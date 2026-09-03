@@ -76,6 +76,7 @@ from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import handlers_of
 from app.ui.icons import icon, icon_name_for
 from app.ui.labels import (
+    LengthSpin,
     NumberSpin,
     compact_length,
     feature_label,
@@ -3926,6 +3927,167 @@ def least_empty_height(label: QLabel) -> int:
     Zuteilung — die Bedingung, unter der die Spalte stillsteht.
     """
     return max(label.minimumHeight(), label.sizeHint().height())
+
+
+class FeaturePanel(QWidget):
+    """Was man mit dem gewählten Merkmal tun kann — als Felder, nicht als Menü.
+
+    Robert am 03.09.2026: „evtl noch ein eigenes Panel, damit man nicht für
+    alles Rechtsklick machen muss — übersichtlich, verständlich, innovativ und
+    intuitiv." Das Panel zeigt, **was Solidon an dieser Stelle gemessen hat**,
+    und macht jede Zahl änderbar: Ort, Durchmesser, Tiefe, Achse. Eine
+    geänderte Zahl ist die Operation, kein Modus und kein zweiter Dialog.
+
+    **Es kennt die Merkmalsarten nicht.** Welche Handlung für welche Art gilt,
+    welche Felder sie hat und was ihr heutiger Wert ist, sagt
+    :func:`app.core.perceive.actions.actions_for` — eine Stelle, nicht zwei.
+    Ein Panel, das ``kind == "hole"`` fragte, führte dieselbe Tabelle ein
+    zweites Mal und wüsste beim nächsten neuen Merkmal die Hälfte.
+
+    **Was nicht geht, steht als Satz und nicht als graues Feld.** Eine
+    Handlung ohne Operation bringt ihren Grund mit („Eine Verrundung folgt
+    ihrer Kante"); eine Lücke ließe den Kunden raten, ob sie fehlt oder
+    vergessen wurde (Regel 17 dem Geist nach).
+    """
+
+    #: Registername und Parameter — dieselbe Form, die der Operationsdialog
+    #: nach außen gibt, damit das Fenster beide gleich behandelt.
+    operationRequested = Signal(str, dict)
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._rows = QVBoxLayout(self)
+        self._rows.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        self._rows.setSpacing(TIGHT)
+        # Der leere Zustand ist ein Satz und keine leere Fläche: Wer nichts
+        # gewählt hat, soll lesen, was ihn hierher bringt (§2.7).
+        self._empty = QLabel(
+            tr(
+                "Kein Merkmal gewählt. Klicken Sie eine Bohrung, eine Fläche oder eine "
+                "Verrundung an — im Objektbaum oder im Bild."
+            ),
+            self,
+        )
+        self._empty.setWordWrap(True)
+        fit_wrapped(self._empty)
+        self._rows.addWidget(self._empty)
+        self._built: list[QWidget] = []
+        self._feature_id: str | None = None
+
+    def clear(self) -> None:
+        """Zurück auf den leeren Zustand."""
+        for widget in self._built:
+            widget.setParent(None)
+            widget.deleteLater()
+        self._built.clear()
+        self._feature_id = None
+        self._empty.setVisible(True)
+
+    def show_feature(self, feature_id: str, feature: Feature) -> None:
+        """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern."""
+        from app.core.perceive.actions import actions_for
+
+        self.clear()
+        self._feature_id = feature_id
+        self._empty.setVisible(False)
+
+        heading = QLabel(f"{feature_name(feature_id, feature)}  ·  {feature_measure(feature)}")
+        set_level(heading, "section")
+        self._rows.insertWidget(self._rows.count() - 1, heading)
+        self._built.append(heading)
+
+        for action in actions_for(feature):
+            row = self._build_action(action)
+            self._rows.insertWidget(self._rows.count() - 1, row)
+            self._built.append(row)
+
+    def _build_action(self, action: Any) -> QWidget:
+        """Eine Zeile: Felder und ein Knopf — oder der Grund, warum nicht."""
+        box = QWidget(self)
+        layout = QHBoxLayout(box)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+
+        if action.op is None:
+            name = QLabel(f"{action.title} — {action.reason}", box)
+            name.setWordWrap(True)
+            name.setEnabled(False)
+            # Und als Statushinweis, damit der Grund auch dort steht, wo der
+            # Kunde ihn beim Überfahren erwartet.
+            name.setStatusTip(str(action.reason))
+            fit_wrapped(name)
+            layout.addWidget(name, 1)
+            return box
+
+        widgets: dict[str, QWidget] = {}
+        for field in action.fields:
+            label = QLabel(str(field.label), box)
+            layout.addWidget(label)
+            editor = self._build_field(field, box)
+            widgets[str(field.name)] = editor
+            layout.addWidget(editor)
+        layout.addStretch(1)
+
+        button = QPushButton(str(action.title), box)
+        button.setStatusTip(str(action.reason) or str(action.title))
+        button.clicked.connect(
+            lambda _checked=False, op=str(action.op), fields=tuple(action.fields), boxes=widgets: (
+                self._emit(op, fields, boxes)
+            )
+        )
+        layout.addWidget(button)
+        return box
+
+    def _build_field(self, field: Any, parent: QWidget) -> QWidget:
+        """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""
+        kind = str(field.kind)
+        if kind == "bool":
+            check = QCheckBox("", parent)
+            check.setChecked(bool(field.value))
+            return check
+        if kind == "choice":
+            combo = QComboBox(parent)
+            for value, text in field.choices or ():
+                combo.addItem(str(text), value)
+            index = combo.findData(field.value)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+            return combo
+        if kind == "length":
+            spin = LengthSpin(parent)
+            spin.set_range_mm(
+                float(field.minimum) if field.minimum is not None else -100000.0,
+                float(field.maximum) if field.maximum is not None else 100000.0,
+            )
+            spin.set_value_mm(float(field.value))
+            return spin
+        angle = NumberSpin(parent)
+        angle.setRange(
+            float(field.minimum) if field.minimum is not None else -360.0,
+            float(field.maximum) if field.maximum is not None else 360.0,
+        )
+        angle.setSuffix(f" {field.unit}" if field.unit else "")
+        angle.setValue(float(field.value))
+        return angle
+
+    def _emit(self, op: str, fields: Sequence[Any], widgets: Mapping[str, QWidget]) -> None:
+        """Die Werte einsammeln und die Operation nennen — gerechnet wird im Kern."""
+        params: dict[str, Any] = {}
+        if self._feature_id is not None:
+            # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
+            # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
+            params["at_feature"] = self._feature_id
+        for field in fields:
+            widget = widgets.get(str(field.name))
+            if isinstance(widget, LengthSpin):
+                params[str(field.name)] = widget.value_mm()
+            elif isinstance(widget, QCheckBox):
+                params[str(field.name)] = widget.isChecked()
+            elif isinstance(widget, QComboBox):
+                params[str(field.name)] = widget.currentData()
+            elif isinstance(widget, QDoubleSpinBox):
+                params[str(field.name)] = float(widget.value())
+        self.operationRequested.emit(op, params)
 
 
 def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:

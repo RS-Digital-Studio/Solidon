@@ -1,0 +1,145 @@
+"""Das Merkmal-Panel: was man mit dem gewählten Merkmal tun kann, als Felder.
+
+Robert am 03.09.2026: „evtl noch ein eigenes Panel, damit man nicht für alles
+Rechtsklick machen muss — übersichtlich, verständlich, innovativ und intuitiv."
+
+Geprüft wird, dass das Panel die Auskunft des Kerns rendert und **keine
+zweite Tabelle führt**: Was gilt, welche Felder es hat und was ihr heutiger
+Wert ist, sagt ``app.core.perceive.actions.actions_for``.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QPushButton, QWidget
+
+from app.core.geom.mesh import MeshData, read_mesh
+from app.core.perceive import features
+from app.core.perceive.actions import actions_for
+from app.core.types import Feature
+from app.ui.labels import LengthSpin
+from app.ui.panels import FeaturePanel
+
+MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def plate() -> MeshData:
+    return read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl")
+
+
+def a_hole() -> tuple[str, Feature]:
+    found = features.detect(plate())
+    return next((key, value) for key, value in found.items() if value.kind == "hole")
+
+
+def buttons(panel: FeaturePanel) -> list[str]:
+    return [knopf.text() for row in panel._built for knopf in row.findChildren(QPushButton)]
+
+
+def fields(row: QWidget) -> list[QWidget]:
+    return [
+        widget
+        for widget in row.findChildren(QWidget)
+        if isinstance(widget, (LengthSpin, QComboBox, QCheckBox))
+    ]
+
+
+def test_without_a_selection_the_panel_says_what_brings_you_here(qt_app: QApplication) -> None:
+    """Ein leeres Feld erklärt nichts; ein Satz schon (§2.7)."""
+    panel = FeaturePanel()
+    assert panel._empty.isVisibleTo(panel)
+    assert panel._empty.text().strip(), "der leere Zustand trägt einen Satz"
+    assert not panel._built, "und keine Zeilen"
+
+
+def test_the_panel_offers_what_the_core_says_and_nothing_else(qt_app: QApplication) -> None:
+    """Die Zeilen kommen aus ``actions_for`` — eine Stelle, nicht zwei.
+
+    Verglichen wird gegen die Auskunft selbst und nicht gegen eine Liste im
+    Test: Sobald der Kern eine Handlung dazubekommt, wächst das Panel mit, und
+    dieser Test bleibt richtig.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+
+    expected = [str(action.title) for action in actions_for(feature) if action.op is not None]
+    assert expected, "ohne Handlungen prüft dieser Test nichts"
+    assert buttons(panel) == expected
+
+
+def test_every_number_starts_on_what_was_measured(qt_app: QApplication) -> None:
+    """Roberts „sinnvolle Einstellungen": Die Vorgabe jedes Feldes ist der
+    heutige Wert, damit der Kunde die eine Zahl ändert, die er meint."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+
+    centre = feature.params["centre"]
+    move = next(
+        row
+        for row in panel._built
+        if any(k.text() == "Merkmal verschieben" for k in row.findChildren(QPushButton))
+    )
+    spins = [widget for widget in fields(move) if isinstance(widget, LengthSpin)]
+    assert len(spins) == 3, "Ort heißt drei Achsen"
+    for spin, measured in zip(spins, centre, strict=True):
+        assert spin.value_mm() == pytest.approx(float(measured))
+
+
+def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplication) -> None:
+    """Das Panel rechnet nichts — es nennt Operation und Werte, wie der
+    Operationsdialog auch. ``at_feature`` steht dabei nicht als Feld: Welches
+    Merkmal gemeint ist, sagt die Auswahl."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    seen: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, params: seen.append((op, params)))
+
+    move = next(
+        knopf
+        for row in panel._built
+        for knopf in row.findChildren(QPushButton)
+        if knopf.text() == "Merkmal verschieben"
+    )
+    move.click()
+
+    assert len(seen) == 1
+    op, params = seen[0]
+    assert op == "move_feature"
+    assert params["at_feature"] == identifier
+    assert set(params) >= {"at_feature", "x", "y", "z"}
+
+
+def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) -> None:
+    """Was nicht geht, steht als Satz und nicht als graues Feld.
+
+    Eine Kantenschleife ist ein Netzfehler und kein Körper; für sie gilt keine
+    der Handlungen. Das Panel zeigt sie trotzdem — mit dem Grund, sonst rät
+    der Kunde, ob sie fehlt oder vergessen wurde.
+    """
+    loop = Feature(
+        id="edge_loop_1",
+        kind="edge_loop",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "open_edges": 4},
+    )
+    ungültig = [action for action in actions_for(loop) if action.op is None]
+    assert ungültig, "ohne abgelehnte Handlungen prüft dieser Test nichts"
+    assert all(str(action.reason).strip() for action in ungültig), "jede nennt ihren Grund"
+
+    panel = FeaturePanel()
+    panel.show_feature("edge_loop_1", loop)
+
+    assert not buttons(panel), "keine Handlung ist anklickbar"
+    texte = " ".join(
+        label.text()
+        for row in panel._built
+        for label in row.findChildren(QWidget)
+        if hasattr(label, "text")
+    )
+    for action in ungültig:
+        assert str(action.reason) in texte, f"der Grund von {action.title} fehlt"
