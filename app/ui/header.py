@@ -384,8 +384,17 @@ class HeaderBar(QWidget):
         many = plates > 1
         self.plates.setVisible(many)
         self._reflow()
-        if not many and previous != ALL_PLATES:
-            self.plateChanged.emit(ALL_PLATES)
+        # **Gemeldet wird jede Änderung, nicht nur der Sonderfall „nur noch
+        # eine Platte".** Fällt die Zahl auf genau die betrachtete Nummer,
+        # greift die Wiederherstellung darüber nicht (``previous < plates`` ist
+        # dann falsch), und ``clear()`` hat den Wähler längst auf „Alle
+        # Platten" gestellt. Vorher blieb das stumm, solange mehr als eine
+        # Platte übrig war: Der Wähler sagte „Alle Platten", die Ansicht
+        # filterte weiter auf die verschwundene Nummer, und das Bild blieb
+        # leer. Einen Rückweg gab es nicht — ein Klick auf denselben Eintrag
+        # ändert den Index nicht und sendet deshalb auch nichts.
+        if previous != ALL_PLATES and self.plate != previous:
+            self.plateChanged.emit(self.plate)
 
     def _on_plate(self, index: int) -> None:
         del index
