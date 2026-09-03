@@ -90,6 +90,7 @@ from app.ui.labels import (
     read_number,
 )
 from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.motion import ACCENT_MS, animations_enabled, mix, tween
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
@@ -451,6 +452,42 @@ def snap_sentence(kind: str) -> str:
     if kind == "edge":
         return tr("Der Messpunkt rastet auf einer Kante ein.")
     return tr("Der Messpunkt sitzt frei auf der Fläche.")
+
+
+def rgb_of(colour: str) -> tuple[float, float, float]:
+    """Eine Farbe der Palette als drei Zahlen von 0 bis 1.
+
+    Die Palette führt Hex-Zeichenketten (``#f0a54a``), weil das Stylesheet sie
+    so braucht. Zum **Mischen** taugen sie nicht: `motion.mix` rechnet, und
+    zwischen zwei Zeichenketten gibt es keine Mitte. VTK nimmt beide Formen an,
+    also kostet die Umrechnung nichts ausser dieser Funktion.
+    """
+    from PySide6.QtGui import QColor
+
+    value = QColor(colour)
+    return (value.redF(), value.greenF(), value.blueF())
+
+
+def gizmo_sentence(feature: Feature | None) -> str:
+    """Was der Griff bewegen wird, in einem Satz.
+
+    Der Griff sagte es nicht. Wer eine Bohrung anklickte und ihn einschaltete,
+    sah drei Achsen in der Mitte des Teils — und die Anwendung schwieg dazu,
+    ob nun die Bohrung oder der Körper gemeint ist. Bei einer Fläche steht der
+    Griff sichtbar darauf; bei allem anderen war der Ort die einzige Auskunft,
+    und er lag bis zu 28 mm neben dem, was gewählt war.
+
+    **Abgeleitet und nicht behauptet:** Der Satz liest, woran der Griff
+    tatsächlich hängt (:meth:`Viewport.gizmo_feature`). Erweitert jemand
+    ``move_feature`` um eine Art, sagt er es von selbst — ein Satz, der die
+    Grenze aufzählt, wäre am selben Tag falsch (dieselbe Falle wie bei den
+    Texten, die eine Abwesenheit versprechen).
+    """
+    if feature is None:
+        return tr("Der Griff bewegt das ganze Teil.")
+    if feature.kind == "face":
+        return tr("Der Griff versetzt die gewählte Fläche entlang ihrer Normalen.")
+    return tr("Der Griff bewegt das gewählte Merkmal, nicht das ganze Teil.")
 
 
 #: Wie weit der Ziehgriff höchstens gestreckt wird, wenn der Blick flach steht.
@@ -2116,6 +2153,46 @@ CORNER_FRACTION = 0.08
 GIZMO_SCALE = 0.3
 GIZMO_LINE_RADIUS = 0.035
 
+
+#: Die Operationen, die ein Merkmal so ändern, wie der Griff es täte.
+#:
+#: **Beide, weil der Griff beides kann.** Er verschiebt und dreht in derselben
+#: Geste; wo nur eines von beidem ginge, ist er trotzdem der richtige Weg
+#: dorthin. Heute nehmen beide dieselben Arten — würde sich das je trennen,
+#: wäre ein Griff, der nur nach der einen fragt, an der anderen blind.
+GIZMO_FEATURE_OPS: Final = ("move_feature", "rotate_feature")
+
+
+def movable_feature_kinds() -> frozenset[str]:
+    """Welche Merkmalsarten sich versetzen lassen — gefragt, nicht aufgezählt.
+
+    Der Griff soll an dem Merkmal sitzen, das gewählt ist (§18.11) — aber nur
+    dort, wo ein Zug auch etwas auslösen kann. Welche Arten das sind, weiß das
+    Register: die Operationen aus ``GIZMO_FEATURE_OPS`` tragen sie in
+    ``applies_to``. Eine Liste hier wäre eine zweite Wahrheit, die beim
+    nächsten Zuwachs veraltet.
+
+    **Und sie veraltet schnell — dieser Docstring hat es an einem Tag
+    vorgeführt.** Er nannte „heute ``hole`` und ``pin``" und führte Kuppe und
+    Kugel als gesperrt; gemessen am selben Nachmittag deckt ``move_feature``
+    ``hole``, ``pin``, ``cone`` und ``sphere``, ``rotate_feature`` die ersten
+    drei (der Kugel fehlt eine Lage, die sich drehen liesse). Die Zahl war
+    beim Aufschreiben richtig und drei Commits später falsch — genau deshalb
+    steht sie hier als Beispiel und nicht als Bedingung.
+
+    Fehlt eine Operation, zählt sie nicht mit; fehlen alle, ist die Menge leer
+    und der Griff bleibt am Körper. Das ist der ehrliche Rückfall: Ohne
+    Operation gäbe es nichts zu ziehen.
+    """
+    from app.core.registry import REGISTRY
+
+    kinds: set[str] = set()
+    for name in GIZMO_FEATURE_OPS:
+        if REGISTRY.has(name):
+            kinds.update(REGISTRY.get(name).applies_to or ())
+    return frozenset(kinds)
+
+
 #: Wie weit hinter der Pfeilspitze die Achsenbeschriftung steht, als Anteil der
 #: Pfeillänge.
 GIZMO_LABEL_GAP = 1.2
@@ -2802,6 +2879,26 @@ class Viewport(QWidget):
     """Der nächste nötige Klick oder der Grund, warum keiner gezählt hat."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    gizmoStatus = Signal(str)
+    """Was der Griff bewegen wird — leer, solange keiner steht.
+
+    Dieselbe Bauart wie ``measurementStatus``: Der Viewport sagt, was gilt,
+    und wo der Satz erscheint, entscheidet das Fenster."""
+    featureMoved = Signal(str, object)
+    """Ein Zug hat ein Merkmal versetzt — Kennung und Zielmitte (§18.11).
+
+    Die Zielmitte kommt **absolut** und nicht als Versatz, weil
+    ``move_feature`` sie so verlangt und weil nur die Ansicht sie kennt: Sie
+    hält das Merkmal in der Hand, das Fenster nicht. Ein Delta zu schicken
+    hiesse, die Mitte auf der anderen Seite noch einmal zu suchen."""
+    featureTurned = Signal(str, str, float)
+    """Ein Zug hat ein Merkmal gekippt — Kennung, Achse, Winkel in Grad.
+
+    **Der Winkel ist der gerastete**, derselbe, der während des Zugs am Zeiger
+    stand: ``_settled_angle`` kennt den harten Fang der Leiste und den
+    45°-Magneten. Das Fenster könnte ihn nicht nachrechnen, ohne beides zu
+    kennen — und ein Wert, der eine andere Drehung verspricht als die, die
+    kommt, ist genau der Fehler, den der Zeiger heute Vormittag hatte."""
     sketchMenuAt = Signal(object, int, int)
     """Ein Rechtsklick im Skizzenmodus — trägt den Ebenenpunkt in Millimetern
     und die Fensterstelle für das Menü. Ohne diese Naht lief der Rechtsklick
@@ -2947,6 +3044,22 @@ class Viewport(QWidget):
         self._uncapped = False
         """Wahr, wenn ein Schnitt offen blieb, weil der Körper es ist (§18.2)."""
         self._object_colour = OBJECT_COLOUR
+        self._shown_colours: dict[ObjectId, str] = {}
+        """Welche Farbe jeder Körper zuletzt bekommen hat.
+
+        Ohne diesen Vergleich liefe bei jedem Szenenaufbau eine Blende — und
+        ``_apply_selection_colour`` läuft auch dann, wenn sich an der Auswahl
+        nichts geändert hat. Animiert wird der **Wechsel**, nicht das
+        Zeichnen."""
+        self._live_colours: dict[ObjectId, tuple[float, ...]] = {}
+        """Welche Farbe gerade wirklich an jedem Aktor steht, als drei Zahlen.
+
+        Nicht dasselbe wie ``_shown_colours``: Das nennt das **Ziel** der
+        letzten Auswahl, dies den Wert, der im Bild ist — mitten in einer
+        Blende liegt er dazwischen. Wird eine Blende abgelöst, ist genau er
+        der richtige Startpunkt der nächsten."""
+        self._selection_fade: Any = None
+        """Die laufende Auswahlblende, damit die nächste sie ablösen kann."""
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
         self._sketch_frame: PlaneFrame | None = None
@@ -4214,6 +4327,18 @@ class Viewport(QWidget):
         for actor in self._actors.values():
             self.plotter.remove_actor(actor, render=False)
         self._actors.clear()
+        # **Und mit ihnen die gemerkten Farben.** Ein neuer Aktor kommt grau
+        # aus der Geometrie; stünde hier noch der Stand von vorhin, hielte
+        # `_apply_selection_colour` die Auswahl für unverändert und **liesse
+        # den gewählten Körper grau** — die Auswahl verschwände beim
+        # Neuzeichnen aus dem Bild, ohne dass sich an ihr etwas geändert hat.
+        # Eine laufende Blende gehört ebenfalls zu Aktoren, die es nicht mehr
+        # gibt.
+        if self._selection_fade is not None:
+            self._selection_fade.stop()
+            self._selection_fade = None
+        self._shown_colours.clear()
+        self._live_colours.clear()
         # **Mit den Aktoren geht auch ihr gemerkter Ausgangsort.** Die neuen
         # kommen aus der Geometrie und tragen keinen Zug mehr; ein
         # stehengebliebener Eintrag würde beim nächsten Ziehen als Basis
@@ -4896,12 +5021,88 @@ class Viewport(QWidget):
         if self.plotter is None:
             return
         highlighted = None if self._sketch_frame is not None else self.highlighted_object()
-        for identifier, actor in self._actors.items():
-            if self._map is not None and identifier == self._map_object:
-                # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
-                # stattdessen im Objektbaum und in der Statusleiste (§19.1).
-                continue
-            actor.prop.color = SELECTED_COLOUR if identifier == highlighted else self._object_colour
+        wanted = {
+            identifier: SELECTED_COLOUR if identifier == highlighted else self._object_colour
+            for identifier in self._actors
+            # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
+            # stattdessen im Objektbaum und in der Statusleiste (§19.1).
+            if not (self._map is not None and identifier == self._map_object)
+        }
+        changed = {
+            identifier: colour
+            for identifier, colour in wanted.items()
+            if self._shown_colours.get(identifier) != colour
+        }
+        self._shown_colours = wanted
+        if not changed:
+            return
+        self._fade_selection(changed)
+
+    def _fade_selection(self, changed: dict[ObjectId, str]) -> None:
+        """Blendet die Auswahl über, statt sie umzuschalten.
+
+        **Warum überhaupt:** „vom aussehen noch anschaulicher, bzw
+        natürlicher" (Robert, 03.09.2026). Im 3D-Fenster gab es bis heute
+        keinen einzigen Übergang — die Auswahl war ein Sprung der Aktorfarbe,
+        und ein Sprung zwingt das Auge, die Szene neu zu lesen. Eine kurze
+        Blende sagt „dasselbe Teil, anderer Zustand".
+
+        **Und beide Seiten zugleich**: Der alte Körper geht auf Grau zurück,
+        während der neue die Auswahlfarbe annimmt. Sie nacheinander zu
+        schalten sähe aus wie zwei Handlungen.
+
+        Die Dauer ist gemessen und nicht geraten. Ein ``render()`` kostet in
+        diesem Fenster **8,2 ms** — und zwar bei 32 328 wie bei 1 803 243
+        Dreiecken, weil es an der Bildwiederholung hängt und nicht an der
+        Geometrie. Sieben Bilder in :data:`ACCENT_MS` sind damit 58 ms
+        Rechenzeit; der Farbwechsel selbst liegt bei 0,03 ms und fällt
+        daneben nicht auf.
+
+        **Ist Bewegung abgeschaltet, steht die Zielfarbe sofort** — darum
+        kümmert sich ``tween`` selbst, und deshalb ist diese Funktion auch der
+        einzige Weg, an dem die Auswahlfarbe gesetzt wird. Ein zweiter Weg
+        „für den Fall, dass" wäre die Stelle, an der die beiden auseinander
+        laufen.
+        """
+        if self.plotter is None:
+            return
+        # Eine noch laufende Blende gehört zu einer Auswahl, die es nicht mehr
+        # gibt. Liefe sie weiter, schriebe sie ihre alten Farben über die neuen.
+        if self._selection_fade is not None:
+            self._selection_fade.stop()
+            self._selection_fade = None
+        # **Die Startfarbe kommt aus dem eigenen Gedächtnis, nicht vom Aktor.**
+        # Zwei Gründe, und der zweite wiegt schwerer: VTKs Eigenschaftsobjekt
+        # gibt in Prüfständen nichts zurück (es zeichnet Zuweisungen nur auf),
+        # und mitten in einer abgelösten Blende stünde dort ein Zwischenwert,
+        # dessen Herkunft niemand kennt. Was `_live_colours` sagt, hat diese
+        # Funktion selbst geschrieben.
+        grey = rgb_of(self._object_colour)
+        starts = {identifier: self._live_colours.get(identifier, grey) for identifier in changed}
+        ends = {identifier: rgb_of(colour) for identifier, colour in changed.items()}
+        # **Gezeichnet wird nur, wenn sich auch etwas bewegt.** Ohne Bewegung
+        # ruft ``tween`` einmal mit 1,0, und der Aufrufer zeichnet danach
+        # ohnehin (``select`` endet auf ``_draw``). Ein ``render`` hier wäre
+        # dann ein zweites Bild je Auswahl — in der Suite hunderte, und die
+        # Datei riss beim Aufräumen. Ein Bild, das niemand sieht, ist keine
+        # Vorsicht, sondern Arbeit.
+        moving = animations_enabled()
+
+        def step(fraction: float) -> None:
+            plotter = self.plotter
+            if plotter is None:
+                return
+            for identifier, start in starts.items():
+                actor = self._actors.get(identifier)
+                if actor is None:
+                    continue
+                blend = mix(start, ends[identifier], fraction)
+                actor.prop.color = blend
+                self._live_colours[identifier] = blend
+            if moving:
+                plotter.render()
+
+        self._selection_fade = tween(self, on_step=step, duration=ACCENT_MS)
 
     def show_build_volume(self, profile: Profile) -> None:
         """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
@@ -7610,6 +7811,12 @@ class Viewport(QWidget):
         Als eigene Auskunft und nicht als Zustand des Plotters, damit die
         Regel prüfbar bleibt: offscreen gibt es keinen Plotter, und ein Test,
         der sich dort überspringt, prüft nie etwas.
+
+        **Nur Flächen**, und das ist keine Einschränkung, sondern die Frage:
+        Diese Methode beantwortet „geht der Zug entlang einer Normalen"
+        (Press/Pull, ``faceDragged``). Wo der Griff *sitzt*, beantwortet
+        :meth:`gizmo_feature` — die beiden liefen einmal zusammen und
+        deckten damit nur den Fall ab, den die Fläche stellt.
         """
         if self._selected_feature is None:
             return None
@@ -7619,6 +7826,39 @@ class Viewport(QWidget):
         if feature.params.get("normal") is None or feature.params.get("centre") is None:
             return None
         return feature
+
+    def gizmo_feature(self) -> Feature | None:
+        """Das Merkmal, an dem der Griff **sitzt** — oder ``None`` für das Objekt.
+
+        „Wenn man die Wulst wählt verschiebt man die Wulst, immer das
+        Ausgewählte" (Robert, 03.09.2026). Der Griff hing bis dahin nur an
+        Flächen; bei jedem anderen Merkmal sprang er in die Mitte des
+        Hüllquaders. Gemessen an ``motor-mountstp.stl`` mit 27 Merkmalen:
+
+            gewählt       Merkmal sitzt bei      Griff sass bei
+            Fläche        (-3,0 / 0,4 / 0,0)     auf der Fläche
+            Bohrung       (-13 / -13 / 2)        (0 / 0 / 30)
+            Verrundung    (-13 / -4,5 / 10)      (0 / 0 / 30)
+
+        Achtundzwanzig Millimeter daneben, am anderen Ende des Teils — und
+        nichts sagte es.
+
+        **Welche Arten mitkommen, entscheidet das Register und keine Liste
+        hier.** Ein Griff, der nichts auslösen kann, wäre schlimmer als
+        keiner: Es zählt, ob es eine Operation gibt, die dieses Merkmal
+        versetzt. Wächst deren ``applies_to``, wächst der Griff mit; fällt
+        eine Art heraus, verschwindet er dort, ohne dass jemand daran denken
+        muss. Welche das gerade sind, sagt :func:`movable_feature_kinds` —
+        und nicht dieser Satz, der schon einmal veraltet ist.
+        """
+        if self._selected_feature is None:
+            return None
+        feature = self._features_of_selection().get(self._selected_feature)
+        if feature is None or feature.params.get("centre") is None:
+            return None
+        if feature.kind == "face":
+            return feature if feature.params.get("normal") is not None else None
+        return feature if feature.kind in movable_feature_kinds() else None
 
     def set_gizmo(self, active: bool) -> None:
         """Hängt den Gizmo an die gewählte Fläche — sonst an das Objekt.
@@ -7636,14 +7876,23 @@ class Viewport(QWidget):
         """
         self._gizmo_wanted = active
         if self.plotter is None:
+            self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
         if not active or self._selected is None:
+            self.gizmoStatus.emit("")
             return
-        face = self.gizmo_target()
-        actor = self._face_handle(face) if face is not None else self._actors.get(self._selected)
+        # **Wo er sitzt und was er tut, sind zwei Fragen.** ``gizmo_feature``
+        # beantwortet die erste (jedes versetzbare Merkmal), ``gizmo_target``
+        # die zweite (nur eine Fläche kennt Press/Pull entlang ihrer Normalen).
+        chosen = self.gizmo_feature()
+        actor = (
+            self._face_handle(chosen) if chosen is not None else self._actors.get(self._selected)
+        )
         if actor is None:
+            self.gizmoStatus.emit("")
             return
+        self.gizmoStatus.emit(gizmo_sentence(chosen))
         from vtkmodules.vtkRenderingCore import vtkMapper
 
         # Vor dem Widget gemerkt: Es stellt die statische Tiefen-Auflösung um
@@ -7677,10 +7926,15 @@ class Viewport(QWidget):
                 found._magnetise_turn(*args)
 
         self._magnet_watch = self.plotter.iren.add_observer("MouseMoveEvent", magnetise)
-        if face is None:
+        if chosen is None:
             # Das dritte Drittel von §18.11: pyvistas Widget verschiebt und
-            # dreht, der Würfel skaliert. Nur am Objekt — eine Fläche kennt
-            # nur vor und zurück.
+            # dreht, der Würfel skaliert. **Nur am ganzen Objekt** — ein
+            # Merkmal hat keine Größe, die dieser Würfel ändern könnte: Eine
+            # Fläche kennt nur vor und zurück, und eine Bohrung wächst über
+            # ihren Durchmesser, nicht über einen Hüllquader. Ein Würfel
+            # daneben skalierte still das Teil, während der Griff daneben das
+            # Loch bewegt — zwei Gesten am selben Ort mit verschiedenen
+            # Zielen.
             self._scale_handle = ScaleHandle(
                 self.plotter,
                 actor,
@@ -7957,12 +8211,18 @@ class Viewport(QWidget):
         self.drag_bar.follow(tr("Faktor"), factor, "", 3)
 
     def _face_handle(self, feature: Feature) -> Any:
-        """Ein Griff auf der Fläche, an dem der Gizmo sitzen kann.
+        """Ein Griff am Merkmal, an dem der Gizmo sitzen kann.
 
-        Der Gizmo braucht einen Actor. Die Fläche selbst ist Teil des
-        Körperactors und lässt sich nicht einzeln greifen, also bekommt sie
-        eine kleine Scheibe an ihrem Mittelpunkt — sichtbar, damit klar ist,
+        Der Gizmo braucht einen Actor. Das Merkmal selbst ist Teil des
+        Körperactors und lässt sich nicht einzeln greifen, also bekommt es
+        eine kleine Scheibe an seinem Mittelpunkt — sichtbar, damit klar ist,
         woran gezogen wird, und flach, damit sie nichts verdeckt.
+
+        **Die Scheibe steht quer zu dem, was das Merkmal auszeichnet.** Eine
+        Fläche hat eine Normale, eine Bohrung eine Achse; beide sagen, wie das
+        Merkmal im Raum liegt, und eine Scheibe darauf liest sich als „hier".
+        Fehlt beides, liegt sie waagerecht — eine Scheibe an der richtigen
+        Stelle ist mehr wert als keine.
         """
         import numpy as np
         import pyvista as pv
@@ -7979,7 +8239,11 @@ class Viewport(QWidget):
         )
         if entry is not None and self._result is not None:
             centre = centre + np.asarray(self._view_offset(entry, self._result), dtype=float)
-        normal = np.asarray(feature.params["normal"], dtype=float)
+        # Normale bei einer Fläche, Achse bei einer Bohrung — und wo keines
+        # von beidem steht, die Z-Achse: Die Scheibe soll das Merkmal zeigen,
+        # nicht seine Ausrichtung behaupten.
+        direction = feature.params.get("normal") or feature.params.get("axis") or (0.0, 0.0, 1.0)
+        normal = np.asarray(direction, dtype=float)
         span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
         radius = max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
         disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
@@ -8054,9 +8318,55 @@ class Viewport(QWidget):
             angle=self._settled_angle(steps.angle),
             scale=steps.scale,
         )
+        # **Sitzt der Griff an einem Merkmal, bewegt der Zug das Merkmal.**
+        # Ohne diese Abzweigung wäre der Griff eine Lüge: Er stünde auf der
+        # gewählten Bohrung, sagte „Der Griff bewegt das gewählte Merkmal" —
+        # und ``transformDragged`` verschöbe darunter das ganze Teil. Eine
+        # Auskunft, die ankommt und nicht stimmt, ist schlimmer als keine.
+        if self._emit_feature_drag(snapped):
+            self._end_drag()
+            return
         if snapped.moves or snapped.turns or snapped.resizes:
             self.transformDragged.emit(snapped)
         self._end_drag()
+
+    def _emit_feature_drag(self, snapped: TransformSteps) -> bool:
+        """Meldet den Zug als Merkmalsbewegung — oder sagt, dass keiner vorlag.
+
+        **Genau eines von beidem**, und die Reihenfolge folgt dem Widget: Ein
+        Zug am Ring dreht, ein Zug am Pfeil verschiebt, beides zugleich gibt
+        es dort nicht. Zwei Meldungen wären zwei Transaktionen für eine Geste
+        (§15.5).
+
+        Der Rückgabewert sagt, ob der Zug hier verbraucht wurde. ``False``
+        heisst nicht „nichts passiert", sondern „das gilt dem ganzen Teil" —
+        der Aufrufer schickt ihn dann den gewohnten Weg.
+
+        **Skalieren fehlt mit Absicht.** Ein Merkmal hat keine Grösse, die
+        dieser Griff ändern könnte; darum steht an ihm auch kein
+        Skalierwürfel (siehe :meth:`set_gizmo`).
+        """
+        chosen = self.gizmo_feature()
+        if chosen is None or chosen.kind == "face":
+            # Eine Fläche geht ihren eigenen Weg (Press/Pull, oben), und ohne
+            # Merkmal gilt der Zug dem Körper.
+            return False
+        if snapped.turns and snapped.axis is not None:
+            self.featureTurned.emit(chosen.id, snapped.axis, float(snapped.angle))
+            return True
+        if snapped.moves:
+            centre = [float(value) for value in chosen.params["centre"]]
+            target = (
+                centre[0] + snapped.offset[0],
+                centre[1] + snapped.offset[1],
+                centre[2] + snapped.offset[2],
+            )
+            self.featureMoved.emit(chosen.id, target)
+            return True
+        # Ein Zug unter der Fangschwelle: verbraucht ist er trotzdem, denn er
+        # gilt dem Merkmal. Ihn durchzulassen verschöbe das ganze Teil um
+        # gerundete null — und `_end_drag` stellt das Bild ohnehin zurück.
+        return True
 
     def _on_scale_released(self, factor: float) -> None:
         """Ein Zug am Skalierwürfel endet als Operation (§18.11, §2.1).

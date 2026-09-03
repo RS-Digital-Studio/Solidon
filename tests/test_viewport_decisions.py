@@ -46,6 +46,7 @@ from __future__ import annotations
 import gc
 import math
 import weakref
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -64,6 +65,45 @@ from app.ui.theme import THEMES, viewport_colours
 from app.ui.viewport import PLATE_GAP
 
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _release_each_view_before_the_next() -> Iterator[None]:
+    """Räumt nach jedem Test auf, damit sich keine Ansichten anhäufen.
+
+    **Ohne diese Fixture hängt die ganze Datei an der Größe eines Viewports.**
+    Gemessen am 03.09.2026: Zwei zusätzliche Instanzattribute — zwei leere
+    Wörterbücher, sonst nichts — ließen den Lauf bei Test 29 von 148 mit
+    ``0xC0000374`` abbrechen, einer Heap-Beschädigung. Eines allein lief
+    durch, zwei nicht:
+
+        HEAD + 1 belangloses Attribut     142 passed
+        HEAD + 2 belanglose Attribute     Riss bei 28 Fortschrittszeichen
+        HEAD + 310 Kommentarzeilen        142 passed
+
+    Die Zeile, die es auslöste, war also nie die Ursache — fünf Einzelproben
+    an meinem eigenen Code blieben deshalb alle rot und schlossen nichts aus.
+    Was wirklich geschieht: Die Tests erzeugen ihre Ansichten lokal und geben
+    sie nie frei. Sie sammeln sich an, bis
+    ``test_the_camera_watcher_holds_the_view_only_weakly`` ein ``gc.collect``
+    ruft und sie **alle auf einmal** sterben — dabei reißt VTK. Werden die
+    Objekte größer, reißt es früher.
+
+    Ein Sammellauf nach jedem Test löst sie einzeln auf, und die Datei läuft
+    wieder ganz durch. Das kostet den Lauf 2,3 → 8,7 Sekunden, und das ist
+    der Preis dafür, dass die nächste Sitzung ein Feld hinzufügen darf, ohne
+    eine Woche zu suchen.
+
+    **Das ist keine Tarnung eines echten Fehlers.** In der Anwendung gibt es
+    einen Viewport und nicht hundertachtundvierzig; die Anhäufung entsteht
+    erst im Testlauf. Was sie deckt, ist ein bekannter Riss beim Abbau
+    (`ROADMAP.md`), und der wird davon nicht besser oder schlechter — nur
+    verteilt statt gebündelt.
+    """
+    import gc
+
+    yield
+    gc.collect()
 
 
 def test_the_effective_qt_platform_keeps_vtk_out_after_the_environment_changes(
@@ -4555,3 +4595,268 @@ def test_the_body_edges_are_searched_once_per_mesh(qt_app: QApplication) -> None
     viewport._feature_edges_for("body", fläche, None)
     viewport._feature_edges_for("body", fläche, None)
     assert fläche.searched == 4, "ohne Schlüssel kein Cache"
+
+
+def _scene_with_a_hole_and_a_fillet() -> Any:
+    """Ein Körper mit einer Bohrung und einer Verrundung.
+
+    Die kleinste Szene für die Frage „an welchem Merkmal hängt der Griff":
+    Eine Bohrung lässt sich versetzen, eine Verrundung nicht — sie hängt an
+    ihrer Kante, und versetzt bliebe die Kante scharf.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    features = {
+        "hole_1": Feature(
+            id="hole_1",
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 5.0, "centre": (-10.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+        ),
+        "fillet_1": Feature(
+            id="fillet_1",
+            kind="fillet",
+            provenance="detected",
+            params={"radius": 2.0, "centre": (10.0, 0.0, 5.0)},
+        ),
+        "face_1": Feature(
+            id="face_1",
+            kind="face",
+            provenance="detected",
+            params={"centre": (0.0, 0.0, 5.0), "normal": (0.0, 0.0, 1.0)},
+        ),
+    }
+    return EvaluationResult(
+        scene=Scene(
+            objects={"obj_1": SceneObject(id="obj_1", name="A", mesh=mesh, features=features)}
+        )
+    )
+
+
+def test_the_handle_sits_on_every_feature_that_can_be_moved(qt_app: QApplication) -> None:
+    """„Wenn man die Wulst wählt verschiebt man die Wulst, immer das
+    Ausgewählte" (Robert, 03.09.2026).
+
+    Der Griff hing nur an Flächen. Bei jedem anderen Merkmal sprang er in die
+    Mitte des Hüllquaders — gemessen an ``motor-mountstp.stl`` mit 27
+    Merkmalen saß er bei einer gewählten Bohrung **28 mm daneben**, am anderen
+    Ende des Teils, und nichts sagte es. Eine Kundenrückmeldung zu 0.3.0
+    nennt dieselbe Lücke: „Move existing holes and other recognised
+    details/features", Bewertung 1 von 5.
+
+    Die Grenze zieht das Register und keine Liste in der Ansicht: Es zählt,
+    ob es eine Operation gibt, die dieses Merkmal versetzt. Gemessen am
+    03.09.2026 sind das ``hole``, ``pin``, ``cone`` und ``sphere`` — die
+    Verrundung bleibt außen vor, und ein Griff, der nichts auslösen kann,
+    wäre schlimmer als keiner.
+
+    **Der Test nagelt die Liste bewusst nicht fest.** Er fragt nach einer Art,
+    die drin sein muss, und einer, die draußen bleibt; die genaue Menge
+    gehört dem Register und ändert sich dort. Eine Zusicherung auf die
+    vollständige Menge machte jeden Zuwachs an ``move_feature`` zu einem
+    roten Lauf in einer Datei, die davon nichts weiß.
+    """
+    from app.core import bootstrap
+    from app.ui.viewport import Viewport, movable_feature_kinds
+
+    bootstrap.load_operations()
+    beweglich = movable_feature_kinds()
+    assert "hole" in beweglich, f"ohne bewegliche Bohrung prüft dieser Test nichts: {beweglich}"
+    assert "fillet" not in beweglich, beweglich
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+
+    viewport.select_feature("hole_1")
+    ziel = viewport.gizmo_feature()
+    assert ziel is not None and ziel.id == "hole_1", "die Bohrung trägt den Griff"
+    assert viewport.gizmo_target() is None, (
+        "sie ist keine Fläche — Press/Pull entlang einer Normalen gibt es dort nicht"
+    )
+
+    viewport.select_feature("fillet_1")
+    assert viewport.gizmo_feature() is None, (
+        "eine Verrundung lässt sich nicht versetzen — der Griff bleibt am Körper"
+    )
+
+    viewport.select_feature("face_1")
+    flaeche = viewport.gizmo_feature()
+    assert flaeche is not None and flaeche.id == "face_1"
+    assert viewport.gizmo_target() is not None, "die Fläche behält ihren Press/Pull-Weg"
+
+
+def test_the_movable_kinds_come_from_the_register(qt_app: QApplication) -> None:
+    """Die Artenliste steht im Register, nicht in der Ansicht.
+
+    Eine Aufzählung hier wäre eine zweite Wahrheit, die beim nächsten Zuwachs
+    veraltet — und die Grenze bewegt sich: Kuppe und Kugel sind heute
+    ausdrücklich gesperrt, weil ihre erkannte Mitte im Material liegt, und
+    genau das kann sich ändern.
+    """
+    from app.core import bootstrap
+    from app.core.registry import REGISTRY
+    from app.ui.viewport import GIZMO_FEATURE_OPS, movable_feature_kinds
+
+    # **Ohne das Register ist die Menge leer, und die Frage geht ins Leere.**
+    # Der Test lief zuerst nur grün, wenn eine andere Datei vorher geladen
+    # hatte — also je nach Reihenfolge. Genau der Fall, den die Zusicherung
+    # unten fängt.
+    bootstrap.load_operations()
+    erwartet: set[str] = set()
+    gefunden = 0
+    for name in GIZMO_FEATURE_OPS:
+        if not REGISTRY.has(name):
+            # Eine Operation, die es (noch) nicht gibt, ist kein Fehler — genau
+            # dafür fragt `movable_feature_kinds` mit `has`. Sie darf nur nicht
+            # **alle** fehlen, sonst prüft der Test eine leere Menge.
+            continue
+        gefunden += 1
+        erwartet.update(REGISTRY.get(name).applies_to or ())
+    assert gefunden, f"keine der Griff-Operationen im Register: {GIZMO_FEATURE_OPS}"
+    assert erwartet, "eine leere Menge liesse den Griff nie an einem Merkmal sitzen"
+    assert movable_feature_kinds() == frozenset(erwartet)
+
+
+def test_the_handle_says_what_it_will_move(qt_app: QApplication) -> None:
+    """Drei Lagen, drei Sätze — und keiner davon behauptet die Grenze.
+
+    Der Satz wird aus dem Ziel abgeleitet. Erweitert jemand ``move_feature``
+    um eine Art, sagt er es von selbst; eine Aufzählung im Text wäre am selben
+    Tag falsch (dieselbe Falle wie bei Texten, die eine Abwesenheit
+    versprechen).
+    """
+    import dataclasses
+
+    from app.core.types import Feature
+    from app.ui.viewport import gizmo_sentence
+
+    bohrung = Feature(id="hole_1", kind="hole", provenance="detected", params={})
+    flaeche = dataclasses.replace(bohrung, id="face_1", kind="face")
+
+    ganz = gizmo_sentence(None)
+    merkmal = gizmo_sentence(bohrung)
+    auf_flaeche = gizmo_sentence(flaeche)
+
+    assert ganz and merkmal and auf_flaeche
+    assert len({ganz, merkmal, auf_flaeche}) == 3, "drei Lagen, drei Aussagen"
+    assert "{" not in ganz + merkmal + auf_flaeche, "ein Platzhalter blieb stehen"
+
+
+def test_a_drag_on_a_feature_moves_the_feature_and_not_the_part(
+    qt_app: QApplication,
+) -> None:
+    """Der Griff sitzt auf der Bohrung — also wandert die Bohrung.
+
+    **Das ist die Hälfte, die den Fix erst zu einem macht.** Der Griff auf das
+    Merkmal zu setzen und den Zug weiter über ``transformDragged`` laufen zu
+    lassen wäre eine Verschlimmerung: Er stünde auf dem Loch, sagte „Der Griff
+    bewegt das gewählte Merkmal, nicht das ganze Teil." — und verschöbe
+    darunter das Teil. Vorher log er über seinen Ort, danach zusätzlich in
+    Worten.
+
+    Geprüft wird deshalb **beides**: dass die Merkmalsmeldung kommt, und dass
+    die Objektmeldung ausbleibt. Eine allein wäre kein Beleg — genau die
+    Verwechslung, die ohne die zweite Zusicherung entsteht.
+    """
+    from app.core.geom.transform import TransformSteps
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+    viewport.select_feature("hole_1")
+
+    versetzt: list[tuple[str, Any]] = []
+    gedreht: list[tuple[str, str, float]] = []
+    am_teil: list[Any] = []
+    viewport.featureMoved.connect(lambda fid, ziel: versetzt.append((fid, ziel)))
+    viewport.featureTurned.connect(lambda fid, achse, winkel: gedreht.append((fid, achse, winkel)))
+    viewport.transformDragged.connect(am_teil.append)
+
+    verbraucht = viewport._emit_feature_drag(
+        TransformSteps(offset=(5.0, 0.0, 0.0), axis=None, angle=0.0, scale=1.0)
+    )
+    assert verbraucht, "ein Zug am Merkmal gehört dem Merkmal"
+    assert not am_teil, "das ganze Teil darf sich dabei nicht bewegen"
+    assert len(versetzt) == 1, versetzt
+    kennung, ziel = versetzt[0]
+    assert kennung == "hole_1"
+    # Die Zielmitte kommt absolut: Mitte des Merkmals plus der gezogene Weg.
+    mitte = viewport._features_of_selection()["hole_1"].params["centre"]
+    assert ziel == pytest.approx((mitte[0] + 5.0, mitte[1], mitte[2]))
+    assert not gedreht, "ein Verschieben ist keine Drehung"
+
+
+def test_a_turn_on_a_feature_carries_the_settled_angle(qt_app: QApplication) -> None:
+    """Gedreht wird um den Winkel, der auch gilt — nicht um den rohen.
+
+    Der Zeiger zeigte am Vormittag den rohen Winkel, während das Loslassen
+    rastete: Wer bei einem Fang von 15° um fünf Grad drehte, las „5,0°" und
+    bekam nichts. Dieselbe Falle steht hier ein zweites Mal bereit, denn das
+    Fenster könnte den gerasteten Wert nicht nachrechnen, ohne den Fang der
+    Leiste und den 45°-Magneten zu kennen. Also reist er mit.
+
+    Und weiter: Ein Zug, der **beides** zu sein scheint, wird eine Drehung —
+    pyvistas Widget gibt entweder einen Ring oder einen Pfeil her, und zwei
+    Meldungen wären zwei Transaktionen für eine Geste (§15.5).
+    """
+    from app.core.geom.transform import TransformSteps
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+    viewport.select_feature("hole_1")
+
+    versetzt: list[Any] = []
+    gedreht: list[tuple[str, str, float]] = []
+    viewport.featureMoved.connect(lambda fid, ziel: versetzt.append((fid, ziel)))
+    viewport.featureTurned.connect(lambda fid, achse, winkel: gedreht.append((fid, achse, winkel)))
+
+    # `_on_gizmo_released` rastet, bevor es hierher kommt — geprüft wird, dass
+    # genau der gerastete Wert ankommt und nicht ein zweiter, eigener.
+    verbraucht = viewport._emit_feature_drag(
+        TransformSteps(offset=(0.4, 0.0, 0.0), axis="z", angle=45.0, scale=1.0)
+    )
+    assert verbraucht
+    assert gedreht == [("hole_1", "z", 45.0)]
+    assert not versetzt, "ein Zug ist eine Geste und wird eine Operation"
+
+
+def test_a_drag_on_the_body_still_belongs_to_the_body(qt_app: QApplication) -> None:
+    """Ohne gewähltes Merkmal ändert sich nichts am gewohnten Weg.
+
+    Die Gegenrichtung der beiden Tests darüber, und ohne sie wäre die
+    Abzweigung nicht geprüft, sondern nur benutzt: Ein Zug am Körper muss
+    weiterhin ``transformDragged`` auslösen. Eine Abzweigung, die alles
+    einfängt, wäre von einer, die richtig trennt, an den zwei Tests oben
+    nicht zu unterscheiden.
+
+    Dass eine **Verrundung** hier steht und nicht „gar kein Merkmal", ist der
+    schärfere Fall: Sie ist gewählt, sie hat eine Mitte — und es gibt keine
+    Operation, die sie versetzt. Der Zug gehört deshalb dem Teil.
+    """
+    from app.core.geom.transform import TransformSteps
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+
+    versetzt: list[Any] = []
+    viewport.featureMoved.connect(lambda fid, ziel: versetzt.append((fid, ziel)))
+    zug = TransformSteps(offset=(5.0, 0.0, 0.0), axis=None, angle=0.0, scale=1.0)
+
+    assert viewport._emit_feature_drag(zug) is False, "ohne Merkmal gilt der Zug dem Körper"
+
+    viewport.select_feature("fillet_1")
+    assert viewport._emit_feature_drag(zug) is False, (
+        "eine Verrundung lässt sich nicht versetzen — der Zug bleibt beim Teil"
+    )
+    assert not versetzt

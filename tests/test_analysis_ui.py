@@ -655,16 +655,40 @@ def test_a_feature_menu_names_the_operations_of_its_kind(window: MainWindow) -> 
     dort steht das Maß: „Ø3,22 mm" für eine Bohrung. An ``for_feature``
     gereicht fand das nie eine Operation, und das Menü an einer angeklickten
     Bohrung bestand aus Ausblenden und Alles andere ausblenden.
+
+    **Der Test verlangte lange, dass jede Operation direkt dasteht, und das war
+    eine Zusage, die die Oberfläche nie gegeben hat.** ``_add_operations``
+    faltet die größten Gruppen, sobald das Menü über zwölf Zeilen ginge — am
+    Flächenklick tut es das seit je, dort bündelt *Bausteine* fünfundzwanzig
+    Einträge zu einer Zeile. An der Bohrung waren es zehn Operationen und damit
+    knapp darunter; mit *Merkmal verschieben*, *drehen* und *entfernen* sind es
+    dreizehn, und dieselbe Regel greift auch hier: Die fünf Katalogeinträge
+    stehen in einem Untermenü, die acht Operationen der Bohrung selbst direkt.
+
+    Und wo die Bausteine gefaltet würden, tritt der **Katalog** an ihre Stelle
+    — eine Zeile *Baustein einsetzen …*, die Bilder statt Vokabeln zeigt. Das
+    ist Roberts Bedingung von damals („solange man einfach zum Katalog kommt,
+    wenn man das Teil gewählt hat"), und sie gilt jetzt an der Bohrung wie
+    längst an der Fläche.
+
+    Geprüft wird deshalb, was die Oberfläche wirklich verspricht: **was das
+    Merkmal selbst angeht, steht direkt da**, und die Bausteine sind einen
+    Klick entfernt. Ein Katalog ist etwas anderes als eine Handlung an dieser
+    Bohrung; ihn zu bündeln kostet einen Klick und gibt vier Zeilen an die
+    Handlungen zurück, um derentwillen der Kunde geklickt hat.
     """
     window.object_tree.select_feature("obj_1", "hole_2")
     menu = window.object_tree.context_menu()
 
     assert menu is not None
-    labels = {action.text() for action in menu.actions()}
-    expected = {str(spec.title) for spec in window.object_tree.operations_for_feature("hole")}
+    direct = {action.text().replace("&", "") for action in menu.actions()}
+    offered = window.object_tree.operations_for_feature("hole")
+    expected = {str(spec.title) for spec in offered}
+    catalogue = {str(spec.title) for spec in offered if spec.category == "parts"}
 
     assert expected, "an einer Bohrung gibt es etwas zu tun"
-    assert expected <= labels, "und es steht direkt da, ohne Aufklappen"
+    assert expected - catalogue <= direct, "was die Bohrung selbst angeht, steht direkt da"
+    assert "Baustein einsetzen …" in direct, "und die Bausteine über den Katalog"
     menu.deleteLater()
 
 
@@ -2071,6 +2095,13 @@ def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) ->
             provenance="detected",
             params={"normal": (0.0, 0.0, 1.0), "centre": (0.0, 0.0, 5.0)},
         )
+        # **Beide Attrappen**, seit ``set_gizmo`` zwei Fragen stellt: wo der
+        # Griff *sitzt* (``gizmo_feature``, jedes versetzbare Merkmal) und was
+        # er *tut* (``gizmo_target``, nur die Fläche mit Press/Pull). Nur die
+        # zweite zu setzen liess die erste die echte Auswahl lesen — leer —,
+        # und der Würfel kam an einer Fläche zurück, an der er nichts zu
+        # suchen hat.
+        viewport.gizmo_feature = lambda: face  # type: ignore[method-assign]
         viewport.gizmo_target = lambda: face  # type: ignore[method-assign]
         viewport.set_gizmo(True)
         assert viewport._scale_handle is None, "eine Fläche hat keine Größe zu ändern"
