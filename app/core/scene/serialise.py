@@ -48,7 +48,7 @@ from app.core.types import (
     TemperatureSettings,
     Transaction,
 )
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, source_text
 
 
 def has_lone_surrogate(value: object) -> bool:
@@ -103,6 +103,9 @@ def parameter_to_data(parameter: Parameter) -> dict[str, Any]:
             ),
             "title_translatable": True if isinstance(title, TranslatableText) else None,
             "title_context": title.context if isinstance(title, TranslatableText) else None,
+            "title_values": (
+                dict(title.values) if isinstance(title, TranslatableText) and title.values else None
+            ),
             "expression": parameter.expression,
         }
     )
@@ -111,7 +114,7 @@ def parameter_to_data(parameter: Parameter) -> dict[str, Any]:
 def parameter_from_data(name: str, data: dict[str, Any]) -> Parameter:
     title: TranslatableText | str | None = data.get("title")
     if title is not None and data.get("title_translatable"):
-        title = TranslatableText(str(title), data.get("title_context"))
+        title = TranslatableText(str(title), data.get("title_context"), data.get("title_values"))
     return Parameter(
         name=name,
         value=float(data.get("value", 0.0)),
@@ -343,6 +346,9 @@ def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
             "title": title.msgid if isinstance(title, TranslatableText) else str(title),
             "title_translatable": True if isinstance(title, TranslatableText) else None,
             "title_context": title.context if isinstance(title, TranslatableText) else None,
+            "title_values": (
+                dict(title.values) if isinstance(title, TranslatableText) and title.values else None
+            ),
             "origin": origin_to_data(transaction.origin),
             "ops": list(transaction.ops),
             "changes": (
@@ -356,7 +362,7 @@ def transaction_from_data(data: dict[str, Any]) -> Transaction:
     changes = data.get("changes")
     title: TranslatableText | str = data.get("title", "")
     if data.get("title_translatable"):
-        title = TranslatableText(str(title), data.get("title_context"))
+        title = TranslatableText(str(title), data.get("title_context"), data.get("title_values"))
     return Transaction(
         id=data["id"],
         title=title,
@@ -396,7 +402,19 @@ def solver_to_data(solver: SolverInfo) -> dict[str, Any]:
             "strategy": solver.strategy,
             "attempted": list(solver.attempted) or None,
             "seed": solver.seed,
-            "note": str(solver.note) if solver.note is not None else None,
+            # **`source_text` und nicht `str`.** `str()` gäbe die Übersetzung,
+            # und die friert die Sprache ein, in der gerechnet wurde: Wer auf
+            # Französisch speichert, fände die Notiz auch auf Deutsch wieder
+            # französisch vor. Der Nachbar `finding_to_data` vermeidet das seit
+            # langem über die Message-ID, und `test_a_restored_finding_speaks_
+            # the_language_it_is_read_in` hält es dort fest.
+            #
+            # Hier genügt die Quellsprache, das volle Verfahren nicht: `note`
+            # wird von der einzigen Stelle, die ein `SolverInfo` baut
+            # (`geom/boolean.py`), nie gesetzt. Wer sie in Gebrauch nimmt,
+            # nimmt auch die drei Felder dazu — bis dahin wäre das Verfahren
+            # für einen Weg gebaut, den niemand geht.
+            "note": source_text(solver.note) if solver.note is not None else None,
         }
     )
 
@@ -486,6 +504,14 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
             "message": message.msgid if isinstance(message, TranslatableText) else str(message),
             "message_translatable": True if isinstance(message, TranslatableText) else None,
             "message_context": message.context if isinstance(message, TranslatableText) else None,
+            # **Nicht `values`** — das Feld darunter trägt die Werte des
+            # *Befunds*, diese hier die der *Meldung*. Zwei Dinge, ein Wort:
+            # ein gemeinsames Feld ließe das eine das andere überschreiben.
+            "message_values": (
+                dict(message.values)
+                if isinstance(message, TranslatableText) and message.values
+                else None
+            ),
             "object_id": finding.object_id,
             "op_id": finding.op_id,
             "feature_ids": list(finding.feature_ids) or None,
@@ -517,6 +543,11 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
                             if isinstance(action.label, TranslatableText)
                             else None
                         ),
+                        "label_values": (
+                            dict(action.label.values)
+                            if isinstance(action.label, TranslatableText) and action.label.values
+                            else None
+                        ),
                         "primary": True if action.primary else None,
                     }
                 )
@@ -531,12 +562,16 @@ def finding_from_data(data: dict[str, Any]) -> Finding:
     location = data.get("location")
     message: TranslatableText | str = data.get("message", "")
     if data.get("message_translatable"):
-        message = TranslatableText(str(message), data.get("message_context"))
+        message = TranslatableText(
+            str(message), data.get("message_context"), data.get("message_values")
+        )
     suggestions: list[Action] = []
     for entry in data.get("suggestions", ()):
         label: TranslatableText | str = entry.get("label", "")
         if entry.get("label_translatable"):
-            label = TranslatableText(str(label), entry.get("label_context"))
+            label = TranslatableText(
+                str(label), entry.get("label_context"), entry.get("label_values")
+            )
         suggestions.append(
             Action(
                 id=str(entry.get("id", "")),

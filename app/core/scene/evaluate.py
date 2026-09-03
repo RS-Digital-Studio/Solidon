@@ -73,7 +73,7 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import EPS_DISPLAY
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, source_text
 
 _log = get_logger(__name__)
 
@@ -738,9 +738,12 @@ def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
     if not blamed:
         return "kein Befund zu dieser Operation"
     last = blamed[-1]
-    reason = last.message
-    text = reason.msgid if isinstance(reason, TranslatableText) else str(reason)
-    return f"{last.code}: {text}"
+    # **Über `source_text`, nicht über `.msgid`.** Die Message-ID von
+    # „12 von 400 offenen Kanten geschlossen" lautet `{closed} von {total}
+    # offenen Kanten geschlossen` — roh geschrieben stünden im Protokoll die
+    # Platzhalter statt der Zahlen, also gerade das, wonach der Support sucht.
+    # Dieselbe Funktion löst das für Dateinamen (`Slot number.stl`).
+    return f"{last.code}: {source_text(last.message)}"
 
 
 def _without_settled(findings: Sequence[Finding]) -> list[Finding]:

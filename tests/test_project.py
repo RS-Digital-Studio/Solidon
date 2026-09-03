@@ -33,8 +33,16 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
-from app.core.scene.serialise import finding_from_data, finding_to_data
+from app.core.scene.serialise import (
+    finding_from_data,
+    finding_to_data,
+    parameter_from_data,
+    parameter_to_data,
+    transaction_from_data,
+    transaction_to_data,
+)
 from app.core.types import (
+    Action,
     ChatEntry,
     FeatureRef,
     Finding,
@@ -46,6 +54,7 @@ from app.core.types import (
     Report,
     Source,
     SourceOrigin,
+    Transaction,
 )
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, install_catalog, set_language
 from app.i18n.catalog import read_catalog
@@ -1594,6 +1603,72 @@ def test_a_restored_finding_speaks_the_language_it_is_read_in() -> None:
     assert in_french == str(
         TranslatableText("Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters.").translate("fr")
     ), f"in der Sprache des Schreibers eingefroren: {in_french!r}"
+
+
+def test_a_translatable_text_keeps_its_values_through_the_round_trip() -> None:
+    """Die Werte eines Textes überleben das Ablegen — an allen vier Stellen.
+
+    **Ein Text ist Vorlage plus Werte, nicht Vorlage allein.** „12 von 400
+    offenen Kanten geschlossen" ist die Message-ID ``{closed} von {total}
+    offenen Kanten geschlossen`` und drei Zahlen. Abgelegt wurde bisher nur die
+    Vorlage; aus warmem Cache und aus ``report.json`` kam der Satz mit
+    sichtbaren geschweiften Klammern zurück. Getroffen hat es real
+    ``repair.holes_filled`` (:mod:`app.core.geom.repair`).
+
+    Der Fehler war an zwei anderen Stellen schon behoben — in
+    :func:`app.i18n.source_text` für Dateinamen und in
+    ``cache._name_to_data`` für Slotnamen — und deren Docstring verweist sogar
+    auf ``transaction_to_data``. Hingegangen war niemand.
+
+    **Alle vier Stellen in einem Test**, weil sie eine Sache prüfen und nicht
+    vier: Ein zweiter Weg, der die Werte fallen lässt, ist derselbe Fehler.
+    """
+    werte = {"closed": 12, "total": 400, "remaining": 388}
+    vorlage = "{closed} von {total} offenen Kanten geschlossen; {remaining} bleiben offen."
+
+    # 1) Die Meldung eines Befunds — der real getroffene Fall.
+    befund = finding_from_data(
+        finding_to_data(
+            Finding(code="repair.holes_filled", severity="info", message=_(vorlage, **werte))
+        )
+    )
+    assert str(befund.message) == "12 von 400 offenen Kanten geschlossen; 388 bleiben offen.", (
+        f"die Meldung zeigt ihre Platzhalter: {befund.message!r}"
+    )
+
+    # 2) Die Beschriftung eines Auswegs am selben Befund.
+    mit_ausweg = finding_from_data(
+        finding_to_data(
+            Finding(
+                code="x",
+                severity="info",
+                message="egal",
+                suggestions=(Action(id="a", label=_("{n} Löcher zeigen", n=3)),),
+            )
+        )
+    )
+    assert str(mit_ausweg.suggestions[0].label) == "3 Löcher zeigen", (
+        f"der Ausweg zeigt seine Platzhalter: {mit_ausweg.suggestions[0].label!r}"
+    )
+
+    # 3) Der Titel einer Transaktion.
+    zurueck = transaction_from_data(
+        transaction_to_data(
+            Transaction(id="t1", title=_("{n} Objekte zusammengefügt", n=7), ops=(1,))
+        )
+    )
+    assert str(zurueck.title) == "7 Objekte zusammengefügt", (
+        f"der Verlaufseintrag zeigt seine Platzhalter: {zurueck.title!r}"
+    )
+
+    # 4) Der Titel eines Projektparameters.
+    parameter = parameter_from_data(
+        "wall",
+        parameter_to_data(Parameter(name="wall", value=2.0, title=_("Wand {seite}", seite="A"))),
+    )
+    assert str(parameter.title) == "Wand A", (
+        f"der Parametertitel zeigt seine Platzhalter: {parameter.title!r}"
+    )
 
 
 def test_a_plain_message_stays_plain() -> None:

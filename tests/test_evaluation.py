@@ -1635,6 +1635,45 @@ def test_a_stopped_evaluation_says_why_in_the_log(caplog: pytest.LogCaptureFixtu
     assert "." in zeilen[0].split("op 1: ")[-1], f"nennt keinen Befundcode: {zeilen[0]}"
 
 
+def test_the_log_reason_carries_the_numbers_not_the_placeholders() -> None:
+    """Der Abbruchgrund nennt die Zahlen — sonst hilft er dem Support wieder nicht.
+
+    Der Nachbartest darüber hat die Zeile überhaupt erst sprechend gemacht.
+    Nur trägt eine Befundmeldung ihre Werte getrennt von ihrer Vorlage, und
+    die Zeile legte allein die Vorlage ab: Aus „12 von 400 offenen Kanten
+    geschlossen" wurde ``{closed} von {total} offenen Kanten geschlossen`` —
+    also gerade das weg, wonach jemand im Protokoll sucht.
+
+    **Die Message-ID bleibt richtig**, nur eben mit eingesetzten Werten: Ein
+    Protokoll aus Portugal muss der Support lesen können, deshalb steht dort
+    weiter die Quellsprache und nicht ``str()``. Genau das leistet
+    :func:`app.i18n.source_text`, und dieselbe Funktion löst es seit langem
+    für Dateinamen (aus ``Slot {number}`` wurde sonst ``Slot number.stl``).
+    """
+    from app.core.scene.evaluate import _why_it_stopped
+
+    grund = _why_it_stopped(
+        [
+            Finding(
+                code="repair.holes_filled",
+                severity="info",
+                message=_(
+                    "{closed} von {total} offenen Kanten geschlossen.",
+                    closed=12,
+                    total=400,
+                ),
+                op_id=3,
+            )
+        ],
+        stopped_at=3,
+    )
+
+    assert "{closed}" not in grund and "{total}" not in grund, (
+        f"die Protokollzeile zeigt Platzhalter statt Zahlen: {grund!r}"
+    )
+    assert grund == "repair.holes_filled: 12 von 400 offenen Kanten geschlossen.", grund
+
+
 def test_an_expression_that_breaks_its_own_bounds_is_reported(
     history: History, document: Document, profile: Profile, registry: Registry
 ) -> None:
