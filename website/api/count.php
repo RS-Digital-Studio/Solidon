@@ -84,12 +84,13 @@ const COUNT_MAX_TOTAL_BYTES = 64 * 1024 * 1024;
  * Verbietet ``open_basedir`` den Weg dorthin, wird nicht gezählt. Ein
  * öffentlicher Rückfallordner wäre für pseudonyme Nutzungsdaten nicht sicher.
  */
-function store_dir(): string
+function store_dir(?string &$wanted = null): string
 {
     $configured = getenv('SOLIDON_STATS_DIR');
     $outside = $configured === false || $configured === ''
         ? dirname(__DIR__, 2) . '/solidon-stats'
         : $configured;
+    $wanted = $outside;
     if (substr($outside, 0, 1) !== DIRECTORY_SEPARATOR
         && preg_match('#^[A-Za-z]:[\\\\/]#', $outside) !== 1) {
         return '';
@@ -577,8 +578,20 @@ function record(string $kind, string $value): bool
         return true;  // Der Download läuft trotzdem — nur die Zeile entsteht nicht.
     }
 
-    $dir = store_dir();
+    $dir = store_dir($wanted);
     if (!@is_dir($dir)) {
+        // Dieselbe stille Krankheit wie bei der nicht privaten Datei weiter
+        // oben, nur eine Ebene höher: Dort war die Zeile nicht schreibbar,
+        // hier fehlt der Ordner oder wurde verworfen — weil er im
+        // Dokumentenstamm läge, ein Verweis ist oder offene Rechte trägt.
+        // Der Betrieb läuft weiter, ein Zähler hält ihn nie an; aber der
+        // Betreiber darf den Ausfall nicht erst an einer flachen Kurve merken.
+        error_log(sprintf(
+            'Solidon: %s ist kein brauchbarer Ablageort (er muss außerhalb des '
+            . 'Dokumentenstamms liegen, darf kein Verweis sein und braucht die Rechte 0700) '
+            . '— es wird nichts gezählt.',
+            $wanted
+        ));
         return true;  // Kein Ablageort — dann eben keine Zahl. Ein Zähler hält nie den Betrieb an.
     }
 
