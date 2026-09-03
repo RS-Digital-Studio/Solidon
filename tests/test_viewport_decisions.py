@@ -5302,3 +5302,70 @@ def test_a_view_setter_that_changes_nothing_rebuilds_nothing(qt_app: QApplicatio
     assert aufbauten[0] - vorher == 1, "dieselbe Ebene bei derselben Dicke ist keine Änderung"
     viewport.set_section(dataclasses.replace(ebene), 2.0)
     assert aufbauten[0] - vorher == 2, "eine andere Dicke schon"
+
+
+def test_a_dragged_feature_leaves_a_mark_where_it_came_from(qt_app: QApplication) -> None:
+    """Der Zug zeigt beides: wohin — und von wo.
+
+    „Die Bohrung, die beim Verschieben die Vorschau haben sollte" (Robert,
+    03.09.2026). Die Marke wandert mit dem Griff und hat seit `_handle_radius`
+    genau den Durchmesser des Merkmals; sie **ist** damit die Vorschau der
+    Zielstelle. Was fehlte, war der Bezug: Der Körper steht während des Zugs
+    still — seine Geometrie ändert sich erst bei der Auswertung —, und ohne
+    eine Marke am Ausgangsort sah es aus, als bewege sich nichts oder als ziehe
+    man das ganze Teil.
+
+    Gemessen am laufenden Fenster, Bohrung Ø 7,48, Zug über 25 mm:
+
+        vor dem Zug        kein Ring
+        während des Zugs   Ring bei (0, 0, 35), Ø 7,48 — die Ausgangsstelle
+        nach dem Zug       weg
+
+    **Er erscheint erst mit dem ersten sichtbaren Stück des Zugs.** Ihn schon
+    beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu behaupten, die
+    noch keine ist — dieselbe Zurückhaltung, die das Wertfeld daneben übt.
+    """
+    from app.core.types import Feature
+    from app.ui.viewport import Viewport
+
+    gezeichnet: list[dict[str, object]] = []
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
+            gezeichnet.append(dict(kwargs))
+            return SimpleNamespace(GetBounds=lambda: (0.0, 7.48, 0.0, 7.48, 35.0, 35.0))
+
+        def remove_actor(self, actor: Any, **kwargs: Any) -> None:
+            gezeichnet.append({"entfernt": True})
+
+    viewport = Viewport()
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    loch = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 17.5),
+            "axis": (0.0, 0.0, 1.0),
+            "depth": 35.0,
+            "diameter": 7.48,
+        },
+    )
+    # Der Sitz entsteht beim Anlegen der Marke; der Ring nimmt denselben.
+    viewport._face_seat = ((0.0, 0.0, 35.0), (0.0, 0.0, 1.0), 3.74)
+
+    assert viewport._ghost_actor is None
+    viewport._show_ghost(loch)
+    assert viewport._ghost_actor is not None, "der Ring markiert die Ausgangsstelle"
+    ring = next(k for k in gezeichnet if k.get("name") == "feature-ghost")
+    assert ring["pickable"] is False, "eine Marke fängt keine Klicks (Robert, 03.09.2026)"
+
+    viewport._drop_ghost()
+    assert viewport._ghost_actor is None, "nach dem Zug gilt die Auswertung, nicht der Ring"
