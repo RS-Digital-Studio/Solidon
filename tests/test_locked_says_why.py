@@ -55,11 +55,13 @@ from app.ui.install_dialog import InstallDialog
 from app.ui.main_window import MainWindow
 from app.ui.manual_window import ManualWindow
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
+from app.ui.panels import BodyChoiceDialog
 from app.ui.print_disclosure import PrintDisclosureDialog
 from app.ui.print_settings_dialog import FilamentOverrideDialog
 from app.ui.recipe_dialog import RecipeDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.settings_dialog import SettingsDialog
 from app.ui.shortcuts_window import ShortcutsWindow
 from app.ui.sketch_editor import ExpressionDialog, PointDialog, SketchEditorDialog
 from app.ui.support_dialog import SupportDialog
@@ -123,6 +125,23 @@ def _op_dialog(session: Session) -> OperationDialog:
         object_id: str(entry.name) for object_id, entry in session.last_result.scene.objects.items()
     }
     return OperationDialog(REGISTRY.get("hollow_object"), names)
+
+
+def _empty_body_choice() -> BodyChoiceDialog:
+    """Die Körperauswahl, aus der alle Haken heraus sind.
+
+    Zwei Körper, damit sie überhaupt aufgeht — sie erscheint erst, wo es mehr
+    als einen gibt. Abgewählt wird über den Haken *Alle auswählen*, also auf
+    demselben Weg wie beim Kunden und nicht über die Liste von innen.
+    """
+    dialog = BodyChoiceDialog(
+        None,
+        "Zu fein vernetzt beheben",
+        ("obj_1", "obj_2"),
+        {"obj_1": "Halter", "obj_2": "Deckel"},
+    )
+    dialog.all_of_them.setChecked(False)
+    return dialog
 
 
 def _filament_override(session: Session) -> FilamentOverrideDialog:
@@ -199,6 +218,12 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     # daran zuerst „Auswahl als Baustein speichern …", und das war mein
     # Aufbau und kein Befund. Der Grund für *Einfügen* dagegen fehlte wirklich.
     "PartCatalog": lambda _session: _wired_catalog(),
+    # **Mit abgewählten Körpern, und das ist der Punkt.** Der Wächter sieht
+    # nur *gesperrte* Knöpfe an; im Normalzustand sind alle Körper angehakt und
+    # *Übernehmen* ist frei — der Dialog stünde als geprüft in der Liste, ohne
+    # dass je etwas geprüft worden wäre. Gesperrt ist er genau dann, wenn der
+    # Kunde den letzten Haken wegnimmt.
+    "BodyChoiceDialog": lambda _session: _empty_body_choice(),
     "SketchUseDialog": lambda _session: SketchUseDialog(),
     # **Mit leerer Liste, wie beim Filamentdialog:** Eine Befehlspalette ohne
     # Einträge ist der Zustand, in dem ein Suchfeld nichts findet.
@@ -238,6 +263,7 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     "AiDisclosureDialog": lambda _session: AiDisclosureDialog(
         AiDisclosureTarget(backend="ollama", target_class="llm", address="http://localhost:11434")
     ),
+    "SettingsDialog": lambda _session: SettingsDialog(UiSettings()),
 }
 
 

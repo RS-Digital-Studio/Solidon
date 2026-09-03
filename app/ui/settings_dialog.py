@@ -155,19 +155,31 @@ class SettingsDialog(QDialog):
         self._reset_ai_disclosure = False
         self.ai_disclosure_reset = QPushButton(tr("KI-Hinweis erneut anzeigen"), self)
         self.ai_disclosure_reset.setAccessibleName(self.ai_disclosure_reset.text())
-        self.ai_disclosure_reset.setAccessibleDescription(
-            tr(
-                "Löscht nur den lokalen Anzeigenachweis. Vor der nächsten "
-                "Chatnachricht erscheint der KI-Hinweis erneut."
-            )
-        )
-        self.ai_disclosure_reset.setToolTip(self.ai_disclosure_reset.accessibleDescription())
         has_disclosure = bool(
             settings.ai_disclosure_version
             or settings.ai_disclosure_backend
             or settings.ai_disclosure_target
             or settings.ai_disclosure_at_utc
         )
+        # **Gesperrt heißt: der Grund steht dort, wo sonst der Zweck steht.**
+        # Der Knopf trug seine Beschreibung unabhängig vom Zustand, und die
+        # sagt, was er *täte* — auf einem Rechner, der den Hinweis nie gesehen
+        # hat, ist das die Antwort auf eine Frage, die niemand gestellt hat.
+        # Wer den grauen Knopf anfasst, will wissen, warum er grau ist.
+        note = (
+            tr(
+                "Löscht nur den lokalen Anzeigenachweis. Vor der nächsten "
+                "Chatnachricht erscheint der KI-Hinweis erneut."
+            )
+            if has_disclosure
+            else tr(
+                "Der KI-Hinweis wurde auf diesem Rechner noch nicht bestätigt "
+                "— es gibt nichts zurückzusetzen."
+            )
+        )
+        self.ai_disclosure_reset.setAccessibleDescription(note)
+        self.ai_disclosure_reset.setToolTip(note)
+        self.ai_disclosure_reset.setStatusTip(note)
         self.ai_disclosure_reset.setEnabled(has_disclosure)
         self.ai_disclosure_reset.clicked.connect(self._reset_disclosure)
 
