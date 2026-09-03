@@ -107,7 +107,7 @@ dans `website/version.json`.
 - L'avis d'impression donne un conseil au lieu de renvoyer à des numéros du contrat de licence.
 ### Messages, boutons et informations
 
-- Douze boutons verrouillés dans neuf fenêtres indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.
+- Les boutons verrouillés indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.
 - Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Créer* dans la boîte de dialogue de modèle.
 - Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.
 - Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais.
@@ -118,7 +118,7 @@ dans `website/version.json`.
 
 - Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.
 - Lorsque la discussion répartit des objets sur des plateaux d'impression, le résultat est ensuite visible dans la vue.
-- Un constat sur un assemblage désigne le corps concerné ; sur douze constats sans action, il en reste deux, et ces deux sont de simples indications.
+- Un constat sur un assemblage désigne le corps concerné et porte son action ; là où il n'y en a pas, c'est une simple indication.
 - La discussion connaît les nouvelles actions sur les caractéristiques reconnues et les exécute sur demande.
 ## 0.3.0
 

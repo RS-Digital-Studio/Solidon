@@ -106,7 +106,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O aviso de impressão dá um conselho em vez de remeter para números do contrato de licença.
 ### Mensagens, botões e informação
 
-- Doze botões bloqueados em nove janelas indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.
+- Os botões bloqueados indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.
 - Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.
 - As recusas não terminam apenas com a frase, mas com a saída.
 - Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês.
@@ -117,7 +117,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.
 - Quando o chat distribui objetos por mesas de impressão, o resultado fica depois visível na imagem.
-- Um achado sobre um conjunto aponta o corpo em questão; de doze achados sem ação restam dois, e esses dois são meras indicações.
+- Um achado sobre um conjunto aponta o corpo em questão e traz a sua ação; onde não há nenhuma, é uma simples indicação.
 - O chat conhece as novas ações sobre características reconhecidas e executa-as quando pedido.
 ## 0.3.0
 

@@ -106,7 +106,7 @@ it into `website/version.json`.
 - The printing notice gives advice instead of pointing to clause numbers of the licence agreement.
 ### Messages, buttons and information
 
-- Twelve locked buttons in nine windows now say on the button what they are missing — by mouse, by keyboard and for a screen reader.
+- Locked buttons now say on the button what they are missing — by mouse, by keyboard and for a screen reader.
 - Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Create* in the model dialog.
 - Refusals no longer end with the sentence alone, but with the way out.
 - An unexpected error is explained in the language you have set, instead of reciting an internal English text.
@@ -117,7 +117,7 @@ it into `website/version.json`.
 
 - If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.
 - When the chat arranges objects on print beds, the result is visible in the view afterwards.
-- A finding about an assembly points at the body it concerns; of twelve findings without an action, two remain, and those two are pure notes.
+- A finding about an assembly points at the body it concerns and carries its action; where none is offered, it is a plain note.
 - The chat knows the new actions on recognised features and carries them out on request.
 ## 0.3.0
 

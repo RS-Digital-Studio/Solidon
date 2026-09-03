@@ -106,7 +106,7 @@ scrive in `website/version.json`.
 - L'avviso di stampa dà un consiglio invece di rimandare ai numeri del contratto di licenza.
 ### Messaggi, pulsanti e informazioni
 
-- Dodici pulsanti bloccati in nove finestre indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.
+- I pulsanti bloccati indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.
 - Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Crea* nella finestra del modello.
 - I rifiuti non finiscono con la sola frase, ma con la via d'uscita.
 - Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese.
@@ -117,7 +117,7 @@ scrive in `website/version.json`.
 
 - Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.
 - Quando la chat dispone oggetti sui piani di stampa, il risultato è poi visibile nell'immagine.
-- Un rilievo su un assieme indica il corpo interessato; di dodici rilievi senza azione ne restano due, e quei due sono semplici indicazioni.
+- Un rilievo su un assieme indica il corpo interessato e porta la sua azione; dove non ce n'è, è una semplice indicazione.
 - La chat conosce le nuove azioni sulle caratteristiche riconosciute e le esegue su richiesta.
 ## 0.3.0
 

@@ -107,7 +107,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El aviso de impresión da un consejo en vez de remitir a números del contrato de licencia.
 ### Mensajes, botones e información
 
-- Doce botones bloqueados en nueve ventanas indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.
+- Los botones bloqueados indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.
 - Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Generar* en el diálogo de modelo.
 - Los rechazos no terminan solo con la frase, sino con la salida.
 - Un error inesperado se explica en el idioma ajustado, en vez de recitar un texto interno en inglés.
@@ -118,7 +118,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Si una referencia a una característica es ambigua, el chat se detiene, resalta los candidatos en la imagen y pregunta, indicando el cuerpo al que pertenece cada uno.
 - Cuando el chat distribuye objetos en placas de impresión, el resultado se ve después en la imagen.
-- Un hallazgo sobre un conjunto señala el cuerpo del que se trata; de doce hallazgos sin acción quedan dos, y esos dos son meros avisos.
+- Un hallazgo sobre un conjunto señala el cuerpo del que se trata y lleva su acción; donde no hay ninguna, es un simple aviso.
 - El chat conoce las nuevas acciones sobre características reconocidas y las ejecuta cuando se le pide.
 ## 0.3.0
 

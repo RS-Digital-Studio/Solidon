@@ -131,7 +131,7 @@ Nutzen da und sonst nichts.
 - Der Druckhinweis gibt einen Rat, statt auf Nummern des Lizenzvertrags zu verweisen.
 ### Meldungen, Knöpfe und Auskunft
 
-- Zwölf gesperrte Knöpfe in neun Fenstern nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.
+- Gesperrte Knöpfe nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.
 - Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Erzeugen* im Modell-Dialog.
 - Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.
 - Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen.
@@ -142,7 +142,7 @@ Nutzen da und sonst nichts.
 
 - Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.
 - Ordnet der Chat Objekte auf Druckplatten an, ist das Ergebnis danach im Bild zu sehen.
-- Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht; von zwölf Befunden ohne Handlung sind zwei geblieben, und die zwei sind reine Hinweise.
+- Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht, und trägt seine Handlung; wo keine steht, ist er ein reiner Hinweis.
 - Der Chat kennt die neuen Handlungen an erkannten Merkmalen und führt sie auf Zuruf aus.
 ## 0.3.0
 
