@@ -97,7 +97,7 @@ from app.ui.panels import align_forms, collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.style import ROOMY, TIGHT, make_primary, set_level
-from app.ui.theme import THEMES
+from app.ui.theme import THEMES, current_theme
 
 _log = get_logger(__name__)
 
@@ -2186,7 +2186,10 @@ class PrintSettingsDialog(QDialog):
         # für eine Umrandung, nicht für Text. Als Fläche mit der zugehörigen
         # Schriftfarbe sind es 7,93, in beiden Themen. Das Fett bleibt als
         # zweite Kodierung (Regel 18).
-        colours = THEMES[self.ui_settings.theme]
+        # ``current_theme()`` und nicht ``ui_settings.theme``: Es gibt den Typ
+        # ``Theme`` zurück statt eines ``str`` — und es nennt das gerade
+        # aktive Thema, nicht den zuletzt gespeicherten Wert.
+        colours = THEMES[current_theme()]
         label.setStyleSheet(
             f"background: {ROLES['select']}; color: {colours['highlight_text']};"
             " font-weight: 600; border-radius: 3px; padding: 0 4px;"
