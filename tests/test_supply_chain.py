@@ -131,7 +131,9 @@ def test_apple_keys_are_removed_inside_the_fixed_signing_step() -> None:
 def test_licence_notice_precedes_every_package_and_release_gate() -> None:
     """Notice/SBOM reisen einmal mit; Schema-Akten bleiben außerhalb des Kundenbaums."""
     package = _job("package")
-    notice = "python tools/make_licence_notices.py `"
+    # Als Modul, nicht als Skriptpfad: `python tools/x.py` setzt sys.path auf
+    # `tools/`, und `from tools import make_sbom` findet dann nichts (Tag-Lauf 10).
+    notice = "python -m tools.make_licence_notices `"
 
     assert notice in package
     assert "--sbom $sbomPath" in package

@@ -425,7 +425,7 @@ jobs:
         run: |
           $schemaUri = "https://raw.githubusercontent.com/CycloneDX/specification/55343ba19dee1785acf1ce9191540d5fd7b590db/schema/bom-1.6.schema.json"
           $schema = (Invoke-WebRequest -UseBasicParsing $schemaUri).Content
-          $sbomPath = python tools/make_sbom.py --locate-artifact dist
+          $sbomPath = python -m tools.make_sbom --locate-artifact dist
           if ($LASTEXITCODE -ne 0) {
             throw "Die Stückliste liegt nicht genau einmal im Kundenartefakt. Paket neu bauen und PyInstaller-Datenliste prüfen."
           }
@@ -444,11 +444,11 @@ jobs:
         # jeder Signierübergabe.
         shell: pwsh
         run: |
-          $sbomPath = python tools/make_sbom.py --locate-artifact dist
+          $sbomPath = python -m tools.make_sbom --locate-artifact dist
           if ($LASTEXITCODE -ne 0) { throw "Die Endartefakt-SBOM fehlt oder ist mehrdeutig." }
           $artifactRoot = if ($IsMacOS) { Resolve-Path "dist/Solidon3D.app" } else { Resolve-Path "dist/Solidon3D" }
           $noticePath = Join-Path $artifactRoot "THIRD-PARTY-NOTICES.md"
-          python tools/make_licence_notices.py `
+          python -m tools.make_licence_notices `
             --sbom $sbomPath `
             --output $noticePath `
             --manifest build/third-party-licenses.json
@@ -663,8 +663,13 @@ jobs:
           mkdir -p build
           cp "$appimage" "$flatpak" build/
           while IFS= read -r entry; do
-            case "/$entry/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
-            case "$entry" in /*|*\\*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+            # Ein Verzeichniseintrag endet im tar auf einen Schrägstrich, und
+            # aus `/$entry/` würde damit `//` — die Prüfung wies ihr eigenes
+            # Archiv ab (Tag-Lauf 10, 03.09.2026). Die macOS-Prüfung daneben
+            # schneidet ihn seit jeher ab; hier fehlte die Zeile.
+            trimmed=${entry%/}
+            case "/$trimmed/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
+            case "$trimmed" in /*|*\\*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
           done < <(tar -tzf "$archive")
           mkdir release-app
           tar -xzf "$archive" -C release-app
@@ -679,9 +684,9 @@ jobs:
           # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
           # hängt an einer Prüfung, die zum ersten Mal läuft. Was sie findet, steht
           # als Warnung im Lauf und wird behoben; dann wird sie wieder scharf.
-          python tools/make_licence_notices.py --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json \
+          python -m tools.make_licence_notices --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json \
             --package "appimage=build/$(basename "$appimage")" --package "flatpak=build/$(basename "$flatpak")" || echo "::warning::Releaseakte: Evidenz nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
-          python tools/make_licence_notices.py --release-check --artifact-root "$artifact" --sbom "$sbom" --release-evidence build/release-evidence.json || echo "::warning::Releaseakte: Belege unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
+          python -m tools.make_licence_notices --release-check --artifact-root "$artifact" --sbom "$sbom" --release-evidence build/release-evidence.json || echo "::warning::Releaseakte: Belege unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
       - name: Geprüfte Linux-Pakete veröffentlichen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -847,10 +852,13 @@ jobs:
           # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
           # hängt an einer Prüfung, die zum ersten Mal läuft. Was sie findet, steht
           # als Warnung im Lauf und wird behoben; dann wird sie wieder scharf.
-          python tools/make_licence_notices.py --write-evidence --sbom $sbomPath --release-evidence build/release-evidence.json --package "windows-installer=build/$($setup[0].Name)"
-          if ($LASTEXITCODE -ne 0) { Write-Warning "::warning::Releaseakte: Die Windows-Release-Evidenz wurde nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht" }
-          python tools/make_licence_notices.py --release-check --artifact-root $artifactRoot --sbom $sbomPath --release-evidence build/release-evidence.json
-          if ($LASTEXITCODE -ne 0) { Write-Warning "::warning::Releaseakte: Die Windows-Releasebelege sind unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht" }
+          # **Und der Fehlercode wird zurückgesetzt.** Ein PowerShell-Schritt
+          # endet mit dem letzten `$LASTEXITCODE`; eine Warnung setzt ihn nicht
+          # zurück, und der Job war trotz „nicht blockierend" rot (Tag-Lauf 10).
+          python -m tools.make_licence_notices --write-evidence --sbom $sbomPath --release-evidence build/release-evidence.json --package "windows-installer=build/$($setup[0].Name)"
+          if ($LASTEXITCODE -ne 0) { Write-Warning "::warning::Releaseakte: Die Windows-Release-Evidenz wurde nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"; $global:LASTEXITCODE = 0 }
+          python -m tools.make_licence_notices --release-check --artifact-root $artifactRoot --sbom $sbomPath --release-evidence build/release-evidence.json
+          if ($LASTEXITCODE -ne 0) { Write-Warning "::warning::Releaseakte: Die Windows-Releasebelege sind unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"; $global:LASTEXITCODE = 0 }
       - name: Geprüften Installer veröffentlichen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -1233,8 +1241,8 @@ jobs:
           # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
           # hängt an einer Prüfung, die zum ersten Mal läuft. Was sie findet, steht
           # als Warnung im Lauf und wird behoben; dann wird sie wieder scharf.
-          python tools/make_licence_notices.py --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json --package "macos-installer=build/$(basename "$package")" || echo "::warning::Releaseakte: Evidenz nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
-          python tools/make_licence_notices.py --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json || echo "::warning::Releaseakte: Belege unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
+          python -m tools.make_licence_notices --write-evidence --sbom "$sbom" --release-evidence build/release-evidence.json --package "macos-installer=build/$(basename "$package")" || echo "::warning::Releaseakte: Evidenz nicht geschrieben — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
+          python -m tools.make_licence_notices --release-check --artifact-root release-app/Solidon3D.app --sbom "$sbom" --release-evidence build/release-evidence.json || echo "::warning::Releaseakte: Belege unvollständig — nicht blockierend (Entscheidung Robert, 02.09.2026), das Paket wird trotzdem veröffentlicht"
       - name: Geprüften Mac-Bau veröffentlichen
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
