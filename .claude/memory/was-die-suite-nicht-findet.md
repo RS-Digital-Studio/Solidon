@@ -81,4 +81,49 @@ Stelle auf, sodass der Ausgang im Kern nie erreicht wurde — und
 Das ist der Satz, für den diese Notiz da ist — hier steht er zum zweiten Mal,
 mit fünf Fällen an einem Tag statt sechs.
 
+## Zum dritten Mal, und diesmal mit dem Grund (03.09.2026)
+
+Zwei Sitzungen zählten am selben Abend unabhängig dasselbe. a0: „Von
+den letzten **sechs** Funden in meinem Gebiet kam **keiner** aus meinen
+eigenen Tests." Bei mir dieselbe Bilanz über den ganzen Tag:
+
+| Fund | wer fand ihn | wie |
+|---|---|---|
+| Verrundungen mit Radius 0,0007 mm | 7f | Objektbaum eines Kundenmodells angesehen |
+| eine Senkung als drei Kegel | a0 | beim Gegenlesen eines Changelogs |
+| Körper springt nach dem Loslassen zurück | Robert | am Bildschirm |
+| Cache hält bis zu 991 MiB | Robert (Auftrag an 06/19) | gezielte Suche nach einer Fehlerklasse |
+| Kugelpfanne wird zur Senkung | ich | 81s Frage nach weiteren Zwillingen |
+| sieben von acht Szenenaufbauten unnötig | ich | beim Messen des Rücksprungs |
+
+**Keiner kam aus der Suite, und keiner aus einem Test, den es schon gab.** Vier
+kamen von außen — ein Kunde, ein Fragebogen, ein fremdes Gegenlesen,
+eine fremde Frage.
+
+**Der Grund, den a0 benannt hat und der die Notiz ergänzt:** Die Tests
+waren dabei nicht schlecht, sie waren grün *und* richtig. Sie maßen
+nur
+
+* den richtigen Wert an der **falschen Bauart** (der Testkorpus hat keine
+  tesselierte Kunst, also keine Verrundung mit einem Tausendstel Radius),
+* an der **falschen Auflösung** (die Kugelpfanne kippt zwischen 482 und
+  1602 Dreiecken; ein Test mit der groben Variante sieht den Fall nie),
+* gegen einen **vorgestellten Sollwert** (halbe Kugel statt 4-mm-Kalotte).
+
+Alle drei sind Eigenschaften des **Prüfkorpus**, nicht der Zusicherung.
+Ein Test kann nur falsch werden, wo sein Gegenstand die Sache trifft.
+
+**Was praktisch daraus folgt** — über „aus Kundensicht durchfahren"
+hinaus, das oben schon steht:
+
+* **Dieselbe Sache in mehreren Auflösungen messen.** Der teuerste Fund des
+  Tages (feineres Netz, schlechtere Erkennung) war nur sichtbar, weil derselbe
+  Körper dreimal mit verschiedener Feinheit durchlief. Eine Auflösung ist
+  eine Stichprobe.
+* **Echte Kundendateien in den Prüflauf**, nicht nur den Korpus. Die Modelle in
+  `Downloads` haben heute drei Funde geliefert, die kein selbst gebauter
+  Körper hatte.
+* **Fremdes Gegenlesen ist die produktivste Sorte Test.** Vier der sechs kamen
+  von jemandem, der etwas anderes suchte.
+
 Verwandt: [[eine-kette-endet-am-letzten-glied]], [[text-gesetzt-heisst-nicht-gezeigt]].
