@@ -50,3 +50,32 @@ Das ist das Prozess-Geschwister von [[am-eingang-drehen]] (antwortet die
 Messung auf jede Änderung gleich, misst sie nichts) und gehört zur Familie um
 [[gemessene-frage-ist-nicht-die-gestellte]]. Der Hänger selbst steht als
 Signatur C im Register.
+
+## Und wenn er wirklich steht: Der häufigste Grund ist eine Frage
+
+Am 04.09.2026 blieb ein Testlauf zweimal bei **genau 67 Fortschrittszeichen**
+stehen. Vier CPU-Proben hintereinander gaben denselben Wert auf die
+Nachkommastelle — der Prozess stand, er rechnete nicht. Die Differenzmessung
+oben hat das in zwanzig Sekunden entschieden.
+
+**Die Ursache war ein modaler Dialog.** Test 68 rief `start_empty()`, den
+Hauptknopf des Startbildschirms, und der fragt vorher, ob das geänderte
+Projekt weggeworfen werden darf. Im Testlauf beantwortet die Frage niemand.
+
+Zwei Dinge daran sind übertragbar:
+
+- **Eine reproduzierbare Zahl ist eine Adresse.** Zweimal exakt 67 heißt
+  „immer derselbe Test", nicht „irgendwann wird es langsam".
+  `pytest --collect-only -q` mit `-p no:randomly` nennt den Namen zu der Zahl,
+  ohne den Lauf zu wiederholen — die Zeichen davor sind die bestandenen, das
+  nächste ist der Hänger.
+- **Bevor man einen Hänger im Produkt sucht, fragt man, ob der Prüfstand eine
+  Frage gestellt hat.** Jede Handlung, die etwas Unwiederbringliches wegwirft,
+  darf nach Regel 19 nachfragen — und genau die sind es, die einen Testlauf
+  stillstehen lassen. Wer den Zustandswechsel prüfen will, ruft die Stelle
+  **hinter** der Frage (hier `session.start_new(...)`), nicht den Knopf davor.
+
+Verwandt: [[oberflaeche-von-hand-fahren]] (dort steht, wie man Dialoge
+abfängt, wenn man sie *im* Weg braucht) und
+[[abgebrochener-lauf-hinterlaesst-waisen]] — blockierte Reste eigener Läufe
+sehen genauso aus und verzögern fremde Messungen mit.
