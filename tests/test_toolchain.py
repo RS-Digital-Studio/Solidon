@@ -1868,6 +1868,7 @@ RENDERED_TESTS: Final[frozenset[str]] = frozenset(
     {
         "test_the_manual_intro_reads_like_product_documentation",
         "test_the_checked_in_manual_carries_the_current_version",
+        "test_the_checked_in_pdf_carries_the_current_version",
         "test_the_website_page_carries_every_chapter",
         "test_the_website_reference_carries_every_operation_and_parameter",
         "test_every_figure_of_the_website_page_is_there",

@@ -108,9 +108,19 @@ def test_the_checked_in_manual_carries_the_current_version(language: str) -> Non
     assert APP_VERSION in cover, f"{language}: Umschlag nicht auf {APP_VERSION}"
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_checked_in_pdf_carries_the_current_version(language: str) -> None:
-    """Website und PDF tragen denselben Versionsstand auf ihrer Titelseite."""
+    """Website und PDF tragen denselben Versionsstand auf ihrer Titelseite.
+
+    **Der dreizehnte, und er hat die kuratierte Liste widerlegt.** Er las als
+    einziger aus ``Releases/`` statt aus ``website/`` und fiel deshalb durch
+    jedes Muster, mit dem ich die zwölf anderen gesucht hatte. Aufgefallen ist
+    er am 04.09.2026 vor dem Tag zu 0.3.2: Achtzehn Läufe von ``test_manual``
+    waren rot, zwölf davon diese sechs Sprachen — und mit ``-m "not rendered"``
+    blieben sie rot, wären in der CI also angeschlagen. Genau das sollte
+    Roberts Entscheidung verhindern.
+    """
     from pypdf import PdfReader
 
     path = RELEASES / f"Solidon3D-Handbuch-{language}.pdf"
