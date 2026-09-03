@@ -1088,6 +1088,14 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     # Fehlers**, den Robert heute am Stopfen gefunden hat: Im Verlauf steht ein
     # Schritt, im Bild liegt dasselbe Teil. Wer eine Bohrung neben den Körper
     # verdoppelt, soll es lesen und nicht suchen.
+    #
+    # **Und diese Prüfung gehört hierher und ausdrücklich nicht zu den anderen
+    # vier.** Sie vergleicht das Volumen davor und danach, und beim Verdoppeln
+    # ist die Differenz genau das Merkmal. Versetzen, Drehen und Ändern führen
+    # **zwei** Boolesche aus, die sich gegenseitig aufheben — ein gelungenes
+    # Versetzen ändert das Volumen um nichts. Dort eingebaut würde derselbe
+    # Aufruf bei **jedem** Erfolg anschlagen; gemessen am 03.09.2026 bleibt das
+    # Volumen einer versetzten Bohrung auf die Stelle genau gleich.
     nothing = without_effect(source.mesh, placed.mesh, change, ctx.profile)
     if nothing is not None:
         findings.append(nothing)
