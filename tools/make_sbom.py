@@ -780,14 +780,33 @@ def runtime_components(
         Path(path).name.startswith(("libgcc", "libgfortran", "libquadmath", "libstdc++"))
         for path in paths
     ):
+        # **Die Fassung kommt aus dem Paket des Bauservers, nicht aus dem
+        # Interpreter** (03.09.2026). `platform.python_compiler()` nennt den
+        # Compiler, mit dem CPython gebaut wurde — nicht die Bibliothek, die
+        # mitreist, und die Releaseakte verwirft eine solche Angabe seit
+        # 05ca4bd7 ausdrücklich („Compilerangabe"). MSVC und libffi lesen
+        # ihre Fassung längst aus der Datei beziehungsweise dem Paket; GCC
+        # blieb als einzige Familie zurück und ließ den Linux-Paketjob
+        # scheitern. Derselbe Weg wie bei den übrigen Linux-Familien darunter:
+        # `dpkg-query` sagt, aus welchem Paket die Datei stammt und in welcher
+        # Fassung. Wo es kein dpkg gibt — macOS —, bleibt es bei der alten
+        # Angabe; dort greift die Prüfung nicht.
+        gcc_files = [
+            entry for entry in entries if Path(entry.path).name.startswith(("libgcc", "libstdc++"))
+        ]
+        if gcc_files and shutil.which("dpkg-query") is not None:
+            gcc_version, gcc_source = _dpkg_version(Path(gcc_files[0].path).name)
+        else:
+            gcc_version = platform.python_compiler()
+            gcc_source = "Compilerangabe des Zielinterpreters"
         components.append(
             _runtime_component(
                 "gcc-runtime",
                 "GCC Runtime Libraries",
-                platform.python_compiler(),
+                gcc_version,
                 "GPL-3.0-or-later WITH GCC-exception-3.1",
                 "https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html",
-                "Compilerangabe des Zielinterpreters",
+                gcc_source,
             )
         )
     if "msvc-runtime" in owners or any(
