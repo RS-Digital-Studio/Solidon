@@ -1594,3 +1594,59 @@ def test_an_inner_face_is_named_as_such() -> None:
 
     assert feature_name("face_1", outer) != feature_name("face_2", inner)
     assert feature_name("face_1", outer) in feature_name("face_2", inner)
+
+
+def test_a_fillet_smaller_than_any_tool_is_none() -> None:
+    """Dieselbe Schranke wie bei Bohrung und Zapfen — sie fehlte hier.
+
+    **Der Befund (3d-druck-7f, 03.09.2026):** Im Objektbaum eines Kundenmodells
+    standen Zeilen mit „Hohlkehle R0,00 mm", dazu eine ganze Leiter nach unten
+    — R0,01, R0,03, R0,20. Gemessen an „Blessed Family — Heart Script Decor":
+    109 erkannte Verrundungen, die kleinste mit **0,0007 mm** Radius, und
+    zweiundzwanzig unter einer Extrusionsbahn (0,42 mm). Das ist Tesselierung
+    und keine Kante: Wo ein paar Dreiecke zufällig um eine Achse stehen,
+    findet der Fit einen Zylinderausschnitt.
+
+    `MIN_CYLINDER_DIAMETER` gab es längst, mit genau dieser Begründung — „was
+    für kein Werkzeug zu klein ist, ist für keine Passung zu klein" —, und sie
+    galt für Bohrungen und Zapfen. Der Kommentar bei den Zapfen sagt sogar
+    ausdrücklich „dieselbe Schranke wie bei der Bohrung"; die Verrundung war
+    die dritte, an die niemand gedacht hat.
+
+    Geprüft wird an einem Quader mit zwei verrundeten Kanten: eine über der
+    Schranke, eine darunter. Der Test nimmt sie über die Passungen entgegen,
+    damit er ohne den vollen Erkennungslauf auskommt.
+    """
+    from dataclasses import replace
+
+    from app.core.perceive.features import (
+        MIN_CYLINDER_DIAMETER,
+        CylinderFit,
+        detect_fillets,
+    )
+
+    mesh = MeshData(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    gross = CylinderFit(
+        axis=(0.0, 0.0, 1.0),
+        centre=(0.0, 0.0, 0.0),
+        radius=3.0,
+        residual=0.0,
+        inward=False,
+        spread=0.0,
+    )
+    winzig = replace(gross, radius=MIN_CYLINDER_DIAMETER / 2.0 - 0.01)
+    genau = replace(gross, radius=MIN_CYLINDER_DIAMETER / 2.0)
+
+    fläche = tuple(range(6))
+    gefunden = detect_fillets(mesh, [(gross, list(fläche)), (winzig, list(fläche))])
+
+    assert [f.params["radius"] for f in gefunden] == [3.0], (
+        "was für kein Werkzeug groß genug ist, ist auch keine Verrundung"
+    )
+    assert [f.id for f in gefunden] == ["fillet_1"], (
+        "und die Nummern bleiben lückenlos — eine fillet_2 ohne fillet_1 wäre "
+        "ein Verweis ins Leere (§21.2)"
+    )
+
+    auf_der_grenze = detect_fillets(mesh, [(genau, list(fläche))])
+    assert len(auf_der_grenze) == 1, "genau auf der Schranke zählt noch"

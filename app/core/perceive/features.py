@@ -1158,6 +1158,19 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     """
     found = _fitted(mesh).fillets if fillets is None else fillets
     body = mesh.raw
+    # **Dieselbe Schranke wie bei Bohrung und Zapfen**
+    # (:data:`MIN_CYLINDER_DIAMETER`), und sie fehlte hier als Einziger. An
+    # „Blessed Family — Heart Script Decor" gemessen: 109 erkannte
+    # Verrundungen, die kleinste mit **0,0007 mm** Radius; vier zeigte der
+    # Objektbaum als „R0,00 mm" — eine Zahl, die eine Messung behauptet, die
+    # es nicht gibt. Zweiundzwanzig lagen unter einer Extrusionsbahn
+    # (0,42 mm) und waren damit nicht druckbar (Fund 3d-druck-7f, 03.09.2026).
+    #
+    # Was dort steht, ist Tesselierung und keine Kante: Wo ein paar Dreiecke
+    # zufällig um eine Achse stehen, findet der Fit einen Zylinderausschnitt.
+    # Die Begründung ist wörtlich die von :data:`MIN_CYLINDER_DIAMETER` — was
+    # für kein Werkzeug groß genug ist, ist auch keine Verrundung.
+    big = [entry for entry in found if entry[0].radius * 2.0 >= MIN_CYLINDER_DIAMETER]
     return [
         Feature(
             id=f"fillet_{number}",
@@ -1174,7 +1187,7 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
             },
             face_indices=tuple(patch),
         )
-        for number, (fit, patch) in enumerate(found, start=1)
+        for number, (fit, patch) in enumerate(big, start=1)
     ]
 
 

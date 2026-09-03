@@ -34,6 +34,23 @@ zwei verlorenen Felder bei erkannten Merkmalen bis dahin immer leer waren;
 messbar erst, als ce's created_by-Tor ihnen Inhalt gab. Sechs Merkmale mit
 Erzeuger hinein, null heraus.
 
+**Fall sieben, und er dreht die Sache um (03.09.2026):** Nicht der *Fehler*
+hatte ein Geschwister, sondern die *Regel* hat eines verloren.
+`MIN_CYLINDER_DIAMETER` — „was für kein Werkzeug zu klein ist, ist
+für keine Passung zu klein" — stand in `detect_holes` und in
+`detect_pins`, nicht in `detect_fillets`. An einem Kundenmodell meldete der
+Objektbaum daraufhin „Hohlkehle R0,00 mm": 109 Verrundungen, die kleinste mit
+0,0007 mm Radius, zweiundzwanzig unter einer Extrusionsbahn.
+
+Das Bemerkenswerte ist der Kommentar an der zweiten Stelle: „**Dieselbe
+Schranke wie bei der Bohrung**". Er belegt, dass jemand die Frage „wo gilt das
+noch?" gestellt hat — und beim Beantworten bei zwei Geschwistern stehen
+blieb. Ein solcher Kommentar liest sich hinterher wie eine Vollständigkeits-
+zusage und ist keine: Er nennt die Stellen, die die Regel **haben**, nie die,
+die sie bräuchten. Wer eine Schranke setzt, sucht deshalb nicht ihre
+Nachbarn, sondern **alle Aufrufer derselben Einpassung** — hier
+`fit_cylinder`, drei Erkenner, und der dritte war zwanzig Tage unbemerkt.
+
 **Why:** Ein Fix wird dort gemacht, wo der Fund war, und der Docstring
 dokumentiert die Lehre — aber niemand fragt, wo dieselbe Konstruktion noch
 steht. Die Lehre reist nicht von selbst zu den Geschwistern.
