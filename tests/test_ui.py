@@ -1742,6 +1742,78 @@ def test_a_feature_the_new_scene_does_not_know_leaves_the_window(window: MainWin
     assert not window.feature_panel._built, "und seine Zeilen stehen nicht mehr da"
 
 
+def test_saving_keeps_the_mark_on_the_step_that_stopped(window: MainWindow) -> None:
+    """Strg+S löschte das Ausrufezeichen vor dem hängenden Schritt.
+
+    ``_show_scene`` reicht ``result.stopped_at`` an den Verlauf weiter, der Weg
+    über ``projectChanged`` nicht — und Speichern meldet einen Dokumentwechsel
+    **ohne** nachfolgende Auswertung. Danach stand der Verlauf ohne Marke da,
+    während Statuszeile und Prüfbericht weiter sagten, die Kette halte an
+    (§15.3, gefunden von 3d-druck-85, 03.09.2026).
+
+    **Geprüft wird die Weitergabe, nicht das Bild.** Der Verlauf bekommt seine
+    Marke als Argument; fehlt sie dort, kann er sie nicht zeichnen. Ein Aufbau
+    mit einer wirklich angehaltenen Kette wäre der schönere Test, aber er
+    braucht eine Operation, die scheitert — und der Lauf dazu blieb in dieser
+    Datei zweimal stehen, ohne dass die Ursache am Fenster lag. Ein Test, der
+    nicht durchläuft, hält nichts fest.
+
+    Der Weg selbst ist echt: ``projectChanged`` ist das Signal, das Speichern
+    aussendet, und ``_on_project`` ist, was daran hängt.
+    """
+    seen: list[Any] = []
+    window.history_panel.show_document = (  # type: ignore[method-assign]
+        lambda document, stopped_at=None, undone=(): seen.append(stopped_at)
+    )
+
+    window.session.projectChanged.emit()
+    QApplication.processEvents()
+    assert seen == [None], f"ohne angehaltene Kette keine Marke — {seen}"
+
+    result = window.session.evaluate_now()
+    window.session.last_result = dataclasses.replace(result, stopped_at=7)
+    seen.clear()
+    window.session.projectChanged.emit()
+    QApplication.processEvents()
+
+    assert seen == [7], f"die Marke des angehaltenen Schritts kommt an — {seen}"
+
+
+def test_every_selected_body_lights_up_not_just_the_first(window: MainWindow) -> None:
+    """Das Bild zeigte einen, die Statuszeile sagte zwei, der Zug bewegte beide.
+
+    ``_on_selection`` reichte ``object_tree.selected()`` an den Viewport — die
+    Kennung des **ersten** Eintrags —, während die Zahlenzeile drei Zeilen
+    weiter unten mit ``selected_objects()`` rechnet und
+    ``inputs_for_transform`` dieselbe Menge zurückgibt. Von den drei Auskünften
+    log genau eine, und es war die einzige, die der Kunde ansieht (gefunden von
+    3d-druck-85, 03.09.2026).
+
+    Dass alle bewegt werden, ist die Entscheidung und bleibt. Falsch war das
+    Bild.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    bodies = list(window.session.last_result.scene.objects)
+    assert len(bodies) >= 2, f"Voraussetzung: mehrere Körper — {bodies}"
+
+    tree = window.object_tree.tree
+    for row in range(tree.topLevelItemCount()):
+        item = tree.topLevelItem(row)
+        assert item is not None
+        item.setSelected(True)
+    QApplication.processEvents()
+
+    chosen = window.object_tree.selected_objects()
+    assert len(chosen) >= 2, f"Voraussetzung: der Baum hat mehrere gewählt — {chosen}"
+    assert set(window.viewport.highlighted_objects()) == set(chosen), (
+        "das Bild zeigt genau die gewählten Körper, nicht nur den ersten"
+    )
+
+
 def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
     """Robert am 03.09.2026: „wenn wir ein merkmal auswählen und auf der
     tastatur entf drück löschen wir den ganzen körper statt das merkmal."

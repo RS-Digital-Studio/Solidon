@@ -9383,6 +9383,20 @@ class MainWindow(QMainWindow):
         der dieser Fehler an diesem Tag mehrfach auftrat: Der Abbruch war
         bedacht, das Fertigwerden nicht.
         """
+        if self._feature_pending is None and not self._feature_preview.isActive():
+            # **Nichts zu tun, und das ist der Normalfall.** Seit dieser Abbau
+            # am Dokumentwechsel hängt, läuft er bei jedem Anwenden, jedem Undo
+            # und jedem geänderten Parameter — und ``_clear_preview`` ist nicht
+            # billig: ``show_difference`` färbt die Auswahl neu, zeichnet die
+            # Merkmale neu, die Differenz neu und stößt einen Bildaufbau an.
+            # Ohne diese Zeile kostete das jeden Dokumentwechsel einen vollen
+            # Neuaufbau, für den es nichts abzuräumen gab (§31).
+            #
+            # Gefragt wird nach dem Merkposten und dem Zeitgeber, nicht nach
+            # dem Bild: Der Merkposten bleibt gesetzt, solange eine Vorschau
+            # dieses Fensters wartet **oder** schon gezeichnet ist —
+            # ``_preview_feature_change`` liest ihn und leert ihn nicht.
+            return
         self._feature_pending = None
         self._feature_preview.stop()
         self._clear_preview()
@@ -10601,7 +10615,18 @@ class MainWindow(QMainWindow):
         if document.ops and self.stack.currentWidget() is self.start_screen:
             self._show_start_screen(False)
         self.parameters.show_document(document)
-        self.history_panel.show_document(document, undone=self.session.history.undone)
+        # **Mit der Halt-Marke**, und die fehlte hier. ``_show_scene`` reicht
+        # ``result.stopped_at`` weiter, dieser Weg nicht — und ``save_project``
+        # meldet einen Dokumentwechsel **ohne** nachfolgende Auswertung. Ein
+        # Strg+S löschte damit das Ausrufezeichen vor dem Schritt, an dem die
+        # Kette hängt, während Statuszeile und Prüfbericht weiter „Die Kette
+        # hält an" sagten (§15.3; gefunden von 3d-druck-85, 03.09.2026).
+        result = self.session.last_result
+        self.history_panel.show_document(
+            document,
+            result.stopped_at if result is not None else None,
+            self.session.history.undone,
+        )
         self.chat.show_document(document)
         self._refresh_applied_bar()
         self.setWindowTitle(f"{self.session.title} — {APP_NAME}")
@@ -11480,7 +11505,20 @@ class MainWindow(QMainWindow):
         )
 
     def _on_selection(self, object_id: str | None) -> None:
-        self.viewport.select(object_id)
+        # **Alle gewählten Körper, nicht nur der erste.** Hier stand
+        # ``select(object_id)`` — die Kennung des ersten Eintrags —, während
+        # die Statuszeile drei Zeilen weiter unten mit ``selected_objects()``
+        # rechnet und ``inputs_for_transform`` dieselbe Menge zurückgibt. Bei
+        # zwei gewählten Teilen leuchtete eines, die Zeile sagte „2 Teile",
+        # und ein Zug an der Bewegen-Leiste bewegte beide (gemessen von
+        # 3d-druck-85, 03.09.2026).
+        #
+        # Dass alle bewegt werden, ist die Entscheidung — sie steht unten im
+        # Kommentar zur Zahl. Falsch war das Bild, und das Bild wird hier
+        # gesetzt. Der erste führt: An ihm hängt der Griff, weil ein Griff
+        # einen Bezugspunkt braucht; die weiteren tragen nur die Farbe.
+        chosen = self.object_tree.selected_objects()
+        self.viewport.select(chosen[0] if chosen else object_id, more=chosen[1:])
         # Karte und Schichtanalyse gehören zu einem Körper; ein anderer Körper
         # braucht seine eigenen, also folgen sie der Auswahl, statt zu
         # verweilen.
