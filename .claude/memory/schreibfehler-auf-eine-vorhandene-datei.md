@@ -61,6 +61,25 @@ selbst.
 
 **Und nach dem Fix wird gezählt, nicht gehofft:** Wie viele Stellen öffnen diese Datei? Ein Riss, der nach der Reparatur bei einer *anderen* Sprache oder einem *anderen* Durchgang wiederkommt, ist kein neuer Fehler, sondern der zweite Halter — der erste Fix hat ihn nur seltener gemacht.
 
+**Und das Danebenschreiben schützt vor dem Fehlschlag, nicht vor dem alten
+Stand.** Die Schleife oben wiederholt, bis der Schreibvorgang gelingt — sie
+prüft nicht, ob der Inhalt inzwischen veraltet ist. Wer eine geteilte Datei
+liest, ändert und zurückschreibt, wirft alles weg, was zwischen Lesen und
+Schreiben hineingekommen ist, und zwar **lautlos**: Der Schreibvorgang gelingt,
+kein Fehler, keine Wiederholung. Am 03.09.2026 verlor `MEMORY.md` auf diesem
+Weg genau eine Zeile — die eines Commits, der neunzig Sekunden vorher gelandet
+war —, und gefunden hat es kein Werkzeug, sondern `test_directory_docs`, weil
+jede Erinnerung dort ihren Zeiger haben muss. Es war die **dritte**
+Beschädigung derselben Datei an einem Tag (zweimal fälschlich als gelöscht im
+Index, einmal die verlorene Zeile); sie ist der am häufigsten geteilte Text im
+Repository.
+
+Wer eine geteilte Datei ändert, liest sie deshalb **unmittelbar vor** dem
+Schreiben noch einmal — nicht am Anfang des Skripts —, oder er ändert sie
+zeilenweise statt als Ganzes. Und wo es einen Wächter über die Vollständigkeit
+gibt, ist er die letzte Verteidigung: `MEMORY.md` hätte ohne ihn eine Zeile
+verloren, die niemandem aufgefallen wäre.
+
 **Und gezählt wird mit einer Probe, nicht mit dem Blick.** Der zweite Halter war
 gesehen und wieder verworfen worden, weil der Lauf nach dem ersten Fix durchkam
 — was fehlte, war eine Messung, die den zweiten zeigt, *während der erste noch
