@@ -61,7 +61,7 @@ def test_mixing_refuses_two_colours_of_different_length() -> None:
         mix((0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.5), 0.5)
 
 
-def test_a_tween_without_motion_still_sets_the_end(qt_app: object) -> None:
+def test_a_tween_without_motion_still_sets_the_end(qt_app: object, monkeypatch) -> None:
     """Ist Bewegung aus, kommt der Endzustand trotzdem — genau einmal.
 
     Das ist die Zusage, auf der jeder Aufrufer steht: Wer die Zielfarbe *nur*
@@ -77,7 +77,18 @@ def test_a_tween_without_motion_still_sets_the_end(qt_app: object) -> None:
 
     from app.ui.motion import animations_enabled, tween
 
-    assert not animations_enabled(), "die Suite läuft offscreen — sonst misst dieser Test nichts"
+    # **Der Zustand wird hergestellt, nicht vorausgesetzt.** Hier stand eine
+    # Zusicherung, die sich darauf verliess, dass die Suite offscreen läuft —
+    # `conftest.py` setzt das lokal, der Linux-Runner der CI nicht. Der Test
+    # war damit auf einer Maschine grün und auf einer anderen rot, ohne dass
+    # sich an der Sache etwas geändert hätte (Tag-Lauf 0.3.1, 7296 Tests grün
+    # und dieser eine rot, zweimal hintereinander).
+    #
+    # `SOLIDON3D_MOTION=aus` ist der Schalter, den auch ein Kunde hat, der
+    # Bewegung nicht verträgt — der Test geht damit denselben Weg wie er,
+    # statt eine Eigenschaft der Testumgebung auszunutzen.
+    monkeypatch.setenv("SOLIDON3D_MOTION", "aus")
+    assert not animations_enabled(), "der Schalter hat nicht gegriffen"
 
     schritte: list[float] = []
     fertig: list[bool] = []
