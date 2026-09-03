@@ -2578,7 +2578,7 @@ class PrintSettingsDialog(QDialog):
         # lässt den nächsten Aufrufer wieder ungeschützt. ``_fill_processes``
         # macht es an derselben Stelle richtig.
         self.machine_choice.clear()
-        for entry in machines:
+        for entry in self._machines_worth_showing(machines):
             self.machine_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
         # **Eine Wahl, die der neue Fund nicht kennt, bleibt trotzdem stehen.**
         # Das Leeren darf nur den Bestand ersetzen, nicht die Entscheidung des
@@ -2671,6 +2671,44 @@ class PrintSettingsDialog(QDialog):
                 index = self.process_choice.findData(str(named[0].path))
         self.process_choice.setCurrentIndex(max(index, 0))
         self._fill_filaments(machine)
+
+    def _machines_worth_showing(
+        self, machines: list[slicer_profiles.SlicerProfile]
+    ) -> list[slicer_profiles.SlicerProfile]:
+        """Die Maschinenprofile zum eigenen Drucker — sonst alle.
+
+        „Ich hab da mehr Drucker zur Auswahl, offiziell hab ich nur den Elegoo
+        Centauri Carbon 2" (Robert, 03.09.2026). Gemessen an seinem
+        ElegooSlicer: **1001** Maschinenprofile in der Liste, davon 103 einem
+        Solidon-Drucker zuordenbar und **4** seinem — die vier Düsenvarianten.
+        Die Vorwahl traf dabei die richtige; unbrauchbar war die Liste
+        dahinter.
+
+        Zugeordnet wird über :func:`slicer_profiles.printer_for`, also über
+        dieselbe Auskunft, mit der auch die Vorwahl arbeitet — keine zweite
+        Namensheuristik daneben (Vorschlag 3d-druck-a0).
+
+        **Bleibt nichts übrig, bleibt alles stehen.** Für den Vorgabedrucker
+        „Allgemeiner FDM-Drucker" ordnet sich kein einziges Profil zu, und eine
+        leere Druckerliste wäre schlimmer als eine lange: Der Slicer lehnt ohne
+        Maschinenprofil jeden Auftrag ab. Dieselbe Grenze wie bei den
+        Filamenten eine Methode weiter — ein Filter, der alles wegnimmt, ist
+        keiner.
+        """
+        mine = self.session.profile.printer.id
+        known = profiles.printer_profiles()
+        # Eine gemerkte Wahl bleibt immer stehen, auch wenn sie nicht zum
+        # eingestellten Drucker gehört: Wer einmal abgewichen ist, meinte es so
+        # (`test_a_remembered_choice_wins_over_the_match`). Ohne diese Zeile
+        # nahm der Filter genau die Entscheidung weg, die jemand getroffen hat.
+        remembered = self.ui_settings.slicer_machine_profile
+        fitting = [
+            entry
+            for entry in machines
+            if slicer_profiles.printer_for(entry.name, known) == mine
+            or str(entry.path) == remembered
+        ]
+        return fitting or machines
 
     def _filaments_worth_showing(
         self, machine: slicer_profiles.SlicerProfile | None

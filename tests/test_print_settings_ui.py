@@ -3254,3 +3254,49 @@ def test_without_a_machine_profile_the_printers_own_vendor_narrows_the_filaments
         )
         first = printers[two_words].vendor.split(" ")[0].casefold()
         assert all(entry.name.casefold().startswith(first) for entry in found)
+
+
+def test_the_printer_list_shows_the_printer_you_actually_have(
+    qt_app: QApplication, session: Session
+) -> None:
+    """„Ich hab da mehr Drucker zur Auswahl, offiziell hab ich nur den einen."
+
+    Robert am 03.09.2026, und gemessen an seinem ElegooSlicer: **1001**
+    Maschinenprofile in der Liste, davon 103 einem Solidon-Drucker zuordenbar
+    und vier seinem — die Düsenvarianten. Die Vorwahl traf dabei die richtige;
+    unbrauchbar war die Liste dahinter.
+
+    Zugeordnet wird über `printer_for`, also über dieselbe Auskunft, mit der
+    auch die Vorwahl arbeitet — keine zweite Namensheuristik daneben.
+
+    **Und der Rückfall ist der eigentliche Test:** Für den Vorgabedrucker
+    ordnet sich kein Profil zu, und eine leere Druckerliste wäre schlimmer als
+    eine lange — ohne Maschinenprofil lehnt der Slicer jeden Auftrag ab. Ein
+    Filter, der alles wegnimmt, ist keiner.
+    """
+    from app.core.export import slicer_profiles as sp
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    printers = profiles.printer_profiles()
+    named = next((key, entry) for key, entry in printers.items() if entry.vendor and " " not in key)
+    stock = [
+        sp.SlicerProfile(path=Path(name), name=name, kind="machine")
+        for name in (
+            f"{named[1].title} 0.4 nozzle",
+            f"{named[1].title} 0.6 nozzle",
+            "Foreign Q9 0.4 nozzle",
+        )
+    ]
+
+    dialog.session.project.document.printer = named[0]
+    mine = dialog._machines_worth_showing(stock)
+    assert len(mine) == 2, f"nur die eigenen Düsenvarianten, nicht {[m.name for m in mine]}"
+    assert all(str(named[1].title) in entry.name for entry in mine)
+
+    generic = next(key for key, entry in printers.items() if not entry.vendor)
+    dialog.session.project.document.printer = generic
+    assert dialog._machines_worth_showing(stock) == stock, (
+        "wo sich nichts zuordnen lässt, bleibt alles stehen — sonst hätte der "
+        "Slicer kein Maschinenprofil und lehnte jeden Auftrag ab"
+    )
