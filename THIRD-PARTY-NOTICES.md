@@ -1,6 +1,6 @@
 # Drittanbieter-Lizenzen
 
-Erzeugt für Solidon3D 0.3.0 auf `win-amd64`.
+Erzeugt für Solidon3D 0.3.1 auf `win-amd64`.
 Quelle sind die Lizenzdateien der tatsächlich installierten Ziel-Wheels
 und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 
