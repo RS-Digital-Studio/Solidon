@@ -34,6 +34,7 @@
 - [Freies Gebiet](freies-gebiet-einfach-machen.md) — bei niemandem eingetragen → machen, nicht vorlegen.
 - [Worktrees enden auf main](worktrees-enden-auf-main.md) — Probe-Bäume fallen; alles Gebaute liegt auf main.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz für sich steht.
+- [Ein Weg, der nie bis zum Ende lief](weg-nie-bis-zum-ende-gemessen.md) — zwölf Tag-Läufe für 0.3.0, zwölf verschiedene Orte, keine Ursache zweimal.
 - [Durchsicht je Version](durchsicht-je-version.md) — „offen" wird am Code nachgemessen, nicht abgeschrieben.
 
 ## Produkt und Entscheidungen
@@ -104,6 +105,7 @@
 - [Wächter sieht nur Getanes](waechter-sieht-nur-das-getane.md) — blind für das Framework.
 - [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — richtige Regel, ungeprüfter Rand.
 - [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — fragte „voll?" statt „was drin?".
+- [Verkürzung ist eine Messung](jede-verkuerzung-ist-eine-messung.md) — `head`, `[:165]`, Kontextfenster, fehlende Wortgrenze.
 - [Testprojekt trifft nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was man hineinlegt.
 - [Voraussetzung nur im Namen](voraussetzung-im-namen-statt-hergestellt.md) — fünf Korpusse formal sauber, unbrauchbar.
 - [Gegenprobe bei neuer Bauart](gegenprobe-bei-geaenderter-bauart.md) — die Mutation baut die alte Bauart nach.
