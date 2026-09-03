@@ -153,10 +153,25 @@ class VariantsDialog(QDialog):
         self._target: Path | None = None
 
         if not document.parameters:
-            self.state.setText(
-                tr("Dieses Projekt hat keine Parameter — ohne einen gibt es nichts zu variieren.")
-            )
-            self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
+            # Der Satz steht in der Zustandszeile **und** am Knopf: Wer auf einen
+            # grauen Knopf zeigt, fragt ihn und nicht die Zeile darüber. Dieselbe
+            # Zusage wie im Druckdialog (`test_dialog_buttons.py`), und derselbe
+            # Satz — zwei Formulierungen über dieselbe Lage laufen auseinander.
+            why = tr("Dieses Projekt hat keine Parameter — ohne einen gibt es nichts zu variieren.")
+            self.state.setText(why)
+            self._lock_build(why)
+
+    def _lock_build(self, why: str) -> None:
+        """Den Erzeugen-Knopf sperren und sagen, warum — oder ihn freigeben.
+
+        Ein leerer Grund gibt frei. Alle drei Kanäle, weil ein Grund, den nur
+        die Maus findet, für einen Bildschirmleser keiner ist (Regel 18).
+        """
+        button = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        button.setEnabled(not why)
+        button.setToolTip(why)
+        button.setStatusTip(why)
+        button.setAccessibleDescription(why)
 
     def _build(self) -> None:
         """Rechnen lassen und dabei zusehen können.
@@ -179,8 +194,9 @@ class VariantsDialog(QDialog):
         self._cancel.reset()
         self.progress.setValue(0)
         self.progress.setVisible(True)
-        self.state.setText(tr("Die Varianten werden gerechnet …"))
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(False)
+        running = tr("Die Varianten werden gerechnet …")
+        self.state.setText(running)
+        self._lock_build(running)
 
         worker = _VariantWorker(
             self._cancel,
@@ -286,7 +302,7 @@ class VariantsDialog(QDialog):
         worker = self._worker
         self._worker = None
         self.progress.setVisible(False)
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
+        self._lock_build("")
         if worker is not None and not worker.wait(WAIT_TIMEOUT_MS):
             _log.warning("variant worker did not finish within %d ms", WAIT_TIMEOUT_MS)
 

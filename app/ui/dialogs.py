@@ -967,16 +967,34 @@ class KeyDialog(QDialog):
         inner.addWidget(self.probe_result)
         # Bis die Erhebung antwortet, steht hier ein Satz und kein Zustand,
         # den niemand nachgesehen hat.
-        self.service_state.setText(tr("Wird nachgesehen …"))
+        # Derselbe Satz an der Zeile und an den zwei Knöpfen: Bis die Erhebung
+        # antwortet, sind sie gesperrt, und „warum" ist genau dieser Satz.
+        looking = str(tr("Wird nachgesehen …"))
+        self.service_state.setText(looking)
         self.service_button.setVisible(False)
-        self.pull_button.setEnabled(False)
-        self.probe_button.setEnabled(False)
+        self._lock_model_buttons(looking)
         return section
 
     # --- der Dienst -------------------------------------------------------------
 
     def _ollama(self) -> tools.ExternalTool | None:
         return tools.by_id("ollama")
+
+    def _lock_model_buttons(self, why: str) -> None:
+        """*Modell holen* und *Werkzeuge prüfen* sperren und sagen, warum.
+
+        Beide brauchen einen laufenden Dienst, und beide standen gesperrt und
+        wortlos da — der Grund stand in der Zustandszeile darüber. Wer auf einen
+        grauen Knopf zeigt, fragt ihn und nicht die Zeile daneben; deshalb
+        derselbe Satz an beiden Orten statt zwei Formulierungen über dieselbe
+        Lage. Ein leerer Grund gibt frei, und alle drei Kanäle, weil ein Grund,
+        den nur die Maus findet, für einen Bildschirmleser keiner ist (Regel 18).
+        """
+        for button in (self.pull_button, self.probe_button):
+            button.setEnabled(not why)
+            button.setToolTip(why)
+            button.setStatusTip(why)
+            button.setAccessibleDescription(why)
 
     def _show_service(self, state: tools.ToolState | None) -> None:
         """Der Zustand von Ollama als Satz, und der passende Knopf daneben.
@@ -987,6 +1005,10 @@ class KeyDialog(QDialog):
         if state is None:
             self.service_state.setText("")
             self.service_button.setVisible(False)
+            # Der Zustand ist noch unterwegs — auch das ist ein Grund, und ein
+            # ehrlicher: Die zwei Knöpfe starten gesperrt (siehe Aufbau) und
+            # schwiegen bis zur ersten Antwort des Arbeiters.
+            self._lock_model_buttons(str(tr("Wird nachgesehen …")))
             return
         if state.running:
             set_role(self.service_state, "ok", tr("Ollama läuft."))
@@ -1003,8 +1025,10 @@ class KeyDialog(QDialog):
             )
             self.service_button.setText(tr("Zusätzliche Programme …"))
             self.service_button.setVisible(True)
-        self.pull_button.setEnabled(state.running)
-        self.probe_button.setEnabled(state.running)
+        # Der Grund ist der Satz, der eine Zeile höher schon steht: Beide Knöpfe
+        # brauchen einen laufenden Dienst, und was ihm fehlt, hat ``_show_service``
+        # gerade festgestellt.
+        self._lock_model_buttons("" if state.running else self.service_state.text())
 
     def _start_ollama(self) -> None:
         """Starten, oder — wenn es fehlt — dorthin, wo es herkommt."""
@@ -1128,7 +1152,11 @@ class KeyDialog(QDialog):
         self.pull_progress.setRange(0, 0)
         self.pull_progress.setVisible(True)
         self.pull_button.setText(tr("Abbrechen"))
+        holt = str(tr("Erst wenn das Modell geholt ist."))
         self.probe_button.setEnabled(False)
+        self.probe_button.setToolTip(holt)
+        self.probe_button.setStatusTip(holt)
+        self.probe_button.setAccessibleDescription(holt)
         set_role(self.probe_result, "info", f"{tr('Wird geholt')}: {model}")
 
         worker = _PullWorker(model)
@@ -1182,6 +1210,12 @@ class KeyDialog(QDialog):
         self.pull_button.setText(tr("Modell holen"))
         self.service_button.setEnabled(True)
         self.probe_button.setEnabled(True)
+        for kanal in (
+            self.probe_button.setToolTip,
+            self.probe_button.setStatusTip,
+            self.probe_button.setAccessibleDescription,
+        ):
+            kanal("")
         set_role(self.probe_result, "warning", f"{UNEXPECTED_CRASH!s} {detail}")
 
     def _worker_finished(self) -> None:

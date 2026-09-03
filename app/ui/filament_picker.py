@@ -306,7 +306,25 @@ class SlicerFilamentDialog(QDialog):
         self._selection_changed(self.list.currentItem(), None)
 
     def _selection_changed(self, current: object, _previous: object) -> None:
-        self._ok_button.setEnabled(current is not None)
+        """Ohne gewähltes Profil gibt es nichts zu übernehmen — und der Knopf
+        sagt es, statt grau dazustehen.
+
+        Zwei Lagen führen hierher, und der Satz trennt sie: eine Liste, in der
+        nichts markiert ist, und eine Liste, in der nichts steht. Die zweite
+        ist der häufigere Fall — ein Rechner ohne installierten Slicer bringt
+        keine Profile mit, und dort ist „wählen Sie eines" ein Rat ins Leere.
+        """
+        why = ""
+        if current is None:
+            why = str(
+                tr("Kein Profil gewählt.")
+                if self.list.count()
+                else tr("Dieser Slicer bringt keine Filamentprofile mit.")
+            )
+        self._ok_button.setEnabled(not why)
+        self._ok_button.setToolTip(why)
+        self._ok_button.setStatusTip(why)
+        self._ok_button.setAccessibleDescription(why)
 
     def chosen_profile(self) -> str:
         """Der Name des gewählten Profils — nie ein Pfad (Regel 12)."""
@@ -411,7 +429,7 @@ class NewFilamentDialog(QDialog):
         self.choose_profile.clicked.connect(self._choose_slicer_profile)
         self.clear_profile = QPushButton(tr("Entfernen"), self)
         self.clear_profile.clicked.connect(self._clear_slicer_profile)
-        self.clear_profile.setEnabled(bool(slicer_profile.strip()))
+        self._show_clear_state(bool(slicer_profile.strip()))
         profile_row = QHBoxLayout()
         profile_row.setSpacing(TIGHT)
         profile_row.addWidget(self.slicer_profile, 1)
@@ -456,13 +474,26 @@ class NewFilamentDialog(QDialog):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             chosen = dialog.chosen_profile()
             self.slicer_profile.setText(chosen)
-            self.clear_profile.setEnabled(bool(chosen))
+            self._show_clear_state(bool(chosen))
+
+    def _show_clear_state(self, has_profile: bool) -> None:
+        """Der Entfernen-Knopf sagt, warum er nichts zu tun hat.
+
+        Ohne eingetragenes Profil ist er gesperrt, und das ist richtig — er
+        stand nur wortlos da. Alle drei Kanäle (Regel 18); der Grund nennt den
+        Zustand und nicht die Handlung, denn was fehlt, ist das Profil.
+        """
+        why = "" if has_profile else str(tr("Es ist kein Profil eingetragen."))
+        self.clear_profile.setEnabled(has_profile)
+        self.clear_profile.setToolTip(why)
+        self.clear_profile.setStatusTip(why)
+        self.clear_profile.setAccessibleDescription(why)
 
     def _clear_slicer_profile(self) -> None:
         """Ohne Herstellerprofil ist auch eine Antwort — die Werte kommen dann
         aus Solidon allein."""
         self.slicer_profile.clear()
-        self.clear_profile.setEnabled(False)
+        self._show_clear_state(False)
 
     def _pick_colour(self) -> None:
         chosen = QColorDialog.getColor(QColor(self._colour), self, tr("Farbe des Filaments"))
