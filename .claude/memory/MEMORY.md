@@ -119,6 +119,7 @@
 - [Familie ≠ Auslöser](bekannte-familie-erklaert-nicht-den-ausloeser.md) — Gegenprobe auf dem Stand davor.
 - [Verursacher wird gemessen](verursacher-wird-gemessen-nicht-gelesen.md) — `git show --stat` lesen.
 - [Absturz-Frame](absturz-frame-ist-die-naechste-allokation.md) — wandert er, ist keine Stelle die Ursache.
+- [Speicherriss ohne auslösende Zeile](speicherriss-hat-keine-ausloesende-zeile.md) — zwei leere dicts rissen die Datei; fünf Proben an der Zeile blieben rot.
 - [Zwei Zeilen](zwei-zeilen-sind-nicht-die-funktion.md) — lesen, was mit dem Rückgabewert geschieht.
 - [Versatz sieht aus wie viele Abweichungen](versatz-sieht-aus-wie-viele-abweichungen.md) — zwei Listen über den Index, eine hat einen Eintrag mehr; echte Abweichungen sind punktuell.
 - [Suche prüft ihre Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — nichts getroffen sieht aus wie nichts da.
