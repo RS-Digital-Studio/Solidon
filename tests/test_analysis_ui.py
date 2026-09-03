@@ -1873,6 +1873,13 @@ class _GizmoPlotter:
     def add_mesh(self, *_args: object, **_kwargs: object) -> _GizmoActor:
         return _GizmoActor()
 
+    def add_lines(self, *_args: object, **_kwargs: object) -> _GizmoActor:
+        # Seit dem Drehbogen (:meth:`Viewport._draw_turn_arc`) zeichnet der Zug
+        # auch Linien. Eine Attrappe, der eine Methode fehlt, macht aus einer
+        # neuen Anzeige einen roten Test in einer fremden Datei — hier
+        # `AttributeError: '_GizmoPlotter' object has no attribute 'add_lines'`.
+        return _GizmoActor()
+
     def render(self) -> None:
         pass
 

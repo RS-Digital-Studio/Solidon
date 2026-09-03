@@ -11495,7 +11495,8 @@ def _InteractorStyle(  # noqa: N802
                 # derselben Schwelle, an der auch :func:`is_click` urteilt.
                 # Zwei verschiedene Schwellen ergaben ein Loch: ``EPS_DRAG``
                 # misst 0,05 mm und entspricht je nach Zoom einem Drittel
-                # Pixel, ``CLICK_SLACK`` misst zwei Pixel. Dazwischen lag ein
+                # Pixel, ``CLICK_SLACK`` zehn (Qts eigene Zugschwelle).
+                # Dazwischen lag ein
                 # Klick, der den Körper um Bruchteile verschob **und** die
                 # Auswahl nicht wechselte (gemessen am 23.08.2026 an drei
                 # Pixeln Wackeln, wie es beim Klicken normal ist).
