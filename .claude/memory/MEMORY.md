@@ -119,6 +119,7 @@
 - [Verursacher wird gemessen](verursacher-wird-gemessen-nicht-gelesen.md) — `git show --stat` lesen.
 - [Absturz-Frame](absturz-frame-ist-die-naechste-allokation.md) — wandert er, ist keine Stelle die Ursache.
 - [Zwei Zeilen](zwei-zeilen-sind-nicht-die-funktion.md) — lesen, was mit dem Rückgabewert geschieht.
+- [Versatz sieht aus wie viele Abweichungen](versatz-sieht-aus-wie-viele-abweichungen.md) — zwei Listen über den Index, eine hat einen Eintrag mehr; echte Abweichungen sind punktuell.
 - [Suche prüft ihre Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — nichts getroffen sieht aus wie nichts da.
 - [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene.
 - [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei Messungen derselben falschen Frage.
@@ -126,6 +127,7 @@
 - [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — nur eine Differenz trennt.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Kette dahinter war erfunden.
 - [Sondenbau](sondenbau.md) — im großen Lauf misst eine Sonde den Unterschied.
+- [Hilfsmodul verstellt den Suchpfad](hilfsmodul-verstellt-den-suchpfad.md) — run_ui_audit setzt `F:\3D Druck` an sys.path[0]; der Fix sieht wirkungslos aus.
 - [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht".
 - [Messung trägt nur am Ort](messung-traegt-nur-am-ort-ihrer-messung.md) — echt gemessen, woanders gültig.
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders.
@@ -136,6 +138,7 @@
 - [Beleg im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — erst suchen, dann eine Lücke behaupten.
 - [Zusicherung wird stumpf](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — anderswo geändert, der Test bleibt grün.
 - [Zahl im Fließtext](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit.
+- [Vorgabelage bricht fremde Tests](vorgabelage-bricht-fremde-tests.md) — 17 rot in 5 Dateien, keine vom Einlesen.
 - [Abgelesene Zahl altert](abgelesene-zahl-altert-still.md) — stimmt nur in ihrer Entstehungslage.
 - [Messung galt dem Stand davor](messung-galt-fuer-den-stand-davor.md) — nach dem Umbau ist sie über gestern.
 - [Spanne ist keine Zahl](eine-spanne-ist-keine-zahl.md) — Vereinheitlichen frisst das Bewegliche.
