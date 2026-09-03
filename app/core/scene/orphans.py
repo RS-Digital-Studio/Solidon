@@ -15,7 +15,7 @@ bei jeder Auswertung.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -184,10 +184,27 @@ def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
 
 
 def check(
-    document: Document, scene: Scene, ask: Any, registry: Registry | None = None
+    document: Document,
+    scene: Scene,
+    ask: Any,
+    registry: Registry | None = None,
+    announce: Callable[[str, tuple[str, ...]], None] | None = None,
 ) -> CheckResult:
     """Löst jeden Verweis einmal auf und fragt, wo die Antwort nicht
-    offensichtlich ist (§21.3)."""
+    offensichtlich ist (§21.3).
+
+    ``announce`` sagt vor jeder Frage, welches Objekt und welche Merkmale
+    gleich zur Wahl stehen, und nach der Antwort, dass nichts mehr aussteht
+    (leeres Objekt, leere Menge). **Der Grund steht im Bauplan:** §21.3
+    verlangt, die Kandidaten *hervorgehoben* zu zeigen. Ohne das steht der
+    Kunde vor drei Kennungen — ``hole_1``, ``hole_2``, ``hole_3`` — und soll
+    zwischen Bohrungen entscheiden, die er nicht sieht.
+
+    Ein Rückruf und kein Rückgabewert, weil die Hervorhebung **während** der
+    Frage gilt: Der Arbeiter blockiert in ``ask``, und was danach zurückkäme,
+    käme zu spät. Ohne ``announce`` ändert sich nichts — der Kern kennt keine
+    Ansicht (Regel 1), er sagt nur Bescheid, wenn jemand zuhört.
+    """
     result = CheckResult()
     for reference in references(document, registry):
         if _resolves(scene, reference.ref):
@@ -198,7 +215,16 @@ def check(
             continue
 
         question, choices = question_for(reference, candidates)
-        answer = ask(question, choices)
+        if announce is not None:
+            announce(reference.ref.object_id, tuple(candidates))
+        try:
+            answer = ask(question, choices)
+        finally:
+            # Auch bei Abbruch: Was hervorgehoben ist, gehört zur offenen
+            # Frage — bleibt es danach stehen, leuchtet die Ansicht ohne
+            # Anlass weiter.
+            if announce is not None:
+                announce("", ())
         if answer in candidates:
             _rewrite(document, reference, answer)
             result.rewritten += 1

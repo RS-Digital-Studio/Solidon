@@ -108,6 +108,22 @@ class AskRequest:
     answered: threading.Event = field(default_factory=threading.Event)
     answer: str | None = None
 
+    object_id: str = ""
+    """Der Körper, an dem die Kandidaten hängen — leer, wenn die Frage keine hat.
+
+    Eine Skizzenebene darf auf jeder planaren Fläche der Szene neu zu Hause
+    sein; dann ist das Objekt leer und die Ansicht hebt über alle Körper
+    hervor (``orphans._candidates``).
+    """
+
+    features: tuple[str, ...] = ()
+    """Die Merkmale, zwischen denen die Frage entscheidet (§21.3).
+
+    Kennungen und keine Merkmalsobjekte: Die Ansicht löst sie gegen die Szene
+    auf, die sie gerade zeigt. Ein Objekt aus einer anderen Auswertung wäre
+    eine zweite Wahrheit über dieselbe Fläche.
+    """
+
     def reply(self, answer: str | None) -> None:
         self.answer = answer
         self.answered.set()
@@ -157,7 +173,10 @@ class _EvaluationWorker(Worker):
                 # darum herum.
                 session.pending_orphan_check = False
                 check = orphans.check(
-                    session.project.document, result.scene, session.ask_from_worker
+                    session.project.document,
+                    result.scene,
+                    session.ask_from_worker,
+                    announce=session.announce_candidates,
                 )
                 if check.changed:
                     result = session.run_evaluation()
@@ -390,6 +409,8 @@ class Session(QObject):
         """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
         self.last_result: EvaluationResult | None = None
         self.pending_orphan_check = False
+        self._pending_candidates: tuple[str, tuple[str, ...]] = ("", ())
+        """Was die nächste Frage zur Wahl stellt — von ``announce_candidates`` gesetzt."""
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
     einmal, nicht immer."""
         self.pending_part_check = False
@@ -1741,9 +1762,24 @@ class Session(QObject):
     def report_progress(self, fraction: float, text: str) -> None:
         self.progressChanged.emit(fraction, text)
 
+    def announce_candidates(self, object_id: str, features: tuple[str, ...]) -> None:
+        """Was die **nächste** Frage zur Wahl stellt (§21.3).
+
+        ``orphans.check`` ruft es unmittelbar vor ``ask`` und danach wieder
+        leer. Gemerkt statt durchgereicht, weil der Weg dazwischen die
+        Ask-Schnittstelle des Kerns ist (``ctx.ask``, Regel 21) — die trägt
+        eine Frage und ihre Antworten, und ein drittes Feld dort ginge jede
+        Operation an, die je etwas fragt.
+        """
+        self._pending_candidates = (object_id, tuple(features))
+
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
-        request = AskRequest(question=question, choices=list(choices))
+        object_id, features = self._pending_candidates
+        self._pending_candidates = ("", ())
+        request = AskRequest(
+            question=question, choices=list(choices), object_id=object_id, features=features
+        )
         self.askRequested.emit(request)
         request.answered.wait()
         if request.answer is None:

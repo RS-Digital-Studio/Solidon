@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.errors import AmbiguityError
+from app.core.errors import AmbiguityError, OperationCancelled
 from app.core.geom.mesh import read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import detect
@@ -484,3 +484,57 @@ def test_a_resized_hole_keeps_its_name_and_raises_no_orphan(profile: Profile) ->
         assert drift < 1e-3, f"{name} wanderte um {drift:.6f} mm: {was} -> {now}"
     orphaned = [f for f in after.scene.report.findings if f.code == "perceive.orphaned"]
     assert not orphaned, [dict(f.values) for f in orphaned]
+
+
+def test_the_candidates_are_announced_while_the_question_stands(scene: Scene) -> None:
+    """§21.3 verlangt, die Kandidaten **hervorgehoben** zu zeigen.
+
+    Bis zum 03.09.2026 bekam der Kunde beim Öffnen einer Datei drei
+    Kennungen zur Wahl — ``hole_1``, ``hole_2``, ``hole_3`` — und sollte
+    zwischen Bohrungen entscheiden, die er nicht sieht. Die Auskunft dafür gab
+    es (``candidates_of``), sie wurde nur nie abgerufen.
+
+    Angesagt wird **vor** der Frage, denn währenddessen blockiert der
+    Arbeiter, und danach wieder leer: Was hervorgehoben bleibt, ohne dass
+    etwas offen ist, leuchtet ohne Anlass.
+    """
+    document = document_with(fit_to("hole_9"))
+    angesagt: list[tuple[str, tuple[str, ...]]] = []
+    beim_fragen: list[tuple[str, tuple[str, ...]]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        beim_fragen.append(angesagt[-1])
+        return "hole_2"
+
+    orphans.check(document, scene, answer, announce=lambda obj, ids: angesagt.append((obj, ids)))
+
+    assert beim_fragen, "die Ansage kommt vor der Frage, nicht danach"
+    objekt, kandidaten = beim_fragen[0]
+    assert objekt == document.fits[0].a.object_id
+    assert "hole_1" in kandidaten and "hole_2" in kandidaten
+    assert angesagt[-1] == ("", ()), "nach der Antwort steht nichts mehr offen"
+
+
+def test_nothing_stays_lit_when_the_question_is_cancelled(scene: Scene) -> None:
+    """Ein Abbruch lässt die Ansicht nicht leuchtend zurück."""
+    document = document_with(fit_to("hole_9"))
+    angesagt: list[tuple[str, tuple[str, ...]]] = []
+
+    def abbrechen(question: str, choices: list[str]) -> str:
+        raise OperationCancelled
+
+    with pytest.raises(OperationCancelled):
+        orphans.check(
+            document, scene, abbrechen, announce=lambda obj, ids: angesagt.append((obj, ids))
+        )
+
+    assert angesagt[-1] == ("", ()), "auch ohne Antwort wird die Hervorhebung zurückgenommen"
+
+
+def test_without_a_listener_nothing_changes(scene: Scene) -> None:
+    """Der Kern kennt keine Ansicht (Regel 1) — ohne Zuhörer läuft es wie zuvor."""
+    document = document_with(fit_to("hole_9"))
+
+    result = orphans.check(document, scene, lambda question, choices: "hole_2")
+
+    assert result.rewritten == 1
