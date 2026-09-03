@@ -96,7 +96,7 @@ PART_FILE_MIME_TYPE: Final = "application/vnd.solidon.part+json"
 #: `pyproject.toml` mit — die Zahl steht an beiden Orten. Vergessen kann man es nicht mehr:
 #: `test_the_version_is_the_same_in_both_places_that_carry_it` hält sie
 #: zusammen.
-APP_VERSION: Final = "0.3.1"
+APP_VERSION: Final = "0.3.2"
 
 #: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
 COPYRIGHT: Final = f"Copyright © 2026 {APP_VENDOR}"

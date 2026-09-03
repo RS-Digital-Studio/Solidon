@@ -16,6 +16,24 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.3.2
+
+### Editar características reconocidas
+
+- Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.
+- Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.
+- También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.
+- Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores.
+### Visualización y selección
+
+- La vista previa desaparece en cuanto se aplica el cambio; hasta ahora el cuerpo de comparación con la banda «aún no aplicado» quedaba sobre el taladro terminado.
+- La barra espaciadora vuelve a alternar entre antes y después solo donde hay una vista previa, y ya no en toda la aplicación.
+- Un taladro ya no se ilumina en el color de selección cuando no hay nada seleccionado.
+- El arco de giro, la sombra y las marcas de arrastre desaparecen con el arrastre al que pertenecen, también al cambiar de herramienta, deshacer o cerrar el proyecto.
+### Impresión y memoria
+
+- Si no cabe todo en una placa, se crean tantas placas como haga falta; hasta ahora el resto quedaba junto a la mesa, donde no se puede imprimir.
+- La memoria de características de modelos grandes se mantiene acotada; hasta ahora podía ocupar hasta un gigabyte.
 ## 0.3.1
 
 ### Editar características reconocidas

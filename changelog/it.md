@@ -15,6 +15,24 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.3.2
+
+### Modificare le caratteristiche riconosciute
+
+- Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.
+- Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.
+- Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.
+- Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti.
+### Visualizzazione e selezione
+
+- L'anteprima scompare appena la modifica è applicata; finora il corpo di confronto con la fascia «non ancora applicato» restava sopra il foro finito.
+- La barra spaziatrice torna ad alternare prima e dopo solo dove c'è un'anteprima, e non più ovunque nell'applicazione.
+- Un foro non si illumina più nel colore della selezione quando non è selezionato nulla.
+- L'arco di rotazione, l'ombra e i segni di trascinamento scompaiono con il trascinamento a cui appartengono, anche al cambio di strumento, all'annullamento o alla chiusura del progetto.
+### Stampa e memoria
+
+- Se non tutto entra su un piano, vengono creati tanti piani quanti servono; finora il resto restava accanto al piano, dove non è stampabile.
+- La memoria delle caratteristiche dei modelli grandi resta limitata; finora poteva occupare fino a un gigabyte.
 ## 0.3.1
 
 ### Modificare le caratteristiche riconosciute

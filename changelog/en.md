@@ -15,6 +15,24 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.3.2
+
+### Editing recognised features
+
+- Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.
+- A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.
+- When rotating too, a through hole says if it no longer goes through at its new orientation.
+- A newly created feature appears at the end of the object tree, not in the middle of the older ones.
+### Display and selection
+
+- The preview disappears once the change is applied; until now the comparison body with its “not yet applied” banner stayed on top of the finished hole.
+- The space bar again toggles between before and after only where a preview is shown, and no longer everywhere in the application.
+- A hole no longer glows in the selection colour when nothing is selected at all.
+- The rotation arc, the shadow and the drag markers disappear with the drag they belong to — including on tool change, undo or closing the project.
+### Printing and memory
+
+- If not everything fits on one bed, as many beds are created as needed; until now the remainder was left beside the bed, where it cannot be printed.
+- The feature cache of large models stays bounded; until now it could occupy up to a gigabyte.
 ## 0.3.1
 
 ### Editing recognised features

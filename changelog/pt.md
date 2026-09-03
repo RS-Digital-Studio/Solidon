@@ -15,6 +15,24 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.3.2
+
+### Editar características reconhecidas
+
+- Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.
+- Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.
+- Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.
+- Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores.
+### Visualização e seleção
+
+- A pré-visualização desaparece assim que a alteração é aplicada; até agora o corpo de comparação com a faixa «ainda não aplicado» ficava sobre o furo terminado.
+- A barra de espaços volta a alternar entre antes e depois apenas onde há uma pré-visualização, e já não em toda a aplicação.
+- Um furo já não brilha na cor de seleção quando não há nada selecionado.
+- O arco de rotação, a sombra e as marcas de arrasto desaparecem com o arrasto a que pertencem, também ao mudar de ferramenta, anular ou fechar o projeto.
+### Impressão e memória
+
+- Se não couber tudo numa mesa, são criadas tantas mesas quantas forem necessárias; até agora o resto ficava ao lado da mesa, onde não é imprimível.
+- A memória de características de modelos grandes mantém-se limitada; até agora podia ocupar até um gigabyte.
 ## 0.3.1
 
 ### Editar características reconhecidas

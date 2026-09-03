@@ -40,6 +40,24 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.3.2
+
+### Erkannte Merkmale bearbeiten
+
+- Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.
+- Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.
+- Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.
+- Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren.
+### Anzeige und Auswahl
+
+- Die Vorschau verschwindet, sobald die Änderung übernommen ist; bisher lag der Vergleichskörper mit dem Band „noch nicht übernommen“ über der fertigen Bohrung.
+- Die Leertaste blendet wieder nur dort zwischen Vorher und Nachher um, wo eine Vorschau steht, und nicht mehr überall in der Anwendung.
+- Eine Bohrung leuchtet nicht mehr in der Auswahlfarbe, wenn gar nichts ausgewählt ist.
+- Drehbogen, Schatten und Zugmarken verschwinden mit dem Zug, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen des Projekts.
+### Drucken und Arbeitsspeicher
+
+- Passt nicht alles auf eine Platte, entstehen so viele Platten wie nötig; bisher blieb der Rest neben dem Bett liegen, wo er nicht druckbar ist.
+- Der Merkmalsspeicher großer Modelle bleibt begrenzt; bisher konnte er bis zu einem Gigabyte belegen.
 ## 0.3.1
 
 ### Erkannte Merkmale bearbeiten

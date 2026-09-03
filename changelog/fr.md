@@ -16,6 +16,24 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.3.2
+
+### Modifier les caractéristiques reconnues
+
+- Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.
+- Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.
+- Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.
+- Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes.
+### Affichage et sélection
+
+- L'aperçu disparaît dès que la modification est appliquée ; jusqu'ici le corps de comparaison portant « pas encore appliqué » restait au-dessus du perçage terminé.
+- La barre d'espace bascule de nouveau entre avant et après uniquement là où un aperçu est affiché, et non plus partout dans l'application.
+- Un perçage ne s'illumine plus dans la couleur de sélection lorsque rien n'est sélectionné.
+- L'arc de rotation, l'ombre et les repères de glissement disparaissent avec le glissement auquel ils appartiennent, y compris au changement d'outil, à l'annulation ou à la fermeture du projet.
+### Impression et mémoire
+
+- Si tout ne tient pas sur un plateau, autant de plateaux que nécessaire sont créés ; jusqu'ici le reste restait à côté du plateau, où il n'est pas imprimable.
+- La mémoire des caractéristiques des grands modèles reste bornée ; jusqu'ici elle pouvait occuper jusqu'à un gigaoctet.
 ## 0.3.1
 
 ### Modifier les caractéristiques reconnues
