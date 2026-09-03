@@ -263,12 +263,24 @@ eigene Lage sieht anders aus als das Beispiel darin. Verwandt mit
 Kommentar im Modul nicht, hier schützte die selbst geschriebene Notiz nicht,
 nachdem sie zwei Stunden vorher aus dem eigenen Mund kam.
 
-**Und der Zweischritt gehört ins Skript, nicht in den Kopf.** Solange die
-erwartete Zahl nur gedacht wird, gibt es keinen Moment, in dem sie mit dem
-Istwert kollidiert. Geschrieben — in die Ansage an die anderen, in eine
-`echo`-Zeile über dem Befehl — kollidiert sie von selbst. Das ist der
-Unterschied zwischen einer Anzeige und einer Prüfung, und er steht in dieser
-Notiz seit dem 30.08.2026.
+**Und der Zweischritt gehört ins Skript — und das Skript in den Aufruf.**
+Solange die erwartete Zahl nur gedacht wird, gibt es keinen Moment, in dem sie
+mit dem Istwert kollidiert; geschrieben kollidiert sie von selbst. Das ist der
+Unterschied zwischen einer Anzeige und einer Prüfung.
+
+Die zweite Hälfte des Satzes hat 3d-druck-7b noch am selben Tag ergänzt, und
+sie ist die wichtigere: **Der Zweischritt steht längst im Skript.**
+`.claude/skills/liefern/SKILL.md` führt ihn seit dem 31.08.2026 strenger, als
+diese Notiz ihn beschreibt — wörtliche Sollprobe, Abbruch statt Bericht, die
+ganze Kette in einem Shell-Aufruf und ein HEAD-Vergleich gegen das
+Restfenster. Von alldem habe ich nichts benutzt: Ich habe aus dem Gedächtnis
+committet, statt `/liefern` aufzurufen.
+
+Damit ist es dieselbe Sache eine Ebene höher, dreimal hintereinander am selben
+Tag: Die Notiz gelesen und nicht angewandt, die Notiz zitiert und nicht
+angewandt, den Skill vorhanden und nicht aufgerufen. **Ein Werkzeug schützt
+nur, solange man es zum Arbeiten ruft statt aus der Erinnerung an das zu
+arbeiten, was darin steht.**
 
 Die Diagnose gegenüber der Nachbarsitzung war dabei zuerst falsch: Ich habe ihr
 geschrieben, die Notiz benenne das falsche Werkzeug (`-o` statt `add`), und
