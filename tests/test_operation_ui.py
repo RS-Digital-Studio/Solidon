@@ -2599,3 +2599,54 @@ def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
     assert dialog._editors["length"].isEnabled(), (
         "und das Maß ist gesperrt, obwohl es folgen könnte"
     )
+
+
+def test_a_drawing_smaller_than_the_field_can_show_is_not_stretched_back(
+    qt_app: QApplication,
+) -> None:
+    """Ein geklemmter Wert ist keine Ansage — gefunden am 03.09.2026.
+
+    Die Maßfelder tragen ein Schema-Minimum von 0,1 mm. Wird die Zeichnung
+    kleiner, kann das Feld sie nicht mehr zeigen und klemmt auf das Minimum.
+    Der nächste Durchlauf las diese geklemmte Zahl als Kundeneingabe und
+    streckte zurück: 0,1 getippt, Zeichnung 0,1 auf 0,06 — das Breitenfeld
+    zeigte 0,1 statt 0,06, Faktor 0,1/0,06, und im Feld stand danach
+    0,166667. Der Kunde bekam eine andere Größe als die, die er eingab, ohne
+    ein Wort dazu.
+
+    **Gefunden hat es kein Test, sondern ein Durchgang mit Zahlen, die ein
+    Kunde tippt** — nicht 60, sondern 0,1, das kleinste erlaubte Maß. Der
+    Normalfall war die ganze Zeit grün.
+    """
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+    from app.ui.op_dialog import OperationDialog
+
+    bootstrap.load_operations()
+    spec = REGISTRY.get("sketch_extrude")
+    dialog = OperationDialog(
+        spec, [], None, values={"sketch": sketch_to_text(shapes.rectangle(50.0, 30.0))}
+    )
+    try:
+        länge = dialog._editors["length"]
+        assert länge.value() == pytest.approx(50.0, abs=0.01), (
+            "ohne diesen Ausgangswert prüft der Vergleich darunter nichts"
+        )
+
+        länge.set_value(0.1)
+        dialog.valuesChanged.emit()
+        qt_app.processEvents()
+
+        assert länge.value() == pytest.approx(0.1, abs=0.001), (
+            "die Zeichnung ist zurückgestreckt worden — das geklemmte Breitenfeld "
+            "wurde als Eingabe gelesen"
+        )
+        breite = dialog._editors["width"]
+        assert "kleiner" in breite.toolTip(), (
+            "das geklemmte Feld sagt nicht, dass es die Zeichnung nicht mehr zeigt"
+        )
+    finally:
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        dialog.deleteLater()

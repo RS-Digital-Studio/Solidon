@@ -1356,6 +1356,7 @@ class OperationDialog(QDialog):
 
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
         follows = tr("Die Zeichnung folgt dieser Zahl: sie wird darauf gestreckt.")
+        clamped = tr("Die Zeichnung ist hier kleiner, als dieses Feld zeigen kann.")
         axis_of = {"length": 0, "width": 1}
         docs = {name: str(entry.doc or "") for name, entry in declared.items()}
         seen_text: dict[str, str] = {}
@@ -1490,12 +1491,24 @@ class OperationDialog(QDialog):
                     # Nur Zahlen: Ein Ausdruck im Feld (``=@breite``) meint
                     # eine Bindung an einen Projektparameter, und die gehört
                     # in die Zeichnung, nicht in eine einmalige Streckung.
+                    # **Ein geklemmter Wert ist keine Ansage.** Die Felder
+                    # tragen ein Schema-Minimum von 0,1 mm; wird die Zeichnung
+                    # kleiner, kann das Feld sie nicht mehr zeigen und klemmt.
+                    # Ohne diese Bedingung las der nächste Durchlauf die
+                    # geklemmte Zahl als Eingabe und streckte zurück:
+                    # 0,1 getippt, Zeichnung 0,1 auf 0,06 — das Breitenfeld
+                    # zeigte 0,1 statt 0,06, Faktor 0,1/0,06, und heraus kam
+                    # 0,166667. Gemessen am 03.09.2026, mein eigener Fehler
+                    # vom selben Tag.
+                    least = declared[name].minimum
+                    darstellbar = least is None or drawn >= float(least)
                     if (
                         isinstance(typed, float)
                         and drawn > _SKETCH_EPS
                         and abs(typed - drawn) > _SKETCH_EPS
                         and not stretching["now"]
                         and primed["done"]
+                        and darstellbar
                     ):
                         stretch(text, typed / drawn)
                         return
@@ -1507,7 +1520,11 @@ class OperationDialog(QDialog):
                     editor.setEnabled(True)
                     if label is not None:
                         label.setEnabled(True)
-                    _explain(editor, label, held_note() or follows)
+                    # **Ein geklemmtes Feld sagt, dass es klemmt.** Sonst
+                    # steht dort 0,1, während die Zeichnung 0,06 misst — eine
+                    # stille Ungenauigkeit ist schlimmer als eine genannte,
+                    # weil der Kunde die Zahl für sein Maß hält.
+                    _explain(editor, label, (not darstellbar and clamped) or held_note() or follows)
                     continue
                 # Grundform und Eckenzahl bleiben gesperrt, und das ist keine
                 # halbe Sache: Eine gezeichnete Kontur **ist** keine Grundform.
