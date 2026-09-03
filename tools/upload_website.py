@@ -33,7 +33,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from time import monotonic
-from typing import Any, Never
+from typing import Any, Final, Never
 from urllib.parse import parse_qs, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -201,6 +201,21 @@ def files_since(reference: str) -> list[Path]:
     return [ROOT / name for name in result.stdout.split("\n") if name and (ROOT / name).is_file()]
 
 
+#: Endungen, die nie auf den Webserver gehören — Zugangswerte, Datenbanken und
+#: die Zwischendateien der Freischaltung.
+PRIVATE_ENDINGS: Final = (
+    ".seed",
+    ".sqlite",
+    ".sqlite3",
+    ".sqlite-wal",
+    ".sqlite-shm",
+    ".db",
+    ".token",
+    ".solidon-request",
+    ".solidon-activation",
+)
+
+
 def wanted(path: Path) -> bool:
     """Ob eine lokale Datei überhaupt auf den Server gehört.
 
@@ -226,23 +241,31 @@ def wanted(path: Path) -> bool:
     oder erzeugte Datei versehentlich wieder unter ``website/`` auftaucht.
     """
     relative = path.relative_to(LOCAL_ROOT)
-    lower = path.name.lower()
-    private_endings = (
-        ".seed",
-        ".sqlite",
-        ".sqlite3",
-        ".sqlite-wal",
-        ".sqlite-shm",
-        ".db",
-        ".token",
-        ".solidon-request",
-        ".solidon-activation",
-    )
+    return relative.parts[0] != "dl" and allowed_by_name(path)
+
+
+def allowed_by_name(path: Path) -> bool:
+    """Ob eine **ausdrücklich genannte** Datei hinaufdarf.
+
+    ``wanted`` beantwortet eine andere Frage: was der **Abgleich** von sich
+    aus mitnimmt. ``dl/`` ist dort ausgeschlossen, weil die Pakete hundert
+    Megabyte wiegen und nicht bei jedem Abgleich neu hochsollen — nicht, weil
+    sie geheim wären. Sie sind der Zweck des Ordners.
+
+    Seit df8fae68 prüfte die Argumentliste mit ``wanted`` und wies damit
+    genau den Weg ab, den der Auslieferungsablauf vorschreibt: die Pakete
+    einzeln und zuerst (Tag-Lauf 12, 03.09.2026 — fünf Pakete, fünfmal
+    „Darf nicht auf den Webserver"). Was hier gesperrt bleibt, ist das
+    wirklich Private: Zugangswerte, Datenbanken, Entwicklerdoku, die
+    Erzeugungsquellen unter ``teile/`` und die Endpunkte der abgeschalteten
+    Tauschstelle.
+    """
+    relative = path.relative_to(LOCAL_ROOT)
     return (
-        relative.parts[0] not in {"dl", "teile"}
+        relative.parts[0] != "teile"
         and relative.as_posix() not in RETIRED_SHARED_PATHS
         and path.suffix != ".md"
-        and not lower.endswith(private_endings)
+        and not path.name.lower().endswith(PRIVATE_ENDINGS)
     )
 
 
@@ -1143,7 +1166,7 @@ def main() -> int:
             raise SystemExit(f"Gibt es nicht: {path}")
         if LOCAL_ROOT not in path.parents:
             raise SystemExit(f"Liegt nicht unter website/: {path}")
-        if not wanted(path):
+        if not allowed_by_name(path):
             raise SystemExit(
                 f"Darf nicht auf den Webserver: {path.relative_to(LOCAL_ROOT)}. "
                 "Nur ausdrücklich öffentliche Website-Dateien auswählen."
