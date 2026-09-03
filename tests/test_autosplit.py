@@ -27,7 +27,7 @@ from app.core.scene.cancel import CancelSignal, NeverCancelled
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.slice.orientation import best_face_candidate
 from app.core.split import apply_line_split, apply_planned, apply_split, plan_split
-from app.core.types import OpContext, Profile, Scene, SceneObject, Source
+from app.core.types import Finding, OpContext, Profile, Scene, SceneObject, Source
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -311,9 +311,9 @@ def test_support_refinement_stops_after_the_probe_cut(
 
     def cut_and_cancel(
         _mesh: MeshData, _candidate: autosplit.Candidate
-    ) -> tuple[MeshData, MeshData]:
+    ) -> tuple[MeshData, MeshData, list[Finding]]:
         signal.cancel()
-        return mesh, mesh
+        return mesh, mesh, []
 
     monkeypatch.setattr(autosplit, "_cut_in_two", cut_and_cancel)
 
@@ -450,9 +450,9 @@ def test_cancellation_after_the_final_cut_starts_no_pin_plan(
     signal = CancelSignal()
     half = MeshData.of(trimesh.creation.box(extents=(200.0, 60.0, 40.0)))
 
-    def cut_and_cancel(*_args: object) -> tuple[MeshData, MeshData]:
+    def cut_and_cancel(*_args: object) -> tuple[MeshData, MeshData, list[Finding]]:
         signal.cancel()
-        return half, half
+        return half, half, []
 
     monkeypatch.setattr(
         autosplit,
@@ -641,7 +641,7 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     right = autosplit.Candidate("x", 3.25, 484.0, 1, 0.0)
 
     def final_support(candidate: autosplit.Candidate) -> float:
-        first, second = autosplit._cut_in_two(mesh, candidate)
+        first, second, _cut_findings = autosplit._cut_in_two(mesh, candidate)
         assert first is not None and second is not None
         plan = pins.plan_pins(mesh, candidate.plane, count=pins.PIN_COUNT, shape=pins.AUTO)
         assert plan.shape == "dovetail"
@@ -1113,7 +1113,7 @@ def test_batched_connectors_equal_the_sequential_product_geometry(
     PARTS.all()
     whole = connector_body(40.0, 40.0)
     candidate = autosplit.Candidate("x", 0.0, 1600.0, 1, 0.0)
-    first, second = autosplit._cut_in_two(whole, candidate)
+    first, second, _cut_findings = autosplit._cut_in_two(whole, candidate)
     assert first is not None and second is not None
     plan = pins.plan_pins(whole, CONNECTOR_PLANE, count=2, shape=shape)
     assert plan.count == 2
@@ -1155,7 +1155,7 @@ def test_failed_connector_batch_uses_the_sequential_fallback(
     PARTS.all()
     whole = connector_body(40.0, 40.0)
     candidate = autosplit.Candidate("x", 0.0, 1600.0, 1, 0.0)
-    first, second = autosplit._cut_in_two(whole, candidate)
+    first, second, _cut_findings = autosplit._cut_in_two(whole, candidate)
     assert first is not None and second is not None
     plan = pins.plan_pins(whole, CONNECTOR_PLANE, count=2, shape="round")
     reference = pins.add_pins(first, second, plan, profile, quality="draft")
@@ -1942,3 +1942,65 @@ def test_the_sections_of_a_turned_axis_match_the_upright_ones(profile: Profile) 
     assert along_z is not None and along_x is not None
     assert along_z.area == pytest.approx(60.0 * 40.0)
     assert along_x.area == pytest.approx(40.0 * 20.0)
+
+
+def open_body(name: str = "oversized.stl") -> MeshData:
+    """Derselbe zu große Körper, aber mit einem Loch — so, wie er aus einem
+    fremden STL kommt.
+
+    Ein einzelnes Dreieck fehlt. Das genügt: ``is_watertight`` ist damit falsch,
+    und genau daran entscheidet der Schnitt, ob er deckeln kann
+    (``section._apply`` reicht es als ``cap`` an trimesh weiter). Die
+    Eingangsstufe verschweißt normalerweise — hier wird sie bewusst umgangen,
+    denn ein Loch verschwindet dabei nicht.
+    """
+    raw = body(name).raw
+    faces = np.asarray(raw.faces)
+    keep = np.ones(len(faces), dtype=bool)
+    keep[0] = False
+    return MeshData.of(trimesh.Trimesh(vertices=raw.vertices, faces=faces[keep], process=False))
+
+
+def test_auto_split_says_when_it_could_not_close_the_cut(profile: Profile) -> None:
+    """Ein offener Körper wird geschnitten — und das wird gesagt.
+
+    Der Handschnitt meldet es seit jeher: ``split_at_plane`` gibt
+    ``split.uncapped`` zurück, wenn eine der beiden Hälften ungedeckelt bleibt.
+    Auto Split rief dieselbe Funktion, packte die Befunde in ``_findings`` aus
+    und warf sie weg. Der Kunde bekam zwei offene Hälften und keinen Hinweis —
+    beim einzigen Weg, auf dem er die Teilung *nicht* selbst gewählt hat.
+
+    Warum das trägt: Ein ungedeckeltes Netz ist kein Körper. Der Slicer füllt es
+    nach eigenem Gutdünken oder gar nicht, und der Fehler zeigt sich erst am
+    Druck. Das ist genau der Fall, für den Auto Split gedacht ist — Weg 1, ein
+    fremdes STL, das aufs Bett soll.
+    """
+    open_mesh = open_body()
+    assert not open_mesh.raw.is_watertight, "die Vorbedingung des Tests"
+
+    outcome = autosplit.split_to_fit(open_mesh, profile, pins=0)
+
+    assert outcome.divided, "geschnitten wird trotzdem — gemeldet wird es jetzt auch"
+    assert "split.uncapped" in [finding.code for finding in outcome.findings]
+
+
+def test_the_open_cut_is_reported_once_and_not_per_cut(profile: Profile) -> None:
+    """Einmal, nicht je Schnitt.
+
+    ``capped`` ist genau ``is_watertight`` der Eingabe, und eine Hälfte eines
+    offenen Körpers ist wieder offen — der Befund fiele sonst bei jedem Schnitt
+    erneut an und stünde vierfach im Prüfbericht. Er sagt aber viermal dasselbe:
+    dass die Quelle ein Loch hat.
+    """
+    outcome = autosplit.split_to_fit(open_body(), profile, pins=0, max_parts=4)
+
+    codes = [finding.code for finding in outcome.findings]
+    assert codes.count("split.uncapped") == 1, f"einmal, nicht {codes.count('split.uncapped')}-mal"
+
+
+def test_a_closed_body_is_split_without_that_warning(profile: Profile) -> None:
+    """Die Gegenprobe: Der geschlossene Regelfall bleibt still."""
+    outcome = autosplit.split_to_fit(body(), profile, pins=0)
+
+    assert outcome.divided
+    assert "split.uncapped" not in [finding.code for finding in outcome.findings]

@@ -351,7 +351,13 @@ def split_to_fit(
 
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        first, second = _cut_in_two(part, candidate)
+        first, second, cut_findings = _cut_in_two(part, candidate)
+        # Einmal je Ursache und nicht je Schnitt: ``capped`` ist genau die
+        # Wasserdichtheit der Eingabe, und die Hälfte eines offenen Körpers ist
+        # wieder offen. Vierfach im Prüfbericht stünde viermal derselbe Satz.
+        outcome.findings.extend(
+            finding for finding in cut_findings if finding.code not in _codes(outcome.findings)
+        )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if first is None or second is None:
@@ -423,6 +429,11 @@ def split_to_fit(
             )
         )
     return finish()
+
+
+def _codes(findings: Sequence[Finding]) -> frozenset[str]:
+    """Welche Befundarten schon dastehen."""
+    return frozenset(finding.code for finding in findings)
 
 
 def _worst(parts: list[MeshData], profile: Profile, reserves: list[Vec3]) -> int | None:
@@ -686,7 +697,10 @@ def _support_after_cut(
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    first, second = _cut_in_two(mesh, candidate)
+    # Die Befunde des Schnitts gehören hier nicht hin: Diese Funktion beurteilt
+    # eine Ebene, die vielleicht nie geschnitten wird. Ein Prüfbericht über
+    # verworfene Kandidaten wäre länger als der über das Ergebnis.
+    first, second, _judging_only = _cut_in_two(mesh, candidate)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     if first is None or second is None:
@@ -1003,14 +1017,29 @@ def sections_across(mesh: MeshData, normal: Vec3, heights: np.ndarray) -> list[A
     return result
 
 
-def _cut_in_two(mesh: MeshData, candidate: Candidate) -> tuple[MeshData | None, MeshData | None]:
-    """Beide Hälften eines Schnitts, jede mit geschlossener Fläche (§25)."""
+def _cut_in_two(
+    mesh: MeshData, candidate: Candidate
+) -> tuple[MeshData | None, MeshData | None, list[Finding]]:
+    """Beide Hälften eines Schnitts, jede mit geschlossener Fläche (§25) — und
+    was dabei zu sagen war.
+
+    **Die Befunde reisen mit.** Bis zum 03.09.2026 standen sie hier als
+    ``_findings`` und wurden weggeworfen. Der Handschnitt meldet
+    ``split.uncapped``, wenn eine Hälfte ungedeckelt bleibt; Auto Split rief
+    dieselbe Funktion und schwieg. Der Kunde bekam zwei offene Netze auf dem
+    einzigen Weg, auf dem er die Teilung nicht selbst gewählt hat — und ein
+    ungedeckeltes Netz ist kein Körper, der Slicer füllt es nach eigenem
+    Gutdünken oder gar nicht.
+
+    Wer nur misst, wirft sie ausdrücklich weg (:func:`_support_after_cut`).
+    """
     from app.core.geom.prepare import split_at_plane
 
-    first, second, _findings = split_at_plane(mesh, candidate.plane)
+    first, second, findings = split_at_plane(mesh, candidate.plane)
     return (
         first if first.triangle_count else None,
         second if second.triangle_count else None,
+        findings,
     )
 
 
