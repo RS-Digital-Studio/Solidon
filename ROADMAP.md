@@ -14981,3 +14981,29 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
 
   Robert dazu: „wir brauchen auch nur Merkmale usw, die auch von der
   Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+
+## Der Körper sprang zurück, bevor er ankam (03.09.2026)
+
+- [x] **Sieben von acht Szenenaufbauten waren unnötig.** Robert: „wenn wir
+  ein Körper oder Merkmal verschieben oder drehen usw springt es nach
+  Loslassen nochmal zur alten Stelle bevor es an der neuen landet." Gemessen
+  am laufenden Fenster war die Ursache weder der Griff noch der Schatten,
+  sondern `set_analysis_map(None, None)`: dreimal gerufen, während das
+  Ergebnis der Operation schon vorlag, dreimal die ganze Szene mit dem
+  **alten** Stand neu aufgebaut — und jeder Aufbau nahm dem Actor seine
+  Vorschau. **491 ms** an der alten Stelle. Danach: ein Aufbau, neue
+  Geometrie, kein Rücksprung.
+
+  Der teurere Teil war unsichtbar: In vier gewöhnlichen Handlungen fielen
+  **8 Aufbauten auf 2**, und ein Klick auf einen Körper baut jetzt gar
+  nichts mehr neu. An `chufang.3mf` kostet ein Aufbau 0,74 s.
+
+  Acht Setter tragen die Prüfung, `set_hidden` hatte sie als Vorlage. Bei
+  `set_theme` fehlte nicht der Vergleich, sondern das Feld — der Viewport
+  merkte sein Thema nirgends.
+  `tests/test_viewport_decisions.py::test_a_view_setter_that_changes_nothing_rebuilds_nothing`;
+  Gegenprobe **je Prüfung einzeln**, achtmal rot.
+
+  Der Code liegt in `a0c802c3` (c7 hat ihn beim Commit derselben Datei
+  mitgenommen und in seiner Meldung zugeschrieben); Test, Regel und dieser
+  Punkt kommen hier nach.

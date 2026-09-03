@@ -5177,3 +5177,128 @@ def test_the_mark_covers_the_feature_and_does_not_stand_over_it(
     assert viewport._handle_radius(winzig) == FACE_HANDLE_MINIMUM, (
         "eine Ø0,5-Bohrung bekäme sonst eine Marke, die niemand sieht"
     )
+
+
+def test_a_view_setter_that_changes_nothing_rebuilds_nothing(qt_app: QApplication) -> None:
+    """Sieben Setter bauten die Szene neu auf, auch wenn sich nichts änderte.
+
+    **Der sichtbare Anlass (Robert, 03.09.2026):** „wenn wir ein Körper oder
+    Merkmal verschieben oder drehen usw springt es nach Loslassen nochmal zur
+    alten Stelle bevor es an der neuen landet." Gemessen am laufenden Fenster
+    war die Ursache nicht der Griff und nicht der Schatten, sondern
+    `set_analysis_map(None, None)`: dreimal gerufen, während das Ergebnis der
+    Operation längst vorlag, und jeder dieser Aufbauten nahm dem Actor seine
+    Vorschau-Matrix. **491 ms** stand das Teil dort, wo es hergekommen war.
+
+    **Der teurere Teil war unsichtbar.** Zähler um `show_scene` und alle acht
+    Setter, vier gewöhnliche Handlungen an `aushoehlen-und-teilen.p3d`:
+
+    | Handlung | vorher | nachher |
+    |---|---|---|
+    | Körper anklicken | 1 | 0 |
+    | zweiten anklicken | 1 | 0 |
+    | Themenwechsel | 3 | 1 |
+    | dasselbe Thema noch einmal | 1 | 0 |
+    | Modus zweimal auf denselben Wert | 2 | 1 |
+    | **Summe** | **8** | **2** |
+
+    An `chufang.3mf` (32 Körper, 5 476 596 Dreiecke) kostet ein Aufbau
+    **0,74 s** — ein Klick auf einen Körper also drei Viertel Sekunden für
+    nichts.
+
+    `set_hidden` hatte die Prüfung seit je und ist die Vorlage. Geprüft wird
+    hier jeder Setter einzeln: zweimal derselbe Wert, und nur der erste darf
+    aufbauen.
+    """
+    import dataclasses
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    body = SceneObject(
+        id="obj",
+        name="obj",
+        mesh=MeshData(
+            trimesh.creation.box(extents=(10.0, 10.0, 10.0)).apply_translation((0.0, 0.0, 5.0))
+        ),
+    )
+    viewport._result = EvaluationResult(scene=Scene(objects={"obj": body}))
+
+    aufbauten = [0]
+    original = viewport.show_scene
+
+    def zaehlend(result: object) -> None:
+        aufbauten[0] += 1
+        original(result)
+
+    viewport.show_scene = zaehlend  # type: ignore[method-assign]
+
+    # Je Setter: der erste Aufruf zählt, der zweite mit demselben Wert nicht.
+    fälle: list[tuple[str, object, object]] = [
+        ("set_hidden", frozenset({"obj"}), frozenset({"obj"})),
+        ("set_plate", 1, 1),
+        ("set_explosion", 2.5, 2.5),
+        ("set_display_mode", "wireframe", "wireframe"),
+        ("set_shading", "smooth", "smooth"),
+        ("set_analysis_map", None, None),
+    ]
+    for name, erst, zweit in fälle:
+        setter = getattr(viewport, name)
+        vorher = aufbauten[0]
+        if name == "set_analysis_map":
+            # Zwei Argumente, und der gemessene Fall ist genau „keine Karte".
+            setter(None, None)
+            setter(None, None)
+            assert aufbauten[0] - vorher == 0, (
+                "keine Karte auf keine Karte ist keine Änderung — genau der "
+                "Fall, der den Körper zurückspringen ließ"
+            )
+            continue
+        setter(erst)
+        nach_dem_ersten = aufbauten[0] - vorher
+        setter(zweit)
+        nach_dem_zweiten = aufbauten[0] - vorher
+        assert nach_dem_ersten == 1, f"{name}: die echte Änderung baut auf"
+        assert nach_dem_zweiten == 1, f"{name}: derselbe Wert baut nicht noch einmal auf"
+
+    # **``set_theme`` wird an seiner Wirkung geprüft, nicht am Aufbau.** Er
+    # steigt offscreen vor ``show_scene`` aus (``if self.plotter is None``),
+    # und ein Test über den Zähler wäre hier grün, ohne etwas zu sagen — die
+    # Prüfung sitzt aber davor und gilt auch ohne Plotter.
+    viewport.set_theme("light")
+    gemerkt = viewport._object_colour
+    viewport._object_colour = "#000000"
+    viewport.set_theme("light")
+    assert viewport._object_colour == "#000000", (
+        "dasselbe Thema fasst die Farben nicht noch einmal an"
+    )
+    viewport.set_theme("dark")
+    assert viewport._object_colour != "#000000", "ein anderes Thema schon"
+    assert viewport._theme == "dark"
+    viewport.set_theme("light")
+    assert viewport._object_colour == gemerkt, "und zurück ergibt wieder dieselben Farben"
+
+    # Das Auseinanderziehen vergleicht den **normalisierten** Wert: Wer zweimal
+    # einen negativen Faktor schickt, meint zweimal null.
+    vorher = aufbauten[0]
+    viewport.set_explosion(-1.0)
+    viewport.set_explosion(-5.0)
+    assert aufbauten[0] - vorher == 1, (
+        "zwei negative Faktoren sind beide null — der zweite ändert nichts"
+    )
+
+    # Und die Schnittebene hängt an beiden Werten, nicht nur an der Ebene.
+    from app.core.geom.section import SectionPlane
+
+    ebene = SectionPlane(normal=(1.0, 0.0, 0.0), position=0.0)
+    vorher = aufbauten[0]
+    viewport.set_section(ebene, 1.0)
+    viewport.set_section(dataclasses.replace(ebene), 1.0)
+    assert aufbauten[0] - vorher == 1, "dieselbe Ebene bei derselben Dicke ist keine Änderung"
+    viewport.set_section(dataclasses.replace(ebene), 2.0)
+    assert aufbauten[0] - vorher == 2, "eine andere Dicke schon"

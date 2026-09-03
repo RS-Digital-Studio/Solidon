@@ -918,6 +918,79 @@ falsch: `_for_display` kostet beim ersten Aufbau 1044 ms und danach **0 ms**,
 weil `DISPLAY_CACHE_KEPT` (4) für diese drei reicht. Wer die Schwelle
 angefasst hätte, hätte nichts gewonnen.
 
+### Jeder Ansichts-Setter prüft auf Änderung
+
+Sieben von acht Szenenaufbauten waren unnötig. Gemessen am 03.09.2026 am
+laufenden Fenster (Zähler um `show_scene` **und** um alle acht Setter),
+vier gewöhnliche Handlungen an `aushoehlen-und-teilen.p3d`:
+
+| Handlung | vorher | nachher |
+|---|---|---|
+| Körper anklicken | 1 | **0** |
+| zweiten Körper anklicken | 1 | **0** |
+| Themenwechsel dunkel → hell | 3 | **1** |
+| dasselbe Thema noch einmal | 1 | **0** |
+| Modus zweimal auf denselben Wert | 2 | **1** |
+| **Summe** | **8** | **2** |
+
+An `chufang.3mf` (32 Körper, 5 476 596 Dreiecke) kostet ein Aufbau
+**0,74 s** — ein Klick auf einen Körper also drei Viertel Sekunden
+für nichts, ein Themenwechsel gut zwei.
+
+**Sichtbar wurde es an einer anderen Stelle**, und zwar als Fehler: Nach einem
+Zug am Griff sprang der Körper an die alte Stelle zurück, bevor er an
+der neuen landete (Robert, 03.09.2026). Die Kette, gemessen:
+
+```
+ 8439 ms  transformDragged offset=(25,0,0)
+ 8674 ms  das neue Ergebnis liegt vor
+ 8698 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
+ 8879 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
+ 9006 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
+ 9189 ms  Aufbau mit der neuen Geometrie
+```
+
+Jeder dieser Aufbauten nimmt dem Actor seine Vorschau-Matrix; **491 ms** stand
+das Teil dort, wo es hergekommen war. Danach: **ein** Aufbau, mit der neuen
+Geometrie, kein Rücksprung.
+
+**Zwei Verdächtige sind gemessen ausgeschieden** — sie standen der
+Diagnose im Weg, weil beide plausibel aussahen. `_end_drag` räumt den
+Schattenversatz zurück (`e3648624`), aber der Versatz bleibt über den
+ganzen Vorgang bei (0,0,0). Und pyvistas `AffineWidget3D` fasst beim
+Neuanhängen die `user_matrix` nicht an: `remove()` entfernt nur Kreise und
+Pfeile, `__init__` setzt sie nur, wenn sie `None` ist. Die Vorschau
+überlebt `_on_gizmo_released` unverändert.
+
+Die Prüfungen im Einzelnen:
+
+| Setter | verglichen wird |
+|---|---|
+| `set_hidden` | die Menge (hatte sie seit je — die Vorlage) |
+| `set_plate` | die Plattennummer |
+| `set_explosion` | der **normalisierte** Wert, nicht das Argument: zweimal ein negativer Faktor meint zweimal null |
+| `set_display_mode` | der Modus |
+| `set_shading` | die Schattierung |
+| `set_section` | Ebene **und** Dicke |
+| `set_analysis_map` | Identität der Karte, Gleichheit der Kennung |
+| `set_theme` | das Thema, seit es eines merkt |
+
+**`set_theme` konnte als Einziger nicht prüfen**, und der Grund war kein
+Versäumnis am Vergleich, sondern ein fehlendes Feld: Der Viewport merkte
+sein Thema nirgends. `self._theme` beginnt bei `None`, damit der erste Aufruf
+durchläuft — das Fenster setzt das Thema beim Start, und ein
+vorbelegtes Feld ließe die Startfarben ungesetzt. Seine Prüfung steht
+**ganz vorn**, vor dem Umfärben der Leisten: Ändert sich das Thema
+nicht, ist jede Zeile darunter Arbeit für dasselbe Bild.
+
+**Der Test dafür misst nicht bei allen dasselbe.** `set_theme` steigt
+offscreen vor `show_scene` aus (`if self.plotter is None`); ein Test über
+den Aufbau-Zähler wäre dort grün, ohne etwas zu sagen. Geprüft
+wird er deshalb an seiner Wirkung (den gesetzten Farben), die anderen sieben am
+Zähler. Gegenprobe: jede der acht Prüfungen **einzeln** ausgebaut,
+achtmal rot — ein Lauf mit allen acht Mutationen hätte beim ersten
+abgebrochen und die übrigen sieben ungeprüft gelassen.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an
