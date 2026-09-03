@@ -1009,6 +1009,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "materials": _("Materialien"),
     "lost": _("Verloren"),
     "major": _("Hauptversion"),
+    "machine": _("Maschine"),
     "material": _("Material"),
     "maximum": _("Höchstwert"),
     "measured": _("Gemessen"),

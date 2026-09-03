@@ -23,7 +23,13 @@ import numpy as np
 
 from app.core import activation
 from app.core.deferred import trimesh
-from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    EXPORT_AS_MESH,
+    FileWriteError,
+    NeedsSolidError,
+    ValidationError,
+)
 from app.core.export import threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
@@ -1108,6 +1114,20 @@ def _needs_solid() -> NeedsSolidError:
     Zwei Stellen werfen ihn: der Schreiber eines einzelnen Körpers und der
     Plan, aus dem am Ende keine einzige Datei übrig blieb. Zwei Fassungen
     desselben Satzes wären zwei Einträge im Katalog und einer davon veraltet.
+
+    **Und der Ausweg ist ein Knopf, nicht nur ein Satz.** Derselbe Fall
+    erreicht den Kunden auf zwei Wegen: als Befund im Prüfbericht und als
+    geworfener Fehler, wenn er ``teil.step`` tippt. Der Befund bot *Als 3MF
+    speichern* an, die Ausnahme nur *Abbrechen* — gemessen am 03.09.2026
+    ``['cancel']`` gegen ``['export_as_mesh', 'show_details']``. Formal
+    genügte das Regel 17; praktisch endete der häufigere der beiden Wege mit
+    „geht nicht, brich ab", während die Handlung dazu im Fenster fertig lag
+    (``_export_as_mesh_after_error`` trägt den Fall im Namen).
+
+    Der schmale Vorschlag von :class:`NeedsSolidError` bleibt für die
+    B-Rep-Werkzeuge richtig — vom Netz zum exakten Körper führt kein Weg
+    zurück. Hier führt einer: nicht zum Körper, aber zu einer Datei, die
+    Dreiecke kennt.
     """
     return NeedsSolidError(
         detail=_(
@@ -1115,4 +1135,5 @@ def _needs_solid() -> NeedsSolidError:
             "besteht aus festen Dreiecken; dafür bleiben STL und 3MF."
         ),
         values={"field": "format", "constraint": "needs_brep"},
+        suggestions=(EXPORT_AS_MESH, CANCEL),
     )

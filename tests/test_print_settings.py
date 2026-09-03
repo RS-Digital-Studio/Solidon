@@ -2776,7 +2776,7 @@ def test_the_customer_hears_that_the_slicer_stands_on_another_printer(monkeypatc
     assert findings[0].severity == "warning"
     assert findings[0].suggestions, "Regel 17: ein Befund endet nie mit „geht nicht"
     werte = findings[0].values
-    assert "Bambu Lab A1 0.2 nozzle" in str(werte["chosen"]), "der Kunde muss den Namen sehen"
+    assert "Bambu Lab A1 0.2 nozzle" in str(werte["machine"]), "der Kunde muss den Namen sehen"
 
 
 def test_nothing_is_said_when_the_machine_side_is_there(monkeypatch) -> None:

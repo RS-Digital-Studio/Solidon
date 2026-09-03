@@ -278,7 +278,7 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                     "kann. Stellen Sie den Slicer auf denselben Drucker um oder "
                     "wählen Sie das Maschinenprofil in den Druckeinstellungen."
                 ),
-                values={"chosen": chosen, "printer": profile.printer.title},
+                values={"machine": chosen, "printer": profile.printer.title},
                 suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
             )
         ]

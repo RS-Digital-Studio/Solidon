@@ -1502,7 +1502,7 @@ def test_the_export_says_why_the_machine_side_is_missing(
 
     treffer = [finding for finding in findings if finding.code == "slicer.machine_mismatch"]
     assert treffer, [finding.code for finding in findings]
-    assert "Bambu Lab A1 0.2 nozzle" in str(treffer[0].values["chosen"])
+    assert "Bambu Lab A1 0.2 nozzle" in str(treffer[0].values["machine"])
     assert treffer[0].suggestions, "Regel 17"
 
 
@@ -1530,3 +1530,28 @@ def test_a_plain_export_hears_nothing_about_a_foreign_slicer(
     )
 
     assert not [f for f in findings if f.code.startswith("slicer.machine_")]
+
+
+def test_the_step_refusal_offers_the_way_out_it_names(profile: Profile) -> None:
+    """Derselbe Fall, zwei Wege — und nur einer trug den Knopf.
+
+    ``export.needs_solid`` erreicht den Kunden auf zwei Wegen: als Befund im
+    Prüfbericht und als geworfener Fehler, wenn er ``teil.step`` tippt. Der
+    Befund bietet seit dem 30.08.2026 *Als 3MF speichern* an; die Ausnahme bot
+    nur *Abbrechen*. Gemessen am selben Tag:
+
+        geworfen    ['cancel']
+        als Befund  ['export_as_mesh', 'show_details']
+
+    Formal genügte das Regel 17 — ein Vorschlag war da. Praktisch endete der
+    häufigere der beiden Wege mit „geht nicht, brich ab", während die Handlung
+    dazu im Fenster fertig lag: ``_export_as_mesh_after_error`` trägt den Fall
+    im Namen und wurde nie gerufen.
+    """
+    from app.core.errors import EXPORT_AS_MESH
+    from app.core.export.writer import _needs_solid
+
+    ausgaenge = [action.id for action in _needs_solid().suggestions]
+
+    assert EXPORT_AS_MESH.id in ausgaenge, ausgaenge
+    assert ausgaenge[0] == EXPORT_AS_MESH.id, "der Ausweg steht vor dem Abbruch"
