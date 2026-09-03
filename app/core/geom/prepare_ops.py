@@ -335,7 +335,14 @@ def drill_hole(ctx: OpContext) -> OpResult:
 #: Randring liegt auf der Grundfläche — gedeckelt ergibt er den Körper, der
 #: wirklich das Merkmal ist. Bis dahin sagt die Operation, warum sie es nicht
 #: tut, statt es falsch zu tun (Regel 21).
-MOVABLE_KINDS: Final = ("hole", "pin")
+MOVABLE_KINDS: Final = ("hole", "pin", "cone", "sphere")
+
+#: Die Arten, deren Kennzahlen den Körper genau beschreiben.
+#:
+#: Für sie baut :func:`_feature_solid` ihn daraus, und das ist auch der
+#: einzige Weg, der eine **durchgehende** Bohrung trägt: Ihr Flächenausschnitt
+#: hat zwei Randringe, und ein Deckel aus einem Fächer schließt nur einen.
+PARAMETRIC_KINDS: Final = ("hole", "pin")
 
 #: Wie viele Seiten ein gebauter Zylinder oder Kegel bekommt. Dieselbe Zahl wie
 #: beim Bohren — ein Stopfen mit anderer Auflösung träfe die Bohrungswand in
@@ -422,6 +429,128 @@ def _feature_solid(
         [0.0, 0.0, 1.0], direction
     )
     body.apply_transform(turn)
+    body.apply_translation(np.asarray(centre, dtype=float))
+    return MeshData.of(body)
+
+
+#: Wie flach ein Randring sein muss, damit ein Deckel aus einem Fächer trägt.
+#:
+#: Ein Fächer vom Schwerpunkt zu jeder Randkante ist genau dann eine Fläche,
+#: wenn der Ring in einer Ebene liegt. Bei einer Kuppe auf einer Platte ist die
+#: Spanne gemessen **null**; die Grenze fängt die Tesselierung einer schwach
+#: gekrümmten Grundfläche mit und lehnt alles darüber ab, statt einen
+#: verdrehten Deckel zu bauen.
+FLAT_RIM: Final = 0.05
+
+
+def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
+    """Der Körper, den dieses Merkmal wirklich einnimmt — aus seinen Flächen.
+
+    **Warum nicht aus den Kennzahlen.** Für Bohrung und Zapfen beschreiben
+    ``centre``, ``axis``, ``depth`` und ``diameter`` den Körper genau, und
+    :func:`_feature_solid` baut ihn daraus. Für eine Kuppe oder einen Kegel tun
+    sie das nicht: Die erkannte Mitte liegt **in** der Fläche, auf der sie
+    sitzen, der halbe Grundkörper steckt im Material. Gemessen am 03.09.2026
+    kostete das Versetzen einer Kuppe Ø 12 auf einer 10-mm-Platte 445 mm³ von
+    24 449 — der Körper blieb wasserdicht und war still falsch.
+
+    Die Merkmalsflächen sagen es genau: Sie begrenzen die Kuppe, ihr Randring
+    liegt auf der Grundfläche, und mit einem Deckel darüber entsteht der
+    Körper, der wirklich das Merkmal ist. Gemessen: 448,5 mm³ gegen 452,4 der
+    analytischen Halbkugel — die Differenz ist die Tesselierung der Vorlage.
+
+    ``None``, wenn der Bau nicht sicher ist: keine Flächen, mehr als ein
+    Randring, oder ein Ring, der nicht in einer Ebene liegt. Dann ist ein
+    Deckel aus einem Fächer keine Fläche, und ein verdrehter Deckel wäre
+    schlimmer als eine Absage (Regel 21).
+    """
+    if not feature.face_indices:
+        return None
+
+    raw = mesh.raw
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if chosen.size == 0 or int(chosen.max()) >= len(raw.faces):
+        return None
+
+    patch = trimesh.Trimesh(
+        vertices=raw.vertices, faces=np.asarray(raw.faces)[chosen], process=False
+    )
+    patch.remove_unreferenced_vertices()
+    patch.merge_vertices()
+
+    # Eine Randkante gehört genau einem Dreieck des Ausschnitts. Alles andere
+    # liegt innen und braucht keinen Deckel.
+    edges = patch.edges_sorted
+    single = trimesh.grouping.group_rows(  # type: ignore[no-untyped-call]
+        edges, require_count=1
+    )
+    rim = edges[single]
+    if len(rim) < 3:
+        return None
+
+    points = np.asarray(patch.vertices, dtype=float)
+    ring = points[np.unique(rim)]
+    hub = ring.mean(axis=0)
+    # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an einer
+    # Seitenwand hat ihren Ring in der YZ-Ebene.
+    spread = ring - hub
+    if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
+        return None
+
+    index = len(points)
+    cap = np.column_stack([rim[:, 0], rim[:, 1], np.full(len(rim), index, dtype=np.int64)])
+    closed = trimesh.Trimesh(
+        vertices=np.vstack([points, hub]),
+        faces=np.vstack([np.asarray(patch.faces, dtype=np.int64), cap]),
+        process=True,
+    )
+    trimesh.repair.fix_normals(closed)  # type: ignore[no-untyped-call]
+    if not closed.is_watertight or closed.volume <= EPS_GEOM:
+        return None
+    return MeshData.of(closed)
+
+
+def _tool_for(
+    mesh: MeshData, feature: Feature, centre: Vec3, scale: float = 1.0, axis: Vec3 | None = None
+) -> MeshData:
+    """Der Werkzeugkörper dieses Merkmals, an ``centre`` gesetzt.
+
+    Zwei Wege, und welcher gilt, entscheidet die Merkmalsart: Wo die
+    Kennzahlen den Körper genau beschreiben (Bohrung, Zapfen), baut
+    :func:`_feature_solid` ihn daraus — das trägt auch für eine durchgehende
+    Bohrung, deren Ausschnitt **zwei** Randringe hat und die ein Deckel aus
+    einem Fächer deshalb nicht schließt. Sonst kommt er aus den Flächen des
+    Merkmals (:func:`_feature_body`) und wird verschoben, gedreht und
+    skaliert wie er ist.
+    """
+    if feature.kind in PARAMETRIC_KINDS:
+        return _feature_solid(feature, centre, scale=scale, axis=axis)
+
+    built = _feature_body(mesh, feature)
+    if built is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_HELP_INSTEAD.get(feature.kind, _NOT_MOVABLE),
+            values={"feature": feature.id, "kind": feature.kind},
+            constraint="not_movable",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+
+    measured = [float(value) for value in feature.params["centre"]]
+    matrix = np.eye(4)
+    if axis is not None:
+        from_axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+        matrix = np.asarray(
+            trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+                from_axis, np.asarray(axis, dtype=np.float64)
+            ),
+            dtype=np.float64,
+        )
+    body = built.raw.copy()
+    body.apply_translation(-np.asarray(measured, dtype=float))
+    if scale != 1.0:
+        body.apply_scale(scale)  # type: ignore[no-untyped-call]
+    body.apply_transform(matrix)
     body.apply_translation(np.asarray(centre, dtype=float))
     return MeshData.of(body)
 
@@ -587,7 +716,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = boolean(
         "union" if cavity else "difference",
-        [body, _feature_solid(feature, centre)],
+        [body, _tool_for(body, feature, centre)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -595,7 +724,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _feature_solid(feature, target)],
+        [closed.mesh, _tool_for(as_mesh_data(source.mesh), feature, target)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -669,7 +798,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
     closed = boolean(
         "union" if cavity else "difference",
-        [as_mesh_data(source.mesh), _feature_solid(feature, centre)],
+        [as_mesh_data(source.mesh), _tool_for(as_mesh_data(source.mesh), feature, centre)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -731,7 +860,10 @@ class RotateFeatureParams(BaseParams):
     params=RotateFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=list(MOVABLE_KINDS),
+    # **Ohne die Kugel.** Sie hat keine Lage, die sich drehen ließe — gedreht
+    # sähe sie aus wie vorher, und eine Handlung ohne Wirkung ist schlechter
+    # als keine (Roberts „alles, was bei den jeweiligen sinnvoll ist").
+    applies_to=["hole", "pin", "cone"],
     touches_features=True,
     deterministic=False,
     doc=_("Kippt eine erkannte Bohrung oder einen erkannten Zapfen um ihre Mitte."),
@@ -776,7 +908,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = boolean(
         "union" if cavity else "difference",
-        [as_mesh_data(source.mesh), _feature_solid(feature, centre)],
+        [as_mesh_data(source.mesh), _tool_for(as_mesh_data(source.mesh), feature, centre)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -784,7 +916,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _feature_solid(feature, centre, axis=turned_axis)],
+        [closed.mesh, _tool_for(as_mesh_data(source.mesh), feature, centre, axis=turned_axis)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -848,7 +980,11 @@ class ResizeFeatureParams(BaseParams):
     params=ResizeFeatureParams,
     consumes=1,
     produces=1,
-    applies_to=["pin"],
+    # **Nicht ``hole``** — dafür gibt es ``resize_hole`` mit eigenem Weg durch
+    # den exakten Kern und einer Materialkompensation, die für ein Loch gilt und
+    # für einen Zapfen andersherum liefe. Die beiden überschneiden sich deshalb
+    # nicht, und ``perceive.actions`` legt sie zu **einer** Zeile zusammen.
+    applies_to=["pin", "cone", "sphere"],
     touches_features=True,
     deterministic=False,
     doc=_("Ändert den Durchmesser eines erkannten Zapfens."),
@@ -892,7 +1028,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = boolean(
         "union" if cavity else "difference",
-        [as_mesh_data(source.mesh), _feature_solid(feature, centre)],
+        [as_mesh_data(source.mesh), _tool_for(as_mesh_data(source.mesh), feature, centre)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -900,7 +1036,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _feature_solid(feature, centre, scale=scale)],
+        [closed.mesh, _tool_for(as_mesh_data(source.mesh), feature, centre, scale=scale)],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
