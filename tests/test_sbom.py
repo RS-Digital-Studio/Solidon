@@ -424,7 +424,9 @@ def test_the_build_creates_and_bundles_the_sbom_from_the_target_environment() ->
     package_job = workflow.split("  package:", 1)[1]
     assert package_job.count("pyinstaller packaging/solidon3d.spec") == 1
     assert OFFICIAL_SCHEMA in package_job
-    assert "python tools/make_sbom.py --locate-artifact dist" in package_job
+    # Als Modul: `python tools/x.py` setzt sys.path auf `tools/`, und der
+    # Prüfjob fiel damit über `from tools import make_sbom` (Tag-Lauf 10).
+    assert "python -m tools.make_sbom --locate-artifact dist" in package_job
     assert 'Get-ChildItem -LiteralPath "dist"' not in package_job
     assert "Test-Json" in package_job
 
