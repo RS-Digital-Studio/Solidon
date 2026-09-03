@@ -76,6 +76,9 @@ Nutzen da und sonst nichts.
 - Ein Rechtsklick in der Objektliste trifft die Zeile, auf die man zeigt, und nicht die zwei darüber.
 ### Ansicht und Objektbaum
 
+- Die Ansicht hat eine eigene Steuerung, und sie ist die neue Vorgabe: Links ziehen verschiebt, rechts dreht, das gedrückte Mausrad kippt, das Rad zoomt.
+- Mit W, A, S und D fliegt man durch die Szene, Q und E kippen — der Flug geht durch ein Teil hindurch, während der Zoom davor stehen bleibt.
+- Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, FreeCAD, Fusion und Blender bleiben unverändert.
 - Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene.
 - Ein Teil unter der Druckplatte ist zu sehen — durchsichtig ist jetzt das Bett und nicht das Modell.
 - Halbdurchsichtige Körper werden in der richtigen Tiefenfolge gezeichnet, unabhängig von der Reihenfolge ihrer Entstehung.

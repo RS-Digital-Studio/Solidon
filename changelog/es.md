@@ -52,6 +52,9 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un clic derecho en la lista de objetos acierta la fila señalada, no las dos de encima.
 ### Vista y árbol de objetos
 
+- La vista tiene un control propio, y es el nuevo predeterminado: arrastrar con el izquierdo desplaza, con el derecho gira, la rueda pulsada inclina y la rueda acerca.
+- Con W, A, S y D se vuela por la escena, y Q y E inclinan; el vuelo atraviesa una pieza, mientras que el zoom se detiene delante.
+- Quien esté acostumbrado a otro control lo elige en los ajustes: los esquemas de Cura, FreeCAD, Fusion y Blender no cambian.
 - La entrada *Ajustar a la vista* encuadra la pieza pulsada; sin selección, toda la escena como hasta ahora.
 - Una pieza bajo la placa de impresión se ve: ahora es la placa la que es transparente, no el modelo.
 - Los cuerpos semitransparentes se dibujan en el orden de profundidad correcto, sea cual sea el orden en que se crearon.
