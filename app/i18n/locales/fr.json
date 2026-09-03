@@ -2532,6 +2532,7 @@
   "Links ein bemaßter Umriss, ein Pfeil führt nach rechts zu drei Körpern daraus: derselbe Umriss gerade nach oben extrudiert, um eine senkrechte Achse zu einer Hülse gedreht, und als Band entlang eines Viertelbogens geführt.": "À gauche, un contour coté ; une flèche mène à droite vers trois corps qui en sortent : le même contour extrudé droit vers le haut, tourné autour d'un axe vertical en une douille, et guidé comme un ruban le long d'un quart d'arc.",
   "Links stehen vier Maße mit Namen. Stellen Sie die Höhe auf 60 mm — die Dose wächst, der Deckel bleibt, wo er hingehört, und die Kabeldurchführung wandert mit der Wand.": "À gauche, quatre cotes portent un nom. Réglez la hauteur sur 60 mm — la boîte grandit, le couvercle reste à sa place, et le passe-câble suit la paroi.",
   "Links unter Parameter stehen Breite, Tiefe und Stärke. Ändern Sie hier eine Zahl; alle passenden Schritte im Verlauf verwenden sie automatisch.": "À gauche, sous Paramètres, figurent la largeur, la profondeur et l'épaisseur. Modifiez un nombre ici ; toutes les étapes correspondantes de l'historique l'utiliseront automatiquement.",
+  "Links verschiebt, rechts dreht, das gedrückte Rad kippt; WASD fliegt.": "Gauche déplace, droite tourne, la molette enfoncée bascule ; WASD vole.",
   "Links wählt, mittlere Taste dreht, Umschalt und Mitte schiebt.": "Le gauche sélectionne, le milieu tourne, Maj et milieu déplace.",
   "Links wählt, rechts dreht, Umschalt und Ziehen schiebt.": "Gauche sélectionne, droite tourne, Maj et glisser déplace.",
   "Lizenz": "Licence",

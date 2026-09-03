@@ -2532,6 +2532,7 @@
   "Links ein bemaßter Umriss, ein Pfeil führt nach rechts zu drei Körpern daraus: derselbe Umriss gerade nach oben extrudiert, um eine senkrechte Achse zu einer Hülse gedreht, und als Band entlang eines Viertelbogens geführt.": "À esquerda, um contorno cotado; uma seta leva à direita a três corpos criados a partir dele: o mesmo contorno extrudido a direito para cima, revolvido em torno de um eixo vertical até formar uma manga, e conduzido como faixa ao longo de um quarto de arco.",
   "Links stehen vier Maße mit Namen. Stellen Sie die Höhe auf 60 mm — die Dose wächst, der Deckel bleibt, wo er hingehört, und die Kabeldurchführung wandert mit der Wand.": "À esquerda estão quatro cotas com nome. Defina a altura para 60 mm — a caixa cresce, a tampa fica onde pertence, e o passa-cabos acompanha a parede.",
   "Links unter Parameter stehen Breite, Tiefe und Stärke. Ändern Sie hier eine Zahl; alle passenden Schritte im Verlauf verwenden sie automatisch.": "À esquerda, em Parâmetros, aparecem a largura, a profundidade e a espessura. Altere aqui um número; todos os passos correspondentes no histórico irão usá-lo automaticamente.",
+  "Links verschiebt, rechts dreht, das gedrückte Rad kippt; WASD fliegt.": "O esquerdo desloca, o direito gira, a roda premida inclina; WASD voa.",
   "Links wählt, mittlere Taste dreht, Umschalt und Mitte schiebt.": "O esquerdo seleciona, o do meio roda, Shift e meio desloca.",
   "Links wählt, rechts dreht, Umschalt und Ziehen schiebt.": "O esquerdo seleciona, o direito gira, Shift e arrastar desloca.",
   "Lizenz": "Licença",

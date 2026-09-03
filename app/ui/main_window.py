@@ -2908,27 +2908,31 @@ class MainWindow(QMainWindow):
         navigation_menu = self._submenu(view_menu, tr("Navigation"))
         self._navigation_group = QActionGroup(self)
         self._navigation_group.setExclusive(True)
-        for scheme, hint in (
-            (
-                "slicer",
-                # Der Hinweis stand hier andersherum, als das Schema arbeitet:
-                # „links drehen, rechts schieben" beschreibt Bambu und Prusa,
-                # nicht die Vorgabe aus §2.9.
-                tr("Links wählt, rechts dreht, Umschalt und Ziehen schiebt."),
-            ),
-            (
-                "orbit",
-                tr("Links dreht, rechts schiebt — die verbreitetste Aufteilung."),
-            ),
-            (
-                "cad",
-                tr("Mittlere Taste dreht, mit Umschalt schiebt sie; rechts zoomt."),
-            ),
-            (
-                "blender",
-                tr("Links wählt, mittlere Taste dreht, Umschalt und Mitte schiebt."),
-            ),
-        ):
+        # **Die Mitgliedschaft kommt aus dem Katalog, nicht aus einer Liste
+        # hier.** Sie stand hier als vierte Aufzählung derselben Schemata, und
+        # sie ist genau so auseinandergelaufen: Das Schema ``solidon`` kam
+        # dazu und wurde zugleich Vorgabe, stand aber nicht in dieser Liste —
+        # womit **kein** Eintrag angehakt war und das Menü dem Kunden sagte,
+        # es sei keine Steuerung aktiv, während er mit der neuen fuhr
+        # (gefunden von 3d-druck-06, gemeldet von 3d-druck-85, 03.09.2026).
+        #
+        # Über ``NAVIGATION`` gelesen kann das nicht wieder passieren: Ein
+        # sechstes Schema steht ohne Zutun im Menü. Fehlt ihm der Hinweissatz
+        # unten, bleibt der Statustext leer — sichtbar zu wenig, aber nicht
+        # falsch. Die Reihenfolge ist die des Katalogs, und dort steht die
+        # Vorgabe vorn.
+        hints = {
+            "solidon": tr("Links verschiebt, rechts dreht, das gedrückte Rad kippt; WASD fliegt."),
+            # Der Hinweis stand hier andersherum, als das Schema arbeitet:
+            # „links drehen, rechts schieben" beschreibt Bambu und Prusa,
+            # nicht die Vorgabe aus §2.9.
+            "slicer": tr("Links wählt, rechts dreht, Umschalt und Ziehen schiebt."),
+            "orbit": tr("Links dreht, rechts schiebt — die verbreitetste Aufteilung."),
+            "cad": tr("Mittlere Taste dreht, mit Umschalt schiebt sie; rechts zoomt."),
+            "blender": tr("Links wählt, mittlere Taste dreht, Umschalt und Mitte schiebt."),
+        }
+        for scheme in NAVIGATION:
+            hint = hints.get(scheme, "")
             action = self._add_action(
                 navigation_menu,
                 str(NAVIGATION[scheme]),

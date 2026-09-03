@@ -2532,6 +2532,7 @@
   "Links ein bemaßter Umriss, ein Pfeil führt nach rechts zu drei Körpern daraus: derselbe Umriss gerade nach oben extrudiert, um eine senkrechte Achse zu einer Hülse gedreht, und als Band entlang eines Viertelbogens geführt.": "On the left a dimensioned outline, an arrow leads right to three bodies made from it: the same outline extruded straight up, revolved about a vertical axis into a sleeve, and swept as a band along a quarter bend.",
   "Links stehen vier Maße mit Namen. Stellen Sie die Höhe auf 60 mm — die Dose wächst, der Deckel bleibt, wo er hingehört, und die Kabeldurchführung wandert mit der Wand.": "Four named dimensions sit on the left. Set the height to 60 mm — the box grows, the lid stays where it belongs, and the cable gland travels with the wall.",
   "Links unter Parameter stehen Breite, Tiefe und Stärke. Ändern Sie hier eine Zahl; alle passenden Schritte im Verlauf verwenden sie automatisch.": "Width, depth and thickness are listed under Parameters on the left. Change a number here; all matching steps in the history use it automatically.",
+  "Links verschiebt, rechts dreht, das gedrückte Rad kippt; WASD fliegt.": "Left pans, right rotates, the held wheel tilts; WASD flies.",
   "Links wählt, mittlere Taste dreht, Umschalt und Mitte schiebt.": "Left selects, the middle button rotates, Shift and middle pans.",
   "Links wählt, rechts dreht, Umschalt und Ziehen schiebt.": "Left selects, right rotates, shift and drag pans.",
   "Lizenz": "Licence",
