@@ -1574,6 +1574,74 @@ def test_choosing_another_feature_drops_the_waiting_preview(window: MainWindow) 
     assert window._feature_pending is None, "und ihr Merkposten auch"
 
 
+def test_applying_drops_the_waiting_preview_too(window: MainWindow) -> None:
+    """Der Zwilling zu ``test_choosing_another_feature_drops_the_waiting_preview``.
+
+    Das Abwählen räumte die wartende Vorschau ab, das **Anwenden** nicht: Der
+    Zeitgeber lief nach dem Übernehmen weiter und rechnete eine Änderung, die
+    schon im Verlauf stand. ``session.apply`` dreht die Vorschau-Generation
+    ebenfalls nicht weiter, ein schon rechnender Arbeiter legt sein Ergebnis
+    also über das fertige Teil.
+
+    Beide Anwenden-Wege werden geprüft — der einzelne und der für alle
+    gleichartigen. Ein Weg, der nur an einer von zwei Stellen abräumt, ist
+    derselbe Fehler noch einmal (gemeldet von 3d-druck-85, 03.09.2026).
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2, "die Platte hat mehrere Bohrungen"
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+
+    values = {"at_feature": holes[0], "diameter": 9.0, "compensate": False}
+    window.feature_panel.valuesChanged.emit("resize_hole", values)
+    assert window._feature_preview.isActive(), "Voraussetzung: die Vorschau wartet"
+
+    # **Sie muss auch wirklich im Bild stehen.** Ein bloß scharfer Zeitgeber
+    # zeichnet nichts, und eine Zusicherung über ein Bild, das es nie gab, ist
+    # immer grün — gemessen am 03.09.2026, der erste Anlauf dieses Tests war
+    # genau so leer.
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert window.viewport.difference is not None, "Voraussetzung: die Differenz liegt im Bild"
+    assert window.viewport._comparing, "Voraussetzung: das Band steht, der Filter hängt"
+    window.feature_panel.valuesChanged.emit("resize_hole", values)
+
+    window._apply_from_feature_panel("resize_hole", values)
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    assert not window._feature_preview.isActive(), "nach dem Übernehmen wartet nichts mehr"
+    assert window._feature_pending is None, "und der Merkposten ist leer"
+    # Eine abgebrochene Rechnung nimmt nicht weg, was schon gezeichnet ist.
+    assert window.viewport.difference is None, (
+        "der Differenzkörper der Vorschau liegt nicht mehr da"
+    )
+    assert not window.viewport._comparing, (
+        "mit dem Band geht der anwendungsweite Filter — sonst blendet die Leertaste überall um"
+    )
+
+    window.object_tree.select_feature(object_id, holes[1])
+    QApplication.processEvents()
+    window.feature_panel.valuesChanged.emit("resize_hole", {**values, "at_feature": holes[1]})
+    assert window._feature_preview.isActive(), "Voraussetzung für den zweiten Weg"
+
+    window._apply_to_each_feature("resize_hole", {"diameter": 9.5, "compensate": False}, holes)
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    assert not window._feature_preview.isActive(), "auch der Weg über alle gleichartigen räumt ab"
+    assert window._feature_pending is None
+    assert window.viewport.difference is None
+    assert not window.viewport._comparing
+
+
 def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
     """Robert am 03.09.2026: „wenn wir ein merkmal auswählen und auf der
     tastatur entf drück löschen wir den ganzen körper statt das merkmal."

@@ -9259,9 +9259,7 @@ class MainWindow(QMainWindow):
         # Eine Vorschau, die zum vorigen Merkmal gehört, hat hier nichts mehr
         # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
         # ist.
-        self._feature_pending = None
-        self._feature_preview.stop()
-        self.session.cancel_preview()
+        self._drop_feature_preview()
         if feature_id is None:
             self.feature_panel.clear()
             return
@@ -9329,7 +9327,38 @@ class MainWindow(QMainWindow):
             OperationDraft(op=op, inputs=(selected,), params={**params, "at_feature": feature_id})
             for feature_id in feature_ids
         ]
+        self._drop_feature_preview()
         self.session.apply(REGISTRY.get(op).title, drafts, bundle=True)
+
+    def _drop_feature_preview(self) -> None:
+        """Die wartende Vorschau des Merkmalsfensters fällt.
+
+        **Vier Dinge, und alle vier einzeln nötig.** Der gemerkte Posten, weil
+        der Zeitgeber sonst eine Änderung von vorhin rechnet; der Zeitgeber,
+        weil er sonst nach dem Übernehmen noch einmal feuert; die Rechnung,
+        weil ein Arbeiter, der schon läuft, sein Ergebnis sonst über das
+        fertige Teil legt (``session.apply`` dreht die Vorschau-Generation
+        nicht weiter); und das **Bild**, weil das Abbrechen einer Rechnung
+        nichts wegnimmt, was schon gezeichnet ist.
+
+        Das Bild ist der Teil, an dem zwei Sitzungen vorbeigelaufen sind, und
+        er wiegt am schwersten. Sichtbar bleibt der Differenzkörper der alten
+        Vorschau über der neuen Geometrie liegen, mit einem Band, das sagt, sie
+        sei nicht übernommen. Unsichtbar bleibt mit dem Band ``_comparing``
+        stehen, und mit ihm ein **anwendungsweiter** Ereignisfilter: Die
+        Leertaste blendet danach überall zwischen „mit" und „ohne" um.
+        ``mark_preview("")`` nimmt beides zurück, und ``_clear_preview`` tut
+        genau das — mitsamt der Frage, ob ein wartender Agentenvorschlag seine
+        Differenz zurückbekommt (gefunden von 3d-druck-85, 03.09.2026).
+
+        Am 03.09.2026 stand der Abbau nur im Weg *abwählen*, und auch dort nur
+        zur Hälfte. Der Weg *anwenden* führte ganz daran vorbei — die Form, in
+        der dieser Fehler an diesem Tag mehrfach auftrat: Der Abbruch war
+        bedacht, das Fertigwerden nicht.
+        """
+        self._feature_pending = None
+        self._feature_preview.stop()
+        self._clear_preview()
 
     def _on_feature_values_changed(self, op: str, params: dict[str, Any]) -> None:
         """Eine geänderte Zahl im Merkmalspanel — erst zeigen, nicht tun.
@@ -9373,6 +9402,7 @@ class MainWindow(QMainWindow):
         if object_id is None:
             self.announce(_needs_objects(0))
             return
+        self._drop_feature_preview()
         draft = OperationDraft(op=op, inputs=(object_id,), params=params)
         self.session.apply(REGISTRY.get(op).title, [draft])
 
@@ -10169,8 +10199,13 @@ class MainWindow(QMainWindow):
         )
 
     def _clear_preview(self) -> None:
-        """Der Dialog ist zu: die Vorschau geht, ein wartender Agentenvorschlag
-        bekommt seine Differenz zurück."""
+        """Die Vorschau geht — Rechnung und Bild —, ein wartender
+        Agentenvorschlag bekommt seine Differenz zurück.
+
+        Geschrieben für den geschlossenen Dialog, gilt aber für jeden Weg, an
+        dessen Ende keine Vorschau mehr stehen darf; :meth:`_drop_feature_preview`
+        ruft sie ebenfalls.
+        """
         self.session.cancel_preview()
         pending = self._proposal.difference if self._proposal is not None else None
         self.viewport.show_difference(pending)
