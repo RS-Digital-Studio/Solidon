@@ -72,6 +72,16 @@ Verhalten billig:
 - Urheberschaft: `git show --stat <commit>` statt `git log -- <pfade>`. In
   einem Baum mit vier Sitzungen ist „wer war das" nie aus dem Verlauf zu
   lesen, nur aus dem, was der Commit tatsächlich anfasst.
+- „Gab es die Funktion damals?" fragt das **Register am Tag**
+  (`git show v0.3.0:app/core/geom/prepare_ops.py | grep 'name="…"'`), nicht den
+  Übersetzungskatalog. Am 03.09.2026 schloss eine Sitzung aus einem fehlenden
+  Katalogeintrag „Bohrung ändern", die Operation habe es in 0.3.0 nicht
+  gegeben, und strich einen richtigen Changelog-Punkt; gemessen hatte sie die
+  **Vollständigkeit der Übersetzung**. Der Katalog kannte im Tag keinen
+  einzigen Eintrag mit „ändern" — er ist ein Verzeichnis von Texten und keines
+  von Funktionen. Der Fehler unterlief in derselben Stunde, in der dieselbe
+  Sitzung mit genau dieser Regel vier andere Punkte geprüft hat
+  (Selbstdiagnose meine-apps-ava-ba).
 
 Verwandt: [[bekannte-familie-erklaert-nicht-den-ausloeser]] (dort ist die
 Erklärung bequem, hier die Messung), [[messwerkzeug-misst-sich-selbst]] und
