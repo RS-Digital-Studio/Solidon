@@ -39,7 +39,7 @@ from app.core.units import DISPLAY_UNITS
 from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.ai_disclosure import clear_disclosure
-from app.ui.labels import by_title
+from app.ui.labels import TrackSlider, by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.panels import align_forms
 from app.ui.settings import UiSettings
@@ -220,7 +220,7 @@ class SettingsDialog(QDialog):
                 "zu sich ziehen holt es näher. Jede Gerätetaste passt alles ein."
             )
         )
-        self.spacemouse_speed = QSlider(Qt.Orientation.Horizontal, self)
+        self.spacemouse_speed = TrackSlider(Qt.Orientation.Horizontal, self)
         self.spacemouse_speed.setRange(1, 10)
         self.spacemouse_speed.setValue(settings.spacemouse_speed)
         self.spacemouse_speed.setTickPosition(QSlider.TickPosition.TicksBelow)

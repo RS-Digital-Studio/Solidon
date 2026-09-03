@@ -21,14 +21,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSlider,
     QWidget,
 )
 
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.units import round_display
 from app.i18n import tr
-from app.ui.labels import LengthSpin, length, localised
+from app.ui.labels import LengthSpin, TrackSlider, length, localised
 from app.ui.leash import weak_slot
 from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
@@ -120,7 +119,7 @@ class SectionBar(QWidget):
             self.axis.addItem(label, userData=axis)
         self.axis.currentIndexChanged.connect(self._axis_changed)
 
-        self.position = QSlider(Qt.Orientation.Horizontal, self)
+        self.position = TrackSlider(Qt.Orientation.Horizontal, self)
         self.position.setAccessibleName(tr("Schnittposition"))
         self.position.setMinimum(-1000)
         self.position.setMaximum(1000)

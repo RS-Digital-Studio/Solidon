@@ -929,21 +929,28 @@ QSplitter::handle:vertical {{ height: {NORMAL}px; }}
    Gesperrt heißt hier wirklich gesperrt: Griff und gefüllte Rille fallen auf
    die Sperrfarbe, sonst sieht ein Regler bedienbar aus, den nichts bewegt. */
 QSlider::groove:horizontal {{
-    height: {SPACE}px;
+    height: {SPACE + 2}px;
     background: {line};
-    border-radius: {SPACE // 2}px;
+    border-radius: {(SPACE + 2) // 2}px;
 }}
 QSlider::sub-page:horizontal {{
     background: {accent_line};
     border-radius: {SPACE // 2}px;
 }}
+/* **Der Griff ist so groß, dass man ihn trifft.** Er maß zwölf Punkte, und
+   das ist unter dem, was eine Maus bei einer Zuggeste sicher fasst; wer
+   danebentraf, verschob den Regler seitenweise statt zu ziehen (Robert,
+   03.09.2026). Achtzehn Punkte sind die Größe, die Qt für einen Zuggriff
+   ohnehin annimmt, und die Rinne darunter wächst um zwei mit, damit das
+   Verhältnis stimmt. Danebentreffen kostet seit `TrackSlider` ohnehin
+   nichts mehr — der Klick springt zur Stelle. */
 QSlider::handle:horizontal {{
     background: {muted};
     border: 1px solid {line};
-    width: {ROOMY}px;
-    height: {ROOMY}px;
+    width: {ROOMY + 6}px;
+    height: {ROOMY + 6}px;
     margin: -{NORMAL}px 0;
-    border-radius: {ROOMY // 2}px;
+    border-radius: {(ROOMY + 6) // 2}px;
 }}
 QSlider::handle:horizontal:hover {{ background: {text}; }}
 QSlider::handle:horizontal:pressed {{ background: {accent_line}; }}

@@ -15,7 +15,7 @@ from typing import Any, Final, Literal
 
 from PySide6.QtCore import QDate, QLocale, QObject, Qt, Signal
 from PySide6.QtGui import QColor, QValidator
-from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QWidget
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
 
 from app.core import figures
 from app.core.activation import Activation
@@ -222,6 +222,78 @@ def circle_sign() -> str:
 def circle_word() -> str:
     """Das Wort für ein Kreismaß, für Beschriftungen und Vorleser."""
     return str(tr("Radius") if _CIRCLE_MEASURE == "radius" else tr("Durchmesser"))
+
+
+class TrackSlider(QSlider):
+    """Ein Regler, der dorthin springt, wohin man klickt.
+
+    **Qts Vorgabe ist seitenweise**, und das ist für einen Regler, mit dem man
+    ein Teil durchfährt, die falsche Geste: Ein Klick ans andere Ende bewegt
+    ihn um eine Seite, und bei einem 40 mm hohen Körper braucht man vierzig
+    Klicks, um von unten nach oben zu kommen. Wer auf eine Stelle der Rinne
+    zeigt, meint diese Stelle (Robert, 03.09.2026: „die Slider sind auch
+    schwer zu bedienen").
+
+    Dazu zwei Kleinigkeiten, die zur selben Geste gehören: Das Mausrad fährt
+    in Seitenschritten statt in Einzelschritten — eine Radraste soll etwas
+    bewegen —, und ein Zug bleibt ein Zug, weil der Klick den Griff unter den
+    Zeiger setzt und Qt von dort weiterzieht.
+    """
+
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        if event.button() == Qt.MouseButton.LeftButton and not self._on_handle(event):
+            self.setValue(self._value_at(event))
+            event.accept()
+            # Qt zieht ab hier weiter, als hätte man den Griff gegriffen.
+        super().mousePressEvent(event)
+
+    def wheelEvent(self, event: Any) -> None:  # noqa: N802 - Qt-Name
+        notches = event.angleDelta().y() / 120.0
+        if notches:
+            step = self.pageStep() or self.singleStep()
+            self.setValue(self.value() + round(notches) * step)
+            event.accept()
+            return
+        super().wheelEvent(event)
+
+    def _on_handle(self, event: Any) -> bool:
+        """Ob der Klick den Griff selbst getroffen hat — dann zieht Qt."""
+        from PySide6.QtWidgets import QStyleOptionSlider
+
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        handle = self.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderHandle, self
+        )
+        return handle.contains(event.position().toPoint())
+
+    def _value_at(self, event: Any) -> int:
+        """Welcher Wert unter dem Zeiger liegt — die Griffbreite herausgerechnet."""
+        from PySide6.QtWidgets import QStyleOptionSlider
+
+        option = QStyleOptionSlider()
+        self.initStyleOption(option)
+        groove = self.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderGroove, self
+        )
+        handle = self.style().subControlRect(
+            QStyle.ComplexControl.CC_Slider, option, QStyle.SubControl.SC_SliderHandle, self
+        )
+        if self.orientation() == Qt.Orientation.Horizontal:
+            travel = groove.width() - handle.width()
+            spot = event.position().toPoint().x() - groove.x() - handle.width() // 2
+        else:
+            travel = groove.height() - handle.height()
+            spot = event.position().toPoint().y() - groove.y() - handle.height() // 2
+        return int(
+            QStyle.sliderValueFromPosition(
+                self.minimum(),
+                self.maximum(),
+                int(spot),
+                int(travel) or 1,
+                self.orientation() == Qt.Orientation.Vertical,
+            )
+        )
 
 
 class NumberSpin(QDoubleSpinBox):
@@ -900,6 +972,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "got": _("Bekommen"),
     "expected_prefix": _("Erwarteter Anfang"),
     "faces": _("Flächen"),
+    "factor": _("Maßstab"),
     # Ohne das ``_mm`` des Werteschlüssels: ``value_label`` streift die
     # Einheiten-Endung, bevor es hier nachschlägt — wie bei ``eroded``.
     "fair_wall": _("Verlässlich ab"),

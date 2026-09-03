@@ -16,9 +16,10 @@ sehen jedes Teil dort, wo es ist, auf der Platte, auf die es gehört.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QWidget
 
 from app.i18n import tr
+from app.ui.labels import TrackSlider
 from app.ui.leash import weak_slot
 from app.ui.section_bar import SETTLE_MS
 from app.ui.style import NORMAL, TIGHT
@@ -44,7 +45,7 @@ class ExplodeBar(QWidget):
         self._pending.setSingleShot(True)
         self._pending.timeout.connect(self._settled)
 
-        self.slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.slider = TrackSlider(Qt.Orientation.Horizontal, self)
         self.slider.setAccessibleName(tr("Abstand der Explosion"))
         self.slider.setRange(0, MAX_STEPS)
         self.slider.setValue(0)

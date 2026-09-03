@@ -22,14 +22,13 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QHBoxLayout,
     QLabel,
-    QSlider,
     QWidget,
 )
 
 from app.core.perceive.maps import AnalysisMap, MapKind
 from app.core.types import SliceResult
 from app.i18n import tr
-from app.ui.labels import area, length
+from app.ui.labels import TrackSlider, area, length
 from app.ui.leash import weak_slot
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
@@ -311,7 +310,7 @@ class LayerBar(QWidget):
         einschalten muss. Jetzt schaltet der Werkzeugknopf, und zwar beides.
         """
 
-        self.slider = QSlider(Qt.Orientation.Horizontal, self)
+        self.slider = TrackSlider(Qt.Orientation.Horizontal, self)
         self.slider.setAccessibleName(tr("Schicht"))
         self.slider.setMinimum(0)
         self.slider.setMaximum(0)

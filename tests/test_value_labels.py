@@ -1367,3 +1367,83 @@ def test_no_value_key_speaks_german() -> None:
         "Ein Wertschlüssel reist in die Projektdatei und ins Protokoll — er ist "
         f"englisch, auch wenn der Kommentar daneben deutsch ist: {german}"
     )
+
+
+def test_a_click_on_the_groove_lands_where_the_pointer_is(qt_app: object) -> None:
+    """Ein Klick auf die Rinne setzt den Wert dorthin, nicht eine Seite weiter.
+
+    Qts Vorgabe bewegt einen Regler seitenweise, und bei einem Schnitt durch
+    einen 40 mm hohen Körper sind das vierzig Klicks von unten nach oben
+    (Robert, 03.09.2026: „die Slider sind auch schwer zu bedienen"). Die
+    Gegenprobe steht im Test selbst: Derselbe Klick auf einen gewöhnlichen
+    ``QSlider`` bewegt ihn um genau einen Seitenschritt — bliebe der
+    ``TrackSlider`` dabei, wäre der ganze Umbau wirkungslos.
+    """
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QMouseEvent
+    from PySide6.QtWidgets import QSlider
+
+    from app.ui.labels import TrackSlider
+
+    def klick(regler: QSlider, x: int) -> int:
+        regler.setMinimum(0)
+        regler.setMaximum(1000)
+        regler.setPageStep(50)
+        regler.setValue(0)
+        regler.resize(400, 30)
+        ereignis = QMouseEvent(
+            QMouseEvent.Type.MouseButtonPress,
+            QPointF(float(x), 15.0),
+            regler.mapToGlobal(QPoint(x, 15)),
+            Qt.MouseButton.LeftButton,
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.NoModifier,
+        )
+        regler.mousePressEvent(ereignis)
+        return regler.value()
+
+    getroffen = klick(TrackSlider(Qt.Orientation.Horizontal), 200)
+    assert 400 < getroffen < 600, f"Klick in die Mitte gab {getroffen} statt etwa 500"
+
+    weit = klick(TrackSlider(Qt.Orientation.Horizontal), 360)
+    assert weit > 800, f"Klick weit rechts gab {weit} statt über 800"
+
+    seitenweise = klick(QSlider(Qt.Orientation.Horizontal), 200)
+    assert seitenweise <= 50, (
+        "Ein gewöhnlicher QSlider soll hier weiterhin seitenweise laufen — sonst "
+        f"misst dieser Test nichts ({seitenweise})"
+    )
+
+
+def test_one_wheel_notch_moves_a_page_not_a_step(qt_app: object) -> None:
+    """Eine Radraste bewegt spürbar, sonst dreht man minutenlang.
+
+    Der Einzelschritt eines Schnittreglers ist ein Zehntelmillimeter; mit ihm
+    an einer Radraste käme niemand durch ein Teil. Der Seitenschritt ist die
+    Größe, in der auch die Bild-Tasten fahren.
+    """
+    from PySide6.QtCore import QPoint, QPointF, Qt
+    from PySide6.QtGui import QWheelEvent
+
+    from app.ui.labels import TrackSlider
+
+    regler = TrackSlider(Qt.Orientation.Horizontal)
+    regler.setMinimum(0)
+    regler.setMaximum(1000)
+    regler.setSingleStep(1)
+    regler.setPageStep(50)
+    regler.setValue(500)
+    regler.resize(400, 30)
+
+    rad = QWheelEvent(
+        QPointF(200.0, 15.0),
+        regler.mapToGlobal(QPoint(200, 15)),
+        QPoint(0, 0),
+        QPoint(0, 120),
+        Qt.MouseButton.NoButton,
+        Qt.KeyboardModifier.NoModifier,
+        Qt.ScrollPhase.NoScrollPhase,
+        False,
+    )
+    regler.wheelEvent(rad)
+    assert regler.value() == 550, f"Eine Radraste gab {regler.value()} statt 550"
