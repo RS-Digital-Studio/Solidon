@@ -21,6 +21,7 @@ it into `website/version.json`.
 
 - Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.
 - The command *Fill a bore* now fills exactly the bore as well: the plug no longer protrudes into a groove or makes the part thicker.
+- A spherical socket is recognised as a sphere and not as a countersink even in finely meshed models, so it carries the actions that belong to it.
 - A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.
 - When rotating too, a through hole says if it no longer goes through at its new orientation.
 - A newly created feature appears at the end of the object tree, not in the middle of the older ones.
@@ -29,7 +30,8 @@ it into `website/version.json`.
 - The preview disappears once the change is applied; until now the comparison body with its “not yet applied” banner stayed on top of the finished hole.
 - The space bar again toggles between before and after only where a preview is shown, and no longer everywhere in the application.
 - A hole no longer glows in the selection colour when nothing is selected at all.
-- The rotation arc, the shadow and the drag markers disappear with the drag they belong to — including on tool change, undo or closing the project.
+- The rotation arc, the shadow, the drag markers and the brush ring disappear with the action they belong to — including on tool change, undo or closing the project.
+- A measurement stays with its part, even when the view switches to another print bed or to all of them.
 ### Printing and memory
 
 - If not everything fits on one bed, as many beds are created as needed; until now the remainder was left beside the bed, where it cannot be printed.

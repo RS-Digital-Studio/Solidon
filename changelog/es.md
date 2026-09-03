@@ -22,6 +22,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.
 - El comando *Cerrar un taladro* rellena ahora exactamente el taladro: el tapón ya no sobresale hacia una ranura ni engrosa la pieza.
+- Una cuenca esférica se reconoce como superficie esférica y no como avellanado, también en modelos de malla fina, y ofrece así las acciones que le corresponden.
 - Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.
 - También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.
 - Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores.
@@ -30,7 +31,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La vista previa desaparece en cuanto se aplica el cambio; hasta ahora el cuerpo de comparación con la banda «aún no aplicado» quedaba sobre el taladro terminado.
 - La barra espaciadora vuelve a alternar entre antes y después solo donde hay una vista previa, y ya no en toda la aplicación.
 - Un taladro ya no se ilumina en el color de selección cuando no hay nada seleccionado.
-- El arco de giro, la sombra y las marcas de arrastre desaparecen con el arrastre al que pertenecen, también al cambiar de herramienta, deshacer o cerrar el proyecto.
+- El arco de giro, la sombra, las marcas de arrastre y el anillo del pincel desaparecen con la acción a la que pertenecen, también al cambiar de herramienta o cerrar.
+- Una medida permanece en su pieza, aunque la vista cambie a otra placa de impresión o a todas.
 ### Impresión y memoria
 
 - Si no cabe todo en una placa, se crean tantas placas como haga falta; hasta ahora el resto quedaba junto a la mesa, donde no se puede imprimir.

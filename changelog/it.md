@@ -21,6 +21,7 @@ scrive in `website/version.json`.
 
 - Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.
 - Il comando *Chiudi un foro* riempie ora esattamente il foro: il tappo non sporge più in una scanalatura né ingrossa il pezzo.
+- Una sede sferica viene riconosciuta come superficie sferica e non come svasatura, anche in modelli a mesh fitta, e offre così le azioni che le competono.
 - Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.
 - Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.
 - Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti.
@@ -29,7 +30,8 @@ scrive in `website/version.json`.
 - L'anteprima scompare appena la modifica è applicata; finora il corpo di confronto con la fascia «non ancora applicato» restava sopra il foro finito.
 - La barra spaziatrice torna ad alternare prima e dopo solo dove c'è un'anteprima, e non più ovunque nell'applicazione.
 - Un foro non si illumina più nel colore della selezione quando non è selezionato nulla.
-- L'arco di rotazione, l'ombra e i segni di trascinamento scompaiono con il trascinamento a cui appartengono, anche al cambio di strumento, all'annullamento o alla chiusura del progetto.
+- L'arco di rotazione, l'ombra, i segni di trascinamento e l'anello del pennello scompaiono con l'azione a cui appartengono, anche al cambio di strumento o alla chiusura.
+- Una misura resta sul suo pezzo, anche se la vista passa a un altro piano di stampa o a tutti.
 ### Stampa e memoria
 
 - Se non tutto entra su un piano, vengono creati tanti piani quanti servono; finora il resto restava accanto al piano, dove non è stampabile.

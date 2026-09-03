@@ -22,6 +22,7 @@ dans `website/version.json`.
 
 - Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.
 - La commande *Reboucher un perçage* comble désormais exactement le perçage : le bouchon ne dépasse plus dans une rainure et n'épaissit plus la pièce.
+- Une cuvette sphérique est reconnue comme surface sphérique et non comme fraisure, même dans un maillage fin, et porte donc les actions qui lui reviennent.
 - Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.
 - Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.
 - Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes.
@@ -30,7 +31,8 @@ dans `website/version.json`.
 - L'aperçu disparaît dès que la modification est appliquée ; jusqu'ici le corps de comparaison portant « pas encore appliqué » restait au-dessus du perçage terminé.
 - La barre d'espace bascule de nouveau entre avant et après uniquement là où un aperçu est affiché, et non plus partout dans l'application.
 - Un perçage ne s'illumine plus dans la couleur de sélection lorsque rien n'est sélectionné.
-- L'arc de rotation, l'ombre et les repères de glissement disparaissent avec le glissement auquel ils appartiennent, y compris au changement d'outil, à l'annulation ou à la fermeture du projet.
+- L'arc de rotation, l'ombre, les repères de glissement et l'anneau du pinceau disparaissent avec l'action à laquelle ils appartiennent, y compris au changement d'outil ou à la fermeture.
+- Une mesure reste sur sa pièce, même si la vue passe à un autre plateau d'impression ou à tous.
 ### Impression et mémoire
 
 - Si tout ne tient pas sur un plateau, autant de plateaux que nécessaire sont créés ; jusqu'ici le reste restait à côté du plateau, où il n'est pas imprimable.

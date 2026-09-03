@@ -21,6 +21,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.
 - O comando *Fechar furo* preenche agora exatamente o furo: o tampão já não entra numa ranhura nem engrossa a peça.
+- Uma sede esférica é reconhecida como superfície esférica e não como escareamento, mesmo em modelos de malha fina, oferecendo as ações que lhe pertencem.
 - Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.
 - Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.
 - Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores.
@@ -29,7 +30,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - A pré-visualização desaparece assim que a alteração é aplicada; até agora o corpo de comparação com a faixa «ainda não aplicado» ficava sobre o furo terminado.
 - A barra de espaços volta a alternar entre antes e depois apenas onde há uma pré-visualização, e já não em toda a aplicação.
 - Um furo já não brilha na cor de seleção quando não há nada selecionado.
-- O arco de rotação, a sombra e as marcas de arrasto desaparecem com o arrasto a que pertencem, também ao mudar de ferramenta, anular ou fechar o projeto.
+- O arco de rotação, a sombra, as marcas de arrasto e o anel do pincel desaparecem com a ação a que pertencem, também ao mudar de ferramenta ou fechar o projeto.
+- Uma medida permanece na sua peça, mesmo que a vista mude para outra mesa de impressão ou para todas.
 ### Impressão e memória
 
 - Se não couber tudo numa mesa, são criadas tantas mesas quantas forem necessárias; até agora o resto ficava ao lado da mesa, onde não é imprimível.

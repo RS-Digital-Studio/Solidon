@@ -46,6 +46,7 @@ Nutzen da und sonst nichts.
 
 - Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.
 - Auch *Bohrung verschließen* füllt genau die Bohrung: Der Pfropfen ragt nicht mehr in eine Nut und macht das Teil nicht dicker.
+- Eine Kugelpfanne wird auch in fein vernetzten Modellen als Kugelfläche erkannt und nicht als Senkung; sie trägt damit die Handlungen, die zu ihr gehören.
 - Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.
 - Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.
 - Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren.
@@ -54,7 +55,8 @@ Nutzen da und sonst nichts.
 - Die Vorschau verschwindet, sobald die Änderung übernommen ist; bisher lag der Vergleichskörper mit dem Band „noch nicht übernommen“ über der fertigen Bohrung.
 - Die Leertaste blendet wieder nur dort zwischen Vorher und Nachher um, wo eine Vorschau steht, und nicht mehr überall in der Anwendung.
 - Eine Bohrung leuchtet nicht mehr in der Auswahlfarbe, wenn gar nichts ausgewählt ist.
-- Drehbogen, Schatten und Zugmarken verschwinden mit dem Zug, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen des Projekts.
+- Drehbogen, Schatten, Zugmarken und der Ring des Pinsels verschwinden mit dem Vorgang, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen.
+- Ein Maß bleibt bei seinem Teil, auch wenn die Ansicht auf eine andere Druckplatte oder auf alle umschaltet.
 ### Drucken und Arbeitsspeicher
 
 - Passt nicht alles auf eine Platte, entstehen so viele Platten wie nötig; bisher blieb der Rest neben dem Bett liegen, wo er nicht druckbar ist.
