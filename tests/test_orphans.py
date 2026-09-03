@@ -9,6 +9,7 @@ Regelfall jeder Formänderung und bleibt eine Feststellung
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -499,36 +500,35 @@ def test_the_candidates_are_announced_while_the_question_stands(scene: Scene) ->
     etwas offen ist, leuchtet ohne Anlass.
     """
     document = document_with(fit_to("hole_9"))
-    angesagt: list[tuple[str, tuple[str, ...]]] = []
-    beim_fragen: list[tuple[str, tuple[str, ...]]] = []
+    angesagt: list[tuple[tuple[str, str], ...]] = []
+    beim_fragen: list[tuple[tuple[str, str], ...]] = []
 
     def answer(question: str, choices: list[str]) -> str:
         beim_fragen.append(angesagt[-1])
         return "hole_2"
 
-    orphans.check(document, scene, answer, announce=lambda obj, ids: angesagt.append((obj, ids)))
+    orphans.check(document, scene, answer, announce=angesagt.append)
 
     assert beim_fragen, "die Ansage kommt vor der Frage, nicht danach"
-    objekt, kandidaten = beim_fragen[0]
-    assert objekt == document.fits[0].a.object_id
+    koerper = {objekt for objekt, _ in beim_fragen[0]}
+    kandidaten = {kennung for _, kennung in beim_fragen[0]}
+    assert koerper == {document.fits[0].a.object_id}, "je Kandidat sein Körper"
     assert "hole_1" in kandidaten and "hole_2" in kandidaten
-    assert angesagt[-1] == ("", ()), "nach der Antwort steht nichts mehr offen"
+    assert angesagt[-1] == (), "nach der Antwort steht nichts mehr offen"
 
 
 def test_nothing_stays_lit_when_the_question_is_cancelled(scene: Scene) -> None:
     """Ein Abbruch lässt die Ansicht nicht leuchtend zurück."""
     document = document_with(fit_to("hole_9"))
-    angesagt: list[tuple[str, tuple[str, ...]]] = []
+    angesagt: list[tuple[tuple[str, str], ...]] = []
 
     def abbrechen(question: str, choices: list[str]) -> str:
         raise OperationCancelled
 
     with pytest.raises(OperationCancelled):
-        orphans.check(
-            document, scene, abbrechen, announce=lambda obj, ids: angesagt.append((obj, ids))
-        )
+        orphans.check(document, scene, abbrechen, announce=angesagt.append)
 
-    assert angesagt[-1] == ("", ()), "auch ohne Antwort wird die Hervorhebung zurückgenommen"
+    assert angesagt[-1] == (), "auch ohne Antwort wird die Hervorhebung zurückgenommen"
 
 
 def test_without_a_listener_nothing_changes(scene: Scene) -> None:
@@ -538,3 +538,24 @@ def test_without_a_listener_nothing_changes(scene: Scene) -> None:
     result = orphans.check(document, scene, lambda question, choices: "hole_2")
 
     assert result.rewritten == 1
+
+
+def test_the_same_identifier_on_two_bodies_is_announced_twice(scene: Scene) -> None:
+    """Merkmalskennungen sind je Körper vergeben, nicht je Szene.
+
+    Beim leeren Objektnamen — der Skizzenebene, die auf jeder planaren Fläche
+    zu Hause sein darf — sucht ``_candidates`` über alle Körper und wirft die
+    Kennungen in eine Menge: Zwei ``face_1`` fallen dort zu **einem** Eintrag
+    zusammen. Die Auswahl ist damit richtig (zurückgeschrieben wird die
+    Kennung), die Hervorhebung wäre es nicht — sie muss beide Fundorte kennen,
+    sonst leuchtet sie an einer Stelle zu wenig.
+    """
+    from app.core.scene.orphans import _candidate_pairs
+
+    zweiter = replace(scene.objects["obj_1"], id="obj_2")
+    beide = replace(scene, objects={"obj_1": scene.objects["obj_1"], "obj_2": zweiter})
+    gemeinsam = sorted(set(scene.objects["obj_1"].features))[:1]
+
+    paare = _candidate_pairs(beide, FeatureRef(object_id="", feature_id=gemeinsam[0]), gemeinsam)
+
+    assert sorted(paare) == [("obj_1", gemeinsam[0]), ("obj_2", gemeinsam[0])]

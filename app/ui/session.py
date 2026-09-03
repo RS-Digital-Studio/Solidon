@@ -108,20 +108,14 @@ class AskRequest:
     answered: threading.Event = field(default_factory=threading.Event)
     answer: str | None = None
 
-    object_id: str = ""
-    """Der Körper, an dem die Kandidaten hängen — leer, wenn die Frage keine hat.
-
-    Eine Skizzenebene darf auf jeder planaren Fläche der Szene neu zu Hause
-    sein; dann ist das Objekt leer und die Ansicht hebt über alle Körper
-    hervor (``orphans._candidates``).
-    """
-
-    features: tuple[str, ...] = ()
+    candidates: tuple[tuple[str, str], ...] = ()
     """Die Merkmale, zwischen denen die Frage entscheidet (§21.3).
 
-    Kennungen und keine Merkmalsobjekte: Die Ansicht löst sie gegen die Szene
-    auf, die sie gerade zeigt. Ein Objekt aus einer anderen Auswertung wäre
-    eine zweite Wahrheit über dieselbe Fläche.
+    Je Kandidat ein Paar aus Körper und Kennung — Kennungen sind je Körper
+    vergeben, und zwei Körper tragen beide ein ``hole_1``. Kennungen und keine
+    Merkmalsobjekte: Die Ansicht löst sie gegen die Szene auf, die sie gerade
+    zeigt; ein Objekt aus einer anderen Auswertung wäre eine zweite Wahrheit
+    über dieselbe Fläche.
     """
 
     def reply(self, answer: str | None) -> None:
@@ -409,7 +403,7 @@ class Session(QObject):
         """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
         self.last_result: EvaluationResult | None = None
         self.pending_orphan_check = False
-        self._pending_candidates: tuple[str, tuple[str, ...]] = ("", ())
+        self._pending_candidates: tuple[tuple[str, str], ...] = ()
         """Was die nächste Frage zur Wahl stellt — von ``announce_candidates`` gesetzt."""
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
     einmal, nicht immer."""
@@ -1762,7 +1756,7 @@ class Session(QObject):
     def report_progress(self, fraction: float, text: str) -> None:
         self.progressChanged.emit(fraction, text)
 
-    def announce_candidates(self, object_id: str, features: tuple[str, ...]) -> None:
+    def announce_candidates(self, candidates: tuple[tuple[str, str], ...]) -> None:
         """Was die **nächste** Frage zur Wahl stellt (§21.3).
 
         ``orphans.check`` ruft es unmittelbar vor ``ask`` und danach wieder
@@ -1771,15 +1765,13 @@ class Session(QObject):
         eine Frage und ihre Antworten, und ein drittes Feld dort ginge jede
         Operation an, die je etwas fragt.
         """
-        self._pending_candidates = (object_id, tuple(features))
+        self._pending_candidates = tuple(candidates)
 
     def ask_from_worker(self, question: str, choices: list[str]) -> str:
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
-        object_id, features = self._pending_candidates
-        self._pending_candidates = ("", ())
-        request = AskRequest(
-            question=question, choices=list(choices), object_id=object_id, features=features
-        )
+        candidates = self._pending_candidates
+        self._pending_candidates = ()
+        request = AskRequest(question=question, choices=list(choices), candidates=candidates)
         self.askRequested.emit(request)
         request.answered.wait()
         if request.answer is None:

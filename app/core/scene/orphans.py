@@ -188,14 +188,15 @@ def check(
     scene: Scene,
     ask: Any,
     registry: Registry | None = None,
-    announce: Callable[[str, tuple[str, ...]], None] | None = None,
+    announce: Callable[[tuple[tuple[str, str], ...]], None] | None = None,
 ) -> CheckResult:
     """Löst jeden Verweis einmal auf und fragt, wo die Antwort nicht
     offensichtlich ist (§21.3).
 
-    ``announce`` sagt vor jeder Frage, welches Objekt und welche Merkmale
-    gleich zur Wahl stehen, und nach der Antwort, dass nichts mehr aussteht
-    (leeres Objekt, leere Menge). **Der Grund steht im Bauplan:** §21.3
+    ``announce`` sagt vor jeder Frage, welche Merkmale gleich zur Wahl stehen —
+    je Kandidat ein Paar aus Körper und Kennung —, und nach der Antwort mit
+    einer leeren Folge, dass nichts mehr aussteht. **Der Grund steht im
+    Bauplan:** §21.3
     verlangt, die Kandidaten *hervorgehoben* zu zeigen. Ohne das steht der
     Kunde vor drei Kennungen — ``hole_1``, ``hole_2``, ``hole_3`` — und soll
     zwischen Bohrungen entscheiden, die er nicht sieht.
@@ -204,6 +205,13 @@ def check(
     Frage gilt: Der Arbeiter blockiert in ``ask``, und was danach zurückkäme,
     käme zu spät. Ohne ``announce`` ändert sich nichts — der Kern kennt keine
     Ansicht (Regel 1), er sagt nur Bescheid, wenn jemand zuhört.
+
+    **Paare und keine bloßen Kennungen**, und das ist keine Bequemlichkeit:
+    Merkmalskennungen sind je Körper vergeben. Zwei Körper tragen beide ein
+    ``hole_1``, und wer nur die Kennung hervorhebt, leuchtet an zwei Stellen,
+    während die Frage eine meint. Beim leeren Objektnamen — der Skizzenebene,
+    die auf jeder planaren Fläche der Szene zu Hause sein darf — ist das der
+    Regelfall und nicht der Sonderfall.
     """
     result = CheckResult()
     for reference in references(document, registry):
@@ -216,7 +224,7 @@ def check(
 
         question, choices = question_for(reference, candidates)
         if announce is not None:
-            announce(reference.ref.object_id, tuple(candidates))
+            announce(_candidate_pairs(scene, reference.ref, candidates))
         try:
             answer = ask(question, choices)
         finally:
@@ -224,7 +232,7 @@ def check(
             # Frage — bleibt es danach stehen, leuchtet die Ansicht ohne
             # Anlass weiter.
             if announce is not None:
-                announce("", ())
+                announce(())
         if answer in candidates:
             _rewrite(document, reference, answer)
             result.rewritten += 1
@@ -241,6 +249,35 @@ def check(
     if result.changed:
         _log.info("orphan check rewrote %d and removed %d", result.rewritten, result.removed)
     return result
+
+
+def _candidate_pairs(
+    scene: Scene, reference: FeatureRef, candidates: Sequence[str]
+) -> tuple[tuple[str, str], ...]:
+    """Zu jedem Kandidaten der Körper, an dem er hängt.
+
+    Bei gesetztem Objektnamen ist das genau einer. Beim leeren — der
+    Skizzenebene — kann dieselbe Kennung an mehreren Körpern vorkommen;
+    dann steht sie mehrfach in der Antwort, einmal je Fundort. Die
+    **Auswahl** bleibt davon unberührt: Gefragt wird nach der Kennung, denn
+    genau die wird zurückgeschrieben.
+    """
+    wanted = set(candidates)
+    entry = scene.objects.get(reference.object_id) if reference.object_id else None
+    if entry is not None:
+        return tuple(
+            (reference.object_id, feature_id)
+            for feature_id in candidates
+            if feature_id in entry.features
+        )
+    if reference.object_id:
+        return ()
+    return tuple(
+        (object_id, feature_id)
+        for object_id, entry in scene.objects.items()
+        for feature_id in sorted(entry.features)
+        if feature_id in wanted
+    )
 
 
 def _resolves(scene: Scene, reference: FeatureRef) -> bool:
