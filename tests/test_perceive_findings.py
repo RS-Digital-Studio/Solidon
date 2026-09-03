@@ -273,12 +273,18 @@ def test_a_model_too_dense_to_perceive_offers_the_way_out() -> None:
     from app.core.types import Finding
     from app.ui.panels import FINDING_ACTIONS, actions_for
 
-    assert FINDING_ACTIONS.get("perceive.too_large") == (DECIMATE_MESH,), (
-        "der Befund mit der Objektkennung bekommt den Knopf — an ihm hat er ein Ziel"
-    )
-    assert "ingest.very_large" not in FINDING_ACTIONS, (
-        "und der ohne Kennung nicht: dort wäre es eine Handlung ohne Ziel"
-    )
+    # **Beide, seit beide ein Ziel haben.** Bis zum Mittag des 03.09.2026 stand
+    # hier das Gegenteil für ``ingest.very_large``, und die Begründung war
+    # richtig: Er trug keine Objektkennung, und eine Handlung ohne Ziel landet
+    # auf der gerade gewählten Auswahl. Seit `c45e70e7` reicht die Auswertung
+    # sie nach, wo der Name des Teils genau eine Ausgabe trifft — die Bedingung
+    # ist weg, also gilt die Zusage für beide. Ihn stumm zu lassen wäre
+    # derselbe Fehler in neuer Gestalt: Sein Text ist der, der den Ausweg beim
+    # Namen nennt, und der Knopf stünde an der Zeile daneben.
+    for code in ("perceive.too_large", "ingest.very_large"):
+        assert FINDING_ACTIONS.get(code) == (DECIMATE_MESH,), (
+            f"{code} nennt den Ausweg im Text und muss ihn anbieten"
+        )
     assert REGISTRY.get("decimate_mesh").consumes == 1, (
         "sie verringert die Dreiecke genau eines Körpers — dessen, den der Klick wählt"
     )

@@ -417,6 +417,15 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Dieselbe Handlung hängt seit je am geworfenen Fehler der Analysekarten
     # (``app/core/perceive/maps.py``); nur der Befund kannte sie nicht.
     "perceive.too_large": (DECIMATE_MESH,),
+    # **Und seit dem Nachmittag auch der andere.** Der Absatz darüber begründet,
+    # warum ``ingest.very_large`` den Knopf **nicht** bekam: Er trug keine
+    # Objektkennung, und eine Handlung ohne Ziel landet auf der zufälligen
+    # Auswahl. Seit `c45e70e7` trägt er eine — die Auswertung reicht sie nach,
+    # wo der Name des Teils genau eine Ausgabe trifft (3d-druck-85). Damit gilt
+    # die Begründung von oben für ihn genauso, und ihn jetzt stumm zu lassen
+    # wäre derselbe Fehler in neuer Gestalt: Sein Text ist der, der „Dreiecke
+    # verringern" beim Namen nennt, und der Knopf stünde an der Zeile daneben.
+    "ingest.very_large": (DECIMATE_MESH,),
     # **Dritter Melder derselben Sache, und er stand ohne Menü da.** „Nicht
     # geschlossen" meldet der Kern an drei Stellen: beim Einlesen, beim
     # Exportieren und nach jedem Zug des Agenten (``agent.not_watertight``,
