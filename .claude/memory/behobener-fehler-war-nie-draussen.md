@@ -60,6 +60,29 @@ Operation.** Genau daran hing der vierte Fall oben: Die Operation war alt, nur
 ihre Absage war falsch. Wer „ist die Operation neu?" fragt statt „war der
 Auslöser erreichbar?", streicht einen richtigen Punkt.
 
+**Die dritte Seite, 03.09.2026 abends (3d-druck-a0):** Auch eine Behebung, die
+**schon ausgeliefert** ist, gehört nicht in den nächsten Abschnitt. Ein Befund
+über drei Kegel bei einer einzigen Senkung war echt, gemessen und behoben — nur
+nennt `git tag --contains 242ffa1b` bereits v0.3.1. Er gehört damit weder in
+0.3.2 noch nachträglich in den 0.3.1-Abschnitt, dessen Fassung draußen und
+unterschrieben ist.
+
+> **Ein Punkt, der einem Kunden erzählt, was er schon hat, ist dieselbe Sorte
+> Fehler wie einer über einen Fehler, den er nie hatte — nur andersherum.**
+
+Damit hat der Prüfstein drei Seiten, und sie fragen alle dasselbe Register am
+Tag:
+
+| Was der Punkt sagt | Was zu fragen ist |
+|---|---|
+| „behoben" | War der **Auslöser** im Tag erreichbar? |
+| „neu" | Gab es die **Funktion** im Tag schon? |
+| überhaupt etwas | Ist die **Behebung** nicht schon im Tag? |
+
+Die dritte ist die am leichtesten zu übersehende, weil sie einen Punkt trifft,
+der in jeder anderen Hinsicht richtig ist: echter Fehler, echte Behebung, echte
+Kundenwirkung. Nur eben zwei Fassungen zu spät.
+
 **Why:** Ein Changelog ist eine Aussage über das **Produkt**, nicht über
 die Arbeit. Wer eine Behebung meldet, behauptet damit den Fehler — und der
 Leser prüft, ob er ihn hatte. Bei einem Fehler, der nie ausgeliefert war,
