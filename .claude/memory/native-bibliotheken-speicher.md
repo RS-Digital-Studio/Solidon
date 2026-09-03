@@ -91,13 +91,26 @@ Meldung — beim ersten Mal 260 von 448, beim zweiten 31 von 70. Wer nur auf
 FAILED-Zeilen sieht, liest einen grünen Lauf, der zu 42 Prozent stattgefunden
 hat.
 
-**Die Gegenmaßnahme ist eine Zahl, nicht ein Blick:** je Lauf **gesammelt
-gegen gelaufen** vergleichen. `--collect-only` gibt das Soll, die
-Fortschrittszeichen das Ist; weichen sie ab, ist es kein Lauf, auch ohne roten
-Test. Die verschluckten Tests dann einzeln nachfahren — in beiden Fällen waren
-sie grün, aber das wusste man erst danach.
+**Die Gegenmaßnahme ist eine Zahl, nicht ein Blick** — und sie ist gebaut:
+`suite-getrennt.sh` portioniert jede Fensterdatei über 60 Tests von selbst,
+vergleicht je Portion **gesammelt gegen gelaufen** (`nicht_gelaufen`), trennt
+den Abriss beim Abbau vom echten Fehlschlag (`zaehlt_als_fehler`) und
+**halbiert eine Portion, die Tests verschluckt hat, bis hinunter zu vier**,
+statt sie als Befund liegenzulassen.
 
-Beim Zählen der Fortschrittszeichen nur **reine** Fortschrittszeilen nehmen:
-„8 passed in 1.59s" bringt drei `s` und einen Punkt mit und macht aus acht
-Tests zwölf. Und den Zähler an einem Protokoll mit bekanntem Ausgang prüfen,
-nicht an sich selbst ([[messwerkzeug-misst-sich-selbst]]).
+**Wer das nachbaut, baut schlechter.** Ich habe es am 04.09.2026 getan und es
+erst gemerkt, als 3d-druck-81 das vorhandene Skript las statt es nur zu
+benutzen. Zwei Fallen kennt `fortschritt()` dort, die mein Nachbau nicht
+hatte: `Fatal Python error` steuert ein `F` bei, das als roter Test gelesen
+wird, und `Extension modules:` ein `Ex`. Meine Protokolle enthielten beides
+zufällig nicht — meine Zahlen stimmten also aus Glück, nicht aus Bauart.
+
+Der Fehler war **`test_ui.py` einzeln am Stück zu fahren**. Über
+`suite-getrennt.sh` passiert das nicht; der 34-Minuten-Lauf und der Abriss nach
+188 kamen beide daher.
+
+Was vom Nachbau bleibt, ist die Handregel für den Fall, dass man doch einmal
+selbst zählt: nur **reine** Fortschrittszeilen nehmen — „8 passed in 1.59s"
+bringt drei `s` und einen Punkt mit und macht aus acht Tests zwölf — und den
+Zähler an einem Protokoll mit bekanntem Ausgang prüfen, nicht an sich selbst
+([[messwerkzeug-misst-sich-selbst]]).
