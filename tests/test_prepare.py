@@ -2630,3 +2630,31 @@ def test_arranging_uses_every_plate_it_is_allowed(profile: Profile) -> None:
         [entry.mesh for entry in blocks(9)], profile, spacing=5.0, plates=MAX_PLATES
     )
     assert len(set(many.plates)) > 1, "der Rest wandert wirklich auf die nächste"
+
+
+def test_the_plate_advice_carries_a_way_to_follow_it(profile: Profile) -> None:
+    """Regel 17 gilt auch im Prüfbericht, nicht nur im Fehlerdialog.
+
+    Der Befund sagte „eine mehr würde helfen" und trug keinen Knopf: Von
+    fünfzehn Fehlerbefunden hatten sieben einen und acht keinen; dieser war
+    einer der acht (Zählung 3d-druck-81, 03.09.2026). Der Kunde las, was hülfe,
+    und konnte es nicht anklicken.
+
+    Es ist **Eingabe korrigieren** und kein eigener Knopf „eine Platte mehr":
+    Der öffnet den Schritt, und dort steht die Zahl, um die es geht. Ein Knopf,
+    der sie still erhöht, nähme dem Kunden die Entscheidung ab und ließe ihn im
+    Unklaren, wo sie liegt. Dass der Knopf greift, hängt an der Schrittkennung
+    am Befund — sie wird in der Auswertung nachgetragen und ist dort gemessen
+    worden (``op_id`` 100 an einem echten Dokument).
+    """
+    from app.core.errors import CORRECT_INPUT
+
+    # Zwei Klötze von 200 mm auf einem Bett von 256: Nebeneinander passt
+    # keiner von beiden, auf eine Platte also nur einer.
+    bodies = [MeshData.of(trimesh.creation.box(extents=(200.0, 200.0, 20.0))) for _ in range(2)]
+
+    tight = arrange_on_bed(bodies, profile, spacing=5.0, plates=1)
+
+    said = [found for found in tight.findings if found.code == "arrange.needs_more_plates"]
+    assert said, [found.code for found in tight.findings]
+    assert CORRECT_INPUT in said[0].suggestions, said[0].suggestions

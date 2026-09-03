@@ -22,7 +22,7 @@ from typing import Any, Literal, Protocol
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import PROGRAMMING_ERRORS
+from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -1000,6 +1000,23 @@ def arrange_on_bed(
                 severity="warning",
                 message=_("Auf so viele Platten passt das nicht — eine mehr würde helfen."),
                 values={"plates": plates},
+                # **Der Rat stand da, der Weg dorthin nicht.** Im Prüfbericht
+                # hatte dieser Befund keinen Knopf: `panels.actions_for` liest
+                # zuerst `suggestions`, dann seine Tabelle, dann eine Regel für
+                # Codes mit dem Präfix ``op.`` — und dieser Code hat keines.
+                # Der Kunde las, was hülfe, und konnte es nicht anklicken
+                # (Regel 17 im Bericht statt im Dialog, Fund 3d-druck-81).
+                #
+                # *Eingabe korrigieren* und kein eigener Knopf „eine Platte
+                # mehr": Er öffnet den Schritt, und dort **steht** die Zahl.
+                # Ein Knopf, der sie still erhöht, nähme dem Kunden die
+                # Entscheidung ab und ließe ihn im Unklaren, wo sie liegt —
+                # zumal die Vorgabe seit `9e35bc28` schon jede erlaubte Platte
+                # nutzt und dieser Befund nur noch kommt, wenn auch zwölf nicht
+                # reichen. Dass die Kennung des Schritts am Befund hängt und
+                # der Knopf damit greift, ist gemessen: ``op_id`` wird in
+                # ``evaluate`` nachgetragen.
+                suggestions=(CORRECT_INPUT,),
             )
         )
     return Arrangement(meshes=arranged, plates=assigned, findings=findings)
