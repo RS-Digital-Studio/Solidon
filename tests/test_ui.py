@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
-from PySide6.QtGui import QAction, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QContextMenuEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -1265,7 +1265,16 @@ def test_drawable_faces_keep_the_object_that_owns_them(window: MainWindow) -> No
 def test_a_tree_context_click_selects_the_feature_it_opens_for(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der Rechtsklick auf eine Bohrung darf nicht die vorige Auswahl benutzen."""
+    """Der Rechtsklick auf eine Bohrung darf nicht die vorige Auswahl benutzen.
+
+    **Und er muss die Zeile treffen, auf die gezeigt wird.** Dieser Test rief
+    ``_on_context_menu`` bis zum 03.09.2026 selbst auf und rechnete seinen
+    Punkt vorher mit ``viewport().mapTo(tree, …)`` in Baumkoordinaten um — also
+    genau in die falsche Annahme hinein, die im Handler stand. Beide Fehler
+    hoben sich auf, der Test war grün, und in der Anwendung sprang die Auswahl
+    zwei Zeilen nach oben (Robert, 03.09.2026). Jetzt geht der Weg über das
+    echte Ereignis an den Viewport, so wie Qt es zustellt.
+    """
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
@@ -1289,17 +1298,149 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     window.object_tree.tree.expandAll()
     window.object_tree.tree.scrollToItem(target)
     QApplication.processEvents()
-    point = window.object_tree.tree.viewport().mapTo(
-        window.object_tree.tree,
-        window.object_tree.tree.visualItemRect(target).center(),
-    )
+    tree = window.object_tree.tree
+    point = tree.visualItemRect(target).center()
     assert point.y() >= 0, "die Bohrung hat eine sichtbare Baumzeile"
     window.object_tree.select_feature(object_id, face)
     monkeypatch.setattr(window.object_tree, "context_menu", lambda: None)
 
-    window.object_tree._on_context_menu(point)
+    QApplication.sendEvent(
+        tree.viewport(),
+        QContextMenuEvent(
+            QContextMenuEvent.Reason.Mouse, point, tree.viewport().mapToGlobal(point)
+        ),
+    )
+    QApplication.processEvents()
 
     assert window.object_tree.selected_feature() == hole
+
+
+def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -> None:
+    """Roberts Wunsch vom 03.09.2026: „bei Doppelklick würde ich auch gerne die
+    Größen usw. ändern können über einen Dialog."
+
+    Geprüft wird der Weg und nicht der Dialog: Der Baum nennt die Operation,
+    das Fenster öffnet sie — dieselbe Kette, die das Kontextmenü seit je geht.
+    An einer erkannten Bohrung ist das *Bohrung ändern*.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    target = next(
+        item
+        for item in window.object_tree.tree.selectedItems()
+        if item.data(1, Qt.ItemDataRole.UserRole) == hole
+    )
+
+    angeboten: list[object] = []
+    window.object_tree.operationRequested.connect(angeboten.append)
+    window.object_tree._on_double_click(target, 0)
+
+    assert angeboten, "der Doppelklick auf eine Bohrung blieb folgenlos"
+    assert str(angeboten[0].name) in {spec.name for spec in REGISTRY.for_feature("hole")}
+
+
+def test_a_double_click_on_a_body_keeps_unfolding_it(window: MainWindow) -> None:
+    """Die Gegenprobe: Ein Körper und ein Dach über gleichartigen Merkmalen
+    sind nichts, was man ändert — dort bleibt der Doppelklick das Aufklappen."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    window.session.evaluate_now()
+    body = window.object_tree.tree.topLevelItem(0)
+    assert body is not None and body.childCount() > 0, "der Körper hat Merkmale"
+
+    angeboten: list[object] = []
+    schritte: list[int] = []
+    window.object_tree.operationRequested.connect(angeboten.append)
+    window.object_tree.stepRequested.connect(schritte.append)
+    window.object_tree._on_double_click(body, 0)
+
+    assert not angeboten and not schritte, "ein Körper öffnet keinen Dialog"
+
+
+def test_a_double_click_on_a_made_feature_opens_its_step(window: MainWindow) -> None:
+    """Was aus einem Schritt kam, führt in diesen Schritt zurück — dort stehen
+    seine Maße als Parameter, und genau die will der Kunde ändern (§21.2)."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    target = next(
+        item
+        for item in window.object_tree.tree.selectedItems()
+        if item.data(1, Qt.ItemDataRole.UserRole) == hole
+    )
+    # Ein erkanntes Merkmal hat keinen Erzeuger; der Baum trägt die
+    # Schrittnummer an der Zeile, und genau die liest der Doppelklick.
+    from app.ui.panels import _STEP_ROLE
+
+    target.setData(0, _STEP_ROLE, 1)
+
+    schritte: list[int] = []
+    window.object_tree.stepRequested.connect(schritte.append)
+    window.object_tree._on_double_click(target, 0)
+
+    assert schritte == [1], "der Schritt geht vor der Operation"
+
+
+def test_a_context_click_hits_the_row_it_points_at(qt_app: QApplication) -> None:
+    """Zwanzig Zeilen, zwanzig Rechtsklicks, zwanzig Treffer.
+
+    Der Test darüber prüft **welches Merkmal** gewählt wird, dieser prüft
+    **welche Zeile** — und nur der zweite fängt einen Versatz, der jede Zeile
+    gleich weit verschiebt. Gemessen am Fehler vom 03.09.2026: Kopfzeile 17 px
+    gegen Zeilenhöhe 12 px, fünf von sechs Klicks daneben, der erste ins Leere.
+
+    Flache Zeilen statt einer Szene, weil die Frage keine Geometrie braucht:
+    Es geht um die Zuordnung von Bildpunkt zu Zeile.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import ObjectTree
+
+    tree_panel = ObjectTree()
+    tree_panel.resize(360, 700)
+    tree_panel.show()
+    QApplication.processEvents()
+    tree = tree_panel.tree
+    tree.clear()
+    for number in range(20):
+        tree.addTopLevelItem(QTreeWidgetItem([f"Zeile {number}", f"{number} mm"]))
+    QApplication.processEvents()
+    tree_panel.context_menu = lambda: None  # type: ignore[method-assign]
+
+    assert tree.header().height() > 0, "ohne Kopfzeile prüft dieser Test den Versatz nicht"
+
+    daneben: list[str] = []
+    for number in range(20):
+        item = tree.topLevelItem(number)
+        middle = tree.visualItemRect(item).center()
+        if middle.y() < 0 or middle.y() > tree.viewport().height():
+            continue
+        QApplication.sendEvent(
+            tree.viewport(),
+            QContextMenuEvent(
+                QContextMenuEvent.Reason.Mouse, middle, tree.viewport().mapToGlobal(middle)
+            ),
+        )
+        QApplication.processEvents()
+        chosen = tree.selectedItems()
+        got = chosen[0].text(0) if chosen else "nichts"
+        if got != item.text(0):
+            daneben.append(f"{item.text(0)} -> {got}")
+
+    assert not daneben, "der Rechtsklick traf eine andere Zeile: " + ", ".join(daneben)
 
 
 def test_a_tolerance_keeps_its_third_decimal(qt_app: QApplication) -> None:

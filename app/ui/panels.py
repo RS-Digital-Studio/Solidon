@@ -986,6 +986,12 @@ class ObjectTree(QWidget):
         der Baum still, während das erste Bild entsteht — und bei einem
         gescannten Teil sind das achtzig Millisekunden je Zeile."""
         self.tree.itemSelectionChanged.connect(self._on_selection)
+        # **Doppelklick öffnet, was die Zeile ändert** (Robert, 03.09.2026:
+        # „bei Doppelklick würde ich auch gerne die Größen usw. ändern können
+        # über einen Dialog"). Der kurze Weg zum selben Ziel, das das
+        # Kontextmenü an erster Stelle führt — und in derselben Reihenfolge,
+        # damit beide Wege nicht auseinanderlaufen.
+        self.tree.itemDoubleClicked.connect(self._on_double_click)
         # Wer einen Körper aufklappt, will seine Merkmale sehen und nicht in
         # einem Feld von zwei Zeilen danach scrollen.
         self.tree.itemExpanded.connect(self._fit)
@@ -1824,14 +1830,62 @@ class ObjectTree(QWidget):
             lambda _checked=False, entry=spec: self.operationRequested.emit(entry)
         )
 
+    def _on_double_click(self, item: QTreeWidgetItem, column: int) -> None:
+        """Ein Doppelklick öffnet den Dialog, der diese Zeile ändert (§18.5).
+
+        **Dieselbe Reihenfolge wie im Kontextmenü**, und nicht eine zweite
+        Meinung darüber, was zu einer Zeile gehört: erst der Schritt, der sie
+        erzeugt hat — dort stehen ihre Maße als Parameter —, dann die erste
+        Operation, die für ihre Merkmalsart gilt und in dieser Lage auch laufen
+        kann.
+
+        **Zeilen mit Kindern behalten das Auf- und Zuklappen.** Ein Körper und
+        ein Dach über gleichartigen Merkmalen sind keine Sache, die man ändert;
+        Qt klappt sie auf, und das ist die richtige Antwort auf den
+        Doppelklick.
+
+        **Und wo nichts gilt, geschieht nichts.** Für ein erkanntes Merkmal
+        ohne eigene Operation — ein Wulst, eine Verrundung — gibt es heute
+        keinen Dialog, der es ändert; irgendeinen zu öffnen wäre ein Angebot,
+        das die Frage nicht beantwortet. Der Statushinweis der Zeile sagt
+        weiterhin, was sie ist.
+        """
+        if item.childCount():
+            return
+        step: int | None = item.data(0, _STEP_ROLE)
+        if step is None:
+            feature = self._chosen_feature()
+            if feature is not None and feature.created_by is not None:
+                step = feature.created_by
+        if step is not None:
+            self.stepRequested.emit(step)
+            return
+        kind = self._feature_kind()
+        if kind is None:
+            return
+        kinds = self.kinds_of_selection()
+        spoiled = spoiled_the_exact_body(self._result)
+        for spec in self.operations_for_feature(kind):
+            if not kind_requirement(spec, kinds, spoiled):
+                self.operationRequested.emit(spec)
+                return
+
     def _on_context_menu(self, position: QPoint) -> None:
-        # Das Signal kommt in Koordinaten des gesamten Baums, ``itemAt`` und
-        # der Ansichtsbereich erwarten dagegen Koordinaten ihres Viewports.
-        # Ohne die Umrechnung trifft ein Rechtsklick unter der Kopfzeile die
-        # Zeile darüber oder gar keine — gerade ein Bohrungsmenü verlor so
-        # sein Zielmerkmal.
-        viewport_position = self.tree.viewport().mapFrom(self.tree, position)
-        item = self.tree.itemAt(viewport_position)
+        # **Die Position kommt schon in Koordinaten des Ansichtsbereichs.**
+        # Hier stand eine Umrechnung mit ``viewport().mapFrom(self.tree, …)``
+        # und darüber die Begründung, das Signal liefere Koordinaten des
+        # ganzen Baums. Das ist falsch: Qt stellt das Kontextmenü-Ereignis dem
+        # Viewport zu, und von dort kommt die Position. Die Umrechnung zog
+        # deshalb noch einmal die Kopfzeile ab und traf eine Zeile weiter oben
+        # — bei kleiner Zeilenhöhe zwei (gemessen 03.09.2026: Kopfzeile 17 px,
+        # Zeilenhöhe 12 px; ein Klick auf Zeile 5 wählte Zeile 4, ein Klick auf
+        # die erste wählte gar nichts).
+        #
+        # Gemeldet von Robert: „wenn ich einen Eintrag links mit Rechtsklick
+        # anwähle springen wir 2 Einträge hoch." Die Verlaufsliste im selben
+        # Modul nimmt ihre Position seit je roh (``_on_context_menu`` dort),
+        # und sie trifft.
+        item = self.tree.itemAt(position)
         if item is not None:
             # Der Rechtsklick meint die Zeile darunter. Ohne diese Auswahl
             # öffnete sich zwar das passende Kontextmenü, der Dialog erbte
@@ -1842,7 +1896,7 @@ class ObjectTree(QWidget):
             self.tree.setCurrentItem(item)
         menu = self.context_menu()
         if menu is not None:
-            menu.exec(self.tree.viewport().mapToGlobal(viewport_position))
+            menu.exec(self.tree.viewport().mapToGlobal(position))
 
     def _add_source_step(self, menu: QMenu) -> None:
         """„Diesen Schritt ändern" — der Weg vom Ergebnis zurück zum Schritt
