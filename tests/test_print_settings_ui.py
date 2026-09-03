@@ -3387,3 +3387,40 @@ def test_the_machine_list_follows_the_printer_of_the_project(qt_app: QApplicatio
     assert session.profile.printer.id == "centauri-carbon-2", "die Vorbedingung des Tests"
     assert dialog.machine_choice.count() == 1, "jetzt nur noch die des neuen Druckers"
     assert dialog.machine_choice.currentData() == str(meiner.path)
+
+
+def test_a_printer_the_slicer_does_not_know_says_which_one(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """„Zu diesem Drucker passt kein Profil" ließ offen, welcher gemeint ist.
+
+    Der Satz ist wahr und ist trotzdem keine Auskunft: Er sagt nicht, *welcher*
+    Drucker keines hat, nicht *welcher Slicer* keines mitbringt, und damit auch
+    nicht, warum die Liste darunter voll ist. Gemessen an einem frischen
+    Projekt auf *Allgemeiner FDM-Drucker 220 mm* mit ElegooSlicer: 1001 Profile
+    zur Wahl, das Feld leer, *Slicen* gesperrt — und kein Wort darüber, dass
+    der Slicer für genau diesen Drucker keines kennt.
+
+    Wer beide Namen liest, weiß sofort, ob er den Drucker wechseln oder ein
+    Profil suchen muss. Geprüft wird deshalb, dass beide Namen vorkommen, und
+    nicht der Wortlaut — ein Test, der den Satz mitliest, prüft sich selbst.
+    """
+    dialog._slicer_path = Path("C:/Programme/ElegooSlicer/elegoo-slicer.exe")
+    fremd = SlicerProfile(
+        path=Path("Afinia H+1(HS) 0.4 nozzle.json"),
+        name="Afinia H+1(HS) 0.4 nozzle",
+        kind="machine",
+        printer_model="Afinia H+1",
+        nozzle=0.4,
+    )
+    dialog._profiles_found([fremd])
+
+    note = dialog.profile_note.text()
+    assert note, "ohne Zuordnung bleibt der Hinweis vom Suchen stehen"
+    drucker = dialog.printer_choice.currentText()
+    assert drucker, "ohne Druckernamen prüft dieser Test nichts"
+    assert drucker in note, f"der Hinweis nennt den Drucker nicht: {note!r}"
+    assert "lslicer" in note.lower() or "elegoo" in note.lower(), (
+        f"der Hinweis nennt den Slicer nicht: {note!r}"
+    )
+    assert "{" not in note, f"ein Platzhalter blieb stehen: {note!r}"

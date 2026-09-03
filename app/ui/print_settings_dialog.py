@@ -2658,9 +2658,37 @@ class PrintSettingsDialog(QDialog):
         self._fill_processes(process)
 
         if chosen is None:
-            self.profile_note.setText(
-                tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
-            )
+            # **Eine Aufforderung ist noch keine Auskunft.** Hier stand „Zu
+            # diesem Drucker passt kein Profil von selbst — bitte auswählen.":
+            # wahr, und es ließ offen, *welcher* Drucker gemeint ist und warum
+            # die Liste darunter dann tausend Einträge hat. Gemessen an einem
+            # frischen Projekt auf *Allgemeiner FDM-Drucker 220 mm* mit
+            # ElegooSlicer: 1001 Profile zur Wahl, das Feld leer, der
+            # Slicen-Knopf gesperrt — und kein Wort darüber, dass der Slicer
+            # für genau diesen Drucker keines mitbringt. Wer beide Namen liest,
+            # weiß sofort, ob er den Drucker wechseln oder ein Profil suchen
+            # muss.
+            #
+            # ``.replace`` und nicht ``.format``: dieselbe Schreibweise wie am
+            # Satz über die ignorierte Einstellung, und ein Katalogeintrag, der
+            # eine geschweifte Klammer verliert, wirft damit nicht.
+            printer = self.printer_choice.currentText()
+            slicer = _slicer_title(self._slicer_path) if self._slicer_path else ""
+            if printer and slicer:
+                self.profile_note.setText(
+                    str(
+                        tr(
+                            "Für {printer} bringt {slicer} kein eigenes Profil mit — "
+                            "wählen Sie das Profil Ihres Druckers aus der Liste."
+                        )
+                    )
+                    .replace("{printer}", printer)
+                    .replace("{slicer}", slicer)
+                )
+            else:
+                self.profile_note.setText(
+                    tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
+                )
             self._open_slicer_section()
         else:
             self.profile_note.setText(
