@@ -171,6 +171,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
 | Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
+| Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Bis dahin ist die Absage mit Ausweg die richtige Antwort, und der Ausweg trägt: die Bohrung versetzen, die Senkung neu setzen |
 
 ---
 
@@ -14984,6 +14985,69 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
 
   Robert dazu: „wir brauchen auch nur Merkmale usw, die auch von der
   Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+
+## Erkannte Merkmale bearbeiten (03.09.2026)
+
+Aus einer Kundenumfrage, 1 von 5: „The ideas are good, but a lot are missing" —
+und als einziger konkreter Punkt „Move existing holes and other recognised
+details/features". Gemessen war der Befund eindeutig: Von 95 Operationen fasste
+**eine** ein erkanntes Merkmal an (`resize_hole`), und die kannte nur den
+Durchmesser.
+
+- [x] **Fünf Handlungen an einem erkannten Merkmal.** Versetzen, Drehen,
+  Ändern, Verdoppeln, Entfernen — für Bohrung, Zapfen, Kegel und Kugelfläche;
+  die Kugel ohne Drehen, weil sie keine Lage hat. Innen ist es **eine**
+  Maschine mit vier Ausgängen: an der alten Stelle das Gegenteil dessen, was
+  das Merkmal ist, an der neuen das Merkmal selbst, und dazwischen ein anderer
+  Wert. Die Kennung reist beim Versetzen mit, damit Passungen ihren Bezug
+  behalten; beim Verdoppeln bekommt die Kopie eine eigene.
+
+- [x] **Kuppe und Kegel aus ihren eigenen Flächen.** Ihre erkannte Mitte liegt
+  *in* der Fläche, auf der sie sitzen — der parametrische Grundkörper gräbt
+  eine Mulde und verlor gemessen 445 von 24 449 mm³, wasserdicht und still.
+  Die Merkmalsflächen begrenzen die Kuppe genau: 448,5 mm³ gegen 452,4 der
+  analytischen Halbkugel, und die Differenz ist die Tesselierung der Vorlage.
+
+- [x] **Der Stopfen stand oben und unten über** (Robert am eigenen
+  Kundenmodell). Das Füllwerkzeug ist absichtlich größer als gemessen und bei
+  einer durchgehenden Bohrung mindestens so lang wie ihr Durchmesser — beim
+  Ausschneiden richtig, beim Vereinen trägt es auf. An einer 10 mm starken
+  Platte mit Bohrung Ø 16: 16,03 mm hoch statt 10, Volumen 21 995 auf 23 600.
+  `prepare.plug` beschneidet seinen Stopfen seit langem an der Hülle des Teils;
+  vier Stellen hier hatten die Zeile nicht.
+
+- [x] **`applies_to` galt nur im Menü.** Über Chat oder Kommandozeile lief
+  `resize_feature` auf einer Bohrung durch (46 997,6 → 45 737,0 mm³, am exakten
+  Kern und an der Materialkompensation vorbei) und `rotate_feature` auf einer
+  Kuppel (112 von 24 448 mm³ mit). Beide Male wasserdicht, kein roter Test. Der
+  Kern fragt jetzt das Register nach der aufrufenden Operation, und den Satz
+  dazu holt er aus derselben Tabelle wie das Panel.
+
+- [ ] **Eine Senkung über einer Bohrung lässt sich nicht versetzen.** Sie ist
+  kein eigener Hohlraum — sie geht in die Bohrung über, und versetzt zöge sie
+  sie mit zu. Gemessen an drei Bauarten: eine kegelige Tasche **ohne** Bohrung
+  darunter lässt sich versetzen; über einer Sackbohrung hat die Kegelfläche
+  zwei Randringe; über einer durchgehenden liegt ihr einer Ring nicht in einer
+  Ebene (Spanne 10,1 mm gegen eine Grenze von 0,38). Der Kunde bekommt in
+  beiden Fällen einen Satz mit dem Ausweg — die Bohrung versetzen und die
+  Senkung neu setzen —, und das ist heute die richtige Antwort.
+
+  **Was fehlt, ist die Nachbarschaft zweier Merkmale.** Wer die Bohrung
+  versetzt, müsste ihre Senkung mitnehmen können; dafür muss Solidon wissen,
+  welche Merkmale aneinander hängen. Das ist die Voraussetzung, nicht der
+  Aufwand: `matching.py` hält Kennungen über Operationen hinweg, aber keine
+  Beziehungen zwischen ihnen. Wird das gebaut, fällt die Absage weg und
+  `_feature_body` bekommt seinen Nachbarn abgezogen, statt abzusagen.
+
+- [x] **Zwei Warnungen, die stillen Ausschuss verhindern.** Eine durchgehende
+  Bohrung, die nach dem Versetzen oder Verdoppeln nicht mehr durchgeht, sagt es
+  (gemessen: 1,985 mm Material stehengeblieben, 398 mm³, wasserdicht). Und eine
+  Kopie, die nichts geschnitten hat, wird gemeldet statt gesucht.
+
+- [x] **Der Ring bekam einen Grund statt des Auffangsatzes.** `torus` wird
+  erkannt — der Objektbaum nennt ihn Kehle oder Wulst —, stand aber in keiner
+  Gründetabelle; das Panel sagte viermal „Für diese Art von Merkmal gibt es
+  noch keine Handlung". Nicht falsch, aber leer.
 
 ## Der Körper sprang zurück, bevor er ankam (03.09.2026)
 
