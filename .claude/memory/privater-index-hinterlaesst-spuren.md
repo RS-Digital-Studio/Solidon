@@ -95,3 +95,33 @@ gemeinsamen Datei), [[index-altert-zwischen-lesen-und-commit]] (der Index ist
 einen Commit zu alt), [[sicherung-ist-eine-zeitmaschine]] (die Kopie vom
 Anfang) — vier Gestalten desselben Satzes: **Was einen ganzen Stand trägt,
 trägt auch den fremden Teil davon.**
+
+
+## Und damit ist `git diff HEAD` als Endkontrolle untauglich
+
+**Die Spur oben macht die Frage kaputt, mit der man sie finden würde.**
+`git diff HEAD` heißt „Arbeitsbaum gegen HEAD", und man liest es als Frage nach
+ungestagter Arbeit. Git zieht dafür aber den Index als Zwischenspeicher heran
+und zeigt dessen Löschung mit — **auch wenn die Datei im Baum liegt und
+bytegleich mit HEAD ist.**
+
+Am 03.09.2026 an der Release-Schwelle: Die Endkontrolle meldete „3 Dateien, 56
+Löschungen" in `.claude/memory/`, darunter eine Notiz, die eine Stunde vorher
+wiederhergestellt worden war. Sie war nie weg. Zwei Sitzungen hätten nachts um
+zwei nach drei verschwundenen Dateien gesucht, die alle drei danebenlagen.
+
+Die Frage, die trägt, fragt den Index nicht:
+
+    git status --porcelain -- <pfad>        # was Git für geändert hält
+    git show HEAD:<datei> | sha256sum       # und dann: stimmt der Inhalt?
+
+Oder kurz: **Inhalt gegen HEAD-Blob.** Wer belegen will, dass nichts Halbes im
+Baum liegt, vergleicht Bytes und nicht Zustände.
+
+**Die Verschärfung liegt darin, wer darauf hereinfällt.** Diese Notiz gibt es
+seit dem 30.08., und ich habe am selben 03.09. mehrfach anderen Sitzungen
+geschrieben, `git diff HEAD` sei „die richtige Frage" — als Gegenmittel gegen
+den *anderen* Fall, in dem `git diff` ohne HEAD gegen den veralteten Index
+vergleicht. Beide Sätze stimmen für ihren Fall, und der zweite habe ich für
+allgemein gehalten. Siehe [[der-nachbar-findet-den-fehler]]: richtig gemessen,
+an der falschen Stelle geglaubt.
