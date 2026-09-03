@@ -180,7 +180,7 @@ def _folder_pattern(folder: str) -> str:
     return "[\"'/]" + re.escape(folder) + "[\"'/]"
 
 
-def _named_readers(graph: ImportGraph, file: Path) -> set[str]:
+def _named_readers(graph: ImportGraph, file: Path) -> dict[str, str]:
     """Testdateien, die von einer Nicht-Python-Datei abhängen — auf zwei Wegen.
 
     **Der Name allein genügt nicht, und das hat am 03.09.2026 eine CI-Runde
@@ -195,11 +195,18 @@ def _named_readers(graph: ImportGraph, file: Path) -> set[str]:
     einem Modul, das ihr **Verzeichnis** nennt? Der zweite Weg findet, was über
     ein Werkzeug gelesen wird — und das ist bei jeder Datendatei die Regel und
     nicht die Ausnahme.
+
+    **Beide Wege nennen ihren eigenen Grund**, denn ``--why`` soll erklären und
+    nicht bloß behaupten: Bis zum 03.09.2026 trug auch der zweite Weg den Text
+    des ersten, und für `website/api/count.php` stand dann hinter
+    ``test_agent.py`` das Wort „nennt count.php" — eine Datei, die diesen
+    Namen kein einziges Mal enthält. Wer dem Grund nachgeht, sucht dort
+    vergeblich und traut der Auswahl danach nicht mehr.
     """
-    found: set[str] = set()
+    found: dict[str, str] = {}
     for name, path in graph.modules.items():
         if name.startswith("tests.") and file.name in path.read_text(encoding="utf-8"):
-            found.add(name)
+            found[name] = f"nennt {file.name}"
 
     # Der Ordner, in dem die Datei liegt — ``changelog``, ``locales``,
     # ``data``. Module, die ihn im Quelltext nennen, lesen die Datei.
@@ -218,11 +225,10 @@ def _named_readers(graph: ImportGraph, file: Path) -> set[str]:
                 _folder_pattern(folder), path.read_text(encoding="utf-8")
             ):
                 continue
-            found.update(
-                importer
-                for importer in graph.importers.get(name, ())
-                if importer.startswith("tests.")
-            )
+            for importer in graph.importers.get(name, ()):
+                if importer.startswith("tests."):
+                    # Der Namensweg oben ist der genauere — er behält den Vorrang.
+                    found.setdefault(importer, f"hängt an einem Modul, das {folder}/ liest")
     return found
 
 
@@ -257,8 +263,8 @@ def affected(
                 if name.startswith(("app.", "tools.")) or name in ("app", "tools"):
                     touches_code = True
         else:
-            for name in _named_readers(graph, graph.root / relative):
-                reasons.setdefault(graph.modules[name], f"nennt {path.name}")
+            for name, reason in _named_readers(graph, graph.root / relative).items():
+                reasons.setdefault(graph.modules[name], reason)
     for name in graph.dependents(changed_modules):
         path = graph.modules[name]
         if name.startswith("tests.") and path.name.startswith("test_"):

@@ -130,7 +130,11 @@ def test_a_data_file_selects_the_tests_of_the_module_that_reads_it(tree: Path) -
     assert "tests/test_reader.py" in _names(files, tree), (
         "der Test des Moduls, das den Ordner liest, fehlt in der Auswahl"
     )
-    assert reasons[tree / "tests" / "test_reader.py"] == "nennt tabelle.toml"
+    # Und der Grund sagt den *zweiten* Weg an: Diese Datei nennt `tabelle.toml`
+    # nirgends — sie hängt an einem Modul, das den Ordner liest. Bis zum
+    # 03.09.2026 stand hier „nennt tabelle.toml", und wer dem nachging, suchte
+    # einen Namen, den die Datei nicht enthält.
+    assert reasons[tree / "tests" / "test_reader.py"] == "hängt an einem Modul, das daten/ liest"
 
 
 def test_a_data_file_does_not_drag_in_the_whole_tree(tree: Path) -> None:
