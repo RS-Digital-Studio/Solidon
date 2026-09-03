@@ -100,7 +100,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
-| Eine Projektdatei ist auf Windows und Linux nicht bitgleich | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | einen Lauf, der Kompression von Erzeugung trennt: nach `make_examples.py` den Hash der `.p3d` **und** den ihres entpackten Inhalts ausgeben. Stimmt der Inhalt und die Datei nicht, ist es DEFLATE; weichen beide ab, die Erzeugung. Anlass war Tag-Lauf `33696236181`: Suite dreimal grün, Paket **Windows grün**, ubuntu und beide macOS rot am Byte-Nachweis für `weg3-generiert-aufbereiten.p3d` — die Grenze verlief exakt an der Plattform, auf der die Nachweise entstanden. `f58854ae` hat den Auslöser beseitigt (der Paketjob erzeugt die Beispiele nicht mehr neu), die Frage bleibt offen und wird beim nächsten Anfassen von `project.py` wieder wichtig |
 | Ein Worker stirbt auf Ubuntu am ersten Dialogaufbau — verdeckt, nicht behoben | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | die Antwort, **welcher** Test etwas hinterlässt, das den nächsten Dialogaufbau auf demselben Worker umbringt. Gemessen: Lauf 4 (`33693498309`) mit 7207 Tests sauber, Lauf 5 (`33695122405`) mit 7208 zweimal `gw3 crashed` am ersten Test von `test_print_settings_ui.py`. Der eine zusätzliche Test ist der einzige bekannte Unterschied, **taugt aber nicht als Erklärung**: xdist verteilt hier dynamisch (`--dist load`, nirgends gesetzt), die Zuordnung ist je Lauf verschieden — dass zweimal dieselbe Stelle traf, spricht deshalb für etwas Systematisches. Die Nachbarschaft ist aus den Läufen **nicht** rekonstruierbar (ohne `-v` steht sie nirgends); der nächste Schritt ist ein Probelauf mit `--dist loadfile` auf Linux. Ausgeschlossen: Testinhalt (auf Windows einzeln, seriell und mit `-n 4` grün), Umgebung des Workers (in Lauf 4 dieselbe), xcb-Bibliotheken und der Startpfad `qt_platform` (alle sechs CI-Lagen durchgerechnet, kein Eingriff). Die Datei läuft seit `cc5c6a99` in einem eigenen Prozess — **eine Grenze, keine Diagnose** |
 | `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird. **Dritte Beobachtung am 26.08.2026 (ce, Torlauf):** wieder bei 23 %, diesmal aber im `QCompleter`-Konstruktor (`op_dialog.py:197`, aus der fx-Hilfe `2b48f288`) statt in `panels.py` — die Position im Lauf ist stabil, die Stelle im Code nicht. Der betroffene Test allein: grün. Vollständige Wiederholung derselben Datei: 305 passed, Exit 0. Das ist die Auskunft, die zur Reihenfolge passt und gegen eine Regression spricht — der Torlauf davor am selben Tag kannte den Abbruch nicht, und die Änderungen dazwischen (Plattenwahl im Druckdialog) berühren weder `op_dialog` noch `panels`. **Vierte Messung am 27.08.2026 (30):** Die Datei trägt inzwischen **307** statt 303 Tests, und der Satz „mit `-p no:randomly` laufen alle durch" gilt nicht mehr — drei Läufe unter dem Schloss, mit fester Reihenfolge, gaben **1 von 3**: einmal Zugriffsverletzung bei 70 Prozent, zweimal 307 passed. Stelle wie gehabt `panels.py` unter `_show_scene`, diesmal `show_result`, ausgelöst aus `_with_two_objects` über `wait_for_idle`. Damit ist die Reihenfolge als Bedingung **widerlegt** und die Zusammensetzung bestätigt: Vier Tests mehr genügen, um die Mine auch bei fester Reihenfolge scharf zu machen. Eine Zuschreibung an die Commits des Tages ist bei dieser Rate nicht führbar — sie bräuchte viele Läufe je Seite —, und der Absturzstapel führt durch `main_window.py`, das während der Messung von einer anderen Sitzung geändert wurde. `test_operation_ui.py` riss im selben Torlauf mit und lief einzeln mit 67 passed durch: dort war es Fremdlast |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
@@ -14260,42 +14259,6 @@ bleibt, steht hier mit Kästchen.
   den ganzen Bereich) wird damit nur noch lokal eingelöst; wer sie in der CI
   zurückhaben will, misst zuerst `range_check` (3d-druck-85 hat es am
   02.09.2026 zur Klasse gemacht, gleiche Zeiten).
-- [ ] **Dieselbe Projektdatei ist auf Windows und Linux nicht bitgleich.** Im
-      Tag-Lauf `33696236181` waren die Suite auf allen drei Plattformen und
-      „Paket (windows-latest)" grün, während „Paket (ubuntu-latest)",
-      „(macos-latest)" und „(macos-26-intel)" am selben Byte-Nachweis
-      scheiterten: `ASSET-RIGHTS.toml ist nicht freigabefähig: Byte-Nachweis
-      für 'app/examples/weg3-generiert-aufbereiten.p3d' stimmt nicht`. Die
-      Grenze verlief exakt an der Plattform, auf der die Nachweise entstanden
-      sind.
-
-      **Der Auslöser ist beseitigt** (`f58854ae`, 3d-druck-7b): Der Paketjob
-      erzeugt die Beispiele nicht mehr neu. Sein Argument wiegt schwerer als
-      das der Reproduzierbarkeit — ein Byte-Nachweis belegt die Bytes der
-      **eingecheckten** Datei; wenn der Bau sie vorher überschreibt, belegt er
-      nichts. `test_every_example_can_still_be_built` ist seither die einzige
-      Stelle, an der der Erzeuger überhaupt noch läuft.
-
-      **Die Ursache ist damit nicht beantwortet, nur umgangen.** Eingegrenzt
-      ist sie: Auf Windows ist die Erzeugung bitgenau reproduzierbar (alle 15
-      Byte-Nachweise stimmen nach einem Neulauf im frischen Worktree). In der
-      Datei scheiden aus: die ZIP-Zeitstempel (fest auf 1980-01-01), das
-      eingebettete Netz (`sources/src_1/Figur.stl` trägt exakt den Hash der
-      Korpusdatei, wird also kopiert und nicht gerechnet) und der Inhalt von
-      `project.json` (2609 B: keine Zeitstempel, keine Pfadtrenner außer dem
-      POSIX-`sources/…`, keine Zahl mit sechs oder mehr Nachkommastellen).
-      Übrig bleibt die **DEFLATE-Kompression** — `project.py:837` und `:980`
-      schreiben mit `ZIP_DEFLATED` ohne festes `compresslevel`, und gleicher
-      Inhalt ergibt mit einer anderen zlib andere Bytes. **Das ist eine
-      begründete Vermutung und kein Beweis:** gemessen wurde auf Windows, eine
-      Linux-Maschine stand nicht zur Verfügung.
-
-      **Was die Frage in einem Lauf beantwortet:** nach `make_examples.py` den
-      Hash der `.p3d` und zusätzlich den ihres entpackten Inhalts ausgeben.
-      Stimmt der Inhalt überein und die Datei nicht, ist es die Kompression;
-      weichen beide ab, liegt es an der Erzeugung. Wichtig, sobald jemand
-      `project.py` anfasst — dort ist die Datei eine Grenzdatei, und eine
-      Änderung an der Kompression berührt jede je geschriebene Projektdatei.
 - [ ] **Ein Worker stirbt auf Ubuntu am ersten Dialogaufbau — verdeckt, nicht
       behoben.** In Lauf `33693498309` (Lauf 4) lief `test_print_settings_ui.py`
       unter `-n auto` auf demselben Runner sauber durch; in `33695122405`
