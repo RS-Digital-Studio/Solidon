@@ -305,6 +305,43 @@ ROUND_TOLERANCE = 0.02
 #: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
 #: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
 #: Einpassung und nicht die Fertigung.
+#: Wie weit zwei Kegelstücke im Halbwinkel auseinanderliegen dürfen, um noch
+#: derselbe Kegel zu sein — in Grad.
+#:
+#: **Gemessen an Senkungen Ø 12 über Bohrungen Ø 6** (03.09.2026): Der Mantel
+#: zerfällt in Ausschnitte, und je kleiner ein Ausschnitt, desto weiter fittet
+#: er den Winkel daneben — 44,94° bei 72 Dreiecken, 47,14° bei 37, **50,68°
+#: bei 28**. Fünf Grad standen hier zuerst, nach dem ersten gemessenen Fall;
+#: der zweite lag bei 5,74 und blieb draußen. Das ist die Lehre an der Zahl:
+#: Eine Schranke aus **einer** Messung ist geraten, nicht gemessen.
+#:
+#: **Zehn Grad sind gefahrlos, weil die Schranke nicht die trennende ist.** Zwei
+#: Kegel mit derselben Spitze **und** derselben Achse, aber verschiedenem
+#: Winkel, schneiden einander — das ist keine Oberfläche, die es an einem
+#: Körper gibt. Getrennt wird über die Spitze (gemessen 30 mm zwischen zwei
+#: Senkungen gegen 0,15 mm innerhalb einer), und der gemeinsame Fit muss
+#: danach immer noch ``good`` sein. Diese Schranke fängt nur den groben
+#: Ausreißer ab, bevor ein Fit dafür gerechnet wird.
+CONE_SAME_ANGLE = 10.0
+
+#: Wie weit zwei Kegelstücke in der Achse auseinanderstehen dürfen, um noch
+#: derselbe Kegel zu sein — in Grad.
+#:
+#: **Eine eigene Schranke und nicht** :data:`SINK_AXIS_LIMIT`, die zwei Grad
+#: erlaubt: Das ist die Schranke des Rings, und dort trennt sie zwei *fertige*
+#: Einpassungen. Hier steht auf einer Seite oft ein Splitter aus wenigen
+#: Dreiecken, und der fittet die Achse so ungenau wie den Winkel — gemessen
+#: 3,6 Grad an dem Ausschnitt, der eine Senkung zum dritten Merkmal machte.
+#: Mit zwei Grad blieb er draußen und der Objektbaum zeigte zwei Senkungen
+#: statt einer.
+#:
+#: **Weiten ist hier gefahrlos, weil die Trennung woanders liegt:** Zwei
+#: verschiedene Senkungen unterscheiden sich in der **Spitze** (gemessen
+#: 30 mm gegen 0,15 mm innerhalb einer), nicht in der Achse — bei
+#: gleichgerichteten Bohrungen ist die Achse sogar identisch. Und der
+#: gemeinsame Fit muss danach immer noch ``good`` sein.
+CONE_SAME_AXIS = 8.0
+
 SINK_AXIS_LIMIT = 2.0
 
 
@@ -656,6 +693,7 @@ def _fitted(mesh: MeshData) -> Fitted:
                 classify(piece)
 
     found = _merged_cylinders(body, mesh, found)
+    cones = _merged_cones(body, cones)
     tori = _merged_tori(body, tori)
     found = _without_thread_turns(body, found)
     found, fillets = _split_off_fillets(body, found)
@@ -2330,6 +2368,82 @@ def _same_torus(one: tuple[TorusFit, list[int]], two: tuple[TorusFit, list[int]]
     # gleich große Ringe übereinander auf derselben Achse sind zwei Ringe.
     offset = np.asarray(second.centre, dtype=float) - np.asarray(first.centre, dtype=float)
     return float(np.linalg.norm(offset)) <= scale * SINK_FIT_LIMIT
+
+
+def _same_cone(one: tuple[ConeFit, list[int]], two: tuple[ConeFit, list[int]]) -> bool:
+    """Beschreiben diese zwei Flecken denselben Kegel?
+
+    **Das dritte Geschwister, und es hatte die Zusammenführung nicht.** Für
+    Zylinder gibt es sie seit je (:func:`_merged_cylinders`), für Ringe seit
+    dem Befund an einem Kundenbild (:func:`_merged_tori`) — der Kegel ging
+    beide Male leer aus.
+
+    Gemessen an einem Quader mit **einer** Senkung Ø 12 über einer Bohrung
+    Ø 6 (Befund 3d-druck-a0, 03.09.2026): Der Objektbaum zeigte **drei**
+    Senkungen. Die Flecken sind dabei disjunkt — 56, 8 und 37 Dreiecke, keine
+    gemeinsame Fläche —, es ist also **ein** Mantel in drei Stücken und kein
+    dreifacher Fit. Zwei davon treffen die Sache genau (Ø 11,98, Achse Z,
+    Rest 0,0003), der dritte ist der schlechte Ausschnitt: Achse drei Grad
+    verkippt, Ø 12,88, Rest 0,0245.
+
+    **Der Anker ist die Spitze**, wie beim Ring der Mittelpunkt — und aus
+    demselben Grund: Der Radius eines Ausschnitts hängt davon ab, wie viel vom
+    Mantel er trägt (hier 11,98 gegen 12,88), die Spitze nicht. Gemessen liegen
+    die drei Spitzen 0,000 und 0,153 mm auseinander; zwischen **zwei** Senkungen
+    in demselben Quader sind es **30 mm**. Die Schwelle sitzt bei einem Viertel
+    des Radius (:data:`SINK_FIT_LIMIT`), also rund 1,6 mm — Faktor zehn nach
+    unten, Faktor zwanzig nach oben.
+    """
+    first, _ = one
+    second, _ = two
+    if first.recess is not second.recess:
+        return False
+    if abs(first.half_angle - second.half_angle) > CONE_SAME_ANGLE:
+        return False
+
+    axis = np.asarray(first.axis, dtype=float)
+    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < math.cos(
+        math.radians(CONE_SAME_AXIS)
+    ):
+        return False
+
+    scale = max(first.radius, second.radius)
+    offset = np.asarray(second.apex, dtype=float) - np.asarray(first.apex, dtype=float)
+    return float(np.linalg.norm(offset)) <= scale * SINK_FIT_LIMIT
+
+
+def _merged_cones(body: trimesh.Trimesh, found: Cones) -> Cones:
+    """Kegelflecken, die denselben Kegel beschreiben, zu einem machen.
+
+    Wie :func:`_merged_tori`, und mit derselben Rechtfertigung: Der gemeinsame
+    Fit muss beweisen, dass er überhaupt ein Kegel ist — nicht, dass er besser
+    streut als seine Teile. Ein Fit über mehr Punkte streut immer etwas mehr.
+
+    An der gemessenen Senkung: die drei Stücke einzeln 0,0003, 0,0003 und
+    0,0245, zusammen **0,0099** über alle 101 Dreiecke — unter
+    :data:`ROUND_TOLERANCE`, und damit besser als der schlechteste Teil. Der
+    zusammengeführte Kegel trägt Ø 12,07 statt dreier Zahlen zwischen 11,98
+    und 12,88.
+
+    ``good`` prüft die Bauart mit (Rückstand **und** Winkelbereich); ein
+    Zusammenschluss, der aus dem Kegelfenster fällt, bleibt getrennt.
+    """
+    if len(found) < 2:
+        return found
+
+    merged: Cones = []
+    for fit, patch in found:
+        for index, (other, gathered) in enumerate(merged):
+            if not _same_cone((fit, patch), (other, gathered)):
+                continue
+            together = gathered + patch
+            again = fit_cone(body, together)
+            if again is not None and again.good and again.residual <= ROUND_TOLERANCE:
+                merged[index] = (again, together)
+                break
+        else:
+            merged.append((fit, patch))
+    return merged
 
 
 def _merged_tori(body: trimesh.Trimesh, found: Tori) -> Tori:

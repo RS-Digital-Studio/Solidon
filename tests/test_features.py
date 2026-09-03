@@ -33,6 +33,7 @@ from app.core.perceive.features import (
     fit_torus,
     forget_cache,
 )
+from app.core.types import Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -1931,3 +1932,81 @@ def test_the_panel_offers_duplicating_beside_the_original() -> None:
     assert fields["x"] == pytest.approx(-7.0), fields
     assert fields["y"] == pytest.approx(2.0), fields
     assert fields["z"] == pytest.approx(3.0), fields
+
+
+def test_one_countersink_is_one_cone(profile: Profile) -> None:
+    """Eine Senkung stand dreimal im Objektbaum.
+
+    **Befund 3d-druck-a0, 03.09.2026**, beim Gegenlesen des Changelogs
+    gefunden und nicht bei einer Suche danach: Ein Quader mit **einer**
+    durchgehenden Bohrung Ø 6 und **einer** Senkung Ø 12 lieferte **drei**
+    Kegel.
+
+    | | Dreiecke | Ø | Achse | Halbwinkel |
+    |---|---|---|---|---|
+    | cone_1 | 56 | 11,98 | Z | 44,94° |
+    | cone_2 | 8 | 11,98 | Z | 44,94° |
+    | cone_3 | 37 | 12,88 | 3° verkippt | 47,14° |
+
+    Die drei Flecken sind **disjunkt** — zusammen 101 Dreiecke, keine
+    gemeinsame Fläche. Es war also ein Mantel in drei Stücken und kein
+    dreifacher Fit; der Unterschied entscheidet, ob eine Zusammenführung die
+    Antwort ist oder eine bessere Einpassung.
+
+    **Das dritte Geschwister ohne die Regel:** `_merged_cylinders` gibt es seit
+    je, `_merged_tori` seit einem Kundenbild mit drei Wülsten — für den Kegel
+    hat sie niemand gebaut. Dieselbe Familie wie die Werkzeugschranke, die
+    Bohrung und Zapfen hatten und Verrundung, Kegel, Kugel und Torus nicht.
+
+    Warum es dem Kunden weh tut: Drei Senkungen, wo eine ist. Er klickt eine
+    an, und die Operationen antworten je nach Zeile verschieden — zwei lehnen
+    mit gutem Grund ab, die dritte ändert 0,4 mm³ an einer Stelle, die er nicht
+    gemeint hat.
+
+    Geprüft wird beides: dass eine Senkung **eine** wird, und dass zwei
+    Senkungen **zwei** bleiben.
+
+    **Was dieser Test ausdrücklich nicht misst:** :data:`CONE_SAME_ANGLE`.
+    Gegengeprobt — die Schranke entschärft, und der Test bleibt grün. Das ist
+    kein Mangel, sondern die Sache selbst: Sie ist ein Vorfilter, der einen
+    groben Ausreißer abfängt, bevor ein Fit dafür gerechnet wird. Getrennt
+    wird über die Spitze und darüber, dass der gemeinsame Fit ``good`` bleibt
+    — und **das** misst der zweite Teil hier. Wer die Winkelschranke prüfen
+    will, braucht zwei Kegel mit derselben Spitze und derselben Achse bei
+    verschiedenem Winkel; die schneiden einander und kommen an einem Körper
+    nicht vor.
+    """
+    from app.core.geom.prepare_ops import countersink, drill
+
+    def with_a_countersink(body: MeshData, x: float) -> MeshData:
+        bored = drill(
+            body,
+            position=(x, 0.0, 10.0),
+            axis="z",
+            diameter=6.0,
+            profile=profile,
+            compensate=False,
+        ).mesh
+        return countersink(
+            bored, position=(x, 0.0, 10.0), axis="z", diameter=12.0, profile=profile
+        ).mesh
+
+    block = MeshData(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
+
+    single = detect_cones(with_a_countersink(block, 15.0))
+    assert len(single) == 1, (
+        f"eine Senkung ist ein Kegel, nicht {len(single)} — "
+        f"Ø {[round(float(f.params['diameter']), 2) for f in single]}"
+    )
+    assert float(single[0].params["diameter"]) == pytest.approx(12.0, abs=0.15), (
+        "und er trägt das Maß der Senkung, nicht das eines Ausschnitts"
+    )
+    assert len(single[0].face_indices) > 90, "der zusammengeführte Fleck trägt den ganzen Mantel"
+
+    # **Die Gegenprobe gehört in denselben Test**: Eine Zusammenführung, die
+    # zu viel zusammenführt, sieht am ersten Fall genauso gut aus.
+    both = with_a_countersink(with_a_countersink(block, -15.0), 15.0)
+    pair = detect_cones(both)
+    assert len(pair) == 2, f"zwei Senkungen bleiben zwei, nicht {len(pair)}"
+    apart = abs(float(pair[0].params["centre"][0]) - float(pair[1].params["centre"][0]))
+    assert apart == pytest.approx(30.0, abs=0.5), "und zwar an ihren beiden Orten"

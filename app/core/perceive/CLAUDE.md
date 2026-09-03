@@ -81,6 +81,11 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - Mehrdeutigkeit wird gemeldet, nicht aufgelöst (§15.7, Regel 21).
+- **Was zerfällt, wird wieder zusammengeführt.** Ein Mantel kommt aus
+  der Fleckenbildung oft in Stücken; `_merged_cylinders`, `_merged_cones`
+  und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von
+  der Größe des Ausschnitts unabhängig ist: beim Zylinder der
+  Achsabschnitt, beim Kegel die **Spitze**, beim Ring der Mittelpunkt.
 - **Was für kein Werkzeug groß genug ist, ist kein Merkmal.**
   `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für **alle sechs** eingepassten
   Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht

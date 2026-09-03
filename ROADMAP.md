@@ -15074,3 +15074,30 @@ Durchmesser.
   Der Code liegt in `a0c802c3` (c7 hat ihn beim Commit derselben Datei
   mitgenommen und in seiner Meldung zugeschrieben); Test, Regel und dieser
   Punkt kommen hier nach.
+
+## Eine Senkung stand dreimal im Objektbaum (03.09.2026)
+
+- [x] **Der Kegel hatte die Zusammenführung als Einziger nicht.** Befund
+  3d-druck-a0 beim Gegenlesen des Changelogs: Ein Quader mit **einer** Bohrung
+  Ø 6 und **einer** Senkung Ø 12 lieferte **drei** Kegel — 56, 8
+  und 37 Dreiecke, disjunkt, also ein Mantel in drei Stücken und kein
+  dreifacher Fit. Zwei trafen die Sache (Ø 11,98, Achse Z), der dritte war
+  drei Grad verkippt bei Ø 12,88.
+
+  `_merged_cylinders` gibt es seit je, `_merged_tori` seit einem Kundenbild mit
+  drei Wülsten — für den Kegel hat sie niemand gebaut. Dieselbe
+  Familie wie die Werkzeugschranke am selben Tag.
+
+  Jetzt **ein** Kegel, Ø 12,07 über alle 101 Dreiecke, Rest 0,0099
+  gegen die Grenze 0,02 — besser als der schlechteste Teil (0,0245). Zwei
+  Senkungen bleiben zwei; getrennt wird über die **Spitze**, denn die
+  hängt nicht davon ab, wie viel vom Mantel ein Ausschnitt trägt
+  (gemessen 0,15 mm innerhalb einer Senkung gegen 30 mm zwischen zweien).
+  `tests/test_features.py::test_one_countersink_is_one_cone`.
+
+  **Zwei Schranken standen erst zu eng, und beide Male nach einer einzigen
+  Messung:** die Achse bei 2 Grad (geerbt vom Ring, gemessen 3,6) und der
+  Winkel bei 5 Grad (gemessen 2,2 im ersten Fall, **5,74** im zweiten). Eine
+  Schranke aus einem Messwert ist geraten. Beide sitzen jetzt weiter, weil die
+  trennende Prüfung woanders liegt — und die Winkelschranke wird vom
+  Test ausdrücklich **nicht** gemessen, was im Docstring steht.
