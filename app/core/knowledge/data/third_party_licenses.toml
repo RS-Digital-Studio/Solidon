@@ -90,8 +90,15 @@ versions = ["6.22.2"]
 [[runtime]]
 id = "openssl"
 name = "OpenSSL"
-source = "https://github.com/openssl/openssl/tree/openssl-3.0.21"
-versions = ["3.0.21"]
+# **Zwei Fassungen, weil zwei Plattformen liefern.** Windows und macOS
+# bekommen OpenSSL mit dem CPython-Bau (3.0.21), auf Linux reist die
+# Systembibliothek des Bauservers mit — Ubuntu 24.04 trägt 3.0.13. Der
+# erste Linux-Paketlauf, der überhaupt bis zur Releaseakte kam (Tag-Lauf 8,
+# 03.09.2026), ist darüber gestolpert. Beide Fassungen stehen unter
+# Apache-2.0; die Quelle nennt deshalb das Repository und nicht einen
+# einzelnen Baum, denn eine Zeile kann nicht auf zwei Tags zeigen.
+source = "https://github.com/openssl/openssl"
+versions = ["3.0.13", "3.0.21"]
 
 [[runtime]]
 id = "libffi"
