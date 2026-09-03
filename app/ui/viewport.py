@@ -19,7 +19,7 @@ from dataclasses import replace
 from itertools import pairwise
 from typing import Any, Final, Literal, NamedTuple, cast
 
-from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QFrame,
@@ -139,9 +139,20 @@ FLIGHT_KEYS: Final[dict[str, dict[str, float]]] = {
     "q": {"rx": 1.0},
     "e": {"rx": -1.0},
 }
-#: Die Zeitspanne eines Tastenschritts. Größer als beim Kippen mit der Maus:
-#: Dort kommen viele Ereignisse je Bewegung, hier eines je Anschlag.
-FLIGHT_STEP_SECONDS: Final = 0.12
+#: Takt des Fluges in Millisekunden — derselbe wie bei der 3D-Maus (~60 Hz).
+#:
+#: **Ein eigener Takt und nicht die Tastaturwiederholung.** Zuerst war ein
+#: Anschlag ein Schritt: Qt liefert beim Halten die Wiederholung, und die
+#: schien der Takt zu sein, den das System ohnehin hat. Nachgerechnet fliegt
+#: das nicht, es springt — rund eine halbe Sekunde Stillstand (die
+#: Wiederholverzögerung des Systems, die niemand hier einstellt), danach
+#: 31 Schritte je Sekunde und damit das Viereinhalbfache der Entfernung je
+#: Sekunde. Der Bauraum wäre in einer Fünftelsekunde durchflogen.
+FLIGHT_TICK_MS: Final = 16
+#: Wie weit der Flug je Sekunde trägt, gemessen in Entfernungen zum
+#: Blickpunkt. Eins heißt: aus 300 mm Abstand 300 mm je Sekunde — der Bauraum
+#: von Rand zu Rand in etwa einer Sekunde.
+FLIGHT_RATE: Final = 1.0
 """``slicer`` folgt §2.9 und damit Cura: links wählt, rechts dreht.
 ``orbit`` ist die Aufteilung von Bambu Studio, OrcaSlicer und PrusaSlicer —
 links dreht, rechts schiebt. ``cad`` und ``blender`` legen das Drehen auf die
@@ -3083,6 +3094,10 @@ class Viewport(QWidget):
         # den Tabulator — wer die Ansicht anklickt, um zu fliegen, hat ihn dann
         # ohnehin.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        #: Welche Flugtasten gerade liegen, und der Takt, der sie fährt.
+        self._flying: set[str] = set()
+        self._flight_timer: QTimer | None = None
+        self._flight_clock = QElapsedTimer()
         # **Und wer fokussierbar ist, muss sich nennen können** (§19.2).
         # Mit der Fokusrichtlinie ist die Ansicht zum ersten Mal ein Element,
         # das ein Bildschirmleser ansteuert; ohne Namen sagt er ihre Bauart an
@@ -10198,29 +10213,106 @@ class Viewport(QWidget):
         Fremdprogramme nach; eine Bewegung, die es im Vorbild nicht gibt, wäre
         dort eine Überraschung — und in Blender sind die Tasten belegt.
 
-        Ein Anschlag ist ein Schritt. Wer die Taste hält, bekommt von Qt die
-        Wiederholung; ein eigener Zeitgeber wäre ein zweiter Takt neben dem,
-        den das System ohnehin liefert.
+        **Der Anschlag schaltet ein, er bewegt nicht.** Gefahren wird im Takt
+        (:data:`FLIGHT_TICK_MS`), solange die Taste liegt; die Wiederholung des
+        Systems wird verworfen (``isAutoRepeat``). So hängt die Geschwindigkeit
+        an einer Zahl in dieser Datei und nicht an der Tastatureinstellung des
+        Kunden — und der Flug beginnt sofort statt nach der halben Sekunde, die
+        das System vor der ersten Wiederholung wartet.
         """
         if self._scheme != "solidon" or self.plotter is None:
             super().keyPressEvent(event)
             return
         axes = FLIGHT_KEYS.get(event.text().lower())
-        if axes is None:
-            super().keyPressEvent(event)
+        if axes is None or event.isAutoRepeat():
+            # Die Wiederholung trägt nichts bei: Die Taste liegt schon im Satz.
+            if axes is None:
+                super().keyPressEvent(event)
+            else:
+                event.accept()
             return
-        self.fly_camera(**axes)
+        self._flying.add(event.text().lower())
+        self._start_flying()
         event.accept()
 
-    def fly_camera(self, **axes: float) -> None:
-        """Einen Flugschritt auf die Kamera legen (§2.9).
+    def keyReleaseEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Die Taste geht hoch, die Bewegung endet.
+
+        **Die Wiederholung schickt auch Loslass-Ereignisse.** Wer eine Taste
+        hält, bekommt von Qt abwechselnd Release und Press; ohne
+        ``isAutoRepeat`` endete der Flug damit bei jedem Takt der Tastatur und
+        begänne neu — sichtbar als Stottern.
+        """
+        key = event.text().lower()
+        if key not in FLIGHT_KEYS or event.isAutoRepeat():
+            super().keyReleaseEvent(event)
+            return
+        self._flying.discard(key)
+        if not self._flying:
+            self._stop_flying()
+        event.accept()
+
+    def focusOutEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Wer den Fokus verliert, bekommt kein Loslassen mehr zu sehen.
+
+        Ohne das flöge die Ansicht weiter, während der Kunde längst in einem
+        Eingabefeld tippt — die Taste ist dort losgelassen worden, und dieses
+        Ereignis kommt nie hier an.
+        """
+        self._flying.clear()
+        self._stop_flying()
+        super().focusOutEvent(event)
+
+    def _start_flying(self) -> None:
+        """Den Takt anwerfen, falls er nicht schon läuft."""
+        if self._flight_timer is None:
+            timer = QTimer(self)
+            timer.setInterval(FLIGHT_TICK_MS)
+            timer.timeout.connect(self._fly_one_tick)
+            self._flight_timer = timer
+        self._flight_clock.restart()
+        if not self._flight_timer.isActive():
+            self._flight_timer.start()
+
+    def _stop_flying(self) -> None:
+        if self._flight_timer is not None:
+            self._flight_timer.stop()
+
+    def _fly_one_tick(self) -> None:
+        """Ein Takt Flug — mit der Zeit, die wirklich vergangen ist.
+
+        Nicht mit :data:`FLIGHT_TICK_MS`: Unter Last kommt der Takt später,
+        und eine feste Zeitspanne machte die Bewegung dann langsamer statt
+        gleich schnell. Dasselbe Vorgehen wie bei der 3D-Maus.
+        """
+        if not self._flying or self.plotter is None:
+            self._stop_flying()
+            return
+        seconds = self._flight_clock.restart() / 1000.0
+        if seconds <= 0.0:
+            return
+        axes: dict[str, float] = {}
+        for key in self._flying:
+            for axis, amount in FLIGHT_KEYS[key].items():
+                # Zwei Tasten auf derselben Achse heben sich auf — wer A und D
+                # zugleich hält, steht still, wie in jedem Spiel.
+                axes[axis] = axes.get(axis, 0.0) + amount
+        self.fly_camera(seconds, **axes)
+
+    def fly_camera(self, seconds: float, **axes: float) -> None:
+        """Eine Zeitspanne Flug auf die Kamera legen (§2.9).
 
         Getrennt von :meth:`keyPressEvent`, damit die Bewegung ohne ein
         Tastenereignis prüfbar ist — dieselbe Trennung wie bei
         ``belongs_to_the_focus``: Was Qt aus einem Anschlag macht, hängt an der
         Fensterhülle, die Bewegung darin nicht.
+
+        Die Geschwindigkeit steht als :data:`FLIGHT_RATE` in Entfernungen je
+        Sekunde und wird hier in die Einheit von ``camera_step`` umgerechnet:
+        Dessen ``speed`` ist ein Faktor auf ``PAN_RATE``, nicht selbst eine
+        Strecke. Eine Zahl, die man lesen kann, ohne die Kappe zu kennen.
         """
-        from app.ui.spacemouse import CameraPose, Motion, camera_step
+        from app.ui.spacemouse import PAN_RATE, CameraPose, Motion, camera_step
 
         if self.plotter is None:
             return
@@ -10238,7 +10330,8 @@ class Viewport(QWidget):
                 ry=axes.get("ry", 0.0),
                 rz=axes.get("rz", 0.0),
             ),
-            FLIGHT_STEP_SECONDS,
+            seconds,
+            speed=FLIGHT_RATE / PAN_RATE,
             fly=True,
         )
         if moved is pose:

@@ -1182,9 +1182,21 @@ ein Vorbild haben.
   Richtung zieht, wäre die Falle für den Nächsten, der `fly` an ein Gerät hängt.
 * **Die Tastatur wirkt nur in `solidon`.** Die vier anderen bilden
   Fremdprogramme nach; dort wäre WASD eine Bewegung, die es im Vorbild nicht
-  gibt — in Blender ist sie sogar belegt. Ein Anschlag ist ein Schritt; die
-  Wiederholung liefert Qt, ein eigener Zeitgeber wäre ein zweiter Takt neben
-  dem des Systems.
+  gibt — in Blender ist sie sogar belegt.
+* **Der Anschlag schaltet ein, er bewegt nicht.** Zuerst war ein Anschlag ein
+  Schritt, und die Wiederholung sollte Qt liefern — das schien der Takt zu
+  sein, den das System ohnehin hat. Nachgerechnet ist es keiner: rund eine
+  halbe Sekunde Stillstand (die Wiederholverzögerung, die niemand hier
+  einstellt), danach 31 Schritte je Sekunde und damit das Viereinhalbfache der
+  Entfernung je Sekunde — der Bauraum in einer Fünftelsekunde. Gefahren wird
+  deshalb in einem eigenen Takt (`FLIGHT_TICK_MS`, 16 ms wie bei der Kappe),
+  solange die Taste liegt, mit der wirklich vergangenen Zeit. `FLIGHT_RATE`
+  sagt die Geschwindigkeit in einer Einheit, die man lesen kann: Entfernungen
+  je Sekunde, derzeit eine. **Wer daran baut, denkt an drei Dinge:** Die
+  Wiederholung des Systems schickt auch *Loslass*-Ereignisse (ohne
+  `isAutoRepeat` stottert der Flug), ein Fokusverlust bringt kein Loslassen
+  mehr (ohne `focusOutEvent` fliegt die Ansicht weiter, während der Kunde
+  tippt), und zwei Tasten auf derselben Achse heben sich auf.
 * **`setFocusPolicy(StrongFocus)` wirkt in allen fünf.** Ohne ihn kommt kein
   Tastendruck an, und er ist die einzige Änderung dieses Umbaus außerhalb des
   neuen Schemas: Ein Klick in die Ansicht nimmt seither den Fokus aus einem

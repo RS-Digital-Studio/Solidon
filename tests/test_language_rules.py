@@ -43,6 +43,12 @@ GERMAN_WORDS = frozenset(
         # als in bundling.py drei deutsche Namen standen und diese
         # Prüfung dazu schwieg.
         "anker",
+        # "taste" ist zugleich das englische Verb (to taste, tasted): als
+        # Stamm gesucht wäre es ein Falschmelder auf Vorrat, als ganzes Wort
+        # fängt es, was es fangen soll. Anlass: In der Flugsteuerung des
+        # Viewports standen am 03.09.2026 "taste", "achse" und "wert"
+        # nebeneinander, und nur "wert" wurde gemeldet.
+        "taste",
         "knopf",
         "metrik",
         "neu",
@@ -138,6 +144,7 @@ GERMAN_STEMS = (
     "befehl",
     "begriff",
     "beispiel",
+    "achse",
     "aussen",
     "auswahl",
     "bereit",

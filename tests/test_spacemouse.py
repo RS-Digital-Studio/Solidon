@@ -707,3 +707,42 @@ def test_flying_and_zooming_pull_in_the_same_direction() -> None:
             f"y={reach}: fliegen {weg_beim_fliegen:+.2f}, zoomen {weg_beim_zoomen:+.2f} — "
             "dieselbe Achse muss in dieselbe Richtung ziehen"
         )
+
+
+def test_a_second_of_flight_carries_about_one_distance() -> None:
+    """Eine Sekunde Flug trägt ungefähr eine Kameraentfernung (§2.9).
+
+    Die Zahl ist keine Geschmacksfrage, sondern die Antwort auf einen
+    gemessenen Fehler: Bis zum 03.09.2026 war ein Tastenanschlag ein
+    Flugschritt von 14,4 % der Entfernung, und die Wiederholung überließ die
+    Anwendung dem Betriebssystem. Gerechnet sind das bei 31 Anschlägen je
+    Sekunde das Viereinhalbfache der Entfernung — der Bauraum in einer
+    Fünftelsekunde, nach einer halben Sekunde Stillstand davor.
+
+    Seither fährt ein eigener Takt, und ``FLIGHT_RATE`` sagt in einer Einheit,
+    die man lesen kann, wie schnell: Entfernungen je Sekunde. Dieser Test hält
+    fest, dass die Umrechnung in ``camera_step`` das auch liefert — dessen
+    ``speed`` ist ein Faktor auf ``PAN_RATE`` und keine Strecke, und genau da
+    verrutscht so etwas.
+    """
+    from app.ui.spacemouse import PAN_RATE, CameraPose, Motion, camera_step
+    from app.ui.viewport import FLIGHT_RATE
+
+    abstand = 300.0
+    pose = CameraPose(
+        position=(0.0, -abstand, 0.0), focal_point=(0.0, 0.0, 0.0), view_up=(0.0, 0.0, 1.0)
+    )
+    nach_einer_sekunde = camera_step(
+        pose, Motion(y=-1.0), 1.0, speed=FLIGHT_RATE / PAN_RATE, fly=True
+    )
+
+    weg = abs(nach_einer_sekunde.position[1] - pose.position[1])
+    assert weg == pytest.approx(abstand * FLIGHT_RATE, rel=0.01), (
+        f"eine Sekunde trägt {weg / abstand:.2f} Entfernungen statt {FLIGHT_RATE}"
+    )
+
+    # Und der Abstand bleibt: Fliegen ändert ihn nicht, sonst würde die
+    # Bewegung mit jedem Schritt schneller oder langsamer.
+    vorher = math.dist(pose.position, pose.focal_point)
+    nachher = math.dist(nach_einer_sekunde.position, nach_einer_sekunde.focal_point)
+    assert nachher == pytest.approx(vorher), "der Flug hält den Abstand"
