@@ -3376,6 +3376,13 @@ class Viewport(QWidget):
         angewandt wird."""
         self._face_actor: Any | None = None
         self._ghost_actor: Any | None = None
+        self._shape_actor: Any | None = None
+        """Das Merkmal in seiner Gestalt — eigener Aktor, damit der Griff an der
+        Öffnung bleibt und nicht am Schwerpunkt eines Zylinders.
+
+        **Nicht zu verwechseln mit ``_preview_actor``**, der die Vorschau einer
+        noch nicht gesetzten Bohrung zeigt. Dies hier ist ein **erkanntes**
+        Merkmal, das gerade gewählt ist."""
         self._arc_actor: Any | None = None
         """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet."""
         self._face_seat: tuple[tuple[float, ...], tuple[float, ...], float] | None = None
@@ -8138,7 +8145,7 @@ class Viewport(QWidget):
             actor,
             release_callback=self._on_gizmo_released,
             interact_callback=self._on_gizmo_interacted,
-            scale=self._gizmo_scale_for(actor),
+            scale=GIZMO_SCALE,
             line_radius=GIZMO_LINE_RADIUS,
         )
         # **Danach und nicht davor**: Das Widget schaltet beim Anhängen selbst
@@ -8178,40 +8185,6 @@ class Viewport(QWidget):
                 interact_callback=self._on_scale_interacted,
             )
         self._label_gizmo(actor)
-
-    def _gizmo_scale_for(self, actor: Any) -> float:
-        """Wie gross der Griff wird — damit er **greifbar** ist, nicht damit er passt.
-
-        „Ich bin mit meinem Mauszeiger auch immer drüber aber es klappt nicht
-        … weder Seitenansicht, Schrägansicht noch Draufsicht" (Robert,
-        03.09.2026). Gemessen am laufenden Fenster, Bohrung Ø 7,34 in einem
-        Teil von 105 x 61,25 x 35:
-
-            Pfeillänge         3,17 mm     (in einem 105-mm-Teil)
-            Ursprung z        17,50 mm     — mitten im Körper
-            Pfeil X, Y, Z     getroffen -> der **Körper**, nicht der Griff
-
-        Der Griff steckte im Teil. Aus jeder Blickrichtung lag Material davor,
-        und der Zeiger traf es statt der Pfeile — kein Grössen-, sondern ein
-        Erreichbarkeitsproblem.
-
-        **Marke und Werkzeug sind zwei Dinge, und sie brauchen zwei Grössen.**
-        Die Scheibe (:meth:`_handle_radius`) markiert das Merkmal und deckt
-        genau seinen Durchmesser — sie soll nicht überstehen. Der Griff wird
-        mit der Maus bedient und muss aus dem Körper herausragen, gleich wie
-        klein das Merkmal ist. Sie aneinanderzuhängen war der Fehler: Ein Griff
-        in Merkmalsgrösse ist unerreichbar, einer in Teilgrösse überdeckt die
-        Bohrung — beides ist an einem Nachmittag ausprobiert worden.
-
-        Gerechnet wird deshalb gegen die Diagonale des **Körpers**, gleich
-        woran der Griff hängt. Ohne gewählten Körper bleibt es beim Anteil;
-        dann sitzt er ohnehin am Körperaktor.
-        """
-        length = float(actor.GetLength())
-        body = self._actors.get(self._selected) if self._selected is not None else None
-        if body is None or length <= EPS_GEOM:
-            return GIZMO_SCALE
-        return GIZMO_SCALE * float(body.GetLength()) / length
 
     def _give_the_widget_a_picker_that_hits(self) -> None:
         """Setzt den Picker, mit dem pyvistas Griff seine Pfeile findet.
@@ -8318,7 +8291,7 @@ class Viewport(QWidget):
         import numpy as np
         import pyvista as pv
 
-        length = float(actor.GetLength()) * self._gizmo_scale_for(actor) * 1.15
+        length = float(actor.GetLength()) * GIZMO_SCALE * 1.15
         centre = (float(actor.center[0]), float(actor.center[1]), float(actor.center[2]))
         marks = gizmo_labels(centre, length, self.gizmo_face_label())
         if self._scale_handle is not None:
@@ -8388,6 +8361,7 @@ class Viewport(QWidget):
         steps = decompose_transform(np.asarray(matrix, dtype=float))
         self._drag_shadow(steps)
         self._draw_turn_arc(steps)
+        self._drag_preview(steps)
         # **Der Ring erscheint mit dem ersten sichtbaren Stück des Zugs.** Ihn
         # schon beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu
         # behaupten, die noch keine ist.
@@ -8618,13 +8592,26 @@ class Viewport(QWidget):
         # beim nächsten Zuwachs auseinander, und dann läge der Ring neben der
         # Marke, die er begleiten soll.
         self._face_seat = (tuple(float(v) for v in centre), tuple(float(v) for v in normal), radius)
-        disc = self._feature_shape(feature, centre, normal, radius)
+        # **Der Griff hängt an einer flachen Scheibe an der Öffnung, nicht am
+        # Zylinder.** Ein Zylinder über die volle Tiefe hat seinen Schwerpunkt
+        # auf halber Tiefe — und pyvistas Widget hängt genau dort. Damit sass
+        # der Griff wieder im Material, obwohl :meth:`_handle_seat` ihn an die
+        # Öffnung gesetzt hatte: gemessen Mitte z = 17,50 statt 35,00.
+        #
+        # Werkzeug und Marke sind zwei Dinge — dieselbe Lehre wie bei der
+        # Grösse, hier an der **Lage**. Die Vorschau in Merkmalsgestalt ist ein
+        # eigener Aktor (:meth:`_show_preview`), der beim Zug mitgeschoben
+        # wird.
+        import pyvista as pv
+
+        disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
         # **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
         # genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
         # damit den Griff statt des Körpers, und die Bohrung liess sich nicht
         # mehr auswählen (Robert, 03.09.2026). Der Gizmo braucht sie als
         # Bezugsaktor, nicht als Ziel — seine Pfeile findet er über den eigenen
         # Picker (:meth:`_give_the_widget_a_picker_that_hits`).
+        self._show_preview(feature, centre, normal, radius)
         self._face_actor = self.plotter.add_mesh(
             disc,
             color=MEASURE_COLOUR,
@@ -8743,6 +8730,57 @@ class Viewport(QWidget):
         axis = np.asarray(centre, dtype=float) - direction * float(depth) / 2.0
         return pv.Cylinder(
             center=axis, direction=direction, radius=radius, height=float(depth), resolution=24
+        )
+
+    def _show_preview(self, feature: Feature, centre: Any, normal: Any, radius: float) -> None:
+        """Zeigt das Merkmal in seiner Gestalt — als Körper, wo es einer ist.
+
+        „Nicht nur Ring, die ganze Vorschau mit Loch" (Robert, 03.09.2026).
+        Eine flache Scheibe sagt „hier ist etwas"; ein Zylinder in Durchmesser
+        und Tiefe sagt „hier ist die Bohrung".
+
+        **Als eigener Aktor**, und das ist der Unterschied zum ersten Anlauf:
+        Hängt der Griff daran, zieht der Schwerpunkt des Zylinders ihn auf
+        halbe Tiefe — also ins Material, wo seine Pfeile niemand trifft. Der
+        Griff bleibt deshalb an der flachen Scheibe an der Öffnung, und die
+        Vorschau wird beim Zug mitgeschoben (:meth:`_drag_preview`).
+        """
+        self._drop_preview()
+        if self.plotter is None:
+            return
+        shape = self._feature_shape(feature, centre, normal, radius)
+        if shape is None:
+            return
+        self._shape_actor = self.plotter.add_mesh(
+            shape,
+            color=MEASURE_COLOUR,
+            opacity=0.45,
+            lighting=False,
+            name="feature-preview",
+            render=False,
+            pickable=False,
+        )
+
+    def _drop_preview(self) -> None:
+        """Nimmt die Vorschau weg."""
+        if self._shape_actor is not None and self.plotter is not None:
+            self.plotter.remove_actor(self._shape_actor, render=False)
+        self._shape_actor = None
+
+    def _drag_preview(self, steps: TransformSteps) -> None:
+        """Schiebt die Vorschau mit, solange gezogen wird.
+
+        Der Griff hängt an der Scheibe und wandert von selbst; die Vorschau ist
+        ein eigener Aktor und muss nachgeführt werden. Nur beim Verschieben —
+        eine Drehung des Merkmals ändert seine Lage im Raum, und die liesse
+        sich nur durch Neuaufbau einholen.
+        """
+        if self._shape_actor is None or not steps.moves or steps.turns:
+            return
+        self._shape_actor.position = (
+            steps.offset[0],
+            steps.offset[1],
+            steps.offset[2],
         )
 
     def _show_ghost(self, feature: Feature) -> None:
@@ -8942,6 +8980,7 @@ class Viewport(QWidget):
         # Der Ring gehört dem Zug; was danach gilt, zeigt die Auswertung.
         self._drop_ghost()
         self._drop_turn_arc()
+        self._drop_preview()
         # Der Schatten stand während des Zugs versetzt (:meth:`_drag_shadow`);
         # was danach gilt, entscheidet die Auswertung und zeichnet ihn neu.
         # Bliebe der Versatz stehen, läge er beim nächsten Bild doppelt.
