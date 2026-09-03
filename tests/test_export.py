@@ -1730,3 +1730,38 @@ def test_nothing_is_said_when_every_part_takes_the_plates_setting(
     )
 
     assert not [finding for finding in findings if finding.code == "export.part_setting"]
+
+
+def test_an_empty_object_says_what_to_do_about_it(tmp_path: Path, profile: Profile) -> None:
+    """Der schwerste Befund des Exports endete mit „hat keine Geometrie".
+
+    ``export.empty`` ist ``error`` — das Stärkste, was der Prüfbericht sagen
+    kann — und trug weder einen eigenen Ausweg noch einen in der Tabelle des
+    Fensters. Damit ist es „geht nicht" an einem anderen Ort; Regel 17 gilt im
+    Bericht so gut wie im Dialog.
+
+    Gefunden am 03.09.2026 beim Durchzählen aller Fehlerbefunde: Von fünfzehn
+    tragen sieben einen Knopf über ``panels.FINDING_ACTIONS``, acht gar nichts.
+    Dieser hier liegt im Export und damit an der Stelle, an der er entsteht.
+
+    **Zwei Auswege, beide verdrahtet und beide wahr.** Ein Objekt ohne
+    Dreiecke ist entweder das falsche in der Auswahl — dann hilft eine andere
+    Auswahl — oder das Ergebnis eines Schritts, der nichts übrig gelassen hat;
+    dann steht im Verlauf, welcher. Ein dritter Knopf wäre geraten.
+
+    Am Befund selbst und nicht in der Tabelle des Fensters: ``_actions_for``
+    liest ``finding.suggestions`` zuerst und die Tabelle nur als Rückfall. Der
+    Grund, warum es hier gehört, ist derselbe wie bei jeder Operation — wer den
+    Befund erzeugt, weiß am besten, was hilft.
+    """
+    leer = MeshData.of(trimesh.Trimesh())
+    objects = [replace(scene_object("obj_1", "Nichts"), mesh=leer)]
+
+    _written, findings = write_assembly(objects, tmp_path, project_name="Gehäuse", profile=profile)
+
+    treffer = [finding for finding in findings if finding.code == "export.empty"]
+    assert treffer, [finding.code for finding in findings]
+    wege = [action.id for action in treffer[0].suggestions]
+    assert "change_selection" in wege, wege
+    assert "show_history" in wege, wege
+    assert treffer[0].object_id == "obj_1", "der Befund nennt das Objekt, um das es geht"

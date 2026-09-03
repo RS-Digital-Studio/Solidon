@@ -25,7 +25,9 @@ from app.core import activation
 from app.core.deferred import trimesh
 from app.core.errors import (
     CANCEL,
+    CHANGE_SELECTION,
     EXPORT_AS_MESH,
+    SHOW_HISTORY,
     FileWriteError,
     NeedsSolidError,
     ValidationError,
@@ -629,6 +631,18 @@ def check_before_export(
                     severity="error",
                     message=_("Das Objekt hat keine Geometrie."),
                     object_id=entry.id,
+                    # **Der schwerste Befund des Exports endete mit „hat keine
+                    # Geometrie".** Ein ``error`` ist das Stärkste, was der
+                    # Prüfbericht sagen kann, und dieser bot nichts an — weder
+                    # hier noch über ``panels.FINDING_ACTIONS``. Das ist „geht
+                    # nicht" an einem anderen Ort, und Regel 17 gilt im Bericht
+                    # so gut wie im Dialog.
+                    #
+                    # Zwei Auswege, beide wahr: Ein Objekt ohne Dreiecke ist
+                    # entweder das falsche in der Auswahl, oder das Ergebnis
+                    # eines Schritts, der nichts übrig gelassen hat — dann
+                    # steht im Verlauf, welcher. Ein dritter wäre geraten.
+                    suggestions=(CHANGE_SELECTION, SHOW_HISTORY),
                 )
             )
 
