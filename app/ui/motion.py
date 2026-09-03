@@ -25,8 +25,9 @@ das Widget, auf dem sie läuft — fällt das weg, fällt sie mit.
 from __future__ import annotations
 
 import os
+from collections.abc import Callable, Sequence
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation
+from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QVariantAnimation
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QStackedWidget, QTabWidget, QWidget
 
 #: Für alles, was nur bestätigt: ein Panel erscheint, ein Hinweis geht.
@@ -34,6 +35,11 @@ SHORT_MS = 140
 
 #: Für den Wechsel einer ganzen Ansicht — Startbildschirm, rechte Spalte.
 MEDIUM_MS = 220
+
+#: Für einen Wechsel im 3D-Fenster: die Auswahl wandert von einem Körper zum
+#: nächsten. Kürzer als ``SHORT_MS``, weil hier jedes Bild ein Neuzeichnen der
+#: ganzen Szene ist und nicht ein Deckkraft-Effekt auf einem Widget.
+ACCENT_MS = 110
 
 #: Die Kurve für alles: schnell los, weich aus. Eine Bewegung, die linear
 #: endet, wirkt abgeschnitten.
@@ -172,7 +178,69 @@ def flash(widget: QWidget, *, duration: int = MEDIUM_MS) -> None:
     animation.start(QPropertyAnimation.DeletionPolicy.DeleteWhenStopped)
 
 
+def mix(start: Sequence[float], end: Sequence[float], fraction: float) -> tuple[float, ...]:
+    """Mischt zwei Farben — ``fraction`` 0 ist ``start``, 1 ist ``end``.
+
+    Absichtlich ohne Qt und ohne Uhr: Das ist die Hälfte einer Blende, die sich
+    prüfen lässt, ohne auf ein Bild zu warten. Und sie ist nicht auf drei Werte
+    festgelegt — ein RGBA-Ton mischt sich genauso.
+
+    Ausserhalb von 0..1 wird beschnitten. Eine Kurve wie ``OutBack`` schiesst
+    über das Ziel hinaus, und eine Farbkomponente über 1 ist keine Farbe mehr.
+    """
+    step = max(0.0, min(fraction, 1.0))
+    return tuple(a + (b - a) * step for a, b in zip(start, end, strict=True))
+
+
+def tween(
+    owner: QObject,
+    *,
+    on_step: Callable[[float], None],
+    duration: int = ACCENT_MS,
+    curve: QEasingCurve.Type = CURVE,
+    on_done: Callable[[], None] | None = None,
+) -> QVariantAnimation | None:
+    """Läuft von 0 auf 1 und ruft ``on_step`` bei jedem Bild.
+
+    Der Unterschied zu allem darüber: Hier bewegt sich **kein Widget**. Was
+    ``on_step`` mit der Zahl tut, entscheidet der Aufrufer — eine Farbe an
+    einem VTK-Aktor mischen, einen Bogen wachsen lassen, einen Schatten
+    nachziehen. ``motion`` weiss davon nichts und soll es nicht wissen.
+
+    **Ist Bewegung abgeschaltet, bekommt ``on_step`` genau einmal die 1.0.**
+    Das ist die eigentliche Zusage dieser Funktion: Der Endzustand steht immer,
+    auch offscreen, auch bei ``SOLIDON3D_MOTION=aus``. Ein Aufrufer, der die
+    Zielfarbe nur über die Animation setzt, ist damit trotzdem richtig — und
+    kein Test misst je eine halb gemischte Farbe.
+
+    ``owner`` hält die Animation am Leben; fällt er weg, fällt sie mit (die
+    Falle aus ``.claude/rules/oberflaeche.md``).
+    """
+    if not animations_enabled():
+        on_step(1.0)
+        if on_done is not None:
+            on_done()
+        return None
+    animation = QVariantAnimation(owner)
+    animation.setDuration(duration)
+    animation.setEasingCurve(curve)
+    animation.setStartValue(0.0)
+    animation.setEndValue(1.0)
+    animation.valueChanged.connect(lambda value: on_step(float(value)))
+
+    # Der Endwert kommt aus der Kurve und wird hier **nicht** noch einmal
+    # gesetzt. Gemessen an zwölf Läufen (1 bis 220 ms, `OutCubic` und
+    # `OutBack`): Qt meldet die 1,0 immer als letzten `valueChanged`. Ein
+    # zweiter Aufruf wäre kein Gürtel zum Hosenträger, sondern ein zusätzliches
+    # Neuzeichnen der ganzen Szene für einen Wert, der schon steht.
+    if on_done is not None:
+        animation.finished.connect(on_done)
+    animation.start(QVariantAnimation.DeletionPolicy.DeleteWhenStopped)
+    return animation
+
+
 __all__ = [
+    "ACCENT_MS",
     "CURVE",
     "MEDIUM_MS",
     "SHORT_MS",
@@ -180,6 +248,8 @@ __all__ = [
     "fade_in",
     "fade_out",
     "flash",
+    "mix",
     "reveal",
     "switch",
+    "tween",
 ]
