@@ -1738,6 +1738,37 @@ def test_a_foreign_file_does_not_take_a_delivery_slot() -> None:
         assert delivery_slot(name) == platz, f"{name} bekam {delivery_slot(name)!r} statt {platz!r}"
 
 
+def test_every_film_ends_on_the_closing_card() -> None:
+    """Jeder Film endet mit der Schlusskarte, in jeder Sprache.
+
+    **Zwei von sechs taten es nicht**, und niemandem fiel es auf, weil der
+    Fehler nicht wie einer aussieht: Die letzte Szene hieß ``"outro"`` statt
+    ``"closing"``, und ``"outro"`` ist kein Szenentyp, den das Werkzeug kennt.
+    Es fällt in den Standardzweig und zeigt weiter das Fenster — der
+    Schlusssatz wird gesprochen, die Karte („Vollständige Demo bis …") kommt
+    nie. Auf der Website steht der Film dann mit einem Ausschnitt der
+    Oberfläche als Vorschaubild neben dreien, die die Karte zeigen.
+
+    Ein Name, der plausibel klingt und trotzdem nichts auslöst, ist die
+    stillste Art, eine Szene zu verlieren. Deshalb prüft dieser Test nicht auf
+    das Fehlen von ``"outro"``, sondern auf das Vorhandensein von ``"closing"``
+    an der letzten Stelle: Der nächste falsche Name heißt anders.
+    """
+    from tools.make_video import SCRIPTS
+
+    assert SCRIPTS, "keine Filme gefunden — sonst prüft dieser Test nichts"
+    ohne_karte = [
+        f"{name}/{language}: endet auf {scenes[-1][0]!r}"
+        for name, script in SCRIPTS.items()
+        for language, scenes in script.items()
+        if not scenes or scenes[-1][0] != "closing"
+    ]
+    assert not ohne_karte, (
+        "Filme, die ohne Schlusskarte enden — ihr Vorschaubild auf der Website "
+        "wird dann ein Ausschnitt der Oberfläche:\n" + "\n".join(ohne_karte)
+    )
+
+
 def test_windowed_suite_selection_follows_the_fixture_graph(tmp_path: Path) -> None:
     """Vererbte Fenster-Fixtures zählen, bloße Wörter im Quelltext nicht."""
     from tools.list_windowed_tests import collect_windowed
@@ -1872,3 +1903,75 @@ def test_no_generated_comparison_runs_in_the_ci() -> None:
         f"markiert, nicht eingetragen: {sorted(marked - set(RENDERED_TESTS))}; "
         f"eingetragen, nicht markiert: {sorted(set(RENDERED_TESTS) - marked)}"
     )
+
+
+def test_a_stale_lock_is_cleared_and_not_only_reported(tmp_path, monkeypatch) -> None:
+    """Wer erkennt, dass ein Schloss nichts mehr schützt, räumt es auch weg.
+
+    **Der Fall, der diese Prüfung veranlasst hat.** Am 03.09.2026 brach ein
+    Aufnahmelauf ab, und sein Schloss lag danach **196 Minuten** da. ``status``
+    hat es in dieser Zeit mehrfach als verwaist gemeldet — und liegen gelassen;
+    abgeräumt hätte es nur, wer zufällig ``run`` fuhr. Drei Stunden lang hat
+    damit jede andere Sitzung entweder gewartet oder ungeschützt gemessen.
+
+    Erkennen und Melden war die halbe Handlung: Der Beweis, dass der Halter
+    tot ist, liegt in derselben Funktion, die ihn ausgibt.
+    """
+    import time
+
+    lock = tmp_path / "tor.json"
+    monkeypatch.setattr(gate_lock, "_lock_file", lambda: lock)
+    # Eine Kennung, die es nicht gibt — für ``_stale`` ist der Halter tot.
+    lock.write_text(
+        json.dumps({"wer": "abgebrochener Lauf", "pid": 2**30, "seit": time.time()}),
+        encoding="utf-8",
+    )
+
+    assert gate_lock.status() == 0, "ein verwaistes Schloss hält das Tor nicht auf"
+    assert not lock.exists(), "das verwaiste Schloss liegt noch da"
+
+
+def test_a_living_lock_survives_both_the_look_and_the_release(tmp_path, monkeypatch) -> None:
+    """Das Aufräumen darf nie ein Schloss treffen, das noch etwas schützt.
+
+    Der eigene Prozess lebt — also ist sein Schloss gültig, und weder ``status``
+    noch ``frei`` dürfen es anfassen. Ohne diese Gegenprobe wäre ein Aufräumer,
+    der **jedes** Schloss löscht, genauso grün wie ein richtiger.
+    """
+    import time
+
+    lock = tmp_path / "tor.json"
+    monkeypatch.setattr(gate_lock, "_lock_file", lambda: lock)
+    lock.write_text(
+        json.dumps({"wer": "laufendes Tor", "pid": os.getpid(), "seit": time.time()}),
+        encoding="utf-8",
+    )
+
+    assert gate_lock.status() == 1, "ein lebendes Schloss belegt das Tor"
+    assert lock.exists(), "status hat ein lebendes Schloss weggeräumt"
+    assert gate_lock.release() == 1, "frei darf ein lebendes Schloss nicht wegräumen"
+    assert lock.exists(), "frei hat ein lebendes Schloss weggeräumt"
+
+
+def test_releasing_keeps_its_hands_off_a_lock_that_changed_underneath(
+    tmp_path, monkeypatch
+) -> None:
+    """Zwischen Lesen und Löschen darf ein neuer Halter dazwischenkommen.
+
+    Wer den alten Eintrag liest, ihn für verwaist hält und dann blind löscht,
+    trifft das Schloss des Nachfolgers — und zwei Torläufe messen gleichzeitig.
+    Verglichen wird deshalb an Prozess **und** Zeitpunkt: Eine Kennung allein
+    wird auf jedem System irgendwann wiederverwendet.
+    """
+    import time
+
+    lock = tmp_path / "tor.json"
+    monkeypatch.setattr(gate_lock, "_lock_file", lambda: lock)
+    tot = {"wer": "toter Lauf", "pid": 2**30, "seit": time.time()}
+
+    # Der Nachfolger legt an, nachdem gelesen und bevor gelöscht wurde.
+    lebt = {"wer": "neuer Lauf", "pid": os.getpid(), "seit": time.time() + 1}
+    lock.write_text(json.dumps(lebt), encoding="utf-8")
+
+    assert gate_lock._discard(lock, tot) is False, "ein fremdes Schloss wurde weggeräumt"
+    assert lock.exists(), "das Schloss des Nachfolgers ist weg"

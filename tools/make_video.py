@@ -244,7 +244,7 @@ STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
             "Jedes Bild ist neu gerechnet, nicht gedehnt.",
         ),
         (
-            "outro",
+            "closing",
             "Solidon. Parametrisch konstruieren, offline, ohne CAD-Studium.",
         ),
     ),
@@ -265,7 +265,7 @@ STORYBOARD: dict[str, tuple[tuple[str, str], ...]] = {
             "Every frame is recomputed, not stretched.",
         ),
         (
-            "outro",
+            "closing",
             "Solidon. Parametric design, offline, no CAD degree required.",
         ),
     ),
@@ -306,7 +306,7 @@ MODULAR: dict[str, tuple[tuple[str, str], ...]] = {
             "jedes für sich gedruckt.",
         ),
         (
-            "outro",
+            "closing",
             "Und wer mehr Besteck hat, druckt ein Fach dazu. Solidon.",
         ),
     ),
@@ -327,7 +327,7 @@ MODULAR: dict[str, tuple[tuple[str, str], ...]] = {
             "printed on its own.",
         ),
         (
-            "outro",
+            "closing",
             "And if you own more cutlery, you print another compartment. Solidon.",
         ),
     ),
