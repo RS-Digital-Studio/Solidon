@@ -273,8 +273,8 @@ jobs:
           # `test_the_save_button_says_what_it_is_waiting_for`, sonst 7207
           # grün. Ein eigener Prozess ist die Grenze, hinter der die Fixture
           # vollständig gilt — keine Portionierung mehr, die ganze Datei.
-          attempt -n auto -m "not performance" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
-          attempt -m "not performance" tests/test_print_settings_ui.py
+          attempt -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
+          attempt -m "not performance and not rendered" tests/test_print_settings_ui.py
 
           # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
@@ -1314,5 +1314,5 @@ jobs:
           # auch dieser Lauf Stunden bei 49 Prozent.
           # Dieselbe Trennung wie im Suite-Job darüber: die Dialogdatei in
           # einem eigenen Prozess, weil `-n auto` nach Tests verteilt.
-          python -m pytest -q -n auto -m "not performance" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
-          python -m pytest -q -m "not performance" tests/test_print_settings_ui.py
+          python -m pytest -q -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
+          python -m pytest -q -m "not performance and not rendered" tests/test_print_settings_ui.py

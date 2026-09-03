@@ -1268,6 +1268,7 @@ def test_the_mobile_hero_is_visible_without_waiting_for_an_animation() -> None:
     assert ".hero-text > * { animation: none; }" in mobile
 
 
+@pytest.mark.rendered
 def test_every_reference_carries_the_stamp_of_the_file_it_points_at() -> None:
     """Jeder Verweis auf eine eigene Datei trägt deren aktuellen Inhaltsstempel.
 
@@ -1856,6 +1857,7 @@ def test_a_video_and_its_poster_both_carry_a_stamp() -> None:
         assert not LINK.search(zeile), f"hätte nicht treffen dürfen: {zeile}"
 
 
+@pytest.mark.rendered
 def test_srcset_candidates_carry_individual_asset_stamps(tmp_path: Path) -> None:
     """Helle und dunkle Handbuchbilder erhalten beide ihre eigene Adresse."""
     import tools.stamp_assets as stamp

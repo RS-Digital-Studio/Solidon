@@ -88,6 +88,7 @@ def test_the_manual_has_pages_at_all() -> None:
     assert any(not page.generated for page in pages), "keine geschriebene Seite"
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_manual_intro_reads_like_product_documentation(language: str) -> None:
     """Die Einführung verweist auf Rechtstexte, sie wiederholt keine Warnliste."""
@@ -97,6 +98,7 @@ def test_the_manual_intro_reads_like_product_documentation(language: str) -> Non
     assert not present, f"{language}: rechtliche Warnliste im Handbuch: {present}"
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_checked_in_manual_carries_the_current_version(language: str) -> None:
     """Die nie veröffentlichte Zwischenfassung darf nicht auf dem Umschlag bleiben."""
@@ -155,6 +157,7 @@ def test_written_manual_covers_the_current_demo_and_visible_controls() -> None:
     assert "nur den Auftrag, den Solidon selbst gestartet hat" in extras
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_website_page_carries_every_chapter(language: str) -> None:
     """Die eingecheckte Seite muss zum Handbuch passen, nicht zu einem alten.
@@ -190,6 +193,7 @@ def test_the_website_page_carries_every_chapter(language: str) -> None:
     )
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_website_reference_carries_every_operation_and_parameter(language: str) -> None:
     """Ein neues Feld darf nicht hinter einer unveränderten Kapitelüberschrift fehlen.
@@ -229,6 +233,7 @@ def test_the_website_reference_carries_every_operation_and_parameter(language: s
     )
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_every_figure_of_the_website_page_is_there(language: str) -> None:
     """Jede Abbildung, die die Seite nennt, liegt auch daneben.
@@ -249,6 +254,7 @@ def test_every_figure_of_the_website_page_is_there(language: str) -> None:
     assert not missing, f"{WEBSITE_PAGES[language].name} verweist ins Leere:\n" + "\n".join(missing)
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_website_page_carries_the_generated_reference(language: str) -> None:
     """Der **erzeugte** Teil der Seite muss zum Register passen.
@@ -1256,6 +1262,7 @@ def test_the_model_page_names_the_models_solidon_currently_offers() -> None:
     assert "Hunyuan3D" not in seite
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", ("de", "en", "es", "fr", "it", "pt"))
 def test_every_manual_language_describes_the_released_generator_chain(language: str) -> None:
     """Quellhandbuch und veröffentlichte Seite nennen denselben lokalen Weg."""
@@ -1313,6 +1320,7 @@ def test_every_manual_language_describes_the_released_generator_chain(language: 
         ),
     ],
 )
+@pytest.mark.rendered
 def test_the_exchange_manual_describes_only_local_files(
     language: str, page_title: str, transfer_denial: str
 ) -> None:
@@ -1358,6 +1366,7 @@ def test_the_model_page_comes_from_the_code_and_not_from_a_second_list() -> None
     assert f"**{DEFAULT_OLLAMA_MODEL}**" in seite, "die Vorgabe steht hervorgehoben"
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_checked_in_manual_carries_the_current_model_measurements(language: str) -> None:
     """Die ausgelieferte Seite darf nicht hinter ``OLLAMA_SUGGESTIONS`` stehen.

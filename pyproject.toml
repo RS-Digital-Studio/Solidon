@@ -160,6 +160,7 @@ filterwarnings = [
 markers = [
   "performance: misst gegen das Budget aus Bauplan §31",
   "slow: dauert spürbar länger als ein Unit-Test",
+  "rendered: vergleicht gegen erzeugte Seiten oder Bilder — braucht einen Lauf von /erzeugen",
 ]
 
 [tool.ruff]

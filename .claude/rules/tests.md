@@ -176,6 +176,20 @@ wöchentliche CI-Lauf gegen die neuesten Versionen.
 das Budget. Messwerte je Lauf festhalten; eine Verschlechterung um mehr als ein
 Viertel gilt als Fehler, nicht als Rauschen.
 
+`rendered` für Tests, deren Grün an einem **Erzeugerlauf** hängt: Sie
+vergleichen den Code gegen eine eingecheckte, erzeugte Datei — die
+Handbuchseiten der Website, die Referenz daraus, die Abbildungsstempel. **Die
+CI fährt sie nicht** (Entscheidung Robert, 03.09.2026), und der Grund ist
+derselbe, aus dem `AGENTS.md` „Bilder und Handbuch nur beim Release" sagt: Eine
+neue Operation macht sie rot, und was sie dann verlangt, ist kein Codefehler,
+sondern `tools/make_manual.py` und `tools/stamp_assets.py`. Am 03.09.2026
+kostete das achtzehn rote Läufe und zwei Erzeugerläufe für eine Änderung, die
+mit dem Handbuch nichts zu tun hatte.
+
+Sie bleiben im lokalen Lauf, und dort sind sie richtig: Wer vor einem Release
+`/pruefen` fährt, soll erfahren, dass die Seiten hinterherhängen. Wer sie
+ausdrücklich allein will, nimmt `-m rendered`.
+
 ## Korpus
 
 `tests/data/` ist der Referenzkorpus. Erwartete Kennzahlen stehen gegen Dateien

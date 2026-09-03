@@ -166,6 +166,7 @@
 - [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
 - [Fremde Erklärung altert mit](fremde-erklaerung-altert-mit.md) — beim zweiten Mal prüfen, nicht erklären.
 - [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — allein fahren, bevor man Regression glaubt.
+- [Erzeugtes nicht in der CI](erzeugtes-laeuft-nicht-in-der-ci.md) — Marker `rendered`, kuratierte Liste in test_toolchain; neue eintragen.
 - [rtree-Abstürze](rtree-abstuerze-im-langen-lauf.md) — die volle Suite stirbt; portionsweise fahren.
 - [Native Bibliotheken](native-bibliotheken-speicher.md) — rtree, _elementtree, Abriss: eine Familie.
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) — die Hülle überlebt; je Lauf ein Ordner.

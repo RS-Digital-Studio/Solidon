@@ -162,6 +162,7 @@ def test_the_dropped_words_are_really_gone_from_the_application() -> None:
         )
 
 
+@pytest.mark.rendered
 @pytest.mark.parametrize("language", sorted(available_languages()))
 def test_every_manual_paragraph_reaches_the_generated_page(language: str) -> None:
     """Der Handbuchtext und die erzeugte Seite sagen dasselbe.

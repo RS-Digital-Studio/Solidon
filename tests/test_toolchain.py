@@ -1768,3 +1768,107 @@ def test_windowed_suite_selection_follows_the_fixture_graph(tmp_path: Path) -> N
     found = collect_windowed((tmp_path,), confcutdir=tmp_path)
 
     assert found == (windowed.resolve(),)
+
+
+#: Die Tests, deren Grün an einem **Erzeugerlauf** hängt.
+#:
+#: Sie vergleichen den Code gegen eine eingecheckte, erzeugte Datei — die
+#: Handbuchseiten der Website (``website/handbuch.html`` und
+#: ``website/<sprache>/manual.html``), die Referenz darin, die
+#: Abbildungsstempel aus ``tools/stamp_assets.py``. Wer eine Operation
+#: hinzufügt oder die Version erhöht, macht sie rot, und was sie dann
+#: verlangen, ist kein Codefehler, sondern ein Lauf von
+#: ``tools/make_manual.py``.
+#:
+#: **Kuratiert und nicht erkannt**, aus demselben Grund wie ``GERMAN_STEMS``
+#: in ``test_language_rules``: Ein Muster über den Quelltext trennt „liest die
+#: erzeugte Seite" nicht von „benutzt den Stempler zum Vergleichen". Am
+#: 03.09.2026 gemessen — ein solches Muster hätte
+#: ``test_the_page_loads_nothing_from_outside`` mitmarkiert und damit eine
+#: **Sicherheitsprüfung** aus der CI genommen. Wer einen dreizehnten schreibt,
+#: trägt ihn hier ein; der Test darunter meldet jede Abweichung in beide
+#: Richtungen.
+RENDERED_TESTS: Final[frozenset[str]] = frozenset(
+    {
+        "test_the_manual_intro_reads_like_product_documentation",
+        "test_the_checked_in_manual_carries_the_current_version",
+        "test_the_website_page_carries_every_chapter",
+        "test_the_website_reference_carries_every_operation_and_parameter",
+        "test_every_figure_of_the_website_page_is_there",
+        "test_the_website_page_carries_the_generated_reference",
+        "test_every_manual_language_describes_the_released_generator_chain",
+        "test_the_exchange_manual_describes_only_local_files",
+        "test_the_checked_in_manual_carries_the_current_model_measurements",
+        "test_every_reference_carries_the_stamp_of_the_file_it_points_at",
+        "test_srcset_candidates_carry_individual_asset_stamps",
+        "test_every_manual_paragraph_reaches_the_generated_page",
+    }
+)
+
+
+def _marked_rendered() -> set[str]:
+    """Welche Testfunktionen in ``tests/`` den Marker tragen."""
+    found: set[str] = set()
+    for path in sorted(Path(__file__).resolve().parent.glob("test_*.py")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for number, line in enumerate(lines):
+            if not line.startswith("def test_"):
+                continue
+            above = number - 1
+            while above >= 0 and lines[above].startswith("@"):
+                if lines[above].strip() == "@pytest.mark.rendered":
+                    found.add(line[4 : line.index("(")])
+                above -= 1
+    return found
+
+
+def test_no_generated_comparison_runs_in_the_ci() -> None:
+    """Erzeugtes gehört nicht in die CI (Entscheidung Robert, 03.09.2026).
+
+    **Warum das ein Test ist und keine Absprache.** Ein Wächter, der immer
+    schreit, warnt vor nichts mehr — und genau dahin führen die zwölf Tests aus
+    :data:`RENDERED_TESTS`, wenn die CI sie fährt: Jede neue Operation macht
+    sie rot, ohne dass am Code etwas falsch wäre. Am 03.09.2026 waren es
+    achtzehn rote Läufe für vier neue Operationen, behoben mit zwei
+    Erzeugerläufen und keiner Codeänderung.
+
+    Geprüft werden **beide** Hälften. Die erste: Jeder Suitelauf in
+    ``build.yml`` wählt ``rendered`` ab. Die zweite: Die kuratierte Liste und
+    die gesetzten Marker stimmen überein — wer einen Test hinzufügt und die
+    Liste vergisst, bekommt es hier gesagt, und wer einen Marker setzt, ohne
+    ihn einzutragen, auch.
+
+    Lokal laufen sie weiter, und dort sind sie richtig: Wer vor einem Release
+    `/pruefen` fährt, soll erfahren, dass die Seiten hinterherhängen.
+    """
+    workflow = (_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    # **Gesucht wird die Markerwahl, nicht der Aufruf.** Zwei Fallen liegen
+    # hier. Die erste: Der Suitelauf steckt in einer Shell-Funktion
+    # (``run() { … python -m pytest -q "$@"; }``), die ihre Argumente nur
+    # weiterreicht — wer nach ``python -m pytest`` sucht, findet die Hülle und
+    # verlangt eine Abwahl an einer Stelle, die keine Marker kennt. Die zweite:
+    # In dieser Datei stehen Kommentare, die Aufrufe zitieren; ein zitierter
+    # Aufruf sieht für eine Textsuche wie ein echter aus und erfüllte die
+    # Zusage, ohne dass irgendetwas läuft. Der Hinweis kam von 3d-druck-7f, die
+    # dieselbe Falle heute in ``packaging/solidon3d.iss`` hatte.
+    #
+    # ``-m "not `` trifft beides nicht: Es steht genau dort, wo ein Lauf
+    # entscheidet, was er auslässt.
+    suite_runs = [
+        line.strip()
+        for line in workflow.splitlines()
+        if '-m "not ' in line and not line.strip().startswith("#")
+    ]
+    assert suite_runs, "keine Markerwahl in build.yml gefunden — dann prüft dieser Test nichts"
+    without = [line for line in suite_runs if "rendered" not in line]
+    assert not without, "diese Suiteläufe in build.yml wählen ``rendered`` nicht ab: " + " | ".join(
+        line[:110] for line in without
+    )
+
+    marked = _marked_rendered()
+    assert marked, "kein Test trägt den Marker — dann prüft die zweite Hälfte nichts"
+    assert marked == set(RENDERED_TESTS), (
+        "Marker und Liste laufen auseinander — "
+        f"markiert, nicht eingetragen: {sorted(marked - set(RENDERED_TESTS))}; "
+        f"eingetragen, nicht markiert: {sorted(set(RENDERED_TESTS) - marked)}"
+    )
