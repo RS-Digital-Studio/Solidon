@@ -31,7 +31,7 @@ from app.core.perceive.features import detect
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
-from app.core.types import Document, Profile, Source
+from app.core.types import Document, Profile, SceneObject, Source
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -750,7 +750,7 @@ def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) 
     gesagt hat es bis dahin nur, wer „Kollisionen prüfen" von Hand aufrief.
     """
     from app.core.scene.evaluate import check_placement
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     # Kennung und Schlüssel sind dasselbe — die Auswertung setzt ``id`` beim
     # Einhängen, und ein Test, der das anders macht, prüft eine Szene, die es
@@ -786,7 +786,7 @@ def test_a_body_floating_above_the_bed_is_reported(profile: Profile) -> None:
     Platte: Ein Klick behebt es.
     """
     from app.core.scene.evaluate import check_placement
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     floating = SceneObject(
         id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 40.0)))
@@ -812,7 +812,7 @@ def test_a_body_resting_on_another_one_does_not_float(profile: Profile) -> None:
     eingesetzt.
     """
     from app.core.scene.evaluate import check_placement
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     base = SceneObject(id="obj_1", name="Dose", mesh=cube())
     lid = SceneObject(id="obj_2", name="Deckel", mesh=apply(cube(), translation((0.0, 0.0, 20.0))))
@@ -844,7 +844,7 @@ def test_floating_so_high_that_it_leaves_the_volume_says_so(profile: Profile) ->
     beides verschiebt, wo ein Absenken genügt.
     """
     from app.core.scene.evaluate import check_placement
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     high = SceneObject(
         id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 300.0)))
@@ -860,7 +860,7 @@ def test_floating_so_high_that_it_leaves_the_volume_says_so(profile: Profile) ->
 def test_a_body_on_the_bed_says_nothing(profile: Profile) -> None:
     """Und wer richtig steht, bekommt keine Meldung — sonst wäre sie wertlos."""
     from app.core.scene.evaluate import check_placement
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     standing = SceneObject(
         id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 10.0)))
@@ -1393,7 +1393,7 @@ def test_bodies_stacked_on_each_other_are_reported(profile: Profile) -> None:
     sagte es niemand, und der Klick sah aus wie verschluckt.
     """
     from app.core.scene.evaluate import check_bodies_in_one_place
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     first = SceneObject(id="obj_1", name="Quader", mesh=cube())
     second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube())
@@ -1418,7 +1418,7 @@ def test_bodies_in_the_same_spot_on_different_plates_are_fine(profile: Profile) 
     liegen im Modell aufeinander und sind trotzdem richtig verteilt.
     """
     from app.core.scene.evaluate import check_bodies_in_one_place
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     first = SceneObject(id="obj_1", name="Quader", mesh=cube(), plate=0)
     second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube(), plate=1)
@@ -1438,7 +1438,7 @@ def test_two_alike_bodies_side_by_side_are_not_reported(profile: Profile) -> Non
     ordentlich verteilte Kleinserie als Problem.
     """
     from app.core.scene.evaluate import check_bodies_in_one_place
-    from app.core.types import Scene, SceneObject
+    from app.core.types import Scene
 
     first = SceneObject(id="obj_1", name="Quader", mesh=cube())
     second = SceneObject(
@@ -1657,3 +1657,216 @@ def test_fitting_to_a_size_below_the_nozzle_says_so(document: Document, profile:
     codes = [entry.code for entry in result.scene.report.findings]
     assert "transform.fitted" in codes, "die Operation sagt weiterhin, was sie tat"
     assert "transform.below_printable" in codes, codes
+
+
+# --- Erkannte Merkmale versetzen (Kundenumfrage S-20260903-74133c) ------------------
+
+
+def _run_op(op: str, entry: SceneObject, profile: Profile, **params: object):
+    """Eine Operation fahren, wie der Verlauf sie fährt."""
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene
+
+    spec = REGISTRY.get(op)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=7,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def _block_with_a_bore(profile: Profile) -> tuple[SceneObject, str]:
+    """Ein Quader mit einer durchgehenden Bohrung, wie die Erkennung sie sieht."""
+    from app.core.geom.prepare import drill
+
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
+    bored = drill(
+        block,
+        position=(-15.0, 0.0, 10.0),
+        axis="z",
+        diameter=8.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=bored, features=detect(bored))
+    hole = next(name for name, f in entry.features.items() if f.kind == "hole")
+    return entry, hole
+
+
+def test_a_recognised_bore_can_be_moved(profile: Profile) -> None:
+    """Der Kunde wollte genau das, und es gab es nicht (Umfrage vom 03.09.2026).
+
+    „Move existing holes and other recognised details/features" — bei 1 von 5
+    der einzige konkrete Punkt. Gemessen war der Befund eindeutig: Von 95
+    Operationen fasste **eine** ein erkanntes Merkmal an (``resize_hole`` über
+    ``at_feature``), und die kannte nur den Durchmesser. Wer eine Bohrung
+    versetzen wollte, musste sie verschließen und an neuen Zahlen neu setzen —
+    zwei Schritte, Koordinaten von Hand, und die Merkmalskennung war weg. Damit
+    brechen Passungen, die auf sie zeigen (``fit.missing_feature``).
+
+    Hier wird das Ergebnis gemessen und nicht der Weg: Das Volumen bleibt (es
+    ist dieselbe Bohrung), an der alten Stelle ist wieder Material, an der
+    neuen fehlt es.
+    """
+    entry, hole = _block_with_a_bore(profile)
+    before = entry.mesh.volume
+
+    moved = _run_op("move_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=0.0)
+    body = as_mesh_data(moved.outputs[0].mesh)
+
+    assert body.raw.is_watertight, "eine versetzte Bohrung lässt den Körper geschlossen"
+    assert body.volume == pytest.approx(before, rel=0.02), (
+        "dieselbe Bohrung, nur woanders — das Volumen ändert sich nicht"
+    )
+    # **Gefragt wird über den Querschnitt, nicht über den Abstand.** Zur
+    # nächsten Fläche sind es in der Mitte einer Ø8 Bohrung 4 mm — und 4 mm
+    # auch mitten im Material einer 20 mm dicken Platte; die Frage „Loch oder
+    # nicht" beantwortet der Abstand nicht. ``contains`` wäre die direkte
+    # Antwort und braucht ``rtree``, das hier fehlt — die Suite stirbt daran
+    # im langen Lauf. Der Schnitt ist das Werkzeug des Projekts und sagt es
+    # genauso: Ein Loch ist ein innerer Ring.
+    from app.core.slice.analysis import cross_section
+
+    schnitt = cross_section(body, 0.0)
+    assert schnitt is not None
+    ringe = [
+        (ring.centroid.x, ring.centroid.y)
+        for teil in getattr(schnitt, "geoms", [schnitt])
+        for ring in teil.interiors
+    ]
+    assert len(ringe) == 1, f"genau ein Loch im Querschnitt, gefunden: {ringe}"
+    assert ringe[0][0] == pytest.approx(15.0, abs=0.5), f"und es liegt rechts: {ringe[0]}"
+
+
+def test_the_moved_bore_keeps_its_identity(profile: Profile) -> None:
+    """Die Kennung überlebt — sonst bricht jede Passung, die auf sie zeigt.
+
+    Das ist der ganze Unterschied zum Umweg von Hand: Verschließen und neu
+    bohren ergibt dieselbe Geometrie und ein **anderes** Merkmal. Wer eine
+    Passung auf ``hole_1`` gelegt hat, findet danach nichts mehr.
+    """
+    entry, hole = _block_with_a_bore(profile)
+
+    moved = _run_op("move_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=0.0)
+    features = moved.outputs[0].features
+
+    assert hole in features, sorted(features)
+    versetzt = features[hole]
+    assert versetzt.kind == "hole"
+    assert versetzt.params["centre"][0] == pytest.approx(15.0, abs=0.5), versetzt.params["centre"]
+
+
+def test_a_feature_that_cannot_be_moved_says_so(profile: Profile) -> None:
+    """Drei Arten lassen sich nicht versetzen, und das ist eine Auskunft.
+
+    Eine Fläche gehört zur Oberfläche des Körpers — sie zu bewegen ist
+    ``push_face``. Eine Kantenschleife ist ein Netzfehler und kein Körper. Ein
+    Verrundung hängt an ihrer Kante; versetzt man sie allein, bleibt die Kante
+    scharf und die Rundung liegt daneben.
+
+    Regel 17: Der Satz nennt in jedem der drei Fälle, was stattdessen hilft.
+    """
+    from app.core.errors import UserError
+
+    entry, _hole = _block_with_a_bore(profile)
+    face = next(name for name, f in entry.features.items() if f.kind == "face")
+
+    with pytest.raises(UserError) as raised:
+        _run_op("move_feature", entry, profile, at_feature=face, x=0.0, y=0.0, z=0.0)
+
+    assert raised.value.suggestions, "Regel 17"
+    assert "push_face" not in str(raised.value), "der Satz nennt den Weg, nicht den Bezeichner"
+
+
+def test_moving_a_feature_is_registered_completely() -> None:
+    """Registerkonsistenz: Was der Katalog verspricht, steht auch da."""
+    spec = REGISTRY.get("move_feature")
+
+    assert spec.applies_to == ("hole", "pin"), (
+        "Kegel und Kugel sind gemessen draußen: Ihre Mitte liegt in der Fläche, "
+        "und der halbe Grundkörper steckt im Material"
+    )
+    assert spec.touches_features, "die Kennung reist mit"
+    assert spec.requires_seed, "der Weg geht über die Boolesche Rückfallkette"
+    felder = {entry.name: entry for entry in spec.params.spec()}
+    assert felder["at_feature"].kind == "feature" and felder["at_feature"].required
+    assert felder["at_feature"].placement == "front"
+    for achse in ("x", "y", "z"):
+        assert felder[achse].unit == "mm", achse
+        assert felder[achse].placement == "front"
+
+
+def test_a_recognised_pin_can_be_moved_too(profile: Profile) -> None:
+    """Nicht nur Löcher — der Kunde schrieb „and other recognised features".
+
+    Ein Zapfen ist der Gegenfall zur Bohrung: Materie statt Hohlraum. Dieselbe
+    Maschine, nur mit vertauschten Booleschen — an der alten Stelle abziehen,
+    an der neuen vereinen. Gemessen an einer Platte 60 x 40 x 10 mit einem
+    Zapfen Ø 8: Volumen 24300,7 vor dem Versetzen, 24301,1 danach.
+
+    Die 0,4 mm³ Unterschied sind die Überlappung, mit der jeder Werkzeugkörper
+    gebaut wird — ohne sie träfe die Boolesche auf zusammenfallende Flächen,
+    und das ist der eine Fall, der sie zuverlässig bricht (§39).
+    """
+    from app.core.slice.analysis import cross_section
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    stud = trimesh.creation.cylinder(radius=4.0, height=12.0, sections=48)
+    stud.apply_translation((-15.0, 0.0, 5.0))
+    body = MeshData.of(trimesh.boolean.union([plate, stud]))
+    features = detect(body)
+    pin = next(name for name, f in features.items() if f.kind == "pin")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+    centre = tuple(float(v) for v in features[pin].params["centre"])
+
+    moved = _run_op(
+        "move_feature", entry, profile, at_feature=pin, x=15.0, y=centre[1], z=centre[2]
+    )
+    after = as_mesh_data(moved.outputs[0].mesh)
+
+    assert after.raw.is_watertight
+    assert after.volume == pytest.approx(body.volume, rel=0.01), "derselbe Zapfen, nur woanders"
+    # Über der Platte steht nur noch der versetzte Zapfen.
+    above = cross_section(after, 8.0)
+    assert above is not None
+    parts = list(getattr(above, "geoms", [above]))
+    assert len(parts) == 1, f"genau ein Zapfen über der Platte, gefunden: {len(parts)}"
+    assert parts[0].centroid.x == pytest.approx(15.0, abs=0.5)
+
+
+def test_a_dome_says_why_it_stays_where_it_is(profile: Profile) -> None:
+    """Kugel und Kegel bleiben draußen — und der Satz sagt den gemessenen Grund.
+
+    **Gemessen am 03.09.2026, und das Ergebnis war still falsch:** Eine Kuppe
+    Ø 12 auf einer 10 mm starken Platte, versetzt, ergab einen wasserdichten
+    Körper mit 24 003 mm³ statt 24 449 — 445 fehlten. Die erkannte Mitte einer
+    Kugelfläche liegt in der Fläche, auf der sie sitzt; der halbe Grundkörper
+    steckt im Material, und wer ihn abzieht, gräbt eine Mulde.
+
+    Ein wasserdichter Körper mit einer Mulde, die niemand gewollt hat, ist
+    schlimmer als eine Absage — er sieht richtig aus. Regel 21: nicht raten.
+    """
+    from app.core.errors import UserError
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    dome = trimesh.creation.icosphere(radius=6.0, subdivisions=3)
+    dome.apply_translation((-15.0, 0.0, 5.0))
+    body = MeshData.of(trimesh.boolean.union([plate, dome]))
+    features = detect(body)
+    ball = next((name for name, f in features.items() if f.kind == "sphere"), None)
+    assert ball is not None, "die Vorbedingung des Tests"
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+
+    with pytest.raises(UserError) as raised:
+        _run_op("move_feature", entry, profile, at_feature=ball, x=15.0, y=0.0, z=5.0)
+
+    assert raised.value.suggestions, "Regel 17"
+    assert "Material" in str(raised.value), str(raised.value)

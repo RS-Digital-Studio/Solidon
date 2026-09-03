@@ -11,10 +11,19 @@ import dataclasses
 import math
 from collections.abc import Sequence
 from functools import lru_cache
-from typing import cast
+from typing import Final, cast
+
+import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, InternalError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHANGE_SELECTION,
+    CORRECT_INPUT,
+    GeometryError,
+    InternalError,
+    ValidationError,
+)
 from app.core.geom.boolean import (
     NOTHING_LEFT_DETAIL,
     NOTHING_LEFT_TITLE,
@@ -37,6 +46,7 @@ from app.core.geom.pins import (
     plan_pins,
 )
 from app.core.geom.prepare import (
+    BORE_SECTIONS,
     MAX_PLATES,
     Arrangement,
     BoreAnchor,
@@ -58,7 +68,16 @@ from app.core.geom.transform import Axis, place_on_bed
 from app.core.knowledge.profiles import for_object, material
 from app.core.registry import AUTO_FROM_PROFILE_DOC, VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
-from app.core.types import BaseParams, Feature, Finding, Mesh, OpContext, OpResult, SceneObject
+from app.core.types import (
+    BaseParams,
+    Feature,
+    Finding,
+    Mesh,
+    OpContext,
+    OpResult,
+    SceneObject,
+    Vec3,
+)
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length
 from app.i18n import TranslatableText, _
 
@@ -274,6 +293,319 @@ def drill_hole(ctx: OpContext) -> OpResult:
         outputs=[dataclasses.replace(source, mesh=result.mesh)],
         solver=result.solver,
         findings=result.findings,
+    )
+
+
+# --- Erkannte Merkmale versetzen (§25, Kundenumfrage vom 03.09.2026) ---------------
+#
+# **Eine Maschine mit mehreren Ausgängen, nicht mehrere Operationen.** Vier der
+# neun Merkmalsarten beschreiben ihren eigenen Körper vollständig, und ``recess``
+# sagt, ob er ein Hohlraum ist oder Materie:
+#
+#     hole     axis, centre, depth, diameter, through
+#     pin      axis, centre, depth, diameter
+#     cone     axis, centre, diameter, angle, recess
+#     sphere   centre, diameter, recess
+#
+# Damit sind Verschieben, Ändern und Löschen dasselbe Paar aus Vereinen und
+# Abziehen — an der alten Stelle das Gegenteil dessen, was das Merkmal ist, an
+# der neuen das Merkmal selbst.
+#
+# Die drei übrigen Arten bleiben draußen, und zwar begründet: Eine ``face``
+# gehört zur Oberfläche des Körpers (dafür gibt es ``push_face``), ein
+# ``edge_loop`` ist ein Netzfehler und kein Körper, und ein ``fillet`` hängt an
+# seiner Kante — versetzt man ihn allein, bleibt die Kante scharf und die
+# Rundung liegt daneben.
+
+#: Die Arten, deren Kennzahlen das Merkmal **genau** beschreiben.
+#:
+#: **Genau heißt: Der gebaute Körper ist das Merkmal und nicht mehr.** Bei einer
+#: Bohrung stimmt das — ``centre``, ``axis``, ``depth`` und ``through`` spannen
+#: den Zylinder auf, der genau das Loch ist. Bei einem Zapfen ebenso: ``depth``
+#: ist seine Höhe über der Grundfläche.
+#:
+#: Bei ``cone`` und ``sphere`` stimmt es **nicht**, und das ist gemessen: Die
+#: erkannte Mitte einer Kuppe liegt in der Fläche, auf der sie sitzt — der halbe
+#: Grundkörper steckt im Material. Wer den ganzen abzieht, gräbt eine Mulde in
+#: die Platte. An einer Kuppe Ø 12 auf einer 10 mm starken Platte kostete das
+#: 445 mm³ von 24 449, und der Körper war danach wasserdicht und still falsch.
+#:
+#: Der Weg dorthin ist bekannt und gehört in einen eigenen Schritt: Die
+#: Merkmalsflächen (``face_indices``) begrenzen die Kuppe genau, und ihr
+#: Randring liegt auf der Grundfläche — gedeckelt ergibt er den Körper, der
+#: wirklich das Merkmal ist. Bis dahin sagt die Operation, warum sie es nicht
+#: tut, statt es falsch zu tun (Regel 21).
+MOVABLE_KINDS: Final = ("hole", "pin")
+
+#: Wie viele Seiten ein gebauter Zylinder oder Kegel bekommt. Dieselbe Zahl wie
+#: beim Bohren — ein Stopfen mit anderer Auflösung träfe die Bohrungswand in
+#: einer fast zusammenfallenden Fläche, und das ist der eine Fall, den eine
+#: Boolesche zuverlässig bricht (§39).
+FEATURE_SECTIONS: Final = BORE_SECTIONS
+
+#: Wieviel größer der Körper gebaut wird, der ein Merkmal ausfüllt oder
+#: abträgt. Aus demselben Grund wie beim Stopfen: Fläche auf Fläche bricht.
+FEATURE_OVERLAP: Final = 0.02
+
+
+def _feature_is_a_cavity(feature: Feature) -> bool:
+    """Ist dieses Merkmal ein Hohlraum oder Materie?
+
+    ``hole`` ist immer ein Hohlraum, ``pin`` immer Materie. ``cone`` und
+    ``sphere`` können beides sein, und die Erkennung sagt es in ``recess`` —
+    eine angesenkte Bohrung ist ein Kegel nach innen, eine Kuppe einer nach
+    außen.
+    """
+    if feature.kind == "hole":
+        return True
+    if feature.kind == "pin":
+        return False
+    return bool(feature.params.get("recess", False))
+
+
+def _feature_solid(feature: Feature, centre: Vec3, scale: float = 1.0) -> MeshData:
+    """Der Körper, den dieses Merkmal einnimmt — an ``centre`` gesetzt.
+
+    ``scale`` skaliert die Querschnittsmaße; ``1.0`` baut das Merkmal, wie es
+    gemessen wurde. Der Körper wird um :data:`FEATURE_OVERLAP` größer gebaut
+    als gemessen, damit keine Boolesche auf zusammenfallende Flächen trifft
+    (§39) — beim Ausfüllen wie beim Abtragen.
+    """
+    diameter = float(feature.params.get("diameter", 0.0)) * scale + FEATURE_OVERLAP
+    if diameter <= EPS_GEOM:
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Dieses Merkmal hat kein Maß, aus dem sich ein Körper bauen ließe."),
+            values={"feature": feature.id},
+            constraint="no_size",
+        )
+
+    if feature.kind == "sphere":
+        body = trimesh.creation.icosphere(radius=diameter / 2.0)
+        body.apply_translation(np.asarray(centre, dtype=float))
+        return MeshData.of(body)
+
+    axis = np.asarray(feature.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    length = float(np.linalg.norm(axis))
+    direction = axis / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
+    # **Ganz durch und nicht nur so tief wie gemessen.** Eine Bohrung, die als
+    # 12 mm tief erkannt wurde, muss beim Ausfüllen auch die 12 mm treffen —
+    # und eine, die durchgeht, den ganzen Körper. Die gemessene Tiefe ist die
+    # Untergrenze, die Zugabe an beiden Enden deckt die Messungenauigkeit.
+    depth = float(feature.params.get("depth", 0.0))
+    height = max(depth, diameter) + 2.0 * FEATURE_OVERLAP
+
+    if feature.kind == "cone":
+        body = trimesh.creation.cone(
+            radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
+        )
+        # ``cone`` steht mit der Spitze oben auf z=0; für einen Hohlraum zeigt
+        # sie ins Material, also entlang der Achse.
+        body.apply_translation((0.0, 0.0, -height / 2.0))
+    else:
+        body = trimesh.creation.cylinder(
+            radius=diameter / 2.0, height=height, sections=FEATURE_SECTIONS
+        )
+
+    turn = trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+        [0.0, 0.0, 1.0], direction
+    )
+    body.apply_transform(turn)
+    body.apply_translation(np.asarray(centre, dtype=float))
+    return MeshData.of(body)
+
+
+@op_params
+class MoveFeatureParams(BaseParams):
+    at_feature: str = param(
+        title=_("Merkmal"),
+        default="",
+        kind="feature",
+        required=True,
+        placement="front",
+        doc=_(
+            "Das erkannte Merkmal, das versetzt wird. Ein Klick darauf im Objektbaum "
+            "oder in der Ansicht wählt es aus."
+        ),
+    )
+    x: float = param(
+        title=_("X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
+    )
+    y: float = param(
+        title=_("Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
+    )
+    z: float = param(
+        title=_("Z"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_("Die neue Mitte des Merkmals. Beim Anklicken steht hier seine heutige."),
+    )
+
+
+def _movable_feature(source: SceneObject, name: str) -> Feature:
+    """Das gewählte Merkmal — oder ein Satz, warum es nicht geht (Regel 17).
+
+    Drei der neun Arten lassen sich nicht versetzen, und jede aus einem eigenen
+    Grund. Der Satz nennt deshalb je Art, was stattdessen hilft: Eine Fläche
+    wird mit *Fläche verschieben* bewegt, eine Verrundung gehört zu ihrer Kante,
+    und eine offene Kantenschleife ist ein Netzfehler — dort hilft die
+    Reparatur und keine Versetzung.
+    """
+    feature = source.features.get(name)
+    if feature is None:
+        raise ValidationError(
+            field="at_feature",
+            detail=_("Dieses Merkmal gibt es an diesem Objekt nicht."),
+            values={"feature": name, "object": source.id},
+            constraint="unknown_feature",
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    if feature.kind in MOVABLE_KINDS:
+        return feature
+    raise ValidationError(
+        field="at_feature",
+        detail=_HELP_INSTEAD.get(feature.kind, _NOT_MOVABLE),
+        values={"feature": name, "kind": feature.kind},
+        constraint="not_movable",
+        suggestions=(CHANGE_SELECTION, CANCEL),
+    )
+
+
+#: Was statt des Versetzens hilft, je Art, die sich nicht versetzen lässt.
+_HELP_INSTEAD: Final[dict[str, TranslatableText]] = {
+    "face": _(
+        "Eine Fläche gehört zur Oberfläche des Körpers und lässt sich nicht "
+        "einzeln versetzen. Mit „Fläche verschieben“ wird sie hinein- oder "
+        "herausgezogen."
+    ),
+    "fillet": _(
+        "Eine Verrundung gehört zu ihrer Kante. Versetzt man sie allein, bliebe "
+        "die Kante scharf und die Rundung läge daneben."
+    ),
+    "edge_loop": _(
+        "Eine offene Kantenschleife ist ein Loch im Netz und kein Körper. Sie "
+        "lässt sich reparieren, aber nicht versetzen."
+    ),
+    "sphere": _(
+        "Von einer Kugelfläche ist gemessen, wo ihre Mitte liegt und wie groß "
+        "sie ist — nicht, wie tief sie im Material steckt. Versetzt würde ein "
+        "Stück des Körpers mitgenommen. Solange das nicht sicher ist, bleibt der "
+        "Weg über Verschließen und neu Anlegen."
+    ),
+    "cone": _(
+        "Von einer Kegelfläche ist gemessen, wo ihre Mitte liegt und wie groß "
+        "sie ist — nicht, wie tief sie im Material steckt. Versetzt würde ein "
+        "Stück des Körpers mitgenommen. Solange das nicht sicher ist, bleibt der "
+        "Weg über Verschließen und neu Anlegen."
+    ),
+}
+
+_NOT_MOVABLE: Final = _("Diese Art von Merkmal lässt sich nicht versetzen.")
+
+
+@register_op(
+    name="move_feature",
+    title=_("Merkmal verschieben"),
+    category="holes",
+    params=MoveFeatureParams,
+    consumes=1,
+    produces=1,
+    applies_to=list(MOVABLE_KINDS),
+    touches_features=True,
+    deterministic=False,
+    doc=_("Versetzt eine erkannte Bohrung oder einen erkannten Zapfen an eine andere Stelle."),
+)
+def move_feature(ctx: OpContext) -> OpResult:
+    """Ein erkanntes Merkmal an eine andere Stelle — in einem Schritt.
+
+    **Der Kunde hat es verlangt, und der Umweg war schlecht.** „Move existing
+    holes and other recognised details/features" war bei 1 von 5 der einzige
+    konkrete Punkt der Umfrage vom 03.09.2026. Möglich war es vorher nur über
+    zwei Schritte: verschließen und an neuen Zahlen neu bohren. Das ergibt
+    dieselbe Geometrie und ein **anderes** Merkmal — jede Passung, die auf die
+    alte Kennung zeigte, verlor ihren Bezug (``fit.missing_feature``).
+
+    **Innen ist es dasselbe Paar wie beim Löschen und beim Ändern**: An der
+    alten Stelle das Gegenteil dessen, was das Merkmal ist, an der neuen das
+    Merkmal selbst. Ein Hohlraum wird also gefüllt und neu ausgeschnitten, ein
+    Zapfen abgetragen und neu angesetzt. Beide Wege gehen über die Boolesche
+    Rückfallkette, und die benutzte Stufe steht im Ergebnis (§39).
+
+    Die Kennung reist mit: Sie ist das Einzige, was den Unterschied zum Umweg
+    von Hand ausmacht.
+    """
+    params = cast(MoveFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _movable_feature(source, params.at_feature)
+    # **Erst in eine Liste, dann drei Werte einzeln.** Ein Generatorausdruck über
+    # die Achsen hat für mypy keine feste Länge; ``Vec3`` verlangt genau drei.
+    measured = [float(value) for value in feature.params["centre"]]
+    centre: Vec3 = (measured[0], measured[1], measured[2])
+    target: Vec3 = (params.x, params.y, params.z)
+
+    if all(abs(a - b) <= EPS_GEOM for a, b in zip(centre, target, strict=True)):
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="move_feature.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+
+    body = as_mesh_data(source.mesh)
+    cavity = _feature_is_a_cavity(feature)
+    ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
+    closed = boolean(
+        "union" if cavity else "difference",
+        [body, _feature_solid(feature, centre)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+    placed = boolean(
+        "difference" if cavity else "union",
+        [closed.mesh, _feature_solid(feature, target)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    moved = dataclasses.replace(
+        feature,
+        params={**feature.params, "centre": target},
+        provenance="generated",
+    )
+    findings = [*closed.findings, *placed.findings]
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed.mesh,
+                features={**source.features, feature.id: moved},
+            )
+        ],
+        findings=findings,
+        solver=placed.solver,
     )
 
 
