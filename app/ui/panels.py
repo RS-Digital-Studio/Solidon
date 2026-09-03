@@ -3992,6 +3992,8 @@ class FeaturePanel(QWidget):
         self._empty.setVisible(False)
 
         heading = QLabel(f"{feature_name(feature_id, feature)}  ·  {feature_measure(feature)}")
+        heading.setWordWrap(True)
+        fit_wrapped(heading)
         set_level(heading, "section")
         self._rows.insertWidget(self._rows.count() - 1, heading)
         self._built.append(heading)
@@ -4002,34 +4004,55 @@ class FeaturePanel(QWidget):
             self._built.append(row)
 
     def _build_action(self, action: Any) -> QWidget:
-        """Eine Zeile: Felder und ein Knopf — oder der Grund, warum nicht."""
+        """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
+
+        **Untereinander und nicht nebeneinander** (Robert, 03.09.2026: „auch
+        auf die Größen achten, war viel abgeschnitten"). Eine Zeile aus
+        Beschriftung, drei Zahlenfeldern und einem Knopf braucht rund
+        fünfhundert Bildpunkte; die linke Spalte hat halb so viel, und was
+        nicht passt, schneidet Qt ab — aus *Merkmal verschieben* wurde „zmal
+        versch". Ein Formularlayout stellt die Beschriftung neben ihr Feld und
+        bricht die Spalte um, statt sie zu beschneiden, und der Knopf steht
+        darunter über die ganze Breite.
+        """
         box = QWidget(self)
-        layout = QHBoxLayout(box)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout = QVBoxLayout(box)
+        layout.setContentsMargins(0, 0, 0, TIGHT)
         layout.setSpacing(TIGHT)
 
         if action.op is None:
+            # Titel und Grund in **einer** umbrechenden Zeile: Der Grund ist
+            # ein Satz, und ein Satz gehört nicht in eine Formularspalte.
             name = QLabel(f"{action.title} — {action.reason}", box)
             name.setWordWrap(True)
             name.setEnabled(False)
-            # Und als Statushinweis, damit der Grund auch dort steht, wo der
-            # Kunde ihn beim Überfahren erwartet.
             name.setStatusTip(str(action.reason))
             fit_wrapped(name)
-            layout.addWidget(name, 1)
+            layout.addWidget(name)
             return box
 
         widgets: dict[str, QWidget] = {}
-        for field in action.fields:
-            label = QLabel(str(field.label), box)
-            layout.addWidget(label)
-            editor = self._build_field(field, box)
-            widgets[str(field.name)] = editor
-            layout.addWidget(editor)
-        layout.addStretch(1)
+        if action.fields:
+            form = QFormLayout()
+            form.setContentsMargins(0, 0, 0, 0)
+            form.setSpacing(TIGHT)
+            # Bricht um, statt abzuschneiden: Bei schmaler Spalte rutscht das
+            # Feld unter seine Beschriftung, und beide bleiben ganz.
+            form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+            form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
+            for field in action.fields:
+                editor = self._build_field(field, box)
+                widgets[str(field.name)] = editor
+                label = QLabel(str(field.label), box)
+                label.setWordWrap(True)
+                form.addRow(label, editor)
+            layout.addLayout(form)
 
         button = QPushButton(str(action.title), box)
         button.setStatusTip(str(action.reason) or str(action.title))
+        # Der Knopf trägt den ganzen Titel und wird nicht gekürzt; die Breite
+        # gehört ihm, weil er die Handlung benennt.
+        button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         button.clicked.connect(
             lambda _checked=False, op=str(action.op), fields=tuple(action.fields), boxes=widgets: (
                 self._emit(op, fields, boxes)

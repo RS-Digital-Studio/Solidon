@@ -40,6 +40,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDockWidget,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -50,6 +51,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QTabWidget,
     QToolBar,
@@ -419,7 +421,10 @@ def gcode_filter() -> str:
 #: steht und dort fehlt, fällt still auf den Körper zurück — die übrigen
 #: Handlungen entstehen gerade, und ein Name, der zu früh greift, wäre eine
 #: Sackgasse statt eines Rückfalls.
-FEATURE_TWINS: Final[dict[str, str]] = {"translate_object": "move_feature"}
+FEATURE_TWINS: Final[dict[str, str]] = {
+    "translate_object": "move_feature",
+    "delete_object": "remove_feature",
+}
 
 
 class _MapWorker(Worker):
@@ -1359,6 +1364,10 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_status_bar()
         self._build_menus()
+        # **Nach den Menüs, weil das Dock seinen Ein-/Ausschalter dort
+        # einhängt.** Vorher stand der Aufruf im Zentrum und lief in ein Menü,
+        # das es noch nicht gab — die Anwendung kam gar nicht erst hoch.
+        self._build_feature_dock()
         # Nach den Menüs, denn die Kopfzeile entsteht in der Werkzeugleiste:
         # ein Aufruf aus ``_build_central`` heraus fände sie noch nicht.
         self._apply_card_style(self.settings.theme)
@@ -1444,8 +1453,6 @@ class MainWindow(QMainWindow):
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
         # hoch sein — gestreckt hinterließ er dreihundert Pixel leere Fläche
         # über einem Modell, das daneben keinen Platz hatte.
-        # **Vor der Spalte, weil sie ihn gleich einhängt.** Ein Panel, das erst
-        # weiter unten entsteht, ist beim Aufbau der Spalte noch keines.
         self.feature_panel = FeaturePanel(self)
         self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
 
@@ -1457,11 +1464,6 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
         left_layout.setSpacing(TIGHT)
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
-        # **Direkt unter dem Baum, weil der Blick nach dem Klick dort steht.**
-        # Robert am 03.09.2026: „evtl noch ein eigenes Panel damit man nicht
-        # für alles rechtsklick machen muss". Wer eine Bohrung anklickt, findet
-        # ihre Maße eine Zeile tiefer und nicht hinter einem zweiten Klick.
-        left_layout.addWidget(collapsible(tr("Merkmal"), self.feature_panel))
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel))
         # Zugeklappt: Die drei darüber beantworten Fragen, die beim Bauen
@@ -2644,6 +2646,9 @@ class MainWindow(QMainWindow):
                 self._op_actions[spec.name] = self._operation_action(menu, spec)
 
         view_menu = self._menu(tr("Ansicht"))
+        # Festgehalten, weil das Merkmalsfenster seinen Ein-/Ausschalter
+        # später dort einhängt — es entsteht erst mit dem Zentrum.
+        self._view_menu = view_menu
         self._workspace_menus.append(view_menu)
         # **Gehört zu den Darstellungseinträgen**, obwohl er nicht in ihrem
         # Untermenü steht: Er teilt ihr Problem. „Pos1" ist fensterweit
@@ -7824,6 +7829,46 @@ class MainWindow(QMainWindow):
             return False, hint
         return False, tr("Dafür braucht es eine passende Auswahl.")
 
+    def _build_feature_dock(self) -> None:
+        """Das Merkmalspanel als **eigenes, frei platzierbares Fenster**.
+
+        Robert am 03.09.2026, nachdem es zuerst ein Abschnitt der linken Spalte
+        war: „bei dem Panel mit den merkmalen hab ich gedacht ein extra panel
+        nicht die bestehenden erweitern." Ein Dock ist genau das — es steht
+        angedockt da, lässt sich abziehen und irgendwohin stellen, bleibt
+        offen und hat seine eigene Breite. Die linke Spalte bleibt, wie sie
+        war.
+
+        **Mit Rollbereich**, und das ist keine Vorsorge: An einer Bohrung sind
+        es vier Handlungen mit zusammen sechs Feldern und vier Knöpfen. Ohne
+        Rollbereich schneidet ein niedriges Fenster die letzte Handlung ab —
+        dieselbe Sorte Fehler, die Robert am abgeschnittenen Text gemeldet hat,
+        nur senkrecht (Robert: „auch auf die größen achten war viel
+        abgeschnitten").
+        """
+        scroller = QScrollArea(self)
+        scroller.setWidget(self.feature_panel)
+        # Ohne dies bleibt das Panel auf seiner Wunschbreite stehen und wird
+        # waagerecht gerollt statt umgebrochen.
+        scroller.setWidgetResizable(True)
+        scroller.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        self.feature_dock = QDockWidget(tr("Merkmal"), self)
+        self.feature_dock.setObjectName("featureDock")
+        self.feature_dock.setWidget(scroller)
+        self.feature_dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.feature_dock)
+        # Der Eintrag kommt von Qt selbst und trägt damit denselben Namen wie
+        # das Fenster; wer es zugemacht hat, findet es hier wieder.
+        entry = self.feature_dock.toggleViewAction()
+        entry.setStatusTip(
+            tr("Zeigt die Maße des gewählten Merkmals — als eigenes Fenster, frei platzierbar.")
+        )
+        self._view_menu.addSeparator()
+        self._view_menu.addAction(entry)
+
     def _on_feature_moved(self, feature_id: str, centre: Any) -> None:
         """Ein Zug am Griff hat ein Merkmal versetzt (§18.11, Regel 2).
 
@@ -7889,6 +7934,37 @@ class MainWindow(QMainWindow):
                 )
             ],
         )
+
+    def feature_instead_of(self, op: str) -> OperationSpec | None:
+        """Die Merkmalsoperation, die an die Stelle dieser Körperoperation tritt.
+
+        **Die eine Stelle, an der die Frage steht** „ist ein Merkmal gewählt,
+        und gilt für seine Art eine eigene Operation?". Taste, Menüeintrag und
+        Bewegen-Leiste lesen dieselbe Antwort; zwei Antworten liefen nach der
+        nächsten Registeränderung auseinander, und dann graut das Menü etwas
+        aus, das die Taste noch zulässt.
+
+        Geprüft wird gegen das Register: eine Zuordnung ohne Operation fällt
+        still auf den Körper zurück.
+        """
+        twin = FEATURE_TWINS.get(op)
+        if twin is None or not REGISTRY.has(twin):
+            return None
+        feature = self._selected_feature_object()
+        if feature is None:
+            return None
+        spec = REGISTRY.get(twin)
+        return spec if feature.kind in (spec.applies_to or ()) else None
+
+    def _selected_feature_object(self) -> Feature | None:
+        """Das gewählte Merkmal selbst — oder nichts, wenn keines gewählt ist."""
+        feature_id = self.object_tree.selected_feature()
+        object_id = self.object_tree.selected()
+        if feature_id is None or object_id is None:
+            return None
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        return entry.features.get(feature_id) if entry is not None else None
 
     def feature_draft(self, op: str, params: Mapping[str, Any]) -> OperationDraft | None:
         """Der Zug gilt dem **gewählten Merkmal**, wenn es dafür eine Operation
@@ -9170,6 +9246,28 @@ class MainWindow(QMainWindow):
         Was hier gilt, hat der Kunde in der Liste angehakt und nicht im Baum
         markiert.
         """
+        # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026: „wenn wir
+        # ein Merkmal auswählen und auf der Tastatur Entf drücken löschen wir
+        # den ganzen Körper statt das Merkmal"). Der Weg gilt für jeden
+        # Aufrufer dieser Methode — Taste, Menüeintrag, Befehlspalette —, weil
+        # die Frage hier steht und nicht an jeder Taste neu.
+        #
+        # **Ohne Dialog, wenn nichts zu fragen bleibt.** *Merkmal entfernen*
+        # kennt nur ``at_feature``, und das steht in der Auswahl; ein Dialog
+        # dafür wäre eine Frage, deren Antwort schon dasteht — und vor einer
+        # rücknehmbaren Handlung verbietet Regel 19 sie ohnehin.
+        instead = self.feature_instead_of(spec.name)
+        if instead is not None:
+            feature_id = self.object_tree.selected_feature()
+            unanswered = [
+                entry.name for entry in instead.params.spec() if entry.name != "at_feature"
+            ]
+            if feature_id is not None and not unanswered:
+                self._feature_step(str(instead.name), feature_id, {})
+                return
+            spec = instead
+            given = {**(given or {}), "at_feature": feature_id}
+
         if self.session.history.discardable and not confirm_discard(
             self.session.history.discardable, self._discarded_names(), self
         ):

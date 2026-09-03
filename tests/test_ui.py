@@ -1315,6 +1315,76 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
+def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
+    """Robert am 03.09.2026: „wenn wir ein merkmal auswählen und auf der
+    tastatur entf drück löschen wir den ganzen körper statt das merkmal."
+
+    Die Weiche sitzt in ``run_operation``, also an der **einen** Stelle, durch
+    die Taste, Menüeintrag und Befehlspalette laufen. Gemessen wird beides:
+    dass die Bohrung verschwindet **und** dass der Körper bleibt — nur zusammen
+    sagen sie, dass die richtige Operation gelaufen ist.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+
+    window.run_operation(REGISTRY.get("delete_object"))
+    window.session.wait_for_idle()
+
+    assert [step.op for step in window.session.project.document.ops] == ["load", "remove_feature"]
+    scene = window.session.evaluate_now().scene.objects
+    assert object_id in scene, "der Körper bleibt stehen"
+    assert hole not in scene[object_id].features, "die Bohrung ist weg"
+
+
+def test_delete_without_a_feature_still_takes_the_body(window: MainWindow) -> None:
+    """Die Gegenprobe: Ohne gewähltes Merkmal bleibt Entf, was es war.
+
+    Eine Weiche, die alles einfängt, wäre von einer, die richtig trennt, am
+    Test darüber nicht zu unterscheiden.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id = next(iter(result.scene.objects))
+    window.object_tree.select_object(object_id)
+
+    assert window.feature_instead_of("delete_object") is None
+    window.run_operation(REGISTRY.get("delete_object"))
+    window.session.wait_for_idle()
+
+    assert [step.op for step in window.session.project.document.ops] == ["load", "delete_object"]
+
+
+def test_the_feature_panel_is_a_window_of_its_own(window: MainWindow) -> None:
+    """Robert am 03.09.2026: „ein extra panel nicht die bestehenden erweitern."
+
+    Es hing zuerst als Abschnitt in der linken Spalte. Jetzt ist es ein Dock:
+    eigener Titel, abziehbar, mit einem Schalter im Ansichtsmenü — und die
+    linke Spalte ist wieder die, die sie war.
+    """
+    from PySide6.QtWidgets import QDockWidget, QPushButton
+
+    dock = window.feature_dock
+    assert isinstance(dock, QDockWidget)
+    assert dock.widget() is not None, "das Panel steckt darin"
+    assert dock.features() & QDockWidget.DockWidgetFeature.DockWidgetFloatable, "abziehbar"
+    assert window.feature_panel in dock.findChildren(type(window.feature_panel))
+
+    beschriftungen = [
+        knopf.text().replace("&", "")
+        for knopf in window.findChildren(QPushButton)
+        if knopf.parent() is not None
+    ]
+    assert tr("Merkmal") not in beschriftungen, "kein Abschnitt mehr in der linken Spalte"
+
+
 def test_a_drag_on_a_feature_becomes_a_feature_step(window: MainWindow) -> None:
     """Der Zug am Griff trifft das Merkmal, nicht sein Teil (§18.11).
 
