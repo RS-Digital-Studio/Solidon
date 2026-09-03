@@ -89,13 +89,12 @@ gh run download <lauf-id> -D dist/ci                    # vier Artefakte
 Die Artefakte heißen `solidon3d-setup-windows`, `solidon3d-linux`,
 `solidon3d-macos-X64` und `solidon3d-macos-ARM64`, jedes mit seiner `.sha256`.
 
-**Neun Dateien kommen an, sechs gehen hinaus.** Windows baut zwei, Linux drei
-(Archiv, AppImage, Flatpak), macOS zwei je Architektur. Angeboten werden diese:
+**Acht Dateien kommen an, fünf gehen hinaus.** Linux baut drei (Archiv,
+AppImage, Flatpak), macOS zwei je Architektur. Angeboten werden diese:
 
 | Zielsystem | Datei |
 |---|---|
 | Windows | `Solidon3D-Setup-<version>.exe` |
-| Windows (ohne Installation) | `Solidon3D-<version>-windows-x86_64.zip` |
 | Linux (direkter Start) | `Solidon3D-<version>-x86_64.AppImage` |
 | Linux (verwaltet) | `Solidon3D-<version>-x86_64.flatpak` |
 | macOS (Apple Silicon) | `Solidon3D-<version>-macos-arm64.pkg` |
@@ -103,15 +102,6 @@ Die Artefakte heißen `solidon3d-setup-windows`, `solidon3d-linux`,
 
 Nicht hinaus gehen: das Linux-Archiv (`.tar.gz`, setzt ein Terminal voraus) und
 die beiden macOS-Archive (`.zip`, Bauartefakte des Signierwegs).
-
-**Das Windows-Archiv entsteht im Signierlauf**, nicht in der CI — es soll
-dieselbe signierte `.exe` tragen wie die Setup-Datei, und ein ZIP nimmt selbst
-keine Signatur an. `sign_release.py` legt es neben das Setup, mit `.sha256`.
-Wer ohne Signierlauf paketiert, hat es nicht, und `make_download.py` hält dann
-an und sagt, welche Datei fehlt. Der Anlass steht in `packaging/CLAUDE.md`: Am
-03.09.2026 scheiterte bei einem Kunden die Setup-Datei über zwei Versionen und
-vier Downloads reproduzierbar, bei bytegenau angekommener Datei — und es gab
-keinen zweiten Weg.
 
 `make_download.py` weist seit dem 27.08.2026 alles andere ab (`DELIVERED`) —
 davor stand die Liste nirgends außer in der Gewohnheit dessen, der die Dateien

@@ -73,18 +73,6 @@ relative Pfadliste mit SHA-256 (Artefakt `solidon3d-windows-signing-input`,
 sieben Tage haltbar). Ein ungeschützter Job baut daraus mit ISCC den
 unsignierten Installer für Demo und Releaseprüfung und nennt SmartScreen
 ausdrücklich. Die Signatur entsteht auf Roberts Rechner mit
-**Zwei Pakete gehen nach Windows**, seit dem 03.09.2026: die Setup-Datei und
-ein Archiv ohne Installation (`--portable`). Der Anlass steht im Docstring von
-`make_installer.build_portable` — die Setup-Datei packt ihre 190 MB in einem
-durchgehenden LZMA2-Strom aus (`SolidCompression=yes`), und kippt dabei ein
-Bit, ist nicht eine Datei kaputt, sondern der ganze Block; der Kunde sieht
-„fehlerhaftes File" bei jedem neuen Download wieder. Das Archiv packt
-blockweise, kommt durch und braucht keine Adminrechte. Es entsteht **im
-Signierlauf**, nicht in der CI: Ein ZIP nimmt keine Authenticode-Signatur an,
-die `.exe` darin schon, und ein unsigniertes Archiv wäre der schlechtere von
-zwei Wegen statt der zweite. Gemessen am Bau von 0.3.0: 798 MB Bau → 286 MB
-Archiv in 31 s, gegen 195 MB Setup-Datei.
-
 `tools/sign_release.py` aus demselben Archiv: Das Certum-Zertifikat liegt in
 der SimplySign-Cloud und verlangt einen Einmalcode vom Handy, den keine CI
 eingeben kann und soll. Das Werkzeug prüft Archiv, Produktangaben und jede

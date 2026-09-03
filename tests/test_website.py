@@ -1143,9 +1143,7 @@ def test_the_next_linux_release_offers_appimage_and_flatpak_but_not_the_archive(
     assert delivery_slot("Solidon3D-0.2.2-x86_64.AppImage") == "Linux AppImage"
     assert delivery_slot("Solidon3D-0.2.2-x86_64.flatpak") == "Linux Flatpak"
     assert delivery_slot("Solidon3D-0.2.2-linux-x86_64.tar.gz") == ""
-    assert len(DELIVERED) == 6, (
-        "zweimal Windows (Setup und Archiv), zweimal Linux, beide Mac-Architekturen"
-    )
+    assert len(DELIVERED) == 5, "Windows, zweimal Linux und beide Mac-Architekturen"
 
 
 def test_no_two_values_share_a_spot_and_a_moment() -> None:

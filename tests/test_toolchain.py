@@ -1653,7 +1653,6 @@ def test_only_the_five_delivered_files_go_into_the_box() -> None:
 
     ausgeliefert = [
         Path("Solidon3D-Setup-0.2.1.exe"),
-        Path("Solidon3D-0.2.1-windows-x86_64.zip"),
         Path("Solidon3D-0.2.1-x86_64.AppImage"),
         Path("Solidon3D-0.2.1-x86_64.flatpak"),
         Path("Solidon3D-0.2.1-macos-arm64.pkg"),
@@ -1727,100 +1726,16 @@ def test_a_foreign_file_does_not_take_a_delivery_slot() -> None:
 
     echt = {
         "Solidon3D-Setup-9.9.9.exe": "Windows",
-        "Solidon3D-9.9.9-windows-x86_64.zip": "Windows (Archiv)",
         "Solidon3D-9.9.9-x86_64.AppImage": "Linux AppImage",
         "Solidon3D-9.9.9-x86_64.flatpak": "Linux Flatpak",
         "Solidon3D-9.9.9-macos-arm64.pkg": "macOS (Apple Silicon)",
         "Solidon3D-9.9.9-macos-x86_64.pkg": "macOS (Intel)",
     }
     assert set(echt.values()) == {label for label, _s, _m in DELIVERED}, (
-        "die sechs Plätze haben sich geändert — dieser Test kennt sie nicht mehr"
+        "die fünf Plätze haben sich geändert — dieser Test kennt sie nicht mehr"
     )
     for name, platz in echt.items():
         assert delivery_slot(name) == platz, f"{name} bekam {delivery_slot(name)!r} statt {platz!r}"
-
-    # Und die andere Richtung: Die Mac-Archive sind weiterhin **nicht**
-    # ausgeliefert. Sie tragen dieselbe Endung wie das neue Windows-Archiv, und
-    # ein Platz für ``.zip`` allein hätte beide mitgenommen.
-    for mac_archiv in (
-        "Solidon3D-9.9.9-macos-arm64.zip",
-        "Solidon3D-9.9.9-macos-x86_64.zip",
-    ):
-        assert delivery_slot(mac_archiv) == "", (
-            f"{mac_archiv} besetzt einen Platz — die Endung .zip trennt Windows nicht von macOS"
-        )
-
-
-def test_the_windows_archive_is_not_mistaken_for_a_mac_one() -> None:
-    """Windows und macOS liefern beide ein ``.zip`` — die Endung trennt sie nicht.
-
-    **Zwei Stellen entscheiden das, und beide wären still falsch gewesen.**
-    ``kind_of`` nimmt die erste Plattform, deren Endung passt, und Windows
-    steht in ``PLATFORMS`` vorn: Ein nacktes ``.zip`` dort hätte beide
-    Mac-Archive nach Windows gezogen. ``variant_of`` dagegen sucht mit ``in``
-    und sammelt **jeden** Treffer — die Marke ``x86_64.zip`` für „Intel" hätte
-    auf ``…-windows-x86_64.zip`` mitgegriffen, und im Kasten stünde „Windows
-    10/11 (Intel, Archiv)".
-
-    Beides fällt in keinem Lauf auf, in dem nur eine der beiden Dateien
-    vorkommt. Deshalb prüft dieser Test sie gemeinsam.
-    """
-    from tools.make_download import kind_of, variant_of
-
-    windows = "Solidon3D-9.9.9-windows-x86_64.zip"
-    mac_intel = "Solidon3D-9.9.9-macos-x86_64.zip"
-    mac_arm = "Solidon3D-9.9.9-macos-arm64.zip"
-
-    assert kind_of(Path(windows)) == "windows", "das Windows-Archiv bekam die falsche Plattform"
-    assert kind_of(Path(mac_intel)) == "macos", "das Mac-Archiv wurde nach Windows gezogen"
-    assert kind_of(Path(mac_arm)) == "macos", "das Mac-Archiv wurde nach Windows gezogen"
-
-    verloren = "das Mac-Archiv verlor seine Architektur"
-    assert variant_of(windows, "de") == " (Archiv)", (
-        f"das Windows-Archiv heißt {variant_of(windows, 'de')!r} — Intel färbt von macOS ab"
-    )
-    assert variant_of(mac_intel, "de") == " (Intel, Archiv)", verloren
-    assert variant_of(mac_arm, "de") == " (Apple Silicon, Archiv)", verloren
-
-
-def test_the_portable_archive_carries_the_program_at_its_root(tmp_path: Path) -> None:
-    """Auspacken, doppelklicken — die ``.exe`` liegt nicht in einem Unterordner.
-
-    So macht es jedes andere Programm, das ein Archiv neben den Installer
-    stellt, und es ist der Grund, warum das Archiv überhaupt existiert: Wer
-    hier landet, kommt von einer Setup-Datei, die nicht durchgelaufen ist, und
-    soll nicht erst suchen. Daneben liegen der Lizenzvertrag und drei Zeilen,
-    die sagen, was diese Fassung nicht tut.
-    """
-    import zipfile
-
-    from tools.make_installer import pack_portable
-
-    bau = tmp_path / "bau"
-    (bau / "_internal").mkdir(parents=True)
-    (bau / "Solidon3D.exe").write_bytes(b"MZ")
-    (bau / "_internal" / "base_library.zip").write_bytes(b"PK")
-    lizenz = tmp_path / "eula.txt"
-    lizenz.write_text("Vertrag", encoding="utf-8")
-
-    ziel = pack_portable(bau, tmp_path, "9.9.9", lizenz)
-    assert ziel.name == "Solidon3D-9.9.9-windows-x86_64.zip"
-
-    with zipfile.ZipFile(ziel) as archiv:
-        namen = archiv.namelist()
-        beilage = archiv.read("Solidon3D-9.9.9-windows-x86_64/README.txt").decode("utf-8-sig")
-
-    wurzeln = {name.split("/", 1)[0] for name in namen}
-    assert wurzeln == {"Solidon3D-9.9.9-windows-x86_64"}, (
-        f"das Archiv schüttet {len(wurzeln)} Einträge in den Downloadordner: {sorted(wurzeln)}"
-    )
-    assert "Solidon3D-9.9.9-windows-x86_64/Solidon3D.exe" in namen, (
-        "die .exe liegt nicht im Wurzelverzeichnis des Archivs"
-    )
-    assert "Solidon3D-9.9.9-windows-x86_64/_internal/base_library.zip" in namen
-    assert "Solidon3D-9.9.9-windows-x86_64/eula.txt" in namen, "der Lizenzvertrag fehlt"
-    assert "Solidon3D.exe" in beilage, "die Beilage sagt nicht, was zu starten ist"
-    assert "ändert nichts am System" in beilage, "die Beilage sagt nicht, was die Fassung nicht tut"
 
 
 def test_windowed_suite_selection_follows_the_fixture_graph(tmp_path: Path) -> None:

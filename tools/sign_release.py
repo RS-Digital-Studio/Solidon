@@ -469,12 +469,7 @@ def run(
     evidence: Path,
     output_dir: Path,
 ) -> Path:
-    """Fährt die ganze Kette und liefert den signierten Installer unter ``output_dir``.
-
-    Daneben legt sie das Archiv ohne Installation ab. Der Rückgabewert bleibt
-    die Setup-Datei: Sie ist der Hauptweg, das Archiv der zweite für den Fall,
-    dass sie nicht durchläuft.
-    """
+    """Fährt die ganze Kette und liefert den signierten Installer unter ``output_dir``."""
     _identity_arguments(subject, thumbprint)
     # Erst der Eingang, dann das Werkzeug: Wer ohne Archiv startet, soll das
     # Archiv genannt bekommen und nicht ein fehlendes signtool — und die Suite
@@ -498,18 +493,6 @@ def run(
     _step(f"Setup-Datei signieren: {setup.name}")
     sign_file(tool, setup, subject=subject, thumbprint=thumbprint, timestamp_url=timestamp_url)
     checksum = write_checksum(setup)
-    # Das Archiv trägt dieselbe eben signierte Anwendung — deshalb hier und
-    # nicht in der CI: Ein ZIP nimmt keine Authenticode-Signatur an, die
-    # ``.exe`` darin schon, und ein unsigniertes Archiv wäre der schlechtere
-    # von zwei Wegen statt der zweite.
-    _step("Archiv ohne Installation packen")
-    portable = make_installer.pack_portable(
-        resolve_handoff_path(stage, str(handoff["source_dir"])),
-        resolve_handoff_path(stage, str(handoff["output_dir"])),
-        str(handoff["app_version"]),
-        resolve_handoff_path(stage, str(handoff["licence"])),
-    )
-    portable_checksum = write_checksum(portable)
     _step("Release-Evidenz schreiben und Releaseakte prüfen")
     warning = release_check(stage, handoff, setup, evidence)
     if warning:
@@ -522,12 +505,8 @@ def run(
     result = output_dir / setup.name
     shutil.copy2(setup, result)
     shutil.copy2(checksum, output_dir / checksum.name)
-    shutil.copy2(portable, output_dir / portable.name)
-    shutil.copy2(portable_checksum, output_dir / portable_checksum.name)
     print(f"Signierter Installer: {result}")
     print(f"Prüfsumme: {output_dir / checksum.name}")
-    print(f"Archiv ohne Installation: {output_dir / portable.name}")
-    print(f"Prüfsumme: {output_dir / portable_checksum.name}")
     return result
 
 

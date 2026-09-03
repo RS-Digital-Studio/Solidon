@@ -71,7 +71,7 @@ PAGES = ("index.html", *(f"{code}/index.html" for code in ("en", "es", "fr", "it
 PLATFORMS: tuple[tuple[str, tuple[str, ...], dict[str, str]], ...] = (
     (
         "windows",
-        (".exe", ".msi", "windows-x86_64.zip"),
+        (".exe", ".msi"),
         {
             "de": "Windows 10/11",
             "en": "Windows 10/11",
@@ -109,7 +109,7 @@ VARIANT_MARKS: tuple[tuple[str, dict[str, str]], ...] = (
         dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Intel"),
     ),
     (
-        "macos-x86_64.zip",
+        "x86_64.zip",
         dict.fromkeys(("de", "en", "es", "fr", "it", "pt"), "Intel"),
     ),
     (
@@ -273,25 +273,14 @@ def variant_of(name: str, language: str) -> str:
     return " (" + ", ".join(marks) + ")"
 
 
-#: Was wirklich ausgeliefert wird: sechs Dateien. Windows bekommt zwei — die
-#: Setup-Datei und ein Archiv ohne Installation —, beide Mac-Architekturen je
-#: eine, Linux bekommt AppImage zum direkten Start und Flatpak für die
-#: verwaltete Installation (Entscheidung Robert, 28.08.2026).
+#: Was wirklich ausgeliefert wird: fünf Dateien. Windows und beide Mac-Architekturen
+#: bekommen je eine, Linux bekommt AppImage zum direkten Start und Flatpak für
+#: die verwaltete Installation (Entscheidung Robert, 28.08.2026).
 #:
-#: **Warum Windows zwei bekommt, seit dem 03.09.2026.** Die Setup-Datei packt
-#: ihre 190 MB in einem durchgehenden LZMA2-Strom aus. Kippt dabei ein Bit,
-#: ist der ganze Block hin, und der Kunde sieht „fehlerhaftes File" — bei jedem
-#: neuen Download wieder, weil jeder Versuch dieselbe Speicherstelle trifft.
-#: Genau dieser Fall stand im Support: dieselbe Meldung über zwei Versionen und
-#: vier Downloads, bei nachweislich bytegenau angekommener Datei, und es gab
-#: keinen zweiten Weg. Ein ZIP packt in kleinen Blöcken aus und kommt durch, wo
-#: der Installer reproduzierbar scheitert. Jedes andere Programm bietet beides
-#: an; wir taten es für macOS und Linux längst und für Windows nicht.
-#:
-#: Der Baulauf wirft **neun** aus: Windows zwei, Linux drei (Archiv, AppImage,
+#: Der Baulauf wirft **acht** aus: Linux allein drei (Archiv, AppImage,
 #: Flatpak), macOS zwei je Architektur (Installationspaket und Archiv). Das
-#: Linux-Archiv bleibt ein Bauartefakt: Es setzt ein Terminal voraus und ist
-#: kein besserer Einstieg als das AppImage.
+#: Archiv bleibt ein Bauartefakt: Es setzt ein Terminal voraus und ist kein
+#: besserer Einstieg als das AppImage.
 #:
 #: Am 27.08.2026 hat diese Lücke zugeschnappt: Beim Release von 0.2.1 gingen
 #: alle acht in den Kasten, und die Startseiten verwiesen in sechs Sprachen
@@ -299,7 +288,6 @@ def variant_of(name: str, language: str) -> str:
 #: gegeben, und keine Prüfung hätte es gesagt.
 DELIVERED: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("Windows", ".exe", ()),
-    ("Windows (Archiv)", "windows-x86_64.zip", ()),
     ("Linux AppImage", ".appimage", ()),
     ("Linux Flatpak", ".flatpak", ()),
     ("macOS (Apple Silicon)", ".pkg", ("arm64",)),
@@ -308,7 +296,7 @@ DELIVERED: tuple[tuple[str, str, tuple[str, ...]], ...] = (
 
 
 def delivery_slot(name: str) -> str:
-    """Welchen der sechs Plätze eine Datei besetzt — oder nichts.
+    """Welchen der fünf Plätze eine Datei besetzt — oder nichts.
 
     **Der Produktname gehört zur Bedingung, nicht nur die Endung.** Ohne ihn
     entscheidet allein das Suffix, und dann besetzt jede fremde ``.exe`` im
@@ -328,7 +316,7 @@ def delivery_slot(name: str) -> str:
 
 
 def refuse_wrong_delivery(paths: list[Path]) -> None:
-    """Hält an, wenn die übergebenen Dateien nicht die sechs Ausgelieferten sind.
+    """Hält an, wenn die übergebenen Dateien nicht die fünf Ausgelieferten sind.
 
     Geprüft wird in **beide** Richtungen, und die zweite ist die wichtigere:
     Eine Datei zu viel steht als toter Verweis auf der Seite, eine zu wenig
@@ -358,16 +346,16 @@ def refuse_wrong_delivery(paths: list[Path]) -> None:
     if not unknown and not missing and not twice:
         return
 
-    lines = ["Das sind nicht die sechs Dateien, die ausgeliefert werden."]
+    lines = ["Das sind nicht die fünf Dateien, die ausgeliefert werden."]
     for name in sorted(unknown):
-        lines.append(f"  zu viel:  {name} — besetzt keinen der sechs Plätze")
+        lines.append(f"  zu viel:  {name} — besetzt keinen der fünf Plätze")
     for label in missing:
         suffix = next(s for lab, s, _ in DELIVERED if lab == label)
         lines.append(f"  fehlt:    {label} ({suffix})")
     for label, names in sorted(twice.items()):
         lines.append(f"  zweimal:  {label} — {', '.join(sorted(names))}")
     lines.append("")
-    lines.append("  Der Baulauf wirft neun Dateien aus, angeboten werden sechs.")
+    lines.append("  Der Baulauf wirft acht Dateien aus, angeboten werden fünf.")
     lines.append("  Erwartet: " + ", ".join(f"{lab} {suf}" for lab, suf, _ in DELIVERED))
     raise SystemExit("\n".join(lines))
 
@@ -461,8 +449,8 @@ def download_link(package: Package, label: str, css_class: str) -> str:
 def links(packages: list[Package], language: str) -> str:
     """Die Verweise, wie sie im Kasten stehen — ein Knopf je Plattform.
 
-    **Warum nicht eine Zeile je Datei.** Sechs ausgelieferte Pakete sind nicht
-    sechs Hauptknöpfe: Wer auf Linux sitzt, braucht keine Mac-Architektur, und
+    **Warum nicht eine Zeile je Datei.** Fünf ausgelieferte Pakete sind nicht
+    fünf Hauptknöpfe: Wer auf Linux sitzt, braucht keine Mac-Architektur, und
     wer auf einem Mac sitzt, keine Auswahl zwischen Flatpak und AppImage. Also
     trägt jede Plattform einen Knopf; hat sie mehr als eine Datei, öffnet er
     einen Dialog mit genau den passenden Varianten.
