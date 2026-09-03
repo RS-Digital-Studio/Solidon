@@ -51,6 +51,45 @@ Stehen dort Namen, die man nicht selbst geschrieben hat, ist fremde Arbeit
 dabei — und dann hilft nur die Blob-Fassung aus dem unmittelbaren HEAD plus
 den eigenen Zeilen.
 
+## Fünf Sekunden vor jedem Tag, und danach
+
+Am 03.09.2026 standen **zweimal** Dateien im Haupt-Index als gelöscht, die
+im Baum unversehrt lagen — einmal zwei Erinnerungen, einmal zwei
+Erinnerungen plus zwei Dateien unter `.claude/.state/`. Alle mit demselben
+Hash wie in HEAD. Der zweite Fall lag **eine Viertelstunde vor dem Tag
+`v0.3.1`**.
+
+```
+git status --short | grep "^D "
+```
+
+Steht dort etwas, das im Baum liegt, gehört es zurückgenommen, **bevor**
+ein Tag den Stand einfriert oder jemand ohne privaten Index committet:
+
+```
+git reset -- <die genannten Pfade>      # nicht ohne Pfade, siehe unten
+```
+
+**Warum die Blob-Prüfung nicht reicht**, obwohl sie näherliegt: Die
+Sitzung, die die Spur erzeugt hatte, hatte sie selbst bemerkt und als
+blob-identisch mit HEAD gemessen — also für harmlos gehalten. Das
+stimmt für den **Ist-Zustand** und nicht für das **Risiko**: Harmlos
+ist die Spur nur, solange niemand ohne privaten Index committet. Wer es tut,
+nimmt die Löschung mit, und im Paket fehlen die Dateien, ohne dass es
+jemandem auffällt. Der Statusblick sieht das Risiko, die Blob-Prüfung
+nur den Augenblick.
+
+**Und `git reset` ohne Pfade ist die falsche Antwort**, auch wenn viel im
+Index steht. Am selben Tag trug er 86 gestagte Einträge; wer die wegwirft,
+nimmt jedem, der bewusst vorbereitet hat, seine Arbeit ab — und der merkt
+es erst beim Commit. Zwei falsche Einträge rechtfertigen nicht,
+vierundachtzig richtige mitzunehmen (Selbstkorrektur 3d-druck-a0, `5c656052`).
+
+Dazu kann ein **verwaistes `.git/index.lock`** danebenliegen und den Reset
+blockieren. Es blockiert sonst nichts, weil private Indizes keines brauchen —
+also fällt es nur hier auf. Reihenfolge: Alter messen (23 Minuten sind kein
+laufender Commit), sichern, dann entfernen.
+
 Beides zusammen: [[commit-o-nimmt-den-dateistand]] (der fremde *Stand* einer
 gemeinsamen Datei), [[index-altert-zwischen-lesen-und-commit]] (der Index ist
 einen Commit zu alt), [[sicherung-ist-eine-zeitmaschine]] (die Kopie vom
