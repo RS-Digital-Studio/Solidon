@@ -167,6 +167,24 @@ def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
     return _built(solid, builder, "chamfer", distance, len(chosen))
 
 
+def _too_large(kind: str) -> Any:
+    """Der Satz zum gescheiterten Bau — in den Worten des Feldes, das ihn
+    ausgelöst hat.
+
+    Beide Wege endeten in „Der Radius ist für diese Kanten zu groß.", auch die
+    Fase. Deren Feld heißt aber **Breite** (``distance``, Titel „Breite"), und
+    einen Radius gibt es dort nirgends: Wer *Fase anbringen* mit der Vorgabe
+    1,0 mm auf ein eingelesenes STEP-Teil anwendet, bekommt eine Absage über
+    eine Größe, die in seinem Dialog nicht vorkommt, und sucht ein Feld, das es
+    nicht gibt. Gemessen an ``build_tray_v3.step`` aus dem Kundenbestand:
+    0,2 mm geht, 0,5 mm und darüber nicht — der Satz kommt also im Normalfall
+    und nicht im Ausnahmefall.
+    """
+    if kind == "chamfer":
+        return _("Die Breite ist für diese Kanten zu groß.")
+    return _("Der Radius ist für diese Kanten zu groß.")
+
+
 def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> Solid:
     """Führt den Builder aus und macht aus seinem Scheitern einen Satz, auf
     den jemand reagieren kann.
@@ -175,7 +193,7 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
         builder.Build()
         if not builder.IsDone():
             raise GeometryError(
-                detail=_("Der Radius ist für diese Kanten zu groß."),
+                detail=_too_large(kind),
                 # **Nicht die Vorgabe des Geometriefehlers.** Die heißt
                 # „Reparieren und erneut versuchen" und „Stellen zeigen" — an
                 # einem exakten Körper gibt es nichts zu reparieren, und
@@ -194,7 +212,7 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
         raise
     except Exception as problem:  # OpenCASCADE raises its own exception types
         raise GeometryError(
-            detail=_("Der Radius ist für diese Kanten zu groß."),
+            detail=_too_large(kind),
             suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(size, 3), "edges": edges},
         ) from problem
