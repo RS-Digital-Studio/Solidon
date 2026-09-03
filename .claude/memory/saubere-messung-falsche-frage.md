@@ -22,6 +22,16 @@ keine Aktionen — die ordnet `panels.actions_for` zu, und für Codes mit `op.`
 und Schrittkennung liefert sie `correct_input`. Gemessen wurde der Kern, die
 Antwort steht in der Oberfläche. Siehe [[pruefstand-geht-den-weg-der-oberflaeche]].
 
+Diese Bauart kehrt am häufigsten zurück, und 3d-druck-c7 hat gesagt warum:
+**Der falsche Weg ist billiger.** Den Kern direkt zu rufen spart den Aufbau
+der Anwendung; man tut es, um schnell eine Zahl zu bekommen, und bekommt
+eine, die für den Kern gilt und nicht für den Kunden. c7 ist ihr am
+03.09.2026 zweimal aufgesessen — einmal bei einer STEP-Datei, die angeblich
+nicht lud (`plan.py` fängt STEP vor `read_model` ab), einmal bei einer STL,
+die angeblich nicht wasserdicht war (ohne `normalise` ist **keine** STL
+wasserdicht, weil jedes Dreieck seine Ecken einzeln trägt) — und hatte sie
+dazwischen dreimal bei anderen benannt. Siehe [[benannte-falle-schuetzt-nicht]].
+
 **Der Prüfling trägt das Merkmal nicht.** 7b maß den Kontrast eines
 Kontaktschattens in einer selbst gestellten Szene, die gar keinen trug — die
 Zahlen waren Rauschen, sauber erhoben. Siehe [[testprojekt-trifft-den-fall-nicht]].
