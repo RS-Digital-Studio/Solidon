@@ -4144,3 +4144,53 @@ def test_a_measuring_click_writes_down_which_body_it_hit(qt_app: QApplication) -
     assert mass.value == pytest.approx(0.0, abs=1e-9), (
         "beide Platten liegen in der Szene übereinander, der Abstand ist null"
     )
+
+
+def test_the_candidates_of_a_question_are_shown_and_taken_back(
+    qt_app: QApplication,
+) -> None:
+    """Eine mehrdeutige Frage zeigt, wovon sie redet (§21.3).
+
+    Der Bauplan verlangt es wörtlich — „zeigt die Kandidaten hervorgehoben und
+    fragt über `ctx.ask`" —, und gebaut war alles außer der Hervorhebung: Der
+    Dialog nannte `hole_1`, `hole_2`, `hole_3`, und der Kunde sollte zwischen
+    drei Bohrungen entscheiden, die er nicht sieht (Fund 3d-druck-a0).
+
+    Geprüft wird die Auskunft und ihre Rücknahme. **Paare und nicht
+    Kennungen**: Merkmalskennungen sind je Körper vergeben, und beim leeren
+    Objektnamen sucht `orphans._candidates` über alle Körper — zwei `hole_1`
+    an zwei Körpern sind zwei Fundorte, nicht einer.
+    """
+    import dataclasses
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    ergebnis = _scene_with_two_holes()
+    zweiter = dataclasses.replace(ergebnis.scene.objects["obj_1"], id="obj_2", name="B")
+    ergebnis.scene.objects["obj_2"] = zweiter
+    viewport.show_scene(ergebnis)
+
+    assert viewport.candidates == (), "ohne Frage leuchtet nichts"
+
+    viewport.show_candidates((("obj_1", "hole_1"), ("obj_2", "hole_1")))
+    assert viewport.candidates == (("obj_1", "hole_1"), ("obj_2", "hole_1")), (
+        "dieselbe Kennung an zwei Körpern sind zwei Kandidaten"
+    )
+
+    viewport.show_candidates(
+        (("obj_1", "hole_1"), ("obj_1", "hole_2")), emphasis=("obj_1", "hole_2")
+    )
+    assert viewport._candidate_emphasis == ("obj_1", "hole_2"), (
+        "die markierte Zeile im Dialog ist der betonte Kandidat"
+    )
+
+    viewport.show_candidates()
+    assert viewport.candidates == (), "und die leere Folge nimmt alles zurück"
+
+    # Eine neue Auswertung nimmt sie ebenfalls mit: Sie zeigen auf Dreiecke
+    # einer bestimmten Auswertung, und danach kann dieselbe Kennung eine
+    # andere Fläche meinen.
+    viewport.show_candidates((("obj_1", "hole_1"),))
+    viewport.show_scene(_scene_with_two_holes())
+    assert viewport.candidates == (), "eine neue Auswertung räumt die Frage weg"

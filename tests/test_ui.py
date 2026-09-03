@@ -11771,3 +11771,49 @@ def test_closing_the_measure_tool_takes_the_dimensions_with_it(window: MainWindo
 
     assert window.viewport.measurements.entries == [], "das Schließen räumt die Maße weg"
     assert window.measure_bar.mode.currentData() == "off", "und schaltet das Messen ab"
+
+
+def test_the_view_settings_are_still_there_after_a_restart(qt_app: QApplication) -> None:
+    """Darstellung, Schattierung und Projektion überleben das Schließen.
+
+    **Der Befund (Robert, 03.09.2026):** „sollte leicht durchsichtig sein seit
+    dem letzten update". Der Modus *war* eingestellt gewesen — und beim
+    nächsten Start stand wieder *Massiv* da. `UiSettings` führte Navigation,
+    Thema, Sprache, Einheit und ein Dutzend Slicer-Profile; diese drei nicht.
+    Das ist die Sorte Fehler, die man für die eigene Erinnerung hält.
+
+    Geprüft wird die ganze Kette: Der Menüweg schreibt in die Einstellungen,
+    ein **neu gebautes** Fenster mit denselben Einstellungen wendet sie an,
+    und die Häkchen zeigen, was gilt.
+    """
+    window = MainWindow(Session(), UiSettings())
+    assert window.settings.display_mode == "solid", "die Vorgabe"
+
+    window.action_display_mode("transparent")
+    window.action_shading("smooth")
+    window.action_projection("orthographic")
+
+    assert window.settings.display_mode == "transparent"
+    assert window.settings.shading == "smooth"
+    assert window.settings.projection == "orthographic"
+    assert window.viewport.display_mode == "transparent", "und die Ansicht folgt sofort"
+
+    gemerkt = UiSettings(
+        display_mode=window.settings.display_mode,
+        shading=window.settings.shading,
+        projection=window.settings.projection,
+    )
+    zweites = MainWindow(Session(), gemerkt)
+    # Denselben Weg wie ``app.py``: Der Bau stellt das Fenster hin, und
+    # ``_apply_settings`` gibt ihm, was gemerkt wurde. Ein Test, der das
+    # ausließe, prüfte einen Start, den es nicht gibt.
+    zweites._apply_settings()
+    assert zweites.viewport.display_mode == "transparent", (
+        "der neue Start nimmt den gemerkten Modus"
+    )
+    angehakt = [action.data() for action in zweites._mode_group.actions() if action.isChecked()]
+    assert angehakt == ["transparent"], f"und das Menü zeigt ihn: {angehakt}"
+    assert [a.data() for a in zweites._shading_group.actions() if a.isChecked()] == ["smooth"]
+    assert [a.data() for a in zweites._projection_group.actions() if a.isChecked()] == [
+        "orthographic"
+    ]

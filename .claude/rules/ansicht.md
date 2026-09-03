@@ -720,6 +720,54 @@ Am laufenden Fenster gemessen, ein Zug über 59 Schritte am Y-Ring:
 | Schritt 24 bis 46 | **45,0°**, dreiundzwanzig Schritte lang |
 | ab Schritt 47 | 49,2° → 51,4° frei |
 
+## Was die Ansicht sich merkt — und was VTK nicht annimmt (03.09.2026)
+
+**Drei Ansichtseinstellungen waren flüchtig.** Darstellung (massiv, mit
+Kanten, Drahtgitter, transparent), Schattierung und Projektion standen in
+keiner Einstellung: Wer *Transparent* wählte, hatte beim nächsten Start wieder
+*Massiv* — und hielt es für die eigene Erinnerung (Robert, 03.09.2026:
+„sollte leicht durchsichtig sein seit dem letzten update"). Dazu trugen die
+zwölf Menüeinträge **kein Häkchen**; man sah also auch im laufenden Programm
+nicht, welcher gilt.
+
+Beides zusammen behoben, nach dem Muster von Thema und Navigation: drei
+`QActionGroup`s mit Häkchen, drei `action_`-Methoden, die setzen, merken und
+speichern, und `_apply_settings` wendet sie beim Start an. Der Skizzenmodus
+stellt Darstellung und Projektion weiterhin **direkt am Viewport** um und
+nimmt es beim Verlassen zurück — das ist eine Leihgabe und keine Entscheidung
+des Nutzers, also wird sie nicht gespeichert.
+
+### Der Transparenzmodus mischt nach Zeichenreihenfolge, und das bleibt so
+
+Der Fund kam aus dem Quelltext (3d-druck-85): `enable_depth_peeling` gibt es
+im Viewport nicht, also mischt VTK halbdurchsichtige Flächen in der
+Reihenfolge, in der die Aktoren angelegt wurden.
+
+**Im Bild bestätigt.** Zwei transparente Quader hintereinander, Blick von
+vorn, dieselbe Szene in zwei Einfügereihenfolgen:
+
+    vorne zuerst gegen hinten zuerst:  13 784 Bildpunkte anders,
+                                       größte Abweichung 47 von 255
+
+**Und zweimal gemessen nicht behebbar** — jedenfalls nicht auf diesem Weg:
+
+| Anlauf | Ergebnis |
+|---|---|
+| `enable_depth_peeling()` beim Umschalten in den Modus | `UseDepthPeeling=1`, `LastRenderingUsedDepthPeeling=**0**`, Bild unverändert |
+| dasselbe **vor** dem ersten Bild, mit acht Schichten und `occlusion_ratio=0` | genauso |
+
+Die Voraussetzungen stimmen dabei (`MultiSamples=0`, `AlphaBitPlanes=1`), und
+`enable_depth_peeling` gibt `True` zurück — VTK nimmt die Sortierung an und
+fährt sie trotzdem nicht. Der Aufruf ist deshalb **nicht** eingebaut: Ein
+Aufruf, der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas
+bewirkt (dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
+Fensterchrom).
+
+Was bliebe, ist die Sortierung selbst zu machen — die Aktoren bei jedem
+Kamerawechsel nach Tiefe neu einzuhängen. Das ist ein eigener Punkt und steht
+im Register; solange er offen ist, hängt das transparente Bild an der
+Reihenfolge, in der die Körper entstanden sind.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an

@@ -1186,6 +1186,22 @@ EPS_DRAG = 0.05
 #: erwischen, zu wenig, um die falsche Fläche zu greifen.
 PICK_TOLERANCE = 0.005
 
+#: Die Farbe, in der die Kandidaten einer mehrdeutigen Frage liegen (§21.3).
+#:
+#: **Nicht die Auswahlfarbe.** Was hier leuchtet, ist keine Auswahl, sondern
+#: eine Frage: „Welches dieser drei Löcher meinst du?" Wer die Auswahlfarbe
+#: nähme, sagte dreimal „das hier ist gewählt", und der Kunde suchte den
+#: Unterschied. ``info`` ist die Rolle, die auf eine Auskunft zeigt.
+CANDIDATE_COLOUR = ROLES["info"]
+
+#: Wie durchscheinend ein Kandidat ist, und wie der betonte.
+#:
+#: Der Unterschied trägt die Auskunft „diese Zeile im Dialog gehört zu diesem
+#: Loch" — zusammen mit der Kennung, die an jedem Kandidaten steht. Farbe
+#: allein täte es nicht (Regel 18), und beide sind ohnehin dieselbe.
+CANDIDATE_OPACITY = 0.45
+EMPHASIS_OPACITY = 0.95
+
 #: Bei welchen Winkeln der Drehgriff kurz einrastet, und wie nah man dafür
 #: herankommen muss — beides in Grad.
 #:
@@ -3042,6 +3058,12 @@ class Viewport(QWidget):
         self._snap_actors: list[Any] = []
         """Die Fangmarke unter dem Zeiger — sie zeigt vor dem Klick, wohin der
         Punkt fällt."""
+        self._candidates: tuple[tuple[str, str], ...] = ()
+        """Die Merkmale, zwischen denen eine Frage entscheiden lässt (§21.3) —
+        je Eintrag Körper und Merkmal, denn dieselbe Kennung gibt es in
+        mehreren Körpern."""
+        self._candidate_emphasis: tuple[str, str] | None = None
+        self._candidate_actors: list[Any] = []
         self._snap_owner: str = ""
         """Der Körper unter dem Zeiger, im Bild gefragt — damit die Marke dort
         steht, wo das Maß danach steht (§25)."""
@@ -3977,6 +3999,12 @@ class Viewport(QWidget):
         self._hover_feature = False
         self._hovered_object = None
         self._hovered_feature = None
+        # Und die Kandidaten einer Frage ebenso: Sie zeigen auf Dreiecke einer
+        # bestimmten Auswertung, und nach der nächsten kann dieselbe Kennung
+        # eine andere Fläche meinen. Wer die Frage noch offen hat, bekommt sie
+        # mit dem nächsten Aufruf zurück.
+        self._candidates = ()
+        self._candidate_emphasis = None
         # Die Fangmarke gehört zu einer Geometrie, die es gleich nicht mehr
         # gibt. Die Maße bleiben (sie überleben eine Auswertung, §18.3), die
         # Marke nicht: Sie zeigt auf eine Ecke, die dieser Schritt entfernt
@@ -6240,6 +6268,114 @@ class Viewport(QWidget):
                 reset_camera=False,
             )
         )
+
+    def show_candidates(
+        self,
+        candidates: Sequence[tuple[str, str]] = (),
+        emphasis: tuple[str, str] | None = None,
+    ) -> None:
+        """Zeigt, zwischen welchen Merkmalen eine Frage entscheiden lässt (§21.3).
+
+        Der Bauplan verlangt es wörtlich: Verweist eine spätere Operation auf
+        eine mehrdeutige Kennung, hält die Auswertung an, **zeigt die
+        Kandidaten hervorgehoben** und fragt. Gebaut war alles außer der
+        Hervorhebung — der Dialog nannte `hole_1`, `hole_2`, `hole_3`, und der
+        Kunde sollte zwischen drei Bohrungen entscheiden, die er nicht sieht.
+
+        ``candidates`` sind Paare aus Körper- und Merkmalskennung. **Paare und
+        nicht Kennungen**: Merkmalskennungen sind je Körper vergeben, zwei
+        Körper haben beide ein ``hole_1``, und über alle hervorzuheben
+        leuchtete an zwei Stellen, während die Frage eine meint.
+
+        ``emphasis`` ist der Kandidat, auf dem die Markierung im Dialog steht;
+        er wird deckender gezeichnet. Ein zweiter Aufruf ersetzt den ersten —
+        der Dialog ruft bei jedem Zeilenwechsel neu, und das kostet nichts.
+
+        Eine leere Folge nimmt alles weg. Kennungen, die es in der laufenden
+        Auswertung nicht gibt, werden still übergangen: Die Auswertung, die
+        gefragt hat, kann eine andere sein als die, die im Bild steht.
+        """
+        self._candidates = tuple(candidates)
+        self._candidate_emphasis = emphasis
+        self._redraw_candidates()
+
+    def _redraw_candidates(self) -> None:
+        """Zeichnet die Kandidaten — Fläche in der Auskunftsfarbe, Kennung
+        daneben.
+
+        Die Kennung ist die zweite Kodierung (Regel 18) und zugleich die
+        Brücke zum Dialog: Dort steht dieselbe Zeichenkette in der Liste. Sie
+        ist ASCII und darf deshalb in eine VTK-Beschriftung — anders als ein
+        übersetzter Flächenname, der den ganzen Griffaufbau abstürzen ließ.
+        """
+        if self.plotter is None:
+            return
+        for actor in self._candidate_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._candidate_actors.clear()
+        if not self._candidates or self._result is None:
+            self._draw()
+            return
+
+        import numpy as np
+        import pyvista as pv
+
+        marks: list[tuple[Vec3, str]] = []
+        for index, (object_id, feature_id) in enumerate(self._candidates):
+            entry = self._result.scene.objects.get(object_id)
+            if entry is None or not self._in_view(object_id, entry):
+                continue
+            feature = entry.features.get(feature_id)
+            raw = getattr(entry.mesh, "raw", None)
+            if feature is None or raw is None or not feature.face_indices:
+                continue
+            chosen = np.asarray(feature.face_indices, dtype=np.int64)
+            triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
+            normals = np.asarray(raw.face_normals, dtype=float)[chosen]
+            corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
+            lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
+            corners += np.repeat(normals, 3, axis=0) * lift
+            corners += self._view_offset(entry, self._result)
+            count = len(triangles)
+            faces = np.hstack(
+                [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
+            ).ravel()
+            loud = (object_id, feature_id) == self._candidate_emphasis
+            self._candidate_actors.append(
+                self.plotter.add_mesh(
+                    pv.PolyData(corners, faces),
+                    color=CANDIDATE_COLOUR,
+                    opacity=EMPHASIS_OPACITY if loud else CANDIDATE_OPACITY,
+                    backface_params={"color": CANDIDATE_COLOUR},
+                    lighting=False,
+                    name=f"candidate:{index}",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+            middle = corners.mean(axis=0)
+            marks.append(((float(middle[0]), float(middle[1]), float(middle[2])), feature_id))
+
+        if marks:
+            self._candidate_actors.append(
+                self.plotter.add_point_labels(
+                    np.asarray([point for point, _text in marks], dtype=float),
+                    [text for _point, text in marks],
+                    text_color=CANDIDATE_COLOUR,
+                    font_size=12,
+                    show_points=False,
+                    name="candidate-labels",
+                    always_visible=True,
+                    render=False,
+                )
+            )
+        self._draw()
+
+    @property
+    def candidates(self) -> tuple[tuple[str, str], ...]:
+        """Welche Kandidaten gerade leuchten — Auskunft für Tests und Dialog."""
+        return self._candidates
 
     def _redraw_feature_patch(self) -> None:
         """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe (§18.5).

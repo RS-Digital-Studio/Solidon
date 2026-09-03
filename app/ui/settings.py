@@ -34,6 +34,19 @@ class UiSettings:
     theme: str = "dark"
     diff_palette: str = "blue_orange"
     """Farben der Differenzansicht (§19.1). Rot/Grün gibt es, es ist nicht die Vorgabe."""
+    display_mode: str = "solid"
+    """Wie die Körper gezeichnet werden (§18.1): massiv, mit Kanten,
+    Drahtgitter, transparent.
+
+    **Gemerkt, weil eine Entscheidung des Nutzers gemerkt gehört.** Sie stand
+    in keiner Einstellung: Wer Transparent wählte, hatte beim nächsten Start
+    wieder Massiv — und hielt es für seine eigene Erinnerung, nicht für einen
+    Fehler (Robert, 03.09.2026)."""
+    shading: str = "flat"
+    """Flach oder weich (§18.1). Dieselbe Begründung wie eine Zeile darüber."""
+    projection: str = "perspective"
+    """Perspektivisch oder orthografisch (§18.1). Wer misst, stellt einmal auf
+    orthografisch — und meinte es dauerhaft."""
     display_unit: str = "mm"
     """Die Anzeigeeinheit (§19.3). Der Kern bleibt in beiden Fällen bei
     Millimetern."""
