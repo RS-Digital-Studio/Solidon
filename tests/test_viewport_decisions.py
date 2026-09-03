@@ -5571,7 +5571,15 @@ def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) ->
         # rechnet: Ein nachgiebiges Objekt kommt dort als `invalid
         # __array_struct__` an. Eine Attrappe, die auf alles antwortet,
         # antwortet auch dort, wo eine Zahl gebraucht wird.
-        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+        camera = SimpleNamespace(
+            position=(100.0, 100.0, 100.0),
+            focal_point=(0.0, 0.0, 0.0),
+            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
+            # stirbt jeder Test, der über den Griff geht, am Massstab.
+            GetPosition=lambda: (100.0, 100.0, 100.0),
+            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
+            GetViewUp=lambda: (0.0, 0.0, 1.0),
+        )
 
         def add_lines(self, *args: Any, **kwargs: Any) -> Any:
             gezeichnet.append(str(kwargs.get("name")))
@@ -5716,7 +5724,15 @@ def test_a_new_result_drops_the_old_preview(qt_app: QApplication) -> None:
     class _Plotter(_Nachgiebig):
         # Eine echte Kamera: `show_scene` rechnet über `shadow_direction` mit
         # ihren Zahlen und meldet sonst `invalid __array_struct__`.
-        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+        camera = SimpleNamespace(
+            position=(100.0, 100.0, 100.0),
+            focal_point=(0.0, 0.0, 0.0),
+            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
+            # stirbt jeder Test, der über den Griff geht, am Massstab.
+            GetPosition=lambda: (100.0, 100.0, 100.0),
+            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
+            GetViewUp=lambda: (0.0, 0.0, 1.0),
+        )
 
         def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
             # `prop` braucht der Auswahlübergang (`_fade_selection` setzt die
@@ -5777,7 +5793,15 @@ def test_the_turn_arc_does_not_outlive_the_gizmo(qt_app: QApplication) -> None:
             return _Nachgiebig()
 
     class _Plotter(_Nachgiebig):
-        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+        camera = SimpleNamespace(
+            position=(100.0, 100.0, 100.0),
+            focal_point=(0.0, 0.0, 0.0),
+            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
+            # stirbt jeder Test, der über den Griff geht, am Massstab.
+            GetPosition=lambda: (100.0, 100.0, 100.0),
+            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
+            GetViewUp=lambda: (0.0, 0.0, 1.0),
+        )
 
     viewport = Viewport()
     viewport.plotter = _Plotter()  # type: ignore[assignment]
@@ -5822,7 +5846,15 @@ def test_the_shadow_returns_even_without_a_release(qt_app: QApplication) -> None
             return _Nachgiebig()
 
     class _Plotter(_Nachgiebig):
-        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+        camera = SimpleNamespace(
+            position=(100.0, 100.0, 100.0),
+            focal_point=(0.0, 0.0, 0.0),
+            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
+            # stirbt jeder Test, der über den Griff geht, am Massstab.
+            GetPosition=lambda: (100.0, 100.0, 100.0),
+            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
+            GetViewUp=lambda: (0.0, 0.0, 1.0),
+        )
 
     class _Actor:
         def __init__(self) -> None:
@@ -5874,7 +5906,15 @@ def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
             return _Nachgiebig()
 
     class _Plotter(_Nachgiebig):
-        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+        camera = SimpleNamespace(
+            position=(100.0, 100.0, 100.0),
+            focal_point=(0.0, 0.0, 0.0),
+            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
+            # stirbt jeder Test, der über den Griff geht, am Massstab.
+            GetPosition=lambda: (100.0, 100.0, 100.0),
+            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
+            GetViewUp=lambda: (0.0, 0.0, 1.0),
+        )
 
     viewport = Viewport()
     viewport.plotter = _Plotter()  # type: ignore[assignment]

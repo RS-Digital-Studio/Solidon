@@ -1858,6 +1858,16 @@ class _GizmoPlotter:
         self.widgets: list[_GizmoWidget] = []
         self.interactor = _GizmoInteractor()
         self.iren = _GizmoObservers()
+        # **Eine Kamera im VTK-Stil.** Seit der Griff seine Länge in
+        # Bildpunkten deckelt (`_gizmo_scale_for`), fragt er über
+        # `_pixels_per_mm_at` die Projektion — und die ruft `GetPosition`,
+        # nicht `position`. Ohne diese drei stirbt jeder Test, der einen Griff
+        # anhängt, am Massstab statt an seiner Sache.
+        self.camera = SimpleNamespace(
+            GetPosition=lambda: (100.0, 100.0, 100.0),
+            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
+            GetViewUp=lambda: (0.0, 0.0, 1.0),
+        )
 
     def add_affine_transform_widget(self, actor: object, **_kwargs: object) -> _GizmoWidget:
         widget = _GizmoWidget(actor)

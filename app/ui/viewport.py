@@ -531,6 +531,18 @@ def rgb_of(colour: str) -> tuple[float, float, float]:
     return (value.redF(), value.greenF(), value.blueF())
 
 
+def _centre_of(actor: Any) -> tuple[float, float, float]:
+    """Die Mitte eines Aktors — und (0, 0, 0), wo keine zu holen ist."""
+    bounds = getattr(actor, "GetBounds", None)
+    if not callable(bounds):
+        return (0.0, 0.0, 0.0)
+    try:
+        low_x, high_x, low_y, high_y, low_z, high_z = bounds()
+    except Exception:
+        return (0.0, 0.0, 0.0)
+    return ((low_x + high_x) / 2.0, (low_y + high_y) / 2.0, (low_z + high_z) / 2.0)
+
+
 def turn_arc(origin: Any, axis: Any, radius: float, angle: float, *, steps: int = 32) -> Any:
     """Die Punkte eines Bogens von 0 bis ``angle`` um ``axis``, im Uhrzeigersinn.
 
@@ -2259,6 +2271,19 @@ CORNER_FRACTION = 0.08
 #: zurückgenommen worden.
 GIZMO_SCALE = 0.3
 GIZMO_LINE_RADIUS = 0.035
+
+#: Wie lang der Griff im Bild mindestens wird, in Bildpunkten.
+#:
+#: **Weil Treffbarkeit keine Millimeterfrage ist.** Der Anteil oben gilt dem
+#: Aktor, an dem der Griff hängt — an einer Merkmalsscheibe ist das der
+#: Bohrungsdurchmesser, und bei Ø 4 mm bleiben 1,7 mm Pfeil und 0,20 mm
+#: Schaft. Wie viele Bildpunkte daraus werden, entscheidet der Zoom.
+#:
+#: Achtzig ist doppelt so viel, wie der Kommentar an :data:`GIZMO_SCALE` als
+#: „zu klein" nennt (vierzig), und liegt in der Grössenordnung des räumlichen
+#: Ziehgriffs (:data:`PULL_HANDLE_PIXELS`, 38 — dort ist es allerdings die
+#: **halbe** Länge, gemessen vom Mittelpunkt).
+GIZMO_LEAST_PIXELS = 80.0
 
 
 #: Die Operationen, die ein Merkmal so ändern, wie der Griff es täte.
@@ -8145,7 +8170,9 @@ class Viewport(QWidget):
             actor,
             release_callback=self._on_gizmo_released,
             interact_callback=self._on_gizmo_interacted,
-            scale=GIZMO_SCALE,
+            scale=self._gizmo_scale_for(
+                actor, self._face_seat[0] if self._face_seat else (0.0, 0.0, 0.0)
+            ),
             line_radius=GIZMO_LINE_RADIUS,
         )
         # **Danach und nicht davor**: Das Widget schaltet beim Anhängen selbst
@@ -8185,6 +8212,56 @@ class Viewport(QWidget):
                 interact_callback=self._on_scale_interacted,
             )
         self._label_gizmo(actor)
+
+    def _gizmo_scale_for(self, actor: Any, centre: Any = None) -> float:
+        """Der Massstab des Griffs — gross genug, um ihn zu treffen.
+
+        **Marke und Werkzeug ziehen gegeneinander, und eine Millimeterzahl kann
+        nur eines von beiden.** Die Scheibe soll das Merkmal genau abdecken
+        (:meth:`_handle_radius`), also klein sein. Der Griff hängt an ihr, und
+        pyvista rechnet seine Pfeillänge als ``actor.GetLength() *
+        GIZMO_SCALE`` — bei einer Ø 4-Bohrung sind das 1,7 mm Pfeil und
+        0,20 mm Schaft, auf einem 105-mm-Teil rund zehn Bildpunkte lang und
+        gut einer dick. Der Kommentar an :data:`GIZMO_SCALE` nennt vierzig
+        Bildpunkte ausdrücklich als **zu klein** (3d-druck-85, 03.09.2026).
+
+        **Treffbarkeit ist eine Grösse in Bildpunkten, keine in Millimetern**
+        — sie hängt am Zoom. Dieselbe Datei weiss das an drei anderen Stellen
+        (:data:`PULL_HIT_PIXELS`, :data:`CURSOR_PIXELS`,
+        :data:`PULL_HANDLE_PIXELS`), und hier fehlte es. Der Anteil gilt
+        deshalb weiter als Vorgabe; unterschreitet er
+        :data:`GIZMO_LEAST_PIXELS`, wächst der Griff auf dieses Mass.
+
+        Damit ist der Widerspruch aufgelöst, an dem heute zwei Fassungen
+        gescheitert sind: Die Marke bleibt am Merkmal, der Griff wird
+        bedienbar, und keiner von beiden muss dafür der anderen folgen.
+        """
+        length = float(actor.GetLength())
+        wanted = length * GIZMO_SCALE
+        if centre is None:
+            # Ohne Angabe der Sitz der Marke — und ohne Marke die Mitte des
+            # Aktors, an dem der Griff hängt.
+            centre = self._face_seat[0] if self._face_seat else _centre_of(actor)
+        # **Ohne Projektion gilt der Anteil**, und zwar ohne dass der Griff
+        # deshalb ausfällt: Offscreen gibt es keinen Renderer, und dort sieht
+        # den Griff ohnehin niemand. Ihn hier von der Projektion abhängig zu
+        # machen hiesse, jeden Test, der einen Griff anhängt, an eine
+        # vollständige Kamera-Attrappe zu binden — dreizehn wurden dabei rot,
+        # keiner davon an der Sache.
+        # **Und wenn die Projektion nichts hergibt, gilt der Anteil.** Der
+        # Deckel in Bildpunkten ist eine Verbesserung, kein Muss: Offscreen
+        # gibt es keinen Renderer, in Prüfständen keine vollständige Kamera,
+        # und in beiden Lagen sieht den Griff ohnehin niemand. Ihn davon
+        # abhängig zu machen band dreizehn Tests an eine Kamera-Attrappe, und
+        # keiner von ihnen wurde an seiner Sache rot.
+        try:
+            scale = self._pixels_per_mm_at(centre)
+        except Exception:
+            scale = None
+        if scale is None or scale <= EPS_GEOM or length <= EPS_GEOM:
+            return GIZMO_SCALE
+        least = GIZMO_LEAST_PIXELS / scale
+        return max(GIZMO_SCALE, least / length) if wanted < least else GIZMO_SCALE
 
     def _give_the_widget_a_picker_that_hits(self) -> None:
         """Setzt den Picker, mit dem pyvistas Griff seine Pfeile findet.
@@ -8447,8 +8524,20 @@ class Viewport(QWidget):
         axes = getattr(gizmo, "axes", None)
         direction = axes[index] if axes is not None else np.eye(3)[index]
         origin = getattr(gizmo, "_origin", (0.0, 0.0, 0.0))
-        actor = self._actors.get(self._selected) if self._selected is not None else None
-        radius = float(actor.GetLength()) * GIZMO_SCALE if actor is not None else 0.0
+        # **Der Radius ist der des Griffs, nicht der des Körpers.** Hier stand
+        # der Körperaktor, während `set_gizmo` bei einem gewählten Merkmal die
+        # Scheibe übergibt — der Bogen war damit sechsmal so gross wie das
+        # Werkzeug, dessen Drehung er zeigt, und lag weit ausserhalb des
+        # Merkmals (3d-druck-85, 03.09.2026). Der eigene Docstring versprach
+        # schon das Richtige; nur die Zeile darunter tat es nicht.
+        actor = getattr(gizmo, "_main_actor", None)
+        if actor is None:
+            actor = self._actors.get(self._selected) if self._selected is not None else None
+        radius = (
+            float(actor.GetLength()) * self._gizmo_scale_for(actor, origin)
+            if actor is not None
+            else 0.0
+        )
         points = turn_arc(origin, direction, radius, self._settled_angle(steps.angle))
         if points is None:
             return
