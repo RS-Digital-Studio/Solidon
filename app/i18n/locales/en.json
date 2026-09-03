@@ -3875,6 +3875,7 @@
   "Zielzahl. Weniger heißt schneller und ungenauer — wie viel, sagt der Bericht.": "Target count. Fewer means faster and less accurate — the report says how much.",
   "Zoll (in)": "Inches (in)",
   "Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.": "No profile matches this printer by itself — please choose one.",
+  "Für {printer} bringt {slicer} kein eigenes Profil mit — wählen Sie das Profil Ihres Druckers aus der Liste.": "{slicer} does not ship a profile for {printer} — pick your printer's profile from the list.",
   "Zu diesem Merkmal ist keine Lage gespeichert: Es hat weder eine Richtung noch einen Mittelpunkt.": "No pose is stored for this feature: it has neither a direction nor a centre.",
   "Zu diesem Schritt fehlt der ausgelagerte Inhalt im Container — die Datei ist unvollständig.": "The externalised content for this step is missing from the container — the file is incomplete.",
   "Zu diesem Slicer ist kein Fenster installiert — er rechnet nur.": "No window is installed for this slicer — it only computes.",

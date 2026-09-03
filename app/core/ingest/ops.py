@@ -9,6 +9,7 @@ Parameteränderung, kein neuer Import.
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
@@ -19,6 +20,7 @@ from app.core.geom.transform import apply, scaling, translation
 from app.core.ingest import outline, threemf
 from app.core.ingest.loader import (
     IngestResult,
+    bed_offset,
     check_limits,
     check_unpacked,
     detect_unit,
@@ -83,6 +85,14 @@ class LoadParams(BaseParams):
         title=_("Auf das Bett setzen"),
         default=False,
         doc=_("Setzt das Modell mit seiner Unterseite auf das Druckbett."),
+    )
+    centre: bool = param(
+        title=_("Mittig auf das Bett legen"),
+        default=False,
+        doc=_(
+            "Schiebt das Modell in die Mitte der Druckplatte. Ein Modell aus einem "
+            "CAD-Programm hat seinen Nullpunkt oft in einer Ecke und liegt sonst weit daneben."
+        ),
     )
     weld: bool = param(
         title=_("Punkte verschweißen"),
@@ -209,6 +219,10 @@ def load(ctx: OpContext) -> OpResult:
             # deshalb **gemeinsam** aufs Bett, unten nach der Schleife — nicht
             # gar nicht.
             place_on_bed=params.place_on_bed and len(parts) == 1,
+            # Aus demselben Grund wie eine Zeile darüber: Jeden Körper für sich
+            # zu zentrieren schöbe die Teile einer Baugruppe ineinander. Sie
+            # rückt gemeinsam in die Mitte, unten nach der Schleife.
+            centre=params.centre and len(parts) == 1,
             progress=ctx.progress,
         )
         outputs.append(
@@ -218,8 +232,10 @@ def load(ctx: OpContext) -> OpResult:
             _named(result.findings, part.name) if len(parts) > 1 else list(result.findings)
         )
 
-    if params.place_on_bed and len(outputs) > 1:
-        outputs = _group_on_bed(outputs, findings)
+    if (params.place_on_bed or params.centre) and len(outputs) > 1:
+        outputs = _group_on_bed(
+            outputs, findings, place_on_bed=params.place_on_bed, centre=params.centre
+        )
 
     if len(parts) > 1:
         findings.append(
@@ -331,36 +347,64 @@ def _colour_groups(
     return MeshData(raw=mesh.raw, slots=groups.slots), list(groups.materials)
 
 
-def _group_on_bed(outputs: list[SceneObject], findings: list[Finding]) -> list[SceneObject]:
-    """Setzt eine Baugruppe **als Ganzes** auf Z = 0 (§17.1, Schritt 6).
+def _group_on_bed(
+    outputs: list[SceneObject],
+    findings: list[Finding],
+    *,
+    place_on_bed: bool = True,
+    centre: bool = False,
+) -> list[SceneObject]:
+    """Setzt eine Baugruppe **als Ganzes** auf Z = 0 und in die Mitte der
+    Platte (§17.1, Schritt 6).
 
     Der Haken war für eine Baugruppe wirkungslos, und zwar stillschweigend:
     Wer ihn setzte, bekam eine Datei, die lag, wo sie lag, ohne ein Wort
     darüber. Der Grund dafür war richtig — jeden Körper einzeln abzusetzen
     stapelte Gehäuse, Deckel und Tülle aufeinander —, die Folgerung nicht: Was
     zusammengehört, wird zusammen verschoben, und dann ist der tiefste Punkt
-    der Gruppe der, der auf null kommt.
+    der Gruppe der, der auf null kommt. Fürs Zentrieren gilt dasselbe: Die
+    Mitte ist die des gemeinsamen Hüllquaders, nicht die jedes Körpers.
 
-    Steht die Gruppe schon unten, geschieht nichts und wird nichts gemeldet:
+    Liegt die Gruppe schon richtig, geschieht nichts und wird nichts gemeldet:
     ein Befund über eine Verschiebung um null wäre Lärm.
     """
-    lowest = min(float(as_mesh_data(entry.mesh).bounds.minimum[2]) for entry in outputs)
-    if is_zero(lowest):
+    boxes = [as_mesh_data(entry.mesh).bounds for entry in outputs]
+    low = [min(float(box.minimum[axis]) for box in boxes) for axis in range(3)]
+    high = [max(float(box.maximum[axis]) for box in boxes) for axis in range(3)]
+    group = BoundingBox((low[0], low[1], low[2]), (high[0], high[1], high[2]))
+    offset = bed_offset(group, place_on_bed=place_on_bed, centre=centre)
+    if all(is_zero(value) for value in offset):
         return outputs
 
-    lift = translation((0.0, 0.0, -lowest))
+    lift = translation(offset)
     moved = [
         dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
     ]
+    # **Der Satz sagt, was geschehen ist, und nicht mehr.** Beide Haken sind
+    # einzeln setzbar (sie stehen als Parameter an der Operation), und ein
+    # Befund „auf das Bett gesetzt" über eine Gruppe, die nur zur Seite gerückt
+    # wurde, wäre schlicht unwahr.
+    if place_on_bed and centre:
+        message = _(
+            "Die Baugruppe wurde als Ganzes mittig auf das Bett gesetzt — die Teile "
+            "behalten ihre Lage zueinander."
+        )
+    elif place_on_bed:
+        message = _(
+            "Die Baugruppe wurde als Ganzes auf das Bett gesetzt — die Teile behalten "
+            "ihre Lage zueinander."
+        )
+    else:
+        message = _(
+            "Die Baugruppe wurde als Ganzes in die Mitte des Betts gerückt — die Teile "
+            "behalten ihre Lage zueinander."
+        )
     findings.append(
         Finding(
             code="load.assembly_on_bed",
             severity="info",
-            message=_(
-                "Die Baugruppe wurde als Ganzes auf das Bett gesetzt — die Teile behalten "
-                "ihre Lage zueinander."
-            ),
-            values={"amount": format_length(-lowest)},
+            message=message,
+            values={"amount": format_length(math.hypot(*offset))},
         )
     )
     return moved

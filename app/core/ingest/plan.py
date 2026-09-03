@@ -61,8 +61,33 @@ class ImportPlan:
     """
 
 
-def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -> ImportPlan:
+def import_plan(
+    source_id: str,
+    name: str,
+    payload: bytes,
+    unit: str = "auto",
+    *,
+    first_model: bool = False,
+) -> ImportPlan:
     """Der Einleseweg für eine Datei, entschieden an ihrer Endung.
+
+    ``first_model`` sagt, dass die Szene noch leer ist — das erste Modell
+    eines Projekts. Dann kommt es **auf** die Platte und **in ihre Mitte**
+    (§17.1, Schritt 6), statt dort zu liegen, wo seine Datei es hinlegt: Ein
+    heruntergeladenes Modell sitzt meist um den Ursprung und steckt zur Hälfte
+    unter dem Bett, eines aus einem CAD-Programm hat seinen Nullpunkt in einer
+    Ecke und liegt weit daneben. Beides ist für den ersten Blick auf ein
+    frisches Projekt die falsche Lage (Entscheidung Robert, 03.09.2026).
+
+    **Nur beim ersten**, und zwar aus einem geometrischen Grund: Ein zweites
+    Modell in die Mitte zu schieben legte es in das erste hinein. Wer weitere
+    Teile ordnet, nimmt *Auf dem Bett anordnen* (§29) — die Operation, die den
+    Platz kennt.
+
+    Die Entscheidung fällt hier und wird in die Parameter der Operation
+    geschrieben, nicht beim Auswerten nachgeschlagen: Sonst hinge das Ergebnis
+    daran, was sonst noch in der Szene steht, und dieselbe Datei käme beim
+    nächsten Öffnen anders herein (§15.1).
 
     ``payload`` wird nur für die 3MF-Baugruppe gebraucht: Wie viele Körper eine
     Datei hält, entscheidet sich **vor** der Operation, weil der Stapel die
@@ -115,7 +140,11 @@ def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -
         title=_TITLES["load"],
         draft=OperationDraft(
             op="load",
-            params={"source": source_id, "unit": unit},
+            params={
+                "source": source_id,
+                "unit": unit,
+                **({"place_on_bed": True, "centre": True} if first_model else {}),
+            },
             produces=max(parts, 1),
         ),
         asks_unit=asks,

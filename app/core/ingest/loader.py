@@ -9,7 +9,8 @@ Jede geladene Datei geht dieselben sechs Schritte, in dieser Reihenfolge:
 3. entartete Dreiecke entfernen (Nullfläche, Nadeln, Duplikate);
 4. Normalen vereinheitlichen und die Ausrichtung prüfen;
 5. Komponenten zählen und Kleinstteile **melden** statt still zu löschen;
-6. den Schwerpunkt finden und das Aufsetzen aufs Bett **anbieten**.
+6. den Schwerpunkt finden, das Aufsetzen aufs Bett und das Zentrieren
+   darauf **anbieten**.
 
 Alles, was die Stufe getan hat, landet in ``IngestInfo`` und in Befunden — der
 Prüfbericht (§17.3) und der Steckbrief können also sagen, was auf dem Weg
@@ -42,7 +43,7 @@ from app.core.geom.repair import SMALL_COMPONENT_SHARE
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
-from app.core.types import Finding, IngestInfo, ProgressFn
+from app.core.types import BoundingBox, Finding, IngestInfo, ProgressFn, Vec3
 from app.core.units import (
     EPS_GEOM,
     LengthUnit,
@@ -462,6 +463,29 @@ def _silent(fraction: float, text: str) -> None:
     return None
 
 
+def bed_offset(bounds: BoundingBox, *, place_on_bed: bool = False, centre: bool = False) -> Vec3:
+    """Der Versatz, der einen Körper auf das Bett und in dessen Mitte legt
+    (§17.1, Schritt 6).
+
+    **Die Mitte des Bettes ist der Ursprung.** Der Kern rechnet um ihn herum:
+    ``arrange_on_bed`` misst seine Ränder als ``±width/2``, und der Viewport
+    zeichnet die Platte um denselben Punkt. Zentrieren heißt deshalb: den
+    Mittelpunkt des Hüllquaders auf x = y = 0 schieben.
+
+    Als eigene Funktion, weil zwei Stellen denselben Versatz brauchen — ein
+    einzelner Körper und eine Baugruppe, die als Ganzes bewegt wird — und weil
+    eine Verschiebung, die nur im Ablauf steht, sich nicht einzeln prüfen lässt.
+
+    Der Hüllquader kommt von außen, weil eine Baugruppe ihren gemeinsamen
+    braucht und nicht den eines einzelnen Körpers.
+    """
+    return (
+        -bounds.centre[0] if centre else 0.0,
+        -bounds.centre[1] if centre else 0.0,
+        -bounds.minimum[2] if place_on_bed else 0.0,
+    )
+
+
 def normalise(
     mesh: MeshData,
     unit: LengthUnit,
@@ -470,6 +494,7 @@ def normalise(
     remove_degenerate: bool = True,
     unify_normals: bool = True,
     place_on_bed: bool = False,
+    centre: bool = False,
     progress: ProgressFn = _silent,
 ) -> IngestResult:
     """Führt die sechs Schritte aus und meldet, was sie getan haben."""
@@ -619,10 +644,15 @@ def normalise(
     progress(0.8, str(_("Komponenten zählen")))
     components = _count_components(body, findings)
 
-    # 6 — Lage. Das Aufsetzen aufs Bett wird angeboten, nicht erzwungen.
-    if place_on_bed and len(body.faces):
+    # 6 — Lage. Aufsetzen und Zentrieren werden angeboten, nicht erzwungen.
+    if (place_on_bed or centre) and len(body.faces):
         progress(0.9, str(_("Auf das Bett setzen")))
-        body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
+        low, high = body.bounds
+        box = BoundingBox(
+            (float(low[0]), float(low[1]), float(low[2])),
+            (float(high[0]), float(high[1]), float(high[2])),
+        )
+        body.apply_translation(bed_offset(box, place_on_bed=place_on_bed, centre=centre))
 
     too_fine = _too_fine(len(body.faces))
     if too_fine is not None:

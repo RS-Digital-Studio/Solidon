@@ -1079,8 +1079,14 @@ class Session(QObject):
         # das er nie hineingetan hat und von dem ihm niemand erzählt hat —
         # dasselbe Argument, mit dem §32 die Ansage fremder Inhalte
         # begründet. Gefunden von 3d-druck-46 im Lizenz-Audit.
+        #: Das erste Modell eines Projekts kommt **mittig auf die Platte**
+        #: (§17.1, Schritt 6). Gefragt wird der Stapel, nicht die ausgewertete
+        #: Szene: Er steht fest, bevor gerechnet wird, und die Entscheidung
+        #: landet in den Parametern der Operation statt in einem Zustand, den
+        #: die nächste Auswertung anders vorfindet (§15.1).
+        first_model = not self.history.operations
         try:
-            plan = import_plan(source_id, path.name, payload, unit)
+            plan = import_plan(source_id, path.name, payload, unit, first_model=first_model)
         except AppError:
             self._drop_source(source_id)
             raise

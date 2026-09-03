@@ -3875,6 +3875,7 @@
   "Zielzahl. Weniger heißt schneller und ungenauer — wie viel, sagt der Bericht.": "Nombre visé. Moins signifie plus rapide et moins précis — de combien, le rapport le dit.",
   "Zoll (in)": "Pouces (in)",
   "Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.": "Aucun profil ne correspond de lui-même à cette imprimante — veuillez en choisir un.",
+  "Für {printer} bringt {slicer} kein eigenes Profil mit — wählen Sie das Profil Ihres Druckers aus der Liste.": "{slicer} ne fournit pas de profil pour {printer} — choisissez celui de votre imprimante dans la liste.",
   "Zu diesem Merkmal ist keine Lage gespeichert: Es hat weder eine Richtung noch einen Mittelpunkt.": "Aucune position n'est enregistrée pour cet élément : il n'a ni direction ni centre.",
   "Zu diesem Schritt fehlt der ausgelagerte Inhalt im Container — die Datei ist unvollständig.": "Le contenu externalisé de cette étape manque dans le conteneur — le fichier est incomplet.",
   "Zu diesem Slicer ist kein Fenster installiert — er rechnet nur.": "Ce slicer n'a pas de fenêtre installée — il ne fait que calculer.",

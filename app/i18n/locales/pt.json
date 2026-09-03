@@ -3875,6 +3875,7 @@
   "Zielzahl. Weniger heißt schneller und ungenauer — wie viel, sagt der Bericht.": "Número alvo. Menos significa mais rápido e menos exato — quanto, di-lo o relatório.",
   "Zoll (in)": "Polegadas (in)",
   "Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.": "A esta impressora não corresponde nenhum perfil por si só — escolha um.",
+  "Für {printer} bringt {slicer} kein eigenes Profil mit — wählen Sie das Profil Ihres Druckers aus der Liste.": "{slicer} não traz um perfil para {printer} — escolha o perfil da sua impressora na lista.",
   "Zu diesem Merkmal ist keine Lage gespeichert: Es hat weder eine Richtung noch einen Mittelpunkt.": "Não há posição guardada para este elemento: não tem direção nem centro.",
   "Zu diesem Schritt fehlt der ausgelagerte Inhalt im Container — die Datei ist unvollständig.": "A este passo falta o conteúdo externalizado no contentor — o ficheiro está incompleto.",
   "Zu diesem Slicer ist kein Fenster installiert — er rechnet nur.": "Este fatiador não tem janela instalada — ele apenas calcula.",

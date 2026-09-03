@@ -83,6 +83,17 @@ def on_the_bore_wall(window: MainWindow, feature_id: str = "hole_1") -> tuple[fl
     return (float(centre[0]) + radius, float(centre[1]), 2.0)
 
 
+def top_of(window: MainWindow) -> float:
+    """Die Höhe der Deckfläche, gemessen statt abgelesen.
+
+    Hier stand sie als 4.0, weil die Platte von z -4 bis +4 lag. Seit das erste
+    Modell eines Projekts aufgesetzt hereinkommt (§17.1, Schritt 6), liegt sie
+    von 0 bis 8, und jeder Klick auf „die Deckfläche" traf die Mitte des
+    Körpers. Eine abgelesene Zahl altert still; diese hier nicht.
+    """
+    return float(window.session.last_result.scene.objects["obj_1"].mesh.bounds.maximum[2])
+
+
 def on_the_top_face_beside_a_hole(window: MainWindow) -> tuple[float, float, float]:
     """Die Deckfläche, sieben Millimeter neben einer Bohrung.
 
@@ -90,7 +101,7 @@ def on_the_top_face_beside_a_hole(window: MainWindow) -> tuple[float, float, flo
     ``hole_1`` (8,1 mm) näher als der Mittelpunkt der 80 mm langen Deckfläche
     (36,1 mm), und ein Klick hierhin wählte die Bohrung.
     """
-    return (-30.0, -20.0, 4.0)
+    return (-30.0, -20.0, top_of(window))
 
 
 def two_plates(qt_app: QApplication) -> tuple[Viewport, EvaluationResult]:
@@ -209,10 +220,16 @@ def looking_down(
     return ((x, y, 100.0), (0.0, 0.0, -1.0))
 
 
-#: Wie weit der Strahl in der Draufsicht läuft, bis er die Deckfläche (z = +4)
-#: erreicht: von z = 100 aus sind das 96 mm. Der Wert steht für ``until`` —
-#: alles, was erst dahinter beginnt, hat der Klick nicht gemeint.
-UNTIL_THE_TOP_FACE = 96.0
+def until_the_top_face(window: MainWindow) -> float:
+    """Wie weit der Strahl in der Draufsicht läuft, bis er die Deckfläche
+    erreicht. Der Wert steht für ``until`` — alles, was erst dahinter beginnt,
+    hat der Klick nicht gemeint.
+
+    Stand hier als 96.0 (von z = 100 bis zur Deckfläche bei z = +4) und ist aus
+    demselben Grund gemessen wie :func:`top_of`: Die Platte liegt jetzt höher,
+    und 96 mm reichten vier Millimeter **in** den Körper hinein.
+    """
+    return 100.0 - top_of(window)
 
 
 def test_looking_straight_into_a_through_hole_aims_at_it(window: MainWindow) -> None:
@@ -265,11 +282,11 @@ def test_a_hole_wins_over_the_face_a_fraction_beside_it(window: MainWindow) -> N
     )
     beside = centre[0] + radius + 0.4
 
-    on_the_face = (beside, centre[1], 4.0)
+    on_the_face = (beside, centre[1], top_of(window))
     assert viewport._feature_at(on_the_face) == "face_2", "über den Punkt allein die Fläche"
 
     origin, direction = looking_down(beside, centre[1])
-    aimed = viewport._bore_aim(origin, direction, UNTIL_THE_TOP_FACE)
+    aimed = viewport._bore_aim(origin, direction, until_the_top_face(window))
     assert aimed is not None, "vier Zehntel neben dem Rand ist die Bohrung gemeint"
     assert viewport._feature_at(aimed) == "hole_1"
 
@@ -284,7 +301,7 @@ def test_a_ray_well_beside_the_hole_aims_at_nothing(window: MainWindow) -> None:
     """
     viewport = window.viewport
     origin, direction = looking_down(-30.0, -20.0)
-    assert viewport._bore_aim(origin, direction, UNTIL_THE_TOP_FACE) is None
+    assert viewport._bore_aim(origin, direction, until_the_top_face(window)) is None
 
 
 def test_a_hole_behind_the_surface_is_not_aimed_at(window: MainWindow) -> None:

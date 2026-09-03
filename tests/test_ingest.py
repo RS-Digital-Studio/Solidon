@@ -13,6 +13,7 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshCodec, MeshData, read_mesh
+from app.core.geom.transform import apply, translation
 from app.core.ingest.loader import (
     MAX_FILE_BYTES,
     MAX_TRIANGLES,
@@ -286,6 +287,43 @@ def test_placing_on_the_bed_is_offered_not_forced() -> None:
     assert placed.mesh.bounds.minimum[2] == pytest.approx(0.0)
 
 
+def offset_cube(x: float, y: float, z: float) -> MeshData:
+    """Der Korpuswürfel, aus der Mitte geschoben — so kommt ein Modell aus
+    einem CAD-Programm herein, dessen Nullpunkt in einer Ecke liegt."""
+    return apply(mesh_of("cube_clean.stl"), translation((x, y, z)))
+
+
+def test_centring_puts_the_model_in_the_middle_of_the_bed() -> None:
+    """Das Bett liegt um den Ursprung, also ist seine Mitte x = y = 0."""
+    off = offset_cube(120.0, -35.0, 40.0)
+    assert off.bounds.centre[0] == pytest.approx(120.0)
+
+    centred = normalise(off, "mm", centre=True)
+    assert centred.mesh.bounds.centre[0] == pytest.approx(0.0)
+    assert centred.mesh.bounds.centre[1] == pytest.approx(0.0)
+
+
+def test_centring_leaves_the_height_alone() -> None:
+    """Mittig heißt seitlich mittig. Wer nicht aufsetzen lässt, bleibt in
+    seiner Höhe — sonst tut ein Haken zwei Dinge."""
+    centred = normalise(offset_cube(120.0, -35.0, 40.0), "mm", centre=True)
+    assert centred.mesh.bounds.minimum[2] == pytest.approx(30.0)
+
+
+def test_centring_and_placing_work_together() -> None:
+    both = normalise(offset_cube(120.0, -35.0, 40.0), "mm", place_on_bed=True, centre=True)
+    assert both.mesh.bounds.centre[0] == pytest.approx(0.0)
+    assert both.mesh.bounds.centre[1] == pytest.approx(0.0)
+    assert both.mesh.bounds.minimum[2] == pytest.approx(0.0)
+
+
+def test_centring_is_offered_not_forced() -> None:
+    """Die Gegenprobe: ohne Haken bleibt die Lage der Datei erhalten."""
+    kept = normalise(offset_cube(120.0, -35.0, 40.0), "mm")
+    assert kept.mesh.bounds.centre[0] == pytest.approx(120.0)
+    assert kept.mesh.bounds.centre[1] == pytest.approx(-35.0)
+
+
 def test_progress_is_reported_while_running() -> None:
     seen: list[float] = []
     normalise(
@@ -390,6 +428,86 @@ def test_a_too_large_file_is_refused_for_every_format(monkeypatch: pytest.Monkey
             plan.import_plan("src_1", name, payload)
         assert refused.value.constraint == "file_too_large", name
         assert refused.value.suggestions, "Regel 17"
+
+
+def test_the_first_model_of_a_project_lands_in_the_middle_of_the_bed() -> None:
+    """§17.1, Schritt 6 — Entscheidung Robert, 03.09.2026.
+
+    Ein frisches Projekt zeigt sein erstes Modell mittig auf der Platte statt
+    dort, wo die Datei es hinlegt. Die Entscheidung steht in den Parametern der
+    Operation und nicht in einem Zustand, den die nächste Auswertung anders
+    vorfindet.
+    """
+    from app.core.ingest import plan
+
+    first = plan.import_plan("src_1", "modell.stl", b"", first_model=True)
+    assert first.draft.params["place_on_bed"] is True
+    assert first.draft.params["centre"] is True
+
+
+def test_a_further_model_keeps_its_place() -> None:
+    """Die Gegenprobe, und der Grund für sie: Ein zweites Modell in die Mitte
+    zu schieben legte es in das erste hinein. Dafür gibt es *Auf dem Bett
+    anordnen* (§29)."""
+    from app.core.ingest import plan
+
+    later = plan.import_plan("src_1", "modell.stl", b"")
+    assert "centre" not in later.draft.params
+    assert "place_on_bed" not in later.draft.params
+
+
+def test_only_a_mesh_is_placed_and_centred() -> None:
+    """STEP und eine flache Zeichnung gehen andere Operationen; ihnen einen
+    Parameter mitzugeben, den sie nicht kennen, wäre ein Planungsfehler."""
+    from app.core.ingest import plan
+
+    for name in ("teil.step", "zeichnung.dxf", "platte.svg"):
+        draft = plan.import_plan("src_1", name, b"", first_model=True).draft
+        assert draft.op != "load", name
+        assert "centre" not in draft.params, name
+
+
+def off_centre_stl() -> bytes:
+    """Ein Quader, dessen Nullpunkt in einer Ecke liegt und der unter der
+    Platte beginnt — die Lage, in der ein CAD-Export hereinkommt."""
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    body.apply_translation((140.0, 60.0, -8.0))
+    return bytes(body.export(file_type="stl"))
+
+
+def test_the_window_actually_asks_for_the_first_model(qt_app: object) -> None:
+    """Die Kette endet am letzten Glied: `import_plan` kann den Schalter
+    kennen, und trotzdem setzt ihn niemand.
+
+    Deshalb steht hier der Weg, den ein Kunde geht — Sitzung, Datei, Stapel —
+    und nicht der Aufruf der Planfunktion. Geprüft werden die Parameter der
+    Operation und nicht die Geometrie: Was der Schalter bewirkt, messen die
+    Tests über `normalise` weiter oben.
+    """
+    from app.ui.session import Session
+
+    session = Session()
+    assert session.import_payload("ecke.stl", off_centre_stl(), unit="mm")
+
+    first = session.history.operations[0]
+    assert first.op == "load"
+    assert first.params["place_on_bed"] is True
+    assert first.params["centre"] is True
+
+
+def test_a_second_model_is_not_dragged_into_the_first(qt_app: object) -> None:
+    """Die Gegenprobe am selben Weg — und der Grund für sie steht in der
+    Geometrie: Zentriert läge das zweite Modell im ersten."""
+    from app.ui.session import Session
+
+    session = Session()
+    assert session.import_payload("ecke.stl", off_centre_stl(), unit="mm")
+    assert session.import_payload("noch-eine.stl", off_centre_stl(), unit="mm")
+
+    second = session.history.operations[-1]
+    assert second.op == "load"
+    assert second.params.get("centre") is not True
+    assert second.params.get("place_on_bed") is not True
 
 
 # --- die Lade-Operation ---------------------------------------------------------
@@ -568,6 +686,53 @@ def test_placing_an_assembly_on_the_bed_moves_it_as_one(profile: Profile) -> Non
     assert zweites.minimum[2] == pytest.approx(20.0), "und der Abstand der Teile bleibt"
     codes = {entry.code for entry in result.scene.report.findings}
     assert "load.assembly_on_bed" in codes, "und es steht dabei, dass etwas verschoben wurde"
+
+
+def test_an_assembly_is_centred_as_one_body(profile: Profile) -> None:
+    """Und mittig gerückt wird sie ebenso **gemeinsam** (§17.1, Schritt 6).
+
+    Derselbe Grund wie eine Zusicherung höher, andere Achse: Jeden Körper für
+    sich zu zentrieren legte Gehäuse, Deckel und Tülle übereinander. Die Mitte
+    ist die des gemeinsamen Hüllquaders, und was die Teile voneinander trennt,
+    bleibt.
+    """
+    from app.core.export import threemf
+
+    links = trimesh.creation.box((10.0, 10.0, 10.0))
+    links.apply_translation((100.0, 50.0, 15.0))
+    rechts = trimesh.creation.box((10.0, 10.0, 10.0))
+    rechts.apply_translation((140.0, 50.0, 15.0))
+    payload = threemf.write_assembly(
+        [
+            threemf.AssemblyPart(mesh=MeshData.of(links), name="Links"),
+            threemf.AssemblyPart(mesh=MeshData.of(rechts), name="Rechts"),
+        ]
+    )
+    project = _project_of(payload, "gruppe.3mf")
+    history = History(project.document)
+    history.apply(
+        _("Laden"),
+        [
+            OperationDraft(
+                op="load",
+                params={"source": "src_1", "place_on_bed": True, "centre": True},
+                produces=2,
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    erstes = result.scene.objects["obj_1"].mesh.bounds
+    zweites = result.scene.objects["obj_2"].mesh.bounds
+    # Die Gruppe reicht von x 95 bis 145, ihre Mitte liegt also bei 120.
+    assert erstes.centre[0] == pytest.approx(-20.0), "gemeinsam gerückt, nicht jeder für sich"
+    assert zweites.centre[0] == pytest.approx(20.0)
+    assert erstes.centre[1] == pytest.approx(0.0), "auf der zweiten Achse ebenso"
+    assert zweites.centre[1] == pytest.approx(0.0)
+    assert zweites.centre[0] - erstes.centre[0] == pytest.approx(40.0), "der Abstand bleibt"
+    assert erstes.minimum[2] == pytest.approx(0.0), "und die Gruppe steht auf der Platte"
 
 
 def test_an_assembly_already_on_the_bed_is_left_alone(profile: Profile) -> None:

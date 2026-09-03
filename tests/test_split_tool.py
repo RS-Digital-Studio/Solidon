@@ -39,10 +39,27 @@ def window(qt_app: QApplication, session: Session) -> MainWindow:
 
 
 def with_a_cube(window: MainWindow) -> str:
-    """Ein 20er-Würfel um den Ursprung, ausgewertet und im Baum."""
+    """Ein 20er-Würfel, ausgewertet und im Baum.
+
+    Er lag bis zum 03.09.2026 um den Ursprung; seither kommt das erste Modell
+    eines Projekts aufgesetzt herein (§17.1, Schritt 6) und steht von z 0 bis
+    20. Wer auf eine Höhe zeigt, nimmt deshalb :func:`mid_of` und keine Zahl.
+    """
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     return "obj_1"
+
+
+def mid_of(window: MainWindow, object_id: str = "obj_1") -> float:
+    """Die halbe Höhe des Körpers — dort trennt eine Linie ihn mittig.
+
+    Hier stand 2.0, und das war die Mitte, solange der Würfel von -10 bis +10
+    lag. Aufgesetzt liegt er von 0 bis 20, und dieselbe Zahl zeigt jetzt in
+    seine unterste Ecke: Die Schnittfläche wurde zu klein für Passstifte, und
+    der Test las das als Fehler des Trennwerkzeugs.
+    """
+    box = window.session.last_result.scene.objects[object_id].mesh.bounds
+    return float(box.centre[2])
 
 
 # --- die Leiste allein --------------------------------------------------------------
@@ -411,8 +428,8 @@ def test_drawing_a_line_and_pressing_split_makes_two_parts(window: MainWindow) -
     with_a_cube(window)
     window.tools.activate("split")
 
-    window.viewport.splitPointRequested.emit((-10.0, 0.0, 2.0))
-    window.viewport.splitPointRequested.emit((10.0, 0.0, 2.0))
+    window.viewport.splitPointRequested.emit((-10.0, 0.0, mid_of(window)))
+    window.viewport.splitPointRequested.emit((10.0, 0.0, mid_of(window)))
     window.split_bar.applyRequested.emit()
     window.session.wait_for_idle()
 
@@ -436,8 +453,8 @@ def test_the_seam_becomes_a_fit_pair(window: MainWindow) -> None:
     with_a_cube(window)
     window.tools.activate("split")
 
-    window.viewport.splitPointRequested.emit((-10.0, 0.0, 2.0))
-    window.viewport.splitPointRequested.emit((10.0, 0.0, 2.0))
+    window.viewport.splitPointRequested.emit((-10.0, 0.0, mid_of(window)))
+    window.viewport.splitPointRequested.emit((10.0, 0.0, mid_of(window)))
     window.split_bar.applyRequested.emit()
     window.session.wait_for_idle()
 

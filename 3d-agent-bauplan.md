@@ -1053,8 +1053,14 @@ Jede geladene Datei durchläuft dieselbe Kette; das Ergebnis steht in `sources`:
 3. **Entartete Dreiecke entfernen** (Nullfläche, Nadeln, Dubletten).
 4. **Normalen vereinheitlichen**, Orientierung prüfen.
 5. **Komponenten zählen**, Kleinstteile melden statt still zu löschen.
-6. **Lage**: Schwerpunkt ermitteln, Aufsetzen auf das Bett anbieten — nicht
-   erzwingen.
+6. **Lage**: Schwerpunkt ermitteln, Aufsetzen auf das Bett und Zentrieren
+   darauf anbieten — nicht erzwingen. **Das erste Modell eines Projekts** kommt
+   aufgesetzt und mittig herein (Entscheidung Robert, 03.09.2026): Ein leeres
+   Bett hat keine Lage, die zu erhalten wäre, und ein Modell, das halb unter
+   der Platte oder weit daneben steht, ist der erste Eindruck eines frischen
+   Projekts. Jedes weitere behält seine Lage — es käme sonst in das erste zu
+   liegen; dafür gibt es *Auf dem Bett anordnen* (§29). Beides steht als
+   Parameter in der Op, nicht als Regel bei der Auswertung.
 
 Die Eingangsstufe ist die Op `load`, damit ihre Parameter im Stack sichtbar und
 änderbar bleiben.

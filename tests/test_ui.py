@@ -1459,10 +1459,13 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     Klick auf eine Listenzeile Knöpfe freischaltet, muss man wissen. §2.7
     verspricht anklickbare Handlungen, nicht auffindbare.
 
-    Gemessen am ersten Öffnen eines Modells, also am Weg, den jeder geht:
-    ``block_with_rounded_edge.stl`` liegt von Z -10 bis +10, der Bericht meldet
-    ``arrange.below_bed``, und *Auf das Bett setzen* löst es mit einem Klick.
-    Vorher standen dort **null** Knöpfe und ``currentRow()`` auf −1.
+    Gemessen an einem **zweiten** Modell, und das hat seit dem 03.09.2026 einen
+    Grund: Das erste Modell eines Projekts kommt aufgesetzt und mittig herein
+    (§17.1, Schritt 6), hat also nichts unter der Platte und nichts zu melden.
+    Jedes weitere behält seine Dateilage — ``block_with_rounded_edge.stl``
+    liegt von Z -10 bis +10 —, der Bericht meldet ``arrange.below_bed``, und
+    *Auf das Bett setzen* löst es mit einem Klick. Vorher standen dort **null**
+    Knöpfe und ``currentRow()`` auf −1.
 
     Zwei Entscheidungen im Testaufbau, beide notwendig:
 
@@ -1477,6 +1480,10 @@ def test_a_finding_with_a_way_out_is_chosen_before_anyone_clicks(window: MainWin
     """
     from PySide6.QtWidgets import QAbstractButton
 
+    window.open_path(MESHES / "block_with_rounded_edge.stl")
+    window.session.wait_for_idle()
+    # Das zweite Modell ist das, das unter der Platte landet — das erste liegt
+    # seit dem 03.09.2026 aufgesetzt und mittig da.
     window.open_path(MESHES / "block_with_rounded_edge.stl")
     window.session.wait_for_idle()
     window._on_scene(window.session.evaluate_now())
@@ -3433,6 +3440,10 @@ def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -
 
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
+    # Zwei Modelle, weil das erste seit dem 03.09.2026 mittig auf dem Bett
+    # landet und der Fall „unter der Platte" erst mit dem zweiten entsteht.
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
     report = window.report
     report.show_result(window.session.last_result, window.session.project.document)
 
@@ -3975,6 +3986,12 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     angeboten war es nirgends: Der Bericht nannte den Fall und bot *Modell
     teilen* und *Auf den Bauraum verkleinern* an.
 
+    **Seit dem 03.09.2026 ist es das zweite Modell, an dem das gemessen wird.**
+    Das erste eines Projekts kommt aufgesetzt und mittig herein; jedes weitere
+    behält seine Lage, weil es sonst im ersten läge. Der Befund und sein Knopf
+    haben damit denselben Anlass wie vorher, nur nicht mehr beim allerersten
+    Öffnen.
+
     Geprüft wird die ganze Kette — Kennung, Handlung, Handler, Geometrie — und
     dass ein Undo sie zurücknimmt (Regel 19, §2.1).
     """
@@ -3982,11 +3999,15 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
 
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
 
     result = window.session.last_result
     sunk = [f for f in result.scene.report.findings if f.code == "arrange.below_bed"]
-    assert sunk, "ein mittig geladenes Modell steckt unter der Platte"
-    before = next(iter(result.scene.objects.values())).mesh.bounds.minimum[2]
+    assert sunk, "ein weiteres Modell behält seine Lage und steckt unter der Platte"
+    # Das zweite Objekt ist das gesunkene; das erste liegt auf dem Bett.
+    gesunken = list(result.scene.objects.values())[1]
+    before = gesunken.mesh.bounds.minimum[2]
     assert before < 0.0
 
     offers = FINDING_ACTIONS[sunk[0].code]
@@ -3998,7 +4019,7 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     window.session.wait_for_idle()
 
     after = window.session.last_result
-    assert next(iter(after.scene.objects.values())).mesh.bounds.minimum[2] == pytest.approx(0.0)
+    assert list(after.scene.objects.values())[1].mesh.bounds.minimum[2] == pytest.approx(0.0)
     assert not [f for f in after.scene.report.findings if f.code == "arrange.below_bed"], (
         "der Befund bleibt stehen, obwohl er behoben ist"
     )
@@ -4006,7 +4027,7 @@ def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWin
     window.action_undo()
     window.session.wait_for_idle()
     zurueck = window.session.last_result
-    assert next(iter(zurueck.scene.objects.values())).mesh.bounds.minimum[2] == pytest.approx(
+    assert list(zurueck.scene.objects.values())[1].mesh.bounds.minimum[2] == pytest.approx(
         before
     ), "ein Undo nimmt die Handlung nicht zurück"
 
@@ -9414,7 +9435,14 @@ def test_a_menu_entry_gets_its_description_back_when_it_works_again(window: Main
     # Derselbe Eintrag, aber jetzt liegt genug vor: ein Objekt in der Szene und
     # eines ausgewählt. Geprüft wird die Rückstellung und nicht der Szenenaufbau
     # — dafür genügt der Zustand, aus dem der Hinweis entsteht.
-    window._kind_hint(action, spec, [], False, objects=1, chosen=spec.consumes)
+    #
+    # **Über beide Glieder der Kette**, seit ``_kind_hint`` den Grund
+    # entgegennimmt statt ihn selbst zu holen: Die Freigabe des Eintrags folgt
+    # demselben Grund, und ihn zweimal je Eintrag zu rechnen war nicht nur
+    # doppelte Arbeit. Die Zeile prüft damit beides — dass ``_reason_locked``
+    # hier keinen Grund mehr findet und dass ``_kind_hint`` daraufhin den
+    # Beschreibungssatz zurückgibt.
+    window._kind_hint(action, window._reason_locked(spec, [], 1, spec.consumes), False)
 
     assert action.toolTip().strip() == str(spec.doc).strip(), (
         "Der Grund blieb stehen, obwohl der Eintrag wieder geht — dann ist der "
@@ -10724,8 +10752,12 @@ def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) ->
     zeichnet, meint diese Fläche.
 
     Geprüft wird bis in die Zahl: Der Rahmen der Zeichenebene muss auf der
-    Höhe der Deckfläche liegen (Würfel 20 mm, Mitte auf null → z = 10), nicht
-    auf null — der Ebenenname allein bewiese nur die halbe Kette.
+    Höhe der Deckfläche liegen, nicht auf null — der Ebenenname allein bewiese
+    nur die halbe Kette. Die Höhe wird aus dem Körper gelesen und nicht
+    hingeschrieben: Sie stand hier als 10.0, weil der 20-mm-Würfel um den
+    Ursprung lag; seit das erste Modell eines Projekts mittig auf dem Bett
+    landet (03.09.2026), sind es 20.0. Eine abgelesene Zahl altert still, eine
+    gemessene nicht.
     """
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
@@ -10748,7 +10780,9 @@ def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) ->
         )
         frame = window._sketch_frame()
         assert frame is not None
-        assert frame.origin[2] == pytest.approx(10.0), (
+        deckflaeche = entry.mesh.bounds.maximum[2]
+        assert deckflaeche > 0.0, "sonst prüft die Zeile darunter gegen null"
+        assert frame.origin[2] == pytest.approx(deckflaeche), (
             "gezeichnet wird auf der Deckfläche, nicht darunter auf z=0"
         )
     finally:

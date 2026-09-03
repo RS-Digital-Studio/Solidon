@@ -310,10 +310,19 @@ def command_import(args: argparse.Namespace) -> int:
     # Die Einheitenfrage kommt erst nach dem Plan: nur ein Netz hat sie. STEP
     # trägt seine Einheit selbst, eine flache Zeichnung hat keine dritte
     # Dimension — dort wäre die Frage eine Zumutung ohne Zweck.
-    plan = import_plan(source_id, incoming.name, payload, args.unit)
+    # Das erste Modell eines Projekts kommt mittig auf die Platte (§17.1,
+    # Schritt 6). Gefragt wird der Stapel und nicht die Szene: Er steht fest,
+    # bevor irgendetwas ausgewertet ist, und die Operation trägt die
+    # Entscheidung danach selbst.
+    first_model = not project.document.ops
+    plan = import_plan(source_id, incoming.name, payload, args.unit, first_model=first_model)
     if plan.asks_unit:
         plan = import_plan(
-            source_id, incoming.name, payload, _chosen_unit(payload, incoming, args.unit)
+            source_id,
+            incoming.name,
+            payload,
+            _chosen_unit(payload, incoming, args.unit),
+            first_model=first_model,
         )
     history = History(project.document)
     history.apply(plan.title, [plan.draft])
