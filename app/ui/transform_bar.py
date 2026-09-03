@@ -435,6 +435,42 @@ class TransformBar(QWidget):
         """Die Eingabetaste im Feld wirkt wie der Knopf daneben."""
         self._apply()
 
+    def limit_roles(self, reasons: dict[str, str | None]) -> None:
+        """Welche Rollen gerade gelten — und warum die anderen nicht.
+
+        „Eine Seite zu bewegen oder skalieren oder drehen zu lassen ist denke
+        ich sowieso sinnlos" (Robert, 03.09.2026). Bei einer gewählten Fläche
+        bleibt *Verschieben*: Das ist Press/Pull entlang der Normalen und heißt
+        für den Kunden „Maß ändern". *Drehen* und *Skalieren* geben am Netz
+        einen Fehler — und zwar erst **nach** dem ausgefüllten Feld und dem
+        Klick, also genau die Sackgasse, die Regel 19 verbietet.
+
+        ``None`` heißt frei, ein Satz heißt gesperrt mit diesem Grund. Der
+        Grund steht als **Text** im Tooltip und in der Statuszeile, nicht nur
+        als graue Farbe: Regel 18 verlangt eine zweite Kodierung, und „warum
+        geht das nicht" ist die Frage, die eine ausgegraute Schaltfläche sonst
+        offen lässt.
+
+        Die Leiste weiß von Merkmalen nichts und soll es nicht wissen — sie
+        bekommt fertige Antworten. Wer sie erzeugt, entscheidet das Fenster;
+        dort steht die Frage einmal für Menü, Taste und Leiste.
+
+        **Ist die gewählte Rolle gesperrt, springt sie auf eine freie.** Eine
+        Leiste, die eine gesperrte Rolle angewählt lässt, zeigt Felder, die
+        niemand anwenden kann.
+        """
+        for key, button in self.role_buttons.items():
+            reason = reasons.get(key)
+            button.setEnabled(reason is None)
+            button.setToolTip(reason or _role_hint(key))
+            button.setStatusTip(reason or _role_hint(key))
+        current = next((k for k, b in self.role_buttons.items() if b.isChecked()), None)
+        if current is not None and reasons.get(current) is not None:
+            free = next((k for k, b in self.role_buttons.items() if b.isEnabled()), None)
+            if free is not None:
+                self.role_buttons[free].setChecked(True)
+                self._role_chosen(self.roles.id(self.role_buttons[free]))
+
     def steps(self) -> tuple[float, float]:
         """Rasterschritt in Millimetern und Winkelschritt in Grad. Null heißt kein
         Einrasten.

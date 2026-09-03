@@ -282,6 +282,7 @@ from app.ui.survey import SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
+from app.ui.transform_bar import ROLES as TRANSFORM_ROLES
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
@@ -423,6 +424,8 @@ def gcode_filter() -> str:
 #: Sackgasse statt eines Rückfalls.
 FEATURE_TWINS: Final[dict[str, str]] = {
     "translate_object": "move_feature",
+    "rotate_object": "rotate_feature",
+    "scale_object": "resize_feature",
     "delete_object": "remove_feature",
 }
 
@@ -2000,6 +2003,9 @@ class MainWindow(QMainWindow):
 
         self.object_tree.selectionChanged.connect(self._on_selection)
         self.object_tree.featureSelected.connect(self._on_feature_selected)
+        # Zwei markierte Merkmale beantworten eine andere Frage als eines —
+        # deshalb ein eigenes Signal und ein eigener Empfänger.
+        self.object_tree.featuresSelected.connect(self._on_features_selected)
         # **Über ``launch_operation``, nicht ``run_operation``.** Genau dieser
         # Fehler ist für Menü und Palette schon behoben worden, das Kontextmenü
         # blieb hängen: Drei Operationen mit Gestenfeld stehen dort am Körper —
@@ -9037,6 +9043,55 @@ class MainWindow(QMainWindow):
         dialog = self._op_dialog
         if dialog is not None:
             dialog.take_feature(feature_id, self._feature_names().get(feature_id, feature_id))
+        # **Auch hier**, und nicht nur bei der Objektauswahl: Ein Klick auf ein
+        # Merkmal ändert, was die Leiste anbieten darf, und `_on_selection`
+        # läuft dabei nicht — der gewählte Körper bleibt ja derselbe.
+        self._update_transform_roles()
+
+    def _update_transform_roles(self) -> None:
+        """Sagt der Bewegen-Leiste, welche Rollen die Auswahl zulässt.
+
+        Die Frage steht hier und nicht in der Leiste, weil sie hier schon
+        einmal steht: `feature_instead_of` beantwortet für Taste, Menü und
+        Befehlspalette dasselbe. Zwei Antworten darauf liefen nach der nächsten
+        Registeränderung auseinander, und dann graute das Menü etwas aus, das
+        die Leiste noch anbietet.
+
+        Drei Fälle, und der mittlere ist der, den Robert gemeldet hat:
+
+        * **Kein Merkmal gewählt** — alles gilt dem Körper, nichts ist gesperrt.
+        * **Ein Merkmal mit eigener Operation** (Bohrung: verschieben, drehen)
+          — die Rolle bleibt frei und läuft über die Merkmalsoperation.
+        * **Ein Merkmal ohne** (Fläche: drehen, skalieren) — gesperrt, mit dem
+          Satz aus ``reason_against``. Er kommt aus dem Kern, damit Panel und
+          Leiste denselben sagen.
+        """
+        from app.core.perceive.actions import reason_against
+
+        feature = self._selected_feature_object()
+        reasons: dict[str, str | None] = {}
+        for key, op, _symbol in TRANSFORM_ROLES:
+            if feature is None or self.feature_instead_of(op) is not None:
+                reasons[key] = None
+                continue
+            # Kein Zwilling für diese Art: Der Satz sagt, warum.
+            #
+            # **Der Kern zuerst, der eigene Satz nur als Rückfall.**
+            # ``reason_against`` kennt die Operation und die Merkmalsart und
+            # sagt es genauer, als es hier möglich wäre; der Satz darunter
+            # greift, wenn es gar keine Merkmalsoperation gibt (dann ist auch
+            # nichts zu begründen als „nicht am Merkmal").
+            #
+            # ``str()`` und nicht ``TranslatableText``: Die Leiste schreibt den
+            # Satz in einen Tooltip und in die Statuszeile, und beide wollen
+            # eine Zeichenkette. Beim Sprachwechsel wird die Leiste ohnehin neu
+            # gefüttert, weil sich mit der Sprache auch die Auswahl neu
+            # anzeigt — ein mitreisender ``TranslatableText`` brächte hier
+            # nichts, was nicht schon da wäre.
+            twin = FEATURE_TWINS.get(op)
+            spoken = reason_against(twin, feature.kind) if twin else None
+            reasons[key] = str(spoken or _("Das geht an einem gewählten Merkmal nicht."))
+        self.transform_bar.limit_roles(reasons)
 
     def _on_point_picked(self, point: Any) -> None:
         """Ein Klick auf eine Stelle füllt die Positionsfelder eines offenen
@@ -9156,6 +9211,33 @@ class MainWindow(QMainWindow):
             self.feature_panel.show_feature(feature_id, feature, alike)
         else:
             self.feature_panel.clear()
+
+    def _on_features_selected(self, chosen: list[Any]) -> None:
+        """Zwei markierte Merkmale: das Panel zeigt, wie weit sie auseinander
+        stehen.
+
+        **Nur bei genau zweien und nur am selben Körper.** Bei einem gilt der
+        gewöhnliche Weg (:meth:`_on_feature_selected` hat ihn schon gefüllt);
+        bei dreien gibt es keine Strecke, sondern drei, und welche gemeint
+        wäre, kann niemand wissen. Über zwei Körper hinweg wäre der Abstand
+        zwar rechenbar, aber die beiden stehen in verschiedenen Verläufen — was
+        man damit täte, ist eine andere Frage als „wie weit sitzen die zwei
+        Bohrungen in diesem Teil".
+        """
+        if len(chosen) != 2:
+            return
+        (first_object, first_id), (second_object, second_id) = chosen
+        if first_object != second_object:
+            return
+        result = self.session.last_result
+        entry = result.scene.objects.get(first_object) if result is not None else None
+        if entry is None:
+            return
+        first = entry.features.get(first_id)
+        second = entry.features.get(second_id)
+        if first is None or second is None:
+            return
+        self.feature_panel.show_pair(first_id, first, second_id, second)
 
     def _apply_to_each_feature(
         self, op: str, params: dict[str, Any], feature_ids: list[str]
@@ -11223,6 +11305,7 @@ class MainWindow(QMainWindow):
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         self._update_actions()
+        self._update_transform_roles()
         # „Abtragen“ hängt nicht nur am Umriss, sondern am gewählten exakten
         # Körper. Wer dem Hinweis folgt und ihn im Objektbaum auswählt, muss
         # den Knopf sofort benutzen können — ohne erst noch die Kamera oder

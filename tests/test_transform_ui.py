@@ -774,3 +774,54 @@ def test_the_magnet_watch_lives_and_dies_with_the_handle(qt_app: QApplication) -
 
     viewport._detach_gizmo()
     assert viewport._magnet_watch is None, "und der Abbau hält das aus"
+
+
+def test_a_face_offers_only_moving(qt_app: QApplication) -> None:
+    """Bei einer gewählten Fläche fallen Drehen und Skalieren weg.
+
+    „Eine Seite zu bewegen oder skalieren oder drehen zu lassen ist denke ich
+    sowieso sinnlos" (Robert, 03.09.2026). Beides gibt am Netz einen
+    `NeedsSolidError` — und zwar **erst nach** dem ausgefüllten Feld und dem
+    Klick. Regel 19 verbietet genau das: Ein Werkzeug, das für diese Auswahl
+    nichts kann, wird gar nicht erst angeboten.
+
+    *Verschieben* bleibt, denn es ist Press/Pull entlang der Normalen und für
+    den Kunden „Maß ändern" — die einzige der drei Rollen, die an einer Fläche
+    etwas bedeutet.
+
+    Geprüft wird auch die **zweite Kodierung** (Regel 18): Der Grund steht als
+    Text im Tooltip, nicht nur als graue Farbe. „Warum geht das nicht" ist die
+    Frage, die eine ausgegraute Schaltfläche sonst offen lässt.
+    """
+    from app.ui.transform_bar import TransformBar
+
+    bar = TransformBar()
+    bar.limit_roles({"move": None, "rotate": "Das braucht einen exakten Körper.", "scale": None})
+
+    assert bar.role_buttons["move"].isEnabled()
+    assert not bar.role_buttons["rotate"].isEnabled()
+    assert bar.role_buttons["rotate"].toolTip() == "Das braucht einen exakten Körper."
+    assert bar.role_buttons["rotate"].statusTip() == "Das braucht einen exakten Körper."
+
+    # Und zurück: Ohne Sperre gilt wieder der eigene Satz der Rolle.
+    bar.limit_roles({"move": None, "rotate": None, "scale": None})
+    assert bar.role_buttons["rotate"].isEnabled()
+    assert "Achse" in bar.role_buttons["rotate"].toolTip(), "der eigene Hinweis kommt zurück"
+
+
+def test_a_locked_role_does_not_stay_selected(qt_app: QApplication) -> None:
+    """Wird die gewählte Rolle gesperrt, springt die Leiste auf eine freie.
+
+    Sonst zeigt sie Felder, die niemand anwenden kann: Der Kunde tippt einen
+    Winkel, drückt die Eingabetaste und bekommt nichts — dieselbe Sackgasse
+    wie vorher, nur eine Ebene später.
+    """
+    from app.ui.transform_bar import TransformBar
+
+    bar = TransformBar()
+    bar.role_buttons["rotate"].setChecked(True)
+    assert bar.role_buttons["rotate"].isChecked()
+
+    bar.limit_roles({"move": None, "rotate": "geht hier nicht", "scale": "geht hier auch nicht"})
+    assert bar.role_buttons["move"].isChecked(), "die freie Rolle übernimmt"
+    assert not bar.role_buttons["rotate"].isChecked()
