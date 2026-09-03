@@ -474,3 +474,59 @@ def test_missing_software_offers_the_install_list_and_not_a_bug_report() -> None
             f"{type(problem).__name__}: der Weg zur Installation fehlt"
         )
         assert "report_error" not in ids, "fehlende Software ist kein Fehlerbericht"
+
+
+def test_all_three_refusals_of_the_alignment_offer_a_way_out(monkeypatch) -> None:
+    """Regel 17 für alle drei, nicht für eine.
+
+    ``align.py`` sagt dreimal „An diesem Merkmal lässt sich nichts ausrichten."
+    Eine der drei trug einen Vorschlag, die zwei anderen endeten mit dem Satz
+    allein — gefunden am 03.09.2026, als alle achtzehn Fehlerklassen und alle
+    zehn direkt geworfenen ``AppError`` auf ihre Auswege abgeklopft wurden.
+
+    Für den Kunden ist der Fall dreimal derselbe: Er hat etwas angeklickt, mit
+    dem sich nicht ausrichten lässt. Dass es einmal an der Merkmalsart liegt,
+    einmal an fehlenden Maßen und einmal an einer Richtung der Länge null,
+    ändert an seinem nächsten Schritt nichts — er klickt etwas anderes an.
+
+    **Gefragt wird nach ``pick_feature`` und nicht danach, ob überhaupt etwas
+    dasteht.** Die erste Fassung dieses Tests prüfte ``assert
+    error.suggestions`` — und blieb grün, als die Vorschläge testweise wieder
+    entfernt wurden. ``AppError.default_suggestions`` ist ``(CANCEL,)``, also
+    ist die Liste **nie** leer: Der Test hätte „Regel 17 ist erfüllt" gemeldet
+    für genau den Zustand, den Regel 17 verbietet. Derselbe Fehler eine Ebene
+    höher, den 85 am selben Tag bei ``NeedsSolidError`` fand — formal ein
+    Vorschlag, praktisch „geht nicht, brich ab".
+    """
+
+    def wege(fehler: AppError) -> list[str]:
+        return [action.id for action in fehler.suggestions]
+
+    from app.core.errors import AppError
+    from app.core.geom import align
+    from app.core.types import Feature
+
+    herkunft = "detected"
+
+    # Eine Bohrung ohne Achse und ohne Mitte: der Zweig „keine Lage gespeichert".
+    ohne_lage = Feature(id="hole_1", kind="hole", provenance=herkunft, params={})
+    with pytest.raises(AppError) as erste:
+        align.frame_of(ohne_lage)
+    assert "pick_feature" in wege(erste.value), wege(erste.value)
+
+    # Eine Achse der Länge null.
+    mit_nullachse = Feature(
+        id="hole_2",
+        kind="hole",
+        provenance=herkunft,
+        params={"axis": (0.0, 0.0, 0.0), "centre": (0.0, 0.0, 0.0)},
+    )
+    with pytest.raises(AppError) as zweite:
+        align.frame_of(mit_nullachse)
+    assert "pick_feature" in wege(zweite.value), wege(zweite.value)
+
+    # Und der Zweig, der seinen Vorschlag schon hatte — die Gegenprobe.
+    fremde_art = Feature(id="edge_1", kind="edge_loop", provenance=herkunft, params={})
+    with pytest.raises(AppError) as dritte:
+        align.frame_of(fremde_art)
+    assert "pick_feature" in wege(dritte.value), wege(dritte.value)

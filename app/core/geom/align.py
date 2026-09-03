@@ -76,6 +76,16 @@ def frame_of(feature: Feature) -> tuple[Vec3, Vec3]:
                 "Richtung noch einen Mittelpunkt."
             ),
             values={"feature": feature.id},
+            # **Derselbe Ausweg wie beim Zweig darüber.** Die drei Absagen
+            # dieser Datei tragen denselben Titel; eine bekam ihren Vorschlag,
+            # die zwei anderen blieben bei „geht nicht" (Regel 17). Der Fall ist
+            # für den Kunden derselbe: Er hat etwas angeklickt, mit dem sich
+            # nicht ausrichten lässt, und der nächste Schritt ist, etwas
+            # anderes anzuklicken. Dass es hier an fehlenden Maßen liegt und
+            # dort an der Merkmalsart, ändert daran nichts.
+            suggestions=(
+                Action(id="pick_feature", label=_("Wählen Sie eine Bohrung oder eine Fläche.")),
+            ),
         )
     return _unit(direction), (float(point[0]), float(point[1]), float(point[2]))
 
@@ -161,6 +171,9 @@ def _unit(vector: object) -> Vec3:
             detail=_(
                 "Die Richtung dieses Merkmals hat die Länge null — daraus lässt "
                 "sich keine Achse bilden."
+            ),
+            suggestions=(
+                Action(id="pick_feature", label=_("Wählen Sie eine Bohrung oder eine Fläche.")),
             ),
         )
     values = values / length
