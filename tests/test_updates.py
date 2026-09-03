@@ -1361,3 +1361,29 @@ def test_a_short_name_cache_path_is_not_mistaken_for_a_link(
     folder = updates.target_dir()
 
     assert folder == (long_dir / "cache" / "updates").resolve()
+
+
+def test_a_nonsense_total_from_the_server_counts_as_none() -> None:
+    """Die Zahl entscheidet, ob der Kunde nach draußen geschickt wird.
+
+    Sie kommt aus der Antwort, also wird sie behandelt wie jeder Wert von
+    dort: Was keine Anzahl ist, ist null. ``True`` ist in Python eine Eins und
+    wäre sonst eine Auskunft; eine Million ist keine mehr.
+    """
+    for angabe in (True, -5, "115", 3.5, None, [115]):
+        release = updates.check(fetch=answering({"version": "99.0.0", "changes_total": angabe}))
+
+        assert release is not None
+        assert release.changes_total == 0, f"{angabe!r} ist keine Anzahl"
+
+    zuviel = updates.check(fetch=answering({"version": "99.0.0", "changes_total": 10_000_000}))
+    assert zuviel is not None
+    assert zuviel.changes_total == updates.MAX_CHANGES
+
+    echt = updates.check(
+        fetch=answering(
+            {"version": "99.0.0", "changes": {"de": ["Ein Punkt."]}, "changes_total": 115}
+        )
+    )
+    assert echt is not None
+    assert echt.omitted("de") == 114

@@ -48,6 +48,7 @@ from app.branding import (
     SECURITY_SUPPORT_UNTIL,
     SUPPORT_ADDRESS,
     WEBSITE_URL,
+    website_page_url,
 )
 from app.core import activation, expressions, licence_service, tools
 from app.core.activation import certificate as activation_certificate
@@ -2747,9 +2748,7 @@ class AboutDialog(QDialog):
 
 def _security_page_url() -> str:
     """Die Sicherheitsseite in der Sprache der geöffneten Oberfläche."""
-    language = get_language()
-    page = "security.html" if language == "de" else f"{language}/security.html"
-    return f"{WEBSITE_URL}{page}"
+    return website_page_url("security.html", get_language())
 
 
 def damaged_line() -> str:

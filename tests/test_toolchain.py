@@ -214,6 +214,37 @@ def test_capping_drops_a_group_instead_of_leaving_a_lonely_heading() -> None:
     assert capped[0]["points"] == ["a"]
 
 
+def test_the_version_file_names_the_full_number_of_points() -> None:
+    """Ohne die Gesamtzahl sähe eine gekappte Liste aus wie die ganze.
+
+    Das Update-Fenster verweist auf den Web-Changelog, sobald hier mehr steht
+    als in der Liste — und es kann das nur, wenn die Datei die Zahl nennt.
+    Sie wird **vor** der Kappung eingetragen, damit deren Budgetrechnung sie
+    mitmisst.
+    """
+    from tools.make_download import cap_for_legacy_clients
+
+    data: dict[str, object] = {
+        "version": "9.9.9",
+        "changes_total": 200,
+        "changes": {"de": [f"Punkt {n} " + "x" * 400 for n in range(200)]},
+        "groups": {
+            "de": [
+                {"title": "Erstens", "points": [f"Punkt {n} " + "x" * 400 for n in range(100)]},
+                {
+                    "title": "Zweitens",
+                    "points": [f"Punkt {n} " + "x" * 400 for n in range(100, 200)],
+                },
+            ]
+        },
+    }
+
+    kept = cap_for_legacy_clients(data)
+
+    assert kept < 200, "der Datensatz sollte die Grenze reißen"
+    assert data["changes_total"] == 200, "die Kappung fasst die Gesamtzahl nicht an"
+
+
 def test_capping_keeps_something_from_every_group() -> None:
     """Reihum, nicht von hinten — sonst verschwindet ein ganzes Gebiet.
 

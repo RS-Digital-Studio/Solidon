@@ -32,11 +32,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_VERSION, WEBSITE_URL
+from app.branding import APP_VERSION, WEBSITE_URL, website_page_url
 from app.core import updates
 from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
-from app.i18n import tr
+from app.i18n import get_language, tr
 from app.ui.changes_dialog import groups_html
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary
@@ -164,6 +164,33 @@ class UpdateDialog(QDialog):
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroller.setVisible(bool(points))
 
+        # **Der Verweis auf den vollständigen Changelog** — nur, wenn wirklich
+        # etwas fehlt. Die Versionsdatei muss unter der Lesegrenze der
+        # ausgelieferten Fassungen bleiben und trägt deshalb eine Auswahl;
+        # ohne diesen Satz sähe sie aus wie die ganze Liste. In 0.3.0 wäre
+        # genau der Punkt weggefallen, der einem Kunden gehörte, der uns den
+        # Absturz gemeldet hatte.
+        #
+        # Anders als die Liste darüber trägt dieses Label **unseren eigenen**
+        # Text: Die Adresse baut die Anwendung aus ihrer Sprache, vom Server
+        # kommt allein die Zahl, und die geht als Zahl in den Satz. Deshalb
+        # darf hier ein Verweis wirken, wo er nebenan abgeschaltet ist.
+        self.more = QLabel(self)
+        self.more.setWordWrap(True)
+        self.more.setTextFormat(Qt.TextFormat.RichText)
+        self.more.setOpenExternalLinks(True)
+        omitted = release.omitted()
+        if omitted:
+            self.more.setText(
+                tr("Gezeigt sind {shown} von {total} Punkten.").format(
+                    shown=len(points), total=release.changes_total
+                )
+                + ' <a href="'
+                + website_page_url("changelog.html", get_language())
+                + f'">{tr("Vollständige Liste auf der Website")}</a>'
+            )
+        self.more.setVisible(bool(omitted))
+
         self.state = QLabel(self)
         self.state.setWordWrap(True)
         self.state.setTextFormat(Qt.TextFormat.PlainText)
@@ -197,6 +224,7 @@ class UpdateDialog(QDialog):
         # Stretch 1: Ein größer gezogenes Fenster gibt jeden Bildpunkt der
         # Liste, nicht der Leere zwischen den Zeilen darunter.
         layout.addWidget(self.scroller, 1)
+        layout.addWidget(self.more)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
         layout.addWidget(self.buttons)

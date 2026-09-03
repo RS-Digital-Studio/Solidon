@@ -931,6 +931,11 @@ def write_version(packages: list[Package]) -> None:
         else:
             data.pop("groups", None)
         total = max((len(points) for points in changes.values()), default=0)
+        # **Vor der Kappung eingetragen, damit sie es mitmisst** — und weil
+        # der Leser sonst nicht weiß, dass etwas fehlt: Das Update-Fenster
+        # zeigt die Punkte, die hier stehen, und verweist auf den
+        # Web-Changelog, sobald diese Zahl größer ist als die Liste.
+        data["changes_total"] = total
         kept = cap_for_legacy_clients(data)
         if kept < total:
             print(

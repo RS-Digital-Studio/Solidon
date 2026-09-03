@@ -53,6 +53,21 @@ SECURITY_SUPPORT_UNTIL: Final = date(2031, 10, 31)
 #: kaufen" — sie stand vorher an zwei Stellen getrennt.
 WEBSITE_URL: Final = "https://solidon3d.de/"
 
+
+def website_page_url(page: str, language: str) -> str:
+    """Die Adresse einer Website-Seite in der Sprache der Oberfläche.
+
+    Die deutschen Seiten liegen im Stamm, jede weitere Sprache in ihrem
+    eigenen Ordner — dieselbe Aufteilung wie im Verzeichnis ``website/``.
+    Zwei Stellen fragen danach (die Sicherheitsseite im Über-Dialog, der
+    Changelog im Update-Hinweis), und eine dritte kommt bestimmt.
+
+    Die Sprache kommt als Parameter, damit diese Datei bleibt, was sie ist:
+    die Werte des Produkts, ohne einen Import und ohne Zustand.
+    """
+    return f"{WEBSITE_URL}{page}" if language == "de" else f"{WEBSITE_URL}{language}/{page}"
+
+
 #: Der freiwillige Förderweg. Er führt direkt zum von PayPal gehosteten
 #: Zahlungsdialog; die Produktseite liegt nicht dazwischen.
 DONATION_URL: Final = "https://www.paypal.com/donate/?hosted_button_id=D7T4A9VYU9MX4"

@@ -377,6 +377,18 @@ class Release:
     Darstellungen im Fenster nach sich gezogen.
     """
 
+    changes_total: int = 0
+    """Wie viele Punkte die Fassung insgesamt hat — ``0``, wenn die Datei es
+    nicht sagt.
+
+    Die Versionsdatei trägt nicht alle: Sie muss unter der Lesegrenze der
+    ausgelieferten Fassungen bleiben (:data:`MAX_ANSWER_BYTES`), und
+    ``make_download.cap_groups`` nimmt deshalb reihum aus jeder Gruppe, bis
+    das Budget voll ist. Ohne diese Zahl sähe der Kunde eine Liste, die
+    vollständig aussieht — und der Punkt, der ihm gehört, wäre einer der
+    weggelassenen (Wayland in 0.3.0, gemeldet aus dem Feld).
+    """
+
     def newer_than(self, current: str = APP_VERSION) -> bool:
         return _as_tuple(self.version) > _as_tuple(current)
 
@@ -405,6 +417,17 @@ class Release:
             return found
         points = self.points(language)
         return (Group(title="", points=points),) if points else ()
+
+    def omitted(self, language: str = "") -> int:
+        """Wie viele Punkte die Versionsdatei **nicht** trägt.
+
+        Null heißt „alles da", und das ist auch die Antwort einer
+        Versionsdatei, die von der Gesamtzahl nichts weiß. Ein Verweis auf
+        eine vollständigere Liste gehört nur dorthin, wo wirklich etwas
+        fehlt — sonst schickt er den Kunden für nichts nach draußen.
+        """
+        shown = len(self.points(language))
+        return max(0, self.changes_total - shown) if shown else 0
 
     def note(self, language: str = "") -> str:
         """Der Hinweistext in der Sprache des Fensters, sonst in der Quellsprache.
@@ -617,7 +640,21 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         packages=_packages(payload.get("packages"), origin=address, release=payload),
         changes=_changes(payload.get("changes")),
         groups=_groups(payload.get("groups")),
+        changes_total=_count(payload.get("changes_total")),
     )
+
+
+def _count(raw: object) -> int:
+    """Eine Anzahl aus der Antwort — alles, was keine ist, zählt als null.
+
+    Dieselbe Vorsicht wie bei :func:`_changes`: Der Wert kommt von einem
+    Server. ``bool`` ist in Python ein ``int`` und wird hier ausdrücklich
+    nicht als Zahl gelesen; alles über :data:`MAX_CHANGES` ist keine
+    Auskunft mehr, sondern ein Versehen oder ein Versuch.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+        return 0
+    return min(raw, MAX_CHANGES)
 
 
 def _notes(raw: object) -> dict[str, str]:

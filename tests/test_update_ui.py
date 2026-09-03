@@ -293,3 +293,57 @@ def test_the_progress_counts_in_the_bar(
 
     assert dialog.progress.value() == 50
     assert "90" in dialog.state.text()
+
+
+def test_a_capped_list_points_at_the_full_changelog(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Kunde soll sehen, dass er eine Auswahl liest — und wo die ganze steht.
+
+    Die Versionsdatei muss unter die Lesegrenze der ausgelieferten Fassungen
+    passen und trägt deshalb nicht alle Punkte. In 0.3.0 fiel dabei
+    ausgerechnet der Punkt weg, der einen gemeldeten Absturz beantwortete;
+    ohne diesen Satz sähe die gekürzte Liste aus wie die ganze.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    dialog = UpdateDialog(release(changes_total=115))
+
+    text = dialog.more.text()
+    assert dialog.more.isVisibleTo(dialog)
+    assert "2" in text and "115" in text, "die Zahlen sagen, wie viel fehlt"
+    assert 'href="https://solidon3d.de/changelog.html"' in text
+    assert dialog.more.openExternalLinks(), "der Verweis soll auch wirken"
+
+
+def test_a_complete_list_says_nothing_about_a_website(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wo nichts fehlt, schickt auch nichts nach draußen.
+
+    Beide Fälle, die „vollständig" heißen: Die Datei nennt die Gesamtzahl und
+    sie stimmt, oder sie nennt gar keine — eine Versionsdatei von vor dieser
+    Fassung.
+    """
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+
+    for total in (2, 0):
+        dialog = UpdateDialog(release(changes_total=total))
+
+        assert not dialog.more.isVisibleTo(dialog), f"changes_total={total}"
+        assert not dialog.more.text()
+
+
+def test_the_link_follows_the_language_of_the_window(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein deutscher Satz mit einer englischen Seite dahinter wäre halb übersetzt."""
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    monkeypatch.setattr("app.ui.update_dialog.get_language", lambda: "pt")
+
+    dialog = UpdateDialog(release(changes_total=115))
+
+    assert 'href="https://solidon3d.de/pt/changelog.html"' in dialog.more.text()
