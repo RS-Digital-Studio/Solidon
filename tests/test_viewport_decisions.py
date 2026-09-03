@@ -3769,3 +3769,65 @@ def test_the_pocket_preview_starts_at_the_top_of_the_body(qt_app: QApplication) 
     )
     viewport._pull_height = -5.0
     assert viewport._pull_frame() is viewport._sketch_frame, "Ebene ist Oberkante: nichts zu heben"
+
+
+def test_a_cut_through_an_editable_body_still_shows_it(qt_app: QApplication) -> None:
+    """Ein Schnitt durch einen B-Rep-Körper zeigt ihn — er verschwindet nicht.
+
+    **Der Fall, wie Robert ihn gemeldet hat (03.09.2026):** Ein selbst
+    gezeichnetes Teil, im Objektbaum als „weiter bearbeitbar" geführt, also
+    ein ``Solid`` aus dem zweiten Kern. Knopf *Schnitt*, Regler in die Mitte —
+    und die Bühne war leer. Kein Fehler, keine Meldung, kein Modell.
+
+    Die Ursache lag im Weg dorthin: ``cut`` arbeitet auf ``MeshData``, liest
+    ``mesh.slots`` und setzt sein Ergebnis über ``replacing`` ein. Ein
+    ``Solid`` führt stattdessen ``slot_indices``, und sein ``replacing``
+    erwartet eine OCC-Form. Der Aufbau der Ansicht brach mit
+    ``AttributeError: 'Solid' object has no attribute 'slots'`` ab, **nachdem**
+    die alten Aktoren entfernt waren — daher die leere Bühne statt einer
+    Fehlermeldung.
+
+    Geprüft wird deshalb das, was der Kunde sieht: dass nach dem Schnitt
+    überhaupt noch etwas gezeichnet ist. Die Gegenprobe (Vernetzung
+    herausgenommen) lässt die Zusicherung unten fallen.
+    """
+    from app.core.geom.section import SectionPlane
+    from app.ui.viewport import Viewport
+
+    class _Solid:
+        """So viel ``Solid``, wie der Schnittweg anfasst — ohne OpenCASCADE."""
+
+        def __init__(self, mesh: MeshData) -> None:
+            self._mesh = mesh
+
+        @property
+        def raw(self) -> Any:
+            return self._mesh.raw
+
+        @property
+        def triangle_count(self) -> int:
+            return self._mesh.triangle_count
+
+        @property
+        def bounds(self) -> Any:
+            return self._mesh.bounds
+
+        @property
+        def slot_indices(self) -> tuple[int, ...]:
+            return ()
+
+        def to_mesh(self) -> MeshData:
+            return self._mesh
+
+        def replacing(self, shape: Any) -> Any:
+            raise AssertionError("ein Solid nimmt kein Netz — hier wird vorher vernetzt")
+
+    viewport = Viewport()
+    körper = _Solid(MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 16.0))))
+    viewport._section = SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0)
+
+    geschnitten = viewport._sectioned(körper)
+
+    assert geschnitten is not körper, "ohne Vernetzung geht der Schnitt gar nicht erst los"
+    assert len(geschnitten.raw.faces) > 0, "nach dem Schnitt bleibt Geometrie übrig"
+    assert float(geschnitten.raw.bounds[1][2]) <= 0.0 + 1e-9, "und sie liegt unter der Ebene"

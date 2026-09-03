@@ -4509,6 +4509,23 @@ class Viewport(QWidget):
             plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=self._layer.z)
         if plane is None:
             return mesh
+        # **Ein B-Rep-Körper wird vorher vernetzt.** ``cut`` arbeitet auf
+        # ``MeshData``: Es liest ``mesh.slots`` und setzt das Ergebnis über
+        # ``replacing`` ein. Ein ``Solid`` hat weder das eine (er führt
+        # ``slot_indices``) noch nimmt sein ``replacing`` ein Netz — es
+        # erwartet eine OCC-Form. Der Schnitt warf deshalb
+        # ``AttributeError: 'Solid' object has no attribute 'slots'``, der
+        # Aufbau der Ansicht brach mittendrin ab, und der Kunde sah eine
+        # **leere Bühne** statt seines Modells (gemeldet von Robert,
+        # 03.09.2026, am eigenen Teil mit „weiter bearbeitbar").
+        #
+        # Vernetzt wird hier und nicht im Kern: Ein geschnittener Körper ist
+        # eine Ansichtssache und kein bearbeitbarer Stand — die Einbahntür aus
+        # §30 wird also nur für das Bild durchschritten, das Dokument behält
+        # seine exakte Form.
+        to_mesh = getattr(mesh, "to_mesh", None)
+        if callable(to_mesh):
+            mesh = to_mesh()
         second = None
         if self._section is not None and self._slice_thickness is not None:
             offset = plane.position - self._slice_thickness
