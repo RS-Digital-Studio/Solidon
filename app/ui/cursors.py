@@ -100,6 +100,24 @@ SHAPES: Final[dict[str, tuple[str, tuple[float, float]]]] = {
         '<path d="M25 12a10.5 10.5 0 1 0 2 7" /><path d="M27.5 11 27 19.5 19 18" />',
         (16.0, 16.0),
     ),
+    # Kippen: der senkrechte Doppelpfeil. Die Geste geht nur auf und ab —
+    # der Trackball dreht in beiden Achsen, und genau deshalb rechnet der
+    # Kipp-Zweig selbst (``viewport.py``, ``_start``). Der Zeiger sagt die
+    # **Bewegung**, nicht die Drehung dahinter: Ein zweiter Bogen neben dem
+    # von „rotate" wäre bei Zeigergröße derselbe Fleck, und wer kippt, führt
+    # die Maus senkrecht.
+    #
+    # **Gezeichnet und nicht geliehen**, obwohl Qt mit ``SizeVerCursor`` einen
+    # senkrechten Doppelpfeil mitbringt: Kippen steht neben Drehen und Zoomen,
+    # und die beiden sind gezeichnet. Ein grauer Systempfeil mitten in drei
+    # Kameragesten liest sich wie ein Aussetzer, nicht wie eine vierte Geste.
+    # Bis zum 04.09.2026 war es genau der — ``_tell("tilt")`` setzte eine
+    # Rolle, die es nicht gab, und Windows zeigte seinen eigenen Pfeil.
+    "tilt": (
+        '<path d="M16 5.5 16 26.5" /><path d="M11 10.5 16 5 21 10.5" />'
+        '<path d="M11 21.5 16 27 21 21.5" />',
+        (16.0, 16.0),
+    ),
     # Zoomen: die Lupe, ohne Plus oder Minus — die Richtung entscheidet die
     # Bewegung, und ein festes Vorzeichen wäre die Hälfte der Zeit falsch.
     "zoom": (
