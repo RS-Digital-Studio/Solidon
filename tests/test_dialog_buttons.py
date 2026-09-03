@@ -27,8 +27,17 @@ from PySide6.QtWidgets import QApplication, QDialog, QPushButton
 
 from app.core import updates
 from app.ui.changes_dialog import ChangesDialog
-from app.ui.dialogs import AboutDialog, DonationDialog, KeyDialog
+from app.ui.comfy_dialog import ComfySetupDialog
+from app.ui.dialogs import (
+    AboutDialog,
+    ActivationDialog,
+    DonationDialog,
+    KeyDialog,
+    OfflineActivationDialog,
+)
 from app.ui.filament_picker import NewFilamentDialog, SlicerFilamentDialog
+from app.ui.first_run import FirstRunDialog
+from app.ui.install_dialog import InstallDialog
 from app.ui.print_disclosure import PrintDisclosureDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -69,6 +78,15 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     # Rechner ohne installierten Slicer bringt keine Filamentprofile mit; wer
     # den Dialog nur mit Bestand prüft, prüft den selteneren Zustand.
     "SlicerFilamentDialog": lambda _session: SlicerFilamentDialog(None, []),
+    # **Die Freischaltung, und sie ist der Fall mit den meisten Sperren:** vier
+    # von fünf Knöpfen sind im Ausgangszustand zu, weil weder Schlüssel noch
+    # Lizenz eingetragen sind. Genau die Lage, in der ein neuer Kunde den
+    # Dialog zum ersten Mal sieht.
+    "ActivationDialog": lambda _session: ActivationDialog(),
+    "OfflineActivationDialog": lambda _session: OfflineActivationDialog(UiSettings()),
+    "FirstRunDialog": lambda _session: FirstRunDialog(settings=UiSettings()),
+    "InstallDialog": lambda _session: InstallDialog(),
+    "ComfySetupDialog": lambda _session: ComfySetupDialog(),
 }
 
 

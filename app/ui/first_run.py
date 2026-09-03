@@ -318,7 +318,10 @@ class FirstRunDialog(QDialog):
         # Knopf auf eine Vermutung.
         self.install_button = QPushButton(tr("Zusatzprogramme verwalten …"), optional)
         self.install_button.clicked.connect(self._install)
-        self.install_button.setEnabled(False)
+        # Gesperrt, bis die Erhebung antwortet — und der Grund steht am Knopf
+        # und nicht nur in der Zeile darunter. Derselbe Satz, den der
+        # Chat-Einrichtungsdialog für dieselbe Lage benutzt.
+        self._say_why_locked(str(tr("Wird nachgesehen …")))
 
         self.chat_state = QLabel(tr("Chat — wird nachgesehen …"), optional)
         self.chat_state.setWordWrap(True)
@@ -455,12 +458,23 @@ class FirstRunDialog(QDialog):
     def _grow_soon(self) -> None:
         QTimer.singleShot(0, self, self._grow_to_content)
 
+    def _say_why_locked(self, why: str) -> None:
+        """Den Programme-Knopf sperren und sagen, warum — oder ihn freigeben.
+
+        Ein leerer Grund gibt frei. Alle drei Kanäle (Regel 18): Der Tooltip
+        allein erreicht nicht, wer den Knopf mit der Tastatur anfährt.
+        """
+        self.install_button.setEnabled(not why)
+        self.install_button.setToolTip(why)
+        self.install_button.setStatusTip(why)
+        self.install_button.setAccessibleDescription(why)
+
     def _show(self, found: object) -> None:
         """Die Antworten eintragen."""
         assert isinstance(found, Findings)
         self.findings = found
         self._fill_tools(found.tools)
-        self.install_button.setEnabled(True)
+        self._say_why_locked("")
         self.chat_state.setText(found.chat)
         if found.filaments:
             filaments.synchronise(list(found.filaments))
@@ -494,7 +508,7 @@ class FirstRunDialog(QDialog):
         """
         _log.warning("first run survey crashed: %s", detail)
         self._fill_tools(())
-        self.install_button.setEnabled(True)
+        self._say_why_locked("")
         self.extras_state.show()
         self.extras_state.setText(
             tr(

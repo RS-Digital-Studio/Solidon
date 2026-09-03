@@ -1982,6 +1982,16 @@ class ActivationDialog(QDialog):
             button.setToolTip(activation_hint)
             button.setStatusTip(activation_hint)
             button.setAccessibleDescription(activation_hint)
+        # **Der fünfte Knopf, den die vier Schleifen darüber übersehen haben.**
+        # Er ist gesperrt, solange es nichts zu entfernen gibt, und stand dabei
+        # wortlos zwischen vier Knöpfen, die ihren Grund nennen. Der Satz sagt
+        # den Zustand und nicht die Handlung: Was fehlt, ist der Schlüssel.
+        forget_hint = (
+            "" if self.forget_button.isEnabled() else str(tr("Es ist kein Schlüssel eingetragen."))
+        )
+        self.forget_button.setToolTip(forget_hint)
+        self.forget_button.setStatusTip(forget_hint)
+        self.forget_button.setAccessibleDescription(forget_hint)
 
     def _remember(self) -> None:
         text = self.field.toPlainText().strip()
