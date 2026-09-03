@@ -1772,9 +1772,22 @@ def test_a_drawn_sketch_puts_its_own_size_into_the_dialog(qt_app: QApplication) 
         assert werte["length"] == pytest.approx(50.0), "die Länge kommt aus der Zeichnung"
         assert werte["width"] == pytest.approx(30.0), "die Breite auch"
 
+        # **Die Sperre gilt seit dem 03.09.2026 nur noch der Grundform.** Ihre
+        # Begründung war „ein Feld ohne Wirkung sagt es" — und die Maßfelder
+        # wirken jetzt: Eine getippte Zahl streckt die Zeichnung darauf
+        # (Robert: „mach die felder bedienbar, zeichnung folgt"). Eine
+        # gezeichnete Kontur *ist* dagegen weiterhin keine Grundform, und ein
+        # Feld, das sie in „Rechteck" umdeutete, verspräche, die Zeichnung zu
+        # ersetzen.
+        assert not dialog._editors["shape"].isEnabled(), (
+            "die Grundform wirkt nicht und ist trotzdem bedienbar"
+        )
+        for name in ("length", "width"):
+            assert dialog._editors[name].isEnabled(), (
+                f"{name} wirkt jetzt — es zu sperren nimmt dem Kunden den kurzen Weg"
+            )
         for name in ("shape", "length", "width"):
             editor = dialog._editors[name]
-            assert not editor.isEnabled(), f"{name} wirkt nicht und ist trotzdem bedienbar"
             assert "Zeichnung" in editor.toolTip(), f"{name} sagt nicht, woher sein Wert kommt"
     finally:
         release = getattr(type(dialog), "release", None)
@@ -1839,7 +1852,14 @@ def test_a_deleted_sketch_gives_the_measure_fields_back(qt_app: QApplication) ->
         spec, [], None, values={"sketch": sketch_to_text(shapes.rectangle(50.0, 30.0))}
     )
     try:
-        assert not dialog._editors["length"].isEnabled(), "mit Zeichnung ist das Feld gesperrt"
+        # Die Maßfelder sind seit dem 03.09.2026 auch mit Zeichnung bedienbar;
+        # gesperrt bleibt die Grundform. Was dieser Test zusichert, ist die
+        # **Rücknahme**: Nach dem Löschen darf kein Feld eine Begründung
+        # tragen, die sich auf eine Zeichnung beruft, die es nicht mehr gibt.
+        assert not dialog._editors["shape"].isEnabled(), "mit Zeichnung ist die Grundform gesperrt"
+        assert "Zeichnung" in dialog._editors["length"].toolTip(), (
+            "ohne einen Hinweis an den Maßfeldern prüft die Rücknahme darunter nichts"
+        )
 
         field = dialog._editors["sketch"]
         assert isinstance(field, SketchField)
@@ -2468,3 +2488,114 @@ def test_a_field_that_is_no_circle_has_no_toggle(qt_app: QApplication) -> None:
         assert field.circle_toggle is None
     finally:
         field.deleteLater()
+
+
+def test_a_typed_measurement_stretches_the_drawing(qt_app: QApplication) -> None:
+    """Robert, 03.09.2026: „mach die felder bedienbar, zeichnung folgt".
+
+    Bis dahin sperrte der Dialog Länge und Breite, sobald eine Zeichnung
+    gewählt war, mit der Begründung „Die Maße kommen aus der Zeichnung". Das
+    war fachlich richtig und praktisch eine Sackgasse: Wer die Größe ändern
+    wollte, musste zurück in den Zeichenmodus, dort eine Bedingung suchen und
+    sie bemaßen — für „mach das 20 Prozent größer" der längste Weg im ganzen
+    Programm.
+
+    **Zwei Zusagen, und die zweite ist die eigentliche.** Das Feld ist
+    bedienbar, *und* die getippte Zahl steht nach dem Durchlauf noch da — sie
+    wird nicht von der alten Ausdehnung überschrieben, weil die Zeichnung
+    selbst mitgewachsen ist. Der erste Teil allein wäre eine Schaltfläche
+    ohne Wirkung.
+
+    Geprüft wird am **Skizzentext**, nicht am Anzeigewert: Was im Feld steht,
+    kann eine Anzeige sein; was im Text steht, ist das, was die Operation
+    danach rechnet.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+    from app.ui.op_dialog import OperationDialog
+
+    load_operations()
+    from app.core.registry import REGISTRY
+
+    quadrat = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (50.0, 0.0))),
+            SketchElement("line", ((50.0, 0.0), (50.0, 30.0))),
+            SketchElement("line", ((50.0, 30.0), (0.0, 30.0))),
+            SketchElement("line", ((0.0, 30.0), (0.0, 0.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("distance", (0, 1), "50"),
+        ),
+    )
+    spec = REGISTRY.get("sketch_extrude")
+    dialog = OperationDialog(spec, {}, values={"sketch": sketch_to_text(quadrat)})
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+
+    länge = dialog._editors["length"]
+    assert länge.isEnabled(), (
+        "das Maßfeld ist gesperrt — der Kunde kommt an die Größe seiner "
+        "Zeichnung nur über den Zeichenmodus"
+    )
+    assert länge.value() == pytest.approx(50.0, abs=0.1), (
+        "ohne diesen Ausgangswert sagt der Vergleich darunter nichts"
+    )
+
+    länge.set_value(60.0)
+    dialog.valuesChanged.emit()
+    qt_app.processEvents()
+
+    gestreckt = sketch_from_text(str(dialog.values()["sketch"]))
+    maße = [c.value for c in gestreckt.constraints if c.kind == "distance"]
+    assert maße == ["60"], f"die Zeichnung ist der getippten Zahl nicht gefolgt: Maße {maße}"
+    assert länge.value() == pytest.approx(60.0, abs=0.1), (
+        "die getippte Zahl ist vom alten Maß überschrieben worden"
+    )
+
+
+def test_the_shape_stays_locked_while_a_drawing_decides_the_outline(
+    qt_app: QApplication,
+) -> None:
+    """Die Grundform bleibt gesperrt, und das ist keine halbe Sache.
+
+    Eine gezeichnete Kontur *ist* keine Grundform. Ein Feld, das sie in
+    „Rechteck" umdeutet, verspräche, die Zeichnung zu ersetzen — und das tut
+    „Zeichnen …", nur dort. Bedienbar sind die **Maße**, nicht die Art.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import Sketch, SketchElement
+    from app.ui.op_dialog import OperationDialog
+
+    load_operations()
+    from app.core.registry import REGISTRY
+
+    dreieck = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (40.0, 0.0))),
+            SketchElement("line", ((40.0, 0.0), (20.0, 30.0))),
+            SketchElement("line", ((20.0, 30.0), (0.0, 0.0))),
+        ),
+        constraints=(),
+    )
+    spec = REGISTRY.get("sketch_extrude")
+    dialog = OperationDialog(spec, {}, values={"sketch": sketch_to_text(dreieck)})
+    dialog.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
+    dialog.show()
+    qt_app.processEvents()
+
+    assert not dialog._editors["shape"].isEnabled(), (
+        "die Grundform ist bedienbar — sie verspricht, die Zeichnung zu ersetzen"
+    )
+    assert dialog._editors["length"].isEnabled(), (
+        "und das Maß ist gesperrt, obwohl es folgen könnte"
+    )

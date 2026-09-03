@@ -1355,10 +1355,83 @@ class OperationDialog(QDialog):
             return
 
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
+        follows = tr("Die Zeichnung folgt dieser Zahl: sie wird darauf gestreckt.")
         axis_of = {"length": 0, "width": 1}
         docs = {name: str(entry.doc or "") for name, entry in declared.items()}
         seen_text: dict[str, str] = {}
         seen_extent: dict[str, tuple[float, float] | None] = {}
+
+        #: Läuft gerade eine Streckung? Als Wörterbuch und nicht als lokale
+        #: Variable, weil ``stretch`` und ``follow_sketch`` einander rufen und
+        #: ein ``nonlocal`` über zwei Ebenen schlechter zu lesen wäre.
+        stretching = {"now": False}
+        #: Hat der erste Durchlauf die Felder schon aus der Zeichnung belegt?
+        #:
+        #: **Der Aufbau schreibt, danach liest der Dialog.** Beim Öffnen steht
+        #: in ``length`` die Vorgabe des Schemas — 40, während die Zeichnung 50
+        #: misst. Ohne diese Unterscheidung hielte der erste Durchlauf die 40
+        #: für eine Ansage und schrumpfte die Zeichnung darauf: Wer einen
+        #: Dialog nur öffnet und wieder schließt, hätte seine Zeichnung
+        #: verkleinert. Der Test hat genau das gefangen.
+        primed = {"done": False}
+        held: dict[str, tuple[str, ...]] = {}
+
+        def held_note() -> str:
+            """Was beim Strecken **nicht** mitkam — oder nichts.
+
+            Ein Maß an einem Projektparameter bleibt stehen (Regel 8), und die
+            Zeichnung erreicht das getippte Maß dann nicht ganz. Das gehört an
+            das Feld, in dem die Zahl steht: Eine Abweichung, die niemand
+            erklärt, sieht aus wie ein Rechenfehler.
+            """
+            kept = held.get("value") or ()
+            if not kept:
+                return ""
+            return str(
+                tr(
+                    "{count} Maß der Zeichnung hängt an einem Projektparameter "
+                    "und bleibt — sie folgt nur so weit."
+                )
+            ).format(count=len(kept))
+
+        def stretch(text: str, factor: float) -> None:
+            """Die Zeichnung auf das getippte Maß bringen.
+
+            Die Punkte allein zu strecken genügt nicht — ein ``distance`` von
+            50 zöge der Löser wieder auf 50 zusammen, und das Feld zeigte nach
+            dem Schließen die alte Zahl. ``sketch.edit.scaled`` nimmt die Maße
+            mit und lässt stehen, was an einem Parameter hängt.
+            """
+            from app.core.errors import AppError
+            from app.core.sketch.edit import scaled
+            from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+            from app.ui.sketch_editor import SketchField
+
+            field = self._editors.get(sketch_field)
+            if not isinstance(field, SketchField):
+                return
+            try:
+                bigger, kept = scaled(sketch_from_text(text), factor)
+            except AppError:
+                # Eine halbfertige Zeichnung ist im Dialog kein Fehlerfall —
+                # dieselbe Haltung wie in ``sketch_extent``.
+                return
+
+            blocked = field.blockSignals(True)
+            field.set_text(sketch_to_text(bigger))
+            field.blockSignals(blocked)
+            seen_text.pop("value", None)
+            seen_extent.pop("value", None)
+            held["value"] = kept
+            # **Ein Wächter, kein Vertrauen auf Genauigkeit.** Der Löser trifft
+            # das Maß auf seine Toleranz genau, nicht exakt; bliebe ein Rest
+            # über der Schwelle, streckte der nächste Durchlauf erneut, und der
+            # Dialog liefe im Kreis, während der Nutzer tippt.
+            stretching["now"] = True
+            try:
+                follow_sketch()
+            finally:
+                stretching["now"] = False
 
         def follow_sketch() -> None:
             text = str(self.values().get(sketch_field, "") or "")
@@ -1393,18 +1466,53 @@ class OperationDialog(QDialog):
                     # denselben Signalweg ausgegraut hat, muss grau bleiben —
                     # blind freigegeben überschrieb dieser Zweig die Sperre
                     # des Nachbarn, je nachdem, wer zuletzt lief.
-                    if editor.toolTip() == reason:
+                    # **Auch der Hinweis am freigegebenen Maßfeld ist unsere
+                    # Marke.** Erkannt wird die eigene Zeile an ihrer
+                    # Begründung; seit die Maßfelder bedienbar sind, tragen sie
+                    # `follows` statt `reason`, und ohne diese Zeile bliebe
+                    # nach dem Löschen ein Satz stehen, der sich auf eine
+                    # Zeichnung beruft, die es nicht mehr gibt.
+                    if editor.toolTip() in (reason, follows, held_note()):
                         editor.setEnabled(True)
                         if label is not None:
                             label.setEnabled(True)
                         _explain(editor, label, docs[name])
                     continue
                 if name in axis_of and isinstance(editor, ValueField):
+                    drawn = extent[axis_of[name]]
+                    typed = editor.value()
+                    # **Eine getippte Zahl ist eine Ansage, keine Anzeige.**
+                    # Weicht sie von dem ab, was die Zeichnung misst, hat der
+                    # Nutzer gerade ein Maß gesetzt — und die Zeichnung folgt
+                    # ihm, statt seinen Wert beim nächsten Durchlauf zu
+                    # überschreiben (Robert, 03.09.2026).
+                    #
+                    # Nur Zahlen: Ein Ausdruck im Feld (``=@breite``) meint
+                    # eine Bindung an einen Projektparameter, und die gehört
+                    # in die Zeichnung, nicht in eine einmalige Streckung.
+                    if (
+                        isinstance(typed, float)
+                        and drawn > _SKETCH_EPS
+                        and abs(typed - drawn) > _SKETCH_EPS
+                        and not stretching["now"]
+                        and primed["done"]
+                    ):
+                        stretch(text, typed / drawn)
+                        return
                     # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``
                     # aus, und diese Funktion riefe sich selbst.
                     blocked = editor.blockSignals(True)
-                    editor.set_value(extent[axis_of[name]])
+                    editor.set_value(drawn)
                     editor.blockSignals(blocked)
+                    editor.setEnabled(True)
+                    if label is not None:
+                        label.setEnabled(True)
+                    _explain(editor, label, held_note() or follows)
+                    continue
+                # Grundform und Eckenzahl bleiben gesperrt, und das ist keine
+                # halbe Sache: Eine gezeichnete Kontur **ist** keine Grundform.
+                # Ein Feld, das sie in „Rechteck" umdeutet, verspräche, die
+                # Zeichnung zu ersetzen — das tut „Zeichnen …", und nur dort.
                 editor.setEnabled(False)
                 if label is not None:
                     label.setEnabled(False)
@@ -1412,6 +1520,7 @@ class OperationDialog(QDialog):
 
         self.valuesChanged.connect(follow_sketch)
         follow_sketch()
+        primed["done"] = True
 
     def _watch(self, editor: QWidget) -> None:
         """Verbindet das Änderungssignal des Editors mit ``valuesChanged``.
@@ -1878,6 +1987,15 @@ def _show_patterns(combo: QComboBox, choices: Sequence[Any]) -> None:
 #: aufzieht. Steht der Eintrag einmal nicht im Register, bleibt es bei der
 #: ersten Zeile — eine Vorauswahl, die ins Leere zeigt, wäre schlimmer als
 #: eine unpassende.
+_SKETCH_EPS = 0.01
+"""Ab wann eine getippte Zahl als neues Maß gilt und nicht als Anzeige.
+
+Hundertstelmillimeter: feiner als die zweistellige Anzeige und gröber als der
+Rest, den der Löser auf seiner Toleranz stehen lässt. Zu klein gewählt, hielte
+eine Rundungsdifferenz den Dialog für eine Ansage und er streckte im Kreis; zu
+groß, verschluckte er eine echte Änderung.
+"""
+
 DEFAULT_SKETCH_USE = "sketch_extrude"
 
 #: Was vorausgewählt ist, wenn die Zeichnung auf einem Körper liegt.
