@@ -35,7 +35,7 @@ dans `website/version.json`.
 - Un double clic sur une ligne de la liste des objets ouvre ce qui la modifie : la boîte de dialogue adaptée pour une caractéristique reconnue, l'étape avec ses cotes pour une créée.
 - Lors du déplacement d'un perçage, son ancien emplacement est comblé proprement, sans rien qui dépasse en haut ni en bas.
 - Un perçage débouchant qui ne débouche plus après déplacement le signale, et une fraisure qui refermerait son perçage ne peut pas être déplacée.
-- Réduire un perçage sous la limite de reconnaissance donne une explication de la raison.
+- Réduire un perçage jusqu'à ce qu'il n'en soit plus un donne une explication au lieu de demander un rapport d'erreur.
 - Sur une face, un bouton mène au catalogue de blocs au lieu d'afficher des lignes qui disent seulement ce qui est impossible.
 ### Déplacer, tourner et sélectionner
 

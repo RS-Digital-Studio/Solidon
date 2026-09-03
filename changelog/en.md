@@ -34,7 +34,7 @@ it into `website/version.json`.
 - A double click on a row in the object list opens what changes it — the matching dialog for a recognised feature, the step with its dimensions for one you built.
 - When a hole is moved, its old position is filled cleanly, with nothing sticking out above or below.
 - A through hole that no longer goes through after being moved says so — and a countersink that would close its hole cannot be moved.
-- Shrinking a hole below the recognition limit brings an explanation of why it does not work.
+- Shrinking a hole until it is no longer one brings an explanation instead of a request to file an error report.
 - On a face, a button leads to the parts catalogue instead of rows that only say what is impossible there.
 ### Moving, rotating and selecting
 

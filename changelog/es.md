@@ -35,7 +35,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un doble clic en una fila de la lista de objetos abre lo que la modifica: el diálogo correspondiente en una característica reconocida, el paso con sus medidas en una creada.
 - Al desplazar un taladro, su sitio anterior se rellena limpiamente, sin que nada sobresalga por arriba ni por abajo.
 - Un taladro pasante que tras el desplazamiento ya no atraviesa lo indica, y un avellanado que cerraría su taladro no se puede desplazar.
-- Reducir un taladro por debajo del límite de reconocimiento da una explicación de por qué no es posible.
+- Reducir un taladro hasta que deja de ser uno da una explicación en vez de pedir un informe de error.
 - En una cara, un botón lleva al catálogo de bloques en vez de mostrar filas que solo dicen lo que allí no funciona.
 ### Mover, girar y seleccionar
 
