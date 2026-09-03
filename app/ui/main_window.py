@@ -238,6 +238,7 @@ from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
 from app.ui.palette import ROLES
 from app.ui.panels import (
     SEVERITY_MARKER,
+    FeaturePanel,
     HistoryPanel,
     MeasurementLabel,
     ObjectTree,
@@ -405,6 +406,20 @@ def model_filter() -> str:
 
 def gcode_filter() -> str:
     return _filter_for(tr("G-Code"), GCODE_SUFFIXES)
+
+
+#: Welche Merkmalsoperation zu welcher Körperoperation gehört.
+#:
+#: Roberts Regel vom 03.09.2026: „wenn man die Wulst wählt verschiebt man die
+#: Wulst, immer das Ausgewählte." Die Bewegen-Leiste nennt weiterhin ihre
+#: Körperoperation; ist ein Merkmal gewählt, für das es die Merkmalsoperation
+#: gibt, läuft diese stattdessen (:meth:`MainWindow.feature_draft`).
+#:
+#: **Geprüft wird gegen das Register, nicht gegen diese Liste.** Was hier
+#: steht und dort fehlt, fällt still auf den Körper zurück — die übrigen
+#: Handlungen entstehen gerade, und ein Name, der zu früh greift, wäre eine
+#: Sackgasse statt eines Rückfalls.
+FEATURE_TWINS: Final[dict[str, str]] = {"translate_object": "move_feature"}
 
 
 class _MapWorker(Worker):
@@ -1429,6 +1444,11 @@ class MainWindow(QMainWindow):
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
         # hoch sein — gestreckt hinterließ er dreihundert Pixel leere Fläche
         # über einem Modell, das daneben keinen Platz hatte.
+        # **Vor der Spalte, weil sie ihn gleich einhängt.** Ein Panel, das erst
+        # weiter unten entsteht, ist beim Aufbau der Spalte noch keines.
+        self.feature_panel = FeaturePanel(self)
+        self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
+
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
         # Ein Pixel Polster, damit die Randlinie der Karte stehen bleibt: die
@@ -1437,6 +1457,11 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
         left_layout.setSpacing(TIGHT)
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
+        # **Direkt unter dem Baum, weil der Blick nach dem Klick dort steht.**
+        # Robert am 03.09.2026: „evtl noch ein eigenes Panel damit man nicht
+        # für alles rechtsklick machen muss". Wer eine Bohrung anklickt, findet
+        # ihre Maße eine Zeile tiefer und nicht hinter einem zweiten Klick.
+        left_layout.addWidget(collapsible(tr("Merkmal"), self.feature_panel))
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel))
         # Zugeklappt: Die drei darüber beantworten Fragen, die beim Bauen
@@ -1482,6 +1507,15 @@ class MainWindow(QMainWindow):
         self.viewport.sketchViewChanged.connect(self._on_sketch_view_changed)
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
+        # **Der Zug am Merkmal kommt fertig gerechnet an.** Die Ansicht hält
+        # das Merkmal in der Hand und kennt den Fang; sie schickt die
+        # Zielmitte absolut und den Winkel gerastet. Das Fenster macht daraus
+        # einen Schritt und rechnet nichts nach (§18.11).
+        self.viewport.featureMoved.connect(self._on_feature_moved)
+        self.viewport.featureTurned.connect(self._on_feature_turned)
+        # Was der Griff bewegen wird, sagt die Ansicht — wo der Satz steht,
+        # entscheidet das Fenster, wie bei ``measurementStatus``.
+        self.viewport.gizmoStatus.connect(self.announce)
         self.viewport.featurePicked.connect(self._on_feature_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
         self.viewport.contextMenuAt.connect(self._on_viewport_context_menu)
@@ -7790,6 +7824,41 @@ class MainWindow(QMainWindow):
             return False, hint
         return False, tr("Dafür braucht es eine passende Auswahl.")
 
+    def _on_feature_moved(self, feature_id: str, centre: Any) -> None:
+        """Ein Zug am Griff hat ein Merkmal versetzt (§18.11, Regel 2).
+
+        Die Zielmitte kommt **absolut** aus der Ansicht — sie hält das Merkmal
+        und kennt das Raster, in das der Zug gefangen wurde. Hier wird sie
+        weder umgerechnet noch nachgeprüft; ein zweiter Fang an dieser Stelle
+        wäre eine zweite Meinung über denselben Zug.
+        """
+        self._feature_step(
+            "move_feature",
+            feature_id,
+            {"x": float(centre[0]), "y": float(centre[1]), "z": float(centre[2])},
+        )
+
+    def _on_feature_turned(self, feature_id: str, axis: str, angle: float) -> None:
+        """Ein Zug am Ring hat ein Merkmal gekippt — mit dem **gerasteten**
+        Winkel, also dem, der während des Zugs am Zeiger stand."""
+        self._feature_step("rotate_feature", feature_id, {"axis": axis, "angle": float(angle)})
+
+    def _feature_step(self, op: str, feature_id: str, params: dict[str, Any]) -> None:
+        """Ein Zug, eine Transaktion — dieselbe Zusage wie am Körpergriff.
+
+        **Die Operation wird gegen das Register geprüft.** Die Ansicht sendet
+        nur, wo eine Griff-Operation gilt; steht sie hier trotzdem nicht im
+        Register, geschieht nichts, statt dass das Fenster mit einer
+        unbekannten Operation abbricht.
+        """
+        selected = self.object_tree.selected()
+        if selected is None or not REGISTRY.has(op):
+            return
+        draft = OperationDraft(
+            op=op, inputs=(selected,), params={"at_feature": feature_id, **params}
+        )
+        self.session.apply(REGISTRY.get(op).title, [draft])
+
     def _on_face_dragged(self, normal: Any, distance: float) -> None:
         """Ein Zug am Flächengriff wird eine Operation (§18.11, Regel 2).
 
@@ -7819,6 +7888,56 @@ class MainWindow(QMainWindow):
                     },
                 )
             ],
+        )
+
+    def feature_draft(self, op: str, params: Mapping[str, Any]) -> OperationDraft | None:
+        """Der Zug gilt dem **gewählten Merkmal**, wenn es dafür eine Operation
+        gibt — sonst wie bisher seinem Körper.
+
+        Roberts Regel vom 03.09.2026: „wenn man die Wulst wählt verschiebt man
+        die Wulst, immer das Ausgewählte." Bis dahin nahm die Bewegen-Leiste
+        immer den Körper, auch wenn im Objektbaum eine Bohrung markiert war —
+        das Teil sprang, und das Merkmal blieb, wo es war.
+
+        **Die Zuordnung wird gegen das Register geprüft.** Eine Handlung, deren
+        Merkmalsoperation es noch nicht gibt, fällt still auf den Körper zurück
+        statt zu scheitern; sobald sie im Register steht, greift sie von selbst.
+        Und die Art entscheidet mit: Eine Verrundung folgt ihrer Kante und hat
+        kein Verschieben, also bewegt sich dort weiterhin der Körper.
+
+        **Zielwert statt Zuwachs.** Die Merkmalsoperationen nehmen die neue Lage
+        absolut (``x``, ``y``, ``z`` ist die neue Mitte), die Leiste gibt einen
+        Versatz. Umgerechnet wird hier, weil nur die Oberfläche die heutige
+        Mitte kennt — und absolut ist es, weil eine Operation aus ihren
+        Parametern reproduzierbar sein muss (Regel 2).
+        """
+        twin = FEATURE_TWINS.get(op)
+        if twin is None or not REGISTRY.has(twin):
+            return None
+        feature_id = self.object_tree.selected_feature()
+        object_id = self.object_tree.selected()
+        if feature_id is None or object_id is None:
+            return None
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        feature = entry.features.get(feature_id) if entry is not None else None
+        if feature is None:
+            return None
+        spec = REGISTRY.get(twin)
+        if feature.kind not in (spec.applies_to or ()):
+            return None
+        centre = feature.params.get("centre")
+        if centre is None or len(centre) != 3:
+            return None
+        return OperationDraft(
+            op=twin,
+            inputs=(object_id,),
+            params={
+                "at_feature": feature_id,
+                "x": float(centre[0]) + float(params.get("dx", 0.0)),
+                "y": float(centre[1]) + float(params.get("dy", 0.0)),
+                "z": float(centre[2]) + float(params.get("dz", 0.0)),
+            },
         )
 
     def inputs_for_transform(self, op: str) -> tuple[ObjectId, ...]:
@@ -7891,6 +8010,16 @@ class MainWindow(QMainWindow):
         """
         drafts: list[OperationDraft] = []
         if steps.moves:
+            # Derselbe Vorrang wie bei den getippten Werten: Was gewählt ist,
+            # wird bewegt. Ein Zug am Griff, der ein Merkmal meint, darf nicht
+            # das ganze Teil versetzen.
+            single = self.feature_draft(
+                "translate_object",
+                {"dx": steps.offset[0], "dy": steps.offset[1], "dz": steps.offset[2]},
+            )
+            if single is not None:
+                self.session.apply(REGISTRY.get(str(single.op)).title, [single])
+                return
             # Ein Draft je Körper, alle in einem ``apply`` — weiter genau eine
             # Transaktion, und ein Strg+Z nimmt den ganzen Zug zurück.
             drafts.extend(
@@ -8909,9 +9038,11 @@ class MainWindow(QMainWindow):
         self.object_tree.select_object(object_id or None)
 
     def _on_feature_selected(self, feature_id: str | None) -> None:
-        """Das gewählte Merkmal, in der Ansicht und in der Statusleiste."""
+        """Das gewählte Merkmal — in der Ansicht, in der Statusleiste und im
+        Panel, das seine Maße änderbar zeigt."""
         self.viewport.select_feature(feature_id)
         if feature_id is None:
+            self.feature_panel.clear()
             return
         result = self.session.last_result
         object_id = self.object_tree.selected()
@@ -8919,6 +9050,24 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry is not None else None
         if entry is not None and feature is not None:
             self.measurements.setText(f"{entry.name} · {feature_label(feature_id, feature)}")
+            self.feature_panel.show_feature(feature_id, feature)
+        else:
+            self.feature_panel.clear()
+
+    def _apply_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
+        """Eine geänderte Zahl im Merkmal-Panel wird ein Schritt im Verlauf.
+
+        Dasselbe wie bei der Bewegen-Leiste: Das Panel rechnet nichts und
+        ändert nichts, es nennt eine registrierte Operation und ihre Werte
+        (Regel 2). Der Körper kommt aus der Auswahl — welches Merkmal gemeint
+        ist, steht schon in ``at_feature``.
+        """
+        object_id = self.object_tree.selected()
+        if object_id is None:
+            self.announce(_needs_objects(0))
+            return
+        draft = OperationDraft(op=op, inputs=(object_id,), params=params)
+        self.session.apply(REGISTRY.get(op).title, [draft])
 
     def close_measuring(self) -> None:
         """Das Messwerkzeug schließen: Modus aus, Maße weg.
@@ -10617,6 +10766,13 @@ class MainWindow(QMainWindow):
         (:func:`_needs_objects`), damit nicht zwei Stellen verschieden
         erklären, was dasselbe ist.
         """
+        # **Erst das Merkmal, dann der Körper** (Robert, 03.09.2026). Steht die
+        # Auswahl auf einer Bohrung und gibt es die Merkmalsoperation, gilt der
+        # Zug ihr — sonst wie bisher dem ganzen Teil.
+        single = self.feature_draft(op, params)
+        if single is not None:
+            self.session.apply(REGISTRY.get(str(single.op)).title, [single])
+            return
         chosen = self.inputs_for_transform(op)
         if not chosen:
             self.announce(_needs_objects(0))

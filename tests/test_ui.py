@@ -1315,6 +1315,135 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
+def test_a_drag_on_a_feature_becomes_a_feature_step(window: MainWindow) -> None:
+    """Der Zug am Griff trifft das Merkmal, nicht sein Teil (§18.11).
+
+    Die Ansicht rechnet die Zielmitte selbst und schickt sie **absolut**; das
+    Fenster macht daraus einen Schritt. Geprüft wird die Naht zwischen beiden —
+    dass ein Signal einen Empfänger hat, fällt in keinem Test auf, der nur den
+    Sender prüft.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    centre = entry.features[hole].params["centre"]
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+
+    ziel = (float(centre[0]) + 4.0, float(centre[1]), float(centre[2]))
+    window.viewport.featureMoved.emit(hole, ziel)
+    window.session.wait_for_idle()
+
+    assert [step.op for step in window.session.project.document.ops] == ["load", "move_feature"]
+    letzter = window.session.project.document.ops[-1]
+    assert letzter.params["at_feature"] == hole
+    assert float(letzter.params["x"]) == pytest.approx(ziel[0]), "die Mitte kommt absolut an"
+
+
+def test_a_turn_on_a_feature_keeps_the_settled_angle(window: MainWindow) -> None:
+    """Der Winkel kommt **gerastet** aus der Ansicht — sie kennt den Fang, das
+    Fenster nicht. Nachgerechnet wird hier nichts."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+
+    window.viewport.featureTurned.emit(hole, "x", 45.0)
+    window.session.wait_for_idle()
+
+    steps = [step.op for step in window.session.project.document.ops]
+    assert steps == ["load", "rotate_feature"]
+    letzter = window.session.project.document.ops[-1]
+    assert letzter.params["at_feature"] == hole
+    assert letzter.params["axis"] == "x"
+    assert float(letzter.params["angle"]) == pytest.approx(45.0), "unverändert weitergereicht"
+
+
+def test_the_gizmo_sentence_reaches_the_status_line(window: MainWindow) -> None:
+    """Was der Griff bewegen wird, sagt die Ansicht — und der Kunde liest es.
+
+    Ein Satz, den niemand anzeigt, ist derselbe Fall wie ein Signal ohne
+    Empfänger: im Sender geprüft, beim Kunden unsichtbar.
+    """
+    window.viewport.gizmoStatus.emit("Der Griff bewegt die Bohrung.")
+    QApplication.processEvents()
+
+    assert "Bohrung" in window._announcement
+
+
+def test_selecting_a_feature_fills_the_panel_and_clearing_empties_it(
+    window: MainWindow,
+) -> None:
+    """Das Merkmal-Panel folgt der Auswahl (Robert, 03.09.2026).
+
+    Geprüft wird die Kette und nicht das Panel für sich: Ein Panel, das seine
+    Zeilen bauen kann und nie eine Auswahl bekommt, ist beim Kunden leer.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    assert not window.feature_panel._built, "ohne Auswahl steht dort der Satz"
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    assert window.feature_panel._built, "die Bohrung füllt das Panel"
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    assert not window.feature_panel._built, "ohne Merkmal ist es wieder leer"
+
+
+def test_a_changed_number_in_the_panel_becomes_a_step(window: MainWindow) -> None:
+    """„Eine geänderte Zahl ist die Operation." Gemessen bis in die Geometrie:
+    Der Durchmesser der Bohrung wächst, und der Schritt steht im Verlauf."""
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.labels import LengthSpin
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    before = float(entry.features[hole].params["diameter"])
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+
+    for row in window.feature_panel._built:
+        buttons = row.findChildren(QPushButton)
+        if not buttons or "ändern" not in buttons[0].text():
+            continue
+        for spin in row.findChildren(LengthSpin):
+            spin.set_value_mm(spin.value_mm() + 2.0)
+        buttons[0].click()
+        break
+    else:
+        pytest.fail("das Panel bot keine Änderung an")
+    window.session.wait_for_idle()
+
+    assert [step.op for step in window.session.project.document.ops] == ["load", "resize_hole"]
+    after = window.session.evaluate_now().scene.objects[object_id].features.get(hole)
+    assert after is not None, "die Bohrung ist noch da"
+    assert float(after.params["diameter"]) > before + 1.5, "und sie ist größer geworden"
+
+
 def test_a_double_click_on_a_feature_opens_what_changes_it(window: MainWindow) -> None:
     """Roberts Wunsch vom 03.09.2026: „bei Doppelklick würde ich auch gerne die
     Größen usw. ändern können über einen Dialog."
