@@ -5083,3 +5083,97 @@ def test_a_click_looks_for_bodies_and_nothing_else(qt_app: QApplication) -> None
         assert "begrenzt" not in gesehen, "eine leere Kandidatenliste trifft nie etwas"
     finally:
         VtkRenderingCore.vtkCellPicker = echt  # type: ignore[misc]
+
+
+def test_the_handle_of_a_hole_sits_at_its_mouth(qt_app: QApplication) -> None:
+    """Der Griff einer Bohrung gehört an die Öffnung, nicht in ihre Mitte.
+
+    „Ich bin mit meinem Mauszeiger auch immer drüber aber es klappt nicht …
+    weder Seitenansicht, Schrägansicht noch Draufsicht" (Robert, 03.09.2026).
+    Gemessen am laufenden Fenster, Bohrung Ø 7,34 durch eine 35 mm dicke
+    Platte:
+
+        Griffspanne     61,14 mm   — gross genug
+        Ursprung z      17,50 mm   — mitten im Material
+        Pfeil X, Y      -> der Körper
+        Pfeil Z         -> ein Griff-Aktor
+
+    Die erkannte Mitte liegt auf halber Tiefe. Die waagerechten Pfeile stecken
+    damit im Teil, und aus jeder Blickrichtung liegt Wand davor. Nach dem
+    Umsetzen an die Öffnung trafen alle drei Achsen den Griff.
+
+    **Zur Kamera hin**, weil eine durchgehende Bohrung zwei Öffnungen hat und
+    die andere wieder hinter dem Teil läge.
+    """
+    from app.core.types import Feature
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    loch = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 17.5),
+            "axis": (0.0, 0.0, 1.0),
+            "depth": 35.0,
+            "diameter": 7.34,
+        },
+    )
+
+    # Ohne Plotter gilt die Achsrichtung — offscreen gibt es keine Kamera.
+    sitz = viewport._handle_seat(loch, (0.0, 0.0, 17.5))
+    assert tuple(float(v) for v in sitz) == pytest.approx((0.0, 0.0, 35.0)), (
+        "die Öffnung liegt eine halbe Tiefe über der Mitte"
+    )
+
+    # Eine Fläche hat keine Tiefe — ihre Mitte liegt schon auf der Oberfläche.
+    flaeche = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"centre": (1.0, 2.0, 3.0), "normal": (0.0, 0.0, 1.0)},
+    )
+    assert viewport._handle_seat(flaeche, (1.0, 2.0, 3.0)) == (1.0, 2.0, 3.0)
+
+
+def test_the_mark_covers_the_feature_and_does_not_stand_over_it(
+    qt_app: QApplication,
+) -> None:
+    """Die Scheibe deckt das Merkmal — sie steht nicht darüber hinaus.
+
+    „Ein kleiner Überstand ist noch da" (Robert, 03.09.2026). Die Scheibe mass
+    sich an der Objektdiagonale; an seinem Teil (105 x 61,25 x 35) waren das
+    Ø 15,18 mm über einer Bohrung von Ø 7,34 — 2,1-mal so breit, 3,92 mm
+    Überstand je Seite.
+
+    **Marke und Werkzeug sind zwei Dinge.** Die Scheibe markiert und deckt
+    genau das Merkmal; der Griff wird bedient und misst sich am Körper
+    (:meth:`_gizmo_scale_for`), damit er aus dem Teil herausragt. Beide an
+    dieselbe Grösse zu hängen war der Fehler: Ein Griff in Merkmalsgrösse ist
+    unerreichbar, eine Marke in Teilgrösse steht über.
+
+    Eine Fläche hat kein eigenes Mass — für sie bleibt der Anteil der
+    Diagonale, und der Grund steht bei ``FACE_HANDLE_SHARE``.
+    """
+    from app.core.types import Feature
+    from app.ui.viewport import FACE_HANDLE_MINIMUM, Viewport
+
+    viewport = Viewport()
+    loch = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "diameter": 7.34},
+    )
+    assert viewport._handle_radius(loch) == pytest.approx(3.67), "genau der halbe Durchmesser"
+
+    winzig = Feature(
+        id="hole_2",
+        kind="hole",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "diameter": 0.5},
+    )
+    assert viewport._handle_radius(winzig) == FACE_HANDLE_MINIMUM, (
+        "eine Ø0,5-Bohrung bekäme sonst eine Marke, die niemand sieht"
+    )

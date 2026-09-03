@@ -3025,6 +3025,15 @@ class Viewport(QWidget):
         Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
         den man behalten will."""
         self._scheme: NavigationScheme = "slicer"
+        self._theme: str | None = None
+        """Welches Thema gerade gilt — damit :meth:`set_theme` prüfen kann.
+
+        Es gab das Feld nicht, und deshalb konnte der Setter als Einziger der
+        sieben nicht auf Änderung prüfen: Dasselbe Thema zum zweiten Mal
+        kostete einen vollen Szenenaufbau (gemessen 03.09.2026). ``None`` und
+        nicht ``"dark"``, damit der erste Aufruf immer durchläuft — das Fenster
+        setzt das Thema beim Start, und ein vorbelegtes Feld ließe die
+        Startfarben ungesetzt."""
         self._mode: DisplayMode = "solid"
         self._shading: Shading = "flat"
         self._shadow_opacity = SHADOW_OPACITY["dark"]
@@ -4802,6 +4811,24 @@ class Viewport(QWidget):
         self._hidden = hidden
         self.show_scene(self._result)
 
+    # **Jeder Ansichts-Setter prüft auf Änderung, und das ist keine Feinarbeit.**
+    # Gemessen am 03.09.2026 an ``aushoehlen-und-teilen.p3d``, Zähler um
+    # ``show_scene`` und alle acht Setter: **sieben von acht Szenenaufbauten in
+    # vier gewöhnlichen Handlungen waren unnötig** — ein Klick auf einen Körper
+    # baute die ganze Szene neu, ein Themenwechsel dreimal, dasselbe Thema noch
+    # einmal ein viertes Mal. An einem Kundenmodell (``chufang.3mf``, 32 Körper)
+    # kostet ein Aufbau **0,74 s**; ein Klick also drei Viertel Sekunden für
+    # nichts.
+    #
+    # Sichtbar wurde es an einer anderen Stelle: Nach einem Zug am Griff sprang
+    # der Körper an die alte Stelle zurück, bevor er an der neuen landete
+    # (Robert, 03.09.2026). Der Grund war ``set_analysis_map(None, None)``,
+    # dreimal gerufen, während das Ergebnis der Operation schon vorlag — jeder
+    # dieser Aufbauten nahm dem Actor seine Vorschau-Matrix, und für 491 ms
+    # stand das Teil dort, wo es hergekommen war.
+    #
+    # ``set_hidden`` darüber hatte die Prüfung seit je. Die anderen sechs nicht.
+
     @property
     def hidden(self) -> frozenset[ObjectId]:
         return self._hidden
@@ -4813,6 +4840,8 @@ class Viewport(QWidget):
         Platten sind weiter da, werden weiter exportiert und stehen weiter im
         Prüfbericht.
         """
+        if plate == self._plate:
+            return
         self._plate = plate
         # Eine einzelne Platte heißt ein Bett; „Alle" heißt so viele, wie die
         # Szene belegt. ``show_scene`` zieht die Kulisse nach, sobald sich die
@@ -4827,7 +4856,12 @@ class Viewport(QWidget):
         ist immer noch dort, wo der Stapel es sagt, und der Export sagt das
         auch.
         """
-        self._explosion = max(0.0, factor)
+        # Verglichen wird der normalisierte Wert: Wer zweimal -1 schickt, meint
+        # zweimal null, und das ist keine Änderung.
+        wanted = max(0.0, factor)
+        if wanted == self._explosion:
+            return
+        self._explosion = wanted
         self.show_scene(self._result)
 
     def _view_offset(self, entry: Any, result: EvaluationResult) -> Any:
@@ -5339,7 +5373,17 @@ class Viewport(QWidget):
     # --- theme (§19.3) ----------------------------------------------------------
 
     def set_theme(self, theme: str) -> None:
-        """Hintergrund-, Körper- und Bettfarben folgen dem Anwendungsthema."""
+        """Hintergrund-, Körper- und Bettfarben folgen dem Anwendungsthema.
+
+        **Die Prüfung steht ganz vorn**, also vor dem Umfärben der Leisten und
+        vor der Achsenanzeige: Ändert sich das Thema nicht, ändert sich an
+        keiner der Farben etwas, und jede Zeile darunter wäre Arbeit für
+        dasselbe Bild. Der teuerste Teil ist der Szenenaufbau am Ende —
+        gemessen 0,74 s an einem Kundenmodell mit 32 Körpern.
+        """
+        if theme == self._theme:
+            return
+        self._theme = theme
         colours = viewport_colours(theme)  # type: ignore[arg-type]
         self._object_colour = colours["object"]
         self._bed_colour = colours["bed"]
@@ -5391,10 +5435,14 @@ class Viewport(QWidget):
 
     def set_display_mode(self, mode: DisplayMode) -> None:
         """Voll, voll mit Kanten, Drahtgitter oder durchsichtig."""
+        if mode == self._mode:
+            return
         self._mode = mode
         self.show_scene(self._result)
 
     def set_shading(self, shading: Shading) -> None:
+        if shading == self._shading:
+            return
         self._shading = shading
         self.show_scene(self._result)
 
@@ -5425,6 +5473,8 @@ class Viewport(QWidget):
         """Schneidet die Ansicht. ``thickness`` macht aus dem Schnitt eine
         Scheibe.
         """
+        if plane == self._section and thickness == self._slice_thickness:
+            return
         self._section = plane
         self._slice_thickness = thickness
         self.show_scene(self._result)
@@ -6456,8 +6506,15 @@ class Viewport(QWidget):
         """Färbt einen Körper nach den Zahlen einer Karte, oder nimmt die Karte
         weg.
         """
+        # **Identität für die Karte, Gleichheit für die Kennung.** Ein ``==``
+        # über zwei Karten verglich ihre Zahlenfelder — bei Arrays ist das
+        # teuer und im Wahrheitswert nicht eindeutig. ``None is None`` trifft
+        # genau den gemessenen Fall: dreimal „keine Karte" hintereinander.
+        wanted_object = object_id if analysis is not None else None
+        if analysis is self._map and wanted_object == self._map_object:
+            return
         self._map = analysis
-        self._map_object = object_id if analysis is not None else None
+        self._map_object = wanted_object
         # Solange Farbe eine Zahl bedeutet, darf nichts sie nachdunkeln —
         # weder die Verdeckung noch ein Schatten.
         self._apply_ambient_occlusion()
@@ -7946,7 +8003,7 @@ class Viewport(QWidget):
             actor,
             release_callback=self._on_gizmo_released,
             interact_callback=self._on_gizmo_interacted,
-            scale=GIZMO_SCALE,
+            scale=self._gizmo_scale_for(actor),
             line_radius=GIZMO_LINE_RADIUS,
         )
         # **Danach und nicht davor**: Das Widget schaltet beim Anhängen selbst
@@ -7986,6 +8043,40 @@ class Viewport(QWidget):
                 interact_callback=self._on_scale_interacted,
             )
         self._label_gizmo(actor)
+
+    def _gizmo_scale_for(self, actor: Any) -> float:
+        """Wie gross der Griff wird — damit er **greifbar** ist, nicht damit er passt.
+
+        „Ich bin mit meinem Mauszeiger auch immer drüber aber es klappt nicht
+        … weder Seitenansicht, Schrägansicht noch Draufsicht" (Robert,
+        03.09.2026). Gemessen am laufenden Fenster, Bohrung Ø 7,34 in einem
+        Teil von 105 x 61,25 x 35:
+
+            Pfeillänge         3,17 mm     (in einem 105-mm-Teil)
+            Ursprung z        17,50 mm     — mitten im Körper
+            Pfeil X, Y, Z     getroffen -> der **Körper**, nicht der Griff
+
+        Der Griff steckte im Teil. Aus jeder Blickrichtung lag Material davor,
+        und der Zeiger traf es statt der Pfeile — kein Grössen-, sondern ein
+        Erreichbarkeitsproblem.
+
+        **Marke und Werkzeug sind zwei Dinge, und sie brauchen zwei Grössen.**
+        Die Scheibe (:meth:`_handle_radius`) markiert das Merkmal und deckt
+        genau seinen Durchmesser — sie soll nicht überstehen. Der Griff wird
+        mit der Maus bedient und muss aus dem Körper herausragen, gleich wie
+        klein das Merkmal ist. Sie aneinanderzuhängen war der Fehler: Ein Griff
+        in Merkmalsgrösse ist unerreichbar, einer in Teilgrösse überdeckt die
+        Bohrung — beides ist an einem Nachmittag ausprobiert worden.
+
+        Gerechnet wird deshalb gegen die Diagonale des **Körpers**, gleich
+        woran der Griff hängt. Ohne gewählten Körper bleibt es beim Anteil;
+        dann sitzt er ohnehin am Körperaktor.
+        """
+        length = float(actor.GetLength())
+        body = self._actors.get(self._selected) if self._selected is not None else None
+        if body is None or length <= EPS_GEOM:
+            return GIZMO_SCALE
+        return GIZMO_SCALE * float(body.GetLength()) / length
 
     def _give_the_widget_a_picker_that_hits(self) -> None:
         """Setzt den Picker, mit dem pyvistas Griff seine Pfeile findet.
@@ -8092,7 +8183,7 @@ class Viewport(QWidget):
         import numpy as np
         import pyvista as pv
 
-        length = float(actor.GetLength()) * GIZMO_SCALE * 1.15
+        length = float(actor.GetLength()) * self._gizmo_scale_for(actor) * 1.15
         centre = (float(actor.center[0]), float(actor.center[1]), float(actor.center[2]))
         marks = gizmo_labels(centre, length, self.gizmo_face_label())
         if self._scale_handle is not None:
@@ -8329,13 +8420,13 @@ class Viewport(QWidget):
         )
         if entry is not None and self._result is not None:
             centre = centre + np.asarray(self._view_offset(entry, self._result), dtype=float)
+        centre = self._handle_seat(feature, centre)
         # Normale bei einer Fläche, Achse bei einer Bohrung — und wo keines
         # von beidem steht, die Z-Achse: Die Scheibe soll das Merkmal zeigen,
         # nicht seine Ausrichtung behaupten.
         direction = feature.params.get("normal") or feature.params.get("axis") or (0.0, 0.0, 1.0)
         normal = np.asarray(direction, dtype=float)
-        span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
-        radius = max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
+        radius = self._handle_radius(feature)
         disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
         # **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
         # genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
@@ -8352,6 +8443,85 @@ class Viewport(QWidget):
             pickable=False,
         )
         return self._face_actor
+
+    def _handle_seat(self, feature: Feature, centre: Any) -> Any:
+        """Wo der Griff eines Merkmals sitzt — an der Öffnung, nicht in der Mitte.
+
+        „Ich bin mit meinem Mauszeiger auch immer drüber aber es klappt nicht
+        … weder Seitenansicht, Schrägansicht noch Draufsicht" (Robert,
+        03.09.2026). Gemessen am laufenden Fenster, Bohrung Ø 7,34 durch eine
+        35 mm dicke Platte:
+
+            Griffspanne     61,14 mm   — gross genug
+            Ursprung z      17,50 mm   — **mitten im Material**
+            Pfeil X, Y      getroffen -> der Körper
+            Pfeil Z         getroffen -> ein Griff-Aktor
+
+        Die erkannte Mitte einer Bohrung liegt auf halber Tiefe, also im
+        Material. Die waagerechten Pfeile stecken damit im Teil, und aus jeder
+        Blickrichtung liegt Wand davor — der Zeiger trifft sie, nicht den
+        Griff. Bei einer **Fläche** stellt sich die Frage nicht: Ihre Mitte
+        liegt auf der Oberfläche.
+
+        Gesetzt wird deshalb auf die Öffnung, und zwar auf die dem Betrachter
+        zugewandte: Bei einer durchgehenden Bohrung gibt es zwei, und die
+        andere läge wieder hinter dem Teil. Fehlt eine Tiefe oder eine Achse,
+        bleibt es bei der Mitte — dann ist sie das Beste, was wir wissen.
+        """
+        import numpy as np
+
+        axis = feature.params.get("axis")
+        depth = feature.params.get("depth")
+        if axis is None or depth is None:
+            return centre
+        direction = np.asarray(axis, dtype=float)
+        norm = float(np.linalg.norm(direction))
+        if norm <= EPS_GEOM:
+            return centre
+        direction = direction / norm
+        # Zur Kamera hin: Das Vorzeichen entscheidet, welche der beiden
+        # Öffnungen vorn liegt. Ohne Plotter (offscreen) gilt die Achsrichtung.
+        towards = 1.0
+        if self.plotter is not None:
+            eye = np.asarray(self.plotter.camera.position, dtype=float)
+            towards = (
+                1.0
+                if float(np.dot(eye - np.asarray(centre, dtype=float), direction)) >= 0
+                else -1.0
+            )
+        return np.asarray(centre, dtype=float) + direction * (float(depth) / 2.0) * towards
+
+    def _handle_radius(self, feature: Feature) -> float:
+        """Wie gross die Scheibe wird, die ein gewähltes Merkmal markiert.
+
+        „Ein kleiner Überstand ist noch da" (Robert, 03.09.2026). Die Scheibe
+        mass sich an der **Objektdiagonale**, und das ist bei einem Merkmal die
+        falsche Bezugsgrösse. Gemessen an seinem Teil (105 x 61,25 x 35, Bohrung
+        Ø 7,34):
+
+            Objektdiagonale   126,50 mm
+            Scheibe daraus     15,18 mm   -> 2,1-mal die Bohrung
+            Überstand je Seite  3,92 mm
+
+        **Hat das Merkmal ein eigenes Mass, gilt das.** Eine Bohrung und ein
+        Zapfen kennen ihren Durchmesser; die Scheibe deckt ihn dann genau ab
+        und markiert, was gewählt ist, statt darüber hinauszustehen.
+
+        **Eine Fläche hat keines**, und für sie bleibt der Anteil der
+        Diagonale — der Grund dafür steht bei :data:`FACE_HANDLE_SHARE` und
+        gilt weiter: Ein fester Radius verschwindet an einem Gehäuse und
+        verdeckt einen Zapfen vollständig.
+
+        Die Untergrenze bleibt in beiden Fällen: Eine Ø 0,5-Bohrung bekäme
+        sonst eine Marke, die niemand sieht.
+        """
+        import numpy as np
+
+        measure = feature.params.get("diameter") or feature.params.get("width")
+        if measure is not None:
+            return max(float(measure) / 2.0, FACE_HANDLE_MINIMUM)
+        span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
+        return max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
 
     def _drop_face_handle(self) -> None:
         if self._face_actor is not None and self.plotter is not None:
