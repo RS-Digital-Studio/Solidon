@@ -9,6 +9,7 @@ Regel 2).
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
@@ -902,6 +903,9 @@ class ObjectTree(QWidget):
 
     selectionChanged = Signal(object)
     featureSelected = Signal(object)
+    #: Alle gewählten Merkmale als Paare aus Körper und Kennung — für die
+    #: Frage, wie weit zwei voneinander stehen.
+    featuresSelected = Signal(list)
     """Ein im Baum gewähltes Merkmal — trägt seine ID, oder None."""
     operationRequested = Signal(object)
     """Eine aus dem Kontextmenü gewählte Operation — trägt ihre ``OperationSpec``."""
@@ -1411,6 +1415,22 @@ class ObjectTree(QWidget):
         value: str | None = items[0].data(1, Qt.ItemDataRole.UserRole)
         return value
 
+    def selected_features(self) -> tuple[tuple[str, str], ...]:
+        """Alle gewählten Merkmale als Paare aus Körper und Kennung.
+
+        :meth:`selected_feature` gibt bewusst nichts zurück, sobald mehr als
+        eine Zeile markiert ist — „das gewählte Merkmal" hätte dann keine
+        Antwort. Für die Frage „wie weit stehen diese beiden auseinander"
+        braucht es aber genau **zwei**, und die stehen hier.
+        """
+        found: list[tuple[str, str]] = []
+        for item in self.tree.selectedItems():
+            object_id = item.data(0, Qt.ItemDataRole.UserRole)
+            feature_id = item.data(1, Qt.ItemDataRole.UserRole)
+            if object_id is not None and feature_id is not None:
+                found.append((str(object_id), str(feature_id)))
+        return tuple(found)
+
     def step_selection(self, forward: bool = True) -> None:
         """Zum nächsten Körper weiterschalten (§19.2).
 
@@ -1463,6 +1483,11 @@ class ObjectTree(QWidget):
         self._remember_order()
         self.selectionChanged.emit(self.selected())
         self.featureSelected.emit(self.selected_feature())
+        # **Und die Mehrfachauswahl getrennt**, weil sie eine andere Frage
+        # beantwortet: nicht „was ist gewählt", sondern „welche stehen
+        # zueinander". Über ``featureSelected`` ginge sie nicht — das trägt
+        # bewusst nichts, sobald mehr als eine Zeile markiert ist.
+        self.featuresSelected.emit(list(self.selected_features()))
 
     def _remember_order(self) -> None:
         """Führt mit, in welcher Reihenfolge angeklickt wurde.
@@ -4045,6 +4070,68 @@ class FeaturePanel(QWidget):
             catalog.clicked.connect(lambda _checked=False: self.catalogRequested.emit())
             self._rows.insertWidget(self._rows.count() - 1, catalog)
             self._built.append(catalog)
+
+    def show_pair(self, first_id: str, first: Feature, second_id: str, second: Feature) -> None:
+        """Wie weit zwei gewählte Merkmale auseinanderstehen.
+
+        Robert am 03.09.2026, als er das Merkmalsfenster ausgebaut haben
+        wollte: der Abstand zweier Bohrungen ist das, was man vor jedem Druck
+        wissen will. Bis dahin ging das nur über das Messwerkzeug und zwei
+        Klicks ins Bild — zwei Zeilen im Baum anzuklicken ist der kürzere Weg,
+        und markiert hat man sie ohnehin schon.
+
+        **Eine Auskunft und keine Handlung** (Regel 2): Hier wird nichts
+        geändert und nichts in den Verlauf geschrieben. Deshalb steht auch kein
+        Knopf darunter.
+
+        Gezeigt werden der räumliche Abstand und die drei Achsabstände
+        einzeln — die Mitte-zu-Mitte-Strecke beantwortet „passt der Schlüssel
+        dazwischen", die Achsabstände „wie weit muss ich die Schablone
+        schieben".
+        """
+        self.clear()
+        self._empty.setVisible(False)
+
+        heading = QLabel(
+            f"{feature_name(first_id, first)}  →  {feature_name(second_id, second)}", self
+        )
+        heading.setWordWrap(True)
+        fit_wrapped(heading)
+        set_level(heading, "section")
+        self._rows.insertWidget(self._rows.count() - 1, heading)
+        self._built.append(heading)
+
+        here = first.params.get("centre")
+        there = second.params.get("centre")
+        if here is None or there is None or len(here) != 3 or len(there) != 3:
+            # Ein Merkmal ohne gemessene Mitte hat keinen Abstand — und ein
+            # erfundener wäre schlimmer als keiner.
+            note = QLabel(tr("Für diese beiden ist kein Abstand gemessen."), self)
+            note.setWordWrap(True)
+            fit_wrapped(note)
+            self._rows.insertWidget(self._rows.count() - 1, note)
+            self._built.append(note)
+            return
+
+        gap = tuple(float(there[axis]) - float(here[axis]) for axis in range(3))
+        straight = math.sqrt(sum(value * value for value in gap))
+        rows = [
+            (tr("Abstand"), straight),
+            (tr("in X"), gap[0]),
+            (tr("in Y"), gap[1]),
+            (tr("in Z"), gap[2]),
+        ]
+        box = QWidget(self)
+        form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(TIGHT)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        for label, value in rows:
+            # Über ``length`` und nicht als rohe Zahl: außen die Anzeigeeinheit,
+            # innen Millimeter — sonst stünde bei Zoll eine Millimeterzahl da.
+            form.addRow(QLabel(label, box), QLabel(length(value), box))
+        self._rows.insertWidget(self._rows.count() - 1, box)
+        self._built.append(box)
 
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.

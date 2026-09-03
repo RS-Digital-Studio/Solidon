@@ -1315,6 +1315,57 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
+def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
+    """Zwei Zeilen im Baum markieren und den Abstand lesen — ohne Messwerkzeug.
+
+    Geprüft wird die Kette: Der Baum meldet die Mehrfachauswahl über ein
+    eigenes Signal, weil ``featureSelected`` bei zwei Zeilen bewusst nichts
+    trägt, und das Panel macht daraus eine Auskunft.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+
+    window.object_tree.featuresSelected.emit([(object_id, holes[0]), (object_id, holes[1])])
+    QApplication.processEvents()
+
+    texte = " ".join(
+        widget.text()
+        for row in window.feature_panel._built
+        for widget in ([row] if isinstance(row, QLabel) else row.findChildren(QLabel))
+    )
+    assert tr("Abstand") in texte, texte
+    assert tr("in X") in texte and tr("in Z") in texte
+
+
+def test_three_selected_features_show_nothing_new(window: MainWindow) -> None:
+    """Bei dreien gibt es keine Strecke, sondern drei — und welche gemeint
+    wäre, kann niemand wissen. Das Panel bleibt dann, was es war."""
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 3
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+    vorher = len(window.feature_panel._built)
+
+    window.object_tree.featuresSelected.emit([(object_id, hole) for hole in holes[:3]])
+    QApplication.processEvents()
+
+    assert len(window.feature_panel._built) == vorher, "das Panel wurde nicht umgebaut"
+
+
 def test_one_handling_for_all_alike_features_is_one_transaction(window: MainWindow) -> None:
     """Sechs Bohrungen auf ein Maß zu bringen war sechsmal derselbe Weg.
 

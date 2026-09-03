@@ -10,10 +10,18 @@ Wert ist, sagt ``app.core.perceive.actions.actions_for``.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
-from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QCheckBox,
+    QComboBox,
+    QLabel,
+    QPushButton,
+    QWidget,
+)
 
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.perceive import features
@@ -267,3 +275,74 @@ def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
     assert fuer_alle, "die Sammelhandlung wurde nicht gemeldet"
     _op, _params, ids = fuer_alle[-1]
     assert ids == [identifier, "hole_2", "hole_3"], "alle drei, das eigene zuerst"
+
+
+def two_holes() -> tuple[tuple[str, Feature], tuple[str, Feature]]:
+    found = features.detect(plate())
+    holes = [(key, value) for key, value in found.items() if value.kind == "hole"]
+    assert len(holes) >= 2, "die Platte hat mehrere Bohrungen"
+    return holes[0], holes[1]
+
+
+def test_two_features_show_how_far_apart_they_stand(qt_app: QApplication) -> None:
+    """Robert am 03.09.2026 zum Ausbau: der Abstand zweier Bohrungen ist das,
+    was man vor jedem Druck wissen will.
+
+    Bis dahin ging das nur über das Messwerkzeug und zwei Klicks ins Bild. Zwei
+    Zeilen im Baum anzuklicken ist der kürzere Weg — markiert hat man sie
+    ohnehin schon.
+    """
+    (first_id, first), (second_id, second) = two_holes()
+    panel = FeaturePanel()
+    panel.show_pair(first_id, first, second_id, second)
+
+    texte = " ".join(
+        label.text()
+        for row in panel._built
+        for label in row.findChildren(QLabel)
+        if hasattr(label, "text")
+    ) + " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
+    # Der Kundenname und nicht die rohe Kennung: „Bohrung 1", nicht „hole_1".
+    from app.ui.labels import feature_name
+
+    assert feature_name(first_id, first) in texte, "das erste steht dabei"
+    assert feature_name(second_id, second) in texte, "und das zweite"
+
+    here = first.params["centre"]
+    there = second.params["centre"]
+    erwartet = math.sqrt(sum((float(b) - float(a)) ** 2 for a, b in zip(here, there, strict=True)))
+    # Die Zahl steht als Text mit Einheit; geprüft wird, dass sie vorkommt.
+    assert (
+        f"{erwartet:.2f}".replace(".", ",") in texte or f"{erwartet:.1f}".replace(".", ",") in texte
+    ), texte
+
+
+def test_a_pair_writes_no_step(qt_app: QApplication) -> None:
+    """Eine Auskunft und keine Handlung (Regel 2): kein Knopf, kein Signal."""
+    (first_id, first), (second_id, second) = two_holes()
+    panel = FeaturePanel()
+    getan: list[object] = []
+    panel.operationRequested.connect(lambda *_a: getan.append(True))
+    panel.operationRequestedForEach.connect(lambda *_a: getan.append(True))
+    panel.show_pair(first_id, first, second_id, second)
+
+    assert not [knopf for row in panel._built for knopf in row.findChildren(QPushButton)], (
+        "kein Knopf unter einer Auskunft"
+    )
+    assert not getan
+
+
+def test_a_pair_without_a_measured_centre_says_so(qt_app: QApplication) -> None:
+    """Ein erfundener Abstand wäre schlimmer als keiner."""
+    (first_id, first), _zweites = two_holes()
+    ohne = Feature(
+        id="edge_loop_1",
+        kind="edge_loop",
+        provenance="detected",
+        params={"open_edges": 4},
+    )
+    panel = FeaturePanel()
+    panel.show_pair(first_id, first, "edge_loop_1", ohne)
+
+    texte = " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
+    assert "kein Abstand" in texte, texte
