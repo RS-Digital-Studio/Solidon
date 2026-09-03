@@ -1208,6 +1208,17 @@ ein Vorbild haben.
   Viewport nimmt den Fokus beim Klick, das Feld holt ihn beim nächsten zurück,
   und die Eingabetaste wirkt.
 
+**Was kein Test prüfen kann, prüft ein Werkzeug von Hand.** Offscreen bleibt
+`Viewport.plotter` auf `None` — die Suite kann VTK also gar nicht erst nach
+der Bewegung fragen, und ob der Interaktionsstil ausführt, was die Tabelle
+verspricht, steht in keinem Lauf. `.claude/.state/steuerung-2026-09-03/`
+schließt die Lücke: ein echtes Fenster, VTKs eigene Ereignisse, die
+Kamerastellung vorher und nachher. Zu fahren nach jeder Änderung an
+`_NAVIGATION`, am Stil oder an `camera_step`. Die README daneben nennt die
+drei Fallen, die dabei zuschnappen — Millimeter sagen nichts (jede Bewegung
+skaliert mit der Entfernung), Bildpunkte hier gar nichts (das Renderfenster
+bleibt 160×160), und `session.apply` blockiert den Hauptthread.
+
 Vier Wächter in `tests/test_viewport_decisions.py` und
 `tests/test_spacemouse.py`, alle ohne Fenster: Jedes Schema belegt alle sechs
 Kombinationen aus Taste und Umschalt (`navigation_action` liest ohne Rückfall
