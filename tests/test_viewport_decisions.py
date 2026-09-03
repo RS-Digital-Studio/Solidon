@@ -5524,3 +5524,97 @@ def test_forward_flight_moves_the_camera_and_its_focus() -> None:
 
     zurueck = camera_step(pose, Motion(**FLIGHT_KEYS["s"]), 0.12, fly=True)
     assert zurueck.position[1] < pose.position[1], "S fährt zurück"
+
+
+def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) -> None:
+    """Der Zug ruft, was er rufen soll — geprüft am Zug, nicht an den Methoden.
+
+    **Drei Tests standen daneben und deckten den Aufruf nicht.** Gemessen am
+    03.09.2026, jede Zeile einzeln aus `_on_gizmo_interacted` beziehungsweise
+    `_on_gizmo_released` entfernt:
+
+        self._drag_shadow(steps)          Tests bleiben grün
+        self._draw_turn_arc(steps)        Tests bleiben grün
+        self._emit_feature_drag(snapped)  Tests bleiben grün
+
+    Wer eine der Zeilen löscht, merkt es nicht: Schatten, Drehbogen und die
+    Merkmalsbewegung fielen still aus, und die Tests darüber prüfen weiter
+    fleissig die Methoden. Das ist die Falle „am Weg vorbei" aus
+    `.claude/rules/tests.md`, und der Hinweis darauf kam von 3d-druck-d4 —
+    „was du direkt setzt, ist nicht das, was ein Zug herstellt".
+
+    Dieser Test geht deshalb über die **Rückrufe des Widgets**, also über den
+    Weg, den pyvista beim Ziehen nimmt.
+    """
+    import numpy as np
+
+    from app.ui.viewport import Viewport
+
+    class _Actor:
+        def __init__(self) -> None:
+            self.position = (0.0, 0.0, 0.0)
+
+        def GetLength(self) -> float:  # noqa: N802 — VTK-Name
+            return 100.0
+
+    gezeichnet: list[str] = []
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        # **Eine echte Kamera**, weil `shadow_direction` mit ihren Zahlen
+        # rechnet: Ein nachgiebiges Objekt kommt dort als `invalid
+        # __array_struct__` an. Eine Attrappe, die auf alles antwortet,
+        # antwortet auch dort, wo eine Zahl gebraucht wird.
+        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+
+        def add_lines(self, *args: Any, **kwargs: Any) -> Any:
+            gezeichnet.append(str(kwargs.get("name")))
+            return _Nachgiebig()
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.select("obj_1")
+    viewport.select_feature("hole_1")
+    schatten = [_Actor()]
+    viewport._shadow_owners = {"obj_1": schatten}
+    viewport._shadow_cast = (-0.5, -0.25)
+    viewport._actors = {"obj_1": _Actor()}
+    # `_end_drag` hängt den Griff neu an und räumt den alten ab — die Attrappe
+    # braucht deshalb ein `remove`, sonst stirbt der Test am Aufräumen statt
+    # an der Sache.
+    viewport._gizmo = SimpleNamespace(_origin=(0.0, 0.0, 0.0), axes=None, remove=lambda: None)
+
+    # **Ein Verschieben über den Rückruf des Widgets**, nicht über `_drag_shadow`.
+    versatz = np.eye(4)
+    versatz[0, 3] = 20.0
+    versatz[2, 3] = 10.0
+    viewport._on_gizmo_interacted(versatz)
+    assert schatten[0].position == pytest.approx((15.0, -2.5, 0.0)), (
+        "der Zug hat den Schatten nicht mitgezogen — ist der Aufruf noch da?"
+    )
+
+    # **Und ein Drehen**, ebenfalls über den Rückruf.
+    import math
+
+    winkel = math.radians(30.0)
+    drehung = np.eye(4)
+    drehung[0, 0] = drehung[1, 1] = math.cos(winkel)
+    drehung[0, 1], drehung[1, 0] = -math.sin(winkel), math.sin(winkel)
+    viewport._on_gizmo_interacted(drehung)
+    assert "turn-arc" in gezeichnet, "der Zug hat keinen Drehbogen gezeichnet"
+
+    # **Und das Loslassen** meldet die Merkmalsbewegung statt einer am Objekt.
+    versetzt: list[str] = []
+    am_teil: list[Any] = []
+    viewport.featureMoved.connect(lambda fid, _ziel: versetzt.append(fid))
+    viewport.transformDragged.connect(am_teil.append)
+    viewport._on_gizmo_released(versatz)
+    assert versetzt == ["hole_1"], "das Loslassen hat das Merkmal nicht gemeldet"
+    assert not am_teil, "und schon gar nicht das ganze Teil"
