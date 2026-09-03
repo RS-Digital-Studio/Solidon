@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QLabel,
     QPushButton,
+    QScrollArea,
     QWidget,
 )
 
@@ -275,6 +276,62 @@ def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
     assert fuer_alle, "die Sammelhandlung wurde nicht gemeldet"
     _op, _params, ids = fuer_alle[-1]
     assert ids == [identifier, "hole_2", "hole_3"], "alle drei, das eigene zuerst"
+
+
+def spread(panel: FeaturePanel, scroller: QScrollArea, height: int) -> int:
+    """Der Abstand zwischen dem obersten und dem untersten Knopf, in Punkten.
+
+    Gemessen wird über den **Rollbereich**, weil die Anwendung es so baut: Er
+    trägt ``setWidgetResizable(True)`` und zieht das Panel auf seine Höhe. Wer
+    das Panel stattdessen selbst vergrößert, misst eine Lage, die kein Fenster
+    herstellt — nachgemessen am 03.09.2026: Dort antwortet die Messung auf jede
+    Höhe gleich, und der Fehler bliebe unsichtbar.
+    """
+    scroller.resize(320, height)
+    QApplication.processEvents()
+    layout = panel.layout()
+    assert layout is not None
+    layout.activate()
+    lagen = [
+        knopf.mapTo(panel, knopf.rect().topLeft()).y()
+        for row in panel._built
+        for knopf in row.findChildren(QPushButton)
+    ]
+    assert len(lagen) >= 2, "mehrere Handlungen, sonst misst der Test nichts"
+    return max(lagen) - min(lagen)
+
+
+def test_a_tall_window_does_not_pull_the_handlings_apart(qt_app: QApplication) -> None:
+    """Der Restplatz gehört nach unten, nicht zwischen die Handlungen.
+
+    Das Panel steckt in einem Rollbereich mit ``setWidgetResizable`` und wird
+    damit auf dessen Höhe gezogen. Ohne eine Dehnung am Ende verteilt Qt den
+    Überschuss auf die Zeilen: In einem 1255 Punkte hohen Fenster wollte der
+    Inhalt 581 und stand am Ende 179 Punkte je Handlung auseinander. Vier
+    Knöpfe mit so viel Luft dazwischen gehören sichtbar nicht mehr zu den
+    Feldern über ihnen.
+
+    Die Höhe ist der **Eingang** der Messung: Eine Antwort, die sich mit ihr
+    ändert, ist der Fehler. Gegengeprüft, dass der Test ihn auch fängt — ohne
+    die Dehnung wuchs die Spanne von 319 auf 725 Punkte.
+    """
+    key, feature = a_hole()
+    panel = FeaturePanel()
+    scroller = QScrollArea()
+    scroller.setWidget(panel)
+    scroller.setWidgetResizable(True)
+    scroller.show()
+    panel.show_feature(key, feature)
+    QApplication.processEvents()
+    wanted = panel.sizeHint().height()
+
+    tight = spread(panel, scroller, wanted)
+    roomy = spread(panel, scroller, wanted * 3)
+
+    assert tight > 0, "die Knöpfe stehen überhaupt untereinander"
+    assert roomy == tight, (
+        f"die Handlungen wandern mit der Fensterhöhe auseinander: {tight} -> {roomy} Punkte"
+    )
 
 
 def two_holes() -> tuple[tuple[str, Feature], tuple[str, Feature]]:

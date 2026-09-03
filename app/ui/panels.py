@@ -4014,6 +4014,15 @@ class FeaturePanel(QWidget):
         self._empty.setWordWrap(True)
         fit_wrapped(self._empty)
         self._rows.addWidget(self._empty)
+        # **Der Restplatz gehört nach unten, nicht zwischen die Handlungen.**
+        # Das Panel steckt in einem Rollbereich mit ``setWidgetResizable``, wird
+        # also auf dessen Höhe gezogen. Ohne diese Dehnung verteilt Qt den
+        # Überschuss auf die Zeilen: In einem 1255 Punkte hohen Fenster wollte
+        # der Inhalt 581 und stand am Ende 179 Punkte je Handlung auseinander —
+        # vier Knöpfe, zwischen denen so viel Luft steht, dass die Felder
+        # darüber nicht mehr erkennbar zu ihnen gehören. Gemessen am
+        # 03.09.2026, sichtbar erst im Bildschirmfoto eines hohen Fensters.
+        self._rows.addStretch(1)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
         self._alike: tuple[str, ...] = ()
