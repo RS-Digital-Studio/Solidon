@@ -858,15 +858,25 @@ def test_only_the_part_that_needs_it_gets_the_setting() -> None:
 
 
 def _boxed(
-    name: str, size: tuple[float, float, float], at: tuple[float, float], slot: str = ""
+    name: str,
+    size: tuple[float, float, float],
+    at: tuple[float, float],
+    slot: str = "",
+    material: str | None = None,
 ) -> SceneObject:
-    """Ein Quader an einer Stelle der Platte, mit optionalem Materialnamen."""
+    """Ein Quader an einer Stelle der Platte, mit optionaler Spule und Material.
+
+    ``slot`` ist die zugewiesene Spule, ``material`` das ausdrücklich am Teil
+    gesetzte Material — zwei verschiedene Dinge, und die Plattenverteilung
+    braucht beide (siehe ``plates_by_material``).
+    """
     raw = trimesh.creation.box(size)
     raw.apply_translation((at[0], at[1], size[2] / 2.0))
     return SceneObject(
         id=name,
         name=name,
         mesh=MeshData.of(raw),
+        material=material,
         material_slots=[MaterialSlot(index=0, name=slot)] if slot else [],
     )
 
@@ -985,6 +995,47 @@ def test_parts_without_a_named_filament_stay_together() -> None:
     ]
 
     assert set(plates_by_material(objects).values()) == {0}
+
+
+def test_a_material_set_on_the_part_gets_its_own_plate() -> None:
+    """Eine TPU-Dichtung gehört nicht auf die Platte des PETG-Gehäuses.
+
+    ``SceneObject.material`` ist kein Beiwerk: ``for_object`` rechnet damit
+    Spiel, Schrumpf und Elefantenfuß, und ``types.py`` nennt genau diesen Fall
+    („Eine TPU-Dichtung im PETG-Gehäuse schrumpft anders"). Die
+    Plattenverteilung sah es bis zum 03.09.2026 trotzdem nicht: Sie gruppierte
+    allein nach dem Spulennamen, und ohne zugewiesene Spule trugen alle Teile
+    denselben leeren Schlüssel. Gehäuse und Dichtung kamen auf eine Platte,
+    ``check_filament_changes`` schwieg, und so ging es an den Slicer.
+    """
+    objects = [
+        _boxed("gehaeuse", (10.0, 10.0, 10.0), (0.0, 0.0)),
+        _boxed("dichtung", (10.0, 10.0, 10.0), (30.0, 0.0), material="tpu-95a"),
+    ]
+
+    plates = plates_by_material(objects)
+
+    assert plates["gehaeuse"] != plates["dichtung"], (
+        "zwei Materialien sind zwei Filamente, auch ohne zugewiesene Spule"
+    )
+    assert plates["gehaeuse"] == 0, "die Reihenfolge folgt dem ersten Auftreten"
+
+
+def test_two_spools_of_the_same_material_stay_apart() -> None:
+    """Und die Gegenrichtung, an der der einfache Fix gescheitert wäre.
+
+    „Material schlägt Spule" ist die Rangfolge aus ``for_object``, und für die
+    **Rechnung** ist sie richtig. Für die **Platte** ist sie falsch: Grau und
+    Weiß sind zwei Spulen, auch wenn beide PETG sind — zwei Filamente, zwei
+    Platten. Gemessen an vier Lagen war das der einzige Fall, in dem sich die
+    naheliegende Fassung und die gewählte unterscheiden, und er entscheidet.
+    """
+    objects = [
+        _boxed("links", (10.0, 10.0, 10.0), (0.0, 0.0), slot="grau", material="petg"),
+        _boxed("rechts", (10.0, 10.0, 10.0), (30.0, 0.0), slot="weiss", material="petg"),
+    ]
+
+    assert plates_by_material(objects)["links"] != plates_by_material(objects)["rechts"]
 
 
 # --- die Anordnung geht nur mit, wenn sie eine ist (§29) ------------------------

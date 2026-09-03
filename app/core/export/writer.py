@@ -496,14 +496,33 @@ def plates_by_material(objects: Sequence[SceneObject]) -> dict[str, int]:
     # Gruppiert wird trotzdem richtig: Ein solcher Text vergleicht wie seine
     # Message-ID, auch gegen eine schlichte Zeichenkette. Angezeigt oder
     # geschrieben wird hier nichts — der Name ist nur der Schlüssel.
-    order: list[TranslatableText | str] = []
+    order: list[tuple[TranslatableText | str, str]] = []
     chosen: dict[str, int] = {}
     for entry in objects:
         names = [slot.name for slot in entry.material_slots] or [""]
-        first = names[0]
-        if first not in order:
-            order.append(first)
-        chosen[entry.id] = order.index(first)
+        # **Das Paar, nicht eines von beiden** — und welches von beiden es wäre,
+        # ist die Frage, an der dieser Fix beinahe schiefgegangen wäre.
+        #
+        # Am Teil kann ein Material ausdrücklich stehen (``SceneObject.material``,
+        # etwa die TPU-Dichtung im PETG-Gehäuse). Bis zum 03.09.2026 zählte
+        # allein der Spulenname, und wo keine Spule zugewiesen war, trugen alle
+        # denselben leeren Schlüssel: Gehäuse und Dichtung landeten auf einer
+        # Platte, ``check_filament_changes`` schwieg, und die Datei ging so an
+        # den Slicer.
+        #
+        # **Dieselbe Rangfolge ist an einer Stelle richtig und an der anderen
+        # falsch.** :func:`app.core.knowledge.profiles.for_object` lässt das
+        # Material die Spule schlagen, und dort stimmt es — es wird gerechnet,
+        # und wer ein Material am Teil wählt, hat sich entschieden. Auf der
+        # Platte zählt dagegen, was physisch im Drucker steckt: Zwei Spulen mit
+        # demselben Material — grau und weiß PETG — sind zwei Filamente und
+        # kämen mit „Material vor Spule" auf **eine** Platte. Gemessen an vier
+        # Lagen; die Rangfolge aus dem einen Modul hierher zu tragen, weil sie
+        # „die Rangfolge" ist, baut genau diesen Fehler.
+        key = (names[0], entry.material or "")
+        if key not in order:
+            order.append(key)
+        chosen[entry.id] = order.index(key)
     return chosen
 
 
