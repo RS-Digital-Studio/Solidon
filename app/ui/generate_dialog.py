@@ -639,7 +639,7 @@ class GenerateDialog(QDialog):
             and not self._busy
             and bool(self.prompt.text().strip() or self._image)
         )
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ready)
+        self._lock_make(ready)
 
     def _choose_image(self) -> None:
         name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())
@@ -687,8 +687,39 @@ class GenerateDialog(QDialog):
         Thread), unerreichbar war nur sein Knopf.
         """
         self._busy = running
-        self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(not running)
+        self._lock_make(not running)
         self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
+
+    def _lock_make(self, free: bool) -> None:
+        """*Erzeugen* freigeben oder sperren — und im zweiten Fall sagen, warum.
+
+        **Der Satz stand daneben, nicht am Knopf.** Der Docstring von
+        :attr:`_worth_starting` begründet die Sperre damit, dass „der gesperrte
+        den Satz daneben hat, der ihn erklärt" — und genau das ist der Fall, den
+        Regel 18 ausschließt: Wer mit der Maus auf einen grauen Knopf zeigt,
+        fragt ihn, und ein Bildschirmleser liest die Zustandszeile über dem Feld
+        gar nicht mit. Gefunden hat es der Wächter in
+        ``tests/test_locked_says_why.py``, als er von fünfzehn Dialogen auf
+        achtundzwanzig ausgeweitet wurde.
+
+        Drei Lagen sperren, und sie verlangen verschiedene Sätze. Bei der
+        ersten ist der Satz schon formuliert — in der Zustandszeile, die
+        :meth:`_show_readiness` gerade gesetzt hat; ihn hier neu zu erfinden
+        gäbe zwei Formulierungen über dieselbe Lage.
+        """
+        if free:
+            why = ""
+        elif not self._worth_starting:
+            why = self.state.text()
+        elif self._busy:
+            why = tr("Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist.")
+        else:
+            why = tr("Beschreiben Sie zuerst, was entstehen soll, oder wählen Sie ein Bild.")
+        make = self.buttons.button(QDialogButtonBox.StandardButton.Ok)
+        make.setEnabled(free)
+        make.setToolTip(why)
+        make.setStatusTip(why)
+        make.setAccessibleDescription(why)
 
     def _start(self) -> None:
         # Dieselbe Frage wie am Knopf (:attr:`_worth_starting`) und nicht

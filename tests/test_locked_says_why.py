@@ -26,22 +26,33 @@ import pytest
 from PySide6.QtWidgets import QApplication, QDialog, QMenu, QPushButton
 
 from app.core import updates
+from app.core.knowledge.profiles import DEFAULT_MATERIAL
+from app.ui.ai_disclosure import AiDisclosureDialog, AiDisclosureTarget, LocalPrivacyDialog
+from app.ui.catalog import PartCatalog
 from app.ui.changes_dialog import ChangesDialog
 from app.ui.comfy_dialog import ComfySetupDialog
+from app.ui.command_palette import CommandPalette
 from app.ui.dialogs import (
     AboutDialog,
     ActivationDialog,
+    AskDialog,
+    CalibrationDialog,
     DonationDialog,
     KeyDialog,
     OfflineActivationDialog,
+    ParameterDialog,
 )
 from app.ui.filament_picker import NewFilamentDialog, SlicerFilamentDialog
 from app.ui.first_run import FirstRunDialog
+from app.ui.generate_dialog import GenerateDialog
 from app.ui.install_dialog import InstallDialog
 from app.ui.main_window import MainWindow
+from app.ui.op_dialog import SketchUseDialog
 from app.ui.print_disclosure import PrintDisclosureDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.shortcuts_window import ShortcutsWindow
+from app.ui.sketch_editor import ExpressionDialog, PointDialog, SketchEditorDialog
 from app.ui.support_dialog import SupportDialog
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
@@ -56,6 +67,22 @@ def _release() -> updates.Release:
         url="https://solidon3d.de/dl/Solidon3D-9.9.9.exe",
         notes="Der erste Punkt.\nDer zweite Punkt.",
     )
+
+
+def _wired_catalog() -> PartCatalog:
+    """Ein Bausteinkatalog mit den Bedingungen, die das Hauptfenster setzt.
+
+    Beide Gründe sind echte Sätze aus der Anwendung und keine Platzhalter: Ohne
+    Szene ist Einsetzen gesperrt, ohne gerechneten Körper das Speichern.
+    """
+    catalog = PartCatalog()
+    catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
+    catalog.set_can_insert(
+        False,
+        "Die Szene ist leer — ein Baustein wird auf einen Körper gesetzt. "
+        "Lesen Sie zuerst ein Modell ein oder legen Sie einen Grundkörper an.",
+    )
+    return catalog
 
 
 #: Wie jeder Dialog gebaut wird. Die Bauanleitungen stammen aus den Tests, die
@@ -88,6 +115,47 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     "FirstRunDialog": lambda _session: FirstRunDialog(settings=UiSettings()),
     "InstallDialog": lambda _session: InstallDialog(),
     "ComfySetupDialog": lambda _session: ComfySetupDialog(),
+    # --- die ohne eigenen Aufbau: nur ein Elternfenster, und das ist None ---------
+    # **Verdrahtet wie in ``main_window._make_catalog``**, und das ist keine
+    # Höflichkeit: Die Anwendung ruft ``set_can_save`` und ``set_can_insert``
+    # unmittelbar nach dem Konstruktor, für alle drei Zugänge. Ein Katalog ohne
+    # sie zeigt einen Zustand, den kein Kunde je sieht — der Wächter meldete
+    # daran zuerst „Auswahl als Baustein speichern …", und das war mein
+    # Aufbau und kein Befund. Der Grund für *Einfügen* dagegen fehlte wirklich.
+    "PartCatalog": lambda _session: _wired_catalog(),
+    "SketchUseDialog": lambda _session: SketchUseDialog(),
+    # **Mit leerer Liste, wie beim Filamentdialog:** Eine Befehlspalette ohne
+    # Einträge ist der Zustand, in dem ein Suchfeld nichts findet.
+    "CommandPalette": lambda _session: CommandPalette(),
+    # **Ohne Erzeuger, und das ist der häufigste Fall.** Wer kein ComfyUI
+    # eingerichtet hat, bekommt diesen Dialog mit gesperrtem Hauptknopf — genau
+    # die Lage, in der ein Grund gebraucht wird.
+    "GenerateDialog": lambda _session: GenerateDialog(),
+    "SketchEditorDialog": lambda _session: SketchEditorDialog(),
+    # ``menu_bar=None``: Das Fenster baut seine Liste dann aus dem Register statt
+    # aus einer Menüleiste, und ohne Hauptfenster ist das der Weg.
+    "ShortcutsWindow": lambda _session: ShortcutsWindow(None),
+    # --- die mit einfachen Werten -------------------------------------------------
+    "AskDialog": lambda _session: AskDialog(
+        "Welche Fläche ist gemeint?", ["die obere", "die untere"]
+    ),
+    # ``DEFAULT_MATERIAL`` und kein Handelsname: Der Dialog löst die Angabe
+    # gegen die Profiltabelle auf und hält bei allem an, was dort nicht steht
+    # — "PETG" ist der Werkstoff, "petg" wäre die Kennung.
+    "CalibrationDialog": lambda _session: CalibrationDialog(DEFAULT_MATERIAL),
+    "LocalPrivacyDialog": lambda _session: LocalPrivacyDialog(
+        "# Hinweis\n\nDie Anfrage bleibt auf diesem Rechner."
+    ),
+    "PointDialog": lambda _session: PointDialog((12.5, -4.0), ("X", "Y")),
+    "ExpressionDialog": lambda _session: ExpressionDialog({"breite": 40.0, "hoehe": 12.0}),
+    # Die Parameter des Dokuments, wie ``main_window`` sie übergibt: Der Dialog
+    # löst Ausdrücke auf und braucht dafür die Objekte, nicht ihre Zahlen. Bei
+    # einer frischen Sitzung ist die Sammlung leer, und das ist der Zustand, in
+    # dem ein Kunde sie zum ersten Mal öffnet.
+    "ParameterDialog": lambda session: ParameterDialog(session.project.document.parameters),
+    "AiDisclosureDialog": lambda _session: AiDisclosureDialog(
+        AiDisclosureTarget(backend="ollama", target_class="llm", address="http://localhost:11434")
+    ),
 }
 
 

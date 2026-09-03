@@ -429,7 +429,13 @@ class PartCatalog(QDialog):
         if not self._insert_allowed:
             return False, self._insert_reason
         if spec is None:
-            return False, ""
+            # **Der leere Grund war einer.** Sperren ohne zu sagen, warum, ist
+            # genau das, was Regel 18 ausschließt — und diese Lage ist nicht
+            # der Randfall, sondern der Anfang: Der Katalog geht auf, links ist
+            # nichts gewählt, und *Einfügen* stand grau und wortlos da. Wer im
+            # Suchfeld etwas tippt, das nichts trifft, landet wieder hier.
+            # Gefunden vom Wächter über alle Dialoge (3d-druck-7f, 03.09.2026).
+            return False, tr("Wählen Sie links in der Liste einen Baustein.")
         if (spec.at_hole or spec.at_face) and not self._feature_chosen:
             return True, tr(
                 "Dieser Baustein wird an eine Fläche oder Bohrung gesetzt. "

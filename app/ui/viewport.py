@@ -468,41 +468,6 @@ def rgb_of(colour: str) -> tuple[float, float, float]:
     return (value.redF(), value.greenF(), value.blueF())
 
 
-def turn_arc(origin: Any, axis: Any, radius: float, angle: float, *, steps: int = 32) -> Any:
-    """Die Punkte eines Bogens von 0 bis ``angle`` um ``axis``, im Uhrzeigersinn.
-
-    **Der 45°-Magnet rastet, und niemand sieht es.** Beim Drehen springt die
-    Zahl am Zeiger von 40,5 auf 45,0 und bleibt dort, während man weiterzieht
-    (gemessen: dreiundzwanzig Schritte lang) — aber im Bild geschieht nichts,
-    was das erklärt. Ein Bogen, der vom Ausgangswinkel bis zum aktuellen
-    wächst, macht die Drehung sichtbar und das Einrasten dazu.
-
-    Als freie Funktion und ohne Qt, aus demselben Grund wie
-    :func:`shadow_points`: Was hinter der Plotter-Wache steht, prüft offscreen
-    niemand mehr. Hier ist es reine Rechnung, also ist es hier prüfbar.
-
-    Zurück kommen die Punkte **paarweise** für ``add_lines`` — jeder innere
-    doppelt, so wie es die Schichtkonturen schon tun.
-    """
-    import numpy as np
-
-    centre = np.asarray(origin, dtype=float)
-    direction = np.asarray(axis, dtype=float)
-    norm = float(np.linalg.norm(direction))
-    if norm <= EPS_GEOM or abs(angle) <= EPS_DISPLAY or radius <= EPS_GEOM:
-        return None
-    direction = direction / norm
-    # Zwei Achsen quer zur Drehachse: die erste beliebig, solange sie nicht
-    # parallel liegt — sonst wäre das Kreuzprodukt null und der Bogen leer.
-    helper = np.array([1.0, 0.0, 0.0]) if abs(direction[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-    first = np.cross(direction, helper)
-    first = first / float(np.linalg.norm(first))
-    second = np.cross(direction, first)
-    turns = np.radians(np.linspace(0.0, float(angle), max(int(steps), 2)))
-    points = centre + radius * (np.outer(np.cos(turns), first) + np.outer(np.sin(turns), second))
-    return np.repeat(points, 2, axis=0)[1:-1]
-
-
 def gizmo_sentence(feature: Feature | None) -> str:
     """Was der Griff bewegen wird, in einem Satz.
 
@@ -3296,8 +3261,6 @@ class Viewport(QWidget):
         angewandt wird."""
         self._face_actor: Any | None = None
         self._ghost_actor: Any | None = None
-        self._arc_actor: Any | None = None
-        """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet."""
         self._face_seat: tuple[tuple[float, ...], tuple[float, ...], float] | None = None
         """Wo die letzte Merkmalsmarke sass und wie gross sie war.
 
@@ -8300,7 +8263,6 @@ class Viewport(QWidget):
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
         self._drag_shadow(steps)
-        self._draw_turn_arc(steps)
         # **Der Ring erscheint mit dem ersten sichtbaren Stück des Zugs.** Ihn
         # schon beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu
         # behaupten, die noch keine ist.
@@ -8342,50 +8304,6 @@ class Viewport(QWidget):
             )
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
-
-    def _draw_turn_arc(self, steps: TransformSteps) -> None:
-        """Zeichnet den Bogen, der zeigt, wie weit gedreht wurde (§18.11).
-
-        **Der Magnet rastet, und niemand sah es.** Bei jedem Vielfachen von
-        :data:`TURN_MAGNET_STEP` bleibt der gezeigte Winkel eine Weile stehen —
-        gemessen am laufenden Fenster dreiundzwanzig Zugschritte lang bei
-        45,0° —, und im Bild geschah nichts, was das erklärt. Die Zahl am
-        Zeiger allein liest niemand, während er zieht.
-
-        Der Bogen wächst vom Ausgangswinkel bis zum **gerasteten** Wert, also
-        bis zu dem, der auch angewandt wird. Damit zeigt er zweierlei: wie weit
-        man gedreht hat und dass es gerade einrastet.
-
-        Sein Radius ist der des Griffrings, an dem gezogen wird — ein eigener
-        wäre eine zweite Grösse für dieselbe Geste.
-        """
-        if self.plotter is None or not steps.turns or steps.axis is None:
-            return
-        gizmo = self._gizmo
-        if gizmo is None:
-            return
-        import numpy as np
-
-        index = ("x", "y", "z").index(steps.axis)
-        axes = getattr(gizmo, "axes", None)
-        direction = axes[index] if axes is not None else np.eye(3)[index]
-        origin = getattr(gizmo, "_origin", (0.0, 0.0, 0.0))
-        actor = self._actors.get(self._selected) if self._selected is not None else None
-        radius = float(actor.GetLength()) * GIZMO_SCALE if actor is not None else 0.0
-        points = turn_arc(origin, direction, radius, self._settled_angle(steps.angle))
-        if points is None:
-            return
-        if self._arc_actor is not None:
-            self.plotter.remove_actor(self._arc_actor, render=False)
-        self._arc_actor = self.plotter.add_lines(
-            points, color=MEASURE_COLOUR, width=3, name="turn-arc"
-        )
-
-    def _drop_turn_arc(self) -> None:
-        """Nimmt den Bogen weg — der Zug ist vorbei."""
-        if self._arc_actor is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._arc_actor, render=False)
-        self._arc_actor = None
 
     def _drag_shadow(self, steps: TransformSteps) -> None:
         """Zieht den Schatten mit, solange das Teil am Griff hängt (§18.6).
@@ -8854,7 +8772,6 @@ class Viewport(QWidget):
         self._drag_normal = None
         # Der Ring gehört dem Zug; was danach gilt, zeigt die Auswertung.
         self._drop_ghost()
-        self._drop_turn_arc()
         # Der Schatten stand während des Zugs versetzt (:meth:`_drag_shadow`);
         # was danach gilt, entscheidet die Auswertung und zeichnet ihn neu.
         # Bliebe der Versatz stehen, läge er beim nächsten Bild doppelt.
