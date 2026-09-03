@@ -76,6 +76,7 @@
 ## Qt, VTK, Oberfläche
 
 - [VTK/Qt-Referenzen](vtk-qt-referenzen-halten-zu-lange.md) — wer hält, was weg sein sollte?
+- [Renderfenster bleibt 160x160](renderfenster-bleibt-briefmarkengross.md) — egal wie groß das Widget ist; in Bildpunkten misst man die Umgebung.
 - [VTK sagt ja und tut nichts](vtk-sagt-ja-und-tut-nichts.md) — Hardware-Picker treffen hier nichts, Depth Peeling läuft nie.
 - [Verwaiste Widgets](verwaiste-widgets-sterben-im-falschen-moment.md) — gc.disable trennt Zeitpunkt und Zerstörung.
 - [Prüfstand misst zu früh](qt-pruefstand-misst-zu-frueh.md) — processEvents stellt DeferredDelete nicht zu.
@@ -131,6 +132,7 @@
 - [Zahl beschreibt die Regel](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest den Basiswert.
 - [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — nur eine Differenz trennt.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Kette dahinter war erfunden.
+- [Prüfstand misst seine Nachstellung](pruefstand-misst-seine-nachstellung.md) — die alte Bauart nachgebaut statt geholt; fünf von fünf rot, kein Fehler.
 - [Sondenbau](sondenbau.md) — im großen Lauf misst eine Sonde den Unterschied.
 - [Hilfsmodul verstellt den Suchpfad](hilfsmodul-verstellt-den-suchpfad.md) — run_ui_audit setzt `F:\3D Druck` an sys.path[0]; der Fix sieht wirkungslos aus.
 - [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht".

@@ -155,3 +155,23 @@ zählt nur, was gerendert im Bild steht. `hidden`, `display:none`,
 `content-visibility` und ein Wähler machen aus zehn Abschnitten einen. Die
 billigste Prüfung ist ein Blick in die Datei nach `hidden` — die zweitbilligste
 ein Bildschirmfoto.
+
+## Und in einer Freigabe altert sie am schnellsten
+
+03.09.2026, Release 0.3.0. In meiner Freigabemeldung stand „Aktivierungsdienst
+bereit". Gemessen war das um **02:26:28**, geschrieben wurde es um **05:29** —
+und dazwischen hat eine andere Sitzung alle vier Endpunkte auf **503**
+gemessen. Meine Zahl war zum Zeitpunkt ihrer Messung richtig und zum Zeitpunkt
+ihrer Verwendung eine Behauptung über die Gegenwart, die sie nicht deckte.
+
+Eine Freigabe ist der Ort, an dem das am teuersten ist: Sie besteht aus
+lauter Messungen, die zu verschiedenen Zeiten entstanden sind, und liest sich
+als **ein** Zustand. Wer sie zusammenschreibt, macht aus einer Zeitreihe eine
+Momentaufnahme, ohne es zu merken.
+
+**How to apply:** In einer Freigabe steht neben jeder Zahl, **wann** sie
+gemessen wurde. Was älter ist als der letzte Eingriff in das gemessene System
+— hier der Upload —, wird vor der Meldung neu gefahren, nicht zitiert. Und
+was flackern kann, wird nicht einmal gemessen, sondern über eine Spanne
+beobachtet: Ein Dienst, der zweimal antwortet, kann dazwischen unten gewesen
+sein.
