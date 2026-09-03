@@ -266,7 +266,13 @@ _NOT_A_RANGE = frozenset(
         # nicht „zu groß" sein, sie ist lesbar oder nicht.
         "changed", "colour",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
-        "empty", "exists", "expected_sha256", "file_too_large",
+        "empty", "exists", "expected_sha256",
+        # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):
+        # leer, abgeschnitten, kein Netz, kein Archiv, null Dreiecke. Keine
+        # davon ist eine Spanne — der Kunde kann an einer kaputten Datei
+        # keine Zahl ändern, und „Ein Wert liegt außerhalb des zulässigen
+        # Bereichs" stünde über jeder von ihnen falsch.
+        "file_empty", "file_too_large", "file_truncated",
         "format", "grammar", "history_moved", "host",
         "inverted",
         "known_pattern",
@@ -276,7 +282,8 @@ _NOT_A_RANGE = frozenset(
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
         "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile",
         "no_repair_target", "no_section",
-        "no_shapes", "no_sources", "no_split", "not_a_face", "not_a_hole", "not_a_number",
+        "no_shapes", "no_sources", "no_split", "no_triangles",
+        "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
         "not_a_twin", "not_outline", "not_step", "not_upright", "one_body", "point_count",
         "recipe_format", "remove_failed", "restore_failed",
@@ -530,3 +537,44 @@ def test_all_three_refusals_of_the_alignment_offer_a_way_out(monkeypatch) -> Non
     with pytest.raises(AppError) as dritte:
         align.frame_of(fremde_art)
     assert "pick_feature" in wege(dritte.value), wege(dritte.value)
+
+
+def test_the_refusal_of_a_broken_file_offers_more_than_the_exit() -> None:
+    """Eine Absage beim Einlesen trägt eine Handlung, die der Dialog auch zeigt.
+
+    **Die naheliegende Prüfung wäre stumpf.** ``assert error.suggestions``
+    bleibt immer grün, weil ``AppError.default_suggestions`` ``(CANCEL,)`` ist.
+    Und ``correct_input``, das ``ValidationError`` von Haus aus mitbringt,
+    zeigt der Fehlerdialog hier gar nicht: Es steht in ``dialogs.NEEDS_OP`` und
+    braucht die Kennung eines Schrittes — beim Lesen einer Datei gibt es
+    keinen, denn die Prüfung läuft, bevor die Operation entsteht.
+
+    Gefragt wird deshalb nach dem, was **übrig bleibt**, wenn der Dialog
+    gefiltert hat. Bliebe nur *Abbrechen*, endete der Fehler mit „geht nicht" —
+    genau das verbietet Regel 17.
+    """
+    import struct
+
+    from app.core.ingest.plan import import_plan
+    from app.ui.dialogs import NEEDS_OP
+
+    # Ein Kopf, der zwölf Dreiecke ansagt, und genau eines dahinter: der
+    # abgebrochene Download. Ohne Escape-Folgen gebaut — ``bytes(80)`` ist
+    # dasselbe wie achtzig Nullbytes und übersteht jedes Werkzeug dazwischen.
+    abgeschnitten = bytes(80) + struct.pack("<I", 12) + bytes(50)
+
+    for name, payload in (
+        ("leer.stl", b""),
+        ("halb.stl", abgeschnitten),
+        ("seite.stl", b"<!DOCTYPE html><html><body>404 Not Found</body></html>"),
+        ("ohne_dreiecke.stl", bytes(80) + struct.pack("<I", 0)),
+        ("kein_archiv.3mf", b"Das ist kein ZIP-Archiv."),
+    ):
+        with pytest.raises(ValidationError) as gefangen:
+            import_plan("src_1", name, payload)
+        gezeigt = [
+            action.id
+            for action in gefangen.value.suggestions
+            if action.id != "cancel" and action.id not in NEEDS_OP
+        ]
+        assert gezeigt, f"{name}: die Absage endet mit „geht nicht“"

@@ -10333,6 +10333,12 @@ class MainWindow(QMainWindow):
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
             "show_step_values": self._show_step_values,
+            # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
+            # kaputte Datei lässt sich nicht korrigieren, und der Schritt,
+            # den ``correct_input`` öffnen würde, entsteht gar nicht erst.
+            # Was bleibt, ist eine andere Datei — ``action_import``, nicht
+            # ``action_open``: Einfügen ersetzt kein offenes Projekt.
+            "choose_another_file": lambda _error: self.action_import(),
             # Die andere Hälfte davon: Wo nicht ein Wert, sondern die
             # Auswahl nicht geht, hilft kein Dialog (§15.4).
             "change_selection": self._change_selection_after_error,

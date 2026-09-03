@@ -24,7 +24,12 @@ from typing import Final
 
 from app.core.brep import step as brep_step
 from app.core.ingest import threemf
-from app.core.ingest.loader import READABLE_SUFFIXES, check_limits, check_unpacked
+from app.core.ingest.loader import (
+    READABLE_SUFFIXES,
+    check_limits,
+    check_readable,
+    check_unpacked,
+)
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.scene.history import OperationDraft
 from app.i18n import TranslatableText, _
@@ -101,6 +106,11 @@ def import_plan(
     # die übergroße Quelle wanderte beim nächsten Speichern in die Projektdatei.
     # (Die entpackte Größe bleibt 3MF-eigen — nur ein Archiv hat eine.)
     check_limits(len(payload), 0)
+    # Und ob überhaupt ein Modell darin sein kann. Beides gehört vor die
+    # Operation: Was hier durchgeht, wird zur eingebetteten Quelle im
+    # Dokument und wandert beim Speichern in die Projektdatei — auch wenn
+    # der Leser danach nichts damit anfangen kann.
+    check_readable(payload, suffix)
     if brep_step.is_step(suffix):
         return ImportPlan(
             title=_TITLES["load_step"],

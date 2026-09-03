@@ -4,6 +4,7 @@ Importgrenzen (§17.1, §32).
 
 from __future__ import annotations
 
+import struct
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -22,6 +23,7 @@ from app.core.ingest.loader import (
     normalise,
 )
 from app.core.ingest.ops import unit_question
+from app.core.ingest.plan import import_plan
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import CachedResult, DiskCache
 from app.core.scene.project import Project, ProjectSources, checksum, new_project
@@ -440,7 +442,7 @@ def test_the_first_model_of_a_project_lands_in_the_middle_of_the_bed() -> None:
     """
     from app.core.ingest import plan
 
-    first = plan.import_plan("src_1", "modell.stl", b"", first_model=True)
+    first = plan.import_plan("src_1", "modell.stl", _stl(_cube()), first_model=True)
     assert first.draft.params["place_on_bed"] is True
     assert first.draft.params["centre"] is True
 
@@ -451,7 +453,7 @@ def test_a_further_model_keeps_its_place() -> None:
     anordnen* (§29)."""
     from app.core.ingest import plan
 
-    later = plan.import_plan("src_1", "modell.stl", b"")
+    later = plan.import_plan("src_1", "modell.stl", _stl(_cube()))
     assert "centre" not in later.draft.params
     assert "place_on_bed" not in later.draft.params
 
@@ -461,8 +463,16 @@ def test_only_a_mesh_is_placed_and_centred() -> None:
     Parameter mitzugeben, den sie nicht kennen, wäre ein Planungsfehler."""
     from app.core.ingest import plan
 
-    for name in ("teil.step", "zeichnung.dxf", "platte.svg"):
-        draft = plan.import_plan("src_1", name, b"", first_model=True).draft
+    # Ein Kopf statt einer leeren Datei: Seit ``loader.check_readable``
+    # ist eine Nutzlast ohne ein einziges Byte in jedem Format eine
+    # Absage. Die Weiche entscheidet an der Endung und liest den Inhalt
+    # nicht, die Aussage des Tests bleibt also dieselbe.
+    for name, payload in (
+        ("teil.step", b"ISO-10303-21;"),
+        ("zeichnung.dxf", b"0 SECTION"),
+        ("platte.svg", b"<svg/>"),
+    ):
+        draft = plan.import_plan("src_1", name, payload, first_model=True).draft
         assert draft.op != "load", name
         assert "centre" not in draft.params, name
 
@@ -785,7 +795,11 @@ def test_the_import_plan_does_not_ask_what_the_file_answers() -> None:
 
     assert not mit.asks_unit, "die Datei sagt es"
     assert ohne.asks_unit, "und wo sie schweigt, wird gefragt"
-    assert import_plan("src_1", "teil.stl", b"").asks_unit, "ein STL sagt nie etwas"
+    # Eine echte STL, keine leere Nutzlast: Seit der Eingangsprüfung
+    # (``check_readable``) ist eine leere Datei eine Absage und kommt gar
+    # nicht mehr bis zur Einheitenfrage. Die Aussage des Tests bleibt
+    # dieselbe — ein STL nennt seine Einheit nie.
+    assert import_plan("src_1", "teil.stl", _stl(_cube())).asks_unit, "ein STL sagt nie etwas"
 
 
 def test_a_3mf_without_a_unit_is_still_asked_about(profile: Profile) -> None:
@@ -971,3 +985,161 @@ def test_a_part_that_fills_the_bed_is_plausible_in_millimetres() -> None:
     assert detect_unit(30.0, reach).unit is None, "30 mm oder 30 cm — die Frage bleibt"
     assert detect_unit(60.0, reach).unit == "mm", "60 cm wären zu groß, 60 mm nicht"
     assert detect_unit(2 * reach, reach).unit is None, "größer als der doppelte Drucker fragt"
+
+
+# ---------------------------------------------------------------------
+# Was ein Kunde wirklich auf der Platte hat: der abgebrochene Download,
+# die umbenannte Datei, die Fehlerseite des Servers (03.09.2026).
+
+
+# ---------------------------------------------------------------- Bausteine
+
+
+def _stl(dreiecke: list) -> bytes:
+    """Eine binäre STL, wie jedes Werkzeug sie schreibt."""
+    teile = [b"\0" * 80, struct.pack("<I", len(dreiecke))]
+    for ecken in dreiecke:
+        teile.append(struct.pack("<3f", 0.0, 0.0, 1.0))
+        for ecke in ecken:
+            teile.append(struct.pack("<3f", *ecke))
+        teile.append(struct.pack("<H", 0))
+    return b"".join(teile)
+
+
+def _cube(kante: float = 20.0) -> list:
+    k = kante
+    ecken = [
+        (0, 0, 0),
+        (k, 0, 0),
+        (k, k, 0),
+        (0, k, 0),
+        (0, 0, k),
+        (k, 0, k),
+        (k, k, k),
+        (0, k, k),
+    ]
+    flaechen = [
+        (0, 2, 1),
+        (0, 3, 2),
+        (4, 5, 6),
+        (4, 6, 7),
+        (0, 1, 5),
+        (0, 5, 4),
+        (1, 2, 6),
+        (1, 6, 5),
+        (2, 3, 7),
+        (2, 7, 6),
+        (3, 0, 4),
+        (3, 4, 7),
+    ]
+    return [tuple(ecken[i] for i in f) for f in flaechen]
+
+
+GOOD_STL = _stl(_cube())
+
+#: Eine ASCII-STL — die zweite gültige Bauart, die nicht fallen darf.
+ASCII_STL = (
+    b"solid wuerfel\n"
+    b"  facet normal 0 0 1\n    outer loop\n"
+    b"      vertex 0 0 0\n      vertex 1 0 0\n      vertex 0 1 0\n"
+    b"    endloop\n  endfacet\nendsolid wuerfel\n"
+)
+
+
+# ------------------------------------------------------------------- Absagen
+
+
+@pytest.mark.parametrize(
+    ("name", "payload", "constraint"),
+    [
+        # Der abgebrochene Download — die häufigste kaputte Datei überhaupt.
+        ("leer.stl", b"", "file_empty"),
+        # Halb geladen: Der Kopf nennt zwölf Dreiecke, es kam eines an.
+        ("halb.stl", GOOD_STL[:84] + GOOD_STL[84:134], "file_truncated"),
+        # Jemand hat eine Textdatei umbenannt.
+        ("text.stl", b"Hallo, das ist keine STL.\n", "not_a_mesh"),
+        # Der Server lieferte seine Fehlerseite statt des Modells.
+        ("seite.stl", b"<!DOCTYPE html><html><body>404</body></html>\n", "not_a_mesh"),
+        # Gültig aufgebaut, aber ohne Inhalt: Export ohne Auswahl.
+        ("leer_gueltig.stl", _stl([]), "no_triangles"),
+        # Eine 3MF ist ein Zip; was nicht mit PK beginnt, ist keines.
+        ("kein_archiv.3mf", b"Das ist kein ZIP-Archiv.", "not_an_archive"),
+    ],
+)
+def test_an_unusable_file_is_refused_before_it_reaches_the_stack(
+    name: str, payload: bytes, constraint: str
+) -> None:
+    """Unbrauchbares wird abgewiesen, **bevor** es Operation und Quelle wird.
+
+    Bis zum 03.09.2026 ging jede dieser sechs Dateien durch: Die Operation lag
+    im Stapel, die Datei als eingebettete Quelle im Dokument, und gemeldet
+    wurde es als Befund ohne einen einzigen Ausweg. ``_drop_source`` räumt nur
+    auf, wenn eine ``AppError`` fliegt — hier flog keine.
+    """
+    with pytest.raises(ValidationError) as gefangen:
+        import_plan("src_1", name, payload)
+    assert gefangen.value.values.get("constraint", constraint) is not None
+    # Regel 17: Der Satz sagt, was zu tun ist — nicht nur, was nicht geht.
+    assert str(gefangen.value.detail)
+
+
+# ------------------------------------------------------------------ Durchlass
+
+
+@pytest.mark.parametrize(
+    ("name", "payload"),
+    [
+        ("cube.stl", GOOD_STL),
+        # ASCII-STL: die zweite Bauart. Sie hat keine Längenrechnung.
+        ("ascii.stl", ASCII_STL),
+        # In Zoll gezeichnet — gültig, nur klein. Die Einheitenfrage kommt
+        # später und ist nicht Sache dieser Prüfung.
+        ("zoll.stl", _stl(_cube(0.7874))),
+        # Zu groß für jede Platte — auch das ist eine gültige Datei.
+        ("riesig.stl", _stl(_cube(4000.0))),
+    ],
+)
+def test_a_valid_file_still_passes(name: str, payload: bytes) -> None:
+    """Was gültig ist, bleibt gültig — auch die ungewöhnliche Bauart."""
+    plan = import_plan("src_1", name, payload)
+    assert plan.draft.op == "load"
+
+
+def test_a_format_without_a_signature_is_not_judged() -> None:
+    """STEP, OBJ und PLY haben keine Kennung, die ohne Parser prüfbar wäre.
+
+    Sie dürfen deshalb nicht an dieser Prüfung scheitern — sonst schnitte sie
+    den STEP-Weg ab, der drei Zeilen weiter unten in ``import_plan`` beginnt.
+    Gemeldet von 3d-druck-c7 beim Durchfahren echter Kundendateien.
+    """
+    plan = import_plan("src_1", "teil.step", b"ISO-10303-21;\nHEADER;\n")
+    assert plan.draft.op == "load_step"
+
+
+def test_an_empty_file_is_refused_whatever_its_format() -> None:
+    """Null Bytes sind in **jedem** Format nichts — auch in STEP."""
+    for name in ("teil.step", "teil.obj", "teil.ply", "teil.3mf", "teil.stl"):
+        with pytest.raises(ValidationError):
+            import_plan("src_1", name, b"")
+
+
+def test_no_file_of_the_corpus_is_refused() -> None:
+    """**Der wichtigste Test dieser Datei.**
+
+    Eine Eingangsprüfung, die ein gültiges Modell abweist, macht aus einem
+    stillen Fehler einen lauten — und der ist schlimmer. Gemessen am
+    03.09.2026 über 23 Dateien des Korpus, keine fiel; dazu sechzehn echte
+    Kundendateien aus einem Durchlauf von 3d-druck-c7, darunter eine binäre
+    STL, deren 80-Byte-Kopf mit ``ST`` beginnt und die eine Prüfung „fängt mit
+    solid an" abgewiesen hätte.
+    """
+    korpus = Path(__file__).parent / "data"
+    gefallen = []
+    for pfad in sorted(korpus.rglob("*")):
+        if not pfad.is_file() or pfad.suffix.lower() not in (".stl", ".3mf", ".obj", ".ply"):
+            continue
+        try:
+            import_plan("src_1", pfad.name, pfad.read_bytes())
+        except ValidationError as fehler:
+            gefallen.append(f"{pfad.name}: {fehler}")
+    assert not gefallen, f"gültige Dateien abgewiesen: {gefallen}"

@@ -4,6 +4,7 @@ Oberfläche (§10).
 
 from __future__ import annotations
 
+import struct
 from pathlib import Path
 
 import pytest
@@ -418,17 +419,27 @@ def test_import_reads_every_format_the_window_reads(
     assert [entry.op for entry in project.document.ops] == ["load_outline"]
     assert str(project.document.transactions[-1].title) == "Zeichnung hochziehen"
 
-    # Und der Weg für STEP und DXF, ohne dafür eine Datei zu brauchen: geprüft
-    # wird die Entscheidung, nicht der Leser dahinter.
-    assert import_plan("src_1", "teil.step", b"").draft.op == "load_step"
-    assert import_plan("src_1", "zeichnung.dxf", b"").draft.op == "load_outline"
-    assert import_plan("src_1", "modell.stl", b"").draft.op == "load"
+    # Und der Weg für STEP und DXF, ohne dafür ein echtes Modell zu brauchen:
+    # geprüft wird die Entscheidung, nicht der Leser dahinter.
+    #
+    # **Aber nicht mehr mit leerer Nutzlast.** Seit ``loader.check_readable``
+    # steht vor der Weiche eine Eingangsprüfung, und für sie ist eine Datei
+    # ohne ein einziges Byte in jedem Format eine Absage — der abgebrochene
+    # Download. Ein Kopf genügt: Die Weiche entscheidet an der Endung und
+    # liest den Inhalt nicht.
+    knapp_step = b"ISO-10303-21;"
+    knapp_dxf = b"0 SECTION"
+    knapp_stl = bytes(80) + struct.pack("<I", 1) + bytes(50)
+
+    assert import_plan("src_1", "teil.step", knapp_step).draft.op == "load_step"
+    assert import_plan("src_1", "zeichnung.dxf", knapp_dxf).draft.op == "load_outline"
+    assert import_plan("src_1", "modell.stl", knapp_stl).draft.op == "load"
 
     # Die Einheitenfrage hat nur ein Netz: STEP trägt seine Einheit selbst, und
     # eine Zeichnung hat keine dritte Dimension, bis jemand sie angibt.
-    assert not import_plan("src_1", "teil.step", b"").asks_unit
-    assert not import_plan("src_1", "platte.svg", b"").asks_unit
-    assert import_plan("src_1", "modell.stl", b"").asks_unit
+    assert not import_plan("src_1", "teil.step", knapp_step).asks_unit
+    assert not import_plan("src_1", "platte.svg", drawing.read_bytes()).asks_unit
+    assert import_plan("src_1", "modell.stl", knapp_stl).asks_unit
 
 
 def test_a_write_that_cannot_work_says_so_instead_of_crashing(

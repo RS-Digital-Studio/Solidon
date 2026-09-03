@@ -23,6 +23,7 @@ import base64
 import json
 import math
 import mimetypes
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -31,7 +32,7 @@ from urllib.parse import unquote, urlsplit
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import ValidationError
+from app.core.errors import CANCEL, CHOOSE_ANOTHER_FILE, ValidationError
 from app.core.geom.mesh import (
     TRIMESH_SUFFIXES,
     MeshData,
@@ -421,6 +422,142 @@ def check_limits(payload_size: int, triangle_count: int) -> None:
             constraint="too_many_triangles",
             values={"triangles": triangle_count, "limit": MAX_TRIANGLES},
         )
+
+
+#: Der Kopf einer binären STL: 80 Byte Bezeichnung, dann die Dreieckszahl.
+STL_HEADER_BYTES: Final = 84
+#: Ein Dreieck darin: Normale, drei Ecken, ein Attributfeld.
+STL_TRIANGLE_BYTES: Final = 50
+
+
+def check_readable(payload: bytes, suffix: str) -> None:
+    """Lehnt eine Datei ab, aus der kein Modell werden kann — **vor** der Op.
+
+    Gemessen am 03.09.2026 gingen fünf unbrauchbare Dateien klaglos durch:
+    null Bytes, ein abgebrochener Download, eine umbenannte Textdatei, die
+    404-Seite eines Servers und eine STL mit null Dreiecken. Jede wurde zur
+    Operation im Stapel und zur eingebetteten Quelle im Dokument, und jede
+    wanderte beim nächsten Speichern in die Projektdatei. Gemeldet wurde es
+    erst bei der Auswertung, als Befund über einem leeren Viewport.
+
+    Geprüft wird nur, was **ohne einen Parser** entschieden werden kann: die
+    leere Datei für jedes Format, die Struktur bei ``.stl``, die Archivkennung
+    bei ``.3mf``. Wo diese Funktion schweigt, heißt das nicht „gültig" — es
+    heißt „hier entscheidet der Leser".
+
+    **Die Reihenfolge bei STL ist wichtig und nicht umkehrbar.** Erst die
+    Längenrechnung, dann der ASCII-Weg. Ein Kopf, der mit ``solid`` beginnt,
+    steht auch in manchen binären Dateien; umgekehrt trägt eine echte binäre
+    STL beliebigen Text im Kopf. Aus einem Durchlauf über sechzehn
+    Kundendateien (3d-druck-c7, 03.09.2026) stammt der Beleg: In
+    ``broomholdervcd_d35mm.stl`` stehen dort die Bytes ``ST`` — die Datei ist
+    binär, gültig, und eine Prüfung „fängt mit solid an, sonst raus" hätte sie
+    abgewiesen.
+    """
+    if not payload:
+        raise ValidationError(
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+            field="file",
+            detail=_(
+                "Die Datei ist leer. Meistens ist ein Download abgebrochen — "
+                "lade sie erneut herunter und öffne sie noch einmal."
+            ),
+            constraint="file_empty",
+            values={"size": 0},
+        )
+
+    kind = suffix.lower()
+    if kind == ".3mf":
+        # Eine 3MF ist ein Zip-Archiv, und ein Zip beginnt mit „PK". Das ist
+        # keine Formatprüfung, sondern die Frage, ob überhaupt ein Archiv
+        # vorliegt: Was ein Server als Fehlerseite schickt, ist keines.
+        if not payload.startswith(b"PK"):
+            raise ValidationError(
+                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+                field="file",
+                detail=_(
+                    "Diese Datei ist kein 3MF-Archiv, auch wenn sie so heißt. "
+                    "Prüfe, ob der Download vollständig war, und lade sie sonst "
+                    "erneut herunter."
+                ),
+                constraint="not_an_archive",
+                values={"size": len(payload)},
+            )
+        return
+
+    if kind != ".stl":
+        # OBJ, PLY, GLB, STEP: keine Kennung, die sich ohne Parser prüfen
+        # ließe. Die leere Datei oben ist alles, was hier ehrlich zu haben ist
+        # — insbesondere darf hier nichts fallen, sonst schnitte diese Prüfung
+        # den STEP-Weg ab, der in ``import_plan`` gleich danach beginnt.
+        return
+
+    announced = -1
+    if len(payload) >= STL_HEADER_BYTES:
+        announced = int(struct.unpack("<I", payload[80:STL_HEADER_BYTES])[0])
+    expected = STL_HEADER_BYTES + STL_TRIANGLE_BYTES * announced
+    binary_fits = announced > 0 and len(payload) == expected
+
+    if binary_fits:
+        return
+
+    # **Erst hier der ASCII-Weg, und dann ohne die Zahlen von oben.** Bei einer
+    # Textdatei sind die Bytes 80 bis 84 irgendein Wort, und die daraus
+    # gerechnete Dreieckszahl ist Zufall: Eine gültige ASCII-STL mit einem
+    # Kommentarblock vor der ersten Facette wurde damit als „unvollständig"
+    # abgewiesen. Wer hier ``solid`` liest, verlässt den binären Zweig ganz.
+    if payload[:512].lstrip()[:5].lower() == b"solid":
+        if b"facet" in payload.lower():
+            return
+        raise ValidationError(
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+            field="file",
+            detail=_(
+                "Die Datei enthält kein Modell: Sie ist gültig aufgebaut, führt "
+                "aber null Dreiecke. Prüfe im Ursprungsprogramm, ob beim "
+                "Exportieren etwas ausgewählt war."
+            ),
+            constraint="no_triangles",
+            values={"triangles": 0},
+        )
+
+    if announced == 0 and len(payload) == STL_HEADER_BYTES:
+        raise ValidationError(
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+            field="file",
+            detail=_(
+                "Die Datei enthält kein Modell: Sie ist gültig aufgebaut, führt "
+                "aber null Dreiecke. Prüfe im Ursprungsprogramm, ob beim "
+                "Exportieren etwas ausgewählt war."
+            ),
+            constraint="no_triangles",
+            values={"triangles": 0},
+        )
+
+    if announced > 0 and len(payload) < expected:
+        raise ValidationError(
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+            field="file",
+            detail=_(
+                "Die Datei ist unvollständig: Ihr Kopf nennt mehr Dreiecke, als "
+                "enthalten sind. Meistens ist ein Download abgebrochen — lade "
+                "sie erneut herunter."
+            ),
+            constraint="file_truncated",
+            values={"announced": announced, "size": len(payload), "expected": expected},
+        )
+
+    raise ValidationError(
+        suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+        field="file",
+        detail=_(
+            "Diese Datei ist keine STL-Datei, auch wenn sie so heißt. Häufig "
+            "steckt dahinter die Fehlerseite eines Servers, die beim "
+            "Herunterladen anstelle des Modells kam."
+        ),
+        constraint="not_a_mesh",
+        values={"size": len(payload)},
+    )
 
 
 def check_unpacked(payload: bytes) -> None:

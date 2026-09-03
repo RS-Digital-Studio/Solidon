@@ -132,6 +132,11 @@ CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), pri
 #: Weg, den es vor dem Update in der Anwendung als einzigen gab (§37.2).
 OPEN_DOWNLOAD_PAGE = Action("open_download_page", _("Download-Seite öffnen"), primary=True)
 SAVE_ELSEWHERE = Action("save_elsewhere", _("Anderen Ort wählen"))
+#: **Der Ausweg, wenn die Datei selbst nicht geht.** Eine Absage beim
+#: Einlesen trägt sonst nur *Abbrechen*: ``correct_input`` fällt weg, weil
+#: es einen Schritt braucht, den es vor der Operation nicht gibt
+#: (``dialogs.NEEDS_OP``). Was hilft, ist der Dateidialog — und den gibt es.
+CHOOSE_ANOTHER_FILE = Action("choose_another_file", _("Andere Datei wählen"), primary=True)
 ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
 BUY_LICENCE = Action("buy_licence", _("Solidon kaufen"))
 ACTIVATE_ONLINE = Action("activate_online", _("Online aktivieren"), primary=True)
