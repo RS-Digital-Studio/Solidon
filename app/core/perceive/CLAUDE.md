@@ -81,6 +81,10 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - Mehrdeutigkeit wird gemeldet, nicht aufgelöst (§15.7, Regel 21).
+- **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
+  Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
+  ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und
+  die Anzahl allein ließe fast ein Gigabyte zu.
 - **Was zerfällt, wird wieder zusammengeführt.** Ein Mantel kommt aus
   der Fleckenbildung oft in Stücken; `_merged_cylinders`, `_merged_cones`
   und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von

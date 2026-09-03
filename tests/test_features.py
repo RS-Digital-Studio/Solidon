@@ -2010,3 +2010,58 @@ def test_one_countersink_is_one_cone(profile: Profile) -> None:
     assert len(pair) == 2, f"zwei Senkungen bleiben zwei, nicht {len(pair)}"
     apart = abs(float(pair[0].params["centre"][0]) - float(pair[1].params["centre"][0]))
     assert apart == pytest.approx(30.0, abs=0.5), "und zwar an ihren beiden Orten"
+
+
+def test_the_cache_counts_weight_and_not_only_entries() -> None:
+    """Die Cache-Grenze zählte Einträge, und die kosten sehr verschieden viel.
+
+    **Gemessen am 03.09.2026**, angestoßen von Roberts Frage nach Dingen, die
+    gesetzt und nie abgeräumt werden: Ein Eintrag für
+    `garden-hose-holder.3mf` (392 532 Dreiecke, 797 Merkmale) wiegt **3,9 MiB**
+    — davon 2,7 allein an Flächenindizes, 97 425 Stück zu je 28 Byte. Bei
+    :data:`CACHE_LIMIT` von 256 hielte der Cache damit **991 MiB**, und der
+    Kundenverlauf, mit dem die 256 begründet sind (132 verschiedene Netze),
+    käme auf gut 500.
+
+    Abgeräumt **wurde** also — die Grenze zählte nur das Falsche. Für ein
+    kleines Teil mit tausend Indizes je Eintrag sind 256 Einträge sieben
+    Megabyte, und dort soll der Cache voll ausgenutzt werden; für ein großes
+    kostet derselbe Zähler das Hundertfache.
+
+    Geprüft wird deshalb beides: dass die Anzahl die kleinen weiter deckelt,
+    und dass ein einzelner Eintrag über der Gewichtsgrenze trotzdem bleibt —
+    ihn wegzuwerfen hieße, ihn beim nächsten Aufruf sofort neu zu rechnen, und
+    der Cache wäre nicht begrenzt, sondern aus.
+    """
+    from app.core.perceive.features import (
+        _CACHE_INDICES,
+        _FEATURE_CACHE,
+        CACHE_INDEX_LIMIT,
+        CACHE_LIMIT,
+        detect,
+        forget_cache,
+    )
+
+    forget_cache()
+    for step in range(CACHE_LIMIT + 8):
+        # Jeder Körper ein anderes Maß, damit jeder einen eigenen Schlüssel hat.
+        detect(MeshData(trimesh.creation.box(extents=(10.0 + step * 0.01, 10.0, 10.0))))
+
+    assert len(_FEATURE_CACHE) == CACHE_LIMIT, "die Anzahl deckelt die kleinen weiter"
+    assert len(_CACHE_INDICES) == len(_FEATURE_CACHE), (
+        "und der Gewichtszähler läuft mit — sonst wächst er, während der Cache verdrängt"
+    )
+    assert sum(_CACHE_INDICES.values()) < CACHE_INDEX_LIMIT, (
+        "kleine Körper kommen der Gewichtsgrenze nicht nahe"
+    )
+
+    # Ein einzelner Eintrag bleibt, auch wenn er für sich schwer ist.
+    forget_cache()
+    detect(MeshData(trimesh.creation.icosphere(subdivisions=5)))
+    assert len(_FEATURE_CACHE) == 1
+    assert sum(_CACHE_INDICES.values()) > 0, "und sein Gewicht steht im Zähler"
+
+    # Und Vergessen räumt beide Seiten ab. Ein Zähler, der einen Eintrag
+    # überlebt, ist genau die Sorte Rest, um die es hier geht.
+    forget_cache()
+    assert not _FEATURE_CACHE and not _CACHE_INDICES

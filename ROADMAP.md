@@ -15123,3 +15123,29 @@ Durchmesser.
   Schranke aus einem Messwert ist geraten. Beide sitzen jetzt weiter, weil die
   trennende Prüfung woanders liegt — und die Winkelschranke wird vom
   Test ausdrücklich **nicht** gemessen, was im Docstring steht.
+
+## Der Merkmals-Cache konnte ein Gigabyte halten (03.09.2026)
+
+- [x] **Die Grenze zählte Einträge, und die kosten sehr verschieden
+  viel.** Aus Roberts Auftrag an 06 und 19, Dinge zu suchen, die gesetzt und
+  nie abgeräumt werden — abgeräumt **wurde** hier, nur zählte die
+  Schranke das Falsche.
+
+  Gemessen: Ein Eintrag für `garden-hose-holder.3mf` (392 532
+  Dreiecke, 797 Merkmale) wiegt **3,9 MiB**, davon 2,7 an
+  Flächenindizes — 97 425 Stück zu je 28 Byte. Mit
+  `CACHE_LIMIT` von 256 hält der Cache **991 MiB**; der
+  Kundenverlauf, mit dem die 256 begründet sind (132 verschiedene Netze),
+  käme auf gut 500.
+
+  Jetzt zwei Schranken: Die Anzahl deckelt kleine Modelle (dort sind 256
+  Einträge sieben Megabyte und sollen ausgenutzt werden), `CACHE_INDEX_LIMIT`
+  = 12 Millionen ≈ 320 MiB deckelt große. Der Übergang liegt
+  bei rund 47 000 Indizes je Eintrag. Ein einzelner Eintrag über der
+  Grenze bleibt — ihn wegzuwerfen hieße, ihn sofort neu zu rechnen.
+  `tests/test_features.py::test_the_cache_counts_weight_and_not_only_entries`.
+
+  **Die zwölf Millionen sind eine Abwägung und keine Messung**, und
+  das steht auch an der Konstante: Wer ein noch größeres Modell
+  fährt, verliert ältere Einträge früher. Der Preis ist
+  benannt, die Zahl änderbar.

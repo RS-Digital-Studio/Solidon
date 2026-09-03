@@ -432,6 +432,11 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
 #: Öffnen andere Namen zurück als beim ersten — schlimmer als jede Wartezeit.
 _FEATURE_CACHE: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 
+#: Je Eintrag die Zahl seiner Flächenindizes — das Gewicht, das
+#: :data:`CACHE_INDEX_LIMIT` deckelt. Getrennt geführt, weil die Summe sonst
+#: bei jeder Verdrängung über alle Merkmale aller Einträge neu zu rechnen wäre.
+_CACHE_INDICES: OrderedDict[bytes, int] = OrderedDict()
+
 #: Wie viele Zwischenkörper der Cache behält. Eine Auswertung untersucht nicht
 #: nur die fertigen Objekte, sondern nach jeder Operation deren damaliges Netz.
 #: Der gemessene Kundenverlauf hat bei 163 Operationen 132 verschiedene Netze;
@@ -439,6 +444,29 @@ _FEATURE_CACHE: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 #: benötigten Einträge und macht aus lauter Treffern eine vollständige
 #: Neuberechnung. 256 lässt dafür Luft und bleibt trotzdem fest begrenzt.
 CACHE_LIMIT = 256
+
+#: Wie viele Flächenindizes der Cache insgesamt behält — die zweite Schranke
+#: neben :data:`CACHE_LIMIT`, und die einzige, die bei großen Modellen greift.
+#:
+#: **Gemessen am 03.09.2026:** Ein Eintrag für `garden-hose-holder.3mf`
+#: (392 532 Dreiecke, 797 Merkmale) wiegt **3,9 MiB**, davon 2,7 allein an
+#: Flächenindizes — 97 425 Stück zu je 28 Byte. Mit 256 solcher Einträge hielte
+#: der Cache **991 MiB**; schon der oben genannte Kundenverlauf mit 132
+#: verschiedenen Netzen käme auf gut 500.
+#:
+#: **Die Anzahl war die falsche Größe, um zu zählen.** Sie stimmt für kleine
+#: Modelle — ein Teil mit tausend Indizes je Eintrag füllt bei 256 Einträgen
+#: sieben Megabyte, und dort soll der Cache voll ausgenutzt werden. Bei einem
+#: großen kostet derselbe Zähler das Hundertfache. Deshalb zwei Schranken: Die
+#: Anzahl deckelt die kleinen, die Menge die großen; der Übergang liegt bei
+#: rund 47 000 Indizes je Eintrag.
+#:
+#: **Zwölf Millionen sind rund 320 MiB** und tragen den gemessenen
+#: Kundenverlauf an einem 400 000-Dreieck-Modell fast vollständig (132 Netze
+#: bräuchten 12,8). Wer ein noch größeres Modell fährt, verliert die ältesten
+#: Einträge früher — das ist der Preis dafür, nicht ein Gigabyte zu halten,
+#: und er ist eine Abwägung und keine Messung.
+CACHE_INDEX_LIMIT = 12_000_000
 
 
 def _mesh_key(mesh: MeshData) -> bytes:
@@ -463,6 +491,7 @@ def _mesh_key(mesh: MeshData) -> bytes:
 def forget_cache() -> None:
     """Vergisst die gemerkten Erkennungen — für Tests und Messungen."""
     _FEATURE_CACHE.clear()
+    _CACHE_INDICES.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -556,8 +585,15 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
         found[feature.id] = feature
     _log.info("detected %d features", len(found))
     _FEATURE_CACHE[key] = found
-    while len(_FEATURE_CACHE) > CACHE_LIMIT:
-        _FEATURE_CACHE.popitem(last=False)
+    _CACHE_INDICES[key] = sum(len(feature.face_indices) for feature in found.values())
+    while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
+        oldest, _ = _FEATURE_CACHE.popitem(last=False)
+        _CACHE_INDICES.pop(oldest, None)
+        if not _FEATURE_CACHE:
+            # Ein einzelner Eintrag über der Grenze bleibt: Ihn wegzuwerfen
+            # hieße, ihn beim nächsten Aufruf sofort neu zu rechnen — der Cache
+            # wäre dann nicht begrenzt, sondern aus.
+            break
     return dict(found)
 
 
