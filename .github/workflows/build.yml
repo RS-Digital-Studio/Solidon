@@ -658,6 +658,9 @@ jobs:
             expected=$(awk '{print $1}' "$package.sha256")
             [ "$(sha256sum "$package" | awk '{print $1}')" = "$expected" ] || { echo "Geändertes Linux-Paket: $package"; exit 1; }
           done
+          # `build/` gibt es hier nicht: Der Prüfjob checkt nur aus und lädt
+          # Artefakte, gebaut wird woanders (Tag-Lauf 9, 03.09.2026).
+          mkdir -p build
           cp "$appimage" "$flatpak" build/
           while IFS= read -r entry; do
             case "/$entry/" in *'/../'*|*'/./'*|*'//'*) echo "Unzulässiger Archivpfad: $entry"; exit 1;; esac
@@ -837,6 +840,8 @@ jobs:
           if ($setup.Count -ne 1 -or -not (Test-Path -LiteralPath "$($setup[0].FullName).sha256")) { throw "Finaler Windows-Installer fehlt oder ist mehrdeutig." }
           $setupLine = (Get-Content -Raw "$($setup[0].FullName).sha256").Trim()
           if ($setupLine -notmatch '^([0-9a-f]{64})  Solidon3D-Setup-\d+\.\d+\.\d+\.exe$' -or (Get-FileHash -LiteralPath $setup[0].FullName -Algorithm SHA256).Hash.ToLower() -ne $Matches[1]) { throw "Geänderter finaler Windows-Installer." }
+          # `build/` gibt es hier nicht — siehe Linux-Prüfjob.
+          New-Item -ItemType Directory -Force build | Out-Null
           Copy-Item -LiteralPath $setup[0].FullName -Destination build/$($setup[0].Name)
           # **Die Releaseakte meldet, sie blockiert nicht** (Entscheidung Robert,
           # 02.09.2026): Sie hat bis heute keinen Tag-Lauf gesehen, und kein Release
@@ -1219,6 +1224,8 @@ jobs:
           package=$(find release-download -maxdepth 1 -type f -name "Solidon3D-*-macos-${{ matrix.machine_arch }}.pkg")
           [ -n "$package" ] && [ -f "$package.sha256" ]
           [ "$(shasum -a 256 "$package" | awk '{print $1}')" = "$(awk '{print $1}' "$package.sha256")" ] || { echo "Geänderter finaler macOS-Installer."; exit 1; }
+          # `build/` gibt es hier nicht — siehe Linux-Prüfjob.
+          mkdir -p build
           cp "$package" "build/$(basename "$package")"
           sbom=$(find release-app/Solidon3D.app -type f -name Solidon3D.cdx.json)
           [ "$(printf '%s\n' "$sbom" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || { echo "Die macOS-Endartefakt-SBOM fehlt oder ist mehrdeutig."; exit 1; }
