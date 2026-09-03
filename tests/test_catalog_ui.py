@@ -1426,3 +1426,54 @@ def _box_recipe(name: str):
         author="Probe",
         features={"top": "face_top"},
     )
+
+
+def test_an_own_python_part_is_told_apart_from_a_shipped_one(qt_app: QApplication) -> None:
+    """§24.5 heißt „Eigene Bausteine" und meint die ``.py`` aus dem Nutzerordner.
+
+    Genau die fielen durch. ``_range_warning`` zählte ``recipe``, ``travelled``
+    und ``imported`` auf — die drei Quellen, die später dazukamen — und ließ
+    ``user`` aus. Gemessen: Ein Baustein mit ``source="user"`` bekam unter
+    keinem Wert von ``range_passed`` einen Hinweis, auch nicht bei ``False``.
+
+    Für den Kunden hieß das: Er legt eine eigene ``.py`` in seinen Ordner, sie
+    steht im Katalog wie ein mitgelieferter Baustein, und dass ihr Bereich nie
+    gefahren wurde, erfährt er nicht. Der Bauplan verspricht ihm das Gegenteil.
+    """
+    import dataclasses
+
+    from app.i18n import tr
+    from app.ui.catalog import RANGE_MARKER, describe, detail
+
+    donor = next(iter(PARTS.all()))
+    ungeprueft = dataclasses.replace(donor, source="user", range_passed=None)
+    gebrochen = dataclasses.replace(donor, source="user", range_passed=False)
+    bestanden = dataclasses.replace(donor, source="user", range_passed=True)
+
+    assert tr("der Bereichstest ist für diesen Baustein nie gelaufen") in describe(ungeprueft)
+    assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in describe(gebrochen)
+    assert RANGE_MARKER in detail(gebrochen), "Regel 18: Zeichen und Satz"
+    assert "Bereichstest" not in describe(bestanden) and "Grenzen" not in describe(bestanden)
+
+    # Und die Gegenprobe bleibt: Der mitgelieferte trägt dasselbe ``None`` und
+    # wird nicht angeschrieben, denn seinen Bereich fährt die Suite.
+    ausgeliefert = dataclasses.replace(donor, source="shipped", range_passed=None)
+    assert "Bereichstest" not in describe(ausgeliefert)
+
+
+def test_a_new_source_inherits_the_warning_instead_of_losing_it(qt_app: QApplication) -> None:
+    """Die Bedingung nennt die Ausnahme, nicht die Fälle.
+
+    Das ist der Grund, aus dem ``user`` überhaupt durchfallen konnte: Eine
+    Aufzählung der betroffenen Quellen altert mit jeder neuen. Wer morgen eine
+    fünfte einführt, soll den Hinweis erben und ihn nicht stillschweigend
+    verlieren — der Fehler wäre wieder unsichtbar, weil nichts rot wird.
+    """
+    import dataclasses
+
+    from app.ui.catalog import _range_warning
+
+    donor = next(iter(PARTS.all()))
+    erfunden = dataclasses.replace(donor, source="von_wo_auch_immer", range_passed=None)
+
+    assert _range_warning(erfunden), "eine unbekannte Herkunft gilt als ungeprüft"

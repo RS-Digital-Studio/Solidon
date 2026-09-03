@@ -811,13 +811,27 @@ class PartCatalog(QDialog):
 def _range_warning(spec: PartSpec) -> str:
     """Der §24.5-Satz zum Bereichstest — oder nichts.
 
-    Nur für Rezepte: Ein mitgelieferter Baustein wird in der Suite über
-    seinen ganzen Bereich gefahren, sein ``None`` heißt „nicht hier
-    protokolliert" und nicht „ungeprüft". Bei einem Rezept heißt ``None``,
-    dass der Test nie lief — eine von Hand kopierte Datei etwa —, und
-    ``False``, dass an den Grenzen kein brauchbarer Körper herauskam.
+    Für alles außer den mitgelieferten Bausteinen: Ein mitgelieferter wird in
+    der Suite über seinen ganzen Bereich gefahren, sein ``None`` heißt „nicht
+    hier protokolliert" und nicht „ungeprüft". Überall sonst heißt ``None``,
+    dass der Test nie lief — eine von Hand kopierte Datei etwa —, und ``False``,
+    dass an den Grenzen kein brauchbarer Körper herauskam.
+
+    **``user`` fehlte hier, und das war die Quelle, um die §24.5 geht.** Der
+    Abschnitt heißt „Eigene Bausteine" und meint die ``.py``-Dateien aus dem
+    Nutzerverzeichnis; sein letzter Satz lautet „Dieselben Tests gelten; ohne
+    bestandenen Parameterbereichstest erscheint ein Warnhinweis im Katalog".
+    Die Bedingung zählte ``recipe``, ``travelled`` und ``imported`` auf — die
+    drei Quellen, die es *später* dazu bekam — und ließ genau die aus, für die
+    der Satz geschrieben wurde. Gemessen am 03.09.2026: Ein Baustein mit
+    ``source="user"`` bekam unter **keinem** Wert von ``range_passed`` einen
+    Hinweis, auch nicht bei ``False``.
+
+    Aufgezählt wird deshalb, wovon ausgenommen wird, statt wofür es gilt: Die
+    Liste der Quellen wächst, und eine neue soll den Hinweis erben und nicht
+    stillschweigend verlieren.
     """
-    if spec.source not in ("recipe", "travelled", "imported") or spec.range_passed is True:
+    if spec.source == "shipped" or spec.range_passed is True:
         return ""
     if spec.range_passed is False:
         return tr("an den Grenzen kam kein brauchbarer Körper heraus")
