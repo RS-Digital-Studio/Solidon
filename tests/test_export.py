@@ -1217,6 +1217,22 @@ def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Pro
     assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
 
 
+def _asks_only_a_flavour(function: object) -> bool:
+    """Ist das eine Funktion, die genau eine Slicer-Familie beantwortet?
+
+    Erkannt an der Signatur und nicht am Namen: **ein** Parameter, und der
+    heißt ``flavour``. Das trifft die sieben, die es gab, und jedes weitere,
+    das jemand daneben schreibt — und es trifft nicht ``flavour_of`` (nimmt
+    einen Dateinamen) oder ``values_for`` (nimmt drei Dinge).
+    """
+    import inspect
+
+    if not inspect.isfunction(function):
+        return False
+    parameters = list(inspect.signature(function).parameters)
+    return parameters == ["flavour"]
+
+
 def test_every_flavour_answers_every_property() -> None:
     """Jede Familie hat zu jeder Eigenschaft eine Antwort — und sie steht hier.
 
@@ -1226,15 +1242,16 @@ def test_every_flavour_answers_every_property() -> None:
     nicht unbemerkt umdreht, und sie ist die Liste, die jemand ausfüllen muss,
     der eine vierte Familie einführt.
 
-    Der Bestand ist ausdrücklich **kein** Muster: Sechs der sieben Zeilen
-    trennen die Orca-Familie von den anderen beiden, und wer daraus „Orca kann
-    alles" liest, hat die Ursache verwechselt. Sie kann es, weil sie ihre
+    Der Bestand ist ausdrücklich **kein** Muster: Sechs der neun Zeilen
+    trennen die Orca-Familie von den anderen beiden, eine stellt Cura allein
+    (``has_key_definitions``), und wer daraus „Orca kann alles" liest, hat die
+    Ursache verwechselt. Sie kann es, weil sie ihre
     Profile als Dateien führt, die Solidon lesen kann; Cura führt seine
     Einstellungen ausschließlich auf der Kommandozeile, und PrusaSlicer legt
     keine Profile ab, die eine Auswahl trügen.
 
-    Gegenprobe gefahren: Jedes der sieben Prädikate einmal auf ``True``
-    festgenagelt, jedes Mal wird diese Tabelle rot.
+    Gegenprobe gefahren: Jedes der Prädikate einmal auf ``True`` festgenagelt,
+    jedes Mal wird diese Tabelle rot.
     """
     expected: dict[str, dict[SlicerFlavour, bool]] = {
         "wants_bed_coordinates": {"prusa": False, "orca": True, "cura": False},
@@ -1244,6 +1261,14 @@ def test_every_flavour_answers_every_property() -> None:
         "names_its_own_output": {"prusa": False, "orca": True, "cura": False},
         "has_readable_profiles": {"prusa": False, "orca": True, "cura": True},
         "reads_assembly_file": {"prusa": True, "orca": True, "cura": False},
+        "takes_a_machine_profile": {"prusa": False, "orca": True, "cura": False},
+        # **Die einzige Zeile, in der Cura allein steht**, und sie fehlte hier,
+        # bis die Vollständigkeitsprüfung darunter sie ans Licht holte: Nur
+        # neben CuraEngine liegt eine Datei, die jeden gültigen Schlüssel nennt
+        # (``fdmprinter.def.json``). Sie ist dort die einzige Gegenprobe, die
+        # es gibt, denn CuraEngine schreibt seine wirksame Konfiguration nicht
+        # in den G-Code — Prusa und Orca tun es und prüfen sich damit selbst.
+        "has_key_definitions": {"prusa": False, "orca": False, "cura": True},
     }
     flavours = set(get_args(SlicerFlavour))
     assert len(flavours) >= 3, f"zu wenige Familien gefunden: {flavours}"
@@ -1253,6 +1278,25 @@ def test_every_flavour_answers_every_property() -> None:
         predicate = getattr(slicer_keys, name)
         for flavour, wanted in answers.items():
             assert predicate(flavour) is wanted, f"{name}({flavour})"
+
+    # **Und die Tabelle muss vollständig sein, nicht nur richtig.** Sie ist
+    # bis zum 03.09.2026 über ``expected`` gelaufen und hat damit nur geprüft,
+    # was jemand eingetragen hatte. Ein achtes Prädikat kam an diesem Tag dazu
+    # (``takes_a_machine_profile``, aus dem Fall „Cura bekam eine Warnung über
+    # ein Maschinenprofil, das es nie lädt") — und wäre stillschweigend
+    # ungeprüft geblieben, weil die Schleife es nie zu Gesicht bekommt.
+    #
+    # Der Docstring nennt diese Tabelle „die Liste, die jemand ausfüllen muss,
+    # der eine vierte Familie einführt". Ein Versprechen, das nur gilt, wenn
+    # jemand daran denkt, ist keines.
+    found = {
+        name
+        for name in dir(slicer_keys)
+        if not name.startswith("_")
+        and callable(getattr(slicer_keys, name))
+        and _asks_only_a_flavour(getattr(slicer_keys, name))
+    }
+    assert found <= set(expected), f"nicht in der Tabelle: {sorted(found - set(expected))}"
 
 
 def test_the_bed_box_asks_the_same_source_as_the_handover(profile: Profile) -> None:
