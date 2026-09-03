@@ -970,6 +970,19 @@ def machine_values(path: Path) -> dict[str, Any]:
     gesetzt hat, ist keine Angabe des Herstellers, und ihn zu erfinden wäre
     schlimmer als ihn wegzulassen — bei G-Code sogar gefährlich: Ein geratener
     Homing-Befehl fährt die Düse ins Bett.
+
+    **Sie hat keinen Aufrufer, und das ist kein Loch in der Übergabe.**
+    :data:`MACHINE_READBACK` sagt, die Werte reisten „unter ihrem Orca-Namen
+    weiter und werden beim Schreiben unverändert eingesetzt" — eingesetzt
+    werden sie, nur nicht über diesen Weg: :func:`handover._orca_machine`
+    schreibt das Maschinenprofil mit :func:`resolve_values` **vollständig**
+    aus, und die enge Auswahl hier ist eine Teilmenge davon. Cura und
+    PrusaSlicer bekommen umgekehrt gar keine Maschinenseite aus fremdem Profil
+    (siehe :func:`handover.machine_for`).
+
+    Was sie kann und niemand fragt: **eine Maschine beschreiben, ohne sie zu
+    übernehmen** — die achtzig Werte hinter einem Profilnamen zeigen, statt ihn
+    nur zu nennen. Wer das baut, hat sie schon.
     """
     resolved = resolve_values(path)
     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}

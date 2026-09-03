@@ -737,8 +737,20 @@ def _violated_features(scene: Scene, object_id: ObjectId) -> set[FeatureId]:
 
 
 def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:
-    """Passungen, an denen ein Objekt teilnimmt — benutzt von Legende und
-    Steckbrief.
+    """Passungen, an denen ein Objekt teilnimmt.
+
+    **Ohne Aufrufer in der Anwendung**, und der Docstring behauptete das
+    Gegenteil: „benutzt von Legende und Steckbrief". Beide tun es nicht. Der
+    Steckbrief zählt die Passungen des Projekts in einer eigenen Zeile
+    (``digest._fit_lines``) und wiederholt sie nicht je Körper — §26.1, jede
+    Zeile, die nichts unterscheidet, verdrängt eine, die es tut. Eine Legende
+    über Passungen gibt es in der Ansicht nicht; :func:`fit_map` färbt die
+    Dreiecke und sucht sich seine Paare selbst.
+
+    Die Funktion bleibt, weil sie diese Suche in einem Ausdruck sagt und
+    ``fit_map`` sie nachbaut. Was nicht bleiben durfte, ist der Satz darüber:
+    Ein Docstring, der zwei Aufrufer nennt, hält den nächsten Leser davon ab,
+    genau das nachzusehen.
     """
     return tuple(fit for fit in scene.fits if object_id in (fit.a.object_id, fit.b.object_id))
 
