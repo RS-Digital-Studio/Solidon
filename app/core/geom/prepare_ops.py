@@ -445,6 +445,15 @@ def _feature_solid(
 #: Spanne gemessen **null**; die Grenze fängt die Tesselierung einer schwach
 #: gekrümmten Grundfläche mit und lehnt alles darüber ab, statt einen
 #: verdrehten Deckel zu bauen.
+#:
+#: **Diese Zahl ist an einem einzigen Körper gemessen, und das ist ihr
+#: schwächster Punkt.** Sie hält, weil die Grenze mit der Wurzel der
+#: Randknotenzahl mitwächst — die abgelehnten Fälle liegen um Größenordnungen
+#: darüber (15,2 gegen 0,51 an einer Senkung über einer Bohrung, gemessen am
+#: 03.09.2026). Wer sie anfasst, messe an **mehr als einem** Körper: 3d-druck-7b
+#: hat am selben Tag zwei Schranken aus je einem Messwert gesetzt, und beide
+#: standen zu eng — 5 Grad aus einer Messung von 2,2, und der zweite Fall lag
+#: bei 5,74. Eine Schranke aus einem Wert ist geraten, nicht gemessen.
 FLAT_RIM: Final = 0.05
 
 
