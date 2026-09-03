@@ -67,6 +67,7 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - Mehrdeutigkeit wird gemeldet, nicht aufgelöst (§15.7, Regel 21).
 - **Was für kein Werkzeug groß genug ist, ist kein Merkmal.**
-  `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für Bohrung, Zapfen **und**
-  Verrundung. Ohne sie meldet ein tesseliertes Kundenmodell hundert Hohlkehlen
-  mit Radien um ein Tausendstel Millimeter.
+  `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für **alle sechs** eingepassten
+  Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht
+  einmal als `_too_small_to_make`, damit die nächste Art sie nicht wieder
+  übersieht; beim Torus entscheidet das kleinere von Ring und Röhre.

@@ -1672,9 +1672,8 @@ def test_the_actions_of_a_bore_come_with_their_measured_values() -> None:
     eine Liste daneben, die dasselbe noch einmal sagt, weiß beim nächsten
     Registereintrag die Hälfte.
     """
-    from app.core.perceive.actions import actions_for
-
     from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import actions_for
     from app.core.types import Feature
 
     load_operations()
@@ -1723,9 +1722,8 @@ def test_an_edge_loop_is_told_why_nothing_applies() -> None:
     „Verschieben — eine offene Kantenschleife ist ein Loch im Netz" beantwortet
     die Frage und beendet das Suchen (Entwurf 3d-druck-d4, 03.09.2026).
     """
-    from app.core.perceive.actions import actions_for
-
     from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import actions_for
     from app.core.types import Feature
 
     load_operations()
@@ -1742,3 +1740,84 @@ def test_an_edge_loop_is_told_why_nothing_applies() -> None:
     assert all(entry.op is None for entry in actions), [entry.op for entry in actions]
     assert all(str(entry.reason) for entry in actions), "jede Zeile trägt ihren Grund"
     assert any("Netz" in str(entry.reason) for entry in actions)
+
+
+def test_no_feature_is_smaller_than_the_tool_that_would_make_it() -> None:
+    """Kegel, Kugel und Torus hatten die Werkzeugschranke auch nicht.
+
+    **Der Befund, eine Stunde nach der Verrundung (03.09.2026):** Ich hatte
+    die Schranke bei `detect_fillets` nachgetragen und in den Kommentar
+    geschrieben, sie habe „hier als Einziger" gefehlt. Gemessen an Roberts
+    Modellen stimmte das nicht — `garden-hose-holder.3mf` (392 532 Dreiecke)
+    lieferte **1130 Merkmale**: 497 Kugeln, 421 Tori, 183 Kegel, und **257
+    davon trugen ein Maß unter einer Extrusionsbahn** (0,42 mm), der kleinste
+    Kegel mit 0,0074 mm.
+
+    Der Suchfehler dahinter ist der lehrreiche Teil: Ich hatte nach den
+    Aufrufern derselben *Zylinder*-Einpassung gesucht und damit genau die drei
+    Arten übersehen, die eine andere benutzen. Danach 834 Merkmale, keines
+    mehr unter einer Bahn.
+
+    Robert am selben Tag: „wir brauchen auch nur Merkmale usw, die auch von
+    der Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+
+    Beim Torus entscheidet das **kleinere** der beiden Maße: Ein Ring von
+    40 mm aus einem Rohr von drei Zehnteln ist nichts, was ein Drucker legen
+    kann.
+    """
+    from dataclasses import replace
+
+    from app.core.perceive.features import (
+        MIN_CYLINDER_DIAMETER,
+        ConeFit,
+        SphereFit,
+        TorusFit,
+        detect_cones,
+        detect_spheres,
+        detect_tori,
+    )
+
+    mesh = MeshData(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+    fläche = list(range(6))
+    winzig = MIN_CYLINDER_DIAMETER / 2.0 - 0.01
+    genau = MIN_CYLINDER_DIAMETER / 2.0
+
+    kegel = ConeFit(
+        axis=(0.0, 0.0, 1.0),
+        apex=(0.0, 0.0, 0.0),
+        centre=(0.0, 0.0, 0.0),
+        half_angle=45.0,
+        radius=3.0,
+        residual=0.0,
+        recess=False,
+    )
+    gefunden = detect_cones(mesh, [(kegel, fläche), (replace(kegel, radius=winzig), fläche)])
+    assert [f.params["diameter"] for f in gefunden] == [6.0], "ein Kegel unter Werkzeuggröße"
+    assert [f.id for f in gefunden] == ["cone_1"], "und die Nummern bleiben lückenlos"
+    assert len(detect_cones(mesh, [(replace(kegel, radius=genau), fläche)])) == 1
+
+    kugel = SphereFit(centre=(0.0, 0.0, 0.0), radius=3.0, residual=0.0, recess=False)
+    gefunden = detect_spheres(mesh, [(kugel, fläche), (replace(kugel, radius=winzig), fläche)])
+    assert [f.params["diameter"] for f in gefunden] == [6.0], "eine Kugel unter Werkzeuggröße"
+    assert [f.id for f in gefunden] == ["sphere_1"]
+    assert len(detect_spheres(mesh, [(replace(kugel, radius=genau), fläche)])) == 1
+
+    torus = TorusFit(
+        axis=(0.0, 0.0, 1.0),
+        centre=(0.0, 0.0, 0.0),
+        ring_radius=8.0,
+        tube_radius=2.0,
+        residual=0.0,
+        recess=False,
+    )
+    # **Der Ring ist groß, die Röhre nicht** — genau der Fall, den ein Blick
+    # allein auf ``diameter`` durchgelassen hätte.
+    dünn = replace(torus, tube_radius=winzig)
+    gefunden = detect_tori(mesh, [(torus, fläche), (dünn, fläche)])
+    assert [f.params["tube_diameter"] for f in gefunden] == [4.0], (
+        "ein Ring von 16 mm aus einem Rohr von einem Viertel ist nicht druckbar"
+    )
+    assert [f.id for f in gefunden] == ["torus_1"]
+    # Und andersherum: winziger Ring, dicke Röhre — auch das ist nichts.
+    gestaucht = replace(torus, ring_radius=winzig)
+    assert detect_tori(mesh, [(gestaucht, fläche)]) == []

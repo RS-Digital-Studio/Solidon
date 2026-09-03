@@ -1069,6 +1069,28 @@ def angular_span(body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]) -> f
     return float(math.degrees(2.0 * math.pi - gaps.max()))
 
 
+def _too_small_to_make(size: float) -> bool:
+    """Ob ein Maß unter dem liegt, was überhaupt herstellbar ist.
+
+    **Die Begründung ist wörtlich die von** :data:`MIN_CYLINDER_DIAMETER`: Was
+    für kein Werkzeug groß genug ist, ist auch kein Merkmal. Sie galt für
+    Bohrung und Zapfen, seit dem 03.09.2026 auch für die Verrundung — und für
+    Kegel, Kugel und Torus fehlte sie weiter. Als eigene Frage, damit die
+    nächste Merkmalsart sie nicht wieder übersieht.
+
+    **Der Befund, an Roberts Modellen gemessen (03.09.2026):**
+    `garden-hose-holder.3mf` (392 532 Dreiecke) lieferte **1130 Merkmale** —
+    497 Kugeln, 421 Tori, 183 Kegel —, und **257 davon trugen ein Maß unter
+    einer Extrusionsbahn** (0,42 mm), der kleinste Kegel 0,0074 mm. Ein
+    Objektbaum mit tausend Einträgen, von denen ein Viertel Tesselierung ist,
+    beantwortet keine Frage; er verdeckt die Antwort.
+
+    Robert dazu am selben Tag: „wir brauchen auch nur Merkmale usw, die auch
+    von der Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+    """
+    return size < MIN_CYLINDER_DIAMETER
+
+
 def _fits_in_the_body_by_size(mesh: MeshData, radius: float) -> bool:
     """Dieselbe Frage wie :func:`_fits_in_the_body`, aber ohne Achse.
 
@@ -1090,6 +1112,9 @@ def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Featu
     Grund: In eine Pfanne setzt man etwas hinein, auf eine Kuppel nicht.
     """
     found = _fitted(mesh).spheres if spheres is None else spheres
+    # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
+    # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
+    big = [entry for entry in found if not _too_small_to_make(entry[0].radius * 2.0)]
     return [
         Feature(
             id=f"sphere_{number}",
@@ -1103,7 +1128,7 @@ def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Featu
             },
             face_indices=tuple(patch),
         )
-        for number, (fit, patch) in enumerate(found, start=1)
+        for number, (fit, patch) in enumerate(big, start=1)
     ]
 
 
@@ -1118,6 +1143,16 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
     steht als eigener Punkt in der Roadmap.
     """
     found = _fitted(mesh).tori if tori is None else tori
+    # **Das kleinere der beiden Maße entscheidet**, und das ist meist die
+    # Röhre: Ein Ring von 40 mm aus einem Rohr von drei Zehnteln ist nichts,
+    # was ein Drucker legen kann. Umgekehrt gibt es den ausgearteten Fall
+    # (Röhre größer als Ring) auch, und ``min`` fängt beide, ohne dass man
+    # entscheiden müsste, welcher der häufigere ist.
+    big = [
+        entry
+        for entry in found
+        if not _too_small_to_make(min(entry[0].ring_radius, entry[0].tube_radius) * 2.0)
+    ]
     return [
         Feature(
             id=f"torus_{number}",
@@ -1139,7 +1174,7 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
             },
             face_indices=tuple(patch),
         )
-        for number, (fit, patch) in enumerate(found, start=1)
+        for number, (fit, patch) in enumerate(big, start=1)
     ]
 
 
@@ -1159,7 +1194,10 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     found = _fitted(mesh).fillets if fillets is None else fillets
     body = mesh.raw
     # **Dieselbe Schranke wie bei Bohrung und Zapfen**
-    # (:data:`MIN_CYLINDER_DIAMETER`), und sie fehlte hier als Einziger. An
+    # (:data:`MIN_CYLINDER_DIAMETER`). Hier stand „und sie fehlte hier als
+    # Einziger" — das war falsch, gemessen eine Stunde später: Sie fehlte auch
+    # bei Kegel, Kugel und Torus, und ich hatte beim Suchen nur die Aufrufer
+    # derselben Zylinder-Einpassung angesehen. An
     # „Blessed Family — Heart Script Decor" gemessen: 109 erkannte
     # Verrundungen, die kleinste mit **0,0007 mm** Radius; vier zeigte der
     # Objektbaum als „R0,00 mm" — eine Zahl, die eine Messung behauptet, die
@@ -1237,6 +1275,9 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
     Kegel.
     """
     found = _fitted(mesh)[1] if cones is None else cones
+    # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
+    # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
+    big = [entry for entry in found if not _too_small_to_make(entry[0].radius * 2.0)]
     return [
         Feature(
             id=f"cone_{number}",
@@ -1258,7 +1299,7 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
             },
             face_indices=tuple(patch),
         )
-        for number, (fit, patch) in enumerate(found, start=1)
+        for number, (fit, patch) in enumerate(big, start=1)
     ]
 
 
