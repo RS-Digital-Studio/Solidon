@@ -4860,3 +4860,226 @@ def test_a_drag_on_the_body_still_belongs_to_the_body(qt_app: QApplication) -> N
         "eine Verrundung lässt sich nicht versetzen — der Zug bleibt beim Teil"
     )
     assert not versetzt
+
+
+def test_the_shadow_follows_the_part_while_it_is_dragged(qt_app: QApplication) -> None:
+    """Ein Teil, dessen Schatten am Boden klebt, sieht falsch aus.
+
+    Gemessen am laufenden Fenster, ein Zug über 20 mm in X und 10 mm nach
+    oben: **null von drei** Schattenaktoren bewegten sich, während der Körper
+    wegwanderte. `_redraw_shadows` reagiert nur auf Kamerabewegungen, nicht
+    auf Objektbewegungen — es gab schlicht niemanden, der beim Ziehen
+    nachzieht.
+
+    Die Rechnung ist eine Translation: `shadow_points` wirft schräg, jeder
+    Punkt fällt um seine Höhe mal der waagerechten Lichtrichtung zur Seite.
+    Für **jeden** Punkt derselbe Versatz, also genügt es, den fertigen Aktor
+    zu setzen — und die Höhe wirkt dabei seitlich, was die beste Auskunft der
+    Geste ist: Wer ein Teil anhebt, sieht am Schatten, wie hoch es steht.
+    """
+    from app.core.geom.transform import TransformSteps
+    from app.ui.viewport import Viewport
+
+    class _Actor:
+        def __init__(self) -> None:
+            self.position = (0.0, 0.0, 0.0)
+
+    viewport = Viewport()
+    viewport.select("obj_1")
+    schatten = [_Actor(), _Actor()]
+    viewport._shadow_owners = {"obj_1": schatten}
+    viewport._shadow_cast = (-0.5, -0.25)
+
+    viewport._drag_shadow(TransformSteps(offset=(20.0, 0.0, 10.0), axis=None, angle=0.0, scale=1.0))
+    # 20 + 10·(-0,5) = 15 in X, 0 + 10·(-0,25) = -2,5 in Y, und immer 0 in Z:
+    # Der Schatten liegt auf dem Bett, er hebt sich nicht mit.
+    for aktor in schatten:
+        assert aktor.position == pytest.approx((15.0, -2.5, 0.0))
+
+    # **Eine Drehung lässt ihn stehen — auch wenn sie mit einer Verschiebung
+    # kommt.** Sie ändert die Silhouette, und die liesse sich nur durch
+    # Neuprojizieren einholen; ein Schatten an der neuen Stelle in der alten
+    # Form wäre schlechter als ein stehender.
+    #
+    # Der Versatz gehört zwingend in diesen Fall: Eine Drehung *ohne* ihn
+    # ergäbe rechnerisch (0, 0, 0), und der Test könnte „stehen geblieben"
+    # nicht von „mitgezogen um nichts" unterscheiden — die Gegenprobe blieb
+    # damit grün.
+    for aktor in schatten:
+        aktor.position = (0.0, 0.0, 0.0)
+    viewport._drag_shadow(TransformSteps(offset=(20.0, 0.0, 10.0), axis="z", angle=30.0, scale=1.0))
+    for aktor in schatten:
+        assert aktor.position == (0.0, 0.0, 0.0)
+
+
+def test_the_handle_takes_the_size_of_what_is_selected(qt_app: QApplication) -> None:
+    """Der Griff misst sich an dem, was gewählt ist — nicht am ganzen Teil.
+
+    Gemessen am laufenden Fenster an ``broomholdervcd_d35mm.stl``:
+
+        Körperaktor    133,58 mm  ->  Griff  40,07 mm
+        Scheibe hole_1  22,67 mm  ->  Griff   6,80 mm
+
+    **Und das ist Absicht** (Entscheidung Robert, 03.09.2026). Am selben Tag
+    war die Gegenfassung gebaut — ein Faktor, der beide gleich groß machte —,
+    und sie ist zurückgenommen worden: Wer eine Ø6-Bohrung gewählt hat, bewegt
+    die Bohrung, und ein Griff in Teilgröße läge weit über sie hinaus und sähe
+    aus, als ginge es um das ganze Teil.
+
+    Der Test hält damit eine **Entscheidung** fest und nicht bloß den
+    Ist-Zustand: Ohne ihn baut die nächste Sitzung denselben Faktor wieder ein
+    — die Beobachtung „der Griff ist an einer Bohrung winzig" stimmt ja, sie
+    ist nur kein Fehler.
+
+    Geprüft wird, was **ankommt**, nicht was dasteht: pyvista rechnet den
+    Anteil gegen die Diagonale des Aktors, den es bekommt. Also müssen beide
+    stimmen — der unveränderte Anteil und die Scheibe als Aktor.
+    """
+    from app.ui.viewport import GIZMO_SCALE, Viewport
+
+    gesehen: dict[str, object] = {}
+
+    class _Nachgiebig:
+        """Antwortet auf alles — Attribut wie Aufruf.
+
+        Der Weg durch ``set_gizmo`` berührt Picker, Interactor und Beobachter;
+        sie einzeln nachzubauen hiesse, den Weg zu beschreiben statt ihn zu
+        gehen, und beim nächsten Zwischenschritt wäre der Test wieder rot,
+        ohne dass sich an seiner Zusage etwas geändert hat.
+        """
+
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        def add_affine_transform_widget(self, actor: Any, **kwargs: Any) -> Any:
+            gesehen["actor"] = actor
+            gesehen["scale"] = kwargs.get("scale")
+            return SimpleNamespace(_origin=(0.0, 0.0, 0.0), axes=None)
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+    # Die Scheibe muss ihre Länge kennen: `_label_gizmo` misst daran, wie weit
+    # die Achsenbuchstaben hinter den Spitzen stehen.
+    scheibe = SimpleNamespace(GetLength=lambda: 22.67, center=(0.0, 0.0, 0.0))
+    viewport._face_handle = lambda feature: scheibe  # type: ignore[method-assign]
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+
+    viewport.select_feature("hole_1")
+    viewport.set_gizmo(True)
+
+    assert gesehen.get("actor") is scheibe, "der Griff hängt an der Scheibe des Merkmals"
+    assert gesehen.get("scale") == GIZMO_SCALE, (
+        "kein Umrechnungsfaktor auf die Körpergröße — am 03.09.2026 verworfen"
+    )
+
+
+def test_a_finished_fade_leaves_no_reference_to_a_dead_animation(qt_app: QApplication) -> None:
+    """Eine abgelaufene Blende darf nicht noch einmal angehalten werden.
+
+    **Gefunden am laufenden Fenster, nicht in der Suite** — und das ist der
+    Punkt dieses Tests. `tween` startet mit `DeleteWhenStopped`: Nach dem
+    letzten Bild ist die C++-Hülle weg, während die Python-Referenz bleibt.
+    Der nächste Auswahlwechsel ruft `stop()` darauf und bekommt
+    ``RuntimeError: Internal C++ object (QVariantAnimation) already deleted``.
+
+    Offscreen läuft **nie** eine Animation (`animations_enabled`), also konnte
+    die ganze Suite das nicht sehen: ein Fehler, der nur in der Lage auftritt,
+    die der Kunde hat.
+    """
+    from app.ui.viewport import Viewport
+
+    class _Tot:
+        """Eine Hülle, deren C++-Objekt weg ist — wie nach `DeleteWhenStopped`."""
+
+        def stop(self) -> None:
+            raise AssertionError("eine tote Animation darf nicht angehalten werden")
+
+    viewport = Viewport()
+    # So sieht es nach einer abgelaufenen Blende aus: `on_done` hat geräumt.
+    viewport._forget_selection_fade()
+    assert viewport._selection_fade is None
+    viewport._stop_selection_fade()  # darf nichts tun und nichts werfen
+
+    # Und eine, die noch lebt, wird angehalten und danach vergessen.
+    angehalten: list[bool] = []
+
+    class _Lebt:
+        def stop(self) -> None:
+            angehalten.append(True)
+
+    viewport._selection_fade = _Lebt()
+    viewport._stop_selection_fade()
+    assert angehalten == [True]
+    assert viewport._selection_fade is None, "sonst trifft der nächste Halt eine tote Hülle"
+
+
+def test_a_click_looks_for_bodies_and_nothing_else(qt_app: QApplication) -> None:
+    """Der Bewegungsgriff darf keine Auswahl abfangen.
+
+    „Ich kann die Bohrung in der Mitte nicht mehr auswählen wenn ich sie
+    anklicke" (Robert, 03.09.2026). Ein `vtkCellPicker` trifft alles, was im
+    Bild steht, und im Bild steht mehr als die Szene: die Pfeile des Griffs,
+    sein Skalierwürfel, Marken, Schatten, das Bett. Gemessen am laufenden
+    Fenster, Klick genau auf die Bohrungsmitte:
+
+        Griff aus                   -> 'hole_1'
+        Griff an, nichts gewählt    -> None       <- der Pfeil lag davor
+        Griff an, Bohrung gewählt   -> 'hole_1'
+
+    **Und der erste Prüfstand war grün.** Er fragte `_click_target(punkt)` mit
+    einem Weltpunkt und umging damit genau die Stelle, an der der Fehler saß.
+    Erst der Weg über `_world_at(x, y)` — der, den ein Klick nimmt — hat ihn
+    gezeigt.
+
+    Geprüft wird deshalb die Ursache: dass der Picker seine Kandidatenliste
+    aus den Körperaktoren füllt und ``PickFromListOn`` einschaltet. Ohne
+    Körper bleibt sie aus — im Skizzenmodus und im leeren Projekt gibt es
+    keine, und eine leere Liste träfe nie etwas.
+    """
+    from app.ui.viewport import Viewport
+
+    gesehen: dict[str, object] = {}
+
+    class _Picker:
+        def SetTolerance(self, value: float) -> None:  # noqa: N802 — VTK-Name
+            gesehen["tolerance"] = value
+
+        def AddPickList(self, actor: Any) -> None:  # noqa: N802 — VTK-Name
+            gesehen.setdefault("liste", []).append(actor)  # type: ignore[union-attr]
+
+        def PickFromListOn(self) -> None:  # noqa: N802 — VTK-Name
+            gesehen["begrenzt"] = True
+
+        def Pick(self, *args: Any) -> int:  # noqa: N802 — VTK-Name
+            return 1
+
+        def GetPickPosition(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+            return (1.0, 2.0, 3.0)
+
+    viewport = Viewport()
+    viewport.plotter = SimpleNamespace(renderer=object())  # type: ignore[assignment]
+    koerper = object()
+    viewport._actors = {"obj_1": koerper}
+
+    import vtkmodules.vtkRenderingCore as VtkRenderingCore
+
+    echt = VtkRenderingCore.vtkCellPicker
+    VtkRenderingCore.vtkCellPicker = _Picker  # type: ignore[misc]
+    try:
+        assert viewport._world_at(700, 512) == pytest.approx((1.0, 2.0, 3.0))
+        assert gesehen.get("liste") == [koerper], "nur die Körper stehen zur Wahl"
+        assert gesehen.get("begrenzt") is True, "sonst trifft der Klick auch den Griff"
+
+        # Ohne Körper bleibt die Begrenzung aus — sonst träfe nie etwas.
+        gesehen.clear()
+        viewport._actors = {}
+        viewport._world_at(700, 512)
+        assert "liste" not in gesehen
+        assert "begrenzt" not in gesehen, "eine leere Kandidatenliste trifft nie etwas"
+    finally:
+        VtkRenderingCore.vtkCellPicker = echt  # type: ignore[misc]

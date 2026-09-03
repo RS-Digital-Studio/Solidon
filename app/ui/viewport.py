@@ -2146,10 +2146,19 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
 #: hineinreichen, als Anteil ihrer Länge.
 CORNER_FRACTION = 0.08
 
-#: Länge der Gizmo-Pfeile als Anteil der Körperdiagonale, und die Dicke ihrer
-#: Schäfte im selben Maß. pyvistas Vorgaben (0.15 und 0.02) ergaben auf einem
-#: 80-mm-Teil ein Gebilde aus dünnen Linien von etwa vierzig Bildpunkten — zu
-#: klein, um es mit der Maus zu treffen.
+#: Länge der Gizmo-Pfeile als Anteil der Diagonale **dessen, woran der Griff
+#: hängt**, und die Dicke ihrer Schäfte im selben Maß. pyvistas Vorgaben
+#: (0.15 und 0.02) ergaben auf einem 80-mm-Teil ein Gebilde aus dünnen Linien
+#: von etwa vierzig Bildpunkten — zu klein, um es mit der Maus zu treffen.
+#:
+#: **Der Bezug ist das Gewählte, nicht das Teil** (Entscheidung Robert,
+#: 03.09.2026). Am Körper heißt das die Körperdiagonale, an einer Bohrung die
+#: Scheibe des Merkmalsgriffs — gemessen an ``broomholdervcd_d35mm.stl``
+#: 40,07 mm gegen 6,80 mm. Der Unterschied ist Absicht: Wer eine Ø6-Bohrung
+#: gewählt hat, bewegt die Bohrung, und ein Griff in Teilgröße läge weit über
+#: sie hinaus und sähe aus, als ginge es um das ganze Teil. Ein Versuch, beide
+#: gleich groß zu machen, ist an diesem Tag gebaut, gemessen und wieder
+#: zurückgenommen worden.
 GIZMO_SCALE = 0.3
 GIZMO_LINE_RADIUS = 0.035
 
@@ -3267,6 +3276,12 @@ class Viewport(QWidget):
         kosten, solange sich nichts bewegt."""
         self._edge_actors: list[Any] = []
         self._shadow_actors: list[Any] = []
+        self._shadow_owners: dict[ObjectId, list[Any]] = {}
+        """Welche Schattenaktoren zu welchem Körper gehören.
+
+        ``_shadow_actors`` ist die flache Liste zum Abräumen; diese Zuordnung
+        braucht der Zug, denn während er läuft bewegt sich **ein** Körper und
+        sein Schatten soll mit."""
         self._shadow_hulls: dict[ObjectId, list[Any]] = {}
         """Je Körper die konvexe Hülle seiner Punkte, für den Schattenwurf.
         Einmal je Szenenaufbau gerechnet — ein Ansichtswechsel projiziert nur
@@ -4334,9 +4349,7 @@ class Viewport(QWidget):
         # Neuzeichnen aus dem Bild, ohne dass sich an ihr etwas geändert hat.
         # Eine laufende Blende gehört ebenfalls zu Aktoren, die es nicht mehr
         # gibt.
-        if self._selection_fade is not None:
-            self._selection_fade.stop()
-            self._selection_fade = None
+        self._stop_selection_fade()
         self._shown_colours.clear()
         self._live_colours.clear()
         # **Mit den Aktoren geht auch ihr gemerkter Ausgangsort.** Die neuen
@@ -4351,6 +4364,7 @@ class Viewport(QWidget):
         for actor in self._shadow_actors:
             self.plotter.remove_actor(actor, render=False)
         self._shadow_actors.clear()
+        self._shadow_owners.clear()
         # Die Hüllen gehören zu den Körpern, die gerade weggeräumt wurden. Ein
         # Rest davon hieße: ein gelöschter Körper wirft beim nächsten Drehen
         # weiter seinen Schatten.
@@ -4736,21 +4750,21 @@ class Viewport(QWidget):
                     outline = self._shadow_outline_of(hull, direction, ground, window)
                     if outline is None:
                         continue
-                    self._shadow_actors.append(
-                        self.plotter.add_mesh(
-                            outline,
-                            color=SHADOW_COLOUR,
-                            opacity=self._shadow_opacity,
-                            lighting=False,
-                            # Der Name trägt jetzt auch das Stück: Zwei Schatten
-                            # desselben Körpers auf derselben Fläche hätten sonst
-                            # denselben Namen, und pyvista ersetzt gleichnamige
-                            # Aktoren — von drei Haken bliebe einer.
-                            name=f"shadow:{object_id}:{part}:{index}",
-                            render=False,
-                            pickable=False,
-                        )
+                    actor = self.plotter.add_mesh(
+                        outline,
+                        color=SHADOW_COLOUR,
+                        opacity=self._shadow_opacity,
+                        lighting=False,
+                        # Der Name trägt jetzt auch das Stück: Zwei Schatten
+                        # desselben Körpers auf derselben Fläche hätten sonst
+                        # denselben Namen, und pyvista ersetzt gleichnamige
+                        # Aktoren — von drei Haken bliebe einer.
+                        name=f"shadow:{object_id}:{part}:{index}",
+                        render=False,
+                        pickable=False,
                     )
+                    self._shadow_actors.append(actor)
+                    self._shadow_owners.setdefault(object_id, []).append(actor)
 
     def _redraw_shadows(self) -> None:
         """Die Schatten der neuen Kamerastellung anpassen (§18.6).
@@ -4771,6 +4785,7 @@ class Viewport(QWidget):
         for actor in self._shadow_actors:
             self.plotter.remove_actor(actor, render=False)
         self._shadow_actors.clear()
+        self._shadow_owners.clear()
         self._place_shadows(direction)
         self._draw()
 
@@ -5068,9 +5083,7 @@ class Viewport(QWidget):
             return
         # Eine noch laufende Blende gehört zu einer Auswahl, die es nicht mehr
         # gibt. Liefe sie weiter, schriebe sie ihre alten Farben über die neuen.
-        if self._selection_fade is not None:
-            self._selection_fade.stop()
-            self._selection_fade = None
+        self._stop_selection_fade()
         # **Die Startfarbe kommt aus dem eigenen Gedächtnis, nicht vom Aktor.**
         # Zwei Gründe, und der zweite wiegt schwerer: VTKs Eigenschaftsobjekt
         # gibt in Prüfständen nichts zurück (es zeichnet Zuweisungen nur auf),
@@ -5102,7 +5115,37 @@ class Viewport(QWidget):
             if moving:
                 plotter.render()
 
-        self._selection_fade = tween(self, on_step=step, duration=ACCENT_MS)
+        # **Die Referenz fällt mit der Animation.** ``tween`` startet mit
+        # ``DeleteWhenStopped``: Nach dem letzten Bild ist das C++-Objekt weg,
+        # und ein ``stop()`` darauf wirft ``Internal C++ object already
+        # deleted``. Offscreen läuft nie eine Animation, also hat die ganze
+        # Suite das nie gesehen — gefunden am laufenden Fenster, beim zweiten
+        # Auswahlwechsel.
+        self._selection_fade = tween(
+            self, on_step=step, duration=ACCENT_MS, on_done=self._forget_selection_fade
+        )
+
+    def _forget_selection_fade(self) -> None:
+        """Die Blende ist fertig — ihre Hülle ist gleich weg, die Referenz auch."""
+        self._selection_fade = None
+
+    def _stop_selection_fade(self) -> None:
+        """Hält eine laufende Blende an, wenn es noch eine gibt.
+
+        Zwei Fälle, und der zweite ist der, der geknallt hat: Läuft sie noch,
+        wird sie gestoppt; ist sie natürlich zu Ende gegangen, hat
+        :meth:`_forget_selection_fade` die Referenz schon geräumt. Die
+        Gültigkeitsprüfung bleibt trotzdem stehen, denn ein Abbruch zwischen
+        beiden Ereignissen ist nicht ausgeschlossen — und sie kostet nichts.
+        """
+        fade = self._selection_fade
+        self._selection_fade = None
+        if fade is None:
+            return
+        from shiboken6 import isValid
+
+        if isValid(fade):
+            fade.stop()
 
     def show_build_volume(self, profile: Profile) -> None:
         """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
@@ -8117,6 +8160,7 @@ class Viewport(QWidget):
         import numpy as np
 
         steps = decompose_transform(np.asarray(matrix, dtype=float))
+        self._drag_shadow(steps)
         face = self.gizmo_target()
         if face is not None:
             normal = face.params["normal"]
@@ -8151,6 +8195,52 @@ class Viewport(QWidget):
             )
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
+
+    def _drag_shadow(self, steps: TransformSteps) -> None:
+        """Zieht den Schatten mit, solange das Teil am Griff hängt (§18.6).
+
+        **Er blieb stehen.** Gemessen am 03.09.2026 an einem Zug über 20 mm in
+        X und 10 mm nach oben: null von drei Schattenaktoren bewegten sich,
+        während der Körper wegwanderte. Ein Teil, dessen Schatten am Boden
+        klebt, ist das Unnatürlichste, was ein 3D-Fenster zeigen kann — und
+        Robert hat genau danach gefragt („vom aussehen noch anschaulicher, bzw
+        natürlicher").
+
+        **Die Rechnung ist eine Translation und sonst nichts.**
+        :func:`shadow_points` wirft schräg: Jeder Punkt fällt um seine Höhe mal
+        der waagerechten Lichtrichtung zur Seite. Eine Verschiebung um
+        ``(dx, dy, dz)`` versetzt den Schatten damit um
+        ``(dx + dz·rx, dy + dz·ry, 0)`` — und weil das für **jeden** Punkt
+        dieselbe Verschiebung ist, genügt es, den fertigen Aktor zu versetzen.
+        Nichts wird neu projiziert, nichts neu vernetzt.
+
+        Dass die Höhe seitlich wirkt, ist dabei kein Nebeneffekt, sondern die
+        beste Auskunft der ganzen Geste: Wer ein Teil anhebt, sieht seinen
+        Schatten davonlaufen und weiß damit, wie hoch es steht — eine Zahl, die
+        sonst nirgends im Bild steht.
+
+        **Nur beim Verschieben.** Eine Drehung ändert die Silhouette, und die
+        ließe sich nur durch Neuprojizieren einholen; der Schatten bleibt dann
+        stehen, wie er es bisher immer tat, und das Loslassen richtet ihn. Ein
+        falsch gedrehter Schatten wäre schlechter als ein stehender.
+        """
+        # **Eine Drehung schliesst das Mitziehen aus, auch wenn sie mit einer
+        # Verschiebung kommt.** Der Versatz allein wäre dann ein halb richtiger
+        # Schatten: an der neuen Stelle, in der alten Form. Stehen zu bleiben
+        # ist die ehrlichere Vorschau, und das Loslassen richtet beides.
+        if steps.turns or not steps.moves or self._selected is None:
+            return
+        actors = self._shadow_owners.get(self._selected)
+        if not actors:
+            return
+        reach_x, reach_y = self._shadow_cast
+        offset = (
+            steps.offset[0] + steps.offset[2] * reach_x,
+            steps.offset[1] + steps.offset[2] * reach_y,
+            0.0,
+        )
+        for actor in actors:
+            actor.position = offset
 
     def _settled_angle(self, angle: float) -> float:
         """Der Winkel, der wirklich gilt — mit Raster oder mit Magnet.
@@ -8247,8 +8337,19 @@ class Viewport(QWidget):
         span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
         radius = max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
         disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
+        # **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
+        # genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
+        # damit den Griff statt des Körpers, und die Bohrung liess sich nicht
+        # mehr auswählen (Robert, 03.09.2026). Der Gizmo braucht sie als
+        # Bezugsaktor, nicht als Ziel — seine Pfeile findet er über den eigenen
+        # Picker (:meth:`_give_the_widget_a_picker_that_hits`).
         self._face_actor = self.plotter.add_mesh(
-            disc, color=MEASURE_COLOUR, opacity=0.6, name="face-handle", render=False
+            disc,
+            color=MEASURE_COLOUR,
+            opacity=0.6,
+            name="face-handle",
+            render=False,
+            pickable=False,
         )
         return self._face_actor
 
@@ -8399,6 +8500,12 @@ class Viewport(QWidget):
         self._drag_kind = None
         self._drag_axis = None
         self._drag_normal = None
+        # Der Schatten stand während des Zugs versetzt (:meth:`_drag_shadow`);
+        # was danach gilt, entscheidet die Auswertung und zeichnet ihn neu.
+        # Bliebe der Versatz stehen, läge er beim nächsten Bild doppelt.
+        for actors in self._shadow_owners.values():
+            for actor in actors:
+                actor.position = (0.0, 0.0, 0.0)
         self.drag_bar.dismiss()
         self.set_navigation(self._scheme)
         self.set_gizmo(self._gizmo_wanted)
@@ -9805,6 +9912,21 @@ class Viewport(QWidget):
         # Die Toleranz ist ein Anteil der Bilddiagonale; die Vorgabe von VTK
         # ist so klein, dass ein Klick an einer Kante wieder danebengeht.
         picker.SetTolerance(PICK_TOLERANCE)
+        # **Gesucht wird nur unter den Körpern.** Ein Zell-Picker trifft alles,
+        # was im Bild steht, und im Bild steht mehr als die Szene: die Pfeile
+        # des Bewegungsgriffs, sein Skalierwürfel, Marken, Schatten, das Bett.
+        # Mit eingeschaltetem Griff traf ein Klick auf eine Bohrung dessen
+        # Pfeil, und die Bohrung liess sich nicht mehr auswählen (Robert,
+        # 03.09.2026) — gemessen am laufenden Fenster: Griff aus ``hole_1``,
+        # Griff an **nichts**.
+        #
+        # Die Liste bleibt leer, wenn es keine Körper gibt (Skizzenmodus,
+        # leeres Projekt); dann pickt VTK wie zuvor über die ganze Szene, denn
+        # ``PickFromListOn`` mit leerer Liste träfe nie etwas.
+        for actor in self._actors.values():
+            picker.AddPickList(actor)
+        if self._actors:
+            picker.PickFromListOn()
         if not picker.Pick(float(x), float(y), 0.0, self.plotter.renderer):
             return None
         position = picker.GetPickPosition()
