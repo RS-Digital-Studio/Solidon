@@ -156,7 +156,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Konzeptordner aufräumen | Review vor der Demo 0.3.0 (02.09.2026) | `konzepte/archiv/` für die 21 abgearbeiteten Dokumente (13 066 Zeilen), eine Entscheidungsnotiz „Weg 3 — Lizenzkette", `konzept-demo-2026-10.md` §6 als überholt kennzeichnen, Zeilenverweise auf `ROADMAP.md` durch Anker ersetzen, die zwei Sitzungs-Bedienkonzepte unter `.claude/` archivieren |
 | Die Stiftseite entscheidet mit, welche Hälfte die günstige Lage verliert | P10 — Auto Split mit Verstiftung | eine Messung, ob ein Tausch der Stiftseite das fertige Stützvolumen senkt; bis dahin folgt Auto Split der fertigen Zahl und wählt am Prüfkörper die Naht, die die zwei Überhänge **nicht** trennt |
 | Die CI prüft die Bausteinbereiche nicht mehr | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine `has_self_intersections`, die 27 Bausteine über 2114 Ecken in Minuten statt in einer Stunde prüft — oder einen eigenen CI-Job dafür, der das Paket nicht blockiert. Bis dahin prüft sie allein das lokale Tor (Entscheidung Robert, 02.09.2026: die CI fährt das Nötigste) |
-| Die private Support-Verwaltung war nie eingerichtet | 0.3.0 ist draußen (03.09.2026) | `appdata/operator.token` auf dem Server — ein Zugangsgeheimnis, das Robert selbst anlegt (`setup_activation_server.py`, dann `deploy_activation_server.py --apply`; von Hand hochgeladen scheitert es an 0644). **Fällig zum Verkaufsstart am 01.11.2026, nicht vorher** (Robert, 03.09.2026): Bis zum 30.10. läuft die Demo ohne Schlüssel, es gibt also keine Lizenz, die zu sperren, freizugeben oder zurückzuerstatten wäre. Aktivierung, Support und Zähler laufen unabhängig davon |
 | Vier Zählzeilen liegen im öffentlichen Baum | 0.3.0 ist draußen (03.09.2026) | Roberts Entscheidung: `httpdocs/api/.stats/` trägt vier echte Zeilen vom 02.09. aus einer älteren `count.php`, von außen 403, Löschen ist irreversibel; der heutige Code schreibt dort nicht mehr hin |
 | Eine ausgelieferte Datei ohne Manifesteintrag hat keinen Prüfer | 0.3.0 ist draußen (03.09.2026) | `promised_files()` soll auch die Seitenlinks lesen — das AppImage steht mit Absicht in keiner `version.json` und fällt damit durch jede Prüfung; für 0.3.0 von Hand belegt |
 | Der Wayland-Punkt erreicht das Update-Fenster nicht | 0.3.0 ist draußen (03.09.2026) | eine Kappung, die reihum aus jeder Gruppe nimmt statt von hinten zu schneiden — Punkt 95 von 105 fällt heute heraus, und es ist der, den der meldende Kunde lesen sollte |
@@ -14499,12 +14498,26 @@ bleibt, steht hier mit Kästchen.
 ## 0.3.0 ist draußen (03.09.2026)
 ### Was nach dem Upload offen bleibt
 
-- [ ] **Die private Support-Verwaltung war nie eingerichtet.**
-  `api/operator.php` antwortet mit 503, weil `appdata/operator.token` auf dem
-  Server nicht existiert. Kein Regressionsfehler — es hat sie nie gegeben.
-  Den Token anzulegen heißt, ein Zugangsgeheimnis auf dem Produktivsystem zu
-  erzeugen, das Robert auch lokal braucht; das macht er selbst
-  (`setup_activation_server.py`). Aktivierung, Support und Zähler laufen.
+- [x] **Die private Support-Verwaltung war nie eingerichtet** — auf Roberts
+  Ansage am 03.09.2026 nachgeholt. Es fehlte mehr als der Token: Die
+  Serverdatenbank stammte vom 28.08. und kannte `operator_events` nicht, aus
+  der `operator.php` liest und in die sie schreibt. Ein Token allein hätte
+  den 503 gegen einen SQL-Fehler getauscht.
+
+  Der Schemavergleich gegen eine frisch erzeugte Datenbank sagte, dass genau
+  diese eine Tabelle fehlt und sonst nichts abweicht — deshalb wurde sie
+  ergänzt und die Datenbank nicht ersetzt (`backups/activation-*.sqlite` ist
+  der Stand davor). Alle drei bestehenden Tabellen waren leer, es hätte auch
+  nichts zu verlieren gegeben. Token über `setup_activation_server.py`,
+  beides mit 0600 hochgeladen.
+
+  Belegt am Dienst und nicht am Befehl: ohne Token 403, mit falschem Token
+  403, mit dem echten `lookup` auf eine erfundene Kennung **200 mit
+  `"events":[]`** — also hat er die neue Tabelle wirklich abgefragt. Der
+  Token liegt unter `%LOCALAPPDATA%\Solidon3D\server\operator.token`, wo
+  `licence_admin.py` ihn ohne Argument findet, und **nur auf dieser
+  Maschine**: Auf den beiden anderen fehlt er, bis Robert ihn dorthin
+  kopiert — nicht über das Repository.
 - [ ] **Vier Zählzeilen liegen im öffentlichen Baum.**
   `httpdocs/api/.stats/` trägt vier echte Zeilen vom 02.09., 21:00–21:07 UTC,
   aus einer älteren `count.php`. Von außen 403, also kein Leck — aber
