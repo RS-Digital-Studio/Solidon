@@ -21,6 +21,12 @@ sichtbar gemacht — und zwar zum schlechtestmöglichen Zeitpunkt, im Moment der
 Veröffentlichung. FTPS überträgt keine Rechte: Was hochgeladen oder
 zurückgespielt wird, bekommt die Vorgabe des Servers.
 
+**Und die Meldung führt weg von der Ursache.** „Der Aktivierungsdienst ist
+noch nicht vollständig eingerichtet" liest sich wie „nie aufgesetzt" und nicht
+wie „falsche Rechte" — beide Sitzungen haben zuerst geglaubt, der Dienst habe
+nie existiert. Der Zähler sagte gar nichts. Deshalb ist die Rechteprüfung der
+**erste** Griff bei einem 503 nach einem Upload, nicht der letzte.
+
 **How to apply:** Nach jedem Upload, der eine gehärtete Fassung mitbringt, die
 Endpunkte **abfragen** statt anzunehmen, dass sie laufen — `activation-health.php`
 antwortet `{"ok": true, "protocol": 1}`, `count.php` schreibt eine Zeile.
@@ -28,4 +34,15 @@ Antwortet etwas mit 503 „nicht vollständig eingerichtet", sind es die Rechte
 der Zustandsdateien: `SITE CHMOD 600` auf die Datei, `700` auf ihr
 Verzeichnis. Und wer eine solche Prüfung neu einbaut, prüft **vorher** den
 Bestand auf dem Server, statt sie den ersten Kunden finden zu lassen.
+
+Die zwei Messungen dazu kosten zusammen zwei Minuten:
+
+    LIST solidon3d.de/appdata          # Rechte lesen, 0600 erwartet
+    LIST solidon3d.de/solidon-stats
+    GET  /api/activation-health.php    # ein Endpunkt, der den Zustand anfasst
+
+**Der Beleg ist die Antwort des Dienstes, nicht das gelungene `SITE CHMOD`.**
+Ein Rechtebefehl, der durchläuft, sagt nichts darüber, ob die Prüfung danach
+zufrieden ist — gemessen wird vor und nach dem Eingriff am Endpunkt.
+
 Verwandt: [[solidon3d-webserver-zugang]].

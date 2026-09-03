@@ -63,7 +63,6 @@
 - [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — die AppImage steht in keiner version.json; jede Prüfung überspringt sie.
 - [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt nur beim Entwickler auf.
 - [Paketfix ist kein Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) — im Manifest behoben, im AppImage noch da.
-- [Gehärtete Fassung, alter Zustand](gehaertete-fassung-trifft-alten-zustand.md) — neue Prüfung kippt Dateien von vorher; FTPS legt 0644 an.
 - [Rechnung warnt, sie erlaubt nicht](rechnung-warnt-sie-erlaubt-nicht.md) — was weg soll, wird benannt; „überall vorhanden" ist keine Messung.
 - [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — einmal über ein echtes Paket fahren.
 - [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen anderes.
