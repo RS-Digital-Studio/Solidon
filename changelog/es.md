@@ -21,6 +21,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Editar características reconocidas
 
 - Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.
+- El comando *Cerrar un taladro* rellena ahora exactamente el taladro: el tapón ya no sobresale hacia una ranura ni engrosa la pieza.
 - Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.
 - También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.
 - Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores.

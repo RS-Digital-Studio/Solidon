@@ -21,6 +21,7 @@ dans `website/version.json`.
 ### Modifier les caractéristiques reconnues
 
 - Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.
+- La commande *Reboucher un perçage* comble désormais exactement le perçage : le bouchon ne dépasse plus dans une rainure et n'épaissit plus la pièce.
 - Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.
 - Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.
 - Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes.

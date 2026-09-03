@@ -20,6 +20,7 @@ it into `website/version.json`.
 ### Editing recognised features
 
 - Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.
+- The command *Fill a bore* now fills exactly the bore as well: the plug no longer protrudes into a groove or makes the part thicker.
 - A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.
 - When rotating too, a through hole says if it no longer goes through at its new orientation.
 - A newly created feature appears at the end of the object tree, not in the middle of the older ones.

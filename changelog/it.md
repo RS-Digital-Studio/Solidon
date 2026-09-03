@@ -20,6 +20,7 @@ scrive in `website/version.json`.
 ### Modificare le caratteristiche riconosciute
 
 - Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.
+- Il comando *Chiudi un foro* riempie ora esattamente il foro: il tappo non sporge più in una scanalatura né ingrossa il pezzo.
 - Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.
 - Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.
 - Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti.

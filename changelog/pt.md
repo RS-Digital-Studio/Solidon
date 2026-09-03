@@ -20,6 +20,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Editar características reconhecidas
 
 - Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.
+- O comando *Fechar furo* preenche agora exatamente o furo: o tampão já não entra numa ranhura nem engrossa a peça.
 - Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.
 - Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.
 - Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores.

@@ -45,6 +45,7 @@ Nutzen da und sonst nichts.
 ### Erkannte Merkmale bearbeiten
 
 - Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.
+- Auch *Bohrung verschließen* füllt genau die Bohrung: Der Pfropfen ragt nicht mehr in eine Nut und macht das Teil nicht dicker.
 - Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.
 - Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.
 - Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren.
