@@ -1,267 +1,243 @@
 {
-  "version": "0.3.0",
+  "version": "0.3.1",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.3.0.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.0.exe",
-      "size": 195291118,
-      "sha256": "ba6069857187d43bd8c5295b7f2c8310400f6e696b267ed4da1b36ca542abe94"
+      "file": "Solidon3D-Setup-0.3.1.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.1.exe",
+      "size": 219341762,
+      "sha256": "5cb4e38e60fefb1a8a6ad58c0c9c9174eae92ae732a171926fd69d963aa54e8b"
     },
     "linux": {
-      "file": "Solidon3D-0.3.0-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.0-x86_64.flatpak",
-      "size": 271916104,
-      "sha256": "cd0cc6b8753c45c1969923d53c1b6e92d88337542bf34d7c221b54e2140c12d5"
+      "file": "Solidon3D-0.3.1-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.1-x86_64.flatpak",
+      "size": 272117360,
+      "sha256": "04ec37a852db62f3bca8589fdd8fc7f183afa9d24acb08b036de18d1a4a60883"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.3.0-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.0-macos-arm64.pkg",
-      "size": 295591830,
-      "sha256": "b10d8be36bfa081151c172a8f3e44d478946a990e8f8771a1ebd48f9093a3344"
+      "file": "Solidon3D-0.3.1-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.1-macos-arm64.pkg",
+      "size": 295861352,
+      "sha256": "8c82624a76efbf13b9f30ab25ad6f49ad3032450b6e47c524cc3175ecbfd6116"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.3.0-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.0-macos-x86_64.pkg",
-      "size": 329121600,
-      "sha256": "4d7d04852d797187ef111df31423bddda75fef1b049475aebf1b34d3c1894301"
+      "file": "Solidon3D-0.3.1-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.1-macos-x86_64.pkg",
+      "size": 329383753,
+      "sha256": "665f35903dae7fbb5c3370c8823d668d7b427b62542957ca249f18da5341643c"
     }
   },
   "changes": {
     "de": [
-      "Vier geführte Einstiege erklären die wichtigsten Wege vom ersten Entwurf bis zum druckbaren Ergebnis.",
-      "Der Startbildschirm nutzt auch kleinere und schmalere Fenster vollständig, ohne abgeschnittene Karten oder verdeckte Inhalte.",
-      "Zuletzt verwendete Projekte stehen vor den Einführungstouren und sind dadurch schneller erreichbar.",
-      "Der Startbildschirm bewegt die Auswahl nicht mehr ungefragt und lässt sich vollständig mit Maus und Tastatur bedienen.",
-      "Die Einstiege *Neu*, *Öffnen* und *Beispiele* sind klarer geordnet und beschreiben bereits vor dem Öffnen, wohin sie führen.",
-      "Menüs besitzen deutlich sichtbare Überschriften und einheitlich ausgerichtete Symbolspalten.",
-      "Die Befehlsübersicht richtet Kürzel und Erklärungen sauber aus, sodass lange Einträge schneller überflogen werden können.",
-      "Umfangreiche Dialoge verwenden einheitliche Spalten und Feldbreiten.",
-      "Die frühere Sammelseite für Haftung, Rückzug und Filament ist in kleinere, logisch benannte Einstellungsbereiche aufgeteilt.",
-      "Alle 56 Druckeinstellungen lassen sich über ihre sichtbaren deutschen Bezeichnungen durchsuchen.",
-      "Kreise werden über den Durchmesser eingegeben; eine M3-Bohrung kann damit direkt als 3,2 mm angelegt werden.",
-      "Eine Durchmesserbedingung bleibt beim Lösen, Speichern und erneuten Öffnen als bearbeitbarer Ausdruck erhalten.",
-      "Maße lassen sich durch Doppelklick direkt bearbeiten, ohne den bisherigen langen Auswahlweg.",
-      "X-, Y- und Z-Position, Winkel und Skalierung können unmittelbar in der Bewegungsleiste eingegeben werden.",
-      "Exakte Eingaben erzeugen denselben rücknehmbaren Arbeitsschritt wie eine Bewegung mit der Maus.",
-      "Mehrere ausgewählte Körper können gemeinsam verschoben werden.",
-      "Mehrere ausgewählte Körper drehen sich um einen gemeinsamen Mittelpunkt und behalten ihre Abstände zueinander.",
-      "Nach einer Drehung können Körper im selben Arbeitsschritt wieder sauber auf die Druckplatte gesetzt werden.",
-      "Aufeinanderfolgende Bewegungen desselben Körpers werden zu einem verständlichen Verlaufsschritt zusammengefasst.",
-      "Zusammengehörige Arbeitsschritte erscheinen als aufklappbarer Eintrag, statt den Verlauf mit Einzelzeilen zu überladen.",
-      "Eigene Bausteine können als lokale .solidon-part-Datei gespeichert und wieder in den Katalog aufgenommen werden.",
-      "Bausteindateien lassen sich öffnen, hineinziehen und über die Dateizuordnung des Betriebssystems importieren.",
-      "Dateiname und Dateiendung machen sofort sichtbar, dass eine Datei zu Solidon gehört.",
-      "Import, Teilen und lokale Bibliothek verwenden in allen sechs Sprachen vollständige Oberflächentexte.",
-      "Ein eigener Baustein kann vor dem Speichern aus mehreren bearbeitbaren Schritten und Werten aufgebaut werden.",
-      "Automatisches Teilen bevorzugt tragfähige Schnittstellen und vermeidet die bisher mögliche dünnste Schwachstelle.",
-      "Für jede Trennstelle wird die passende Verbindungsart einzeln gewählt und als konkrete Form gespeichert.",
-      "Hinweise zu Klebeverbindungen bleiben zusammen mit der gewählten Trennstelle erhalten.",
-      "Automatisches Teilen reagiert auf geänderte Vorgaben reproduzierbar und lässt sich während der Berechnung abbrechen.",
-      "Unter Linux mit einer Wayland-Sitzung startet Solidon und zeigt die 3D-Ansicht; fehlt dem System eine Bibliothek dafür, startet die Anwendung trotzdem und sagt, welche fehlt.",
-      "Gleichartige Prüfbefunde werden gebündelt, ohne den Bezug zu den betroffenen Körpern und Stellen zu verlieren.",
-      "Zahlen und Messwerte im Prüfbericht besitzen vollständige Bezeichnungen statt unverständlicher Einzelwerte.",
-      "Scheitert eine Reparatur, wird der unveränderte Ausgangskörper vollständig wiederhergestellt.",
-      "Der Chat begrüßt mit seinem konkreten Zweck und startet nicht mehr mit einer leeren Fläche oder technischen Modellbegriffen.",
-      "Technische Token-Zähler wurden aus der normalen Kundenoberfläche entfernt.",
-      "Gleichlautende Hinweise zu verlorenen Formdetails erreichen den Assistenten gezählt statt einzeln.",
-      "Der Erzeugen-Dialog macht aus Text oder Bild über ein lokales ComfyUI ein Modell und übernimmt es in dieselbe bearbeitbare Szene."
+      "Erkannte Merkmale lassen sich verschieben, drehen, verdoppeln und entfernen: eine Bohrung, ein Zapfen oder eine Kuppel — die Kuppel ohne Drehen, weil sie keine Lage hat.",
+      "In der Größe ändern lässt sich jetzt auch ein Zapfen oder eine Kuppel; bisher konnte das nur eine Bohrung.",
+      "Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.",
+      "Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.",
+      "Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen.",
+      "Der Bewegungsgriff sitzt an dem, was gewählt ist — bei einer Bohrung an ihrer Öffnung statt in der Mitte des Teils.",
+      "Bewegt wird, was ausgewählt ist: Mit markierter Bohrung versetzen Griff und Leiste die Bohrung, nicht mehr das ganze Teil.",
+      "Beim Ziehen zeigt eine durchsichtige Vorschau, wohin die Bohrung wandert, und ein blasses Abbild, wo sie herkommt.",
+      "Der Schatten läuft beim Verschieben mit und zeigt damit die Höhe über der Platte.",
+      "Die Ansicht hat eine eigene Steuerung, und sie ist die neue Vorgabe: Links ziehen verschiebt, rechts dreht, das gedrückte Mausrad kippt, das Rad zoomt.",
+      "Mit W, A, S und D fliegt man durch die Szene, Q und E kippen — der Flug geht durch ein Teil hindurch, während der Zoom davor stehen bleibt.",
+      "Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, für Bambu Studio, Orca und PrusaSlicer, für das CAD und für Blender bleiben.",
+      "Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene.",
+      "Länge und Breite einer gewählten Zeichnung sind bedienbar; die Zeichnung folgt der geänderten Zahl samt ihren Maßen.",
+      "Ein falsch gesetztes Maß lässt sich einzeln zurücknehmen, statt nur zusammen mit allen anderen.",
+      "Wer eine Skizze hochgezogen hat, findet im Dialog auch den Weg zum Abziehen wieder.",
+      "Ein getipptes Maß gilt, wie es getippt wurde: Aus 0,1 wird nicht mehr 0,166667.",
+      "Das erste Modell eines Projekts liegt mittig auf dem Druckbett, statt dort, wo seine Datei es ablegt; jedes weitere behält seine Lage.",
+      "Eine kaputte Datei wird beim Öffnen abgelehnt, statt angenommen zu werden und beim Speichern im Projekt zu landen.",
+      "Die Absage nennt den Grund — leer, abgeschnitten, keine STL, kein 3MF, ohne Dreiecke, mit unbrauchbaren Koordinaten — und bietet *Andere Datei wählen* an.",
+      "Der abgebrochene Download einer Modelldatei wird als solcher erkannt.",
+      "Der Druckdialog zeigt die Profile, die zum eingestellten Drucker passen, statt eines Bestands von 1001 Einträgen.",
+      "Bei einem Elegoo Centauri Carbon sind es vier, und das richtige ist vorausgewählt.",
+      "Ein Wechsel des Druckers im Projekt zieht Bauraum, Düse und Startcode mit — ein Prusa-Projekt bekommt nicht mehr die Maschine des Elegoo.",
+      "Der Slicer bekommt die Maschinenangabe mit und liefert eine Druckdatei zurück, statt den Lauf mit „nicht zum Drucker passend“ abzubrechen.",
+      "Gesperrte Knöpfe nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.",
+      "Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Erzeugen* im Modell-Dialog.",
+      "Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.",
+      "Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen.",
+      "Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.",
+      "Ordnet der Chat Objekte auf Druckplatten an, ist das Ergebnis danach im Bild zu sehen.",
+      "Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht, und trägt seine Handlung; wo keine steht, ist er ein reiner Hinweis.",
+      "Der Chat kennt die neuen Handlungen an erkannten Merkmalen und führt sie auf Zuruf aus."
     ],
     "en": [
-      "Four guided introductions explain the main routes from a first design to a printable result.",
-      "The start screen now makes full use of smaller and narrower windows, with no clipped cards or hidden content.",
-      "Recent projects appear before the introductory tours, making them quicker to reach.",
-      "The start screen no longer moves the selection unexpectedly and is fully usable with mouse and keyboard.",
-      "The *New*, *Open* and *Examples* entries are more clearly organised and explain where they lead before opening.",
-      "Menus have clearly visible headings and consistently aligned icon columns.",
-      "The command overview aligns shortcuts and explanations cleanly, making long entries easier to scan.",
-      "Extensive dialogs use consistent columns and field widths.",
-      "The former combined page for adhesion, retraction and filament is split into smaller, logically named settings areas.",
-      "All 56 print settings can be searched by their visible English labels.",
-      "Circles are entered by diameter, so an M3 hole can be created directly as 3.2 mm.",
-      "A diameter constraint remains an editable expression after solving, saving and reopening.",
-      "Dimensions can be edited directly with a double click, avoiding the previous lengthy selection path.",
-      "X, Y and Z position, angle and scale can be entered directly in the movement toolbar.",
-      "Exact input creates the same undoable action as moving with the mouse.",
-      "Multiple selected bodies can be moved together.",
-      "Multiple selected bodies rotate around a shared centre while preserving their spacing.",
-      "After rotation, bodies can be placed neatly back on the print bed within the same action.",
-      "Consecutive movements of the same body are combined into one understandable history step.",
-      "Related actions appear as an expandable entry instead of overloading the history with individual lines.",
-      "Custom parts can be saved as local .solidon-part files and added back to the catalogue.",
-      "Part files can be opened, dragged in and imported through the operating system file association.",
-      "The file name and extension make it immediately clear that a file belongs to Solidon.",
-      "Import, sharing and the local library use complete interface text in all six languages.",
-      "Before saving, a custom part can be built from multiple editable steps and values.",
-      "Auto Split prefers load-bearing seams and avoids choosing the thinnest possible weak point.",
-      "The appropriate connector is chosen separately for each seam and stored as a concrete shape.",
-      "Notes about glued joints remain attached to the selected seam.",
-      "Auto Split responds reproducibly to changed requirements and can be cancelled during calculation.",
-      "On Linux in a Wayland session Solidon starts and shows the 3D view; if the system lacks a library for it, the application still starts and names the missing one.",
-      "Similar report findings are grouped without losing their connection to affected bodies and locations.",
-      "Numbers and measurements in the report have complete labels instead of unexplained individual values.",
-      "If a repair cannot be completed, the unchanged original body is restored in full.",
-      "Chat opens with a clear description of its purpose instead of an empty area or technical model terms.",
-      "Technical token counters have been removed from the normal customer interface.",
-      "Identical notes about lost shape details reach the assistant counted instead of one by one.",
-      "The Generate dialog turns text or an image into a model through local ComfyUI and brings it into the same editable scene."
+      "Recognised features can be moved, rotated, duplicated and removed: a hole, a peg or a dome — the dome without rotating, as it has no orientation.",
+      "Resizing now works for a peg or a dome as well; until now only a hole could be resized.",
+      "The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.",
+      "A moved hole stays the same hole: every fit that refers to it keeps its reference.",
+      "Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing.",
+      "The move handle sits on whatever is selected — on a hole at its opening, no longer in the middle of the part.",
+      "What is selected is what moves: with a hole selected, handle and toolbar move the hole, not the whole part.",
+      "While dragging, a transparent preview shows where the hole is going and a pale copy where it came from.",
+      "The shadow follows while moving and thereby shows the height above the bed.",
+      "The view has a control scheme of its own, and it is the new default: dragging left pans, right orbits, the pressed wheel tilts, the wheel zooms.",
+      "W, A, S and D fly through the scene, Q and E tilt — the flight passes through a part, while zooming stops in front of it.",
+      "Anyone used to a different scheme picks it in the settings: those for Cura, for Bambu Studio, Orca and PrusaSlicer, for a CAD program and for Blender remain.",
+      "The entry *Fit to view* frames the part you clicked; with nothing selected, the whole scene as before.",
+      "Length and width of a selected drawing can be edited; the drawing follows the changed number together with its dimensions.",
+      "A dimension set by mistake can be undone on its own, instead of only together with all the others.",
+      "After extruding a sketch, the dialog also offers the way back to cutting it away.",
+      "A typed dimension counts as typed: 0.1 no longer becomes 0.166667.",
+      "The first model of a project sits centred on the print bed instead of wherever its file puts it; every further one keeps its position.",
+      "A broken file is refused when opening, instead of being accepted and ending up in the project when you save.",
+      "The refusal names the reason — empty, truncated, not an STL, not a 3MF, without triangles, with unusable coordinates — and offers *Choose another file*.",
+      "An interrupted download of a model file is recognised as such.",
+      "The print dialog shows the profiles that match the selected printer, instead of a stock of 1001 entries.",
+      "For an Elegoo Centauri Carbon that is four, with the right one preselected.",
+      "Changing the printer in the project brings build volume, nozzle and start code along — a Prusa project no longer gets the Elegoo's machine.",
+      "The slicer is given the machine details and returns a print file, instead of aborting with “not compatible with printer”.",
+      "Locked buttons now say on the button what they are missing — by mouse, by keyboard and for a screen reader.",
+      "Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Create* in the model dialog.",
+      "Refusals no longer end with the sentence alone, but with the way out.",
+      "An unexpected error is explained in the language you have set, instead of reciting an internal English text.",
+      "If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.",
+      "When the chat arranges objects on print beds, the result is visible in the view afterwards.",
+      "A finding about an assembly points at the body it concerns and carries its action; where none is offered, it is a plain note.",
+      "The chat knows the new actions on recognised features and carries them out on request."
     ],
     "es": [
-      "Cuatro introducciones guiadas explican las vías principales desde el primer diseño hasta un resultado imprimible.",
-      "La pantalla de inicio aprovecha por completo las ventanas pequeñas y estrechas, sin tarjetas recortadas ni contenido oculto.",
-      "Los proyectos recientes aparecen antes de los recorridos introductorios y son más rápidos de abrir.",
-      "La pantalla de inicio ya no mueve la selección sin pedirlo y se puede manejar por completo con ratón y teclado.",
-      "Las entradas *Nuevo*, *Abrir* y *Ejemplos* están mejor ordenadas y explican adónde conducen antes de abrirse.",
-      "Los menús tienen encabezados claramente visibles y columnas de iconos alineadas de forma uniforme.",
-      "El resumen de comandos alinea bien los atajos y las explicaciones para recorrer con rapidez las entradas largas.",
-      "Los diálogos extensos usan columnas y anchos de campo uniformes.",
-      "La antigua página conjunta de adherencia, retracción y filamento se divide en áreas de ajustes más pequeñas y bien nombradas.",
-      "Los 56 ajustes de impresión se pueden buscar por sus nombres visibles en español.",
-      "Los círculos se introducen por su diámetro, de modo que un agujero M3 se puede crear directamente con 3,2 mm.",
-      "Una restricción de diámetro sigue siendo una expresión editable después de resolver, guardar y volver a abrir.",
-      "Las medidas se editan directamente con un doble clic, sin el largo recorrido de selección anterior.",
-      "La posición X, Y y Z, el ángulo y la escala se pueden introducir directamente en la barra de movimiento.",
-      "Una entrada exacta crea el mismo paso reversible que un movimiento con el ratón.",
-      "Se pueden mover conjuntamente varios cuerpos seleccionados.",
-      "Varios cuerpos seleccionados giran alrededor de un centro común y conservan sus distancias.",
-      "Después de girarlos, los cuerpos pueden volver a colocarse bien sobre la placa en el mismo paso.",
-      "Los movimientos consecutivos del mismo cuerpo se agrupan en un paso comprensible del historial.",
-      "Las acciones relacionadas aparecen como una entrada desplegable, sin saturar el historial con líneas individuales.",
-      "Los bloques propios se pueden guardar como archivos locales .solidon-part y volver a añadir al catálogo.",
-      "Los archivos de bloque se pueden abrir, arrastrar e importar mediante la asociación de archivos del sistema operativo.",
-      "El nombre y la extensión muestran de inmediato que un archivo pertenece a Solidon.",
-      "La importación, el intercambio y la biblioteca local usan textos completos de interfaz en los seis idiomas.",
-      "Antes de guardarlo, un bloque propio se puede construir con varios pasos y valores editables.",
-      "La división automática prefiere uniones resistentes y evita elegir el punto débil más fino posible.",
-      "Para cada unión se elige por separado el conector adecuado y se guarda como una forma concreta.",
-      "Las indicaciones sobre uniones pegadas permanecen asociadas a la unión elegida.",
-      "La división automática responde de forma reproducible a nuevos requisitos y se puede cancelar durante el cálculo.",
-      "En Linux con una sesión Wayland, Solidon arranca y muestra la vista 3D; si al sistema le falta una biblioteca, la aplicación arranca igualmente e indica cuál falta.",
-      "Los hallazgos similares se agrupan sin perder la relación con los cuerpos y lugares afectados.",
-      "Los números y medidas del informe tienen nombres completos en vez de valores sueltos incomprensibles.",
-      "Si una reparación falla, se restaura por completo el cuerpo original sin modificar.",
-      "El chat se abre con una explicación concreta de su finalidad, no con un área vacía ni términos técnicos de modelos.",
-      "Los contadores técnicos de tokens se han retirado de la interfaz normal para clientes.",
-      "Los avisos idénticos sobre detalles de forma perdidos llegan al asistente contados en lugar de uno por uno.",
-      "El diálogo Generar convierte texto o una imagen en un modelo mediante ComfyUI local y lo incorpora a la misma escena editable."
+      "Las características reconocidas se pueden mover, girar, duplicar y quitar: un taladro, una espiga o una cúpula; la cúpula sin girar, porque no tiene orientación.",
+      "Cambiar el tamaño funciona ahora también en una espiga o una cúpula; hasta ahora solo en un taladro.",
+      "Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.",
+      "Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.",
+      "Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio.",
+      "El asa de movimiento se sitúa en lo seleccionado: en un taladro, en su boca, y no en el centro de la pieza.",
+      "Se mueve lo que está seleccionado: con un taladro marcado, el asa y la barra desplazan el taladro, no la pieza entera.",
+      "Al arrastrar, una vista previa transparente muestra hacia dónde va el taladro y una copia pálida de dónde viene.",
+      "La sombra acompaña el desplazamiento y muestra así la altura sobre la placa.",
+      "La vista tiene un control propio, y es el nuevo predeterminado: arrastrar con el izquierdo desplaza, con el derecho gira, la rueda pulsada inclina y la rueda acerca.",
+      "Con W, A, S y D se vuela por la escena, y Q y E inclinan; el vuelo atraviesa una pieza, mientras que el zoom se detiene delante.",
+      "Quien esté acostumbrado a otro control lo elige en los ajustes: siguen los esquemas de Cura, de Bambu Studio, Orca y PrusaSlicer, de un CAD y de Blender.",
+      "La entrada *Ajustar a la vista* encuadra la pieza pulsada; sin selección, toda la escena como hasta ahora.",
+      "La longitud y la anchura de un dibujo seleccionado son editables; el dibujo sigue la cifra modificada junto con sus cotas.",
+      "Una cota mal puesta se puede deshacer por sí sola, y no solo junto con todas las demás.",
+      "Tras extruir un croquis, el diálogo vuelve a ofrecer también el camino para restarlo.",
+      "Una cota escrita vale tal como se escribió: 0,1 ya no se convierte en 0,166667.",
+      "El primer modelo de un proyecto queda centrado en la placa de impresión y no donde lo deja su archivo; los siguientes conservan su posición.",
+      "Un archivo defectuoso se rechaza al abrirlo, en vez de aceptarse y acabar en el proyecto al guardar.",
+      "El rechazo indica el motivo — vacío, truncado, no es STL, no es 3MF, sin triángulos, con coordenadas inservibles — y ofrece *Elegir otro archivo*.",
+      "La descarga interrumpida de un archivo de modelo se reconoce como tal.",
+      "El diálogo de impresión muestra los perfiles que corresponden a la impresora ajustada, en vez de un fondo de 1001 entradas.",
+      "Con una Elegoo Centauri Carbon son cuatro, y el correcto viene preseleccionado.",
+      "Cambiar la impresora del proyecto arrastra volumen de impresión, boquilla y código de inicio: un proyecto Prusa ya no recibe la máquina de la Elegoo.",
+      "El slicer recibe los datos de la máquina y devuelve un archivo de impresión, en vez de abortar con «no compatible con la impresora».",
+      "Los botones bloqueados indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.",
+      "Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Generar* en el diálogo de modelo.",
+      "Los rechazos no terminan solo con la frase, sino con la salida.",
+      "Un error inesperado se explica en el idioma ajustado, en vez de recitar un texto interno en inglés.",
+      "Si una referencia a una característica es ambigua, el chat se detiene, resalta los candidatos en la imagen y pregunta, indicando el cuerpo al que pertenece cada uno.",
+      "Cuando el chat distribuye objetos en placas de impresión, el resultado se ve después en la imagen.",
+      "Un hallazgo sobre un conjunto señala el cuerpo del que se trata y lleva su acción; donde no hay ninguna, es un simple aviso.",
+      "El chat conoce las nuevas acciones sobre características reconocidas y las ejecuta cuando se le pide."
     ],
     "fr": [
-      "Quatre parcours guidés expliquent les principales voies, de la première ébauche au résultat imprimable.",
-      "L’écran d’accueil occupe entièrement les fenêtres petites ou étroites, sans cartes coupées ni contenu masqué.",
-      "Les projets récemment utilisés précèdent les parcours d’introduction et sont ainsi accessibles plus rapidement.",
-      "L’écran d’accueil ne déplace plus la sélection sans demande et se commande entièrement à la souris comme au clavier.",
-      "Les accès *Nouveau*, *Ouvrir* et *Exemples* sont mieux ordonnés et décrivent leur destination avant même l’ouverture.",
-      "Les menus ont des titres bien visibles et des colonnes d’icônes alignées de façon uniforme.",
-      "La liste des commandes aligne proprement raccourcis et explications afin de parcourir plus vite les longues entrées.",
-      "Les grands dialogues emploient des colonnes et des largeurs de champ cohérentes.",
-      "L’ancienne page réunissant adhérence, rétraction et filament est divisée en sections de réglages plus petites et clairement nommées.",
-      "Les 56 réglages d’impression peuvent être recherchés sous leurs libellés allemands visibles.",
-      "Les cercles sont saisis par leur diamètre ; un perçage M3 peut ainsi être créé directement à 3,2 mm.",
-      "Une contrainte de diamètre reste une expression modifiable après résolution, enregistrement et réouverture.",
-      "Les cotes se modifient directement par double-clic, sans l’ancien et long détour par la sélection.",
-      "Les positions X, Y et Z, l’angle et l’échelle se saisissent directement dans la barre de déplacement.",
-      "Une saisie exacte crée la même étape annulable qu’un déplacement à la souris.",
-      "Plusieurs corps sélectionnés peuvent être déplacés ensemble.",
-      "Plusieurs corps sélectionnés tournent autour d’un centre commun et conservent leurs distances mutuelles.",
-      "Après une rotation, les corps peuvent être replacés proprement sur le plateau dans la même étape de travail.",
-      "Les déplacements successifs d’un même corps sont regroupés en une étape d’historique compréhensible.",
-      "Les étapes liées apparaissent dans une entrée dépliable au lieu de surcharger l’historique de lignes isolées.",
-      "Les blocs personnels peuvent être enregistrés dans un fichier local .solidon-part puis réintégrés au catalogue.",
-      "Les fichiers de bloc s’ouvrent, se glissent dans l’application et s’importent via l’association de fichiers du système.",
-      "Le nom et l’extension du fichier montrent immédiatement qu’il appartient à Solidon.",
-      "Importation, partage et bibliothèque locale emploient des textes d’interface complets dans les six langues.",
-      "Avant l’enregistrement, un bloc personnel peut être composé de plusieurs étapes et valeurs modifiables.",
-      "La séparation automatique privilégie les interfaces solides et évite l’ancien choix possible du point faible le plus fin.",
-      "Le type d’assemblage adapté est choisi séparément pour chaque coupe et enregistré sous forme concrète.",
-      "Les indications concernant les assemblages collés restent liées à la coupe sélectionnée.",
-      "La séparation automatique réagit aux consignes modifiées de façon reproductible et peut être annulée pendant le calcul.",
-      "Sous Linux dans une session Wayland, Solidon démarre et affiche la vue 3D ; s’il manque une bibliothèque au système, l’application démarre quand même et indique laquelle.",
-      "Les constats semblables sont regroupés sans perdre le lien avec les corps et emplacements concernés.",
-      "Les nombres et mesures du rapport portent des libellés complets plutôt que des valeurs isolées incompréhensibles.",
-      "Si une réparation échoue, le corps d’origine inchangé est entièrement restauré.",
-      "La discussion accueille avec son objectif concret et ne démarre plus sur une zone vide ou des termes techniques liés aux modèles.",
-      "Les compteurs techniques de jetons ont été retirés de l’interface client habituelle.",
-      "Les indications identiques sur des détails de forme perdus parviennent à l’assistant comptées plutôt qu’une par une.",
-      "Le dialogue de génération transforme un texte ou une image en modèle via un ComfyUI local et l’ajoute à la même scène modifiable."
+      "Les caractéristiques reconnues peuvent être déplacées, tournées, dupliquées et retirées : un perçage, un tenon ou un dôme ; le dôme sans rotation, faute d'orientation.",
+      "Le redimensionnement fonctionne aussi pour un tenon ou un dôme ; jusqu'ici, seul un perçage le permettait.",
+      "Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.",
+      "Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.",
+      "Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence.",
+      "La poignée de déplacement se place sur ce qui est sélectionné : sur un perçage, à son ouverture, et non au centre de la pièce.",
+      "Ce qui est sélectionné est ce qui bouge : avec un perçage sélectionné, la poignée et la barre déplacent le perçage, non la pièce entière.",
+      "Pendant le glissement, un aperçu transparent montre où va le perçage et une image pâle son point de départ.",
+      "L'ombre suit le déplacement et indique ainsi la hauteur au-dessus du plateau.",
+      "La vue a sa propre commande, et elle est la nouvelle valeur par défaut : glisser à gauche déplace, à droite fait tourner, la molette pressée incline, la molette zoome.",
+      "W, A, S et D permettent de voler dans la scène, Q et E inclinent ; le vol traverse une pièce, tandis que le zoom s'arrête devant.",
+      "Qui préfère une autre commande la choisit dans les réglages : les schémas Cura, Bambu Studio, Orca et PrusaSlicer, CAO et Blender restent en place.",
+      "L'entrée *Ajuster à la vue* cadre la pièce cliquée ; sans sélection, toute la scène comme avant.",
+      "La longueur et la largeur d'un dessin sélectionné sont modifiables ; le dessin suit la valeur modifiée avec ses cotes.",
+      "Une cote mal placée s'annule seule, et non plus uniquement avec toutes les autres.",
+      "Après avoir extrudé une esquisse, la boîte de dialogue propose aussi le chemin pour la soustraire.",
+      "Une cote saisie vaut telle qu'elle a été saisie : 0,1 ne devient plus 0,166667.",
+      "Le premier modèle d'un projet est centré sur le plateau d'impression au lieu de l'endroit fixé par son fichier ; les suivants gardent leur position.",
+      "Un fichier défectueux est refusé à l'ouverture, au lieu d'être accepté et de finir dans le projet à l'enregistrement.",
+      "Le refus indique la raison — vide, tronqué, pas un STL, pas un 3MF, sans triangles, coordonnées inutilisables — et propose *Choisir un autre fichier*.",
+      "Le téléchargement interrompu d'un fichier de modèle est reconnu comme tel.",
+      "La boîte de dialogue d'impression affiche les profils correspondant à l'imprimante réglée, au lieu d'un stock de 1001 entrées.",
+      "Pour une Elegoo Centauri Carbon, ce sont quatre profils, le bon étant présélectionné.",
+      "Changer d'imprimante dans le projet entraîne volume d'impression, buse et code de départ : un projet Prusa ne reçoit plus la machine de l'Elegoo.",
+      "Le slicer reçoit les données de la machine et renvoie un fichier d'impression, au lieu d'abandonner avec « incompatible avec l'imprimante ».",
+      "Les boutons verrouillés indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.",
+      "Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Créer* dans la boîte de dialogue de modèle.",
+      "Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.",
+      "Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais.",
+      "Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.",
+      "Lorsque la discussion répartit des objets sur des plateaux d'impression, le résultat est ensuite visible dans la vue.",
+      "Un constat sur un assemblage désigne le corps concerné et porte son action ; là où il n'y en a pas, c'est une simple indication.",
+      "La discussion connaît les nouvelles actions sur les caractéristiques reconnues et les exécute sur demande."
     ],
     "it": [
-      "Quattro percorsi guidati spiegano le vie principali dal primo progetto fino al risultato stampabile.",
-      "La schermata iniziale sfrutta interamente anche le finestre piccole o strette, senza schede tagliate o contenuti coperti.",
-      "I progetti usati di recente precedono i tour introduttivi e sono quindi raggiungibili più rapidamente.",
-      "La schermata iniziale non sposta più la selezione senza richiesta e si usa completamente con mouse e tastiera.",
-      "Le voci *Nuovo*, *Apri* ed *Esempi* sono ordinate più chiaramente e descrivono la destinazione già prima dell’apertura.",
-      "I menu hanno titoli ben visibili e colonne di icone allineate in modo uniforme.",
-      "La panoramica dei comandi allinea scorciatoie e spiegazioni, così le voci lunghe si scorrono più rapidamente.",
-      "I dialoghi estesi usano colonne e larghezze di campo uniformi.",
-      "La precedente pagina unica per adesione, retrazione e filamento è divisa in aree di impostazioni più piccole e ben denominate.",
-      "Tutte le 56 impostazioni di stampa si possono cercare tramite le etichette tedesche visibili.",
-      "I cerchi si inseriscono tramite il diametro; un foro M3 può quindi essere creato direttamente con 3,2 mm.",
-      "Un vincolo di diametro resta un’espressione modificabile dopo la risoluzione, il salvataggio e la riapertura.",
-      "Le quote si modificano direttamente con un doppio clic, senza il precedente e lungo percorso di selezione.",
-      "Posizione X, Y e Z, angolo e scala si possono inserire direttamente nella barra di movimento.",
-      "Un’immissione esatta crea lo stesso passaggio annullabile di un movimento con il mouse.",
-      "Più corpi selezionati possono essere spostati insieme.",
-      "Più corpi selezionati ruotano attorno a un centro comune e mantengono le distanze reciproche.",
-      "Dopo una rotazione, i corpi possono tornare correttamente sul piano di stampa nello stesso passaggio.",
-      "I movimenti consecutivi dello stesso corpo sono riuniti in un passaggio comprensibile della cronologia.",
-      "I passaggi collegati compaiono come una voce espandibile, invece di sovraccaricare la cronologia con righe singole.",
-      "I blocchi personali si possono salvare come file locale .solidon-part e aggiungere nuovamente al catalogo.",
-      "I file di blocco si possono aprire, trascinare nell’app e importare tramite l’associazione del sistema operativo.",
-      "Il nome e l’estensione rendono subito evidente che il file appartiene a Solidon.",
-      "Importazione, condivisione e libreria locale usano testi completi dell’interfaccia in tutte e sei le lingue.",
-      "Prima del salvataggio, un blocco personale può essere composto da più passaggi e valori modificabili.",
-      "La divisione automatica privilegia interfacce solide ed evita il precedente possibile punto debole più sottile.",
-      "Per ogni taglio viene scelto separatamente il tipo di collegamento adatto e salvato come forma concreta.",
-      "Le indicazioni sui collegamenti incollati restano associate al taglio scelto.",
-      "La divisione automatica reagisce in modo riproducibile alle indicazioni modificate e si può annullare durante il calcolo.",
-      "Su Linux in una sessione Wayland, Solidon si avvia e mostra la vista 3D; se al sistema manca una libreria, l’applicazione si avvia comunque e dice quale manca.",
-      "I riscontri simili sono raggruppati senza perdere il riferimento ai corpi e ai punti interessati.",
-      "Numeri e misure nel rapporto hanno etichette complete invece di singoli valori incomprensibili.",
-      "Se una riparazione non riesce, il corpo originale invariato viene ripristinato completamente.",
-      "La chat accoglie con il proprio scopo concreto e non si apre più con uno spazio vuoto o termini tecnici relativi ai modelli.",
-      "I contatori tecnici dei token sono stati rimossi dalla normale interfaccia per i clienti.",
-      "Le segnalazioni identiche su dettagli di forma persi raggiungono l’assistente conteggiate invece che una per una.",
-      "La finestra di generazione trasforma testo o immagine in un modello tramite ComfyUI locale e lo inserisce nella stessa scena modificabile."
+      "Le caratteristiche riconosciute si possono spostare, ruotare, duplicare e rimuovere: un foro, un perno o una cupola; la cupola senza rotazione, perché non ha orientamento.",
+      "Il ridimensionamento funziona ora anche per un perno o una cupola; finora solo per un foro.",
+      "I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.",
+      "Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.",
+      "Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio.",
+      "La maniglia di spostamento si trova su ciò che è selezionato: su un foro alla sua apertura, non più al centro del pezzo.",
+      "Si muove ciò che è selezionato: con un foro selezionato, maniglia e barra spostano il foro, non l'intero pezzo.",
+      "Durante il trascinamento, un'anteprima trasparente mostra dove va il foro e un'immagine pallida da dove viene.",
+      "L'ombra segue lo spostamento e mostra così l'altezza sopra il piano.",
+      "La vista ha un comando proprio, ed è la nuova impostazione predefinita: trascinare con il sinistro sposta, con il destro ruota, la rotellina premuta inclina e ingrandisce.",
+      "Con W, A, S e D si vola nella scena, Q ed E inclinano; il volo attraversa un pezzo, mentre lo zoom si ferma davanti.",
+      "Chi è abituato a un altro comando lo sceglie nelle impostazioni: restano gli schemi per Cura, per Bambu Studio, Orca e PrusaSlicer, per un CAD e per Blender.",
+      "La voce *Adatta alla vista* inquadra il pezzo selezionato; senza selezione, tutta la scena come prima.",
+      "Lunghezza e larghezza di un disegno selezionato sono modificabili; il disegno segue il numero cambiato insieme alle sue quote.",
+      "Una quota sbagliata si può annullare da sola, e non più solo insieme a tutte le altre.",
+      "Dopo aver estruso uno schizzo, la finestra offre di nuovo anche la via per sottrarlo.",
+      "Una quota digitata vale come è stata digitata: 0,1 non diventa più 0,166667.",
+      "Il primo modello di un progetto è centrato sul piano di stampa invece che dove lo mette il suo file; ogni altro mantiene la sua posizione.",
+      "Un file danneggiato viene rifiutato all'apertura, invece di essere accettato e finire nel progetto al salvataggio.",
+      "Il rifiuto indica il motivo — vuoto, troncato, non è un STL, non è un 3MF, senza triangoli, con coordinate inservibili — e offre *Scegli un altro file*.",
+      "Il download interrotto di un file di modello viene riconosciuto come tale.",
+      "La finestra di stampa mostra i profili corrispondenti alla stampante impostata, invece di un magazzino di 1001 voci.",
+      "Con una Elegoo Centauri Carbon sono quattro, e quello giusto è preselezionato.",
+      "Cambiare stampante nel progetto porta con sé volume di stampa, ugello e codice iniziale: un progetto Prusa non riceve più la macchina della Elegoo.",
+      "Lo slicer riceve i dati della macchina e restituisce un file di stampa, invece di interrompersi con «non compatibile con la stampante».",
+      "I pulsanti bloccati indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.",
+      "Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Crea* nella finestra del modello.",
+      "I rifiuti non finiscono con la sola frase, ma con la via d'uscita.",
+      "Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese.",
+      "Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.",
+      "Quando la chat dispone oggetti sui piani di stampa, il risultato è poi visibile nell'immagine.",
+      "Un rilievo su un assieme indica il corpo interessato e porta la sua azione; dove non ce n'è, è una semplice indicazione.",
+      "La chat conosce le nuove azioni sulle caratteristiche riconosciute e le esegue su richiesta."
     ],
     "pt": [
-      "Quatro percursos guiados explicam os caminhos principais, desde o primeiro esboço até ao resultado pronto a imprimir.",
-      "O ecrã inicial ocupa por completo até janelas pequenas ou estreitas, sem cartões cortados nem conteúdos tapados.",
-      "Os projetos usados recentemente aparecem antes das visitas introdutórias e ficam assim mais rapidamente acessíveis.",
-      "O ecrã inicial já não move a seleção sem pedido e pode ser usado inteiramente com rato e teclado.",
-      "As opções *Novo*, *Abrir* e *Exemplos* estão organizadas com mais clareza e descrevem o destino antes de o abrir.",
-      "Os menus têm títulos bem visíveis e colunas de ícones alinhadas de forma uniforme.",
-      "A visão geral dos comandos alinha atalhos e explicações, permitindo percorrer mais depressa as entradas longas.",
-      "Os diálogos extensos usam colunas e larguras de campo uniformes.",
-      "A antiga página conjunta para aderência, retração e filamento foi dividida em áreas de definições menores e com nomes claros.",
-      "Todas as 56 definições de impressão podem ser pesquisadas pelas respetivas designações alemãs visíveis.",
-      "Os círculos são introduzidos pelo diâmetro; um furo M3 pode assim ser criado diretamente com 3,2 mm.",
-      "Uma restrição de diâmetro continua a ser uma expressão editável após resolver, guardar e voltar a abrir.",
-      "As medidas podem ser editadas diretamente com duplo clique, sem o anterior e demorado percurso de seleção.",
-      "A posição X, Y e Z, o ângulo e a escala podem ser introduzidos diretamente na barra de movimento.",
-      "Uma introdução exata cria o mesmo passo reversível que um movimento com o rato.",
-      "É possível mover em conjunto vários corpos selecionados.",
-      "Vários corpos selecionados rodam em torno de um centro comum e mantêm as distâncias entre si.",
-      "Depois de rodar, os corpos podem voltar corretamente à mesa de impressão no mesmo passo de trabalho.",
-      "Os movimentos consecutivos do mesmo corpo são reunidos num passo compreensível do histórico.",
-      "Os passos relacionados aparecem numa entrada expansível, em vez de sobrecarregarem o histórico com linhas isoladas.",
-      "Os blocos próprios podem ser guardados num ficheiro local .solidon-part e adicionados novamente ao catálogo.",
-      "Os ficheiros de bloco podem ser abertos, arrastados para a aplicação e importados pela associação de ficheiros do sistema.",
-      "O nome e a extensão mostram de imediato que o ficheiro pertence ao Solidon.",
-      "A importação, partilha e biblioteca local usam textos completos da interface nos seis idiomas.",
-      "Antes de guardar, um bloco próprio pode ser composto por vários passos e valores editáveis.",
-      "A divisão automática privilegia interfaces resistentes e evita o anterior ponto fraco mais fino que podia ser escolhido.",
-      "O tipo de ligação adequado é escolhido separadamente para cada corte e guardado como uma forma concreta.",
-      "As indicações sobre ligações coladas permanecem associadas ao corte escolhido.",
-      "A divisão automática responde de forma reproduzível a orientações alteradas e pode ser cancelada durante o cálculo.",
-      "No Linux numa sessão Wayland, o Solidon arranca e mostra a vista 3D; se faltar uma biblioteca ao sistema, a aplicação arranca à mesma e indica qual falta.",
-      "Os resultados semelhantes são agrupados sem perder a ligação aos corpos e locais afetados.",
-      "Os números e medições no relatório têm designações completas, em vez de valores isolados incompreensíveis.",
-      "Se uma reparação falhar, o corpo original inalterado é totalmente restaurado.",
-      "O chat apresenta o seu objetivo concreto e já não começa com um espaço vazio ou termos técnicos de modelos.",
-      "Os contadores técnicos de tokens foram retirados da interface normal do cliente.",
-      "Os avisos idênticos sobre detalhes de forma perdidos chegam ao assistente contados em vez de um a um.",
-      "O diálogo de geração transforma texto ou imagem num modelo através de um ComfyUI local e insere-o na mesma cena editável."
+      "As características reconhecidas podem ser movidas, rodadas, duplicadas e removidas: um furo, um pino ou uma cúpula; a cúpula sem rodar, por não ter orientação.",
+      "Redimensionar funciona agora também num pino ou numa cúpula; até agora, apenas num furo.",
+      "Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.",
+      "Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.",
+      "Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio.",
+      "A alça de movimento fica no que está selecionado: num furo, na sua abertura, e não no centro da peça.",
+      "Move-se o que está selecionado: com um furo marcado, a alça e a barra deslocam o furo, não a peça inteira.",
+      "Ao arrastar, uma pré-visualização transparente mostra para onde vai o furo e uma cópia pálida de onde veio.",
+      "A sombra acompanha o movimento e mostra assim a altura acima da mesa.",
+      "A vista tem um comando próprio, e é a nova predefinição: arrastar com o esquerdo desloca, com o direito roda, a roda premida inclina e a roda amplia.",
+      "Com W, A, S e D voa-se pela cena, e Q e E inclinam; o voo atravessa uma peça, enquanto a ampliação para à frente dela.",
+      "Quem está habituado a outro comando escolhe-o nas definições: mantêm-se os esquemas para Cura, para Bambu Studio, Orca e PrusaSlicer, para um CAD e para Blender.",
+      "A entrada *Ajustar à vista* enquadra a peça selecionada; sem seleção, toda a cena como antes.",
+      "O comprimento e a largura de um desenho selecionado são editáveis; o desenho segue o número alterado com as suas cotas.",
+      "Uma cota mal colocada pode ser anulada isoladamente, e não apenas com todas as outras.",
+      "Depois de extrudir um esboço, o diálogo volta a oferecer também o caminho para o subtrair.",
+      "Uma cota escrita vale como foi escrita: 0,1 já não se torna 0,166667.",
+      "O primeiro modelo de um projeto fica centrado na mesa de impressão em vez de onde o seu ficheiro o coloca; os restantes mantêm a sua posição.",
+      "Um ficheiro danificado é recusado ao abrir, em vez de ser aceite e acabar no projeto ao gravar.",
+      "A recusa indica o motivo — vazio, truncado, não é STL, não é 3MF, sem triângulos, com coordenadas inutilizáveis — e oferece *Escolher outro ficheiro*.",
+      "A transferência interrompida de um ficheiro de modelo é reconhecida como tal.",
+      "O diálogo de impressão mostra os perfis correspondentes à impressora definida, em vez de um acervo de 1001 entradas.",
+      "Com uma Elegoo Centauri Carbon são quatro, e o correto vem pré-selecionado.",
+      "Mudar a impressora no projeto arrasta volume de impressão, bico e código inicial: um projeto Prusa já não recebe a máquina da Elegoo.",
+      "O slicer recebe os dados da máquina e devolve um ficheiro de impressão, em vez de abortar com «não compatível com a impressora».",
+      "Os botões bloqueados indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.",
+      "Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.",
+      "As recusas não terminam apenas com a frase, mas com a saída.",
+      "Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês.",
+      "Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.",
+      "Quando o chat distribui objetos por mesas de impressão, o resultado fica depois visível na imagem.",
+      "Um achado sobre um conjunto aponta o corpo em questão e traz a sua ação; onde não há nenhuma, é uma simples indicação.",
+      "O chat conhece as novas ações sobre características reconhecidas e executa-as quando pedido."
     ]
   },
   "notes_by_language": {
@@ -275,478 +251,455 @@
   "groups": {
     "de": [
       {
-        "title": "Einstieg und Orientierung",
+        "title": "Erkannte Merkmale bearbeiten",
         "points": [
-          "Vier geführte Einstiege erklären die wichtigsten Wege vom ersten Entwurf bis zum druckbaren Ergebnis.",
-          "Der Startbildschirm nutzt auch kleinere und schmalere Fenster vollständig, ohne abgeschnittene Karten oder verdeckte Inhalte.",
-          "Zuletzt verwendete Projekte stehen vor den Einführungstouren und sind dadurch schneller erreichbar.",
-          "Der Startbildschirm bewegt die Auswahl nicht mehr ungefragt und lässt sich vollständig mit Maus und Tastatur bedienen.",
-          "Die Einstiege *Neu*, *Öffnen* und *Beispiele* sind klarer geordnet und beschreiben bereits vor dem Öffnen, wohin sie führen."
+          "Erkannte Merkmale lassen sich verschieben, drehen, verdoppeln und entfernen: eine Bohrung, ein Zapfen oder eine Kuppel — die Kuppel ohne Drehen, weil sie keine Lage hat.",
+          "In der Größe ändern lässt sich jetzt auch ein Zapfen oder eine Kuppel; bisher konnte das nur eine Bohrung.",
+          "Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.",
+          "Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.",
+          "Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen."
         ]
       },
       {
-        "title": "Oberfläche und Bedienung",
+        "title": "Bewegen, Drehen und Auswählen",
         "points": [
-          "Menüs besitzen deutlich sichtbare Überschriften und einheitlich ausgerichtete Symbolspalten.",
-          "Die Befehlsübersicht richtet Kürzel und Erklärungen sauber aus, sodass lange Einträge schneller überflogen werden können.",
-          "Umfangreiche Dialoge verwenden einheitliche Spalten und Feldbreiten.",
-          "Die frühere Sammelseite für Haftung, Rückzug und Filament ist in kleinere, logisch benannte Einstellungsbereiche aufgeteilt.",
-          "Alle 56 Druckeinstellungen lassen sich über ihre sichtbaren deutschen Bezeichnungen durchsuchen."
+          "Der Bewegungsgriff sitzt an dem, was gewählt ist — bei einer Bohrung an ihrer Öffnung statt in der Mitte des Teils.",
+          "Bewegt wird, was ausgewählt ist: Mit markierter Bohrung versetzen Griff und Leiste die Bohrung, nicht mehr das ganze Teil.",
+          "Beim Ziehen zeigt eine durchsichtige Vorschau, wohin die Bohrung wandert, und ein blasses Abbild, wo sie herkommt.",
+          "Der Schatten läuft beim Verschieben mit und zeigt damit die Höhe über der Platte."
+        ]
+      },
+      {
+        "title": "Ansicht und Objektbaum",
+        "points": [
+          "Die Ansicht hat eine eigene Steuerung, und sie ist die neue Vorgabe: Links ziehen verschiebt, rechts dreht, das gedrückte Mausrad kippt, das Rad zoomt.",
+          "Mit W, A, S und D fliegt man durch die Szene, Q und E kippen — der Flug geht durch ein Teil hindurch, während der Zoom davor stehen bleibt.",
+          "Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, für Bambu Studio, Orca und PrusaSlicer, für das CAD und für Blender bleiben.",
+          "Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene."
         ]
       },
       {
         "title": "Zeichnen und genaue Eingabe",
         "points": [
-          "Kreise werden über den Durchmesser eingegeben; eine M3-Bohrung kann damit direkt als 3,2 mm angelegt werden.",
-          "Eine Durchmesserbedingung bleibt beim Lösen, Speichern und erneuten Öffnen als bearbeitbarer Ausdruck erhalten.",
-          "Maße lassen sich durch Doppelklick direkt bearbeiten, ohne den bisherigen langen Auswahlweg.",
-          "X-, Y- und Z-Position, Winkel und Skalierung können unmittelbar in der Bewegungsleiste eingegeben werden.",
-          "Exakte Eingaben erzeugen denselben rücknehmbaren Arbeitsschritt wie eine Bewegung mit der Maus."
+          "Länge und Breite einer gewählten Zeichnung sind bedienbar; die Zeichnung folgt der geänderten Zahl samt ihren Maßen.",
+          "Ein falsch gesetztes Maß lässt sich einzeln zurücknehmen, statt nur zusammen mit allen anderen.",
+          "Wer eine Skizze hochgezogen hat, findet im Dialog auch den Weg zum Abziehen wieder.",
+          "Ein getipptes Maß gilt, wie es getippt wurde: Aus 0,1 wird nicht mehr 0,166667."
         ]
       },
       {
-        "title": "Ansicht, Verlauf und Formen bearbeiten",
+        "title": "Öffnen, Speichern und Austauschdateien",
         "points": [
-          "Mehrere ausgewählte Körper können gemeinsam verschoben werden.",
-          "Mehrere ausgewählte Körper drehen sich um einen gemeinsamen Mittelpunkt und behalten ihre Abstände zueinander.",
-          "Nach einer Drehung können Körper im selben Arbeitsschritt wieder sauber auf die Druckplatte gesetzt werden.",
-          "Aufeinanderfolgende Bewegungen desselben Körpers werden zu einem verständlichen Verlaufsschritt zusammengefasst.",
-          "Zusammengehörige Arbeitsschritte erscheinen als aufklappbarer Eintrag, statt den Verlauf mit Einzelzeilen zu überladen."
+          "Das erste Modell eines Projekts liegt mittig auf dem Druckbett, statt dort, wo seine Datei es ablegt; jedes weitere behält seine Lage.",
+          "Eine kaputte Datei wird beim Öffnen abgelehnt, statt angenommen zu werden und beim Speichern im Projekt zu landen.",
+          "Die Absage nennt den Grund — leer, abgeschnitten, keine STL, kein 3MF, ohne Dreiecke, mit unbrauchbaren Koordinaten — und bietet *Andere Datei wählen* an.",
+          "Der abgebrochene Download einer Modelldatei wird als solcher erkannt."
         ]
       },
       {
-        "title": "Eigene Bausteine und Austauschdateien",
+        "title": "Drucken, Slicer und Filament",
         "points": [
-          "Eigene Bausteine können als lokale .solidon-part-Datei gespeichert und wieder in den Katalog aufgenommen werden.",
-          "Bausteindateien lassen sich öffnen, hineinziehen und über die Dateizuordnung des Betriebssystems importieren.",
-          "Dateiname und Dateiendung machen sofort sichtbar, dass eine Datei zu Solidon gehört.",
-          "Import, Teilen und lokale Bibliothek verwenden in allen sechs Sprachen vollständige Oberflächentexte.",
-          "Ein eigener Baustein kann vor dem Speichern aus mehreren bearbeitbaren Schritten und Werten aufgebaut werden."
+          "Der Druckdialog zeigt die Profile, die zum eingestellten Drucker passen, statt eines Bestands von 1001 Einträgen.",
+          "Bei einem Elegoo Centauri Carbon sind es vier, und das richtige ist vorausgewählt.",
+          "Ein Wechsel des Druckers im Projekt zieht Bauraum, Düse und Startcode mit — ein Prusa-Projekt bekommt nicht mehr die Maschine des Elegoo.",
+          "Der Slicer bekommt die Maschinenangabe mit und liefert eine Druckdatei zurück, statt den Lauf mit „nicht zum Drucker passend“ abzubrechen."
         ]
       },
       {
-        "title": "Teilen, Drucken und Filament",
+        "title": "Meldungen, Knöpfe und Auskunft",
         "points": [
-          "Automatisches Teilen bevorzugt tragfähige Schnittstellen und vermeidet die bisher mögliche dünnste Schwachstelle.",
-          "Für jede Trennstelle wird die passende Verbindungsart einzeln gewählt und als konkrete Form gespeichert.",
-          "Hinweise zu Klebeverbindungen bleiben zusammen mit der gewählten Trennstelle erhalten.",
-          "Automatisches Teilen reagiert auf geänderte Vorgaben reproduzierbar und lässt sich während der Berechnung abbrechen."
-        ]
-      },
-      {
-        "title": "Prüfbericht, Stabilität, Plattformen und Sprachen",
-        "points": [
-          "Unter Linux mit einer Wayland-Sitzung startet Solidon und zeigt die 3D-Ansicht; fehlt dem System eine Bibliothek dafür, startet die Anwendung trotzdem und sagt, welche fehlt.",
-          "Gleichartige Prüfbefunde werden gebündelt, ohne den Bezug zu den betroffenen Körpern und Stellen zu verlieren.",
-          "Zahlen und Messwerte im Prüfbericht besitzen vollständige Bezeichnungen statt unverständlicher Einzelwerte.",
-          "Scheitert eine Reparatur, wird der unveränderte Ausgangskörper vollständig wiederhergestellt."
+          "Gesperrte Knöpfe nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.",
+          "Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Erzeugen* im Modell-Dialog.",
+          "Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.",
+          "Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen."
         ]
       },
       {
         "title": "Chat und Modellunterstützung",
         "points": [
-          "Der Chat begrüßt mit seinem konkreten Zweck und startet nicht mehr mit einer leeren Fläche oder technischen Modellbegriffen.",
-          "Technische Token-Zähler wurden aus der normalen Kundenoberfläche entfernt.",
-          "Gleichlautende Hinweise zu verlorenen Formdetails erreichen den Assistenten gezählt statt einzeln.",
-          "Der Erzeugen-Dialog macht aus Text oder Bild über ein lokales ComfyUI ein Modell und übernimmt es in dieselbe bearbeitbare Szene."
+          "Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.",
+          "Ordnet der Chat Objekte auf Druckplatten an, ist das Ergebnis danach im Bild zu sehen.",
+          "Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht, und trägt seine Handlung; wo keine steht, ist er ein reiner Hinweis.",
+          "Der Chat kennt die neuen Handlungen an erkannten Merkmalen und führt sie auf Zuruf aus."
         ]
       }
     ],
     "en": [
       {
-        "title": "Getting started and orientation",
+        "title": "Editing recognised features",
         "points": [
-          "Four guided introductions explain the main routes from a first design to a printable result.",
-          "The start screen now makes full use of smaller and narrower windows, with no clipped cards or hidden content.",
-          "Recent projects appear before the introductory tours, making them quicker to reach.",
-          "The start screen no longer moves the selection unexpectedly and is fully usable with mouse and keyboard.",
-          "The *New*, *Open* and *Examples* entries are more clearly organised and explain where they lead before opening."
+          "Recognised features can be moved, rotated, duplicated and removed: a hole, a peg or a dome — the dome without rotating, as it has no orientation.",
+          "Resizing now works for a peg or a dome as well; until now only a hole could be resized.",
+          "The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.",
+          "A moved hole stays the same hole: every fit that refers to it keeps its reference.",
+          "Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing."
         ]
       },
       {
-        "title": "Interface and controls",
+        "title": "Moving, rotating and selecting",
         "points": [
-          "Menus have clearly visible headings and consistently aligned icon columns.",
-          "The command overview aligns shortcuts and explanations cleanly, making long entries easier to scan.",
-          "Extensive dialogs use consistent columns and field widths.",
-          "The former combined page for adhesion, retraction and filament is split into smaller, logically named settings areas.",
-          "All 56 print settings can be searched by their visible English labels."
+          "The move handle sits on whatever is selected — on a hole at its opening, no longer in the middle of the part.",
+          "What is selected is what moves: with a hole selected, handle and toolbar move the hole, not the whole part.",
+          "While dragging, a transparent preview shows where the hole is going and a pale copy where it came from.",
+          "The shadow follows while moving and thereby shows the height above the bed."
+        ]
+      },
+      {
+        "title": "View and object tree",
+        "points": [
+          "The view has a control scheme of its own, and it is the new default: dragging left pans, right orbits, the pressed wheel tilts, the wheel zooms.",
+          "W, A, S and D fly through the scene, Q and E tilt — the flight passes through a part, while zooming stops in front of it.",
+          "Anyone used to a different scheme picks it in the settings: those for Cura, for Bambu Studio, Orca and PrusaSlicer, for a CAD program and for Blender remain.",
+          "The entry *Fit to view* frames the part you clicked; with nothing selected, the whole scene as before."
         ]
       },
       {
         "title": "Drawing and precise input",
         "points": [
-          "Circles are entered by diameter, so an M3 hole can be created directly as 3.2 mm.",
-          "A diameter constraint remains an editable expression after solving, saving and reopening.",
-          "Dimensions can be edited directly with a double click, avoiding the previous lengthy selection path.",
-          "X, Y and Z position, angle and scale can be entered directly in the movement toolbar.",
-          "Exact input creates the same undoable action as moving with the mouse."
+          "Length and width of a selected drawing can be edited; the drawing follows the changed number together with its dimensions.",
+          "A dimension set by mistake can be undone on its own, instead of only together with all the others.",
+          "After extruding a sketch, the dialog also offers the way back to cutting it away.",
+          "A typed dimension counts as typed: 0.1 no longer becomes 0.166667."
         ]
       },
       {
-        "title": "View, history and shape editing",
+        "title": "Opening, saving and exchange files",
         "points": [
-          "Multiple selected bodies can be moved together.",
-          "Multiple selected bodies rotate around a shared centre while preserving their spacing.",
-          "After rotation, bodies can be placed neatly back on the print bed within the same action.",
-          "Consecutive movements of the same body are combined into one understandable history step.",
-          "Related actions appear as an expandable entry instead of overloading the history with individual lines."
+          "The first model of a project sits centred on the print bed instead of wherever its file puts it; every further one keeps its position.",
+          "A broken file is refused when opening, instead of being accepted and ending up in the project when you save.",
+          "The refusal names the reason — empty, truncated, not an STL, not a 3MF, without triangles, with unusable coordinates — and offers *Choose another file*.",
+          "An interrupted download of a model file is recognised as such."
         ]
       },
       {
-        "title": "Custom parts and exchange files",
+        "title": "Printing, slicer and filament",
         "points": [
-          "Custom parts can be saved as local .solidon-part files and added back to the catalogue.",
-          "Part files can be opened, dragged in and imported through the operating system file association.",
-          "The file name and extension make it immediately clear that a file belongs to Solidon.",
-          "Import, sharing and the local library use complete interface text in all six languages.",
-          "Before saving, a custom part can be built from multiple editable steps and values."
+          "The print dialog shows the profiles that match the selected printer, instead of a stock of 1001 entries.",
+          "For an Elegoo Centauri Carbon that is four, with the right one preselected.",
+          "Changing the printer in the project brings build volume, nozzle and start code along — a Prusa project no longer gets the Elegoo's machine.",
+          "The slicer is given the machine details and returns a print file, instead of aborting with “not compatible with printer”."
         ]
       },
       {
-        "title": "Splitting, printing and filament",
+        "title": "Messages, buttons and information",
         "points": [
-          "Auto Split prefers load-bearing seams and avoids choosing the thinnest possible weak point.",
-          "The appropriate connector is chosen separately for each seam and stored as a concrete shape.",
-          "Notes about glued joints remain attached to the selected seam.",
-          "Auto Split responds reproducibly to changed requirements and can be cancelled during calculation."
-        ]
-      },
-      {
-        "title": "Report, stability, platforms and languages",
-        "points": [
-          "On Linux in a Wayland session Solidon starts and shows the 3D view; if the system lacks a library for it, the application still starts and names the missing one.",
-          "Similar report findings are grouped without losing their connection to affected bodies and locations.",
-          "Numbers and measurements in the report have complete labels instead of unexplained individual values.",
-          "If a repair cannot be completed, the unchanged original body is restored in full."
+          "Locked buttons now say on the button what they are missing — by mouse, by keyboard and for a screen reader.",
+          "Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Create* in the model dialog.",
+          "Refusals no longer end with the sentence alone, but with the way out.",
+          "An unexpected error is explained in the language you have set, instead of reciting an internal English text."
         ]
       },
       {
         "title": "Chat and model support",
         "points": [
-          "Chat opens with a clear description of its purpose instead of an empty area or technical model terms.",
-          "Technical token counters have been removed from the normal customer interface.",
-          "Identical notes about lost shape details reach the assistant counted instead of one by one.",
-          "The Generate dialog turns text or an image into a model through local ComfyUI and brings it into the same editable scene."
+          "If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.",
+          "When the chat arranges objects on print beds, the result is visible in the view afterwards.",
+          "A finding about an assembly points at the body it concerns and carries its action; where none is offered, it is a plain note.",
+          "The chat knows the new actions on recognised features and carries them out on request."
         ]
       }
     ],
     "es": [
       {
-        "title": "Primeros pasos y orientación",
+        "title": "Editar características reconocidas",
         "points": [
-          "Cuatro introducciones guiadas explican las vías principales desde el primer diseño hasta un resultado imprimible.",
-          "La pantalla de inicio aprovecha por completo las ventanas pequeñas y estrechas, sin tarjetas recortadas ni contenido oculto.",
-          "Los proyectos recientes aparecen antes de los recorridos introductorios y son más rápidos de abrir.",
-          "La pantalla de inicio ya no mueve la selección sin pedirlo y se puede manejar por completo con ratón y teclado.",
-          "Las entradas *Nuevo*, *Abrir* y *Ejemplos* están mejor ordenadas y explican adónde conducen antes de abrirse."
+          "Las características reconocidas se pueden mover, girar, duplicar y quitar: un taladro, una espiga o una cúpula; la cúpula sin girar, porque no tiene orientación.",
+          "Cambiar el tamaño funciona ahora también en una espiga o una cúpula; hasta ahora solo en un taladro.",
+          "Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.",
+          "Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.",
+          "Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio."
         ]
       },
       {
-        "title": "Interfaz y manejo",
+        "title": "Mover, girar y seleccionar",
         "points": [
-          "Los menús tienen encabezados claramente visibles y columnas de iconos alineadas de forma uniforme.",
-          "El resumen de comandos alinea bien los atajos y las explicaciones para recorrer con rapidez las entradas largas.",
-          "Los diálogos extensos usan columnas y anchos de campo uniformes.",
-          "La antigua página conjunta de adherencia, retracción y filamento se divide en áreas de ajustes más pequeñas y bien nombradas.",
-          "Los 56 ajustes de impresión se pueden buscar por sus nombres visibles en español."
+          "El asa de movimiento se sitúa en lo seleccionado: en un taladro, en su boca, y no en el centro de la pieza.",
+          "Se mueve lo que está seleccionado: con un taladro marcado, el asa y la barra desplazan el taladro, no la pieza entera.",
+          "Al arrastrar, una vista previa transparente muestra hacia dónde va el taladro y una copia pálida de dónde viene.",
+          "La sombra acompaña el desplazamiento y muestra así la altura sobre la placa."
+        ]
+      },
+      {
+        "title": "Vista y árbol de objetos",
+        "points": [
+          "La vista tiene un control propio, y es el nuevo predeterminado: arrastrar con el izquierdo desplaza, con el derecho gira, la rueda pulsada inclina y la rueda acerca.",
+          "Con W, A, S y D se vuela por la escena, y Q y E inclinan; el vuelo atraviesa una pieza, mientras que el zoom se detiene delante.",
+          "Quien esté acostumbrado a otro control lo elige en los ajustes: siguen los esquemas de Cura, de Bambu Studio, Orca y PrusaSlicer, de un CAD y de Blender.",
+          "La entrada *Ajustar a la vista* encuadra la pieza pulsada; sin selección, toda la escena como hasta ahora."
         ]
       },
       {
         "title": "Dibujo y entrada precisa",
         "points": [
-          "Los círculos se introducen por su diámetro, de modo que un agujero M3 se puede crear directamente con 3,2 mm.",
-          "Una restricción de diámetro sigue siendo una expresión editable después de resolver, guardar y volver a abrir.",
-          "Las medidas se editan directamente con un doble clic, sin el largo recorrido de selección anterior.",
-          "La posición X, Y y Z, el ángulo y la escala se pueden introducir directamente en la barra de movimiento.",
-          "Una entrada exacta crea el mismo paso reversible que un movimiento con el ratón."
+          "La longitud y la anchura de un dibujo seleccionado son editables; el dibujo sigue la cifra modificada junto con sus cotas.",
+          "Una cota mal puesta se puede deshacer por sí sola, y no solo junto con todas las demás.",
+          "Tras extruir un croquis, el diálogo vuelve a ofrecer también el camino para restarlo.",
+          "Una cota escrita vale tal como se escribió: 0,1 ya no se convierte en 0,166667."
         ]
       },
       {
-        "title": "Vista, historial y edición de formas",
+        "title": "Apertura, guardado y archivos de intercambio",
         "points": [
-          "Se pueden mover conjuntamente varios cuerpos seleccionados.",
-          "Varios cuerpos seleccionados giran alrededor de un centro común y conservan sus distancias.",
-          "Después de girarlos, los cuerpos pueden volver a colocarse bien sobre la placa en el mismo paso.",
-          "Los movimientos consecutivos del mismo cuerpo se agrupan en un paso comprensible del historial.",
-          "Las acciones relacionadas aparecen como una entrada desplegable, sin saturar el historial con líneas individuales."
+          "El primer modelo de un proyecto queda centrado en la placa de impresión y no donde lo deja su archivo; los siguientes conservan su posición.",
+          "Un archivo defectuoso se rechaza al abrirlo, en vez de aceptarse y acabar en el proyecto al guardar.",
+          "El rechazo indica el motivo — vacío, truncado, no es STL, no es 3MF, sin triángulos, con coordenadas inservibles — y ofrece *Elegir otro archivo*.",
+          "La descarga interrumpida de un archivo de modelo se reconoce como tal."
         ]
       },
       {
-        "title": "Bloques propios y archivos de intercambio",
+        "title": "Impresión, slicer y filamento",
         "points": [
-          "Los bloques propios se pueden guardar como archivos locales .solidon-part y volver a añadir al catálogo.",
-          "Los archivos de bloque se pueden abrir, arrastrar e importar mediante la asociación de archivos del sistema operativo.",
-          "El nombre y la extensión muestran de inmediato que un archivo pertenece a Solidon.",
-          "La importación, el intercambio y la biblioteca local usan textos completos de interfaz en los seis idiomas.",
-          "Antes de guardarlo, un bloque propio se puede construir con varios pasos y valores editables."
+          "El diálogo de impresión muestra los perfiles que corresponden a la impresora ajustada, en vez de un fondo de 1001 entradas.",
+          "Con una Elegoo Centauri Carbon son cuatro, y el correcto viene preseleccionado.",
+          "Cambiar la impresora del proyecto arrastra volumen de impresión, boquilla y código de inicio: un proyecto Prusa ya no recibe la máquina de la Elegoo.",
+          "El slicer recibe los datos de la máquina y devuelve un archivo de impresión, en vez de abortar con «no compatible con la impresora»."
         ]
       },
       {
-        "title": "División, impresión y filamento",
+        "title": "Mensajes, botones e información",
         "points": [
-          "La división automática prefiere uniones resistentes y evita elegir el punto débil más fino posible.",
-          "Para cada unión se elige por separado el conector adecuado y se guarda como una forma concreta.",
-          "Las indicaciones sobre uniones pegadas permanecen asociadas a la unión elegida.",
-          "La división automática responde de forma reproducible a nuevos requisitos y se puede cancelar durante el cálculo."
-        ]
-      },
-      {
-        "title": "Informe, estabilidad, plataformas e idiomas",
-        "points": [
-          "En Linux con una sesión Wayland, Solidon arranca y muestra la vista 3D; si al sistema le falta una biblioteca, la aplicación arranca igualmente e indica cuál falta.",
-          "Los hallazgos similares se agrupan sin perder la relación con los cuerpos y lugares afectados.",
-          "Los números y medidas del informe tienen nombres completos en vez de valores sueltos incomprensibles.",
-          "Si una reparación falla, se restaura por completo el cuerpo original sin modificar."
+          "Los botones bloqueados indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.",
+          "Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Generar* en el diálogo de modelo.",
+          "Los rechazos no terminan solo con la frase, sino con la salida.",
+          "Un error inesperado se explica en el idioma ajustado, en vez de recitar un texto interno en inglés."
         ]
       },
       {
         "title": "Chat y compatibilidad con modelos",
         "points": [
-          "El chat se abre con una explicación concreta de su finalidad, no con un área vacía ni términos técnicos de modelos.",
-          "Los contadores técnicos de tokens se han retirado de la interfaz normal para clientes.",
-          "Los avisos idénticos sobre detalles de forma perdidos llegan al asistente contados en lugar de uno por uno.",
-          "El diálogo Generar convierte texto o una imagen en un modelo mediante ComfyUI local y lo incorpora a la misma escena editable."
+          "Si una referencia a una característica es ambigua, el chat se detiene, resalta los candidatos en la imagen y pregunta, indicando el cuerpo al que pertenece cada uno.",
+          "Cuando el chat distribuye objetos en placas de impresión, el resultado se ve después en la imagen.",
+          "Un hallazgo sobre un conjunto señala el cuerpo del que se trata y lleva su acción; donde no hay ninguna, es un simple aviso.",
+          "El chat conoce las nuevas acciones sobre características reconocidas y las ejecuta cuando se le pide."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Premiers pas et orientation",
+        "title": "Modifier les caractéristiques reconnues",
         "points": [
-          "Quatre parcours guidés expliquent les principales voies, de la première ébauche au résultat imprimable.",
-          "L’écran d’accueil occupe entièrement les fenêtres petites ou étroites, sans cartes coupées ni contenu masqué.",
-          "Les projets récemment utilisés précèdent les parcours d’introduction et sont ainsi accessibles plus rapidement.",
-          "L’écran d’accueil ne déplace plus la sélection sans demande et se commande entièrement à la souris comme au clavier.",
-          "Les accès *Nouveau*, *Ouvrir* et *Exemples* sont mieux ordonnés et décrivent leur destination avant même l’ouverture."
+          "Les caractéristiques reconnues peuvent être déplacées, tournées, dupliquées et retirées : un perçage, un tenon ou un dôme ; le dôme sans rotation, faute d'orientation.",
+          "Le redimensionnement fonctionne aussi pour un tenon ou un dôme ; jusqu'ici, seul un perçage le permettait.",
+          "Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.",
+          "Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.",
+          "Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence."
         ]
       },
       {
-        "title": "Interface et utilisation",
+        "title": "Déplacer, tourner et sélectionner",
         "points": [
-          "Les menus ont des titres bien visibles et des colonnes d’icônes alignées de façon uniforme.",
-          "La liste des commandes aligne proprement raccourcis et explications afin de parcourir plus vite les longues entrées.",
-          "Les grands dialogues emploient des colonnes et des largeurs de champ cohérentes.",
-          "L’ancienne page réunissant adhérence, rétraction et filament est divisée en sections de réglages plus petites et clairement nommées.",
-          "Les 56 réglages d’impression peuvent être recherchés sous leurs libellés allemands visibles."
+          "La poignée de déplacement se place sur ce qui est sélectionné : sur un perçage, à son ouverture, et non au centre de la pièce.",
+          "Ce qui est sélectionné est ce qui bouge : avec un perçage sélectionné, la poignée et la barre déplacent le perçage, non la pièce entière.",
+          "Pendant le glissement, un aperçu transparent montre où va le perçage et une image pâle son point de départ.",
+          "L'ombre suit le déplacement et indique ainsi la hauteur au-dessus du plateau."
+        ]
+      },
+      {
+        "title": "Vue et arborescence des objets",
+        "points": [
+          "La vue a sa propre commande, et elle est la nouvelle valeur par défaut : glisser à gauche déplace, à droite fait tourner, la molette pressée incline, la molette zoome.",
+          "W, A, S et D permettent de voler dans la scène, Q et E inclinent ; le vol traverse une pièce, tandis que le zoom s'arrête devant.",
+          "Qui préfère une autre commande la choisit dans les réglages : les schémas Cura, Bambu Studio, Orca et PrusaSlicer, CAO et Blender restent en place.",
+          "L'entrée *Ajuster à la vue* cadre la pièce cliquée ; sans sélection, toute la scène comme avant."
         ]
       },
       {
         "title": "Dessin et saisie précise",
         "points": [
-          "Les cercles sont saisis par leur diamètre ; un perçage M3 peut ainsi être créé directement à 3,2 mm.",
-          "Une contrainte de diamètre reste une expression modifiable après résolution, enregistrement et réouverture.",
-          "Les cotes se modifient directement par double-clic, sans l’ancien et long détour par la sélection.",
-          "Les positions X, Y et Z, l’angle et l’échelle se saisissent directement dans la barre de déplacement.",
-          "Une saisie exacte crée la même étape annulable qu’un déplacement à la souris."
+          "La longueur et la largeur d'un dessin sélectionné sont modifiables ; le dessin suit la valeur modifiée avec ses cotes.",
+          "Une cote mal placée s'annule seule, et non plus uniquement avec toutes les autres.",
+          "Après avoir extrudé une esquisse, la boîte de dialogue propose aussi le chemin pour la soustraire.",
+          "Une cote saisie vaut telle qu'elle a été saisie : 0,1 ne devient plus 0,166667."
         ]
       },
       {
-        "title": "Vue, historique et modification des formes",
+        "title": "Ouverture, enregistrement et fichiers d'échange",
         "points": [
-          "Plusieurs corps sélectionnés peuvent être déplacés ensemble.",
-          "Plusieurs corps sélectionnés tournent autour d’un centre commun et conservent leurs distances mutuelles.",
-          "Après une rotation, les corps peuvent être replacés proprement sur le plateau dans la même étape de travail.",
-          "Les déplacements successifs d’un même corps sont regroupés en une étape d’historique compréhensible.",
-          "Les étapes liées apparaissent dans une entrée dépliable au lieu de surcharger l’historique de lignes isolées."
+          "Le premier modèle d'un projet est centré sur le plateau d'impression au lieu de l'endroit fixé par son fichier ; les suivants gardent leur position.",
+          "Un fichier défectueux est refusé à l'ouverture, au lieu d'être accepté et de finir dans le projet à l'enregistrement.",
+          "Le refus indique la raison — vide, tronqué, pas un STL, pas un 3MF, sans triangles, coordonnées inutilisables — et propose *Choisir un autre fichier*.",
+          "Le téléchargement interrompu d'un fichier de modèle est reconnu comme tel."
         ]
       },
       {
-        "title": "Blocs personnels et fichiers d’échange",
+        "title": "Impression, slicer et filament",
         "points": [
-          "Les blocs personnels peuvent être enregistrés dans un fichier local .solidon-part puis réintégrés au catalogue.",
-          "Les fichiers de bloc s’ouvrent, se glissent dans l’application et s’importent via l’association de fichiers du système.",
-          "Le nom et l’extension du fichier montrent immédiatement qu’il appartient à Solidon.",
-          "Importation, partage et bibliothèque locale emploient des textes d’interface complets dans les six langues.",
-          "Avant l’enregistrement, un bloc personnel peut être composé de plusieurs étapes et valeurs modifiables."
+          "La boîte de dialogue d'impression affiche les profils correspondant à l'imprimante réglée, au lieu d'un stock de 1001 entrées.",
+          "Pour une Elegoo Centauri Carbon, ce sont quatre profils, le bon étant présélectionné.",
+          "Changer d'imprimante dans le projet entraîne volume d'impression, buse et code de départ : un projet Prusa ne reçoit plus la machine de l'Elegoo.",
+          "Le slicer reçoit les données de la machine et renvoie un fichier d'impression, au lieu d'abandonner avec « incompatible avec l'imprimante »."
         ]
       },
       {
-        "title": "Séparation, impression et filament",
+        "title": "Messages, boutons et informations",
         "points": [
-          "La séparation automatique privilégie les interfaces solides et évite l’ancien choix possible du point faible le plus fin.",
-          "Le type d’assemblage adapté est choisi séparément pour chaque coupe et enregistré sous forme concrète.",
-          "Les indications concernant les assemblages collés restent liées à la coupe sélectionnée.",
-          "La séparation automatique réagit aux consignes modifiées de façon reproductible et peut être annulée pendant le calcul."
-        ]
-      },
-      {
-        "title": "Rapport, stabilité, plateformes et langues",
-        "points": [
-          "Sous Linux dans une session Wayland, Solidon démarre et affiche la vue 3D ; s’il manque une bibliothèque au système, l’application démarre quand même et indique laquelle.",
-          "Les constats semblables sont regroupés sans perdre le lien avec les corps et emplacements concernés.",
-          "Les nombres et mesures du rapport portent des libellés complets plutôt que des valeurs isolées incompréhensibles.",
-          "Si une réparation échoue, le corps d’origine inchangé est entièrement restauré."
+          "Les boutons verrouillés indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.",
+          "Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Créer* dans la boîte de dialogue de modèle.",
+          "Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.",
+          "Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais."
         ]
       },
       {
         "title": "Discussion et prise en charge des modèles",
         "points": [
-          "La discussion accueille avec son objectif concret et ne démarre plus sur une zone vide ou des termes techniques liés aux modèles.",
-          "Les compteurs techniques de jetons ont été retirés de l’interface client habituelle.",
-          "Les indications identiques sur des détails de forme perdus parviennent à l’assistant comptées plutôt qu’une par une.",
-          "Le dialogue de génération transforme un texte ou une image en modèle via un ComfyUI local et l’ajoute à la même scène modifiable."
+          "Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.",
+          "Lorsque la discussion répartit des objets sur des plateaux d'impression, le résultat est ensuite visible dans la vue.",
+          "Un constat sur un assemblage désigne le corps concerné et porte son action ; là où il n'y en a pas, c'est une simple indication.",
+          "La discussion connaît les nouvelles actions sur les caractéristiques reconnues et les exécute sur demande."
         ]
       }
     ],
     "it": [
       {
-        "title": "Primi passi e orientamento",
+        "title": "Modificare le caratteristiche riconosciute",
         "points": [
-          "Quattro percorsi guidati spiegano le vie principali dal primo progetto fino al risultato stampabile.",
-          "La schermata iniziale sfrutta interamente anche le finestre piccole o strette, senza schede tagliate o contenuti coperti.",
-          "I progetti usati di recente precedono i tour introduttivi e sono quindi raggiungibili più rapidamente.",
-          "La schermata iniziale non sposta più la selezione senza richiesta e si usa completamente con mouse e tastiera.",
-          "Le voci *Nuovo*, *Apri* ed *Esempi* sono ordinate più chiaramente e descrivono la destinazione già prima dell’apertura."
+          "Le caratteristiche riconosciute si possono spostare, ruotare, duplicare e rimuovere: un foro, un perno o una cupola; la cupola senza rotazione, perché non ha orientamento.",
+          "Il ridimensionamento funziona ora anche per un perno o una cupola; finora solo per un foro.",
+          "I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.",
+          "Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.",
+          "Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio."
         ]
       },
       {
-        "title": "Interfaccia e utilizzo",
+        "title": "Spostare, ruotare e selezionare",
         "points": [
-          "I menu hanno titoli ben visibili e colonne di icone allineate in modo uniforme.",
-          "La panoramica dei comandi allinea scorciatoie e spiegazioni, così le voci lunghe si scorrono più rapidamente.",
-          "I dialoghi estesi usano colonne e larghezze di campo uniformi.",
-          "La precedente pagina unica per adesione, retrazione e filamento è divisa in aree di impostazioni più piccole e ben denominate.",
-          "Tutte le 56 impostazioni di stampa si possono cercare tramite le etichette tedesche visibili."
+          "La maniglia di spostamento si trova su ciò che è selezionato: su un foro alla sua apertura, non più al centro del pezzo.",
+          "Si muove ciò che è selezionato: con un foro selezionato, maniglia e barra spostano il foro, non l'intero pezzo.",
+          "Durante il trascinamento, un'anteprima trasparente mostra dove va il foro e un'immagine pallida da dove viene.",
+          "L'ombra segue lo spostamento e mostra così l'altezza sopra il piano."
+        ]
+      },
+      {
+        "title": "Vista e albero degli oggetti",
+        "points": [
+          "La vista ha un comando proprio, ed è la nuova impostazione predefinita: trascinare con il sinistro sposta, con il destro ruota, la rotellina premuta inclina e ingrandisce.",
+          "Con W, A, S e D si vola nella scena, Q ed E inclinano; il volo attraversa un pezzo, mentre lo zoom si ferma davanti.",
+          "Chi è abituato a un altro comando lo sceglie nelle impostazioni: restano gli schemi per Cura, per Bambu Studio, Orca e PrusaSlicer, per un CAD e per Blender.",
+          "La voce *Adatta alla vista* inquadra il pezzo selezionato; senza selezione, tutta la scena come prima."
         ]
       },
       {
         "title": "Disegno e immissione precisa",
         "points": [
-          "I cerchi si inseriscono tramite il diametro; un foro M3 può quindi essere creato direttamente con 3,2 mm.",
-          "Un vincolo di diametro resta un’espressione modificabile dopo la risoluzione, il salvataggio e la riapertura.",
-          "Le quote si modificano direttamente con un doppio clic, senza il precedente e lungo percorso di selezione.",
-          "Posizione X, Y e Z, angolo e scala si possono inserire direttamente nella barra di movimento.",
-          "Un’immissione esatta crea lo stesso passaggio annullabile di un movimento con il mouse."
+          "Lunghezza e larghezza di un disegno selezionato sono modificabili; il disegno segue il numero cambiato insieme alle sue quote.",
+          "Una quota sbagliata si può annullare da sola, e non più solo insieme a tutte le altre.",
+          "Dopo aver estruso uno schizzo, la finestra offre di nuovo anche la via per sottrarlo.",
+          "Una quota digitata vale come è stata digitata: 0,1 non diventa più 0,166667."
         ]
       },
       {
-        "title": "Vista, cronologia e modifica delle forme",
+        "title": "Apertura, salvataggio e file di scambio",
         "points": [
-          "Più corpi selezionati possono essere spostati insieme.",
-          "Più corpi selezionati ruotano attorno a un centro comune e mantengono le distanze reciproche.",
-          "Dopo una rotazione, i corpi possono tornare correttamente sul piano di stampa nello stesso passaggio.",
-          "I movimenti consecutivi dello stesso corpo sono riuniti in un passaggio comprensibile della cronologia.",
-          "I passaggi collegati compaiono come una voce espandibile, invece di sovraccaricare la cronologia con righe singole."
+          "Il primo modello di un progetto è centrato sul piano di stampa invece che dove lo mette il suo file; ogni altro mantiene la sua posizione.",
+          "Un file danneggiato viene rifiutato all'apertura, invece di essere accettato e finire nel progetto al salvataggio.",
+          "Il rifiuto indica il motivo — vuoto, troncato, non è un STL, non è un 3MF, senza triangoli, con coordinate inservibili — e offre *Scegli un altro file*.",
+          "Il download interrotto di un file di modello viene riconosciuto come tale."
         ]
       },
       {
-        "title": "Blocchi personali e file di scambio",
+        "title": "Stampa, slicer e filamento",
         "points": [
-          "I blocchi personali si possono salvare come file locale .solidon-part e aggiungere nuovamente al catalogo.",
-          "I file di blocco si possono aprire, trascinare nell’app e importare tramite l’associazione del sistema operativo.",
-          "Il nome e l’estensione rendono subito evidente che il file appartiene a Solidon.",
-          "Importazione, condivisione e libreria locale usano testi completi dell’interfaccia in tutte e sei le lingue.",
-          "Prima del salvataggio, un blocco personale può essere composto da più passaggi e valori modificabili."
+          "La finestra di stampa mostra i profili corrispondenti alla stampante impostata, invece di un magazzino di 1001 voci.",
+          "Con una Elegoo Centauri Carbon sono quattro, e quello giusto è preselezionato.",
+          "Cambiare stampante nel progetto porta con sé volume di stampa, ugello e codice iniziale: un progetto Prusa non riceve più la macchina della Elegoo.",
+          "Lo slicer riceve i dati della macchina e restituisce un file di stampa, invece di interrompersi con «non compatibile con la stampante»."
         ]
       },
       {
-        "title": "Divisione, stampa e filamento",
+        "title": "Messaggi, pulsanti e informazioni",
         "points": [
-          "La divisione automatica privilegia interfacce solide ed evita il precedente possibile punto debole più sottile.",
-          "Per ogni taglio viene scelto separatamente il tipo di collegamento adatto e salvato come forma concreta.",
-          "Le indicazioni sui collegamenti incollati restano associate al taglio scelto.",
-          "La divisione automatica reagisce in modo riproducibile alle indicazioni modificate e si può annullare durante il calcolo."
-        ]
-      },
-      {
-        "title": "Rapporto, stabilità, piattaforme e lingue",
-        "points": [
-          "Su Linux in una sessione Wayland, Solidon si avvia e mostra la vista 3D; se al sistema manca una libreria, l’applicazione si avvia comunque e dice quale manca.",
-          "I riscontri simili sono raggruppati senza perdere il riferimento ai corpi e ai punti interessati.",
-          "Numeri e misure nel rapporto hanno etichette complete invece di singoli valori incomprensibili.",
-          "Se una riparazione non riesce, il corpo originale invariato viene ripristinato completamente."
+          "I pulsanti bloccati indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.",
+          "Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Crea* nella finestra del modello.",
+          "I rifiuti non finiscono con la sola frase, ma con la via d'uscita.",
+          "Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese."
         ]
       },
       {
         "title": "Chat e assistenza dei modelli",
         "points": [
-          "La chat accoglie con il proprio scopo concreto e non si apre più con uno spazio vuoto o termini tecnici relativi ai modelli.",
-          "I contatori tecnici dei token sono stati rimossi dalla normale interfaccia per i clienti.",
-          "Le segnalazioni identiche su dettagli di forma persi raggiungono l’assistente conteggiate invece che una per una.",
-          "La finestra di generazione trasforma testo o immagine in un modello tramite ComfyUI locale e lo inserisce nella stessa scena modificabile."
+          "Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.",
+          "Quando la chat dispone oggetti sui piani di stampa, il risultato è poi visibile nell'immagine.",
+          "Un rilievo su un assieme indica il corpo interessato e porta la sua azione; dove non ce n'è, è una semplice indicazione.",
+          "La chat conosce le nuove azioni sulle caratteristiche riconosciute e le esegue su richiesta."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Primeiros passos e orientação",
+        "title": "Editar características reconhecidas",
         "points": [
-          "Quatro percursos guiados explicam os caminhos principais, desde o primeiro esboço até ao resultado pronto a imprimir.",
-          "O ecrã inicial ocupa por completo até janelas pequenas ou estreitas, sem cartões cortados nem conteúdos tapados.",
-          "Os projetos usados recentemente aparecem antes das visitas introdutórias e ficam assim mais rapidamente acessíveis.",
-          "O ecrã inicial já não move a seleção sem pedido e pode ser usado inteiramente com rato e teclado.",
-          "As opções *Novo*, *Abrir* e *Exemplos* estão organizadas com mais clareza e descrevem o destino antes de o abrir."
+          "As características reconhecidas podem ser movidas, rodadas, duplicadas e removidas: um furo, um pino ou uma cúpula; a cúpula sem rodar, por não ter orientação.",
+          "Redimensionar funciona agora também num pino ou numa cúpula; até agora, apenas num furo.",
+          "Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.",
+          "Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.",
+          "Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio."
         ]
       },
       {
-        "title": "Interface e utilização",
+        "title": "Mover, rodar e selecionar",
         "points": [
-          "Os menus têm títulos bem visíveis e colunas de ícones alinhadas de forma uniforme.",
-          "A visão geral dos comandos alinha atalhos e explicações, permitindo percorrer mais depressa as entradas longas.",
-          "Os diálogos extensos usam colunas e larguras de campo uniformes.",
-          "A antiga página conjunta para aderência, retração e filamento foi dividida em áreas de definições menores e com nomes claros.",
-          "Todas as 56 definições de impressão podem ser pesquisadas pelas respetivas designações alemãs visíveis."
+          "A alça de movimento fica no que está selecionado: num furo, na sua abertura, e não no centro da peça.",
+          "Move-se o que está selecionado: com um furo marcado, a alça e a barra deslocam o furo, não a peça inteira.",
+          "Ao arrastar, uma pré-visualização transparente mostra para onde vai o furo e uma cópia pálida de onde veio.",
+          "A sombra acompanha o movimento e mostra assim a altura acima da mesa."
+        ]
+      },
+      {
+        "title": "Vista e árvore de objetos",
+        "points": [
+          "A vista tem um comando próprio, e é a nova predefinição: arrastar com o esquerdo desloca, com o direito roda, a roda premida inclina e a roda amplia.",
+          "Com W, A, S e D voa-se pela cena, e Q e E inclinam; o voo atravessa uma peça, enquanto a ampliação para à frente dela.",
+          "Quem está habituado a outro comando escolhe-o nas definições: mantêm-se os esquemas para Cura, para Bambu Studio, Orca e PrusaSlicer, para um CAD e para Blender.",
+          "A entrada *Ajustar à vista* enquadra a peça selecionada; sem seleção, toda a cena como antes."
         ]
       },
       {
         "title": "Desenho e introdução precisa",
         "points": [
-          "Os círculos são introduzidos pelo diâmetro; um furo M3 pode assim ser criado diretamente com 3,2 mm.",
-          "Uma restrição de diâmetro continua a ser uma expressão editável após resolver, guardar e voltar a abrir.",
-          "As medidas podem ser editadas diretamente com duplo clique, sem o anterior e demorado percurso de seleção.",
-          "A posição X, Y e Z, o ângulo e a escala podem ser introduzidos diretamente na barra de movimento.",
-          "Uma introdução exata cria o mesmo passo reversível que um movimento com o rato."
+          "O comprimento e a largura de um desenho selecionado são editáveis; o desenho segue o número alterado com as suas cotas.",
+          "Uma cota mal colocada pode ser anulada isoladamente, e não apenas com todas as outras.",
+          "Depois de extrudir um esboço, o diálogo volta a oferecer também o caminho para o subtrair.",
+          "Uma cota escrita vale como foi escrita: 0,1 já não se torna 0,166667."
         ]
       },
       {
-        "title": "Vista, histórico e edição de formas",
+        "title": "Abertura, gravação e ficheiros de troca",
         "points": [
-          "É possível mover em conjunto vários corpos selecionados.",
-          "Vários corpos selecionados rodam em torno de um centro comum e mantêm as distâncias entre si.",
-          "Depois de rodar, os corpos podem voltar corretamente à mesa de impressão no mesmo passo de trabalho.",
-          "Os movimentos consecutivos do mesmo corpo são reunidos num passo compreensível do histórico.",
-          "Os passos relacionados aparecem numa entrada expansível, em vez de sobrecarregarem o histórico com linhas isoladas."
+          "O primeiro modelo de um projeto fica centrado na mesa de impressão em vez de onde o seu ficheiro o coloca; os restantes mantêm a sua posição.",
+          "Um ficheiro danificado é recusado ao abrir, em vez de ser aceite e acabar no projeto ao gravar.",
+          "A recusa indica o motivo — vazio, truncado, não é STL, não é 3MF, sem triângulos, com coordenadas inutilizáveis — e oferece *Escolher outro ficheiro*.",
+          "A transferência interrompida de um ficheiro de modelo é reconhecida como tal."
         ]
       },
       {
-        "title": "Blocos próprios e ficheiros de troca",
+        "title": "Impressão, slicer e filamento",
         "points": [
-          "Os blocos próprios podem ser guardados num ficheiro local .solidon-part e adicionados novamente ao catálogo.",
-          "Os ficheiros de bloco podem ser abertos, arrastados para a aplicação e importados pela associação de ficheiros do sistema.",
-          "O nome e a extensão mostram de imediato que o ficheiro pertence ao Solidon.",
-          "A importação, partilha e biblioteca local usam textos completos da interface nos seis idiomas.",
-          "Antes de guardar, um bloco próprio pode ser composto por vários passos e valores editáveis."
+          "O diálogo de impressão mostra os perfis correspondentes à impressora definida, em vez de um acervo de 1001 entradas.",
+          "Com uma Elegoo Centauri Carbon são quatro, e o correto vem pré-selecionado.",
+          "Mudar a impressora no projeto arrasta volume de impressão, bico e código inicial: um projeto Prusa já não recebe a máquina da Elegoo.",
+          "O slicer recebe os dados da máquina e devolve um ficheiro de impressão, em vez de abortar com «não compatível com a impressora»."
         ]
       },
       {
-        "title": "Divisão, impressão e filamento",
+        "title": "Mensagens, botões e informação",
         "points": [
-          "A divisão automática privilegia interfaces resistentes e evita o anterior ponto fraco mais fino que podia ser escolhido.",
-          "O tipo de ligação adequado é escolhido separadamente para cada corte e guardado como uma forma concreta.",
-          "As indicações sobre ligações coladas permanecem associadas ao corte escolhido.",
-          "A divisão automática responde de forma reproduzível a orientações alteradas e pode ser cancelada durante o cálculo."
-        ]
-      },
-      {
-        "title": "Relatório, estabilidade, plataformas e idiomas",
-        "points": [
-          "No Linux numa sessão Wayland, o Solidon arranca e mostra a vista 3D; se faltar uma biblioteca ao sistema, a aplicação arranca à mesma e indica qual falta.",
-          "Os resultados semelhantes são agrupados sem perder a ligação aos corpos e locais afetados.",
-          "Os números e medições no relatório têm designações completas, em vez de valores isolados incompreensíveis.",
-          "Se uma reparação falhar, o corpo original inalterado é totalmente restaurado."
+          "Os botões bloqueados indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.",
+          "Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.",
+          "As recusas não terminam apenas com a frase, mas com a saída.",
+          "Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês."
         ]
       },
       {
         "title": "Chat e apoio de modelos",
         "points": [
-          "O chat apresenta o seu objetivo concreto e já não começa com um espaço vazio ou termos técnicos de modelos.",
-          "Os contadores técnicos de tokens foram retirados da interface normal do cliente.",
-          "Os avisos idênticos sobre detalhes de forma perdidos chegam ao assistente contados em vez de um a um.",
-          "O diálogo de geração transforma texto ou imagem num modelo através de um ComfyUI local e insere-o na mesma cena editável."
+          "Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.",
+          "Quando o chat distribui objetos por mesas de impressão, o resultado fica depois visível na imagem.",
+          "Um achado sobre um conjunto aponta o corpo em questão e traz a sua ação; onde não há nenhuma, é uma simples indicação.",
+          "O chat conhece as novas ações sobre características reconhecidas e executa-as quando pedido."
         ]
       }
     ]
   },
-  "signature": "356ba11ae52c2a79bd4a4d13df5a1d167a64ab34ab85b213e4d51817e93e879a4f41673d7d65fdac2fc9db86d44460415b6823ef203b385c4b8f49c7d1a47304"
+  "changes_total": 86,
+  "signature": "2322b7ab09b4d554dae8a7bb402ceab3c2ab350253dc742c6bc37420cde06b4bb3521cc642b2ea39d3caaf964f9b5b65b566f4a7129ce3919d82d706a79cd007"
 }
