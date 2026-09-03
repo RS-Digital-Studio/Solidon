@@ -990,15 +990,15 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: vollständig auf der Grafikkarte. Wer ein größeres Modell fährt, zahlt hier
 #: zuerst.
 #:
-#: Die Reihe fuhr 84 Schemata. Am 31.08.2026 sind es mit 106 Werkzeugen
-#: **19 641 Token** für den kompakten Satz, den dieser Weg fährt
-#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — 59,9 % des
-#: Fensters. Vorher waren es am selben Tag und mit demselben Skript gemessen
-#: 24 161; die Differenz sind die zwei Schritte, die wortgleiche Wiederholung
-#: aus dem Schema in den Systemprompt geholt haben (``objects`` und die sechs
-#: Platzierungsangaben eines Bausteins). Der Test gegen
-#: :data:`PROMPT_TOOL_COUNT` macht jede weitere Operation zum Anlass für eine
-#: neue Messung.
+#: Die Reihe fuhr 84 Schemata. Am 03.09.2026 sind es mit 110 Werkzeugen
+#: **22 691 Token** für den kompakten Satz, den dieser Weg fährt
+#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — 69,2 % des
+#: Fensters. Am 31.08.2026 waren es 19 641 bei 106 Werkzeugen, und davor am
+#: selben Tag 24 161; die Differenz zwischen diesen beiden sind die zwei
+#: Schritte, die wortgleiche Wiederholung aus dem Schema in den Systemprompt
+#: geholt haben (``objects`` und die sechs Platzierungsangaben eines
+#: Bausteins). Der Test gegen :data:`PROMPT_TOOL_COUNT` macht jede weitere
+#: Operation zum Anlass für eine neue Messung.
 #:
 #: **Die Zeit daneben misst etwas anderes als die Zahl.** Beide Läufe brauchten
 #: über zehn Minuten, weil ``api/ps`` während der Messung ``0.0 GB im VRAM``
@@ -1780,7 +1780,7 @@ def ollama_tool_check(
 GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 
 #: Wie groß der Systemprompt dieser Anwendung ist — einschließlich des
-#: kompakten Werkzeugsatzes, den der Ollama-Pfad fährt. Am 31.08.2026 mit
+#: kompakten Werkzeugsatzes, den der Ollama-Pfad fährt. Am 03.09.2026 mit
 #: ``qwen3:14b`` über den echten ``/api/chat``-Auftrag gemessen, nicht aus der
 #: JSON-Länge geschätzt (siehe :data:`OLLAMA_CONTEXT_TOKENS`).
 #:
@@ -1791,12 +1791,20 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: und nach zwei Schritten an den Werkzeugschemata waren es 19 641 — der
 #: Kunde bekam eine um 22 Prozent zu hohe Schätzung, bei 7,8 Token je Sekunde
 #: einundfünfzig statt zweiundvierzig Minuten.
-PROMPT_TOKENS: Final = 19641
+#:
+#: **Und sie wächst mit dem Register, nicht nur mit einer Optimierung.** Die
+#: vier Merkmalsoperationen vom 03.09.2026 haben sie auf **22 691** gehoben —
+#: dieselbe Messung, dieselbe Karte, 110 statt 106 Werkzeuge. Das sind bei
+#: 7,8 Token je Sekunde achtundvierzig Minuten statt zweiundvierzig, und
+#: genau deshalb steht die Zahl nicht als Schätzung im Code: Wer eine
+#: Operation dazulegt, verlängert dem Kunden die Wartezeit, und er soll es
+#: hier sehen.
+PROMPT_TOKENS: Final = 22691
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen.
-PROMPT_TOOL_COUNT: Final = 106
+PROMPT_TOOL_COUNT: Final = 110
 
 
 @dataclass(frozen=True, slots=True)

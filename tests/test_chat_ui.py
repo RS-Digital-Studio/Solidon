@@ -1339,16 +1339,22 @@ def test_a_broken_pull_frees_the_button(
 def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """**Gemessene zweiundvierzig Minuten, bis die erste Antwort beginnt.**
+    """**Achtundvierzig gemessene Minuten, bis die erste Antwort beginnt.**
 
     Auf einer Maschine mit Intel-Arc-Grafik spricht Ollama die Karte nicht an
     und rechnet auf dem Prozessor: 7,8 Token je Sekunde beim Einlesen, und der
-    Auftrag dieser Anwendung ist rund 20 000 Token lang. „Das Modell ruft
+    Auftrag dieser Anwendung ist über 22 000 Token lang. „Das Modell ruft
     Werkzeuge auf" ist dann wahr und nutzlos — der Kunde sieht ein Fenster, das
     nichts tut, und hält es für einen Fehler der Anwendung.
 
     Die Zahlen setzt die Oberfläche ein, nicht der Kern: Dort steht der Satz
     mit seinen Platzhaltern (§33.1, dasselbe Muster wie ``AppError.values``).
+
+    **Die Minutenzahl steht hier nicht fest, sie wird gerechnet.** Am
+    03.09.2026 stand „42" im Test und war seit der Messung von 22 691 Token
+    falsch — dieselbe Zahl, die ``PROMPT_TOKENS`` trägt, kam vier Zeilen
+    später als Behauptung wieder heraus. Was der Test prüft, ist nicht die
+    Arithmetik, sondern dass die Wartezeit überhaupt im Satz steht.
     """
     from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
@@ -1360,7 +1366,8 @@ def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     gesagt = dialog.probe_result.text()
     assert "Prozessor" in gesagt
     assert "7.8" in gesagt, "die gemessene Zahl steht dabei"
-    assert "42" in gesagt, "und was sie für den Kunden bedeutet"
+    minutes = round(llm.PROMPT_TOKENS / 7.8 / 60)
+    assert str(minutes) in gesagt, "und was sie für den Kunden bedeutet"
     assert "Zehn-Minuten-Grenze" in gesagt, "der CPU-Weg endet vor dem Ergebnis"
     assert "nicht abgeschlossen" in gesagt, "die Grenze wird nicht als langsamer Erfolg verkauft"
     assert "Grafikkarte" in gesagt, "der erste nutzbare Wechselweg steht dabei"

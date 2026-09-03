@@ -44,7 +44,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-582 Parameter der 95 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+592 Parameter der 99 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile; im Operationsdialog holt
 `QFormLayout.labelForField` die Beschriftung, die `addRow` aus der Zeichenkette
 gebaut hat (`_explain` in `op_dialog.py`). Ist eine Zeile gesperrt, tragen beide
@@ -720,7 +720,7 @@ Im **Schema** bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`);
 im Dialog steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Sechsundzwanzig von fünfundneunzig
+wann eine Operation die falsche Wahl ist. Sechsundzwanzig von neunundneunzig
 Operationen tragen einen (gemessen am 29.08.2026; hier stand „zwölf", und die
 Zahl war mit dem Bestand nicht mitgewachsen — sie ist deshalb jetzt geprüft,
 siehe `tests/test_registry_consistency.py`). Gelesen hat ihn lange allein die

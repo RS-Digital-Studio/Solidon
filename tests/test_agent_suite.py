@@ -584,11 +584,20 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
     described = {schema["name"]: schema["description"] for schema in tools.operation_tools()}
 
     # **Das Paar aus einem Menü ist der Wächter.** Beide liegen in *Ändern*:
-    # *Bohrungen* steht direkt darin, *Formgebung* faltet. Eine Umsetzung, die
+    # *Vereinigen* steht direkt darin, *Formgebung* faltet. Eine Umsetzung, die
     # grundsätzlich abschneidet, bricht die zweite; eine, die grundsätzlich eine
     # Ebene erfindet, die erste. Zusammen kann keine Pauschalregel sie erfüllen.
-    assert "Menü: Ändern → Bohrung setzen." in described["drill_hole"]
+    #
+    # **Hier stand ``drill_hole``, und das Paar hat sich selbst aufgelöst.** Mit
+    # den vier Merkmalsoperationen (versetzen, drehen, ändern, entfernen) wuchs
+    # die Gruppe *Merkmale* von zwei Einträgen auf neun; *Ändern* hätte damit
+    # sechzehn Zeilen gehabt und faltet sie stattdessen. Der Weg zur Bohrung ist
+    # seither dreistufig — richtig gerechnet, aber als Wächter taugte er nicht
+    # mehr, weil beide Hälften des Paares dieselbe Tiefe hatten. Die Booleschen
+    # sind zu dritt und wachsen nicht; sie bleiben direkt im Menü.
+    assert "Menü: Ändern → Vereinigen." in described["union_objects"]
     assert "Menü: Ändern → Formgebung → Fase anbringen." in described["chamfer_edges"]
+    assert "Menü: Ändern → Merkmale → Bohrung setzen." in described["drill_hole"]
     assert "Menü: Erzeugen → Quader anlegen." in described["create_box"]
     assert "Menü: Objekt → Objekt umbenennen." in described["rename_object"]
 
