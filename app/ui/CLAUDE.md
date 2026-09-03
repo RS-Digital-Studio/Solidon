@@ -33,7 +33,7 @@ viewport.py      zeigt an
 `session.py` ist die einzige Stelle, an der die Oberfläche den Kern anfasst.
 Wer an ihr vorbei rechnet, bricht Regel 2.
 
-## Die vier Dinge, die an `session.py` überraschen
+## Die fünf Dinge, die an `session.py` überraschen
 
 Ende zu Ende gemessen am 27.08.2026 — vier Anläufe gingen daran verloren,
 bevor es jemand wusste:
@@ -49,6 +49,16 @@ bevor es jemand wusste:
 - **`Scene.objects` ist ein Wörterbuch.** Darüber zu iterieren gibt die
   Kennungen. Die Folgemeldung `'str' object has no attribute 'mesh'` sieht
   aus wie ein leerer Import und ist keiner.
+
+- **Das Fenster liest über `import_model_async`, nicht über `import_model`.**
+  Der synchrone Weg steht daneben und bleibt — Kommandozeile und Tests
+  brauchen einen, der wirft. Das Fenster braucht einen, der meldet: Bei einer
+  3MF zählt `import_plan` die ganze Baugruppe, bevor eine Operation entsteht,
+  und das dauert bei 63 MB vierzehn Sekunden. Oberhalb von
+  `PLAN_IN_WORKER_ABOVE` läuft das im Arbeiter, der Fehler kommt über
+  `importFailed`. Wer in einem Test `session.import_model` patcht, patcht
+  damit einen Weg, den das Fenster nicht mehr geht — fünf Tests in
+  `test_ui.py` hingen daran (03.09.2026).
 
 ## Die Karte
 

@@ -68,6 +68,38 @@ stehen bleibt, aussieht wie ein hängendes Programm — und eine Frage, die
 darunter gestellt wird, sagt zweierlei. `_offer_recovery` liegt deshalb
 außerhalb.
 
+**Seit dem 03.09.2026 gilt das nur noch unterhalb von acht Megabyte.** Bei
+einer 3MF zählt `import_plan` die Körper und Dreiecke der ganzen Baugruppe,
+bevor eine Operation entsteht (§11, §32) — gemessen an einer Datei von 63 MB
+mit 32 Körpern und 5 476 596 Dreiecken sind das **14,1 s**, während das Lesen
+von der Platte 0,09 s kostet. Nicht das Lesen ist teuer, sondern das Zählen.
+
+`Session.import_model_async` schiebt deshalb den Plan in einen Arbeiter, und
+die Ladeanzeige greift dort sehr wohl: Der Fortschritt läuft über die
+Modelldateien des Archivs, bei einer großen Baugruppe achtundzwanzig Meldungen.
+Unterhalb der Grenze (`PLAN_IN_WORKER_ABOVE`, gemessene 0,18 s je MB, also etwa
+1,4 s bei acht MB) bleibt es beim geraden Weg unter `waiting()` — ein Arbeiter
+für einen Plan, der in Mikrosekunden steht, verschöbe das Ergebnis hinter die
+Ereignisschleife, ohne dass jemand darauf gewartet hätte.
+
+Zwei Fallen dabei, beide gemessen und beide teuer:
+
+**Der Wartezeiger des Aufrufers steht noch, wenn der Weg gerade durchläuft.**
+`with waiting(): self.session.import_model_async(path)` ist richtig — unterhalb
+der Grenze steht der Zeiger, darüber kehrt der Aufruf sofort zurück und die
+Ladeanzeige übernimmt. Aber ein Fehler, der aus dem synchronen Zweig kommt,
+erreicht seinen Slot **innerhalb** dieses `with`, und ein Fehlerdialog unter
+dem Wartezeiger ist genau das Fenster, das zugleich fragt und bittet zu warten.
+`_on_import_failed` nimmt ihn deshalb selbst zurück, bevor es `show_error`
+ruft.
+
+**Und `wait_for_idle` muss jeden Arbeitertyp kennen.** Es kannte den neuen
+nicht und kehrte zurück, bevor überhaupt eine Operation auf dem Stapel lag —
+wer danach die Szene fragte, bekam eine leere. Wer einen Arbeiter dazubaut,
+trägt ihn dort ein; sonst wartet die Schleife auf einen Lauf, den es noch gar
+nicht gibt.
+
+
 **Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
 Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb
 geschriebener Export ist eine halbe Datei, und der Schreiber im Kern hat keinen
