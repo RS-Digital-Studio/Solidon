@@ -5039,15 +5039,23 @@ def test_the_keyboard_reaches_zoom_and_the_next_body(window: MainWindow) -> None
     assert any("+" in text for text in shortcuts), "der Zoom hat ein Kürzel"
 
 
-def test_the_fourth_navigation_scheme_exists_without_changing_the_default() -> None:
-    """Bambu, Orca und Prusa drehen mit links; §2.9 gibt Cura vor.
+def test_the_default_navigation_is_solidons_own() -> None:
+    """Die Vorgabe ist die eigene Steuerung, nicht mehr die von Cura (§2.9).
 
-    Ein viertes Wahlschema ist keine Bauplanänderung — die Vorgabe bleibt.
+    Bis zum 03.09.2026 sicherte dieser Test das Gegenteil zu: „die Vorgabe
+    folgt weiter §2.9" hieß damals ``slicer``. Robert hat sie an diesem Tag
+    umgelegt, und der Bauplan ist mitgezogen — eine Zusicherung, die einer
+    Entscheidung widerspricht, ist kein Schutz, sondern ein Hindernis.
+
+    Was bleibt, ist die Aussage darunter: Die vier Nachbildungen sind alle
+    noch da. Eine neue Vorgabe darf keine Wahl kosten, die jemand schon
+    getroffen hat.
     """
     from app.ui.settings_dialog import NAVIGATION
 
-    assert "orbit" in NAVIGATION
-    assert UiSettings().navigation == "slicer", "die Vorgabe folgt weiter §2.9"
+    assert UiSettings().navigation == "solidon", "die Vorgabe ist die eigene"
+    for nachbildung in ("slicer", "orbit", "cad", "blender"):
+        assert nachbildung in NAVIGATION, f"{nachbildung} ist verschwunden"
 
 
 def test_the_report_can_be_filtered(window: MainWindow) -> None:

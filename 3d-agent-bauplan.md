@@ -304,10 +304,24 @@ Viewport, nie ein blockierendes Fenster.
 
 ### 2.9 Maus und Navigation
 
-Vorgabe folgt der Slicer-Gewohnheit: linke Taste wählt, rechte oder mittlere
-Taste dreht, Umschalt plus Ziehen schiebt, Rad zoomt auf den Mauszeiger. Zwei
-Alternativschemata (CAD-typisch, Blender-typisch) stehen in den Einstellungen
-— das kostet fast nichts und erspart Umgewöhnung.
+Vorgabe ist Solidons eigene Steuerung: Die linke Taste verschiebt beim Ziehen
+und wählt beim Klicken, die rechte dreht um den Mittelpunkt der Ansicht, das
+gedrückte Rad kippt nach oben und unten, das gescrollte Rad zoomt auf den
+Mauszeiger. Dazu fliegen W, A, S und D durch die Szene, Q und E kippen sie.
+Der Flug nimmt den Blickpunkt mit — anders als der Zoom, der bis vor das Teil
+fährt und dort stehen bleibt.
+
+Bis zum 03.09.2026 stand hier die Slicer-Gewohnheit als Vorgabe; Robert hat
+sie an diesem Tag umgelegt („eine eigene und Standard wählen"). Sie ist nicht
+verschwunden, sondern eines von vier Alternativschemata, die Fremdprogramme
+nachbilden und in den Einstellungen stehen: Cura (links wählt, rechts dreht,
+Umschalt und Ziehen schiebt), Bambu Studio/Orca/PrusaSlicer (links dreht),
+CAD-typisch (mittlere Taste dreht, rechts zoomt) und Blender-typisch. Das
+kostet fast nichts und erspart Umgewöhnung.
+
+Die Tastatursteuerung gilt nur in der eigenen Vorgabe. In einer Nachbildung
+wäre sie eine Bewegung, die das Vorbild nicht kennt — und in Blender sind die
+Tasten belegt.
 
 ---
 

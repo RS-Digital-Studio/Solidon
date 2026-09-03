@@ -3083,6 +3083,13 @@ class Viewport(QWidget):
         # den Tabulator — wer die Ansicht anklickt, um zu fliegen, hat ihn dann
         # ohnehin.
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        # **Und wer fokussierbar ist, muss sich nennen können** (§19.2).
+        # Mit der Fokusrichtlinie ist die Ansicht zum ersten Mal ein Element,
+        # das ein Bildschirmleser ansteuert; ohne Namen sagt er ihre Bauart an
+        # statt dessen, was sie zeigt. Befund von 3d-druck-d4 am 03.09.2026 —
+        # eine Regression, die keine Zeile Bedienlogik berührt und trotzdem
+        # eine ist.
+        self.setAccessibleName(tr("3D-Ansicht"))
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self.plotter: Any | None = None
@@ -3633,7 +3640,14 @@ class Viewport(QWidget):
         self.set_theme("dark")
         # Schaltet das Picking gleich mit ein — ein Stilwechsel und der erste
         # Aufbau sind für die Ansicht dasselbe.
-        self.set_navigation("slicer")
+        #
+        # **Das gesetzte Schema, nicht ein fest eingetragenes.** Hier stand
+        # ``"slicer"``, und der Plotter entsteht später als
+        # ``_apply_settings``: Was der Kunde eingestellt hatte, wurde beim
+        # Aufbau überschrieben. Menü und Dialog zeigten sein Schema, die Maus
+        # fuhr das andere. Solange die Vorgabe ``slicer`` hieß, traf es nur
+        # den, der umstellte; seit dem 03.09.2026 träfe es jeden.
+        self.set_navigation(self._scheme)
         self._watch_camera()
         # **Die eigene Iso, nicht die von pyvista.** Ohne diese Zeile erbte die
         # Anwendung pyvistas Stellung über (1, 1, 1) — und ihre eigene Vorgabe
