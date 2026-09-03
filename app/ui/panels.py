@@ -3953,6 +3953,16 @@ class FeaturePanel(QWidget):
     #: Registername und Parameter — dieselbe Form, die der Operationsdialog
     #: nach außen gibt, damit das Fenster beide gleich behandelt.
     operationRequested = Signal(str, dict)
+    #: Dieselbe Handlung für **mehrere** gleichartige Merkmale, in einer
+    #: Transaktion — Registername, Werte, und die Kennungen, für die sie gilt.
+    #:
+    #: Sechs Bohrungen auf Ø 5 zu bringen heißt sonst sechsmal derselbe Weg.
+    #: Ein Undo nimmt sie zusammen zurück, weil es eine Handlung war (Regel 16).
+    operationRequestedForEach = Signal(str, dict, list)
+    #: Der Katalog, aus der Fläche heraus. An einer Fläche gilt keine der vier
+    #: Merkmalshandlungen — dafür setzen dort fünfundzwanzig Bausteine an, und
+    #: der Weg dorthin lag hinter Rechtsklick und Untermenü.
+    catalogRequested = Signal()
     #: Dieselbe Form, während noch getippt wird (Robert, 03.09.2026: „eine
     #: live vorschau wäre noch gut").
     #:
@@ -3981,6 +3991,7 @@ class FeaturePanel(QWidget):
         self._rows.addWidget(self._empty)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
+        self._alike: tuple[str, ...] = ()
 
     def clear(self) -> None:
         """Zurück auf den leeren Zustand."""
@@ -3989,14 +4000,22 @@ class FeaturePanel(QWidget):
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None
+        self._alike = ()
         self._empty.setVisible(True)
 
-    def show_feature(self, feature_id: str, feature: Feature) -> None:
-        """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern."""
+    def show_feature(self, feature_id: str, feature: Feature, alike: Sequence[str] = ()) -> None:
+        """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern.
+
+        ``alike`` sind die **gleichartigen Geschwister** am selben Körper. Wo es
+        sie gibt, bekommt jede Handlung einen Haken „auf alle N anwenden": Sechs
+        Bohrungen auf ein neues Maß zu bringen war bis dahin sechsmal derselbe
+        Weg, und der Objektbaum führt sie längst unter einem Dach.
+        """
         from app.core.perceive.actions import actions_for
 
         self.clear()
         self._feature_id = feature_id
+        self._alike = tuple(alike)
         self._empty.setVisible(False)
 
         heading = QLabel(f"{feature_name(feature_id, feature)}  ·  {feature_measure(feature)}")
@@ -4006,10 +4025,26 @@ class FeaturePanel(QWidget):
         self._rows.insertWidget(self._rows.count() - 1, heading)
         self._built.append(heading)
 
-        for action in actions_for(feature):
+        actions = actions_for(feature)
+        for action in actions:
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
+
+        # **Wo nichts gilt, steht der Weg, der gilt.** An einer Fläche ist
+        # jede der vier Handlungen abgelehnt — dort setzen dafür
+        # fünfundzwanzig Bausteine an, und der Katalog lag hinter Rechtsklick
+        # und Untermenü. Ein Panel aus vier grauen Zeilen ist eine Sackgasse
+        # mit Begründung; eine Sackgasse bleibt es trotzdem.
+        if not any(action.op for action in actions):
+            catalog = QPushButton(tr("Baustein einsetzen …"), self)
+            catalog.setStatusTip(
+                tr("Öffnet den Katalog — Bohrung, Mutternfalle, Magnettasche und die übrigen.")
+            )
+            catalog.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+            catalog.clicked.connect(lambda _checked=False: self.catalogRequested.emit())
+            self._rows.insertWidget(self._rows.count() - 1, catalog)
+            self._built.append(catalog)
 
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
@@ -4057,16 +4092,32 @@ class FeaturePanel(QWidget):
                 form.addRow(label, editor)
             layout.addLayout(form)
 
+        # **Der Haken steht nur da, wo es Geschwister gibt.** „Auf alle 1
+        # anwenden" wäre eine Frage ohne Unterschied; ab dem zweiten
+        # gleichartigen Merkmal spart er fünf Wege.
+        every: QCheckBox | None = None
+        if self._alike:
+            every = QCheckBox(
+                tr("Auf alle {count} gleichartigen anwenden").format(count=len(self._alike) + 1),
+                box,
+            )
+            every.setStatusTip(
+                tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
+            )
+            layout.addWidget(every)
+
         button = QPushButton(str(action.title), box)
         button.setStatusTip(str(action.reason) or str(action.title))
         # Der Knopf trägt den ganzen Titel und wird nicht gekürzt; die Breite
         # gehört ihm, weil er die Handlung benennt.
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        button.clicked.connect(
-            lambda _checked=False, op=str(action.op), fields=tuple(action.fields), boxes=widgets: (
-                self._emit(op, fields, boxes)
-            )
-        )
+        op_name = str(action.op)
+        entries = tuple(action.fields)
+
+        def run(_checked: bool = False) -> None:
+            self._emit(op_name, entries, widgets, every)
+
+        button.clicked.connect(run)
         layout.addWidget(button)
         return box
 
@@ -4143,9 +4194,23 @@ class FeaturePanel(QWidget):
                 params[str(field.name)] = float(widget.value())
         return params
 
-    def _emit(self, op: str, fields: Sequence[Any], widgets: Mapping[str, QWidget]) -> None:
-        """Die Werte einsammeln und die Operation nennen — gerechnet wird im Kern."""
-        self.operationRequested.emit(op, self._values(fields, widgets))
+    def _emit(
+        self,
+        op: str,
+        fields: Sequence[Any],
+        widgets: Mapping[str, QWidget],
+        every: QCheckBox | None = None,
+    ) -> None:
+        """Die Werte einsammeln und die Operation nennen — gerechnet wird im Kern.
+
+        Ist der Haken gesetzt, gilt sie allen gleichartigen Merkmalen des
+        Körpers, und das Fenster macht daraus **eine** Transaktion.
+        """
+        params = self._values(fields, widgets)
+        if every is not None and every.isChecked() and self._feature_id is not None:
+            self.operationRequestedForEach.emit(op, params, [self._feature_id, *self._alike])
+            return
+        self.operationRequested.emit(op, params)
 
 
 def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:

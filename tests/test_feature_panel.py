@@ -191,3 +191,79 @@ def test_a_length_is_reported_in_millimetres(qt_app: QApplication) -> None:
     assert gemeldet, "nichts gemeldet"
     werte = [wert for name, wert in gemeldet[-1].items() if name != "at_feature"]
     assert any(abs(float(wert) - 12.5) < 1e-6 for wert in werte if isinstance(wert, (int, float)))
+
+
+def a_face() -> tuple[str, Feature]:
+    found = features.detect(plate())
+    return next((key, value) for key, value in found.items() if value.kind == "face")
+
+
+def test_a_face_gets_the_catalogue_instead_of_a_dead_end(qt_app: QApplication) -> None:
+    """An einer Fläche gilt keine der vier Handlungen — dort setzen dafür
+    fünfundzwanzig Bausteine an.
+
+    Vier graue Zeilen mit Begründung sind eine Sackgasse mit Erklärung; eine
+    Sackgasse bleibt es trotzdem. Der Katalog lag hinter Rechtsklick und
+    Untermenü.
+    """
+    identifier, feature = a_face()
+    assert all(action.op is None for action in actions_for(feature)), "sonst prüft das nichts"
+
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    gerufen: list[bool] = []
+    panel.catalogRequested.connect(lambda: gerufen.append(True))
+
+    knopf = next(widget for widget in panel._built if isinstance(widget, QPushButton))
+    knopf.click()
+
+    assert gerufen == [True], "der Knopf öffnet den Katalog"
+
+
+def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> None:
+    """„Auf alle 1 anwenden" wäre eine Frage ohne Unterschied."""
+    identifier, feature = a_hole()
+    allein = FeaturePanel()
+    allein.show_feature(identifier, feature)
+    assert not [
+        widget
+        for row in allein._built
+        for widget in row.findChildren(QCheckBox)
+        if "alle" in widget.text()
+    ], "ohne Geschwister kein Haken"
+
+    mit = FeaturePanel()
+    mit.show_feature(identifier, feature, ["hole_2", "hole_3"])
+    haken = [
+        widget
+        for row in mit._built
+        for widget in row.findChildren(QCheckBox)
+        if "alle" in widget.text()
+    ]
+    assert haken, "mit Geschwistern schon"
+    assert "3" in haken[0].text(), "und er nennt die Zahl: das eigene plus zwei"
+
+
+def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
+    """Gesetzt gilt die Handlung allen — und das Panel nennt sie einzeln,
+    damit das Fenster eine Transaktion daraus machen kann (Regel 16)."""
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature, ["hole_2", "hole_3"])
+    fuer_alle: list[tuple[str, dict[str, object], list[str]]] = []
+    einzeln: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequestedForEach.connect(
+        lambda op, params, ids: fuer_alle.append((op, params, ids))
+    )
+    panel.operationRequested.connect(lambda op, params: einzeln.append((op, params)))
+
+    row = next(
+        row for row in panel._built if row.findChildren(QCheckBox) and row.findChildren(QPushButton)
+    )
+    next(box for box in row.findChildren(QCheckBox) if "alle" in box.text()).setChecked(True)
+    row.findChildren(QPushButton)[0].click()
+
+    assert not einzeln, "gesetzt heißt: nicht nur dieses eine"
+    assert fuer_alle, "die Sammelhandlung wurde nicht gemeldet"
+    _op, _params, ids = fuer_alle[-1]
+    assert ids == [identifier, "hole_2", "hole_3"], "alle drei, das eigene zuerst"

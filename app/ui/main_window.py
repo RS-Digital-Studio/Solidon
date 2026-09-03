@@ -1464,6 +1464,10 @@ class MainWindow(QMainWindow):
         self._feature_preview.timeout.connect(self._preview_feature_change)
         self._feature_pending: tuple[str, dict[str, Any]] | None = None
         self.feature_panel.valuesChanged.connect(self._on_feature_values_changed)
+        self.feature_panel.operationRequestedForEach.connect(self._apply_to_each_feature)
+        # Derselbe Katalog wie aus dem Objektbaum — ein zweiter Weg dorthin,
+        # kein zweiter Katalog.
+        self.feature_panel.catalogRequested.connect(self.action_catalog)
 
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
@@ -9141,9 +9145,36 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry is not None else None
         if entry is not None and feature is not None:
             self.measurements.setText(f"{entry.name} · {feature_label(feature_id, feature)}")
-            self.feature_panel.show_feature(feature_id, feature)
+            # **Die gleichartigen Geschwister kommen mit.** Der Objektbaum
+            # führt sie längst unter einem Dach; das Panel bietet damit an, eine
+            # Handlung für alle zu tun, statt sie sechsmal zu wiederholen.
+            alike = [
+                other
+                for other, candidate in entry.features.items()
+                if other != feature_id and candidate.kind == feature.kind
+            ]
+            self.feature_panel.show_feature(feature_id, feature, alike)
         else:
             self.feature_panel.clear()
+
+    def _apply_to_each_feature(
+        self, op: str, params: dict[str, Any], feature_ids: list[str]
+    ) -> None:
+        """Dieselbe Handlung für mehrere gleichartige Merkmale — **eine**
+        Transaktion (Regel 16).
+
+        Ein Draft je Merkmal, alle in einem ``apply``: Ein Strg+Z nimmt sie
+        zusammen zurück, weil es eine Handlung war. Sechs einzelne Aufrufe wären
+        sechs Schritte im Verlauf und sechs Undos für einen Handgriff.
+        """
+        selected = self.object_tree.selected()
+        if selected is None or not REGISTRY.has(op) or not feature_ids:
+            return
+        drafts = [
+            OperationDraft(op=op, inputs=(selected,), params={**params, "at_feature": feature_id})
+            for feature_id in feature_ids
+        ]
+        self.session.apply(REGISTRY.get(op).title, drafts, bundle=True)
 
     def _on_feature_values_changed(self, op: str, params: dict[str, Any]) -> None:
         """Eine geänderte Zahl im Merkmalspanel — erst zeigen, nicht tun.

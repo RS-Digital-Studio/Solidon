@@ -1315,6 +1315,68 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
+def test_one_handling_for_all_alike_features_is_one_transaction(window: MainWindow) -> None:
+    """Sechs Bohrungen auf ein Maß zu bringen war sechsmal derselbe Weg.
+
+    Geprüft wird beides: dass **jede** Bohrung wandert und dass es **eine**
+    Transaktion bleibt — ein Strg+Z nimmt sie zusammen zurück, weil es eine
+    Handlung war (Regel 16). Sechs einzelne Aufrufe wären sechs Undos für einen
+    Handgriff.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2, "die Platte hat mehrere Bohrungen"
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+    vorher = len(window.session.project.document.transactions)
+
+    window.feature_panel.operationRequestedForEach.emit(
+        "resize_hole", {"diameter": 6.5, "compensate": False}, list(holes)
+    )
+    window.session.wait_for_idle()
+
+    schritte = [step.op for step in window.session.project.document.ops]
+    assert schritte.count("resize_hole") == len(holes), "je Bohrung ein Schritt"
+    assert len(window.session.project.document.transactions) == vorher + 1, "und eine Handlung"
+    danach = window.session.evaluate_now().scene.objects[object_id]
+    gemessen = [
+        round(float(danach.features[hole].params["diameter"]), 1)
+        for hole in holes
+        if hole in danach.features
+    ]
+    assert gemessen and all(abs(wert - 6.5) < 0.2 for wert in gemessen), gemessen
+
+
+def test_a_face_offers_the_catalogue_from_the_panel(window: MainWindow) -> None:
+    """Der Katalog aus der Fläche heraus — derselbe wie aus dem Objektbaum.
+
+    Ein zweiter Weg dorthin, kein zweiter Katalog: Beide Signale hängen am
+    selben Empfänger.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    face = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "face"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, face)
+    QApplication.processEvents()
+
+    from PySide6.QtWidgets import QPushButton
+
+    knoepfe = [
+        widget.text() for widget in window.feature_panel._built if isinstance(widget, QPushButton)
+    ]
+    assert knoepfe, "an der Fläche steht ein Weg statt vier grauer Zeilen"
+    assert tr("Baustein einsetzen …") in knoepfe
+
+
 def test_a_changed_number_previews_before_it_changes_anything(window: MainWindow) -> None:
     """Robert am 03.09.2026: „eine live vorschau wäre noch gut."
 
