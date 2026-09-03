@@ -1477,3 +1477,45 @@ def test_a_new_source_inherits_the_warning_instead_of_losing_it(qt_app: QApplica
     erfunden = dataclasses.replace(donor, source="von_wo_auch_immer", range_passed=None)
 
     assert _range_warning(erfunden), "eine unbekannte Herkunft gilt als ungeprüft"
+
+
+def test_every_locked_button_says_its_reason_to_a_screen_reader(qt_app: QApplication) -> None:
+    """Der Grund steht sichtbar daneben — und beim Knopf selbst.
+
+    Alle drei gesperrten Knöpfe des Katalogs führen ihren Grund als eigene
+    Zeile daneben, und das ist die Hauptsache: Ein Tooltip findet nur, wer
+    weiß, dass er da ist. **Wer den Knopf mit der Tastatur anfährt, hört
+    dagegen die zugängliche Beschreibung**, und die trug nur *Weitergeben*.
+
+    Gefunden am 03.09.2026 von 3d-druck-7f beim Bau eines Wächters über alle
+    Dialoge: Ihr Prüfstand liest Tooltip, Statuszeile und zugängliche
+    Beschreibung **am Knopf** und hätte hier zwei Fehlalarme gemeldet — für
+    zwei Knöpfe, deren Grund sichtbar danebensteht. Die Meldung wäre falsch
+    gewesen, die Lücke ist es nicht: Der sichtbare Satz und die zugängliche
+    Beschreibung erreichen verschiedene Leute.
+
+    Ein Zwilling wie er im Buche steht: ``set_can_share`` setzt alle drei seit
+    August, ``set_can_save`` und das Einsetzen blieben beim Tooltip.
+    """
+    catalog = PartCatalog()
+    try:
+        catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
+        catalog.set_can_share(False, "Dieser Baustein lässt sich nicht weitergeben.")
+        catalog.set_can_insert(False, "Dafür muss ein Körper gewählt sein.")
+
+        for knopf, wort in (
+            (catalog.save_part, "gerechnet"),
+            (catalog.share_part, "weitergeben"),
+            (catalog._insert, "Körper"),
+        ):
+            assert knopf is not None
+            assert not knopf.isEnabled()
+            assert wort in knopf.accessibleDescription(), (
+                f"{knopf.objectName() or knopf.text()}: {knopf.accessibleDescription()!r}"
+            )
+
+        catalog.set_can_save(True, "")
+        assert catalog.save_part.accessibleDescription() == "", "frei heißt: kein Grund"
+    finally:
+        catalog.release()
+        catalog.deleteLater()

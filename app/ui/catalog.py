@@ -354,10 +354,19 @@ class PartCatalog(QDialog):
         Er steht als Zeile über den Knöpfen (das Handbuch verspricht „sagt
         daneben, was ihm fehlt" — ein Tooltip löst das nicht ein); der Tooltip
         bleibt als zweite Kodierung dazu.
+
+        **Und am Knopf selbst**, seit dem 03.09.2026: Wer ihn mit der Tastatur
+        anfährt, hört die zugängliche Beschreibung und nicht die Zeile daneben.
+        ``set_can_share`` setzte sie seit August, dieser Knopf und das Einsetzen
+        blieben beim Tooltip zurück — ein Zwilling, den erst der Wächter über
+        alle Dialoge sichtbar gemacht hat (Fund 3d-druck-7f).
         """
+        hint = "" if can else reason
         self.save_part.setEnabled(can)
-        self.save_part.setToolTip("" if can else reason)
-        self.save_hint.setText("" if can else reason)
+        self.save_part.setToolTip(hint)
+        self.save_part.setStatusTip(hint)
+        self.save_part.setAccessibleDescription(hint)
+        self.save_hint.setText(hint)
         self.save_hint.setVisible(bool(reason) and not can)
 
     def set_can_share(self, can: bool, reason: str = "") -> None:
@@ -770,6 +779,10 @@ class PartCatalog(QDialog):
         if self._insert is not None:
             self._insert.setEnabled(spec is not None and allowed)
             self._insert.setToolTip(reason)
+            # Dieselbe Auskunft für den, der den Knopf anfährt statt ihn
+            # anzusehen — siehe :meth:`set_can_save`.
+            self._insert.setStatusTip(reason)
+            self._insert.setAccessibleDescription(reason)
         self.insert_hint.setText(reason)
         self.insert_hint.setVisible(bool(reason))
         # Derselbe Wechsel entscheidet über den zweiten Knopf. **Hier und
