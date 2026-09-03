@@ -2702,11 +2702,16 @@ class PrintSettingsDialog(QDialog):
             printer = self.printer_choice.currentText()
             slicer = _slicer_title(self._slicer_path) if self._slicer_path else ""
             if printer and slicer:
+                # **Ohne „aus der Liste".** Wo gewählt wird, sagt das Feld
+                # selbst („Tippen sucht in der ganzen Liste …"); dieser Satz
+                # sagt die Lage. Zwei Sätze, die dasselbe Wort tragen, laufen
+                # irgendwann auseinander — bei den Auswahlnamen hat das zwei
+                # Tabellen gekostet (Hinweis 3d-druck-7f).
                 self.profile_note.setText(
                     str(
                         tr(
                             "Für {printer} bringt {slicer} kein eigenes Profil mit — "
-                            "wählen Sie das Profil Ihres Druckers aus der Liste."
+                            "wählen Sie das Profil Ihres Druckers."
                         )
                     )
                     .replace("{printer}", printer)
