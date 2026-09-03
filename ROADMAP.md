@@ -171,6 +171,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
 | Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
+| `plug_hole` lässt denselben Pfropfen stehen | Erkannte Merkmale bearbeiten (03.09.2026) | eine Entscheidung: `plug_hole` bekäme einen Parameter `at_feature` wie die fünf Merkmalshandlungen, dann gilt der Schnitt an den Mündungen auch dort. Das ändert eine ausgelieferte Operation, gemessen ist der Fehler (1007 mm³ am U-Profil), und er steht in 0.3.0 und 0.3.1 beim Kunden |
 | Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Bis dahin ist die Absage mit Ausweg die richtige Antwort, und der Ausweg trägt: die Bohrung versetzen, die Senkung neu setzen |
 
 ---
@@ -15037,6 +15038,29 @@ Durchmesser.
   Kuppel (112 von 24 448 mm³ mit). Beide Male wasserdicht, kein roter Test. Der
   Kern fragt jetzt das Register nach der aufrufenden Operation, und den Satz
   dazu holt er aus derselben Tabelle wie das Panel.
+
+- [ ] **`plug_hole` hat denselben Überstand, und es ist die Quelle.** Der
+  Hüllschnitt, den meine vier Wege heute bekommen haben, steht in
+  `prepare.plug` seit langem — ich habe ihn von dort abgeschrieben. Er ist
+  dort genauso falsch. Gemessen am selben U-Profil (60 × 40 × 30, Nut,
+  Bodenwand 5 mm, Bohrung Ø 7,98):
+
+      Soll ohne Bohrung        27 000,00 mm³
+      mit Bohrung              26 749,39      Nutraum    0,000
+      durchgehend gestopft     28 259,32      Nutraum 1007,460
+      mit Tiefe 5 gestopft     27 001,25      Nutraum  251,865
+
+  Selbst mit der genauen Wandstärke als Tiefe stehen 252 mm³ im Nutraum.
+  **In 0.3.0 und 0.3.1 ausgeliefert.**
+
+  Der Weg, der meine vier Wege genau macht, steht `plug` nicht offen: Es
+  bekommt Position, Achse und Tiefe — kein Merkmal, also keine
+  Merkmalsfläche, an deren Mündungen sich schneiden ließe. Die saubere Lösung
+  ist deshalb, `plug_hole` das zu geben, was es ohnehin meint: einen
+  Parameter `at_feature` wie die fünf Merkmalshandlungen. Dann gilt derselbe
+  Schnitt, und der Kunde muss die Koordinaten nicht mehr abtippen. Das ändert
+  eine ausgelieferte Operation um einen Parameter und wartet deshalb auf
+  Roberts Wort.
 
 - [ ] **Eine Senkung über einer Bohrung lässt sich nicht versetzen.** Sie ist
   kein eigener Hohlraum — sie geht in die Bohrung über, und versetzt zöge sie
