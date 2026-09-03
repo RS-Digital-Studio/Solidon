@@ -1892,3 +1892,42 @@ def test_a_torus_is_told_it_belongs_to_what_it_encircles() -> None:
     assert any("Rille" in str(entry.reason) for entry in actions), [
         str(entry.reason) for entry in actions
     ]
+
+
+def test_the_panel_offers_duplicating_beside_the_original() -> None:
+    """Die Vorgabe ist hier **nicht** der gemessene Wert, und das mit Absicht.
+
+    Sonst gilt im Panel die gemessene Zahl (``_FROM_FEATURE``), damit ein Klick
+    auf Übernehmen nichts still ändert. Beim Verdoppeln wäre die gemessene
+    Mitte die Stelle, an der das Merkmal schon liegt: eine Boolesche auf sich
+    selbst, ein Schritt im Verlauf und dasselbe Teil im Bild. Um einen
+    Durchmesser versetzt liegt die Kopie neben dem Original und ist zu sehen
+    (Vorschlag 3d-druck-d4, 03.09.2026).
+
+    Y und Z bleiben dagegen gemessen — versetzt wird in **eine** Richtung, und
+    welche das ist, soll man an der Zahl erkennen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.actions import actions_for
+    from app.core.types import Feature
+
+    load_operations()
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (-15.0, 2.0, 3.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 8.0,
+            "depth": 20.0,
+            "through": True,
+        },
+    )
+
+    row = next(entry for entry in actions_for(bore) if entry.op == "duplicate_feature")
+    fields = {field.name: field.value for field in row.fields}
+
+    assert fields["x"] == pytest.approx(-7.0), fields
+    assert fields["y"] == pytest.approx(2.0), fields
+    assert fields["z"] == pytest.approx(3.0), fields

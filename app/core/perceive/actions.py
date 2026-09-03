@@ -58,6 +58,7 @@ ACTION_ORDER: Final[tuple[tuple[str, ...], ...]] = (
     ("move_feature",),
     ("resize_feature", "resize_hole"),
     ("rotate_feature",),
+    ("duplicate_feature",),
     ("remove_feature",),
 )
 
@@ -177,7 +178,18 @@ def _kind_of(spec: Any) -> str:
     return "length"
 
 
-def _value_of(spec: Any, feature: Feature) -> float | bool | str:
+#: Wo eine Vorgabe **nicht** der gemessene Wert sein darf, und um welche
+#: Kennzahl sie daneben liegt.
+#:
+#: Sonst gilt hier der gemessene Wert, und zwar mit Absicht (siehe
+#: :data:`_FROM_FEATURE`). Beim Verdoppeln wäre er die Stelle, an der das
+#: Merkmal schon liegt: eine Boolesche auf sich selbst, ein Schritt im Verlauf
+#: und dasselbe Teil im Bild. Um einen Durchmesser versetzt liegt die Kopie
+#: neben dem Original und ist zu sehen (Vorschlag 3d-druck-d4, 03.09.2026).
+_SHIFTED_BY: Final[dict[tuple[str, str], str]] = {("duplicate_feature", "x"): "diameter"}
+
+
+def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
     """Der heutige Wert dieses Parameters am Merkmal — sonst seine Vorgabe."""
     reads = _FROM_FEATURE.get(spec.name)
     if reads is None:
@@ -186,10 +198,12 @@ def _value_of(spec: Any, feature: Feature) -> float | bool | str:
     measured = feature.params.get(key)
     if measured is None:
         return spec.default  # type: ignore[no-any-return]
+    shift = _SHIFTED_BY.get((op, spec.name))
+    beside = float(feature.params.get(shift, 0.0)) if shift else 0.0
     if index is None:
-        return float(measured)
+        return float(measured) + beside
     try:
-        return float(measured[index])
+        return float(measured[index]) + beside
     except (IndexError, TypeError):
         return spec.default  # type: ignore[no-any-return]
 
@@ -205,7 +219,7 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
             name=entry.name,
             label=entry.title,
             unit=str(entry.unit or ""),
-            value=_value_of(entry, feature),
+            value=_value_of(entry, feature, spec.name),
             kind=_kind_of(entry),
             minimum=entry.minimum,
             maximum=entry.maximum,

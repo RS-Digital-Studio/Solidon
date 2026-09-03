@@ -74,6 +74,7 @@ from app.core.types import (
     BaseParams,
     CancelToken,
     Feature,
+    FeatureId,
     Finding,
     Mesh,
     OpContext,
@@ -593,7 +594,16 @@ def _no_longer_through(
         allow_empty=True,
         cancelled=cancelled,
     )
-    return bool(left.mesh.raw.volume > EPS_GEOM)
+    # **Der leere Schnitt ist der gute Fall, und er darf nicht rechnen.** Geht
+    # die Bohrung noch durch, bleibt vom Verschnitt nichts übrig — und ein Netz
+    # ohne Dreiecke nach seinem Volumen zu fragen teilt in ``trimesh`` durch
+    # null (``RuntimeWarning: invalid value encountered in divide``). Die Suite
+    # macht daraus einen Fehler (``filterwarnings = ["error"]``), und gemessen
+    # am 03.09.2026 riss genau daran der erste Lauf des Verdoppelns.
+    remaining = left.mesh.raw
+    if len(remaining.faces) == 0:
+        return False
+    return bool(remaining.volume > EPS_GEOM)
 
 
 def _throughness_lost(
@@ -928,6 +938,181 @@ def move_feature(ctx: OpContext) -> OpResult:
                 source,
                 mesh=placed.mesh,
                 features={**source.features, feature.id: moved},
+            )
+        ],
+        findings=findings,
+        solver=placed.solver,
+    )
+
+
+def _free_feature_id(source: SceneObject, kind: str) -> FeatureId:
+    """Eine Kennung, die es an diesem Körper noch nicht gibt.
+
+    Dieselbe Form, die die Erkennung vergibt (``hole_1``, ``pin_2``), damit
+    Kopie und Original im Objektbaum nebeneinander gleich aussehen. Gesucht
+    wird die kleinste freie Zahl und nicht die nächste nach der höchsten: Wer
+    eine Bohrung löscht und danach eine verdoppelt, bekommt die Lücke gefüllt
+    statt eine Kennung, die auf eine Zählung verweist, die niemand sieht.
+    """
+    number = 1
+    while f"{kind}_{number}" in source.features:
+        number += 1
+    return f"{kind}_{number}"
+
+
+@op_params
+class DuplicateFeatureParams(BaseParams):
+    at_feature: str = param(
+        title=_("Merkmal"),
+        default="",
+        kind="feature",
+        required=True,
+        placement="front",
+        doc=_(
+            "Das erkannte Merkmal, das ein zweites Mal entsteht. Ein Klick darauf im "
+            "Objektbaum oder in der Ansicht wählt es aus."
+        ),
+    )
+    x: float = param(
+        title=_("X"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_(
+            "Die Mitte der Kopie. Beim Anklicken steht hier die alte, um einen "
+            "Durchmesser versetzt."
+        ),
+    )
+    y: float = param(
+        title=_("Y"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_(
+            "Die Mitte der Kopie. Beim Anklicken steht hier die alte, um einen "
+            "Durchmesser versetzt."
+        ),
+    )
+    z: float = param(
+        title=_("Z"),
+        default=0.0,
+        unit="mm",
+        minimum=-1000.0,
+        maximum=1000.0,
+        placement="front",
+        doc=_(
+            "Die Mitte der Kopie. Beim Anklicken steht hier die alte, um einen "
+            "Durchmesser versetzt."
+        ),
+    )
+
+
+@register_op(
+    name="duplicate_feature",
+    title=_("Merkmal verdoppeln"),
+    category="holes",
+    params=DuplicateFeatureParams,
+    reversible=True,
+    consumes=1,
+    produces=1,
+    applies_to=list(MOVABLE_KINDS),
+    deterministic=False,
+    doc=_(
+        "Legt ein erkanntes Merkmal ein zweites Mal an: Bohrung, Zapfen, Senkung, "
+        "Verjüngung, Kuppel oder Pfanne."
+    ),
+)
+def duplicate_feature(ctx: OpContext) -> OpResult:
+    """Ein erkanntes Merkmal ein zweites Mal — die halbe Bewegung des Versetzens.
+
+    **Der weiteste Weg von allen war das** (gemessen 3d-druck-d4, 03.09.2026):
+    Wer eine zweite Bohrung wie die erste wollte, rief *Bohrung setzen* und
+    tippte Durchmesser, Tiefe, Achse und drei Koordinaten von Hand ab — obwohl
+    Solidon alle vier Werte gemessen hat und im Merkmalspanel anzeigt. Vier
+    abgeschriebene Zahlen sind vier Gelegenheiten für einen Tippfehler, und
+    keine davon ist nötig.
+
+    Innen ist es die zweite Hälfte von :func:`move_feature` ohne die erste: An
+    der alten Stelle bleibt alles, an der neuen entsteht dasselbe Merkmal. Ein
+    Hohlraum wird also geschnitten, ein Zapfen angesetzt.
+
+    **Die Kopie bekommt eine eigene Kennung**, und das ist der Unterschied zum
+    Versetzen: Dort reist die Kennung mit, weil es dasselbe Merkmal bleibt;
+    hier gibt es hinterher zwei, und Passungen, die auf das Original zeigen,
+    dürfen davon nichts merken.
+    """
+    params = cast(DuplicateFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _movable_feature(source, params.at_feature, "duplicate_feature")
+    measured = [float(value) for value in feature.params["centre"]]
+    centre: Vec3 = (measured[0], measured[1], measured[2])
+    target: Vec3 = (params.x, params.y, params.z)
+
+    if all(abs(a - b) <= EPS_GEOM for a, b in zip(centre, target, strict=True)):
+        # Kein Fehler, sondern ein Hinweis: Die Boolesche liefe auf sich selbst
+        # und ließe den Körper, wie er ist. Regel 19 — was zurücknehmbar ist,
+        # bekommt keine Nachfrage, und was nichts tut, keine Ausnahme.
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="duplicate_feature.unchanged",
+                    severity="info",
+                    message=_(
+                        "Ein zweites Merkmal an derselben Stelle ist dasselbe Merkmal — "
+                        "nichts verdoppelt."
+                    ),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+
+    body = as_mesh_data(source.mesh)
+    cavity = _feature_is_a_cavity(feature)
+    ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
+    change: BooleanKind = "difference" if cavity else "union"
+    placed = boolean(
+        change,
+        [body, _tool_for(body, feature, target)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    findings = [*placed.findings]
+    # **Eine Kopie, die nichts geschnitten hat, ist die stille Variante des
+    # Fehlers**, den Robert heute am Stopfen gefunden hat: Im Verlauf steht ein
+    # Schritt, im Bild liegt dasselbe Teil. Wer eine Bohrung neben den Körper
+    # verdoppelt, soll es lesen und nicht suchen.
+    nothing = without_effect(source.mesh, placed.mesh, change, ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
+    findings += _throughness_lost(
+        placed.mesh,
+        feature,
+        target,
+        "duplicate_feature",
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    copy = dataclasses.replace(
+        feature,
+        id=_free_feature_id(source, feature.kind),
+        params={**feature.params, "centre": target},
+        provenance="generated",
+    )
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed.mesh,
+                features={**source.features, copy.id: copy},
             )
         ],
         findings=findings,

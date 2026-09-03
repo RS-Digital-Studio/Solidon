@@ -2345,3 +2345,77 @@ def test_a_through_bore_moved_along_its_axis_says_it_no_longer_goes_through(
     assert said[0].severity == "warning"
     assert "durch" in str(said[0].message)
     assert along.outputs[0].mesh.raw.volume > bored.raw.volume, "Material ist stehengeblieben"
+
+
+def test_a_recognised_feature_can_be_duplicated(profile: Profile) -> None:
+    """Der weiteste Weg von allen, bis heute (3d-druck-d4, 03.09.2026).
+
+    Wer eine zweite Bohrung wie die erste wollte, rief *Bohrung setzen* und
+    tippte Durchmesser, Tiefe, Achse und drei Koordinaten von Hand ab — obwohl
+    Solidon alle vier Werte gemessen hat und im Merkmalspanel anzeigt. Vier
+    abgeschriebene Zahlen sind vier Gelegenheiten für einen Tippfehler.
+
+    Gemessen wird das Ergebnis und nicht der Weg: Das Volumen sinkt um genau
+    eine Bohrung, das Original bleibt, wo es war, und die **Erkennung** findet
+    hinterher zwei — die zweite ist also wirklich eine Bohrung und nicht ein
+    Loch, das so aussieht.
+
+    Die Kopie bekommt eine **eigene** Kennung. Das ist der Unterschied zum
+    Versetzen, bei dem die Kennung mitreist: Hier gibt es hinterher zwei
+    Merkmale, und eine Passung, die auf das Original zeigt, darf davon nichts
+    merken.
+    """
+    entry, hole = _block_with_a_bore(profile)
+    before = as_mesh_data(entry.mesh).raw.volume
+    measured = entry.features[hole].params
+    hollow = math.pi * (float(measured["diameter"]) / 2.0) ** 2 * 20.0
+
+    result = _run_op("duplicate_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=0.0)
+    twice = result.outputs[0]
+
+    assert twice.mesh.raw.is_watertight
+    assert before - twice.mesh.raw.volume == pytest.approx(hollow, rel=0.02), (
+        f"{before} -> {twice.mesh.raw.volume}"
+    )
+    assert hole in twice.features, "das Original behält seine Kennung"
+    copies = [name for name in twice.features if name not in entry.features]
+    assert len(copies) == 1, sorted(twice.features)
+    assert twice.features[copies[0]].provenance == "generated"
+
+    found = {
+        name: tuple(round(value, 1) for value in feature.params["centre"])
+        for name, feature in detect(twice.mesh).items()
+        if feature.kind == "hole"
+    }
+    assert len(found) == 2, found
+    assert (-15.0, 0.0, 0.0) in found.values()
+    assert (15.0, 0.0, 0.0) in found.values()
+
+
+def test_duplicating_onto_the_same_spot_says_that_nothing_happened(profile: Profile) -> None:
+    """Eine Kopie auf der Stelle ist dasselbe Merkmal.
+
+    Die Boolesche liefe auf sich selbst und ließe den Körper, wie er ist. Das
+    ist kein Fehler und bekommt deshalb keine Ausnahme — Regel 19 gilt dem
+    Nachfragen, und derselbe Gedanke gilt dem Werfen: Was zurücknehmbar ist und
+    nichts anrichtet, wird gesagt und nicht verweigert.
+
+    Dass die Vorgabe im Panel gar nicht auf der Stelle liegt, ist die andere
+    Hälfte davon (siehe ``perceive.actions._SHIFTED_BY``); dieser Test hält den
+    Fall, in dem jemand die Zahlen selbst tippt.
+    """
+    entry, hole = _block_with_a_bore(profile)
+    centre = [float(value) for value in entry.features[hole].params["centre"]]
+
+    result = _run_op(
+        "duplicate_feature",
+        entry,
+        profile,
+        at_feature=hole,
+        x=centre[0],
+        y=centre[1],
+        z=centre[2],
+    )
+
+    assert [found.code for found in result.findings] == ["duplicate_feature.unchanged"]
+    assert result.outputs[0] is entry, "unverändert heißt: derselbe Körper"
