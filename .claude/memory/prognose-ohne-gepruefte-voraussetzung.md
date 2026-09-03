@@ -41,3 +41,45 @@ taugt als Vorlage), nicht das Auslassen. Siehe auch
 zerlegbar ist, und [[bekannte-familie-erklaert-nicht-den-ausloeser]] sowie
 [[gemessene-frage-ist-nicht-die-gestellte]] für dieselbe Familie ungeprüfter
 Zwischenbehauptungen.
+
+---
+
+**Die Schwester in der Gegenwartsform, und sie hat mich am 03.09.2026 fast
+einen Fund gekostet.**
+
+Ich habe 19 einen Zwilling gemeldet: `TranslatableText` hatte ein Feld `values`
+bekommen, `scene/cache.py` schrieb es mit, drei gleichartige Stellen in
+`scene/serialise.py` nicht. Der Befund war richtig. Dahinter stand ein
+Halbsatz: Heute trage dort noch kein Text Werte, also sei nichts kaputt — es
+sei nur dieselbe Bauart.
+
+**Der Halbsatz war falsch, und ich hatte ihn nicht gemessen.**
+`repair.holes_filled` baut seine Meldung seit langem mit Werten, und der Kunde
+las im Prüfbericht `{closed} von {total} offenen Kanten geschlossen`. Es waren
+außerdem fünf Stellen, nicht drei — eine vierte in `finding_to_data`, dazu
+`evaluate.py:742`, das `.msgid` roh ins Protokoll schrieb. Ausgerechnet die
+Zeile, die nach einem Kundenprotokoll sprechend gemacht worden war, verlor
+damit ihre Zahlen.
+
+**Why:** Die Prognose oben und diese Entwarnung sind derselbe Fehler in zwei
+Zeitformen. Beide stehen als Nebensatz hinter einer richtigen Aussage, beide
+klingen wie ihr Abschluss, und genau deshalb liest sie niemand als Behauptung.
+Meine war sogar teurer: Sie hätte den Empfänger dazu bringen können, den Fund
+als theoretisch abzulegen.
+
+**How to apply:** Wer einen Befund meldet, meldet den Befund — und **misst**,
+was er über dessen Tragweite sagt, oder schreibt „nicht gemessen" dazu. Für
+diesen Fall war die Messung ein Einzeiler: eine Suche nach `_(`-Aufrufen mit
+Schlüsselwortargument findet jeden Text, der Werte trägt. Eine Minute gegen
+einen halben Fund.
+
+Die Gegenprobe steckte schon im eigenen Text: Der Docstring von `_name_to_data`
+sagt wörtlich, dass `transaction_to_data` dasselbe „über drei Felder" tut. Der
+Zwilling stand geschrieben, seit Monaten, und niemand ist hingegangen — siehe
+[[benannte-falle-schuetzt-nicht]]. Und `source_text` löste denselben Fehler
+seit langem für Dateinamen. Derselbe Fehler war zweimal behoben und fünfmal
+offen.
+
+Verwandt: [[reparierter-fehler-hat-zwillinge]] (die Suche selbst),
+[[eigener-messfehler-widerlegt-den-befund-nicht]] (dort entwertet ein eigener
+Messfehler den Fund, hier ein eigener Nebensatz).

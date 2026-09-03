@@ -142,7 +142,7 @@
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders.
 - [Fortschritt ≠ collect](fortschrittszeichen-zaehlen-nicht-wie-collect.md) — das n-te `F` ist nicht die n-te Zeile.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy davor, Suite danach; der Reexport fehlt beiden.
-- [Prognose ohne Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „heilt später" braucht einen Heiler.
+- [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „heilt sich später“ setzt jemanden voraus, der heilen kann; „trifft heute noch nicht“ ist dieselbe Behauptung in der Gegenwart.
 - [Fehlalarm zu mehreren](fehlalarm-den-mehrere-fuer-einen-halten.md) — verrechnet ist keine bloße Messung.
 - [Beleg im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — erst suchen, dann eine Lücke behaupten.
 - [Zusicherung wird stumpf](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — anderswo geändert, der Test bleibt grün.
