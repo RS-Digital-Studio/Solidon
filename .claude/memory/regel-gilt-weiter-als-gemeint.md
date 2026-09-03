@@ -49,3 +49,33 @@ Zwei Prüfmuster, die den Rand sichtbar machen:
 * **Trennen, was verschiedene Gründe hat.** „Automatische Bewegung" und
   „Bedienung auf Geste" standen in einem Block, weil beide mit Bewegung zu tun
   haben. Sie haben verschiedene Gründe und gehören deshalb in zwei.
+
+## Die andere Richtung: die richtige Zahl an der falschen Grenze
+
+Am 04.09.2026 in der Gegenrichtung, und zwar zweimal hintereinander an
+derselben Frage — welche Operationen ein Feld `at_feature` führen müssen,
+damit ein Fehlerdialog darauf zeigen kann.
+
+**Erst zu eng:** Ich habe vier Namen **getippt** statt sie abzuleiten, und
+einer davon (`turn_feature`) existierte gar nicht. Das fiel niemandem auf, denn
+eine zu kleine Menge sieht aus wie eine vollständige. Die Gegenprobe eines
+anderen ergab sieben.
+
+**Dann zu weit:** Abgeleitet über das Register waren es 38, und ich habe daraus
+„der Vertrag gilt für alle 38" gemacht. Auch das war falsch, und die Messung
+zeigte warum: Es gibt einen 39., `align_to_feature`, dessen Feld `feature`
+heißt — der wirft aber **ohne** `field=` und mit eigenem Vorschlag. Bei ihm
+hängt keine Zusage an dem Namen. Ein Wächter über alle 39 wäre rot gewesen und
+hätte eine Umbenennung ohne Nutzen erzwungen.
+
+> **Der eine, den die Menge nicht enthält, ist der, der die Regel bricht — und
+> er darf sie brechen.**
+
+**Die Grenze liegt dort, wo die Zusage gemacht wird, nicht dort, wo das Merkmal
+vorkommt.** a0s Wächter sucht deshalb die *Wurfstellen* mit `field="at_feature"`
+im Quelltext (drei Module, zehn Operationen) statt die Träger des Feldes; ein
+viertes Modul zieht ohne Zutun mit ein.
+
+Beide Fehler haben dieselbe Wurzel wie die drei CSS-Fälle oben — ein
+Geltungsbereich, den niemand nachgerechnet hat. Nur fällt die zu weite Regel
+als roter Lauf auf, und die zu enge gar nicht.
