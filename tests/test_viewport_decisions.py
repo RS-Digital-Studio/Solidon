@@ -5998,3 +5998,107 @@ def test_what_moves_with_the_plate_is_redrawn_with_the_scene() -> None:
         assert name in gerufen, (
             f"{name} rechnet mit _view_offset und muss bei jeder Auswertung laufen"
         )
+
+
+def _scene_with_two_bodies() -> Any:
+    """Zwei Körper nebeneinander — die kleinste Szene, an der sich „welcher
+    trägt die Auswahlfarbe" für mehr als einen überhaupt stellen lässt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    return EvaluationResult(
+        scene=Scene(
+            objects={
+                "obj_1": SceneObject(
+                    id="obj_1",
+                    name="Halter",
+                    mesh=MeshData(trimesh.creation.box(extents=(20.0, 20.0, 10.0))),
+                ),
+                "obj_2": SceneObject(
+                    id="obj_2",
+                    name="Deckel",
+                    mesh=MeshData(trimesh.creation.box(extents=(20.0, 20.0, 10.0))),
+                ),
+            }
+        )
+    )
+
+
+def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication) -> None:
+    """Was der Zug bewegt, trägt auch die Auswahlfarbe.
+
+    **Der Fall** (gemessen von 3d-druck-85, abgegeben von 3d-druck-d4 am
+    03.09.2026): Bei zwei gewählten Körpern zeigte das Bild einen, die
+    Statuszeile sagte zwei, und ein Zug an der Bewegen-Leiste verschob beide.
+
+        tree=('obj_1','obj_2')   highlighted='obj_1'   status='2 Teile'
+
+    Dass beide sich bewegen, ist eine Entscheidung und steht so in
+    ``_on_selection``; ``inputs_for_transform`` gibt die ganze Auswahl. Der
+    Fehler war das Bild: ``select`` nahm **eine** Kennung, und die Färbung
+    verglich mit genau ihr.
+
+    **Warum nicht `_selected` zur Menge wird:** An der Kennung hängen zwei
+    verschiedene Aufgaben. Die Färbung fragt „was ist gewählt" — das sind
+    beliebig viele. Griff, Drehbogen, Schatten und Merkmalsliste fragen „woran
+    hänge ich" — das ist genau einer, sonst gibt es keinen Bezugspunkt. Beide
+    an dieselbe Zahl zu hängen wäre der Fehler, der heute dreimal zugeschlagen
+    hat; deshalb bleibt ``_selected`` der führende Körper und die Menge kommt
+    daneben.
+    """
+    from app.ui.viewport import SELECTED_COLOUR, Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_two_bodies())
+
+    # Erst der Einzelfall — er muss unverändert gelten.
+    viewport.select("obj_1")
+    assert viewport.highlighted_object() == "obj_1"
+    assert viewport.highlighted_objects() == ("obj_1",), "allein gewählt ist einer gewählt"
+
+    # Und jetzt zu zweit, so wie der Objektbaum es meldet.
+    viewport.select("obj_1", more=("obj_2",))
+    assert viewport.highlighted_objects() == ("obj_1", "obj_2"), (
+        "die Auswahl kam nicht vollständig an"
+    )
+    # Der führende Körper bleibt einer: Griff und Marken brauchen einen Bezug.
+    assert viewport.highlighted_object() == "obj_1", (
+        "die Mehrfachauswahl hat den führenden Körper verloren"
+    )
+
+    # **Und die Farbe folgt der Menge, nicht dem führenden allein.**
+    #
+    # Die Färbung steigt ohne Plotter sofort aus, und offscreen gibt es keinen:
+    # ``_shown_colours`` bliebe leer, und jede Prüfung darauf wäre grün, weil
+    # ``None != SELECTED_COLOUR`` gilt — ein Test, der aus dem falschen Grund
+    # besteht. Die Lage wird deshalb hergestellt; Plotter und Aktorkennungen
+    # sind alles, was die *Entscheidung* braucht. Das Überblenden bekommt eine
+    # Ablage statt echter Actors: Es beantwortet eine andere Frage und hat
+    # seinen eigenen Test.
+    faded: list[dict[str, str]] = []
+    viewport.plotter = object()
+    viewport._actors = {"obj_1": object(), "obj_2": object()}
+    viewport._fade_selection = faded.append  # type: ignore[method-assign]
+    viewport._apply_selection_colour()
+    assert viewport._shown_colours.get("obj_1") == SELECTED_COLOUR
+    assert viewport._shown_colours.get("obj_2") == SELECTED_COLOUR, (
+        "der zweite gewählte Körper blieb grau — das Bild sagt einer, der Zug bewegt zwei"
+    )
+
+    # Und zurück auf einen — der zweite muss seine Farbe wieder hergeben.
+    # Die Auswahl wieder ohne Plotter, weil ``select`` sonst den ganzen
+    # Zeichenweg mitnimmt und die Attrappe dort auf VTK trifft; gefärbt wird
+    # danach, in derselben Lage wie oben.
+    viewport.plotter = None
+    viewport.select("obj_1")
+    viewport.plotter = object()
+    viewport._apply_selection_colour()
+    assert viewport.highlighted_objects() == ("obj_1",)
+    assert viewport._shown_colours.get("obj_1") == SELECTED_COLOUR
+    assert viewport._shown_colours.get("obj_2") != SELECTED_COLOUR, (
+        "die alte Mehrfachauswahl färbt weiter"
+    )

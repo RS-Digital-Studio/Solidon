@@ -3148,6 +3148,16 @@ class Viewport(QWidget):
         #: :meth:`set_sketching`.
         self._ground_actors: list[Any] = []
         self._selected: ObjectId | None = None
+        self._selected_more: tuple[ObjectId, ...] = ()
+        """Die **weiteren** gewählten Körper — ohne den führenden.
+
+        Zwei Aufgaben hängen an der Auswahl, und sie vertragen keine
+        gemeinsame Zahl: Die Färbung fragt „was ist gewählt" und meint
+        beliebig viele; Griff, Drehbogen, Schatten und Merkmalsliste
+        fragen „woran hänge ich" und brauchen genau einen, sonst zeigt
+        der Schatten auf ein anderes Teil als der Griff. ``_selected``
+        bleibt deshalb der führende Körper, und die Menge steht daneben
+        statt an seiner Stelle."""
         self._fitted_to: Literal["", "bed", "objects"] = ""
         """Worauf die Kamera zuletzt eingepasst wurde — auf nichts, auf den
         Bauraum oder auf die Körper. Wechselt der Zustand, wird einmal neu
@@ -4477,6 +4487,13 @@ class Viewport(QWidget):
         # Schritt entfernt hat, dagegen nicht. Ohne den Rückfall blieb seine
         # Kennung intern stehen, der Körper verlor die Auswahlfarbe und im Bild
         # war weder die alte Fläche noch eine neue Auswahl zu sehen.
+        if result is not None:
+            # Auch die weiteren: Ein Schritt, der einen von ihnen verschmilzt,
+            # ließe seine Kennung sonst in der Menge stehen — unsichtbar, bis
+            # eine spätere Auswertung sie unter demselben Namen neu vergibt.
+            self._selected_more = tuple(
+                other for other in self._selected_more if other in result.scene.objects
+            )
         if result is not None and self._selected is not None:
             selected_entry = result.scene.objects.get(self._selected)
             if selected_entry is None:
@@ -4508,6 +4525,7 @@ class Viewport(QWidget):
             # keine Maße. Vor dem Plotter-Zweig, aus demselben Grund wie das
             # Einpassen: das sind Aussagen über die Szene, nicht über VTK.
             self._selected = None
+            self._selected_more = ()
             self._selected_feature = None
             self._hover_feature = False
             self._hovered_object = None
@@ -5221,11 +5239,32 @@ class Viewport(QWidget):
         self._uncapped = self._uncapped or not result.capped
         return result.mesh
 
-    def select(self, object_id: ObjectId | None) -> None:
+    def select(self, object_id: ObjectId | None, *, more: Sequence[ObjectId] = ()) -> None:
         """Hebt ein Objekt hervor — Farbe plus Statusleiste, nie Farbe
         allein (§19.1).
+
+        ``more`` sind die **weiteren** gewählten Körper. Sie tragen dieselbe
+        Auswahlfarbe, hängen aber nichts an sich: Der Griff bleibt am
+        führenden ``object_id``. Wer sie wegläßt, wählt einen — der Aufruf
+        ändert sich für niemanden, der bisher einen übergab.
+
+        **Warum das überhaupt nötig ist:** ``inputs_for_transform`` gab schon
+        immer die ganze Auswahl weiter, ein Zug bewegte also beide Körper.
+        Gefärbt war einer. Das Bild widersprach damit dem, was der Zug tat,
+        und die Statuszeile hatte recht — gemessen 3d-druck-85, abgegeben von
+        3d-druck-d4 am 03.09.2026.
         """
         self._selected = object_id
+        # Der führende Körper steht nicht zweimal in der Auswahl: Sonst zählt
+        # ``highlighted_objects`` ihn doppelt, und ein Vergleich auf Gleichheit
+        # gegen den Objektbaum schlägt fehl, ohne dass etwas fehlt.
+        #
+        # **Gegen die Aktoren zu filtern wäre hier falsch.** Ohne Plotter ist
+        # ``_actors`` leer, und die Auswahl käme offscreen nie an — eine
+        # Bedingung, die genau dort nicht greift, wo geprüft wird. Ob es einen
+        # Körper noch gibt, entscheidet die Auswertung in ``show_scene``; dort
+        # ist die Szene bekannt und der Plotter unerheblich.
+        self._selected_more = tuple(dict.fromkeys(o for o in more if o != object_id))
         if self.plotter is None:
             return
         self._apply_selection_colour()
@@ -5248,9 +5287,9 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
-        highlighted = None if self._sketch_frame is not None else self.highlighted_object()
+        highlighted = () if self._sketch_frame is not None else self.highlighted_objects()
         wanted = {
-            identifier: SELECTED_COLOUR if identifier == highlighted else self._object_colour
+            identifier: SELECTED_COLOUR if identifier in highlighted else self._object_colour
             for identifier in self._actors
             # Eine Karte besitzt die Farbe ihres Körpers; die Auswahl zeigt sich
             # stattdessen im Objektbaum und in der Statusleiste (§19.1).
@@ -6802,6 +6841,21 @@ class Viewport(QWidget):
         if self._selection_marking_hidden() or self._selected_feature is not None:
             return None
         return self._selected
+
+    def highlighted_objects(self) -> tuple[ObjectId, ...]:
+        """Alle Körper mit Auswahlfarbe, der führende zuerst.
+
+        **Baut auf :meth:`highlighted_object` auf und erbt damit deren
+        Ausnahmen** statt sie nachzubauen: Ist ein Merkmal gewählt, liegt die
+        Auswahlfarbe auf der Bohrung und kein Körper leuchtet — auch keiner
+        der weiteren (§19.1). Dasselbe gilt, solange eine Differenzvorschau
+        die Modellfarben besitzt. Eine zweite Fassung dieser Regel wäre die
+        Stelle, an der die beiden Antworten eines Tages auseinanderlaufen.
+        """
+        leading = self.highlighted_object()
+        if leading is None:
+            return ()
+        return (leading, *self._selected_more)
 
     def highlighted_faces(self) -> tuple[int, ...]:
         """Die Dreiecke, die als gewähltes Merkmal aufleuchten (§18.5).
