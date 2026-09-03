@@ -97,6 +97,7 @@ from app.ui.panels import align_forms, collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.style import ROOMY, TIGHT, make_primary, set_level
+from app.ui.theme import THEMES
 
 _log = get_logger(__name__)
 
@@ -2178,7 +2179,18 @@ class PrintSettingsDialog(QDialog):
                 area = self.tabs.widget(index)
                 if isinstance(area, QScrollArea):
                     area.ensureWidgetVisible(editor)
-        label.setStyleSheet(f"color: {ROLES['select']}; font-weight: 600;")
+        # **Die Füllfarbe füllt, sie schreibt nicht.** Als Schriftfarbe auf der
+        # Dialogfläche brachte ``select`` im hellen Thema 1,70 — die am
+        # schlechtesten lesbare Zeile des Dialogs war ausgerechnet die gesuchte.
+        # ``accent_line`` wie beim Fokusring wäre 3,01 und damit die Schwelle
+        # für eine Umrandung, nicht für Text. Als Fläche mit der zugehörigen
+        # Schriftfarbe sind es 7,93, in beiden Themen. Das Fett bleibt als
+        # zweite Kodierung (Regel 18).
+        colours = THEMES[self.ui_settings.theme]
+        label.setStyleSheet(
+            f"background: {ROLES['select']}; color: {colours['highlight_text']};"
+            " font-weight: 600; border-radius: 3px; padding: 0 4px;"
+        )
         editor.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def _build_tabs(self) -> QWidget:
