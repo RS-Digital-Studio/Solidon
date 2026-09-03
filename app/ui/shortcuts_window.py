@@ -146,7 +146,7 @@ def _drawing_keys() -> list[tuple[str, str, str]]:
         "distance": _("Abstand"),
         "offset": _("Versetzen"),
         "construction": _("Hilfslinie"),
-        "fit": _("Alles einpassen"),
+        "fit": _("Einpassen"),
         "plane:xy": _("Draufsicht (XY) — liegend"),
         "plane:xz": _("Vorderansicht (XZ) — stehend, von vorn"),
         "plane:yz": _("Seitenansicht (YZ) — stehend, von der Seite"),
