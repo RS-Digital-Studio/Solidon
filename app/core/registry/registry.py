@@ -44,7 +44,17 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "boolean": _("Verbinden und Abziehen"),
     "sketch": _("Skizze"),
     "shaping": _("Formgebung"),
-    "holes": _("Bohrungen"),
+    # **Nicht mehr „Bohrungen“.** Unter dieser Kategorie stehen seit dem
+    # 03.09.2026 auch *Merkmal verschieben* und *Merkmal entfernen*, und die
+    # gelten ebenso für einen Zapfen. Wer einen Zapfen versetzen will, sucht
+    # nicht unter „Bohrungen“ — der Name war zu eng, der Ort ist richtig:
+    # Alle Einträge darunter handeln von einem erkannten Merkmal.
+    #
+    # Der Schlüssel bleibt ``holes``. Ihn umzubenennen wäre eine Migration in
+    # jeder bestehenden Projektdatei wert, und der sichtbare Titel löst den
+    # Fall vollständig (Vorschlag 3d-druck-d4, gemessen: neun Zeilen statt
+    # zwölf, damit drei unter der Grenze aus ``test_interface_limits``).
+    "holes": _("Merkmale"),
     "parts": _("Bausteine"),
     # Nicht „Druckvorbereitung": Diese Kategorie steht als Untermenü unter der
     # Gruppe *Vorbereiten*, und zwei Ebenen, die fast dasselbe Wort tragen,

@@ -610,6 +610,82 @@ def move_feature(ctx: OpContext) -> OpResult:
 
 
 @op_params
+class RemoveFeatureParams(BaseParams):
+    at_feature: str = param(
+        title=_("Merkmal"),
+        default="",
+        kind="feature",
+        required=True,
+        placement="front",
+        doc=_("Das erkannte Merkmal, das entfernt wird."),
+    )
+
+
+@register_op(
+    name="remove_feature",
+    title=_("Merkmal entfernen"),
+    category="holes",
+    params=RemoveFeatureParams,
+    consumes=1,
+    produces=1,
+    applies_to=list(MOVABLE_KINDS),
+    touches_features=True,
+    deterministic=False,
+    doc=_("Entfernt eine erkannte Bohrung oder einen erkannten Zapfen."),
+)
+def remove_feature(ctx: OpContext) -> OpResult:
+    """Ein erkanntes Merkmal wegnehmen — die halbe Bewegung des Versetzens.
+
+    „Ich will die auch löschen können, also jede Operation" (Robert,
+    03.09.2026). Für ein erkanntes Merkmal ist das derselbe Motor wie
+    :func:`move_feature`, nur mit einem Gang: An der alten Stelle steht das
+    Gegenteil dessen, was das Merkmal ist, und danach nichts mehr. Eine
+    Bohrung wird gefüllt, ein Zapfen abgetragen.
+
+    **Die Kennung geht mit und bleibt nicht als Verweis stehen.** Ein Merkmal,
+    das im Objekt weiterlebt, obwohl seine Geometrie fort ist, ist genau der
+    Zustand, den ``fit.missing_feature`` später als Verletzung meldet — und
+    dann sucht der Kunde an einem Teil, das in Ordnung ist. Ein Befund sagt es
+    stattdessen sofort.
+    """
+    params = cast(RemoveFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    feature = _movable_feature(source, params.at_feature)
+    measured = [float(value) for value in feature.params["centre"]]
+    centre: Vec3 = (measured[0], measured[1], measured[2])
+
+    cavity = _feature_is_a_cavity(feature)
+    ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
+    closed = boolean(
+        "union" if cavity else "difference",
+        [as_mesh_data(source.mesh), _feature_solid(feature, centre)],
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+
+    remaining = {name: entry for name, entry in source.features.items() if name != feature.id}
+    findings = [
+        *closed.findings,
+        Finding(
+            code="remove_feature.gone",
+            severity="info",
+            message=_(
+                "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es "
+                "verweisen, finden es nicht mehr."
+            ),
+            feature_ids=(feature.id,),
+            values={"feature": feature.id, "kind": feature.kind},
+        ),
+    ]
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=closed.mesh, features=remaining)],
+        findings=findings,
+        solver=closed.solver,
+    )
+
+
+@op_params
 class ResizeHoleParams(BaseParams):
     diameter: float = param(
         title=_("Durchmesser"),

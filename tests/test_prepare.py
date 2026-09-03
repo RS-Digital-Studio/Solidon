@@ -1870,3 +1870,59 @@ def test_a_dome_says_why_it_stays_where_it_is(profile: Profile) -> None:
 
     assert raised.value.suggestions, "Regel 17"
     assert "Material" in str(raised.value), str(raised.value)
+
+
+def test_a_recognised_bore_can_be_removed(profile: Profile) -> None:
+    """Löschen ist derselbe Motor mit nur einem Gang.
+
+    Robert am 03.09.2026: „ich will die auch löschen können, also jede
+    Operation". Für ein erkanntes Merkmal ist das die halbe Bewegung des
+    Versetzens — an der alten Stelle das Gegenteil dessen, was das Merkmal ist,
+    und dann nichts mehr. Eine Bohrung wird gefüllt, ein Zapfen abgetragen.
+
+    Die Kennung geht dabei **mit** und bleibt nicht als Verweis ins Leere
+    stehen: Das Merkmal ist weg, und ein Befund sagt es, damit spätere Schritte
+    und Passungen es erfahren statt darüber zu stolpern.
+    """
+    entry, hole = _block_with_a_bore(profile)
+    before = entry.mesh.volume
+
+    gone = _run_op("remove_feature", entry, profile, at_feature=hole)
+    body = as_mesh_data(gone.outputs[0].mesh)
+
+    assert body.raw.is_watertight
+    assert body.volume > before, "die Bohrung ist zu, also ist mehr Material da"
+    assert body.volume == pytest.approx(60.0 * 40.0 * 20.0, rel=0.01), "wieder ein voller Quader"
+    assert hole not in gone.outputs[0].features, "das Merkmal ist fort"
+    assert "remove_feature.gone" in [f.code for f in gone.findings], [f.code for f in gone.findings]
+
+
+def test_a_recognised_pin_can_be_removed(profile: Profile) -> None:
+    """Der Gegenfall: Materie statt Hohlraum, also abziehen statt füllen."""
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    stud = trimesh.creation.cylinder(radius=4.0, height=12.0, sections=48)
+    stud.apply_translation((-15.0, 0.0, 5.0))
+    body = MeshData.of(trimesh.boolean.union([plate, stud]))
+    features = detect(body)
+    pin = next(name for name, f in features.items() if f.kind == "pin")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+
+    gone = _run_op("remove_feature", entry, profile, at_feature=pin)
+    after = as_mesh_data(gone.outputs[0].mesh)
+
+    assert after.raw.is_watertight
+    assert after.volume == pytest.approx(60.0 * 40.0 * 10.0, rel=0.01), "wieder eine glatte Platte"
+    assert pin not in gone.outputs[0].features
+
+
+def test_removing_a_feature_is_registered_completely() -> None:
+    """Dieselbe Reichweite wie das Versetzen — es ist dieselbe Maschine."""
+    spec = REGISTRY.get("remove_feature")
+
+    assert spec.applies_to == ("hole", "pin")
+    assert spec.touches_features
+    assert spec.requires_seed, "auch das Füllen geht über die Rückfallkette"
+    fields = {entry.name: entry for entry in spec.params.spec()}
+    assert fields["at_feature"].kind == "feature" and fields["at_feature"].required
+    assert fields["at_feature"].placement == "front"
+    assert len(fields) == 1, "mehr braucht es nicht — das Merkmal sagt alles"
