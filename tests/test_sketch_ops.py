@@ -35,7 +35,9 @@ from app.core.types import (
     Scene,
     SceneObject,
     Sketch,
+    SketchConstraint,
     SketchElement,
+    SolvedSketch,
 )
 from tests.test_sketch import rectangle
 
@@ -1180,3 +1182,87 @@ def test_the_width_of_a_revolved_polygon_does_nothing_and_the_schema_says_so() -
     entry = next(e for e in REGISTRY.get("sketch_revolve").params.spec() if e.name == "width")
     assert entry.depends_on is not None
     assert "polygon" not in entry.depends_on[1], "und das Schema weist sie nicht als wirksam aus"
+
+
+def test_scaling_a_sketch_moves_its_measurements_along() -> None:
+    """Robert, 03.09.2026: Die Maßfelder im Dialog sollen bedienbar sein, und
+    die Zeichnung folgt.
+
+    **Die Punkte allein zu strecken genügt nicht**, und das ist der ganze
+    Grund für diese Funktion: Ein ``distance``-Maß von 50 zieht der Löser beim
+    nächsten Lauf wieder auf 50 zusammen. Wer nur die Koordinaten anfasst,
+    sieht im Dialog die neue Größe und nach dem Schließen die alte — der
+    unangenehmste Fehler überhaupt, weil er wie ein verlorener Klick aussieht
+    und nicht wie ein Fehler.
+
+    Geprüft wird deshalb **hinter dem Löser** und nicht an den rohen Punkten.
+    """
+    from app.core.sketch.edit import scaled
+    from app.core.sketch.solver import solve_sketch
+
+    quadrat = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (50.0, 0.0))),
+            SketchElement("line", ((50.0, 0.0), (50.0, 30.0))),
+            SketchElement("line", ((50.0, 30.0), (0.0, 30.0))),
+            SketchElement("line", ((0.0, 30.0), (0.0, 0.0))),
+        ),
+        constraints=(
+            SketchConstraint("coincident", (1, 2)),
+            SketchConstraint("coincident", (3, 4)),
+            SketchConstraint("coincident", (5, 6)),
+            SketchConstraint("coincident", (7, 0)),
+            SketchConstraint("distance", (0, 1), "50"),
+        ),
+    )
+
+    def bemaßte_linie(gelöst: SolvedSketch) -> float:
+        # **Die bemaßte Linie, nicht die Hülle der Zeichnung.** Der erste
+        # Anlauf maß `max(x) - min(x)`, und die Gegenprobe blieb grün: Das
+        # Quadrat hat drei freie Freiheitsgrade, der Löser zieht bei einem
+        # ungültigen Maß den nächstbesten Punkt und lässt die Hülle stehen.
+        # Gemessen wird deshalb genau das, was die `distance`-Bedingung
+        # zusichert — sonst prüft der Test die Willkür des Lösers.
+        anfang, ende = gelöst.elements[0].points
+        return abs(ende[0] - anfang[0])
+
+    vorher = solve_sketch(quadrat)
+    assert bemaßte_linie(vorher) == pytest.approx(50.0, abs=0.01), (
+        "ohne diese Ausgangsbreite sagt der Vergleich darunter nichts"
+    )
+
+    größer, gehalten = scaled(quadrat, 1.2)
+    assert not gehalten, "ein blankes Maß hängt an keinem Parameter"
+
+    nachher = solve_sketch(größer)
+    assert bemaßte_linie(nachher) == pytest.approx(60.0, abs=0.01), (
+        "der Löser hat die Zeichnung auf ihr altes Maß zurückgezogen — "
+        "die distance-Bedingung ist nicht mitskaliert worden"
+    )
+
+
+def test_a_measurement_on_a_project_parameter_is_left_alone() -> None:
+    """Ein Maß wie ``=@breite`` ist die ausgesprochene Absicht des Nutzers.
+
+    Es still durch eine Zahl zu ersetzen nähme ihm den Parameter, ohne es zu
+    sagen — genau das, was Regel 8 verbietet. Die Funktion lässt es stehen und
+    **meldet** es, damit die Oberfläche nicht eine Größe verspricht, die nicht
+    eintritt.
+    """
+    from app.core.sketch.edit import scaled
+
+    am_parameter = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (40.0, 0.0))),),
+        constraints=(SketchConstraint("distance", (0, 1), "=@breite"),),
+    )
+
+    größer, gehalten = scaled(am_parameter, 2.0)
+
+    assert gehalten == ("=@breite",), "das gehaltene Maß wird nicht gemeldet"
+    assert größer.constraints[0].value == "=@breite", "der Parameterbezug ist überschrieben"
+    punkte = größer.elements[0].points
+    assert punkte[1][0] - punkte[0][0] == pytest.approx(80.0), (
+        "die Punkte folgen trotzdem — der Löser entscheidet danach, wer gewinnt"
+    )

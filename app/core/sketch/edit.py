@@ -584,3 +584,88 @@ def arc_through(start: Point2, end: Point2, via: Point2) -> tuple[Point2, Point2
     if sweep_via > sweep_end:
         return (centre, end, start)
     return (centre, start, end)
+
+
+#: Die Bedingungsarten, die ein Maß tragen und deshalb mitskaliert werden
+#: müssen. Alles andere — Deckung, Parallelität, Tangente — ist eine Aussage
+#: über Lage und Richtung und bleibt unter einer Ähnlichkeitsabbildung wahr.
+MEASURED_KINDS: frozenset[str] = frozenset({"distance", "radius", "diameter"})
+
+
+def scaled(sketch: Sketch, factor: float) -> tuple[Sketch, tuple[str, ...]]:
+    """Die Skizze um *factor* vergrößern — Punkte **und** Maße.
+
+    Der Grund, aus dem das hier steht und nicht in der Oberfläche: Die Punkte
+    allein zu strecken genügt nicht. Ein ``distance``-Maß von 50 zieht der
+    Löser beim nächsten Lauf wieder auf 50 zusammen, und die Zeichnung springt
+    in ihre alte Größe zurück — sichtbar erst nach dem Schließen des Dialogs.
+    Skaliert wird deshalb um den **Schwerpunkt der Punkte**, damit die
+    Zeichnung an Ort und Stelle bleibt, und jedes Maß wandert mit.
+
+    **Ein Maß an einem Projektparameter bleibt stehen.** Ein Wert wie
+    ``=@breite`` ist die ausgesprochene Absicht des Nutzers (Regel 8); ihn
+    still durch eine Zahl zu ersetzen, nähme ihm den Parameter, ohne es zu
+    sagen. Solche Maße kommen als zweiter Rückgabewert zurück — wer skaliert,
+    weiß damit, dass die Zeichnung nicht vollständig gefolgt ist, und kann es
+    sagen, statt eine Größe zu versprechen, die nicht eintritt.
+
+    ``factor`` muss endlich und größer als null sein: Null faltet die
+    Zeichnung auf einen Punkt, negativ spiegelt sie, und beides ist keine
+    Größenänderung.
+    """
+    if not math.isfinite(factor) or factor <= 0.0:
+        raise ValidationError(
+            title=_("Die Zeichnung lässt sich nicht auf dieses Maß bringen."),
+            field="factor",
+            detail=_("Der Faktor muss endlich und größer als null sein."),
+            constraint="positive",
+            values={"factor": str(factor)},
+        )
+
+    points = [point for element in sketch.elements for point in element.points]
+    if not points:
+        return sketch, ()
+    centre_x = sum(x for x, _y in points) / len(points)
+    centre_y = sum(y for _x, y in points) / len(points)
+
+    def pulled(point: Point2) -> Point2:
+        return (
+            centre_x + (point[0] - centre_x) * factor,
+            centre_y + (point[1] - centre_y) * factor,
+        )
+
+    elements = tuple(
+        replace(element, points=tuple(pulled(point) for point in element.points))
+        for element in sketch.elements
+    )
+
+    kept: list[str] = []
+    constraints: list[SketchConstraint] = []
+    for constraint in sketch.constraints:
+        if constraint.kind not in MEASURED_KINDS or not constraint.value.strip():
+            constraints.append(constraint)
+            continue
+        try:
+            measure = float(constraint.value)
+        except ValueError:
+            # Ein Ausdruck, kein blanker Wert — er hängt an einem Parameter
+            # oder rechnet selbst. Beides bleibt, wie es ist.
+            kept.append(constraint.value)
+            constraints.append(constraint)
+            continue
+        constraints.append(replace(constraint, value=_written(measure * factor)))
+
+    return replace(sketch, elements=elements, constraints=tuple(constraints)), tuple(kept)
+
+
+def _written(value: float) -> str:
+    """Ein Maß so schreiben, wie es in der Projektdatei steht.
+
+    Punkt als Trennzeichen (der Kern rechnet und schreibt so, Regel 6), und
+    ohne die Nachkommastellen, die aus der Fließkommarechnung übrig bleiben:
+    ``50 * 1.2`` ergibt ``60.00000000000001``, und das stünde danach im Feld.
+    Sechs Stellen sind feiner, als jeder Drucker auflöst, und lassen ``0.05``
+    unversehrt.
+    """
+    rounded = round(value, 6)
+    return f"{rounded:g}"
