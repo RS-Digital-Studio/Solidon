@@ -48,8 +48,10 @@ nie hart in den Baustein.
 3. Benannte Features zurückgeben (`bore`, `chamfer`, …): das sind die
    Provenienz-IDs, an denen Ops und Passungen später ansetzen
 4. `to_scad()` für den Quelltext-Export
-5. Test über den **gesamten** Parameterbereich: wasserdicht, Mindestwandstärke,
-   keine Selbstdurchdringung an den Grenzen, Features korrekt benannt
+5. Bereichstest **von Hand für den geänderten Baustein** — `check_part(spec,
+   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den
+   Grenzen, Features korrekt benannt. Der Lauf über alle 27 ist am 03.09.2026
+   gefallen (`.claude/rules/bausteine.md`)
 6. Normteilmaße aus der Tabelle
 7. Vorschaubild rendern lassen, nicht von Hand pflegen
 8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und

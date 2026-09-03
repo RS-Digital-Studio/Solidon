@@ -97,12 +97,29 @@ dem der Arm sitzt, nicht vom Stift daneben. Und wer eine Rückfallregel baut,
 misst einmal nach, wann sie greift: Eine, die immer greift, ist keine
 Rückfallregel, sondern die Regel.
 
-## Test über den ganzen Bereich
+## Test über den ganzen Bereich — von Hand, nicht bei jedem Lauf
 
 Jeder Baustein wird über seinen Parameterbereich durchgerechnet: wasserdicht,
 Mindestwandstärke eingehalten, keine Selbstdurchdringung an den Grenzen,
-Features korrekt benannt. **Ein Baustein ohne diesen Test gilt als nicht
-vorhanden** (§24.3).
+Features korrekt benannt.
+
+**Der Lauf über alle 27 Bausteine ist am 03.09.2026 gefallen** (Entscheidung
+Robert). Er kostete rund eine Minute je Baustein und machte aus einem Torlauf
+von Minuten einen von einer halben Stunde; in dieser Zeit schreibt pytest kein
+Zeichen, und auf einer Maschine mit bis zu vier Sitzungen blockierte er alle
+mit. Was bleibt:
+
+* **Die Prüflogik selbst** steht weiter unter Test — Eckenberechnung, die 2114
+  kartesischen Grenzen, Wandmessung, Selbstdurchdringung (`test_parts.py`).
+* **Die versprochenen Merkmale** werden weiter über jeden Baustein geprüft;
+  das ist schnell.
+* **Der Bereichstest läuft in der Anwendung**: `range_check.check` hängt am
+  Rezeptdialog, ein Kunde bekommt ihn also zu sehen.
+* **Von Hand fällig**, wenn ein Baustein oder seine Grenzen sich ändern —
+  `check_part(spec, profile)` für den einen, den es betrifft.
+
+Damit gilt ein Baustein ohne diese Prüfung weiterhin als nicht vorhanden
+(§24.3); nur wird sie nicht mehr bei jedem Schritt wiederholt.
 
 ## Version
 

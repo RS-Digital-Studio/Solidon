@@ -27,7 +27,6 @@ from app.core.knowledge.parts import ops as part_ops
 from app.core.knowledge.parts.range_check import (
     FeatureRequirement,
     WallRequirement,
-    check_part,
     has_self_intersections,
     local_wall_thickness,
 )
@@ -1212,16 +1211,6 @@ def test_range_check_cancels_inside_local_geometry_and_keeps_progress_monotonic(
     assert report.checked == 0, "eine halb geprüfte Ecke zählt nicht"
     assert seen == sorted(seen)
     assert seen and seen[-1] < 1.0
-
-
-@pytest.mark.parametrize("spec", PARTS.all(), ids=ids)
-def test_a_part_holds_over_its_whole_range(spec: PartSpec, profile: Profile) -> None:
-    report = check_part(spec, profile)
-
-    assert report.checked == len(corners(spec))
-    assert not report.failures, "; ".join(
-        f"{spec.name} {failure.values}: {failure.reason}" for failure in report.failures
-    )
 
 
 @pytest.mark.parametrize("spec", PARTS.all(), ids=ids)

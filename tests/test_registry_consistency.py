@@ -121,8 +121,16 @@ def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
 
 #: Wo die Bausteine gesammelt geprüft werden, und woran man erkennt, dass es
 #: **alle** sind: an der Ableitung aus dem Register statt aus einer Namensliste.
+#:
+#: **Der Träger hat am 03.09.2026 gewechselt.** Bis dahin stand hier
+#: ``test_a_part_holds_over_its_whole_range``, der jeden Baustein über sein
+#: ganzes Parameterprodukt rechnete — rund eine Minute je Baustein, eine halbe
+#: Stunde je Torlauf, und deshalb gefallen (Entscheidung Robert). Was diese
+#: Stelle braucht, ist aber gar nicht der teure Lauf, sondern ein Test, der
+#: **jeden** Baustein aus dem Register anfasst; das leistet der Merkmalstest
+#: genauso und in Sekunden.
 PARTS_TEST: Final = "test_parts.py"
-PARTS_SWEEP: Final = "test_a_part_holds_over_its_whole_range"
+PARTS_SWEEP: Final = "test_a_part_names_the_features_it_promised"
 
 
 def parts_under_range_check() -> set[str]:
@@ -139,7 +147,8 @@ def parts_under_range_check() -> set[str]:
 
     sweep = getattr(test_parts, PARTS_SWEEP, None)
     assert sweep is not None, (
-        f"{PARTS_TEST} hat kein {PARTS_SWEEP} mehr — §24.3 hängt an diesem Sweep"
+        f"{PARTS_TEST} hat kein {PARTS_SWEEP} mehr — der Nachweis, dass jede "
+        "Baustein-Operation von einem Test angefasst wird, hängt daran"
     )
     marks = [
         mark
