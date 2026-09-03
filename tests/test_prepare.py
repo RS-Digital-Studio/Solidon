@@ -1790,10 +1790,7 @@ def test_moving_a_feature_is_registered_completely() -> None:
     """Registerkonsistenz: Was der Katalog verspricht, steht auch da."""
     spec = REGISTRY.get("move_feature")
 
-    assert spec.applies_to == ("hole", "pin"), (
-        "Kegel und Kugel sind gemessen draußen: Ihre Mitte liegt in der Fläche, "
-        "und der halbe Grundkörper steckt im Material"
-    )
+    assert set(spec.applies_to) == {"hole", "pin", "cone", "sphere"}
     assert spec.touches_features, "die Kennung reist mit"
     assert spec.requires_seed, "der Weg geht über die Boolesche Rückfallkette"
     felder = {entry.name: entry for entry in spec.params.spec()}
@@ -1842,34 +1839,38 @@ def test_a_recognised_pin_can_be_moved_too(profile: Profile) -> None:
     assert parts[0].centroid.x == pytest.approx(15.0, abs=0.5)
 
 
-def test_a_dome_says_why_it_stays_where_it_is(profile: Profile) -> None:
-    """Kugel und Kegel bleiben draußen — und der Satz sagt den gemessenen Grund.
+def test_a_fillet_says_why_it_stays_where_it_is(profile: Profile) -> None:
+    """Was übrig bleibt, bleibt aus einem Grund, der nicht am Bau liegt.
 
-    **Gemessen am 03.09.2026, und das Ergebnis war still falsch:** Eine Kuppe
-    Ø 12 auf einer 10 mm starken Platte, versetzt, ergab einen wasserdichten
-    Körper mit 24 003 mm³ statt 24 449 — 445 fehlten. Die erkannte Mitte einer
-    Kugelfläche liegt in der Fläche, auf der sie sitzt; der halbe Grundkörper
-    steckt im Material, und wer ihn abzieht, gräbt eine Mulde.
+    Kuppe und Kegel waren bis heute Mittag gesperrt, weil ihr Körper aus den
+    Kennzahlen falsch entstand — das ist behoben, sie werden aus ihren eigenen
+    Flächen gebaut. Eine Verrundung bleibt draußen, und zwar aus einem anderen
+    Grund: Sie **gehört zu ihrer Kante**. Versetzt man sie allein, bliebe die
+    Kante scharf und die Rundung läge daneben — ein Körper, der entstünde, wäre
+    geometrisch richtig und sachlich falsch.
 
-    Ein wasserdichter Körper mit einer Mulde, die niemand gewollt hat, ist
-    schlimmer als eine Absage — er sieht richtig aus. Regel 21: nicht raten.
+    Der Unterschied zählt für das Panel: Der erste Grund verschwindet, wenn
+    jemand den Bau verbessert, der zweite nie.
     """
-    from app.core.errors import UserError
+    import dataclasses
 
-    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
-    dome = trimesh.creation.icosphere(radius=6.0, subdivisions=3)
-    dome.apply_translation((-15.0, 0.0, 5.0))
-    body = MeshData.of(trimesh.boolean.union([plate, dome]))
-    features = detect(body)
-    ball = next((name for name, f in features.items() if f.kind == "sphere"), None)
-    assert ball is not None, "die Vorbedingung des Tests"
-    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+    from app.core.errors import UserError
+    from app.core.types import Feature
+
+    entry, _hole = _block_with_a_bore(profile)
+    rounded = Feature(
+        id="fillet_1",
+        kind="fillet",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "radius": 2.0},
+    )
+    entry = dataclasses.replace(entry, features={**entry.features, rounded.id: rounded})
 
     with pytest.raises(UserError) as raised:
-        _run_op("move_feature", entry, profile, at_feature=ball, x=15.0, y=0.0, z=5.0)
+        _run_op("move_feature", entry, profile, at_feature=rounded.id, x=5.0, y=0.0, z=0.0)
 
     assert raised.value.suggestions, "Regel 17"
-    assert "Material" in str(raised.value), str(raised.value)
+    assert "Kante" in str(raised.value), str(raised.value)
 
 
 def test_a_recognised_bore_can_be_removed(profile: Profile) -> None:
@@ -1919,7 +1920,7 @@ def test_removing_a_feature_is_registered_completely() -> None:
     """Dieselbe Reichweite wie das Versetzen — es ist dieselbe Maschine."""
     spec = REGISTRY.get("remove_feature")
 
-    assert spec.applies_to == ("hole", "pin")
+    assert set(spec.applies_to) == {"hole", "pin", "cone", "sphere"}
     assert spec.touches_features
     assert spec.requires_seed, "auch das Füllen geht über die Rückfallkette"
     fields = {entry.name: entry for entry in spec.params.spec()}
@@ -1974,10 +1975,16 @@ def test_turning_a_bore_keeps_its_centre(profile: Profile) -> None:
 
 
 def test_turning_a_feature_is_registered_completely() -> None:
-    """Dieselbe Sprache wie ``rotate_object`` — Achse als Auswahl, Winkel in Grad."""
+    """Dieselbe Sprache wie ``rotate_object`` — Achse als Auswahl, Winkel in Grad.
+
+    **Ohne die Kugel**, und das ist Roberts „alles, was bei den jeweiligen
+    sinnvoll ist": Sie hat keine Lage, die sich drehen ließe. Gedreht sähe sie
+    aus wie vorher, und eine Handlung ohne Wirkung ist schlechter als keine.
+    """
     spec = REGISTRY.get("rotate_feature")
 
-    assert spec.applies_to == ("hole", "pin")
+    assert set(spec.applies_to) == {"hole", "pin", "cone"}
+    assert "sphere" not in spec.applies_to, "eine Kugel hat keine Lage"
     assert spec.touches_features
     fields = {entry.name: entry for entry in spec.params.spec()}
     assert fields["axis"].kind == "enum" and fields["axis"].choices == ("x", "y", "z")
@@ -2049,3 +2056,69 @@ def test_the_size_row_is_the_same_row_for_a_bore_and_a_pin() -> None:
         assert len(rows) == 1, [entry.op for entry in rows]
         assert rows[0].op == expected, (feature.kind, rows[0].op)
         assert rows[0].fields, "die Zeile trägt ihr Maß"
+
+
+def test_a_dome_is_built_from_its_own_faces(profile: Profile) -> None:
+    """Eine Kuppe wird aus ihren eigenen Flächen gebaut, nicht aus einer Kugel.
+
+    **Der Grundkörper war die falsche Vorlage, und das ist gemessen.** Die
+    erkannte Mitte einer Kugelfläche liegt in der Fläche, auf der sie sitzt;
+    wer die ganze Kugel abzieht, gräbt eine Mulde und verliert 445 mm³, ohne
+    dass der Körper aufhört, wasserdicht zu sein.
+
+    Die Merkmalsflächen sagen es genau: Sie begrenzen die Kuppe, ihr Randring
+    liegt auf der Grundfläche, und mit einem Deckel darüber entsteht der
+    Körper, der wirklich das Merkmal ist. Gemessen an einer Kuppe r = 6 auf
+    einer Platte: 448,5 mm³ — die analytische Halbkugel hat 452,4, und die
+    Differenz ist die Tesselierung der Vorlage, nicht ein Fehler des Baus.
+    """
+    from app.core.geom.prepare_ops import _feature_body
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    dome = trimesh.creation.icosphere(radius=6.0, subdivisions=3)
+    dome.apply_translation((-15.0, 0.0, 5.0))
+    body = MeshData.of(trimesh.boolean.union([plate, dome]))
+    ball = next(f for f in detect(body).values() if f.kind == "sphere")
+
+    built = _feature_body(body, ball)
+
+    assert built is not None, "die Flächen der Kuppe begrenzen sie vollständig"
+    assert built.raw.is_watertight
+    assert built.volume == pytest.approx(448.5, rel=0.02), built.volume
+
+
+def test_a_dome_can_be_moved_without_losing_material(profile: Profile) -> None:
+    """Und damit trägt das Versetzen auch für Kuppe und Kegel.
+
+    Der Fall, an dem es heute Vormittag gemessen scheiterte: Volumen 24 449
+    vorher, 24 003 nachher — 445 mm³ waren fort, der Körper wasserdicht und
+    still falsch. Mit dem aus den Flächen gebauten Körper bleibt das Volumen.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    dome = trimesh.creation.icosphere(radius=6.0, subdivisions=3)
+    dome.apply_translation((-15.0, 0.0, 5.0))
+    body = MeshData.of(trimesh.boolean.union([plate, dome]))
+    features = detect(body)
+    ball = next(name for name, f in features.items() if f.kind == "sphere")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+    centre = tuple(float(v) for v in features[ball].params["centre"])
+
+    moved = _run_op(
+        "move_feature", entry, profile, at_feature=ball, x=15.0, y=centre[1], z=centre[2]
+    )
+    after = as_mesh_data(moved.outputs[0].mesh)
+
+    assert after.raw.is_watertight
+    assert after.volume == pytest.approx(body.volume, rel=0.01), (
+        f"dieselbe Kuppe, nur woanders: {body.volume:.1f} -> {after.volume:.1f}"
+    )
+
+
+def test_the_movable_kinds_now_include_the_dome() -> None:
+    """Vier Arten statt zwei — und die Sätze für die übrigen bleiben."""
+    spec = REGISTRY.get("move_feature")
+
+    assert set(spec.applies_to) == {"hole", "pin", "cone", "sphere"}
+    assert "fillet" not in spec.applies_to, "eine Verrundung folgt ihrer Kante"
+    assert "edge_loop" not in spec.applies_to, "ein Netzfehler ist kein Körper"
+    assert "face" not in spec.applies_to, "dafür gibt es push_face"
