@@ -1666,3 +1666,67 @@ def test_a_typed_name_still_loses_what_no_disc_can_hold(tmp_path: Path, profile:
         scheme="{project}",
     )
     assert write_plan(leer, tmp_path)[0].stem == "projekt", "ein leerer Rest bekommt den Rückfall"
+
+
+def test_a_brim_the_export_adds_by_itself_is_said_out_loud(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Der Export ändert eine Einstellung je Teil — und sagt es jetzt.
+
+    ``advise.for_part`` ist die eine Stelle, an der eine Einstellung **je
+    Körper** statt je Auftrag gilt: Ein hohes, schmales Teil bekommt einen
+    Brim, auch wenn die Platte auf Skirt steht. Das ist richtig und gewollt
+    (§29); der Kunde erfuhr es nur nicht.
+
+    **Der Grund lag dabei fertig da.** ``SettingAdvice`` trägt ihn mit, und
+    sein Docstring sagt warum: „eine Zahl ohne Begründung ist im Zweifel
+    schlechter als die Vorgabe, weil niemand sie nachprüfen kann." Gemessen am
+    03.09.2026 kam aus ``for_part`` der fertige Satz „Dieses Teil ist hoch und
+    schmal. Die Düse kann es beim Anfahren kippen." — und ``object_keys``
+    machte daraus Slicer-Schlüssel und warf den Satz weg.
+
+    Für den Kunden zählt es doppelt: Ein Brim kostet Material und muss
+    abgeschnitten werden. Wer drei von fünfzehn Teilen mit Rand aus dem Drucker
+    nimmt und seine Platte auf Skirt gestellt hat, sucht den Fehler bei sich.
+
+    Einmal je Grund und nicht je Teil — dieselbe Zurückhaltung wie beim
+    ungedeckelten Schnitt: Zwölf gleiche Sätze verdrängen elf andere.
+    """
+    schlank = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 80.0)))
+    breit = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [
+        replace(scene_object("obj_1", "Turm"), mesh=schlank),
+        replace(scene_object("obj_2", "Platte"), mesh=breit),
+    ]
+    settings = print_settings.resolve(profile, "standard")
+    assert settings.adhesion.kind == "skirt", "die Vorbedingung des Tests"
+
+    _written, findings = write_assembly(
+        objects, tmp_path, project_name="Gehäuse", profile=profile, settings=settings
+    )
+
+    treffer = [finding for finding in findings if finding.code == "export.part_setting"]
+    assert treffer, [finding.code for finding in findings]
+    assert len(treffer) == 1, "einmal je Grund, nicht je Teil"
+    assert treffer[0].values["objects"] == 1, "nur der Turm, nicht die Platte"
+    assert "Brim" in str(treffer[0].values["reason"]), treffer[0].values["reason"]
+    assert treffer[0].values["setting"] == "adhesion.kind"
+    assert treffer[0].values["value"] == "brim"
+
+
+def test_nothing_is_said_when_every_part_takes_the_plates_setting(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Die Gegenprobe: Wo nichts abweicht, steht auch nichts."""
+    breit = MeshData.of(trimesh.creation.box(extents=(60.0, 60.0, 10.0)))
+    objects = [replace(scene_object("obj_1", "Platte"), mesh=breit)]
+
+    _written, findings = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Gehäuse",
+        profile=profile,
+        settings=print_settings.resolve(profile, "standard"),
+    )
+
+    assert not [finding for finding in findings if finding.code == "export.part_setting"]

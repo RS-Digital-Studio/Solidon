@@ -48,6 +48,7 @@ from app.core.types import (
     PrintSettings,
     Profile,
     SceneObject,
+    SettingAdvice,
     Source,
     kind_of,
 )
@@ -764,16 +765,25 @@ def _written(target: Path, payload: bytes) -> Path:
 
 def _part_settings(
     mesh: MeshData, settings: PrintSettings | None, flavour: SlicerFlavour
-) -> dict[str, str]:
-    """Was dieses Teil anders braucht als die Platte (§29).
+) -> tuple[dict[str, str], list[SettingAdvice]]:
+    """Was dieses Teil anders braucht als die Platte (§29) — und warum.
 
     Die Grundfläche kommt aus einem Schnitt knapp über dem Boden, nicht aus
     der Bounding-Box: ein Teil, das auf drei schmalen Armen steht, hat eine
     große Grundfläche und trotzdem kaum Halt. Genau dieser Fall ist der Grund
     für die Unterscheidung.
+
+    **Der Rat reist mit heraus.** Bis zum 03.09.2026 gab diese Funktion nur die
+    Slicer-Schlüssel zurück, und der Grund, den ``SettingAdvice`` ausdrücklich
+    mitführt, endete hier. Sein Docstring sagt, warum es ihn gibt: „eine Zahl
+    ohne Begründung ist im Zweifel schlechter als die Vorgabe, weil niemand sie
+    nachprüfen kann." Der Kunde bekam einen Brim an drei von fünfzehn Teilen,
+    obwohl seine Platte auf Skirt steht, und keinen Satz dazu — dabei lag einer
+    fertig da: „Dieses Teil ist hoch und schmal. Die Düse kann es beim Anfahren
+    kippen."
     """
     if settings is None:
-        return {}
+        return {}, []
     # Beide erst hier: `handover` zieht die G-Code-Auswertung mit, und ein
     # Export soll nicht davon abhängen, dass ein Slicer im Spiel ist.
     from app.core.export import handover
@@ -784,7 +794,41 @@ def _part_settings(
     section = cross_section(mesh, lowest + FOOTPRINT_HEIGHT)
     footprint = 0.0 if section is None or section.is_empty else float(section.area)
     advice = advise.for_part(settings, mesh.bounds, footprint)
-    return handover.object_keys(settings, advice, flavour)
+    return handover.object_keys(settings, advice, flavour), advice
+
+
+def _part_setting_findings(advice: Sequence[SettingAdvice]) -> list[Finding]:
+    """Was der Export je Teil selbst entschieden hat, in einem Satz je Grund.
+
+    Einmal je Grund und nicht je Teil: Zwölf Behälter auf zu kleiner Fläche
+    ergäben zwölf gleiche Zeilen, und elf davon verdrängen andere (§26.1).
+    Dieselbe Zurückhaltung wie beim ungedeckelten Schnitt in ``autosplit``.
+
+    Die Schwere kommt vom Rat selbst. ``for_part`` gibt ``info``, und das ist
+    richtig: Hier ist nichts kaputt, hier hat die Anwendung etwas getan, das
+    der Kunde wissen soll — ein Brim kostet Material und muss abgeschnitten
+    werden.
+    """
+    counted: dict[tuple[str, str], list[SettingAdvice]] = {}
+    for entry in advice:
+        counted.setdefault((entry.path, str(entry.reason)), []).append(entry)
+    return [
+        Finding(
+            code="export.part_setting",
+            severity=group[0].severity,
+            message=_(
+                "Für einzelne Teile gilt eine andere Einstellung als für die Platte — "
+                "die Geometrie verlangt es."
+            ),
+            values={
+                "objects": len(group),
+                "setting": path,
+                "value": str(group[0].value),
+                "reason": group[0].reason,
+            },
+        )
+        for (path, _reason), group in sorted(counted.items())
+    ]
 
 
 def write_assembly(
@@ -856,12 +900,21 @@ def write_assembly(
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
+    # Einmal je Körper gerechnet: Der Schnitt knapp über dem Boden kostet, und
+    # die Schlüssel wie der Grund kommen aus demselben Aufruf.
+    part_advice = {
+        entry.id: _part_settings(as_mesh_data(entry.mesh), settings, flavour) for entry in chosen
+    }
+    findings += _part_setting_findings(
+        [advice for _keys, own in part_advice.values() for advice in own]
+    )
+
     parts = [
         threemf.AssemblyPart(
             mesh=as_mesh_data(entry.mesh),
             name=source_text(entry.name),
             slots=tuple(entry.material_slots),
-            settings=_part_settings(as_mesh_data(entry.mesh), settings, flavour),
+            settings=part_advice[entry.id][0],
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
             # dieselbe Datei — und dann muss dort stehen, welches Teil auf
             # welche gehört, sonst legt der Slicer sie übereinander.

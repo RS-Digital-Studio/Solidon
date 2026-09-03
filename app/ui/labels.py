@@ -1071,6 +1071,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "section": _("Dateiabschnitt"),
     "seconds": _("Sekunden"),
     "seed": _("Startwert"),
+    "setting": _("Einstellung"),
     "settings": _("Einstellungen"),
     "share": _("Anteil"),
     "shortcut": _("Kürzel"),
