@@ -183,6 +183,7 @@
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` zeigt beim nächsten Aufruf ins Leere.
 - [Privater Index: Spuren](privater-index-hinterlaesst-spuren.md) — eine neue Datei steht danach als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — nicht den fremden Stand einer gemeinsamen Datei.
+- [Privater Index schützt die Kataloge nicht](privater-index-schuetzt-die-kataloge-nicht.md) — fünf fremde Zeilen in en.json gingen unter meiner Meldung hinaus.
 - [Blob-Commit verliert](blob-commit-verliert-den-wettlauf.md) — „cannot lock ref" heißt nicht passiert.
 - [Patchskript schneidet Fremdes](patchskript-schneidet-fremdes-weg.md) — „ab Marke bis Ende" löscht den Nachbarn.
 - [Sicherung ist Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — spielt den ganzen Stand von damals zurück.
