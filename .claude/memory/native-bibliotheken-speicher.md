@@ -71,3 +71,33 @@ Familie: nicht die Zeile ansehen, sondern die Kombination.
 Siehe [[rtree-abstuerze-im-langen-lauf]], das denselben Cluster von außen
 beschreibt, und [[leistungstests-fremdlast]] für die andere Sorte
 Fehlzuschreibung.
+
+## „Diesmal ging es durch" ist keine Eigenschaft — und ein Abriss verschluckt still
+
+Am 04.09.2026 riss `test_ui.py` am Stück nach 188 von 448 Tests ab, Exit 139,
+**ohne eine einzige FAILED-Zeile**. Portioniert zu 70 lief dieselbe Datei
+komplett durch: 448 grün, jede Portion Exit 0. Ich habe daraus „portioniert
+kein Abriss" gemacht — und eine halbe Stunde später riss derselbe portionierte
+Aufruf in Teil 3 nach 39 von 70 ab.
+
+**Ein sauberer Lauf ist eine Beobachtung, keine Eigenschaft.** Bei einer
+lastabhängigen Ursache sagt er nur, dass die Last diesmal reichte. Dieselbe
+Form wie [[schranke-aus-einem-messwert-ist-geraten]], nur in der negativen
+Richtung: nicht „der Wert ist so groß", sondern „das Problem gibt es nicht".
+
+**Gefährlicher ist die stille Hälfte.** `Exit 139, rot=0` sieht beim
+Überfliegen aus wie ein Erfolg, und die verschluckten Tests fehlen ohne
+Meldung — beim ersten Mal 260 von 448, beim zweiten 31 von 70. Wer nur auf
+FAILED-Zeilen sieht, liest einen grünen Lauf, der zu 42 Prozent stattgefunden
+hat.
+
+**Die Gegenmaßnahme ist eine Zahl, nicht ein Blick:** je Lauf **gesammelt
+gegen gelaufen** vergleichen. `--collect-only` gibt das Soll, die
+Fortschrittszeichen das Ist; weichen sie ab, ist es kein Lauf, auch ohne roten
+Test. Die verschluckten Tests dann einzeln nachfahren — in beiden Fällen waren
+sie grün, aber das wusste man erst danach.
+
+Beim Zählen der Fortschrittszeichen nur **reine** Fortschrittszeilen nehmen:
+„8 passed in 1.59s" bringt drei `s` und einen Punkt mit und macht aus acht
+Tests zwölf. Und den Zähler an einem Protokoll mit bekanntem Ausgang prüfen,
+nicht an sich selbst ([[messwerkzeug-misst-sich-selbst]]).
