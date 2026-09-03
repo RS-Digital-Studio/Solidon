@@ -79,11 +79,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
-| VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
+| VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | **nichts — das ist eine Entscheidung mit Datum (20.08.2026), kein offener Auftrag.** Sie steht ausgeschrieben in `build.yml` und weiter unten in diesem Dokument: Kein Runner hat eine Grafikkarte, VTK stirbt im emulierten GL-Kontext mit SIGSEGV, und der Absturz wandert — er hängt an keinem Test und ist lokal nicht zu sehen (dieselben Dateien laufen mit GL grün durch, 4021 Tests). Weil der Paketier-Job an dieser Suite hängt, verhinderte ein Fremdcode-Absturz in einer Umgebung, die niemand benutzt, wochenlang die Auslieferung aller vier Plattformen. **Die Fenster prüft seither, wer einen Bildschirm hat** — also jede Sitzung vor dem Commit. Wieder aufmachen würde es ein Runner mit GL oder ein VTK, das ohne auskommt; bis dahin steht der Eintrag für die Lücke, nicht für Arbeit |
 | Ein Gewinde auf macOS kann als STL Löcher haben — **ein Weg ist gebaut, die Bestätigung fehlt** | Die Demo bis 30.10.2026 (12.08.2026) | einen Lauf auf einem Mac. Seit `d96308bb` wird ein offenes Netz aus geschlossener Form vernäht statt feiner vernetzt (T-Kreuzung, nicht Loch); ob der dortige Riss einer ist, lässt sich hier nicht erzeugen |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
+| Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg — `test_chat_ui.test_the_applied_bar_clears_when_something_newer_is_on_top` trägt seit dem 13.08.2026 ein `skipif` für Linux, und von Windows aus ist der Absturz nicht auslösbar |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
-| Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
@@ -95,7 +95,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD, am selben Abend nach sechs weiteren Commits bei **1824** — er altert also messbar mit jedem privaten Commit weiter, und zwar in die gefährliche Richtung. Zweimal aufgeräumt, beide Male ohne Verlust: keine Datei geändert, nur der Index |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374. **Fortschreibung 25.08.2026 (c1fcb9ea):** Todesweg ist die **Referenzzählung**, nicht der Sammler — beide gc-Anläufe (aus + gezieltes Sammeln, aus + gar nichts) sind gemessen und verworfen, Notiz in `tests/conftest.py`. Mit dem Testbestand vom 25.08. riss `test_ui.py` deterministisch (3/3, Position wandert mit der Zusammensetzung); seit dem Suite-Pin (`_windows_live_to_the_end`) stellt die Suite den tragenden Zustand **absichtlich** her — Fenster leben bis zum Prozessende, der Riss liegt wieder hinter der Zusammenfassung. Die Mine selbst — C++-Zerstörung eines VTK-Fensters mitten im Prozess — bleibt offen; wer sie angeht, misst gegen den Bestand vom 25.08. **Fortschreibung 26.08.2026:** `test_analysis_ui.py` riss zweimal von zweimal **vor** der Zusammenfassung (einmal im Tor, einmal solo — aber unter Vier-Sitzungen-Last), Access Violation beim 24. Test, Stack im `super().__init__()` des Preview-Workers (`session.py:223` ← `preview_async`). Die Zeile ist als Ursache **ausgeschlossen**: ces Tages-Commits berühren sie nicht, und ce maß 3/3 grün solo auf ruhiger Maschine. Die Kombination ist die Auskunft — lastabhängig, die Familie in neuer Position, und der Stack nennt den Moment, nicht den Grund. Dieselbe Datei zeigte am selben Tag eine **dritte Gestalt** (a2, Torlauf): neunzehn Minuten Stillstand bei 0,015 CPU-Sekunden und 0 Bytes Ausgabe, dann von selbst gelöst und grün — als Beobachtung belegt, als Diagnose nicht; die Signatur passt zum Abbau-Deadlock (Signatur C, eine Zeile tiefer). **Fortschreibung 26.08.2026, `test_print_settings_ui.py` (d1 und ce):** Die schärfste Messung bisher, weil beide Richtungen belegt sind. Nach dem Plattenwahl-Commit (`78f559d0`) riss die Datei mit `-p no:randomly` reproduzierbar an Position 57; im Arbeitsbaum auf dem Stand davor lief sie mit 73 passed durch. **Und trotzdem lag es nicht am Inhalt der neuen Tests:** Ein trivialer 75. Test an derselben Stelle war folgenlos, der Absturz traf nie einen der neuen, sondern den Abbau von `test_switching_the_slicer_empties_the_profile_choice`, und das Zusammenlegen beider Tests zu einem verschob ihn nur von 57 auf 58. Damit ist gemessen, was die conftest-Notiz behauptet: Es zählt die Zusammensetzung, nicht ein Test — aber auch nicht die bloße Anzahl. Behoben durch Umzug in die Sammelgruppe (`77c0f5d5`), nicht durch eine Reparatur; wer die Mine entschärft, kann den Test zurückholen. Lehre nebenbei: Die erste Zuschreibung lautete „bekannte Familie, kein Verdacht gegen den Commit" — die Gegenprobe auf dem Stand davor kostete zwei Minuten und widerlegte sie. **Fortschreibung 30.08.2026 (72 und d5, unabhängig):** `test_print_settings_ui.py` reißt jetzt mit **139 im Teardown der Aufräum-Fixture** (`conftest.py:836`, `_no_worker_outlives_its_window`) nach 63–64 grünen Punkten — in der Release-Kontrolle und im Waisen-Tor am selben Tag, einzeln reproduzierbar, und auf purem HEAD ohne die Tagesänderung identisch (Gegenprobe 72): dritte Code-Gestalt der Familie, erstmals mit benannter Stelle. Nach D13 (`5b7e4a46`, 15/53) erneut bestätigt: auf HEAD pur identisch, und die Rissstelle wandert mit der Testzahl — die Zusammensetzung zählt, wie schon bei `test_ui` gemessen. Neuer Fundort 30.08.2026 (72, im Tor vor `d91798b3`): `test_widget_lifetime.py` mit Exit 127 (`0xc0000374`, Heap) — Gegenprobe auf HEAD pur 1 von 2 gerissen, Familie, der Tagesdiff ist entlastet |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
@@ -4824,7 +4823,10 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon
       wieder ein.
 
-- [ ] **Die Belegung heißt in `es` und `pt` noch nicht entschieden.** Elegoo
+- [x] **Die Belegung heißt in `es` und `pt` noch nicht entschieden.**
+      *Erledigt am 03.09.2026, gemessen: `es` trägt `Bandeja`, `pt` trägt
+      `Placa`. Genau das sagt der Eintrag selbst voraus — bei unentschiedener
+      Quelle bleibt der Bestand, und der Bestand steht.* Elegoo
       sagt für `es` `bandeja` (65) gegen `placa` (18); für `pt` steht es
       **69:69**. Das ist eine Wortwahl und keine Messung — bei unentschiedener
       Quelle bleibt der Bestand stehen.
@@ -14617,6 +14619,24 @@ passiert, nachdem man geklickt hat.
   `TrackSlider` springt dorthin, wohin man klickt, das Rad fährt in
   Seitenschritten, und der Griff ist von zwölf auf achtzehn Punkte gewachsen.
   Vier Leisten fahren ihn: Schnitt, Analyse, Explosion, Einstellungen.
+
+- [x] **Der Bewegen-Griff war nicht greifbar, und niemand sah es.**
+  Zwei Fehler übereinander: `AffineWidget3D` sucht seinen Renderer über
+  `GetInteractorStyle()._parent()`, und unser eigener Stil hat das nicht —
+  jede Mausbewegung endete in einem `AttributeError`, den pyvistaqt zu einer
+  stillen Warnung macht. Derselbe Rückruf setzt `_selected_actor`, ohne den
+  der Druck-Rückruf nichts tut. Darunter lag der zweite: Der Picker, den das
+  Widget sich selbst hinstellt (`vtkHardwarePicker`), trifft in dieser
+  Umgebung nichts — gemessen nicht einmal den Körper in der Bildmitte. Beides
+  behoben; jetzt färbt der Griff die Achse unter dem Zeiger und lässt sich
+  ziehen. Die erste Hälfte stand seit je im Docstring von `_InteractorStyle`,
+  für einen anderen Aufrufer — ein reparierter Fehler mit einem ungesuchten
+  Zwilling.
+- [x] **Drehen rastet bei 45 Grad ein, ohne das freie Drehen zu nehmen.**
+  `snap_near` im Kern zieht nur in der Nähe eines Vielfachen; `_magnetise_turn`
+  macht es während des Zugs sichtbar (Robert, 03.09.2026). Gemessen am
+  laufenden Fenster: frei bis 40,5°, dann 23 Schritte lang exakt 45,0°, danach
+  wieder frei.
 
 - [x] **Maße und Fangmarke folgen jetzt dem Plattenversatz.**
   Beide zeichneten in Szenenkoordinaten, und auf Platte 2 liegt diese Stelle
