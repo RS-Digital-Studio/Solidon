@@ -157,6 +157,26 @@ class UiSettings:
     Der Merker bleibt lokal in den Oberflächeneinstellungen und reist nie in
     einer Projektdatei."""
 
+    print_disclosure_version: str = ""
+    print_disclosure_at_utc: str = ""
+    """§29: Textfassung und UTC-Zeitpunkt des zuletzt gezeigten Druckhinweises
+    — dasselbe Muster wie beim KI-Hinweis darüber, nur ohne Ziel und Backend,
+    denn hier verlässt nichts das Gerät."""
+
+    print_settings_in_files: bool = True
+    """Ob Solidons Druckeinstellungen mit einer gespeicherten 3MF und mit der
+    Übergabe an den Slicer mitreisen (§29).
+
+    Vorbelegt mit *ja*, weil das der bisherige und für die meisten der
+    gewollte Weg ist: Eine Datei, die ihre Temperatur selbst mitbringt, muss
+    man nicht einrichten. Ohne den Haken enthält die 3MF nur Geometrie und
+    Materialslots, und der Slicer arbeitet mit seinem eigenen Profil —
+    gemessen sind das 1472 statt 2468 Byte an einem Würfel.
+
+    In den Oberflächeneinstellungen und nicht im Projekt: Es ist eine Aussage
+    darüber, wie jemand arbeitet, und sie soll nicht davon abhängen, welches
+    Projekt gerade offen ist. Dieselbe Trennung wie bei der Slicer-Wahl (§29)."""
+
     circle_measure: str = "diameter"
     """Ob Kreismaße als Durchmesser oder als Radius eingegeben werden — der
     Umschalter steht an jedem Kreisfeld, die Wahl gilt überall und bleibt."""

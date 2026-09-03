@@ -87,6 +87,7 @@ Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
 | `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung |
 | `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29) |
+| `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 
 **Editor**
@@ -131,6 +132,30 @@ wieder, und die Einstellungen können ihn zurücksetzen. Weil `ChatPanel` vor
 seinem Signal leert, hält es bis zur Entscheidung den unbearbeiteten
 Eingabetext: Bei einem Abbruch kommen auch Leerraum und Zeilenumbrüche
 vollständig und markiert ins Feld zurück.
+
+## §29 — was die Datei mitnimmt
+
+`print_disclosure.py` steht vor dem ersten Öffnen der Druckeinstellungen und
+sagt dreierlei: Die Werte sind Erfahrungswerte; sie reisen mit einer
+gespeicherten 3MF und mit der Übergabe an den Slicer; für Ergebnis und
+Schäden gelten die Nummern 10 und 11 des Lizenzvertrags. Anders als der
+KI-Hinweis sperrt er nichts — hier verlässt nichts das Gerät, und die Wahl
+darunter entscheidet erst über das Speichern.
+
+Drei Stellen tragen sie: Der Hinweis fragt einmal je Textfassung, der
+Umschalter im Kopf des Druckdialogs zeigt und ändert sie, und
+`settings_for_export()` beantwortet damit die Frage, was eine Datei
+mitbekommt. Der Merker steht in `UiSettings` (Fassung und UTC-Zeitpunkt) und
+reist nie in einer Projektdatei.
+
+**Der Fehler dahinter, weil er die Bauart erklärt:** Bis zum 03.09.2026 trug
+**jede** exportierte 3MF Solidons Werte. Der Kern konnte es anders
+(`writer._plate_settings` gibt bei fehlenden Einstellungen ein leeres
+Verzeichnis), aber die Anwendung löste an ihrer eigenen Stelle auf — der
+Ausgang war zugemauert. Dazu schrieb schon das **bloße Öffnen** des Dialogs
+die Werte ins Dokument, denn `set_print_settings` lief nach `exec()` ohne
+Rückfrage, und der Dialog hat nur „Schließen". `PrintSettingsDialog.has_changes`
+misst deshalb am Anfangszustand und nicht an einer Liste von Knöpfen.
 
 **Bibliothek**
 

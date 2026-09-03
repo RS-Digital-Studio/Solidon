@@ -95,7 +95,7 @@ from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible
 from app.ui.session import Session
-from app.ui.settings import UiSettings
+from app.ui.settings import UiSettings, save_settings
 from app.ui.style import ROOMY, TIGHT, make_primary, set_level
 
 _log = get_logger(__name__)
@@ -980,6 +980,32 @@ def _select_data(box: QComboBox, identifier: str) -> None:
         box.setCurrentIndex(index)
 
 
+def settings_for_export(
+    document: Any, profile: Profile, ui_settings: UiSettings
+) -> PrintSettings | None:
+    """Welche Druckeinstellungen mit einer Datei hinausgehen — oder keine (§29).
+
+    Die Entscheidung stand als verschachtelter Ausdruck im Aufruf des
+    Export-Arbeiters und war damit von außen nicht prüfbar. Sie hat drei
+    Fälle, und der dritte fehlte bis zum 03.09.2026 ganz:
+
+    * Das Projekt trägt eigene Werte — die gelten.
+    * Es trägt keine — dann wird aus Stufe, Material und Drucker aufgelöst.
+      ``None`` im Dokument heißt „Dialog nie geöffnet", nicht „keine Werte".
+    * **Der Kunde will keine mitgeben** — dann geht nur Geometrie hinaus, und
+      sein Slicer arbeitet mit dem eigenen Profil.
+
+    Ohne den dritten Fall gab es keine 3MF ohne Solidons Werte: Der Ausgang im
+    Kern (``writer._plate_settings`` gibt bei ``None`` ein leeres Verzeichnis
+    zurück) war von der Anwendung aus nicht erreichbar, weil hier immer
+    aufgelöst wurde.
+    """
+    if not ui_settings.print_settings_in_files:
+        return None
+    stored = document.print_settings
+    return stored if stored is not None else print_settings.resolve(profile)
+
+
 def remembered_setup(
     settings: UiSettings, material: str = "", printer_id: str = ""
 ) -> handover.SlicerSetup | None:
@@ -1611,6 +1637,12 @@ class PrintSettingsDialog(QDialog):
         self.settings = stored or print_settings.resolve(
             session.profile, self._remembered_quality()
         )
+        # Woran :meth:`has_changes` misst, ob dieser Dialog etwas bewirkt hat.
+        # Bis zum 03.09.2026 schrieb schon das bloße Öffnen die aufgelösten
+        # Werte ins Projekt: Wer nur nachsah, welche Temperatur vorgeschlagen
+        # würde, hatte sie danach im Dokument — und jede exportierte 3MF trug
+        # sie mit, ohne Weg zurück.
+        self._opened_with = self.settings
         # Einmal suchen, dreimal gebraucht: die Suche geht über PATH,
         # Registry und die üblichen Installationsorte und kostet eine halbe
         # Sekunde — dreimal wäre die Hälfte der Zeit, die der Dialog zum
@@ -1643,6 +1675,22 @@ class PrintSettingsDialog(QDialog):
         # ganzen Dialog. Zehn Formulare rechneten sie bis hierhin einzeln, und
         # die Felder begannen an zehn Stellen (B8/B11).
         align_forms(self)
+
+    def has_changes(self) -> bool:
+        """Hat der Kunde in diesem Dialog etwas bewirkt?
+
+        Gefragt wird nicht, ob er einen Knopf gedrückt hat, sondern ob am Ende
+        etwas anderes dasteht als am Anfang — das erfasst jeden der sieben
+        Wege, auf denen sich ``settings`` ändert (Feld, Stufe, Vorschläge,
+        Slot-Profil, übernommene Werte, Übergabeart), und kann nicht veralten,
+        wenn ein achter dazukommt.
+
+        Wer nur nachsieht, bewirkt nichts: Sein Projekt bleibt ohne
+        Druckeinstellungen, und eine exportierte 3MF trägt weiter nur
+        Geometrie. Das ist kein Verlust — beim nächsten Öffnen löst der Dialog
+        aus Stufe, Material und Drucker dieselben Werte wieder auf.
+        """
+        return self.settings != self._opened_with
 
     def take_slice_result(self, result: SliceResult | None) -> None:
         """Die nachgereichte Schichtanalyse übernehmen (§2.8, §29).
@@ -1709,6 +1757,23 @@ class PrintSettingsDialog(QDialog):
         self.material_link.clicked.connect(self.filamentsRequested)
         self.refresh_materials()
 
+        # Ob diese Werte die Anwendung verlassen (§29). Der Druckhinweis fragt
+        # es einmal; hier steht die Antwort zum Nachsehen und Ändern — sonst
+        # wäre die Wahl eine Einbahnstraße, und genau das war der Fehler, den
+        # dieser Umschalter behebt.
+        self.share_settings = QCheckBox(tr("Werte mitgeben"), self)
+        self.share_settings.setChecked(self.ui_settings.print_settings_in_files)
+        self.share_settings.setToolTip(
+            tr(
+                "Mit Haken tragen eine gespeicherte 3MF und die Übergabe an den Slicer "
+                "diese Werte. Ohne Haken geht nur die Geometrie hinaus, und Ihr Slicer "
+                "arbeitet mit seinem eigenen Profil."
+            )
+        )
+        self.share_settings.setStatusTip(self.share_settings.toolTip())
+        self.share_settings.setAccessibleDescription(self.share_settings.toolTip())
+        self.share_settings.toggled.connect(self._share_toggled)
+
         row.addWidget(QLabel(tr("Qualität"), self))
         row.addWidget(self.quality, 1)
         row.addWidget(QLabel(tr("Drucker"), self))
@@ -1716,7 +1781,19 @@ class PrintSettingsDialog(QDialog):
         row.addWidget(QLabel(tr("Material"), self))
         row.addWidget(self.material_state, 1)
         row.addWidget(self.material_link)
+        row.addWidget(self.share_settings)
         return row
+
+    def _share_toggled(self, on: bool) -> None:
+        """Die Wahl gilt für die Anwendung, nicht für dieses Projekt (§29).
+
+        Dieselbe Trennung wie bei der Slicer-Wahl: Ein Projekt wandert auf
+        einen anderen Rechner, die Arbeitsweise seines Besitzers nicht. Sofort
+        gespeichert, damit sie auch dann steht, wenn die Anwendung nach dem
+        Dialog nicht mehr regulär endet.
+        """
+        self.ui_settings.print_settings_in_files = on
+        save_settings(self.ui_settings)
 
     def show_materials(self, materials: Sequence[str]) -> None:
         """Woraus sich das Material ergibt — die Liste, sonst die Vorgabe
@@ -3620,7 +3697,17 @@ class PrintSettingsDialog(QDialog):
             # ist nur ohne ``last_result`` leer, und genau dann hat der frühe
             # Rückweg über ``objects`` oben schon geantwortet — dieselbe
             # Quelle, zwei Ecken. Ohne diese Kette stünde unten „0 Platten".
-            runs = [self._plate_run(objects, plate, folder, name, setup) for plate in plates]
+            runs = [
+                self._plate_run(
+                    objects,
+                    plate,
+                    folder,
+                    name,
+                    setup,
+                    with_settings=self.ui_settings.print_settings_in_files,
+                )
+                for plate in plates
+            ]
             for run in runs:
                 handover.open_in_slicer(run.model, setup)
                 findings.extend(run.findings)
@@ -3720,6 +3807,8 @@ class PrintSettingsDialog(QDialog):
         folder: Path,
         name: str,
         setup: handover.SlicerSetup,
+        *,
+        with_settings: bool = True,
     ) -> PlateRun:
         """Eine Platte für den Slicer fertig machen (§20, §25, §29).
 
@@ -3747,7 +3836,14 @@ class PrintSettingsDialog(QDialog):
             plate=plate,
             # Damit ein Teil bekommen kann, was nur es braucht — der Brim
             # unter der Streuscheibe, nicht unter den zwölf Behältern.
-            settings=self.settings,
+            #
+            # ``with_settings=False`` kommt vom Übergabeweg „Im Slicer öffnen":
+            # Dort gehört das Fenster danach dem Nutzer, und wer im Kopf des
+            # Dialogs den Haken weggenommen hat, will genau dort sein eigenes
+            # Profil sehen. Beim Rechen-Weg bleibt es dabei — dort misst
+            # Solidon mit seinen Werten und liest das Ergebnis zurück; ohne sie
+            # wäre die gemessene Zahl die eines fremden Profils.
+            settings=self.settings if with_settings else None,
             flavour=setup.flavour,
             place_on_bed=keep,
             # Und das Systemprofil darunter: ohne es trägt die Datei zwar

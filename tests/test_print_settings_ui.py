@@ -31,7 +31,7 @@ from app.core.export import handover
 from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
-from app.core.types import Feature, MaterialSlot, SlotOverride
+from app.core.types import Feature, MaterialSlot, SceneObject, SlotOverride
 from app.i18n import tr
 from app.ui.print_settings_dialog import (
     FIELD_WIDTH,
@@ -42,6 +42,7 @@ from app.ui.print_settings_dialog import (
     PrintSettingsDialog,
     _ColourButton,
     group_title,
+    settings_for_export,
 )
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -876,13 +877,26 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     # wie es die Auswertung selbst tut.
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
-    monkeypatch.setattr(
-        dialog,
-        "_plate_run",
-        lambda objects, plate, folder, name, setup: module.PlateRun(
+    # ``with_settings`` wird mitgelesen und nicht nur geschluckt: Der
+    # Übergabeweg reicht die Wahl des Kunden durch, und ein Ersatz mit
+    # ``**kwargs`` wäre an dieser Stelle blind für sie.
+    handed: list[bool] = []
+
+    def _run(
+        objects: object,
+        plate: int,
+        folder: Path,
+        name: str,
+        setup: object,
+        *,
+        with_settings: bool = True,
+    ) -> object:
+        handed.append(with_settings)
+        return module.PlateRun(
             plate=plate, model=written, slots=(), keep_arrangement=False, findings=()
-        ),
-    )
+        )
+
+    monkeypatch.setattr(dialog, "_plate_run", _run)
     opened: list[tuple[Path, object]] = []
     monkeypatch.setattr(
         module.handover, "open_in_slicer", lambda model, setup: opened.append((model, setup))
@@ -894,6 +908,13 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     assert opened and opened[0][0] == written, "das Fenster bekommt die geschriebene Datei"
     assert dialog.settings.handover == "open", "die benutzte Art ist gemerkt"
     assert dialog.state.text(), "die Handlung quittiert sich (§2.8)"
+    assert handed == [True], "und die Wahl des Kunden reist mit — hier vorbelegt mit ja"
+
+    # Und die Gegenrichtung: Wer den Haken wegnimmt, öffnet den Slicer mit
+    # dessen eigenem Profil.
+    dialog.ui_settings.print_settings_in_files = False
+    dialog._open_in_slicer()
+    assert handed == [True, False]
 
 
 def test_opening_is_not_remembered_by_merely_looking(dialog: PrintSettingsDialog) -> None:
@@ -2911,3 +2932,129 @@ def test_the_filament_dialog_uses_that_calculation() -> None:
 
     assert "swatch_size(title)" in quelle, "die Überschrift gibt das Maß vor"
     assert "SWATCH_PIXELS, SWATCH_PIXELS" not in quelle, "und nicht mehr die Listenkonstante"
+
+
+# --- Was die Datei mitnimmt ---------------------------------------------------------
+
+
+def _cube_object() -> SceneObject:
+    """Ein Körper, an dem sich die Größe einer 3MF ablesen lässt."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    return SceneObject(
+        id="obj_1",
+        name="Würfel",
+        mesh=MeshData(raw=trimesh.creation.box(extents=(20.0, 20.0, 20.0))),
+    )
+
+
+def _settings_in(path: Path) -> bool:
+    """Trägt die 3MF Solidons Druckeinstellungen?"""
+    import zipfile
+
+    with zipfile.ZipFile(path) as archive:
+        return "Metadata/project_settings.config" in archive.namelist()
+
+
+def test_a_customer_can_export_geometry_without_our_values(
+    qt_app: QApplication, session: Session, tmp_path: Path
+) -> None:
+    """Der Weg, den es bis zum 03.09.2026 nicht gab (§29).
+
+    Der Kern konnte es immer: ``writer._plate_settings`` gibt bei fehlenden
+    Einstellungen ein leeres Verzeichnis zurück, und die 3MF trägt dann nur
+    Geometrie und Materialslots. Erreichbar war das nicht — der Export löste
+    an seiner eigenen Stelle auf (``document.print_settings or resolve(...)``),
+    und damit trug **jede** exportierte 3MF Solidons Temperaturen,
+    Geschwindigkeiten und Kühlung, auch die aus einem Projekt, in dem nie
+    jemand Druckeinstellungen geöffnet hatte.
+
+    Geprüft wird die Anwendung und nicht der Kern: dieselbe Kette, die der
+    Knopf im Menü geht — Wahl, :func:`settings_for_export`, Export-Arbeiter,
+    fertige Datei. Ein Test gegen ``_plate_settings`` bliebe grün, während der
+    Kunde weiterhin nicht hinkommt.
+    """
+    from app.ui.main_window import _ExportWorker
+
+    document = session.project.document
+    assert document.print_settings is None, "ein frisches Projekt hat noch keine"
+
+    written: dict[bool, Path] = {}
+    for wanted in (True, False):
+        ui = UiSettings()
+        ui.print_settings_in_files = wanted
+        folder = tmp_path / f"mitgeben-{wanted}"
+        folder.mkdir()
+        worker = _ExportWorker(
+            [_cube_object()],
+            folder / "probe.3mf",
+            "3mf",
+            profile=session.profile,
+            sources={},
+            settings=settings_for_export(document, session.profile, ui),
+            ui_settings=ui,
+            material=session.profile.material.id,
+        )
+        paths, _findings = worker._assembly()
+        assert len(paths) == 1
+        written[wanted] = paths[0]
+
+    assert _settings_in(written[True]), "mit Haken trägt die Datei Solidons Werte"
+    assert not _settings_in(written[False]), (
+        "ohne Haken geht nur Geometrie hinaus — der Slicer nimmt sein eigenes Profil"
+    )
+    # Und der Unterschied ist nicht nur ein fehlender Eintrag im Verzeichnis:
+    # Die Beilage ist der größte Teil einer kleinen Datei.
+    assert written[False].stat().st_size < written[True].stat().st_size
+
+
+def test_only_looking_at_the_settings_leaves_the_project_alone(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Wer nachsieht, ändert nichts (§29).
+
+    Bis zum 03.09.2026 schrieb schon das bloße Öffnen die aufgelösten Werte
+    ins Dokument: ``main_window`` rief ``set_print_settings(dialog.settings)``
+    nach ``exec()``, ohne zu fragen, ob etwas geschehen war — und der Dialog
+    hat nur „Schließen", also nicht einmal einen Abbruch. Wer wissen wollte,
+    welche Temperatur vorgeschlagen würde, trug sie danach in jeder
+    exportierten 3MF mit sich, ohne Weg zurück.
+
+    Gemessen wird an ``has_changes`` und nicht an einer Liste von Knöpfen:
+    Das erfasst jeden der sieben Wege, auf denen sich ``settings`` ändert.
+    """
+    assert not dialog.has_changes(), "nach dem Aufbau hat niemand etwas getan"
+
+    # Eine echte Handlung des Nutzers: die Stufe wechseln.
+    other = next(
+        index
+        for index in range(dialog.quality.count())
+        if dialog.quality.itemData(index) != dialog.settings.quality
+    )
+    dialog.quality.setCurrentIndex(other)
+
+    assert dialog.has_changes(), "eine gewechselte Stufe ist eine Änderung"
+
+
+def test_the_head_offers_the_way_back(dialog: PrintSettingsDialog) -> None:
+    """Die Wahl aus dem Druckhinweis ist im Dialog zu sehen und zu ändern.
+
+    Ohne diesen Umschalter wäre die Wahl selbst wieder eine Einbahnstraße —
+    genau der Fehler, den sie behebt. Der Haken trägt seine Erklärung in allen
+    drei Kanälen, denn eine Bedeutung allein über die Stellung eines Kästchens
+    wäre keine (Regel 18).
+    """
+    assert dialog.share_settings.isChecked(), "vorbelegt wie der bisherige Weg"
+    for channel, value in (
+        ("tooltip", dialog.share_settings.toolTip()),
+        ("status tip", dialog.share_settings.statusTip()),
+        ("accessible description", dialog.share_settings.accessibleDescription()),
+    ):
+        assert "Geometrie" in value, f"der {channel} sagt, was ohne Haken hinausgeht: {value!r}"
+
+    dialog.share_settings.setChecked(False)
+    assert not dialog.ui_settings.print_settings_in_files, (
+        "der Haken schaltet die Einstellung, nicht nur sich selbst"
+    )

@@ -247,10 +247,12 @@ from app.ui.panels import (
     open_section,
 )
 from app.ui.pose_bar import PoseBar
+from app.ui.print_disclosure import ensure_print_disclosure
 from app.ui.print_settings_dialog import (
     FilamentOverrideDialog,
     PrintSettingsDialog,
     remembered_setup,
+    settings_for_export,
 )
 from app.ui.recipe_dialog import RecipeDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
@@ -4548,6 +4550,12 @@ class MainWindow(QMainWindow):
         :meth:`PrintSettingsDialog.take_slice_result` trägt sie nach, sobald
         sie da ist (§2.8).
         """
+        # §29: Was Solidon hier rechnet, reist mit einer gespeicherten 3MF und
+        # mit der Übergabe an den Slicer. Der Hinweis sagt das einmal je
+        # Textfassung und lässt dabei wählen, ob es so sein soll; danach steht
+        # die Wahl in den Einstellungen. Er hält nichts an (Regel 19) — hier
+        # verlässt nichts das Gerät, anders als beim KI-Hinweis.
+        ensure_print_disclosure(self.settings, self)
         # Der Wartezeiger bleibt für den Aufbau: die Suche nach dem Slicer im
         # Konstruktor kostet eine knappe halbe Sekunde — unter der Grenze aus
         # §2.8, aber nicht unter der, ab der ein Zeiger dazugehört.
@@ -4578,7 +4586,14 @@ class MainWindow(QMainWindow):
         # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
         # zur Anwendung (§29). Getrennt gespeichert, weil ein Projekt auf einem
         # anderen Rechner geöffnet wird, wo ein anderer Slicer liegt.
-        self.session.set_print_settings(dialog.settings)
+        #
+        # **Nur, wenn der Dialog etwas bewirkt hat.** Vorher schrieb schon das
+        # bloße Öffnen die aufgelösten Werte ins Dokument; wer nachsah, welche
+        # Temperatur vorgeschlagen würde, trug sie danach in jeder exportierten
+        # 3MF mit sich. ``has_changes`` misst am Anfangszustand und nicht an
+        # einer Liste von Knöpfen.
+        if dialog.has_changes():
+            self.session.set_print_settings(dialog.settings)
         self.settings.print_quality = dialog.settings.quality
         save_settings(self.settings)
         # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
@@ -4901,11 +4916,16 @@ class MainWindow(QMainWindow):
             # eingestellten Slicers (§29). Ohne beides ist die Datei reine
             # Geometrie: Der Slicer füllt sie aus dem, was gerade bei ihm
             # steht, und meldet dann Widersprüche zu einem Drucker, den
-            # niemand gemeint hat. ``None`` heißt „Dialog nie geöffnet", nicht
-            # „keine Einstellungen" — dann gilt die Auflösung aus Stufe,
-            # Material und Drucker, wie überall sonst.
-            settings=self.session.project.document.print_settings
-            or print_settings.resolve(self.session.profile),
+            # niemand gemeint hat. ``None`` im Dokument heißt „Dialog nie
+            # geöffnet", nicht „keine Einstellungen" — dann gilt die Auflösung
+            # aus Stufe, Material und Drucker, wie überall sonst.
+            #
+            # **Es sei denn, der Kunde will das nicht.** Die drei Fälle stehen
+            # in :func:`settings_for_export`, damit ein Test sie fragen kann;
+            # als Ausdruck an dieser Stelle waren sie es nicht.
+            settings=settings_for_export(
+                self.session.project.document, self.session.profile, self.settings
+            ),
             ui_settings=self.settings,
             material=self.session.profile.material.id,
         )

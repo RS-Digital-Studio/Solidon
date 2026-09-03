@@ -272,6 +272,13 @@ Das gilt besonders für:
   Druckfestigkeit oder eine Prüfung für einen konkreten Einsatzzweck aus.
   Schichtanalyse und Slicer-Zahlen werden getrennt ausgewiesen; die Druckdatei
   erzeugt weiterhin Ihr Slicer.
+* **Druckeinstellungen.** Temperaturen, Geschwindigkeiten, Kühlung und
+  Haftung rechnet Solidon3D aus den Profilen für Material, Drucker und
+  Qualitätsstufe. Das sind Erfahrungswerte und keine geprüften Vorgaben für
+  Ihr Gerät, Ihr Filament und Ihr Teil. Sie reisen auf Wunsch mit einer
+  gespeicherten 3MF-Datei und mit der Übergabe an einen Slicer, der sie
+  anstelle seiner eigenen übernimmt; die Anwendung sagt das vor der ersten
+  Verwendung und lässt Sie wählen. Prüfen Sie die Werte, bevor Sie drucken.
 * **Erzeugte Modelle.** Was ein Bildmodell liefert, ist eine Oberfläche und
   keine Konstruktion. Maßhaltigkeit wird dabei ausdrücklich nicht zugesichert.
 * **Vorschläge des KI-Chats.** Er wählt Operationen und Werte; er ist keine
