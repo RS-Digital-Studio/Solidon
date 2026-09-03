@@ -39,8 +39,33 @@ DisableProgramGroupPage=yes
 LicenseFile={#LicenseFile}
 OutputDir={#OutputDir}
 OutputBaseFilename={#AppName}-Setup-{#AppVersion}
-Compression=lzma2
-SolidCompression=yes
+; **Blockweise, nicht in einem Strom** (Entscheidung Robert, 03.09.2026).
+; Vorher stand hier `lzma2` mit solider Kompression: alle 1319 Dateien in
+; einem durchgehenden Strom von 798 MB, entpackt mit einem Wörterbuch von 32
+; bis 64 MB im Arbeitsspeicher. Das ist die kleinste Setup-Datei, die zu
+; bauen ist — und die empfindlichste. Kippt beim Auspacken ein einziges Bit,
+; ist nicht eine Datei beschädigt, sondern der Reststrom, und der Kunde sieht
+; „fehlerhaftes File". Er sieht es bei jedem neuen Download wieder, weil jeder
+; Versuch dieselbe Stelle im Speicher benutzt. Genau dieser Fall stand am
+; 03.09.2026 im Support: dieselbe Meldung über zwei Versionen und vier
+; Downloads, bei nachweislich bytegenau angekommener Datei.
+;
+; `no` komprimiert jede Datei einzeln — ein Fehler bleibt in dieser einen —,
+; `/normal` senkt das Wörterbuch auf 8 MB. Gemessen über den Bau von 0.3.0
+; (798 MB, 1319 Dateien):
+;
+;   lzma2       + solid   190 MB   111 s   ← vorher
+;   lzma2       + no      211 MB    91 s
+;   lzma2/normal + no     213 MB    70 s   ← jetzt
+;   lzma2/fast   + no     242 MB    23 s
+;
+; 23 MB Aufpreis für beide Hebel zugleich. `LZMADictionarySize` wäre der
+; direkte Weg zum Wörterbuch und wirkt nicht: Mit und ohne die Direktive kam
+; bytegenau dieselbe Datei heraus (199180804 Bytes), ohne Warnung von ISCC.
+; Wer die Werte hier ändert, ändert die Robustheit der Auslieferung —
+; `tests/test_packaging.py` hält sie deshalb fest.
+Compression=lzma2/normal
+SolidCompression=no
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

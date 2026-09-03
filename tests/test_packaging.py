@@ -767,6 +767,49 @@ def test_the_windows_installer_asks_both_questions() -> None:
     assert "DisableDirPage=yes" not in script
 
 
+def test_the_installer_unpacks_in_blocks_and_not_in_one_stream() -> None:
+    """Jede Datei einzeln, Wörterbuch klein — die kleinste Setup-Datei ist die
+    empfindlichste.
+
+    **Der Anlass war ein Kunde, dem sie nicht durchlief** (03.09.2026):
+    dieselbe Meldung „fehlerhaftes File" über zwei Versionen und vier
+    Downloads, bei nachweislich bytegenau angekommener Datei. Mit soliden
+    1319 Dateien in einem Strom von 798 MB und einem Wörterbuch von 32 bis
+    64 MB im Arbeitsspeicher zerstört ein einziges gekipptes Bit nicht eine
+    Datei, sondern den Reststrom — und jeder neue Versuch trifft dieselbe
+    Speicherstelle und scheitert gleich.
+
+    Die 23 MB, die das kostet, sind gemessen und stehen im Kommentar der
+    Skriptdatei. Wer sie zurückholen will, weil die Datei ja kleiner wird,
+    kommt hier vorbei.
+
+    **Gelesen werden Direktiven, nicht Text.** Der Kommentar darüber nennt die
+    alten Werte in seiner Messtabelle; ein Test, der im ganzen Quelltext nach
+    ihnen sucht, fände seine eigene Begründung.
+    """
+    directives = {}
+    for line in INSTALLER_SCRIPT.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line.startswith((";", "[")) or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        directives.setdefault(key.strip(), value.strip())
+
+    assert directives.get("SolidCompression") == "no", (
+        "solide Kompression packt alle Dateien in einen Strom — ein Bitfehler "
+        "nimmt dann alles mit, was danach kommt"
+    )
+    stufe = directives.get("Compression", "")
+    assert stufe.startswith("lzma2/"), (
+        f"Compression={stufe!r} ohne Stufe bedeutet /max, und damit ein Wörterbuch "
+        "von 32 bis 64 MB — die Stufe ist der einzige Hebel, der es senkt "
+        "(LZMADictionarySize wirkt nicht, gemessen: bytegleiches Ergebnis)"
+    )
+    assert stufe.split("/", 1)[1] in {"normal", "fast"}, (
+        f"Compression={stufe!r}: /max und /ultra nehmen das große Wörterbuch wieder"
+    )
+
+
 def test_the_windows_installer_speaks_every_language_the_application_does() -> None:
     """Sechs Sprachen in der Anwendung, sechs im Installer.
 

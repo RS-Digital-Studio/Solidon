@@ -73,6 +73,15 @@ relative Pfadliste mit SHA-256 (Artefakt `solidon3d-windows-signing-input`,
 sieben Tage haltbar). Ein ungeschützter Job baut daraus mit ISCC den
 unsignierten Installer für Demo und Releaseprüfung und nennt SmartScreen
 ausdrücklich. Die Signatur entsteht auf Roberts Rechner mit
+**Die Setup-Datei packt blockweise aus, nicht in einem Strom** (Entscheidung
+Robert, 03.09.2026): `SolidCompression=no` und `Compression=lzma2/normal`. Das
+kostet gemessene 23 MB gegenüber der kleinsten baubaren Fassung und nimmt dafür
+beiden Empfindlichkeiten: Ein gekipptes Bit beschädigt eine Datei statt des
+Reststroms, und das Wörterbuch belegt 8 statt 32 bis 64 MB Arbeitsspeicher. Die
+Messreihe, der Anlass und die Falle mit `LZMADictionarySize` — die Direktive
+wirkt nicht — stehen im Kommentar über den beiden Zeilen in `solidon3d.iss`;
+`tests/test_packaging.py` hält sie fest.
+
 `tools/sign_release.py` aus demselben Archiv: Das Certum-Zertifikat liegt in
 der SimplySign-Cloud und verlangt einen Einmalcode vom Handy, den keine CI
 eingeben kann und soll. Das Werkzeug prüft Archiv, Produktangaben und jede
