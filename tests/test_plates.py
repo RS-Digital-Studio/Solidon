@@ -543,3 +543,51 @@ def test_a_single_body_on_two_plates_still_gets_the_selector(qt_app: QApplicatio
 
     assert bar.plates.isVisibleTo(bar), "drei Platten, ein Wähler"
     assert bar.plates.count() == 4
+
+
+def test_a_plate_that_disappears_takes_the_view_with_it(qt_app: QApplication) -> None:
+    """Fällt die betrachtete Platte weg, erfährt es die Ansicht — immer.
+
+    **Der Fall, der diese Prüfung veranlasst hat** (gemessen 3d-druck-85 am
+    03.09.2026): Wer Platte 3 betrachtet und dann auf zwei Platten fällt,
+    stand vor einem leeren Bauraum ohne Rückweg. ``clear()`` stellt den Wähler
+    auf „Alle Platten", die Wiederherstellung darüber greift nicht mehr
+    (``previous < plates`` ist bei 2 < 2 falsch) — und weil noch **mehr als
+    eine** Platte übrig war, meldete die Kopfzeile das nicht: Die alte Regel
+    sprach nur den Sonderfall „nur noch eine Platte" an.
+
+    Die Ansicht filterte deshalb weiter auf Platte 3, auf der nichts mehr
+    liegt. Und der Weg zurück fehlte: Der Wähler zeigte „Alle Platten", ein
+    Klick auf denselben Eintrag ändert den Index nicht und sendet nichts.
+    Auch ein neues Projekt heilte es nicht.
+    """
+    bar = HeaderBar()
+    bar.show_plates(3)
+    bar.plates.setCurrentIndex(3)
+    assert bar.plate == 2, "die dritte Platte zählt als 2"
+
+    seen: list[int] = []
+    bar.plateChanged.connect(seen.append)
+    bar.show_plates(2)
+
+    assert bar.plate == ALL_PLATES, "die dritte Platte gibt es nicht mehr"
+    assert seen == [ALL_PLATES], "die Ansicht muss erfahren, dass der Filter fällt"
+
+
+def test_a_plate_that_survives_is_kept_without_a_word(qt_app: QApplication) -> None:
+    """Die Gegenprobe: Was bleibt, wird behalten und **nicht** gemeldet.
+
+    Ohne sie wäre eine Kopfzeile, die bei jedem Neuaufbau meldet, genauso
+    grün — und die Ansicht spränge bei jeder Änderung der Plattenzahl zurück
+    auf „alle", obwohl die betrachtete Platte noch da ist.
+    """
+    bar = HeaderBar()
+    bar.show_plates(3)
+    bar.plates.setCurrentIndex(2)
+
+    seen: list[int] = []
+    bar.plateChanged.connect(seen.append)
+    bar.show_plates(5)
+
+    assert bar.plate == 1, "die zweite Platte ist noch da"
+    assert seen == [], "wo sich nichts ändert, wird nichts gemeldet"
