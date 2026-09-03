@@ -138,6 +138,7 @@
 - [Fehlalarm zu mehreren](fehlalarm-den-mehrere-fuer-einen-halten.md) — verrechnet ist keine bloße Messung.
 - [Beleg im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — erst suchen, dann eine Lücke behaupten.
 - [Zusicherung wird stumpf](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — anderswo geändert, der Test bleibt grün.
+- [Test auf Abwesenheit](test-der-eine-abwesenheit-festschreibt.md) — meldet, wenn die Begründung fürs Fehlen wegfällt.
 - [Zahl im Fließtext](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit.
 - [Vorgabelage bricht fremde Tests](vorgabelage-bricht-fremde-tests.md) — 17 rot in 5 Dateien, keine vom Einlesen.
 - [Abgelesene Zahl altert](abgelesene-zahl-altert-still.md) — stimmt nur in ihrer Entstehungslage.

@@ -43,3 +43,27 @@ Verwandt mit [[gegenprobe-bei-geaenderter-bauart]] (dort trifft die Mutation
 die neue Bauart, aber die alte war gemeint) und [[rueckbau-kann-scheitern]] —
 alle drei sagen dasselbe über Proben, was [[messwerkzeug-misst-sich-selbst]]
 über Messwerkzeuge sagt.
+
+
+## Und dieselbe Form eine Stufe früher: der Aufbau enthält den Fall nicht
+
+Die drei Punkte oben prüfen, ob die **Mutation** greift. Davor liegt eine
+Frage, die genauso grün aussieht: Enthält der Prüfstand den Fall überhaupt?
+
+Am 03.09.2026 zweimal an einem Tag, in beiden Richtungen:
+
+* 3d-druck-85 baute für einen Befundtest eine Baugruppe aus zwei sauberen
+  Würfeln. Zwei saubere Würfel erzeugen keinen Befund — der Test prüfte eine
+  leere Liste und war grün. Erst ein Körper mit einem entfernten Dreieck gab
+  ihm seinen Gegenstand.
+* Für die Merkmalsbündelung im Objektbaum suchte ich im Korpus ein Modell mit
+  vier gleichnamigen Merkmalen und fand keines: `feature_name` nummeriert
+  Bohrungen („Bohrung 1"), Verrundungen nicht. Der Fall, den ich prüfen
+  wollte, war in zwanzig Testdateien nicht herstellbar — deshalb wurde er nie
+  gefunden, und deshalb musste ich die Merkmalsmenge von Hand bauen.
+
+**Wer eine Baugruppe für einen Befundtest baut, baut sie kaputt.** Und wer im
+Korpus nichts findet, hat oft nicht schlecht gesucht, sondern gerade den Grund
+gefunden, aus dem der Fehler so lange stand.
+
+Verwandt: [[voraussetzung-im-namen-statt-hergestellt]], [[testprojekt-trifft-den-fall-nicht]].
