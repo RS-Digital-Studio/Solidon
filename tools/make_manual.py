@@ -878,6 +878,15 @@ def _chapter_of_each_page(pdf: Path) -> list[str]:
             running = titles[ahead]
             ahead += 1
         found.append(running)
+    # **Ausdrücklich schließen, nicht dem Einsammler überlassen.** Qt hält die
+    # Datei offen, solange das Dokument lebt, und ``_stamp`` schreibt gleich
+    # darauf in dieselbe Datei. Ohne diese Zeile hing es davon ab, wann
+    # CPython das lokale Objekt einsammelt: Am 03.09.2026 riss der Lauf
+    # zweimal mit ``OSError 22`` beim Öffnen zum Schreiben — einmal bei
+    # Englisch, einmal bei Französisch, und dazwischen gingen dieselben
+    # Sprachen durch. Ein Fehler, der die Reihenfolge wechselt, ist kein
+    # Fehler der Datei.
+    document.close()
     return found
 
 
