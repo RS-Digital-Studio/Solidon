@@ -15026,11 +15026,18 @@ Durchmesser.
 - [ ] **Eine Senkung über einer Bohrung lässt sich nicht versetzen.** Sie ist
   kein eigener Hohlraum — sie geht in die Bohrung über, und versetzt zöge sie
   sie mit zu. Gemessen an drei Bauarten: eine kegelige Tasche **ohne** Bohrung
-  darunter lässt sich versetzen; über einer Sackbohrung hat die Kegelfläche
-  zwei Randringe; über einer durchgehenden liegt ihr einer Ring nicht in einer
-  Ebene (Spanne 10,1 mm gegen eine Grenze von 0,38). Der Kunde bekommt in
-  beiden Fällen einen Satz mit dem Ausweg — die Bohrung versetzen und die
-  Senkung neu setzen —, und das ist heute die richtige Antwort.
+  darunter lässt sich versetzen; über einer Bohrung nicht, und zwar aus zwei
+  verschiedenen Gründen je nach Wandstärke. In einer 10 mm starken Platte hat
+  die Kegelfläche **zwei Randringe** (Ø 12 oben, Ø 6 am Übergang); in einem
+  20 mm starken Quader ist es **einer, der nicht in einer Ebene liegt**
+  (Spanne 15,2 mm gegen eine Grenze von 0,51, über 104 Randknoten). Der Kunde
+  bekommt in beiden Fällen einen Satz mit dem Ausweg — die Bohrung versetzen
+  und die Senkung neu setzen —, und das ist heute die richtige Antwort.
+
+  Die zweite Zahl ist **nach** `242ffa1b` gemessen: Vorher zerfiel eine
+  Senkung in drei erkannte Kegel, und der größte trug 56 der 101 Dreiecke;
+  seither ist es einer. Die alte Messung (10,1 gegen 0,38) stand hier und war
+  seit jenem Commit nicht mehr nachvollziehbar.
 
   **Was fehlt, ist die Nachbarschaft zweier Merkmale.** Wer die Bohrung
   versetzt, müsste ihre Senkung mitnehmen können; dafür muss Solidon wissen,
