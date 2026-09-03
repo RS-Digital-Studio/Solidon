@@ -1483,3 +1483,96 @@ def test_duplicating_leads_into_the_stacked_state(profile: Profile) -> None:
     assert list(result.scene.objects) == ["obj_1", "obj_2"], "das Original behält seine Kennung"
     codes = [entry.code for entry in result.scene.report.findings]
     assert "arrange.bodies_in_one_place" in codes, codes
+
+
+def test_a_bore_shrunk_out_of_recognition_keeps_the_body(
+    document: Document, profile: Profile
+) -> None:
+    """Eine Bohrung, die zu klein zum Wiedererkennen wird, ist kein Programmfehler.
+
+    ``_recognised_resized_feature`` warf hier einen ``InternalError`` mit dem
+    Satz „Erstellen Sie einen Fehlerbericht" — und nahm das fertig gerechnete
+    Ergebnis mit, weil eine geworfene Ausnahme das ganze ``OpResult`` nimmt.
+    Gemessen an ``spool-bearing-holder-p1stp.stl`` aus dem Kundenbestand: Wer
+    die 3,4-mm-Bohrung eines 3 mm dünnen Teils auf 0,2 mm verkleinert, bekommt
+    genau die 11,75 mm³ Material zurück, die die Rechnung verlangt, und danach
+    die Absage. Die Auswertung hielt an, die richtige Geometrie war fort.
+
+    Ein Loch von 0,2 mm ist keines, das die Erkennung findet — das ist eine
+    Aussage über die Geometrie und nicht über das Programm. Der Körper bleibt
+    also, das Merkmal geht, und ein Befund sagt beides.
+
+    Geprüft wird an ``plate_holes.stl``: Die Platte trägt vier Bohrungen, und
+    eine davon auf das Minimum des Schemas zu schrumpfen erzeugt denselben
+    Fall wie am Kundenteil.
+    """
+    project, history = loaded(document, "plate_holes.stl")
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    body = first.scene.objects["obj_1"]
+    bores = [name for name, entry in body.features.items() if entry.kind == "hole"]
+    assert bores, "ohne erkannte Bohrung prüft dieser Test nichts"
+    before = body.mesh.volume
+
+    history.apply(
+        _("Bohrung ändern"),
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"diameter": 0.2, "at_feature": bores[0], "compensate": False},
+            )
+        ],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete, (
+        "die Auswertung hielt an und warf das gerechnete Ergebnis weg: "
+        f"gestoppt bei op {result.stopped_at}"
+    )
+    changed = result.scene.objects["obj_1"]
+    assert changed.mesh.volume > before, (
+        "eine kleinere Bohrung gibt Material zurück — die Geometrie ist gerechnet"
+    )
+    assert bores[0] not in changed.features, (
+        "ein Merkmal zu behalten, das die Erkennung nicht bestätigt, wäre eine Behauptung"
+    )
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "resize_hole.feature_lost" in codes, codes
+    assert not [code for code in codes if code.startswith("op.resize_hole.")], (
+        f"kein Programmfehler mehr, sondern ein Befund: {codes}"
+    )
+
+
+def test_a_bore_that_stays_recognisable_keeps_its_name(
+    document: Document, profile: Profile
+) -> None:
+    """Die Gegenprobe: Wo die Erkennung greift, bleibt das Merkmal.
+
+    Ohne sie wäre der Test darüber auch dann grün, wenn *jede* Änderung das
+    Merkmal fallen ließe — und dann hätte die Operation ihren Zweck verloren.
+    """
+    project, history = loaded(document, "plate_holes.stl")
+    first = evaluate(document, profile, sources=ProjectSources(project))
+    body = first.scene.objects["obj_1"]
+    bores = [name for name, entry in body.features.items() if entry.kind == "hole"]
+    assert bores
+    before = body.mesh.volume
+
+    history.apply(
+        _("Bohrung ändern"),
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"diameter": 8.0, "at_feature": bores[0], "compensate": False},
+            )
+        ],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    changed = result.scene.objects["obj_1"]
+    assert changed.mesh.volume < before, "eine größere Bohrung trägt Material ab"
+    assert bores[0] in changed.features, "die vergrößerte Bohrung behält ihren Namen"
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "resize_hole.feature_lost" not in codes, codes

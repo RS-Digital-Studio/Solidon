@@ -415,16 +415,19 @@ def resize_hole(ctx: OpContext) -> OpResult:
         for name, entry in source.features.items()
         if entry.provenance == "generated" and name != feature.id
     }
+    # Findet sich die geänderte Bohrung nicht wieder, bleibt der Körper und
+    # das Merkmal geht — mit einem Satz darüber. Ihn zu behalten wäre eine
+    # Behauptung über etwas, das die Erkennung gerade nicht bestätigt.
+    features = (
+        {**carried, feature.id: resized_feature} if resized_feature is not None else dict(carried)
+    )
+    findings = list(result.findings)
+    if resized_feature is None:
+        findings.append(_bore_no_longer_a_feature(feature, result.diameter))
     return OpResult(
-        outputs=[
-            dataclasses.replace(
-                source,
-                mesh=result.mesh,
-                features={**carried, feature.id: resized_feature},
-            )
-        ],
+        outputs=[dataclasses.replace(source, mesh=result.mesh, features=features)],
         solver=result.solver,
-        findings=result.findings,
+        findings=findings,
     )
 
 
@@ -543,13 +546,29 @@ def _expected_bore(feature: Feature, diameter: float) -> Feature:
     )
 
 
-def _recognised_resized_feature(mesh: MeshData, feature: Feature, diameter: float) -> Feature:
+def _recognised_resized_feature(
+    mesh: MeshData, feature: Feature, diameter: float
+) -> Feature | None:
     """Findet die eben erzeugte Wand und hängt den bestehenden Namen daran.
 
     Die allgemeine Zuordnung darf einen Sprung von Ø 3 auf Ø 30 nicht
     stillschweigend für dasselbe Merkmal halten. Hier ist er dagegen die
     ausdrückliche Operation. Darum wird genau für diesen Vergleich das neue
     Sollmaß eingesetzt, statt die globale Toleranz aufzuweichen.
+
+    **Findet sie sich nicht wieder, ist das kein Programmfehler.** Hier stand
+    ein ``InternalError`` mit „Erstellen Sie einen Fehlerbericht" — und er warf
+    das fertig gerechnete Ergebnis mit weg, weil eine geworfene Ausnahme das
+    ganze ``OpResult`` nimmt. Gemessen an ``spool-bearing-holder-p1stp.stl``
+    aus dem Kundenbestand: Wer die 3,4-mm-Bohrung auf 0,2 mm verkleinert,
+    bekommt genau die 11,75 mm³ Material zurück, die die Rechnung verlangt —
+    und danach die Absage, weil ein Loch von 0,2 mm keines mehr ist, das die
+    Erkennung findet. Die Auswertung hielt an, die richtige Geometrie war
+    verworfen, und der Kunde las von einem unerwarteten Fehler.
+
+    Der Rückgabewert ist deshalb ``None``, wenn die Zuordnung nicht greift.
+    Der Aufrufer behält den Körper und meldet, dass das Merkmal fort ist —
+    das ist die Wahrheit über die Lage und nicht über das Programm.
     """
     from app.core.perceive.features import detect
     from app.core.perceive.matching import match
@@ -564,18 +583,32 @@ def _recognised_resized_feature(mesh: MeshData, feature: Feature, diameter: floa
     )
     found_id = matched.mapping.get(feature.id)
     if found_id is None:
-        raise InternalError(
-            detail=_(
-                "Die geänderte Bohrung wurde gerechnet, aber danach nicht wiedererkannt. "
-                "Erstellen Sie einen Fehlerbericht mit dem betroffenen Modell."
-            ),
-            values={"feature": feature.id, "diameter": format_length(diameter)},
-        )
+        return None
     return dataclasses.replace(
         detected[found_id],
         id=feature.id,
         provenance="generated",
         created_by=None,
+    )
+
+
+def _bore_no_longer_a_feature(feature: Feature, diameter: float) -> Finding:
+    """Die geänderte Bohrung ist da, aber nicht mehr als Merkmal auffindbar.
+
+    Der Satz sagt beides — die Geometrie stimmt, der Bezug ist fort —, weil
+    aus dem einen das andere folgt: Wer später auf diese Bohrung verweist,
+    findet sie nicht mehr, und das ist die Auskunft, die er braucht.
+    """
+    return Finding(
+        code="resize_hole.feature_lost",
+        severity="warning",
+        message=_(
+            "Die Bohrung wurde geändert, lässt sich in dieser Größe aber nicht mehr "
+            "als Merkmal wiederfinden. Die Geometrie stimmt; spätere Schritte, die "
+            "auf sie verweisen, verlieren ihren Bezug."
+        ),
+        feature_ids=(feature.id,),
+        values={"feature": feature.id, "diameter": format_length(diameter)},
     )
 
 
