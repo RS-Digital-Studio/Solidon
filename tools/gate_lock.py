@@ -707,6 +707,57 @@ def run(who: str, wait: float, command: list[str]) -> int:
             )
 
 
+def _discard(path: Path, present: dict[str, object]) -> bool:
+    """Ein verwaistes Schloss wegräumen — aber nur genau dieses.
+
+    **Zwischen Lesen und Löschen kann ein neuer Halter angelegt haben.** Dann
+    zeigt die Datei auf einen lebenden Lauf, und ihn zu löschen wäre schlimmer
+    als das verwaiste Schloss: Zwei Torläufe messen gleichzeitig, und beide
+    Ergebnisse sind wertlos. Verglichen wird deshalb vor dem Löschen noch
+    einmal, und zwar an Prozess **und** Zeitpunkt — eine Kennung allein wird
+    auf jedem System irgendwann wiederverwendet.
+    """
+    again = _read(path) if path.exists() else None
+    if again is None:
+        return False
+    if (again.get("pid"), again.get("seit")) != (present.get("pid"), present.get("seit")):
+        return False
+    if _stale(again) == "":
+        return False
+    path.unlink(missing_ok=True)
+    return True
+
+
+def release() -> int:
+    """Ein verwaistes Schloss von Hand wegräumen. Ein lebendes bleibt liegen.
+
+    Gebraucht, weil ein Schloss sonst nur zufällig verschwindet: ``_acquire``
+    räumt es ab, wer aber bloß nachsieht, ließ es liegen. Am 03.09.2026 lag
+    eines nach einem abgebrochenen Aufnahmelauf **196 Minuten** da, und
+    solange hat jede andere Sitzung entweder gewartet oder ungeschützt
+    gemessen.
+
+    Ein lebendes Schloss rührt dieser Weg nicht an. Wer einen laufenden Lauf
+    beenden will, beendet den Prozess — dann ist das Schloss verwaist und
+    fällt beim nächsten Blick von selbst.
+    """
+    path = _lock_file()
+    present = _read(path) if path.exists() else None
+    if present is None:
+        print("Das Tor ist frei — nichts wegzuräumen.")
+        return 0
+    reason = _stale(present)
+    if not reason:
+        print(f"Das Tor läuft: {_describe(present)}")
+        print("Ein lebendes Schloss wird nicht weggeräumt — beende erst den Prozess.")
+        return 1
+    if _discard(path, present):
+        print(f"Verwaistes Schloss weggeräumt ({reason}): {_describe(present)}")
+        return 0
+    print("Inzwischen hat jemand anderes das Tor genommen — nichts weggeräumt.")
+    return 1
+
+
 def status() -> int:
     """0 heißt frei, 1 heißt belegt — damit ein Skript danach entscheiden kann."""
     path = _lock_file()
@@ -716,7 +767,16 @@ def status() -> int:
         return 0
     reason = _stale(present)
     if reason:
-        print(f"Ein verwaistes Schloss liegt da ({reason}): {_describe(present)}")
+        # **Erkennen und liegenlassen war die halbe Handlung.** Wer den Beweis
+        # in der Hand hält, dass das Schloss nichts mehr schützt, räumt es auch
+        # weg; sonst liest es die nächste Sitzung noch einmal und die
+        # übernächste auch.
+        if _discard(path, present):
+            print(
+                f"Ein verwaistes Schloss lag da und ist weggeräumt ({reason}): {_describe(present)}"
+            )
+        else:
+            print(f"Ein verwaistes Schloss liegt da ({reason}): {_describe(present)}")
         return 0
     print(f"Das Tor läuft: {_describe(present)}")
     note = _idle_note(present)
@@ -740,6 +800,7 @@ def main() -> int:
     runner.add_argument("command", nargs=argparse.REMAINDER)
 
     sub.add_parser("status", help="sagen, ob und von wem das Tor gerade läuft")
+    sub.add_parser("frei", help="ein verwaistes Schloss wegräumen; ein lebendes bleibt")
 
     args = parser.parse_args()
     if args.task == "run":
@@ -747,6 +808,8 @@ def main() -> int:
         if command and command[0] == "--":
             command = command[1:]
         return run(args.who, args.wait, command)
+    if args.task == "frei":
+        return release()
     return status()
 
 
