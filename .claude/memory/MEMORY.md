@@ -102,6 +102,7 @@
 
 ## Messen und Prüfen
 
+- [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) — fünf Bauarten mit ihren Warnzeichen.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — ansehen, mutieren, durchfahren.
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — dazwischen sind beide Antworten falsch.
 - [Roh gegen gerendert](roh-gegen-gerendert-vergleichen.md) — Maskierung mitprüfen.
