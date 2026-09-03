@@ -172,6 +172,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 | Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Bis dahin ist die Absage mit Ausweg die richtige Antwort, und der Ausweg trägt: die Bohrung versetzen, die Senkung neu setzen |
+| `MEMORY.md` hat kein Werkzeug zum Einfügen einer Zeile | Die geteilte Datei ohne Werkzeug (03.09.2026) | ein kleines Werkzeug: Zeile einfügen unter Sperre, mit Prüfung, dass der Rest unverändert bleibt. Bis dahin trägt `tests/test_directory_docs.py` den Fall — er hat am 03.09.2026 dreimal angeschlagen, meldet den Verlust aber erst hinterher |
 
 ---
 
@@ -14985,6 +14986,30 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
 
   Robert dazu: „wir brauchen auch nur Merkmale usw, die auch von der
   Größenordnung zum 3D-Drucker passen und sinnvoll sind."
+
+## Die geteilte Datei ohne Werkzeug (03.09.2026)
+
+- [ ] **`MEMORY.md` wurde an einem Tag dreimal beschädigt.** Zweimal stand eine
+  Erinnerung fälschlich als gelöscht im Haupt-Index (Spur eines privaten
+  Index), einmal verlor die Datei im Arbeitsbaum eine Zeile: Eine Sitzung las
+  sie, änderte sie und schrieb sie zurück, und der Zeiger eines Commits, der
+  neunzig Sekunden vorher gelandet war, fiel dabei heraus. Der Schreibvorgang
+  gelang — kein Fehler, keine Wiederholung, kein Werkzeug hat es bemerkt.
+
+  Gefunden hat es `tests/test_directory_docs.py`, weil dort jede Erinnerung
+  ihren Zeiger haben muss. **Der Test hat an diesem Tag dreimal getragen**,
+  und er ist die einzige Stelle, an der ein Verlust in dieser Datei auffällt.
+
+  Zwischen 22:01 und 22:45 haben fünf Commits `MEMORY.md` angefasst, im
+  Schnitt alle neun Minuten. Bei dieser Dichte ist das Fenster zwischen Lesen
+  und Schreiben nicht mehr theoretisch, und „unmittelbar vorher noch einmal
+  lesen" verkleinert es nur (Einwand 3d-druck-7b, und er ist der stärkere
+  Teil): Wer eine Zeile einfügen will, sollte nicht die Datei schreiben.
+
+  **Was fehlt, ist ein Werkzeug**, das genau eine Zeile einfügt — unter
+  Sperre, mit der Prüfung, dass der Rest unverändert bleibt. Solange es das
+  nicht gibt, bleibt der Wächter die Verteidigung, und er meldet den Verlust
+  erst, nachdem er passiert ist.
 
 ## Erkannte Merkmale bearbeiten (03.09.2026)
 
