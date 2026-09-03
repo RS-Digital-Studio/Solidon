@@ -25,6 +25,7 @@
 ## Roberts Vorgaben
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — muss der Kunde raten, ist es falsch.
+- [Fehlerzählung ist kein Nutzen](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) — zwölf behobene Knöpfe sagen dem Kunden, dass zwölf kaputt waren.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — sieben Merkmale; Rückspiegeln ist eines.
 - [Beheben statt notieren](beheben-statt-notieren.md) — Fund → Messung → Fix → Test in dieser Sitzung.
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) — je Schritt affected_tests; Tor vor dem Commit.
