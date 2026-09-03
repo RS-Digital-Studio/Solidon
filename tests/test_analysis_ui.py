@@ -1781,13 +1781,25 @@ class _GizmoWidget:
 
 
 class _GizmoInteractor:
-    """Verbucht, wer den Interaktionsstil setzt."""
+    """Verbucht, wer den Interaktionsstil und wer den Picker setzt.
+
+    **Die Attrappe spiegelt die echte API-Oberfläche, nicht die vermutete.**
+    ``SetPicker`` steht hier, weil der Viewport es ruft: pyvistas Griff fragt
+    bei jeder Mausbewegung ``interactor.GetPicker()``, und der Picker, den das
+    Widget selbst hinstellt, trifft in dieser Umgebung nichts. Ohne diese
+    Methode fielen acht Tests mit ``AttributeError`` — dieselbe Sorte, vor der
+    der Docstring am Griff selbst warnt.
+    """
 
     def __init__(self) -> None:
         self.styles: list[object] = []
+        self.pickers: list[object] = []
 
     def SetInteractorStyle(self, style: object) -> None:  # noqa: N802 — VTK-Name
         self.styles.append(style)
+
+    def SetPicker(self, picker: object) -> None:  # noqa: N802 — VTK-Name
+        self.pickers.append(picker)
 
 
 class _GizmoObservers:
@@ -2042,7 +2054,10 @@ def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) ->
         viewport.select("obj_1")
         viewport.set_gizmo(True)
         assert viewport._scale_handle is not None, "am Objekt gibt es den Würfel"
-        assert len(plotter.iren.active) == 3, "drei Beobachter: Bewegen, Drücken, Loslassen"
+        assert len(plotter.iren.active) == 4, (
+            "drei Beobachter des Skaliergriffs — Bewegen, Drücken, Loslassen — "
+            "und der vierte, der den Drehgriff auf seine Raste zieht"
+        )
         assert viewport._gizmo_label_data.n_points == 4, "X, Y, Z — und S"
 
         viewport.set_gizmo(False)

@@ -149,6 +149,47 @@ def snap_to_step(value: float, step: float) -> float:
     return round(value / step) * step
 
 
+def snap_near(value: float, step: float, zone: float) -> float:
+    """Rastet **nur in der Nähe** eines Vielfachen ein — sonst freie Fahrt.
+
+    Der Unterschied zu :func:`snap_to_step` ist die Zone: Jenes zieht jeden
+    Wert auf das nächste Vielfache, also **jeden**. Beim Drehen ist das
+    falsch herum — man dreht frei, und ein Raster, das immer greift, macht
+    aus einer Geste eine Auswahl aus acht Möglichkeiten. Vorher stand die
+    Winkelvorgabe deshalb auf null, also gar kein Einrasten, und dann trifft
+    niemand genau 45 Grad.
+
+    Hier ist beides zu haben (Robert, 03.09.2026): „freies drehen, aber kurzes
+    einrasten bei allen 45 grad winkeln außer man dreht weiter". Innerhalb der
+    Zone um ein Vielfaches gilt das Vielfache — der Wert bleibt einen Moment
+    stehen, obwohl die Maus weiterzieht. Außerhalb gilt der rohe Wert, und wer
+    weiterdreht, kommt heraus.
+
+    Zone null oder Schritt null heißt: kein Magnet, der Wert bleibt, wie er
+    ist. Eine Zone von der halben Schrittweite ergäbe wieder
+    :func:`snap_to_step`, also ist sie darauf begrenzt.
+    """
+    if step <= EPS_GEOM or zone <= EPS_GEOM:
+        return value
+    nearest = round(value / step) * step
+    if abs(value - nearest) <= min(zone, step / 2.0):
+        return nearest
+    return value
+
+
+def rotation_about(direction: Vec3, origin: Vec3, degrees: float) -> np.ndarray:
+    """Die Matrix, die um eine Achse durch einen Punkt dreht.
+
+    Hier und nicht in der Ansicht, weil die Ansicht keine Geometrie rechnet
+    (§8) — sie braucht die Matrix, um einen laufenden Zug auf seine Raste zu
+    ziehen, und das ist eine Drehung wie jede andere.
+    """
+    return np.asarray(
+        trimesh.transformations.rotation_matrix(math.radians(degrees), direction, origin),
+        dtype=float,
+    )
+
+
 def along_normal(offset: Vec3, normal: Vec3) -> float:
     """Wie weit ein Zug entlang einer Flächennormalen führt (§18.11).
 

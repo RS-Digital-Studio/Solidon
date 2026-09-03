@@ -49,6 +49,8 @@ from app.core.geom.transform import (
     TransformSteps,
     along_normal,
     decompose_transform,
+    rotation_about,
+    snap_near,
     snap_to_step,
 )
 from app.core.log import get_logger
@@ -1183,6 +1185,21 @@ EPS_DRAG = 0.05
 
 #: erwischen, zu wenig, um die falsche Fläche zu greifen.
 PICK_TOLERANCE = 0.005
+
+#: Bei welchen Winkeln der Drehgriff kurz einrastet, und wie nah man dafür
+#: herankommen muss — beides in Grad.
+#:
+#: **Frei drehen und trotzdem 45 Grad treffen** (Robert, 03.09.2026: „freies
+#: drehen, aber kurzes einrasten bei allen 45 grad winkeln außer man dreht
+#: weiter"). Ein Raster, das immer greift, macht aus einer Drehung eine
+#: Auswahl aus acht Möglichkeiten; gar kein Raster heißt, dass niemand genau
+#: 45 Grad trifft. Der Magnet hat beides: In der Zone gilt das Vielfache, der
+#: Körper bleibt einen Moment stehen, und wer weiterzieht, kommt heraus.
+#:
+#: Vier Grad sind knapp ein Zehntel des Weges zwischen zwei Rasten — weit
+#: genug, dass man hineinfällt, ohne die Geste dazwischen zu bremsen.
+TURN_MAGNET_STEP = 45.0
+TURN_MAGNET_ZONE = 4.0
 
 #: Was eine Bedeutung trägt, kommt aus ``palette.ROLES`` — dort steht die
 #: Auswahlfarbe einmal, und der Objektbaum färbt in derselben. Vorher standen
@@ -3032,6 +3049,9 @@ class Viewport(QWidget):
         """Was die Marke gerade zeigt. Auskunft für Tests und Schutz davor,
         dieselbe Stelle bei jeder Ruhepause neu zu zeichnen."""
         self._gizmo: Any | None = None
+        self._magnet_watch: Any = None
+        """Der Beobachter, der den Drehgriff auf seine Raste zieht — er lebt
+        genau so lange wie der Griff."""
         self._gizmo_wanted = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
@@ -7287,6 +7307,26 @@ class Viewport(QWidget):
             scale=GIZMO_SCALE,
             line_radius=GIZMO_LINE_RADIUS,
         )
+        # **Danach und nicht davor**: Das Widget schaltet beim Anhängen selbst
+        # ein Mesh-Picking ein (``picker='hardware'``), wenn noch keines läuft
+        # — ein vorher gesetzter Picker wäre in derselben Zeile wieder weg.
+        self._give_the_widget_a_picker_that_hits()
+        # Und ebenfalls danach: Der Magnet korrigiert, was das Widget gerade
+        # gesetzt hat, also muss sein Beobachter der spätere sein.
+        #
+        # **Schwach gehalten**, aus demselben Grund wie die fünf Rückrufe an
+        # den Interaktionsstil (:func:`_weak_callbacks`): VTK hält den
+        # Beobachter, der hielte sonst den Viewport, der den Plotter, der den
+        # Interactor — eine Schleife, die jedes Schließen überlebt und später
+        # als Access Violation ohne Zeile endet.
+        weak = weakref.ref(self)
+
+        def magnetise(*args: Any) -> None:
+            found = weak()
+            if found is not None:
+                found._magnetise_turn(*args)
+
+        self._magnet_watch = self.plotter.iren.add_observer("MouseMoveEvent", magnetise)
         if face is None:
             # Das dritte Drittel von §18.11: pyvistas Widget verschiebt und
             # dreht, der Würfel skaliert. Nur am Objekt — eine Fläche kennt
@@ -7300,6 +7340,46 @@ class Viewport(QWidget):
             )
         self._label_gizmo(actor)
 
+    def _give_the_widget_a_picker_that_hits(self) -> None:
+        """Setzt den Picker, mit dem pyvistas Griff seine Pfeile findet.
+
+        ``AffineWidget3D`` fragt bei jeder Mausbewegung
+        ``interactor.GetPicker()``, und pyvista stellt dort einen
+        ``vtkHardwarePicker`` hin — er liest das gerenderte Bild. **In dieser
+        Umgebung trifft er nichts**, und zwar nicht nur die dünnen Pfeile:
+        gemessen am laufenden Fenster fand er auch den Körper in der Bildmitte
+        nicht, während ein ``vtkCellPicker`` an derselben Stelle antwortet.
+        Dasselbe gilt für den ``vtkPropPicker``; beide gehen über die Hardware.
+
+        Das ist der zweite Grund, aus dem am Bewegen-Griff nichts geschah
+        (Robert, 03.09.2026). Der erste war das fehlende ``_parent`` am
+        eigenen Interaktionsstil — beide zusammen: Der Rückruf brach ab, und
+        wäre er durchgelaufen, hätte sein Picker nichts gefunden. Ohne einen
+        Treffer setzt das Widget kein ``_selected_actor``, und ohne das tut
+        sein Druck-Rückruf nichts. Der Griff war nicht greifbar.
+
+        Warum der Weg über den Interactor und nicht über das Widget: Es nimmt
+        keinen Picker entgegen. Und warum das nichts anderes stört: Solidon
+        pickt selbst (:meth:`_world_at`, aus genau demselben Grund mit einem
+        ``vtkCellPicker``) und benutzt pyvistas Auswahlfunktionen nicht.
+        """
+        if self.plotter is None:
+            return
+        from vtkmodules.vtkRenderingCore import vtkCellPicker
+
+        picker = vtkCellPicker()
+        picker.SetTolerance(PICK_TOLERANCE)
+        # **Und zwar an beiden**: ``plotter.interactor`` ist das Qt-Widget
+        # (``QtInteractor``), ``plotter.iren.interactor`` der VTK-Interactor
+        # (``vtkGenericRenderWindowInteractor``) — zwei verschiedene Objekte
+        # mit derselben Methode. Der Rückruf des Widgets hängt am zweiten und
+        # fragt dessen Picker; wer nur den ersten setzt, ändert nichts und
+        # sieht es nicht, weil beide die Methode kennen.
+        self.plotter.interactor.SetPicker(picker)
+        inner = getattr(getattr(self.plotter, "iren", None), "interactor", None)
+        if inner is not None and inner is not self.plotter.interactor:
+            inner.SetPicker(picker)
+
     def _detach_gizmo(self) -> None:
         """Nimmt Griff, Beschriftung und Flächenscheibe aus dem Bild.
 
@@ -7310,6 +7390,11 @@ class Viewport(QWidget):
         Ruhe — eine leere Szene nimmt den Griff weg, aber nicht die
         Entscheidung, dass einer gewünscht ist.
         """
+        if self._magnet_watch is not None and self.plotter is not None:
+            # Ein vergessener Beobachter zieht am Griff der vorigen Auswahl
+            # weiter — dieselbe Falle wie beim Skaliergriff daneben.
+            self.plotter.iren.remove_observer(self._magnet_watch)
+            self._magnet_watch = None
         if self._gizmo is not None:
             self._gizmo.remove()
             self._gizmo = None
@@ -7447,7 +7532,7 @@ class Viewport(QWidget):
             self._drag_axis = steps.axis
             self.drag_bar.follow(
                 f"{tr('Winkel')} {steps.axis.upper()}",
-                snap_to_step(steps.angle, self._angle_step),
+                self._settled_angle(steps.angle),
                 "°",
                 1,
             )
@@ -7462,6 +7547,59 @@ class Viewport(QWidget):
             )
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
+
+    def _settled_angle(self, angle: float) -> float:
+        """Der Winkel, der wirklich gilt — mit Raster oder mit Magnet.
+
+        Zwei Fälle, und der zweite ist die Vorgabe: Hat die Leiste einen
+        Winkelfang eingestellt, gilt er hart (`snap_to_step`) — das ist eine
+        Ansage des Nutzers. Steht sie auf null, gilt der Magnet: frei drehen,
+        aber bei jedem Vielfachen von :data:`TURN_MAGNET_STEP` kurz einrasten.
+        """
+        if self._angle_step > EPS_GEOM:
+            return snap_to_step(angle, self._angle_step)
+        return snap_near(angle, TURN_MAGNET_STEP, TURN_MAGNET_ZONE)
+
+    def _magnetise_turn(self, *_args: Any) -> None:
+        """Zieht den **gezeigten** Körper auf die Raste, während man dreht.
+
+        Ohne das wäre der Magnet erst beim Loslassen zu spüren: Die Zahl am
+        Zeiger spränge auf 45, das Teil im Bild stünde schief, und beim
+        Loslassen ruckte es. „Kurzes Einrasten" heißt, dass man es **sieht**.
+
+        Warum ein eigener Beobachter und nicht der Rückruf des Widgets:
+        ``AffineWidget3D`` ruft ihn **vor** dem Setzen der neuen Matrix und
+        übergibt ihm die alte — was dort gesetzt würde, wäre in derselben
+        Zeile wieder weg. Dieser hier läuft danach und korrigiert um die
+        Differenz zurück; die Rechnung des Widgets bleibt unberührt, denn sie
+        geht jedes Mal von ``_cached_matrix`` und der Zeigerstelle aus.
+        """
+        griff = self._gizmo
+        if griff is None or not getattr(griff, "_pressing_down", False):
+            return
+        actor = getattr(griff, "_main_actor", None)
+        if actor is None:
+            return
+        matrix = getattr(actor, "user_matrix", None)
+        if matrix is None:
+            return
+
+        import numpy as np
+
+        steps = decompose_transform(np.asarray(matrix, dtype=float))
+        if not steps.turns or steps.axis is None:
+            return
+        settled = self._settled_angle(steps.angle)
+        difference = settled - steps.angle
+        if abs(difference) <= EPS_DISPLAY:
+            return
+
+        index = ("x", "y", "z").index(steps.axis)
+        axes = getattr(griff, "axes", None)
+        direction = axes[index] if axes is not None else np.eye(3)[index]
+        origin = getattr(griff, "_origin", (0.0, 0.0, 0.0))
+        correction = rotation_about(direction, origin, difference)
+        actor.user_matrix = correction @ np.asarray(matrix, dtype=float)
 
     def _on_scale_interacted(self, factor: float) -> None:
         """Der Zwischenstand am Skalierwürfel — die Zahl zum Zug (§18.11)."""
@@ -7563,7 +7701,7 @@ class Viewport(QWidget):
                 snap_to_step(steps.offset[2], self._grid_step),
             ),
             axis=steps.axis,
-            angle=snap_to_step(steps.angle, self._angle_step),
+            angle=self._settled_angle(steps.angle),
             scale=steps.scale,
         )
         if snapped.moves or snapped.turns or snapped.resizes:
@@ -8831,6 +8969,25 @@ class Viewport(QWidget):
             on_rotate_start=calls.on_rotate_start,
             on_camera=calls.on_camera,
         )
+        # **pyvistas Widgets suchen ihren Renderer über den Stil**, und zwar
+        # als ``GetInteractorStyle()._parent()._plotter``. Ein eigener Stil hat
+        # dieses Attribut nicht: Bei jeder Mausbewegung über dem Bewegen-Griff
+        # brach ``AffineWidget3D._move_callback`` mit ``AttributeError:
+        # 'Style' object has no attribute '_parent'`` ab, und pyvistaqt machte
+        # daraus eine Warnung, die niemand sieht.
+        #
+        # Der Preis war nicht nur die Farbe: Derselbe Rückruf setzt
+        # ``_selected_actor``, und ohne den tut ``_press_callback`` gar nichts
+        # — der Griff war **nicht greifbar**. Robert am 03.09.2026: „bei
+        # bewegen geht das drehen des modells nicht nur das normale
+        # verschieben was auch so geht"; das normale Verschieben ist unsere
+        # eigene Zuggeste am Körper und ging deshalb weiter.
+        #
+        # Dass pyvista diesen Weg geht, stand seit je im Docstring von
+        # :func:`_InteractorStyle` — für ``enable_point_picking``, das wir
+        # deshalb selbst gebaut haben. Der zweite Fall derselben Sache hat
+        # zwei Monate gewartet.
+        style._parent = weakref.ref(self.plotter.iren)
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
         # sonst noch einzuschalten wäre, steht dort.

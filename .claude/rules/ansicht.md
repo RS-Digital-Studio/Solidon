@@ -657,6 +657,69 @@ und zwar mit genau diesen vier französischen Namen als Eingabe. Ein Absatz
 hier wird gelesen, wenn jemand ihn sucht; der Test wird rot, wenn jemand es
 wieder tut.
 
+## Der Bewegen-Griff gehorchte niemandem (03.09.2026)
+
+Robert: „bei bewegen geht das drehen des modells nicht nur das normale
+verschieben was auch so geht" und „hover effekt welche achse man wählt".
+Beides derselbe Befund, und dahinter lagen **zwei** Fehler, die einander
+verdeckten.
+
+**pyvistas Widget sucht seinen Renderer über den Interaktionsstil.**
+`AffineWidget3D._move_callback` beginnt mit
+`interactor.GetInteractorStyle()._parent()._plotter…`, und Solidon setzt für
+seine vier Navigationsschemata einen eigenen Stil. Der hat kein `_parent`:
+Jede Mausbewegung über dem Griff endete in `AttributeError: 'Style' object has
+no attribute '_parent'`, den pyvistaqt zu einer Warnung macht, die niemand
+sieht. Derselbe Rückruf setzt `_selected_actor`, und ohne den tut
+`_press_callback` nichts — **der Griff war nicht greifbar**. Was weiter ging,
+war unsere eigene Zuggeste am Körper, und genau die hat Robert „das normale
+verschieben was auch so geht" genannt.
+
+Dass pyvista diesen Weg geht, stand seit je im Docstring von
+`_InteractorStyle` — für `enable_point_picking`, das deshalb selbst gebaut
+ist. **Der zweite Fall derselben Sache hat zwei Monate gewartet**: ein
+reparierter Fehler mit einem Zwilling, den niemand gesucht hat. Der Griff
+bekommt jetzt sein `_parent` (ein `weakref` auf `plotter.iren`).
+
+**Und der Picker des Widgets trifft in dieser Umgebung nichts.** Es stellt
+sich beim Anhängen selbst einen `vtkHardwarePicker` hin (`enable_mesh_picking
+(picker='hardware')`). Gemessen am laufenden Fenster fand der nicht einmal den
+Körper in der Bildmitte, während ein `vtkCellPicker` an derselben Stelle
+antwortet; `vtkPropPicker` ebenso wenig — beide gehen über die Hardware. Ohne
+Treffer kein `_selected_actor`, also derselbe tote Griff eine Ebene tiefer.
+`_give_the_widget_a_picker_that_hits` setzt deshalb einen Zell-Picker, **nach**
+dem Anhängen (vorher wäre er in derselben Zeile wieder weg) und an **beiden**
+Objekten: `plotter.interactor` ist das Qt-Widget, `plotter.iren.interactor` der
+VTK-Interactor, und der Rückruf fragt den zweiten.
+
+### Frei drehen, aber 45 Grad treffen
+
+Der Winkelfang stand auf null, weil ein hartes Raster jeden kleinen Zug
+verschluckte. Damit trifft aber niemand genau 45 Grad. Robert: „freies drehen,
+aber kurzes einrasten bei allen 45 grad winkeln außer man dreht weiter."
+
+`geom.transform.snap_near(wert, schritt, zone)` ist das Gegenstück zu
+`snap_to_step`: Es zieht **nur in der Nähe** eines Vielfachen. Der Viewport
+fragt es über `_settled_angle` — hat die Leiste einen Winkelfang eingestellt,
+gilt der hart, sonst der Magnet (`TURN_MAGNET_STEP` 45°, `TURN_MAGNET_ZONE` 4°).
+
+**Sichtbar wird das über einen eigenen Beobachter**, nicht über den Rückruf des
+Widgets: Das ruft seinen `interact_callback` **vor** dem Setzen der neuen
+Matrix und übergibt ihm die alte — was dort gesetzt würde, wäre in derselben
+Zeile wieder weg. `_magnetise_turn` hängt an `MouseMoveEvent`, läuft danach und
+dreht um die Differenz zurück (`rotation_about` im Kern, denn die Ansicht
+rechnet keine Geometrie). Die Rechnung des Widgets bleibt unberührt: Sie geht
+jedes Mal von `_cached_matrix` und der Zeigerstelle aus, nicht vom letzten
+Ergebnis. Der Beobachter lebt genau so lange wie der Griff.
+
+Am laufenden Fenster gemessen, ein Zug über 59 Schritte am Y-Ring:
+
+| Zugstrecke | gezeigter Winkel |
+|---|---|
+| Anfang bis Schritt 23 | 0 → 40,5° frei |
+| Schritt 24 bis 46 | **45,0°**, dreiundzwanzig Schritte lang |
+| ab Schritt 47 | 49,2° → 51,4° frei |
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an

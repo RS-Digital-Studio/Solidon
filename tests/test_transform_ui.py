@@ -653,3 +653,124 @@ def test_every_axis_turns_and_moves_the_way_it_was_dragged() -> None:
             assert steps.offset[index] == pytest.approx(distance), f"{axis} verlor seinen Weg"
             others = [value for position, value in enumerate(steps.offset) if position != index]
             assert others == pytest.approx([0.0, 0.0]), f"{axis} färbte auf die Nachbarn ab"
+
+
+def test_the_magnet_holds_near_a_step_and_lets_go_beyond_it() -> None:
+    """Frei drehen, aber bei jedem Vielfachen kurz einrasten.
+
+    **Roberts Vorgabe vom 03.09.2026:** „freies drehen, aber kurzes einrasten
+    bei allen 45 grad winkeln außer man dreht weiter". Das ist nicht
+    :func:`snap_to_step` — jenes zieht *jeden* Wert auf ein Vielfaches und
+    macht aus einer Drehung eine Auswahl aus acht Möglichkeiten. Und es ist
+    auch nicht „kein Fang", denn dann trifft niemand genau 45 Grad.
+
+    Geprüft werden beide Seiten der Zone am selben Vielfachen, dazu die zwei
+    Abschaltungen: Schritt null und Zone null heißen beide „kein Magnet".
+    """
+    from app.core.geom.transform import snap_near
+
+    assert snap_near(43.0, 45.0, 4.0) == 45.0, "knapp davor rastet ein"
+    assert snap_near(47.5, 45.0, 4.0) == 45.0, "knapp dahinter auch"
+    assert snap_near(45.0, 45.0, 4.0) == 45.0, "genau darauf bleibt darauf"
+    assert snap_near(38.0, 45.0, 4.0) == 38.0, "wer weiterdreht, kommt heraus"
+    assert snap_near(52.0, 45.0, 4.0) == 52.0
+
+    assert snap_near(-43.0, 45.0, 4.0) == -45.0, "und in die andere Richtung ebenso"
+    assert snap_near(2.0, 45.0, 4.0) == 0.0, "die Null ist auch ein Vielfaches"
+    assert snap_near(20.0, 45.0, 4.0) == 20.0, "dazwischen bleibt es frei"
+
+    assert snap_near(43.0, 0.0, 4.0) == 43.0, "ohne Schritt kein Magnet"
+    assert snap_near(43.0, 45.0, 0.0) == 43.0, "ohne Zone auch nicht"
+
+    # Eine Zone von der halben Schrittweite wäre wieder ein hartes Raster;
+    # weiter als das kann sie nicht greifen.
+    assert snap_near(30.0, 45.0, 100.0) == 45.0
+    assert snap_near(20.0, 45.0, 100.0) == 0.0
+
+
+def test_a_rotation_about_a_point_turns_around_that_point() -> None:
+    """Die Drehmatrix dreht um die Achse **durch den gegebenen Punkt**.
+
+    Um den Ursprung zu drehen wäre die halbe Antwort: Der Griff sitzt am
+    Körper, und eine Korrektur um die Weltachse verschöbe ihn quer durch die
+    Szene.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import rotation_about
+
+    mitte = (10.0, 0.0, 0.0)
+    matrix = rotation_about((0.0, 0.0, 1.0), mitte, 90.0)
+
+    fest = matrix @ np.array([10.0, 0.0, 0.0, 1.0])
+    assert fest[:3] == pytest.approx([10.0, 0.0, 0.0], abs=1e-9), "der Punkt selbst bleibt liegen"
+
+    gedreht = matrix @ np.array([11.0, 0.0, 0.0, 1.0])
+    assert gedreht[:3] == pytest.approx([10.0, 1.0, 0.0], abs=1e-9), (
+        "und was einen Millimeter daneben liegt, wandert im Viertelkreis um ihn"
+    )
+
+
+def test_the_turn_handle_sticks_at_forty_five_degrees(qt_app: QApplication) -> None:
+    """Der Drehgriff rastet sichtbar ein, ohne das freie Drehen zu nehmen.
+
+    **Roberts Vorgabe vom 03.09.2026:** „freies drehen, aber kurzes einrasten
+    bei allen 45 grad winkeln außer man dreht weiter". Geprüft wird die
+    Kette, die das leistet, an ihren beiden Enden — der Zahl am Zeiger und
+    der Matrix des Körpers.
+
+    Die Matrix ist der Teil, den man sonst erst beim Loslassen merkt:
+    `AffineWidget3D` ruft seinen Rückruf **vor** dem Setzen der neuen Matrix
+    und übergibt ihm die alte. Was dort gesetzt würde, wäre in derselben Zeile
+    wieder weg — deshalb hängt der Magnet an einem eigenen Beobachter, der
+    danach läuft.
+    """
+    import numpy as np
+
+    from app.core.geom.transform import decompose_transform, rotation_about
+    from app.ui.viewport import TURN_MAGNET_STEP, TURN_MAGNET_ZONE, Viewport
+
+    viewport = Viewport()
+    assert viewport._angle_step == 0.0, "ohne Ansage der Leiste gilt der Magnet"
+
+    # Knapp neben der Raste: der gezeigte Wert ist die Raste.
+    assert viewport._settled_angle(43.0) == TURN_MAGNET_STEP
+    assert viewport._settled_angle(-43.0) == -TURN_MAGNET_STEP
+    # Weit genug weg: der rohe Wert.
+    assert viewport._settled_angle(30.0) == 30.0
+    assert viewport._settled_angle(TURN_MAGNET_STEP + TURN_MAGNET_ZONE + 1.0) == pytest.approx(50.0)
+
+    # Und eine Ansage der Leiste gewinnt: dann gilt ihr Raster, hart.
+    viewport._angle_step = 15.0
+    assert viewport._settled_angle(43.0) == 45.0, "45 ist auch ein Vielfaches von 15"
+    assert viewport._settled_angle(30.0) == 30.0
+    assert viewport._settled_angle(8.0) == 15.0, (
+        "das eingestellte Raster zieht jeden Wert, nicht nur den nahen"
+    )
+
+    # Die Matrix, die der Magnet daraus baut: aus 43 Grad werden 45.
+    achse = (0.0, 0.0, 1.0)
+    mitte = (0.0, 0.0, 0.0)
+    roh = rotation_about(achse, mitte, 43.0)
+    korrektur = rotation_about(achse, mitte, 2.0)
+    steps = decompose_transform(np.asarray(korrektur @ roh, dtype=float))
+    assert steps.angle == pytest.approx(45.0, abs=1e-6), (
+        "die Korrektur um die Differenz führt genau auf die Raste"
+    )
+
+
+def test_the_magnet_watch_lives_and_dies_with_the_handle(qt_app: QApplication) -> None:
+    """Der Beobachter des Magneten gehört zum Griff — nicht zur Sitzung.
+
+    Ein vergessener zöge am Griff der vorigen Auswahl weiter, dieselbe Familie
+    wie beim Skaliergriff. Offscreen gibt es keinen Plotter, also prüft dieser
+    Test das, was **vor** der Wache steht: dass der Abbau ihn abmeldet und das
+    Feld leert, auch wenn nie einer angemeldet wurde.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    assert viewport._magnet_watch is None, "ohne Griff kein Beobachter"
+
+    viewport._detach_gizmo()
+    assert viewport._magnet_watch is None, "und der Abbau hält das aus"
