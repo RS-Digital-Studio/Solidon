@@ -269,6 +269,10 @@ eines der folgenden Stücke anfasst, liest sie zusätzlich:
 Drei Stufen: nichts, ein Körper, ein Merkmal (`Viewport.selection_depth`).
 **Links wandert, rechts fragt** — und diese Aufteilung ist der Kern:
 
+Seit dem 03.09.2026 schiebt links im Schema `solidon` **auch** die Ansicht.
+Das ändert an der Stufung nichts: `_left_up` trennt Klick und Zug an der
+Zugschwelle des Systems, und nur der Klick wandert (siehe unten).
+
 * **Der Linksklick geht eine Stufe.** Der erste wählt den Körper, der nächste
   das Merkmal unter dem Zeiger. Das Modell von Figma und Illustrator: erst die
   Gruppe, dann das Element darin. Vorher gewann sofort das Merkmal, und ein
@@ -667,7 +671,7 @@ verdeckten.
 **pyvistas Widget sucht seinen Renderer über den Interaktionsstil.**
 `AffineWidget3D._move_callback` beginnt mit
 `interactor.GetInteractorStyle()._parent()._plotter…`, und Solidon setzt für
-seine vier Navigationsschemata einen eigenen Stil. Der hat kein `_parent`:
+seine fünf Navigationsschemata einen eigenen Stil. Der hat kein `_parent`:
 Jede Mausbewegung über dem Griff endete in `AttributeError: 'Style' object has
 no attribute '_parent'`, den pyvistaqt zu einer Warnung macht, die niemand
 sieht. Derselbe Rückruf setzt `_selected_actor`, und ohne den tut
@@ -1120,11 +1124,12 @@ noch Tiefe und erzeugt keine Operation.
 ## Die Kamera hat einen zweiten Treiber (02.09.2026)
 
 Die 3D-Maus (`app/ui/spacemouse.py`, Konzept `konzept-3d-maus-2026-08`) fährt
-dieselbe Kamera wie die Maus — kein fünftes Navigationsschema, kein Modus,
-keine Operation. Drei Regeln:
+dieselbe Kamera wie die Maus — kein eigenes Navigationsschema, kein Modus,
+keine Operation. (Bis zum 03.09.2026 stand hier „kein fünftes“; die Zahl ist
+seither vergeben, die Zusage nicht.) Drei Regeln:
 
 * **Die Abbildung ist eine reine Funktion.** `camera_step` bekommt sechs
-  Achsen, eine Stellung, eine Zeitspanne und zwei Einstellungen und gibt eine
+  Achsen, eine Stellung, eine Zeitspanne und drei Einstellungen und gibt eine
   Stellung zurück. Kein Qt, kein VTK, kein HID darin — jeder Achsenfehler
   (Vorzeichen, Bezugssystem) wird dort behoben und in
   `tests/test_spacemouse.py` mit einem Test je Achse festgehalten. Wer die
@@ -1145,3 +1150,57 @@ keine Operation. Drei Regeln:
   der Achsen stammen aus einer aufgezeichneten Lesung im Korpus
   (`tests/data/spacemouse/`), nicht aus einer Annahme.
 
+## Die Ansicht hat eine eigene Steuerung (03.09.2026)
+
+Robert: „noch eine änderung zur steuerung weil sie mir nicht gefällt, aber als
+eigene und standart wählen". Vier Schemata bildeten Fremdprogramme nach —
+`slicer` (Cura), `orbit` (Bambu Studio, Orca, PrusaSlicer), `cad` und
+`blender` —, und keines davon war Solidons eigenes. Das
+fünfte heißt `solidon` und ist die Vorgabe: links verschiebt, rechts dreht um
+den Mittelpunkt der Ansicht, das gedrückte Rad kippt nach oben und unten,
+Scrollen zoomt. Umschalt ändert hier nichts — anders als in den vieren, die
+ein Vorbild haben.
+
+* **Links schiebt und wählt trotzdem.** `_left_up` fragt `is_click` und trennt
+  Klick von Zug an der Zugschwelle des Systems; die Auswahl hängt also nicht
+  daran, was `_begin` an der Kamera gestartet hat. Wer eine sechste Steuerung
+  baut, darf `select` und `pan` deshalb auf dieselbe Taste legen — was sich
+  ausschließt, ist `pan` und ein *gezogenes* Werkzeug, nicht `pan` und ein
+  Klick. Auf dem **gewählten** Körper führt links weiter das Teil (Robert,
+  03.09.2026, gegen den Vorschlag, das dem Griff allein zu lassen).
+* **Das Kippen ist keine VTK-Bewegung.** Der Trackball dreht in beiden Achsen;
+  „nur nach oben und unten" gibt es dort nicht, und `Rotate` dafür zu
+  überschreiben hieße, am Zustand des Interactors zu drehen. Gerechnet wird
+  mit `spacemouse.camera_step` — der Stil meldet nur die senkrechte Strecke
+  seit dem letzten Ereignis (`_tilt_at`), das Rechnen bleibt in der reinen
+  Funktion und damit ohne Fenster prüfbar.
+* **Fliegen ist nicht Zoomen, und der Unterschied ist der Blickpunkt.**
+  `camera_step(..., fly=True)` schiebt Standort **und** Blickpunkt entlang der
+  Blickrichtung; ohne den Schalter ändert die Achse `y` nur den Abstand. Der
+  Zoom fährt bis vor das Teil, der Flug hindurch. Das Vorzeichen folgt dem
+  Zoom, den der Zweig ersetzt: eine Achse, die je nach Schalter in die andere
+  Richtung zieht, wäre die Falle für den Nächsten, der `fly` an ein Gerät hängt.
+* **Die Tastatur wirkt nur in `solidon`.** Die vier anderen bilden
+  Fremdprogramme nach; dort wäre WASD eine Bewegung, die es im Vorbild nicht
+  gibt — in Blender ist sie sogar belegt. Ein Anschlag ist ein Schritt; die
+  Wiederholung liefert Qt, ein eigener Zeitgeber wäre ein zweiter Takt neben
+  dem des Systems.
+* **`setFocusPolicy(StrongFocus)` wirkt in allen fünf.** Ohne ihn kommt kein
+  Tastendruck an, und er ist die einzige Änderung dieses Umbaus außerhalb des
+  neuen Schemas: Ein Klick in die Ansicht nimmt seither den Fokus aus einem
+  Eingabefeld. Wer einen Test schreibt, der nach einem Klick in die Ansicht
+  noch tippt, tippt jetzt in die Ansicht. **Für die Bedienung ist das
+  unschädlich, und zwar gemessen** (3d-druck-c7, 03.09.2026, am echten
+  Fenster — offscreen vergibt Qt gar keinen Fokus): Das Anwenden in der
+  Bewegen-Leiste hängt seit dem Wegfall des Knopfes an `returnPressed`, der
+  Viewport nimmt den Fokus beim Klick, das Feld holt ihn beim nächsten zurück,
+  und die Eingabetaste wirkt.
+
+Vier Wächter in `tests/test_viewport_decisions.py` und
+`tests/test_spacemouse.py`, alle ohne Fenster: Jedes Schema belegt alle sechs
+Kombinationen aus Taste und Umschalt (`navigation_action` liest ohne Rückfall
+und würfe sonst beim Drücken — ein Rückfall wäre die schlechtere Antwort, weil
+er die Lücke zur stillen Vorgabe macht); jedes trägt einen Namen im
+Einstellungsdialog (sonst wäre es gebaut, geprüft und unerreichbar); die sechs
+Flugtasten decken drei Achsen in beide Richtungen ohne Dopplung; und der Flug
+nimmt den Blickpunkt mit, wo der Zoom ihn stehen lässt.
