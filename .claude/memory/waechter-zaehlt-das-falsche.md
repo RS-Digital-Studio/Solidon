@@ -48,3 +48,25 @@ reißt, und **über** null, damit sie überhaupt trägt. Und: Jeder Test, der ei
 Zuordnung zwischen zwei Welten herstellt (Kern gegen Fenster, Katalog gegen
 Code), bekommt eine Mutationsprobe — die Zuordnung selbst ist die Stelle, an
 der so ein Test still wird ([[was-die-suite-nicht-findet]]).
+
+**Ein Wächter, der den Weg misst statt den Vertrag, findet nur die Wege, die
+sein Autor kennt.** Am 04.09.2026 sollte ein Test festhalten, dass jede
+Operation, die eine bestimmte Absage wirft, auch das Feld führt, auf das der
+Vorschlag zeigt. Erster Versuch: die Aufrufer der beiden Helfer im Quelltext
+suchen, die ich als Werfer kannte.
+
+Er fand **sechs** statt sieben. `resize_hole` wirft dieselbe Absage über einen
+**dritten** Helfer, den ich nicht in das Muster geschrieben hatte — der Test
+hätte also genau die Operation durchgelassen, die anders gebaut ist, und das
+ist immer die gefährdete.
+
+Aufgefallen ist es nur, weil eine untere Schranke danebenstand
+(`assert len(gefunden) >= 7`) und die Zahl aus einer **vorherigen, unabhängigen
+Messung** stammte. Ohne sie wäre der Test grün gewesen und hätte sechs von
+sieben geprüft — die halbe Regel, die aussieht wie eine ganze
+([[die-halbe-regel-sieht-aus-wie-eine-ganze]]).
+
+Behoben, indem der Test die Sache prüft statt den Weg dorthin: Der Feldname
+steht **fest** in jedem `field=`-Argument dieser Fehler, also muss jedes Feld
+dieser Art im Modul so heißen — gleich, über welchen Helfer die Absage kommt.
+**Frage nicht „wer ruft den Werfer", frage „woran hängt die Zusage".**

@@ -59,3 +59,25 @@ Geometrie".
 
 Verwandt: [[sollwert-aus-dem-pruefling]] und [[was-die-suite-nicht-findet]] —
 auch dort war der Finder nicht der Test, sondern etwas daneben.
+
+**Dieselbe Wurzel, andere Gestalt — 04.09.2026, und diesmal fast als
+Fehlalarm an eine andere Sitzung.** Ich wollte prüfen, ob sieben Operationen
+ein Feld namens `at_feature` führen:
+
+```
+felder = list(spec.params.fields())
+marke = "ok  " if "at_feature" in felder else "FEHLT"
+```
+
+`fields()` gibt **`Field`-Objekte**, keine Namen. Das `in` traf also nie, und
+die Ausgabe meldete für **alle sieben** „FEHLT" — sieben angeblich kaputte
+Dialoge, an die ein Knopf zeigt. Gerettet hat mich nur, dass ich die Zeilen
+**daneben** mitgedruckt hatte: Dort stand jedes Mal `Field(name='at_feature',
+…)` als erstes Feld, also das Gegenteil der Marke.
+
+Die Regel daraus: **Wer über eine Struktur iteriert, prüft an einem Fall mit
+bekanntem Ausgang, was die Schleife tatsächlich in der Hand hält** — ein
+`print` des ersten Elements kostet nichts. Und: Eine Marke, die alles gleich
+beurteilt, ist verdächtig, bevor sie überzeugend ist. „Alle sieben kaputt" war
+die unwahrscheinlichere Lage; siehe [[am-eingang-drehen]] und
+[[messwerkzeug-misst-sich-selbst]].
