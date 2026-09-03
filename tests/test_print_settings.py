@@ -3829,3 +3829,102 @@ def test_choosing_another_slicer_drops_the_profiles_of_the_old_one(
     assert gemerkt == [str(zwei[1])], "und er wird gemerkt"
     assert dialog.machine_choice.count() == 0, "das Druckerprofil des alten ist weg"
     assert dialog.process_choice.count() == 0, "das Prozessprofil auch"
+
+
+def test_cura_and_prusa_are_not_warned_about_a_machine_they_never_take() -> None:
+    """Der Befund galt weiter, als er gemeint war — einen halben Tag lang.
+
+    ``machine_missing`` entstand für die Orca-Familie, die ihre Maschine als
+    Profil aus dem eigenen Bestand lädt. Cura und PrusaSlicer tun das nie:
+    Ihre Maschinenseite baut ``_machine_keys`` aus Solidons eigenem
+    Druckerprofil, und eine PrusaSlicer-``.ini`` ist damit eigenständig
+    lauffähig. Gemessen am 03.09.2026, bevor das hier stand:
+
+        orca   -> nichts
+        cura   -> ['slicer.machine_unset']
+        prusa  -> ['slicer.machine_unset']
+
+    Beide bekamen bei **jedem** Export den Rat, im Slicer einen Drucker
+    einzurichten, den sie dafür nicht brauchen. Eine Warnung, die nicht
+    stimmt, ist teurer als keine — der Kunde lernt, sie zu übersehen, und
+    übersieht die richtige mit.
+
+    Die eigenen Tests trugen den Fehler nicht, weil alle drei ``flavour="orca"``
+    setzten: die richtige Regel mit ungeprüftem Rand.
+    """
+    from pathlib import Path
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+
+    for flavour in ("cura", "prusa"):
+        setup = handover.SlicerSetup(executable=Path(f"{flavour}.exe"), flavour=flavour)
+        assert handover.machine_missing(setup, profile) == [], flavour
+        assert not handover.takes_a_machine_profile(flavour)
+
+    assert handover.takes_a_machine_profile("orca")
+
+
+def test_the_orca_family_is_still_warned(monkeypatch) -> None:
+    """Die Gegenprobe: Der Fall, für den der Befund gebaut wurde, bleibt."""
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    assert [f.code for f in handover.machine_missing(setup, profile)] == ["slicer.machine_mismatch"]
+
+
+def test_the_slicing_run_says_it_too_when_the_machine_side_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anschluss: Der Befund darf nicht nur am Export hängen.
+
+    ``machine_missing`` entstand für ``write_assembly``. Wer auf *Slicen*
+    klickt, geht dort nicht vorbei — sein Lauf gelingt mit den Vorgaben des
+    Slicers statt mit den Werten aus Solidon, oder er scheitert, und die
+    Orca-Familie sagt dazu nur „Slic3r::CLI::run found error, exit".
+
+    **Gemessen am 03.09.2026 gegen ElegooSlicer 1.5.3.4 auf dieser Maschine**,
+    einmal mit Maschinenseite und einmal ohne, dieselbe Datei:
+
+        mit    286 957 Bytes G-Code, 100 Schichten, 103 × ``G92 E0``, ein ``G28``
+        ohne   Exit -17, „process not compatible with printer.", keine Datei
+
+    Ohne den Befund erführe der Kunde in beiden Fällen nicht, woran es lag.
+    """
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Bambu Lab A1 0.2 nozzle")
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    model, setup = _slicer_writing(
+        monkeypatch, tmp_path, _gcode_printing_at(-10.0, 10.0), flavour="orca"
+    )
+
+    outcome = handover.slice_model(model, settings, profile, setup, output_dir=tmp_path)
+
+    codes = [finding.code for finding in outcome.findings]
+    assert "slicer.machine_mismatch" in codes, codes
+
+
+def test_a_matching_machine_leaves_the_slicing_run_quiet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenprobe: Passt die Maschine, wird nichts gesagt."""
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "Meine Maschine")
+    monkeypatch.setattr(slicer_profiles, "printer_for", lambda *_: "centauri-carbon-2")
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    model, setup = _slicer_writing(
+        monkeypatch, tmp_path, _gcode_printing_at(-10.0, 10.0), flavour="orca"
+    )
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
+    )
+
+    assert not [f for f in outcome.findings if f.code.startswith("slicer.machine_")]

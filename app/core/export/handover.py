@@ -56,6 +56,7 @@ from app.core.export.slicer_keys import (
     has_key_definitions,
     names_its_own_output,
     reads_settings_from_project_file,
+    takes_a_machine_profile,
     wants_bed_coordinates,
 )
 from app.core.knowledge import profiles
@@ -261,7 +262,19 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
 
     Nichts zu melden ist der Regelfall: Steht die Maschine, ist die Datei
     vollständig, und eine Beruhigung wäre eine Zeile, die nichts unterscheidet.
+
+    **Und nur für die Orca-Familie.** Der Befund galt einen halben Tag lang
+    weiter, als er gemeint war: Cura und PrusaSlicer bekommen von Solidon
+    **nie** ein Maschinenprofil aus fremdem Bestand — ihre Maschinenseite baut
+    :func:`_machine_keys` aus dem eigenen Druckerprofil, und eine ``.ini`` ist
+    eigenständig lauffähig, sobald Düse und Bettform darin stehen. Für sie ist
+    „keine Maschinenseite" kein Mangel, sondern die Bauart. Gemessen am
+    03.09.2026: Beide bekamen bei jedem Export ein ``slicer.machine_unset``
+    und den Rat, im Slicer einen Drucker einzurichten, den sie dafür nicht
+    brauchen. Eine Warnung, die nicht stimmt, ist teurer als keine.
     """
+    if not takes_a_machine_profile(setup.flavour):
+        return []
     if setup.machine_profile or machine_for(setup, profile):
         return []
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
@@ -2201,6 +2214,12 @@ def slice_model(
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
         *unreachable_overrides(settings, setup, slots),
+        # **Auch hier und nicht nur beim Export.** Der Befund entstand für
+        # ``write_assembly``; der Kunde, der auf *Slicen* klickt, geht aber gar
+        # nicht dort vorbei. Sein Lauf gelingt dann mit den Vorgaben des
+        # Slicers statt mit den Werten aus Solidon — oder er scheitert, und die
+        # Orca-Familie sagt dazu nur „process not compatible with printer".
+        *machine_missing(setup, profile),
         *ignored,
         *([beyond] if beyond is not None else []),
         *([short] if short is not None else []),
