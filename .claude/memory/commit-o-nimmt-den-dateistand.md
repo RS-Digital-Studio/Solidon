@@ -237,3 +237,41 @@ reiner Modus-Commit braucht den Index ohne `-o` (`read-tree HEAD`,
 `update-index --chmod=+x`, `commit` ohne Pfadliste) — und danach `git show
 --raw HEAD`, das den Moduswechsel als `:100644 100755` zeigt. Die Zeilenzahl
 sagt dort nichts: Sie ist `0 0`.
+
+
+## Vierter Fall, und diesmal ohne Ausrede (03.09.2026)
+
+Diese Notiz nennt `git add <pfad>` ausdrücklich, sie nennt den Zweischritt, und
+sie nennt seine Reihenfolge als „den ganzen Punkt". Ich habe sie am selben Tag
+**zitiert** — einer Nachbarsitzung gegenüber, mit genau dieser Begründung, warum
+sie ihre Datei erst nach meinem Commit anfassen soll. Zwei Stunden später ging
+mein eigener Commit `eb979353` hinaus und nahm die Viewport-Arbeit einer
+anderen Sitzung mit: `test_ui.py`, `main_window.py` und fünf Kataloge.
+
+**Der Zweischritt lief zur Hälfte.** Ich habe `git diff --cached --stat` gelesen
+— 405 Zeilen — und abgenickt. Eine Erwartung hatte ich nicht genannt. Genau
+dafür steht der Satz oben da: *Wer erst die Zahlen liest, nickt den Istwert ab.*
+405 sagt für sich nichts; „ich habe rund 250 gebaut" hätte den Unterschied
+laut gemacht.
+
+Zwei Sätze, die daraus folgen:
+
+**Eine Regel, die man zitiert, ist nicht angewandt.** Das Zitieren fühlt sich
+an wie Anwenden — man hat den Satz im Kopf, er war eben noch richtig, und die
+eigene Lage sieht anders aus als das Beispiel darin. Verwandt mit
+[[benannte-falle-schuetzt-nicht]], aber eine Stufe schärfer: Dort schützte der
+Kommentar im Modul nicht, hier schützte die selbst geschriebene Notiz nicht,
+nachdem sie zwei Stunden vorher aus dem eigenen Mund kam.
+
+**Und der Zweischritt gehört ins Skript, nicht in den Kopf.** Solange die
+erwartete Zahl nur gedacht wird, gibt es keinen Moment, in dem sie mit dem
+Istwert kollidiert. Geschrieben — in die Ansage an die anderen, in eine
+`echo`-Zeile über dem Befehl — kollidiert sie von selbst. Das ist der
+Unterschied zwischen einer Anzeige und einer Prüfung, und er steht in dieser
+Notiz seit dem 30.08.2026.
+
+Die Diagnose gegenüber der Nachbarsitzung war dabei zuerst falsch: Ich habe ihr
+geschrieben, die Notiz benenne das falsche Werkzeug (`-o` statt `add`), und
+deshalb habe sie nicht gegriffen. Sie benennt beide. Eine Notiz für ungenau zu
+erklären, die man nicht gelesen hat, ist die bequemere von zwei Erklärungen —
+und sie hätte die Notiz verschlechtert.
