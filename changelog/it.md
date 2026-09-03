@@ -24,7 +24,7 @@ scrive in `website/version.json`.
 - I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.
 - Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.
 - Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio.
-- Un pannello *Caratteristica* mostra a destra ciò che è stato misurato nel punto selezionato; si può staccare e attivare da *Vista*.
+- Un pannello *Caratteristica* si apre a destra appena si seleziona la prima caratteristica e mostra ciò che vi è stato misurato; si può staccare, chiudere e riprendere da *Vista*.
 - Ogni numero è modificabile: posizione, diametro, profondità e asse si impostano nel campo, senza finestre intermedie.
 - Un numero modificato appare come anteprima nell'immagine prima di essere applicato.
 - Una casella *Applica a tutti dello stesso tipo* modifica un'intera fila di fori in una volta, con un solo passo per annullare.

@@ -25,7 +25,7 @@ dans `website/version.json`.
 - Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.
 - Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.
 - Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence.
-- Un panneau *Caractéristique* affiche à droite ce qui a été mesuré à l'endroit cliqué ; il se détache et s'active depuis *Affichage*.
+- Un panneau *Caractéristique* s'ouvre à droite dès le premier clic sur une caractéristique et montre ce qui y a été mesuré ; il se détache, se ferme et revient depuis *Affichage*.
 - Chaque valeur y est modifiable : position, diamètre, profondeur et axe se règlent dans le champ, sans boîte de dialogue.
 - Une valeur modifiée s'affiche en aperçu dans la vue avant de s'appliquer.
 - Une case *Appliquer à tous les semblables* modifie toute une rangée de perçages d'un coup, avec une seule étape pour annuler.

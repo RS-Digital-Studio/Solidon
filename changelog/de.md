@@ -49,7 +49,7 @@ Nutzen da und sonst nichts.
 - Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.
 - Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.
 - Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen.
-- Ein eigenes Fenster *Merkmal* zeigt rechts, was an der angeklickten Stelle gemessen wurde; es lässt sich abziehen und über *Ansicht* zuschalten.
+- Ein eigenes Fenster *Merkmal* geht rechts auf, sobald das erste Merkmal angeklickt ist, und zeigt, was dort gemessen wurde; es lässt sich abziehen, zumachen und zurückholen.
 - Jede Zahl darin ist änderbar: Ort, Durchmesser, Tiefe und Achse werden im Feld gesetzt, ohne Dialog dazwischen.
 - Eine geänderte Zahl zeigt sich als Vorschau im Bild, bevor sie gilt.
 - Ein Haken *Auf alle gleichartigen anwenden* ändert eine ganze Lochreihe in einem Zug, mit einem einzigen Schritt zum Zurücknehmen.

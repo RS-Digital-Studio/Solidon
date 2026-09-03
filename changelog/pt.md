@@ -24,7 +24,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.
 - Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.
 - Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio.
-- Um painel próprio *Característica* mostra à direita o que foi medido no ponto selecionado; pode ser desencaixado e ativado em *Vista*.
+- Um painel *Característica* abre-se à direita assim que se seleciona a primeira característica e mostra o que ali foi medido; pode ser desencaixado, fechado e retomado em *Vista*.
 - Cada número é alterável: posição, diâmetro, profundidade e eixo definem-se no próprio campo, sem diálogo pelo meio.
 - Um número alterado aparece como pré-visualização na imagem antes de ser aplicado.
 - Uma caixa *Aplicar a todos do mesmo tipo* altera toda uma fila de furos de uma vez, com um único passo para anular.

@@ -25,7 +25,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.
 - Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.
 - Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio.
-- Un panel propio *Característica* muestra a la derecha lo medido en el punto que se ha pulsado; se puede desacoplar y activar desde *Vista*.
+- Un panel *Característica* se abre a la derecha en cuanto se pulsa la primera característica y muestra lo medido allí; se puede desacoplar, cerrar y recuperar desde *Vista*.
 - Cada cifra es modificable: posición, diámetro, profundidad y eje se fijan en el propio campo, sin diálogo intermedio.
 - Una cifra modificada aparece como vista previa en la imagen antes de aplicarse.
 - Una casilla *Aplicar a todos los del mismo tipo* cambia toda una hilera de taladros de una vez, con un único paso para deshacer.

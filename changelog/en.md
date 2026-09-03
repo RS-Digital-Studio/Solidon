@@ -24,7 +24,7 @@ it into `website/version.json`.
 - The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.
 - A moved hole stays the same hole: every fit that refers to it keeps its reference.
 - Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing.
-- A separate *Feature* panel on the right shows what was measured at the spot you clicked; it can be detached and switched on under *View*.
+- A *Feature* panel opens on the right as soon as you click the first feature and shows what was measured there; it can be detached, closed and brought back under *View*.
 - Every number in it can be changed: position, diameter, depth and axis are set right in the field, with no dialog in between.
 - A changed number appears as a preview in the view before it takes effect.
 - A checkbox *Apply to all of the same kind* changes a whole row of holes at once, with a single step to undo it.
