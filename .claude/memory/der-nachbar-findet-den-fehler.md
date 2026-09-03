@@ -38,3 +38,35 @@ hinzusehen schon, **und das kann man sich nicht selbst verordnen** (50,
 
 Verwandt: [[schutz-verliert-ein-geschwister]] (die Geschwisterfrage nach dem
 eigenen Fix), [[parallele-sitzungen-solidon3d]].
+
+
+## 03.09.2026: neun Sitzungen, fünf Fälle, keiner vom Urheber gefunden
+
+Dieselbe Beobachtung an einem Tag mit neun parallelen Sitzungen, und diesmal
+mit der **Form** der Fehler dazu. Keiner davon war Nachlässigkeit:
+
+| Fall | gemessen wurde | geglaubt wurde | gefunden von |
+|---|---|---|---|
+| Farbe des Suchtreffers | `accent_line` bringt 3,01 | das reiche für Text | der Nächste, der die Regel nachlas |
+| Handbuchzeile über gesperrte Knöpfe | der Tooltip trägt den Grund | die Zusage sei eingelöst | ein Wächter über drei Kanäle |
+| `input_sha256` im Rechtemanifest | die Summe vom Erzeugungstag | es dokumentiere Herkunft | der Upload, der abbrach |
+| eine Kontrastzahl in einer Meldung | die Schrift auf dem Balken | es gelte der Legende | die Sitzung, die gemessen hatte |
+| ein Wächter über eine Bauart | er findet Füllfarben als Schrift | er prüfe Schwellen | der, der ihn gebaut hatte |
+
+**Die Bauart ist immer dieselbe: richtig gemessen, an der falschen Stelle
+geglaubt.** Die Messung stimmt, und ihre Geltung reicht weiter als der Ort, an
+dem sie gemacht wurde. Das ist der Grund, warum Sorgfalt hier nicht hilft —
+niemand prüft eine Zahl nach, die er selbst korrekt erhoben hat.
+
+Was hilft, ist die Frage nach der Geltung: **Wofür wurde das belegt?** Bei
+3,01 stand die Antwort im Kommentar daneben (WCAG 1.4.11, Umrandungen). Beim
+Tooltip stand sie in Regel 18 (drei Kanäle). Bei `input_sha256` stand sie im
+Quelltext der Prüfung. Jedes Mal war sie auffindbar, und jedes Mal hat sie
+niemand gesucht, weil die Zahl ja stimmte.
+
+Und die Ergänzung zur Zurechnung, die den Punkt erst schließt: **Vier der fünf
+wurden von einer anderen Sitzung gefunden, der fünfte von einem Wächter.**
+Nicht ein einziger vom Urheber — auch dann nicht, wenn er den Fehler eine
+Stunde später in einer Nachricht erklärte. Wer eine Zahl weitergibt, sagt
+deshalb dazu, **wo sie gemessen wurde**; das ist billiger als jede Nachprüfung
+und fängt genau diese Familie.
