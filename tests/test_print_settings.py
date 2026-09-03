@@ -2657,14 +2657,115 @@ def test_cura_switches_acceleration_on_before_using_it(tmp_path) -> None:
     assert any(line.startswith("acceleration_print=") for line in lines)
 
 
-def test_an_unknown_profile_name_is_no_crash(tmp_path) -> None:
+def test_an_unknown_profile_name_is_no_crash(tmp_path, monkeypatch) -> None:
     """Ein Name, den dieser Slicer nicht kennt, liefert nichts — und keinen
     Stapelabzug."""
     from pathlib import Path
 
+    from app.core.export import slicer_profiles
+
+    # Ausdrücklich gesetzt, nicht der Maschine überlassen: Ohne Namen fragt die
+    # Maschinenart den Slicer, welcher Drucker dort eingestellt ist, und diese
+    # Zusicherung gilt dem Fall, in dem auch das nichts ergibt.
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
+
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
     assert handover.profile_file("gibt es nicht", setup, "process") is None
     assert handover.profile_file("", setup, "machine") is None
+
+
+def test_without_a_chosen_printer_the_slicers_own_selection_counts(tmp_path, monkeypatch) -> None:
+    """Ohne gewähltes Druckerprofil fragt die Übergabe den Slicer.
+
+    **Der Fall kam vom Drucker.** Am 03.09.2026 lehnte ElegooSlicer eine
+    übergebene Datei ab: „Relative Extruderadressierung erfordert das
+    Zurücksetzen der Extruderposition bei jeder Schicht … Fügen Sie G92 E0 zu
+    layer_gcode hinzu." Ohne Maschinenprofil schrieb Solidon die Maschinenseite
+    gar nicht — kein Startcode, kein Schichtwechselcode —, und der Slicer
+    füllte sie mit seinen eigenen Vorgaben, die nicht zusammenpassen. Das
+    Herstellerprofil bringt das ``G92 E0`` selbst mit.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    echte = tmp_path / "Elegoo Centauri Carbon 2 0.4 nozzle.json"
+    echte.write_text("{}", encoding="utf-8")
+
+    class Eintrag:
+        name = "Elegoo Centauri Carbon 2 0.4 nozzle"
+        kind = "machine"
+        path = echte
+
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda *_: "Elegoo Centauri Carbon 2 0.4 nozzle"
+    )
+    monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [Eintrag()])
+    monkeypatch.setattr(
+        slicer_profiles,
+        "resolve_values",
+        lambda _: {"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE" + chr(10) + "G92 E0"},
+    )
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    assert handover.machine_for(setup, profile) == "Elegoo Centauri Carbon 2 0.4 nozzle"
+
+    werte = handover.project_settings(print_settings.resolve(profile, "standard"), profile, setup)
+
+    assert "G92 E0" in str(werte["before_layer_change_gcode"]), (
+        "ohne diese Zeile nimmt der Slicer die Datei nicht an"
+    )
+
+
+def test_a_printer_that_is_not_the_projects_is_left_alone(monkeypatch) -> None:
+    """Der Slicer steht auf einem anderen Drucker — dann wird nichts übernommen.
+
+    **Gemessen und keine Annahme:** Auf Roberts Rechner stand ElegooSlicer auf
+    einem „Bambu Lab A1 0.2 nozzle", während das Projekt einem Centauri Carbon
+    2 galt. Ein blind übernommenes Profil brächte den Startcode, den Bauraum
+    und die Düse eines fremden Druckers in die Datei; ein Homing-Befehl der
+    falschen Maschine fährt die Düse ins Bett. Lieber keine Maschinenseite als
+    die falsche (Regel 21).
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    gefragt: list[str] = []
+
+    def gemerkt(flavour, _executable) -> str:
+        gefragt.append(flavour)
+        return "Bambu Lab A1 0.2 nozzle"
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", gemerkt)
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    assert handover.machine_for(setup, profile) == ""
+    assert gefragt == ["orca"], "gefragt wird einmal, übernommen wird nichts"
+
+
+def test_a_chosen_printer_is_never_second_guessed(monkeypatch) -> None:
+    """Wer selbst gewählt hat, wird nicht gefragt — auch nicht freundlich."""
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    gefragt: list[str] = []
+    monkeypatch.setattr(
+        slicer_profiles, "chosen_machine", lambda flavour, _exe: gefragt.append(flavour) or ""
+    )
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"), flavour="orca", machine_profile="Meine Maschine"
+    )
+
+    assert handover.machine_for(setup, profile) == "Meine Maschine"
+    assert gefragt == [], "eine getroffene Wahl steht"
 
 
 def test_a_spread_overhang_is_no_reason_for_supports() -> None:

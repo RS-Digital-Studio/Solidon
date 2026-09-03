@@ -33,6 +33,7 @@ from collections.abc import Sequence
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QColorDialog,
     QComboBox,
     QDialog,
@@ -49,7 +50,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.export import slicer_keys
+from app.core import discover, tools
+from app.core.export import slicer_keys, slicer_profiles
+from app.core.export.handover import detect
 from app.core.knowledge import filaments, profiles
 from app.core.types import MaterialSlot, PrintSettings
 from app.i18n import tr
@@ -147,6 +150,191 @@ def swatch(colour: str | None) -> QIcon:
     return QIcon(image)
 
 
+#: Wie viele Treffer die Liste zeigt. Der Bestand geht in die Tausende, und
+#: eine Liste, die alles zeigt, ist so unbrauchbar wie eine leere — wer mehr
+#: sieht, als er lesen kann, filtert weiter statt zu blättern.
+MAX_HITS = 300
+
+
+def known_material_types() -> tuple[str, ...]:
+    """Die Materialarten, die Solidon führt, in der Schreibweise des Slicers."""
+    return tuple(
+        slicer_keys.filament_type(identifier) for identifier in profiles.material_profiles()
+    )
+
+
+class SlicerFilamentDialog(QDialog):
+    """Ein Filamentprofil aus dem Bestand des Slicers wählen (§29).
+
+    **Warum ein Dialog und keine Auswahlliste.** Gemessen an einem
+    ElegooSlicer-Bestand hält der Slicer **5962** Filamentprofile aus 48
+    Herstellern. In eine Auswahlliste passt das nicht; wer dort das
+    „Elegoo PLA @EC" sucht, sucht es in zweitausend Zeilen fremder Hersteller.
+
+    **Warum es ihn überhaupt braucht.** Bis zum 03.09.2026 bekam eine Spule
+    ihr Herstellerprofil ausschließlich bei der Ersteinrichtung, aus der
+    Übernahme der im Slicer eingerichteten Filamente. Danach gab es keinen Weg
+    mehr, eines zuzuordnen: Das Feld im Anlegen-Dialog war schreibgeschützt.
+    Wer im Slicer dasselbe Material mehrfach mit verschiedenen Werten anlegt —
+    und das ist der übliche Weg, wenn eine Spule anders fährt als die
+    Grundausführung —, konnte in Solidon nicht sagen, welche Ausführung gilt.
+    Der Unterschied ist messbar: Ein Slot mit ``Elegoo PLA @EC`` bringt 30
+    Werte mehr in die übergebene Datei.
+
+    Gefiltert wird nach dem, was jedes Profil wirklich trägt: Hersteller
+    (:func:`slicer_profiles.vendor_of`), Materialart
+    (:func:`slicer_profiles.material_of`) und der Name selbst.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        entries: Sequence[slicer_profiles.SlicerProfile] = (),
+        chosen: str = "",
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Slicer-Profil wählen"))
+        self.setMinimumSize(520, 460)
+        self._entries = list(entries)
+        self._known = known_material_types()
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(TIGHT)
+
+        form = QFormLayout()
+        self.search = QLineEdit(self)
+        self.search.setPlaceholderText(tr("etwa „PLA Matte“"))
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self._refill)
+        form.addRow(tr("Suche"), self.search)
+
+        self.vendor = QComboBox(self)
+        self.vendor.addItem(tr("Alle Hersteller"), "")
+        for name in sorted({slicer_profiles.vendor_of(entry) for entry in self._entries} - {""}):
+            self.vendor.addItem(name, name)
+        self.vendor.currentIndexChanged.connect(self._refill)
+        form.addRow(tr("Hersteller"), self.vendor)
+
+        self.material = QComboBox(self)
+        self.material.addItem(tr("Alle Materialien"), "")
+        for name in sorted({entry for entry in self._known if entry}):
+            self.material.addItem(name, name)
+        self.material.currentIndexChanged.connect(self._refill)
+        form.addRow(tr("Material"), self.material)
+        layout.addLayout(form)
+
+        self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Gefundene Profile"))
+        self.list.itemDoubleClicked.connect(lambda _item: self.accept())
+        self.list.currentItemChanged.connect(self._selection_changed)
+        layout.addWidget(self.list, 1)
+
+        self.count = QLabel(self)
+        set_level(self.count, "caption")
+        layout.addWidget(self.count)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
+            parent=self,
+        )
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        assert self._ok_button is not None
+        make_primary(self._ok_button)
+
+        # **Die Vorwahl steuert den Filter, nicht nur die Markierung.** Wer mit
+        # „Elegoo PLA @EC" hereinkommt, soll nicht erst den Hersteller suchen,
+        # unter dem seine Wahl liegt.
+        if chosen:
+            found = next((e for e in self._entries if e.name == chosen), None)
+            if found is not None:
+                vendor = slicer_profiles.vendor_of(found)
+                position = self.vendor.findData(vendor)
+                if position >= 0:
+                    self.vendor.setCurrentIndex(position)
+        self._refill()
+        if chosen:
+            for row in range(self.list.count()):
+                if self.list.item(row).data(Qt.ItemDataRole.UserRole) == chosen:
+                    self.list.setCurrentRow(row)
+                    break
+        self._selection_changed(self.list.currentItem(), None)
+
+    def _matching(self) -> list[slicer_profiles.SlicerProfile]:
+        """Die Treffer der drei Filter, nach Namen sortiert."""
+        wanted = self.search.text().strip().casefold()
+        vendor = str(self.vendor.currentData() or "")
+        material = str(self.material.currentData() or "")
+        found = []
+        for entry in self._entries:
+            if vendor and slicer_profiles.vendor_of(entry) != vendor:
+                continue
+            if material and slicer_profiles.material_of(entry, self._known) != material:
+                continue
+            if wanted and wanted not in entry.name.casefold():
+                continue
+            found.append(entry)
+        return sorted(found, key=lambda entry: entry.name)
+
+    def _refill(self) -> None:
+        """Die Liste neu füllen und sagen, wie viele es sind."""
+        found = self._matching()
+        self.list.clear()
+        for entry in found[:MAX_HITS]:
+            item = QListWidgetItem(entry.name, self.list)
+            item.setData(Qt.ItemDataRole.UserRole, entry.name)
+            item.setToolTip(str(entry.path))
+        if self.list.count() and self.list.currentRow() < 0:
+            # **Der erste Treffer steht ausgewählt da.** Ohne das ist nach jedem
+            # Tastendruck im Suchfeld nichts gewählt, der Übernehmen-Knopf grau,
+            # und wer den einen Treffer will, muss ihn noch einmal anklicken.
+            self.list.setCurrentRow(0)
+        if not found:
+            # Keine Sackgasse (§2.1): Der Satz sagt, was zu tun ist, und die
+            # Liste bleibt leer statt zu schweigen.
+            self.count.setText(tr("Kein Profil passt zu dieser Auswahl — Filter weiter öffnen."))
+        elif len(found) > MAX_HITS:
+            self.count.setText(
+                tr("{shown} von {total} Profilen — enger filtern, um den Rest zu sehen.").format(
+                    shown=MAX_HITS, total=len(found)
+                )
+            )
+        else:
+            self.count.setText(tr("{total} Profile").format(total=len(found)))
+        self._selection_changed(self.list.currentItem(), None)
+
+    def _selection_changed(self, current: object, _previous: object) -> None:
+        self._ok_button.setEnabled(current is not None)
+
+    def chosen_profile(self) -> str:
+        """Der Name des gewählten Profils — nie ein Pfad (Regel 12)."""
+        item = self.list.currentItem()
+        return str(item.data(Qt.ItemDataRole.UserRole)) if item is not None else ""
+
+
+def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
+    """Die Filamentprofile des eingerichteten Slicers, oder nichts.
+
+    Kein Slicer ist kein Fehler: Solidon läuft ohne, und dann gibt es hier
+    nichts zu wählen. Die Suche kostet gemessen 0,8 Sekunden über 5962
+    Profile — genug für einen Wartezeiger, zu wenig für einen Arbeiter (§2.8).
+    """
+    found = discover.find_programs("slicer", tools.SLICERS)
+    remembered = discover.remembered_path("slicer")
+    chosen = next((entry for entry in found if str(entry) == remembered), None) or (
+        found[0] if found else None
+    )
+    if chosen is None:
+        return ()
+    try:
+        flavour = detect(chosen).flavour
+        return tuple(slicer_profiles.find_profiles(chosen, flavour, kinds=("filament",)))
+    except Exception:  # ein fremder Bestand scheitert auf viele Arten
+        return ()
+
+
 class NewFilamentDialog(QDialog):
     """Name, Typ, Farbe und optionales Slicerprofil eines Filaments.
 
@@ -209,15 +397,28 @@ class NewFilamentDialog(QDialog):
         self.colour.clicked.connect(self._pick_colour)
         layout.addRow(tr("Farbe"), self.colour)
 
+        # **Wählbar, nicht nur anzeigbar.** Bis zum 03.09.2026 stand hier ein
+        # schreibgeschütztes Feld mit dem Platzhalter „wird bei Übernahme aus
+        # dem Slicer gesetzt" — und die Übernahme lief ausschließlich in der
+        # Ersteinrichtung. Wer danach im Slicer eine Spule anlegte, konnte sie
+        # in Solidon nie zuordnen, obwohl die Übergabe sie sofort verwendet
+        # hätte (30 Werte mehr in der Datei).
         self.slicer_profile = QLineEdit(self)
         self.slicer_profile.setText(slicer_profile)
         self.slicer_profile.setReadOnly(True)
-        self.slicer_profile.setPlaceholderText(tr("wird bei Übernahme aus dem Slicer gesetzt"))
+        self.slicer_profile.setPlaceholderText(tr("kein Profil aus dem Slicer"))
+        self.choose_profile = QPushButton(tr("Wählen …"), self)
+        self.choose_profile.clicked.connect(self._choose_slicer_profile)
+        self.clear_profile = QPushButton(tr("Entfernen"), self)
+        self.clear_profile.clicked.connect(self._clear_slicer_profile)
+        self.clear_profile.setEnabled(bool(slicer_profile.strip()))
+        profile_row = QHBoxLayout()
+        profile_row.setSpacing(TIGHT)
+        profile_row.addWidget(self.slicer_profile, 1)
+        profile_row.addWidget(self.choose_profile)
+        profile_row.addWidget(self.clear_profile)
         self._slicer_profile_label = QLabel(tr("Slicer-Profil"), self)
-        layout.addRow(self._slicer_profile_label, self.slicer_profile)
-        has_slicer_profile = bool(slicer_profile.strip())
-        self._slicer_profile_label.setVisible(has_slicer_profile)
-        self.slicer_profile.setVisible(has_slicer_profile)
+        layout.addRow(self._slicer_profile_label, profile_row)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -237,6 +438,31 @@ class NewFilamentDialog(QDialog):
 
     def _name_changed(self, text: str) -> None:
         self._ok_button.setEnabled(bool(text.strip()))
+
+    def _choose_slicer_profile(self) -> None:
+        """Den Bestand des Slicers aufschlagen und eines auswählen."""
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            entries = slicer_filaments()
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not entries:
+            # Regel 17: Ein Fehlschlag endet nie mit „geht nicht".
+            self.slicer_profile.setPlaceholderText(
+                tr("Kein Slicer eingerichtet — unter Datei → Einstellungen eintragen.")
+            )
+            return
+        dialog = SlicerFilamentDialog(self, entries, self.slicer_profile.text().strip())
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            chosen = dialog.chosen_profile()
+            self.slicer_profile.setText(chosen)
+            self.clear_profile.setEnabled(bool(chosen))
+
+    def _clear_slicer_profile(self) -> None:
+        """Ohne Herstellerprofil ist auch eine Antwort — die Werte kommen dann
+        aus Solidon allein."""
+        self.slicer_profile.clear()
+        self.clear_profile.setEnabled(False)
 
     def _pick_colour(self) -> None:
         chosen = QColorDialog.getColor(QColor(self._colour), self, tr("Farbe des Filaments"))

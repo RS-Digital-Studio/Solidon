@@ -600,3 +600,72 @@ def test_a_machine_profile_that_says_nothing_yields_nothing(tmp_path: Path) -> N
     leer.write_text(json.dumps({"name": "Leer"}), encoding="utf-8")
 
     assert sp.machine_values(leer) == {}
+
+
+def test_the_vendor_of_a_profile_is_the_folder_above_filament(tmp_path: Path) -> None:
+    """Der Hersteller steht nicht in der Datei, sondern im Ablageort.
+
+    Er ist die einzige Angabe, die jedes mitgelieferte Profil trägt: Gemessen
+    an einem ElegooSlicer-Bestand sind es 5962 Filamentprofile aus 48
+    Herstellern, keines ohne. ``filament_type`` dagegen steht nur bei 888.
+    """
+    entry = sp.SlicerProfile(
+        path=tmp_path / "Elegoo" / "filament" / "Elegoo PLA @EC.json",
+        name="Elegoo PLA @EC",
+        kind="filament",
+    )
+
+    assert sp.vendor_of(entry) == "Elegoo"
+
+
+def test_an_own_profile_gets_no_invented_vendor(tmp_path: Path) -> None:
+    """Unter dem Konto steht der Kontoname, und der ist kein Hersteller.
+
+    Eigene Profile liegen in ``user/<Konto>/filament``. Den Ordner darüber als
+    Hersteller auszuweisen wäre eine erfundene Auskunft; ``from_user`` sagt
+    ohnehin mehr über sie.
+    """
+    entry = sp.SlicerProfile(
+        path=tmp_path / "user" / "default" / "filament" / "Meine Spule.json",
+        name="Meine Spule",
+        kind="filament",
+        from_user=True,
+    )
+
+    assert sp.vendor_of(entry) == ""
+
+
+def test_the_material_comes_from_the_profile_before_the_name(tmp_path: Path) -> None:
+    """Was das Profil selbst sagt, schlägt jede Ableitung aus dem Namen."""
+    entry = sp.SlicerProfile(
+        path=tmp_path / "Elegoo" / "filament" / "Spule.json",
+        name="Elegoo PLA @EC",
+        kind="filament",
+        filament_type="PETG",
+    )
+
+    assert sp.material_of(entry, ("PLA", "PETG")) == "PETG"
+
+
+def test_a_carbon_filled_filament_is_not_the_plain_material(tmp_path: Path) -> None:
+    """``PLA-CF`` ist kein PLA — es fährt anders, und es unter PLA zu zeigen
+    führte jemanden zur falschen Spule.
+
+    Erkannt wird deshalb nur eine ganze Wortmarke. Der Preis dafür ist
+    gemessen: 4028 der 5962 Profile bekommen so eine Materialart statt 4449
+    bei der laxen Suche — die Differenz sind Kohlefaser- und
+    Sondermischungen, und die gehören nicht unter das Grundmaterial.
+    """
+    arten = ("PLA", "PETG", "PETG-CF")
+
+    def profil(name: str) -> sp.SlicerProfile:
+        return sp.SlicerProfile(path=tmp_path / f"{name}.json", name=name, kind="filament")
+
+    assert sp.material_of(profil("Elegoo PLA @EC"), arten) == "PLA"
+    assert sp.material_of(profil("Generic PLA-CF"), arten) == ""
+    assert sp.material_of(profil("Elegoo PETG-CF @EC"), arten) == "PETG-CF", (
+        "die längere Marke gewinnt, sonst stünde PETG-CF unter PETG"
+    )
+    assert sp.material_of(profil("Bambu PA6-CF"), arten) == "", (
+        "was Solidon nicht führt, bekommt keine Art — die Suche bleibt der Weg dorthin"
+    )

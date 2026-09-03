@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -894,6 +895,63 @@ MACHINE_READBACK: Final[tuple[str, ...]] = (
     "auxiliary_fan",
     "support_air_filtration",
 )
+
+
+def vendor_of(entry: SlicerProfile) -> str:
+    """Der Hersteller eines Profils — der Ordner über ``filament`` im Bestand.
+
+    Ein :class:`SlicerProfile` nennt ihn nicht, und in der Datei steht er auch
+    nicht. Die Orca-Familie legt ihre Profile aber nach Hersteller ab
+    (``profiles/<Hersteller>/filament/…``), und dieser Ordner ist die einzige
+    Angabe, die **jedes** mitgelieferte Profil trägt: Gemessen an einem
+    ElegooSlicer-Bestand sind es 5962 Filamentprofile aus 48 Herstellern,
+    keines ohne (BBL 1997, Qidi 1113, Elegoo 221).
+
+    Eigene Profile des Nutzers liegen unter seinem Konto statt unter einem
+    Hersteller; dort stünde der Kontoname da, und das wäre eine erfundene
+    Auskunft. Sie bekommen deshalb keinen — ``from_user`` sagt ohnehin mehr
+    über sie als jeder Name.
+    """
+    if entry.from_user:
+        return ""
+    parts = list(entry.path.parts)
+    if "filament" not in parts:
+        return ""
+    position = parts.index("filament")
+    return parts[position - 1] if position else ""
+
+
+def material_of(entry: SlicerProfile, known: Sequence[str]) -> str:
+    """Die Materialart eines Profils, ohne die Erbkette aufzulösen.
+
+    **Warum nicht aufgelöst wird.** ``filament_type`` steht in der Datei
+    selbst nur bei 888 von 5962 Profilen; die übrigen erben es. Die Kette
+    aufzulösen kostet gemessen 4 Sekunden für 221 Profile, also gut zwei
+    Minuten für den ganzen Bestand — für einen Filter, der beim Tippen
+    mitlaufen soll, ist das keine Antwort.
+
+    **Woran es stattdessen erkannt wird.** Am Namen, und zwar nur an einer
+    ganzen Wortmarke: ``Elegoo PLA @EC`` ist PLA, ``Anker Generic PLA-CF``
+    ist es nicht — ein Kohlefaser-Filament fährt anders, und es unter PLA zu
+    zeigen wäre schlimmer, als es dem Suchfeld zu überlassen. Damit sind
+    4028 der 5962 Profile einer der Solidon-Materialarten zugeordnet; der
+    Rest sind Materialien, die Solidon nicht führt (PA-CF, PC, PVA), und die
+    bleiben über „alle Materialien" und die Suche erreichbar.
+
+    ``known`` sind die Schreibweisen, nach denen gefragt wird — der Aufrufer
+    kennt sie, dieses Modul soll sie nicht zum zweiten Mal wissen. Die
+    längste passt zuerst, sonst gewänne ``PETG`` gegen ``PETG-CF``.
+    """
+    if entry.filament_type:
+        return entry.filament_type
+    upper = entry.name.upper()
+    for candidate in sorted(known, key=len, reverse=True):
+        if not candidate:
+            continue
+        marker = re.escape(candidate.upper())
+        if re.search(rf"(?<![A-Z0-9-]){marker}(?![A-Z0-9-])", upper):
+            return candidate
+    return ""
 
 
 def machine_values(path: Path) -> dict[str, Any]:

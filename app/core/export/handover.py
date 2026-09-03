@@ -57,6 +57,7 @@ from app.core.export.slicer_keys import (
     reads_settings_from_project_file,
     wants_bed_coordinates,
 )
+from app.core.knowledge import profiles
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.process import (
@@ -195,6 +196,49 @@ def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileK
                 return found
     _log.warning("no %s profile named %r in this slicer", kind, chosen)
     return None
+
+
+def machine_for(setup: SlicerSetup, profile: Profile) -> str:
+    """Das Maschinenprofil dieser Übergabe — gewählt, sonst das des Slicers.
+
+    **Warum es diesen Rückfall gibt.** Prozess und Filament schreibt Solidon
+    selbst aus; die Maschine schreibt es **nicht**. Startcode,
+    Schichtwechselcode und Maschinengrenzen weiß nur der Hersteller, und
+    Geratenes wäre bei G-Code gefährlich. Ist keine Maschine hinterlegt, fehlt
+    diese Seite in der Datei ganz, und der Slicer füllt sie aus seinen eigenen
+    Vorgaben — die nicht zusammenpassen müssen. Am 03.09.2026 lehnte
+    ElegooSlicer eine übergebene Datei deshalb ab: Seine Vorgabe fährt mit
+    relativer Extruderadressierung und verlangt dafür ein ``G92 E0`` im
+    Schichtwechselcode, das im Herstellerprofil steht und in der Datei fehlte.
+    Gemessen an einem Centauri Carbon 2: ohne Maschinenseite 73 Werte, mit ihr
+    160.
+
+    **Und warum der Rückfall fragt, statt zu nehmen.** Der Slicer nennt seine
+    eingestellte Maschine, aber das muss nicht der Drucker sein, für den
+    Solidon gerade rechnet — auf dieser Maschine stand ElegooSlicer auf einem
+    „Bambu Lab A1 0.2 nozzle", während das Projekt einem Centauri Carbon 2
+    galt. Ein blind übernommenes Profil brächte den Startcode eines fremden
+    Druckers in die Datei, dazu dessen Bauraum und Düse; ein Homing-Befehl der
+    falschen Maschine fährt die Düse ins Bett. Übernommen wird deshalb nur,
+    was über :func:`slicer_profiles.printer_for` auf **denselben** Drucker
+    zeigt, den das Projekt benutzt. Sonst bleibt es beim bisherigen Verhalten:
+    keine Maschinenseite, und Regel 21 — nicht raten.
+    """
+    if setup.machine_profile:
+        return setup.machine_profile
+    chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
+    if not chosen:
+        return ""
+    same = slicer_profiles.printer_for(chosen, profiles.printer_profiles())
+    if same != profile.printer.id:
+        _log.info(
+            "slicer is set to %r (%s), the project prints on %s — no machine side handed over",
+            chosen,
+            same or "unknown",
+            profile.printer.id,
+        )
+        return ""
+    return chosen
 
 
 def detect(executable: Path | str) -> SlicerSetup:
@@ -868,6 +912,7 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``.
     """
+    setup = replace(setup, machine_profile=machine_for(setup, profile))
 
     # Gerechnet wird in dem Zweig, der es braucht: Die Orca-Familie schreibt
     # ihre Werte aus ``by_section`` und ``_orca_*``, nicht aus dieser Abbildung
@@ -972,6 +1017,10 @@ def project_settings(
     if not reads_settings_from_project_file(setup.flavour):
         # Cura bekommt sie über die Kommandozeile, PrusaSlicer über seine INI.
         return {}
+
+    # Vor den Grundlagen: Steht keine Maschine, fragt :func:`machine_for` den
+    # Slicer — und übernimmt nur, was derselbe Drucker ist.
+    setup = replace(setup, machine_profile=machine_for(setup, profile))
 
     split = by_section(settings, setup.flavour)
 

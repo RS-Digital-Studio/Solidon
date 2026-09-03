@@ -169,11 +169,19 @@ def test_a_new_filament_starts_without_a_guessed_material_type(
 def test_a_manual_filament_dialog_only_shows_questions_the_user_can_answer(
     qt_app: QApplication,
 ) -> None:
-    """Technische Slicer-Metadaten bleiben bei einer lokalen Spule verborgen."""
+    """Eine lokale Spule braucht kein Slicer-Profil — aber den Weg dorthin.
+
+    Bis zum 03.09.2026 war das Feld bei einer lokalen Spule **verborgen**, und
+    das war die falsche Antwort auf die richtige Frage: Es blieb auch dann
+    verborgen, wenn jemand eines zuordnen wollte, und gefüllt wurde es allein
+    bei der Ersteinrichtung. Leer bleiben darf es weiterhin — die Werte kommen
+    dann aus Solidon allein —, unerreichbar nicht.
+    """
     dialog = NewFilamentDialog()
 
-    assert dialog.slicer_profile.isHidden()
-    assert dialog._slicer_profile_label.isHidden()
+    assert dialog.slicer_profile.text() == "", "leer ist die Vorgabe einer lokalen Spule"
+    assert dialog.choose_profile.isEnabled(), "der Weg zum Bestand des Slicers steht offen"
+    assert not dialog.clear_profile.isEnabled(), "ohne Profil gibt es nichts zu entfernen"
     assert not dialog._ok_button.isEnabled(), "ein leeres Formular kann nicht wirkungslos enden"
 
     dialog.name.setText("Werkstattrolle")
@@ -623,3 +631,109 @@ def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
         f"{liste.count()} Zeilen brauchen {sum(hoehen)} Punkte, die Liste bietet "
         f"{platz} — die letzten passen nicht hinein"
     )
+
+
+def test_the_filter_dialog_narrows_by_vendor_material_and_text(qt_app: QApplication) -> None:
+    """Der Grund, aus dem es diesen Dialog gibt.
+
+    Der Bestand eines Slicers geht in die Tausende — gemessen 5962
+    Filamentprofile aus 48 Herstellern. Eine Auswahlliste ist dafür der
+    falsche Behälter; drei Filter sind die Antwort.
+    """
+    from pathlib import Path as _Path
+
+    from app.core.export import slicer_profiles as sp
+    from app.ui.filament_picker import SlicerFilamentDialog
+
+    bestand = [
+        sp.SlicerProfile(
+            path=_Path(f"/x/{vendor}/filament/{name}.json"),
+            name=name,
+            kind="filament",
+        )
+        for vendor, name in (
+            ("Elegoo", "Elegoo PLA @EC"),
+            ("Elegoo", "Elegoo PLA Matte @EC"),
+            ("Elegoo", "Elegoo PETG @EC"),
+            ("BBL", "Bambu PLA Basic"),
+        )
+    ]
+
+    dialog = SlicerFilamentDialog(None, bestand)
+    assert dialog.list.count() == 4, "ohne Filter steht alles da"
+
+    dialog.vendor.setCurrentIndex(dialog.vendor.findData("Elegoo"))
+    assert dialog.list.count() == 3
+
+    dialog.material.setCurrentIndex(dialog.material.findData("PLA"))
+    assert dialog.list.count() == 2, "PETG fällt weg"
+
+    dialog.search.setText("matte")
+    assert dialog.list.count() == 1
+    assert dialog.chosen_profile() == "Elegoo PLA Matte @EC"
+
+
+def test_the_dialog_opens_on_the_vendor_of_the_current_choice(qt_app: QApplication) -> None:
+    """Wer mit einer Wahl hereinkommt, sucht sie nicht unter 48 Herstellern."""
+    from pathlib import Path as _Path
+
+    from app.core.export import slicer_profiles as sp
+    from app.ui.filament_picker import SlicerFilamentDialog
+
+    bestand = [
+        sp.SlicerProfile(
+            path=_Path("/x/BBL/filament/a.json"), name="Bambu PLA Basic", kind="filament"
+        ),
+        sp.SlicerProfile(
+            path=_Path("/x/Elegoo/filament/b.json"), name="Elegoo PLA @EC", kind="filament"
+        ),
+    ]
+
+    dialog = SlicerFilamentDialog(None, bestand, "Elegoo PLA @EC")
+
+    assert dialog.vendor.currentData() == "Elegoo"
+    assert dialog.chosen_profile() == "Elegoo PLA @EC", "die Vorwahl steht markiert"
+
+
+def test_an_empty_result_says_what_to_do(qt_app: QApplication) -> None:
+    """Keine Sackgasse (§2.1): Eine leere Liste ohne Satz ist ein stiller Ausfall."""
+    from pathlib import Path as _Path
+
+    from app.core.export import slicer_profiles as sp
+    from app.ui.filament_picker import SlicerFilamentDialog
+
+    bestand = [
+        sp.SlicerProfile(
+            path=_Path("/x/Elegoo/filament/a.json"), name="Elegoo PLA @EC", kind="filament"
+        )
+    ]
+
+    dialog = SlicerFilamentDialog(None, bestand)
+    dialog.search.setText("gibt es nicht")
+
+    assert dialog.list.count() == 0
+    assert "Filter" in dialog.count.text(), "der Satz nennt den Weg heraus"
+    assert not dialog._ok_button.isEnabled(), "ohne Treffer gibt es nichts zu übernehmen"
+
+
+def test_the_profile_of_a_spool_can_be_chosen_and_removed(qt_app: QApplication) -> None:
+    """Der eigentliche Fund vom 03.09.2026.
+
+    Das Feld war schreibgeschützt, und gefüllt wurde es allein bei der
+    Ersteinrichtung. Wer im Slicer dasselbe Material mehrfach mit
+    verschiedenen Werten anlegt, konnte in Solidon nicht sagen, welche
+    Ausführung gilt — obwohl die Übergabe sie sofort verwendet hätte.
+    """
+    dialog = NewFilamentDialog(
+        None, name="PLA Rot", colour="#ff0000", slicer_profile="Elegoo PLA @EC"
+    )
+
+    assert dialog.slicer_profile.isVisibleTo(dialog), "das Feld ist immer erreichbar"
+    assert dialog.choose_profile.isEnabled()
+    assert dialog.clear_profile.isEnabled()
+
+    dialog._clear_slicer_profile()
+
+    assert dialog.slicer_profile.text() == ""
+    assert not dialog.clear_profile.isEnabled()
+    assert dialog.filament()[3] == "", "ohne Profil kommen die Werte aus Solidon allein"
