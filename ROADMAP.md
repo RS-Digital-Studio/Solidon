@@ -15016,6 +15016,21 @@ Durchmesser.
   `prepare.plug` beschneidet seinen Stopfen seit langem an der Hülle des Teils;
   vier Stellen hier hatten die Zeile nicht.
 
+- [x] **Und der Hüllschnitt war die halbe Antwort.** Robert am selben Abend,
+  nach der Auslieferung von 0.3.1: „bei verschieben haben wir immer noch einen
+  Überstand". Die Hülle ist **konvex** — bei einer massiven Platte ist sie der
+  Körper, bei einem Teil mit Nut oder Innenraum nicht, und ein Überstand nach
+  innen liegt darin. Mein Test lief über eine Platte und war deshalb grün.
+  Nachgebaut an einem U-Profil mit 5 mm Bodenwand und Bohrung Ø 7,98,
+  Material im Nutraum über der alten Stelle: vorher 0,000 mm³, nach dem
+  Versetzen **76,397**, nach dem Drehen 17,407, nach dem Entfernen 76,397;
+  Verdoppeln bleibt bei 0,000, weil es nichts füllt. Geschnitten wird seither
+  an den **Mündungen** des Merkmals — die Merkmalsfläche ist die Wand des
+  Hohlraums, ihre Ausdehnung entlang der Achse seine Tiefe. Danach alle vier
+  bei 0,000, und `remove_feature` liefert 27 000,00 mm³, genau das Volumen vor
+  dem Bohren. **Ausgeliefert ist der Fehler in 0.3.1**; die Behebung geht in
+  0.3.2, und die Changelog-Zeile dazu wird zurückgenommen.
+
 - [x] **`applies_to` galt nur im Menü.** Über Chat oder Kommandozeile lief
   `resize_feature` auf einer Bohrung durch (46 997,6 → 45 737,0 mm³, am exakten
   Kern und an der Materialkompensation vorbei) und `rotate_feature` auf einer

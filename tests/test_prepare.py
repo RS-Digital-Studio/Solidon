@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface, read_mesh
 from app.core.geom.prepare import (
     BOOLEAN_OVERLAP,
@@ -2419,3 +2420,96 @@ def test_duplicating_onto_the_same_spot_says_that_nothing_happened(profile: Prof
 
     assert [found.code for found in result.findings] == ["duplicate_feature.unchanged"]
     assert result.outputs[0] is entry, "unverändert heißt: derselbe Körper"
+
+
+def _channel_with_a_bore(profile: Profile) -> tuple[SceneObject, str]:
+    """Ein U-Profil mit 5 mm Bodenwand und einer Bohrung hindurch.
+
+    **Die Bauart ist der Punkt.** Bei einer massiven Platte ist die konvexe
+    Hülle der Körper selbst; hier ist sie der volle Kasten — 72 000 gegen
+    27 000 mm³ —, und alles, was in die Nut ragt, liegt innerhalb der Hülle.
+    """
+    box = trimesh.creation.box(extents=(60.0, 40.0, 30.0))
+    slot = trimesh.creation.box(extents=(70.0, 30.0, 30.0))
+    slot.apply_translation((0.0, 0.0, 5.0))
+    channel = MeshData.of(trimesh.boolean.difference([box, slot]))
+    bored = drill(
+        channel,
+        position=(-15.0, 0.0, -10.0),
+        axis="z",
+        diameter=8.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="U-Profil", mesh=bored, features=detect(bored))
+    hole = next(name for name, found in entry.features.items() if found.kind == "hole")
+    return entry, hole
+
+
+def _material_in_the_channel(mesh: MeshData) -> float:
+    """Wie viel Material über der alten Bohrungsstelle in der Nut steht."""
+    probe = trimesh.creation.cylinder(radius=6.0, height=20.0)
+    probe.apply_translation((-15.0, 0.0, 0.0))
+    left = boolean("intersection", [MeshData.of(probe), mesh], allow_empty=True).mesh
+    return 0.0 if len(left.raw.faces) == 0 else float(left.raw.volume)
+
+
+@pytest.mark.parametrize(
+    ("op", "params"),
+    [
+        ("move_feature", {"x": 15.0, "y": 0.0, "z": -12.5}),
+        ("rotate_feature", {"axis": "x", "angle": 15.0}),
+        ("remove_feature", {}),
+    ],
+)
+def test_no_plug_stands_proud_into_a_hollow(
+    profile: Profile, op: str, params: dict[str, object]
+) -> None:
+    """Roberts zweiter Befund am eigenen Modell, 03.09.2026 — und mein halber Fix.
+
+    „Bei verschieben haben wir immer noch einen Überstand, statt dass die
+    Fläche dann eben ist." Der erste Anlauf beschnitt den Stopfen an der
+    **konvexen Hülle**, so wie ``plug`` es seit langem tut, und der Test dazu
+    lief über eine massive Platte — dort *ist* die Hülle der Körper, und er war
+    grün. An einem Teil mit Nut oder Innenraum ist sie es nicht: Ein Überstand,
+    der nach innen ragt, liegt innerhalb der Hülle und blieb stehen.
+
+    Gemessen an diesem U-Profil, Material im Nutraum über der alten Stelle:
+
+        vorher              0,000 mm³
+        Versetzen          76,397 mm³
+        Drehen             17,407 mm³
+        Entfernen          76,397 mm³
+        Verdoppeln          0,000 mm³   — füllt nichts, also nichts zu beschneiden
+
+    Der Schnitt geht seither an den **Mündungen** des Merkmals statt an der
+    Hülle: Die Merkmalsfläche ist die Wand des Hohlraums, ihre Ausdehnung
+    entlang der Achse ist seine Tiefe. Prüfe dieser Test die Hülle, ginge er an
+    einer massiven Platte grün durch und hier trotzdem falsch — deshalb steht
+    hier ein Probekörper **im Hohlraum** und keine Hüllmaße.
+    """
+    entry, hole = _channel_with_a_bore(profile)
+    before = _material_in_the_channel(as_mesh_data(entry.mesh))
+    assert before == pytest.approx(0.0, abs=1e-6), "der Nutraum ist vorher leer"
+
+    result = _run_op(op, entry, profile, at_feature=hole, **params)
+
+    assert _material_in_the_channel(result.outputs[0].mesh) == pytest.approx(0.0, abs=1e-3), (
+        f"{op} lässt einen Pfropfen in der Nut stehen"
+    )
+
+
+def test_removing_a_bore_restores_the_body_exactly(profile: Profile) -> None:
+    """Die schärfste Probe auf denselben Schnitt: das Volumen davor.
+
+    Ein U-Profil 60 × 40 × 30 mit einer Nut hat 27 000,00 mm³. Wer eine
+    Bohrung hineinlegt und sie wieder entfernt, muss genau dorthin
+    zurückkommen — ein Stopfen, der zu lang ist, käme darüber hinaus, und
+    einer, der zu kurz ist, darunter.
+    """
+    entry, hole = _channel_with_a_bore(profile)
+
+    result = _run_op("remove_feature", entry, profile, at_feature=hole)
+
+    restored = result.outputs[0].mesh.raw.volume
+    assert restored == pytest.approx(27000.0, abs=0.01), restored

@@ -652,6 +652,60 @@ def _throughness_lost(
     ]
 
 
+def _between_the_mouths(mesh: MeshData, feature: Feature, centre: Vec3) -> MeshData | None:
+    """Ein Schnittkörper, der genau so weit reicht wie das Merkmal selbst.
+
+    **Warum die konvexe Hülle dafür nicht genügt.** ``plug`` beschneidet seinen
+    Stopfen an :func:`~app.core.geom.prepare.shell`, und für einen massiven
+    Körper ist das richtig: Die Hülle *ist* er. Für ein U-Profil ist sie der
+    volle Kasten — gemessen 72 000 gegen 27 000 mm³ —, und ein Überstand, der
+    in die Nut ragt, liegt **innerhalb** der Hülle. Genau das hat Robert am
+    03.09.2026 an einem Kundenteil gesehen: ein erhabener Kranz um die alte
+    Stelle. Nachgebaut an einem U-Profil mit 5 mm Bodenwand und einer Bohrung
+    Ø 7,98: **76,4 mm³** standen nach dem Versetzen im Nutraum, vorher null.
+
+    Die Merkmalsfläche weiß es besser als jede Hülle: Sie **ist** die Wand des
+    Hohlraums, ihre Ausdehnung entlang der Merkmalsachse ist seine Tiefe, und
+    ihre Ränder liegen in den Mündungen. Der Schnittkörper ist deshalb ein
+    Zylinder um die Achse, der genau von der einen Mündung zur anderen reicht —
+    breit genug für jedes Werkzeug, das hier hineingeht, und in der Länge
+    genau.
+
+    ``None``, wenn das Merkmal keine Flächen führt. Dann bleibt es beim
+    Hüllschnitt, der für massive Körper trägt.
+    """
+    if not feature.face_indices:
+        return None
+    raw = mesh.raw
+    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    if chosen.size == 0 or int(chosen.max()) >= len(raw.faces):
+        return None
+
+    points = np.asarray(raw.vertices, dtype=float)[np.unique(np.asarray(raw.faces)[chosen])]
+    direction = np.asarray(_feature_direction(feature), dtype=float)
+    measured = np.asarray([float(value) for value in feature.params["centre"]], dtype=float)
+    along = (points - measured) @ direction
+    reach = float(along.max() - along.min())
+    if reach <= EPS_GEOM:
+        return None
+
+    # Breit genug für alles, was als Werkzeug hineingeht — geschnitten wird nur
+    # in der Länge. Der Radius kommt aus der Ausdehnung der Fläche quer zur
+    # Achse, damit auch eine Senkung hineinpasst, die weiter ist als ihr Loch.
+    across = points - measured - np.outer(along, direction)
+    radius = float(np.linalg.norm(across, axis=1).max()) + FEATURE_OVERLAP * 2.0
+
+    cut = trimesh.creation.cylinder(radius=radius, height=reach, sections=FEATURE_SECTIONS)
+    cut.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            np.array([0.0, 0.0, 1.0]), direction
+        )
+    )
+    middle = float(along.min() + along.max()) / 2.0
+    cut.apply_translation(np.asarray(centre, dtype=float) + direction * middle)
+    return MeshData.of(cut)
+
+
 def _closed_at(
     mesh: MeshData,
     feature: Feature,
@@ -692,8 +746,13 @@ def _closed_at(
     """
     tool = _tool_for(mesh, feature, centre)
     if cavity:
+        # **Erst an den Mündungen, sonst an der Hülle.** Die Merkmalsfläche
+        # kennt die Tiefe des Hohlraums genau; die konvexe Hülle kennt nur den
+        # Umriss des ganzen Teils und lässt einen Überstand stehen, der in eine
+        # Nut oder einen Innenraum ragt (siehe :func:`_between_the_mouths`).
+        limit = _between_the_mouths(mesh, feature, centre) or shell(mesh)
         tool = boolean(
-            "intersection", [tool, shell(mesh)], quality=quality, seed=seed, cancelled=cancelled
+            "intersection", [tool, limit], quality=quality, seed=seed, cancelled=cancelled
         ).mesh
     return boolean(
         "union" if cavity else "difference",
