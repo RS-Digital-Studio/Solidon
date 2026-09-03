@@ -159,7 +159,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine ausgelieferte Datei ohne Manifesteintrag hat keinen Prüfer | 0.3.0 ist draußen (03.09.2026) | `promised_files()` soll auch die Seitenlinks lesen — das AppImage steht mit Absicht in keiner `version.json` und fällt damit durch jede Prüfung; für 0.3.0 von Hand belegt |
 | Der Wayland-Punkt erreicht das Update-Fenster nicht | 0.3.0 ist draußen (03.09.2026) | eine Kappung, die reihum aus jeder Gruppe nimmt statt von hinten zu schneiden — Punkt 95 von 105 fällt heute heraus, und es ist der, den der meldende Kunde lesen sollte |
 | Die Releaseakte meldet, sie blockiert nicht | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | den Tag-Lauf 0.3.0 als erste Messung: Ihre zwei Schritte (`--write-evidence`, `--release-check`) stehen seit dem Abend als Warnung im Lauf und halten das Artefakt nicht auf (Entscheidung Robert, 02.09.2026: kein Release hängt an einer Prüfung, die zum ersten Mal läuft); was dort steht, wird behoben, dann werden sie wieder scharf |
-| Der Transparenzmodus mischt nach Zeichenreihenfolge | Viewport-Werkzeuge aus Kundensicht (03.09.2026) | im Bild gemessen (13 784 Bildpunkte Unterschied zwischen zwei Einfügereihenfolgen); VTKs Tiefensortierung greift auf dieser Maschine nicht, zweimal versucht — was bliebe, ist die Aktoren bei jedem Kamerawechsel selbst nach Tiefe einzuhängen |
 | Der Schlüsseldialog wartet beim Sterben 2,3 s | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Messung, wer da wartet (`WorkerLeash`?), und einen Abbruch statt einer Frist beim Zerstören — sichtbar in jedem Teardown von `test_chat_ui` (61 s statt 19) und beim Kunden, wenn er den Dialog schließt, während die Modellabfrage läuft |
 | Die Schichtanalyse der Rändelplatte kostet 7,0 s statt 4,5 | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Vorprüfung in `minimum_width`, die ohne Aufweitung auskommt — 32 Öffnungen je Lauf sind die Vorprüfung, nur zwei Schichten gehen in die Bisektion; `simplify` als Vorprüfung ist gemessen teurer (0,17 s je Schicht) und bleibt draußen |
 | Der Sammellauf zwischen zwei Tests gilt nur für zwei Dateien | Die CI kam zum ersten Mal bis zum Ende (02.09.2026) | eine Zerstörung, die nicht am Speicherbereiniger hängt — über die ganze Suite gelegt reißt er selbst (0xc0000374, zweimal von zwei); `_DIALOG_MODULES` in `tests/conftest.py` grenzt ihn auf `test_print_settings_ui` und `test_install` ein, gemessen 636 grün statt Absturz |
@@ -14597,16 +14596,20 @@ passiert, nachdem man geklickt hat.
   `action_`-Methoden, `_apply_settings` wendet sie beim Start an. Der
   Skizzenmodus leiht sich Darstellung und Projektion weiterhin, ohne sie zu
   speichern.
-- [ ] **Der Transparenzmodus mischt nach Zeichenreihenfolge.**
+- [x] **Der Transparenzmodus mischt nicht mehr nach Zeichenreihenfolge.**
   Im Bild gemessen: dieselbe Szene, zwei Einfügereihenfolgen, 13 784
   Bildpunkte Unterschied bei einer größten Abweichung von 47. VTKs
   Tiefensortierung behebt es auf dieser Maschine **nicht** — zweimal versucht
   (beim Umschalten und vor dem ersten Bild, mit acht Schichten), `Use
   DepthPeeling=1` und `LastRenderingUsedDepthPeeling=0`, Bild unverändert,
-  obwohl `MultiSamples=0` und `AlphaBitPlanes=1` stimmen. Der wirkungslose
-  Aufruf ist deshalb nicht eingebaut. Was bliebe: die transluzenten Aktoren
-  bei jedem Kamerawechsel selbst nach Tiefe einhängen. Fund 3d-druck-85 am
-  Quelltext, im Bild bestätigt von 3d-druck-7b.
+  obwohl `MultiSamples=0` und `AlphaBitPlanes=1` stimmen; der wirkungslose
+  Aufruf ist deshalb nicht eingebaut. `vtkDepthSortPolyData` vor dem Mapper
+  brachte 9 897 statt 13 784 — er sortiert innerhalb eines Körpers, nicht
+  zwischen zweien. **Es trägt der dritte Weg:** die Aktoren nach dem Abstand
+  zur Kamera neu einhängen, der fernste zuerst (`_order_by_depth`, an `_draw`
+  und mit einer Wache auf Kameralage und Körperliste). Gemessen 0 Bildpunkte
+  Unterschied. Fund 3d-druck-85 am Quelltext, im Bild bestätigt und behoben
+  von 3d-druck-7b; der dritte Weg kam wieder von 3d-druck-85.
 
 - [x] **Der Schnitt zeigte kein Modell.** `cut` arbeitet auf `MeshData`, ein
   selbst gezeichneter Körper ist ein `Solid` aus dem zweiten Kern, und der

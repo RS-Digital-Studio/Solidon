@@ -30,6 +30,13 @@ und vor dem allerersten Bild, mit acht Schichten und `occlusion_ratio=0`. Die
 bekannten Voraussetzungen stimmten dabei (`MultiSamples=0`,
 `AlphaBitPlanes=1`). Der Aufruf wurde deshalb wieder ausgebaut.
 
+**Was stattdessen trug:** die Aktoren selbst nach Kameraabstand neu
+einhängen (`renderer.RemoveActor`/`AddActor`, der fernste zuerst) — 0
+Bildpunkte Unterschied. Ein `vtkDepthSortPolyData` vor dem Mapper half nur zu
+einem Drittel, weil er innerhalb eines Aktors sortiert. Wo VTK eine Fähigkeit
+verweigert, ist die Frage also nicht „warum", sondern „was leistet dasselbe
+mit den Mitteln, die sicher wirken".
+
 **Wonach man fragt, wenn eine VTK-Einstellung wirken soll:** nicht nach dem
 Rückgabewert und nicht nach dem `Get`-Gegenstück — beide sagen nur, dass die
 Einstellung angekommen ist. Es gibt oft ein `LastRenderingUsed…`, und wo

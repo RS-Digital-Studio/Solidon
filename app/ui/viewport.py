@@ -3116,6 +3116,10 @@ class Viewport(QWidget):
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
         self._occlusion_applied = False
+        self._depth_order_for: tuple[tuple[float, ...], tuple[str, ...]] | None = None
+        """Für welche Kameralage und welche Körper zuletzt nach Tiefe geordnet
+        wurde — die Ordnung läuft an der Zeichenstelle und darf dort nichts
+        kosten, solange sich nichts bewegt."""
         self._edge_actors: list[Any] = []
         self._shadow_actors: list[Any] = []
         self._shadow_hulls: dict[ObjectId, list[Any]] = {}
@@ -3727,6 +3731,80 @@ class Viewport(QWidget):
         """
         return self._map is None
 
+    @property
+    def sees_through(self) -> bool:
+        """Ob gerade durch die Körper hindurchgesehen werden soll.
+
+        Zwei Lagen führen dazu: der Darstellungsmodus *Transparent* (Taste 4)
+        und der Skizzenmodus, der den vorhandenen Körper leise stellt, damit
+        die Zeichnung darauf lesbar bleibt (:data:`SKETCH_CONTEXT_OPACITY`).
+
+        Als Eigenschaft und nicht als Zustand des Plotters, aus demselben
+        Grund wie bei :attr:`ambient_occlusion`: Offscreen gibt es keinen
+        Plotter, und eine Regel, die nur dort gilt, wo niemand sie prüfen
+        kann, ist keine.
+        """
+        return self._mode == "transparent" or self._sketch_frame is not None
+
+    def _order_by_depth(self) -> None:
+        """Zeichnet die Körper von hinten nach vorn, solange man durchsieht.
+
+        **Ein durchsichtiges Bild hing daran, in welcher Reihenfolge die
+        Körper entstanden sind.** VTK mischt transluzente Flächen in der
+        Reihenfolge der Prop-Sammlung, und die folgt dem Anlegen. Gemessen an
+        zwei transparenten Quadern hintereinander, dieselbe Szene in zwei
+        Einfügereihenfolgen: 13 784 Bildpunkte Unterschied, größte Abweichung
+        47 von 255 (Robert, 03.09.2026: „warum kann man bei dem bild nicht
+        durch das viewport schauen"; am Quelltext gefunden von 3d-druck-85).
+
+        **Drei Wege sind gemessen, nur dieser trägt:**
+
+        * ``enable_depth_peeling`` nimmt an und fährt nicht:
+          ``LastRenderingUsedDepthPeeling`` bleibt 0, das Bild ändert sich um
+          keinen Punkt — zweimal versucht, beim Umschalten und vor dem
+          allerersten Bild.
+        * ``vtkDepthSortPolyData`` je Aktor bringt 9 897 statt 13 784
+          Bildpunkte: Er sortiert **innerhalb** eines Körpers, nicht zwischen
+          zweien.
+        * Die Aktoren umhängen: **0 Bildpunkte Unterschied.**
+
+        Es ist der Maleralgorithmus auf Objektebene: richtig für getrennte
+        Körper, machtlos bei sich durchdringenden. Genau der gemeldete Fall.
+
+        Gerechnet wird über den Mittelpunkt des Aktors — also über das, was im
+        Bild steht, samt Plattenversatz und Auseinanderziehen. Umgehängt wird
+        auf der VTK-Ebene (``renderer.RemoveActor``/``AddActor``), damit
+        pyvistas Namensverzeichnis unberührt bleibt: Es kennt seine Aktoren
+        weiter unter denselben Namen, und ``remove_actor`` würde sie
+        herausnehmen.
+
+        Nur bei :attr:`sees_through`: Opake Geometrie ordnet der Tiefenpuffer,
+        und die Arbeit wäre umsonst.
+        """
+        if self.plotter is None or not self.sees_through or len(self._actors) < 2:
+            return
+
+        import numpy as np
+
+        renderer = self.plotter.renderer
+        eye = np.asarray(self.plotter.camera.GetPosition(), dtype=float)
+        # Nichts tun, wo nichts zu tun ist: Diese Methode hängt an ``_draw``
+        # und läuft damit bei jedem Bild, auch während eines Zugs.
+        seen = (tuple(eye.tolist()), tuple(self._actors))
+        if seen == self._depth_order_for:
+            return
+        self._depth_order_for = seen
+        ranked = [
+            (float(np.linalg.norm(np.asarray(actor.GetCenter(), dtype=float) - eye)), index, actor)
+            for index, actor in enumerate(self._actors.values())
+        ]
+        for _far, _index, actor in ranked:
+            renderer.RemoveActor(actor)
+        # Der Index hält die Reihenfolge stabil, wo zwei Körper gleich weit
+        # weg sind — sonst tauschten sie bei jedem Zeichnen die Plätze.
+        for _far, _index, actor in sorted(ranked, key=lambda entry: (-entry[0], entry[1])):
+            renderer.AddActor(actor)
+
     def _apply_ambient_occlusion(self) -> None:
         """Die Regel an den Plotter geben, wenn es einen gibt."""
         wanted = self.ambient_occlusion
@@ -4248,6 +4326,13 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
+        # **Vor jedem Bild, nicht bei jedem Anlass.** Die Tiefenordnung hängt
+        # an der Kamera, und die ändert sich an einem Dutzend Stellen —
+        # ``view_from``, Radzoom, Zugende, 3D-Maus, Skizzenkamera. Wer sie
+        # dort einzeln nachzöge, vergäße eine; hier kommt jede vorbei.
+        # ``_order_by_depth`` merkt sich die letzte Lage und tut nichts, wenn
+        # sich nichts geändert hat.
+        self._order_by_depth()
         self.plotter.render()
 
     def _slot_colours(self, surface: Any, mesh: Any, entry: Any, face_count: int) -> dict[str, Any]:

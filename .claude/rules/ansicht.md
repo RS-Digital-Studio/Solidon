@@ -737,7 +737,7 @@ stellt Darstellung und Projektion weiterhin **direkt am Viewport** um und
 nimmt es beim Verlassen zurück — das ist eine Leihgabe und keine Entscheidung
 des Nutzers, also wird sie nicht gespeichert.
 
-### Der Transparenzmodus mischt nach Zeichenreihenfolge, und das bleibt so
+### Durchsichtige Körper werden von hinten nach vorn gezeichnet
 
 Der Fund kam aus dem Quelltext (3d-druck-85): `enable_depth_peeling` gibt es
 im Viewport nicht, also mischt VTK halbdurchsichtige Flächen in der
@@ -763,10 +763,32 @@ Aufruf, der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas
 bewirkt (dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
 Fensterchrom).
 
-Was bliebe, ist die Sortierung selbst zu machen — die Aktoren bei jedem
-Kamerawechsel nach Tiefe neu einzuhängen. Das ist ein eigener Punkt und steht
-im Register; solange er offen ist, hängt das transparente Bild an der
-Reihenfolge, in der die Körper entstanden sind.
+**Ein dritter Weg war halb richtig**, und die Zahl sagt, warum:
+`vtkDepthSortPolyData` vor dem Mapper brachte 9 897 statt 13 784 Bildpunkte
+Unterschied. Er sortiert die Polygone **innerhalb** eines Aktors — der Fall
+hier liegt zwischen zweien.
+
+**Was trägt, ist die Ordnung der Aktoren selbst** (`_order_by_depth`): Sie
+werden nach dem Abstand ihres Mittelpunkts zur Kamera neu eingehängt, der
+fernste zuerst. Gemessen: **0 Bildpunkte Unterschied** zwischen den beiden
+Einfügereihenfolgen. Das ist der Maleralgorithmus auf Objektebene — richtig
+für getrennte Körper, machtlos bei sich durchdringenden, und genau der
+gemeldete Fall.
+
+Drei Dinge daran sind tragend:
+
+* **Sie hängt an `_draw`, nicht an ihren Anlässen.** Die Kamera ändert sich an
+  einem Dutzend Stellen — `view_from`, Radzoom, Zugende, 3D-Maus,
+  Skizzenkamera —, und wer sie dort einzeln nachzöge, vergäße eine. Der erste
+  Anlauf tat genau das und war deshalb an `show_scene` gehängt: Dort steht die
+  Kamera noch auf der alten Stellung, `view_from` kommt danach, und im Bild
+  änderte sich nichts.
+* **Sie merkt sich, wofür sie geordnet hat** (Kameralage und Körperliste).
+  An der Zeichenstelle läuft sie sonst bei jedem Bild, auch mitten in einem
+  Zug.
+* **Umgehängt wird auf der VTK-Ebene** (`renderer.RemoveActor`/`AddActor`),
+  nicht über `plotter.remove_actor`: Jenes nähme die Aktoren aus pyvistas
+  Namensverzeichnis, und das braucht sie unter ihren Namen weiter.
 
 ## Mehrere Druckplatten
 

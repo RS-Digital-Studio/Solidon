@@ -4194,3 +4194,100 @@ def test_the_candidates_of_a_question_are_shown_and_taken_back(
     viewport.show_candidates((("obj_1", "hole_1"),))
     viewport.show_scene(_scene_with_two_holes())
     assert viewport.candidates == (), "eine neue Auswertung räumt die Frage weg"
+
+
+class _DepthActor:
+    """So viel Aktor, wie die Tiefenordnung anfasst."""
+
+    def __init__(self, centre: tuple[float, float, float]) -> None:
+        self._centre = centre
+
+    def GetCenter(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        return self._centre
+
+
+class _DepthRenderer:
+    """Der Renderer als Liste: Wer wird wann gezeichnet?"""
+
+    def __init__(self) -> None:
+        self.order: list[object] = []
+
+    def RemoveActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
+        if actor in self.order:
+            self.order.remove(actor)
+
+    def AddActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
+        self.order.append(actor)
+
+
+def test_transparent_bodies_are_drawn_from_back_to_front(qt_app: QApplication) -> None:
+    """Ein durchsichtiges Bild darf nicht davon abhängen, in welcher
+    Reihenfolge die Körper entstanden sind.
+
+    **Der Befund, im Bild gemessen (Robert, 03.09.2026):** Zwei transparente
+    Quader hintereinander, dieselbe Szene in zwei Einfügereihenfolgen — 13 784
+    Bildpunkte Unterschied, größte Abweichung 47 von 255. VTK mischt
+    transluzente Flächen in der Reihenfolge der Prop-Sammlung, und die folgt
+    dem Anlegen (Quelltextfund 3d-druck-85).
+
+    Zwei andere Wege sind gemessen und gescheitert: `enable_depth_peeling`
+    nimmt an und fährt nicht, `vtkDepthSortPolyData` sortiert innerhalb eines
+    Körpers statt zwischen zweien. Die Aktoren selbst umzuhängen gibt **0**
+    Bildpunkte Unterschied.
+
+    Geprüft wird hier die Ordnung und die Wache davor — offscreen gibt es
+    keinen Plotter, also steht die Reihenfolge in einer Attrappe, die genau
+    die zwei Methoden kennt, die benutzt werden.
+    """
+    from types import SimpleNamespace
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    nah = _DepthActor((0.0, -30.0, 0.0))
+    fern = _DepthActor((0.0, 30.0, 0.0))
+    renderer = _DepthRenderer()
+    renderer.order = [nah, fern]
+    viewport._actors = {"nah": nah, "fern": fern}  # type: ignore[assignment]
+    viewport.plotter = SimpleNamespace(  # type: ignore[assignment]
+        renderer=renderer,
+        camera=SimpleNamespace(GetPosition=lambda: (0.0, -500.0, 0.0)),
+    )
+
+    # Massiv: der Tiefenpuffer ordnet, hier gibt es nichts zu tun.
+    assert not viewport.sees_through
+    viewport._order_by_depth()
+    assert renderer.order == [nah, fern], "ohne Durchsicht bleibt alles, wie es ist"
+
+    # Der Modus wird hier gesetzt und nicht geschaltet: ``set_display_mode``
+    # baut die ganze Szene neu auf, und die Attrappe kennt genau die zwei
+    # Methoden, um die es geht. Dass der Schalter den Modus setzt, prüft der
+    # Test daneben.
+    viewport._mode = "transparent"
+    assert viewport.sees_through
+    viewport._order_by_depth()
+    assert renderer.order == [fern, nah], (
+        "durchsichtig wird von hinten nach vorn gezeichnet — der ferne zuerst"
+    )
+
+    # Zweiter Aufruf bei unveränderter Kamera: keine Arbeit. Die Methode hängt
+    # an ``_draw`` und läuft bei jedem Bild.
+    # **Verkehrt herum gelegt**, damit die Probe den Fall trifft: In richtiger
+    # Ordnung sähe ein zweiter Durchgang genauso aus wie keiner, und die
+    # Zusicherung wäre auch ohne Wache grün.
+    renderer.order = ["fremd", nah, fern]  # type: ignore[list-item]
+    viewport._order_by_depth()
+    assert renderer.order == ["fremd", nah, fern], "ohne Kamerabewegung wird nichts angefasst"
+
+    # Und wenn die Kamera auf die andere Seite geht, dreht sich die Ordnung um.
+    viewport.plotter.camera = SimpleNamespace(GetPosition=lambda: (0.0, 500.0, 0.0))
+    renderer.order = [fern, nah]
+    viewport._order_by_depth()
+    assert renderer.order == [nah, fern], "von der anderen Seite ist der andere hinten"
+
+    # Der Skizzenmodus zählt ebenso: Er stellt den Körper leise, damit die
+    # Zeichnung darauf lesbar bleibt.
+    viewport._mode = "solid"
+    assert not viewport.sees_through
+    viewport._sketch_frame = object()
+    assert viewport.sees_through
