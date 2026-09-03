@@ -25,7 +25,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Final, Literal, cast
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
@@ -1955,9 +1955,8 @@ class PrintSettingsDialog(QDialog):
         """
         if not self._profiles:
             return
-        self.machine_choice.blockSignals(True)
-        self.machine_choice.setCurrentIndex(-1)
-        self.machine_choice.blockSignals(False)
+        with QSignalBlocker(self.machine_choice):
+            self.machine_choice.setCurrentIndex(-1)
         self._profiles_found(self._profiles)
 
     def _resolved(self, quality: Any) -> PrintSettings:
@@ -2527,9 +2526,8 @@ class PrintSettingsDialog(QDialog):
         """
         self._profiles = []
         for combo in (self.machine_choice, self.process_choice, self.filament_choice):
-            combo.blockSignals(True)
-            combo.clear()
-            combo.blockSignals(False)
+            with QSignalBlocker(combo):
+                combo.clear()
             combo.setEnabled(False)
         for _label, box in self.slot_rows:
             box.clear()
@@ -2632,25 +2630,29 @@ class PrintSettingsDialog(QDialog):
             self._show_slicer_state()
             return
 
-        self.machine_choice.blockSignals(True)
-        # **Leeren, bevor gefüllt wird**, und zwar hier statt beim Aufrufer:
-        # Zweimal gefunden hieß bis hierhin zweimal angehängt, und aus tausend
-        # Druckerprofilen wurden zweitausend, jedes doppelt (Handlauf,
-        # 30.08.2026). Der Weg über ``_slicer_chosen`` leerte vorher, der über
-        # ``recheck_slicer`` nicht — eine Absicherung, die am Aufrufer hängt,
-        # lässt den nächsten Aufrufer wieder ungeschützt. ``_fill_processes``
-        # macht es an derselben Stelle richtig.
-        self.machine_choice.clear()
-        for entry in self._machines_worth_showing(machines):
-            self.machine_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
-        # **Eine Wahl, die der neue Fund nicht kennt, bleibt trotzdem stehen.**
-        # Das Leeren darf nur den Bestand ersetzen, nicht die Entscheidung des
-        # Nutzers wegwerfen: Wer wählt, während die Suche noch läuft, hätte
-        # sonst nach ihrer Antwort ein leeres Feld — derselbe Wettlauf, den der
-        # Abschnitt darunter schon einmal gekostet hat.
-        if already and self.machine_choice.findData(already) < 0:
-            self.machine_choice.addItem(already_shown, already)
-        self.machine_choice.blockSignals(False)
+        # ``QSignalBlocker`` und nicht das Paar von Hand: Zwischen Sperren und
+        # Freigeben laufen ``_machines_worth_showing`` und ``entry.title`` über
+        # bis zu tausend gefundene Profile. Wirft eines davon, bliebe die
+        # Druckerauswahl für immer stumm — sie zeigte weiter ihre Liste, ließe
+        # wählen und sagte es niemandem.
+        with QSignalBlocker(self.machine_choice):
+            # **Leeren, bevor gefüllt wird**, und zwar hier statt beim Aufrufer:
+            # Zweimal gefunden hieß bis hierhin zweimal angehängt, und aus tausend
+            # Druckerprofilen wurden zweitausend, jedes doppelt (Handlauf,
+            # 30.08.2026). Der Weg über ``_slicer_chosen`` leerte vorher, der über
+            # ``recheck_slicer`` nicht — eine Absicherung, die am Aufrufer hängt,
+            # lässt den nächsten Aufrufer wieder ungeschützt. ``_fill_processes``
+            # macht es an derselben Stelle richtig.
+            self.machine_choice.clear()
+            for entry in self._machines_worth_showing(machines):
+                self.machine_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
+            # **Eine Wahl, die der neue Fund nicht kennt, bleibt trotzdem stehen.**
+            # Das Leeren darf nur den Bestand ersetzen, nicht die Entscheidung des
+            # Nutzers wegwerfen: Wer wählt, während die Suche noch läuft, hätte
+            # sonst nach ihrer Antwort ein leeres Feld — derselbe Wettlauf, den der
+            # Abschnitt darunter schon einmal gekostet hat.
+            if already and self.machine_choice.findData(already) < 0:
+                self.machine_choice.addItem(already_shown, already)
         self.machine_choice.setEnabled(True)
         self.process_choice.setEnabled(True)
         self.filament_choice.setEnabled(True)
@@ -3550,16 +3552,15 @@ class PrintSettingsDialog(QDialog):
         Pfad steht im Tooltip: Zwei Installationen desselben Programms
         unterscheiden sich am Ordner, nicht am Namen.
         """
-        self.slicer_choice.blockSignals(True)
-        self.slicer_choice.clear()
-        for entry in self._slicers:
-            self.slicer_choice.addItem(_slicer_title(entry), str(entry))
-            self.slicer_choice.setItemData(
-                self.slicer_choice.count() - 1, str(entry), Qt.ItemDataRole.ToolTipRole
-            )
-        if self._slicer_path is not None and self._slicer_path in self._slicers:
-            self.slicer_choice.setCurrentIndex(self._slicers.index(self._slicer_path))
-        self.slicer_choice.blockSignals(False)
+        with QSignalBlocker(self.slicer_choice):
+            self.slicer_choice.clear()
+            for entry in self._slicers:
+                self.slicer_choice.addItem(_slicer_title(entry), str(entry))
+                self.slicer_choice.setItemData(
+                    self.slicer_choice.count() - 1, str(entry), Qt.ItemDataRole.ToolTipRole
+                )
+            if self._slicer_path is not None and self._slicer_path in self._slicers:
+                self.slicer_choice.setCurrentIndex(self._slicers.index(self._slicer_path))
 
         several = len(self._slicers) > 1
         self.slicer_choice.setVisible(several)

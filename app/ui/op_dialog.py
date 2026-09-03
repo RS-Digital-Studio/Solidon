@@ -18,7 +18,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import QEvent, QObject, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -363,16 +363,18 @@ class ValueField(QWidget):
         set_circle_measure("radius" if to_radius else "diameter")
         self._name_circle_toggle()
         entry = self._entry
-        blocked = self.spin.blockSignals(True)
-        self.spin.setMinimum(
-            self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
-        )
-        self.spin.setMaximum(
-            self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
-        )
-        self._core = core
-        self.spin.setValue(self._as_shown(core))
-        self.spin.blockSignals(blocked)
+        # ``QSignalBlocker`` und nicht das Paar von Hand: ``_as_shown`` rechnet
+        # viermal um, und wirft eine dieser Umrechnungen, bliebe das Feld für
+        # immer stumm — es nähme weiter Eingaben an und meldete keine weiter.
+        with QSignalBlocker(self.spin):
+            self.spin.setMinimum(
+                self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
+            )
+            self.spin.setMaximum(
+                self._as_shown(entry.maximum) if entry.maximum is not None else 1_000_000.0
+            )
+            self._core = core
+            self.spin.setValue(self._as_shown(core))
         self.captionChanged.emit(self.caption())
 
     def set_value(self, value: Any) -> None:
@@ -1418,9 +1420,8 @@ class OperationDialog(QDialog):
                 # dieselbe Haltung wie in ``sketch_extent``.
                 return
 
-            blocked = field.blockSignals(True)
-            field.set_text(sketch_to_text(bigger))
-            field.blockSignals(blocked)
+            with QSignalBlocker(field):
+                field.set_text(sketch_to_text(bigger))
             seen_text.pop("value", None)
             seen_extent.pop("value", None)
             held["value"] = kept
@@ -1514,9 +1515,8 @@ class OperationDialog(QDialog):
                         return
                     # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``
                     # aus, und diese Funktion riefe sich selbst.
-                    blocked = editor.blockSignals(True)
-                    editor.set_value(drawn)
-                    editor.blockSignals(blocked)
+                    with QSignalBlocker(editor):
+                        editor.set_value(drawn)
                     editor.setEnabled(True)
                     if label is not None:
                         label.setEnabled(True)
