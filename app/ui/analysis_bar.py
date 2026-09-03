@@ -34,6 +34,7 @@ from app.ui.leash import weak_slot
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT
+from app.ui.theme import THEMES, current_theme
 from app.ui.tool_strip import BarComboBox
 
 #: Wie lang der Farbbalken der Ringlegende ist.
@@ -42,6 +43,15 @@ from app.ui.tool_strip import BarComboBox
 #: (``LAYER_WIDTHS``). Die Länge ist nur so bemessen, dass die Farbe auch bei
 #: einem einen Punkt dicken Ring erkennbar bleibt.
 STROKE_LENGTH = 18
+
+#: Wie breit die Kante um den Farbbalken ist.
+#:
+#: Sie liegt **außen** um die Füllung, damit die Höhe der Füllung weiter die
+#: Ringdicke ist. Ohne sie verschwindet der Balken im hellen Thema fast
+#: (`layer` 1,84 gegen den Grund); mit ihr grenzt er sich ab, ohne dass seine
+#: Farbe sich ändert — und ändern darf sie sich nicht, denn sie ist genau die
+#: Farbe, die im Bild liegt.
+STROKE_EDGE = 1
 
 #: Reihenfolge der Karten im Wähler, passend zur Tabelle in §18.4.
 MAP_ORDER: tuple[MapKind, ...] = (
@@ -474,9 +484,28 @@ class LayerBar(QWidget):
             # nur genauer als eine Kette von Strichzeichen: Ein Ring von drei
             # Punkten sieht als Balken dreimal so dick aus und als Text
             # dreimal so lang.
+            # **Eine Kante, damit der Balken überhaupt eine hat.** Auf hellem
+            # Grund bringen `layer` und `island` 1,84 und 1,82 — der Balken
+            # verschwämme sonst mit der Leiste. Der Rand grenzt ihn ab, ohne
+            # seine Farbe anzufassen, und das ist die Bedingung: Die Legende
+            # zeigt genau die Farbe, die im Bild liegt; eine besser lesbare
+            # Variante wäre eine andere Farbe als die gemeinte. Die Füllung
+            # darin behält die Ringdicke.
+            #
+            # **Die 3,0 aus WCAG 1.4.11 erreicht auch das nicht**, und das ist
+            # ehrlich zu sagen: Die Themenlinie bringt gegen den Grund 2,30
+            # (dunkel) und 2,00 (hell). Der Grund liegt tiefer als in dieser
+            # Legende — dieselben Farben stehen im Bild auf der Objektfarbe bei
+            # 1,02 bis 2,24. Es gibt keinen Grund, auf dem sie die Schwelle
+            # halten; das ist eine Frage an die Palette und steht bei 85s
+            # Rollenbefund (03.09.2026). Was hier zählt: Der **Name** daneben
+            # ist lesbar, und die Balkenhöhe trägt die Aussage ein zweites Mal.
             stroke = QFrame(entry)
-            stroke.setFixedSize(STROKE_LENGTH, LAYER_WIDTHS[role])
-            stroke.setStyleSheet(f"background: {ROLES[role]};")
+            stroke.setFixedSize(STROKE_LENGTH, LAYER_WIDTHS[role] + 2 * STROKE_EDGE)
+            stroke.setStyleSheet(
+                f"background: {ROLES[role]};"
+                f"border: {STROKE_EDGE}px solid {THEMES[current_theme()]['line']};"
+            )
             row.addWidget(stroke)
             row.addWidget(QLabel(name, entry))
             entry.setAccessibleName(name)
