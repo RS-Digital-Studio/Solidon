@@ -453,7 +453,8 @@ def _feature_solid(
 #: 03.09.2026). Wer sie anfasst, messe an **mehr als einem** Körper: 3d-druck-7b
 #: hat am selben Tag zwei Schranken aus je einem Messwert gesetzt, und beide
 #: standen zu eng — 5 Grad aus einer Messung von 2,2, und der zweite Fall lag
-#: bei 5,74. Eine Schranke aus einem Wert ist geraten, nicht gemessen.
+#: bei 5,74. Eine Schranke aus einem Wert ist geraten, nicht gemessen; der Fall
+#: steht ausgeschrieben in ``.claude/memory/schranke-aus-einem-messwert-ist-geraten.md``.
 FLAT_RIM: Final = 0.05
 
 
