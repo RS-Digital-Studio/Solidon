@@ -169,9 +169,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | Ein Datum steht in jeder Sprache auf Deutsch | Architektur-Durchsicht (02.09.2026) | eine Zeile in `main_window.py:11170` — `QLocale().toString(...)` statt `strftime("%d.%m.%Y %H:%M")`; nach dem Release, weil der Wiederherstellungsdialog nur nach einem Absturz erscheint |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
-| Der Knopf-Wächter gilt nur einem Dialog | Die Modelle von heute über die Oberfläche (03.09.2026) | eine Ausweitung von `test_no_locked_button_in_this_dialog_stays_silent` auf alle Dialoge der Anwendung. Er prüft jeden gesperrten, sichtbaren Knopf der Druckeinstellungen auf Tooltip, Statuszeile und zugängliche Beschreibung und hat beim ersten Lauf zwei Fälle mehr gefunden, als die Handmessung gesehen hatte: „Slicen“ und „Im Slicer öffnen …“ schwiegen im häufigsten Fall überhaupt, wenn gar kein Slicer eingerichtet ist. Dieselbe Zusage gilt jedem der vierzehn Dialoge; geprüft wird einer (Vorschlag 3d-druck-c7) |
+| Der Knopf-Wächter deckt fünfzehn von fünfunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen zwanzig, und die brauchen echten Aufbau: eine Sitzung mit Körper, ein gefülltes Register, einen eingerichteten Slicer, ein Backend mit vorgeschriebenen Antworten. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein. Gemessen über die fünfzehn: 50 sichtbare Knöpfe, davon 10 sperrbar, davon 10 mit Grund — heute früh waren es 0 von 10 |
 | Der Einheitendialog zeigt „nan" | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Prüfung auf endliche Koordinaten dort, wo die Zahl **entsteht** — `biggest` in `ingest/ops.py`, die Diagonale des größten Körpers (3d-druck-d4). Eine STL mit einer NaN-Ecke wird angenommen, `detect_unit` findet nichts Plausibles und fragt; im Dialog steht dann „Millimeter (mm): nan × 20.00 × 20.00 mm". Der Docstring von `_unit_for` sagt die Regel selbst: „eine Frage, die niemand beantworten kann, ist nur die halbe Regel" |
-| Vierzehn Sekunden eingefrorenes Fenster beim Lesen | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | einen asynchronen Umbau von `main_window.open_path`. Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute Fenster mit einem Zeitgeber, der während der Blockade nicht feuert: 119,5 s gesamt, davon 30,2 s eingefroren — ein Block von 14,0 s ganz am Anfang (synchrones Lesen plus `scan_assembly`) und einer von 6,3 s am Ende. Dazwischen ist §2.8 vorbildlich erfüllt („Punkte verschweißen · 20 % · noch etwa 2 min"). Der Docstring beschreibt die Lücke vollständig und schließt sie nicht; `first_model` fällt vor dem Lesen und stört den Umbau nicht |
+| Das Zählen einer Baugruppe ist dreimal zu langsam | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | einen Zähllauf ohne Objektbau. `_model_without_geometry` nimmt `ET.iterparse` und baut für **jedes** der 5,5 Millionen Dreiecke ein `ET.Element`, nur um es unmittelbar danach zu leeren. Gemessen am 03.09.2026 an denselben 28 Modelldateien (463 MB entpackt): `iterparse` 21,3 s, `xml.parsers.expat` ohne Objektbau **6,3 s**, rohes Byte-Zählen 0,16 s (aber ungenau — es trifft auch `<triangles>`). Faktor 3,4, und der Weg ist bekannt: expat mit einem Handler, der die Objekt- und Build-Struktur baut und bei `triangle`/`vertex` nur zählt. **Kein Ersatz für den Arbeiter** (`4abd3597`) — auch 6,3 s frieren ein Fenster ein, Windows meldet ab fünf Sekunden, es reagiere nicht; der Gewinn ist vier statt vierzehn Sekunden Wartezeit, sichtbar in beiden Fällen |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 
 ---
@@ -14745,7 +14745,7 @@ Durchgangs an denselben Weg gestoßen sind:
       (3d-druck-d4). Der Docstring von `_unit_for` nennt die Regel selbst:
       „eine Frage, die niemand beantworten kann, ist nur die halbe Regel".
 
-- [ ] **Vierzehn Sekunden eingefrorenes Fenster beim Lesen.**
+- [x] **Vierzehn Sekunden eingefrorenes Fenster beim Lesen.**
       Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute
       Fenster, mit einem Zeitgeber, der während der Blockade nicht feuert:
       119,5 s gesamt, davon 30,2 s eingefroren — ein Block von 14,0 s am
@@ -14754,6 +14754,34 @@ Durchgangs an denselben Weg gestoßen sind:
       20 % · noch etwa 2 min"). Der Docstring von `open_path` beschreibt die
       Lücke vollständig und schließt sie nicht. `first_model` fällt vor dem
       Lesen und stört einen asynchronen Umbau nicht.
+
+      *Erledigt am 03.09.2026 (`4abd3597`), und die Messung hat den Entwurf
+      umgedreht: Das Lesen kostet 0,09 s, das Zählen 14,13 s. Nur
+      `import_plan` wandert deshalb in einen Arbeiter, und erst ab acht
+      Megabyte — `waiting()` nennt die Grenze im eigenen Docstring (bis zu
+      zwei Sekunden Wartezeiger, darüber ein Arbeiter), und bei gemessenen
+      0,18 s je MB sind acht MB etwa 1,4 s. Dadurch brauchten die 425 Tests in
+      `test_ui.py` keine Anpassung außer fünfen, die `session.import_model`
+      patchten. Drei Fehler fand erst der volle Lauf: der Arbeiter ohne Leine
+      (der Absturz erschien im Konstruktor des nächsten), `wait_for_idle`, das
+      ihn nicht kannte und zurückkehrte, bevor eine Operation auf dem Stapel
+      lag (3d-druck-d4), und der Fehlerdialog unter dem Wartezeiger — den fing
+      ein Test vom 29.08.2026.*
+- [ ] **Das Zählen einer Baugruppe ist dreimal zu langsam.**
+      `_model_without_geometry` benutzt `ET.iterparse` und baut für jedes der
+      5,5 Millionen Dreiecke ein `ET.Element`, nur um es unmittelbar danach zu
+      leeren. Gemessen an denselben 28 Modelldateien (463 MB entpackt):
+
+          iterparse (heute)   21,3 s
+          expat ohne Objekte   6,3 s
+          Bytes zählen         0,16 s   (ungenau: trifft auch `<triangles>`)
+
+      Der Weg ist damit klar: ein expat-Handler, der die Objekt- und
+      Build-Struktur baut und bei `triangle`/`vertex` nur zählt — den Baum
+      brauchen `_objects_in` und `_parts_of`, die Koordinaten braucht niemand.
+      **Kein Ersatz für den Arbeiter**: Auch 6,3 s frieren das Fenster ein.
+      Der Gewinn liegt darin, dass der Kunde vier Sekunden wartet statt
+      vierzehn — sichtbar sind seit `4abd3597` beide.
 
 - [x] **`ingest.very_large` trägt den Körpernamen als Text statt als Kennung.**
       `ops._named()` setzt `values["object"] = name`, keine `object_id`. Zwei
@@ -14836,13 +14864,35 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
 
 **Offen:**
 
-- [ ] **Der Knopf-Wächter gilt nur einem Dialog.**
-  `test_no_locked_button_in_this_dialog_stays_silent` prüft jeden gesperrten,
-  sichtbaren Knopf der Druckeinstellungen auf Tooltip, Statuszeile und
-  zugängliche Beschreibung — und hat beim ersten Lauf zwei Fälle mehr gefunden,
-  als die Handmessung gesehen hatte. Dieselbe Zusage gilt jedem Dialog der
-  Anwendung; vierzehn sind es, und geprüft wird einer. Ein Wächter über alle
-  wäre eine gute halbe Stunde und fängt den nächsten stummen Knopf, bevor ihn
+- [x] **Der Knopf-Wächter galt nur einem Dialog** — jetzt fünfzehn.
+  `tests/test_locked_says_why.py` baut jeden Dialog, zeigt ihn und prüft jeden
+  gesperrten, sichtbaren Knopf auf Tooltip, Statuszeile und zugängliche
+  Beschreibung. **Sieben stumme Knöpfe sind dabei gefallen**, alle mit derselben
+  Form: Der Grund stand im Fenster, nur eben daneben — in der Zustandszeile, im
+  Hinweis darunter, in der Liste. Wer auf einen grauen Knopf zeigt, fragt ihn
+  und nicht die Zeile darüber.
+
+  „Vorschläge übernehmen" (Druckeinstellungen), „Slicen" und „Im Slicer öffnen
+  …" (dieselben, im häufigsten Fall überhaupt: kein Slicer eingerichtet),
+  „Entfernen" (Filament anlegen), „Erzeugen" (Varianten), „Modell holen" und
+  „Werkzeuge prüfen" (Chat einrichten), „OK" (Slicer-Filament), „Schlüssel
+  entfernen" (Freischaltung), „Zusatzprogramme verwalten …" (erster Start).
+
+  Zwei Zahlen, die die Größenordnung zeigen: Von 50 sichtbaren Knöpfen können
+  **10** überhaupt gesperrt sein, und die meisten nur in Lagen, die auf einem
+  Entwicklerrechner nie auftreten. Deshalb stand die Lücke so lange.
+
+  Am selben Tag gemessen und **nicht** gefunden: die Menüs. 117 Einträge in zwei
+  Lagen, 56 und 11 gesperrt, alle mit Grund; das Kontextmenü 47 Einträge, 5
+  gesperrt, 5 mit Grund. Der Unterschied ist keine Sorgfaltsfrage — dort ist die
+  Zusage schon einmal gebrochen worden (`toolTipsVisible` fehlte), und seither
+  steht sie unter Beobachtung. Festgeschrieben ist der Stand jetzt trotzdem.
+
+- [ ] **Zwanzig Dialoge fehlen dem Wächter noch.**
+  Sie brauchen echten Aufbau — eine Sitzung mit Körper, ein gefülltes Register,
+  einen eingerichteten Slicer, ein Backend mit vorgeschriebenen Antworten. Die
+  Bauanleitungen stehen in `BUILDERS`; wer einen dazunimmt, trägt ihn dort ein.
+  Ein Wächter über alle fängt den nächsten stummen Knopf, bevor ihn
   jemand fotografiert (Vorschlag 3d-druck-c7, 03.09.2026).
 ## Einpassen zeigt, was gewählt ist (03.09.2026)
 
@@ -14887,3 +14937,28 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
   Kantensuche. Das ist einmalig je Modell und beim Öffnen kaum vom
   Einlesen zu trennen; ob es einen eigenen Punkt wert ist, entscheidet sich,
   wenn 85s Umbau steht.
+
+## Tausend Merkmale, ein Viertel davon Tesselierung (03.09.2026)
+
+- [x] **Kegel, Kugel und Torus hatten die Werkzeugschranke auch nicht.**
+  Eine Stunde nach der Verrundung, und der Suchfehler ist der lehrreiche Teil:
+  Ich hatte in den Kommentar geschrieben, die Schranke habe „hier als Einziger"
+  gefehlt, und dabei nur die Aufrufer derselben *Zylinder*-Einpassung
+  angesehen. Die drei Arten mit einer anderen Einpassung blieben unbesehen.
+
+  Gemessen an `garden-hose-holder.3mf` (392 532 Dreiecke): **1130
+  Merkmale** — 497 Kugeln, 421 Tori, 183 Kegel — und **257 davon mit
+  einem Maß unter einer Extrusionsbahn** (0,42 mm), der kleinste Kegel
+  0,0074 mm. Ein Objektbaum mit tausend Einträgen, von denen ein
+  Viertel Tesselierung ist, beantwortet keine Frage; er verdeckt die Antwort.
+  Danach **834**, keines mehr unter einer Bahn. Am Fettwerkzeug 112 → 106.
+
+  Die Frage steht jetzt einmal als `_too_small_to_make`, damit die nächste
+  Merkmalsart sie nicht wieder übersieht. Beim Torus entscheidet das
+  **kleinere** von Ring und Röhre: ein Ring von 40 mm aus einem Rohr
+  von drei Zehnteln ist nichts, was ein Drucker legen kann.
+  `tests/test_features.py::test_no_feature_is_smaller_than_the_tool_that_would_make_it`,
+  Gegenprobe gültig.
+
+  Robert dazu: „wir brauchen auch nur Merkmale usw, die auch von der
+  Größenordnung zum 3D-Drucker passen und sinnvoll sind."
