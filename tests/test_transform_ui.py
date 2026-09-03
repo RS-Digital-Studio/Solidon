@@ -611,3 +611,45 @@ def test_a_small_turn_is_not_swallowed_by_a_hidden_snap(bar: TransformBar) -> No
     grid, angle = bar.grid.value_mm(), bar.angle.value()
     assert snap_to_step(5.0, angle) == 5.0, "fünf Grad bleiben fünf Grad"
     assert snap_to_step(0.4, grid) == 0.4, "und ein Zehntelmillimeter bleibt einer"
+
+
+def test_every_axis_turns_and_moves_the_way_it_was_dragged() -> None:
+    """Was am Griff gezogen wird, kommt als dieselbe Achse und Richtung an.
+
+    Robert hat es ausdrücklich verlangt („korrektes drehen und schieben
+    verifizieren"), und die Frage ist berechtigt: Ein Vorzeichenfehler oder
+    eine vertauschte Achse fällt beim Ziehen kaum auf — man korrigiert
+    unbewusst mit der Maus nach. Fünfzehn Fälle, drei Achsen, beide
+    Richtungen.
+    """
+    import numpy as np
+
+    from app.ui.viewport import decompose_transform
+
+    def turned(axis: str, degrees: float) -> np.ndarray:
+        radians = np.radians(degrees)
+        c, s = np.cos(radians), np.sin(radians)
+        matrix = np.eye(4)
+        matrix[:3, :3] = {
+            "x": [[1, 0, 0], [0, c, -s], [0, s, c]],
+            "y": [[c, 0, s], [0, 1, 0], [-s, 0, c]],
+            "z": [[c, -s, 0], [s, c, 0], [0, 0, 1]],
+        }[axis]
+        return matrix
+
+    for axis in ("x", "y", "z"):
+        for degrees in (7.0, -12.5, 90.0):
+            steps = decompose_transform(turned(axis, degrees))
+            assert steps.axis == axis, f"{axis} um {degrees}° wurde zu {steps.axis}"
+            assert steps.angle == pytest.approx(degrees, abs=0.01), (
+                f"{axis}: {steps.angle} statt {degrees}"
+            )
+
+    for index, axis in enumerate(("x", "y", "z")):
+        for distance in (3.4, -0.2):
+            matrix = np.eye(4)
+            matrix[index, 3] = distance
+            steps = decompose_transform(matrix)
+            assert steps.offset[index] == pytest.approx(distance), f"{axis} verlor seinen Weg"
+            others = [value for position, value in enumerate(steps.offset) if position != index]
+            assert others == pytest.approx([0.0, 0.0]), f"{axis} färbte auf die Nachbarn ab"
