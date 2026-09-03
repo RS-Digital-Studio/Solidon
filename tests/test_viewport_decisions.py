@@ -5744,3 +5744,48 @@ def test_a_new_result_drops_the_old_preview(qt_app: QApplication) -> None:
     assert viewport._shape_actor is None, (
         "die Vorschau der vorigen Auswertung stand über dem neuen Ergebnis"
     )
+
+
+def test_the_turn_arc_does_not_outlive_the_gizmo(qt_app: QApplication) -> None:
+    """Der Drehbogen überlebt weder das Abhängen des Griffs noch eine Auswertung.
+
+    **Selbst gefunden, nachdem 3d-druck-85 nach genau dieser Klasse gefragt
+    hatte** („gibt es einen Weg, auf dem eine Marke einen Werkzeugwechsel, ein
+    Undo oder ein Projekt-Schließen überlebt?"). Gemessen am 03.09.2026:
+
+        Bogen gesetzt          -> da
+        nach _detach_gizmo     -> BLEIBT
+        nach show_scene(None)  -> BLEIBT
+
+    Er wurde nur in `_end_drag` geräumt, weil er zum Zug gehört. Ein Zug endet
+    aber nicht immer dort: Ein Undo, ein Werkzeugwechsel oder ein geschlossenes
+    Projekt hängen den Griff ab, ohne dass jemand losgelassen hat. Und weil der
+    Bogen `MEASURE_COLOUR` trägt — dieselbe Farbe wie Auswahl und Messung —
+    sähe ein stehengebliebener aus wie eine Drehung, die noch läuft.
+
+    Das ist der dritte Fall derselben Klasse an einem Nachmittag, und alle drei
+    hatten dieselbe Form: Der Weg „abbrechen" war bedacht, der Weg „fertig"
+    nicht — oder umgekehrt.
+    """
+    from app.ui.viewport import Viewport
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+
+    viewport = Viewport()
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+
+    viewport._arc_actor = SimpleNamespace(name="turn-arc")
+    viewport._detach_gizmo()
+    assert viewport._arc_actor is None, "der Bogen überlebte das Abhängen des Griffs"
+
+    viewport._arc_actor = SimpleNamespace(name="turn-arc")
+    viewport.show_scene(None)
+    assert viewport._arc_actor is None, "der Bogen überlebte eine neue Auswertung"

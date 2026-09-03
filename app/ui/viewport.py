@@ -8249,6 +8249,14 @@ class Viewport(QWidget):
             self._scale_handle = None
         self._drop_gizmo_labels()
         self._drop_face_handle()
+        # **Und der Drehbogen.** Er gehört zum Zug und wurde deshalb nur in
+        # `_end_drag` geräumt — aber ein Zug endet nicht immer dort: Ein Undo,
+        # ein Werkzeugwechsel oder ein geschlossenes Projekt hängen den Griff
+        # ab, ohne dass jemand losgelassen hat. Gemessen am 03.09.2026
+        # überlebte der Bogen beides, und er trägt `MEASURE_COLOUR` — also
+        # dieselbe Farbe wie Auswahl und Messung. Ein stehengebliebener Bogen
+        # sähe aus wie eine Drehung, die noch läuft.
+        self._drop_turn_arc()
         if self._coincident_before is not None:
             from vtkmodules.vtkRenderingCore import vtkMapper
 
