@@ -7304,6 +7304,11 @@ class MainWindow(QMainWindow):
             return
 
         self._sculpt_target = target
+        # **Auch der erste Zug ist einer.** Der Schalter wird nach jedem Zug
+        # zurückgenommen (der Grund steht dort), beim Betreten aber nicht: Wer
+        # ihn in der vorigen Sitzung zuletzt setzte, fand ihn hier wieder und
+        # bekam eine eigene Etappe, ohne sie verlangt zu haben.
+        self.sculpt_bar.cut.setChecked(False)
         self._sculpt_strokes = []
         self.viewport.set_sculpting(True, self.sculpt_bar.radius.value_mm())
         self.tools.close_tool()
@@ -7613,7 +7618,26 @@ class MainWindow(QMainWindow):
         self.tools.close_tool()
         self.tools.setVisible(False)
         self.pose_bar.setVisible(True)
-        self.pose_bar.show_state(0, pending=False, chain=True)
+        # **Der Zustand wird abgeleitet, nicht behauptet.** Sieben Zeilen
+        # darüber lädt ``_armature_of`` die Knochen des vorhandenen Schritts;
+        # eine feste Null daneben ist eine zweite Quelle für etwas, das schon
+        # eine hat — und sie war die falsche. Wer „Noch kein Knochen" liest,
+        # hält das für eine Zusage: Er fängt bei null an. Setzt er dann einen
+        # und sieht vier, weiß er nicht, ob er drei fremde geerbt oder drei
+        # eigene verloren hat, und *Fertig* ändert einen Schritt, von dem die
+        # Leiste behauptet hat, er sei leer (gemessen 3d-druck-85, 03.09.2026:
+        # drei geladene Knochen, angezeigt „Noch kein Knochen").
+        #
+        # Das Namensfeld gehört dazu: Es überlebte sonst die Sitzung, und der
+        # erste Knochen am **nächsten** Körper hieß, was jemand hier getippt
+        # und nie gesetzt hatte. ``clear_name`` verbietet das in seinem
+        # eigenen Docstring — gerufen hat es diese Stelle nur nicht.
+        self.pose_bar.clear_name()
+        self.pose_bar.show_state(
+            len(self._armature_bones),
+            pending=False,
+            chain=bool(self._armature_parent),
+        )
         self._update_actions()
         self.statusBar().showMessage(tr("Zwei Klicks setzen einen Knochen — Escape beendet."))
 
@@ -7657,7 +7681,9 @@ class MainWindow(QMainWindow):
         place = (float(point[0]), float(point[1]), float(point[2]))
         if self._armature_head is None:
             self._armature_head = place
-            self.pose_bar.show_state(len(self._armature_bones), pending=True, chain=True)
+            self.pose_bar.show_state(
+                len(self._armature_bones), pending=True, chain=bool(self._armature_parent)
+            )
             return
 
         name = self.pose_bar.next_name() or f"bone_{len(self._armature_bones) + 1}"
@@ -7672,7 +7698,9 @@ class MainWindow(QMainWindow):
         self._armature_head = None
         self._armature_parent = name
         self.pose_bar.clear_name()
-        self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=True)
+        self.pose_bar.show_state(
+            len(self._armature_bones), pending=False, chain=bool(self._armature_parent)
+        )
 
     def break_armature_chain(self) -> None:
         """Der nächste Knochen hängt an nichts — für den zweiten Arm."""
@@ -7694,7 +7722,16 @@ class MainWindow(QMainWindow):
             self._armature_parent = gone.parent
         else:
             return False
-        self.pose_bar.show_state(len(self._armature_bones), pending=False, chain=True)
+        # ``gone.parent`` ist leer, sobald der zurückgenommene Knochen der
+        # erste einer neuen Kette war: Der nächste hängt dann wieder an nichts
+        # — ein zweiter Arm —, und ein festes ``chain=True`` verschwieg genau
+        # das. Der Kunde drückte *Neue Kette* ein zweites Mal oder bekam ein
+        # Skelett mit falscher Elternkette.
+        self.pose_bar.show_state(
+            len(self._armature_bones),
+            pending=False,
+            chain=bool(self._armature_parent),
+        )
         return True
 
     def finish_armature(self) -> None:
