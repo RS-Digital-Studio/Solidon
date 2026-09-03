@@ -51,6 +51,33 @@ die sie bräuchten. Wer eine Schranke setzt, sucht deshalb nicht ihre
 Nachbarn, sondern **alle Aufrufer derselben Einpassung** — hier
 `fit_cylinder`, drei Erkenner, und der dritte war zwanzig Tage unbemerkt.
 
+**Und am 03.09.2026 dreimal an einem Tag, mit derselben Signatur — damit
+ist es ein Muster und keine Anekdote (a0s Formulierung):**
+
+| Regel | hatten sie | hatte sie nicht |
+|---|---|---|
+| Werkzeugschranke `MIN_CYLINDER_DIAMETER` | Bohrung, Zapfen | Verrundung — und nach dem Fix immer noch Kegel, Kugel, Torus |
+| Zusammenführung zerfallener Flächen | Zylinder, Ring | **Kegel** |
+| Gründetabellen der Leiste | zwei Rollen | die dritte |
+
+**Die Signatur ist immer dieselbe:** zwei Geschwister tragen die Regel, das
+dritte nicht, und an den zweien steht sogar ein Kommentar, der die
+Vollständigkeit nahelegt („dieselbe Schranke wie bei der Bohrung"). Wer
+nach der Regel sucht, findet die Stellen, die sie **haben** — nie die, die
+sie bräuchten.
+
+**Was daraus als Suchweg folgt:** nicht nach dem Muster suchen, sondern nach
+der **gemeinsamen Quelle** der Geschwister. Bei der Werkzeugschranke war das
+die Einpassung (drei Erkenner rufen dieselbe, drei eine andere — und genau
+die drei anderen fehlten). Beim Zusammenführen war es die Fleckenbildung,
+die jede Mantelart zerlegt. Wer „alle Aufrufer von X" fragt, bekommt eine
+vollständige Antwort auf eine zu enge Frage
+([[gemessene-frage-ist-nicht-die-gestellte]]).
+
+Und die beste Vorbeugung ist keine Suche: **die Regel eine benannte Frage
+werden lassen**, die eine neue Art beantworten muss (`_too_small_to_make`).
+Eine verstreute Prüfung findet nur, wer sie schon kennt.
+
 **Why:** Ein Fix wird dort gemacht, wo der Fund war, und der Docstring
 dokumentiert die Lehre — aber niemand fragt, wo dieselbe Konstruktion noch
 steht. Die Lehre reist nicht von selbst zu den Geschwistern.

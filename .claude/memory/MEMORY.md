@@ -106,6 +106,7 @@
 
 - [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) — fünf Bauarten mit ihren Warnzeichen.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — ansehen, mutieren, durchfahren.
+- [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) — der erste Fall gibt die Größenordnung, nicht die Grenze.
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — dazwischen sind beide Antworten falsch.
 - [Roh gegen gerendert](roh-gegen-gerendert-vergleichen.md) — Maskierung mitprüfen.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — nach der Verneinung suchen.
