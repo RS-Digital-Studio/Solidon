@@ -3165,6 +3165,14 @@ class Viewport(QWidget):
         dafür da, das Zerlegen zu sparen, wenn sich am Netz nichts geändert
         hat. Verglichen wird die Identität des Netzes (siehe
         ``_shadow_hulls_for``)."""
+        self._edge_meshes: dict[ObjectId, tuple[Any, Any]] = {}
+        """Je Körper das Netz, aus dem seine Körperkanten stammen, und sie selbst.
+
+        Dieselbe Bauart und derselbe Grund wie bei ``_shadow_splits``, nur
+        teurer: Die Kantensuche kostete an einem Kundenmodell mit 32 Körpern
+        **453 ms bei jedem Aufbau** — und ``show_scene`` läuft bei jeder
+        Auswahl, jedem Themenwechsel und jedem Schieberschritt (gemessen
+        03.09.2026, siehe :meth:`_feature_edges_for`)."""
         self._shadow_ground: dict[ObjectId, tuple[float, float, Any]] = {}
         """Je Körper Unterkante, Oberkante und sein Umriss von oben. Damit
         steht fest, wer auf wem steht — und damit, welche Fläche den Schatten
@@ -4233,8 +4241,14 @@ class Viewport(QWidget):
                 for object_id, entry in self._shadow_splits.items()
                 if object_id in result.scene.objects
             }
+            self._edge_meshes = {
+                object_id: entry
+                for object_id, entry in self._edge_meshes.items()
+                if object_id in result.scene.objects
+            }
         else:
             self._shadow_splits.clear()
+            self._edge_meshes.clear()
         self._shadow_cast = self._shadow_direction()
         self._uncapped = False
         if result is None:
@@ -4301,7 +4315,10 @@ class Viewport(QWidget):
                 **extra,
             )
             self._actors[object_id] = actor
-            self._draw_feature_edges(surface, object_id)
+            # ``mesh`` als Schlüssel, aus demselben Grund wie beim Schatten
+            # eine Zeile tiefer: Das PolyData entsteht in jeder Runde neu, das
+            # Netz dahinter bleibt dasselbe, solange sich nichts geändert hat.
+            self._draw_feature_edges(surface, object_id, mesh)
             # ``mesh`` und nicht ``surface``: Das PolyData entsteht in jeder
             # Runde neu, das Netz dahinter bleibt dasselbe, solange sich nichts
             # geändert hat. Daran erkennt der Schatten, ob er neu zerlegen muss.
@@ -4471,7 +4488,50 @@ class Viewport(QWidget):
             "show_scalar_bar": False,
         }
 
-    def _draw_feature_edges(self, surface: Any, object_id: ObjectId) -> None:
+    def _feature_edges_for(self, object_id: ObjectId, surface: Any, source: Any) -> Any:
+        """Die Körperkanten dieses Körpers — neu gesucht nur bei einem anderen Netz.
+
+        ``extract_feature_edges`` läuft linear über die Dreiecke, und der
+        Kommentar bei :data:`FEATURE_EDGE_LIMIT` rechnet damit: 0,15 ms je
+        tausend, an der Grenze dreißig Millisekunden „je Körper und
+        Szenenaufbau". Die Rechnung stimmt, ihre Annahme nicht — ein
+        Szenenaufbau ist nicht selten.
+
+        **Gemessen am Kundenmodell `chufang.3mf`** (32 Körper, 5 476 596
+        Dreiecke, 03.09.2026): Ein Aufbau kostet **1,0 s**, und **453 ms davon
+        sind diese Suche** — bei jeder Auswahl eines Körpers, jedem
+        Themenwechsel, jedem Schritt der Schieber für Explosion, Schnitt und
+        Schicht. Es ist damit der teuerste einzelne Posten des Aufbaus; die
+        Dezimierung dahinter kostet beim zweiten Mal nichts mehr, weil sie
+        längst cacht, und die Schattenzerlegung fiel aus demselben Grund von
+        1504 auf 28 ms.
+
+        Verglichen wird die **Identität** des Netzes, nicht sein Inhalt —
+        wörtlich die Begründung aus :meth:`_shadow_hulls_for`: Ein Hash über
+        Millionen Dreiecke wäre nicht billiger als die Suche, die er spart.
+        Und der Schnittschieber trifft den Cache aus demselben Grund
+        absichtlich nicht: ``cut`` erzeugt dort wirklich ein neues Netz, und
+        dessen Kanten sind andere.
+        """
+        cached = self._edge_meshes.get(object_id)
+        if cached is not None and source is not None and cached[0] is source:
+            return cached[1]
+        try:
+            edges = surface.extract_feature_edges(
+                feature_angle=FEATURE_EDGE_ANGLE,
+                boundary_edges=True,
+                non_manifold_edges=False,
+                feature_edges=True,
+                manifold_edges=False,
+            )
+        except Exception as problem:  # pragma: no cover - hängt an der Geometrie
+            _log.info("feature edges unavailable: %s", problem)
+            return None
+        if source is not None:
+            self._edge_meshes[object_id] = (source, edges)
+        return edges
+
+    def _draw_feature_edges(self, surface: Any, object_id: ObjectId, source: Any = None) -> None:
         """Die Kanten des *Körpers*, nicht die des Netzes (§18.1).
 
         „Massiv mit Kanten" zeichnet jede Dreieckskante — das beantwortet die
@@ -4494,18 +4554,8 @@ class Viewport(QWidget):
             return
         if surface.n_cells > FEATURE_EDGE_LIMIT:
             return
-        try:
-            edges = surface.extract_feature_edges(
-                feature_angle=FEATURE_EDGE_ANGLE,
-                boundary_edges=True,
-                non_manifold_edges=False,
-                feature_edges=True,
-                manifold_edges=False,
-            )
-        except Exception as problem:  # pragma: no cover - hängt an der Geometrie
-            _log.info("feature edges unavailable: %s", problem)
-            return
-        if edges.n_cells == 0:
+        edges = self._feature_edges_for(object_id, surface, source)
+        if edges is None or edges.n_cells == 0:
             return
         self._edge_actors.append(
             self.plotter.add_mesh(

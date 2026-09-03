@@ -881,6 +881,43 @@ Kamera. Offscreen gibt es keinen Plotter, und `reset_camera` steigt an seiner
 Wache aus, bevor irgendetwas gerahmt wird. Erst eine Attrappe mit genau einer
 Methode (`_FramingPlotter.reset_camera`) hat den Unterschied gemessen.
 
+### Die Kantensuche läuft einmal je Netz, nicht einmal je Aufbau
+
+`extract_feature_edges` war der teuerste einzelne Posten eines Szenenaufbaus.
+Am Kundenmodell `chufang.3mf` gemessen (32 Körper, 5 476 596 Dreiecke,
+03.09.2026), Aufbau für Aufbau:
+
+| Posten | ohne Cache | mit Cache |
+|---|---|---|
+| `_draw_feature_edges` (32×) | **453 ms** | **61 ms** |
+| `plotter.add_mesh` (65×) | 193 ms | 203 ms |
+| `_remember_shadow` (32×) | 28 ms | 32 ms |
+| **`show_scene` insgesamt** | **1,02 s** | **0,74 s** |
+
+Der Kommentar bei `FEATURE_EDGE_LIMIT` rechnet mit „dreißig Millisekunden
+je Körper und Szenenaufbau". Die Rechnung stimmt; ihre **Annahme** stimmt
+nicht — ein Szenenaufbau ist nicht selten. `show_scene` läuft bei
+jeder Auswahl eines Körpers, jedem Themenwechsel und jedem Schritt der
+Schieber für Explosion, Schnitt und Schicht.
+
+**Genau dieselbe Fehleinschätzung stand schon einmal beim Schatten** und
+ist dort behoben: `_shadow_hulls_for` nennt sie in eigenen Worten („sein
+Docstring nannte das ‚einmal je Szenenaufbau' und meinte damit ‚selten' —
+das stimmte nicht"). Die Kanten daneben blieben zwanzig Tage stehen. Der Cache
+ist deshalb **dieselbe Bauart**: `_edge_meshes` neben `_shadow_splits`,
+verglichen wird die **Identität** des Netzes und nicht sein Inhalt —
+ein Hash über Millionen Dreiecke wäre nicht billiger als die Suche,
+die er spart. Und der Schnittschieber trifft ihn aus demselben Grund
+absichtlich nicht: `cut` erzeugt dort wirklich ein neues Netz.
+
+**Was die Messung widerlegt hat**, und das gehört dazu: Die Vermutung war
+`DISPLAY_DECIMATION_ABOVE` (500 000 Dreiecke, **je Körper**) — 32
+Körper mit im Mittel 171 000 kommen zusammen auf fünfeinhalb
+Millionen, von denen drei über der Schwelle liegen. Der Verdacht war
+falsch: `_for_display` kostet beim ersten Aufbau 1044 ms und danach **0 ms**,
+weil `DISPLAY_CACHE_KEPT` (4) für diese drei reicht. Wer die Schwelle
+angefasst hätte, hätte nichts gewonnen.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an

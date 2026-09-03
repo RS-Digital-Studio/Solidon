@@ -4493,3 +4493,65 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     viewport._fitted_to = None
     viewport._fit_once_for(viewport._result)
     assert gefragt == [False], "die Rahmung nach dem Wachsen nimmt die ganze Szene"
+
+
+class _EdgySurface:
+    """So viel PolyData, wie die Kantensuche anfasst — und sie zählt mit."""
+
+    def __init__(self, cells: int = 100) -> None:
+        self.n_cells = cells
+        self.searched = 0
+
+    def extract_feature_edges(self, **kwargs: object) -> _EdgySurface:
+        self.searched += 1
+        found = _EdgySurface(cells=12)
+        return found
+
+
+def test_the_body_edges_are_searched_once_per_mesh(qt_app: QApplication) -> None:
+    """Die Kantensuche lief bei jedem Aufbau neu — und ein Aufbau ist häufig.
+
+    **Gemessen am Kundenmodell `chufang.3mf`** (32 Körper, 5 476 596
+    Dreiecke, 03.09.2026): Ein Szenenaufbau kostete **1,02 s**, davon
+    **453 ms** allein `extract_feature_edges`. Das ist der teuerste einzelne
+    Posten — und `show_scene` läuft bei jeder Auswahl eines Körpers, jedem
+    Themenwechsel und jedem Schritt der Schieber für Explosion, Schnitt und
+    Schicht.
+
+    Der Kommentar bei :data:`FEATURE_EDGE_LIMIT` rechnet mit „dreißig
+    Millisekunden je Körper und Szenenaufbau"; die Rechnung stimmt, ihre
+    Annahme nicht. Dieselbe Fehleinschätzung stand schon einmal beim Schatten
+    (`_shadow_hulls_for`: „einmal je Szenenaufbau" hieß dort „selten"), und
+    dort ist sie längst behoben — die Kanten daneben blieben.
+
+    Mit dem Cache: **61 ms**, der Aufbau 0,74 s.
+
+    Geprüft wird, woran der Cache hängt (die Identität des Netzes, nicht sein
+    Inhalt) und dass ein anderes Netz neu sucht — der Schnittschieber erzeugt
+    genau das und soll den Cache nicht treffen.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    fläche = _EdgySurface()
+    netz = object()
+
+    zuerst = viewport._feature_edges_for("body", fläche, netz)
+    assert fläche.searched == 1
+    assert zuerst is not None
+
+    noch_einmal = viewport._feature_edges_for("body", fläche, netz)
+    assert fläche.searched == 1, "dasselbe Netz wird nicht zweimal durchsucht"
+    assert noch_einmal is zuerst, "und es kommt dieselbe Geometrie zurück"
+
+    # Ein geschnittener Körper ist ein anderes Netz — dort wäre der alte
+    # Kantenzug falsch.
+    geschnitten = object()
+    danach = viewport._feature_edges_for("body", fläche, geschnitten)
+    assert fläche.searched == 2, "ein anderes Netz wird durchsucht"
+    assert danach is not zuerst
+
+    # Ohne Netz gibt es nichts zu merken — dann bleibt es beim Suchen.
+    viewport._feature_edges_for("body", fläche, None)
+    viewport._feature_edges_for("body", fläche, None)
+    assert fläche.searched == 4, "ohne Schlüssel kein Cache"

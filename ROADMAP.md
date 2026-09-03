@@ -14861,3 +14861,29 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
   alles. `tests/test_viewport_decisions.py::test_fitting_frames_the_chosen_body`
   — die erste Fassung des Tests war gegen den Ausbau der Änderung
   grün und ist deshalb um eine Plotter-Attrappe ergänzt.
+
+## Jeder Klick kostete eine Sekunde (03.09.2026)
+
+- [x] **Die Kantensuche lief bei jedem Szenenaufbau neu.** 7f hat an
+  `chufang.3mf` (66 MB, 32 Körper) eine Blockade gemessen, in der Windows
+  „Keine Rückmeldung" zeigt. Zerlegt (Sonde am echten Fenster, unter dem
+  Torschloss gefahren): Ein Aufbau kostet **1,02 s**, davon **453 ms**
+  `extract_feature_edges` — und ein Aufbau passiert bei jeder Auswahl,
+  jedem Themenwechsel, jedem Schieberschritt. Mit Cache nach dem Muster des
+  Schattens (`_edge_meshes`, Netzidentität als Schlüssel): **61 ms**,
+  Aufbau **0,74 s**. Gegenprobe gültig.
+
+  **Die Vermutung vorher war falsch, und das ist der Teil, der bleibt:**
+  Gesucht hatte ich bei `DISPLAY_DECIMATION_ABOVE`, weil die Schwelle je
+  Körper gilt und hier 32 Körper knapp darunter liegen. Die Messung
+  sagt: `_for_display` kostet ab dem zweiten Aufbau **null**, der Cache
+  dahinter reicht. Ohne die Sonde hätte ich an der richtigen Datei die
+  falsche Zeile geglaubt.
+
+  **Was offen bleibt und nicht meins ist:** `import_model` braucht für
+  diese Datei **14,6 s** — daran arbeitet 3d-druck-85 (`open_path`
+  asynchron, `scan_assembly`). Und der **erste** Aufbau kostet weiterhin rund
+  drei Sekunden: 1570 ms Schattenzerlegung, 1068 ms Dezimierung, 463 ms
+  Kantensuche. Das ist einmalig je Modell und beim Öffnen kaum vom
+  Einlesen zu trennen; ob es einen eigenen Punkt wert ist, entscheidet sich,
+  wenn 85s Umbau steht.
