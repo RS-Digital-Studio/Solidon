@@ -78,7 +78,7 @@ Nutzen da und sonst nichts.
 
 - Die Ansicht hat eine eigene Steuerung, und sie ist die neue Vorgabe: Links ziehen verschiebt, rechts dreht, das gedrückte Mausrad kippt, das Rad zoomt.
 - Mit W, A, S und D fliegt man durch die Szene, Q und E kippen — der Flug geht durch ein Teil hindurch, während der Zoom davor stehen bleibt.
-- Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, FreeCAD, Fusion und Blender bleiben unverändert.
+- Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, für Bambu Studio, Orca und PrusaSlicer, für das CAD und für Blender bleiben.
 - Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene.
 - Ein Teil unter der Druckplatte ist zu sehen — durchsichtig ist jetzt das Bett und nicht das Modell.
 - Halbdurchsichtige Körper werden in der richtigen Tiefenfolge gezeichnet, unabhängig von der Reihenfolge ihrer Entstehung.

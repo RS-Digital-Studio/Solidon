@@ -53,7 +53,7 @@ scrive in `website/version.json`.
 
 - La vista ha un comando proprio, ed è la nuova impostazione predefinita: trascinare con il sinistro sposta, con il destro ruota, la rotellina premuta inclina e ingrandisce.
 - Con W, A, S e D si vola nella scena, Q ed E inclinano; il volo attraversa un pezzo, mentre lo zoom si ferma davanti.
-- Chi è abituato a un altro comando lo sceglie nelle impostazioni: gli schemi per Cura, FreeCAD, Fusion e Blender restano invariati.
+- Chi è abituato a un altro comando lo sceglie nelle impostazioni: restano gli schemi per Cura, per Bambu Studio, Orca e PrusaSlicer, per un CAD e per Blender.
 - La voce *Adatta alla vista* inquadra il pezzo selezionato; senza selezione, tutta la scena come prima.
 - Un pezzo sotto il piano di stampa si vede: ora è il piano a essere trasparente, non il modello.
 - I corpi semitrasparenti vengono disegnati nel giusto ordine di profondità, qualunque sia l'ordine di creazione.

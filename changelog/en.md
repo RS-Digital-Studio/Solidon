@@ -53,7 +53,7 @@ it into `website/version.json`.
 
 - The view has a control scheme of its own, and it is the new default: dragging left pans, right orbits, the pressed wheel tilts, the wheel zooms.
 - W, A, S and D fly through the scene, Q and E tilt — the flight passes through a part, while zooming stops in front of it.
-- Anyone used to a different scheme picks it in the settings: those for Cura, FreeCAD, Fusion and Blender are unchanged.
+- Anyone used to a different scheme picks it in the settings: those for Cura, for Bambu Studio, Orca and PrusaSlicer, for a CAD program and for Blender remain.
 - The entry *Fit to view* frames the part you clicked; with nothing selected, the whole scene as before.
 - A part below the print bed is visible — it is the bed that is transparent now, not the model.
 - Semi-transparent bodies are drawn in the right depth order, whatever order they were created in.

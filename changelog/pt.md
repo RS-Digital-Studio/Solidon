@@ -53,7 +53,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - A vista tem um comando próprio, e é a nova predefinição: arrastar com o esquerdo desloca, com o direito roda, a roda premida inclina e a roda amplia.
 - Com W, A, S e D voa-se pela cena, e Q e E inclinam; o voo atravessa uma peça, enquanto a ampliação para à frente dela.
-- Quem está habituado a outro comando escolhe-o nas definições: os esquemas para Cura, FreeCAD, Fusion e Blender mantêm-se.
+- Quem está habituado a outro comando escolhe-o nas definições: mantêm-se os esquemas para Cura, para Bambu Studio, Orca e PrusaSlicer, para um CAD e para Blender.
 - A entrada *Ajustar à vista* enquadra a peça selecionada; sem seleção, toda a cena como antes.
 - Uma peça sob a mesa de impressão fica visível: agora é a mesa que é transparente, não o modelo.
 - Os corpos semitransparentes são desenhados na ordem de profundidade correta, qualquer que seja a ordem de criação.

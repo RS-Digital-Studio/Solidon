@@ -54,7 +54,7 @@ dans `website/version.json`.
 
 - La vue a sa propre commande, et elle est la nouvelle valeur par défaut : glisser à gauche déplace, à droite fait tourner, la molette pressée incline, la molette zoome.
 - W, A, S et D permettent de voler dans la scène, Q et E inclinent ; le vol traverse une pièce, tandis que le zoom s'arrête devant.
-- Qui préfère une autre commande la choisit dans les réglages : les schémas Cura, FreeCAD, Fusion et Blender restent inchangés.
+- Qui préfère une autre commande la choisit dans les réglages : les schémas Cura, Bambu Studio, Orca et PrusaSlicer, CAO et Blender restent en place.
 - L'entrée *Ajuster à la vue* cadre la pièce cliquée ; sans sélection, toute la scène comme avant.
 - Une pièce sous le plateau d'impression est visible : c'est désormais le plateau qui est transparent, pas le modèle.
 - Les corps semi-transparents sont dessinés dans le bon ordre de profondeur, quel que soit leur ordre de création.
