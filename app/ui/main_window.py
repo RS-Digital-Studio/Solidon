@@ -237,7 +237,7 @@ from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
 from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
-from app.ui.palette import ROLES
+from app.ui.palette import text_colour
 from app.ui.panels import (
     SEVERITY_MARKER,
     FeaturePanel,
@@ -316,6 +316,21 @@ _NEEDS_BODY = _("Dafür braucht es einen Körper in der Szene.")
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
 FLASH_MS = 1200
+
+
+def _flash_colour(widget: QWidget) -> str:
+    """Die Rahmenfarbe, mit der ein Bereich kurz aufleuchtet.
+
+    Über :func:`text_colour` und nicht über ``ROLES['select']`` direkt: Das
+    Bernstein der Auswahl ist für die dunkle Fläche gewählt, auf der die
+    Anwendung startet, und dort trägt es 5,54. Auf der hellen bringt es 1,70 —
+    WCAG 1.4.11 verlangt für eine Umrandung 3,0, also weniger als die Hälfte
+    des Nötigen. Ein Rahmen, den man nicht sieht, zeigt auf nichts.
+
+    Gefragt wird die Fläche des Widgets selbst und nicht das eingestellte
+    Thema: Der Aufrufer kennt die Fläche, auf die er zeichnet, immer.
+    """
+    return text_colour("select", widget.palette().window().color().name())
 
 
 def _tick(group: QActionGroup, value: str) -> None:
@@ -445,6 +460,11 @@ class _FeatureDock(QDockWidget):
     Kreuz, das andere beim Schalter.
     """
 
+    #: Es ist zugegangen. Wer eine Vorschau hat, die zu diesem Fenster gehört,
+    #: räumt sie hier ab — das Fenster, in dem man sie zurücknehmen könnte, ist
+    #: gerade verschwunden.
+    closed = Signal()
+
     # Als Klassenwerte, nicht erst im Rumpf: ``setVisible`` ist überschrieben
     # und kann von Qt schon aus ``super().__init__`` heraus gerufen werden —
     # dann stünden die Felder noch nicht.
@@ -482,6 +502,8 @@ class _FeatureDock(QDockWidget):
         if self._watching:
             self.dismissed = not visible
         super().setVisible(visible)
+        if self._watching and not visible:
+            self.closed.emit()
 
 
 class _MapWorker(Worker):
@@ -4628,7 +4650,7 @@ class MainWindow(QMainWindow):
         """
         dialog.hide()
         open_section(self.filaments)
-        self.filaments.setStyleSheet(f"border: 2px solid {ROLES['select']};")
+        self.filaments.setStyleSheet(f"border: 2px solid {_flash_colour(self.filaments)};")
         QTimer.singleShot(FLASH_MS, self, lambda: self.filaments.setStyleSheet(""))
         dialog.show()
         dialog.refresh_materials()
@@ -7950,6 +7972,11 @@ class MainWindow(QMainWindow):
         # Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe.
         self.feature_dock.hide()
         self.feature_dock.start_watching()
+        # Wer das Fenster zumacht, während eine Vorschau darauf wartet, hätte
+        # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
+        # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
+        # Ereignisfilter (gemessen am 03.09.2026: alle sechs Zustände blieben).
+        self.feature_dock.closed.connect(self._drop_feature_preview)
         # Der Eintrag kommt von Qt selbst und trägt damit denselben Namen wie
         # das Fenster; wer es zugemacht hat, findet es hier wieder.
         entry = self.feature_dock.toggleViewAction()
@@ -10443,21 +10470,27 @@ class MainWindow(QMainWindow):
         self._hidden &= set(result.scene.objects)
         self.viewport.set_hidden(self._hidden)
         self.object_tree.set_hidden(self._hidden)
+        # **Und dasselbe für das Merkmalsfenster** — es war der Zwilling, den
+        # die Zeile darüber nicht mitgenommen hat. Es zeigt die Handlungen
+        # eines Merkmals, und nach dem Öffnen einer anderen Datei bezeichnet
+        # dieselbe Kennung dort etwas anderes oder gar nichts; seine Knöpfe
+        # zeigten auf ein Merkmal, das die Szene nicht mehr enthält.
+        #
+        # Geprüft und nicht pauschal geleert: Nach einem Übernehmen oder einem
+        # Undo lebt dasselbe Merkmal weiter, und das Fenster soll dann
+        # stehenbleiben.
+        shown = self.feature_panel.feature_id
+        if shown is not None and not any(
+            shown in entry.features for entry in result.scene.objects.values()
+        ):
+            self.feature_panel.clear()
         # Eingepasst wird im Viewport (``_fit_once_for``), nicht hier: dort ist
         # die neue Szene schon gesetzt. Von hier aus lief es mit den Maßen der
         # *vorigen* — beim ersten Projekt also mit gar keinen, und dann passte
         # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
-        quality = cast(
-            QualityPreset,
-            self.settings.print_quality
-            if self.settings.print_quality in print_settings.quality_presets()
-            else print_settings.DEFAULT_QUALITY,
-        )
-        effective_settings = self.session.project.document.print_settings or print_settings.resolve(
-            self.session.profile, quality
-        )
+        effective_settings = self.effective_print_settings()
         self.filaments.show_scene(list(result.scene.objects.values()), effective_settings)
         plates = {entry.plate for entry in result.scene.objects.values()}
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
@@ -10541,6 +10574,20 @@ class MainWindow(QMainWindow):
         # bezeichnet.
         if self._split_points:
             self._clear_split_line()
+        # **Und aus demselben Grund die Vorschau des Merkmalsfensters.** Sie
+        # zeigt eine Änderung an einer Geometrie, die es nach einem Undo, einem
+        # gelöschten Verlaufsschritt oder einer Operation von woanders so nicht
+        # mehr gibt.
+        #
+        # Gemessen war dieser Weg sauber — aber nur mittelbar: Der neu gebaute
+        # Objektbaum meldete eine geänderte Auswahl, und *die* räumte ab. Eine
+        # Verteidigung, die über die Auswahl eines anderen Bedienelements läuft,
+        # hält nur so lange, wie dieses Element sich so verhält. Hier kommt
+        # jeder Dokumentwechsel durch (Vorschlag 3d-druck-85, 03.09.2026).
+        #
+        # Eine laufende Vorschau kann das nicht treffen: Sie ändert das
+        # Dokument nicht und löst ``projectChanged`` deshalb nicht aus.
+        self._drop_feature_preview()
         document = self.session.project.document
         produced = frozenset(output for operation in document.ops for output in operation.outputs)
         if self._pending_split_reveal and not self._pending_split_reveal.issubset(produced):
@@ -10598,6 +10645,30 @@ class MainWindow(QMainWindow):
         self.header.show_profile(self.session.profile)
         self._update_facts()
 
+    def effective_print_settings(self) -> Any:
+        """Die Druckeinstellungen, die für dieses Projekt wirklich gelten.
+
+        **Zuerst die des Dokuments**, denn wer sie im Dialog gesetzt hat, meint
+        sie; sonst die aufgelöste Vorgabe aus Profil und gewählter Stufe. Die
+        Stufe darf nicht fehlen: ``resolve(profile)`` allein nimmt die
+        Standardstufe, und an einem Quader von 40 auf 30 auf 20 mm auf „fein" stand damit
+        13 g · 49 min in der Zahlenzeile, während es 14,1 g · 116 min sind —
+        Faktor 2,4 auf der Dauer, und die Zeile bewegte sich beim Umstellen
+        nicht (gemessen von 3d-druck-85, 03.09.2026).
+
+        Als eigene Stelle, weil derselbe Ausdruck an vier weiteren stand und
+        ``_update_facts`` als fünfte davon abwich. Ein sechster Ort kann jetzt
+        nicht mehr anders rechnen.
+        """
+        quality = cast(
+            QualityPreset,
+            self.settings.print_quality
+            if self.settings.print_quality in print_settings.quality_presets()
+            else print_settings.DEFAULT_QUALITY,
+        )
+        document = self.session.project.document
+        return document.print_settings or print_settings.resolve(self.session.profile, quality)
+
     def _update_facts(self) -> None:
         """Material und Dauer aus dem, was ohnehin vorliegt.
 
@@ -10605,14 +10676,17 @@ class MainWindow(QMainWindow):
         Schätzung darauf kostet nichts und darf deshalb nach jeder Auswertung
         laufen (§31). Eine Schichtanalyse dürfte das nicht — sie braucht
         Sekunden, und die Zeile stünde nach jedem gezogenen Parameter still.
+
+        Gerechnet wird mit :meth:`effective_print_settings` — die Zeile führt
+        eine Zahl, die der Kunde liest, und sie muss dieselbe Grundlage haben
+        wie der Dialog, in den sie per Klick führt.
         """
         result = self.session.last_result
         if result is None or not result.scene.objects:
             self.facts.show_estimate(None)
             return
         bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
-        settings = print_settings.resolve(self.session.profile)
-        self.facts.show_estimate(estimate_total(bodies, settings))
+        self.facts.show_estimate(estimate_total(bodies, self.effective_print_settings()))
 
     def _facts_key(self) -> str:
         """Woran die Zahlenzeile ein Projekt wiedererkennt.
@@ -11909,6 +11983,19 @@ class MainWindow(QMainWindow):
         # Der härteste Schnitt, den die Anwendung hat: der ganze Inhalt wird
         # ein anderer. Mit Blende liest das Auge „dasselbe Fenster, andere
         # Ansicht" statt von vorn (``app/ui/motion.py``).
+        if show:
+            # **Eine Vorschau überlebt diesen Schnitt nicht.** Wer mit einer
+            # wartenden Änderung auf *Datei → Neu* geht, ließ bis zum
+            # 03.09.2026 den Differenzkörper und sein Band hinter sich: Beim
+            # nächsten geöffneten Projekt lag die Vorschau von vorhin über der
+            # neuen Szene, und die Leertaste blendete anwendungsweit um, weil
+            # mit dem Band der Ereignisfilter stehenblieb (gemessen an
+            # ``action_new``: Bild da, Filter hängt).
+            #
+            # ``start_empty`` braucht das nicht noch einmal — es hängt am
+            # Hauptknopf des Startbildschirms, ist also nur von hier aus
+            # erreichbar.
+            self._drop_feature_preview()
         switch(self.stack, self.start_screen if show else self.overlay)
         # Die Menüleiste folgt dem Schnitt: was eine offene Szene voraussetzt,
         # steht auf dem Startbildschirm nicht herum. Die Kürzel der Einträge
@@ -12048,7 +12135,7 @@ class MainWindow(QMainWindow):
         # Rücknahme-Warnung in den Verlauf zeigt (H-1).
         open_section(area)
 
-        area.setStyleSheet(f"border: 2px solid {ROLES['select']};")
+        area.setStyleSheet(f"border: 2px solid {_flash_colour(area)};")
         QTimer.singleShot(FLASH_MS, self, lambda: area.setStyleSheet(""))
 
     def _remove_tour(self) -> None:

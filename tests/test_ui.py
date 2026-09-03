@@ -1642,6 +1642,106 @@ def test_applying_drops_the_waiting_preview_too(window: MainWindow) -> None:
     assert not window.viewport._comparing
 
 
+def _a_drawn_preview(window: MainWindow) -> tuple[str, str]:
+    """Eine Vorschau, die wirklich im Bild steht — Voraussetzung dreier Tests.
+
+    Ein bloß scharfer Zeitgeber zeichnet nichts, und eine Zusicherung über ein
+    Bild, das es nie gab, ist immer grün.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+
+    values = {"at_feature": hole, "diameter": 12.0, "compensate": False}
+    window.feature_panel.valuesChanged.emit("resize_hole", values)
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+    assert window.viewport.difference is not None, "Voraussetzung: die Differenz liegt im Bild"
+    assert window.viewport._comparing, "Voraussetzung: das Band steht, der Filter hängt"
+    window.feature_panel.valuesChanged.emit("resize_hole", values)
+    return object_id, hole
+
+
+def test_closing_the_feature_window_takes_its_preview_along(window: MainWindow) -> None:
+    """Wer das Fenster zumacht, hat keinen Ort mehr, die Änderung zu übernehmen.
+
+    Gemessen am 03.09.2026: Nach dem Zumachen blieben **alle sechs** Zustände
+    stehen — Zeitgeber, Merkposten, Differenzkörper, Band, Filter und die
+    Zeilen. Der Differenzkörper lag über dem Teil, das Band sagte „noch nicht
+    übernommen", und der anwendungsweite Filter bog die Leertaste um. Sichtbar
+    war das Fenster, an dem man beides hätte auflösen können, gerade nicht
+    mehr.
+    """
+    _a_drawn_preview(window)
+
+    window.feature_dock.close()
+    QApplication.processEvents()
+
+    assert window.viewport.difference is None, "der Differenzkörper geht mit"
+    assert not window.viewport._comparing, "und der anwendungsweite Filter auch"
+    assert not window._feature_preview.isActive()
+    assert window._feature_pending is None
+
+
+def test_the_start_screen_cut_takes_the_preview_along(window: MainWindow) -> None:
+    """*Datei → Neu* ist der härteste Schnitt, den die Anwendung hat.
+
+    Eine Vorschau überlebt ihn nicht: Beim nächsten geöffneten Projekt läge sie
+    über der neuen Szene, mit einem Band, das von einer Änderung spricht, die
+    es dort nie gab. ``start_empty`` ist mitgedeckt — es hängt am Hauptknopf
+    des Startbildschirms und ist nur von dort erreichbar.
+    """
+    _a_drawn_preview(window)
+
+    window.action_new()
+    QApplication.processEvents()
+
+    assert window.viewport.difference is None
+    assert not window.viewport._comparing
+    assert window._feature_pending is None
+
+
+def test_a_feature_the_new_scene_does_not_know_leaves_the_window(window: MainWindow) -> None:
+    """Der übersehene Zwilling von ``self._hidden &= set(result.scene.objects)``.
+
+    Zwei Zeilen darüber vergisst ``_show_scene`` ausgeblendete Objekte, die es
+    nicht mehr gibt — „sonst blendet eine wiederhergestellte Nummer später
+    etwas aus, das niemand versteckt hat". Für das Merkmalsfenster galt
+    dasselbe und stand nicht da: Seine Knöpfe zeigten auf ein Merkmal, das die
+    Szene nicht mehr enthält.
+
+    Geprüft und nicht pauschal geleert — nach einem Übernehmen lebt dasselbe
+    Merkmal weiter, und dann soll das Fenster stehenbleiben.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    assert window.feature_panel.feature_id == hole, "Voraussetzung: das Fenster zeigt die Bohrung"
+
+    window.start_empty()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    assert window.feature_panel.feature_id is None, "das Merkmal gibt es dort nicht mehr"
+    assert not window.feature_panel._built, "und seine Zeilen stehen nicht mehr da"
+
+
 def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
     """Robert am 03.09.2026: „wenn wir ein merkmal auswählen und auf der
     tastatur entf drück löschen wir den ganzen körper statt das merkmal."

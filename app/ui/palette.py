@@ -94,6 +94,18 @@ ROLES_ON_LIGHT: dict[Role, str] = {
     "info": "#3479ba",
     "warning": "#9d6c19",
     "error": "#cb4a4a",
+    # **Bernstein fehlte hier**, obwohl der Kommentar darüber es seit je als
+    # den schlechtesten Fall nennt („Bernstein bringt 2,22"). Aufgefallen ist
+    # es an einer anderen Verwendung: Der Rahmen, mit dem ein Tourschritt
+    # einen Bereich aufleuchten lässt, brachte auf der hellen Fläche 1,70 —
+    # WCAG 1.4.11 verlangt für eine Umrandung 3,0 (gemessen von 7f über
+    # 3d-druck-85, 03.09.2026).
+    #
+    # Eine Farbe kann beide Themen nicht bedienen: Derselbe Ton, dunkel genug
+    # für Weiß, bringt auf der dunklen Fläche nur 2,52. Genau dafür gibt es
+    # diese Tabelle. Nachgemessen: 4,54 auf Weiß, 3,74 auf der hellen
+    # Fensterfläche — über beiden Schwellen.
+    "select": "#ac650e",
 }
 
 #: Und dieselbe Rechnung in die andere Richtung.

@@ -4027,6 +4027,12 @@ class FeaturePanel(QWidget):
         self._feature_id: str | None = None
         self._alike: tuple[str, ...] = ()
 
+    @property
+    def feature_id(self) -> str | None:
+        """Welches Merkmal hier gerade steht — für den, der prüfen muss, ob es
+        das noch gibt."""
+        return self._feature_id
+
     def clear(self) -> None:
         """Zurück auf den leeren Zustand."""
         for widget in self._built:

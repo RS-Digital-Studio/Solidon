@@ -234,6 +234,35 @@ def test_a_border_is_actually_visible(theme: str) -> None:
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_the_flash_border_is_visible_on_the_surface_it_points_at(theme: str) -> None:
+    """Ein Rahmen, der auf einen Bereich zeigt, muss zu sehen sein.
+
+    Ein Tourschritt sagt „Sehen Sie links in den Verlauf" und lässt den Bereich
+    eine Sekunde lang aufleuchten; derselbe Rahmen führt aus den
+    Druckeinstellungen zum Filamentwähler. Die Farbe war ``ROLES['select']``
+    direkt — Bernstein, gewählt für die dunkle Fläche, auf der die Anwendung
+    startet. Dort trägt es 5,54, auf der hellen 1,70.
+
+    Gefordert sind 3,0 (WCAG 1.4.11 für eine Umrandung), also weniger als für
+    Schrift, und trotzdem um mehr als die Hälfte gerissen. Ein Rahmen, den man
+    nicht sieht, zeigt auf nichts.
+
+    Der Zwilling stand daneben schon gelöst: ``ROLES_ON_LIGHT`` dunkelt genau
+    dafür ab, und der Kommentar darüber nennt Bernstein als schlechtesten Fall
+    — nur stand es nicht in der Tabelle.
+    """
+    from app.ui.palette import text_colour
+
+    for surface_name in ("window", "base"):
+        surface = THEMES[theme][surface_name]  # type: ignore[index]
+        ratio = contrast_ratio(text_colour("select", surface), surface)
+        assert ratio >= 3.0, (
+            f"der Rahmen bringt auf {surface_name} ({surface}) nur {ratio:.2f} — "
+            "ein Aufleuchten, das niemand sieht"
+        )
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_the_drawing_grid_is_visible_without_shouting(theme: str) -> None:
     """Das Raster der Zeichenfläche wurde gezeichnet und war unsichtbar.
 
