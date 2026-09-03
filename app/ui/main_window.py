@@ -1806,6 +1806,7 @@ class MainWindow(QMainWindow):
 
         self.report = ReportPanel(self)
         self.report.findingActivated.connect(self._on_finding_activated)
+        self.report.actionOnBodies.connect(self._run_on_chosen_bodies)
         self.report.slicerRequested.connect(self.action_print_settings)
         self.chat = ChatPanel(self)
         self.chat.requestSent.connect(self._on_request_sent)
@@ -2622,10 +2623,10 @@ class MainWindow(QMainWindow):
         self._display_actions.append(
             self._add_action(
                 view_menu,
-                tr("Alles einpassen"),
+                tr("Einpassen"),
                 "Home",
                 self.viewport.reset_camera,
-                tr("Rückt die Kamera so, dass die ganze Szene ins Bild passt."),
+                tr("Rückt die Kamera auf den gewählten Körper — ohne Auswahl auf die ganze Szene."),
                 symbol="fit",
             )
         )
@@ -5928,7 +5929,7 @@ class MainWindow(QMainWindow):
                 self.action_add_parameter,
             ),
             "edit.auto_split": (tr("Automatisch teilen …"), "", self.action_auto_split),
-            "view.fit": (tr("Alles einpassen"), "Home", self.viewport.reset_camera),
+            "view.fit": (tr("Einpassen"), "Home", self.viewport.reset_camera),
             "view.toggle_right": (tr("Rechten Bereich zeigen"), "F9", self.action_toggle_right),
             "view.bed": (tr("Druckplatte zeigen"), "Ctrl+Shift+D", self.action_toggle_bed),
             "help.manual": (tr("Handbuch …"), "F1", self.action_manual),
@@ -6011,7 +6012,7 @@ class MainWindow(QMainWindow):
         Dieselbe Auskunft wie ``_palette_availability`` für die Operationen,
         aus derselben Quelle: der Action, die auch das Menü ausgraut. Was von
         Hand in ``window_commands`` steht und keine Action hat — Speichern,
-        das Handbuch, „Alles einpassen" — kann immer.
+        das Handbuch, „Einpassen" — kann immer.
         """
         action = self._palette_actions.get(key)
         if action is None or action.isEnabled():
@@ -8193,6 +8194,29 @@ class MainWindow(QMainWindow):
         for waiter in waiters:
             waiter(outcome)
 
+    def _run_on_chosen_bodies(self, action_id: str, bodies: object) -> None:
+        """Eine Handlung aus einer Sammelzeile des Prüfberichts.
+
+        Der gewöhnliche Weg geht über ``error_handlers`` und einen ``AppError``
+        mit genau einem Körper. Eine Zeile, die zwölf vertritt, hat gefragt,
+        welche gemeint sind (``BodyChoiceDialog``), und schickt sie hierher.
+
+        Die Kennung der Handlung ist zugleich der Name der Operation —
+        ``decimate_mesh`` heißt an beiden Enden gleich. Wo das nicht zutrifft,
+        passiert nichts: Eine Sammelzeile mit einer Handlung ohne gleichnamige
+        Operation gibt es heute nicht, und still das Falsche zu tun wäre
+        schlechter, als nichts zu tun.
+        """
+        # bodies kommt über ein Qt-Signal und ist dort object — die
+        # Prüfung hier ist die Stelle, an der aus "irgendetwas" eine Folge wird.
+        if not isinstance(bodies, (tuple, list)):
+            return
+        wanted = tuple(str(entry) for entry in bodies)
+        spec = next((entry for entry in REGISTRY.all() if entry.name == action_id), None)
+        if spec is None or not wanted:
+            return
+        self.run_operation(spec, on_bodies=wanted)
+
     def _on_finding_activated(self, finding: Finding) -> None:
         """Eine Warnung anklicken, die Stelle sehen: der kürzeste Weg vom Problem
         zum Ort (§18.4).
@@ -8947,7 +8971,13 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
         _tick(self._projection_group, projection)
 
-    def run_operation(self, spec: OperationSpec, given: Mapping[str, Any] | None = None) -> None:
+    def run_operation(
+        self,
+        spec: OperationSpec,
+        given: Mapping[str, Any] | None = None,
+        *,
+        on_bodies: Sequence[ObjectId] | None = None,
+    ) -> None:
         """Menüeintrag, Dialog, Transaktion — derselbe Weg, den auch der Agent
         nehmen wird.
 
@@ -8955,6 +8985,16 @@ class MainWindow(QMainWindow):
         Skizzenmodus reicht so seine gezeichnete Skizze herein. Es ersetzt den
         Dialog nicht: die übrigen Werte fragt er weiter, und was hier steht,
         lässt sich dort ändern.
+
+        ``on_bodies`` wendet dieselbe Operation auf **mehrere** Körper an, mit
+        denselben Werten und in **einer** Transaktion (Regel 16: ein Undo nimmt
+        sie vollständig zurück). Der Weg kommt aus dem Prüfbericht: Eine
+        Sammelzeile vertritt sechs oder zwölf Körper, und ihre Handlung fragt
+        beim Klick, für welche davon sie gelten soll. Der Dialog fragt die
+        Werte dabei **einmal** — sechs gleiche Dialoge hintereinander wären
+        dieselbe Frage sechsmal. Die Auswahl im Objektbaum bleibt außen vor:
+        Was hier gilt, hat der Kunde in der Liste angehakt und nicht im Baum
+        markiert.
         """
         if self.session.history.discardable and not confirm_discard(
             self.session.history.discardable, self._discarded_names(), self
@@ -8963,7 +9003,10 @@ class MainWindow(QMainWindow):
 
         result = self.session.last_result
         objects = list(result.scene.objects) if result else []
-        chosen = self.object_tree.selected_objects()
+        # Die Körper der Sammelzeile treten an die Stelle der Baumauswahl —
+        # sonst fragte die Prüfung darunter nach einer Markierung, die für
+        # diesen Weg nie gemeint war.
+        chosen = tuple(on_bodies) if on_bodies else self.object_tree.selected_objects()
         if spec.consumes and len(chosen) < spec.consumes:
             QMessageBox.information(self, str(spec.title), _needs_objects(spec.consumes))
             return
@@ -9025,10 +9068,17 @@ class MainWindow(QMainWindow):
                 self.report.add_findings(applied.findings)
                 return
             count_before = len(self.session.project.document.ops)
-            self.session.apply(
-                spec.title,
-                [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))],
+            # Ein Schritt je Körper, alle in einer Transaktion: Die Operation
+            # verbraucht einen (``consumes``), die Handlung meint zwölf.
+            drafts = (
+                [
+                    OperationDraft(op=spec.name, inputs=(body,), params=dict(params))
+                    for body in on_bodies
+                ]
+                if on_bodies
+                else [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))]
             )
+            self.session.apply(spec.title, drafts, bundle=bool(on_bodies))
             operations = self.session.project.document.ops
             if spec.name == "split_pinned" and len(operations) > count_before:
                 self._queue_split_reveal(operations[-1].outputs)

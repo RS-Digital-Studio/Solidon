@@ -169,6 +169,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | Ein Datum steht in jeder Sprache auf Deutsch | Architektur-Durchsicht (02.09.2026) | eine Zeile in `main_window.py:11170` — `QLocale().toString(...)` statt `strftime("%d.%m.%Y %H:%M")`; nach dem Release, weil der Wiederherstellungsdialog nur nach einem Absturz erscheint |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
+| Der Knopf-Wächter gilt nur einem Dialog | Die Modelle von heute über die Oberfläche (03.09.2026) | eine Ausweitung von `test_no_locked_button_in_this_dialog_stays_silent` auf alle Dialoge der Anwendung. Er prüft jeden gesperrten, sichtbaren Knopf der Druckeinstellungen auf Tooltip, Statuszeile und zugängliche Beschreibung und hat beim ersten Lauf zwei Fälle mehr gefunden, als die Handmessung gesehen hatte: „Slicen“ und „Im Slicer öffnen …“ schwiegen im häufigsten Fall überhaupt, wenn gar kein Slicer eingerichtet ist. Dieselbe Zusage gilt jedem der vierzehn Dialoge; geprüft wird einer (Vorschlag 3d-druck-c7) |
 | Der Einheitendialog zeigt „nan" | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Prüfung auf endliche Koordinaten dort, wo die Zahl **entsteht** — `biggest` in `ingest/ops.py`, die Diagonale des größten Körpers (3d-druck-d4). Eine STL mit einer NaN-Ecke wird angenommen, `detect_unit` findet nichts Plausibles und fragt; im Dialog steht dann „Millimeter (mm): nan × 20.00 × 20.00 mm". Der Docstring von `_unit_for` sagt die Regel selbst: „eine Frage, die niemand beantworten kann, ist nur die halbe Regel" |
 | Vierzehn Sekunden eingefrorenes Fenster beim Lesen | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | einen asynchronen Umbau von `main_window.open_path`. Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute Fenster mit einem Zeitgeber, der während der Blockade nicht feuert: 119,5 s gesamt, davon 30,2 s eingefroren — ein Block von 14,0 s ganz am Anfang (synchrones Lesen plus `scan_assembly`) und einer von 6,3 s am Ende. Dazwischen ist §2.8 vorbildlich erfüllt („Punkte verschweißen · 20 % · noch etwa 2 min"). Der Docstring beschreibt die Lücke vollständig und schließt sie nicht; `first_model` fällt vor dem Lesen und stört den Umbau nicht |
 | `ingest.very_large` trägt den Körpernamen als Text statt als Kennung | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine `object_id` in `ops._named()`, das heute nur `values["object"] = name` setzt. Zwei Folgen, gemessen von 3d-druck-7f an einem Kundenmodell mit acht Körpern: Der Befund bekommt keine Handlung, weil `DECIMATE_MESH` ein Ziel braucht und ohne Kennung auf der zufälligen Auswahl landete; und `_bundled` gruppiert über den Wortlaut, in dem der Name steht — sechs Körper werden sechs fast wortgleiche Zeilen. Zwölf von fünfzehn Befunden im Bericht stammen aus zwei Kennungen |
@@ -14776,3 +14777,79 @@ Durchgangs an denselben Weg gestoßen sind:
       mit, ein Klon und die CI nehmen GEOS. `test_slice_core.py` hält beide
       Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen
       auf Eckpunkte fallen — das ist der Prüffall, der fehlt.
+
+
+## Die Modelle von heute über die Oberfläche (03.09.2026)
+
+Acht Dateien aus Roberts Download-Ordner — 3MF aus Bambu Studio, Orca und
+Elegoo, eine STL, eine STEP, von 0,3 bis 63,6 MB — durch das **gebaute
+Fenster**, mit Bildschirmfoto an jeder Station. Nicht `ingest` direkt: Wer den
+Kern fragt, prüft den Kern und nicht den Weg.
+
+**Behoben, vier Commits:**
+
+- [x] **Fünfzig Zeilen „Hohlkehle" im Objektbaum** (`2ec9f135`).
+  `build_tray_v3.step` bringt 234 erkannte Merkmale mit, und der Baum stellte
+  jedes als eigene Zeile dar — die linke Spalte war voll, Parameter und
+  Verlauf standen darunter außerhalb des Fensters. Der Prüfbericht daneben
+  bündelt dieselbe Menge seit einem Weg-3-Lauf zu einer Zeile; der Baum kannte
+  die Regel nur für Merkmale aus einem Baustein, und erkannte stammen aus
+  keinem Schritt. Jetzt vier zugeklappte Dächer, dieselbe Schwelle.
+
+- [x] **„Dreiecke verringern" stand als Rat im Text und nirgends als Knopf**
+  (`f5ab49e6`). Zwölf von fünfzehn Befunden am Wizard Tower trugen keine
+  Handlung, und ihr Text nannte den Ausweg beim Namen. `DECIMATE_MESH` gibt es
+  seit je, der Handler ist verdrahtet, die Operation existiert — nur der
+  Befund kannte sie nicht.
+
+- [x] **Drei graue Knöpfe im Druckdialog sagten nicht, warum** (`97bcc32b`).
+  „Vorschläge übernehmen" schwieg, und „Slicen" wie „Im Slicer öffnen …"
+  schwiegen im häufigsten Fall überhaupt: wenn gar kein Slicer eingerichtet
+  ist. Beide Zweige, die einen Grund setzen, verlangten `found is not None`.
+  Gefunden hat es ein Wächter über **alle** Knöpfe des Dialogs, nicht das
+  Auge — zwei Tests je Knopf standen schon da und prüften beide den Fall, dass
+  ein Slicer da ist.
+
+- [x] **Der getippte Dateiname kam anders auf der Platte an** (`9204ced6`).
+  „Gehäuse Deckel.3mf" wurde „Gehaeuse_Deckel.3mf". Der `_ExportWorker` reicht
+  den Stem des gewählten Zielpfads durch, und der ging durch dieselbe
+  Bereinigung wie ein erzeugter Name. `given_name()` nimmt jetzt nur heraus,
+  was ein Dateisystem nicht trägt; `safe_name` bleibt für den Objektteil
+  (Entscheidung Robert).
+
+**Was der Durchgang darüber hinaus gezeigt hat, ohne dass etwas zu tun war:**
+Die gescheiterte Bohrung in „Blessed Family — Heart Script Decor" bietet drei
+klickbare Auswege und sagt in der Statuszeile „Die Kette hält an — siehe
+Prüfbericht"; die Kamera passt korrekt ein (3d-druck-7b hat es nachgemessen:
+möglicher Zoom 0,98 über fünf Fälle, es ist keine Luft mehr da); chinesische
+Objektnamen kommen sauber durch; und die Kette laden → bohren → speichern →
+drei Drucker → zurücklesen ergibt Maße, die auf **0,000000 mm** übereinstimmen.
+An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
+
+**Offen:**
+
+- [ ] **Der Knopf-Wächter gilt nur einem Dialog.**
+  `test_no_locked_button_in_this_dialog_stays_silent` prüft jeden gesperrten,
+  sichtbaren Knopf der Druckeinstellungen auf Tooltip, Statuszeile und
+  zugängliche Beschreibung — und hat beim ersten Lauf zwei Fälle mehr gefunden,
+  als die Handmessung gesehen hatte. Dieselbe Zusage gilt jedem Dialog der
+  Anwendung; vierzehn sind es, und geprüft wird einer. Ein Wächter über alle
+  wäre eine gute halbe Stunde und fängt den nächsten stummen Knopf, bevor ihn
+  jemand fotografiert (Vorschlag 3d-druck-c7, 03.09.2026).
+## Einpassen zeigt, was gewählt ist (03.09.2026)
+
+- [x] **Pos1 rahmt den gewählten Körper, nicht mehr immer die ganze
+  Szene.** Roberts Entscheidung, nachdem die Messung gezeigt hatte, dass am
+  bisherigen Verhalten kein Fehler ist: über fünf Fälle lag der
+  mögliche Zusatzzoom bei 0,98 bis 1,00 — eingepasst **war**
+  eingepasst, nur eben auf alles. Wer ein Teil aus einer Baugruppe anklickt,
+  meint das Teil. Ohne Auswahl bleibt alles wie bisher.
+
+  Der Eintrag heißt jetzt „Einpassen" (vorher „Alles
+  einpassen") — ein Name, der in beiden Zuständen stimmt; der Tooltip
+  sagt, welcher gilt. Der Versatz von Platte und Auseinanderziehen zählt
+  mit, ein ausgeblendeter Ausgewählter fällt auf die Szene
+  zurück, und die automatische Rahmung nach dem Wachsen nimmt weiterhin
+  alles. `tests/test_viewport_decisions.py::test_fitting_frames_the_chosen_body`
+  — die erste Fassung des Tests war gegen den Ausbau der Änderung
+  grün und ist deshalb um eine Plotter-Attrappe ergänzt.

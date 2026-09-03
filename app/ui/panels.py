@@ -12,11 +12,14 @@ import dataclasses
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
-from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QByteArray, QPoint, QSignalBlocker, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
     QHBoxLayout,
@@ -183,11 +186,39 @@ SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
 #: Einzelzeilen — dort trägt „welches Objekt" mehr als eine Zahl.
 BUNDLE_FROM = 4
 
+#: Befunde, die je Körper **einmal** entstehen und für jeden dasselbe sagen.
+#:
+#: Sonst gehört der Körper zum Klickvertrag: Eine Sammelzeile darf nicht auf
+#: das erste zufällige Mitglied zeigen, also trennt er die Gruppen. Diese hier
+#: sind die Ausnahme, und sie ist gemessen: An
+#: ``Wizard+Tower+Staunton+Elegoo.3mf`` standen 15 Befunde, davon **zwölf** aus
+#: diesen beiden Kennungen über dieselben sechs Körper — sechsmal derselbe
+#: Satz, nur mit anderem Namen dahinter. Bei ``chufang.3mf`` waren es zwölf von
+#: achtzehn. Was der Kunde daraus liest, ist eine Wand.
+#:
+#: Statt des Körpers trägt die Zeile ihre Zahl und die Liste der betroffenen
+#: Körper (:data:`_BODIES_ROLE`); die Handlung fragt beim Klick, für welche
+#: davon sie gelten soll (Entscheidung Robert, 03.09.2026). Damit verliert die
+#: Bündelung nichts — sie gibt die Wahl zurück, die vorher sechs Zeilen waren.
+ACROSS_BODIES: Final[frozenset[str]] = frozenset({"perceive.too_large", "ingest.very_large"})
+
+#: Die Körper, die eine Sammelzeile vertritt — Grundlage der Auswahl beim
+#: Klick. Eigene Rolle und nicht aus dem Befund gelesen: Der trägt nur seinen
+#: eigenen, und die Zeile steht für alle.
+_BODIES_ROLE = int(Qt.ItemDataRole.UserRole) + 5
+
 #: Trägt an einer Sammelzeile, wie viele Befunde sie bündelt. Eine eigene
 #: Rolle und nicht ``values["count"]``: Den Schlüssel führen auch Befunde des
 #: Kerns („12 kleine Objekte übergangen"), und eine Zählung, die ihn läse,
 #: zählte deren Zahl statt ihrer Zeile.
 _BUNDLE_ROLE = int(Qt.ItemDataRole.UserRole) + 3
+
+#: Die Farbe des Schweregradsymbols an einer Befundzeile. Trug lange keine
+#: Konstante, sondern stand als ``UserRole + 4`` mitten im Aufbau — und
+#: genau darauf ist :data:`_BODIES_ROLE` beim ersten Anlauf gelaufen: Die
+#: Zeile lieferte ``'#3479ba'`` statt ihrer Körper. Eine Rolle ohne Namen
+#: ist für den Nächsten unsichtbar; deshalb steht sie hier bei den anderen.
+_TONE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 
 
 def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
@@ -206,23 +237,28 @@ def _bundled(findings: list[Finding]) -> list[tuple[Finding, list[Finding]]]:
     groups: dict[tuple[Any, ...], list[Finding]] = {}
     order: list[tuple[Any, ...]] = []
     for finding in findings:
+        # Zwei Klassen von Mengenbefunden, aus zwei verschiedenen Gründen: Ein
+        # verlorenes Formdetail hat keinen Ort, ein „zu fein vernetzt" hat für
+        # jeden Körper denselben Satz. Beim zweiten fällt der Körper aus dem
+        # Schlüssel — die Zeile führt ihn dann als Liste und nicht als Namen.
+        across = finding.code in ACROSS_BODIES
         key = (
             finding.code,
             finding.severity,
             str(finding.message),
             finding.source,
-            finding.object_id,
+            None if across else finding.object_id,
             finding.op_id,
             tuple((action.id, str(action.label), action.primary) for action in finding.suggestions),
             # Nur verlorene Formdetails sind nachweislich ortlose
             # Mengenbefunde. Jede andere Warnung behält Ort und Merkmale im
             # Schlüssel; sonst würde aus vier anklickbaren Stellen eine Zeile
             # ohne jedes räumliche Ziel.
-            None if finding.code == "perceive.orphaned" else finding.location,
-            () if finding.code == "perceive.orphaned" else finding.feature_ids,
+            None if finding.code == "perceive.orphaned" or across else finding.location,
+            () if finding.code == "perceive.orphaned" or across else finding.feature_ids,
             (
                 ()
-                if finding.code == "perceive.orphaned"
+                if finding.code == "perceive.orphaned" or across
                 else tuple(
                     (name, type(value), value) for name, value in sorted(finding.values.items())
                 )
@@ -2755,10 +2791,119 @@ class HistoryPanel(QWidget):
 FILTER_FROM = 2
 
 
+class BodyChoiceDialog(QDialog):
+    """Für welche Körper soll die Handlung einer Sammelzeile gelten?
+
+    Sechs Zeilen „zu fein vernetzt" wurden zu einer (:data:`ACROSS_BODIES`) —
+    was dabei verlorenginge, ist die Wahl, welchen Körper man behandelt. Der
+    Dialog gibt sie zurück, und zwar als Wahl und nicht als Frage: Alle sind
+    angehakt, wer alle meint, drückt einmal (Entscheidung Robert, 03.09.2026).
+
+    **Keine Bestätigung vor einer rücknehmbaren Handlung** (Regel 19): Er geht
+    nur auf, wo es mehr als einen Körper gibt, und er fragt nicht „wirklich?",
+    sondern „welche?". Der Unterschied ist der Grund, aus dem er erlaubt ist.
+    """
+
+    def __init__(
+        self,
+        parent: QWidget | None,
+        title: str,
+        bodies: Sequence[str],
+        names: Mapping[str, str],
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        layout = QVBoxLayout(self)
+        layout.addWidget(QLabel(tr("Für welche Körper soll das gelten?"), self))
+        self.list = QListWidget(self)
+        for identifier in bodies:
+            entry = QListWidgetItem(names.get(identifier, identifier), self.list)
+            entry.setData(Qt.ItemDataRole.UserRole, identifier)
+            entry.setFlags(entry.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            entry.setCheckState(Qt.CheckState.Checked)
+        layout.addWidget(self.list)
+
+        self.all_of_them = QCheckBox(tr("Alle auswählen"), self)
+        self.all_of_them.setChecked(True)
+        self.all_of_them.toggled.connect(self._check_all)
+        layout.addWidget(self.all_of_them)
+        # Der Haken folgt der Liste, nicht nur umgekehrt: Wer den letzten
+        # Körper abwählt, sieht sonst „Alle auswählen" angehakt über einer
+        # leeren Wahl.
+        self.list.itemChanged.connect(self._follow_list)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
+        )
+        self.ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self.ok_button.setText(title or tr("Übernehmen"))
+        make_primary(self.ok_button)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _check_all(self, wanted: bool) -> None:
+        state = Qt.CheckState.Checked if wanted else Qt.CheckState.Unchecked
+        with QSignalBlocker(self.list):
+            for row in range(self.list.count()):
+                item = self.list.item(row)
+                if item is not None:
+                    item.setCheckState(state)
+        self._update_ok()
+
+    def _follow_list(self) -> None:
+        with QSignalBlocker(self.all_of_them):
+            self.all_of_them.setChecked(len(self.chosen()) == self.list.count())
+        self._update_ok()
+
+    def _update_ok(self) -> None:
+        """Ohne einen einzigen Körper gibt es nichts zu tun — und der gesperrte
+        Knopf sagt, warum (dieselbe Zusage wie im Druckdialog)."""
+        empty = not self.chosen()
+        self.ok_button.setEnabled(not empty)
+        why = tr("Kein Körper ausgewählt.") if empty else ""
+        self.ok_button.setToolTip(why)
+        self.ok_button.setStatusTip(why)
+        self.ok_button.setAccessibleDescription(why)
+
+    def chosen(self) -> tuple[str, ...]:
+        """Die angehakten Körper, in der Reihenfolge der Liste."""
+        return tuple(
+            str(item.data(Qt.ItemDataRole.UserRole))
+            for row in range(self.list.count())
+            if (item := self.list.item(row)) is not None
+            and item.checkState() == Qt.CheckState.Checked
+        )
+
+    @classmethod
+    def ask(
+        cls,
+        parent: QWidget | None,
+        title: str,
+        bodies: Sequence[str],
+        names: Mapping[str, str],
+    ) -> tuple[str, ...]:
+        """Fragen und antworten — leer, wenn abgebrochen wurde."""
+        dialog = cls(parent, title, bodies, names)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return ()
+        return dialog.chosen()
+
+
 class ReportPanel(QWidget):
     """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
     findingActivated = Signal(object)
+
+    actionOnBodies = Signal(str, object)
+    """Eine Handlung einer Sammelzeile, samt der Körper, für die sie gelten soll.
+
+    Der gewöhnliche Weg geht über ``handlers_of`` und einen ``AppError`` — der
+    trägt genau einen Körper. Eine Zeile, die zwölf vertritt, braucht einen
+    zweiten: Das Panel fragt (:class:`BodyChoiceDialog`), das Fenster führt
+    aus, und zwar als **eine** Transaktion über alle gewählten (Regel 16).
+    Zwei Wege zur selben Handlung sind einer zu viel — deshalb kommt der hier
+    nur zum Zug, wo es wirklich etwas zu wählen gibt."""
 
     contentGrew = Signal()
     """Die Liste hat Zeilen bekommen und will mehr Platz.
@@ -2972,6 +3117,33 @@ class ReportPanel(QWidget):
         if len(items) != 1:
             return
         finding: Finding | None = items[0].data(Qt.ItemDataRole.UserRole)
+        # **Eine Sammelzeile fragt, für welche Körper sie gelten soll.** Sie
+        # vertritt sechs oder zwölf, und ihr Befund trägt nur den ersten davon;
+        # ihn stillschweigend zu nehmen wäre die Handlung an einem zufälligen
+        # Ziel. Gefragt wird nur, wo es etwas zu wählen gibt — bei einem
+        # einzigen Körper wäre der Dialog eine Bestätigung vor einer
+        # rücknehmbaren Handlung, und die verbietet Regel 19.
+        bodies: tuple[str, ...] = items[0].data(_BODIES_ROLE) or ()
+        if finding is not None and len(bodies) > 1:
+            action = next(
+                (
+                    entry
+                    for entry in actions_for_document(
+                        finding,
+                        self._document,
+                        stopped_at=self._stopped_at,
+                        live_objects=self._live_objects,
+                    )
+                    if entry.id == action_id
+                ),
+                None,
+            )
+            chosen = BodyChoiceDialog.ask(
+                self, str(action.label) if action else "", bodies, self._names
+            )
+            if chosen:
+                self.actionOnBodies.emit(action_id, chosen)
+            return
         handler = handlers_of(self).get(action_id)
         if finding is not None and handler is not None:
             if action_id == REPAIR_AND_RETRY.id:
@@ -3268,7 +3440,13 @@ class ReportPanel(QWidget):
             # derselben Auswertung wie der Objektbaum; „Schritt" ist die
             # Sprache des sichtbaren Verlaufs und keine interne Op-Kennung.
             context: list[str] = []
-            if finding.object_id is not None:
+            # **Eine Zeile für sechs Körper nennt keinen einzelnen.** Der
+            # Befund trägt den des ersten Mitglieds, und ihn anzuschreiben
+            # hieße, fünf andere zu verschweigen. Die Namen stehen im Tooltip,
+            # die Kennungen in :data:`_BODIES_ROLE` — daraus baut der Klick
+            # seine Auswahl.
+            across = finding.code in ACROSS_BODIES
+            if finding.object_id is not None and not across:
                 identifier = str(finding.object_id)
                 context.append(self._names.get(identifier, identifier))
             if finding.op_id is not None:
@@ -3289,6 +3467,10 @@ class ReportPanel(QWidget):
                 message = f"{message} — {' · '.join(context)}"
             item = QListWidgetItem(message)
             item.setData(_BUNDLE_ROLE, len(members))
+            if across:
+                bodies = tuple(str(one.object_id) for one in members if one.object_id is not None)
+                if bodies:
+                    item.setData(_BODIES_ROLE, bodies)
 
             # Nur Navigation mitnehmen, die für **jedes** Mitglied gilt.
             # ``_bundled`` hält Körper, Schritt und Herkunft bereits im
@@ -3357,7 +3539,7 @@ class ReportPanel(QWidget):
         # Text 13,59 hätte. Der Fehler war der am schlechtesten lesbare
         # Befund. Regel 18 bleibt gewahrt: Die Form des Symbols trägt den
         # Schweregrad, und sie trug ihn schon vorher — Dreieck, Kreis, Punkt.
-        item.setData(Qt.ItemDataRole.UserRole + 4, tone.name())
+        item.setData(_TONE_ROLE, tone.name())
         # §22.5: woher eine Zahl kommt, ist Teil des Befunds und wird nie dem
         # Leser zum Annehmen überlassen — eine Schätzung ist keine Messung.
         details = [f"{tr('Herkunft')}: {origin_label(finding.source)}"]

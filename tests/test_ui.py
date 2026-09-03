@@ -40,6 +40,7 @@ from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import (
     Feature,
+    Finding,
     MaterialSlot,
     Parameter,
     Profile,
@@ -4408,7 +4409,7 @@ def test_escape_closes_the_open_tool(window: MainWindow) -> None:
 def test_the_view_menu_can_fit_everything(window: MainWindow) -> None:
     """Ohne diesen Eintrag musste man wissen, dass Strg+0 nebenbei einpasst."""
     labels = {action.text() for action in all_menu_actions(window)}
-    assert "Alles einpassen" in labels
+    assert "Einpassen" in labels
 
 
 def test_the_first_body_gets_the_camera(window: MainWindow) -> None:
@@ -11999,3 +12000,76 @@ def test_many_features_of_one_kind_stand_under_one_roof(window: MainWindow) -> N
 
     tree.select_feature(object_id, "fillet_3")
     assert dach.isExpanded(), "wer ein Merkmal darin wählt, sieht es"
+
+
+def test_one_line_stands_for_many_bodies_and_asks_which(window: MainWindow) -> None:
+    """Sechs Körper, ein Satz — und die Wahl bleibt erhalten.
+
+    Gemessen an ``Wizard+Tower+Staunton+Elegoo.3mf`` (03.09.2026): 15 Befunde,
+    davon zwölf aus zwei Kennungen über dieselben sechs Körper. Sechsmal
+    derselbe Satz mit anderem Namen dahinter — was der Kunde liest, ist eine
+    Wand. Gebündelt wird jetzt über die Körpergrenze (``ACROSS_BODIES``), und
+    die Zeile führt die Körper mit, damit die Handlung fragen kann, für welche
+    sie gelten soll (Entscheidung Robert).
+    """
+    report = window.report
+    report.show_result(None)
+    report.add_findings(
+        [
+            Finding(
+                code="perceive.too_large",
+                severity="info",
+                message="Für die Merkmalserkennung ist dieses Modell zu groß.",
+                object_id=f"obj_{index}",
+                values={"triangles": 200000 + index, "limit": 200000},
+            )
+            for index in range(1, 7)
+        ]
+    )
+
+    from app.ui.panels import _BODIES_ROLE
+
+    zeilen = [report.list.item(row) for row in range(report.list.count())]
+    assert len(zeilen) == 1, f"sechs Befunde, eine Zeile — gezählt: {len(zeilen)}"
+    zeile = zeilen[0]
+    assert zeile is not None
+    assert "6 ×" in zeile.text(), zeile.text()
+    assert "obj_1" not in zeile.text(), (
+        "eine Zeile für sechs Körper nennt keinen einzelnen — sonst verschweigt sie fünf"
+    )
+    assert zeile.data(_BODIES_ROLE) == tuple(f"obj_{index}" for index in range(1, 7))
+
+
+def test_the_same_operation_on_many_bodies_is_one_transaction(window: MainWindow) -> None:
+    """Regel 16: Ein Undo nimmt die ganze Handlung zurück, nicht ein Sechstel.
+
+    ``decimate_mesh`` verbraucht einen Körper; die Handlung der Sammelzeile
+    meint mehrere. ``run_operation(..., on_bodies=...)`` baut deshalb einen
+    Schritt je Körper und wendet sie in **einer** Transaktion an — der Dialog
+    fragt seine Werte dabei einmal für alle.
+    """
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    bodies = tuple(result.scene.objects)
+    assert len(bodies) >= 2, f"zwei Körper für den Fall, gefunden: {len(bodies)}"
+    transactions_before = len(window.session.project.document.transactions)
+    steps_before = len(window.session.project.document.ops)
+
+    window.run_operation(REGISTRY.get("decimate_mesh"), on_bodies=bodies[:2])
+    dialog = window._op_dialog
+    assert dialog is not None, "der Dialog fragt die Werte — einmal für beide"
+    dialog.accept()
+    window.session.wait_for_idle()
+
+    document = window.session.project.document
+    assert len(document.ops) == steps_before + 2, "ein Schritt je Körper"
+    assert len(document.transactions) == transactions_before + 1, (
+        "und alle in einer Transaktion — sonst nimmt Strg+Z nur den letzten zurück"
+    )
+    assert [tuple(step.inputs) for step in document.ops[-2:]] == [
+        (bodies[0],),
+        (bodies[1],),
+    ], "jeder Schritt trifft genau seinen Körper"
