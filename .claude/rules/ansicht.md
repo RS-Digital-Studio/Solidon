@@ -790,6 +790,54 @@ Drei Dinge daran sind tragend:
   nicht über `plotter.remove_actor`: Jenes nähme die Aktoren aus pyvistas
   Namensverzeichnis, und das braucht sie unter ihren Namen weiter.
 
+### Die Druckplatte scheint durch, wenn etwas darunter liegt
+
+Ein Teil unter der Platte war **vollständig** unsichtbar. Gemessen am
+laufenden Fenster: ein Quader von 40 auf 40 auf 30 mm, 35 mm unter Z=0, von
+schräg oben gezählt — **1** Bildpunkt von 263 583. Wer sein Modell versenkt
+oder falsch positioniert hat, sah davon nichts und merkte es beim Slicen
+(Robert, 03.09.2026: „dass man die Modelle auch unter dem Bett durchsehen
+sollte").
+
+Die Entscheidung vom 23.08.2026 löste nur die halbe Sache: `culling = "back"`
+wirft die Rückseite der Ebene weg, also sieht man **von unten** hindurch. Von
+oben blieb sie undurchdringlich.
+
+| Deckkraft der Fläche | Körper sichtbar |
+|---|---|
+| 1,00 | 1 Bildpunkt |
+| 0,80 | 81 675 |
+| 0,60 | 258 370 |
+| **0,45** | **262 077** |
+| 0,30 | 263 773 |
+
+`BED_SUNKEN_OPACITY` ist 0,45 — praktisch alles, und dieselbe Zahl, die der
+Darstellungsmodus *Transparent* schon führt.
+
+**Und sie gilt nur, solange wirklich etwas darunter liegt** (`sunken_body`,
+gefragt an der Szene und nicht am Bild). Das ist Roberts ausdrückliche
+Fassung, und sie nimmt der Sache ihre einzige Abwägung: Die Fläche existiert,
+damit der Kontaktschatten auf etwas fällt — über einer leeren Platte bleibt
+sie deckend, und die Frage stellt sich gar nicht.
+
+Drei Dinge hängen daran:
+
+* **Nur die gefüllte Ebene** (`_bed_surfaces`, je Platte eine). Das Raster ist
+  ohnehin ein Drahtgitter mit 0,35, der Bauraum sind Linien; verdeckt hat
+  immer nur `bed_surface_<n>`.
+* **Die Frage wird bei jeder Auswertung neu gestellt** (`_apply_bed_
+  transparency` in `show_scene`). Die Platte steht schon, seit der Drucker
+  gewählt wurde; ob etwas unter ihr liegt, ändert sich mit jedem Schritt.
+* **Und sie zählt zur Tiefenordnung** (`sees_through`, `_order_by_depth`):
+  Eine durchscheinende Fläche unter *allen* Körpern ist genau der Fall, den
+  eine falsche Zeichenreihenfolge ruiniert — ohne sie wäre falsch dargestellt,
+  was die Durchsicht zeigen soll (Hinweis 3d-druck-85).
+
+**Ganz weg gibt es weiterhin**, und das ist etwas anderes: *Ansicht →
+Druckplatte zeigen* (Strg+Umschalt+D) blendet Bett, Bauraum und Maßstab aus,
+gemerkt über den Neustart. Für „das Teil einmal ganz allein sehen" ist das
+direkter als Durchsichtigkeit.
+
 ## Mehrere Druckplatten
 
 Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an

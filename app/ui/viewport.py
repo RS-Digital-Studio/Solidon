@@ -1401,6 +1401,34 @@ SUPPORT_DIRECTIONS: tuple[tuple[float, float, float], ...] = (
 #: beide nicht um dieselbe Tiefe streiten.
 BED_SURFACE_DROP = 0.2
 
+#: Wie deckend die Bettfläche ist, solange ein Körper **unter** ihr liegt.
+#:
+#: **Ein Teil unter der Platte war unsichtbar, und zwar vollständig.** Gemessen
+#: am laufenden Fenster, ein Quader von 40 auf 40 auf 30 mm, 35 mm unter Z=0,
+#: von schräg oben gezählt: **1** Bildpunkt von 263 583. Ohne die Fläche wären
+#: es alle.
+#: Wer sein Modell versenkt oder falsch positioniert hat, sah davon nichts und
+#: merkte es beim Slicen (Robert, 03.09.2026: „dass man die Modelle auch unter
+#: dem Bett durchsehen sollte").
+#:
+#: Die Reihe dazu, dieselbe Lage bei fallender Deckkraft:
+#:
+#: | Deckkraft | sichtbar |
+#: |---|---|
+#: | 1,00 | 1 Bildpunkt |
+#: | 0,80 | 81 675 |
+#: | 0,60 | 258 370 |
+#: | 0,45 | 262 077 |
+#: | 0,30 | 263 773 |
+#:
+#: Bei 0,45 ist praktisch alles da, und es ist derselbe Wert, den der
+#: Darstellungsmodus *Transparent* schon führt — eine Zahl statt zweier.
+#:
+#: **Nur wenn wirklich etwas darunter liegt** (Robert, ausdrücklich): Sonst
+#: bliebe die Frage, was die Durchsicht den Kontaktschatten kostet, und die
+#: stellt sich bei einer Platte, unter der nichts ist, gar nicht.
+BED_SUNKEN_OPACITY = 0.45
+
 
 #: Der Abstand zwischen zwei Betten, wenn alle Platten zusammen zu sehen sind.
 #:
@@ -2862,6 +2890,10 @@ class Viewport(QWidget):
         self._actors: dict[ObjectId, Any] = {}
         self._frame_actors: list[Any] = []
         self._bed_visible = True
+        self._bed_surfaces: list[Any] = []
+        """Die gefüllten Ebenen der Betten, je Platte eine. Eigene Liste, weil
+        genau sie durchscheinend wird und die anderen Bettteile nicht: Das
+        Raster ist ohnehin ein Drahtgitter, der Bauraum sind Linien."""
         self._explosion_middle: tuple[int, Any] | None = None
         #: Die Teilmenge von ``_frame_actors``, die **flach auf dem Bett** liegt:
         #: Fläche und Raster. Nur sie tritt im Skizzenmodus ab — Bauraumkanten
@@ -3116,7 +3148,7 @@ class Viewport(QWidget):
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
         self._occlusion_applied = False
-        self._depth_order_for: tuple[tuple[float, ...], tuple[str, ...]] | None = None
+        self._depth_order_for: tuple[tuple[float, ...], tuple[str, ...], int] | None = None
         """Für welche Kameralage und welche Körper zuletzt nach Tiefe geordnet
         wurde — die Ordnung läuft an der Zeichenstelle und darf dort nichts
         kosten, solange sich nichts bewegt."""
@@ -3731,6 +3763,33 @@ class Viewport(QWidget):
         """
         return self._map is None
 
+    def sunken_body(self) -> bool:
+        """Ob ein sichtbarer Körper unter die Bettfläche ragt (§18.6).
+
+        Die Frage entscheidet, ob die Platte durchscheinend wird — und sie
+        wird an der **Szene** gestellt, nicht am Bild: Ein Körper, der unten
+        heraussteht, tut das aus jeder Kamerastellung.
+        """
+        if self._result is None:
+            return False
+        for object_id, entry in self._result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
+            if float(entry.mesh.bounds.minimum[2]) < -BED_SURFACE_DROP - EPS_GEOM:
+                return True
+        return False
+
+    def _apply_bed_transparency(self) -> None:
+        """Setzt die Deckkraft der Bettflächen nach dieser Regel.
+
+        Am vorhandenen Aktor und nicht durch Neuaufbau: Der Bauraum wird beim
+        Wechsel des Druckers gezeichnet, die Frage stellt sich bei jeder
+        Auswertung neu.
+        """
+        wanted = BED_SUNKEN_OPACITY if self.sunken_body() else 1.0
+        for surface in self._bed_surfaces:
+            surface.prop.opacity = wanted
+
     @property
     def sees_through(self) -> bool:
         """Ob gerade durch die Körper hindurchgesehen werden soll.
@@ -3744,7 +3803,14 @@ class Viewport(QWidget):
         Plotter, und eine Regel, die nur dort gilt, wo niemand sie prüfen
         kann, ist keine.
         """
-        return self._mode == "transparent" or self._sketch_frame is not None
+        return (
+            self._mode == "transparent"
+            or self._sketch_frame is not None
+            # Eine durchscheinende Bettfläche ist ein transluzenter Aktor
+            # unter **allen** Körpern; ohne die Ordnung wäre gerade das falsch
+            # gezeichnet, was sie sichtbar machen soll (Hinweis 3d-druck-85).
+            or self.sunken_body()
+        )
 
     def _order_by_depth(self) -> None:
         """Zeichnet die Körper von hinten nach vorn, solange man durchsieht.
@@ -3781,7 +3847,9 @@ class Viewport(QWidget):
         Nur bei :attr:`sees_through`: Opake Geometrie ordnet der Tiefenpuffer,
         und die Arbeit wäre umsonst.
         """
-        if self.plotter is None or not self.sees_through or len(self._actors) < 2:
+        if self.plotter is None or not self.sees_through:
+            return
+        if len(self._actors) + len(self._bed_surfaces) < 2:
             return
 
         import numpy as np
@@ -3790,13 +3858,17 @@ class Viewport(QWidget):
         eye = np.asarray(self.plotter.camera.GetPosition(), dtype=float)
         # Nichts tun, wo nichts zu tun ist: Diese Methode hängt an ``_draw``
         # und läuft damit bei jedem Bild, auch während eines Zugs.
-        seen = (tuple(eye.tolist()), tuple(self._actors))
+        seen = (tuple(eye.tolist()), tuple(self._actors), len(self._bed_surfaces))
         if seen == self._depth_order_for:
             return
         self._depth_order_for = seen
+        # Die Bettflächen gehören dazu, sobald sie durchscheinen: Sie liegen
+        # unter allen Körpern, und eine falsch einsortierte Fläche verdeckt
+        # genau das, was sie zeigen soll.
+        ordered = [*self._actors.values(), *self._bed_surfaces]
         ranked = [
             (float(np.linalg.norm(np.asarray(actor.GetCenter(), dtype=float) - eye)), index, actor)
-            for index, actor in enumerate(self._actors.values())
+            for index, actor in enumerate(ordered)
         ]
         for _far, _index, actor in ranked:
             renderer.RemoveActor(actor)
@@ -4242,6 +4314,10 @@ class Viewport(QWidget):
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
+        # Ob ein Körper unter der Platte liegt, entscheidet sich mit jeder
+        # Auswertung neu — und die Platte steht schon, seit der Drucker
+        # gewählt wurde.
+        self._apply_bed_transparency()
         if restore_finding:
             self._draw_finding_mark()
         self._render_now()
@@ -4814,6 +4890,7 @@ class Viewport(QWidget):
             self.plotter.remove_actor(actor, render=False)
         self._frame_actors.clear()
         self._ground_actors.clear()
+        self._bed_surfaces.clear()
         for plate in range(beds):
             self._draw_one_bed(pv, plate, plate_shift(plate, width)[0], width, depth, height)
         # Der Zustand entscheidet, nicht die Aufruf-Reihenfolge: Während des
@@ -4826,6 +4903,7 @@ class Viewport(QWidget):
         if not self._bed_visible:
             for actor in self._frame_actors:
                 actor.SetVisibility(False)
+        self._apply_bed_transparency()
         self._draw()
 
     @property
@@ -4888,6 +4966,7 @@ class Viewport(QWidget):
             reset_camera=False,
             pickable=False,
         )
+        self._bed_surfaces.append(surface)
         # **Von unten schaut man hindurch** (Robert, 23.08.2026): Wer eine
         # Unterseite bearbeitet, dreht die Ansicht unter das Teil — und sah
         # dort die Platte statt des Teils.

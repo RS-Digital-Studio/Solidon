@@ -4291,3 +4291,83 @@ def test_transparent_bodies_are_drawn_from_back_to_front(qt_app: QApplication) -
     assert not viewport.sees_through
     viewport._sketch_frame = object()
     assert viewport.sees_through
+
+
+class _BedSurface:
+    """So viel Bettfläche, wie die Durchsicht anfasst."""
+
+    def __init__(self) -> None:
+        self.prop = SimpleNamespace(opacity=1.0)
+
+
+def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
+    """Ein Teil unter der Druckplatte war vollständig unsichtbar.
+
+    **Gemessen am laufenden Fenster (03.09.2026):** Ein Quader von 40 auf 40
+    auf 30 mm, 35 mm unter Z=0, von schräg oben gezählt — **1** Bildpunkt von
+    263 583. Ohne die Bettfläche wären es alle. Wer sein Modell versenkt oder
+    falsch positioniert hat, sah davon nichts und merkte es beim Slicen
+    (Robert: „dass man die Modelle auch unter dem Bett durchsehen sollte").
+
+    **Nur wenn wirklich etwas darunter liegt** — so hat Robert es gestellt,
+    und damit stellt sich die Frage nach dem Kontaktschatten gar nicht: Über
+    einer leeren Platte bleibt sie deckend.
+
+    Geprüft wird die Regel, die Anwendung und die Rücknahme. Die Bettfläche
+    ist eine Attrappe mit genau der einen Eigenschaft, die angefasst wird —
+    offscreen gibt es keinen Plotter.
+    """
+    import dataclasses
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import BED_SUNKEN_OPACITY, Viewport
+
+    viewport = Viewport()
+    flaeche = _BedSurface()
+    viewport._bed_surfaces = [flaeche]  # type: ignore[list-item]
+
+    assert not viewport.sunken_body(), "ohne Auswertung liegt nichts unter der Platte"
+
+    oben = SceneObject(
+        id="oben",
+        name="oben",
+        mesh=MeshData(
+            trimesh.creation.box(extents=(40.0, 40.0, 30.0)).apply_translation((0.0, 0.0, 15.0))
+        ),
+    )
+    viewport._result = EvaluationResult(scene=Scene(objects={"oben": oben}))
+    assert not viewport.sunken_body(), "ein Körper auf der Platte ragt nicht darunter"
+    viewport._apply_bed_transparency()
+    assert flaeche.prop.opacity == 1.0, "und dann bleibt die Platte deckend"
+    assert not viewport.sees_through
+
+    unten = dataclasses.replace(
+        oben,
+        id="unten",
+        mesh=MeshData(
+            trimesh.creation.box(extents=(40.0, 40.0, 30.0)).apply_translation((0.0, 0.0, -20.0))
+        ),
+    )
+    viewport._result = EvaluationResult(scene=Scene(objects={"unten": unten}))
+    assert viewport.sunken_body(), "dieser ragt darunter"
+    viewport._apply_bed_transparency()
+    assert flaeche.prop.opacity == BED_SUNKEN_OPACITY, "und dann scheint die Platte durch"
+    assert viewport.sees_through, (
+        "eine durchscheinende Fläche unter allen Körpern braucht die Tiefenordnung"
+    )
+
+    # Und zurück: Wer sein Teil wieder heraufholt, bekommt seine Platte wieder.
+    viewport._result = EvaluationResult(scene=Scene(objects={"oben": oben}))
+    viewport._apply_bed_transparency()
+    assert flaeche.prop.opacity == 1.0
+
+    # Ein ausgeblendeter Körper zählt nicht — was nicht im Bild ist, kann
+    # niemand meinen (§18.8).
+    viewport._result = EvaluationResult(scene=Scene(objects={"unten": unten}))
+    assert viewport.sunken_body()
+    viewport._hidden = frozenset({"unten"})
+    assert not viewport.sunken_body(), "ausgeblendet ist nicht unter der Platte"
