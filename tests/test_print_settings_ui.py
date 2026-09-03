@@ -3205,3 +3205,52 @@ def test_the_list_of_ignored_settings_matches_what_the_slicers_take() -> None:
             f"{flavour}: gemessen {sorted(measured)}, "
             f"eingetragen {sorted(slicer_keys.NOT_TAKEN_BY[flavour])}"
         )
+
+
+def test_without_a_machine_profile_the_printers_own_vendor_narrows_the_filaments(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Ohne Maschinenprofil zeigt die Liste die Filamente des eigenen Herstellers.
+
+    Vorher blieb sie leer, und das war eine Leistungsentscheidung: Der Bestand
+    eines installierten Slicers hält 5962 Filamentprofile über 48 Hersteller,
+    und sie alle in eine Combobox zu legen ließ die Anwendung minutenlang
+    stehen. Solidon weiß aber mehr — der Drucker des Projekts kennt seinen
+    Hersteller, und die Profilnamen tragen ihn vorn.
+
+    Zwei Fälle, die den Filter fast unbrauchbar gemacht hätten, beide am
+    03.09.2026 gemessen:
+
+    * **Der Vorgabedrucker hat gar keinen Hersteller.** ``generic-220`` heißt
+      „Allgemeiner FDM-Drucker"; ein Filter auf sein leeres Feld träfe mit
+      ``startswith("")`` jeden Eintrag und stellte genau den Hänger wieder her.
+    * **Der Herstellername ist nicht der Namensanfang.** Der Hersteller heißt
+      „Bambu Lab", die Profile heißen „Bambu PLA Basic" — auf den vollen Namen
+      verglichen waren es null von vier Treffern.
+    """
+    from app.core.export import slicer_profiles as sp
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog._profiles = [
+        sp.SlicerProfile(path=Path(__file__), name=name, kind="filament")
+        for name in ("Elegoo PLA @EC", "Elegoo PETG @EC", "Bambu PLA Basic", "Generic ABS")
+    ]
+
+    printers = profiles.printer_profiles()
+    generic = next(key for key, entry in printers.items() if not entry.vendor)
+    dialog.session.project.document.printer = generic
+    assert dialog._filaments_worth_showing(None) == [], (
+        "ohne Hersteller bleibt es leer — sonst stünden 5962 Einträge in der Liste"
+    )
+
+    two_words = next((key for key, entry in printers.items() if " " in entry.vendor.strip()), "")
+    if two_words:
+        dialog.session.project.document.printer = two_words
+        found = dialog._filaments_worth_showing(None)
+        assert found, (
+            f"{printers[two_words].vendor!r}: das erste Wort muss zählen, "
+            "sonst trifft der Filter nichts"
+        )
+        first = printers[two_words].vendor.split(" ")[0].casefold()
+        assert all(entry.name.casefold().startswith(first) for entry in found)

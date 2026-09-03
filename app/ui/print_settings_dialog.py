@@ -2672,6 +2672,47 @@ class PrintSettingsDialog(QDialog):
         self.process_choice.setCurrentIndex(max(index, 0))
         self._fill_filaments(machine)
 
+    def _filaments_worth_showing(
+        self, machine: slicer_profiles.SlicerProfile | None
+    ) -> list[slicer_profiles.SlicerProfile]:
+        """Die Filamente zur Auswahl — ohne Maschine die des eigenen Herstellers.
+
+        Mit gewähltem Maschinenprofil entscheidet der Slicer, was passt. Ohne
+        eines stand hier eine leere Liste, und das war eine
+        Leistungsentscheidung: Der Bestand hält **5962** Filamentprofile über
+        48 Hersteller, und sie alle in eine Combobox zu legen ließ die
+        Anwendung minutenlang stehen.
+
+        Solidon weiß aber mehr, als es benutzt hat: Der Drucker des Projekts
+        kennt seinen Hersteller, und die Profilnamen tragen ihn vorn („Elegoo
+        PLA @EC"). Für einen Elegoo bleiben damit gut zweihundert statt
+        sechstausend — eine Liste, die man lesen kann (Vorschlag 3d-druck-a0,
+        03.09.2026).
+
+        **Der Vorgabedrucker hat keinen Hersteller, und das ist genau der
+        Fall, um den es geht.** ``generic-220`` heißt „Allgemeiner
+        FDM-Drucker"; ein Filter auf sein leeres Herstellerfeld träfe mit
+        ``startswith("")`` jeden Eintrag und stellte den Hänger wieder her, den
+        die leere Liste verhindert. Ohne Hersteller bleibt es deshalb leer —
+        und der Platzhalter darunter sagt, was zu tun ist, statt ein leeres
+        Feld hinzustellen (§2.1: keine Sackgassen).
+        """
+        if machine is not None:
+            return slicer_profiles.filaments(self._profiles, machine)
+        # Das **erste Wort** des Herstellers, nicht sein ganzer Name: Die
+        # Profile heißen „Bambu PLA Basic", der Hersteller aber „Bambu Lab" —
+        # ein Vergleich auf den vollen Namen traf dort null von vier, gemessen
+        # am 03.09.2026. Bei „Elegoo", „Creality" und „Anycubic" ist es
+        # dasselbe Wort, der Fall fällt also nur bei zweiteiligen Namen auf.
+        vendor = self.session.profile.printer.vendor.strip().casefold().split(" ")[0]
+        if not vendor:
+            return []
+        return [
+            entry
+            for entry in slicer_profiles.filaments(self._profiles, None)
+            if entry.name.casefold().startswith(vendor)
+        ]
+
     def _fill_filaments(self, machine: slicer_profiles.SlicerProfile | None) -> None:
         """Die Filamentprofile zum gewählten Drucker, vorbelegt nach Material.
 
@@ -2681,7 +2722,7 @@ class PrintSettingsDialog(QDialog):
         das transluzente will 255 Grad, das PRO 240 bei halbem Volumenstrom.
         Wer eine besondere Spule hat, stellt sie hier ein.
         """
-        fitting = slicer_profiles.filaments(self._profiles, machine) if machine else []
+        fitting = self._filaments_worth_showing(machine)
         self.filament_choice.clear()
         for entry in fitting:
             self.filament_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
@@ -2695,6 +2736,11 @@ class PrintSettingsDialog(QDialog):
             # bevor jemand einen Drucker eingestellt hat — stand die Anwendung
             # damit minutenlang.
             self.filament_choice.setCurrentIndex(-1)
+            # Ein leeres Feld ist eine Sackgasse; der Platzhalter nennt den
+            # nächsten Schritt (§2.1, Regel 17 in ihrer freundlichen Gestalt).
+            self.filament_choice.setPlaceholderText(
+                tr("Erst einen Drucker wählen — dann stehen die Filamente hier.")
+            )
             for _label, box in self.slot_rows:
                 box.clear()
             return
