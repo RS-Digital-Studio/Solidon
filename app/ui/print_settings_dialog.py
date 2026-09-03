@@ -1923,6 +1923,42 @@ class PrintSettingsDialog(QDialog):
         self.settings = settings
         self._load_into_editors()
         self._refresh_advice()
+        self._refill_slicer_profiles()
+
+    def _refill_slicer_profiles(self) -> None:
+        """Die Profilfelder folgen dem Drucker des Projekts (§29).
+
+        **Sie taten es nicht, und das traf Roberts eigenen Drucker.** Gemessen
+        am 03.09.2026 (Fund von 3d-druck-c7, hier nachgestellt): Der Dialog
+        öffnet mit dem Drucker aus den Einstellungen, bei frischem Stand also
+        dem allgemeinen 220er. Für den ordnet sich kein Profil zu, die
+        Notbremse in :meth:`_machines_worth_showing` zeigt deshalb den ganzen
+        Bestand. Danach stellt der Kunde seinen Drucker ein — und die Liste
+        blieb, wie sie war:
+
+            generic-220         1001 zur Wahl, nichts gewählt
+            Centauri Carbon 2   1001 zur Wahl, nichts gewählt
+            neu gefüllt            4 zur Wahl, das richtige gewählt
+
+        Für den einzigen Drucker, den er besitzt, hieß das: aus 1001 Einträgen
+        suchen, obwohl vier davon seine sind und ``printer_for`` sie kennt.
+
+        **Die gemerkte Wahl überlebt den Wechsel nicht**, und deshalb wird das
+        Feld vorher geleert: Sie galt für den vorigen Drucker, und ein
+        Maschinenprofil gehört zu genau einem. Innerhalb desselben Druckers
+        bleibt eine Abweichung stehen — das hält
+        ``test_a_remembered_choice_wins_over_the_match`` fest, und
+        :meth:`_profiles_found` liest dafür ``already``.
+
+        Ohne gefundene Profile gibt es nichts zu füllen. Die Suche läuft in
+        einem Arbeiter; kommt sie später, füllt sie selbst.
+        """
+        if not self._profiles:
+            return
+        self.machine_choice.blockSignals(True)
+        self.machine_choice.setCurrentIndex(-1)
+        self.machine_choice.blockSignals(False)
+        self._profiles_found(self._profiles)
 
     def _resolved(self, quality: Any) -> PrintSettings:
         """Neu aufgelöste Vorgaben — mit der Slotbelegung von vorher.

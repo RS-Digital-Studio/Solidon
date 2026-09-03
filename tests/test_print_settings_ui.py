@@ -3337,3 +3337,53 @@ def test_no_locked_button_in_this_dialog_stays_silent(dialog: PrintSettingsDialo
         if not (button.toolTip() and button.statusTip() and button.accessibleDescription()):
             stumm.append(button.text())
     assert not stumm, f"gesperrt und ohne Grund: {stumm}"
+
+
+def test_the_machine_list_follows_the_printer_of_the_project(qt_app: QApplication) -> None:
+    """Wer den Drucker wechselt, bekommt die Profile des neuen — nicht die alten.
+
+    **Roberts Fall, gemessen am 03.09.2026 von 3d-druck-c7 und hier
+    nachgestellt.** Der Dialog öffnet mit dem Drucker aus den Einstellungen,
+    und das ist bei frischem Stand der allgemeine 220er. Für den ordnet sich
+    kein Profil zu, also greift die Notbremse in ``_machines_worth_showing``
+    („bleibt nichts übrig, bleibt alles stehen") und zeigt den ganzen Bestand.
+    Danach stellt der Kunde seinen Drucker ein — und die Liste blieb, wie sie
+    war:
+
+        A) generic-220         1001 zur Wahl, nichts gewählt
+        B) Centauri Carbon 2   1001 zur Wahl, nichts gewählt
+        C) neu gefüllt            4 zur Wahl, das richtige gewählt
+
+    ``_scene_profile_changed`` lud die Editoren neu und frischte die Beratung
+    auf, rührte die drei Profilfelder aber nicht an. Für den einzigen Drucker,
+    den Robert besitzt, hieß das: aus 1001 Einträgen suchen, obwohl vier davon
+    seine sind und ``printer_for`` sie kennt.
+
+    **Die gemerkte Wahl überlebt den Wechsel nicht.** Sie galt für den vorigen
+    Drucker; ein Maschinenprofil gehört zu genau einem. Innerhalb desselben
+    Druckers bleibt sie stehen — das hält
+    ``test_a_remembered_choice_wins_over_the_match`` fest.
+    """
+    session = Session()
+    session.project.document.printer = "generic-220"
+    settings = UiSettings()
+    weit = _profile("Fremder Drucker 0.4 nozzle", "machine", printer_model="Fremder", nozzle=0.4)
+    meiner = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+    )
+    from app.ui.print_settings_dialog import _select_data
+
+    dialog = PrintSettingsDialog(session, settings)
+    dialog._profiles_found([weit, meiner])
+
+    assert dialog.machine_choice.count() == 2, "der allgemeine Drucker sieht alles"
+
+    _select_data(dialog.printer_choice, "centauri-carbon-2")
+    dialog._scene_profile_changed()
+
+    assert session.profile.printer.id == "centauri-carbon-2", "die Vorbedingung des Tests"
+    assert dialog.machine_choice.count() == 1, "jetzt nur noch die des neuen Druckers"
+    assert dialog.machine_choice.currentData() == str(meiner.path)
