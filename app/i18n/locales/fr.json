@@ -593,6 +593,7 @@
   "Das geladene Paket ist beschädigt und wurde gelöscht.": "Le paquet téléchargé est endommagé et a été supprimé.",
   "Das gemessene Spiel eintragen. Es gilt danach für jede Passung, auch in älteren Projekten.": "Saisir le jeu mesuré. Il vaut ensuite pour chaque ajustement, y compris dans les projets plus anciens.",
   "Das geprüfte Geräte-Zertifikat ließ sich nicht im Profil ablegen.": "Le certificat d’appareil vérifié n’a pas pu être enregistré dans le profil.",
+  "Das gewählte Maschinenprofil gehört zu einem anderen Drucker und wird deshalb nicht übergeben — sein Bauraum, seine Düse und sein Startcode wären die einer fremden Maschine. Wählen Sie in den Druckeinstellungen das Profil dieses Druckers.": "Le profil de machine sélectionné appartient à une autre imprimante et n'est donc pas transmis : son volume d'impression, sa buse et son code de démarrage seraient ceux d'une machine étrangère. Choisissez le profil de cette imprimante dans les réglages d'impression.",
   "Das hat nicht geklappt.": "Cela n'a pas marché.",
   "Das hat so nicht funktioniert": "Cela n'a pas fonctionné",
   "Das ist ein Dateipfad und keine Operation": "Ceci est un chemin de fichier, pas une opération",

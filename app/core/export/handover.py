@@ -215,6 +215,21 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     Gemessen an einem Centauri Carbon 2: ohne Maschinenseite 73 Werte, mit ihr
     160.
 
+    **Auch eine getroffene Wahl wird gefragt** — seit dem 03.09.2026, und das
+    war ein Fund von 3d-druck-c7 an vier echten Druckern. Der Druckdialog merkt
+    sich das zuletzt gewählte Maschinenprofil und reichte es unbesehen weiter;
+    wer den Drucker des Projekts wechselte, bekam es trotzdem. Die geschriebene
+    Maschinendatei eines Prusa-MK4S-Projekts trug damit ``printer_model``
+    „Elegoo Centauri Carbon 2", einen Bauraum von 256 x 256 x 256 statt
+    250 x 210 x 220 und den Anfahrcode ``CC2_START_GCODE``. Ein Teil, das
+    Solidon als passend ausweist, ragt so 46 mm über die Kante des Prusa.
+
+    Die Sperre dagegen gab es: ``UiSettings.slicer_profile_printer`` merkt,
+    für welchen Drucker die Profile gewählt wurden, und ``settings_for_export``
+    fragt sie. ``_current_setup`` im Dialog las die Auswahlfelder ungefiltert —
+    ein Wächter, den ein Weg von zweien ruft. Er steht jetzt hier, wo beide
+    durchmüssen.
+
     **Und warum der Rückfall fragt, statt zu nehmen.** Der Slicer nennt seine
     eingestellte Maschine, aber das muss nicht der Drucker sein, für den
     Solidon gerade rechnet — auf dieser Maschine stand ElegooSlicer auf einem
@@ -227,7 +242,7 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
     keine Maschinenseite, und Regel 21 — nicht raten.
     """
     if setup.machine_profile:
-        return setup.machine_profile
+        return setup.machine_profile if _fits_the_printer(setup.machine_profile, profile) else ""
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
     if not chosen:
         return ""
@@ -241,6 +256,33 @@ def machine_for(setup: SlicerSetup, profile: Profile) -> str:
         )
         return ""
     return chosen
+
+
+def _fits_the_printer(machine_profile: str, profile: Profile) -> bool:
+    """Gehört dieses Maschinenprofil zum Drucker des Projekts?
+
+    **Nicht erkannt heißt ja.** ``printer_for`` ordnet nur zu, was es kennt;
+    ein selbst gebautes Profil gehört seinem Besitzer, und es ihm wegzunehmen
+    wäre schlimmer als es zu nehmen — ohne Maschinenprofil lehnt die
+    Orca-Familie den Auftrag ganz ab. Geprüft wird deshalb gegen einen
+    **anderen bekannten** Drucker und nicht gegen „unbekannt".
+
+    Ein Pfad statt eines Namens ist der zweite Fall, den ``printer_for`` nicht
+    beantwortet: In die Projektdatei gehört der Name (Regel 12), der Dialog
+    reicht aber die Datei weiter. Der Stamm des Dateinamens ist derselbe Name —
+    ``profile_file`` löst beide Richtungen ebenso auf.
+
+    **Der Stamm wird nur genommen, wenn der ganze Name nichts ergibt**, und
+    nicht anhand einer Dateiendung: Profilnamen tragen Punkte. „Elegoo Centauri
+    Carbon 2 0.4 nozzle" hat für ``Path`` das Suffix „.4 nozzle", und wer daran
+    entscheidet, fragt nach „Elegoo Centauri Carbon 2 0" — einem Namen, den es
+    nicht gibt. Der Prüfling galt damit als nicht zuordenbar und ging durch.
+    """
+    known = profiles.printer_profiles()
+    belongs = slicer_profiles.printer_for(machine_profile, known)
+    if not belongs:
+        belongs = slicer_profiles.printer_for(Path(machine_profile).stem, known)
+    return not belongs or belongs == profile.printer.id
 
 
 def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
@@ -275,8 +317,29 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
     """
     if not takes_a_machine_profile(setup.flavour):
         return []
-    if setup.machine_profile or machine_for(setup, profile):
+    if machine_for(setup, profile):
         return []
+    if setup.machine_profile:
+        # **Nicht „der Slicer steht falsch", denn er steht gar nicht.** Hier hat
+        # der Kunde selbst gewählt, und seine Wahl gehört zu einer anderen
+        # Maschine — meist, weil sie aus dem vorigen Projekt stammt. Der Rat
+        # ist deshalb ein anderer: nicht den Slicer umstellen, sondern die
+        # Wahl. Ein Satz, der die falsche Ursache nennt, schickt den Kunden an
+        # die falsche Stelle.
+        return [
+            Finding(
+                code="slicer.machine_mismatch",
+                severity="warning",
+                message=_(
+                    "Das gewählte Maschinenprofil gehört zu einem anderen Drucker "
+                    "und wird deshalb nicht übergeben — sein Bauraum, seine Düse "
+                    "und sein Startcode wären die einer fremden Maschine. Wählen "
+                    "Sie in den Druckeinstellungen das Profil dieses Druckers."
+                ),
+                values={"machine": setup.machine_profile, "printer": profile.printer.title},
+                suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
+            )
+        ]
     chosen = slicer_profiles.chosen_machine(setup.flavour, setup.executable)
     if chosen:
         return [

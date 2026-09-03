@@ -593,6 +593,7 @@
   "Das geladene Paket ist beschädigt und wurde gelöscht.": "The downloaded package is damaged and has been deleted.",
   "Das gemessene Spiel eintragen. Es gilt danach für jede Passung, auch in älteren Projekten.": "Enter the clearance you measured. It applies to every fit afterwards, in older projects too.",
   "Das geprüfte Geräte-Zertifikat ließ sich nicht im Profil ablegen.": "The verified device certificate could not be saved in the profile.",
+  "Das gewählte Maschinenprofil gehört zu einem anderen Drucker und wird deshalb nicht übergeben — sein Bauraum, seine Düse und sein Startcode wären die einer fremden Maschine. Wählen Sie in den Druckeinstellungen das Profil dieses Druckers.": "The selected machine profile belongs to a different printer and is therefore not handed over — its build volume, its nozzle and its start G-code would be those of a foreign machine. Choose the profile for this printer in the print settings.",
   "Das hat nicht geklappt.": "That did not work.",
   "Das hat so nicht funktioniert": "That did not work",
   "Das ist ein Dateipfad und keine Operation": "That is a file path, not an operation",

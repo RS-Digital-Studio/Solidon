@@ -3928,3 +3928,85 @@ def test_a_matching_machine_leaves_the_slicing_run_quiet(
     )
 
     assert not [f for f in outcome.findings if f.code.startswith("slicer.machine_")]
+
+
+def test_a_machine_profile_of_another_printer_is_not_handed_over(monkeypatch) -> None:
+    """Eine gemerkte Wahl überlebt den Drucker nicht, zu dem sie gehört.
+
+    **Gemessen am 03.09.2026, gemeldet von 3d-druck-c7.** Der Druckdialog merkt
+    sich das zuletzt gewählte Maschinenprofil und reicht es unbesehen weiter.
+    Wer den Drucker des Projekts wechselt, bekommt es trotzdem — vier Drucker,
+    viermal dasselbe Profil. Die geschriebene Maschinendatei sah für ein
+    Prusa-MK4S-Projekt so aus:
+
+        printer_model    Elegoo Centauri Carbon 2
+        Bauraum          256 x 256 x 256   (der Prusa hat 250 x 210 x 220)
+        Startcode        ;===== CC2_START_GCODE
+
+    Der Prusa hat 210 mm in Y; die Datei behauptet 256. Ein Teil, das Solidon
+    als passend ausweist, ragt damit 46 mm über die Kante — und der Anfahrcode
+    ist der einer fremden Maschine, wofür der Docstring von ``machine_for``
+    seit gestern „ein Homing-Befehl der falschen Maschine fährt die Düse ins
+    Bett" schreibt.
+
+    **Die Sperre gab es, und ein Weg von zweien fragte sie.**
+    ``settings_for_export`` vergleicht ``slicer_profile_printer`` und gibt
+    nichts zurück, wenn die Drucker abweichen; ``_current_setup`` im Dialog
+    liest die Auswahlfelder ungefiltert. Die Prüfung sitzt jetzt im Kern, wo
+    beide Wege durchmüssen.
+
+    **Was weiterhin gilt:** ein Profil, das Solidon keinem Drucker zuordnen
+    kann. Ein selbst gebautes gehört seinem Besitzer, und es ihm wegzunehmen
+    wäre schlimmer als es zu nehmen — geprüft wird gegen einen *anderen
+    bekannten* Drucker, nicht gegen „nicht erkannt".
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    known = {
+        "Elegoo Centauri Carbon 2 0.4 nozzle": "centauri-carbon-2",
+        "Prusa MK4S 0.4 nozzle": "prusa-mk4s",
+    }
+    monkeypatch.setattr(slicer_profiles, "printer_for", lambda name, _table: known.get(name, ""))
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"),
+        flavour="orca",
+        machine_profile="Elegoo Centauri Carbon 2 0.4 nozzle",
+    )
+
+    eigener = profiles.make_profile("centauri-carbon-2", "pla")
+    fremder = profiles.make_profile("prusa-mk4s", "pla")
+
+    assert handover.machine_for(setup, eigener) == "Elegoo Centauri Carbon 2 0.4 nozzle"
+    assert handover.machine_for(setup, fremder) == "", "das Profil gehört einer anderen Maschine"
+
+    # Und der Kunde erfährt es, statt eine falsch adressierte Datei zu bekommen.
+    codes = [finding.code for finding in handover.machine_missing(setup, fremder)]
+    assert "slicer.machine_mismatch" in codes, codes
+
+
+def test_a_profile_solidon_cannot_place_stays_the_customers(monkeypatch) -> None:
+    """Ein selbst gebautes Profil gehört seinem Besitzer.
+
+    ``printer_for`` ordnet nur zu, was es kennt. Ein Profil ohne Zuordnung als
+    fremd zu behandeln nähme dem Kunden genau die Wahl weg, die er von Hand
+    getroffen hat — und ein Slicer ohne Maschinenprofil lehnt den Auftrag ab.
+    Geprüft wird deshalb gegen einen *anderen bekannten* Drucker.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "printer_for", lambda *_: "")
+    setup = handover.SlicerSetup(
+        executable=Path("elegoo-slicer.exe"),
+        flavour="orca",
+        machine_profile="Meine eigene Maschine",
+    )
+
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+
+    assert handover.machine_for(setup, profile) == "Meine eigene Maschine"
+    assert handover.machine_missing(setup, profile) == []

@@ -593,6 +593,7 @@
   "Das geladene Paket ist beschädigt und wurde gelöscht.": "El paquete descargado está dañado y se ha eliminado.",
   "Das gemessene Spiel eintragen. Es gilt danach für jede Passung, auch in älteren Projekten.": "Introducir la holgura medida. A partir de entonces vale para todos los ajustes, también en proyectos antiguos.",
   "Das geprüfte Geräte-Zertifikat ließ sich nicht im Profil ablegen.": "No se pudo guardar el certificado del dispositivo verificado en el perfil.",
+  "Das gewählte Maschinenprofil gehört zu einem anderen Drucker und wird deshalb nicht übergeben — sein Bauraum, seine Düse und sein Startcode wären die einer fremden Maschine. Wählen Sie in den Druckeinstellungen das Profil dieses Druckers.": "El perfil de máquina seleccionado pertenece a otra impresora y por eso no se transfiere: su volumen de impresión, su boquilla y su código de inicio serían los de una máquina ajena. Elija el perfil de esta impresora en los ajustes de impresión.",
   "Das hat nicht geklappt.": "Eso no ha funcionado.",
   "Das hat so nicht funktioniert": "Así no ha funcionado",
   "Das ist ein Dateipfad und keine Operation": "Esa es una ruta de archivo, no una operación",

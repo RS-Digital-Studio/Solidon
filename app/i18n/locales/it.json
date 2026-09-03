@@ -593,6 +593,7 @@
   "Das geladene Paket ist beschädigt und wurde gelöscht.": "Il pacchetto scaricato è danneggiato ed è stato eliminato.",
   "Das gemessene Spiel eintragen. Es gilt danach für jede Passung, auch in älteren Projekten.": "Inserisci il gioco misurato. Da quel momento vale per ogni accoppiamento, anche nei progetti più vecchi.",
   "Das geprüfte Geräte-Zertifikat ließ sich nicht im Profil ablegen.": "Non è stato possibile salvare il certificato del dispositivo verificato nel profilo.",
+  "Das gewählte Maschinenprofil gehört zu einem anderen Drucker und wird deshalb nicht übergeben — sein Bauraum, seine Düse und sein Startcode wären die einer fremden Maschine. Wählen Sie in den Druckeinstellungen das Profil dieses Druckers.": "Il profilo macchina selezionato appartiene a un'altra stampante e non viene quindi trasferito: il suo volume di stampa, il suo ugello e il suo codice di avvio sarebbero quelli di una macchina estranea. Scelga il profilo di questa stampante nelle impostazioni di stampa.",
   "Das hat nicht geklappt.": "Non ha funzionato.",
   "Das hat so nicht funktioniert": "Così non ha funzionato",
   "Das ist ein Dateipfad und keine Operation": "Questo è un percorso di file, non un'operazione",

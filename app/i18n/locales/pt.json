@@ -593,6 +593,7 @@
   "Das geladene Paket ist beschädigt und wurde gelöscht.": "O pacote transferido está danificado e foi eliminado.",
   "Das gemessene Spiel eintragen. Es gilt danach für jede Passung, auch in älteren Projekten.": "Introduzir a folga medida. Depois disso vale para todos os ajustes, também em projetos antigos.",
   "Das geprüfte Geräte-Zertifikat ließ sich nicht im Profil ablegen.": "Não foi possível guardar o certificado do dispositivo verificado no perfil.",
+  "Das gewählte Maschinenprofil gehört zu einem anderen Drucker und wird deshalb nicht übergeben — sein Bauraum, seine Düse und sein Startcode wären die einer fremden Maschine. Wählen Sie in den Druckeinstellungen das Profil dieses Druckers.": "O perfil de máquina selecionado pertence a outra impressora e por isso não é transferido: o seu volume de impressão, o seu bico e o seu código de arranque seriam os de uma máquina alheia. Escolha o perfil desta impressora nas definições de impressão.",
   "Das hat nicht geklappt.": "Isto não funcionou.",
   "Das hat so nicht funktioniert": "Assim não funcionou",
   "Das ist ein Dateipfad und keine Operation": "Esse é um caminho de ficheiro, não uma operação",
