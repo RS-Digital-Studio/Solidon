@@ -143,3 +143,51 @@ def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) 
     )
     for action in ungültig:
         assert str(action.reason) in texte, f"der Grund von {action.title} fehlt"
+
+
+def test_a_changed_number_is_reported_before_it_is_done(qt_app: QApplication) -> None:
+    """Robert am 03.09.2026: „eine live vorschau wäre noch gut."
+
+    Das Panel meldet jede Änderung über ein **eigenes** Signal — getrennt vom
+    Ausführen, damit ein Empfänger ohne Nachdenken weiß, ob er rechnen oder
+    ändern soll. Ein Empfänger, der beim falschen Signal ausführt, schriebe
+    einen Schritt, den niemand ausgelöst hat.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    gemeldet: list[tuple[str, dict[str, object]]] = []
+    getan: list[tuple[str, dict[str, object]]] = []
+    panel.valuesChanged.connect(lambda op, params: gemeldet.append((op, params)))
+    panel.operationRequested.connect(lambda op, params: getan.append((op, params)))
+
+    spin = next(
+        widget for row in panel._built for widget in fields(row) if isinstance(widget, LengthSpin)
+    )
+    spin.set_value_mm(spin.value_mm() + 2.0)
+
+    assert gemeldet, "die Änderung wurde nicht gemeldet"
+    assert gemeldet[-1][1]["at_feature"] == identifier, "das Merkmal steht dabei"
+    assert not getan, "gemeldet heißt nicht getan"
+
+
+def test_a_length_is_reported_in_millimetres(qt_app: QApplication) -> None:
+    """Qts ``valueChanged`` trägt den Anzeigewert; gemeldet wird der des Kerns.
+
+    Wer das verwechselt, schickt bei Zoll 0,1969 statt 5 — derselbe Fehler,
+    für den ``LengthSpin`` sein eigenes Signal hat.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    gemeldet: list[dict[str, object]] = []
+    panel.valuesChanged.connect(lambda _op, params: gemeldet.append(params))
+
+    spin = next(
+        widget for row in panel._built for widget in fields(row) if isinstance(widget, LengthSpin)
+    )
+    spin.set_value_mm(12.5)
+
+    assert gemeldet, "nichts gemeldet"
+    werte = [wert for name, wert in gemeldet[-1].items() if name != "at_feature"]
+    assert any(abs(float(wert) - 12.5) < 1e-6 for wert in werte if isinstance(wert, (int, float)))

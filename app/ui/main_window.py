@@ -1455,6 +1455,15 @@ class MainWindow(QMainWindow):
         # über einem Modell, das daneben keinen Platz hatte.
         self.feature_panel = FeaturePanel(self)
         self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
+        # **Die Vorschau wartet, das Tippen nicht.** Jeder Tastendruck in einem
+        # Zahlenfeld wäre sonst eine Boolesche über das ganze Teil; dieselbe
+        # Verzögerung wie im Operationsdialog (§18.7).
+        self._feature_preview = QTimer(self)
+        self._feature_preview.setSingleShot(True)
+        self._feature_preview.setInterval(300)
+        self._feature_preview.timeout.connect(self._preview_feature_change)
+        self._feature_pending: tuple[str, dict[str, Any]] | None = None
+        self.feature_panel.valuesChanged.connect(self._on_feature_values_changed)
 
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
@@ -9117,6 +9126,12 @@ class MainWindow(QMainWindow):
         """Das gewählte Merkmal — in der Ansicht, in der Statusleiste und im
         Panel, das seine Maße änderbar zeigt."""
         self.viewport.select_feature(feature_id)
+        # Eine Vorschau, die zum vorigen Merkmal gehört, hat hier nichts mehr
+        # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
+        # ist.
+        self._feature_pending = None
+        self._feature_preview.stop()
+        self.session.cancel_preview()
         if feature_id is None:
             self.feature_panel.clear()
             return
@@ -9129,6 +9144,36 @@ class MainWindow(QMainWindow):
             self.feature_panel.show_feature(feature_id, feature)
         else:
             self.feature_panel.clear()
+
+    def _on_feature_values_changed(self, op: str, params: dict[str, Any]) -> None:
+        """Eine geänderte Zahl im Merkmalspanel — erst zeigen, nicht tun.
+
+        Robert am 03.09.2026: „eine live vorschau wäre noch gut." Gemerkt und
+        verzögert: Wer 16 tippt, tippt zuerst 1, und eine Boolesche über das
+        ganze Teil je Tastendruck macht das Feld unbenutzbar.
+        """
+        self._feature_pending = (op, dict(params))
+        self._feature_preview.start()
+
+    def _preview_feature_change(self) -> None:
+        """Rechnet die gemerkte Änderung und legt sie ins Bild (§18.7).
+
+        **Über denselben Weg wie der Operationsdialog**: `preview_async` rechnet
+        im Arbeiter, eine jüngere Anfrage ersetzt die wartende, und gezeigt wird
+        nur das Jüngste. Was hier entsteht, ist eine Vorschau und kein
+        Dokumentzustand (Regel 2) — im Verlauf steht erst etwas, wenn der Knopf
+        gedrückt wird.
+        """
+        merkposten = self._feature_pending
+        if merkposten is None:
+            return
+        op, params = merkposten
+        selected = self.object_tree.selected()
+        if selected is None or not REGISTRY.has(op):
+            return
+        self.session.preview_async(
+            self._show_preview, [OperationDraft(op=op, inputs=(selected,), params=params)]
+        )
 
     def _apply_from_feature_panel(self, op: str, params: dict[str, Any]) -> None:
         """Eine geänderte Zahl im Merkmal-Panel wird ein Schritt im Verlauf.

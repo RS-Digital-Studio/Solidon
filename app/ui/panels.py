@@ -3953,6 +3953,14 @@ class FeaturePanel(QWidget):
     #: Registername und Parameter — dieselbe Form, die der Operationsdialog
     #: nach außen gibt, damit das Fenster beide gleich behandelt.
     operationRequested = Signal(str, dict)
+    #: Dieselbe Form, während noch getippt wird (Robert, 03.09.2026: „eine
+    #: live vorschau wäre noch gut").
+    #:
+    #: **Getrennt vom Ausführen und nicht dasselbe Signal mit einem Schalter.**
+    #: Wer zuhört, muss ohne Nachdenken wissen, ob er rechnen oder ändern soll;
+    #: ein Empfänger, der beim falschen Signal ausführt, schreibt einen Schritt
+    #: in den Verlauf, den niemand ausgelöst hat.
+    valuesChanged = Signal(str, dict)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -4043,6 +4051,7 @@ class FeaturePanel(QWidget):
             for field in action.fields:
                 editor = self._build_field(field, box)
                 widgets[str(field.name)] = editor
+                self._watch(editor, str(action.op), tuple(action.fields), widgets)
                 label = QLabel(str(field.label), box)
                 label.setWordWrap(True)
                 form.addRow(label, editor)
@@ -4060,6 +4069,28 @@ class FeaturePanel(QWidget):
         )
         layout.addWidget(button)
         return box
+
+    def _watch(
+        self, editor: QWidget, op: str, fields: Sequence[Any], widgets: Mapping[str, QWidget]
+    ) -> None:
+        """Meldet jede Änderung an einem Feld — für die Vorschau, nicht zum Tun.
+
+        **Bei der Länge über ``valueChangedMm``**: Qts ``valueChanged`` trägt
+        die Zahl aus dem Feld, also einen Anzeigewert. Wer sie weiterreicht,
+        hat die Umrechnung übersprungen, und aus 5 mm werden bei Zoll 0,1969.
+        """
+
+        def report(*_ignored: object) -> None:
+            self.valuesChanged.emit(op, self._values(fields, widgets))
+
+        if isinstance(editor, LengthSpin):
+            editor.valueChangedMm.connect(report)
+        elif isinstance(editor, QCheckBox):
+            editor.toggled.connect(report)
+        elif isinstance(editor, QComboBox):
+            editor.currentIndexChanged.connect(report)
+        elif isinstance(editor, QDoubleSpinBox):
+            editor.valueChanged.connect(report)
 
     def _build_field(self, field: Any, parent: QWidget) -> QWidget:
         """Das Feld zur Art — Länge rechnet Zoll zurück, ein Winkel nicht."""
@@ -4093,8 +4124,8 @@ class FeaturePanel(QWidget):
         angle.setValue(float(field.value))
         return angle
 
-    def _emit(self, op: str, fields: Sequence[Any], widgets: Mapping[str, QWidget]) -> None:
-        """Die Werte einsammeln und die Operation nennen — gerechnet wird im Kern."""
+    def _values(self, fields: Sequence[Any], widgets: Mapping[str, QWidget]) -> dict[str, Any]:
+        """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns."""
         params: dict[str, Any] = {}
         if self._feature_id is not None:
             # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
@@ -4110,7 +4141,11 @@ class FeaturePanel(QWidget):
                 params[str(field.name)] = widget.currentData()
             elif isinstance(widget, QDoubleSpinBox):
                 params[str(field.name)] = float(widget.value())
-        self.operationRequested.emit(op, params)
+        return params
+
+    def _emit(self, op: str, fields: Sequence[Any], widgets: Mapping[str, QWidget]) -> None:
+        """Die Werte einsammeln und die Operation nennen — gerechnet wird im Kern."""
+        self.operationRequested.emit(op, self._values(fields, widgets))
 
 
 def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:

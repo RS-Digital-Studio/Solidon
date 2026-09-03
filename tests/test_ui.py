@@ -1315,6 +1315,69 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
+def test_a_changed_number_previews_before_it_changes_anything(window: MainWindow) -> None:
+    """Robert am 03.09.2026: „eine live vorschau wäre noch gut."
+
+    Geprüft wird die Kette und ihre **Grenze**: Die Änderung wird gerechnet und
+    gezeigt, und im Verlauf steht nichts. Eine Vorschau, die einen Schritt
+    schreibt, wäre keine (Regel 2).
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(
+        identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    vorher = len(window.session.project.document.ops)
+
+    window.feature_panel.valuesChanged.emit(
+        "resize_hole", {"at_feature": hole, "diameter": 9.0, "compensate": False}
+    )
+
+    assert window._feature_preview.isActive(), "die Vorschau wartet, statt sofort zu rechnen"
+    assert len(window.session.project.document.ops) == vorher, "und ändert nichts"
+
+    gezeigt: list[object] = []
+    window._show_preview = lambda difference: gezeigt.append(difference)  # type: ignore[method-assign]
+    window._feature_preview.stop()
+    window._preview_feature_change()
+    window.session.wait_for_idle()
+    QApplication.processEvents()
+
+    assert gezeigt, "gerechnet, aber nichts gezeigt"
+    assert len(window.session.project.document.ops) == vorher, "auch danach kein Schritt"
+
+
+def test_choosing_another_feature_drops_the_waiting_preview(window: MainWindow) -> None:
+    """Eine Vorschau gehört zu dem Merkmal, an dem sie entstand.
+
+    Ohne das Vergessen zeigte der nächste Klick eine Änderung an etwas, das
+    nicht mehr gewählt ist — und der Kunde sieht ein Teil, das er nicht
+    angefasst hat.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    holes = [identifier for identifier, feature in entry.features.items() if feature.kind == "hole"]
+    assert len(holes) >= 2, "die Platte hat mehrere Bohrungen"
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+    window.feature_panel.valuesChanged.emit("resize_hole", {"at_feature": holes[0]})
+    assert window._feature_preview.isActive()
+
+    window.object_tree.select_feature(object_id, holes[1])
+    QApplication.processEvents()
+
+    assert not window._feature_preview.isActive(), "die wartende Vorschau ist weg"
+    assert window._feature_pending is None, "und ihr Merkposten auch"
+
+
 def test_delete_removes_the_feature_not_the_body(window: MainWindow) -> None:
     """Robert am 03.09.2026: „wenn wir ein merkmal auswählen und auf der
     tastatur entf drück löschen wir den ganzen körper statt das merkmal."
