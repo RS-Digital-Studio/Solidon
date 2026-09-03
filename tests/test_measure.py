@@ -119,3 +119,121 @@ def test_dimensions_stay_until_they_are_deleted() -> None:
     assert len(dimensions) == 1
     dimensions.clear()
     assert len(dimensions) == 0
+
+
+def test_the_snap_never_catches_a_line_that_is_not_there() -> None:
+    """Gefangen wird nur, was man sieht — keine Triangulierungsdiagonale.
+
+    **Der Befund (Robert, 03.09.2026):** „bei messen ist das zielen relativ
+    schwer". Eine Ursache lag hier: Gerechnet wurde über *alle*
+    Dreieckskanten. Die Deckfläche eines Quaders besteht aus zwei Dreiecken,
+    und ihre gemeinsame Diagonale läuft mitten über die Fläche — ein Klick
+    darauf hatte Abstand **null** und wurde als „Kante" gemeldet. Der Punkt
+    saß auf einer Linie, die es im Bild nicht gibt, die Zahl daneben stimmte,
+    und niemand konnte wissen, wovon sie galt.
+
+    Der Punkt hier liegt auf der Diagonalen der Deckfläche
+    (``x == y``, ``z == 5``) und weit von jeder echten Kante entfernt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    box = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    auf_der_diagonalen = (5.0, 5.0, 5.0)
+
+    gefangen = snap(box, auf_der_diagonalen, radius=1.0)
+
+    assert gefangen.kind == "free", f"die Diagonale zweier Dreiecke ist keine Kante: {gefangen}"
+    assert gefangen.point == auf_der_diagonalen, "und der Klick bleibt, wo er war"
+
+
+def test_the_snap_takes_the_corner_the_edge_and_nothing_else() -> None:
+    """Die drei Antworten an einer Stelle, nur über die Reichweite getrennt.
+
+    Der Punkt liegt auf der Deckfläche, zwei Millimeter von beiden Randkanten
+    und damit 2,83 mm von der Ecke. Er ist derselbe in allen drei Fällen —
+    was sich ändert, ist allein die Weite, in der gefangen wird.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    box = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    stelle = (18.0, 18.0, 5.0)
+
+    weit = snap(box, stelle, radius=4.0)
+    assert weit.kind == "vertex" and weit.point == (20.0, 20.0, 5.0), f"die Ecke: {weit}"
+
+    mittel = snap(box, stelle, radius=2.5)
+    assert mittel.kind == "edge", f"zu weit für die Ecke, nah genug an der Kante: {mittel}"
+    assert mittel.point[2] == pytest.approx(5.0), "und sie liegt auf der Deckfläche"
+
+    eng = snap(box, stelle, radius=0.5)
+    assert eng.kind == "free" and eng.point == stelle, f"und sonst bleibt er stehen: {eng}"
+
+
+def test_a_sphere_has_no_corners_to_catch() -> None:
+    """Ein rundes Teil hat keine Ecke, also fängt dort nichts.
+
+    Über alle Netzknoten gerechnet lieferte jeder Klick auf eine Kugel einen
+    „Eckpunkt" — den nächsten Knoten der Vernetzung. Damit hing die Messung an
+    einer Entscheidung des Vernetzers und wanderte, sobald jemand die
+    Auflösung änderte.
+    """
+    import trimesh
+
+    from app.core.geom.measure import corner_points, visible_edges
+    from app.core.geom.mesh import MeshData
+
+    kugel = MeshData(trimesh.creation.icosphere(subdivisions=3, radius=20.0))
+
+    assert len(visible_edges(kugel)) == 0, "eine geschlossene Kugel hat keine sichtbare Kante"
+    assert len(corner_points(kugel)) == 0, "und erst recht keine Ecke"
+
+    aussen = (20.0, 0.0, 0.0)
+    assert snap(kugel, aussen, radius=5.0).kind == "free", "also bleibt jeder Klick stehen"
+
+
+def test_a_hole_in_the_mesh_keeps_its_rim() -> None:
+    """Eine offene Kante ist sichtbar, auch ohne Knick dahinter.
+
+    Sie hängt nur an einem Dreieck; im Bild ist sie der Rand eines Lochs. Wer
+    an einem kaputten Netz misst, meint oft genau diesen Rand — er ist der
+    Befund, den er ansieht.
+
+    Der Fall ist so gebaut, dass **nur** der offene Zweig ihn löst: Ohne
+    Deckel ist keine der vier oberen Umlaufkanten mehr scharf — an jeder hängt
+    nur noch die Seitenwand. Wer allein die Knickkanten nimmt, verliert den
+    ganzen Lochrand, und die erste Zusicherung unten sagt das auch.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.measure import SHARP_EDGE_ANGLE, visible_edges
+    from app.core.geom.mesh import MeshData
+
+    roh = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    deckel = [index for index, normal in enumerate(roh.face_normals) if normal[2] > 0.9]
+    ohne_deckel = trimesh.Trimesh(
+        vertices=roh.vertices, faces=np.delete(roh.faces, deckel, axis=0), process=False
+    )
+    box = MeshData(ohne_deckel)
+
+    def oben(kanten: object) -> int:
+        """Wie viele der Kanten ganz auf der Höhe des fehlenden Deckels liegen."""
+        return sum(
+            1
+            for a, b in kanten  # type: ignore[attr-defined]
+            if abs(float(ohne_deckel.vertices[a][2]) - 5.0) < 1e-9
+            and abs(float(ohne_deckel.vertices[b][2]) - 5.0) < 1e-9
+        )
+
+    winkel = np.asarray(ohne_deckel.face_adjacency_angles, dtype=float)
+    nur_scharf = np.asarray(ohne_deckel.face_adjacency_edges)[winkel > SHARP_EDGE_ANGLE]
+    assert oben(nur_scharf) == 0, (
+        "ohne Deckel ist keine der oberen Kanten mehr ein Knick — sonst prüft "
+        "dieser Test den offenen Zweig gar nicht"
+    )
+
+    assert oben(visible_edges(box)) >= 4, "der Rand des Lochs zählt trotzdem als sichtbar"

@@ -79,7 +79,7 @@ Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 
 **Messen und Schneiden**
 
-`measure.py` (§18.3) · `section.py` (Ebene durch einen Körper, §18.2) ·
+`measure.py` (§18.3 — Abstand, Wandstärke, Winkel, und der **Fang**: `visible_edges` und `corner_points` sagen, was im Bild überhaupt eine Kante oder eine Ecke ist, `snap` zieht den Klick darauf) · `section.py` (Ebene durch einen Körper, §18.2) ·
 `difference.py` (was eine Änderung hinzugefügt und was sie entfernt hat)
 
 **Netz, Farbe, Text**

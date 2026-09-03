@@ -24,7 +24,37 @@ from app.core.units import EPS_GEOM, round_display
 #: Wie weit ein Klick von einem Eckpunkt oder einer Kante entfernt sein darf,
 #: um darauf gezogen zu werden — relativ zur Modelldiagonale. Auf dem
 #: Bildschirm etwa eine Fingerbreite.
+#:
+#: **Das ist die Rückfallweite.** Wer die Ansicht hat, rechnet sie in
+#: Bildpunkten (``Viewport._snap_radius_at``): Gezielt wird mit der Maus, und
+#: vier Millimeter sind je nach Zoom zweihundert Bildpunkte oder zwei.
 SNAP_RADIUS_RELATIVE = 0.02
+
+#: Ab welchem Knick zwischen zwei Dreiecken eine Kante **sichtbar** ist.
+#:
+#: Ohne diese Grenze fängt ein Messklick auf jede Dreieckskante, und die
+#: meisten davon gibt es im Bild nicht: Die Deckfläche eines Quaders besteht
+#: aus zwei Dreiecken, und ihre Diagonale läuft mitten über die Fläche. Ein
+#: Klick zwei Millimeter neben der Ecke landete deshalb mit Abstand **null**
+#: auf dieser Diagonalen — der Punkt sprang auf eine Linie, die niemand sieht,
+#: und die Messung stimmte nur zufällig (Robert, 03.09.2026: „bei messen ist
+#: das zielen relativ schwer").
+#:
+#: Zwanzig Grad trennen die Triangulierung (null Grad) von dem, was eine Kante
+#: ist: Eine Fase mit 45 Grad bleibt eine, ein Zylindermantel mit 64 Segmenten
+#: (5,6 Grad je Schritt) wird keine. Ein grob geteilter Zylinder mit weniger
+#: als achtzehn Segmenten fängt auf seinen Mantellinien — dort sieht man sie
+#: aber auch.
+SHARP_EDGE_ANGLE = math.radians(20.0)
+
+#: Wie viele sichtbare Kanten an einem Punkt zusammenlaufen müssen, damit er
+#: eine **Ecke** ist.
+#:
+#: Zwei genügen nicht: Jeder Knoten entlang einer Kante hat zwei, und der
+#: Fang zöge dann auf jeden Zwischenpunkt einer Kreiskante. Drei ist die Ecke
+#: eines Körpers. Eine offene Fläche ohne Volumen hat damit keine Ecken —
+#: ihre Ränder fängt der Kantenfang, und drucken lässt sie sich ohnehin nicht.
+CORNER_EDGES = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,6 +77,18 @@ class Measurement:
     value: float
     points: tuple[Vec3, ...] = ()
     object_id: str | None = None
+    object_ids: tuple[str, ...] = ()
+    """Zu welchem Körper jeder Punkt gehört — **je Punkt einer**.
+
+    Ein Maß spannt sich über zwei Flächen, und die dürfen zu verschiedenen
+    Körpern gehören; ``object_id`` daneben benennt das Maß als Ganzes und
+    reicht dafür nicht. Gebraucht wird das nicht zum Rechnen — die Zahl steht
+    in den Punkten —, sondern zum **Zeigen**: Zwei Druckplatten stehen im Bild
+    nebeneinander und in der Szene übereinander (§25), und ohne diese Zuordnung
+    lässt sich ein Punkt der einen nicht von einem der anderen unterscheiden.
+
+    Leer heißt „nicht zugeordnet"; dann bleibt der Punkt, wo er ist.
+    """
     label: str = ""
 
     @property
@@ -124,36 +166,107 @@ def volume_of(meshes: list[MeshData]) -> float:
 
 
 def snap(mesh: MeshData, point: Vec3, radius: float | None = None) -> SnapResult:
-    """Zieht einen Klick auf den nächsten Eckpunkt, sonst auf die nächste
-    Kante, sonst lässt ihn stehen.
+    """Zieht einen Klick auf die nächste Ecke, sonst auf die nächste Kante,
+    sonst lässt ihn stehen.
+
+    **Gefangen wird nur, was man sieht** (:data:`SHARP_EDGE_ANGLE`,
+    :data:`CORNER_EDGES`). Über alle Netzknoten und alle Dreieckskanten
+    gerechnet, fängt jeder Klick auf irgendetwas — auf einen Knoten mitten in
+    einer Fläche, auf eine Triangulierungsdiagonale, auf eine Kante, die nur
+    die Vernetzung kennt. Ein Punkt, der auf eine unsichtbare Linie springt,
+    ist schlimmer als einer, der stehen bleibt: Die Zahl daneben stimmt, und
+    niemand weiß, wovon sie gilt.
     """
     limit = radius if radius is not None else mesh.bounds.diagonal * SNAP_RADIUS_RELATIVE
     target = np.asarray(point, dtype=float)
 
+    edges = visible_edges(mesh)
     vertices = np.asarray(mesh.raw.vertices, dtype=float)
-    if len(vertices):
-        offsets = np.linalg.norm(vertices - target, axis=1)
+
+    corners = corner_points(mesh, edges)
+    if len(corners):
+        offsets = np.linalg.norm(corners - target, axis=1)
         closest = int(np.argmin(offsets))
         if float(offsets[closest]) <= limit:
-            found = vertices[closest]
+            found = corners[closest]
             return SnapResult(
                 point=(float(found[0]), float(found[1]), float(found[2])),
                 kind="vertex",
                 distance=float(offsets[closest]),
             )
 
-    edge_point, edge_offset = _closest_point_on_edges(mesh, target)
+    edge_point, edge_offset = _closest_point_on_edges(vertices, edges, target)
     if edge_point is not None and edge_offset <= limit:
         return SnapResult(point=edge_point, kind="edge", distance=edge_offset)
 
     return SnapResult(point=(float(target[0]), float(target[1]), float(target[2])), kind="free")
 
 
-def _closest_point_on_edges(mesh: MeshData, target: np.ndarray) -> tuple[Vec3 | None, float]:
-    edges = np.asarray(mesh.raw.edges_unique, dtype=np.int64)
+def visible_edges(mesh: MeshData) -> np.ndarray:
+    """Die Kanten, die im Bild eine sind — als Paare von Knotennummern.
+
+    Zwei Sorten zählen: die **scharfen**, an denen zwei Dreiecke einen Knick
+    machen (:data:`SHARP_EDGE_ANGLE`), und die **offenen**, an denen überhaupt
+    nur eines hängt — ein Loch im Netz hat einen sichtbaren Rand.
+
+    Beide Auskünfte hält ``trimesh`` selbst vor und rechnet sie einmal je
+    Netz; gemessen kostet der erste Zugriff bei zwanzigtausend Dreiecken
+    7,6 ms und jeder weitere elf Mikrosekunden. Das ist der Grund, warum die
+    Frage bei jeder Ruhepause des Zeigers gestellt werden darf.
+    """
+    raw = mesh.raw
+    pieces: list[np.ndarray] = []
+
+    angles = np.asarray(raw.face_adjacency_angles, dtype=float)
+    if len(angles):
+        adjacent = np.asarray(raw.face_adjacency_edges, dtype=np.int64)
+        pieces.append(adjacent[angles > SHARP_EDGE_ANGLE])
+
+    # **Offene Kanten nur, wo es welche geben kann.** Die Zählung läuft über
+    # jede Dreieckskante — bei einem Netz aus dreihunderttausend Dreiecken ist
+    # sie der ganze Aufwand dieser Funktion (gemessen 3,9 ms von 3,9 ms). Ein
+    # wasserdichtes Netz hat keine offene Kante, und ob es das ist, weiß
+    # ``trimesh`` bereits.
+    if not raw.is_watertight:
+        unique = np.asarray(raw.edges_unique, dtype=np.int64)
+        if len(unique):
+            counts = np.bincount(
+                np.asarray(raw.edges_unique_inverse, dtype=np.int64), minlength=len(unique)
+            )
+            pieces.append(unique[counts == 1])
+
+    found = [piece for piece in pieces if len(piece)]
+    if not found:
+        return np.empty((0, 2), dtype=np.int64)
+    return np.vstack(found)
+
+
+def corner_points(mesh: MeshData, edges: np.ndarray | None = None) -> np.ndarray:
+    """Die Punkte, an denen mindestens drei sichtbare Kanten zusammenlaufen.
+
+    Das ist die Ecke eines Körpers. Jeder andere Netzknoten ist einer, den die
+    Vernetzung gesetzt hat, und ihn zu fangen hieße, eine Messung an eine
+    Entscheidung des Vernetzers zu hängen: Eine Kugel aus zwanzigtausend
+    Dreiecken hat keine einzige Ecke und lieferte trotzdem für jeden Klick
+    einen „Eckpunkt".
+    """
+    if edges is None:
+        edges = visible_edges(mesh)
+    if not len(edges):
+        return np.empty((0, 3), dtype=float)
+    nodes, counts = np.unique(edges.ravel(), return_counts=True)
+    chosen = nodes[counts >= CORNER_EDGES]
+    if not len(chosen):
+        return np.empty((0, 3), dtype=float)
+    vertices: np.ndarray = np.asarray(mesh.raw.vertices, dtype=float)[chosen]
+    return vertices
+
+
+def _closest_point_on_edges(
+    vertices: np.ndarray, edges: np.ndarray, target: np.ndarray
+) -> tuple[Vec3 | None, float]:
     if not len(edges):
         return None, math.inf
-    vertices = np.asarray(mesh.raw.vertices, dtype=float)
     starts = vertices[edges[:, 0]]
     ends = vertices[edges[:, 1]]
 

@@ -14578,3 +14578,53 @@ Ausgeliefert sind fünf Pakete (Setup, AppImage, Flatpak, macOS arm64 und
 x86_64), sechs Sprachseiten, das Handbuch und eine unterschriebene
 `version.json`; die 0.2.2-Pakete sind vom Server. Gegen den Server geprüft:
 alle fünf erreichbar und vollständig, alle sechs Startseiten nennen 0.3.0.
+
+
+## Viewport-Werkzeuge aus Kundensicht (03.09.2026)
+
+Robert hat die Werkzeugzeile von Hand durchgefahren und dabei fünf Sachen
+gefunden, die eine grüne Suite nicht sieht. Alle fünf betrafen das, was im Bild
+passiert, nachdem man geklickt hat.
+
+- [x] **Der Schnitt zeigte kein Modell.** `cut` arbeitet auf `MeshData`, ein
+  selbst gezeichneter Körper ist ein `Solid` aus dem zweiten Kern, und der
+  Aufbau brach mit `AttributeError` ab, **nachdem** die alten Aktoren entfernt
+  waren — leere Bühne statt Fehlermeldung. `_sectioned` vernetzt jetzt vorher.
+- [x] **Beim Bewegen ging das Drehen nicht.** Der Griff meldete den Zug, und
+  `snap_to_step` schluckte ihn: Die Vorgabe stand auf einem Raster, das im
+  Bild niemand sieht. In einer 3D-Szene gibt es keinen Rasterfang (Robert),
+  also stehen Gitter- und Winkelschritt auf null, und die Zahl am Zeiger zeigt
+  den gefangenen Wert statt des rohen.
+- [x] **Ein Maß ließ sich nicht einzeln zurücknehmen.** Es gab nur
+  *Bemaßungen löschen*, und das nimmt alle. `undo_measurement` nimmt das
+  letzte — den halb gesetzten Punkt zuerst —, an der Rücktaste und an einem
+  eigenen Knopf.
+- [x] **Maße verschwanden im Material und blieben nach dem Werkzeug stehen.**
+  Linie und Beschriftung liegen jetzt vor dem Körper (`ForceOpaque`,
+  Tiefenversatz, `always_visible`), und wer das Messen verlässt, nimmt seine
+  Maße mit.
+- [x] **Das Zielen beim Messen war schwer, und daran hingen drei Fehler.**
+  Der Fang rechnete in zwei Prozent der Modelldiagonale statt in Bildpunkten;
+  er fing auf **jede** Dreieckskante, also auch auf die Diagonale einer
+  Deckfläche, die es im Bild nicht gibt (Abstand null, zwei Millimeter neben
+  der Ecke); und er wurde erst **nach** dem Klick sichtbar. Jetzt sind es
+  sechzehn Bildpunkte bei jedem Zoom, gefangen wird nur auf sichtbare Kanten
+  und echte Ecken, und unter dem Zeiger steht vorher ein Kreuz, das durch
+  seine Größe sagt, worauf es rastet. Die Regel steht in
+  `.claude/rules/ansicht.md`.
+- [x] **Die Regler waren schwer zu bedienen.** Qts Vorgabe bewegt einen Regler
+  seitenweise; durch einen 40 mm hohen Körper waren das vierzig Klicks.
+  `TrackSlider` springt dorthin, wohin man klickt, das Rad fährt in
+  Seitenschritten, und der Griff ist von zwölf auf achtzehn Punkte gewachsen.
+  Vier Leisten fahren ihn: Schnitt, Analyse, Explosion, Einstellungen.
+
+- [x] **Maße und Fangmarke folgen jetzt dem Plattenversatz.**
+  Beide zeichneten in Szenenkoordinaten, und auf Platte 2 liegt diese Stelle
+  eine Bettbreite neben dem Teil (§18.8, §25). Das Schwierige war nicht die
+  Rechnung, sondern die Zuordnung: In der Szene liegen die Platten
+  **übereinander**, ein Punkt gehört zu beiden, und `_object_at` kann die
+  Frage dort nicht beantworten. Beantwortbar ist sie im Bild
+  (`_object_at_view`), also wird sie beim **Klick** gestellt und das Ergebnis
+  gemerkt — `Measurement.object_ids` trägt je Punkt einen Körper, weil ein Maß
+  zwei verbinden darf. Die Schnittebene geht weiterhin nicht mit.
+

@@ -57,9 +57,11 @@ import numpy as np
 import trimesh
 from PySide6.QtWidgets import QApplication
 
+from app.core.geom.measure import SnapResult
 from app.core.geom.mesh import MeshData
 from app.core.types import Profile
 from app.ui.theme import THEMES, viewport_colours
+from app.ui.viewport import PLATE_GAP
 
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
 
@@ -3873,3 +3875,272 @@ def test_the_last_measurement_can_go_without_taking_the_others(qt_app: QApplicat
     viewport.undo_measurement()
 
     assert viewport.measurements.entries == [], "und die leere Liste hält es aus"
+
+
+#: Ein Fangergebnis, das mehrere Tests hier gemeinsam benutzen.
+_SNAP = SnapResult(point=(7.0, 8.0, 9.0), kind="vertex", distance=0.5)
+
+
+def test_the_snap_reach_keeps_the_same_width_on_screen(qt_app: QApplication) -> None:
+    """Die Fangweite wird in Bildpunkten gedacht, nicht in Millimetern.
+
+    **Der Befund (Robert, 03.09.2026):** „bei messen ist das zielen relativ
+    schwer". Der Kern fängt in zwei Prozent der Modelldiagonale — an einem
+    200 mm langen Teil vier Millimeter. Das ist keine feste Größe für eine
+    Zielgeste: Herangezoomt sind vier Millimeter zweihundert Bildpunkte, und
+    der Fang reißt den Punkt quer über die Fläche; herausgezoomt sind es zwei,
+    und es gibt praktisch keinen Fang mehr.
+
+    Geprüft wird die Umkehrung: Doppelt so viele Bildpunkte je Millimeter
+    heißt halb so viel Millimeter Fangweite — im Bild also unverändert. Und
+    ohne Bild kommt ``None`` zurück, damit der Kern bei seiner eigenen Weite
+    bleibt statt durch null zu teilen.
+    """
+    from app.ui.viewport import MEASURE_SNAP_PIXELS, Viewport
+
+    viewport = Viewport()
+    assert viewport._snap_radius_at((0.0, 0.0, 0.0)) is None, (
+        "ohne Bild gibt es keine Bildpunkte, in denen man rechnen könnte"
+    )
+
+    for scale in (4.0, 8.0):
+        viewport._pixels_per_mm_at = lambda _point, _scale=scale: _scale  # type: ignore[method-assign]
+        gemessen = viewport._snap_radius_at((0.0, 0.0, 0.0))
+        assert gemessen is not None
+        assert abs(gemessen * scale - MEASURE_SNAP_PIXELS) < 1e-9, (
+            f"bei {scale} Bildpunkten je Millimeter sind {gemessen} mm nicht "
+            f"{MEASURE_SNAP_PIXELS} Bildpunkte"
+        )
+
+
+def test_the_snap_pulls_to_a_corner_only_within_its_reach(qt_app: QApplication) -> None:
+    """Der Fang zieht auf die Ecke, wenn sie in Reichweite ist — sonst nicht.
+
+    Die Reichweite ist das Ganze an dieser Sache, und sie kommt jetzt aus dem
+    Bild (:meth:`Viewport._snap_radius_at`). Also wird sie hier gesetzt und
+    beide Seiten geprüft: derselbe Klick, einmal mit großzügiger Weite auf der
+    Ecke, einmal mit enger Weite frei auf der Fläche.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    viewport._result = EvaluationResult(
+        scene=Scene(objects={"obj_1": SceneObject(id="obj_1", name="A", mesh=mesh)})
+    )
+    # Auf der Deckfläche, zwei Millimeter von beiden Randkanten entfernt und
+    # damit 2,83 mm von der Ecke (20, 20, 5). Drei Weiten, drei Antworten.
+    daneben = (18.0, 18.0, 5.0)
+
+    viewport._snap_radius_at = lambda _point: 4.0  # type: ignore[method-assign]
+    nah = viewport._snap_for_measure(daneben)
+    assert nah is not None and nah.kind == "vertex", f"in Reichweite wird die Ecke genommen: {nah}"
+    assert nah.point == (20.0, 20.0, 5.0)
+
+    viewport._snap_radius_at = lambda _point: 2.5  # type: ignore[method-assign]
+    mitte = viewport._snap_for_measure(daneben)
+    assert mitte is not None and mitte.kind == "edge", (
+        f"zu weit für die Ecke, nah genug an der Kante: {mitte}"
+    )
+
+    viewport._snap_radius_at = lambda _point: 0.5  # type: ignore[method-assign]
+    fern = viewport._snap_for_measure(daneben)
+    assert fern is not None and fern.kind == "free", f"außer Reichweite bleibt der Klick: {fern}"
+    assert fern.point == daneben
+
+    viewport._result = None
+    assert viewport._snap_for_measure(daneben) is None, (
+        "ohne Auswertung gibt es keinen Körper und nichts zu fangen"
+    )
+
+
+def test_the_pointer_shows_where_the_measuring_click_would_land(qt_app: QApplication) -> None:
+    """Der Zeiger stellt beim Messen dieselbe Frage wie der Klick.
+
+    Dieselbe Zusage wie bei der gestuften Auswahl: Eine Vorschau, die woanders
+    fängt als der Klick, verspricht etwas, das nicht eintritt. Geprüft wird
+    deshalb nicht, dass *irgendetwas* gezeichnet wird, sondern dass die
+    Ruhepause **dieselbe Rechnung mit demselben Punkt** anstößt — und dass sie
+    beim Messen die Merkmalssuche gar nicht erst fragt.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = SimpleNamespace(  # type: ignore[assignment]
+        renderer=None, interactor=SimpleNamespace(setCursor=lambda shape: None)
+    )
+    viewport._hover_at = (120, 80)
+    viewport.set_measure_mode("distance")
+
+    gefragt: list[Any] = []
+    gemerkt: list[Any] = []
+    viewport._world_at = lambda x, y: (7.0, 8.0, 9.0)  # type: ignore[method-assign]
+    viewport._snap_for_measure = lambda point: gefragt.append(point) or _SNAP  # type: ignore[method-assign]
+    viewport._draw_snap_preview = lambda found: gemerkt.append(found)  # type: ignore[method-assign]
+    viewport._aim_at = lambda x, y: pytest.fail("beim Messen wird kein Merkmal gesucht")  # type: ignore[method-assign]
+
+    viewport._look_under_pointer()
+
+    assert gefragt == [(7.0, 8.0, 9.0)], "der Zeiger fragt den Fang an der Stelle des Klicks"
+    assert gemerkt == [_SNAP], "und zeigt, was dabei herauskommt"
+
+    # Und wo nichts unter dem Zeiger liegt, bleibt keine Marke stehen.
+    weg: list[str] = []
+    viewport._world_at = lambda x, y: None  # type: ignore[method-assign]
+    viewport._clear_snap_preview = lambda: weg.append("weg")  # type: ignore[method-assign]
+    viewport._look_under_pointer()
+    assert weg == ["weg"], "über dem Leeren verschwindet die Marke"
+
+
+def test_the_snap_mark_says_what_it_caught_without_colour(qt_app: QApplication) -> None:
+    """Worauf gefangen wurde, steht in der Größe und in einem Satz.
+
+    Farbe trägt hier gar keine Bedeutung — die Marke ist immer in der Messfarbe
+    (Regel 18). Unterschieden wird über die Länge der Arme, und wer nicht
+    sieht, bekommt denselben Unterschied als Satz in der Beschreibung der
+    Ansicht. Beides muss drei verschiedene Antworten geben, sonst ist die
+    Auskunft keine.
+    """
+    from app.ui.viewport import SNAP_MARK_PIXELS, Viewport, snap_sentence
+
+    laengen = [SNAP_MARK_PIXELS[art] for art in ("vertex", "edge", "free")]
+    assert laengen == sorted(laengen, reverse=True), (
+        f"eine Ecke bekommt den größten Stern, eine freie Stelle den kleinsten: {laengen}"
+    )
+    assert len(set(laengen)) == 3, "drei Arten, drei Größen"
+
+    saetze = {snap_sentence(art) for art in ("vertex", "edge", "free")}
+    assert len(saetze) == 3, f"drei Arten, drei Sätze: {saetze}"
+    assert all(satz.strip() for satz in saetze), "und keiner davon leer"
+
+    # Und die Marke geht mit dem Werkzeug: Wer das Messen verlässt, lässt
+    # keinen Stern im Bild stehen.
+    viewport = Viewport()
+    viewport._snap_shown = _SNAP
+    viewport.set_measure_mode("off")
+    assert viewport.snap_preview is None, "das Werkzeug nimmt seine Marke mit"
+
+
+def test_a_dimension_on_the_second_plate_follows_its_body(qt_app: QApplication) -> None:
+    """Ein Maß liegt in der Szene und steht im Bild — die zwei Orte sind
+    verschieden, sobald ein zweites Bett danebensteht (§25).
+
+    `arrange_bed` setzt Platte 2 an denselben Nullpunkt wie Platte 1, denn
+    beide werden einzeln gedruckt; gezeichnet werden sie nebeneinander. Ein Maß
+    an einem Körper auf Platte 2 lag deshalb eine Bettbreite neben dem Teil,
+    das es misst — die Ansicht rechnete für Körper, Merkmalsflächen und Griffe
+    um und für Maße nicht.
+
+    **Und die Zuordnung ist der schwierige Teil, nicht die Rechnung.** In der
+    Szene liegen die zwei Platten *übereinander*: Ein Punkt (18, 18, 5) gehört
+    zu beiden Körpern, und aus ihm allein lässt sich die Platte nicht ablesen.
+    Der Klick weiß es, weil er aus dem Bild kommt — deshalb merkt sich das Maß
+    seine Kennung je Punkt (`Measurement.object_ids`), und deshalb fragt der
+    Viewport sie über `_object_at_view` und nicht über `_object_at`.
+    """
+    import dataclasses
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    erste = SceneObject(id="obj_1", name="A", mesh=mesh)
+    zweite = dataclasses.replace(erste, id="obj_2", name="B", plate=1)
+    viewport._result = EvaluationResult(scene=Scene(objects={"obj_1": erste, "obj_2": zweite}))
+    # So, wie ``show_build_volume`` es hinterlässt: zwei Betten gezeichnet,
+    # keine einzelne Platte gewählt.
+    viewport._beds_drawn = 2
+    viewport._plate = -1
+    viewport._bed_extent = (220.0, 220.0)
+
+    stelle = (18.0, 18.0, 5.0)
+
+    assert viewport._object_at(stelle) == "obj_1", (
+        "in der Szene liegen beide Körper an derselben Stelle — die Frage ist "
+        "dort gar nicht zu beantworten"
+    )
+    assert viewport._object_at_view(stelle) == "obj_1", "im Bild liegt dort Platte 1"
+    weiter = (stelle[0] + 220.0 + PLATE_GAP, stelle[1], stelle[2])
+    assert viewport._object_at_view(weiter) == "obj_2", "und eine Bettbreite weiter Platte 2"
+
+    auf_eins = viewport.view_point_of(stelle, "obj_1")
+    auf_zwei = viewport.view_point_of(stelle, "obj_2")
+    assert auf_eins == stelle, "die erste Platte bleibt, wo sie ist"
+    assert auf_zwei[0] > stelle[0] + 200.0, f"die zweite steht daneben: {auf_zwei}"
+    assert auf_zwei[1] == stelle[1] and auf_zwei[2] == stelle[2], "und nur nach +X"
+
+    # Mit einer einzeln betrachteten Platte steht wieder ein Bett im Bild,
+    # und dann gehört auch ihr Punkt an seinen Ort.
+    viewport._plate = 1
+    assert viewport.view_point_of(stelle, "obj_2") == stelle, (
+        "eine Platte allein wird nicht verschoben"
+    )
+
+    # Und ohne Kennung bleibt der Punkt, wie er ist — ein Versatz, den man
+    # nicht zuordnen kann, ist keiner.
+    viewport._plate = -1
+    assert viewport.view_point_of(stelle, "") == stelle
+
+
+def test_a_measuring_click_writes_down_which_body_it_hit(qt_app: QApplication) -> None:
+    """Die Kennung wird beim Klick gemerkt — sonst nützt sie beim Zeichnen nichts.
+
+    Das ist das letzte Glied der Kette aus dem Test darüber: `view_point_of`
+    kann noch so richtig rechnen, wenn `_on_picked` seine Kennung nicht
+    mitschreibt. Gemessen wird deshalb am fertigen `Measurement` und nicht an
+    der Rechnung davor.
+
+    Zwei Klicks auf **verschiedene** Platten, weil das der Fall ist, für den es
+    die Kennung je Punkt überhaupt gibt: Ein Maß darf zwei Körper verbinden.
+    """
+    import dataclasses
+
+    import trimesh
+
+    from app.core.geom.measure import SnapResult
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    erste = SceneObject(id="obj_1", name="A", mesh=mesh)
+    zweite = dataclasses.replace(erste, id="obj_2", name="B", plate=1)
+    viewport._result = EvaluationResult(scene=Scene(objects={"obj_1": erste, "obj_2": zweite}))
+    viewport._beds_drawn = 2
+    viewport._plate = -1
+    viewport._bed_extent = (220.0, 220.0)
+    viewport.set_measure_mode("distance")
+
+    # Der Fang gibt den Punkt unverändert zurück; hier geht es um die Kennung.
+    viewport._snap_for_measure = lambda point: SnapResult(point=point, kind="free")  # type: ignore[method-assign]
+
+    auf_eins = (18.0, 18.0, 5.0)
+    auf_zwei = (18.0 + 220.0 + PLATE_GAP, 18.0, 5.0)
+    viewport._on_picked(auf_eins)
+    assert viewport._pending_owner == "obj_1", "der erste Punkt merkt seinen Körper"
+    viewport._on_picked(auf_zwei)
+
+    assert len(viewport.measurements.entries) == 1
+    mass = viewport.measurements.entries[0]
+    assert mass.object_ids == ("obj_1", "obj_2"), (
+        f"beide Kennungen gehören ans Maß, in der Reihenfolge der Klicks: {mass.object_ids}"
+    )
+    assert viewport._pending_owner == "", "und danach ist nichts mehr halb gesetzt"
+
+    # Der zweite Punkt liegt in der Szene an derselben Stelle wie der erste —
+    # die Zahl misst also nur die Rückrechnung aus dem Bild.
+    assert mass.value == pytest.approx(0.0, abs=1e-9), (
+        "beide Platten liegen in der Szene übereinander, der Abstand ist null"
+    )

@@ -405,6 +405,55 @@ breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals, denn es ist
 dieselbe Frage — wie weit daneben meint noch dies. Bei 24 Pixeln, also weit
 außerhalb der Bohrung, bleibt es die Fläche.
 
+### Beim Messen zeigt der Zeiger, wohin der Klick fällt
+
+Der Abschnitt darüber gilt der **Auswahl**: Dort fragt der Zeiger dieselbe
+Rechnung wie der Klick, damit er nichts verspricht, was nicht eintritt. Beim
+Messen gilt dasselbe, und dort fehlte es — mit demselben Ergebnis, nur
+umgekehrt: Der Kern **zieht** einen Messklick auf die nächste Ecke oder Kante
+(`geom.measure.snap`), und im Bild geschah das erst *nach* dem Klick. Wer zielt,
+zielte blind (Robert, 03.09.2026: „bei messen ist das zielen relativ schwer").
+
+Drei Sachen hängen daran, und jede war für sich falsch:
+
+* **Die Fangweite gehört in Bildpunkte** (`MEASURE_SNAP_PIXELS`, 16). Der Kern
+  rechnet in zwei Prozent der Modelldiagonale, weil er kein Bild hat — an einem
+  200 mm langen Teil vier Millimeter. Herangezoomt sind das zweihundert
+  Bildpunkte und der Fang reißt den Punkt quer über die Fläche; herausgezoomt
+  sind es zwei und es gibt keinen Fang mehr. `_snap_radius_at` misst den
+  Maßstab an der Stelle (`_pixels_per_mm_at`, zwei Punkte quer zur
+  Blickrichtung durch dieselbe Projektion — wie `pixels_per_mm`) und gibt dem
+  Kern seine Weite in Millimetern. Ohne Bild kommt `None` zurück, und dann
+  bleibt es bei der Weite des Kerns.
+* **Gefangen wird nur, was man sieht.** Das ist die Hälfte, die im Kern lag:
+  `visible_edges` nimmt scharfe und offene Kanten, `corner_points` nur Punkte
+  mit drei sichtbaren Kanten. Über alle Dreieckskanten gerechnet fing ein Klick
+  zwei Millimeter neben der Ecke mit Abstand **null** auf der Diagonalen der
+  Deckfläche — auf einer Linie, die es im Bild nicht gibt.
+* **Und die Marke steht vor dem Klick da.** `_preview_snap` bei jeder Ruhepause
+  des Zeigers, dieselbe Rechnung wie der Klick (`_snap_for_measure`, ein
+  Aufruf, zwei Anrufer). Beim Winkelmessen bleibt es bei der Merkmalssuche —
+  dort wählt man ebene Flächen, und deren Hervorhebung *ist* die Zielhilfe.
+
+Die Marke ist ein Kreuz mit einem Punkt in der Mitte, **in der Bildebene**
+(`_screen_axes`) und in fester Bildgröße (`SNAP_MARK_PIXELS`,
+`SNAP_DOT_PIXELS`). Beides ist gemessen und nicht gewählt: Entlang der
+Weltachsen gezeichnet war sie in der isometrischen Ansicht auf ein Drittel
+verkürzt und im gerenderten Fenster kaum zu finden, und in Millimetern wüchse
+sie beim Hineinzoomen quer über das Teil.
+
+**Worauf gefangen wurde, sagt die Größe** — Ecke groß, Kante mittel, freie
+Stelle klein — und ein Satz in der Beschreibung der Ansicht
+(`snap_sentence`, gelesen von Bildschirmlesern). Nicht die Farbe (Regel 18),
+und nicht die Statuszeile: Die trägt beim Messen den Fortschritt („Erster Punkt
+gewählt"), und ein Satz, der bei jeder Mausbewegung wechselt, überschriebe ihn.
+Der Satz gehört auch **nicht** in die Szene — VTK nimmt in einer Beschriftung
+nur ASCII, und „Fläche" hat ein ä (siehe oben).
+
+Weg ist die Marke, sobald der Zeiger das Bild verlässt, das Werkzeug wechselt
+oder die Szene neu aufgebaut wird. Die Maße überleben eine Auswertung, die
+Marke nicht: Sie zeigt auf eine Ecke, die dieser Schritt entfernt haben kann.
+
 ### Und wo kein Merkmal ist, ist trotzdem ein Körper
 
 Der Abschnitt darüber löst die **Bohrung**, weil sie ein Merkmal ist, auf das
@@ -633,10 +682,24 @@ genau eines. Drei Dinge hängen daran:
   meistens nichts ist, hätte sie stumm nichts getan.
 
 Der Versatz liegt mit dem Auseinanderziehen (§18.8) zusammen in
-`_view_offset`, damit jede Zeichenstelle beides bekommt oder keines. Was
-**nicht** mitgeht, sind die Überlagerungen in Szenenkoordinaten — Maße,
-Schnittebene, Griffe. Sie folgten schon dem Auseinanderziehen nicht; das gehört
-zusammen behoben, nicht halb.
+`_view_offset`, damit jede Zeichenstelle beides bekommt oder keines. **Maße und
+Fangmarke gehen seit dem 03.09.2026 mit**; was noch nicht mitgeht, ist die
+Schnittebene.
+
+**Und das Schwierige daran ist nicht die Rechnung, sondern die Zuordnung.**
+`view_point_of` braucht einen Körper, und in der Szene liegen die Platten
+*übereinander* — `arrange_bed` setzt Platte 2 an denselben Nullpunkt. Ein Punkt
+in Szenenkoordinaten gehört damit zu beiden, und `_object_at` kann die Frage
+dort gar nicht beantworten. Beantwortbar ist sie **im Bild**, wo die Betten
+nebeneinander stehen: `_object_at_view` prüft den Hüllquader **plus** Versatz
+gegen einen Ansichtspunkt.
+
+Gefragt wird deshalb beim **Klick** und nicht beim Zeichnen: Dort liegt der
+Ansichtspunkt vor. Ein Maß merkt sich das Ergebnis je Punkt
+(`Measurement.object_ids` — zwei Enden dürfen zu zwei Körpern gehören,
+`object_id` daneben benennt das Maß als Ganzes und reicht nicht), die Vorschau
+in `_snap_owner`. Ohne Kennung bleibt ein Punkt, wo er ist; ein Versatz, den
+man nicht zuordnen kann, ist keiner.
 
 **Was je Bild neu gerechnet wird, wird je Körper vorbereitet.** Der
 Schattenumriss lief als Triangulierung über jeden Punkt des Anzeigenetzes: 129

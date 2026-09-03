@@ -35,6 +35,7 @@ from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import (
     Measurement,
     MeasurementList,
+    SnapResult,
     angle_between,
     distance,
     snap,
@@ -399,6 +400,56 @@ MOST_GRID_LINES = 200
 #: und eine Marke, die genau so groß ist wie der Bereich, in dem sie fängt,
 #: sieht aus wie seine Berandung. Etwas größer ist sie ein Zeichen.
 CURSOR_PIXELS = 10.0
+
+#: Wie weit ein Messklick von einer Ecke oder Kante entfernt sein darf, um
+#: darauf gezogen zu werden — **in Bildpunkten**.
+#:
+#: Der Kern rechnet die Fangweite in Millimetern (zwei Prozent der Diagonale,
+#: :data:`app.core.geom.measure.SNAP_RADIUS_RELATIVE`), und das ist die falsche
+#: Einheit für eine Zielgeste: Gezielt wird mit der Maus, also in Bildpunkten.
+#: An einem 200 mm langen Teil sind zwei Prozent vier Millimeter — herangezoomt
+#: sind das zweihundert Bildpunkte, und der Fang reißt den Punkt quer über die
+#: Fläche; herausgezoomt sind es zwei, und es gibt praktisch keinen Fang mehr.
+#: Beides hat Robert am 03.09.2026 als „bei messen ist das zielen relativ
+#: schwer" gemeldet. Sechzehn Bildpunkte bleiben bei jedem Zoom dieselbe Geste.
+MEASURE_SNAP_PIXELS = 16.0
+
+#: Wie lang die Arme der Fangmarke sind, je Fangart und **in Bildpunkten**.
+#:
+#: **Die Größe ist die Auskunft** (Regel 18): Das Kreuz an einer Ecke ist
+#: deutlich größer als das an einer Kante, und eine freie Stelle bekommt nur
+#: ein Kreuzchen. Ohne diesen Unterschied sähe jede Stelle gleich aus, und wer
+#: eine Ecke treffen will, wüsste vor dem Klick nicht, ob er sie hat.
+#:
+#: In Bildpunkten und nicht in Millimetern, aus demselben Grund wie die
+#: Fangweite darüber — eine Marke, die beim Hineinzoomen quer über das Teil
+#: wächst, ist keine Marke mehr. Am gerenderten Fenster gemessen: Weltmaß
+#: entlang der Achsen war in der isometrischen Ansicht auf ein Drittel
+#: verkürzt und im Bild kaum zu finden.
+SNAP_MARK_PIXELS = {"vertex": 13.0, "edge": 9.0, "free": 5.0}
+
+#: Wie dick der Punkt in der Mitte der Marke ist, je Fangart.
+#:
+#: Das Kreuz sagt „hier", der Punkt sagt „genau hier" — ohne ihn zeigt die
+#: Marke auf ihren eigenen Schnittpunkt, und den muss das Auge erst bilden.
+SNAP_DOT_PIXELS = {"vertex": 9.0, "edge": 7.0, "free": 5.0}
+
+
+def snap_sentence(kind: str) -> str:
+    """Was die Fangmarke bedeutet, in einem Satz.
+
+    Er steht in der Beschreibung der Ansicht, nicht in der Szene: VTK nimmt in
+    einer Beschriftung nur ASCII an, und „Fläche" hat ein ä. Qt nimmt jede
+    Sprache, und ein Bildschirmleser liest die Beschreibung vor — damit trägt
+    die Auskunft neben der Größe eine zweite Kodierung, die ohne Augen
+    auskommt.
+    """
+    if kind == "vertex":
+        return tr("Der Messpunkt rastet auf einer Ecke ein.")
+    if kind == "edge":
+        return tr("Der Messpunkt rastet auf einer Kante ein.")
+    return tr("Der Messpunkt sitzt frei auf der Fläche.")
+
 
 #: Wie weit der Ziehgriff höchstens gestreckt wird, wenn der Blick flach steht.
 #:
@@ -2965,9 +3016,21 @@ class Viewport(QWidget):
         self._sketch_label_background = THEMES["dark"]["window"]
         self._measure_mode: MeasureMode = "off"
         self._pending_point: Vec3 | None = None
+        self._pending_owner: str = ""
+        """Zu welchem Körper der halb gesetzte Punkt gehört — im Bild gefragt,
+        weil zwei Platten in der Szene übereinanderliegen (§25)."""
         self._pending_plane: tuple[Vec3, Vec3] | None = None
         self.measurements = MeasurementList()
         self._measure_actors: list[Any] = []
+        self._snap_actors: list[Any] = []
+        """Die Fangmarke unter dem Zeiger — sie zeigt vor dem Klick, wohin der
+        Punkt fällt."""
+        self._snap_owner: str = ""
+        """Der Körper unter dem Zeiger, im Bild gefragt — damit die Marke dort
+        steht, wo das Maß danach steht (§25)."""
+        self._snap_shown: SnapResult | None = None
+        """Was die Marke gerade zeigt. Auskunft für Tests und Schutz davor,
+        dieselbe Stelle bei jeder Ruhepause neu zu zeichnen."""
         self._gizmo: Any | None = None
         self._gizmo_wanted = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
@@ -3894,6 +3957,11 @@ class Viewport(QWidget):
         self._hover_feature = False
         self._hovered_object = None
         self._hovered_feature = None
+        # Die Fangmarke gehört zu einer Geometrie, die es gleich nicht mehr
+        # gibt. Die Maße bleiben (sie überleben eine Auswertung, §18.3), die
+        # Marke nicht: Sie zeigt auf eine Ecke, die dieser Schritt entfernt
+        # haben kann. Sie kommt bei der nächsten Ruhepause des Zeigers wieder.
+        self._clear_snap_preview()
         # Eine Auswahl gehört zur aktuellen Auswertung. Der Körper darf nach
         # einem Schritt weiter ausgewählt bleiben; ein Merkmal, das dieser
         # Schritt entfernt hat, dagegen nicht. Ohne den Rückfall blieb seine
@@ -4368,10 +4436,15 @@ class Viewport(QWidget):
         wegrückt: das Auseinanderziehen (§18.8) und die Platte (§25).
 
         An einer Stelle zusammengefasst, damit jede Zeichenstelle beides
-        bekommt oder keines. Merkmalsfläche, Merkmalsbeschriftung, Griffscheibe
-        und Differenzvorschau gehen inzwischen mit; was weiter **nicht**
-        mitgeht, sind Maße und Schnittebene — sie folgten schon dem
-        Auseinanderziehen nicht, und das gehört zusammen behoben, nicht halb.
+        bekommt oder keines. Merkmalsfläche, Merkmalsbeschriftung, Griffscheibe,
+        Differenzvorschau, Maße und die Fangmarke gehen mit; was **nicht**
+        mitgeht, ist die Schnittebene.
+
+        **Ein Ort braucht dafür seinen Körper**, und den kennt nicht jeder
+        Aufrufer. Ein Maß trägt ihn seit dem 03.09.2026 selbst
+        (`Measurement.object_ids`, je Punkt einer), gefragt beim Klick über
+        :meth:`_object_at_view` — in der Szene liegen zwei Platten
+        übereinander, und von dort aus ist die Frage nicht zu beantworten.
         """
         return self._exploded(entry, result) + self._plate_offset(entry)
 
@@ -4891,7 +4964,12 @@ class Viewport(QWidget):
         """
         self._measure_mode = mode
         self._pending_point = None
+        self._pending_owner = ""
         self._pending_plane = None
+        # Die Fangmarke gehört zum Werkzeug: Wer es verlässt, lässt keinen
+        # Stern im Bild stehen — und wer die Messart wechselt, bekommt sie bei
+        # der nächsten Ruhepause neu.
+        self._clear_snap_preview()
         self._update_cursor()
 
     @property
@@ -4909,6 +4987,7 @@ class Viewport(QWidget):
         """
         if self._pending_point is not None or self._pending_plane is not None:
             self._pending_point = None
+            self._pending_owner = ""
             self._pending_plane = None
             self._redraw_measurements()
             return
@@ -4923,6 +5002,7 @@ class Viewport(QWidget):
         """
         self.measurements.clear()
         self._pending_point = None
+        self._pending_owner = ""
         self._pending_plane = None
         self._redraw_measurements()
 
@@ -5264,6 +5344,17 @@ class Viewport(QWidget):
             # Merkmalen bliebe hier nur teuer.
             self._draw_brush()
             return
+        if self._measure_mode in ("distance", "thickness"):
+            # **Beim Messen ist kein Merkmal gemeint, sondern eine Stelle** —
+            # und die verschiebt der Fang. Wer nicht sieht, wohin sein Klick
+            # fällt, zielt blind: Der Kern zieht den Punkt auf die nächste Ecke
+            # oder Kante, und im Bild geschah das bisher erst *nach* dem Klick
+            # (Robert, 03.09.2026: „bei messen ist das zielen relativ schwer").
+            # Der Winkelmodus bleibt bei der Merkmalssuche — dort wählt man
+            # ebene Flächen, und die Hervorhebung ist genau die Zielhilfe.
+            self._set_hover_target(None, None)
+            self._preview_snap(x, y)
+            return
         point = self._aim_at(x, y)
         # Dieselbe Frage, die der Klick stellt, und mit derselben Rechnung: Ein
         # Zeiger, der die Merkmalsform über einer Bohrung zeigt, während der
@@ -5328,6 +5419,7 @@ class Viewport(QWidget):
         self._hover_timer.stop()
         self._hover_at = None
         self._set_hover_target(None, None)
+        self._clear_snap_preview()
 
     def _on_paint_drag(self, x: int, y: int, fresh: bool) -> None:
         """Ein Zug des gedrückten Pinsels — einer je halbem Radius (§18.11).
@@ -5377,19 +5469,32 @@ class Viewport(QWidget):
             self._measure_plane_angle(picked)
             return
 
+        snapped = self._snap_for_measure(picked)
         mesh = self._nearest_mesh(picked)
-        if mesh is None:
+        if snapped is None or mesh is None:
             # Kein stiller Ausgang: Wer am Messen ist und danebenklickt,
             # sieht sonst einfach nichts — derselbe Grund, aus dem der
             # Winkel-Pfad seine Sätze führt (§2.7).
             self.measurementStatus.emit(tr("Zum Messen einen Körper anklicken."))
             return
-        snapped = snap(mesh, picked)
+
+        # **Welcher Körper das war, wird jetzt gefragt und nicht später.** In
+        # der Szene liegen zwei Druckplatten übereinander (§25); von dort aus
+        # ist ein Punkt der einen von einem der anderen nicht zu unterscheiden.
+        # Der Klick kam aus dem Bild, und dort ist er eindeutig.
+        owner = self._object_at_view(point) or ""
 
         if self._measure_mode == "thickness":
             thickness = wall_thickness(mesh, snapped.point)
             if thickness is not None:
-                self._add(Measurement(kind="thickness", value=thickness, points=(snapped.point,)))
+                self._add(
+                    Measurement(
+                        kind="thickness",
+                        value=thickness,
+                        points=(snapped.point,),
+                        object_ids=(owner,),
+                    )
+                )
             else:
                 self.measurementStatus.emit(
                     tr("Hier ließ sich keine Wandstärke messen — auf eine Wand klicken.")
@@ -5398,6 +5503,7 @@ class Viewport(QWidget):
 
         if self._pending_point is None:
             self._pending_point = snapped.point
+            self._pending_owner = owner
             self.measurementStatus.emit(tr("Erster Punkt gewählt — zweiten Punkt anklicken."))
             return
         self._add(
@@ -5405,9 +5511,11 @@ class Viewport(QWidget):
                 kind="distance",
                 value=distance(self._pending_point, snapped.point),
                 points=(self._pending_point, snapped.point),
+                object_ids=(self._pending_owner, owner),
             )
         )
         self._pending_point = None
+        self._pending_owner = ""
 
     def _measure_plane_angle(self, point: Vec3) -> None:
         """Nimmt zwei erkannte Ebenen und misst ihre Normalen (§18.3)."""
@@ -5445,6 +5553,210 @@ class Viewport(QWidget):
             )
         )
         self._pending_plane = None
+
+    # --- wohin ein Messklick fällt (§18.3) --------------------------------------
+
+    def _snap_for_measure(self, point: Vec3) -> SnapResult | None:
+        """Wohin ein Messklick an dieser Stelle fiele — die **eine** Rechnung.
+
+        Klick und Zeiger fragen sie beide, und das ist dieselbe Zusage wie bei
+        :meth:`_would_pick_feature`: Eine Vorschau, die woanders fängt als der
+        Klick, verspricht etwas, das nicht eintritt — sie wäre schlimmer als
+        gar keine.
+
+        ``None``, wo kein Körper unter der Stelle liegt; dort gibt es nichts
+        zu fangen, und der Aufrufer sagt es auf seine Weise (der Klick mit
+        einem Satz, der Zeiger, indem er die Marke wegnimmt).
+        """
+        mesh = self._nearest_mesh(point)
+        if mesh is None:
+            return None
+        return snap(mesh, point, radius=self._snap_radius_at(point))
+
+    def _snap_radius_at(self, point: Vec3) -> float | None:
+        """Die Fangweite in Millimetern, damit sie im Bild immer gleich breit
+        ist (:data:`MEASURE_SNAP_PIXELS`).
+
+        ``None`` heißt „keine Angabe" und lässt dem Kern seine eigene Weite —
+        ohne Plotter, ohne Projektion, ohne Bild gibt es keine Bildpunkte, in
+        denen man rechnen könnte.
+        """
+        scale = self._pixels_per_mm_at(point)
+        if scale is None or scale <= EPS_GEOM:
+            return None
+        ratio = 1.0
+        interactor = getattr(self.plotter, "interactor", None) if self.plotter else None
+        if interactor is not None:
+            ratio = float(interactor.devicePixelRatioF())
+        return MEASURE_SNAP_PIXELS * ratio / scale
+
+    def _pixels_per_mm_at(self, point: Vec3) -> float | None:
+        """Wie viele Gerätepixel ein Millimeter an dieser Stelle im Bild misst.
+
+        **Gemessen, nicht aus der Kamera abgeleitet** — dieselbe Begründung wie
+        bei :meth:`pixels_per_mm`: Zwei Punkte, einen Millimeter auseinander
+        und quer zur Blickrichtung, durch dieselbe Projektion geschickt, die
+        auch das Bild macht. Damit stimmt die Zahl bei Parallel- wie bei
+        Zentralprojektion, ohne dass hier stünde, welche gerade gilt.
+
+        Der Punkt kommt aus der **Szene** und die Projektion aus der
+        **Ansicht** (§25). Für den Maßstab macht das nichts: Eine Verschiebung
+        parallel zur Bildebene ändert ihn nicht, und die Platten stehen
+        nebeneinander. Wer hier umrechnete, bräuchte eine Objektkennung, die
+        an dieser Stelle niemand hat.
+        """
+        if self.plotter is None:
+            return None
+        import numpy as np
+
+        camera = self.plotter.camera
+        position = np.asarray(camera.GetPosition(), dtype=float)
+        focus = np.asarray(camera.GetFocalPoint(), dtype=float)
+        up = np.asarray(camera.GetViewUp(), dtype=float)
+        sideways = np.cross(focus - position, up)
+        span = float(np.linalg.norm(sideways))
+        if span <= EPS_GEOM:
+            return None
+        sideways = sideways / span
+        shifted = np.asarray(point, dtype=float) + sideways
+        here = self._display_of(point)
+        there = self._display_of([float(value) for value in shifted])
+        if here is None or there is None:
+            return None
+        measured = math.dist(here, there)
+        return measured if measured > EPS_GEOM else None
+
+    def _preview_snap(self, x: int, y: int) -> None:
+        """Zeichnet die Marke dorthin, wo ein Klick jetzt landen würde."""
+        view_point = self._world_at(x, y)
+        if view_point is None:
+            self._clear_snap_preview()
+            return
+        found = self._snap_for_measure(self._from_view(view_point))
+        if found is None:
+            self._clear_snap_preview()
+            return
+        self._snap_owner = self._object_at_view(view_point) or ""
+        self._draw_snap_preview(found)
+
+    def _draw_snap_preview(self, found: SnapResult) -> None:
+        """Ein Stern an der Fangstelle, und seine Größe sagt, worauf gefangen
+        wurde.
+
+        **Die Größe trägt die Auskunft, nicht die Farbe** (Regel 18): Eine
+        Ecke bekommt den vollen Stern, eine Kante einen kleineren, eine freie
+        Stelle nur ein Kreuzchen. Wer nicht sieht, bekommt denselben
+        Unterschied als Satz — die Beschreibung der Ansicht nennt ihn, und
+        Bildschirmleser lesen sie vor.
+
+        Gezeichnet wird dort, wo der Körper im Bild steht — über
+        :meth:`view_point_of` mit dem Körper unter dem Zeiger, genau wie das
+        Maß danach (:meth:`_redraw_measurements`). Auf einer zweiten Platte
+        stünde die Marke sonst eine Bettbreite neben dem Teil, das sie meint.
+        """
+        if self.plotter is None:
+            return
+        if (
+            self._snap_shown is not None
+            and self._snap_shown.kind == found.kind
+            and all(
+                abs(before - after) <= EPS_GEOM
+                for before, after in zip(self._snap_shown.point, found.point, strict=True)
+            )
+        ):
+            return
+        self._remove_snap_actors()
+
+        import numpy as np
+
+        # Dieselbe Umrechnung wie am Maß darüber: Die Marke muss dort stehen,
+        # wo der Zeiger ist, und das Maß danach an derselben Stelle.
+        centre = np.asarray(self.view_point_of(found.point, self._snap_owner), dtype=float)
+        across, upward = self._screen_axes()
+        scale = self._pixels_per_mm_at(found.point)
+        if across is None or upward is None or scale is None:
+            return
+        arm = SNAP_MARK_PIXELS.get(found.kind, SNAP_MARK_PIXELS["free"]) / scale
+        for index, direction in enumerate((across, upward)):
+            step = direction * arm
+            actor = self.plotter.add_lines(
+                np.array([centre - step, centre + step], dtype=float),
+                color=MEASURE_COLOUR,
+                width=2,
+                name=f"measure_snap:{index}",
+            )
+            # Dieselbe Zusage wie an der Maßlinie: Eine Marke, die im Material
+            # verschwindet, sagt nichts über die Stelle, die sie meint.
+            actor.mapper.SetRelativeCoincidentTopologyLineOffsetParameters(0.0, -66000.0)
+            actor.SetForceOpaque(True)
+            self._snap_actors.append(actor)
+        dot = self.plotter.add_points(
+            np.array([centre], dtype=float),
+            color=MEASURE_COLOUR,
+            point_size=SNAP_DOT_PIXELS.get(found.kind, SNAP_DOT_PIXELS["free"]),
+            render_points_as_spheres=True,
+            name="measure_snap:dot",
+            render=False,
+        )
+        dot.mapper.SetRelativeCoincidentTopologyPointOffsetParameter(-66000.0)
+        dot.SetForceOpaque(True)
+        self._snap_actors.append(dot)
+        self._snap_shown = found
+        self.setAccessibleDescription(snap_sentence(found.kind))
+        self._draw()
+
+    def _screen_axes(self) -> tuple[Any, Any]:
+        """Die beiden Richtungen, die im Bild waagerecht und senkrecht liegen.
+
+        Eine Marke, die entlang der **Weltachsen** gezeichnet wird, ist in
+        jeder Ansicht verschieden verkürzt: In der isometrischen war sie auf
+        ein Drittel zusammengezogen und im gerenderten Fenster kaum zu finden.
+        Entlang dieser beiden steht sie immer als sauberes Kreuz zum
+        Betrachter.
+        """
+        if self.plotter is None:
+            return None, None
+        import numpy as np
+
+        camera = self.plotter.camera
+        forward = np.asarray(camera.GetFocalPoint(), dtype=float) - np.asarray(
+            camera.GetPosition(), dtype=float
+        )
+        up = np.asarray(camera.GetViewUp(), dtype=float)
+        across = np.cross(forward, up)
+        span = float(np.linalg.norm(across))
+        if span <= EPS_GEOM:
+            return None, None
+        across = across / span
+        upward = np.cross(across, forward)
+        height = float(np.linalg.norm(upward))
+        if height <= EPS_GEOM:
+            return None, None
+        return across, upward / height
+
+    def _remove_snap_actors(self) -> None:
+        if self.plotter is None:
+            self._snap_actors.clear()
+            return
+        for actor in self._snap_actors:
+            self.plotter.remove_actor(actor, render=False)
+        self._snap_actors.clear()
+
+    def _clear_snap_preview(self) -> None:
+        """Nimmt die Marke weg — beim Verlassen des Bildes, des Körpers und
+        des Werkzeugs.
+        """
+        if not self._snap_actors and self._snap_shown is None:
+            return
+        self._remove_snap_actors()
+        self._snap_shown = None
+        self.setAccessibleDescription("")
+        self._draw()
+
+    @property
+    def snap_preview(self) -> SnapResult | None:
+        """Was die Fangmarke gerade zeigt — Auskunft für Tests und Oberfläche."""
+        return self._snap_shown
 
     def _add(self, measurement: Measurement) -> None:
         self.measurements.add(measurement)
@@ -5492,6 +5804,46 @@ class Viewport(QWidget):
         """
         return self._object_at(point)
 
+    def _object_at_view(self, point: Vec3) -> ObjectId | None:
+        """Welcher Körper an dieser Stelle **im Bild** liegt.
+
+        Die Schwester von :meth:`_object_at`, und der Unterschied ist der
+        ganze Grund: Jene fragt die Szene, und dort stehen zwei Druckplatten
+        **übereinander** — `arrange_bed` setzt Platte 2 an denselben Nullpunkt,
+        weil beide einzeln gedruckt werden (§25). Ein Punkt in
+        Szenenkoordinaten lässt sich damit keiner Platte zuordnen; im Bild
+        stehen die Betten nebeneinander, und dort ist er eindeutig.
+
+        Gebraucht wird das überall, wo ein **Ort** gemerkt und später wieder
+        gezeigt wird — beim Messen. Wer nur rechnet, braucht es nicht: Ein
+        Abstand ist derselbe, gleich auf welcher Platte.
+        """
+        if self._result is None:
+            return None
+        import numpy as np
+
+        best: ObjectId | None = None
+        best_volume = float("inf")
+        for object_id, entry in self._result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
+            shift = np.asarray(self._view_offset(entry, self._result), dtype=float)
+            bounds = entry.mesh.bounds
+            size = bounds.size
+            slack = max(EPS_MATCH_MINIMUM, max(size) * EPS_MATCH_RELATIVE)
+            low = np.asarray(bounds.minimum, dtype=float) + shift
+            high = np.asarray(bounds.maximum, dtype=float) + shift
+            if not all(
+                float(a) - slack <= value <= float(b) + slack
+                for a, b, value in zip(low, high, point, strict=True)
+            ):
+                continue
+            volume = size[0] * size[1] * size[2]
+            if volume < best_volume:
+                best_volume = volume
+                best = object_id
+        return best
+
     def _object_at(self, point: Vec3) -> ObjectId | None:
         """Der Körper unter einem Klick, oder nichts.
 
@@ -5536,8 +5888,19 @@ class Viewport(QWidget):
         import numpy as np
 
         for index, entry in enumerate(self.measurements.entries):
-            if len(entry.points) == 2:
-                line = np.array([entry.points[0], entry.points[1]], dtype=float)
+            # **Ein Maß liegt in der Szene und wird im Bild gezeigt** (§25,
+            # §18.8). Die beiden Orte sind nicht derselbe, sobald ein zweites
+            # Bett danebensteht oder die Körper auseinandergezogen sind: Ein
+            # Maß an einem Körper auf Platte 2 lag eine Bettbreite neben dem
+            # Teil, das es misst. Gerechnet wird je Punkt, denn die zwei Enden
+            # eines Maßes dürfen zu verschiedenen Körpern gehören.
+            owners = entry.object_ids or ("",) * len(entry.points)
+            shown = tuple(
+                self.view_point_of(spot, owner)
+                for spot, owner in zip(entry.points, owners, strict=False)
+            )
+            if len(shown) == 2:
+                line = np.array([shown[0], shown[1]], dtype=float)
                 actor = self.plotter.add_lines(
                     line, color=MEASURE_COLOUR, width=2, name=f"measure:{index}"
                 )
@@ -5561,7 +5924,7 @@ class Viewport(QWidget):
                 if entry.kind == "angle"
                 else length(float(entry.value))
             )
-            anchor = np.array([entry.points[-1]], dtype=float) if entry.points else None
+            anchor = np.array([shown[-1]], dtype=float) if shown else None
             if anchor is not None:
                 self._measure_actors.append(
                     self.plotter.add_point_labels(
