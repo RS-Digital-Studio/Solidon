@@ -66,4 +66,18 @@ Am 03.09.2026 zweimal an einem Tag, in beiden Richtungen:
 Korpus nichts findet, hat oft nicht schlecht gesucht, sondern gerade den Grund
 gefunden, aus dem der Fehler so lange stand.
 
+Am selben Tag ein dritter Fall, unabhängig gefunden — und er macht aus den
+zwei Anekdoten eine Form: Der Korpus hat **keine ASCII-STL**, und genau
+deshalb war der ASCII-Zweig der einzige, den nie eine echte Datei gefahren
+hat. Dort steckte der Fehler.
+
+> **Die Lücke im Prüfbestand und die Lücke in der Prüfung sind nicht zwei
+> Befunde, sondern einer** (3d-druck-85, 03.09.2026).
+
+Alle drei Male ist die Suche ins Leere gegangen, weil das Gesuchte im
+Prüfbestand gar nicht entstehen **kann** — nicht, weil es übersehen wurde.
+Praktisch heißt das: Wer eine Zweigabdeckung prüft, prüft sie am Bestand der
+Eingabedateien und nicht an der Zahl der Tests. Ein Zweig ohne eine Datei, die
+ihn erreicht, ist ungeprüft, gleich wie viele Tests daneben grün sind.
+
 Verwandt: [[voraussetzung-im-namen-statt-hergestellt]], [[testprojekt-trifft-den-fall-nicht]].
