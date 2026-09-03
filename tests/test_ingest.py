@@ -1368,3 +1368,71 @@ def test_a_broken_file_reports_instead_of_raising(qt_app: Any, tmp_path: Path) -
     assert gesehen.get("error") is not None, "und sie muss sich melden"
     assert not session.project.document.sources, "die Quelle wird zurückgenommen"
     assert not session.project.document.ops, "und keine Operation bleibt stehen"
+
+
+def test_a_file_with_broken_coordinates_is_refused_instead_of_asked_about(
+    profile: Profile,
+) -> None:
+    """Eine Datei ohne gültige Maße wird abgewiesen, nicht zur Frage gemacht.
+
+    **Der Dialog zeigte „nan".** Eine STL mit einer NaN-Ecke ergibt eine
+    Ausdehnung, die keine ist; die Einheitenerkennung findet dann nichts
+    Plausibles und fragt — und die Frage listet zu jeder Antwort das Ergebnis
+    auf, in diesem Fall mit „nan" in der ersten Spalte. Gemessen am
+    03.09.2026 über den Weg des Fensters.
+
+    ``_unit_for`` nennt die Regel in seinem eigenen Docstring: „Anhalten und
+    fragen bleibt richtig — eine Frage, die niemand beantworten kann, ist aber
+    nur die halbe Regel." Hier ist die Antwort keine Einheit, sondern eine
+    kaputte Datei, und das gehört gesagt statt gefragt.
+    """
+    from app.core.scene import History, OperationDraft, evaluate
+
+    # Ein Dreieck mit einer NaN-Ecke, dazu ein sauberer Würfel: Die Prüfung
+    # geht über alle Teile, nicht über den größten — ``max`` über eine Folge
+    # mit NaN wählt unvorhersehbar, weil jeder Vergleich mit NaN falsch ist.
+    kaputt = [((0.0, 0.0, 0.0), (float("nan"), 0.0, 0.0), (0.0, 10.0, 0.0))]
+    payload = _stl(kaputt + _cube())
+
+    project = _project_of(payload, "kaputt.stl")
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1"})])
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert not result.complete, "eine Datei ohne gültige Maße darf nicht durchgehen"
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert any("ValidationError" in code for code in codes), codes
+
+
+def test_the_scan_counts_what_the_reader_would_return() -> None:
+    """Der Scan zählt, was der Leser zurückgäbe — sein eigenes Versprechen.
+
+    ``_scan`` sagt es im Docstring: „Die Körper werden über dieselben
+    ``_objects_in``/``_parts_of`` gezählt wie beim Lesen, damit die Zahl
+    garantiert die ist, die ``read_objects`` zurückgäbe." Geprüft hat das
+    nichts — und die Zahl ist keine Nebensache: Der Stapel vergibt daraus seine
+    Objekt-IDs, **bevor** irgendetwas gerechnet ist (§11). Eine zu große Zahl
+    hält die Auswertung mit ``evaluate.object_count`` an, und aus einer Datei
+    mit einem lesbaren Körper wird ein Import, der gar nichts einliest.
+
+    **Gefunden über eine Mutation, die grün blieb** (03.09.2026): Nimmt man
+    dem Zähllauf das Attribut, mit dem er die Größe der geleerten Sammelknoten
+    festhält, liefert ``scan_assembly`` für ``colored.3mf`` **(0, 20)** statt
+    (1, 20) — null Körper. Fünfundachtzig Tests liefen weiter grün, weil keiner
+    die Körperzahl des Scans je gegen den Leser gehalten hat.
+    """
+    from app.core.ingest import threemf
+
+    payload = (MESHES / "colored.3mf").read_bytes()
+
+    bodies, triangles = threemf.scan_assembly(payload)
+    parts = threemf.read_objects(payload)
+
+    assert bodies == len(parts), (
+        f"der Scan zählt {bodies} Körper, der Leser gibt {len(parts)} zurück"
+    )
+    assert triangles == sum(part.mesh.triangle_count for part in parts), (
+        "und dieselbe Zusage gilt für die Dreiecke — an ihnen hängt die Größengrenze"
+    )
+    assert bodies > 0, "ohne einen Körper prüft dieser Test nichts"

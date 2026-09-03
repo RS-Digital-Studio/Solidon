@@ -977,6 +977,7 @@
   "Die Datei enthält kein vollständiges Aktivierungsdokument.": "O ficheiro não contém um documento de ativação completo.",
   "Die Datei enthält keine Dreiecksgeometrie.": "O ficheiro não contém geometria triangular.",
   "Die Datei enthält mehrere Körper — sie kommen als eigene Objekte an.": "O ficheiro contém vários corpos — chegam como objetos próprios.",
+  "Die Datei enthält ungültige Koordinaten und ergibt keine Ausdehnung. Meistens ist beim Erzeugen oder Übertragen etwas schiefgegangen — erzeuge sie im Ursprungsprogramm neu.": "O ficheiro contém coordenadas inválidas e não tem qualquer extensão. Normalmente algo correu mal ao criá-lo ou transferi-lo — cria-o novamente no programa de origem.",
   "Die Datei entpackt sich größer, als diese Anwendung verarbeitet.": "O ficheiro descomprime-se para além do que esta aplicação processa.",
   "Die Datei gibt es nicht": "O ficheiro não existe",
   "Die Datei im Slicer öffnen und neu speichern.": "Abrir o ficheiro no slicer e guardá-lo de novo.",

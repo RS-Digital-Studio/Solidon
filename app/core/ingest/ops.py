@@ -14,7 +14,12 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import cast
 
-from app.core.errors import InternalError, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHOOSE_ANOTHER_FILE,
+    InternalError,
+    ValidationError,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.transform import apply, scaling, translation
 from app.core.ingest import outline, threemf
@@ -168,6 +173,30 @@ def load(ctx: OpContext) -> OpResult:
     # Teile einer Baugruppe in verschiedenen Maßstäben herauskommen, und
     # die Frage, die §17.1 dem Nutzer stellt, gilt der Datei, nicht jedem
     # Körper darin.
+    # **Vor der Heuristik: sind die Maße überhaupt Zahlen?** Eine Datei mit
+    # einer NaN-Ecke ergibt eine Ausdehnung, die keine ist — und die
+    # Einheitenfrage zeigte dem Kunden dann eine Zeile, die mit „nan" beginnt.
+    # ``_unit_for`` sagt die Regel im eigenen Docstring: Eine Frage, die
+    # niemand beantworten kann, ist nur die halbe Regel.
+    #
+    # Geprüft wird über **alle** Teile, nicht über den größten: Bei einer
+    # Baugruppe kann ein einzelner Körper kaputt sein, und ``max`` über eine
+    # Folge mit NaN wählt unvorhersehbar, weil jeder Vergleich mit NaN
+    # falsch ist.
+    for part in parts:
+        if not math.isfinite(part.mesh.bounds.diagonal):
+            raise ValidationError(
+                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+                field="file",
+                detail=_(
+                    "Die Datei enthält ungültige Koordinaten und ergibt keine "
+                    "Ausdehnung. Meistens ist beim Erzeugen oder Übertragen etwas "
+                    "schiefgegangen — erzeuge sie im Ursprungsprogramm neu."
+                ),
+                constraint="not_a_number",
+                values={"object": part.name},
+            )
+
     # Der größte Körper der Datei stellt die Frage: seine Diagonale entscheidet
     # die Heuristik, und seine Kantenmaße sind das, was die Rückfrage zeigt.
     biggest = max((part.mesh.bounds for part in parts), key=lambda bounds: bounds.diagonal)

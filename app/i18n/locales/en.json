@@ -977,6 +977,7 @@
   "Die Datei enthält kein vollständiges Aktivierungsdokument.": "The file does not contain a complete activation document.",
   "Die Datei enthält keine Dreiecksgeometrie.": "The file contains no triangle geometry.",
   "Die Datei enthält mehrere Körper — sie kommen als eigene Objekte an.": "The file holds several bodies — they arrive as objects of their own.",
+  "Die Datei enthält ungültige Koordinaten und ergibt keine Ausdehnung. Meistens ist beim Erzeugen oder Übertragen etwas schiefgegangen — erzeuge sie im Ursprungsprogramm neu.": "The file contains invalid coordinates and has no extent. Usually something went wrong while creating or transferring it — create it again in the original program.",
   "Die Datei entpackt sich größer, als diese Anwendung verarbeitet.": "The file unpacks larger than this application handles.",
   "Die Datei gibt es nicht": "No such file",
   "Die Datei im Slicer öffnen und neu speichern.": "Open the file in the slicer and save it again.",

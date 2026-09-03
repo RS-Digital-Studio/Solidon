@@ -977,6 +977,7 @@
   "Die Datei enthält kein vollständiges Aktivierungsdokument.": "Le fichier ne contient pas de document d’activation complet.",
   "Die Datei enthält keine Dreiecksgeometrie.": "Le fichier ne contient aucune géométrie triangulaire.",
   "Die Datei enthält mehrere Körper — sie kommen als eigene Objekte an.": "Le fichier contient plusieurs corps — ils arrivent comme objets à part entière.",
+  "Die Datei enthält ungültige Koordinaten und ergibt keine Ausdehnung. Meistens ist beim Erzeugen oder Übertragen etwas schiefgegangen — erzeuge sie im Ursprungsprogramm neu.": "Le fichier contient des coordonnées invalides et n’a aucune étendue. Quelque chose s’est généralement mal passé lors de sa création ou de son transfert — recrée-le dans le programme d’origine.",
   "Die Datei entpackt sich größer, als diese Anwendung verarbeitet.": "Le fichier se décompresse au-delà de ce que cette application traite.",
   "Die Datei gibt es nicht": "Ce fichier n'existe pas",
   "Die Datei im Slicer öffnen und neu speichern.": "Ouvrir le fichier dans le slicer et l'enregistrer à nouveau.",
