@@ -33,7 +33,6 @@ scrive in `website/version.json`.
 - Un secondo foro come il primo si ottiene duplicando, invece di ridigitare le misure.
 - Il tasto Canc rimuove la caratteristica selezionata e non più l'intero corpo.
 - Un doppio clic su una riga dell'elenco degli oggetti apre ciò che la modifica: la finestra adatta per una caratteristica riconosciuta, il passo con le sue misure per una creata.
-- Quando un foro viene spostato, il punto precedente viene riempito in modo pulito, senza sporgenze sopra o sotto.
 - Un foro passante che dopo lo spostamento non passa più lo segnala, e una svasatura che chiuderebbe il suo foro non si può spostare.
 - Ridurre un foro finché non è più tale dà una spiegazione invece di chiedere una segnalazione di errore.
 - Su una faccia, un pulsante porta al catalogo dei blocchi invece di mostrare righe che dicono solo ciò che lì non è possibile.

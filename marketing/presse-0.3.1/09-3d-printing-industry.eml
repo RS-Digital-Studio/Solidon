@@ -31,8 +31,8 @@ optional language model may invoke the same registered API as the UI, but it
 cannot calculate geometry or execute generated source. Editing, analysis and
 export remain available without AI, an account or an internet connection.
 
-Since the first public 0.1 demo, the release history records 464 curated
-user-facing changes; 0.3.1 itself accounts for 86. Solidon is packaged for
+Since the first public 0.1 demo, the release history records 463 curated
+user-facing changes; 0.3.1 itself accounts for 85. Solidon is packaged for
 Windows, macOS and Linux and supports a file-based activation route for
 workstations that remain offline.
 

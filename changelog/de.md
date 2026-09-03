@@ -58,7 +58,6 @@ Nutzen da und sonst nichts.
 - Eine zweite Bohrung wie die erste entsteht durch Verdoppeln, statt Maße von Hand nachzutippen.
 - Die Entf-Taste entfernt das gewählte Merkmal und nicht mehr den ganzen Körper.
 - Ein Doppelklick auf eine Zeile der Objektliste öffnet, was sie ändert — bei einem erkannten Merkmal den passenden Dialog, bei einem selbst erzeugten den Schritt mit seinen Maßen.
-- Beim Versetzen einer Bohrung wird die alte Stelle sauber gefüllt, ohne Überstand oben und unten.
 - Eine durchgehende Bohrung, die nach dem Versetzen nicht mehr durchgeht, sagt es — und eine Senkung, die ihre Bohrung zuziehen würde, lässt sich nicht versetzen.
 - Wer eine Bohrung so weit verkleinert, dass sie keine mehr ist, bekommt eine Erklärung statt der Aufforderung, einen Fehlerbericht zu schreiben.
 - An einer Fläche führt ein Knopf in den Bausteinkatalog, statt Zeilen zu zeigen, die nur sagen, was dort nicht geht.

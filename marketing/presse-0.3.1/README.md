@@ -5,9 +5,21 @@ Empfänger einen eigenen Link auf den vollständig ausgefüllten E-Mail-Entwurf.
 
 Stand der Adressprüfung: 29.08.2026 für die Entwürfe 1–20, 31.08.2026 für
 21–25; die Inhalte sind am 03.09.2026 auf 0.3.1 umgeschrieben. Die
-fünfundzwanzig Entwürfe sind **nicht versandt**. Sie sind für den
-Veröffentlichungstag der 0.3.1 bestimmt und dürfen erst hinausgehen, wenn
-Download, Changelog und Bilder öffentlich erreichbar sind. 3Druck.com und
+fünfundzwanzig Entwürfe sind **nicht versandt**.
+
+> **Sperre, Stand 03.09.2026: Diese Welle darf nicht auf 0.3.1 hinausgehen.**
+> Die ausgelieferte 0.3.1 füllt die alte Stelle einer versetzten, gedrehten
+> oder entfernten Bohrung nicht sauber: An einem U-Profil bleiben 76,4 mm³
+> stehen, eine 10 mm starke Platte mit Bohrung Ø 16 wird 16,03 mm hoch. Genau
+> diese Funktion ist der Aufhänger fast jeder Mail hier — mehrere laden
+> ausdrücklich zum Nachmessen ein. Eine Redaktion, die der Einladung folgt,
+> findet den Fehler in fünf Minuten. Der Versand wartet deshalb auf die
+> Fassung, in der die Behebung enthalten ist (gemessen 0,000 mm³, bei 3d-druck-a0
+> gebaut); der Verteiler wandert dann auf deren Nummer, und die Zahlen ziehen
+> mit. Entscheidung darüber trifft Robert.
+
+Auch danach gilt: Sie dürfen erst hinausgehen, wenn
+Download, Changelog und Bilder öffentlich die beworbene Fassung zeigen. 3Druck.com und
 VoxelMatters haben Solidon3D bereits ausführlich vorgestellt; ihre Entwürfe
 sind deshalb ausdrücklich als Folge-Update formuliert und wiederholen die
 Erstvorstellung nicht. Alle anderen Texte erklären den für die jeweilige
@@ -38,13 +50,13 @@ Schlauchhalter fallen dadurch 296 von 1130 Einträgen weg, die Messrauschen
 waren. Das ist die Sorte Zahl, die eine Redaktion selbst nachmessen kann.
 
 „Seit 0.1" bedeutet in den Anschreiben: Seit der ersten öffentlichen
-0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **464 ausgewählte,
-für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 83 + 115 + 86
+0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **463 ausgewählte,
+für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 83 + 115 + 85
 Punkte bis einschließlich 0.3.1. Die Zahl ist kein Commit-Zähler und wird in
 den Mails auch nicht so dargestellt.
 
-**Die Zahl wandert, solange an der 0.3.1 gearbeitet wird**, und sie steht in
-fünf Anschreiben (01, 02, 05, 09, 11).
+**Die Zahl steht in
+fünf Anschreiben** (01, 02, 05, 09, 11).
 `tests/test_changelog.py::test_the_press_drafts_count_the_same_changes`
 hält beide Seiten zusammen — wer den Changelog ergänzt, bekommt einen roten
 Lauf statt einer falschen Zahl in einer Mail an eine Redaktion. Erlaubt sind

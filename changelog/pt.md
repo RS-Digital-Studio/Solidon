@@ -33,7 +33,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um segundo furo igual ao primeiro obtém-se duplicando, em vez de escrever de novo as medidas.
 - A tecla Del remove a característica selecionada e já não o corpo inteiro.
 - Um duplo clique numa linha da lista de objetos abre o que a altera: o diálogo adequado numa característica reconhecida, o passo com as suas medidas numa criada.
-- Ao deslocar um furo, o seu local anterior é preenchido de forma limpa, sem nada a sobressair por cima ou por baixo.
 - Um furo passante que após o deslocamento já não atravessa avisa, e um escareamento que fecharia o seu furo não pode ser deslocado.
 - Reduzir um furo até deixar de o ser dá uma explicação em vez de pedir um relatório de erro.
 - Numa face, um botão leva ao catálogo de blocos em vez de mostrar linhas que apenas dizem o que ali não é possível.

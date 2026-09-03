@@ -36,8 +36,8 @@ The concrete additions:
 * the default view navigation was replaced (left pans, right orbits, W/A/S/D
   flies), with the previous slicer and CAD schemes still selectable.
 
-Version 0.3.1 alone documents 86 curated user-facing changes. The complete
-history since the first 0.1 demo now contains 464.
+Version 0.3.1 alone documents 85 curated user-facing changes. The complete
+history since the first 0.1 demo now contains 463.
 
 Changelog: https://solidon3d.de/en/changelog.html
 Download: https://solidon3d.de/en/

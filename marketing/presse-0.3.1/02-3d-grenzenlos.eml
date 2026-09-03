@@ -38,8 +38,8 @@ Für Heimanwender sind in 0.3.1 außerdem besonders relevant:
 * kaputte Dateien werden beim Öffnen abgelehnt statt stillschweigend
   angenommen, große Baugruppen laden mit Fortschrittsanzeige.
 
-0.3.1 umfasst 86 ausgewählte Nutzeränderungen; seit der ersten öffentlichen
-0.1-Demo dokumentiert der Changelog insgesamt 464. Solidon bleibt ohne Konto
+0.3.1 umfasst 85 ausgewählte Nutzeränderungen; seit der ersten öffentlichen
+0.1-Demo dokumentiert der Changelog insgesamt 463. Solidon bleibt ohne Konto
 und Cloud-Ablage nutzbar und ist kein Slicer, sondern bereitet Modelle für den
 vorhandenen Slicer vor.
 

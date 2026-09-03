@@ -34,7 +34,6 @@ dans `website/version.json`.
 - Un second perçage identique au premier s'obtient par duplication, au lieu de retaper les cotes.
 - La touche Suppr retire la caractéristique sélectionnée et non plus le corps entier.
 - Un double clic sur une ligne de la liste des objets ouvre ce qui la modifie : la boîte de dialogue adaptée pour une caractéristique reconnue, l'étape avec ses cotes pour une créée.
-- Lors du déplacement d'un perçage, son ancien emplacement est comblé proprement, sans rien qui dépasse en haut ni en bas.
 - Un perçage débouchant qui ne débouche plus après déplacement le signale, et une fraisure qui refermerait son perçage ne peut pas être déplacée.
 - Réduire un perçage jusqu'à ce qu'il n'en soit plus un donne une explication au lieu de demander un rapport d'erreur.
 - Sur une face, un bouton mène au catalogue de blocs au lieu d'afficher des lignes qui disent seulement ce qui est impossible.
