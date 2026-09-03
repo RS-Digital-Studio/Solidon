@@ -2881,7 +2881,19 @@ class ArrangeParams(BaseParams):
     )
     plates: int = param(
         title=_("Druckplatten"),
-        default=1,
+        # **Die Vorgabe war 1, und damit hielt der Satz daneben nicht.** „Der
+        # Rest wandert auf die nächste" — bei einer erlaubten Platte gibt es
+        # keine nächste, und der Rest landet **neben** dem Bett, wo er nicht
+        # druckbar ist. Gemessen am 03.09.2026 mit neun Klötzen von 120 mm:
+        # erlaubt 1 ergab eine Platte und acht daneben, erlaubt 12 ergab neun
+        # Platten und keinen daneben. Bei **einem** Teil bleibt es in beiden
+        # Fällen bei einer Platte — die höhere Vorgabe legt also keine Platten
+        # auf Vorrat an, sie hört nur auf, den Rest fallen zu lassen.
+        #
+        # Wer genau eine Platte will, stellt sie ein; wer nichts einstellt,
+        # bekommt, was der Satz verspricht. Entscheidung Robert, 03.09.2026:
+        # „nicht den satz sondern die logik anpassen."
+        default=MAX_PLATES,
         minimum=1,
         maximum=MAX_PLATES,
         doc=_("Passt nicht alles auf eine Platte, wandert der Rest auf die nächste."),

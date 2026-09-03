@@ -2591,3 +2591,42 @@ def test_a_copy_never_takes_the_number_of_a_removed_feature(profile: Profile) ->
     assert len(fresh) == 1, fresh
     assert fresh[0] != bores[2], "die Kennung der gelöschten Bohrung bleibt frei"
     assert fresh[0] == "hole_6", fresh
+
+
+def test_arranging_uses_every_plate_it_is_allowed(profile: Profile) -> None:
+    """Der Satz am Parameter hielt nicht, weil die Vorgabe ihn nicht zuließ.
+
+    „Passt nicht alles auf eine Platte, wandert der Rest auf die nächste" —
+    bei einer **erlaubten** Platte gibt es keine nächste, und der Rest landet
+    neben dem Bett, wo er nicht druckbar ist. Gemessen am 03.09.2026 mit neun
+    Klötzen von 120 mm: erlaubt 1 ergab eine Platte und acht daneben, erlaubt
+    12 ergab neun Platten und keinen daneben (3d-druck-81).
+
+    Geprüft wird beides, weil nur das Paar die Zusage trägt: Mit **einem** Teil
+    bleibt es bei **einer** Platte — die höhere Vorgabe legt keine Platten auf
+    Vorrat an. Mit mehreren wandert der Rest wirklich weiter.
+
+    Robert dazu: „nicht den satz sondern die logik anpassen."
+    """
+    from app.core.geom.prepare import MAX_PLATES
+
+    spec = REGISTRY.get("arrange_bed")
+    default = next(entry for entry in spec.params.spec() if entry.name == "plates")
+    assert default.default == MAX_PLATES, "die Vorgabe nutzt, was erlaubt ist"
+
+    def blocks(count: int) -> list[SceneObject]:
+        made: list[SceneObject] = []
+        for number in range(count):
+            body = MeshData.of(trimesh.creation.box(extents=(120.0, 120.0, 20.0)))
+            made.append(SceneObject(id=f"obj_{number + 1}", name=f"Klotz {number + 1}", mesh=body))
+        return made
+
+    alone = arrange_on_bed(
+        [entry.mesh for entry in blocks(1)], profile, spacing=5.0, plates=MAX_PLATES
+    )
+    assert set(alone.plates) == {0}, "ein Teil braucht eine Platte, nicht zwölf"
+
+    many = arrange_on_bed(
+        [entry.mesh for entry in blocks(9)], profile, spacing=5.0, plates=MAX_PLATES
+    )
+    assert len(set(many.plates)) > 1, "der Rest wandert wirklich auf die nächste"
