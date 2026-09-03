@@ -81,3 +81,29 @@ Und weil ein Zurückschreiben den Bestand unter einem laufenden Torlauf ändert:
 **vorher ansagen.** `gate_lock.py status` nennt in einer Sekunde, wer gerade
 misst; ein Katalog, der sich unter `test_translations` ändert, erzeugt einen
 roten Befund, der mit der Arbeit des Messenden nichts zu tun hat.
+
+## Dritte Gestalt: der Blob, den ich selbst zusammensetze
+
+Am 03.09.2026 noch einmal, und diesmal war die Absicht richtig. In
+`tests/test_ui.py` lag frische Arbeit von 85, die ich **nicht** mitcommitten
+wollte. Also habe ich mir einen Blob gebaut: der Dateistand, in dem ihre
+Ersetzung durch die HEAD-Fassung zurückgetauscht war. Die Gegenprobe sagte
+„83 Zeilen, nur meine" — und stimmte.
+
+Zwischen dem Bauen dieses Blobs und meinem Commit fiel ihr Commit. Meiner
+landete darüber und spielte ihre Funktion zurück.
+
+**Die Gegenprobe war richtig gerechnet und gegen die falsche Grundlage
+gestellt.** Ein zusammengesetzter Blob wird gegen den Stand geprüft, auf dem
+der Commit **landen wird** — nicht gegen den HEAD, aus dem er gebaut wurde. Das
+sind bis zur letzten Sekunde zwei verschiedene Dinge, und eine saubere Messung
+am falschen von beiden liest sich genauso beruhigend wie eine richtige
+([[gemessene-frage-ist-nicht-die-gestellte]]).
+
+Gemerkt habe ich es nicht selbst: 85 schrieb unmittelbar danach, was sie
+committet hatte. Mein eigener Diff sah bis dahin sauber aus — wieder
+[[der-nachbar-findet-den-fehler]].
+
+Behoben wurde es vorwärts, mit einem eigenen Commit, der die Funktion aus dem
+überrollten Commit zurückholt und danach **gegen den eigenen Hash** prüft
+([[sollprobe-liest-den-fremden-commit]]), nicht gegen HEAD.
