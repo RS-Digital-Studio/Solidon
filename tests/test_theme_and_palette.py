@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+
+import app
 
 pytest.importorskip("PySide6")
 
@@ -164,6 +168,55 @@ def test_links_are_readable_and_follow_the_theme(theme: str) -> None:
         assert palette.color(QPalette.ColorGroup.Disabled, role).name() == colours["disabled"], (
             f"{theme}: ein gesperrter Link sieht für {role.name} weiter bedienbar aus"
         )
+
+
+def test_no_fill_colour_is_used_as_text() -> None:
+    """Eine Füllfarbe füllt, sie schreibt nicht.
+
+    ``ROLES`` sind **Flächenfarben** — Auswahlbalken, gewählter Körper,
+    Schichtkarten. Als Schriftfarbe auf der Dialogfläche halten sie die
+    Schwelle nicht: ``select`` bringt im hellen Thema 1,70, WCAG AA verlangt
+    4,5 für Text.
+
+    **Zwei Stellen sind darauf hereingefallen, und beide plausibel.** Der
+    Suchtreffer der Druckeinstellungen färbte die gefundene Zeile mit
+    ``select`` — ausgerechnet die gesuchte war damit die am schlechtesten
+    lesbare des Dialogs. Die Ringlegende der Analyseleiste nahm die Farben der
+    3D-Karten, zwischen 1,82 und 3,26.
+
+    Und der naheliegende Ausweg trägt nicht: ``accent_line``, auf das der
+    Fokusring umgestellt wurde, bringt 3,01 — das ist die Schwelle für die
+    **Umrandung** eines Bedienelements (WCAG 1.4.11), nicht für Text. Wer eine
+    Zahl aus einem benachbarten Test übernimmt, übernimmt womöglich die falsche
+    Regel dazu.
+
+    Was trägt, ist eines von beiden: die Rolle als Fläche benutzen und die
+    dafür deklarierte Schriftfarbe darauf (7,93 in beiden Themen), oder ein
+    Farbfeld neben regulärem Text — dann zeigt die Oberfläche die Farbe, statt
+    sie lesen zu lassen, und die Bedeutung hängt nicht mehr allein an ihr
+    (Regel 18).
+
+    Geprüft wird der Quelltext und nicht die laufende Oberfläche: Ein
+    Stilblatt, das nur in einer bestimmten Lage gesetzt wird, erwischt kein
+    Fenstertest zuverlässig.
+    """
+    import re
+
+    ui = Path(app.__file__).parent / "ui"
+    # ``color:`` mit einem Wert aus ROLES — nicht ``background``, nicht
+    # ``border``: Für Flächen ist die Farbe richtig, für Rahmen gilt eine
+    # andere Schwelle (3,0), und beide prüfen eigene Tests.
+    pattern = re.compile(r"[^-\w]color:\s*\{ROLES\[")
+    guilty = [
+        f"{path.name}:{number}"
+        for path in sorted(ui.glob("*.py"))
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if pattern.search(line)
+    ]
+    assert not guilty, (
+        "Füllfarben aus ROLES als Schriftfarbe — auf hellem Grund unter der "
+        "Lesbarkeitsschwelle:\n  " + "\n  ".join(guilty)
+    )
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
