@@ -27,7 +27,7 @@ from app.core.ingest.plan import import_plan
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import CachedResult, DiskCache
 from app.core.scene.project import Project, ProjectSources, checksum, new_project
-from app.core.types import Profile, Source
+from app.core.types import Finding, Profile, Source
 from app.core.units import UNIT_NAMES
 from app.i18n import _
 
@@ -1181,3 +1181,82 @@ def test_a_real_ascii_stl_from_a_foreign_tool_passes() -> None:
 
     plan = import_plan("src_1", "openscad_ascii.stl", payload)
     assert plan.draft.op == "load"
+
+
+def test_a_finding_of_an_assembly_knows_which_body_it_belongs_to(profile: Profile) -> None:
+    """Ein Befund einer Baugruppe trägt die Kennung seines Körpers.
+
+    **Vorher trug er nur dessen Namen.** Die Auswertung setzt die Kennung
+    nach, aber nur bei genau einer Ausgabe — bei mehreren wäre jede Zuordnung
+    geraten (Regel 21). Eine 3MF mit acht Körpern bekam deshalb acht Befunde
+    ohne Ziel, und *Dreiecke verringern* landete auf der zufällig gewählten
+    Auswahl statt auf dem gemeinten Körper (gemessen von 3d-druck-7f am
+    03.09.2026 an ``Wizard+Tower+Staunton+Elegoo.3mf``).
+
+    Geraten wird trotzdem nichts: ``ingest.ops._named`` schreibt den Namen des
+    Teils in ``values["object"]``, und die Auswertung kennt die Namen ihrer
+    Ausgaben. Wo er genau eine trifft, ist die Zuordnung belegt.
+    """
+    from app.core.export import threemf
+
+    unten = trimesh.creation.box((10.0, 10.0, 10.0))
+    # Der zweite Körper ist offen — sonst meldet die Eingangsstufe über diese
+    # Baugruppe gar nichts, und der Test prüfte eine leere Liste.
+    oben = trimesh.creation.box((10.0, 10.0, 10.0))
+    oben.apply_translation((0.0, 0.0, 20.0))
+    oben.update_faces([index for index in range(len(oben.faces)) if index != 0])
+    payload = threemf.write_assembly(
+        [
+            threemf.AssemblyPart(mesh=MeshData.of(unten), name="Unten"),
+            threemf.AssemblyPart(mesh=MeshData.of(oben), name="Oben"),
+        ]
+    )
+    project = _project_of(payload, "gruppe.3mf")
+    history = History(project.document)
+    history.apply(
+        _("Laden"),
+        [OperationDraft(op="load", params={"source": "src_1"}, produces=2)],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    benannt = [
+        entry
+        for entry in result.scene.report.findings
+        if entry.values.get("object") in ("Unten", "Oben")
+    ]
+    assert benannt, "ohne einen benannten Befund prüft dieser Test nichts"
+    for entry in benannt:
+        erwartet = "obj_1" if entry.values["object"] == "Unten" else "obj_2"
+        assert entry.object_id == erwartet, (
+            f"{entry.code} nennt {entry.values['object']}, zeigt aber auf {entry.object_id}"
+        )
+
+
+def test_two_bodies_of_the_same_name_stay_unassigned() -> None:
+    """Wo der Name nicht eindeutig ist, wird nicht zugeordnet (Regel 21).
+
+    **Über eine 3MF ist dieser Fall nicht herstellbar**, und das ist eine
+    eigene Auskunft: Das Format macht gleichnamige Körper selbst eindeutig —
+    aus zweimal „Gleich" werden beim Schreiben „Gleich 1" und „Gleich 2".
+    Gemessen am 03.09.2026; der Versuch über ``write_assembly`` lieferte genau
+    diese beiden Namen und damit zwei saubere Zuordnungen.
+
+    Die Klausel gehört trotzdem zur Funktion und nicht zum Format: Ein anderer
+    Weg in die Szene — ein Baustein, eine Operation, ein späteres Format —
+    kann zwei Ausgaben desselben Namens erzeugen. Dann sind zwei Körper keine
+    Zuordnung, sondern eine Wahl, und die trifft die Auswertung nicht.
+    """
+    from app.core.scene.evaluate import _by_name
+
+    fund = Finding(
+        code="ingest.not_watertight", severity="warning", message="x", values={"object": "Gleich"}
+    )
+
+    assert _by_name(fund, {"Gleich": "obj_1"}) == "obj_1", "eindeutig wird zugeordnet"
+    assert _by_name(fund, {"Gleich": None}) is None, "mehrdeutig bleibt ohne Kennung"
+    assert _by_name(fund, {"Anderer": "obj_1"}) is None, "ein fremder Name trifft nichts"
+
+    ohne_namen = Finding(code="load.assembly", severity="info", message="x")
+    assert _by_name(ohne_namen, {"Gleich": "obj_1"}) is None, "kein Name, keine Kennung"

@@ -454,6 +454,11 @@ def evaluate(
             if entry not in operation.outputs:
                 objects.pop(entry, None)
 
+        # Welche Kennung zu welchem Namen gehört — für Befunde einer
+        # Baugruppe (siehe unten). ``None`` heißt „mehrdeutig": Zwei
+        # Körper desselben Namens sind keine Zuordnung, sondern eine Wahl,
+        # und die trifft hier niemand.
+        produced_by_name: dict[str, ObjectId | None] = {}
         for index, produced_object in enumerate(result.objects):
             object_id = operation.outputs[index]
             # §30: ob ein Körper Mesh oder B-Rep ist, folgt aus dem Körper,
@@ -493,6 +498,10 @@ def evaluate(
                 id=object_id,
                 created_by=operation.id,
                 kind=kind_after,
+            )
+            produced_name = str(placed.name)
+            produced_by_name[produced_name] = (
+                object_id if produced_name not in produced_by_name else None
             )
             recorded: dict[str, dict[str, Any]] = {}
             try:
@@ -560,7 +569,11 @@ def evaluate(
             dataclasses.replace(
                 entry,
                 op_id=entry.op_id if entry.op_id is not None else operation.id,
-                object_id=entry.object_id if entry.object_id is not None else lone,
+                object_id=(
+                    entry.object_id
+                    if entry.object_id is not None
+                    else (lone if lone is not None else _by_name(entry, produced_by_name))
+                ),
             )
             for entry in result.findings
         ]
@@ -681,6 +694,26 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     # erledigter Rat kostet mehr Vertrauen, als er nützt.
     "ingest.very_large": frozenset({"mesh.deviation"}),
 }
+
+
+def _by_name(finding: Finding, produced: Mapping[str, ObjectId | None]) -> ObjectId | None:
+    """Die Kennung des Körpers, den ein Befund beim Namen nennt.
+
+    **Der Weg für die Baugruppe, ohne zu raten.** Eine Operation mit mehreren
+    Ausgaben bekommt ihre Befunde nicht zugeordnet — bei acht Körpern wäre
+    jede Wahl geraten. ``ingest.ops._named`` schreibt aber den Namen des Teils
+    in ``values["object"]``, und hier stehen die Namen aller Ausgaben. Trifft
+    er genau eine, ist die Zuordnung belegt und nicht vermutet.
+
+    Gemessen am 03.09.2026 an einer 3MF mit acht Körpern: Ohne diesen Weg
+    stand ``ingest.very_large`` ohne Kennung da, und damit ohne Handlung —
+    *Dreiecke verringern* braucht ein Ziel und landete sonst auf der zufälligen
+    Auswahl (3d-druck-7f).
+    """
+    named = finding.values.get("object")
+    if not isinstance(named, str):
+        return None
+    return produced.get(named)
 
 
 def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
