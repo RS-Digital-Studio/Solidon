@@ -89,6 +89,7 @@ def digest(
     (Parameter, Passungen, Quellen, Verlauf) bleibt vollständig: es gehört
     zur Szene, nicht zu einem Objekt.
     """
+    plates = _plate_count(scene)
     lines: list[str] = [_scene_line(scene)]
 
     if scene.parameters:
@@ -113,7 +114,7 @@ def digest(
     for object_id, entry in scene.objects.items():
         if only is not None and object_id not in only:
             continue
-        lines.extend(_object_lines(object_id, entry))
+        lines.extend(_object_lines(object_id, entry, plates))
 
     lines.extend(_finding_lines(scene))
     if document is not None:
@@ -195,13 +196,33 @@ def _scene_line(scene: Scene) -> str:
     state = ""
     if profile is not None:
         state = f" ({tr('kalibriert') if profile.material.calibrated else tr('Startwert')})"
+    plates = _plate_count(scene)
+    spread = f", {plates} {tr('Platten')}" if plates > 1 else ""
     return (
-        f"{tr('Szene')}: {len(scene.objects)} {tr('Objekte')}, "
+        f"{tr('Szene')}: {len(scene.objects)} {tr('Objekte')}{spread}, "
         f"{tr('Drucker')} {printer}, {tr('Material')} {material}{state}"
     )
 
 
-def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
+def _plate_count(scene: Scene) -> int:
+    """Wie viele Druckplatten die Szene belegt.
+
+    **Warum das überhaupt im Steckbrief steht.** Der Agent darf *Auf dem Bett
+    anordnen* aufrufen, und diese Operation verteilt die Objekte auf Platten
+    (``arrange_bed``, ``by_material``). Bis zum 03.09.2026 stand die Platte in
+    der Szene (``SceneObject.plate``), wurde vom 3MF-Export gelesen — und kam
+    im Steckbrief nicht vor. Der Agent handelte also auf Platten und war
+    blind für das Ergebnis: Er konnte weder prüfen, was sein eigener Aufruf
+    bewirkt hat, noch eine Frage wie „was liegt auf Platte 2" beantworten.
+
+    Gezählt statt aufgezählt: Eine Szene auf einer Platte ist der Regelfall,
+    und „1 Platte" an jeder Zeile wäre Rauschen (§26.1) — dieselbe
+    Begründung, aus der das Material nur bei Abweichung dasteht.
+    """
+    return len({entry.plate for entry in scene.objects.values()})
+
+
+def _object_lines(object_id: ObjectId, entry: SceneObject, plates: int = 1) -> list[str]:
     size = entry.mesh.bounds.size
     closed = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
     on_bed = tr("auf Bett") if abs(entry.mesh.bounds.minimum[2]) < 0.05 else ""
@@ -223,6 +244,11 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
         # Nur, wenn es vom Projektmaterial abweicht — die Szenenzeile nennt
         # jenes bereits, und es an jedem Körper zu wiederholen wäre Rauschen (§26.1).
         facts.append(entry.material)
+    if plates > 1:
+        # Dieselbe Zurückhaltung wie beim Material: Wo alles auf einer Platte
+        # liegt, sagt die Nummer nichts. Gezählt wird ab eins, wie überall, wo
+        # ein Mensch sie liest (``export.writer`` schreibt ``plate + 1``).
+        facts.append(f"{tr('Platte')} {entry.plate + 1}")
 
     lines = [f"{object_id}  {as_name(entry.name)}  " + ", ".join(facts)]
     lines.append("  " + _extent_line(entry))

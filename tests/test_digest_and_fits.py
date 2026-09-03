@@ -799,3 +799,49 @@ def test_a_corner_fillet_claims_no_axis() -> None:
     assert "Achse" not in corner, corner
     # Der Radius bleibt — was wegfällt, ist nur die Richtung.
     assert "R2" in corner
+
+
+def two_plate_scene(profile: Profile) -> Scene:
+    """Zwei Körper auf zwei Platten — wie ``arrange_bed`` sie hinterlässt."""
+    mesh = place_on_bed(
+        normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    )
+    return Scene(
+        objects={
+            "obj_1": SceneObject(id="obj_1", name="Gehäuse", mesh=mesh, features=detect(mesh)),
+            "obj_2": SceneObject(
+                id="obj_2", name="Dichtung", mesh=mesh, features=detect(mesh), plate=1
+            ),
+        },
+        profile=profile,
+    )
+
+
+def test_the_digest_names_the_plate_where_there_is_more_than_one(profile: Profile) -> None:
+    """Der Agent ordnet auf Platten an und war bis dahin blind für das Ergebnis.
+
+    *Auf dem Bett anordnen* (``arrange_bed``, ``by_material``) verteilt die
+    Objekte auf Platten, und der Agent darf es aufrufen. Die Platte stand in
+    der Szene und wurde vom 3MF-Export gelesen — im Steckbrief, seiner einzigen
+    Sicht auf die Szene (§23), kam sie nicht vor. Er konnte damit weder prüfen,
+    was sein eigener Aufruf bewirkt hat, noch „was liegt auf Platte 2"
+    beantworten.
+    """
+    text = digest(two_plate_scene(profile))
+
+    assert "2 Platten" in text, "die Szenenzeile sagt, dass es mehr als eine gibt"
+    zeilen = {line.split("  ")[0]: line for line in text.splitlines() if line.startswith("obj_")}
+    assert "Platte 1" in zeilen["obj_1"], "gezählt wird ab eins, wie beim Export"
+    assert "Platte 2" in zeilen["obj_2"]
+
+
+def test_a_single_plate_scene_says_nothing_about_plates(profile: Profile) -> None:
+    """Wo alles auf einer Platte liegt, sagt die Nummer nichts.
+
+    Dieselbe Zurückhaltung wie beim Material, das nur bei Abweichung dasteht
+    (§26.1): Der Steckbrief geht an ein Sprachmodell, und jede Zeile, die
+    nichts unterscheidet, verdrängt eine, die es tut.
+    """
+    text = digest(plate_scene(profile))
+
+    assert "Platte" not in text
