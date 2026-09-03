@@ -370,3 +370,46 @@ committet. `git add` auf die zwei Pfade, bitgleich nachgerechnet gegen
 `7f7ad380^`, fertig. **Das gilt nicht allgemein** — siehe
 [[sicherung-ist-eine-zeitmaschine]] für den Fall, in dem der Arbeitsbaum
 weitergelaufen war.
+
+
+## Siebter Fall: die Sollprobe griff, und der Commit ging trotzdem daneben (03.09.2026)
+
+Ein Commit nahm `.claude/memory/begrenzt-am-falschen-mass.md` mit — 56 Zeilen
+einer Notiz, die eine andere Sitzung Minuten vorher angelegt hatte. **Und die
+Gegenmaßnahme aus Fall sechs war diesmal da und hat sogar ausgelöst:** Die
+Sollprobe brach ab, weil ich 2 Zeilen erwartet hatte und 3 gemessen wurden.
+Ich habe die Zahl korrigiert und den Aufruf wiederholt.
+
+In den anderthalb Minuten dazwischen committete eine Sitzung. Der zweite
+Anlauf lief gegen einen HEAD, den es beim `read-tree` noch gab — und nahm
+alles mit, was der neue HEAD trug und mein Index nicht.
+
+**Daraus folgt nicht „noch sorgfältiger prüfen".** Die Sorgfalt war da; sie
+hat den ersten Anlauf gefangen und den zweiten ermöglicht. Das Fenster
+zwischen Messung und Commit lässt sich mit keiner Prüfung schließen, weil die
+Prüfung selbst davor liegt.
+
+Was es schließt, ist eine andere Mechanik:
+
+    git commit -o -F <meldung> -- <pfad> [<pfad> …]
+
+`-o` (`--only`) committet **genau die genannten Pfade**, unabhängig davon, was
+der Index sonst führt. Ein HEAD, der sich unterwegs bewegt, ist damit
+bedeutungslos — es gibt nichts, was versehentlich mitgehen könnte.
+
+**Und das steht scheinbar gegen den Titel dieser Notiz.** Es tut es nicht, weil
+`-o` zwei getrennte Eigenschaften hat, und nur eine ist eine Falle:
+
+| Eigenschaft | Wirkung |
+|---|---|
+| nimmt den **Dateistand** der Pfade | die Falle: fremde ungestagte Zeilen in einer geteilten Datei gehen mit (Fall vier) |
+| nimmt **nur die genannten** Pfade | die Rettung: nichts anderes kann mitgehen, egal was Index und HEAD tun |
+
+Die Regel, die beides zusammenbringt: **`-o` für Dateien, die mir allein
+gehören** — dort ist der Dateistand meiner. Für die drei geteilten Dateien
+(`ROADMAP.md`, `MEMORY.md`, die Sprachkataloge) bleibt der Blob-Weg richtig:
+HEAD lesen, die eigene Änderung darauf anwenden, hashen, in den Index legen.
+
+Ein Nachtrag zur Bedienung: `-o` nimmt nur Pfade, die Git kennt. Eine Datei,
+die im HEAD **gelöscht** ist, muss erst `git add` bekommen — dort hilft `-o`
+also nicht, und genau dort lag die Reparatur dieses Falls.
