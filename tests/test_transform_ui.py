@@ -233,7 +233,6 @@ def test_no_element_of_the_bar_is_squeezed(window: MainWindow) -> None:
         for name, widget in [
             *((key, button) for key, button in bar.role_buttons.items()),
             ("Felder", bar.fields),
-            ("Anwenden", bar.apply),
             ("Fang", bar.snap),
         ]
         if widget.width() < widget.sizeHint().width()
@@ -289,7 +288,9 @@ def test_a_typed_value_becomes_a_step_in_the_history(window: MainWindow) -> None
 
     before = len(window.session.project.document.ops)
     window.transform_bar.dz.set_value_mm(5.0)
-    window.transform_bar.apply.click()
+    # Der Weg der Oberfläche seit dem Wegfall des Knopfes: die Eingabetaste im
+    # Feld wendet an, und zwar alle drei Achsen in **einem** Schritt.
+    QTest.keyClick(window.transform_bar.dz.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     ops = [entry.op for entry in window.session.project.document.ops]
@@ -297,18 +298,26 @@ def test_a_typed_value_becomes_a_step_in_the_history(window: MainWindow) -> None
     assert ops[-1] == "translate_object", f"letzter Schritt: {ops[-1]}"
 
 
-def test_typing_and_then_clicking_moves_the_part_once(window: MainWindow) -> None:
-    """Tippen, dann auf „Anwenden" klicken — eine Bewegung, ein Schritt.
+def test_leaving_a_field_applies_nothing(window: MainWindow) -> None:
+    """Einen getippten Wert stehen lassen und weggehen bewegt **nichts**.
 
-    **Der Weg, den jeder geht, und der einzige, den die Tests bisher nicht
-    gingen.** Der Knopf nimmt beim Klick den Fokus (``StrongFocus``), und das
-    Feld verliert ihn damit, bevor der Knopf wirkt. Hing das Anwenden am
-    Verlassen des Feldes, wurde derselbe Wert zweimal angewandt: aus 5 mm
-    wurden 10 mm, aus 90° wurden 180°, und zurück brauchte es zwei Strg+Z.
+    Der Test hieß bis zum 03.09.2026 „tippen, dann auf Anwenden klicken" und
+    prüfte, dass beides zusammen **einen** Schritt ergibt. Den Knopf gibt es
+    nicht mehr (Robert: „das Anwenden unten bei Bewegen brauchen wir auch
+    nicht"), und damit hat der Test seinen Gegenstand verloren — dass die
+    Eingabetaste einmal anwendet, prüft
+    :func:`test_the_return_key_still_applies_the_value`.
 
-    Gefahren wird deshalb mit echtem Fokus und echtem Mausklick — ohne
-    ``show()`` und ``activateWindow()`` vergibt Qt offscreen gar keinen Fokus,
-    und dann prüft der Test genau das nicht, worum es geht.
+    **Was bleibt, ist die Zusage dahinter, und sie ist die wichtigere:** Das
+    Anwenden hängt an der Eingabetaste und **nicht** am Verlassen des Feldes.
+    Hinge es daran, würde jeder Wechsel in ein anderes Feld anwenden — aus
+    5 mm wurden 10 mm, aus 90° 180°, und zurück brauchte es zwei Strg+Z. Genau
+    diesen Fall gab es einmal, und `editingFinished` feuert weiterhin; nur
+    hört niemand mehr darauf.
+
+    Gefahren wird mit echtem Fokus — ohne ``show()`` und ``activateWindow()``
+    vergibt Qt offscreen gar keinen, und dann prüft der Test nicht, worum es
+    geht.
     """
     window.resize(1600, 900)
     window.show()
@@ -337,19 +346,43 @@ def test_typing_and_then_clicking_moves_the_part_once(window: MainWindow) -> Non
     assert feld.hasFocus(), "ohne Fokus im Feld misst der Test den Fokusverlust nicht"
     feld.lineEdit().selectAll()
     QTest.keyClicks(feld.lineEdit(), "5")
-    QTest.mouseClick(window.transform_bar.apply, Qt.MouseButton.LeftButton)
+    # **Weggehen, ohne die Eingabetaste zu drücken.** Der Wechsel in ein
+    # anderes Feld löst `editingFinished` aus — und genau das darf nichts
+    # bewirken.
+    window.transform_bar.dy.setFocus()
+    QApplication.processEvents()
     window.session.wait_for_idle()
 
     ops = [entry.op for entry in window.session.project.document.ops]
-    assert len(ops) == vorher + 1, (
-        f"ein getippter Wert und ein Klick ergaben {len(ops) - vorher} Schritte: {ops[vorher:]}"
+    assert len(ops) == vorher, (
+        f"das Verlassen des Feldes hat {len(ops) - vorher} Schritte erzeugt: {ops[vorher:]}"
     )
+    # Und die Gegenprobe an der Geometrie: Was kein Schritt ist, hat auch
+    # nichts bewegt. Ohne sie stünde nur da, dass der Verlauf gleich lang
+    # blieb — und ein Zug, der am Verlauf vorbei bewegt, wäre schlimmer.
+    unbewegt = min(
+        as_mesh_data(entry.mesh).bounds.minimum[2]
+        for entry in window.session.evaluate_now().scene.objects.values()
+    )
+    assert unbewegt == pytest.approx(unterkante, abs=1e-6), (
+        f"das Teil ist um {unbewegt - unterkante:.3f} mm gewandert, ohne dass ein Schritt entstand"
+    )
+
+    # **Und jetzt der Gegenbeweis, dass der Test überhaupt etwas kann**: mit
+    # der Eingabetaste bewegt sich dasselbe Feld sehr wohl. Ohne diese Hälfte
+    # wäre er auch grün, wenn die Leiste gar nichts mehr täte.
+    feld.setFocus()
+    QApplication.processEvents()
+    feld.lineEdit().selectAll()
+    QTest.keyClicks(feld.lineEdit(), "5")
+    QTest.keyClick(feld.lineEdit(), Qt.Key.Key_Return)
+    window.session.wait_for_idle()
     gehoben = min(
         as_mesh_data(entry.mesh).bounds.minimum[2]
         for entry in window.session.evaluate_now().scene.objects.values()
     )
     assert gehoben - unterkante == pytest.approx(5.0, abs=1e-6), (
-        f"aus 5 mm wurden {gehoben - unterkante:.3f} mm — der Wert wirkte mehr als einmal"
+        f"mit der Eingabetaste wurden aus 5 mm {gehoben - unterkante:.3f} mm"
     )
 
     window.session.undo()
@@ -443,7 +476,7 @@ def test_a_typed_angle_turns_the_group_around_one_common_point(
 
     window.transform_bar.role_buttons["rotate"].click()
     window.transform_bar.angle_value.setValue(90.0)
-    window.transform_bar.apply.click()
+    QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     turns = [one for one in window.session.project.document.ops if one.op == "rotate_object"]
@@ -473,7 +506,7 @@ def test_one_body_typed_keeps_the_old_meaning(window: MainWindow) -> None:
 
     window.transform_bar.role_buttons["rotate"].click()
     window.transform_bar.angle_value.setValue(90.0)
-    window.transform_bar.apply.click()
+    QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     turns = [one for one in window.session.project.document.ops if one.op == "rotate_object"]
@@ -504,7 +537,7 @@ def test_turning_puts_the_part_back_on_the_bed(window: MainWindow) -> None:
     window.transform_bar.to_bed.setChecked(True)
     window.transform_bar.axis.setCurrentIndex(0)  # um X, damit es kippt
     window.transform_bar.angle_value.setValue(45.0)
-    window.transform_bar.apply.click()
+    QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     scene = window.session.evaluate_now().scene
@@ -534,7 +567,7 @@ def test_the_turn_and_the_drop_are_one_undo(window: MainWindow) -> None:
     window.transform_bar.to_bed.setChecked(True)
     window.transform_bar.axis.setCurrentIndex(0)
     window.transform_bar.angle_value.setValue(45.0)
-    window.transform_bar.apply.click()
+    QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     ops = [entry.op for entry in window.session.project.document.ops]
@@ -565,7 +598,7 @@ def test_moving_never_drops_to_the_bed(window: MainWindow) -> None:
     window.transform_bar.to_bed.setChecked(True)
     window.transform_bar.role_buttons["move"].click()
     window.transform_bar.dz.set_value_mm(10.0)
-    window.transform_bar.apply.click()
+    QTest.keyClick(window.transform_bar.angle_value.lineEdit(), Qt.Key.Key_Return)
     window.session.wait_for_idle()
 
     ops = [entry.op for entry in window.session.project.document.ops]
@@ -583,7 +616,9 @@ def test_without_a_chosen_object_the_status_line_says_so(window: MainWindow) -> 
     window.object_tree.tree.clearSelection()
 
     window.transform_bar.dz.set_value_mm(5.0)
-    window.transform_bar.apply.click()
+    # Der Weg der Oberfläche seit dem Wegfall des Knopfes: die Eingabetaste im
+    # Feld wendet an, und zwar alle drei Achsen in **einem** Schritt.
+    QTest.keyClick(window.transform_bar.dz.lineEdit(), Qt.Key.Key_Return)
 
     assert "Objekt" in window.status_message.text(), window.status_message.text()
 
@@ -825,3 +860,39 @@ def test_a_locked_role_does_not_stay_selected(qt_app: QApplication) -> None:
     bar.limit_roles({"move": None, "rotate": "geht hier nicht", "scale": "geht hier auch nicht"})
     assert bar.role_buttons["move"].isChecked(), "die freie Rolle übernimmt"
     assert not bar.role_buttons["rotate"].isChecked()
+
+
+def test_one_press_of_return_applies_once(qt_app: QApplication) -> None:
+    """Ein Tastendruck, ein Schritt — auch wenn Qt zweimal meldet.
+
+    Gemessen am 03.09.2026: Ein Return im Eingabefeld einer
+    ``QDoubleSpinBox`` löst ``returnPressed`` **zweimal** aus.
+
+        keyClick(Return) auf dem Feld       2 Aufrufe
+        returnPressed direkt emittiert      1
+        keyClick(Return) auf der SpinBox    1
+
+    Aus 5 mm wurden damit 10, aus 90° 180°, und zurück brauchte es zwei
+    Strg+Z. **Der Fehler ist älter als der Wegfall des Anwenden-Knopfes und
+    war von ihm verdeckt**: Jeder Test, der die Wirkung prüfte, ging über den
+    Knopf, und der feuert einmal. Der Kunde tippt aber im Feld.
+
+    Der Test geht deshalb genau den Weg des Kunden — `QTest.keyClick` auf dem
+    Eingabefeld, nicht auf der SpinBox und nicht über das Signal. Über das
+    Signal wäre er grün gewesen, ohne etwas zu prüfen.
+    """
+    from app.ui.transform_bar import TransformBar
+
+    bar = TransformBar()
+    gerufen: list[str] = []
+    bar.applyRequested.connect(lambda op, _params: gerufen.append(op))
+
+    bar.dz.set_value_mm(5.0)
+    QTest.keyClick(bar.dz.lineEdit(), Qt.Key.Key_Return)
+    assert gerufen == ["translate_object"], f"ein Tastendruck ergab {len(gerufen)} Schritte"
+
+    # **Und das Gatter öffnet wieder.** Eine Entprellung, die klemmt, wäre
+    # schlimmer als die Doppelung: Der zweite Tastendruck täte dann nichts.
+    QApplication.processEvents()
+    QTest.keyClick(bar.dz.lineEdit(), Qt.Key.Key_Return)
+    assert len(gerufen) == 2, "der nächste Tastendruck muss wieder anwenden"

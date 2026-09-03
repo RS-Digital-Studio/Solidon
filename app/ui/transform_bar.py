@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -28,7 +28,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLayout,
     QMenu,
-    QPushButton,
     QSizePolicy,
     QStackedWidget,
     QToolButton,
@@ -39,7 +38,7 @@ from PySide6.QtWidgets import (
 from app.i18n import tr
 from app.ui.icons import icon
 from app.ui.labels import LengthSpin, NumberSpin, choice_label
-from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.style import NORMAL, TIGHT
 
 #: **Kein Einrasten als Vorgabe** (Entscheidung Robert, 03.09.2026).
 #:
@@ -86,6 +85,9 @@ class TransformBar(QWidget):
         #: Zustand, siehe :meth:`_fit_roles`.
         self._roomy_width = 0
 
+        self._applying = False
+        """Ob gerade schon angewandt wird — siehe :meth:`_maybe_apply_on_return`."""
+
         self.roles = QButtonGroup(self)
         self.roles.setExclusive(True)
         self.role_buttons: dict[str, QToolButton] = {}
@@ -116,23 +118,22 @@ class TransformBar(QWidget):
         self.fields.addWidget(self._rotate_fields())
         self.fields.addWidget(self._scale_fields())
 
-        self.apply = QPushButton(self)
-        self.apply.setText(tr("Anwenden"))
-        make_primary(self.apply)
-        self.apply.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.apply.clicked.connect(self._apply)
-        # **Ein Knopf und kein Zug beim Tippen.** Drei Felder nacheinander zu
-        # verlassen ergäbe drei Schritte im Verlauf für eine Bewegung; der
-        # Knopf macht daraus einen. Die Eingabetaste löst ihn mit aus — wer
-        # eine Zahl tippt, will sie anwenden, nicht erst zielen.
+        # **Kein Anwenden-Knopf** (Robert, 03.09.2026: „das Anwenden unten bei
+        # Bewegen brauchen wir auch nicht"). Es gab drei Wege für dieselbe
+        # Sache — am Griff ziehen, Zahl und Eingabetaste, Zahl und Knopf —, und
+        # der dritte war der, den niemand brauchte.
+        #
+        # **Ein Schritt und kein Zug beim Tippen** gilt weiter, und das war der
+        # eigentliche Grund für den Knopf: Drei Felder nacheinander zu
+        # verlassen ergäbe drei Schritte im Verlauf für eine Bewegung. Die
+        # Eingabetaste liest alle drei auf einmal, also bleibt es bei einem.
         #
         # **Die Eingabetaste, und nur sie** — ``editingFinished`` feuert auch
-        # beim Fokusverlust, und der Knopf daneben nimmt den Fokus beim Klick.
-        # Tippen und klicken wandte den Wert damit zweimal an: aus 5 mm wurden
-        # 10 mm, aus 90° 180°, und zurück brauchte es zwei Strg+Z.
+        # beim Fokusverlust. Tippen und danach in ein anderes Feld wechseln
+        # wandte den Wert sonst zweimal an: aus 5 mm wurden 10 mm, aus 90° 180°,
+        # und zurück brauchte es zwei Strg+Z.
         for spin in (self.dx, self.dy, self.dz, self.angle_value, self.factor, self.largest):
             spin.lineEdit().returnPressed.connect(self._maybe_apply_on_return)
-
         self.snap = self._snap_button()
 
         layout = QHBoxLayout(self)
@@ -145,7 +146,6 @@ class TransformBar(QWidget):
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addLayout(role_row)
         layout.addWidget(self.fields)
-        layout.addWidget(self.apply)
         layout.addStretch(1)
         # **Der Fang steht hinter einem Knopf, nicht in der Zeile.** Er gilt
         # allen drei Rollen, wird einmal eingestellt und dann nie wieder
@@ -432,8 +432,36 @@ class TransformBar(QWidget):
         self.applyRequested.emit(op, params)
 
     def _maybe_apply_on_return(self) -> None:
-        """Die Eingabetaste im Feld wirkt wie der Knopf daneben."""
+        """Die Eingabetaste wendet an — **einmal je Tastendruck**.
+
+        Gemessen am 03.09.2026: Ein Return im Eingabefeld einer
+        ``QDoubleSpinBox`` löst ``returnPressed`` **zweimal** aus. Aus 5 mm
+        wurden damit 10, aus 90° 180°, und zurück brauchte es zwei Strg+Z:
+
+            keyClick(Return) auf dem Feld       2 Aufrufe
+            returnPressed direkt emittiert      1
+            keyClick(Return) auf der SpinBox    1
+
+        Der Fehler war älter als der Wegfall des Anwenden-Knopfes und ist von
+        ihm verdeckt worden: Jeder Test, der die Wirkung prüfte, ging über den
+        Knopf, und der feuert einmal. Der Kunde tippt aber im Feld.
+
+        **Entprellt über einen Durchlauf der Ereignisschleife**, nicht über
+        eine Uhr: Beide Auslösungen gehören zu demselben Tastendruck und
+        laufen damit im selben Zyklus; ein ``singleShot(0)`` setzt das Gatter
+        genau danach zurück. Eine Millisekundenfrist wäre eine Wette darauf,
+        wie schnell die Maschine ist, und ein zweiter *echter* Druck käme nie
+        vor dem nächsten Zyklus.
+        """
+        if self._applying:
+            return
+        self._applying = True
+        QTimer.singleShot(0, self._release_apply_gate)
         self._apply()
+
+    def _release_apply_gate(self) -> None:
+        """Öffnet das Gatter wieder — der nächste Tastendruck darf anwenden."""
+        self._applying = False
 
     def limit_roles(self, reasons: dict[str, str | None]) -> None:
         """Welche Rollen gerade gelten — und warum die anderen nicht.
