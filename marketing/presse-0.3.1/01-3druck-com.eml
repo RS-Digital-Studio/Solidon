@@ -1,0 +1,59 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: content@3druck.com
+Reply-To: marketing@solidon3d.de
+Subject: Update zu Ihrem Solidon3D-Artikel: Erkannte Merkmale sind jetzt bearbeitbar
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo liebes 3Druck-Team,
+
+vielen Dank für Ihre ausführliche Vorstellung von Solidon3D am 23. August:
+https://3druck.com/programme/solidon3d-desktop-software-passt-heruntergeladene-stl-dateien-ohne-cad-an-13162117/
+
+Sie haben die vier Arbeitswege, den nicht-destruktiven Verlauf, die
+Druckprüfung sowie Offline-Nutzung, Demo und Preis bereits erklärt. Deshalb
+keine zweite Produktvorstellung, sondern nur das, was seit dem dort
+beschriebenen Stand wirklich hinzugekommen ist — vor allem in 0.3.1.
+
+Die eine Änderung, die den Kern Ihres Artikels erweitert: Damals ließ sich der
+Durchmesser einer erkannten Bohrung ändern. Jetzt lässt sich ein erkanntes
+Merkmal verschieben, drehen, in der Größe ändern, verdoppeln und entfernen —
+eine Bohrung ebenso wie ein Zapfen oder eine Kuppel. Der Umweg über
+„verschließen und an neu getippten Zahlen neu bohren" entfällt, und das
+Merkmal behält dabei seine Kennung: Jede Passung, die auf es zeigt, behält
+ihren Bezug.
+
+Dazu diese Neuerungen:
+
+* Ein eigenes Fenster *Merkmal* geht auf, sobald man die erste Bohrung
+  anklickt, und zeigt die gemessenen Werte als änderbare Felder — Ort,
+  Durchmesser, Tiefe, Achse. Eine geänderte Zahl ist die Operation; die
+  Vorschau steht schon beim Tippen im Bild.
+* Ein Haken *Auf alle gleichartigen anwenden* ändert eine ganze Lochreihe in
+  einem Zug, mit einem einzigen Schritt zum Zurücknehmen.
+* Eine Bohrung nennt ihre Normgröße: „misst 5,19 mm, das Durchgangsloch für
+  M5" — und sagt auch, wenn keine passt. Zwei markierte Merkmale nennen ihren
+  Abstand von Mitte zu Mitte.
+* Erkannt wird nur noch, was ein Drucker herstellen kann. An einem
+  heruntergeladenen Schlauchhalter fallen dadurch 296 von 1130 Einträgen aus
+  dem Objektbaum, die Messrauschen waren.
+* Die Ansicht hat eine eigene Steuerung als neue Vorgabe: links verschieben,
+  rechts drehen, dazu ein Flug mit W, A, S und D. Die gewohnten Schemata für
+  Cura, Bambu Studio, Orca, PrusaSlicer, CAD und Blender bleiben wählbar.
+
+Allein 0.3.1 dokumentiert 86 für Nutzer sichtbare Punkte; seit der ersten
+0.1-Demo sind es 464 ausgewählte Änderungen.
+
+Neuerungen: https://solidon3d.de/changelog.html
+Download: https://solidon3d.de/
+
+Wenn ein kurzes Update für Sie interessant ist, stelle ich gern neue
+Bildschirmfotos und ein Projekt bereit, das eine Lochreihe in einem Zug auf
+ein anderes Maß bringt.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

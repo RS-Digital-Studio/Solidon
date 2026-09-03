@@ -1,0 +1,49 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: presse@computerbase.de
+Reply-To: marketing@solidon3d.de
+Subject: Pressemitteilung: Bohrungen in fremden STL-Dateien versetzen - Desktop, Einmalkauf, lokale KI
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Redaktion,
+
+Solidon3D 0.3.1 ist veröffentlicht - eine unabhängige Desktop-Anwendung aus
+Deutschland, die eine Lücke schließt, die viele Ihrer Leser mit 3D-Drucker
+kennen: Ein heruntergeladenes STL passt fast, und für die falsch sitzende
+Bohrung lohnt weder ein CAD-Abo noch das Neuzeichnen.
+
+Neu in dieser Fassung ist, dass ein erkanntes Merkmal wie ein
+Konstruktionselement behandelt wird: Eine Bohrung, ein Zapfen, eine Senkung
+oder eine Kuppel lässt sich verschieben, drehen, in der Größe ändern,
+verdoppeln und entfernen. Bisher ging nur der Durchmesser. Technisch
+interessant ist dabei die Kennung: Wer verschließt und neu bohrt, erzeugt
+dieselbe Geometrie, aber ein anderes Merkmal - jede Passung, die darauf zeigte,
+verliert ihren Bezug. Beim Versetzen bleibt die Kennung erhalten.
+
+Für ein Technikpublikum dürften außerdem interessant sein:
+
+* Einmalkauf statt Abo; ohne Konto und ohne Cloud-Ablage voll nutzbar,
+  Projekte bleiben lokale Dateien;
+* der optionale KI-Assistent ruft dieselben dokumentierten Operationen auf wie
+  ein Mausklick - auch die neuen an Merkmalen, wahlweise komplett lokal über
+  Ollama; Geometrie rechnet immer der Code, nie das Sprachmodell;
+* die Erkennung ist an die Herstellbarkeit gebunden: Merkmale unter einem
+  halben Millimeter fallen weg, an einem heruntergeladenen Halter 296 von 1130;
+* eine eigene Ansichtssteuerung als neue Vorgabe, mit Flug über W, A, S und D;
+  die Schemata für Cura, Bambu Studio, Orca, PrusaSlicer, CAD und Blender
+  bleiben wählbar;
+* Windows, macOS und Linux (Flatpak und AppImage).
+
+Download und Überblick: https://solidon3d.de/
+Changelog: https://solidon3d.de/changelog.html
+
+Gern stelle ich ein Vorher-Nachher-Beispiel bereit (Ausgangs-STL, versetzte
+Bohrung, druckfähige Ergebnisdatei). Die vollständige Demo läuft bis zum
+30. Oktober 2026 kostenlos, sodass sich jede Aussage direkt nachprüfen lässt.
+
+Mit freundlichen Grüßen
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

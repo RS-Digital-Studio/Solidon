@@ -1,0 +1,44 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@3dprint.com
+Reply-To: marketing@solidon3d.de
+Subject: Story lead: Editing a feature that the file format never stored
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear 3DPrint.com Editors,
+
+Solidon3D 0.3.1 targets a common desktop-printing problem that sits between
+mesh repair and full CAD: the downloaded model is valid, but a functional
+detail is in the wrong place.
+
+An STL file stores triangles, not features. Solidon recognises holes, pegs,
+countersinks and domes in imported geometry, and this release lets a user act
+on them the way CAD would: move, rotate, resize, duplicate, remove. The
+original axis is preserved, the edit is reversible, and the feature keeps its
+identity — so a fit or a note that referred to it still refers to it
+afterwards. That last point is the difference from the usual workaround of
+filling a hole and drilling a new one.
+
+Around that, 0.3.1 adds a feature panel with the measured values as editable
+fields and a live preview, an option to apply one edit to every feature of the
+same kind at once, and a plain-language statement of a hole's standard size
+("measures 5.19 mm, the clearance hole for M5"). Recognition is limited to what
+a printer can produce, which removed 296 of 1130 tree entries on a sample
+downloaded part.
+
+The application runs locally on Windows, macOS and Linux, with no account,
+telemetry or cloud project store. An optional language model may call the
+fixed operation API, but all geometry is calculated by deterministic code.
+
+Overview: https://solidon3d.de/en/
+Detailed changes: https://solidon3d.de/en/changelog.html
+
+For editorial evaluation I can provide the original STL, measured
+before-and-after files, the released 0.3.1 build and high-resolution images.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

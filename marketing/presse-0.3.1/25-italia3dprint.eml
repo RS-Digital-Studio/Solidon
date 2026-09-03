@@ -1,0 +1,51 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: 3dprint@tech-center.com
+Reply-To: marketing@solidon3d.de
+Subject: Proposta: spostare e duplicare i fori di una STL scaricata, senza CAD - in italiano
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Gentile redazione di Italia 3D Print,
+
+Solidon3D 0.3.1 è stato pubblicato, e c'è un dettaglio pensato anche per i
+vostri lettori: l'applicazione è completamente localizzata in italiano -
+interfaccia, manuale e progetti di esempio.
+
+La storia si racconta in cinque minuti: si importa un modello scaricato con i
+fori di montaggio nel punto sbagliato, si clicca su un foro e lo si sposta -
+senza il file CAD originale e senza ridisegnare il pezzo. Fino a questa
+versione si poteva cambiare solo il diametro; ora una caratteristica
+riconosciuta - foro, perno, svasatura o cupola - si può spostare, ruotare,
+ridimensionare, duplicare e rimuovere.
+
+Il punto tecnico interessante è l'identità: chi chiude un foro e ne pratica uno
+nuovo ottiene la stessa geometria ma un'altra caratteristica, e ogni
+accoppiamento che la indicava perde il riferimento. Spostandola, l'identità
+resta.
+
+Altri punti rilevanti della 0.3.1:
+
+* un pannello *Caratteristica* mostra i valori misurati - posizione, diametro,
+  profondità, asse - come campi modificabili, con anteprima già durante la
+  digitazione;
+* un'opzione applica la modifica a tutte le caratteristiche dello stesso tipo:
+  una fila di quattro fori diventa una sola transazione con un solo annulla;
+* viene riconosciuto solo ciò che una stampante può produrre: su un supporto
+  scaricato, 296 voci su 1130 erano rumore di misura e sono sparite;
+* assistente IA opzionale che richiama le stesse operazioni documentate di un
+  clic - anche in locale via Ollama; la geometria la calcola sempre il codice;
+* Windows, macOS e Linux (Flatpak e AppImage), senza account e senza cloud;
+  acquisto una tantum, la demo completa è gratuita fino al 30 ottobre 2026.
+
+Download e panoramica: https://solidon3d.de/it/
+Changelog: https://solidon3d.de/it/changelog.html
+
+Posso fornire volentieri un esempio prima/dopo (STL di partenza, fori spostati,
+file di stampa risultante) e la build pubblicata per una verifica diretta.
+
+Cordiali saluti
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

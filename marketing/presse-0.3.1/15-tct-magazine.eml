@@ -1,0 +1,49 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: laura.griffiths@rapidnews.com
+Reply-To: marketing@solidon3d.de
+Subject: Editorial lead: Feature identity preserved through edits on imported geometry
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear Laura,
+
+Solidon3D 0.3.1 has been released. The relevant TCT angle is what happens to
+data provenance when imported geometry is edited: a mesh carries no design
+history, yet downstream steps need something stable to refer to.
+
+Solidon recognises features in imported STL or 3MF — holes, pegs,
+countersinks, domes — and this release lets them be moved, rotated, resized,
+duplicated and removed while the original axis and, importantly, the feature
+identity are preserved. The common workaround of filling a feature and
+recreating it produces equivalent geometry but a new identity, orphaning every
+fit or annotation that referenced it. Keeping the identity is what makes the
+edit safe for a parameterised workflow.
+
+Around that, the release adds a feature panel presenting measured values as
+editable fields with a live preview, a single-transaction edit across all
+features of the same kind, and a manufacturability bound on recognition itself:
+features below half a millimetre are no longer reported, which removed 296 of
+1130 entries on a sample part.
+
+For the handoff, each physical filament spool still carries temperatures,
+cooling, retraction and material properties into the correct 3MF material
+position; the printer profiles offered are now filtered to the configured
+machine rather than the slicer's entire inventory.
+
+This is desktop polymer-AM preparation rather than enterprise PLM or a slicer.
+Every change is a reproducible operation; an optional language model may call
+the same fixed API as the UI, but cannot calculate geometry or execute
+generated code.
+
+Solidon runs on Windows, macOS and Linux without an account, telemetry or cloud
+project store: https://solidon3d.de/en/
+
+I can provide a compact technical briefing, the released 0.3.1 build, a sample
+STL-to-3MF workflow and publication-ready imagery.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

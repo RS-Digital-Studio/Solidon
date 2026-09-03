@@ -1,0 +1,49 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@fabbaloo.com
+Reply-To: marketing@solidon3d.de
+Subject: Release lead: Solidon3D 0.3.1 makes recognised mesh features editable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear Fabbaloo Editors,
+
+Solidon3D 0.3.1 has been released. The local desktop application started as a
+way to adapt downloaded 3D-printing models without rebuilding them in CAD. The
+new release closes the obvious gap in that idea: a recognised feature is no
+longer only resizable, it is editable.
+
+An imported mesh carries no design history — it carries triangles. Solidon
+recognises holes, pegs, countersinks and domes in it, and from 0.3.1 they can
+be moved, rotated, resized, duplicated and removed. The identity survives the
+edit, which is the part that matters for a workflow: filling a hole and
+drilling a new one yields the same shape but a new feature, and every fit
+pointing at the old one is orphaned.
+
+Three additions that show how the workflow has grown:
+
+* a dedicated feature panel presents the measured values as editable fields
+  with a live preview, so a changed number is the operation — no dialog in
+  between;
+* one checkbox applies an edit to every feature of the same kind, so a row of
+  holes becomes a single transaction with a single undo;
+* recognition is now limited to what a printer can make, which removed 296 of
+  1130 tree entries on a downloaded hose holder — most of them fillets of
+  effectively zero radius.
+
+The release also replaces the default view navigation (left pans, right
+orbits, W/A/S/D flies, with the familiar slicer and CAD schemes still
+selectable) and refuses broken files at open time instead of accepting them
+into the project.
+
+Overview: https://solidon3d.de/en/
+Release history: https://solidon3d.de/en/changelog.html
+
+I can send a compact story pack with the 0.3.1 build, a measured feature edit,
+three high-resolution images and a one-page fact sheet.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

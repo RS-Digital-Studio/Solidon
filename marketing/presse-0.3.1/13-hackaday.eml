@@ -1,0 +1,45 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: tips@hackaday.com
+Reply-To: marketing@solidon3d.de
+Subject: [Tip] Giving a mesh feature an identity that survives being edited
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hi Hackaday,
+
+the interesting hack in Solidon3D 0.3.1 is not "edit an STL." It is that a
+feature recognised in a triangle soup gets an identity, and that identity
+survives being moved.
+
+An STL has no design history. Solidon recognises cylindrical and conical
+features in the mesh and, as of this release, lets you move, rotate, resize,
+duplicate and remove them. The naive way to move a hole is to fill it and
+drill a new one — same geometry, new feature, and every reference to the old
+one dangles. Here the recognised feature keeps its id through the edit, so
+fits and downstream steps still resolve.
+
+The boundary around the language model is unchanged and now covers the new
+operations too: menus, shortcuts and chat all request the same registered,
+schema-checked operations. The model may choose an operation and propose
+parameters, but deterministic code computes the geometry, a chat proposal is
+one transaction and one undo, and generated source is never executed.
+
+Two details that fell out of the same work and might amuse you: recognition is
+now bounded by what a printer can make, which deleted 296 of 1130 detected
+features on a downloaded part — most were fillets of essentially zero radius.
+And a hole will tell you what it is: "measures 5.19 mm, the clearance hole for
+M5."
+
+The released application runs on Windows, macOS and Linux:
+https://solidon3d.de/en/
+
+If this is tip-worthy, I can provide the operation schema, a minimal project
+file, the two equivalent calls and a screen recording showing that both paths
+produce the same geometry and undo as one transaction.
+
+Best regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

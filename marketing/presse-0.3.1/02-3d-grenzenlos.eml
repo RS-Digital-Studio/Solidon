@@ -1,0 +1,55 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: pressemitteilung@3d-grenzenlos.de
+Reply-To: marketing@solidon3d.de
+Subject: Themenvorschlag: Bohrungen in fremden STL-Dateien versetzen, drehen, verdoppeln
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Redaktion,
+
+Solidon3D 0.3.1 ist veröffentlicht. Der greifbarste Aufhänger für Ihre Leser:
+Eine vorhandene Bohrung in einer heruntergeladenen STL-Datei lässt sich nicht
+nur im Durchmesser ändern, sondern auch verschieben, drehen, verdoppeln und
+entfernen — ohne das Modell neu zu zeichnen und ohne die ursprüngliche
+CAD-Datei zu besitzen.
+
+Das ist der Unterschied zu jedem Netzwerkzeug: Wer eine Bohrung drei
+Millimeter versetzen wollte, musste sie bisher verschließen und an neu
+getippten Zahlen neu bohren. Dabei entsteht dieselbe Geometrie, aber ein
+anderes Merkmal — jede Passung, die darauf zeigte, verlor ihren Bezug. Jetzt
+bleibt die Kennung, und mit ihr die Passung.
+
+Dasselbe gilt für Zapfen, Senkungen und Kuppeln. Wo eine Handlung an einer
+Merkmalsart keinen Sinn hat, verschwindet sie nicht, sondern steht mit einem
+Satz daneben, der den Grund nennt.
+
+Für Heimanwender sind in 0.3.1 außerdem besonders relevant:
+
+* ein eigenes Fenster *Merkmal* mit den gemessenen Werten als änderbaren
+  Feldern und Vorschau schon beim Tippen,
+* eine ganze Lochreihe in einem Zug ändern, mit einem einzigen Schritt zum
+  Zurücknehmen,
+* die Normgröße einer Bohrung im Klartext („misst 5,19 mm, das Durchgangsloch
+  für M5") und der Abstand zweier markierter Merkmale,
+* eine neue Ansichtssteuerung mit Flug über W, A, S und D; die gewohnten
+  Schemata bleiben wählbar,
+* kaputte Dateien werden beim Öffnen abgelehnt statt stillschweigend
+  angenommen, große Baugruppen laden mit Fortschrittsanzeige.
+
+0.3.1 umfasst 86 ausgewählte Nutzeränderungen; seit der ersten öffentlichen
+0.1-Demo dokumentiert der Changelog insgesamt 464. Solidon bleibt ohne Konto
+und Cloud-Ablage nutzbar und ist kein Slicer, sondern bereitet Modelle für den
+vorhandenen Slicer vor.
+
+Download und Überblick: https://solidon3d.de/
+Changelog: https://solidon3d.de/changelog.html
+
+Gern sende ich Ihnen ein kurzes Vorher-Nachher-Beispiel mit Ausgangs-STL,
+versetzter Bohrung und druckfähiger Ergebnisdatei.
+
+Mit freundlichen Grüßen
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

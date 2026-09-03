@@ -1,0 +1,51 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@voxelmatters.com
+Reply-To: marketing@solidon3d.de
+Subject: Follow-up to your Solidon3D article: recognised features became editable
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear Roksana and the VoxelMatters team,
+
+thank you for the detailed Solidon3D article you published on 22 August:
+https://www.voxelmatters.com/solidon3d-turns-a-downloaded-stl-into-a-part-that-fits-without-cad/
+
+You already covered the four workflows, operation history, print checks,
+offline use, demo terms and pricing. Rather than repeat that introduction, here
+is only what has genuinely changed since the state you described — chiefly in
+0.3.1.
+
+The headline is one step beyond your article: at the time, the diameter of a
+recognised hole could be changed. Now a recognised feature can be moved,
+rotated, resized, duplicated and removed — a hole, a peg, a countersink or a
+dome — and it keeps its identity through the edit, so dependent fits keep
+their reference.
+
+The concrete additions:
+
+* a *Feature* panel opens at the first click on a feature and shows the
+  measured values as editable fields, with a live preview while typing;
+* one option applies an edit to all features of the same kind, so a row of four
+  holes is one transaction with one undo;
+* two selected features report their centre-to-centre distance, and a hole
+  states its standard size in plain language;
+* recognition is bounded by manufacturability: features below half a millimetre
+  are gone, which removed 296 of 1130 entries on a downloaded hose holder;
+* the default view navigation was replaced (left pans, right orbits, W/A/S/D
+  flies), with the previous slicer and CAD schemes still selectable.
+
+Version 0.3.1 alone documents 86 curated user-facing changes. The complete
+history since the first 0.1 demo now contains 464.
+
+Changelog: https://solidon3d.de/en/changelog.html
+Download: https://solidon3d.de/en/
+
+If a short update is useful, I can provide new images and one sample project
+showing a row of holes moved and resized in a single step.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

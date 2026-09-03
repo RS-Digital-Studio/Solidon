@@ -1,0 +1,47 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@omgubuntu.co.uk
+Reply-To: marketing@solidon3d.de
+Subject: App tip: Solidon3D 0.3.1 - edit features in downloaded STLs on Linux, offline
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hi OMG! Ubuntu team,
+
+a desktop app tip that fits your coverage of native Linux software:
+Solidon3D 0.3.1 has just been released, with Linux as a first-class
+platform - Flatpak and AppImage, same feature set as Windows and macOS.
+
+The one-line pitch: fix a downloaded STL without CAD. Click a mounting hole
+that sits in the wrong place and move it - position and axis are preserved,
+the change stays as an undoable history step, and the plate goes straight to
+your existing slicer. This release is the one that made features properly
+editable: a recognised hole, peg, countersink or dome can now be moved,
+rotated, resized, duplicated and removed, where before only the diameter
+could change.
+
+Points your readers tend to care about:
+
+* fully offline after a one-time device activation - no account, no
+  cloud project store, projects are plain local files;
+* one-time purchase, no subscription; the complete demo runs free until
+  30 October 2026;
+* the optional AI assistant can run entirely locally against Ollama,
+  and it only calls the same documented operations a click does -
+  geometry is always computed by code, never by the model;
+* a new default view navigation with W/A/S/D flight, while the familiar
+  Cura, Bambu Studio, Orca, PrusaSlicer, CAD and Blender schemes stay
+  selectable;
+* localised into six languages, manual included.
+
+Download and overview: https://solidon3d.de/en/
+Changelog: https://solidon3d.de/en/changelog.html
+
+Happy to provide screenshots, a Flatpak/AppImage test build walkthrough,
+or a before/after STL example if useful.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

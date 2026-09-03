@@ -1,0 +1,49 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: contact@cnckitchen.com
+Reply-To: marketing@solidon3d.de
+Subject: Solidon3D-Testidee: Bleibt eine Passung gültig, wenn die Bohrung wandert?
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Hallo Stefan,
+
+zu Solidon3D 0.3.1 würde ich dir lieber eine messbare Fragestellung als eine
+Liste mit Produktversprechen schicken. Diesmal gibt es sogar zwei, und die
+zweite ist neu:
+
+1. Wie gut sagt ein einmal gedrucktes Kalibrierteil das notwendige Spiel oder
+   Übermaß in einem späteren, anders geformten Bauteil voraus, wenn Drucker,
+   Düse, Material und Profil gleich bleiben?
+2. Bleibt eine so ermittelte Passung gültig, wenn die Bohrung anschließend
+   versetzt oder verdoppelt wird?
+
+Die zweite Frage stellt sich erst seit dieser Fassung. Bisher hieß „Bohrung
+drei Millimeter weiter" verschließen und neu bohren — dieselbe Geometrie, aber
+ein anderes Merkmal, und die Passung zeigte ins Leere. In 0.3.1 lässt sich ein
+erkanntes Merkmal verschieben, drehen, in der Größe ändern, verdoppeln und
+entfernen, und es behält dabei seine Kennung.
+
+Ein möglicher Testablauf:
+
+1. Stufen für Spiel- und Presspassung drucken und die brauchbaren Werte messen.
+2. Die Werte in einem Materialprofil hinterlegen.
+3. Damit eine Schnappverbindung, einen Lagersitz und einen Gewindeeinsatz in
+   drei unabhängigen Modellen erzeugen.
+4. Die Merkmale anschließend versetzen und verdoppeln, neu drucken und
+   messen, ob Spiel und Einpresskraft gleich bleiben.
+
+Ich stelle gern ein neutrales Testpaket zusammen: Kalibrierteil, drei
+Prüfmodelle, Messblatt und den veröffentlichten 0.3.1-Bau. Es gibt keine
+Vorgabe zum Ergebnis und keine Erwartung an eine positive Besprechung.
+
+Überblick: https://solidon3d.de/
+
+Wenn die Fragestellung interessant ist, passe ich nur die Modellgrößen an
+deinen üblichen Prüfaufbau an; die Messmethode bleibt vollständig bei dir.
+
+Viele Grüße
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

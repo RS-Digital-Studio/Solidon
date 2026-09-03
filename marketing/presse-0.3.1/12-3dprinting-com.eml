@@ -1,0 +1,47 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: service@3dprinting.com
+Reply-To: marketing@solidon3d.de
+Subject: Possible addition to your 2026 software guide: Solidon3D 0.3.1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Dear 3DPrinting.com team,
+
+your 2026 software guide separates full CAD, mesh editing, repair and slicing.
+Solidon3D 0.3.1 may be a useful addition in the gap between those categories:
+it adapts a dimensionally wrong but otherwise usable downloaded model without
+requiring the reader to rebuild it in a full CAD system.
+
+A short review test would be straightforward. Import an STL whose mounting
+holes are in the wrong place, click one, and move it. Solidon keeps the
+original axis, stores the edit as a reversible operation, and — unlike the
+usual fill-and-redrill workaround — keeps the feature's identity, so anything
+referring to it still does.
+
+The features most relevant to your guide are:
+
+* recognised holes, pegs, countersinks and domes in imported STL and 3MF can be
+  moved, rotated, resized, duplicated and removed;
+* a feature panel shows the measured values as editable fields with a live
+  preview, and one option applies an edit to all features of the same kind;
+* printability checks and fit values based on a user-printed calibration part;
+* per-spool process settings carried through 3MF to the slicer, with the
+  printer profiles filtered to the configured machine;
+* Windows, macOS and Linux support, with no account or cloud project storage.
+
+Solidon is neither a general-purpose CAD replacement nor a slicer. Its purpose
+is the practical step from "downloaded model" to "part that fits."
+
+Overview: https://solidon3d.de/en/
+Changelog: https://solidon3d.de/en/changelog.html
+
+I can provide the released 0.3.1 build, a deliberately flawed STL and exact
+before-and-after measurements if you would like to evaluate it for the guide
+or a separate review.
+
+Kind regards
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de

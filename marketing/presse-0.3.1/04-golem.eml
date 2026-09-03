@@ -1,0 +1,54 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: press@golem.de
+Reply-To: marketing@solidon3d.de
+Subject: Themenvorschlag: Ein erkanntes Merkmal ohne Konstruktionshistorie bearbeiten
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+X-Unsent: 1
+
+Sehr geehrte Golem-Redaktion,
+
+Solidon3D 0.3.1 ist veröffentlicht. Der für Golem interessante Teil ist aus
+meiner Sicht nicht die Funktionsliste, sondern eine Frage, die sich im
+Dateiformat stellt: Eine STL-Datei hat keine Konstruktionshistorie. Sie kennt
+Dreiecke, keine Bohrung.
+
+Solidon erkennt daraus Merkmale — Bohrung, Zapfen, Senkung, Kuppel — und
+behandelt sie ab 0.3.1 wie Konstruktionselemente: Sie lassen sich verschieben,
+drehen, in der Größe ändern, verdoppeln und entfernen. Der interessante Teil ist
+die Kennung. Wer eine Bohrung verschließt und neu bohrt, erzeugt dieselbe
+Geometrie, aber ein anderes Merkmal; alles, was darauf verwies, zeigt danach ins
+Leere. Ein Versetzen behält die Kennung und damit jede Passung, die auf sie
+zeigt.
+
+Die Architektur dahinter ist unverändert und wird an dieser Stelle sichtbar:
+Jede Modelländerung ist eine parametrisierte Operation, die ein
+deterministischer Geometriekern auswertet. Der optionale LLM-Chat darf nur
+dieselben registrierten Operationen anfordern wie Menüs und Befehlssuche — auch
+die fünf neuen an Merkmalen. Er darf weder Geometrie berechnen noch erzeugten
+Quelltext ausführen; Projektdateien enthalten Operationen und Werte, aber
+keinen ausführbaren Code.
+
+0.3.1 zieht dieselbe Linie auch dort, wo die Erkennung an ihre Grenze kommt:
+Angezeigt wird nur, was ein Drucker herstellen kann. Merkmale unter einem
+halben Millimeter fallen weg — an einem heruntergeladenen Schlauchhalter 296
+von 1130. Und wo eine Handlung an einer Merkmalsart geometrisch nicht geht,
+steht der Grund als Satz statt eines grauen Feldes.
+
+Ohne Chat, Konto und Internet bleiben Modellierung, Analyse und Export
+vollständig nutzbar. Die spätere Kaufversion wird einmalig aktiviert und kann
+danach offline arbeiten; für Rechner ohne Netz ist ein Dateiweg über ein
+zweites Gerät vorgesehen.
+
+Produkt: https://solidon3d.de/
+Changelog: https://solidon3d.de/changelog.html
+
+Für eine technische Prüfung stelle ich gern ein Beispielprojekt, das
+Operationsschema und einen reproduzierbaren Vergleich zwischen Menü- und
+Chat-Aufruf bereit.
+
+Mit freundlichen Grüßen
+Robert Schneider
+Solidon3D
+marketing@solidon3d.de
