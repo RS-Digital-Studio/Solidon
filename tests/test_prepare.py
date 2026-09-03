@@ -2513,3 +2513,81 @@ def test_removing_a_bore_restores_the_body_exactly(profile: Profile) -> None:
 
     restored = result.outputs[0].mesh.raw.volume
     assert restored == pytest.approx(27000.0, abs=0.01), restored
+
+
+def test_turning_a_through_bore_says_it_no_longer_goes_through(profile: Profile) -> None:
+    """Der Zwilling, der beim Versetzen stand und beim Drehen fehlte.
+
+    Eine gekippte Bohrung trifft die Gegenseite nicht mehr — und das ist
+    derselbe Fall, für den *Versetzen* und *Verdoppeln* seit heute einen
+    Befund haben. Gemessen an einer 12 mm starken Wand mit einer durchgehenden
+    Bohrung Ø 6, Material im alten Schlauch nach dem Drehen:
+
+        um 30°     86,8 mm³
+        um 60°    158,1 mm³
+
+    Beide Läufe endeten ohne ein Wort. Gefragt wird mit der **gedrehten**
+    Achse; mit der alten misst die Prüfung den Schlauch von vorher und findet
+    dort erwartungsgemäß nichts.
+    """
+    wall = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 12.0)))
+    bored = drill(
+        wall, position=(0.0, 0.0, 6.0), axis="z", diameter=6.0, profile=profile, compensate=False
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Wand", mesh=bored, features=detect(bored))
+    hole = next(name for name, found in entry.features.items() if found.kind == "hole")
+    assert entry.features[hole].params.get("through"), "sonst prüft dieser Test nichts"
+
+    result = _run_op("rotate_feature", entry, profile, at_feature=hole, axis="x", angle=30.0)
+
+    said = [found for found in result.findings if found.code == "rotate_feature.no_longer_through"]
+    assert said, [found.code for found in result.findings]
+    assert said[0].severity == "warning"
+
+
+def test_a_copy_never_takes_the_number_of_a_removed_feature(profile: Profile) -> None:
+    """Eine Kennung ist das, woran Verweise hängen — sie wird nicht recycelt.
+
+    Der erste Anlauf vergab die **kleinste freie** Zahl, mit dem Argument, eine
+    Lücke verweise auf eine Zählung, die niemand sieht. Gemessen kostet das
+    zwei Dinge:
+
+    * Wer ``hole_3`` löscht und danach verdoppelt, bekommt wieder ``hole_3``.
+      Jeder Prüfbefund und jede Passung, die auf die alte zeigte, zeigt dann
+      auf eine andere Bohrung (§21.2).
+    * Im Objektbaum stand „Bohrung 3" unter den Flächen, während 1, 2, 4 und 5
+      darüber standen — ein neues Merkmal steht am Ende des Wörterbuchs, und
+      mit einer niedrigen Zahl liest sich das wie ein Sortierfehler. Genau
+      dieses Bild hat Robert am 03.09.2026 gemeldet.
+    """
+    plate = MeshData.of(trimesh.creation.box(extents=(100.0, 40.0, 10.0)))
+    for x in (-40.0, -20.0, 0.0, 20.0, 40.0):
+        plate = drill(
+            plate,
+            position=(x, 0.0, 5.0),
+            axis="z",
+            diameter=6.0,
+            profile=profile,
+            compensate=False,
+        ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=plate, features=detect(plate))
+    bores = [name for name, found in entry.features.items() if found.kind == "hole"]
+    assert len(bores) == 5, bores
+
+    without = _run_op("remove_feature", entry, profile, at_feature=bores[2]).outputs[0]
+    assert bores[2] not in without.features, "die entfernte Bohrung ist fort"
+
+    copied = _run_op(
+        "duplicate_feature",
+        without,
+        profile,
+        at_feature=bores[0],
+        x=-30.0,
+        y=0.0,
+        z=float(without.features[bores[0]].params["centre"][2]),
+    ).outputs[0]
+
+    fresh = [name for name in copied.features if name not in without.features]
+    assert len(fresh) == 1, fresh
+    assert fresh[0] != bores[2], "die Kennung der gelöschten Bohrung bleibt frei"
+    assert fresh[0] == "hole_6", fresh

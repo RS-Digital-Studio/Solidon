@@ -1018,15 +1018,31 @@ def _free_feature_id(source: SceneObject, kind: str) -> FeatureId:
     """Eine Kennung, die es an diesem Körper noch nicht gibt.
 
     Dieselbe Form, die die Erkennung vergibt (``hole_1``, ``pin_2``), damit
-    Kopie und Original im Objektbaum nebeneinander gleich aussehen. Gesucht
-    wird die kleinste freie Zahl und nicht die nächste nach der höchsten: Wer
-    eine Bohrung löscht und danach eine verdoppelt, bekommt die Lücke gefüllt
-    statt eine Kennung, die auf eine Zählung verweist, die niemand sieht.
+    Kopie und Original im Objektbaum nebeneinander gleich aussehen.
+
+    **Gezählt wird über die höchste vergebene Zahl, nicht in die Lücke.** Hier
+    stand das Gegenteil, mit dem Argument, eine Lücke verweise auf eine Zählung,
+    die niemand sieht. Gemessen am 03.09.2026 kostet das Füllen der Lücke zwei
+    Dinge, und beide wiegen schwerer:
+
+    * **Die Kennung wird recycelt.** Wer ``hole_3`` löscht und danach eine
+      Bohrung verdoppelt, bekommt wieder ``hole_3`` — und jeder Prüfbefund,
+      jede Passung und jeder Bericht, der auf die alte zeigte, zeigt jetzt auf
+      eine andere. Eine Kennung ist das, woran Verweise hängen (§21.2); sie
+      darf ihre Bedeutung nicht wechseln.
+    * **Die Reihenfolge im Objektbaum kippt.** Ein neues Merkmal steht am Ende
+      des Wörterbuchs, also hinter den Flächen. Mit der kleinsten freien Zahl
+      stand dort „Bohrung 3" unter „Fläche 6", während 1, 2, 4 und 5 darüber
+      standen — genau das Bild, das Robert am 03.09.2026 gemeldet hat. Mit der
+      höchsten Zahl liest sich dieselbe Stelle als das, was sie ist: die
+      jüngste.
     """
-    number = 1
-    while f"{kind}_{number}" in source.features:
-        number += 1
-    return f"{kind}_{number}"
+    highest = 0
+    for name in source.features:
+        head, _, tail = name.rpartition("_")
+        if head == kind and tail.isdigit():
+            highest = max(highest, int(tail))
+    return f"{kind}_{highest + 1}"
 
 
 @op_params
@@ -1381,6 +1397,22 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         params={**feature.params, "axis": turned_axis},
         provenance="generated",
     )
+    # **Derselbe Befund wie beim Versetzen, und er fehlte hier.** Eine gekippte
+    # Bohrung trifft die Gegenseite nicht mehr: Gemessen am 03.09.2026 an einer
+    # 12 mm starken Wand mit einer durchgehenden Bohrung Ø 6 blieben nach 30°
+    # **86,8 mm³** im alten Schlauch stehen, nach 60° **158,1** — und keiner der
+    # beiden Läufe sagte etwas. Gefragt wird mit der **gedrehten** Achse, sonst
+    # misst die Prüfung den Schlauch von vorher.
+    findings = [*closed.findings, *placed.findings]
+    findings += _throughness_lost(
+        placed.mesh,
+        moved,
+        centre,
+        "rotate_feature",
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
     return OpResult(
         outputs=[
             dataclasses.replace(
@@ -1389,7 +1421,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
                 features={**source.features, feature.id: moved},
             )
         ],
-        findings=[*closed.findings, *placed.findings],
+        findings=findings,
         solver=placed.solver,
     )
 
