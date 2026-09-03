@@ -1227,6 +1227,7 @@
   "Die eingebetteten Quelldaten passen nicht zur Quellenliste.": "Os dados de origem incorporados não correspondem à lista de fontes.",
   "Die einzeln bearbeitbaren Flächen und Kanten wurden in feste Dreiecke umgewandelt. Verrundung, Fase und Taschen aus Skizzen stehen danach nicht mehr zur Verfügung.": "As faces e arestas editáveis individualmente foram convertidas em triângulos fixos. Depois disso, arredondamentos, chanfros e cavidades de esboços deixam de estar disponíveis.",
   "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "O furo detetado cujo diâmetro será alterado. Clique no furo para o indicar.",
+  "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie ein; ohne sie gelten die Werte unter „Mehr“.": "O furo reconhecido que é tapado. Um clique sobre ele insere-o aqui; sem ele aplicam-se os valores em «Mais».",
   "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal.": "A face reconhecida que é pintada por completo — definida pelo clique na característica.",
   "Die erste Schicht darf dicker sein — sie füllt Unebenheiten der Platte aus und hält damit besser.": "A primeira camada pode ser mais espessa: preenche as irregularidades da placa e por isso agarra melhor.",
   "Die erste Schicht wird breiter gedrückt": "A primeira camada é premida mais larga",

@@ -2029,6 +2029,16 @@ def countersink_hole(ctx: OpContext) -> OpResult:
 
 @op_params
 class PlugParams(BaseParams):
+    at_feature: str = param(
+        title=_("Bohrung"),
+        default="",
+        kind="feature",
+        placement="front",
+        doc=_(
+            "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie "
+            "ein; ohne sie gelten die Werte unter „Mehr“."
+        ),
+    )
     diameter: float = param(
         title=_("Durchmesser"),
         default=5.0,
@@ -2091,8 +2101,59 @@ class PlugParams(BaseParams):
     doc=_("Füllt eine Bohrung wieder auf — etwa wenn ein fremdes Teil eine zu viel hat."),
 )
 def plug_hole(ctx: OpContext) -> OpResult:
+    """Eine Bohrung wieder auffüllen — am erkannten Merkmal oder an Zahlen.
+
+    **Der Weg über das Merkmal ist der genaue.** Ohne ihn baut
+    :func:`~app.core.geom.prepare.plug` den Stopfen aus Position, Achse und
+    Tiefe und beschneidet ihn an der **konvexen Hülle** des Teils. Für einen
+    massiven Körper ist das richtig — die Hülle *ist* er. Für ein Teil mit Nut
+    oder Innenraum ist sie es nicht, und ein Stopfen, der nach innen ragt,
+    liegt darin. Gemessen am 03.09.2026 an einem U-Profil mit einer Nut und
+    5 mm starker Bodenwand, Bohrung Ø 7,98:
+
+    ==================================== ============ =============
+    Lauf                                  Volumen      im Nutraum
+    ==================================== ============ =============
+    ohne Bohrung (Soll)                   27 000,00    —
+    mit Bohrung                           26 749,39    0,000
+    gestopft, durchgehend                 28 259,32    1007,460
+    gestopft, Tiefe genau die Wandstärke  27 001,25    251,865
+    ==================================== ============ =============
+
+    Die 1007 sind die Länge, die 252 sind die Form: Der Stopfen setzt an der
+    Mündung an und ragt mit seiner Überlappung darüber hinaus. Beides behebt
+    derselbe Schnitt, weil er nicht fragt, wie lang das Werkzeug ist, sondern
+    **wo das Merkmal aufhört** — und die Mündungen kennt nur die Merkmalsfläche.
+
+    **Der alte Weg bleibt, und zwar nicht aus Rücksicht auf alte Dateien
+    allein.** Ohne Merkmal gibt es keine Mündung, an der sich schneiden ließe;
+    wer eine Bohrung an Zahlen verschließt, die die Erkennung nicht kennt, kann
+    nur die Hülle bekommen. Dass alte Projektdateien weiter öffnen, ist die
+    zweite Zusage und gemessen: Ein gespeicherter Schritt ohne ``at_feature``
+    bekommt die leere Vorgabe, und leer heißt hier der Weg über die Zahlen
+    (``test_prepare.py``).
+    """
     params = cast(PlugParams, ctx.params)
     source = ctx.inputs[0]
+    if params.at_feature:
+        feature = _movable_feature(source, params.at_feature, "plug_hole")
+        measured = [float(value) for value in feature.params["centre"]]
+        centre: Vec3 = (measured[0], measured[1], measured[2])
+        filled = _closed_at(
+            as_mesh_data(source.mesh),
+            feature,
+            centre,
+            True,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        remaining = {name: found for name, found in source.features.items() if name != feature.id}
+        return OpResult(
+            outputs=[dataclasses.replace(source, mesh=filled.mesh, features=remaining)],
+            solver=filled.solver,
+            findings=filled.findings,
+        )
     result = plug(
         as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),

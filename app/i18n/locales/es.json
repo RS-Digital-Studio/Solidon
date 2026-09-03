@@ -1227,6 +1227,7 @@
   "Die eingebetteten Quelldaten passen nicht zur Quellenliste.": "Los datos de fuente incrustados no coinciden con la lista de fuentes.",
   "Die einzeln bearbeitbaren Flächen und Kanten wurden in feste Dreiecke umgewandelt. Verrundung, Fase und Taschen aus Skizzen stehen danach nicht mehr zur Verfügung.": "Las caras y aristas editables por separado se han convertido en triángulos fijos. Después ya no están disponibles el redondeo, el chaflán ni las cavidades creadas a partir de bocetos.",
   "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "El orificio detectado cuyo diámetro se va a cambiar. Haga clic en el orificio para indicarlo.",
+  "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie ein; ohne sie gelten die Werte unter „Mehr“.": "El taladro reconocido que se rellena. Un clic sobre él lo introduce aquí; sin él se aplican los valores de «Más».",
   "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal.": "La cara reconocida que se colorea por completo — establecida al hacer clic en la característica.",
   "Die erste Schicht darf dicker sein — sie füllt Unebenheiten der Platte aus und hält damit besser.": "La primera capa puede ser más gruesa: rellena las irregularidades de la bandeja y por eso agarra mejor.",
   "Die erste Schicht wird breiter gedrückt": "La primera capa queda aplastada más ancha",

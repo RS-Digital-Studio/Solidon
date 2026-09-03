@@ -2658,3 +2658,66 @@ def test_the_plate_advice_carries_a_way_to_follow_it(profile: Profile) -> None:
     said = [found for found in tight.findings if found.code == "arrange.needs_more_plates"]
     assert said, [found.code for found in tight.findings]
     assert CORRECT_INPUT in said[0].suggestions, said[0].suggestions
+
+
+def test_plugging_at_the_feature_restores_the_body_exactly(profile: Profile) -> None:
+    """Roberts Überstand, an seiner Quelle behoben.
+
+    Der Hüllschnitt, den meine vier Merkmalswege am 03.09.2026 verloren haben,
+    steht in ``prepare.plug`` seit langem — ich habe ihn von dort abgeschrieben.
+    Am U-Profil ist er genauso falsch: Die konvexe Hülle eines Teils mit Nut
+    ist der volle Kasten, und ein Stopfen, der nach innen ragt, liegt darin.
+
+        Soll ohne Bohrung        27 000,00 mm³
+        mit Bohrung              26 749,39      Nutraum    0,000
+        gestopft an Zahlen       28 259,32      Nutraum 1007,460
+        gestopft am Merkmal      27 000,00      Nutraum    0,000
+
+    Über das Merkmal kennt die Operation die **Mündungen**, und dort wird
+    geschnitten. Geprüft wird deshalb auf die Stelle genau und nicht auf eine
+    Toleranz: Ein Stopfen, der zu lang ist, käme darüber hinaus, einer, der zu
+    kurz ist, darunter.
+    """
+    entry, hole = _channel_with_a_bore(profile)
+
+    result = _run_op("plug_hole", entry, profile, at_feature=hole)
+    filled = result.outputs[0]
+
+    assert filled.mesh.raw.volume == pytest.approx(27000.0, abs=0.01), filled.mesh.raw.volume
+    assert _material_in_the_channel(filled.mesh) == pytest.approx(0.0, abs=1e-3)
+    assert hole not in filled.features, "die verschlossene Bohrung ist kein Merkmal mehr"
+
+
+def test_plugging_by_numbers_keeps_working_without_a_feature(profile: Profile) -> None:
+    """Der alte Weg bleibt — und das ist keine Rücksicht auf alte Dateien allein.
+
+    **Ohne Merkmal gibt es keine Mündung, an der sich schneiden ließe.** Wer
+    eine Bohrung an Zahlen verschließt, die die Erkennung nicht kennt, kann nur
+    den Schnitt an der Hülle bekommen; der ist gröber, und für einen massiven
+    Körper genau richtig.
+
+    Die zweite Zusage ist die für gespeicherte Projekte: Ein Schritt aus einer
+    älteren Fassung führt kein ``at_feature``. Das Parameterschema füllt
+    fehlende Schlüssel mit ihrer Vorgabe — gemessen: ``spec.params(diameter=8.0)``
+    ergibt ``x = 0.0`` und ``depth = 0.0`` —, und leer heißt hier der Weg über
+    die Zahlen. Ohne diesen Test wäre das eine Absicht und keine Zusage; eine
+    Migration braucht es dafür nicht.
+    """
+    entry, hole = _channel_with_a_bore(profile)
+    before = as_mesh_data(entry.mesh).raw.volume
+
+    result = _run_op(
+        "plug_hole",
+        entry,
+        profile,
+        diameter=8.0,
+        x=-15.0,
+        y=0.0,
+        z=-15.0,
+        axis="z",
+        depth=0.0,
+        compensate=False,
+    )
+
+    assert result.outputs[0].mesh.raw.volume > before, "die Bohrung wird gefüllt"
+    assert hole not in result.outputs[0].features, "der alte Weg lässt kein Merkmal stehen"

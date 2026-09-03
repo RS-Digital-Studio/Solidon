@@ -1227,6 +1227,7 @@
   "Die eingebetteten Quelldaten passen nicht zur Quellenliste.": "The embedded source data does not match the source list.",
   "Die einzeln bearbeitbaren Flächen und Kanten wurden in feste Dreiecke umgewandelt. Verrundung, Fase und Taschen aus Skizzen stehen danach nicht mehr zur Verfügung.": "The individually editable faces and edges were converted into fixed triangles. Fillets, chamfers and pockets from sketches are no longer available afterwards.",
   "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "The detected bore whose diameter is being changed. Click the bore to enter it.",
+  "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie ein; ohne sie gelten die Werte unter „Mehr“.": "The recognised bore that is filled in. Clicking it enters it here; without it the values under “More” apply.",
   "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal.": "The recognised face that is coloured completely — set by clicking the feature.",
   "Die erste Schicht darf dicker sein — sie füllt Unebenheiten der Platte aus und hält damit besser.": "The first layer may be thicker — it fills in the unevenness of the plate and holds better for it.",
   "Die erste Schicht wird breiter gedrückt": "The first layer is squashed wider",

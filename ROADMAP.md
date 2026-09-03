@@ -171,7 +171,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
 | Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
-| `plug_hole` lässt denselben Pfropfen stehen | Erkannte Merkmale bearbeiten (03.09.2026) | eine Entscheidung: `plug_hole` bekäme einen Parameter `at_feature` wie die fünf Merkmalshandlungen, dann gilt der Schnitt an den Mündungen auch dort. Das ändert eine ausgelieferte Operation, gemessen ist der Fehler (1007 mm³ am U-Profil), und er steht in 0.3.0 und 0.3.1 beim Kunden |
 | Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Bis dahin ist die Absage mit Ausweg die richtige Antwort, und der Ausweg trägt: die Bohrung versetzen, die Senkung neu setzen |
 
 ---
@@ -15039,7 +15038,7 @@ Durchmesser.
   Kern fragt jetzt das Register nach der aufrufenden Operation, und den Satz
   dazu holt er aus derselben Tabelle wie das Panel.
 
-- [ ] **`plug_hole` hat denselben Überstand, und es ist die Quelle.** Der
+- [x] **`plug_hole` hatte denselben Überstand, und es war die Quelle.** Der
   Hüllschnitt, den meine vier Wege heute bekommen haben, steht in
   `prepare.plug` seit langem — ich habe ihn von dort abgeschrieben. Er ist
   dort genauso falsch. Gemessen am selben U-Profil (60 × 40 × 30, Nut,
@@ -15058,9 +15057,18 @@ Durchmesser.
   Merkmalsfläche, an deren Mündungen sich schneiden ließe. Die saubere Lösung
   ist deshalb, `plug_hole` das zu geben, was es ohnehin meint: einen
   Parameter `at_feature` wie die fünf Merkmalshandlungen. Dann gilt derselbe
-  Schnitt, und der Kunde muss die Koordinaten nicht mehr abtippen. Das ändert
-  eine ausgelieferte Operation um einen Parameter und wartet deshalb auf
-  Roberts Wort.
+  Schnitt, und der Kunde muss die Koordinaten nicht mehr abtippen.
+
+  **Robert hat entschieden** („ja bugs wollen wir nicht drin lassen",
+  03.09.2026), und es ist gebaut. Am Merkmal liefert `plug_hole` jetzt
+  **27 000,00 mm³** — genau das Volumen vor dem Bohren — und null im Nutraum.
+  Der Weg über die Zahlen bleibt und ist unverändert (28 259,32 / 1007,460):
+  Ohne Merkmal gibt es keine Mündung, an der sich schneiden ließe, und für
+  einen massiven Körper ist der Hüllschnitt richtig. **Keine Migration**, und
+  das ist gemessen statt angenommen: Das Parameterschema füllt fehlende
+  Schlüssel mit ihrer Vorgabe (`spec.params(diameter=8.0)` ergibt `x = 0.0`),
+  ein gespeicherter Schritt ohne `at_feature` geht also den alten Weg. Ein
+  Test hält das fest, sonst wäre es eine Absicht und keine Zusage.
 
 - [ ] **Eine Senkung über einer Bohrung lässt sich nicht versetzen.** Sie ist
   kein eigener Hohlraum — sie geht in die Bohrung über, und versetzt zöge sie
@@ -15173,3 +15181,47 @@ Durchmesser.
   das steht auch an der Konstante: Wer ein noch größeres Modell
   fährt, verliert ältere Einträge früher. Der Preis ist
   benannt, die Zahl änderbar.
+
+## Ein feineres Netz machte die Erkennung schlechter (03.09.2026)
+
+- [x] **Eine Kugelpfanne wurde zur Senkung, sobald das Netz fein genug war.**
+  Gefunden bei der Durchsicht nach Zwillingen (81s Frage, ob es weitere
+  Eigenschaften gibt, die nur ein Teil der neun Merkmalsarten hat).
+
+  | Netz | Kegel-Rückstand | Kugel-Rückstand | erkannt als |
+  |---|---|---|---|
+  | 482 Dreiecke | 0,0891 | 0,00049 | Kugel |
+  | 1602 | **0,0779** | 0,00009 | **Senkung** |
+  | 5746 | 0,0736 | 0,00002 | **Senkung** |
+
+  Der Kegelzweig wird vor dem Kugelzweig gefragt, und sein Rückstand
+  rutscht mit steigender Feinheit unter `CONE_TOLERANCE` (0,08). Bei 0,0891
+  fiel er durch und die Pfanne erreichte die Kugel; bei 0,0779 nicht mehr.
+  **Heruntergeladene Modelle sind fein vernetzt** — der Fall trifft genau
+  die Dateien, mit denen ein Kunde ankommt.
+
+  Die Reihenfolge bleibt (eine Senkung passt auf eine Kugel besser, als man
+  denkt, und ein `hole_1`, das `sphere_1` hieße, wäre für jede
+  Bohrungs-Operation unsichtbar). Die Kugel verdrängt den Kegel nur, wenn
+  sie **um Größenordnungen** besser passt: an einer echten Senkung
+  ist der Kegel besser (0,7), an einer Pfanne liegt es bei 182 bis 3733.
+  `tests/test_features.py::test_a_socket_stays_a_socket_when_the_mesh_gets_finer`
+  prüft **beide** Richtungen.
+
+- [x] **Die Werkzeugschranke wird an einer Stelle gefragt, nicht an sechs.**
+  Ein Zwilling der eigenen Arbeit vom selben Tag: `_too_small_to_make` entstand,
+  damit die nächste Merkmalsart die Frage beantworten **muss** — und
+  bekam sie nur bei den drei Erkennern, die neu dazukamen. Bohrung, Zapfen und
+  Verrundung verglichen weiter von Hand gegen `MIN_CYLINDER_DIAMETER`, mit
+  demselben Ergebnis und unauffindbar für die Frage „wer beantwortet sie
+  nicht?". Eine halbe Vereinheitlichung ist schlechter als keine, weil sie
+  vollständig aussieht.
+  `tests/test_features.py::test_every_fitted_kind_asks_the_same_question` ist
+  ein Wächter über den Quelltext: Die Konstante darf nur noch in
+  `_too_small_to_make` verglichen werden.
+
+- [x] **Kugelflächen zerfallen nicht** — gemessen an vier Körpern
+  (Pfanne in drei Feinheiten, volle Kugel), jedes Mal genau ein Merkmal. Ein
+  `_merged_spheres` neben `_merged_cylinders`, `_merged_cones` und
+  `_merged_tori` wäre Aufwand ohne Fall; als Nicht-Befund festgehalten,
+  damit die Frage nicht ein zweites Mal gestellt wird.

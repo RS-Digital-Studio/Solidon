@@ -1227,6 +1227,7 @@
   "Die eingebetteten Quelldaten passen nicht zur Quellenliste.": "Les données source intégrées ne correspondent pas à la liste des sources.",
   "Die einzeln bearbeitbaren Flächen und Kanten wurden in feste Dreiecke umgewandelt. Verrundung, Fase und Taschen aus Skizzen stehen danach nicht mehr zur Verfügung.": "Les faces et arêtes modifiables séparément ont été converties en triangles fixes. Les congés, chanfreins et poches issues d’esquisses ne sont ensuite plus disponibles.",
   "Die erkannte Bohrung, deren Durchmesser geändert wird. Ein Klick auf die Bohrung trägt sie ein.": "Le trou détecté dont le diamètre doit être modifié. Cliquez sur le trou pour le renseigner.",
+  "Die erkannte Bohrung, die verschlossen wird. Ein Klick darauf trägt sie ein; ohne sie gelten die Werte unter „Mehr“.": "Le perçage reconnu qui est rebouché. Un clic dessus le saisit ici ; sans lui, ce sont les valeurs sous « Plus » qui s'appliquent.",
   "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal.": "La face reconnue qui est colorée entièrement — définie par le clic sur la caractéristique.",
   "Die erste Schicht darf dicker sein — sie füllt Unebenheiten der Platte aus und hält damit besser.": "La première couche peut être plus épaisse : elle comble les irrégularités de la plaque et tient donc mieux.",
   "Die erste Schicht wird breiter gedrückt": "La première couche est écrasée plus large",
