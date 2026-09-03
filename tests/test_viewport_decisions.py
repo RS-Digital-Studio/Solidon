@@ -5789,3 +5789,101 @@ def test_the_turn_arc_does_not_outlive_the_gizmo(qt_app: QApplication) -> None:
     viewport._arc_actor = SimpleNamespace(name="turn-arc")
     viewport.show_scene(None)
     assert viewport._arc_actor is None, "der Bogen überlebte eine neue Auswertung"
+
+
+def test_the_shadow_returns_even_without_a_release(qt_app: QApplication) -> None:
+    """Der Schattenversatz überlebt das Abhängen des Griffs nicht.
+
+    Die Rückstellung hing bis zum 03.09.2026 allein an `_end_drag`, also am
+    Loslassen. Wer *Bewegen* mitten im Zug ausschaltet, kommt dort nie an: Der
+    Griff wird über `_detach_gizmo` abgehängt, und der Schatten blieb an der
+    Zielstelle liegen, während das Teil an seinem Ort steht.
+
+        nach dem Zug        (15,0 / -2,5 / 0)
+        nach _detach_gizmo  (15,0 / -2,5 / 0)   <- blieb versetzt
+
+    **Gefunden, weil ich es vorher behauptet hatte.** Auf 3d-druck-85s Frage
+    nach Marken, die einen Werkzeugwechsel überleben, hatte ich geantwortet,
+    der Schatten sei gedeckt, „weil er bei jedem Szenenaufbau neu gebaut wird".
+    Das stimmt für den Aufbau und nicht für das Abhängen — und der Unterschied
+    fiel erst auf, als ich die Behauptung nachgemessen habe.
+
+    Derselbe Fall wie beim Drehbogen eine Stunde vorher: Was zum Zug gehört,
+    muss auch dann verschwinden, wenn der Zug nicht mit Loslassen endet.
+    """
+    from app.core.geom.transform import TransformSteps
+    from app.ui.viewport import Viewport
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+
+    class _Actor:
+        def __init__(self) -> None:
+            self.position = (0.0, 0.0, 0.0)
+
+    viewport = Viewport()
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.select("obj_1")
+    schatten = _Actor()
+    viewport._shadow_owners = {"obj_1": [schatten]}
+    viewport._shadow_cast = (-0.5, -0.25)
+
+    viewport._drag_shadow(TransformSteps(offset=(20.0, 0.0, 10.0), axis=None, angle=0.0, scale=1.0))
+    assert schatten.position == pytest.approx((15.0, -2.5, 0.0)), "der Zug hat nicht gewirkt"
+
+    viewport._detach_gizmo()
+    assert schatten.position == (0.0, 0.0, 0.0), (
+        "der Schatten blieb an der Zielstelle, während das Teil an seinem Ort steht"
+    )
+
+
+def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
+    """Bogen, Geisterring und Schattenversatz gehen zusammen mit dem Griff.
+
+    Drei Marken, drei Wege, dieselbe Klasse — alle hingen nur an `_end_drag`,
+    also am Loslassen. Ein Zug endet aber nicht immer dort:
+
+    * Undo, Werkzeugwechsel oder Projekt schließen hängen den Griff ab, ohne
+      dass jemand losgelassen hat.
+    * **Und wer während des Zugs eine Ziffer tippt, gibt ihn an die Tastatur
+      ab**: `_on_gizmo_released` geht bei `drag_bar.typing` über `set_gizmo`
+      hinaus, und `_end_drag` läuft nie (gefunden von 3d-druck-85). Der Weg
+      des Kunden: ziehen bis der Ring erscheint, eine Ziffer tippen, loslassen,
+      dann irgendwohin klicken statt Enter.
+
+    Alle drei tragen `MEASURE_COLOUR` — dieselbe Farbe wie Auswahl und Messung.
+    Was stehen bleibt, sieht aus wie eine Geste, die noch läuft.
+
+    Der Test hält sie **zusammen** fest, weil sie zusammen gehören: Wer eine
+    vierte Marke baut, sieht hier, wohin sie muss.
+    """
+    from app.ui.viewport import Viewport
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+
+    viewport = Viewport()
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport._arc_actor = SimpleNamespace(name="turn-arc")
+    viewport._ghost_actor = SimpleNamespace(name="feature-ghost")
+    viewport._shape_actor = SimpleNamespace(name="feature-preview")
+
+    viewport._detach_gizmo()
+
+    assert viewport._arc_actor is None, "der Drehbogen"
+    assert viewport._ghost_actor is None, "der Geisterring"
+    assert viewport._shape_actor is None, "die Vorschau"

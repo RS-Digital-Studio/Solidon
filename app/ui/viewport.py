@@ -8249,14 +8249,22 @@ class Viewport(QWidget):
             self._scale_handle = None
         self._drop_gizmo_labels()
         self._drop_face_handle()
-        # **Und der Drehbogen.** Er gehört zum Zug und wurde deshalb nur in
-        # `_end_drag` geräumt — aber ein Zug endet nicht immer dort: Ein Undo,
-        # ein Werkzeugwechsel oder ein geschlossenes Projekt hängen den Griff
-        # ab, ohne dass jemand losgelassen hat. Gemessen am 03.09.2026
-        # überlebte der Bogen beides, und er trägt `MEASURE_COLOUR` — also
-        # dieselbe Farbe wie Auswahl und Messung. Ein stehengebliebener Bogen
-        # sähe aus wie eine Drehung, die noch läuft.
+        # **Und alles, was zum Zug gehört.** Bogen, Geisterring und der
+        # Schattenversatz hingen nur an `_end_drag`, also am Loslassen — aber
+        # ein Zug endet nicht immer dort:
+        #
+        #   * Ein Undo, ein Werkzeugwechsel oder ein geschlossenes Projekt
+        #     hängen den Griff ab, ohne dass jemand losgelassen hat.
+        #   * Und wer während des Zugs eine Ziffer tippt, gibt ihn an die
+        #     Tastatur ab: ``_on_gizmo_released`` geht bei ``drag_bar.typing``
+        #     über ``set_gizmo`` hinaus, und ``_end_drag`` läuft nie
+        #     (3d-druck-85, 03.09.2026).
+        #
+        # Alle drei tragen ``MEASURE_COLOUR`` — dieselbe Farbe wie Auswahl und
+        # Messung. Was stehen bleibt, sieht aus wie eine Geste, die noch läuft.
         self._drop_turn_arc()
+        self._drop_ghost()
+        self._reset_shadow_offset()
         if self._coincident_before is not None:
             from vtkmodules.vtkRenderingCore import vtkMapper
 
@@ -8449,6 +8457,27 @@ class Viewport(QWidget):
         self._arc_actor = self.plotter.add_lines(
             points, color=MEASURE_COLOUR, width=3, name="turn-arc"
         )
+
+    def _reset_shadow_offset(self) -> None:
+        """Stellt die Schatten an ihren Platz zurück.
+
+        Sie standen während des Zugs versetzt (:meth:`_drag_shadow`); was
+        danach gilt, entscheidet die Auswertung und zeichnet sie neu.
+
+        **An zwei Wegen und nicht nur an einem.** Bis zum 03.09.2026 hing die
+        Rückstellung allein an `_end_drag`, also am Loslassen. Wer *Bewegen*
+        mitten im Zug ausschaltet, kommt dort nie an: Der Griff wird über
+        `_detach_gizmo` abgehängt, und der Schatten blieb an der Zielstelle
+        liegen, während das Teil an seinem Ort steht. Gemessen — nach
+        `_detach_gizmo` trug er weiterhin (15,0 / -2,5 / 0).
+
+        Derselbe Fall wie beim Drehbogen eine Stunde vorher, und dieselbe
+        Antwort: Was zum Zug gehört, muss auch dann verschwinden, wenn der Zug
+        nicht mit Loslassen endet.
+        """
+        for actors in self._shadow_owners.values():
+            for actor in actors:
+                actor.position = (0.0, 0.0, 0.0)
 
     def _drop_turn_arc(self) -> None:
         """Nimmt den Bogen weg — der Zug ist vorbei."""
@@ -9004,12 +9033,7 @@ class Viewport(QWidget):
         self._drop_ghost()
         self._drop_turn_arc()
         self._drop_preview()
-        # Der Schatten stand während des Zugs versetzt (:meth:`_drag_shadow`);
-        # was danach gilt, entscheidet die Auswertung und zeichnet ihn neu.
-        # Bliebe der Versatz stehen, läge er beim nächsten Bild doppelt.
-        for actors in self._shadow_owners.values():
-            for actor in actors:
-                actor.position = (0.0, 0.0, 0.0)
+        self._reset_shadow_offset()
         self.drag_bar.dismiss()
         self.set_navigation(self._scheme)
         self.set_gizmo(self._gizmo_wanted)
