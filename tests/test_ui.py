@@ -5262,6 +5262,21 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
             einmal aufgeschlagen.
             """
 
+        def has_changes(self) -> bool:
+            """Ob dieser Dialog etwas bewirkt hat (§29).
+
+            Und hier ist der Fall, den der Docstring darüber vorhersagt,
+            tatsächlich eingetreten: Seit dem 03.09.2026 fragt
+            ``action_print_settings`` danach, bevor es die Einstellungen ins
+            Projekt schreibt — wer nur nachsieht, soll sein Projekt unberührt
+            lassen. Die Attrappe kannte die Methode nicht, und der Test starb
+            mit genau dem ``AttributeError``, vor dem oben gewarnt wird.
+
+            ``False``, weil diese Attrappe nichts einstellt: Sie sendet einen
+            Befund und geht wieder.
+            """
+            return False
+
     monkeypatch.setattr(module, "PrintSettingsDialog", FailingDialog)
 
     window.action_print_settings()
