@@ -99,6 +99,12 @@ _KNOWN_FIELDS: Final = ", ".join("{" + name + "}" for name in SCHEME_FIELDS)
 
 _UNSAFE = re.compile(r"[^\w\-. ]+", re.UNICODE)
 
+#: Was kein Dateisystem trägt — die Windows-Liste, sie ist die engste der drei.
+#: Anders als :data:`_UNSAFE` zählt hier auf, was **weg muss**, statt was
+#: bleiben darf: Für einen getippten Namen ist alles erlaubt, was möglich ist
+#: (siehe :func:`given_name`).
+_FORBIDDEN = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+
 #: Höhe über dem Boden, in der die Standfläche eines Teils gemessen wird. Nicht
 #: bei null: dort liegt die Grundfläche selbst, und ein Schnitt genau in einer
 #: Fläche liefert je nach Netz alles oder nichts.
@@ -126,6 +132,31 @@ def safe_name(text: str, fallback: str = "teil") -> str:
     text = unicodedata.normalize("NFC", text)
     text = _UNSAFE.sub("", text).strip().replace(" ", "_")
     return text or fallback
+
+
+def given_name(text: str, fallback: str = "teil") -> str:
+    """Ein Name, den der Kunde selbst getippt hat — es fällt nur das Unmögliche.
+
+    :func:`safe_name` darüber gilt Namen, die **entstehen**: aus einem
+    Objektnamen, einem Variantentitel, einem Muster. Dort ist die
+    Transliteration eine Konvention und richtig. Für einen Namen, den jemand im
+    Speichern-Dialog eingegeben hat, ist sie es nicht: Er hat entschieden, und
+    NTFS wie ext4 können Umlaute seit je.
+
+    Gemessen am 03.09.2026 über den Weg der Oberfläche: Wer „Gehäuse Deckel"
+    tippte, bekam ``Gehaeuse_Deckel``; ein „Halter V2+" verlor sein Plus. Der
+    ``_ExportWorker`` reicht den Stem des gewählten Zielpfads durch, und der
+    ging durch dieselbe Bereinigung wie ein erzeugter Name. Die Statuszeile
+    nannte danach ehrlich die geschriebene Datei — nur hatte der Kunde eine
+    andere gemeint (Entscheidung Robert, 03.09.2026).
+
+    Weg muss trotzdem, was ein Dateisystem nicht trägt: Pfadtrenner, die
+    Zeichen, die Windows sich vorbehält, und Steuerzeichen. Ein leerer Name
+    fällt auf den Rückfall zurück — sonst entstünde eine Datei, die nur ihre
+    Endung ist.
+    """
+    text = unicodedata.normalize("NFC", text)
+    return _FORBIDDEN.sub("", text).strip().rstrip(".") or fallback
 
 
 @dataclass(frozen=True, slots=True)
@@ -224,9 +255,11 @@ def _entries_for(
     entries = tuple(
         ExportEntry(
             object_id=entry.id,
-            filename=safe_name(
+            # Der Projektteil ist der Name, den der Kunde gewählt hat, der
+            # Objektteil entsteht — deshalb zwei verschiedene Prüfungen.
+            filename=given_name(
                 pattern.format(
-                    project=safe_name(project_name, "projekt"),
+                    project=given_name(project_name, "projekt"),
                     # **Quellsprache, nicht Anzeigesprache** (§16.2, entschieden
                     # am 22.08.2026). Ein Dateiname, der mit der eingestellten
                     # Sprache wandert, macht aus demselben Klick verschiedene
@@ -817,7 +850,7 @@ def write_assembly(
 
     if not reads_assembly_file(flavour):
         target = _written(
-            directory / (safe_name(project_name, "projekt") + ".stl"),
+            directory / (given_name(project_name, "projekt") + ".stl"),
             _cura_assembly(chosen, bed),
         )
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
@@ -865,7 +898,7 @@ def write_assembly(
             # Einstellung eines fremden Programms nichts hören.
             findings += handover.machine_missing(setup, profile)
     target = _written(
-        directory / (safe_name(project_name, "projekt") + ".3mf"),
+        directory / (given_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(
             parts,
             project_name,

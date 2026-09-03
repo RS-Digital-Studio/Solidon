@@ -1599,3 +1599,70 @@ def test_the_step_refusal_offers_the_way_out_it_names(profile: Profile) -> None:
 
     assert EXPORT_AS_MESH.id in ausgaenge, ausgaenge
     assert ausgaenge[0] == EXPORT_AS_MESH.id, "der Ausweg steht vor dem Abbruch"
+
+
+def test_a_name_the_customer_typed_reaches_the_disc_unchanged(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Wer den Dateinamen selbst eingibt, hat entschieden.
+
+    Der ``_ExportWorker`` reicht den Stem des im Speichern-Dialog gewählten
+    Pfads als ``project_name`` durch, und der ging durch dieselbe Bereinigung
+    wie ein erzeugter Name: „Gehäuse Deckel" wurde ``Gehaeuse_Deckel``, ein
+    „Halter V2+" verlor sein Plus. Gemessen am 03.09.2026 über den Weg der
+    Oberfläche — drei Exporte, dreimal ein anderer Name als der getippte
+    (Entscheidung Robert: unverändert nehmen).
+
+    Der **Objektname** im selben Dateinamen bleibt bereinigt: Er entsteht, statt
+    getippt zu werden, und für ihn gilt die Konvention weiter.
+    """
+    plan = plan_export(
+        [scene_object("obj_1", "Größe L")],
+        project_name="Gehäuse Deckel V2+",
+        profile=profile,
+        scheme="{project}",
+    )
+    written = write_plan(plan, tmp_path)
+
+    assert [path.stem for path in written] == ["Gehäuse Deckel V2+"], (
+        "Umlaut, Leerzeichen und Plus stehen so da, wie sie getippt wurden"
+    )
+
+    beides = plan_export(
+        [scene_object("obj_1", "Größe L")],
+        project_name="Gehäuse Deckel",
+        profile=profile,
+        scheme="{project}_{object}",
+    )
+    assert [path.stem for path in write_plan(beides, tmp_path)] == ["Gehäuse Deckel_Groesse_L"], (
+        "der getippte Teil bleibt, der erzeugte wird transliteriert"
+    )
+
+
+def test_a_typed_name_still_loses_what_no_disc_can_hold(tmp_path: Path, profile: Profile) -> None:
+    """Erlaubt ist, was möglich ist — und Pfadtrenner sind es nicht.
+
+    Die Gegenrichtung zum Test darüber: Ohne sie wäre „unverändert nehmen" die
+    Erlaubnis, mit einem Doppelpunkt oder einem Schrägstrich ein Verzeichnis zu
+    wechseln. Ein leerer Rest fällt auf den Rückfall zurück, sonst entstünde
+    eine Datei, die nur ihre Endung ist.
+    """
+    plan = plan_export(
+        [scene_object("obj_1", "Teil")],
+        project_name="../ganz/woanders:x?",
+        profile=profile,
+        scheme="{project}",
+    )
+    written = write_plan(plan, tmp_path)
+
+    assert len(written) == 1
+    assert written[0].parent == tmp_path, "die Datei bleibt im gewählten Ordner"
+    assert "/" not in written[0].stem and ":" not in written[0].stem
+
+    leer = plan_export(
+        [scene_object("obj_1", "Teil")],
+        project_name=":::",
+        profile=profile,
+        scheme="{project}",
+    )
+    assert write_plan(leer, tmp_path)[0].stem == "projekt", "ein leerer Rest bekommt den Rückfall"
