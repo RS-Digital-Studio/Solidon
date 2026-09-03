@@ -3831,3 +3831,45 @@ def test_a_cut_through_an_editable_body_still_shows_it(qt_app: QApplication) -> 
     assert geschnitten is not körper, "ohne Vernetzung geht der Schnitt gar nicht erst los"
     assert len(geschnitten.raw.faces) > 0, "nach dem Schnitt bleibt Geometrie übrig"
     assert float(geschnitten.raw.bounds[1][2]) <= 0.0 + 1e-9, "und sie liegt unter der Ebene"
+
+
+def test_the_last_measurement_can_go_without_taking_the_others(qt_app: QApplication) -> None:
+    """Ein falsch gesetztes Maß geht einzeln — nicht die ganze Reihe mit.
+
+    **Der Befund (Robert, 03.09.2026):** „das messen lässt sich auch nicht
+    verschieben oder wieder löschen". Es gab genau einen Weg, ein Maß
+    loszuwerden: *Bemaßungen löschen*, und der nimmt alle. Wer nach dem
+    fünften Maß einmal danebenklickte, verlor die vier davor mit.
+
+    Zwei Fälle, und die Reihenfolge ist die Aussage: Ein **halb gesetztes**
+    Maß zählt zuerst. Wer den ersten Punkt gesetzt hat und die Rücktaste
+    drückt, meint diesen Punkt — nicht das fertige Maß davor, das er gerade
+    behalten will.
+    """
+    from app.core.geom.measure import Measurement
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    for index in range(3):
+        viewport.measurements.add(
+            Measurement(kind="distance", value=float(index + 1), points=((0.0, 0.0, 0.0),))
+        )
+    assert len(viewport.measurements.entries) == 3
+
+    viewport.undo_measurement()
+
+    assert [entry.value for entry in viewport.measurements.entries] == [1.0, 2.0], (
+        "nur das letzte Maß geht"
+    )
+
+    viewport._pending_point = (1.0, 2.0, 3.0)
+    viewport.undo_measurement()
+
+    assert viewport._pending_point is None, "der halb gesetzte Punkt geht zuerst"
+    assert len(viewport.measurements.entries) == 2, "und kostet kein fertiges Maß"
+
+    viewport.undo_measurement()
+    viewport.undo_measurement()
+    viewport.undo_measurement()
+
+    assert viewport.measurements.entries == [], "und die leere Liste hält es aus"

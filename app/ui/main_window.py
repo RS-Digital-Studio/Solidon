@@ -1463,6 +1463,7 @@ class MainWindow(QMainWindow):
         self.viewport.measurementStatus.connect(self.measure_bar.show_status)
         self.measure_bar.modeChanged.connect(self.viewport.set_measure_mode)
         self.measure_bar.clearRequested.connect(self.viewport.clear_measurements)
+        self.measure_bar.undoRequested.connect(self.viewport.undo_measurement)
         self.transform_bar = TransformBar(self)
         self.transform_bar.applyRequested.connect(self._apply_from_transform_bar)
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
@@ -1541,7 +1542,12 @@ class MainWindow(QMainWindow):
             "measure",
             tr("Messen"),
             self.measure_bar,
-            weak_slot(self, lambda view: view.measure_bar.mode.setCurrentIndex(0)),
+            # **Das Schließen räumt die Maße weg** (Robert, 03.09.2026). Ein
+            # Maß ist eine Auskunft über das Teil und kein Dokumentzustand
+            # (Regel 2) — dieselbe Entscheidung wie bei der Trennlinie, die
+            # ihr Werkzeug auch nicht überlebt. Vorher blieben die Linien im
+            # Bild stehen, ohne Werkzeug daneben, mit dem man sie loswird.
+            weak_slot(self, lambda view: view.close_measuring()),
             symbol="measure",
             # „Zwei Punkte im Bild anklicken" — dafür muss gemessen werden.
             # Abstand ist die häufigere der beiden Arten und die, die der
@@ -8788,6 +8794,16 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry is not None else None
         if entry is not None and feature is not None:
             self.measurements.setText(f"{entry.name} · {feature_label(feature_id, feature)}")
+
+    def close_measuring(self) -> None:
+        """Das Messwerkzeug schließen: Modus aus, Maße weg.
+
+        Ein Maß ist eine Auskunft und kein Dokumentzustand (Regel 2). Vorher
+        schaltete das Schließen nur den Modus ab, und die Linien blieben im
+        Bild stehen — ohne die Leiste, an der ein Knopf zum Löschen sitzt.
+        """
+        self.measure_bar.mode.setCurrentIndex(0)
+        self.viewport.clear_measurements()
 
     def _on_section(self, plane: object, thickness: object) -> None:
         self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]

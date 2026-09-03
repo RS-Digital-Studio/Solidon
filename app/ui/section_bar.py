@@ -49,6 +49,8 @@ class MeasureBar(QWidget):
 
     modeChanged = Signal(str)
     clearRequested = Signal()
+    undoRequested = Signal()
+    """Nimmt das zuletzt gesetzte Maß zurück — nicht alle."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -64,6 +66,16 @@ class MeasureBar(QWidget):
         )
 
         self.readout = QLabel("", self)
+        # **Ein falsch gesetztes Maß muss einzeln weg.** „Bemaßungen löschen"
+        # nimmt alle, und wer nach dem fünften Maß einmal danebengeklickt hat,
+        # verlor damit auch die vier davor (Robert, 03.09.2026: „das messen
+        # lässt sich auch nicht verschieben oder wieder löschen"). Der Knopf
+        # steht vor dem Löschen, weil er die häufigere Handlung ist; die
+        # Rücktaste tut dasselbe, solange die Ansicht den Fokus hat.
+        self.undo = QPushButton(tr("Letztes Maß zurück"), self)
+        self.undo.setToolTip(tr("Nimmt das zuletzt gesetzte Maß zurück (Rücktaste)."))
+        self.undo.setStatusTip(self.undo.toolTip())
+        self.undo.clicked.connect(self.undoRequested)
         clear = QPushButton(tr("Bemaßungen löschen"), self)
         clear.clicked.connect(self.clearRequested)
 
@@ -71,6 +83,7 @@ class MeasureBar(QWidget):
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(self.mode)
         layout.addWidget(self.readout, stretch=1)
+        layout.addWidget(self.undo)
         layout.addWidget(clear)
 
     def show_measurement(self, kind: str, value: float, count: int) -> None:

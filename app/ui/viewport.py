@@ -4898,6 +4898,25 @@ class Viewport(QWidget):
     def measure_mode(self) -> MeasureMode:
         return self._measure_mode
 
+    def undo_measurement(self) -> None:
+        """Nimmt das zuletzt gesetzte Maß zurück — nur dieses (§18.3).
+
+        „Bemaßungen löschen" nimmt alle, und wer nach dem fünften Maß einmal
+        danebengeklickt hatte, verlor die vier davor mit (Robert,
+        03.09.2026). Ein halb gesetztes Maß zählt zuerst: Wer den ersten
+        Punkt gesetzt hat und die Rücktaste drückt, meint diesen Punkt und
+        nicht das fertige Maß davor.
+        """
+        if self._pending_point is not None or self._pending_plane is not None:
+            self._pending_point = None
+            self._pending_plane = None
+            self._redraw_measurements()
+            return
+        if not self.measurements.entries:
+            return
+        self.measurements.remove(len(self.measurements.entries) - 1)
+        self._redraw_measurements()
+
     def clear_measurements(self) -> None:
         """Maße bleiben, bis sie gelöscht werden — das hier ist das
         Löschen (§18.3).
@@ -5519,11 +5538,21 @@ class Viewport(QWidget):
         for index, entry in enumerate(self.measurements.entries):
             if len(entry.points) == 2:
                 line = np.array([entry.points[0], entry.points[1]], dtype=float)
-                self._measure_actors.append(
-                    self.plotter.add_lines(
-                        line, color=MEASURE_COLOUR, width=2, name=f"measure:{index}"
-                    )
+                actor = self.plotter.add_lines(
+                    line, color=MEASURE_COLOUR, width=2, name=f"measure:{index}"
                 )
+                # **Ein Maß läuft durch das Material, und dort war es weg.**
+                # Wer die Wandstärke misst oder zwei gegenüberliegende Flächen,
+                # setzt beide Punkte auf verschiedene Seiten — die Linie
+                # dazwischen liegt im Körper und verschwand hinter ihm
+                # (Robert, 03.09.2026: „die Kollisionen mit dem Körper beim
+                # Messen beachten"). Ein Maß ist eine Auskunft über das Teil
+                # und kein Teil davon: Es wird zuletzt gezeichnet und
+                # überdeckt, was davor liegt.
+                actor.mapper.SetRelativeCoincidentTopologyLineOffsetParameters(0.0, -66000.0)
+                actor.prop.SetLineWidth(2)
+                actor.SetForceOpaque(True)
+                self._measure_actors.append(actor)
             # Über ``labels`` wie jede Anzeige: Die MeasureBar schrieb
             # „2,3622 in", das Bild daneben „60 mm" — zwei Zahlen für dieselbe
             # Messung, und ``grad`` stand fest deutsch da (Regel 20).
@@ -5544,6 +5573,9 @@ class Viewport(QWidget):
                         point_color=MEASURE_COLOUR,
                         point_size=8,
                         name=f"measure_label:{index}",
+                        # Dieselbe Zusage wie an der Linie: Die Zahl gehört
+                        # nicht in den Körper, sie gehört darüber.
+                        always_visible=True,
                         render=False,
                     )
                 )
@@ -7327,6 +7359,16 @@ class Viewport(QWidget):
                 if schliessend and self._sketch_finish_stroke():
                     return True
 
+        if (
+            kind == QEvent.Type.KeyPress
+            and self._measure_mode != "off"
+            and event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete)
+        ):
+            # Beim Messen nimmt die Rücktaste das letzte Maß zurück. Vor der
+            # Zug-Behandlung darunter, denn ein Maß entsteht ohne Zug — dort
+            # käme die Taste nie an.
+            self.undo_measurement()
+            return True
         if self._drag_kind is None or kind != QEvent.Type.KeyPress:
             return False
         key = event.key()

@@ -11734,3 +11734,25 @@ def test_the_build_plate_hides_in_one_step(window: MainWindow) -> None:
     assert window.viewport.bed_visible
     assert window.settings.bed_visible
     assert window._bed_action.isChecked()
+
+
+def test_closing_the_measure_tool_takes_the_dimensions_with_it(window: MainWindow) -> None:
+    """Ein Maß überlebt sein Werkzeug nicht (Robert, 03.09.2026).
+
+    Vorher schaltete das Schließen nur den Modus ab: Die Linien blieben im
+    Bild stehen, und der einzige Knopf, mit dem man sie loswird, war mit der
+    Leiste verschwunden. Ein Maß ist eine Auskunft über das Teil und kein
+    Dokumentzustand (Regel 2) — dieselbe Entscheidung wie bei der Trennlinie.
+    """
+    from app.core.geom.measure import Measurement
+
+    window.tools.toggle("measure")
+    window.viewport.measurements.add(
+        Measurement(kind="distance", value=12.0, points=((0.0, 0.0, 0.0), (12.0, 0.0, 0.0)))
+    )
+    assert len(window.viewport.measurements.entries) == 1
+
+    window.tools.toggle("measure")
+
+    assert window.viewport.measurements.entries == [], "das Schließen räumt die Maße weg"
+    assert window.measure_bar.mode.currentData() == "off", "und schaltet das Messen ab"
