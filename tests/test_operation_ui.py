@@ -15,6 +15,7 @@ modalen Meldung. Alles, was scheitern *soll*, läuft darum auf einer nackten
 from __future__ import annotations
 
 import ast
+import contextlib
 import inspect
 import textwrap
 from collections.abc import Iterable
@@ -2650,3 +2651,57 @@ def test_a_drawing_smaller_than_the_field_can_show_is_not_stretched_back(
         if release is not None:
             release(dialog)
         dialog.deleteLater()
+
+
+def test_a_bore_without_a_standard_size_offers_the_sizes_it_asks_about(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Frage ohne Antwortweg ist eine Sackgasse — gefunden am 03.09.2026.
+
+    ``bore_advice`` unterscheidet zwei Fälle und ist genau dafür gebaut: Wo
+    eine Normgröße passt, gibt sie einen **Satz** und eine leere Liste; wo
+    keine passt, eine **Frage** und die beiden Nachbargrößen samt Ausweg.
+    Die Oberfläche nahm bis dahin nur den Satz — ``said, _choices = …`` — und
+    warf die Antworten in einen Unterstrich.
+
+    Gemessen an 7,50 mm: gefragt wurde „Zu welcher Schraube gehört sie?",
+    verworfen wurde ``['M6', 'M8', 'Selbst eintragen']``. Der Kunde las eine
+    Frage, auf die das Fenster keine Antwort anbot — derselbe Schnitt, den
+    §2.7 bei Fehlern schließt (Regel 17: nie mit „fehlgeschlagen" enden).
+
+    **Geprüft wird an der Verdrahtung, nicht an der Formulierung.** Was
+    ``bore_advice`` sagt, prüft ``tests/test_matching.py`` an drei Stellen;
+    hier geht es um die eine Zeile, die ihr Ergebnis weiterreicht — und genau
+    die war der Fehler. Der Durchmesser wird deshalb untergeschoben:
+    ``plate_holes`` misst 5,19 mm, dazu passt M5, und der Fall träte nie ein.
+    """
+    from app.ui import main_window as fenster
+
+    monkeypatch.setattr(
+        fenster,
+        "bore_advice",
+        lambda _diameter: ("Passt zu keiner Normgröße.", ["M6", "M8", "Selbst eintragen"]),
+    )
+
+    class _AbbruchError(Exception):
+        """Bricht den Aufbau ab, sobald der Hinweis abgelesen ist."""
+
+    gezeigt: list[str] = []
+    echt = fenster.OperationDialog
+
+    def merken(*args: object, **kwargs: object) -> object:
+        gezeigt.append(str(kwargs.get("note", "")))
+        raise _AbbruchError
+
+    monkeypatch.setattr(fenster, "OperationDialog", merken)
+
+    select(window)
+    window._on_feature_picked("hole_1")
+    with contextlib.suppress(_AbbruchError):
+        window.run_operation(REGISTRY.get("countersink_hole"))
+
+    assert gezeigt, "der Dialog wurde nie gebaut — der Test prüft nichts"
+    assert "M6" in gezeigt[0] and "M8" in gezeigt[0], (
+        f"die Antworten auf die eigene Frage fehlen im Hinweis: {gezeigt[0]!r}"
+    )
+    assert echt is not None

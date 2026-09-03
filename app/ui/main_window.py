@@ -2651,6 +2651,13 @@ class MainWindow(QMainWindow):
         # Trennstriche gegliedert — eine Liste, die man absucht (Konzept P15
         # §5). Was zusammengehört, bekommt jetzt seinen Namen und seine Ebene.
         display_menu = self._submenu(view_menu, tr("Darstellung"))
+        # **Die drei Gruppen tragen Häkchen, und ihre Wahl wird gemerkt.**
+        # Vorher waren es zwölf Einträge ohne Zustand: Man sah nicht, welcher
+        # gilt, und beim nächsten Start galt wieder die Vorgabe. Wer
+        # *Transparent* eingestellt hatte, hielt das für seine eigene
+        # Erinnerung (Robert, 03.09.2026).
+        self._mode_group = QActionGroup(self)
+        self._mode_group.setExclusive(True)
         for mode, label, shortcut, hint in (
             ("solid", tr("Massiv"), "1", tr("Die Oberfläche, wie sie gedruckt wird.")),
             (
@@ -2672,16 +2679,21 @@ class MainWindow(QMainWindow):
                 tr("Durchscheinend — für Hohlräume und Teile, die ineinandergreifen."),
             ),
         ):
-            self._display_actions.append(
-                self._add_action(
-                    display_menu,
-                    label,
-                    shortcut,
-                    weak_slot(self, lambda view, key: view.viewport.set_display_mode(key), mode),
-                    hint,
-                )
+            action = self._add_action(
+                display_menu,
+                label,
+                shortcut,
+                weak_slot(self, lambda view, key: view.action_display_mode(key), mode),
+                hint,
             )
+            action.setCheckable(True)
+            action.setChecked(mode == self.settings.display_mode)
+            action.setData(mode)
+            self._mode_group.addAction(action)
+            self._display_actions.append(action)
         display_menu.addSeparator()
+        self._shading_group = QActionGroup(self)
+        self._shading_group.setExclusive(True)
         for shading, label, hint in (
             (
                 "flat",
@@ -2694,16 +2706,21 @@ class MainWindow(QMainWindow):
                 tr("Über die Kanten hinweg gemittelt. Schöner, aber beschönigend."),
             ),
         ):
-            self._display_actions.append(
-                self._add_action(
-                    display_menu,
-                    label,
-                    None,
-                    weak_slot(self, lambda view, key: view.viewport.set_shading(key), shading),
-                    hint,
-                )
+            action = self._add_action(
+                display_menu,
+                label,
+                None,
+                weak_slot(self, lambda view, key: view.action_shading(key), shading),
+                hint,
             )
+            action.setCheckable(True)
+            action.setChecked(shading == self.settings.shading)
+            action.setData(shading)
+            self._shading_group.addAction(action)
+            self._display_actions.append(action)
         display_menu.addSeparator()
+        self._projection_group = QActionGroup(self)
+        self._projection_group.setExclusive(True)
         for projection, label, shortcut, hint in (
             (
                 "perspective",
@@ -2718,17 +2735,18 @@ class MainWindow(QMainWindow):
                 tr("Ohne Fluchtpunkt — gleich lange Kanten sehen gleich lang aus. Zum Messen."),
             ),
         ):
-            self._display_actions.append(
-                self._add_action(
-                    display_menu,
-                    label,
-                    shortcut,
-                    weak_slot(
-                        self, lambda view, key: view.viewport.set_projection(key), projection
-                    ),
-                    hint,
-                )
+            action = self._add_action(
+                display_menu,
+                label,
+                shortcut,
+                weak_slot(self, lambda view, key: view.action_projection(key), projection),
+                hint,
             )
+            action.setCheckable(True)
+            action.setChecked(projection == self.settings.projection)
+            action.setData(projection)
+            self._projection_group.addAction(action)
+            self._display_actions.append(action)
 
         camera_menu = self._submenu(view_menu, tr("Kamera"))
         standpoint = tr("Kamera auf diesen Standpunkt setzen.")
@@ -5797,6 +5815,17 @@ class MainWindow(QMainWindow):
         self._apply_card_style(self.settings.theme)
         self.viewport.set_navigation(self.settings.navigation)  # type: ignore[arg-type]
         self.viewport.set_difference_palette(self.settings.diff_palette)  # type: ignore[arg-type]
+        # Was der Nutzer zuletzt eingestellt hat, gilt wieder — und die
+        # Häkchen im Menü zeigen es. Über den Viewport und nicht über die
+        # ``action_``-Methoden: Beim Start ist nichts zu speichern, und ein
+        # Schreiben in die Einstellungen bei jedem Programmstart wäre eine
+        # Änderung, die niemand gemacht hat.
+        self.viewport.set_display_mode(self.settings.display_mode)  # type: ignore[arg-type]
+        self.viewport.set_shading(self.settings.shading)  # type: ignore[arg-type]
+        self.viewport.set_projection(self.settings.projection)  # type: ignore[arg-type]
+        _tick(self._mode_group, self.settings.display_mode)
+        _tick(self._shading_group, self.settings.shading)
+        _tick(self._projection_group, self.settings.projection)
         self.set_display_unit(self.settings.display_unit)
         set_circle_measure("radius" if self.settings.circle_measure == "radius" else "diameter")
 
@@ -8877,6 +8906,38 @@ class MainWindow(QMainWindow):
         save_settings(self.settings)
         _tick(self._navigation_group, scheme)
 
+    def action_display_mode(self, mode: str) -> None:
+        """Massiv, mit Kanten, Drahtgitter oder transparent — und gemerkt.
+
+        **Der Weg über diese Methode ist der des Nutzers.** Der Skizzenmodus
+        stellt daneben direkt am Viewport um (`set_display_mode`) und nimmt es
+        beim Verlassen zurück; das ist eine Leihgabe und keine Entscheidung,
+        also wird sie nicht gespeichert.
+        """
+        self.viewport.set_display_mode(mode)  # type: ignore[arg-type]
+        self.settings.display_mode = mode
+        save_settings(self.settings)
+        _tick(self._mode_group, mode)
+
+    def action_shading(self, shading: str) -> None:
+        """Flach oder weich — dieselbe Bauart wie eine Methode darüber."""
+        self.viewport.set_shading(shading)  # type: ignore[arg-type]
+        self.settings.shading = shading
+        save_settings(self.settings)
+        _tick(self._shading_group, shading)
+
+    def action_projection(self, projection: str) -> None:
+        """Perspektivisch oder orthografisch.
+
+        Wer misst, arbeitet orthografisch, und wer das einmal eingestellt hat,
+        meint es dauerhaft (§18.1). Der Skizzenmodus stellt sie ebenfalls
+        vorübergehend um und nimmt es zurück — auch das ist keine Entscheidung.
+        """
+        self.viewport.set_projection(projection)  # type: ignore[arg-type]
+        self.settings.projection = projection
+        save_settings(self.settings)
+        _tick(self._projection_group, projection)
+
     def run_operation(self, spec: OperationSpec, given: Mapping[str, Any] | None = None) -> None:
         """Menüeintrag, Dialog, Transaktion — derselbe Weg, den auch der Agent
         nehmen wird.
@@ -8927,7 +8988,22 @@ class MainWindow(QMainWindow):
         if feature is not None and feature.kind == "hole" and advises_on_bores(spec):
             diameter = feature.params.get("diameter")
             if diameter is not None:
-                said, _choices = bore_advice(float(diameter))
+                said, choices = bore_advice(float(diameter))
+                # **Eine Frage ohne Antwortweg ist keine Frage, sondern eine
+                # Sackgasse.** Wo keine Normgröße passt, endet der Satz aus dem
+                # Kern mit „Zu welcher Schraube gehört sie?" und bringt die
+                # beiden Nachbargrößen mit; bis zum 03.09.2026 hat die
+                # Oberfläche sie in einen Unterstrich geworfen. Gemessen an
+                # 7,50 mm: gefragt wurde, `['M6', 'M8', 'Selbst eintragen']`
+                # wurde verworfen — dieselbe Lücke, die §2.7 bei Fehlern
+                # schließt („ein Fehler endet nie mit fehlgeschlagen").
+                #
+                # Wo eine Größe passt, ist die Liste leer und der Satz steht
+                # allein; das ist die Unterscheidung, die `bore_advice`
+                # ausdrücklich trifft, und sie bleibt unangetastet.
+                if choices:
+                    options = str(_("Infrage kommen: {list}.")).format(list=", ".join(choices))
+                    said = f"{said} {options}"
                 note = f"{note}\n{said}" if note else said
 
         def run(params: Mapping[str, Any]) -> None:
