@@ -2719,6 +2719,15 @@ class AboutDialog(QDialog):
         rights = QLabel(f"{COPYRIGHT}. {tr('Alle Rechte vorbehalten.')}", self)
         rights.setWordWrap(True)
 
+        # **Wer dahintersteht, gehört neben die Kontaktadresse.** Der Dialog
+        # nannte Copyright, Version und eine E-Mail — und ließ offen, wer
+        # antwortet. Für einen Kunden ist das keine Nebensache: Es sagt ihm,
+        # wie schnell eine Antwort kommt und von wem.
+        made_by = QLabel(
+            tr("Solidon entwickelt eine Person — Entwurf, Programm, Handbuch und Support."),
+            self,
+        )
+        made_by.setWordWrap(True)
         support = QLabel(f"{tr('Support und Kontakt')}: {SUPPORT_ADDRESS}", self)
         support.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
@@ -2772,6 +2781,7 @@ class AboutDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(heading)
         layout.addWidget(rights)
+        layout.addWidget(made_by)
         layout.addWidget(support)
         layout.addWidget(licensed)
         layout.addWidget(security_heading)
