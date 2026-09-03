@@ -26,7 +26,9 @@ import pytest
 from PySide6.QtWidgets import QApplication, QDialog, QMenu, QPushButton
 
 from app.core import updates
+from app.core.bootstrap import load_operations
 from app.core.knowledge.profiles import DEFAULT_MATERIAL
+from app.core.registry import REGISTRY
 from app.ui.ai_disclosure import AiDisclosureDialog, AiDisclosureTarget, LocalPrivacyDialog
 from app.ui.catalog import PartCatalog
 from app.ui.changes_dialog import ChangesDialog
@@ -41,13 +43,15 @@ from app.ui.dialogs import (
     KeyDialog,
     OfflineActivationDialog,
     ParameterDialog,
+    StepValuesDialog,
 )
 from app.ui.filament_picker import NewFilamentDialog, SlicerFilamentDialog
 from app.ui.first_run import FirstRunDialog
 from app.ui.generate_dialog import GenerateDialog
 from app.ui.install_dialog import InstallDialog
 from app.ui.main_window import MainWindow
-from app.ui.op_dialog import SketchUseDialog
+from app.ui.manual_window import ManualWindow
+from app.ui.op_dialog import OperationDialog, SketchUseDialog
 from app.ui.print_disclosure import PrintDisclosureDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -83,6 +87,37 @@ def _wired_catalog() -> PartCatalog:
         "Lesen Sie zuerst ein Modell ein oder legen Sie einen Grundkörper an.",
     )
     return catalog
+
+
+def _first_step(session: Session) -> object:
+    """Der erste Schritt des Verlaufs — das Einlesen des Körpers.
+
+    ``StepValuesDialog`` zeigt die Werte einer Operation und bekommt sie im
+    Hauptfenster aus ``document.ops``, gesucht über die ID aus dem Fehler. Ein
+    selbst gebautes Objekt hätte die Felder, die der Test gerade braucht, und
+    keines von denen, an denen er scheitern könnte.
+    """
+    ops = session.project.document.ops
+    assert ops, "die Sitzung hat keinen Schritt — dann zeigt der Dialog nichts"
+    return ops[0]
+
+
+def _op_dialog(session: Session) -> OperationDialog:
+    """Der Operationsdialog, wie ``main_window`` ihn zum Anlegen öffnet.
+
+    ``hollow_object`` und nicht der erste Registereintrag: Die Operation hat
+    Parameter mit Grenzen und Einheiten, und ihr Dialog ist damit einer mit
+    Vorder- und Rückseite statt eines leeren Rahmens. ``load_operations()``
+    davor, weil das Register sonst leer ist — die Bausteine tragen sich erst
+    beim Laden ein.
+    """
+    load_operations()
+    # ``scene.objects`` ist eine Zuordnung, keine Liste: ``for x in`` gäbe die
+    # Schlüssel. Dieselbe Bildung wie ``main_window._object_names``.
+    names = {
+        object_id: str(entry.name) for object_id, entry in session.last_result.scene.objects.items()
+    }
+    return OperationDialog(REGISTRY.get("hollow_object"), names)
 
 
 #: Wie jeder Dialog gebaut wird. Die Bauanleitungen stammen aus den Tests, die
@@ -153,6 +188,10 @@ BUILDERS: dict[str, Callable[[Session], QDialog]] = {
     # einer frischen Sitzung ist die Sammlung leer, und das ist der Zustand, in
     # dem ein Kunde sie zum ersten Mal öffnet.
     "ParameterDialog": lambda session: ParameterDialog(session.project.document.parameters),
+    # --- die auf die Sitzung angewiesen sind ---------------------------------------
+    "StepValuesDialog": lambda session: StepValuesDialog(_first_step(session)),
+    "OperationDialog": _op_dialog,
+    "ManualWindow": lambda _session: ManualWindow(),
     "AiDisclosureDialog": lambda _session: AiDisclosureDialog(
         AiDisclosureTarget(backend="ollama", target_class="llm", address="http://localhost:11434")
     ),
