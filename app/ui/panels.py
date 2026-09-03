@@ -1098,6 +1098,23 @@ class ObjectTree(QWidget):
             # Der Kunde sieht sechs Verrundungen und findet den Einhänger
             # nicht, aus dem sie stammen (Befund Robert, 25.08.2026).
             groups: dict[int, QTreeWidgetItem] = {}
+            # **Und gleichartige Merkmale stehen unter einem Dach.** Der Absatz
+            # darüber löst den Fall, dass vierzehn Merkmale aus einem Baustein
+            # kommen; er löst nicht den häufigeren: Eine STEP-Datei aus Fusion
+            # oder Onshape bringt Dutzende erkannte Verrundungen mit, die aus
+            # gar keinem Schritt stammen. Gemessen an ``build_tray_v3.step``
+            # (Roberts Downloads, 03.09.2026): 234 Merkmale, davon rund fünfzig
+            # sichtbare Zeilen „Hohlkehle R13,98 mm" untereinander, die die
+            # ganze linke Spalte füllten und Parameter und Verlauf hinausdrückten.
+            # Der Prüfbericht daneben bündelte dieselbe Menge längst zu einer
+            # Zeile — dieselbe Schwelle (:data:`BUNDLE_FROM`) und derselbe
+            # Grund: Jede Einzelzeile stimmt, die Menge begräbt.
+            alike: dict[str, int] = {}
+            for other_id, other in entry.features.items():
+                if _part_step(other.created_by, document) is None:
+                    name = feature_name(other_id, other)
+                    alike[name] = alike.get(name, 0) + 1
+            by_kind: dict[str, QTreeWidgetItem] = {}
             for feature_id, feature in entry.features.items():
                 # Name links, Maß rechts. Vorher stand die ganze Beschriftung
                 # links und rechts der Typ („hole", „face") — links war damit
@@ -1118,7 +1135,31 @@ class ObjectTree(QWidget):
 
                 part = _part_step(feature.created_by, document)
                 if part is None:
-                    item.addChild(child)
+                    label = child.text(0)
+                    if alike[label] < BUNDLE_FROM:
+                        item.addChild(child)
+                        continue
+                    roof = by_kind.get(label)
+                    if roof is None:
+                        # Die Zahl steht im Text der Zeile selbst, wie bei der
+                        # Sammelzeile des Prüfberichts. Die Maßspalte bleibt
+                        # leer: Ein Dach über siebzehn Radien hat kein Maß, und
+                        # einen davon anzuschreiben wäre eine Behauptung über
+                        # die anderen sechzehn.
+                        roof = QTreeWidgetItem([f"{label} ({alike[label]})", ""])
+                        roof.setData(0, Qt.ItemDataRole.UserRole, object_id)
+                        roof.setData(1, Qt.ItemDataRole.UserRole, None)
+                        note = tr(
+                            "{count} gleichartige Merkmale — anklicken zum Auf- und Zuklappen."
+                        ).format(count=alike[label])
+                        roof.setToolTip(0, note)
+                        roof.setStatusTip(0, note)
+                        roof.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, note)
+                        by_kind[label] = roof
+                        item.addChild(roof)
+                    # Zugeklappt, sonst wäre nichts gewonnen. ``_restore``
+                    # klappt den Ast auf, wenn das gewählte Merkmal darin liegt.
+                    roof.addChild(child)
                     continue
                 title, step = part
                 group = groups.get(step)

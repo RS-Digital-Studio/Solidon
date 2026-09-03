@@ -203,6 +203,17 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
   zugänglicher Beschreibung. Körper und Schritt stehen sichtbar an der Zeile.
   Der Klick zeigt beide, aber keine Merkmalskarte einer Stelle, die nicht mehr
   existiert. Der Kerntext bleibt kanalneutral; nur das Panel nennt den Klick.
+- **Und der Objektbaum bündelt nach derselben Regel wie der Prüfbericht.**
+  Gleichnamige *erkannte* Merkmale stehen ab `BUNDLE_FROM` unter einem
+  zugeklappten Dach („Hohlkehle (17)"), die Maßspalte bleibt dort leer — ein
+  Dach über siebzehn Radien hat kein Maß. Was aus einem Baustein kam, gruppiert
+  weiter nach seinem Schritt; die zwei Dächer schließen einander nicht aus.
+  Gemessen an `build_tray_v3.step`: 234 erkannte Merkmale, rund fünfzig
+  sichtbare Zeilen „Hohlkehle R13,98 mm" untereinander, die die linke Spalte
+  füllten und Parameter und Verlauf hinausdrückten. Der Bericht daneben zeigte
+  dieselbe Menge längst als eine Zeile. `_restore` klappt das Dach auf, wenn
+  das gewählte Merkmal darin liegt — sonst wäre ein Klick im Viewport auf eine
+  Verrundung wieder ins Leere gegangen.
 - **Kurzlebige Warnungsmarken sind semantischer Ansichts-Zustand.** Ring und
   Beschriftung im nativen Renderer sind nur die Darstellung. Baut eine
   Analysekarte dieselbe Auswertung neu auf, werden beide aus Punkt, Text und

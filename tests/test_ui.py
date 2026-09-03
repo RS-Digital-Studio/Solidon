@@ -38,7 +38,14 @@ from app.core.registry import REGISTRY, catalogue_operations
 from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
-from app.core.types import MaterialSlot, Parameter, Profile, SceneObject, SlotOverride
+from app.core.types import (
+    Feature,
+    MaterialSlot,
+    Parameter,
+    Profile,
+    SceneObject,
+    SlotOverride,
+)
 from app.i18n import tr
 from app.ui import main_window as main_window_module
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
@@ -11904,3 +11911,57 @@ def test_the_marked_row_is_the_emphasised_candidate(
     mehrdeutig.setData(Qt.ItemDataRole.UserRole, "face_1")
     window._emphasise_candidate(mehrdeutig, None)
     assert gezeigt[-1] is None, "zwei Fundorte, eine Frage — keiner wird betont"
+
+
+def test_many_features_of_one_kind_stand_under_one_roof(window: MainWindow) -> None:
+    """Eine STEP-Datei bringt Dutzende gleichnamige Verrundungen mit.
+
+    Gemessen an ``build_tray_v3.step`` (03.09.2026): 234 erkannte Merkmale,
+    davon rund fünfzig sichtbare Zeilen „Hohlkehle R13,98 mm" untereinander.
+    Der Prüfbericht daneben bündelt dieselbe Menge längst zu einer Zeile; der
+    Objektbaum tat es nur für Merkmale aus einem Baustein.
+
+    Gebaut wird die Merkmalsmenge hier von Hand: Geprüft wird die **Anzeige**,
+    nicht die Erkennung — und kein Modell des Korpus hat vier gleichnamige.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+
+    fillets = {
+        f"fillet_{index}": Feature(
+            id=f"fillet_{index}",
+            kind="fillet",
+            params={"radius": 13.98, "recess": True},
+            provenance="detected",
+        )
+        for index in range(6)
+    }
+    einzeln = next(iter(entry.features.values()))
+    entry = dataclasses.replace(entry, features={**fillets, einzeln.id: einzeln})
+    result = dataclasses.replace(
+        result, scene=dataclasses.replace(result.scene, objects={object_id: entry})
+    )
+
+    tree = window.object_tree
+    tree.show_scene(result, window.session.project.document)
+    top = tree.tree.topLevelItem(0)
+    assert top is not None
+    top.setExpanded(True)
+    kinder = [top.child(index) for index in range(top.childCount())]
+    beschriftungen = [kind.text(0) for kind in kinder if kind is not None]
+
+    dach = next((kind for kind in kinder if kind is not None and "(6)" in kind.text(0)), None)
+    assert dach is not None, f"sechs gleichnamige Merkmale, kein Dach darüber: {beschriftungen}"
+    assert dach.childCount() == 6, "unter dem Dach stehen alle sechs"
+    assert not dach.isExpanded(), "zugeklappt — sonst wäre nichts gewonnen"
+    assert len(beschriftungen) == 2, (
+        f"ein Dach und das einzelne Merkmal, sonst nichts: {beschriftungen}"
+    )
+    assert dach.toolTip(0) and dach.data(0, Qt.ItemDataRole.AccessibleDescriptionRole), (
+        "Regel 18: der Hinweis steht auch für den Bildschirmleser da"
+    )
+
+    tree.select_feature(object_id, "fillet_3")
+    assert dach.isExpanded(), "wer ein Merkmal darin wählt, sieht es"
