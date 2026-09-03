@@ -111,6 +111,43 @@ class TranslateParams(BaseParams):
     )
 
 
+def _too_small_to_print(mesh: object, profile: object) -> list[Finding]:
+    """Sagt, wenn nach dem Skalieren nichts Druckbares übrig ist.
+
+    Für „zu groß" gibt es ``arrange.out_of_build_volume``; die Gegenrichtung
+    hatte niemanden. Gemessen beim Durchfahren der Schieber über ihren ganzen
+    Bereich: ``scale_object`` mit dem Faktor 0,001 und ``fit_to_size`` mit
+    0,1 mm machen aus einem Halter ein Teil von Hundertstelmillimetern —
+    Volumen 0,0 in der Anzeige, **kein einziger Befund**, und im Verlauf steht
+    ein Schritt, der etwas getan zu haben scheint.
+
+    Die Grenze kommt aus dem Profil und nicht aus dem Code (Regel 7):
+    ``smallest_printable_volume`` ist ein Stück Extrusionsbahn von einer
+    Bahnbreite Länge — am Centauri mit 0,4er Düse sind das 0,035 mm³. Was
+    darunter liegt, hinterlässt dieser Drucker nicht, und an einer 0,8er Düse
+    ist die Antwort eine andere.
+
+    Ein Hinweis und keine Absage: Wer ein Modell absichtlich klein rechnet, um
+    es später wieder zu vergrößern, tut nichts Verbotenes — er soll nur wissen,
+    dass dabei gerade kein Teil mehr steht.
+    """
+    volume = getattr(mesh, "volume", None)
+    limit = getattr(profile, "smallest_printable_volume", None)
+    if volume is None or limit is None or volume >= limit:
+        return []
+    return [
+        Finding(
+            code="transform.below_printable",
+            severity="warning",
+            message=_(
+                "Der Körper ist danach kleiner als das, was dieser Drucker "
+                "hinterlässt. Gedruckt entstünde daraus nichts."
+            ),
+            values={"volume_mm3": round(float(volume), 6)},
+        )
+    ]
+
+
 def _stood_still(matrix: object) -> list[Finding]:
     """Eine Transformation, die den Körper stehen lässt, sagt es.
 
@@ -340,7 +377,7 @@ def scale_object(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=scaled)],
         transform=as_transform(matrix),
-        findings=_stood_still(matrix),
+        findings=[*_stood_still(matrix), *_too_small_to_print(scaled, ctx.profile)],
     )
 
 
@@ -396,8 +433,9 @@ def fit_to_size(ctx: OpContext) -> OpResult:
     factor = params.largest / current
     pivot = anchor_point(body, cast(Anchor, params.about))
     matrix = scaling((factor, factor, factor), pivot)
+    fitted = apply(body, matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=apply(body, matrix))],
+        outputs=[dataclasses.replace(source, mesh=fitted)],
         transform=as_transform(matrix),
         findings=[
             Finding(
@@ -406,7 +444,8 @@ def fit_to_size(ctx: OpContext) -> OpResult:
                 message=_("Auf Maß gebracht."),
                 values={"from_mm": round(current, 3), "to_mm": params.largest},
                 source="internal",
-            )
+            ),
+            *_too_small_to_print(fitted, ctx.profile),
         ],
     )
 

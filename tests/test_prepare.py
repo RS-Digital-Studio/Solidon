@@ -1576,3 +1576,84 @@ def test_a_bore_that_stays_recognisable_keeps_its_name(
     assert bores[0] in changed.features, "die vergrößerte Bohrung behält ihren Namen"
     codes = [entry.code for entry in result.scene.report.findings]
     assert "resize_hole.feature_lost" not in codes, codes
+
+
+def test_scaling_below_what_the_printer_leaves_says_so(
+    document: Document, profile: Profile
+) -> None:
+    """Für „zu groß" gibt es einen Befund, für „zu klein" gab es keinen.
+
+    Gemessen beim Durchfahren der Zahlenschieber über ihren ganzen Bereich:
+    ``scale_object`` mit dem Faktor 0,001 macht aus einem Quader von 60 × 40 ×
+    10 mm ein Teil von Hundertstelmillimetern — Volumen 0,0 in der Anzeige,
+    **kein einziger Befund**, und im Verlauf steht ein Schritt, der etwas
+    getan zu haben scheint. ``arrange.out_of_build_volume`` deckt die andere
+    Richtung ab; diese hatte niemanden.
+
+    Die Grenze kommt aus dem Profil und nicht aus dem Code (Regel 7):
+    ``smallest_printable_volume`` ist ein Stück Extrusionsbahn von einer
+    Bahnbreite Länge, am Centauri mit 0,4er Düse 0,035 mm³.
+    """
+    history = History(document)
+    history.apply(
+        _("Quader"),
+        [OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        _("Winzig"),
+        [OperationDraft(op="scale_object", inputs=("obj_1",), params={"factor": 0.001})],
+    )
+    result = evaluate(document, profile)
+
+    assert result.complete, "ein Hinweis, keine Absage"
+    body = result.scene.objects["obj_1"]
+    assert body.mesh.volume < profile.smallest_printable_volume, (
+        "sonst prüft dieser Test einen Körper, den der Drucker sehr wohl hinterlässt"
+    )
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "transform.below_printable" in codes, codes
+
+
+def test_a_scale_that_still_prints_stays_quiet(document: Document, profile: Profile) -> None:
+    """Die Gegenprobe: Wer halb so groß rechnet, bekommt keine Warnung.
+
+    Ohne sie wäre der Test darüber auch dann grün, wenn *jede* Verkleinerung
+    warnte — und eine Warnung, die immer kommt, liest niemand mehr.
+    """
+    history = History(document)
+    history.apply(
+        _("Quader"),
+        [OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        _("Halb"),
+        [OperationDraft(op="scale_object", inputs=("obj_1",), params={"factor": 0.5})],
+    )
+    result = evaluate(document, profile)
+
+    assert result.complete
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "transform.below_printable" not in codes, codes
+
+
+def test_fitting_to_a_size_below_the_nozzle_says_so(document: Document, profile: Profile) -> None:
+    """Derselbe Fall über *Auf Maß bringen*, das eigene Schema-Minimum 0,1 mm.
+
+    Beide Wege enden in derselben Rechnung, und beide hatten dieselbe Lücke —
+    ein Befund an nur einem von ihnen wäre die halbe Antwort.
+    """
+    history = History(document)
+    history.apply(
+        _("Quader"),
+        [OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        _("Auf Maß"),
+        [OperationDraft(op="fit_to_size", inputs=("obj_1",), params={"largest": 0.1})],
+    )
+    result = evaluate(document, profile)
+
+    assert result.complete
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "transform.fitted" in codes, "die Operation sagt weiterhin, was sie tat"
+    assert "transform.below_printable" in codes, codes
