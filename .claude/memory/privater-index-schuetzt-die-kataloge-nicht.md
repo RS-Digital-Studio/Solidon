@@ -24,9 +24,20 @@ so lautet, findet einen Commit, der von etwas anderem handelt.
 
 **How to apply:** Die Zeilenzahl im `git diff --cached` **vor** dem Commit
 gegen die eigene Erwartung halten — bei den Katalogen ist eine Abweichung die
-Regel, nicht die Ausnahme. Wer nur den eigenen Eintrag will, baut den Blob aus
-`git show HEAD:app/i18n/locales/<sprache>.json` plus der eigenen Zeile, wie bei
-[[blob-commit-verliert-den-wettlauf]] beschrieben. Wer es mitnimmt, sagt es
+Regel, nicht die Ausnahme.
+
+**Und dann den Blob bauen statt den Dateistand zu nehmen** (3d-druck-7f,
+03.09.2026, seitdem bei zwei Sitzungen in Gebrauch):
+
+    git show HEAD:app/i18n/locales/<sprache>.json   → eigene Zeilen einfügen
+    git hash-object -w --path <pfad>                → git update-index --cacheinfo
+
+Dann liegt im Commit genau der eigene Anteil, auch wenn im Baum fünf fremde
+Zeilen stehen. Der Beleg: Ihr Commit danach trug **null** Katalogzeilen, weil
+der eigene Teil schon über fremde Commits draußen war — und genau das sollte er
+zeigen. Dasselbe Verfahren wie bei
+[[blob-commit-verliert-den-wettlauf]], nur hier für die Datei, bei der es fast
+immer nötig ist. Wer es mitnimmt, sagt es
 denen, deren Zeilen es waren — sie sehen sonst einen leeren Katalogteil in
 ihrem eigenen Diff und halten ihn für verloren.
 
