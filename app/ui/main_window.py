@@ -44,6 +44,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QInputDialog,
     QLabel,
+    QListWidgetItem,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -1335,6 +1336,8 @@ class MainWindow(QMainWindow):
         ``_on_scene``). Ein zweiter Durchlauf mitten im ersten räumt Listen,
         die gerade befüllt werden."""
         self._pending_scene: EvaluationResult | None = None
+        self._ask_candidates: tuple[tuple[str, str], ...] = ()
+        """Die Kandidaten der offenen Rückfrage (§21.3) — leer, wenn keine offen ist."""
         """Das Ergebnis, das während des Aufbaus hereinkam — nachgeholt, sobald
         er fertig ist."""
 
@@ -10160,12 +10163,55 @@ class MainWindow(QMainWindow):
         self.middle_stack.setVisible(True)
 
     def _on_ask(self, request: AskRequest) -> None:
-        """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3)."""
+        """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3).
+
+        **Und die Kandidaten stehen dabei hervorgehoben in der Ansicht.** Der
+        Bauplan verlangt es wörtlich, gebaut war es bis zum 03.09.2026 nicht:
+        Wer eine Projektdatei öffnete, deren Verweis mehrdeutig geworden war,
+        bekam ``hole_1``, ``hole_2``, ``hole_3`` zur Wahl und sollte zwischen
+        Bohrungen entscheiden, die er nicht sieht. Die Auskunft lag im Kern
+        bereit (``orphans.candidates_of``) und wurde nie abgerufen.
+
+        Die markierte Zeile wandert mit: Was gleich die Antwort wäre, leuchtet
+        deckender als die übrigen. Steht dieselbe Kennung an mehreren Körpern
+        — der Fall der Skizzenebene, die auf jeder Fläche zu Hause sein darf —,
+        wird keine betont, denn die Frage entscheidet dort über die Kennung
+        und nicht über den Fundort.
+        """
         dialog = AskDialog(request.question, request.choices, self)
-        if dialog.exec() == AskDialog.DialogCode.Accepted:
-            request.reply(dialog.chosen())
-        else:
-            request.reply(None)
+        self._ask_candidates = tuple(request.candidates)
+        if self._ask_candidates:
+            self.viewport.show_candidates(self._ask_candidates)
+            dialog.list.currentItemChanged.connect(weak_slot(self, MainWindow._emphasise_candidate))
+            self._emphasise_candidate(dialog.list.currentItem(), None)
+        try:
+            if dialog.exec() == AskDialog.DialogCode.Accepted:
+                request.reply(dialog.chosen())
+            else:
+                request.reply(None)
+        finally:
+            # Auch bei Abbruch und auch, wenn der Dialog wirft: Was ohne offene
+            # Frage leuchtet, leuchtet ohne Anlass. Der Kern nimmt seine Ansage
+            # ebenfalls zurück, aber die erreicht nur die nächste Frage — das
+            # Bild gehört dem Fenster.
+            if self._ask_candidates:
+                self.viewport.show_candidates()
+                self._ask_candidates = ()
+
+    def _emphasise_candidate(self, current: object, _previous: object) -> None:
+        """Die markierte Zeile bekommt die deckendere Hervorhebung.
+
+        Zwei Argumente, weil ``currentItemChanged`` zwei sendet: Qt verbindet,
+        was von der Stelligkeit passt, und ein Slot mit einem Argument bekäme
+        hier stillschweigend das falsche.
+        """
+        chosen = ""
+        if isinstance(current, QListWidgetItem):
+            chosen = str(current.data(Qt.ItemDataRole.UserRole) or "")
+        matching = [pair for pair in self._ask_candidates if pair[1] == chosen]
+        self.viewport.show_candidates(
+            self._ask_candidates, matching[0] if len(matching) == 1 else None
+        )
 
     def _on_error(self, error: AppError) -> None:
         """§33.1: ein Fehler des Nutzers sieht anders aus als ein Fehler im

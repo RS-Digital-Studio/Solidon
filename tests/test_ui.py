@@ -11817,3 +11817,90 @@ def test_the_view_settings_are_still_there_after_a_restart(qt_app: QApplication)
     assert [a.data() for a in zweites._projection_group.actions() if a.isChecked()] == [
         "orthographic"
     ]
+
+
+def test_the_candidates_are_lit_while_the_question_stands(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§21.3 wörtlich: die Kandidaten stehen hervorgehoben da.
+
+    Bis zum 03.09.2026 fehlte genau das. Wer eine Projektdatei öffnete, deren
+    Merkmalsverweis mehrdeutig geworden war, bekam ``hole_1``, ``hole_2``,
+    ``hole_3`` zur Wahl und sollte zwischen Bohrungen entscheiden, die er
+    nicht sieht. Die Auskunft lag im Kern bereit und wurde nie abgerufen.
+    """
+    from app.ui.dialogs import AskDialog
+    from app.ui.session import AskRequest
+
+    gezeigt: list[tuple[tuple[tuple[str, str], ...], object]] = []
+    monkeypatch.setattr(
+        window.viewport,
+        "show_candidates",
+        lambda candidates=(), emphasis=None: gezeigt.append((tuple(candidates), emphasis)),
+    )
+    monkeypatch.setattr(AskDialog, "exec", lambda self: AskDialog.DialogCode.Accepted)
+
+    request = AskRequest(
+        question="Welches Merkmal ist gemeint?",
+        choices=["hole_1", "hole_2"],
+        candidates=(("obj_1", "hole_1"), ("obj_1", "hole_2")),
+    )
+    window._on_ask(request)
+
+    assert gezeigt, "während der Frage leuchtet etwas"
+    erste = gezeigt[0][0]
+    assert erste == (("obj_1", "hole_1"), ("obj_1", "hole_2"))
+    assert gezeigt[-1] == ((), None), "und nach der Antwort ist es weg"
+    assert request.answer == "hole_1"
+
+
+def test_nothing_is_lit_for_a_question_without_candidates(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Einheitenfrage beim Einlesen hat keine Kandidaten — und leuchtet nicht."""
+    from app.ui.dialogs import AskDialog
+    from app.ui.session import AskRequest
+
+    gezeigt: list[object] = []
+    monkeypatch.setattr(
+        window.viewport,
+        "show_candidates",
+        lambda candidates=(), emphasis=None: gezeigt.append(candidates),
+    )
+    monkeypatch.setattr(AskDialog, "exec", lambda self: AskDialog.DialogCode.Rejected)
+
+    window._on_ask(AskRequest(question="Millimeter oder Zoll?", choices=["mm", "in"]))
+
+    assert gezeigt == [], "ohne Kandidaten wird die Ansicht nicht angefasst"
+
+
+def test_the_marked_row_is_the_emphasised_candidate(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was gleich die Antwort wäre, leuchtet deckender als die übrigen.
+
+    Und wo dieselbe Kennung an mehreren Körpern steht — die Skizzenebene, die
+    auf jeder planaren Fläche zu Hause sein darf —, wird keine betont: Die
+    Frage entscheidet dort über die Kennung, nicht über den Fundort.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QListWidgetItem
+
+    gezeigt: list[object] = []
+    monkeypatch.setattr(
+        window.viewport,
+        "show_candidates",
+        lambda candidates=(), emphasis=None: gezeigt.append(emphasis),
+    )
+
+    window._ask_candidates = (("obj_1", "face_1"), ("obj_2", "face_1"), ("obj_1", "face_2"))
+
+    eindeutig = QListWidgetItem("face_2")
+    eindeutig.setData(Qt.ItemDataRole.UserRole, "face_2")
+    window._emphasise_candidate(eindeutig, None)
+    assert gezeigt[-1] == ("obj_1", "face_2")
+
+    mehrdeutig = QListWidgetItem("face_1")
+    mehrdeutig.setData(Qt.ItemDataRole.UserRole, "face_1")
+    window._emphasise_candidate(mehrdeutig, None)
+    assert gezeigt[-1] is None, "zwei Fundorte, eine Frage — keiner wird betont"
