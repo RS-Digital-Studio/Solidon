@@ -415,6 +415,25 @@ def test_the_written_pages_come_first() -> None:
     assert max(written) < min(generated)
 
 
+def test_no_two_chapters_share_a_title() -> None:
+    """Zwei Kapitel desselben Namens sind im Verzeichnis eine Frage.
+
+    Die geschriebene Seite über die erkannten Merkmale hieß zuerst
+    „Merkmale" — und die Registerkategorie ``holes`` heißt ebenso, sie führt
+    die Operationen dazu. Auf der erzeugten Seite standen damit zwei Einträge
+    „Merkmale" untereinander, jeder mit eigenem Anker, und wer den falschen
+    anklickte, landete in einer Operationsliste statt in der Erklärung.
+
+    Geprüft wird über **alle** Seiten und nicht nur die geschriebenen: Der
+    Zusammenstoß entsteht gerade zwischen den beiden Sorten, und ein
+    Kategorietitel ändert sich, ohne dass jemand an das Handbuch denkt.
+    """
+    titles = [str(page.title) for page in manual.pages()]
+    twice = sorted({title for title in titles if titles.count(title) > 1})
+
+    assert not twice, "diese Kapitelnamen gibt es doppelt: " + ", ".join(twice)
+
+
 def test_no_page_is_empty() -> None:
     for page in manual.pages():
         assert str(page.title).strip(), page.key

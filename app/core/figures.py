@@ -89,7 +89,7 @@ class Figure:
 
 
 def _window(theme: Theme) -> str:
-    """Das Fensterschema aus §2.5 — drei Zonen, nicht sechs."""
+    """Das Fensterschema aus §2.5 — vier Bereiche, nicht sechs."""
     canvas = Canvas(600, 330, theme)
     colours = canvas.colours
     canvas.background()
@@ -97,37 +97,45 @@ def _window(theme: Theme) -> str:
     canvas.box(10, 10, 580, 26, fill=colours.fill)
     canvas.label(20, 28, str(_("Werkzeugleiste")), size=11)
 
-    labels = (_("Objektbaum"), _("Parameter"), _("Verlauf"))
+    # Vier Abschnitte, nicht drei: *Filamente* ist der vierte und steht
+    # zugeklappt da. Die Höhen sind an die Zahl gebunden — wer einen fünften
+    # hinzunimmt, verteilt hier neu, statt unten aus dem Bild zu laufen.
+    labels = (_("Objekte"), _("Parameter"), _("Verlauf"), _("Filamente"))
     for index, title in enumerate(labels):
-        top = 46 + index * 62
-        canvas.box(10, top, 150, 54, fill=colours.fill)
-        canvas.label(20, top + 22, str(title), size=11, bold=True)
-        for row in range(2):
-            canvas.line(
-                20,
-                top + 34 + row * 10,
-                120 - row * 24,
-                top + 34 + row * 10,
-                stroke=colours.muted,
-                weight=2.0,
-            )
+        top = 46 + index * 51
+        canvas.box(10, top, 140, 43, fill=colours.fill)
+        canvas.label(20, top + 18, str(title), size=11, bold=True)
+        canvas.line(20, top + 30, 120, top + 30, stroke=colours.muted, weight=2.0)
 
-    canvas.box(170, 46, 260, 202, stroke=colours.accent, weight=2.0)
+    canvas.box(158, 46, 214, 202, stroke=colours.accent, weight=2.0)
     canvas.label(
-        300, 140, str(_("Viewport")), anchor="middle", size=13, bold=True, colour=colours.accent
+        265, 140, str(_("Viewport")), anchor="middle", size=13, bold=True, colour=colours.accent
     )
     # Mittig wie das ``Viewport``-Wort darüber — beide teilen die x-Mitte.
-    canvas.caption(300, 158, str(_("das Modell, immer sichtbar")), size=10, anchor="middle")
+    canvas.caption(265, 158, str(_("das Modell, immer sichtbar")), size=10, anchor="middle")
 
-    canvas.box(440, 46, 150, 202, fill=colours.fill, dashed=True)
-    canvas.label(515, 76, str(_("Chat")), anchor="middle", size=11, bold=True)
-    canvas.label(515, 96, str(_("oder")), anchor="middle", size=10, colour=colours.muted)
-    canvas.label(515, 116, str(_("Prüfbericht")), anchor="middle", size=11, bold=True)
+    canvas.box(380, 46, 104, 202, fill=colours.fill, dashed=True)
+    canvas.label(432, 76, str(_("Prüfbericht")), anchor="middle", size=10, bold=True)
+    canvas.label(432, 94, str(_("oder")), anchor="middle", size=9, colour=colours.muted)
+    canvas.label(432, 112, str(_("Chat")), anchor="middle", size=10, bold=True)
     canvas.wrapped(
-        515,
-        146,
-        str(_("Umschaltbar und ganz ausblendbar")),
-        width=18,
+        432,
+        136,
+        str(_("Zwei Reiter, ganz ausblendbar")),
+        width=14,
+        anchor="middle",
+        colour=colours.muted,
+    )
+
+    # Das Merkmalsfenster ist ein eigenes Dock: ganz außen und über die volle
+    # Höhe, nicht unter dem Prüfbericht. Es steht hier, weil es dort steht.
+    canvas.box(492, 46, 98, 202, fill=colours.fill)
+    canvas.label(541, 76, str(_("Merkmal")), anchor="middle", size=10, bold=True)
+    canvas.wrapped(
+        541,
+        98,
+        str(_("Maße der gewählten Stelle, abziehbar")),
+        width=13,
         anchor="middle",
         colour=colours.muted,
     )
@@ -141,12 +149,17 @@ def _window(theme: Theme) -> str:
     # und keine Katalogprüfung hätte es gemeldet: Der Text wird **gerendert**
     # und nicht übersetzt. Wer ein Werkzeug hinzunimmt oder streicht, sieht
     # hier nach; die Reihenfolge ist die der Leiste.
-    canvas.box(170, 254, 260, 24, fill=colours.fill)
-    canvas.label(
-        180,
-        270,
+    # Zweizeilig, seit die Ansicht schmaler ist: einzeilig lief die Zeile über
+    # den Rand ihres Kastens hinaus, und zwar nur in der Zeichnung.
+    canvas.box(158, 250, 214, 30, fill=colours.fill)
+    canvas.wrapped(
+        265,
+        262,
         str(_("Schnitt · Messen · Bewegen · Analyse · Schichten · Explosion · Trennen")),
+        width=36,
         size=7,
+        line_height=9,
+        anchor="middle",
     )
 
     canvas.box(10, 288, 580, 26, fill=colours.fill)
@@ -1096,12 +1109,13 @@ FIGURES: Final[tuple[Figure, ...]] = (
     Figure(
         key="window",
         alt=_(
-            "Das Fenster: oben die Werkzeugleiste, links Objektbaum, Parameter und "
-            "Verlauf untereinander, in der Mitte der Viewport mit dem Modell und "
-            "darunter die Werkzeugzeile, rechts wahlweise Chat oder Prüfbericht, unten "
-            "die Statusleiste."
+            "Das Fenster: oben die Werkzeugleiste, links Objekte, Parameter, Verlauf "
+            "und Filamente untereinander, in der Mitte der Viewport mit dem Modell und "
+            "darunter die Werkzeugzeile, daneben wahlweise Prüfbericht oder Chat und "
+            "ganz rechts über die volle Höhe das Fenster „Merkmal“, unten die "
+            "Statusleiste."
         ),
-        caption=_("Drei Zonen, keine Betriebsarten. Rechts lässt sich ganz ausblenden."),
+        caption=_("Vier Bereiche, keine Betriebsarten. Rechts lässt sich ganz ausblenden."),
         build=_window,
     ),
     Figure(
