@@ -98,3 +98,20 @@ Kollisionen; er ist eine zweite Maschine, die man sonst nicht hat.
 Verwandt: [[gemessene-frage-ist-nicht-die-gestellte]],
 [[bekannte-familie-erklaert-nicht-den-ausloeser]],
 [[parallele-sitzung-im-arbeitsbaum]], [[messwerkzeug-misst-sich-selbst]].
+
+**Und die schärfste Gestalt: `HEAD` bedeutet zwischen zwei Messungen etwas
+anderes.** Am 04.09.2026 wollte 81 belegen, dass eine Zeile auf HEAD fehlte
+und der Wächter dort rot war. Zwei saubere Läufe, die sich widersprachen:
+
+    erste Messung:  git show HEAD:<datei>   → Zeile fehlt      (HEAD war b02a2110)
+    zweite Messung: Worktree auf HEAD       → Wächter grün     (HEAD war fd2c852f)
+
+Dazwischen lag mein Commit. 81 hätte daraus fast geschlossen, die Zeile sei
+Kosmetik gewesen — der Beleg war in Wahrheit meine Behebung, gemessen unter
+demselben Namen. **Hier lag nichts Ungestagtes im Weg; der Fehler war der Name
+selbst.** Ein Worktree „auf HEAD" ist kein Vergleichsstand, sondern ein
+Schnappschuss des Augenblicks, in dem er entsteht.
+
+Wer zwei Messungen gegeneinander stellt, hält den Stand fest, statt ihn zu
+benennen — `git rev-parse HEAD` vor jeder und beide Hashes danebengelegt.
+Unterscheiden sie sich, vergleicht man nicht zwei Läufe, sondern zwei Tage.
