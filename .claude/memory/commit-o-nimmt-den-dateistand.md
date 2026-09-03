@@ -287,3 +287,42 @@ geschrieben, die Notiz benenne das falsche Werkzeug (`-o` statt `add`), und
 deshalb habe sie nicht gegriffen. Sie benennt beide. Eine Notiz für ungenau zu
 erklären, die man nicht gelesen hat, ist die bequemere von zwei Erklärungen —
 und sie hätte die Notiz verschlechtert.
+
+
+## Fünfter Fall: die Kette stimmte, die Prüfung nicht (03.09.2026, zwei Stunden später)
+
+`56c2a559` nahm zwei Registerpunkte einer Nachbarsitzung mit — und diesmal lief
+**alles richtig, was beim vierten Fall falsch gelaufen war**: die ganze Kette in
+einem Aufruf, `read-tree HEAD`, ein HEAD-Vergleich unmittelbar vor dem Commit.
+Der Index war keine Sekunde alt.
+
+**Er war auch nicht das Problem.** `git add -- ROADMAP.md` nimmt den
+Dateistand, und in der Datei lagen zwei fremde Absätze, die zwei Minuten vorher
+dazugekommen waren. Die Kette in einem Aufruf schützt gegen einen alternden
+Index; gegen den Dateistand schützt sie nichts.
+
+Was dagegen geschützt hätte, stand im selben Befehl — als `echo`:
+
+    IST=$(git diff --cached HEAD --numstat) && echo "gemessen: $IST" && …commit
+
+85 Zeilen für einen Registerpunkt sahen plausibel aus. Sie waren es auch — nur
+gehörten davon rund vierzig jemand anderem. **Eine Zahl ohne vorher genannte
+Erwartung ist eine Anzeige und keine Prüfung**, und dieser Satz steht seit dem
+30.08.2026 in dieser Notiz, drei Absätze weiter oben.
+
+Daraus die vollständige Regel, weil jede Hälfte für sich nicht reicht:
+
+| Gefahr | Gegenmittel |
+|---|---|
+| Der Index altert zwischen zwei Aufrufen | die ganze Kette in **einem** Aufruf |
+| Die Datei trägt fremde Zeilen | die **Sollprobe mit vorher genannter Zahl** |
+| Ein Blob trägt den Stand seines Zeitpunkts | `git diff` **vor** dem Zurückschreiben |
+
+Und für die drei Dateien, an denen jede Sitzung anhängt — `ROADMAP.md`,
+`MEMORY.md`, die fünf Sprachkataloge — gibt es einen Weg, der alle drei
+Gefahren zugleich umgeht: **die eigene Änderung als Skript schreiben und auf
+`git show HEAD:<datei>` anwenden**, dann den Blob hashen und in den Index
+legen. Was dabei entsteht, ist HEAD plus die eigene Änderung und sonst nichts —
+unabhängig davon, was im Arbeitsbaum liegt. `katalog_blobs.py` aus dieser
+Sitzung ist die Vorlage; an den Katalogen hat es zweimal getragen, an
+`ROADMAP.md` habe ich es nicht angewandt und prompt den fünften Fall gebaut.
