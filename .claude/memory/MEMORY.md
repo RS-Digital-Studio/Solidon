@@ -3,6 +3,7 @@
 ## Diese Maschine
 
 - [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) — in Dokumenten; gehört in den Passwortmanager.
+- [Release-Schlüssel](release-schluessel-fuer-version-json.md) — unterschreibt version.json; ohne ihn wird kein Update angeboten.
 - [MSVC bei VS 18](msvc-erkennung-vs18.md) — setuptools findet ihn nicht; über vcvars64.bat bauen.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Stamm je Domain; meist der SSH-Schalter.
 - [Fusion ist da](zeichnen-an-fusion-orientieren.md) — Skizzeneditor daran messen.
