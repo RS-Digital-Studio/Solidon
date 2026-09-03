@@ -740,6 +740,11 @@ def main() -> int:
     parser.add_argument("--release-evidence", type=Path)
     parser.add_argument("--release-check", action="store_true")
     parser.add_argument("--check", action="store_true")
+    # **Nur ein Name für den Normallauf.** `bump_version.DERIVED` ruft jedes
+    # Werkzeug, das eine abgeleitete Datei schreibt, mit `--files`; ohne diesen
+    # Schalter ließe sich die Beilage dort nicht eintragen, und sie hing nach
+    # jeder Erhöhung hinterher (03.09.2026, zweimal an einem Tag).
+    parser.add_argument("--files", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--write-evidence", action="store_true")
     parser.add_argument(
         "--package",

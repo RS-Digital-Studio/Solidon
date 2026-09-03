@@ -953,6 +953,51 @@ def test_raising_the_version_moves_both_places_and_nothing_else() -> None:
     assert bump_version.PROJECT_LINE.search(project) is not None
 
 
+def test_every_derived_file_names_the_version_that_is_current() -> None:
+    """Was ``bump_version`` nachzieht, steht danach auch auf der neuen Nummer.
+
+    **Zweimal ist eine Datei aus dieser Tabelle gefallen.** Am 23.08.2026 die
+    drei Paketmanifeste — ein Paket, dessen Anwendung 0.1.3 war und dessen
+    Installationsdatei 0.1.2 sagte. Am 03.09.2026 die Lizenzbeilage: Ihr Kopf
+    nennt die Fassung, für die sie erzeugt wurde, und stand nach dem Bump auf
+    0.3.1 noch auf 0.3.0. Der Tag-Lauf war rot — und zwar **nur auf Windows**,
+    weil ``test_licence_notices`` sich auf den anderen Plattformen überspringt.
+    Von Hand nachgezogen, und beim nächsten Bump lief es sofort wieder hinein.
+
+    Beide Male war die Tabelle unvollständig, und beide Male stand die Lehre
+    schon im Docstring des Werkzeugs. Eine aufgeschriebene Lehre schützt nur
+    den, der sie im richtigen Moment liest; dieser Test liest sie bei jedem
+    Lauf.
+
+    **Warum kein Suchlauf über den ganzen Baum.** Der wäre die stärkere Frage
+    („nennt irgendeine Datei noch die alte Nummer?") und fänge auch die fünfte,
+    die niemand kennt. Er braucht aber eine Ausnahmeliste, und die ist größer
+    als der Nutzen: Erinnerungen, ROADMAP, Presseentwürfe, README und
+    Code-Kommentare nennen alte Nummern mit gutem Grund — allein für die
+    Vorgängerversion zwölf Dateien. Ein Wächter, der beim ersten Lauf rot ist,
+    wird abgeschaltet statt befolgt (Hinweis 3d-druck-06).
+    """
+    from app.branding import APP_VERSION
+    from tools import bump_version
+
+    named = [path for paths in bump_version.DERIVED.values() for path in paths]
+    assert named, "die Tabelle ist leer — dann prüft dieser Test nichts"
+
+    stale: list[str] = []
+    for relative in named:
+        path = bump_version.ROOT / relative
+        assert path.is_file(), f"{relative} steht in DERIVED und liegt nicht da"
+        if APP_VERSION not in path.read_text(encoding="utf-8", errors="replace"):
+            stale.append(relative)
+
+    assert not stale, (
+        f"diese abgeleiteten Dateien nennen {APP_VERSION} nicht:\n  "
+        + "\n  ".join(stale)
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/bump_version.py --zeigen "
+        "sagt, welches Werkzeug sie schreibt."
+    )
+
+
 # --- Das Schloss über dem Tor (tools/gate_lock.py) ------------------------------------
 
 #: Kann diese Plattform den Prozessbaum lesen, den ``gate_lock`` braucht?

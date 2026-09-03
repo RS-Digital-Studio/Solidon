@@ -77,6 +77,18 @@ DERIVED: dict[str, tuple[str, ...]] = {
         "packaging/install.sh",
     ),
     "make_macos_package.py": ("packaging/macos-distribution.xml",),
+    # **Die vierte, und sie ist zweimal an einem Tag vergessen worden.** Der
+    # Kopf der Lizenzbeilage nennt die Fassung, für die sie erzeugt wurde. Am
+    # 03.09.2026 stand dort nach dem Bump auf 0.3.1 noch 0.3.0 — der Tag-Lauf
+    # war rot, und zwar nur auf Windows, weil `test_licence_notices` sich auf
+    # den anderen Plattformen überspringt. Von Hand nachgezogen, und beim
+    # nächsten Bump lief es sofort wieder hinein.
+    #
+    # Der Lauf liest die **installierten** Wheels, erzeugt die Datei also für
+    # die Plattform, auf der gebumpt wird. Das ist richtig so: Der Test prüft
+    # sie nur dort, und das Kundenpaket bekommt seine Beilage ohnehin je
+    # Plattform aus der Endartefakt-SBOM (`build.yml`).
+    "make_licence_notices.py": ("THIRD-PARTY-NOTICES.md",),
 }
 
 #: Die Zeile in ``branding.py``, die die Version trägt.
