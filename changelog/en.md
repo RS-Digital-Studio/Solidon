@@ -19,7 +19,7 @@ it into `website/version.json`.
 
 ### Editing recognised features
 
-- Recognised features can now be edited: a hole, a peg, a countersink or a dome can be moved, rotated, resized, duplicated and removed.
+- Recognised features can now be edited: a hole or a peg can be moved, rotated, resized, duplicated and removed — a dome all of that except rotating.
 - The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.
 - A moved hole stays the same hole: every fit that refers to it keeps its reference.
 - Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing.
@@ -31,10 +31,10 @@ it into `website/version.json`.
 - A hole names its standard size — “measures 5.19 mm, the clearance hole for M5” — and says so when none fits.
 - A second hole like the first comes from duplicating it, instead of typing the dimensions again.
 - The Delete key removes the selected feature and no longer the whole body.
-- A double click on a row in the object list opens the step that created it, with its dimensions.
-- Where a moved hole used to be, the material no longer sticks out above and below.
+- A double click on a row in the object list opens what changes it — the matching dialog for a recognised feature, the step with its dimensions for one you built.
+- When a hole is moved, its old position is filled cleanly, with nothing sticking out above or below.
 - A through hole that no longer goes through after being moved says so — and a countersink that would close its hole cannot be moved.
-- Shrinking a hole below the recognition limit brings an explanation instead of a request to file an error report.
+- Shrinking a hole below the recognition limit brings an explanation of why it does not work.
 - On a face, a button leads to the parts catalogue instead of rows that only say what is impossible there.
 ### Moving, rotating and selecting
 
@@ -47,7 +47,6 @@ it into `website/version.json`.
 - On a face the move toolbar offers only what is possible there and gives the reason on the button, not in a message after the click.
 - The *Apply* button is gone: you apply with Enter in the field or by dragging the handle — exactly once, no longer twice.
 - A moved part no longer flicks back to its old position when you let go.
-- A click on a hole hits the hole, even when the move handle lies in front of it.
 - A right click in the object list hits the row you are pointing at, not the two above it.
 ### View and object tree
 
@@ -103,14 +102,13 @@ it into `website/version.json`.
 - The printing notice gives advice instead of pointing to clause numbers of the licence agreement.
 ### Messages, buttons and information
 
-- Nine locked buttons in seven windows now say on the button what they are missing — by mouse, by keyboard and for a screen reader.
-- Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Remove* when adding filament.
+- Twelve locked buttons in nine windows now say on the button what they are missing — by mouse, by keyboard and for a screen reader.
+- Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Create* in the model dialog.
 - Refusals no longer end with the sentence alone, but with the way out.
 - An unexpected error is explained in the language you have set, instead of reciting an internal English text.
 - The About dialog names who is behind Solidon and who answers feedback.
 - A link to an older release leads to the current one instead of an error page.
-- The shortcuts window shows every entry again, including the renamed *Fit to view*.
-- The Windows installation now completes where it used to abort with “corrupt file”; in return the setup file is 23 megabytes larger.
+- The Windows installation now completes on machines where it used to abort with “corrupt file”; in return the setup file is 23 megabytes larger.
 ### Chat and model support
 
 - If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.

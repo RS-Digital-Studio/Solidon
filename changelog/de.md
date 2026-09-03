@@ -44,7 +44,7 @@ Nutzen da und sonst nichts.
 
 ### Erkannte Merkmale bearbeiten
 
-- Erkannte Merkmale lassen sich bearbeiten: Eine Bohrung, ein Zapfen, eine Senkung oder eine Kuppel lässt sich verschieben, drehen, in der Größe ändern, verdoppeln und entfernen.
+- Erkannte Merkmale lassen sich bearbeiten: Eine Bohrung oder ein Zapfen lässt sich verschieben, drehen, in der Größe ändern, verdoppeln und entfernen — eine Kuppel alles davon außer Drehen.
 - Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.
 - Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.
 - Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen.
@@ -56,10 +56,10 @@ Nutzen da und sonst nichts.
 - Eine Bohrung nennt ihre Normgröße — „misst 5,19 mm, das Durchgangsloch für M5“ — und sagt auch, wenn keine passt.
 - Eine zweite Bohrung wie die erste entsteht durch Verdoppeln, statt Maße von Hand nachzutippen.
 - Die Entf-Taste entfernt das gewählte Merkmal und nicht mehr den ganzen Körper.
-- Ein Doppelklick auf eine Zeile der Objektliste öffnet den Schritt, der sie erzeugt hat, mit seinen Maßen.
-- An der alten Stelle einer verschobenen Bohrung steht das Material nicht mehr oben und unten über.
+- Ein Doppelklick auf eine Zeile der Objektliste öffnet, was sie ändert — bei einem erkannten Merkmal den passenden Dialog, bei einem selbst erzeugten den Schritt mit seinen Maßen.
+- Beim Versetzen einer Bohrung wird die alte Stelle sauber gefüllt, ohne Überstand oben und unten.
 - Eine durchgehende Bohrung, die nach dem Versetzen nicht mehr durchgeht, sagt es — und eine Senkung, die ihre Bohrung zuziehen würde, lässt sich nicht versetzen.
-- Wer eine Bohrung unter die Erkennungsgrenze verkleinert, bekommt eine Erklärung statt der Aufforderung, einen Fehlerbericht zu schreiben.
+- Wer eine Bohrung unter die Erkennungsgrenze verkleinert, bekommt eine Erklärung, warum das nicht geht.
 - An einer Fläche führt ein Knopf in den Bausteinkatalog, statt Zeilen zu zeigen, die nur sagen, was dort nicht geht.
 ### Bewegen, Drehen und Auswählen
 
@@ -72,7 +72,6 @@ Nutzen da und sonst nichts.
 - Die Bewegen-Leiste bietet an einer Fläche nur an, was dort möglich ist, und nennt den Grund am Knopf statt in einer Meldung nach dem Klick.
 - Der Knopf *Anwenden* ist weg: Angewandt wird mit der Eingabetaste im Feld oder durch Ziehen am Griff — und zwar genau einmal, nicht doppelt.
 - Ein verschobenes Teil springt nach dem Loslassen nicht mehr kurz an die alte Stelle zurück.
-- Ein Klick auf eine Bohrung trifft die Bohrung, auch wenn der Bewegungsgriff davor liegt.
 - Ein Rechtsklick in der Objektliste trifft die Zeile, auf die man zeigt, und nicht die zwei darüber.
 ### Ansicht und Objektbaum
 
@@ -128,14 +127,13 @@ Nutzen da und sonst nichts.
 - Der Druckhinweis gibt einen Rat, statt auf Nummern des Lizenzvertrags zu verweisen.
 ### Meldungen, Knöpfe und Auskunft
 
-- Neun gesperrte Knöpfe in sieben Fenstern nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.
-- Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Entfernen* beim Filament-Anlegen.
+- Zwölf gesperrte Knöpfe in neun Fenstern nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.
+- Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Erzeugen* im Modell-Dialog.
 - Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.
 - Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen.
 - Der Über-Dialog nennt, wer hinter Solidon steht und wer auf eine Rückmeldung antwortet.
 - Ein Link auf eine ältere Fassung führt auf die aktuelle statt auf eine Fehlerseite.
-- Das Kürzelfenster zeigt wieder jeden Eintrag, auch den umbenannten *Einpassen*.
-- Die Windows-Installation läuft auch dort durch, wo sie bisher mit „fehlerhaftes File“ abbrach; die Setup-Datei ist dafür 23 Megabyte größer.
+- Die Windows-Installation läuft auch auf Rechnern durch, auf denen sie bisher mit „fehlerhaftes File“ abbrach; die Setup-Datei ist dafür 23 Megabyte größer.
 ### Chat und Modellunterstützung
 
 - Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.

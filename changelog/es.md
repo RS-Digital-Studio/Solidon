@@ -20,7 +20,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Editar características reconocidas
 
-- Las características reconocidas se pueden editar: un taladro, una espiga, un avellanado o una cúpula se pueden mover, girar, redimensionar, duplicar y quitar.
+- Las características reconocidas se pueden editar: un taladro o una espiga se puede mover, girar, redimensionar, duplicar y quitar; una cúpula todo eso salvo girar.
 - Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.
 - Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.
 - Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio.
@@ -32,10 +32,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un taladro indica su medida normalizada — «mide 5,19 mm, el agujero de paso para M5» — y también avisa cuando ninguna encaja.
 - Un segundo taladro igual al primero se obtiene duplicando, en vez de teclear de nuevo las medidas.
 - La tecla Supr quita la característica seleccionada y ya no el cuerpo completo.
-- Un doble clic en una fila de la lista de objetos abre el paso que la creó, con sus medidas.
-- En el sitio anterior de un taladro desplazado, el material ya no sobresale por arriba ni por abajo.
+- Un doble clic en una fila de la lista de objetos abre lo que la modifica: el diálogo correspondiente en una característica reconocida, el paso con sus medidas en una creada.
+- Al desplazar un taladro, su sitio anterior se rellena limpiamente, sin que nada sobresalga por arriba ni por abajo.
 - Un taladro pasante que tras el desplazamiento ya no atraviesa lo indica, y un avellanado que cerraría su taladro no se puede desplazar.
-- Reducir un taladro por debajo del límite de reconocimiento da una explicación en vez de pedir un informe de error.
+- Reducir un taladro por debajo del límite de reconocimiento da una explicación de por qué no es posible.
 - En una cara, un botón lleva al catálogo de bloques en vez de mostrar filas que solo dicen lo que allí no funciona.
 ### Mover, girar y seleccionar
 
@@ -48,7 +48,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En una cara, la barra de movimiento solo ofrece lo posible allí e indica el motivo en el botón, no en un mensaje tras pulsar.
 - El botón *Aplicar* desaparece: se aplica con Intro en el campo o arrastrando el asa, y exactamente una vez, no dos.
 - Una pieza desplazada ya no salta un instante a su sitio anterior al soltarla.
-- Un clic en un taladro acierta el taladro, aunque el asa de movimiento esté delante.
 - Un clic derecho en la lista de objetos acierta la fila señalada, no las dos de encima.
 ### Vista y árbol de objetos
 
@@ -104,14 +103,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El aviso de impresión da un consejo en vez de remitir a números del contrato de licencia.
 ### Mensajes, botones e información
 
-- Nueve botones bloqueados en siete ventanas indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.
-- Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Quitar* al crear filamento.
+- Doce botones bloqueados en nueve ventanas indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.
+- Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Generar* en el diálogo de modelo.
 - Los rechazos no terminan solo con la frase, sino con la salida.
 - Un error inesperado se explica en el idioma ajustado, en vez de recitar un texto interno en inglés.
 - El diálogo Acerca de indica quién está detrás de Solidon y quién responde a los comentarios.
 - Un enlace a una versión anterior lleva a la actual en lugar de a una página de error.
-- La ventana de atajos vuelve a mostrar todas las entradas, incluida la renombrada *Ajustar a la vista*.
-- La instalación en Windows llega al final también donde antes abortaba con «archivo defectuoso»; a cambio el archivo de instalación es 23 megabytes mayor.
+- La instalación en Windows llega al final también en equipos donde antes abortaba con «archivo defectuoso»; a cambio el archivo de instalación es 23 megabytes mayor.
 ### Chat y compatibilidad con modelos
 
 - Si una referencia a una característica es ambigua, el chat se detiene, resalta los candidatos en la imagen y pregunta, indicando el cuerpo al que pertenece cada uno.

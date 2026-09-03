@@ -19,7 +19,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Editar características reconhecidas
 
-- As características reconhecidas podem ser editadas: um furo, um pino, um escareamento ou uma cúpula pode ser movido, rodado, redimensionado, duplicado e removido.
+- As características reconhecidas podem ser editadas: um furo ou um pino pode ser movido, rodado, redimensionado, duplicado e removido; uma cúpula tudo isso exceto rodar.
 - Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.
 - Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.
 - Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio.
@@ -31,10 +31,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um furo indica a sua medida normalizada — «mede 5,19 mm, o furo de passagem para M5» — e também avisa quando nenhuma serve.
 - Um segundo furo igual ao primeiro obtém-se duplicando, em vez de escrever de novo as medidas.
 - A tecla Del remove a característica selecionada e já não o corpo inteiro.
-- Um duplo clique numa linha da lista de objetos abre o passo que a criou, com as suas medidas.
-- No local anterior de um furo deslocado, o material já não sobressai por cima nem por baixo.
+- Um duplo clique numa linha da lista de objetos abre o que a altera: o diálogo adequado numa característica reconhecida, o passo com as suas medidas numa criada.
+- Ao deslocar um furo, o seu local anterior é preenchido de forma limpa, sem nada a sobressair por cima ou por baixo.
 - Um furo passante que após o deslocamento já não atravessa avisa, e um escareamento que fecharia o seu furo não pode ser deslocado.
-- Reduzir um furo abaixo do limite de reconhecimento dá uma explicação em vez de pedir um relatório de erro.
+- Reduzir um furo abaixo do limite de reconhecimento dá uma explicação do motivo.
 - Numa face, um botão leva ao catálogo de blocos em vez de mostrar linhas que apenas dizem o que ali não é possível.
 ### Mover, rodar e selecionar
 
@@ -47,7 +47,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Numa face, a barra de movimento só oferece o que ali é possível e indica o motivo no botão, não numa mensagem após o clique.
 - O botão *Aplicar* desaparece: aplica-se com Enter no campo ou arrastando a alça, e exatamente uma vez, não duas.
 - Uma peça deslocada já não salta por um instante para a posição anterior ao largar.
-- Um clique num furo acerta no furo, mesmo quando a alça de movimento está à frente.
 - Um clique direito na lista de objetos acerta na linha indicada, e não nas duas acima.
 ### Vista e árvore de objetos
 
@@ -103,14 +102,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O aviso de impressão dá um conselho em vez de remeter para números do contrato de licença.
 ### Mensagens, botões e informação
 
-- Nove botões bloqueados em sete janelas indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.
-- Entre eles *Fatiar* e *Abrir no slicer* sem slicer configurado, *Inserir* no catálogo de blocos e *Remover* ao criar filamento.
+- Doze botões bloqueados em nove janelas indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.
+- Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.
 - As recusas não terminam apenas com a frase, mas com a saída.
 - Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês.
 - O diálogo Acerca indica quem está por trás do Solidon e quem responde ao feedback.
 - Uma ligação para uma versão anterior leva à atual em vez de uma página de erro.
-- A janela de atalhos volta a mostrar todas as entradas, incluindo *Ajustar à vista* renomeada.
-- A instalação em Windows chega ao fim também onde antes abortava com «ficheiro danificado»; em troca, o ficheiro de instalação é 23 megabytes maior.
+- A instalação em Windows chega ao fim também em computadores onde antes abortava com «ficheiro danificado»; em troca, o ficheiro de instalação é 23 megabytes maior.
 ### Chat e apoio de modelos
 
 - Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.

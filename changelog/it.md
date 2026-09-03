@@ -19,7 +19,7 @@ scrive in `website/version.json`.
 
 ### Modificare le caratteristiche riconosciute
 
-- Le caratteristiche riconosciute si possono modificare: un foro, un perno, una svasatura o una cupola si può spostare, ruotare, ridimensionare, duplicare e rimuovere.
+- Le caratteristiche riconosciute si possono modificare: un foro o un perno si può spostare, ruotare, ridimensionare, duplicare e rimuovere; una cupola tutto tranne ruotare.
 - I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.
 - Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.
 - Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio.
@@ -31,10 +31,10 @@ scrive in `website/version.json`.
 - Un foro indica la sua misura normalizzata — «misura 5,19 mm, il foro di passaggio per M5» — e dice anche quando nessuna corrisponde.
 - Un secondo foro come il primo si ottiene duplicando, invece di ridigitare le misure.
 - Il tasto Canc rimuove la caratteristica selezionata e non più l'intero corpo.
-- Un doppio clic su una riga dell'elenco degli oggetti apre il passo che l'ha creata, con le sue misure.
-- Nel punto precedente di un foro spostato, il materiale non sporge più sopra e sotto.
+- Un doppio clic su una riga dell'elenco degli oggetti apre ciò che la modifica: la finestra adatta per una caratteristica riconosciuta, il passo con le sue misure per una creata.
+- Quando un foro viene spostato, il punto precedente viene riempito in modo pulito, senza sporgenze sopra o sotto.
 - Un foro passante che dopo lo spostamento non passa più lo segnala, e una svasatura che chiuderebbe il suo foro non si può spostare.
-- Ridurre un foro sotto il limite di riconoscimento dà una spiegazione invece di chiedere una segnalazione di errore.
+- Ridurre un foro sotto il limite di riconoscimento dà una spiegazione del motivo.
 - Su una faccia, un pulsante porta al catalogo dei blocchi invece di mostrare righe che dicono solo ciò che lì non è possibile.
 ### Spostare, ruotare e selezionare
 
@@ -47,7 +47,6 @@ scrive in `website/version.json`.
 - Su una faccia la barra di spostamento offre solo ciò che è possibile e indica il motivo sul pulsante, non in un messaggio dopo il clic.
 - Il pulsante *Applica* non c'è più: si applica con Invio nel campo o trascinando la maniglia, ed esattamente una volta, non due.
 - Un pezzo spostato non torna più per un istante nella posizione precedente al rilascio.
-- Un clic su un foro colpisce il foro, anche quando la maniglia di spostamento gli sta davanti.
 - Un clic destro nell'elenco degli oggetti colpisce la riga indicata, non le due sopra.
 ### Vista e albero degli oggetti
 
@@ -103,14 +102,13 @@ scrive in `website/version.json`.
 - L'avviso di stampa dà un consiglio invece di rimandare ai numeri del contratto di licenza.
 ### Messaggi, pulsanti e informazioni
 
-- Nove pulsanti bloccati in sette finestre indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.
-- Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Rimuovi* nella creazione del filamento.
+- Dodici pulsanti bloccati in nove finestre indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.
+- Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Crea* nella finestra del modello.
 - I rifiuti non finiscono con la sola frase, ma con la via d'uscita.
 - Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese.
 - La finestra Informazioni indica chi sta dietro a Solidon e chi risponde ai riscontri.
 - Un collegamento a una versione precedente porta a quella attuale invece di una pagina di errore.
-- La finestra delle scorciatoie mostra di nuovo ogni voce, compresa *Adatta alla vista* rinominata.
-- L'installazione su Windows arriva in fondo anche dove prima si interrompeva con «file danneggiato»; in cambio il file di installazione è 23 megabyte più grande.
+- L'installazione su Windows arriva in fondo anche sui computer dove prima si interrompeva con «file danneggiato»; in cambio il file di installazione è 23 megabyte più grande.
 ### Chat e assistenza dei modelli
 
 - Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.

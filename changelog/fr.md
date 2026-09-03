@@ -20,7 +20,7 @@ dans `website/version.json`.
 
 ### Modifier les caractéristiques reconnues
 
-- Les caractéristiques reconnues sont modifiables : un perçage, un tenon, une fraisure ou un dôme peut être déplacé, tourné, redimensionné, dupliqué et retiré.
+- Les caractéristiques reconnues sont modifiables : un perçage ou un tenon peut être déplacé, tourné, redimensionné, dupliqué et retiré ; un dôme tout cela sauf tourner.
 - Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.
 - Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.
 - Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence.
@@ -32,10 +32,10 @@ dans `website/version.json`.
 - Un perçage indique sa taille normalisée — « mesure 5,19 mm, le trou de passage pour M5 » — et signale aussi qu'aucune ne convient.
 - Un second perçage identique au premier s'obtient par duplication, au lieu de retaper les cotes.
 - La touche Suppr retire la caractéristique sélectionnée et non plus le corps entier.
-- Un double clic sur une ligne de la liste des objets ouvre l'étape qui l'a créée, avec ses cotes.
-- À l'ancien emplacement d'un perçage déplacé, la matière ne dépasse plus en haut ni en bas.
+- Un double clic sur une ligne de la liste des objets ouvre ce qui la modifie : la boîte de dialogue adaptée pour une caractéristique reconnue, l'étape avec ses cotes pour une créée.
+- Lors du déplacement d'un perçage, son ancien emplacement est comblé proprement, sans rien qui dépasse en haut ni en bas.
 - Un perçage débouchant qui ne débouche plus après déplacement le signale, et une fraisure qui refermerait son perçage ne peut pas être déplacée.
-- Réduire un perçage sous la limite de reconnaissance donne une explication au lieu de demander un rapport d'erreur.
+- Réduire un perçage sous la limite de reconnaissance donne une explication de la raison.
 - Sur une face, un bouton mène au catalogue de blocs au lieu d'afficher des lignes qui disent seulement ce qui est impossible.
 ### Déplacer, tourner et sélectionner
 
@@ -48,7 +48,6 @@ dans `website/version.json`.
 - Sur une face, la barre de déplacement ne propose que le possible et donne la raison sur le bouton, non dans un message après le clic.
 - Le bouton *Appliquer* disparaît : on applique avec Entrée dans le champ ou en tirant la poignée, et exactement une fois, non deux.
 - Une pièce déplacée ne revient plus un instant à son ancienne position au relâchement.
-- Un clic sur un perçage atteint le perçage, même si la poignée de déplacement se trouve devant.
 - Un clic droit dans la liste des objets atteint la ligne visée, et non les deux au-dessus.
 ### Vue et arborescence des objets
 
@@ -104,14 +103,13 @@ dans `website/version.json`.
 - L'avis d'impression donne un conseil au lieu de renvoyer à des numéros du contrat de licence.
 ### Messages, boutons et informations
 
-- Neuf boutons verrouillés dans sept fenêtres indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.
-- Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Retirer* lors de l'ajout de filament.
+- Douze boutons verrouillés dans neuf fenêtres indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.
+- Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Créer* dans la boîte de dialogue de modèle.
 - Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.
 - Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais.
 - La fenêtre À propos indique qui est derrière Solidon et qui répond aux retours.
 - Un lien vers une version antérieure mène à l'actuelle au lieu d'une page d'erreur.
-- La fenêtre des raccourcis affiche à nouveau chaque entrée, y compris *Ajuster à la vue* renommé.
-- L'installation Windows aboutit aussi là où elle échouait avec « fichier corrompu » ; en contrepartie le fichier d'installation est 23 mégaoctets plus gros.
+- L'installation Windows aboutit aussi sur les machines où elle échouait avec « fichier corrompu » ; en contrepartie le fichier d'installation est 23 mégaoctets plus gros.
 ### Discussion et prise en charge des modèles
 
 - Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.
