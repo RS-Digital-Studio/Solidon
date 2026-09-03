@@ -169,6 +169,7 @@
 - [rtree-Abstürze](rtree-abstuerze-im-langen-lauf.md) — die volle Suite stirbt; portionsweise fahren.
 - [Native Bibliotheken](native-bibliotheken-speicher.md) — rtree, _elementtree, Abriss: eine Familie.
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) — die Hülle überlebt; je Lauf ein Ordner.
+- [Schreibfehler auf eine vorhandene Datei](schreibfehler-auf-eine-vorhandene-datei.md) — OSError 22/13: eigener Handle oder fremde Sitzung; daneben schreiben und umbenennen.
 - [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) — eigener Prozessbaum, Blätter zuerst.
 
 ## Geteilter Baum und Shell
