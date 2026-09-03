@@ -2297,3 +2297,51 @@ def test_a_moved_bore_leaves_no_plug_standing_proud(profile: Profile) -> None:
         f"nichts steht über: {moved.raw.bounds.tolist()}"
     )
     assert moved.raw.volume == pytest.approx(bored.raw.volume, rel=1e-6)
+
+
+def test_a_through_bore_moved_along_its_axis_says_it_no_longer_goes_through(
+    profile: Profile,
+) -> None:
+    """Beim Nachmessen des Stopfens aufgefallen, 03.09.2026.
+
+    Das Werkzeug eines Merkmals ist aus seinen gemessenen Kennzahlen gebaut und
+    wandert mit. Eine Bohrung, die als durchgehend erkannt wurde, ist nach dem
+    Versetzen genau so lang wie vorher — und wenn sie entlang ihrer eigenen
+    Achse wandert, geht sie nicht mehr durch.
+
+    Gemessen an einer 10 mm starken Platte mit Bohrung Ø 16, um 5 mm in Z
+    versetzt: Unten blieben **1,985 mm Material** stehen, 398 mm³, das Volumen
+    stieg von 21 995 auf 22 393. Der Körper war wasserdicht und einteilig, und
+    das Ergebnis ist geometrisch richtig — es ist nur nicht das, was der Kunde
+    erwartet hat. „Muss der Kunde raten, ist es falsch" (Robert).
+
+    **Quer versetzt bleibt es still**, und das gehört zur Zusage: Ein Befund,
+    der bei jedem Versetzen erscheint, wird nach dem dritten Mal übersehen. Die
+    Messung läuft deshalb nur, wenn die Bewegung eine Komponente entlang der
+    Merkmalsachse hat — sie kostet eine Boolesche, die sonst nichts zu sagen
+    hätte.
+    """
+    block = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    bored = drill(
+        block,
+        position=(-15.0, 0.0, 5.0),
+        axis="z",
+        diameter=16.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=bored, features=detect(bored))
+    hole = next(name for name, found in entry.features.items() if found.kind == "hole")
+    assert entry.features[hole].params.get("through"), "sonst prüft dieser Test nichts"
+
+    across = _run_op("move_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=0.0)
+    assert not [entry for entry in across.findings if "through" in entry.code], (
+        "quer versetzt bleibt eine durchgehende Bohrung durchgehend"
+    )
+
+    along = _run_op("move_feature", entry, profile, at_feature=hole, x=15.0, y=0.0, z=5.0)
+    said = [found for found in along.findings if found.code == "move_feature.no_longer_through"]
+    assert said, [found.code for found in along.findings]
+    assert said[0].severity == "warning"
+    assert "durch" in str(said[0].message)
+    assert along.outputs[0].mesh.raw.volume > bored.raw.volume, "Material ist stehengeblieben"

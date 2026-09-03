@@ -534,6 +534,104 @@ def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
     return MeshData.of(closed)
 
 
+def _feature_direction(feature: Feature, axis: Vec3 | None = None) -> Vec3:
+    """Die Richtung dieses Merkmals als Einheitsvektor.
+
+    ``axis`` überschreibt die gemessene; ohne beides gilt Z.
+    """
+    wanted = axis if axis is not None else feature.params.get("axis", (0.0, 0.0, 1.0))
+    given = np.asarray(wanted, dtype=float)
+    length = float(np.linalg.norm(given))
+    unit = given / length if length > EPS_GEOM else np.array([0.0, 0.0, 1.0])
+    return (float(unit[0]), float(unit[1]), float(unit[2]))
+
+
+def _no_longer_through(
+    mesh: MeshData,
+    feature: Feature,
+    centre: Vec3,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> bool:
+    """Steht im Schlauch dieser Bohrung wieder Material?
+
+    **Der Fall, den niemand ansagt.** Das Werkzeug eines Merkmals ist aus
+    seinen gemessenen Kennzahlen gebaut und wandert mit: Eine Bohrung, die als
+    durchgehend erkannt wurde, ist nach dem Versetzen genau so lang wie vorher.
+    Wandert sie entlang ihrer eigenen Achse oder trifft sie an der neuen Stelle
+    auf dickeres Material, geht sie nicht mehr durch. Gemessen am 03.09.2026 an
+    einer 10 mm starken Platte, Bohrung Ø 16, um 5 mm in Z versetzt: Unten
+    blieben 1,985 mm Material stehen, 398 mm³, und der Körper war wasserdicht
+    und einteilig. Geometrisch richtig, für den Kunden eine Überraschung.
+
+    Gemessen wird am **Ergebnis** und nicht an einer Rechnung über Hüllmaße:
+    Ein Zylinder im Durchmesser der Bohrung, lang genug für das ganze Teil,
+    gegen den fertigen Körper verschnitten. Bleibt dort Volumen, steht Material
+    im Schlauch. Ein Vergleich von Hüllmaßen hätte an jedem nicht
+    quaderförmigen Teil falschen Alarm gegeben.
+    """
+    diameter = float(feature.params.get("diameter", 0.0)) - FEATURE_OVERLAP
+    if diameter <= EPS_GEOM:
+        return False
+    reach = float(np.linalg.norm(mesh.bounds.size)) * 2.0
+    column = trimesh.creation.cylinder(
+        radius=diameter / 2.0, height=reach, sections=FEATURE_SECTIONS
+    )
+    column.apply_transform(
+        trimesh.geometry.align_vectors(  # type: ignore[no-untyped-call]
+            np.array([0.0, 0.0, 1.0]), np.asarray(_feature_direction(feature), dtype=float)
+        )
+    )
+    column.apply_translation(np.asarray(centre, dtype=float))
+    left = boolean(
+        "intersection",
+        [MeshData.of(column), mesh],
+        quality=quality,
+        seed=seed,
+        allow_empty=True,
+        cancelled=cancelled,
+    )
+    return bool(left.mesh.raw.volume > EPS_GEOM)
+
+
+def _throughness_lost(
+    mesh: MeshData,
+    feature: Feature,
+    centre: Vec3,
+    op: str,
+    *,
+    quality: Quality,
+    seed: int | None,
+    cancelled: CancelToken | None,
+) -> list[Finding]:
+    """Der Befund dazu — leer, wenn die Bohrung weiter durchgeht.
+
+    Ein Hinweis und keine Ausnahme: Das Ergebnis ist richtig gerechnet, es ist
+    nur nicht das, was der Kunde erwartet hat. Der Satz nennt deshalb, woran es
+    liegt, und nicht nur, dass es so ist (§2.7).
+    """
+    if not feature.params.get("through"):
+        return []
+    if not _no_longer_through(
+        mesh, feature, centre, quality=quality, seed=seed, cancelled=cancelled
+    ):
+        return []
+    return [
+        Finding(
+            code=f"{op}.no_longer_through",
+            severity="warning",
+            message=_(
+                "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle "
+                "nicht mehr — ihre Achse durchquert das Material dort nicht ganz."
+            ),
+            feature_ids=(feature.id,),
+            location=centre,
+        )
+    ]
+
+
 def _closed_at(
     mesh: MeshData,
     feature: Feature,
@@ -809,6 +907,21 @@ def move_feature(ctx: OpContext) -> OpResult:
         provenance="generated",
     )
     findings = [*closed.findings, *placed.findings]
+    # Nur, wenn sie entlang ihrer eigenen Achse gewandert ist: Quer versetzt
+    # bleibt eine durchgehende Bohrung durchgehend, und die Messung kostet eine
+    # Boolesche, die dann nichts zu sagen hätte.
+    travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
+    axial = float(np.dot(travel, np.asarray(_feature_direction(feature), dtype=float)))
+    if abs(axial) > EPS_GEOM:
+        findings += _throughness_lost(
+            placed.mesh,
+            feature,
+            target,
+            "move_feature",
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
     return OpResult(
         outputs=[
             dataclasses.replace(

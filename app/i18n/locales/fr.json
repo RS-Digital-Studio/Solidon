@@ -1269,6 +1269,7 @@
   "Diese Bedingung widerspricht einer anderen. {key} entfernt sie.": "Cette contrainte en contredit une autre. {key} la retire.",
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "Cette contrainte désigne un point qui n'existe pas.",
   "Diese Bedingungsart gibt es nicht.": "Ce type de contrainte n'existe pas.",
+  "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "Ce perçage traversait la pièce et ne le fait plus à son nouvel emplacement — son axe ne franchit pas entièrement la matière à cet endroit.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "Ce perçage mesure {measure} mm et ne correspond à aucune taille normalisée. À quelle vis appartient-il ?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "Ce perçage mesure {measure} mm — le trou de passage pour {screw}.",
   "Diese Datei ist in einem Packverfahren geschrieben, das Solidon nicht öffnet.": "Ce fichier est écrit dans un procédé de compression que Solidon n'ouvre pas.",

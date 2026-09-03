@@ -1269,6 +1269,7 @@
   "Diese Bedingung widerspricht einer anderen. {key} entfernt sie.": "This constraint contradicts another one. {key} removes it.",
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "This constraint points at a point that does not exist.",
   "Diese Bedingungsart gibt es nicht.": "There is no such constraint kind.",
+  "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "This bore went right through the part and no longer does at its new place — its axis does not cross the material there completely.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "This hole measures {measure} mm and matches no standard size. Which screw does it belong to?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "This hole measures {measure} mm — the clearance hole for {screw}.",
   "Diese Datei ist in einem Packverfahren geschrieben, das Solidon nicht öffnet.": "This file is written in a compression scheme Solidon does not open.",

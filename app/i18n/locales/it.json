@@ -1269,6 +1269,7 @@
   "Diese Bedingung widerspricht einer anderen. {key} entfernt sie.": "Questo vincolo ne contraddice un altro. {key} lo rimuove.",
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "Questo vincolo punta a un punto che non esiste.",
   "Diese Bedingungsart gibt es nicht.": "Questo tipo di vincolo non esiste.",
+  "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "Questo foro attraversava il pezzo e nella nuova posizione non lo fa più: il suo asse non attraversa del tutto il materiale lì.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "Questo foro misura {measure} mm e non corrisponde a nessuna misura normalizzata. A quale vite appartiene?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "Questo foro misura {measure} mm — il foro passante per {screw}.",
   "Diese Datei ist in einem Packverfahren geschrieben, das Solidon nicht öffnet.": "Questo file è scritto con un metodo di compressione che Solidon non apre.",

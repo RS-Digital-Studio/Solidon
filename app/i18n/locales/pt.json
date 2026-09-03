@@ -1269,6 +1269,7 @@
   "Diese Bedingung widerspricht einer anderen. {key} entfernt sie.": "Esta restrição contradiz outra. {key} a remove.",
   "Diese Bedingung zeigt auf einen Punkt, den es nicht gibt.": "Esta restrição aponta para um ponto que não existe.",
   "Diese Bedingungsart gibt es nicht.": "Este tipo de restrição não existe.",
+  "Diese Bohrung ging durch das Teil und tut es an der neuen Stelle nicht mehr — ihre Achse durchquert das Material dort nicht ganz.": "Este furo atravessava a peça e no novo lugar já não o faz — o seu eixo não atravessa o material por completo aí.",
   "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. Zu welcher Schraube gehört sie?": "Este furo mede {measure} mm e não corresponde a nenhuma medida normalizada. A que parafuso pertence?",
   "Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.": "Este furo mede {measure} mm — o furo de passagem para {screw}.",
   "Diese Datei ist in einem Packverfahren geschrieben, das Solidon nicht öffnet.": "Este ficheiro está escrito num método de compressão que o Solidon não abre.",
