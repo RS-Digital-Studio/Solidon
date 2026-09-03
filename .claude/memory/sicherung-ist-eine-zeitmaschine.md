@@ -40,3 +40,44 @@ Verwandt: [[probe-worktree-altert]] (ein Worktree ist ebenfalls ein Zustand und
 altert), [[geteilter-index-haelt-alten-stand]] und
 [[commit-o-nimmt-den-dateistand]] — dreimal dieselbe Familie: **Was einen
 ganzen Stand trägt, trägt auch den fremden Teil davon.**
+
+
+## Dasselbe mit einem Git-Blob, und dort hilft der HEAD-Vergleich nicht
+
+Am 03.09.2026 in einer zweiten Gestalt: Ein Commit hatte fremde Arbeit
+zurückgerollt (der Index war zwischen zwei Shell-Aufrufen gealtert), und die
+Reparatur schrieb die betroffenen Blobs aus dem überrollten Commit zurück —
+`git rev-parse <commit>:<pfad>` in den Index, sauber vorwärts statt per Revert.
+Die acht Dateien stimmten danach bitgleich mit dem Zielcommit.
+
+**Und genau das war das Problem.** In fünf der acht Dateien lagen zu diesem
+Zeitpunkt drei ungestagte Zeilen einer dritten Sitzung. Der zurückgeschriebene
+Blob trug den vollständigen Stand seines Zeitpunkts — einschließlich der
+**Abwesenheit** von allem, was seither dazugekommen war. Zehn Minuten später
+standen dort 0 von 3.
+
+> **Ein wiederhergestellter Blob ist kein Rückbau einer Änderung, sondern ein
+> Zustand — mit allem, was darin fehlt** (3d-druck-c7, 03.09.2026).
+
+Der Unterschied zu der Falle, die ihn ausgelöst hat, ist der ganze Punkt:
+
+| | fängt | fängt nicht |
+|---|---|---|
+| HEAD-Vergleich vor dem Commit | einen **Commit**, der dazwischenkam | ungestagte Arbeit |
+| `git diff --stat -- <pfade>` vor dem Zurückschreiben | beides | — |
+
+Ein HEAD-Vergleich kann ungestagte Arbeit prinzipiell nicht sehen: Sie steht in
+keinem Commit. Wer einen Blob zurückschreibt, liest deshalb **vorher** den
+Arbeitsbaum — steht dort etwas, gehört es in die wiederhergestellte Fassung
+hinein und nicht darunter.
+
+**Bei den Sprachkatalogen ist das der Normalfall und kein Randfall.** Fünf
+Dateien, an denen jede Sitzung nur Zeilen anhängt, sind der Ort im Repository,
+an dem am häufigsten ungestagte Fremdarbeit liegt — siehe
+[[privater-index-schuetzt-die-kataloge-nicht]] für die Gegenrichtung desselben
+Problems.
+
+Und weil ein Zurückschreiben den Bestand unter einem laufenden Torlauf ändert:
+**vorher ansagen.** `gate_lock.py status` nennt in einer Sekunde, wer gerade
+misst; ein Katalog, der sich unter `test_translations` ändert, erzeugt einen
+roten Befund, der mit der Arbeit des Messenden nichts zu tun hat.
