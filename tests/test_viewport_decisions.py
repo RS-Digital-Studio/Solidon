@@ -5677,3 +5677,70 @@ def test_the_preview_goes_when_the_mark_goes(qt_app: QApplication) -> None:
         "die Vorschau blieb stehen, während die Marke ging — ein Loch in Auswahlfarbe"
     )
     assert "feature-preview" in entfernt
+
+
+def test_a_new_result_drops_the_old_preview(qt_app: QApplication) -> None:
+    """Eine neue Auswertung macht jede Vorschau überholt.
+
+    Nach „Bohrung ändern" stand der alte Zylinder über der neuen Bohrung — an
+    derselben Stelle, mit Flimmermuster an der gemeinsamen Fläche. Und weil er
+    `MEASURE_COLOUR` trägt, also dieselbe Farbe wie `SELECTED_COLOUR`, sah es
+    aus, als sei die Bohrung noch gewählt, während Statusleiste und
+    Merkmalsfenster „Keine Auswahl" sagten (Robert, 03.09.2026).
+
+    **Dieser Test hat keine eigene Zeile im Code, und das ist Absicht.** Der
+    Weg läuft über `select` → `set_gizmo` → `_detach_gizmo` →
+    `_drop_face_handle`, also über den Fix aus `a62d477c`. Ein zusätzliches
+    `_drop_preview()` in `show_scene` wäre gemessen wirkungslos: Seine
+    Gegenprobe blieb grün.
+
+    Er steht trotzdem hier, weil er eine **Zusage** festhält und keinen Weg:
+    Nach einer neuen Auswertung steht keine Vorschau der vorigen mehr, gleich
+    über welchen Weg sie verschwindet. Baut jemand den Griff-Weg um, wird
+    dieser Test rot, bevor ein Kunde eine verwaiste Marke sieht.
+
+    Steht das Merkmal nach der Auswertung noch, legt `set_gizmo` die Vorschau
+    mit den **neuen** Massen wieder an — geprüft wird das Wegräumen des alten
+    Standes, nicht das Verschwinden der Anzeige.
+    """
+    from app.core.types import Feature
+    from app.ui.viewport import Viewport
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        # Eine echte Kamera: `show_scene` rechnet über `shadow_direction` mit
+        # ihren Zahlen und meldet sonst `invalid __array_struct__`.
+        camera = SimpleNamespace(position=(100.0, 100.0, 100.0), focal_point=(0.0, 0.0, 0.0))
+
+        def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
+            # `prop` braucht der Auswahlübergang (`_fade_selection` setzt die
+            # Farbe darauf); ohne ihn stirbt der Test am Zeichnen statt an der
+            # Sache.
+            return SimpleNamespace(name=kwargs.get("name"), prop=SimpleNamespace(color=None))
+
+    viewport = Viewport()
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    loch = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 17.5),
+            "axis": (0.0, 0.0, 1.0),
+            "depth": 35.0,
+            "diameter": 7.34,
+        },
+    )
+    viewport._show_preview(loch, (0.0, 0.0, 35.0), (0.0, 0.0, 1.0), 3.67)
+    assert viewport._shape_actor is not None
+
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    assert viewport._shape_actor is None, (
+        "die Vorschau der vorigen Auswertung stand über dem neuen Ergebnis"
+    )
