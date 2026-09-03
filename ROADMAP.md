@@ -169,7 +169,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | Ein Datum steht in jeder Sprache auf Deutsch | Architektur-Durchsicht (02.09.2026) | eine Zeile in `main_window.py:11170` — `QLocale().toString(...)` statt `strftime("%d.%m.%Y %H:%M")`; nach dem Release, weil der Wiederherstellungsdialog nur nach einem Absturz erscheint |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
-| Der Knopf-Wächter deckt fünfzehn von fünfunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen zwanzig, und die brauchen echten Aufbau: eine Sitzung mit Körper, ein gefülltes Register, einen eingerichteten Slicer, ein Backend mit vorgeschriebenen Antworten. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein. Gemessen über die fünfzehn: 50 sichtbare Knöpfe, davon 10 sperrbar, davon 10 mit Grund — heute früh waren es 0 von 10 |
+| Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 
 ---
@@ -14886,7 +14886,10 @@ An diesen vier Stellen wollte ich etwas beheben und habe nichts gefunden.
 - [x] **Der Knopf-Wächter galt nur einem Dialog** — jetzt fünfzehn.
   `tests/test_locked_says_why.py` baut jeden Dialog, zeigt ihn und prüft jeden
   gesperrten, sichtbaren Knopf auf Tooltip, Statuszeile und zugängliche
-  Beschreibung. **Sieben stumme Knöpfe sind dabei gefallen**, alle mit derselben
+  Beschreibung. **Zehn stumme Knöpfe in sieben Fenstern sind dabei gefallen** —
+  hier stand „sieben Knöpfe", und das war die Zahl der Fenster über einer Liste
+  von zehn Namen; sie ist einmal in einen Changelog-Entwurf abgeschrieben
+  worden, bevor sie auffiel. Alle zehn mit derselben
   Form: Der Grund stand im Fenster, nur eben daneben — in der Zustandszeile, im
   Hinweis darunter, in der Liste. Wer auf einen grauen Knopf zeigt, fragt ihn
   und nicht die Zeile darüber.
