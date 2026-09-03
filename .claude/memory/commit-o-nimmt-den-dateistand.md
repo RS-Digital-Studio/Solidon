@@ -326,3 +326,47 @@ legen. Was dabei entsteht, ist HEAD plus die eigene Änderung und sonst nichts �
 unabhängig davon, was im Arbeitsbaum liegt. `katalog_blobs.py` aus dieser
 Sitzung ist die Vorlage; an den Katalogen hat es zweimal getragen, an
 `ROADMAP.md` habe ich es nicht angewandt und prompt den fünften Fall gebaut.
+
+
+## Sechster Fall: `read-tree` im Aufruf davor, und die Zahl stand in einem `echo` (03.09.2026)
+
+`7f7ad380` löschte 150 Zeilen Viewport-Arbeit — 83 in `app/ui/viewport.py`, 67
+in `tests/test_viewport_decisions.py` —, und diesmal war **die ganze Kette
+richtig gebaut**: privater Index, `read-tree HEAD`, eine Sollprobe mit vorher
+genannter Zahl, und die Sollprobe stand im selben Aufruf wie der Commit.
+
+Nur lief `read-tree` im Aufruf **davor**. Dazwischen committete eine andere
+Sitzung. Damit zeigte der Index einen HEAD, den es nicht mehr gab, und
+`git diff --cached HEAD` rechnete gegen den neuen: Alles, was der neue HEAD
+trug und der Index nicht, stand als **Löschung** im Commit.
+
+**Und die Zahl stand auf dem Schirm.** Soll war „8 Dateien, 123 Einfügungen, 3
+Löschungen", ausgegeben wurde „10 Dateien, 123, 153". Sie stand in einem
+`echo`, und danach lief der Commit über `&&` weiter — `echo` gelingt immer.
+Das ist derselbe Fehler, den `CLAUDE.md` für Testläufe beschreibt (der
+Shell-Status ist der des letzten Befehls), an einer anderen Stelle:
+
+> **Eine Zahl auszugeben ist keine Prüfung. Eine Prüfung bricht ab.**
+
+    IST=$(git diff --cached HEAD --shortstat | tr -d ' ')
+    if [ "$IST" = "2fileschanged,150insertions(+)" ]; then git commit …; else echo ABBRUCH; fi
+
+Damit sind es drei Fälle an einem Tag, und **keine zwei hatten dieselbe
+Ursache**:
+
+| Fall | Ursache | was gefangen hätte |
+|---|---|---|
+| `bc3a8b12` | Index zwischen zwei Aufrufen gealtert | die Kette in einem Aufruf |
+| `56c2a559` | `git add` nahm den Dateistand mit fremden Zeilen | Sollprobe, die abbricht |
+| `7f7ad380` | `read-tree` gegen einen HEAD von vorher | **beides zusammen** |
+
+Die Regel, die alle drei fängt, ist eine: **`read-tree`, Sollprobe und Commit
+gehören in einen Aufruf, und die Sollprobe muss abbrechen können.** Zwei von
+drei ist nichts — beim sechsten Fall waren zwei davon erfüllt.
+
+Die Reparatur ging vorwärts und war einfach, weil der Arbeitsbaum die Dateien
+unversehrt hatte: Ich hatte sie nie angefasst, nur ihr Fehlen im Index
+committet. `git add` auf die zwei Pfade, bitgleich nachgerechnet gegen
+`7f7ad380^`, fertig. **Das gilt nicht allgemein** — siehe
+[[sicherung-ist-eine-zeitmaschine]] für den Fall, in dem der Arbeitsbaum
+weitergelaufen war.
