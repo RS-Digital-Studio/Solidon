@@ -32,6 +32,7 @@ from app.core.ingest.loader import (
 )
 from app.core.ingest.outline import OUTLINE_SUFFIXES, is_outline
 from app.core.scene.history import OperationDraft
+from app.core.types import ProgressFn
 from app.i18n import TranslatableText, _
 
 #: Der Titel der Transaktion je Weg. Im Verlauf steht er, nicht der Op-Name.
@@ -66,6 +67,15 @@ class ImportPlan:
     """
 
 
+def _silent_plan(fraction: float, text: str) -> None:
+    """Der Vorgabewert: Wer keinen Fortschritt will, bekommt keinen.
+
+    Dieselbe Form wie ``loader._silent`` und ``threemf._silent_scan`` — eine
+    Funktion statt ``None``, damit die Zählschleife nicht bei jedem Schritt
+    fragen muss, ob sie melden darf.
+    """
+
+
 def import_plan(
     source_id: str,
     name: str,
@@ -73,6 +83,7 @@ def import_plan(
     unit: str = "auto",
     *,
     first_model: bool = False,
+    progress: ProgressFn = _silent_plan,
 ) -> ImportPlan:
     """Der Einleseweg für eine Datei, entschieden an ihrer Endung.
 
@@ -139,7 +150,7 @@ def import_plan(
         # rund das Zwölffache der entpackten XML in ET.Element-Objekte, und die
         # Dreiecksgrenze griff bisher erst *nach* diesem Parsen. Sie greift
         # jetzt hier, vor jeder Operation — gezählt wurde ohne eine Koordinate.
-        parts, triangles = threemf.scan_assembly(payload)
+        parts, triangles = threemf.scan_assembly(payload, progress)
         check_limits(len(payload), triangles)
         # Eine 3MF trägt ihre Einheit im ``unit``-Attribut. Wo sie dasteht,
         # stellt die Operation die Frage nicht — und dann darf der Aufrufer

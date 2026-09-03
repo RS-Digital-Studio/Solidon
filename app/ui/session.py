@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
@@ -183,6 +183,61 @@ class _EvaluationWorker(Worker):
             self.finishedWith.emit(result)
 
 
+class _PlanWorker(Worker):
+    """Der Einleseplan einer Datei. Besitzt nichts, meldet alles.
+
+    **Warum überhaupt ein Arbeiter für einen Plan.** ``import_plan`` klingt
+    billig und ist es bei einer STL auch. Bei einer 3MF zählt es die Körper
+    und Dreiecke der ganzen Baugruppe, bevor eine Operation entsteht (§11,
+    §32) — und das dauert: An einer Datei von 63 MB mit 32 Körpern und
+    5 476 596 Dreiecken sind es 14,1 s, gemessen am 03.09.2026. Das Lesen von
+    der Platte dagegen kostet 0,09 s.
+
+    Vierzehn Sekunden im Hauptthread sind kein Wartezeiger, sondern ein
+    eingefrorenes Fenster; Windows schreibt ab etwa fünf Sekunden „Keine
+    Rückmeldung" in die Titelleiste. Deshalb hier.
+
+    Der Plan ändert nichts am Dokument — er liest die Nutzlast und gibt einen
+    ``ImportPlan`` zurück. Was danach kommt (``apply``), gehört in den
+    Hauptthread und steht in ``Session._on_plan_ready``.
+    """
+
+    readyWith = Signal(object, str)
+    failedWith = Signal(object, str)
+
+    def __init__(
+        self,
+        source_id: str,
+        name: str,
+        payload: bytes,
+        unit: str,
+        first_model: bool,
+        progress: Any,
+    ) -> None:
+        super().__init__()
+        self._source_id = source_id
+        self._name = name
+        self._payload = payload
+        self._unit = unit
+        self._first_model = first_model
+        self._progress = progress
+
+    def work(self) -> None:
+        try:
+            plan = import_plan(
+                self._source_id,
+                self._name,
+                self._payload,
+                self._unit,
+                first_model=self._first_model,
+                progress=self._progress,
+            )
+        except AppError as error:
+            self.failedWith.emit(error, self._source_id)
+        else:
+            self.readyWith.emit(plan, self._source_id)
+
+
 @dataclass(slots=True)
 class ProposalPreview:
     """Ein Vorschlag plus das, wonach er aussähe (§26.5, §18.7).
@@ -337,6 +392,29 @@ def _with_findings(result: EvaluationResult, extra: list[Finding]) -> Evaluation
     return result
 
 
+#: Ab dieser Nutzlast wird der Einleseplan in einem Arbeiter gerechnet.
+#:
+#: **Gemessen, nicht geschätzt** (03.09.2026, ``import_plan`` über echte
+#: Kundendateien):
+#:
+#:     cube_clean.stl          0,00 MB    0,00 s
+#:     garden-hose-holder.3mf  5,19 MB    0,92 s
+#:     Wizard Tower.3mf       27,87 MB    3,98 s
+#:     chufang.3mf            66,65 MB   11,88 s
+#:
+#: Das ist linear, rund 0,18 s je MB. Acht MB sind damit etwa 1,4 s — noch in
+#: dem Bereich, den ``main_window.waiting`` für sich beschreibt („bis zu zwei
+#: Sekunden"), und darüber beginnt der, den derselbe Docstring dem Arbeiter
+#: zuweist.
+#:
+#: **Warum überhaupt eine Grenze und nicht immer ein Arbeiter.** Er kostet
+#: einen Fadenwechsel und macht aus einem Aufruf einen Vorgang mit Signalen.
+#: Für eine Datei, deren Plan in Mikrosekunden steht, ist das der teurere Weg,
+#: und er verschöbe das Ergebnis hinter die Ereignisschleife, obwohl niemand
+#: darauf gewartet hat.
+PLAN_IN_WORKER_ABOVE: Final = 8 * 1024 * 1024
+
+
 class Session(QObject):
     """Hält das offene Projekt und die Oberfläche im Gleichschritt mit ihm."""
 
@@ -362,6 +440,16 @@ class Session(QObject):
     """Der Nutzer hat den Abbruch der laufenden Trennebenensuche verlangt."""
     splitCancelled = Signal()
     """Der aktuelle Arbeiter hat den verlangten Abbruch bestätigt (§2.8)."""
+    importFailed = Signal(object)
+    """Der asynchrone Einleseweg ist gescheitert — trägt eine ``AppError``.
+
+    Das Gegenstück zum ``raise`` des synchronen Wegs: Wer im Arbeiter plant,
+    kann nicht in den Aufrufer werfen, der längst weitergelaufen ist."""
+    importFinished = Signal(bool)
+    """Der asynchrone Einleseweg ist durch — ``True``, wenn etwas ankam.
+
+    Die Auswertung läuft danach noch; dieses Signal sagt nur, dass Plan und
+    Stapel fertig sind und das Fenster seinen Wartezustand auflösen darf."""
     evaluationCancelled = Signal()
     """Ein Mensch hat die Auswertung angehalten (§2.8).
 
@@ -423,6 +511,8 @@ class Session(QObject):
         Auswertung wäre es eine Zeile, die immer dasteht und die deshalb
         niemand mehr liest."""
         self._worker: _EvaluationWorker | None = None
+        self._plan: _PlanWorker | None = None
+        """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
         self._agent: _AgentWorker | None = None
         self._split: _SplitWorker | None = None
         self._leash = WorkerLeash(self)
@@ -1113,6 +1203,117 @@ class Session(QObject):
         if not accepted:
             self._drop_source(source_id)
         return accepted
+
+    def import_model_async(self, path: Path, unit: str = "auto") -> None:
+        """Wie :meth:`import_model`, aber ohne den Hauptthread zu belegen.
+
+        **Warum es diesen zweiten Weg gibt.** Gemessen an einer 3MF von 63 MB
+        mit 32 Körpern: Das Lesen von der Platte kostet 0,09 s, das Zählen der
+        Körper und Dreiecke in ``import_plan`` **14,1 s** — und das steht vor
+        jeder Operation, weil der Stapel seine Objekt-IDs vorher vergibt (§11)
+        und die Größengrenze vor dem Parsen greifen muss (§32).
+
+        Vierzehn Sekunden im Hauptthread sind kein Wartezeiger, sondern ein
+        eingefrorenes Fenster; Windows schreibt ab etwa fünf Sekunden „Keine
+        Rückmeldung" in die Titelleiste.
+
+        Der synchrone Weg bleibt daneben stehen: Die Kommandozeile und die
+        Tests brauchen einen, der wirft statt zu melden.
+        """
+        self.import_payload_async(path.name, read_local_payload(path), unit=unit)
+
+    def import_payload_async(
+        self,
+        name: str,
+        payload: bytes,
+        *,
+        unit: str = "auto",
+        origin: SourceOrigin | None = None,
+    ) -> None:
+        """Derselbe Weg für eine Datei ohne Pfad (§16.3), asynchron.
+
+        **Eingebettet wird im Hauptthread, geplant im Arbeiter.** Die
+        Kennungsregel ``src_<n>`` lebt in ``_embed_source`` und hängt am
+        Dokument; sie in einen Arbeiter zu verlegen hieße, das Dokument aus
+        zwei Fäden zu ändern. Teuer ist sie ohnehin nicht — teuer ist das
+        Zählen danach.
+        """
+        path = Path(name)
+        source_id = self._embed_source("import", path.name, payload, origin)
+        first_model = not self.history.operations
+
+        # **Unter der Grenze bleibt es beim geraden Weg.** Ein Arbeiter für
+        # einen Plan, der in Mikrosekunden steht, verschöbe das Ergebnis hinter
+        # die Ereignisschleife, ohne dass jemand darauf gewartet hätte — und
+        # jeder Aufrufer müsste danach auf ein Signal warten, auch wenn es
+        # nichts zu warten gab.
+        if len(payload) <= PLAN_IN_WORKER_ABOVE:
+            try:
+                plan = import_plan(source_id, path.name, payload, unit, first_model=first_model)
+            except AppError as error:
+                self._drop_source(source_id)
+                self.importFailed.emit(error)
+                return
+            self._on_plan_ready(plan, source_id)
+            return
+
+        self.busyChanged.emit(True)
+        worker = _PlanWorker(source_id, path.name, payload, unit, first_model, self.report_progress)
+        self._plan = worker
+        # **An die Leine, wie jeder andere Arbeiter auch.** Ohne diese Zeile
+        # holt der Speicherbereiniger den Arbeiter, während sein Faden noch
+        # läuft: Der Lauf starb dann irgendwo später mit einer
+        # Zugriffsverletzung — bei mir im Konstruktor des *nächsten*
+        # Arbeiters, also weit weg von der Ursache. ``hold_until_done`` hält
+        # ihn, bis ``isRunning`` nein sagt.
+        worker.finished.connect(partial(self._on_plan_done, worker))
+        worker.readyWith.connect(self._on_plan_ready)
+        worker.failedWith.connect(self._on_plan_failed)
+        # Wie bei der Auswertung: Was niemand erwartet hat, wird zu einem
+        # ``InternalError`` — sonst bliebe der Wartezustand für immer stehen.
+        worker.crashed.connect(
+            lambda detail, src=source_id: self._on_plan_failed(InternalError(detail=detail), src)
+        )
+        self._leash.start(worker)
+
+    def _on_plan_done(self, worker: Any) -> None:
+        """Der Faden ist ausgelaufen — halten, bis Qt wirklich fertig ist.
+
+        Das Gegenstück zu ``_on_thread_done`` für den Einleseplan. Das Feld
+        wird nur geleert, wenn es noch diesem Arbeiter gehört: Ein Nachzügler
+        darf nicht den Nachfolger austragen.
+        """
+        if self._plan is worker:
+            self._plan = None
+        self._leash.hold_until_done(worker)
+
+    def _on_plan_ready(self, plan: Any, source_id: str) -> None:
+        """Der Plan steht — anwenden gehört in den Hauptthread.
+
+        ``History.apply`` ändert das Dokument und fragt die Lizenzgrenze; beides
+        gehört dorthin, wo auch alles andere am Dokument geschieht.
+        """
+        self.busyChanged.emit(False)
+        try:
+            accepted = self.apply(plan.title, [plan.draft], raise_on_error=True)
+        except AppError as error:
+            self._drop_source(source_id)
+            self.importFailed.emit(error)
+            return
+        if not accepted:
+            self._drop_source(source_id)
+        self.importFinished.emit(accepted)
+
+    def _on_plan_failed(self, error: Any, source_id: str) -> None:
+        """Die Quelle wird zurückgenommen, wie im synchronen Weg auch.
+
+        Sonst bliebe sie als Waise im Dokument und wanderte mit dem nächsten
+        Speichern in die Projektdatei — bei einer abgewiesenen 63-MB-Datei ist
+        das nicht theoretisch.
+        """
+        self.busyChanged.emit(False)
+        self._drop_source(source_id)
+        self.importFailed.emit(error)
 
     def _drop_source(self, source_id: str) -> None:
         """Eine eben eingebettete Quelle wieder austragen.
@@ -2003,7 +2204,18 @@ class Session(QObject):
             # Fenster zu, das der Speicherbereiniger abgeräumt hatte. In
             # `test_chat_ui.py` traf es reproduzierbar den zehnten Test —
             # nicht den, der den Arbeiter gestartet hatte.
-            worker = self._worker or self._agent or self._split or next(iter(self._previews), None)
+            # Und der Einleseplan: Seit er im Arbeiter läuft (§2.8), kehrte
+            # ``wait_for_idle`` zurück, bevor überhaupt eine Operation auf
+            # dem Stapel lag — die Auswertung, auf die es wartet, war noch
+            # gar nicht angefordert. Wer danach die Szene fragte, bekam eine
+            # leere. Gefunden von 3d-druck-d4 am 03.09.2026.
+            worker = (
+                self._plan
+                or self._worker
+                or self._agent
+                or self._split
+                or next(iter(self._previews), None)
+            )
             if worker is None:
                 break
             worker.wait(50)

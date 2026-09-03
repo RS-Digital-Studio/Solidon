@@ -35,7 +35,7 @@ from app.core.deferred import trimesh
 from app.core.errors import CANCEL, Action, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.types import MaterialSlot
+from app.core.types import MaterialSlot, ProgressFn
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -326,7 +326,15 @@ def _entries_in(mesh_node: ET.Element, tag: str) -> int:
     return len(found) or int(found.get(_SCANNED_COUNT) or 0)
 
 
-def _scan(payload: bytes) -> tuple[int, int]:
+def _silent_scan(fraction: float, text: str) -> None:
+    """Der Vorgabewert: Wer keinen Fortschritt will, bekommt keinen.
+
+    Dieselbe Form wie ``loader._silent`` — eine Funktion statt ``None``, damit
+    die Zählschleife nicht bei jedem Schritt fragen muss, ob sie melden darf.
+    """
+
+
+def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int]:
     """Zählt Körper und Dreiecke einer Baugruppe, ohne eine Koordinate in den
     Speicher zu heben.
 
@@ -346,13 +354,20 @@ def _scan(payload: bytes) -> tuple[int, int]:
                 return 0, 0
             triangles = 0
             models: dict[str, ET.Element] = {}
-            for entry in [MODEL_PATH, *sorted(names)]:
-                if entry in models:
-                    continue
-                if entry != MODEL_PATH and not (
-                    entry.startswith("3D/Objects/") and entry.endswith(".model")
-                ):
-                    continue
+            # **Erst die Liste, dann der Lauf** — und zwar wegen des
+            # Fortschritts: Wer eine Schleife mit ``continue`` filtert, kennt
+            # ihre Länge nicht und kann keinen Bruchteil melden. Eine große
+            # Baugruppe bringt es hier auf 28 Dateien, und das Zählen dauert
+            # bei 5,5 Millionen Dreiecken vierzehn Sekunden (§2.8).
+            geometry = [
+                entry
+                for entry in sorted(names)
+                if entry != MODEL_PATH
+                and entry.startswith("3D/Objects/")
+                and entry.endswith(".model")
+            ]
+            for index, entry in enumerate([MODEL_PATH, *geometry]):
+                progress(index / (len(geometry) + 1), str(_("Modell wird gelesen")))
                 models[entry], found = _model_without_geometry(container, entry)
                 triangles += found
             titles = _titles(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else {}
@@ -397,7 +412,7 @@ def _scan(payload: bytes) -> tuple[int, int]:
     return bodies, triangles
 
 
-def scan_assembly(payload: bytes) -> tuple[int, int]:
+def scan_assembly(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int]:
     """(Zahl der Körper, Zahl der Dreiecke) einer 3MF — streamend, ohne
     Koordinaten im Speicher.
 
@@ -406,7 +421,7 @@ def scan_assembly(payload: bytes) -> tuple[int, int]:
     das ganze XML in den Speicher hebt. Beides in einem Lauf, damit die Datei
     nur einmal durchläuft.
     """
-    return _scan(payload)
+    return _scan(payload, progress)
 
 
 def count_objects(payload: bytes) -> int:

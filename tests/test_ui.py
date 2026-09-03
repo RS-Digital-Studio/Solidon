@@ -8340,13 +8340,17 @@ def test_reading_a_file_stands_under_the_wait_cursor(
     ist. Dazwischen lag ein Fenster ohne jede Auskunft.
     """
     seen: list[tuple[Any, str]] = []
-    real = window.session.import_model
+    real = window.session.import_model_async
 
     def watched(path: Path, *args: Any, **kwargs: Any) -> Any:
         seen.append((QApplication.overrideCursor(), window.status_message.text()))
         return real(path, *args, **kwargs)
 
-    monkeypatch.setattr(window.session, "import_model", watched)
+    # ``import_model_async`` statt ``import_model``: Der Einleseplan geht
+    # seit dem asynchronen Umbau dort hindurch. Unterhalb von
+    # ``PLAN_IN_WORKER_ABOVE`` — und diese Datei hat 684 Bytes — läuft er
+    # gerade durch, der Wartezeiger steht also währenddessen wie zuvor.
+    monkeypatch.setattr(window.session, "import_model_async", watched)
 
     window.open_path(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
@@ -8367,7 +8371,7 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
 
     window.announce("Bereit")
     seen: list[tuple[Any, str, str]] = []
-    real = window.session.import_model
+    real = window.session.import_model_async
 
     def watched(path: Path, *args: Any, **kwargs: Any) -> Any:
         seen.append(
@@ -8379,7 +8383,7 @@ def test_import_dialog_keeps_its_reading_status_after_starting_the_project(
         )
         return real(path, *args, **kwargs)
 
-    monkeypatch.setattr(window.session, "import_model", watched)
+    monkeypatch.setattr(window.session, "import_model_async", watched)
     monkeypatch.setattr(
         QFileDialog,
         "getOpenFileName",
@@ -8409,7 +8413,11 @@ def test_a_broken_file_takes_the_wait_cursor_with_it(
         raise errors.UserError(title="Diese Datei ließ sich nicht lesen.")
 
     shown: list[Any] = []
-    monkeypatch.setattr(window.session, "import_model", refuse)
+    # **Der Fehler entsteht jetzt dort, wo er hingehört.** Gepatcht wird
+    # der Planer, nicht die Sitzungsmethode: So läuft der echte Weg samt
+    # ``importFailed``, und der Test prüft, was der Kunde bekommt, statt
+    # was eine ersetzte Methode geworfen hätte.
+    monkeypatch.setattr("app.ui.session.import_plan", refuse)
     monkeypatch.setattr(
         "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
     )
@@ -9411,7 +9419,9 @@ def test_a_rejected_download_never_claims_success(
         received.append(kwargs)
         raise errors.UserError(detail="der Schritt wurde abgewiesen")
 
-    monkeypatch.setattr(window.session, "import_payload", refusing)
+    # Wie beim Lesen von der Platte: gepatcht wird der Planer, damit der
+    # echte Weg läuft und die Abweisung über ``importFailed`` ankommt.
+    monkeypatch.setattr("app.ui.session.import_plan", refusing)
     monkeypatch.setattr(
         "app.ui.main_window.show_error", lambda error, *_args, **_kwargs: shown.append(error)
     )
@@ -9426,7 +9436,7 @@ def test_a_rejected_download_never_claims_success(
     )
 
     assert shown, "die Abweisung kam nirgends an"
-    assert received and received[0].get("raise_on_error") is True
+    assert received, "der Planer wurde nicht gefragt"
     assert window.stack.currentWidget() is window.start_screen
     assert not window._announcement.startswith(tr("Geladen"))
 

@@ -8,6 +8,7 @@ import struct
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 
 import pytest
 import trimesh
@@ -1260,3 +1261,110 @@ def test_two_bodies_of_the_same_name_stay_unassigned() -> None:
 
     ohne_namen = Finding(code="load.assembly", severity="info", message="x")
     assert _by_name(ohne_namen, {"Gleich": "obj_1"}) is None, "kein Name, keine Kennung"
+
+
+def _await_signal(session: Any, *, seconds: int = 20) -> tuple[dict[str, Any], Any]:
+    """Fährt den asynchronen Einleseweg zu Ende und sammelt, was er meldet.
+
+    Ohne eine laufende Ereignisschleife stellt Qt die Signale des Arbeiters nie
+    zu — der Test liefe ins Zeitlimit und sähe nichts. Das Zeitlimit hier ist
+    die Notbremse, nicht der Normalfall.
+    """
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    gesehen: dict[str, Any] = {"fortschritt": []}
+    loop = QEventLoop()
+    session.importFinished.connect(lambda ok: gesehen.update(accepted=ok))
+    session.importFailed.connect(lambda error: gesehen.update(error=error))
+    session.progressChanged.connect(
+        lambda anteil, text: gesehen["fortschritt"].append((anteil, text))
+    )
+    session.importFinished.connect(lambda _ok: loop.quit())
+    session.importFailed.connect(lambda _error: loop.quit())
+    QTimer.singleShot(seconds * 1000, loop.quit)
+
+    def settle() -> None:
+        """Wartet nur, wenn es etwas zu warten gibt.
+
+        Unterhalb von ``PLAN_IN_WORKER_ABOVE`` läuft der Weg gerade durch, und
+        das Signal kommt **vor** dieser Zeile. Eine Schleife, die dann noch
+        startet, wartet auf etwas Vergangenes — und läuft ins Zeitlimit.
+        """
+        if "accepted" not in gesehen and "error" not in gesehen:
+            loop.exec()
+
+    return gesehen, settle
+
+
+def test_a_model_is_read_without_blocking_the_window(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Einleseweg des Fensters läuft im Arbeiter, nicht im Hauptthread.
+
+    **Warum es diesen zweiten Weg gibt.** ``import_plan`` klingt billig und ist
+    es bei einer STL auch. Bei einer 3MF zählt es Körper und Dreiecke der
+    ganzen Baugruppe, bevor eine Operation entsteht — der Stapel vergibt seine
+    Objekt-IDs vorher (§11), und die Größengrenze greift vor dem Parsen (§32).
+    Gemessen am 03.09.2026 an einer Datei von 63 MB mit 32 Körpern und
+    5 476 596 Dreiecken: **0,09 s Lesen, 14,1 s Zählen.**
+
+    Vierzehn Sekunden im Hauptthread sind kein Wartezeiger, sondern ein
+    eingefrorenes Fenster; Windows schreibt ab etwa fünf Sekunden „Keine
+    Rückmeldung" in die Titelleiste.
+    """
+    from app.ui import session as session_module
+    from app.ui.session import Session
+
+    modell = tmp_path / "wuerfel.stl"
+    modell.write_bytes(_stl(_cube()))
+
+    session = Session()
+    # Die Grenze außer Kraft: Eine Testdatei von 684 Bytes bliebe sonst unter
+    # ``PLAN_IN_WORKER_ABOVE`` und liefe gerade durch — geprüft würde dann der
+    # andere Weg. Acht Megabyte in einem Test zu erzeugen wäre die Alternative
+    # und kostete mehr, als sie belegt.
+    monkeypatch.setattr(session_module, "PLAN_IN_WORKER_ABOVE", 0)
+    gesehen, settle = _await_signal(session)
+    session.import_model_async(modell)
+
+    # **Die Zusicherung, die den Test scharf macht.** Ohne sie wäre er auch
+    # grün, wenn alles wieder synchron liefe — er prüft ja nur das Ergebnis.
+    # Der Aufruf kehrt zurück, bevor der Stapel steht: Der Plan entsteht im
+    # Arbeiter, und ``_on_plan_ready`` läuft erst, wenn die Ereignisschleife
+    # ihn zustellt.
+    assert not session.project.document.ops, "der Aufruf darf nicht blockieren"
+
+    settle()
+
+    assert gesehen.get("error") is None, gesehen.get("error")
+    assert gesehen.get("accepted") is True, "der Weg muss bis zum Ende laufen"
+    assert [entry.op for entry in session.project.document.ops] == ["load"]
+
+
+def test_a_broken_file_reports_instead_of_raising(qt_app: Any, tmp_path: Path) -> None:
+    """Was der synchrone Weg wirft, meldet der asynchrone.
+
+    Wer im Arbeiter plant, kann nicht in einen Aufrufer werfen, der längst
+    zurückgekehrt ist — der ``try``/``except`` um ``import_model`` in
+    ``open_path`` fängt hier nichts mehr. Der Fehler kommt über
+    ``importFailed`` und wird dort gezeigt, wo er vorher auch stand.
+
+    **Und die Quelle wird zurückgenommen.** Sonst bliebe sie als Waise im
+    Dokument und wanderte mit dem nächsten Speichern in die Projektdatei; bei
+    einer abgewiesenen Datei von 63 MB ist das nicht theoretisch.
+    """
+    from app.ui.session import Session
+
+    kaputt = tmp_path / "halb.stl"
+    ganz = _stl(_cube())
+    kaputt.write_bytes(ganz[:84] + ganz[84:134])
+
+    session = Session()
+    gesehen, settle = _await_signal(session)
+    session.import_model_async(kaputt)
+    settle()
+
+    assert gesehen.get("accepted") is None, "eine kaputte Datei darf nicht ankommen"
+    assert gesehen.get("error") is not None, "und sie muss sich melden"
+    assert not session.project.document.sources, "die Quelle wird zurückgenommen"
+    assert not session.project.document.ops, "und keine Operation bleibt stehen"

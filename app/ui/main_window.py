@@ -3840,6 +3840,13 @@ class MainWindow(QMainWindow):
         self.session.progressChanged.connect(self._on_progress)
         self.session.busyChanged.connect(self._on_busy)
         self.session.askRequested.connect(self._on_ask)
+        # Der asynchrone Einleseweg meldet, wo der synchrone geworfen hat.
+        #: Der Name der heruntergeladenen Datei, bis ihr Import durch ist.
+        #: Die Meldung „Geladen: …" gehört ans Ende des Vorgangs, und der
+        #: endet seit dem Arbeiter nicht mehr in derselben Methode.
+        self._pending_download = ""
+        self.session.importFailed.connect(self._on_import_failed)
+        self.session.importFinished.connect(self._on_import_finished)
         self.session.failed.connect(self._on_error)
         # Gebundene Methode, kein Lambda: Der Sender ist ein Kind dieses
         # Fensters, und ein Lambda schlösse den Ring aus `.claude/rules`.
@@ -3963,26 +3970,45 @@ class MainWindow(QMainWindow):
         )
         self.status_message.repaint()
         try:
-            with waiting():
-                if project_file:
+            if project_file:
+                with waiting():
                     self.session.open_project(path)
                     self.settings.remember(path)
                     save_settings(self.settings)
-                else:
-                    if starting_fresh:
-                        self.session.start_new(self.settings.printer, self.settings.material)
-                        # Der Projektwechsel zeichnet den gemeinsamen
-                        # Fortschrittsbereich neu; der Lesehinweis gehört
-                        # unmittelbar vor den weiterhin synchronen Zugriff.
-                        self.status_message.setText(tr("Modell einfügen …"))
-                        self.status_message.repaint()
-                    self.session.import_model(path, raise_on_error=True)
-            if project_file:
                 # Beide fragen etwas, und beide erst außerhalb des
                 # Wartezeigers: ein Fenster, das um Antwort bittet und dabei
                 # „bitte warten" zeigt, sagt zweierlei.
                 self._offer_recovery(path)
                 self._offer_tour(path)
+            else:
+                if starting_fresh:
+                    self.session.start_new(self.settings.printer, self.settings.material)
+                    # Der Projektwechsel zeichnet den gemeinsamen
+                    # Fortschrittsbereich neu; der Lesehinweis gehört
+                    # unmittelbar davor.
+                    self.status_message.setText(tr("Modell einfügen …"))
+                    self.status_message.repaint()
+                # **Kein Wartezeiger mehr, und das ist die Änderung.** Gemessen
+                # an einer 3MF von 63 MB mit 32 Körpern: 0,09 s Lesen, 14,1 s
+                # Zählen — und das Zählen lief hier im Hauptthread. Ein
+                # Wartezeiger ist die Anzeige für zwei Sekunden; darüber
+                # gehört die Arbeit in einen Arbeiter, sagt der Docstring von
+                # ``waiting`` selbst. Was der Kunde jetzt sieht, ist die
+                # Ladeanzeige mit Fortschritt über die Modelldateien der
+                # Baugruppe — und ein Fenster, das sich bewegen lässt.
+                #
+                # Der Fehlerfall kommt nicht mehr als Ausnahme zurück, sondern
+                # über ``importFailed``: Wer im Arbeiter plant, kann nicht in
+                # einen Aufrufer werfen, der längst weitergelaufen ist.
+                # **Der Wartezeiger bleibt, und er regelt sich selbst.** Unter
+                # ``PLAN_IN_WORKER_ABOVE`` läuft der Weg gerade durch — dann
+                # steht er, solange gelesen wird, wie eh und je. Darüber kehrt
+                # der Aufruf sofort zurück, der Zeiger verschwindet mit dem
+                # ``with``, und die Ladeanzeige mit ihrem Fortschritt übernimmt.
+                # Eine Fallunterscheidung braucht es dafür nicht.
+                with waiting():
+                    self.session.import_model_async(path)
+                return
         except AppError as error:
             self.status_message.setText(self._announcement)
             show_error(error, self)
@@ -4068,23 +4094,23 @@ class MainWindow(QMainWindow):
             return
         self.status_message.setText(tr("Modell einfügen …"))
         self.status_message.repaint()
-        try:
-            with waiting():
-                if starting_fresh:
-                    # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
-                    # Nachtrag: ein frisches Projekt mit Drucker und Material
-                    # aus den Einstellungen, wie es open_path beim Ablegen
-                    # einer Datei auch anlegt.
-                    self.session.start_new(self.settings.printer, self.settings.material)
-                    # ``start_new`` zeichnet den gemeinsamen
-                    # Fortschrittsbereich neu. Der vorübergehende Lesehinweis
-                    # wird danach erneut gesetzt, ohne ihn anzukündigen.
-                    self.status_message.setText(tr("Modell einfügen …"))
-                    self.status_message.repaint()
-                self.session.import_model(Path(name), raise_on_error=True)
-        except AppError as error:
-            self.status_message.setText(self._announcement)
-            show_error(error, self)
+        if starting_fresh:
+            # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
+            # Nachtrag: ein frisches Projekt mit Drucker und Material
+            # aus den Einstellungen, wie es open_path beim Ablegen
+            # einer Datei auch anlegt.
+            self.session.start_new(self.settings.printer, self.settings.material)
+            # ``start_new`` zeichnet den gemeinsamen Fortschrittsbereich neu.
+            # Der vorübergehende Lesehinweis wird danach erneut gesetzt, ohne
+            # ihn anzukündigen.
+            self.status_message.setText(tr("Modell einfügen …"))
+            self.status_message.repaint()
+        # Derselbe Weg wie in ``open_path``, aus demselben Grund: Das Zählen
+        # der Körper einer Baugruppe dauert bei 63 MB vierzehn Sekunden, und
+        # die gehören nicht in den Hauptthread. Der Fehler kommt über
+        # ``importFailed``, der Wartezeiger deckt den kurzen Weg.
+        with waiting():
+            self.session.import_model_async(Path(name))
 
     def action_import_url(self) -> None:
         """Weg 1 (§2.2), wenn die Datei noch nicht auf dem Bett liegt.
@@ -4190,18 +4216,17 @@ class MainWindow(QMainWindow):
                 self.announce(tr("Der Download wurde verworfen — das Projekt bleibt."))
                 return
             self.session.start_new(self.settings.printer, self.settings.material)
-        try:
-            self.session.import_payload(
+        # Wie die zwei Wege von der Platte: Geplant wird im Arbeiter, gemeldet
+        # über ``importFailed``. Eine heruntergeladene Baugruppe ist genau der
+        # Fall, für den das gebaut ist — sie kommt ohne Vorwarnung in jeder
+        # Größe.
+        self._pending_download = fetched.name
+        with waiting():
+            self.session.import_payload_async(
                 fetched.name,
                 fetched.payload,
                 origin=SourceOrigin(url=fetched.url, retrieved=fetched.retrieved),
-                raise_on_error=True,
             )
-        except AppError as error:
-            show_error(error, self)
-            return
-        self._show_start_screen(False)
-        self.announce(f"{tr('Geladen')}: {fetched.name}")
 
     def _cancel_download(self) -> None:
         """Der eine Abbrechen-Knopf gilt auch dem Download (§2.8) — ein
@@ -9957,6 +9982,42 @@ class MainWindow(QMainWindow):
                 self.announce("")
             if self.report.worst_severity(result) in ("warning", "error"):
                 self._focus_report()
+
+    def _on_import_failed(self, error: AppError) -> None:
+        """Was der ``except``-Zweig von ``open_path`` getan hat, nur später.
+
+        Der Weg über das Signal ist nötig, weil der Plan im Arbeiter entsteht:
+        Wer dort scheitert, kann nicht in einen Aufrufer werfen, der längst
+        zurückgekehrt ist. Gezeigt wird dasselbe wie vorher — der Fehlerdialog
+        mit seinen Handlungen, und die Statuszeile zurück auf das, was vor dem
+        Ladehinweis dastand.
+        """
+        # **Erst den Wartezeiger, dann den Dialog.** Unterhalb von
+        # ``PLAN_IN_WORKER_ABOVE`` läuft der Einleseweg gerade durch, und
+        # dieser Slot steht damit noch **im** ``with waiting()`` des
+        # Aufrufers. Ein Fehlerdialog unter dem Wartezeiger ist genau das
+        # Fenster, das zugleich fragt und bittet zu warten — dagegen gibt es
+        # seit dem 29.08.2026 einen Test. Über der Schwelle steht hier
+        # ohnehin keiner, und ``restoreOverrideCursor`` auf einem leeren
+        # Stapel tut nichts.
+        if QApplication.overrideCursor() is not None:
+            QApplication.restoreOverrideCursor()
+        self.status_message.setText(self._announcement)
+        show_error(error, self)
+
+    def _on_import_finished(self, accepted: bool) -> None:
+        """Der Stapel steht; die Auswertung läuft danach von selbst.
+
+        Der Startbildschirm weicht erst hier — vorher wäre er einer leeren
+        Szene gewichen, und der Kunde sähe vierzehn Sekunden lang nichts.
+        """
+        geladen, self._pending_download = self._pending_download, ""
+        if accepted:
+            self._show_start_screen(False)
+            if geladen:
+                self.announce(f"{tr('Geladen')}: {geladen}")
+        else:
+            self.status_message.setText(self._announcement)
 
     def _on_project(self) -> None:
         # Eine gezeichnete Trennlinie liegt auf einem Körper, den es nach einer
