@@ -1734,7 +1734,15 @@ def test_a_feature_the_new_scene_does_not_know_leaves_the_window(window: MainWin
     QApplication.processEvents()
     assert window.feature_panel.feature_id == hole, "Voraussetzung: das Fenster zeigt die Bohrung"
 
-    window.start_empty()
+    # **Über die Sitzung und nicht über ``start_empty``.** Der Knopf des
+    # Startbildschirms fragt vorher, ob das geänderte Projekt weggeworfen
+    # werden darf (Regel 19 erlaubt die Frage, weil kein Undo ein verworfenes
+    # Dokument zurückholt) — und ein modaler Dialog wartet im Testlauf ewig.
+    # Der Lauf blieb daran zweimal stehen, ohne eine Zeile Ausgabe.
+    #
+    # Geprüft wird der Zustandswechsel, und der ist derselbe: ``start_empty``
+    # ruft genau das hier, sobald die Frage beantwortet ist.
+    window.session.start_new(window.settings.printer, window.settings.material)
     window.session.wait_for_idle()
     QApplication.processEvents()
 
