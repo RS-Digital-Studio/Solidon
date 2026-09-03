@@ -8831,6 +8831,21 @@ class Viewport(QWidget):
         self._ghost_actor = None
 
     def _drop_face_handle(self) -> None:
+        """Nimmt die Marke am Merkmal weg — **und die Vorschau mit ihr**.
+
+        Sie gehören zusammen: Beide zeigen dasselbe gewählte Merkmal, und beide
+        tragen ``MEASURE_COLOUR``, die dieselbe Farbe ist wie
+        ``SELECTED_COLOUR``. Blieb die Vorschau stehen, während die Marke ging,
+        leuchtete eine Bohrung weiter in der Auswahlfarbe, obwohl Statusleiste
+        und Merkmalsfenster „Keine Auswahl" sagten (Robert, 03.09.2026, am
+        Beispielprojekt ``weg1-halterung-anpassen.p3d``).
+
+        **Der Hinweis, der es entschieden hat, war die fehlende Beschriftung**
+        (3d-druck-85): Ein gewähltes Merkmal wird immer beschriftet. Eine
+        orange Fläche ohne Namen ist also keine Auswahl, sondern eine Marke,
+        die niemand abgeräumt hat.
+        """
+        self._drop_preview()
         if self._face_actor is not None and self.plotter is not None:
             self.plotter.remove_actor(self._face_actor, render=False)
         self._face_actor = None

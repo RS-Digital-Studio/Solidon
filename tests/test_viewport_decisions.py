@@ -5618,3 +5618,62 @@ def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) ->
     viewport._on_gizmo_released(versatz)
     assert versetzt == ["hole_1"], "das Loslassen hat das Merkmal nicht gemeldet"
     assert not am_teil, "und schon gar nicht das ganze Teil"
+
+
+def test_the_preview_goes_when_the_mark_goes(qt_app: QApplication) -> None:
+    """Die Vorschau überlebt die Marke nicht — sonst leuchtet ein Loch ohne Auswahl.
+
+    „Die Bohrung bleibt selektiert" (Robert, 03.09.2026, am Beispielprojekt
+    `weg1-halterung-anpassen.p3d`): Eine Bohrung leuchtete in der Auswahlfarbe,
+    während Statusleiste und Merkmalsfenster „Keine Auswahl" sagten.
+
+    **`MEASURE_COLOUR` und `SELECTED_COLOUR` sind dieselbe Farbe** (`#f0a54a`).
+    Eine Marke, die stehen bleibt, ist von einer Auswahl nicht zu
+    unterscheiden — und `_drop_preview` lief nur beim Zugende, nicht beim
+    Abhängen des Griffs.
+
+    Der Hinweis, der es entschieden hat, kam von 3d-druck-85 und stand im Bild:
+    **Die orange Fläche trug keine Beschriftung.** Ein gewähltes Merkmal wird
+    immer beschriftet; eine orange Fläche ohne Namen ist also keine Auswahl,
+    sondern eine Marke, die niemand abgeräumt hat.
+    """
+    from app.core.types import Feature
+    from app.ui.viewport import Viewport
+
+    entfernt: list[object] = []
+
+    class _Nachgiebig:
+        def __getattr__(self, name: str) -> Any:
+            return _Nachgiebig()
+
+        def __call__(self, *args: Any, **kwargs: Any) -> Any:
+            return _Nachgiebig()
+
+    class _Plotter(_Nachgiebig):
+        def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
+            return SimpleNamespace(name=kwargs.get("name"))
+
+        def remove_actor(self, actor: Any, **kwargs: Any) -> None:
+            entfernt.append(getattr(actor, "name", actor))
+
+    viewport = Viewport()
+    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    loch = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 17.5),
+            "axis": (0.0, 0.0, 1.0),
+            "depth": 35.0,
+            "diameter": 7.34,
+        },
+    )
+    viewport._show_preview(loch, (0.0, 0.0, 35.0), (0.0, 0.0, 1.0), 3.67)
+    assert viewport._shape_actor is not None
+
+    viewport._drop_face_handle()
+    assert viewport._shape_actor is None, (
+        "die Vorschau blieb stehen, während die Marke ging — ein Loch in Auswahlfarbe"
+    )
+    assert "feature-preview" in entfernt
