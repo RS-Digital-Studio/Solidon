@@ -3004,8 +3004,10 @@ class Viewport(QWidget):
         """Die Achse des laufenden Zugs, sobald sie sich gezeigt hat."""
         self._drag_normal: Vec3 | None = None
         """Die Flächennormale, wenn der Zug an einer Fläche hängt."""
-        self._grid_step = 1.0
-        self._angle_step = 15.0
+        # Kein Einrasten, solange die Leiste nichts anderes sagt — die
+        # Begründung steht bei ``DEFAULT_GRID_STEP`` in ``transform_bar``.
+        self._grid_step = 0.0
+        self._angle_step = 0.0
         self._map: AnalysisMap | None = None
         self._map_object: ObjectId | None = None
         self._occlusion_applied = False
@@ -7038,15 +7040,31 @@ class Viewport(QWidget):
             self._drag_normal = (float(normal[0]), float(normal[1]), float(normal[2]))
             self.drag_bar.follow_length(tr("Fläche"), along_normal(steps.offset, self._drag_normal))
         elif steps.turns and steps.axis is not None:
+            # **Gezeigt wird, was angewandt wird — der gerastete Wert.** Hier
+            # stand der rohe, und das Loslassen rastete: Wer bei einem
+            # Winkelfang von 15° um fünf Grad drehte, las „5,0°" mit und
+            # bekam nichts. Zweimal falsch — die Zahl versprach eine Drehung,
+            # die nicht kam, und der Kunde schloss daraus, das Drehen sei
+            # kaputt (Robert, 03.09.2026: „bei bewegen geht das drehen des
+            # modells nicht"). Mit dem gerasteten Wert springt die Zahl von
+            # 0 auf 15 auf 30, und man sieht, worauf man einrastet.
             self._drag_kind = "turn"
             self._drag_axis = steps.axis
-            self.drag_bar.follow(f"{tr('Winkel')} {steps.axis.upper()}", steps.angle, "°", 1)
+            self.drag_bar.follow(
+                f"{tr('Winkel')} {steps.axis.upper()}",
+                snap_to_step(steps.angle, self._angle_step),
+                "°",
+                1,
+            )
         elif steps.moves:
             index = max(range(3), key=lambda axis: abs(steps.offset[axis]))
             dominant: Axis = ("x", "y", "z")[index]
             self._drag_kind = "move"
             self._drag_axis = dominant
-            self.drag_bar.follow_length(dominant.upper(), steps.offset[index])
+            # Dieselbe Zusage wie beim Winkel darüber: der gerastete Weg.
+            self.drag_bar.follow_length(
+                dominant.upper(), snap_to_step(steps.offset[index], self._grid_step)
+            )
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
 

@@ -41,9 +41,22 @@ from app.ui.icons import icon
 from app.ui.labels import LengthSpin, NumberSpin, choice_label
 from app.ui.style import NORMAL, TIGHT, make_primary
 
-#: Sinnvolle Vorgaben: ein Millimeter Weg, fünfzehn Grad Drehung.
-DEFAULT_GRID_STEP = 1.0
-DEFAULT_ANGLE_STEP = 15.0
+#: **Kein Einrasten als Vorgabe** (Entscheidung Robert, 03.09.2026).
+#:
+#: Hier stand ein Millimeter und fünfzehn Grad, und beides wirkte, ohne dass
+#: es irgendwo sichtbar gewesen wäre: Der Fang lebt in einem Popup hinter
+#: einem Symbolknopf. Beim Verschieben fiel das nicht auf — ein Millimeter ist
+#: feiner als eine Mausbewegung. Beim Drehen verschwand jeder Zug unter
+#: siebeneinhalb Grad **spurlos**: Der Körper drehte sich unter der Maus mit,
+#: die Zahl am Zeiger zählte mit, und das Loslassen rundete auf null. Der
+#: Befund lautete deshalb „das Drehen geht gar nicht".
+#:
+#: Eine 3D-Szene hat kein Raster, an dem etwas einrasten könnte — wer runde
+#: Werte will, tippt sie (die Zahl am Zeiger nimmt Eingaben) oder stellt den
+#: Fang im Popup ein. Null heißt dort seit je „kein Einrasten"; jetzt ist es
+#: auch die Vorgabe.
+DEFAULT_GRID_STEP = 0.0
+DEFAULT_ANGLE_STEP = 0.0
 
 #: Die drei Rollen in der Reihenfolge, in der man sie braucht.
 #:

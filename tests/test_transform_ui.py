@@ -586,3 +586,28 @@ def test_without_a_chosen_object_the_status_line_says_so(window: MainWindow) -> 
     window.transform_bar.apply.click()
 
     assert "Objekt" in window.status_message.text(), window.status_message.text()
+
+
+def test_a_small_turn_is_not_swallowed_by_a_hidden_snap(bar: TransformBar) -> None:
+    """Eine 3D-Szene rastet nicht ein, solange es niemand einstellt.
+
+    **Der Befund (Robert, 03.09.2026):** „bei bewegen geht das drehen des
+    modells nicht, nur das normale verschieben". Er stimmte, und die Ursache
+    war ein Fang, den niemand sehen konnte: fünfzehn Grad als Vorgabe, gesetzt
+    in einem Popup hinter einem Symbolknopf. Ein Zug um wenige Grad drehte den
+    Körper unter der Maus mit, die Zahl am Zeiger zählte mit — und das
+    Loslassen rundete auf null. Beim Verschieben fiel derselbe Fang nicht auf,
+    weil ein Millimeter feiner ist als eine Mausbewegung.
+
+    Wer runde Werte will, tippt sie oder stellt den Fang ein; null heißt dort
+    seit je „kein Einrasten". Geprüft wird beides: die Vorgabe der Leiste und
+    dass eine kleine Drehung die Rechnung übersteht.
+    """
+    from app.core.geom.transform import snap_to_step
+
+    assert bar.grid.value_mm() == 0.0, "der Rasterfang ist ab Werk aus"
+    assert bar.angle.value() == 0.0, "der Winkelfang ebenso"
+
+    grid, angle = bar.grid.value_mm(), bar.angle.value()
+    assert snap_to_step(5.0, angle) == 5.0, "fünf Grad bleiben fünf Grad"
+    assert snap_to_step(0.4, grid) == 0.4, "und ein Zehntelmillimeter bleibt einer"
