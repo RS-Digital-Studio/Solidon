@@ -990,9 +990,9 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: vollständig auf der Grafikkarte. Wer ein größeres Modell fährt, zahlt hier
 #: zuerst.
 #:
-#: Die Reihe fuhr 84 Schemata. Am 03.09.2026 sind es mit 110 Werkzeugen
-#: **22 691 Token** für den kompakten Satz, den dieser Weg fährt
-#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — 69,2 % des
+#: Die Reihe fuhr 84 Schemata. Am 03.09.2026 sind es mit 111 Werkzeugen
+#: **22 856 Token** für den kompakten Satz, den dieser Weg fährt
+#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — 69,8 % des
 #: Fensters. Am 31.08.2026 waren es 19 641 bei 106 Werkzeugen, und davor am
 #: selben Tag 24 161; die Differenz zwischen diesen beiden sind die zwei
 #: Schritte, die wortgleiche Wiederholung aus dem Schema in den Systemprompt
@@ -1799,12 +1799,17 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: genau deshalb steht die Zahl nicht als Schätzung im Code: Wer eine
 #: Operation dazulegt, verlängert dem Kunden die Wartezeit, und er soll es
 #: hier sehen.
-PROMPT_TOKENS: Final = 22691
+#:
+#: *Merkmal verdoppeln* hat am selben Tag **165 Token** dazugelegt — von
+#: 22 691 auf 22 856, eine einzige Operation. Das ist die Größenordnung, in
+#: der eine neue Operation den Chat kostet: knapp zwei Zehntel Prozent des
+#: Fensters und eine halbe Minute Wartezeit auf dem Prozessorweg.
+PROMPT_TOKENS: Final = 22856
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen.
-PROMPT_TOOL_COUNT: Final = 110
+PROMPT_TOOL_COUNT: Final = 111
 
 
 @dataclass(frozen=True, slots=True)
