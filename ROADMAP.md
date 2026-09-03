@@ -169,6 +169,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein elternloser Knopf „Auf das Bett setzen" wird zum aktiven Fenster | Review vor der Demo 0.3.0 (02.09.2026) | die Herkunft: Beim Laden eines Modells entsteht ein Handlungsknopf ohne Elternfenster (vermutlich `errors.PLACE_ON_BED` als Handlung einer Befundzeile, gezeigt, bevor er im Layout hängt), der offscreen `QApplication.activeWindow()` wird und dem Hauptfenster die Aktivierung nimmt (gemessen 02.09.2026 im Transform-Test) — Knopf erst nach dem Einhängen zeigen |
 | Ein Datum steht in jeder Sprache auf Deutsch | Architektur-Durchsicht (02.09.2026) | eine Zeile in `main_window.py:11170` — `QLocale().toString(...)` statt `strftime("%d.%m.%Y %H:%M")`; nach dem Release, weil der Wiederherstellungsdialog nur nach einem Absturz erscheint |
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
+| Der Einheitendialog zeigt „nan" | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Prüfung auf endliche Koordinaten dort, wo die Zahl **entsteht** — `biggest` in `ingest/ops.py`, die Diagonale des größten Körpers (3d-druck-d4). Eine STL mit einer NaN-Ecke wird angenommen, `detect_unit` findet nichts Plausibles und fragt; im Dialog steht dann „Millimeter (mm): nan × 20.00 × 20.00 mm". Der Docstring von `_unit_for` sagt die Regel selbst: „eine Frage, die niemand beantworten kann, ist nur die halbe Regel" |
+| Vierzehn Sekunden eingefrorenes Fenster beim Lesen | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | einen asynchronen Umbau von `main_window.open_path`. Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute Fenster mit einem Zeitgeber, der während der Blockade nicht feuert: 119,5 s gesamt, davon 30,2 s eingefroren — ein Block von 14,0 s ganz am Anfang (synchrones Lesen plus `scan_assembly`) und einer von 6,3 s am Ende. Dazwischen ist §2.8 vorbildlich erfüllt („Punkte verschweißen · 20 % · noch etwa 2 min"). Der Docstring beschreibt die Lücke vollständig und schließt sie nicht; `first_model` fällt vor dem Lesen und stört den Umbau nicht |
+| `ingest.very_large` trägt den Körpernamen als Text statt als Kennung | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine `object_id` in `ops._named()`, das heute nur `values["object"] = name` setzt. Zwei Folgen, gemessen von 3d-druck-7f an einem Kundenmodell mit acht Körpern: Der Befund bekommt keine Handlung, weil `DECIMATE_MESH` ein Ziel braucht und ohne Kennung auf der zufälligen Auswahl landete; und `_bundled` gruppiert über den Wortlaut, in dem der Name steht — sechs Körper werden sechs fast wortgleiche Zeilen. Zwölf von fünfzehn Befunden im Bericht stammen aus zwei Kennungen |
+| Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 
 ---
 
@@ -14677,4 +14681,98 @@ passiert, nachdem man geklickt hat.
   (`_object_at_view`), also wird sie beim **Klick** gestellt und das Ergebnis
   gemerkt — `Measurement.object_ids` trägt je Punkt einen Körper, weil ein Maß
   zwei verbinden darf. Die Schnittebene geht weiterhin nicht mit.
+## Eine Hohlkehle mit Radius null (03.09.2026)
 
+- [x] **Der Objektbaum zeigte „Hohlkehle R0,00 mm".**
+  Eine Zahl, die eine Messung behauptet, die es nicht gibt. Gemessen an
+  „Blessed Family — Heart Script Decor" (23 282 Dreiecke): **109**
+  erkannte Verrundungen, die kleinste mit **0,0007 mm** Radius, vier unter
+  einem halben Hundertstel und zweiundzwanzig unter einer Extrusionsbahn
+  (0,42 mm) — also unter allem, was ein Drucker herstellen kann. Was
+  dort erkannt wird, ist Tesselierung: Wo ein paar Dreiecke zufällig um
+  eine Achse stehen, findet der Fit einen Zylinderausschnitt.
+
+  `MIN_CYLINDER_DIAMETER` gab es seit jeher mit genau dieser Begründung
+  — „was für kein Werkzeug zu klein ist, ist für keine Passung zu
+  klein" — und sie galt für Bohrungen und Zapfen; bei den Zapfen steht
+  sogar „dieselbe Schranke wie bei der Bohrung" im Kommentar. Die Verrundung
+  war die dritte, an die niemand gedacht hat. Jetzt gilt sie auch dort:
+  109 → **90** Verrundungen an diesem Modell, kleinster Radius
+  0,286 mm, keine Null mehr. An einem zweiten Kundenmodell
+  (Schwammablage DM24) ändert sich nichts — dort war die kleinste
+  ohnehin 1,47 mm.
+
+  Die Nummern bleiben lückenlos: Gefiltert wird **vor** dem Zählen,
+  sonst hätte der Baum eine `fillet_2` ohne `fillet_1` — ein Verweis
+  ins Leere für die Zuordnung (§21.2).
+  `tests/test_features.py::test_a_fillet_smaller_than_any_tool_is_none`,
+  Gegenprobe gültig.
+
+
+## Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026)
+
+Der häufigste Einstieg (§2.2, Weg 1) mit Dateien, wie ein Kunde sie hat statt
+wie ein Test sie baut: der abgebrochene Download, die halb geladene STL, die
+umbenannte Textdatei, die 404-Seite eines Servers unter dem Namen
+`modell.stl`, der Export ohne Auswahl, die Datei in Zoll, die in Metern, die
+zu große, die mit einer NaN-Ecke.
+
+**Behoben ist der Hauptbefund** (`74b49b0d`): Fünf unbrauchbare Dateien gingen
+klaglos durch, wurden zur Operation im Stapel und zur eingebetteten Quelle im
+Dokument und wären beim Speichern in die Projektdatei gewandert.
+`loader.check_readable` weist sie jetzt vor der Weiche ab, mit einem Satz zur
+Ursache statt zum Ergebnis und mit *Andere Datei wählen* als Ausweg — ohne den
+hätte die Absage nur *Abbrechen* getragen, weil `correct_input` in
+`dialogs.NEEDS_OP` steht und einen Schritt öffnet, den es vor der Operation
+nicht gibt.
+
+**Was der Durchgang darüber hinaus gezeigt hat, ohne dass etwas zu tun wäre:**
+Die Einheitenerkennung fragt bei zwei plausiblen Deutungen, statt zu raten
+(Regel 21), und zeigt zu jeder Antwort das Ergebnis in Millimetern; eine Datei
+in Metern erkennt sie allein; `ingest.welded` erscheint bei 22 von 22 Modellen,
+ist aber `info` und holt den Prüfbericht deshalb nicht nach vorn. An diesen
+drei Stellen wollte ich etwas beheben und habe nichts gefunden — auch das ist
+ein Ergebnis.
+
+Die vier offenen Punkte, drei davon aus anderen Sitzungen, die während dieses
+Durchgangs an denselben Weg gestoßen sind:
+
+- [ ] **Der Einheitendialog zeigt „nan".**
+      Eine STL mit einer NaN-Ecke wird angenommen; `detect_unit` findet nichts
+      Plausibles und fragt, und im Dialog steht „Millimeter (mm): nan × 20.00 ×
+      20.00 mm". Auffällig wird es in der Anzeige, entstehen tut es bei
+      `biggest` in `ingest/ops.py` — der Diagonale des größten Körpers
+      (3d-druck-d4). Der Docstring von `_unit_for` nennt die Regel selbst:
+      „eine Frage, die niemand beantworten kann, ist nur die halbe Regel".
+
+- [ ] **Vierzehn Sekunden eingefrorenes Fenster beim Lesen.**
+      Gemessen von 3d-druck-c7 an `chufang.3mf` (63,6 MB) über das gebaute
+      Fenster, mit einem Zeitgeber, der während der Blockade nicht feuert:
+      119,5 s gesamt, davon 30,2 s eingefroren — ein Block von 14,0 s am
+      Anfang (synchrones Lesen plus `scan_assembly`) und einer von 6,3 s am
+      Ende. Dazwischen ist §2.8 vorbildlich erfüllt („Punkte verschweißen ·
+      20 % · noch etwa 2 min"). Der Docstring von `open_path` beschreibt die
+      Lücke vollständig und schließt sie nicht. `first_model` fällt vor dem
+      Lesen und stört einen asynchronen Umbau nicht.
+
+- [ ] **`ingest.very_large` trägt den Körpernamen als Text statt als Kennung.**
+      `ops._named()` setzt `values["object"] = name`, keine `object_id`. Zwei
+      Folgen, von 3d-druck-7f an einem Kundenmodell mit acht Körpern gemessen:
+      Der Befund bekommt keine Handlung, weil `DECIMATE_MESH` ein Ziel braucht
+      und sonst auf der zufälligen Auswahl landete; und `_bundled` gruppiert
+      über den Wortlaut, in dem der Name steht — sechs Körper werden sechs
+      fast wortgleiche Zeilen. Zwölf von fünfzehn Befunden im Bericht stammen
+      aus zwei Kennungen.
+
+- [ ] **Die übersetzte Schnitt-Erweiterung verliert eine Schicht.**
+      Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204
+      gemeinsame Schichten, davon **null** flächenverschieden — und genau eine
+      fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus
+      dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die
+      Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im
+      vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein
+      22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden,
+      je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain`
+      mit, ein Klon und die CI nehmen GEOS. `test_slice_core.py` hält beide
+      Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen
+      auf Eckpunkte fallen — das ist der Prüffall, der fehlt.
