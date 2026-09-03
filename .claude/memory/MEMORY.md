@@ -72,6 +72,7 @@
 ## Qt, VTK, Oberfläche
 
 - [VTK/Qt-Referenzen](vtk-qt-referenzen-halten-zu-lange.md) — wer hält, was weg sein sollte?
+- [VTK sagt ja und tut nichts](vtk-sagt-ja-und-tut-nichts.md) — Hardware-Picker treffen hier nichts, Depth Peeling läuft nie.
 - [Verwaiste Widgets](verwaiste-widgets-sterben-im-falschen-moment.md) — gc.disable trennt Zeitpunkt und Zerstörung.
 - [Prüfstand misst zu früh](qt-pruefstand-misst-zu-frueh.md) — processEvents stellt DeferredDelete nicht zu.
 - [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) — isVisible und hasFocus antworten falsch.
@@ -151,7 +152,10 @@
 - [Fix macht nicht grün](fix-der-nicht-gruen-macht.md) — dann war die Diagnose falsch.
 - [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — den alten Namen überall grepen.
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen.
+- [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — ruff format bricht den Suchtext um; der Patch greift halb.
+- [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) — Hauptwert geprüft, Nachbar nicht; ein Feld von sieben.
 - [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
+- [Fremde Erklärung altert mit](fremde-erklaerung-altert-mit.md) — beim zweiten Mal prüfen, nicht erklären.
 - [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — allein fahren, bevor man Regression glaubt.
 - [rtree-Abstürze](rtree-abstuerze-im-langen-lauf.md) — die volle Suite stirbt; portionsweise fahren.
 - [Native Bibliotheken](native-bibliotheken-speicher.md) — rtree, _elementtree, Abriss: eine Familie.
