@@ -73,3 +73,26 @@ Verwandt: [[eine-kette-endet-am-letzten-glied]] — dort deckt eine *zutreffende
 Begründung im Docstring eine Lücke; hier deckt eine *tautologische* Erwartung
 einen falschen Erzeuger. Und [[messwerkzeug-misst-sich-selbst]], Punkt 1:
 an einem Fall prüfen, dessen Ausgang feststeht.
+
+**Und die Kehrseite, an einem Abend zweimal belegt: Eine Zahl, die man
+*vorher* festschreibt, findet Fehler, die ein grüner Lauf durchlässt.**
+04.09.2026:
+
+* 81 hielt vor dem Freigabe-Tag fest, mein Lauf über die erzeugten Vergleiche
+  müsse **68 Fälle** haben, und wollte jede Abweichung erklärt haben — auch
+  nach oben. Der Lauf traf 68 genau. Ohne die vorher genannte Zahl wären
+  auch 62 als „grün" durchgegangen, und niemand hätte gewusst, dass sechs
+  Fälle fehlen.
+* Wirklich *gefunden* hat es die Technik eine Stunde vorher: In einem neuen
+  Wächter stand `assert len(gefunden) >= 7`, und die 7 stammte aus einer
+  **unabhängigen** Messung von vorher. Er fand sechs — die siebte Operation
+  warf dieselbe Absage über einen dritten Helfer, den mein Suchmuster nicht
+  kannte. Ohne die Schranke wäre der Test grün gewesen und hätte sechs von
+  sieben geprüft.
+
+Der Unterschied zum Fehler oben ist die **Herkunft**: Ein Sollwert aus dem
+Prüfling prüft nichts; ein Sollwert aus einer unabhängigen Quelle, vor dem
+Lauf notiert, prüft die Vollständigkeit der Messung selbst. Jede Suche, jede
+Sammlung, jede Auswahl verdient deshalb eine Zahl daneben — und die kommt von
+woanders her. Siehe [[suche-prueft-ihre-eigene-trefferzahl]] und
+[[waechter-zaehlt-das-falsche]].
