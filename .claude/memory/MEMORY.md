@@ -27,6 +27,7 @@
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — muss der Kunde raten, ist es falsch.
 - [Fehlerzählung ist kein Nutzen](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) — zwölf behobene Knöpfe sagen dem Kunden, dass zwölf kaputt waren.
+- [Kundentexte sagen Version](kundentexte-sagen-version.md) — nicht „Fassung“; intern darf es bleiben.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — sieben Merkmale; Rückspiegeln ist eines.
 - [Beheben statt notieren](beheben-statt-notieren.md) — Fund → Messung → Fix → Test in dieser Sitzung.
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) — je Schritt affected_tests; Tor vor dem Commit.
@@ -44,6 +45,7 @@
 
 ## Produkt und Entscheidungen
 
+- [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) — SKÅDIS-Kunde, maß die Platte selbst; sein Mac-Bericht steht aus.
 - [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) — vier Wege, eine Szene, ehrliche Übergabe.
 - [Technische Produktreife](technische-produktreife-konzept.md) — Qualitätsvertrag, messbare KI, Updates.
 - [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker und Einmalkauf bleiben der Kurs.
@@ -109,6 +111,7 @@
 
 - [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) — fünf Bauarten mit ihren Warnzeichen.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — ansehen, mutieren, durchfahren.
+- [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) — LRU zählt Einträge; wiegen die verschieden, hält er ein Gigabyte.
 - [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) — der erste Fall gibt die Größenordnung, nicht die Grenze.
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — dazwischen sind beide Antworten falsch.
 - [Roh gegen gerendert](roh-gegen-gerendert-vergleichen.md) — Maskierung mitprüfen.
