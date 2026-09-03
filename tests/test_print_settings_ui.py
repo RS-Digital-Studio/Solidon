@@ -3424,3 +3424,95 @@ def test_a_printer_the_slicer_does_not_know_says_which_one(
         f"der Hinweis nennt den Slicer nicht: {note!r}"
     )
     assert "{" not in note, f"ein Platzhalter blieb stehen: {note!r}"
+
+
+def test_without_a_matching_profile_the_nozzle_still_narrows_the_list(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """„1001 Profile sind bisschen viel" (Robert, 03.09.2026).
+
+    Für einen Drucker, dem sich kein Profil zuordnet, zeigte die Notbremse den
+    **ganzen** Bestand — beim ElegooSlicer 1001 Einträge, 78 Hersteller. Eine
+    echte Auskunft über den Drucker gibt es aber auch dann: seine Düse. Ein
+    Profil für 0,8 mm ist an einem 0,4-mm-Drucker die falsche Wahl, gleich wie
+    der Drucker heißt; am echten Bestand bleiben damit 387 statt 1001.
+
+    Der Herstellername hülfe hier nicht: Er ist genau bei dem Drucker leer, bei
+    dem diese Stufe überhaupt greift (`generic-220`).
+
+    Und die Notbremse dahinter bleibt: Passt auch keine Düse, steht wieder
+    alles da — der Slicer lehnt ohne Maschinenprofil jeden Auftrag ab.
+    """
+
+    def machine(name: str, nozzle: float) -> SlicerProfile:
+        return SlicerProfile(path=Path(f"{name}.json"), name=name, kind="machine", nozzle=nozzle)
+
+    fremd = [
+        machine("Afinia H+1(HS) 0.4 nozzle", 0.4),
+        machine("Voron 2.4 0.8 nozzle", 0.8),
+        machine("Snapmaker J1 0.6 nozzle", 0.6),
+        machine("RatRig V-Core 0.4 nozzle", 0.4),
+    ]
+    mine = dialog.session.profile.printer
+    assert mine.nozzle_diameter == pytest.approx(0.4), "sonst prüft dieser Test etwas anderes"
+
+    gezeigt = dialog._machines_worth_showing(fremd)
+    assert [entry.name for entry in gezeigt] == [
+        "Afinia H+1(HS) 0.4 nozzle",
+        "RatRig V-Core 0.4 nozzle",
+    ], "die Liste zeigt Düsen, die dieser Drucker nicht hat"
+
+    # Passt keine, bleibt alles stehen — eine leere Liste wäre schlimmer.
+    nur_dick = [machine("Voron 2.4 0.8 nozzle", 0.8)]
+    assert dialog._machines_worth_showing(nur_dick) == nur_dick
+
+    # Und die gemerkte Wahl überlebt auch diese Stufe.
+    dialog.ui_settings.slicer_machine_profile = "Voron 2.4 0.8 nozzle.json"
+    gezeigt = dialog._machines_worth_showing(fremd)
+    assert "Voron 2.4 0.8 nozzle" in [entry.name for entry in gezeigt], (
+        "wer einmal abgewichen ist, meinte es so"
+    )
+
+
+def test_the_printer_list_can_be_searched_by_typing(dialog: PrintSettingsDialog) -> None:
+    """Auch 387 Einträge findet niemand durch Rollen.
+
+    Die Düsenstufe darüber drittelt die Liste; was bleibt, ist immer noch zu
+    lang für ein Aufklappmenü. Getippt wird deshalb, und gesucht wird **im
+    ganzen Namen**: Wer „Ender" eingibt, meint „Creality Ender-3 V3", und der
+    Herstellername steht davor. Am echten Bestand: „ender" trifft 21 Einträge,
+    „Centauri" vier.
+
+    Ein getippter Name, den es nicht gibt, darf keine Wahl werden — sonst
+    stünde im Feld ein Drucker, den der Slicer nicht kennt.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QComboBox
+
+    box = dialog.machine_choice
+    assert box.isEditable(), "ohne Eingabefeld gibt es nichts zu tippen"
+    assert box.insertPolicy() == QComboBox.InsertPolicy.NoInsert, (
+        "ein erfundener Drucker darf nicht in die Liste rutschen"
+    )
+
+    completer = box.completer()
+    assert completer is not None, "ohne Vervollständiger sucht das Tippen nichts"
+    assert completer.filterMode() == Qt.MatchFlag.MatchContains, (
+        "am Anfang zu suchen hilft nicht, wenn der Hersteller davorsteht"
+    )
+    assert completer.caseSensitivity() == Qt.CaseSensitivity.CaseInsensitive
+
+    dialog._profiles_found(
+        [
+            SlicerProfile(path=Path(f"{name}.json"), name=name, kind="machine", nozzle=0.4)
+            for name in (
+                "Creality Ender-3 V3 0.4 nozzle",
+                "Elegoo Centauri Carbon 2 0.4 nozzle",
+                "Voron 2.4 0.4 nozzle",
+            )
+        ]
+    )
+    completer.setCompletionPrefix("ender")
+    assert completer.completionCount() == 1, "mitten im Namen wird nicht gesucht"
+    completer.setCurrentRow(0)
+    assert "Ender-3" in completer.currentCompletion()

@@ -3639,6 +3639,7 @@
   "Welcher Grauwert die Fläche in Ruhe lässt. Null trägt nur auf; ein halb hebt und senkt — der Unterschied zwischen Stempel und Prägung.": "Que valor de cinzento deixa a superfície em paz. Zero apenas acrescenta; meio levanta e baixa — a diferença entre um carimbo e um relevo gravado.",
   "Welcher Punkt beim Skalieren stehen bleibt.": "Que ponto fica parado durante a escala.",
   "Welcher Slicer die Druckdatei rechnet. Die Wahl bleibt gemerkt und gilt auch beim nächsten Mal; die Profile darunter richten sich nach ihr.": "Qual slicer calcula o ficheiro de impressão. A escolha fica memorizada e vale também da próxima vez; os perfis abaixo regem-se por ela.",
+  "Das Druckerprofil des Slicers. Tippen sucht in der ganzen Liste — auch mitten im Namen.": "O perfil de impressora do slicer. Digitar procura em toda a lista, também no meio do nome.",
   "Welches Filament die Fläche bekommt. Im 3MF bleibt es demselben Farbwechselplatz zugeordnet.": "Que filamento a face recebe. No 3MF, permanece atribuído à mesma posição da mudança de cor.",
   "Welches Filament diese Fläche bekommt. Die Vorwahl steht darunter — was der Körper schon trägt, ganz oben.": "Que filamento esta face recebe. A pré-seleção está abaixo — o que o corpo já usa fica no topo.",
   "Welches Material dieses Teil ist. Leer heißt: das des Projekts.": "De que material é esta peça. Vazio significa: o do projeto.",

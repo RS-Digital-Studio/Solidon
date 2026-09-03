@@ -2332,6 +2332,33 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice = QComboBox(self.slicer_inner)
         self.machine_choice.setEnabled(False)
         self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
+        # **Tippen statt scrollen** („1001 Profile sind bisschen viel", Robert,
+        # 03.09.2026). Wo kein Profil zum Drucker gehört, bleiben nach der
+        # Düsenstufe immer noch 387 — und eine Liste dieser Länge findet
+        # niemand durch Rollen. Der Vervollständiger sucht **im ganzen Namen**
+        # und nicht nur am Anfang: Wer „Ender" tippt, meint „Creality Ender-3
+        # V3", und wer den Hersteller kennt, tippt ihn eben.
+        #
+        # ``NoInsert`` und die Sperre für neue Einträge sind das Gegenstück:
+        # Ein getippter Name, den es nicht gibt, darf keine Wahl werden — dann
+        # stünde im Feld ein Drucker, den der Slicer nicht kennt.
+        # ``currentData()`` bleibt dabei die einzige Quelle der Wahl; sie ist
+        # ``None``, solange nichts Passendes getroffen ist, und der
+        # Slicen-Knopf sperrt sich mit seinem Grund (Regel 19).
+        self.machine_choice.setEditable(True)
+        self.machine_choice.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        machine_completer = self.machine_choice.completer()
+        if machine_completer is not None:
+            machine_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            machine_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        machine_note = tr(
+            "Das Druckerprofil des Slicers. Tippen sucht in der ganzen Liste — "
+            "auch mitten im Namen."
+        )
+        self.machine_choice.setToolTip(machine_note)
+        self.machine_choice.setStatusTip(machine_note)
+        self.machine_choice.setAccessibleDescription(machine_note)
+        self.machine_choice.setAccessibleName(tr("Drucker"))
         self.process_choice = QComboBox(self.slicer_inner)
         self.process_choice.setEnabled(False)
         # Der Slicen-Knopf fragt die Profilwahl vor dem Klick (Regel 19) —
@@ -2758,6 +2785,20 @@ class PrintSettingsDialog(QDialog):
         Maschinenprofil jeden Auftrag ab. Dieselbe Grenze wie bei den
         Filamenten eine Methode weiter — ein Filter, der alles wegnimmt, ist
         keiner.
+
+        **Und dazwischen liegt eine Stufe, weil „alles" zu viel ist** („1001
+        Profile sind bisschen viel", Robert, 03.09.2026). Wo kein Profil zum
+        Drucker gehört, gibt es immer noch eine echte Auskunft über ihn: seine
+        Düse. Ein Profil für 0,8 mm ist an einem 0,4-mm-Drucker die falsche
+        Wahl, gleich wie der Drucker heißt. Gemessen am Bestand des
+        ElegooSlicer:
+
+            ohne Filter                     1001
+            nach Düse (0,4 mm)               387
+            dem Drucker zugeordnet          4 bis 41
+
+        Der Herstellername hilft dabei nicht weiter: Er ist genau bei dem
+        Drucker leer, bei dem diese Stufe überhaupt greift.
         """
         mine = self.session.profile.printer.id
         known = profiles.printer_profiles()
@@ -2772,7 +2813,15 @@ class PrintSettingsDialog(QDialog):
             if slicer_profiles.printer_for(entry.name, known) == mine
             or str(entry.path) == remembered
         ]
-        return fitting or machines
+        if fitting:
+            return fitting
+        nozzle = self.session.profile.printer.nozzle_diameter
+        same_nozzle = [
+            entry
+            for entry in machines
+            if is_close(entry.nozzle, nozzle) or str(entry.path) == remembered
+        ]
+        return same_nozzle or machines
 
     def _filaments_worth_showing(
         self, machine: slicer_profiles.SlicerProfile | None
