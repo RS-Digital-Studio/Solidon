@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QLabel,
+    QPushButton,
     QSpinBox,
     QToolButton,
     QWidget,
@@ -3300,3 +3301,39 @@ def test_the_printer_list_shows_the_printer_you_actually_have(
         "wo sich nichts zuordnen lässt, bleibt alles stehen — sonst hätte der "
         "Slicer kein Maschinenprofil und lehnte jeden Auftrag ab"
     )
+
+
+def test_no_locked_button_in_this_dialog_stays_silent(dialog: PrintSettingsDialog) -> None:
+    """Dieselbe Zusage wie oben, nur für alle Knöpfe statt für einen.
+
+    Der Test über *Druckdatei speichern …* steht seit Langem da, und trotzdem
+    fiel *Vorschläge übernehmen* durch: gesperrt, weil es nichts zu übernehmen
+    gibt, und wortlos. Gemessen am 03.09.2026 über alle sichtbaren Knöpfe des
+    Dialogs — von vier gesperrten trug einer keinen Grund.
+
+    Ein Test je Knopf fängt den nächsten Knopf nicht. Die Regel gilt dem
+    Dialog, also prüft sie ihn als Ganzes; wer einen fünften Knopf hinzufügt,
+    bekommt sie ohne weiteres Zutun.
+
+    Die Tabelle darüber sagt zwar „Nichts einzuwenden.", aber das ist ein Satz
+    an einer anderen Stelle: Wer auf den grauen Knopf zeigt, fragt ihn.
+    """
+    # **Gezeigt, nicht nur gebaut.** Vor dem ``show()`` steht der Dialog auf
+    # halbem Weg: Die Profilsuche läuft nicht, und die zwei Slicer-Knöpfe
+    # tragen ihren Grund noch nicht. Gemessen am gebauten Fenster ist er nach
+    # dem Anzeigen da („Der Profilbestand wird durchgesehen …"), und das ist
+    # der Zustand, den ein Kunde sieht — ein Test davor prüfte einen, den es
+    # für ihn nie gibt.
+    dialog.show()
+    for _ in range(10):
+        QApplication.processEvents()
+
+    stumm = []
+    for button in dialog.findChildren(QPushButton):
+        if not button.isVisibleTo(dialog) or not button.text() or button.isEnabled():
+            continue
+        # Alle drei Kanäle, wie bei den Nachbarn: Ein Grund, den nur die Maus
+        # findet, ist für den Bildschirmleser keiner (Regel 18).
+        if not (button.toolTip() and button.statusTip() and button.accessibleDescription()):
+            stumm.append(button.text())
+    assert not stumm, f"gesperrt und ohne Grund: {stumm}"

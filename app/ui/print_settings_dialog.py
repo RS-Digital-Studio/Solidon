@@ -3322,9 +3322,23 @@ class PrintSettingsDialog(QDialog):
         """
         found = self._slicer_path
         state = activation.state()
+        # **Der häufigste Grund stand in keinem der Zweige.** Beide Knöpfe
+        # brauchen einen Slicer, und wenn keiner da ist, sperrte sie
+        # ``found is None`` unten wortlos: Der ``reason``-Zweig verlangt
+        # ``found is not None``, also blieb der Satz leer. Gefunden hat es der
+        # Wächter über alle Knöpfe des Dialogs (03.09.2026) — die zwei Tests je
+        # Knopf daneben prüfen den Fall, dass ein Slicer da ist, und der ist
+        # der seltenere: Ein Kunde ohne eingerichteten Slicer sieht diesen hier
+        # bei jedem Öffnen. Die Auskunft gab es, aber in der Zustandszeile
+        # darunter; wer auf den grauen Knopf zeigt, fragt ihn und nicht sie.
+        no_slicer = str(
+            tr("Dafür fehlt ein Slicer — der Knopf Zusätzliche Programme richtet einen ein.")
+        )
         reason = ""
         if not state.unlocked:
             reason = licence_lock_line(state)
+        elif found is None:
+            reason = no_slicer
         elif found is not None:
             # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
             # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher
@@ -3345,7 +3359,12 @@ class PrintSettingsDialog(QDialog):
         open_reason = ""
         if not state.unlocked:
             open_reason = licence_lock_line(state)
-        elif found is not None and handover.window_program(found) is None:
+        elif found is None:
+            # Dieselbe Lücke wie oben, und sie war hier genauso still: Ohne
+            # Slicer sperrt die Zeile unten auch diesen Knopf, und keiner der
+            # beiden Zweige darüber hatte einen Satz dafür.
+            open_reason = no_slicer
+        elif handover.window_program(found) is None:
             open_reason = str(tr("Zu diesem Slicer ist kein Fenster installiert — er rechnet nur."))
         self.open_button.setEnabled(found is not None and not open_reason and not running)
         self.open_button.setToolTip(open_reason)
@@ -3727,6 +3746,20 @@ class PrintSettingsDialog(QDialog):
         if not entries:
             self.advice_view.addTopLevelItem(QTreeWidgetItem([tr("Nichts einzuwenden."), "", ""]))
         self.apply_button.setEnabled(bool(entries))
+        # **Ein gesperrter Knopf nennt seinen Grund** — dieselbe Zusage, die
+        # „Slicen" und „Druckdatei speichern …" darunter einlösen, und die
+        # einzige Stelle im Dialog, an der sie fehlte (gemessen am 03.09.2026
+        # über alle sichtbaren Knöpfe). Die Tabelle darüber sagt zwar „Nichts
+        # einzuwenden.", aber das ist ein Satz an einer anderen Stelle; wer auf
+        # den grauen Knopf zeigt, fragt ihn und nicht sie. An allen drei
+        # Kanälen, weil ein Grund, den nur die Maus findet, für den
+        # Bildschirmleser keiner ist (Regel 18).
+        why = (
+            "" if entries else tr("Es gibt nichts zu übernehmen — die Werte passen zu diesem Teil.")
+        )
+        self.apply_button.setToolTip(why)
+        self.apply_button.setStatusTip(why)
+        self.apply_button.setAccessibleDescription(why)
         for column in range(2):
             self.advice_view.resizeColumnToContents(column)
 
