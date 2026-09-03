@@ -20,6 +20,7 @@ from typing import Any
 from PySide6.QtCore import QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
     QWidget,
@@ -34,6 +35,13 @@ from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, reada
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT
 from app.ui.tool_strip import BarComboBox
+
+#: Wie lang der Farbbalken der Ringlegende ist.
+#:
+#: Seine **Höhe** trägt die Aussage — sie ist die Dicke des Rings im Bild
+#: (``LAYER_WIDTHS``). Die Länge ist nur so bemessen, dass die Farbe auch bei
+#: einem einen Punkt dicken Ring erkennbar bleibt.
+STROKE_LENGTH = 18
 
 #: Reihenfolge der Karten im Wähler, passend zur Tabelle in §18.4.
 MAP_ORDER: tuple[MapKind, ...] = (
@@ -393,10 +401,27 @@ class LayerBar(QWidget):
         self._show_readout()
         self.layerChanged.emit(self.index())
 
+    def _clear_legend(self) -> None:
+        """Die Legende leeren — auf jedem Weg, der keine Schicht mehr zeigt.
+
+        **Sie hing an einem einzigen Weg und blieb sonst stehen.** Aufgeräumt
+        wurde sie nur am Kopf von :meth:`_show_legend`, und das lief nur bei
+        gezeigter Schicht. In vier Lagen stand deshalb die Legende des vorigen
+        Körpers da — bei „keine Auswahl", nach dem Schließen des Werkzeugs und
+        nach **jeder** Auswertung, weil das Fenster dann ``show_result(None)``
+        ruft. Mitsamt „Insel" und „Überhang", die es dort nicht gibt.
+        """
+        while self._legend.count():
+            item = self._legend.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.deleteLater()
+
     def _show_readout(self) -> None:
         result = self._result
         if result is None or not result.layers or not self.enabled():
             self.readout.setText("")
+            self._clear_legend()
             return
         layer = result.layers[min(self.slider.value(), len(result.layers) - 1)]
         parts = [
@@ -421,11 +446,7 @@ class LayerBar(QWidget):
         Gezeigt wird nur, was in dieser Schicht vorkommt: Eine Legende, die
         „Insel" führt, wo keine liegt, lässt suchen.
         """
-        while self._legend.count():
-            item = self._legend.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
+        self._clear_legend()
 
         shown: list[tuple[Role, str, bool]] = [
             ("layer", str(tr("Kontur")), True),
@@ -435,9 +456,29 @@ class LayerBar(QWidget):
         for role, name, present in shown:
             if not present:
                 continue
-            # Der Strich ist so lang, wie der Ring im Bild dick ist — dieselbe
-            # zweite Kodierung, und sie verbindet die Legende mit dem Bild.
-            swatch = QLabel(f"{'─' * LAYER_WIDTHS[role]} {name}", self)
-            swatch.setStyleSheet(f"color: {ROLES[role]};")
-            self._legend.addWidget(swatch)
+            # **Die Farbe trägt der Strich, nicht der Text.** Sie kommt aus den
+            # Kartenfarben der Ansicht und ist für den dunklen 3D-Grund
+            # gewählt; als Schriftfarbe brachte sie im hellen Thema 1,82 bis
+            # 3,26 gegen die 4,5, die WCAG AA für Text verlangt — Überhang riss
+            # die Schwelle sogar in beiden Themen (gemessen 3d-druck-85 am
+            # 03.09.2026). Für einen Strich gilt 1.4.11 mit 3,0, und er zeigt
+            # die Farbe, statt sie lesen zu lassen. Der Name daneben nimmt die
+            # Textfarbe des Themas wie jeder andere Text der Leiste.
+            entry = QWidget(self)
+            row = QHBoxLayout(entry)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(TIGHT)
+            # **Ein Balken und kein Textstrich.** Er trägt die Farbe als
+            # Fläche, wie die Rolle deklariert ist, und seine Höhe ist die
+            # Dicke des Rings im Bild — dieselbe zweite Kodierung wie dort,
+            # nur genauer als eine Kette von Strichzeichen: Ein Ring von drei
+            # Punkten sieht als Balken dreimal so dick aus und als Text
+            # dreimal so lang.
+            stroke = QFrame(entry)
+            stroke.setFixedSize(STROKE_LENGTH, LAYER_WIDTHS[role])
+            stroke.setStyleSheet(f"background: {ROLES[role]};")
+            row.addWidget(stroke)
+            row.addWidget(QLabel(name, entry))
+            entry.setAccessibleName(name)
+            self._legend.addWidget(entry)
         self._legend.addStretch(1)
