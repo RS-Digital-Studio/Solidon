@@ -16,7 +16,27 @@ features.py   ──> „hier ist eine Bohrung, eine Tasche, eine Fase"
 matching.py   ──> derselbe Name auch nach der nächsten Operation
 digest.py     ──> der Steckbrief: was der Agent zu sehen bekommt
 maps.py       ──> Analysekarten für die Ansicht (Überhang, Wandstärke …)
+actions.py    ──> „was kann ich damit tun" — und warum nicht, wo nichts geht
 ```
+
+## Die Auskunft für das Merkmalspanel
+
+`actions.py` ist die eine Stelle, an der steht, welche Handlung für welche
+Merkmalsart gilt — **abgeleitet aus `applies_to` im Register**, nicht als
+Liste daneben. Eine zweite Tabelle wüsste beim nächsten Registereintrag die
+Hälfte.
+
+Zwei Entscheidungen darin sind Absicht und keine Bequemlichkeit:
+
+- **Was nicht gilt, steht trotzdem in der Liste**, mit `op=None` und einem
+  Satz. Ein Panel, das bei einer Verrundung nur den Radius zeigt, lässt den
+  Kunden raten, ob der Rest fehlt oder vergessen wurde.
+- **Jedes Feld trägt seinen heutigen gemessenen Wert** als Vorgabe. Eine
+  Vorgabe, die nicht der gemessene Wert ist, wäre eine stille Änderung, sobald
+  jemand auf Übernehmen drückt.
+
+Die Oberfläche fragt die Merkmalsart **nicht** — sie rendert die Liste. Sonst
+führt sie dieselbe Tabelle ein zweites Mal.
 
 ## Die Karte
 
@@ -26,6 +46,7 @@ maps.py       ──> Analysekarten für die Ansicht (Überhang, Wandstärke …
 | `maps.py` | Analysekarten (§18.4) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |
+| `actions.py` | Was der Kunde mit einem erkannten Merkmal tun kann — und was nicht, mit Grund. Die Liste fürs Merkmalspanel, **aus dem Register abgeleitet** (§10, §21) |
 
 ## Die Sache mit der Stabilität
 

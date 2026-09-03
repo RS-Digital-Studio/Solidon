@@ -1650,3 +1650,95 @@ def test_a_fillet_smaller_than_any_tool_is_none() -> None:
 
     auf_der_grenze = detect_fillets(mesh, [(genau, list(fläche))])
     assert len(auf_der_grenze) == 1, "genau auf der Schranke zählt noch"
+
+
+# --- Was der Kunde mit einem erkannten Merkmal tun kann (Panel, 03.09.2026) --------
+
+
+def test_the_actions_of_a_bore_come_with_their_measured_values() -> None:
+    """Die Auskunft fürs Merkmalspanel — eine Liste, kein Nachschlagewerk.
+
+    Robert am 03.09.2026: „evtl noch ein eigenes panel damit man nicht für
+    alles rechtsklick machen muss übersichtlich, verständlich innovativ und
+    intuitiv." Der Entwurf dazu ist, dass eine geänderte Zahl **die Operation
+    ist**: Das Panel zeigt, was Solidon gemessen hat, und der Kunde ändert es.
+
+    Damit muss jedes Feld seinen **heutigen** Wert mitbringen — eine Vorgabe,
+    die nicht der gemessene Wert ist, wäre eine stille Änderung, sobald jemand
+    auf Übernehmen drückt.
+
+    **Abgeleitet aus dem Register, nicht aus einer zweiten Tabelle.** Welche
+    Operationen für eine Merkmalsart gelten, steht in ihren ``applies_to``;
+    eine Liste daneben, die dasselbe noch einmal sagt, weiß beim nächsten
+    Registereintrag die Hälfte.
+    """
+    from app.core.perceive.actions import actions_for
+
+    from app.core.bootstrap import load_operations
+    from app.core.types import Feature
+
+    load_operations()
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (-15.0, 0.0, 2.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 8.0,
+            "depth": 20.0,
+            "through": True,
+        },
+    )
+
+    actions = actions_for(bore)
+    by_op = {entry.op: entry for entry in actions if entry.op}
+
+    assert "move_feature" in by_op, sorted(by_op)
+    assert "remove_feature" in by_op
+    assert "rotate_feature" in by_op
+
+    move = by_op["move_feature"]
+    fields = {field.name: field for field in move.fields}
+    assert fields["x"].value == pytest.approx(-15.0), "die Vorgabe ist der gemessene Ort"
+    assert fields["y"].value == pytest.approx(0.0)
+    assert fields["z"].value == pytest.approx(2.0)
+    assert fields["x"].unit == "mm" and fields["x"].kind == "length"
+    assert "at_feature" not in fields, "die Kennung wählt das Panel selbst, sie ist kein Feld"
+
+    turn = by_op["rotate_feature"]
+    turn_fields = {field.name: field for field in turn.fields}
+    assert turn_fields["axis"].kind == "choice"
+    assert [value for value, _label in turn_fields["axis"].choices] == ["x", "y", "z"]
+    assert turn_fields["angle"].kind == "angle"
+
+    assert by_op["remove_feature"].fields == (), "eine Handlung ohne Felder ist ein Knopf"
+
+
+def test_an_edge_loop_is_told_why_nothing_applies() -> None:
+    """Was nicht gilt, kommt **mit** — als Satz, nicht als Lücke.
+
+    Ein Panel, das bei einer Kantenschleife nichts zeigt, lässt den Kunden
+    raten, ob die Handlungen fehlen oder vergessen wurden. Eine Zeile
+    „Verschieben — eine offene Kantenschleife ist ein Loch im Netz" beantwortet
+    die Frage und beendet das Suchen (Entwurf 3d-druck-d4, 03.09.2026).
+    """
+    from app.core.perceive.actions import actions_for
+
+    from app.core.bootstrap import load_operations
+    from app.core.types import Feature
+
+    load_operations()
+    loop = Feature(
+        id="edge_1",
+        kind="edge_loop",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "open_edges": 12},
+    )
+
+    actions = actions_for(loop)
+
+    assert actions, "auch hier steht etwas — nur eben, warum es nicht geht"
+    assert all(entry.op is None for entry in actions), [entry.op for entry in actions]
+    assert all(str(entry.reason) for entry in actions), "jede Zeile trägt ihren Grund"
+    assert any("Netz" in str(entry.reason) for entry in actions)

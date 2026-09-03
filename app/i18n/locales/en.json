@@ -2028,6 +2028,7 @@
   "Für die Druckdatei und die Gegenprobe aus dem G-Code.": "For the print file and the cross-check from the G-code.",
   "Für die Merkmalserkennung ist dieses Modell zu groß.": "This model is too large for the feature detection.",
   "Für die erste Schicht darf das Bett wärmer sein als danach.": "For the first layer the bed may be warmer than afterwards.",
+  "Für diese Art von Merkmal gibt es noch keine Handlung.": "There is no action for this kind of feature yet.",
   "Für diese Dateiversion fehlt der Umstellungsschritt.": "The migration step for this file version is missing.",
   "Für diese Rückfrage ist niemand da.": "There is nobody here to answer this question.",
   "Für diese Verkaufsversion ist keine Testphase aktiv. Öffnen, Ansehen und Messen bleiben möglich; Änderungen und Ausgaben brauchen einen Lizenzschlüssel und die einmalige Geräteaktivierung.": "No trial period is active for this sales version. Opening, viewing and measuring remain available; changes and output require a licence key and one-time device activation.",

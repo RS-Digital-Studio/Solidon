@@ -182,6 +182,7 @@ GERMAN_STEMS = (
     "merkmal",
     "namen",
     "pruef",
+    "quell",
     "schluss",
     "schmal",
     "schuld",
