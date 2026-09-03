@@ -3322,6 +3322,7 @@
   "Solidon schließen. Ungesichertes wird vorher erfragt.": "Fechar o Solidon. O que não estiver guardado é perguntado antes.",
   "Solidon sucht und bewertet: Inseln, Spannweiten, dünne Stellen, die beste Lage.": "O Solidon procura e avalia: ilhas, vãos, pontos finos, a melhor orientação.",
   "Solidon {new} ist da — Sie haben {old}.": "O Solidon {new} já saiu — tem a {old}.",
+  "Solidon — links verschiebt, rechts dreht, WASD fliegt": "Solidon — o esquerdo desloca, o direito roda, WASD voa",
   "Solidon-Aktivierungsanfrage (*.solidon-request)": "Pedido de ativação do Solidon (*.solidon-request)",
   "Solidon-Aktivierungsantwort (*.solidon-activation)": "Resposta de ativação do Solidon (*.solidon-activation)",
   "Solidon-Datenschutz": "Privacidade do Solidon",

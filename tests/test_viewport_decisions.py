@@ -5436,3 +5436,91 @@ def test_the_arc_turns_around_any_axis() -> None:
         assert punkte is not None, f"kein Bogen um {achse}"
         abstand = np.linalg.norm(punkte, axis=1)
         assert abstand == pytest.approx(5.0), f"entarteter Bogen um {achse}"
+
+
+def test_every_navigation_scheme_covers_every_button() -> None:
+    """Jedes Schema belegt alle sechs Kombinationen — sonst wirft die Anwendung.
+
+    ``navigation_action`` liest ``_NAVIGATION[scheme][(button, shift)]`` ohne
+    Rückfall. Ein Schema, dem ein Eintrag fehlt, wirft dort einen ``KeyError``
+    beim Drücken der Taste — keine Auskunft, keine Handlung, ein Stapelabzug in
+    der Bedienung.
+
+    Ein Rückfall wäre die andere Möglichkeit und die schlechtere: Er machte aus
+    der Lücke eine stille Vorgabe, und niemand erfährt, dass ein Schema
+    unvollständig ist. Dieser Test fängt sie beim Anlegen — auch beim sechsten,
+    das jemand nach dem fünften baut (Anregung von 3d-druck-c7, 03.09.2026).
+    """
+    from typing import get_args
+
+    from app.ui.viewport import CameraAction, NavigationScheme, navigation_action
+
+    erlaubt = set(get_args(CameraAction))
+    for scheme in get_args(NavigationScheme):
+        for button in ("left", "middle", "right"):
+            for shift in (False, True):
+                action = navigation_action(scheme, button, shift)
+                assert action in erlaubt, f"{scheme}/{button}/{shift}: {action!r}"
+
+
+def test_every_navigation_scheme_has_a_name_in_the_dialog() -> None:
+    """Und jedes trägt einen Namen, den der Kunde lesen kann.
+
+    Die Liste im Einstellungsdialog ist eine zweite Aufzählung derselben
+    Schemata. Fehlt dort eines, kann der Kunde es nicht wählen — es wäre
+    gebaut, geprüft und unerreichbar. Umgekehrt wäre ein Name ohne Schema ein
+    Eintrag, der beim Klick wirft.
+    """
+    from typing import get_args
+
+    from app.ui.settings_dialog import NAVIGATION
+    from app.ui.viewport import NavigationScheme
+
+    gebaut = set(get_args(NavigationScheme))
+    benannt = set(NAVIGATION)
+    assert gebaut == benannt, (
+        f"nur gebaut: {sorted(gebaut - benannt)}; nur benannt: {sorted(benannt - gebaut)}"
+    )
+
+
+def test_the_flight_keys_cover_all_six_directions() -> None:
+    """Sechs Tasten, sechs Richtungen, keine doppelt (§2.9).
+
+    Entscheidung Robert, 03.09.2026: W/S vorwärts und rückwärts, A/D
+    seitwärts, Q/E kippen wie die mittlere Maustaste. Eine Taste, die dieselbe
+    Achse in dieselbe Richtung bewegt wie eine andere, wäre ein zweiter Weg
+    ohne zweiten Zweck — und eine fehlende Richtung eine Sackgasse.
+    """
+    from app.ui.viewport import FLIGHT_KEYS
+
+    assert set(FLIGHT_KEYS) == {"w", "a", "s", "d", "q", "e"}
+    bewegungen = {tuple(sorted(axes.items())) for axes in FLIGHT_KEYS.values()}
+    assert len(bewegungen) == 6, f"zwei Tasten tun dasselbe: {FLIGHT_KEYS}"
+
+    # Jede Achse einmal vorwärts und einmal rückwärts.
+    for achse in ("x", "y", "rx"):
+        werte = [axes[achse] for axes in FLIGHT_KEYS.values() if achse in axes]
+        assert sorted(werte) == [-1.0, 1.0], f"{achse}: {werte}"
+
+
+def test_forward_flight_moves_the_camera_and_its_focus() -> None:
+    """W fliegt vorwärts — und nimmt den Blickpunkt mit.
+
+    Der Unterschied zum Zoom auf dem Mausrad ist genau dieser: Der Zoom fährt
+    bis vor das Teil, der Flug hindurch. Ohne den mitwandernden Blickpunkt
+    drehte sich die nächste Bewegung um einen Ort, den der Kunde längst hinter
+    sich hat.
+    """
+    from app.ui.spacemouse import CameraPose, Motion, camera_step
+    from app.ui.viewport import FLIGHT_KEYS
+
+    pose = CameraPose(
+        position=(0.0, -100.0, 0.0), focal_point=(0.0, 0.0, 0.0), view_up=(0.0, 0.0, 1.0)
+    )
+    vorwaerts = camera_step(pose, Motion(**FLIGHT_KEYS["w"]), 0.12, fly=True)
+
+    assert vorwaerts.position[1] > pose.position[1], "W fährt nach vorn"
+    assert vorwaerts.focal_point[1] > pose.focal_point[1], "und der Blickpunkt kommt mit"
+
+    zurueck = camera_step(pose, Motion(**FLIGHT_KEYS["s"]), 0.12, fly=True)
+    assert zurueck.position[1] < pose.position[1], "S fährt zurück"

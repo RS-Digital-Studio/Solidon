@@ -290,6 +290,7 @@ def camera_step(
     speed: float = 1.0,
     invert: bool = False,
     orbit: bool = True,
+    fly: bool = False,
 ) -> CameraPose:
     """Eine Zeitspanne Kappenbewegung auf eine Kamerastellung anwenden.
 
@@ -312,6 +313,15 @@ def camera_step(
     Blickrichtung auf der Zeichenebene, geschoben und gezoomt wird trotzdem.
     Schub und Zoom skalieren mit der Entfernung zum Blickpunkt, damit die
     Bewegung am Bildschirm immer gleich schnell ist.
+
+    ``fly=True`` legt ``y`` anders aus: **fliegen statt zoomen.** Standort und
+    Blickpunkt wandern gemeinsam entlang der Blickrichtung, statt nur den
+    Abstand zu ändern — die Kamera fährt also ins Teil hinein und nicht bis
+    davor. Für die Tastatursteuerung (W/S, Entscheidung Robert, 03.09.2026):
+    Dort liegt der Zoom auf dem Mausrad, und eine zweite Zoomgeste wäre keine
+    neue Bewegung. Der Blickpunkt mitzunehmen ist dabei das Entscheidende —
+    ohne ihn dreht sich die nächste Kamerabewegung weiter um einen Punkt, den
+    der Kunde längst hinter sich gelassen hat.
     """
     if dt <= 0.0 or not motion.active():
         return pose
@@ -356,7 +366,19 @@ def camera_step(
     # Dort den Standort zu verschieben änderte am Bild nichts und schob die
     # Kamera unsichtbar bis auf einen halben Millimeter an das Teil heran.
     reach = _response(motion.y)
-    if reach:
+    if reach and fly:
+        # Fliegen: dieselbe Rechnung wie beim Schieben darüber, nur entlang
+        # der Blickrichtung. Beide Punkte wandern, also bleibt der Abstand —
+        # und mit ihm die Empfindlichkeit jeder folgenden Drehung.
+        # **Dasselbe Vorzeichen wie der Zoom, den dieser Zweig ersetzt.**
+        # Dort heißt ``y`` positiv „weiter weg" (die Kappe wegschieben), und
+        # eine Achse, die je nach Schalter in die andere Richtung zieht,
+        # wäre die Falle für den Nächsten, der ``fly`` an ein Gerät hängt.
+        # Die Tastatur legt W deshalb auf einen negativen Wert.
+        shift = _scale(forward, _response(motion.y) * PAN_RATE * gain * extent * sign)
+        position, focal = _add(position, shift), _add(focal, shift)
+        changed = True
+    elif reach:
         factor = math.exp(reach * ZOOM_RATE * gain * -sign)
         if scale is None:
             new_distance = max(MIN_DISTANCE, min(MAX_DISTANCE, distance * factor))

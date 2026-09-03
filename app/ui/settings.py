@@ -30,7 +30,7 @@ class UiSettings:
     """Alles, was sich das Fenster über Sitzungen hinweg merkt."""
 
     recent: list[str] = field(default_factory=list)
-    navigation: str = "slicer"
+    navigation: str = "solidon"
     theme: str = "dark"
     diff_palette: str = "blue_orange"
     """Farben der Differenzansicht (§19.1). Rot/Grün gibt es, es ist nicht die Vorgabe."""

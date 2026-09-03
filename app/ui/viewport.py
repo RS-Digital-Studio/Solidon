@@ -106,14 +106,49 @@ from app.ui.theme import THEMES, slot_colour, viewport_colours
 
 _log = get_logger(__name__)
 
-NavigationScheme = Literal["slicer", "cad", "blender", "orbit"]
+NavigationScheme = Literal["solidon", "slicer", "cad", "blender", "orbit"]
+
+#: Wie viel Kappenausschlag ein Bildpunkt senkrechter Mausbewegung bedeutet.
+#:
+#: ``camera_step`` erwartet Achsen zwischen -1 und 1 und rechnet sie mit
+#: ``ORBIT_RATE`` mal der Zeitspanne. Der Wert hier ist so gewählt, dass eine
+#: Bewegung über etwa die halbe Fensterhöhe (rund 400 Bildpunkte) eine
+#: Vierteldrehung ergibt — dieselbe Empfindlichkeit, die VTKs Trackball beim
+#: Drehen zeigt.
+TILT_PER_PIXEL: Final = 0.05
+#: Die Zeitspanne, mit der ein einzelner Kippschritt gerechnet wird. Ein
+#: Mausereignis hat keine Dauer; genommen wird deshalb ein fester Takt, damit
+#: dieselbe Strecke immer denselben Winkel ergibt — unabhängig davon, wie viele
+#: Ereignisse das System dafür schickt.
+TILT_STEP_SECONDS: Final = 0.05
+
+#: Was eine Flugtaste an den Achsen von ``Motion`` bewegt (§2.9).
+#:
+#: **Als Tabelle und nicht als Kette von ``if``**, aus demselben Grund wie bei
+#: :data:`_NAVIGATION`: Der Text im Handbuch und das Verhalten sollen aus
+#: derselben Quelle kommen, und eine Tabelle lässt sich ohne Fenster prüfen.
+#:
+#: ``y`` ist negativ für „vorwärts": Die Achse heißt bei der Kappe
+#: „wegschieben ist positiv", und ``camera_step`` folgt dem in beiden
+#: Auslegungen — beim Zoom wie beim Flug.
+FLIGHT_KEYS: Final[dict[str, dict[str, float]]] = {
+    "w": {"y": -1.0},
+    "s": {"y": 1.0},
+    "a": {"x": -1.0},
+    "d": {"x": 1.0},
+    "q": {"rx": 1.0},
+    "e": {"rx": -1.0},
+}
+#: Die Zeitspanne eines Tastenschritts. Größer als beim Kippen mit der Maus:
+#: Dort kommen viele Ereignisse je Bewegung, hier eines je Anschlag.
+FLIGHT_STEP_SECONDS: Final = 0.12
 """``slicer`` folgt §2.9 und damit Cura: links wählt, rechts dreht.
 ``orbit`` ist die Aufteilung von Bambu Studio, OrcaSlicer und PrusaSlicer —
 links dreht, rechts schiebt. ``cad`` und ``blender`` legen das Drehen auf die
 mittlere Taste, wie die Programme, nach denen sie heißen."""
 
 MouseButton = Literal["left", "middle", "right"]
-CameraAction = Literal["select", "rotate", "pan", "zoom"]
+CameraAction = Literal["select", "rotate", "pan", "zoom", "tilt"]
 
 #: Was eine Maustaste in einem Schema an der Kamera tut.
 #:
@@ -124,6 +159,23 @@ CameraAction = Literal["select", "rotate", "pan", "zoom"]
 #: Taste überhaupt einen Beobachter hatte**. Der andere ist die eine Wahrheit:
 #: Der Text im Dialog und das Verhalten stammen jetzt aus derselben Tabelle.
 _NAVIGATION: Final[dict[NavigationScheme, dict[tuple[MouseButton, bool], CameraAction]]] = {
+    # **Die Vorgabe** (Entscheidung Robert, 03.09.2026): links verschiebt,
+    # rechts dreht um den Mittelpunkt, das gedrückte Rad kippt nach oben und
+    # unten. Dazu WASD zum Fliegen und Q/E zum Kippen — die Tastatur ist die
+    # eigentliche Neuheit dieses Schemas, die Maustasten ordnen sich ihr zu.
+    #
+    # Dass links **schiebt** und trotzdem **auswählt**, ist kein Widerspruch:
+    # ``_left_up`` fragt ``is_click`` und trennt Klick von Zug an der
+    # Zugschwelle des Systems. Wer zieht, bewegt die Ansicht; wer klickt,
+    # wählt. Auf dem gewählten Körper führt links weiter das Teil selbst.
+    "solidon": {
+        ("left", False): "pan",
+        ("left", True): "pan",
+        ("middle", False): "tilt",
+        ("middle", True): "tilt",
+        ("right", False): "rotate",
+        ("right", True): "rotate",
+    },
     # Cura: links wählt, rechts dreht, Umschalt und Ziehen schiebt.
     "slicer": {
         ("left", False): "select",
@@ -3025,6 +3077,12 @@ class Viewport(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # **Ohne Fokus kein Tastendruck.** Die Flugtasten (§2.9) kommen als
+        # ``keyPressEvent`` an diesem Widget an, und Qt schickt sie nur dorthin,
+        # wo der Fokus liegt. ``StrongFocus`` heißt: durch Klick **und** über
+        # den Tabulator — wer die Ansicht anklickt, um zu fliegen, hat ihn dann
+        # ohnehin.
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
         self.plotter: Any | None = None
@@ -3059,7 +3117,7 @@ class Viewport(QWidget):
         :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
         Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
         den man behalten will."""
-        self._scheme: NavigationScheme = "slicer"
+        self._scheme: NavigationScheme = "solidon"
         self._theme: str | None = None
         """Welches Thema gerade gilt — damit :meth:`set_theme` prüfen kann.
 
@@ -10119,6 +10177,88 @@ class Viewport(QWidget):
 
     # --- navigation (§2.9) ------------------------------------------------------
 
+    def keyPressEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """W/A/S/D fliegen, Q/E kippen — nur im Schema, das sie verspricht (§2.9).
+
+        **Nur in ``solidon``.** Die vier anderen Schemata bilden
+        Fremdprogramme nach; eine Bewegung, die es im Vorbild nicht gibt, wäre
+        dort eine Überraschung — und in Blender sind die Tasten belegt.
+
+        Ein Anschlag ist ein Schritt. Wer die Taste hält, bekommt von Qt die
+        Wiederholung; ein eigener Zeitgeber wäre ein zweiter Takt neben dem,
+        den das System ohnehin liefert.
+        """
+        if self._scheme != "solidon" or self.plotter is None:
+            super().keyPressEvent(event)
+            return
+        axes = FLIGHT_KEYS.get(event.text().lower())
+        if axes is None:
+            super().keyPressEvent(event)
+            return
+        self.fly_camera(**axes)
+        event.accept()
+
+    def fly_camera(self, **axes: float) -> None:
+        """Einen Flugschritt auf die Kamera legen (§2.9).
+
+        Getrennt von :meth:`keyPressEvent`, damit die Bewegung ohne ein
+        Tastenereignis prüfbar ist — dieselbe Trennung wie bei
+        ``belongs_to_the_focus``: Was Qt aus einem Anschlag macht, hängt an der
+        Fensterhülle, die Bewegung darin nicht.
+        """
+        from app.ui.spacemouse import CameraPose, Motion, camera_step
+
+        if self.plotter is None:
+            return
+        pose = CameraPose(*self.camera_pose())
+        # ``Motion`` führt neben den sechs Achsen die Tastenmaske als
+        # ``int``; die Aufweitung eines ``dict[str, float]`` passt für mypy
+        # deshalb nicht auf die Signatur. Gebaut wird darum aus den Achsen.
+        moved = camera_step(
+            pose,
+            Motion(
+                x=axes.get("x", 0.0),
+                y=axes.get("y", 0.0),
+                z=axes.get("z", 0.0),
+                rx=axes.get("rx", 0.0),
+                ry=axes.get("ry", 0.0),
+                rz=axes.get("rz", 0.0),
+            ),
+            FLIGHT_STEP_SECONDS,
+            fly=True,
+        )
+        if moved is pose:
+            return
+        self.set_camera_pose(moved.position, moved.focal_point, moved.view_up)
+        self.cameraMoved.emit()
+
+    def tilt_camera(self, step: int) -> None:
+        """Die Ansicht um *step* Bildpunkte nach oben oder unten kippen (§2.9).
+
+        **Warum die Anwendung das selbst rechnet.** VTKs Trackball dreht in
+        beiden Achsen; „nur nach oben und unten" ist keine seiner Bewegungen,
+        und ``Rotate`` dafür zu überschreiben hieße, am Zustand des Interactors
+        zu drehen. Gerechnet wird deshalb mit
+        :func:`app.ui.spacemouse.camera_step` — derselben reinen Funktion, die
+        die Kappe und die Tastatur bedienen, und der einzigen hier, die ohne
+        VTK prüfbar ist (§35).
+
+        Der Schritt kommt in Bildpunkten und wird auf den Bereich der
+        Kappenachsen umgerechnet: :data:`TILT_PER_PIXEL` ist so gewählt, dass
+        eine Bewegung über die halbe Fensterhöhe die Ansicht etwa eine
+        Vierteldrehung kippt.
+        """
+        from app.ui.spacemouse import CameraPose, Motion, camera_step
+
+        if self.plotter is None:
+            return
+        pose = CameraPose(*self.camera_pose())
+        turned = camera_step(pose, Motion(rx=step * TILT_PER_PIXEL), TILT_STEP_SECONDS)
+        if turned is pose:
+            return
+        self.set_camera_pose(turned.position, turned.focal_point, turned.view_up)
+        self.cameraMoved.emit()
+
     def set_navigation(self, scheme: NavigationScheme) -> None:
         """Slicer-Gewohnheit als Vorgabe; CAD und Blender als Alternativen.
 
@@ -10141,6 +10281,7 @@ class Viewport(QWidget):
             on_body_drag=calls.on_body_drag,
             on_rotate_start=calls.on_rotate_start,
             on_camera=calls.on_camera,
+            on_tilt=calls.on_tilt,
         )
         # **pyvistas Widgets suchen ihren Renderer über den Stil**, und zwar
         # als ``GetInteractorStyle()._parent()._plotter``. Ein eigener Stil hat
@@ -11248,6 +11389,7 @@ class _ViewCallbacks(NamedTuple):
     on_body_drag: Callable[[str, int, int], bool]
     on_rotate_start: Callable[[], None]
     on_camera: Callable[[], None]
+    on_tilt: Callable[[int], None]
 
 
 def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
@@ -11385,6 +11527,11 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         if found is not None:
             found.cameraMoved.emit()
 
+    def on_tilt(step: int) -> None:
+        found = weak()
+        if found is not None:
+            found.tilt_camera(step)
+
     return _ViewCallbacks(
         on_context,
         on_pick,
@@ -11394,6 +11541,7 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         on_body_drag,
         on_rotate_start,
         on_camera,
+        on_tilt,
     )
 
 
@@ -11404,6 +11552,7 @@ def _InteractorStyle(  # noqa: N802
     on_pick: Any = None,
     on_cursor: Any = None,
     on_paint: Any = None,
+    on_tilt: Any = None,
     is_sculpting: Any = None,
     on_body_drag: Any = None,
     on_rotate_start: Any = None,
@@ -11458,6 +11607,13 @@ def _InteractorStyle(  # noqa: N802
             self._dragging_body = False
             """Ob der Zug tatsächlich läuft — also die Klickschwelle
             überschritten wurde."""
+            self._tilt_at: tuple[int, int] | None = None
+            """Wo der Zeiger beim letzten Kippschritt stand.
+
+            Das Kippen rechnet die Anwendung selbst (siehe ``on_tilt``), und
+            zwar schrittweise: Gemeldet wird die Strecke seit dem letzten
+            Ereignis, nicht die seit dem Drücken — sonst wüchse der Winkel
+            quadratisch mit der Bewegung."""
 
         def _shift(self) -> bool:
             return bool(self.GetInteractor().GetShiftKey())
@@ -11527,6 +11683,16 @@ def _InteractorStyle(  # noqa: N802
                 # Ansicht, die sich zugleich dreht.
                 if on_body_drag is not None:
                     on_body_drag("move", *now)
+                return
+            if self._tilt_at is not None:
+                # Nur die senkrechte Strecke, und nur die seit dem letzten
+                # Ereignis. ``OnMouseMove`` bleibt aus: Sonst kippte die
+                # Anwendung und VTK drehte zugleich.
+                now = self._position()
+                step = now[1] - self._tilt_at[1]
+                self._tilt_at = now
+                if step and on_tilt is not None:
+                    on_tilt(step)
                 return
             # Der Beobachter verdrängt die eingebaute Verarbeitung — ohne
             # diesen Aufruf stünde die Kamera bei jedem Ziehen still.
@@ -11608,6 +11774,14 @@ def _InteractorStyle(  # noqa: N802
                 self.StartDolly()
                 self._tell("zoom")
                 return
+            if action == "tilt":
+                # **Kein VTK-Start.** Der Trackball dreht in beiden Achsen;
+                # „nur nach oben und unten" ist keine seiner Bewegungen.
+                # Gerechnet wird deshalb in der Anwendung, und dieser Zweig
+                # merkt sich nur, wo es losgeht.
+                self._tilt_at = self._position()
+                self._tell("tilt")
+                return
             if on_rotate_start is not None:
                 # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
                 # Tiefe der Körper, unsichtbar (§2.9, ``_aim_rotation``).
@@ -11617,6 +11791,7 @@ def _InteractorStyle(  # noqa: N802
 
         def _end(self) -> None:
             """Jede Bewegung beenden — welche lief, weiß hier niemand mehr."""
+            self._tilt_at = None
             self.EndRotate()
             self.EndDolly()
             self.EndPan()

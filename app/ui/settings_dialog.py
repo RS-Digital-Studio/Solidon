@@ -61,6 +61,7 @@ from app.ui.style import make_primary
 
 #: Die Bezeichnungen der Navigationsschemata (§2.9).
 NAVIGATION = {
+    "solidon": _("Solidon — links verschiebt, rechts dreht, WASD fliegt"),
     "slicer": _("Wie in Cura — links wählt, rechts dreht"),
     "orbit": _("Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"),
     "cad": _("Wie im CAD — mittlere Taste dreht, rechts zoomt"),

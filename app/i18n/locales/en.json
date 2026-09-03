@@ -3322,6 +3322,7 @@
   "Solidon schließen. Ungesichertes wird vorher erfragt.": "Close Solidon. Unsaved work is asked about first.",
   "Solidon sucht und bewertet: Inseln, Spannweiten, dünne Stellen, die beste Lage.": "Solidon finds and judges: islands, spans, thin spots, the best orientation.",
   "Solidon {new} ist da — Sie haben {old}.": "Solidon {new} is out — you have {old}.",
+  "Solidon — links verschiebt, rechts dreht, WASD fliegt": "Solidon — left pans, right orbits, WASD flies",
   "Solidon-Aktivierungsanfrage (*.solidon-request)": "Solidon activation request (*.solidon-request)",
   "Solidon-Aktivierungsantwort (*.solidon-activation)": "Solidon activation response (*.solidon-activation)",
   "Solidon-Datenschutz": "Solidon privacy policy",

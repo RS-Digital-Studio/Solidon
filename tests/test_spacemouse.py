@@ -655,3 +655,55 @@ def test_the_search_waits_for_the_window_and_then_backs_off(qt_app: QApplication
         assert waits[-1] <= SCAN_MAX_MS
     finally:
         controller.stop()
+
+
+def test_flying_takes_the_focal_point_along_and_zooming_does_not() -> None:
+    """``fly=True`` fliegt, ``fly=False`` zoomt — der Unterschied ist der Blickpunkt.
+
+    **Warum es beides braucht.** Der Zoom ändert den Abstand zum Blickpunkt und
+    lässt ihn stehen; die Kamera fährt also bis vor das Teil und nie hinein.
+    Für W/S ist das die falsche Bewegung, und zwar aus zwei Gründen: Der Zoom
+    liegt schon auf dem Mausrad (Entscheidung Robert, 03.09.2026), und eine
+    Kamera, die ihren Blickpunkt zurücklässt, dreht sich danach um einen Ort,
+    den der Kunde längst hinter sich hat.
+
+    Beim Fliegen wandern Standort und Blickpunkt gemeinsam — der Abstand
+    zwischen ihnen bleibt, und mit ihm die Empfindlichkeit jeder folgenden
+    Drehung.
+    """
+    pose = CameraPose(
+        position=(0.0, -100.0, 0.0), focal_point=(0.0, 0.0, 0.0), view_up=(0.0, 0.0, 1.0)
+    )
+
+    flown = camera_step(pose, Motion(y=-1.0), 0.1, fly=True)
+    zoomed = camera_step(pose, Motion(y=-1.0), 0.1)
+
+    assert flown.focal_point != pose.focal_point, "beim Fliegen wandert der Blickpunkt mit"
+    assert zoomed.focal_point == pose.focal_point, "beim Zoomen bleibt er stehen"
+
+    vorher = pose.position[1] - pose.focal_point[1]
+    nachher = flown.position[1] - flown.focal_point[1]
+    assert vorher == pytest.approx(nachher), "und der Abstand bleibt, also auch die Drehrate"
+
+
+def test_flying_and_zooming_pull_in_the_same_direction() -> None:
+    """Dieselbe Achse zieht in beiden Auslegungen in dieselbe Richtung.
+
+    ``y`` heißt bei der Kappe „wegschieben ist positiv", und der Zoom folgt
+    dem. Eine Achse, die je nach Schalter das Gegenteil täte, wäre die Falle
+    für den Nächsten, der ``fly`` an ein Gerät hängt — er würde sie einmal
+    messen, richtig finden und beim zweiten Modus danebenliegen.
+    """
+    pose = CameraPose(
+        position=(0.0, -100.0, 0.0), focal_point=(0.0, 0.0, 0.0), view_up=(0.0, 0.0, 1.0)
+    )
+
+    for reach in (1.0, -1.0):
+        flown = camera_step(pose, Motion(y=reach), 0.1, fly=True)
+        zoomed = camera_step(pose, Motion(y=reach), 0.1)
+        weg_beim_fliegen = flown.position[1] - pose.position[1]
+        weg_beim_zoomen = zoomed.position[1] - pose.position[1]
+        assert (weg_beim_fliegen < 0) == (weg_beim_zoomen < 0), (
+            f"y={reach}: fliegen {weg_beim_fliegen:+.2f}, zoomen {weg_beim_zoomen:+.2f} — "
+            "dieselbe Achse muss in dieselbe Richtung ziehen"
+        )
