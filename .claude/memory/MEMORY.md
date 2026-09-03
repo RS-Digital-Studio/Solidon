@@ -34,6 +34,7 @@
 - [Freies Gebiet](freies-gebiet-einfach-machen.md) — bei niemandem eingetragen → machen, nicht vorlegen.
 - [Worktrees enden auf main](worktrees-enden-auf-main.md) — Probe-Bäume fallen; alles Gebaute liegt auf main.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz für sich steht.
+- [Härtung trifft alten Zustand](haertung-trifft-alten-zustand.md) — die neue Prüfung deckt auf, was seit Tagen falsch steht; nach dem Upload die Endpunkte abfragen.
 - [Ein Weg, der nie bis zum Ende lief](weg-nie-bis-zum-ende-gemessen.md) — zwölf Tag-Läufe für 0.3.0, zwölf verschiedene Orte, keine Ursache zweimal.
 - [Durchsicht je Version](durchsicht-je-version.md) — „offen" wird am Code nachgemessen, nicht abgeschrieben.
 
@@ -59,8 +60,10 @@
 - [Signierung getrennt](signierung-ist-ein-eigener-vertrauensraum.md) — Windows lokal, macOS in geschützten Jobs.
 - [Download-Kasten](download-kasten-vier-pakete.md) — vier von acht Paketen; `--nachpruefen` am Ende.
 - [Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s; ein halbes Paket sieht ganz aus.
+- [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — die AppImage steht in keiner version.json; jede Prüfung überspringt sie.
 - [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt nur beim Entwickler auf.
 - [Paketfix ist kein Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) — im Manifest behoben, im AppImage noch da.
+- [Gehärtete Fassung, alter Zustand](gehaertete-fassung-trifft-alten-zustand.md) — neue Prüfung kippt Dateien von vorher; FTPS legt 0644 an.
 - [Rechnung warnt, sie erlaubt nicht](rechnung-warnt-sie-erlaubt-nicht.md) — was weg soll, wird benannt; „überall vorhanden" ist keine Messung.
 - [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — einmal über ein echtes Paket fahren.
 - [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen anderes.
