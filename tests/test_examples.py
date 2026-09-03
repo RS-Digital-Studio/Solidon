@@ -492,9 +492,14 @@ def test_every_example_can_still_be_built() -> None:
 
     Die Tests darüber lesen ``app/examples/*.p3d``. Das sind Artefakte: Sie
     liegen im Repository und bleiben gültig, auch wenn ihr Erzeuger längst
-    nicht mehr läuft. ``tools/make_examples.py`` läuft nur im Paketier-Job,
-    und der nur bei einem Tag — zwischen zwei Veröffentlichungen fährt es
-    also niemand.
+    nicht mehr läuft. ``tools/make_examples.py`` fährt seit dem 03.09.2026
+    **gar kein Bauschritt mehr**: Der Paketier-Job hat die Dateien bis dahin
+    vor dem Bau neu erzeugt und damit ihren Byte-Nachweis in
+    ``ASSET-RIGHTS.toml`` überschrieben — auf Windows bitgenau, auf Linux und
+    macOS nicht (``weg3-generiert-aufbereiten.p3d`` trägt ein eingebettetes
+    Netz, und irgendwo im Weg sitzt eine Fließkommarechnung, die sich um ein
+    ULP unterscheidet). Damit ist dieser Test die **einzige** Stelle, an der
+    der Erzeuger überhaupt noch läuft.
 
     Am 27.08.2026 hat das eine Fassung gekostet. Um 06:59 bekam
     ``blend_union`` ein ``keeps_inputs``, weil die Merkmale des Vorgängers an

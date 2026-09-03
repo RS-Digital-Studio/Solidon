@@ -382,10 +382,20 @@ jobs:
           # — das war die einzige ungepinnte Installationszeile des Workflows.
           python -m pip install -c constraints.txt pyinstaller
 
-      - name: Beispielprojekte erzeugen
-        env:
-          QT_QPA_PLATFORM: offscreen
-        run: python tools/make_examples.py
+      # **Die Beispielprojekte werden hier nicht mehr erzeugt** (03.09.2026).
+      # Sie liegen eingecheckt im Repository und tragen in `ASSET-RIGHTS.toml`
+      # einen Byte-Nachweis; ein Bauschritt, der sie überschreibt, macht diesen
+      # Nachweis wertlos. Und er hält plattformübergreifend nicht: Auf Windows
+      # erzeugt `make_examples.py` bitgenau dieselben Dateien (15 von 15
+      # Nachweise, zweimal unabhängig gemessen), auf ubuntu und macos weicht
+      # `weg3-generiert-aufbereiten.p3d` ab — irgendwo im Weg sitzt eine
+      # Fließkommarechnung, die sich um ein ULP unterscheidet, und die Datei
+      # trägt ein eingebettetes Netz. Der Tag-Lauf 6 scheiterte daran auf
+      # beiden Plattformen, noch vor `Analysis`.
+      #
+      # Dass die eingecheckten Dateien zum Code passen, sichert seither ein
+      # Test statt eines Bauschritts: `tests/test_examples.py` öffnet und
+      # rechnet jedes Beispiel in jedem Lauf.
 
       - name: Rechen- und Prüfmodule kompilieren, Manifest signieren
         # Die schnelle Konturverkettung aus §31 muss auf genau der Plattform
