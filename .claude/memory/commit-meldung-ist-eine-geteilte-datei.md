@@ -57,3 +57,24 @@ anderen Sitzung Bescheid geben, denn deren Commit ist wahrscheinlich gar nicht
 gelaufen und ihre Arbeit liegt noch im Baum. Wer es ganz vermeiden will,
 committet in einem eigenen Worktree — der hat sein eigenes `.git`-Verzeichnis
 und damit seine eigene `COMMIT_EDITMSG` ([[sonde-im-geteilten-baum]]).
+
+## Wieder passiert am 03.09.2026 — und diesmal hat die Kontrolle gegriffen
+
+`61588789` trägt die Meldung „Ein Punkt in der ausgelieferten 0.3.1 versprach,
+was sie nicht hält" (3d-druck-a0, über Bohrungsstopfen) und enthält
+`app/ui/viewport.py` mit meinem `_shape_actor` — der Griff, der wieder an die
+Öffnung gehört. Zwei Commits um 21:00:45 und 21:01:35, `.git/COMMIT_EDITMSG`
+trug a0s Text.
+
+**Der Unterschied zum ersten Mal ist die Kontrolle.** Am 31.08. passte die
+Zeilenzahl zu meinem Inhalt, und der falsche Betreff fiel nicht auf. Diesmal
+stand er in der Ausgabe, wurde gelesen und sofort untersucht — der Commit war
+vier Minuten später als solcher benannt, statt Wochen später jemanden zu
+verwirren.
+
+**Was daraus folgt und was nicht.** Vermeiden lässt sich der Fall nicht: `-F`
+schreibt immer über dieselbe Datei, und wann eine Nachbarsitzung committet, ist
+nicht messbar. Erkennen lässt er sich in einer Sekunde, und das ist der ganze
+Schutz: **Nach jedem Commit den Betreff der Ausgabe gegen den erwarteten
+lesen.** Der Fehler ist nicht die Verwechslung, sondern eine Verwechslung, die
+niemand bemerkt.
