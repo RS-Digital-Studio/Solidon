@@ -49,4 +49,36 @@ angesehen hat ([[messwerkzeug-misst-sich-selbst]]): Mein Sprachprüfstand baute
 denselben Dialog sechsmal auf Deutsch, schrieb sechs Dateien und sah
 vollständig aus. Dieselbe Falle wie ein Verbotstest über eine leere Menge.
 
+## Die häufigste Klasse hat keine Signatur im Quelltext
+
+Am 03.09.2026 fanden **fünf Sitzungen unabhängig voneinander denselben
+Fehlertyp**, und die Commit-Titel lesen sich wie Varianten eines Satzes:
+
+* „Der Dialog fragte nach der Schraubengröße und bot keine Antwort an"
+* „Der Befund nannte den Ausweg und bot ihn nicht an"
+* „Der Agent ordnete auf Platten an und sah das Ergebnis nicht"
+* „Die Ansicht vergaß, wie man sie eingestellt hatte"
+* „Auto Split schnitt offene Netze und sagte nichts dazu"
+
+Jedes Mal ist die Auskunft **da** und kommt beim Kunden nicht an.
+
+**Und ein Wächter dafür ist gemessen unmöglich.** 3d-druck-85 hat es geprüft,
+bevor sie einen baute: 36 Stellen in ``app/`` werfen einen Teil eines
+Rückgabewerts weg, und **null** davon tragen eine Auskunft — alles numerische
+Nebenwerte aus numpy, marching_cubes, partition. Der Wächter wäre grün gewesen
+und hätte Sicherheit vorgetäuscht, wo keine ist; das ist schlechter als keiner.
+
+Der Grund steht in ihrer Diagnose, und sie ist genauer als „Auskunft
+verworfen": Die Fälle sind **„nie erzeugt oder nie abgerufen"**. Eine Funktion,
+die einen Grund zurückgibt, den niemand ruft, sieht im Quelltext aus wie jede
+andere; ein Aufruf, der an der falschen Stelle steht, ebenso. Zweimal an einem
+Tag im Druckweg: ``settings_for_export`` löste die Werte an seiner eigenen
+Stelle auf, sodass der Ausgang im Kern nie erreicht wurde — und
+``chosen_machine`` wurde bei der Ersteinrichtung gefragt statt bei der
+Übergabe, wo die Antwort etwas geändert hätte.
+
+**Alle fünf kamen aus dem Durchfahren aus Kundensicht. Keiner aus einem Test.**
+Das ist der Satz, für den diese Notiz da ist — hier steht er zum zweiten Mal,
+mit fünf Fällen an einem Tag statt sechs.
+
 Verwandt: [[eine-kette-endet-am-letzten-glied]], [[text-gesetzt-heisst-nicht-gezeigt]].
