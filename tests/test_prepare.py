@@ -2251,6 +2251,58 @@ def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Prof
     )
 
 
+def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> None:
+    """Der Vorschlag öffnet den Schritt an einem Feld — das muss es geben.
+
+    ``_tool_for`` und ``_movable_feature`` werfen ihre Absagen mit
+    ``field="at_feature"``, und der Vorschlag dazu ist seit dem 04.09.2026 die
+    Vorgabe der ``UserError``: *Eingabe korrigieren*. Die Oberfläche macht
+    daraus ``edit_operation(op_id, field=…)`` — sie öffnet den erzeugten
+    Dialog des Schritts und setzt den Cursor in genau dieses Feld.
+
+    **Führt die Operation das Feld nicht, zeigt der Knopf ins Leere.** Genau
+    dieser Fehler steht in ``errors.py`` neben ``CHANGE_SELECTION``
+    beschrieben: „ein Dialog darauf zeigte auf ein Feld, das es nicht gibt".
+    Er war der Grund, weshalb es diese zweite Handlung überhaupt gibt.
+
+    **Geprüft wird der Vertrag, nicht der Weg dorthin.** Ein erster Versuch
+    suchte die Aufrufer von ``_movable_feature`` und ``_tool_for`` im
+    Quelltext und fand sechs — ``resize_hole`` wirft dieselbe Absage über
+    ``_chosen_bore`` und fiel durch das Muster. Wer nach Helfern sucht, findet
+    die, die er kennt. Der Name ``at_feature`` steht dagegen **fest** in jedem
+    ``field=``-Argument dieser Fehler, und daran hängt der Knopf: Also muss
+    jedes Merkmalsfeld dieses Moduls so heißen, und zwar unabhängig davon,
+    über welchen Helfer die Absage kommt.
+
+    Gemessen am 04.09.2026: sieben Operationen mit einem Feld der Art
+    ``feature``, alle sieben heißen ``at_feature``.
+    """
+    import inspect
+
+    from app.core.bootstrap import load_operations
+    from app.core.geom import prepare_ops
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    falsch_benannt = []
+    mit_merkmal = []
+    for spec in REGISTRY.all():
+        if inspect.getmodule(spec.fn) is not prepare_ops:
+            continue
+        for field in spec.params.fields():
+            if field.metadata["param"]["kind"] != "feature":
+                continue
+            mit_merkmal.append(spec.name)
+            if field.name != "at_feature":
+                falsch_benannt.append(f"{spec.name}.{field.name}")
+
+    assert len(mit_merkmal) >= 7, f"zu wenige gefunden — sucht der Test noch richtig? {mit_merkmal}"
+    assert not falsch_benannt, (
+        'die Absagen nennen field="at_feature"; diese Felder heißen anders und der '
+        f"Vorschlag zeigte dort ins Leere: {falsch_benannt}"
+    )
+
+
 def test_applies_to_holds_outside_the_menu(profile: Profile) -> None:
     """``applies_to`` stand nur im Menü, und der Chat kam daran vorbei.
 
