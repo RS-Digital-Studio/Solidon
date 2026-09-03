@@ -15,6 +15,108 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.3.1
+
+### Editing recognised features
+
+- Recognised features can now be edited: a hole, a peg, a countersink or a dome can be moved, rotated, resized, duplicated and removed.
+- The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.
+- A moved hole stays the same hole: every fit that refers to it keeps its reference.
+- Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing.
+- A separate *Feature* panel on the right shows what was measured at the spot you clicked; it can be detached and switched on under *View*.
+- Every number in it can be changed: position, diameter, depth and axis are set right in the field, with no dialog in between.
+- A changed number appears as a preview in the view before it takes effect.
+- A checkbox *Apply to all of the same kind* changes a whole row of holes at once, with a single step to undo it.
+- Two selected features report their distance centre to centre and per axis.
+- A hole names its standard size — “measures 5.19 mm, the clearance hole for M5” — and says so when none fits.
+- A second hole like the first comes from duplicating it, instead of typing the dimensions again.
+- The Delete key removes the selected feature and no longer the whole body.
+- A double click on a row in the object list opens the step that created it, with its dimensions.
+- Where a moved hole used to be, the material no longer sticks out above and below.
+- A through hole that no longer goes through after being moved says so — and a countersink that would close its hole cannot be moved.
+- Shrinking a hole below the recognition limit brings an explanation instead of a request to file an error report.
+- On a face, a button leads to the parts catalogue instead of rows that only say what is impossible there.
+### Moving, rotating and selecting
+
+- The move handle sits on whatever is selected — on a hole at its opening, no longer in the middle of the part.
+- What is selected is what moves: with a hole selected, handle and toolbar move the hole, not the whole part.
+- While dragging, a transparent preview shows where the hole is going and a pale copy where it came from.
+- The shadow follows while moving and thereby shows the height above the bed.
+- While rotating, an arc shows how far it has turned and that the angle snaps to multiples of 45 degrees.
+- Small rotations get through — until now an invisible angle snap swallowed every drag below its step.
+- On a face the move toolbar offers only what is possible there and gives the reason on the button, not in a message after the click.
+- The *Apply* button is gone: you apply with Enter in the field or by dragging the handle — exactly once, no longer twice.
+- A moved part no longer flicks back to its old position when you let go.
+- A click on a hole hits the hole, even when the move handle lies in front of it.
+- A right click in the object list hits the row you are pointing at, not the two above it.
+### View and object tree
+
+- The entry *Fit to view* frames the part you clicked; with nothing selected, the whole scene as before.
+- A part below the print bed is visible — it is the bed that is transparent now, not the model.
+- Semi-transparent bodies are drawn in the right depth order, whatever order they were created in.
+- The view you set is kept, instead of falling back at the next step.
+- Selecting and switching in the 3D view run with soft transitions instead of hard jumps.
+- From four features of the same name on, the object tree shows one expandable row with their count instead of hundreds of single rows.
+- Only what a printer can make is shown: features below half a millimetre are dropped — on a hose holder, 296 out of 1130.
+- Fillets with a radius of zero therefore disappear from the object tree.
+- A click on a body costs no waiting time any more; on a 63 MB assembly it took three quarters of a second.
+- Switching the display and rebuilding the image of large models take a third of the time they used to.
+### Drawing and precise input
+
+- Length and width of a selected drawing can be edited; the drawing follows the changed number together with its dimensions.
+- A dimension set by mistake can be undone on its own, instead of only together with all the others.
+- After extruding a sketch, the dialog also offers the way back to cutting it away.
+- A typed dimension counts as typed: 0.1 no longer becomes 0.166667.
+- The units dialog asks for millimetres and shows a number instead of “nan”.
+- The chamfer field is called width, and its message speaks of the width too, not of a radius.
+- A click in a slider's groove puts it where you clicked, not one page further.
+- When measuring, the target point snaps to the model's edges and not to lines that are not in the picture.
+### Opening, saving and exchange files
+
+- The first model of a project sits centred on the print bed instead of wherever its file puts it; every further one keeps its position.
+- A broken file is refused when opening, instead of being accepted and ending up in the project when you save.
+- The refusal names the reason — empty, truncated, not an STL, not a 3MF, without triangles, with unusable coordinates — and offers *Choose another file*.
+- An interrupted download of a model file is recognised as such.
+- Files over eight megabytes are read with a loading indicator and progress, instead of leaving the window unresponsive for fourteen seconds.
+- A file name reaches the disk the way it was typed — with spaces, accents, brackets and a plus sign.
+- A model can be saved as 3MF without Solidon's print settings, for when it should reach the slicer unchanged.
+- Where STEP is impossible for a mesh, the refusal offers *Save as 3MF* right away.
+- A model with too fine a mesh gets *Reduce triangles* as a button on the finding, not just as advice in the text.
+- A finding that affects several bodies can be fixed for all at once — with a choice of which, and one Ctrl+Z for the whole action.
+- The command *Auto Split* says when a cut leaves an open surface, and a cut through an editable body no longer leaves the stage empty.
+- Scaling a part below what the machine can make now raises a finding; until now there was one only for too large.
+- Custom parts carry the same warning notice as the ones supplied.
+### Printing, slicer and filament
+
+- The print dialog shows the profiles that match the selected printer, instead of a stock of 1001 entries.
+- For an Elegoo Centauri Carbon that is four, with the right one preselected.
+- Changing the printer in the project brings build volume, nozzle and start code along — a Prusa project no longer gets the Elegoo's machine.
+- The slicer is given the machine details and returns a print file, instead of aborting with “not compatible with printer”.
+- If the slicer is set to a different printer than the project, Solidon says so instead of quietly accepting it.
+- The notice about a missing profile names the printer it is about.
+- The filament list stays empty until a machine profile is chosen and gives that as the reason, instead of offering 5962 spools.
+- The filament selection can be filtered by manufacturer, material and the values a profile brings.
+- Where Solidon adds a brim, it states which part needs it and why.
+- What the machine cannot do is stated on every field affected, not on just one.
+- Recommendations from the report that the slicer does not accept no longer promise an effect.
+- Objects of different materials end up on separate print beds — the TPU seal no longer on the bed of the PETG housing.
+- The printing notice gives advice instead of pointing to clause numbers of the licence agreement.
+### Messages, buttons and information
+
+- Nine locked buttons in seven windows now say on the button what they are missing — by mouse, by keyboard and for a screen reader.
+- Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Remove* when adding filament.
+- Refusals no longer end with the sentence alone, but with the way out.
+- An unexpected error is explained in the language you have set, instead of reciting an internal English text.
+- The About dialog names who is behind Solidon and who answers feedback.
+- A link to an older release leads to the current one instead of an error page.
+- The shortcuts window shows every entry again, including the renamed *Fit to view*.
+- The Windows installation now completes where it used to abort with “corrupt file”; in return the setup file is 23 megabytes larger.
+### Chat and model support
+
+- If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.
+- When the chat arranges objects on print beds, the result is visible in the view afterwards.
+- A finding about an assembly points at the body it concerns; of twelve findings without an action, two remain, and those two are pure notes.
+- The chat knows the new actions on recognised features and carries them out on request.
 ## 0.3.0
 
 ### Getting started and orientation

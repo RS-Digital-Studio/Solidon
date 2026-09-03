@@ -16,6 +16,108 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.3.1
+
+### Modifier les caractéristiques reconnues
+
+- Les caractéristiques reconnues sont modifiables : un perçage, un tenon, une fraisure ou un dôme peut être déplacé, tourné, redimensionné, dupliqué et retiré.
+- Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.
+- Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.
+- Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence.
+- Un panneau *Caractéristique* affiche à droite ce qui a été mesuré à l'endroit cliqué ; il se détache et s'active depuis *Affichage*.
+- Chaque valeur y est modifiable : position, diamètre, profondeur et axe se règlent dans le champ, sans boîte de dialogue.
+- Une valeur modifiée s'affiche en aperçu dans la vue avant de s'appliquer.
+- Une case *Appliquer à tous les semblables* modifie toute une rangée de perçages d'un coup, avec une seule étape pour annuler.
+- Deux caractéristiques sélectionnées indiquent leur distance d'axe en axe et par axe.
+- Un perçage indique sa taille normalisée — « mesure 5,19 mm, le trou de passage pour M5 » — et signale aussi qu'aucune ne convient.
+- Un second perçage identique au premier s'obtient par duplication, au lieu de retaper les cotes.
+- La touche Suppr retire la caractéristique sélectionnée et non plus le corps entier.
+- Un double clic sur une ligne de la liste des objets ouvre l'étape qui l'a créée, avec ses cotes.
+- À l'ancien emplacement d'un perçage déplacé, la matière ne dépasse plus en haut ni en bas.
+- Un perçage débouchant qui ne débouche plus après déplacement le signale, et une fraisure qui refermerait son perçage ne peut pas être déplacée.
+- Réduire un perçage sous la limite de reconnaissance donne une explication au lieu de demander un rapport d'erreur.
+- Sur une face, un bouton mène au catalogue de blocs au lieu d'afficher des lignes qui disent seulement ce qui est impossible.
+### Déplacer, tourner et sélectionner
+
+- La poignée de déplacement se place sur ce qui est sélectionné : sur un perçage, à son ouverture, et non au centre de la pièce.
+- Ce qui est sélectionné est ce qui bouge : avec un perçage sélectionné, la poignée et la barre déplacent le perçage, non la pièce entière.
+- Pendant le glissement, un aperçu transparent montre où va le perçage et une image pâle son point de départ.
+- L'ombre suit le déplacement et indique ainsi la hauteur au-dessus du plateau.
+- Pendant la rotation, un arc montre l'angle parcouru et l'accrochage aux multiples de 45 degrés.
+- Les petites rotations aboutissent : jusqu'ici un accrochage angulaire invisible avalait tout mouvement inférieur à son pas.
+- Sur une face, la barre de déplacement ne propose que le possible et donne la raison sur le bouton, non dans un message après le clic.
+- Le bouton *Appliquer* disparaît : on applique avec Entrée dans le champ ou en tirant la poignée, et exactement une fois, non deux.
+- Une pièce déplacée ne revient plus un instant à son ancienne position au relâchement.
+- Un clic sur un perçage atteint le perçage, même si la poignée de déplacement se trouve devant.
+- Un clic droit dans la liste des objets atteint la ligne visée, et non les deux au-dessus.
+### Vue et arborescence des objets
+
+- L'entrée *Ajuster à la vue* cadre la pièce cliquée ; sans sélection, toute la scène comme avant.
+- Une pièce sous le plateau d'impression est visible : c'est désormais le plateau qui est transparent, pas le modèle.
+- Les corps semi-transparents sont dessinés dans le bon ordre de profondeur, quel que soit leur ordre de création.
+- La vue réglée est conservée au lieu de revenir en arrière à l'étape suivante.
+- La sélection et les changements dans la vue 3D se font par transitions douces au lieu de sauts brusques.
+- À partir de quatre caractéristiques de même nom, l'arborescence affiche une ligne dépliable avec leur nombre au lieu de centaines de lignes.
+- Seul ce qu'une imprimante peut fabriquer est affiché : les caractéristiques sous le demi-millimètre disparaissent — sur un support de tuyau, 296 sur 1130.
+- Les congés de rayon nul disparaissent donc de l'arborescence des objets.
+- Un clic sur un corps ne coûte plus d'attente ; sur un assemblage de 63 Mo, c'était trois quarts de seconde.
+- Changer l'affichage et reconstruire l'image des grands modèles prennent un tiers du temps précédent.
+### Dessin et saisie précise
+
+- La longueur et la largeur d'un dessin sélectionné sont modifiables ; le dessin suit la valeur modifiée avec ses cotes.
+- Une cote mal placée s'annule seule, et non plus uniquement avec toutes les autres.
+- Après avoir extrudé une esquisse, la boîte de dialogue propose aussi le chemin pour la soustraire.
+- Une cote saisie vaut telle qu'elle a été saisie : 0,1 ne devient plus 0,166667.
+- La boîte de dialogue des unités demande des millimètres et affiche un nombre au lieu de « nan ».
+- Le champ du chanfrein s'appelle largeur, et son message parle aussi de la largeur, non du rayon.
+- Un clic dans la glissière d'un curseur le place à l'endroit cliqué, et non une page plus loin.
+- Lors de la mesure, le point cible s'accroche aux arêtes du modèle et non à des lignes absentes de l'image.
+### Ouverture, enregistrement et fichiers d'échange
+
+- Le premier modèle d'un projet est centré sur le plateau d'impression au lieu de l'endroit fixé par son fichier ; les suivants gardent leur position.
+- Un fichier défectueux est refusé à l'ouverture, au lieu d'être accepté et de finir dans le projet à l'enregistrement.
+- Le refus indique la raison — vide, tronqué, pas un STL, pas un 3MF, sans triangles, coordonnées inutilisables — et propose *Choisir un autre fichier*.
+- Le téléchargement interrompu d'un fichier de modèle est reconnu comme tel.
+- Les fichiers de plus de huit mégaoctets sont lus avec un indicateur de chargement et une progression, au lieu de figer la fenêtre quatorze secondes.
+- Un nom de fichier arrive sur le disque tel qu'il a été saisi, avec espaces, accents, parenthèses et signe plus.
+- Un modèle peut être enregistré en 3MF sans les valeurs d'impression de Solidon, pour arriver inchangé dans le slicer.
+- Lorsque STEP est impossible pour un maillage, le refus propose directement *Enregistrer en 3MF*.
+- Un modèle au maillage trop fin reçoit *Réduire les triangles* comme bouton sur le constat, et non seulement comme conseil dans le texte.
+- Un constat qui touche plusieurs corps se corrige pour tous d'un coup, avec le choix desquels et un seul Ctrl+Z pour toute l'action.
+- La commande *Auto Split* signale quand une coupe laisse une surface ouverte, et une coupe dans un corps modifiable ne vide plus la scène.
+- Mettre une pièce à une échelle inférieure à la limite de la machine donne un constat ; jusqu'ici il n'y en avait que pour trop grand.
+- Les blocs personnels portent le même avertissement que ceux fournis.
+### Impression, slicer et filament
+
+- La boîte de dialogue d'impression affiche les profils correspondant à l'imprimante réglée, au lieu d'un stock de 1001 entrées.
+- Pour une Elegoo Centauri Carbon, ce sont quatre profils, le bon étant présélectionné.
+- Changer d'imprimante dans le projet entraîne volume d'impression, buse et code de départ : un projet Prusa ne reçoit plus la machine de l'Elegoo.
+- Le slicer reçoit les données de la machine et renvoie un fichier d'impression, au lieu d'abandonner avec « incompatible avec l'imprimante ».
+- Si le slicer est réglé sur une autre imprimante que le projet, Solidon le signale au lieu de l'accepter en silence.
+- L'avis de profil manquant indique de quelle imprimante il s'agit.
+- La liste des filaments reste vide tant qu'aucun profil machine n'est choisi et en donne la raison, au lieu de proposer 5962 bobines.
+- La sélection de filament se filtre par fabricant, matière et valeurs apportées par un profil.
+- Là où Solidon ajoute une bordure, il précise quelle pièce en a besoin et pourquoi.
+- Ce que la machine ne peut pas faire est indiqué sur tous les champs concernés, et non sur un seul.
+- Les recommandations du rapport que le slicer n'accepte pas ne promettent plus d'effet.
+- Les objets de matières différentes vont sur des plateaux séparés : le joint en TPU n'est plus sur le plateau du boîtier en PETG.
+- L'avis d'impression donne un conseil au lieu de renvoyer à des numéros du contrat de licence.
+### Messages, boutons et informations
+
+- Neuf boutons verrouillés dans sept fenêtres indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.
+- Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Retirer* lors de l'ajout de filament.
+- Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.
+- Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais.
+- La fenêtre À propos indique qui est derrière Solidon et qui répond aux retours.
+- Un lien vers une version antérieure mène à l'actuelle au lieu d'une page d'erreur.
+- La fenêtre des raccourcis affiche à nouveau chaque entrée, y compris *Ajuster à la vue* renommé.
+- L'installation Windows aboutit aussi là où elle échouait avec « fichier corrompu » ; en contrepartie le fichier d'installation est 23 mégaoctets plus gros.
+### Discussion et prise en charge des modèles
+
+- Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.
+- Lorsque la discussion répartit des objets sur des plateaux d'impression, le résultat est ensuite visible dans la vue.
+- Un constat sur un assemblage désigne le corps concerné ; sur douze constats sans action, il en reste deux, et ces deux sont de simples indications.
+- La discussion connaît les nouvelles actions sur les caractéristiques reconnues et les exécute sur demande.
 ## 0.3.0
 
 ### Premiers pas et orientation

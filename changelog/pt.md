@@ -15,6 +15,108 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.3.1
+
+### Editar características reconhecidas
+
+- As características reconhecidas podem ser editadas: um furo, um pino, um escareamento ou uma cúpula pode ser movido, rodado, redimensionado, duplicado e removido.
+- Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.
+- Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.
+- Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio.
+- Um painel próprio *Característica* mostra à direita o que foi medido no ponto selecionado; pode ser desencaixado e ativado em *Vista*.
+- Cada número é alterável: posição, diâmetro, profundidade e eixo definem-se no próprio campo, sem diálogo pelo meio.
+- Um número alterado aparece como pré-visualização na imagem antes de ser aplicado.
+- Uma caixa *Aplicar a todos do mesmo tipo* altera toda uma fila de furos de uma vez, com um único passo para anular.
+- Duas características marcadas indicam a sua distância de centro a centro e por eixo.
+- Um furo indica a sua medida normalizada — «mede 5,19 mm, o furo de passagem para M5» — e também avisa quando nenhuma serve.
+- Um segundo furo igual ao primeiro obtém-se duplicando, em vez de escrever de novo as medidas.
+- A tecla Del remove a característica selecionada e já não o corpo inteiro.
+- Um duplo clique numa linha da lista de objetos abre o passo que a criou, com as suas medidas.
+- No local anterior de um furo deslocado, o material já não sobressai por cima nem por baixo.
+- Um furo passante que após o deslocamento já não atravessa avisa, e um escareamento que fecharia o seu furo não pode ser deslocado.
+- Reduzir um furo abaixo do limite de reconhecimento dá uma explicação em vez de pedir um relatório de erro.
+- Numa face, um botão leva ao catálogo de blocos em vez de mostrar linhas que apenas dizem o que ali não é possível.
+### Mover, rodar e selecionar
+
+- A alça de movimento fica no que está selecionado: num furo, na sua abertura, e não no centro da peça.
+- Move-se o que está selecionado: com um furo marcado, a alça e a barra deslocam o furo, não a peça inteira.
+- Ao arrastar, uma pré-visualização transparente mostra para onde vai o furo e uma cópia pálida de onde veio.
+- A sombra acompanha o movimento e mostra assim a altura acima da mesa.
+- Ao rodar, um arco mostra quanto já rodou e que o ângulo encaixa em múltiplos de 45 graus.
+- As rotações pequenas chegam: até agora um encaixe angular invisível engolia todo o movimento inferior ao seu passo.
+- Numa face, a barra de movimento só oferece o que ali é possível e indica o motivo no botão, não numa mensagem após o clique.
+- O botão *Aplicar* desaparece: aplica-se com Enter no campo ou arrastando a alça, e exatamente uma vez, não duas.
+- Uma peça deslocada já não salta por um instante para a posição anterior ao largar.
+- Um clique num furo acerta no furo, mesmo quando a alça de movimento está à frente.
+- Um clique direito na lista de objetos acerta na linha indicada, e não nas duas acima.
+### Vista e árvore de objetos
+
+- A entrada *Ajustar à vista* enquadra a peça selecionada; sem seleção, toda a cena como antes.
+- Uma peça sob a mesa de impressão fica visível: agora é a mesa que é transparente, não o modelo.
+- Os corpos semitransparentes são desenhados na ordem de profundidade correta, qualquer que seja a ordem de criação.
+- A vista definida mantém-se, em vez de voltar atrás no passo seguinte.
+- A seleção e as mudanças na vista 3D ocorrem com transições suaves em vez de saltos bruscos.
+- A partir de quatro características com o mesmo nome, a árvore de objetos mostra uma linha expansível com a sua quantidade em vez de centenas de linhas.
+- Só é mostrado o que uma impressora consegue produzir: as características abaixo de meio milímetro desaparecem; num suporte de mangueira, 296 de 1130.
+- Os arredondamentos com raio zero desaparecem assim da árvore de objetos.
+- Um clique num corpo já não custa espera; num conjunto de 63 MB eram três quartos de segundo.
+- Mudar a representação e reconstruir a imagem de modelos grandes leva um terço do tempo anterior.
+### Desenho e introdução precisa
+
+- O comprimento e a largura de um desenho selecionado são editáveis; o desenho segue o número alterado com as suas cotas.
+- Uma cota mal colocada pode ser anulada isoladamente, e não apenas com todas as outras.
+- Depois de extrudir um esboço, o diálogo volta a oferecer também o caminho para o subtrair.
+- Uma cota escrita vale como foi escrita: 0,1 já não se torna 0,166667.
+- O diálogo de unidades pede milímetros e mostra um número em vez de «nan».
+- O campo do chanfro chama-se largura, e a mensagem correspondente também fala de largura e não de raio.
+- Um clique na ranhura de um cursor coloca-o no ponto selecionado, e não uma página mais adiante.
+- Ao medir, o ponto de destino fixa-se nas arestas do modelo e não em linhas que não existem na imagem.
+### Abertura, gravação e ficheiros de troca
+
+- O primeiro modelo de um projeto fica centrado na mesa de impressão em vez de onde o seu ficheiro o coloca; os restantes mantêm a sua posição.
+- Um ficheiro danificado é recusado ao abrir, em vez de ser aceite e acabar no projeto ao gravar.
+- A recusa indica o motivo — vazio, truncado, não é STL, não é 3MF, sem triângulos, com coordenadas inutilizáveis — e oferece *Escolher outro ficheiro*.
+- A transferência interrompida de um ficheiro de modelo é reconhecida como tal.
+- Os ficheiros com mais de oito megabytes são lidos com indicador de carregamento e progresso, em vez de deixar a janela catorze segundos sem resposta.
+- Um nome de ficheiro chega ao disco tal como foi escrito, com espaços, acentos, parênteses e sinal de mais.
+- Um modelo pode ser guardado como 3MF sem os valores de impressão do Solidon, para chegar inalterado ao slicer.
+- Onde STEP não é possível para uma malha, a recusa oferece logo *Guardar como 3MF*.
+- Um modelo com malha demasiado fina recebe *Reduzir triângulos* como botão no achado, e não apenas como conselho no texto.
+- Um achado que afeta vários corpos pode ser resolvido para todos de uma vez, escolhendo quais, com um único Ctrl+Z para toda a ação.
+- O comando *Auto Split* avisa quando um corte deixa uma superfície aberta, e um corte por um corpo editável já não deixa a cena vazia.
+- Escalar uma peça abaixo do limite da máquina gera um achado; até agora só existia para demasiado grande.
+- Os blocos próprios têm o mesmo aviso que os fornecidos.
+### Impressão, slicer e filamento
+
+- O diálogo de impressão mostra os perfis correspondentes à impressora definida, em vez de um acervo de 1001 entradas.
+- Com uma Elegoo Centauri Carbon são quatro, e o correto vem pré-selecionado.
+- Mudar a impressora no projeto arrasta volume de impressão, bico e código inicial: um projeto Prusa já não recebe a máquina da Elegoo.
+- O slicer recebe os dados da máquina e devolve um ficheiro de impressão, em vez de abortar com «não compatível com a impressora».
+- Se o slicer estiver noutra impressora que não a do projeto, o Solidon avisa em vez de o aceitar em silêncio.
+- O aviso de perfil em falta indica a impressora em questão.
+- A lista de filamentos fica vazia enquanto não for escolhido um perfil de máquina e indica esse motivo, em vez de oferecer 5962 bobinas.
+- A seleção de filamento pode ser filtrada por fabricante, material e pelos valores que um perfil traz.
+- Onde o Solidon coloca uma borda, indica qual a peça que dela precisa e por que motivo.
+- O que a máquina não consegue fazer é indicado em todos os campos afetados, e não apenas num.
+- As recomendações do relatório que o slicer não aceita já não prometem efeito.
+- Os objetos de materiais diferentes vão para mesas separadas: a junta de TPU já não na mesa da caixa de PETG.
+- O aviso de impressão dá um conselho em vez de remeter para números do contrato de licença.
+### Mensagens, botões e informação
+
+- Nove botões bloqueados em sete janelas indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.
+- Entre eles *Fatiar* e *Abrir no slicer* sem slicer configurado, *Inserir* no catálogo de blocos e *Remover* ao criar filamento.
+- As recusas não terminam apenas com a frase, mas com a saída.
+- Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês.
+- O diálogo Acerca indica quem está por trás do Solidon e quem responde ao feedback.
+- Uma ligação para uma versão anterior leva à atual em vez de uma página de erro.
+- A janela de atalhos volta a mostrar todas as entradas, incluindo *Ajustar à vista* renomeada.
+- A instalação em Windows chega ao fim também onde antes abortava com «ficheiro danificado»; em troca, o ficheiro de instalação é 23 megabytes maior.
+### Chat e apoio de modelos
+
+- Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.
+- Quando o chat distribui objetos por mesas de impressão, o resultado fica depois visível na imagem.
+- Um achado sobre um conjunto aponta o corpo em questão; de doze achados sem ação restam dois, e esses dois são meras indicações.
+- O chat conhece as novas ações sobre características reconhecidas e executa-as quando pedido.
 ## 0.3.0
 
 ### Primeiros passos e orientação

@@ -15,6 +15,108 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.3.1
+
+### Modificare le caratteristiche riconosciute
+
+- Le caratteristiche riconosciute si possono modificare: un foro, un perno, una svasatura o una cupola si può spostare, ruotare, ridimensionare, duplicare e rimuovere.
+- I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.
+- Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.
+- Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio.
+- Un pannello *Caratteristica* mostra a destra ciò che è stato misurato nel punto selezionato; si può staccare e attivare da *Vista*.
+- Ogni numero è modificabile: posizione, diametro, profondità e asse si impostano nel campo, senza finestre intermedie.
+- Un numero modificato appare come anteprima nell'immagine prima di essere applicato.
+- Una casella *Applica a tutti dello stesso tipo* modifica un'intera fila di fori in una volta, con un solo passo per annullare.
+- Due caratteristiche selezionate indicano la loro distanza da centro a centro e per asse.
+- Un foro indica la sua misura normalizzata — «misura 5,19 mm, il foro di passaggio per M5» — e dice anche quando nessuna corrisponde.
+- Un secondo foro come il primo si ottiene duplicando, invece di ridigitare le misure.
+- Il tasto Canc rimuove la caratteristica selezionata e non più l'intero corpo.
+- Un doppio clic su una riga dell'elenco degli oggetti apre il passo che l'ha creata, con le sue misure.
+- Nel punto precedente di un foro spostato, il materiale non sporge più sopra e sotto.
+- Un foro passante che dopo lo spostamento non passa più lo segnala, e una svasatura che chiuderebbe il suo foro non si può spostare.
+- Ridurre un foro sotto il limite di riconoscimento dà una spiegazione invece di chiedere una segnalazione di errore.
+- Su una faccia, un pulsante porta al catalogo dei blocchi invece di mostrare righe che dicono solo ciò che lì non è possibile.
+### Spostare, ruotare e selezionare
+
+- La maniglia di spostamento si trova su ciò che è selezionato: su un foro alla sua apertura, non più al centro del pezzo.
+- Si muove ciò che è selezionato: con un foro selezionato, maniglia e barra spostano il foro, non l'intero pezzo.
+- Durante il trascinamento, un'anteprima trasparente mostra dove va il foro e un'immagine pallida da dove viene.
+- L'ombra segue lo spostamento e mostra così l'altezza sopra il piano.
+- Durante la rotazione, un arco mostra di quanto si è ruotato e che l'angolo scatta sui multipli di 45 gradi.
+- Le piccole rotazioni arrivano: finora uno scatto angolare invisibile inghiottiva ogni movimento inferiore al suo passo.
+- Su una faccia la barra di spostamento offre solo ciò che è possibile e indica il motivo sul pulsante, non in un messaggio dopo il clic.
+- Il pulsante *Applica* non c'è più: si applica con Invio nel campo o trascinando la maniglia, ed esattamente una volta, non due.
+- Un pezzo spostato non torna più per un istante nella posizione precedente al rilascio.
+- Un clic su un foro colpisce il foro, anche quando la maniglia di spostamento gli sta davanti.
+- Un clic destro nell'elenco degli oggetti colpisce la riga indicata, non le due sopra.
+### Vista e albero degli oggetti
+
+- La voce *Adatta alla vista* inquadra il pezzo selezionato; senza selezione, tutta la scena come prima.
+- Un pezzo sotto il piano di stampa si vede: ora è il piano a essere trasparente, non il modello.
+- I corpi semitrasparenti vengono disegnati nel giusto ordine di profondità, qualunque sia l'ordine di creazione.
+- La vista impostata viene mantenuta, invece di tornare indietro al passo successivo.
+- Selezione e cambi nella vista 3D avvengono con transizioni morbide invece di salti bruschi.
+- Da quattro caratteristiche con lo stesso nome, l'albero degli oggetti mostra una riga espandibile con il loro numero invece di centinaia di righe.
+- Viene mostrato solo ciò che una stampante può produrre: le caratteristiche sotto il mezzo millimetro scompaiono; su un supporto per tubo, 296 su 1130.
+- I raccordi con raggio zero scompaiono così dall'albero degli oggetti.
+- Un clic su un corpo non costa più attesa; su un assieme da 63 MB erano tre quarti di secondo.
+- Cambiare la rappresentazione e ricostruire l'immagine di modelli grandi richiede un terzo del tempo precedente.
+### Disegno e immissione precisa
+
+- Lunghezza e larghezza di un disegno selezionato sono modificabili; il disegno segue il numero cambiato insieme alle sue quote.
+- Una quota sbagliata si può annullare da sola, e non più solo insieme a tutte le altre.
+- Dopo aver estruso uno schizzo, la finestra offre di nuovo anche la via per sottrarlo.
+- Una quota digitata vale come è stata digitata: 0,1 non diventa più 0,166667.
+- La finestra delle unità chiede millimetri e mostra un numero invece di «nan».
+- Il campo dello smusso si chiama larghezza, e il relativo messaggio parla di larghezza e non di raggio.
+- Un clic nella guida di un cursore lo porta nel punto selezionato, non una pagina più avanti.
+- Nella misurazione, il punto di destinazione si aggancia agli spigoli del modello e non a linee assenti dall'immagine.
+### Apertura, salvataggio e file di scambio
+
+- Il primo modello di un progetto è centrato sul piano di stampa invece che dove lo mette il suo file; ogni altro mantiene la sua posizione.
+- Un file danneggiato viene rifiutato all'apertura, invece di essere accettato e finire nel progetto al salvataggio.
+- Il rifiuto indica il motivo — vuoto, troncato, non è un STL, non è un 3MF, senza triangoli, con coordinate inservibili — e offre *Scegli un altro file*.
+- Il download interrotto di un file di modello viene riconosciuto come tale.
+- I file oltre gli otto megabyte vengono letti con indicatore di caricamento e avanzamento, invece di lasciare la finestra bloccata per quattordici secondi.
+- Un nome di file arriva sul disco come è stato digitato, con spazi, accenti, parentesi e segno più.
+- Un modello si può salvare come 3MF senza i valori di stampa di Solidon, per arrivare invariato nello slicer.
+- Dove STEP non è possibile per una mesh, il rifiuto offre subito *Salva come 3MF*.
+- Un modello con mesh troppo fitta riceve *Ridurre i triangoli* come pulsante sul rilievo, non solo come consiglio nel testo.
+- Un rilievo che riguarda più corpi si può risolvere per tutti in una volta, scegliendo quali, con un solo Ctrl+Z per l'intera azione.
+- Il comando *Auto Split* avvisa quando un taglio lascia una superficie aperta, e un taglio in un corpo modificabile non svuota più la scena.
+- Scalare un pezzo sotto il limite della macchina produce un rilievo; finora esisteva solo per troppo grande.
+- I blocchi personali riportano la stessa avvertenza di quelli forniti.
+### Stampa, slicer e filamento
+
+- La finestra di stampa mostra i profili corrispondenti alla stampante impostata, invece di un magazzino di 1001 voci.
+- Con una Elegoo Centauri Carbon sono quattro, e quello giusto è preselezionato.
+- Cambiare stampante nel progetto porta con sé volume di stampa, ugello e codice iniziale: un progetto Prusa non riceve più la macchina della Elegoo.
+- Lo slicer riceve i dati della macchina e restituisce un file di stampa, invece di interrompersi con «non compatibile con la stampante».
+- Se lo slicer è impostato su una stampante diversa dal progetto, Solidon lo dice invece di accettarlo in silenzio.
+- L'avviso di profilo mancante indica di quale stampante si tratta.
+- L'elenco dei filamenti resta vuoto finché non si sceglie un profilo macchina e ne indica il motivo, invece di offrire 5962 bobine.
+- La selezione del filamento si può filtrare per produttore, materiale e valori di un profilo.
+- Dove Solidon aggiunge un bordo, indica quale pezzo ne ha bisogno e perché.
+- Ciò che la macchina non può fare viene indicato su tutti i campi interessati, non su uno solo.
+- Le raccomandazioni del rapporto che lo slicer non accetta non promettono più un effetto.
+- Gli oggetti di materiali diversi finiscono su piani separati: la guarnizione in TPU non più sul piano della custodia in PETG.
+- L'avviso di stampa dà un consiglio invece di rimandare ai numeri del contratto di licenza.
+### Messaggi, pulsanti e informazioni
+
+- Nove pulsanti bloccati in sette finestre indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.
+- Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Rimuovi* nella creazione del filamento.
+- I rifiuti non finiscono con la sola frase, ma con la via d'uscita.
+- Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese.
+- La finestra Informazioni indica chi sta dietro a Solidon e chi risponde ai riscontri.
+- Un collegamento a una versione precedente porta a quella attuale invece di una pagina di errore.
+- La finestra delle scorciatoie mostra di nuovo ogni voce, compresa *Adatta alla vista* rinominata.
+- L'installazione su Windows arriva in fondo anche dove prima si interrompeva con «file danneggiato»; in cambio il file di installazione è 23 megabyte più grande.
+### Chat e assistenza dei modelli
+
+- Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.
+- Quando la chat dispone oggetti sui piani di stampa, il risultato è poi visibile nell'immagine.
+- Un rilievo su un assieme indica il corpo interessato; di dodici rilievi senza azione ne restano due, e quei due sono semplici indicazioni.
+- La chat conosce le nuove azioni sulle caratteristiche riconosciute e le esegue su richiesta.
 ## 0.3.0
 
 ### Primi passi e orientamento

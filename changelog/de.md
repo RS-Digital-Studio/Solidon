@@ -40,6 +40,108 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.3.1
+
+### Erkannte Merkmale bearbeiten
+
+- Erkannte Merkmale lassen sich bearbeiten: Eine Bohrung, ein Zapfen, eine Senkung oder eine Kuppel lässt sich verschieben, drehen, in der Größe ändern, verdoppeln und entfernen.
+- Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.
+- Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.
+- Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen.
+- Ein eigenes Fenster *Merkmal* zeigt rechts, was an der angeklickten Stelle gemessen wurde; es lässt sich abziehen und über *Ansicht* zuschalten.
+- Jede Zahl darin ist änderbar: Ort, Durchmesser, Tiefe und Achse werden im Feld gesetzt, ohne Dialog dazwischen.
+- Eine geänderte Zahl zeigt sich als Vorschau im Bild, bevor sie gilt.
+- Ein Haken *Auf alle gleichartigen anwenden* ändert eine ganze Lochreihe in einem Zug, mit einem einzigen Schritt zum Zurücknehmen.
+- Zwei markierte Merkmale nennen ihren Abstand von Mitte zu Mitte und je Achse.
+- Eine Bohrung nennt ihre Normgröße — „misst 5,19 mm, das Durchgangsloch für M5“ — und sagt auch, wenn keine passt.
+- Eine zweite Bohrung wie die erste entsteht durch Verdoppeln, statt Maße von Hand nachzutippen.
+- Die Entf-Taste entfernt das gewählte Merkmal und nicht mehr den ganzen Körper.
+- Ein Doppelklick auf eine Zeile der Objektliste öffnet den Schritt, der sie erzeugt hat, mit seinen Maßen.
+- An der alten Stelle einer verschobenen Bohrung steht das Material nicht mehr oben und unten über.
+- Eine durchgehende Bohrung, die nach dem Versetzen nicht mehr durchgeht, sagt es — und eine Senkung, die ihre Bohrung zuziehen würde, lässt sich nicht versetzen.
+- Wer eine Bohrung unter die Erkennungsgrenze verkleinert, bekommt eine Erklärung statt der Aufforderung, einen Fehlerbericht zu schreiben.
+- An einer Fläche führt ein Knopf in den Bausteinkatalog, statt Zeilen zu zeigen, die nur sagen, was dort nicht geht.
+### Bewegen, Drehen und Auswählen
+
+- Der Bewegungsgriff sitzt an dem, was gewählt ist — bei einer Bohrung an ihrer Öffnung statt in der Mitte des Teils.
+- Bewegt wird, was ausgewählt ist: Mit markierter Bohrung versetzen Griff und Leiste die Bohrung, nicht mehr das ganze Teil.
+- Beim Ziehen zeigt eine durchsichtige Vorschau, wohin die Bohrung wandert, und ein blasses Abbild, wo sie herkommt.
+- Der Schatten läuft beim Verschieben mit und zeigt damit die Höhe über der Platte.
+- Beim Drehen zeigt ein Bogen, wie weit gedreht wurde, und dass der Winkel auf einem Vielfachen von 45 Grad einrastet.
+- Kleine Drehungen kommen an — bisher verschluckte ein unsichtbarer Winkelfang jeden Zug unterhalb der Rastweite.
+- Die Bewegen-Leiste bietet an einer Fläche nur an, was dort möglich ist, und nennt den Grund am Knopf statt in einer Meldung nach dem Klick.
+- Der Knopf *Anwenden* ist weg: Angewandt wird mit der Eingabetaste im Feld oder durch Ziehen am Griff — und zwar genau einmal, nicht doppelt.
+- Ein verschobenes Teil springt nach dem Loslassen nicht mehr kurz an die alte Stelle zurück.
+- Ein Klick auf eine Bohrung trifft die Bohrung, auch wenn der Bewegungsgriff davor liegt.
+- Ein Rechtsklick in der Objektliste trifft die Zeile, auf die man zeigt, und nicht die zwei darüber.
+### Ansicht und Objektbaum
+
+- Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene.
+- Ein Teil unter der Druckplatte ist zu sehen — durchsichtig ist jetzt das Bett und nicht das Modell.
+- Halbdurchsichtige Körper werden in der richtigen Tiefenfolge gezeichnet, unabhängig von der Reihenfolge ihrer Entstehung.
+- Die eingestellte Ansicht bleibt erhalten, statt beim nächsten Schritt zurückzufallen.
+- Auswahl und Umschalten im 3D-Fenster laufen mit weichen Übergängen statt harter Sprünge.
+- Ab vier gleichnamigen Merkmalen steht im Objektbaum eine aufklappbare Sammelzeile mit ihrer Anzahl, statt hunderter Einzelzeilen.
+- Angezeigt wird nur, was ein Drucker herstellen kann: Merkmale unter einem halben Millimeter fallen weg — an einem Schlauchhalter 296 von 1130.
+- Verrundungen mit Radius null verschwinden damit aus dem Objektbaum.
+- Ein Klick auf einen Körper kostet keine Wartezeit mehr; an einer Baugruppe von 63 MB waren es drei Viertel einer Sekunde.
+- Umschalten der Darstellung und Bildaufbau großer Modelle brauchen ein Drittel der früheren Zeit.
+### Zeichnen und genaue Eingabe
+
+- Länge und Breite einer gewählten Zeichnung sind bedienbar; die Zeichnung folgt der geänderten Zahl samt ihren Maßen.
+- Ein falsch gesetztes Maß lässt sich einzeln zurücknehmen, statt nur zusammen mit allen anderen.
+- Wer eine Skizze hochgezogen hat, findet im Dialog auch den Weg zum Abziehen wieder.
+- Ein getipptes Maß gilt, wie es getippt wurde: Aus 0,1 wird nicht mehr 0,166667.
+- Der Einheitendialog fragt nach Millimetern und zeigt eine Zahl statt „nan“.
+- Das Feld der Fase heißt Breite, und die Meldung dazu spricht auch von der Breite statt vom Radius.
+- Ein Klick in die Rinne eines Reglers setzt ihn an die angeklickte Stelle, nicht eine Seite weiter.
+- Beim Messen fängt der Zielpunkt an den Kanten des Modells und nicht an Linien, die im Bild nicht vorkommen.
+### Öffnen, Speichern und Austauschdateien
+
+- Das erste Modell eines Projekts liegt mittig auf dem Druckbett, statt dort, wo seine Datei es ablegt; jedes weitere behält seine Lage.
+- Eine kaputte Datei wird beim Öffnen abgelehnt, statt angenommen zu werden und beim Speichern im Projekt zu landen.
+- Die Absage nennt den Grund — leer, abgeschnitten, keine STL, kein 3MF, ohne Dreiecke, mit unbrauchbaren Koordinaten — und bietet *Andere Datei wählen* an.
+- Der abgebrochene Download einer Modelldatei wird als solcher erkannt.
+- Dateien über acht Megabyte werden mit Ladeanzeige und Fortschritt gelesen, statt das Fenster vierzehn Sekunden ohne Rückmeldung stehen zu lassen.
+- Ein Dateiname kommt so auf der Platte an, wie er eingegeben wurde — mit Leerzeichen, Umlauten, Klammern und Plus.
+- Ein Modell lässt sich als 3MF ohne Solidons Druckwerte speichern, wenn es im Slicer unverändert ankommen soll.
+- Wo STEP an einem Netz nicht möglich ist, bietet die Absage *Als 3MF speichern* gleich an.
+- Ein zu fein vernetztes Modell bekommt *Dreiecke verringern* als Knopf am Befund, nicht nur als Rat im Text.
+- Ein Befund, der mehrere Körper betrifft, lässt sich für alle auf einmal beheben — mit Auswahl, welche, und einem Strg+Z für die ganze Handlung.
+- Der Befehl *Auto Split* sagt, wenn ein Schnitt eine offene Fläche hinterlässt, und ein Schnitt durch einen bearbeitbaren Körper lässt die Bühne nicht mehr leer.
+- Wer ein Teil unter die Maschinengrenze skaliert, bekommt einen Befund; bisher gab es den nur für zu groß.
+- Eigene Bausteine tragen denselben Warnhinweis wie die mitgelieferten.
+### Drucken, Slicer und Filament
+
+- Der Druckdialog zeigt die Profile, die zum eingestellten Drucker passen, statt eines Bestands von 1001 Einträgen.
+- Bei einem Elegoo Centauri Carbon sind es vier, und das richtige ist vorausgewählt.
+- Ein Wechsel des Druckers im Projekt zieht Bauraum, Düse und Startcode mit — ein Prusa-Projekt bekommt nicht mehr die Maschine des Elegoo.
+- Der Slicer bekommt die Maschinenangabe mit und liefert eine Druckdatei zurück, statt den Lauf mit „nicht zum Drucker passend“ abzubrechen.
+- Steht der Slicer auf einem anderen Drucker als das Projekt, sagt Solidon es, statt es stillschweigend hinzunehmen.
+- Der Hinweis auf ein fehlendes Profil nennt den Drucker, um den es geht.
+- Die Filamentliste bleibt leer, solange kein Maschinenprofil gewählt ist, und nennt diesen Grund, statt 5962 Rollen anzubieten.
+- Die Filamentauswahl lässt sich nach Hersteller, Material und den Werten eines Profils filtern.
+- Wo Solidon einen Rand setzt, steht dabei, welches Teil ihn braucht und warum.
+- Was die Maschine nicht kann, wird an allen betroffenen Feldern gesagt und nicht nur an einem.
+- Empfehlungen aus dem Prüfbericht, die der Slicer nicht annimmt, versprechen keine Wirkung mehr.
+- Objekte aus verschiedenen Materialien landen auf getrennten Druckplatten — die TPU-Dichtung nicht mehr auf der Platte des PETG-Gehäuses.
+- Der Druckhinweis gibt einen Rat, statt auf Nummern des Lizenzvertrags zu verweisen.
+### Meldungen, Knöpfe und Auskunft
+
+- Neun gesperrte Knöpfe in sieben Fenstern nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.
+- Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Entfernen* beim Filament-Anlegen.
+- Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.
+- Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen.
+- Der Über-Dialog nennt, wer hinter Solidon steht und wer auf eine Rückmeldung antwortet.
+- Ein Link auf eine ältere Fassung führt auf die aktuelle statt auf eine Fehlerseite.
+- Das Kürzelfenster zeigt wieder jeden Eintrag, auch den umbenannten *Einpassen*.
+- Die Windows-Installation läuft auch dort durch, wo sie bisher mit „fehlerhaftes File“ abbrach; die Setup-Datei ist dafür 23 Megabyte größer.
+### Chat und Modellunterstützung
+
+- Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.
+- Ordnet der Chat Objekte auf Druckplatten an, ist das Ergebnis danach im Bild zu sehen.
+- Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht; von zwölf Befunden ohne Handlung sind zwei geblieben, und die zwei sind reine Hinweise.
+- Der Chat kennt die neuen Handlungen an erkannten Merkmalen und führt sie auf Zuruf aus.
 ## 0.3.0
 
 ### Einstieg und Orientierung
