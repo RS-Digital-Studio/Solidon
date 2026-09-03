@@ -626,3 +626,31 @@ def test_http_error_body_is_bounded_before_an_llm_detail_is_built(
         llm.post_json("https://example.org/chat", {"Authorization": "Bearer key"}, {})
 
     assert "topsecret" not in str(raised.value.detail)
+
+
+def test_the_upload_tool_accepts_the_version_file_we_publish() -> None:
+    """Was ``make_download.py`` schreibt, muss ``upload_website`` annehmen.
+
+    **Der Fall, aus dem dieser Test entstand** (Auslieferung 0.3.1): Der
+    Download-Kasten schreibt seit einer Weile ein Feld ``changes_total``, und
+    ``_VERSION_FIELDS`` kannte es nicht. Die Prüfung ist mit Absicht
+    geschlossen — ein unbekanntes Feld lässt sie scheitern —, also wies sie
+    jede aktuelle ``version.json`` ab. Gelöscht wurde dadurch nichts, das ist
+    die sichere Richtung; aber ``--alte-pakete`` war blind, und alte Pakete
+    blieben auf dem Server liegen.
+
+    Aufgefallen ist es nur, weil ``--nachpruefen`` eine Minute vorher fünf
+    Pakete aus derselben Datei gelesen hatte. Die Meldung selbst
+    („nennt kein einziges Paket oder hat ein ungültiges Schema") liest sich wie
+    eine kaputte Datei und nicht wie ein veraltetes Werkzeug.
+
+    Geprüft wird gegen die **eingecheckte** Datei und nicht Feldliste gegen
+    Feldliste: Zwei Listen zu vergleichen hieße anzunehmen, dass eine von
+    beiden stimmt.
+    """
+    published = Path(upload_website.__file__).resolve().parent.parent / "website" / "version.json"
+    payload = json.loads(published.read_text(encoding="utf-8"))
+    if not payload.get("packages"):
+        pytest.skip("version.json führt noch keine Pakete — vor dem ersten Release ist das richtig")
+
+    upload_website._validate_remote_version(payload)

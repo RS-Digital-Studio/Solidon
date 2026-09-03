@@ -99,6 +99,15 @@ PUBLIC_TIMEOUT_SECONDS = 30.0
 MAX_PUBLIC_TEXT_BYTES = 8 * 1024 * 1024
 MAX_REMOTE_VERSION_BYTES = 1024 * 1024
 MAX_REMOTE_PACKAGE_BYTES = 2 * 1024 * 1024 * 1024
+#: Jedes Feld, das ``make_download.py`` schreiben darf.
+#:
+#: **Die Liste gehört zu der dort, und sie ist einmal auseinandergelaufen.**
+#: `changes_total` kam beim Download-Kasten dazu und fehlte hier; die
+#: geschlossene Prüfung darunter wies daraufhin jede aktuelle Datei ab, und
+#: `--alte-pakete` räumte seither nichts mehr auf. Aufgefallen ist es erst
+#: beim Ausliefern von 0.3.1, weil die Meldung wie eine kaputte Datei aussieht
+#: und nicht wie ein veraltetes Werkzeug. `tests/test_website.py` hält beide
+#: Listen jetzt zusammen.
 _VERSION_FIELDS = frozenset(
     {
         "version",
@@ -106,6 +115,7 @@ _VERSION_FIELDS = frozenset(
         "notes",
         "packages",
         "changes",
+        "changes_total",
         "notes_by_language",
         "groups",
         "signature",
