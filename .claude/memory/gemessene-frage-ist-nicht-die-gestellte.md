@@ -28,6 +28,32 @@ Am 27.08.2026 dreimal an einem Abend, in zwei Sitzungen:
 - **27, eine halbe Stunde vorher:** „Wessen Commit nahm meine Zeilen mit?" Dass
   sie mitgingen, war gemessen und stimmte; wem der Commit gehörte, war geraten.
 
+**Und eine vierte Gestalt, die schwerer zu sehen ist als die drei oben
+(03.09.2026):** Dort war die Ersatzfrage jeweils *bequemer* — Text statt
+Verhalten, Pfad statt Commit. Hier war sie **enger**, und das fällt nicht
+auf, weil die Suche vollständig ist.
+
+Ich hatte `MIN_CYLINDER_DIAMETER` bei den Verrundungen nachgetragen und
+gesucht, wo sie sonst noch fehlt. Gemessen habe ich: „welche Aufrufer
+**derselben Zylinder-Einpassung** prüfen sie nicht?" — drei, alle
+gefunden, Ergebnis korrekt. Gemeint war: „wo fehlt die Schranke?" Kegel, Kugel
+und Torus benutzen eine **andere** Einpassung, standen damit außerhalb des
+Suchraums und waren im Ergebnis nicht als fehlend, sondern gar nicht
+vertreten. Ich habe die Vollständigkeit dann sogar in den Code
+geschrieben: „und sie fehlte hier als Einziger". Eine Stunde später zeigte
+die Messung an einem Kundenmodell 257 Merkmale unter einer Extrusionsbahn.
+
+**Der Suchraum ist Teil der Frage, und er wird nie mitgenannt.** „Alle
+Aufrufer von X" klingt vollständig und ist es — für X.
+
+**Die Gegenmaßnahme ist nicht die bessere Suche, sondern die benannte
+Frage.** Eine verstreute Prüfung (dreimal derselbe Vergleich in drei
+Funktionen) lässt sich nur finden, wenn man weiß, wonach man sucht;
+eine Funktion mit Namen (`_too_small_to_make`) muss die nächste
+Merkmalsart **beantworten**, sonst fällt sie auf. Aus „wo steht dieser
+Vergleich überall?" wird „wer ruft diese Frage nicht?" — und das ist
+eine Frage, die ein Werkzeug wirklich beantworten kann.
+
 **Why:** Die Ersatzfrage ist immer die, die leichter zu greifen ist — ein
 `grep` über Text statt einer Prüfung am Verhalten, ein `git log` über Pfade
 statt `git show --stat` über einen Commit. Sie liefert eine plausible Zahl,
