@@ -2270,24 +2270,44 @@ def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> Non
     Quelltext und fand sechs — ``resize_hole`` wirft dieselbe Absage über
     ``_chosen_bore`` und fiel durch das Muster. Wer nach Helfern sucht, findet
     die, die er kennt. Der Name ``at_feature`` steht dagegen **fest** in jedem
-    ``field=``-Argument dieser Fehler, und daran hängt der Knopf: Also muss
-    jedes Merkmalsfeld dieses Moduls so heißen, und zwar unabhängig davon,
-    über welchen Helfer die Absage kommt.
+    ``field=``-Argument dieser Fehler, und daran hängt der Knopf.
 
-    Gemessen am 04.09.2026: sieben Operationen mit einem Feld der Art
-    ``feature``, alle sieben heißen ``at_feature``.
+    **Und die Reichweite leitet der Test sich her, statt sie zu kennen.** Auch
+    sie war erst zu eng: gefiltert auf ``prepare_ops``, weil dort der Anlass
+    lag. Gemessen am 04.09.2026 werfen aber **drei** Module mit diesem Feld —
+    ``prepare_ops``, ``paint`` und ``lid`` —, und 38 Operationen führen es.
+    Der Test sucht die Wurfstellen deshalb im Quelltext und prüft jede
+    Operation, die aus einem dieser Module kommt; ein viertes Modul zieht ohne
+    Zutun mit ein.
+
+    Nicht geprüft wird, wer **kein** ``field=`` benutzt: ``align_to_feature``
+    nennt seinen Parameter ``feature`` und wirft mit eigenem Vorschlag
+    („Wählen Sie das Merkmal im Objektbaum aus.") statt über *Eingabe
+    korrigieren*. Dort ist der abweichende Name folgenlos, und ein Test, der
+    ihn rot machte, verlangte eine Umbenennung ohne Nutzen.
     """
     import inspect
+    import re
+    from pathlib import Path
 
     from app.core.bootstrap import load_operations
-    from app.core.geom import prepare_ops
     from app.core.registry import REGISTRY
 
     load_operations()
+
+    kern = Path(__file__).resolve().parent.parent / "app" / "core"
+    werfend = {
+        datei.relative_to(kern.parent.parent).with_suffix("").as_posix().replace("/", ".")
+        for datei in kern.rglob("*.py")
+        if re.search(r'field="at_feature"', datei.read_text(encoding="utf-8"))
+    }
+    assert len(werfend) >= 3, f"zu wenige Wurfstellen — sucht der Test noch richtig? {werfend}"
+
     falsch_benannt = []
     mit_merkmal = []
     for spec in REGISTRY.all():
-        if inspect.getmodule(spec.fn) is not prepare_ops:
+        modul = inspect.getmodule(spec.fn)
+        if modul is None or modul.__name__ not in werfend:
             continue
         for field in spec.params.fields():
             if field.metadata["param"]["kind"] != "feature":
@@ -2296,7 +2316,9 @@ def test_every_op_that_refuses_a_feature_carries_the_field_it_points_at() -> Non
             if field.name != "at_feature":
                 falsch_benannt.append(f"{spec.name}.{field.name}")
 
-    assert len(mit_merkmal) >= 7, f"zu wenige gefunden — sucht der Test noch richtig? {mit_merkmal}"
+    assert len(mit_merkmal) >= 10, (
+        f"zu wenige gefunden — sucht der Test noch richtig? {mit_merkmal}"
+    )
     assert not falsch_benannt, (
         'die Absagen nennen field="at_feature"; diese Felder heißen anders und der '
         f"Vorschlag zeigte dort ins Leere: {falsch_benannt}"
