@@ -46,6 +46,7 @@ from app.core.errors import (
     CHANGE_SELECTION,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
+    DECIMATE_MESH,
     EXPORT_AS_MESH,
     PLACE_ON_BED,
     REMOVE_SMALL_PARTS,
@@ -361,6 +362,25 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Gemessen am Korpus: zwei von zwanzig Modellen, beide Male eine
     # Warnung ohne Weg.
     "ingest.small_components": (REMOVE_SMALL_PARTS,),
+    # **Der Ausweg stand im Text des einen Befunds und das Ziel im anderen.**
+    # Ein fein vernetztes Modell meldet sich zweimal: ``ingest.very_large``
+    # nennt „Dreiecke verringern" beim Namen, trägt aber keine Objektkennung —
+    # beim Einlesen gibt es noch keine. ``perceive.too_large`` trägt sie und
+    # nennt den Ausweg nicht. Keiner der beiden war für sich vollständig, und
+    # beide standen ohne Knopf da.
+    #
+    # Gemessen an ``Wizard+Tower+Staunton+Elegoo.3mf`` (Roberts Downloads,
+    # 03.09.2026): 15 Befunde, davon zwölf aus diesen beiden Kennungen über
+    # dieselben sechs Körper — und keiner mit einer Handlung. Der Kunde las
+    # sechsmal, was hilft, und fand nichts zum Klicken.
+    #
+    # Den Knopf bekommt der Befund **mit** der Kennung: Ein Klick auf ihn
+    # wählt seinen Körper (§2.7), und ``decimate_mesh`` verringert dann genau
+    # dessen Dreiecke. Am anderen wäre er eine Handlung ohne Ziel — er landete
+    # auf der gerade gewählten Auswahl oder, ohne sie, in einer Meldung.
+    # Dieselbe Handlung hängt seit je am geworfenen Fehler der Analysekarten
+    # (``app/core/perceive/maps.py``); nur der Befund kannte sie nicht.
+    "perceive.too_large": (DECIMATE_MESH,),
     # **Dritter Melder derselben Sache, und er stand ohne Menü da.** „Nicht
     # geschlossen" meldet der Kern an drei Stellen: beim Einlesen, beim
     # Exportieren und nach jedem Zug des Agenten (``agent.not_watertight``,

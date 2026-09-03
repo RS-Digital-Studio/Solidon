@@ -24,6 +24,7 @@ from app.core.perceive.features import (
     detect_pins,
     forget_cache,
 )
+from app.core.registry import REGISTRY
 from app.core.slice.advise import warnings_for
 
 # --- Befund 1: drei koaxiale Bohrungen gleichen Durchmessers ----------------------
@@ -250,3 +251,45 @@ def test_an_unsorted_table_is_put_in_order_when_it_is_read(tmp_path: Path) -> No
     tables = standards.load(path)
 
     assert list(tables.screws) == ["M3", "M8"]
+
+
+# --- Befund: der Ausweg stand im Text, der Knopf fehlte ---------------------------
+
+
+def test_a_model_too_dense_to_perceive_offers_the_way_out() -> None:
+    """„Dreiecke verringern" stand als Rat im Text und nirgends als Handlung.
+
+    Ein fein vernetztes Modell meldet sich zweimal: ``ingest.very_large`` nennt
+    den Ausweg beim Namen und trägt keine Objektkennung — beim Einlesen gibt es
+    noch keine. ``perceive.too_large`` trägt sie und nennt den Ausweg nicht.
+    Keiner der beiden war für sich vollständig.
+
+    Gemessen an ``Wizard+Tower+Staunton+Elegoo.3mf`` (03.09.2026): 15 Befunde,
+    zwölf davon aus diesen beiden Kennungen über dieselben sechs Körper, und
+    kein einziger mit einem Knopf. Die Handlung selbst ist alt — sie hängt seit
+    je am geworfenen Fehler der Analysekarten (``perceive/maps.py``).
+    """
+    from app.core.errors import DECIMATE_MESH
+    from app.core.types import Finding
+    from app.ui.panels import FINDING_ACTIONS, actions_for
+
+    assert FINDING_ACTIONS.get("perceive.too_large") == (DECIMATE_MESH,), (
+        "der Befund mit der Objektkennung bekommt den Knopf — an ihm hat er ein Ziel"
+    )
+    assert "ingest.very_large" not in FINDING_ACTIONS, (
+        "und der ohne Kennung nicht: dort wäre es eine Handlung ohne Ziel"
+    )
+    assert REGISTRY.get("decimate_mesh").consumes == 1, (
+        "sie verringert die Dreiecke genau eines Körpers — dessen, den der Klick wählt"
+    )
+
+    # Und der Weg, nicht die Tabelle: Was das Panel unter der Liste anbietet,
+    # kommt aus ``actions_for`` — eine Zeile im Verzeichnis ist noch kein Knopf.
+    gemeldet = Finding(
+        code="perceive.too_large",
+        severity="info",
+        message="Für die Merkmalserkennung ist dieses Modell zu groß.",
+        object_id="obj_1",
+        values={"triangles": 367294, "limit": 200000},
+    )
+    assert [action.id for action in actions_for(gemeldet)] == ["decimate_mesh"]
