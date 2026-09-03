@@ -87,6 +87,19 @@ def test_both_lid_buttons_use_the_shared_fit_flow() -> None:
 # --- Die Auswahl erreicht den Dialog ----------------------------------------------
 
 
+def top_of(window: MainWindow, object_id: str = "obj_1") -> float:
+    """Die Oberseite des Körpers, gemessen statt abgelesen.
+
+    Sie stand als 4.0 in zwei Tests, weil die Platte von z -4 bis +4 lag. Seit
+    das erste Modell eines Projekts aufgesetzt hereinkommt (§17.1, Schritt 6),
+    liegt sie von 0 bis 8 — und die Zahl beschrieb ab da die Mitte des Körpers
+    statt seiner Oberseite. Der Docstring darunter nennt genau diesen Fall
+    schon als Gefahr.
+    """
+    box = window.session.last_result.scene.objects[object_id].mesh.bounds
+    return float(box.maximum[2])
+
+
 def test_without_a_feature_the_body_offers_its_top(window: MainWindow) -> None:
     """Kein Merkmal gewählt heißt nicht „keine Ahnung, wohin".
 
@@ -101,7 +114,7 @@ def test_without_a_feature_the_body_offers_its_top(window: MainWindow) -> None:
     values = window._from_selection(REGISTRY.get("drill_hole"), object_id)
 
     assert set(values) >= {"x", "y", "z"}
-    assert values["z"] == pytest.approx(4.0), "die Oberseite der Platte"
+    assert values["z"] == pytest.approx(top_of(window)), "die Oberseite der Platte"
     assert "at_feature" not in values, "geraten ist nicht gezeigt"
 
 
@@ -170,7 +183,7 @@ def test_a_feature_that_is_gone_falls_back_to_the_body(window: MainWindow) -> No
     after_a_ghost = window._from_selection(spec, object_id)
 
     assert after_a_ghost == without_any
-    assert after_a_ghost["z"] == pytest.approx(4.0), "die Oberseite, nicht der Ursprung"
+    assert after_a_ghost["z"] == pytest.approx(top_of(window)), "die Oberseite, nicht der Ursprung"
 
 
 # --- Der Dialog öffnet auf Werten statt auf Vorgaben ------------------------------
@@ -277,12 +290,71 @@ def test_a_body_without_the_needed_feature_says_so(window: MainWindow) -> None:
     assert reason is not None, "ohne Bohrung braucht der Eintrag einen Grund"
     assert str(tr("Bohrung")).lower() in reason.lower()
 
+    # **Und der Eintrag ist auch wirklich grau.** Der Grund allein war er
+    # nicht: Dieser Test prüfte bis zum 03.09.2026 nur ``_reason_locked``,
+    # während die Freigabe daneben ihre eigene Bedingung nachbaute — Bauart
+    # und Anzahl, ohne das Merkmal. Der Tooltip sagte „Dafür braucht es eine
+    # erkannte Bohrung", und der Eintrag ließ sich anklicken; gemessen an
+    # einer eingelesenen STEP-Datei mit 302 Merkmalen und null Bohrungen
+    # öffnete der Dialog auf einer **Unterseite** und die Absage kam erst
+    # nach dem Übernehmen. Eine Zusicherung über den Grund ist keine über
+    # die Wirkung.
+    window._update_actions()
+    assert not window._op_actions["resize_hole"].isEnabled(), (
+        "ohne Bohrung ist der Eintrag eine Sackgasse (Regel 19)"
+    )
+
     drill = REGISTRY.get("drill_hole")
     assert window._reason_locked(drill, window.object_tree.kinds_of_selection(), 2, 1) is None
+    assert window._op_actions["drill_hole"].isEnabled(), "Bohren braucht kein Merkmal"
 
     choose(0)  # die Platte — vier Bohrungen, der Eintrag bleibt frei
     reason = window._reason_locked(spec, window.object_tree.kinds_of_selection(), 2, 1)
     assert reason is None, reason
+    window._update_actions()
+    assert window._op_actions["resize_hole"].isEnabled(), "mit Bohrung geht es"
+
+
+def test_the_feature_list_only_offers_what_the_operation_takes(window: MainWindow) -> None:
+    """Die Auswahl eines Dialogs zeigt die Merkmalsarten, die er nimmt (§18.5).
+
+    Sie zeigte alle. An einer STEP-Datei aus dem Kundenbestand — 238 Flächen,
+    64 Verrundungen, keine Bohrung — bot *Bohrung ändern* 302 Einträge an, von
+    denen keiner passte, und stand vorausgewählt auf „Unterseite · 60 mm²":
+    Eine Pflicht-Auswahl trägt keinen Leereintrag und steht damit auf ihrem
+    ersten. Das liest sich als Vorschlag der Anwendung und ist keiner.
+
+    ``applies_to`` ist dieselbe Zuordnung, über die das Kontextmenü am Merkmal
+    die Operation findet (§10) — hier nur andersherum gelesen. Wo sie fehlt,
+    wird nicht gefiltert: Raten wäre schlechter als Anbieten.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    body = window.object_tree.selected() or next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(body)
+
+    features = window.session.last_result.scene.objects[body].features
+    kinds = {feature.kind for feature in features.values()}
+    assert {"hole", "face"} <= kinds, f"dieser Korpus trägt nur {kinds} — der Test prüft nichts"
+
+    holes = window._feature_names(REGISTRY.get("resize_hole"))
+    assert holes, "die Platte hat Bohrungen"
+    assert all(features[name].kind == "hole" for name in holes), (
+        f"Bohrung ändern bekam auch {sorted({features[n].kind for n in holes})}"
+    )
+
+    faces = window._feature_names(REGISTRY.get("insert_screw_hole"))
+    assert faces, "die Platte hat Flächen"
+    assert all(features[name].kind == "face" for name in faces)
+
+    # Ohne Operation bleibt die volle Liste — die Legende der Analyseleiste
+    # und das Nachtragen eines angeklickten Merkmals brauchen sie.
+    assert set(window._feature_names()) == set(features), "ungefragt wird nicht gefiltert"
+
+    # Und eine Operation ohne ``applies_to`` bekommt ebenfalls alles.
+    open_ended = REGISTRY.get("displace_image")
+    assert not open_ended.applies_to, "sonst prüft dieser Zweig nichts"
+    assert set(window._feature_names(open_ended)) == set(features)
 
 
 # --- Ein Maß, das an einem Projektparameter hängt (§13) ---------------------------
@@ -1561,6 +1633,13 @@ def test_both_ways_into_a_dialog_carry_the_feature_names(window: MainWindow) -> 
     Nur ``edit_operation`` übergab sie. Geprüft wird deshalb nicht der Dialog —
     den halten die Tests daneben längst fest —, sondern **beide Aufrufer**: Wer
     einen dritten baut, soll hier auffallen.
+
+    **Gezählt wird der Aufruf, nicht seine Schreibweise.** Hier stand
+    ``"features=self._feature_names(),"`` mitsamt schließender Klammer, und
+    damit hing der Test an einem Aufruf *ohne Argument*: Als beide Wege ihre
+    Liste auf ``applies_to`` verengten (``_feature_names(spec)``), wurde er rot,
+    obwohl beide die Merkmale weiter übergeben. Ein Wächter, der die Sache
+    meint, darf nicht die Zeichenkette zählen.
     """
     import inspect
 
@@ -1569,9 +1648,9 @@ def test_both_ways_into_a_dialog_carry_the_feature_names(window: MainWindow) -> 
     source = inspect.getsource(module.MainWindow)
     calls = source.count("dialog = OperationDialog(")
     assert calls >= 2, "es gibt nicht mehr zwei Wege in den Dialog — dieser Test ist veraltet"
-    assert source.count("features=self._feature_names(),") == calls, (
-        f"{calls} Aufrufe von OperationDialog, aber "
-        f"{source.count('features=self._feature_names(),')} übergeben die Merkmale"
+    passed_on = source.count("features=self._feature_names(")
+    assert passed_on == calls, (
+        f"{calls} Aufrufe von OperationDialog, aber {passed_on} übergeben die Merkmale"
     )
 
 
@@ -2705,3 +2784,63 @@ def test_a_bore_without_a_standard_size_offers_the_sizes_it_asks_about(
         f"die Antworten auf die eigene Frage fehlen im Hinweis: {gezeigt[0]!r}"
     )
     assert echt is not None
+
+
+# --- Was die Vorschau sagt, wenn sie nur die Hälfte rechnen konnte (§18.7) -------
+
+
+def test_a_partial_preview_says_so_instead_of_showing_nothing(window: MainWindow) -> None:
+    """Eine Vorschau, die stumm nichts zeigt, ist eine Rückmeldung, die fehlt.
+
+    Die schnelle Stufe der Booleschen Kette scheitert an groben Netzen aus dem
+    Netz regelmäßig, während die Auswertung dieselbe Operation danach sauber
+    rechnet. ``difference.compare`` vermerkt das seit je als
+    ``difference.incomplete`` — und der Vermerk kam nirgends an: Über einer
+    halben Vorschau stand dasselbe Band wie über einer vollständigen.
+
+    Gemessen an ``garden-hose-holder.3mf`` (392 532 Dreiecke, ein Kundenmodell):
+    Die Vorschau rechnete 3 579 mm³ abgetragenes Volumen, die Gegenrichtung
+    nicht, und im Fenster stand „Vorschau — noch nicht übernommen". Wer den
+    Durchmesser bewegt, konnte nicht unterscheiden, ob er falsch zielt, ob es
+    rechnet oder ob es nicht geht.
+
+    Geprüft wird hier mit einer gebauten Differenz und nicht mit dem
+    Kundenmodell: Die Frage ist, ob die Oberfläche den Vermerk **zeigt**, nicht
+    ob die Kette scheitert — das gehört zu den Geometrietests.
+    """
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.core.types import Finding
+
+    gezeigt: list[str] = []
+    echt = type(window.viewport).mark_preview
+
+    def merken(self: object, note: str, hint: str = "") -> object:
+        gezeigt.append(note)
+        return echt(self, note, hint)
+
+    type(window.viewport).mark_preview = merken
+    try:
+        vollstaendig = SceneDifference()
+        vollstaendig.entries["obj_1"] = Difference(object_id="obj_1", removed_volume=120.0)
+        window._show_preview(vollstaendig)
+        assert gezeigt[-1] == str(tr("Vorschau — noch nicht übernommen"))
+
+        halb = SceneDifference()
+        eintrag = Difference(object_id="obj_1", removed_volume=3579.47)
+        eintrag.findings.append(
+            Finding(
+                code="difference.incomplete",
+                severity="info",
+                message="Die Differenz ließ sich nicht vollständig berechnen.",
+            )
+        )
+        halb.entries["obj_1"] = eintrag
+        window._show_preview(halb)
+        assert gezeigt[-1] != str(tr("Vorschau — noch nicht übernommen")), (
+            "über einer halben Vorschau stand dasselbe wie über einer ganzen"
+        )
+        assert gezeigt[-1] == str(
+            tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
+        )
+    finally:
+        type(window.viewport).mark_preview = echt

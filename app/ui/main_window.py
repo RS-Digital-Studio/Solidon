@@ -3260,17 +3260,24 @@ class MainWindow(QMainWindow):
 
         for name, action in self._op_actions.items():
             spec = REGISTRY.get(name)
-            if locked or gesturing:
-                action.setEnabled(False)
-            elif spec.takes_whole_scene:
-                action.setEnabled(objects > 0)
-            elif spec.consumes:
-                fits = not spec.requires_kind or all(kind == spec.requires_kind for kind in kinds)
-                action.setEnabled(chosen >= spec.consumes and fits)
-            else:
-                action.setEnabled(True)
+            # **Ein Grund, und beide Seiten folgen ihm.** Hier stand die
+            # Bedingung ein zweites Mal, von Hand nachgebaut — Bauart und
+            # Anzahl, aber nicht das Merkmal. ``_reason_locked`` prüft alle
+            # drei und belieferte bisher nur den Hinweistext: *Bohrung ändern*
+            # war an einem Körper ohne Bohrung anklickbar, während sein
+            # eigener Tooltip „Dafür braucht es eine erkannte Bohrung am
+            # gewählten Teil." sagte. Gemessen an einer eingelesenen STEP-Datei
+            # mit 302 Merkmalen und null Bohrungen: Dialog geht auf,
+            # ``at_feature`` steht auf einer **Unterseite**, Übernehmen ist
+            # frei, und die Absage steht danach im Prüfbericht — die Sackgasse
+            # aus Regel 19, die dieselbe Schleife bei den Operationen des
+            # exakten Kerns seit je vermeidet.
+            reason = (
+                None if locked or gesturing else self._reason_locked(spec, kinds, objects, chosen)
+            )
+            action.setEnabled(not locked and not gesturing and reason is None)
             self._lock_hint(action, locked)
-            self._kind_hint(action, spec, kinds, locked, objects, chosen)
+            self._kind_hint(action, reason, locked)
 
         # Dieselbe Regel für die Werkzeugzeile unten. Sie stand dem Anfänger
         # näher als jedes Menü und bot auf einer leeren Szene weiter Messen,
@@ -3454,15 +3461,7 @@ class MainWindow(QMainWindow):
         """
         return self.object_tree.kinds_of_selection()
 
-    def _kind_hint(
-        self,
-        action: QAction,
-        spec: OperationSpec,
-        kinds: list[str],
-        locked: bool,
-        objects: int = 0,
-        chosen: int = 0,
-    ) -> None:
+    def _kind_hint(self, action: QAction, reason: str | None, locked: bool) -> None:
         """Sagt am ausgegrauten Eintrag, *warum* er ausgegraut ist.
 
         Ausgrauen allein wäre die halbe Antwort: der Nutzer sieht, dass es
@@ -3476,11 +3475,18 @@ class MainWindow(QMainWindow):
         wenn sie könnte. Die Werkzeugzeile daneben sagte es im selben Augenblick
         richtig („Dafür braucht es einen Körper in der Szene."), weil
         ``set_usable`` den Grund mitbekommt.
+
+        **Der Grund kommt herein, statt hier gerechnet zu werden.** Er wird
+        oben schon gebraucht — die Freigabe des Eintrags folgt ihm —, und
+        ``_reason_locked`` ein zweites Mal je Eintrag zu rufen ist nicht nur
+        doppelte Arbeit: mit 59 Einträgen je Aktualisierung endete
+        ``tests/test_operation_ui.py`` reproduzierbar in einer
+        Zugriffsverletzung, während derselbe Lauf mit einem Aufruf zweimal
+        sauber durchging.
         """
         if locked:
             return
         stored = action.property("tip_before_kind")
-        reason = self._reason_locked(spec, kinds, objects, chosen)
         if reason is not None:
             if stored is None:
                 action.setProperty("tip_before_kind", action.statusTip())
@@ -9130,7 +9136,10 @@ class MainWindow(QMainWindow):
                 # *Ändern* laufen hier durch —, und der Docstring des
                 # Parameters verspricht die lesbare Bezeichnung. Gemessen:
                 # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
-                features=self._feature_names(),
+                #
+                # Verengt auf die Arten, die diese Operation nimmt: eine
+                # Auswahl, in der nichts passt, ist keine (§18.5).
+                features=self._feature_names(spec),
                 extra=exact if exact is not None else variant,
                 extra_label=str(group.choice) if group is not None else "",
                 surroundings=self._sketch_surroundings(),
@@ -9451,7 +9460,10 @@ class MainWindow(QMainWindow):
             values={**entry.params, **(given or {})},
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
-            features=self._feature_names(),
+            # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
+            # korrigiert, soll dort dieselbe Auswahl vorfinden wie beim ersten
+            # Mal — sonst hinge die Liste daran, wie man den Dialog geöffnet hat.
+            features=self._feature_names(REGISTRY.get(shown)),
             extra=exact,
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
@@ -9572,9 +9584,34 @@ class MainWindow(QMainWindow):
         request()
 
     def _show_preview(self, difference: Any) -> None:
+        """Die Live-Vorschau ins Bild — und dazu, ob sie vollständig ist.
+
+        **Eine Vorschau, die stumm nichts zeigt, ist eine Rückmeldung, die
+        fehlt.** Die schnelle Stufe der Booleschen Kette scheitert an groben
+        Netzen aus dem Netz regelmäßig, während die Auswertung dieselbe
+        Operation danach sauber rechnet; ``difference.compare`` vermerkt das
+        seit je als ``difference.incomplete``, und der Vermerk kam bis zum
+        03.09.2026 nirgends an. Gemessen an ``garden-hose-holder.3mf``
+        (392 532 Dreiecke): Die Vorschau rechnete 3 579 mm³ abgetragenes
+        Volumen, die Gegenrichtung nicht, und im Fenster stand dasselbe Band
+        wie über einer vollständigen Vorschau. Wer den Durchmesser bewegt,
+        kann dann nicht unterscheiden, ob er falsch zielt, ob es rechnet oder
+        ob es nicht geht.
+
+        Der Satz sagt, was gilt, und nennt den Ausweg, der ohnehin der nächste
+        Schritt ist — das Ergebnis entsteht beim Übernehmen, und dort ist es
+        richtig.
+        """
         self.viewport.show_difference(difference)
+        partial = any(
+            finding.code == "difference.incomplete"
+            for entry in getattr(difference, "entries", {}).values()
+            for finding in entry.findings
+        )
         self.viewport.mark_preview(
-            tr("Vorschau — noch nicht übernommen"),
+            tr("Vorschau unvollständig — beim Übernehmen wird genau gerechnet")
+            if partial
+            else tr("Vorschau — noch nicht übernommen"),
             tr("Leertaste halten: vorher"),
         )
 
@@ -9670,12 +9707,31 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(chosen)
         return tuple(entry.material_slots) if entry is not None else ()
 
-    def _feature_names(self) -> dict[str, str]:
+    def _feature_names(self, spec: OperationSpec | None = None) -> dict[str, str]:
         """Die Merkmale des gewählten Körpers, Kennung auf Beschriftung (§18.5).
 
         Dieselbe Beschriftung wie im Objektbaum und über dem Modell: „hole_1 ·
         Ø5,19 mm". Ohne Auswahl bleibt die Liste leer — welche Fläche gemeint
         ist, entscheidet der Körper, an dem gearbeitet wird.
+
+        ``spec`` verengt die Liste auf die Merkmalsarten, mit denen diese
+        Operation etwas anfangen kann (``applies_to``) — dieselbe Zuordnung,
+        über die das Kontextmenü am Merkmal die Operation findet (§18.5, §10).
+
+        **Ohne sie war die Auswahl eines Dialogs die aller Merkmale.** An einer
+        eingelesenen STEP-Datei mit 302 erkannten Merkmalen bot *Bohrung
+        ändern* 238 Flächen und 64 Verrundungen an und keine einzige Bohrung —
+        es gab dort keine. Vorausgewählt war „Unterseite · 60 mm²", denn eine
+        Pflicht-Auswahl trägt keinen Leereintrag und steht damit auf ihrem
+        ersten Eintrag; das liest sich als Vorschlag der Anwendung und ist
+        keiner. Auch wo passende Merkmale da sind, kostet die ungefilterte
+        Liste das Suchen: der Motorhalter aus dem Kundenbestand hat 27
+        Merkmale und darunter 6 Bohrungen.
+
+        Ohne ``applies_to`` wird nicht gefiltert — dieselbe Haltung wie in
+        :func:`labels.feature_requirement`: Raten wäre schlechter als Anbieten.
+        Die übrigen Aufrufer (Legende der Analyseleiste, das Nachtragen eines
+        angeklickten Merkmals) fragen ohne ``spec`` und bekommen alles.
         """
         result = self.session.last_result
         chosen = self.object_tree.selected()
@@ -9684,9 +9740,11 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(chosen)
         if entry is None:
             return {}
+        wanted = frozenset(spec.applies_to or ()) if spec is not None else frozenset()
         return {
             feature_id: feature_label(feature_id, feature)
             for feature_id, feature in entry.features.items()
+            if not wanted or feature.kind in wanted
         }
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
