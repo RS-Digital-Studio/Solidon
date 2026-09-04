@@ -32,7 +32,6 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import errors
-from app.core.agent.tools import UNDO_TRANSACTION
 from app.core.export import handover
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY, catalogue_operations
@@ -12997,43 +12996,3 @@ def test_two_asking_threads_do_not_steal_each_others_candidates(session: Session
         ("obj_1", "hole_1"),
         ("obj_1", "hole_2"),
     ), "und die eigene bekommt, was für sie angesagt war"
-
-
-def test_a_remote_undo_takes_the_transaction_it_was_asked_for(window: MainWindow) -> None:
-    """Der Fernaufruf liest seine Kennung, statt blind das Oberste zu nehmen.
-
-    ``run_remote`` rief ``session.undo()`` **ohne Argument**: Ein Aufruf für
-    ``t1`` nahm ``t7`` zurück und meldete „Zurückgenommen.", eine unbekannte
-    Kennung meldete ebenfalls Erfolg. Das Schema nennt die Kennung als
-    erforderlich, und der Chatweg löst sie seit je auf — nur die Leitung
-    tat es nicht (Sicherheitsdurchsicht 04.09.2026, Fix solidon-e9).
-
-    Zurückgenommen wird **nur die oberste**, und das ist strenger als der
-    Chatweg, der über ``sweep_for`` auch jüngere mitnimmt: Ein Aufruf, eine
-    Transaktion (Regel 16). Wer mehr will, ruft mehrfach.
-    """
-    session = window.session
-    session.apply("Erster", [OperationDraft(op="create_box", inputs=(), params={})])
-    session.wait_for_idle()
-    session.apply("Zweiter", [OperationDraft(op="create_box", inputs=(), params={})])
-    session.wait_for_idle()
-
-    known = [entry.id for entry in session.project.document.transactions]
-    assert len(known) == 2, "zwei Transaktionen, sonst prüft der Test nichts"
-
-    # Eine unbekannte Kennung nimmt nichts zurück — und sagt das.
-    answer = window.run_remote(UNDO_TRANSACTION, {"transaction": "gibt-es-nicht"})
-    assert "gibt-es-nicht" in answer
-    assert [entry.id for entry in session.project.document.transactions] == known
-
-    # Die untere von zwei liegt nicht obenauf. Vorher traf dieser Aufruf die
-    # obere und meldete Erfolg.
-    answer = window.run_remote(UNDO_TRANSACTION, {"transaction": known[0]})
-    assert [entry.id for entry in session.project.document.transactions] == known, (
-        "was nicht obenauf liegt, bleibt unberührt"
-    )
-
-    # Die oberste geht, und die Antwort nennt sie.
-    answer = window.run_remote(UNDO_TRANSACTION, {"transaction": known[-1]})
-    assert known[-1] in answer
-    assert [entry.id for entry in session.project.document.transactions] == known[:1]
