@@ -845,3 +845,41 @@ def test_a_single_plate_scene_says_nothing_about_plates(profile: Profile) -> Non
     text = digest(plate_scene(profile))
 
     assert "Platte" not in text
+
+
+def test_the_digest_names_the_wall_between_a_bore_and_its_sleeve(profile: Profile) -> None:
+    """Die Wand steht in keinem der beiden Merkmale — nur in ihrem Verhältnis.
+
+    Der Agent hat den Steckbrief und sonst nichts (§26.1). Ohne diese Angabe
+    liest er „Bohrung Ø 16" und „Zapfen Ø 28" als zwei unabhängige Zahlen und
+    vergrößert die Bohrung eines Rohrs, bis von der Wand nichts übrig ist.
+
+    An **beiden** Zeilen, denn geändert werden kann jedes von beiden.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    tube = trimesh.creation.annulus(r_min=8.0, r_max=14.0, height=20.0, sections=96)
+    mesh = MeshData.of(tube)
+    entry = SceneObject(id="obj_1", name="Rohr", mesh=mesh, features=detect(mesh))
+    text = digest(Scene(objects={"obj_1": entry}, profile=profile))
+
+    lines = [line for line in text.splitlines() if "Wand" in line and "mm" in line]
+    assert len(lines) == 2, f"erwartet zwei Zeilen mit der Wand, gefunden: {lines}"
+    for line in lines:
+        assert "6.00 mm" in line or "6,00 mm" in line, f"Wandstärke fehlt oder falsch: {line}"
+    assert any("hole" in line and "pin" in line for line in lines), (
+        f"die Zeilen nennen ihren Partner nicht: {lines}"
+    )
+
+
+def test_a_plain_plate_says_nothing_about_walls(profile: Profile) -> None:
+    """Die Gegenprobe: vier Bohrungen in einer Platte haben keine Hülle.
+
+    Eine Auskunft, die an jedem gebohrten Teil anliefe, wäre im Steckbrief
+    Rauschen — und der Steckbrief ist das ganze Vokabular des Gesprächs.
+    """
+    text = digest(plate_scene(profile))
+
+    assert " Wand " not in text, f"die Platte meldet eine Wand, die es nicht gibt:\n{text}"

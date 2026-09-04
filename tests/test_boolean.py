@@ -563,3 +563,37 @@ def test_the_overlap_is_one_number_for_the_whole_core() -> None:
             if any(name in ("BOOLEAN_OVERLAP", "OVERLAP") for name in names):
                 defined.append(path.name)
     assert defined == ["boolean.py"], f"die Zugabe steht an {len(defined)} Stellen: {defined}"
+
+
+def test_an_empty_result_in_draft_quality_points_at_the_stages_left() -> None:
+    """„Nichts übrig" ist keine Aussage über die Maße, solange Stufen offen sind.
+
+    Der Test darüber gilt der **vollen** Kette, und dort stimmt der Satz. Im
+    Fenster läuft die kurze (:data:`DRAFT_CHAIN`, §31), und dieselbe Handlung
+    an demselben Körper endete dort mit „Prüfen Sie Maß und Lage" — ohne einen
+    Weg weiter und mit einer Ursache, die es nicht war.
+
+    Gemessen am Mast des Piratenschiffs (``obj_1_Cylinder.stl``, Ø 5 auf
+    115 mm, 04.09.2026): ``resize_feature`` liefert über *direkt* und
+    *verschweißt* nichts, und die dritte Stufe löst es (Befund
+    ``boolean.jittered``). In feiner Qualität bekam der Kunde sein Ergebnis, in
+    Entwurfsqualität eine Absage — dieselbe Datei, derselbe Klick.
+    """
+    plate = MeshData.of(trimesh.creation.box(extents=(80.0, 50.0, 8.0)))
+    tool = MeshData.of(trimesh.creation.box(extents=(300.0, 300.0, 300.0)))
+
+    with pytest.raises(BooleanFailedError) as caught:
+        boolean("difference", [plate, tool], quality="draft")
+
+    detail = str(caught.value.detail)
+    assert "Rechenstufen" in detail, f"der Satz nennt die offenen Stufen nicht: {detail!r}"
+    assert "Maß und Lage" not in detail, (
+        f"er behauptet weiter eine Ursache, die nicht feststeht: {detail!r}"
+    )
+    assert any(action.id == "use_voxel_stage" for action in caught.value.suggestions), (
+        "der Weg zur vollständigen Kette fehlt — genau die Handlung, die hier hilft"
+    )
+    # Und der Titel kommt aus derselben Entscheidung wie die Handlung: Die
+    # Ausnahme wählt ihn danach, ob die Voxelstufe dran war. Zwei Stellen für
+    # dieselbe Frage liefen auseinander, sobald jemand eine davon ändert.
+    assert "Vorschau" in str(caught.value.title), str(caught.value.title)

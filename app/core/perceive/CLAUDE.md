@@ -13,11 +13,27 @@ jemand Dreiecke zählt.
 
 ```
 features.py   ──> „hier ist eine Bohrung, eine Tasche, eine Fase"
+relations.py  ──> „diese zwei gehören zusammen" — und was daraus folgt
 matching.py   ──> derselbe Name auch nach der nächsten Operation
 digest.py     ──> der Steckbrief: was der Agent zu sehen bekommt
 maps.py       ──> Analysekarten für die Ansicht (Überhang, Wandstärke …)
 actions.py    ──> „was kann ich damit tun" — und warum nicht, wo nichts geht
 ```
+
+## Zwei Fragen, zwei Dateien
+
+`features.py` beantwortet **„was ist das hier"**, `relations.py` die Frage
+danach: **„gehören zwei davon zusammen?"** Das ist keine Aufteilung nach
+Zeilenzahl, sondern nach Aufgabe — eine Wandstärke steht in keinem der beiden
+Merkmale, sie entsteht erst aus ihrem Verhältnis.
+
+Die Nachbarschaften werden nicht bei einer bleiben: Senkung über Bohrung, Rohr,
+Bohrungsraster, Bohrung durch zwei Wände. Jede davon in das größte Modul des
+Kerns zu hängen hieße, es weiter wachsen zu lassen.
+
+**Die Richtung ist einseitig:** `relations.py` liest `features.py`, nie
+umgekehrt — samt dessen Schwellen (`SINK_AXIS_LIMIT`, `SINK_FIT_LIMIT`). Zwei
+Achsenprüfungen mit zwei Zahlen wären zwei Antworten auf dieselbe Frage.
 
 ## Die Auskunft für das Merkmalspanel
 
@@ -58,6 +74,7 @@ ist *Bohrung ändern* da" statt „geht nicht".
 | Datei | Rolle |
 |---|---|
 | `features.py` | Merkmalserkennung (§21.1) — **2 200 Zeilen**, das größte Modul des Kerns |
+| `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen |
 | `maps.py` | Analysekarten (§18.4) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
 | `matching.py` | Merkmalsbezeichner über Operationen hinweg stabil halten (§21.2, §21.3) |

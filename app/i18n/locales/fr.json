@@ -2299,6 +2299,7 @@
   "In der Aktivierungsanforderung fehlt eine Geräteangabe.": "Une information sur l’appareil manque dans la demande d’activation.",
   "In der Geräteabmeldung fehlt eine signierte Angabe.": "Une donnée signée manque dans la demande de désactivation.",
   "In der Paketverwaltung dieses Systems liegt es nicht": "Il n’est pas dans le gestionnaire de paquets de ce système",
+  "In der schnellen Vorschau blieb von dem Körper nichts übrig. Von {stages} Rechenstufen sind {tried} gelaufen — ob es an den Maßen liegt oder an der schnellen Rechnung, sagt erst die vollständige.": "L'aperçu rapide n'a rien laissé du corps. {tried} étapes de calcul sur {stages} ont été exécutées — si cela vient des cotes ou du calcul rapide, seul le calcul complet le dira.",
   "In die Fläche vertieft — bündig und unempfindlich.": "En creux dans la surface — affleurant et robuste.",
   "In diese Richtung zeigt keine ebene Fläche dieses Körpers.": "Aucune face plane de ce corps ne pointe dans cette direction.",
   "In diesem ComfyUI ist kein eigenes Python zu finden. Die Pakete für TripoSG müssen in die Umgebung, mit der ComfyUI läuft — welche das ist, weiß Solidon hier nicht.": "Aucun Python propre n’est trouvé dans ce ComfyUI. Les paquets pour TripoSG doivent aller dans l’environnement avec lequel ComfyUI tourne — et Solidon ne sait pas lequel c’est ici.",

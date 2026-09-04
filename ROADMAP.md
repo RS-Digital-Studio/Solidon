@@ -77,7 +77,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, das Certum-Zertifikat (Standard Code Signing in the Cloud, Einzelperson) für `tools/sign_release.py` sowie die Apple-Developer-IDs und sieben CI-Geheimnisse zum seit 02.09.2026 vorhandenen Konto. Die CI-Wege und alle Pakete stehen; Azure und PFX sind seit 02.09.2026 entfernt |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und einen nachweisbar abgeschlossenen netcup-AVV. Das Repository belegt den Abschluss derzeit nicht; die Datenschutzerklärung nennt netcup als Hoster (Art. 6 lit. f) und behauptet keinen AVV mehr. Vor der Freigabe im CCP prüfen und den Beleg sichern: Hosting, Mail, Support, Aktivierung, Protokolle/Statistik und Sicherungen; dazu Unterauftragsverarbeiter, TOM, Löschung und Wiederherstellung. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Der Punkt für den Changelog | Zwei schnelle Klicks nahmen die ganze Ansicht (04.09.2026) | eine Release-Entscheidung, keine Arbeit am Code: Die Fassung 0.3.2 ist gebaut und ihr Abschnitt kündigt die neue Steuerung an. Der Fund gehört in den nächsten Abschnitt; welcher das ist, entscheidet der Release |
-| Übersprungene Fassungen zeigen nur die neuesten Punkte | Zwei Löcher im Weg zur neuesten Fassung (04.09.2026) | eine Entscheidung von Robert über eine Formatänderung: ein Feld je Fassung in version.json, das die Anwendung gegen ihre eigene Nummer filtert. Wer von 0.3.0 auf 0.3.3 springt, liest heute acht Punkte und sieht von den 98 aus 0.3.1 und 0.3.2 keinen, während `omitted()` null meldet |
+| Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | die Umsetzung: `sleeve_at` liegt fertig da, geprüft wird am Endstand und nicht je Schritt (Entscheidung Robert, 04.09.2026) |
+| Drei Viertel der erkannten Merkmale sind nur Anzeige | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Entscheidung von Robert, ob Flächen überhaupt bearbeitbar werden sollen — der Verrundungsradius steht schon als eigener Punkt |
+| Dezimieren kann die Dichtheit kosten | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Messung, ob wirklich die kleinen Komponenten kollabieren; belegt ist bisher nur das Ergebnis an einem Modell von dreien |
+| Ein reiner Import macht das Projekt geändert | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Entscheidung, ob die Antwort ein anderer Zustand oder ein anderer Text ist — Regel 19 spricht für die Nachfrage, Robert hat sie am 04.09.2026 als Fund benannt |
+| Siebzehn Teile kosten siebzehn Vorgänge | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | die Freigabe, den Mehrfachimport überhaupt zu bauen — zurückgestellt von Robert am 04.09.2026 zugunsten der Einzelmodelle |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -15536,12 +15540,179 @@ Stellen hielten die Zusage nicht.
   sechs Startseiten nennen nur noch 0.3.3, alle fünf versprochenen Dateien
   liegen vollständig oben.
 
-- [ ] **Wer eine Fassung überspringt, sieht nur die Punkte der neuesten.**
+- [x] **Wer eine Fassung überspringt, sieht nur die Punkte der neuesten — und
+  das genügt (Entscheidung Robert, 04.09.2026: „im Update-Fenster reicht immer
+  das von der aktuellen Version").**
   `make_download.py` schreibt `changes_for(APP_VERSION)`, also den Abschnitt
   einer einzigen Fassung. Wer von 0.3.0 auf 0.3.3 springt, liest im
   Update-Fenster acht Punkte und bekommt von den 98 aus 0.3.1 und 0.3.2 keinen
   zu sehen — während `omitted()` null meldet, also „alles da". Nach der
   Installation sind sie über die Changelog-Seite und das Neuerungen-Fenster
-  erreichbar; davor nicht. Das zu ändern hieße, ein Feld je Fassung ins Format
-  zu legen, das die Anwendung gegen ihre eigene Nummer filtert — eine
-  Formatänderung mit Migration, keine Release-Arbeit. **Entscheidung Robert.**
+  erreichbar; davor nicht.
+
+  Vorgelegt wurden drei Wege: nichts tun, den Link auf die vollständige Liste
+  immer zeigen, oder die Punkte je Fassung mitliefern. Der dritte scheitert an
+  der Größe — nachgerechnet am veröffentlichten Stand: 1 557 Bytes je Punkt in
+  sechs Sprachen, 106 Punkte für 0.3.1 bis 0.3.3, also rund 168 000 Bytes
+  gegen die 65 536, die eine Fassung bis 0.2.1 überhaupt liest. Wer die Grenze
+  reißt, nimmt genau den alten Installationen die Update-Prüfung, für die das
+  Feld gedacht war.
+
+  Entschieden ist der erste: Das Fenster sagt, was die neue Fassung bringt,
+  und der Kunde updatet deswegen und nicht wegen einer Chronik. Nach der
+  Installation stehen die übersprungenen Punkte im Neuerungen-Fenster und auf
+  der Changelog-Seite. Festgehalten, damit die Frage nicht ein drittes Mal
+  aufgemacht wird.
+
+## Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026)
+
+Robert gab neunzehn heruntergeladene STL-Dateien: ein Piratenschiff in
+siebzehn Teilen, einen Spiderman als Voronoi-Netz und einen Besenhalter —
+zusammen 250 MB. Sein Auftrag: „was wir bei unserer app an verbesserungen und
+einstellungen bzw ändern usw verbessern können", nachgeschärft auf „das
+bearbeiten und erkennen von merkmalen" und „auch den zusammenhang zwischen
+merkmalen".
+
+Gefahren wurde jede Datei einzeln durch das gebaute Fenster (ein Prozess je
+Datei, echte Plattform, Dialoge protokolliert statt weggeklickt). Die Zahl,
+die alles andere erklärt:
+
+| Dateien | Dreiecke | erkannte Merkmale |
+|---|---|---|
+| 10 | 277 460 – 1 223 836 | **0** |
+| 8 | 1 440 – 5 036 | 3 bis 6, davon zwei Drittel Flächen |
+| 1 (Besenhalter) | 59 740 | 26 |
+
+- [x] **Die abgelehnte Analysekarte war eine Sackgasse.** „Für eine
+  Analysekarte ist dieses Modell zu groß." sagte, was nicht geht, und ließ den
+  Kunden dort stehen — während der Prüfbericht zu genau demselben Sachverhalt
+  seit je *Dreiecke verringern* anbietet (`panels.SUGGESTED`). Zehn der
+  neunzehn Dateien liegen über der Kartengrenze; an keiner führte von dort ein
+  Weg weiter. `AnalysisBar.show_problem` nimmt jetzt Beschriftung und Handlung
+  entgegen, `MainWindow._map_too_large` nennt die Zahlen („885 570 Dreiecke,
+  möglich sind 120 000") und hängt den Knopf daran.
+
+  Und die Vorgabe im Dialog kommt aus dem **Anlass**: Das Schema führt 50 000,
+  wer aus einer abgelehnten Karte kommt, braucht 120 000. Gemessen trifft
+  `simplify_quadric_decimation` die Zahl exakt (120 000 aus 885 570), und
+  `maps.build` lehnt erst darüber ab — jedes Dreieck weniger wäre Form, die
+  niemand zurückbekommt.
+
+- [x] **Ein Zapfen um eine Bohrung ist ein Rohr, und niemand sagte es.** Am
+  Besenhalter: `hole_2` Ø 34,00 und `pin_1` Ø 40,80, dieselbe Achse, dieselbe
+  Mitte, dieselbe Tiefe — eine Wand von 3,40 mm, die in keinem der beiden
+  Merkmale steht. Wer eines von beiden ändert, ändert sie mit.
+
+  `app/core/perceive/relations.py` ist der neue Ort für solche
+  Nachbarschaften; `sleeve_at` beantwortet die Frage von **beiden** Seiten,
+  weil beide Merkmale im Baum stehen und beide anklickbar sind. Der Steckbrief
+  nennt die Wand seither an beiden Zeilen (`digest._wall_note`) — der Agent hat
+  diesen Text und sonst nichts (§26.1) und las bis dahin zwei unabhängige
+  Zahlen.
+
+  **Die Begründung der Schwelle war beim ersten Anlauf falsch, und die
+  Gegenprobe hat es gezeigt:** Ich hatte geschrieben, die Überdeckung längs der
+  Achse trenne Rohr und Senkung. Mit ausgebauter Bedingung blieben alle Tests
+  grün — eine Senkung scheidet eine Bedingung früher aus, weil ein Kegel keine
+  `depth` führt. Der Fall, den sie wirklich trennt, ist ein koaxialer Zapfen
+  **über** einer Bohrung; für den steht jetzt ein eigens gebauter Prüfkörper in
+  `tests/test_relations.py`, und die Mutation macht ihn rot.
+
+- [x] **Dieselbe Änderung gelang in feiner Qualität und scheiterte in der
+  schnellen.** Am Mast des Piratenschiffs (`obj_1_Cylinder.stl`, Ø 5 auf
+  115 mm) endete *Merkmal ändern* mit „Von dem Körper bleibt nichts übrig — das
+  Werkzeug deckt ihn vollständig ab. Prüfen Sie Maß und Lage." Maß und Lage
+  waren in Ordnung.
+
+  **Die erste Erklärung war falsch, und die Messung hat sie widerlegt.** Ich
+  hatte den Zapfen verdächtigt, der hier 100 % des Körpervolumens ausmacht —
+  ein Zapfen, der aus nichts herausragt. Gemessen ist das nicht die Ursache:
+  Derselbe Aufruf läuft in feiner Qualität sauber durch (2257,9 → 2745,0 mm³,
+  wasserdicht), und `obj_12_Cylinder_A_A` mit ebenfalls 100 % gelingt in
+  **beiden** Stufen. Der Unterschied ist die Kette: `DRAFT_CHAIN` endet nach
+  *direkt* und *verschweißt* (§31), und für diesen Fall liefern beide nichts —
+  gelöst wird er von der dritten Stufe (Befund `boolean.jittered`).
+
+  Im `emptied`-Zweig von `boolean.py` stand dazu „Kein Rückfall hilft gegen
+  Maße", und der Zweig setzte Titel und Vorschläge selbst — also auch dann,
+  wenn die Kette noch zwei Stufen offen hatte. Die Ausnahme entscheidet diese
+  Frage längst selbst (`errors.BooleanFailedError`: War die Voxelstufe dran,
+  fällt der Rat weg, sonst bleibt er samt Handler). Der Zweig geht jetzt nur
+  noch den kurzen Weg, wenn die Kette wirklich zu Ende ist; sonst nennt der
+  Satz die offenen Stufen und lässt der Ausnahme ihre Wahl.
+  `tests/test_boolean.py::test_an_empty_result_in_draft_quality_points_at_the_stages_left`,
+  Gegenprobe gefahren.
+
+  Was von der ersten Vermutung bleibt, ist eine offene Frage und kein Befund:
+  Ob ein Zylinder, der den ganzen Körper ausmacht, überhaupt als *Zapfen*
+  gemeldet werden sollte. Er ist einer im Sinne der Erkennung, und alle fünf
+  Handlungen laufen — nur ergibt „diesen Zapfen vergrößern" an einem Mast
+  dasselbe wie „das Teil skalieren".
+
+- [ ] **Nach einer Änderung prüft niemand, ob die Wand noch druckbar ist.**
+  Robert hat den ersten Entwurf verworfen, und die Begründung trägt: Ein Satz
+  „du machst gerade eine Wand dünner" sagt dem Kunden, was er selbst getan hat,
+  und er käme bei jeder Änderung an einem Rohr. **Niemand ändert eine
+  Wandstärke** — man ändert die Bohrung, weil etwas hineinpassen muss, oder den
+  Außendurchmesser, weil etwas darüberpasst; die Wand ist die Folge.
+
+  Was bleibt, ist die Prüfung auf **zu dünn** — unter der Druckgrenze des
+  Profils (0,84 mm an einer 0,4er Düse), mit dem Satz, den `hollow.py` schon
+  führt (`hollow.wall_below_nozzle`, „Die Wand ist dünner, als der Drucker sie
+  legen kann.").
+
+  **Und die Auflage dazu ist die eigentliche Arbeit: am Endstand prüfen, nicht
+  je Schritt.** Roberts Fall: Wer alles um 6 mm kleiner haben will und erst
+  außen und dann die Bohrung ändert, hat nach dem ersten Schritt eine Wand von
+  0,40 mm. Der zweite räumt sie weg — aber die Auswertung sammelt Befunde über
+  alle Schritte, und gestrichen wird nur, was einen Heiler in `SETTLED_BY` hat.
+  Dieselbe Änderung in der anderen Reihenfolge meldete nichts. Zwei Wege zum
+  selben Teil, zwei verschiedene Prüfberichte — genau der Falschalarm, den die
+  einfache Fassung gebaut hätte. `sleeve_at` liegt dafür fertig da.
+
+- [ ] **Zwanzig der 26 erkannten Merkmale des Besenhalters lassen sich nicht
+  bearbeiten.** Zehn Verrundungen und zehn Flächen tragen null von fünf
+  Handlungen; nur die drei Bohrungen, der Zapfen und die zwei Senkungen sind
+  änderbar. Bei den Schiffs-Zylindern ist das Verhältnis noch schlechter — von
+  drei Merkmalen sind zwei Flächen. Die Sätze in den gesperrten Zeilen stimmen
+  und sind gut („Eine Verrundung wegzunehmen heißt, die Kante wieder scharf zu
+  machen — sinnvoll und noch nicht gebaut"), aber der Kunde sieht eine Liste,
+  in der drei Viertel nur Anzeige sind. Der Verrundungsradius steht als eigener
+  Punkt weiter oben („Verrundung und Fase gehen auf einem Netz nicht"); für
+  Flächen gibt es keinen.
+
+- [ ] **Dezimieren kann die Dichtheit kosten.** Der Spiderman (885 570
+  Dreiecke, geschlossen, mit sehr kleinen Einzelteilen) kommt aus
+  `decimate(120 000)` **offen** zurück; `obj_13_Assembly_B` und `dense_1m` aus
+  demselben Lauf bleiben geschlossen. Damit führt der Weg, der die
+  Merkmalserkennung freischalten soll, bei diesem Modell in den nächsten
+  Befund. Vermutung: Das Dreiecksbudget verteilt sich auf alle Komponenten, und
+  die kleinsten kollabieren zu offenen Resten — ungemessen, deshalb ein
+  offener Punkt und keine Behauptung.
+
+- [ ] **Ein reiner Import macht das Projekt „geändert".** Wer eine STL öffnet,
+  ansieht und schließt, bekommt „Ungesicherte Änderungen — Speichern /
+  Verwerfen / Abbrechen", obwohl er nichts geändert hat (gemessen an allen
+  neunzehn Dateien: `session.modified` ist nach dem Import immer `True`).
+  Technisch stimmt es — der Import ist eine Operation im Stapel —, aus
+  Kundensicht ist es eine Frage nach etwas, das er nicht getan hat. Robert hat
+  ausdrücklich darauf hingewiesen (04.09.2026). Ob die Antwort ein anderer
+  Zustand oder ein anderer Text ist, ist offen: Regel 19 verlangt die Nachfrage
+  genau dort, wo etwas unwiederbringlich weg wäre, und eine ungespeicherte
+  Szene ist das.
+
+- [ ] **Siebzehn Teile eines Modells kosten siebzehn Vorgänge.** „Modell
+  einfügen" nimmt genau eine Datei (`getOpenFileName`), und ein Drop von
+  siebzehn markierten lädt stillschweigend die erste (`accepted_path` — „die
+  erste fallengelassene Datei"). Gemessen: 78,8 s reine Rechenzeit für den
+  Piratenschiff-Ordner, dazu siebzehnmal der Dateidialog. Danach liegen
+  sechzehn der siebzehn Teile außerhalb des Bauraums, weil nur das **erste**
+  Modell zentriert und aufs Bett gesetzt wird (`first_model`) — bei einer
+  zerlegten Baugruppe zerreißt das genau die Lage, die sie zusammenhält. Der
+  Prüfbericht zeigte dabei 69 Befunde in 69 Zeilen, davon siebzehnmal
+  `ingest.welded` ohne jede Handlung: Die Bündelung greift nicht, weil `op_id`
+  im Schlüssel steht und jede Datei ihre eigene Ladeoperation hat.
+
+  **Zurückgestellt** (Robert, 04.09.2026: „es reicht wenn du jedes modell
+  erstmal einzeln machst"). Die Messung steht hier, damit sie nicht verloren
+  geht.

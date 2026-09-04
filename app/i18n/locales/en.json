@@ -2299,6 +2299,7 @@
   "In der Aktivierungsanforderung fehlt eine Geräteangabe.": "The activation request lacks device information.",
   "In der Geräteabmeldung fehlt eine signierte Angabe.": "A signed field is missing from the device deactivation request.",
   "In der Paketverwaltung dieses Systems liegt es nicht": "It is not in this system’s package manager",
+  "In der schnellen Vorschau blieb von dem Körper nichts übrig. Von {stages} Rechenstufen sind {tried} gelaufen — ob es an den Maßen liegt oder an der schnellen Rechnung, sagt erst die vollständige.": "The quick preview left nothing of the body. {tried} of {stages} solver stages have run — whether it is the dimensions or the quick pass, only the complete one can say.",
   "In die Fläche vertieft — bündig und unempfindlich.": "Recessed into the surface — flush and robust.",
   "In diese Richtung zeigt keine ebene Fläche dieses Körpers.": "No planar face of this body points that way.",
   "In diesem ComfyUI ist kein eigenes Python zu finden. Die Pakete für TripoSG müssen in die Umgebung, mit der ComfyUI läuft — welche das ist, weiß Solidon hier nicht.": "No Python of its own can be found in this ComfyUI. The packages for TripoSG have to go into the environment ComfyUI runs with — and Solidon does not know which one that is here.",

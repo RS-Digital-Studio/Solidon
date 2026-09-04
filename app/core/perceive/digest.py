@@ -12,10 +12,11 @@ nachsieht, was dem Modell gesagt wurde.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from pathlib import PurePosixPath
 
-from app.core.types import Document, Feature, ObjectId, Operation, Scene, SceneObject
+from app.core.perceive.relations import sleeve_at
+from app.core.types import Document, Feature, FeatureId, ObjectId, Operation, Scene, SceneObject
 from app.core.units import format_length, round_display
 from app.i18n import TranslatableText, tr
 
@@ -253,8 +254,38 @@ def _object_lines(object_id: ObjectId, entry: SceneObject, plates: int = 1) -> l
     lines = [f"{object_id}  {as_name(entry.name)}  " + ", ".join(facts)]
     lines.append("  " + _extent_line(entry))
     for feature_id, feature in entry.features.items():
-        lines.append("  " + _feature_line(feature_id, feature))
+        lines.append(
+            "  " + _feature_line(feature_id, feature) + _wall_note(feature, entry.features)
+        )
     return lines
+
+
+def _wall_note(feature: Feature, features: Mapping[FeatureId, Feature]) -> str:
+    """Die Wand, die dieses Merkmal mit seinem Nachbarn teilt — oder nichts.
+
+    **Sie steht in keinem der beiden Merkmale.** Eine Bohrung nennt ihren
+    Durchmesser, ein Zapfen den seinen, und dass zwischen beiden 3,40 mm
+    Material liegen, ergibt sich erst aus ihrem Verhältnis
+    (:func:`relations.sleeve_at`). Der Agent hat genau diesen Text und sonst
+    nichts (§26.1): Ohne die Zeile liest er zwei unabhängige Zahlen und
+    vergrößert die Bohrung eines Rohrs, bis von der Wand nichts übrig ist.
+
+    An **beiden** Merkmalen und nicht nur an der Bohrung. Der Satz ist die
+    Warnung vor einer Änderung, und geändert werden kann jedes von beiden —
+    eine Auskunft nur an einem wäre an der anderen Hälfte der Fälle stumm.
+    """
+    sleeve = sleeve_at(feature, features)
+    if sleeve is None:
+        return ""
+    partner = sleeve.wall if feature.id == sleeve.bore else sleeve.bore
+    # **Ein Schlüssel, ein Satz.** „Wand" und „zu" einzeln zu übersetzen hieße,
+    # zwei Wörter in den Katalog zu legen, die dort jeder andere Satz auch
+    # brauchen kann — und die in keiner Sprache in dieser Reihenfolge stehen
+    # müssen.
+    note = tr("Wand {size} zu {feature}").format(
+        size=format_length(sleeve.thickness), feature=partner
+    )
+    return f", {note}"
 
 
 def _extent_line(entry: SceneObject) -> str:

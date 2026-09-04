@@ -193,10 +193,39 @@ def boolean(
             findings=list(_findings_for(stage)),
         )
 
+    if emptied and "voxel" not in attempted:
+        # **„Nichts übrig" ist keine Aussage über die Maße, solange die Kette
+        # noch Stufen hätte.** Genau das stand hier — „Kein Rückfall hilft
+        # gegen Maße" —, und es ist widerlegt: Am Mast des Piratenschiffs
+        # (``obj_1_Cylinder.stl``, Ø 5 auf 115 mm) liefern *direkt* und
+        # *verschweißt* für ``resize_feature`` nichts, und **die dritte Stufe
+        # löst es** (Befund ``boolean.jittered``, gemessen 04.09.2026).
+        #
+        # Im Fenster läuft die kurze Kette (:data:`DRAFT_CHAIN`), beim Export
+        # die volle (§17.2, §31). Derselbe Kunde bekam damit für dieselbe
+        # Handlung am selben Körper einmal ein Ergebnis und einmal „Prüfen Sie
+        # Maß und Lage" — und Maß und Lage waren in Ordnung.
+        #
+        # Der Rat gehört deshalb dem, was noch offen ist. Titel und
+        # Vorschläge setzt hier **niemand**: Die Ausnahme wählt sie selbst
+        # danach, ob die Voxelstufe dran war (``errors.BooleanFailedError``),
+        # und eine zweite Entscheidung derselben Frage liefe auseinander.
+        raise BooleanFailedError(
+            detail=_(
+                "In der schnellen Vorschau blieb von dem Körper nichts übrig. "
+                "Von {stages} Rechenstufen sind {tried} gelaufen — ob es an den "
+                "Maßen liegt oder an der schnellen Rechnung, sagt erst die "
+                "vollständige.",
+                stages=len(FULL_CHAIN),
+                tried=len(attempted),
+            ),
+            attempted=tuple(attempted),
+            seed=seed,
+        )
     if emptied:
-        # Kein Rückfall hilft gegen Maße. Der Satz sagt, was zu sehen wäre,
-        # und die Handlung dazu ist eine andere als beim Kernversagen: nicht
-        # reparieren, sondern nachrechnen.
+        # Hier ist die Kette wirklich zu Ende, und dann sagt „nichts übrig"
+        # etwas über die Maße. Die Handlung dazu ist eine andere als beim
+        # Kernversagen: nicht reparieren, sondern nachrechnen.
         raise BooleanFailedError(
             # **Eigener Titel, denn hier ist nichts gescheitert.** Der Vorgabetitel
             # der Klasse heißt „Die boolesche Operation ist auf allen Stufen
