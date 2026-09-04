@@ -94,7 +94,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
-| Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD, am selben Abend nach sechs weiteren Commits bei **1824** — er altert also messbar mit jedem privaten Commit weiter, und zwar in die gefährliche Richtung. Zweimal aufgeräumt, beide Male ohne Verlust: keine Datei geändert, nur der Index |
+| Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD, am selben Abend nach sechs weiteren Commits bei **1824** — er altert also messbar mit jedem privaten Commit weiter, und zwar in die gefährliche Richtung. Zweimal aufgeräumt, beide Male ohne Verlust: keine Datei geändert, nur der Index. **Fortschreibung 04.09.2026: erstmals fast mit Schaden.** Nach einem Commit mit privatem Index (`b4f0711b`, von Robert freigegeben) standen die Vor-Commit-Stände beider Dateien im Haupt-Index: `git diff --cached HEAD --numstat` meldete `24 54 app/ui/main_window.py` und `0 38 tests/test_operation_ui.py` — rückwärts gelesen hätte ein **pfadloser** `git commit` einer der vier gleichzeitig arbeitenden Sitzungen den Fix und seinen Regressionstest wieder herausgenommen und über den post-commit-Hook auf drei Maschinen geschoben. Gefunden von solidon-bd durch Messen, nicht durch einen Fehlschlag; geheilt mit `git restore --staged <pfade>` (wirkt nur auf den Index, Arbeitsbaum unberührt). Damit ist die offene Frage vorentschieden: Das Verfahren **muss** den Nachzug selbst übernehmen — eine Prozedur, deren Vergessen einen fremden Commit zur Rücknahme macht, ist keine, die man an die Erinnerung hängt |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374. **Fortschreibung 25.08.2026 (c1fcb9ea):** Todesweg ist die **Referenzzählung**, nicht der Sammler — beide gc-Anläufe (aus + gezieltes Sammeln, aus + gar nichts) sind gemessen und verworfen, Notiz in `tests/conftest.py`. Mit dem Testbestand vom 25.08. riss `test_ui.py` deterministisch (3/3, Position wandert mit der Zusammensetzung); seit dem Suite-Pin (`_windows_live_to_the_end`) stellt die Suite den tragenden Zustand **absichtlich** her — Fenster leben bis zum Prozessende, der Riss liegt wieder hinter der Zusammenfassung. Die Mine selbst — C++-Zerstörung eines VTK-Fensters mitten im Prozess — bleibt offen; wer sie angeht, misst gegen den Bestand vom 25.08. **Fortschreibung 26.08.2026:** `test_analysis_ui.py` riss zweimal von zweimal **vor** der Zusammenfassung (einmal im Tor, einmal solo — aber unter Vier-Sitzungen-Last), Access Violation beim 24. Test, Stack im `super().__init__()` des Preview-Workers (`session.py:223` ← `preview_async`). Die Zeile ist als Ursache **ausgeschlossen**: ces Tages-Commits berühren sie nicht, und ce maß 3/3 grün solo auf ruhiger Maschine. Die Kombination ist die Auskunft — lastabhängig, die Familie in neuer Position, und der Stack nennt den Moment, nicht den Grund. Dieselbe Datei zeigte am selben Tag eine **dritte Gestalt** (a2, Torlauf): neunzehn Minuten Stillstand bei 0,015 CPU-Sekunden und 0 Bytes Ausgabe, dann von selbst gelöst und grün — als Beobachtung belegt, als Diagnose nicht; die Signatur passt zum Abbau-Deadlock (Signatur C, eine Zeile tiefer). **Fortschreibung 26.08.2026, `test_print_settings_ui.py` (d1 und ce):** Die schärfste Messung bisher, weil beide Richtungen belegt sind. Nach dem Plattenwahl-Commit (`78f559d0`) riss die Datei mit `-p no:randomly` reproduzierbar an Position 57; im Arbeitsbaum auf dem Stand davor lief sie mit 73 passed durch. **Und trotzdem lag es nicht am Inhalt der neuen Tests:** Ein trivialer 75. Test an derselben Stelle war folgenlos, der Absturz traf nie einen der neuen, sondern den Abbau von `test_switching_the_slicer_empties_the_profile_choice`, und das Zusammenlegen beider Tests zu einem verschob ihn nur von 57 auf 58. Damit ist gemessen, was die conftest-Notiz behauptet: Es zählt die Zusammensetzung, nicht ein Test — aber auch nicht die bloße Anzahl. Behoben durch Umzug in die Sammelgruppe (`77c0f5d5`), nicht durch eine Reparatur; wer die Mine entschärft, kann den Test zurückholen. Lehre nebenbei: Die erste Zuschreibung lautete „bekannte Familie, kein Verdacht gegen den Commit" — die Gegenprobe auf dem Stand davor kostete zwei Minuten und widerlegte sie. **Fortschreibung 30.08.2026 (72 und d5, unabhängig):** `test_print_settings_ui.py` reißt jetzt mit **139 im Teardown der Aufräum-Fixture** (`conftest.py:836`, `_no_worker_outlives_its_window`) nach 63–64 grünen Punkten — in der Release-Kontrolle und im Waisen-Tor am selben Tag, einzeln reproduzierbar, und auf purem HEAD ohne die Tagesänderung identisch (Gegenprobe 72): dritte Code-Gestalt der Familie, erstmals mit benannter Stelle. Nach D13 (`5b7e4a46`, 15/53) erneut bestätigt: auf HEAD pur identisch, und die Rissstelle wandert mit der Testzahl — die Zusammensetzung zählt, wie schon bei `test_ui` gemessen. Neuer Fundort 30.08.2026 (72, im Tor vor `d91798b3`): `test_widget_lifetime.py` mit Exit 127 (`0xc0000374`, Heap) — Gegenprobe auf HEAD pur 1 von 2 gerissen, Familie, der Tagesdiff ist entlastet |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
@@ -175,6 +175,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Die Absage bleibt die richtige Antwort; der **Ausweg** darin war am 04.09.2026 gemessen falsch und ist ersetzt — beides über Zahlen verschließen, Ø der Senkung über die volle Wandstärke |
 | `MEMORY.md` hat kein Werkzeug zum Einfügen einer Zeile | Die geteilte Datei ohne Werkzeug (03.09.2026) | ein kleines Werkzeug: Zeile einfügen unter Sperre, mit Prüfung, dass der Rest unverändert bleibt. Bis dahin trägt `tests/test_directory_docs.py` den Fall — er hat am 03.09.2026 dreimal angeschlagen, meldet den Verlust aber erst hinterher |
 | Die Schnittebene folgt dem Plattenversatz nicht | Viewport-Werkzeuge aus Kundensicht (03.09.2026) | die Klärung, ob und wo eine Ebene gezeichnet wird und woher sie ihre Koordinaten bekommt — dort gehört der Versatz aus `_view_offset` hin, nicht in `_sectioned`; dazu einen Prüfstand mit zwei Platten und einer senkrechten Ebene, weil offscreen die Kette nicht messbar ist |
+| `show_build_volume` vergleicht seinen Stand nicht | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | eine Messung, wie teuer der zusätzliche Render je Auswertung wirklich ist — und dann **sechs** Zustände im Vergleich, nicht zwei: `_build_volume`, `beds`, `_profile`, `_sketch_frame`, `_bed_visible` und den Plattenumriss für den Kontaktschatten (`_bed_outline_for`). Ein vergessener Zustand lässt ein falsches Bett oder einen falschen Umriss stehen, während die Platte wechselt |
+| Das `pv.PolyData` jedes Körpers wird bei jedem Szenenaufbau neu gebaut | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Cache über Netz-Identität **und** `_view_offset` — der hängt an Platte und Explosion und ändert sich, ohne dass das Netz sich ändert. Kanten und Schattenzerlegung daneben sind längst gecacht. Messung davor und danach, sonst ist der Gewinn eine Behauptung |
+| Zwei rote Tests sind Altlast | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Erzeugerlauf für `THIRD-PARTY-NOTICES.md` (`hidapi` fehlt im Erzeugnis) und eine Klärung der Stützwahl in `test_autosplit` (Zusicherung um mehr als das Doppelte verfehlt). Beide auf HEAD in einem wegwerfbaren Worktree ziffernidentisch reproduziert — weder Regression noch einer Sitzung zuzurechnen |
 
 ---
 
@@ -15437,3 +15440,52 @@ einfach ins Leere klickt geht auch nicht."
   Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die
   eingestellte Steuerung bleibt dabei die eingestellte." Die Entscheidung,
   welche Fassung das ist, gehört zum Release und nicht hierher.
+
+## Was eine Aufräum-Durchsicht offenließ (04.09.2026)
+
+Vier Durchsichten über `app/` — Wiederverwendung, Vereinfachung, Effizienz,
+Flughöhe — brachten 46 Funde. Zwanzig sind behoben, sieben nach Prüfung am Code
+begründet verworfen (unter anderem, weil zwei Agentenmeldungen überschätzt
+hatten: von „vierzehn wortgleichen Textprüfungen" in `part_file.py` sind es
+drei, und die vier gleichen `__init__` in `errors.py` würden als Zwischenklasse
+in der Regel-17-Prüfung auftauchen, obwohl sie nie geworfen wird). Was hier
+steht, ist der Rest: drei Punkte, die keine Aufräumarbeit sind, sondern eigene
+Pakete brauchen.
+
+- [ ] **`show_build_volume` vergleicht seinen Stand nicht, und das kostet je
+  Auswertung einen vollen Render.** Sie ist die einzige Ansichtsmethode in
+  `app/ui/viewport.py` ohne Änderungsprüfung und endet auf `_draw()`; das Fenster
+  ruft sie bei jeder Auswertung unbedingt (`main_window.py`), während
+  `show_scene` daneben schon prüft, ob sich die Bettzahl geändert hat. Wer den
+  Punkt aufgreift, braucht **sechs** Zustände im Vergleich und nicht zwei:
+  `_build_volume`, `beds`, `_profile`, `_sketch_frame`, `_bed_visible` und den
+  Plattenumriss, an dem der Kontaktschatten schneidet (`_bed_outline_for`,
+  Hinweis von b4). Ein vergessener Zustand lässt ein falsches Bett oder einen
+  falschen Umriss stehen, während die Platte wechselt — deshalb erst messen, wie
+  teuer der Render wirklich ist, dann bauen, und mit einem Test je Zustand.
+- [ ] **Das `pv.PolyData` jedes Körpers wird bei jedem Szenenaufbau neu
+  gebaut** (`app/ui/viewport.py`, im Aufbau der Oberflächen). Die davon
+  abgeleiteten Dinge — Körperkanten und Schattenzerlegung — sind daneben längst
+  über die Netz-Identität gecacht, das PolyData selbst nicht, obwohl die
+  Kommentare feststellen, dass das Netz dahinter dasselbe bleibt. Der Cache
+  braucht die Netz-Identität **und** den `_view_offset`: Der hängt an Platte und
+  Explosion und ändert sich, ohne dass das Netz sich ändert. Messung davor und
+  danach, sonst ist der Gewinn eine Behauptung.
+- [ ] **Zwei rote Tests sind Altlast und gehören keiner Änderung von heute.**
+  `test_autosplit.py::test_auto_dovetails_take_part_in_the_support_choice`
+  verfehlt seine Zusicherung um mehr als das Doppelte (fertig links 7132,9 gegen
+  rechts 3473,6 bei `SUPPORT_TIE` 0,05), und
+  `test_licence_notices.py::test_checked_in_notice_is_the_deterministic_target_output`
+  vermisst `hidapi` im Erzeugnis, obwohl `THIRD-PARTY-NOTICES.md` die Zeile
+  trägt — das riecht nach fälligem Erzeugerlauf und nicht nach einem
+  Codefehler. Beide sind in einem wegwerfbaren Worktree auf HEAD reproduziert,
+  ziffernidentisch; sie sind also weder eine Regression noch einer Sitzung
+  zuzurechnen. **Die Methode ist der Ertrag:** `git worktree add --detach` auf
+  HEAD kostet zwei Minuten und entscheidet die Frage „war das meine Änderung"
+  endgültig, wo eine Rückwärtssuche im Traceback eine halbe Stunde kostet und
+  eine Vermutung liefert.
+
+Nebenbei aufgefallen und nicht angefasst, weil es nicht aus einer Änderung
+dieser Durchsicht stammt: `app/ui/icons.py` nimmt in `_pixmap(source, size,
+colour)` einen Farbwert an, den der Rumpf nicht liest — er steht nur in der
+Signatur.
