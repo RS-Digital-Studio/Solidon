@@ -1115,3 +1115,29 @@ def test_an_activation_document_is_read_through_the_json_boundary() -> None:
 
     with pytest.raises(certificate.ActivationDocumentError):
         certificate._payload_values(b'{"a": 1, "a": 2}')
+
+
+def test_a_marker_with_a_non_ascii_signature_ends_the_trial(own_config: Path) -> None:
+    """Eine Unterschrift ist ein Hex-Digest — was kein ASCII ist, ist keine.
+
+    ``hmac.compare_digest`` wirft bei nicht-ASCII einen ``TypeError``, und der
+    Aufruf stand **außerhalb** des ``try`` darüber. Ein Marker mit einem
+    Umlaut in der Unterschrift ließ damit jede Dokumentänderung mit einem
+    rohen Programmfehler abbrechen, statt die Frist zu beenden — ein
+    Bedienfehler, der wie ein Programmfehler aussah
+    (Sicherheitsdurchsicht 04.09.2026).
+
+    Geprüft wird das Ergebnis und nicht die Ausnahme: Der Marker ist
+    angefasst, also endet die Frist, genau wie bei einer falschen
+    Unterschrift.
+    """
+    import json as json_module
+
+    start = date(2026, 9, 6)
+    store.trial_days_left(start)
+
+    data = json_module.loads(store.trial_path().read_text(encoding="utf-8"))
+    data["signature"] = "fälschung mit Umlaut"
+    store.trial_path().write_text(json_module.dumps(data), encoding="utf-8")
+
+    assert store.trial_days_left(start + timedelta(days=1)) == 0

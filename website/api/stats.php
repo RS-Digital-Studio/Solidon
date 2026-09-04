@@ -965,9 +965,23 @@ function megabytes(int $bytes): string
     return number_format($bytes / 1000000, 0, ',', '.') . ' MB';
 }
 
-function e(string $text): string
+/**
+ * Maskiert einen Text fuer die Ausgabe.
+ *
+ * Nimmt auch eine Ganzzahl, und das ist kein Komfort: Sechs Aufrufstellen
+ * uebergeben einen **Array-Schluessel**, und PHP wandelt einen kanonischen
+ * Dezimaltext beim Eintragen still in einen `int`. Ein Referrer-Host, der nur
+ * aus Ziffern besteht, kam so als `int` hier an und liess die Seite unter
+ * `declare(strict_types=1)` mit einem `TypeError` mitten im Rendern
+ * abbrechen — die Statistik brach ab der Herkunftstabelle ab, mit Status 200
+ * (Sicherheitsdurchsicht 04.09.2026). `count.php` laesst einen rein
+ * numerischen Host inzwischen nicht mehr durch; diese Signatur ist die
+ * Gegenprobe an der Stelle, an der es darauf ankommt, und deckt zugleich die
+ * fuenf Schluessel, die heute noch niemand von aussen setzen kann.
+ */
+function e(string|int $text): string
 {
-    return htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    return htmlspecialchars((string) $text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 ?><!doctype html>

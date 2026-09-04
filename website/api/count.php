@@ -663,7 +663,15 @@ function referrer_host(): string
     // (`cleanup_private_state.php`) weist jede Monatszeile mit Leer- oder
     // Steuerzeichen als Schemafehler ab — eine einzige solche Zeile machte
     // damit jeden weiteren Lauf rot.
-    if (preg_match('/^[a-z0-9.-]{1,80}$/D', $host) !== 1) {
+    //
+    // Mindestens ein Buchstabe muss dabei sein, und das ist keine Kosmetik:
+    // Ein rein numerischer Host ist als Rechnername ohnehin keiner, kam durch
+    // die Zeichenpruefung aber durch — und `stats.php` traegt ihn als
+    // **Array-Schluessel**, den PHP still in einen `int` wandelt. Die
+    // Herkunftstabelle brach damit unter `strict_types` mit einem `TypeError`
+    // ab (Sicherheitsdurchsicht 04.09.2026). Dort steht die Gegenprobe;
+    // hier steht, dass so etwas nicht erst gespeichert wird.
+    if (preg_match('/^(?=.*[a-z])[a-z0-9.-]{1,80}$/D', $host) !== 1) {
         return '';
     }
 

@@ -300,7 +300,17 @@ def _read_place(path: Path) -> tuple[date, date] | Literal["forged"] | None:
     stated = data.get("signature")
     if stated is None:
         return first_run, last_seen
-    if not hmac.compare_digest(str(stated), _marker_signature(first_run, last_seen)):
+    # ``compare_digest`` verlangt ASCII und wirft sonst ``TypeError`` — und
+    # dieser Aufruf steht **außerhalb** des ``try`` darüber. Ein von Hand
+    # geänderter Marker, dessen Unterschrift einen Umlaut trägt, ließ damit
+    # jede Dokumentänderung mit einem rohen Programmfehler abbrechen, statt
+    # die Frist zu beenden (Sicherheitsdurchsicht 04.09.2026). Eine
+    # Unterschrift ist ein Hex-Digest; was kein ASCII ist, ist keine — und
+    # fällt damit in denselben Zweig wie eine falsche.
+    signature = str(stated)
+    if not signature.isascii() or not hmac.compare_digest(
+        signature, _marker_signature(first_run, last_seen)
+    ):
         _log.warning("trial marker at %s does not match its signature", path)
         return FORGED
     return first_run, last_seen

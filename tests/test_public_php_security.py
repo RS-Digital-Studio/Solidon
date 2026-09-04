@@ -1974,3 +1974,35 @@ def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None
             status, target = _redirect_target(base, name)
             assert status == 302, f"{name}: {status}"
             assert target == "https://solidon3d.de/#download", f"{name}: {target}"
+
+
+def test_a_numeric_referrer_host_can_neither_be_stored_nor_break_the_report() -> None:
+    """Ein rein numerischer Referrer-Host legte die Statistik still lahm.
+
+    ``count.php`` schrieb ihn, weil die Zeichenprüfung Ziffern erlaubt;
+    ``stats.php`` trägt den Wert dann als **Array-Schlüssel**, und PHP wandelt
+    einen kanonischen Dezimaltext still in einen ``int``. Unter
+    ``declare(strict_types=1)`` warf ``e()`` damit mitten im Rendern einen
+    ``TypeError``: Die Seite brach ab der Herkunftstabelle ab, mit Status 200
+    und ohne Fehlermeldung, und der Wartungslauf räumte die Zeile nicht weg
+    (Sicherheitsdurchsicht 04.09.2026).
+
+    **Geprüft wird der Quelltext, nicht das Verhalten** — diese Datei hat für
+    die öffentlichen Endpunkte keinen HTTP-Aufbau, und ``stats.php`` lässt
+    sich nicht einbinden, ohne loszulaufen. Die Zusicherung ist damit
+    schwächer als ein Lauf, aber keine leere: Sie wird rot, wenn jemand den
+    Lookahead entfernt oder die Signatur zurückdreht.
+    """
+    counter = (API / "count.php").read_text(encoding="utf-8")
+    stats = (API / "stats.php").read_text(encoding="utf-8")
+
+    # Die Schreibseite: mindestens ein Buchstabe muss im Hostnamen stehen.
+    assert "'/^(?=.*[a-z])[a-z0-9.-]{1,80}$/D'" in counter, (
+        "der Hostname braucht einen Buchstaben, sonst ist er als Schlüssel eine Zahl"
+    )
+
+    # Die Leseseite als Gegenprobe: ``e()`` nimmt auch eine Ganzzahl an.
+    assert "function e(string|int $text): string" in stats, (
+        "sechs Aufrufstellen übergeben einen Array-Schlüssel, der ein int sein kann"
+    )
+    assert "htmlspecialchars((string) $text" in stats, "und maskiert wird weiterhin"
