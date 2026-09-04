@@ -13,6 +13,7 @@ jemand Dreiecke zählt.
 
 ```
 features.py   ──> „hier ist eine Bohrung, eine Tasche, eine Fase"
+helix.py      ──> „hier ist ein Gewinde" — und darum sind die anderen weg
 relations.py  ──> „diese zwei gehören zusammen" — und was daraus folgt
 matching.py   ──> derselbe Name auch nach der nächsten Operation
 digest.py     ──> der Steckbrief: was der Agent zu sehen bekommt
@@ -74,6 +75,7 @@ ist *Bohrung ändern* da" statt „geht nicht".
 | Datei | Rolle |
 |---|---|
 | `features.py` | Merkmalserkennung (§21.1) — **2 200 Zeilen**, das größte Modul des Kerns |
+| `helix.py` | Wendelflächen (§21.1): Achse, Steigung, Gangtiefe. Ein eingelesener Bolzen bringt sonst je nach Größe drei bis zwanzig Merkmale mit, die es nicht gibt — die Flanke eines Gewindegangs ist örtlich eine Kegelfläche und passt sich sauber ein. Wo eine Wendel liegt, steht danach **ein** `thread` statt vieler Erfundener |
 | `relations.py` | Nachbarschaften zwischen Merkmalen (§21.1, §21.2): Was zusammengehört und was daraus folgt. Heute das koaxiale Rohr — eine Bohrung und das Material um sie herum, mit der Wand dazwischen |
 | `maps.py` | Analysekarten (§18.4) |
 | `digest.py` | Der Steckbrief der Szene für den Agenten (§23) |
@@ -107,6 +109,15 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   und `_merged_tori` machen daraus wieder **ein** Merkmal. Anker ist, was von
   der Größe des Ausschnitts unabhängig ist: beim Zylinder der
   Achsabschnitt, beim Kegel die **Spitze**, beim Ring der Mittelpunkt.
+- **Eine Wendel ist keine Grundform, und sie verschluckt die, die man auf ihr
+  findet.** `helix.py` misst sie am Netz statt an den Einpassungen: scharfe
+  Kanten zu Zügen verbinden, je Zug die Steigung über die Konzentration von
+  `z − p·θ/2π` suchen, und dann fünf Bedingungen. Die tragende ist die
+  **Gangtiefe** — 0,54 · Steigung nach Norm; über Korpus, Kundendatei und
+  kurze Bolzen gezählt ist sie die einzige, die je allein ablehnt. Der Grund,
+  aus dem es sie braucht: Ein Mantel mit Spiral-Naht ist eine echte Wendel
+  über zwanzig Windungen und hat trotzdem kein Gewinde. Ein Gewinde aus einem
+  **Baustein** läuft hier nie durch — es steht ohnehin in der Szene (§24.1).
 - **Was für kein Werkzeug groß genug ist, ist kein Merkmal.**
   `MIN_CYLINDER_DIAMETER` (0,5 mm) gilt für **alle sechs** eingepassten
   Arten — Bohrung, Zapfen, Verrundung, Kegel, Kugel, Torus. Die Frage steht

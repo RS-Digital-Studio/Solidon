@@ -30,6 +30,7 @@ from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
+from app.core.perceive.helix import find_helices
 from app.core.types import Feature, FeatureId, Vec3
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 
@@ -621,6 +622,7 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
             *detect_edge_loops(mesh),
         ]:
             found[feature.id] = feature
+        found = _threads_instead_of_phantoms(mesh, found)
     _log.info("detected %d features", len(found))
     _FEATURE_CACHE[key] = found
     _CACHE_INDICES[key] = sum(len(feature.face_indices) for feature in found.values())
@@ -633,6 +635,68 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
             # wäre dann nicht begrenzt, sondern aus.
             break
     return dict(found)
+
+
+# --- Gewinde ---------------------------------------------------------------------
+
+
+#: Welche Arten eine Wendel verschluckt, wenn eine gefunden wird.
+#:
+#: Die sechs eingepassten Grundformen — sie entstehen an der Wendel und
+#: bezeichnen dort nichts. ``face`` und ``edge_loop`` stehen bewusst nicht
+#: dabei: Gemessen an fünf Größen fand die Erkennung auf dem Gewinde selbst
+#: keine einzige Fläche, wohl aber die sechs der Platte darunter, und die
+#: gehören dem Kunden.
+_SWALLOWED_BY_A_HELIX: Final[frozenset[str]] = frozenset(
+    {"hole", "pin", "cone", "sphere", "torus", "fillet"}
+)
+
+
+def _threads_instead_of_phantoms(
+    mesh: MeshData, found: dict[FeatureId, Feature]
+) -> dict[FeatureId, Feature]:
+    """Wo eine Wendel liegt, steht ein Gewinde statt einer Handvoll Erfundener.
+
+    Ein eingelesener Bolzen brachte je nach Größe einen Kegel und zwei Zapfen,
+    neunzehn Kegel und einen Zapfen oder drei Kegel und zwei Kugeln — alles
+    Einpassungen auf die Flanke eines Gewindegangs, die dort örtlich eine
+    Kegelfläche ist. Sie verschwinden hier, und an ihrer Stelle steht, was
+    wirklich da ist: :mod:`app.core.perceive.helix` misst Achse, Steigung und
+    Gangtiefe aus der Geometrie.
+
+    **Ein Gewinde aus einem Baustein ist davon nicht betroffen.** Es steht
+    ohnehin in der Szene und läuft nie durch ``detect``; hier entsteht die
+    Auskunft für alles, was von außen kommt.
+    """
+    helices = find_helices(mesh)
+    if not helices:
+        return found
+
+    kept = dict(found)
+    for number, helix in enumerate(helices, start=1):
+        on_the_helix = set(helix.face_indices)
+        for name, feature in list(kept.items()):
+            if feature.kind not in _SWALLOWED_BY_A_HELIX or not feature.face_indices:
+                continue
+            inside = sum(1 for index in feature.face_indices if index in on_the_helix)
+            if inside * 2 > len(feature.face_indices):
+                del kept[name]
+        identifier = FeatureId(f"thread_{number}")
+        kept[identifier] = Feature(
+            id=identifier,
+            kind="thread",
+            provenance="detected",
+            params={
+                "diameter": round(helix.diameter, 4),
+                "pitch": round(helix.pitch, 4),
+                "centre": helix.centre,
+                "axis": helix.axis,
+                "internal": helix.internal,
+                "length": round(helix.length, 4),
+            },
+            face_indices=helix.face_indices,
+        )
+    return kept
 
 
 # --- Bohrungen -------------------------------------------------------------------
