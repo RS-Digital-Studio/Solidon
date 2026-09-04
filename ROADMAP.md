@@ -180,12 +180,13 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 21 Kernfunktionen über 150 Zeilen | Architektur-Durchsicht (02.09.2026) | je Funktion einen eigenen Umbau mit Messung davor und danach — `has_self_intersections` ist erledigt, `evaluate._with_features` (520) und `evaluate` (472) sind die nächsten |
 | Der Knopf-Wächter deckt einunddreißig von siebenunddreißig Dialogen | Die Modelle von heute über die Oberfläche (03.09.2026) | die übrigen sechs. Zwei davon liegen in fremdem Gebiet (Körperauswahl, Einstellungen), drei brauchen schwereren Aufbau — einen eingerichteten Slicer, ein Rezept mit Nutzlasten, Merkmalen und Profil —, und `MainWindow` ist kein Dialog. `tests/test_locked_says_why.py` trägt die Bauanleitungen in `BUILDERS`; wer einen Dialog dazunimmt, trägt ihn dort ein, und zwar mit dem Aufbau, den das Hauptfenster nimmt: Ein selbst erfundener meldet Funde, die kein Kunde sieht (dreimal passiert). Gefallen sind zwölf stumme Knöpfe in neun Fenstern |
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
-| Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Die Absage bleibt die richtige Antwort; der **Ausweg** darin war am 04.09.2026 gemessen falsch und ist ersetzt — beides über Zahlen verschließen, Ø der Senkung über die volle Wandstärke |
 | `MEMORY.md` hat kein Werkzeug zum Einfügen einer Zeile | Die geteilte Datei ohne Werkzeug (03.09.2026) | ein kleines Werkzeug: Zeile einfügen unter Sperre, mit Prüfung, dass der Rest unverändert bleibt. Bis dahin trägt `tests/test_directory_docs.py` den Fall — er hat am 03.09.2026 dreimal angeschlagen, meldet den Verlust aber erst hinterher |
 | Die Schnittebene folgt dem Plattenversatz nicht | Viewport-Werkzeuge aus Kundensicht (03.09.2026) | die Klärung, ob und wo eine Ebene gezeichnet wird und woher sie ihre Koordinaten bekommt — dort gehört der Versatz aus `_view_offset` hin, nicht in `_sectioned`; dazu einen Prüfstand mit zwei Platten und einer senkrechten Ebene, weil offscreen die Kette nicht messbar ist |
 | `show_build_volume` vergleicht seinen Stand nicht | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | eine Messung, wie teuer der zusätzliche Render je Auswertung wirklich ist — und dann **sechs** Zustände im Vergleich, nicht zwei: `_build_volume`, `beds`, `_profile`, `_sketch_frame`, `_bed_visible` und den Plattenumriss für den Kontaktschatten (`_bed_outline_for`). Ein vergessener Zustand lässt ein falsches Bett oder einen falschen Umriss stehen, während die Platte wechselt |
 | Das `pv.PolyData` jedes Körpers wird bei jedem Szenenaufbau neu gebaut | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Cache über Netz-Identität **und** `_view_offset` — der hängt an Platte und Explosion und ändert sich, ohne dass das Netz sich ändert. Kanten und Schattenzerlegung daneben sind längst gecacht. Messung davor und danach, sonst ist der Gewinn eine Behauptung |
 | Zwei rote Tests sind Altlast | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Erzeugerlauf für `THIRD-PARTY-NOTICES.md` (`hidapi` fehlt im Erzeugnis) und eine Klärung der Stützwahl in `test_autosplit` (Zusicherung um mehr als das Doppelte verfehlt). Beide auf HEAD in einem wegwerfbaren Worktree ziffernidentisch reproduziert — weder Regression noch einer Sitzung zuzurechnen |
+| Viele Merkmale und wenig erklärte Fläche sagen dasselbe | Was die Erkennung erklärt — und was nicht (04.09.2026) | eine belastbare Schranke aus Abdeckung je Merkmal oder dem Anteil rund gefitteter Merkmale; die Messreihe trennt die 21 geprüften konstruierten und organischen Modelle, ist aber noch kein allgemeiner Beweis |
+| `rotate_feature` ändert das Volumen ohne Befund | Was die Erkennung erklärt — und was nicht (04.09.2026) | entscheiden, ob und wie der Prüfbericht die geometrisch richtige Volumenänderung einer schräg gedrehten Bohrung sichtbar macht; gemessen sind 2,5 bis 92,9 mm³ an vier Modellen |
 
 ---
 
@@ -15207,7 +15208,7 @@ Durchmesser.
   ein gespeicherter Schritt ohne `at_feature` geht also den alten Weg. Ein
   Test hält das fest, sonst wäre es eine Absicht und keine Zusage.
 
-- [ ] **Eine Senkung über einer Bohrung lässt sich nicht versetzen.** Sie ist
+- [x] **Eine Senkung über einer Bohrung lässt sich nicht versetzen.** Sie ist
   kein eigener Hohlraum — sie geht in die Bohrung über, und versetzt zöge sie
   sie mit zu. Gemessen an drei Bauarten: eine kegelige Tasche **ohne** Bohrung
   darunter lässt sich versetzen; über einer Bohrung nicht, und zwar aus zwei
@@ -15240,12 +15241,14 @@ Durchmesser.
   seither ist es einer. Die alte Messung (10,1 gegen 0,38) stand hier und war
   seit jenem Commit nicht mehr nachvollziehbar.
 
-  **Was fehlt, ist die Nachbarschaft zweier Merkmale.** Wer die Bohrung
-  versetzt, müsste ihre Senkung mitnehmen können; dafür muss Solidon wissen,
-  welche Merkmale aneinander hängen. Das ist die Voraussetzung, nicht der
-  Aufwand: `matching.py` hält Kennungen über Operationen hinweg, aber keine
-  Beziehungen zwischen ihnen. Wird das gebaut, fällt die Absage weg und
-  `_feature_body` bekommt seinen Nachbarn abgezogen, statt abzusagen.
+  **Erledigt am 04.09.2026:** `relations.py` erkennt die Nachbarschaft aus
+  Bohrung und Senkung von beiden Seiten eindeutig. `move_feature` schließt
+  ihren gemeinsamen Hohlraum aus den exakten Flächen beider Merkmale, setzt
+  ihn an der neuen Stelle und erhält dabei beide Kennungen und Mittelpunkte.
+  Deshalb bleibt die Senkung im Objektbaum unter ihrer Bohrung — unabhängig
+  davon, welche Hälfte der Nutzer zum Verschieben gewählt hat. Der
+  Merkmalbereich nennt die Kopplung vor dem Ausführen sichtbar. Die Kern- und
+  Oberflächentests halten Geometrie, Beziehung und Hinweis fest.
 
 - [x] **Zwei Warnungen, die stillen Ausschuss verhindern.** Eine durchgehende
   Bohrung, die nach dem Versetzen oder Verdoppeln nicht mehr durchgeht, sagt es

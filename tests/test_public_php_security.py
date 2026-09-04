@@ -2020,11 +2020,25 @@ def test_every_delivered_kind_finds_its_current_file(tmp_path: Path) -> None:
         "eine neue Art gehört auch hierher"
     )
 
-    with _php_server(tmp_path) as base:
-        for angefragt, erwartet in fälle:
-            status, target = _redirect_target(base, angefragt)
-            assert status == 302, f"{angefragt}: {status}"
-            assert target == f"https://solidon3d.de/dl/{erwartet}", f"{angefragt}: {target}"
+    # Nur das AppImage prüft im PHP-Weg zusätzlich, ob die versprochene Datei
+    # wirklich im Downloadordner liegt. Dieser Ordner ist absichtlich
+    # ignoriert: Auf der Release-Maschine liegen dort alte Pakete, in einem
+    # frischen Klon und in der CI nicht. Der Prüfstand legt deshalb genau das
+    # aktuelle AppImage selbst an und räumt nur seinen eigenen Platzhalter
+    # wieder weg.
+    appimage = ROOT / "website" / "dl" / f"Solidon3D-{fassung}-x86_64.AppImage"
+    existed = appimage.is_file()
+    if not existed:
+        appimage.write_bytes(b"kein echtes Paket")
+    try:
+        with _php_server(tmp_path) as base:
+            for angefragt, erwartet in fälle:
+                status, target = _redirect_target(base, angefragt)
+                assert status == 302, f"{angefragt}: {status}"
+                assert target == f"https://solidon3d.de/dl/{erwartet}", f"{angefragt}: {target}"
+    finally:
+        if not existed:
+            appimage.unlink(missing_ok=True)
 
 
 def test_a_numeric_referrer_host_can_neither_be_stored_nor_break_the_report() -> None:

@@ -254,9 +254,11 @@ Fortschrittszeichen und **null `F`** bis zur Abrissstelle, und daraus wird
 
 Der Handgriff dagegen kostet nichts: `pytest --collect-only -q | wc -l` nennt
 die Sollzahl, und die Fortschrittszeichen nennen die Istzahl. Sind sie
-ungleich, ist das Ergebnis **unvollständig** und nicht grün — dann fährt man
-die fehlende Hälfte einzeln (`-k` auf die Namen dahinter) oder in einem
-eigenen Worktree, wo der Abriss nicht auftritt.
+ungleich, ist das Ergebnis **unvollständig** und nicht grün.
+`suite-getrennt.sh` halbiert dann die betroffene Portion und reiht beide
+Hälften wieder ein — auch wenn die ganze Fensterdatei kleiner als die normale
+Portionsgröße ist. Sonst bliebe ausgerechnet eine Datei mit 31 Tests rot,
+obwohl zwei vollständige Hälften die gesamte Aussage liefern.
 
 Und der Grund, aus dem gerade diese Gestalt so leicht durchgeht: Die beiden
 anderen fühlen sich wie ein Urteil an — man entscheidet, ob ein Zeichen ein

@@ -200,7 +200,9 @@ def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -
     ``test_print_settings_ui.py`` riss schon bei vierzig, und zwar an keinem
     einzelnen Test — dreiundzwanzig rissen, vierundzwanzig nicht,
     vierunddreißig liefen, vierzig rissen wieder. Eine gepflegte Zahl je Datei
-    wäre am Tag ihres Eintrags schon falsch.
+    wäre am Tag ihres Eintrags schon falsch. Am 04.09.2026 zeigte
+    ``test_sculpt_session.py`` dieselbe Grenze mit nur 31 Tests; deshalb muss
+    auch eine Datei unterhalb der normalen Portionsgröße in diesen Weg kommen.
 
     Geprüft wird mit einem **gefälschten pytest**, das über einer Grenze reißt
     und darunter durchläuft. Nur so lässt sich zeigen, dass das Skript kleiner
@@ -262,7 +264,9 @@ def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -
     environment = dict(os.environ)
     environment["SUITE_WURZEL"] = str(tmp_path)
     environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
-    environment["SUITE_PORTION"] = "10"
+    # Die zwanzig Tests liegen absichtlich unter der Obergrenze. Vor dem
+    # 04.09.2026 nahm das Skript dann den direkten Weg, riss und teilte nie.
+    environment["SUITE_PORTION"] = "60"
     environment["SUITE_MIN_PORTION"] = "2"
     environment["FAKE_LIMIT"] = "4"
     environment["SUITE_PYTHON"] = str(wrapper)
@@ -289,10 +293,10 @@ def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -
     assert "geteilt in" in output, (
         "das Skript hat nicht geteilt, obwohl der Lauf Tests verschluckte:\n" + output[-2000:]
     )
-    # Zwanzig Tests, Portionen zu zehn, und das gefälschte pytest reißt über
-    # vier: Zehn reißen, fünf reißen, zwei und drei laufen. Also mehrere
-    # Teilungen je Portion — und am Ende kein Fehllauf, ohne dass jemand eine
-    # Zahl gepflegt hätte.
+    # Zwanzig Tests in der ersten Portion, und das gefälschte pytest reißt über
+    # vier: Zwanzig reißen, zehn reißen, fünf reißen, zwei und drei laufen.
+    # Also mehrere Teilungen — und am Ende kein Fehllauf, ohne dass jemand eine
+    # Zahl je Datei gepflegt hätte.
     assert output.count("geteilt in") >= 2, f"nur einmal geteilt:\n{output[-2000:]}"
     assert "Läufe mit Fehler: 0" in output, (
         "nach dem Verkleinern lief alles durch, das Skript meldet trotzdem einen Fehler:\n"

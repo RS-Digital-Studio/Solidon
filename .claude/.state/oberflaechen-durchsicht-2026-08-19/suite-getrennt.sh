@@ -373,7 +373,14 @@ for file in $windowed; do
   namen=$(namen_von "$file")
   anzahl=$(printf '%s\n' "$namen" | grep -c "::" || true)
 
-  if [ "$anzahl" -le "$PORTION" ]; then
+  # Auch eine kleine Datei kann zu groß für einen einzigen Qt-Prozess sein.
+  # ``test_sculpt_session.py`` riss am 04.09.2026 bei 19 beziehungsweise 25
+  # von 31 Tests, während jede Hälfte und der vollständige Lauf dazwischen
+  # grün waren. Deshalb nimmt jede nichtleere Fensterdatei denselben
+  # Warteschlangenweg: Die erste Portion umfasst höchstens ``PORTION`` Tests,
+  # und ein Riss mit verschluckten Tests halbiert sie unabhängig davon, ob die
+  # Datei ursprünglich größer oder kleiner als diese Obergrenze war.
+  if [ "$anzahl" -eq 0 ]; then
     echo "=== $file ==="
     PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"     2>&1 | tee "$protokoll"
     status=${PIPESTATUS[0]}
@@ -388,7 +395,11 @@ for file in $windowed; do
   # **Portionsweise, und jede Portion zählt für sich.** Ein Riss in der
   # vierten Portion sagt nichts über die anderen sechs — vorher nahm er die
   # ganze Datei mit, und mit ihr die Auskunft, welche Tests überhaupt liefen.
-  echo "=== $file ($anzahl Tests, Portionen zu $PORTION) ==="
+  if [ "$anzahl" -le "$PORTION" ]; then
+    echo "=== $file ==="
+  else
+    echo "=== $file ($anzahl Tests, Portionen zu $PORTION) ==="
+  fi
   # **Eine Warteschlange und keine feste Schrittweite.** Reißt ein Stück so,
   # dass Tests darin nie liefen, wird es halbiert und beide Hälften kommen
   # vorn wieder herein — dieselbe Datei, kleinere Häppchen, ohne dass jemand

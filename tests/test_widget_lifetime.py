@@ -28,6 +28,7 @@ from __future__ import annotations
 import gc
 import weakref
 from collections.abc import Callable
+from typing import cast
 
 import pytest
 
@@ -118,6 +119,12 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     from app.ui.update_dialog import UpdateDialog
     from app.ui.variants_dialog import VariantsDialog
     from app.ui.viewport import HoldToCompare, ViewBar, Viewport
+
+    class ComparisonHost(QWidget):
+        """Der schmale Vertrag, den ``HoldToCompare`` vom Viewport braucht."""
+
+        def hold_before(self, held: bool) -> None:
+            """Für die Lebensdauerprüfung muss die Vorschau nichts zeichnen."""
 
     # Die Ops müssen geladen sein, sonst hat das Register nichts, womit ein
     # Operationsdialog gebaut werden könnte.
@@ -230,7 +237,15 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         ("TourPanel", lambda: TourPanel(Session())),
         ("UpdateDialog", lambda: UpdateDialog(release)),
         ("VariantsDialog", lambda: VariantsDialog(Session())),
-        ("HoldToCompare", lambda: HoldToCompare(Viewport())),
+        # Der echte Viewport steht oben bereits selbst in der Prüfung. Ihn hier
+        # als bloßen Elternträger ein zweites Mal je Runde zu bauen, erzeugt
+        # weitere native VTK-Renderer und misst deren Sammelabbau statt des
+        # Referenzrings von ``HoldToCompare``. Der schmale Wirt erhält genau die
+        # entscheidende Bauart: Elternbesitz plus Rückverweis vom Kind.
+        (
+            "HoldToCompare",
+            lambda: HoldToCompare(cast(Viewport, ComparisonHost())),
+        ),
     ]
 
 
