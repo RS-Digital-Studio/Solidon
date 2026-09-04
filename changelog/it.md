@@ -15,6 +15,26 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.3.4
+
+### Modificare le caratteristiche rilevate
+
+- Un foro e la sua svasatura collegata vengono ora spostati insieme, indipendentemente da quale dei due sia selezionato. Il pannello delle caratteristiche indica il collegamento prima della modifica.
+- Quando si modifica un foro, la sua svasatura resta associata sotto di esso nell’albero degli oggetti e può essere adattata direttamente.
+- Il pannello delle caratteristiche raggruppa le azioni identiche non disponibili e indica con chiarezza i gruppi di campi interessati.
+
+### Riconoscimento delle caratteristiche
+
+- Le filettature dei modelli importati vengono riconosciute in modo più affidabile; coni, perni e sfere errati al loro interno non appaiono più come caratteristiche separate.
+- Le giunzioni strette tra forme unite non generano più numerose caratteristiche errate.
+- Il riconoscimento delle caratteristiche è sensibilmente più rapido sui modelli grandi e dettagliati.
+
+### Mappe di analisi
+
+- Le mappe di analisi sono disponibili per un numero maggiore di modelli grandi.
+- Se una mappa di analisi è troppo grande per un modello, il messaggio propone direttamente *Riduci triangoli*.
+- L’analisi del fabbisogno di supporti è notevolmente più rapida sui modelli grandi.
+
 ## 0.3.3
 
 ### Vista e selezione

@@ -40,6 +40,26 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.3.4
+
+### Erkannte Merkmale bearbeiten
+
+- Eine Bohrung und ihre verknüpfte Senkung werden beim Verschieben gemeinsam versetzt — gleich, welche der beiden gewählt wurde. Der Merkmalbereich weist vor der Änderung auf die Kopplung hin.
+- Beim Ändern einer Bohrung bleibt ihre Senkung im Objektbaum zugeordnet und kann direkt mitangepasst werden.
+- Der Merkmalbereich fasst gleiche Ablehnungen zusammen und benennt die betroffenen Feldgruppen klar.
+
+### Merkmalserkennung
+
+- Gewinde in importierten Modellen werden zuverlässiger erkannt; falsche Kegel, Zapfen und Kugeln daran erscheinen nicht mehr als eigene Merkmale.
+- Schmale Nähte zwischen zusammengefügten Formen erzeugen nicht mehr zahlreiche falsche Merkmale.
+- Die Merkmalserkennung großer, detailreicher Modelle ist spürbar schneller.
+
+### Analysekarten
+
+- Analysekarten stehen für mehr große Modelle zur Verfügung.
+- Ist eine Analysekarte für ein Modell zu groß, bietet die Meldung direkt *Dreiecke verringern* an.
+- Die Analyse des Stützbedarfs großer Modelle ist deutlich schneller.
+
 ## 0.3.3
 
 ### Anzeige und Auswahl

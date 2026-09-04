@@ -16,6 +16,26 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.3.4
+
+### Modifier les caractéristiques détectées
+
+- Un perçage et sa fraisure liée se déplacent désormais ensemble, quel que soit celui des deux que vous sélectionnez. Le panneau Caractéristique indique ce lien avant la modification.
+- Lorsque vous modifiez un perçage, sa fraisure reste associée sous lui dans l’arborescence et peut elle aussi être ajustée directement.
+- Le panneau Caractéristique regroupe les actions identiques qui ne sont pas disponibles et nomme clairement les groupes de champs concernés.
+
+### Reconnaissance des caractéristiques
+
+- Les filetages des modèles importés sont reconnus de manière plus fiable ; les cônes, tenons et sphères incorrects qui s’y trouvent n’apparaissent plus comme des caractéristiques distinctes.
+- Les jointures étroites entre des formes assemblées ne créent plus de nombreuses caractéristiques incorrectes.
+- La reconnaissance des caractéristiques est sensiblement plus rapide sur les grands modèles détaillés.
+
+### Cartes d’analyse
+
+- Les cartes d’analyse sont disponibles pour davantage de grands modèles.
+- Si une carte d’analyse est trop grande pour un modèle, le message propose directement *Réduire les triangles*.
+- L’analyse du besoin en supports est nettement plus rapide sur les grands modèles.
+
 ## 0.3.3
 
 ### Affichage et sélection

@@ -15,6 +15,26 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.3.4
+
+### Editing detected features
+
+- A bore and its linked countersink now move together, whichever of the two you select. The feature panel identifies the link before you make the change.
+- When you edit a bore, its countersink remains assigned beneath it in the object tree and can be adjusted directly as well.
+- The feature panel combines identical unavailable actions and clearly names the affected groups of fields.
+
+### Feature recognition
+
+- Threads in imported models are recognised more reliably; incorrect cones, pins and spheres on them no longer appear as separate features.
+- Narrow seams between joined shapes no longer create large numbers of incorrect features.
+- Feature recognition is noticeably faster on large, detailed models.
+
+### Analysis maps
+
+- Analysis maps are now available for more large models.
+- If an analysis map is too large for a model, the message directly offers *Reduce triangles*.
+- Support-need analysis is considerably faster on large models.
+
 ## 0.3.3
 
 ### Display and selection

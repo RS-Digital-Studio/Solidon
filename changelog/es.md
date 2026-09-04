@@ -16,6 +16,26 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.3.4
+
+### Editar características detectadas
+
+- Un taladro y su avellanado vinculado se desplazan ahora juntos, sin importar cuál de los dos se seleccione. El panel de características indica la vinculación antes del cambio.
+- Al modificar un taladro, su avellanado permanece asignado debajo de él en el árbol de objetos y también se puede ajustar directamente.
+- El panel de características agrupa las acciones no disponibles iguales e indica con claridad los grupos de campos afectados.
+
+### Reconocimiento de características
+
+- Las roscas de los modelos importados se reconocen con mayor fiabilidad; los conos, salientes y esferas incorrectos que aparecen en ellas ya no se muestran como características independientes.
+- Las uniones estrechas entre formas ensambladas ya no generan una gran cantidad de características incorrectas.
+- El reconocimiento de características es notablemente más rápido en modelos grandes y detallados.
+
+### Mapas de análisis
+
+- Los mapas de análisis están disponibles para más modelos grandes.
+- Si un mapa de análisis es demasiado grande para un modelo, el aviso ofrece directamente *Reducir triángulos*.
+- El análisis de la necesidad de soportes es considerablemente más rápido en modelos grandes.
+
 ## 0.3.3
 
 ### Vista y selección

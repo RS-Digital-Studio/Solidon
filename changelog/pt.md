@@ -15,6 +15,26 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.3.4
+
+### Editar características detetadas
+
+- Um furo e o seu escareamento associado passam agora a ser deslocados em conjunto, independentemente de qual dos dois é selecionado. O painel de características indica a ligação antes da alteração.
+- Ao alterar um furo, o respetivo escareamento mantém-se associado por baixo dele na árvore de objetos e também pode ser ajustado diretamente.
+- O painel de características agrupa ações indisponíveis iguais e indica claramente os grupos de campos afetados.
+
+### Reconhecimento de características
+
+- As roscas dos modelos importados são reconhecidas com maior fiabilidade; cones, pinos e esferas incorretos nelas deixam de aparecer como características separadas.
+- As uniões estreitas entre formas reunidas deixam de criar numerosas características incorretas.
+- O reconhecimento de características é visivelmente mais rápido em modelos grandes e detalhados.
+
+### Mapas de análise
+
+- Os mapas de análise estão disponíveis para mais modelos grandes.
+- Se um mapa de análise for demasiado grande para um modelo, a mensagem oferece diretamente *Reduzir triângulos*.
+- A análise da necessidade de suportes é consideravelmente mais rápida em modelos grandes.
+
 ## 0.3.3
 
 ### Exibição e seleção
