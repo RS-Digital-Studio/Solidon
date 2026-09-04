@@ -122,6 +122,20 @@ TILT_PER_PIXEL: Final = 0.05
 #: Ereignisse das System dafür schickt.
 TILT_STEP_SECONDS: Final = 0.05
 
+#: Wie weit die Ansicht sich der Senkrechten nähern darf (Grad).
+#:
+#: Genau über dem Teil gibt es kein Oben mehr: Blickrichtung und Welt-Hochachse
+#: fallen zusammen, und jede Aufrichtung wäre eine Division durch nichts. Ein
+#: Grad davor ist der Unterschied unsichtbar und die Rechnung wohldefiniert.
+POLE_LIMIT_DEGREES: Final = 89.0
+#: Die Empfindlichkeit des Drehens, übernommen von dem Stil, den
+#: :func:`turntable_camera` ersetzt: ``vtkInteractorStyleTrackballCamera``
+#: rechnet 20 Grad je Fensterhälfte mal seinem ``MotionFactor`` von 10.
+#: Übernommen und nicht neu gewählt — wer die Neigung abstellt, soll nicht
+#: nebenbei die gewohnte Geschwindigkeit ändern.
+TURN_PER_PIXEL: Final = 20.0
+TURN_MOTION_FACTOR: Final = 10.0
+
 #: Was eine Flugtaste an den Achsen von ``Motion`` bewegt (§2.9).
 #:
 #: **Als Tabelle und nicht als Kette von ``if``**, aus demselben Grund wie bei
@@ -4661,7 +4675,13 @@ class Viewport(QWidget):
         # steht, und welche das ist, weiß nur die vollständige Szene.
         if self._sketch_frame is None:
             self._place_shadows(self._shadow_direction())
-        self.select(self._selected)
+        # **Mit der ganzen Auswahl**, sonst räumt dieser Aufruf sie ab: Ohne
+        # ``more`` setzt ``select`` das Feld unbedingt aus seinem Argument, und
+        # der sorgfältige Beschnitt weiter oben wäre umsonst gewesen. Gemessen
+        # am 04.09.2026 am echten Fenster — zwei gewählte Körper, nach der
+        # nächsten Auswertung noch einer gefärbt, und ``_selected_bounds``
+        # rahmte wieder einen einzigen.
+        self.select(self._selected, more=self._selected_more)
         self._redraw_features()
         self._redraw_layer()
         # **Und alles andere, was durch ``_view_offset`` geht.** Dessen
@@ -7102,6 +7122,34 @@ class Viewport(QWidget):
         self._candidate_emphasis = emphasis
         self._redraw_candidates()
 
+    def _patch_lift(self) -> float:
+        """Wie weit eine hervorgehobene Fläche über dem Körper schwebt.
+
+        Mit der Szene skaliert und nach unten begrenzt: Ein festes Maß wäre an
+        einem 5-mm-Teil ein Klotz und an einem 300-mm-Teil unsichtbar.
+        """
+        return max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
+
+    def _lifted_corners(self, raw: Any, chosen: Any, lift: float, offset: Any) -> Any:
+        """Die Eckpunkte einer Flächenauswahl, entlang ihrer Normalen angehoben.
+
+        **Je Dreieck eigene Punkte**: Die Fläche wird entlang **ihrer** Normalen
+        angehoben, und geteilte Eckpunkte würden das über die Kante hinaus in
+        den Nachbarn ziehen.
+
+        Bis zum 04.09.2026 stand die Rechnung viermal untereinander in dieser
+        Datei — in ``_redraw_candidates``, ``_redraw_feature_patch``,
+        ``_redraw_protected_patch`` und ``_redraw_hover_patch``. Die Begründung
+        darüber stand in **einer** der vier; die drei anderen trugen dieselben
+        sieben Zeilen ohne den Satz, der erklärt, warum sie so aussehen.
+        """
+        import numpy as np
+
+        triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
+        normals = np.asarray(raw.face_normals, dtype=float)[chosen]
+        corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
+        return corners + np.repeat(normals, 3, axis=0) * lift + offset
+
     def _redraw_candidates(self) -> None:
         """Zeichnet die Kandidaten — Fläche in der Auskunftsfarbe, Kennung
         daneben.
@@ -7133,16 +7181,10 @@ class Viewport(QWidget):
             if feature is None or raw is None or not feature.face_indices:
                 continue
             chosen = np.asarray(feature.face_indices, dtype=np.int64)
-            triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
-            normals = np.asarray(raw.face_normals, dtype=float)[chosen]
-            corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
-            lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
-            corners += np.repeat(normals, 3, axis=0) * lift
-            corners += self._view_offset(entry, self._result)
-            count = len(triangles)
-            faces = np.hstack(
-                [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
-            ).ravel()
+            corners = self._lifted_corners(
+                raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
+            )
+            faces = _triangle_faces(len(chosen))
             loud = (object_id, feature_id) == self._candidate_emphasis
             self._candidate_actors.append(
                 self.plotter.add_mesh(
@@ -7213,19 +7255,10 @@ class Viewport(QWidget):
         import pyvista as pv
 
         chosen = np.asarray(highlighted, dtype=np.int64)
-        triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
-        normals = np.asarray(raw.face_normals, dtype=float)[chosen]
-        # Je Dreieck eigene Punkte: die Fläche wird entlang **ihrer** Normalen
-        # angehoben, und geteilte Eckpunkte würden das über die Kante hinaus
-        # in den Nachbarn ziehen.
-        corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
-        lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
-        corners += np.repeat(normals, 3, axis=0) * lift
-        corners += self._view_offset(entry, self._result)
-        count = len(triangles)
-        faces = np.hstack(
-            [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
-        ).ravel()
+        corners = self._lifted_corners(
+            raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
+        )
+        faces = _triangle_faces(len(chosen))
         feature = (
             entry.features.get(self._selected_feature)
             if self._selected_feature is not None
@@ -7297,10 +7330,8 @@ class Viewport(QWidget):
                 if not chosen:
                     continue
                 index = np.asarray(chosen, dtype=np.int64)
-                triangles = np.asarray(raw.faces, dtype=np.int64)[index]
                 normals = np.asarray(raw.face_normals, dtype=float)[index]
-                patch = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
-                patch = patch + np.repeat(normals, 3, axis=0) * lift + offset
+                patch = self._lifted_corners(raw, index, lift, offset)
                 corners.append(patch)
                 # Die Striche liegen noch eine Spur höher als die Tönung,
                 # sonst streiten sie mit ihr um dieselbe Tiefe und flimmern.
@@ -7310,10 +7341,7 @@ class Viewport(QWidget):
             return
 
         points = np.vstack(corners)
-        count = len(points) // 3
-        faces = np.hstack(
-            [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
-        ).ravel()
+        faces = _triangle_faces(len(points) // 3)
         self._protected_patch = self.plotter.add_mesh(
             pv.PolyData(points, faces),
             color=PROTECTED_COLOUR,
@@ -7379,16 +7407,10 @@ class Viewport(QWidget):
         import pyvista as pv
 
         chosen = np.asarray(indices, dtype=np.int64)
-        triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
-        normals = np.asarray(raw.face_normals, dtype=float)[chosen]
-        corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
-        lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
-        corners += np.repeat(normals, 3, axis=0) * lift
-        corners += self._view_offset(entry, self._result)
-        count = len(triangles)
-        faces = np.hstack(
-            [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
-        ).ravel()
+        corners = self._lifted_corners(
+            raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
+        )
+        faces = _triangle_faces(len(chosen))
         feature = entry.features.get(self._hovered_feature)
         hole_surface = feature is not None and feature.kind == "hole"
         hover_opacity = HOVERED_HOLE_OPACITY if hole_surface else HOVERED_FEATURE_OPACITY
@@ -10419,27 +10441,37 @@ class Viewport(QWidget):
         steht der Startwert der Zeichenfläche, und der ist eine brauchbare
         Vorgabe statt einer Division durch null.
         """
+        return self._span_in_pixels(to_world(frame, (0.0, 0.0)), to_world(frame, (1.0, 0.0)))
+
+    def _span_in_pixels(self, here: Sequence[float], there: Sequence[float]) -> float:
+        """Wie weit zwei Weltpunkte im Bild auseinanderliegen, in Bildpunkten.
+
+        Der gemeinsame Kern von :meth:`pixels_per_mm` und
+        :meth:`pixels_per_mm_upright` — die beiden unterschieden sich bis zum
+        04.09.2026 in genau einer Zeile (welchen zweiten Punkt sie nehmen) und
+        führten dieselben neunzehn davor doppelt.
+
+        **Erst messen, wenn es etwas zu messen gibt.** Solange das Layout nicht
+        steht, meldet Qt die Startgröße eines Widgets (100 mal 30), und die
+        Projektion daran ist keine Aussage über das Bild, das der Nutzer sieht.
+        Siehe :data:`LEAST_VIEW_PIXELS`.
+
+        Null kommt nie zurück: Ohne Plotter oder bei entarteter Projektion
+        steht :data:`FALLBACK_SCALE`, und der ist eine brauchbare Vorgabe statt
+        einer Division durch null.
+        """
         if self.plotter is None:
             return FALLBACK_SCALE
-        # **Erst messen, wenn es etwas zu messen gibt.** Solange das Layout
-        # nicht steht, meldet Qt die Startgröße eines Widgets (100 mal 30), und
-        # die Projektion daran ist keine Aussage über das Bild, das der Nutzer
-        # sieht. Siehe :data:`LEAST_VIEW_PIXELS`.
         interactor = getattr(self.plotter, "interactor", None)
         if interactor is not None:
             size = interactor.size()
             if min(size.width(), size.height()) < LEAST_VIEW_PIXELS:
                 return FALLBACK_SCALE
-        renderer = self.plotter.renderer
-        here = to_world(frame, (0.0, 0.0))
-        there = to_world(frame, (1.0, 0.0))
-        seen = []
-        for point in (here, there):
-            renderer.SetWorldPoint(point[0], point[1], point[2], 1.0)
-            renderer.WorldToDisplay()
-            spot = renderer.GetDisplayPoint()
-            seen.append((float(spot[0]), float(spot[1])))
-        span = math.dist(seen[0], seen[1])
+        first = self._display_of(here)
+        second = self._display_of(there)
+        if first is None or second is None:
+            return FALLBACK_SCALE
+        span = math.dist(first, second)
         return span if span > EPS_GEOM else FALLBACK_SCALE
 
     def pixels_per_mm_upright(self, frame: PlaneFrame) -> float:
@@ -10471,24 +10503,9 @@ class Viewport(QWidget):
         wie bei :meth:`pixels_per_mm`: Durch die echte Projektion geschickt
         stimmt die Zahl bei Parallel- wie bei Zentralprojektion.
         """
-        if self.plotter is None:
-            return FALLBACK_SCALE
-        interactor = getattr(self.plotter, "interactor", None)
-        if interactor is not None:
-            size = interactor.size()
-            if min(size.width(), size.height()) < LEAST_VIEW_PIXELS:
-                return FALLBACK_SCALE
-        renderer = self.plotter.renderer
         here = to_world(frame, (0.0, 0.0))
         there = tuple(here[axis] + frame.normal[axis] for axis in range(3))
-        seen = []
-        for point in (here, there):
-            renderer.SetWorldPoint(point[0], point[1], point[2], 1.0)
-            renderer.WorldToDisplay()
-            spot = renderer.GetDisplayPoint()
-            seen.append((float(spot[0]), float(spot[1])))
-        span = math.dist(seen[0], seen[1])
-        return span if span > EPS_GEOM else FALLBACK_SCALE
+        return self._span_in_pixels(here, there)
 
     def _plane_distance(self) -> float:
         """Wie weit die Kamera von der Zeichenebene wegrückt.
@@ -10954,14 +10971,25 @@ class Viewport(QWidget):
         if now is None or start is None:
             return
         self._body_drag_offset = (now[0] - start[0], now[1] - start[1])
-        actor = self._actors.get(self._selected)
-        if actor is not None:
-            base = self._actor_home.setdefault(self._selected, tuple(actor.GetPosition()))
+        # **Alle gewählten Körper, nicht nur der führende.** Beim Loslassen
+        # trifft der Schritt die ganze Auswahl (``inputs_for_transform``), also
+        # muss die Vorschau sie auch zeigen — sonst folgt einer dem Zeiger und
+        # beim Loslassen springen zwei. Jeder bekommt seinen eigenen Eintrag in
+        # ``_actor_home``, damit ``_undo_body_preview`` sie alle zurückholt;
+        # dessen Schleife über die Einträge trägt das schon.
+        moved = False
+        for identifier in (self._selected, *self._selected_more):
+            actor = self._actors.get(identifier)
+            if actor is None:
+                continue
+            base = self._actor_home.setdefault(identifier, tuple(actor.GetPosition()))
             actor.SetPosition(
                 base[0] + self._body_drag_offset[0], base[1] + self._body_drag_offset[1], base[2]
             )
-            if self.plotter is not None:
-                self.plotter.render()
+            moved = True
+        # Ein Bildaufbau für alle, nicht einer je Körper.
+        if moved and self.plotter is not None:
+            self.plotter.render()
 
     def finish_body_drag(self) -> None:
         """Aus dem Zug wird ein Schritt im Verlauf — oder gar nichts.
@@ -11351,19 +11379,6 @@ class Viewport(QWidget):
         # zeichnen") — kein Wertfeld am Zeiger, keines in der Leiste. Die
         # genaue Zahl bekommt der Dialog beim Loslassen.
         self._show_pull_cage()
-
-    def _pointer_spot(self, x: int, y: int) -> QPoint:
-        """Die Stelle des Zeigers in Qt-Logikpunkten, für das Wertfeld.
-
-        Der Interactor zählt von unten und in Gerätepunkten, ein Qt-Kind wird
-        von oben und in Logikpunkten gesetzt — dieselbe Umrechnung wie in
-        :meth:`sketch_screen_at`, nur in der anderen Richtung.
-        """
-        if self.plotter is None:
-            return QPoint(int(x), int(y))
-        ratio = float(self.plotter.interactor.devicePixelRatioF()) or 1.0
-        height = float(self.plotter.interactor.height())
-        return QPoint(int(x / ratio), int(height - y / ratio))
 
     def _pull_frame(self) -> PlaneFrame:
         """Die Ebene, von der die Drahtform ausgeht.
@@ -11805,6 +11820,23 @@ def _world_at_depth(
     return (point[0] / point[3], point[1] / point[3], point[2] / point[3])
 
 
+def _triangle_faces(count: int) -> Any:
+    """Die Dreiecksliste für ``count`` Dreiecke mit je eigenen Eckpunkten.
+
+    Das Format, das ``pv.PolyData`` erwartet: je Dreieck die Zahl 3 und danach
+    seine drei Punktindizes, alles in einem flachen Feld. Weil die Punkte je
+    Dreieck eigene sind (siehe :meth:`Viewport._lifted_corners`), zählen die
+    Indizes einfach durch.
+
+    Stand bis zum 04.09.2026 viermal wortgleich in dieser Datei.
+    """
+    import numpy as np
+
+    return np.hstack(
+        [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
+    ).ravel()
+
+
 def apply_wheel_zoom(camera: Any, factor: float) -> None:
     """Ein Radschritt an der Kamera — in **beiden** Projektionen.
 
@@ -11824,6 +11856,114 @@ def apply_wheel_zoom(camera: Any, factor: float) -> None:
         camera.SetParallelScale(camera.GetParallelScale() / factor)
     else:
         camera.Dolly(factor)
+
+
+def turntable_camera(
+    position: Sequence[float],
+    focal_point: Sequence[float],
+    view_up: Sequence[float],
+    dx: int,
+    dy: int,
+    size: Sequence[int],
+) -> tuple[Vec3, Vec3]:
+    """Ein Mauszug am Drehteller: neuer Standort und neues Oben (§2.9).
+
+    **Der Fehler, den das behebt** (Robert, 04.09.2026: „das rotieren neigt
+    immer noch statt den winkel zur mitte zu lassen"):
+    ``vtkInteractorStyleTrackballCamera`` dreht um das **Oben der Kamera** und
+    führt es dabei mit; ``OrthogonalizeViewUp`` stellt es hinterher nur wieder
+    senkrecht zur Blickrichtung, nicht auf. Über eine Geste summiert sich
+    daraus eine sichtbare Schräglage — an einer nackten ``vtkCamera``
+    nachgerechnet, zwölf diagonale Züge aus derselben Ausgangslage: **62,7 Grad
+    Neigung** gegen **0,0** hier.
+
+    Ein Drehteller dreht stattdessen waagerecht immer um die **Welt-Hochachse**
+    und senkrecht um die Bildwaagerechte. Das Oben folgt daraus, statt
+    mitgeschleift zu werden — es ist die Welt-Hochachse, auf die Bildebene
+    gestellt. So halten es Cura, Bambu Studio und Blender, und deshalb gilt es
+    hier für alle fünf Schemata: Ein Nachbau, der neigt, wo sein Vorbild
+    aufrecht bleibt, ist keiner.
+
+    **Die Hebung wird begrenzt, nicht abgeschnitten** (:data:`POLE_LIMIT_
+    DEGREES`): Wer schon fast senkrecht darüber steht, dreht weiter waagerecht
+    und kommt jederzeit wieder herunter — nur über den Pol hinaus geht es
+    nicht, denn dort gibt es kein Oben mehr. Aus einer Draufsicht heraus, die
+    das Menü setzt, führt der Weg deshalb ebenso zurück.
+
+    Reine Funktion auf Vektoren, aus demselben Grund wie
+    :func:`rotation_focus`: Offscreen gibt es keinen Plotter, und was hinter
+    dieser Wache gerechnet wird, prüft in der Suite sonst niemand.
+    """
+    import numpy as np
+
+    # Die Welt-Hochachse steht bei der 3D-Maus, und dort bleibt sie: Zwei
+    # Fassungen derselben Zahl wären zwei Wahrheiten.
+    from app.ui.spacemouse import WORLD_UP
+
+    width = max(int(size[0]), 1)
+    height = max(int(size[1]), 1)
+    azimuth = -float(dx) * TURN_PER_PIXEL / width * TURN_MOTION_FACTOR
+    elevation = -float(dy) * TURN_PER_PIXEL / height * TURN_MOTION_FACTOR
+
+    focal = np.asarray(focal_point, dtype=float)
+    offset = np.asarray(position, dtype=float) - focal
+    distance = float(np.linalg.norm(offset))
+    up = np.asarray(view_up, dtype=float)
+    if distance <= EPS_GEOM:
+        return (
+            (float(position[0]), float(position[1]), float(position[2])),
+            (float(view_up[0]), float(view_up[1]), float(view_up[2])),
+        )
+
+    world_up = np.asarray(WORLD_UP, dtype=float)
+    offset = _turned_about(offset, world_up, azimuth)
+    up = _turned_about(up, world_up, azimuth)
+
+    forward = -offset / distance
+    sideways = np.cross(forward, world_up)
+    if float(np.linalg.norm(sideways)) <= EPS_GEOM:
+        # Senkrechter Blick: Die Welt-Hochachse taugt hier nicht als Bezug,
+        # das Oben des Bildes schon.
+        sideways = np.cross(forward, up)
+    sideways = sideways / float(np.linalg.norm(sideways))
+
+    height_now = math.degrees(math.asin(max(-1.0, min(1.0, float(offset[2]) / distance))))
+    height_next = max(-POLE_LIMIT_DEGREES, min(POLE_LIMIT_DEGREES, height_now + elevation))
+    offset = _turned_about(offset, sideways, height_now - height_next)
+
+    forward = -offset / float(np.linalg.norm(offset))
+    upright = world_up - forward * float(np.dot(forward, world_up))
+    if float(np.linalg.norm(upright)) > EPS_GEOM:
+        up = upright / float(np.linalg.norm(upright))
+
+    moved = focal + offset
+    return (
+        (float(moved[0]), float(moved[1]), float(moved[2])),
+        (float(up[0]), float(up[1]), float(up[2])),
+    )
+
+
+def _turned_about(vector: Any, axis: Any, degrees: float) -> Any:
+    """Einen Vektor um eine Achse drehen (Rodrigues).
+
+    Eigene Rechnung statt ``vtkCamera.Azimuth`` und ``Elevation``: Jene drehen
+    um das Oben **der Kamera**, und genau das ist der Unterschied, um den es
+    in :func:`turntable_camera` geht.
+    """
+    import numpy as np
+
+    axis = np.asarray(axis, dtype=float)
+    length = float(np.linalg.norm(axis))
+    vector = np.asarray(vector, dtype=float)
+    if length <= EPS_GEOM:
+        return vector
+    axis = axis / length
+    angle = math.radians(degrees)
+    return (
+        vector * math.cos(angle)
+        + np.cross(axis, vector) * math.sin(angle)
+        + axis * float(np.dot(axis, vector)) * (1.0 - math.cos(angle))
+    )
 
 
 class _ViewCallbacks(NamedTuple):
@@ -12062,6 +12202,16 @@ def _InteractorStyle(  # noqa: N802
             zwar schrittweise: Gemeldet wird die Strecke seit dem letzten
             Ereignis, nicht die seit dem Drücken — sonst wüchse der Winkel
             quadratisch mit der Bewegung."""
+            self._turn_at: tuple[int, int] | None = None
+            """Wo der Zeiger beim letzten Drehschritt stand.
+
+            Dasselbe Muster wie beim Kippen darüber, und aus demselben Grund:
+            Gedreht wird in der Anwendung (:func:`turntable_camera`), damit die
+            Ansicht aufrecht bleibt. **Eine überschriebene ``Rotate``-Methode
+            hätte das nicht getan** — VTKs ``OnMouseMove`` ist C++ und ruft
+            seine eigene, nicht die einer Python-Unterklasse. Gemessen am
+            laufenden Fenster: mit Überschreibung 35,8 Grad Schräglage nach
+            zwölf Zügen, also unverändert die alte Bewegung."""
 
         def _shift(self) -> bool:
             return bool(self.GetInteractor().GetShiftKey())
@@ -12142,9 +12292,56 @@ def _InteractorStyle(  # noqa: N802
                 if step and on_tilt is not None:
                     on_tilt(step)
                 return
+            if self._turn_at is not None:
+                # Dasselbe für das Drehen, und aus demselben Grund: ``self``
+                # rechnet als Drehteller, VTK würde als Trackball daneben
+                # drehen. Ohne das ``return`` täten es beide.
+                now = self._position()
+                step_x = now[0] - self._turn_at[0]
+                step_y = now[1] - self._turn_at[1]
+                self._turn_at = now
+                if step_x or step_y:
+                    self._turn(step_x, step_y)
+                return
             # Der Beobachter verdrängt die eingebaute Verarbeitung — ohne
             # diesen Aufruf stünde die Kamera bei jedem Ziehen still.
             self.OnMouseMove()
+
+        def _turn(self, dx: int, dy: int) -> None:
+            """Ein Drehschritt als Drehteller — die Ansicht bleibt aufrecht.
+
+            **Warum die Anwendung das selbst rechnet**, und zwar mit derselben
+            Begründung wie beim Kippen daneben: VTKs Trackball dreht um das
+            Oben der Kamera und schleift es mit, und ``Rotate`` dafür zu
+            überschreiben trägt nicht — ``OnMouseMove`` ist C++ und ruft die
+            Methode seiner eigenen Klasse, nie die einer Python-Unterklasse.
+            Das ist derselbe Grund, aus dem hier alles über Beobachter läuft.
+
+            Die drei Zeilen am Ende sind die Pflichten, die sonst die
+            Basisklasse erledigt: Schnittebenen nachziehen, das Licht der
+            Kamera folgen lassen — pyvistas Lichtsatz hängt an ihr, ein Körper
+            wäre sonst nach dem ersten Zug von der falschen Seite beleuchtet —
+            und zeichnen.
+            """
+            interactor = self.GetInteractor()
+            renderer = getattr(plotter, "renderer", None)
+            if interactor is None or renderer is None:
+                return
+            camera = renderer.GetActiveCamera()
+            position, up = turntable_camera(
+                camera.GetPosition(),
+                camera.GetFocalPoint(),
+                camera.GetViewUp(),
+                dx,
+                dy,
+                renderer.GetSize(),
+            )
+            camera.SetPosition(*position)
+            camera.SetViewUp(*up)
+            renderer.ResetCameraClippingRange()
+            if interactor.GetLightFollowCamera():
+                renderer.UpdateLightsGeometryToFollowCamera()
+            interactor.Render()
 
         def _left_up(self, *_: Any) -> None:
             painted, self._painting = self._painting, False
@@ -12243,12 +12440,19 @@ def _InteractorStyle(  # noqa: N802
                 # Tiefe dessen, was in der Bildmitte steht, unsichtbar
                 # (§2.9, ``_aim_rotation``).
                 on_rotate_start()
+            self._turn_at = self._position()
+            # **``StartRotate`` bleibt, obwohl die Anwendung selbst dreht.**
+            # Nicht wegen der Bewegung — die fängt ``_mouse_move`` ab —,
+            # sondern wegen der Ereignisse: Erst der Zustandswechsel schickt
+            # beim Loslassen das ``EndInteractionEvent``, an dem ``cameraMoved``
+            # und mit ihm der Schattenwurf hängen (``_watch_camera``).
             self.StartRotate()
             self._tell("rotate")
 
         def _end(self) -> None:
             """Jede Bewegung beenden — welche lief, weiß hier niemand mehr."""
             self._tilt_at = None
+            self._turn_at = None
             self.EndRotate()
             self.EndDolly()
             self.EndPan()

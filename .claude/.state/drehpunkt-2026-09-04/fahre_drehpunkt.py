@@ -160,6 +160,33 @@ def main() -> int:
         f"höchstens {HAELT:.1f} mm — das gedrueckte Rad dreht dieselbe Ansicht",
     )
 
+    # Und die zweite Zusage derselben Geste: Die Ansicht neigt sich nicht.
+    # Geprüft wird hier und nicht in der Suite, weil nur hier der
+    # Interaktionsstil wirklich läuft — ``turntable_camera`` allein sagt
+    # nichts darüber, ob der Stil sie auch ruft.
+    def horizont() -> float:
+        import math
+
+        import numpy as np
+
+        stand, ziel, oben = viewport.camera_pose()[:3]
+        blick = np.asarray(ziel, dtype=float) - np.asarray(stand, dtype=float)
+        blick /= np.linalg.norm(blick)
+        quer = np.cross(blick, np.asarray(oben, dtype=float))
+        quer /= np.linalg.norm(quer)
+        return math.degrees(math.asin(abs(float(quer[2]))))
+
+    von_vorn()
+    for _ in range(12):
+        ziehen("right", 40, 30)
+    schraeg = horizont()
+    gut &= bericht(
+        "die Ansicht neigt sich beim Drehen nicht",
+        f"Horizont {schraeg:.2f} Grad nach zwoelf diagonalen Zuegen",
+        schraeg < 0.5,
+        "unter einem halben Grad — der Trackball kam hier auf ueber sechzig",
+    )
+
     # Gegenprobe: derselbe Zug mit dem alten Weg, also ohne die Bildmitte als
     # Quelle. Die Zahl daneben ist der ganze Unterschied dieser Änderung.
     von_vorn()

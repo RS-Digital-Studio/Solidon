@@ -437,6 +437,24 @@ class _RecordingActor:
 
     def __init__(self) -> None:
         self.prop = _RecordingProperty()
+        self.centre = (0.0, 0.0, 0.0)
+        self.position = (0.0, 0.0, 0.0)
+
+    def GetCenter(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        """Die Mitte, nach der ``_order_by_depth`` sortiert."""
+        return self.centre
+
+    def GetPosition(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        """Der Versatz, den eine Zugvorschau am Actor setzt.
+
+        Sie ist der einzige Zustand, an dem ein Test sehen kann, **welche**
+        Körper ein Zug mitnimmt: Verschoben wird der Actor und nicht die
+        Geometrie (Regel 2), also steht die Antwort nirgends sonst.
+        """
+        return self.position
+
+    def SetPosition(self, x: float, y: float, z: float) -> None:  # noqa: N802 — VTK-Name
+        self.position = (x, y, z)
 
 
 class _RecordingProperty:
@@ -444,6 +462,28 @@ class _RecordingProperty:
 
     def __init__(self) -> None:
         self.culling = "none"
+
+
+class _RecordingRenderer:
+    """Der Renderer, so weit ``_order_by_depth`` und ``_render_now`` ihn nutzen.
+
+    Reihenfolge und Zahl der Aufrufe sind hier nicht die Aussage — die Attrappe
+    steht, damit ``show_scene`` überhaupt bis an sein Ende läuft. Ohne sie hört
+    ein Aufbau mit gesetztem Plotter beim Tiefensortierer auf, und alles
+    dahinter bleibt ungeprüft.
+    """
+
+    def __init__(self) -> None:
+        self.added: list[object] = []
+
+    def RemoveActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
+        pass
+
+    def AddActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
+        self.added.append(actor)
+
+    def ResetCameraClippingRange(self) -> None:  # noqa: N802 — VTK-Name
+        pass
 
 
 class _RecordingPlotter:
@@ -466,7 +506,9 @@ class _RecordingPlotter:
             position=(100.0, -100.0, 80.0),
             focal_point=(0.0, 0.0, 0.0),
             parallel_scale=50.0,
+            GetPosition=lambda: (100.0, -100.0, 80.0),
         )
+        self.renderer = _RecordingRenderer()
         """Die zurückgegebenen Actors, in der Reihenfolge von drawn.
 
         Damit ein Test nicht nur sehen kann, **was** gezeichnet wurde, sondern
@@ -502,6 +544,9 @@ class _RecordingPlotter:
 
     def render(self) -> None:
         self.renders += 1
+
+    def reset_camera(self, **_kwargs: Any) -> None:
+        """Gerahmt wird hier nichts — ``_fit_once_for`` ruft es trotzdem."""
 
     def names(self) -> list[str]:
         """Die Actor-Namen in der Reihenfolge, in der gezeichnet wurde."""
@@ -2002,6 +2047,140 @@ def test_without_a_body_in_the_middle_the_body_centre_decides(
     finally:
         viewport.plotter = None
         viewport.deleteLater()
+
+
+# --- Die Ansicht bleibt beim Drehen aufrecht (§2.9) --------------------------
+
+
+def _horizon_tilt(
+    position: tuple[float, float, float],
+    focal_point: tuple[float, float, float],
+    view_up: tuple[float, float, float],
+) -> float:
+    """Wie schief der Horizont im Bild liegt, in Grad.
+
+    Gemessen an der Bildwaagerechten: Steht sie waagerecht in der Welt, ist
+    ihre Hochkomponente null. Das ist genau das, was man im Fenster als
+    „das Modell kippt zur Seite" sieht.
+    """
+    import math
+
+    import numpy as np
+
+    forward = np.asarray(focal_point, dtype=float) - np.asarray(position, dtype=float)
+    forward /= np.linalg.norm(forward)
+    sideways = np.cross(forward, np.asarray(view_up, dtype=float))
+    sideways /= np.linalg.norm(sideways)
+    return math.degrees(math.asin(abs(float(sideways[2]))))
+
+
+def test_the_view_stays_upright_while_it_turns() -> None:
+    """Zwölf diagonale Züge, und der Horizont steht immer noch waagerecht.
+
+    Robert, 04.09.2026: „das rotieren neigt immer noch statt den winkel zur
+    mitte zu lassen." Der Trackball von VTK dreht um das Oben **der Kamera**
+    und führt es mit; über eine Geste summiert sich daraus eine Schräglage.
+
+    Die Gegenprobe steht im Test, damit die Zahl nicht nur in der
+    Commit-Meldung lebt: Dieselben zwölf Züge, mit ``Azimuth``, ``Elevation``
+    und ``OrthogonalizeViewUp`` gerechnet — also so, wie die Basisklasse es
+    tut —, kippen den Horizont um mehr als sechzig Grad.
+    """
+    from vtkmodules.vtkRenderingCore import vtkCamera
+
+    from app.ui.viewport import turntable_camera
+
+    focal = (0.0, 0.0, 0.0)
+    size = (1100, 650)
+
+    position, up = (0.0, -100.0, 60.0), (0.0, 0.0, 1.0)
+    for _ in range(12):
+        position, up = turntable_camera(position, focal, up, -40, -30, size)
+
+    assert _horizon_tilt(position, focal, up) == pytest.approx(0.0, abs=1e-6), (
+        "der Drehteller lässt die Ansicht aufrecht"
+    )
+
+    camera = vtkCamera()
+    camera.SetPosition(0.0, -100.0, 60.0)
+    camera.SetFocalPoint(*focal)
+    camera.SetViewUp(0.0, 0.0, 1.0)
+    # Dieselbe Formel wie die Basisklasse: 20 Grad je Fensterhälfte, mal ihr
+    # MotionFactor von 10 — für den Zug (-40, -30) also diese zwei Winkel.
+    for _ in range(12):
+        camera.Azimuth(40.0 * 20.0 / 1100 * 10.0)
+        camera.Elevation(30.0 * 20.0 / 650 * 10.0)
+        camera.OrthogonalizeViewUp()
+    alt = _horizon_tilt(camera.GetPosition(), focal, camera.GetViewUp())
+
+    assert alt > 60.0, f"die alte Rechnung muss kippen, sonst prüft der Test nichts — {alt:.1f}°"
+
+
+def test_turning_stops_at_the_pole_and_finds_its_way_back() -> None:
+    """Über das Teil hinaus geht es nicht, und aus der Draufsicht heraus schon.
+
+    Genau senkrecht darüber gibt es kein Oben mehr; deshalb hält die Rechnung
+    ein Grad davor an. Begrenzt heißt aber nicht festgefahren: Der Rückweg
+    nach unten muss offen bleiben, sonst wäre eine Draufsicht — die das Menü
+    setzt — eine Sackgasse.
+    """
+    import math
+
+    from app.ui.viewport import POLE_LIMIT_DEGREES, turntable_camera
+
+    def height_angle(position: tuple[float, float, float]) -> float:
+        length = math.dist(position, (0.0, 0.0, 0.0))
+        return math.degrees(math.asin(position[2] / length))
+
+    focal = (0.0, 0.0, 0.0)
+    size = (1100, 650)
+
+    position, up = (0.0, -100.0, 0.0), (0.0, 0.0, 1.0)
+    for _ in range(100):
+        position, up = turntable_camera(position, focal, up, 0, -30, size)
+
+    assert height_angle(position) == pytest.approx(POLE_LIMIT_DEGREES, abs=1e-6)
+    assert _horizon_tilt(position, focal, up) == pytest.approx(0.0, abs=1e-6)
+
+    # Aus der Draufsicht des Menüs heraus: Blick senkrecht nach unten, das Oben
+    # zeigt nach hinten. Ein Zug muss davon wegführen.
+    position, up = turntable_camera((0.0, 0.0, 150.0), focal, (0.0, 1.0, 0.0), 0, 30, size)
+
+    assert height_angle(position) < POLE_LIMIT_DEGREES, "der Rückweg nach unten ist offen"
+
+
+def test_the_turn_keeps_its_distance_and_the_speed_it_had() -> None:
+    """Der Abstand zur Mitte bleibt, und die Geschwindigkeit ist die gewohnte.
+
+    Das Zweite ist die stille Zusage dieser Änderung: Wer das Neigen abstellt,
+    darf nicht nebenbei die Empfindlichkeit verstellen. Geprüft gegen
+    ``vtkCamera.Azimuth`` mit der Formel der Basisklasse — bei einem rein
+    waagerechten Zug müssen beide denselben Standort ergeben.
+    """
+    import math
+
+    from vtkmodules.vtkRenderingCore import vtkCamera
+
+    from app.ui.viewport import turntable_camera
+
+    focal = (0.0, 0.0, 0.0)
+    size = (1100, 650)
+    start = (0.0, -100.0, 60.0)
+
+    position, up = start, (0.0, 0.0, 1.0)
+    for _ in range(25):
+        position, up = turntable_camera(position, focal, up, 17, -11, size)
+
+    assert math.dist(position, focal) == pytest.approx(math.dist(start, focal))
+
+    camera = vtkCamera()
+    camera.SetPosition(*start)
+    camera.SetFocalPoint(*focal)
+    camera.SetViewUp(0.0, 0.0, 1.0)
+    camera.Azimuth(40.0 * 20.0 / 1100 * 10.0)
+    turned, _ = turntable_camera(start, focal, (0.0, 0.0, 1.0), -40, 0, size)
+
+    assert turned == pytest.approx(tuple(camera.GetPosition())), "dieselbe Empfindlichkeit"
 
 
 def test_a_body_is_split_once_while_its_mesh_stays(
@@ -6232,6 +6411,112 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     assert viewport._shown_colours.get("obj_1") == SELECTED_COLOUR
     assert viewport._shown_colours.get("obj_2") != SELECTED_COLOUR, (
         "die alte Mehrfachauswahl färbt weiter"
+    )
+
+
+def test_a_second_evaluation_keeps_every_selected_body(qt_app: QApplication) -> None:
+    """Eine Auswertung färbt weiter, was gewählt war — auch den zweiten Körper.
+
+    Die beiden Tests darüber und darunter sichern die Färbung und das
+    Einpassen für mehrere Körper. Beide gelten trotzdem nur bis zur nächsten
+    Auswertung: ``show_scene`` beschneidet ``_selected_more`` sorgfältig auf
+    die Körper, die es noch gibt, und rief 170 Zeilen später
+    ``select(self._selected)`` **ohne** ``more``. Da ``select`` das Feld
+    unbedingt aus seinem Argument setzt, war der Beschnitt umsonst — nach jedem
+    Anwenden, Undo oder geänderten Parameter trug nur noch der führende Körper
+    die Auswahlfarbe, und ``_selected_bounds`` rahmte wieder einen einzigen.
+
+    **Die Attrappe steht vor ``show_scene`` und nicht dahinter**, und darin
+    liegt der Grund, warum der Fehler so lange stand: Ohne Plotter kehrt
+    ``show_scene`` in seinem eigenen ``plotter is None``-Zweig zurück, lange
+    bevor der Aufruf kommt, um den es hier geht. Jeder Test dieser Datei, der
+    die Attrappe **danach** setzt, läuft an dieser Stelle vorbei — und offscreen
+    gemessen sah der Fehler deshalb aus wie keiner: Beide Körper blieben
+    gefärbt. Am echten Fenster war es einer (gemessen 04.09.2026).
+    """
+    from app.ui.viewport import Viewport
+
+    ergebnis = _scene_with_two_bodies()
+    beide = tuple(ergebnis.scene.objects)
+
+    viewport = Viewport()
+    viewport.plotter = _RecordingPlotter()
+    viewport.show_scene(ergebnis)
+    viewport.select(beide[0], more=beide[1:])
+    assert viewport.highlighted_objects() == beide, "die Auswahl kam gar nicht erst an"
+
+    # Dieselbe Auswertung ein zweites Mal — wie nach jedem Schritt im Verlauf.
+    viewport.show_scene(ergebnis)
+
+    assert viewport.highlighted_objects() == beide, (
+        f"die Auswertung nahm die weiteren Körper aus der Auswahl: {viewport.highlighted_objects()}"
+    )
+
+
+def test_a_drag_previews_every_selected_body(qt_app: QApplication) -> None:
+    """Was der Zug am Ende bewegt, bewegt schon die Vorschau.
+
+    ``inputs_for_transform`` gibt die ganze Auswahl weiter, der Schritt beim
+    Loslassen trifft also beide Körper — die Vorschau versetzte bis zum
+    04.09.2026 nur den Actor von ``_selected``. Wer zwei Teile markierte und
+    eines zog, sah einen dem Zeiger folgen und beim Loslassen zwei springen.
+
+    **Warum das niemand meldet und der Test trotzdem sein muss:** Das
+    *Ergebnis* stimmt. Der Körper steht am Ende richtig, es hinkt nur die
+    Vorschau — das liest sich wie eine hakelige Anzeige und nicht wie ein
+    Fehler, und so etwas steht Monate (Hinweis solidon-b4, 04.09.2026).
+
+    **Geprüft werden beide Hälften des Fixes.** Dass die Actors sich bewegen,
+    ist die sichtbare; dass **jeder** seinen eigenen Eintrag in
+    ``_actor_home`` bekommt, ist die andere — an ihr hängt
+    ``_undo_body_preview``, das über genau diese Einträge zurückholt. Ohne sie
+    bliebe der zweite Körper nach einem folgenlosen Zug versetzt stehen.
+    """
+    from app.ui.viewport import Viewport
+
+    class _Zeiger:
+        """Was ``_update_cursor`` am Plotter anfasst, und sonst nichts."""
+
+        @staticmethod
+        def setCursor(cursor: object) -> None:  # noqa: N802 — Qt-Name
+            pass
+
+    class _MitZeiger(_RecordingPlotter):
+        # Dasselbe Muster wie bei ``_MitInteractor`` weiter oben: Was nur ein
+        # Test braucht, hängt an einer Unterklasse und nicht an der Attrappe —
+        # ein Feld dort verdeckte, was ein anderer Test selbst setzt.
+        interactor = _Zeiger()
+
+    ergebnis = _scene_with_two_bodies()
+    fuehrend, weiterer = tuple(ergebnis.scene.objects)
+
+    viewport = Viewport()
+    viewport.plotter = _MitZeiger()
+    viewport.show_scene(ergebnis)
+    viewport.select(fuehrend, more=(weiterer,))
+
+    # Der Punkt liegt im führenden Körper — ``can_drag_body_at`` verlangt das.
+    assert viewport.begin_body_drag_at((0.0, 0.0, 0.0)), "der Zug begann gar nicht"
+    viewport.continue_body_drag_at((10.0, 5.0))
+
+    versetzt = {
+        kennung: viewport._actors[kennung].GetPosition()[:2] for kennung in (fuehrend, weiterer)
+    }
+    assert versetzt == {fuehrend: (10.0, 5.0), weiterer: (10.0, 5.0)}, (
+        f"die Vorschau nahm nicht beide Körper mit: {versetzt}"
+    )
+    assert set(viewport._actor_home) == {fuehrend, weiterer}, (
+        f"ohne eigenen Ausgangsort holt _undo_body_preview ihn nicht zurück: "
+        f"{sorted(viewport._actor_home)}"
+    )
+
+    # Und die Gegenrichtung: ein folgenloser Zug lässt keinen versetzt stehen.
+    viewport._undo_body_preview()
+    zurueck = {
+        kennung: viewport._actors[kennung].GetPosition()[:2] for kennung in (fuehrend, weiterer)
+    }
+    assert zurueck == {fuehrend: (0.0, 0.0), weiterer: (0.0, 0.0)}, (
+        f"ein Körper blieb nach dem Zurücknehmen versetzt: {zurueck}"
     )
 
 

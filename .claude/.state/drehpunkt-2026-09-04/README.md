@@ -30,6 +30,7 @@ dort den Körper trifft, sagt keiner von ihnen.
 | die Bildmitte hält beim Drehen | **0,00 mm** gewandert |
 | die Bildmitte hält beim Kippen | **0,00 mm** gewandert |
 | dasselbe nur über `rotation_centre` | **3,14 mm** — der Unterschied dieser Änderung |
+| die Ansicht neigt sich nicht | **0,00 Grad** nach zwölf diagonalen Zügen |
 | über dem Hintergrund | kein Treffer, Rückfall auf die Körpermitte |
 | die Druckplatte zieht nicht | kein Treffer, obwohl die Mitte auf das Bett zeigt |
 
@@ -45,3 +46,22 @@ Wer „Hintergrund" prüfen will, blickt in den Himmel.
 Drehpunkt nicht an sich zieht, hängt allein an der PickList in `_world_at` —
 eine Zeile, die jemand beim Aufräumen für überflüssig halten könnte. Die
 letzte Messung zeigt senkrecht auf das leere Bett und muss nichts finden.
+
+## Die Neigung, und warum dieser Prüfstand sie gefangen hat
+
+Der erste Anlauf gegen das Neigen war eine überschriebene `Rotate`-Methode in
+der Stilklasse. Sie war richtig gerechnet, ihre drei Einheitstests waren grün
+— und **wirkungslos**: Am laufenden Fenster gemessen blieben 35,8 Grad
+Schräglage nach zwölf Zügen, praktisch die alte Bewegung.
+
+> **VTKs `OnMouseMove` ist C++ und ruft die Methode seiner eigenen Klasse,
+> nie die einer Python-Unterklasse.**
+
+Das ist derselbe Grund, aus dem in `viewport.py` alles über `AddObserver`
+läuft. Gedreht wird deshalb im Beobachter (`_mouse_move` → `_turn`), genau wie
+das Kippen daneben, und `turntable_camera` trägt nur die Rechnung.
+
+Die Lehre für den nächsten: **Einheitstests über eine reine Funktion sagen
+nichts darüber, ob jemand sie ruft.** Drei grüne Tests und ein Fenster, das
+sich unverändert verhält, sind kein Widerspruch — sie prüfen verschiedene
+Dinge.

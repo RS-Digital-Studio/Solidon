@@ -1183,3 +1183,43 @@ Plotters eine Attrappe und prüfen damit die Regel, nicht die Kette bis in VTK.
 knapp am Teil vorbeizielt, misst die Toleranz des Zell-Pickers und nicht den
 Hintergrund — sie bekam einen Treffer fünf Millimeter neben der Platte. Wer
 „da ist nichts" prüfen will, blickt in den Himmel.
+
+## Gedreht wird als Drehteller, nicht als Trackball (04.09.2026)
+
+Robert: „das rotieren neigt immer noch statt den winkel zur mitte zu lassen."
+`vtkInteractorStyleTrackballCamera` dreht um das **Oben der Kamera** und führt
+es dabei mit; `OrthogonalizeViewUp` stellt es hinterher nur wieder senkrecht
+zur Blickrichtung, nicht auf. Über eine Geste summiert sich daraus eine
+Schräglage — an einer nackten `vtkCamera` nachgerechnet, zwölf diagonale Züge:
+**62,7 Grad** gegen **0,0** beim Drehteller.
+
+`turntable_camera` dreht waagerecht immer um die Welt-Hochachse und senkrecht
+um die Bildwaagerechte; das Oben folgt daraus, statt mitgeschleift zu werden.
+Die Hebung wird an `POLE_LIMIT_DEGREES` **begrenzt und nicht abgeschnitten** —
+wer fast senkrecht darüber steht, dreht weiter waagerecht und kommt jederzeit
+zurück; aus einer Draufsicht des Menüs führt der Weg ebenso heraus. Die
+Empfindlichkeit ist die der Basisklasse (20 Grad je Fensterhälfte mal ihrem
+`MotionFactor` von 10), damit die Änderung nicht nebenbei die gewohnte
+Geschwindigkeit verstellt. Es gilt für alle fünf Schemata: Cura, Bambu Studio
+und Blender bleiben alle aufrecht, und ein Nachbau, der neigt, wo sein Vorbild
+es nicht tut, ist keiner.
+
+**Der erste Anlauf war eine überschriebene `Rotate`-Methode, und er war
+wirkungslos.** Die Rechnung stimmte, drei Einheitstests waren grün, und am
+laufenden Fenster blieben **35,8 Grad** Schräglage — die alte Bewegung:
+
+> VTKs `OnMouseMove` ist C++ und ruft die Methode **seiner eigenen** Klasse,
+> nie die einer Python-Unterklasse.
+
+Das ist derselbe Grund, aus dem hier alles über `AddObserver` läuft, und die
+Schwester des Abschnitts über `iren.style`: Was pyvista oder VTK selbst führt,
+lässt sich nicht von außen überschreiben — man hängt sich davor. Gedreht wird
+deshalb im Beobachter (`_mouse_move` → `_turn`), genau wie gekippt wird.
+`StartRotate` bleibt trotzdem stehen: nicht für die Bewegung, sondern für das
+`EndInteractionEvent`, an dem `cameraMoved` und der Schattenwurf hängen.
+
+**Und die Lehre über die Prüfung, die teurer war als der Fehler:**
+Einheitstests über eine reine Funktion sagen nichts darüber, ob jemand sie
+ruft. Drei grüne Tests und ein unverändertes Fenster sind kein Widerspruch —
+sie prüfen verschiedene Dinge. Gefangen hat es `.claude/.state/drehpunkt-2026-09-04/`,
+das die Kette am echten Fenster fährt.
