@@ -86,7 +86,7 @@ DENIED: Final[frozenset[str]] = frozenset({ASK_USER})
 _LOOPBACK: Final[frozenset[str]] = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
 
 #: Rechnernamen, die in einem ``Origin`` als „dieser Rechner" gelten.
-_LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost", "::1"})
+LOOPBACK_HOSTS: Final[frozenset[str]] = frozenset({"127.0.0.1", "localhost", "::1"})
 
 
 class Bridge(Protocol):
@@ -110,7 +110,7 @@ def allowed(address: str) -> bool:
     return address in _LOOPBACK
 
 
-def origin_allowed(origin: str | None) -> bool:
+def origin_allowed(origin: str | None, port: int) -> bool:
     """Ob eine Anfrage mit diesem ``Origin`` sprechen darf.
 
     Die dritte Prüfung zur zweiten Auflage — und die einzige, die den Browser
@@ -127,13 +127,28 @@ def origin_allowed(origin: str | None) -> bool:
 
     ``Origin: null`` (aus einer ``file://``-Seite oder einem abgeschotteten
     Rahmen) hat keinen Rechnernamen und fällt damit durch.
+
+    **Verglichen wird der ganze Ursprung, nicht nur der Rechnername.** Bis zum
+    04.09.2026 genügte ein Loopback-Name, und damit stand die Schnittstelle
+    jeder Seite offen, die auf **irgendeinem** Port dieses Rechners liegt —
+    einem Entwicklungsserver auf 3000, der Weboberfläche von ComfyUI auf 8188.
+    Ein Skript dort brauchte keinen Fehler in Solidon, nur einen in seinem
+    eigenen Gastgeber. Der Port gehört deshalb zur Prüfung, und ``https``
+    fällt weg: Diese Schnittstelle spricht kein TLS, ein verschlüsselter
+    Ursprung kann also nicht sie selbst sein.
+
+    ``port`` ist der Port, auf dem der Server wirklich hört — nicht der
+    eingestellte. Beides kann auseinandergehen, wenn die Vergabe dem
+    Betriebssystem überlassen wurde.
     """
     if origin is None:
         return True
     parts = urlsplit(origin)
-    if parts.scheme not in ("http", "https"):
+    if parts.scheme != "http":
         return False
-    return (parts.hostname or "") in _LOOPBACK_HOSTS
+    if (parts.hostname or "") not in LOOPBACK_HOSTS:
+        return False
+    return parts.port == port
 
 
 def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]:

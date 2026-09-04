@@ -162,3 +162,48 @@ def test_every_activation_module_translates_to_c(tmp_path: Path) -> None:
     translated = sorted(entry.name for entry in (tmp_path / "c").rglob("*.c"))
     expected = sorted(entry.name.replace(".py", ".c") for entry in staging.glob("*.py"))
     assert translated == expected
+
+
+def test_nothing_may_shadow_a_boundary_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gehasht wird die ``.py`` — ausgeführt werden kann etwas daneben.
+
+    Die Spec schickt die vier Grenzdateien als Quelltext, damit ``intact()``
+    genau die Datei hasht, aus der Python sie lädt. Diese Zusage hält nur,
+    solange nichts daneben zuerst gefunden wird: CPython nimmt eine ``.pyc``,
+    sobald ihr Kopf zu Änderungszeit und Größe der Quelle passt — beide Felder
+    kann setzen, wer die Installation erreicht —, und der ``FileFinder`` fragt
+    eine Erweiterung gleichen Namens noch davor
+    (Sicherheitsdurchsicht 04.09.2026).
+
+    In der Entwicklung ist ein ``__pycache__`` der Normalfall und keine
+    Manipulation; gesucht wird deshalb nur im gefrorenen Zustand.
+    """
+    import importlib.util
+    import sys
+
+    from app.core.activation.integrity import _no_shadow_beside
+
+    (tmp_path / "core" / "scene").mkdir(parents=True)
+    source = tmp_path / "core" / "scene" / "history.py"
+    source.write_text("x = 1\n", encoding="utf-8")
+    files = {"core/scene/history.py": "0" * 64}
+
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    cached = Path(importlib.util.cache_from_source(str(source)))
+    cached.parent.mkdir(parents=True, exist_ok=True)
+    cached.write_bytes(b"kein echter Bytecode")
+    assert _no_shadow_beside(tmp_path, files), "in der Entwicklung ist ein Cache normal"
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert not _no_shadow_beside(tmp_path, files), "im Paket muss eine .pyc sperren"
+
+    cached.unlink()
+    assert _no_shadow_beside(tmp_path, files), "ohne Schatten läuft es durch"
+
+    for suffix in (".pyd", ".so"):
+        shadow = source.with_suffix(suffix)
+        shadow.write_bytes(b"keine echte Erweiterung")
+        assert not _no_shadow_beside(tmp_path, files), f"{suffix} verdrängt die Quelle"
+        shadow.unlink()

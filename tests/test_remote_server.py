@@ -633,3 +633,88 @@ def test_it_is_off_until_someone_turns_it_on() -> None:
     running = RemoteServer(_Bridge())
 
     assert not running.running
+
+
+def _raw_post(port: int, headers: list[str], body: bytes = b"{}") -> int:
+    """POST über einen rohen Socket, mit genau den angegebenen Kopfzeilen.
+
+    ``post_with_headers`` setzt ``Content-Type`` immer selbst; um zu prüfen,
+    was **ohne** ihn geschieht, braucht es einen Weg daneben. Gibt den
+    Statuscode zurück.
+    """
+    connection = socket.create_connection(("127.0.0.1", port), timeout=5.0)
+    try:
+        head = f"POST {ENDPOINT} HTTP/1.1\r\n" + "".join(f"{one}\r\n" for one in headers)
+        head += f"Content-Length: {len(body)}\r\n\r\n"
+        connection.sendall(head.encode("ascii") + body)
+        answer = b""
+        while b"\r\n" not in answer:
+            piece = connection.recv(256)
+            if not piece:
+                break
+            answer += piece
+        return int(answer.split(b" ")[1]) if b" " in answer else 0
+    finally:
+        connection.close()
+
+
+def test_a_simple_browser_post_never_reaches_the_handler() -> None:
+    """Ein POST mit ``text/plain`` ist für CORS eine *einfache* Anfrage.
+
+    Der Browser schickt sie ohne Preflight ab und verbirgt nur die **Antwort**
+    — ausgeführt wäre der Aufruf trotzdem, und bei einer Schnittstelle, die
+    Operationen am offenen Dokument auslöst, ist das der Unterschied zwischen
+    Mitlesen und Mitschreiben. Mit dem Zwang auf ``application/json`` braucht
+    dieselbe Anfrage einen Preflight, auf den dieser Server nicht antwortet:
+    Sie fällt geschlossen aus (Sicherheitsdurchsicht 04.09.2026).
+    """
+    running = RemoteServer(_Bridge(), port=0)
+    running.start()
+    try:
+        eigen = f"Host: 127.0.0.1:{running.port}"
+
+        assert _raw_post(running.port, [eigen, "Content-Type: text/plain;charset=UTF-8"]) == 415
+        assert _raw_post(running.port, [eigen, "Content-Type: text/plain"]) == 415
+        assert _raw_post(running.port, [eigen]) == 415, "gar keiner ist auch keiner"
+
+        # Der echte Weg bleibt offen — ein MCP-Client schickt JSON.
+        assert _raw_post(running.port, [eigen, "Content-Type: application/json"]) == 200
+        assert (
+            _raw_post(running.port, [eigen, "Content-Type: application/json; charset=utf-8"]) == 200
+        ), "der Parameter dahinter gehört dazu"
+    finally:
+        running.stop()
+
+
+def test_a_rebound_domain_does_not_pass_as_this_machine() -> None:
+    """Die ``Host``-Kopfzeile muss diesen Server benennen.
+
+    Bei einem DNS-Rebinding zeigt eine Angreiferdomäne auf 127.0.0.1. Der
+    Ursprung fängt das schon, weil die Seite ihren eigenen Namen mitschickt —
+    aber das ist eine glückliche Überdeckung und keine zweite Verteidigung:
+    Wer ``origin_allowed`` je weitete, nähme sie mit.
+
+    Der Port darf dabei fehlen, und das ist Absicht: ``Host: 127.0.0.1`` ohne
+    Port ist eine gültige Kopfzeile, und ein Bestandstest schickt sie.
+    """
+    running = RemoteServer(_Bridge(), port=0)
+    running.start()
+    try:
+        json_kopf = "Content-Type: application/json"
+
+        assert _raw_post(running.port, ["Host: angreifer.example", json_kopf]) == 403
+        assert (
+            _raw_post(running.port, [f"Host: angreifer.example:{running.port}", json_kopf]) == 403
+        )
+        assert _raw_post(running.port, ["Host: 127.0.0.1.angreifer.example", json_kopf]) == 403, (
+            "der Name endet woanders"
+        )
+        assert _raw_post(running.port, [f"Host: 127.0.0.1:{running.port + 1}", json_kopf]) == 403, (
+            "ein genannter Port muss stimmen"
+        )
+
+        assert _raw_post(running.port, ["Host: 127.0.0.1", json_kopf]) == 200, "ohne Port gültig"
+        assert _raw_post(running.port, [f"Host: localhost:{running.port}", json_kopf]) == 200
+        assert _raw_post(running.port, [f"Host: [::1]:{running.port}", json_kopf]) == 200
+    finally:
+        running.stop()

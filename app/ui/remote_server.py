@@ -25,6 +25,7 @@ import time
 from contextlib import suppress
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.parse import urlsplit
 
 from PySide6.QtCore import QCoreApplication, QEvent, QObject
 
@@ -222,6 +223,48 @@ class WindowBridge(QObject):
         return True
 
 
+def _host_allowed(host: str | None, port: int) -> bool:
+    """Ob die ``Host``-Kopfzeile diesen Server benennt.
+
+    Geprüft wird der **Name**, und der Port nur, wenn er dabeisteht. Genau der
+    Name ist die Aussage: Bei einem DNS-Rebinding — einer Angreiferdomäne, die
+    auf 127.0.0.1 zeigt — steht dort ``angreifer.example`` und nicht der
+    eigene Rechner.
+
+    **Der Port darf fehlen, und das ist keine Nachlässigkeit.** Ein
+    Bestandstest hat es gefangen: Er schickt ``Host: 127.0.0.1`` ohne Port,
+    und das ist eine gültige Kopfzeile. Den Port zu verlangen hätte einen
+    legitimen Client abgewiesen, ohne die Aussage über den Namen zu
+    verbessern.
+
+    Eine fehlende Kopfzeile fällt durch — HTTP/1.1 verlangt sie.
+    """
+    if not host:
+        return False
+    parts = urlsplit(f"//{host.strip().lower()}")
+    try:
+        named = parts.port
+    except ValueError:
+        # Ein Port, der keine Zahl ist. ``urlsplit`` wirft erst beim Zugriff.
+        return False
+    if (parts.hostname or "") not in remote.LOOPBACK_HOSTS:
+        return False
+    return named in (None, port)
+
+
+def _json_request(content_type: str | None) -> bool:
+    """Ob die Anfrage sich als JSON ausgibt.
+
+    Geprüft wird nur der Medientyp; Parameter wie ``charset=utf-8`` gehören
+    dazu und werden abgeschnitten. MCP-Clients schicken ``application/json``
+    von sich aus — für sie ändert sich nichts. Was die Zeile abweist, ist die
+    *einfache* Anfrage eines Browsers, die ohne Preflight abgeht.
+    """
+    if not content_type:
+        return False
+    return content_type.split(";")[0].strip().lower() == "application/json"
+
+
 class _Handler(BaseHTTPRequestHandler):
     """JSON-RPC über POST. Keine Sitzung, kein Zustand, kein Verzeichnis."""
 
@@ -257,12 +300,42 @@ class _Handler(BaseHTTPRequestHandler):
             _log.warning("remote call refused from %s", self.client_address[0])
             self._send(403, b"")
             return
+        # ``server_port`` und nicht ``server_address[1]``: Die Adresse ist am
+        # ``BaseServer`` als Vereinigung mit ``str`` und ``Buffer`` typisiert
+        # und damit nicht indexierbar. ``HTTPServer`` setzt den Port in
+        # ``server_bind`` als ``int``, und das ist genau die Frage hier.
+        server = self.server
+        assert isinstance(server, _BoundedHTTPServer)
+        port = server.server_port
         origin = self.headers.get("Origin")
-        if not remote.origin_allowed(origin):
+        if not remote.origin_allowed(origin, port):
             # Die dritte, und die einzige, die einen Browser aufhält: der sitzt
             # auf diesem Rechner und besteht die Adressprüfung.
             _log.warning("remote call refused, origin %s", origin)
             self._send(403, b"")
+            return
+        if not _host_allowed(self.headers.get("Host"), port):
+            # Die vierte, und sie ist bewusst redundant. Ein DNS-Rebinding —
+            # eine Angreiferdomäne, die auf 127.0.0.1 zeigt — scheitert schon
+            # an der Ursprungsprüfung, weil die Seite ihren eigenen Namen im
+            # ``Origin`` mitschickt. Das ist aber eine glückliche Überdeckung
+            # und keine zweite Verteidigung: Wer ``origin_allowed`` je
+            # weitete, nähme sie mit. Der ``Host`` steht deshalb eigenständig.
+            _log.warning("remote call refused, host %s", self.headers.get("Host"))
+            self._send(403, b"")
+            return
+        if not _json_request(self.headers.get("Content-Type")):
+            # Und die fünfte, die vor dem Browser wirkt statt nach ihm: Ein
+            # ``Content-Type: application/json`` macht aus einer
+            # Fremdursprungsanfrage eine, die erst einen Preflight braucht.
+            # Auf ``OPTIONS`` antwortet dieser Server nicht, also fällt sie
+            # geschlossen aus — der Aufruf erreicht den Handler nie. Ohne
+            # diese Zeile war ein POST mit ``text/plain`` eine *einfache*
+            # Anfrage: Der Browser schickt sie ohne Rückfrage ab und verbirgt
+            # nur die Antwort. Verborgen ist dann die Antwort, ausgeführt der
+            # Aufruf.
+            _log.warning("remote call refused, content type %s", self.headers.get("Content-Type"))
+            self._send(415, b"")
             return
         length, length_error = self._content_length()
         if length_error is not None:

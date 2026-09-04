@@ -218,17 +218,33 @@ def test_a_web_page_cannot_drive_the_interface() -> None:
     Schnittstelle, die Operationen am offenen Dokument auslöst, ist das der
     Unterschied zwischen Mitlesen und Mitschreiben.
     """
-    assert remote.origin_allowed(None), "ein MCP-Client ist kein Browser und schickt keinen"
-    assert remote.origin_allowed("http://127.0.0.1:8787")
-    assert remote.origin_allowed("http://localhost:3000")
-    assert remote.origin_allowed("https://localhost")
-    assert remote.origin_allowed("http://[::1]:8787")
+    assert remote.origin_allowed(None, 8787), "ein MCP-Client ist kein Browser und schickt keinen"
+    assert remote.origin_allowed("http://127.0.0.1:8787", 8787)
+    assert remote.origin_allowed("http://localhost:8787", 8787)
+    assert remote.origin_allowed("http://[::1]:8787", 8787)
 
-    assert not remote.origin_allowed("https://beispiel.de")
-    assert not remote.origin_allowed("http://127.0.0.1.angreifer.de"), "der Name endet woanders"
-    assert not remote.origin_allowed("null"), "file:// und abgeschottete Rahmen"
-    assert not remote.origin_allowed(""), "kein Schema, kein Rechnername"
-    assert not remote.origin_allowed("chrome-extension://abcdef")
+    assert not remote.origin_allowed("https://beispiel.de", 8787)
+    assert not remote.origin_allowed("http://127.0.0.1.angreifer.de", 8787), (
+        "der Name endet woanders"
+    )
+    assert not remote.origin_allowed("null", 8787), "file:// und abgeschottete Rahmen"
+    assert not remote.origin_allowed("", 8787), "kein Schema, kein Rechnername"
+    assert not remote.origin_allowed("chrome-extension://abcdef", 8787)
+
+    # **Ein fremder Port auf demselben Rechner ist ein fremder Ursprung.**
+    # Bis zum 04.09.2026 stand hier das Gegenteil, und zwar ausdrücklich: ein
+    # Entwicklungsserver auf 3000 galt als „dieser Rechner". Damit brauchte
+    # eine Angreiferseite keinen Fehler in Solidon, sondern nur einen in dem
+    # Programm, das gerade auf einem anderen Loopback-Port eine
+    # Weboberfläche zeigt — ComfyUI auf 8188 ist bei Weg 3 der Normalfall
+    # (Sicherheitsdurchsicht 04.09.2026).
+    assert not remote.origin_allowed("http://localhost:3000", 8787), "fremder Port"
+    assert not remote.origin_allowed("http://127.0.0.1:8188", 8787), "ComfyUI daneben"
+    assert not remote.origin_allowed("http://127.0.0.1", 8787), "ohne Port ist es Port 80"
+
+    # ``https`` fällt weg: Diese Schnittstelle spricht kein TLS, ein
+    # verschlüsselter Ursprung kann also nicht sie selbst sein.
+    assert not remote.origin_allowed("https://localhost:8787", 8787), "wir sprechen kein TLS"
 
 
 def test_calling_an_operation_that_does_not_exist_says_so() -> None:
