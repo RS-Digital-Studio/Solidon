@@ -16,6 +16,22 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.3.3
+
+### Vista y selección
+
+- El primer clic selecciona la pieza, el segundo el taladro que hay debajo, y un clic al lado anula la selección; el control elegido se mantiene en todo momento.
+- Al girar, el horizonte permanece horizontal: tras un gesto la vista queda tan recta como antes, en cada uno de los cinco controles.
+- El control y el tema elegidos en los ajustes aparecen también marcados en el menú *Vista*.
+- Varios cuerpos seleccionados siguen seleccionados tras un nuevo cálculo, y un arrastre los mueve juntos.
+
+### Trabajo en el proyecto
+
+- Un proyecto se puede guardar también cuando una característica lleva un aviso.
+- Cambiar entre dos mapas de análisis del mismo cuerpo muestra al instante lo que ya está calculado.
+- Un proyecto nuevo empieza sin restos de una vista previa que seguía abierta al cambiar.
+- Mediante el control remoto, *Deshacer* retira exactamente el paso indicado y no el último.
+
 ## 0.3.2
 
 ### Editar características reconocidas

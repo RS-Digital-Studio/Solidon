@@ -15,6 +15,22 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.3.3
+
+### Vista e selezione
+
+- Il primo clic seleziona il pezzo, il secondo il foro sottostante, un clic accanto annulla la selezione, e il comando impostato resta valido per tutto il tempo.
+- Ruotando, l'orizzonte resta orizzontale: dopo un gesto la vista è dritta come prima, in ciascuno dei cinque comandi.
+- Il comando e il tema scelti nelle impostazioni sono spuntati anche nel menu *Vista*.
+- Più corpi selezionati restano selezionati dopo un nuovo calcolo, e un trascinamento li muove insieme.
+
+### Lavoro sul progetto
+
+- Un progetto si può salvare anche quando a una caratteristica è allegata una nota.
+- Passare da una mappa di analisi all'altra sullo stesso corpo mostra subito ciò che è già calcolato.
+- Un progetto nuovo comincia senza resti di un'anteprima rimasta aperta al momento del cambio.
+- Tramite il comando a distanza, *Annulla* ritira esattamente il passo indicato e non l'ultimo.
+
 ## 0.3.2
 
 ### Modificare le caratteristiche riconosciute

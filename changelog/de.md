@@ -40,6 +40,22 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.3.3
+
+### Anzeige und Auswahl
+
+- Der erste Klick wählt das Teil, der zweite die Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die eingestellte Steuerung gilt dabei durchgehend.
+- Beim Drehen bleibt der Horizont waagerecht: Die Ansicht steht nach einer Geste so aufrecht wie vorher, in jeder der fünf Steuerungen.
+- Die in den Einstellungen gewählte Steuerung und das Thema stehen auch im Menü *Ansicht* angehakt.
+- Mehrere gewählte Körper bleiben nach einer Neuberechnung gewählt, und ein Zug bewegt sie zusammen.
+
+### Arbeiten am Projekt
+
+- Ein Projekt lässt sich auch dann speichern, wenn an einem Merkmal ein Hinweis hängt.
+- Der Wechsel zwischen zwei Analysekarten desselben Körpers zeigt sofort, was schon gerechnet ist.
+- Ein neues Projekt beginnt ohne Reste einer Vorschau, die beim Wechsel noch offen stand.
+- Über die Fernsteuerung nimmt *Zurücknehmen* genau den genannten Schritt zurück und nicht den obersten.
+
 ## 0.3.2
 
 ### Erkannte Merkmale bearbeiten

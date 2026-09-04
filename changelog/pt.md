@@ -15,6 +15,22 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.3.3
+
+### Exibição e seleção
+
+- O primeiro clique seleciona a peça, o segundo o furo por baixo, e um clique ao lado cancela a seleção; o controlo escolhido mantém-se todo o tempo.
+- Ao rodar, o horizonte permanece na horizontal: depois de um gesto a vista fica tão direita como antes, em cada um dos cinco controlos.
+- O controlo e o tema escolhidos nas definições aparecem também assinalados no menu *Exibição*.
+- Vários corpos selecionados continuam selecionados após um novo cálculo, e um arrasto move-os em conjunto.
+
+### Trabalho no projeto
+
+- Um projeto pode ser guardado mesmo quando uma característica traz um aviso.
+- Alternar entre dois mapas de análise do mesmo corpo mostra de imediato o que já está calculado.
+- Um projeto novo começa sem restos de uma pré-visualização que ficara aberta na altura da mudança.
+- Através do controlo remoto, *Anular* retira exatamente o passo indicado e não o último.
+
 ## 0.3.2
 
 ### Editar características reconhecidas

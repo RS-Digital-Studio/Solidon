@@ -15,6 +15,22 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.3.3
+
+### Display and selection
+
+- The first click selects the part, the second the bore beneath it, a click beside it clears the selection — and the chosen navigation applies throughout.
+- Rotating keeps the horizon level: after a gesture the view stands as upright as before, in each of the five navigation schemes.
+- The navigation and the theme chosen in the settings are ticked in the *View* menu as well.
+- Several selected bodies stay selected after a recalculation, and one drag moves them together.
+
+### Working on the project
+
+- A project can be saved even when a note is attached to a feature.
+- Switching between two analysis maps of the same body shows at once what has already been computed.
+- A new project starts without remnants of a preview that was still open at the time.
+- Through remote control, *Undo* takes back exactly the step named, not the topmost one.
+
 ## 0.3.2
 
 ### Editing recognised features

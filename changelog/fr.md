@@ -16,6 +16,22 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.3.3
+
+### Affichage et sélection
+
+- Le premier clic sélectionne la pièce, le deuxième le perçage en dessous, un clic à côté annule la sélection — et la navigation choisie reste valable tout du long.
+- La rotation garde l'horizon à l'horizontale : après un geste, la vue est aussi droite qu'avant, dans chacune des cinq navigations.
+- La navigation et le thème choisis dans les réglages sont également cochés dans le menu *Affichage*.
+- Plusieurs corps sélectionnés le restent après un nouveau calcul, et un glissement les déplace ensemble.
+
+### Travail sur le projet
+
+- Un projet peut être enregistré même lorsqu'une remarque est attachée à une caractéristique.
+- Passer d'une carte d'analyse à l'autre sur le même corps montre aussitôt ce qui est déjà calculé.
+- Un nouveau projet démarre sans restes d'un aperçu resté ouvert au moment du changement.
+- Par la commande à distance, *Annuler* retire exactement l'étape nommée et non la dernière.
+
 ## 0.3.2
 
 ### Modifier les caractéristiques reconnues
