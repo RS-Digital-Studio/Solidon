@@ -1,123 +1,93 @@
 {
-  "version": "0.3.2",
+  "version": "0.3.3",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.3.2.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.2.exe",
-      "size": 219358595,
-      "sha256": "ba9249280c49a2e55231f41e5f91bf0ab16e302795c2bac1fa7fda6b8f97a36d"
+      "file": "Solidon3D-Setup-0.3.3.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.3.exe",
+      "size": 218620652,
+      "sha256": "3f7adacb861feb984341bbaa41ef9c037af4e263789c412f97d6d1c1241276f4"
     },
     "linux": {
-      "file": "Solidon3D-0.3.2-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.2-x86_64.flatpak",
-      "size": 272117112,
-      "sha256": "9dac54257cef3a9db2b9bb8638431940743ce646c220a911e5a0ef5a39c9af17"
+      "file": "Solidon3D-0.3.3-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.3-x86_64.flatpak",
+      "size": 271414464,
+      "sha256": "2d78d6169e820fc282ff1f26d31fda3ef28ae011a4fc0046ebcb70b45c364718"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.3.2-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.2-macos-arm64.pkg",
-      "size": 295876255,
-      "sha256": "d18c8bd36ae57895a2ebc3f4e4d63349efd98ffd8d346887b66d1d98ac3cfc1c"
+      "file": "Solidon3D-0.3.3-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.3-macos-arm64.pkg",
+      "size": 295135098,
+      "sha256": "0d6fca6be475e1afc39a20cb258e1226f9f3e7e6c131930cf0c7fc97dfb59240"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.3.2-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.2-macos-x86_64.pkg",
-      "size": 329406150,
-      "sha256": "26ef3b23c923276db5874b7ae013e22323392b66c298175228d89c7467294456"
+      "file": "Solidon3D-0.3.3-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.3-macos-x86_64.pkg",
+      "size": 328685970,
+      "sha256": "107d5ba75799ea68435c50e338353141bbce3b6126c9601a9b1f2dc1b5cf30d1"
     }
   },
   "changes": {
     "de": [
-      "Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.",
-      "Auch *Bohrung verschließen* füllt genau die Bohrung: Der Pfropfen ragt nicht mehr in eine Nut und macht das Teil nicht dicker.",
-      "Eine Kugelpfanne wird auch in fein vernetzten Modellen als Kugelfläche erkannt und nicht als Senkung; sie trägt damit die Handlungen, die zu ihr gehören.",
-      "Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.",
-      "Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.",
-      "Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren.",
-      "Die Vorschau verschwindet, sobald die Änderung übernommen ist; bisher lag der Vergleichskörper mit dem Band „noch nicht übernommen“ über der fertigen Bohrung.",
-      "Die Leertaste blendet wieder nur dort zwischen Vorher und Nachher um, wo eine Vorschau steht, und nicht mehr überall in der Anwendung.",
-      "Eine Bohrung leuchtet nicht mehr in der Auswahlfarbe, wenn gar nichts ausgewählt ist.",
-      "Drehbogen, Schatten, Zugmarken und der Ring des Pinsels verschwinden mit dem Vorgang, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen.",
-      "Ein Maß bleibt bei seinem Teil, auch wenn die Ansicht auf eine andere Druckplatte oder auf alle umschaltet.",
-      "Passt nicht alles auf eine Platte, entstehen so viele Platten wie nötig; bisher blieb der Rest neben dem Bett liegen, wo er nicht druckbar ist.",
-      "Der Merkmalsspeicher großer Modelle bleibt begrenzt; bisher konnte er bis zu einem Gigabyte belegen."
+      "Der erste Klick wählt das Teil, der zweite die Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die eingestellte Steuerung gilt dabei durchgehend.",
+      "Beim Drehen bleibt der Horizont waagerecht: Die Ansicht steht nach einer Geste so aufrecht wie vorher, in jeder der fünf Steuerungen.",
+      "Die in den Einstellungen gewählte Steuerung und das Thema stehen auch im Menü *Ansicht* angehakt.",
+      "Mehrere gewählte Körper bleiben nach einer Neuberechnung gewählt, und ein Zug bewegt sie zusammen.",
+      "Ein Projekt lässt sich auch dann speichern, wenn an einem Merkmal ein Hinweis hängt.",
+      "Der Wechsel zwischen zwei Analysekarten desselben Körpers zeigt sofort, was schon gerechnet ist.",
+      "Ein neues Projekt beginnt ohne Reste einer Vorschau, die beim Wechsel noch offen stand.",
+      "Über die Fernsteuerung nimmt *Zurücknehmen* genau den genannten Schritt zurück und nicht den obersten."
     ],
     "en": [
-      "Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.",
-      "The command *Fill a bore* now fills exactly the bore as well: the plug no longer protrudes into a groove or makes the part thicker.",
-      "A spherical socket is recognised as a sphere and not as a countersink even in finely meshed models, so it carries the actions that belong to it.",
-      "A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.",
-      "When rotating too, a through hole says if it no longer goes through at its new orientation.",
-      "A newly created feature appears at the end of the object tree, not in the middle of the older ones.",
-      "The preview disappears once the change is applied; until now the comparison body with its “not yet applied” banner stayed on top of the finished hole.",
-      "The space bar again toggles between before and after only where a preview is shown, and no longer everywhere in the application.",
-      "A hole no longer glows in the selection colour when nothing is selected at all.",
-      "The rotation arc, the shadow, the drag markers and the brush ring disappear with the action they belong to — including on tool change, undo or closing the project.",
-      "A measurement stays with its part, even when the view switches to another print bed or to all of them.",
-      "If not everything fits on one bed, as many beds are created as needed; until now the remainder was left beside the bed, where it cannot be printed.",
-      "The feature cache of large models stays bounded; until now it could occupy up to a gigabyte."
+      "The first click selects the part, the second the bore beneath it, a click beside it clears the selection — and the chosen navigation applies throughout.",
+      "Rotating keeps the horizon level: after a gesture the view stands as upright as before, in each of the five navigation schemes.",
+      "The navigation and the theme chosen in the settings are ticked in the *View* menu as well.",
+      "Several selected bodies stay selected after a recalculation, and one drag moves them together.",
+      "A project can be saved even when a note is attached to a feature.",
+      "Switching between two analysis maps of the same body shows at once what has already been computed.",
+      "A new project starts without remnants of a preview that was still open at the time.",
+      "Through remote control, *Undo* takes back exactly the step named, not the topmost one."
     ],
     "es": [
-      "Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.",
-      "El comando *Cerrar un taladro* rellena ahora exactamente el taladro: el tapón ya no sobresale hacia una ranura ni engrosa la pieza.",
-      "Una cuenca esférica se reconoce como superficie esférica y no como avellanado, también en modelos de malla fina, y ofrece así las acciones que le corresponden.",
-      "Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.",
-      "También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.",
-      "Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores.",
-      "La vista previa desaparece en cuanto se aplica el cambio; hasta ahora el cuerpo de comparación con la banda «aún no aplicado» quedaba sobre el taladro terminado.",
-      "La barra espaciadora vuelve a alternar entre antes y después solo donde hay una vista previa, y ya no en toda la aplicación.",
-      "Un taladro ya no se ilumina en el color de selección cuando no hay nada seleccionado.",
-      "El arco de giro, la sombra, las marcas de arrastre y el anillo del pincel desaparecen con la acción a la que pertenecen, también al cambiar de herramienta o cerrar.",
-      "Una medida permanece en su pieza, aunque la vista cambie a otra placa de impresión o a todas.",
-      "Si no cabe todo en una placa, se crean tantas placas como haga falta; hasta ahora el resto quedaba junto a la mesa, donde no se puede imprimir.",
-      "La memoria de características de modelos grandes se mantiene acotada; hasta ahora podía ocupar hasta un gigabyte."
+      "El primer clic selecciona la pieza, el segundo el taladro que hay debajo, y un clic al lado anula la selección; el control elegido se mantiene en todo momento.",
+      "Al girar, el horizonte permanece horizontal: tras un gesto la vista queda tan recta como antes, en cada uno de los cinco controles.",
+      "El control y el tema elegidos en los ajustes aparecen también marcados en el menú *Vista*.",
+      "Varios cuerpos seleccionados siguen seleccionados tras un nuevo cálculo, y un arrastre los mueve juntos.",
+      "Un proyecto se puede guardar también cuando una característica lleva un aviso.",
+      "Cambiar entre dos mapas de análisis del mismo cuerpo muestra al instante lo que ya está calculado.",
+      "Un proyecto nuevo empieza sin restos de una vista previa que seguía abierta al cambiar.",
+      "Mediante el control remoto, *Deshacer* retira exactamente el paso indicado y no el último."
     ],
     "fr": [
-      "Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.",
-      "La commande *Reboucher un perçage* comble désormais exactement le perçage : le bouchon ne dépasse plus dans une rainure et n'épaissit plus la pièce.",
-      "Une cuvette sphérique est reconnue comme surface sphérique et non comme fraisure, même dans un maillage fin, et porte donc les actions qui lui reviennent.",
-      "Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.",
-      "Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.",
-      "Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes.",
-      "L'aperçu disparaît dès que la modification est appliquée ; jusqu'ici le corps de comparaison portant « pas encore appliqué » restait au-dessus du perçage terminé.",
-      "La barre d'espace bascule de nouveau entre avant et après uniquement là où un aperçu est affiché, et non plus partout dans l'application.",
-      "Un perçage ne s'illumine plus dans la couleur de sélection lorsque rien n'est sélectionné.",
-      "L'arc de rotation, l'ombre, les repères de glissement et l'anneau du pinceau disparaissent avec l'action à laquelle ils appartiennent, y compris au changement d'outil ou à la fermeture.",
-      "Une mesure reste sur sa pièce, même si la vue passe à un autre plateau d'impression ou à tous.",
-      "Si tout ne tient pas sur un plateau, autant de plateaux que nécessaire sont créés ; jusqu'ici le reste restait à côté du plateau, où il n'est pas imprimable.",
-      "La mémoire des caractéristiques des grands modèles reste bornée ; jusqu'ici elle pouvait occuper jusqu'à un gigaoctet."
+      "Le premier clic sélectionne la pièce, le deuxième le perçage en dessous, un clic à côté annule la sélection — et la navigation choisie reste valable tout du long.",
+      "La rotation garde l'horizon à l'horizontale : après un geste, la vue est aussi droite qu'avant, dans chacune des cinq navigations.",
+      "La navigation et le thème choisis dans les réglages sont également cochés dans le menu *Affichage*.",
+      "Plusieurs corps sélectionnés le restent après un nouveau calcul, et un glissement les déplace ensemble.",
+      "Un projet peut être enregistré même lorsqu'une remarque est attachée à une caractéristique.",
+      "Passer d'une carte d'analyse à l'autre sur le même corps montre aussitôt ce qui est déjà calculé.",
+      "Un nouveau projet démarre sans restes d'un aperçu resté ouvert au moment du changement.",
+      "Par la commande à distance, *Annuler* retire exactement l'étape nommée et non la dernière."
     ],
     "it": [
-      "Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.",
-      "Il comando *Chiudi un foro* riempie ora esattamente il foro: il tappo non sporge più in una scanalatura né ingrossa il pezzo.",
-      "Una sede sferica viene riconosciuta come superficie sferica e non come svasatura, anche in modelli a mesh fitta, e offre così le azioni che le competono.",
-      "Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.",
-      "Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.",
-      "Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti.",
-      "L'anteprima scompare appena la modifica è applicata; finora il corpo di confronto con la fascia «non ancora applicato» restava sopra il foro finito.",
-      "La barra spaziatrice torna ad alternare prima e dopo solo dove c'è un'anteprima, e non più ovunque nell'applicazione.",
-      "Un foro non si illumina più nel colore della selezione quando non è selezionato nulla.",
-      "L'arco di rotazione, l'ombra, i segni di trascinamento e l'anello del pennello scompaiono con l'azione a cui appartengono, anche al cambio di strumento o alla chiusura.",
-      "Una misura resta sul suo pezzo, anche se la vista passa a un altro piano di stampa o a tutti.",
-      "Se non tutto entra su un piano, vengono creati tanti piani quanti servono; finora il resto restava accanto al piano, dove non è stampabile.",
-      "La memoria delle caratteristiche dei modelli grandi resta limitata; finora poteva occupare fino a un gigabyte."
+      "Il primo clic seleziona il pezzo, il secondo il foro sottostante, un clic accanto annulla la selezione, e il comando impostato resta valido per tutto il tempo.",
+      "Ruotando, l'orizzonte resta orizzontale: dopo un gesto la vista è dritta come prima, in ciascuno dei cinque comandi.",
+      "Il comando e il tema scelti nelle impostazioni sono spuntati anche nel menu *Vista*.",
+      "Più corpi selezionati restano selezionati dopo un nuovo calcolo, e un trascinamento li muove insieme.",
+      "Un progetto si può salvare anche quando a una caratteristica è allegata una nota.",
+      "Passare da una mappa di analisi all'altra sullo stesso corpo mostra subito ciò che è già calcolato.",
+      "Un progetto nuovo comincia senza resti di un'anteprima rimasta aperta al momento del cambio.",
+      "Tramite il comando a distanza, *Annulla* ritira esattamente il passo indicato e non l'ultimo."
     ],
     "pt": [
-      "Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.",
-      "O comando *Fechar furo* preenche agora exatamente o furo: o tampão já não entra numa ranhura nem engrossa a peça.",
-      "Uma sede esférica é reconhecida como superfície esférica e não como escareamento, mesmo em modelos de malha fina, oferecendo as ações que lhe pertencem.",
-      "Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.",
-      "Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.",
-      "Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores.",
-      "A pré-visualização desaparece assim que a alteração é aplicada; até agora o corpo de comparação com a faixa «ainda não aplicado» ficava sobre o furo terminado.",
-      "A barra de espaços volta a alternar entre antes e depois apenas onde há uma pré-visualização, e já não em toda a aplicação.",
-      "Um furo já não brilha na cor de seleção quando não há nada selecionado.",
-      "O arco de rotação, a sombra, as marcas de arrasto e o anel do pincel desaparecem com a ação a que pertencem, também ao mudar de ferramenta ou fechar o projeto.",
-      "Uma medida permanece na sua peça, mesmo que a vista mude para outra mesa de impressão ou para todas.",
-      "Se não couber tudo numa mesa, são criadas tantas mesas quantas forem necessárias; até agora o resto ficava ao lado da mesa, onde não é imprimível.",
-      "A memória de características de modelos grandes mantém-se limitada; até agora podia ocupar até um gigabyte."
+      "O primeiro clique seleciona a peça, o segundo o furo por baixo, e um clique ao lado cancela a seleção; o controlo escolhido mantém-se todo o tempo.",
+      "Ao rodar, o horizonte permanece na horizontal: depois de um gesto a vista fica tão direita como antes, em cada um dos cinco controlos.",
+      "O controlo e o tema escolhidos nas definições aparecem também assinalados no menu *Exibição*.",
+      "Vários corpos selecionados continuam selecionados após um novo cálculo, e um arrasto move-os em conjunto.",
+      "Um projeto pode ser guardado mesmo quando uma característica traz um aviso.",
+      "Alternar entre dois mapas de análise do mesmo corpo mostra de imediato o que já está calculado.",
+      "Um projeto novo começa sem restos de uma pré-visualização que ficara aberta na altura da mudança.",
+      "Através do controlo remoto, *Anular* retira exatamente o passo indicado e não o último."
     ]
   },
   "notes_by_language": {
@@ -131,185 +101,125 @@
   "groups": {
     "de": [
       {
-        "title": "Erkannte Merkmale bearbeiten",
-        "points": [
-          "Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.",
-          "Auch *Bohrung verschließen* füllt genau die Bohrung: Der Pfropfen ragt nicht mehr in eine Nut und macht das Teil nicht dicker.",
-          "Eine Kugelpfanne wird auch in fein vernetzten Modellen als Kugelfläche erkannt und nicht als Senkung; sie trägt damit die Handlungen, die zu ihr gehören.",
-          "Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.",
-          "Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.",
-          "Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren."
-        ]
-      },
-      {
         "title": "Anzeige und Auswahl",
         "points": [
-          "Die Vorschau verschwindet, sobald die Änderung übernommen ist; bisher lag der Vergleichskörper mit dem Band „noch nicht übernommen“ über der fertigen Bohrung.",
-          "Die Leertaste blendet wieder nur dort zwischen Vorher und Nachher um, wo eine Vorschau steht, und nicht mehr überall in der Anwendung.",
-          "Eine Bohrung leuchtet nicht mehr in der Auswahlfarbe, wenn gar nichts ausgewählt ist.",
-          "Drehbogen, Schatten, Zugmarken und der Ring des Pinsels verschwinden mit dem Vorgang, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen.",
-          "Ein Maß bleibt bei seinem Teil, auch wenn die Ansicht auf eine andere Druckplatte oder auf alle umschaltet."
+          "Der erste Klick wählt das Teil, der zweite die Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die eingestellte Steuerung gilt dabei durchgehend.",
+          "Beim Drehen bleibt der Horizont waagerecht: Die Ansicht steht nach einer Geste so aufrecht wie vorher, in jeder der fünf Steuerungen.",
+          "Die in den Einstellungen gewählte Steuerung und das Thema stehen auch im Menü *Ansicht* angehakt.",
+          "Mehrere gewählte Körper bleiben nach einer Neuberechnung gewählt, und ein Zug bewegt sie zusammen."
         ]
       },
       {
-        "title": "Drucken und Arbeitsspeicher",
+        "title": "Arbeiten am Projekt",
         "points": [
-          "Passt nicht alles auf eine Platte, entstehen so viele Platten wie nötig; bisher blieb der Rest neben dem Bett liegen, wo er nicht druckbar ist.",
-          "Der Merkmalsspeicher großer Modelle bleibt begrenzt; bisher konnte er bis zu einem Gigabyte belegen."
+          "Ein Projekt lässt sich auch dann speichern, wenn an einem Merkmal ein Hinweis hängt.",
+          "Der Wechsel zwischen zwei Analysekarten desselben Körpers zeigt sofort, was schon gerechnet ist.",
+          "Ein neues Projekt beginnt ohne Reste einer Vorschau, die beim Wechsel noch offen stand.",
+          "Über die Fernsteuerung nimmt *Zurücknehmen* genau den genannten Schritt zurück und nicht den obersten."
         ]
       }
     ],
     "en": [
       {
-        "title": "Editing recognised features",
-        "points": [
-          "Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.",
-          "The command *Fill a bore* now fills exactly the bore as well: the plug no longer protrudes into a groove or makes the part thicker.",
-          "A spherical socket is recognised as a sphere and not as a countersink even in finely meshed models, so it carries the actions that belong to it.",
-          "A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.",
-          "When rotating too, a through hole says if it no longer goes through at its new orientation.",
-          "A newly created feature appears at the end of the object tree, not in the middle of the older ones."
-        ]
-      },
-      {
         "title": "Display and selection",
         "points": [
-          "The preview disappears once the change is applied; until now the comparison body with its “not yet applied” banner stayed on top of the finished hole.",
-          "The space bar again toggles between before and after only where a preview is shown, and no longer everywhere in the application.",
-          "A hole no longer glows in the selection colour when nothing is selected at all.",
-          "The rotation arc, the shadow, the drag markers and the brush ring disappear with the action they belong to — including on tool change, undo or closing the project.",
-          "A measurement stays with its part, even when the view switches to another print bed or to all of them."
+          "The first click selects the part, the second the bore beneath it, a click beside it clears the selection — and the chosen navigation applies throughout.",
+          "Rotating keeps the horizon level: after a gesture the view stands as upright as before, in each of the five navigation schemes.",
+          "The navigation and the theme chosen in the settings are ticked in the *View* menu as well.",
+          "Several selected bodies stay selected after a recalculation, and one drag moves them together."
         ]
       },
       {
-        "title": "Printing and memory",
+        "title": "Working on the project",
         "points": [
-          "If not everything fits on one bed, as many beds are created as needed; until now the remainder was left beside the bed, where it cannot be printed.",
-          "The feature cache of large models stays bounded; until now it could occupy up to a gigabyte."
+          "A project can be saved even when a note is attached to a feature.",
+          "Switching between two analysis maps of the same body shows at once what has already been computed.",
+          "A new project starts without remnants of a preview that was still open at the time.",
+          "Through remote control, *Undo* takes back exactly the step named, not the topmost one."
         ]
       }
     ],
     "es": [
       {
-        "title": "Editar características reconocidas",
+        "title": "Vista y selección",
         "points": [
-          "Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.",
-          "El comando *Cerrar un taladro* rellena ahora exactamente el taladro: el tapón ya no sobresale hacia una ranura ni engrosa la pieza.",
-          "Una cuenca esférica se reconoce como superficie esférica y no como avellanado, también en modelos de malla fina, y ofrece así las acciones que le corresponden.",
-          "Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.",
-          "También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.",
-          "Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores."
+          "El primer clic selecciona la pieza, el segundo el taladro que hay debajo, y un clic al lado anula la selección; el control elegido se mantiene en todo momento.",
+          "Al girar, el horizonte permanece horizontal: tras un gesto la vista queda tan recta como antes, en cada uno de los cinco controles.",
+          "El control y el tema elegidos en los ajustes aparecen también marcados en el menú *Vista*.",
+          "Varios cuerpos seleccionados siguen seleccionados tras un nuevo cálculo, y un arrastre los mueve juntos."
         ]
       },
       {
-        "title": "Visualización y selección",
+        "title": "Trabajo en el proyecto",
         "points": [
-          "La vista previa desaparece en cuanto se aplica el cambio; hasta ahora el cuerpo de comparación con la banda «aún no aplicado» quedaba sobre el taladro terminado.",
-          "La barra espaciadora vuelve a alternar entre antes y después solo donde hay una vista previa, y ya no en toda la aplicación.",
-          "Un taladro ya no se ilumina en el color de selección cuando no hay nada seleccionado.",
-          "El arco de giro, la sombra, las marcas de arrastre y el anillo del pincel desaparecen con la acción a la que pertenecen, también al cambiar de herramienta o cerrar.",
-          "Una medida permanece en su pieza, aunque la vista cambie a otra placa de impresión o a todas."
-        ]
-      },
-      {
-        "title": "Impresión y memoria",
-        "points": [
-          "Si no cabe todo en una placa, se crean tantas placas como haga falta; hasta ahora el resto quedaba junto a la mesa, donde no se puede imprimir.",
-          "La memoria de características de modelos grandes se mantiene acotada; hasta ahora podía ocupar hasta un gigabyte."
+          "Un proyecto se puede guardar también cuando una característica lleva un aviso.",
+          "Cambiar entre dos mapas de análisis del mismo cuerpo muestra al instante lo que ya está calculado.",
+          "Un proyecto nuevo empieza sin restos de una vista previa que seguía abierta al cambiar.",
+          "Mediante el control remoto, *Deshacer* retira exactamente el paso indicado y no el último."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Modifier les caractéristiques reconnues",
-        "points": [
-          "Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.",
-          "La commande *Reboucher un perçage* comble désormais exactement le perçage : le bouchon ne dépasse plus dans une rainure et n'épaissit plus la pièce.",
-          "Une cuvette sphérique est reconnue comme surface sphérique et non comme fraisure, même dans un maillage fin, et porte donc les actions qui lui reviennent.",
-          "Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.",
-          "Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.",
-          "Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes."
-        ]
-      },
-      {
         "title": "Affichage et sélection",
         "points": [
-          "L'aperçu disparaît dès que la modification est appliquée ; jusqu'ici le corps de comparaison portant « pas encore appliqué » restait au-dessus du perçage terminé.",
-          "La barre d'espace bascule de nouveau entre avant et après uniquement là où un aperçu est affiché, et non plus partout dans l'application.",
-          "Un perçage ne s'illumine plus dans la couleur de sélection lorsque rien n'est sélectionné.",
-          "L'arc de rotation, l'ombre, les repères de glissement et l'anneau du pinceau disparaissent avec l'action à laquelle ils appartiennent, y compris au changement d'outil ou à la fermeture.",
-          "Une mesure reste sur sa pièce, même si la vue passe à un autre plateau d'impression ou à tous."
+          "Le premier clic sélectionne la pièce, le deuxième le perçage en dessous, un clic à côté annule la sélection — et la navigation choisie reste valable tout du long.",
+          "La rotation garde l'horizon à l'horizontale : après un geste, la vue est aussi droite qu'avant, dans chacune des cinq navigations.",
+          "La navigation et le thème choisis dans les réglages sont également cochés dans le menu *Affichage*.",
+          "Plusieurs corps sélectionnés le restent après un nouveau calcul, et un glissement les déplace ensemble."
         ]
       },
       {
-        "title": "Impression et mémoire",
+        "title": "Travail sur le projet",
         "points": [
-          "Si tout ne tient pas sur un plateau, autant de plateaux que nécessaire sont créés ; jusqu'ici le reste restait à côté du plateau, où il n'est pas imprimable.",
-          "La mémoire des caractéristiques des grands modèles reste bornée ; jusqu'ici elle pouvait occuper jusqu'à un gigaoctet."
+          "Un projet peut être enregistré même lorsqu'une remarque est attachée à une caractéristique.",
+          "Passer d'une carte d'analyse à l'autre sur le même corps montre aussitôt ce qui est déjà calculé.",
+          "Un nouveau projet démarre sans restes d'un aperçu resté ouvert au moment du changement.",
+          "Par la commande à distance, *Annuler* retire exactement l'étape nommée et non la dernière."
         ]
       }
     ],
     "it": [
       {
-        "title": "Modificare le caratteristiche riconosciute",
+        "title": "Vista e selezione",
         "points": [
-          "Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.",
-          "Il comando *Chiudi un foro* riempie ora esattamente il foro: il tappo non sporge più in una scanalatura né ingrossa il pezzo.",
-          "Una sede sferica viene riconosciuta come superficie sferica e non come svasatura, anche in modelli a mesh fitta, e offre così le azioni che le competono.",
-          "Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.",
-          "Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.",
-          "Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti."
+          "Il primo clic seleziona il pezzo, il secondo il foro sottostante, un clic accanto annulla la selezione, e il comando impostato resta valido per tutto il tempo.",
+          "Ruotando, l'orizzonte resta orizzontale: dopo un gesto la vista è dritta come prima, in ciascuno dei cinque comandi.",
+          "Il comando e il tema scelti nelle impostazioni sono spuntati anche nel menu *Vista*.",
+          "Più corpi selezionati restano selezionati dopo un nuovo calcolo, e un trascinamento li muove insieme."
         ]
       },
       {
-        "title": "Visualizzazione e selezione",
+        "title": "Lavoro sul progetto",
         "points": [
-          "L'anteprima scompare appena la modifica è applicata; finora il corpo di confronto con la fascia «non ancora applicato» restava sopra il foro finito.",
-          "La barra spaziatrice torna ad alternare prima e dopo solo dove c'è un'anteprima, e non più ovunque nell'applicazione.",
-          "Un foro non si illumina più nel colore della selezione quando non è selezionato nulla.",
-          "L'arco di rotazione, l'ombra, i segni di trascinamento e l'anello del pennello scompaiono con l'azione a cui appartengono, anche al cambio di strumento o alla chiusura.",
-          "Una misura resta sul suo pezzo, anche se la vista passa a un altro piano di stampa o a tutti."
-        ]
-      },
-      {
-        "title": "Stampa e memoria",
-        "points": [
-          "Se non tutto entra su un piano, vengono creati tanti piani quanti servono; finora il resto restava accanto al piano, dove non è stampabile.",
-          "La memoria delle caratteristiche dei modelli grandi resta limitata; finora poteva occupare fino a un gigabyte."
+          "Un progetto si può salvare anche quando a una caratteristica è allegata una nota.",
+          "Passare da una mappa di analisi all'altra sullo stesso corpo mostra subito ciò che è già calcolato.",
+          "Un progetto nuovo comincia senza resti di un'anteprima rimasta aperta al momento del cambio.",
+          "Tramite il comando a distanza, *Annulla* ritira esattamente il passo indicato e non l'ultimo."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Editar características reconhecidas",
+        "title": "Exibição e seleção",
         "points": [
-          "Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.",
-          "O comando *Fechar furo* preenche agora exatamente o furo: o tampão já não entra numa ranhura nem engrossa a peça.",
-          "Uma sede esférica é reconhecida como superfície esférica e não como escareamento, mesmo em modelos de malha fina, oferecendo as ações que lhe pertencem.",
-          "Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.",
-          "Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.",
-          "Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores."
+          "O primeiro clique seleciona a peça, o segundo o furo por baixo, e um clique ao lado cancela a seleção; o controlo escolhido mantém-se todo o tempo.",
+          "Ao rodar, o horizonte permanece na horizontal: depois de um gesto a vista fica tão direita como antes, em cada um dos cinco controlos.",
+          "O controlo e o tema escolhidos nas definições aparecem também assinalados no menu *Exibição*.",
+          "Vários corpos selecionados continuam selecionados após um novo cálculo, e um arrasto move-os em conjunto."
         ]
       },
       {
-        "title": "Visualização e seleção",
+        "title": "Trabalho no projeto",
         "points": [
-          "A pré-visualização desaparece assim que a alteração é aplicada; até agora o corpo de comparação com a faixa «ainda não aplicado» ficava sobre o furo terminado.",
-          "A barra de espaços volta a alternar entre antes e depois apenas onde há uma pré-visualização, e já não em toda a aplicação.",
-          "Um furo já não brilha na cor de seleção quando não há nada selecionado.",
-          "O arco de rotação, a sombra, as marcas de arrasto e o anel do pincel desaparecem com a ação a que pertencem, também ao mudar de ferramenta ou fechar o projeto.",
-          "Uma medida permanece na sua peça, mesmo que a vista mude para outra mesa de impressão ou para todas."
-        ]
-      },
-      {
-        "title": "Impressão e memória",
-        "points": [
-          "Se não couber tudo numa mesa, são criadas tantas mesas quantas forem necessárias; até agora o resto ficava ao lado da mesa, onde não é imprimível.",
-          "A memória de características de modelos grandes mantém-se limitada; até agora podia ocupar até um gigabyte."
+          "Um projeto pode ser guardado mesmo quando uma característica traz um aviso.",
+          "Alternar entre dois mapas de análise do mesmo corpo mostra de imediato o que já está calculado.",
+          "Um projeto novo começa sem restos de uma pré-visualização que ficara aberta na altura da mudança.",
+          "Através do controlo remoto, *Anular* retira exatamente o passo indicado e não o último."
         ]
       }
     ]
   },
-  "changes_total": 13,
-  "signature": "98390a54743d87a85e394339c8e37b62c9491290e1ad6b22fe39590c96fd1f51ecdfc523f2b785dc64ade331b6150c99b0a12571bd409a6f839595d04d45ac0e"
+  "changes_total": 8,
+  "signature": "cccec943986a75d30c30c19a3bead1ca843ed2083b85cd4fbd3d2c8d7ef89fdac0f7025167bb94cccd6d842fbfb9e5f2b55b599027efeef7daa92eb85a8c400a"
 }
