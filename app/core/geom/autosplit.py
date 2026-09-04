@@ -37,7 +37,7 @@ from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
 from app.core.slice.orientation import SUPPORT_TIE, best_face_candidate
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -975,7 +975,7 @@ def upright_normal(normal: Vec3) -> np.ndarray:
     if length <= EPS_GEOM:
         return np.eye(4)
     direction = direction / length
-    if abs(direction[2] - 1.0) <= EPS_GEOM:
+    if is_close(direction[2], 1.0):
         return np.eye(4)
     return np.asarray(
         trimesh.geometry.align_vectors(direction, [0.0, 0.0, 1.0]),

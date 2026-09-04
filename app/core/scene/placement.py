@@ -30,7 +30,7 @@ from typing import Any, Final
 
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
-from app.core.types import Feature, Vec3
+from app.core.types import Feature, Vec3, vec3_or_none
 from app.core.units import format_length
 from app.i18n import tr
 
@@ -46,11 +46,6 @@ POSITION = ("x", "y", "z")
 
 #: Eine freie Richtung, für die Operationen, die eine nehmen (§25, Beschriftung).
 NORMAL = ("nx", "ny", "nz")
-
-#: Der Parameter, der eine Fläche als **Ziel** benennt statt als Ort — die Höhe
-#: einer Extrusion reicht bis dorthin (§30.1, D14). Wie ``at_feature`` eine
-#: Kennung, aber kein Ersatz für die Position: die Skizze liegt woanders.
-TARGET_FIELD = "up_to"
 
 #: Der Durchmesser, um den eine Textur läuft. **Nicht** ``diameter``: eine
 #: Senkung hat einen eigenen — den des Schraubenkopfs — und dürfte den der
@@ -202,6 +197,20 @@ def _sizes_around(diameter: float) -> list[str]:
     return [*below[-1:], *above[:1]]
 
 
+def _target_field(spec: OperationSpec) -> str:
+    """Der Parameter, der eine Fläche als **Ziel** benennt statt als Ort — oder
+    leer, wenn diese Operation keinen hat (§30.1, D14).
+
+    Wie ``at_feature`` eine Kennung, aber kein Ersatz für die Position: die
+    Skizze liegt woanders, die Extrusion reicht nur bis dorthin. Gefragt wird
+    nach :attr:`~app.core.types.ParamSpec.targets_feature` und nicht nach dem
+    Namen ``up_to`` — aus demselben Grund, der acht Zeilen tiefer schon einmal
+    aufgeschrieben ist: Eine zweite Operation mit Zielfläche hätte ihr Feld
+    sonst exakt so nennen müssen.
+    """
+    return next((entry.name for entry in spec.params.spec() if entry.targets_feature), "")
+
+
 def _from_the_bore(spec: OperationSpec, feature: Feature, names: set[str]) -> dict[str, Any]:
     """Was der Baustein aus dem **gemessenen** Durchmesser dieser Bohrung macht.
 
@@ -284,11 +293,12 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         return feature_values
 
     values: dict[str, Any] = {}
-    if TARGET_FIELD in names and feature.kind == "face":
+    target = _target_field(spec)
+    if target and feature.kind == "face":
         # „Bis zu dieser Fläche" — die Kennung reicht, den Rahmen rechnet die
         # Auswertung daraus (app.core.sketch.planes). Nur planare Flächen: bis
         # zu einer Bohrung zu extrudieren hat keine Bedeutung.
-        values[TARGET_FIELD] = feature.id
+        values[target] = feature.id
     if DIAMETER_FIELD in names and feature.kind == "hole":
         diameter = feature.params.get("diameter")
         if diameter is not None:
@@ -301,13 +311,15 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         head = _head_diameter(feature)
         if head is not None:
             values["diameter"] = head
-    centre = _vector(feature.params.get("centre"))
+    centre = vec3_or_none(feature.params.get("centre"))
     if centre is not None:
         for name, value in zip(POSITION, centre, strict=True):
             if name in names:
                 values[name] = round(float(value), 4)
 
-    direction = _vector(feature.params.get("normal")) or _vector(feature.params.get("axis"))
+    direction = vec3_or_none(feature.params.get("normal")) or vec3_or_none(
+        feature.params.get("axis")
+    )
     if direction is not None:
         for name, value in zip(NORMAL, direction, strict=True):
             if name in names:
@@ -351,7 +363,7 @@ def top_face(features: Mapping[str, Feature]) -> Feature | None:
         return None
 
     def rank(entry: Feature) -> tuple[float, float]:
-        centre = _vector(entry.params.get("centre"))
+        centre = vec3_or_none(entry.params.get("centre"))
         height = centre[2] if centre is not None else float("-inf")
         area = entry.params.get("area")
         return (height, float(area) if isinstance(area, int | float) else 0.0)
@@ -377,7 +389,9 @@ def values_for_object(spec: OperationSpec, features: Mapping[str, Feature]) -> d
         return {}
     values = values_for(spec, face)
     values.pop(FEATURE_FIELD, None)
-    values.pop(TARGET_FIELD, None)
+    target = _target_field(spec)
+    if target:
+        values.pop(target, None)
     return values
 
 
@@ -397,7 +411,7 @@ def faces_up(feature: Feature) -> bool:
     Vermutung zu bauen, dass jemand das meinte, ist schlechter, als zu sagen,
     welche Fläche gewollt ist.
     """
-    normal = _vector(feature.params.get("normal"))
+    normal = vec3_or_none(feature.params.get("normal"))
     return normal is not None and dominant_axis(normal) == "z" and normal[2] > 0.0
 
 
@@ -407,12 +421,3 @@ def _allows(spec: OperationSpec, name: str, value: str) -> bool:
         if entry.name == name:
             return not entry.choices or value in entry.choices
     return False
-
-
-def _vector(value: object) -> Vec3 | None:
-    if not isinstance(value, list | tuple) or len(value) != 3:
-        return None
-    try:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    except (TypeError, ValueError):
-        return None

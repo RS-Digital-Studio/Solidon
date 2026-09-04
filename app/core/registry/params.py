@@ -45,6 +45,45 @@ NAME_DOC: Final = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt
 #: die an einer Stelle steht, sollte auch an einer Stelle erklärt werden.
 AUTO_FROM_PROFILE_DOC: Final = _("Null heißt: Wert aus dem kalibrierten Materialprofil.")
 
+#: Der Titel des Maßes, das zwei Flächen auf Abstand hält.
+PLAY_TITLE: Final = _("Spiel")
+
+#: Und der Titel für die Gegenrichtung: was übersteht statt Luft zu lassen.
+GRIP_TITLE: Final = _("Übermaß")
+
+
+def play_param(
+    *,
+    title: TranslatableText | str = PLAY_TITLE,
+    maximum: float = 1.0,
+    depends_on: tuple[str, tuple[str | bool, ...]] | None = None,
+) -> Any:
+    """Das Spiel einer Passung, wie es dreiundzwanzig Stellen deklarieren.
+
+    Dreiundzwanzig Blöcke in fünf Dateien, und in ``default``, ``unit``,
+    ``minimum``, ``placement`` und ``doc`` waren sie alle wortgleich —
+    gemessen, nicht vermutet. Verschieden waren nur drei Dinge, und die stehen
+    hier als Parameter: der Titel (*Spiel*, *Übermaß*, einmal *Betrag*), die
+    Obergrenze (1,0, 1,5 oder 2,0 mm) und die Bedingung, unter der das Feld
+    überhaupt wirksam wird.
+
+    Der Grund ist derselbe wie bei :data:`AUTO_FROM_PROFILE_DOC` eine Zeile
+    höher: Die Obergrenze eines Spiels ist eine fachliche Aussage, und eine
+    Aussage, die an dreiundzwanzig Stellen steht, ändert man nicht an
+    dreiundzwanzig Stellen — man vergisst eine.
+    """
+    return param(
+        title=title,
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=maximum,
+        placement="advanced",
+        depends_on=depends_on,
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
 _KIND_BY_ANNOTATION: dict[str, ParamKind] = {
     "float": "float",
     "int": "int",
@@ -67,6 +106,7 @@ def param(
     depends_on: tuple[str, tuple[str | bool, ...]] | None = None,
     required: bool | None = None,
     subtractive_on: tuple[str | bool, ...] | None = None,
+    targets_feature: bool = False,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
@@ -76,6 +116,9 @@ def param(
 
     ``subtractive_on`` nennt die Werte, bei denen ein Baustein abträgt statt
     aufzusetzen — siehe :attr:`app.core.types.ParamSpec.subtractive_on`.
+
+    ``targets_feature`` markiert einen Parameter, der ein Merkmal als **Ziel**
+    nennt — siehe :attr:`app.core.types.ParamSpec.targets_feature`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -90,6 +133,7 @@ def param(
             "depends_on": depends_on,
             "required": required,
             "subtractive_on": subtractive_on,
+            "targets_feature": targets_feature,
         }
     }
     if default is MISSING:
@@ -158,6 +202,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 doc=metadata["doc"],
                 depends_on=metadata["depends_on"],
                 subtractive_on=metadata["subtractive_on"],
+                targets_feature=metadata["targets_feature"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]

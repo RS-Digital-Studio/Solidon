@@ -492,24 +492,18 @@ def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
     Nur bei **erhabenem** Muster: Ein vertieftes schneidet, und Schneiden darf
     teilen — bei manchen Mustern ist das der Zweck.
     """
-    if mode != "raised" or after.component_count <= before.component_count:
-        return None
-    loose = after.component_count - before.component_count
-    return Finding(
+    from app.core.geom.boolean import fell_apart
+
+    return fell_apart(
+        before,
+        after,
+        applies=mode == "raised",
         code="texture.fell_apart",
-        severity="error",
-        # Der Vorschlag steht im Satz: Ein ``Finding`` trägt keine Aktionsliste,
-        # das kann nur eine Ausnahme — die Nachbarn machen es genauso.
         message=_(
             "Das Muster hängt nicht am Körper: Es liegt in {loose} losen Stücken "
             "daneben und würde einzeln gedruckt. Meist ist der Durchmesser des "
             "Wickelzylinders veraltet — klicken Sie die Zylinderfläche neu an."
         ),
-        values={
-            "loose": str(loose),
-            "before": str(before.component_count),
-            "after": str(after.component_count),
-        },
     )
 
 

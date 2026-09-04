@@ -21,8 +21,7 @@ from app.core.http import (
     ResponseTooLargeError,
     deadline_after,
     read_limited,
-    response_url,
-    same_origin,
+    redirect_left_origin,
     validate_http_url,
 )
 from app.core.json_boundary import loads as load_json
@@ -98,8 +97,7 @@ def _post_to(url: str, payload: bytes) -> bytes:
     )
     try:
         with _open_service(request, timeout=TIMEOUT_SECONDS) as response:  # type: ignore[attr-defined]
-            final = validate_http_url(response_url(response, address), allow_http=False)
-            if not same_origin(address, final):
+            if redirect_left_origin(response, address, allow_http=False):
                 raise ActivationServiceError(
                     detail=_("Der Aktivierungsdienst hat die Anfrage abgelehnt.")
                 )

@@ -26,7 +26,7 @@ from app.core.errors import CANCEL, INSTALL_MISSING, AppError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import BoundingBox
-from app.core.units import EPS_GEOM
+from app.core.units import is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -75,11 +75,7 @@ def _same_point(a: tuple[float, float, float], b: tuple[float, float, float]) ->
     Millimeter gegen ``EPS_GEOM``: identische Koordinaten liegen erst recht
     darunter, der Bestand bleibt also unverändert grün.
     """
-    return (
-        abs(a[0] - b[0]) <= EPS_GEOM
-        and abs(a[1] - b[1]) <= EPS_GEOM
-        and abs(a[2] - b[2]) <= EPS_GEOM
-    )
+    return is_close(a[0], b[0]) and is_close(a[1], b[1]) and is_close(a[2], b[2])
 
 
 def available() -> bool:

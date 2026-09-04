@@ -69,7 +69,7 @@ from app.core.http import (
     deadline_after,
     iter_limited,
     read_limited,
-    response_url,
+    redirect_left_origin,
     same_origin,
     validate_http_url,
 )
@@ -876,8 +876,7 @@ def _get(url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[st
     deadline = deadline_after(TIMEOUT_SECONDS)
     request = urllib.request.Request(address, headers=headers)
     with _open_update(request, timeout=TIMEOUT_SECONDS) as answer:
-        final = validate_http_url(response_url(answer, address), allow_http=False)
-        if not same_origin(address, final):
+        if redirect_left_origin(answer, address, allow_http=False):
             raise ValueError("version endpoint redirected")
         raw = read_limited(
             answer,
@@ -1141,8 +1140,7 @@ def _store_download(
                 raise FileWriteError(
                     detail=_("Der Update-Zwischenspeicher wechselte während des Downloads.")
                 )
-            final = validate_http_url(response_url(answer, address), allow_http=False)
-            if not same_origin(address, final):
+            if redirect_left_origin(answer, address, allow_http=False):
                 raise ExternalToolError(
                     tool="update",
                     detail=_("Der Server hat das Paket nicht herausgegeben."),

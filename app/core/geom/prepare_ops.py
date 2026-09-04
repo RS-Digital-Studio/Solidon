@@ -56,6 +56,7 @@ from app.core.geom.prepare import (
     check_build_volume,
     check_collisions,
     compensate_elephant_foot,
+    compensation_findings,
     countersink,
     drill,
     named_for,
@@ -68,7 +69,7 @@ from app.core.geom.prepare import (
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.geom.transform import Axis, place_on_bed
 from app.core.knowledge.profiles import for_object, material
-from app.core.registry import AUTO_FROM_PROFILE_DOC, VARIABLE, op_params, param, register_op
+from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import (
     BaseParams,
@@ -83,7 +84,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length, is_close, is_zero
 from app.i18n import TranslatableText, _
 
 _AXES = tuple(AXIS_NORMALS)
@@ -969,7 +970,7 @@ def move_feature(ctx: OpContext) -> OpResult:
     centre: Vec3 = (measured[0], measured[1], measured[2])
     target: Vec3 = (params.x, params.y, params.z)
 
-    if all(abs(a - b) <= EPS_GEOM for a, b in zip(centre, target, strict=True)):
+    if all(is_close(a, b) for a, b in zip(centre, target, strict=True)):
         return OpResult(
             outputs=[source],
             findings=[
@@ -1154,7 +1155,7 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     centre: Vec3 = (measured[0], measured[1], measured[2])
     target: Vec3 = (params.x, params.y, params.z)
 
-    if all(abs(a - b) <= EPS_GEOM for a, b in zip(centre, target, strict=True)):
+    if all(is_close(a, b) for a, b in zip(centre, target, strict=True)):
         # Kein Fehler, sondern ein Hinweis: Die Boolesche liefe auf sich selbst
         # und ließe den Körper, wie er ist. Regel 19 — was zurücknehmbar ist,
         # bekommt keine Nachfrage, und was nichts tut, keine Ausnahme.
@@ -1516,7 +1517,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     centre: Vec3 = (measured[0], measured[1], measured[2])
     previous = float(feature.params.get("diameter", 0.0))
 
-    if abs(params.diameter - previous) <= EPS_GEOM:
+    if is_close(params.diameter, previous):
         return OpResult(
             outputs=[source],
             findings=[
@@ -1641,7 +1642,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
                 detail="a scene object marked as brep does not carry a Solid",
                 values={"object": source.id},
             )
-        if abs(cut - previous) <= EPS_GEOM:
+        if is_close(cut, previous):
             return OpResult(outputs=[source], findings=[_unchanged_bore(cut)])
         solid = edit.resize_bore(
             source.mesh,
@@ -1663,7 +1664,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         if nothing is not None:
             findings.append(nothing)
         findings.extend(over_the_edge_along(source.mesh, centre, axis, cut))
-        findings.extend(_compensation_findings(params.diameter, cut, params.compensate))
+        findings.extend(compensation_findings(params.diameter, cut, params.compensate))
         exact_features = _preserved_exact_features(
             source.features,
             features_of(solid),
@@ -1813,20 +1814,6 @@ def _unchanged_bore(diameter: float) -> Finding:
         message=_("Die Bohrung hat bereits diesen Durchmesser."),
         values={"diameter": format_length(diameter)},
     )
-
-
-def _compensation_findings(nominal: float, cut: float, compensate: bool) -> list[Finding]:
-    """Materialkompensation, wortgleich mit den anderen Bohrungswegen."""
-    if not compensate or abs(cut - nominal) <= EPS_GEOM:
-        return []
-    return [
-        Finding(
-            code="bore.compensated",
-            severity="info",
-            message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
-            values={"nominal": format_length(nominal), "cut": format_length(cut)},
-        )
-    ]
 
 
 def _expected_bore(feature: Feature, diameter: float) -> Feature:
@@ -2299,15 +2286,7 @@ class ElephantFootParams(BaseParams):
         maximum=5.0,
         doc=_("Über wie viel Höhe eingezogen wird — etwa die ersten drei Schichten."),
     )
-    amount: float = param(
-        title=_("Betrag"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    amount: float = play_param(title=_("Betrag"), maximum=2.0)
 
 
 @register_op(
@@ -2471,7 +2450,7 @@ def test_piece(ctx: OpContext) -> OpResult:
     )
 
     piece = outcome.mesh
-    if not piece.triangle_count or abs(piece.volume) <= EPS_GEOM:
+    if not piece.triangle_count or is_zero(piece.volume):
         raise ValidationError(
             field="size",
             detail=_("An dieser Stelle ist kein Material — der Ausschnitt bleibt leer."),
@@ -2555,15 +2534,7 @@ class SplitPinnedParams(BaseParams):
         placement="advanced",
         doc=_("Null heißt: aus der Schnittfläche ableiten."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_op(
@@ -2816,15 +2787,7 @@ class SplitLineParams(BaseParams):
         placement="advanced",
         doc=_("Null heißt: aus der Schnittfläche ableiten."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_op(

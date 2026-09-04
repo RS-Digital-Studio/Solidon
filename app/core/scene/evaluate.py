@@ -45,7 +45,6 @@ from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
 from app.core.scene.orphans import feature_ref_of_sketch
 from app.core.scene.orphans import references as feature_references
-from app.core.scene.placement import TARGET_FIELD
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
     AskFn,
@@ -72,7 +71,7 @@ from app.core.types import (
     Transform,
     kind_of,
 )
-from app.core.units import EPS_DISPLAY
+from app.core.units import EPS_DISPLAY, is_close
 from app.i18n import TranslatableText, _, source_text
 
 _log = get_logger(__name__)
@@ -822,7 +821,7 @@ def _same_size(first: BoundingBox, second: BoundingBox) -> bool:
     Millimeter ist unter allem, was ein Drucker auflöst, und über allem, was
     beim Neurechnen an Rundung entsteht.
     """
-    return all(abs(a - b) <= EPS_DISPLAY for a, b in zip(first.size, second.size, strict=True))
+    return all(is_close(a, b, EPS_DISPLAY) for a, b in zip(first.size, second.size, strict=True))
 
 
 def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
@@ -1479,7 +1478,7 @@ def _with_nested_context(
             if isinstance(source_id, str) and source_id:
                 context[f"#{spec.name}"] = sources.identity(source_id)
             continue
-        if spec.kind == "feature" or spec.name == TARGET_FIELD:
+        if spec.kind == "feature" or spec.targets_feature:
             named = resolved.get(spec.name)
             if isinstance(named, str) and named and objects is not None and hashes is not None:
                 carriers = _carrier_hashes(named, objects, hashes)

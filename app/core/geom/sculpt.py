@@ -43,6 +43,7 @@ from app.core.types import (
     Profile,
     Stroke,
     Vec3,
+    as_vec3,
 )
 from app.i18n import _
 
@@ -295,8 +296,8 @@ def strokes_from_text(text: str) -> list[Stroke]:
     entries = json.loads(text)
     return [
         Stroke(
-            point=_vector(entry["p"]),
-            normal=_vector(entry["n"]),
+            point=as_vec3(entry["p"]),
+            normal=as_vec3(entry["n"]),
             radius=float(entry["r"]),
             strength=float(entry["s"]),
             tool=entry.get("t", "draw"),
@@ -305,10 +306,6 @@ def strokes_from_text(text: str) -> list[Stroke]:
         )
         for entry in entries
     ]
-
-
-def _vector(values: Sequence[float]) -> Vec3:
-    return (float(values[0]), float(values[1]), float(values[2]))
 
 
 # --- operation --------------------------------------------------------------------

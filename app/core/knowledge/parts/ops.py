@@ -24,7 +24,13 @@ import math
 from typing import Any
 
 from app.core.errors import Action, AppError
-from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
+from app.core.geom.boolean import (
+    BOOLEAN_OVERLAP,
+    BooleanKind,
+    boolean,
+    fell_apart,
+    without_effect,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
@@ -324,23 +330,13 @@ def _hanging_loose(
     Nur für **angebaute** Bausteine: Ein abziehender darf teilen, das ist bei
     manchen sein Zweck.
     """
-    if subtractive or after.component_count <= before.component_count:
-        return None
-    loose = after.component_count - before.component_count
-    return Finding(
+    return fell_apart(
+        before,
+        after,
+        applies=not subtractive,
         code="parts.hanging_loose",
-        severity="error",
-        # **Der Vorschlag steht im Satz.** Ein ``Finding`` trägt keine
-        # ``Action``-Liste — das kann nur eine Ausnahme. Regel 17 verlangt
-        # trotzdem einen Weg nach vorn, und ``without_effect`` macht es
-        # nebenan genauso: erst was ist, dann was hilft.
         message=_loose_advice(spec),
-        values={
-            "part": spec.name,
-            "loose": str(loose),
-            "before": str(before.component_count),
-            "after": str(after.component_count),
-        },
+        values={"part": spec.name},
     )
 
 
@@ -577,11 +573,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil.
-    loose = (
-        None
-        if spec.separate_from_host
-        else _hanging_loose(body, as_mesh_data(outcome.mesh), spec, subtractive)
-    )
+    loose = None if spec.separate_from_host else _hanging_loose(body, mesh, spec, subtractive)
 
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, features=features)],

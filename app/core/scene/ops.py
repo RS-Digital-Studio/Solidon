@@ -17,7 +17,7 @@ from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import BaseParams, OpContext, OpResult, SceneObject
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
 from app.i18n import TranslatableText, _, tr
 
 
@@ -303,7 +303,7 @@ def pattern(ctx: OpContext) -> OpResult:
         # Ein voller Kranz teilt durch die Zahl, ein Teilbogen durch die
         # Zwischenräume — sonst fielen bei 360 Grad die erste und die letzte
         # Kopie aufeinander.
-        full = abs(abs(params.angle) - 360.0) <= EPS_GEOM
+        full = is_close(abs(params.angle), 360.0)
         divisor = params.count if full else max(params.count - 1, 1)
         steps = [
             rotation(cast(Axis, params.axis), params.angle * index / divisor)

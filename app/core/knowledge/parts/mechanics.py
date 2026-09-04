@@ -27,7 +27,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
-from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
+from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
@@ -118,26 +118,8 @@ class BearingSeatParams(BaseParams):
         placement="advanced",
         doc=_("Zusätzlicher Platz hinter dem Lager."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        depends_on=("removable", (True,)),
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
-    grip: float = param(
-        title=_("Übermaß"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        depends_on=("removable", (False,)),
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0, depends_on=("removable", (True,)))
+    grip: float = play_param(title=GRIP_TITLE, maximum=2.0, depends_on=("removable", (False,)))
 
 
 @register_part(
@@ -331,15 +313,7 @@ class LatchParams(BaseParams):
         default=False,
         doc=_("Die Gegenseite: dieselbe Form, aber mit Spiel und zum Abziehen."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_part(
@@ -510,15 +484,7 @@ class DowelParams(BaseParams):
         placement="advanced",
         doc=_("Erleichtert das Fügen und hält die erste Schicht maßhaltig."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_part(
@@ -705,15 +671,7 @@ class SnapConnectorParams(BaseParams):
         subtractive_on=("bore",),
         doc=_("Der Federarm selbst oder die Tasche mit der Rastkante dazu."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_part(
@@ -955,15 +913,7 @@ class HingeEyeParams(BaseParams):
         maximum=15.0,
         doc=_("Material rings um die Bohrung. Zu dünn reißt beim ersten Zug auf."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0)
 
 
 @register_part(
@@ -1100,15 +1050,7 @@ class BarrelHingeParams(BaseParams):
         maximum=15.0,
         doc=_("Material rings um den Bolzen. Zu dünn reißt beim ersten Zug auf."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0)
 
 
 @register_part(

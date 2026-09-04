@@ -20,7 +20,8 @@ from typing import Any, cast
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import CORRECT_INPUT, Action, GeometryError, NeedsSolidError, ValidationError
+from app.core.brep.ops import brep_input
+from app.core.errors import CORRECT_INPUT, Action, GeometryError, ValidationError
 from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import planes, shapes
@@ -235,44 +236,6 @@ def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
     )
 
 
-def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
-    """Die Eingabe und ihr exakter Körper — oder ein Satz, der weiterhilft.
-
-    Kein ``ValidationError``: dessen Titel lautet „Ein Wert liegt außerhalb des
-    zulässigen Bereichs", und hier ist kein Wert außerhalb eines Bereichs —
-    hier hat der Körper die falsche Art. Im Prüfbericht stand deshalb eine
-    Fehlermeldung über Zahlen an einer Stelle, an der keine Zahl schuld war.
-    Denselben Weg sind ``brep/ops.py`` und ``export/writer.py`` schon gegangen;
-    diese Stelle war beim Umstellen übersehen worden.
-
-    Aufgefallen an ``puppenhaus_fertig``: dort höhlt ``hollow_object`` den
-    exakten Körper aus und gibt ein Netz zurück, und die drei Taschen danach
-    liefen ins Leere. Der Satz nennt jetzt den Ausweg — ``shell_exact`` hätte
-    den Körper exakt gelassen.
-
-    **Für die Tasche gilt dieser Fall seit dem 30.08.2026 nicht mehr:**
-    ``sketch_pocket`` schneidet auch in ein Netz und ruft diese Funktion nicht
-    mehr. Was hier bleibt, sind die Operationen, die wirklich einzeln
-    bearbeitbare Flächen brauchen — ``push_face`` und seinesgleichen.
-    """
-    require()
-    source = ctx.inputs[0]
-    if not isinstance(source.mesh, Solid):
-        raise NeedsSolidError(
-            # Ohne Platzhalter: TranslatableText löst nur den Katalog auf und
-            # formatiert nicht. Der Name reist wie überall in ``values``.
-            detail=_(
-                "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
-                "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
-                "dafür bei einer Grundform oder beim Aushöhlen „Flächen und Kanten "
-                "später bearbeiten“ oder öffne eine STEP-Datei."
-            ),
-            values={"name": source.name, "field": "in", "constraint": "needs_brep"},
-            object_id=source.id,
-        )
-    return source, source.mesh
-
-
 @op_params
 class SketchExtrudeParams(BaseParams):
     shape: str = param(
@@ -322,6 +285,7 @@ class SketchExtrudeParams(BaseParams):
         title=_("Bis zur Fläche"),
         default="",
         placement="advanced",
+        targets_feature=True,
         doc=_(
             "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die "
             "Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein."
@@ -1053,7 +1017,7 @@ class PushFaceParams(BaseParams):
 def push_face(ctx: OpContext) -> OpResult:
     """Press/Pull auf dem exakten Kern."""
     params = cast(PushFaceParams, ctx.params)
-    source, solid = _brep_input(ctx)
+    source, solid = brep_input(ctx)
     moved = profiles.push_faces(solid, (params.nx, params.ny, params.nz), params.distance)
     # ``features_of`` wie bei jeder anderen B-Rep-Op: Mit ``features={}``
     # hatte der Körper nach „Fläche versetzen" keine anklickbaren Flächen

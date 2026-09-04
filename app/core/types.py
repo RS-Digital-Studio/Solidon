@@ -90,6 +90,31 @@ MetricSource = Literal["internal", "gcode"]
 # --- Geometrische Grundtypen ---------------------------------------------------
 
 Vec3 = tuple[float, float, float]
+
+
+def as_vec3(values: Sequence[float]) -> Vec3:
+    """Drei Zahlen als :data:`Vec3` — ohne Prüfung, für schon geprüfte Werte."""
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def vec3_or_none(value: object) -> Vec3 | None:
+    """Ein dreikomponentiger Parameterwert, oder ``None``, wenn er keiner ist.
+
+    Der prüfende Bruder von :func:`as_vec3`, für Werte aus einer Projektdatei
+    oder einem Agentenaufruf: Was dort steht, ist erst einmal ``object``.
+
+    Beide standen bis zum 04.09.2026 je zweimal im Baum, und alle vier hießen
+    ``_vector`` — zwei verschiedene Bedeutungen unter einem Namen in einem
+    Paketbaum. Der Zeilenpreis war klein, die Verwechslungsgefahr nicht.
+    """
+    if not isinstance(value, list | tuple) or len(value) != 3:
+        return None
+    try:
+        return as_vec3(value)
+    except (TypeError, ValueError):
+        return None
+
+
 Point2 = tuple[float, float]
 Ring = tuple[Point2, ...]
 
@@ -1054,6 +1079,25 @@ class ParamSpec:
     Boolesche Op), der Registereintrag (ob ein Flächenklick den Baustein
     anbietet) und die Vorschau (welche Farbe) — und sie steht dort, wo die
     Wahl getroffen wird."""
+
+    targets_feature: bool = False
+    """Dieser Parameter nennt ein **Merkmal als Ziel**, ohne ``kind="feature"``
+    zu sein (§30.1, D14).
+
+    Der Unterschied zu ``kind="feature"``: Ein Ziel ersetzt nicht den Ort. Die
+    Skizze liegt, wo sie liegt; ``up_to`` sagt nur, bis wohin ihre Extrusion
+    reicht. Der Wert ist trotzdem eine Merkmalskennung und wird trotzdem an den
+    eigenen Eingängen vorbei in der Szene nachgeschlagen — und genau daran
+    hängen zwei Dinge, die es sonst am Namen festmachen müssten: der
+    Auswertungs-Cache muss die Hashes der Träger in seinen Schlüssel nehmen
+    (sonst bleibt die Extrusion bei z = 10, wenn der Quader auf 30 wächst), und
+    ein Klick auf eine Fläche trägt sich hier ein.
+
+    **Am Parameter und nicht als Namensvergleich**, aus demselben Grund wie
+    :attr:`subtractive_on`. Vorher stand an beiden Stellen ``spec.name ==
+    "up_to"``: Eine zweite Operation mit Zielfläche hätte ihren Parameter exakt
+    so nennen müssen, sonst hätte der Cache still ein veraltetes Ergebnis
+    geliefert."""
 
 
 @runtime_checkable

@@ -32,7 +32,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
-from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
+from app.core.registry import op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -289,15 +289,7 @@ class CableGlandParams(BaseParams):
         maximum=30.0,
         doc=_("Dicke der Wand, durch die die Durchführung geht."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0)
     strain_relief: bool = param(
         title=_("Zugentlastung"),
         default=True,
@@ -392,15 +384,7 @@ class ProfileTongueParams(BaseParams):
             "Feder einschieben lässt statt an der ersten Kante zu klemmen."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
     head: float = param(
         title=_("Kopfhöhe"),
         default=0.0,
@@ -543,15 +527,7 @@ class CableClipParams(BaseParams):
             "was den Clip halten lässt. Null heißt: ein Fünftel des Durchmessers."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0)
 
 
 @register_part(

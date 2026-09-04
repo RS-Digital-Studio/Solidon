@@ -23,6 +23,7 @@ from app.core.types import (
     FitKind,
     Profile,
     Scene,
+    vec3_or_none,
 )
 from app.core.units import EPS_DISPLAY, format_length
 from app.i18n import TranslatableText, _
@@ -210,10 +211,10 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
             )
         ]
 
-    normal = _vector(first.params.get("normal"))
-    other = _vector(second.params.get("normal"))
-    centre = _vector(first.params.get("centre"))
-    against = _vector(second.params.get("centre"))
+    normal = vec3_or_none(first.params.get("normal"))
+    other = vec3_or_none(second.params.get("normal"))
+    centre = vec3_or_none(first.params.get("centre"))
+    against = vec3_or_none(second.params.get("centre"))
     if normal is None or other is None or centre is None or against is None:
         return [
             Finding(
@@ -254,16 +255,6 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
             feature_ids=(fit.a.feature_id,),
         )
     ]
-
-
-def _vector(value: object) -> tuple[float, float, float] | None:
-    """Ein dreikomponentiger Parameter, oder None, wenn er keiner ist."""
-    if not isinstance(value, list | tuple) or len(value) != 3:
-        return None
-    try:
-        return (float(value[0]), float(value[1]), float(value[2]))
-    except (TypeError, ValueError):
-        return None
 
 
 def _sort_by_kind(first: Feature, second: Feature) -> tuple[Feature, Feature]:

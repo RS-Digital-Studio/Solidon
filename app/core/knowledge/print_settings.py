@@ -272,8 +272,11 @@ def _adhesion(value: object) -> AdhesionType:
 
 
 #: Wo die Punktpfade aus :class:`SettingAdvice` hinzeigen. Die Oberfläche und
-#: die Slicer-Zuordnung benutzen dieselbe Schreibweise.
-_GROUPS: Final = (
+#: die Slicer-Zuordnung benutzen dieselbe Schreibweise — und zwar diese hier:
+#: ``print_settings_dialog`` baut seine Reiter daraus. Öffentlich, weil eine
+#: abgeschriebene Kopie dort den Dialog beim elften Bereich still einen Reiter
+#: verlieren ließe, ohne dass ein Test es merkt.
+GROUPS: Final = (
     "layers",
     "shell",
     "infill",
@@ -290,11 +293,11 @@ _GROUPS: Final = (
 def read_path(settings: PrintSettings, path: str) -> Any:
     """Einen Wert über seinen Punktpfad lesen, etwa ``support.style``."""
     group, _dot, name = path.partition(".")
-    if not name or group not in _GROUPS:
+    if not name or group not in GROUPS:
         raise ValidationError(
             field="path",
             detail=_("Dieser Pfad zeigt auf keine Einstellung."),
-            values={"path": path, "groups": list(_GROUPS)},
+            values={"path": path, "groups": list(GROUPS)},
         )
     section = getattr(settings, group)
     if not hasattr(section, name):

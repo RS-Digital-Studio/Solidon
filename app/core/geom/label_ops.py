@@ -25,7 +25,13 @@ import numpy as np
 from app.core.deferred import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.attributes import with_slot
-from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
+from app.core.geom.boolean import (
+    BOOLEAN_OVERLAP,
+    BooleanKind,
+    boolean,
+    fell_apart,
+    without_effect,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
@@ -266,26 +272,19 @@ def _fell_apart(before: Any, after: Any, mode: str) -> Finding | None:
     ``texture_ops._fell_apart`` und ``parts._hanging_loose``, samt derselben
     Ausnahme: Ein graviertes Muster schneidet, und Schneiden darf teilen.
     """
-    if mode != "raised" or after.component_count <= before.component_count:
-        return None
-    loose = after.component_count - before.component_count
-    return Finding(
+    # Der Satz ist parallel zu dem der Textur gebaut: Der Kunde erkennt die
+    # Familie am Wortlaut, nicht am Befundcode — den sieht er nie.
+    return fell_apart(
+        before,
+        after,
+        applies=mode == "raised",
         code="label.fell_apart",
-        severity="error",
-        # Der Vorschlag steht im Satz, und der Satz ist parallel zu dem der
-        # Textur gebaut: Der Kunde erkennt die Familie am Wortlaut, nicht am
-        # Befundcode — den sieht er nie.
         message=_(
             "Die Schrift hängt nicht am Körper: Sie liegt in {loose} losen Stücken "
             "daneben und würde einzeln gedruckt. Meist steht sie neben der Fläche, "
             "auf die sie soll — klicken Sie die Fläche an, dann trägt sie Ort und "
             "Richtung selbst ein."
         ),
-        values={
-            "loose": str(loose),
-            "before": str(before.component_count),
-            "after": str(after.component_count),
-        },
     )
 
 

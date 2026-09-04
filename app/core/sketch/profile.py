@@ -19,7 +19,7 @@ from typing import Final, Literal
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
 from app.core.sketch.planes import to_world
 from app.core.types import PlaneFrame, Point2, SketchElement, SolvedSketch, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_zero
 from app.i18n import TranslatableText, _
 
 #: Wie nah zwei Endpunkte beieinander liegen müssen, um als verbunden zu
@@ -423,7 +423,7 @@ def arc_through(start: Point2, via: Point2, end: Point2) -> tuple[Point2, float,
     # Umkreismittelpunkt über die Determinante; sie ist zugleich das Maß dafür,
     # wie weit die drei Punkte von einer Geraden entfernt sind.
     below = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
-    if abs(below) <= EPS_GEOM:
+    if is_zero(below):
         return None
     first, second, third = ax * ax + ay * ay, bx * bx + by * by, cx * cx + cy * cy
     ux = (first * (by - cy) + second * (cy - ay) + third * (ay - by)) / below

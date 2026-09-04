@@ -21,7 +21,7 @@ from app.core.geom import enclosure
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_zero
 
 _log = get_logger(__name__)
 
@@ -130,9 +130,9 @@ def plane_patch(minimum: Vec3, maximum: Vec3, plane: SectionPlane) -> tuple[Vec3
             start, end = corners[first], corners[second]
             start_distance = float(np.dot(start - origin, normal))
             end_distance = float(np.dot(end - origin, normal))
-            if abs(start_distance) <= EPS_GEOM:
+            if is_zero(start_distance):
                 remember(start)
-            if abs(end_distance) <= EPS_GEOM:
+            if is_zero(end_distance):
                 remember(end)
             crosses = (start_distance < -EPS_GEOM and end_distance > EPS_GEOM) or (
                 end_distance < -EPS_GEOM and start_distance > EPS_GEOM

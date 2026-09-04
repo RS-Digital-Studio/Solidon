@@ -134,15 +134,6 @@ class WallRequirement:
             raise ValueError("eine ausgelassene Wandprüfung braucht eine Begründung")
         return cls(reason=reason.strip())
 
-    @classmethod
-    def not_applicable_when(cls, name: str, equals: Any, reason: str) -> WallRequirement:
-        """Nur eine fachlich benannte Parameterstellung ist kein Druckkörper."""
-        if not name.strip():
-            raise ValueError("die Bedingung braucht einen Parameternamen")
-        if not reason.strip():
-            raise ValueError("eine ausgelassene Wandprüfung braucht eine Begründung")
-        return cls(reason=reason.strip(), when=name, equals=equals)
-
     def minimum(self, values: dict[str, Any], profile: Profile) -> float | None:
         """Die Untergrenze für genau diese Parameterkombination."""
         if self.reason is not None and (self.when is None or values.get(self.when) == self.equals):

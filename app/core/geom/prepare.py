@@ -45,7 +45,7 @@ from app.core.types import (
     SolverInfo,
     Vec3,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length, format_volume
+from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length, format_volume, is_close
 from app.i18n import TranslatableText, _
 
 #: Segmente, aus denen ein Bohrzylinder gebaut wird. Fein genug, dass das
@@ -66,6 +66,32 @@ class BoreResult:
     diameter: float
     """Der wirklich geschnittene Durchmesser, samt Materialkompensation."""
     findings: list[Finding]
+
+
+def compensation_findings(nominal: float, cut: float, compensate: bool) -> list[Finding]:
+    """Der Hinweis, dass eine Bohrung um die Materialtoleranz gewachsen ist.
+
+    **Einmal für alle drei Bohrungswege.** Der Befund stand bis zum 04.09.2026
+    dreifach im Baum: hier ausgeschrieben, in ``brep.ops`` ausgeschrieben, und
+    in ``prepare_ops`` als Funktion, deren eigener Docstring „wortgleich mit
+    den anderen Bohrungswegen" sagte — mit genau einem Aufrufer. Der Satz
+    selbst ist ein übersetzter Oberflächentext, und eine Änderung an ihm hätte
+    drei Stellen und sechs Kataloge treffen müssen.
+
+    Leer heißt: nichts zu melden. Ohne Kompensation gibt es keinen Hinweis, und
+    ein Maß, das sich nicht messbar geändert hat, ist keine Vergrößerung
+    (Regel 6 — verglichen wird über :func:`~app.core.units.is_close`).
+    """
+    if not compensate or is_close(cut, nominal):
+        return []
+    return [
+        Finding(
+            code="bore.compensated",
+            severity="info",
+            message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
+            values={"nominal": format_length(nominal), "cut": format_length(cut)},
+        )
+    ]
 
 
 def bore_diameter(nominal: float, profile: Profile, compensate: bool) -> float:
@@ -185,7 +211,7 @@ def resize_bore(
     aufgeschlagene Materialtoleranz eine andere Bohrung bekommen.
     """
     cut_diameter = bore_diameter(diameter, profile, compensate)
-    if abs(cut_diameter - previous_diameter) <= EPS_GEOM:
+    if is_close(cut_diameter, previous_diameter):
         return BoreResult(
             mesh=mesh,
             solver=None,
@@ -257,15 +283,7 @@ def resize_bore(
         findings.append(nothing)
     unit_vector: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
     findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter))
-    if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
-        findings.append(
-            Finding(
-                code="bore.compensated",
-                severity="info",
-                message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
-                values={"nominal": format_length(diameter), "cut": format_length(cut_diameter)},
-            )
-        )
+    findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
         mesh=resized,
         solver=outcome.solver,

@@ -35,7 +35,7 @@ from app.core.expressions import evaluate, is_expression, references
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Bone, Finding, OpContext, OpResult, Pose, Vec3
+from app.core.types import BaseParams, Bone, Finding, OpContext, OpResult, Pose, Vec3, as_vec3
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -257,8 +257,8 @@ def armature_from_text(text: str) -> list[Bone]:
         return [
             Bone(
                 name=str(entry["n"]),
-                head=_vector(entry["h"]),
-                tail=_vector(entry["t"]),
+                head=as_vec3(entry["h"]),
+                tail=as_vec3(entry["t"]),
                 parent=str(entry.get("p", "")),
             )
             for entry in json.loads(text)
@@ -402,10 +402,6 @@ def pose_from_text(text: str, values: Mapping[str, float] | None = None) -> list
         ) from problem
 
 
-def _vector(values: Sequence[float]) -> Vec3:
-    return (float(values[0]), float(values[1]), float(values[2]))
-
-
 def _angles(entry: Sequence[float | str], values: Mapping[str, float]) -> Vec3:
     """Drei Winkel, jeder eine Zahl oder ein Ausdruck darauf.
 
@@ -420,7 +416,7 @@ def _angles(entry: Sequence[float | str], values: Mapping[str, float]) -> Vec3:
     am JSON statt am Parameter.
     """
     resolved = [evaluate(angle, values) if is_expression(angle) else angle for angle in entry]
-    return _vector(cast(Sequence[float], resolved))
+    return as_vec3(cast(Sequence[float], resolved))
 
 
 # --- operation --------------------------------------------------------------------

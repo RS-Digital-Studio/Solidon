@@ -39,10 +39,11 @@ from app.core.types import (
     PrintSettings,
     Profile,
     SettingAdvice,
+    Severity,
     SliceResult,
 )
 from app.core.units import is_close
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -208,6 +209,34 @@ def advise(
     return advice
 
 
+def _advice(
+    settings: PrintSettings,
+    *,
+    path: str,
+    value: object,
+    reason: TranslatableText | str,
+    severity: Severity = "info",
+) -> SettingAdvice:
+    """Ein Vorschlag, dessen Ausgangswert aus dem Pfad kommt statt aus der Hand.
+
+    ``was`` stand bis zum 04.09.2026 an siebenundzwanzig Stellen ausgeschrieben
+    — und zwar wirkungslos: :func:`_merged` setzt es für **jeden** Vorschlag
+    ohnehin neu auf ``read_path(settings, path)``, damit es auch nach dem
+    Zusammenführen zweier Regeln der Ausgangswert ist. Wer eine dieser
+    siebenundzwanzig Zeilen geändert hätte, hätte nichts geändert; wer den
+    Pfad geändert und die Zeile vergessen hätte, hätte es nicht gemerkt.
+
+    Jetzt nennt ein Vorschlag seine Einstellung einmal.
+    """
+    return SettingAdvice(
+        path=path,
+        value=value,
+        was=settings_table.read_path(settings, path),
+        reason=reason,
+        severity=severity,
+    )
+
+
 def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[SettingAdvice]:
     """Ein Vorschlag je Einstellung, und ``was`` ist immer der Ausgangswert.
 
@@ -322,10 +351,10 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
     headroom = profile.printer.nozzle_temperature_max - settings.temperature.nozzle
     if headroom >= TEMPERATURE_STEP:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="temperature.nozzle",
                 value=settings.temperature.nozzle + TEMPERATURE_STEP,
-                was=settings.temperature.nozzle,
                 reason=_(
                     "Bei diesem Tempo müssen mehr Kubikmillimeter je Sekunde durch die "
                     "Düse, als das Material bei dieser Temperatur flüssig wird."
@@ -369,10 +398,10 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     wanted = settings_table.MAX_LAYER_RATIO * printer.nozzle_diameter
     if settings.layers.layer_height > wanted:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="layers.layer_height",
                 value=round(wanted, 3),
-                was=settings.layers.layer_height,
                 reason=_(
                     "Eine Schicht über drei Vierteln des Düsendurchmessers haftet nicht "
                     "sicher auf der darunterliegenden."
@@ -389,10 +418,10 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     # wie eine ganze.
     if settings.layers.first_layer_height > wanted:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="layers.first_layer_height",
                 value=round(wanted, 3),
-                was=settings.layers.first_layer_height,
                 reason=_(
                     "Auch die erste Schicht bleibt unter drei Vierteln des "
                     "Düsendurchmessers — höher legt die Düse keine Bahn, die auf dem "
@@ -446,10 +475,10 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
     narrowest = NARROW_LINE_SHARE * printer.nozzle_diameter
     if 0.0 < settings.layers.line_width < narrowest:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="layers.line_width",
                 value=round(narrowest, 3),
-                was=settings.layers.line_width,
                 reason=_(
                     "Schmaler legt diese Düse keine Bahn — enger gequetscht reißt die "
                     "Spur ab, statt dünner zu werden. Für feinere Bahnen gehört eine "
@@ -461,10 +490,10 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
 
     if settings.temperature.nozzle >= printer.nozzle_temperature_max:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="temperature.nozzle",
                 value=printer.nozzle_temperature_max,
-                was=settings.temperature.nozzle,
                 reason=_(
                     "Das Material will an die Grenze dessen, was dieser Drucker heizen "
                     "kann — für einen Dauerlauf ist das knapp."
@@ -475,10 +504,10 @@ def _from_machine(settings: PrintSettings, profile: Profile) -> list[SettingAdvi
 
     if settings.temperature.chamber > 0 and not printer.enclosed:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="temperature.chamber",
                 value=0,
-                was=settings.temperature.chamber,
                 reason=_("Dieser Drucker hat keinen geschlossenen Bauraum."),
             )
         )
@@ -493,10 +522,10 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
     if material in WARPING_MATERIALS and not profile.printer.enclosed:
         if settings.adhesion.kind != "brim":
             advice.append(
-                SettingAdvice(
+                _advice(
+                    settings,
                     path="adhesion.kind",
                     value="brim",
-                    was=settings.adhesion.kind,
                     reason=_(
                         "Dieses Material zieht sich beim Abkühlen zusammen, und der "
                         "Bauraum ist offen. Ein Brim hält die Ecken unten."
@@ -506,10 +535,10 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
             )
         if settings.cooling.fan_speed > 0.3:
             advice.append(
-                SettingAdvice(
+                _advice(
+                    settings,
                     path="cooling.fan_speed",
                     value=0.2,
-                    was=settings.cooling.fan_speed,
                     reason=_("Zugluft auf diesem Material trennt die Schichten voneinander."),
                     severity="warning",
                 )
@@ -524,10 +553,10 @@ def _from_material(settings: PrintSettings, profile: Profile) -> list[SettingAdv
         # Das Materialprofil setzt die Kammer; steht sie trotzdem auf null, hat
         # jemand sie ausgeschaltet — auf einem Gerät, das den Grund dafür hat.
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="temperature.chamber",
                 value=CHAMBER_FOR_WARPING,
-                was=settings.temperature.chamber,
                 reason=_(
                     "Dieser Drucker hat einen geschlossenen Bauraum, und dieses Material "
                     "ist der Grund, warum das hilft."
@@ -592,10 +621,10 @@ def _from_geometry(
     if needs_support and settings.support.style == "none":
         style = "tree" if len(islands) >= TREE_FROM_ISLANDS else "grid"
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="support.style",
                 value=style,
-                was=settings.support.style,
                 reason=_("Ohne Stützen druckt dieses Teil in die Luft.")
                 if islands
                 else _("Die Überhänge sind zu groß, um sich selbst zu tragen."),
@@ -604,10 +633,10 @@ def _from_geometry(
         )
     elif not needs_support and settings.support.style != "none":
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="support.style",
                 value="none",
-                was=settings.support.style,
                 reason=_(
                     "Nichts an diesem Teil schwebt. Stützen kosten hier nur Material "
                     "und hinterlassen Spuren."
@@ -628,10 +657,10 @@ def _from_geometry(
         and not support_on_model(result)
     ):
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="support.placement",
                 value="build_plate",
-                was=settings.support.placement,
                 reason=_(
                     "Alle Überhänge erreichen das Bett. Stützen auf dem Modell "
                     "hinterlassen Narben, die keine sein müssen."
@@ -641,10 +670,10 @@ def _from_geometry(
 
     if 0.0 < result.first_layer_area < SMALL_FOOTPRINT and settings.adhesion.kind == "skirt":
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="adhesion.kind",
                 value="brim",
-                was=settings.adhesion.kind,
                 reason=_("Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt."),
                 severity="warning",
             )
@@ -658,13 +687,13 @@ def _from_geometry(
         # Wenig Fläche und ein Material, das zieht: das Bett ist der einzige
         # Halt, den das Teil in der ersten Minute hat.
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="temperature.bed_first_layer",
                 value=min(
                     settings.temperature.bed_first_layer + BED_STEP,
                     profile.printer.bed_temperature_max,
                 ),
-                was=settings.temperature.bed_first_layer,
                 reason=_(
                     "Kleine Standfläche und ein Material, das sich zusammenzieht — ein "
                     "wärmeres Bett hält die erste Schicht unten."
@@ -674,10 +703,10 @@ def _from_geometry(
 
     if bounds is not None and _slender(bounds) and settings.adhesion.kind == "skirt":
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="adhesion.kind",
                 value="brim",
-                was=settings.adhesion.kind,
                 reason=_("Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen."),
                 severity="warning",
             )
@@ -700,10 +729,10 @@ def _from_geometry(
     thin = narrowest_measured(result, interesting_below=asked)
     if thin is not None and thin < asked and settings.shell.wall_generator == "classic":
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="shell.wall_generator",
                 value="arachne",
-                was=settings.shell.wall_generator,
                 reason=_(
                     "Die schmalste Stelle geht auf keine ganze Zahl von Bahnen auf. "
                     "Mit fester Linienbreite bleibt dort eine Lücke, die nur "
@@ -715,10 +744,10 @@ def _from_geometry(
 
     if overhang > 0.0 and settings.speed.bridge > settings.speed.outer_wall:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="speed.bridge",
                 value=settings.speed.outer_wall,
-                was=settings.speed.bridge,
                 reason=_(
                     "Über einer Lücke trägt nichts von unten. Schneller als die "
                     "Außenwand gefahren hängt die erste Bahn durch."
@@ -739,10 +768,10 @@ def _from_geometry(
         # den ganzen Bereich darunter: kleinere Düse oder breitere Stelle,
         # beides entscheidet der Nutzer, kein Wert.
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="layers.line_width",
                 value=round(max(thin / 2.0, least), 3),
-                was=settings.layers.line_width,
                 reason=_(
                     "Die dünnste Stelle ist schmaler als zwei Linien breit. Mit der "
                     "jetzigen Breite fällt sie im Druck weg."
@@ -753,10 +782,10 @@ def _from_geometry(
 
     if _has_thin_layers(result) and settings.cooling.minimum_layer_time < THIN_LAYER_SECONDS:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="cooling.minimum_layer_time",
                 value=THIN_LAYER_SECONDS,
-                was=settings.cooling.minimum_layer_time,
                 reason=_(
                     "Weiter oben liegen Schichten mit so wenig Fläche, dass sie in "
                     "Sekunden fertig sind. Ohne Mindestzeit je Schicht legt die Düse "
@@ -779,10 +808,10 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
     careful = 30.0
     if "flush" in kinds and not settings.shell.ironing:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="shell.ironing",
                 value=True,
-                was=settings.shell.ironing,
                 reason=_(
                     "Eine bündige Passung legt zwei Flächen aufeinander. Gebügelt "
                     "gleitet die obere, statt auf den Bahnkanten zu sitzen."
@@ -791,10 +820,10 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
         )
     if not settings.shell.precise_outer_wall:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="shell.precise_outer_wall",
                 value=True,
-                was=settings.shell.precise_outer_wall,
                 reason=_(
                     "Das Projekt hat Passungen. Die Außenwand auf das Sollmaß zu "
                     "rechnen statt auf die Bahnmitte ist genau dafür da."
@@ -803,10 +832,10 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
         )
     if settings.speed.outer_wall_acceleration > CAREFUL_ACCELERATION:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="speed.outer_wall_acceleration",
                 value=CAREFUL_ACCELERATION,
-                was=settings.speed.outer_wall_acceleration,
                 reason=_(
                     "Hohe Beschleunigung schwingt die Kontur aus. Das kostet die "
                     "Zehntelmillimeter, auf die eine Passung gerechnet ist."
@@ -815,10 +844,10 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
         )
     if settings.speed.outer_wall > careful:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="speed.outer_wall",
                 value=careful,
-                was=settings.speed.outer_wall,
                 reason=_(
                     "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält "
                     "das Maß, auf das sie gerechnet sind."
@@ -827,10 +856,10 @@ def _from_fits(settings: PrintSettings, kinds: Sequence[str]) -> list[SettingAdv
         )
     if not settings.shell.outer_wall_first:
         advice.append(
-            SettingAdvice(
+            _advice(
+                settings,
                 path="shell.outer_wall_first",
                 value=True,
-                was=settings.shell.outer_wall_first,
                 reason=_(
                     "Die Außenwand zuerst zu legen gibt die genauere Kontur — was bei "
                     "einer Passung der Punkt ist."
@@ -882,10 +911,10 @@ def _fill_the_core(settings: PrintSettings, diameter: float, core: float) -> lis
         # ist kein Vorschlag.
         return []
     return [
-        SettingAdvice(
+        _advice(
+            settings,
             path="infill.density",
             value=round(needed, 2),
-            was=settings.infill.density,
             reason=_(
                 "Der Verbinder ist zu dick, um ihn mit Wänden zu schließen — er "
                 "trägt dann über das Füllmuster in seiner Mitte. So viel Füllung "
@@ -958,10 +987,10 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
         # nennt: das Muster im Kern.
         return _fill_the_core(settings, thickest, core)
     return [
-        SettingAdvice(
+        _advice(
+            settings,
             path="shell.wall_count",
             value=needed,
-            was=settings.shell.wall_count,
             reason=_(
                 "Der Verbinder besteht bei den eingestellten Wänden im Kern aus "
                 "Füllmuster und trägt nur mit seiner Außenhaut. So viele Wände "
@@ -995,10 +1024,10 @@ def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> 
     else:
         return []
     return [
-        SettingAdvice(
+        _advice(
+            settings,
             path="adhesion.kind",
             value="brim",
-            was=settings.adhesion.kind,
             reason=reason,
             severity="warning",
         )

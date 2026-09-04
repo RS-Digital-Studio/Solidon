@@ -34,7 +34,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
-from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
+from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import is_greater
 from app.i18n import _
@@ -215,15 +215,7 @@ class MagnetPocketParams(BaseParams):
             "Null verwendet die ausgewählte Größe."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
     cover: float = param(
         title=_("Deckschicht"),
         default=0.0,
@@ -238,15 +230,7 @@ class MagnetPocketParams(BaseParams):
         placement="advanced",
         doc=_("Ein Zehntel Verengung am Rand, damit der Magnet nicht herausfällt."),
     )
-    grip: float = param(
-        title=_("Übermaß"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    grip: float = play_param(title=GRIP_TITLE)
 
 
 @register_part(
@@ -501,15 +485,7 @@ class KeyholeParams(BaseParams):
         placement="advanced",
         doc=_("Wie tief der Schraubenkopf einsinkt."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0)
 
 
 @register_part(
@@ -874,15 +850,7 @@ class PegboardHookParams(BaseParams):
             "Wer trotzdem eine will, bekommt sie **im** Teil liegend, nicht darauf."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.5,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=1.5)
     lip: float = param(
         title=_("Nasentiefe"),
         default=0.0,
@@ -1246,15 +1214,7 @@ class FootParams(BaseParams):
             "es eine Fase zum Einfädeln."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0)
 
 
 @register_part(

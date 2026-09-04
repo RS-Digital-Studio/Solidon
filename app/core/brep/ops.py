@@ -30,12 +30,12 @@ from app.core.errors import (
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
-from app.core.geom.prepare import bore_diameter, over_the_edge
+from app.core.geom.prepare import bore_diameter, compensation_findings, over_the_edge
 from app.core.geom.prepare_ops import DrillParams
 from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
-from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
+from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
 from app.i18n import _
 
 _CHOICES = edit.EDGE_CHOICES
@@ -234,7 +234,7 @@ class FilletParams(BaseParams):
 )
 def fillet_edges(ctx: OpContext) -> OpResult:
     params = cast(FilletParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source, body = brep_input(ctx)
     solid = edit.fillet(body, params.radius, cast(edit.EdgeChoice, params.edges))
     return OpResult(outputs=[_replaced(source, solid)])
 
@@ -269,7 +269,7 @@ class ChamferParams(BaseParams):
 )
 def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source, body = brep_input(ctx)
     solid = edit.chamfer(body, params.distance, cast(edit.EdgeChoice, params.edges))
     return OpResult(outputs=[_replaced(source, solid)])
 
@@ -313,7 +313,7 @@ class ShellParams(BaseParams):
 )
 def shell_exact(ctx: OpContext) -> OpResult:
     params = cast(ShellParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source, body = brep_input(ctx)
     solid = profiles.shell_open_top(body, params.wall)
     # **Der Zwilling meldete fünf Dinge, dieser keines.** Gemessen über
     # dreizehn Wandstärken an einem Quader 40x30x20: Bei 15 mm kam ein Körper
@@ -326,7 +326,7 @@ def shell_exact(ctx: OpContext) -> OpResult:
     # Derselbe Befund wie im Netz und aus derselben Quelle (``hollow.too_thin``):
     # Für den Kunden ist es dieselbe Auskunft, gleich woran der Kern es merkt.
     findings: list[Finding] = []
-    if abs(solid.volume - body.volume) <= EPS_GEOM or not solid.is_watertight:
+    if is_close(solid.volume, body.volume) or not solid.is_watertight:
         findings.append(too_thin(params.wall))
     else:
         # **Und der Erfolgsfall, der als letzter auseinanderlief.** Nach dem
@@ -374,7 +374,7 @@ class DraftParams(BaseParams):
 )
 def draft_faces(ctx: OpContext) -> OpResult:
     params = cast(DraftParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source, body = brep_input(ctx)
     solid = profiles.draft_vertical(body, params.angle)
     return OpResult(outputs=[_replaced(source, solid)])
 
@@ -478,7 +478,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     eines gröberen Versuchs.
     """
     params = cast(DrillParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source, body = brep_input(ctx)
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
     solid = edit.bore(
         body,
@@ -531,15 +531,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
             cut,
         )
     )
-    if params.compensate and abs(cut - params.diameter) > EPS_GEOM:
-        findings.append(
-            Finding(
-                code="bore.compensated",
-                severity="info",
-                message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
-                values={"nominal": format_length(params.diameter), "cut": format_length(cut)},
-            )
-        )
+    findings.extend(compensation_findings(params.diameter, cut, params.compensate))
     return OpResult(outputs=[_replaced(source, solid)], findings=findings)
 
 
@@ -586,7 +578,7 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
     Körper zurück, weil der Stapel neu gerechnet und nicht geflickt wird.
     """
     params = cast(ToMeshParams, ctx.params)
-    source, body = _brep_input(ctx)
+    source, body = brep_input(ctx)
     mesh = Solid(shape=body.shape, deflection=params.deflection).to_mesh()
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, kind="mesh", features={})],
@@ -605,9 +597,21 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
     )
 
 
-def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
+def brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
     """Die Eingabe und ihr exakter Körper — oder ein klarer Satz, wenn es ein
     Netz ist (§33.1).
+
+    Kein ``ValidationError``: dessen Titel lautet „Ein Wert liegt außerhalb des
+    zulässigen Bereichs", und hier ist kein Wert außerhalb eines Bereichs —
+    hier hat der Körper die falsche Art. Im Prüfbericht stand deshalb eine
+    Fehlermeldung über Zahlen an einer Stelle, an der keine Zahl schuld war.
+
+    **Öffentlich und einmal**, seit dem 04.09.2026: ``sketch.ops`` trug eine
+    wortgleiche Kopie mitsamt eigenem Katalogeintrag in sechs Sprachen. Die
+    beiden Sätze waren schon auseinandergelaufen — der hiesige nannte das
+    Aushöhlen nicht, obwohl ``hollow_object`` genau der Weg ist, auf dem ein
+    exakter Körper zum Netz wird (aufgefallen an ``puppenhaus_fertig``). Der
+    umfassendere Satz hat gewonnen.
     """
     require()
     source = ctx.inputs[0]
@@ -619,10 +623,10 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             detail=_(
                 "Der gewählte Körper besteht bereits aus festen Dreiecken. Dieses "
                 "Werkzeug braucht einzeln bearbeitbare Flächen und Kanten. Aktiviere "
-                "dafür bei einer Grundform die Option „Flächen und Kanten später "
-                "bearbeiten“ oder öffne eine STEP-Datei."
+                "dafür bei einer Grundform oder beim Aushöhlen „Flächen und Kanten "
+                "später bearbeiten“ oder öffne eine STEP-Datei."
             ),
-            values={"name": source.name},
+            values={"name": source.name, "field": "in", "constraint": "needs_brep"},
             object_id=source.id,
         )
     return source, source.mesh

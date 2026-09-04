@@ -137,6 +137,26 @@ def same_origin(first: str, second: str) -> bool:
     return left == right
 
 
+def redirect_left_origin(answer: Any, address: str, *, allow_http: bool) -> bool:
+    """Hat die Antwort den Ursprung verlassen, aus dem sie kommen sollte? (§32)
+
+    Eine Weiterleitung darf die Adresse verfeinern, aber nicht den Host
+    wechseln: Sonst geht ein Kaufcode oder ein Prüfbericht an einen Server, den
+    niemand geprüft hat. Die Frage ist überall dieselbe — die Antwort darauf
+    nicht, und deshalb wirft diese Funktion nicht selbst: Der Sprachbackend
+    meldet ``BackendUnavailable``, der Aktivierungsdienst
+    ``ActivationServiceError``, Update und Support ein nacktes ``ValueError``.
+    Jeder Aufrufer behält seinen Fehler und bekommt nur die Prüfung geliehen.
+
+    Bis zum 04.09.2026 stand sie siebenmal ausgeschrieben — in ``backends.llm``
+    dreimal, in ``updates`` zweimal, dazu ``support`` und ``licence_service``.
+    Sieben Stellen sind sechs Gelegenheiten, eine zu vergessen, wenn die Regel
+    einmal schärfer wird.
+    """
+    final = validate_http_url(response_url(answer, address), allow_http=allow_http)
+    return not same_origin(address, final)
+
+
 def is_private_destination(url: str) -> bool:
     """Ob eine Adresse ausdrücklich auf einen lokalen oder privaten Host zeigt.
 

@@ -35,8 +35,7 @@ from app.core.http import (
     deadline_after,
     is_private_destination,
     read_limited,
-    response_url,
-    same_origin,
+    redirect_left_origin,
     validate_http_url,
 )
 from app.core.json_boundary import loads as load_json
@@ -457,8 +456,7 @@ def _post(url: str, content_type: str, body: bytes) -> dict[str, Any]:
         method="POST",
     )
     with _SUPPORT_OPENER.open(request, timeout=TIMEOUT_SECONDS) as answer:
-        final = validate_http_url(response_url(answer, address), allow_http=True)
-        if not same_origin(address, final):
+        if redirect_left_origin(answer, address, allow_http=True):
             raise ValueError("support endpoint redirected")
         raw = read_limited(answer, limit=MAX_REPLY_BYTES, deadline=deadline)
     try:

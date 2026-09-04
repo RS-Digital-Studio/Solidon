@@ -24,7 +24,7 @@ from app.core.brep.kernel import Solid, require
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
 from app.core.types import Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -346,7 +346,7 @@ def resize_bore(
     aufeinanderliegen. Das Ergebnismaß bleibt der innere Radius und damit
     exakt der gewählte Durchmesser.
     """
-    if abs(diameter - previous_diameter) <= EPS_GEOM:
+    if is_close(diameter, previous_diameter):
         return solid
     if depth <= EPS_GEOM:
         raise ValueError("a detected bore must have a positive depth")

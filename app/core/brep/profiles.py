@@ -27,7 +27,7 @@ from app.core.log import get_logger
 from app.core.sketch.planes import to_world
 from app.core.sketch.profile import Profile, arc_through, signed_area
 from app.core.types import PlaneFrame, Point2
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, is_zero
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -943,7 +943,7 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
     from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
     from OCP.gp import gp_Vec
 
-    if abs(distance) <= EPS_GEOM:
+    if is_zero(distance):
         raise ValidationError(
             "distance",
             _("Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein."),

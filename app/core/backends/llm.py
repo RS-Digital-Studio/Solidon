@@ -49,8 +49,7 @@ from app.core.http import (
     deadline_after,
     iter_limited,
     read_limited,
-    response_url,
-    same_origin,
+    redirect_left_origin,
     validate_http_url,
 )
 from app.core.json_boundary import loads as load_json
@@ -296,8 +295,7 @@ def post_json(
     )
     try:
         with opener_for(address).open(request, timeout=timeout) as answer:
-            final = validate_http_url(response_url(answer, address), allow_http=True)
-            if not same_origin(address, final):
+            if redirect_left_origin(answer, address, allow_http=True):
                 raise BackendUnavailable()
             raw = read_limited(answer, limit=MAX_RESPONSE_BYTES, deadline=deadline)
             return _as_object(raw, address)
@@ -1371,8 +1369,7 @@ def _get_json(url: str) -> dict[str, Any]:
     deadline = deadline_after(TAGS_TIMEOUT_SECONDS)
     request = urllib.request.Request(address)
     with opener_for(address).open(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
-        final = validate_http_url(response_url(answer, address), allow_http=True)
-        if not same_origin(address, final):
+        if redirect_left_origin(answer, address, allow_http=True):
             raise ValueError("redirected model list")
         raw = read_limited(answer, limit=MAX_TAGS_RESPONSE_BYTES, deadline=deadline)
     return dict(load_json(raw, max_bytes=MAX_TAGS_RESPONSE_BYTES))
@@ -1589,8 +1586,7 @@ def pull_model(
             address, data=body, headers={"Content-Type": "application/json"}
         )
         with opener_for(address).open(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
-            final = validate_http_url(response_url(answer, address), allow_http=True)
-            if not same_origin(address, final):
+            if redirect_left_origin(answer, address, allow_http=True):
                 raise ValueError("redirected model pull")
             for raw in _pull_lines(answer, deadline):
                 if cancelled is not None and cancelled():

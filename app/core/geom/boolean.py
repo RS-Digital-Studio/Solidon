@@ -20,9 +20,9 @@ schnell (§31).
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Final, Literal, Protocol
+from typing import Any, Final, Literal, Protocol
 
 import numpy as np
 
@@ -34,7 +34,7 @@ from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
 from app.core.types import CancelToken, Finding, Profile, Quality, SolverInfo, SolverStage
 from app.core.units import EPS_GEOM
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -474,6 +474,55 @@ NOTHING_LEFT_DETAIL: Final = _(
     "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
     "vollständig ab. Prüfen Sie Maß und Lage."
 )
+
+
+def fell_apart(
+    before: Any,
+    after: Any,
+    *,
+    applies: bool,
+    code: str,
+    message: TranslatableText | str,
+    values: Mapping[str, str] | None = None,
+) -> Finding | None:
+    """Ist etwas neben dem Körper liegengeblieben, statt an ihm zu hängen?
+    (Regel 17)
+
+    **Die Teilezahl lügt nicht.** Sie ist binär statt toleranzbehaftet und
+    fängt Fälle, die :func:`without_effect` bauartbedingt nicht sieht: Dort
+    wird das Volumen gemessen, und bei erhabener Schrift oder aufgesetztem
+    Muster ändert es sich ja — nur eben daneben. Die Volumenfrage ist damit
+    beantwortet und die falsche gestellt.
+
+    ``applies`` ist die Ausnahme, und sie hat bei jedem Aufrufer einen anderen
+    Namen für dieselbe Sache: Ein graviertes Muster, eine vertiefte Schrift und
+    ein abziehender Baustein **schneiden**, und Schneiden darf teilen — bei
+    manchen ist das der Zweck.
+
+    Dreimal wortgleich geschrieben, bis zum 04.09.2026 — in ``label_ops``,
+    ``texture_ops`` und ``knowledge.parts.ops``, und alle drei Docstrings
+    verwiesen brav aufeinander („Dieselbe Bauart wie …"), ohne dass es einer
+    auflöste. Die Fälle bleiben getrennt, weil sie verschiedene Messungen und
+    verschiedene Sätze tragen; die Regel steht jetzt hier.
+    """
+    if not applies or after.component_count <= before.component_count:
+        return None
+    loose = after.component_count - before.component_count
+    return Finding(
+        code=code,
+        severity="error",
+        # **Der Vorschlag steht im Satz.** Ein ``Finding`` trägt keine
+        # ``Action``-Liste — das kann nur eine Ausnahme. Regel 17 verlangt
+        # trotzdem einen Weg nach vorn, und :func:`without_effect` macht es
+        # nebenan genauso: erst was ist, dann was hilft.
+        message=message,
+        values={
+            **(dict(values) if values else {}),
+            "loose": str(loose),
+            "before": str(before.component_count),
+            "after": str(after.component_count),
+        },
+    )
 
 
 def without_effect(

@@ -26,7 +26,7 @@ from app.core.knowledge.parts.registry import (
     WallRequirement,
     register_part,
 )
-from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
+from app.core.registry import op_params, param, play_param
 from app.core.types import BaseParams, Feature, PartResult
 from app.i18n import _
 
@@ -152,16 +152,7 @@ class ScrewHoleParams(BaseParams):
         depends_on=("countersink", (False,)),
         doc=_("Schneidet eine passende Auflage für die Unterlegscheibe."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=2.0,
-        placement="advanced",
-        depends_on=("washer", (True,)),
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param(maximum=2.0, depends_on=("washer", (True,)))
     head_room: float = param(
         title=_("Kopftiefe"),
         default=0.0,
@@ -473,15 +464,7 @@ class NutTrapParams(BaseParams):
         maximum=100.0,
         doc=_("Wie weit der Schlitz nach außen reicht. Null heißt: nur die Tasche."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
     screw_hole: bool = param(
         title=_("Schraubenloch mitschneiden"),
         default=True,
@@ -680,15 +663,7 @@ class ThreadParams(BaseParams):
             "mit passendem Schraubdeckel verwenden Sie „Drehdeckel erzeugen“."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_part(
@@ -812,15 +787,7 @@ class PrintedScrewParams(BaseParams):
             "selben rücknehmbaren Schritt passend an."
         ),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_part(
@@ -931,15 +898,7 @@ class PrintedNutParams(BaseParams):
         choices=_NUTS,
         doc=_("Nenndurchmesser und Steigung des passenden gedruckten Gewindes."),
     )
-    play: float = param(
-        title=_("Spiel"),
-        default=0.0,
-        unit="mm",
-        minimum=0.0,
-        maximum=1.0,
-        placement="advanced",
-        doc=AUTO_FROM_PROFILE_DOC,
-    )
+    play: float = play_param()
 
 
 @register_part(
