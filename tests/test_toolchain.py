@@ -1894,6 +1894,71 @@ def test_every_film_ends_on_the_closing_card() -> None:
     )
 
 
+def test_the_feature_film_proves_the_same_identity_in_both_languages() -> None:
+    """Der Pressefilm beantwortet die Frage nach Netz und Merkmalskennung.
+
+    Ein bloßes Vorher-Nachher könnte auch „Loch schließen, neues bohren“ sein.
+    Deshalb müssen beide Fassungen denselben Ablauf tragen und ausdrücklich
+    mit dem eingelesenen Netz beginnen, bevor Auswahl, Vorschau und Übernehmen
+    folgen.
+    """
+    from tools.make_video import FEATURE_CAPTIONS, FEATURE_EDITING, feature_timing
+
+    expected = ["mesh", "recognise", "preview_feature", "apply_feature", "closing"]
+    assert set(FEATURE_EDITING) == {"de", "en"}
+    for language, scenes in FEATURE_EDITING.items():
+        assert [key for key, _sentence in scenes] == expected, language
+        assert set(FEATURE_CAPTIONS[language]) == set(expected) - {"closing"}
+        timing = feature_timing(scenes)
+        assert [key for key, _path, _seconds in timing] == expected
+        assert sum(seconds for _key, _path, seconds in timing) == 27.0
+
+
+def test_feature_music_is_original_stereo_and_reproducible(tmp_path: Path) -> None:
+    """Das Musikbett hängt weder an einem Download noch an einem Zufallswert."""
+    import wave
+
+    from tools.make_video import write_feature_music
+
+    first = write_feature_music(tmp_path / "eins.wav", 0.25)
+    second = write_feature_music(tmp_path / "zwei.wav", 0.25)
+
+    assert first.read_bytes() == second.read_bytes()
+    with wave.open(str(first), "rb") as stream:
+        assert stream.getnchannels() == 2
+        assert stream.getsampwidth() == 2
+        assert stream.getframerate() == 48_000
+        assert stream.getnframes() == 12_000
+        assert any(stream.readframes(12_000)), "das Musikbett ist nur Stille"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows-Cursorschema")
+def test_feature_film_uses_the_configured_windows_pointer() -> None:
+    """Im Film steht der Systempfeil und nicht eine ähnlich gezeichnete Form."""
+    import ctypes
+
+    from tools.make_video import _system_pointer_image
+
+    pointer = _system_pointer_image()
+    assert pointer is not None and not pointer.isNull()
+    assert pointer.width() == ctypes.windll.user32.GetSystemMetrics(13)
+    assert pointer.height() == ctypes.windll.user32.GetSystemMetrics(14)
+
+
+def test_video_subtitles_follow_the_spoken_pauses(tmp_path: Path) -> None:
+    """YouTube-Untertitel enden vor der Pause und die nächste Szene danach."""
+    from tools.make_video import write_subtitles
+
+    scenes = (("mesh", "Erster Satz."), ("closing", "Zweiter Satz."))
+    spoken = [("mesh", Path("eins.wav"), 2.7), ("closing", Path("zwei.wav"), 1.7)]
+    target = write_subtitles(spoken, scenes, tmp_path / "film.srt")
+    written = target.read_text(encoding="utf-8-sig")
+
+    assert "00:00:00,000 --> 00:00:02,000" in written
+    assert "00:00:02,700 --> 00:00:03,700" in written
+    assert "Erster Satz." in written and "Zweiter Satz." in written
+
+
 def test_windowed_suite_selection_follows_the_fixture_graph(tmp_path: Path) -> None:
     """Vererbte Fenster-Fixtures zählen, bloße Wörter im Quelltext nicht."""
     from tools.list_windowed_tests import collect_windowed

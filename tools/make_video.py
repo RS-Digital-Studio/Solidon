@@ -38,6 +38,7 @@ OpenSCAD und den Slicern, damit bleibt die Lizenzlage unberührt (Regel 15).
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import shutil
@@ -46,6 +47,7 @@ import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -81,6 +83,13 @@ from tools.make_figures import release_viewport
 #: Was eine Szene je Bild tut: Nummer und Gesamtzahl herein, Welt eingestellt.
 StepFn = Callable[[int, int], None]
 
+#: Wo der sichtbare Mauszeiger in diesem Bild steht — Fensterkoordinaten
+#: und ob der Klickring sichtbar sein soll. Bildschirmaufnahmen enthalten den
+#: Systemzeiger nicht zuverlässig; der Film ergänzt deshalb das im
+#: Betriebssystem eingestellte Zeigerbild an genau der Stelle, an der dieselbe
+#: Aufnahme die Qt-Eingabe auslöst.
+PointerFn = Callable[[int, int], tuple[float, float, bool] | None]
+
 #: Aufnahmegröße fürs Querformat. Nativ Full HD — der Bildschirm hier ist
 #: breit genug, und alles, was skaliert werden muss, verliert an den
 #: Beschriftungen zuerst.
@@ -114,6 +123,11 @@ FPS = 30
 #: dass sie ein Loch bohren kann.
 EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 
+#: Das eingelesene MIT-Korpusnetz für den Merkmalsfilm. Im Projekt stehen
+#: bereits Reparatur und Bettlage; die vier Bohrungen stammen weiterhin aus
+#: der eingebetteten STL und nicht aus einer Solidon-Konstruktion.
+FEATURE_EXAMPLE = "weg1-halterung-anpassen.p3d"
+
 #: Die eigene Umgebung für die Sprachausgabe.
 #:
 #: **Nicht die Projektumgebung.** Chatterbox bringt PyTorch mit; das in der
@@ -123,6 +137,7 @@ EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 #: ``tools/speak_chatterbox.py``.
 VOICE_PYTHON = Path(__file__).resolve().parent.parent / ".venv-tts" / "Scripts" / "python.exe"
 VOICE_SCRIPT = Path(__file__).resolve().parent / "speak_chatterbox.py"
+VOICE_REFERENCE = Path(__file__).resolve().parent / "voice-reference.wav"
 
 
 def offer_copy(language: str) -> tuple[str, str]:
@@ -458,6 +473,67 @@ FORMEN: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Das kurze Beweisvideo zur Merkmalsbearbeitung auf einem eingelesenen Netz.
+#:
+#: Die Frage des All3DP-Redakteurs vom 04.09.2026 trifft genau den Punkt, den
+#: ein gewöhnlicher Bildschirmfilm nicht beantwortet: Wird erst ein CAD-Körper
+#: rekonstruiert, oder arbeitet Solidon wirklich am Netz? Deshalb nennt der
+#: erste Satz ausdrücklich STL, Dreiecke und den fehlenden CAD-Verlauf. Danach
+#: zeigt die Aufnahme nicht bloß zwei gleich aussehende Löcher, sondern dieselbe
+#: Kennung vor und nach der Operation. Das ist der Beleg für den Unterschied
+#: zwischen „schließen und neu bohren“ und ``move_feature``.
+FEATURE_EDITING: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        (
+            "mesh",
+            "Hier liegt wirklich nur eine STL. Dreiecke, sonst nichts. Kein CAD-Verlauf.",
+        ),
+        (
+            "recognise",
+            "Ich klicke auf diese Bohrung. Solidon erkennt fünf Komma eins neun "
+            "Millimeter: ein Durchgangsloch für M fünf.",
+        ),
+        (
+            "preview_feature",
+            "Rechts ändere ich die X-Position, von minus fünfundzwanzig auf minus zehn "
+            "Millimeter. Schon in der Vorschau wandert die Bohrung.",
+        ),
+        (
+            "apply_feature",
+            "Jetzt übernehme ich die Änderung. Es bleibt dieselbe Bohrung, mit derselben "
+            "Kennung. Deshalb verlieren Passungen und spätere Schritte nicht ihren Bezug.",
+        ),
+        (
+            "closing",
+            "Eine STL ändern, ohne sie in CAD nachzubauen. Das ist Solidon.",
+        ),
+    ),
+    "en": (
+        (
+            "mesh",
+            "This really is just an STL. Triangles, nothing else. No CAD history.",
+        ),
+        (
+            "recognise",
+            "I click this hole. Solidon recognises 5.19 millimetres: an M5 clearance hole.",
+        ),
+        (
+            "preview_feature",
+            "On the right, I change X from minus 25 to minus 10 millimetres. "
+            "The hole moves in the preview.",
+        ),
+        (
+            "apply_feature",
+            "Now I apply the change. It is still the same hole, with the same identity. "
+            "That is why fits and later steps keep their reference.",
+        ),
+        (
+            "closing",
+            "Change an STL without rebuilding it in CAD. That is Solidon.",
+        ),
+    ),
+}
+
 SCRIPTS = {
     "einstieg": OPENING,
     "parametrik": STORYBOARD,
@@ -465,6 +541,7 @@ SCRIPTS = {
     "anpassen": ANPASSEN,
     "generieren": GENERIEREN,
     "formen": FORMEN,
+    "merkmal": FEATURE_EDITING,
 }
 
 #: Wie weit die Teile im Modul-Video auseinandergehen, als Faktor auf den
@@ -537,6 +614,56 @@ PORTRAIT_TEXT = {
     "en": ("Change one dimension", "Everything else follows."),
 }
 
+#: Ziel der sichtbaren Probe. Fünfzehn Millimeter sind im Bild deutlich; die
+#: Operation selbst arbeitet selbstverständlich auch mit kleineren Wegen.
+FEATURE_DEMO_TARGET_X = -10.0
+
+#: Szenen, die den Merkmalsbeweis aufbauen. Der Name ist Teil des Vertrags mit
+#: :func:`prepare_feature_demo_scene`; ein Tippfehler soll dort auffallen und
+#: nicht still auf eine Kreisfahrt zurückfallen.
+FEATURE_DEMO_SCENES = frozenset({"mesh", "recognise", "preview_feature", "apply_feature"})
+
+#: Der stumme Merkmalsfilm bekommt eine feste, bewusst knappe Uhr. Die
+#: Einblendungen brauchen weniger Zeit als ein Sprecher; sieben Sekunden für
+#: Eingabe und Übernehmen lassen den tatsächlichen Mausweg dennoch lesbar.
+FEATURE_SCENE_SECONDS = {
+    "mesh": 4.0,
+    "recognise": 5.0,
+    "preview_feature": 7.0,
+    "apply_feature": 7.0,
+    "closing": 4.0,
+}
+
+#: Was statt einer künstlichen Stimme im Bild steht. Titel nennen die
+#: Handlung, die zweite Zeile den Beleg. Der Text liegt tief im Viewport, aber
+#: oberhalb der Werkzeugleiste; Objektbaum und Merkmalfenster bleiben frei.
+FEATURE_CAPTIONS = {
+    "de": {
+        "mesh": ("NUR EINE STL", "Dreiecke · kein CAD-Verlauf"),
+        "recognise": ("BOHRUNG AUSWÄHLEN", "Erkannt: ⌀ 5,19 mm · M5-Durchgang"),
+        "preview_feature": (
+            "POSITION DIREKT ÄNDERN",
+            "X: -25 mm → -10 mm · Live-Vorschau",
+        ),
+        "apply_feature": (
+            "DIESELBE BOHRUNG BLEIBT ERHALTEN",
+            "Kennung hole_1 · Passungen bleiben verbunden",
+        ),
+    },
+    "en": {
+        "mesh": ("JUST AN STL", "Triangles · no CAD history"),
+        "recognise": ("SELECT THE HOLE", "Recognised: ⌀ 5.19 mm · M5 clearance"),
+        "preview_feature": (
+            "CHANGE ITS POSITION DIRECTLY",
+            "X: -25 mm → -10 mm · live preview",
+        ),
+        "apply_feature": (
+            "THE SAME HOLE IS PRESERVED",
+            "Identity hole_1 · fits stay connected",
+        ),
+    },
+}
+
 #: Pause hinter jedem Satz, in Sekunden.
 #:
 #: Sie steht im Ton **und** im Bild, sonst wechselt die Szene, während noch
@@ -578,32 +705,9 @@ SCRIPT = {
 #: einträgt, bekommt eine Stimme, die die Zahl trifft und dumpfer klingt.
 LOUDNESS = -14.0
 
-#: Die Kette, die aus der Sprachausgabe einen Sendeton macht.
-#:
-#: Gemessen an der Verteilung der Klangenergie bringt sie die Präsenz (2 bis
-#: 6 kHz) von 1,4 auf 5,1 Prozent und die Brillanz (6 bis 11 kHz) von 0,6 auf
-#: 4,7 — die beiden Bänder, an denen Verständlichkeit hängt. Roh klingt piper
-#: dumpf, weil dort fast nichts liegt.
-#:
-#: **Oberhalb von 11 kHz ändert das nichts**, und keine Einstellung tut das:
-#: piper liefert 22,05 kHz, damit ist bei der halben Abtastrate Schluss. Der
-#: ``aexciter`` erfindet Obertöne unterhalb dieser Grenze, nicht darüber.
-#:
-#: Die Reihenfolge ist nicht beliebig: ``aresample`` steht **vor** dem
-#: Exciter, damit der Platz für Obertöne oberhalb der Quellrate hat.
-#:
-#: Die Werte gelten für Chatterbox und **nicht mehr für piper**. Die alte
-#: Kette musste ein dumpfes 22-kHz-Signal von 0,6 Prozent Präsenz hochziehen;
-#: Chatterbox liefert 4,5 Prozent bei 24 kHz. Dieselbe Anhebung darübergelegt
-#: ergab 8,7 Prozent — anderthalbmal so viel wie das, was bei piper gut klang,
-#: und in dem Bereich wird eine Stimme scharf und zischend.
-#:
-#: Deshalb: keine Präsenzanhebung mehr bei 2,8 kHz, die Absenkung bei 200 Hz
-#: nur noch halb so tief (Chatterbox hat 39 statt 64 Prozent Fundament), und
-#: der Exciter trägt die Brillanz allein. Er ist der einzige Regler, der sie
-#: bewegt, und bei 3,0 liegen Präsenz und Brillanz auf rund 6 und 3 Prozent.
-#:
-#: Die Lautheit ist absichtlich **nicht** dabei — sie hängt hinten an
+#: Die Kette, die aus einer Sprachausgabe einen Sendeton macht. Sie bleibt für
+#: die übrigen Filme erhalten; der Merkmalsfilm benutzt bewusst Originalmusik
+#: und eingeblendeten Text. Die Lautheit hängt weiterhin getrennt hinten an
 #: (:func:`polish`).
 POLISH_FILTERS = (
     "aresample=48000,"
@@ -888,6 +992,12 @@ def speak_storyboard(
     Sprache bestimmt die Länge der Szene, nicht eine geratene Sekundenzahl.
     """
     spoken: list[tuple[str, Path, float]] = []
+    voice_stamp = hashlib.sha256()
+    for source in (VOICE_SCRIPT, VOICE_REFERENCE):
+        if not source.is_file():
+            raise SystemExit(f"Die Sprachquelle fehlt: {source}")
+        voice_stamp.update(source.read_bytes())
+    voice_version = voice_stamp.hexdigest()
     for key, text in script[language]:
         raw = out / "audio" / f"{key}-{language}-roh.wav"
         ready = out / "audio" / f"{key}-{language}.wav"
@@ -899,13 +1009,14 @@ def speak_storyboard(
         # neu; zwei Aufnahmen desselben Satzes klingen messbar verschieden.
         # Wer nach einer Bildkorrektur neu rendert, bekäme sonst nebenbei eine
         # andere Stimme.
-        cached = stamp.is_file() and stamp.read_text(encoding="utf-8") == text
+        expected_stamp = f"{voice_version}\n{text}"
+        cached = stamp.is_file() and stamp.read_text(encoding="utf-8") == expected_stamp
         if cached and ready.is_file():
             print(f"  {key:12s} {audio_duration(ready) + SCENE_TAIL:5.1f} s (unverändert)")
         else:
             speak(text, language, raw)
             polish(raw, ready)
-            stamp.write_text(text, encoding="utf-8")
+            stamp.write_text(expected_stamp, encoding="utf-8")
             print(f"  {key:12s} {audio_duration(ready) + SCENE_TAIL:5.1f} s")
         spoken.append((key, ready, audio_duration(ready) + SCENE_TAIL))
     return spoken
@@ -933,9 +1044,53 @@ def join_audio(pieces: list[tuple[str, Path, float]], target: Path) -> None:
                 str(padded),
             ]
         )
-        lines.append(f"file '{padded.as_posix()}'")
+        # Die Konkatenationsliste wird relativ zu ihrem eigenen Ordner
+        # gelesen. Stand hier der ebenfalls relative Zielpfad, setzte ffmpeg
+        # beides zusammen (``ziel/ziel/audio/...``) und fand keinen Ton.
+        # Ein absoluter Schrägstrichpfad gilt unter Windows und Unix gleich.
+        lines.append(f"file '{padded.resolve().as_posix()}'")
     listing.write_text("\n".join(lines) + "\n", encoding="utf-8")
     run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(target)])
+
+
+def _subtitle_stamp(seconds: float) -> str:
+    """Eine Zeitangabe im SRT-Format, ohne Rundungsüberlauf."""
+    milliseconds = max(0, round(seconds * 1000.0))
+    hours, remainder = divmod(milliseconds, 3_600_000)
+    minutes, remainder = divmod(remainder, 60_000)
+    whole_seconds, milliseconds = divmod(remainder, 1000)
+    return f"{hours:02d}:{minutes:02d}:{whole_seconds:02d},{milliseconds:03d}"
+
+
+def write_subtitles(
+    spoken: list[tuple[str, Path, float]],
+    scenes: tuple[tuple[str, str], ...],
+    target: Path,
+) -> Path:
+    """Die gesprochenen Sätze als hochladbare YouTube-Untertitel schreiben.
+
+    Jeder Tonbaustein trägt hinten :data:`SCENE_TAIL` Sekunden Pause. Die
+    Untertitel enden vor dieser Pause, während die nächste Szene erst danach
+    beginnt. Dadurch bleibt zwischen zwei Sätzen derselbe Atemraum wie im Ton.
+    """
+    if len(spoken) != len(scenes):
+        raise ValueError("Ton und Drehbuch haben verschieden viele Szenen")
+    elapsed = 0.0
+    blocks: list[str] = []
+    for number, ((spoken_key, _path, duration), (scene_key, sentence)) in enumerate(
+        zip(spoken, scenes, strict=True), start=1
+    ):
+        if spoken_key != scene_key:
+            raise ValueError(f"Ton {spoken_key!r} gehört nicht zu Szene {scene_key!r}")
+        audible_end = elapsed + max(0.0, duration - SCENE_TAIL)
+        blocks.append(
+            f"{number}\n{_subtitle_stamp(elapsed)} --> {_subtitle_stamp(audible_end)}\n{sentence}"
+        )
+        elapsed += duration
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("\n\n".join(blocks) + "\n", encoding="utf-8-sig")
+    print(f"  Text  → {target.name}")
+    return target
 
 
 def audio_duration(path: Path) -> float:
@@ -960,6 +1115,110 @@ def audio_duration(path: Path) -> float:
     if finished.returncode != 0:
         raise SystemExit(f"ffprobe brach ab:\n{finished.stderr.strip()}")
     return float(finished.stdout.strip())
+
+
+def feature_timing(scenes: tuple[tuple[str, str], ...]) -> list[tuple[str, Path, float]]:
+    """Die feste Bildzeit des Merkmalsfilms in Drehbuchreihenfolge liefern."""
+    missing = [key for key, _text in scenes if key not in FEATURE_SCENE_SECONDS]
+    if missing:
+        raise ValueError(f"Keine Bildzeit für Merkmalsfilmszene: {', '.join(missing)}")
+    return [(key, Path(), FEATURE_SCENE_SECONDS[key]) for key, _text in scenes]
+
+
+def write_feature_music(target: Path, seconds: float) -> Path:
+    """Ein eigenes, deterministisches Musikbett für den Merkmalsfilm bauen.
+
+    Alle Töne entstehen hier aus Sinusschwingungen; weder Komposition noch
+    Aufnahme stammen von Dritten. Damit reist kein GEMA- oder Plattformrecht
+    mit dem Film. Die drei kurzen Akzente liegen exakt auf den sichtbaren
+    Klicks, ohne wie nachträglich angeklebte Mausklick-Geräusche zu wirken.
+    """
+    import wave
+
+    import numpy as np
+
+    rate = 48_000
+    count = max(1, round(seconds * rate))
+    time_axis = np.arange(count, dtype=np.float64) / rate
+    stereo = np.zeros((count, 2), dtype=np.float64)
+    chords = (
+        (146.83, 220.00, 293.66, 349.23),
+        (116.54, 174.61, 233.08, 293.66),
+        (130.81, 196.00, 261.63, 349.23),
+        (130.81, 196.00, 261.63, 329.63),
+    )
+    span = seconds / len(chords)
+    overlap = min(1.2, span / 3.0)
+    for chord_index, frequencies in enumerate(chords):
+        start = chord_index * span - (overlap if chord_index else 0.0)
+        end = (chord_index + 1) * span + (overlap if chord_index < len(chords) - 1 else 0.0)
+        local = time_axis - start
+        envelope = np.clip(local / overlap, 0.0, 1.0)
+        envelope *= np.clip((end - time_axis) / overlap, 0.0, 1.0)
+        envelope = np.sin(envelope * math.pi / 2.0) ** 2
+        for note_index, frequency in enumerate(frequencies):
+            weight = 0.055 / (1.0 + note_index * 0.22)
+            phase = chord_index * 0.73 + note_index * 0.41
+            left = np.sin(2.0 * math.pi * frequency * time_axis + phase)
+            right = np.sin(2.0 * math.pi * frequency * 1.0015 * time_axis + phase + 0.18)
+            # Eine leise Oktave gibt Kontur, ohne aus dem Pad eine Melodie zu
+            # machen. Unter Sprache läge sie im Weg; hier trägt sie den Film.
+            left += 0.15 * np.sin(4.0 * math.pi * frequency * time_axis + phase)
+            right += 0.15 * np.sin(4.0 * math.pi * frequency * 0.9985 * time_axis + phase + 0.18)
+            stereo[:, 0] += weight * envelope * left
+            stereo[:, 1] += weight * envelope * right
+
+    # Ruhiger Puls, nicht Schlagzeug: Er gibt dem sonst völlig geraden
+    # Bildschirmfilm Bewegung, bleibt aber unter der Bedienung.
+    for beat in np.arange(0.8, seconds, 1.5):
+        local = time_axis - beat
+        active = (local >= 0.0) & (local < 0.32)
+        pulse = np.zeros(count, dtype=np.float64)
+        pulse[active] = (
+            np.sin(2.0 * math.pi * (68.0 * local[active] - 18.0 * local[active] ** 2))
+            * np.exp(-local[active] * 13.0)
+            * 0.09
+        )
+        stereo[:, 0] += pulse
+        stereo[:, 1] += pulse
+
+    scene_starts: dict[str, float] = {}
+    elapsed = 0.0
+    for key, duration in FEATURE_SCENE_SECONDS.items():
+        scene_starts[key] = elapsed
+        elapsed += duration
+    click_times = (
+        scene_starts["recognise"] + FEATURE_SCENE_SECONDS["recognise"] * 0.48,
+        scene_starts["preview_feature"] + FEATURE_SCENE_SECONDS["preview_feature"] * 0.32,
+        scene_starts["apply_feature"] + FEATURE_SCENE_SECONDS["apply_feature"] * 0.38,
+    )
+    for click in click_times:
+        local = time_axis - click
+        active = (local >= 0.0) & (local < 0.09)
+        accent = np.zeros(count, dtype=np.float64)
+        accent[active] = (
+            np.sin(2.0 * math.pi * 1250.0 * local[active]) * np.exp(-local[active] * 48.0) * 0.13
+        )
+        stereo[:, 0] += accent
+        stereo[:, 1] += accent
+
+    master = np.ones(count, dtype=np.float64)
+    fade = min(count // 2, round(rate * 0.9))
+    master[:fade] = np.sin(np.linspace(0.0, math.pi / 2.0, fade)) ** 2
+    master[-fade:] = np.sin(np.linspace(math.pi / 2.0, 0.0, fade)) ** 2
+    stereo *= master[:, None]
+    rms = float(np.sqrt(np.mean(stereo * stereo)))
+    if rms > 0.0:
+        stereo *= min(0.12 / rms, 0.78 / float(np.max(np.abs(stereo))))
+    pcm = np.round(np.clip(stereo, -1.0, 1.0) * 32767.0).astype("<i2")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(target), "wb") as stream:
+        stream.setnchannels(2)
+        stream.setsampwidth(2)
+        stream.setframerate(rate)
+        stream.writeframes(pcm.tobytes())
+    print(f"  Musik → {target.name}  {seconds:.1f} s · eigene Komposition")
+    return target
 
 
 def audio_arguments(audio: Path | None) -> list[str]:
@@ -1159,6 +1418,116 @@ def write_outro(
     return start + count
 
 
+@lru_cache(maxsize=1)
+def _system_pointer_image() -> Any | None:
+    """Den vom Nutzer eingestellten Windows-Pfeil in seiner echten Größe laden.
+
+    ``grabWindow`` lässt den Systemzeiger weg. Unter Windows steht der aktive
+    Pfeilpfad jedoch im Cursor-Schema des Nutzers; dadurch kann der Film genau
+    dieses Bild ergänzen, statt eine ähnliche Form nachzuzeichnen. Auf anderen
+    Plattformen bleibt der bisherige kontrastreiche Ersatz.
+    """
+    if os.name != "nt":
+        return None
+
+    import ctypes
+    import winreg
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QImage
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Cursors") as key:
+            path = str(winreg.QueryValueEx(key, "Arrow")[0])
+        path = os.path.expandvars(path)
+        image = QImage(path)
+        if image.isNull():
+            return None
+        width = max(1, int(ctypes.windll.user32.GetSystemMetrics(13)))
+        height = max(1, int(ctypes.windll.user32.GetSystemMetrics(14)))
+        return image.scaled(
+            width,
+            height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+    except (OSError, ValueError):
+        return None
+
+
+def _paint_pointer(frame: Any, mark: tuple[float, float, bool]) -> None:
+    """Den echten Systemzeiger und beim tatsächlichen Klick einen Ring zeichnen."""
+    from PySide6.QtCore import QPointF, Qt
+    from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+
+    x, y, pressed = mark
+    painter = QPainter(frame)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    if pressed:
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(QColor("#e08b4e"), 3.0))
+        painter.drawEllipse(QPointF(x, y), 16.0, 16.0)
+    pointer = _system_pointer_image()
+    if pointer is not None:
+        painter.drawImage(QPointF(x, y), pointer)
+    else:
+        path = QPainterPath(QPointF(x, y))
+        path.lineTo(x + 1.0, y + 26.0)
+        path.lineTo(x + 7.5, y + 20.0)
+        path.lineTo(x + 14.0, y + 32.0)
+        path.lineTo(x + 19.0, y + 29.0)
+        path.lineTo(x + 13.0, y + 17.0)
+        path.lineTo(x + 22.0, y + 17.0)
+        path.closeSubpath()
+        painter.setPen(QPen(QColor("#14161a"), 3.0))
+        painter.setBrush(QColor("#f7f9fb"))
+        painter.drawPath(path)
+    painter.end()
+
+
+def _paint_feature_caption(
+    frame: Any,
+    caption: tuple[str, str],
+    index: int,
+    total: int,
+) -> None:
+    """Eine ruhige Zweizeilen-Einblendung in den freien unteren Viewport setzen."""
+    from PySide6.QtCore import QRectF, Qt
+    from PySide6.QtGui import QColor, QFont, QPainter
+
+    edge = max(1, round(FPS * 0.22))
+    alpha = min(1.0, (index + 1) / edge, (total - index) / edge)
+    width = min(1080.0, frame.width() - 520.0)
+    box = QRectF((frame.width() - width) / 2.0, frame.height() - 218.0, width, 112.0)
+    painter = QPainter(frame)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setOpacity(alpha)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(16, 19, 24, 224))
+    painter.drawRoundedRect(box, 12.0, 12.0)
+    painter.setBrush(QColor("#e08b4e"))
+    painter.drawRoundedRect(QRectF(box.left(), box.top(), 6.0, box.height()), 3.0, 3.0)
+
+    title_font = QFont("Segoe UI", 24)
+    title_font.setWeight(QFont.Weight.DemiBold)
+    painter.setFont(title_font)
+    painter.setPen(QColor("#f5f7fa"))
+    painter.drawText(
+        QRectF(box.left() + 34.0, box.top() + 14.0, box.width() - 58.0, 37.0),
+        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+        caption[0],
+    )
+    detail_font = QFont("Segoe UI", 18)
+    painter.setFont(detail_font)
+    painter.setPen(QColor("#b7c0cb"))
+    painter.drawText(
+        QRectF(box.left() + 34.0, box.top() + 55.0, box.width() - 58.0, 38.0),
+        Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+        caption[1],
+    )
+    painter.end()
+
+
 def record(
     window: QWidget,
     app: QApplication,
@@ -1166,6 +1535,8 @@ def record(
     start: int,
     count: int,
     step: Callable[[int, int], None],
+    pointer: PointerFn | None = None,
+    caption: tuple[str, str] | None = None,
 ) -> int:
     """``count`` Bilder aufnehmen und dabei je Bild ``step`` aufrufen.
 
@@ -1181,7 +1552,13 @@ def record(
         step(index, count)
         app.processEvents()
         window.screen()
-        screen.grabWindow(window.winId()).save(str(frames / f"{start + index:05d}.png"))
+        shot = screen.grabWindow(window.winId())
+        if caption is not None:
+            _paint_feature_caption(shot, caption, index, count)
+        mark = pointer(index, count) if pointer is not None else None
+        if mark is not None:
+            _paint_pointer(shot, mark)
+        shot.save(str(frames / f"{start + index:05d}.png"))
     return start + count
 
 
@@ -1373,6 +1750,260 @@ def hold_step(window: QWidget, app: QApplication) -> StepFn:
     return step
 
 
+def _feature_demo_target(session: Any) -> tuple[str, str, Any]:
+    """Den einen belegten Zielpunkt des Merkmalsfilms finden.
+
+    Das mitgelieferte Beispiel stammt aus ``plate_holes.stl`` und trägt die
+    erkannte Bohrung ``hole_1``. Ihre Kennung wird absichtlich verlangt statt
+    durch „die erste Bohrung“ ersetzt: Genau ihre Beständigkeit ist die
+    Aussage des Films. Würde die Erkennung sie anders benennen, soll der Lauf
+    anhalten, bevor ein falscher Beleg entsteht.
+    """
+    result = session.last_result
+    if result is None:
+        raise SystemExit("Keine ausgewertete Szene für den Merkmalsfilm")
+    for object_id, entry in result.scene.objects.items():
+        feature = entry.features.get("hole_1")
+        if feature is not None and feature.kind == "hole":
+            return object_id, "hole_1", feature
+    raise SystemExit("Der Merkmalsfilm braucht die erkannte Bohrung hole_1")
+
+
+def _feature_move_row(window: Any) -> tuple[Any, Any]:
+    """X-Feld und Knopf der sichtbaren Handlung „Merkmal verschieben“.
+
+    Gesucht wird über den Registertitel und nicht über die Reihenfolge aller
+    Eingabefelder. Im Panel stehen X/Y/Z zweimal — einmal fürs Verschieben und
+    einmal fürs Duplizieren. „Das erste X-Feld“ wäre damit ein stiller Vertrag
+    mit der heutigen Reihenfolge statt mit der gezeigten Handlung.
+    """
+    from PySide6.QtWidgets import QLabel, QPushButton
+
+    from app.core.registry import REGISTRY
+    from app.ui.labels import LengthSpin
+
+    title = str(REGISTRY.get("move_feature").title)
+    for row in window.feature_panel._built:
+        if not any(label.text() == title for label in row.findChildren(QLabel)):
+            continue
+        fields = row.findChildren(LengthSpin)
+        buttons = [button for button in row.findChildren(QPushButton) if button.text() == title]
+        if fields and buttons:
+            return fields[0], buttons[0]
+    raise SystemExit("Im Merkmalfenster fehlt die Handlung „Merkmal verschieben“")
+
+
+def _wait_for_feature_preview(window: Any, app: QApplication, seconds: float = 120.0) -> None:
+    """Auf den entprellten, im Arbeiter gerechneten Merkmalsvergleich warten."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        app.processEvents()
+        if getattr(window, "_preview_shown", False):
+            settle(app, 20)
+            return
+        time.sleep(0.02)
+    raise SystemExit("Die Merkmalsvorschau wurde nicht sichtbar")
+
+
+def _widget_centre(window: Any, widget: Any) -> tuple[float, float]:
+    """Die Mitte eines Bedienelements in Koordinaten des Hauptfensters."""
+    from PySide6.QtCore import QPoint
+
+    point = widget.mapTo(window, QPoint(widget.width() // 2, widget.height() // 2))
+    return float(point.x()), float(point.y())
+
+
+def _feature_click(window: Any) -> tuple[Any, tuple[float, float, float], tuple[float, float]]:
+    """Eingabeziel und sichtbare Stelle auf der Innenwand von ``hole_1``.
+
+    Die Mitte eines Durchgangslochs ist leer und deshalb kein Klickziel. Der
+    Punkt liegt auf seiner zylindrischen Wand, ein Viertel der Tiefe unter der
+    Oberseite — dort trifft der Zell-Picker wirklich ein Dreieck des Merkmals.
+    """
+    from PySide6.QtCore import QPoint
+
+    _object_id, _feature_id, feature = _feature_demo_target(window.session)
+    centre = tuple(float(value) for value in feature.params["centre"])
+    diameter = float(feature.params["diameter"])
+    depth = float(feature.params["depth"])
+    world = (centre[0] + diameter / 2.0, centre[1], centre[2] + depth / 4.0)
+    viewport = window.viewport
+    display = viewport._display_of(world)
+    interactor = viewport.plotter.interactor
+    if display is None:
+        raise SystemExit("Die Bohrung ließ sich nicht ins Videobild projizieren")
+    ratio = float(interactor.devicePixelRatioF()) or 1.0
+    local = QPoint(
+        round(display[0] / ratio),
+        round(interactor.height() - display[1] / ratio),
+    )
+    visible = interactor.mapTo(window, local)
+    return interactor, world, (float(visible.x()), float(visible.y()))
+
+
+def _ease(
+    start: tuple[float, float], end: tuple[float, float], share: float
+) -> tuple[float, float]:
+    """Eine ruhige Mausbewegung zwischen zwei Punkten."""
+    clamped = max(0.0, min(1.0, share))
+    eased = 0.5 - 0.5 * math.cos(math.pi * clamped)
+    return (
+        start[0] + (end[0] - start[0]) * eased,
+        start[1] + (end[1] - start[1]) * eased,
+    )
+
+
+def feature_demo_step(
+    window: Any,
+    app: QApplication,
+    session: Any,
+    scene: str,
+) -> tuple[StepFn, PointerFn | None]:
+    """Den sichtbaren Bedienweg einer Szene samt gezeichnetem Zeiger bauen.
+
+    Die Maus bewegt sich nicht nur über eine nachträgliche Grafik. Am Klickbild
+    schickt ``QTest`` dieselbe Eingabe an Viewport, Zahlenfeld oder Knopf, die
+    ein Mensch dort auslösen würde; der gezeichnete Zeiger macht genau diesen
+    sonst unsichtbaren Systemzustand im Bildschirmabgriff sichtbar.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    if scene == "mesh":
+        return orbit_step(window, app, 1.0, turns=0.18), None
+
+    field, button = _feature_move_row(window) if scene != "recognise" else (None, None)
+    _interactor, world, feature_point = _feature_click(window)
+    viewport = window.viewport.plotter.interactor
+    start = _widget_centre(window, viewport)
+
+    if scene == "recognise":
+        clicked = False
+
+        def select_step(index: int, total: int) -> None:
+            nonlocal clicked
+            if not clicked and index >= round(total * 0.48):
+                # QTest-Ereignisse enden am eingebetteten VTK-Interactor,
+                # bevor dessen eigener Zell-Picker sie sieht. ``_select_at``
+                # ist genau der UI-Weg nach diesem Picker; der projizierte
+                # Punkt liegt auf derselben Bohrungswand wie der Zeiger.
+                window.viewport._select_at(world)
+                app.processEvents()
+                if window.object_tree.selected_feature() != "hole_1":
+                    raise SystemExit("Der sichtbare Klick hat hole_1 nicht ausgewählt")
+                clicked = True
+            window.viewport.plotter.render()
+
+        def select_pointer(index: int, total: int) -> tuple[float, float, bool]:
+            point = _ease(start, feature_point, index / max(1.0, total * 0.45))
+            pressed = abs(index - round(total * 0.48)) <= 2
+            return (*point, pressed)
+
+        return select_step, select_pointer
+
+    assert field is not None and button is not None
+    field_point = _widget_centre(window, field)
+    button_point = _widget_centre(window, button)
+
+    if scene == "preview_feature":
+        typed = False
+        checked = False
+
+        def edit_step(index: int, total: int) -> None:
+            nonlocal typed, checked
+            if not typed and index >= round(total * 0.32):
+                QTest.mouseClick(field, Qt.MouseButton.LeftButton)
+                field.setFocus()
+                field.selectAll()
+                QTest.keyClicks(field, "-10")
+                QTest.keyClick(field, Qt.Key.Key_Return)
+                typed = True
+            if typed and not checked and index >= round(total * 0.58):
+                _wait_for_feature_preview(window, app)
+                checked = True
+            window.viewport.plotter.render()
+
+        def edit_pointer(index: int, total: int) -> tuple[float, float, bool]:
+            point = _ease(feature_point, field_point, index / max(1.0, total * 0.28))
+            pressed = abs(index - round(total * 0.32)) <= 2
+            return (*point, pressed)
+
+        return edit_step, edit_pointer
+
+    if scene != "apply_feature":
+        raise SystemExit(f"Unbekannte Merkmalsfilmszene: {scene}")
+    applied = False
+
+    def apply_step(index: int, total: int) -> None:
+        nonlocal applied
+        if not applied and index >= round(total * 0.38):
+            QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+            session.wait_for_idle(120_000)
+            settle(app, 30)
+            _object_id, feature_id, feature = _feature_demo_target(session)
+            centre = feature.params.get("centre")
+            if centre is None or not math.isclose(
+                float(centre[0]), FEATURE_DEMO_TARGET_X, abs_tol=0.5
+            ):
+                raise SystemExit(
+                    f"Die Bohrung wurde nicht an die belegte Zielstelle versetzt: {centre}"
+                )
+            if feature_id != "hole_1":
+                raise SystemExit(f"Die Bohrungskennung wechselte zu {feature_id}")
+            applied = True
+        window.viewport.plotter.render()
+
+    def apply_pointer(index: int, total: int) -> tuple[float, float, bool]:
+        point = _ease(field_point, button_point, index / max(1.0, total * 0.34))
+        pressed = abs(index - round(total * 0.38)) <= 2
+        return (*point, pressed)
+
+    return apply_step, apply_pointer
+
+
+def reset_feature_demo(window: Any, app: QApplication, session: Any) -> None:
+    """Den Merkmalsfilm auf die eingelesene Ausgangsdatei zurückstellen."""
+    window._drop_feature_preview()
+    while session.project.document.ops and session.project.document.ops[-1].op == "move_feature":
+        session.undo()
+        session.wait_for_idle(120_000)
+    object_id, _feature_id, _feature = _feature_demo_target(session)
+    window.object_tree.select_object(object_id)
+    window.feature_dock.hide()
+    # Das Verbergen gehört dem Aufnahmewerkzeug, nicht dem Nutzer. Der Dock
+    # merkt ein gewöhnliches ``hide`` sonst als „selbst geschlossen“ und
+    # verweigert beim sichtbaren Bohrungsklick sein automatisches Öffnen.
+    window.feature_dock.dismissed = False
+    settle(app, 20)
+
+
+def prepare_feature_demo_scene(
+    window: Any,
+    app: QApplication,
+    session: Any,
+    scene: str,
+    panel_visible: bool,
+) -> None:
+    """Den Anfangszustand einer sichtbaren Bediensequenz herstellen."""
+    if scene == "mesh":
+        object_id, _feature_id, _feature = _feature_demo_target(session)
+        window.object_tree.select_object(object_id)
+        window.feature_dock.hide()
+        window.feature_dock.dismissed = False
+        settle(app, 20)
+        return
+    if scene == "recognise":
+        object_id, _feature_id, _feature = _feature_demo_target(session)
+        window.object_tree.select_object(object_id)
+        window.feature_dock.hide()
+        window.feature_dock.dismissed = False
+        settle(app, 20)
+        return
+    if not panel_visible:
+        window.feature_dock.hide()
+        window.feature_dock.dismissed = False
+
+
 def shoot_storyboard(
     window: QWidget,
     app: QApplication,
@@ -1385,6 +2016,7 @@ def shoot_storyboard(
     morph_name: str = MORPH_PARAMETER,
     morph_span: tuple[float, float] = MORPH,
     start_degrees: float = 0.0,
+    feature_panel_visible: bool = True,
 ) -> Shot:
     """Alle Szenen des Drehbuchs hintereinander aufnehmen.
 
@@ -1396,7 +2028,10 @@ def shoot_storyboard(
     Hochformat zeigte ein Gehäuse, das schon breit ist und dann noch breiter
     wird.
     """
+    feature_demo = any(key in FEATURE_DEMO_SCENES for key, _path, _seconds in spoken)
     reset_morph(session)
+    if feature_demo:
+        reset_feature_demo(window, app, session)
     # Und den Versatz auch: ``shoot_storyboard`` läuft zweimal am selben
     # Fenster, quer und hoch. Bliebe die Explosion stehen, begänne das
     # Hochformat mit einem Korb, der schon auseinander ist.
@@ -1406,6 +2041,12 @@ def shoot_storyboard(
     readout: list[str] = []
     for key, _path, seconds in spoken:
         count = max(1, round(seconds * FPS))
+        pointer: PointerFn | None = None
+        caption: tuple[str, str] | None = None
+        if key in FEATURE_DEMO_SCENES:
+            prepare_feature_demo_scene(window, app, session, key, feature_panel_visible)
+            step, pointer = feature_demo_step(window, app, session, key)
+            caption = FEATURE_CAPTIONS[language][key]
         if key == "closing":
             # Die Schlusskarte kommt aus dem Zeichenprogramm, nicht aus dem
             # Fenster — sie zeigt nichts aus der Anwendung.
@@ -1416,7 +2057,9 @@ def shoot_storyboard(
             readout.extend([""] * (total - len(readout)))
             print(f"  {key:12s} {count:4d} Bilder (Schlusskarte)")
             continue
-        if key == "morph":
+        if key in FEATURE_DEMO_SCENES:
+            pass
+        elif key == "morph":
             # Die Bilder vor dieser Szene tragen keinen Wert — aufgefüllt wird
             # bis hierher, damit der Index im Bandwurm der Wert des Bildes
             # bleibt und nicht der Wert des Bildes minus einer Szene.
@@ -1433,9 +2076,11 @@ def shoot_storyboard(
             # Umdrehung in vier Sekunden sieht aus wie ein Ausstellungsstück im
             # Schaufenster.
             step = orbit_step(window, app, zoom, turns=0.35, start_degrees=start_degrees)
-        total = record(window, app, frames, total, count, step)
+        total = record(window, app, frames, total, count, step, pointer, caption)
         print(f"  {key:12s} {count:4d} Bilder")
     reset_morph(session)
+    if feature_demo:
+        reset_feature_demo(window, app, session)
     window.viewport.set_explosion(0.0)  # type: ignore[attr-defined]
     settle(app, 20)
     readout.extend([""] * (total - len(readout)))
@@ -1603,6 +2248,174 @@ def encode_landscape(shot: Shot, target: Path, audio: Path | None = None) -> Non
     print(f"  quer  → {target.name}")
 
 
+def compose_feature_short(
+    landscape: Shot,
+    target_frames: Path,
+    timing: list[tuple[str, Path, float]],
+    language: str,
+) -> Shot:
+    """Aus der breiten Bedienaufnahme eine lesbare Short-Komposition bauen.
+
+    Ein einfacher 9:16-Zuschnitt würde entweder das ausgewählte Loch oder das
+    Merkmalfenster verlieren. Deshalb zeigt jedes Bild den ganzen Ablauf und
+    darunter den gerade wichtigen Bereich vergrößert. Das ist absichtlich
+    dieselbe Aufnahme zweimal, keine nachgestellte zweite Bedienung.
+    """
+    from PySide6.QtCore import QRect, QRectF, Qt
+    from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPen
+
+    if target_frames.exists():
+        shutil.rmtree(target_frames)
+    target_frames.mkdir(parents=True)
+    width, height = 1080, 1920
+    detail_rects = {
+        "mesh": QRect(260, 70, 1280, 780),
+        "recognise": QRect(360, 70, 1200, 780),
+        "preview_feature": QRect(760, 50, 1160, 780),
+        "apply_feature": QRect(760, 50, 1160, 780),
+    }
+    source_index = 0
+    card_from = landscape.count
+    for scene_number, (key, _path, seconds) in enumerate(timing):
+        scene_count = max(1, round(seconds * FPS))
+        if key == "closing":
+            card_from = source_index
+            card = outro_card((width, height), (0, 0, width, height), language)
+            for _local_index in range(scene_count):
+                card.save(str(target_frames / f"{source_index:05d}.png"))
+                source_index += 1
+            continue
+
+        caption = FEATURE_CAPTIONS[language][key]
+        for _local_index in range(scene_count):
+            source = QImage(str(landscape.frames / f"{source_index:05d}.png"))
+            if source.isNull():
+                raise SystemExit(f"Short-Quellbild fehlt: {source_index:05d}.png")
+            canvas = QImage(width, height, QImage.Format.Format_RGB32)
+            canvas.fill(QColor("#14161a"))
+            painter = QPainter(canvas)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+
+            kicker = QFont("Segoe UI")
+            kicker.setPixelSize(25)
+            kicker.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(kicker)
+            painter.setPen(QColor("#e08b4e"))
+            painter.drawText(
+                QRectF(60.0, 48.0, 960.0, 36.0),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                "SOLIDON3D · STL",
+            )
+            title = QFont("Segoe UI")
+            title.setPixelSize(54)
+            title.setWeight(QFont.Weight.Bold)
+            while QFontMetrics(title).horizontalAdvance(caption[0]) > 960:
+                title.setPixelSize(title.pixelSize() - 1)
+            painter.setFont(title)
+            painter.setPen(QColor("#f5f7fa"))
+            painter.drawText(
+                QRectF(60.0, 98.0, 960.0, 72.0),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                caption[0],
+            )
+            detail_font = QFont("Segoe UI")
+            detail_font.setPixelSize(35)
+            painter.setFont(detail_font)
+            painter.setPen(QColor("#b7c0cb"))
+            painter.drawText(
+                QRectF(60.0, 174.0, 960.0, 54.0),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                caption[1],
+            )
+
+            overview = source.scaled(
+                960,
+                540,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            painter.setPen(QPen(QColor("#39424d"), 2.0))
+            painter.setBrush(QColor("#0f1216"))
+            painter.drawRoundedRect(QRectF(59.0, 294.0, 962.0, 542.0), 10.0, 10.0)
+            painter.drawImage(QRectF(60.0, 295.0, 960.0, 540.0), overview)
+
+            label_font = QFont("Segoe UI")
+            label_font.setPixelSize(24)
+            label_font.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(label_font)
+            painter.setPen(QColor("#7f8b99"))
+            label = "DETAILANSICHT" if language == "de" else "DETAIL VIEW"
+            painter.drawText(
+                QRectF(60.0, 870.0, 960.0, 38.0),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                label,
+            )
+            cropped = source.copy(detail_rects[key])
+            detailed = cropped.scaled(
+                960,
+                640,
+                Qt.AspectRatioMode.IgnoreAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            painter.setPen(QPen(QColor("#e08b4e"), 2.0))
+            painter.setBrush(QColor("#0f1216"))
+            painter.drawRoundedRect(QRectF(59.0, 923.0, 962.0, 642.0), 10.0, 10.0)
+            painter.drawImage(QRectF(60.0, 924.0, 960.0, 640.0), detailed)
+
+            painter.setPen(QColor("#7f8b99"))
+            footer = QFont("Segoe UI")
+            footer.setPixelSize(30)
+            painter.setFont(footer)
+            painter.drawText(
+                QRectF(60.0, 1745.0, 960.0, 48.0),
+                Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+                "solidon3d.de",
+            )
+            dot_y = 1835.0
+            for dot in range(len(FEATURE_DEMO_SCENES)):
+                painter.setBrush(QColor("#e08b4e") if dot == scene_number else QColor("#46505c"))
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawEllipse(QRectF(475.0 + dot * 42.0, dot_y, 14.0, 14.0))
+            painter.end()
+            canvas.save(str(target_frames / f"{source_index:05d}.png"))
+            source_index += 1
+
+    if source_index != landscape.count:
+        raise SystemExit(f"Short hat {source_index} Bilder, die Quelle aber {landscape.count}")
+    return Shot(
+        frames=target_frames,
+        count=source_index,
+        viewport=(0, 0, width, height),
+        card_from=card_from,
+    )
+
+
+def encode_feature_short(shot: Shot, target: Path, audio: Path) -> None:
+    """Die fertige 9:16-Komposition als YouTube Short kodieren."""
+    run_ffmpeg(
+        [
+            "-framerate",
+            str(FPS),
+            "-i",
+            str(shot.frames / "%05d.png"),
+            *audio_arguments(audio),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            "18",
+            "-preset",
+            "medium",
+            "-movflags",
+            "+faststart",
+            str(target),
+        ]
+    )
+    print(f"  Short → {target.name}")
+
+
 def encode_portrait(
     shot: Shot,
     target: Path,
@@ -1765,6 +2578,7 @@ def main() -> int:
     # zwei Programme, die dasselbe Fenster filmen, laufen unweigerlich
     # auseinander.
     as_loop = "loop" in arguments
+    short_only = "short" in arguments
     # ``--morph <name>[:<von>:<bis>]`` — welcher Parameter im Loop läuft.
     #
     # **Das Werkzeug folgt dem Motiv, nicht umgekehrt.** ``MORPH_PARAMETER``
@@ -1813,6 +2627,7 @@ def main() -> int:
         for entry in arguments
         if entry not in SCRIPTS
         and entry != "loop"
+        and entry != "short"
         and not entry.endswith(".p3d")
         and not entry.startswith("--")
         and entry not in skip
@@ -1882,7 +2697,16 @@ def main() -> int:
                 start_degrees=start_degrees,
             )
             continue
-        shoot_language(app, language, out, frames / f"{name}-{language}", script, project)
+        shoot_language(
+            app,
+            language,
+            out,
+            frames / f"{name}-{language}",
+            script,
+            project,
+            script_name=name,
+            short_only=short_only,
+        )
 
     print(f"\nFertig: {out}")
     return 0
@@ -2219,8 +3043,10 @@ def shoot_language(
     frames: Path,
     script: dict[str, tuple[tuple[str, str], ...]],
     chosen: Path | None = None,
+    script_name: str = "einstieg",
+    short_only: bool = False,
 ) -> None:
-    """Ein vollständiger Durchgang für eine Sprache: sprechen, filmen, kodieren.
+    """Ein vollständiger Durchgang für eine Sprache: vertonen, filmen, kodieren.
 
     Je Sprache ein eigenes Hauptfenster — und deshalb am Ende
     :func:`release_viewport`. Ohne das behält das ``QtInteractor`` des ersten
@@ -2234,21 +3060,43 @@ def shoot_language(
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    # **Zuerst die Stimme.** Sie bestimmt, wie lang jede Szene wird — und wenn
-    # etwas an ihr fehlt, soll das auffallen, bevor zweimal achthundert Bilder
-    # gerechnet sind.
-    print("Sprachausgabe:")
-    spoken = speak_storyboard(language, out, script)
-    audio = out / f"stimme-{language}.wav"
-    join_audio(spoken, audio)
-    print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
+    stem = "solidon3d-stl-feature" if script_name == "merkmal" else "solidon3d"
+    if script_name == "merkmal":
+        # Der konkrete Höreindruck entscheidet: Eine künstliche Stimme, die
+        # als solche auffällt, schwächt ausgerechnet einen Beweisfilm. Kurze
+        # Einblendungen und ein eigenes Musikbett brauchen keine Behauptung,
+        # die der Film nicht selbst zeigt.
+        spoken = feature_timing(script[language])
+        seconds = sum(entry[2] for entry in spoken)
+        audio = write_feature_music(out / "solidon3d-stl-feature-musik.wav", seconds)
+        for obsolete in (out / f"stimme-{language}.wav", out / f"{stem}-{language}.srt"):
+            if obsolete.is_file():
+                obsolete.unlink()
+        old_audio = out / "audio"
+        if old_audio.is_dir():
+            shutil.rmtree(old_audio)
+        old_listing = out / "tonfolge.txt"
+        if old_listing.is_file():
+            old_listing.unlink()
+        print(f"  zusammen {seconds:.1f} s · Text im Bild, keine künstliche Stimme")
+    else:
+        # **Zuerst die Stimme.** Sie bestimmt, wie lang jede Szene wird — und
+        # wenn etwas an ihr fehlt, soll das auffallen, bevor zweimal
+        # achthundert Bilder gerechnet sind.
+        print("Sprachausgabe:")
+        spoken = speak_storyboard(language, out, script)
+        audio = out / f"stimme-{language}.wav"
+        join_audio(spoken, audio)
+        write_subtitles(spoken, script[language], out / f"{stem}-{language}.srt")
+        print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
 
     session = Session()
     window = MainWindow(session, UiSettings())
     window.resize(*WINDOW)
     window.show()
 
-    project = chosen if chosen is not None else examples.directory() / EXAMPLE
+    default_example = FEATURE_EXAMPLE if script_name == "merkmal" else EXAMPLE
+    project = chosen if chosen is not None else examples.directory() / default_example
     if not project.is_file():
         raise SystemExit(f"Projekt fehlt: {project}")
     session.open_project(project)
@@ -2265,32 +3113,56 @@ def shoot_language(
         window, app, session, frames / "landscape", spoken, language=language
     )
 
-    print("Aufnahme hoch:")
-    show_panels(window, False)
-    hide_orientation_widget(window)
-    window.resize(*PORTRAIT)
-    settle_resize(window, app)
-    portrait = shoot_storyboard(
-        window,
-        app,
-        session,
-        frames / "portrait",
-        spoken,
-        zoom=PORTRAIT_ZOOM,
-        label=READOUT_LABEL.get(language, MORPH_PARAMETER),
-    )
-    show_panels(window, True)
-
-    headline, sub = PORTRAIT_TEXT[language]
+    portrait: Shot | None = None
+    if script_name == "merkmal":
+        print("Komposition Short:")
+        portrait = compose_feature_short(
+            landscape,
+            frames / "portrait",
+            spoken,
+            language,
+        )
+    else:
+        print("Aufnahme hoch:")
+        show_panels(window, False)
+        hide_orientation_widget(window)
+        window.resize(*PORTRAIT)
+        settle_resize(window, app)
+        portrait = shoot_storyboard(
+            window,
+            app,
+            session,
+            frames / "portrait",
+            spoken,
+            zoom=PORTRAIT_ZOOM,
+            label=READOUT_LABEL.get(language, MORPH_PARAMETER),
+            language=language,
+            feature_panel_visible=False,
+        )
+        show_panels(window, True)
     print("Kodierung:")
-    encode_landscape(landscape, out / f"solidon3d-{language}-quer-1080p.mp4", audio)
-    encode_portrait(
-        portrait,
-        out / f"solidon3d-{language}-hoch-1080x1920.mp4",
-        headline=headline,
-        sub=sub,
-        audio=audio,
-    )
+    if not short_only:
+        encode_landscape(landscape, out / f"{stem}-{language}-quer-1080p.mp4", audio)
+    else:
+        obsolete_landscape = out / f"{stem}-{language}-quer-1080p.mp4"
+        if obsolete_landscape.is_file():
+            obsolete_landscape.unlink()
+    if portrait is not None:
+        if script_name == "merkmal":
+            encode_feature_short(
+                portrait,
+                out / f"{stem}-{language}-short-1080x1920.mp4",
+                audio,
+            )
+        else:
+            headline, sub = PORTRAIT_TEXT[language]
+            encode_portrait(
+                portrait,
+                out / f"{stem}-{language}-hoch-1080x1920.mp4",
+                headline=headline,
+                sub=sub,
+                audio=audio,
+            )
 
     window.close()
     release_viewport(window)
