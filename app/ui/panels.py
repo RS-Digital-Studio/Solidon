@@ -4131,7 +4131,14 @@ class FeaturePanel(QWidget):
         self._alike = ()
         self._empty.setVisible(True)
 
-    def show_feature(self, feature_id: str, feature: Feature, alike: Sequence[str] = ()) -> None:
+    def show_feature(
+        self,
+        feature_id: str,
+        feature: Feature,
+        alike: Sequence[str] = (),
+        *,
+        features: Mapping[str, Feature] | None = None,
+    ) -> None:
         """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern.
 
         ``alike`` sind die **gleichartigen Geschwister** am selben Körper. Wo es
@@ -4170,7 +4177,7 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, note)
             self._built.append(note)
 
-        actions = actions_for(feature)
+        actions = actions_for(feature, features)
         # **Derselbe Grund steht einmal da, nicht fünfmal.** Die abgelehnten
         # Handlungen tragen ihren Satz je Zeile, und bei den Arten, an denen
         # gar nichts geht, ist es immer wieder derselbe: An einer Fläche
@@ -4314,6 +4321,14 @@ class FeaturePanel(QWidget):
             set_level(group_title, "caption")
             fit_wrapped(group_title)
             layout.addWidget(group_title)
+
+            if action.note:
+                note = QLabel(str(action.note), box)
+                note.setWordWrap(True)
+                note.setStatusTip(str(action.note))
+                note.setAccessibleDescription(str(action.note))
+                fit_wrapped(note)
+                layout.addWidget(note)
 
             form = QFormLayout()
             form.setContentsMargins(0, 0, 0, 0)

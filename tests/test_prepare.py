@@ -29,6 +29,7 @@ from app.core.geom.transform import apply, rotation, translation
 from app.core.ingest.loader import normalise
 from app.core.knowledge import profiles
 from app.core.perceive.features import detect
+from app.core.perceive.relations import bore_and_widening_at
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
@@ -2125,8 +2126,9 @@ def test_the_movable_kinds_now_include_the_dome() -> None:
     assert "face" not in spec.applies_to, "dafür gibt es push_face"
 
 
-def test_a_countersink_keeps_its_bore_by_being_refused(profile: Profile) -> None:
-    """Zwei Randringe heißen: Der Hohlraum gehört dem Merkmal nicht allein.
+@pytest.mark.parametrize("selected_kind", ["hole", "cone"])
+def test_a_countersink_moves_together_with_its_bore(profile: Profile, selected_kind: str) -> None:
+    """Zwei Randringe heißen: Der gemeinsame Hohlraum bewegt sich gemeinsam.
 
     Gemessen am 03.09.2026 an einer Platte 40 × 40 × 10 mit durchgehender Bohrung
     Ø 6 und Senkung Ø 12. Die Kegelfläche hat **zwei** Randringe — Ø 12 auf der
@@ -2134,18 +2136,12 @@ def test_a_countersink_keeps_its_bore_by_being_refused(profile: Profile) -> None
     Ring entsteht daraus ein sauberer Kegelstumpf: 196,65 mm³, wasserdicht, und
     die analytische Rechnung sagt 197,92.
 
-    Er ist trotzdem das falsche Werkzeug, und das ist der Grund für diesen
-    Test. Beim Auffüllen an der alten Stelle wuchs der Körper um alle
-    196,65 mm³, obwohl nur 113,1 davon Senkung waren — der Rest war die
-    **Bohrung**, und ein Querschnitt bei z = 3,5 hatte danach kein Loch mehr.
-    Wer die Senkung versetzt hätte, hätte seine Bohrung verloren, ohne dass
-    irgendetwas rot geworden wäre.
-
-    Ein zweiter Randring ist deshalb die Absage wert. Sie fällt hier nicht
-    zufällig durch die Planaritätsprüfung — die beiden Ringe liegen ohnehin in
-    verschiedenen Ebenen —, sondern weil gezählt wird.
+    Die Bohrungs- und Kegelflächen zusammen begrenzen dagegen genau den
+    gemeinsamen Hohlraum. Er wird an der alten Stelle geschlossen und an der
+    neuen wieder ausgeschnitten. Dabei bleiben beide Kennungen und ihre
+    Beziehung erhalten — auch wenn der Kunde die Senkung statt der Bohrung
+    ausgewählt hat.
     """
-    from app.core.errors import UserError
     from app.core.geom.prepare_ops import _feature_body
 
     block = MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
@@ -2161,6 +2157,7 @@ def test_a_countersink_keeps_its_bore_by_being_refused(profile: Profile) -> None
         bored, position=(0.0, 0.0, 5.0), axis="z", diameter=12.0, profile=profile
     ).mesh
     entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
+    bore = next(name for name, found in entry.features.items() if found.kind == "hole")
     cone = next(name for name, found in entry.features.items() if found.kind == "cone")
 
     patch = trimesh.Trimesh(
@@ -2176,11 +2173,35 @@ def test_a_countersink_keeps_its_bore_by_being_refused(profile: Profile) -> None
 
     assert _feature_body(sunk, entry.features[cone]) is None
 
-    with pytest.raises(UserError) as raised:
-        _run_op("move_feature", entry, profile, at_feature=cone, x=8.0, y=0.0, z=3.5)
+    selected = entry.features[bore if selected_kind == "hole" else cone]
+    centre = tuple(float(value) for value in selected.params["centre"])
+    moved = _run_op(
+        "move_feature",
+        entry,
+        profile,
+        at_feature=selected.id,
+        x=centre[0] + 8.0,
+        y=centre[1],
+        z=centre[2],
+    ).outputs[0]
 
-    assert raised.value.suggestions, "Regel 17"
-    assert "Bohrung" in str(raised.value), str(raised.value)
+    assert moved.mesh.raw.is_watertight
+    assert moved.mesh.volume == pytest.approx(sunk.volume, abs=0.01), (
+        "derselbe gemeinsame Hohlraum, nur acht Millimeter weiter"
+    )
+    pair = bore_and_widening_at(moved.features[bore], moved.features)
+    assert pair is not None, "die Senkung hat ihre Bohrung im Baum verloren"
+    assert pair[1].id == cone
+    for identifier in (bore, cone):
+        before = tuple(float(value) for value in entry.features[identifier].params["centre"])
+        after = tuple(float(value) for value in moved.features[identifier].params["centre"])
+        assert after == pytest.approx((before[0] + 8.0, before[1], before[2]))
+
+    recognised = detect(moved.mesh)
+    recognised_bore = next(found for found in recognised.values() if found.kind == "hole")
+    recognised_pair = bore_and_widening_at(recognised_bore, recognised)
+    assert recognised_pair is not None, "die neue Geometrie trägt keine verbundene Senkung"
+    assert float(recognised_bore.params["centre"][0]) == pytest.approx(8.0, abs=0.05)
 
 
 def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Profile) -> None:
@@ -2223,9 +2244,8 @@ def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Prof
     entry = SceneObject(id="obj_1", name="Platte", mesh=sunk, features=detect(sunk))
     cone = next(name for name, found in entry.features.items() if found.kind == "cone")
 
-    # Die Sackgasse ist vollständig: keine der fünf Handlungen nimmt die Senkung.
+    # Die übrigen Handlungen brauchen weiter ihren eigenen Beziehungsweg.
     for op in (
-        "move_feature",
         "rotate_feature",
         "remove_feature",
         "duplicate_feature",

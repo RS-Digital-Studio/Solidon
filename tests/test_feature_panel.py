@@ -123,6 +123,45 @@ def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplica
     assert set(params) >= {"at_feature", "x", "y", "z"}
 
 
+def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplication) -> None:
+    """Das Panel sagt vor dem Klick, dass beide Teile des Hohlraums mitgehen."""
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 6.0,
+            "depth": 10.0,
+        },
+    )
+    sink = Feature(
+        id="cone_1",
+        kind="cone",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 5.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 12.0,
+            "recess": True,
+        },
+    )
+    linked = {bore.id: bore, sink.id: sink}
+    panel = FeaturePanel()
+
+    panel.show_feature(bore.id, bore, features=linked)
+
+    move = next(
+        row
+        for row in panel._built
+        if any(button.text() == "Merkmal verschieben" for button in row.findChildren(QPushButton))
+    )
+    text = " ".join(label.text() for label in move.findChildren(QLabel))
+    assert "Bohrung und Senkung" in text
+    assert "gemeinsam verschoben" in text
+
+
 def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) -> None:
     """Was nicht geht, steht als Satz und nicht als graues Feld.
 

@@ -322,3 +322,32 @@ def widening_at_the_mouth(
         found = candidate
         widest = other_diameter
     return found
+
+
+def bore_and_widening_at(
+    feature: Feature, features: Mapping[FeatureId, Feature]
+) -> tuple[Feature, Feature] | None:
+    """Bohrung und Aufweitung, gleich welche der beiden gewählt ist.
+
+    :func:`widening_at_the_mouth` beantwortet die Beziehung absichtlich von
+    der Bohrung aus. Für eine Bedienhandlung reicht eine Richtung nicht: Im
+    Objektbaum lassen sich die Bohrung und ihre Senkung anklicken, und beide
+    meinen beim Versetzen denselben Hohlraum.
+
+    Von der Aufweitung zurück wird nur eine **eindeutige** Bohrung geliefert.
+    Treffen mehrere zu, bleibt die Antwort ``None`` — welche davon mitgehen
+    soll, darf die Reihenfolge im Wörterbuch nicht entscheiden (Regel 21).
+    """
+    widening = widening_at_the_mouth(feature, features)
+    if widening is not None:
+        return feature, widening
+
+    candidates = [
+        candidate
+        for candidate in features.values()
+        if (found := widening_at_the_mouth(candidate, features)) is not None
+        and found.id == feature.id
+    ]
+    if len(candidates) != 1:
+        return None
+    return candidates[0], feature

@@ -14,7 +14,12 @@ import trimesh
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import detect
-from app.core.perceive.relations import SLEEVE_OVERLAP, Sleeve, sleeve_at
+from app.core.perceive.relations import (
+    SLEEVE_OVERLAP,
+    Sleeve,
+    bore_and_widening_at,
+    sleeve_at,
+)
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -117,6 +122,22 @@ def test_a_countersink_is_not_a_sleeve() -> None:
             if sleeve_at(feature, features) is not None
         }
         assert not found, f"{name}: Senkung als Rohr gelesen — {found}"
+
+
+def test_a_bore_and_its_countersink_answer_from_both_sides() -> None:
+    """Bohrung und Senkung bleiben ein Paar, gleich welche Seite gewählt ist.
+
+    Der Objektbaum zeigt die Senkung unter ihrer Bohrung. Eine Operation darf
+    dieselbe Beziehung deshalb nicht nur von der Bohrung aus kennen: Im
+    Merkmalsfenster lassen sich beide Zeilen anklicken.
+    """
+    features = detect(_corpus("plate_countersunk.stl"))
+    bore = next(feature for feature in features.values() if feature.kind == "hole")
+    widening = next(feature for feature in features.values() if feature.kind == "cone")
+
+    expected = (bore, widening)
+    assert bore_and_widening_at(bore, features) == expected
+    assert bore_and_widening_at(widening, features) == expected
 
 
 def test_plain_bores_have_no_wall_to_speak_of() -> None:

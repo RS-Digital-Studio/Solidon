@@ -3551,6 +3551,7 @@
   "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Aumenta la medida final seleccionada en el valor del perfil de material. Desactivado, la medida permanece sin cambios.",
   "Vergrößert die Bohrung um den Wert aus dem Materialprofil.": "Ensancha el taladro en el valor que da el perfil de material.",
   "Verjüngung": "Conicidad",
+  "Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.": "Vinculados: el taladro y el avellanado se desplazan juntos.",
   "Verknüpfte Quellen brauchen einen gespeicherten Projektordner.": "Las fuentes vinculadas necesitan una carpeta de proyecto guardada.",
   "Verlauf": "Historial",
   "Verlauf zeigen": "Mostrar el historial",

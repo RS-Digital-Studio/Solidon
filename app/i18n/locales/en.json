@@ -3551,6 +3551,7 @@
   "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Increases the selected finished dimension by the value from the material profile. When off, the measured dimension remains unchanged.",
   "Vergrößert die Bohrung um den Wert aus dem Materialprofil.": "Widens the bore by the value from the material profile.",
   "Verjüngung": "Taper",
+  "Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.": "Linked: The bore and countersink move together.",
   "Verknüpfte Quellen brauchen einen gespeicherten Projektordner.": "Linked sources need a saved project folder.",
   "Verlauf": "History",
   "Verlauf zeigen": "Show the history",

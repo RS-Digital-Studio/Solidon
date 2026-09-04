@@ -31,6 +31,7 @@ from app.core.geom.boolean import (
     BooleanKind,
     BooleanOutcome,
     boolean,
+    deepest,
     without_effect,
 )
 from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
@@ -493,14 +494,29 @@ def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
     Bohrung verloren.
 
     Ein zweiter Ring heißt also: Dieses Merkmal geht in ein anderes über, und
-    sein Hohlraum gehört nicht ihm allein. Bis Solidon die Nachbarschaft kennt,
-    ist die Absage die richtige Antwort.
+    sein Hohlraum gehört nicht ihm allein. Allein bleibt die Absage richtig;
+    :func:`_paired_cavity_body` nimmt die erkannte Nachbarschaft dazu und baut
+    erst daraus den gemeinsamen Körper.
     """
-    if not feature.face_indices:
+    return _body_from_faces(mesh, feature.face_indices, allowed_rings=(0, 1))
+
+
+def _body_from_faces(
+    mesh: MeshData, face_indices: Sequence[int], *, allowed_rings: tuple[int, ...]
+) -> MeshData | None:
+    """Einen Flächenausschnitt an seinen ebenen Randringen schließen.
+
+    Ein einzelnes Merkmal darf höchstens einen Ring haben. Bohrung und
+    Senkung zusammen haben genau zwei: die weite Mündung der Senkung und die
+    andere Mündung beziehungsweise den Boden der Bohrung. Die Zahl kommt vom
+    Aufrufer, damit ein zweiter Ring nie wieder still dieselbe Bedeutung für
+    zwei verschiedene Geometrien bekommt.
+    """
+    if not face_indices:
         return None
 
     raw = mesh.raw
-    chosen = np.asarray(feature.face_indices, dtype=np.int64)
+    chosen = np.unique(np.asarray(face_indices, dtype=np.int64))
     if chosen.size == 0 or int(chosen.max()) >= len(raw.faces):
         return None
 
@@ -519,32 +535,66 @@ def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
     rim = edges[single]
     points = np.asarray(patch.vertices, dtype=float)
 
-    if len(rim) == 0:
+    rings = list(trimesh.graph.connected_components(rim)) if len(rim) else []
+    if len(rings) not in allowed_rings:
+        return None
+
+    if not rings:
         # Ein Ausschnitt ohne Rand ist schon geschlossen — ein Hohlraum ganz im
         # Material. Er braucht keinen Deckel und ist der Körper selbst.
         closed = patch
     else:
-        rings = trimesh.graph.connected_components(rim)
-        if len(rings) != 1 or len(rim) < 3:
-            return None
-        ring = points[np.unique(rim)]
-        hub = ring.mean(axis=0)
-        # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an einer
-        # Seitenwand hat ihren Ring in der YZ-Ebene.
-        spread = ring - hub
-        if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
-            return None
-        index = len(points)
-        cap = np.column_stack([rim[:, 0], rim[:, 1], np.full(len(rim), index, dtype=np.int64)])
+        vertices = [points]
+        faces = [np.asarray(patch.faces, dtype=np.int64)]
+        next_index = len(points)
+        for component in rings:
+            members = np.asarray(component, dtype=np.int64)
+            belongs = np.isin(rim[:, 0], members) & np.isin(rim[:, 1], members)
+            ring_edges = rim[belongs]
+            if len(ring_edges) < 3:
+                return None
+            ring = points[members]
+            hub = ring.mean(axis=0)
+            # Flach in **irgendeiner** Richtung, nicht nur in Z: Eine Kuppe an
+            # einer Seitenwand hat ihren Ring in der YZ-Ebene.
+            spread = ring - hub
+            if float(np.linalg.svd(spread, compute_uv=False)[-1]) > FLAT_RIM * len(ring) ** 0.5:
+                return None
+            cap = np.column_stack(
+                [
+                    ring_edges[:, 0],
+                    ring_edges[:, 1],
+                    np.full(len(ring_edges), next_index, dtype=np.int64),
+                ]
+            )
+            vertices.append(hub.reshape(1, 3))
+            faces.append(cap)
+            next_index += 1
         closed = trimesh.Trimesh(
-            vertices=np.vstack([points, hub]),
-            faces=np.vstack([np.asarray(patch.faces, dtype=np.int64), cap]),
+            vertices=np.vstack(vertices),
+            faces=np.vstack(faces),
             process=True,
         )
     trimesh.repair.fix_normals(closed)  # type: ignore[no-untyped-call]
     if not closed.is_watertight or closed.volume <= EPS_GEOM:
         return None
     return MeshData.of(closed)
+
+
+def _paired_cavity_body(mesh: MeshData, bore: Feature, widening: Feature) -> MeshData | None:
+    """Der gemeinsame Hohlraum einer Bohrung mit ihrer Senkung.
+
+    Die Kegelfläche allein hat zwei Randringe und darf deshalb nicht als
+    eigener Körper verschoben werden. Zusammen mit der Bohrungswand bleiben
+    genau die beiden äußeren Ränder des **ganzen** Hohlraums. Mit zwei Deckeln
+    entsteht das Volumen, das an der alten Stelle gefüllt und an der neuen
+    ausgeschnitten werden muss — ohne Maße oder Winkel nachzubauen.
+    """
+    return _body_from_faces(
+        mesh,
+        (*bore.face_indices, *widening.face_indices),
+        allowed_rings=(2,),
+    )
 
 
 def _feature_direction(feature: Feature, axis: Vec3 | None = None) -> Vec3:
@@ -902,23 +952,12 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #: einer Quelle; hier bleibt der eine Fall, den das Panel nicht kennt, weil er
 #: nicht an der Merkmalsart hängt, sondern am Netz.
 #:
-#: **Der Satz nannte zwei Auswege, und am 04.09.2026 hielt keiner.** Gemessen
-#: an einer Platte 60 auf 40 auf 10 mit durchgehender Bohrung Ø 8 und einer
-#: Senkung Ø 16:
-#:
-#: * *„Wählen Sie das Merkmal in der Mitte"* — die Bohrung versetzen lässt den
-#:   Senkungskrater an der alten Stelle stehen, und die versetzte Bohrung ist
-#:   nur noch so tief wie das Stück unter der Senkung, geht also nicht mehr
-#:   durch (``no_longer_through`` meldet es, aber gewollt war es nicht).
-#: * *„verschließen Sie die Bohrung"* — das geht (23 531,589 mm³), doch danach
-#:   ist die Senkung **weiter gesperrt**: Der Stopfen endet in ihr und macht
-#:   ihrer Fläche wieder zwei Randringe. Der Rat schickte im Kreis, denn
-#:   ``plug_hole`` auf der Senkung sagt mit genau diesem Satz ab.
-#:
-#: Was trägt, ist der Weg über Zahlen: ein Stopfen mit dem Durchmesser der
-#: Senkung über die volle Wandstärke schließt beides in einem Zug —
-#: **24 000,000 mm³, Rest 0,000, wasserdicht, kein Merkmal mehr übrig.** Den
-#: nennt der Satz jetzt, und nur den.
+#: ``move_feature`` fängt das erkannte Paar aus Bohrung und Senkung vor
+#: ``_tool_for`` ab und versetzt seinen gemeinsamen Hohlraum. Dieser Satz
+#: bleibt für die anderen Handlungen und für Netze, auf denen die Beziehung
+#: nicht eindeutig erkannt werden kann. Dort trägt weiter nur der gemessene
+#: Weg über Zahlen: ein Stopfen mit dem Durchmesser der Senkung über die volle
+#: Wandstärke schließt beides in einem Zug.
 _NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
     "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Versetzt "
@@ -956,8 +995,11 @@ def move_feature(ctx: OpContext) -> OpResult:
     **Innen ist es dasselbe Paar wie beim Löschen und beim Ändern**: An der
     alten Stelle das Gegenteil dessen, was das Merkmal ist, an der neuen das
     Merkmal selbst. Ein Hohlraum wird also gefüllt und neu ausgeschnitten, ein
-    Zapfen abgetragen und neu angesetzt. Beide Wege gehen über die Boolesche
-    Rückfallkette, und die benutzte Stufe steht im Ergebnis (§39).
+    Zapfen abgetragen und neu angesetzt. Eine Bohrung mit Senkung bildet dabei
+    einen gemeinsamen, aus beiden Flächengruppen geschlossenen Hohlraum; egal
+    welche Hälfte gewählt ist, beide Kennungen und Mittelpunkte reisen mit.
+    Alle Wege gehen über die Boolesche Rückfallkette, und die benutzte Stufe
+    steht im Ergebnis (§39).
 
     Die Kennung reist mit: Sie ist das Einzige, was den Unterschied zum Umweg
     von Hand ausmacht.
@@ -965,6 +1007,9 @@ def move_feature(ctx: OpContext) -> OpResult:
     params = cast(MoveFeatureParams, ctx.params)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "move_feature")
+    from app.core.perceive.relations import bore_and_widening_at
+
+    pair = bore_and_widening_at(feature, source.features)
     # **Erst in eine Liste, dann drei Werte einzeln.** Ein Generatorausdruck über
     # die Achsen hat für mypy keine feste Länge; ``Vec3`` verlangt genau drei.
     measured = [float(value) for value in feature.params["centre"]]
@@ -985,36 +1030,91 @@ def move_feature(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
-    cavity = _feature_is_a_cavity(feature)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
-    closed = _closed_at(
-        body, feature, centre, cavity, quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
-    )
-    ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
-    placed = boolean(
-        "difference" if cavity else "union",
-        [closed.mesh, _tool_for(as_mesh_data(source.mesh), feature, target)],
-        quality=ctx.quality,
-        seed=ctx.seed,
-        cancelled=ctx.cancelled,
-    )
+    travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
+    if pair is not None:
+        bore, widening = pair
+        cavity_body = _paired_cavity_body(body, bore, widening)
+        if cavity_body is None:
+            raise ValidationError(
+                field="at_feature",
+                detail=_NO_OWN_BODY,
+                values={"feature": feature.id, "bore": bore.id, "widening": widening.id},
+                constraint="not_movable",
+            )
+        closed = boolean(
+            "union",
+            [body, cavity_body],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        moved_body = cavity_body.raw.copy()
+        moved_body.apply_translation(travel)
+        ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+        placed = boolean(
+            "difference",
+            [closed.mesh, MeshData.of(moved_body)],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        features = dict(source.features)
+        for related in pair:
+            related_centre = np.asarray(related.params["centre"], dtype=float) + travel
+            features[related.id] = dataclasses.replace(
+                related,
+                params={
+                    **related.params,
+                    "centre": tuple(float(value) for value in related_centre),
+                },
+                provenance="generated",
+            )
+        through_feature = bore
+        bore_target = np.asarray(bore.params["centre"], dtype=float) + travel
+        through_target: Vec3 = (
+            float(bore_target[0]),
+            float(bore_target[1]),
+            float(bore_target[2]),
+        )
+    else:
+        cavity = _feature_is_a_cavity(feature)
+        closed = _closed_at(
+            body,
+            feature,
+            centre,
+            cavity,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
+        placed = boolean(
+            "difference" if cavity else "union",
+            [closed.mesh, _tool_for(body, feature, target)],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        moved = dataclasses.replace(
+            feature,
+            params={**feature.params, "centre": target},
+            provenance="generated",
+        )
+        features = {**source.features, feature.id: moved}
+        through_feature = feature
+        through_target = target
 
-    moved = dataclasses.replace(
-        feature,
-        params={**feature.params, "centre": target},
-        provenance="generated",
-    )
     findings = [*closed.findings, *placed.findings]
     # Nur, wenn sie entlang ihrer eigenen Achse gewandert ist: Quer versetzt
     # bleibt eine durchgehende Bohrung durchgehend, und die Messung kostet eine
     # Boolesche, die dann nichts zu sagen hätte.
-    travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
-    axial = float(np.dot(travel, np.asarray(_feature_direction(feature), dtype=float)))
+    axial = float(np.dot(travel, np.asarray(_feature_direction(through_feature), dtype=float)))
     if abs(axial) > EPS_GEOM:
         findings += _throughness_lost(
             placed.mesh,
-            feature,
-            target,
+            through_feature,
+            through_target,
             "move_feature",
             quality=ctx.quality,
             seed=ctx.seed,
@@ -1025,11 +1125,11 @@ def move_feature(ctx: OpContext) -> OpResult:
             dataclasses.replace(
                 source,
                 mesh=placed.mesh,
-                features={**source.features, feature.id: moved},
+                features=features,
             )
         ],
         findings=findings,
-        solver=placed.solver,
+        solver=deepest((closed.solver, placed.solver)),
     )
 
 

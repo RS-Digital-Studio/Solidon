@@ -3551,6 +3551,7 @@
   "Vergrößert das gewählte Fertigmaß um den Wert aus dem Materialprofil. Aus bleibt das gemessene Maß unverändert.": "Augmente la cote finale choisie de la valeur du profil de matériau. Désactivé, la mesure relevée reste inchangée.",
   "Vergrößert die Bohrung um den Wert aus dem Materialprofil.": "Élargit le perçage de la valeur issue du profil de matériau.",
   "Verjüngung": "Conicité",
+  "Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.": "Liés : le perçage et la fraisure sont déplacés ensemble.",
   "Verknüpfte Quellen brauchen einen gespeicherten Projektordner.": "Les sources liées ont besoin d'un dossier de projet enregistré.",
   "Verlauf": "Historique",
   "Verlauf zeigen": "Afficher l'historique",

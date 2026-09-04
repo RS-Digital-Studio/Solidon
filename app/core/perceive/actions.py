@@ -25,11 +25,12 @@ selbst.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final
 
 from app.core.registry import REGISTRY
-from app.core.types import Feature
+from app.core.types import Feature, FeatureId
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
@@ -164,6 +165,7 @@ class FeatureAction:
     title: TranslatableText | str
     op: str | None
     reason: TranslatableText | str = ""
+    note: TranslatableText | str = ""
     fields: tuple[ActionField, ...] = field(default_factory=tuple)
 
 
@@ -230,7 +232,9 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
     )
 
 
-def actions_for(feature: Feature) -> list[FeatureAction]:
+def actions_for(
+    feature: Feature, features: Mapping[FeatureId, Feature] | None = None
+) -> list[FeatureAction]:
     """Was sich an diesem Merkmal tun lässt — und was nicht, mit Grund.
 
     Gilt eine Handlung, trägt sie den Registernamen und ihre Felder samt
@@ -252,6 +256,7 @@ def actions_for(feature: Feature) -> list[FeatureAction]:
                 FeatureAction(
                     title=fitting.title,
                     op=fitting.name,
+                    note=_note_for(fitting.name, feature, features),
                     fields=_fields_of(fitting, feature),
                 )
             )
@@ -268,6 +273,19 @@ def actions_for(feature: Feature) -> list[FeatureAction]:
                 )
             )
     return actions
+
+
+def _note_for(
+    op: str, feature: Feature, features: Mapping[FeatureId, Feature] | None
+) -> TranslatableText | str:
+    """Eine Folge der Handlung, die erst aus der Nachbarschaft hervorgeht."""
+    if op != "move_feature" or features is None:
+        return ""
+    from app.core.perceive.relations import bore_and_widening_at
+
+    if bore_and_widening_at(feature, features) is None:
+        return ""
+    return _("Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.")
 
 
 def instead_of(op: str, kind: str) -> Any:

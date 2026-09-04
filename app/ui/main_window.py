@@ -9418,7 +9418,7 @@ class MainWindow(QMainWindow):
                 for other, candidate in entry.features.items()
                 if other != feature_id and candidate.kind == feature.kind
             ]
-            self.feature_panel.show_feature(feature_id, feature, alike)
+            self.feature_panel.show_feature(feature_id, feature, alike, features=entry.features)
             self.feature_dock.reveal()
         else:
             self.feature_panel.clear()
