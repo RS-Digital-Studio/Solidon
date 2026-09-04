@@ -75,7 +75,7 @@ from app.core.types import Document, Feature, Finding, ObjectId, OpId
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import handlers_of
-from app.ui.icons import icon, icon_name_for
+from app.ui.icons import OVERSAMPLING, icon, icon_name_for
 from app.ui.labels import (
     LengthSpin,
     NumberSpin,
@@ -4520,18 +4520,20 @@ def _preview_pixels(widget: QWidget) -> int:
 def _svg_icon(svg: str, size: int) -> QIcon:
     """Ein SVG als Symbol, scharf auf HiDPI.
 
-    Doppelt gerastert und dann auf die Anzeigegröße gesetzt: Ein Bild in
-    genau der Punktgröße franst auf einem skalierten Bildschirm aus.
+    Überzählig gerastert und dann auf die Anzeigegröße gesetzt: Ein Bild in
+    genau der Punktgröße franst auf einem skalierten Bildschirm aus. Der Faktor
+    ist :data:`app.ui.icons.OVERSAMPLING` — hier stand er als nackte 2 und
+    wäre bei der nächsten Anpassung dort allein geblieben.
     """
     from PySide6.QtSvg import QSvgRenderer
 
     renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
     if not renderer.isValid():
         return QIcon()
-    image = QImage(QSize(size, size) * 2, QImage.Format.Format_ARGB32_Premultiplied)
+    image = QImage(QSize(size, size) * OVERSAMPLING, QImage.Format.Format_ARGB32_Premultiplied)
     image.fill(Qt.GlobalColor.transparent)
     painter = QPainter(image)
     renderer.render(painter)
     painter.end()
-    image.setDevicePixelRatio(2.0)
+    image.setDevicePixelRatio(float(OVERSAMPLING))
     return QIcon(QPixmap.fromImage(image))

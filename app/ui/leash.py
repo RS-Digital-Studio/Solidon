@@ -11,6 +11,33 @@ Dialoge nicht: fünf Stellen schrieben ``self._worker = None`` direkt im
 nicht „das Objekt darf weg" —, und ein Lambda, das blind ``None`` schreibt,
 trifft obendrein den Nachfolger, wenn der Vorgänger später fertig wird. Die
 Gebietsregel beschreibt beides; hier steht es einmal statt sechsmal.
+
+**Warum der Aufräumbefehl überall ``release`` heißt.** Er hieß einmal fünf
+verschiedene Dinge — ``release``, ``wait_for_workers``, ``wait_for_survey``,
+``wait_for_look``, ``wait_for_setup`` —, und wer eine Testfixture darauf
+baute, sammelte sie nacheinander ein: erst zwei, dann drei, dann vier. Der
+fünfte fehlte, und der Prozess starb beim Abbau an einem Thread, der sein
+Fenster überlebt hatte. Ein Name, den die Fixture blind rufen kann, ist die
+einzige Form, die mitwächst; es sind inzwischen vierzehn Klassen.
+
+**Der fachliche Name daneben bleibt.** ``wait_for_setup`` und seine
+Geschwister geben zurück, **ob** ein Lauf fertig wurde, und werden beim
+Schließen gefragt. Aufräumen fragt nicht, es wartet — die beiden tun
+Verschiedenes und behalten deshalb getrennte Namen.
+
+**Die Frist der fachlichen Methode bleibt ihre eigene.** In den Dialogen stand
+zuerst ``wait_for_...(timeout_ms)``, und damit bekam eine Erhebung, für die 30
+Sekunden vorgesehen sind, die 2 Sekunden aus :data:`WAIT_TIMEOUT_MS`, die für
+das Einsammeln der Leine gedacht sind. Gemessen an ``test_chat_ui``: zwei von
+vier Läufen starben danach beim Abbau, gegen null von vier davor. Der
+Parameter von ``release`` gilt der Leine, nicht der Sache.
+
+**Auch eine Klasse ohne eigenen Arbeiter braucht ihn.** Wer nur eine
+``WorkerLeash`` hält und keinen Weg anbietet, ihr Schluss zu sagen, fällt
+nicht auf, solange jeder Test schließt: Der Weg über ``reject``/``closeEvent``
+wartet, der Weg über das bloße Wegräumen nicht. Beim Erstlauf-Dialog las ein
+Test die Sprachliste und schloss nie — dann stirbt der Prozess beim Abbau, und
+die Ursache steht drei Dateien weiter.
 """
 
 from __future__ import annotations

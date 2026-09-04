@@ -309,15 +309,10 @@ class VariantsDialog(QDialog):
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieser Dialog außerhalb von Qt hält.
 
-        **Diese Klasse hatte gar nichts** — eine ``WorkerLeash`` und keinen Weg,
-        ihr zu sagen, dass Schluss ist. Unauffällig war das nur, solange jeder
-        Test sie schließt: Der Weg über ``reject``/``closeEvent`` wartet, der
-        Weg über das Wegräumen nicht. Genau so stand es beim Erstlauf-Dialog,
-        bis ein Test die Sprachliste las und nie schloss — dann stirbt der
-        Prozess beim Abbau, und die Ursache steht drei Dateien weiter.
-
         ``closeEvent`` bricht denselben Lauf ab — der Weg über das Kreuz.
         Hier steht der Weg über das Wegräumen, den es bisher nicht gab.
+
+        Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
         """
         if self._worker is not None:
             self._cancel.cancel()

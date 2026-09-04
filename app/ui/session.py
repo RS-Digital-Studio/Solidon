@@ -697,6 +697,20 @@ class Session(QObject):
 
     # --- editing ----------------------------------------------------------------
 
+    def _changed(self) -> None:
+        """Was nach jeder angenommenen Änderung geschieht — und zwar dreierlei.
+
+        Als geändert merken (sonst geht die Arbeit beim Schließen verloren, das
+        nur sichert, was als geändert gilt), die Oberflächen anstoßen, und neu
+        auswerten. Die drei standen bis zum 04.09.2026 zwanzigmal in dieser
+        Datei untereinander; wer ein viertes hinzufügen wollte — ein Signal,
+        eine Sicherung, eine Kennzahl —, musste zwanzig Stellen finden und
+        durfte keine übersehen.
+        """
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
     def apply(
         self,
         title: TranslatableText | str,
@@ -725,9 +739,7 @@ class Session(QObject):
                 raise
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def repair_and_retry(self, stopped_at: int) -> bool:
@@ -742,9 +754,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def change_parameter(self, name: str, value: float, origin: Origin | None = None) -> bool:
@@ -798,9 +808,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def add_fit(self, fit: Fit, origin: Origin | None = None) -> bool:
@@ -836,9 +844,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def add_parameter(self, parameter: Parameter, origin: Origin | None = None) -> bool:
@@ -877,9 +883,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def edit_parameter(self, name: str, parameter: Parameter, origin: Origin | None = None) -> bool:
@@ -924,9 +928,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def change_scene_profile(
@@ -956,9 +958,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def change_params(self, op_id: int, params: dict[str, Any]) -> None:
@@ -968,9 +968,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
 
     def removal_closure(self, op_ids: Sequence[int]) -> tuple[int, ...]:
         """Gewählte und davon abhängige Schritte für die Nachfrage bestimmen."""
@@ -987,9 +985,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def change_inputs(self, op_id: int, inputs: list[str]) -> None:
@@ -1005,9 +1001,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
 
     def change_kernel(self, op_id: int, op_name: str, params: dict[str, Any]) -> None:
         """Denselben Schritt im anderen Rechenkern (§15.4, ``MENU_TWINS``).
@@ -1020,9 +1014,7 @@ class Session(QObject):
         except AppError as error:
             self.failed.emit(error)
             return
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
 
     def bake_strokes(self, op_id: int) -> bool:
         """Den Stand einer Formsitzung festschreiben (Entscheidung D).
@@ -1377,9 +1369,7 @@ class Session(QObject):
         Neuzeichnen danach — genau wie bei einem Import.
         """
         generation = generate_into(self.project, result)
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return generation.object_id
 
     def auto_split(self, object_id: str) -> SplitApplied:
@@ -1409,9 +1399,7 @@ class Session(QObject):
             features=entry.features,
         )
         if applied.transaction is not None:
-            self._dirty = True
-            self.projectChanged.emit()
-            self.evaluate_async()
+            self._changed()
         return applied
 
     def split_along(
@@ -1443,9 +1431,7 @@ class Session(QObject):
             pins=pins,
             shape=shape,
         )
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return applied
 
     def create_lid(
@@ -1463,9 +1449,7 @@ class Session(QObject):
         Bügeln — die drei Werte, die über eine Passung entscheiden.
         """
         applied = apply_lid(self.project.document, object_id, params, self.profile, op=op)
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return applied
 
     def preview_async(
@@ -1666,18 +1650,14 @@ class Session(QObject):
             return
         applied = apply_planned(self.project.document, plan, object_id, profile)
         if applied.transaction is not None:
-            self._dirty = True
-            self.projectChanged.emit()
-            self.evaluate_async()
+            self._changed()
         then(applied)
 
     def undo(self) -> Transaction | None:
         transaction = self.history.undo()
         if transaction is None:
             return None
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return transaction
 
     def undo_applied(self, transaction: str) -> bool:
@@ -1692,16 +1672,12 @@ class Session(QObject):
         """
         if not agent_apply.undo_applied(self.history, transaction):
             return False
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return True
 
     def redo(self) -> None:
         if self.history.redo() is not None:
-            self._dirty = True
-            self.projectChanged.emit()
-            self.evaluate_async()
+            self._changed()
 
     # --- evaluation -------------------------------------------------------------
 
@@ -1954,9 +1930,7 @@ class Session(QObject):
         """
         transaction = agent_apply.accept(preview.proposal, self.history)
         self._accepted[preview.proposal.request] = transaction.id if transaction else None
-        self._dirty = True
-        self.projectChanged.emit()
-        self.evaluate_async()
+        self._changed()
         return transaction
 
     def discard_proposal(self, preview: ProposalPreview) -> None:

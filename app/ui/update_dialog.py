@@ -374,16 +374,11 @@ class UpdateDialog(QDialog):
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieser Dialog außerhalb von Qt hält.
 
-        **Diese Klasse hatte gar nichts** — eine ``WorkerLeash`` und keinen Weg,
-        ihr zu sagen, dass Schluss ist. Unauffällig war das nur, solange jeder
-        Test sie schließt: Der Weg über ``reject``/``closeEvent`` wartet, der
-        Weg über das Wegräumen nicht. Genau so stand es beim Erstlauf-Dialog,
-        bis ein Test die Sprachliste las und nie schloss — dann stirbt der
-        Prozess beim Abbau, und die Ursache steht drei Dateien weiter.
-
         Ein laufender Download wird abgebrochen und nicht abgewartet: Er
         kann Minuten dauern, und ein Fenster, das beim Schließen minutenlang
         steht, ist schlimmer als ein abgebrochener Download.
+
+        Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
         """
         worker = self._worker
         if worker is not None:

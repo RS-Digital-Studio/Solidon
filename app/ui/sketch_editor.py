@@ -4895,11 +4895,6 @@ class SketchPanel(QWidget):
         """Die Höhe beendet das Rechteck nach der verriegelten Breite."""
         self.canvas.place_second_measured(self.canvas.second_measure_field.value_mm())
 
-    def _insert_rectangle(self) -> None:
-        """Das Rechteck des Kürzels — vierzig auf zwanzig, wie die Zeichenfläche
-        es als Vorgabe kennt."""
-        self.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
-
     def _request_distance(self) -> None:
         """Das Kürzel für die häufigste Bedingung: ein Maß zwischen zwei Punkten."""
         self.request_constraint("distance")

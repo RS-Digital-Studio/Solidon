@@ -169,18 +169,10 @@ FITTING_OPS: frozenset[str] = frozenset(
 #: fast dreimal so viele wie der Schnitt, und drei Themen in einem Namen sind
 #: kein Titel, sondern eine Aufzählung. Die Teilung stand längst im Pfad
 #: jedes Feldes; jetzt ist der Reiter eines Feldes sein Bereich.
-GROUPS = (
-    "layers",
-    "shell",
-    "infill",
-    "temperature",
-    "cooling",
-    "speed",
-    "support",
-    "adhesion",
-    "retraction",
-    "filament",
-)
+#: Aus dem Kern geholt, nicht abgeschrieben: ``read_path`` lehnt jeden Pfad ab,
+#: dessen Bereich dort nicht steht — eine eigene Liste hier hätte den elften
+#: Bereich still verschluckt.
+GROUPS = print_settings.GROUPS
 
 #: Wie breit ein Feld höchstens wird, je Art des Werts. Ein Haken steht nicht
 #: dabei: bei ihm ist die breite Fläche ein größeres Ziel und kein gedehnter
@@ -4428,16 +4420,7 @@ class PrintSettingsDialog(QDialog):
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
 
-        **Ein Name für den Aufräumbefehl, auf allen Klassen, die Arbeiter
-        halten.** Es waren fünf — ``release``, ``wait_for_workers``,
-        ``wait_for_survey``, ``wait_for_look``, ``wait_for_setup`` —, und wer
-        eine Testfixture darauf baute, sammelte sie nacheinander ein: erst
-        zwei, dann drei, dann vier. Der fünfte fehlte, und der Prozess starb
-        beim Abbau an einem Thread, der sein Fenster überlebt hatte.
-
-        Der fachliche Name daneben bleibt: ``wait_for_workers`` tut hier schon dasselbe;
-        ``release`` ist der
-        Name, unter dem es von außen gefunden wird.
+        Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
         """
         self.wait_for_workers(timeout_ms)
 

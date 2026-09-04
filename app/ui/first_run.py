@@ -398,25 +398,7 @@ class FirstRunDialog(QDialog):
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
 
-        **Ein Name für den Aufräumbefehl, auf allen Klassen, die Arbeiter
-        halten.** Es waren fünf — ``release``, ``wait_for_workers``,
-        ``wait_for_survey``, ``wait_for_look``, ``wait_for_setup`` —, und wer
-        eine Testfixture darauf baute, sammelte sie nacheinander ein: erst
-        zwei, dann drei, dann vier. Der fünfte fehlte, und der Prozess starb
-        beim Abbau an einem Thread, der sein Fenster überlebt hatte.
-
-        Der fachliche Name daneben bleibt: ``wait_for_survey`` steht in ``accept`` und
-        ``reject`` und gibt
-        zurück, ob die Erhebung durch ist. **An dieser Klasse fiel es auf:** Ein
-        Test las die Sprachliste und schloss nie — der Erhebungsthread
-        überlebte den Dialog, und der Prozess starb mit ``0xC0000409``.
-
-        **Die Frist der fachlichen Methode bleibt ihre eigene.** Hier stand
-        zuerst ``wait_for_survey(timeout_ms)`` — und damit bekam eine Erhebung, für die
-        30 Sekunden vorgesehen sind, die 2 Sekunden, die für das Einsammeln
-        der Leine gedacht sind. Gemessen an ``test_chat_ui``: zwei von vier
-        Läufen starben danach beim Abbau, gegen null von vier davor. Der
-        Parameter gilt der Leine, nicht der Sache.
+        Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
         """
         self.wait_for_survey()
         self._leash.wait_all(timeout_ms)
