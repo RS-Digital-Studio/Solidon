@@ -1087,6 +1087,37 @@ Und der Skaliergriff (`app/ui/scale_widget.py`) ist diesem Widget
 absichtlich Zeile für Zeile nachgebaut — wer dort etwas am
 Interaktionsmuster ändert, ändert es an beiden Stellen.
 
+## Der Interaktionsstil wird über `iren.style` gesetzt, nie daran vorbei (04.09.2026)
+
+`set_navigation` hängt den eigenen Stil über pyvistas Eigenschaft an
+(`plotter.iren.style = style`) und **nicht** über `SetInteractorStyle` am
+Interactor. Der Unterschied ist nicht Geschmack, sondern die Frage, wer den
+Stil für den seinen hält: pyvistas `RenderWindowInteractor` führt daneben
+`_style_class` und setzt es bei jeder Gelegenheit über `update_style()`
+wieder durch. Wer daran vorbei anhängt, verliert seinen Stil bei der
+nächsten dieser Gelegenheiten — und der Interactor fährt danach mit VTKs
+Trackball: links dreht, nichts wählt aus.
+
+**Eine dieser Gelegenheiten ist der Doppelklick.** pyvista meldet
+`_toggle_chart_interaction` als Rückruf für zwei schnelle Linksklicks an,
+immer, auch ohne ein einziges Diagramm in der Szene; findet er keines, endet
+er in `_set_context_style(None)`, und dessen letzte Zeile ist
+`update_style()`. Das trifft die gestufte Auswahl (§18.5) ins Herz: erst der
+Körper, dann das Merkmal darin heißt zwei Klicks auf dieselbe Stelle — also
+genau einen Doppelklick. Wer eine Bohrung anwählte, verlor im selben Moment
+Auswahl, Kontextmenü, die Abwahl durch einen Klick ins Leere und das
+eingestellte Schema (Robert, 04.09.2026).
+
+Die Regel gilt für jeden weiteren Zustand, den pyvista neben VTK doppelt
+führt: **über pyvista setzen, nicht an ihm vorbei.** Der Griff bleibt die
+Ausnahme, die trotzdem nachziehen muss — `enable_trackball_style` tauscht
+`_style_class` selbst aus, statt es nur erneut durchzusetzen, und deshalb
+steht der `set_navigation`-Ruf am Zugende weiter dort.
+
+Geprüft in `tests/test_viewport_decisions.py` an einem echten
+`pv.Plotter(off_screen=True)`: angehängt, `_set_context_style(None)`
+gerufen, und der eigene Stil muss noch hängen.
+
 ## Die Skizze ist Vordergrund, der Körper Zusammenhang (29.08.2026)
 
 Während des Zeichnens bleibt der vorhandene Körper sichtbar, aber mit

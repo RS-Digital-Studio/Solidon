@@ -3091,6 +3091,57 @@ def test_the_stretch_is_bounded_by_the_snap_that_precedes_it() -> None:
         )
 
 
+def test_the_style_survives_what_pyvista_does_on_a_double_click(qt_app: QApplication) -> None:
+    """Zwei Klicks auf dieselbe Stelle sind ein Doppelklick — und der nahm uns
+    bis hierher die ganze Bedienung der Ansicht.
+
+    pyvista meldet ``_toggle_chart_interaction`` als Rückruf für den linken
+    Doppelklick an, immer, auch ohne ein einziges Diagramm in der Szene. Findet
+    er keines, endet er in ``_set_context_style(None)``, und dessen letzte
+    Zeile ist ``update_style()``: Der Interactor bekommt den Stil gesetzt, den
+    **pyvista** für den seinen hält. Wer seinen eigenen mit
+    ``SetInteractorStyle`` daran vorbei angehängt hat, verliert ihn dort.
+
+    Der Preis war nicht ein Detail, sondern §18.5 im Ganzen: Die gestufte
+    Auswahl braucht zwei Klicks auf dieselbe Stelle (erst der Körper, dann die
+    Bohrung darin) — also genau einen Doppelklick. Nach dem zweiten Klick fuhr
+    die Ansicht mit VTKs Trackball: keine Auswahl mehr, kein Kontextmenü, keine
+    Abwahl durch einen Klick ins Leere, und das eingestellte Schema war weg
+    (Robert, 04.09.2026: „ist die neue Steuerung nicht als Standard
+    vorgewählt … kann ich nichts anderes auswählen … das Abwählen … geht auch
+    nicht" — drei Meldungen, eine Ursache).
+
+    **Gemessen an einem echten pyvista-Interactor**, nicht an einer Attrappe:
+    ``pv.Plotter(off_screen=True)`` bringt ``iren`` mitsamt ``style`` und
+    ``update_style`` mit, und aufgerufen wird die Methode, die den Schaden
+    angerichtet hat.
+    """
+    import pyvista as pv
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    plotter = pv.Plotter(off_screen=True)
+    try:
+        viewport.plotter = cast(Any, plotter)
+        viewport.set_navigation("solidon")
+
+        angehaengt = plotter.iren.interactor.GetInteractorStyle()
+        assert hasattr(angehaengt, "_left_down"), "der eigene Stil hängt am Interactor"
+
+        # Was pyvista beim Doppelklick zuletzt tut.
+        plotter.iren._set_context_style(None)
+
+        danach = plotter.iren.interactor.GetInteractorStyle()
+        assert hasattr(danach, "_left_down"), (
+            "nach pyvistas update_style muss der eigene Stil noch hängen — sonst "
+            "wählt der zweite Klick der gestuften Tiefe nichts mehr aus"
+        )
+    finally:
+        viewport.plotter = None
+        plotter.close()
+
+
 def test_each_navigation_scheme_does_what_its_name_promises() -> None:
     """Vier Schemata, und zwei hielten ihren eigenen Namen nicht (V3).
 

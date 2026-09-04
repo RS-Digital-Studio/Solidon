@@ -10678,7 +10678,36 @@ class Viewport(QWidget):
         # deshalb selbst gebaut haben. Der zweite Fall derselben Sache hat
         # zwei Monate gewartet.
         style._parent = weakref.ref(self.plotter.iren)
-        self.plotter.interactor.SetInteractorStyle(style)
+        # **Über pyvistas Eigenschaft und nicht am Interactor vorbei.** Das
+        # ist der Unterschied zwischen „unser Stil hängt dran" und „unser Stil
+        # ist der, den pyvista für den seinen hält", und er entscheidet über
+        # die ganze Bedienung der Ansicht.
+        #
+        # ``SetInteractorStyle`` hängt ihn an und sagt es pyvista nicht.
+        # Dessen ``RenderWindowInteractor`` führt daneben ``_style_class`` und
+        # setzt es bei jeder Gelegenheit wieder durch (``update_style``) — und
+        # eine dieser Gelegenheiten ist der **Doppelklick**: pyvista meldet
+        # ``_toggle_chart_interaction`` als Rückruf für zwei schnelle
+        # Linksklicks an, immer, auch ohne ein einziges Diagramm in der Szene.
+        # Der Rückruf findet keines, ruft ``_set_context_style(None)``, und
+        # das endet mit ``update_style()``.
+        #
+        # Genau das trifft die gestufte Auswahl (§18.5) ins Herz: Erst der
+        # Körper, dann das Merkmal darin heißt **zwei Klicks auf dieselbe
+        # Stelle**, und zwei Klicks auf dieselbe Stelle sind ein Doppelklick.
+        # Wer eine Bohrung anwählte, verlor damit im selben Moment den Stil —
+        # und mit ihm die Auswahl, das Kontextmenü, die Abwahl durch einen
+        # Klick ins Leere und das gewählte Navigationsschema. Danach fuhr die
+        # Ansicht mit VTKs Trackball: links dreht, nichts wählt aus. „Die neue
+        # Steuerung ist nicht vorgewählt" (Robert, 04.09.2026) war dieselbe
+        # Sache von vorn gesehen.
+        #
+        # Über die Eigenschaft gesetzt zeigt ``_style_class`` auf **uns**;
+        # dieselbe Zeile, die vorher den Stil wegnahm, setzt ihn jetzt wieder.
+        # Der Griff (:meth:`set_gizmo`) braucht seinen ``set_navigation``-Ruf
+        # trotzdem weiter: ``enable_trackball_style`` tauscht das Feld selbst
+        # aus, statt es nur erneut durchzusetzen.
+        self.plotter.iren.style = style
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
         # sonst noch einzuschalten wäre, steht dort.
         self._enable_picking()

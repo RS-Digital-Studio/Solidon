@@ -1805,7 +1805,7 @@ class _GizmoWidget:
 
 
 class _GizmoInteractor:
-    """Verbucht, wer den Interaktionsstil und wer den Picker setzt.
+    """Verbucht, wer den Picker setzt.
 
     **Die Attrappe spiegelt die echte API-Oberfläche, nicht die vermutete.**
     ``SetPicker`` steht hier, weil der Viewport es ruft: pyvistas Griff fragt
@@ -1813,14 +1813,18 @@ class _GizmoInteractor:
     Widget selbst hinstellt, trifft in dieser Umgebung nichts. Ohne diese
     Methode fielen acht Tests mit ``AttributeError`` — dieselbe Sorte, vor der
     der Docstring am Griff selbst warnt.
+
+    ``SetInteractorStyle`` stand hier und ist es nicht mehr: Der Viewport hängt
+    seinen Stil seit dem 04.09.2026 über pyvistas Eigenschaft an
+    (``iren.style``), weil ein daran vorbei gesetzter Stil beim nächsten
+    ``update_style()`` verlorenging — beim Doppelklick etwa, also bei jedem
+    zweiten Klick der gestuften Auswahl. Verbucht wird deshalb dort, wo der
+    Aufruf hingeht (:class:`_GizmoObservers`); eine Attrappe, die die alte
+    Stelle weiter anbietet, verstünde einen Rückfall als Erfolg.
     """
 
     def __init__(self) -> None:
-        self.styles: list[object] = []
         self.pickers: list[object] = []
-
-    def SetInteractorStyle(self, style: object) -> None:  # noqa: N802 — VTK-Name
-        self.styles.append(style)
 
     def SetPicker(self, picker: object) -> None:  # noqa: N802 — VTK-Name
         self.pickers.append(picker)
@@ -1836,6 +1840,17 @@ class _GizmoObservers:
     def __init__(self) -> None:
         self.active: dict[int, str] = {}
         self._next = 0
+        self.styles: list[object] = []
+        """Wer den Interaktionsstil gesetzt hat — der Weg, den der Viewport
+        wirklich nimmt (siehe :class:`_GizmoInteractor`)."""
+
+    @property
+    def style(self) -> object | None:
+        return self.styles[-1] if self.styles else None
+
+    @style.setter
+    def style(self, style: object) -> None:
+        self.styles.append(style)
 
     def add_observer(
         self,
@@ -2152,7 +2167,7 @@ def test_a_scale_drag_becomes_an_operation(qt_app: QApplication) -> None:
 
         viewport._on_scale_released(1.5)
         assert factors == [1.5]
-        assert len(plotter.interactor.styles) == 2, "und das Schema ist beide Male zurück"
+        assert len(plotter.iren.styles) == 2, "und das Schema ist beide Male zurück"
     finally:
         viewport.deleteLater()
 
@@ -2288,13 +2303,13 @@ def test_a_drag_gives_the_navigation_back(qt_app: QApplication) -> None:
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
-        assert plotter.interactor.styles == [], "bis hierhin hat niemand den Stil angefasst"
+        assert plotter.iren.styles == [], "bis hierhin hat niemand den Stil angefasst"
 
         viewport._on_gizmo_released(translation((5.0, 0.0, 0.0)))
-        assert len(plotter.interactor.styles) == 1, "der eigene Stil ist zurück"
+        assert len(plotter.iren.styles) == 1, "der eigene Stil ist zurück"
 
         viewport._on_gizmo_released(translation((0.2, 0.0, 0.0)))
-        assert len(plotter.interactor.styles) == 2, "auch ein Zug unter der Fangschwelle"
+        assert len(plotter.iren.styles) == 2, "auch ein Zug unter der Fangschwelle"
     finally:
         viewport.deleteLater()
 
