@@ -1030,6 +1030,77 @@ def with_slot_profiles(
     )
 
 
+def _single_line(text: str) -> bool:
+    """Ob der Text keinen Zeilentrenner enthält — auch keinen abwegigen.
+
+    Gemessen wird mit ``splitlines()`` und nicht gegen eine Liste von Zeichen,
+    denn genau ``splitlines()`` liest der Cura-Zweig die Werte später wieder
+    ein (:func:`_command`). Was dort trennt, muss hier auffallen — und das ist
+    mehr als Wagenrücklauf und Zeilenvorschub: Vertikaltabulator,
+    Seitenvorschub, die vier Trennzeichen der Zeichensatzsteuerung und drei
+    weitere Unicode-Zeilentrenner zählen für Python ebenso dazu.
+    """
+    return text.splitlines() == [text] if text else True
+
+
+def _one_line(text: str) -> str:
+    """Bringt einen schmückenden Text auf eine Zeile.
+
+    Gilt nur für Texte, die als **Kommentar** in eine Konfigurationsdatei
+    gehen. Dort ist der Umbruch bedeutungstragend, der Text selbst aber nicht:
+    Ein Titel aus einer fremden Projektdatei, der einen Umbruch trägt,
+    schriebe sonst eine zweite Zeile — und die liest der Slicer als
+    Einstellung. ``post_process`` stünde dann in einer Datei, in die Solidon
+    ihn nie geschrieben hat.
+
+    Für **Werte** ist Bereinigen der falsche Weg; dort hält
+    :func:`_without_line_break` an, statt eine Druckeinstellung stillschweigend
+    zu verändern.
+    """
+    return " ".join(text.splitlines())
+
+
+def _without_line_break(values: Mapping[str, str], setup: SlicerSetup) -> None:
+    """Hält an, wenn ein Einstellungswert einen Zeilenumbruch enthält (§28).
+
+    Eine Slicer-Konfiguration trennt ihre Einträge mit Zeilenumbrüchen, und der
+    Cura-Zweig liest sie danach mit ``splitlines()`` wieder ein: Ein Umbruch
+    mitten in einem Wert macht aus einem Eintrag zwei, und der zweite steht
+    dort, ohne dass Solidon ihn geschrieben hätte. Die Werte kommen unter
+    anderem aus der geöffneten Projektdatei, sind also fremder Herkunft — genau
+    dieser Weg war der Befund der Sicherheitsdurchsicht vom 04.09.2026.
+
+    **Abgelehnt statt bereinigt, wie beim Trenner im Profilpfad.** Einen Wert
+    still zu ändern hieße, eine Druckeinstellung zu verändern, ohne es zu sagen
+    (Regel 21) — und für einen Umbruch in einem Slicer-Wert ist nirgends
+    zugesagt, wie man ihn maskiert.
+
+    Der Fall kann im normalen Betrieb nicht auftreten: Die Schemaprüfung der
+    Projektdatei weist Steuerzeichen schon beim Öffnen ab
+    (:func:`app.core.scene.project._validate_print_settings`). Diese Prüfung
+    ist die Gegenprobe an der Stelle, an der es darauf ankommt.
+    """
+    marked = sorted(key for key, value in values.items() if not _single_line(value))
+    if not marked:
+        return
+    raise ExternalToolError(
+        tool=setup.name,
+        detail=_(
+            "Eine Druckeinstellung enthält einen Zeilenumbruch. In einer "
+            "Slicer-Konfiguration trennt der die Einträge und ergäbe eine "
+            "Einstellung, die niemand gesetzt hat."
+        ),
+        # ``setting`` und nicht ``key``: Jeder Wertschlüssel eines Befunds
+        # braucht eine Beschriftung in ``ui.labels._VALUE_NAMES``, sonst steht
+        # der rohe Bezeichner im Tooltip des Kunden.
+        # ``tests/test_value_labels.py`` hat genau das gefangen — und
+        # ``setting`` ist dort seit je als „Einstellung" beschriftet, trifft
+        # die Sache also besser als ein neuer Eintrag in fünf Katalogen.
+        values={"setting": ", ".join(marked)},
+        suggestions=(OPEN_SETTINGS, CANCEL),
+    )
+
+
 def write_config(
     settings: PrintSettings,
     profile: Profile,
@@ -1058,8 +1129,15 @@ def write_config(
 
     if setup.flavour == "prusa":
         target = directory / "solidon.ini"
-        lines = [f"# {settings.title} — von Solidon geschrieben, nicht von Hand"]
-        lines += [f"{key} = {value}" for key, value in sorted(flat_values().items())]
+        # Der Titel wird auf eine Zeile gebracht, die Werte werden geprüft: In
+        # einer INI trennt der Umbruch die Einträge, und der Titel kommt aus
+        # der Projektdatei. Ein Umbruch darin schrieb sonst eine zweite Zeile,
+        # die PrusaSlicer als Einstellung liest — mit ``post_process`` als
+        # Befehl, den niemand gesetzt hat.
+        flat = flat_values()
+        _without_line_break(flat, setup)
+        lines = [f"# {_one_line(settings.title)} — von Solidon geschrieben, nicht von Hand"]
+        lines += [f"{key} = {value}" for key, value in sorted(flat.items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return SlicerConfig(process=target)
 
@@ -1115,8 +1193,14 @@ def write_config(
         return SlicerConfig(process=target, filaments=tuple(written), machine=machine_target)
 
     target = directory / "solidon_cura.txt"
+    # Hier wiegt der Umbruch schwerer als bei Prusa: ``_command`` liest diese
+    # Datei mit ``splitlines()`` zurück und macht aus jeder Zeile ein eigenes
+    # ``-s``-Argument. Eine zweite Zeile wäre damit ein zusätzliches Argument
+    # für CuraEngine.
+    flat = flat_values()
+    _without_line_break(flat, setup)
     target.write_text(
-        "\n".join(f"{key}={value}" for key, value in sorted(flat_values().items())) + "\n",
+        "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",
     )
     return SlicerConfig(process=target)

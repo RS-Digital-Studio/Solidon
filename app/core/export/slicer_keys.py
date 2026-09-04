@@ -435,7 +435,18 @@ CURA: Final[tuple[Row, ...]] = (
     # entsteht nur, wenn ``support_interface_enable`` sie einschaltet. Beides
     # rechnet die Ableitungsstufe: ohne sie wurden aus zwei Schichten zwei
     # Millimeter, das Zehnfache bei 0,2er Schichten.
-    ("adhesion.kind", "adhesion_type", _mapped({"none": "none"}, "")),
+    # Vier Namen, und sie stimmen mit Curas eigenen überein — deshalb stand
+    # hier eine Abbildung mit leerem Rückfallwert, also eine Durchleitung
+    # (``fallback or str(value)``). Sie war die einzige Stelle der Cura-Tabelle,
+    # an der ein Wert aus der Projektdatei wörtlich in ein ``-s``-Argument
+    # gelangte. Ausgeschrieben ist es nicht länger, aber es ist eine
+    # Positivliste: Was nicht darin steht, wird die Vorgabe aus
+    # :data:`app.core.types.Adhesion` und nicht der fremde Text.
+    (
+        "adhesion.kind",
+        "adhesion_type",
+        _mapped({"none": "none", "skirt": "skirt", "brim": "brim", "raft": "raft"}, "skirt"),
+    ),
     ("adhesion.skirt_loops", "skirt_line_count", _integer),
     ("adhesion.skirt_distance", "skirt_gap", _number),
     ("adhesion.brim_width", "brim_width", _number),

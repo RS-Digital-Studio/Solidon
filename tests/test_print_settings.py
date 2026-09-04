@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import zipfile
 from dataclasses import fields, replace
 from pathlib import Path
 from typing import Any, Final, get_args, get_type_hints
@@ -19,6 +20,7 @@ import pytest
 from app.core.errors import ExternalToolError, ValidationError
 from app.core.export import handover, slicer_keys
 from app.core.knowledge import print_settings, profiles
+from app.core.scene.project import PROJECT_ENTRY, load, new_project, save
 from app.core.slice import advise
 from app.core.types import (
     BoundingBox,
@@ -878,6 +880,110 @@ def test_a_prusa_config_stands_on_its_own(tmp_path: Path) -> None:
     assert "nozzle_diameter" in text
     assert f"layer_height = {settings.layers.layer_height:g}" in text
     assert f"temperature = {settings.temperature.nozzle:d}" in text
+
+
+def test_a_line_break_in_the_print_settings_is_refused_when_opening(tmp_path: Path) -> None:
+    """Eine fremde Projektdatei bringt ihre Druckeinstellungen mit.
+
+    ``print_settings`` war der einzige Block des Dokuments ohne Formprüfung:
+    ``print_settings_from_data`` übernimmt die Werte mit ``klass(**…)``, und
+    die ``Literal``-Typen gelten zur Laufzeit nicht. Ein Zeilenumbruch im
+    Titel reiste damit bis in die ``.ini`` von PrusaSlicer, wo er die
+    Einträge trennt.
+    """
+    path = save(new_project(), tmp_path / "umbruch.p3d")
+    with zipfile.ZipFile(path) as container:
+        entries = {name: container.read(name) for name in container.namelist()}
+    data = json.loads(entries[PROJECT_ENTRY])
+    # Ein neues Projekt legt noch keine Druckeinstellungen ab (``None``) — die
+    # fremde Datei bringt den Block also vollständig selbst mit, und genau so
+    # kommt er beim Kunden an.
+    data["print_settings"] = {"title": "Standard\npost_process = beliebiger Befehl\n# "}
+    entries[PROJECT_ENTRY] = json.dumps(data).encode("utf-8")
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        for name, payload in entries.items():
+            container.writestr(name, payload)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert "print_settings.title" in str(caught.value.values.get("reason", ""))
+    assert caught.value.suggestions, "Regel 17: jede Ausnahme trägt einen Vorschlag"
+
+
+def test_a_line_break_in_the_title_never_becomes_an_ini_line(tmp_path: Path) -> None:
+    """Die Gegenprobe an der Schreibstelle, unabhängig vom Weg dorthin.
+
+    Der Titel steht als Kommentar in der ersten Zeile der ``.ini``. Trüge er
+    einen Umbruch, stünde ab der zweiten Zeile eine Einstellung — und
+    ``post_process`` schreibt Solidon nirgends selbst, es hätte also keine
+    Konkurrenz.
+    """
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = replace(
+        print_settings.resolve(profile),
+        title="Standard\npost_process = beliebiger Befehl\n# ",
+    )
+    setup = handover.SlicerSetup(executable=Path("PrusaSlicer.exe"), flavour="prusa")
+
+    written = handover.write_config(settings, profile, setup, tmp_path)
+    lines = written.process.read_text(encoding="utf-8").splitlines()
+
+    # Der Titel darf den Text tragen — er steht als Kommentar da. Was er nicht
+    # darf, ist eine **Zeile** daraus machen: PrusaSlicer liest nur Zeilen als
+    # Einstellungen, und keine beginnt mit ``post_process``.
+    assert not any(line.startswith("post_process") for line in lines)
+    assert lines[0].startswith("# "), "der Titel bleibt ein Kommentar"
+    assert lines[0].count("post_process") == 1, "und zwar in einer einzigen Zeile"
+    assert all(line.startswith("#") or " = " in line for line in lines if line), (
+        "keine Zeile, die weder Kommentar noch Zuweisung ist"
+    )
+
+
+def test_a_line_break_in_a_setting_value_is_refused(tmp_path: Path) -> None:
+    """Werte werden abgelehnt, nicht bereinigt (Regel 21).
+
+    Einen Wert stillschweigend zu ändern hieße, eine Druckeinstellung zu
+    verändern, ohne es zu sagen — und für einen Umbruch in einem Slicer-Wert
+    ist nirgends zugesagt, wie man ihn maskiert. Dieselbe Entscheidung wie
+    beim Semikolon im Profilpfad.
+    """
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    base = print_settings.resolve(profile)
+    settings = replace(base, filament=replace(base.filament, colour="rot\nmachine_start_gcode = x"))
+    setup = handover.SlicerSetup(executable=Path("PrusaSlicer.exe"), flavour="prusa")
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover.write_config(settings, profile, setup, tmp_path)
+
+    assert "filament_colour" in str(caught.value.values.get("setting", ""))
+    assert caught.value.suggestions, "Regel 17: jede Ausnahme trägt einen Vorschlag"
+
+
+def test_no_cura_key_passes_a_value_through_verbatim() -> None:
+    """Keine Cura-Zuordnung leitet einen Wert unverändert durch.
+
+    ``_mapped(table, "")`` fällt über ``fallback or str(value)`` auf den
+    fremden Text zurück. ``adhesion_type`` war die einzige Stelle der
+    Cura-Tabelle, an der ein Wert aus der Projektdatei so wörtlich in ein
+    ``-s``-Argument gelangte; jetzt ist die Abbildung eine Positivliste.
+    """
+    fremd = "skirt\nmachine_start_gcode = beliebiger G-Code"
+    durchgeleitet = []
+    for row in slicer_keys.CURA:
+        try:
+            umgewandelt = row[2](fremd)
+        except (TypeError, ValueError):
+            # Ein Zahlenwandler lehnt einen Text ohnehin ab — das ist die
+            # strengere Antwort und genau die gewünschte.
+            continue
+        if umgewandelt == fremd:
+            durchgeleitet.append(row[1])
+
+    assert not durchgeleitet, (
+        f"diese Cura-Schlüssel leiten einen fremden Wert wörtlich durch: {durchgeleitet}"
+    )
 
 
 def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> None:

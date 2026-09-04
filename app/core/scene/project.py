@@ -29,6 +29,7 @@ import math
 import os
 import sys
 import tempfile
+import unicodedata
 import zipfile
 from contextlib import suppress
 from dataclasses import dataclass, field
@@ -682,6 +683,20 @@ def _validate_json_tree(value: object) -> None:
             if len(current) > MAX_JSON_COLLECTION_ITEMS:
                 raise ValueError("json_collection")
             stack.extend((child, depth + 1) for child in current)
+            continue
+        # Was bis hierher kommt, ist keine JSON-Sorte. Beim **Lesen** kann das
+        # nicht auftreten — ``json.loads`` erzeugt nur diese Typen. Beim
+        # Schreiben schon: Ein Wert, der versehentlich als Objekt statt als
+        # Zahl oder Text abgelegt wird, lief hier durch und starb zwei Zeilen
+        # später in ``json.dumps`` — als roher ``TypeError`` ohne
+        # Handlungsvorschlag, und damit verlor der Kunde das Speichern
+        # (Regel 17; Befund solidon-52 vom 04.09.2026, Ursache dort behoben).
+        #
+        # ``bool`` steht ausdrücklich mit dabei: Es ist Untertyp von ``int``,
+        # und eine umgedrehte Prüfung („ist das eine Zahl?") nähme ``True``
+        # klaglos als Zahl an.
+        if not isinstance(current, bool | int | float | str | type(None)):
+            raise ValueError("json_type")
 
 
 def _mapping(data: dict[str, Any], name: str) -> dict[str, Any]:
@@ -706,6 +721,62 @@ def _check_schema_count(name: str, size: int, limit: int) -> None:
             size=size,
             limit=limit,
         )
+
+
+#: Die Unicode-Kategorien, die in einem Einstellungstext nichts zu suchen
+#: haben: Steuerzeichen (``Cc``) sowie Zeilen- und Absatztrenner (``Zl``,
+#: ``Zp``). Geschütztes Leerzeichen und andere ``Zs`` bleiben erlaubt — sie
+#: sind Typografie, kein Trennzeichen.
+_SETTING_TEXT_BAN: Final = frozenset({"Cc", "Zl", "Zp"})
+
+
+def _is_settings_text(value: str) -> bool:
+    """Ob der Text ohne Steuerzeichen und ohne Zeilentrenner auskommt."""
+    return not any(unicodedata.category(char) in _SETTING_TEXT_BAN for char in value)
+
+
+def _validate_print_settings(data: dict[str, Any]) -> None:
+    """Prüft den Druckeinstellungsblock, den sonst niemand geprüft hat.
+
+    ``print_settings`` war der einzige Teil des Dokuments ohne Formprüfung:
+    :func:`app.core.scene.serialise.print_settings_from_data` übernimmt die
+    Werte mit ``klass(**…)`` aus der Datei, und die deklarierten
+    ``Literal``-Typen gelten zur Laufzeit nicht. Ein Titel mit einem
+    Zeilenumbruch reiste damit bis in die Slicer-Konfiguration, wo der Umbruch
+    die Einträge trennt — und schrieb dort eine Einstellung, die niemand
+    gesetzt hatte (Befund der Sicherheitsdurchsicht vom 04.09.2026).
+
+    Geprüft wird die **Form**, nicht der Wertebereich. Steuerzeichen und
+    Zeilentrenner sind in keinem dieser Texte sinnvoll; was dagegen ein
+    gültiger Einstellungswert ist, entscheiden die Positivlisten in
+    :mod:`app.core.export.slicer_keys`. Dieselbe Aussage an zwei Stellen wäre
+    die Sorte Doppelung, die auseinanderläuft.
+
+    Die Gegenprobe sitzt an der Schreibstelle
+    (:func:`app.core.export.handover._without_line_break`) — dort, wo es
+    darauf ankommt, und unabhängig davon, auf welchem Weg die Einstellungen
+    dorthin gelangt sind.
+    """
+    settings = data.get("print_settings")
+    if settings is None:
+        return
+    if not isinstance(settings, dict):
+        raise ValueError("schema:print_settings")
+    # Iterativ wie :func:`_validate_json_tree`, und aus demselben Grund: Die
+    # Tiefe hat dieselbe Datei schon begrenzt, eine Rekursion wäre hier
+    # trotzdem der zweite Ort, an dem eine Grenze stehen müsste.
+    stack: list[tuple[str, object]] = [("print_settings", settings)]
+    while stack:
+        where, current = stack.pop()
+        if isinstance(current, str):
+            if not _is_settings_text(current):
+                raise ValueError(f"schema:{where}")
+            continue
+        if isinstance(current, dict):
+            stack.extend((f"{where}.{key}", value) for key, value in current.items())
+            continue
+        if isinstance(current, list):
+            stack.extend((f"{where}[]", value) for value in current)
 
 
 def _validate_project_schema(data: object) -> dict[str, Any]:
@@ -736,6 +807,7 @@ def _validate_project_schema(data: object) -> dict[str, Any]:
     _check_schema_count("transactions", len(transactions), MAX_PROJECT_TRANSACTIONS)
     _check_schema_count("ops", len(operations), MAX_PROJECT_OPERATIONS)
     _check_schema_count("chat", len(chat), MAX_PROJECT_CHAT_ENTRIES)
+    _validate_print_settings(data)
 
     objects: set[str] = set()
     for operation in operations:
