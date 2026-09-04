@@ -1,0 +1,159 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="800" height="800"
+     viewBox="0 0 800 800">
+  <!-- Kanalbild für YouTube. Angezeigt wird ein Kreis: der Rand des Quadrats
+       fällt weg, deshalb steht der Körper mittig und mit Abstand zum Ring. -->
+  <defs>
+    <radialGradient id="ground" cx="0.5" cy="0.42" r="0.72">
+      <stop offset="0" stop-color="#33200c" />
+      <stop offset="0.62" stop-color="#241505" />
+      <stop offset="1" stop-color="#140c04" />
+    </radialGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.40" r="0.52">
+      <stop offset="0" stop-color="#e08b4e" stop-opacity="0.16" />
+      <stop offset="1" stop-color="#e08b4e" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="800" height="800" fill="url(#ground)" />
+  <g stroke="#ffffff" stroke-opacity="0.045" stroke-width="1.2" fill="none">
+    <path d="M-2400 800 L-800 0" />
+    <path d="M-2400 0 L-800 800" />
+    <path d="M-2320 800 L-720 0" />
+    <path d="M-2320 0 L-720 800" />
+    <path d="M-2240 800 L-640 0" />
+    <path d="M-2240 0 L-640 800" />
+    <path d="M-2160 800 L-560 0" />
+    <path d="M-2160 0 L-560 800" />
+    <path d="M-2080 800 L-480 0" />
+    <path d="M-2080 0 L-480 800" />
+    <path d="M-2000 800 L-400 0" />
+    <path d="M-2000 0 L-400 800" />
+    <path d="M-1920 800 L-320 0" />
+    <path d="M-1920 0 L-320 800" />
+    <path d="M-1840 800 L-240 0" />
+    <path d="M-1840 0 L-240 800" />
+    <path d="M-1760 800 L-160 0" />
+    <path d="M-1760 0 L-160 800" />
+    <path d="M-1680 800 L-80 0" />
+    <path d="M-1680 0 L-80 800" />
+    <path d="M-1600 800 L0 0" />
+    <path d="M-1600 0 L0 800" />
+    <path d="M-1520 800 L80 0" />
+    <path d="M-1520 0 L80 800" />
+    <path d="M-1440 800 L160 0" />
+    <path d="M-1440 0 L160 800" />
+    <path d="M-1360 800 L240 0" />
+    <path d="M-1360 0 L240 800" />
+    <path d="M-1280 800 L320 0" />
+    <path d="M-1280 0 L320 800" />
+    <path d="M-1200 800 L400 0" />
+    <path d="M-1200 0 L400 800" />
+    <path d="M-1120 800 L480 0" />
+    <path d="M-1120 0 L480 800" />
+    <path d="M-1040 800 L560 0" />
+    <path d="M-1040 0 L560 800" />
+    <path d="M-960 800 L640 0" />
+    <path d="M-960 0 L640 800" />
+    <path d="M-880 800 L720 0" />
+    <path d="M-880 0 L720 800" />
+    <path d="M-800 800 L800 0" />
+    <path d="M-800 0 L800 800" />
+    <path d="M-720 800 L880 0" />
+    <path d="M-720 0 L880 800" />
+    <path d="M-640 800 L960 0" />
+    <path d="M-640 0 L960 800" />
+    <path d="M-560 800 L1040 0" />
+    <path d="M-560 0 L1040 800" />
+    <path d="M-480 800 L1120 0" />
+    <path d="M-480 0 L1120 800" />
+    <path d="M-400 800 L1200 0" />
+    <path d="M-400 0 L1200 800" />
+    <path d="M-320 800 L1280 0" />
+    <path d="M-320 0 L1280 800" />
+    <path d="M-240 800 L1360 0" />
+    <path d="M-240 0 L1360 800" />
+    <path d="M-160 800 L1440 0" />
+    <path d="M-160 0 L1440 800" />
+    <path d="M-80 800 L1520 0" />
+    <path d="M-80 0 L1520 800" />
+    <path d="M0 800 L1600 0" />
+    <path d="M0 0 L1600 800" />
+    <path d="M80 800 L1680 0" />
+    <path d="M80 0 L1680 800" />
+    <path d="M160 800 L1760 0" />
+    <path d="M160 0 L1760 800" />
+    <path d="M240 800 L1840 0" />
+    <path d="M240 0 L1840 800" />
+    <path d="M320 800 L1920 0" />
+    <path d="M320 0 L1920 800" />
+    <path d="M400 800 L2000 0" />
+    <path d="M400 0 L2000 800" />
+    <path d="M480 800 L2080 0" />
+    <path d="M480 0 L2080 800" />
+    <path d="M560 800 L2160 0" />
+    <path d="M560 0 L2160 800" />
+    <path d="M640 800 L2240 0" />
+    <path d="M640 0 L2240 800" />
+    <path d="M720 800 L2320 0" />
+    <path d="M720 0 L2320 800" />
+    <path d="M800 800 L2400 0" />
+    <path d="M800 0 L2400 800" />
+    <path d="M880 800 L2480 0" />
+    <path d="M880 0 L2480 800" />
+    <path d="M960 800 L2560 0" />
+    <path d="M960 0 L2560 800" />
+    <path d="M1040 800 L2640 0" />
+    <path d="M1040 0 L2640 800" />
+    <path d="M1120 800 L2720 0" />
+    <path d="M1120 0 L2720 800" />
+    <path d="M1200 800 L2800 0" />
+    <path d="M1200 0 L2800 800" />
+    <path d="M1280 800 L2880 0" />
+    <path d="M1280 0 L2880 800" />
+    <path d="M1360 800 L2960 0" />
+    <path d="M1360 0 L2960 800" />
+    <path d="M1440 800 L3040 0" />
+    <path d="M1440 0 L3040 800" />
+    <path d="M1520 800 L3120 0" />
+    <path d="M1520 0 L3120 800" />
+    <path d="M1600 800 L3200 0" />
+    <path d="M1600 0 L3200 800" />
+    <path d="M1680 800 L3280 0" />
+    <path d="M1680 0 L3280 800" />
+    <path d="M1760 800 L3360 0" />
+    <path d="M1760 0 L3360 800" />
+    <path d="M1840 800 L3440 0" />
+    <path d="M1840 0 L3440 800" />
+    <path d="M1920 800 L3520 0" />
+    <path d="M1920 0 L3520 800" />
+    <path d="M2000 800 L3600 0" />
+    <path d="M2000 0 L3600 800" />
+    <path d="M2080 800 L3680 0" />
+    <path d="M2080 0 L3680 800" />
+    <path d="M2160 800 L3760 0" />
+    <path d="M2160 0 L3760 800" />
+    <path d="M2240 800 L3840 0" />
+    <path d="M2240 0 L3840 800" />
+    <path d="M2320 800 L3920 0" />
+    <path d="M2320 0 L3920 800" />
+  </g>
+  <circle cx="400.0" cy="400.0" r="400.0" fill="url(#glow)" />
+  <circle cx="400.0" cy="400.0" r="370" fill="none"
+          stroke="#e08b4e" stroke-opacity="0.75" stroke-width="8" />
+  <g transform="translate(100.00 100.00) scale(4.68750)">
+    <!-- Das Anwendungssymbol: ein isometrischer Körper in der Markenfarbe,
+           mit einer Bohrung auf der Deckfläche (die Operation) und Schichtlinien
+           an der linken Flanke (der Druck). Eine gestaltete Form, von Hand —
+           gerastert wird sie von tools/make_icon.py, nie von Hand gepflegt. -->
+      <!-- Deckfläche -->
+      <polygon points="64,18 104,41 64,64 24,41" fill="#e08b4e" />
+      <!-- linke Flanke, mit Schichtlinien -->
+      <polygon points="24,41 64,64 64,110 24,87" fill="#b96428" />
+      <path d="M24 52.5 64 75.5 M24 64 64 87 M24 75.5 64 98.5"
+            stroke="#96491a" stroke-width="2.5" fill="none" />
+      <!-- rechte Flanke -->
+      <polygon points="104,41 64,64 64,110 104,87" fill="#7c3a10" />
+      <!-- Bohrung: isometrisch projizierter Kreis auf der Deckfläche -->
+      <ellipse cx="64" cy="41" rx="17" ry="9.8" fill="#3a1c06" />
+  </g>
+</svg>

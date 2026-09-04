@@ -1,0 +1,227 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="2048" height="1152"
+     viewBox="0 0 2048 1152">
+  <!-- Kanalbanner für YouTube, 2048x1152. Vom Handy kommen nur die mittleren
+       1235x338 Pixel an — dort steht alles, was gelesen werden muss.
+       Außen liegt nur Grund, den zusätzlich der Fernseher zeigt. -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#140c04" />
+      <stop offset="0.45" stop-color="#241505" />
+      <stop offset="1" stop-color="#0f0903" />
+    </linearGradient>
+    <radialGradient id="glow" cx="0.42" cy="0.5" r="0.46">
+      <stop offset="0" stop-color="#e08b4e" stop-opacity="0.26" />
+      <stop offset="1" stop-color="#e08b4e" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="vignette" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.55" />
+      <stop offset="0.22" stop-color="#000000" stop-opacity="0" />
+      <stop offset="0.78" stop-color="#000000" stop-opacity="0" />
+      <stop offset="1" stop-color="#000000" stop-opacity="0.55" />
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e08b4e" stop-opacity="0.9" />
+      <stop offset="1" stop-color="#e08b4e" stop-opacity="0" />
+    </linearGradient>
+    <radialGradient id="shadow">
+      <stop offset="0" stop-color="#000000" stop-opacity="0.46" />
+      <stop offset="0.68" stop-color="#000000" stop-opacity="0.20" />
+      <stop offset="1" stop-color="#000000" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="2048" height="1152" fill="url(#ground)" />
+  <g stroke="#ffffff" stroke-opacity="0.04" stroke-width="1.2" fill="none">
+    <path d="M-4352 1152 L-2048 0" />
+    <path d="M-4352 0 L-2048 1152" />
+    <path d="M-4240 1152 L-1936 0" />
+    <path d="M-4240 0 L-1936 1152" />
+    <path d="M-4128 1152 L-1824 0" />
+    <path d="M-4128 0 L-1824 1152" />
+    <path d="M-4016 1152 L-1712 0" />
+    <path d="M-4016 0 L-1712 1152" />
+    <path d="M-3904 1152 L-1600 0" />
+    <path d="M-3904 0 L-1600 1152" />
+    <path d="M-3792 1152 L-1488 0" />
+    <path d="M-3792 0 L-1488 1152" />
+    <path d="M-3680 1152 L-1376 0" />
+    <path d="M-3680 0 L-1376 1152" />
+    <path d="M-3568 1152 L-1264 0" />
+    <path d="M-3568 0 L-1264 1152" />
+    <path d="M-3456 1152 L-1152 0" />
+    <path d="M-3456 0 L-1152 1152" />
+    <path d="M-3344 1152 L-1040 0" />
+    <path d="M-3344 0 L-1040 1152" />
+    <path d="M-3232 1152 L-928 0" />
+    <path d="M-3232 0 L-928 1152" />
+    <path d="M-3120 1152 L-816 0" />
+    <path d="M-3120 0 L-816 1152" />
+    <path d="M-3008 1152 L-704 0" />
+    <path d="M-3008 0 L-704 1152" />
+    <path d="M-2896 1152 L-592 0" />
+    <path d="M-2896 0 L-592 1152" />
+    <path d="M-2784 1152 L-480 0" />
+    <path d="M-2784 0 L-480 1152" />
+    <path d="M-2672 1152 L-368 0" />
+    <path d="M-2672 0 L-368 1152" />
+    <path d="M-2560 1152 L-256 0" />
+    <path d="M-2560 0 L-256 1152" />
+    <path d="M-2448 1152 L-144 0" />
+    <path d="M-2448 0 L-144 1152" />
+    <path d="M-2336 1152 L-32 0" />
+    <path d="M-2336 0 L-32 1152" />
+    <path d="M-2224 1152 L80 0" />
+    <path d="M-2224 0 L80 1152" />
+    <path d="M-2112 1152 L192 0" />
+    <path d="M-2112 0 L192 1152" />
+    <path d="M-2000 1152 L304 0" />
+    <path d="M-2000 0 L304 1152" />
+    <path d="M-1888 1152 L416 0" />
+    <path d="M-1888 0 L416 1152" />
+    <path d="M-1776 1152 L528 0" />
+    <path d="M-1776 0 L528 1152" />
+    <path d="M-1664 1152 L640 0" />
+    <path d="M-1664 0 L640 1152" />
+    <path d="M-1552 1152 L752 0" />
+    <path d="M-1552 0 L752 1152" />
+    <path d="M-1440 1152 L864 0" />
+    <path d="M-1440 0 L864 1152" />
+    <path d="M-1328 1152 L976 0" />
+    <path d="M-1328 0 L976 1152" />
+    <path d="M-1216 1152 L1088 0" />
+    <path d="M-1216 0 L1088 1152" />
+    <path d="M-1104 1152 L1200 0" />
+    <path d="M-1104 0 L1200 1152" />
+    <path d="M-992 1152 L1312 0" />
+    <path d="M-992 0 L1312 1152" />
+    <path d="M-880 1152 L1424 0" />
+    <path d="M-880 0 L1424 1152" />
+    <path d="M-768 1152 L1536 0" />
+    <path d="M-768 0 L1536 1152" />
+    <path d="M-656 1152 L1648 0" />
+    <path d="M-656 0 L1648 1152" />
+    <path d="M-544 1152 L1760 0" />
+    <path d="M-544 0 L1760 1152" />
+    <path d="M-432 1152 L1872 0" />
+    <path d="M-432 0 L1872 1152" />
+    <path d="M-320 1152 L1984 0" />
+    <path d="M-320 0 L1984 1152" />
+    <path d="M-208 1152 L2096 0" />
+    <path d="M-208 0 L2096 1152" />
+    <path d="M-96 1152 L2208 0" />
+    <path d="M-96 0 L2208 1152" />
+    <path d="M16 1152 L2320 0" />
+    <path d="M16 0 L2320 1152" />
+    <path d="M128 1152 L2432 0" />
+    <path d="M128 0 L2432 1152" />
+    <path d="M240 1152 L2544 0" />
+    <path d="M240 0 L2544 1152" />
+    <path d="M352 1152 L2656 0" />
+    <path d="M352 0 L2656 1152" />
+    <path d="M464 1152 L2768 0" />
+    <path d="M464 0 L2768 1152" />
+    <path d="M576 1152 L2880 0" />
+    <path d="M576 0 L2880 1152" />
+    <path d="M688 1152 L2992 0" />
+    <path d="M688 0 L2992 1152" />
+    <path d="M800 1152 L3104 0" />
+    <path d="M800 0 L3104 1152" />
+    <path d="M912 1152 L3216 0" />
+    <path d="M912 0 L3216 1152" />
+    <path d="M1024 1152 L3328 0" />
+    <path d="M1024 0 L3328 1152" />
+    <path d="M1136 1152 L3440 0" />
+    <path d="M1136 0 L3440 1152" />
+    <path d="M1248 1152 L3552 0" />
+    <path d="M1248 0 L3552 1152" />
+    <path d="M1360 1152 L3664 0" />
+    <path d="M1360 0 L3664 1152" />
+    <path d="M1472 1152 L3776 0" />
+    <path d="M1472 0 L3776 1152" />
+    <path d="M1584 1152 L3888 0" />
+    <path d="M1584 0 L3888 1152" />
+    <path d="M1696 1152 L4000 0" />
+    <path d="M1696 0 L4000 1152" />
+    <path d="M1808 1152 L4112 0" />
+    <path d="M1808 0 L4112 1152" />
+    <path d="M1920 1152 L4224 0" />
+    <path d="M1920 0 L4224 1152" />
+    <path d="M2032 1152 L4336 0" />
+    <path d="M2032 0 L4336 1152" />
+    <path d="M2144 1152 L4448 0" />
+    <path d="M2144 0 L4448 1152" />
+    <path d="M2256 1152 L4560 0" />
+    <path d="M2256 0 L4560 1152" />
+    <path d="M2368 1152 L4672 0" />
+    <path d="M2368 0 L4672 1152" />
+    <path d="M2480 1152 L4784 0" />
+    <path d="M2480 0 L4784 1152" />
+    <path d="M2592 1152 L4896 0" />
+    <path d="M2592 0 L4896 1152" />
+    <path d="M2704 1152 L5008 0" />
+    <path d="M2704 0 L5008 1152" />
+    <path d="M2816 1152 L5120 0" />
+    <path d="M2816 0 L5120 1152" />
+    <path d="M2928 1152 L5232 0" />
+    <path d="M2928 0 L5232 1152" />
+    <path d="M3040 1152 L5344 0" />
+    <path d="M3040 0 L5344 1152" />
+    <path d="M3152 1152 L5456 0" />
+    <path d="M3152 0 L5456 1152" />
+    <path d="M3264 1152 L5568 0" />
+    <path d="M3264 0 L5568 1152" />
+    <path d="M3376 1152 L5680 0" />
+    <path d="M3376 0 L5680 1152" />
+    <path d="M3488 1152 L5792 0" />
+    <path d="M3488 0 L5792 1152" />
+    <path d="M3600 1152 L5904 0" />
+    <path d="M3600 0 L5904 1152" />
+    <path d="M3712 1152 L6016 0" />
+    <path d="M3712 0 L6016 1152" />
+    <path d="M3824 1152 L6128 0" />
+    <path d="M3824 0 L6128 1152" />
+    <path d="M3936 1152 L6240 0" />
+    <path d="M3936 0 L6240 1152" />
+    <path d="M4048 1152 L6352 0" />
+    <path d="M4048 0 L6352 1152" />
+    <path d="M4160 1152 L6464 0" />
+    <path d="M4160 0 L6464 1152" />
+    <path d="M4272 1152 L6576 0" />
+    <path d="M4272 0 L6576 1152" />
+  </g>
+  <rect width="2048" height="1152" fill="url(#glow)" />
+  <rect width="2048" height="1152" fill="url(#vignette)" />
+  <ellipse cx="586.0" cy="691.0"
+           rx="156.0" ry="30.0" fill="url(#shadow)" />
+  <g transform="translate(426.00 416.00) scale(2.50000)">
+    <!-- Das Anwendungssymbol: ein isometrischer Körper in der Markenfarbe,
+           mit einer Bohrung auf der Deckfläche (die Operation) und Schichtlinien
+           an der linken Flanke (der Druck). Eine gestaltete Form, von Hand —
+           gerastert wird sie von tools/make_icon.py, nie von Hand gepflegt. -->
+      <!-- Deckfläche -->
+      <polygon points="64,18 104,41 64,64 24,41" fill="#e08b4e" />
+      <!-- linke Flanke, mit Schichtlinien -->
+      <polygon points="24,41 64,64 64,110 24,87" fill="#b96428" />
+      <path d="M24 52.5 64 75.5 M24 64 64 87 M24 75.5 64 98.5"
+            stroke="#96491a" stroke-width="2.5" fill="none" />
+      <!-- rechte Flanke -->
+      <polygon points="104,41 64,64 64,110 104,87" fill="#7c3a10" />
+      <!-- Bohrung: isometrisch projizierter Kreis auf der Deckfläche -->
+      <ellipse cx="64" cy="41" rx="17" ry="9.8" fill="#3a1c06" />
+  </g>
+  <text x="746.0" y="525.6"
+        font-family="Segoe UI Semibold" font-size="96.0"
+        fill="#f6ece1">Solidon<tspan
+        fill="#e08b4e">3D</tspan></text>
+  <rect x="746.0" y="547.6"
+        width="816.0" height="3" fill="url(#rule)" />
+  <text x="746.0" y="597.6"
+        font-family="Segoe UI" font-size="36.0"
+        fill="#cbb39b">Fremde 3D-Modelle anpassen. Eigene konstruieren.</text>
+  <text x="746.0" y="645.6"
+        font-family="Segoe UI" font-size="32.0"
+        fill="#9a836d">Druckbarkeit prüfen, bevor der Slicer läuft.</text>
+  <text x="746.0" y="695.6"
+        font-family="Segoe UI Semibold" font-size="28.0"
+        fill="#e08b4e">solidon3d.de</text>
+</svg>
