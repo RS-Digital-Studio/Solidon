@@ -145,6 +145,7 @@
 - [Messung trägt nur am Ort](messung-traegt-nur-am-ort-ihrer-messung.md) — echt gemessen, woanders gültig.
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders.
 - [Fortschritt ≠ collect](fortschrittszeichen-zaehlen-nicht-wie-collect.md) — das n-te `F` ist nicht die n-te Zeile.
+- [Hintergrundlauf meldet die Hülle](hintergrundlauf-meldet-seinen-wrapper.md) — 282 von 448 bei Exit 0; Zeichen gegen Soll zählen.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy davor, Suite danach; der Reexport fehlt beiden.
 - [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „heilt sich später“ setzt jemanden voraus, der heilen kann; „trifft heute noch nicht“ ist dieselbe Behauptung in der Gegenwart.
 - [Fehlalarm zu mehreren](fehlalarm-den-mehrere-fuer-einen-halten.md) — verrechnet ist keine bloße Messung.
@@ -171,6 +172,7 @@
 - [Rückbau kann scheitern](rueckbau-kann-scheitern.md) — `finally` garantiert den Lauf, nicht das Gelingen.
 - [Fix macht nicht grün](fix-der-nicht-gruen-macht.md) — dann war die Diagnose falsch.
 - [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — den alten Namen überall grepen.
+- [Zwei Dinge, eines geprüft](zwei-dinge-nur-eines-geprueft.md) — die geteilte Zahl ist nur der häufigste Fall; auch eine Aufzählung im Docstring altert.
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen.
 - [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — ruff format bricht den Suchtext um; der Patch greift halb.
 - [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) — Hauptwert geprüft, Nachbar nicht; ein Feld von sieben.
