@@ -9,7 +9,7 @@ X-Unsent: 1
 
 Hi Angus,
 
-I would like to offer the released Solidon3D 0.3.1 for an independent,
+I would like to offer the released Solidon3D 0.3.3 for an independent,
 hands-on modelling-software review. The practical question is simple: can a
 beginner fix a dimensionally wrong downloaded STL without rebuilding it in a
 full CAD package?
@@ -21,7 +21,7 @@ is what happens to the feature's identity: the usual workaround of filling and
 redrilling produces the same shape but a new feature, so any fit defined
 against it is orphaned. Here the identity survives the move.
 
-Version 0.3.1 is the release that made this possible — a recognised hole, peg,
+This is what the last releases made possible. A recognised hole, peg,
 countersink or dome can now be moved, rotated, resized, duplicated and removed,
 where before only the diameter could change. A panel shows the measured values
 as editable fields with a live preview, and one option applies an edit to a

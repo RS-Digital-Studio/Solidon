@@ -1,7 +1,7 @@
 From: Solidon3D <marketing@solidon3d.de>
 To: stephan@drucktipps3d.de
 Reply-To: marketing@solidon3d.de
-Subject: Themenvorschlag: Der Fünf-Minuten-Test - vier Bohrungen auf einmal versetzen
+Subject: Themenvorschlag: vier Bohrungen auf einmal versetzen, in fünf Minuten
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -9,26 +9,27 @@ X-Unsent: 1
 
 Hallo Herr Knaus,
 
-Solidon3D 0.3.1 ist veröffentlicht, und der Aufhänger passt zu Ihrem
+Solidon3D 0.3.3 ist veröffentlicht, und der Aufhänger passt zu Ihrem
 Praxisansatz: ein Fünf-Minuten-Test, den jeder Leser mit einem
 heruntergeladenen Modell nachstellen kann. Halter mit falschem Lochraster
 laden, eine Bohrung anklicken, neues Maß eintippen, Haken bei „auf alle
-gleichartigen anwenden" - fertig, ohne die ursprüngliche CAD-Datei und ohne
+gleichartigen anwenden", fertig, ohne die ursprüngliche CAD-Datei und ohne
 das Teil neu zu zeichnen.
 
-Neu ist dabei, dass sich ein erkanntes Merkmal nicht mehr nur im Durchmesser
-ändern lässt, sondern auch verschieben, drehen, verdoppeln und entfernen. Die
+Der Punkt dabei: Ein erkanntes Merkmal lässt sich nicht mehr nur im Durchmesser
+ändern, sondern auch verschieben, drehen, verdoppeln und entfernen. Das
+Versetzen hat lange gefehlt. Die
 Achse bleibt erhalten, auch bei schrägen Bohrungen, und der Eingriff bleibt ein
 rücknehmbarer Schritt im Verlauf. Rechts geht dabei ein Fenster auf, das die
-gemessenen Werte als Felder zeigt - eine geänderte Zahl ist die Änderung, mit
+gemessenen Werte als Felder zeigt; eine geänderte Zahl ist die Änderung, mit
 Vorschau schon beim Tippen.
 
 Für Ihre Leser außerdem interessant:
 
 * eine Bohrung nennt ihre Normgröße im Klartext: „misst 5,19 mm, das
-  Durchgangsloch für M5" - und sagt auch, wenn keine passt;
+  Durchgangsloch für M5", und sagt auch, wenn keine passt;
 * zwei markierte Merkmale nennen ihren Abstand von Mitte zu Mitte;
-* der Objektbaum zeigt nur noch, was ein Drucker herstellen kann - an einem
+* der Objektbaum zeigt nur noch, was ein Drucker herstellen kann; an einem
   heruntergeladenen Schlauchhalter fallen 296 von 1130 Einträgen weg;
 * komplett offline nutzbar, kein Konto, Einmalkauf; Windows, macOS und Linux
   (Flatpak und AppImage).
@@ -38,7 +39,7 @@ Changelog: https://solidon3d.de/changelog.html
 
 Gern sende ich Ihnen ein Vorher-Nachher-Beispiel mit Ausgangs-STL, versetzten
 Bohrungen und druckfähiger Ergebnisdatei. Die vollständige Demo läuft bis zum
-30. Oktober 2026 kostenlos - für einen ehrlichen Test aus Anwendersicht
+30. Oktober 2026 kostenlos, für einen ehrlichen Test aus Anwendersicht
 braucht es von mir also nichts weiter.
 
 Mit freundlichen Grüßen

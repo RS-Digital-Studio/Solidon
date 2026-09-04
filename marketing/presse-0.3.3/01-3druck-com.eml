@@ -15,26 +15,26 @@ https://3druck.com/programme/solidon3d-desktop-software-passt-heruntergeladene-s
 Sie haben die vier Arbeitswege, den nicht-destruktiven Verlauf, die
 Druckprüfung sowie Offline-Nutzung, Demo und Preis bereits erklärt. Deshalb
 keine zweite Produktvorstellung, sondern nur das, was seit dem dort
-beschriebenen Stand wirklich hinzugekommen ist — vor allem in 0.3.1.
+beschriebenen Stand wirklich hinzugekommen ist.
 
-Die eine Änderung, die den Kern Ihres Artikels erweitert: Damals ließ sich der
-Durchmesser einer erkannten Bohrung ändern. Jetzt lässt sich ein erkanntes
-Merkmal verschieben, drehen, in der Größe ändern, verdoppeln und entfernen —
-eine Bohrung ebenso wie ein Zapfen oder eine Kuppel. Der Umweg über
-„verschließen und an neu getippten Zahlen neu bohren" entfällt, und das
-Merkmal behält dabei seine Kennung: Jede Passung, die auf es zeigt, behält
-ihren Bezug.
+Die eine Änderung, die den Kern Ihres Artikels erweitert: Damals ließ sich nur
+der Durchmesser einer erkannten Bohrung ändern. Das Versetzen hat von Anfang an
+gefehlt, und jetzt ist es da. Ein erkanntes Merkmal lässt sich verschieben,
+drehen, in der Größe ändern, verdoppeln und entfernen, eine Bohrung ebenso wie
+ein Zapfen oder eine Kuppel. Der Umweg über „verschließen und an neu getippten
+Zahlen neu bohren" entfällt, und das Merkmal behält dabei seine Kennung: Jede
+Passung, die auf es zeigt, behält ihren Bezug.
 
 Dazu diese Neuerungen:
 
 * Ein eigenes Fenster *Merkmal* geht auf, sobald man die erste Bohrung
-  anklickt, und zeigt die gemessenen Werte als änderbare Felder — Ort,
+  anklickt, und zeigt die gemessenen Werte als änderbare Felder: Ort,
   Durchmesser, Tiefe, Achse. Eine geänderte Zahl ist die Operation; die
   Vorschau steht schon beim Tippen im Bild.
 * Ein Haken *Auf alle gleichartigen anwenden* ändert eine ganze Lochreihe in
   einem Zug, mit einem einzigen Schritt zum Zurücknehmen.
 * Eine Bohrung nennt ihre Normgröße: „misst 5,19 mm, das Durchgangsloch für
-  M5" — und sagt auch, wenn keine passt. Zwei markierte Merkmale nennen ihren
+  M5", und sagt auch, wenn keine passt. Zwei markierte Merkmale nennen ihren
   Abstand von Mitte zu Mitte.
 * Erkannt wird nur noch, was ein Drucker herstellen kann. An einem
   heruntergeladenen Schlauchhalter fallen dadurch 296 von 1130 Einträgen aus
@@ -43,8 +43,8 @@ Dazu diese Neuerungen:
   rechts drehen, dazu ein Flug mit W, A, S und D. Die gewohnten Schemata für
   Cura, Bambu Studio, Orca, PrusaSlicer, CAD und Blender bleiben wählbar.
 
-Allein 0.3.1 dokumentiert 85 für Nutzer sichtbare Punkte; seit der ersten
-0.1-Demo sind es 463 ausgewählte Änderungen.
+Seit der ersten 0.1-Demo dokumentiert der Changelog 484 ausgewählte, für
+Nutzer sichtbare Änderungen.
 
 Neuerungen: https://solidon3d.de/changelog.html
 Download: https://solidon3d.de/

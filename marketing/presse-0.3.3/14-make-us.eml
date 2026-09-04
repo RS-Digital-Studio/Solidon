@@ -10,12 +10,12 @@ X-Unsent: 1
 Dear Make: Editors,
 
 I would like to pitch a reproducible workshop project built around the
-released Solidon3D 0.3.1, rather than a general software announcement.
+released Solidon3D 0.3.3, rather than a general software announcement.
 
 Start with a downloaded bracket whose four mounting holes are in the wrong
 place and the wrong size. Solidon recognises them in the mesh. Click one, and
-a panel on the right shows what was measured — position, diameter, depth,
-axis — as editable fields. Tick "apply to all of the same kind" and the whole
+a panel on the right shows what was measured (position, diameter, depth, axis)
+as editable fields. Tick "apply to all of the same kind" and the whole
 row moves and resizes as one transaction with one undo. Then add a heat-set
 insert whose clearance comes from a small stepped gauge printed on the same
 machine with the same filament.
@@ -28,9 +28,10 @@ The article can answer three practical questions:
 3. Does the distance the software reports between two holes match the printed
    result?
 
-Version 0.3.1 is what makes this possible: recognised features — holes, pegs,
-countersinks, domes — can now be moved, rotated, resized, duplicated and
-removed, not just resized. The workflow does not require an account, cloud
+The current version is what makes this possible. Recognised features, so holes,
+pegs, countersinks and domes, can now be moved, rotated, resized, duplicated
+and removed. For a long time only resizing worked; moving is the part that was
+missing. The workflow does not require an account, cloud
 storage or the optional AI chat.
 
 Overview: https://solidon3d.de/en/
@@ -38,7 +39,7 @@ Overview: https://solidon3d.de/en/
 I can supply a complete project kit: calibration and comparison models, a
 measurement sheet, step-by-step images, final 3MF files and the released build
 for Windows, macOS or Linux. There is no requirement to cover the software
-positively—or at all.
+positively, or at all.
 
 Kind regards
 Robert Schneider

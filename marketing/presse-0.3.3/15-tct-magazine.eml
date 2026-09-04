@@ -9,12 +9,13 @@ X-Unsent: 1
 
 Dear Laura,
 
-Solidon3D 0.3.1 has been released. The relevant TCT angle is what happens to
+Solidon3D 0.3.3 has been released. The relevant TCT angle is what happens to
 data provenance when imported geometry is edited: a mesh carries no design
 history, yet downstream steps need something stable to refer to.
 
-Solidon recognises features in imported STL or 3MF — holes, pegs,
-countersinks, domes — and this release lets them be moved, rotated, resized,
+Solidon recognises features in imported STL or 3MF, so holes, pegs,
+countersinks and domes. For a long time only their diameter could be changed;
+they can now be moved, rotated, resized,
 duplicated and removed while the original axis and, importantly, the feature
 identity are preserved. The common workaround of filling a feature and
 recreating it produces equivalent geometry but a new identity, orphaning every
@@ -40,7 +41,7 @@ generated code.
 Solidon runs on Windows, macOS and Linux without an account, telemetry or cloud
 project store: https://solidon3d.de/en/
 
-I can provide a compact technical briefing, the released 0.3.1 build, a sample
+I can provide a compact technical briefing, the released 0.3.3 build, a sample
 STL-to-3MF workflow and publication-ready imagery.
 
 Kind regards

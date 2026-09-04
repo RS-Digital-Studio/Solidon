@@ -1,22 +1,21 @@
-# Presseansprache Solidon3D 0.3.1
+# Presseansprache Solidon3D 0.3.3
 
 **Direkt zum Versand:** [`VERSAND.html`](VERSAND.html) enthält für jeden
 Empfänger einen eigenen Link auf den vollständig ausgefüllten E-Mail-Entwurf.
 
 Stand der Adressprüfung: 29.08.2026 für die Entwürfe 1–20, 31.08.2026 für
-21–25; die Inhalte sind am 03.09.2026 auf 0.3.1 umgeschrieben. Die
+21–25; die Inhalte sind am 04.09.2026 auf 0.3.3 umgeschrieben. Die
 fünfundzwanzig Entwürfe sind **nicht versandt**.
 
-> **Sperre, Stand 03.09.2026: Diese Welle darf nicht auf 0.3.1 hinausgehen.**
-> Die ausgelieferte 0.3.1 füllt die alte Stelle einer versetzten, gedrehten
-> oder entfernten Bohrung nicht sauber: An einem U-Profil bleiben 76,4 mm³
-> stehen, eine 10 mm starke Platte mit Bohrung Ø 16 wird 16,03 mm hoch. Genau
-> diese Funktion ist der Aufhänger fast jeder Mail hier — mehrere laden
-> ausdrücklich zum Nachmessen ein. Eine Redaktion, die der Einladung folgt,
-> findet den Fehler in fünf Minuten. Der Versand wartet deshalb auf die
-> Fassung, in der die Behebung enthalten ist (gemessen 0,000 mm³, bei 3d-druck-a0
-> gebaut); der Verteiler wandert dann auf deren Nummer, und die Zahlen ziehen
-> mit. Entscheidung darüber trifft Robert.
+> **Die Sperre vom 03.09.2026 ist aufgehoben (Stand 04.09.2026).** Sie galt,
+> solange die ausgelieferte Fassung die alte Stelle einer versetzten, gedrehten
+> oder entfernten Bohrung nicht sauber füllte: An einem U-Profil blieben
+> 76,4 mm³ stehen, eine 10 mm starke Platte mit Bohrung Ø 16 wurde 16,03 mm
+> hoch. Das ist der Aufhänger fast jeder Mail hier, und mehrere laden
+> ausdrücklich zum Nachmessen ein. Die Behebung ist seit 0.3.2 draußen
+> (gemessen 0,000 mm³), der Verteiler steht auf 0.3.3, und die Zahlen sind
+> mitgewandert. Eine Redaktion, die der Einladung folgt, misst jetzt das, was
+> die Mail verspricht.
 
 Auch danach gilt: Sie dürfen erst hinausgehen, wenn
 Download, Changelog und Bilder öffentlich die beworbene Fassung zeigen. 3Druck.com und
@@ -27,11 +26,13 @@ Redaktion notwendigen Kontext aus sich heraus.
 
 ## Die Geschichte dieser Welle
 
-**Bis 0.2.2 war es die eine änderbare Bohrung, ab 0.3.1 ist es das bearbeitbare
+**Lange war es die eine änderbare Bohrung, jetzt ist es das bearbeitbare
 Merkmal.** Das ist der Unterschied, um den jeder Entwurf gebaut ist: Eine
 STL-Datei speichert Dreiecke, keine Konstruktionshistorie. Solidon erkennt
-darin Bohrungen, Zapfen, Senkungen und Kuppeln — und seit dieser Fassung lassen
-sie sich verschieben, drehen, in der Größe ändern, verdoppeln und entfernen.
+darin Bohrungen, Zapfen, Senkungen und Kuppeln, und die lassen sich jetzt
+verschieben, drehen, in der Größe ändern, verdoppeln und entfernen. Das
+Versetzen und das Vergrößern haben seit der ersten Demo gefehlt; sie sind der
+Grund, aus dem diese Welle jetzt hinausgeht und nicht früher.
 
 Der Punkt, der die Meldung von einer Funktionsliste unterscheidet, ist die
 **Kennung**: Wer eine Bohrung verschließt und neu bohrt, erzeugt dieselbe
@@ -50,13 +51,13 @@ Schlauchhalter fallen dadurch 296 von 1130 Einträgen weg, die Messrauschen
 waren. Das ist die Sorte Zahl, die eine Redaktion selbst nachmessen kann.
 
 „Seit 0.1" bedeutet in den Anschreiben: Seit der ersten öffentlichen
-0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **463 ausgewählte,
+0.1-Demo. Der Changelog dokumentiert seit 0.1.2 insgesamt **484 ausgewählte,
 für Nutzer sichtbare Änderungen**: 8 + 11 + 20 + 17 + 75 + 49 + 83 + 115 + 85
-Punkte bis einschließlich 0.3.1. Die Zahl ist kein Commit-Zähler und wird in
-den Mails auch nicht so dargestellt.
++ 13 + 8 Punkte bis einschließlich 0.3.3. Die Zahl ist kein Commit-Zähler und
+wird in den Mails auch nicht so dargestellt.
 
-**Die Zahl steht in
-fünf Anschreiben** (01, 02, 05, 09, 11).
+**Die Zahl steht in fünf Anschreiben** (01, 02, 05, 09, 11); die Angabe je
+Fassung ist überall herausgenommen, weil sie mit jedem Wartungsschritt altert.
 `tests/test_changelog.py::test_the_press_drafts_count_the_same_changes`
 hält beide Seiten zusammen — wer den Changelog ergänzt, bekommt einen roten
 Lauf statt einer falschen Zahl in einer Mail an eine Redaktion. Erlaubt sind
@@ -121,21 +122,21 @@ Mal nicht von vorn beginnt:
   angeschrieben. Beide Nachrichten danken für den vorhandenen Artikel und
   nennen nur, was seit dem dort beschriebenen Stand hinzugekommen ist.
 - Für die übrigen Empfänger ist die Mail eine eigenständige Ansprache zur
-  veröffentlichten 0.3.1; sie setzt keine Erinnerung an eine frühere Nachricht
+  veröffentlichten 0.3.3; sie setzt keine Erinnerung an eine frühere Nachricht
   voraus.
 - 3Druck.com nennt für Inhalte inzwischen `content@3druck.com`; diese neuere
   veröffentlichte Adresse ersetzt das frühere Kontaktformular.
 - Golem nennt `press@golem.de` inzwischen ausdrücklich für Pressemitteilungen;
   deshalb ersetzt sie `redaktion@golem.de` aus der ersten Welle.
-- Vor dem Versand die öffentliche Downloadseite auf 0.3.1 bringen. Alle
+- Vor dem Versand die öffentliche Downloadseite auf 0.3.3 bringen. Alle
   Entwürfe versprechen auf Anfrage ein Testpaket oder eine Prüfaufgabe, aber
   keinen noch nicht vorhandenen Vorabzugang.
 
 ## Empfohlene Reihenfolge für Reichweite
 
-1. **Freigabe prüfen:** 0.3.1 muss auf der Downloadseite stehen; Windows,
+1. **Freigabe prüfen:** 0.3.3 muss auf der Downloadseite stehen; Windows,
    macOS und Linux müssen auf die genannten Dateien zeigen; deutscher und
-   englischer Changelog müssen die 0.3.1 tatsächlich anzeigen.
+   englischer Changelog müssen die 0.3.3 tatsächlich anzeigen.
 2. **Danach alle fünfundzwanzig einzeln versenden:** zuerst die beiden belegten
    Folgekontakte 3Druck.com und VoxelMatters, anschließend die fünf Test- und
    Videokanäle All3DP, Make Magazin, CNC Kitchen, Made with Layers und Maker's
@@ -143,7 +144,7 @@ Mal nicht von vorn beginnt:
    nur der Kontrolle von Rückläufern, nicht einer mehrtägigen Staffelung.
 3. **Genau eine Nachfrage nach vier Werktagen**, nur wenn sie etwas Neues
    mitbringt: ein gemessenes Ergebnis, ein fertiges Vergleichsbild oder der
-   veröffentlichte 0.3.1-Bau. Keine zweite Nachfrage ohne neue Information.
+   veröffentlichte 0.3.3-Bau. Keine zweite Nachfrage ohne neue Information.
 
 Jede `.eml` einzeln öffnen und senden, nie alle Empfänger in eine Nachricht
 setzen. Große Bilder und Pakete nicht anhängen; ein einziger, stabiler Link auf

@@ -9,17 +9,18 @@ X-Unsent: 1
 
 Dear 3D ADEPT Editorial Team,
 
-Solidon3D 0.3.1 offers a software story at the intersection of AM workflow,
+Solidon3D 0.3.3 offers a software story at the intersection of AM workflow,
 data control and AI governance: the language model is an optional interface to
-a fixed operation API, not a geometry engine — and this release extends that
-API to feature-level editing.
+a fixed operation API, not a geometry engine, and the current version extends
+that API to feature-level editing. Moving a recognised feature is what was
+missing there for a long time.
 
 Every model change is a registered, parameterised operation evaluated by
 deterministic geometry code. The same operation can be requested from a menu,
 shortcut or chat. The model cannot execute source code, and executable code is
 never embedded in a project file.
 
-Applied to practical preparation tasks, 0.3.1 adds:
+Applied to practical preparation tasks, 0.3.3 adds:
 
 * recognised holes, pegs, countersinks and domes in imported STL or 3MF can be
   moved, rotated, resized, duplicated and removed, with the original axis and
@@ -27,7 +28,7 @@ Applied to practical preparation tasks, 0.3.1 adds:
 * the measured values of a selected feature are presented as editable fields
   with a live preview, and one option applies an edit to every feature of the
   same kind as a single transaction;
-* recognition itself is bounded by manufacturability — features below half a
+* recognition itself is bounded by manufacturability: features below half a
   millimetre are discarded, which removed 296 of 1130 entries on a sample part;
 * where an action is geometrically impossible for a feature type, the software
   states the reason in a sentence instead of greying out a control.
@@ -39,7 +40,7 @@ project files local.
 Product: https://solidon3d.de/en/
 Changelog: https://solidon3d.de/en/changelog.html
 
-I can provide the released 0.3.1 build, an architecture note, a safe project
+I can provide the released 0.3.3 build, an architecture note, a safe project
 file example and the resulting STL-to-3MF workflow for editorial review.
 
 Kind regards

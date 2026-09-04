@@ -9,23 +9,23 @@ X-Unsent: 1
 
 Sehr geehrte Redaktion,
 
-Solidon3D 0.3.1 ist veröffentlicht. Der greifbarste Aufhänger für Ihre Leser:
-Eine vorhandene Bohrung in einer heruntergeladenen STL-Datei lässt sich nicht
-nur im Durchmesser ändern, sondern auch verschieben, drehen, verdoppeln und
-entfernen — ohne das Modell neu zu zeichnen und ohne die ursprüngliche
-CAD-Datei zu besitzen.
+Solidon3D 0.3.3 ist veröffentlicht. Der greifbarste Aufhänger für Ihre Leser:
+Eine vorhandene Bohrung in einer heruntergeladenen STL-Datei lässt sich jetzt
+auch verschieben, drehen, verdoppeln und entfernen, nicht mehr nur im
+Durchmesser ändern. Ohne das Modell neu zu zeichnen und ohne die ursprüngliche
+CAD-Datei zu besitzen. Das war der Punkt, an dem Solidon bisher aufhörte.
 
 Das ist der Unterschied zu jedem Netzwerkzeug: Wer eine Bohrung drei
 Millimeter versetzen wollte, musste sie bisher verschließen und an neu
 getippten Zahlen neu bohren. Dabei entsteht dieselbe Geometrie, aber ein
-anderes Merkmal — jede Passung, die darauf zeigte, verlor ihren Bezug. Jetzt
+anderes Merkmal, und jede Passung, die darauf zeigte, verlor ihren Bezug. Jetzt
 bleibt die Kennung, und mit ihr die Passung.
 
 Dasselbe gilt für Zapfen, Senkungen und Kuppeln. Wo eine Handlung an einer
 Merkmalsart keinen Sinn hat, verschwindet sie nicht, sondern steht mit einem
 Satz daneben, der den Grund nennt.
 
-Für Heimanwender sind in 0.3.1 außerdem besonders relevant:
+Für Heimanwender sind außerdem besonders relevant:
 
 * ein eigenes Fenster *Merkmal* mit den gemessenen Werten als änderbaren
   Feldern und Vorschau schon beim Tippen,
@@ -38,8 +38,8 @@ Für Heimanwender sind in 0.3.1 außerdem besonders relevant:
 * kaputte Dateien werden beim Öffnen abgelehnt statt stillschweigend
   angenommen, große Baugruppen laden mit Fortschrittsanzeige.
 
-0.3.1 umfasst 85 ausgewählte Nutzeränderungen; seit der ersten öffentlichen
-0.1-Demo dokumentiert der Changelog insgesamt 463. Solidon bleibt ohne Konto
+Seit der ersten öffentlichen 0.1-Demo dokumentiert der Changelog insgesamt
+484 ausgewählte Nutzeränderungen. Solidon bleibt ohne Konto
 und Cloud-Ablage nutzbar und ist kein Slicer, sondern bereitet Modelle für den
 vorhandenen Slicer vor.
 

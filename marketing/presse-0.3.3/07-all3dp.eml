@@ -9,13 +9,14 @@ X-Unsent: 1
 
 Dear All3DP Editors,
 
-Solidon3D 0.3.1 has been released, and there is a simple five-minute test that
+Solidon3D 0.3.3 has been released, and there is a simple five-minute test that
 fits your practical CAD and STL coverage: import a useful model with the wrong
-mounting holes, click one of them, and move it three millimetres — without
+mounting holes, click one of them, and move it three millimetres, without
 finding the source CAD file or rebuilding the part.
 
-Until now only the diameter could be changed. A recognised feature can now be
-moved, rotated, resized, duplicated and removed: a hole, a peg or a dome. The
+For a long time only the diameter could be changed. Moving a recognised feature
+is what was missing, and it is there now: a hole, a peg or a dome can be moved,
+rotated, resized, duplicated and removed. The
 difference matters more than it sounds. Filling a hole and drilling a new one
 produces the same geometry but a different feature, so every fit that referred
 to it loses its reference. Moving keeps the identity, and with it the fit.
@@ -23,12 +24,12 @@ to it loses its reference. Moving keeps the identity, and with it the fit.
 What a reader sees while doing it:
 
 * a *Feature* panel opens on the right at the first click and shows the
-  measured values as editable fields — position, diameter, depth, axis — with a
+  measured values as editable fields (position, diameter, depth, axis) with a
   live preview while typing;
 * a checkbox applies the change to all features of the same kind, turning a row
   of four holes into one edit with a single undo;
-* a hole names its standard size — "measures 5.19 mm, the clearance hole for
-  M5" — and says so when none fits;
+* a hole names its standard size, "measures 5.19 mm, the clearance hole for
+  M5", and says so when none fits;
 * two selected features report their centre-to-centre distance;
 * only what a printer can produce is recognised at all: on a downloaded hose
   holder, 296 of 1130 tree entries were measurement noise and are gone.
@@ -40,7 +41,7 @@ purchase rather than a subscription.
 Demo and screenshots: https://solidon3d.de/en/
 Detailed changes: https://solidon3d.de/en/changelog.html
 
-I can provide the released 0.3.1 build, the deliberately flawed STL, exact
+I can provide the released 0.3.3 build, the deliberately flawed STL, exact
 before-and-after measurements and publication-ready images. There are no
 conditions on the verdict.
 

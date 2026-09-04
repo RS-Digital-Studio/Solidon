@@ -1,7 +1,7 @@
 From: Solidon3D <marketing@solidon3d.de>
 To: info@3dprintingindustry.com
 Reply-To: marketing@solidon3d.de
-Subject: News tip: Editable recognised features in imported meshes — Solidon3D 0.3.1
+Subject: News tip: recognised features in imported meshes are now editable
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -9,12 +9,13 @@ X-Unsent: 1
 
 Dear 3D Printing Industry Editorial Team,
 
-Solidon3D 0.3.1 has been released. It is not an industrial PLM platform or a
+Solidon3D 0.3.3 has been released. It is not an industrial PLM platform or a
 slicer; it is local desktop software for the preparation gap between imported
 geometry and an external polymer-AM slicing workflow.
 
-The defining capability of this release is feature-level editing on geometry
-that has no design history:
+The defining capability of the current version is feature-level editing on
+geometry that has no design history. Resizing a recognised feature has been
+possible for a while; moving one is what was missing:
 
 * a recognised hole, peg, countersink or dome in imported STL or 3MF geometry
   can be moved, rotated, resized, duplicated and removed, with its original
@@ -23,7 +24,7 @@ that has no design history:
 * the measured values appear as editable fields with a live preview, and one
   option applies an edit to all features of the same kind as a single
   transaction with a single undo;
-* recognition is bounded by manufacturability — features below half a
+* recognition is bounded by manufacturability: features below half a
   millimetre are discarded, which removed 296 of 1130 entries on a sample part.
 
 Every geometry change remains a parameterised, reproducible operation. An
@@ -31,10 +32,9 @@ optional language model may invoke the same registered API as the UI, but it
 cannot calculate geometry or execute generated source. Editing, analysis and
 export remain available without AI, an account or an internet connection.
 
-Since the first public 0.1 demo, the release history records 463 curated
-user-facing changes; 0.3.1 itself accounts for 85. Solidon is packaged for
-Windows, macOS and Linux and supports a file-based activation route for
-workstations that remain offline.
+Since the first public 0.1 demo, the release history records 484 curated
+user-facing changes. Solidon is packaged for Windows, macOS and Linux and
+supports a file-based activation route for workstations that remain offline.
 
 Product: https://solidon3d.de/en/
 Release history: https://solidon3d.de/en/changelog.html

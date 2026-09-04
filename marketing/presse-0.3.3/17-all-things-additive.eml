@@ -9,21 +9,22 @@ X-Unsent: 1
 
 Dear All Things Additive Editorial Team,
 
-Solidon3D 0.3.1 connects three desktop polymer-printing tasks that are often
+Solidon3D 0.3.3 connects three desktop polymer-printing tasks that are often
 handled separately: adapting imported geometry, assigning the physical
 material configuration and handing structured data to an external slicer.
 
-The workflow now begins one step earlier than before. A recognised feature in
-an imported STL or 3MF — a hole, a peg, a countersink, a dome — can be moved,
+The workflow now begins one step earlier than before. A recognised feature in an
+imported STL or 3MF, so a hole, a peg, a countersink or a dome, can be moved,
 rotated, resized, duplicated and removed, with its original axis preserved and
-its identity retained through the edit. Standards-based inserts, screw seats or
+its identity retained through the edit. For a long time only the diameter could
+be changed; moving is what was missing. Standards-based inserts, screw seats or
 bearing seats can then use clearance values measured from a printed calibration
 artefact.
 
 Supporting that, the release presents the measured values of the selected
 feature as editable fields with a live preview, applies one edit to all
 features of the same kind as a single transaction, and limits recognition to
-what a printer can actually produce — on a sample downloaded part, 296 of 1130
+what a printer can actually produce: on a sample downloaded part, 296 of 1130
 reported features were below that bound and are gone.
 
 Each real filament spool continues to carry colour, temperatures, cooling,

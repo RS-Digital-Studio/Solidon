@@ -9,7 +9,7 @@ X-Unsent: 1
 
 Hallo Stefan,
 
-zu Solidon3D 0.3.1 würde ich dir lieber eine messbare Fragestellung als eine
+zu Solidon3D 0.3.3 würde ich dir lieber eine messbare Fragestellung als eine
 Liste mit Produktversprechen schicken. Diesmal gibt es sogar zwei, und die
 zweite ist neu:
 
@@ -19,9 +19,9 @@ zweite ist neu:
 2. Bleibt eine so ermittelte Passung gültig, wenn die Bohrung anschließend
    versetzt oder verdoppelt wird?
 
-Die zweite Frage stellt sich erst seit dieser Fassung. Bisher hieß „Bohrung
-drei Millimeter weiter" verschließen und neu bohren — dieselbe Geometrie, aber
-ein anderes Merkmal, und die Passung zeigte ins Leere. In 0.3.1 lässt sich ein
+Die zweite Frage lässt sich erst jetzt stellen. Lange hieß „Bohrung
+drei Millimeter weiter" verschließen und neu bohren: dieselbe Geometrie, aber
+ein anderes Merkmal, und die Passung zeigte ins Leere. In 0.3.3 lässt sich ein
 erkanntes Merkmal verschieben, drehen, in der Größe ändern, verdoppeln und
 entfernen, und es behält dabei seine Kennung.
 
@@ -35,7 +35,7 @@ Ein möglicher Testablauf:
    messen, ob Spiel und Einpresskraft gleich bleiben.
 
 Ich stelle gern ein neutrales Testpaket zusammen: Kalibrierteil, drei
-Prüfmodelle, Messblatt und den veröffentlichten 0.3.1-Bau. Es gibt keine
+Prüfmodelle, Messblatt und den veröffentlichten 0.3.3-Bau. Es gibt keine
 Vorgabe zum Ergebnis und keine Erwartung an eine positive Besprechung.
 
 Überblick: https://solidon3d.de/

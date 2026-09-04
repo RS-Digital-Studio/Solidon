@@ -10,18 +10,19 @@ X-Unsent: 1
 Hallo Carsten,
 
 ein kurzes Software-Update, das gut in deine App- und Desktop-Berichterstattung
-passen könnte: Solidon3D 0.3.1 ist für Windows, macOS und Linux erschienen
+passen könnte: Solidon3D 0.3.3 ist für Windows, macOS und Linux erschienen
 (Flatpak und AppImage).
 
 Das praktische Beispiel in einem Satz: Eine vorhandene Bohrung in einer
 heruntergeladenen STL lässt sich anklicken und verschieben, drehen, in der
-Größe ändern, verdoppeln oder entfernen — ohne das Teil neu in CAD zu zeichnen.
-Bisher ging nur der Durchmesser. Rechts geht dabei ein Fenster auf, das die
+Größe ändern, verdoppeln oder entfernen, ohne das Teil neu in CAD zu zeichnen.
+Lange ging nur der Durchmesser, das Versetzen ist erst jetzt fertig. Rechts
+geht dabei ein Fenster auf, das die
 gemessenen Werte als Felder zeigt; eine geänderte Zahl ist die Änderung, mit
 Vorschau schon beim Tippen.
 
 Dazu neu: eine eigene Ansichtssteuerung als Vorgabe (links verschieben, rechts
-drehen, Flug mit W, A, S und D — die gewohnten Schemata bleiben wählbar) und
+drehen, Flug mit W, A, S und D; die gewohnten Schemata bleiben wählbar) und
 ein deutlich aufgeräumterer Objektbaum, weil nur noch erkannt wird, was ein
 Drucker herstellen kann.
 

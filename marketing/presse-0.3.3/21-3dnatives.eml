@@ -1,7 +1,7 @@
 From: Solidon3D <marketing@solidon3d.de>
 To: contact@3dnatives.com
 Reply-To: marketing@solidon3d.de
-Subject: Pitch: Move and duplicate holes in a downloaded STL - localised in your edition languages
+Subject: Pitch: moving holes in a downloaded STL, localised in your edition languages
 MIME-Version: 1.0
 Content-Type: text/plain; charset=UTF-8
 Content-Transfer-Encoding: 8bit
@@ -9,29 +9,29 @@ X-Unsent: 1
 
 Dear 3Dnatives team,
 
-Solidon3D 0.3.1 has been released, and there is one detail that may make it
+Solidon3D 0.3.3 has been released, and there is one detail that may make it
 unusually convenient for your editions: the application ships fully localised
-in French, English, Spanish and German (plus Italian and Portuguese) -
+in French, English, Spanish and German (plus Italian and Portuguese):
 interface, manual and example projects alike. Whichever edition picks the
 story up, readers can follow it in their own language.
 
 The core story is a five-minute test: import a downloaded model whose mounting
-holes are in the wrong place, click one, and move it - without finding the
-source CAD file or rebuilding the part. Until this release only the diameter
+holes are in the wrong place, click one, and move it, without finding the
+source CAD file or rebuilding the part. For a long time only the diameter
 could be changed; now a recognised feature can be moved, rotated, resized,
 duplicated and removed, and it keeps its identity through the edit, so a fit
 defined against it still holds.
 
 What sets it apart from both mesh editors and CAD suites:
 
-* a feature panel showing the measured values - position, diameter, depth,
-  axis - as editable fields with a live preview while typing;
+* a feature panel showing the measured values (position, diameter, depth,
+  axis) as editable fields with a live preview while typing;
 * one option that applies an edit to every feature of the same kind, turning a
   row of four holes into a single transaction with a single undo;
 * recognition bounded by what a printer can make: on a downloaded hose holder,
   296 of 1130 reported features were noise and are gone;
 * an optional AI assistant that drives the same documented operations a click
-  does - running locally via Ollama if preferred, never writing geometry
+  does, running locally via Ollama if preferred, never writing geometry
   itself;
 * Windows, macOS and Linux packages, no account, no cloud project store.
 
