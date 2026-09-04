@@ -174,6 +174,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die übersetzte Schnitt-Erweiterung verliert eine Schicht | Weg 1 mit den Dateien, die ein Kunde hat (03.09.2026) | eine Entscheidung und einen Prüffall, nicht eine Schwelle. Gemessen von 3d-druck-a0: `_chain` und der GEOS-Rückfall liefern 204 gemeinsame Schichten, davon **null** flächenverschieden — und genau eine fehlt (z = 9,5, vier Eckpunkte exakt auf der Ebene, der Sonderfall aus dem Docstring von `_rings_from`). Die Segmente sind dort bitgleich, die Ausweiche greift, `_polygon_from` liefert einzeln gerufen 4471,5; erst im vollständigen `slice_body` verschwindet die Schicht. GEOS hat recht — ein 22 mm hoher Körper hat dort kein Loch. **Der Kunde schneidet verschieden, je nachdem woher sein Paket kommt**: Das gebaute Paket bringt `_chain` mit, ein Klon und die CI nehmen GEOS; `test_slice_core.py` hält beide Wege aneinander, hat aber nie einen Körper gesehen, dessen Schichthöhen auf Eckpunkte fallen |
 | Eine Senkung über einer Bohrung lässt sich nicht versetzen | Erkannte Merkmale bearbeiten (03.09.2026) | die Nachbarschaft zweier Merkmale — Solidon hält Kennungen über Operationen hinweg (`matching.py`), aber keine Beziehungen zwischen ihnen. Die Absage bleibt die richtige Antwort; der **Ausweg** darin war am 04.09.2026 gemessen falsch und ist ersetzt — beides über Zahlen verschließen, Ø der Senkung über die volle Wandstärke |
 | `MEMORY.md` hat kein Werkzeug zum Einfügen einer Zeile | Die geteilte Datei ohne Werkzeug (03.09.2026) | ein kleines Werkzeug: Zeile einfügen unter Sperre, mit Prüfung, dass der Rest unverändert bleibt. Bis dahin trägt `tests/test_directory_docs.py` den Fall — er hat am 03.09.2026 dreimal angeschlagen, meldet den Verlust aber erst hinterher |
+| Die Schnittebene folgt dem Plattenversatz nicht | Viewport-Werkzeuge aus Kundensicht (03.09.2026) | die Klärung, ob und wo eine Ebene gezeichnet wird und woher sie ihre Koordinaten bekommt — dort gehört der Versatz aus `_view_offset` hin, nicht in `_sectioned`; dazu einen Prüfstand mit zwei Platten und einer senkrechten Ebene, weil offscreen die Kette nicht messbar ist |
 
 ---
 
@@ -7522,6 +7523,62 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       unangetastet); gefunden von 3d-druck-b8, und zwar weil eine Datei nach
       ihrem eigenen Commit noch als `MM` im Status stand.
 
+- [x] **`/pruefen` schrieb seine Ausgabe unter festen Namen in `$TEMP` — bei
+      zwei Sitzungen dieselbe Datei.** Gefunden von solidon-b4, behoben am
+      04.09.2026. Der Skill legte sieben Ausgaben ab, alle mit festem Namen:
+      `$TEMP/ruff.txt`, `$TEMP/t.txt` und `$TEMP/g1.txt` bis `$TEMP/g5.txt`.
+      `$TEMP` ist benutzerweit, also teilen sich alle Sitzungen dieser Maschine
+      diese sieben Dateien.
+
+      **Der Fehler steckt nicht im Schloss, sondern darin, dass der Skill zwei
+      Werkzeuge vermischt** (die Zuspitzung ist von b4): Das Schloss trennt die
+      **Messung** — gegen Fremdlast, deshalb laufen die Leistungstests darunter
+      —, die Dateinamen trennen die **Ausgabe**. Das Zweite braucht kein
+      Schloss, sondern einen eindeutigen Namen, und zwar auch für die drei
+      schnellen Läufe `g1` bis `g3`, die der Skill ausdrücklich **ohne** Schloss
+      fährt. Genau die laufen heute ungeschützt.
+
+      **Der Schaden ist plausibler Müll, nicht kaputter.** Wer nach der
+      Empfehlung aus `CLAUDE.md` verfährt — „Ausgabe in eine Datei, danach
+      lesen", die Lehre vom 22.08.2026 — bekommt eine gültig aussehende Zahl
+      aus einem fremden Lauf. Die Empfehlung bringt die Falle also selbst mit,
+      sobald zwei Sitzungen ihr folgen. Das ist dieselbe Familie wie der
+      `tail`-Fall und der `echo`-Fall, die dort schon stehen: nicht der
+      Abbruch ist gefährlich, sondern die glaubwürdige falsche Auskunft.
+
+      **Belegt als Beobachtung, nicht als Messung** — wer den Punkt abarbeitet,
+      sucht sonst nach Zahlen, die es nicht gibt: Während b4s geteilter Lauf
+      noch bei `tests/test_sculpt_session.py` stand, lag in `$TEMP/g5.txt`
+      bereits ein vollständiges Ergebnis der Leistungstests. Sequenziell
+      unmöglich, also aus einem fremden Lauf.
+
+      **Behoben:** Alle sieben Ausgaben tragen jetzt einen Sitzungsmarker im
+      Namen, über die Kette
+      `${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}`. Für den Lauf
+      unter dem Schloss wird er exportiert, weil der innere `bash -c` eine
+      eigene Shell ist — ohne das schrieben die beiden teuren Läufe wieder in
+      dieselbe Datei. Nachgewiesen, nicht angenommen: Der geänderte Befehl
+      läuft, und der innere `bash` sieht den Marker.
+
+      **Dabei kam ein zweiter Fund heraus, der die ganze Zeit danebenlag:**
+      `CLAUDE_SESSION_NAME` ist **leer**, wenn die Sitzung keinen Namen trägt —
+      gemessen am 04.09.2026. Der Skill gab sie so an `gate_lock.py --who`
+      weiter; wer das Beispiel wörtlich fährt, trägt sich also als namenloser
+      Halter ein, und der Wartende bekommt eine Auskunft, mit der er niemanden
+      ansprechen kann. `--who` nimmt jetzt denselben Marker wie die Dateinamen.
+
+      **Als Eigenschaft des Befehls belegt, als Vorfall nicht** — die
+      Unterscheidung gehört dazu, weil sie beim Aufschreiben schon einmal
+      verrutscht ist: solidon-b4 hat an jenem Tag `--who "solidon-b4"` literal
+      eingesetzt statt die Variable zu übergeben und war deshalb nicht
+      betroffen; ihr einziger Schlossfall war ein verwaistes Schloss eines
+      toten Prozesses. Es ist also kein beobachteter Schaden, sondern eine
+      Falle im Beispiel — und die zählt, weil Beispiele kopiert werden.
+
+      Die drei Glieder der Kette haben je einen Grund — der Name ist lesbar,
+      wenn es ihn gibt (`claude --worktree <name>`); `CLAUDE_CODE_SESSION_ID`
+      steht immer und ist über Aufrufe stabil; `$$` ist der letzte Ausweg.
+
 - [x] **Ein Test steht zwölf Minuten still, ohne zu rechnen — aufgeklärt am
       23.08.2026 (`2969086`).** Kein Fix, sondern ein Name für das Problem und
       zwei Sätze darüber, was **nicht** geht. Gefunden von 3d-druck-b8 mit
@@ -14715,6 +14772,16 @@ passiert, nachdem man geklickt hat.
   (`_object_at_view`), also wird sie beim **Klick** gestellt und das Ergebnis
   gemerkt — `Measurement.object_ids` trägt je Punkt einen Körper, weil ein Maß
   zwei verbinden darf. Die Schnittebene geht weiterhin nicht mit.
+- [ ] **Die Schnittebene folgt dem Plattenversatz nicht.** `_sectioned` schneidet
+  das Netz in Szenenkoordinaten, und erst danach addiert `show_scene` den
+  Versatz aus `_view_offset` (`viewport.py` um Zeile 4611 und 4618). Für eine
+  Höhenebene ist das richtig: In der Szene liegen die Platten übereinander,
+  eine Z-Ebene trifft alle Körper gleich. Falsch ist die **Ansicht** davon —
+  was der Nutzer sieht und anfasst, steht um den Plattenversatz verschoben,
+  eine senkrechte Ebene trifft einen Körper auf Platte 2 im Bild also dort, wo
+  er ohne Versatz stünde (`.claude/rules/ansicht.md`, „Mehrere Druckplatten").
+  Am 04.09.2026 von zwei Sitzungen am Code nachgelesen, nicht am Bild gemessen.
+
 ## Eine Hohlkehle mit Radius null (03.09.2026)
 
 - [x] **Der Objektbaum zeigte „Hohlkehle R0,00 mm".**
