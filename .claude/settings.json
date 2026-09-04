@@ -33,7 +33,7 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || P=\"$(command -v python3 || command -v python || command -v py)\"; [ -n \"$P\" ] && \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
+            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; if [ ! -x \"$P\" ]; then P=\"\"; for K in python3 python py; do C=\"$(command -v \"$K\" 2>/dev/null)\" || continue; case \"$C\" in *WindowsApps*) continue;; esac; P=\"$C\"; break; done; fi; [ -n \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
             "timeout": 25
           }
         ]
