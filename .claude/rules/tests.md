@@ -56,24 +56,11 @@ tut das beim Start; die Oberfläche existiert im Betrieb also nie ohne. Eine
 Fixture, die es nach jedem Test abräumt, macht Tests verlässlich grün gegen
 einen Zustand, den niemand je sieht.
 
-**Der Fall, der hier als Beleg stand, war selbst der Fehler — und deshalb ist
-er der bessere Lehrsatz.** Er lautete: Die Parameterkarte messe ohne Stylesheet
-258 und mit 270, die linke Zone sei 260 breit, also passe sie auf keinem
-Fenster unter rund 2080 Pixeln. Auf dieser Messung wurde `LEFT_WIDTH` auf 272
-erhöht und ein Wächter geschrieben.
-
-Gemessen am 30.08.2026, dieselbe Karte, einziger Unterschied die Plattform:
-
-| Lauf | Schrift | Karte ohne / mit Stylesheet |
-|---|---|---|
-| `QT_QPA_PLATFORM=offscreen` | `QFontInfo.family()` ist **leer** | 258 / 270 |
-| echte Plattform | `Segoe UI` | **166 / 166** |
-
 **Offscreen hat gar keine Schrift.** Die Punktgröße ist negativ, und jede
 angeforderte Familie — `Segoe UI`, `DejaVu Sans`, `Sans Serif` — liefert
-dieselbe synthetische Metrik: derselbe Text 228 Punkte gegen 111. Beide Zahlen
-der Tabelle oben, 258 wie 270, stammen aus einer Schrift, die es nicht gibt.
-Die Karte hat nie gesprengt.
+dieselbe synthetische Metrik. Der Wächter, der hier als Beleg stand, war selbst
+der Fehler: Er maß eine Kartenbreite in einer Schrift, die es nicht gibt, und
+hat eine Änderung erzwungen, die niemand brauchte (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Daraus **drei** Sätze, und der dritte ist der teuerste:
 
@@ -97,55 +84,35 @@ Daraus **drei** Sätze, und der dritte ist der teuerste:
 
 Und die allgemeine Form, weil sie über Fixtures hinausgeht: **Ein Test, der nur
 in einer Lage grün ist, die es im Betrieb nicht gibt, ist keine Zusicherung,
-sondern eine Tarnung.** Das gilt in beide Richtungen — der Wächter, der auf der
-Phantomschrift stand, war rot in einer Lage, die es nicht gibt, und hat eine
-Änderung erzwungen, die niemand brauchte. Die Frage davor ist dieselbe wie überall in dieser
-Datei — was habe ich gerade gemessen, und ist das, was der Kunde hat?
+sondern eine Tarnung.** Das gilt in beide Richtungen — auch rot in einer Lage,
+die es nicht gibt, erzwingt Änderungen, die niemand braucht. Die Frage davor
+ist dieselbe wie überall in dieser Datei — was habe ich gerade gemessen, und
+ist das, was der Kunde hat?
 
 **Und die Gegenrichtung, damit daraus kein Kult wird: Die Betriebslage
-herzustellen trägt nur, wo die Messgröße selbst an ihr hängt.** Beide
-Richtungen sind am selben Tag gemessen worden, in derselben Datei:
-
-| Fall | Messgröße | Betriebslage herstellen? |
-|---|---|---|
-| Kartenbreite | hängt an der **Schrift**, und die fehlt offscreen | **gar nicht messen** — siehe oben |
-| Kürzelübersicht | „Home" ohne, „Pos1" mit Qt-Katalog | **nein** — siehe unten |
-
-Bei der Kürzelübersicht verglich der Test rohe Deklarationstexte (`VIEW_KEYS`)
-gegen Anzeigenamen aus `entries()`, und Qt übersetzt „Home" auf einer
-deutschen Oberfläche zu „Pos1". Der Fix ist, **über dieselbe Funktion zu
-vergleichen, die auch anzeigt** (`_native`) — und damit neutralisiert sich die
-Lage auf beiden Seiten: mit Katalog „Pos1" gegen „Pos1", ohne ihn „Home" gegen
-„Home".
-
-Ein zusätzliches `install_qt_translations` im Test war deshalb Zierat, und die
-Gegenprobe hat es entlarvt: Entfernt man es, wird nichts rot. **Eine Zeile,
-deren Entfernen nichts rot macht, prüft nichts** — und in vier Wochen
-unterscheidet sie niemand mehr von den tragenden. Die Frage lautet also nicht
-„habe ich die Betriebslage hergestellt", sondern: **Hängt das, was ich messe,
-an ihr?**
+herzustellen trägt nur, wo die Messgröße selbst an ihr hängt.** Eine
+Kartenbreite hängt an der Schrift, und die fehlt offscreen — gar nicht messen.
+Eine Kürzelübersicht zeigt „Home" ohne und „Pos1" mit Qt-Katalog — hier ist der
+Fix, **über dieselbe Funktion zu vergleichen, die auch anzeigt** (`_native`),
+und damit neutralisiert sich die Lage auf beiden Seiten. Ein zusätzliches
+`install_qt_translations` im Test war deshalb Zierat, und die Gegenprobe hat es
+entlarvt: Entfernt man es, wird nichts rot. **Eine Zeile, deren Entfernen
+nichts rot macht, prüft nichts** — und in vier Wochen unterscheidet sie niemand
+mehr von den tragenden. Die Frage lautet also nicht „habe ich die Betriebslage
+hergestellt", sondern: **Hängt das, was ich messe, an ihr?**
 
 ### Und bei einer Farbe hängt es immer an ihr — die Suite fährt ohne Stylesheet
 
-Der Abschnitt oben liest sich als Frage an eine **Fixture**. Am 30.08.2026 ist
-dieselbe Frage vier Sitzungen an vier verschiedenen Stellen begegnet, und
-keine davon war eine Fixture-Frage: `apply_theme` und `apply_style` stehen in
-`app.py` und in **keiner** Fixture. Jeder Test, der eine Farbe, eine Breite
-oder eine Einrückung misst, misst deshalb Windows, solange er die Betriebslage
-nicht selbst herstellt.
-
-| Was gemessen wurde | ohne Thema und Stylesheet | in der Betriebslage |
-|---|---|---|
-| Symbol des aktiven Werkzeugs | `#000000` (Systemschrift) | `#e6e9ee` |
-| verglichen mit `palette().highlight()` | Systemakzent | die Farbe des Themas |
-| Texteinrückung im Menü | Qts eigene Abstände | die des Stylesheets |
-| `isDefault()` eines Dialogknopfs | überall `False` vor `show()` | neun von vierzehn wahr |
-
-Die Zeile mit dem Symbol ist die lehrreichste, weil der Test **grün** war: Er
-verglich eine Systemfarbe mit einer zweiten Systemfarbe, und ihr Verhältnis lag
-zufällig über der Schwelle, die er forderte. Zwei falsche Werte, deren
-Verhältnis stimmt, sind von zwei richtigen nicht zu unterscheiden — und ein
-Test, der so grün wird, wird es jahrelang.
+Der Abschnitt oben liest sich als Frage an eine **Fixture**. Aber `apply_theme`
+und `apply_style` stehen in `app.py` und in **keiner** Fixture. Jeder Test, der
+eine Farbe, eine Breite oder eine Einrückung misst, misst deshalb Windows,
+solange er die Betriebslage nicht selbst herstellt: Systemschrift statt der
+Symbolfarbe des Themas, Systemakzent statt `palette().highlight()` des Themas,
+Qts eigene Menüabstände statt der des Stylesheets — und `isDefault()` eines
+Dialogknopfs ist vor `show()` überall `False`. Ein solcher Test kann dabei
+**grün** sein: Zwei falsche Werte, deren Verhältnis stimmt, sind von zwei
+richtigen nicht zu unterscheiden — und ein Test, der so grün wird, wird es
+jahrelang (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Praktisch, und es sind drei Zeilen:
 
@@ -182,9 +149,7 @@ Handbuchseiten der Website, die Referenz daraus, die Abbildungsstempel. **Die
 CI fährt sie nicht** (Entscheidung Robert, 03.09.2026), und der Grund ist
 derselbe, aus dem `AGENTS.md` „Bilder und Handbuch nur beim Release" sagt: Eine
 neue Operation macht sie rot, und was sie dann verlangt, ist kein Codefehler,
-sondern `tools/make_manual.py` und `tools/stamp_assets.py`. Am 03.09.2026
-kostete das achtzehn rote Läufe und zwei Erzeugerläufe für eine Änderung, die
-mit dem Handbuch nichts zu tun hatte.
+sondern `tools/make_manual.py` und `tools/stamp_assets.py` (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Sie bleiben im lokalen Lauf, und dort sind sie richtig: Wer vor einem Release
 `/pruefen` fährt, soll erfahren, dass die Seiten hinterherhängen. Wer sie
@@ -236,9 +201,8 @@ das *neben* dem Testlauf stand.
       echo "Lauf $i: Exit=$?  $(grep -c passed datei)"
 
   Die Kommandosubstitution läuft mit, bevor die Zeile steht, und `$?` trägt
-  danach ihren Status. Am 31.08.2026 meldete genau diese Zeile zweimal
-  „Exit=0", während die Shell daneben `Segmentation fault` schrieb — und die
-  Messreihe, die darauf aufbaute, war eine Stunde Arbeit für nichts.
+  danach ihren Status — die Zeile meldet „Exit=0", während die Shell daneben
+  `Segmentation fault` schreibt.
 
   Der Griff ist eine Zeile mehr: **den Code als allerersten Befehl in eine
   Variable**, dann alles übrige.
@@ -252,12 +216,10 @@ das *neben* dem Testlauf stand.
   Datei: **`$?` gehört dem letzten Befehl, und „letzter" heißt wörtlich.**
 
 * **Ein Hintergrundlauf meldet den Status seiner Hülle, nicht den des Programms
-  darin.** Am 22.08.2026 dreimal an einem Abend, in drei Sitzungen: Die
-  Abschlussmeldung sagte „completed (exit code 0)" — einmal über einem Lauf,
-  der mit **139** abgebrochen war, einmal über `geteilt Exit=5`, einmal über
-  `geteilt Exit=3`. Das ist die Pipe-Falle in neuer Gestalt und die
-  gefährlichere von beiden: Eine Pipe baut man selbst und weiß davon, ein
-  Hintergrundlauf sieht aus wie ein Lauf. Also auch hier: Der Lauf schreibt
+  darin.** Die Abschlussmeldung sagt „completed (exit code 0)" auch über einem
+  Lauf, der mit **139** abgebrochen ist. Das ist die Pipe-Falle in neuer Gestalt
+  und die gefährlichere von beiden: Eine Pipe baut man selbst und weiß davon,
+  ein Hintergrundlauf sieht aus wie ein Lauf. Also auch hier: Der Lauf schreibt
   seinen eigenen Exit-Code in eine Datei (`…; echo "Exit=$?" > …`), und gelesen
   wird der, nicht die Meldung.
 
@@ -268,22 +230,12 @@ Unterschied steht in `ROADMAP.md`; wer ihn nicht kennt, sucht den Fehler in
 einem Test, der nie fehlgeschlagen ist.
 
 **Und die Kehrseite davon, die genauso teuer ist: Ein `F` unmittelbar vor einem
-bekannten Riss sieht aus wie Teil des Risses.** Am 23.08.2026 stand im Torlauf
-vor dem Release
-
-    === tests/test_ui.py ===
-    ..............F.Windows fatal exception: access violation
-
-und wurde als ein einziges Ereignis gelesen — vierzehn Punkte, ein F, dann der
-bekannte Abriss. Gemeldet wurde „kein einziger echter Testfehler". Das `F` war
-eine Regression aus derselben Sitzung, die den Lauf fuhr; gefunden hat sie eine
-**zweite** Sitzung, die dieselbe Datei unabhängig gefahren hatte.
-
-Der Abschnitt darüber warnt vor der einen Richtung — einen Abriss für einen
-Testfehler zu halten. Diese hier ist die andere: **einen Testfehler für einen
-Abriss zu halten.** Wer nur eine der beiden kennt, macht zuverlässig die andere,
-und diese Richtung ist die gefährlichere — die erste kostet eine Stunde Suche,
-die zweite geht ins Paket.
+bekannten Riss sieht aus wie Teil des Risses.** Der Abschnitt darüber warnt vor
+der einen Richtung — einen Abriss für einen Testfehler zu halten. Diese hier ist
+die andere: **einen Testfehler für einen Abriss zu halten.** Wer nur eine der
+beiden kennt, macht zuverlässig die andere, und diese Richtung ist die
+gefährlichere — die erste kostet eine Stunde Suche, die zweite geht ins Paket
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Praktisch: **Beim Melden eines Laufs gehört die Zahl der `F` dazu, nicht nur die
 Zusammenfassung.** Ein Riss verschluckt die Zusammenfassung, in der die Namen
@@ -292,19 +244,9 @@ stünden; die Fortschrittszeichen davor überleben ihn.
 ### Und die dritte Gestalt, die tückischste: die Tests *nach* dem Abriss
 
 Die zwei Richtungen oben handeln davon, ein `F` und einen Riss zu verwechseln.
-Die dritte verwechselt gar nichts — sie zählt richtig und schließt falsch.
-
-Am 30.08.2026 endete ein Torlauf über `test_ui.py` am bekannten Abriss:
-
-    ........................................................................ [ 19%]
-    ........................................................................ [ 39%]
-    ..............Windows fatal exception: access violation
-
-Gezählt wurden 158 Fortschrittszeichen und **null `F`**, und daraus wurde
-„grün". Die Datei hat 372 Tests. **Acht davon waren rot**, und sie standen
-hinter der Abrissstelle — sie sind nie gelaufen. Sie lagen danach über zwei
-Stunden rot auf `main`, bis eine andere Sitzung einen Lauf schaffte, der
-durchkam.
+Die dritte verwechselt gar nichts — sie zählt richtig und schließt falsch:
+Fortschrittszeichen und **null `F`** bis zur Abrissstelle, und daraus wird
+„grün", obwohl die Tests dahinter nie gelaufen sind (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 > **Ein Lauf, der abbricht, hat nicht bestanden, sondern aufgehört.** Die Zahl
 > der gelaufenen Tests gehört neben den Exit-Code, und zwar als Bruch: 124 von
@@ -329,20 +271,7 @@ misst. Die Datei ist **absichtlich** ignoriert (`.gitignore`), und der Grund
 steht bisher nur dort: Die Werte sind maschinenabhängig (Bauplan §31). An
 diesem Projekt arbeiten drei Maschinen; die Bestwerte des schnellsten Rechners
 würden den Laptop dauerhaft rot färben, ohne dass eine Zeile langsamer
-geworden wäre.
-
-Am 22.08.2026 ist das belegt worden, weil zwei Sitzungen gleichzeitig am selben
-Projekt rechneten:
-
-| Lauf | Fremdlast | Ergebnis |
-|---|---|---|
-| A | 48 % | 5 failed, 14 passed |
-| B | 16 % | **19 passed, Exit 0** |
-
-Dieselbe Software, derselbe Tag, dieselbe Maschine. Alle fünf roten waren die
-Regressionsschwelle, kein absoluter Zielwert aus §31, und im ruhigen Lauf lagen
-alle Einzelzeiten darunter (Orientierungssuche 17,47 s, Subdivision 2,46 s,
-Blending 1,33 s, Skizzenlöser 0,21 s).
+geworden wäre (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Daraus folgt für jeden roten Leistungstest:**
 
@@ -364,20 +293,9 @@ Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig" bedeutet.
 **Menge** der roten Tests, war es die Maschine. Ein einzelner Messwert, der um
 die Regressionsschwelle **streut**, erfüllt dieselbe Regel dagegen zuverlässig
 — er reißt in Serie und wird von selbst wieder grün, ohne dass sich eine Zeile
-geändert hätte. In der Ausgabe sieht beides identisch aus.
-
-Am 26.08.2026 an `orient_200` durchgespielt, fünf Messungen aus zwei
-Sitzungen, alle einzeln und unter dem Schloss:
-
-| | ms | gegen die Schwelle |
-|---|---|---|
-| ce | 18 958 · 19 568 | darüber |
-| a2 | 19 442 · 19 804 | darüber |
-| ce, Torlauf | grün | darunter |
-
-Bestmarke 15 151 ms, Schwelle also 18 939 ms. Vier Überschreitungen in Folge —
-nach der Regel oben eine Regression —, und der fünfte Lauf setzte `strikes`
-zurück. **Der Wert liegt nicht über der Schwelle, er liegt auf ihr.**
+geändert hätte. In der Ausgabe sieht beides identisch aus. **Der Wert liegt
+nicht über der Schwelle, er liegt auf ihr:** vier Überschreitungen in Folge,
+und der fünfte Lauf setzt `strikes` zurück (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Der Unterschied ist keine Nuance, weil er auf zwei verschiedene Suchen
 schickt: „stabil verschlechtert" heißt, jemand sucht eine Ursache im Code.
@@ -386,37 +304,15 @@ aus einem besonders ruhigen Lauf? Entschieden wird das durch eine Messreihe
 gegen einen **älteren Stand**, nicht durch einen weiteren Lauf gegen den
 heutigen.
 
-**Und zwei Läufe im selben Zeitfenster sind eine Messung.** Am selben Tag hat
-eine Sitzung `app_start` als Release-Blocker gemeldet (4154 und 4425 ms gegen
-3 s Ziel) — zwei Läufe kurz hintereinander, und ihre Übereinstimmung wurde für
-Bestätigung gehalten. Eine zweite Sitzung maß 2,46 und 2,57 s, ein späterer
-Solo-Lauf war grün. Was die Regel oben verlangt, ist nicht „zweimal", sondern
-**zweimal unter anderen Bedingungen**.
+**Und zwei Läufe im selben Zeitfenster sind eine Messung.** Was die Regel oben
+verlangt, ist nicht „zweimal", sondern **zweimal unter anderen Bedingungen**.
 
 ### Die Messreihe wurde gefahren, und sie entschied gegen die Bestmarke
 
-Am 30.08.2026 stand der Fall aus dem Abschnitt darüber in fünffacher
-Ausführung: Fünf Marken meldeten zwölf bis vierzehn Überschreitungen in Folge.
-Die Registerzeile machte den `deferred`-Umbau dafür verantwortlich.
-
-**Zwei Worktrees, beide mit geleerter Baseline, gleicher Kontext, freie
-Maschine** — der Stand vor dem Umbau gegen HEAD:
-
-| Marke | vor `deferred` | HEAD | Bestmarke | Budget |
-|---|---|---|---|---|
-| `sculpt_replay_1000` | 70 ms | 72 ms | 46 ms | 2000 ms |
-| `sculpt_apply_1000` | 97 ms | 100 ms | 64 ms | 2000 ms |
-| `subdivide_surface` | 1893 ms | 1863 ms | 1173 ms | 3000 ms |
-| `remesh_uniform` | 1565 ms | 1538 ms | 947 ms | 3000 ms |
-| `boolean_medium` | 854 ms | 834 ms | 451 ms | 20 000 ms |
-| `orient_200` | 18 682 ms | 18 774 ms | — | 20 000 ms |
-
-Unter drei Prozent Unterschied, bei vier von sechs ist der **neue** Stand der
-schnellere. Kein Code war langsamer geworden; die Bestmarken waren auf keinem
-der beiden Stände reproduzierbar. **Und kein einziges Budget war gerissen** —
-`sculpt_replay_1000` lag bei 3,5 Prozent seines Budgets. Rot war der
-Regressionszähler, und die Zusicherung dazu liest sich als `assert 13 < 2`, was
-wie eine Zeitangabe aussieht und keine ist.
+Die Messreihe gegen einen älteren Stand ergab: Kein Code war langsamer
+geworden, die Bestmarken waren auf keinem Stand reproduzierbar, kein Budget war
+gerissen. Rot war der Regressionszähler, und die Zusicherung dazu liest sich
+als `assert 13 < 2`, was wie eine Zeitangabe aussieht und keine ist (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Daraus folgte der Umbau von Minimum auf Median** (`measure`, `WINDOW`,
 `MIN_RUNS`). Das Argument fürs Minimum war: Eine Messung ist nach oben beliebig
@@ -434,16 +330,10 @@ und `REGRESSION_STRIKES` schlägt zu, bevor der Median nachgezogen ist.
 
 **Der Umbau hatte eine Delle, und sie zeigte sich erst im zweiten Lauf.** Der
 migrierte alte Bestwert ist selbst ein Ausreißer und zieht den Median nach
-unten, solange das Fenster halb leer ist:
-
-    Lauf 1   Marke 451 ms (nur der alte Bestwert)   gemessen 849 → Strike 1
-    Lauf 2   Marke 650 ms (451 und 849)             gemessen 838 → Strike 2, rot
-    Lauf 3   Marke 838 ms (451, 838, 849)           ab hier trägt sie
-
-Der erste Lauf nach dem Umbau war 26 von 26 grün und sah fertig aus. Deshalb
-`MIN_RUNS = 3`: **Zwei Läufe bewusst blind sind ehrlicher als zwei Läufe falsch
-rot.** Ab dem dritten Wert steht der Ausreißer außen und bestimmt den Median
-nicht mehr — genau die Eigenschaft, wegen der dort ein Median steht.
+unten, solange das Fenster halb leer ist. Deshalb `MIN_RUNS = 3`: **Zwei Läufe
+bewusst blind sind ehrlicher als zwei Läufe falsch rot.** Ab dem dritten Wert
+steht der Ausreißer außen und bestimmt den Median nicht mehr — genau die
+Eigenschaft, wegen der dort ein Median steht.
 
 Für den nächsten, der eine Marke prüft: **Die Baseline ist maschinenlokal**
 (`tests/.performance.json`, in `.gitignore`). Sie zurückzusetzen betrifft
@@ -454,13 +344,9 @@ neue nichts.
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
 Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
-Leistungstests. Am 22.08.2026 hat sich gezeigt, dass er zu eng gefasst ist: Eine
-Sitzung fuhr `test_ui.py` **ohne Schloss** mitten in einem fremden Tor und bekam
-**Exit 139** mit Zugriffsverletzung, zwei Fehlschlägen und acht Minuten
-Stillstand bei elf von 255 Tests. Sie hielt es für eine Folge ihrer eigenen
-Änderung an Objektlebensdauern — plausibel, und falsch. Dieselben zwölf Tests
-einzeln: **0,87 s, grün.** Im selben Zeitraum lief `test_ui.py` in einem anderen
-Prozess unter dem Schloss vollständig durch (255 passed).
+Leistungstests. Er ist zu eng gefasst: Ein Lauf **ohne Schloss** mitten in
+einem fremden Tor endete mit **Exit 139** und Zugriffsverletzung; dieselben
+Tests einzeln liefen in einer Sekunde grün durch (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Bei einer Messung äußert sich Last als *langsamer*, und dagegen hilft die Regel
 „zweimal fahren". Bei einem funktionalen Test äußert sie sich als **rot** — und
@@ -474,23 +360,20 @@ sich damit um:
 * **Der billigste Gegenbeweis ist der einzelne Test.** Läuft er allein in einer
   Sekunde durch, war es die Maschine.
 * **Steht er oder rechnet er?** Drei Fragen, und erst zusammen tragen sie eine
-  Aussage. Sie kosten zwanzig Sekunden, und jede einzelne davon hat in der Nacht
-  vom 22. auf den 23.08.2026 mindestens einmal jemanden in die Irre geführt.
+  Aussage. Sie kosten zwanzig Sekunden.
 
   1. **Welche Prozesse gehören überhaupt zum Lauf?** Nicht die aus dem
      Prozessbaum: Windows setzt die Elternnummer nicht um, wenn ein
      Zwischenprozess endet, und der `pytest` fällt dann heraus. Und nicht alle
      mit `pytest` in der Kommandozeile: Die Hülle von `gate_lock` trägt den
-     ganzen geschützten Befehl, wartet aber nur.
+     ganzen geschützten Befehl, wartet aber nur — wartende Hüllen sehen aus
+     wie hängende Läufe.
 
      ```
      Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
        Where-Object { $_.CommandLine -match '-m pytest' -and
                       $_.CommandLine -notmatch 'gate_lock' }
      ```
-
-     Zwölf wartende Hüllen sahen einmal aus wie zwölf hängende Läufe — keine
-     Rechenzeit, Protokoll steht, die perfekte Signatur, und vollständig falsch.
 
   2. **Wächst die Rechenzeit?** `Get-Process -Id N | Select CPU`, zweimal im
      Abstand von mindestens fünf Sekunden. Ein einzelner Blick genügt nicht:
@@ -515,36 +398,17 @@ fremder Zwischenstand kann einen Lauf auch grün machen, und dann hält jemand
 seine Arbeit für abgesichert. Ein eigener Arbeitsbaum ist die einzige
 vollständige Antwort (`claude --worktree <name>`).
 
-
 **Und die Beschleunigung des Tors macht das Schloss wichtiger, nicht
-überflüssiger.** Am 22.08.2026 lag der Vorschlag auf dem Tisch, es auf die
-Leistungstests zu schrumpfen — 49 Sekunden brauchen Ruhe, dreißig Minuten
-nicht. Die Messung hat ihn widerlegt, und zwar aus der Gegenrichtung: Mit
-`-n 8` lastet die Sammelgruppe die Maschine so aus, dass der **fremde** Lauf
-kippt. Zwei Läufe derselben Gruppe ohne Schloss gaben **11 failed** und
-**0 failed**; die elf lagen in `test_blend.py`, `test_examples.py` und
-`test_real_models.py`, und dieselbe Datei allein mit `-n 8` lief grün durch.
-Ursache war nicht die Parallelität und keine Reihenfolgeabhängigkeit, sondern
-**Speicher**: Acht Prozesse, die je eine speicherhungrige Geometrie rechnen,
-sind etwas anderes als einer. Parallelität macht Speicherhunger sichtbar — als
-Korrektheitsfehler.
-
-Vorher belegte ein serieller Torlauf einen Kern und störte niemanden. Also:
-**Je paralleler das Tor, desto strenger das Schloss.**
-
-Der Gewinn kommt trotzdem, nur an anderer Stelle: nicht dadurch, dass das
-Schloss fällt, sondern dadurch, dass das, was es umschließt, kleiner wird. Auf
-leerer Maschine gemessen, alles seriell gegen alles parallel:
-
-| | seriell | mit `-n 8` |
-|---|---|---|
-| Sammelgruppe | 193 s | **57 s** (zweimal, gleiche Menge) |
-| Tor insgesamt | ~30 min | **5 min 9 s** |
-
-Die dreißig Minuten waren nie Testzeit. Sie waren Wartezeit, Fremdlast und der
-Deadlock beim Fensterabbau. Vier Sitzungen × 30 Minuten sind zwei Stunden
-Warten; vier × 5 sind zwanzig Minuten — **das** ist die Zahl, die zählt, nicht
-die Laufzeit eines einzelnen Laufs.
+überflüssiger.** Es auf die Leistungstests zu schrumpfen ist gemessen
+widerlegt, und zwar aus der Gegenrichtung: Mit `-n 8` lastet die Sammelgruppe
+die Maschine so aus, dass der **fremde** Lauf kippt — nicht wegen Parallelität
+oder Reihenfolge, sondern wegen **Speicher**: Acht Prozesse, die je eine
+speicherhungrige Geometrie rechnen, sind etwas anderes als einer. Parallelität
+macht Speicherhunger sichtbar — als Korrektheitsfehler. Vorher belegte ein
+serieller Torlauf einen Kern und störte niemanden. Also: **Je paralleler das
+Tor, desto strenger das Schloss.** Der Gewinn kommt trotzdem, nur an anderer
+Stelle: nicht dadurch, dass das Schloss fällt, sondern dadurch, dass das, was
+es umschließt, kleiner wird (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Eine feste Zahl statt `-n auto`.** Auf 32 logischen Kernen startet xdist 32
 Worker und stirbt beim Verteilen (`INTERNALERROR KeyError <WorkerController
@@ -556,57 +420,33 @@ Begründung wie bei `.performance.json`.
 **Zweimal fahren und die Mengen vergleichen, nicht die Zahlen.** Ein Test, der
 von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er wird
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
-einer. Beim ersten Einsatz dieses Verfahrens fielen die elf oben auf.
-
-
+einer.
 
 ### Wer das Schloss belegt sieht, schreibt nicht
 
 Das Schloss schützt den Halter vor **Rechenlast**. Es schützt ihn nicht vor
 **dir**. Wer bei belegtem Schloss eine Datei ändert, verfälscht nicht den
-eigenen Lauf — der kommt ja erst noch —, sondern den fremden, der gerade läuft.
+eigenen Lauf — der kommt ja erst noch —, sondern den fremden, der gerade läuft:
+ein neuer `tr()`-Text, den die laufende fremde Suite ohne Katalog sieht, oder
+eine Zeile in `suite-getrennt.sh`, die Bash in den laufenden Lauf nachliest
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Der zweite Fall ist behoben — das Skript kopiert sich beim
+Start. Der erste nicht: Eine Datei, die der laufende Test importiert, lässt
+sich nicht wegkopieren. Dafür bleibt nur die Regel. `gate_lock.py status` sagt
+in einer Sekunde, ob jemand fährt.
 
-Zweimal in einer Nacht, beide Male mit einer „kleinen" Änderung:
-
-* Eine Sitzung schrieb `tr("Außengewinde")` in `digest.py`, während ein fremdes
-  Tor lief. Dessen Suite sah den Text und die Kataloge noch nicht: fünf rote
-  Übersetzungstests, eine halbe Stunde Suche in einer Sache, die zwei Minuten
-  später von selbst geschlossen war.
-* Eine andere ergänzte `suite-getrennt.sh` um eine verabredete Zeile, während
-  ein fremdes Tor **darauf** lief. Bash liest ein Skript zeilenweise nach: Der
-  Lauf starb mit einem Syntaxfehler in einer Zeile, die es nie gegeben hat.
-
-Der zweite Fall ist behoben — das Skript kopiert sich beim Start. Der erste
-nicht: Eine Datei, die der laufende Test importiert, lässt sich nicht
-wegkopieren. Dafür bleibt nur die Regel. `gate_lock.py status` sagt in einer
-Sekunde, ob jemand fährt.
-
-**Und zwar vor jeder Schreiboperation, nicht vor jeder Arbeitseinheit.** Der
-dritte Fall derselben Nacht entstand nicht aus Nichtwissen: Die Sitzung hatte
-vor dem *vorletzten* Schreiben nachgesehen — das Tor war frei — und danach in
-einem Zug weitergearbeitet. Die Prüfung hatte stattgefunden und galt als
-erledigt, während das Schloss in der Zwischenzeit den Halter wechselte. Wer
-schreibt, sieht **jedes Mal** nach; die Sekunde kostet weniger als ein fremder
-Torlauf.
+**Und zwar vor jeder Schreiboperation, nicht vor jeder Arbeitseinheit.** Das
+Schloss kann zwischen zwei Schreibvorgängen den Halter wechseln. Wer schreibt,
+sieht **jedes Mal** nach; die Sekunde kostet weniger als ein fremder Torlauf.
 
 ### Der fremden Messung glaubt man so wenig wie der eigenen
 
 Eine Zahl, die eine Sitzung weiterreicht, wird auf dem Weg **fester**, nicht
 lockerer: Jede Weitergabe streift eine Unsicherheit ab, bis am Ende eine Zahl
-steht, die niemand mehr hinterfragt. In derselben Nacht ist eine ungeprüfte
-Zahl über drei Sitzungen gewandert und in einer Meldung gelandet, die sie als
-Ergebnis führte — bis der Urheber selbst zurückzog.
-
-Und der häufigste Grund für eine falsche Zahl ist immer derselbe:
-
-**Eine Mustersuche misst, was das Muster kennt — und schweigt über den Rest,
-ohne es zu sagen.** Dreimal an einem Morgen, in beide Richtungen:
-
-| Suche | Fehler | Folge |
-|---|---|---|
-| `grep -o "le plaque"` | ohne Wortgrenze | zählte `seule plaque` mit — Befund war Rauschen |
-| `re.search(r"\ble plaque\b")` | ein Muster, ein Fall | fand `un même plaque` nicht — „null Fehler" war blind |
-| `"pytest" in CommandLine` | zu weit | zählte wartende `gate_lock`-Hüllen als laufende Tests |
+steht, die niemand mehr hinterfragt. Und der häufigste Grund für eine falsche
+Zahl ist immer derselbe: **Eine Mustersuche misst, was das Muster kennt — und
+schweigt über den Rest, ohne es zu sagen** — ohne Wortgrenze zu viel, mit einem
+Muster für einen Fall zu wenig, mit `"pytest" in CommandLine` wartende
+`gate_lock`-Hüllen als laufende Tests (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Wer eine Zahl weitergibt, gibt deshalb das **Muster** mit, nicht nur das
 Ergebnis. Und wer eine bekommt, prüft sie an einem Fall, von dem er weiß, wie
@@ -616,15 +456,8 @@ er ausgehen muss — bevor er auf ihr aufbaut.
 
 „Zweimal fahren" ist keine Zahl, sondern eine Faustregel — und wie viele Läufe
 eine Aussage wirklich braucht, hängt daran, **wie oft die Sache ohne jede
-Änderung schon schiefgeht**. Diese Basisraten sind am 22./23.08.2026 gemessen
-worden, alle unter dem Schloss:
-
-| Datei / Lage | ohne Änderung | Bemerkung |
-|---|---|---|
-| `test_pose_session.py`, ruhig | **1/10** | die Rate, gegen die ein Fix sich beweisen muss |
-| `test_pose_session.py` nach dem Ring-Umbau | **6/10** | eine Änderung, die die Rate hob |
-| `test_ui.py`, ruhig | **0/3** | |
-| `test_ui.py` unter Fremdlast | **5/5** | *immer* — hier misst kein Lauf mehr etwas |
+Änderung schon schiefgeht**. Gemessene Basisraten reichen von 1/10 in ruhiger
+Lage bis 5/5 unter Fremdlast (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Daraus folgen drei Dinge, und das dritte kostet am meisten Zeit, wenn man es
 vergisst:
@@ -636,10 +469,9 @@ vergisst:
 * **Bei 5/5 ist gar nichts messbar.** Eine Änderung kann die Rate nicht mehr
   erhöhen, also entlastet ein „gleich schlecht" sie nicht. Solche Läufe zählen
   nicht als Messung, auch wenn sie Zahlen liefern.
-* **Die Messlatte gehört vor die Messung.** Am 23.08. lautete sie „0 oder 1 von
-  5 wirkt, 2 oder mehr nicht", festgelegt bevor irgendjemand ein Ergebnis
-  kannte. Es wurden fünf, und die Entscheidung war damit schon getroffen. Wer
-  die Grenze hinterher zieht, findet immer eine, die zum Ergebnis passt.
+* **Die Messlatte gehört vor die Messung.** Sie wird festgelegt, bevor
+  irgendjemand ein Ergebnis kennt. Wer die Grenze hinterher zieht, findet immer
+  eine, die zum Ergebnis passt.
 
 **Und ein Prozess, den keiner von uns startet, läuft immer mit:** ComfyUI liegt
 mit rund einem Gigabyte und wachsender Rechenzeit im Hintergrund. Wer die Last
@@ -668,7 +500,7 @@ auf ein Ereignis, das nicht kommt.
 Ein Werkzeug, das man an einen fremden Prozess hängt, ist so wenig Bestandteil
 des Produkts wie `git` oder ein Debugger. In `constraints.txt` hätte es die
 Lizenzprüfung und den nächsten Klon berührt, ohne dass die Anwendung es je
-importiert. Entschieden am 22.08.2026.
+importiert.
 
 **Die Prozessnummer findet man nicht über die Elternkette.** Auf Windows setzt
 niemand die Elternnummer um, wenn der Elternprozess endet — der `pytest` unter
@@ -682,7 +514,7 @@ Get-CimInstance Win32_Process -Filter "Name like '%python%'" |
 
 Dasselbe tut `tools/gate_lock.py` in `_test_processes()`, und aus demselben
 Grund. Wer nur die direkten Kinder des Schlosshalters zählt, findet den
-stehenden Lauf nicht — an einem Abend zweimal passiert.
+stehenden Lauf nicht.
 
 ## Wer mit privatem Index committet, zieht den Haupt-Index nach
 
@@ -692,8 +524,8 @@ Testdatei gar nicht. Es steht jetzt in `.claude/skills/liefern/SKILL.md`.
 
 ## Was habe ich gerade gemessen?
 
-Am 22.08.2026 haben vier Sitzungen an einem Abend **sieben** Messfehler
-gemacht, und alle sieben hatten dieselbe Form:
+Vier Sitzungen haben an einem Abend **sieben** Messfehler gemacht, und alle
+sieben hatten dieselbe Form:
 
 | Werkzeug | maß | gemeint war |
 |---|---|---|
@@ -718,8 +550,8 @@ gemessen, und ist das dasselbe wie das, was ich wissen wollte?**
 
 ### Und in welche Richtung habe ich mich geirrt?
 
-Am 24.08.2026 kamen drei weitere dazu, aus drei Sitzungen, und sie zeigen die
-Asymmetrie, die in der Tabelle oben noch nicht steht:
+Drei weitere aus drei Sitzungen zeigen die Asymmetrie, die in der Tabelle oben
+noch nicht steht:
 
 | Werkzeug | maß | gemeint war |
 |---|---|---|
@@ -736,15 +568,12 @@ Daraus folgt eine Zusicherung, die in jedes selbstgebaute Prüfwerkzeug gehört:
 **Zähle zuerst, wie viel du überhaupt gefunden hast, und lass den Lauf
 scheitern, wenn es zu wenig ist.** `tests/test_plan_references.py` macht es so
 (`assert len(sections) > 100`), `tests/test_translations.py` ebenfalls
-(`assert gb_texte`), und `suite-getrennt.sh` seit dem 24.08. auch — die Zeile
+(`assert gb_texte`), und `suite-getrennt.sh` auch — die Zeile
 „Sammelgruppe: 3554 passed" ist genau diese Zusicherung, nur für das Tor.
 
 Die zweite Hälfte kostet noch weniger: **Gib dem Werkzeug einen Fall, dessen
 Ausgang du kennst.** Ein Prüfer für Doppelungen, der den bekannten Fall nicht
-findet, ist kaputt; einer, der ihn findet, hat seine erste Zusicherung. Der
-Duplikat-Sucher vom 24.08. fand `size_for_thread` — den Fall, den eine andere
-Sitzung eine Stunde vorher gemeldet hatte — und war damit brauchbar, bevor er
-etwas Neues meldete.
+findet, ist kaputt; einer, der ihn findet, hat seine erste Zusicherung (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 ## Ein eingechecktes Artefakt überlebt seinen Erzeuger
 
@@ -754,14 +583,8 @@ wenn `tools/make_examples.py` aufhört zu laufen — die Dateien sind ja da.
 
 **Und es fährt sie fast nie jemand.** Das Werkzeug läuft im Paketier-Job, und
 der startet nur bei einem Tag. Zwischen zwei Veröffentlichungen ist es also
-ungeprüft, während alles, was es aufruft, sich weiterbewegt.
-
-Am 27.08.2026 lagen genau fünf Stunden dazwischen: Um 06:59 bekam
-`blend_union` ein `keeps_inputs` — richtig und nötig, sonst zeigt `hole_1`
-nach dem Vereinigen auf ein anderes Loch. Um 11:50 brach der Paketbau von
-0.2.1 auf allen vier Plattformen ab, weil `way_four` seither auf `obj_3`
-verwies und die Kennung nicht mehr entstand. Dazwischen war jeder Lauf grün,
-und die eingecheckten `.p3d` stammten noch aus der Zeit davor.
+ungeprüft, während alles, was es aufruft, sich weiterbewegt — bis ein Paketbau
+an einer Änderung abbricht, hinter der jeder Lauf grün war (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Die Frage dazu ist eine eigene, weil keine andere in dieser Datei sie stellt:
 
@@ -779,20 +602,8 @@ Handbuchseiten, Lizenzmanifest, Vorschaubilder.
 ## Prüft dieser Test eine Zusage — oder den Ist-Zustand?
 
 Ein Test kann einen Fehler **festschreiben**. Er ist dann grün, solange der
-Fehler da ist, und wird rot, sobald jemand ihn behebt.
-
-Am 23.08.2026 stand in `tests/test_operation_ui.py`:
-
-```python
-assert values == {"at_feature": "hole_1"}
-```
-
-Das ist die vollständige Vorbelegung eines Dialogs — und sie sicherte damit zu,
-dass die **Größe nicht mitkommt.** Genau das war der Fehler, den dieselbe
-Sitzung am selben Tag gemeldet hatte: Eine 5,19-mm-Bohrung bekam M3
-vorgeschlagen, M3 bohrt 4,00 mm, der Schnitt trägt nichts ab. Als die Größe
-endlich mitkam, wurde der Test rot — **er hat die Verbesserung blockiert, statt
-sie zu tragen.**
+Fehler da ist, und wird rot, sobald jemand ihn behebt — **er hat die
+Verbesserung blockiert, statt sie zu tragen** (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Die Gegenprobe dagegen ist nicht die übliche („einmal ohne den Fix fahren“),
 sondern eine andere Frage:
@@ -824,19 +635,13 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
   die erste.
 * **Ein Wert herausgezogen, die Nachbarn geprüft aussehen lassen.** Ein Aufruf
   mit fünf Argumenten, eines davon in eine eigene Methode gehoben, damit ein
-  Test es fragen kann — und die anderen vier sehen danach mitgeprüft aus. Am
-  25.08.2026 hat das einen stillen Datenfehler gedeckt: `_save_as_part` reichte
-  Merkmale (geprüft, eigene Methode, eigener Test) und `op_ids` (ungeprüft, in
-  der Zeile) an denselben Aufruf. Die IDs waren `enumerate`-Plätze, `capture`
-  filtert nach `Operation.id`, und die zählt ab eins — **der letzte Schritt fiel
-  aus jedem Rezept**, ohne Fehler und ohne Meldung. Acht grüne Tests standen
-  daneben, einer davon zwei Zeilen über der falschen. Wer ein Argument
-  herauszieht, um es prüfbar zu machen, zählt die übrigen desselben Aufrufs —
-  die Extraktion prüft eines und tarnt den Rest.
+  Test es fragen kann — und die anderen vier sehen danach mitgeprüft aus
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Wer ein Argument herauszieht, um es prüfbar zu machen, zählt
+  die übrigen desselben Aufrufs — die Extraktion prüft eines und tarnt den
+  Rest.
 
-  Derselbe Aufruf trug im selben Commit einen zweiten stillen Fehler, und der
-  war von der anderen Sorte: `dialog.saved.connect(catalog.show_parts)` —
-  ein `Signal(str)` mit einem Namen darin an einem Slot, der einen Suchtext
+  Derselbe Aufruf trug einen zweiten stillen Fehler von der anderen Sorte: ein
+  `Signal(str)` mit einem Namen darin an einem Slot, der einen Suchtext
   erwartet. Qt verbindet alles, dessen Stelligkeit passt. Was dagegen hilft,
   steht in `.claude/memory/signal-passt-an-den-falschen-slot.md`; die zwei
   gehören zusammen gelesen, weil dieser Punkt sagt, wie man den Fehler beim
@@ -848,16 +653,13 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
   die Anwendung baut.
 * **An der Aussage vorbei.** `str(op_id) in tooltip` war grün, weil „2" auch in
   „2,40 mm" steht. Eine Teilzeichenkette, die zufällig vorkommt, ist keine
-  Prüfung — verglichen wird mit dem ganzen Satz. Am 30.08.2026 in seiner
-  peinlichsten Gestalt wieder da: `"2" in "1 von 2"`. Die Zusage galt dem
-  **Platz** in der Trefferliste, erfüllt hat sie die **Anzahl** daneben, und
-  beide Zahlen standen in derselben Zeile.
-* **Am erfundenen Beleg vorbei — und das ist der teuerste der Liste.** Der
-  Docstring begründete, warum die Suche auch die Erklärsätze durchsucht: „weil
-  *Elefantenfuß* dort steht und in keinem Titel". Das Wort kommt im ganzen
-  Bestand nicht vor. Der Test prüfte deshalb nur Titeltreffer, die Mutation
-  „Sätze nicht durchsuchen" blieb grün, und die Lücke war durch eine Begründung
-  gedeckt, die sich wie eine Messung las.
+  Prüfung — verglichen wird mit dem ganzen Satz. In seiner peinlichsten
+  Gestalt: `"2" in "1 von 2"` — die Zusage galt dem **Platz** in der
+  Trefferliste, erfüllt hat sie die **Anzahl** daneben.
+* **Am erfundenen Beleg vorbei — und das ist der teuerste der Liste.** Ein
+  Docstring begründete eine Zusage mit einem Wort, das im ganzen Bestand nicht
+  vorkommt; die Mutation blieb grün, und die Lücke war durch eine Begründung
+  gedeckt, die sich wie eine Messung las (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
   Der Unterschied zu den vier Punkten darüber: Die messen am falschen Ort,
   dieser **behauptet einen Ort, den es nicht gibt** — und ein Leser, der die
@@ -865,9 +667,7 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
   ([[benannte-falle-schuetzt-nicht]] ist derselbe Mechanismus, eine Ebene
   höher). Der Griff dagegen kostet zehn Sekunden: **Ein Beleg, der ein
   konkretes Wort, eine Zahl oder eine Datei nennt, wird gegen den Bestand
-  gegriffen, bevor er in einen Docstring kommt** — hier hätte
-  `search_hits("Elefantenfuß") == []` gereicht. Gemessen sind es „Überhänge"
-  (drei Sätze, kein Titel), und daran hängt die Zusage jetzt.
+  gegriffen, bevor er in einen Docstring kommt.**
 
 Und zweimal hat sie den *Fix* verworfen, nicht den Test: der Einzeiler traf die
 falsche von drei gleichen Codestellen, und ein Testfall löste den Fehler gar
@@ -890,9 +690,9 @@ Test bleibt grün und niemand erfährt, dass er aufgehört hat zu prüfen.
 
 ### Wann die Zusicherung nötig ist, und wann sie Zierat ist
 
-Am 23.08.2026 hat ein Registerpunkt vorgeschlagen, überall eine Zeile
-danebenzuschreiben. Angewandt auf 29 Kandidaten waren **14 echte Lücken** und
-15 nicht. Der Schnitt läuft entlang einer Frage:
+Ein Registerpunkt hat vorgeschlagen, überall eine Zeile danebenzuschreiben.
+Angewandt auf 29 Kandidaten waren **14 echte Lücken** und 15 nicht. Der Schnitt
+läuft entlang einer Frage:
 
 **Wird die Menge *erhoben* oder steht sie *da*?**
 
@@ -948,7 +748,7 @@ mutierbaren Fällen haben gegriffen — aber das ist kein Grund, sie zu lassen: 
 Probe hat an anderer Stelle schon fünf überzeugend aussehende Tests verworfen.
 Wer sie automatisiert, packt die Rückstellung in ein `finally`; ein Abbruch
 zwischen Mutation und Rückstellung lässt sonst eine verfälschte Datei liegen —
-am 23.08.2026 einmal passiert, aufgefallen nur, weil danach ein `grep` lief.
+einmal passiert, aufgefallen nur, weil danach ein `grep` lief.
 
 ### Was für die Gesamtmenge gilt, gilt nicht für jedes Element
 
@@ -983,47 +783,29 @@ gh api repos/<eigner>/<repo>/actions/jobs/<job-id>/logs
 Ohne führenden Schrägstrich vor `repos` — Git Bash schreibt einen mit `/`
 beginnenden Pfad sonst in einen Dateisystempfad um.
 
-**Die Grenze davon ist gemessen worden, und sie ist enger als sie zuerst
-aussah.** Der Satz „die API gibt auch laufende Jobs heraus" stimmt nicht:
+**Die Grenze davon ist gemessen worden:** Ein Job `in_progress` antwortet mit
+`BlobNotFound`, HTTP 404. Was die API hergibt, ist das Protokoll eines
+**fertigen** Jobs, während der **Lauf** noch läuft — und das genügt, weil ein
+Job, der rot geworden ist, fertig ist (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
-    Job in_progress   Exit 1   228 Bytes   BlobNotFound, HTTP 404
-    Job completed     Exit 0   57 480 Bytes
+**Und die Falle daneben, die dabei prompt zugeschnappt hat:** `gh api … |
+tail -6` meldet **Exit 0** über einer 404-Antwort — der Rückgabewert von
+`tail`. Dieselbe Pipe-Falle, die weiter oben in dieser Datei steht, an einem
+Werkzeug, das kein Testlauf ist. Sie gilt für jeden Befehl, dessen
+Rückgabewert man liest, nicht nur für `pytest`.
 
-Was sie hergibt, ist das Protokoll eines **fertigen** Jobs, während der **Lauf**
-noch läuft — und das genügt, weil ein Job, der rot geworden ist, fertig ist. Am
-23.08.2026 hat das eine Diagnose von „nach dem Lauf" auf „in einer Minute"
-verkürzt.
-
-**Und die Falle daneben, die dabei prompt zugeschnappt hat:** Der erste Versuch
-lief als `gh api … | tail -6` und meldete **Exit 0** über einer 404-Antwort —
-der Rückgabewert von `tail`. Dieselbe Pipe-Falle, die weiter oben in dieser
-Datei steht, an einem Werkzeug, das kein Testlauf ist. Sie gilt für jeden
-Befehl, dessen Rückgabewert man liest, nicht nur für `pytest`.
-
-Der Handgriff davor hat die Suche zusätzlich halbiert: Die neueste `ruff` in
-einer **eigenen** Umgebung gegen das Projekt zu fahren (nicht in der `.venv` —
-vor einem Paketbau wird dort nichts installiert) schloss die wahrscheinlichste
-Ursache aus, bevor das Protokoll überhaupt da war.
-
-Am 23.08.2026 hat das eine Diagnose von „nach dem Lauf" auf „in einer Minute"
-verkürzt. Und der Handgriff davor hat sie halbiert: Die neueste `ruff` in einer
+Der Handgriff davor halbiert die Suche: Die neueste `ruff` in einer
 **eigenen** Umgebung gegen das Projekt zu fahren (nicht in der `.venv` — vor
-einem Paketbau wird dort nichts installiert) schloss die wahrscheinlichste
-Ursache aus, bevor das Protokoll da war.
+einem Paketbau wird dort nichts installiert) schließt die wahrscheinlichste
+Ursache aus, bevor das Protokoll überhaupt da ist.
 
 ### Eine Automatik, die in Wahrheit Handarbeit ist, ist gefährlicher als keine
 
 `CLAUDE.md` sagt zu: „Jeder Commit geht sofort hinaus, `.githooks/post-commit`
-pusht ihn." Am 23.08.2026 zeigte sich, dass es diesen Hook im Arbeitsbaum **nicht
-gibt**:
-
-    .git/hooks/post-commit     existiert nicht
-    core.hooksPath             auf keiner Ebene gesetzt
-
-Ohne `core.hooksPath` sieht Git `.githooks/` nie an. Gemerkt hat es niemand,
-**weil das Ergebnis stimmte** — es hat immer jemand von Hand gepusht. Aufgefallen
-ist es erst, als zwei Commits vor einem CI-Start liegenblieben und die CI fast
-den Stand *vor* zwei Fehlerbehebungen gebaut hätte.
+pusht ihn." Im Arbeitsbaum gab es diesen Hook zeitweise **nicht** —
+`core.hooksPath` war nicht gesetzt, und ohne ihn sieht Git `.githooks/` nie an.
+Gemerkt hat es niemand, **weil das Ergebnis stimmte** — es hat immer jemand von
+Hand gepusht (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Daraus folgen zwei Dinge, und das zweite ist die eigentliche Regel:
 
@@ -1034,40 +816,33 @@ Daraus folgen zwei Dinge, und das zweite ist die eigentliche Regel:
   niemandem auffällt, ist keine. Also gehört zu ihr eine Zusicherung:
   `core.hooksPath` zeigt auf `.githooks`, und jede Datei darin ist ausführbar.
 
-### Die Isolation deckt Qt, Verzeichnisse und die Fremdprogramme ab — das Netz nicht
+### Die Isolation deckt Qt, Verzeichnisse, die Fremdprogramme und das Netz ab
 
 `conftest.py` hält die Maschine aus dem Ergebnis heraus: Offscreen-Qt,
-Nutzerverzeichnisse in einem Temp-Ordner, kein gefundenes Fremdprogramm. Am
-23.08.2026 stand in einem Absturzstapel von `test_ui.py`:
+Nutzerverzeichnisse in einem Temp-Ordner, kein gefundenes Fremdprogramm — und
+seit der Fixture `_the_network_stays_out_of_it` auch kein erreichbares Modell.
+Sie leert die Liste der Backends; `llm.available()` fragte sonst über
+`socket.create_connection`, ob eines antwortet, und ein Rechner mit laufendem
+Ollama misst damit etwas anderes als einer ohne; die CI hat gar keins —
+dieselbe Klasse wie ein installierter Slicer, nur eine Ebene weiter. Gefunden
+in einem Absturzstapel von `test_ui.py` (Vorfall: ROADMAP-ARCHIV.md,
+04.09.2026).
 
-    app/core/backends/llm.py:501    available
-    app/ui/first_run.py:445         _chat_text
-    app/ui/leash.py:173             run              (Arbeitsthread)
-    ... socket.py:853               create_connection
-
-**Ein Test öffnet eine echte Netzwerkverbindung.** `llm.available()` fragt über
-`socket.create_connection`, ob ein Backend erreichbar ist. Ein Rechner mit
-laufendem Ollama misst damit etwas anderes als einer ohne, und die CI hat gar
-keins — dieselbe Klasse wie ein installierter Slicer, nur eine Ebene weiter.
-
-Ob es die Ursache des Absturzes war, ist offen. Ein Isolationsloch ist es
-unabhängig davon.
+**Kein Test öffnet eine echte Netzwerkverbindung.** Wer eine Erreichbarkeit
+prüfen will, tut es wie `test_backends.py` an einer selbst gebauten Instanz
+gegen einen garantiert geschlossenen Port (`localhost:1`). Geleert wird die
+Liste der Backends, nicht die Prüfung selbst — sonst wird aus dem Test eine
+Attrappe, die nichts mehr misst.
 
 ### Ein Testdatensatz, in dem alles gleich heißt, prüft weniger als er aussieht
 
-Zweimal an einem Tag, beide Male an derselben Stelle und beide Male von der
-Gegenprobe gefangen:
+Zweimal an derselben Stelle, beide Male von der Gegenprobe gefangen:
+`website/version.json` nennt jedes Paket zweimal — als `"file"` und in der
+`"url"` —, und `updates.py` liest **beide**. Ein Test, der nur eines der Felder
+prüft, und ein Testdatensatz, der beide gleich füllt, blieben bei der Mutation
+grün (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 > **Zwei Felder mit gleichem Wert machen jeden Test grün, der nur eines liest.**
-
-* `website/version.json` nennt jedes Paket zweimal — als `"file"` und in der
-  `"url"`. `updates.py` liest **beide**: das eine, um zu laden, das andere, um
-  die geladene Datei zu benennen. Der erste Test prüfte nur `url`; die
-  Mutation traf `file`, und der Test blieb grün.
-* Dasselbe im Werkzeug daneben: `promised_files()` sammelt die Namen aus beiden
-  Feldern, und der Test dazu fütterte sie mit **demselben** Wert. Die
-  Gegenprobe „nur `url` auswerten" blieb grün, obwohl die Auswertung damit die
-  Hälfte verlor.
 
 Die Lösung ist nicht, die Gegenprobe zu verschärfen, sondern **den Datensatz zu
 entzerren**: `{"url": "…f=geladen.exe", "file": "benannt.exe"}`. Ein Test, der
@@ -1079,15 +854,10 @@ weil „2" auch in „2,40 mm" steht): Beide Male stimmt der Vergleich zufällig
 
 ### Lokal gegen lokal sagt nichts darüber, was oben liegt
 
-Am 23.08.2026 wurden beim Veröffentlichen von 0.1.3 die alten Pakete gelöscht,
-**bevor** die Seiten und `version.json` hochgeladen waren. Mehrere Minuten lang
-zeigte solidon3d.de in sechs Sprachen auf vier Dateien, die es nicht mehr gab,
-und die Update-Prüfung bot jedem Kunden eine Fassung an, deren Datei 404 gab.
-
-**Keine Prüfung hat es gemerkt, und alle waren grün** — 199 Tests, vier
-hochgeladene Pakete mit verglichenen Prüfsummen, eine `version.json`, die zur
-Anwendung passte. Lokal war durchgehend alles stimmig. Falsch war nur, was
-**oben** lag, und danach hatte niemand gefragt.
+Beim Veröffentlichen wurden einmal die alten Pakete gelöscht, **bevor** die
+Seiten und `version.json` hochgeladen waren. **Keine Prüfung hat es gemerkt,
+und alle waren grün.** Lokal war durchgehend alles stimmig. Falsch war nur, was
+**oben** lag, und danach hatte niemand gefragt (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Daraus folgen zwei Dinge:
 
@@ -1112,20 +882,9 @@ nicht, wann Läufe überhaupt das richtige Werkzeug sind.
 
 **Eine Rate sagt, dass etwas anders ist. Sie sagt nie, was.**
 
-Am 23.08.2026 stand eine Sitzung vor „2 von 4 sauber" — nach der eigenen,
-vorher festgelegten Latte also: keine Entscheidung, mehr Läufe. Statt zehn
-weitere zu fahren, hat sie zwei Minuten in die fremde Fixture gesehen und die
-Zeile gefunden:
-
-```python
-def release(self, timeout_ms: int = 2000) -> None:
-    self.wait_for_look(timeout_ms)  # der fachliche Standardwert ist 30_000
-```
-
-Eine Erhebung, für die eine halbe Minute vorgesehen ist, bekam zwei Sekunden.
-**Das erklärt auch die Zahl:** Der Thread braucht meistens weniger als zwei
-Sekunden, manchmal nicht — daher zwei von vier und nicht null von vier. Zehn
-Läufe hätten dieselbe Zahl schärfer gegeben und keine einzige Zeile genannt.
+Vor „2 von 4 sauber" hat ein Blick von zwei Minuten in die fremde Fixture die
+Zeile gefunden, die zehn weitere Läufe nur schärfer beziffert und nie genannt
+hätten (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Die Faustregel dazu:
 
@@ -1134,17 +893,10 @@ Die Faustregel dazu:
 
 ## Ein Signal, das jedes Mal kommt, lässt sich halbieren
 
-Der Abbau-Absturz galt als Eigenschaft ganzer Fensterdateien: 86 Sekunden für
-ein Ja/Nein, drei Ausgänge bei drei Läufen, und deshalb hat ihn niemand
-eingegrenzt. Er ist aber **deterministisch** — und damit war die Suche billig:
-
-    1, 5, 10, 20, 30, 40, 50 Tests    sauber
-    58 Tests                           Riss
-    51 Tests                           sauber
-    52 Tests                           Riss        <- die Grenze
-
-Der 52. Test riss **allein**, ohne Vorgeschichte, dreimal von dreimal, in einer
-Drittelsekunde. Dasselbe Verfahren fand in `test_chat_ui.py` zwei weitere.
+Der Abbau-Absturz galt als Eigenschaft ganzer Fensterdateien — 86 Sekunden für
+ein Ja/Nein, drei Ausgänge bei drei Läufen —, und deshalb hat ihn niemand
+eingegrenzt. Er ist aber **deterministisch**, und damit war die Suche billig:
+Halbieren über die Zahl der Tests fand den einen, der **allein** riss (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Drei Dinge, die das Verfahren tragen:
 
@@ -1168,36 +920,23 @@ drei weitere Klassen mit Arbeiter und ganz ohne Wartemethode.
 
 Die Fixture fragt seitdem nach dem Muster (`release`, dann alles, was
 `wait_for_` heißt) — das ist die richtige **Notlösung** und war nicht die
-Lösung. Die war ein einheitliches `release()` auf allen elf Klassen, dazu eine
+Lösung. Die war ein einheitliches `release()` auf jeder Klasse mit Arbeiter, dazu eine
 Prüfung, die per `ast` liest, wer eine `WorkerLeash` anlegt, und von jedem
 dasselbe Wort verlangt. Ein sechster Name kann seitdem nicht mehr entstehen.
 
 **Und der Umbau hat sofort einen Fehler freigelegt**, den fünf Namen verdeckt
-hatten: Eine der Klassen reichte ihre 2000-ms-Frist an eine Methode durch,
-deren fachlicher Standardwert 30 000 ist. Der Fehler war vorher da — er hatte
-nur keine Stelle, an der er auffallen konnte.
+hatten — er war vorher da und hatte nur keine Stelle, an der er auffallen
+konnte (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 ## Eine Zusicherung in beide Richtungen kann den Fehler festhalten
 
-`test_registry.py` prüfte, dass jedes Merkmalsfeld sich als solches
-deklariert — und zwar so:
-
-```python
-named    = {… if entry.name == "at_feature"}
-declared = {… if entry.kind == "feature"}
-assert named == declared
-```
-
-Der Zweck war richtig und stand im Docstring: §21.3 sucht Merkmalsverweise
-nach der **Art**, und achtzehn Operationen liefen an der Prüfung vorbei, bevor
-sie sich deklarierten. Getestet wurde davon aber nur die eine Richtung; die
-andere sagt etwas ganz anderes, nämlich **„kein Merkmalsfeld darf anders
-heißen"**.
-
-Genau daran ist die Behebung eines echten Fehlers hängengeblieben. *An Merkmal
-ausrichten* nennt ihr Feld `feature`, war deshalb für §21.3 unsichtbar, und
-`kind="feature"` zu setzen machte diesen Test rot. **Ein Test, der einen Fehler
-am Behobenwerden hindert, prüft die Gewohnheit und nicht die Zusage.**
+`test_registry.py` prüfte mit `assert named == declared`, dass jedes
+Merkmalsfeld sich als solches deklariert. Der Zweck war richtig: §21.3 sucht
+Merkmalsverweise nach der **Art**. Getestet wurde davon aber nur die eine
+Richtung; die andere sagt etwas ganz anderes, nämlich **„kein Merkmalsfeld
+darf anders heißen"** — und genau daran ist die Behebung eines echten Fehlers
+hängengeblieben (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). **Ein Test, der einen Fehler am Behobenwerden
+hindert, prüft die Gewohnheit und nicht die Zusage.**
 
 Die Frage, die das vorher gefunden hätte, ist nicht „ist die Zusicherung
 scharf genug", sondern:
@@ -1212,44 +951,31 @@ Zusagen in einer Zeile, und meist ist nur eine gewollt.
 eine Aufgabe — sie fing jemanden, der `kind="feature"` an ein Feld setzt, das
 gar kein Merkmal des Eingangsobjekts benennt. An ihre Stelle gehört eine
 Zusicherung über die *Sache*: Ein Merkmalsverweis wird gegen `inputs[0]`
-aufgelöst, also zeigt er ins Leere, wenn die Operation nichts verbraucht. Am
-Bestand gemessen (22 Operationen, keine ohne Eingang), beide Richtungen einmal
-mutiert und rot gesehen.
+aufgelöst, also zeigt er ins Leere, wenn die Operation nichts verbraucht.
 
 ## Ein Messwerkzeug, das den Absturz nicht überlebt, misst nichts
 
-Die Frage war, an welcher Zeile der Speicherbereiniger feuert, wenn
-`test_ui.py` reißt. Der erste Entwurf hängte sich an `gc.callbacks`, sammelte
-die Treffer in eine Liste und gab sie in `pytest_sessionfinish` aus.
-
-**Er hat null Zeilen geliefert** — der Lauf, um den es geht, stürzt ab, und ein
-abgestürzter Prozess erreicht kein Sitzungsende. Ein Werkzeug, das genau den
-Fall nicht überlebt, für den es gebaut ist, gibt nur dann eine Zahl aus, wenn
-sie niemanden interessiert.
-
-Die zweite Fassung schreibt zeilenweise in eine Datei
-(`open(pfad, "w", buffering=1)`), und damit stand die Antwort nach **einem**
-Lauf von neunzig Sekunden:
-
-    58 Sammelläufe insgesamt, 2 davon mit dem Hauptthread in wait_for_idle
-    #53  Auslöser haupt      Zeile 1522
-    #58  Auslöser ARBEITER   Zeile 1515   ARBEITER-LÄUFT   <- und hier starb er
+Ein Messwerkzeug, das sich an `gc.callbacks` hängt und seine Treffer erst in
+`pytest_sessionfinish` ausgibt, liefert **null Zeilen**, wenn der Lauf, um den
+es geht, abstürzt — ein abgestürzter Prozess erreicht kein Sitzungsende. Ein
+Werkzeug, das genau den Fall nicht überlebt, für den es gebaut ist, gibt nur
+dann eine Zahl aus, wenn sie niemanden interessiert. Zeilenweise in eine Datei
+geschrieben (`open(pfad, "w", buffering=1)`) stand die Antwort nach **einem**
+Lauf (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Der Umweg, der beinahe gegangen worden wäre: **sechzehn Läufe**, acht je Seite,
 abwechselnd mit und ohne einen vermuteten Fix — eine halbe Stunde für eine
-Wahrscheinlichkeitsaussage, wo eine direkte Messung die Ursache nennt. Bei
-einer Rissrate von 80 % (fünf Sitzungen auf der Maschine) hätte die Statistik
-ohnehin nichts getrennt.
+Wahrscheinlichkeitsaussage, wo eine direkte Messung die Ursache nennt.
 
 **Die Frage davor lohnt sich also:** Will ich wissen, *ob* etwas hilft, oder
 *warum* es passiert? Das zweite ist oft billiger zu messen und immer mehr wert.
 
 ## Nach einer Änderung an `app/` oder `tools/`: zwei Läufe von je drei Sekunden
 
-Viermal an einem Tag ist ein deutscher Bezeichner ins Tor gekommen, dreimal in
-Code, der gerade repariert wurde, einmal in eigenem. Die Ursache war jedes Mal
-dieselbe und jedes Mal vernünftig: Gefahren wurden die Tests des *Gebiets*, in
-dem die Änderung lag — nicht die, die *jede* Datei prüfen.
+Viermal an einem Tag ist ein deutscher Bezeichner ins Tor gekommen, und die
+Ursache war jedes Mal dieselbe und jedes Mal vernünftig: Gefahren wurden die
+Tests des *Gebiets*, in dem die Änderung lag — nicht die, die *jede* Datei
+prüfen.
 
 ```
 .venv\Scripts\python.exe -m pytest tests/test_language_rules.py -q   # ~3 s, 745 Fälle
@@ -1324,9 +1050,8 @@ Zwei Handgriffe dagegen, beide billig:
 
 ### Die Abfrage muss den Befehl noch ändern können
 
-Die Regel „wer das Schloss belegt sieht, schreibt nicht" ist am 23.08.2026
-zweimal erfüllt worden und hat trotzdem nichts verhindert — einmal bei 3a,
-einmal bei mir. Beide Male so:
+Die Regel „wer das Schloss belegt sieht, schreibt nicht" ist zweimal erfüllt
+worden und hat trotzdem nichts verhindert. Beide Male so:
 
 ```bash
 gate_lock.py status && python - <<'PY'   # der Editor hängt schon dran
@@ -1344,9 +1069,7 @@ Notiz. Praktisch heißt das: **Ein Aufruf fragt, ein zweiter schreibt** — und
 zwischen beiden liest jemand das Ergebnis. Das kostet einen Tastendruck und ist
 der einzige Unterschied zwischen einer Zusicherung und einer Verzierung.
 
-Dieselbe Form hat 64s Fehler am selben Tag, nur ohne Schloss: Sie maß, ob
-Katalog und Quelltext zusammenpassen, bekam „0 fehlen, 0 tot" — und derselbe
-Test war im selben Baum rot. Die Messung lief **nach** dem Testlauf, und
-dazwischen hatte jemand geschrieben. **In einem Baum, in dem vier Sitzungen
-schreiben, misst man nicht den Baum, sondern einen Zeitpunkt** — und der steht
-nicht im Ergebnis.
+Dieselbe Form gibt es ohne Schloss: Eine Messung, die **nach** dem Testlauf
+läuft, während dazwischen jemand geschrieben hat, misst einen anderen Baum.
+**In einem Baum, in dem vier Sitzungen schreiben, misst man nicht den Baum,
+sondern einen Zeitpunkt** — und der steht nicht im Ergebnis (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).

@@ -27,14 +27,11 @@ sein eigener Name ist — M4, 6x3, mm, x, DejaVu Sans.
 
 **Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die
 Druckeinstellungen führen ihre sechsundfünfzig Felder in einer eigenen Liste
-(`print_settings_dialog.FIELDS`), und dort stand auch eine zweite
-Namenstabelle mit einer gleichnamigen `choice_label`-Funktion davor — die eine
-verdeckte die andere. Beide beschrifteten dieselben Schlüssel und waren schon
-auseinandergelaufen: `cubic` hieß hier „Würfelgitter" und dort „Würfel", `none`
-hier „Ohne" und dort „Keine". Zwei Werte hatte keine von beiden, und im
-deutschen Fenster stand „Wandbahnen: classic" und „arachne". Der Test prüft
-deshalb **beide Feldquellen** gegen die eine Tabelle; wer eine dritte Liste von
-Auswahlwerten anlegt, hängt sie dort ein.
+(`print_settings_dialog.FIELDS`) — eine zweite Namenstabelle davor verdeckt
+die erste und läuft auseinander. Der Test prüft deshalb **beide Feldquellen**
+gegen die eine Tabelle; wer eine dritte Liste von Auswahlwerten anlegt, hängt
+sie dort ein.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 Wo der englische Begriff der ist, unter dem der Kunde die Sache in seinem
 Slicer wiederfindet, bleibt er stehen: `skirt`, `brim` und `raft` heißen so,
@@ -45,19 +42,19 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
 597 Parameter der 100 Operationen ihren `doc`-Satz aus dem Register. Beide Male
-hängt er an **beiden** Hälften der Zeile; im Operationsdialog holt
-`QFormLayout.labelForField` die Beschriftung, die `addRow` aus der Zeichenkette
-gebaut hat (`_explain` in `op_dialog.py`). Ist eine Zeile gesperrt, tragen beide
+hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
+auf das unverständliche Wort und nicht auf den Kasten daneben. In den
+Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
+Beschriftung; im Operationsdialog holt `QFormLayout.labelForField` die
+Beschriftung, die `addRow` aus der Zeichenkette gebaut hat (`_explain` in
+`op_dialog.py`). Ist eine Zeile gesperrt, tragen beide
 Hälften den *Grund* statt des Satzes — in ein ausgegrautes Feld zeigt niemand,
 man zeigt auf das Wort davor.
 
-Die sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz: nicht den Titel noch
-einmal, sondern was passiert, wenn man den Wert bewegt („Rechnet die Außenwand
+Der `note`-Satz ist nicht der Titel noch einmal, sondern sagt, was passiert,
+wenn man den Wert bewegt („Rechnet die Außenwand
 auf ihr Sollmaß statt auf die Bahnmitte. Für Passungen richtig, sonst
-unnötig."). Der Satz gehört an **beide** Hälften der Zeile — `_editor` setzt
-ihn am Eingabefeld, `_label` an der Beschriftung, denn wer eine Zeile nicht
-versteht, zeigt auf das unverständliche Wort und nicht auf den Kasten daneben.
-Dazu `statusTip` und `accessibleDescription`: die Statuszeile zeigt ihn ohne
+unnötig."). Dazu `statusTip` und `accessibleDescription`: die Statuszeile zeigt ihn ohne
 Wartezeit, der Bildschirmleser liest ihn vor (Regel 18 — nicht nur eine
 Kodierung). Ein Widget, das seinen Tooltip selbst führt, behält ihn: Der
 Farbknopf nennt darin den Hexwert, den sonst nichts zeigt, und hängt den Satz
@@ -86,13 +83,9 @@ Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
 Stapelabzug im Nutzerdialog.
 
-**Ein Text, der eine Grenze beschreibt, altert mit der Grenze.** „Es wird
-nichts geladen und nichts ersetzt" stand am Kästchen in den Einstellungen, am
-Menüeintrag und im Docstring von `_check_for_updates` — richtig, solange der
-Update-Weg wirklich nur ein Link war, und mit `download()` und
-`start_installer()` still falsch geworden. Für diesen einen Satz waren es drei
-Stellen im Code, zweimal fünf Kataloge, eine Website-Seite und der
-Vertragstext.
+**Ein Text, der eine Grenze beschreibt, altert mit der Grenze.** Für einen
+einzigen solchen Satz waren es drei Stellen im Code, zweimal fünf Kataloge,
+eine Website-Seite und der Vertragstext.
 
 Wer eine Fähigkeit hinzufügt, sucht deshalb **vorher** die Sätze, die ihre
 Abwesenheit versprechen. Der Suchbegriff ist die Verneinung dessen, was man
@@ -101,8 +94,8 @@ den kennen die alten Texte ja gerade nicht.
 
 Und beim Tauschen eines Katalogtexts muss der **alte Schlüssel hinaus**:
 `test_every_text_is_translated` prüft beide Richtungen und meldet ihn sonst als
-„no longer used". Zwei gegenläufige Zusicherungen decken einander — genau das
-hat hier zweimal an einem Tag einen halben Umzug gefangen.
+„no longer used". Zwei gegenläufige Zusicherungen decken einander.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 ## Zahlen
 
@@ -110,13 +103,11 @@ hat hier zweimal an einem Tag einen halben Umzug gefangen.
 
 *Hinaus:* Der Kern rechnet und schreibt mit Punkt, das ist richtig; dort ist
 eine Zahl ein Wert. Wer sie **anzeigt**, schickt sie durch `localised`
-(`app/ui/labels.py`). Neun Stellen taten das nicht, und keine war auf eine
-Sprache beschränkt: Die Parameterleiste schrieb im deutschen Fenster
-„12.50 mm" neben ein Eingabefeld mit „12,50", der Chat „+1.25 cm³", die
-Kalibrierung „Spiel 0.25 mm". Zwei setzten umgekehrt das Komma fest ein und
-zeigten im englischen Fenster „8,4 g". `test_no_number_reaches_the_user_past_
-the_localisation` prüft jede Datei unter `app/ui`; wer eine Kommazahl in einen
-Anzeigetext schreibt, kommt daran nicht vorbei.
+(`app/ui/labels.py`) — und setzt umgekehrt auch kein Komma fest ein.
+`test_no_number_reaches_the_user_past_the_localisation` prüft jede Datei unter
+`app/ui`; wer eine Kommazahl in einen Anzeigetext schreibt, kommt daran nicht
+vorbei.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Zwei Prüfungen von zwei Seiten.** Die Regelprüfung liest den Quelltext und
 sieht f-Strings mit Formatangabe — nicht `"%.2f" %`, nicht `.format()`, nicht
@@ -140,10 +131,8 @@ der Wert selbst zwischen mm³ und cm³ wechselt.
 **Die Einheit gehört in den Wert, nicht in den Satz.** Länge, Volumen *und
 Fläche* folgen der Umschaltung aus §19.3 — `labels.length`, `labels.volume`,
 `labels.area`. Wer sie selbst anschreibt, baut eine Zeile, die in Zoll nicht
-sprechen kann: „Fläche an {object} — {area} mm², {side}" stand als
-*übersetzter* Satz im Katalog, mit der Einheit darin, und die Schichtanalyse
-schrieb `f"{layer.area:.0f} mm²"` neben ein `z {length(layer.z)}`, das
-umschaltet.
+sprechen kann — auch als *übersetzter* Satz im Katalog, mit der Einheit darin.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 *Herein:* Ein Zahlenfeld ist eine `NumberSpin` (oder eine `LengthSpin`
 darauf), **kein nacktes `QDoubleSpinBox`**. Qt liest den Punkt in einer
@@ -230,16 +219,9 @@ Hälfte derselben Regel, und sie ist die häufigere: `QDialog` macht beim
 **ersten `show()`** den ersten Knopf mit `autoDefault` zum Default, gleich wo
 er im Fenster sitzt. Er trägt damit die Akzentfarbe aus `QPushButton:default`
 — aber **nicht** die halbfette Schrift, die `make_primary` am Widget setzt.
-Übrig bleibt Bedeutung allein über Farbe, also Regel 18.
-
-Gemessen am 30.08.2026 über vierzehn Dialoge: **vier** trugen einen
-ausdrücklichen Hauptknopf, **neun** einen von Qt vergebenen. Drei davon saßen
-auf „Schließen" (Kürzelfenster, Über, Änderungen) — dort ist der Akzent eine
-Empfehlung, das Fenster zu verlassen. Der schlimmste Fall war der
-Zusatzprogramme-Dialog: Unter seinen vierzig Knöpfen traf es Nummer eins, das
-„Installieren" der **ersten Listenzeile**. Sechs Zeilen tragen denselben Text,
-eine stand hervorgehoben da, und was wie eine Empfehlung aussah, war die
-Reihenfolge im Layout.
+Übrig bleibt Bedeutung allein über Farbe, also Regel 18 — und was wie eine
+Empfehlung aussieht, ist die Reihenfolge im Layout.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 Zwei Dinge folgen daraus:
 
@@ -253,8 +235,8 @@ Zwei Dinge folgen daraus:
   sieht gar nichts, weil es niemand ruft. `tests/test_style.py` hält deshalb
   **beide** Richtungen — `test_every_default_button_of_the_surface_goes_
   through_make_primary` am Text und `test_no_window_wears_an_accent_it_never_
-  asked_for` am gebauten Fenster. Der zweite hat beim ersten Lauf sofort einen
-  zehnten Fall gefunden, den die Handmessung nicht bauen konnte.
+  asked_for` am gebauten Fenster.
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Und ein typloses Stylesheet am Vorfahren nimmt ihm seine Farben.** Eine
 Regel ohne Selektor — `setStyleSheet("background: #202225;")` an einer Karte,
@@ -262,19 +244,9 @@ einer Leiste, einem Rahmen — gilt für den Träger **und jeden Nachkommen** un
 **ersetzt** dort die Regeln des Anwendungs-Stylesheets, statt sie zu ergänzen.
 `QPushButton:default` greift dann nicht mehr, und weil diese Regel neben
 `font-weight` auch `background` und `color` trägt, steht der Hauptknopf mit
-Rahmen und **ohne lesbare Beschriftung** da.
-
-Gemessen an einem Hauptknopf in vier Lagen, jeweils die häufigste Farbe seiner
-Fläche im gerenderten Fenster:
-
-| Was ein Stylesheet trägt | Füllung | |
-|---|---|---|
-| nichts | `#f0a54a` | färbt |
-| die Eltern, typlos `background:` | `#202225` | färbt **nicht** |
-| die Großeltern, typlos `background:` | `#202225` | färbt **nicht** — es wirkt über Ebenen |
-| die Eltern, typlos `border:` | `#f0a54a` | färbt |
-| die Eltern, typlos `color:` | `#f0a54a` | färbt, nur die Schrift wechselt |
-| die Großeltern, `#nurIch { … }` | `#f0a54a` | färbt |
+Rahmen und **ohne lesbare Beschriftung** da. Es wirkt über Ebenen — auch aus
+dem Stylesheet der Großeltern.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Und nur für die Eigenschaften, die sie selbst setzt.** Das ist die Hälfte,
 ohne die man an fünf Stellen sucht, an denen nichts ist: Ein typloses
@@ -284,23 +256,21 @@ Anwendungs-Stylesheet eine eigene `border`-Regel trägt und die gewinnt.
 Gefährlich ist allein dieselbe Eigenschaft, die der Knopf braucht, und das ist
 `background`.
 
-**Und die Abhilfe steht in der letzten Zeile: Eine Regel mit Kennung trifft
-nur ihr Ziel.** Wer einem Träger ein Stylesheet gibt, schreibt es an dessen
-`objectName` und nicht typlos. Wo eine breite Regel bleiben muss, bekommt der
-Hauptknopf darin seine Farben ausdrücklich (`#surveyNotice #surveyGive` in
-`app/ui/survey.py`). `make_primary` bleibt in beiden Fällen — es rechnet die
-Breite gegen die halbfette Schrift.
+**Und die Abhilfe: Eine Regel mit Kennung trifft nur ihr Ziel.** Wer einem
+Träger ein Stylesheet gibt, schreibt es an dessen `objectName` und nicht
+typlos. Wo eine breite Regel bleiben muss, bekommt der Hauptknopf darin seine
+Farben ausdrücklich (`#surveyNotice #surveyGive` in `app/ui/survey.py`).
+`make_primary` bleibt in beiden Fällen — es rechnet die Breite gegen die
+halbfette Schrift.
 
 **Ein `QDialog` ist dabei nicht der Unterschied**, auch wenn es zuerst so
 aussah: Ohne Stylesheet färbt der Knopf in einem schlichten `QWidget` genauso
-wie im Dialog. Der falsche Schluss entstand an einem Vergleichsbild, in dem
-**beide** Knöpfe unter einem typlosen Stylesheet hingen — und ein
-Gegenbeispiel, das dieselbe Bedingung trägt wie der Fall, ist keines. Gefunden
-hat den Fehler die Nachbarsitzung, die ihn nicht reproduzieren konnte.
+wie im Dialog — und ein Gegenbeispiel, das dieselbe Bedingung trägt wie der
+Fall, ist keines.
 
-**Gefunden hat den leeren Knopf kein Test, sondern ein Blick auf das Bild.**
-Die zwei Klicktests auf ihm waren grün: Ein Knopf ohne sichtbare Beschriftung
-nimmt Klicks entgegen wie jeder andere.
+**Ein Knopf ohne sichtbare Beschriftung nimmt Klicks entgegen wie jeder
+andere** — ein grüner Klicktest sagt nichts über sein Bild.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Und er heißt nicht wie sein Werkzeug.** Der Umschalter der Werkzeugzeile
 nennt das Werkzeug, der Knopf darin seine Handlung — „Trennen" oben, „Jetzt
@@ -316,32 +286,24 @@ springt — dieselbe Bauart wie bei Knopf und Werkzeugknopf, und dort richtig.
 Qt leitet die Höhe des Aufklappmenüs aber aus dem **Innenrechteck** der
 Combobox ab (`SC_ComboBoxListBoxPopup` über den `QStyleSheetStyle`). Mit dem
 zweiten Rahmenpunkt verliert es zwei Punkte, kippt damit in den Rollbetrieb
-und verliert an dessen zwei Pfeilen weitere zehn. Gemessen, dunkles Thema:
-
-| Einträge | Platz | gebraucht |
-|---|---|---|
-| 2 | 36 px | 48 px |
-| 3 | 60 px | 72 px |
-| 5 | 108 px | 120 px |
-
-Zwölf Punkte sind ein halber Eintrag. Im Bohrdialog stand unter dem
-hervorgehobenen „Mündung" ein waagerecht durchgeschnittenes „Mitte" — und
-getroffen hat es **jede** Combobox mit Tastaturfokus, also jede, die man
-anklickt. Ohne Fokus rechnet Qt richtig; das ist der Grund, aus dem eine
-Messung ohne `setFocus` nichts findet.
+und verliert an dessen zwei Pfeilen weitere zehn. Zwölf Punkte sind ein halber
+Eintrag, und getroffen hat es **jede** Combobox mit Tastaturfokus, also jede,
+die man anklickt. Ohne Fokus rechnet Qt richtig; das ist der Grund, aus dem
+eine Messung ohne `setFocus` nichts findet.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 Drei Auswege sind gemessen und untauglich: `:on` (der Pseudozustand für das
 offene Menü) wird erst nach der Höhenrechnung gesetzt, `outline` zeichnet Qt
 an einer Combobox nur einen Punkt breit, und ein Rahmen, der in einen
 `margin` hineinwächst, vergrößert stattdessen das Feld. Es bleibt: **konstante
-Breite, wechselnde Farbe.**
+Breite, wechselnde Farbe und Strichart.**
 
-Der Ruherahmen ist deshalb zwei Punkte breit und nimmt eine gedämpfte
-Mischfarbe (`_blend(line, base, 0.55)` in `style.py`), damit er so leise
-bleibt wie der einpunktige vorher. Das kostet Regel 18 nichts: Ein Punkt
-Rahmenbreite ist keine wahrnehmbare zweite Kodierung — die Kachel des
-Startbildschirms hat das schon einmal gezeigt —, und der Abstand zwischen
-Ruhe und Fokus ist jetzt größer als zuvor.
+Der Ruherahmen ist deshalb zwei Punkte breit wie der Fokusrahmen, und der
+Fokus sagt es über **Farbe und Strichart**: Der Ring bleibt zwei Punkte breit,
+wechselt auf `accent_line` und wird gestrichelt (`style.py`). Nur die Farbe
+wechseln zu lassen, mit dem Argument, ein Punkt Rahmenbreite sei ohnehin keine
+wahrnehmbare Kodierung gewesen, trägt nicht: Regel 18 verlangt die zweite
+Kodierung, nicht den Nachweis, dass die alte auch keine war.
 
 `tests/test_style.py` hält beide Enden: eine Messung am gebauten Fenster
 (`test_an_open_combo_box_shows_every_entry_it_has`, samt Gegenprobe mit der
@@ -351,16 +313,15 @@ alten Regel, die fallen **muss**) und eine am Text der Regel
 **Und der Ruhezustand behält die volle Linienfarbe.** Der doppelt breite
 Rahmen legte es nahe, ihn zur Feldfläche hin zu dämpfen, damit er so leise
 wirkt wie der einfache vorher. Im Bild sah das richtig aus und war gemessen
-falsch: 3,33 auf 1,90 im dunklen Thema, 2,43 auf 1,57 im hellen — unter den
-3,0, die WCAG 1.4.11 für die Umrandung eines Bedienelements verlangt und die
-zwei Absätze weiter oben für den Fokusring zitiert werden.
+falsch — unter den 3,0, die WCAG 1.4.11 für die Umrandung eines Bedienelements
+verlangt — dieselbe Grenze, an der `style.py` auch den Fokusring misst.
 
-Die Fläche fängt das nicht auf: Feld gegen Fenster sind 1,45 im dunklen und
-1,22 im hellen Thema. **Der Rahmen ist die einzige Kante, die ein Feld hat.**
-`test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die
+Die Fläche fängt das nicht auf: **Der Rahmen ist die einzige Kante, die ein
+Feld hat.** `test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die
 Linienfarbe des Themas und nicht gegen 3,0 — was diese Farbe leistet, ist eine
 Frage an das Thema (im hellen bringt sie seit je nur 2,43), dass der Rahmen sie
 nicht unterschreitet, eine an das Stylesheet.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 ## Gestufte Tiefe
 
@@ -455,7 +416,7 @@ Rechnung liegt im Kern, damit `menu_path` sie fragen kann; sie war einmal in
 `panels.py`, und deshalb nannten Handbuch, Agent und Tour einen Weg, den die
 Leiste anders baute.
 
-Zwei Folgen für die Oberfläche, beide gemessen am 27.08.2026:
+Drei Folgen für die Oberfläche:
 
 * **Eine Kategorie, die direkt im Menü steht, behält ihren Namen als
   Überschrift** (`addSection`, nicht `addSeparator`). Ein nackter Trennstrich
@@ -484,13 +445,10 @@ Bibliothek steht im Katalog mit Bild, weil ein räumliches Teil als Textzeile
 die schlechtere Darstellung ist (§2.6) — im Menü standen 29 davon in sechs
 Untermenüs, jede Zeile eine Vokabel statt einer Form.
 
-Die Frage hing bis zum 29.08.2026 an der Kategorie (`WITHOUT_MENU = {"parts"}`),
-und das ist die Sorte Näherung, die stimmt, bis sie nicht mehr stimmt: 27 der
-29 Operationen dieser Kategorie haben eine Kachel, `create_lid` und
-`screw_lid` nicht. Beide verschwanden damit aus der Menüleiste, ohne im
-Katalog aufzutauchen — gemessen 114 Menüeinträge, kein *Deckel erzeugen*
-darunter, und im Kontextmenü der Fläche ebenso wenig, also an genau dem Ort,
-den §18.5 dafür vorsieht.
+Die Frage an der Kategorie festzumachen ist die Sorte Näherung, die stimmt,
+bis sie nicht mehr stimmt: Nicht jede Operation der Kategorie hat eine Kachel,
+`create_lid` und `screw_lid` nicht.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 Zwei Sätze daraus, und der zweite ist der teurere:
 
@@ -534,14 +492,12 @@ und wer sie ändert, ändert eine der vier Zusagen mit.
   eine Ausnahme formuliert, prüft sie an ihren Rändern und nicht an ihrem
   Normalfall.
 
-**Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.** An jeder
-Fläche stand *Bohrung setzen* zweimal: `drill_hole` und `drill_brep_hole`
-tragen denselben Titel, und der Kunde traf seine Wahl blind — je nach Zeile
-bekam er einen anderen Rechenkern. Die Menüleiste legt das Paar seit je über
-`MENU_TWINS` zusammen; `panels.operations_for_feature` gab
-`REGISTRY.for_feature` ungefiltert weiter und kannte die Zusammenlegung nicht.
-**Dieselbe Frage, zwei Rechnungen** — genau der Grund, aus dem die Menütiefe in
-den Kern gewandert ist.
+**Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.** `drill_hole`
+und `drill_brep_hole` tragen denselben Titel; die Menüleiste legt das Paar über
+`MENU_TWINS` zusammen, und das Kontextmenü am Merkmal muss dieselbe
+Zusammenlegung kennen. **Dieselbe Frage, zwei Rechnungen** — genau der Grund,
+aus dem die Menütiefe in den Kern gewandert ist.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 Weggelassen wird ein Zwilling nur, wenn sein Partner tatsächlich mit angeboten
 wird; sonst wäre er spurlos weg statt zusammengelegt.
@@ -622,17 +578,17 @@ eine dritte Gelegenheit, auseinanderzulaufen.
 
 **Und ein Menü zeigt Hinweise nur, wenn man es ihm sagt.** `QMenu` steht mit
 `toolTipsVisible == False` auf der Welt: Der Satz, den `_add_operation` an die
-gesperrte Handlung schreibt, kommt an — und Qt zeigt ihn nie. Die Menüleiste
-setzt die Eigenschaft an ihren drei Stellen seit je; das Kontextmenü am Körper
-und das der Skizze taten es nicht, und damit war die ganze Kette umsonst.
+gesperrte Handlung schreibt, kommt an — und Qt zeigt ihn nie. Die Eigenschaft
+setzt jedes Menü, das gesperrte Handlungen trägt: die Menüleiste an ihren drei
+Stellen, das Kontextmenü am Körper und das der Skizze ebenso.
 **Untermenüs erben sie nicht** — und am ganzen Körper stehen die Operationen
 gerade dort drin, nach Kategorie gruppiert, weil siebenundfünfzig Zeilen kein
 Menü mehr sind.
 
-Der Test daneben prüfte den **Wert** von `toolTip()`, und der war immer
-richtig. Eine Zusage über einen Text ohne die Zusage, dass er erscheint, ist
-die Hälfte einer Prüfung — wer einen Grund an eine Handlung schreibt, prüft
+Eine Zusage über einen Text ohne die Zusage, dass er erscheint, ist die Hälfte
+einer Prüfung — wer einen Grund an eine Handlung schreibt, prüft
 `toolTipsVisible()` des Menüs mit, in dem sie steht.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Grau ohne Grund gibt es auch ohne `requires_kind`.** Im Kontextmenü der
 Skizze standen die zehn Bedingungen, die halbe Liste gesperrt, und keine sagte,
@@ -651,22 +607,19 @@ mit Eingang dazunimmt, nimmt diese Frage mit.
 — denselben Titel wie `create_box` und `drill_hole`. Den Unterschied nennt
 nicht der Titel, sondern der Haken im Dialog des Partners („Flächen und Kanten
 später bearbeiten", `_EXACT_TOGGLE` in `registry.py`); in der Palette steht
-der Zwilling nicht ein zweites Mal (`hidden_from_the_menu`). Zwei Stufen
-davor lagen falsch: „Exakt bohren" ließ `test_theme_and_palette` fallen, weil
-die Befehlspalette nach Titel sortiert und der Eintrag bei der Suche nach
-„bohren" *vor* „Bohrung setzen" landete; „Exakten Quader anlegen" mit dem
-Wort davor las sich wie eine Qualitätsstufe („das andere ist also ungenau?"),
-obwohl es den Rechenkern meint. Dahinter steht der Kunde: Er sucht das
-**Substantiv** („Bohrung"), und wer den Zwilling umformuliert, nimmt ihm eine
-der beiden Antworten aus der Liste.
+der Zwilling nicht ein zweites Mal (`hidden_from_the_menu`). Kein eigener
+Titel und kein Wort davor: Die Befehlspalette sortiert nach Titel, und „Exakt"
+vor dem Namen liest sich wie eine Qualitätsstufe, obwohl es den Rechenkern
+meint. Dahinter steht der Kunde: Er sucht das **Substantiv** („Bohrung"), und
+wer den Zwilling umformuliert, nimmt ihm eine der beiden Antworten aus der
+Liste.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**, nicht nur
 die Rechnung: `OperationDialog.switch_variant` blendet aus, was die gewählte
 Variante nicht kennt, und tauscht die Beschreibung. Die Werte beim Anwenden zu
-filtern genügt nicht — was stehen bleibt, verspricht eine Wirkung. Der
-Bezugspunkt des Netz-Quaders stand in derselben aufgeklappten Gruppe wie der
-Umschalter selbst, also genau dort, wo jeder vorbeikommt; auf „Ecke" gestellt
-kam ein mittiger Quader und kein Ton dazu.
+filtern genügt nicht — was stehen bleibt, verspricht eine Wirkung.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Ein Feld ohne Wirkung sagt es.** Eine Nummer kleiner als der Umschalter:
 *Fläche* in „Relief auflegen" gilt nur, solange *Auflegen* auf „Auf eine
@@ -677,12 +630,11 @@ verschwinden darf nur, was die gewählte Variante gar nicht kennt; wer eine
 Zeile vermisst, sucht sie.
 
 **Die Angabe steht am Parameter** (`ParamSpec.depends_on`), nicht in einer
-Tabelle der Oberfläche. Als Tabelle hatte sie einen Eintrag, während fünf
-Operationen bedingte Felder trugen — *Kopien in Reihe oder Kreis* allein sechs —
-und sie hatte damit ihre eigene Begründung widerlegt: Dieselbe Auskunft brauchen
-vier Oberflächen, und genau eine hatte sie. Der Dialog graut aus und begründet,
-das Handbuch schreibt die Bedingung in die Parametertabelle, der Agent bekommt
-sie in der Werkzeugbeschreibung, die Kommandozeile liest dasselbe `json_schema`.
+Tabelle der Oberfläche: Dieselbe Auskunft brauchen vier Oberflächen. Der Dialog
+graut aus und begründet, das Handbuch schreibt die Bedingung in die
+Parametertabelle, der Agent bekommt sie in der Werkzeugbeschreibung, die
+Kommandozeile liest dasselbe `json_schema`.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene Inhalte.**
 „Gilt bei Art = circular" hilft im Handbuch; der Agent kennt kein *Art*, er
@@ -709,29 +661,26 @@ Wer eine neue Abhängigkeit deklariert, prüft die **Art** des Umschalters mit:
 Ein Wahrheitswert an einem Aufklappmenü oder ein Auswahlwert an einem Haken wäre
 eine Bedingung, die nie zutrifft — und ein Feld, das immer grau bleibt.
 
-**Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat.** Der
-Skizzentext hat ihn seit je, die Stellung eines Skeletts bekam ihn spät:
-`kind="armature"` fiel auf ein Textfeld durch, und der kürzeste Weg zu einem
-gebeugten Arm ging über getipptes JSON. `ArmatureField` baut je Knochen eine
-Zeile mit drei Winkeln — sobald der Dialog ein Skelett hat (aus dem Editor
-oder aus dem Wert der Operation), sonst bleibt das Textfeld als Rückfall. Die
-Winkel sind `ValueField`, denn §13 gilt für einen Winkel wie für eine Länge.
-Im **Schema** bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`);
-im Dialog steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
+**Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat** —
+getipptes JSON ist keiner. `ArmatureField` baut je Knochen eine Zeile mit drei
+Winkeln — sobald der Dialog ein Skelett hat (aus dem Editor oder aus dem Wert
+der Operation), sonst bleibt das Textfeld als Rückfall. Die Winkel sind
+`ValueField`, denn §13 gilt für einen Winkel wie für eine Länge. Im **Schema**
+bleibt der Sammelparameter hinten (`tests/test_gesture_ops.py`); im Dialog
+steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
 wann eine Operation die falsche Wahl ist. Sechsundzwanzig von hundert
-Operationen tragen einen (gemessen am 29.08.2026; hier stand „zwölf", und die
-Zahl war mit dem Bestand nicht mitgewachsen — sie ist deshalb jetzt geprüft,
-siehe `tests/test_registry_consistency.py`). Gelesen hat ihn lange allein die
-Handbuchreferenz — nicht der Dialog, in dem
-gerade jemand die Operation anwendet, nicht der Tooltip am Menüeintrag, nicht
-die Werkzeugliste des Agenten. `caveat_line()` (`app/core/registry/surfaces.py`)
+Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
+ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
+allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)
 ist die eine Quelle und trägt das Wort davor: Ohne Vorwort liest sich die Grenze
 als Fortsetzung des `doc`-Satzes. Im Dialog ein **eigenes Label**, halbfett, mit
 dem Wort als zweiter Kodierung (Regel 18); im Tooltip unter dem Satz; beim
 Agenten in der Werkzeugbeschreibung. **Nicht in die Statuszeile** — die ist eine
 Zeile, und eine abgeschnittene Warnung ist schlimmer als keine.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Jede neue Funktion nennt ihren Hauptweg** (§2.2), bevor sie einen Platz
 bekommt:
@@ -775,16 +724,15 @@ Kontextmenü, sondern auch die Befehlspalette
 (`palette_entries(for_feature=...)`). Es ist eine Reihenfolge, keine Auswahl —
 eine Palette, die aussortiert, wäre eine Betriebsart mit anderem Namen.
 
-**Und sortiert wird nach dem Titel, überall mit `i18n.sort_key`.** Die
-Menüleiste tat es (`by_category`), Palette und Kontextmenü gaben die Ordnung
-von `Registry.all()` weiter — die der internen englischen Bezeichner. Gelesen
-hat man dort „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
-anordnen". Nicht `str` und nicht `casefold`: 23 der 85 Titel tragen einen
-Umlaut, und „Überhangfächer" landet nach Codepunkt hinter allem anderen. Nicht
-zu verwechseln mit `command_palette.fold`, der **Suchfaltung** — dort wird „ä"
-zu „ae", weil jemand „aushoehlen" tippt; beim Sortieren zählt „ä" wie „a"
-(DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" steht. Zwei
-Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
+**Und sortiert wird nach dem Titel, überall mit `i18n.sort_key`** — in der
+Menüleiste (`by_category`), in der Palette und im Kontextmenü, nicht in der
+Ordnung von `Registry.all()`, die der internen englischen Bezeichner. Nicht
+`str` und nicht `casefold`: „Überhangfächer" landet nach Codepunkt hinter allem
+anderen. Nicht zu verwechseln mit `command_palette.fold`, der **Suchfaltung** —
+dort wird „ä" zu „ae", weil jemand „aushoehlen" tippt; beim Sortieren zählt „ä"
+wie „a" (DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" steht.
+Zwei Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 ## Wie die Karten ihre Höhe teilen
 
@@ -793,13 +741,11 @@ Drei Zusagen, und alle drei sind schon gebrochen worden:
 
 * **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden.** Eine
   Zuteilung, die ihr eigenes Ergebnis liest, bekommt beim nächsten Durchlauf
-  andere Zahlen und die Karte läuft auf und ab — bei einem einzigen Aufklappen
-  waren es 905 Geometriewechsel. Deshalb taugt `natural_height` **innerhalb**
-  der Zuteilung nicht: sie liest für ihre Rollbereiche die gelegten Höhen und
-  schwankte zwischen 389 und 1275 Pixeln. `extra_height` rechnet strukturell —
-  je Posten der Unterschied zwischen dem, was er als Ganzes wünscht, und dem,
-  was die Karten darin wünschen — und stand über Zuteilungen von 60 bis 900
-  Pixeln unverändert auf 217.
+  andere Zahlen und die Karte läuft auf und ab. Deshalb taugt `natural_height`
+  **innerhalb** der Zuteilung nicht: sie liest für ihre Rollbereiche die
+  gelegten Höhen. `extra_height` rechnet strukturell — je Posten der
+  Unterschied zwischen dem, was er als Ganzes wünscht, und dem, was die Karten
+  darin wünschen.
 * **Was nicht den Karten gehört, wird abgezogen.** Abschnittsköpfe,
   Parameterleiste, Layoutabstände. Ungekürzt verteilt die Zuteilung mehr Höhe,
   als die Zone hat: Der Objektbaum stand auf 500 Pixeln in einem Abschnitt von
@@ -807,70 +753,65 @@ Drei Zusagen, und alle drei sind schon gebrochen worden:
   eigenen Höhe ausging, meldete sein Rollbalken dazu nichts. Zehn Zeilen waren
   nicht abgeschnitten, sondern unerreichbar.
 * **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`), und verteilt wird
-  nur, was darüber liegt. Sonst ist die Zuteilung eine Bitte: Der leere Verlauf
-  meldete vier Pixel Bedarf, bekam anteilig drei und setzte 112 durch. Der Boden
-  hat zwei Quellen, und beide zählen — `fit_to_rows` mit seinen drei
-  Mindestzeilen und der leere Zustand, dessen Höhe aus dem umbrochenen Satz
-  kommt (`fit_wrapped`) und nicht aus der Zeilenrechnung. **Und nie höher als
-  der Wunsch**: Eine Karte, die überhaupt nur eine Zeile *hat*, forderte über
-  jene drei Mindestzeilen 130 Punkte für 128 gewünschte — Platz, den sie
-  niemandem zeigen kann, während die Nachbarn ihn brauchen.
+  nur, was darüber liegt. Sonst ist die Zuteilung eine Bitte. Der Boden hat
+  zwei Quellen, und beide zählen — `fit_to_rows` mit seinen drei Mindestzeilen
+  und der leere Zustand, dessen Höhe aus dem umbrochenen Satz kommt
+  (`fit_wrapped`) und nicht aus der Zeilenrechnung. **Und nie höher als der
+  Wunsch**: Eine Karte, die überhaupt nur eine Zeile *hat*, forderte über jene
+  drei Mindestzeilen 130 Punkte für 128 gewünschte — Platz, den sie niemandem
+  zeigen kann, während die Nachbarn ihn brauchen.
 
 `tests/test_overlay.py` hält alle drei: „settles on one answer",
 „moves a card once", „no card is pushed outside its section".
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **`fit_to_rows` rechnet mit *einer* Zeilenhöhe** — der ersten, mal der Zahl
 der Zeilen. Für einen Baum, in dem jede Zeile gleich aussieht, ist das
-richtig; für eine Liste mit fetten Zwischenüberschriften ist es zu wenig. Die
-Filamentkarte brauchte bei fünf Zeilen 172 Punkte und bekam 156, und die
-letzte Zeile fehlte auch dann, wenn die Spalte ihre volle Wunschhöhe hatte und
-ringsum Platz frei war. Wer eine Liste mit ungleichen Zeilen bemisst, nimmt
-`overlay.rows_height` — es misst jede Zeile einzeln, und `wanted_height` muss
-dieselbe Quelle nehmen wie das Setzen, sonst fordert die Karte etwas anderes,
-als sie einrichtet.
+richtig; für eine Liste mit fetten Zwischenüberschriften ist es zu wenig. Wer
+eine Liste mit ungleichen Zeilen bemisst, nimmt `overlay.rows_height` — es
+misst jede Zeile einzeln, und `wanted_height` muss dieselbe Quelle nehmen wie
+das Setzen, sonst fordert die Karte etwas anderes, als sie einrichtet.
 
 **Und was unter der Liste steht, gehört in beide Rechnungen.** Hinweis und
 Knöpfe einer Karte sind kein Beiwerk der Zone, sondern Teil der Karte: Wer der
-Liste die ganze Zuteilung gibt, schiebt sie unten heraus. Bei der
-Filamentkarte waren das *Filament anlegen …* und *Druckwerte …* — der einzige
-Weg zu einer neuen Spule, und er stand außerhalb des Fensters.
+Liste die ganze Zuteilung gibt, schiebt sie unten heraus — und mit ihnen den
+einzigen Weg, den die Karte anbietet.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 ## Barrierefreiheit
 
 - **Keine Bedeutung allein über Farbe** (Regel 18). Immer eine zweite
   Kodierung: Muster, Schraffur, Symbol, Beschriftung.
 - **Aber auch keine Bedeutung ohne Farbe, wo Farbe die Sache ist.** Ein
-  Materialslot ohne eigene Farbe bekam in der Ansicht die Körperfarbe — bei
-  zwei bemalten Slots zwei gleiche Einträge in derselben Tabelle, und das
-  Bemalen war im Bild folgenlos. `theme.slot_colour` gibt die Ersatzfarbe
-  (Okabe/Ito, sieben Einträge; Slot 0 ist das unbemalte Teil und bekommt
+  Materialslot ohne eigene Farbe darf in der Ansicht nicht die Körperfarbe
+  tragen — sonst ist das Bemalen im Bild folgenlos. `theme.slot_colour` gibt
+  die Ersatzfarbe (sieben Einträge; Slot 0 ist das unbemalte Teil und bekommt
   `None`); im **Dokument** steht sie nicht, denn keine Farbe zu haben ist ein
   Zustand, den „Slot zuweisen" auflöst. Die Zahl daneben bleibt: Die
   Pinselleiste zeigt Farbfeld **und** Name, „neu" für einen Slot, den der
   gewählte Körper noch nicht hat.
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 - **Dasselbe Problem bietet dieselben Handlungen**, gleich wer es meldet.
   „Nicht geschlossen" meldet der Kern beim Einlesen, beim Exportieren und nach
   jedem Zug des Agenten; zwei trugen ihre zwei Handlungen, der dritte nichts.
-  **Seit dem Filament-Konzept (26.08.2026) ist die Ersatzpalette eine
-  Grauleiter, keine Buntpalette mehr:** Okabe/Ito begann mit einem Orange,
-  das von der Auswahlfarbe nicht zu unterscheiden war (Kontrast 1,09) — die
-  allererste Bemalung sah aus wie eine Auswahl. Echte Farben kommen vom
-  Kunden (Farbwähler, Filamentkatalog); die Leiter zeigt nur den Zustand
-  davor, unbunt und je Stufe unterscheidbar
+  **Die Ersatzpalette ist eine Grauleiter, keine Buntpalette:** Eine bunte
+  Ersatzfarbe ist von der Auswahlfarbe nicht sicher zu unterscheiden. Echte
+  Farben kommen vom Kunden (Farbwähler, Filamentkatalog); die Leiter zeigt nur
+  den Zustand davor, unbunt und je Stufe unterscheidbar
   (`test_no_fallback_colour_can_be_mistaken_for_the_selection`).
   `FINDING_ACTIONS` (`app/ui/panels.py`) hält die Zuordnung, und
   `tests/test_value_labels.py` prüft die **Familie**: Befunde mit demselben
   Namen hinter dem Punkt melden dasselbe Problem, und trägt einer eine
   Handlung, müssen es alle.
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 - **Die Kennung entscheidet über die Handlung, also muss sie den Fall
   treffen.** „Passt nicht" und „liegt woanders" sind zwei Fälle, und die
   Trennlinie ist nicht, über welche Seite ein Körper hinaussteht, sondern ob er
-  überhaupt hineinpasst (`prepare._fits_at_all`). Gemessen am häufigsten
-  Importfall überhaupt: Eine 3MF aus Bambu Studio, Orca oder Elegoo führt
-  **Bettkoordinaten**, ihre Körper liegen also rechts neben dem Bett — 132 mm
-  breit auf einem 256er Bett. Angeboten wurden *Modell teilen*, *Auf den
-  Bauraum verkleinern* und *Anderen Drucker wählen*, dreimal, gleich beim
-  Öffnen. Was hilft, ist *Auf dem Bett anordnen*.
+  überhaupt hineinpasst (`prepare._fits_at_all`). Der häufigste Importfall
+  überhaupt: Eine 3MF aus Bambu Studio, Orca oder Elegoo führt
+  **Bettkoordinaten**, ihre Körper liegen also rechts neben dem Bett. Was
+  hilft, ist *Auf dem Bett anordnen*, nicht *Modell teilen*.
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 - **Und sie stehen sichtbar da, nicht im Rechtsklick.** Unter der Befundliste
   liegt eine Knopfzeile mit den Handlungen des gewählten Befunds (leer, solange
   es keine gibt). Gefragt wird über `actions_for(finding)` — dieselbe Quelle,
@@ -886,13 +827,11 @@ Weg zu einer neuen Spule, und er stand außerhalb des Fensters.
   Handlung, die eine Schrittkennung braucht, steht in `dialogs.NEEDS_OP` und
   wird ohne sie nicht angeboten.
 - **Ein Klick auf einen Befund bleibt nie folgenlos.** Er ist die Geste, die
-  §2.7 dem Prüfbericht ausdrücklich verspricht, und sie war leer: Gemessen am
-  30.08.2026 über alle 58 Befunde der Beispielprojekte löste **keiner** eine
-  sichtbare Reaktion aus. Zwei Ursachen — ein Operationsfehler trägt weder Ort
-  noch Merkmale (der Kern gibt ihm `object_id` und `op_id`), und der Ort eines
-  Kartenbefunds steht erst fest, wenn die Karte gerechnet ist, was beim ersten
-  Klick nie der Fall ist. Beim zweiten ging es, und damit sah es aus wie ein
-  Bedienfehler des Kunden.
+  §2.7 dem Prüfbericht ausdrücklich verspricht. Zwei Hürden — ein
+  Operationsfehler trägt weder Ort noch Merkmale (der Kern gibt ihm `object_id`
+  und `op_id`), und der Ort eines Kartenbefunds steht erst fest, wenn die Karte
+  gerechnet ist, was beim ersten Klick nie der Fall ist.
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
   Geantwortet wird gestuft, nach dem, was der Befund hergibt: **Ort** → die
   Kamera fliegt hin und eine vergängliche Marke steht dort (`mark_finding`,
@@ -929,7 +868,7 @@ Register. Ist der einfache Buchstabe belegt, kommt Umschalt dazu (*Vereinigen*
 Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist auch das belegt, **bleibt die
 Operation ohne Kürzel**. *Skalieren* ist der Fall: S gehört dem Speichern,
 Umschalt+S dem Speichern unter, und ein erfundener Buchstabe wäre schlechter als
-keiner. Vierzehn von sechsundachtzig führen eines; wer eine fünfzehnte Taste
+keiner. Vierzehn der hundert Operationen führen eines; wer eine fünfzehnte Taste
 vergibt, prüft vorher am **gebauten Fenster** gegen die dreiundvierzig, die
 nicht aus dem Register kommen — Ansichten, Werkzeugzeile, Dateibefehle,
 Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus
@@ -966,17 +905,15 @@ Umstellen, sondern das Lesen an ihm vorbei:
 * **`valueChanged` ist eine Lesestelle, die die Umrechnung überspringt.** Der
   Docstring von `LengthSpin` versprach, es gebe keine — „`value()` heißt hier
   nicht mehr, was der Kern will". Qts Signal trägt aber genau die Zahl aus dem
-  Feld, und dafür muss niemand `value()` schreiben. Sechs Stellen im Fenster
-  nahmen sie: Der Pinselradius kam als 0,1969 in der Szene an, wo 5 mm
-  eingestellt waren, und `stroke_at` schrieb damit **Geometrie ins Dokument**.
-  `valueChangedMm` ist dieselbe Nachricht in der Einheit des Kerns;
-  `valueChanged` bleibt für alles, was den Wert fallen lässt und selbst
-  `value_mm()` liest.
+  Feld, und dafür muss niemand `value()` schreiben — und was es weiterreicht,
+  kann bis in die **Geometrie des Dokuments** gelangen. `valueChangedMm` ist
+  dieselbe Nachricht in der Einheit des Kerns; `valueChanged` bleibt für alles,
+  was den Wert fallen lässt und selbst `value_mm()` liest.
 * **Ein Einheitenwechsel meldet nichts.** `refresh_unit` legte die neue Spanne,
-  während noch der Wert der alten stand — Qt klemmt ihn und feuert damit. Ein
-  Feld auf 10 mm gab seinem Empfänger 99,9998, bevor es 10,0 gab. In
+  während noch der Wert der alten stand — Qt klemmt ihn und feuert damit. In
   Millimetern ändert sich beim Wechsel nichts, also gibt es nichts zu melden:
   der Tausch läuft unter `blockSignals`.
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 * **Gelesen wird über die Leiste, nicht an ihr vorbei.** `SculptBar.values()`
   beantwortete die Frage des Zugs mit den richtigen Einheiten und hatte
   **keinen Aufrufer**, während das Fenster dieselben vier Werte aus den Widgets
@@ -1000,16 +937,14 @@ Oberflächentests laufen offscreen (`QT_QPA_PLATFORM=offscreen`, von
 `tests/conftest.py` gesetzt). Eine neue Ansicht ohne Test in `tests/test_ui.py`
 oder einer der spezielleren Dateien ist unfertig.
 
-**Ein modaler Dialog auf einem Startweg hält die ganze Suite an.** Am
-03.09.2026 kam ein Hinweis vor den Druckeinstellungs-Dialog — richtig gebaut,
-fehlerfrei, am falschen Ort: `QDialog.exec()` wartet offscreen auf einen Klick,
-den es nie gibt. Betroffen war jeder Test, der die Druckeinstellungen öffnet,
-und die CI bis zu ihrem Sechs-Stunden-Limit.
+**Ein modaler Dialog auf einem Startweg hält die ganze Suite an.**
+`QDialog.exec()` wartet offscreen auf einen Klick, den es nie gibt — und die CI
+bis zu ihrem Sechs-Stunden-Limit.
 
 Das Tückische ist nicht der Fehler, sondern seine Anzeige: **Die Suite wird
 nicht rot, sie steht.** Kein Name, kein Fehlschlag, nur ein Protokoll, das
-nicht mehr wächst — gefunden hat es eine Nachbarsitzung mit
-`py-spy dump --native`, und dort stand die Stelle wörtlich.
+nicht mehr wächst; `py-spy dump --native` nennt die Stelle wörtlich.
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 Wer einen Dialog auf einen Weg setzt, den ein Test geht, fragt vorher
 `QT_QPA_PLATFORM != "offscreen"` — dasselbe Muster wie

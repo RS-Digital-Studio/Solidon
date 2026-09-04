@@ -101,6 +101,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 | 2026-08-21 | [Zwei Tabellen für dieselbe Sache (21.08.2026)](#zwei-tabellen-für-dieselbe-sache-21082026) |
 | 2026-08-21 | [Der Kundendurchgang durch die vier Wege (21.08.2026)](#der-kundendurchgang-durch-die-vier-wege-21082026) |
 | 2026-08-21 | [Der Kundendurchgang auf der ruhigen Maschine (21.08.2026)](#der-kundendurchgang-auf-der-ruhigen-maschine-21082026) |
+| 2026-09-04 | [Aus den Regeldateien ausgelagert (04.09.2026)](#aus-den-regeldateien-ausgelagert-04092026) |
 
 ---
 
@@ -6940,3 +6941,1228 @@ acht Schritte an 52 Körpern in 87 Sekunden, an einem Vierteilesatz in 16.
       die neue Taschengeometrie nur im Test steht und nicht im Durchgang. Was
       fehlt, ist ein Modell mit einer breiten Naht; die 234er Basis des
       Bausatzes wäre eines.
+
+## Aus den Regeldateien ausgelagert (04.09.2026)
+
+Drei Regeldateien — `.claude/rules/tests.md`, `.claude/rules/ansicht.md` und
+`.claude/rules/oberflaeche.md` — waren auf 61 000 bis 69 000 Zeichen gewachsen
+und lagen damit einzeln über der Schwelle, ab der Claude Code eine geladene
+Datei als zu groß meldet; wer `app/ui/viewport.py` anfasste, bekam zwei davon
+zusammen, rund 32 000 Tokens. `CLAUDE.md` sagt zur Unterlagen-Pyramide:
+Regeldateien tragen Regeln, Verbote und Stolperfallen, und „Datums-Marker,
+Phasenberichte und Verifikations-Stände gehören in keines von beiden". Diese
+Trennung ist am 04.09.2026 nachgezogen worden: Die Regel und ihre Begründung
+stehen weiter in der Regeldatei, der datierte Vorfall, die Messreihe und die
+Fundgeschichte stehen hier. Jede Stelle dort trägt den Verweis
+`(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)`.
+
+Unter 40 000 Zeichen kam dabei keine der drei. Was bleibt, ist Regel- und
+Begründungstext, und der wurde nicht gekürzt — das wäre eine andere
+Entscheidung als diese.
+
+Die Passagen stehen wörtlich und in der Reihenfolge der Quelldatei, jeweils
+unter der Überschrift des Abschnitts, aus dem sie stammen. Was im Präsens
+steht, beschreibt den Tag, an dem es geschrieben wurde.
+
+
+### `.claude/rules/tests.md`
+
+#### Isolation heißt Betriebslage, nicht Nullzustand
+
+**Der Fall, der hier als Beleg stand, war selbst der Fehler — und deshalb ist
+er der bessere Lehrsatz.** Er lautete: Die Parameterkarte messe ohne Stylesheet
+258 und mit 270, die linke Zone sei 260 breit, also passe sie auf keinem
+Fenster unter rund 2080 Pixeln. Auf dieser Messung wurde `LEFT_WIDTH` auf 272
+erhöht und ein Wächter geschrieben.
+
+Gemessen am 30.08.2026, dieselbe Karte, einziger Unterschied die Plattform:
+
+| Lauf | Schrift | Karte ohne / mit Stylesheet |
+|---|---|---|
+| `QT_QPA_PLATFORM=offscreen` | `QFontInfo.family()` ist **leer** | 258 / 270 |
+| echte Plattform | `Segoe UI` | **166 / 166** |
+
+**Offscreen hat gar keine Schrift.** Die Punktgröße ist negativ, und jede
+angeforderte Familie — `Segoe UI`, `DejaVu Sans`, `Sans Serif` — liefert
+dieselbe synthetische Metrik: derselbe Text 228 Punkte gegen 111. Beide Zahlen
+der Tabelle oben, 258 wie 270, stammen aus einer Schrift, die es nicht gibt.
+Die Karte hat nie gesprengt.
+
+Und die allgemeine Form, weil sie über Fixtures hinausgeht: **Ein Test, der nur
+in einer Lage grün ist, die es im Betrieb nicht gibt, ist keine Zusicherung,
+sondern eine Tarnung.** Das gilt in beide Richtungen — der Wächter, der auf der
+Phantomschrift stand, war rot in einer Lage, die es nicht gibt, und hat eine
+Änderung erzwungen, die niemand brauchte. Die Frage davor ist dieselbe wie überall in dieser
+Datei — was habe ich gerade gemessen, und ist das, was der Kunde hat?
+
+**Und die Gegenrichtung, damit daraus kein Kult wird: Die Betriebslage
+herzustellen trägt nur, wo die Messgröße selbst an ihr hängt.** Beide
+Richtungen sind am selben Tag gemessen worden, in derselben Datei:
+
+| Fall | Messgröße | Betriebslage herstellen? |
+|---|---|---|
+| Kartenbreite | hängt an der **Schrift**, und die fehlt offscreen | **gar nicht messen** — siehe oben |
+| Kürzelübersicht | „Home" ohne, „Pos1" mit Qt-Katalog | **nein** — siehe unten |
+
+Bei der Kürzelübersicht verglich der Test rohe Deklarationstexte (`VIEW_KEYS`)
+gegen Anzeigenamen aus `entries()`, und Qt übersetzt „Home" auf einer
+deutschen Oberfläche zu „Pos1". Der Fix ist, **über dieselbe Funktion zu
+vergleichen, die auch anzeigt** (`_native`) — und damit neutralisiert sich die
+Lage auf beiden Seiten: mit Katalog „Pos1" gegen „Pos1", ohne ihn „Home" gegen
+„Home".
+
+#### Und bei einer Farbe hängt es immer an ihr — die Suite fährt ohne Stylesheet
+
+Der Abschnitt oben liest sich als Frage an eine **Fixture**. Am 30.08.2026 ist
+dieselbe Frage vier Sitzungen an vier verschiedenen Stellen begegnet, und
+keine davon war eine Fixture-Frage: `apply_theme` und `apply_style` stehen in
+`app.py` und in **keiner** Fixture. Jeder Test, der eine Farbe, eine Breite
+oder eine Einrückung misst, misst deshalb Windows, solange er die Betriebslage
+nicht selbst herstellt.
+
+| Was gemessen wurde | ohne Thema und Stylesheet | in der Betriebslage |
+|---|---|---|
+| Symbol des aktiven Werkzeugs | `#000000` (Systemschrift) | `#e6e9ee` |
+| verglichen mit `palette().highlight()` | Systemakzent | die Farbe des Themas |
+| Texteinrückung im Menü | Qts eigene Abstände | die des Stylesheets |
+| `isDefault()` eines Dialogknopfs | überall `False` vor `show()` | neun von vierzehn wahr |
+
+Die Zeile mit dem Symbol ist die lehrreichste, weil der Test **grün** war: Er
+verglich eine Systemfarbe mit einer zweiten Systemfarbe, und ihr Verhältnis lag
+zufällig über der Schwelle, die er forderte. Zwei falsche Werte, deren
+Verhältnis stimmt, sind von zwei richtigen nicht zu unterscheiden — und ein
+Test, der so grün wird, wird es jahrelang.
+
+#### Marker
+
+Am 03.09.2026
+kostete das achtzehn rote Läufe und zwei Erzeugerläufe für eine Änderung, die
+mit dem Handbuch nichts zu tun hatte.
+
+#### Den Lauf messen, nicht einen Filter darüber
+
+Die Kommandosubstitution läuft mit, bevor die Zeile steht, und `$?` trägt
+danach ihren Status. Am 31.08.2026 meldete genau diese Zeile zweimal
+„Exit=0", während die Shell daneben `Segmentation fault` schrieb — und die
+Messreihe, die darauf aufbaute, war eine Stunde Arbeit für nichts.
+
+**Ein Hintergrundlauf meldet den Status seiner Hülle, nicht den des Programms
+darin.** Am 22.08.2026 dreimal an einem Abend, in drei Sitzungen: Die
+Abschlussmeldung sagte „completed (exit code 0)" — einmal über einem Lauf,
+der mit **139** abgebrochen war, einmal über `geteilt Exit=5`, einmal über
+`geteilt Exit=3`.
+
+**Und die Kehrseite davon, die genauso teuer ist: Ein `F` unmittelbar vor einem
+bekannten Riss sieht aus wie Teil des Risses.** Am 23.08.2026 stand im Torlauf
+vor dem Release
+
+    === tests/test_ui.py ===
+    ..............F.Windows fatal exception: access violation
+
+und wurde als ein einziges Ereignis gelesen — vierzehn Punkte, ein F, dann der
+bekannte Abriss. Gemeldet wurde „kein einziger echter Testfehler". Das `F` war
+eine Regression aus derselben Sitzung, die den Lauf fuhr; gefunden hat sie eine
+**zweite** Sitzung, die dieselbe Datei unabhängig gefahren hatte.
+
+#### Und die dritte Gestalt, die tückischste: die Tests *nach* dem Abriss
+
+Am 30.08.2026 endete ein Torlauf über `test_ui.py` am bekannten Abriss:
+
+    ........................................................................ [ 19%]
+    ........................................................................ [ 39%]
+    ..............Windows fatal exception: access violation
+
+Gezählt wurden 158 Fortschrittszeichen und **null `F`**, und daraus wurde
+„grün". Die Datei hat 372 Tests. **Acht davon waren rot**, und sie standen
+hinter der Abrissstelle — sie sind nie gelaufen. Sie lagen danach über zwei
+Stunden rot auf `main`, bis eine andere Sitzung einen Lauf schaffte, der
+durchkam.
+
+#### Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
+
+Am 22.08.2026 ist das belegt worden, weil zwei Sitzungen gleichzeitig am selben
+Projekt rechneten:
+
+| Lauf | Fremdlast | Ergebnis |
+|---|---|---|
+| A | 48 % | 5 failed, 14 passed |
+| B | 16 % | **19 passed, Exit 0** |
+
+Dieselbe Software, derselbe Tag, dieselbe Maschine. Alle fünf roten waren die
+Regressionsschwelle, kein absoluter Zielwert aus §31, und im ruhigen Lauf lagen
+alle Einzelzeiten darunter (Orientierungssuche 17,47 s, Subdivision 2,46 s,
+Blending 1,33 s, Skizzenlöser 0,21 s).
+
+#### Die Regel fängt Fremdlast — sie fängt keinen Wert, der um die Schwelle streut
+
+Am 26.08.2026 an `orient_200` durchgespielt, fünf Messungen aus zwei
+Sitzungen, alle einzeln und unter dem Schloss:
+
+| | ms | gegen die Schwelle |
+|---|---|---|
+| ce | 18 958 · 19 568 | darüber |
+| a2 | 19 442 · 19 804 | darüber |
+| ce, Torlauf | grün | darunter |
+
+Bestmarke 15 151 ms, Schwelle also 18 939 ms. Vier Überschreitungen in Folge —
+nach der Regel oben eine Regression —, und der fünfte Lauf setzte `strikes`
+zurück. **Der Wert liegt nicht über der Schwelle, er liegt auf ihr.**
+
+**Und zwei Läufe im selben Zeitfenster sind eine Messung.** Am selben Tag hat
+eine Sitzung `app_start` als Release-Blocker gemeldet (4154 und 4425 ms gegen
+3 s Ziel) — zwei Läufe kurz hintereinander, und ihre Übereinstimmung wurde für
+Bestätigung gehalten. Eine zweite Sitzung maß 2,46 und 2,57 s, ein späterer
+Solo-Lauf war grün. Was die Regel oben verlangt, ist nicht „zweimal", sondern
+**zweimal unter anderen Bedingungen**.
+
+#### Die Messreihe wurde gefahren, und sie entschied gegen die Bestmarke
+
+Am 30.08.2026 stand der Fall aus dem Abschnitt darüber in fünffacher
+Ausführung: Fünf Marken meldeten zwölf bis vierzehn Überschreitungen in Folge.
+Die Registerzeile machte den `deferred`-Umbau dafür verantwortlich.
+
+**Zwei Worktrees, beide mit geleerter Baseline, gleicher Kontext, freie
+Maschine** — der Stand vor dem Umbau gegen HEAD:
+
+| Marke | vor `deferred` | HEAD | Bestmarke | Budget |
+|---|---|---|---|---|
+| `sculpt_replay_1000` | 70 ms | 72 ms | 46 ms | 2000 ms |
+| `sculpt_apply_1000` | 97 ms | 100 ms | 64 ms | 2000 ms |
+| `subdivide_surface` | 1893 ms | 1863 ms | 1173 ms | 3000 ms |
+| `remesh_uniform` | 1565 ms | 1538 ms | 947 ms | 3000 ms |
+| `boolean_medium` | 854 ms | 834 ms | 451 ms | 20 000 ms |
+| `orient_200` | 18 682 ms | 18 774 ms | — | 20 000 ms |
+
+Unter drei Prozent Unterschied, bei vier von sechs ist der **neue** Stand der
+schnellere. Kein Code war langsamer geworden; die Bestmarken waren auf keinem
+der beiden Stände reproduzierbar. **Und kein einziges Budget war gerissen** —
+`sculpt_replay_1000` lag bei 3,5 Prozent seines Budgets. Rot war der
+Regressionszähler, und die Zusicherung dazu liest sich als `assert 13 < 2`, was
+wie eine Zeitangabe aussieht und keine ist.
+
+**Der Umbau hatte eine Delle, und sie zeigte sich erst im zweiten Lauf.** Der
+migrierte alte Bestwert ist selbst ein Ausreißer und zieht den Median nach
+unten, solange das Fenster halb leer ist:
+
+    Lauf 1   Marke 451 ms (nur der alte Bestwert)   gemessen 849 → Strike 1
+    Lauf 2   Marke 650 ms (451 und 849)             gemessen 838 → Strike 2, rot
+    Lauf 3   Marke 838 ms (451, 838, 849)           ab hier trägt sie
+
+Der erste Lauf nach dem Umbau war 26 von 26 grün und sah fertig aus. Deshalb
+`MIN_RUNS = 3`: **Zwei Läufe bewusst blind sind ehrlicher als zwei Läufe falsch
+rot.** Ab dem dritten Wert steht der Ausreißer außen und bestimmt den Median
+nicht mehr — genau die Eigenschaft, wegen der dort ein Median steht.
+
+#### Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
+
+Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
+Leistungstests. Am 22.08.2026 hat sich gezeigt, dass er zu eng gefasst ist: Eine
+Sitzung fuhr `test_ui.py` **ohne Schloss** mitten in einem fremden Tor und bekam
+**Exit 139** mit Zugriffsverletzung, zwei Fehlschlägen und acht Minuten
+Stillstand bei elf von 255 Tests. Sie hielt es für eine Folge ihrer eigenen
+Änderung an Objektlebensdauern — plausibel, und falsch. Dieselben zwölf Tests
+einzeln: **0,87 s, grün.** Im selben Zeitraum lief `test_ui.py` in einem anderen
+Prozess unter dem Schloss vollständig durch (255 passed).
+
+* **Steht er oder rechnet er?** Drei Fragen, und erst zusammen tragen sie eine
+  Aussage. Sie kosten zwanzig Sekunden, und jede einzelne davon hat in der Nacht
+  vom 22. auf den 23.08.2026 mindestens einmal jemanden in die Irre geführt.
+
+     Zwölf wartende Hüllen sahen einmal aus wie zwölf hängende Läufe — keine
+     Rechenzeit, Protokoll steht, die perfekte Signatur, und vollständig falsch.
+
+**Und die Beschleunigung des Tors macht das Schloss wichtiger, nicht
+überflüssiger.** Am 22.08.2026 lag der Vorschlag auf dem Tisch, es auf die
+Leistungstests zu schrumpfen — 49 Sekunden brauchen Ruhe, dreißig Minuten
+nicht. Die Messung hat ihn widerlegt, und zwar aus der Gegenrichtung: Mit
+`-n 8` lastet die Sammelgruppe die Maschine so aus, dass der **fremde** Lauf
+kippt. Zwei Läufe derselben Gruppe ohne Schloss gaben **11 failed** und
+**0 failed**; die elf lagen in `test_blend.py`, `test_examples.py` und
+`test_real_models.py`, und dieselbe Datei allein mit `-n 8` lief grün durch.
+Ursache war nicht die Parallelität und keine Reihenfolgeabhängigkeit, sondern
+**Speicher**: Acht Prozesse, die je eine speicherhungrige Geometrie rechnen,
+sind etwas anderes als einer. Parallelität macht Speicherhunger sichtbar — als
+Korrektheitsfehler.
+
+Der Gewinn kommt trotzdem, nur an anderer Stelle: nicht dadurch, dass das
+Schloss fällt, sondern dadurch, dass das, was es umschließt, kleiner wird. Auf
+leerer Maschine gemessen, alles seriell gegen alles parallel:
+
+| | seriell | mit `-n 8` |
+|---|---|---|
+| Sammelgruppe | 193 s | **57 s** (zweimal, gleiche Menge) |
+| Tor insgesamt | ~30 min | **5 min 9 s** |
+
+Die dreißig Minuten waren nie Testzeit. Sie waren Wartezeit, Fremdlast und der
+Deadlock beim Fensterabbau. Vier Sitzungen × 30 Minuten sind zwei Stunden
+Warten; vier × 5 sind zwanzig Minuten — **das** ist die Zahl, die zählt, nicht
+die Laufzeit eines einzelnen Laufs.
+
+**Zweimal fahren und die Mengen vergleichen, nicht die Zahlen.** Ein Test, der
+von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er wird
+*manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
+einer. Beim ersten Einsatz dieses Verfahrens fielen die elf oben auf.
+
+#### Wer das Schloss belegt sieht, schreibt nicht
+
+Zweimal in einer Nacht, beide Male mit einer „kleinen" Änderung:
+
+* Eine Sitzung schrieb `tr("Außengewinde")` in `digest.py`, während ein fremdes
+  Tor lief. Dessen Suite sah den Text und die Kataloge noch nicht: fünf rote
+  Übersetzungstests, eine halbe Stunde Suche in einer Sache, die zwei Minuten
+  später von selbst geschlossen war.
+* Eine andere ergänzte `suite-getrennt.sh` um eine verabredete Zeile, während
+  ein fremdes Tor **darauf** lief. Bash liest ein Skript zeilenweise nach: Der
+  Lauf starb mit einem Syntaxfehler in einer Zeile, die es nie gegeben hat.
+
+Der zweite Fall ist behoben — das Skript kopiert sich beim Start. Der erste
+nicht: Eine Datei, die der laufende Test importiert, lässt sich nicht
+wegkopieren. Dafür bleibt nur die Regel. `gate_lock.py status` sagt in einer
+Sekunde, ob jemand fährt.
+
+**Und zwar vor jeder Schreiboperation, nicht vor jeder Arbeitseinheit.** Der
+dritte Fall derselben Nacht entstand nicht aus Nichtwissen: Die Sitzung hatte
+vor dem *vorletzten* Schreiben nachgesehen — das Tor war frei — und danach in
+einem Zug weitergearbeitet. Die Prüfung hatte stattgefunden und galt als
+erledigt, während das Schloss in der Zwischenzeit den Halter wechselte. Wer
+schreibt, sieht **jedes Mal** nach; die Sekunde kostet weniger als ein fremder
+Torlauf.
+
+#### Der fremden Messung glaubt man so wenig wie der eigenen
+
+Eine Zahl, die eine Sitzung weiterreicht, wird auf dem Weg **fester**, nicht
+lockerer: Jede Weitergabe streift eine Unsicherheit ab, bis am Ende eine Zahl
+steht, die niemand mehr hinterfragt. In derselben Nacht ist eine ungeprüfte
+Zahl über drei Sitzungen gewandert und in einer Meldung gelandet, die sie als
+Ergebnis führte — bis der Urheber selbst zurückzog.
+
+Und der häufigste Grund für eine falsche Zahl ist immer derselbe:
+
+**Eine Mustersuche misst, was das Muster kennt — und schweigt über den Rest,
+ohne es zu sagen.** Dreimal an einem Morgen, in beide Richtungen:
+
+| Suche | Fehler | Folge |
+|---|---|---|
+| `grep -o "le plaque"` | ohne Wortgrenze | zählte `seule plaque` mit — Befund war Rauschen |
+| `re.search(r"\ble plaque\b")` | ein Muster, ein Fall | fand `un même plaque` nicht — „null Fehler" war blind |
+| `"pytest" in CommandLine` | zu weit | zählte wartende `gate_lock`-Hüllen als laufende Tests |
+
+#### Wie viele Läufe trägt eine Aussage?
+
+„Zweimal fahren" ist keine Zahl, sondern eine Faustregel — und wie viele Läufe
+eine Aussage wirklich braucht, hängt daran, **wie oft die Sache ohne jede
+Änderung schon schiefgeht**. Diese Basisraten sind am 22./23.08.2026 gemessen
+worden, alle unter dem Schloss:
+
+| Datei / Lage | ohne Änderung | Bemerkung |
+|---|---|---|
+| `test_pose_session.py`, ruhig | **1/10** | die Rate, gegen die ein Fix sich beweisen muss |
+| `test_pose_session.py` nach dem Ring-Umbau | **6/10** | eine Änderung, die die Rate hob |
+| `test_ui.py`, ruhig | **0/3** | |
+| `test_ui.py` unter Fremdlast | **5/5** | *immer* — hier misst kein Lauf mehr etwas |
+
+* **Die Messlatte gehört vor die Messung.** Am 23.08. lautete sie „0 oder 1 von
+  5 wirkt, 2 oder mehr nicht", festgelegt bevor irgendjemand ein Ergebnis
+  kannte. Es wurden fünf, und die Entscheidung war damit schon getroffen. Wer
+  die Grenze hinterher zieht, findet immer eine, die zum Ergebnis passt.
+
+#### Wenn ein Lauf steht: py-spy
+
+**Es liegt in der Nutzer-Umgebung und nicht in der `.venv`**
+(`%APPDATA%\Python\Python313\Scripts\py-spy.exe`), und das ist kein Zufall:
+Ein Werkzeug, das man an einen fremden Prozess hängt, ist so wenig Bestandteil
+des Produkts wie `git` oder ein Debugger. In `constraints.txt` hätte es die
+Lizenzprüfung und den nächsten Klon berührt, ohne dass die Anwendung es je
+importiert. Entschieden am 22.08.2026.
+
+Dasselbe tut `tools/gate_lock.py` in `_test_processes()`, und aus demselben
+Grund. Wer nur die direkten Kinder des Schlosshalters zählt, findet den
+stehenden Lauf nicht — an einem Abend zweimal passiert.
+
+#### Was habe ich gerade gemessen?
+
+Am 22.08.2026 haben vier Sitzungen an einem Abend **sieben** Messfehler
+gemacht, und alle sieben hatten dieselbe Form:
+
+#### Und in welche Richtung habe ich mich geirrt?
+
+Am 24.08.2026 kamen drei weitere dazu, aus drei Sitzungen, und sie zeigen die
+Asymmetrie, die in der Tabelle oben noch nicht steht:
+
+Daraus folgt eine Zusicherung, die in jedes selbstgebaute Prüfwerkzeug gehört:
+**Zähle zuerst, wie viel du überhaupt gefunden hast, und lass den Lauf
+scheitern, wenn es zu wenig ist.** `tests/test_plan_references.py` macht es so
+(`assert len(sections) > 100`), `tests/test_translations.py` ebenfalls
+(`assert gb_texte`), und `suite-getrennt.sh` seit dem 24.08. auch — die Zeile
+„Sammelgruppe: 3554 passed" ist genau diese Zusicherung, nur für das Tor.
+
+Die zweite Hälfte kostet noch weniger: **Gib dem Werkzeug einen Fall, dessen
+Ausgang du kennst.** Ein Prüfer für Doppelungen, der den bekannten Fall nicht
+findet, ist kaputt; einer, der ihn findet, hat seine erste Zusicherung. Der
+Duplikat-Sucher vom 24.08. fand `size_for_thread` — den Fall, den eine andere
+Sitzung eine Stunde vorher gemeldet hatte — und war damit brauchbar, bevor er
+etwas Neues meldete.
+
+#### Ein eingechecktes Artefakt überlebt seinen Erzeuger
+
+Am 27.08.2026 lagen genau fünf Stunden dazwischen: Um 06:59 bekam
+`blend_union` ein `keeps_inputs` — richtig und nötig, sonst zeigt `hole_1`
+nach dem Vereinigen auf ein anderes Loch. Um 11:50 brach der Paketbau von
+0.2.1 auf allen vier Plattformen ab, weil `way_four` seither auf `obj_3`
+verwies und die Kennung nicht mehr entstand. Dazwischen war jeder Lauf grün,
+und die eingecheckten `.p3d` stammten noch aus der Zeit davor.
+
+#### Prüft dieser Test eine Zusage — oder den Ist-Zustand?
+
+Am 23.08.2026 stand in `tests/test_operation_ui.py`:
+
+```python
+assert values == {"at_feature": "hole_1"}
+```
+
+Das ist die vollständige Vorbelegung eines Dialogs — und sie sicherte damit zu,
+dass die **Größe nicht mitkommt.** Genau das war der Fehler, den dieselbe
+Sitzung am selben Tag gemeldet hatte: Eine 5,19-mm-Bohrung bekam M3
+vorgeschlagen, M3 bohrt 4,00 mm, der Schnitt trägt nichts ab. Als die Größe
+endlich mitkam, wurde der Test rot — **er hat die Verbesserung blockiert, statt
+sie zu tragen.**
+
+#### Die Gegenprobe
+
+* **Ein Wert herausgezogen, die Nachbarn geprüft aussehen lassen.** Ein Aufruf
+  mit fünf Argumenten, eines davon in eine eigene Methode gehoben, damit ein
+  Test es fragen kann — und die anderen vier sehen danach mitgeprüft aus. Am
+  25.08.2026 hat das einen stillen Datenfehler gedeckt: `_save_as_part` reichte
+  Merkmale (geprüft, eigene Methode, eigener Test) und `op_ids` (ungeprüft, in
+  der Zeile) an denselben Aufruf. Die IDs waren `enumerate`-Plätze, `capture`
+  filtert nach `Operation.id`, und die zählt ab eins — **der letzte Schritt fiel
+  aus jedem Rezept**, ohne Fehler und ohne Meldung. Acht grüne Tests standen
+  daneben, einer davon zwei Zeilen über der falschen. Wer ein Argument
+  herauszieht, um es prüfbar zu machen, zählt die übrigen desselben Aufrufs —
+  die Extraktion prüft eines und tarnt den Rest.
+
+  Derselbe Aufruf trug im selben Commit einen zweiten stillen Fehler, und der
+  war von der anderen Sorte: `dialog.saved.connect(catalog.show_parts)` —
+  ein `Signal(str)` mit einem Namen darin an einem Slot, der einen Suchtext
+  erwartet. Qt verbindet alles, dessen Stelligkeit passt. Was dagegen hilft,
+  steht in `.claude/memory/signal-passt-an-den-falschen-slot.md`; die zwei
+  gehören zusammen gelesen, weil dieser Punkt sagt, wie man den Fehler beim
+  **Schreiben** vermeidet, und jener, wie man ihn beim **Prüfen** findet.
+
+* **An der Aussage vorbei.** `str(op_id) in tooltip` war grün, weil „2" auch in
+  „2,40 mm" steht. Eine Teilzeichenkette, die zufällig vorkommt, ist keine
+  Prüfung — verglichen wird mit dem ganzen Satz. Am 30.08.2026 in seiner
+  peinlichsten Gestalt wieder da: `"2" in "1 von 2"`. Die Zusage galt dem
+  **Platz** in der Trefferliste, erfüllt hat sie die **Anzahl** daneben, und
+  beide Zahlen standen in derselben Zeile.
+* **Am erfundenen Beleg vorbei — und das ist der teuerste der Liste.** Der
+  Docstring begründete, warum die Suche auch die Erklärsätze durchsucht: „weil
+  *Elefantenfuß* dort steht und in keinem Titel". Das Wort kommt im ganzen
+  Bestand nicht vor. Der Test prüfte deshalb nur Titeltreffer, die Mutation
+  „Sätze nicht durchsuchen" blieb grün, und die Lücke war durch eine Begründung
+  gedeckt, die sich wie eine Messung las.
+
+  Der Unterschied zu den vier Punkten darüber: Die messen am falschen Ort,
+  dieser **behauptet einen Ort, den es nicht gibt** — und ein Leser, der die
+  Begründung glaubt, prüft die Stelle nie wieder
+  ([[benannte-falle-schuetzt-nicht]] ist derselbe Mechanismus, eine Ebene
+  höher). Der Griff dagegen kostet zehn Sekunden: **Ein Beleg, der ein
+  konkretes Wort, eine Zahl oder eine Datei nennt, wird gegen den Bestand
+  gegriffen, bevor er in einen Docstring kommt** — hier hätte
+  `search_hits("Elefantenfuß") == []` gereicht. Gemessen sind es „Überhänge"
+  (drei Sätze, kein Titel), und daran hängt die Zusage jetzt.
+
+#### Wann die Zusicherung nötig ist, und wann sie Zierat ist
+
+Am 23.08.2026 hat ein Registerpunkt vorgeschlagen, überall eine Zeile
+danebenzuschreiben. Angewandt auf 29 Kandidaten waren **14 echte Lücken** und
+15 nicht. Der Schnitt läuft entlang einer Frage:
+
+#### Und die Gegenprobe gilt auch hier
+
+Grundmenge leeren, Test fahren, muss rot sein, zurückstellen. Sechs von sechs
+mutierbaren Fällen haben gegriffen — aber das ist kein Grund, sie zu lassen: Die
+Probe hat an anderer Stelle schon fünf überzeugend aussehende Tests verworfen.
+Wer sie automatisiert, packt die Rückstellung in ein `finally`; ein Abbruch
+zwischen Mutation und Rückstellung lässt sonst eine verfälschte Datei liegen —
+am 23.08.2026 einmal passiert, aufgefallen nur, weil danach ein `grep` lief.
+
+#### Ein fertiger Job in einem laufenden Lauf gibt sein Protokoll heraus
+
+**Die Grenze davon ist gemessen worden, und sie ist enger als sie zuerst
+aussah.** Der Satz „die API gibt auch laufende Jobs heraus" stimmt nicht:
+
+    Job in_progress   Exit 1   228 Bytes   BlobNotFound, HTTP 404
+    Job completed     Exit 0   57 480 Bytes
+
+Was sie hergibt, ist das Protokoll eines **fertigen** Jobs, während der **Lauf**
+noch läuft — und das genügt, weil ein Job, der rot geworden ist, fertig ist. Am
+23.08.2026 hat das eine Diagnose von „nach dem Lauf" auf „in einer Minute"
+verkürzt.
+
+**Und die Falle daneben, die dabei prompt zugeschnappt hat:** Der erste Versuch
+lief als `gh api … | tail -6` und meldete **Exit 0** über einer 404-Antwort —
+der Rückgabewert von `tail`. Dieselbe Pipe-Falle, die weiter oben in dieser
+Datei steht, an einem Werkzeug, das kein Testlauf ist. Sie gilt für jeden
+Befehl, dessen Rückgabewert man liest, nicht nur für `pytest`.
+
+Der Handgriff davor hat die Suche zusätzlich halbiert: Die neueste `ruff` in
+einer **eigenen** Umgebung gegen das Projekt zu fahren (nicht in der `.venv` —
+vor einem Paketbau wird dort nichts installiert) schloss die wahrscheinlichste
+Ursache aus, bevor das Protokoll überhaupt da war.
+
+Am 23.08.2026 hat das eine Diagnose von „nach dem Lauf" auf „in einer Minute"
+verkürzt. Und der Handgriff davor hat sie halbiert: Die neueste `ruff` in einer
+**eigenen** Umgebung gegen das Projekt zu fahren (nicht in der `.venv` — vor
+einem Paketbau wird dort nichts installiert) schloss die wahrscheinlichste
+Ursache aus, bevor das Protokoll da war.
+
+#### Eine Automatik, die in Wahrheit Handarbeit ist, ist gefährlicher als keine
+
+`CLAUDE.md` sagt zu: „Jeder Commit geht sofort hinaus, `.githooks/post-commit`
+pusht ihn." Am 23.08.2026 zeigte sich, dass es diesen Hook im Arbeitsbaum **nicht
+gibt**:
+
+    .git/hooks/post-commit     existiert nicht
+    core.hooksPath             auf keiner Ebene gesetzt
+
+Ohne `core.hooksPath` sieht Git `.githooks/` nie an. Gemerkt hat es niemand,
+**weil das Ergebnis stimmte** — es hat immer jemand von Hand gepusht. Aufgefallen
+ist es erst, als zwei Commits vor einem CI-Start liegenblieben und die CI fast
+den Stand *vor* zwei Fehlerbehebungen gebaut hätte.
+
+#### Die Isolation deckt Qt, Verzeichnisse und die Fremdprogramme ab — das Netz nicht
+
+`conftest.py` hält die Maschine aus dem Ergebnis heraus: Offscreen-Qt,
+Nutzerverzeichnisse in einem Temp-Ordner, kein gefundenes Fremdprogramm. Am
+23.08.2026 stand in einem Absturzstapel von `test_ui.py`:
+
+    app/core/backends/llm.py:501    available
+    app/ui/first_run.py:445         _chat_text
+    app/ui/leash.py:173             run              (Arbeitsthread)
+    ... socket.py:853               create_connection
+
+#### Ein Testdatensatz, in dem alles gleich heißt, prüft weniger als er aussieht
+
+Zweimal an einem Tag, beide Male an derselben Stelle und beide Male von der
+Gegenprobe gefangen:
+
+> **Zwei Felder mit gleichem Wert machen jeden Test grün, der nur eines liest.**
+
+* `website/version.json` nennt jedes Paket zweimal — als `"file"` und in der
+  `"url"`. `updates.py` liest **beide**: das eine, um zu laden, das andere, um
+  die geladene Datei zu benennen. Der erste Test prüfte nur `url`; die
+  Mutation traf `file`, und der Test blieb grün.
+* Dasselbe im Werkzeug daneben: `promised_files()` sammelt die Namen aus beiden
+  Feldern, und der Test dazu fütterte sie mit **demselben** Wert. Die
+  Gegenprobe „nur `url` auswerten" blieb grün, obwohl die Auswertung damit die
+  Hälfte verlor.
+
+#### Lokal gegen lokal sagt nichts darüber, was oben liegt
+
+Am 23.08.2026 wurden beim Veröffentlichen von 0.1.3 die alten Pakete gelöscht,
+**bevor** die Seiten und `version.json` hochgeladen waren. Mehrere Minuten lang
+zeigte solidon3d.de in sechs Sprachen auf vier Dateien, die es nicht mehr gab,
+und die Update-Prüfung bot jedem Kunden eine Fassung an, deren Datei 404 gab.
+
+**Keine Prüfung hat es gemerkt, und alle waren grün** — 199 Tests, vier
+hochgeladene Pakete mit verglichenen Prüfsummen, eine `version.json`, die zur
+Anwendung passte. Lokal war durchgehend alles stimmig. Falsch war nur, was
+**oben** lag, und danach hatte niemand gefragt.
+
+#### Wann man aufhört zu zählen und anfängt zu lesen
+
+Am 23.08.2026 stand eine Sitzung vor „2 von 4 sauber" — nach der eigenen,
+vorher festgelegten Latte also: keine Entscheidung, mehr Läufe. Statt zehn
+weitere zu fahren, hat sie zwei Minuten in die fremde Fixture gesehen und die
+Zeile gefunden:
+
+```python
+def release(self, timeout_ms: int = 2000) -> None:
+    self.wait_for_look(timeout_ms)  # der fachliche Standardwert ist 30_000
+```
+
+Eine Erhebung, für die eine halbe Minute vorgesehen ist, bekam zwei Sekunden.
+**Das erklärt auch die Zahl:** Der Thread braucht meistens weniger als zwei
+Sekunden, manchmal nicht — daher zwei von vier und nicht null von vier. Zehn
+Läufe hätten dieselbe Zahl schärfer gegeben und keine einzige Zeile genannt.
+
+#### Ein Signal, das jedes Mal kommt, lässt sich halbieren
+
+Der Abbau-Absturz galt als Eigenschaft ganzer Fensterdateien: 86 Sekunden für
+ein Ja/Nein, drei Ausgänge bei drei Läufen, und deshalb hat ihn niemand
+eingegrenzt. Er ist aber **deterministisch** — und damit war die Suche billig:
+
+    1, 5, 10, 20, 30, 40, 50 Tests    sauber
+    58 Tests                           Riss
+    51 Tests                           sauber
+    52 Tests                           Riss        <- die Grenze
+
+Der 52. Test riss **allein**, ohne Vorgeschichte, dreimal von dreimal, in einer
+Drittelsekunde. Dasselbe Verfahren fand in `test_chat_ui.py` zwei weitere.
+
+#### Ein Muster, das man abfragen muss, ist ein fehlender Vertrag
+
+**Und der Umbau hat sofort einen Fehler freigelegt**, den fünf Namen verdeckt
+hatten: Eine der Klassen reichte ihre 2000-ms-Frist an eine Methode durch,
+deren fachlicher Standardwert 30 000 ist. Der Fehler war vorher da — er hatte
+nur keine Stelle, an der er auffallen konnte.
+
+#### Eine Zusicherung in beide Richtungen kann den Fehler festhalten
+
+`test_registry.py` prüfte, dass jedes Merkmalsfeld sich als solches
+deklariert — und zwar so:
+
+```python
+named    = {… if entry.name == "at_feature"}
+declared = {… if entry.kind == "feature"}
+assert named == declared
+```
+
+Der Zweck war richtig und stand im Docstring: §21.3 sucht Merkmalsverweise
+nach der **Art**, und achtzehn Operationen liefen an der Prüfung vorbei, bevor
+sie sich deklarierten. Getestet wurde davon aber nur die eine Richtung; die
+andere sagt etwas ganz anderes, nämlich **„kein Merkmalsfeld darf anders
+heißen"**.
+
+Genau daran ist die Behebung eines echten Fehlers hängengeblieben. *An Merkmal
+ausrichten* nennt ihr Feld `feature`, war deshalb für §21.3 unsichtbar, und
+`kind="feature"` zu setzen machte diesen Test rot. **Ein Test, der einen Fehler
+am Behobenwerden hindert, prüft die Gewohnheit und nicht die Zusage.**
+
+**Beim Lockern nicht die Deckung wegnehmen.** Die gestrichene Richtung hatte
+eine Aufgabe — sie fing jemanden, der `kind="feature"` an ein Feld setzt, das
+gar kein Merkmal des Eingangsobjekts benennt. An ihre Stelle gehört eine
+Zusicherung über die *Sache*: Ein Merkmalsverweis wird gegen `inputs[0]`
+aufgelöst, also zeigt er ins Leere, wenn die Operation nichts verbraucht. Am
+Bestand gemessen (22 Operationen, keine ohne Eingang), beide Richtungen einmal
+mutiert und rot gesehen.
+
+#### Ein Messwerkzeug, das den Absturz nicht überlebt, misst nichts
+
+Die Frage war, an welcher Zeile der Speicherbereiniger feuert, wenn
+`test_ui.py` reißt. Der erste Entwurf hängte sich an `gc.callbacks`, sammelte
+die Treffer in eine Liste und gab sie in `pytest_sessionfinish` aus.
+
+**Er hat null Zeilen geliefert** — der Lauf, um den es geht, stürzt ab, und ein
+abgestürzter Prozess erreicht kein Sitzungsende. Ein Werkzeug, das genau den
+Fall nicht überlebt, für den es gebaut ist, gibt nur dann eine Zahl aus, wenn
+sie niemanden interessiert.
+
+Die zweite Fassung schreibt zeilenweise in eine Datei
+(`open(pfad, "w", buffering=1)`), und damit stand die Antwort nach **einem**
+Lauf von neunzig Sekunden:
+
+    58 Sammelläufe insgesamt, 2 davon mit dem Hauptthread in wait_for_idle
+    #53  Auslöser haupt      Zeile 1522
+    #58  Auslöser ARBEITER   Zeile 1515   ARBEITER-LÄUFT   <- und hier starb er
+
+Der Umweg, der beinahe gegangen worden wäre: **sechzehn Läufe**, acht je Seite,
+abwechselnd mit und ohne einen vermuteten Fix — eine halbe Stunde für eine
+Wahrscheinlichkeitsaussage, wo eine direkte Messung die Ursache nennt. Bei
+einer Rissrate von 80 % (fünf Sitzungen auf der Maschine) hätte die Statistik
+ohnehin nichts getrennt.
+
+#### Nach einer Änderung an `app/` oder `tools/`: zwei Läufe von je drei Sekunden
+
+Viermal an einem Tag ist ein deutscher Bezeichner ins Tor gekommen, dreimal in
+Code, der gerade repariert wurde, einmal in eigenem. Die Ursache war jedes Mal
+dieselbe und jedes Mal vernünftig: Gefahren wurden die Tests des *Gebiets*, in
+dem die Änderung lag — nicht die, die *jede* Datei prüfen.
+
+#### Die Abfrage muss den Befehl noch ändern können
+
+Die Regel „wer das Schloss belegt sieht, schreibt nicht" ist am 23.08.2026
+zweimal erfüllt worden und hat trotzdem nichts verhindert — einmal bei 3a,
+einmal bei mir. Beide Male so:
+
+Dieselbe Form hat 64s Fehler am selben Tag, nur ohne Schloss: Sie maß, ob
+Katalog und Quelltext zusammenpassen, bekam „0 fehlen, 0 tot" — und derselbe
+Test war im selben Baum rot. Die Messung lief **nach** dem Testlauf, und
+dazwischen hatte jemand geschrieben. **In einem Baum, in dem vier Sitzungen
+schreiben, misst man nicht den Baum, sondern einen Zeitpunkt** — und der steht
+nicht im Ergebnis.
+
+
+### `.claude/rules/ansicht.md`
+
+#### Was nur das Bild zeigt
+
+Vier Fehler am selben Tag, alle vier durch eine grüne Suite gekommen, alle vier
+im gerenderten Fenster sofort zu sehen:
+
+| Fehler | Warum kein Test ihn fand |
+|---|---|
+| Hauptknopf ohne Beschriftung | `click()` funktioniert auf einem leeren Knopf |
+| Skala in vier von sechs Sprachen abgeschnitten | die Werte stimmten, nur die Breite nicht |
+| Nebenfeld doppelt so hoch wie die Hauptfrage | ein Layout hat kein Richtig und Falsch |
+| Aufklappmenü als erste Zeile über einer Frage | es tat genau das, was es sollte |
+
+Der erste Blick auf den Bogen sagte „die Skala passt"; unter
+der echten Plattform brauchte sie in Portugiesisch 635 Punkte, wo 598 da
+waren.
+
+Der
+Rezeptdialog wurde am 25.08.2026 so „in sechs Sprachen geprüft"; aufgefallen
+ist es erst am portugiesischen Bild, auf dem „Welche Maße soll man einstellen
+können?" stand.
+
+
+#### Ein Widget, das nachgibt, darf nicht weniger verlangen
+
+Am 30.08.2026 an der Bewegen-Leiste gemessen: Bei einem **1600 Punkte breiten**
+Fenster stand sie auf 677 und zeigte kein einziges Wort. Der Platz war da; sie
+hat ihn nur nicht mehr verlangt.
+
+
+#### Ein Messwert, der zu glatt ist, ist selbst der Befund
+
+Dieselbe Leiste maß **677 in allen sechs Sprachen**, auf die Stelle genau.
+
+
+#### Ein Merkmal hat eine Reichweite
+
+An der Korpusplatte wählte ein Klick auf
+die Deckfläche sieben Millimeter neben einer Bohrung die Bohrung (8,1 mm zum
+Bohrungsmittelpunkt gegen 36,1 mm zur Mitte der 80 mm langen Deckfläche), und
+ein Klick nahe der Stirnseite wählte die Stirnfläche.
+
+Der Rechtsklick tat es nicht und die Zeigersuche auch nicht: Auf Platte 2
+fragten beide eine Bettbreite daneben, fanden dort meist keinen Körper, und der
+Rechtsklick hob die Auswahl auf, statt das Menü zu ihr zu zeigen.
+
+
+#### Ein Klick ist eine Blickrichtung, kein Punkt
+
+**Bei einer Bohrung liegt dort keines**, und das war der zweite gemeldete
+Fehler an derselben Stelle: „wir erwischen oft nur die Oberfläche und kommen
+nicht zur Bohrung". Gemessen am echten `vtkCellPicker` in einem sichtbaren
+Fenster, Korpusplatte, Bohrung 32 Bildpunkte breit, Pixel neben der
+Bohrungsmitte:
+
+| | Draufsicht | Isometrisch | Vorderansicht |
+|---|---|---|---|
+| 0–8 px | **kein Treffer** | `hole_1` | `face_3` |
+| 12 px | `hole_1` | **kein Treffer** | `face_3` |
+| 16 px | `face_2` | `face_2` | `face_3` |
+
+Gemessen gab schon ein Punkt 0,4 mm neben dem
+  Bohrungsrand `face_2`, bei einer Reichweite von 0,95 mm.
+
+Die dritte Spalte
+  oben ist die Gegenprobe und bleibt unverändert `face_3`.
+
+
+#### Und wo kein Merkmal ist, ist trotzdem ein Körper
+
+Gemessen: 0 bis 30 px in einem 12×8-Ausschnitt geben jetzt den
+  Körper, ab 60 px unverändert `face_2`, und 100 mm neben dem Teil nichts.
+
+
+#### Was VTK beschriftet, ist ASCII — und sonst nichts
+
+**Der Fall ist am 30.08.2026 passiert und wäre auf Deutsch nie aufgefallen.**
+Am Griff standen kurz ein Doppelpfeil und der Name der Fläche aus
+`feature_name`. Deutsch ist „Oberseite", „Unterseite", „Vorderseite" — alles
+ASCII. Französisch nicht:
+
+| | |
+|---|---|
+| `Oberseite` | `Face supérieure` |
+| `Rückseite` | `Arrière` |
+| `Linke Seite` | `Côté gauche` |
+| `Rechte Seite` | `Côté droit` |
+
+Vier von sechs. Ein Kunde auf Französisch hätte beim Klick auf eine Fläche
+einen Absturz bekommen, und ein Torlauf in deutscher Umgebung hätte
+geschwiegen — die Sorte Fehler, die es bis zum Kunden schafft.
+
+
+#### Der Bewegen-Griff gehorchte niemandem (03.09.2026)
+
+Robert: „bei bewegen geht das drehen des modells nicht nur das normale
+verschieben was auch so geht" und „hover effekt welche achse man wählt".
+Beides derselbe Befund, und dahinter lagen **zwei** Fehler, die einander
+verdeckten.
+
+Was weiter ging,
+war unsere eigene Zuggeste am Körper, und genau die hat Robert „das normale
+verschieben was auch so geht" genannt.
+
+**Der zweite Fall derselben Sache hat zwei Monate gewartet**: ein
+reparierter Fehler mit einem Zwilling, den niemand gesucht hat.
+
+Gemessen am laufenden Fenster fand der nicht einmal den
+Körper in der Bildmitte, während ein `vtkCellPicker` an derselben Stelle
+antwortet; `vtkPropPicker` ebenso wenig — beide gehen über die Hardware.
+
+
+#### Frei drehen, aber 45 Grad treffen
+
+Am laufenden Fenster gemessen, ein Zug über 59 Schritte am Y-Ring:
+
+| Zugstrecke | gezeigter Winkel |
+|---|---|
+| Anfang bis Schritt 23 | 0 → 40,5° frei |
+| Schritt 24 bis 46 | **45,0°**, dreiundzwanzig Schritte lang |
+| ab Schritt 47 | 49,2° → 51,4° frei |
+
+
+#### Was die Ansicht sich merkt — und was VTK nicht annimmt (03.09.2026)
+
+**Drei Ansichtseinstellungen waren flüchtig.** Darstellung (massiv, mit
+Kanten, Drahtgitter, transparent), Schattierung und Projektion standen in
+keiner Einstellung: Wer *Transparent* wählte, hatte beim nächsten Start wieder
+*Massiv* — und hielt es für die eigene Erinnerung (Robert, 03.09.2026:
+„sollte leicht durchsichtig sein seit dem letzten update"). Dazu trugen die
+zwölf Menüeinträge **kein Häkchen**; man sah also auch im laufenden Programm
+nicht, welcher gilt.
+
+
+#### Durchsichtige Körper werden von hinten nach vorn gezeichnet
+
+**Im Bild bestätigt.** Zwei transparente Quader hintereinander, Blick von
+vorn, dieselbe Szene in zwei Einfügereihenfolgen:
+
+    vorne zuerst gegen hinten zuerst:  13 784 Bildpunkte anders,
+                                       größte Abweichung 47 von 255
+
+**Und zweimal gemessen nicht behebbar** — jedenfalls nicht auf diesem Weg:
+
+| Anlauf | Ergebnis |
+|---|---|
+| `enable_depth_peeling()` beim Umschalten in den Modus | `UseDepthPeeling=1`, `LastRenderingUsedDepthPeeling=**0**`, Bild unverändert |
+| dasselbe **vor** dem ersten Bild, mit acht Schichten und `occlusion_ratio=0` | genauso |
+
+**Ein dritter Weg war halb richtig**, und die Zahl sagt, warum:
+`vtkDepthSortPolyData` vor dem Mapper brachte 9 897 statt 13 784 Bildpunkte
+Unterschied.
+
+Gemessen: **0 Bildpunkte Unterschied** zwischen den beiden
+Einfügereihenfolgen.
+
+
+#### Die Druckplatte scheint durch, wenn etwas darunter liegt
+
+Gemessen am
+laufenden Fenster: ein Quader von 40 auf 40 auf 30 mm, 35 mm unter Z=0, von
+schräg oben gezählt — **1** Bildpunkt von 263 583. Wer sein Modell versenkt
+oder falsch positioniert hat, sah davon nichts und merkte es beim Slicen
+(Robert, 03.09.2026: „dass man die Modelle auch unter dem Bett durchsehen
+sollte").
+
+Die Entscheidung vom 23.08.2026 löste nur die halbe Sache: `culling = "back"`
+wirft die Rückseite der Ebene weg, also sieht man **von unten** hindurch. Von
+oben blieb sie undurchdringlich.
+
+| Deckkraft der Fläche | Körper sichtbar |
+|---|---|
+| 1,00 | 1 Bildpunkt |
+| 0,80 | 81 675 |
+| 0,60 | 258 370 |
+| **0,45** | **262 077** |
+| 0,30 | 263 773 |
+
+
+#### Die Kantensuche läuft einmal je Netz, nicht einmal je Aufbau
+
+Am Kundenmodell `chufang.3mf` gemessen (32 Körper, 5 476 596 Dreiecke,
+03.09.2026), Aufbau für Aufbau:
+
+| Posten | ohne Cache | mit Cache |
+|---|---|---|
+| `_draw_feature_edges` (32×) | **453 ms** | **61 ms** |
+| `plotter.add_mesh` (65×) | 193 ms | 203 ms |
+| `_remember_shadow` (32×) | 28 ms | 32 ms |
+| **`show_scene` insgesamt** | **1,02 s** | **0,74 s** |
+
+
+#### Jeder Ansichts-Setter prüft auf Änderung
+
+Sieben von acht Szenenaufbauten waren unnötig. Gemessen am 03.09.2026 am
+laufenden Fenster (Zähler um `show_scene` **und** um alle acht Setter),
+vier gewöhnliche Handlungen an `aushoehlen-und-teilen.p3d`:
+
+| Handlung | vorher | nachher |
+|---|---|---|
+| Körper anklicken | 1 | **0** |
+| zweiten Körper anklicken | 1 | **0** |
+| Themenwechsel dunkel → hell | 3 | **1** |
+| dasselbe Thema noch einmal | 1 | **0** |
+| Modus zweimal auf denselben Wert | 2 | **1** |
+| **Summe** | **8** | **2** |
+
+An `chufang.3mf` (32 Körper, 5 476 596 Dreiecke) kostet ein Aufbau
+**0,74 s** — ein Klick auf einen Körper also drei Viertel Sekunden
+für nichts, ein Themenwechsel gut zwei.
+
+**Sichtbar wurde es an einer anderen Stelle**, und zwar als Fehler: Nach einem
+Zug am Griff sprang der Körper an die alte Stelle zurück, bevor er an
+der neuen landete (Robert, 03.09.2026). Die Kette, gemessen:
+
+```
+ 8439 ms  transformDragged offset=(25,0,0)
+ 8674 ms  das neue Ergebnis liegt vor
+ 8698 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
+ 8879 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
+ 9006 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
+ 9189 ms  Aufbau mit der neuen Geometrie
+```
+
+Jeder dieser Aufbauten nimmt dem Actor seine Vorschau-Matrix; **491 ms** stand
+das Teil dort, wo es hergekommen war. Danach: **ein** Aufbau, mit der neuen
+Geometrie, kein Rücksprung.
+
+**Zwei Verdächtige sind gemessen ausgeschieden** — sie standen der
+Diagnose im Weg, weil beide plausibel aussahen. `_end_drag` räumt den
+Schattenversatz zurück (`e3648624`), aber der Versatz bleibt über den
+ganzen Vorgang bei (0,0,0). Und pyvistas `AffineWidget3D` fasst beim
+Neuanhängen die `user_matrix` nicht an: `remove()` entfernt nur Kreise und
+Pfeile, `__init__` setzt sie nur, wenn sie `None` ist. Die Vorschau
+überlebt `_on_gizmo_released` unverändert.
+
+
+#### Mehrere Druckplatten
+
+Der Radius der
+Umgebungsverdeckung stand mit plausibler Begründung auf dem schwächsten Wert
+seiner Messreihe; der doppelte ViewCube fiel erst im neu aufgenommenen
+Handbuchbild auf. Beim Schatten war es dieselbe Sorte Fehler: der Kommentar
+beschrieb, wohin er fallen sollte, und niemand hatte nachgesehen, wohin er
+fiel.
+
+
+#### Die Ansicht hat eine eigene Steuerung (03.09.2026)
+
+(3d-druck-c7, 03.09.2026, am echten
+  Fenster — offscreen vergibt Qt gar keinen Fokus): Das Anwenden in der
+  Bewegen-Leiste hängt seit dem Wegfall des Knopfes an `returnPressed`, der
+  Viewport nimmt den Fokus beim Klick, das Feld holt ihn beim nächsten zurück,
+  und die Eingabetaste wirkt.
+
+
+### `.claude/rules/oberflaeche.md`
+
+#### Texte
+
+**Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die
+Druckeinstellungen führen ihre sechsundfünfzig Felder in einer eigenen Liste
+(`print_settings_dialog.FIELDS`), und dort stand auch eine zweite
+Namenstabelle mit einer gleichnamigen `choice_label`-Funktion davor — die eine
+verdeckte die andere. Beide beschrifteten dieselben Schlüssel und waren schon
+auseinandergelaufen: `cubic` hieß hier „Würfelgitter" und dort „Würfel", `none`
+hier „Ohne" und dort „Keine". Zwei Werte hatte keine von beiden, und im
+deutschen Fenster stand „Wandbahnen: classic" und „arachne". Der Test prüft
+deshalb **beide Feldquellen** gegen die eine Tabelle; wer eine dritte Liste von
+Auswahlwerten anlegt, hängt sie dort ein.
+
+#### Texte
+
+**Ein Text, der eine Grenze beschreibt, altert mit der Grenze.** „Es wird
+nichts geladen und nichts ersetzt" stand am Kästchen in den Einstellungen, am
+Menüeintrag und im Docstring von `_check_for_updates` — richtig, solange der
+Update-Weg wirklich nur ein Link war, und mit `download()` und
+`start_installer()` still falsch geworden. Für diesen einen Satz waren es drei
+Stellen im Code, zweimal fünf Kataloge, eine Website-Seite und der
+Vertragstext.
+
+#### Texte
+
+Zwei gegenläufige Zusicherungen decken einander — genau das
+hat hier zweimal an einem Tag einen halben Umzug gefangen.
+
+#### Zahlen
+
+*Hinaus:* Der Kern rechnet und schreibt mit Punkt, das ist richtig; dort ist
+eine Zahl ein Wert. Wer sie **anzeigt**, schickt sie durch `localised`
+(`app/ui/labels.py`). Neun Stellen taten das nicht, und keine war auf eine
+Sprache beschränkt: Die Parameterleiste schrieb im deutschen Fenster
+„12.50 mm" neben ein Eingabefeld mit „12,50", der Chat „+1.25 cm³", die
+Kalibrierung „Spiel 0.25 mm". Zwei setzten umgekehrt das Komma fest ein und
+zeigten im englischen Fenster „8,4 g". `test_no_number_reaches_the_user_past_
+the_localisation` prüft jede Datei unter `app/ui`; wer eine Kommazahl in einen
+Anzeigetext schreibt, kommt daran nicht vorbei.
+
+#### Zahlen
+
+„Fläche an {object} — {area} mm², {side}" stand als
+*übersetzter* Satz im Katalog, mit der Einheit darin, und die Schichtanalyse
+schrieb `f"{layer.area:.0f} mm²"` neben ein `z {length(layer.z)}`, das
+umschaltet.
+
+#### Der Hauptknopf
+
+Gemessen am 30.08.2026 über vierzehn Dialoge: **vier** trugen einen
+ausdrücklichen Hauptknopf, **neun** einen von Qt vergebenen. Drei davon saßen
+auf „Schließen" (Kürzelfenster, Über, Änderungen) — dort ist der Akzent eine
+Empfehlung, das Fenster zu verlassen. Der schlimmste Fall war der
+Zusatzprogramme-Dialog: Unter seinen vierzig Knöpfen traf es Nummer eins, das
+„Installieren" der **ersten Listenzeile**. Sechs Zeilen tragen denselben Text,
+eine stand hervorgehoben da, und was wie eine Empfehlung aussah, war die
+Reihenfolge im Layout.
+
+#### Der Hauptknopf
+
+Der zweite hat beim ersten Lauf sofort einen
+  zehnten Fall gefunden, den die Handmessung nicht bauen konnte.
+
+#### Der Hauptknopf
+
+Gemessen an einem Hauptknopf in vier Lagen, jeweils die häufigste Farbe seiner
+Fläche im gerenderten Fenster:
+
+| Was ein Stylesheet trägt | Füllung | |
+|---|---|---|
+| nichts | `#f0a54a` | färbt |
+| die Eltern, typlos `background:` | `#202225` | färbt **nicht** |
+| die Großeltern, typlos `background:` | `#202225` | färbt **nicht** — es wirkt über Ebenen |
+| die Eltern, typlos `border:` | `#f0a54a` | färbt |
+| die Eltern, typlos `color:` | `#f0a54a` | färbt, nur die Schrift wechselt |
+| die Großeltern, `#nurIch { … }` | `#f0a54a` | färbt |
+
+#### Der Hauptknopf
+
+**Ein `QDialog` ist dabei nicht der Unterschied**, auch wenn es zuerst so
+aussah: Ohne Stylesheet färbt der Knopf in einem schlichten `QWidget` genauso
+wie im Dialog. Der falsche Schluss entstand an einem Vergleichsbild, in dem
+**beide** Knöpfe unter einem typlosen Stylesheet hingen — und ein
+Gegenbeispiel, das dieselbe Bedingung trägt wie der Fall, ist keines. Gefunden
+hat den Fehler die Nachbarsitzung, die ihn nicht reproduzieren konnte.
+
+**Gefunden hat den leeren Knopf kein Test, sondern ein Blick auf das Bild.**
+Die zwei Klicktests auf ihm waren grün: Ein Knopf ohne sichtbare Beschriftung
+nimmt Klicks entgegen wie jeder andere.
+
+#### Ein Zustand darf die Farbe wechseln, nicht die Rahmenbreite
+
+Gemessen, dunkles Thema:
+
+| Einträge | Platz | gebraucht |
+|---|---|---|
+| 2 | 36 px | 48 px |
+| 3 | 60 px | 72 px |
+| 5 | 108 px | 120 px |
+
+Zwölf Punkte sind ein halber Eintrag. Im Bohrdialog stand unter dem
+hervorgehobenen „Mündung" ein waagerecht durchgeschnittenes „Mitte" — und
+getroffen hat es **jede** Combobox mit Tastaturfokus, also jede, die man
+anklickt.
+
+#### Ein Zustand darf die Farbe wechseln, nicht die Rahmenbreite
+
+**Und der Ruhezustand behält die volle Linienfarbe.** Der doppelt breite
+Rahmen legte es nahe, ihn zur Feldfläche hin zu dämpfen, damit er so leise
+wirkt wie der einfache vorher. Im Bild sah das richtig aus und war gemessen
+falsch: 3,33 auf 1,90 im dunklen Thema, 2,43 auf 1,57 im hellen — unter den
+3,0, die WCAG 1.4.11 für die Umrandung eines Bedienelements verlangt und die
+zwei Absätze weiter oben für den Fokusring zitiert werden.
+
+#### Ein Zustand darf die Farbe wechseln, nicht die Rahmenbreite
+
+Die Fläche fängt das nicht auf: Feld gegen Fenster sind 1,45 im dunklen und
+1,22 im hellen Thema.
+
+#### Die Oberfläche wächst nicht mit
+
+Die Frage hing bis zum 29.08.2026 an der Kategorie (`WITHOUT_MENU = {"parts"}`),
+und das ist die Sorte Näherung, die stimmt, bis sie nicht mehr stimmt: 27 der
+29 Operationen dieser Kategorie haben eine Kachel, `create_lid` und
+`screw_lid` nicht. Beide verschwanden damit aus der Menüleiste, ohne im
+Katalog aufzutauchen — gemessen 114 Menüeinträge, kein *Deckel erzeugen*
+darunter, und im Kontextmenü der Fläche ebenso wenig, also an genau dem Ort,
+den §18.5 dafür vorsieht.
+
+#### Die Oberfläche wächst nicht mit
+
+**Zwei Zeilen mit demselben Text sind eine Frage ohne Antwort.** An jeder
+Fläche stand *Bohrung setzen* zweimal: `drill_hole` und `drill_brep_hole`
+tragen denselben Titel, und der Kunde traf seine Wahl blind — je nach Zeile
+bekam er einen anderen Rechenkern. Die Menüleiste legt das Paar seit je über
+`MENU_TWINS` zusammen; `panels.operations_for_feature` gab
+`REGISTRY.for_feature` ungefiltert weiter und kannte die Zusammenlegung nicht.
+**Dieselbe Frage, zwei Rechnungen** — genau der Grund, aus dem die Menütiefe in
+den Kern gewandert ist.
+
+#### Die Oberfläche wächst nicht mit
+
+Die Menüleiste
+setzt die Eigenschaft an ihren drei Stellen seit je; das Kontextmenü am Körper
+und das der Skizze taten es nicht, und damit war die ganze Kette umsonst.
+
+#### Die Oberfläche wächst nicht mit
+
+Der Test daneben prüfte den **Wert** von `toolTip()`, und der war immer
+richtig.
+
+#### Die Oberfläche wächst nicht mit
+
+Zwei Stufen
+davor lagen falsch: „Exakt bohren" ließ `test_theme_and_palette` fallen, weil
+die Befehlspalette nach Titel sortiert und der Eintrag bei der Suche nach
+„bohren" *vor* „Bohrung setzen" landete; „Exakten Quader anlegen" mit dem
+Wort davor las sich wie eine Qualitätsstufe („das andere ist also ungenau?"),
+obwohl es den Rechenkern meint.
+
+#### Die Oberfläche wächst nicht mit
+
+Der
+Bezugspunkt des Netz-Quaders stand in derselben aufgeklappten Gruppe wie der
+Umschalter selbst, also genau dort, wo jeder vorbeikommt; auf „Ecke" gestellt
+kam ein mittiger Quader und kein Ton dazu.
+
+#### Die Oberfläche wächst nicht mit
+
+Als Tabelle hatte sie einen Eintrag, während fünf
+Operationen bedingte Felder trugen — *Kopien in Reihe oder Kreis* allein sechs —
+und sie hatte damit ihre eigene Begründung widerlegt: Dieselbe Auskunft brauchen
+vier Oberflächen, und genau eine hatte sie.
+
+#### Die Oberfläche wächst nicht mit
+
+Der
+Skizzentext hat ihn seit je, die Stellung eines Skeletts bekam ihn spät:
+`kind="armature"` fiel auf ein Textfeld durch, und der kürzeste Weg zu einem
+gebeugten Arm ging über getipptes JSON.
+
+#### Die Oberfläche wächst nicht mit
+
+Sechsundzwanzig von hundert
+Operationen tragen einen (gemessen am 29.08.2026; hier stand „zwölf", und die
+Zahl war mit dem Bestand nicht mitgewachsen — sie ist deshalb jetzt geprüft,
+siehe `tests/test_registry_consistency.py`). Gelesen hat ihn lange allein die
+Handbuchreferenz — nicht der Dialog, in dem
+gerade jemand die Operation anwendet, nicht der Tooltip am Menüeintrag, nicht
+die Werkzeugliste des Agenten.
+
+#### Die Oberfläche wächst nicht mit
+
+Die
+Menüleiste tat es (`by_category`), Palette und Kontextmenü gaben die Ordnung
+von `Registry.all()` weiter — die der internen englischen Bezeichner. Gelesen
+hat man dort „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
+anordnen". Nicht `str` und nicht `casefold`: 23 der 85 Titel tragen einen
+Umlaut, und „Überhangfächer" landet nach Codepunkt hinter allem anderen.
+
+#### Wie die Karten ihre Höhe teilen
+
+* **Gerechnet wird nie mit den Höhen, die gerade gesetzt wurden.** Eine
+  Zuteilung, die ihr eigenes Ergebnis liest, bekommt beim nächsten Durchlauf
+  andere Zahlen und die Karte läuft auf und ab — bei einem einzigen Aufklappen
+  waren es 905 Geometriewechsel. Deshalb taugt `natural_height` **innerhalb**
+  der Zuteilung nicht: sie liest für ihre Rollbereiche die gelegten Höhen und
+  schwankte zwischen 389 und 1275 Pixeln. `extra_height` rechnet strukturell —
+  je Posten der Unterschied zwischen dem, was er als Ganzes wünscht, und dem,
+  was die Karten darin wünschen — und stand über Zuteilungen von 60 bis 900
+  Pixeln unverändert auf 217.
+* **Was nicht den Karten gehört, wird abgezogen.** Abschnittsköpfe,
+  Parameterleiste, Layoutabstände. Ungekürzt verteilt die Zuteilung mehr Höhe,
+  als die Zone hat: Der Objektbaum stand auf 500 Pixeln in einem Abschnitt von
+  121, das Elternwidget schnitt die Differenz weg, und weil der Baum von seiner
+  eigenen Höhe ausging, meldete sein Rollbalken dazu nichts. Zehn Zeilen waren
+  nicht abgeschnitten, sondern unerreichbar.
+* **Jede Karte nennt ihren Boden** (`RoomTaker.least_height`), und verteilt wird
+  nur, was darüber liegt. Sonst ist die Zuteilung eine Bitte: Der leere Verlauf
+  meldete vier Pixel Bedarf, bekam anteilig drei und setzte 112 durch. Der Boden
+  hat zwei Quellen, und beide zählen — `fit_to_rows` mit seinen drei
+  Mindestzeilen und der leere Zustand, dessen Höhe aus dem umbrochenen Satz
+  kommt (`fit_wrapped`) und nicht aus der Zeilenrechnung. **Und nie höher als
+  der Wunsch**: Eine Karte, die überhaupt nur eine Zeile *hat*, forderte über
+  jene drei Mindestzeilen 130 Punkte für 128 gewünschte — Platz, den sie
+  niemandem zeigen kann, während die Nachbarn ihn brauchen.
+
+#### Wie die Karten ihre Höhe teilen
+
+**`fit_to_rows` rechnet mit *einer* Zeilenhöhe** — der ersten, mal der Zahl
+der Zeilen. Für einen Baum, in dem jede Zeile gleich aussieht, ist das
+richtig; für eine Liste mit fetten Zwischenüberschriften ist es zu wenig. Die
+Filamentkarte brauchte bei fünf Zeilen 172 Punkte und bekam 156, und die
+letzte Zeile fehlte auch dann, wenn die Spalte ihre volle Wunschhöhe hatte und
+ringsum Platz frei war. Wer eine Liste mit ungleichen Zeilen bemisst, nimmt
+`overlay.rows_height` — es misst jede Zeile einzeln, und `wanted_height` muss
+dieselbe Quelle nehmen wie das Setzen, sonst fordert die Karte etwas anderes,
+als sie einrichtet.
+
+**Und was unter der Liste steht, gehört in beide Rechnungen.** Hinweis und
+Knöpfe einer Karte sind kein Beiwerk der Zone, sondern Teil der Karte: Wer der
+Liste die ganze Zuteilung gibt, schiebt sie unten heraus. Bei der
+Filamentkarte waren das *Filament anlegen …* und *Druckwerte …* — der einzige
+Weg zu einer neuen Spule, und er stand außerhalb des Fensters.
+
+#### Barrierefreiheit
+
+- **Aber auch keine Bedeutung ohne Farbe, wo Farbe die Sache ist.** Ein
+  Materialslot ohne eigene Farbe bekam in der Ansicht die Körperfarbe — bei
+  zwei bemalten Slots zwei gleiche Einträge in derselben Tabelle, und das
+  Bemalen war im Bild folgenlos. `theme.slot_colour` gibt die Ersatzfarbe
+  (Okabe/Ito, sieben Einträge; Slot 0 ist das unbemalte Teil und bekommt
+  `None`); im **Dokument** steht sie nicht, denn keine Farbe zu haben ist ein
+  Zustand, den „Slot zuweisen" auflöst. Die Zahl daneben bleibt: Die
+  Pinselleiste zeigt Farbfeld **und** Name, „neu" für einen Slot, den der
+  gewählte Körper noch nicht hat.
+- **Dasselbe Problem bietet dieselben Handlungen**, gleich wer es meldet.
+  „Nicht geschlossen" meldet der Kern beim Einlesen, beim Exportieren und nach
+  jedem Zug des Agenten; zwei trugen ihre zwei Handlungen, der dritte nichts.
+  **Seit dem Filament-Konzept (26.08.2026) ist die Ersatzpalette eine
+  Grauleiter, keine Buntpalette mehr:** Okabe/Ito begann mit einem Orange,
+  das von der Auswahlfarbe nicht zu unterscheiden war (Kontrast 1,09) — die
+  allererste Bemalung sah aus wie eine Auswahl. Echte Farben kommen vom
+  Kunden (Farbwähler, Filamentkatalog); die Leiter zeigt nur den Zustand
+  davor, unbunt und je Stufe unterscheidbar
+  (`test_no_fallback_colour_can_be_mistaken_for_the_selection`).
+  `FINDING_ACTIONS` (`app/ui/panels.py`) hält die Zuordnung, und
+  `tests/test_value_labels.py` prüft die **Familie**: Befunde mit demselben
+  Namen hinter dem Punkt melden dasselbe Problem, und trägt einer eine
+  Handlung, müssen es alle.
+
+#### Barrierefreiheit
+
+- **Die Kennung entscheidet über die Handlung, also muss sie den Fall
+  treffen.** „Passt nicht" und „liegt woanders" sind zwei Fälle, und die
+  Trennlinie ist nicht, über welche Seite ein Körper hinaussteht, sondern ob er
+  überhaupt hineinpasst (`prepare._fits_at_all`). Gemessen am häufigsten
+  Importfall überhaupt: Eine 3MF aus Bambu Studio, Orca oder Elegoo führt
+  **Bettkoordinaten**, ihre Körper liegen also rechts neben dem Bett — 132 mm
+  breit auf einem 256er Bett. Angeboten wurden *Modell teilen*, *Auf den
+  Bauraum verkleinern* und *Anderen Drucker wählen*, dreimal, gleich beim
+  Öffnen. Was hilft, ist *Auf dem Bett anordnen*.
+
+#### Barrierefreiheit
+
+- **Ein Klick auf einen Befund bleibt nie folgenlos.** Er ist die Geste, die
+  §2.7 dem Prüfbericht ausdrücklich verspricht, und sie war leer: Gemessen am
+  30.08.2026 über alle 58 Befunde der Beispielprojekte löste **keiner** eine
+  sichtbare Reaktion aus. Zwei Ursachen — ein Operationsfehler trägt weder Ort
+  noch Merkmale (der Kern gibt ihm `object_id` und `op_id`), und der Ort eines
+  Kartenbefunds steht erst fest, wenn die Karte gerechnet ist, was beim ersten
+  Klick nie der Fall ist. Beim zweiten ging es, und damit sah es aus wie ein
+  Bedienfehler des Kunden.
+
+#### Barrierefreiheit
+
+* **`valueChanged` ist eine Lesestelle, die die Umrechnung überspringt.** Der
+  Docstring von `LengthSpin` versprach, es gebe keine — „`value()` heißt hier
+  nicht mehr, was der Kern will". Qts Signal trägt aber genau die Zahl aus dem
+  Feld, und dafür muss niemand `value()` schreiben. Sechs Stellen im Fenster
+  nahmen sie: Der Pinselradius kam als 0,1969 in der Szene an, wo 5 mm
+  eingestellt waren, und `stroke_at` schrieb damit **Geometrie ins Dokument**.
+  `valueChangedMm` ist dieselbe Nachricht in der Einheit des Kerns;
+  `valueChanged` bleibt für alles, was den Wert fallen lässt und selbst
+  `value_mm()` liest.
+* **Ein Einheitenwechsel meldet nichts.** `refresh_unit` legte die neue Spanne,
+  während noch der Wert der alten stand — Qt klemmt ihn und feuert damit. Ein
+  Feld auf 10 mm gab seinem Empfänger 99,9998, bevor es 10,0 gab. In
+  Millimetern ändert sich beim Wechsel nichts, also gibt es nichts zu melden:
+  der Tausch läuft unter `blockSignals`.
+
+#### Tests
+
+**Ein modaler Dialog auf einem Startweg hält die ganze Suite an.** Am
+03.09.2026 kam ein Hinweis vor den Druckeinstellungs-Dialog — richtig gebaut,
+fehlerfrei, am falschen Ort: `QDialog.exec()` wartet offscreen auf einen Klick,
+den es nie gibt. Betroffen war jeder Test, der die Druckeinstellungen öffnet,
+und die CI bis zu ihrem Sechs-Stunden-Limit.
+
+Das Tückische ist nicht der Fehler, sondern seine Anzeige: **Die Suite wird
+nicht rot, sie steht.** Kein Name, kein Fehlschlag, nur ein Protokoll, das
+nicht mehr wächst — gefunden hat es eine Nachbarsitzung mit
+`py-spy dump --native`, und dort stand die Stelle wörtlich.

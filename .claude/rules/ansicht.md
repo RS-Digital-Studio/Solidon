@@ -21,26 +21,17 @@ Regeln der Oberfläche gelten weiter und laden zusätzlich.
 
 ## Was nur das Bild zeigt
 
-Vier Fehler am selben Tag, alle vier durch eine grüne Suite gekommen, alle vier
-im gerenderten Fenster sofort zu sehen:
-
-| Fehler | Warum kein Test ihn fand |
-|---|---|
-| Hauptknopf ohne Beschriftung | `click()` funktioniert auf einem leeren Knopf |
-| Skala in vier von sechs Sprachen abgeschnitten | die Werte stimmten, nur die Breite nicht |
-| Nebenfeld doppelt so hoch wie die Hauptfrage | ein Layout hat kein Richtig und Falsch |
-| Aufklappmenü als erste Zeile über einer Frage | es tat genau das, was es sollte |
-
-Die Regel dazu ist keine neue, sondern die aus §35 an ein Widget gerichtet:
+Die Regel ist keine neue, sondern die aus §35 an ein Widget gerichtet:
 **Was man nicht angesehen hat, ist ungeprüft.** Ein Dialog wird deshalb einmal
-gerendert und angesehen, bevor er als fertig gilt.
+gerendert und angesehen, bevor er als fertig gilt — vier Fehler kamen an einem
+Tag durch eine grüne Suite und waren im gerenderten Fenster sofort zu sehen
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Und angesehen wird unter der echten Plattform.** Unter
 `QT_QPA_PLATFORM=offscreen` hat Qt auf dieser Maschine null Schriftfamilien:
 Jede Beschriftung wird ein leeres Kästchen, und **jede Breitenmessung ist
-damit falsch**. Der erste Blick auf den Bogen sagte „die Skala passt"; unter
-der echten Plattform brauchte sie in Portugiesisch 635 Punkte, wo 598 da
-waren. Dieselbe Falle steht bei den erzeugten Bildern (`/erzeugen`) — sie gilt
+damit falsch** (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+Dieselbe Falle steht bei den erzeugten Bildern (`/erzeugen`) — sie gilt
 für jede Messung an einem Widget, nicht nur für Bildschirmfotos.
 
 Der Aufruf dafür ist drei Zeilen und braucht kein Fenster auf dem Schirm:
@@ -58,10 +49,9 @@ dialog.grab().save("bogen.png")
 `set_language` setzt eine Variable und sonst nichts; geladen wird über
 `install_catalog(sprache, read_catalog(sprache))`, so wie `make_figures.py` es
 tut. Ohne diese Zeile ist jedes Bild deutsch — und der Lauf sieht vollständig
-aus, weil er sechs Dateien schreibt und sechs Zeilen ausgibt. Der
-Rezeptdialog wurde am 25.08.2026 so „in sechs Sprachen geprüft"; aufgefallen
-ist es erst am portugiesischen Bild, auf dem „Welche Maße soll man einstellen
-können?" stand. **Die Gegenprobe kostet nichts: Sind zwei Bilder gleich groß,
+aus, weil er sechs Dateien schreibt und sechs Zeilen ausgibt
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+**Die Gegenprobe kostet nichts: Sind zwei Bilder gleich groß,
 zeigen sie dasselbe.**
 
 Dazu `install_qt_translations(app, sprache)` (`app/ui/app.py`) — Qts eigene
@@ -138,14 +128,11 @@ zu wenig Platz — und sie schließt einen Kreis, wenn man sie naiv baut:
     eng → Symbole → schmaler → kleinere Wunschbreite → Container gibt weniger
         → immer noch „eng" → nie zurück
 
-Am 30.08.2026 an der Bewegen-Leiste gemessen: Bei einem **1600 Punkte breiten**
-Fenster stand sie auf 677 und zeigte kein einziges Wort. Der Platz war da; sie
-hat ihn nur nicht mehr verlangt.
-
 **Wer nachgibt, verlangt weiter das Volle.** `sizeHint()` meldet die Breite
 **mit** Beschriftung, auch während Symbole stehen; die gemerkte Zahl entsteht
 im breiten Zustand und wird im engen nur verglichen. Damit bekommt die Leiste
-den Platz, wo er da ist, und weicht nur, wo er wirklich fehlt.
+den Platz, wo er da ist, und weicht nur, wo er wirklich fehlt
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Das ist dieselbe Lehre wie bei der Höhenverteilung der Karten
 (`oberflaeche.md`, „Gerechnet wird nie mit den Höhen, die gerade gesetzt
@@ -164,10 +151,10 @@ wurden") — hier in der Breite und mit einem Zustand statt einer Zahl.
 
 ### Ein Messwert, der zu glatt ist, ist selbst der Befund
 
-Dieselbe Leiste maß **677 in allen sechs Sprachen**, auf die Stelle genau. Die
-Wörter sind verschieden lang — „Verschieben", „Move", „Mettre à l'échelle" —,
+Die Wörter sind verschieden lang — „Verschieben", „Move", „Mettre à l'échelle" —,
 und eine identische Breite kann es nur geben, wenn **kein Wort mehr da ist**.
-Die Zahl war das Symptom, nicht die Entwarnung.
+Die Zahl war das Symptom, nicht die Entwarnung
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Die Frage davor kostet nichts: **Sollte dieser Wert sich unterscheiden?** Wo
 Sprache, Schrift oder Inhalt eingehen und trotzdem dieselbe Zahl herauskommt,
@@ -310,10 +297,8 @@ irgendwo stehen muss.
 
 `_feature_at` hatte keine, und das war der gemeldete Fehler: Es nahm das
 Merkmal mit dem nächsten **Mittelpunkt**, es gab also immer einen Gewinner,
-sobald der Körper ein Merkmal hatte. An der Korpusplatte wählte ein Klick auf
-die Deckfläche sieben Millimeter neben einer Bohrung die Bohrung (8,1 mm zum
-Bohrungsmittelpunkt gegen 36,1 mm zur Mitte der 80 mm langen Deckfläche), und
-ein Klick nahe der Stirnseite wählte die Stirnfläche.
+sobald der Körper ein Merkmal hatte
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Gemessen wird gegen die **Dreiecke** des Merkmals
 (`geom.mesh.distance_to_triangles`), gegen den nächsten Ort *auf* dem Dreieck
@@ -337,25 +322,17 @@ Drei Folgen davon:
   Merkmale nötig, deren Quader ihn überhaupt erreicht. Geleert wird in
   `show_scene` — die Dreiecke gehören einer Auswertung, nicht dem Viewport.
 
-**Und jeder Klickpfad rechnet über `_from_view` in die Szene zurück** (§25).
-Der Rechtsklick tat es nicht und die Zeigersuche auch nicht: Auf Platte 2
-fragten beide eine Bettbreite daneben, fanden dort meist keinen Körper, und der
-Rechtsklick hob die Auswahl auf, statt das Menü zu ihr zu zeigen.
+**Und jeder Klickpfad rechnet über `_from_view` in die Szene zurück** (§25) —
+Linksklick, Rechtsklick und Zeigersuche gleichermaßen; auf Platte 2 fragt sonst
+einer eine Bettbreite daneben
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 ### Ein Klick ist eine Blickrichtung, kein Punkt
 
 Der Abschnitt darüber setzt voraus, dass unter dem Zeiger ein Dreieck liegt.
-**Bei einer Bohrung liegt dort keines**, und das war der zweite gemeldete
-Fehler an derselben Stelle: „wir erwischen oft nur die Oberfläche und kommen
-nicht zur Bohrung". Gemessen am echten `vtkCellPicker` in einem sichtbaren
-Fenster, Korpusplatte, Bohrung 32 Bildpunkte breit, Pixel neben der
-Bohrungsmitte:
-
-| | Draufsicht | Isometrisch | Vorderansicht |
-|---|---|---|---|
-| 0–8 px | **kein Treffer** | `hole_1` | `face_3` |
-| 12 px | `hole_1` | **kein Treffer** | `face_3` |
-| 16 px | `face_2` | `face_2` | `face_3` |
+**Bei einer Bohrung liegt dort keines** — in der Draufsicht trifft ein Klick in
+die Bohrungsmitte nichts, und schon wenige Bildpunkte neben ihr gewinnt die
+Deckfläche (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Zwei Ursachen, und beide liegen vor der Reichweite:
 
@@ -366,8 +343,7 @@ Zwei Ursachen, und beide liegen vor der Reichweite:
   Ansicht, in der man ein Lochbild anklickt.
 * **Landet der Strahl daneben auf der Deckfläche, gewinnt sie immer.** Ihr
   Abstand ist null, der der Bohrung größer als null; die Reichweite ist eine
-  Obergrenze und kein Vorrang. Gemessen gab schon ein Punkt 0,4 mm neben dem
-  Bohrungsrand `face_2`, bei einer Reichweite von 0,95 mm.
+  Obergrenze und kein Vorrang.
 
 Gefragt wird deshalb der **Sichtstrahl** (`_pick_ray` → `_bore_aim`, gerechnet
 in `bore_span`): Welche Bohrung durchquert er, bevor er auf dem Sichtbaren
@@ -375,8 +351,8 @@ landet? Drei Eigenschaften daran sind tragend:
 
 * **`until` ist der Auftreffpunkt, und ohne diese Grenze wird es falsch.** In
   der Vorderansicht liegt hinter der Stirnfläche jede Bohrung der Platte; was
-  der Strahl erst dahinter durchquert, hat niemand gemeint. Die dritte Spalte
-  oben ist die Gegenprobe und bleibt unverändert `face_3`.
+  der Strahl erst dahinter durchquert, hat niemand gemeint; die Vorderansicht
+  ist die Gegenprobe und wählt weiter die Stirnfläche.
 * **Der Achsbereich kommt aus den Dreiecken des Merkmals**, nicht aus `depth`
   und nicht aus dem Hüllquader — der kennt die Achse nicht, und eine schräge
   Bohrung hat beides. Ohne die Begrenzung reicht der Zylinder unendlich weit
@@ -476,8 +452,8 @@ Entschieden wird dort deshalb nicht, welches Merkmal gemeint ist, sondern
 * **Die Hülle und nicht der Hüllquader.** Der Quader eines L-Profils reicht
   weit ins Leere, und damit wäre die Zusage aus §18.5 weg, dass ein Klick
   daneben die Auswahl aufhebt — der einzige Weg, sie ohne den Objektbaum
-  loszuwerden. Gemessen: 0 bis 30 px in einem 12×8-Ausschnitt geben jetzt den
-  Körper, ab 60 px unverändert `face_2`, und 100 mm neben dem Teil nichts.
+  loszuwerden
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 * **Die Kerbe zählt mit, und das ist gewollt.** Durch den fehlenden Quadranten
   eines L-Profils läuft der Strahl in der Hülle, ohne das Netz zu treffen. Ein
   Kriterium, das das ausnimmt, müsste „Loch" von „Einbuchtung" unterscheiden —
@@ -635,21 +611,11 @@ Der ganze Griffaufbau stürzt damit ab. **Das ist der eine Ort in der
 Oberfläche, an den ein übersetzter Text nicht darf** — überall sonst zeichnet
 Qt, und Qt kann jede Sprache.
 
-**Der Fall ist am 30.08.2026 passiert und wäre auf Deutsch nie aufgefallen.**
-Am Griff standen kurz ein Doppelpfeil und der Name der Fläche aus
-`feature_name`. Deutsch ist „Oberseite", „Unterseite", „Vorderseite" — alles
-ASCII. Französisch nicht:
-
-| | |
-|---|---|
-| `Oberseite` | `Face supérieure` |
-| `Rückseite` | `Arrière` |
-| `Linke Seite` | `Côté gauche` |
-| `Rechte Seite` | `Côté droit` |
-
-Vier von sechs. Ein Kunde auf Französisch hätte beim Klick auf eine Fläche
-einen Absturz bekommen, und ein Torlauf in deutscher Umgebung hätte
-geschwiegen — die Sorte Fehler, die es bis zum Kunden schafft.
+**Der Fall wäre auf Deutsch nie aufgefallen.** Deutsch ist „Oberseite",
+„Unterseite", „Vorderseite" — alles ASCII. Französisch nicht: `Face
+supérieure`, `Arrière`, `Côté gauche`, `Côté droit`, vier von sechs. Ein Torlauf
+in deutscher Umgebung hätte geschwiegen — die Sorte Fehler, die es bis zum
+Kunden schafft (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Wohin der Text stattdessen gehört:** in die Statusleiste. Sie zeigt bei
 gewähltem Merkmal ohnehin „Platte · Oberseite", dort zeichnet Qt, und dort
@@ -663,10 +629,8 @@ wieder tut.
 
 ## Der Bewegen-Griff gehorchte niemandem (03.09.2026)
 
-Robert: „bei bewegen geht das drehen des modells nicht nur das normale
-verschieben was auch so geht" und „hover effekt welche achse man wählt".
-Beides derselbe Befund, und dahinter lagen **zwei** Fehler, die einander
-verdeckten.
+Zwei Fehler, die einander verdeckten, und aus jedem eine Regel
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026):
 
 **pyvistas Widget sucht seinen Renderer über den Interaktionsstil.**
 `AffineWidget3D._move_callback` beginnt mit
@@ -675,21 +639,18 @@ seine fünf Navigationsschemata einen eigenen Stil. Der hat kein `_parent`:
 Jede Mausbewegung über dem Griff endete in `AttributeError: 'Style' object has
 no attribute '_parent'`, den pyvistaqt zu einer Warnung macht, die niemand
 sieht. Derselbe Rückruf setzt `_selected_actor`, und ohne den tut
-`_press_callback` nichts — **der Griff war nicht greifbar**. Was weiter ging,
-war unsere eigene Zuggeste am Körper, und genau die hat Robert „das normale
-verschieben was auch so geht" genannt.
+`_press_callback` nichts — **der Griff war nicht greifbar**; was weiter ging,
+war unsere eigene Zuggeste am Körper.
 
 Dass pyvista diesen Weg geht, stand seit je im Docstring von
 `_InteractorStyle` — für `enable_point_picking`, das deshalb selbst gebaut
-ist. **Der zweite Fall derselben Sache hat zwei Monate gewartet**: ein
-reparierter Fehler mit einem Zwilling, den niemand gesucht hat. Der Griff
-bekommt jetzt sein `_parent` (ein `weakref` auf `plotter.iren`).
+ist. Der Griff bekommt sein `_parent` (ein `weakref` auf `plotter.iren`).
 
 **Und der Picker des Widgets trifft in dieser Umgebung nichts.** Es stellt
 sich beim Anhängen selbst einen `vtkHardwarePicker` hin (`enable_mesh_picking
-(picker='hardware')`). Gemessen am laufenden Fenster fand der nicht einmal den
-Körper in der Bildmitte, während ein `vtkCellPicker` an derselben Stelle
-antwortet; `vtkPropPicker` ebenso wenig — beide gehen über die Hardware. Ohne
+(picker='hardware')`), und der findet nicht einmal den Körper in der Bildmitte,
+während ein `vtkCellPicker` an derselben Stelle antwortet; `vtkPropPicker`
+ebenso wenig — beide gehen über die Hardware. Ohne
 Treffer kein `_selected_actor`, also derselbe tote Griff eine Ebene tiefer.
 `_give_the_widget_a_picker_that_hits` setzt deshalb einen Zell-Picker, **nach**
 dem Anhängen (vorher wäre er in derselben Zeile wieder weg) und an **beiden**
@@ -714,29 +675,17 @@ Zeile wieder weg. `_magnetise_turn` hängt an `MouseMoveEvent`, läuft danach un
 dreht um die Differenz zurück (`rotation_about` im Kern, denn die Ansicht
 rechnet keine Geometrie). Die Rechnung des Widgets bleibt unberührt: Sie geht
 jedes Mal von `_cached_matrix` und der Zeigerstelle aus, nicht vom letzten
-Ergebnis. Der Beobachter lebt genau so lange wie der Griff.
-
-Am laufenden Fenster gemessen, ein Zug über 59 Schritte am Y-Ring:
-
-| Zugstrecke | gezeigter Winkel |
-|---|---|
-| Anfang bis Schritt 23 | 0 → 40,5° frei |
-| Schritt 24 bis 46 | **45,0°**, dreiundzwanzig Schritte lang |
-| ab Schritt 47 | 49,2° → 51,4° frei |
+Ergebnis. Der Beobachter lebt genau so lange wie der Griff
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 ## Was die Ansicht sich merkt — und was VTK nicht annimmt (03.09.2026)
 
-**Drei Ansichtseinstellungen waren flüchtig.** Darstellung (massiv, mit
-Kanten, Drahtgitter, transparent), Schattierung und Projektion standen in
-keiner Einstellung: Wer *Transparent* wählte, hatte beim nächsten Start wieder
-*Massiv* — und hielt es für die eigene Erinnerung (Robert, 03.09.2026:
-„sollte leicht durchsichtig sein seit dem letzten update"). Dazu trugen die
-zwölf Menüeinträge **kein Häkchen**; man sah also auch im laufenden Programm
-nicht, welcher gilt.
-
-Beides zusammen behoben, nach dem Muster von Thema und Navigation: drei
+**Darstellung (massiv, mit Kanten, Drahtgitter, transparent), Schattierung
+und Projektion sind Einstellungen**, und ihre zwölf Menüeinträge tragen ein
+Häkchen — nach dem Muster von Thema und Navigation: drei
 `QActionGroup`s mit Häkchen, drei `action_`-Methoden, die setzen, merken und
-speichern, und `_apply_settings` wendet sie beim Start an. Der Skizzenmodus
+speichern, und `_apply_settings` wendet sie beim Start an
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Der Skizzenmodus
 stellt Darstellung und Projektion weiterhin **direkt am Viewport** um und
 nimmt es beim Verlassen zurück — das ist eine Leihgabe und keine Entscheidung
 des Nutzers, also wird sie nicht gespeichert.
@@ -747,37 +696,27 @@ Der Fund kam aus dem Quelltext (3d-druck-85): `enable_depth_peeling` gibt es
 im Viewport nicht, also mischt VTK halbdurchsichtige Flächen in der
 Reihenfolge, in der die Aktoren angelegt wurden.
 
-**Im Bild bestätigt.** Zwei transparente Quader hintereinander, Blick von
-vorn, dieselbe Szene in zwei Einfügereihenfolgen:
-
-    vorne zuerst gegen hinten zuerst:  13 784 Bildpunkte anders,
-                                       größte Abweichung 47 von 255
-
 **Und zweimal gemessen nicht behebbar** — jedenfalls nicht auf diesem Weg:
-
-| Anlauf | Ergebnis |
-|---|---|
-| `enable_depth_peeling()` beim Umschalten in den Modus | `UseDepthPeeling=1`, `LastRenderingUsedDepthPeeling=**0**`, Bild unverändert |
-| dasselbe **vor** dem ersten Bild, mit acht Schichten und `occlusion_ratio=0` | genauso |
-
-Die Voraussetzungen stimmen dabei (`MultiSamples=0`, `AlphaBitPlanes=1`), und
+`enable_depth_peeling()` beim Umschalten in den Modus wie auch **vor** dem
+ersten Bild, mit acht Schichten und `occlusion_ratio=0`, ergibt
+`UseDepthPeeling=1`, `LastRenderingUsedDepthPeeling=0` und ein unverändertes
+Bild. Die Voraussetzungen stimmen dabei (`MultiSamples=0`, `AlphaBitPlanes=1`), und
 `enable_depth_peeling` gibt `True` zurück — VTK nimmt die Sortierung an und
 fährt sie trotzdem nicht. Der Aufruf ist deshalb **nicht** eingebaut: Ein
 Aufruf, der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas
 bewirkt (dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
 Fensterchrom).
 
-**Ein dritter Weg war halb richtig**, und die Zahl sagt, warum:
-`vtkDepthSortPolyData` vor dem Mapper brachte 9 897 statt 13 784 Bildpunkte
-Unterschied. Er sortiert die Polygone **innerhalb** eines Aktors — der Fall
-hier liegt zwischen zweien.
+**Ein dritter Weg war halb richtig**: `vtkDepthSortPolyData` vor dem Mapper
+sortiert die Polygone **innerhalb** eines Aktors — der Fall hier liegt
+zwischen zweien.
 
 **Was trägt, ist die Ordnung der Aktoren selbst** (`_order_by_depth`): Sie
 werden nach dem Abstand ihres Mittelpunkts zur Kamera neu eingehängt, der
-fernste zuerst. Gemessen: **0 Bildpunkte Unterschied** zwischen den beiden
-Einfügereihenfolgen. Das ist der Maleralgorithmus auf Objektebene — richtig
+fernste zuerst. Das ist der Maleralgorithmus auf Objektebene — richtig
 für getrennte Körper, machtlos bei sich durchdringenden, und genau der
-gemeldete Fall.
+gemeldete Fall
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Drei Dinge daran sind tragend:
 
@@ -796,27 +735,11 @@ Drei Dinge daran sind tragend:
 
 ### Die Druckplatte scheint durch, wenn etwas darunter liegt
 
-Ein Teil unter der Platte war **vollständig** unsichtbar. Gemessen am
-laufenden Fenster: ein Quader von 40 auf 40 auf 30 mm, 35 mm unter Z=0, von
-schräg oben gezählt — **1** Bildpunkt von 263 583. Wer sein Modell versenkt
-oder falsch positioniert hat, sah davon nichts und merkte es beim Slicen
-(Robert, 03.09.2026: „dass man die Modelle auch unter dem Bett durchsehen
-sollte").
-
-Die Entscheidung vom 23.08.2026 löste nur die halbe Sache: `culling = "back"`
+Ein Teil unter der Platte war **vollständig** unsichtbar: `culling = "back"`
 wirft die Rückseite der Ebene weg, also sieht man **von unten** hindurch. Von
-oben blieb sie undurchdringlich.
-
-| Deckkraft der Fläche | Körper sichtbar |
-|---|---|
-| 1,00 | 1 Bildpunkt |
-| 0,80 | 81 675 |
-| 0,60 | 258 370 |
-| **0,45** | **262 077** |
-| 0,30 | 263 773 |
-
-`BED_SUNKEN_OPACITY` ist 0,45 — praktisch alles, und dieselbe Zahl, die der
-Darstellungsmodus *Transparent* schon führt.
+oben blieb sie undurchdringlich. `BED_SUNKEN_OPACITY` ist 0,45 — praktisch
+alles, und dieselbe Zahl, die der Darstellungsmodus *Transparent* schon führt
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Und sie gilt nur, solange wirklich etwas darunter liegt** (`sunken_body`,
 gefragt an der Szene und nicht am Bild). Das ist Roberts ausdrückliche
@@ -887,16 +810,8 @@ Methode (`_FramingPlotter.reset_camera`) hat den Unterschied gemessen.
 
 ### Die Kantensuche läuft einmal je Netz, nicht einmal je Aufbau
 
-`extract_feature_edges` war der teuerste einzelne Posten eines Szenenaufbaus.
-Am Kundenmodell `chufang.3mf` gemessen (32 Körper, 5 476 596 Dreiecke,
-03.09.2026), Aufbau für Aufbau:
-
-| Posten | ohne Cache | mit Cache |
-|---|---|---|
-| `_draw_feature_edges` (32×) | **453 ms** | **61 ms** |
-| `plotter.add_mesh` (65×) | 193 ms | 203 ms |
-| `_remember_shadow` (32×) | 28 ms | 32 ms |
-| **`show_scene` insgesamt** | **1,02 s** | **0,74 s** |
+`extract_feature_edges` war der teuerste einzelne Posten eines Szenenaufbaus
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Der Kommentar bei `FEATURE_EDGE_LIMIT` rechnet mit „dreißig Millisekunden
 je Körper und Szenenaufbau". Die Rechnung stimmt; ihre **Annahme** stimmt
@@ -924,47 +839,12 @@ angefasst hätte, hätte nichts gewonnen.
 
 ### Jeder Ansichts-Setter prüft auf Änderung
 
-Sieben von acht Szenenaufbauten waren unnötig. Gemessen am 03.09.2026 am
-laufenden Fenster (Zähler um `show_scene` **und** um alle acht Setter),
-vier gewöhnliche Handlungen an `aushoehlen-und-teilen.p3d`:
-
-| Handlung | vorher | nachher |
-|---|---|---|
-| Körper anklicken | 1 | **0** |
-| zweiten Körper anklicken | 1 | **0** |
-| Themenwechsel dunkel → hell | 3 | **1** |
-| dasselbe Thema noch einmal | 1 | **0** |
-| Modus zweimal auf denselben Wert | 2 | **1** |
-| **Summe** | **8** | **2** |
-
-An `chufang.3mf` (32 Körper, 5 476 596 Dreiecke) kostet ein Aufbau
-**0,74 s** — ein Klick auf einen Körper also drei Viertel Sekunden
-für nichts, ein Themenwechsel gut zwei.
-
-**Sichtbar wurde es an einer anderen Stelle**, und zwar als Fehler: Nach einem
-Zug am Griff sprang der Körper an die alte Stelle zurück, bevor er an
-der neuen landete (Robert, 03.09.2026). Die Kette, gemessen:
-
-```
- 8439 ms  transformDragged offset=(25,0,0)
- 8674 ms  das neue Ergebnis liegt vor
- 8698 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
- 8879 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
- 9006 ms  set_analysis_map(None, None) -> Aufbau mit ALTER Geometrie
- 9189 ms  Aufbau mit der neuen Geometrie
-```
-
-Jeder dieser Aufbauten nimmt dem Actor seine Vorschau-Matrix; **491 ms** stand
-das Teil dort, wo es hergekommen war. Danach: **ein** Aufbau, mit der neuen
-Geometrie, kein Rücksprung.
-
-**Zwei Verdächtige sind gemessen ausgeschieden** — sie standen der
-Diagnose im Weg, weil beide plausibel aussahen. `_end_drag` räumt den
-Schattenversatz zurück (`e3648624`), aber der Versatz bleibt über den
-ganzen Vorgang bei (0,0,0). Und pyvistas `AffineWidget3D` fasst beim
-Neuanhängen die `user_matrix` nicht an: `remove()` entfernt nur Kreise und
-Pfeile, `__init__` setzt sie nur, wenn sie `None` ist. Die Vorschau
-überlebt `_on_gizmo_released` unverändert.
+Sieben von acht Szenenaufbauten waren unnötig — ein Klick auf einen Körper,
+ein Themenwechsel, derselbe Wert noch einmal —, und an einem großen Modell
+kostet jeder drei Viertel Sekunden. Sichtbar wurde es als Fehler: Jeder
+Aufbau nimmt dem Actor seine Vorschau-Matrix, und nach einem Zug am Griff
+sprang der Körper an die alte Stelle zurück, bevor er an der neuen landete
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Die Prüfungen im Einzelnen:
 
@@ -1049,12 +929,8 @@ teurer als das, was sie ersetzt. Über `SHADOW_HULL_POINTS` genügt eine
 Stichprobe — plus die äußersten Punkte in vierzehn Hauptrichtungen, sonst
 verliert ein gescannter Halter seine Ecken.
 
-Zahlen an Bildern werden **angesehen, nicht nur gerechnet**. Der Radius der
-Umgebungsverdeckung stand mit plausibler Begründung auf dem schwächsten Wert
-seiner Messreihe; der doppelte ViewCube fiel erst im neu aufgenommenen
-Handbuchbild auf. Beim Schatten war es dieselbe Sorte Fehler: der Kommentar
-beschrieb, wohin er fallen sollte, und niemand hatte nachgesehen, wohin er
-fiel.
+Zahlen an Bildern werden **angesehen, nicht nur gerechnet**
+(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Ein Layout, das nur bei der geprüften Breite stimmt, ist ungeprüft.** Drei
 Fehler wurden am selben Tag sichtbar, und alle drei erst, als das Handbuch die
@@ -1233,11 +1109,10 @@ ein Vorbild haben.
   neuen Schemas: Ein Klick in die Ansicht nimmt seither den Fokus aus einem
   Eingabefeld. Wer einen Test schreibt, der nach einem Klick in die Ansicht
   noch tippt, tippt jetzt in die Ansicht. **Für die Bedienung ist das
-  unschädlich, und zwar gemessen** (3d-druck-c7, 03.09.2026, am echten
-  Fenster — offscreen vergibt Qt gar keinen Fokus): Das Anwenden in der
-  Bewegen-Leiste hängt seit dem Wegfall des Knopfes an `returnPressed`, der
-  Viewport nimmt den Fokus beim Klick, das Feld holt ihn beim nächsten zurück,
-  und die Eingabetaste wirkt.
+  unschädlich, und zwar gemessen** am echten Fenster — offscreen vergibt Qt
+  gar keinen Fokus; ein Feld holt sich den Fokus beim nächsten Klick zurück,
+  und die Eingabetaste wirkt
+  (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Was kein Test prüfen kann, prüft ein Werkzeug von Hand.** Offscreen bleibt
 `Viewport.plotter` auf `None` — die Suite kann VTK also gar nicht erst nach
@@ -1258,3 +1133,53 @@ er die Lücke zur stillen Vorgabe macht); jedes trägt einen Namen im
 Einstellungsdialog (sonst wäre es gebaut, geprüft und unerreichbar); die sechs
 Flugtasten decken drei Achsen in beide Richtungen ohne Dopplung; und der Flug
 nimmt den Blickpunkt mit, wo der Zoom ihn stehen lässt.
+
+## Der Drehpunkt ist, was in der Bildmitte steht (04.09.2026)
+
+Robert: „beim rotieren der ansicht wollen wir uns um den mittelpunkt des
+viewports drehen." Der Bauplan sagt es seit je (§2.9, „dreht um den
+Mittelpunkt der Ansicht“); umgesetzt war eine Näherung.
+
+`_aim_rotation` setzte den Fokus auf die Projektion der **Mitte aller Körper**
+auf den Sichtstrahl. Seitlich war der Drehpunkt damit schon die Bildmitte —
+jeder Punkt des Sichtstrahls ist es —, in der **Tiefe** aber die Mitte des
+ganzen Teils. Wer auf ein Detail zoomt, drehte um einen Punkt eine halbe
+Bauhöhe dahinter, und das Detail schwenkte aus dem Bild.
+
+Gefragt wird deshalb zuerst `centre_hit()`: derselbe Zell-Picker wie bei jedem
+Klick (`_world_at`), in der Mitte des Renderers. Erst wenn dort nichts steht,
+gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
+
+* **Die Kulisse kann den Drehpunkt nicht an sich ziehen**, und zwar ohne eine
+  eigene Regel: `_world_at` beschränkt seine PickList auf die Körperaktoren.
+  Das ist dieselbe Zusage, die 2026-08 als „gedreht wurde um die Kulisse"
+  einmal fehlte — sie hängt jetzt an einer Zeile, die beim Aufräumen
+  überflüssig aussieht.
+* **Der Rückfall ist kein Sonderfall, sondern der Normalfall am Rand.** Über
+  dem Hintergrund findet der Picker nichts, und beim senkrechten Blick in eine
+  Durchgangsbohrung ebenfalls nicht (siehe „Ein Klick ist eine Blickrichtung").
+  Beides endet bei der Mitte der Körper, nicht bei „kein Drehpunkt".
+* **Das gedrückte Rad bekommt ihn auch.** `camera_step` kippt um den
+  Blickpunkt, genau wie VTKs Trackball dreht; der `tilt`-Zweig des
+  Interaktionsstils ruft `on_rotate_start` deshalb ebenso. Ein Drehpunkt, der
+  je nach Taste ein anderer ist, lässt sich niemandem erklären.
+* **Und das Bild ändert sich beim Setzen um nichts.** Der neue Fokus liegt auf
+  dem Sichtstrahl, Stellung und Blickrichtung bleiben — die Bedingung von
+  Robert (23.08.2026, „kamera bei aktueller position dann immer lassen") gilt
+  unverändert.
+
+**Geprüft wird das nicht in der Suite**, denn offscreen gibt es keinen Picker:
+Die Tests in `tests/test_viewport_decisions.py` setzen an die Stelle des
+Plotters eine Attrappe und prüfen damit die Regel, nicht die Kette bis in VTK.
+`.claude/.state/drehpunkt-2026-09-04/` fährt sie am echten Fenster. Gemessen,
+`plate_holes.stl`, Blick schräg auf die Platte, Zug nach rechts:
+
+| | Punkt in der Bildmitte |
+|---|---|
+| über `centre_hit` | **0,00 mm** gewandert |
+| nur über `rotation_centre` | 3,14 mm |
+
+**Eine Falle beim Prüfen davon**, sofort zugeschnappt: Eine Gegenprobe, die
+knapp am Teil vorbeizielt, misst die Toleranz des Zell-Pickers und nicht den
+Hintergrund — sie bekam einen Treffer fünf Millimeter neben der Platte. Wer
+„da ist nichts" prüfen will, blickt in den Himmel.
