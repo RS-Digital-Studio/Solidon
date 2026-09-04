@@ -20,6 +20,7 @@ from app.core.errors import (
     CANCEL,
     CHANGE_SELECTION,
     CORRECT_INPUT,
+    RESIZE_THE_WIDENING,
     GeometryError,
     InternalError,
     ValidationError,
@@ -1564,7 +1565,11 @@ def resize_feature(ctx: OpContext) -> OpResult:
                 features={**source.features, feature.id: changed},
             )
         ],
-        findings=[*closed.findings, *placed.findings],
+        findings=[
+            *closed.findings,
+            *placed.findings,
+            *_widening_findings(source, feature, params.diameter),
+        ],
         solver=placed.solver,
     )
 
@@ -1665,6 +1670,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
             findings.append(nothing)
         findings.extend(over_the_edge_along(source.mesh, centre, axis, cut))
         findings.extend(compensation_findings(params.diameter, cut, params.compensate))
+        findings.extend(_widening_findings(source, feature, params.diameter))
         exact_features = _preserved_exact_features(
             source.features,
             features_of(solid),
@@ -1714,6 +1720,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
         {**carried, feature.id: resized_feature} if resized_feature is not None else dict(carried)
     )
     findings = list(result.findings)
+    findings.extend(_widening_findings(source, feature, params.diameter))
     if resized_feature is None:
         findings.append(_bore_no_longer_a_feature(feature, result.diameter))
     return OpResult(
@@ -1721,6 +1728,79 @@ def resize_hole(ctx: OpContext) -> OpResult:
         solver=result.solver,
         findings=findings,
     )
+
+
+def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -> list[Finding]:
+    """Sagt es, wenn über der geänderten Bohrung eine Senkung sitzt.
+
+    **Der Fall, der diese Funktion veranlasst hat.** Robert hat am 04.09.2026
+    an einem heruntergeladenen Halter den Durchmesser einer Bohrung geändert;
+    über ihr saß eine Senkung Ø 8,16, und die blieb stehen. Im Teil entstand
+    eine Stufe, und gesagt wurde nichts — ``resize_hole`` und
+    ``resize_feature`` ändern genau ein Merkmal und kennen seine Nachbarschaft
+    nicht.
+
+    **Zwei Härten, und der Unterschied ist der Schaden.** Wächst die Bohrung
+    bis an die Senkung heran, ist die Senkung weg: Ein Kegel, der enger ist
+    als sein Loch, hat keine Fläche mehr. Das ist eine Warnung. Bleibt sie
+    enger, ist die Senkung noch da, sitzt aber nicht mehr im gemessenen
+    Verhältnis — das ist ein Hinweis, und wer ihn nicht braucht, überliest ihn.
+
+    Beide tragen dieselbe Handlung (:data:`RESIZE_THE_WIDENING`), weil beide
+    denselben Ausweg haben, und beide nennen die Zahlen: Ohne sie müsste der
+    Kunde die Senkung erst suchen, um zu wissen, wovon die Rede ist (§2.7).
+    """
+    # Der Import steht hier und nicht oben: ``perceive`` zieht die Erkennung
+    # mit, und die kostet beim Laden des Moduls Zeit, die eine Operation ohne
+    # Senkung nie braucht — dieselbe Aufteilung wie bei ``detect`` weiter unten.
+    from app.core.perceive.features import widening_at_the_mouth
+
+    widening = widening_at_the_mouth(feature, source.features)
+    if widening is None:
+        return []
+    outer = float(widening.params.get("diameter") or 0.0)
+    values: dict[str, float | str | TranslatableText] = {
+        "widening": widening.id,
+        "outer": outer,
+        "diameter": diameter,
+        # Das **alte** Maß der Bohrung, damit „Senkung mitziehen" den Rand
+        # ausrechnen kann, den die Senkung bisher gelassen hat. Ohne diese Zahl
+        # müsste die Oberfläche ihn schätzen oder ein Verhältnis erfinden.
+        "previous": float(feature.params.get("diameter") or 0.0),
+    }
+    if diameter >= outer - EPS_GEOM:
+        return [
+            Finding(
+                code="resize.widening_swallowed",
+                severity="warning",
+                message=_(
+                    "Über dieser Bohrung sitzt eine Senkung mit {outer:.2f} mm. Mit "
+                    "{diameter:.2f} mm ist die Bohrung nicht mehr enger als sie — die "
+                    "Senkung verschwindet. Ziehen Sie die Senkung mit, oder bleiben Sie "
+                    "unter ihrem Maß.",
+                    outer=outer,
+                    diameter=diameter,
+                ),
+                feature_ids=(feature.id, widening.id),
+                values=values,
+                suggestions=(RESIZE_THE_WIDENING, CORRECT_INPUT),
+            )
+        ]
+    return [
+        Finding(
+            code="resize.widening_kept",
+            severity="info",
+            message=_(
+                "Über dieser Bohrung sitzt eine Senkung mit {outer:.2f} mm. Sie ist "
+                "stehen geblieben und sitzt jetzt nicht mehr im gemessenen Verhältnis "
+                "zur Bohrung.",
+                outer=outer,
+            ),
+            feature_ids=(feature.id, widening.id),
+            values=values,
+            suggestions=(RESIZE_THE_WIDENING,),
+        )
+    ]
 
 
 def _chosen_bore(source: SceneObject, name: str) -> Feature:

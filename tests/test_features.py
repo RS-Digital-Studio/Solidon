@@ -6,6 +6,7 @@ die die Erkennung erzeugt, lässt sich also prüfen statt bewundern.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from app.core.perceive.features import (
     fit_cylinder,
     fit_torus,
     forget_cache,
+    widening_at_the_mouth,
 )
 from app.core.types import Profile
 
@@ -2175,3 +2177,132 @@ def test_a_socket_stays_a_socket_when_the_mesh_gets_finer(profile: Profile) -> N
     ).mesh
     assert detect_cones(sunk), "eine Senkung bleibt eine Senkung"
     assert not detect_spheres(sunk), "und wird keine Pfanne"
+
+
+def test_a_countersink_knows_the_bore_it_widens() -> None:
+    """Die Senkung findet ihre Bohrung — und der Zapfen findet keine.
+
+    **Der Fall.** Robert hat am 04.09.2026 an einem heruntergeladenen Halter
+    den Durchmesser einer Bohrung geändert; über ihr saß eine Senkung, die
+    stehen blieb, und im Teil entstand eine Stufe. Gesagt wurde nichts:
+    ``resize_hole`` ändert genau ein Merkmal und kannte seine Nachbarschaft
+    nicht. ``prepare_ops._feature_body`` schreibt seit dem 03.09.2026 im
+    Docstring, was fehlt — „Bis Solidon die Nachbarschaft kennt, ist die
+    Absage die richtige Antwort".
+
+    **Und der Fehlgriff der ersten Fassung steht hier mit drin**, denn er ist
+    die eigentliche Schärfe des Tests: Ohne die Bedingung „auch ein Hohlraum"
+    fand die Bohrung Ø 34 des Halters den Zapfen Ø 40,80 als ihre Senkung —
+    koaxial, weiter, und seine Mitte liegt in ihrer Strecke. Ein Zapfen umgibt
+    die Bohrung aber, er mündet nicht in sie.
+
+    Geprüft an der Platte des Korpus in beiden Richtungen: ``plate_holes.stl``
+    hat vier Bohrungen ohne Senkung und darf **kein** Paar liefern,
+    ``plate_countersunk.stl`` genau eines.
+    """
+    ohne = detect(plate("plate_holes.stl"))
+    for feature in ohne.values():
+        assert widening_at_the_mouth(feature, ohne) is None, (
+            f"{feature.id} hat eine Senkung bekommen, die es nicht gibt"
+        )
+
+    mit = detect(plate("plate_countersunk.stl"))
+    paare = {
+        feature.id: found.id
+        for feature in mit.values()
+        if (found := widening_at_the_mouth(feature, mit)) is not None
+    }
+    assert len(paare) == 1, f"genau ein Paar erwartet, gefunden: {paare}"
+    bohrung, senkung = next(iter(paare.items()))
+    assert mit[bohrung].kind == "hole", f"die Bohrung ist keine: {mit[bohrung].kind}"
+    assert mit[senkung].params["diameter"] > mit[bohrung].params["diameter"], (
+        "die Senkung muss weiter sein als ihre Bohrung"
+    )
+
+
+def test_material_beside_a_bore_is_not_its_countersink() -> None:
+    """Ein Zapfen um eine Bohrung herum ist keine Aufweitung ihrer Öffnung.
+
+    Die Gegenprobe zum Test darüber, an einem eigens gebauten Körper statt am
+    Kundenmodell: Eine Bohrung **im** Zapfen ist koaxial mit ihm, er ist
+    weiter, und seine Mitte liegt in ihrer Strecke — drei der vier Bedingungen
+    treffen zu. Was ihn ausschließt, ist die vierte.
+
+    **Der Prüfkörper ist eigens dafür gebaut, und das ist der Punkt.** Der
+    erste Anlauf nahm ``plate_with_pin`` aus dieser Datei: eine Platte mit
+    einem Stift daneben, ohne Bohrung darin. Ohne die Hohlraum-Bedingung war
+    der Test trotzdem grün — er traf den Fall nicht. Ein Rohr trifft ihn: Die
+    Bohrung steckt im Zapfen, wie am Halter (Ø 34 in Ø 40,80), an dem der
+    Fehlgriff aufgefallen ist.
+    """
+    tube = trimesh.creation.annulus(r_min=8.0, r_max=14.0, height=20.0, sections=96)
+    body = MeshData.of(tube)
+    features = detect(body)
+    pins = [feature for feature in features.values() if feature.kind == "pin"]
+    bores = [feature for feature in features.values() if feature.kind == "hole"]
+    assert pins and bores, (
+        f"der Prüfkörper trägt nicht beides — Zapfen {[p.id for p in pins]}, "
+        f"Bohrungen {[b.id for b in bores]}; dann prüft der Test nichts"
+    )
+
+    for feature in features.values():
+        found = widening_at_the_mouth(feature, features)
+        assert found is None or found.kind != "pin", (
+            f"{feature.id} hält den Zapfen {found.id if found else ''} für seine Senkung"
+        )
+
+
+def test_each_condition_of_the_countersink_rule_separates_something() -> None:
+    """Fünf Bedingungen, und jede muss allein etwas trennen.
+
+    **Der Anlass ist ein Fehlschlag dieser Datei.** Nach dem ersten Anlauf
+    standen drei Tests auf der Regel, und eine Mutation je Bedingung zeigte:
+    Vier von fünf hielt niemand fest. Die Korpusplatte hat keine Senkung, die
+    gesenkte Platte hat genau ein Paar — bei einem einzigen Kandidaten findet
+    ihn jede Bedingung, gleich welche man streicht. Der Docstring behauptete
+    fünf gemessene Bedingungen; gemessen war eine (gefunden am 04.09.2026 nach
+    einem Zuruf von 3d-druck-11, die denselben Fehler an ihrer eigenen
+    Begründung gefunden hatte).
+
+    Geprüft wird deshalb an der **echten** gesenkten Platte, und verändert wird
+    je Durchgang genau ein Wert der Senkung. Was danach nicht mehr gefunden
+    wird, hat die Bedingung getrennt.
+    """
+    features = dict(detect(plate("plate_countersunk.stl")))
+    bore = next(feature for feature in features.values() if feature.kind == "hole")
+    sink = next(
+        feature
+        for feature in features.values()
+        if feature.kind == "cone" and feature.params.get("recess")
+    )
+    assert widening_at_the_mouth(bore, features) is not None, (
+        "der Grundfall trifft nicht — dann trennt keine der Abwandlungen etwas"
+    )
+
+    centre = [float(value) for value in sink.params["centre"]]
+    axis = [float(value) for value in sink.params["axis"]]
+    radius = float(bore.params["diameter"]) / 2.0
+
+    abwandlungen = {
+        # Quer zur Achse gekippt: dieselbe Stelle, andere Richtung.
+        "gleiche Achse": {"axis": (axis[1], axis[2], axis[0])},
+        # Danebengeschoben, quer zur Achse — zwei Bohrungen nebeneinander
+        # haben dieselbe Richtung und sind trotzdem zwei.
+        "Mitten auf einer Linie": {"centre": (centre[0] + radius * 4.0, centre[1], centre[2])},
+        # Weit weg **auf** der Achse: die Senkung der nächsten Wand.
+        "auf der Strecke der Bohrung": {
+            "centre": tuple(centre[index] + axis[index] * radius * 40.0 for index in range(3))
+        },
+        # Enger als ihre Bohrung — dann ist sie keine Senkung.
+        "ist weiter": {"diameter": float(bore.params["diameter"]) / 2.0},
+        # Materie statt Hohlraum.
+        "ist ein Hohlraum": {"recess": False},
+    }
+
+    for bedingung, änderung in abwandlungen.items():
+        verändert = dataclasses.replace(sink, params={**sink.params, **änderung})
+        gefunden = widening_at_the_mouth(bore, {**features, sink.id: verändert})
+        assert gefunden is None, (
+            f"Bedingung {bedingung!r} trennt nichts: die Senkung wird auch "
+            f"als {gefunden.id} gefunden"
+        )

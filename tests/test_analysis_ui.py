@@ -4814,3 +4814,112 @@ def test_the_layer_legend_goes_when_the_layer_does(qt_app: QApplication) -> None
     bar.show_result(None)
 
     assert bar._legend.count() == 0, "ohne Schicht bleibt keine Legende stehen"
+
+
+def test_a_countersink_stands_under_its_bore(qt_app: QApplication) -> None:
+    """Bohrung und Senkung sind ein Merkmal in zwei Flächen — der Baum zeigt es.
+
+    **Der Fall.** Robert am 04.09.2026: „ich hab bei der Bohrung den
+    Durchmesser geändert, allerdings hat die Bohrung auch noch eine Senkung."
+    An seinem Halter standen zwei Bohrungen und zwei Senkungen als vier Zeilen
+    nebeneinander, ohne erkennbaren Zusammenhang — wer die Bohrung anklickt,
+    findet die Senkung nicht, und wer sie ändert, merkt erst am Teil, dass die
+    Senkung stehen geblieben ist.
+
+    Die Zuordnung kommt aus dem Kern (``widening_at_the_mouth``), damit Baum
+    und Prüfbericht dieselbe Nachbarschaft meinen und nicht zwei.
+    """
+    from pathlib import Path
+
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.features import detect
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    quelle = Path(__file__).parent / "data" / "meshes" / "plate_countersunk.stl"
+    body = normalise(read_mesh(quelle.read_bytes(), ".stl"), "mm").mesh
+    features = detect(body)
+    bore = next(feature for feature in features.values() if feature.kind == "hole")
+    sink = next(
+        feature
+        for feature in features.values()
+        if feature.kind == "cone" and feature.params.get("recess")
+    )
+
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=features)
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(scene=Scene(objects={"obj_1": entry})))
+
+        gefunden = _feature_row(tree.tree.topLevelItem(0), sink.id)
+        assert gefunden is not None, "die Senkung steht gar nicht im Baum"
+        eltern = gefunden.parent()
+        assert eltern is not None, "die Senkung hängt am Objekt statt an ihrer Bohrung"
+        assert eltern.data(1, Qt.ItemDataRole.UserRole) == bore.id, (
+            "die Senkung hängt unter "
+            f"{eltern.data(1, Qt.ItemDataRole.UserRole)} statt unter {bore.id}"
+        )
+    finally:
+        tree.deleteLater()
+
+
+def _feature_row(item: Any, feature_id: str) -> Any:
+    """Die Zeile eines Merkmals, gleich wie tief sie hängt."""
+    for index in range(item.childCount()):
+        child = item.child(index)
+        if child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
+            return child
+        deeper = _feature_row(child, feature_id)
+        if deeper is not None:
+            return deeper
+    return None
+
+
+def test_a_rejected_map_offers_the_way_out(qt_app: QApplication) -> None:
+    """Regel 17 gilt auch für eine Karte, die nicht geht.
+
+    „Für eine Analysekarte ist dieses Modell zu groß" sagte, was nicht geht,
+    und ließ den Kunden dort stehen — während der Prüfbericht zu genau
+    demselben Sachverhalt seit je *Dreiecke verringern* anbietet. Gemessen an
+    neunzehn heruntergeladenen Kundendateien (04.09.2026) lagen zehn über der
+    Kartengrenze; an keiner führte von hier aus ein Weg weiter.
+    """
+    from app.ui.analysis_bar import AnalysisBar
+
+    bar = AnalysisBar(None)
+    try:
+        clicked: list[bool] = []
+        bar.show_problem("zu groß", "Dreiecke verringern", lambda: clicked.append(True))
+
+        button = bar.legend.action
+        assert button is not None, "der Ausweg fehlt"
+        assert button.text() == "Dreiecke verringern"
+        assert bar.legend._layout.indexOf(button) >= 0, "der Knopf steht außerhalb der Anordnung"
+        button.click()
+        assert clicked == [True], "der Knopf löst seine Handlung nicht aus"
+
+        # Und er verschwindet mit der nächsten Karte — sonst stünde er über
+        # einer Legende, die gerade beweist, dass es doch geht.
+        bar.show_legend(None)
+        assert bar.legend.action is None, "der Ausweg überlebt seine Karte"
+    finally:
+        bar.deleteLater()
+
+
+def test_a_problem_without_a_way_out_stays_a_sentence(qt_app: QApplication) -> None:
+    """Wo die Anwendung keinen Ausweg kennt, erfindet sie keinen.
+
+    Eine Handlung ohne Empfänger wäre schlimmer als keine: Der Knopf sähe aus
+    wie eine Lösung und täte nichts.
+    """
+    from app.ui.analysis_bar import AnalysisBar
+
+    bar = AnalysisBar(None)
+    try:
+        bar.show_problem("Die Analysekarte ließ sich nicht berechnen.")
+        assert bar.legend.action is None, "ein Knopf ohne Handlung"
+        assert bar.legend.note.text() == "Die Analysekarte ließ sich nicht berechnen."
+    finally:
+        bar.deleteLater()

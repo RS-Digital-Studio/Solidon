@@ -56,6 +56,12 @@ CHOOSE = Action("choose", _("Auswählen"), primary=True)
 CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), primary=True)
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
+#: Die Senkung über einer geänderten Bohrung im selben Verhältnis mitziehen.
+#:
+#: **Regel 17 verlangt eine Handlung, und „ändern Sie die Senkung auch"
+#: wäre keine** — der Kunde müsste den Faktor selbst ausrechnen. Die
+#: Handlung nennt deshalb das Ergebnis und nicht die Arbeit.
+RESIZE_THE_WIDENING = Action("resize_the_widening", _("Senkung mitziehen"), primary=True)
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
 #: Die laufende Teilungssuche anhalten und verwerfen.
 #:

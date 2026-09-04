@@ -1109,6 +1109,15 @@ REMOTE_ORIGIN = "mcp"
 REMOTE_WAIT_MS = 120_000
 
 
+def _measure(value: object) -> float:
+    """Ein Maß aus den Werten eines Befunds, oder null.
+
+    Die Werte eines Befunds tragen Zahlen **und** übersetzbare Texte; wer
+    eine Zahl erwartet, prüft es, statt es anzunehmen.
+    """
+    return float(value) if isinstance(value, int | float) else 0.0
+
+
 def _needs_objects(count: int) -> str:
     """Der Satz, der sagt, wie viele Körper fehlen — nicht nur, dass welche
     fehlen.
@@ -8373,11 +8382,7 @@ class MainWindow(QMainWindow):
         worker.done.connect(
             lambda analysis, key=key, object_id=object_id: self._map_ready(analysis, key, object_id)
         )
-        worker.tooLarge.connect(
-            lambda: self.analysis_bar.show_problem(
-                tr("Für eine Analysekarte ist dieses Modell zu groß.")
-            )
-        )
+        worker.tooLarge.connect(lambda count=entry.mesh.triangle_count: self._map_too_large(count))
         # **Nicht** auf ``None`` setzen, wenn der Arbeiter fertig ist.
         #
         # ``finished`` kommt, während Qt den Thread noch abräumt. Wer die
@@ -8421,6 +8426,54 @@ class MainWindow(QMainWindow):
     def _retire(self, worker: Any) -> None:
         """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist."""
         self._leash.retire(worker)
+
+    def _map_too_large(self, triangles: int) -> None:
+        """Die abgelehnte Karte nennt ihre Grenze — und den Weg darüber hinweg.
+
+        **Hier stand eine Sackgasse** (Regel 17, §2.7): „Für eine Analysekarte
+        ist dieses Modell zu groß." sagte, was nicht geht, und ließ den Kunden
+        dort stehen. Der Prüfbericht bietet zu genau demselben Sachverhalt seit
+        je *Dreiecke verringern* an (``panels.SUGGESTED``); die Leiste, an der
+        man es merkt, tat es nicht.
+
+        Gemessen an neunzehn heruntergeladenen Kundendateien (04.09.2026):
+        zehn liegen über der Kartengrenze, von 277 460 bis 1 223 836 Dreiecken.
+        An keiner davon führte von hier aus ein Weg weiter.
+
+        **Die Zahlen stehen dabei, weil eine Grenze ohne Zahl keine ist.** „Zu
+        groß" beantwortet nicht, um wie viel — und genau das entscheidet, ob
+        das Verringern eine Kleinigkeit oder ein Verlust an Form ist.
+        """
+        self.analysis_bar.show_problem(
+            tr(
+                "Für eine Analysekarte ist dieses Modell zu groß: "
+                "{count} Dreiecke, möglich sind {limit}."
+            ).format(count=triangles, limit=maps.MAP_LIMIT_TRIANGLES),
+            tr("Dreiecke verringern"),
+            weak_slot(self, MainWindow._decimate_for_a_map),
+        )
+
+    def _decimate_for_a_map(self) -> None:
+        """*Dreiecke verringern*, vorbelegt mit dem, was die Karte braucht.
+
+        **Die Vorgabe des Schemas ist 50 000, und sie kennt den Anlass nicht.**
+        Wer aus einer abgelehnten Karte kommt, braucht 120 000 — jedes Dreieck
+        darunter ist Form, die er ohne Grund verliert. An einem Modell mit
+        885 570 Dreiecken ist der Unterschied zwischen beiden Zahlen mehr als
+        die Hälfte dessen, was übrig bleibt.
+
+        Getroffen wird die Zahl genau: ``simplify_quadric_decimation`` liefert
+        exakt die verlangte Fläche (gemessen 120 000 aus 885 570), und
+        ``maps.build`` lehnt erst **über** der Grenze ab. Ein Sicherheitsabstand
+        wäre Form, die niemand zurückbekommt.
+
+        Der Dialog geht trotzdem auf: Die Zahl ist ein Vorschlag und keine
+        Entscheidung (§2.4), und wer mehr wegnehmen will, tut es dort.
+        """
+        self.run_operation(
+            REGISTRY.get("decimate_mesh"),
+            given={"triangles": maps.MAP_LIMIT_TRIANGLES},
+        )
 
     def _map_crashed(self, detail: str) -> None:
         self.analysis_bar.show_problem(tr("Die Analysekarte ließ sich nicht berechnen."))
@@ -11132,6 +11185,7 @@ class MainWindow(QMainWindow):
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
+            "resize_the_widening": self._resize_the_widening,
             "show_step_values": self._show_step_values,
             # **Die Absage beim Einlesen hatte nur „Abbrechen".** Eine
             # kaputte Datei lässt sich nicht korrigieren, und der Schritt,
@@ -11274,6 +11328,45 @@ class MainWindow(QMainWindow):
             return error.object_id
         chosen = self.object_tree.selected_objects()
         return chosen[0] if chosen else None
+
+    def _resize_the_widening(self, error: AppError) -> None:
+        """„Senkung mitziehen" öffnet ihre Größe, mit dem passenden Maß darin.
+
+        **Angeboten und nicht getan** (Entscheidung Robert, 04.09.2026). Die
+        Senkung im selben Verhältnis mitwachsen zu lassen wäre eine zweite
+        Geometrieänderung, die niemand angeklickt hat; der Dialog zeigt die
+        Zahl, und der Kunde übernimmt sie oder tippt eine andere.
+
+        Das Verhältnis kommt aus den Werten des Befunds und nicht aus einer
+        zweiten Messung: ``outer`` ist die gemessene Senkung, ``diameter`` das
+        neue Maß der Bohrung, und der Befund kennt beide, weil er sie im Satz
+        nennt. Eine eigene Rechnung hier liefe irgendwann auseinander mit dem,
+        was der Kunde gelesen hat.
+        """
+        widening = error.values.get("widening")
+        if not isinstance(widening, str) or not widening:
+            return
+        entry = self._entry_of(error)
+        if entry is None or widening not in entry.features:
+            return
+        self.object_tree.select_feature(entry.id, widening)
+        given: dict[str, Any] = {"at_feature": widening}
+        outer = _measure(error.values.get("outer"))
+        previous = _measure(error.values.get("previous"))
+        diameter = _measure(error.values.get("diameter"))
+        if outer > previous > 0.0 and diameter > 0.0:
+            # **Der Rand bleibt, nicht das Verhältnis.** Eine Senkung ist der
+            # Platz für einen Schraubenkopf; was sie über der Bohrung stehen
+            # lässt, ist eine Strecke und keine Quote. Wächst die Bohrung um
+            # einen Millimeter, wächst die Senkung um denselben.
+            given["diameter"] = round(outer - previous + diameter, 2)
+        self.run_operation(REGISTRY.get("resize_feature"), given)
+
+    def _entry_of(self, error: AppError) -> Any:
+        """Der Körper, den ein Fehler meint — oder nichts."""
+        object_id = self._object_of(error)
+        result = self.session.last_result
+        return result.scene.objects.get(object_id) if result and object_id else None
 
     def _show_error_location(self, error: AppError) -> None:
         """„Stellen zeigen" heißt: die Karte, auf der sie zu sehen sind (§18.4).

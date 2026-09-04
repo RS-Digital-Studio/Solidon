@@ -1191,6 +1191,25 @@ class ObjectTree(QWidget):
                     name = feature_name(other_id, other)
                     alike[name] = alike.get(name, 0) + 1
             by_kind: dict[str, QTreeWidgetItem] = {}
+            # **Und eine Senkung steht unter ihrer Bohrung.** Sie sind ein
+            # Merkmal in zwei Flächen: Wer die Bohrung ändert, meint die
+            # Senkung mit, und wer sie als Nachbarzeile sieht, sucht sie
+            # (Befund Robert, 04.09.2026, an ``broomholdervcd_d35mm.stl`` —
+            # zwei Bohrungen Ø 5,44 mit je einer Senkung Ø 8,16, die im Baum
+            # vier Zeilen ohne erkennbaren Zusammenhang waren).
+            #
+            # Die Zuordnung kommt aus dem Kern (`widening_at_the_mouth`) und
+            # nicht aus einer zweiten Rechnung hier: Dieselbe Nachbarschaft
+            # entscheidet, was der Prüfbericht meldet, wenn die Bohrung wächst.
+            from app.core.perceive.features import widening_at_the_mouth
+
+            under: dict[str, str] = {}
+            for feature_id, feature in entry.features.items():
+                widening = widening_at_the_mouth(feature, entry.features)
+                if widening is not None:
+                    under[widening.id] = feature_id
+            made: dict[str, QTreeWidgetItem] = {}
+            waiting: list[tuple[str, QTreeWidgetItem]] = []
             for feature_id, feature in entry.features.items():
                 # Name links, Maß rechts. Vorher stand die ganze Beschriftung
                 # links und rechts der Typ („hole", „face") — links war damit
@@ -1208,6 +1227,13 @@ class ObjectTree(QWidget):
                 child.setToolTip(1, tip)
                 child.setStatusTip(0, tip.replace("\n", " · "))
                 child.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, tip)
+
+                made[feature_id] = child
+                if feature_id in under:
+                    # Erst wenn alle Zeilen stehen: Die Bohrung kann in der
+                    # Reihenfolge hinter ihrer Senkung kommen.
+                    waiting.append((under[feature_id], child))
+                    continue
 
                 part = _part_step(feature.created_by, document)
                 if part is None:
@@ -1253,6 +1279,12 @@ class ObjectTree(QWidget):
                     groups[step] = group
                     item.addChild(group)
                 group.addChild(child)
+            for bore, child in waiting:
+                # Steht die Bohrung selbst unter einem Dach, hängt die Senkung
+                # trotzdem an ihr — der Ast klappt beim Auswählen ohnehin auf.
+                # Fehlt sie ganz, bleibt die Senkung dort, wo sie war: eine
+                # Zeile zu verlieren wäre schlimmer als eine ohne Zusammenhang.
+                (made.get(bore) or item).addChild(child)
             for group in groups.values():
                 group.setExpanded(True)
             self.tree.addTopLevelItem(item)

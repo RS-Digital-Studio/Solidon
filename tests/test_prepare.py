@@ -2896,3 +2896,55 @@ def test_the_five_handlings_work_on_a_finely_meshed_socket(profile: Profile) -> 
     assert gone.outputs[0].mesh.raw.volume == pytest.approx(72000.0, abs=0.01), gone.outputs[
         0
     ].mesh.raw.volume
+
+
+def test_resizing_a_bore_says_that_its_countersink_stayed(profile: Profile) -> None:
+    """Wer die Bohrung ändert, erfährt von der Senkung darüber (Regel 17).
+
+    **Der Fall.** Robert hat am 04.09.2026 an einem heruntergeladenen Halter
+    den Durchmesser einer Bohrung geändert. Über ihr saß eine Senkung, die
+    stehen blieb — im Teil eine Stufe, und gesagt wurde nichts.
+
+    Zwei Härten, und der Unterschied ist der Schaden: Bleibt die Bohrung enger
+    als die Senkung, steht die Senkung noch, sitzt aber nicht mehr im
+    gemessenen Verhältnis — ein Hinweis. Erreicht sie deren Maß, ist die
+    Senkung weg — eine Warnung. Beide tragen denselben Ausweg, denn beide
+    haben denselben.
+    """
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.features import detect
+
+    quelle = Path(__file__).parent / "data" / "meshes" / "plate_countersunk.stl"
+    body = normalise(read_mesh(quelle.read_bytes(), ".stl"), "mm").mesh
+    entry = SceneObject(id="obj_1", name="Platte", mesh=body, features=detect(body))
+    bore = next(feature for feature in entry.features.values() if feature.kind == "hole")
+    sink = next(
+        feature
+        for feature in entry.features.values()
+        if feature.kind == "cone" and feature.params.get("recess")
+    )
+    outer = float(sink.params["diameter"])
+    inner = float(bore.params["diameter"])
+    assert inner < outer, "der Prüfkörper trägt keine Senkung über der Bohrung"
+
+    kept = _run_op(
+        "resize_hole", entry, profile, at_feature=bore.id, diameter=inner + 0.3, compensate=False
+    )
+    codes = {finding.code for finding in kept.findings}
+    assert "resize.widening_kept" in codes, f"kein Hinweis auf die Senkung: {sorted(codes)}"
+
+    swallowed = _run_op(
+        "resize_hole", entry, profile, at_feature=bore.id, diameter=outer + 0.5, compensate=False
+    )
+    warning = next(
+        finding for finding in swallowed.findings if finding.code == "resize.widening_swallowed"
+    )
+    assert warning.severity == "warning"
+    assert sink.id in warning.feature_ids, "der Befund nennt die Senkung nicht"
+    assert "resize_the_widening" in {action.id for action in warning.suggestions}, (
+        "Regel 17: der Befund nennt keinen Ausweg"
+    )
+    # Der Satz trägt die Zahlen und nicht die Platzhalter — sonst liest der
+    # Kunde „{outer:.2f} mm".
+    assert "{" not in str(warning.message), str(warning.message)

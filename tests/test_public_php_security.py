@@ -1952,7 +1952,7 @@ def test_an_old_download_link_leads_to_the_current_one(tmp_path: Path) -> None:
 
 
 def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None:
-    """Was sich nicht zuordnen lässt, geht zur Downloadauswahl — und sonst nirgends.
+    """Jede Weiterleitung endet auf unserer eigenen Seite — ohne Ausnahme.
 
     Eine Weiterleitung ist ein Werkzeug, mit dem sich Vertrauen ausleihen
     lässt: Wer eine offene baut, verschickt fremde Adressen unter unserem
@@ -1960,13 +1960,13 @@ def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None
     Pfadwechsel aussieht, und einer mit angehängter Endung, wie ihn ein
     Downloader anlegt.
 
-    Formate ohne Entsprechung im Manifest (AppImage, tar.gz, zip; seit 0.2.0
-    nicht mehr gebaut) gehören zur selben Klasse: Es gibt keine aktuelle
-    Fassung davon, also führt der Weg zur Auswahl.
+    Was sich keiner ausgelieferten Datei zuordnen lässt, geht zur
+    Downloadauswahl: tar.gz und zip standen früher im Angebot und werden nicht
+    mehr ausgeliefert.
     """
     with _php_server(tmp_path) as base:
         for name in (
-            "Solidon3D-0.2.2-x86_64.AppImage",
+            "Solidon3D-0.1.1-linux-x86_64.tar.gz",
             "Solidon3D-..%2F..%2Fetc%2Fpasswd",
             "Solidon3D-Setup-0.2.2.exe.evil",
             "Solidon3D-https:%2F%2Ffremde.example%2Fx.exe",
@@ -1974,6 +1974,57 @@ def test_the_download_redirect_never_leaves_our_own_site(tmp_path: Path) -> None
             status, target = _redirect_target(base, name)
             assert status == 302, f"{name}: {status}"
             assert target == "https://solidon3d.de/#download", f"{name}: {target}"
+
+
+def test_every_delivered_kind_finds_its_current_file(tmp_path: Path) -> None:
+    """Ein alter Link führt zur Nachfolgerin **derselben** Plattform.
+
+    Hier stand einmal, das AppImage werde „seit 0.2.0 nicht mehr gebaut", und
+    der Test darüber schrieb genau das fest: Ein alter AppImage-Link musste
+    auf der Downloadauswahl landen. Beides war überholt, seit die Datei zurück
+    im Angebot ist — und die Zusicherung hielt den falschen Zustand fest,
+    statt ihn zu melden. Gemessen am 04.09.2026 gegen den laufenden Server:
+    Windows, Flatpak und beide Macs fanden ihre neue Datei, das AppImage
+    landete auf der Auswahl.
+
+    Geprüft wird jede Art, die ``make_download.DELIVERED`` ausliefert, und
+    zwar gegen die Fassung, die ``version.json`` **hier** nennt: Der
+    PHP-Prüfstand serviert ``website/``, dieselbe Datei liest der Auffangpfad.
+    """
+    import json
+
+    from tools.make_download import DELIVERED
+
+    manifest = json.loads((ROOT / "website" / "version.json").read_text(encoding="utf-8"))
+    fassung = str(manifest["version"])
+    alt = "0.2.2"
+    assert alt != fassung, "der alte Name muss ein anderer sein als der aktuelle"
+
+    namen = {
+        ".exe": "Solidon3D-Setup-{}.exe",
+        ".appimage": "Solidon3D-{}-x86_64.AppImage",
+        ".flatpak": "Solidon3D-{}-x86_64.flatpak",
+        ".pkg": None,  # zwei Architekturen, unten einzeln
+    }
+    fälle = [
+        (muster.format(alt), muster.format(fassung))
+        for endung, muster in namen.items()
+        if muster is not None
+    ]
+    fälle += [
+        (f"Solidon3D-{alt}-macos-arm64.pkg", f"Solidon3D-{fassung}-macos-arm64.pkg"),
+        (f"Solidon3D-{alt}-macos-x86_64.pkg", f"Solidon3D-{fassung}-macos-x86_64.pkg"),
+    ]
+    assert len(fälle) == len(DELIVERED), (
+        f"{len(DELIVERED)} ausgelieferte Arten, aber {len(fälle)} Fälle — "
+        "eine neue Art gehört auch hierher"
+    )
+
+    with _php_server(tmp_path) as base:
+        for angefragt, erwartet in fälle:
+            status, target = _redirect_target(base, angefragt)
+            assert status == 302, f"{angefragt}: {status}"
+            assert target == f"https://solidon3d.de/dl/{erwartet}", f"{angefragt}: {target}"
 
 
 def test_a_numeric_referrer_host_can_neither_be_stored_nor_break_the_report() -> None:
