@@ -4930,3 +4930,54 @@ def test_the_two_ways_to_stand_a_hook_upright_stay_silent(profile: Profile) -> N
         assert result.complete, [str(f.message) for f in result.scene.report.findings]
         flat = [f for f in result.scene.report.findings if f.code == "parts.up_points_nowhere"]
         assert not flat, f"{params} steht aufrecht und wird trotzdem gemeldet: {flat}"
+
+
+def test_a_named_thread_says_how_long_its_helix_is() -> None:
+    """Ohne die Strecke lässt sich ein Gewinde nur radial abgrenzen.
+
+    **Wozu die Angabe da ist.** Die Erkennung sieht eine Wendel als das, was
+    sie geometrisch ist: eine Folge von Zylinder-, Kegel- und Kugelflecken. An
+    einem gedruckten Gewinde werden daraus Phantommerkmale — ein „Zapfen
+    Ø 5,79" an einem M6-Bolzen, den niemand gesetzt hat (Kundenbild
+    Alexander, gemessen von 3d-druck-4d über sechs Größen: kein Fall ohne
+    Phantom). Was innerhalb der Hülle des benannten Gewindes liegt, ist ein
+    Artefakt der Wendel; Provenienz schlägt Erkennung (§21.2).
+
+    Der Durchmesser allein reicht dafür nicht: Ohne die Strecke längs der
+    Achse verschluckt dieselbe Unterdrückung eine echte Bohrung, die koaxial
+    unter einem Gewindebolzen sitzt.
+
+    Geprüft wird deshalb beides — dass die Zahl dasteht und dass
+    ``centre ± length/2`` wirklich die bewendelte Strecke trifft. Beim Bolzen
+    mit Kopf endet sie unter dem Kopf, und genau das ist gewollt: Der Schaft
+    gehört nicht zum Gewinde.
+    """
+    faelle = (
+        ("printed_thread", {"size": "M6", "length": 14.99, "play": 0.20}, 14.99, (0.0, 14.99)),
+        ("printed_thread", {"size": "M8", "length": 12.0, "play": 0.15}, 12.0, (0.0, 12.0)),
+        ("printed_screw", {"size": "M5", "length": 12.0, "play": 0.15}, 12.0, (-12.0, 0.0)),
+    )
+    for name, werte, erwartet, strecke in faelle:
+        spec = PARTS.get(name)
+        built = spec.fn(spec.params(**werte))
+        threads = [f for f in built.features.values() if f.kind == "thread"]
+        assert threads, f"{name} nennt sein Gewinde nicht"
+        for feature in threads:
+            length = float(feature.params.get("length", 0.0))
+            centre = feature.params["centre"]
+            assert length == pytest.approx(erwartet), (
+                f"{name}: Gewindelänge {length} statt {erwartet}"
+            )
+            unten, oben = centre[2] - length / 2.0, centre[2] + length / 2.0
+            assert (unten, oben) == pytest.approx(strecke, abs=0.02), (
+                f"{name}: Strecke {unten:.3f}…{oben:.3f} statt {strecke}"
+            )
+
+    # Die Mutter führt ihr Innengewinde über die volle Höhe — hier ist die
+    # Länge kein Parameter, sondern das Normmaß.
+    spec = PARTS.get("printed_nut")
+    built = spec.fn(spec.params(size="M6", play=0.15))
+    thread = next(f for f in built.features.values() if f.kind == "thread")
+    assert float(thread.params["length"]) == pytest.approx(built.mesh.bounds.size[2], abs=0.02), (
+        "das Innengewinde der Mutter geht durch, also ist seine Länge die Mutternhöhe"
+    )

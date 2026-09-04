@@ -98,7 +98,31 @@ def thread(
     *,
     axis: Vec3 = (0.0, 0.0, 1.0),
     internal: bool = False,
+    length: float = 0.0,
 ) -> tuple[FeatureId, Feature]:
+    """Ein benanntes Gewinde, wie ein Baustein es beim Bauen erklärt (§24.1).
+
+    ``length`` ist die **bewendelte Strecke**, und ``centre`` liegt in ihrer
+    Mitte — beides zusammen sagt, wo das Gewinde anfängt und aufhört.
+
+    **Wozu die Länge da ist.** Die Erkennung sieht eine Wendel nicht als
+    Gewinde, sondern als das, was sie geometrisch ist: eine Folge von
+    Zylinder-, Kegel- und Kugelflecken. An einem gedruckten M6 werden daraus
+    Phantommerkmale im Objektbaum — ein „Zapfen Ø 5,79" an einem Bolzen, den
+    niemand gesetzt hat (gemeldet von einem Kunden, gemessen von 3d-druck-4d
+    über sechs Größen: kein Fall ohne Phantom). Was innerhalb der Hülle des
+    benannten Gewindes liegt, ist ein Artefakt der Wendel und gehört nicht in
+    die Szene — Provenienz schlägt Erkennung (§21.2).
+
+    Radial genügt der Durchmesser dafür nicht: Ohne die Strecke längs der
+    Achse verschluckt dieselbe Unterdrückung eine echte Bohrung, die koaxial
+    unter einem Gewindebolzen sitzt. Genau deshalb steht die Länge hier und
+    nicht als Näherung bei dem, der sie braucht.
+
+    Die Vorgabe ist null, damit ein Baustein, der sie nicht kennt, sich nicht
+    ändert: Wer keine Strecke nennt, bekommt keine Unterdrückung, und ein
+    altes Projekt behält seine Funde, statt dass jemand radial rät.
+    """
     return identifier, Feature(
         id=identifier,
         kind="thread",
@@ -109,6 +133,7 @@ def thread(
             "centre": centre,
             "axis": axis,
             "internal": internal,
+            "length": round(length, 4),
         },
     )
 

@@ -759,6 +759,7 @@ def _printed_thread(size: str, length: float, internal: bool, play: float) -> Pa
             screw.pitch,
             (0.0, 0.0, reach + length / 2.0),
             internal=internal,
+            length=length,
         ),
     )
 
@@ -860,6 +861,7 @@ def printed_screw(raw: BaseParams) -> PartResult:
             screw.nominal,
             screw.pitch,
             (0.0, 0.0, thread_top - params.length / 2.0),
+            length=params.length,
         ),
     )
 
@@ -935,6 +937,7 @@ def printed_nut(raw: BaseParams) -> PartResult:
             screw.nominal,
             screw.pitch,
             (0.0, 0.0, nut.height / 2.0),
+            length=nut.height,
             internal=True,
         ),
     )
