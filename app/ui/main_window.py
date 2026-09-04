@@ -384,6 +384,13 @@ SCULPT_CHECK_MS: Final = 400
 #: dünne Stellen an einer Schale mit 0,8 mm Wand.
 WALL_GRID_SHARE: Final = 0.8
 
+#: Wie viele gerechnete Analysekarten das Fenster behält. Sieben Arten gibt es
+#: (``maps.MapKind``), und wer zwischen zweien hin und her sieht, will nicht
+#: jedes Mal die drei Sekunden aus §31 bezahlen. Verdrängt wird der älteste,
+#: wie bei ``viewport.DISPLAY_CACHE_KEPT``; geleert wird ohnehin bei jeder
+#: neuen Auswertung.
+MAP_CACHE_KEPT: Final = 8
+
 #: Operationen, die einen Deckel bauen und deshalb über ihren Ablauf laufen —
 #: er trägt die Passung ein, die die Operation allein nicht eintragen darf
 #: (§14, §15.1).
@@ -953,22 +960,6 @@ def inputs_for(
     if spec.takes_whole_scene:
         return tuple(objects)
     return tuple(selected[: spec.consumes]) if spec.consumes else ()
-
-
-def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
-    """Das Exportformat aus dem Dateinamen, sonst aus dem gewählten Filter.
-
-    Wer ``teil.3mf`` tippt, meint 3MF, auch wenn der Filter noch auf STL
-    steht — die Endung ist die ausdrücklichere der beiden Angaben.
-    """
-    from app.core.export.writer import FORMAT_SUFFIX
-
-    suffix = target.suffix.lower()
-    for name, ending in FORMAT_SUFFIX.items():
-        if suffix == ending:
-            return name
-    filtered = _format_from_filter(chosen_filter)
-    return filtered if filtered is not None else "stl"
 
 
 def _format_from_filter(chosen_filter: str) -> ExportFormat | None:
@@ -1542,6 +1533,17 @@ class MainWindow(QMainWindow):
         self._feature_preview.setInterval(300)
         self._feature_preview.timeout.connect(self._preview_feature_change)
         self._feature_pending: tuple[str, dict[str, Any]] | None = None
+        self._preview_shown = False
+        """Ob dieses Fenster eine Vorschau ins Bild gelegt hat, die es
+        zurückzunehmen hat.
+
+        **Der Merkposten des Merkmalspanels reicht dafür nicht**, und genau das
+        war der Fehler: ``_drop_feature_preview`` stieg seit dem 04.09.2026
+        früh aus, wenn ``_feature_pending`` leer war — eine Vorschau des
+        Operationsdialogs setzt den aber nie. Wer mit offenem Dialog auf
+        *Datei > Neu* ging, ließ Differenzkörper, Band und mit dem Band den
+        anwendungsweiten Ereignisfilter für die Leertaste stehen; der Kommentar
+        in ``_show_start_screen`` beschreibt genau diesen Zustand als behoben."""
         self.feature_panel.valuesChanged.connect(self._on_feature_values_changed)
         self.feature_panel.operationRequestedForEach.connect(self._apply_to_each_feature)
         # Derselbe Katalog wie aus dem Objektbaum — ein zweiter Weg dorthin,
@@ -8425,7 +8427,14 @@ class MainWindow(QMainWindow):
         self._on_error(InternalError(detail=detail))
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
-        self._map_cache = {key: analysis}
+        # **Ergänzen, nicht ersetzen.** Hier stand ``= {key: analysis}``, und
+        # damit hatte der Cache trotz seines Typs genau einen Platz: Wer
+        # zwischen Wandstärke und Überhang desselben Körpers wechselte, zahlte
+        # jedes Mal neu, und ``_finding_awaiting_map`` fand beim Sprung zu einem
+        # anderen Körper nie etwas vor.
+        self._map_cache[key] = analysis
+        while len(self._map_cache) > MAP_CACHE_KEPT:
+            self._map_cache.pop(next(iter(self._map_cache)))
         if self.analysis_bar.chosen() == key[1] and self.object_tree.selected() == object_id:
             self._show_map(analysis, object_id)
         # **Den Flug nachholen, auf den der Klick gewartet hat.** Der Ort eines
@@ -9430,7 +9439,11 @@ class MainWindow(QMainWindow):
         der dieser Fehler an diesem Tag mehrfach auftrat: Der Abbruch war
         bedacht, das Fertigwerden nicht.
         """
-        if self._feature_pending is None and not self._feature_preview.isActive():
+        if (
+            self._feature_pending is None
+            and not self._feature_preview.isActive()
+            and not self._preview_shown
+        ):
             # **Nichts zu tun, und das ist der Normalfall.** Seit dieser Abbau
             # am Dokumentwechsel hängt, läuft er bei jedem Anwenden, jedem Undo
             # und jedem geänderten Parameter — und ``_clear_preview`` ist nicht
@@ -9439,10 +9452,11 @@ class MainWindow(QMainWindow):
             # Ohne diese Zeile kostete das jeden Dokumentwechsel einen vollen
             # Neuaufbau, für den es nichts abzuräumen gab (§31).
             #
-            # Gefragt wird nach dem Merkposten und dem Zeitgeber, nicht nach
-            # dem Bild: Der Merkposten bleibt gesetzt, solange eine Vorschau
-            # dieses Fensters wartet **oder** schon gezeichnet ist —
-            # ``_preview_feature_change`` liest ihn und leert ihn nicht.
+            # Gefragt wird nach drei Dingen, und das dritte fehlte: Merkposten
+            # und Zeitgeber gehören dem Merkmalspanel, ``_preview_shown`` jedem
+            # Weg, der etwas ins Bild gelegt hat. Der Operationsdialog geht über
+            # ``_show_preview`` und setzt die ersten beiden nie — mit ihnen
+            # allein blieb seine Vorschau bei *Datei > Neu* stehen.
             return
         self._feature_pending = None
         self._feature_preview.stop()
@@ -9883,8 +9897,20 @@ class MainWindow(QMainWindow):
         """
         values = dict(arguments)
         if name == UNDO_TRANSACTION:
-            self.session.undo()
-            return tr("Zurückgenommen.")
+            # Die Kennung wird gelesen, nicht übergangen: Das Schema nennt sie
+            # als erforderlich, und ``History.undo`` nimmt zurück, was obenauf
+            # liegt — nicht das, wonach gefragt wurde. Ein Aufruf für ``t1``
+            # traf so ``t7`` und meldete Erfolg. Denselben Weg geht der
+            # Rückgängig-Knopf der Übernommen-Leiste (§26.5).
+            asked = str(values.get("transaction", ""))
+            if not agent_apply.sweep_for(self.session.project.document, asked):
+                return f"{tr('Diese Transaktion gibt es nicht')}: {asked}"
+            if not self.session.undo_applied(asked):
+                return tr(
+                    "Inzwischen liegt Neueres obenauf — das Rückgängig im Menü "
+                    "nimmt Schritt für Schritt zurück."
+                )
+            return f"{tr('Zurückgenommen.')} {asked}"
         if name == READ_REPORT:
             return self._remote_report(str(values.get("severity", "")))
         if name in (ADD_PARAMETER, SET_PARAMETER):
@@ -10273,6 +10299,9 @@ class MainWindow(QMainWindow):
         Schritt ist — das Ergebnis entsteht beim Übernehmen, und dort ist es
         richtig.
         """
+        # Ab hier hat dieses Fenster etwas im Bild, das ihm gehört — auch
+        # wenn ``difference`` leer ist: Das Band unten setzt es trotzdem.
+        self._preview_shown = True
         self.viewport.show_difference(difference)
         partial = any(
             finding.code == "difference.incomplete"
@@ -10294,6 +10323,7 @@ class MainWindow(QMainWindow):
         dessen Ende keine Vorschau mehr stehen darf; :meth:`_drop_feature_preview`
         ruft sie ebenfalls.
         """
+        self._preview_shown = False
         self.session.cancel_preview()
         pending = self._proposal.difference if self._proposal is not None else None
         self.viewport.show_difference(pending)

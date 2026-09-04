@@ -2844,3 +2844,41 @@ def test_a_partial_preview_says_so_instead_of_showing_nothing(window: MainWindow
         )
     finally:
         type(window.viewport).mark_preview = echt
+
+
+def test_a_preview_from_the_dialog_is_dropped_at_a_document_change(window: MainWindow) -> None:
+    """Der Abbau am Dokumentwechsel räumt auch die Vorschau des Dialogs.
+
+    Der Wächter in ``_drop_feature_preview`` fragte bis zum 04.09.2026 nur nach
+    dem Merkposten des Merkmalspanels und seinem Zeitgeber. Eine Vorschau des
+    Operationsdialogs setzt beides nie — sie geht über ``_show_preview``. Wer
+    mit offenem Dialog auf *Datei > Neu* ging, ließ deshalb Differenzkörper und
+    Band stehen, und mit dem Band den anwendungsweiten Ereignisfilter für die
+    Leertaste: Sie blendete danach überall zwischen „mit" und „ohne" um.
+
+    Gefunden von solidon-52 beim Durchsehen der Änderung, die den Wächter
+    eingeführt hat.
+    """
+    gezeigt: list[str] = []
+    echt = type(window.viewport).mark_preview
+
+    def merken(self: object, note: str, hint: str = "") -> object:
+        gezeigt.append(note)
+        return echt(self, note, hint)
+
+    type(window.viewport).mark_preview = merken
+    try:
+        window._show_preview(None)
+        assert gezeigt[-1] == str(tr("Vorschau — noch nicht übernommen"))
+        assert window._feature_pending is None, (
+            "die Vorbedingung des Falls: der Merkposten des Merkmalspanels ist leer"
+        )
+
+        window._drop_feature_preview()
+
+        assert gezeigt[-1] == "", (
+            "das Band blieb stehen — mit ihm der anwendungsweite Ereignisfilter"
+        )
+        assert window.viewport.difference is None, "der Differenzkörper blieb im Bild"
+    finally:
+        type(window.viewport).mark_preview = echt
