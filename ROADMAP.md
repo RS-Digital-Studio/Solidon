@@ -15792,6 +15792,42 @@ die falsche Größe.
   schon immer) und sperrt billige aus. Sie ist abbrechbar und läuft im
   Arbeiter — was fehlt, ist eine Absage, die vorher weiß, was sie kostet.
 
+  **Nach dem Umbau derselben Karte auf 7,07 Sekunden (`dbc2125e`) noch einmal
+  über achtzehn Kundendateien gemessen, weil die Zahlen oben für den Stand
+  davor galten.** Das Ergebnis kehrt die Grenze nicht um, es schärft sie:
+
+  | Modell | Dreiecke | Schichten | Stützkarte |
+  |---|---|---|---|
+  | Besenhalter | 59 740 (**unter** der Grenze) | 136 | **8,30 s** |
+  | obj_5 Segel | 277 460 (über) | 420 | 0,49 s |
+  | obj_3 Segel | 422 742 (über) | 248 | 1,08 s |
+  | obj_15 Rumpf | 1 223 836 (über) | 401 | 5,68 s |
+
+  Die Grenze lehnt neun von achtzehn Modellen ab, die zwischen 0,48 und 5,68
+  Sekunden brauchen, und lässt das einzige durch, das acht kostet. Über alle
+  achtzehn korreliert die Rechenzeit am besten mit der Dreieckszahl (+0,77),
+  aber der Besenhalter fällt aus jeder Achse: **7,29 seiner 8,30 Sekunden
+  liegen im Schneiden**, bei nur 136 Schichten — 54 Millisekunden je Schicht
+  gegen 10 beim Rumpf.
+
+  **Anheben wäre trotzdem falsch, und das ist der Grund, warum diese Messung
+  hier steht.** Bei fester Form wächst die Karte fast linear mit den
+  Dreiecken — der Besenhalter, dreimal unterteilt, ohne dass sich seine Form
+  ändert:
+
+      59 740 Dreiecke ->  7,65 s
+     238 960 Dreiecke -> 24,71 s
+     955 840 Dreiecke -> 64,34 s
+
+  Ein Modell dieser Bauart mit 900 000 Dreiecken rechnet also über eine
+  Minute, und die Kartengrenze ließe es durch. Der Faktor, der Besenhalter von
+  Segel trennt, ist die Form (0,128 gegen 0,002 Sekunden je tausend Dreiecke,
+  Faktor 60), und den kennt keine Zahl, die vor dem Schneiden verfügbar ist.
+  **Eine Vorab-Schranke auf Dreiecke kann diesen Fall nicht fassen — weder
+  höher noch niedriger.** Was ihn fasst, ist eine Grenze an der Rechnung
+  selbst: Die Karte läuft im Arbeiter und `cancelled` ist bis in die teuerste
+  Schleife durchgereicht, es fehlt der Wecker, der sie zieht.
+
 - [ ] **Sechzehntausend Merkmale an einem Schiffsrumpf sind keine Auskunft.**
   Auch in 153 Sekunden nicht. Ein Segel meldet 2252, ein Rumpf 16 508 — beides
   Rauschen aus einem feinen, organischen Netz, und beides landet im
@@ -15799,3 +15835,113 @@ die falsche Größe.
   fällt mit jedem weiteren Eintrag. Die Schranke gehört zur Merkmalserkennung
   und damit in dasselbe Gebiet wie die Gewinde-Phantome; sie soll nicht
   zweimal gezogen werden (Absprache mit 3d-druck-f9, 04.09.2026).
+
+## Was die Erkennung erklärt — und was nicht (04.09.2026)
+
+Robert: „schau dir die modelle an ob wir etwas noch nicht erkennen". Was
+gefunden **wurde**, beantwortet das nicht; dafür braucht es einen Maßstab
+außerhalb der Erkennung. Der billigste ehrliche ist die Oberfläche selbst:
+Jedes Dreieck gehört zu einem Merkmal oder zu nichts.
+
+Alle Zahlen am Stand von `1ff568a4` in einem Zug gemessen; die großen
+Modelle auf 60 000 Dreiecke verkleinert, sonst dauert es zu lange. **In einem
+Zug, weil eine erste Fassung dieser Tabelle zwei Stände mischte** — die
+organischen Modelle vom Vormittag, die konstruierten von nach zwei Fixes in
+der Erkennung. Das Segel stand darin mit 19,5 % statt 35,7 %.
+
+| Modell | Art | Dreiecke | Merkmale | Abdeckung | größtes Loch |
+|---|---|---|---|---|---|
+| obj_1, obj_11, obj_12, obj_14 | konstruiert | 1 440–5 036 | 3–6 | **100 %** | 0 % |
+| clean_figure, block_with_rou | Korpus | 108–738 | 7–15 | **100 %** | 0 % |
+| broken_open, bracket_inch | Korpus | 9–12 | 2–5 | 84–89 % | 0–16 % |
+| Besenhalter | halb organisch | 59 740 | 26 | 51,2 % | 12,3 % |
+| Segel obj_3 | organisch | 60 000 | 314 | 35,7 % | 62,4 % |
+| Rumpf obj_15 | organisch | 60 000 | 958 | 33,3 % | 64,3 % |
+| Spiderman, Voronoi | organisch | 60 000 | 396 | **5,9 %** | **94,0 %** |
+
+**Die Erkennung erklärt Konstruiertes vollständig und Organisches zu einem
+Drittel bis gar nicht** — und das Unerklärte liegt nicht in Splittern, sondern
+in einem Stück. Das ist keine Lücke, sondern ihre Grenze: Eine Freiformfläche
+ist kein Zylinder, Kegel, Kugel oder Torus, und sie soll auch keiner werden.
+
+Die Messung ist robust gegen das Verkleinern, das die großen Modelle erst
+messbar macht: Der Besenhalter kommt unverkleinert auf 51,2 % und verkleinert
+auf 50,0 %.
+
+- [ ] **Viele Merkmale und wenig erklärte Fläche sind dieselbe Aussage von
+  zwei Seiten.** Am Spiderman erklären **400 Merkmale 5,9 Prozent** — 0,015 %
+  je Stück. Am Besenhalter erklären 26 Merkmale 51 %, also 2 % je Stück, das
+  Hundertdreißigfache. Ein Modell, dessen Merkmale im Schnitt ein
+  Zehntausendstel der Oberfläche erklären, ist keine Konstruktion, und die
+  Liste, die dabei herauskommt, hilft niemandem.
+
+  Damit gibt es für die Schranke, die unter „Sechzehntausend Merkmale an einem
+  Schiffsrumpf" gesucht wird, eine Zahl, die **nicht** die Merkmalszahl ist:
+  Ein Rumpf mit 16 508 Einträgen und ein Prüfkörper mit acht sind über die
+  Abdeckung je Merkmal unterscheidbar, über die bloße Anzahl nicht.
+
+  **Und es gibt eine billigere, die genauso scharf trennt: den Anteil rund
+  gefitteter Merkmale.** Die Abdeckung kostet eine Flächenrechnung über jedes
+  Dreieck; das hier ist ein Zähler über die fertige Liste.
+
+  | Modell | Art | Merkmale | `sphere` + `torus` |
+  |---|---|---|---|
+  | vier Kundenzylinder, fünf Korpusmodelle | konstruiert | 2–15 | **0–7 %** |
+  | Besenhalter | halb organisch | 26 | **0 %** |
+  | Rumpf obj_15 | organisch | 958 | **79 %** |
+  | Spiderman | organisch | 396 | **81 %** |
+  | Segel obj_3 | organisch | 314 | **95 %** |
+
+  Keine Überlappung, in beide Richtungen, und der Grund ist geometrisch statt
+  statistisch: Eine gekrümmte Fläche lässt sich lokal **immer** an eine Kugel
+  anpassen — das ist die Definition der Krümmung. Wo `sphere` und `torus` die
+  Mehrheit stellen, passt die Erkennung Grundformen an etwas an, das keine ist.
+  Ein Segel hat keine 222 Kugeln.
+
+  Der Besenhalter ist dabei der Beleg, dass die Zahl nicht bloß „viele
+  Merkmale" misst: 26 Stück, halb organisch, 0 % — er fällt auf die richtige
+  Seite. **Ein Beweis ist es nicht:** 21 Modelle sind wenige, und ein Modell
+  mit einer echten Kugelkalotte und sonst wenig würde falsch einsortiert.
+
+- [ ] **`rotate_feature` ändert das Volumen, und niemand sagt es.** Gemessen an
+  vier Modellen: Eine Bohrung um 30° zu drehen kostet oder bringt zwischen
+  2,5 und 92,9 mm³. Das ist geometrisch richtig — eine schräge Bohrung durch
+  eine Platte ist länger als eine senkrechte —, aber es steht in keinem
+  Befund. Achse und Merkmalszahl stimmen dabei (0,0,1 → 0,−0,5,0,87 = 30°, das
+  Netz bleibt wasserdicht); die Operation tut, was sie soll. Offen ist allein,
+  ob eine Änderung des Materialvolumens ohne ein Wort dazu die richtige
+  Bedienung ist.
+
+### Kein Fund: `decimate` an Netzen mit Durchbrüchen
+
+Der Vollständigkeit halber, weil er an einem Tag zweimal gemeldet und einmal
+zu Unrecht entkräftet wurde. Am Besenhalter verfehlt `simplify_quadric_decimation`
+jedes Ziel — 50 000, 30 000, 15 000, 8 000, 2 000 ergeben **immer 59 100**.
+
+Das ist **kein Fehler, sondern eine dokumentierte Grenze**: Die Begründung an
+`SIMPLIFY_MISSED` in `geom/mesh_ops.py` sagt seit dem 31.08.2026, dass Netze
+mit Euler-Zahl 2 jedes Ziel treffen und Netze mit Durchbrüchen stehenbleiben,
+und `_simplification_findings` meldet es dem Kunden. Nachgemessen, vier von
+vier:
+
+| Modell | Dreiecke | Euler | Vorhersage | gemessen |
+|---|---|---|---|---|
+| Besenhalter | 59 740 | −14 | verfehlt | verfehlt |
+| obj_11 | 3 598 | 4 | verfehlt | verfehlt |
+| obj_13 | 288 200 | 2 | trifft | trifft |
+| obj_5 | 277 460 | 2 | trifft | trifft |
+
+**Und der Kundenweg trägt**, geprüft am größten Modell: Der Rumpf mit
+1 223 836 Dreiecken und Euler −362 bekommt die Absage der Analysekarte, der
+Ausweg *Dreiecke verringern* trifft 900 000 exakt, Dicken- und Überhangkarte
+kommen danach in 4,6 und 0,1 Sekunden. Die Untergrenze ist modellabhängig, kein
+Alles-oder-nichts.
+
+**Zwei Lehren, beide teuer bezahlt.** Erstens: Die falsche Entkräftung entstand
+aus einer Gegenprobe mit dem Ziel aus dem Kundenweg (120 000) — der Besenhalter
+liegt mit 59 740 darunter, `decimate` kehrt dann in der ersten Zeile zurück,
+und **„nicht dezimiert" sah aus wie „Ziel getroffen"**. Wer eine Zahl
+entkräftet, prüft, ob seine Gegenprobe den Fall überhaupt erreicht. Zweitens:
+Die Antwort stand die ganze Zeit als Kommentar an der Konstante, die den
+Befund auslöst. Vor der Messung lohnt der Blick, ob jemand sie schon gemacht
+hat.
