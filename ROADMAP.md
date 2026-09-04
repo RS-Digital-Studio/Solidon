@@ -77,6 +77,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, das Certum-Zertifikat (Standard Code Signing in the Cloud, Einzelperson) für `tools/sign_release.py` sowie die Apple-Developer-IDs und sieben CI-Geheimnisse zum seit 02.09.2026 vorhandenen Konto. Die CI-Wege und alle Pakete stehen; Azure und PFX sind seit 02.09.2026 entfernt |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und einen nachweisbar abgeschlossenen netcup-AVV. Das Repository belegt den Abschluss derzeit nicht; die Datenschutzerklärung nennt netcup als Hoster (Art. 6 lit. f) und behauptet keinen AVV mehr. Vor der Freigabe im CCP prüfen und den Beleg sichern: Hosting, Mail, Support, Aktivierung, Protokolle/Statistik und Sicherungen; dazu Unterauftragsverarbeiter, TOM, Löschung und Wiederherstellung. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
 | Der Punkt für den Changelog | Zwei schnelle Klicks nahmen die ganze Ansicht (04.09.2026) | eine Release-Entscheidung, keine Arbeit am Code: Die Fassung 0.3.2 ist gebaut und ihr Abschnitt kündigt die neue Steuerung an. Der Fund gehört in den nächsten Abschnitt; welcher das ist, entscheidet der Release |
+| Übersprungene Fassungen zeigen nur die neuesten Punkte | Zwei Löcher im Weg zur neuesten Fassung (04.09.2026) | eine Entscheidung von Robert über eine Formatänderung: ein Feld je Fassung in version.json, das die Anwendung gegen ihre eigene Nummer filtert. Wer von 0.3.0 auf 0.3.3 springt, liest heute acht Punkte und sieht von den 98 aus 0.3.1 und 0.3.2 keinen, während `omitted()` null meldet |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -15489,3 +15490,58 @@ Nebenbei aufgefallen und nicht angefasst, weil es nicht aus einer Änderung
 dieser Durchsicht stammt: `app/ui/icons.py` nimmt in `_pixmap(source, size,
 colour)` einen Farbwert an, den der Rumpf nicht liest — er steht nur in der
 Signatur.
+
+## Zwei Löcher im Weg zur neuesten Fassung (04.09.2026)
+
+Robert zum Release 0.3.3: „verifizieren dass man immer die neuste version hat
+auch mit alten installer und immer in der App auch die neuste version angezeigt
+wird falls man ein update verpasst." Gemessen wurde gegen den Server, und zwei
+Stellen hielten die Zusage nicht.
+
+- [x] **Das Räumen hätte den Auffangpfad mitgelöscht.** `--alte-pakete` nimmt
+  alles unter `dl/`, was `version.json` nicht verspricht und was die laufende
+  Fassung nicht im Namen trägt. Auf `veraltet.php` trifft beides nicht zu — es
+  stand als sechzehnter Eintrag zwischen den fünfzehn alten Paketen auf der
+  Löschliste. Die Datei gibt es, weil am 03.09.2026 ein Interessent einen Tag
+  nach dem Link ein 404 bekam; das Werkzeug hätte sie zusammen mit dem
+  gelöscht, wovor sie auffängt, und der nächste Release hätte den Vorfall
+  wiederholt. Kriterium ist jetzt die Fassungsnummer im Namen.
+  `tests/test_toolchain.py::test_the_cleanup_spares_the_handler_that_catches_dead_links`,
+  mit Gegenprobe rot gefahren.
+
+- [x] **Der Auffangpfad kannte vier der fünf ausgelieferten Dateien.** Für die
+  Linux-Direktstartdatei stand im Quelltext, sie werde „seit 0.2.0 nicht mehr
+  gebaut" — falsch seit dem Tag, an dem sie zurückkam. Gemessen gegen den
+  Server: Ein alter Windows-, Flatpak- oder Mac-Link fand seine Nachfolgerin,
+  dieser eine landete auf der Downloadauswahl. **Ein Fehlschlag dieser Datei
+  sieht aus wie ein Erfolg** — der Kunde steht auf einer gültigen Seite, nur
+  einen Klick weiter weg, und niemand meldet das. Das Ziel kommt weiter aus
+  `version.json`; der Name wird aus der dortigen Fassung gebaut, und
+  weitergeleitet wird nur auf eine Datei, die auch dort liegt.
+
+  Der Wächter dazu hat **drei Anläufe** gebraucht, und das ist der eigentliche
+  Ertrag: Der erste las die ganze Datei und zählte den Kommentar mit, der die
+  Direktstartdatei beim Namen nennt; der zweite las bis zur ersten Anweisung
+  und zählte den Namen der Hilfsfunktion mit. Beide Male stand das gesuchte
+  Wort da, beide Male fehlte das Muster, und beide Male war der Test grün.
+  Geprüft wird jetzt der Rumpf von `plattform_zu` und darin nur die
+  `preg_match`-Zeilen.
+
+- [x] **Nachgemessen, was hält:** `version.json` ist 15 649 Bytes und damit
+  auch für Fassungen bis 0.2.1 lesbar (deren Grenze liegt bei 65 536, und was
+  darüber liegt, melden sie als „Seite nicht erreichbar" — dann erfährt der
+  Kunde nie von einem Update; beim Kunden gerissen am 27.08.2026). Signatur
+  gültig unter beiden Grenzen. Von 0.1.1, 0.1.5, 0.2.2, 0.3.0, 0.3.1 und 0.3.2
+  aus wird 0.3.3 angeboten, und zwar bei jedem Start und nicht einmalig. Alle
+  sechs Startseiten nennen nur noch 0.3.3, alle fünf versprochenen Dateien
+  liegen vollständig oben.
+
+- [ ] **Wer eine Fassung überspringt, sieht nur die Punkte der neuesten.**
+  `make_download.py` schreibt `changes_for(APP_VERSION)`, also den Abschnitt
+  einer einzigen Fassung. Wer von 0.3.0 auf 0.3.3 springt, liest im
+  Update-Fenster acht Punkte und bekommt von den 98 aus 0.3.1 und 0.3.2 keinen
+  zu sehen — während `omitted()` null meldet, also „alles da". Nach der
+  Installation sind sie über die Changelog-Seite und das Neuerungen-Fenster
+  erreichbar; davor nicht. Das zu ändern hieße, ein Feld je Fassung ins Format
+  zu legen, das die Anwendung gegen ihre eigene Nummer filtert — eine
+  Formatänderung mit Migration, keine Release-Arbeit. **Entscheidung Robert.**
