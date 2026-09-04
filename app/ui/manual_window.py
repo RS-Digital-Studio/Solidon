@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
 from PySide6.QtGui import (
+    QDesktopServices,
     QImage,
     QKeySequence,
     QPainter,
@@ -47,7 +48,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME
+from app.branding import APP_NAME, WEBSITE_URL
 from app.core import drawing, figures, manual
 from app.i18n import get_language, tr
 
@@ -85,9 +86,27 @@ class PageView(QTextBrowser):
         self._refit_timer.timeout.connect(self._refit)
 
     def setMarkdown(self, markdown: str) -> None:  # noqa: N802 — Qt gibt den Namen vor
-        """Eine neue Seite fragt nach ihren eigenen Abbildungen."""
+        """Eine neue Seite fragt nach ihren eigenen Abbildungen.
+
+        Gerendert wird **ohne HTML-Auswertung**. Qts Vorgabe ist der
+        GitHub-Dialekt, und der lässt rohes HTML durch: ein ``<a href=…>`` im
+        Text wurde zu einem echten Anker. Das Handbuch entsteht aus dem
+        Register, und ein mitgereistes Rezept bringt Titel und Beschreibung
+        aus einer fremden Projektdatei mit (Sicherheitsdurchsicht 04.09.2026).
+        Mit ``MarkdownNoHTML`` steht dasselbe HTML als Text da — sichtbar,
+        aber wirkungslos.
+
+        Es ist die **zweite** Schicht, nicht die erste: Markdown-Linksyntax
+        bleibt Markdown, ``[Text](beliebiges:ziel)`` wird also weiter ein
+        Anker. Wohin ein Klick darf, entscheidet
+        :meth:`ManualWindow._open_link`.
+        """
         self._asked.clear()
-        super().setMarkdown(markdown)
+        self.document().setMarkdown(
+            markdown,
+            QTextDocument.MarkdownFeature.MarkdownDialectGitHub
+            | QTextDocument.MarkdownFeature.MarkdownNoHTML,
+        )
 
     def loadResource(  # noqa: N802 — Qt gibt den Namen vor
         self, kind: int, name: QUrl | str
@@ -234,7 +253,15 @@ class ManualWindow(QMainWindow):
         self.contents.currentRowChanged.connect(self._show_current)
 
         self.text = PageView(self)
-        self.text.setOpenExternalLinks(True)
+        # **Kein Klick öffnet von selbst etwas.** Das Handbuch entsteht aus dem
+        # Register, und ein mitgereistes Rezept bringt Titel und Beschreibung
+        # aus einer fremden Projektdatei mit. ``setOpenLinks(False)`` schließt
+        # dabei auch den Weg über ``setSource``: Ein ``file://`` auf einen
+        # UNC-Pfad startet kein Programm, erzwingt aber eine SMB-Anmeldung.
+        # Dasselbe Muster wie in ``ai_disclosure`` und ``changes_dialog``.
+        self.text.setOpenLinks(False)
+        self.text.setOpenExternalLinks(False)
+        self.text.anchorClicked.connect(self._open_link)
 
         left = QWidget(self)
         left_layout = QVBoxLayout(left)
@@ -254,6 +281,25 @@ class ManualWindow(QMainWindow):
 
         self._visible: list[manual.Page] = []
         self._fill(self._pages)
+
+    def _open_link(self, address: QUrl) -> None:
+        """Öffnet nur Adressen auf der eigenen Website.
+
+        Das Handbuch trägt heute keinen einzigen externen Link — gemessen über
+        ``app/`` am 04.09.2026, null Markdown-Links. Die Erlaubnis für die
+        eigene Domain steht trotzdem, damit ein künftiges Kapitel einen setzen
+        kann, ohne dass hier jemand nachziehen muss.
+
+        Alles andere bleibt liegen, und der Grund ist nicht Vorsicht, sondern
+        ein Weg, den es gab: ``QDesktopServices.openUrl`` reicht unter Windows
+        jedes Protokoll an seinen eingetragenen Handler weiter — ``search-ms:``
+        stellt eine fremde Netzfreigabe als Suchergebnis dar, und was sonst
+        auf dem Rechner ein Protokoll angemeldet hat, weiß Solidon nicht.
+        Verglichen wird der **Host**, nicht ein Präfix: ``solidon3d.de.fremd``
+        beginnt sonst mit der eigenen Adresse und ist es nicht.
+        """
+        if address.scheme() == "https" and address.host() == QUrl(WEBSITE_URL).host():
+            QDesktopServices.openUrl(address)
 
     # --- Inhalt ---------------------------------------------------------------
 

@@ -54,6 +54,7 @@ import stat
 import tempfile
 import threading
 import time
+import unicodedata
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -309,17 +310,70 @@ def to_data(recipe: Recipe) -> dict[str, Any]:
     }
 
 
+#: Die Unicode-Kategorien, die in einem Rezepttext nichts zu suchen haben:
+#: Steuerzeichen (``Cc``) sowie Zeilen- und Absatztrenner (``Zl``, ``Zp``).
+#: Für ``doc`` gilt es abgeschwächt — ein Beschreibungstext darf Absätze haben.
+_TEXT_BAN: Final = frozenset({"Cc", "Zl", "Zp"})
+
+
+def _checked_text(value: str, limit: int, field: str, *, paragraphs: bool = False) -> str:
+    """Ein Textfeld eines Rezepts, auf Länge und Zeichen geprüft.
+
+    Beide Prüfungen fehlten auf dem **Adopt-Weg** vollständig: ``adopt`` und
+    ``adopt_payload`` rufen :func:`from_data` unmittelbar auf, und die strengen
+    Prüfungen aus ``part_file.PartFileIO._strict_shape`` — samt
+    ``MAX_TITLE_CHARS`` und ``MAX_DOC_CHARS`` — gelten nur für den lokalen
+    ``.solidon-part``-Import. Ein Rezept aus einer fremden Projektdatei trug
+    damit einen Titel beliebiger Länge und beliebigen Inhalts, und der reist
+    weit: ins Handbuch, in den Katalog, in die Menüs und in die Befehlspalette
+    (Sicherheitsdurchsicht 04.09.2026).
+
+    **Markdown bleibt erlaubt**, und zwar bewusst: ``doc`` wird als
+    Markdown-Absatz ins Handbuch gesetzt, das ist sein Zweck. Wohin ein Link
+    darin führen darf, entscheidet die Anzeige — bei
+    ``ui.manual_window.ManualWindow._open_link`` eine Positivliste, bei
+    ``ui.catalog`` das Maskieren, im Website-Handbuch ``core.markup``. Die
+    Entscheidung gehört dorthin, weil dieselben Texte in der Kommandozeile
+    schlicht Text sind und dort nichts zu maskieren ist.
+    """
+    if len(value) > limit:
+        raise ValueError(f"recipe_text:{field}")
+    for char in value:
+        # Die zwei üblichen Zeilenenden bleiben in einem Absatztext erlaubt.
+        # Sie einzuschließen ist keine Nachlässigkeit: Eine von Hand
+        # geschriebene Rezeptdatei trägt unter Windows ``\r\n``, und sie
+        # deshalb abzuweisen wäre eine Grenze gegen den eigenen Nutzer. Die
+        # abwegigen Trenner (``\v``, ``\x85``, LINE und PARAGRAPH SEPARATOR)
+        # fallen weiter durch — sie stehen in keinem geschriebenen Text.
+        if paragraphs and char in "\n\r":
+            continue
+        if unicodedata.category(char) in _TEXT_BAN:
+            raise ValueError(f"recipe_text:{field}")
+    return value
+
+
 def from_data(data: dict[str, Any]) -> Recipe:
     """Ein Rezept aus seinen Daten. Der Dokument-Teil läuft durch die
     Migrationen des Dokumentformats — ein altes Rezept öffnet wie eine alte
-    Projektdatei."""
+    Projektdatei.
+
+    Die Textfelder gehen durch :func:`_checked_text`. Das gilt für **beide**
+    Wege hierher: den lokalen Bausteinimport, der ohnehin streng prüft, und
+    das mitgereiste Rezept einer fremden Projektdatei, das es nicht tat.
+    """
+    # Träge, weil ``shared`` aus diesem Modul importiert — auf Modulebene wäre
+    # es ein Zirkelbezug. Dasselbe Muster wie bei ``part_ops`` weiter unten.
+    from app.core.knowledge.parts import shared
+
     if has_lone_surrogate(data):
         raise ValueError("unicode_scalar")
     return Recipe(
         name=str(data["name"]),
-        title=str(data.get("title") or data["name"]),
-        group=str(data.get("group", "structure")),
-        doc=str(data.get("doc", "")),
+        title=_checked_text(
+            str(data.get("title") or data["name"]), shared.MAX_TITLE_CHARS, "title"
+        ),
+        group=_checked_text(str(data.get("group", "structure")), 120, "group"),
+        doc=_checked_text(str(data.get("doc", "")), shared.MAX_DOC_CHARS, "doc", paragraphs=True),
         # Durch die Migrationen, wie eine Projektdatei: Der Dokumentteil
         # eines Rezepts altert mit dem Dokumentformat, und eine Datei aus
         # der Zukunft wird abgewiesen statt falsch gelesen (``too_new``).

@@ -1128,6 +1128,51 @@ def test_a_stopped_stack_is_an_error_not_a_half_body(profile: Profile) -> None:
     assert caught.value.suggestions, "Regel 17: auch dieser Fehler trägt einen Vorschlag"
 
 
+def test_a_travelled_recipe_gets_the_same_text_limits_as_a_local_one(profile: Profile) -> None:
+    """Die Längen- und Zeichengrenzen galten nur für den lokalen Import.
+
+    ``adopt`` und ``adopt_payload`` rufen ``from_data`` unmittelbar auf und
+    umgingen damit ``PartFileIO._strict_shape`` — samt ``MAX_TITLE_CHARS`` und
+    ``MAX_DOC_CHARS``. Ein Rezept aus einer fremden Projektdatei trug deshalb
+    einen Titel beliebiger Länge und beliebigen Inhalts, und der reist weit:
+    ins Handbuch, in den Katalog, in die Menüs und in die Befehlspalette
+    (Sicherheitsdurchsicht 04.09.2026).
+    """
+    from app.core.knowledge.parts import shared
+
+    zu_lang = recipe.to_data(_recipe(profile))
+    zu_lang["title"] = "A" * (shared.MAX_TITLE_CHARS + 1)
+    with pytest.raises(ValueError, match="recipe_text:title"):
+        recipe.from_data(zu_lang)
+
+    zweizeilig = recipe.to_data(_recipe(profile))
+    zweizeilig["title"] = "Halter\nzweite Zeile"
+    with pytest.raises(ValueError, match="recipe_text:title"):
+        recipe.from_data(zweizeilig)
+
+    # Über den Reiseweg ist es ein Befund und kein Abbruch — eine kaputte
+    # Beilage darf das Öffnen des Projekts nicht kosten.
+    assert recipe.adopt(zweizeilig, PartRegistry(), Registry())
+
+
+def test_a_recipe_description_may_have_paragraphs(profile: Profile) -> None:
+    """``doc`` wird als Markdown-Absatz gesetzt — Absätze gehören dazu.
+
+    Die Grenze trennt Geschriebenes von Steuerzeichen, nicht Kurzes von
+    Langem: Zeilenumbrüche bleiben erlaubt, auch die von Windows, denn eine
+    von Hand geschriebene Rezeptdatei trägt ``\\r\\n``. Die abwegigen Trenner
+    fallen durch, weil sie in keinem geschriebenen Text stehen.
+    """
+    absaetze = recipe.to_data(_recipe(profile))
+    absaetze["doc"] = "Erster Absatz.\r\n\r\nZweiter Absatz."
+    assert recipe.from_data(absaetze).doc == "Erster Absatz.\r\n\r\nZweiter Absatz."
+
+    exotisch = recipe.to_data(_recipe(profile))
+    exotisch["doc"] = "Erster Teil zweiter Teil"
+    with pytest.raises(ValueError, match="recipe_text:doc"):
+        recipe.from_data(exotisch)
+
+
 def test_a_recipe_from_the_future_is_refused(profile: Profile) -> None:
     """Der Dokumentteil erbt die Migrationen der Projektdatei — und damit auch
     die Sperre gegen eine Datei aus einer neueren Version (``too_new``)."""

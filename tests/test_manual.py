@@ -1209,6 +1209,90 @@ def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> N
         window.deleteLater()
 
 
+def test_the_manual_opens_only_its_own_website(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Klick im Handbuch führt nur auf solidon3d.de.
+
+    Das Handbuch entsteht aus dem Register, und ein mitgereistes Rezept bringt
+    Titel und Beschreibung aus einer fremden Projektdatei mit. Ein
+    ``[Text](search-ms:…)`` darin wurde zu einem echten Anker mit
+    angreifergewählter Beschriftung — die Adresse stand nirgends, denn das
+    Fenster hat keine Statuszeile (Sicherheitsdurchsicht 04.09.2026).
+    """
+    from PySide6.QtCore import QUrl
+
+    window = ManualWindow()
+    try:
+        geoeffnet: list[str] = []
+        monkeypatch.setattr(
+            "app.ui.manual_window.QDesktopServices.openUrl",
+            lambda url: geoeffnet.append(url.toString()),
+        )
+
+        for adresse in (
+            # Startet unter Windows den eingetragenen Protokoll-Handler.
+            "search-ms:query=update&crumb=location:\\\\fremd.example\\share",
+            "ms-msdt:/id x",
+            # Erzwingt eine SMB-Anmeldung, also einen NetNTLM-Abfluss.
+            "file://///fremd.example/share/x.exe",
+            "https://fremd.example/",
+            # Ein Präfixvergleich fiele hierauf herein, ein Hostvergleich nicht.
+            "https://solidon3d.de.fremd.example/",
+            # Auch die eigene Domain nur verschlüsselt.
+            "http://solidon3d.de/handbuch.html",
+        ):
+            window._open_link(QUrl(adresse))
+        assert geoeffnet == [], f"nichts davon darf öffnen: {geoeffnet}"
+
+        window._open_link(QUrl("https://solidon3d.de/handbuch.html"))
+        assert geoeffnet == ["https://solidon3d.de/handbuch.html"], (
+            "die eigene Website muss weiter erreichbar sein"
+        )
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_no_click_in_the_manual_opens_anything_by_itself(qt_app: QApplication) -> None:
+    """``setOpenLinks`` schließt auch den Weg über ``setSource``.
+
+    ``setOpenExternalLinks(False)`` allein genügt nicht: Ein ``file://`` gilt
+    Qt nicht als extern, sondern wird als Dokument geladen — bei einem
+    UNC-Pfad heißt das, dass Windows die Freigabe öffnet.
+    """
+    window = ManualWindow()
+    try:
+        assert not window.text.openLinks(), "kein Anker öffnet sich selbst"
+        assert not window.text.openExternalLinks(), "und schon gar nicht nach außen"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_raw_html_in_a_manual_page_stays_text(qt_app: QApplication) -> None:
+    """Rohes HTML im Markdown wird kein Anker.
+
+    Qts Vorgabe ist der GitHub-Dialekt, und der wertet eingebettetes HTML aus.
+    Mit ``MarkdownNoHTML`` steht dasselbe HTML als Text da — sichtbar, aber
+    ohne ``href``. Die zweite Schicht neben der Positivliste des Klicks.
+    """
+    window = ManualWindow()
+    try:
+        window.text.setMarkdown(
+            'Ein <a href="file://///fremd.example/s/x.exe">harmlos aussehender</a> Satz.'
+        )
+        html = window.text.document().toHtml()
+
+        assert 'href="file:' not in html, "kein Anker auf eine Netzfreigabe"
+        assert "fremd.example" in window.text.document().toPlainText(), (
+            "der Text bleibt sichtbar — verschwiegen wird nichts, es wirkt nur nicht"
+        )
+    finally:
+        window.close()
+        window.deleteLater()
+
+
 def test_a_figure_grows_back_when_the_column_does(qt_app: QApplication) -> None:
     """Eine Abbildung, die für eine schmale Spalte verkleinert wurde, darf
     nicht klein bleiben, wenn das Fenster aufgeht (§19.2).
@@ -1491,3 +1575,60 @@ def test_a_contents_entry_that_is_cut_says_so(qt_app: QApplication) -> None:
     eintrag = liste.item(lang)
     assert eintrag.toolTip() == eintrag.text(), "der volle Name steht im Hinweis"
     fenster.close()
+
+
+def test_a_click_on_a_manual_link_really_reaches_the_allowlist(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die **Verbindung**, nicht die Methode dahinter.
+
+    ``test_the_manual_opens_only_its_own_website`` ruft ``_open_link``
+    unmittelbar auf und prüft damit die Positivliste — bei der Gegenprobe
+    blieb es deshalb grün, während vier andere Tests fielen. Was dort fehlte,
+    ist die Frage, ob Qts ``anchorClicked`` überhaupt bei diesem Slot ankommt.
+    Genau davor warnt ``.claude/rules/tests.md`` unter „Am Weg vorbei", und
+    solidon-b4 hat am 04.09.2026 dieselbe Familie in ihrer schärferen Gestalt
+    gemessen: eine in Python überschriebene VTK-Methode, die VTKs eigener
+    C++-Code nie ruft — Rechnung richtig, drei Einheitstests grün, am
+    laufenden Fenster 35,8 Grad Schräglage statt der gerechneten 0.
+
+    **Was dieser Test nicht prüft:** den Mausklick selbst. Dass Qt beim Klick
+    auf einen Anker ``anchorClicked`` feuert, ist Qt-Verhalten und keine
+    Zusage dieses Projekts; die Position eines Ankers offscreen zu treffen
+    wäre eine Messung an der Schriftmetrik, und die gibt es dort nicht.
+    Geprüft wird die Kette dahinter: Anker im Dokument, Signal am Slot,
+    Positivliste am Ziel.
+    """
+    from PySide6.QtCore import QUrl
+
+    window = ManualWindow()
+    try:
+        opened: list[str] = []
+        monkeypatch.setattr(
+            "app.ui.manual_window.QDesktopServices.openUrl",
+            lambda url: opened.append(url.toString()),
+        )
+        window.text.setMarkdown(
+            "Ein [Handbuch](https://solidon3d.de/handbuch.html) und ein "
+            "[fremder](search-ms:query=x) Link."
+        )
+
+        # Erst der Beleg, dass Qt überhaupt Anker gerendert hat — ohne ihn
+        # prüfte alles Weitere eine leere Menge (`tests.md`: „Ein Verbotstest
+        # über eine leere Menge ist immer grün").
+        html = window.text.document().toHtml()
+        assert 'href="https://solidon3d.de/handbuch.html"' in html, "der eigene Anker steht da"
+        assert 'href="search-ms:query=x"' in html, "der fremde auch — gesperrt wird beim Klick"
+
+        # Und jetzt der Weg, den ein Klick nimmt: Qt schickt das Signal, und
+        # es muss bei ``_open_link`` ankommen.
+        window.text.anchorClicked.emit(QUrl("search-ms:query=x"))
+        assert opened == [], "ein fremdes Ziel öffnet nicht"
+
+        window.text.anchorClicked.emit(QUrl("https://solidon3d.de/handbuch.html"))
+        assert opened == ["https://solidon3d.de/handbuch.html"], (
+            "die eigene Website muss über die Verbindung erreichbar sein"
+        )
+    finally:
+        window.close()
+        window.deleteLater()
