@@ -1655,6 +1655,22 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
     # ist selbst einer, und jede liegt damit bei fast hundert Prozent. Gegen
     # die größte gemessen zerfiel ``torus_ring.stl`` in 288 ebene Flächen.
     broad = float(body.area) * BROAD_FACE_SHARE
+    # **Der erste Zweig prüft die Rundung nicht, und das ist eine offene
+    # Stelle.** Ein Mantelstreifen, den eine Boolesche neu vernetzt hat, besteht
+    # aus mehr als acht koplanaren Dreiecken und kommt hier unbesehen durch.
+    # Gemessen an einem Mast Ø 5, dessen Zapfen einmal versetzt wurde:
+    # fünfzig Facetten qualifizieren sich allein über die Dreieckszahl, alle
+    # fünfzig sitzen auf der Rundung, und der Zapfen trägt danach 720 statt
+    # 1630 Dreiecke — 43 ebene Flächen stehen daneben, die alle zu ihm gehören.
+    #
+    # **Die naheliegende Ergänzung ``and not any(... in curved ...)`` ist
+    # gemessen und wieder ausgebaut** (04.09.2026): Sie bringt den Mast von 47
+    # Merkmalen auf 8 und gibt ihm seinen Zapfen zurück, nimmt aber die
+    # Deckfläche eines Gewindebolzens mit — deren *Rand* grenzt an den
+    # Gewindekamm, und schon ein einziges Dreieck darin verwirft die ganze
+    # Facette. Danach passt die Erkennung dort eine Kugel Ø 23 ein.
+    # Der Anteil statt des Vorkommens trennt es nicht: die Streifen liegen bei
+    # 0,00 bis 0,85, die echte Deckfläche bei 0,15.
     return {
         int(index)
         for facet, area in zip(facets, areas, strict=True)
