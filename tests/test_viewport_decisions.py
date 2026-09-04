@@ -1887,22 +1887,33 @@ class _AimedCamera:
 
 
 class _AimedPlotter:
-    """Renderer und Kamera, mehr braucht der Drehbeginn nicht."""
+    """Renderer und Kamera, mehr braucht der Drehbeginn nicht.
+
+    Ohne Größe hat der Renderer keine Bildmitte — dann fragt der Drehbeginn
+    den Picker gar nicht erst, und die Attrappe braucht keinen.
+    """
 
     class _Renderer:
-        def __init__(self, camera: _AimedCamera) -> None:
+        def __init__(self, camera: _AimedCamera, size: tuple[int, int]) -> None:
             self._camera = camera
+            self._size = size
             self.clipped = False
 
         def GetActiveCamera(self) -> _AimedCamera:  # noqa: N802 — VTK-Name
             return self._camera
 
+        def GetSize(self) -> tuple[int, int]:  # noqa: N802 — VTK-Name
+            return self._size
+
+        def GetOrigin(self) -> tuple[int, int]:  # noqa: N802 — VTK-Name
+            return (0, 0)
+
         def ResetCameraClippingRange(self) -> None:  # noqa: N802 — VTK-Name
             self.clipped = True
 
-    def __init__(self) -> None:
+    def __init__(self, size: tuple[int, int] = (0, 0)) -> None:
         self.camera = _AimedCamera()
-        self.renderer = self._Renderer(self.camera)
+        self.renderer = self._Renderer(self.camera, size)
 
 
 def test_the_rotation_start_aims_over_the_weak_callback(
@@ -1928,6 +1939,66 @@ def test_the_rotation_start_aims_over_the_weak_callback(
 
         assert plotter.camera.set_to == pytest.approx((0.0, 10.0, 0.0))
         assert plotter.renderer.clipped, "ein neuer Fokus braucht neue Schnittebenen"
+    finally:
+        viewport.plotter = None
+        viewport.deleteLater()
+
+
+def test_the_rotation_point_is_what_the_middle_of_the_view_shows(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gedreht wird um den Körper in der Bildmitte, nicht um die Mitte aller.
+
+    Robert, 04.09.2026: „beim rotieren der ansicht wollen wir uns um den
+    mittelpunkt des viewports drehen." Wer auf ein Detail zoomt, dreht sonst
+    um eine Tiefe, die eine halbe Bauhöhe dahinterliegt, und das Detail
+    schwenkt aus dem Bild.
+    """
+    from app.ui.viewport import Viewport, _weak_callbacks
+
+    viewport = Viewport()
+    try:
+        plotter = _AimedPlotter(size=(800, 600))
+        viewport.plotter = plotter  # type: ignore[assignment]
+        asked: list[tuple[int, int]] = []
+
+        def _hit(x: int, y: int) -> tuple[float, float, float]:
+            asked.append((x, y))
+            return (0.0, -2.0, 0.0)
+
+        monkeypatch.setattr(viewport, "_world_at", _hit)
+        # Die Mitte aller Körper liegt anderswo — sie darf hier nicht gewinnen.
+        monkeypatch.setattr(viewport, "rotation_centre", lambda: (30.0, 10.0, 4.0))
+
+        _weak_callbacks(viewport).on_rotate_start()
+
+        assert asked == [(400, 300)], "gefragt wird die Mitte des Renderers"
+        assert plotter.camera.set_to == pytest.approx((0.0, -2.0, 0.0))
+    finally:
+        viewport.plotter = None
+        viewport.deleteLater()
+
+
+def test_without_a_body_in_the_middle_the_body_centre_decides(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zeigt die Mitte auf den Hintergrund, bleibt es beim alten Weg.
+
+    Denselben Rückfall nimmt der Fall, in dem der Zell-Picker nichts findet,
+    weil der Strahl senkrecht in eine Bohrung läuft.
+    """
+    from app.ui.viewport import Viewport, _weak_callbacks
+
+    viewport = Viewport()
+    try:
+        plotter = _AimedPlotter(size=(800, 600))
+        viewport.plotter = plotter  # type: ignore[assignment]
+        monkeypatch.setattr(viewport, "_world_at", lambda x, y: None)
+        monkeypatch.setattr(viewport, "rotation_centre", lambda: (30.0, 10.0, 4.0))
+
+        _weak_callbacks(viewport).on_rotate_start()
+
+        assert plotter.camera.set_to == pytest.approx((0.0, 10.0, 0.0))
     finally:
         viewport.plotter = None
         viewport.deleteLater()

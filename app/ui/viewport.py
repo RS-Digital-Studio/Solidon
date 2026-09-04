@@ -4685,7 +4685,7 @@ class Viewport(QWidget):
         self._render_now()
 
     def _aim_rotation(self) -> None:
-        """Der Drehpunkt bekommt beim Drehbeginn die Tiefe der Körper (§2.9).
+        """Der Drehpunkt bekommt beim Drehbeginn die Tiefe dessen, was man ansieht (§2.9).
 
         VTK dreht um den Fokuspunkt der Kamera. Der wurde früher bei jedem
         Szenenaufbau auf die Mitte der Körper gesetzt (``_centre_rotation``),
@@ -4697,16 +4697,27 @@ class Viewport(QWidget):
 
         Deshalb jetzt hier, im Beginn der Drehung — dem einzigen Moment, in
         dem der Fokuspunkt etwas bedeutet. Und unsichtbar: Der Fokus rückt auf
-        den Punkt des Sichtstrahls, der der Mitte der Körper am nächsten liegt
-        (:func:`rotation_focus`). Stellung und Blickrichtung der Kamera
-        bleiben unangetastet, das Bild ändert sich um nichts; nur die Tiefe
-        des Drehpunkts stimmt wieder. Seitlich bleibt er in der Bildmitte:
-        Gedreht wird um das, was man ansieht — nicht um einen Punkt daneben,
-        dessen Anfahren mitten in der Geste einen Sprung ins Bild brächte.
+        einen Punkt des Sichtstrahls (:func:`rotation_focus`). Stellung und
+        Blickrichtung der Kamera bleiben unangetastet, das Bild ändert sich um
+        nichts; nur die Tiefe des Drehpunkts stimmt wieder. Seitlich bleibt er
+        in der Bildmitte: Gedreht wird um das, was man ansieht — nicht um einen
+        Punkt daneben, dessen Anfahren mitten in der Geste einen Sprung ins
+        Bild brächte.
+
+        **Welche Tiefe, entscheidet die Bildmitte** (Robert, 04.09.2026: „beim
+        rotieren der ansicht wollen wir uns um den mittelpunkt des viewports
+        drehen"). Liegt dort ein Körper, ist sein Auftreffpunkt der Drehpunkt
+        (:meth:`centre_hit`) — wer auf ein Detail zoomt, dreht um dieses Detail
+        und nicht um eine Tiefe, die eine halbe Bauhöhe dahinterliegt. Zeigt
+        die Mitte auf den Hintergrund, gilt weiter die Mitte der Körper
+        (:meth:`rotation_centre`), auf den Sichtstrahl projiziert; dasselbe
+        gilt, wo der Zell-Picker nichts findet, weil der Strahl senkrecht in
+        eine Bohrung läuft (siehe :meth:`_world_at`).
 
         Den Fall »Kulisse statt Körper« — Bauraumrahmen 250 mm, Teil 40, die
-        Mitte alles Sichtbaren hundert Millimeter über dem Modell — löst
-        :meth:`rotation_centre`: Die Mitte kommt aus den Körpern, nie aus dem
+        Mitte alles Sichtbaren hundert Millimeter über dem Modell — schließen
+        beide Quellen auf dieselbe Weise aus: Der Picker sucht nur unter den
+        Körperaktoren, und die Mitte kommt aus den Körpern, nie aus dem
         Renderer.
         """
         if self.plotter is None:
@@ -4714,7 +4725,9 @@ class Viewport(QWidget):
         renderer = getattr(self.plotter, "renderer", None)
         if renderer is None:
             return
-        centre = self.rotation_centre()
+        centre = self.centre_hit()
+        if centre is None:
+            centre = self.rotation_centre()
         if centre is None:
             return
         camera = renderer.GetActiveCamera()
@@ -4724,8 +4737,38 @@ class Viewport(QWidget):
         camera.SetFocalPoint(*target)
         renderer.ResetCameraClippingRange()
 
+    def centre_hit(self) -> Vec3 | None:
+        """Der Körperpunkt in der Bildmitte — oder nichts, wo keiner liegt.
+
+        Die erste Quelle des Drehpunkts (:meth:`_aim_rotation`). Gefragt wird
+        derselbe Zell-Picker wie bei jedem Klick (:meth:`_world_at`), und der
+        sucht nur unter den Körperaktoren: Druckplatte, Bauraum, Griffe und
+        Schatten können den Drehpunkt also nicht an sich ziehen.
+
+        **Die Mitte braucht keine Umrechnung.** VTK zählt Y von unten, Qt von
+        oben; die Mitte ist in beiden Zählungen dieselbe Zeile, und der Picker
+        erwartet ohnehin VTKs Zählung. Der Ursprung kommt trotzdem vom
+        Renderer — Display-Koordinaten zählen im Fenster, nicht im Viewport.
+
+        Vor dem ersten Bild hat der Renderer keine Ausdehnung; dann gibt es
+        keine Mitte, und der Aufrufer nimmt seinen anderen Weg.
+        """
+        if self.plotter is None:
+            return None
+        renderer = getattr(self.plotter, "renderer", None)
+        if renderer is None:
+            return None
+        width, height = renderer.GetSize()
+        if width < 1 or height < 1:
+            return None
+        left, bottom = renderer.GetOrigin()
+        return self._world_at(left + width // 2, bottom + height // 2)
+
     def rotation_centre(self) -> Vec3 | None:
         """Der Punkt, um den gedreht wird — die Mitte der Körper, oder nichts.
+
+        Der Rückfall hinter :meth:`centre_hit`: Was die Bildmitte nicht
+        beantwortet, beantwortet die Ausdehnung der Körper.
 
         Als eigene Auskunft, damit die Regel ohne Plotter prüfbar bleibt:
         offscreen gibt es keinen, und ein Test, der sich dort überspringt,
@@ -12184,12 +12227,21 @@ def _InteractorStyle(  # noqa: N802
                 # „nur nach oben und unten" ist keine seiner Bewegungen.
                 # Gerechnet wird deshalb in der Anwendung, und dieser Zweig
                 # merkt sich nur, wo es losgeht.
+                if on_rotate_start is not None:
+                    # **Auch hier.** ``camera_step`` kippt die Kamera um den
+                    # Blickpunkt, genau wie VTKs Trackball dreht — dieselbe
+                    # Bewegung um dieselbe Größe. Ein Drehpunkt, der bei der
+                    # rechten Taste die Bildmitte ist und beim gedrückten Rad
+                    # die Mitte der Körper, wäre eine Inkonsistenz, die sich
+                    # niemandem erklären ließe (§2.9).
+                    on_rotate_start()
                 self._tilt_at = self._position()
                 self._tell("tilt")
                 return
             if on_rotate_start is not None:
                 # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
-                # Tiefe der Körper, unsichtbar (§2.9, ``_aim_rotation``).
+                # Tiefe dessen, was in der Bildmitte steht, unsichtbar
+                # (§2.9, ``_aim_rotation``).
                 on_rotate_start()
             self.StartRotate()
             self._tell("rotate")
