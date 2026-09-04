@@ -71,7 +71,7 @@ from app.core.types import (
     Transform,
     kind_of,
 )
-from app.core.units import EPS_DISPLAY, is_close
+from app.core.units import EPS_DISPLAY, EPS_GEOM, is_close
 from app.i18n import TranslatableText, _, source_text
 
 _log = get_logger(__name__)
@@ -824,6 +824,97 @@ def _same_size(first: BoundingBox, second: BoundingBox) -> bool:
     return all(is_close(a, b, EPS_DISPLAY) for a, b in zip(first.size, second.size, strict=True))
 
 
+def _cut_from_a_thread(mesh: MeshData, threads: Sequence[Feature], found: Feature) -> bool:
+    """Besteht dieses erkannte Merkmal ganz aus den Dreiecken einer Wendel?
+
+    Gefragt wird über die **Flächen** des Merkmals und nicht über seinen
+    eingepassten Mittelpunkt, und das ist der Unterschied zwischen einer
+    Abgrenzung und einem Raten: Eine Kugel, die die Einpassung in eine Wendel
+    legt, hat einen Mittelpunkt irgendwo — an einem M8-Gewinde einen mit
+    Ø 20,99 auf einem 21 mm hohen Teil. Ihre Dreiecke liegen trotzdem alle auf
+    dem Gewinde. Der Mittelpunkt sagt, wohin die Rechnung lief; die Dreiecke
+    sagen, woraus das Merkmal gemacht ist.
+
+    **Alle Dreiecke, nicht die meisten.** Ein Merkmal, das zur Hälfte auf der
+    Wendel und zur Hälfte auf dem Körper daneben liegt, ist kein Artefakt der
+    Wendel — es zu verwerfen nähme dem Kunden etwas Echtes. Die Gegenprobe
+    dazu steht in ``tests/test_thread_features.py``: eine Bohrung koaxial
+    unter dem Bolzen, die bleiben muss.
+
+    Flächen bleiben ausgenommen. Die Oberseite einer Platte hat ihren
+    Schwerpunkt dort, wo ein mittig aufgesetzter Bolzen steht, und sie ist
+    trotzdem die Platte.
+    """
+    import numpy as np
+
+    if found.kind == "face" or not found.face_indices:
+        return False
+
+    points = np.asarray(mesh.raw.triangles_center, dtype=float)[list(found.face_indices)]
+    return any(_within(points, thread) for thread in threads)
+
+
+def _within(points: Any, thread: Feature) -> bool:
+    """Liegt jeder dieser Punkte in der Hülle des Gewindes?
+
+    Die Hülle ist der Zylinder, über den die Wendel läuft: Achse und Mitte aus
+    dem Merkmal, der Nenndurchmesser als Weite, die Gewindelänge als Höhe.
+
+    **Ohne Länge keine Abgrenzung.** Ein Gewindemerkmal ohne ``length`` — aus
+    einer Projektdatei, die vor dem Feld entstanden ist — liefert ``False``,
+    und die Erkennung behält ihre Funde. Radial allein abzugrenzen wäre der
+    teurere Fehler: Eine Bohrung, die koaxial unter dem Bolzen durch die
+    Platte geht, fiele mit den Artefakten weg, und eine Passung, die auf sie
+    zeigt, verlöre ihr Ziel (§21.3).
+
+    Der Zuschlag ist eine halbe **Steigung** und keine Zahl aus der Luft: Die
+    Gangtiefe ist ein Bruchteil der Steigung, und Spiel wie Vernetzung bleiben
+    darunter. Ein Innengewinde greift um das halbe Spiel über den
+    Nenndurchmesser hinaus — auch das liegt darin.
+    """
+    import numpy as np
+
+    length = float(thread.params.get("length", 0.0))
+    pitch = float(thread.params.get("pitch", 0.0))
+    if length <= 0.0 or pitch <= 0.0:
+        return False
+
+    axis = np.asarray(thread.params.get("axis", (0.0, 0.0, 1.0)), dtype=float)
+    norm = float(np.linalg.norm(axis))
+    if norm <= EPS_GEOM:
+        return False
+    axis = axis / norm
+
+    margin = pitch / 2.0
+    offset = points - np.asarray(thread.params["centre"], dtype=float)
+    along = offset @ axis
+    across = np.linalg.norm(offset - np.outer(along, axis), axis=1)
+
+    radius = float(thread.params.get("diameter", 0.0)) / 2.0
+    reach = radius + margin
+    # **Ein Gewinde ist eine Schale und kein voller Zylinder**, und daran hängt
+    # ein Fall, den die Hülle sonst mitnähme: eine Querbohrung durch den
+    # Bolzen — ein Splintloch. Sie liegt vollständig in der Hülle, und ohne
+    # diese Grenze verlöre sie ihr Merkmal.
+    #
+    # Der naheliegende Weg über die Achsrichtung ist **gemessen gescheitert**:
+    # Ein Phantom-Kegel weicht bis zu 72,8 Grad von der Gewindeachse ab, eine
+    # Querbohrung 90 — dazwischen sitzt keine Schwelle, die nicht geraten wäre.
+    #
+    # Die Schale trägt dagegen, weil sie aus der Bauart folgt und nicht aus
+    # einer Messreihe: Der Gewindegrund liegt bei ``radius - pitch *
+    # RIDGE_SHARE``, und der Ganganteil ist kleiner als eins — eine Fläche der
+    # Wendel liegt deshalb immer über ``radius - pitch``. Nachgemessen über 45
+    # Fälle: Der knappste Phantomfund hat 0,158 mm Luft nach unten, die
+    # Querbohrung liegt 1,67 mm darunter.
+    root = radius - pitch
+    return bool(
+        np.all(np.abs(along) <= length / 2.0 + margin)
+        and np.all(across <= reach)
+        and np.all(across >= root)
+    )
+
+
 def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
     """Lag dieses Merkmal außerhalb dessen, was übrig geblieben ist?
 
@@ -1137,6 +1228,40 @@ def _with_features(
     # neuen Eintrag. Der Vorgänger eines neu ausgegebenen Namens hat hier
     # nichts mehr zu suchen.
     previous = {name: feature for name, feature in previous.items() if name not in declared}
+
+    # **Was aus den Dreiecken einer benannten Wendel besteht, ist die Wendel.**
+    # Die Erkennung kennt die Art ``thread`` nicht (§21.1). Sie sieht eine
+    # Schraubenlinie und passt darauf ein, was sie kennt — und findet immer
+    # etwas: An einem M6-Bolzen zwei Kegel, an M4, M5 und M8 zwei Zapfen, an
+    # M3 bei Länge 20 neunzehn Kugeln. Gemessen über die ganze Größentabelle
+    # gibt es keinen Fall ohne. Für den Kunden stehen sie neben dem Gewinde im
+    # Baum, mit Maßen, die er nirgends eingegeben hat: Ein Kunden-Screenshot
+    # vom 04.09.2026 zeigt „Zapfen · Ø 5,79 mm" an einem M6-Bolzen — das ist
+    # der verschmolzene Gewindekamm.
+    #
+    # ``features._without_thread_turns`` fängt sie nicht: Es verlangt drei
+    # koaxiale Zylinder, und ``_merged_cylinders`` läuft drei Zeilen davor und
+    # verschmilzt die Gänge auf zwei. Kegel und Kugeln filtert es ohnehin
+    # nicht. Das ist dort zu reparieren, wo ein Gewinde **ohne** Baustein
+    # ankommt — in einer eingelesenen STL. Hier ist der Fall der andere und
+    # der sichere: Der Baustein hat das Gewinde benannt, also ist bekannt, wo
+    # es steht.
+    #
+    # **Dieselbe Zusage wie eine Zeile weiter oben**, nur über die Geometrie
+    # statt über die Zuordnung: Was einen benannten Partner hat, kommt nicht
+    # zusätzlich in die Szene.
+    threads = tuple(
+        feature
+        for feature in (*declared.values(), *unchecked.values(), *checked.values())
+        if feature.kind == "thread"
+    )
+    if threads:
+        detected = {
+            name: feature
+            for name, feature in detected.items()
+            if not _cut_from_a_thread(mesh, threads, feature)
+        }
+
     if not previous:
         return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
