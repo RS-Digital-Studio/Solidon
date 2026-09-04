@@ -411,7 +411,7 @@ baut, sammelt Namen: Sie kannte zwei von fünf, dann drei, dann vier, und beim
 fünften starb der Prozess beim Abbau an einem Thread, der sein Fenster
 überlebt hatte.
 
-Alle elf tragen jetzt `release()`, und es ruft intern das, was die Klasse
+Jede Klasse mit Arbeiter trägt `release()`, und es ruft intern das, was die Klasse
 schon kann. **Die fachlichen Namen bleiben daneben**: `wait_for_survey` gibt
 einen Wahrheitswert zurück und steht im Produktivcode (`FirstRunDialog.reject`),
 `release` räumt auf und gibt nichts zurück. Zwei Sachen, zwei Namen — nur soll

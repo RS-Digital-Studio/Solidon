@@ -6309,8 +6309,8 @@ def test_the_shape_button_says_what_a_click_does(qt_app: QApplication) -> None:
     # Anlauf baute den Satz im Test selbst zusammen und fragte, ob „fertige
     # Form" darin steht — trivial wahr, und die Mutationsprobe ließ das
     # Entfernen aus `main_window` grün durchgehen. Ein Test, der seinen
-    # eigenen Sollwert erzeugt, prüft nichts (`tests.md`, „Sollwert aus dem
-    # Prüfling").
+    # eigenen Sollwert erzeugt, prüft nichts („Sollwert aus dem Prüfling",
+    # `.claude/memory/sollwert-aus-dem-pruefling.md`).
     #
     # Gelesen wird deshalb die Stelle, die den Hinweis wirklich setzt. Am
     # gebauten Fenster wäre es der bessere Weg, aber dafür müsste der
