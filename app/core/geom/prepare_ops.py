@@ -1753,7 +1753,7 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
     # Der Import steht hier und nicht oben: ``perceive`` zieht die Erkennung
     # mit, und die kostet beim Laden des Moduls Zeit, die eine Operation ohne
     # Senkung nie braucht — dieselbe Aufteilung wie bei ``detect`` weiter unten.
-    from app.core.perceive.features import widening_at_the_mouth
+    from app.core.perceive.relations import widening_at_the_mouth
 
     widening = widening_at_the_mouth(feature, source.features)
     if widening is None:

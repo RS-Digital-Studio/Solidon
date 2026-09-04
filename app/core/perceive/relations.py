@@ -238,3 +238,87 @@ def _overlap(along: float, depth: float, other_depth: float) -> float:
         return 0.0
     reach = (depth + other_depth) / 2.0 - abs(along)
     return max(0.0, min(reach, shorter)) / shorter
+
+
+def widening_at_the_mouth(
+    feature: Feature, features: Mapping[FeatureId, Feature]
+) -> Feature | None:
+    """Das Merkmal, das sich über der Öffnung dieses Merkmals aufweitet — die
+    Senkung über einer Bohrung.
+
+    **Warum es diese Auskunft braucht.** ``resize_hole`` und
+    ``resize_feature`` ändern genau ein Merkmal. An einer Bohrung mit Senkung
+    heißt das: Die Bohrung wächst, die Senkung bleibt stehen, und im Teil
+    entsteht eine Stufe, die niemand gewollt hat — ohne einen Satz darüber.
+    Gemeldet von Robert am 04.09.2026 an einem heruntergeladenen Halter, und
+    ``geom.prepare_ops._feature_body`` sagt seit dem 03.09.2026 im Docstring, was
+    fehlt: „Bis Solidon die Nachbarschaft kennt, ist die Absage die richtige
+    Antwort." Das hier ist die Nachbarschaft.
+
+    **Vier Bedingungen, und keine davon ist geraten** — die Schwellen sind
+    dieselben, mit denen die Erkennung schon heute entscheidet, ob zwei
+    Flächen zu einer Bohrung gehören (:data:`SINK_AXIS_LIMIT`,
+    :data:`SINK_FIT_LIMIT`):
+
+    * dieselbe Achsrichtung,
+    * die Mitten auf **einer** Linie und nicht bloß parallel — zwei Bohrungen
+      nebeneinander haben dieselbe Richtung und sind trotzdem zwei,
+    * die Mitte des Nachbarn liegt auf der Strecke der Bohrung (mit derselben
+      Toleranz an beiden Enden), denn eine Senkung sitzt an einer ihrer
+      Mündungen und nicht drei Zentimeter daneben,
+    * er ist **weiter** — eine Senkung, die enger wäre als ihre Bohrung, gibt
+      es nicht; ohne diese Bedingung fände eine durchgehende Bohrung ihre
+      eigene Fortsetzung in der nächsten Wand,
+    * und er ist ebenfalls ein **Hohlraum**. Das war der eine Fehlgriff der
+      ersten Fassung, und zwar an Roberts eigenem Halter: Die Bohrung Ø 34
+      steckt im Zapfen Ø 40,80, beide auf derselben Achse, und die Mitte des
+      Zapfens liegt in ihrer Strecke. Ein Zapfen ist aber Materie und keine
+      Aufweitung einer Öffnung — er umgibt die Bohrung, er mündet nicht in
+      sie. Gefragt wird wie in ``prepare_ops._feature_is_a_cavity``: ``hole``
+      immer, ``pin`` nie, und bei Kegel und Kugel entscheidet ``recess``.
+
+    Gemessen an ``broomholdervcd_d35mm.stl`` (Robert, 04.09.2026):
+    ``hole_1`` Ø 5,44 mit Mitte (-49,60 | 31,28 | 0) und ``cone_1`` Ø 8,16 mit
+    Mitte (-49,60 | 28,56 | 0), beide auf der Achse (0 | -1 | 0). Der Abstand
+    längs ist 2,72 mm und damit genau die Tiefe der Bohrung; quer ist er null.
+    Dasselbe am zweiten Paar. An der Platte des Korpus (vier Bohrungen ohne
+    Senkung) findet die Funktion nichts.
+
+    ``None``, wo es keinen Nachbarn gibt oder die Zahlen für die Frage nicht
+    reichen — ein Merkmal ohne Achse, ohne Tiefe oder ohne Durchmesser.
+    """
+    axis = axis_of(feature)
+    centre = centre_of(feature)
+    diameter = float(feature.params.get("diameter") or 0.0)
+    depth = float(feature.params.get("depth") or 0.0)
+    if axis is None or centre is None or diameter <= EPS_GEOM:
+        return None
+    if not is_a_cavity(feature):
+        return None
+
+    radius = diameter / 2.0
+    across_limit = radius * SINK_FIT_LIMIT
+    found: Feature | None = None
+    widest = diameter
+    for candidate in features.values():
+        if candidate.id == feature.id:
+            continue
+        other_axis = axis_of(candidate)
+        other_centre = centre_of(candidate)
+        other_diameter = float(candidate.params.get("diameter") or 0.0)
+        if other_axis is None or other_centre is None or other_diameter <= widest:
+            continue
+        if not is_a_cavity(candidate):
+            continue
+        if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
+            continue
+        offset = other_centre - centre
+        along = float(offset @ axis)
+        across = offset - along * axis
+        if float(np.linalg.norm(across)) > across_limit:
+            continue
+        if not -across_limit <= abs(along) <= depth + across_limit:
+            continue
+        found = candidate
+        widest = other_diameter
+    return found

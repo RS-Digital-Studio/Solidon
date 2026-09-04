@@ -29,6 +29,7 @@ from app.core.errors import (
     CHANGE_SELECTION,
     REPAIR_AND_RETRY,
     SHOW_STEP_VALUES,
+    AppError,
     UserError,
     ValidationError,
 )
@@ -52,6 +53,14 @@ from app.core.types import (
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
+
+#: Wie viele gelöschte Schritte der Titel beim Namen nennt.
+#:
+#: Drei, und dann eine Zahl: Die Löschung nimmt abhängige Schritte mit, und
+#: das können viele sein. Dieselbe Entscheidung wie bei der Sammelzeile des
+#: Prüfberichts — jede Einzelzeile stimmt, die Menge begräbt.
+_NAMED_IN_TITLE: Final = 3
+
 
 _OBJECT_PATTERN = re.compile(r"^obj_(\d+)$")
 
@@ -966,7 +975,7 @@ class History:
         )
         transaction = Transaction(
             id=f"t{next(self._next_transaction)}",
-            title=_("Schritt löschen"),
+            title=_deletion_title(versions),
             ops=(),
             changes=changes,
         )
@@ -1350,3 +1359,50 @@ class History:
             if (match := _OBJECT_PATTERN.match(object_id))
         ]
         return max(max(indices, default=0), self.document.highest_object)
+
+
+def _deletion_title(versions: Mapping[OpId, Operation]) -> TranslatableText:
+    """Was gelöscht wurde, steht im Titel — nicht nur, dass gelöscht wurde.
+
+    **Der Fall.** Im Verlauf eines Kunden standen zwei Einträge untereinander,
+    beide „Schritt löschen", beide ohne Nummer und ohne Namen (Alexanders
+    Bildschirmfoto, gemessen von 3d-druck-4d am 04.09.2026). Er konnte nicht
+    sehen, welchen der beiden Strg+Z zurückholt — und die Nummer fehlt hier
+    zwangsläufig, weil eine Lösch-Transaktion keine eigene Operation vertritt
+    (``ops=()``) und der Verlauf seine Zahl von dort nimmt.
+
+    Die Transaktion **weiß** es: ``versions`` trägt die vollständigen
+    Operationen, die verschwinden. Ihre Nummern und Titel gehören damit in den
+    Satz, und zwar in der Reihenfolge des Stapels — wer im Verlauf nach oben
+    sieht, sucht sie dort.
+
+    **Drei Namen und dann eine Zahl.** Die Löschung nimmt abhängige Schritte
+    mit (``removal_closure``), und das können viele sein; eine Zeile mit
+    vierzehn Titeln liest niemand. Die drei ersten stehen da, der Rest als
+    Zahl — dieselbe Entscheidung wie bei der Sammelzeile des Prüfberichts.
+
+    Ein Schritt, dessen Operation das Register nicht kennt, behält seine
+    Nummer: Sie ist das, wonach der Kunde im Verlauf sucht, und sie stimmt
+    auch dann.
+    """
+    genannt: list[str] = []
+    for op_id, entry in versions.items():
+        try:
+            genannt.append(f"{op_id} {REGISTRY.get(entry.op).title}")
+        except AppError:
+            genannt.append(str(op_id))
+
+    if len(genannt) == 1:
+        return _("Schritt löschen: {step}", step=genannt[0])
+    if len(genannt) <= _NAMED_IN_TITLE:
+        return _(
+            "{count} Schritte löschen: {steps}",
+            count=len(genannt),
+            steps=", ".join(genannt),
+        )
+    return _(
+        "{count} Schritte löschen: {steps} und {rest} weitere",
+        count=len(genannt),
+        steps=", ".join(genannt[:_NAMED_IN_TITLE]),
+        rest=len(genannt) - _NAMED_IN_TITLE,
+    )

@@ -33,8 +33,8 @@ from app.core.perceive.features import (
     fit_cylinder,
     fit_torus,
     forget_cache,
-    widening_at_the_mouth,
 )
+from app.core.perceive.relations import widening_at_the_mouth
 from app.core.types import Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"

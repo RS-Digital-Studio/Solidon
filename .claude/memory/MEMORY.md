@@ -195,6 +195,7 @@
 - [Sitzung sendet ins Leere](sitzung-sendet-ohne-erreichbar-zu-sein.md) — der Kanal ist nicht beidseitig.
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — sonst Exit 128.
 - [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — neue Maschine: link_memory.py.
+- [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) — `katalog[k]=v` fragt nicht; `git diff HEAD --numstat` findet es.
 - [Geteilter Index hält Altes](geteilter-index-haelt-alten-stand.md) — committet Fremdes als gelöscht.
 - [Index altert](index-altert-zwischen-lesen-und-commit.md) — Sorgfalt vergrößert das Fenster.
 - [Sollprobe gegen eigenen Hash](sollprobe-liest-den-fremden-commit.md) — nie gegen HEAD.

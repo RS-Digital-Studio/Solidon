@@ -1201,7 +1201,7 @@ class ObjectTree(QWidget):
             # Die Zuordnung kommt aus dem Kern (`widening_at_the_mouth`) und
             # nicht aus einer zweiten Rechnung hier: Dieselbe Nachbarschaft
             # entscheidet, was der Prüfbericht meldet, wenn die Bohrung wächst.
-            from app.core.perceive.features import widening_at_the_mouth
+            from app.core.perceive.relations import widening_at_the_mouth
 
             under: dict[str, str] = {}
             for feature_id, feature in entry.features.items():
@@ -3986,6 +3986,62 @@ def least_empty_height(label: QLabel) -> int:
     return max(label.minimumHeight(), label.sizeHint().height())
 
 
+def _folded(actions: Sequence[Any]) -> list[Any]:
+    """Abgelehnte Handlungen mit **demselben** Grund zu einer Zeile.
+
+    Die Reihenfolge bleibt die des Kerns: Die zusammengelegte Zeile steht
+    dort, wo die erste ihrer Handlungen stand. Was gilt, wird nie
+    zusammengelegt — eine Handlung mit Feldern und Knopf ist keine Zeile,
+    die man mit einer anderen teilt.
+
+    Die Titel werden mit Komma und „und" verbunden, weil der Satz dahinter
+    einer ist: „Verschieben, Drehen, Verdoppeln und Entfernen — eine
+    Verrundung gehört zu ihrer Kante." Vier Zeilen, die alle dasselbe sagen,
+    lesen sich als vier Absagen; eine Zeile mit vier Namen liest sich als
+    eine.
+    """
+    from app.core.perceive.actions import FeatureAction
+
+    folded: list[Any] = []
+    by_reason: dict[str, int] = {}
+    for action in actions:
+        if action.op is not None or not action.reason:
+            folded.append(action)
+            continue
+        reason = str(action.reason)
+        seen = by_reason.get(reason)
+        if seen is None:
+            by_reason[reason] = len(folded)
+            folded.append(action)
+            continue
+        first = folded[seen]
+        folded[seen] = FeatureAction(
+            title=_and_then(str(first.title), str(action.title)),
+            op=None,
+            reason=first.reason,
+        )
+    return folded
+
+
+def _and_then(gathered: str, further: str) -> str:
+    """„A, B und C" — der letzte Name hängt mit „und" an, nicht mit Komma.
+
+    **Ein gemeinsames erstes Wort fällt weg.** Die Operationen heißen
+    „Merkmal verschieben", „Merkmal ändern", „Merkmal drehen" — fünfmal
+    hintereinander gelesen steht das Wort im Weg und nicht im Satz. Geprüft
+    wird auf Gleichheit und nichts sonst: Wo eine Sprache ihr gemeinsames
+    Wort hinten trägt (im Französischen die *caractéristique*), fällt nichts
+    weg, und das ist besser als eine Regel, die dort das Falsche kürzt.
+    """
+    leading = gathered.split(" ", 1)[0]
+    if further.startswith(f"{leading} ") and len(further.split(" ", 1)) == 2:
+        further = further.split(" ", 1)[1]
+    if " und " in gathered:
+        start, _, final = gathered.rpartition(" und ")
+        return f"{start}, {final} und {further}"
+    return f"{gathered} und {further}"
+
+
 class FeaturePanel(QWidget):
     """Was man mit dem gewählten Merkmal tun kann — als Felder, nicht als Menü.
 
@@ -4115,7 +4171,20 @@ class FeaturePanel(QWidget):
             self._built.append(note)
 
         actions = actions_for(feature)
-        for action in actions:
+        # **Derselbe Grund steht einmal da, nicht fünfmal.** Die abgelehnten
+        # Handlungen tragen ihren Satz je Zeile, und bei den Arten, an denen
+        # gar nichts geht, ist es immer wieder derselbe: An einer Fläche
+        # sagten fünf Zeilen wörtlich „Eine Fläche gehört zur Oberfläche des
+        # Körpers …", an einer Verrundung vier von fünf „Eine Verrundung
+        # gehört zu ihrer Kante …". Roberts Halter hat zehn Flächen und neun
+        # Verrundungen; wer eine davon anklickt, liest fünf Zeilen und findet
+        # in keiner etwas, das er tun kann (Messung 04.09.2026).
+        #
+        # Weggelassen wird dabei **nichts**: Die Zeile nennt weiter jede
+        # Handlung beim Namen, damit niemand rät, ob sie fehlt oder vergessen
+        # wurde (`actions_for` begründet genau das). Sie nennt sie nur
+        # zusammen, wenn sie denselben Satz teilen.
+        for action in _folded(actions):
             row = self._build_action(action)
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
@@ -4227,6 +4296,25 @@ class FeaturePanel(QWidget):
 
         widgets: dict[str, QWidget] = {}
         if action.fields:
+            # **Die Gruppe sagt selbst, wozu sie gehört.** Bis hierher benannte
+            # sie nur der Knopf **darunter**, und das trägt genau einmal: Beim
+            # ersten Feldpaar liest man die Bedeutung noch von unten nach, beim
+            # zweiten nicht mehr. An einer Bohrung stehen vier Gruppen
+            # untereinander — X/Y/Z für *Verschieben*, ein Durchmesser für
+            # *Ändern*, Achse und Winkel für *Drehen*, wieder X/Y/Z für
+            # *Verdoppeln* —, und der Kunde sieht zweimal dieselben drei Felder
+            # ohne erkennbaren Unterschied (Alexanders Bildschirmfoto, gemessen
+            # von 3d-druck-4d am 04.09.2026).
+            #
+            # Die Überschrift wiederholt den Knopftext, und das ist Absicht: Sie
+            # beantwortet „wozu sind diese Felder", er „und jetzt ausführen".
+            # Zwei verschiedene Wörter dafür wären zwei Namen für eine Handlung.
+            group_title = QLabel(str(action.title), box)
+            group_title.setWordWrap(True)
+            set_level(group_title, "caption")
+            fit_wrapped(group_title)
+            layout.addWidget(group_title)
+
             form = QFormLayout()
             form.setContentsMargins(0, 0, 0, 0)
             form.setSpacing(TIGHT)

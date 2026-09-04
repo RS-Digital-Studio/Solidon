@@ -1115,3 +1115,65 @@ def test_a_step_this_version_cannot_run_is_not_a_program_error() -> None:
             ) from None
         else:  # pragma: no cover
             raise AssertionError(f"{name}: der Schritt ist unbekannt, das gehört gesagt")
+
+
+def test_a_deletion_says_which_steps_it_takes() -> None:
+    """Zwei Einträge „Schritt löschen" untereinander sagen nichts.
+
+    **Der Fall.** Im Verlauf eines Kunden standen genau die zwei, beide ohne
+    Nummer und ohne Namen (Alexanders Bildschirmfoto, gemessen von
+    3d-druck-4d am 04.09.2026). Er konnte nicht sehen, welchen Strg+Z
+    zurückholt — und die Nummer fehlt zwangsläufig: Eine Lösch-Transaktion
+    vertritt keine eigene Operation (``ops=()``), und der Verlauf nimmt seine
+    Zahl von dort.
+
+    Die Transaktion weiß es trotzdem, und jetzt steht es im Titel: die
+    Nummern und die Titel der Schritte, die verschwinden.
+
+    **Drei Namen, dann eine Zahl.** Die Löschung nimmt abhängige Schritte mit,
+    und das können viele sein; eine Zeile mit vierzehn Titeln liest niemand.
+    """
+    from app.core.registry import REGISTRY
+    from app.core.scene.history import _deletion_title
+    from app.core.types import Operation
+
+    namen = [spec.name for spec in list(REGISTRY.all())[:6]]
+    assert len(namen) >= 6, "das Register ist nicht geladen — dann prüft der Test nichts"
+
+    def schritt(nummer: int) -> Operation:
+        return Operation(id=str(nummer), op=namen[nummer - 2], inputs=(), outputs=(), params={})
+
+    einer = str(_deletion_title({"2": schritt(2)}))
+    assert einer.startswith("Schritt löschen:"), einer
+    assert "2" in einer and str(REGISTRY.get(namen[0]).title) in einer
+
+    zwei = str(_deletion_title({"2": schritt(2), "3": schritt(3)}))
+    assert zwei.startswith("2 Schritte löschen:"), zwei
+    assert str(REGISTRY.get(namen[1]).title) in zwei
+
+    viele = str(_deletion_title({str(n): schritt(n) for n in range(2, 8)}))
+    assert viele.startswith("6 Schritte löschen:"), viele
+    assert "und 3 weitere" in viele, viele
+    assert str(REGISTRY.get(namen[4]).title) not in viele, (
+        "der vierte Titel steht ausgeschrieben — dann begräbt die Menge die Zeile"
+    )
+
+
+def test_a_deleted_step_of_an_unknown_operation_keeps_its_number() -> None:
+    """Was das Register nicht kennt, behält seine Nummer.
+
+    Die Nummer ist das, wonach der Kunde im Verlauf sucht — der Fehlerdialog
+    nennt sie, und der Titel eines geöffneten Schritts auch. Sie stimmt auch
+    dann, wenn der Name nicht aufzulösen ist (eine Projektdatei aus einer
+    Fassung mit einer Operation, die es hier nicht gibt).
+    """
+    from app.core.scene.history import _deletion_title
+    from app.core.types import Operation
+
+    titel = str(
+        _deletion_title(
+            {"9": Operation(id="9", op="gibt_es_hier_nicht", inputs=(), outputs=(), params={})}
+        )
+    )
+
+    assert "9" in titel, titel

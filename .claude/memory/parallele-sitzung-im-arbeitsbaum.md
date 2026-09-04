@@ -257,3 +257,33 @@ ist: Zurechnung im Meldungstext des eigenen Folge-Commits geradeziehen
 (History bleibt stehen), die Besitzerin sofort benachrichtigen, und prüfen,
 ob der Ritt eine *halbe* Einheit hinausgetragen hat — die fehlende Hälfte
 ist dann das Dringende, nicht die Zurechnung.
+
+---
+
+**Nachtrag 04.09.2026 — der private Index schützt nicht vor dem, was in der
+genannten Datei steht.** Ich habe `app/ui/main_window.py` in einem Commit
+genannt, korrekt mit privatem Index und ausdrücklichem Pfad. Die Datei trug
+neben meiner Änderung die **halbe** Änderung einer anderen Sitzung: ihren
+Aufruf `analysis_bar.show_problem(text, label, handler)`. Die Gegenseite in
+`analysis_bar.py` blieb liegen, und damit war main kaputt — wer eine
+Analysekarte auf einem Modell über 120 000 Dreiecken wählte, bekam einen
+`TypeError` statt einer Meldung. Bei zehn von neunzehn echten Kundendateien.
+
+**Why:** Der private Index löst ein anderes Problem — er verhindert, dass der
+*veraltete Haupt-Index* fremde Dateien als gelöscht mitcommittet. Gegen fremde
+ungestagete Arbeit **in einer Datei, die man selbst nennt**, hilft er nicht:
+Git committet Dateien, nicht Zeilen, und `-o -- <pfad>` nimmt den ganzen
+Arbeitsstand dieses Pfads.
+
+**How to apply:** Vor jedem Commit im geteilten Baum `git diff HEAD -- <datei>`
+über **jede** genannte Datei lesen und prüfen, ob wirklich nur das eigene
+darinsteht. Das dauert Sekunden und ist die einzige Prüfung, die diesen Fall
+sieht. Wer eine Datei anfasst, die eine andere Sitzung hält, sagt es vorher —
+und wer eine gemeinsame Datei committet, sagt hinterher, was gelandet ist.
+
+Und der Zwilling dazu am selben Tag: Der Haupt-Index stand auf **gelöscht** für
+zwei Dateien, die es auf HEAD gibt und die auf der Platte liegen
+(`perceive/relations.py`, `tests/test_relations.py`). Ein pfadloser Commit
+hätte ein fremdes neues Modul samt Tests aus dem Stand genommen und über den
+post-commit-Hook auf drei Maschinen geschoben. Gerichtet mit `git reset` —
+nur den Index, keine Datei. Siehe [[geteilter-index-haelt-alten-stand]].

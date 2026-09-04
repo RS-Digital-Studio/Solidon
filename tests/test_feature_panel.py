@@ -436,3 +436,110 @@ def test_only_a_hole_gets_the_screw_line(qt_app: QApplication) -> None:
 
     texte = " ".join(row.text() for row in panel._built if isinstance(row, QLabel))
     assert "Bohrung misst" not in texte, texte
+
+
+def test_the_same_refusal_is_said_once(qt_app: QApplication) -> None:
+    """Fünf graue Zeilen mit demselben Satz sind eine Sackgasse mit Echo.
+
+    **Gemessen am 04.09.2026 an Roberts Besenhalter.** Er trägt zehn Flächen
+    und neun Verrundungen; wer eine Fläche anklickt, bekommt fünf Zeilen, und
+    alle fünf sagen wörtlich „Eine Fläche gehört zur Oberfläche des Körpers …".
+    Bei der Verrundung sind es vier von fünf. Jede Zeile für sich ist richtig —
+    `actions_for` begründet zu Recht, warum eine Handlung fehlt, statt sie
+    still wegzulassen —, und zusammen liest es sich als fünf Absagen auf
+    dieselbe Frage.
+
+    Gefaltet wird nur, was **denselben** Grund trägt, und weggelassen wird
+    nichts: Die Zeile nennt weiter jede Handlung beim Namen. An der Verrundung
+    bleiben deshalb drei Zeilen und nicht eine — ihre drei Gründe sind
+    verschieden, und einer davon ist die Ankündigung, dass der Radius kommt.
+
+    Was gilt, wird nie gefaltet: An einer Bohrung stehen alle fünf Handlungen
+    einzeln, mit ihren Feldern und ihrem Knopf.
+    """
+    from app.core.perceive.actions import FeatureAction
+    from app.ui.panels import _folded
+
+    gleich = "Eine Fläche gehört zur Oberfläche des Körpers."
+    anders = "Den Radius zu ändern ist noch nicht gebaut."
+    actions = [
+        FeatureAction(title="Merkmal verschieben", op=None, reason=gleich),
+        FeatureAction(title="Merkmal ändern", op=None, reason=anders),
+        FeatureAction(title="Merkmal drehen", op=None, reason=gleich),
+        FeatureAction(title="Merkmal verdoppeln", op=None, reason=gleich),
+    ]
+
+    gefaltet = _folded(actions)
+
+    assert len(gefaltet) == 2, [str(entry.title) for entry in gefaltet]
+    assert str(gefaltet[0].title) == "Merkmal verschieben, drehen und verdoppeln", (
+        "die drei mit demselben Grund stehen zusammen, ohne das Wort dreimal"
+    )
+    assert str(gefaltet[0].reason) == gleich
+    # Die Reihenfolge des Kerns bleibt: Die zusammengelegte Zeile steht dort,
+    # wo die erste ihrer Handlungen stand.
+    assert str(gefaltet[1].title) == "Merkmal ändern"
+    assert str(gefaltet[1].reason) == anders
+
+
+def test_what_works_is_never_folded_away(qt_app: QApplication) -> None:
+    """Eine Handlung mit Feldern und Knopf teilt keine Zeile mit einer anderen."""
+    from app.core.perceive.actions import FeatureAction
+    from app.ui.panels import _folded
+
+    actions = [
+        FeatureAction(title="Bohrung ändern", op="resize_hole"),
+        FeatureAction(title="Merkmal verschieben", op="move_feature"),
+        FeatureAction(title="Merkmal drehen", op=None, reason="geht hier nicht"),
+        FeatureAction(title="Merkmal verdoppeln", op=None, reason="geht hier nicht"),
+    ]
+
+    gefaltet = _folded(actions)
+
+    assert [entry.op for entry in gefaltet] == ["resize_hole", "move_feature", None]
+
+
+def test_every_field_group_says_what_it_belongs_to(qt_app: QApplication) -> None:
+    """Zweimal X/Y/Z untereinander, und nur der Knopf darunter sagt, welche.
+
+    **Der Fall.** An einer Bohrung stehen vier Gruppen untereinander: X/Y/Z für
+    *Verschieben*, ein Durchmesser für *Ändern*, Achse und Winkel für *Drehen*,
+    wieder X/Y/Z für *Verdoppeln*. Benannt wurden sie nur vom Knopf **unter**
+    ihnen, und das trägt genau einmal — beim ersten Feldpaar liest man die
+    Bedeutung noch von unten nach, beim zweiten nicht mehr (Alexanders
+    Bildschirmfoto, gemessen von 3d-druck-4d am 04.09.2026).
+
+    Geprüft wird an der Reihenfolge im Layout: Vor den Feldern muss eine
+    Beschriftung mit dem Titel der Handlung stehen, und zwar **über** ihnen und
+    nicht nur als Knopf darunter.
+    """
+    from app.core.perceive.actions import ActionField, FeatureAction
+    from app.ui.panels import FeaturePanel
+
+    panel = FeaturePanel()
+    try:
+        action = FeatureAction(
+            title="Merkmal verschieben",
+            op="move_feature",
+            fields=(
+                ActionField(name="x", label="X", unit="mm", value=1.0, kind="length"),
+                ActionField(name="y", label="Y", unit="mm", value=2.0, kind="length"),
+            ),
+        )
+
+        row = panel._build_action(action)
+        beschriftungen = [
+            kind.text() for kind in row.findChildren(QLabel) if kind.text() == "Merkmal verschieben"
+        ]
+        assert beschriftungen, (
+            "über den Feldern steht kein Titel — dann sagt nur der Knopf darunter, wozu sie gehören"
+        )
+
+        # Und sie steht **vor** den Feldern, nicht irgendwo im Kasten.
+        layout = row.layout()
+        erstes = layout.itemAt(0).widget()
+        assert isinstance(erstes, QLabel) and erstes.text() == "Merkmal verschieben", (
+            f"zuerst steht {erstes!r} statt der Überschrift"
+        )
+    finally:
+        panel.deleteLater()
