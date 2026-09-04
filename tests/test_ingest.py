@@ -342,27 +342,41 @@ def test_the_warning_about_a_fine_mesh_holds_at_the_limit_it_names() -> None:
     """Drei Schwellen für eine Frage, und die Warnung stimmte in keiner.
 
     Gesagt wurde „Analysekarten und Merkmalserkennung lehnen ab" — ab 500 000
-    Dreiecken. Die Karten lehnen aber ab 120 000 ab und die Merkmalserkennung
+    Dreiecken. Die Karten lehnten aber ab 120 000 ab und die Merkmalserkennung
     ab 200 000 (§31): Zwischen 200 000 und 500 000 war beides längst
     abgelehnt, und die Eingangsstufe schwieg dazu. Die Zahl hier ist deshalb
     keine eigene mehr, sondern die kleinere der beiden echten.
+
+    **Und der Test darf nicht wissen, welche das ist.** Seine erste Fassung
+    setzte die Kartengrenze als die kleinere ein und wurde am 04.09.2026 rot,
+    als sie auf 900 000 stieg — über die Merkmalsgrenze. Rot war er zu Recht,
+    aber aus dem falschen Grund: Nicht die Zusage hatte sich geändert, nur
+    ihre Lage. Geprüft wird deshalb, was ``_too_fine`` selbst tut — die
+    kleinere Grenze nennt ihre Ablehnung allein, die größere nennt beide —,
+    und welche welche ist, leitet der Test ab.
     """
     from app.core.ingest import loader
     from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
     from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 
-    assert min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES) == loader.HEAVY_TRIANGLES
-    assert loader._too_fine(MAP_LIMIT_TRIANGLES) is None, "an der Grenze ist noch alles möglich"
+    kleiner = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
+    groesser = max(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
+    zuerst_die_karten = MAP_LIMIT_TRIANGLES < FEATURE_LIMIT_TRIANGLES
 
-    dazwischen = loader._too_fine(MAP_LIMIT_TRIANGLES + 1)
+    assert kleiner == loader.HEAVY_TRIANGLES
+    assert loader._too_fine(kleiner) is None, "an der Grenze ist noch alles möglich"
+
+    dazwischen = loader._too_fine(kleiner + 1)
     assert dazwischen is not None and dazwischen.code == "ingest.very_large"
-    assert "Merkmalserkennung" not in str(dazwischen.message), "die läuft hier noch"
+    laeuft_noch = "Merkmalserkennung" if zuerst_die_karten else "Analysekarten"
+    assert laeuft_noch not in str(dazwischen.message), f"{laeuft_noch} läuft hier noch"
     assert "Dreiecke verringern" in str(dazwischen.message), "Regel 17: was jetzt hilft"
 
-    darueber = loader._too_fine(FEATURE_LIMIT_TRIANGLES + 1)
+    darueber = loader._too_fine(groesser + 1)
     assert darueber is not None
     assert "Merkmalserkennung" in str(darueber.message), "und hier lehnt auch sie ab"
-    assert darueber.values["triangles"] == FEATURE_LIMIT_TRIANGLES + 1
+    assert "Analysekarten" in str(darueber.message), "und die Karten ebenso"
+    assert darueber.values["triangles"] == groesser + 1
 
 
 def test_import_limits_are_stated_clearly() -> None:

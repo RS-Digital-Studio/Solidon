@@ -522,7 +522,10 @@ class _MapWorker(Worker):
     """
 
     done = Signal(object)
-    tooLarge = Signal()
+    tooLarge = Signal(int)
+    """Die Grenze, an der es lag — seit die Stützkarte eine eigene führt,
+    gibt es zwei, und eine Absage mit der falschen Zahl schickt den Kunden
+    auf ein Ziel, das er gar nicht treffen muss."""
 
     def __init__(self, kind: Any, entry: Any, profile: Any, scene: Any) -> None:
         super().__init__()
@@ -549,9 +552,9 @@ class _MapWorker(Worker):
                     cancelled=self.cancelled,
                 )
             )
-        except maps.MapTooLarge:
+        except maps.MapTooLarge as zu_gross:
             # §31: eine Karte, die Minuten bräuchte, sagt Nein, statt einzufrieren.
-            self.tooLarge.emit()
+            self.tooLarge.emit(zu_gross.limit)
         except OperationCancelled:
             # Kein Fehler und nie als einer gezeigt (§15.6): Eine andere Karte
             # ist schon unterwegs, und ihr Ergebnis ist das, auf das jemand
@@ -8382,7 +8385,9 @@ class MainWindow(QMainWindow):
         worker.done.connect(
             lambda analysis, key=key, object_id=object_id: self._map_ready(analysis, key, object_id)
         )
-        worker.tooLarge.connect(lambda count=entry.mesh.triangle_count: self._map_too_large(count))
+        worker.tooLarge.connect(
+            lambda limit, count=entry.mesh.triangle_count: self._map_too_large(count, limit)
+        )
         # **Nicht** auf ``None`` setzen, wenn der Arbeiter fertig ist.
         #
         # ``finished`` kommt, während Qt den Thread noch abräumt. Wer die
@@ -8427,7 +8432,7 @@ class MainWindow(QMainWindow):
         """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist."""
         self._leash.retire(worker)
 
-    def _map_too_large(self, triangles: int) -> None:
+    def _map_too_large(self, triangles: int, limit: int) -> None:
         """Die abgelehnte Karte nennt ihre Grenze — und den Weg darüber hinweg.
 
         **Hier stand eine Sackgasse** (Regel 17, §2.7): „Für eine Analysekarte
@@ -8448,12 +8453,12 @@ class MainWindow(QMainWindow):
             tr(
                 "Für eine Analysekarte ist dieses Modell zu groß: "
                 "{count} Dreiecke, möglich sind {limit}."
-            ).format(count=triangles, limit=maps.MAP_LIMIT_TRIANGLES),
+            ).format(count=triangles, limit=limit),
             tr("Dreiecke verringern"),
-            weak_slot(self, MainWindow._decimate_for_a_map),
+            weak_slot(self, MainWindow._decimate_for_a_map, limit),
         )
 
-    def _decimate_for_a_map(self) -> None:
+    def _decimate_for_a_map(self, limit: int) -> None:
         """*Dreiecke verringern*, vorbelegt mit dem, was die Karte braucht.
 
         **Die Vorgabe des Schemas ist 50 000, und sie kennt den Anlass nicht.**
@@ -8472,7 +8477,7 @@ class MainWindow(QMainWindow):
         """
         self.run_operation(
             REGISTRY.get("decimate_mesh"),
-            given={"triangles": maps.MAP_LIMIT_TRIANGLES},
+            given={"triangles": limit},
         )
 
     def _map_crashed(self, detail: str) -> None:

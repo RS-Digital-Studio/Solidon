@@ -51,10 +51,36 @@ _log = get_logger(__name__)
 
 MapKind = Literal["wall", "overhang", "defects", "curvature", "features", "fits", "support"]
 
-#: Darüber wird eine Karte abgelehnt statt minutenlang gerechnet (§31). Die
-#: Karten schießen einen Strahl je Dreieck, und diese Kosten wachsen mit dem
-#: Quadrat des Netzes.
-MAP_LIMIT_TRIANGLES = 120_000
+#: Darüber wird eine Karte abgelehnt statt minutenlang gerechnet (§31).
+#:
+#: **Gemessen am 04.09.2026 über fünf Kundendateien, und die alte Zahl von
+#: 120 000 schützte vor der falschen Sache.** Sechs der sieben Karten bleiben
+#: selbst bei 885 570 Dreiecken weit unter dem Budget von drei Sekunden —
+#: Überhang 0,06 s, Passungen 0,05, Merkmale 0,05, Netzfehler 0,47,
+#: Wandstärke 1,68, Krümmung 2,02. Abgelehnt wurden damit zehn von neunzehn
+#: heruntergeladenen Modellen für Rechnungen, die in zwei Sekunden fertig
+#: gewesen wären.
+#:
+#: Neunhunderttausend und keine rundere Zahl, weil bis 885 570 gemessen ist
+#: und darüber nicht: Der nächste Messpunkt (1 223 836) reißt das Budget bei
+#: der Wandstärke mit 7,06 s. Wer höher will, misst dazwischen.
+MAP_LIMIT_TRIANGLES = 900_000
+
+#: Die Stützkarte hat ihre eigene Grenze, und sie bleibt, wo sie war.
+#:
+#: **Sie ist die einzige, die das Budget reißt, und sie hängt nicht an der
+#: Dreieckszahl.** Gemessen: 8,33 s am Besenhalter mit 59 740 Dreiecken gegen
+#: 1,84 s am Segel mit 277 460 — beim **kleineren** Modell viermal so teuer.
+#: Sie rechnet eine Schichtanalyse, ihre Kosten hängen also an Bauhöhe und
+#: Konturkomplexität; beim Spiderman (885 570) sind es 45,44 s.
+#:
+#: Eine Dreiecksgrenze ist für sie das falsche Werkzeug und war es immer — der
+#: teure Fall liegt darunter und läuft. Sie hier stehen zu lassen, während die
+#: übrigen sechs steigen, ist deshalb keine halbe Lösung, sondern die
+#: Trennung zweier Fragen, die nie dieselbe waren: Was sie wirklich braucht,
+#: ist eine Schranke an ihrer eigenen Größe, und die steht als offener Punkt
+#: in `ROADMAP.md`. Bis dahin ändert sich für sie nichts.
+SUPPORT_LIMIT_TRIANGLES = 120_000
 
 #: Nach so vielen Dreiecken wird gefragt, ob abgebrochen werden soll. Bei
 #: 512 liegt der Abstand zwischen zwei Fragen unter einer Millisekunde — fein
@@ -149,12 +175,21 @@ class MapTooLarge(UserError):
         CANCEL,
     )
 
-    def __init__(self, triangles: int = 0) -> None:
+    def __init__(self, triangles: int = 0, limit: int = MAP_LIMIT_TRIANGLES) -> None:
+        """``limit`` ist die Grenze, die wirklich gegriffen hat.
+
+        Seit die Stützkarte ihre eigene führt, gibt es zwei — und eine Absage,
+        die eine Zahl nennt, die auf den Fall nicht zutrifft, schickt den
+        Kunden auf ein Ziel, das er gar nicht treffen muss. Die Vorgabe bleibt
+        die allgemeine, damit ein Aufrufer ohne Kenntnis der Art sich nicht
+        ändert.
+        """
         super().__init__(
             detail=_("Die Karte läuft jedes Dreieck ab, und ihr Budget ist begrenzt (§31)."),
-            values={"triangles": triangles, "limit": MAP_LIMIT_TRIANGLES},
+            values={"triangles": triangles, "limit": limit},
         )
         self.triangles = triangles
+        self.limit = limit
 
 
 TITLES: dict[MapKind, TranslatableText] = {
@@ -192,8 +227,13 @@ def build(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     mesh = _mesh_of(entry)
-    if mesh.triangle_count > MAP_LIMIT_TRIANGLES:
-        raise MapTooLarge(mesh.triangle_count)
+    # Je Art gefragt und nicht pauschal: Die Stützkarte kostet ein Vielfaches
+    # der übrigen und misst dabei etwas anderes (siehe
+    # :data:`SUPPORT_LIMIT_TRIANGLES`). Eine Zahl für sieben Rechnungen ist
+    # entweder für sechs zu streng oder für eine zu großzügig.
+    limit = SUPPORT_LIMIT_TRIANGLES if kind == "support" else MAP_LIMIT_TRIANGLES
+    if mesh.triangle_count > limit:
+        raise MapTooLarge(mesh.triangle_count, limit)
 
     if kind == "wall":
         return wall_thickness_map(mesh, profile.minimum_wall_thickness if profile else None)

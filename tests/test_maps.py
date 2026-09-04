@@ -632,3 +632,44 @@ def test_an_analysis_map_works_on_an_exact_body(profile: Profile) -> None:
     for kind in ("curvature", "overhang", "wall"):
         card = maps.build(kind, exact, profile=profile)
         assert card.values is not None, f"die Karte {kind!r} rechnet auch am exakten Körper"
+
+
+def test_the_support_map_keeps_its_own_limit(profile: Profile) -> None:
+    """Sechs Karten steigen, eine bleibt — und das ist keine halbe Lösung.
+
+    **Gemessen am 04.09.2026 über fünf Kundendateien.** Sechs der sieben
+    Karten bleiben selbst bei 885 570 Dreiecken unter 2,1 Sekunden, das Budget
+    erlaubt drei (§31). Die Stützkarte reißt es als einzige — und sie hängt
+    nicht an der Dreieckszahl: 8,33 s am Besenhalter mit 59 740 Dreiecken
+    gegen 1,84 s am Segel mit 277 460, beim **kleineren** Modell also
+    viermal so teuer. Sie rechnet eine Schichtanalyse; ihre Kosten stehen an
+    Bauhöhe und Konturkomplexität.
+
+    Eine gemeinsame Zahl für sieben Rechnungen ist damit entweder für sechs zu
+    streng oder für eine zu großzügig. Hier stand sie zu streng: Zehn von
+    neunzehn heruntergeladenen Kundendateien bekamen „zu groß" für Rechnungen,
+    die in zwei Sekunden fertig gewesen wären.
+    """
+    dense = MeshData.of(trimesh.creation.icosphere(subdivisions=3))
+    entry = SceneObject(id="obj_1", name="x", mesh=dense, features={})
+
+    assert maps.SUPPORT_LIMIT_TRIANGLES < maps.MAP_LIMIT_TRIANGLES, (
+        "die teuerste Karte darf nicht dieselbe Grenze haben wie die billigen"
+    )
+
+    karten, stuetze = maps.MAP_LIMIT_TRIANGLES, maps.SUPPORT_LIMIT_TRIANGLES
+    try:
+        # Über der Stützgrenze, unter der allgemeinen: Die Wandstärke läuft,
+        # die Stützkarte sagt Nein.
+        maps.SUPPORT_LIMIT_TRIANGLES = 10
+        maps.MAP_LIMIT_TRIANGLES = 10_000_000
+        maps.build("wall", entry, profile=profile)
+        with pytest.raises(maps.MapTooLarge) as abgelehnt:
+            maps.build("support", entry, profile=profile)
+        assert abgelehnt.value.limit == 10, (
+            "die Absage nennt die Grenze, die griff — sonst schickt sie auf ein "
+            f"Ziel, das gar nicht gilt: {abgelehnt.value.limit}"
+        )
+    finally:
+        maps.MAP_LIMIT_TRIANGLES = karten
+        maps.SUPPORT_LIMIT_TRIANGLES = stuetze
