@@ -86,24 +86,52 @@ def test_no_error_text_carries_a_placeholder_nobody_fills(path: Path) -> None:
     ``str(error.detail)``, wie es ist, und hängt die ``values`` als eigene
     Zeilen darunter. Wer den Wert in den Satz schreibt, zeigt dem Nutzer
     geschweifte Klammern.
+
+    **Es sei denn, der Übersetzer setzt ihn selbst ein.** ``_("… {n} …", n=4)``
+    gibt einen fertigen Satz zurück; die Werte reisen im ``TranslatableText``
+    mit und stehen da, sobald jemand ``str()`` darauf ruft. Der Kern geht
+    diesen Weg an mehreren Stellen (``colour_ops``, ``paint``,
+    ``prepare_ops``), und er ist der **einzige**, auf dem eine Zahl in einen
+    übersetzten Satz kommt, ohne dass jede Sprache dieselbe Wortstellung
+    braucht.
+
+    Bis zum 04.09.2026 hat diese Prüfung nicht unterschieden und jeden
+    Platzhalter gemeldet — auch einen gefüllten. Gemessen an
+    ``boolean.py``: Der Kunde las „Von 4 Rechenstufen sind 2 gelaufen", der
+    Test meldete „unersetzter Platzhalter". Geprüft wird deshalb, ob der
+    Aufruf, in dem der Text steht, für **jeden** seiner Platzhalter ein
+    gleichnamiges Schlüsselwort mitgibt; fehlt eines, bleibt es ein Verstoß.
     """
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-    placeholder = re.compile(r"\{[a-z_]+\}")
+    placeholder = re.compile(r"\{([a-z_]+)\}")
     offenders: list[str] = []
+
+    def unfilled(value: ast.expr, filled: frozenset[str]) -> None:
+        """Sammelt jeden Platzhalter, den niemand einsetzt.
+
+        ``filled`` sind die Schlüsselwörter des umgebenden Aufrufs. Ein Text,
+        der tiefer in einem eigenen Aufruf steckt, bekommt dessen eigene —
+        deshalb steigt die Suche über die Aufrufe hinab statt über
+        ``ast.walk`` in einem Zug.
+        """
+        if isinstance(value, ast.Call):
+            own = frozenset(word.arg for word in value.keywords if word.arg)
+            for part in value.args:
+                unfilled(part, own)
+            return
+        for text in ast.walk(value):
+            if not (isinstance(text, ast.Constant) and isinstance(text.value, str)):
+                continue
+            open_names = set(placeholder.findall(text.value)) - filled
+            if open_names:
+                offenders.append(f"{path.name}:{text.lineno} {sorted(open_names)}")
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         for keyword in node.keywords:
-            if keyword.arg not in ("detail", "title"):
-                continue
-            for text in ast.walk(keyword.value):
-                if (
-                    isinstance(text, ast.Constant)
-                    and isinstance(text.value, str)
-                    and placeholder.search(text.value)
-                ):
-                    offenders.append(f"{path.name}:{text.lineno} {text.value[:60]}")
+            if keyword.arg in ("detail", "title"):
+                unfilled(keyword.value, frozenset())
 
     assert not offenders, "Fehlertexte mit unersetztem Platzhalter:\n" + "\n".join(offenders)
 
