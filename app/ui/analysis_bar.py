@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QWidget,
 )
 
@@ -33,7 +34,7 @@ from app.ui.labels import TrackSlider, area, length
 from app.ui.leash import weak_slot
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
-from app.ui.style import NORMAL, TIGHT
+from app.ui.style import NORMAL, TIGHT, make_primary
 from app.ui.theme import THEMES, current_theme
 from app.ui.tool_strip import BarComboBox
 
@@ -91,6 +92,13 @@ class MapLegend(QWidget):
         self.note.setWordWrap(True)
         self.entries: list[tuple[str, str]] = []
         """Beschriftung und Farbe jedes Feldes — für den Test und den Kurzhinweis."""
+        self.action: QPushButton | None = None
+        """Der angebotene Ausweg, solange einer dasteht — sonst ``None``.
+
+        Als Attribut und nicht nur als Kind im Layout: Ein Test, der ihn
+        suchen muss, findet ihn sonst nur über die Reihenfolge der Widgets,
+        und die ändert sich mit jeder Legende.
+        """
 
     def show_map(
         self, analysis: AnalysisMap | None, names: Mapping[str, str] | None = None
@@ -108,6 +116,11 @@ class MapLegend(QWidget):
             if widget is not None and widget is not self.note:
                 widget.deleteLater()
         self.entries = []
+        # Der Knopf ist eben mitgegangen. Die Referenz darauf zeigte danach
+        # auf ein zerstörtes C++-Objekt — jeder Zugriff wäre ein Absturz ohne
+        # Zeile, und genau darauf laufen die Fallen in ``main_window`` und
+        # ``leash`` seit je hinaus.
+        self.action = None
         if analysis is None:
             # **Der Satz braucht sein Layout zurück.** ``takeAt`` hat auch die
             # Notiz herausgenommen (geschützt war nur ihr Löschen); ohne das
@@ -151,6 +164,24 @@ class MapLegend(QWidget):
             parts.append(unknown)
         self.note.setText(" · ".join(parts))
         self._layout.addWidget(self.note, stretch=1)
+
+    def offer(self, label: str, on_action: Any) -> None:
+        """Den Ausweg neben den Satz stellen (§2.7, Regel 17).
+
+        Rechts vom Text und nicht darunter: Die Leiste ist eine Zeile, und ein
+        Knopf, der sie höher macht, schiebt die Ansicht bei jedem abgelehnten
+        Kartenwunsch ein Stück zusammen.
+        """
+        button = QPushButton(label, self)
+        # Dieselbe Erscheinung wie im Prüfbericht, wo derselbe Ausweg seit je
+        # steht: ein Hauptknopf, damit er nicht wie eine Nebenbemerkung
+        # aussieht. Wer ihn hier anders zeichnete, hätte zwei Gestalten für
+        # eine Handlung.
+        make_primary(button)
+        button.setAccessibleName(label)
+        button.clicked.connect(on_action)
+        self.action = button
+        self._layout.addWidget(button)
 
 
 def _legend_entries(
@@ -300,12 +331,26 @@ class AnalysisBar(QWidget):
         """Die Legende zur Karte; ``names`` übersetzt interne Kennungen."""
         self.legend.show_map(analysis, names)
 
-    def show_problem(self, message: str) -> None:
+    def show_problem(self, message: str, action: str = "", on_action: Any = None) -> None:
         """Eine Karte, die sich nicht bauen ließ, sagt das, statt nichts zu
-        zeigen.
+        zeigen — und wo die Anwendung den Ausweg kennt, ist er ein Knopf.
+
+        **Der Satz allein war eine Sackgasse.** „Für eine Analysekarte ist
+        dieses Modell zu groß" sagt, was nicht geht, und Regel 17 verlangt
+        mindestens einen Handlungsvorschlag. Der Prüfbericht bietet zu genau
+        demselben Sachverhalt seit je *Dreiecke verringern* an
+        (``panels.SUGGESTED``); die Leiste, an der der Kunde es merkt, tat es
+        nicht. Gemessen an neunzehn heruntergeladenen Kundendateien lagen zehn
+        über der Kartengrenze — jede von ihnen endete hier ohne Weg.
+
+        ``action`` und ``on_action`` sind zusammen optional: Wo die Anwendung
+        keinen Ausweg kennt, bleibt es beim Satz. Eine Handlung ohne Empfänger
+        wäre schlimmer als keine.
         """
         self.legend.show_map(None)
         self.legend.note.setText(message)
+        if action and on_action is not None:
+            self.legend.offer(action, on_action)
 
 
 class LayerBar(QWidget):
