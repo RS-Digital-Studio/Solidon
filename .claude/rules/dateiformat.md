@@ -36,6 +36,40 @@ Speicherzeitpunkts ein. Ausnahme: zusammengesetzte Titel wie
 Platzhalter. Die Titel der Beispiel-Bauer sammelt die Extraktion über
 `EXTRA_SOURCES` in `app/i18n/extract.py` mit ein.
 
+## Ein Platzhalterwert kann selbst übersetzbar sein
+
+Ein `TranslatableText` ist Vorlage **plus Werte**, und ein Wert darin ist nicht
+zwingend eine Zahl: `perceive.actions._no_way` baut
+`_("Dafür ist „{title}“ da.", title=<Titel einer Operation>)`, und der Titel
+kommt als `TranslatableText` aus dem Register.
+
+**Werte gehen deshalb durch `translatable_values_to_data` und
+`translatable_values_from_data`** (`scene/serialise.py`), nie durch ein rohes
+`dict(text.values)`. Das gilt für alle vier Ablagestellen — Parametertitel,
+Transaktionstitel, Befundmeldung, Beschriftung eines Auswegs — und für
+`cache._name_to_data`, das dieselben Helfer benutzt.
+
+Was ein rohes `dict(...)` kostete, ist am 04.09.2026 gemessen worden: Der
+eingebettete Text stand unverändert im Bericht, `json.dumps` in `project.save`
+endete mit `Object of type TranslatableText is not JSON serializable`, und
+weil das kein `AppError` ist, verlor der Kunde das Speichern ohne
+Handlungsvorschlag (Regel 17). Im Plattencache wäre dieselbe Sache still
+gewesen — der Eintrag fiele durch den `except`-Zweig, und jedes Projekt
+rechnete neu.
+
+**Abgelegt wird die Struktur, nicht der Satz.** Der eingebettete Text behält
+Message-ID, Kontext und eigene Werte und übersetzt sich nach dem Laden wieder
+selbst. Die beiden kürzeren Wege geben je etwas auf: `str(value)` friert die
+Sprache des Speicherzeitpunkts ein, `source_text(value)` legt einem
+französischen Kunden einen deutschen Operationstitel mitten in den Satz.
+Zahlen bleiben dabei unangetastet — `{free:.1f}` steht so in den Katalogen,
+und ein Wert, der als Zeichenkette zurückkäme, machte aus der Formatangabe
+einen Fehler.
+
+Dieselbe Regel greift eine Ebene höher beim Auflösen: `TranslatableText.translate(sprache)`
+und `source_text()` reichen die verlangte Sprache an ihre Werte weiter, statt
+sie über `__str__` gegen die global eingestellte laufen zu lassen.
+
 ## Eingangsstufe
 
 Jede geladene Datei durchläuft dieselbe Kette, und das Ergebnis steht in

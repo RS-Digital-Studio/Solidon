@@ -96,10 +96,27 @@ class TranslatableText:
         return hash(self.msgid)
 
     def translate(self, language: str | None = None) -> str:
-        """Löst gegen den aktiven Katalog auf; Rückfall ist die Message-ID."""
+        """Löst gegen den aktiven Katalog auf; Rückfall ist die Message-ID.
+
+        **Die genannte Sprache gilt auch für die Werte.** Ein Wert kann selbst
+        ein ``TranslatableText`` sein — ``_("Dafür ist „{title}“ da.",
+        title=<Titel einer Operation>)`` —, und über ``format`` löste er sich
+        bis zum 04.09.2026 über ``__str__`` auf, also gegen die **global**
+        eingestellte Sprache. ``translate("fr")`` gab damit einen französischen
+        Satz mit deutschem Kern zurück, sobald die Anwendung auf Deutsch stand.
+        Im Normalfall fiel das nicht auf, weil ``str(text)`` ohne Argument
+        fragt und beide Sprachen dieselbe sind; wer eine Sprache ausdrücklich
+        nennt, meint sie aber für den ganzen Satz.
+        """
         catalog = _catalogs.get(language or _language, {})
         text = catalog.get(self._key(), self.msgid)
-        return text.format(**self.values) if self.values else text
+        if not self.values:
+            return text
+        values = {
+            key: value.translate(language) if isinstance(value, TranslatableText) else value
+            for key, value in self.values.items()
+        }
+        return text.format(**values)
 
     def _key(self) -> str:
         return f"{self.context}\x04{self.msgid}" if self.context else self.msgid
@@ -173,9 +190,27 @@ def source_text(text: object) -> str:
     lautet ``Slot {number}``; roh zurückgegeben landete daraus ein Dateiname
     ``Slot number.stl`` auf der Platte. Der stabile Teil ist die Quellsprache
     **mit** der Zahl, nicht die Vorlage.
+
+    **Und ein Wert kann selbst übersetzbar sein.** ``perceive.actions._no_way``
+    baut ``_("Dafür ist „{title}“ da.", title=<Titel einer Operation>)``, und
+    der Titel ist ein :class:`TranslatableText`. Eingesetzt über ``format``
+    löste er sich bis zum 04.09.2026 über ``__str__`` auf, also in der
+    **Anzeigesprache**: Bei ``en`` kam ``Dafür ist „Change bore“ da.`` zurück —
+    deutsche Hülle, fremder Kern, aus einer Funktion, deren ganze Zusage die
+    Quellsprache ist. Die Werte gehen deshalb durch dieselbe Funktion.
+
+    **Nur die übersetzbaren.** Eine Zahl bleibt eine Zahl: ``{free:.1f}`` steht
+    so in den Katalogen, und ein ``str`` davor machte aus der Formatangabe
+    einen Fehler.
     """
     if isinstance(text, TranslatableText):
-        return text.msgid.format(**text.values) if text.values else text.msgid
+        if not text.values:
+            return text.msgid
+        values = {
+            key: source_text(value) if isinstance(value, TranslatableText) else value
+            for key, value in text.values.items()
+        }
+        return text.msgid.format(**values)
     return str(text)
 
 

@@ -526,7 +526,10 @@ def ray_span_in_hull(
     Aussage „von hier bis dort" nichts über die Blickrichtung des Aufrufers
     voraussetzen soll.
     """
-    if planes is None or not len(planes):
+    # Nur auf leer, nicht auf ``None``: Der Typ sagt ``np.ndarray``, und der
+    # einzige Aufrufer fängt das fehlende Hüllwerk von ``hull_planes`` schon
+    # eine Zeile vorher ab.
+    if not len(planes):
         return None
     normals = np.asarray(planes, dtype=float)[:, :3]
     offsets = np.asarray(planes, dtype=float)[:, 3]

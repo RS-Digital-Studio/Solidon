@@ -418,7 +418,11 @@ def _displacement_findings(
             )
         )
 
-    layer = ctx.profile.printer.layer_height if ctx.profile else 0.2
+    # Ohne Rückfall: ``OpContext.profile`` ist ``Profile`` und nicht
+    # ``Profile | None`` — nur ``Scene.profile`` darf fehlen. Der Zweig war
+    # damit unerreichbar, und die 0,2 darin eine zweite Schichthöhe neben dem
+    # Materialprofil, die bei keiner Kalibrierung mitgewandert wäre (Regel 7).
+    layer = ctx.profile.printer.layer_height
     if 0.0 < params.strength < layer * MIN_LAYERS:
         findings.append(
             Finding(

@@ -32,6 +32,8 @@ from app.core.scene.serialise import (
     finding_to_data,
     solver_from_data,
     solver_to_data,
+    translatable_values_from_data,
+    translatable_values_to_data,
 )
 from app.core.types import (
     Feature,
@@ -129,8 +131,19 @@ class ResultCache:
         früh (jeder Schritt wird neu gerechnet) oder gar nicht mehr (er wächst,
         bis der Speicher knapp wird).
 
-        Ein ``RLock`` und kein ``Lock``: ``get`` ruft bei einem Treffer auf der
-        Platte ``_store`` auf, hält das Schloss also schon."""
+        **Ein ``RLock``, und der Grund dafür stimmt seit dem Umbau nicht mehr.**
+        Hier stand, ``get`` rufe bei einem Plattentreffer ``_store`` bei bereits
+        gehaltenem Schloss. Das war einmal so; heute gibt ``get`` das Schloss
+        vor dem Dateizugriff ausdrücklich ab (der Satz dazu steht dort) und
+        nimmt es für ``_store`` neu. Beide Aufrufer — ``get`` und ``put`` —
+        treten also einfach ein, und ein ``Lock`` täte es.
+
+        Er bleibt trotzdem, und der Grund ist der schwächere von zweien: Ein
+        ``Lock`` würde eine versehentlich wiedereintretende Änderung als
+        Verklemmung zeigen statt sie durchzulassen. Das ist ein Argument für
+        den Tausch, aber es ist eine Verhaltensänderung unter Nebenläufigkeit
+        und gehört nicht in eine Berichtigung. Wer hier arbeitet, soll den Satz
+        lesen und nicht die alte Begründung glauben."""
 
     def get(self, key: str) -> CachedResult | None:
         with self._lock:
@@ -306,11 +319,19 @@ def _name_to_data(name: TranslatableText | str) -> str | dict[str, Any]:
     **Die Werte gehören dazu.** „Slot 2" ist die Message-ID ``Slot {number}``
     und die Zahl zwei — ohne sie käme aus dem Cache ein Name mit sichtbarem
     Platzhalter zurück. Sie sind der sprachneutrale Teil und altern nicht.
+
+    **Und sie gehen über den Helfer aus** :mod:`~app.core.scene.serialise`.
+    Ein rohes ``dict(name.values)`` trug einen übersetzbaren Wert unverändert
+    weiter, und genau daran ist der ``except``-Zweig weiter unten einmal
+    stillschweigend zugeschnappt — derselbe Ablauf wie oben beschrieben, nur
+    eine Ebene tiefer. Dass heute kein Name einen solchen Wert führt, ist
+    keine Eigenschaft dieser Funktion, sondern der Aufrufer von heute.
     """
     if isinstance(name, TranslatableText):
         data: dict[str, Any] = {"msgid": name.msgid, "context": name.context}
-        if name.values:
-            data["values"] = dict(name.values)
+        values = translatable_values_to_data(name)
+        if values is not None:
+            data["values"] = values
         return data
     return str(name)
 
@@ -323,7 +344,11 @@ def _name_from_data(data: str | dict[str, Any]) -> TranslatableText | str:
     kannte. Beide sind wörtlich gemeint und bleiben es.
     """
     if isinstance(data, dict):
-        return TranslatableText(data["msgid"], data.get("context"), data.get("values"))
+        return TranslatableText(
+            data["msgid"],
+            data.get("context"),
+            translatable_values_from_data(data.get("values")),
+        )
     return data
 
 

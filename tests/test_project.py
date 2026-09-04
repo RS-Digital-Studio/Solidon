@@ -1671,6 +1671,54 @@ def test_a_translatable_text_keeps_its_values_through_the_round_trip() -> None:
     )
 
 
+def test_a_value_that_is_itself_translatable_survives_and_stays_translatable() -> None:
+    """Die Stufe darüber: Ein **Wert** kann selbst ein übersetzbarer Text sein.
+
+    Der Nachbar darüber prüft Zahlen als Werte, und daran ist der Fall
+    vorbeigelaufen: ``perceive.actions._no_way`` baut
+    ``_("Dafür ist „{title}“ da.", title=<Titel einer Operation>)``, und der
+    Titel kommt als :class:`TranslatableText` aus dem Register. Ein rohes
+    ``dict(values)`` trug ihn unverändert in den Bericht, und ``json.dumps``
+    in :func:`app.core.scene.project.save` endete mit ``Object of type
+    TranslatableText is not JSON serializable`` — kein ``AppError``, also ohne
+    Handlungsvorschlag, und der Kunde verlor das Speichern (Gesamtreview
+    04.09.2026). Ausgelöst hat es ``resize_feature`` auf einer Bohrung, ein
+    gewöhnlicher Weg über Chat oder Kommandozeile.
+
+    **Zwei Zusagen, und die zweite ist die schwerere.** Dass es speicherbar
+    ist, sagt ``json.dumps`` hier ausdrücklich. Dass der eingebettete Titel
+    danach **noch übersetzbar** ist, sagt der Sprachwechsel: Wer den kürzeren
+    Weg nähme und den Wert vor dem Ablegen zu Text auflöste, käme durch die
+    erste Zusage und bräche die zweite — ein französischer Kunde läse einen
+    deutschen Operationstitel mitten im Satz.
+    """
+    innen = _("Bohrung ändern")
+    aussen = _("Dafür ist „{title}“ da.", title=innen)
+
+    daten = finding_to_data(
+        Finding(code="op.resize_feature.ValidationError", severity="error", message=aussen)
+    )
+
+    # Erste Zusage: Der Bericht geht durch denselben Aufruf wie in ``save``.
+    json.dumps(daten, indent=2, ensure_ascii=False, allow_nan=False)
+
+    # Zweite Zusage: Der eingebettete Titel wandert mit der Sprache.
+    install_catalog("fr", read_catalog("fr"))
+    set_language("fr")
+    try:
+        auf_franzoesisch = str(finding_from_data(daten).message)
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+    assert auf_franzoesisch == str(aussen.translate("fr")), (
+        f"der eingebettete Titel ist eingefroren: {auf_franzoesisch!r}"
+    )
+    assert "{title}" not in auf_franzoesisch, "der Platzhalter steht noch da"
+    assert str(innen.translate("fr")) in auf_franzoesisch, (
+        f"der Titel kam nicht in der gelesenen Sprache zurück: {auf_franzoesisch!r}"
+    )
+
+
 def test_a_plain_message_stays_plain() -> None:
     """Was ein Aufrufer als Zeichenkette übergibt, wird nicht übersetzt — und
     ein Befund aus einer älteren Datei ohne die Kennzeichnung ebenso wenig."""
@@ -1906,3 +1954,31 @@ def test_the_migration_leaves_a_distance_alone_when_it_is_not_a_circle() -> None
     assert constraints(_rename_circle_measures(sketch([line, circle], [2, 3]))) == ["radius"], (
         "der Kreis dahinter wird nicht gefunden — die Punktzählung stimmt nicht"
     )
+
+
+def test_a_value_that_is_not_json_is_named_before_it_is_written() -> None:
+    """Die Prüfkette endet mit einem benannten Fehler, nicht mit einem Durchlass.
+
+    ``_validate_json_tree`` ließ jeden Wert durch, der weder Text, Objekt,
+    Liste noch Fließkommazahl ist. Beim **Lesen** kann das nicht auftreten —
+    ``json.loads`` erzeugt nur JSON-Sorten. Beim **Schreiben** schon: Ein Wert,
+    der versehentlich als Objekt statt als Zahl oder Text abgelegt wird, kam
+    hier durch und starb zwei Zeilen später in ``json.dumps`` als roher
+    ``TypeError`` ohne Handlungsvorschlag — der Kunde verlor das Speichern
+    (Regel 17; Befund solidon-52 vom 04.09.2026, Ursache dort behoben, diese
+    Schranke von solidon-2f nachgezogen).
+
+    ``bool`` steht ausdrücklich mit unter den erlaubten Sorten: Es ist Untertyp
+    von ``int``, und eine umgedrehte Prüfung („ist das eine Zahl?") nähme
+    ``True`` klaglos an.
+    """
+    project_module._validate_json_tree(
+        {"wahr": True, "ganz": 1, "krumm": 1.5, "leer": None, "text": "x", "liste": [1, "y"]}
+    )
+
+    class Foreign:
+        """Etwas, das keine JSON-Sorte ist — der Fall, der still durchlief."""
+
+    for tree in ({"wert": Foreign()}, {"wert": [Foreign()]}, [Foreign()], Foreign()):
+        with pytest.raises(ValueError, match="json_type"):
+            project_module._validate_json_tree(tree)

@@ -771,7 +771,13 @@ def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float]
     if not text.strip():
         return None
     try:
-        from app.core.errors import AppError
+        # ``AppError`` wird hier **nicht** geholt, obwohl der Fang unten ihn
+        # braucht: Ein Import im Rumpf macht den Namen zur lokalen Variablen
+        # und verdeckt damit den modulweiten aus dem Kopf dieser Datei.
+        # Scheiterte ausgerechnet diese Zeile, wertete Python beim Behandeln
+        # einen ungebundenen Namen aus — aus dem ImportError würde ein
+        # ``NameError``, und der verließe eine Funktion, die im Docstring
+        # zusagt, im Dialog keinen Fehler zu werfen.
         from app.core.sketch.profile import bounds_of, regions_of
         from app.core.sketch.serialize import sketch_from_text
         from app.core.sketch.solver import solve_sketch

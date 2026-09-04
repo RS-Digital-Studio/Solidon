@@ -77,6 +77,67 @@ def _without_none(data: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in data.items() if value is not None}
 
 
+def translatable_values_to_data(text: TranslatableText) -> dict[str, Any] | None:
+    """Die Platzhalterwerte eines übersetzbaren Textes als JSON — oder nichts.
+
+    **Ein Wert kann selbst übersetzbar sein**, und daran ist am 04.09.2026 das
+    Speichern gestorben. ``perceive.actions._no_way`` baut
+    ``_("Dafür ist „{title}“ da.", title=<Titel einer Operation>)``; der Titel
+    ist ein :class:`TranslatableText`, und ein rohes ``dict(values)`` trug ihn
+    unverändert in den Bericht. ``json.dumps`` in :func:`project.save` endete
+    mit ``Object of type TranslatableText is not JSON serializable`` — kein
+    ``AppError``, also ohne Handlungsvorschlag (Regel 17), und der Kunde
+    verlor das Speichern. Ausgelöst von ``resize_feature`` auf einer Bohrung,
+    also von einem gewöhnlichen Weg über Chat oder Kommandozeile.
+
+    **Abgelegt wird die Struktur, nicht der Satz.** Zwei kürzere Wege gäbe es,
+    und beide geben etwas auf: ``str(value)`` friert die Sprache ein, in der
+    gespeichert wurde — genau der Fehler, den der Nachbar ``solver_to_data``
+    in seinem Kommentar beschreibt. ``source_text(value)`` gäbe die
+    Quellsprache und damit einem französischen Kunden nach dem Öffnen einen
+    deutschen Operationstitel mitten im Satz. Der eingebettete Text behält
+    deshalb seine eigene Message-ID, seinen Kontext und seine eigenen Werte
+    und übersetzt sich nach dem Laden wieder selbst.
+
+    Zahlen bleiben Zahlen: ``{free:.1f}`` steht so in den Katalogen, und ein
+    Wert, der als Zeichenkette zurückkäme, machte aus der Formatangabe einen
+    Fehler.
+    """
+    if not text.values:
+        return None
+    return {key: _value_to_data(value) for key, value in text.values.items()}
+
+
+def _value_to_data(value: object) -> Any:
+    if isinstance(value, TranslatableText):
+        return _without_none(
+            {
+                "translatable": True,
+                "msgid": value.msgid,
+                "context": value.context,
+                "values": translatable_values_to_data(value),
+            }
+        )
+    return value
+
+
+def translatable_values_from_data(data: object) -> dict[str, Any] | None:
+    """Gegenstück zu :func:`translatable_values_to_data`."""
+    if not isinstance(data, dict):
+        return None
+    return {str(key): _value_from_data(value) for key, value in data.items()}
+
+
+def _value_from_data(value: object) -> Any:
+    if isinstance(value, dict) and value.get("translatable"):
+        return TranslatableText(
+            str(value.get("msgid", "")),
+            value.get("context"),
+            translatable_values_from_data(value.get("values")),
+        )
+    return value
+
+
 # --- Parameter -----------------------------------------------------------------
 
 
@@ -104,7 +165,7 @@ def parameter_to_data(parameter: Parameter) -> dict[str, Any]:
             "title_translatable": True if isinstance(title, TranslatableText) else None,
             "title_context": title.context if isinstance(title, TranslatableText) else None,
             "title_values": (
-                dict(title.values) if isinstance(title, TranslatableText) and title.values else None
+                translatable_values_to_data(title) if isinstance(title, TranslatableText) else None
             ),
             "expression": parameter.expression,
         }
@@ -114,7 +175,11 @@ def parameter_to_data(parameter: Parameter) -> dict[str, Any]:
 def parameter_from_data(name: str, data: dict[str, Any]) -> Parameter:
     title: TranslatableText | str | None = data.get("title")
     if title is not None and data.get("title_translatable"):
-        title = TranslatableText(str(title), data.get("title_context"), data.get("title_values"))
+        title = TranslatableText(
+            str(title),
+            data.get("title_context"),
+            translatable_values_from_data(data.get("title_values")),
+        )
     return Parameter(
         name=name,
         value=float(data.get("value", 0.0)),
@@ -347,7 +412,7 @@ def transaction_to_data(transaction: Transaction) -> dict[str, Any]:
             "title_translatable": True if isinstance(title, TranslatableText) else None,
             "title_context": title.context if isinstance(title, TranslatableText) else None,
             "title_values": (
-                dict(title.values) if isinstance(title, TranslatableText) and title.values else None
+                translatable_values_to_data(title) if isinstance(title, TranslatableText) else None
             ),
             "origin": origin_to_data(transaction.origin),
             "ops": list(transaction.ops),
@@ -362,7 +427,11 @@ def transaction_from_data(data: dict[str, Any]) -> Transaction:
     changes = data.get("changes")
     title: TranslatableText | str = data.get("title", "")
     if data.get("title_translatable"):
-        title = TranslatableText(str(title), data.get("title_context"), data.get("title_values"))
+        title = TranslatableText(
+            str(title),
+            data.get("title_context"),
+            translatable_values_from_data(data.get("title_values")),
+        )
     return Transaction(
         id=data["id"],
         title=title,
@@ -507,9 +576,13 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
             # **Nicht `values`** — das Feld darunter trägt die Werte des
             # *Befunds*, diese hier die der *Meldung*. Zwei Dinge, ein Wort:
             # ein gemeinsames Feld ließe das eine das andere überschreiben.
+            #
+            # Und **über den Helfer**, nicht über ein rohes `dict(...)`: Ein
+            # Wert kann selbst übersetzbar sein, und dann stirbt `json.dumps`
+            # daran — siehe :func:`translatable_values_to_data`.
             "message_values": (
-                dict(message.values)
-                if isinstance(message, TranslatableText) and message.values
+                translatable_values_to_data(message)
+                if isinstance(message, TranslatableText)
                 else None
             ),
             "object_id": finding.object_id,
@@ -544,8 +617,8 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
                             else None
                         ),
                         "label_values": (
-                            dict(action.label.values)
-                            if isinstance(action.label, TranslatableText) and action.label.values
+                            translatable_values_to_data(action.label)
+                            if isinstance(action.label, TranslatableText)
                             else None
                         ),
                         "primary": True if action.primary else None,
@@ -563,14 +636,18 @@ def finding_from_data(data: dict[str, Any]) -> Finding:
     message: TranslatableText | str = data.get("message", "")
     if data.get("message_translatable"):
         message = TranslatableText(
-            str(message), data.get("message_context"), data.get("message_values")
+            str(message),
+            data.get("message_context"),
+            translatable_values_from_data(data.get("message_values")),
         )
     suggestions: list[Action] = []
     for entry in data.get("suggestions", ()):
         label: TranslatableText | str = entry.get("label", "")
         if entry.get("label_translatable"):
             label = TranslatableText(
-                str(label), entry.get("label_context"), entry.get("label_values")
+                str(label),
+                entry.get("label_context"),
+                translatable_values_from_data(entry.get("label_values")),
             )
         suggestions.append(
             Action(

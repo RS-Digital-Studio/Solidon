@@ -180,6 +180,81 @@ def test_the_catalog_actually_switches_the_language() -> None:
         set_language(SOURCE_LANGUAGE)
 
 
+def test_a_nested_value_follows_the_language_that_was_asked_for() -> None:
+    """Ein Platzhalterwert kann selbst übersetzbar sein — und muss mitziehen.
+
+    ``perceive.actions._no_way`` baut ``_("Dafür ist „{title}“ da.",
+    title=<Titel einer Operation>)``. Über ``format`` löste der Titel sich bis
+    zum 04.09.2026 über ``__str__`` auf, also gegen die **global** gesetzte
+    Sprache statt gegen die genannte: ``translate("fr")`` gab einen
+    französischen Satz mit deutschem Kern zurück, solange die Anwendung auf
+    Deutsch stand.
+
+    Geprüft wird deshalb mit einer Sprache, die **nicht** die aktive ist —
+    andernfalls bliebe der Test grün, weil beide zufällig dasselbe liefern.
+    Genau daran ist der Fehler so lange vorbeigekommen.
+    """
+    install_language("fr")
+    innen = TranslatableText("Bohrung ändern")
+    aussen = TranslatableText("Dafür ist „{title}“ da.", None, {"title": innen})
+
+    assert innen.translate("fr") != innen.msgid, (
+        "ohne übersetzten Kern misst dieser Test nichts — Katalogeintrag fehlt"
+    )
+    assert innen.translate("fr") in aussen.translate("fr"), (
+        f"der eingebettete Titel blieb in der aktiven Sprache: {aussen.translate('fr')!r}"
+    )
+
+
+def test_the_source_language_stays_the_source_language_all_the_way_down() -> None:
+    """Das Gegenstück: :func:`app.i18n.source_text` verspricht die Quellsprache.
+
+    Für Dateinamen und Schlüssel darf nichts mit der Anzeige wandern. Ein
+    verschachtelter Wert tat es trotzdem — er ging über ``__str__`` und kam
+    übersetzt zurück. Gemessen am 04.09.2026: Bei aktivem Englisch lieferte
+    ``source_text`` „Dafür ist „Change bore" da." — deutsche Hülle, fremder
+    Kern, aus der einen Funktion, deren ganze Zusage die Quellsprache ist.
+    """
+    from app.i18n import source_text
+
+    install_language("en")
+    innen = TranslatableText("Bohrung ändern")
+    aussen = TranslatableText("Dafür ist „{title}“ da.", None, {"title": innen})
+
+    set_language("en")
+    try:
+        stabil = source_text(aussen)
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+    assert stabil == "Dafür ist „Bohrung ändern“ da.", (
+        f"die Anzeigesprache ist in die Quellsprache durchgeschlagen: {stabil!r}"
+    )
+
+
+def test_a_numeric_value_keeps_its_format_specification() -> None:
+    """Die Gegenprobe zu den beiden darüber: Nur Texte werden aufgelöst.
+
+    ``{free:.1f}`` steht so in den Katalogen. Wer die Werte pauschal durch
+    ``str`` schickte, um die Verschachtelung zu erschlagen, machte aus der
+    Formatangabe einen ``ValueError`` — der Fix wäre dann teurer als der
+    Fehler.
+    """
+    from app.i18n import source_text
+
+    text = TranslatableText(
+        "{free:.1f} GB frei, {needed:.0f} gebraucht",
+        None,
+        {
+            "free": 12.345,
+            "needed": 7.6,
+        },
+    )
+
+    assert str(text) == "12.3 GB frei, 8 gebraucht"
+    assert source_text(text) == "12.3 GB frei, 8 gebraucht"
+
+
 def test_qt_standard_buttons_speak_the_application_language(qt_app: object) -> None:
     """Qt beschriftet OK/Abbrechen/Schließen selbst — ohne geladenen
     qtbase-Katalog stand dort „Cancel", mitten im deutschen Programm.
