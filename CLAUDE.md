@@ -118,10 +118,28 @@ Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in 
   jenem Tag Exit 3, obwohl jeder Test grün war: drei Fensterdateien melden
   „passed" und stürzen danach beim Aufräumen (`0xC0000409`). Der Fall steht in
   `ROADMAP.md` unter „Der Changelog schickte den Kunden ins Handbuch, und dort
-  war nichts"; wer ihn nicht kennt, hält einen grünen Stand für rot. Zwei
-  Fensterdateien enden inzwischen mit **127** statt mit dem bekannten Code, und
-  zwar einzeln gefahren auch — das ist ein eigener offener Punkt und nicht
-  derselbe Absturz.
+  war nichts"; wer ihn nicht kennt, hält einen grünen Stand für rot.
+
+  **Drei** Fensterdateien enden inzwischen mit **127** statt mit dem bekannten
+  Code, und zwar einzeln gefahren auch: `test_install.py`,
+  `test_print_settings.py` und `test_widget_lifetime.py`. Das ist ein eigener
+  offener Punkt und nicht derselbe Absturz.
+
+  **Und sie sind nicht dieselbe Sorte — der Unterschied ist der Punkt.** Die
+  ersten beiden melden vorher „passed" und sterben beim Aufräumen; ihr
+  Ergebnis gilt, jede Zusicherung stand. `test_widget_lifetime.py` **hört
+  mitten drin auf**: 55 gesammelt, **43 gelaufen**, Heap-Abriss
+  (`0xc0000374`) beim `gc.collect()` in
+  `test_a_released_widget_is_actually_released` (Zeile 282). Zwölf Tests haben
+  nie stattgefunden, und wer den Satz über den harmlosen Fall liest, hält auch
+  diesen für einen — genau die Sorte Auskunft, der beim nächsten Mal jemand
+  glaubt.
+
+  Belegt am 04.09.2026 von drei Sitzungen unabhängig: deterministisch und
+  allein reproduzierbar (3d-druck-4d), auf dem Stand vor den Commits des Tages
+  (3d-druck-11, eigener Arbeitsbaum auf `8cf774c7`), und **dreimal von dreimal
+  auf reinem HEAD ohne jede fremde Änderung im Baum** (3d-druck-f9). Der
+  dritte Beleg ist der stärkste: Er schließt uns als Ursache aus.
 - **„Keine Tests gesammelt" ist kein Fehllauf.** Das Skript sucht seine
   Fensterdateien im *Text* (`grep -lE "MainWindow|Viewport|pyvista"`), damit eine
   neue keinen Eintrag braucht. Es erwischt damit auch eine Datei, die über eine

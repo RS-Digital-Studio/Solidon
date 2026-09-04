@@ -82,6 +82,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Dezimieren kann die Dichtheit kosten | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Messung, ob wirklich die kleinen Komponenten kollabieren; belegt ist bisher nur das Ergebnis an einem Modell von dreien |
 | Ein reiner Import macht das Projekt geändert | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Entscheidung, ob die Antwort ein anderer Zustand oder ein anderer Text ist — Regel 19 spricht für die Nachfrage, Robert hat sie am 04.09.2026 als Fund benannt |
 | Siebzehn Teile kosten siebzehn Vorgänge | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | die Freigabe, den Mehrfachimport überhaupt zu bauen — zurückgestellt von Robert am 04.09.2026 zugunsten der Einzelmodelle |
+| Das Leistungsbudget der Erkennung misst eine Kugel | Was die Erkennung wirklich kostet (04.09.2026) | einen zweiten Messfall mit einem merkmalsreichen Netz — die 0,80 s aus §31 gelten für ein Modell ohne gekrümmte Flecken, ein Kundenmodell derselben Größe brauchte das Zehnfache |
+| Die Stützkarte braucht eine Schranke an ihrer eigenen Größe | Was die Erkennung wirklich kostet (04.09.2026) | eine Absage, die vorher weiß, was die Schichtanalyse kostet — die Dreiecksgrenze fängt den teuren Fall nicht und sperrt billige aus |
+| Sechzehntausend Merkmale an einem Schiffsrumpf | Was die Erkennung wirklich kostet (04.09.2026) | die Schranke gehört zur Merkmalserkennung und damit in dasselbe Gebiet wie die Gewinde-Phantome; nicht zweimal ziehen (Absprache mit 3d-druck-f9, 04.09.2026) |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -15716,3 +15719,83 @@ die alles andere erklärt:
   **Zurückgestellt** (Robert, 04.09.2026: „es reicht wenn du jedes modell
   erstmal einzeln machst"). Die Messung steht hier, damit sie nicht verloren
   geht.
+
+## Was die Erkennung wirklich kostet (04.09.2026)
+
+Robert zu den neunzehn Kundendateien: „können wir die anzahl der dreiecke auch
+erhöhen?" und „oder schau mal wie du das ganze optimieren kannst." Gemessen
+wurde deshalb zuerst, wohin die Zeit geht — ein Prozess je Datei, an den
+Grenzen vorbei:
+
+| Dreiecke | `detect` vorher | Merkmale | Wandstärke | Stützkarte |
+|---|---|---|---|---|
+| 59 740 | 0,55 s | 26 | 0,88 s | **8,33 s** |
+| 277 460 | 11,63 s | 2 252 | 0,78 s | 1,84 s |
+| 288 200 | 11,99 s | 2 127 | 1,24 s | 2,62 s |
+| 421 194 | 24,34 s | 3 362 | 0,54 s | 4,07 s |
+| 885 570 | **17,25 s** | **363** | 1,68 s | **45,44 s** |
+| 1 223 836 | 562,72 s | 16 508 | 7,06 s | — |
+
+**Die Dreieckszahl erklärt nichts davon.** Der Spiderman hat dreimal so viele
+Dreiecke wie das Segel und braucht ein Drittel weniger — weil er ein Zehntel
+der Merkmale hat. Die Stützkarte ist beim **kleinsten** Modell am teuersten,
+weil sie eine Schichtanalyse rechnet. Beide Grenzen, die es gab, maßen also
+die falsche Größe.
+
+- [x] **Dreiviertel der Erkennungszeit war das Hashen des eigenen Netzes.**
+  cProfile über das Segel: 17,3 von 26,6 Sekunden in `trimesh.caching.verify`
+  → `tobytes` (10,3 s, 227 036 Aufrufe) und `xxhash` (4,4 s). Jeder Zugriff
+  auf `body.face_normals[patch]` lässt trimesh prüfen, ob sich das Netz
+  geändert hat, und die Prüfung hasht das **ganze** Netz — bei 3362 Flecken
+  entsprechend oft, für einen Fleck aus zwanzig Dreiecken.
+
+  `Cache.__enter__` um den Erkennungsdurchgang setzt einen Zähler, und
+  `verify` kehrt sofort zurück (`9cd07756`): 24,34 → 6,33 s, 17,25 → 10,58 s,
+  562,72 → 153,20 s, Merkmal für Merkmal identisch. Sicher ist es, weil im
+  gesperrten Abschnitt niemand schreiben **kann** — `_one_body` gibt bei
+  Bedarf ein neues Netz zurück, die vier `fit_*` lesen nur (Gegenprüfung
+  3d-druck-f9).
+
+  Der Test zählt Hashes statt Sekunden: 3566 vorher, drei nachher, und drei an
+  jedem Korpusmodell unabhängig von seiner Größe. Eine Zeitmessung wäre
+  maschinenabhängig; die Zusage ist, dass die Zahl nicht mehr mit den Flecken
+  wächst.
+
+- [x] **Die Kartengrenze schützte vor der falschen Sache** (`483d18a0`).
+  Sechs der sieben Karten bleiben bei 885 570 Dreiecken unter 2,1 s bei einem
+  Budget von drei; abgelehnt wurden dafür zehn von neunzehn Kundendateien.
+  Die Grenze steigt auf 900 000 — so weit, wie gemessen ist. Die Stützkarte
+  behält ihre eigene, weil eine Dreiecksgrenze für sie das falsche Werkzeug
+  ist und immer war.
+
+  Der Einwand, **alle sieben** zu messen statt zwei, kam von 3d-druck-4d. Ohne
+  ihn wäre die Stützkarte mitgestiegen und liefe beim Spiderman 45 Sekunden.
+
+- [ ] **Das Leistungsbudget der Erkennung misst eine Kugel.** §31 sagt
+  „Feature-Erkennung, 200 000 Dreiecke: unter 1 s" und führt 0,80 s als
+  Messwert. Der Test dazu
+  (`test_feature_detection_on_two_hundred_thousand_triangles`) baut eine
+  `icosphere` und dezimiert sie auf 200 000; sein Docstring sagt es selbst —
+  „Eine Kugel hat keine Bohrungen, und das herauszufinden ist die Arbeit."
+
+  Eine Kugel hat kaum gekrümmte Flecken. Ein Kundenmodell derselben Größe hat
+  tausende und brauchte vor `9cd07756` das Zehnfache: 11,63 s bei 277 460
+  Dreiecken gegen 0,80 s bei 200 000. **Die Zusage gilt für ein Modell, das
+  niemand lädt.** Was fehlt, ist ein zweiter Messfall mit einem
+  merkmalsreichen Netz derselben Größe — dann misst das Budget den Fall, für
+  den es da ist.
+
+- [ ] **Die Stützkarte braucht eine Schranke an ihrer eigenen Größe.** Sie
+  hängt an Bauhöhe und Konturkomplexität, nicht an der Dreieckszahl: 8,33 s
+  bei 59 740, 1,84 s bei 277 460, 45,44 s bei 885 570. Ihre heutige Grenze von
+  120 000 Dreiecken fängt den teuren Fall nicht (er liegt darunter und lief
+  schon immer) und sperrt billige aus. Sie ist abbrechbar und läuft im
+  Arbeiter — was fehlt, ist eine Absage, die vorher weiß, was sie kostet.
+
+- [ ] **Sechzehntausend Merkmale an einem Schiffsrumpf sind keine Auskunft.**
+  Auch in 153 Sekunden nicht. Ein Segel meldet 2252, ein Rumpf 16 508 — beides
+  Rauschen aus einem feinen, organischen Netz, und beides landet im
+  Objektbaum. Die Zeit hängt daran (nicht an den Dreiecken), und der Nutzen
+  fällt mit jedem weiteren Eintrag. Die Schranke gehört zur Merkmalserkennung
+  und damit in dasselbe Gebiet wie die Gewinde-Phantome; sie soll nicht
+  zweimal gezogen werden (Absprache mit 3d-druck-f9, 04.09.2026).
