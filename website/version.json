@@ -1,93 +1,99 @@
 {
-  "version": "0.3.3",
+  "version": "0.3.4",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.3.3.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.3.exe",
-      "size": 218620652,
-      "sha256": "3f7adacb861feb984341bbaa41ef9c037af4e263789c412f97d6d1c1241276f4"
+      "file": "Solidon3D-Setup-0.3.4.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.4.exe",
+      "size": 218657493,
+      "sha256": "57078adb3082086f46f1b2cc8726120b1548cd0e929638a8d8449cf15c8df46d"
     },
     "linux": {
-      "file": "Solidon3D-0.3.3-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.3-x86_64.flatpak",
-      "size": 271414464,
-      "sha256": "2d78d6169e820fc282ff1f26d31fda3ef28ae011a4fc0046ebcb70b45c364718"
+      "file": "Solidon3D-0.3.4-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.4-x86_64.flatpak",
+      "size": 271467016,
+      "sha256": "c24c1548f152726303e8d588223003458fd4ce6de04c565f4698d816fd149946"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.3.3-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.3-macos-arm64.pkg",
-      "size": 295135098,
-      "sha256": "0d6fca6be475e1afc39a20cb258e1226f9f3e7e6c131930cf0c7fc97dfb59240"
+      "file": "Solidon3D-0.3.4-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.4-macos-arm64.pkg",
+      "size": 295174401,
+      "sha256": "05823390b63bc38a5d59a043c15e2cd18f3ca2f6e7f6631974a94e20a87c93d8"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.3.3-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.3-macos-x86_64.pkg",
-      "size": 328685970,
-      "sha256": "107d5ba75799ea68435c50e338353141bbce3b6126c9601a9b1f2dc1b5cf30d1"
+      "file": "Solidon3D-0.3.4-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.4-macos-x86_64.pkg",
+      "size": 328709853,
+      "sha256": "75db85fc16b1ea359e06a81c0d0de802fb97e2ec87aa46976829f1d1f479a938"
     }
   },
   "changes": {
     "de": [
-      "Der erste Klick wählt das Teil, der zweite die Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die eingestellte Steuerung gilt dabei durchgehend.",
-      "Beim Drehen bleibt der Horizont waagerecht: Die Ansicht steht nach einer Geste so aufrecht wie vorher, in jeder der fünf Steuerungen.",
-      "Die in den Einstellungen gewählte Steuerung und das Thema stehen auch im Menü *Ansicht* angehakt.",
-      "Mehrere gewählte Körper bleiben nach einer Neuberechnung gewählt, und ein Zug bewegt sie zusammen.",
-      "Ein Projekt lässt sich auch dann speichern, wenn an einem Merkmal ein Hinweis hängt.",
-      "Der Wechsel zwischen zwei Analysekarten desselben Körpers zeigt sofort, was schon gerechnet ist.",
-      "Ein neues Projekt beginnt ohne Reste einer Vorschau, die beim Wechsel noch offen stand.",
-      "Über die Fernsteuerung nimmt *Zurücknehmen* genau den genannten Schritt zurück und nicht den obersten."
+      "Eine Bohrung und ihre verknüpfte Senkung werden beim Verschieben gemeinsam versetzt — gleich, welche der beiden gewählt wurde. Der Merkmalbereich weist vor der Änderung auf die Kopplung hin.",
+      "Beim Ändern einer Bohrung bleibt ihre Senkung im Objektbaum zugeordnet und kann direkt mitangepasst werden.",
+      "Der Merkmalbereich fasst gleiche Ablehnungen zusammen und benennt die betroffenen Feldgruppen klar.",
+      "Gewinde in importierten Modellen werden zuverlässiger erkannt; falsche Kegel, Zapfen und Kugeln daran erscheinen nicht mehr als eigene Merkmale.",
+      "Schmale Nähte zwischen zusammengefügten Formen erzeugen nicht mehr zahlreiche falsche Merkmale.",
+      "Die Merkmalserkennung großer, detailreicher Modelle ist spürbar schneller.",
+      "Analysekarten stehen für mehr große Modelle zur Verfügung.",
+      "Ist eine Analysekarte für ein Modell zu groß, bietet die Meldung direkt *Dreiecke verringern* an.",
+      "Die Analyse des Stützbedarfs großer Modelle ist deutlich schneller."
     ],
     "en": [
-      "The first click selects the part, the second the bore beneath it, a click beside it clears the selection — and the chosen navigation applies throughout.",
-      "Rotating keeps the horizon level: after a gesture the view stands as upright as before, in each of the five navigation schemes.",
-      "The navigation and the theme chosen in the settings are ticked in the *View* menu as well.",
-      "Several selected bodies stay selected after a recalculation, and one drag moves them together.",
-      "A project can be saved even when a note is attached to a feature.",
-      "Switching between two analysis maps of the same body shows at once what has already been computed.",
-      "A new project starts without remnants of a preview that was still open at the time.",
-      "Through remote control, *Undo* takes back exactly the step named, not the topmost one."
+      "A bore and its linked countersink now move together, whichever of the two you select. The feature panel identifies the link before you make the change.",
+      "When you edit a bore, its countersink remains assigned beneath it in the object tree and can be adjusted directly as well.",
+      "The feature panel combines identical unavailable actions and clearly names the affected groups of fields.",
+      "Threads in imported models are recognised more reliably; incorrect cones, pins and spheres on them no longer appear as separate features.",
+      "Narrow seams between joined shapes no longer create large numbers of incorrect features.",
+      "Feature recognition is noticeably faster on large, detailed models.",
+      "Analysis maps are now available for more large models.",
+      "If an analysis map is too large for a model, the message directly offers *Reduce triangles*.",
+      "Support-need analysis is considerably faster on large models."
     ],
     "es": [
-      "El primer clic selecciona la pieza, el segundo el taladro que hay debajo, y un clic al lado anula la selección; el control elegido se mantiene en todo momento.",
-      "Al girar, el horizonte permanece horizontal: tras un gesto la vista queda tan recta como antes, en cada uno de los cinco controles.",
-      "El control y el tema elegidos en los ajustes aparecen también marcados en el menú *Vista*.",
-      "Varios cuerpos seleccionados siguen seleccionados tras un nuevo cálculo, y un arrastre los mueve juntos.",
-      "Un proyecto se puede guardar también cuando una característica lleva un aviso.",
-      "Cambiar entre dos mapas de análisis del mismo cuerpo muestra al instante lo que ya está calculado.",
-      "Un proyecto nuevo empieza sin restos de una vista previa que seguía abierta al cambiar.",
-      "Mediante el control remoto, *Deshacer* retira exactamente el paso indicado y no el último."
+      "Un taladro y su avellanado vinculado se desplazan ahora juntos, sin importar cuál de los dos se seleccione. El panel de características indica la vinculación antes del cambio.",
+      "Al modificar un taladro, su avellanado permanece asignado debajo de él en el árbol de objetos y también se puede ajustar directamente.",
+      "El panel de características agrupa las acciones no disponibles iguales e indica con claridad los grupos de campos afectados.",
+      "Las roscas de los modelos importados se reconocen con mayor fiabilidad; los conos, salientes y esferas incorrectos que aparecen en ellas ya no se muestran como características independientes.",
+      "Las uniones estrechas entre formas ensambladas ya no generan una gran cantidad de características incorrectas.",
+      "El reconocimiento de características es notablemente más rápido en modelos grandes y detallados.",
+      "Los mapas de análisis están disponibles para más modelos grandes.",
+      "Si un mapa de análisis es demasiado grande para un modelo, el aviso ofrece directamente *Reducir triángulos*.",
+      "El análisis de la necesidad de soportes es considerablemente más rápido en modelos grandes."
     ],
     "fr": [
-      "Le premier clic sélectionne la pièce, le deuxième le perçage en dessous, un clic à côté annule la sélection — et la navigation choisie reste valable tout du long.",
-      "La rotation garde l'horizon à l'horizontale : après un geste, la vue est aussi droite qu'avant, dans chacune des cinq navigations.",
-      "La navigation et le thème choisis dans les réglages sont également cochés dans le menu *Affichage*.",
-      "Plusieurs corps sélectionnés le restent après un nouveau calcul, et un glissement les déplace ensemble.",
-      "Un projet peut être enregistré même lorsqu'une remarque est attachée à une caractéristique.",
-      "Passer d'une carte d'analyse à l'autre sur le même corps montre aussitôt ce qui est déjà calculé.",
-      "Un nouveau projet démarre sans restes d'un aperçu resté ouvert au moment du changement.",
-      "Par la commande à distance, *Annuler* retire exactement l'étape nommée et non la dernière."
+      "Un perçage et sa fraisure liée se déplacent désormais ensemble, quel que soit celui des deux que vous sélectionnez. Le panneau Caractéristique indique ce lien avant la modification.",
+      "Lorsque vous modifiez un perçage, sa fraisure reste associée sous lui dans l’arborescence et peut elle aussi être ajustée directement.",
+      "Le panneau Caractéristique regroupe les actions identiques qui ne sont pas disponibles et nomme clairement les groupes de champs concernés.",
+      "Les filetages des modèles importés sont reconnus de manière plus fiable ; les cônes, tenons et sphères incorrects qui s’y trouvent n’apparaissent plus comme des caractéristiques distinctes.",
+      "Les jointures étroites entre des formes assemblées ne créent plus de nombreuses caractéristiques incorrectes.",
+      "La reconnaissance des caractéristiques est sensiblement plus rapide sur les grands modèles détaillés.",
+      "Les cartes d’analyse sont disponibles pour davantage de grands modèles.",
+      "Si une carte d’analyse est trop grande pour un modèle, le message propose directement *Réduire les triangles*.",
+      "L’analyse du besoin en supports est nettement plus rapide sur les grands modèles."
     ],
     "it": [
-      "Il primo clic seleziona il pezzo, il secondo il foro sottostante, un clic accanto annulla la selezione, e il comando impostato resta valido per tutto il tempo.",
-      "Ruotando, l'orizzonte resta orizzontale: dopo un gesto la vista è dritta come prima, in ciascuno dei cinque comandi.",
-      "Il comando e il tema scelti nelle impostazioni sono spuntati anche nel menu *Vista*.",
-      "Più corpi selezionati restano selezionati dopo un nuovo calcolo, e un trascinamento li muove insieme.",
-      "Un progetto si può salvare anche quando a una caratteristica è allegata una nota.",
-      "Passare da una mappa di analisi all'altra sullo stesso corpo mostra subito ciò che è già calcolato.",
-      "Un progetto nuovo comincia senza resti di un'anteprima rimasta aperta al momento del cambio.",
-      "Tramite il comando a distanza, *Annulla* ritira esattamente il passo indicato e non l'ultimo."
+      "Un foro e la sua svasatura collegata vengono ora spostati insieme, indipendentemente da quale dei due sia selezionato. Il pannello delle caratteristiche indica il collegamento prima della modifica.",
+      "Quando si modifica un foro, la sua svasatura resta associata sotto di esso nell’albero degli oggetti e può essere adattata direttamente.",
+      "Il pannello delle caratteristiche raggruppa le azioni identiche non disponibili e indica con chiarezza i gruppi di campi interessati.",
+      "Le filettature dei modelli importati vengono riconosciute in modo più affidabile; coni, perni e sfere errati al loro interno non appaiono più come caratteristiche separate.",
+      "Le giunzioni strette tra forme unite non generano più numerose caratteristiche errate.",
+      "Il riconoscimento delle caratteristiche è sensibilmente più rapido sui modelli grandi e dettagliati.",
+      "Le mappe di analisi sono disponibili per un numero maggiore di modelli grandi.",
+      "Se una mappa di analisi è troppo grande per un modello, il messaggio propone direttamente *Riduci triangoli*.",
+      "L’analisi del fabbisogno di supporti è notevolmente più rapida sui modelli grandi."
     ],
     "pt": [
-      "O primeiro clique seleciona a peça, o segundo o furo por baixo, e um clique ao lado cancela a seleção; o controlo escolhido mantém-se todo o tempo.",
-      "Ao rodar, o horizonte permanece na horizontal: depois de um gesto a vista fica tão direita como antes, em cada um dos cinco controlos.",
-      "O controlo e o tema escolhidos nas definições aparecem também assinalados no menu *Exibição*.",
-      "Vários corpos selecionados continuam selecionados após um novo cálculo, e um arrasto move-os em conjunto.",
-      "Um projeto pode ser guardado mesmo quando uma característica traz um aviso.",
-      "Alternar entre dois mapas de análise do mesmo corpo mostra de imediato o que já está calculado.",
-      "Um projeto novo começa sem restos de uma pré-visualização que ficara aberta na altura da mudança.",
-      "Através do controlo remoto, *Anular* retira exatamente o passo indicado e não o último."
+      "Um furo e o seu escareamento associado passam agora a ser deslocados em conjunto, independentemente de qual dos dois é selecionado. O painel de características indica a ligação antes da alteração.",
+      "Ao alterar um furo, o respetivo escareamento mantém-se associado por baixo dele na árvore de objetos e também pode ser ajustado diretamente.",
+      "O painel de características agrupa ações indisponíveis iguais e indica claramente os grupos de campos afetados.",
+      "As roscas dos modelos importados são reconhecidas com maior fiabilidade; cones, pinos e esferas incorretos nelas deixam de aparecer como características separadas.",
+      "As uniões estreitas entre formas reunidas deixam de criar numerosas características incorretas.",
+      "O reconhecimento de características é visivelmente mais rápido em modelos grandes e detalhados.",
+      "Os mapas de análise estão disponíveis para mais modelos grandes.",
+      "Se um mapa de análise for demasiado grande para um modelo, a mensagem oferece diretamente *Reduzir triângulos*.",
+      "A análise da necessidade de suportes é consideravelmente mais rápida em modelos grandes."
     ]
   },
   "notes_by_language": {
@@ -101,125 +107,161 @@
   "groups": {
     "de": [
       {
-        "title": "Anzeige und Auswahl",
+        "title": "Erkannte Merkmale bearbeiten",
         "points": [
-          "Der erste Klick wählt das Teil, der zweite die Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die eingestellte Steuerung gilt dabei durchgehend.",
-          "Beim Drehen bleibt der Horizont waagerecht: Die Ansicht steht nach einer Geste so aufrecht wie vorher, in jeder der fünf Steuerungen.",
-          "Die in den Einstellungen gewählte Steuerung und das Thema stehen auch im Menü *Ansicht* angehakt.",
-          "Mehrere gewählte Körper bleiben nach einer Neuberechnung gewählt, und ein Zug bewegt sie zusammen."
+          "Eine Bohrung und ihre verknüpfte Senkung werden beim Verschieben gemeinsam versetzt — gleich, welche der beiden gewählt wurde. Der Merkmalbereich weist vor der Änderung auf die Kopplung hin.",
+          "Beim Ändern einer Bohrung bleibt ihre Senkung im Objektbaum zugeordnet und kann direkt mitangepasst werden.",
+          "Der Merkmalbereich fasst gleiche Ablehnungen zusammen und benennt die betroffenen Feldgruppen klar."
         ]
       },
       {
-        "title": "Arbeiten am Projekt",
+        "title": "Merkmalserkennung",
         "points": [
-          "Ein Projekt lässt sich auch dann speichern, wenn an einem Merkmal ein Hinweis hängt.",
-          "Der Wechsel zwischen zwei Analysekarten desselben Körpers zeigt sofort, was schon gerechnet ist.",
-          "Ein neues Projekt beginnt ohne Reste einer Vorschau, die beim Wechsel noch offen stand.",
-          "Über die Fernsteuerung nimmt *Zurücknehmen* genau den genannten Schritt zurück und nicht den obersten."
+          "Gewinde in importierten Modellen werden zuverlässiger erkannt; falsche Kegel, Zapfen und Kugeln daran erscheinen nicht mehr als eigene Merkmale.",
+          "Schmale Nähte zwischen zusammengefügten Formen erzeugen nicht mehr zahlreiche falsche Merkmale.",
+          "Die Merkmalserkennung großer, detailreicher Modelle ist spürbar schneller."
+        ]
+      },
+      {
+        "title": "Analysekarten",
+        "points": [
+          "Analysekarten stehen für mehr große Modelle zur Verfügung.",
+          "Ist eine Analysekarte für ein Modell zu groß, bietet die Meldung direkt *Dreiecke verringern* an.",
+          "Die Analyse des Stützbedarfs großer Modelle ist deutlich schneller."
         ]
       }
     ],
     "en": [
       {
-        "title": "Display and selection",
+        "title": "Editing detected features",
         "points": [
-          "The first click selects the part, the second the bore beneath it, a click beside it clears the selection — and the chosen navigation applies throughout.",
-          "Rotating keeps the horizon level: after a gesture the view stands as upright as before, in each of the five navigation schemes.",
-          "The navigation and the theme chosen in the settings are ticked in the *View* menu as well.",
-          "Several selected bodies stay selected after a recalculation, and one drag moves them together."
+          "A bore and its linked countersink now move together, whichever of the two you select. The feature panel identifies the link before you make the change.",
+          "When you edit a bore, its countersink remains assigned beneath it in the object tree and can be adjusted directly as well.",
+          "The feature panel combines identical unavailable actions and clearly names the affected groups of fields."
         ]
       },
       {
-        "title": "Working on the project",
+        "title": "Feature recognition",
         "points": [
-          "A project can be saved even when a note is attached to a feature.",
-          "Switching between two analysis maps of the same body shows at once what has already been computed.",
-          "A new project starts without remnants of a preview that was still open at the time.",
-          "Through remote control, *Undo* takes back exactly the step named, not the topmost one."
+          "Threads in imported models are recognised more reliably; incorrect cones, pins and spheres on them no longer appear as separate features.",
+          "Narrow seams between joined shapes no longer create large numbers of incorrect features.",
+          "Feature recognition is noticeably faster on large, detailed models."
+        ]
+      },
+      {
+        "title": "Analysis maps",
+        "points": [
+          "Analysis maps are now available for more large models.",
+          "If an analysis map is too large for a model, the message directly offers *Reduce triangles*.",
+          "Support-need analysis is considerably faster on large models."
         ]
       }
     ],
     "es": [
       {
-        "title": "Vista y selección",
+        "title": "Editar características detectadas",
         "points": [
-          "El primer clic selecciona la pieza, el segundo el taladro que hay debajo, y un clic al lado anula la selección; el control elegido se mantiene en todo momento.",
-          "Al girar, el horizonte permanece horizontal: tras un gesto la vista queda tan recta como antes, en cada uno de los cinco controles.",
-          "El control y el tema elegidos en los ajustes aparecen también marcados en el menú *Vista*.",
-          "Varios cuerpos seleccionados siguen seleccionados tras un nuevo cálculo, y un arrastre los mueve juntos."
+          "Un taladro y su avellanado vinculado se desplazan ahora juntos, sin importar cuál de los dos se seleccione. El panel de características indica la vinculación antes del cambio.",
+          "Al modificar un taladro, su avellanado permanece asignado debajo de él en el árbol de objetos y también se puede ajustar directamente.",
+          "El panel de características agrupa las acciones no disponibles iguales e indica con claridad los grupos de campos afectados."
         ]
       },
       {
-        "title": "Trabajo en el proyecto",
+        "title": "Reconocimiento de características",
         "points": [
-          "Un proyecto se puede guardar también cuando una característica lleva un aviso.",
-          "Cambiar entre dos mapas de análisis del mismo cuerpo muestra al instante lo que ya está calculado.",
-          "Un proyecto nuevo empieza sin restos de una vista previa que seguía abierta al cambiar.",
-          "Mediante el control remoto, *Deshacer* retira exactamente el paso indicado y no el último."
+          "Las roscas de los modelos importados se reconocen con mayor fiabilidad; los conos, salientes y esferas incorrectos que aparecen en ellas ya no se muestran como características independientes.",
+          "Las uniones estrechas entre formas ensambladas ya no generan una gran cantidad de características incorrectas.",
+          "El reconocimiento de características es notablemente más rápido en modelos grandes y detallados."
+        ]
+      },
+      {
+        "title": "Mapas de análisis",
+        "points": [
+          "Los mapas de análisis están disponibles para más modelos grandes.",
+          "Si un mapa de análisis es demasiado grande para un modelo, el aviso ofrece directamente *Reducir triángulos*.",
+          "El análisis de la necesidad de soportes es considerablemente más rápido en modelos grandes."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Affichage et sélection",
+        "title": "Modifier les caractéristiques détectées",
         "points": [
-          "Le premier clic sélectionne la pièce, le deuxième le perçage en dessous, un clic à côté annule la sélection — et la navigation choisie reste valable tout du long.",
-          "La rotation garde l'horizon à l'horizontale : après un geste, la vue est aussi droite qu'avant, dans chacune des cinq navigations.",
-          "La navigation et le thème choisis dans les réglages sont également cochés dans le menu *Affichage*.",
-          "Plusieurs corps sélectionnés le restent après un nouveau calcul, et un glissement les déplace ensemble."
+          "Un perçage et sa fraisure liée se déplacent désormais ensemble, quel que soit celui des deux que vous sélectionnez. Le panneau Caractéristique indique ce lien avant la modification.",
+          "Lorsque vous modifiez un perçage, sa fraisure reste associée sous lui dans l’arborescence et peut elle aussi être ajustée directement.",
+          "Le panneau Caractéristique regroupe les actions identiques qui ne sont pas disponibles et nomme clairement les groupes de champs concernés."
         ]
       },
       {
-        "title": "Travail sur le projet",
+        "title": "Reconnaissance des caractéristiques",
         "points": [
-          "Un projet peut être enregistré même lorsqu'une remarque est attachée à une caractéristique.",
-          "Passer d'une carte d'analyse à l'autre sur le même corps montre aussitôt ce qui est déjà calculé.",
-          "Un nouveau projet démarre sans restes d'un aperçu resté ouvert au moment du changement.",
-          "Par la commande à distance, *Annuler* retire exactement l'étape nommée et non la dernière."
+          "Les filetages des modèles importés sont reconnus de manière plus fiable ; les cônes, tenons et sphères incorrects qui s’y trouvent n’apparaissent plus comme des caractéristiques distinctes.",
+          "Les jointures étroites entre des formes assemblées ne créent plus de nombreuses caractéristiques incorrectes.",
+          "La reconnaissance des caractéristiques est sensiblement plus rapide sur les grands modèles détaillés."
+        ]
+      },
+      {
+        "title": "Cartes d’analyse",
+        "points": [
+          "Les cartes d’analyse sont disponibles pour davantage de grands modèles.",
+          "Si une carte d’analyse est trop grande pour un modèle, le message propose directement *Réduire les triangles*.",
+          "L’analyse du besoin en supports est nettement plus rapide sur les grands modèles."
         ]
       }
     ],
     "it": [
       {
-        "title": "Vista e selezione",
+        "title": "Modificare le caratteristiche rilevate",
         "points": [
-          "Il primo clic seleziona il pezzo, il secondo il foro sottostante, un clic accanto annulla la selezione, e il comando impostato resta valido per tutto il tempo.",
-          "Ruotando, l'orizzonte resta orizzontale: dopo un gesto la vista è dritta come prima, in ciascuno dei cinque comandi.",
-          "Il comando e il tema scelti nelle impostazioni sono spuntati anche nel menu *Vista*.",
-          "Più corpi selezionati restano selezionati dopo un nuovo calcolo, e un trascinamento li muove insieme."
+          "Un foro e la sua svasatura collegata vengono ora spostati insieme, indipendentemente da quale dei due sia selezionato. Il pannello delle caratteristiche indica il collegamento prima della modifica.",
+          "Quando si modifica un foro, la sua svasatura resta associata sotto di esso nell’albero degli oggetti e può essere adattata direttamente.",
+          "Il pannello delle caratteristiche raggruppa le azioni identiche non disponibili e indica con chiarezza i gruppi di campi interessati."
         ]
       },
       {
-        "title": "Lavoro sul progetto",
+        "title": "Riconoscimento delle caratteristiche",
         "points": [
-          "Un progetto si può salvare anche quando a una caratteristica è allegata una nota.",
-          "Passare da una mappa di analisi all'altra sullo stesso corpo mostra subito ciò che è già calcolato.",
-          "Un progetto nuovo comincia senza resti di un'anteprima rimasta aperta al momento del cambio.",
-          "Tramite il comando a distanza, *Annulla* ritira esattamente il passo indicato e non l'ultimo."
+          "Le filettature dei modelli importati vengono riconosciute in modo più affidabile; coni, perni e sfere errati al loro interno non appaiono più come caratteristiche separate.",
+          "Le giunzioni strette tra forme unite non generano più numerose caratteristiche errate.",
+          "Il riconoscimento delle caratteristiche è sensibilmente più rapido sui modelli grandi e dettagliati."
+        ]
+      },
+      {
+        "title": "Mappe di analisi",
+        "points": [
+          "Le mappe di analisi sono disponibili per un numero maggiore di modelli grandi.",
+          "Se una mappa di analisi è troppo grande per un modello, il messaggio propone direttamente *Riduci triangoli*.",
+          "L’analisi del fabbisogno di supporti è notevolmente più rapida sui modelli grandi."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Exibição e seleção",
+        "title": "Editar características detetadas",
         "points": [
-          "O primeiro clique seleciona a peça, o segundo o furo por baixo, e um clique ao lado cancela a seleção; o controlo escolhido mantém-se todo o tempo.",
-          "Ao rodar, o horizonte permanece na horizontal: depois de um gesto a vista fica tão direita como antes, em cada um dos cinco controlos.",
-          "O controlo e o tema escolhidos nas definições aparecem também assinalados no menu *Exibição*.",
-          "Vários corpos selecionados continuam selecionados após um novo cálculo, e um arrasto move-os em conjunto."
+          "Um furo e o seu escareamento associado passam agora a ser deslocados em conjunto, independentemente de qual dos dois é selecionado. O painel de características indica a ligação antes da alteração.",
+          "Ao alterar um furo, o respetivo escareamento mantém-se associado por baixo dele na árvore de objetos e também pode ser ajustado diretamente.",
+          "O painel de características agrupa ações indisponíveis iguais e indica claramente os grupos de campos afetados."
         ]
       },
       {
-        "title": "Trabalho no projeto",
+        "title": "Reconhecimento de características",
         "points": [
-          "Um projeto pode ser guardado mesmo quando uma característica traz um aviso.",
-          "Alternar entre dois mapas de análise do mesmo corpo mostra de imediato o que já está calculado.",
-          "Um projeto novo começa sem restos de uma pré-visualização que ficara aberta na altura da mudança.",
-          "Através do controlo remoto, *Anular* retira exatamente o passo indicado e não o último."
+          "As roscas dos modelos importados são reconhecidas com maior fiabilidade; cones, pinos e esferas incorretos nelas deixam de aparecer como características separadas.",
+          "As uniões estreitas entre formas reunidas deixam de criar numerosas características incorretas.",
+          "O reconhecimento de características é visivelmente mais rápido em modelos grandes e detalhados."
+        ]
+      },
+      {
+        "title": "Mapas de análise",
+        "points": [
+          "Os mapas de análise estão disponíveis para mais modelos grandes.",
+          "Se um mapa de análise for demasiado grande para um modelo, a mensagem oferece diretamente *Reduzir triângulos*.",
+          "A análise da necessidade de suportes é consideravelmente mais rápida em modelos grandes."
         ]
       }
     ]
   },
-  "changes_total": 8,
-  "signature": "cccec943986a75d30c30c19a3bead1ca843ed2083b85cd4fbd3d2c8d7ef89fdac0f7025167bb94cccd6d842fbfb9e5f2b55b599027efeef7daa92eb85a8c400a"
+  "changes_total": 9,
+  "signature": "dde1d07ec53cc56b62ff365491c9c1ded825bcb8f7733ef37435f58c12e9e4f6615ded55e7d6cba3700f198757b8bf1efc29812d530a64010ffa8fce31f35a05"
 }
