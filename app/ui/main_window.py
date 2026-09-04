@@ -5996,6 +5996,16 @@ class MainWindow(QMainWindow):
         self.viewport.set_display_mode(self.settings.display_mode)  # type: ignore[arg-type]
         self.viewport.set_shading(self.settings.shading)  # type: ignore[arg-type]
         self.viewport.set_projection(self.settings.projection)  # type: ignore[arg-type]
+        # **Alle fünf Gruppen, nicht drei.** Thema und Navigation standen hier
+        # nicht, und ausgerechnet sie sind die beiden, die der
+        # Einstellungsdialog anbietet: Wer die Steuerung dort umstellte, fuhr
+        # mit der neuen und las im Menü *Ansicht → Navigation* weiter die
+        # alte. Der Test dazu gibt es seit je — er fährt ``action_navigation``,
+        # also den Weg über das Menü, und dessen Docstring nennt als Grund
+        # ausdrücklich „wenn die Einstellung von woanders kommt, etwa aus dem
+        # Einstellungsdialog". Gemessen wurde nie der genannte Weg.
+        _tick(self._theme_group, self.settings.theme)
+        _tick(self._navigation_group, self.settings.navigation)
         _tick(self._mode_group, self.settings.display_mode)
         _tick(self._shading_group, self.settings.shading)
         _tick(self._projection_group, self.settings.projection)

@@ -83,3 +83,34 @@ Ansicht nur über `plotter.screenshot()` oder `screen.grabWindow()`.**
 will, prüft vorher an einer Lage mit **bekanntem** Inhalt, ob das Werkzeug ihn
 zeigt — sonst ist das Foto, das die Instanz sein soll, nur ein weiterer
 blinder Zeuge.
+
+---
+
+**Nachtrag 04.09.2026 — die vierte Richtung: eine Schicht unter dem Widget ist
+schon zu hoch.** Robert meldete, dass sich nach dem Anwählen einer Bohrung
+nichts mehr auswählen und nichts mehr abwählen lässt. Zwei Sonden sagten
+„alles in Ordnung":
+
+| Sonde | Aufruf | Ergebnis |
+|---|---|---|
+| 1 | `viewport._on_left_click(x, y)` | Auswahl, Wechsel, Abwahl — alles grün |
+| 2 | `style._left_down()` / `style._left_up()` am Interaktionsstil | ebenfalls grün |
+| 3 | `QTest.mouseClick(plotter.interactor, …)` | **ab dem zweiten Klick tot** |
+
+Die Ursache lag genau zwischen Sonde 2 und Sonde 3: pyvista meldet auf dem
+**Interactor** einen Doppelklick-Rückruf an, der den Interaktionsstil
+austauscht. Sonde 2 rief die Methoden des Stils direkt und ging damit an dem
+Ereignis vorbei, das den Stil wegnahm — sie fuhr also den Weg der Oberfläche
+bis auf die letzte Schicht und war deshalb blind für genau diese.
+
+**Why:** „Über die Oberfläche" ist keine Ja/Nein-Frage, sondern eine Höhe. Wer
+den Handler ruft, prüft den Handler; wer den Stil ruft, prüft den Stil. Alles,
+was *zwischen* Widget und Handler passiert — fremde Beobachter, Doppelklick,
+Fokus, Ereignisfilter —, ist unsichtbar, und dort sitzen die Fehler, die man
+mit dem Debugger nicht findet, weil jeder Einzelteil funktioniert.
+
+**How to apply:** Wenn ein gemeldeter Bedienfehler in der Sonde nicht auftritt,
+ist die Sonde zu tief angesetzt. Eine Stufe höher gehen, bis beim **Widget**
+angekommen: `QTest.mouseClick`, `QTest.keyClick`, `QTest.mousePress/Move/Release`
+auf das Widget, das der Finger trifft. Erst wenn auch das grün ist, war die
+Meldung nicht reproduzierbar — vorher heißt grün nur „an dieser Höhe nicht".

@@ -962,6 +962,33 @@ def test_switching_moves_the_tick(window: MainWindow) -> None:
     assert ticked == {"blender"}, "und der alte Haken geht weg"
 
 
+def test_the_tick_follows_a_change_from_the_settings_dialog(window: MainWindow) -> None:
+    """Der Weg, den der Test darüber im Docstring nennt und nie gefahren ist.
+
+    ``test_switching_moves_the_tick`` begründet sich mit „nicht aber, wenn die
+    Einstellung von woanders kommt, etwa aus dem Einstellungsdialog" — und
+    fährt ``action_navigation``, also das Menü. Der genannte Weg geht über
+    ``_apply_settings``, und dort standen drei der fünf Gruppen: Darstellung,
+    Schattierung, Projektion. Thema und Navigation fehlten, und ausgerechnet
+    diese beiden bietet der Dialog an.
+
+    Für den Kunden hieß das: Er stellte die Steuerung im Dialog um, fuhr mit
+    der neuen — und las im Menü weiter die alte als die aktive (Robert,
+    04.09.2026).
+    """
+    window.settings.navigation = "cad"
+    window.settings.theme = "light"
+
+    window._apply_settings()
+
+    navigation = {
+        action.data() for action in window._navigation_group.actions() if action.isChecked()
+    }
+    theme = {action.data() for action in window._theme_group.actions() if action.isChecked()}
+    assert navigation == {"cad"}, "das Menü nennt das Schema, mit dem gefahren wird"
+    assert theme == {"light"}, "und dasselbe gilt für das Thema"
+
+
 def test_a_menu_is_sorted_the_way_it_is_read() -> None:
     """Sortiert wurde nach dem internen Namen, gelesen wird der Titel.
 

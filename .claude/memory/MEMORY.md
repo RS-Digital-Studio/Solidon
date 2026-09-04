@@ -13,6 +13,7 @@
 - [ComfyUI](comfyui-installation-d-ai.md) — auf D:\AI; Hunyuan3D 2.1 hat andere Knoten.
 - [Eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) — Ollama und ComfyUI serialisieren, VRAM freigeben.
 - [Ollama-Werkzeuge](ollama-werkzeugaufrufe-modellwahl.md) — ohne num_ctx wird der Prompt still gekürzt.
+- [Kein Schalter fürs Config-Dir](config-dir-hat-keinen-schalter.md) — eine Sonde mit save_settings trifft Roberts echte settings.json.
 - [.venv auf 3.13](lokale-umgebung-python-version.md) — sonst prüft mypy still null Dateien.
 - [.venv verliert Dateien](venv-dateien-verschwinden.md) — RECORD nennt die fehlende, check_env nicht.
 - [Installer-Probe](installer-probe-nicht-mit-fenster.md) — Robert klickt durch; {app} zeigt auf HKCU.
@@ -143,6 +144,7 @@
 - [Hilfsmodul verstellt den Suchpfad](hilfsmodul-verstellt-den-suchpfad.md) — run_ui_audit setzt `F:\3D Druck` an sys.path[0]; der Fix sieht wirkungslos aus.
 - [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht".
 - [Messung trägt nur am Ort](messung-traegt-nur-am-ort-ihrer-messung.md) — echt gemessen, woanders gültig.
+- [Docstring nennt den ungefahrenen Weg](docstring-nennt-den-weg-den-der-test-nicht-faehrt.md) — die Begründung sichert zu, was der Rumpf nicht ruft.
 - [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders.
 - [Fortschritt ≠ collect](fortschrittszeichen-zaehlen-nicht-wie-collect.md) — das n-te `F` ist nicht die n-te Zeile.
 - [Hintergrundlauf meldet die Hülle](hintergrundlauf-meldet-seinen-wrapper.md) — 282 von 448 bei Exit 0; Zeichen gegen Soll zählen.

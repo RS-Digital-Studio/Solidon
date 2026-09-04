@@ -76,6 +76,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | P9 — Weg 3 Ende zu Ende | P9 — Säule B und Farbe | dieselbe vollständig dokumentierte und reproduzierbar gepinnte Generatorenkette sowie einen nachgewiesenen Lauf Text/Bild → Mesh → Reparatur → Prüfbericht → Export auf Windows, macOS und Linux. Der bestehende Weg bleibt während der Lizenzkettenklärung erhalten |
 | CI-Bauläufe, Signierung und Notarisierung | P8 — Erste Veröffentlichung | Feldläufe der Pakete, das Certum-Zertifikat (Standard Code Signing in the Cloud, Einzelperson) für `tools/sign_release.py` sowie die Apple-Developer-IDs und sieben CI-Geheimnisse zum seit 02.09.2026 vorhandenen Konto. Die CI-Wege und alle Pakete stehen; Azure und PFX sind seit 02.09.2026 entfernt |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | DMARC und einen nachweisbar abgeschlossenen netcup-AVV. Das Repository belegt den Abschluss derzeit nicht; die Datenschutzerklärung nennt netcup als Hoster (Art. 6 lit. f) und behauptet keinen AVV mehr. Vor der Freigabe im CCP prüfen und den Beleg sichern: Hosting, Mail, Support, Aktivierung, Protokolle/Statistik und Sicherungen; dazu Unterauftragsverarbeiter, TOM, Löschung und Wiederherstellung. Das Postfach `support@solidon3d.de` existiert; SPF, MX und die Annahme von außen sind geprüft |
+| Der Punkt für den Changelog | Zwei schnelle Klicks nahmen die ganze Ansicht (04.09.2026) | eine Release-Entscheidung, keine Arbeit am Code: Die Fassung 0.3.2 ist gebaut und ihr Abschnitt kündigt die neue Steuerung an. Der Fund gehört in den nächsten Abschnitt; welcher das ist, entscheidet der Release |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -4582,6 +4583,39 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       damit mehr als den Ort der Rechnung — ein Hinweis, kein Beweis. Umgesetzt
       ist nichts; die Vorschau in den Hauptthread zu verlegen wäre eine
       Verhaltensänderung an §18.7.
+
+      **Fortschreibung 04.09.2026 (f9): eine Gestalt ohne Absturz — der
+      unmögliche `TypeError`.** `tests/test_performance.py::test_the_layer_analysis_survives_a_knurled_surface`
+      meldet sporadisch `TypeError: cannot unpack non-iterable int object` an
+      `app/core/slice/analysis.py:805`, und die Zeile dort ist
+      `for other, others in enumerate(inside)` — mit `inside` als `list[list[int]]`,
+      im Protokoll der lokalen Werte nachgelesen (`[[], [], [], …]`, 2898 Einträge).
+      `enumerate` kann über einer Liste keinen `int` liefern; der Fehler ist als
+      Logikfehler **unmöglich** und damit dieselbe Familie wie das
+      `SystemError: error return without exception set` aus `_elementtree`, das
+      im selben Lauf `test_the_input_stage_on_a_large_assembly` reißt. Davor
+      steht jedes Mal `boolean stage direct failed: Not all meshes are volumes!`
+      — also die Rückfallkette und damit schwere native Rechnung.
+
+      Gemessene Raten am selben Tag, ruhige Maschine, je sechs Läufe einzeln
+      mit `-p no:randomly`: **4 von 6** im Arbeitsbaum, **1 von 6** im selben
+      Baum mit auf HEAD zurückgesetztem `app/ui/`, **0 von 6** in einem
+      Arbeitsbaum auf reinem HEAD. Der Unterschied sieht nach einer Spur aus
+      und ist keine: Eine Sonde über `sys.modules` am Ende des Laufs zeigt,
+      dass in diesem Prozess **zwei** `app.ui`-Module überhaupt geladen sind
+      (`app.ui`, `app.ui.labels`) — weder `viewport` noch `main_window`. Die
+      geänderten Dateien können den Lauf nicht erreichen; 4/6 gegen 1/6 bei
+      n=6 ist Rauschen. Festgehalten, damit die nächste Sitzung die
+      Rechnung nicht noch einmal aufmacht.
+
+      Neuer Fundort am selben Tag: `tests/test_resting_state.py` riss im
+      geteilten Lauf mit **139 vor dem ersten Fortschrittszeichen** — Access
+      Violation im `__init__` des Arbeiters (`session.py:134` ←
+      `evaluate_async` ← `start_new` ← `open_path`), also dieselbe Gestalt wie
+      die Fortschreibung vom 26.08.2026 mit `session.py:223` ←
+      `preview_async`. Einzeln gefahren **0 von 5**; die Datei erbt den
+      Zustand, sie erzeugt ihn nicht.
+
 
 - [ ] **Signatur C: der Hänger — kein Absturz, sondern Stillstand.** Abgegrenzt
       am 23.08.2026 bei der Sortierung der Absturzfamilie an 24 Stapeln.
@@ -15267,3 +15301,72 @@ Durchmesser.
   `_merged_spheres` neben `_merged_cylinders`, `_merged_cones` und
   `_merged_tori` wäre Aufwand ohne Fall; als Nicht-Befund festgehalten,
   damit die Frage nicht ein zweites Mal gestellt wird.
+
+## Zwei schnelle Klicks nahmen die ganze Ansicht (04.09.2026)
+
+Robert meldete drei Dinge, und es war eines: „ist die neue Solidon3D-Steuerung
+nicht als Standard vorgewählt … wenn ich eine Bohrung oder anderes auswähle
+kann ich nichts anderes auswählen … das Abwählen über den Viewport wenn man
+einfach ins Leere klickt geht auch nicht."
+
+- [x] **pyvista nahm uns beim Doppelklick den Interaktionsstil weg.**
+  `set_navigation` hängte ihn mit `SetInteractorStyle` an den Interactor —
+  an pyvista vorbei. Dessen `RenderWindowInteractor` führt daneben
+  `_style_class` und setzt es über `update_style()` wieder durch, und eine
+  der Gelegenheiten dazu ist `_toggle_chart_interaction`: ein Rückruf für
+  zwei schnelle Linksklicks, den pyvista **immer** anmeldet, auch ohne ein
+  einziges Diagramm in der Szene. Er findet keines, ruft
+  `_set_context_style(None)`, und dessen letzte Zeile ist `update_style()`.
+
+  Das trifft die gestufte Auswahl aus §18.5 ins Herz, denn sie **besteht**
+  aus zwei Klicks auf dieselbe Stelle: erst der Körper, dann die Bohrung
+  darin — also genau ein Doppelklick. Gemessen am laufenden Fenster mit
+  echten Qt-Mausklicks auf `plate_holes.stl`:
+
+  | Klick | vorher | nachher |
+  |---|---|---|
+  | 1. auf die Bohrung | `obj_1` | `obj_1` |
+  | 2. auf dieselbe Stelle | `obj_1` — **nichts** | `obj_1/hole_1` |
+  | auf eine andere Bohrung | `obj_1` — **nichts** | `obj_1/hole_4` |
+  | ins Leere | `obj_1` — **keine Abwahl** | nichts gewählt |
+
+  Ab dem zweiten Klick fuhr die Ansicht mit VTKs Trackball: links dreht,
+  nichts wählt aus, kein Kontextmenü. **Das ist auch die erste Meldung:**
+  Die Vorgabe *war* `solidon`, in der Datei wie im Menü — sie hielt nur
+  keine zwei Klicks lang. Behoben, indem der Stil über pyvistas eigene
+  Eigenschaft gesetzt wird (`plotter.iren.style = style`): Dieselbe Zeile,
+  die ihn vorher wegnahm, setzt ihn jetzt wieder.
+  `tests/test_viewport_decisions.py::test_the_style_survives_what_pyvista_does_on_a_double_click`
+  misst an einem echten `pv.Plotter(off_screen=True)` und ruft die Methode,
+  die den Schaden anrichtete; mit der alten Bauart ist er rot.
+
+  Der Griff (`set_gizmo`) behält seinen `set_navigation`-Ruf am Zugende:
+  `enable_trackball_style` tauscht `_style_class` selbst aus, statt es nur
+  erneut durchzusetzen. Nachgemessen im Bewegen-Modus — Klick ins Leere und
+  Klick auf das Teil, beide Male bleibt der eigene Stil.
+
+- [x] **Der Haken im Menü folgte dem Einstellungsdialog nicht.** Der
+  Zwilling, und er stand im Docstring des Tests, der ihn hätte finden sollen:
+  `test_switching_moves_the_tick` begründet sich mit „nicht aber, wenn die
+  Einstellung von woanders kommt, etwa aus dem Einstellungsdialog" — und
+  fährt `action_navigation`, also den Weg über das Menü. Der genannte Weg
+  geht über `_apply_settings`, und dort standen drei der fünf Aktionsgruppen:
+  Darstellung, Schattierung, Projektion. **Thema und Navigation fehlten, und
+  genau diese beiden bietet der Dialog an.** Wer die Steuerung dort umstellte,
+  fuhr mit der neuen und las im Menü weiter die alte als aktiv.
+  `tests/test_interface_limits.py::test_the_tick_follows_a_change_from_the_settings_dialog`
+  fährt jetzt den genannten Weg.
+
+- [x] **Die Steuerung bleibt am Gerät** — nachgemessen und nicht behauptet:
+  `action_navigation` und `action_settings` schreiben beide über
+  `save_settings`, und `load_settings` liest das Feld zurück. Als
+  Nicht-Befund festgehalten, damit die Frage nicht zweimal gestellt wird.
+
+- [ ] **Der Punkt für den Changelog steht noch aus.** Die Fassung 0.3.2 ist
+  gebaut (`website/dl/`), und ihr Abschnitt kündigt die neue Steuerung an —
+  ausgerechnet die, die nach zwei Klicks nicht mehr fuhr. Der Fund gehört
+  deshalb in den **nächsten** Abschnitt und nicht in den ausgelieferten; der
+  Satz dafür steht bereit: „Ein zweiter Klick auf dieselbe Stelle wählt die
+  Bohrung darunter, ein Klick daneben hebt die Auswahl auf — und die
+  eingestellte Steuerung bleibt dabei die eingestellte." Die Entscheidung,
+  welche Fassung das ist, gehört zum Release und nicht hierher.
