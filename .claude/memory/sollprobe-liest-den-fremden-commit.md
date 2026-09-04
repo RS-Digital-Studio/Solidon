@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 4e2b249b-1d42-4020-bb0e-bdcf350ef625
-  modified: 2026-08-30T21:08:01.391Z
+  modified: 2026-09-03T22:53:50.515Z
 ---
 
 Am 30.08.2026 meldete meine Sollprobe nach `afebc431` die Datei
@@ -36,6 +36,25 @@ Umfangsprobe, `--numstat`, `--stat`. Nie gegen `HEAD`. Dasselbe gilt für
 Sollprobe eine fremde Datei, ist die erste Frage nicht „was habe ich falsch
 gemacht", sondern `git log --oneline -3`: Steht der eigene Commit dort nicht
 mehr an erster Stelle, hat die Probe jemand anderen gemessen.
+
+**Und der Fall ohne Fehlalarm, der gefährlicher ist: zwei eigene Messungen,
+die sich widersprechen.** Am 04.09.2026 las ich `git show HEAD:tests/test_toolchain.py`
+und fand eine Zeile nicht, die im Baum stand — ein Beleg dafür, dass HEAD einen
+roten Wächter trug. Zur Bestätigung baute ich zwei Minuten später einen
+Probe-Worktree auf HEAD und fuhr den Wächter dort: **grün**.
+
+Beide Messungen waren sauber. Dazwischen hatte eine fremde Sitzung genau diese
+Reparatur committet, und „HEAD" bedeutete beim zweiten Mal einen anderen Stand
+(`b02a2110` → `fd2c852f`). Der Schluss, zu dem ich fast gekommen wäre — „HEAD
+war doch grün, die Zeile ist Kosmetik" — hätte einen echten Blocker als
+Nichtigkeit abgelegt: Sechs Tests wären in der CI rot geworden.
+
+Das ist die unauffälligere Bauart, weil der übliche Reflex hier in die falsche
+Richtung zeigt. Widersprechen sich zwei eigene Messungen, sucht man den
+**Messfehler** — nicht die Bewegung des Gegenstands. Im geteilten Baum ist die
+Bewegung aber die häufigere Erklärung, und der Test darauf ist eine Zeile:
+`git rev-parse HEAD` vor und nach der Messreihe, oder gleich beide Messungen
+gegen denselben festgehaltenen Hash.
 
 Zwei Nachträge von 15, die denselben Fall am selben Abend unabhängig
 aufgeschrieben hatte (ihre Notiz ist zugunsten dieser gelöscht):

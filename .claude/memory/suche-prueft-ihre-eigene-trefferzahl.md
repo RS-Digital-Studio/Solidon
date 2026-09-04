@@ -10,6 +10,21 @@ metadata:
 
 Zwei Fälle vom 30.08.2026, dieselbe Wurzel:
 
+**Und die Gegenrichtung, 04.09.2026 — sie ist die gefährlichere.** Vor einem
+Release sollte belegt werden, dass zwei committete Zeilen wirklich an der
+Spitze stehen: `git show origin/main:… | grep -A 2 "self._redraw_layer()"` gab
+**null** Treffer. Das sah aus wie „meine Zeilen sind aus dem Commit gefallen"
+— an einem Abend, an dem genau das viermal passiert war. Sie standen da; ein
+zwölfzeiliger Kommentar lag dazwischen, und `-A 2` reichte nicht bis dahin.
+
+**Ein Alarm fühlt sich nach Sorgfalt an, und deshalb wird er seltener
+nachgeprüft als eine Entwarnung.** Wer Entwarnung misst, zweifelt vielleicht
+noch; wer Alarm misst, handelt — und schickt eine andere Sitzung nachts um
+zwei einen verlorenen Commit suchen, den es nie gab. Bei `grep -A`/`-B` also
+den Kontext an der Sache bemessen, nicht an der Gewohnheit, und den Fund
+gegenprüfen, **bevor** er gemeldet wird.
+
+
 **Der Filter, der die Frage nie gestellt hat.** Nach einer Änderung an
 `list_top` sollte geprüft werden, ob sie Tests bricht:
 `pytest -k "list_top or drop"` meldete **4 passed**. Der betroffene Test heißt
