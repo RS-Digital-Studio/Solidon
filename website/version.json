@@ -1,243 +1,123 @@
 {
-  "version": "0.3.1",
+  "version": "0.3.2",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.3.1.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.1.exe",
-      "size": 219341762,
-      "sha256": "5cb4e38e60fefb1a8a6ad58c0c9c9174eae92ae732a171926fd69d963aa54e8b"
+      "file": "Solidon3D-Setup-0.3.2.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.2.exe",
+      "size": 219358595,
+      "sha256": "ba9249280c49a2e55231f41e5f91bf0ab16e302795c2bac1fa7fda6b8f97a36d"
     },
     "linux": {
-      "file": "Solidon3D-0.3.1-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.1-x86_64.flatpak",
-      "size": 272117360,
-      "sha256": "04ec37a852db62f3bca8589fdd8fc7f183afa9d24acb08b036de18d1a4a60883"
+      "file": "Solidon3D-0.3.2-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.2-x86_64.flatpak",
+      "size": 272117112,
+      "sha256": "9dac54257cef3a9db2b9bb8638431940743ce646c220a911e5a0ef5a39c9af17"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.3.1-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.1-macos-arm64.pkg",
-      "size": 295861352,
-      "sha256": "8c82624a76efbf13b9f30ab25ad6f49ad3032450b6e47c524cc3175ecbfd6116"
+      "file": "Solidon3D-0.3.2-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.2-macos-arm64.pkg",
+      "size": 295876255,
+      "sha256": "d18c8bd36ae57895a2ebc3f4e4d63349efd98ffd8d346887b66d1d98ac3cfc1c"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.3.1-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.1-macos-x86_64.pkg",
-      "size": 329383753,
-      "sha256": "665f35903dae7fbb5c3370c8823d668d7b427b62542957ca249f18da5341643c"
+      "file": "Solidon3D-0.3.2-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.2-macos-x86_64.pkg",
+      "size": 329406150,
+      "sha256": "26ef3b23c923276db5874b7ae013e22323392b66c298175228d89c7467294456"
     }
   },
   "changes": {
     "de": [
-      "Erkannte Merkmale lassen sich verschieben, drehen, verdoppeln und entfernen: eine Bohrung, ein Zapfen oder eine Kuppel — die Kuppel ohne Drehen, weil sie keine Lage hat.",
-      "In der Größe ändern lässt sich jetzt auch ein Zapfen oder eine Kuppel; bisher konnte das nur eine Bohrung.",
-      "Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.",
-      "Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.",
-      "Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen.",
-      "Der Bewegungsgriff sitzt an dem, was gewählt ist — bei einer Bohrung an ihrer Öffnung statt in der Mitte des Teils.",
-      "Bewegt wird, was ausgewählt ist: Mit markierter Bohrung versetzen Griff und Leiste die Bohrung, nicht mehr das ganze Teil.",
-      "Beim Ziehen zeigt eine durchsichtige Vorschau, wohin die Bohrung wandert, und ein blasses Abbild, wo sie herkommt.",
-      "Der Schatten läuft beim Verschieben mit und zeigt damit die Höhe über der Platte.",
-      "Die Ansicht hat eine eigene Steuerung, und sie ist die neue Vorgabe: Links ziehen verschiebt, rechts dreht, das gedrückte Mausrad kippt, das Rad zoomt.",
-      "Mit W, A, S und D fliegt man durch die Szene, Q und E kippen — der Flug geht durch ein Teil hindurch, während der Zoom davor stehen bleibt.",
-      "Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, für Bambu Studio, Orca und PrusaSlicer, für das CAD und für Blender bleiben.",
-      "Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene.",
-      "Länge und Breite einer gewählten Zeichnung sind bedienbar; die Zeichnung folgt der geänderten Zahl samt ihren Maßen.",
-      "Ein falsch gesetztes Maß lässt sich einzeln zurücknehmen, statt nur zusammen mit allen anderen.",
-      "Wer eine Skizze hochgezogen hat, findet im Dialog auch den Weg zum Abziehen wieder.",
-      "Ein getipptes Maß gilt, wie es getippt wurde: Aus 0,1 wird nicht mehr 0,166667.",
-      "Das erste Modell eines Projekts liegt mittig auf dem Druckbett, statt dort, wo seine Datei es ablegt; jedes weitere behält seine Lage.",
-      "Eine kaputte Datei wird beim Öffnen abgelehnt, statt angenommen zu werden und beim Speichern im Projekt zu landen.",
-      "Die Absage nennt den Grund — leer, abgeschnitten, keine STL, kein 3MF, ohne Dreiecke, mit unbrauchbaren Koordinaten — und bietet *Andere Datei wählen* an.",
-      "Der abgebrochene Download einer Modelldatei wird als solcher erkannt.",
-      "Der Druckdialog zeigt die Profile, die zum eingestellten Drucker passen, statt eines Bestands von 1001 Einträgen.",
-      "Bei einem Elegoo Centauri Carbon sind es vier, und das richtige ist vorausgewählt.",
-      "Ein Wechsel des Druckers im Projekt zieht Bauraum, Düse und Startcode mit — ein Prusa-Projekt bekommt nicht mehr die Maschine des Elegoo.",
-      "Der Slicer bekommt die Maschinenangabe mit und liefert eine Druckdatei zurück, statt den Lauf mit „nicht zum Drucker passend“ abzubrechen.",
-      "Gesperrte Knöpfe nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.",
-      "Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Erzeugen* im Modell-Dialog.",
-      "Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.",
-      "Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen.",
-      "Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.",
-      "Ordnet der Chat Objekte auf Druckplatten an, ist das Ergebnis danach im Bild zu sehen.",
-      "Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht, und trägt seine Handlung; wo keine steht, ist er ein reiner Hinweis.",
-      "Der Chat kennt die neuen Handlungen an erkannten Merkmalen und führt sie auf Zuruf aus."
+      "Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.",
+      "Auch *Bohrung verschließen* füllt genau die Bohrung: Der Pfropfen ragt nicht mehr in eine Nut und macht das Teil nicht dicker.",
+      "Eine Kugelpfanne wird auch in fein vernetzten Modellen als Kugelfläche erkannt und nicht als Senkung; sie trägt damit die Handlungen, die zu ihr gehören.",
+      "Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.",
+      "Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.",
+      "Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren.",
+      "Die Vorschau verschwindet, sobald die Änderung übernommen ist; bisher lag der Vergleichskörper mit dem Band „noch nicht übernommen“ über der fertigen Bohrung.",
+      "Die Leertaste blendet wieder nur dort zwischen Vorher und Nachher um, wo eine Vorschau steht, und nicht mehr überall in der Anwendung.",
+      "Eine Bohrung leuchtet nicht mehr in der Auswahlfarbe, wenn gar nichts ausgewählt ist.",
+      "Drehbogen, Schatten, Zugmarken und der Ring des Pinsels verschwinden mit dem Vorgang, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen.",
+      "Ein Maß bleibt bei seinem Teil, auch wenn die Ansicht auf eine andere Druckplatte oder auf alle umschaltet.",
+      "Passt nicht alles auf eine Platte, entstehen so viele Platten wie nötig; bisher blieb der Rest neben dem Bett liegen, wo er nicht druckbar ist.",
+      "Der Merkmalsspeicher großer Modelle bleibt begrenzt; bisher konnte er bis zu einem Gigabyte belegen."
     ],
     "en": [
-      "Recognised features can be moved, rotated, duplicated and removed: a hole, a peg or a dome — the dome without rotating, as it has no orientation.",
-      "Resizing now works for a peg or a dome as well; until now only a hole could be resized.",
-      "The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.",
-      "A moved hole stays the same hole: every fit that refers to it keeps its reference.",
-      "Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing.",
-      "The move handle sits on whatever is selected — on a hole at its opening, no longer in the middle of the part.",
-      "What is selected is what moves: with a hole selected, handle and toolbar move the hole, not the whole part.",
-      "While dragging, a transparent preview shows where the hole is going and a pale copy where it came from.",
-      "The shadow follows while moving and thereby shows the height above the bed.",
-      "The view has a control scheme of its own, and it is the new default: dragging left pans, right orbits, the pressed wheel tilts, the wheel zooms.",
-      "W, A, S and D fly through the scene, Q and E tilt — the flight passes through a part, while zooming stops in front of it.",
-      "Anyone used to a different scheme picks it in the settings: those for Cura, for Bambu Studio, Orca and PrusaSlicer, for a CAD program and for Blender remain.",
-      "The entry *Fit to view* frames the part you clicked; with nothing selected, the whole scene as before.",
-      "Length and width of a selected drawing can be edited; the drawing follows the changed number together with its dimensions.",
-      "A dimension set by mistake can be undone on its own, instead of only together with all the others.",
-      "After extruding a sketch, the dialog also offers the way back to cutting it away.",
-      "A typed dimension counts as typed: 0.1 no longer becomes 0.166667.",
-      "The first model of a project sits centred on the print bed instead of wherever its file puts it; every further one keeps its position.",
-      "A broken file is refused when opening, instead of being accepted and ending up in the project when you save.",
-      "The refusal names the reason — empty, truncated, not an STL, not a 3MF, without triangles, with unusable coordinates — and offers *Choose another file*.",
-      "An interrupted download of a model file is recognised as such.",
-      "The print dialog shows the profiles that match the selected printer, instead of a stock of 1001 entries.",
-      "For an Elegoo Centauri Carbon that is four, with the right one preselected.",
-      "Changing the printer in the project brings build volume, nozzle and start code along — a Prusa project no longer gets the Elegoo's machine.",
-      "The slicer is given the machine details and returns a print file, instead of aborting with “not compatible with printer”.",
-      "Locked buttons now say on the button what they are missing — by mouse, by keyboard and for a screen reader.",
-      "Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Create* in the model dialog.",
-      "Refusals no longer end with the sentence alone, but with the way out.",
-      "An unexpected error is explained in the language you have set, instead of reciting an internal English text.",
-      "If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.",
-      "When the chat arranges objects on print beds, the result is visible in the view afterwards.",
-      "A finding about an assembly points at the body it concerns and carries its action; where none is offered, it is a plain note.",
-      "The chat knows the new actions on recognised features and carries them out on request."
+      "Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.",
+      "The command *Fill a bore* now fills exactly the bore as well: the plug no longer protrudes into a groove or makes the part thicker.",
+      "A spherical socket is recognised as a sphere and not as a countersink even in finely meshed models, so it carries the actions that belong to it.",
+      "A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.",
+      "When rotating too, a through hole says if it no longer goes through at its new orientation.",
+      "A newly created feature appears at the end of the object tree, not in the middle of the older ones.",
+      "The preview disappears once the change is applied; until now the comparison body with its “not yet applied” banner stayed on top of the finished hole.",
+      "The space bar again toggles between before and after only where a preview is shown, and no longer everywhere in the application.",
+      "A hole no longer glows in the selection colour when nothing is selected at all.",
+      "The rotation arc, the shadow, the drag markers and the brush ring disappear with the action they belong to — including on tool change, undo or closing the project.",
+      "A measurement stays with its part, even when the view switches to another print bed or to all of them.",
+      "If not everything fits on one bed, as many beds are created as needed; until now the remainder was left beside the bed, where it cannot be printed.",
+      "The feature cache of large models stays bounded; until now it could occupy up to a gigabyte."
     ],
     "es": [
-      "Las características reconocidas se pueden mover, girar, duplicar y quitar: un taladro, una espiga o una cúpula; la cúpula sin girar, porque no tiene orientación.",
-      "Cambiar el tamaño funciona ahora también en una espiga o una cúpula; hasta ahora solo en un taladro.",
-      "Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.",
-      "Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.",
-      "Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio.",
-      "El asa de movimiento se sitúa en lo seleccionado: en un taladro, en su boca, y no en el centro de la pieza.",
-      "Se mueve lo que está seleccionado: con un taladro marcado, el asa y la barra desplazan el taladro, no la pieza entera.",
-      "Al arrastrar, una vista previa transparente muestra hacia dónde va el taladro y una copia pálida de dónde viene.",
-      "La sombra acompaña el desplazamiento y muestra así la altura sobre la placa.",
-      "La vista tiene un control propio, y es el nuevo predeterminado: arrastrar con el izquierdo desplaza, con el derecho gira, la rueda pulsada inclina y la rueda acerca.",
-      "Con W, A, S y D se vuela por la escena, y Q y E inclinan; el vuelo atraviesa una pieza, mientras que el zoom se detiene delante.",
-      "Quien esté acostumbrado a otro control lo elige en los ajustes: siguen los esquemas de Cura, de Bambu Studio, Orca y PrusaSlicer, de un CAD y de Blender.",
-      "La entrada *Ajustar a la vista* encuadra la pieza pulsada; sin selección, toda la escena como hasta ahora.",
-      "La longitud y la anchura de un dibujo seleccionado son editables; el dibujo sigue la cifra modificada junto con sus cotas.",
-      "Una cota mal puesta se puede deshacer por sí sola, y no solo junto con todas las demás.",
-      "Tras extruir un croquis, el diálogo vuelve a ofrecer también el camino para restarlo.",
-      "Una cota escrita vale tal como se escribió: 0,1 ya no se convierte en 0,166667.",
-      "El primer modelo de un proyecto queda centrado en la placa de impresión y no donde lo deja su archivo; los siguientes conservan su posición.",
-      "Un archivo defectuoso se rechaza al abrirlo, en vez de aceptarse y acabar en el proyecto al guardar.",
-      "El rechazo indica el motivo — vacío, truncado, no es STL, no es 3MF, sin triángulos, con coordenadas inservibles — y ofrece *Elegir otro archivo*.",
-      "La descarga interrumpida de un archivo de modelo se reconoce como tal.",
-      "El diálogo de impresión muestra los perfiles que corresponden a la impresora ajustada, en vez de un fondo de 1001 entradas.",
-      "Con una Elegoo Centauri Carbon son cuatro, y el correcto viene preseleccionado.",
-      "Cambiar la impresora del proyecto arrastra volumen de impresión, boquilla y código de inicio: un proyecto Prusa ya no recibe la máquina de la Elegoo.",
-      "El slicer recibe los datos de la máquina y devuelve un archivo de impresión, en vez de abortar con «no compatible con la impresora».",
-      "Los botones bloqueados indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.",
-      "Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Generar* en el diálogo de modelo.",
-      "Los rechazos no terminan solo con la frase, sino con la salida.",
-      "Un error inesperado se explica en el idioma ajustado, en vez de recitar un texto interno en inglés.",
-      "Si una referencia a una característica es ambigua, el chat se detiene, resalta los candidatos en la imagen y pregunta, indicando el cuerpo al que pertenece cada uno.",
-      "Cuando el chat distribuye objetos en placas de impresión, el resultado se ve después en la imagen.",
-      "Un hallazgo sobre un conjunto señala el cuerpo del que se trata y lleva su acción; donde no hay ninguna, es un simple aviso.",
-      "El chat conoce las nuevas acciones sobre características reconocidas y las ejecuta cuando se le pide."
+      "Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.",
+      "El comando *Cerrar un taladro* rellena ahora exactamente el taladro: el tapón ya no sobresale hacia una ranura ni engrosa la pieza.",
+      "Una cuenca esférica se reconoce como superficie esférica y no como avellanado, también en modelos de malla fina, y ofrece así las acciones que le corresponden.",
+      "Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.",
+      "También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.",
+      "Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores.",
+      "La vista previa desaparece en cuanto se aplica el cambio; hasta ahora el cuerpo de comparación con la banda «aún no aplicado» quedaba sobre el taladro terminado.",
+      "La barra espaciadora vuelve a alternar entre antes y después solo donde hay una vista previa, y ya no en toda la aplicación.",
+      "Un taladro ya no se ilumina en el color de selección cuando no hay nada seleccionado.",
+      "El arco de giro, la sombra, las marcas de arrastre y el anillo del pincel desaparecen con la acción a la que pertenecen, también al cambiar de herramienta o cerrar.",
+      "Una medida permanece en su pieza, aunque la vista cambie a otra placa de impresión o a todas.",
+      "Si no cabe todo en una placa, se crean tantas placas como haga falta; hasta ahora el resto quedaba junto a la mesa, donde no se puede imprimir.",
+      "La memoria de características de modelos grandes se mantiene acotada; hasta ahora podía ocupar hasta un gigabyte."
     ],
     "fr": [
-      "Les caractéristiques reconnues peuvent être déplacées, tournées, dupliquées et retirées : un perçage, un tenon ou un dôme ; le dôme sans rotation, faute d'orientation.",
-      "Le redimensionnement fonctionne aussi pour un tenon ou un dôme ; jusqu'ici, seul un perçage le permettait.",
-      "Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.",
-      "Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.",
-      "Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence.",
-      "La poignée de déplacement se place sur ce qui est sélectionné : sur un perçage, à son ouverture, et non au centre de la pièce.",
-      "Ce qui est sélectionné est ce qui bouge : avec un perçage sélectionné, la poignée et la barre déplacent le perçage, non la pièce entière.",
-      "Pendant le glissement, un aperçu transparent montre où va le perçage et une image pâle son point de départ.",
-      "L'ombre suit le déplacement et indique ainsi la hauteur au-dessus du plateau.",
-      "La vue a sa propre commande, et elle est la nouvelle valeur par défaut : glisser à gauche déplace, à droite fait tourner, la molette pressée incline, la molette zoome.",
-      "W, A, S et D permettent de voler dans la scène, Q et E inclinent ; le vol traverse une pièce, tandis que le zoom s'arrête devant.",
-      "Qui préfère une autre commande la choisit dans les réglages : les schémas Cura, Bambu Studio, Orca et PrusaSlicer, CAO et Blender restent en place.",
-      "L'entrée *Ajuster à la vue* cadre la pièce cliquée ; sans sélection, toute la scène comme avant.",
-      "La longueur et la largeur d'un dessin sélectionné sont modifiables ; le dessin suit la valeur modifiée avec ses cotes.",
-      "Une cote mal placée s'annule seule, et non plus uniquement avec toutes les autres.",
-      "Après avoir extrudé une esquisse, la boîte de dialogue propose aussi le chemin pour la soustraire.",
-      "Une cote saisie vaut telle qu'elle a été saisie : 0,1 ne devient plus 0,166667.",
-      "Le premier modèle d'un projet est centré sur le plateau d'impression au lieu de l'endroit fixé par son fichier ; les suivants gardent leur position.",
-      "Un fichier défectueux est refusé à l'ouverture, au lieu d'être accepté et de finir dans le projet à l'enregistrement.",
-      "Le refus indique la raison — vide, tronqué, pas un STL, pas un 3MF, sans triangles, coordonnées inutilisables — et propose *Choisir un autre fichier*.",
-      "Le téléchargement interrompu d'un fichier de modèle est reconnu comme tel.",
-      "La boîte de dialogue d'impression affiche les profils correspondant à l'imprimante réglée, au lieu d'un stock de 1001 entrées.",
-      "Pour une Elegoo Centauri Carbon, ce sont quatre profils, le bon étant présélectionné.",
-      "Changer d'imprimante dans le projet entraîne volume d'impression, buse et code de départ : un projet Prusa ne reçoit plus la machine de l'Elegoo.",
-      "Le slicer reçoit les données de la machine et renvoie un fichier d'impression, au lieu d'abandonner avec « incompatible avec l'imprimante ».",
-      "Les boutons verrouillés indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.",
-      "Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Créer* dans la boîte de dialogue de modèle.",
-      "Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.",
-      "Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais.",
-      "Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.",
-      "Lorsque la discussion répartit des objets sur des plateaux d'impression, le résultat est ensuite visible dans la vue.",
-      "Un constat sur un assemblage désigne le corps concerné et porte son action ; là où il n'y en a pas, c'est une simple indication.",
-      "La discussion connaît les nouvelles actions sur les caractéristiques reconnues et les exécute sur demande."
+      "Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.",
+      "La commande *Reboucher un perçage* comble désormais exactement le perçage : le bouchon ne dépasse plus dans une rainure et n'épaissit plus la pièce.",
+      "Une cuvette sphérique est reconnue comme surface sphérique et non comme fraisure, même dans un maillage fin, et porte donc les actions qui lui reviennent.",
+      "Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.",
+      "Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.",
+      "Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes.",
+      "L'aperçu disparaît dès que la modification est appliquée ; jusqu'ici le corps de comparaison portant « pas encore appliqué » restait au-dessus du perçage terminé.",
+      "La barre d'espace bascule de nouveau entre avant et après uniquement là où un aperçu est affiché, et non plus partout dans l'application.",
+      "Un perçage ne s'illumine plus dans la couleur de sélection lorsque rien n'est sélectionné.",
+      "L'arc de rotation, l'ombre, les repères de glissement et l'anneau du pinceau disparaissent avec l'action à laquelle ils appartiennent, y compris au changement d'outil ou à la fermeture.",
+      "Une mesure reste sur sa pièce, même si la vue passe à un autre plateau d'impression ou à tous.",
+      "Si tout ne tient pas sur un plateau, autant de plateaux que nécessaire sont créés ; jusqu'ici le reste restait à côté du plateau, où il n'est pas imprimable.",
+      "La mémoire des caractéristiques des grands modèles reste bornée ; jusqu'ici elle pouvait occuper jusqu'à un gigaoctet."
     ],
     "it": [
-      "Le caratteristiche riconosciute si possono spostare, ruotare, duplicare e rimuovere: un foro, un perno o una cupola; la cupola senza rotazione, perché non ha orientamento.",
-      "Il ridimensionamento funziona ora anche per un perno o una cupola; finora solo per un foro.",
-      "I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.",
-      "Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.",
-      "Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio.",
-      "La maniglia di spostamento si trova su ciò che è selezionato: su un foro alla sua apertura, non più al centro del pezzo.",
-      "Si muove ciò che è selezionato: con un foro selezionato, maniglia e barra spostano il foro, non l'intero pezzo.",
-      "Durante il trascinamento, un'anteprima trasparente mostra dove va il foro e un'immagine pallida da dove viene.",
-      "L'ombra segue lo spostamento e mostra così l'altezza sopra il piano.",
-      "La vista ha un comando proprio, ed è la nuova impostazione predefinita: trascinare con il sinistro sposta, con il destro ruota, la rotellina premuta inclina e ingrandisce.",
-      "Con W, A, S e D si vola nella scena, Q ed E inclinano; il volo attraversa un pezzo, mentre lo zoom si ferma davanti.",
-      "Chi è abituato a un altro comando lo sceglie nelle impostazioni: restano gli schemi per Cura, per Bambu Studio, Orca e PrusaSlicer, per un CAD e per Blender.",
-      "La voce *Adatta alla vista* inquadra il pezzo selezionato; senza selezione, tutta la scena come prima.",
-      "Lunghezza e larghezza di un disegno selezionato sono modificabili; il disegno segue il numero cambiato insieme alle sue quote.",
-      "Una quota sbagliata si può annullare da sola, e non più solo insieme a tutte le altre.",
-      "Dopo aver estruso uno schizzo, la finestra offre di nuovo anche la via per sottrarlo.",
-      "Una quota digitata vale come è stata digitata: 0,1 non diventa più 0,166667.",
-      "Il primo modello di un progetto è centrato sul piano di stampa invece che dove lo mette il suo file; ogni altro mantiene la sua posizione.",
-      "Un file danneggiato viene rifiutato all'apertura, invece di essere accettato e finire nel progetto al salvataggio.",
-      "Il rifiuto indica il motivo — vuoto, troncato, non è un STL, non è un 3MF, senza triangoli, con coordinate inservibili — e offre *Scegli un altro file*.",
-      "Il download interrotto di un file di modello viene riconosciuto come tale.",
-      "La finestra di stampa mostra i profili corrispondenti alla stampante impostata, invece di un magazzino di 1001 voci.",
-      "Con una Elegoo Centauri Carbon sono quattro, e quello giusto è preselezionato.",
-      "Cambiare stampante nel progetto porta con sé volume di stampa, ugello e codice iniziale: un progetto Prusa non riceve più la macchina della Elegoo.",
-      "Lo slicer riceve i dati della macchina e restituisce un file di stampa, invece di interrompersi con «non compatibile con la stampante».",
-      "I pulsanti bloccati indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.",
-      "Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Crea* nella finestra del modello.",
-      "I rifiuti non finiscono con la sola frase, ma con la via d'uscita.",
-      "Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese.",
-      "Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.",
-      "Quando la chat dispone oggetti sui piani di stampa, il risultato è poi visibile nell'immagine.",
-      "Un rilievo su un assieme indica il corpo interessato e porta la sua azione; dove non ce n'è, è una semplice indicazione.",
-      "La chat conosce le nuove azioni sulle caratteristiche riconosciute e le esegue su richiesta."
+      "Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.",
+      "Il comando *Chiudi un foro* riempie ora esattamente il foro: il tappo non sporge più in una scanalatura né ingrossa il pezzo.",
+      "Una sede sferica viene riconosciuta come superficie sferica e non come svasatura, anche in modelli a mesh fitta, e offre così le azioni che le competono.",
+      "Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.",
+      "Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.",
+      "Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti.",
+      "L'anteprima scompare appena la modifica è applicata; finora il corpo di confronto con la fascia «non ancora applicato» restava sopra il foro finito.",
+      "La barra spaziatrice torna ad alternare prima e dopo solo dove c'è un'anteprima, e non più ovunque nell'applicazione.",
+      "Un foro non si illumina più nel colore della selezione quando non è selezionato nulla.",
+      "L'arco di rotazione, l'ombra, i segni di trascinamento e l'anello del pennello scompaiono con l'azione a cui appartengono, anche al cambio di strumento o alla chiusura.",
+      "Una misura resta sul suo pezzo, anche se la vista passa a un altro piano di stampa o a tutti.",
+      "Se non tutto entra su un piano, vengono creati tanti piani quanti servono; finora il resto restava accanto al piano, dove non è stampabile.",
+      "La memoria delle caratteristiche dei modelli grandi resta limitata; finora poteva occupare fino a un gigabyte."
     ],
     "pt": [
-      "As características reconhecidas podem ser movidas, rodadas, duplicadas e removidas: um furo, um pino ou uma cúpula; a cúpula sem rodar, por não ter orientação.",
-      "Redimensionar funciona agora também num pino ou numa cúpula; até agora, apenas num furo.",
-      "Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.",
-      "Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.",
-      "Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio.",
-      "A alça de movimento fica no que está selecionado: num furo, na sua abertura, e não no centro da peça.",
-      "Move-se o que está selecionado: com um furo marcado, a alça e a barra deslocam o furo, não a peça inteira.",
-      "Ao arrastar, uma pré-visualização transparente mostra para onde vai o furo e uma cópia pálida de onde veio.",
-      "A sombra acompanha o movimento e mostra assim a altura acima da mesa.",
-      "A vista tem um comando próprio, e é a nova predefinição: arrastar com o esquerdo desloca, com o direito roda, a roda premida inclina e a roda amplia.",
-      "Com W, A, S e D voa-se pela cena, e Q e E inclinam; o voo atravessa uma peça, enquanto a ampliação para à frente dela.",
-      "Quem está habituado a outro comando escolhe-o nas definições: mantêm-se os esquemas para Cura, para Bambu Studio, Orca e PrusaSlicer, para um CAD e para Blender.",
-      "A entrada *Ajustar à vista* enquadra a peça selecionada; sem seleção, toda a cena como antes.",
-      "O comprimento e a largura de um desenho selecionado são editáveis; o desenho segue o número alterado com as suas cotas.",
-      "Uma cota mal colocada pode ser anulada isoladamente, e não apenas com todas as outras.",
-      "Depois de extrudir um esboço, o diálogo volta a oferecer também o caminho para o subtrair.",
-      "Uma cota escrita vale como foi escrita: 0,1 já não se torna 0,166667.",
-      "O primeiro modelo de um projeto fica centrado na mesa de impressão em vez de onde o seu ficheiro o coloca; os restantes mantêm a sua posição.",
-      "Um ficheiro danificado é recusado ao abrir, em vez de ser aceite e acabar no projeto ao gravar.",
-      "A recusa indica o motivo — vazio, truncado, não é STL, não é 3MF, sem triângulos, com coordenadas inutilizáveis — e oferece *Escolher outro ficheiro*.",
-      "A transferência interrompida de um ficheiro de modelo é reconhecida como tal.",
-      "O diálogo de impressão mostra os perfis correspondentes à impressora definida, em vez de um acervo de 1001 entradas.",
-      "Com uma Elegoo Centauri Carbon são quatro, e o correto vem pré-selecionado.",
-      "Mudar a impressora no projeto arrasta volume de impressão, bico e código inicial: um projeto Prusa já não recebe a máquina da Elegoo.",
-      "O slicer recebe os dados da máquina e devolve um ficheiro de impressão, em vez de abortar com «não compatível com a impressora».",
-      "Os botões bloqueados indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.",
-      "Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.",
-      "As recusas não terminam apenas com a frase, mas com a saída.",
-      "Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês.",
-      "Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.",
-      "Quando o chat distribui objetos por mesas de impressão, o resultado fica depois visível na imagem.",
-      "Um achado sobre um conjunto aponta o corpo em questão e traz a sua ação; onde não há nenhuma, é uma simples indicação.",
-      "O chat conhece as novas ações sobre características reconhecidas e executa-as quando pedido."
+      "Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.",
+      "O comando *Fechar furo* preenche agora exatamente o furo: o tampão já não entra numa ranhura nem engrossa a peça.",
+      "Uma sede esférica é reconhecida como superfície esférica e não como escareamento, mesmo em modelos de malha fina, oferecendo as ações que lhe pertencem.",
+      "Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.",
+      "Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.",
+      "Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores.",
+      "A pré-visualização desaparece assim que a alteração é aplicada; até agora o corpo de comparação com a faixa «ainda não aplicado» ficava sobre o furo terminado.",
+      "A barra de espaços volta a alternar entre antes e depois apenas onde há uma pré-visualização, e já não em toda a aplicação.",
+      "Um furo já não brilha na cor de seleção quando não há nada selecionado.",
+      "O arco de rotação, a sombra, as marcas de arrasto e o anel do pincel desaparecem com a ação a que pertencem, também ao mudar de ferramenta ou fechar o projeto.",
+      "Uma medida permanece na sua peça, mesmo que a vista mude para outra mesa de impressão ou para todas.",
+      "Se não couber tudo numa mesa, são criadas tantas mesas quantas forem necessárias; até agora o resto ficava ao lado da mesa, onde não é imprimível.",
+      "A memória de características de modelos grandes mantém-se limitada; até agora podia ocupar até um gigabyte."
     ]
   },
   "notes_by_language": {
@@ -253,74 +133,29 @@
       {
         "title": "Erkannte Merkmale bearbeiten",
         "points": [
-          "Erkannte Merkmale lassen sich verschieben, drehen, verdoppeln und entfernen: eine Bohrung, ein Zapfen oder eine Kuppel — die Kuppel ohne Drehen, weil sie keine Lage hat.",
-          "In der Größe ändern lässt sich jetzt auch ein Zapfen oder eine Kuppel; bisher konnte das nur eine Bohrung.",
-          "Die gemessenen Werte stehen dabei schon in den Feldern — der Umweg über Verschließen und Neubohren an abgeschriebenen Zahlen entfällt.",
-          "Eine versetzte Bohrung bleibt dieselbe Bohrung: Jede Passung, die auf sie zeigt, behält ihren Bezug.",
-          "Wo eine Handlung für ein Merkmal keinen Sinn hat, steht sie weiter da und sagt in einem Satz, warum — statt still zu fehlen."
+          "Beim Versetzen, Drehen und Entfernen einer Bohrung bleibt an der alten Stelle kein Material stehen — auch an Teilen mit Nut oder Innenraum.",
+          "Auch *Bohrung verschließen* füllt genau die Bohrung: Der Pfropfen ragt nicht mehr in eine Nut und macht das Teil nicht dicker.",
+          "Eine Kugelpfanne wird auch in fein vernetzten Modellen als Kugelfläche erkannt und nicht als Senkung; sie trägt damit die Handlungen, die zu ihr gehören.",
+          "Eine verdoppelte Bohrung bekommt eine eigene Kennung und nicht die einer zuvor gelöschten; eine Passung zeigt damit weiter auf das Merkmal, das sie meint.",
+          "Auch beim Drehen sagt eine durchgehende Bohrung, wenn sie an der neuen Lage nicht mehr durchgeht.",
+          "Ein neu erzeugtes Merkmal steht im Objektbaum am Ende und nicht mitten zwischen den älteren."
         ]
       },
       {
-        "title": "Bewegen, Drehen und Auswählen",
+        "title": "Anzeige und Auswahl",
         "points": [
-          "Der Bewegungsgriff sitzt an dem, was gewählt ist — bei einer Bohrung an ihrer Öffnung statt in der Mitte des Teils.",
-          "Bewegt wird, was ausgewählt ist: Mit markierter Bohrung versetzen Griff und Leiste die Bohrung, nicht mehr das ganze Teil.",
-          "Beim Ziehen zeigt eine durchsichtige Vorschau, wohin die Bohrung wandert, und ein blasses Abbild, wo sie herkommt.",
-          "Der Schatten läuft beim Verschieben mit und zeigt damit die Höhe über der Platte."
+          "Die Vorschau verschwindet, sobald die Änderung übernommen ist; bisher lag der Vergleichskörper mit dem Band „noch nicht übernommen“ über der fertigen Bohrung.",
+          "Die Leertaste blendet wieder nur dort zwischen Vorher und Nachher um, wo eine Vorschau steht, und nicht mehr überall in der Anwendung.",
+          "Eine Bohrung leuchtet nicht mehr in der Auswahlfarbe, wenn gar nichts ausgewählt ist.",
+          "Drehbogen, Schatten, Zugmarken und der Ring des Pinsels verschwinden mit dem Vorgang, an dem sie hängen — auch beim Werkzeugwechsel, Zurücknehmen oder Schließen.",
+          "Ein Maß bleibt bei seinem Teil, auch wenn die Ansicht auf eine andere Druckplatte oder auf alle umschaltet."
         ]
       },
       {
-        "title": "Ansicht und Objektbaum",
+        "title": "Drucken und Arbeitsspeicher",
         "points": [
-          "Die Ansicht hat eine eigene Steuerung, und sie ist die neue Vorgabe: Links ziehen verschiebt, rechts dreht, das gedrückte Mausrad kippt, das Rad zoomt.",
-          "Mit W, A, S und D fliegt man durch die Szene, Q und E kippen — der Flug geht durch ein Teil hindurch, während der Zoom davor stehen bleibt.",
-          "Wer eine andere Steuerung gewohnt ist, wählt sie in den Einstellungen: Die Schemata für Cura, für Bambu Studio, Orca und PrusaSlicer, für das CAD und für Blender bleiben.",
-          "Der Eintrag *Einpassen* rahmt das angeklickte Teil formatfüllend; ohne Auswahl wie bisher die ganze Szene."
-        ]
-      },
-      {
-        "title": "Zeichnen und genaue Eingabe",
-        "points": [
-          "Länge und Breite einer gewählten Zeichnung sind bedienbar; die Zeichnung folgt der geänderten Zahl samt ihren Maßen.",
-          "Ein falsch gesetztes Maß lässt sich einzeln zurücknehmen, statt nur zusammen mit allen anderen.",
-          "Wer eine Skizze hochgezogen hat, findet im Dialog auch den Weg zum Abziehen wieder.",
-          "Ein getipptes Maß gilt, wie es getippt wurde: Aus 0,1 wird nicht mehr 0,166667."
-        ]
-      },
-      {
-        "title": "Öffnen, Speichern und Austauschdateien",
-        "points": [
-          "Das erste Modell eines Projekts liegt mittig auf dem Druckbett, statt dort, wo seine Datei es ablegt; jedes weitere behält seine Lage.",
-          "Eine kaputte Datei wird beim Öffnen abgelehnt, statt angenommen zu werden und beim Speichern im Projekt zu landen.",
-          "Die Absage nennt den Grund — leer, abgeschnitten, keine STL, kein 3MF, ohne Dreiecke, mit unbrauchbaren Koordinaten — und bietet *Andere Datei wählen* an.",
-          "Der abgebrochene Download einer Modelldatei wird als solcher erkannt."
-        ]
-      },
-      {
-        "title": "Drucken, Slicer und Filament",
-        "points": [
-          "Der Druckdialog zeigt die Profile, die zum eingestellten Drucker passen, statt eines Bestands von 1001 Einträgen.",
-          "Bei einem Elegoo Centauri Carbon sind es vier, und das richtige ist vorausgewählt.",
-          "Ein Wechsel des Druckers im Projekt zieht Bauraum, Düse und Startcode mit — ein Prusa-Projekt bekommt nicht mehr die Maschine des Elegoo.",
-          "Der Slicer bekommt die Maschinenangabe mit und liefert eine Druckdatei zurück, statt den Lauf mit „nicht zum Drucker passend“ abzubrechen."
-        ]
-      },
-      {
-        "title": "Meldungen, Knöpfe und Auskunft",
-        "points": [
-          "Gesperrte Knöpfe nennen jetzt am Knopf, was ihnen fehlt — mit der Maus, über die Tastatur und für einen Bildschirmleser.",
-          "Betroffen sind unter anderem *Slicen* und *Im Slicer öffnen* ohne eingerichteten Slicer, *Einfügen* im Bausteinkatalog und *Erzeugen* im Modell-Dialog.",
-          "Absagen enden nicht mit dem Satz allein, sondern mit dem Weg heraus.",
-          "Ein unerwarteter Fehler wird in der eingestellten Sprache erklärt, statt einen englischen Innentext vorzulesen."
-        ]
-      },
-      {
-        "title": "Chat und Modellunterstützung",
-        "points": [
-          "Ist ein Verweis auf ein Merkmal mehrdeutig, hält der Chat an, hebt die Kandidaten im Bild hervor und fragt nach — mit dem Körper, an dem jeder hängt.",
-          "Ordnet der Chat Objekte auf Druckplatten an, ist das Ergebnis danach im Bild zu sehen.",
-          "Ein Befund über eine Baugruppe zeigt auf den Körper, um den es geht, und trägt seine Handlung; wo keine steht, ist er ein reiner Hinweis.",
-          "Der Chat kennt die neuen Handlungen an erkannten Merkmalen und führt sie auf Zuruf aus."
+          "Passt nicht alles auf eine Platte, entstehen so viele Platten wie nötig; bisher blieb der Rest neben dem Bett liegen, wo er nicht druckbar ist.",
+          "Der Merkmalsspeicher großer Modelle bleibt begrenzt; bisher konnte er bis zu einem Gigabyte belegen."
         ]
       }
     ],
@@ -328,74 +163,29 @@
       {
         "title": "Editing recognised features",
         "points": [
-          "Recognised features can be moved, rotated, duplicated and removed: a hole, a peg or a dome — the dome without rotating, as it has no orientation.",
-          "Resizing now works for a peg or a dome as well; until now only a hole could be resized.",
-          "The measured values are already in the fields — no more filling in and re-drilling from numbers copied by hand.",
-          "A moved hole stays the same hole: every fit that refers to it keeps its reference.",
-          "Where an action makes no sense for a feature, it stays visible and says why in one sentence, instead of quietly missing."
+          "Moving, rotating or removing a hole leaves no material behind at its old position — on parts with a groove or a cavity as well.",
+          "The command *Fill a bore* now fills exactly the bore as well: the plug no longer protrudes into a groove or makes the part thicker.",
+          "A spherical socket is recognised as a sphere and not as a countersink even in finely meshed models, so it carries the actions that belong to it.",
+          "A duplicated hole gets an identity of its own rather than that of a deleted one, so a fit still refers to the feature it means.",
+          "When rotating too, a through hole says if it no longer goes through at its new orientation.",
+          "A newly created feature appears at the end of the object tree, not in the middle of the older ones."
         ]
       },
       {
-        "title": "Moving, rotating and selecting",
+        "title": "Display and selection",
         "points": [
-          "The move handle sits on whatever is selected — on a hole at its opening, no longer in the middle of the part.",
-          "What is selected is what moves: with a hole selected, handle and toolbar move the hole, not the whole part.",
-          "While dragging, a transparent preview shows where the hole is going and a pale copy where it came from.",
-          "The shadow follows while moving and thereby shows the height above the bed."
+          "The preview disappears once the change is applied; until now the comparison body with its “not yet applied” banner stayed on top of the finished hole.",
+          "The space bar again toggles between before and after only where a preview is shown, and no longer everywhere in the application.",
+          "A hole no longer glows in the selection colour when nothing is selected at all.",
+          "The rotation arc, the shadow, the drag markers and the brush ring disappear with the action they belong to — including on tool change, undo or closing the project.",
+          "A measurement stays with its part, even when the view switches to another print bed or to all of them."
         ]
       },
       {
-        "title": "View and object tree",
+        "title": "Printing and memory",
         "points": [
-          "The view has a control scheme of its own, and it is the new default: dragging left pans, right orbits, the pressed wheel tilts, the wheel zooms.",
-          "W, A, S and D fly through the scene, Q and E tilt — the flight passes through a part, while zooming stops in front of it.",
-          "Anyone used to a different scheme picks it in the settings: those for Cura, for Bambu Studio, Orca and PrusaSlicer, for a CAD program and for Blender remain.",
-          "The entry *Fit to view* frames the part you clicked; with nothing selected, the whole scene as before."
-        ]
-      },
-      {
-        "title": "Drawing and precise input",
-        "points": [
-          "Length and width of a selected drawing can be edited; the drawing follows the changed number together with its dimensions.",
-          "A dimension set by mistake can be undone on its own, instead of only together with all the others.",
-          "After extruding a sketch, the dialog also offers the way back to cutting it away.",
-          "A typed dimension counts as typed: 0.1 no longer becomes 0.166667."
-        ]
-      },
-      {
-        "title": "Opening, saving and exchange files",
-        "points": [
-          "The first model of a project sits centred on the print bed instead of wherever its file puts it; every further one keeps its position.",
-          "A broken file is refused when opening, instead of being accepted and ending up in the project when you save.",
-          "The refusal names the reason — empty, truncated, not an STL, not a 3MF, without triangles, with unusable coordinates — and offers *Choose another file*.",
-          "An interrupted download of a model file is recognised as such."
-        ]
-      },
-      {
-        "title": "Printing, slicer and filament",
-        "points": [
-          "The print dialog shows the profiles that match the selected printer, instead of a stock of 1001 entries.",
-          "For an Elegoo Centauri Carbon that is four, with the right one preselected.",
-          "Changing the printer in the project brings build volume, nozzle and start code along — a Prusa project no longer gets the Elegoo's machine.",
-          "The slicer is given the machine details and returns a print file, instead of aborting with “not compatible with printer”."
-        ]
-      },
-      {
-        "title": "Messages, buttons and information",
-        "points": [
-          "Locked buttons now say on the button what they are missing — by mouse, by keyboard and for a screen reader.",
-          "Among them are *Slice* and *Open in slicer* without a slicer set up, *Insert* in the parts catalogue and *Create* in the model dialog.",
-          "Refusals no longer end with the sentence alone, but with the way out.",
-          "An unexpected error is explained in the language you have set, instead of reciting an internal English text."
-        ]
-      },
-      {
-        "title": "Chat and model support",
-        "points": [
-          "If a reference to a feature is ambiguous, the chat stops, highlights the candidates in the view and asks — naming the body each one belongs to.",
-          "When the chat arranges objects on print beds, the result is visible in the view afterwards.",
-          "A finding about an assembly points at the body it concerns and carries its action; where none is offered, it is a plain note.",
-          "The chat knows the new actions on recognised features and carries them out on request."
+          "If not everything fits on one bed, as many beds are created as needed; until now the remainder was left beside the bed, where it cannot be printed.",
+          "The feature cache of large models stays bounded; until now it could occupy up to a gigabyte."
         ]
       }
     ],
@@ -403,74 +193,29 @@
       {
         "title": "Editar características reconocidas",
         "points": [
-          "Las características reconocidas se pueden mover, girar, duplicar y quitar: un taladro, una espiga o una cúpula; la cúpula sin girar, porque no tiene orientación.",
-          "Cambiar el tamaño funciona ahora también en una espiga o una cúpula; hasta ahora solo en un taladro.",
-          "Los valores medidos ya están en los campos: se acaba el rodeo de tapar y volver a taladrar con cifras copiadas a mano.",
-          "Un taladro desplazado sigue siendo el mismo taladro: todo ajuste que lo señala conserva su referencia.",
-          "Cuando una acción no tiene sentido para una característica, sigue visible y explica en una frase por qué, en lugar de faltar en silencio."
+          "Al desplazar, girar o quitar un taladro no queda material en su sitio anterior, tampoco en piezas con ranura o hueco interior.",
+          "El comando *Cerrar un taladro* rellena ahora exactamente el taladro: el tapón ya no sobresale hacia una ranura ni engrosa la pieza.",
+          "Una cuenca esférica se reconoce como superficie esférica y no como avellanado, también en modelos de malla fina, y ofrece así las acciones que le corresponden.",
+          "Un taladro duplicado recibe una identidad propia y no la de uno borrado antes, de modo que un ajuste sigue señalando la característica que designa.",
+          "También al girar, un taladro pasante avisa si en la nueva orientación ya no atraviesa.",
+          "Una característica recién creada aparece al final del árbol de objetos y no entre las anteriores."
         ]
       },
       {
-        "title": "Mover, girar y seleccionar",
+        "title": "Visualización y selección",
         "points": [
-          "El asa de movimiento se sitúa en lo seleccionado: en un taladro, en su boca, y no en el centro de la pieza.",
-          "Se mueve lo que está seleccionado: con un taladro marcado, el asa y la barra desplazan el taladro, no la pieza entera.",
-          "Al arrastrar, una vista previa transparente muestra hacia dónde va el taladro y una copia pálida de dónde viene.",
-          "La sombra acompaña el desplazamiento y muestra así la altura sobre la placa."
+          "La vista previa desaparece en cuanto se aplica el cambio; hasta ahora el cuerpo de comparación con la banda «aún no aplicado» quedaba sobre el taladro terminado.",
+          "La barra espaciadora vuelve a alternar entre antes y después solo donde hay una vista previa, y ya no en toda la aplicación.",
+          "Un taladro ya no se ilumina en el color de selección cuando no hay nada seleccionado.",
+          "El arco de giro, la sombra, las marcas de arrastre y el anillo del pincel desaparecen con la acción a la que pertenecen, también al cambiar de herramienta o cerrar.",
+          "Una medida permanece en su pieza, aunque la vista cambie a otra placa de impresión o a todas."
         ]
       },
       {
-        "title": "Vista y árbol de objetos",
+        "title": "Impresión y memoria",
         "points": [
-          "La vista tiene un control propio, y es el nuevo predeterminado: arrastrar con el izquierdo desplaza, con el derecho gira, la rueda pulsada inclina y la rueda acerca.",
-          "Con W, A, S y D se vuela por la escena, y Q y E inclinan; el vuelo atraviesa una pieza, mientras que el zoom se detiene delante.",
-          "Quien esté acostumbrado a otro control lo elige en los ajustes: siguen los esquemas de Cura, de Bambu Studio, Orca y PrusaSlicer, de un CAD y de Blender.",
-          "La entrada *Ajustar a la vista* encuadra la pieza pulsada; sin selección, toda la escena como hasta ahora."
-        ]
-      },
-      {
-        "title": "Dibujo y entrada precisa",
-        "points": [
-          "La longitud y la anchura de un dibujo seleccionado son editables; el dibujo sigue la cifra modificada junto con sus cotas.",
-          "Una cota mal puesta se puede deshacer por sí sola, y no solo junto con todas las demás.",
-          "Tras extruir un croquis, el diálogo vuelve a ofrecer también el camino para restarlo.",
-          "Una cota escrita vale tal como se escribió: 0,1 ya no se convierte en 0,166667."
-        ]
-      },
-      {
-        "title": "Apertura, guardado y archivos de intercambio",
-        "points": [
-          "El primer modelo de un proyecto queda centrado en la placa de impresión y no donde lo deja su archivo; los siguientes conservan su posición.",
-          "Un archivo defectuoso se rechaza al abrirlo, en vez de aceptarse y acabar en el proyecto al guardar.",
-          "El rechazo indica el motivo — vacío, truncado, no es STL, no es 3MF, sin triángulos, con coordenadas inservibles — y ofrece *Elegir otro archivo*.",
-          "La descarga interrumpida de un archivo de modelo se reconoce como tal."
-        ]
-      },
-      {
-        "title": "Impresión, slicer y filamento",
-        "points": [
-          "El diálogo de impresión muestra los perfiles que corresponden a la impresora ajustada, en vez de un fondo de 1001 entradas.",
-          "Con una Elegoo Centauri Carbon son cuatro, y el correcto viene preseleccionado.",
-          "Cambiar la impresora del proyecto arrastra volumen de impresión, boquilla y código de inicio: un proyecto Prusa ya no recibe la máquina de la Elegoo.",
-          "El slicer recibe los datos de la máquina y devuelve un archivo de impresión, en vez de abortar con «no compatible con la impresora»."
-        ]
-      },
-      {
-        "title": "Mensajes, botones e información",
-        "points": [
-          "Los botones bloqueados indican ahora en el propio botón lo que les falta: con el ratón, con el teclado y para un lector de pantalla.",
-          "Entre ellos, *Laminar* y *Abrir en el slicer* sin slicer configurado, *Insertar* en el catálogo de bloques y *Generar* en el diálogo de modelo.",
-          "Los rechazos no terminan solo con la frase, sino con la salida.",
-          "Un error inesperado se explica en el idioma ajustado, en vez de recitar un texto interno en inglés."
-        ]
-      },
-      {
-        "title": "Chat y compatibilidad con modelos",
-        "points": [
-          "Si una referencia a una característica es ambigua, el chat se detiene, resalta los candidatos en la imagen y pregunta, indicando el cuerpo al que pertenece cada uno.",
-          "Cuando el chat distribuye objetos en placas de impresión, el resultado se ve después en la imagen.",
-          "Un hallazgo sobre un conjunto señala el cuerpo del que se trata y lleva su acción; donde no hay ninguna, es un simple aviso.",
-          "El chat conoce las nuevas acciones sobre características reconocidas y las ejecuta cuando se le pide."
+          "Si no cabe todo en una placa, se crean tantas placas como haga falta; hasta ahora el resto quedaba junto a la mesa, donde no se puede imprimir.",
+          "La memoria de características de modelos grandes se mantiene acotada; hasta ahora podía ocupar hasta un gigabyte."
         ]
       }
     ],
@@ -478,74 +223,29 @@
       {
         "title": "Modifier les caractéristiques reconnues",
         "points": [
-          "Les caractéristiques reconnues peuvent être déplacées, tournées, dupliquées et retirées : un perçage, un tenon ou un dôme ; le dôme sans rotation, faute d'orientation.",
-          "Le redimensionnement fonctionne aussi pour un tenon ou un dôme ; jusqu'ici, seul un perçage le permettait.",
-          "Les valeurs mesurées sont déjà dans les champs : plus besoin de reboucher puis repercer avec des chiffres recopiés à la main.",
-          "Un perçage déplacé reste le même perçage : tout ajustement qui le désigne conserve sa référence.",
-          "Lorsqu'une action n'a pas de sens pour une caractéristique, elle reste visible et explique en une phrase pourquoi, au lieu de manquer en silence."
+          "Déplacer, tourner ou retirer un perçage ne laisse plus de matière à son ancien emplacement, y compris sur des pièces à rainure ou à cavité.",
+          "La commande *Reboucher un perçage* comble désormais exactement le perçage : le bouchon ne dépasse plus dans une rainure et n'épaissit plus la pièce.",
+          "Une cuvette sphérique est reconnue comme surface sphérique et non comme fraisure, même dans un maillage fin, et porte donc les actions qui lui reviennent.",
+          "Un perçage dupliqué reçoit sa propre identité et non celle d'un perçage supprimé, si bien qu'un ajustement désigne toujours la caractéristique voulue.",
+          "Lors de la rotation aussi, un perçage débouchant signale s'il ne débouche plus dans sa nouvelle orientation.",
+          "Une caractéristique nouvellement créée apparaît à la fin de l'arborescence et non au milieu des anciennes."
         ]
       },
       {
-        "title": "Déplacer, tourner et sélectionner",
+        "title": "Affichage et sélection",
         "points": [
-          "La poignée de déplacement se place sur ce qui est sélectionné : sur un perçage, à son ouverture, et non au centre de la pièce.",
-          "Ce qui est sélectionné est ce qui bouge : avec un perçage sélectionné, la poignée et la barre déplacent le perçage, non la pièce entière.",
-          "Pendant le glissement, un aperçu transparent montre où va le perçage et une image pâle son point de départ.",
-          "L'ombre suit le déplacement et indique ainsi la hauteur au-dessus du plateau."
+          "L'aperçu disparaît dès que la modification est appliquée ; jusqu'ici le corps de comparaison portant « pas encore appliqué » restait au-dessus du perçage terminé.",
+          "La barre d'espace bascule de nouveau entre avant et après uniquement là où un aperçu est affiché, et non plus partout dans l'application.",
+          "Un perçage ne s'illumine plus dans la couleur de sélection lorsque rien n'est sélectionné.",
+          "L'arc de rotation, l'ombre, les repères de glissement et l'anneau du pinceau disparaissent avec l'action à laquelle ils appartiennent, y compris au changement d'outil ou à la fermeture.",
+          "Une mesure reste sur sa pièce, même si la vue passe à un autre plateau d'impression ou à tous."
         ]
       },
       {
-        "title": "Vue et arborescence des objets",
+        "title": "Impression et mémoire",
         "points": [
-          "La vue a sa propre commande, et elle est la nouvelle valeur par défaut : glisser à gauche déplace, à droite fait tourner, la molette pressée incline, la molette zoome.",
-          "W, A, S et D permettent de voler dans la scène, Q et E inclinent ; le vol traverse une pièce, tandis que le zoom s'arrête devant.",
-          "Qui préfère une autre commande la choisit dans les réglages : les schémas Cura, Bambu Studio, Orca et PrusaSlicer, CAO et Blender restent en place.",
-          "L'entrée *Ajuster à la vue* cadre la pièce cliquée ; sans sélection, toute la scène comme avant."
-        ]
-      },
-      {
-        "title": "Dessin et saisie précise",
-        "points": [
-          "La longueur et la largeur d'un dessin sélectionné sont modifiables ; le dessin suit la valeur modifiée avec ses cotes.",
-          "Une cote mal placée s'annule seule, et non plus uniquement avec toutes les autres.",
-          "Après avoir extrudé une esquisse, la boîte de dialogue propose aussi le chemin pour la soustraire.",
-          "Une cote saisie vaut telle qu'elle a été saisie : 0,1 ne devient plus 0,166667."
-        ]
-      },
-      {
-        "title": "Ouverture, enregistrement et fichiers d'échange",
-        "points": [
-          "Le premier modèle d'un projet est centré sur le plateau d'impression au lieu de l'endroit fixé par son fichier ; les suivants gardent leur position.",
-          "Un fichier défectueux est refusé à l'ouverture, au lieu d'être accepté et de finir dans le projet à l'enregistrement.",
-          "Le refus indique la raison — vide, tronqué, pas un STL, pas un 3MF, sans triangles, coordonnées inutilisables — et propose *Choisir un autre fichier*.",
-          "Le téléchargement interrompu d'un fichier de modèle est reconnu comme tel."
-        ]
-      },
-      {
-        "title": "Impression, slicer et filament",
-        "points": [
-          "La boîte de dialogue d'impression affiche les profils correspondant à l'imprimante réglée, au lieu d'un stock de 1001 entrées.",
-          "Pour une Elegoo Centauri Carbon, ce sont quatre profils, le bon étant présélectionné.",
-          "Changer d'imprimante dans le projet entraîne volume d'impression, buse et code de départ : un projet Prusa ne reçoit plus la machine de l'Elegoo.",
-          "Le slicer reçoit les données de la machine et renvoie un fichier d'impression, au lieu d'abandonner avec « incompatible avec l'imprimante »."
-        ]
-      },
-      {
-        "title": "Messages, boutons et informations",
-        "points": [
-          "Les boutons verrouillés indiquent désormais sur le bouton ce qui leur manque : à la souris, au clavier et pour un lecteur d'écran.",
-          "Parmi eux : *Trancher* et *Ouvrir dans le slicer* sans slicer configuré, *Insérer* dans le catalogue de blocs et *Créer* dans la boîte de dialogue de modèle.",
-          "Les refus ne s'arrêtent plus à la phrase seule, mais indiquent l'issue.",
-          "Une erreur inattendue est expliquée dans la langue réglée, au lieu de réciter un texte interne en anglais."
-        ]
-      },
-      {
-        "title": "Discussion et prise en charge des modèles",
-        "points": [
-          "Si une référence à une caractéristique est ambiguë, la discussion s'arrête, met les candidats en évidence dans la vue et demande, en nommant le corps de chacun.",
-          "Lorsque la discussion répartit des objets sur des plateaux d'impression, le résultat est ensuite visible dans la vue.",
-          "Un constat sur un assemblage désigne le corps concerné et porte son action ; là où il n'y en a pas, c'est une simple indication.",
-          "La discussion connaît les nouvelles actions sur les caractéristiques reconnues et les exécute sur demande."
+          "Si tout ne tient pas sur un plateau, autant de plateaux que nécessaire sont créés ; jusqu'ici le reste restait à côté du plateau, où il n'est pas imprimable.",
+          "La mémoire des caractéristiques des grands modèles reste bornée ; jusqu'ici elle pouvait occuper jusqu'à un gigaoctet."
         ]
       }
     ],
@@ -553,74 +253,29 @@
       {
         "title": "Modificare le caratteristiche riconosciute",
         "points": [
-          "Le caratteristiche riconosciute si possono spostare, ruotare, duplicare e rimuovere: un foro, un perno o una cupola; la cupola senza rotazione, perché non ha orientamento.",
-          "Il ridimensionamento funziona ora anche per un perno o una cupola; finora solo per un foro.",
-          "I valori misurati sono già nei campi: non serve più chiudere e riforare con numeri ricopiati a mano.",
-          "Un foro spostato resta lo stesso foro: ogni accoppiamento che lo indica conserva il suo riferimento.",
-          "Quando un'azione non ha senso per una caratteristica, resta visibile e spiega in una frase perché, invece di mancare in silenzio."
+          "Spostando, ruotando o rimuovendo un foro non resta materiale nel punto precedente, nemmeno su pezzi con scanalatura o cavità.",
+          "Il comando *Chiudi un foro* riempie ora esattamente il foro: il tappo non sporge più in una scanalatura né ingrossa il pezzo.",
+          "Una sede sferica viene riconosciuta come superficie sferica e non come svasatura, anche in modelli a mesh fitta, e offre così le azioni che le competono.",
+          "Un foro duplicato riceve un'identità propria e non quella di uno eliminato prima, così un accoppiamento indica ancora la caratteristica che intende.",
+          "Anche ruotando, un foro passante segnala se nella nuova orientazione non passa più.",
+          "Una caratteristica appena creata compare in fondo all'albero degli oggetti e non tra quelle precedenti."
         ]
       },
       {
-        "title": "Spostare, ruotare e selezionare",
+        "title": "Visualizzazione e selezione",
         "points": [
-          "La maniglia di spostamento si trova su ciò che è selezionato: su un foro alla sua apertura, non più al centro del pezzo.",
-          "Si muove ciò che è selezionato: con un foro selezionato, maniglia e barra spostano il foro, non l'intero pezzo.",
-          "Durante il trascinamento, un'anteprima trasparente mostra dove va il foro e un'immagine pallida da dove viene.",
-          "L'ombra segue lo spostamento e mostra così l'altezza sopra il piano."
+          "L'anteprima scompare appena la modifica è applicata; finora il corpo di confronto con la fascia «non ancora applicato» restava sopra il foro finito.",
+          "La barra spaziatrice torna ad alternare prima e dopo solo dove c'è un'anteprima, e non più ovunque nell'applicazione.",
+          "Un foro non si illumina più nel colore della selezione quando non è selezionato nulla.",
+          "L'arco di rotazione, l'ombra, i segni di trascinamento e l'anello del pennello scompaiono con l'azione a cui appartengono, anche al cambio di strumento o alla chiusura.",
+          "Una misura resta sul suo pezzo, anche se la vista passa a un altro piano di stampa o a tutti."
         ]
       },
       {
-        "title": "Vista e albero degli oggetti",
+        "title": "Stampa e memoria",
         "points": [
-          "La vista ha un comando proprio, ed è la nuova impostazione predefinita: trascinare con il sinistro sposta, con il destro ruota, la rotellina premuta inclina e ingrandisce.",
-          "Con W, A, S e D si vola nella scena, Q ed E inclinano; il volo attraversa un pezzo, mentre lo zoom si ferma davanti.",
-          "Chi è abituato a un altro comando lo sceglie nelle impostazioni: restano gli schemi per Cura, per Bambu Studio, Orca e PrusaSlicer, per un CAD e per Blender.",
-          "La voce *Adatta alla vista* inquadra il pezzo selezionato; senza selezione, tutta la scena come prima."
-        ]
-      },
-      {
-        "title": "Disegno e immissione precisa",
-        "points": [
-          "Lunghezza e larghezza di un disegno selezionato sono modificabili; il disegno segue il numero cambiato insieme alle sue quote.",
-          "Una quota sbagliata si può annullare da sola, e non più solo insieme a tutte le altre.",
-          "Dopo aver estruso uno schizzo, la finestra offre di nuovo anche la via per sottrarlo.",
-          "Una quota digitata vale come è stata digitata: 0,1 non diventa più 0,166667."
-        ]
-      },
-      {
-        "title": "Apertura, salvataggio e file di scambio",
-        "points": [
-          "Il primo modello di un progetto è centrato sul piano di stampa invece che dove lo mette il suo file; ogni altro mantiene la sua posizione.",
-          "Un file danneggiato viene rifiutato all'apertura, invece di essere accettato e finire nel progetto al salvataggio.",
-          "Il rifiuto indica il motivo — vuoto, troncato, non è un STL, non è un 3MF, senza triangoli, con coordinate inservibili — e offre *Scegli un altro file*.",
-          "Il download interrotto di un file di modello viene riconosciuto come tale."
-        ]
-      },
-      {
-        "title": "Stampa, slicer e filamento",
-        "points": [
-          "La finestra di stampa mostra i profili corrispondenti alla stampante impostata, invece di un magazzino di 1001 voci.",
-          "Con una Elegoo Centauri Carbon sono quattro, e quello giusto è preselezionato.",
-          "Cambiare stampante nel progetto porta con sé volume di stampa, ugello e codice iniziale: un progetto Prusa non riceve più la macchina della Elegoo.",
-          "Lo slicer riceve i dati della macchina e restituisce un file di stampa, invece di interrompersi con «non compatibile con la stampante»."
-        ]
-      },
-      {
-        "title": "Messaggi, pulsanti e informazioni",
-        "points": [
-          "I pulsanti bloccati indicano ora sul pulsante ciò che manca: col mouse, da tastiera e per un lettore di schermo.",
-          "Tra questi *Affetta* e *Apri nello slicer* senza slicer configurato, *Inserisci* nel catalogo dei blocchi e *Crea* nella finestra del modello.",
-          "I rifiuti non finiscono con la sola frase, ma con la via d'uscita.",
-          "Un errore inatteso viene spiegato nella lingua impostata, invece di recitare un testo interno in inglese."
-        ]
-      },
-      {
-        "title": "Chat e assistenza dei modelli",
-        "points": [
-          "Se un riferimento a una caratteristica è ambiguo, la chat si ferma, evidenzia i candidati nell'immagine e chiede, indicando il corpo di ciascuno.",
-          "Quando la chat dispone oggetti sui piani di stampa, il risultato è poi visibile nell'immagine.",
-          "Un rilievo su un assieme indica il corpo interessato e porta la sua azione; dove non ce n'è, è una semplice indicazione.",
-          "La chat conosce le nuove azioni sulle caratteristiche riconosciute e le esegue su richiesta."
+          "Se non tutto entra su un piano, vengono creati tanti piani quanti servono; finora il resto restava accanto al piano, dove non è stampabile.",
+          "La memoria delle caratteristiche dei modelli grandi resta limitata; finora poteva occupare fino a un gigabyte."
         ]
       }
     ],
@@ -628,78 +283,33 @@
       {
         "title": "Editar características reconhecidas",
         "points": [
-          "As características reconhecidas podem ser movidas, rodadas, duplicadas e removidas: um furo, um pino ou uma cúpula; a cúpula sem rodar, por não ter orientação.",
-          "Redimensionar funciona agora também num pino ou numa cúpula; até agora, apenas num furo.",
-          "Os valores medidos já estão nos campos: acaba o desvio de tapar e voltar a furar com números copiados à mão.",
-          "Um furo deslocado continua a ser o mesmo furo: cada ajuste que o indica mantém a sua referência.",
-          "Quando uma ação não faz sentido para uma característica, continua visível e explica numa frase o motivo, em vez de faltar em silêncio."
+          "Ao deslocar, rodar ou remover um furo não fica material no local anterior, mesmo em peças com ranhura ou cavidade.",
+          "O comando *Fechar furo* preenche agora exatamente o furo: o tampão já não entra numa ranhura nem engrossa a peça.",
+          "Uma sede esférica é reconhecida como superfície esférica e não como escareamento, mesmo em modelos de malha fina, oferecendo as ações que lhe pertencem.",
+          "Um furo duplicado recebe uma identidade própria e não a de um apagado antes, pelo que um ajuste continua a indicar a característica que designa.",
+          "Também ao rodar, um furo passante avisa se na nova orientação já não atravessa.",
+          "Uma característica recém-criada aparece no fim da árvore de objetos e não entre as anteriores."
         ]
       },
       {
-        "title": "Mover, rodar e selecionar",
+        "title": "Visualização e seleção",
         "points": [
-          "A alça de movimento fica no que está selecionado: num furo, na sua abertura, e não no centro da peça.",
-          "Move-se o que está selecionado: com um furo marcado, a alça e a barra deslocam o furo, não a peça inteira.",
-          "Ao arrastar, uma pré-visualização transparente mostra para onde vai o furo e uma cópia pálida de onde veio.",
-          "A sombra acompanha o movimento e mostra assim a altura acima da mesa."
+          "A pré-visualização desaparece assim que a alteração é aplicada; até agora o corpo de comparação com a faixa «ainda não aplicado» ficava sobre o furo terminado.",
+          "A barra de espaços volta a alternar entre antes e depois apenas onde há uma pré-visualização, e já não em toda a aplicação.",
+          "Um furo já não brilha na cor de seleção quando não há nada selecionado.",
+          "O arco de rotação, a sombra, as marcas de arrasto e o anel do pincel desaparecem com a ação a que pertencem, também ao mudar de ferramenta ou fechar o projeto.",
+          "Uma medida permanece na sua peça, mesmo que a vista mude para outra mesa de impressão ou para todas."
         ]
       },
       {
-        "title": "Vista e árvore de objetos",
+        "title": "Impressão e memória",
         "points": [
-          "A vista tem um comando próprio, e é a nova predefinição: arrastar com o esquerdo desloca, com o direito roda, a roda premida inclina e a roda amplia.",
-          "Com W, A, S e D voa-se pela cena, e Q e E inclinam; o voo atravessa uma peça, enquanto a ampliação para à frente dela.",
-          "Quem está habituado a outro comando escolhe-o nas definições: mantêm-se os esquemas para Cura, para Bambu Studio, Orca e PrusaSlicer, para um CAD e para Blender.",
-          "A entrada *Ajustar à vista* enquadra a peça selecionada; sem seleção, toda a cena como antes."
-        ]
-      },
-      {
-        "title": "Desenho e introdução precisa",
-        "points": [
-          "O comprimento e a largura de um desenho selecionado são editáveis; o desenho segue o número alterado com as suas cotas.",
-          "Uma cota mal colocada pode ser anulada isoladamente, e não apenas com todas as outras.",
-          "Depois de extrudir um esboço, o diálogo volta a oferecer também o caminho para o subtrair.",
-          "Uma cota escrita vale como foi escrita: 0,1 já não se torna 0,166667."
-        ]
-      },
-      {
-        "title": "Abertura, gravação e ficheiros de troca",
-        "points": [
-          "O primeiro modelo de um projeto fica centrado na mesa de impressão em vez de onde o seu ficheiro o coloca; os restantes mantêm a sua posição.",
-          "Um ficheiro danificado é recusado ao abrir, em vez de ser aceite e acabar no projeto ao gravar.",
-          "A recusa indica o motivo — vazio, truncado, não é STL, não é 3MF, sem triângulos, com coordenadas inutilizáveis — e oferece *Escolher outro ficheiro*.",
-          "A transferência interrompida de um ficheiro de modelo é reconhecida como tal."
-        ]
-      },
-      {
-        "title": "Impressão, slicer e filamento",
-        "points": [
-          "O diálogo de impressão mostra os perfis correspondentes à impressora definida, em vez de um acervo de 1001 entradas.",
-          "Com uma Elegoo Centauri Carbon são quatro, e o correto vem pré-selecionado.",
-          "Mudar a impressora no projeto arrasta volume de impressão, bico e código inicial: um projeto Prusa já não recebe a máquina da Elegoo.",
-          "O slicer recebe os dados da máquina e devolve um ficheiro de impressão, em vez de abortar com «não compatível com a impressora»."
-        ]
-      },
-      {
-        "title": "Mensagens, botões e informação",
-        "points": [
-          "Os botões bloqueados indicam agora no próprio botão o que lhes falta: com o rato, pelo teclado e para um leitor de ecrã.",
-          "Entre eles *Fatiar* e *Abrir no fatiador* sem fatiador configurado, *Inserir* no catálogo de blocos e *Criar* no diálogo de modelo.",
-          "As recusas não terminam apenas com a frase, mas com a saída.",
-          "Um erro inesperado é explicado no idioma definido, em vez de recitar um texto interno em inglês."
-        ]
-      },
-      {
-        "title": "Chat e apoio de modelos",
-        "points": [
-          "Se uma referência a uma característica for ambígua, o chat para, destaca os candidatos na imagem e pergunta, indicando o corpo a que cada um pertence.",
-          "Quando o chat distribui objetos por mesas de impressão, o resultado fica depois visível na imagem.",
-          "Um achado sobre um conjunto aponta o corpo em questão e traz a sua ação; onde não há nenhuma, é uma simples indicação.",
-          "O chat conhece as novas ações sobre características reconhecidas e executa-as quando pedido."
+          "Se não couber tudo numa mesa, são criadas tantas mesas quantas forem necessárias; até agora o resto ficava ao lado da mesa, onde não é imprimível.",
+          "A memória de características de modelos grandes mantém-se limitada; até agora podia ocupar até um gigabyte."
         ]
       }
     ]
   },
-  "changes_total": 85,
-  "signature": "4fdbb09d28739bcf5b97fe33a645b553bcb3bd9fd47a12d8cf39b6b5b9b34271df001b9608f977dc394a17876b06e792f079fbccf304f7dac65537f47251e10d"
+  "changes_total": 13,
+  "signature": "98390a54743d87a85e394339c8e37b62c9491290e1ad6b22fe39590c96fd1f51ecdfc523f2b785dc64ade331b6150c99b0a12571bd409a6f839595d04d45ac0e"
 }
