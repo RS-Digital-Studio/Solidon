@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 import numpy as np
+import shapely
 from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
@@ -815,26 +816,26 @@ def support_map(
             kind="support", title=TITLES["support"], values=(), unit="mm", low=0.0, high=0.0
         )
 
-    result = slice_body(mesh, layer_height)
+    # **Nur, was die Stützen brauchen.** ``slice_body`` misst per Vorgabe auch
+    # die gedruckte Struktur — kleinste Breite, Brückenweite, Konturzahl —, und
+    # diese Karte liest davon **nichts**: :func:`_overhang_regions` nimmt allein
+    # ``layer.overhangs``. Der Schalter dafür steht seit je da, für die
+    # Orientierungssuche (§28.2); hier fehlte er.
+    #
+    # Gemessen am Besenhalter (59 740 Dreiecke, 27,2 mm hoch, 04.09.2026):
+    # 13,81 s für die ganze Karte, davon **12,10 s** in ``_survives_opening``
+    # → ``_eroded`` — der morphologischen Öffnung, mit der die kleinste
+    # Struktur je Schicht gesucht wird. 916 Aufrufe für 136 Schichten, und
+    # kein einziger für eine Zahl, die hier jemand liest.
+    result = slice_body(mesh, layer_height, detail="support")
     regions = _overhang_regions(result)
     centres = np.asarray(body.triangles_center, dtype=float)
     field = solid_field(mesh)
     drops = _drop_below(mesh, field, centres)
 
     values = np.zeros(len(centres), dtype=float)
-    marked: list[int] = []
-    for index, centre in enumerate(centres):
-        if cancelled is not None and index % CANCEL_EVERY == 0:
-            # Die teuerste Schleife der sieben Karten: je Dreieck ein Punkt in
-            # shapely. Nicht bei jedem Durchgang gefragt — der Abbruch ist eine
-            # Sache von Millisekunden, das Prüfen einer von Nanosekunden, und
-            # eine Million Abfragen kosten mehr als sie einbringen.
-            cancelled.raise_if_cancelled()
-        region = _region_at(regions, float(centre[2]), layer_height)
-        if region is None or not _inside(region, float(centre[0]), float(centre[1])):
-            continue
-        values[index] = drops[index]
-        marked.append(index)
+    marked = _marked_by_layer(regions, centres, layer_height, cancelled)
+    values[marked] = drops[marked]
 
     return AnalysisMap(
         kind="support",
@@ -863,9 +864,73 @@ def _overhang_regions(result: SliceResult) -> list[tuple[float, list[Any]]]:
     return regions
 
 
+def _marked_by_layer(
+    regions: list[tuple[float, list[Any]]],
+    centres: Any,
+    layer_height: float,
+    cancelled: CancelToken | None,
+) -> Any:
+    """Welche Dreiecke in einem ungestützten Bereich liegen — schichtweise.
+
+    **Die teuerste Schleife der sieben Karten, und sie fragte je Dreieck
+    einzeln.** Gemessen am Spiderman (885 570 Dreiecke, 04.09.2026): 85,3 s in
+    ``_inside`` und 38,5 s in ``_region_at``, darin 216 Millionen Aufrufe von
+    ``abs`` — die lineare Suche nach der passenden Schicht, einmal je Dreieck
+    über 244 Schichten.
+
+    Beides fällt weg, wenn man die Frage umdreht: nicht „welche Schicht gehört
+    zu diesem Dreieck", sondern „welche Dreiecke gehören zu dieser Schicht".
+    Die Schichthöhen sind sortiert, also findet ``searchsorted`` die Gruppe in
+    einem Zug; und ``shapely.intersects_xy`` prüft alle Punkte einer Schicht
+    gegen eine Kontur auf einmal, statt für jeden ein ``Point``-Objekt zu
+    bauen.
+
+    **Die Auswahlregel bleibt Zeichen für Zeichen dieselbe:** Die alte Fassung
+    nahm die **erste** Schicht der Liste mit ``|h - z| <= layer_height``, und
+    die Liste steht aufsteigend — also die unterste, die in Reichweite liegt.
+    ``searchsorted(..., z - layer_height, "left")`` trifft genau sie. Wo zwei
+    Schichten in Reichweite sind, bekommt weiterhin die untere den Zuschlag;
+    eine „nächstgelegene" wäre eine andere Karte.
+    """
+    if not regions or not len(centres):
+        return np.zeros(0, dtype=int)
+
+    heights = np.asarray([height for height, _ in regions], dtype=float)
+    lowest = np.searchsorted(heights, centres[:, 2] - layer_height, side="left")
+    # Wo die Einfügestelle hinter das Ende zeigt, gibt es keine Schicht mehr;
+    # der Index wird geklemmt und die Reichweite darunter aussortiert.
+    clamped = np.clip(lowest, 0, len(heights) - 1)
+    in_reach = np.abs(heights[clamped] - centres[:, 2]) <= layer_height
+
+    found: list[Any] = []
+    for layer in np.unique(clamped[in_reach]):
+        if cancelled is not None:
+            # Je Schicht statt je Dreieck: Der Abbruch ist eine Sache von
+            # Millisekunden, und eine Schicht ist die Einheit, in der hier
+            # gerechnet wird.
+            cancelled.raise_if_cancelled()
+        members = np.flatnonzero(in_reach & (clamped == layer))
+        if not len(members):
+            continue
+        xs = centres[members, 0]
+        ys = centres[members, 1]
+        inside = np.zeros(len(members), dtype=bool)
+        for shape in regions[int(layer)][1]:
+            inside |= shapely.intersects_xy(shape, xs, ys)
+        found.append(members[inside])
+
+    return np.concatenate(found) if found else np.zeros(0, dtype=int)
+
+
 def _region_at(
     regions: list[tuple[float, list[Any]]], z: float, layer_height: float
 ) -> list[Any] | None:
+    """Die ungestützten Konturen der Schicht, in der dieses Dreieck liegt.
+
+    Steht neben :func:`_marked_by_layer` und wird von ihm **nicht** benutzt —
+    für einen einzelnen Punkt ist die gerade Suche billiger als der Aufbau
+    einer Gruppierung, und `maps.location_of` fragt genau so.
+    """
     for height, shapes in regions:
         if abs(height - z) <= layer_height:
             return shapes

@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -673,3 +674,63 @@ def test_the_support_map_keeps_its_own_limit(profile: Profile) -> None:
     finally:
         maps.MAP_LIMIT_TRIANGLES = karten
         maps.SUPPORT_LIMIT_TRIANGLES = stuetze
+
+
+def test_the_support_map_marks_the_same_triangles_as_a_triangle_by_triangle_search(
+    profile: Profile,
+) -> None:
+    """Der Umbau der teuersten Schleife darf keine andere Karte ergeben.
+
+    **Was er ersetzt:** Vorher fragte die Karte je Dreieck einzeln — welche
+    Schicht gehört dazu (lineare Suche über alle), und liegt der Punkt in einer
+    ihrer Konturen (ein ``Point``-Objekt und ein ``intersects`` je Kontur).
+    Gemessen am Spiderman mit 885 570 Dreiecken (04.09.2026): 85,3 s in
+    ``_inside``, 38,5 s in ``_region_at``, darin 216 Millionen Aufrufe von
+    ``abs``.
+
+    Jetzt läuft es schichtweise: ``searchsorted`` findet die Gruppe, und
+    ``shapely.intersects_xy`` prüft alle Punkte einer Schicht auf einmal. Die
+    ganze Karte fiel damit von 45,44 s auf 7,07 s.
+
+    **Geprüft wird nicht die Zeit, sondern die Gleichheit** — gegen eine
+    wörtliche Nachbildung der alten Schleife. Eine schnellere Karte, die andere
+    Dreiecke markiert, ist keine Optimierung.
+    """
+    from shapely.geometry import Point
+
+    from app.core.slice.analysis import slice_body
+
+    # **Der Prüfkörper muss die Auswahlregel treffen, nicht nur Überhänge
+    # haben.** Ein Pilz hat welche, aber seine Überhangschichten zeigen alle
+    # dieselbe Kontur — dort ist es gleich, welche von zwei benachbarten man
+    # nimmt, und die Mutation „nächstgelegene statt unterste" blieb grün.
+    # ``generated_figure`` hat 21 Überhangschichten, davon 14 näher als eine
+    # Schichthöhe am Nachbarn; dort entscheidet die Regel.
+    mesh = normalise(
+        read_mesh(
+            (Path(__file__).parent / "data" / "meshes" / "generated_figure.stl").read_bytes(),
+            ".stl",
+        ),
+        "mm",
+    ).mesh
+
+    result = slice_body(mesh, profile.printer.layer_height, detail="support")
+    regions = maps._overhang_regions(result)
+    assert regions, "der Prüfkörper hat keine Überhänge — dann prüft der Test nichts"
+
+    centres = np.asarray(mesh.raw.triangles_center, dtype=float)
+    zu_fuss: list[int] = []
+    for index, centre in enumerate(centres):
+        region = maps._region_at(regions, float(centre[2]), profile.printer.layer_height)
+        if region is None:
+            continue
+        punkt = Point(float(centre[0]), float(centre[1]))
+        if any(shape.intersects(punkt) for shape in region):
+            zu_fuss.append(index)
+
+    schichtweise = maps._marked_by_layer(regions, centres, profile.printer.layer_height, None)
+
+    assert zu_fuss, "keine markierten Dreiecke — der Prüfkörper trägt den Fall nicht"
+    assert set(zu_fuss) == set(schichtweise.tolist()), (
+        f"schichtweise markiert {len(schichtweise)} Dreiecke, Dreieck für Dreieck {len(zu_fuss)}"
+    )
