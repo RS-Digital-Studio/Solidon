@@ -2306,3 +2306,66 @@ def test_each_condition_of_the_countersink_rule_separates_something() -> None:
             f"Bedingung {bedingung!r} trennt nichts: die Senkung wird auch "
             f"als {gefunden.id} gefunden"
         )
+
+
+def test_the_search_does_not_rehash_the_mesh_for_every_patch() -> None:
+    """Die Erkennung liest die Normalen je Fleck — und hasht dabei nicht neu.
+
+    **Der teuerste Posten der Erkennung war Buchhaltung.** Jeder Zugriff auf
+    ``body.face_normals`` lässt ``trimesh`` prüfen, ob sich das Netz geändert
+    hat, und diese Prüfung hasht das ganze Netz. Gemessen am 04.09.2026 an
+    einem Segel mit 421 194 Dreiecken und 3362 Flecken: 227 036 Hashes,
+    **17,3 von 26,6 Sekunden** (cProfile), allein 4832 Aufrufe aus
+    ``fit_sphere``.
+
+    Mit ``Cache.__enter__`` um den Durchgang fällt die Prüfung weg, solange
+    niemand schreiben kann — und niemand kann: ``_one_body`` gibt bei Bedarf
+    ein neues Netz zurück, die vier Einpassungen lesen nur.
+
+        421 194 Dreiecke:    24,34 s ->  6,33 s
+        885 570 Dreiecke:    17,25 s -> 10,58 s
+        1 223 836 Dreiecke: 562,72 s -> 153,20 s
+
+    **Gezählt statt gestoppt**, denn eine Zeitmessung wäre maschinenabhängig
+    und würde in der Suite streuen. Gemessen wird die Sache selbst: Vor dem
+    Umbau kostete ``post_with_fillet.stl`` 3566 Hashes, danach **drei** — und
+    drei sind es an jedem der vier Korpusmodelle, gleich wie groß sie sind und
+    wie viele Merkmale sie tragen. Genau das ist die Zusage: Die Zahl hängt
+    nicht mehr an der Zahl der Flecken.
+    """
+    from app.core.perceive.features import forget_cache
+
+    def hashes_of(name: str) -> tuple[int, int]:
+        """Wie oft ``detect`` das Netz hasht — und wie viele Merkmale es fand.
+
+        Der Zähler steht in einer eigenen Funktion und nicht in der Schleife:
+        Ein Lambda, das eine Schleifenvariable fängt, sieht deren **letzten**
+        Wert, und der Zähler zählte dann für das falsche Modell.
+        """
+        mesh = plate(name)
+        forget_cache()
+        body = mesh.raw
+        treffer: list[int] = []
+        echt = body._cache._id_function
+        body._cache._id_function = lambda: (treffer.append(1), echt())[1]
+        try:
+            return len(detect(mesh)), len(treffer)
+        finally:
+            body._cache._id_function = echt
+
+    gezaehlt: dict[str, int] = {}
+    for name in ("plate_holes.stl", "post_with_fillet.stl"):
+        merkmale, treffer_zahl = hashes_of(name)
+        features = merkmale
+        gezaehlt[name] = treffer_zahl
+        assert features, f"{name} trägt keine Merkmale — dann prüft der Test nichts"
+        assert treffer_zahl < 50, (
+            f"{name}: {treffer_zahl} Hashes über das ganze Netz — die Sperre greift nicht"
+        )
+
+    # Und die eigentliche Zusage: Das größere Modell mit den meisten Flecken
+    # kostet nicht mehr Hashes als das kleine. Eine Obergrenze allein ginge
+    # durch, sobald jemand sie großzügig genug wählt.
+    assert gezaehlt["post_with_fillet.stl"] <= gezaehlt["plate_holes.stl"] + 2, (
+        f"die Zahl wächst mit dem Modell: {gezaehlt}"
+    )

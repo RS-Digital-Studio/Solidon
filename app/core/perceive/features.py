@@ -597,19 +597,30 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
         return dict(remembered)
 
     mesh = _one_body(mesh)
-    fitted = _fitted(mesh)
-    found: dict[FeatureId, Feature] = {}
-    for feature in [
-        *detect_holes(mesh, fitted.cylinders, fitted.cones),
-        *detect_pins(mesh, fitted.cylinders),
-        *detect_fillets(mesh, fitted.fillets),
-        *detect_cones(mesh, fitted.cones),
-        *detect_spheres(mesh, fitted.spheres),
-        *detect_tori(mesh, fitted.tori),
-        *detect_faces(mesh),
-        *detect_edge_loops(mesh),
-    ]:
-        found[feature.id] = feature
+    # **Die Sperre gehört um den ganzen Durchgang, nicht nur um die
+    # Einpassung.** Die Begründung steht bei ihrer Schwester in
+    # :func:`_fitted`; hier zählt die Reichweite. Gemessen am selben Segel mit
+    # 421 194 Dreiecken: nur in ``_fitted`` gesperrt bleiben 127 317 Hashes
+    # und 8,20 s, um den ganzen Durchgang gelegt sind es 6,38 s — die acht
+    # ``detect_*`` unten lesen dieselben Normalen noch einmal.
+    #
+    # Auf dem Netz **nach** ``_one_body`` und nicht auf dem übergebenen: Jenes
+    # gibt bei mehreren Komponenten ein neues zurück, und eine Sperre auf dem
+    # alten hielte ein Netz still, das niemand mehr liest.
+    with mesh.raw._cache:
+        fitted = _fitted(mesh)
+        found: dict[FeatureId, Feature] = {}
+        for feature in [
+            *detect_holes(mesh, fitted.cylinders, fitted.cones),
+            *detect_pins(mesh, fitted.cylinders),
+            *detect_fillets(mesh, fitted.fillets),
+            *detect_cones(mesh, fitted.cones),
+            *detect_spheres(mesh, fitted.spheres),
+            *detect_tori(mesh, fitted.tori),
+            *detect_faces(mesh),
+            *detect_edge_loops(mesh),
+        ]:
+            found[feature.id] = feature
     _log.info("detected %d features", len(found))
     _FEATURE_CACHE[key] = found
     _CACHE_INDICES[key] = sum(len(feature.face_indices) for feature in found.values())
@@ -675,139 +686,168 @@ def _fitted(mesh: MeshData) -> Fitted:
     if not len(body.faces):
         return Fitted([], [], [], [], [])
 
-    # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
-    # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
-    # Facette" schon.
-    planar = _large_facet_faces(body)
-    curved = [index for index in range(len(body.faces)) if index not in planar]
-    if not curved:
-        return Fitted([], [], [], [], [])
+    # **Der Cache bleibt stehen, solange hier gemessen wird — und das ist
+    # dreiviertel der Erkennungszeit.**
+    #
+    # Jeder Zugriff auf ``body.face_normals`` lässt ``trimesh`` prüfen, ob sich
+    # das Netz seit dem letzten Mal geändert hat, und diese Prüfung hasht das
+    # **ganze** Netz (``tobytes`` plus xxhash). Die vier Einpassungen unten
+    # lesen die Normalen einmal je Fleck; an einem Segel mit 421 194 Dreiecken
+    # und 3362 Flecken waren das 227 036 Hashes und **17,3 von 26,6 Sekunden**
+    # (cProfile, 04.09.2026), allein 4832 Aufrufe aus ``fit_sphere``.
+    #
+    # ``Cache.__enter__`` setzt einen Zähler, und ``verify`` kehrt dann sofort
+    # zurück. Gemessen an denselben Dateien:
+    #
+    #     421 194 Dreiecke:    24,08 s ohne,   6,38 s mit Sperre
+    #     1 223 836 Dreiecke: 562,72 s ohne, 153,20 s mit Sperre
+    #
+    # Beide Male dasselbe Ergebnis, Merkmal für Merkmal verglichen — 73 Prozent
+    # über den Faktor drei in der Modellgröße hinweg konstant.
+    #
+    # **Sicher ist es, weil hier niemand schreiben kann.** ``_one_body`` gibt
+    # bei Bedarf ein *neues* ``MeshData`` zurück und lässt das übergebene in
+    # Ruhe; im gesperrten Abschnitt lesen die vier ``fit_*`` nur
+    # ``face_normals``, ``faces`` und ``vertices``. Der Cache darf nicht
+    # verifizieren, weil sich nichts ändert — nicht, weil wir es ihm verbieten.
+    #
+    # ``_cache`` trägt einen Unterstrich: Wir hängen uns an ``trimesh``-Interna.
+    # ``Cache.__enter__``/``__exit__`` sind genau dafür da, aber wer die Version
+    # in ``constraints.txt`` hebt (heute ``trimesh==5.0.0``), sieht dort nach.
+    with body._cache:
+        # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
+        # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
+        # Facette" schon.
+        planar = _large_facet_faces(body)
+        curved = [index for index in range(len(body.faces)) if index not in planar]
+        if not curved:
+            return Fitted([], [], [], [], [])
 
-    found: Cylinders = []
-    cones: Cones = []
-    spheres: Spheres = []
-    tori: Tori = []
+        found: Cylinders = []
+        cones: Cones = []
+        spheres: Spheres = []
+        tori: Tori = []
 
-    def classify(patch: list[int]) -> bool:
-        """Die erste Form, die auf diesen Fleck passt — oder keine."""
-        if len(patch) < MIN_PATCH_FACES:
+        def classify(patch: list[int]) -> bool:
+            """Die erste Form, die auf diesen Fleck passt — oder keine."""
+            if len(patch) < MIN_PATCH_FACES:
+                return False
+            # **Die Normalen entscheiden, welche Form es ist — nicht der
+            # Rückstand.** Der naheliegende Weg wäre, zuerst einen Zylinder
+            # einzupassen und den Kegel als Auffang zu nehmen. Er ist falsch, und
+            # der Fall, der es zeigt, ist ein aufgesetzter Kegel: Jede seiner
+            # Facetten ist **ein** Dreieck von der Grundfläche zur Spitze, deren
+            # Schwerpunkt liegt auf einem Drittel der Höhe — und damit liegen alle
+            # Schwerpunkte auf **einem Kreis**. Die Zylindereinpassung rechnet über
+            # die Schwerpunkte und findet einen tadellosen Zylinder, Rückstand
+            # 0,0000, an einem Kegel mit 31 Grad. Ein Rückstand kann das nicht
+            # sehen; die Normalen können es: Beim Zylinder stehen sie senkrecht auf
+            # der Achse, beim Kegel um ``sin`` des Halbwinkels daneben.
+            #
+            # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
+            cone = fit_cone(body, patch)
+            if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
+                if (
+                    cone.good
+                    and _fits_in_the_body(mesh, cone)
+                    and not _a_ball_fits_far_better(body, patch, cone)
+                ):
+                    cones.append((cone, patch))
+                    return True
+                # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
+                # Normalen, und daran ändert ein schlechter Rückstand nichts. Die
+                # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
+                # hat einen Kegelwinkel, ohne ein Kegel zu sein.
+            else:
+                fit = fit_cylinder(body, patch)
+                if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
+                    found.append((fit, patch))
+                    return True
+
+            # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
+            # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
+            # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
+            # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
+            # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
+            # Antwort ist ``ROUND_TOLERANCE``.
+            ball = fit_sphere(body, patch)
+            if ball is not None and ball.good and _fits_in_the_body_by_size(mesh, ball.radius):
+                spheres.append((ball, patch))
+                return True
+            ring = fit_torus(body, patch)
+            if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
+                tori.append((ring, patch))
+                return True
             return False
-        # **Die Normalen entscheiden, welche Form es ist — nicht der
-        # Rückstand.** Der naheliegende Weg wäre, zuerst einen Zylinder
-        # einzupassen und den Kegel als Auffang zu nehmen. Er ist falsch, und
-        # der Fall, der es zeigt, ist ein aufgesetzter Kegel: Jede seiner
-        # Facetten ist **ein** Dreieck von der Grundfläche zur Spitze, deren
-        # Schwerpunkt liegt auf einem Drittel der Höhe — und damit liegen alle
-        # Schwerpunkte auf **einem Kreis**. Die Zylindereinpassung rechnet über
-        # die Schwerpunkte und findet einen tadellosen Zylinder, Rückstand
-        # 0,0000, an einem Kegel mit 31 Grad. Ein Rückstand kann das nicht
-        # sehen; die Normalen können es: Beim Zylinder stehen sie senkrecht auf
-        # der Achse, beim Kegel um ``sin`` des Halbwinkels daneben.
-        #
-        # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
-        cone = fit_cone(body, patch)
-        if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
-            if (
-                cone.good
-                and _fits_in_the_body(mesh, cone)
-                and not _a_ball_fits_far_better(body, patch, cone)
-            ):
-                cones.append((cone, patch))
-                return True
-            # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
-            # Normalen, und daran ändert ein schlechter Rückstand nichts. Die
-            # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
-            # hat einen Kegelwinkel, ohne ein Kegel zu sein.
-        else:
-            fit = fit_cylinder(body, patch)
-            if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
-                found.append((fit, patch))
-                return True
 
-        # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
-        # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
-        # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
-        # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
-        # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
-        # Antwort ist ``ROUND_TOLERANCE``.
-        ball = fit_sphere(body, patch)
-        if ball is not None and ball.good and _fits_in_the_body_by_size(mesh, ball.radius):
-            spheres.append((ball, patch))
-            return True
-        ring = fit_torus(body, patch)
-        if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
-            tori.append((ring, patch))
-            return True
-        return False
+        jumps: np.ndarray | None = None
+        for patch in _connected_patches(body, curved):
+            if len(patch) < MIN_PATCH_FACES or classify(patch):
+                continue
+            # **Zweite Runde für das, was nichts ergeben hat.** Eine Verrundung
+            # schließt tangential an, also trennt kein Knick sie ab — Mantel und
+            # Kehle einer Säule liegen in einem Fleck, auf den keine Form passt.
+            # Nachgetrennt wird deshalb erst hier: Wo etwas erkannt wurde, bleibt
+            # es, wie es ist (siehe :func:`_split_by_curvature`).
+            if jumps is None:
+                # **Träge, und das ist der Punkt.** Die Rechnung geht über alle
+                # Nachbarpaare des Körpers; ein Netz, an dem jede Form auf Anhieb
+                # passt, soll sie gar nicht erst bezahlen.
+                jumps = _curvature_jumps(body)
+            pieces = _split_by_curvature(body, patch, jumps)
+            if len(pieces) > 1:
+                for piece in pieces:
+                    classify(piece)
 
-    jumps: np.ndarray | None = None
-    for patch in _connected_patches(body, curved):
-        if len(patch) < MIN_PATCH_FACES or classify(patch):
-            continue
-        # **Zweite Runde für das, was nichts ergeben hat.** Eine Verrundung
-        # schließt tangential an, also trennt kein Knick sie ab — Mantel und
-        # Kehle einer Säule liegen in einem Fleck, auf den keine Form passt.
-        # Nachgetrennt wird deshalb erst hier: Wo etwas erkannt wurde, bleibt
-        # es, wie es ist (siehe :func:`_split_by_curvature`).
-        if jumps is None:
-            # **Träge, und das ist der Punkt.** Die Rechnung geht über alle
-            # Nachbarpaare des Körpers; ein Netz, an dem jede Form auf Anhieb
-            # passt, soll sie gar nicht erst bezahlen.
-            jumps = _curvature_jumps(body)
-        pieces = _split_by_curvature(body, patch, jumps)
-        if len(pieces) > 1:
-            for piece in pieces:
-                classify(piece)
+        found = _merged_cylinders(body, mesh, found)
+        cones = _merged_cones(body, cones)
+        tori = _merged_tori(body, tori)
+        found = _without_thread_turns(body, found)
+        found, fillets = _split_off_fillets(body, found)
 
-    found = _merged_cylinders(body, mesh, found)
-    cones = _merged_cones(body, cones)
-    tori = _merged_tori(body, tori)
-    found = _without_thread_turns(body, found)
-    found, fillets = _split_off_fillets(body, found)
-
-    # Nach Position sortiert, damit die Nummerierung für denselben Körper
-    # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
-    # koaxiale Bohrungen — eine Durchführung durch zwei Wände, die häufigste
-    # Doppelbohrung überhaupt — haben dieselbe Mitte in X und Y. Der Vergleich
-    # endete dort unentschieden, und welche von beiden `hole_1` wurde, hing an
-    # der Reihenfolge der Flecken. Genau das darf eine Provenienz-ID nicht
-    # (§21.2): Eine Op, die an `hole_2` hängt, sitzt nach der nächsten
-    # Auswertung an der anderen.
-    found.sort(
-        key=lambda entry: (
-            round(entry[0].centre[0], 3),
-            round(entry[0].centre[1], 3),
-            round(entry[0].centre[2], 3),
-        )
-    )
-    # Kegel nach ihrer Spitze, aus demselben Grund: Die Nummer eines Merkmals
-    # ist eine Provenienz-ID, und die darf nicht an der Reihenfolge der Flecken
-    # hängen (§21.2).
-    cones.sort(
-        key=lambda entry: (
-            round(entry[0].centre[0], 3),
-            round(entry[0].centre[1], 3),
-            round(entry[0].centre[2], 3),
-        )
-    )
-    # Kugeln und Tori nach demselben Schlüssel und aus demselben Grund (§21.2).
-    for round_shapes in (spheres, tori):
-        round_shapes.sort(
+        # Nach Position sortiert, damit die Nummerierung für denselben Körper
+        # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
+        # koaxiale Bohrungen — eine Durchführung durch zwei Wände, die häufigste
+        # Doppelbohrung überhaupt — haben dieselbe Mitte in X und Y. Der Vergleich
+        # endete dort unentschieden, und welche von beiden `hole_1` wurde, hing an
+        # der Reihenfolge der Flecken. Genau das darf eine Provenienz-ID nicht
+        # (§21.2): Eine Op, die an `hole_2` hängt, sitzt nach der nächsten
+        # Auswertung an der anderen.
+        found.sort(
             key=lambda entry: (
                 round(entry[0].centre[0], 3),
                 round(entry[0].centre[1], 3),
                 round(entry[0].centre[2], 3),
             )
         )
-    for entry_list in (fillets,):
-        entry_list.sort(
+        # Kegel nach ihrer Spitze, aus demselben Grund: Die Nummer eines Merkmals
+        # ist eine Provenienz-ID, und die darf nicht an der Reihenfolge der Flecken
+        # hängen (§21.2).
+        cones.sort(
             key=lambda entry: (
                 round(entry[0].centre[0], 3),
                 round(entry[0].centre[1], 3),
                 round(entry[0].centre[2], 3),
             )
         )
-    return Fitted(found, cones, spheres, tori, fillets)
+        # Kugeln und Tori nach demselben Schlüssel und aus demselben Grund (§21.2).
+        for round_shapes in (spheres, tori):
+            round_shapes.sort(
+                key=lambda entry: (
+                    round(entry[0].centre[0], 3),
+                    round(entry[0].centre[1], 3),
+                    round(entry[0].centre[2], 3),
+                )
+            )
+        for entry_list in (fillets,):
+            entry_list.sort(
+                key=lambda entry: (
+                    round(entry[0].centre[0], 3),
+                    round(entry[0].centre[1], 3),
+                    round(entry[0].centre[2], 3),
+                )
+            )
+        return Fitted(found, cones, spheres, tori, fillets)
 
 
 def detect_holes(
