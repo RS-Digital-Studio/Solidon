@@ -51,10 +51,44 @@ function plattform_zu(string $name): ?string
         return 'macos-x86_64';
     }
 
-    // AppImage, tar.gz und zip standen früher im Angebot und stehen in keinem
-    // Manifest (sie werden seit 0.2.0 nicht mehr gebaut). Für sie gibt es
-    // keine Entsprechung, also führt der Weg auf die Downloadauswahl.
+    // Die Linux-Direktstartdatei wird gebaut und ausgeliefert, steht aber in
+    // keinem Manifest: `version.json` führt die Pakete der Update-Automatik,
+    // und Linux ist dort das Flatpak. Hier stand deshalb, sie werde „seit
+    // 0.2.0 nicht mehr gebaut" — falsch seit dem Tag, an dem sie zurückkam,
+    // und niemandem aufgefallen, weil ein Fehlschlag dieser Datei wie ein
+    // Erfolg aussieht: Der Kunde landet auf der Downloadauswahl und nicht im
+    // Nichts. Gemessen am 04.09.2026 gegen den Server: Windows und beide Macs
+    // fanden ihre neue Datei, diese eine nicht.
+    if (preg_match('/^Solidon3D-[0-9]+(\.[0-9]+)*-x86_64\.AppImage$/', $name) === 1) {
+        return 'appimage';
+    }
+
+    // tar.gz und zip standen früher im Angebot und werden nicht mehr
+    // ausgeliefert (das Archiv setzt ein Terminal voraus, die Zips sind
+    // Bauartefakte des Signierwegs). Für sie gibt es keine Entsprechung,
+    // also führt der Weg auf die Downloadauswahl.
     return null;
+}
+
+/**
+ * Der Name der aktuellen Linux-Direktstartdatei, aus der Fassung im Manifest.
+ *
+ * Dieselbe Regel wie bei den vier Paketen: Die Nummer kommt aus
+ * `version.json` und steht nicht in dieser Datei. Weitergeleitet wird nur,
+ * wenn die Datei auch wirklich hier liegt — eine Umleitung auf ein 404 wäre
+ * kein Fortschritt gegenüber dem 404.
+ */
+function appimage_ziel(array $manifest): ?string
+{
+    $fassung = $manifest['version'] ?? null;
+    if (!is_string($fassung) || preg_match('/^[0-9]+(\.[0-9]+)*$/', $fassung) !== 1) {
+        return null;
+    }
+    $name = 'Solidon3D-' . $fassung . '-x86_64.AppImage';
+    if (!is_file(__DIR__ . '/' . $name)) {
+        return null;
+    }
+    return 'https://solidon3d.de/dl/' . $name;
 }
 
 $angefragt = (string) ($_GET['datei'] ?? '');
@@ -65,7 +99,11 @@ if ($plattform !== null) {
     $roh = @file_get_contents(__DIR__ . '/../version.json');
     if ($roh !== false) {
         $manifest = json_decode($roh, true);
-        $url = $manifest['packages'][$plattform]['url'] ?? null;
+        $url = is_array($manifest)
+            ? ($plattform === 'appimage'
+                ? appimage_ziel($manifest)
+                : ($manifest['packages'][$plattform]['url'] ?? null))
+            : null;
         // **Nur eine eigene Adresse.** Das Manifest liegt auf demselben Server
         // und ist damit so vertrauenswürdig wie diese Datei — aber eine
         // Weiterleitung ist ein Werkzeug, mit dem sich Vertrauen ausleihen

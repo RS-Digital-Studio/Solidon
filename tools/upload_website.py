@@ -122,6 +122,14 @@ _VERSION_FIELDS = frozenset(
     }
 )
 _PACKAGE_FIELDS = frozenset({"file", "url", "size", "sha256"})
+
+#: Woran ein ausgeliefertes Paket zu erkennen ist: an seiner Fassungsnummer.
+#:
+#: Gebraucht wird das beim Räumen (:func:`stale_packages`). Die Prüfung ist
+#: bewusst grob — sie soll nicht Paketarten aufzählen, denn eine neue käme
+#: dann still auf die Löschliste; sie soll nur trennen, was eine Fassung
+#: bedient, von dem, was dauerhaft dort liegt.
+_VERSIONED_NAME = re.compile(r"\d+\.\d+\.\d+")
 _PACKAGE_PLATFORMS = frozenset({"windows", "linux", "macos-arm64", "macos-x86_64"})
 _PUBLIC_OPENER = urllib.request.build_opener(RejectRedirects())
 
@@ -628,6 +636,16 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
     for name, _size in remote_index(session, f"/{root}/dl").items():
         filename = name.split("/")[-1]
         if filename in spared or APP_VERSION in filename:
+            continue
+        if not _VERSIONED_NAME.search(filename):
+            # **Was keine Fassungsnummer trägt, ist kein Paket.** Unter ``dl/``
+            # liegt nicht nur Ausgeliefertes: ``veraltet.php`` fängt die Links
+            # auf, die beim Räumen sterben, und leitet auf dieselbe Plattform
+            # der aktuellen Fassung um. Diese Schleife hätte ihn mitgelöscht —
+            # den Auffangpfad zusammen mit dem, wovor er auffängt, und beim
+            # nächsten Release stünde der Kunde wieder vor dem 404, den es
+            # am 03.09.2026 schon einmal gab. Gemessen am 04.09.2026: Er stand
+            # als sechzehnter Eintrag auf der Löschliste.
             continue
         candidates.append(filename)
     return sorted(candidates), ""

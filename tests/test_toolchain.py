@@ -1323,6 +1323,86 @@ def test_the_cleanup_spares_what_the_version_file_still_promises() -> None:
     assert veraltet == ["Solidon3D-0.0.1-x86_64.flatpak", "Solidon3D-Setup-0.0.1.exe"], veraltet
 
 
+def test_every_delivered_kind_has_a_catch_for_its_dead_links() -> None:
+    """Jede ausgelieferte Paketart findet über ``veraltet.php`` ihre Nachfolgerin.
+
+    Beim Veröffentlichen werden die alten Pakete geräumt, und ``veraltet.php``
+    leitet die dann toten Links auf **dieselbe Plattform** der aktuellen
+    Fassung um. Die Datei zählte dafür vier Muster auf, ausgeliefert werden
+    aber fünf Dateien: Das AppImage fehlte, und im Quelltext stand als Grund,
+    es werde „seit 0.2.0 nicht mehr gebaut" — ein Satz, der einmal stimmte.
+
+    **Ein Fehlschlag dieser Datei sieht aus wie ein Erfolg**, und das ist der
+    Grund für diesen Wächter: Wer keine Entsprechung findet, landet auf der
+    Downloadauswahl statt im Nichts. Gemessen am 04.09.2026 gegen den Server
+    fanden Windows und beide Macs ihr neues Paket, das AppImage nicht — und
+    aufgefallen wäre das niemandem, der nicht danach gefragt hat.
+
+    Geprüft wird der Quelltext und nicht das Verhalten: Für PHP gibt es hier
+    keinen Aufbau, und die Zusicherung ist damit schwächer als ein Lauf. Sie
+    wird rot, wenn eine sechste Paketart dazukommt, ohne dass jemand den
+    Auffangpfad mitnimmt.
+    """
+    from tools.make_download import DELIVERED
+
+    quelle = (_ROOT / "website" / "dl" / "veraltet.php").read_text(encoding="utf-8")
+    # **Nur der Rumpf von plattform_zu, und nur seine Musterzeilen.** Zwei
+    # Anläufe haben hier grün gemeldet, ohne etwas zu prüfen: Der erste las die
+    # ganze Datei und zählte den Kommentar mit, der die Direktstartdatei beim
+    # Namen nennt; der zweite las alles bis zur ersten Anweisung und zählte den
+    # Namen der Hilfsfunktion mit. Beide Male stand das gesuchte Wort da, und
+    # beide Male fehlte das Muster.
+    rumpf = quelle.split("function plattform_zu", 1)[1].split("\n" + "}", 1)[0]
+    gemustert = "\n".join(zeile for zeile in rumpf.split("\n") if "preg_match" in zeile)
+
+    fehlend = [
+        bezeichnung
+        for bezeichnung, endung, _marken in DELIVERED
+        if endung.lstrip(".").lower() not in gemustert.lower()
+    ]
+    assert not fehlend, (
+        f"veraltet.php kennt kein Muster für: {fehlend}. Ein alter Link auf so "
+        "eine Datei landet auf der Downloadauswahl statt bei ihrer Nachfolgerin."
+    )
+
+
+def test_the_cleanup_spares_the_handler_that_catches_dead_links() -> None:
+    """Unter ``dl/`` liegt nicht nur Ausgeliefertes.
+
+    ``veraltet.php`` fängt die Links auf, die beim Räumen sterben, und leitet
+    auf dieselbe Plattform der aktuellen Fassung um — geschrieben, nachdem am
+    03.09.2026 ein Interessent einen Tag nach dem Link ein 404 bekam. Die
+    Löschliste hat ihn trotzdem geführt: Sie nahm alles, was weder versprochen
+    ist noch die laufende Fassung im Namen trägt, und beides trifft auf einen
+    Auffangpfad nicht zu. Gemessen am 04.09.2026 stand er als sechzehnter
+    Eintrag zwischen den fünfzehn alten Paketen.
+
+    Das Kriterium ist die **Fassungsnummer** und keine Aufzählung von
+    Paketarten: Eine neue Paketart käme sonst still auf die Löschliste,
+    während eine neue Hilfsdatei still verschont bliebe — beides falsch
+    herum.
+    """
+    from app.branding import APP_VERSION
+    from tools.upload_website import stale_packages
+
+    sitzung = _AttrappeFTP(
+        _version_json(APP_VERSION),
+        [
+            f"Solidon3D-Setup-{APP_VERSION}.exe",
+            "Solidon3D-Setup-0.0.1.exe",
+            "veraltet.php",
+        ],
+    )
+    veraltet, grund = stale_packages(sitzung, "httpdocs")  # type: ignore[arg-type]
+
+    assert grund == "", f"unerwarteter Einwand: {grund}"
+    assert "veraltet.php" not in veraltet, (
+        "der Auffangpfad stand auf der Löschliste — dann stirbt beim nächsten "
+        "Räumen wieder jeder verschickte Link"
+    )
+    assert veraltet == ["Solidon3D-Setup-0.0.1.exe"], veraltet
+
+
 def test_the_promise_is_read_from_both_name_fields() -> None:
     """``url`` **und** ``file`` — und der Test unterscheidet sie ausdrücklich.
 
