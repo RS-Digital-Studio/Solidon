@@ -13,7 +13,8 @@ dieselbe Bohrung ausgewählt, von X = -25 mm auf X = -10 mm verschoben und mit
 Live-Vorschau übernommen. Ihre Kennung bleibt erhalten – dadurch verlieren
 Passungen und spätere Schritte nicht ihren Bezug.
 
-Vollständige Demo bis 30. Oktober 2026: https://solidon3d.de/
+Kostenlose Demo bis 30. Oktober 2026: Link im Kanalprofil oder
+https://solidon3d.de/
 
 Musik: eigene Komposition von RS Digital, keine fremde Aufnahme.
 
@@ -37,7 +38,8 @@ the same hole, moves it from X = -25 mm to X = -10 mm with a live preview, and
 applies the change. Its identity is preserved, so fits and later steps keep
 their reference.
 
-Try the complete demo until 30 October 2026: https://solidon3d.de/en/
+Free demo until 30 October 2026: link in the channel profile or
+https://solidon3d.de/en/
 
 Music: original composition by RS Digital; no third-party recording.
 
