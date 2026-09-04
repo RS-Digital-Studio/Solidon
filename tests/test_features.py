@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+import re
 from pathlib import Path
 
 import numpy as np
@@ -2368,4 +2369,154 @@ def test_the_search_does_not_rehash_the_mesh_for_every_patch() -> None:
     # durch, sobald jemand sie großzügig genug wählt.
     assert gezaehlt["post_with_fillet.stl"] <= gezaehlt["plate_holes.stl"] + 2, (
         f"die Zahl wächst mit dem Modell: {gezaehlt}"
+    )
+
+
+def _mast_after_moving_its_pin(tmp_path: Path) -> tuple[MeshData, dict[str, object]]:
+    """Ein eingelesener Mast, dessen Zapfen einmal versetzt wurde.
+
+    **Eingelesen und nicht gebaut**, weil es genau um den Weg geht, den ein
+    Kunde nimmt: Datei öffnen, ein Merkmal anfassen, Ergebnis im Baum lesen.
+    Und versetzt, weil erst die Boolesche Operation neu vernetzt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles as knowledge_profiles
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    mast = trimesh.creation.cylinder(radius=2.5, height=115.0, sections=360)
+    path = tmp_path / "mast.stl"
+    mast.export(path)
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/mast.stl", sha256=""
+    )
+    project.sources["src_1"] = path.read_bytes()
+    History(project.document).apply(
+        "Probe",
+        [
+            OperationDraft(op="load", params={"source": "src_1", "unit": "mm"}),
+            OperationDraft(
+                op="move_feature",
+                inputs=("obj_1",),
+                params={"at_feature": "pin_1", "x": 0.0, "y": 0.0, "z": 5.0},
+                # **Der Startwert steht hier und wird nicht gewürfelt.** Die
+                # Rückfallkette der Booleschen stupst die Eckpunkte an (§11.3),
+                # und wie viele Streifen dabei entstehen, hängt daran. Ohne
+                # festen Wert schwankt die Zahl der Funde von Lauf zu Lauf, und
+                # ein Test darüber wäre eine Münze.
+                seed=902239366,
+            ),
+        ],
+    )
+    result = evaluate(
+        project.document,
+        knowledge_profiles.make_profile("centauri-carbon-2", "petg"),
+        sources=ProjectSources(project),
+    )
+    entry = next(iter(result.scene.objects.values()))
+    return entry.mesh, dict(entry.features)
+
+
+def test_a_boolean_seam_does_not_become_a_feature(tmp_path: Path) -> None:
+    """Ein versetztes Merkmal erfand fünfzig Formen, die es nicht gibt.
+
+    Gemessen von 3d-druck-11 an einem Kundenmodell und hier nachgestellt: Ein
+    glatter Mast Ø 5 mit drei Merkmalen kam nach ``move_feature`` mit
+    **zweiundsiebzig** zurück — zwanzig „Verrundungen", sieben Kegel, zwei
+    Kugeln, dazu ein Torus Ø 89,91 auf einem Körper von Ø 5. Es sind die
+    schmalen Dreiecksstreifen, die eine Boolesche Operation an ihren
+    Nahtstellen hinterlässt: sechs bis neun Dreiecke, über die ganze Länge
+    des Körpers gezogen.
+
+    ``MIN_CYLINDER_DIAMETER`` griff dort nicht — die Streifen sind im
+    Durchmesser groß genug. Zu klein ist ihre **Breite**
+    (:data:`app.core.perceive.features.MIN_SURFACE_WIDTH`).
+
+    **Null wird es nicht, und der Test behauptet es auch nicht.** Über zehn
+    Startwerte gemessen fallen 369 erfundene Formen auf 22 — je Lauf eine bis
+    vier bleiben übrig, und welche, hängt am Stups der Rückfallkette. Wer hier
+    ``== {}`` schreibt, bekommt einen Test, der bei jedem zweiten Startwert
+    rot ist; die verbleibenden gehören in die Zusammenführung der Flächen und
+    nicht in diese Schranke.
+    """
+    _mesh, features = _mast_after_moving_its_pin(tmp_path)
+    fitted = {
+        name: feature
+        for name, feature in features.items()
+        if getattr(feature, "kind", "") in ("hole", "cone", "sphere", "torus", "fillet")
+    }
+    assert len(fitted) <= 5, "Neuvernetzung erfand: " + str(
+        [(n, f.kind) for n, f in fitted.items()]
+    )
+
+    # Und der echte Zapfen bleibt, mit seinem echten Maß — das ist die Hälfte,
+    # auf die es ankommt: Eine Schranke, die alles verwirft, bestünde die Zeile
+    # darüber ebenfalls.
+    pins = [f for f in features.values() if getattr(f, "kind", "") == "pin"]
+    assert len(pins) == 1
+    assert float(pins[0].params["diameter"]) == pytest.approx(5.0, abs=0.05)
+
+
+def test_a_real_narrow_surface_survives_the_sliver_guard() -> None:
+    """Die Schranke darf nichts Echtes nehmen — und schmal ist nicht dünn.
+
+    Die Gegenprobe zum Test darüber, denn eine Schranke, die alles verwirft,
+    besteht ihn ebenfalls. Über den Referenzkorpus ist die schmalste echte
+    Fläche 0,379 mm breit und die schmalste echte Verrundung einer Kundendatei
+    0,646 mm; die Streifen der Neuvernetzung messen 0,013 bis 0,038 mm.
+    """
+    from app.core.perceive.features import MIN_SURFACE_WIDTH, _a_sliver
+
+    for name in ("plate_holes.stl", "plate_countersunk.stl", "post_with_fillet.stl"):
+        mesh = plate(name)
+        found = detect(mesh)
+        for feature_name, feature in found.items():
+            if feature.kind not in ("hole", "pin", "cone", "sphere", "torus", "fillet"):
+                continue
+            assert not _a_sliver(mesh.raw, list(feature.face_indices)), (
+                f"{name}: {feature_name} ({feature.kind}) wäre unter"
+                f" {MIN_SURFACE_WIDTH} mm verworfen worden"
+            )
+
+
+def test_the_width_is_asked_where_the_diameter_is_asked() -> None:
+    """Beide Schranken an denselben sechs Stellen — sonst ist es eine halbe.
+
+    Der Zwilling zu :func:`test_every_fitted_kind_asks_the_same_question`, und
+    aus demselben Grund: ``_a_sliver`` ist entstanden, weil
+    ``_too_small_to_make`` die falsche Achse misst. Wenn die neue Frage nur bei
+    fünf der sechs Arten gestellt wird, sieht die Vereinheitlichung vollständig
+    aus und ist es nicht.
+    """
+    import app.core.perceive.features as modul
+
+    source = Path(modul.__file__).read_text(encoding="utf-8")
+    lines = source.splitlines()
+    asks_diameter = [
+        index
+        for index, line in enumerate(lines)
+        if "_too_small_to_make(" in line and not line.lstrip().startswith(("#", "*", '"', "'"))
+    ]
+    # Der Aufruf innerhalb der Definition selbst zählt nicht mit.
+    asks_diameter = [i for i in asks_diameter if not lines[i].lstrip().startswith("def ")]
+
+    for index in asks_diameter:
+        window = "\n".join(lines[max(0, index - 6) : index + 7])
+        assert "_a_sliver(" in window, (
+            "hier wird der Durchmesser geprüft und die Breite nicht: " + lines[index].strip()
+        )
+
+    comparisons = [
+        line.strip()
+        for line in lines
+        if "MIN_SURFACE_WIDTH" in line
+        and not line.lstrip().startswith(("#", "*", '"', "'"))
+        and re.search(r"[<>=!]=|<|>", line)
+    ]
+    assert comparisons == ["return area / reach < MIN_SURFACE_WIDTH"], (
+        "die Breitenschranke wird nur in _a_sliver verglichen: " + "; ".join(comparisons)
     )

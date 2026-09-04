@@ -108,6 +108,33 @@ PARALLEL_FACE_COSINE: Final = 0.99
 #: (§14) — was für kein Werkzeug zu klein ist, ist für keine Passung zu klein.
 MIN_CYLINDER_DIAMETER = 0.5
 
+#: Wie breit ein Fleck mindestens sein muss, um eine Fläche zu sein.
+#:
+#: Gemessen als **Fläche geteilt durch die Ausdehnung** des Flickens — bei
+#: einem langen Streifen ist das seine Breite, bei einem kompakten Fleck eine
+#: Zahl in der Größe seines Radius. Verworfen wird nur nach unten, also
+#: schadet die Ungenauigkeit nach oben nicht.
+#:
+#: **Der Anlass ist die Neuvernetzung nach einer Booleschen Operation.** Ein
+#: eingelesener Mast Ø 5 auf 115 mm Länge mit drei Merkmalen kam nach ``move_feature``
+#: mit 72 zurück und nach ``remove_feature`` mit 87 — zwanzig „Verrundungen",
+#: vierzehn Kegel, zwei Kugeln, dazu ein Torus Ø 89,91 auf einem Körper von
+#: Ø 5. Es sind die schmalen Dreiecksstreifen, die eine Boolesche Operation
+#: an den Nahtstellen hinterlässt: sechs bis neun Dreiecke, über die ganze
+#: Länge des Körpers gezogen, und aus jedem liest die Einpassung eine Form.
+#:
+#: :data:`MIN_CYLINDER_DIAMETER` greift dort nicht — die Streifen messen
+#: 0,52 bis 89,91 mm im Durchmesser und liegen damit über der Schranke. Die
+#: falsche Achse: Nicht ihr Durchmesser ist zu klein, sondern ihre **Breite**.
+#:
+#: Die Größenordnung kommt aus derselben Überlegung wie oben — eine Düse legt
+#: 0,4 mm breite Bahnen, und was schmaler ist als eine halbe Bahn, hat kein
+#: Werkzeug gemacht. Der Platz kommt aus der Messung: Die Streifen sind 0,013
+#: bis 0,038 mm breit, das schmalste echte Merkmal über Korpus und
+#: Kundendatei 0,379 mm, die schmalste echte Verrundung 0,646 mm. 0,2 liegt
+#: mit Faktor fünf von beiden Seiten dazwischen.
+MIN_SURFACE_WIDTH = 0.2
+
 #: … außer sie bestehen aus mindestens so vielen koplanaren Dreiecken. Ein
 #: Zylinderdeckel kommt aus dem Kern als ein Dreieck je Segment — sie zu zählen
 #: ist also das, was eine kleine ebene Fläche von einer Scheibe einer gekrümmten
@@ -940,7 +967,9 @@ def detect_holes(
     found = [
         entry
         for entry in cylinders
-        if entry[0].inward and not _too_small_to_make(entry[0].radius * 2.0)
+        if entry[0].inward
+        and not _too_small_to_make(entry[0].radius * 2.0)
+        and not _a_sliver(mesh.raw, entry[1])
     ]
     return [
         Feature(
@@ -1278,6 +1307,28 @@ def angular_span(body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]) -> f
     return float(math.degrees(2.0 * math.pi - gaps.max()))
 
 
+def _a_sliver(body: trimesh.Trimesh, patch: list[int]) -> bool:
+    """Ob ein Fleck zu schmal ist, um eine Fläche zu sein.
+
+    **Die Schwester von** :func:`_too_small_to_make`, und aus demselben Grund
+    eine eigene Frage: Was für kein Werkzeug groß genug ist, ist kein Merkmal
+    — nur misst jene den Durchmesser und diese die Breite. Ein Streifen aus
+    sechs Dreiecken über die ganze Länge eines Mastes hat einen stattlichen
+    Durchmesser und keine Breite; die alte Schranke ließ ihn deshalb durch.
+
+    Die Begründung der Zahl steht bei :data:`MIN_SURFACE_WIDTH`.
+    """
+    if not patch:
+        return True
+    faces = np.asarray(patch, dtype=int)
+    area = float(body.area_faces[faces].sum())
+    corners = np.asarray(body.vertices[body.faces[faces].reshape(-1)], dtype=float)
+    reach = float(np.linalg.norm(corners.max(axis=0) - corners.min(axis=0)))
+    if reach <= EPS_GEOM:
+        return True
+    return area / reach < MIN_SURFACE_WIDTH
+
+
 def _too_small_to_make(size: float) -> bool:
     """Ob ein Maß unter dem liegt, was überhaupt herstellbar ist.
 
@@ -1355,7 +1406,11 @@ def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Featu
     found = _fitted(mesh).spheres if spheres is None else spheres
     # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
     # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
-    big = [entry for entry in found if not _too_small_to_make(entry[0].radius * 2.0)]
+    big = [
+        entry
+        for entry in found
+        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+    ]
     return [
         Feature(
             id=f"sphere_{number}",
@@ -1393,6 +1448,7 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
         entry
         for entry in found
         if not _too_small_to_make(min(entry[0].ring_radius, entry[0].tube_radius) * 2.0)
+        and not _a_sliver(mesh.raw, entry[1])
     ]
     return [
         Feature(
@@ -1449,7 +1505,11 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     # zufällig um eine Achse stehen, findet der Fit einen Zylinderausschnitt.
     # Die Begründung ist wörtlich die von :data:`MIN_CYLINDER_DIAMETER` — was
     # für kein Werkzeug groß genug ist, ist auch keine Verrundung.
-    big = [entry for entry in found if not _too_small_to_make(entry[0].radius * 2.0)]
+    big = [
+        entry
+        for entry in found
+        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+    ]
     return [
         Feature(
             id=f"fillet_{number}",
@@ -1485,7 +1545,9 @@ def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feat
         # **Dieselbe Schranke wie bei der Bohrung** (:data:`MIN_CYLINDER_DIAMETER`).
         # Sie stand hier nicht, und damit meldete dieselbe Platte einen Zapfen
         # Ø 0,05 neben einer Vertiefung Ø 0,05, die zu Recht keine Bohrung war.
-        if not entry[0].inward and not _too_small_to_make(entry[0].radius * 2.0)
+        if not entry[0].inward
+        and not _too_small_to_make(entry[0].radius * 2.0)
+        and not _a_sliver(mesh.raw, entry[1])
     ]
     return [
         Feature(
@@ -1518,7 +1580,11 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
     found = _fitted(mesh)[1] if cones is None else cones
     # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
     # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
-    big = [entry for entry in found if not _too_small_to_make(entry[0].radius * 2.0)]
+    big = [
+        entry
+        for entry in found
+        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+    ]
     return [
         Feature(
             id=f"cone_{number}",
