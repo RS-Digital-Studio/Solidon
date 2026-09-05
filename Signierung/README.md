@@ -119,8 +119,8 @@ Drei Dinge dabei:
   Anwendung ein; wer nur die Setup-Datei signiert, liefert eine signierte Hülle
   um eine unsignierte `Solidon3D.exe`. SmartScreen prüft die heruntergeladene
   Datei, Virenscanner und Firmenrichtlinien sehen die installierte.
-- **Inno Setup 6 muss lokal installiert sein.** `make_installer.py` sucht ISCC
-  auf dem PATH und an den üblichen Orten.
+- **Inno Setup muss lokal installiert sein, 7 oder 6.** `make_installer.py`
+  sucht ISCC auf dem PATH und an den üblichen Orten, die neuere zuerst.
 
 In der CI gibt es keinen Windows-Signiermodus mehr: Sie baut aus derselben
 Übergabe den unsignierten Installer für Demo und Releaseprüfung und übergibt

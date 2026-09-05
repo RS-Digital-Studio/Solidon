@@ -126,6 +126,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Geometriebefunde G-03 bis G-38 (35 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach den Oberflächenbefunden; jeder braucht zuerst seine Korpusdatei (AGENTS.md: Test zuerst bei Geometrie), und die Reihenfolge folgt der Kundenwirkung — verschwindende Löcher (G-03), ungültige Körper ohne Befund (G-04), verlorene Materialzuweisungen (G-10, G-12) vor den Bausteinmaßen |
 | Werkzeuge und Website: R25, R26, R31, R35, R37, R38 | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach der Geometrie; R35 (FAQ zu den übertragenen Daten) und R38 (widersprüchliche Fachagenten) sind Texte in sechs Sprachen bzw. vierzehn Dateien und brauchen einen ruhigen Durchgang, kein Zwischenstück |
 | Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38 | Was der Gesamtreview liegen ließ (05.09.2026) | einen Katalogdurchgang je Sprache — fünf Zeilen, aber jede gegen die sichtbare Oberfläche geprüft (Menüname, Feldtitel, Verlaufstitel), nicht gegen die deutsche Quelle allein |
+| Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht gefahren | Was der Gesamtreview liegen ließ (05.09.2026) | einen Tag-Lauf der CI für das Flatpak und danach eine Messung im echten Flatpak auf einem Linux (Grafik, Qt-Bibliotheken, Start ohne Netz); für Inno Setup 7 (lokal seit dem 05.09.2026 als 7.1.0 installiert) einen Bau samt Installation |
 | CORE-02 (verworfene Vorschläge reisen als Antworten weiter) und CORE-26 (nachträgliche Kragenhöhe) | Was der Gesamtreview liegen ließ (05.09.2026) | eine Entscheidung Roberts: CORE-02 ist eine Änderung der Projektdatei (Markierung am ChatEntry, format_version 20 mit Migration), CORE-26 macht die Deckelpassung parametrisch statt fest — beides Architektur, nicht Reparatur |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Kommt xxhash im gebauten Paket an? | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | den nächsten CI-Bau — die Diagnose ist durch (kein Hänger am frischen Prozess; jeder Kunde hashte 50-mal zu langsam, behoben mit `dedd2b8d`), aber die Kundenwirkung belegt erst das Paket selbst |
@@ -10790,6 +10791,17 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   Fachagenten unter `.codex/agents/`.
 - [ ] **Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38** — je eine
   Katalogzeile, die gegen die sichtbare Oberfläche geprüft werden muss.
+- [ ] **Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht
+  gefahren** (05.09.2026): Die CI baut das Flatpak beim nächsten Tag-Lauf gegen
+  26.08 (Manifest, Generator und Runner-Installation stehen darauf; 24.08 endet
+  laut Hersteller im September 2026). Was nur ein echtes Flatpak zeigt — ABI,
+  die gebündelten Qt-Bibliotheken neben denen der Laufzeit, Grafiktreiberzugriff
+  und der Start ohne Netz —, muss einmal auf einem Linux gemessen werden, bevor
+  das Paket in den Download-Kasten geht. Inno Setup 7 steht in
+  `tools/make_installer.py` und der CI vor 6; das Skript verwendet keine der
+  in 7 geänderten Direktiven oder Funktionen, aber gebaut hat 7 hier noch
+  nicht — lokal liegt seit dem 05.09.2026 7.1.0 neben 6.7.3 (per Benutzer, wie
+  die 6), das Runner-Image trägt 6.7.1. Einmal mit 7 bauen und installieren.
 - [ ] **CORE-02 und CORE-26** — beide brauchen eine Entscheidung Roberts, weil sie
   keine Reparatur sind: CORE-02 markiert verworfene Vorschläge im Chat und ändert
   damit die Projektdatei (`format_version`, Migration, Beispieldatei); CORE-26

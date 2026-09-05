@@ -46,7 +46,7 @@ NON_SPDX_LICENCES: Final = {
     "PSF-based",
     "Microsoft Visual Studio Runtime license",
 }
-WINDOWS_LIBFFI_VERSIONS: Final = {"3.13.14": "3.4.4"}
+WINDOWS_LIBFFI_VERSIONS: Final = {"3.13.14": "3.4.4", "3.13.15": "3.4.4"}
 #: Die Microsoft-Laufzeit im Windows-Paket: C++-Laufzeit, UCRT und ihre
 #: Weiterleitungs-DLLs. ``api-ms-win-core-*`` fehlte hier — 29 Dateien ohne
 #: Besitzer im Windows-Artefakt, gemessen am 31.08.2026.

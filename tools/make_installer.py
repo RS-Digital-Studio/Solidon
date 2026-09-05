@@ -6,7 +6,7 @@ einen Stelle, an der sie festliegen. Dieses Werkzeug liest sie dort und ruft
 ISCC mit den passenden Defines auf.
 
 Voraussetzungen: ein Bau unter dist/Solidon (pyinstaller
-packaging/solidon3d.spec) und ein installiertes Inno Setup 6.
+packaging/solidon3d.spec) und ein installiertes Inno Setup (7 oder 6).
 
     python tools/make_installer.py
 """
@@ -43,11 +43,16 @@ SIGNING_HANDOFF = ROOT / "packaging" / "build" / "windows-signing.json"
 
 #: Wo ISCC üblicherweise liegt, wenn es nicht auf dem PATH steht.
 #:
-#: Der dritte Ort ist der, an dem ``winget install JRSoftware.InnoSetup``
-#: landet: ins Nutzerprofil, ohne Adminrechte und ohne PATH-Eintrag. Ohne ihn
-#: meldet dieses Werkzeug „nicht gefunden" neben einer Installation, die
-#: einwandfrei daliegt.
+#: Version 7 steht vor 6: Wer beide hat, baut mit der neueren, und das
+#: Skript in packaging/solidon3d.iss verwendet nichts, was 7 verändert hat.
+#: Der jeweils dritte Ort ist der, an dem ``winget install
+#: JRSoftware.InnoSetup`` landet: ins Nutzerprofil, ohne Adminrechte und ohne
+#: PATH-Eintrag. Ohne ihn meldet dieses Werkzeug „nicht gefunden" neben einer
+#: Installation, die einwandfrei daliegt.
 COMPILER_CANDIDATES = (
+    Path("C:/Program Files (x86)/Inno Setup 7/ISCC.exe"),
+    Path("C:/Program Files/Inno Setup 7/ISCC.exe"),
+    Path.home() / "AppData/Local/Programs/Inno Setup 7/ISCC.exe",
     Path("C:/Program Files (x86)/Inno Setup 6/ISCC.exe"),
     Path("C:/Program Files/Inno Setup 6/ISCC.exe"),
     Path.home() / "AppData/Local/Programs/Inno Setup 6/ISCC.exe",
@@ -262,7 +267,7 @@ def main() -> int:
         return 1
     compiler = find_compiler()
     if compiler is None:
-        print("Inno Setup 6 nicht gefunden — installieren oder ISCC auf den PATH legen.")
+        print("Inno Setup (7 oder 6) nicht gefunden — installieren oder ISCC auf den PATH legen.")
         return 1
     completed = subprocess.run(
         [

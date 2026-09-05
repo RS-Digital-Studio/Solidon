@@ -66,12 +66,14 @@ sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
 # den nativen Bestandteil abdecken. ``source_delivery`` sperrt den Release,
 # bis ein RS-kontrolliertes Quellarchiv und Austauschhinweise belegt sind.
 
+# Zwei Fassungen, solange die lokale Umgebung (3.13.14) und die CI (3.13.15)
+# beide Pakete bauen; wie bei OpenSSL nennt die Quelle deshalb das Repository.
 [[runtime]]
 id = "cpython"
 name = "CPython runtime"
 notice_source = "python-runtime"
-source = "https://github.com/python/cpython/tree/v3.13.14"
-versions = ["3.13.14"]
+source = "https://github.com/python/cpython"
+versions = ["3.13.14", "3.13.15"]
 
 [[runtime]]
 id = "appimage-type2-runtime"
@@ -208,9 +210,11 @@ name = "libxkbcommon"
 source = "https://github.com/xkbcommon/libxkbcommon"
 
 # Kerberos reist mit, weil ``libQt6Network`` aus dem PySide6-Wheel hart an
-# ``libgssapi_krb5.so.2`` hängt und die Flatpak-Laufzeit 24.08 kein Kerberos
-# trägt. Ubuntus ``libkrb5`` zieht ``libcom_err`` (e2fsprogs) und
-# ``libkeyutils`` nach; keyutils ist LGPL und braucht deshalb den Quellbeleg.
+# ``libgssapi_krb5.so.2`` hängt und PyInstaller die Bibliothek deshalb vom
+# Bau-Ubuntu einsammelt — die Flatpak-Laufzeit 24.08 trug kein Kerberos, 26.08
+# trägt eines, die gebündelte Kopie reist in beiden Fällen mit. Ubuntus
+# ``libkrb5`` zieht ``libcom_err`` (e2fsprogs) und ``libkeyutils`` nach;
+# keyutils ist LGPL und braucht deshalb den Quellbeleg.
 
 [[runtime]]
 id = "krb5"

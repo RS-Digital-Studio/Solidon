@@ -20,7 +20,7 @@ der Signatur ein anderes als das, das die CI geprüft hat.
     python tools/sign_release.py --run 123456789 --subject "Robert Schneider"
 
 Voraussetzungen: SimplySign Desktop verbunden, ``signtool`` aus dem Windows SDK
-und Inno Setup 6 installiert; für ``--run`` die GitHub-Kommandozeile ``gh``.
+und Inno Setup (7 oder 6) installiert; für ``--run`` die GitHub-Kommandozeile ``gh``.
 Das Ergebnis liegt unter ``dist/`` neben seiner ``.sha256`` — von dort geht
 es wie bisher weiter mit ``make_download.py``.
 """
@@ -360,8 +360,8 @@ def build_installer(stage: Path, handoff: dict[str, Any]) -> Path:
     compiler = make_installer.find_compiler()
     if compiler is None:
         raise SigningError(
-            "Inno Setup 6 nicht gefunden — installieren (winget install JRSoftware.InnoSetup) "
-            "oder ISCC auf den PATH legen."
+            "Inno Setup (7 oder 6) nicht gefunden — installieren "
+            "(winget install JRSoftware.InnoSetup) oder ISCC auf den PATH legen."
         )
     resolved = {key: resolve_handoff_path(stage, str(handoff[key])) for key in FIXED_PATHS}
     completed = _run(

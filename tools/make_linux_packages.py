@@ -618,7 +618,7 @@ def flatpak_manifest() -> str:
         f"# Von Hand geänderte Zeilen verliert der nächste Lauf.\n"
         f"id: {APP_ID}\n"
         f"runtime: org.freedesktop.Platform\n"
-        f"runtime-version: '24.08'\n"
+        f"runtime-version: '26.08'\n"
         f"sdk: org.freedesktop.Sdk\n"
         f"command: {APP_NAME}\n"
         f"finish-args:\n{permissions}\n"

@@ -86,7 +86,7 @@ UninstallDisplayIcon={app}\{#AppName}.exe
 
 ; Sechs Sprachen, dieselben wie in app/i18n/locales — wer die Anwendung auf
 ; Portugiesisch benutzt, soll sie nicht auf Englisch installieren müssen. Alle
-; fünf Kataloge liefert Inno Setup 6 selbst mit; Default.isl ist Englisch.
+; fünf Kataloge liefert Inno Setup selbst mit (7 wie 6); Default.isl ist Englisch.
 [Languages]
 ; Die Namen sind die Kürzel der Anwendung und nicht "german"/"english": So
 ; steht in ActiveLanguage() genau das, was app/i18n/locales erwartet, und
