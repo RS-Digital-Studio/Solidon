@@ -126,6 +126,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Geometriebefunde G-03 bis G-38 (35 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach den Oberflächenbefunden; jeder braucht zuerst seine Korpusdatei (AGENTS.md: Test zuerst bei Geometrie), und die Reihenfolge folgt der Kundenwirkung — verschwindende Löcher (G-03), ungültige Körper ohne Befund (G-04), verlorene Materialzuweisungen (G-10, G-12) vor den Bausteinmaßen |
 | Werkzeuge und Website: R25, R26, R31, R35, R37, R38 | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach der Geometrie; R35 (FAQ zu den übertragenen Daten) und R38 (widersprüchliche Fachagenten) sind Texte in sechs Sprachen bzw. vierzehn Dateien und brauchen einen ruhigen Durchgang, kein Zwischenstück |
 | Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38 | Was der Gesamtreview liegen ließ (05.09.2026) | einen Katalogdurchgang je Sprache — fünf Zeilen, aber jede gegen die sichtbare Oberfläche geprüft (Menüname, Feldtitel, Verlaufstitel), nicht gegen die deutsche Quelle allein |
+| Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | Was der Gesamtreview liegen ließ (05.09.2026) | die Umstellung des Viewports auf den Vertrag, dann den zweiten Renderer und die Messtabelle — in Arbeit (3d-druck-c7) |
 | Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht gefahren | Was der Gesamtreview liegen ließ (05.09.2026) | einen Tag-Lauf der CI für das Flatpak und danach eine Messung im echten Flatpak auf einem Linux (Grafik, Qt-Bibliotheken, Start ohne Netz); für Inno Setup 7 (lokal seit dem 05.09.2026 als 7.1.0 installiert) einen Bau samt Installation |
 | CORE-02 (verworfene Vorschläge reisen als Antworten weiter) und CORE-26 (nachträgliche Kragenhöhe) | Was der Gesamtreview liegen ließ (05.09.2026) | eine Entscheidung Roberts: CORE-02 ist eine Änderung der Projektdatei (Markierung am ChatEntry, format_version 20 mit Migration), CORE-26 macht die Deckelpassung parametrisch statt fest — beides Architektur, nicht Reparatur |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
@@ -10791,6 +10792,20 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   Fachagenten unter `.codex/agents/`.
 - [ ] **Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38** — je eine
   Katalogzeile, die gegen die sichtbare Oberfläche geprüft werden muss.
+- [~] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
+  direkt und pygfx/wgpu** (Entscheidung Robert, 05.09.2026: „bau beides und
+  mess“). Stand: `app/ui/render/api.py` (der Vertrag) und
+  `vtk_renderer.py` (VTK ohne PyVista) stehen und sind ohne Fenster am Bild
+  gemessen (`tests/test_render_vtk.py`). Es folgen: der renderer-neutrale
+  Navigator (Drehteller, Kippen, Schieben, Radzoom am Zeiger — heute
+  `_InteractorStyle`), der Bewegungsgriff ohne PyVistas Widget, die
+  Umstellung von `viewport.py`, `scale_widget.py` und `snapshots.py` auf den
+  Vertrag, dann `gfx_renderer.py` auf pygfx (Lizenzen zuerst: pygfx, wgpu,
+  rendercanvas, pylinalg, freetype-py, uharfbuzz, jinja2, hsluv), zuletzt
+  die Messtabelle auf Roberts Szenen und in einer VM — kopierte Bytes,
+  Aufbau- und Updatezeit, Drag-Framezeit, Speicher über Fenster- und
+  Sprachwechsel. Erst danach fallen PyVista und PyVistaQt aus den
+  Abhängigkeiten, und VTK darf auf 9.7.0.
 - [ ] **Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht
   gefahren** (05.09.2026): Die CI baut das Flatpak beim nächsten Tag-Lauf gegen
   26.08 (Manifest, Generator und Runner-Installation stehen darauf; 24.08 endet
