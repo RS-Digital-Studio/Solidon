@@ -17,6 +17,7 @@
 - [.venv auf 3.13](lokale-umgebung-python-version.md) — sonst prüft mypy still null Dateien.
 - [.venv verliert Dateien](venv-dateien-verschwinden.md) — RECORD nennt die fehlende, check_env nicht.
 - [Installer-Probe](installer-probe-nicht-mit-fenster.md) — Robert klickt durch; {app} zeigt auf HKCU.
+- [Inno Setup 7 nicht über winget](inno-setup-7-nicht-ueber-winget.md) — winget kennt nur 6.7.3; die 7 kommt signiert aus dem GitHub-Release, per Benutzer neben die 6.
 - [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — HID und Raw Input bleiben leer.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen teilen die Dateien.
 - [Abgebrochener Lauf hinterlässt Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) — vier Prozesse ohne lebenden Elternteil; „rechnet er“ und „wem gehört er“ sind zwei Fragen.
