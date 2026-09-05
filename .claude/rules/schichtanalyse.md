@@ -345,3 +345,26 @@ Analysekarten sind teuer: sie laufen im Hintergrund, sind abbrechbar und
 halten das Budget aus §31 ein (Wandstärke unter 3 s, Schichtanalyse bei
 200 000 Dreiecken und 0,2 mm unter 300 ms). Farbskala wahrnehmungsgleich, nie
 Regenbogen.
+
+## Auf einer Freiform sind Kugel, Ring, Kegel und Verrundung keine Merkmale (05.09.2026)
+
+Eine gekrümmte Fläche passt örtlich immer auf eine Kugel; die Nachtrennung an
+Krümmungssprüngen zerlegt einen Scan oder eine Figur in Dutzende Flecken, und
+jeder fittet. Ein Kiefer-Scan eines Kunden trug so 281 Rundformen und einen
+echten Zapfen. `features.is_a_freeform` entscheidet an der fertigen Liste
+(mindestens zwölf Kugeln und Ringe, mindestens sieben Zehntel aller
+Merkmale — die Zahlen und die Modelle dazu stehen an den Konstanten),
+`_shapes_on_a_freeform` nimmt dann die vier Rundformen heraus. Drei Sätze
+dazu:
+
+* **Bohrung, Zapfen, Fläche, Kantenzug und Gewinde bleiben.** Eine
+  Zylindereinpassung erfüllt eine Freiform nur dort, wo wirklich ein Zylinder
+  steckt; der Zapfen des Kunden war echt.
+* **Nicht still.** `freeform_dropped` nennt die Zahl, und die Auswertung macht
+  daraus `perceive.freeform` (Regel 17). Ein Merkmal, das verschwindet, ohne
+  dass ein Satz sagt warum, ist schlimmer als eines, das dasteht.
+* **Wer die Schwelle anfasst, misst an beiden Seiten** — an der Nozzle-Box
+  (konstruiert, 59 Prozent rund) und an der Retro-Maus (Figur, 77 Prozent).
+  Dazwischen liegt die Lücke, und sie ist schmal. Die Merkmals*zahl* und der
+  Rand der Flecken (Knick oder Ebene) trennen nicht; beides ist gemessen und
+  steht am Modul.

@@ -185,7 +185,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `show_build_volume` vergleicht seinen Stand nicht | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | eine Messung, wie teuer der zusätzliche Render je Auswertung wirklich ist — und dann **sechs** Zustände im Vergleich, nicht zwei: `_build_volume`, `beds`, `_profile`, `_sketch_frame`, `_bed_visible` und den Plattenumriss für den Kontaktschatten (`_bed_outline_for`). Ein vergessener Zustand lässt ein falsches Bett oder einen falschen Umriss stehen, während die Platte wechselt |
 | Das `pv.PolyData` jedes Körpers wird bei jedem Szenenaufbau neu gebaut | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Cache über Netz-Identität **und** `_view_offset` — der hängt an Platte und Explosion und ändert sich, ohne dass das Netz sich ändert. Kanten und Schattenzerlegung daneben sind längst gecacht. Messung davor und danach, sonst ist der Gewinn eine Behauptung |
 | Zwei rote Tests sind Altlast | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Erzeugerlauf für `THIRD-PARTY-NOTICES.md` (`hidapi` fehlt im Erzeugnis) und eine Klärung der Stützwahl in `test_autosplit` (Zusicherung um mehr als das Doppelte verfehlt). Beide auf HEAD in einem wegwerfbaren Worktree ziffernidentisch reproduziert — weder Regression noch einer Sitzung zuzurechnen |
-| Viele Merkmale und wenig erklärte Fläche sagen dasselbe | Was die Erkennung erklärt — und was nicht (04.09.2026) | eine belastbare Schranke aus Abdeckung je Merkmal oder dem Anteil rund gefitteter Merkmale; die Messreihe trennt die 21 geprüften konstruierten und organischen Modelle, ist aber noch kein allgemeiner Beweis |
 | `rotate_feature` ändert das Volumen ohne Befund | Was die Erkennung erklärt — und was nicht (04.09.2026) | entscheiden, ob und wie der Prüfbericht die geometrisch richtige Volumenänderung einer schräg gedrehten Bohrung sichtbar macht; gemessen sind 2,5 bis 92,9 mm³ an vier Modellen |
 
 ---
@@ -15902,7 +15901,7 @@ Die Messung ist robust gegen das Verkleinern, das die großen Modelle erst
 messbar macht: Der Besenhalter kommt unverkleinert auf 51,2 % und verkleinert
 auf 50,0 %.
 
-- [ ] **Viele Merkmale und wenig erklärte Fläche sind dieselbe Aussage von
+- [x] **Viele Merkmale und wenig erklärte Fläche sind dieselbe Aussage von
   zwei Seiten.** Am Spiderman erklären **400 Merkmale 5,9 Prozent** — 0,015 %
   je Stück. Am Besenhalter erklären 26 Merkmale 51 %, also 2 % je Stück, das
   Hundertdreißigfache. Ein Modell, dessen Merkmale im Schnitt ein
@@ -15936,6 +15935,29 @@ auf 50,0 %.
   Merkmale" misst: 26 Stück, halb organisch, 0 % — er fällt auf die richtige
   Seite. **Ein Beweis ist es nicht:** 21 Modelle sind wenige, und ein Modell
   mit einer echten Kugelkalotte und sonst wenig würde falsch einsortiert.
+
+  **Gebaut am 05.09.2026, aus dem Kiefer-Scan eines Kunden heraus** (162
+  Kuppeln, 98 Pfannen, 15 Wülste, 6 Kehlen, ein echter Zapfen):
+  `features.is_a_freeform` entscheidet an der fertigen Liste — mindestens
+  zwölf Kugeln und Ringe, mindestens sieben Zehntel aller Merkmale —,
+  `_shapes_on_a_freeform` nimmt dann Kugel, Ring, Kegel und Verrundung
+  heraus; Bohrung, Zapfen, Fläche, Kantenzug und Gewinde bleiben, und die
+  Auswertung meldet die Zahl als `perceive.freeform` (Regel 17). **Die
+  Schwelle liegt bei sieben Zehnteln und nicht bei der Hälfte, weil die
+  Nachmessung die Lücke schmaler fand als oben steht:** Die Nozzle-Box aus
+  den Community-Modellen ist konstruiert und trägt 69 Kugeln und Ringe unter
+  116 Merkmalen (59 %), das Screen-Cover 48 %; die fünf Figuren und Scans
+  (Retro-Maus, Spiderman, Rumpf, Katze, Segel) liegen bei 77 bis 95 %. Zwei
+  weitere Schranken sind gemessen und verworfen, damit sie niemand ein
+  zweites Mal misst: Der Rand der Flecken (Knick oder Ebene, wie ein
+  gemachtes Merkmal endet) trennt Segel und Katze (Median 0,00) von
+  Konstruiertem (0,75 bis 1,00), aber nicht den Voronoi-Spiderman und nicht
+  verkleinerte Netze, und eine echte tangentiale Verrundung endet an gar
+  keinem Knick; die bloße Merkmalszahl trennt 116 (Nozzle-Box) nicht von
+  112 (Katze). Ein synthetischer Scan — Beulen auf einer Kugel mit feinem
+  Rauschen — reproduziert den Fall im Test ohne Korpusdatei (39 Rundformen,
+  ohne Rauschen keine einzige). Was es kostet: Auf einer Figur mit einer
+  echten Senkung geht die Senkung mit — gemessen an noch keinem Modell.
 
 - [ ] **`rotate_feature` ändert das Volumen, und niemand sagt es.** Gemessen an
   vier Modellen: Eine Bohrung um 30° zu drehen kostet oder bringt zwischen

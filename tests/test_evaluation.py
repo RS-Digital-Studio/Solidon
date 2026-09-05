@@ -2146,3 +2146,54 @@ def test_the_recognition_reports_what_it_is_doing(monkeypatch: pytest.MonkeyPatc
 
     assert said, "die Erkennung meldet sich nicht"
     assert any("zuordnen" in text.lower() for text in said), said
+
+
+def test_what_the_recognition_left_out_on_a_freeform_is_said(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Merkmal, das still verschwindet, ist schlimmer als eines, das dasteht.
+
+    ``detect`` nimmt Kugeln, Ringe, Kegel und Verrundungen von einer Freiform
+    — ein Kiefer-Scan brachte 281 davon. Der Kunde sieht dann einen
+    Objektbaum, dem etwas fehlt, und der Befund sagt ihm, warum (Regel 17).
+    """
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 281)
+
+    entry = SceneObject(id="obj_1", name="Kiefer", mesh=_small_body())
+    findings: list[Finding] = []
+    evaluate_module._with_features(
+        entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    freeform = [item for item in findings if item.code == "perceive.freeform"]
+    assert len(freeform) == 1, [item.code for item in findings]
+    assert freeform[0].severity == "info"
+    assert freeform[0].values["dropped"] == 281
+    assert freeform[0].object_id == "obj_1" and freeform[0].op_id == 1
+
+
+def test_a_model_that_is_no_freeform_gets_no_such_finding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenrichtung: null weggelassen heißt kein Satz darüber."""
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
+
+    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+    findings: list[Finding] = []
+    evaluate_module._with_features(
+        entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    assert [item.code for item in findings if item.code == "perceive.freeform"] == []

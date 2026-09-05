@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import math
 from collections import OrderedDict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, NamedTuple
 
@@ -455,6 +455,60 @@ SINK_FIT_LIMIT = 0.25
 #: was getrennt gehört, und lässt beisammen, was eine Fläche ist.
 CURVATURE_JUMP = 0.5
 
+#: Ab welchem Anteil Kugeln und Ringe an **allen** Merkmalen das Modell eine
+#: Freiform ist — ein Scan, eine Figur, ein Segel.
+#:
+#: **Der Grund ist geometrisch, nicht statistisch.** Eine gekrümmte Fläche
+#: lässt sich örtlich immer an eine Kugel anpassen — das ist die Definition
+#: der Krümmung. :func:`_split_by_curvature` teilt eine Freiform an ihren
+#: Krümmungssprüngen in Flecken annähernd gleicher Krümmung, und auf jeden
+#: davon passt eine Kugel oder ein Ring innerhalb der Toleranz. Ein
+#: Kiefer-Scan eines Kunden (05.09.2026) trug so 162 Kuppeln, 98 Pfannen,
+#: 15 Wülste und 6 Kehlen; ein Segel hat keine 222 Kugeln.
+#:
+#: **Gemessen am 05.09.2026, alle Modelle auf 60 000 Dreiecke verkleinert:**
+#:
+#: | Modell | Art | Merkmale | Kugel + Ring |
+#: |---|---|---|---|
+#: | Korpus, Kundenzylinder, Mast, Besenhalter | konstruiert | 1 bis 26 | 0 bis 14 % |
+#: | Screen-Cover | konstruiert | 93 | 48 % |
+#: | Nozzle-Box | konstruiert | 116 | **59 %** |
+#: | Retro-Maus, Spiderman, Rumpf, Katze, Segel | Figur/Scan | 112 bis 958 | **77 bis 95 %** |
+#:
+#: Das Register vom 04.09.2026 nannte für Konstruiertes „0 bis 7 %, keine
+#: Überlappung" — das galt für dessen 21 Modelle. Die Nozzle-Box mit ihren
+#: verrundeten Kanten liegt bei 59 und zeigt, wie nah die Lücke ist: 59 zu 77.
+#: Sieben Zehntel liegen dazwischen, und keine der beiden Seiten hat mit
+#: siebzehn Modellen einen Beweis; der Vorbehalt steht im Register.
+#:
+#: **Zwei Schranken, die nicht getrennt haben, stehen hier, damit sie niemand
+#: ein zweites Mal misst:** Ob ein runder Fleck an Knicken oder Ebenen endet
+#: (ein gemachtes Merkmal tut das, ein Freiformfleck geht glatt in den nächsten
+#: über), trennt das Segel und die Katze (Median 0,00) von Konstruiertem
+#: (0,75 bis 1,00) — aber nicht den Voronoi-Spiderman, dessen Streben lauter
+#: Knicke sind, und nicht die verkleinerten Netze, deren grobe Dreiecke
+#: überall Knicke bilden; und eine echte tangentiale Verrundung am Fuß einer
+#: Säule endet an gar keinem Knick (0,00). Die Merkmals**zahl** allein trennt
+#: ebenfalls nicht: 116 an der Nozzle-Box gegen 112 an der Katze.
+FREEFORM_ROUND_SHARE: Final = 0.7
+
+#: … und ab wie vielen Kugeln und Ringen der Anteil überhaupt zählt.
+#:
+#: Ein Ring allein ist zu hundert Prozent rund und trotzdem ein Ring
+#: (``torus_ring.stl``: ein Merkmal, ein Torus). Zwölf sind mehr, als ein
+#: konstruiertes Teil des Korpus oder der Kundenmodelle je hatte (höchstens
+#: eine Pfanne, ein Ring, zwei Kegel), und weniger als die kleinste Figur
+#: brachte (96 an der Katze).
+FREEFORM_ROUND_COUNT: Final = 12
+
+#: Was auf einer Freiform keine Merkmale sind: die vier eingepassten
+#: Rundformen. Bohrung und Zapfen bleiben — eine Zylindereinpassung verlangt
+#: Normalen senkrecht zur Achse und einen engen Kreis, das erfüllt eine
+#: Freiform nur dort, wo wirklich ein Zylinder steckt: Der Kiefer-Scan trug
+#: genau einen Zapfen, und der war echt. Flächen, Kantenzüge und Gewinde
+#: stehen ohnehin nicht zur Debatte.
+_SHAPES_ON_A_FREEFORM: Final[frozenset[str]] = frozenset({"sphere", "torus", "cone", "fillet"})
+
 #: Die Merkmalsarten, die diese Datei aus einem Netz lesen kann.
 #:
 #: Gebraucht wird die Liste außerhalb, und zwar für eine Unterscheidung, die
@@ -491,6 +545,13 @@ _FEATURE_CACHE: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
 #: :data:`CACHE_INDEX_LIMIT` deckelt. Getrennt geführt, weil die Summe sonst
 #: bei jeder Verdrängung über alle Merkmale aller Einträge neu zu rechnen wäre.
 _CACHE_INDICES: OrderedDict[bytes, int] = OrderedDict()
+
+#: Je Eintrag, wie viele Rundformen :func:`_shapes_on_a_freeform` weggelassen
+#: hat — null für jedes Modell, das keine Freiform ist. Neben dem Ergebnis
+#: statt darin, weil ``detect`` seit je ein Wörterbuch von Merkmalen
+#: zurückgibt und zwei Dutzend Aufrufer genau das erwarten; die Auswertung
+#: fragt über :func:`freeform_dropped` nach und macht einen Befund daraus.
+_FREEFORM_DROPPED: OrderedDict[bytes, int] = OrderedDict()
 
 #: Wie viele Zwischenkörper der Cache behält. Eine Auswertung untersucht nicht
 #: nur die fertigen Objekte, sondern nach jeder Operation deren damaliges Netz.
@@ -547,6 +608,7 @@ def forget_cache() -> None:
     """Vergisst die gemerkten Erkennungen — für Tests und Messungen."""
     _FEATURE_CACHE.clear()
     _CACHE_INDICES.clear()
+    _FREEFORM_DROPPED.clear()
 
 
 def _one_body(mesh: MeshData) -> MeshData:
@@ -650,12 +712,15 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
         ]:
             found[feature.id] = feature
         found = _threads_instead_of_phantoms(mesh, found)
-    _log.info("detected %d features", len(found))
+        found, left_out = _shapes_on_a_freeform(found)
+    _log.info("detected %d features, %d left out as freeform", len(found), left_out)
     _FEATURE_CACHE[key] = found
     _CACHE_INDICES[key] = sum(len(feature.face_indices) for feature in found.values())
+    _FREEFORM_DROPPED[key] = left_out
     while len(_FEATURE_CACHE) > CACHE_LIMIT or sum(_CACHE_INDICES.values()) > CACHE_INDEX_LIMIT:
         oldest, _ = _FEATURE_CACHE.popitem(last=False)
         _CACHE_INDICES.pop(oldest, None)
+        _FREEFORM_DROPPED.pop(oldest, None)
         if not _FEATURE_CACHE:
             # Ein einzelner Eintrag über der Grenze bleibt: Ihn wegzuwerfen
             # hieße, ihn beim nächsten Aufruf sofort neu zu rechnen — der Cache
@@ -724,6 +789,72 @@ def _threads_instead_of_phantoms(
             face_indices=helix.face_indices,
         )
     return kept
+
+
+# --- Freiformen ------------------------------------------------------------------
+
+
+def is_a_freeform(found: Mapping[FeatureId, Feature]) -> bool:
+    """Ob diese Merkmalsliste von einer Freiform stammt.
+
+    Zwei Zahlen, beide an der fertigen Liste gezählt und keine an der
+    Geometrie: Wie viele Kugeln und Ringe es sind (:data:`FREEFORM_ROUND_COUNT`)
+    und welchen Anteil sie an allen Merkmalen haben
+    (:data:`FREEFORM_ROUND_SHARE`). Die Begründung beider Zahlen steht an den
+    Konstanten; die Kegel zählen hier **nicht** mit, weil sie auf
+    Konstruiertem häufig und echt sind (Nozzle-Box: 22 Senkungen).
+    """
+    if not found:
+        return False
+    round_shapes = sum(1 for feature in found.values() if feature.kind in ("sphere", "torus"))
+    return (
+        round_shapes >= FREEFORM_ROUND_COUNT and round_shapes / len(found) >= FREEFORM_ROUND_SHARE
+    )
+
+
+def _shapes_on_a_freeform(
+    found: dict[FeatureId, Feature],
+) -> tuple[dict[FeatureId, Feature], int]:
+    """Auf einer Freiform bleiben Bohrung, Zapfen, Fläche und Gewinde — die
+    Rundformen gehen.
+
+    Der Kiefer-Scan des Kunden zeigte im Objektbaum 162 Kuppeln, 98 Pfannen,
+    14 Verjüngungen, 9 Verrundungen und darunter, kaum zu finden, den einen
+    Zapfen, den es wirklich gab. Ein Baum mit dreihundert Einträgen, von denen
+    dreihundert Tesselierung sind, beantwortet keine Frage; er verdeckt die
+    Antwort — dieselbe Überlegung wie bei :func:`_too_small_to_make`, nur eine
+    Größenordnung weiter oben (Robert, 03.09.2026: „nur Merkmale, die auch
+    von der Größenordnung zum 3D-Drucker passen und sinnvoll sind").
+
+    **Nicht still.** Die Zahl der weggelassenen Formen wird neben dem Ergebnis
+    festgehalten (:func:`freeform_dropped`), und die Auswertung macht einen
+    Befund daraus — ein Merkmal, das verschwindet, ohne dass ein Satz sagt
+    warum, ist schlimmer als eines, das dasteht (Regel 17).
+
+    **Was es kostet, steht dazu:** Auf einer Figur mit einer echten Senkung
+    geht die Senkung mit. Bohrung und Zapfen bleiben, also bleibt der Weg zum
+    Loch; die Senkung darüber ist auf einer Freiform der seltenere Fall als
+    die hundert erfundenen, und gemessen ist er noch an keinem Modell.
+    """
+    if not is_a_freeform(found):
+        return found, 0
+    kept = {
+        name: feature
+        for name, feature in found.items()
+        if feature.kind not in _SHAPES_ON_A_FREEFORM
+    }
+    return kept, len(found) - len(kept)
+
+
+def freeform_dropped(mesh: MeshData) -> int:
+    """Wie viele Rundformen :func:`detect` an diesem Netz als Freiform wegließ.
+
+    Null für jedes Modell, das keine Freiform ist — und null für ein Netz, das
+    ``detect`` noch nicht gesehen hat oder dessen Eintrag der Cache schon
+    verdrängt hat. Die Auswertung fragt unmittelbar nach ``detect`` und trifft
+    damit immer den frischen Eintrag.
+    """
+    return _FREEFORM_DROPPED.get(_mesh_key(mesh), 0)
 
 
 # --- Bohrungen -------------------------------------------------------------------

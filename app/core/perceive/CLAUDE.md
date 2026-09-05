@@ -100,6 +100,13 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
 
 - **Erkennen heißt nicht ändern.** Hier entsteht keine Geometrie.
 - Mehrdeutigkeit wird gemeldet, nicht aufgelöst (§15.7, Regel 21).
+- **Eine Freiform bekommt keine Rundformen.** Ein Scan oder eine Figur
+  zerfällt an den Krümmungssprüngen in Dutzende Flecken, und auf jeden passt
+  eine Kugel; `is_a_freeform` erkennt das an der fertigen Liste, und
+  `_shapes_on_a_freeform` lässt Kugel, Ring, Kegel und Verrundung weg —
+  Bohrung, Zapfen und Fläche bleiben. `freeform_dropped` nennt der Auswertung
+  die Zahl für den Befund `perceive.freeform`. Die Regel steht in
+  `.claude/rules/schichtanalyse.md`.
 - **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und

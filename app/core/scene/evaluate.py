@@ -29,7 +29,7 @@ from app.core import expressions
 from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.perceive.features import DETECTABLE_KINDS, detect
+from app.core.perceive.features import DETECTABLE_KINDS, detect, freeform_dropped
 from app.core.perceive.matching import (
     apply_mapping,
     fingerprint,
@@ -1079,6 +1079,30 @@ def _with_features(
     if say is not None:
         say(str(_("Merkmale erkennen")))
     detected = detect(mesh)
+
+    # **Was auf einer Freiform weggelassen wurde, steht hier, nicht nirgends.**
+    # ``detect`` nimmt Kugeln, Ringe, Kegel und Verrundungen von einem Modell,
+    # das die Erkennung als Freiform einstuft (``features._shapes_on_a_freeform``),
+    # denn dort bezeichnen sie nichts — ein Kiefer-Scan brachte 281 davon.
+    # Ohne den Satz sähe der Kunde einen Objektbaum, dem etwas fehlt, und
+    # fände nirgends den Grund (Regel 17); ein Merkmal, das still verschwindet,
+    # ist schlimmer als eines, das dasteht.
+    left_out = freeform_dropped(mesh)
+    if left_out:
+        findings.append(
+            Finding(
+                code="perceive.freeform",
+                severity="info",
+                message=_(
+                    "Dieses Modell ist eine Freiform, etwa ein Scan. Kugeln, Ringe, Kegel "
+                    "und Verrundungen, die die Erkennung darauf fand, sind keine Merkmale "
+                    "und wurden weggelassen; Bohrungen, Zapfen und ebene Flächen bleiben."
+                ),
+                object_id=entry.id,
+                op_id=operation.id,
+                values={"dropped": left_out},
+            )
+        )
 
     # **Und hier hört es auf, wenn es zu viele geworden sind.** Die
     # Dreiecksgrenze oben zählt Dreiecke; diese zählt, was daraus geworden ist,

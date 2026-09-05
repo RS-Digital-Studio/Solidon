@@ -17,11 +17,14 @@ import trimesh
 
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
+from app.core.perceive import features as features_module
 from app.core.perceive.features import (
     _FEATURE_CACHE,
     CACHE_LIMIT,
     CYLINDER_TOLERANCE,
     EDGE_LOOP_LIMIT,
+    FREEFORM_ROUND_COUNT,
+    FREEFORM_ROUND_SHARE,
     component_count,
     detect,
     detect_cones,
@@ -34,9 +37,11 @@ from app.core.perceive.features import (
     fit_cylinder,
     fit_torus,
     forget_cache,
+    freeform_dropped,
+    is_a_freeform,
 )
 from app.core.perceive.relations import widening_at_the_mouth
-from app.core.types import Profile
+from app.core.types import Feature, Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -2520,3 +2525,126 @@ def test_the_width_is_asked_where_the_diameter_is_asked() -> None:
     assert comparisons == ["return area / reach < MIN_SURFACE_WIDTH"], (
         "die Breitenschranke wird nur in _a_sliver verglichen: " + "; ".join(comparisons)
     )
+
+
+# --- Freiformen -----------------------------------------------------------------
+
+
+def _listed(kinds: dict[str, int]) -> dict[str, Feature]:
+    """Eine Merkmalsliste, wie ``detect`` sie zurückgäbe — nur die Arten zählen."""
+    return {
+        f"{kind}_{number}": Feature(
+            id=f"{kind}_{number}", kind=kind, provenance="detected", params={}
+        )
+        for kind, count in kinds.items()
+        for number in range(1, count + 1)
+    }
+
+
+def _scan_like_blob(seed: int = 7) -> MeshData:
+    """Ein Körper wie ein Scan: glatte Beulen auf einer Kugel, feines Rauschen,
+    unten eine ebene Standfläche.
+
+    **Ohne das Rauschen findet die Erkennung an so einem Körper nichts** —
+    die Krümmung ändert sich zu stetig, als dass ``_split_by_curvature``
+    Flecken abteilte (gemessen am 05.09.2026: zwei Flächen, sonst nichts).
+    Mit ihm zerfällt die Oberfläche in Dutzende Flecken annähernd gleicher
+    Krümmung, und auf jeden passt eine Kugel — genau der Mechanismus, der auf
+    dem Kiefer-Scan eines Kunden 281 Rundformen fand; hier sind es 39.
+    """
+    rng = np.random.default_rng(seed)
+    ball = trimesh.creation.icosphere(subdivisions=5, radius=20.0)
+    vertices = np.asarray(ball.vertices, dtype=float).copy()
+    unit = vertices / np.linalg.norm(vertices, axis=1)[:, None]
+    centres = rng.normal(size=(40, 3))
+    centres /= np.linalg.norm(centres, axis=1)[:, None]
+    widths = rng.uniform(0.15, 0.5, size=40)
+    heights = rng.uniform(-0.25, 0.25, size=40)
+    scale = np.ones(len(vertices))
+    for centre, width, height in zip(centres, widths, heights, strict=True):
+        distance = np.arccos(np.clip(unit @ centre, -1.0, 1.0))
+        scale += height * np.exp(-((distance / width) ** 2))
+    scale += rng.normal(scale=0.01, size=len(vertices))
+    blob = trimesh.Trimesh(vertices=vertices * scale[:, None], faces=ball.faces, process=False)
+    with_base = trimesh.intersections.slice_mesh_plane(
+        blob, plane_normal=(0.0, 0.0, 1.0), plane_origin=(0.0, 0.0, -12.0), cap=True
+    )
+    return MeshData.of(with_base)
+
+
+def test_the_freeform_verdict_needs_the_count_and_the_share() -> None:
+    """Zwei Zahlen an der fertigen Liste — und die Fälle, an denen sie gemessen sind.
+
+    Die Nozzle-Box ist der wichtige: konstruiert, 116 Merkmale, 69 davon
+    Kugeln und Ringe (59 %). Das Register vom 04.09.2026 kannte für
+    Konstruiertes nur 0 bis 7 %; die Schwelle liegt deshalb bei sieben
+    Zehnteln und nicht bei der Hälfte. Der Ring allein ist zu hundert Prozent
+    rund und trotzdem ein Ring — dafür die Mindestzahl.
+    """
+    assert math.isclose(FREEFORM_ROUND_SHARE, 0.7)
+    assert FREEFORM_ROUND_COUNT == 12
+
+    assert is_a_freeform(_listed({"sphere": 8, "torus": 4}))
+    assert is_a_freeform(_listed({"sphere": 60, "torus": 40, "cone": 10, "face": 20})), (
+        "77 Prozent, wie die Retro-Maus"
+    )
+    assert not is_a_freeform(
+        _listed({"sphere": 17, "torus": 52, "cone": 22, "hole": 8, "face": 16, "fillet": 1})
+    ), "die Nozzle-Box: konstruiert, 59 Prozent rund"
+    assert not is_a_freeform(_listed({"sphere": 11, "face": 1})), "elf sind zu wenige"
+    assert not is_a_freeform(_listed({"torus": 1})), "torus_ring.stl: ein Ring ist ein Ring"
+    assert not is_a_freeform({})
+
+
+def test_on_a_freeform_the_round_shapes_go_and_the_rest_stays() -> None:
+    kept, dropped = features_module._shapes_on_a_freeform(
+        _listed({"sphere": 20, "torus": 10, "cone": 3, "fillet": 2, "hole": 1, "pin": 1, "face": 2})
+    )
+    assert dropped == 35
+    assert {feature.kind for feature in kept.values()} == {"hole", "pin", "face"}
+
+    unchanged = _listed({"sphere": 1, "face": 6})
+    assert features_module._shapes_on_a_freeform(unchanged) == (unchanged, 0)
+
+
+def test_a_scan_keeps_its_flat_base_and_loses_the_invented_round_shapes() -> None:
+    """Der Kundenfall an einem Körper aus dem Test selbst — ohne Korpusdatei,
+    weil kein freies Scanmodell im Korpus liegt.
+
+    Was bleibt, ist das Echte: die ebene Standfläche. Was geht, sind die
+    Kugeln und Ringe, die die Krümmungsflecken hergaben — und der Zähler
+    daneben sagt der Auswertung, wie viele es waren (Regel 17).
+    """
+    mesh = _scan_like_blob()
+    forget_cache()
+
+    found = detect(mesh)
+
+    kinds = {feature.kind for feature in found.values()}
+    assert freeform_dropped(mesh) >= FREEFORM_ROUND_COUNT, freeform_dropped(mesh)
+    assert not kinds & {"sphere", "torus", "cone", "fillet"}, kinds
+    assert "face" in kinds, "die Standfläche ist echt und bleibt"
+
+
+def test_without_the_rule_the_same_scan_carries_dozens_of_round_shapes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenprobe: Der Test darüber misst die Regel und nicht den Körper."""
+    monkeypatch.setattr(features_module, "FREEFORM_ROUND_COUNT", 10**6)
+    forget_cache()
+
+    found = detect(_scan_like_blob())
+
+    round_shapes = [f for f in found.values() if f.kind in ("sphere", "torus")]
+    assert len(round_shapes) >= FREEFORM_ROUND_COUNT, len(round_shapes)
+    assert freeform_dropped(_scan_like_blob()) == 0
+
+
+def test_a_constructed_part_with_one_round_feature_is_left_alone() -> None:
+    """Die Gegenrichtung am Korpus: Pfanne, Ring und Verrundung bleiben."""
+    for name in ("sphere_socket.stl", "torus_ring.stl", "post_with_fillet.stl"):
+        forget_cache()
+        mesh = plate(name)
+        found = detect(mesh)
+        assert freeform_dropped(mesh) == 0, name
+        assert any(f.kind in ("sphere", "torus") for f in found.values()), name

@@ -964,6 +964,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "dependency": _("Begleitdatei"),
     "depth": _("Tiefe"),
     "deviation": _("Abweichung"),
+    # ``perceive.freeform``: wie viele Rundformen die Erkennung auf einer
+    # Freiform wegließ — der Kunde liest die Zahl im Prüfbericht.
+    "dropped": _("Weggelassen"),
     "body_diameter": _("Breiteste Stelle des Körpers"),
     "diameter": _("Durchmesser"),
     "widening": _("Senkung darüber"),
