@@ -584,3 +584,18 @@ def test_info_reads_every_shipped_example(
     gedruckt = capsys.readouterr().out
     assert "Objekte" in gedruckt, f"{beispiel.name} beschreibt keine Objekte"
     assert "Verlauf" in gedruckt, f"{beispiel.name} zeigt keinen Verlauf"
+
+
+def test_a_default_true_switch_can_be_turned_off_from_the_command_line() -> None:
+    """Gesamtreview 05.09.2026, CORE-20: Jeder Bool-Parameter bekam nur ein
+    ``store_true`` — für ``compensate`` (Vorgabe wahr) gab es keinen Aufruf,
+    der es abschaltet; eine Bohrung mit Nennmaß war über die Kommandozeile
+    nicht erreichbar. ``--no-compensate`` gibt es jetzt, und nicht gesagt
+    bleibt nicht gesagt."""
+    from app.cli.main import build_parser
+
+    parser = build_parser()
+
+    assert parser.parse_args(["run", "drill_hole", "x.p3d"]).compensate is None
+    assert parser.parse_args(["run", "drill_hole", "x.p3d", "--compensate"]).compensate is True
+    assert parser.parse_args(["run", "drill_hole", "x.p3d", "--no-compensate"]).compensate is False

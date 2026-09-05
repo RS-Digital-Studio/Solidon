@@ -527,10 +527,17 @@ def build_parser() -> argparse.ArgumentParser:
         entry.add_argument("--seed", type=int, default=None)
         for argument in command.arguments:
             if argument.kind == "bool":
+                # Beide Zustände, nicht nur der wahre: ``--compensate`` und
+                # ``--no-compensate``. Mit ``store_true`` gab es für eine
+                # standardmäßig wahre Vorgabe — ``compensate`` beim Bohren,
+                # ``fill_holes`` beim Reparieren — keinen Aufruf, der sie
+                # abschaltet; der Nennmaßweg war über die Kommandozeile nicht
+                # erreichbar (Gesamtreview 05.09.2026, CORE-20). ``None``
+                # bleibt „nicht gesagt", und das Schema entscheidet dann.
                 entry.add_argument(
                     argument.flag,
                     dest=argument.name,
-                    action="store_true",
+                    action=argparse.BooleanOptionalAction,
                     default=None,
                     help=argument.help,
                 )
