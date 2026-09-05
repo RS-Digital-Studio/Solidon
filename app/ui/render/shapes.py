@@ -50,7 +50,7 @@ def closed_ring(points: np.ndarray) -> np.ndarray:
     return np.vstack([points, points[:1]])
 
 
-def polygon(points: Sequence[Sequence[float]]) -> Mesh:
+def polygon(points: Sequence[Sequence[float]] | np.ndarray) -> Mesh:
     """Ein konvexes Vieleck als Fächer von Dreiecken um seinen ersten Punkt."""
     corners = np.asarray(points, dtype=float).reshape(-1, 3)
     count = len(corners)

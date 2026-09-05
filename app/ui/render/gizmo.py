@@ -195,6 +195,11 @@ class Gizmo:
         self.pressing = False
 
     @property
+    def arrow_length(self) -> float:
+        """Die Länge der Pfeile — die Beschriftung stellt ihre Buchstaben dahinter."""
+        return self._arrow_length
+
+    @property
     def axes(self) -> np.ndarray:
         return self._axes.copy()
 

@@ -15,6 +15,7 @@ import pytest
 import trimesh
 
 from app.ui.render import shapes
+from app.ui.render.edges import feature_edges
 
 
 def as_trimesh(mesh: shapes.Mesh) -> trimesh.Trimesh:
@@ -115,3 +116,20 @@ def test_merge_shifts_indices_and_plane_faces_up() -> None:
     )
     assert normal[2] > 0.0
     assert shapes.triangle_soup(2).tolist() == [[0, 1, 2], [3, 4, 5]]
+
+
+def test_feature_edges_are_the_creases_and_the_open_rims() -> None:
+    """Ein Würfel hat zwölf Kanten — seine sechs Flächendiagonalen sind
+    keine, denn dort knickt nichts. Eine Platte aus zwei Dreiecken hat vier
+    Ränder und keine Diagonale; Boden und Wand aus je zwei Dreiecken im
+    rechten Winkel haben sechs Ränder und dazu die eine scharfe Kante, die
+    bei einem größeren Knick als Grenze wieder wegfällt."""
+    vertices, faces = shapes.cube((0.0, 0.0, 0.0), 2.0)
+    assert len(feature_edges(vertices, faces, 30.0)) == 12 * 2
+    plate_vertices, plate_faces = shapes.plane((0.0, 0.0, 0.0), 4.0, 2.0)
+    assert len(feature_edges(plate_vertices, plate_faces, 30.0)) == 4 * 2
+    roof = np.array([[0, 0, 0], [2, 0, 0], [2, 2, 0], [0, 2, 0], [2, 0, 2], [2, 2, 2]], dtype=float)
+    roof_faces = np.array([[0, 1, 2], [0, 2, 3], [1, 4, 5], [1, 5, 2]])
+    assert len(feature_edges(roof, roof_faces, 30.0)) == 7 * 2
+    assert len(feature_edges(roof, roof_faces, 100.0)) == 6 * 2
+    assert feature_edges(roof, np.zeros((0, 3), dtype=int), 30.0).shape == (0, 3)
