@@ -1,5 +1,9 @@
 # YouTube-Videos — englische Fassungen der Hobby-Konstruktionen
 
+Aktuelle gespeicherte Termine und einsteigerorientierte Studio-Titel stehen im
+[Veröffentlichungsplan](publication-plan-2026-09.md). Die Beschreibungen unten
+sind die früheren Produktionsentwürfe, nicht wortgleich mit dem aktuellen Upload.
+
 Englische App-Oberfläche, Einblendungen, Objekt- und Parameternamen. Kein
 Sprecher; jedes Tutorial verwendet sein eigenes erzeugtes Musikstück.
 Die Kapitel sind mit der `.timeline.json` des jeweiligen fertigen Films abgeglichen.

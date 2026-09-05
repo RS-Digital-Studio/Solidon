@@ -1,5 +1,9 @@
 # YouTube-Videos — praktische Konstruktionen für Hobby-3D-Drucker
 
+Aktuelle gespeicherte Termine und einsteigerorientierte Studio-Titel stehen im
+[Veröffentlichungsplan](publication-plan-2026-09.md). Die Texte und empfohlenen
+Termine unten sind die früheren Produktionsentwürfe, nicht der aktuelle Upload-Stand.
+
 Die drei Filme beginnen in einem leeren Solidon-Projekt und bauen jeweils ein
 wirklich ausgewertetes Modell. Es gibt keinen Sprecher: gut lesbare deutsche
 Einblendungen, den echten Windows-Mauszeiger und ein vollständig selbst
