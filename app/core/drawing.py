@@ -86,7 +86,10 @@ PALETTES: Final[dict[Theme, Palette]] = {
     "light": Palette(
         paper="#ffffff",
         ink="#1c2026",
-        muted="#8b929b",
+        # 4,5:1 gegen das Papier (WCAG 1.4.3): ``#8b929b`` brachte 3,1 und war
+        # als Beschriftung einer Zeichnung nicht lesbar (Gesamtreview
+        # 05.09.2026, CORE-35).
+        muted="#5f6772",
         accent="#2f6fb0",
         warn="#b4611c",
         fill="#e9ebee",
@@ -96,7 +99,7 @@ PALETTES: Final[dict[Theme, Palette]] = {
     "dark": Palette(
         paper="#1b1f25",
         ink="#e6e9ee",
-        muted="#7c848f",
+        muted="#8f97a2",
         accent="#6ba3dd",
         warn="#d99048",
         fill="#262b33",

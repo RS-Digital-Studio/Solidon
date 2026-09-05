@@ -203,3 +203,15 @@ def test_the_difference_legend_gives_each_entry_its_own_colour(name: str) -> Non
     assert palette.added.colour != palette.removed.colour or name == "greyscale", (
         "Zwei Kodierungen, eine Farbe — dann trägt allein das Zeichen."
     )
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_the_muted_ink_of_a_drawing_is_readable_on_its_paper(theme: str) -> None:
+    """Gesamtreview 05.09.2026, CORE-35: Die Nebenbemerkungen einer
+    Zeichnung — Maßhilfslinien, Beschriftungen zweiter Ordnung — standen mit
+    3,1:1 auf dem Papier. Als Text gilt die Grenze aus WCAG 1.4.3, und die
+    liegt bei 4,5:1."""
+    from app.core.drawing import PALETTES
+
+    palette = PALETTES[theme]  # type: ignore[index]
+    assert contrast_ratio(palette.muted, palette.paper) >= 4.5
