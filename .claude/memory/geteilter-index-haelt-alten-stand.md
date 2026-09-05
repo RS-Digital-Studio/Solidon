@@ -255,3 +255,41 @@ Indexstände sehen.
 Verwandt: [[verursacher-wird-gemessen-nicht-gelesen]] (dieselbe Bewegung:
 nicht die naheliegende Anzeige lesen, sondern die Frage messen),
 [[messung-galt-fuer-den-stand-davor]].
+
+
+---
+
+## Es gibt einen Beweis, und damit ist „nicht heilen" eine Frage statt einer Regel
+
+Oben steht zweimal, `read-tree HEAD` auf den Haupt-Index sei zu grob, weil es
+fremde Vormerkungen wegwirft — mit dem Fall vom 03.09.2026, an dem jemand
+zweimal pfadlos zurückgesetzt und 86 gestagte Einträge mitgenommen hat. Der
+Einwand ist richtig und er hat eine Lücke: Er sagt, man **wisse** nicht, ob
+dort Arbeit liegt. Man kann es wissen.
+
+    git write-tree                          # den Baum des Index schreiben
+    git rev-parse <commit>^{tree}           # und gegen die letzten Commits halten
+
+Ist der Index-Baum **bitgleich** mit dem Baum irgendeines Commits, enthält der
+Index genau diesen Stand und keinen einzigen abweichenden Eintrag — dann ist er
+reine Veraltung, und `read-tree HEAD` verliert nachweislich nichts. Weicht er
+ab, steht dort etwas, das kein Commit hat: dann pfadweise, wie oben.
+
+Am 04.09.2026 angewandt: Der Haupt-Index führte 2299 Löschungen über 30
+Dateien, darunter zwei fremde Testdateien und zwei gerade committete eigene.
+`git write-tree` ergab einen Baum, der mit dem von `31e08835` identisch war —
+zwölf Commits alt und ohne eine einzige Vormerkung. Danach `read-tree HEAD`,
+`git diff --cached` leer, nichts verloren.
+
+**Why:** Ohne diesen Griff bleibt nur die Wahl zwischen zwei Fehlern — die Mine
+liegen lassen (und irgendwer löscht später fremde Dateien, ohne dass ein Diff
+es zeigt) oder pauschal heilen (und fremde Vorbereitung wegwerfen). Der
+Baumvergleich beantwortet in zwei Sekunden, welcher der beiden Fälle vorliegt.
+Er antwortet dabei **exakt**: Ein Baumhash deckt jeden Eintrag, jeden Modus und
+jeden Pfad ab; es gibt kein „fast gleich".
+
+**How to apply:** Vor jedem Eingriff am Haupt-Index den Baum schreiben und
+gegen `git log --format=%H -20` vergleichen. Trifft er, heilen und es den
+anderen Sitzungen **sagen** — sie sehen den Index nicht als ihren, aber sie
+committen damit. Trifft er nicht, die abweichenden Pfade einzeln ansehen
+(`git diff --name-status --cached HEAD`) und nur die eigenen zurücksetzen.

@@ -140,6 +140,9 @@
 - [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — nur eine Differenz trennt.
 - [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Kette dahinter war erfunden.
 - [Prüfstand misst seine Nachstellung](pruefstand-misst-seine-nachstellung.md) — die alte Bauart nachgebaut statt geholt; fünf von fünf rot, kein Fehler.
+- [any misst den Rand](any-ueber-einen-flicken-misst-den-rand.md) — „grenzt an" statt „ist"; jeder Fleck hat einen Rand.
+- [Periode antwortet auf Teiler](periodizitaet-antwortet-auch-auf-teiler.md) — p/2 kann höher stehen als p; der größte Gipfel gilt.
+- [Welche Bedingung entscheidet allein](welche-bedingung-entscheidet-allein.md) — fünf sahen tragend aus, eine war es.
 - [Sondenbau](sondenbau.md) — im großen Lauf misst eine Sonde den Unterschied.
 - [Hilfsmodul verstellt den Suchpfad](hilfsmodul-verstellt-den-suchpfad.md) — run_ui_audit setzt `F:\3D Druck` an sys.path[0]; der Fix sieht wirkungslos aus.
 - [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht".
@@ -161,6 +164,7 @@
 - [Spanne ist keine Zahl](eine-spanne-ist-keine-zahl.md) — Vereinheitlichen frisst das Bewegliche.
 - [Eigener Messfehler](eigener-messfehler-widerlegt-den-befund-nicht.md) — zwei getrennte Fragen.
 - [Am Eingang drehen](am-eingang-drehen.md) — antwortet die Messung immer gleich, misst sie nichts.
+- [Form festhalten, eine Achse variieren](form-festhalten-eine-achse-variieren.md) — `subdivide` trennt Form von Dreieckszahl; Modellvergleich und Reihe beantworten Verschiedenes.
 - [Eingestellt ≠ Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — `ch` ist nicht Zeichen, String nicht Bild.
 - [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md) — je schlimmer der Fall, desto stiller.
 - [Benannte Falle schützt nicht](benannte-falle-schuetzt-nicht.md) — der Satz liest sich als Beleg.
@@ -192,6 +196,8 @@
 
 - [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Baum ändert sich mitten in der Sitzung.
 - [Parallele Sitzung im Baum](parallele-sitzung-im-arbeitsbaum.md) — Fremdes aussortieren, privater Index.
+- [Fremder Zwischenstand](fremder-zwischenstand-statt-repository.md) — auf HEAD messen, sonst gilt die Antwort für keinen Baum.
+- [Werkzeug las mitten im Schreiben](werkzeug-las-mitten-im-schreiben.md) — identische `-`/`+`-Zeile im Diff; echt gemessen und über nichts.
 - [Sitzung sendet ins Leere](sitzung-sendet-ohne-erreichbar-zu-sein.md) — der Kanal ist nicht beidseitig.
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — sonst Exit 128.
 - [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — neue Maschine: link_memory.py.

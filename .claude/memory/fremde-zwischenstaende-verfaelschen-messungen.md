@@ -32,6 +32,11 @@ Temp-Ordner kopiert und die Kopie fährt.
 `mypy` ohne Argument (wie im Tor) meldete null über 214 Dateien. Der Aufruf mit
 Dateinamen umgeht Teile der Projektkonfiguration.
 
+**Die Gegenrichtung steht in [[fremder-zwischenstand-statt-repository]]:**
+Dort wird der Lauf nicht rot, sondern **grün** — eine Frage über das
+Projekt, beantwortet an fremder ungespeicherter Arbeit. Diese Richtung
+fällt nicht auf, weil ein besseres Ergebnis nach Fortschritt aussieht.
+
 **Warum:** Ein privater Git-Index schützt vor fremden *Commits*. Er schützt
 nicht davor, dass ein fremder halbfertiger Zustand in den eigenen *Lauf* gerät
 — und das ist der Fall, der Stunden kostet, weil die Fehlermeldung auf den
