@@ -12,6 +12,7 @@ Operationen — sie beißen in dem Moment, in dem eine unvollständig hinzukommt
 from __future__ import annotations
 
 import ast
+import functools
 import inspect
 import re
 import textwrap
@@ -161,6 +162,21 @@ def parts_under_range_check() -> set[str]:
     return geprueft
 
 
+@functools.cache
+def _test_sources() -> dict[str, str]:
+    """Der Text jeder Testdatei, einmal je Sitzung gelesen.
+
+    Die Namenssuche darunter läuft je registrierter Operation, und jeder
+    Durchgang las bis hierher sämtliche Testdateien erneut — hunderte
+    Operationen mal hunderte Dateien, für dieselben Bytes.
+    """
+    return {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted(TESTS_DIR.rglob("test_*.py"))
+        if path.name != Path(__file__).name
+    }
+
+
 @pytest.mark.parametrize("spec", registered(), ids=ids)
 def test_every_operation_has_a_test(spec: OperationSpec) -> None:
     """Eine neue Operation ohne Test ist nicht fertig (AGENTS.md, Checkliste).
@@ -180,11 +196,7 @@ def test_every_operation_has_a_test(spec: OperationSpec) -> None:
     Namenssuche, und ein Baustein ohne beides ist so ungeprüft wie jede andere
     Operation ohne Test.
     """
-    mentions = [
-        path.name
-        for path in TESTS_DIR.rglob("test_*.py")
-        if path.name != Path(__file__).name and spec.name in path.read_text(encoding="utf-8")
-    ]
+    mentions = [name for name, text in _test_sources().items() if spec.name in text]
     if mentions:
         return
 
