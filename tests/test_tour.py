@@ -688,3 +688,35 @@ def test_the_fit_tour_names_the_numbers_the_report_shows() -> None:
         assert not fehlend, f"{sprache}: die Tour nennt {fehlend} nicht, der Bericht schon"
 
     set_language(SOURCE_LANGUAGE)
+
+
+def test_the_undo_step_of_way_one_means_the_number_not_the_hole() -> None:
+    """Gesamtreview 05.09.2026, CORE-32: Der Schritt sagte, nach Strg+Z sei
+    das Loch zu — zurückgenommen wird aber der letzte Schritt, und das ist
+    die Zahl. Die Erkennung fragte nur ``can_redo`` und quittierte damit
+    auch ein Undo, nach dem der Durchmesser noch nicht wieder auf 4,2 mm
+    steht."""
+    project, history = _opened("weg1-halterung-anpassen")
+    document = project.document
+    step = tour_for("weg1-halterung-anpassen").steps[2]  # type: ignore[union-attr]
+    assert step.done is not None
+
+    assert "4,2 mm" in str(step.text)
+    assert "Loch ist zu" not in str(step.text)
+
+    op_id = _op_id(document, "drill_hole")
+    history.change_params(op_id, {"diameter": 6.0})
+    history.change_params(op_id, {"diameter": 7.0})
+    history.undo()
+
+    assert history.can_redo
+    assert not step.done(document, history), "6,0 mm ist nicht 4,2 mm — der Satz stimmt noch nicht"
+
+    history.undo()
+    assert step.done(document, history), "jetzt steht die Zahl wieder, und die Bohrung bleibt"
+    assert abs(_first_drill_diameter(document) - 4.2) < 1e-9
+
+
+def _first_drill_diameter(document: Document) -> float:
+    entry = next(entry for entry in document.ops if entry.op == "drill_hole")
+    return float(entry.params["diameter"])

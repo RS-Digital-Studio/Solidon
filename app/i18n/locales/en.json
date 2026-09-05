@@ -1568,7 +1568,7 @@
   "Druckzeit etwa": "Print time about",
   "Druckziel": "Print target",
   "Druckziel geändert": "Print target changed",
-  "Drücken Sie Strg+Z. Der letzte Schritt verschwindet als Ganzes, das Loch ist zu — als wäre nie gebohrt worden.": "Press Ctrl+Z. The last step disappears as a whole, the hole is closed — as if it had never been drilled.",
+  "Drücken Sie Strg+Z. Zurückgenommen wird immer der letzte Schritt, und das war die Zahl: Der Durchmesser steht wieder auf 4,2 mm, die Bohrung bleibt. Erst ein zweites Strg+Z nähme den Bohrschritt selbst zurück.": "Press Ctrl+Z. What is taken back is always the last step, and that was the number: the diameter is back at 4.2 mm, the hole stays. Only a second Ctrl+Z would take back the drilling step itself.",
   "Dunkel": "Dark",
   "Dunkle Geometrie auf hellem Grund.": "Dark geometry on a light background.",
   "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind hervorgehoben: dort beginnt Material in der Luft.": "Scrub through the height and look at the cross-section. Islands are highlighted: that is where material starts in mid-air.",

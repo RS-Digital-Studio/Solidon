@@ -123,6 +123,32 @@ def _undo_happened(document: Document, history: History) -> bool:
     return history.can_redo
 
 
+def _undo_put_back(name: str, field: str, value: float) -> StepCheck:
+    """Getan, sobald ein Undo den Wert eines Schritts zurückgestellt hat — und
+    der Schritt selbst noch steht.
+
+    ``_undo_happened`` fragte nur ``can_redo`` und bestätigte damit auch einen
+    Satz, der das Gegenteil behauptete: Die erste Tour sagte, das Loch sei
+    zu, während das Undo nur den Durchmesser auf 4,2 mm zurückstellte
+    (Gesamtreview 05.09.2026, CORE-32). Die Prüfung sagt jetzt genau das,
+    was der Satz beschreibt.
+    """
+
+    def check(document: Document, history: History) -> bool:
+        if not history.can_redo:
+            return False
+        entry = _first_op(document, name)
+        if entry is None:
+            return False
+        current = entry.params.get(field, value)
+        try:
+            return is_close(float(current), value)
+        except (TypeError, ValueError):
+            return False
+
+    return check
+
+
 def _op_present(name: str) -> StepCheck:
     """Getan, sobald eine Operation dieses Namens im Stapel steht."""
 
@@ -208,10 +234,11 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
             TourStep(
                 text=_(
-                    "Drücken Sie Strg+Z. Der letzte Schritt verschwindet als Ganzes, "
-                    "das Loch ist zu — als wäre nie gebohrt worden."
+                    "Drücken Sie Strg+Z. Zurückgenommen wird immer der letzte Schritt, und das "
+                    "war die Zahl: Der Durchmesser steht wieder auf 4,2 mm, die Bohrung bleibt. "
+                    "Erst ein zweites Strg+Z nähme den Bohrschritt selbst zurück."
                 ),
-                done=_undo_happened,
+                done=_undo_put_back("drill_hole", "diameter", 4.2),
             ),
             TourStep(
                 text=_(

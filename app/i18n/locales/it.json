@@ -1568,7 +1568,7 @@
   "Druckzeit etwa": "Tempo di stampa circa",
   "Druckziel": "Destinazione di stampa",
   "Druckziel geändert": "Destinazione di stampa cambiata",
-  "Drücken Sie Strg+Z. Der letzte Schritt verschwindet als Ganzes, das Loch ist zu — als wäre nie gebohrt worden.": "Premi Ctrl+Z. L'ultimo passo scompare per intero, il foro è chiuso — come se non si fosse mai forato.",
+  "Drücken Sie Strg+Z. Zurückgenommen wird immer der letzte Schritt, und das war die Zahl: Der Durchmesser steht wieder auf 4,2 mm, die Bohrung bleibt. Erst ein zweites Strg+Z nähme den Bohrschritt selbst zurück.": "Premi Ctrl+Z. Viene annullato sempre l'ultimo passo, ed era il numero: il diametro torna a 4,2 mm, il foro resta. Solo un secondo Ctrl+Z annullerebbe il passo di foratura stesso.",
   "Dunkel": "Scuro",
   "Dunkle Geometrie auf hellem Grund.": "Geometria scura su fondo chiaro.",
   "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind hervorgehoben: dort beginnt Material in der Luft.": "Scorri lungo l'altezza e guarda la sezione. Le isole sono evidenziate: lì il materiale comincia in aria.",

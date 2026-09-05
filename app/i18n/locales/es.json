@@ -1568,7 +1568,7 @@
   "Druckzeit etwa": "Tiempo de impresión aproximado",
   "Druckziel": "Destino de impresión",
   "Druckziel geändert": "Destino de impresión cambiado",
-  "Drücken Sie Strg+Z. Der letzte Schritt verschwindet als Ganzes, das Loch ist zu — als wäre nie gebohrt worden.": "Pulse Ctrl+Z. El último paso desaparece entero, el agujero está cerrado — como si nunca se hubiera taladrado.",
+  "Drücken Sie Strg+Z. Zurückgenommen wird immer der letzte Schritt, und das war die Zahl: Der Durchmesser steht wieder auf 4,2 mm, die Bohrung bleibt. Erst ein zweites Strg+Z nähme den Bohrschritt selbst zurück.": "Pulse Ctrl+Z. Siempre se deshace el último paso, y ese fue el número: el diámetro vuelve a 4,2 mm, el agujero se queda. Solo un segundo Ctrl+Z desharía el propio paso de taladrado.",
   "Dunkel": "Oscuro",
   "Dunkle Geometrie auf hellem Grund.": "Geometría oscura sobre fondo claro.",
   "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind hervorgehoben: dort beginnt Material in der Luft.": "Recorrer la altura y observar la sección. Las islas están resaltadas: ahí empieza material en el aire.",

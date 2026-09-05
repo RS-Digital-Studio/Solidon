@@ -1568,7 +1568,7 @@
   "Druckzeit etwa": "Durée d'impression environ",
   "Druckziel": "Cible d'impression",
   "Druckziel geändert": "Cible d'impression modifiée",
-  "Drücken Sie Strg+Z. Der letzte Schritt verschwindet als Ganzes, das Loch ist zu — als wäre nie gebohrt worden.": "Appuyez sur Ctrl+Z. La dernière étape disparaît en entier, le trou est refermé — comme si l'on n'avait jamais percé.",
+  "Drücken Sie Strg+Z. Zurückgenommen wird immer der letzte Schritt, und das war die Zahl: Der Durchmesser steht wieder auf 4,2 mm, die Bohrung bleibt. Erst ein zweites Strg+Z nähme den Bohrschritt selbst zurück.": "Appuyez sur Ctrl+Z. C'est toujours la dernière étape qui est annulée, et c'était le nombre : le diamètre revient à 4,2 mm, le trou reste. Seul un second Ctrl+Z annulerait l'étape de perçage elle-même.",
   "Dunkel": "Sombre",
   "Dunkle Geometrie auf hellem Grund.": "Géométrie sombre sur fond clair.",
   "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind hervorgehoben: dort beginnt Material in der Luft.": "Parcourir la hauteur et regarder la section. Les îlots sont mis en évidence : c'est là que de la matière commence dans le vide.",
