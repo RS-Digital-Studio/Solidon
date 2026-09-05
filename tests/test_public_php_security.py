@@ -44,6 +44,60 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
+def _php_command(
+    php: str,
+    port: int,
+    *,
+    prepend: Path | None = None,
+    error_log: Path | None = None,
+    ini: dict[str, str] | None = None,
+    docroot: Path | None = None,
+) -> list[str]:
+    """Die Befehlszeile des Prüfservers.
+
+    **Post verlässt ihn nie.** ``support.php`` ruft ``mail()``, und ein Rechner
+    mit eingerichtetem Sendmail oder SMTP hätte jede gültige Testrückmeldung
+    an die echte Supportadresse geschickt (Gesamtreview 05.09.2026, R34). Der
+    Transport zeigt deshalb auf ein Programm, das es nicht gibt, und auf einen
+    Port, an dem niemand lauscht; der Endpunkt antwortet dann 502, und die
+    Tests rechnen damit.
+    """
+    command = [
+        php,
+        "-d",
+        "sendmail_path=/nonexistent/solidon-keine-post",
+        "-d",
+        "SMTP=127.0.0.1",
+        "-d",
+        "smtp_port=1",
+    ]
+    if prepend is not None:
+        command.extend(["-d", f"auto_prepend_file={prepend}"])
+    if error_log is not None:
+        # Ohne eigene Datei schreibt PHP nach stderr, und das geht hier nach
+        # DEVNULL — ein Test, der eine Meldung erwartet, sähe nie eine.
+        command.extend(["-d", "log_errors=1", "-d", f"error_log={error_log}"])
+    for key, value in (ini or {}).items():
+        command.extend(["-d", f"{key}={value}"])
+    command.extend(["-S", f"127.0.0.1:{port}", "-t", str(docroot or "website")])
+    return command
+
+
+def _temporary_docroot(tmp_path: Path) -> Path:
+    """Ein eigener Dokumentenstamm für Tests, die Dateien daneben anlegen.
+
+    Bis zum 05.09.2026 schrieben drei Tests Pakete nach ``website/dl`` und
+    einer räumte ``website/api/.stats`` bedingungslos weg — auch, wenn dort
+    ein Bestand lag, den der Test nie angelegt hatte (Gesamtreview, R33). Die
+    Endpunkte finden ``../dl`` und den Dokumentenstamm relativ zu sich, also
+    reicht eine Kopie von ``api/``.
+    """
+    docroot = tmp_path / "website"
+    shutil.copytree(API, docroot / "api")
+    (docroot / "dl").mkdir()
+    return docroot
+
+
 @contextlib.contextmanager
 def _php_server(
     tmp_path: Path,
@@ -51,6 +105,8 @@ def _php_server(
     *,
     prepend: Path | None = None,
     error_log: Path | None = None,
+    ini: dict[str, str] | None = None,
+    docroot: Path | None = None,
 ) -> Iterator[str]:
     php = php_executable("PHP fehlt; der Endpunkttest braucht PHP 7.4+")
     port = _free_port()
@@ -60,14 +116,9 @@ def _php_server(
     environment["SOLIDON_SUPPORT_RATE_FILE"] = str(tmp_path / "support-rate.json")
     if extra_environment:
         environment.update(extra_environment)
-    command = [php]
-    if prepend is not None:
-        command.extend(["-d", f"auto_prepend_file={prepend}"])
-    if error_log is not None:
-        # Ohne eigene Datei schreibt PHP nach stderr, und das geht hier nach
-        # DEVNULL — ein Test, der eine Meldung erwartet, sähe nie eine.
-        command.extend(["-d", "log_errors=1", "-d", f"error_log={error_log}"])
-    command.extend(["-S", f"127.0.0.1:{port}", "-t", "website"])
+    command = _php_command(
+        php, port, prepend=prepend, error_log=error_log, ini=ini, docroot=docroot
+    )
     process = subprocess.Popen(
         command,
         cwd=ROOT,
@@ -1745,14 +1796,19 @@ def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:
     # `min()` über ein leeres Glob warf dort (`ValueError`, Tag-Lauf 4,
     # 03.09.2026). `count.php` verlangt eine wirklich vorhandene Datei
     # (`is_file`), also gehört sie zum Testaufbau und nicht zum Fundus.
-    downloads = ROOT / "website" / "dl"
-    downloads.mkdir(parents=True, exist_ok=True)
+    docroot = _temporary_docroot(tmp_path)
+    downloads = docroot / "dl"
     package = "Solidon3D-Setup-0.0.0-test.exe"
-    (downloads / package).write_bytes(b"kein echtes Paket")
+    real = ROOT / "website" / "dl" / package
+    existed_before = real.exists()
     month = tmp_path / "stats" / f"{_utc_month(0)}.jsonl"
 
     try:
-        with _php_server(tmp_path) as base:
+        (downloads / package).write_bytes(b"kein echtes Paket")
+        assert real.exists() == existed_before, (
+            "der Test legt sein Paket im eigenen Dokumentenstamm an, nicht im echten (R33)"
+        )
+        with _php_server(tmp_path, docroot=docroot) as base:
             head_status, head_target = _without_redirects(f"{base}/count.php?f={package}", "HEAD")
             assert head_status == 302, "ein HEAD auf einen Paketverweis wird bedient"
             assert head_target.endswith(package)
@@ -1832,12 +1888,14 @@ def test_a_counter_that_stops_counting_says_so(tmp_path: Path) -> None:
     assert month.stat().st_nlink == 2, "die Voraussetzung des Tests, nicht seine Annahme"
 
     protokoll = tmp_path / "php-fehler.log"
-    downloads = ROOT / "website" / "dl"
-    downloads.mkdir(parents=True, exist_ok=True)
+    docroot = _temporary_docroot(tmp_path)
+    downloads = docroot / "dl"
     package = "Solidon3D-Setup-0.0.0-stumm.exe"
     (downloads / package).write_bytes(b"kein echtes Paket")
     try:
-        with _php_server(tmp_path, {"SOLIDON_STATS_DIR": str(stats)}, error_log=protokoll) as base:
+        with _php_server(
+            tmp_path, {"SOLIDON_STATS_DIR": str(stats)}, error_log=protokoll, docroot=docroot
+        ) as base:
             status, _ziel = _without_redirects(f"{base}/count.php?f={package}", "GET")
     finally:
         (downloads / package).unlink(missing_ok=True)
@@ -1869,15 +1927,15 @@ def test_a_counter_pointed_into_the_document_root_says_so(tmp_path: Path) -> Non
     Geprüft wird deshalb beides: dass im Dokumentenstamm kein Zählordner
     entsteht, und dass der Ausfall im Fehlerprotokoll steht.
     """
-    verzeichnis = ROOT / "website" / "api" / ".stats"
+    docroot = _temporary_docroot(tmp_path)
+    verzeichnis = docroot / "api" / ".stats"
     protokoll = tmp_path / "php-fehler.log"
-    downloads = ROOT / "website" / "dl"
-    downloads.mkdir(parents=True, exist_ok=True)
+    downloads = docroot / "dl"
     package = "Solidon3D-Setup-0.0.0-stamm.exe"
     (downloads / package).write_bytes(b"kein echtes Paket")
     try:
         with _php_server(
-            tmp_path, {"SOLIDON_STATS_DIR": str(verzeichnis)}, error_log=protokoll
+            tmp_path, {"SOLIDON_STATS_DIR": str(verzeichnis)}, error_log=protokoll, docroot=docroot
         ) as base:
             status, _ziel = _without_redirects(f"{base}/count.php?f={package}", "GET")
         # Vor dem Aufräumen abgelesen — sonst prüft die Zusicherung das finally.
@@ -2071,3 +2129,97 @@ def test_a_numeric_referrer_host_can_neither_be_stored_nor_break_the_report() ->
         "sechs Aufrufstellen übergeben einen Array-Schlüssel, der ein int sein kann"
     )
     assert "htmlspecialchars((string) $text" in stats, "und maskiert wird weiterhin"
+
+
+def test_an_attachment_that_php_rejected_is_not_sent_as_a_success(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, B-13: Ein Anhang über ``upload_max_filesize``
+    kommt mit ``UPLOAD_ERR_INI_SIZE`` und null Bytes an; ein ``continue`` ließ
+    ihn still weg, und die Rückmeldung ging ohne ihn als Erfolg hinaus. Die
+    Grenze steht hier bewusst bei einem Kilobyte, damit kein Test Megabytes
+    schickt; gesendet wird nichts, weil die Antwort vor dem Versand fällt."""
+    prepend = tmp_path / "php-test-extensions.php"
+    prepend.write_text(
+        "<?php\n"
+        "if (!function_exists('mb_strlen')) {\n"
+        "  function mb_strlen(string $value, ?string $encoding = null): int "
+        "{ return strlen($value); }\n"
+        "  function mb_substr(string $value, int $offset, ?int $length = null): string "
+        "{ return substr($value, $offset, $length); }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    boundary = "solidon-attachment-test"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="message"\r\n\r\n'
+        "Pruefung\r\n"
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="kind"\r\n\r\n'
+        "idea\r\n"
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="anhang"; filename="gross.txt"\r\n'
+        "Content-Type: text/plain\r\n\r\n" + "x" * 4096 + "\r\n"
+        f"--{boundary}--\r\n"
+    ).encode()
+
+    with _php_server(tmp_path, prepend=prepend, ini={"upload_max_filesize": "1K"}) as base:
+        status, _headers, text = _request(
+            f"{base}/support.php",
+            method="POST",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+
+    assert status == 413, text
+    assert json.loads(text)["ok"] is False
+
+
+def test_the_test_server_never_lets_a_mail_out() -> None:
+    """R34: Der Rate-Limit-Test schickt eine gültige Rückmeldung durch den
+    echten Endpunkt, und der ruft ``mail()``. Mit einem eingerichteten
+    Transport wäre sie beim Support angekommen. Der Prüfserver zeigt deshalb
+    auf einen Transport, den es nicht gibt."""
+    command = _php_command("php", 1234)
+
+    flags = " ".join(command)
+    assert "sendmail_path=/nonexistent/" in flags
+    assert "SMTP=127.0.0.1" in flags and "smtp_port=1" in flags
+    assert command[-2:] == ["-t", "website"]
+    assert _php_command("php", 1, docroot=Path("anderswo"))[-1] == "anderswo"
+
+
+def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, R30: ``entries()`` kennt seine Grenze von
+    16.384 Zeilen und sagt sie über ``$complete``; ``month_totals()`` warf das
+    weg, und ein zu großer Monat stand im Vergleich als vollständige Summe."""
+    php = php_executable()
+    source = (API / "stats.php").read_text(encoding="utf-8")
+    constants = "\n".join(
+        line
+        for line in source.splitlines()
+        if line.startswith(("const STATS_MAX_", "const DISPLAY_ZONE"))
+    )
+    probe = tmp_path / "probe.php"
+    probe.write_text(
+        "<?php\ndeclare(strict_types=1);\n"
+        + constants
+        + "\n"
+        + _php_function(source, "entries")
+        + "\n"
+        + _php_function(source, "visitors_per_day")
+        + "\n"
+        + _php_function(source, "month_totals")
+        + "\necho json_encode(month_totals($argv[1], '2026-08'));\n",
+        encoding="utf-8",
+    )
+    row = {"t": "2026-08-15T12:00:00+00:00", "k": "p", "v": "/", "r": "", "u": "12345678"}
+    (tmp_path / "2026-08.jsonl").write_text((json.dumps(row) + "\n") * 16385, encoding="utf-8")
+
+    result = subprocess.run(
+        [php, str(probe), str(tmp_path)], capture_output=True, text=True, timeout=60
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    totals = json.loads(result.stdout)
+    assert totals["pages"] == 16384, "bis zur Grenze gezählt"
+    assert totals["complete"] is False, "und die Grenze reist mit"

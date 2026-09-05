@@ -816,9 +816,12 @@ function visits(array $rows): array
 
 /** Die Kopfzeile eines Monats: Aufrufe, Besuche, Downloads — für den Vergleich
  *  über die Monate, ohne die ganze Seite je Monat aufzubauen. */
-function month_totals(string $dir, string $month): array
+function month_totals(string $dir, string $month, ?bool &$complete = null): array
 {
-    $rows = entries($dir, $month);
+    // `entries()` kennt seine Grenze und sagt sie über `$complete`; bis zum
+    // 05.09.2026 warf diese Summe das weg, und ein Monat über 16.384 Zeilen
+    // stand im Vergleich als vollständige Zahl (Gesamtreview, R30).
+    $rows = entries($dir, $month, $complete);
     $pages = 0;
     $downloads = 0;
     foreach ($rows as $row) {
@@ -832,6 +835,7 @@ function month_totals(string $dir, string $month): array
         'pages' => $pages,
         'visitors' => array_sum(visitors_per_day($rows)),
         'downloads' => $downloads,
+        'complete' => $complete,
     ];
 }
 
@@ -925,7 +929,12 @@ $month_rows = [];
 if (count($available) > 1) {
     foreach ($available as $option) {
         $month_rows[$option] = $option === $month
-            ? ['pages' => count($pages), 'visitors' => $visit_sum, 'downloads' => count($downloads)]
+            ? [
+                'pages' => count($pages),
+                'visitors' => $visit_sum,
+                'downloads' => count($downloads),
+                'complete' => $month_complete,
+            ]
             : month_totals($dir, $option);
     }
     ksort($month_rows);
@@ -1076,7 +1085,7 @@ sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p
   <tr><th>Monat</th><th class="n">Aufrufe</th><th class="n">Besuche</th><th class="n">Downloads</th><th style="width:40%"></th></tr>
   <?php foreach ($month_rows as $option => $totals): ?>
     <tr>
-      <td><?php if ($option === $month): ?><b><?= e($option) ?></b><?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?></td>
+      <td><?php if ($option === $month): ?><b><?= e($option) ?></b><?php else: ?><a href="?m=<?= e($option) ?>"><?= e($option) ?></a><?php endif; ?><?php if (empty($totals['complete'])): ?> <abbr title="Unvollständig: Die Monatsdatei überschreitet die sichere Grenze, die Zahlen sind Untergrenzen.">≥</abbr><?php endif; ?></td>
       <td class="n"><?= number_format((float) $totals['pages'], 0, ',', '.') ?></td>
       <td class="n"><?= number_format((float) $totals['visitors'], 0, ',', '.') ?></td>
       <td class="n"><?= number_format((float) $totals['downloads'], 0, ',', '.') ?></td>

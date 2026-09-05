@@ -516,8 +516,23 @@ if (count($_FILES) > MAX_FILES) {
     answer(false, 'Die Sendung enthält zu viele Anhänge.', '', 400);
 }
 foreach ($_FILES as $entry) {
-    if (!is_array($entry) || ($entry['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+    if (!is_array($entry)) {
         continue;
+    }
+    $problem = (int) ($entry['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($problem === UPLOAD_ERR_NO_FILE) {
+        continue;
+    }
+    // Ein Anhang, der eingereicht wurde und nicht ankam, ist kein fehlender
+    // Anhang. Bis zum 05.09.2026 übersprang ein `continue` jeden Fehlercode:
+    // Eine Datei über `upload_max_filesize` fiel still weg, die Rückmeldung
+    // ging ohne sie hinaus und meldete Erfolg — und die Größenprüfung unten
+    // sah null Bytes, weil PHP für den abgelehnten Anhang nichts liefert.
+    if ($problem === UPLOAD_ERR_INI_SIZE || $problem === UPLOAD_ERR_FORM_SIZE) {
+        answer(false, 'Ein Anhang ist zu groß.', '', 413);
+    }
+    if ($problem !== UPLOAD_ERR_OK) {
+        answer(false, 'Ein Anhang kam nicht vollständig an.', '', 400);
     }
     $files++;
     // Erst fragen, ob die Datei wirklich aus diesem Upload stammt: `tmp_name`
