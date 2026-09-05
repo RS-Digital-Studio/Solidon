@@ -1428,3 +1428,25 @@ def test_the_dialog_says_once_that_it_is_searching(qt_app: QApplication) -> None
         dialog.release()
         for _ in range(3):
             qt_app.processEvents()
+
+
+def test_inside_a_flatpak_the_package_manager_of_the_host_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-29: ``Manager.command`` führt im Flatpak
+    ausdrücklich über ``flatpak-spawn --host`` nach draußen — ``manager()``
+    verlangte die Paketverwaltung trotzdem im Sandkasten-PATH, wo sie nie
+    liegt, und der gebaute Hostweg blieb unerreichbar."""
+    wanted = install.for_platform() or install.MANAGERS[0]
+    monkeypatch.setattr(install, "for_platform", lambda: wanted)
+    monkeypatch.setattr(install.discover, "in_flatpak", lambda: True)
+    monkeypatch.setattr(
+        install.shutil,
+        "which",
+        lambda name: "/usr/bin/flatpak-spawn" if name == "flatpak-spawn" else None,
+    )
+
+    assert install.manager() is wanted
+
+    monkeypatch.setattr(install.discover, "in_flatpak", lambda: False)
+    assert install.manager() is None, "außerhalb des Sandkastens zählt nur der PATH"

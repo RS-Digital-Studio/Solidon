@@ -166,7 +166,18 @@ def manager() -> Manager | None:
     einer schlanken Installation.
     """
     found = for_platform()
-    return found if found is not None and shutil.which(found.program) else None
+    if found is None:
+        return None
+    if shutil.which(found.program):
+        return found
+    # **Im Sandkasten sagt der PATH nichts über den Rechner.** Als Flatpak
+    # liegt hier nur ``flatpak-spawn``; die Paketverwaltung liegt draußen,
+    # und genau dorthin führt ``Manager.command`` über ``on_host``. Bis zum
+    # 05.09.2026 verlangte diese Frage trotzdem den lokalen Fund — und der
+    # ausdrücklich gebaute Hostweg blieb unerreichbar (Gesamtreview, CORE-29).
+    if discover.in_flatpak() and shutil.which("flatpak-spawn"):
+        return found
+    return None
 
 
 def _silent(line: str) -> None:
