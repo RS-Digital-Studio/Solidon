@@ -4981,3 +4981,82 @@ def test_a_named_thread_says_how_long_its_helix_is() -> None:
     assert float(thread.params["length"]) == pytest.approx(built.mesh.bounds.size[2], abs=0.02), (
         "das Innengewinde der Mutter geht durch, also ist seine Länge die Mutternhöhe"
     )
+
+
+def test_the_same_part_three_times_keeps_three_named_features() -> None:
+    """Derselbe Baustein zweimal eingefügt nahm dem ersten seinen Namen.
+
+    Der Docstring von ``_placed_features`` sagte Kollisionsfreiheit zu —
+    „Bausteinname und Position machen es eindeutig" —, und im Namen stand nur
+    der Bausteinname. Drei Gewinde auf einer Platte bekamen dreimal
+    ``printed_thread_thread_1``, und ``features.update`` beim Aufrufer behielt
+    das letzte. **Ohne Befund, ohne Meldung.**
+
+    Der Anlass ist die Projektdatei eines Kunden (M4, M6 und M8 auf einer
+    Platte 100 × 60 × 10, 04.09.2026). Bei zehn Millimetern Länge fiel der
+    Verlust kaum auf, weil die Wendelerkennung für die zwei verlorenen
+    einsprang; unterhalb von etwa sieben Windungen greift sie nicht mehr, und
+    dann standen statt zweier Gewinde **vier Zapfen und ein Kegel** im Baum:
+    Die Unterdrückung der Phantome hängt am erzeugten Merkmal, und das war
+    weg. Ein Fehler deckte den anderen zu.
+
+    Geprüft wird deshalb bei einer Länge **unter** dieser Schwelle — dort
+    trägt die Zusage allein, ohne dass die Erkennung sie zufällig einlöst.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("bambu-a1", "pla")
+    history = History(project.document)
+    history.apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 100.0, "depth": 60.0, "height": 10.0})],
+    )
+    for size, x in (("M4", -20.0), ("M6", 0.0), ("M8", 20.0)):
+        history.apply(
+            f"Gewinde {size}",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=("obj_1",),
+                    params={
+                        "size": size,
+                        "length": 5.0,
+                        "internal": False,
+                        "play": 0.0,
+                        "x": x,
+                        "y": 0.0,
+                        "z": 10.0,
+                        "axis": "z",
+                    },
+                )
+            ],
+        )
+    result = evaluate(
+        project.document,
+        profiles.make_profile("bambu-a1", "pla"),
+        sources=ProjectSources(project),
+    )
+    entry = next(iter(result.scene.objects.values()))
+
+    threads = {
+        name: round(float(feature.params["diameter"]), 2)
+        for name, feature in entry.features.items()
+        if feature.kind == "thread"
+    }
+    assert len(threads) == 3, f"drei Gewinde, drei Namen — gefunden: {threads}"
+    assert sorted(threads.values()) == [4.0, 6.0, 8.0], threads
+    assert all(
+        f.provenance == "generated" for f in entry.features.values() if f.kind == "thread"
+    ), "jedes der drei trägt seinen Namen aus dem Baustein, nicht aus der Erkennung"
+
+    # Und die Folge, die den Fehler erst teuer machte: Mit einem Anker je
+    # Gewinde greift die Unterdrückung wieder für alle drei.
+    invented = sorted(
+        f"{name}: {feature.kind}"
+        for name, feature in entry.features.items()
+        if feature.kind in ("hole", "pin", "cone", "sphere", "torus", "fillet")
+    )
+    assert not invented, invented

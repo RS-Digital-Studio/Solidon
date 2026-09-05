@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
+from collections.abc import Container, Iterable
 from typing import Any
 
 from app.core.errors import Action, AppError
@@ -565,11 +566,29 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
         # Antwort steht im Volumen (§2.7).
         nothing = without_effect(body, mesh, kind, ctx.profile)
 
+    # **Was der Körper schon trägt, wird nicht überschrieben.** ``update``
+    # stand hier zweimal, und der zweite Baustein derselben Sorte nahm dem
+    # ersten den Namen weg — siehe :func:`_free_name`.
     features = dict(source.features)
-    features.update(
-        _placed_features(produced, spec, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
-    )
-    features.update(host_features)
+    for extra in (
+        _placed_features(
+            produced,
+            spec,
+            ctx.params,
+            anchor,
+            sink,
+            direction,
+            spec.keeps_up,
+            flip,
+            taken=features,
+        ),
+        host_features,
+    ):
+        for name, feature in extra.items():
+            public = _free_name(name, features)
+            features[public] = (
+                feature if public == name else dataclasses.replace(feature, id=public)
+            )
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil.
@@ -875,22 +894,65 @@ def _placed_features(
     direction: Vec3 | None = None,
     keeps_up: bool = False,
     flip: bool = False,
+    taken: Iterable[str] = (),
 ) -> dict[str, Feature]:
-    """Die Merkmale des Bausteins, mitbewegt und so benannt, dass sie nicht
-    kollidieren können.
+    """Die Merkmale des Bausteins, mitbewegt und mit einem Namen, den es hier
+    noch nicht gibt.
 
     ``bore_1`` des dritten eingefügten Bausteins überschriebe sonst das des
-    ersten. Bausteinname und Position machen es eindeutig, ohne einen Zähler zu
-    erfinden, den niemand vorhersagen kann.
+    ersten. Der Bausteinname trennt die Sorten (``screw_hole_bore_1`` gegen
+    ``heatset_bore_1``); was **danach** noch gleich heißt, bekommt in
+    :func:`_free_name` eine Ziffer.
+
+    **Hier stand, der Bausteinname und die Position machten es eindeutig — und
+    die Position stand nie im Namen.** Der Satz las sich wie eine geprüfte
+    Entscheidung, und deshalb hat die Stelle jahrelang niemand nachgerechnet;
+    was ``taken`` heute leistet, leistete bis zum 04.09.2026 niemand. Wer die
+    Namensgebung ändert, ändert diesen Absatz mit.
     """
     from app.core.perceive.matching import moved_features
 
     matrix = _matrix(params, anchor, sink, direction, keeps_up, flip)
     moved = moved_features(dict(produced.features), matrix)
-    return {
-        f"{spec.name}_{name}": dataclasses.replace(feature, id=f"{spec.name}_{name}")
-        for name, feature in moved.items()
-    }
+    used = set(taken)
+    placed: dict[str, Feature] = {}
+    for name, feature in moved.items():
+        public = _free_name(f"{spec.name}_{name}", used)
+        used.add(public)
+        placed[public] = dataclasses.replace(feature, id=public)
+    return placed
+
+
+def _free_name(wanted: str, taken: Container[str]) -> str:
+    """``wanted``, oder der nächste freie Name daneben.
+
+    **Der Docstring über dieser Stelle versprach Kollisionsfreiheit, und der
+    Code löste sie nicht ein.** „Bausteinname und Position machen es
+    eindeutig" stand dort — im Namen stand aber nur der Bausteinname. Wer
+    denselben Baustein zweimal einfügt, bekam zweimal `printed_thread_thread_1`,
+    und `features.update()` beim Aufrufer behielt das letzte.
+
+    Gemessen an der Projektdatei eines Kunden (M4, M6 und M8 auf einer Platte,
+    04.09.2026): Von drei erzeugten Gewindemerkmalen blieb **eines** übrig,
+    ohne Befund und ohne Meldung. Bei zehn Millimetern Länge fiel es kaum auf,
+    weil die Wendelerkennung für die zwei verlorenen einsprang; bei fünf
+    Millimetern greift sie nicht mehr, und dann standen statt zwei Gewinden
+    **vier Zapfen und ein Kegel** im Baum — die Unterdrückung der Phantome
+    hängt am erzeugten Merkmal, und das war weg.
+
+    **Der erste behält seinen Namen.** Nur wer kollidiert, bekommt eine Ziffer
+    — so bleibt jede vorhandene Projektdatei gültig, denn die zweiten und
+    dritten Merkmale gab es dort bisher gar nicht. Gezählt wird wie bei der
+    Erkennung (`hole_1`, `hole_2`), weil das die Schreibweise des Hauses ist;
+    dass ein gelöschter Schritt die Nummern verschieben kann, ist der bekannte
+    Fall aus §21.3, und dafür fragt die Zuordnung nach.
+    """
+    if wanted not in taken:
+        return wanted
+    number = 2
+    while f"{wanted}_{number}" in taken:
+        number += 1
+    return f"{wanted}_{number}"
 
 
 def _roll_upright(direction: Vec3) -> Any:
