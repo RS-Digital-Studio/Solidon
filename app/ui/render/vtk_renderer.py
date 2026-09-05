@@ -375,6 +375,17 @@ class VtkRenderer(Renderer):
             self.interactor = self.window.GetInteractor()
         self.window.AddRenderer(self.renderer)
         self.renderer.SetBackground(0.0, 0.0, 0.0)
+        # **Der Lichtsatz, nicht ein Frontlicht.** PyVista stellte einen
+        # ``vtkLightKit`` auf — Schlüssellicht 50° über und 10° rechts der
+        # Kamera, Fülllicht von unten, zwei Rücklichter, dazu das Frontlicht
+        # —, und die Themenwerte des Viewports (``HEADLIGHT``) stellen nur das
+        # Frontlicht darin. Mit dem Frontlicht allein war ein Körper im
+        # Fenster fast schwarz (Robert, 05.09.2026: „beim ersten war alles
+        # schwarz").
+        from vtkmodules.vtkRenderingCore import vtkLightKit
+
+        self._light_kit = vtkLightKit()
+        self._light_kit.AddLightsToRenderer(self.renderer)
 
     def _offscreen_window(self, size: tuple[int, int]) -> Any:
         from vtkmodules.vtkRenderingCore import vtkRenderWindow
