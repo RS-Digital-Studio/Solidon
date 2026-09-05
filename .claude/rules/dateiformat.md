@@ -110,12 +110,20 @@ Druckdatei geschrieben", ohne dass irgendwo stand, warum. Cura bekommt ein STL
 mit allen Teilen der Platte; Namen und Materialslots liest es ohnehin nicht,
 und die Einstellungen kommen bei ihm über die Kommandozeile.
 
-**Bettkoordinaten nur für die Orca-Familie** (`wants_bed_coordinates`). Solidon
-rechnet um den Ursprung, und für Cura wie für PrusaSlicer schreibt die
-Übergabe genau diese Welt: `machine_center_is_zero` beim einen, eine Bettform
-von `-128` bis `128` beim anderen. Verschoben landete der Druck um den halben
-Bauraum daneben — gemessen im G-Code, und bei PrusaSlicer endete es in „All
-objects are outside of the print volume".
+**Bettkoordinaten für jede Familie** (`wants_bed_coordinates`). Solidon
+rechnet um den Ursprung, der Drucker misst von der Ecke — und der Slicer
+bekommt die Welt des Druckers: die Teile um den halben Bauraum verschoben
+**und** ein Bett von `0` bis `256`, in derselben Übergabe. Bis zum 05.09.2026
+bekamen Cura und PrusaSlicer stattdessen Solidons Welt erklärt
+(`machine_center_is_zero`, eine Bettform von `-128` bis `128`) und die Teile
+unverschoben; der Slicer war mit sich im Reinen und schrieb Bahnen bei
+`-13,6`, die es auf einem MK4S oder Centauri nicht gibt, während die eigene
+Gegenprobe gegen denselben erfundenen Ursprung maß (Gesamtreview, CORE-17,
+mit PrusaSlicer 2.9.6 gemessen). Die ältere Messung „um den halben Bauraum
+verschoben" — Würfel bei -10…10, im G-Code bei 118…138 — war die Bettmitte;
+PrusaSlicers „All objects are outside of the print volume" kam aus dem
+Widerspruch zwischen verschobenen Teilen und zentriert erklärtem Bett. Wer
+das eine ändert, ändert das andere mit — beides fragt dasselbe Prädikat.
 
 ## Die drei Stufen der Übergabe
 

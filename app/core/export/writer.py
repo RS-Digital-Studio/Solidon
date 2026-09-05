@@ -302,24 +302,38 @@ def _without_name_clashes(entries: tuple[ExportEntry, ...]) -> tuple[ExportEntry
     einer Baugruppe (:func:`app.core.export.threemf` nummeriert dort dieselbe
     Kollision).
     """
+    # **Groß und klein sind ein Name.** Das übliche Windows-Dateisystem und
+    # macOS unterscheiden ``A.stl`` und ``a.stl`` nicht — gemessen unter
+    # Windows: zwei gemeldete Dateien, eine auf der Platte, der erste Körper
+    # weg. Verglichen wird deshalb überall gefaltet, gleich auf welcher
+    # Plattform der Export läuft (Gesamtreview 05.09.2026, CORE-18).
     totals: dict[str, int] = {}
     for entry in entries:
-        totals[entry.filename] = totals.get(entry.filename, 0) + 1
+        totals[entry.filename.casefold()] = totals.get(entry.filename.casefold(), 0) + 1
     if all(total == 1 for total in totals.values()):
         return entries
+    # Was für sich allein steht, behält seinen Namen und ist damit **vergeben**:
+    # ``A``, ``A`` und ``A-1`` wurden ``A-1``, ``A-2``, ``A-1`` — die Nummer
+    # wurde nie gegen die geplanten Namen geprüft, und das erste Teil
+    # verschwand unter dem dritten. Nummeriert wird jetzt so lange weiter,
+    # bis der Name gegen alle vergebenen eindeutig ist.
+    taken = {key for key, total in totals.items() if total == 1}
     seen: dict[str, int] = {}
     result: list[ExportEntry] = []
     for entry in entries:
-        if totals[entry.filename] == 1:
+        key = entry.filename.casefold()
+        if totals[key] == 1:
             result.append(entry)
             continue
-        seen[entry.filename] = seen.get(entry.filename, 0) + 1
         stem, dot, extension = entry.filename.rpartition(".")
-        numbered = (
-            f"{stem}-{seen[entry.filename]}{dot}{extension}"
-            if dot
-            else f"{entry.filename}-{seen[entry.filename]}"
-        )
+        number = seen.get(key, 0)
+        while True:
+            number += 1
+            numbered = f"{stem}-{number}{dot}{extension}" if dot else f"{entry.filename}-{number}"
+            if numbered.casefold() not in taken:
+                break
+        seen[key] = number
+        taken.add(numbered.casefold())
         result.append(replace(entry, filename=numbered))
     return tuple(result)
 
@@ -875,13 +889,13 @@ def write_assembly(
     Hand öffnet, ordnet ohnehin neu an, und eine zurückgelesene Platte läge
     sonst um den halben Bauraum verschoben im nächsten Dokument.
 
-    Und es gilt nur für die Orca-Familie: sie misst von der Ecke der Platte.
-    Cura und PrusaSlicer bekommen von Solidon eine Maschine, die um den
-    Ursprung rechnet (``machine_center_is_zero`` beim einen, eine Bettform von
-    ``-128`` bis ``128`` beim anderen) — verschoben landeten die Teile dort um
-    den halben Bauraum daneben. Gemessen: ein Würfel, den das Dokument bei
-    -10 bis 10 hat, lag in Curas G-Code bei 110,9 bis 137,8, und PrusaSlicer
-    lehnte ihn mit „All objects are outside of the print volume" ganz ab.
+    Und es gilt für jede Familie — ob, sagt :func:`wants_bed_coordinates`,
+    und dort steht auch, warum Cura und PrusaSlicer die Teile lange
+    unverschoben bekamen und was das auf der Maschine bedeutete
+    (Gesamtreview 05.09.2026, CORE-17). Ein Würfel, den das Dokument bei
+    -10 bis 10 hat, liegt im G-Code bei 118 bis 138: Das ist die Bettmitte
+    eines Druckers, der von der Ecke misst, und die Bettform, die die
+    Übergabe daneben schreibt, sagt dasselbe.
     """
     # §2 C: auch die Baugruppe ist ein Export — dieselbe Grenze wie write_plan.
     activation.require(activation.EXPORT)
@@ -1059,9 +1073,9 @@ def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | No
     Namen und Materialslots liest ``CuraEngine`` ohnehin nicht, und die
     Einstellungen kommen bei ihm über die Kommandozeile.
 
-    ``bed`` bleibt bei Cura leer (siehe :func:`wants_bed_coordinates`) — steht
-    doch einmal etwas darin, wird über die Punkte verschoben, denn ein STL hat
-    keine Platzierungsmatrix.
+    ``bed`` sind die Bettmaße, wenn die Teile in Maschinenkoordinaten gehen
+    (:func:`wants_bed_coordinates`): Verschoben wird über die Punkte, denn ein
+    STL hat keine Platzierungsmatrix.
     """
     bodies = []
     for entry in objects:
@@ -1139,9 +1153,18 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
     if parts is None:
         bodies = {stem: mesh.raw.copy()}
     else:
-        bodies = {
-            f"{stem}_{safe_name(label, f'slot{index}')}": part for index, (label, part) in parts
-        }
+        # Der Schlüssel ist ein Name im Betrachter, die Slotnummer ist die
+        # Identität: Zwei Slots, deren Anzeigenamen gleich sind oder nach der
+        # Bereinigung zusammenfallen (``A/B`` und ``AB``), ersetzten sich hier
+        # — sechs statt zwölf Dreiecke, eine ganze Farbregion fehlte
+        # (Gesamtreview 05.09.2026, CORE-19). Der zweite bekommt seine Nummer
+        # angehängt, das Netz bleibt vollständig.
+        bodies = {}
+        for index, (label, part) in parts:
+            key = f"{stem}_{safe_name(label, f'slot{index}')}"
+            while key in bodies:
+                key = f"{key}_{index}"
+            bodies[key] = part
     # Alle Teilnetze mit derselben Matrix, sonst steckt eines quer im anderen.
     # Kopien sind es ohnehin — ``copy()`` oben, ``submesh`` in _parts_by_slot.
     upright = trimesh.transformations.rotation_matrix(-np.pi / 2.0, (1.0, 0.0, 0.0))

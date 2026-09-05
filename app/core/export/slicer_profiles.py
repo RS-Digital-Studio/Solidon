@@ -546,11 +546,14 @@ DESCRIBING_KEYS: Final = frozenset(
 
 
 def _family(path: Path) -> Path:
-    """Der Ordner, unter dem die Vorfahren eines Profils zu finden sind.
+    """Der Ordner, unter dem die Vorfahren eines Profils **zuerst** gesucht
+    werden.
 
-    Gesucht wird nicht im ganzen Bestand: die Erbkette eines Filamentprofils
-    bleibt innerhalb von ``filament/``, und dort sind es zweihundert Dateien
-    statt elftausend.
+    Die Erbkette eines mitgelieferten Filamentprofils bleibt innerhalb seines
+    ``filament/``, und dort sind es zweihundert Dateien statt elftausend. Ein
+    **eigenes** Profil erbt dagegen aus einem anderen Baum — dafür steht
+    :func:`_store_roots` bereit, und die Kette fragt dort erst, wenn hier
+    nichts gefunden wird.
     """
     for parent in path.parents:
         if parent.name.casefold() in PROFILE_DIRS:
@@ -558,7 +561,89 @@ def _family(path: Path) -> Path:
     return path.parent
 
 
-def resolve_values(path: Path) -> dict[str, Any]:
+def _kind_by_folder(path: Path) -> ProfileKind | None:
+    """Die Art eines Profils, abgelesen an seinem Ordner — ohne Wurzel."""
+    for parent in path.parents:
+        found = PROFILE_DIRS.get(parent.name.casefold())
+        if found is not None:
+            return found
+    return None
+
+
+def profile_roots(flavour: SlicerFlavour, executable: Path) -> tuple[Path, ...]:
+    """Alle Wurzeln des Profilbestands dieser Installation, mitgelieferte
+    zuerst: ``resources/profiles`` neben dem Programm, die eigenen
+    ``user/<Konto>`` und der ``system``-Bestand daneben, in den die
+    Orca-Familie die gewählten Herstellerbündel kopiert.
+
+    Die Erbkette eines eigenen Profils (:func:`resolve_values`) braucht sie:
+    Ein im Slicer angelegtes Filament unter ``user/<Konto>/filament/`` erbt
+    mit ``inherits`` von einer Herstellerdatei unter ``resources/profiles/``
+    — und setzt selbst nur den Fluss. Temperatur und Materialtyp stehen in
+    der Basis, und die lag in einem Baum, den die Kette nie ansah: Sie endete
+    ohne Meldung beim Nutzerdelta, das ausgeschriebene Profil ging ohne
+    Temperaturen zum Slicer (Gesamtreview 05.09.2026, CORE-14).
+    """
+    roots: list[Path] = []
+    installed = install_root(executable)
+    if installed is not None:
+        roots.append(installed)
+    for folder in user_roots(flavour, executable):
+        roots.append(folder)
+        system = folder.parent.parent / "system"
+        if system.is_dir() and system not in roots:
+            roots.append(system)
+    return tuple(roots)
+
+
+def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
+    """Wo die Vorfahren eines Profils außerhalb seines eigenen Ordners liegen.
+
+    Ausdrücklich genannte Wurzeln zuerst (:func:`profile_roots`), dann die am
+    Pfad abgelesenen — für Aufrufer, die nur die Datei kennen: Ein eigenes
+    Profil liegt unter ``<Programm>/user/<Konto>/``, und daneben liegt
+    ``<Programm>/system/`` mit den kopierten Herstellerbündeln; ein
+    mitgeliefertes liegt unter ``resources/profiles``.
+    """
+    found = [Path(root) for root in roots]
+    for parent in path.parents:
+        name = parent.name.casefold()
+        if name == "user" and parent.parent != parent:
+            for candidate in (parent.parent / "system", parent):
+                if candidate.is_dir() and candidate not in found:
+                    found.append(candidate)
+            break
+        if name == "profiles" and parent.parent.name.casefold() == "resources":
+            if parent not in found:
+                found.append(parent)
+            break
+    return found
+
+
+def _names_in(root: Path, kind: ProfileKind | None) -> dict[str, Path]:
+    """Profilname → Datei für alles unter ``root`` — bei ``kind`` nur die
+    Profile dieser Art, gemessen am Ordner unterhalb der Wurzel.
+
+    Der Index läuft über den Profilnamen, nicht über den Dateinamen: darauf
+    zeigt ``inherits``. Bei Elegoo sind beide zufällig gleich
+    (`Elegoo PETG @base.json`), garantiert ist das nirgends — und wo es nicht
+    gilt, bräche die Kette nach der ersten Datei ab, ohne dass etwas fehlend
+    aussieht.
+    """
+    index: dict[str, Path] = {}
+    for entry in root.rglob("*.json"):
+        if kind is not None and _kind_of(entry, root) != kind:
+            continue
+        try:
+            loaded = json.loads(entry.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(loaded, dict):
+            index.setdefault(str(loaded.get("name", entry.stem)), entry)
+    return index
+
+
+def resolve_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
 
     Die Hersteller staffeln in mehreren Ebenen — bei Elegoo etwa
@@ -572,12 +657,12 @@ def resolve_values(path: Path) -> dict[str, Any]:
     hier gelesen.
     """
     values: dict[str, Any] = {}
-    for loaded in reversed(_chain(path)):  # Wurzel zuerst, Spezielles gewinnt
+    for loaded in reversed(_chain(path, roots)):  # Wurzel zuerst, Spezielles gewinnt
         values.update({key: value for key, value in loaded.items() if key not in DESCRIBING_KEYS})
     return values
 
 
-def binding(path: Path) -> dict[str, Any]:
+def binding(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     """Woran ein Profil seine Verträglichkeit knüpft (§29).
 
     :func:`resolve_values` lässt die beschreibenden Schlüssel aus
@@ -597,7 +682,7 @@ def binding(path: Path) -> dict[str, Any]:
     leerer Eintrag verträgt sich mit keinem Drucker.
     """
     found: dict[str, Any] = {}
-    for loaded in _chain(path):  # spezifisch zuerst
+    for loaded in _chain(path, roots):  # spezifisch zuerst
         for key in _BINDING:
             value = loaded.get(key)
             if key not in found and value:
@@ -605,27 +690,23 @@ def binding(path: Path) -> dict[str, Any]:
     return found
 
 
-def _chain(path: Path) -> list[dict[str, Any]]:
+def _chain(path: Path, roots: Sequence[Path] = ()) -> list[dict[str, Any]]:
     """Die Profile der Erbkette, spezifisches zuerst.
 
     Roh, ohne Zusammenlegen und ohne Filter: Die beiden Auswertungen
     darüber brauchen Verschiedenes — :func:`resolve_values` die Werte
     ohne die beschreibenden Schlüssel, :func:`binding` ausgerechnet
     einen davon.
+
+    Gesucht wird zuerst im eigenen Ordner (:func:`_family`) und erst bei
+    einem Fehlschlag im ganzen Bestand (:func:`_store_roots`) — der ist
+    tausende Dateien groß, und die meisten Ketten enden im eigenen Ordner.
+    Eine Basis, die nirgends liegt, steht im Protokoll: Die Kette endet dann
+    beim Delta, und wer das ausgeschriebene Profil liest, soll wissen, dass
+    es unvollständig ist.
     """
-    # Der Index läuft über den Profilnamen, nicht über den Dateinamen: darauf
-    # zeigt ``inherits``. Bei Elegoo sind beide zufällig gleich
-    # (`Elegoo PETG @base.json`), garantiert ist das nirgends — und wo es nicht
-    # gilt, bräche die Kette nach der ersten Datei ab, ohne dass etwas fehlt
-    # aussieht.
-    index: dict[str, Path] = {}
-    for entry in _family(path).rglob("*.json"):
-        try:
-            loaded = json.loads(entry.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(loaded, dict):
-            index.setdefault(str(loaded.get("name", entry.stem)), entry)
+    index = _names_in(_family(path), None)
+    wider: dict[str, Path] | None = None
 
     chain: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -646,6 +727,21 @@ def _chain(path: Path) -> list[dict[str, Any]]:
             break
         seen.add(parent)
         current = index.get(parent)
+        if current is None:
+            if wider is None:
+                wider = {}
+                kind = _kind_by_folder(path)
+                for root in _store_roots(path, roots):
+                    for name, entry in _names_in(root, kind).items():
+                        wider.setdefault(name, entry)
+            current = wider.get(parent)
+        if current is None:
+            _log.warning(
+                "profile %s inherits %r, which is nowhere in the store — "
+                "the resolved values stop at the child",
+                path.name,
+                parent,
+            )
 
     return chain
 
@@ -761,11 +857,11 @@ def match_filament(
     return min(fitting, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
 
 
-def type_of(profile: SlicerProfile) -> str:
+def type_of(profile: SlicerProfile, roots: Sequence[Path] = ()) -> str:
     """Welches Material dieses Filamentprofil meint — eigene Angabe oder geerbte."""
     if profile.filament_type:
         return profile.filament_type
-    return _first_string(resolve_values(profile.path).get("filament_type"))
+    return _first_string(resolve_values(profile.path, roots).get("filament_type"))
 
 
 def match(

@@ -822,16 +822,34 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
 
 
 def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
-    """Misst dieser Slicer von der Ecke der Platte statt von ihrer Mitte?
+    """Bekommt dieser Slicer die Teile in den Koordinaten der Maschine — von
+    der Ecke der Platte gemessen?
 
-    Nur die Orca-Familie tut das. Solidon rechnet um den Ursprung, und für die
-    beiden anderen schreibt die Übergabe genau diese Welt: Cura bekommt
-    ``machine_center_is_zero``, PrusaSlicer eine Bettform von ``-128`` bis
-    ``128``. Wer ihnen trotzdem Bettkoordinaten schickt, verschiebt den Druck
-    um den halben Bauraum — gemessen im G-Code, und bei PrusaSlicer endet es
-    in „All objects are outside of the print volume".
+    **Jeder.** Solidon rechnet um den Ursprung; der Drucker misst von der
+    Ecke — Prusa MK4S wie Centauri Carbon 2 legen den Nullpunkt vorn links
+    und die Platte auf 0…250 beziehungsweise 0…256 mm. Bis zum 05.09.2026
+    bekamen Cura und PrusaSlicer stattdessen Solidons Welt: eine Maschine
+    um den Ursprung (``machine_center_is_zero``, eine Bettform von ``-128``
+    bis ``128``) und die Teile unverschoben. Der Slicer war damit mit sich
+    im Reinen und schrieb Bahnen von ``-13,6`` bis ``13,6`` — Koordinaten,
+    die es auf der Maschine nicht gibt; ein mittiges Teil lag um den halben
+    Bauraum neben dem Bett, und die eigene Gegenprobe (``bed_box``) maß
+    gegen denselben erfundenen Ursprung und fand nichts (Gesamtreview,
+    CORE-17, mit echtem PrusaSlicer 2.9.6 gemessen).
+
+    Was die ältere Messung „um den halben Bauraum verschoben" nannte —
+    Solidons Würfel bei -10…10, im G-Code bei 118…138 —, ist auf einem
+    Drucker mit Eckursprung genau die Bettmitte. Die Ablehnung von
+    PrusaSlicer kam aus dem Widerspruch zwischen verschobenen Teilen und
+    zentriert erklärtem Bett, nicht aus der Verschiebung; erklärt wird das
+    Bett seither wie die Teile (:func:`app.core.export.handover._machine_keys`).
+
+    Die Frage bleibt eine Funktion, obwohl jede Familie dasselbe antwortet:
+    Sie ist der eine Ort, an dem die Übergabe, der Schreiber und die
+    Gegenprobe dieselbe Welt vereinbaren — ein Drucker mit Mittelursprung
+    (Delta) käme hier hinzu, nicht an drei Stellen.
     """
-    return flavour == "orca"
+    return True
 
 
 # --- Was eine Familie kann, und was sie von uns braucht -------------------------

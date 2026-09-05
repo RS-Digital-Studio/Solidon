@@ -164,6 +164,13 @@ class SlicerSetup:
         return self.executable.stem
 
 
+def _profile_roots(setup: SlicerSetup) -> tuple[Path, ...]:
+    """Der ganze Profilbestand dieser Installation — für die Erbkette eines
+    eigenen Profils, die aus ``user/`` in ``resources/profiles/`` hinüberreicht
+    (:func:`app.core.export.slicer_profiles.profile_roots`)."""
+    return slicer_profiles.profile_roots(setup.flavour, setup.executable)
+
+
 def profile_file(chosen: str, setup: SlicerSetup, kind: slicer_profiles.ProfileKind) -> Path | None:
     """Die Datei zu einem Profil, gleich ob ein Name oder ein Pfad ankam.
 
@@ -782,15 +789,19 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             "machine_depth": f"{depth:g}",
             "machine_height": f"{height:g}",
             "machine_nozzle_size": f"{profile.printer.nozzle_diameter:g}",
-            # Solidon rechnet um den Ursprung, hier wie bei Prusa.
-            "machine_center_is_zero": "true",
-            # Wo „hinten" liegt, wenn die Naht dorthin soll. Cura sucht den
-            # Konturpunkt, der diesem hier am nächsten liegt; ohne die Angabe
-            # stünde er bei (100, 100) und damit rechts hinten statt hinten.
-            # Gelesen wird er nur bei ``z_seam_type=back``, geschrieben immer:
-            # ein Punkt, den niemand abfragt, kostet nichts.
-            "z_seam_x": "0",
-            "z_seam_y": f"{depth / 2.0:g}",
+            # Die Maschine misst von der Ecke, und die Teile kommen in ihren
+            # Koordinaten (``wants_bed_coordinates``). ``true`` stand hier
+            # bis zum 05.09.2026 und erklärte dem Slicer eine Maschine, die
+            # es nicht gibt — die Bahnen lagen um den halben Bauraum neben
+            # der Platte (Gesamtreview, CORE-17).
+            "machine_center_is_zero": "false",
+            # Wo „hinten" liegt, wenn die Naht dorthin soll: hinten in der
+            # Mitte, in Bettkoordinaten. Cura sucht den Konturpunkt, der diesem
+            # hier am nächsten liegt; ohne die Angabe stünde er bei (100, 100)
+            # und damit irgendwo. Gelesen wird er nur bei ``z_seam_type=back``,
+            # geschrieben immer: ein Punkt, den niemand abfragt, kostet nichts.
+            "z_seam_x": f"{width / 2.0:g}",
+            "z_seam_y": f"{depth:g}",
             "machine_heated_build_volume": "true" if profile.printer.enclosed else "false",
             # Einstellungen, die `CuraEngine` abfragt und in keiner Definition
             # findet, die es geladen hat — das Fenster füllt sie aus Qualitäts-
@@ -816,17 +827,14 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
         return {}
     printer = profile.printer
     width, depth, height = printer.build_volume
-    # Um den Ursprung, nicht ab der Ecke: Solidon rechnet zentriert — die
-    # Anordnung beginnt bei ``-width/2`` (siehe ``arrange_on_bed``), und ein
-    # exportierter Körper steht bei x -30..30. Ein Bett von 0 bis 256 liegt
-    # daneben, und PrusaSlicer sagte dazu „All objects are outside of the
-    # print volume" und schrieb nichts. Die Bettform beschreibt hier dieselbe
-    # Welt wie die Koordinaten, die mit ihr kommen.
-    half_width, half_depth = width / 2.0, depth / 2.0
-    corners = (
-        f"{-half_width:g}x{-half_depth:g},{half_width:g}x{-half_depth:g},"
-        f"{half_width:g}x{half_depth:g},{-half_width:g}x{half_depth:g}"
-    )
+    # Ab der Ecke, wie die Maschine: Die Teile kommen in Bettkoordinaten
+    # (``wants_bed_coordinates``), und die Bettform beschreibt dieselbe Welt
+    # — die des Druckers, dessen Nullpunkt vorn links liegt. Eine Form von
+    # ``-128`` bis ``128`` über verschobenen Teilen endete in „All objects
+    # are outside of the print volume"; dieselbe Form über unverschobenen
+    # Teilen ließ den Slicer Bahnen bei ``-13,6`` schreiben, die es auf der
+    # Maschine nicht gibt (Gesamtreview 05.09.2026, CORE-17).
+    corners = f"0x0,{width:g}x0,{width:g}x{depth:g},0x{depth:g}"
     return {
         "nozzle_diameter": f"{printer.nozzle_diameter:g}",
         "bed_shape": corners,
@@ -1263,7 +1271,7 @@ def project_settings(
     for kind, chosen in foundations:
         found = profile_file(chosen, setup, kind)
         if found is not None:
-            document.update(slicer_profiles.resolve_values(found))
+            document.update(slicer_profiles.resolve_values(found, roots=_profile_roots(setup)))
 
     document.update(_orca_process(split.get("process", {}), settings, setup))
     document.update(_machine_keys(profile, setup.flavour))
@@ -1425,7 +1433,7 @@ def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
         # ``resolve_values`` lässt die beschreibenden Schlüssel weg
         # (``inherits``, ``name``, ``type`` …). Genau richtig: Das Profil
         # soll keinen fremden Namen tragen und nichts nachladen.
-        document.update(slicer_profiles.resolve_values(base))
+        document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     # Nach dem Auffüllen, damit kein geerbter Wert ihn überschreibt.
     document["name"] = _machine_name(setup)
     return document
@@ -1472,7 +1480,7 @@ def _orca_process(
         # übrigen einhundertneunundzwanzig holte bisher der Slicer
         # selbst über ``inherits`` — also aus seinem Bestand, an dem
         # Solidon damit hing.
-        document.update(slicer_profiles.resolve_values(base))
+        document.update(slicer_profiles.resolve_values(base, roots=_profile_roots(setup)))
     document.update(values)
     # Objektmarken, unabhängig von den Einstellungen: Solidon schickt eine
     # Baugruppe mit benannten Teilen, und ohne die Marken im G-Code kann der
@@ -1510,7 +1518,7 @@ def _orca_process(
         # eigenen. Der Prozess muss zu **dem** passen, und das tut er nur
         # mit der geerbten Angabe. Sie steht selten in der obersten Datei,
         # deshalb über ``binding`` aus der Kette statt aus ``document``.
-        document.update(slicer_profiles.binding(base))
+        document.update(slicer_profiles.binding(base, roots=_profile_roots(setup)))
     document.pop("inherits", None)
     return document
 
@@ -1567,7 +1575,7 @@ def _orca_filament(
     base = profile_file(setup.base_filament, setup, "filament")
     inherited: dict[str, object] = {}
     if base is not None:
-        inherited = slicer_profiles.resolve_values(base)
+        inherited = slicer_profiles.resolve_values(base, roots=_profile_roots(setup))
         document.update({key: _as_slots(value) for key, value in inherited.items()})
 
     # Solidons Werte kommen darüber — außer sie gehören einem anderen Material.
@@ -1680,7 +1688,7 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     if base is None:
         return []
 
-    inherited = slicer_profiles.resolve_values(base)
+    inherited = slicer_profiles.resolve_values(base, roots=_profile_roots(setup))
     written = by_section(settings, setup.flavour).get("filament", {})
     apart: list[str] = []
     for key, ours in written.items():

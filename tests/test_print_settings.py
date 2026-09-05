@@ -2093,17 +2093,19 @@ def test_the_first_spools_value_is_verified_as_written(
 def test_a_gcode_that_prints_beside_the_bed_becomes_a_finding(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Gemessen an CuraEngine 5.13.0: ein Würfel 150 mm neben der Mitte, ein
-    Bett von 220 mm — PrusaSlicer rückt ihn selbst in die Mitte, CuraEngine
-    schreibt eine Datei, die bei x 130,2 bis 169,8 druckt. Es prüft den Bauraum
-    nicht, und sein Kopf sagt dazu ``MINX:2.14748e+06``, also nichts.
+    """Gemessen an CuraEngine 5.13.0: ein Würfel jenseits des Betts von
+    220 mm — PrusaSlicer rückt ihn selbst in die Mitte, CuraEngine schreibt
+    eine Datei, die dort druckt, wo kein Bett ist. Es prüft den Bauraum nicht,
+    und sein Kopf sagt dazu ``MINX:2.14748e+06``, also nichts. Seit dem
+    05.09.2026 misst jede Familie von der Ecke (CORE-17): Das Bett liegt bei
+    0 bis 220, und ein Druck bei 230 bis 250 ist um 30 mm darüber hinaus.
 
     Gesperrt wird nichts (§29) — die Datei kommt zurück, der Befund steht
     daneben, und er trägt ``source="gcode"``, weil er an den Bahnen gemessen
     ist und nicht geschätzt (Regel 14).
     """
     profile = profiles.make_profile()
-    model, setup = _slicer_writing(monkeypatch, tmp_path, _gcode_printing_at(150.0, 170.0))
+    model, setup = _slicer_writing(monkeypatch, tmp_path, _gcode_printing_at(230.0, 250.0))
 
     outcome = handover.slice_model(
         model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
@@ -2114,8 +2116,8 @@ def test_a_gcode_that_prints_beside_the_bed_becomes_a_finding(
     assert beyond[0].severity == "error"
     assert beyond[0].source == "gcode"
     assert beyond[0].values["axis"] == "X"
-    # 170 gedruckt, 110 erlaubt — das halbe Bett von 220.
-    assert beyond[0].values["excess_mm"] == pytest.approx(60.0)
+    # 250 gedruckt, 220 erlaubt — das Bett von der Ecke aus.
+    assert beyond[0].values["excess_mm"] == pytest.approx(30.0)
     assert outcome.gcode_path.is_file(), "die Datei bleibt trotzdem"
 
 
@@ -2127,7 +2129,7 @@ def test_a_gcode_that_stays_on_the_bed_says_nothing(
     Ohne sie prüfte der Test oben bloß, dass irgendein Befund entsteht.
     """
     profile = profiles.make_profile()
-    model, setup = _slicer_writing(monkeypatch, tmp_path, _gcode_printing_at(-30.0, 30.0))
+    model, setup = _slicer_writing(monkeypatch, tmp_path, _gcode_printing_at(80.0, 140.0))
 
     outcome = handover.slice_model(
         model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
@@ -2136,22 +2138,25 @@ def test_a_gcode_that_stays_on_the_bed_says_nothing(
     assert not [entry for entry in outcome.findings if entry.code == "gcode.off_the_bed"]
 
 
-def test_the_orca_family_is_measured_from_the_corner() -> None:
-    """Zwei Welten, und sie zu verwechseln kostet einen falschen Befund bei
-    jedem Lauf: Cura und PrusaSlicer bekommen von Solidon eine Maschine um den
-    Ursprung, die Orca-Familie lädt ihr eigenes Profil und misst von der Ecke.
+def test_every_family_is_measured_from_the_corner() -> None:
+    """Eine Welt, die des Druckers: Er misst von der Ecke, und die Gegenprobe
+    misst genauso — für jede Familie.
 
-    Dieselbe Datei ist deshalb für die eine Familie in Ordnung und für die
-    andere daneben — und zwar in beide Richtungen.
+    Bis zum 05.09.2026 waren es zwei Welten: Cura und PrusaSlicer bekamen von
+    Solidon eine Maschine um den Ursprung, und ``bed_box`` maß gegen denselben
+    erfundenen Ursprung — Bahnen bei ``-13,6`` galten damit als „auf dem
+    Bett", obwohl es dort auf einem MK4S oder Centauri keines gibt
+    (Gesamtreview, CORE-17). Unter Null liegt für keine Familie ein Bett.
     """
     profile = profiles.make_profile()
-    mitte = _gcode_printing_at(-30.0, 30.0)
-    ecke = _gcode_printing_at(80.0, 140.0)
+    unter_null = _gcode_printing_at(-30.0, 30.0)
+    mitte = _gcode_printing_at(80.0, 140.0)
 
-    assert handover.off_the_bed(mitte, profile, "cura") is None
-    assert handover.off_the_bed(mitte, profile, "orca") is not None, "unter Null gibt es kein Bett"
-    assert handover.off_the_bed(ecke, profile, "orca") is None
-    assert handover.off_the_bed(ecke, profile, "cura") is not None, "140 statt höchstens 110"
+    for flavour in ("cura", "prusa", "orca"):
+        assert handover.off_the_bed(unter_null, profile, flavour) is not None, (
+            f"{flavour}: unter Null gibt es kein Bett"
+        )
+        assert handover.off_the_bed(mitte, profile, flavour) is None, flavour
 
 
 def test_the_bed_in_the_file_beats_the_one_in_the_profile() -> None:
@@ -2623,7 +2628,7 @@ def test_a_project_file_carries_its_values_written_out(tmp_path, monkeypatch) ->
 
     monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_, **__: [Eintrag()])
     monkeypatch.setattr(
-        slicer_profiles, "resolve_values", lambda _: {"wall_loops": "2", "bridge_angle": "45"}
+        slicer_profiles, "resolve_values", lambda _, **__: {"wall_loops": "2", "bridge_angle": "45"}
     )
 
     profile = profiles.make_profile("centauri-carbon-2", "petg")
@@ -2810,7 +2815,7 @@ def test_without_a_chosen_printer_the_slicers_own_selection_counts(tmp_path, mon
     monkeypatch.setattr(
         slicer_profiles,
         "resolve_values",
-        lambda _: {"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE" + chr(10) + "G92 E0"},
+        lambda _, **__: {"before_layer_change_gcode": ";BEFORE_LAYER_CHANGE" + chr(10) + "G92 E0"},
     )
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
@@ -4274,3 +4279,28 @@ def test_a_profile_solidon_cannot_place_stays_the_customers(monkeypatch) -> None
 
     assert handover.machine_for(setup, profile) == "Meine eigene Maschine"
     assert handover.machine_missing(setup, profile) == []
+
+
+def test_prusa_and_cura_get_the_bed_of_the_machine_not_of_the_document(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, CORE-17: PrusaSlicer bekam eine Bettform von
+    ``-125`` bis ``125``, Cura ``machine_center_is_zero=true`` — Solidons Welt
+    um den Ursprung, nicht die des Druckers, der von der Ecke misst. Der
+    Slicer schrieb Bahnen bei ``-13,6``, die es auf der Maschine nicht gibt,
+    und die eigene Gegenprobe maß gegen denselben erfundenen Ursprung. Beide
+    bekommen jetzt das Bett, das der Drucker hat, und die Teile darin."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    width, depth, height = profile.printer.build_volume
+
+    prusa = handover._machine_keys(profile, "prusa")
+    assert prusa["bed_shape"] == f"0x0,{width:g}x0,{width:g}x{depth:g},0x{depth:g}"
+    assert prusa["max_print_height"] == f"{height:g}"
+
+    cura = handover._machine_keys(profile, "cura")
+    assert cura["machine_center_is_zero"] == "false"
+    assert cura["z_seam_x"] == f"{width / 2.0:g}", "hinten in der Mitte, in Bettkoordinaten"
+    assert cura["z_seam_y"] == f"{depth:g}"
+
+    for flavour in ("prusa", "cura", "orca"):
+        box = handover.bed_box(profile, flavour)
+        assert box.minimum == (0.0, 0.0, 0.0), flavour
+        assert box.maximum == (width, depth, height), flavour

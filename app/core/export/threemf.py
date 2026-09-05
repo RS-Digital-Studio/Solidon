@@ -99,6 +99,24 @@ class AssemblyPart:
     """Auf welche Druckplatte dieses Teil gehört, von null an gezählt."""
 
 
+SlotKey = tuple[TranslatableText | str, tuple[float, float, float] | None, str | None, str | None]
+"""Woran zwei Slots als **dasselbe Filament** erkannt werden: Name, Farbe,
+Herstellerprofil und Materialart."""
+
+
+def slot_identity(slot: MaterialSlot) -> SlotKey:
+    """Die Identität eines Slots für das Zusammenlegen (§20).
+
+    Name und Farbe allein reichten nicht: Zwei Teile mit je einem Slot
+    „Schwarz" in Schwarz, eines PLA und eines PETG, wurden **eine** Düse —
+    die Baugruppe trug einen Materialeintrag, jedes Dreieck ``p1="0"``, und
+    das PETG-Profil war aus der Liste verschwunden, je nachdem, welches Teil
+    zuerst kam (Gesamtreview 05.09.2026, CORE-21). Gleicher Name und gleiche
+    Farbe dürfen zusammenfallen, wenn auch Profil und Materialart gleich sind.
+    """
+    return (slot.name, slot.colour, slot.material, slot.material_type)
+
+
 def merge_slots(
     parts: Sequence[AssemblyPart], across: Sequence[AssemblyPart] | None = None
 ) -> list[MaterialSlot]:
@@ -127,10 +145,10 @@ def merge_slots(
     # Der Name darf ein ``TranslatableText`` sein (:attr:`MaterialSlot.name`).
     # Zusammengelegt wird trotzdem richtig: Ein solcher Text vergleicht und
     # hasht wie seine Message-ID, auch gegen eine schlichte Zeichenkette.
-    seen: dict[tuple[TranslatableText | str, tuple[float, float, float] | None], int] = {}
+    seen: dict[SlotKey, int] = {}
     for part in across if across is not None else parts:
         for slot in part.slots or (MaterialSlot(index=0, name=""),):
-            key = (slot.name, slot.colour)
+            key = slot_identity(slot)
             if key in seen:
                 continue
             seen[key] = len(order)
@@ -141,11 +159,11 @@ def merge_slots(
     # mit den Nummern des Auftrags. Ein Slicer, der eine Platte allein bekommt,
     # soll nicht nach Filamenten fragen, die auf ihr nicht vorkommen.
     here = {
-        (slot.name, slot.colour)
+        slot_identity(slot)
         for part in parts
         for slot in part.slots or (MaterialSlot(index=0, name=""),)
     }
-    return [slot for slot in order if (slot.name, slot.colour) in here]
+    return [slot for slot in order if slot_identity(slot) in here]
 
 
 def by_extruder(slots: Sequence[MaterialSlot]) -> list[MaterialSlot | None]:
@@ -399,12 +417,12 @@ def _assembly_xml(
 
     # Wohin ein objekteigener Slot in der gemeinsamen Liste zeigt. Ohne diese
     # Übersetzung trüge Teil zwei die Farben von Teil eins.
-    positions = {(entry.name, entry.colour): entry.index for entry in materials}
+    positions = {slot_identity(entry): entry.index for entry in materials}
 
     build = ET.SubElement(root, "build")
     for number, part in enumerate(parts, start=2):
         order = {
-            slot.index: positions.get((slot.name, slot.colour), 0)
+            slot.index: positions.get(slot_identity(slot), 0)
             for slot in part.slots or (MaterialSlot(index=0, name=""),)
         }
         body = ET.SubElement(

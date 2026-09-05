@@ -1155,13 +1155,13 @@ def test_the_cura_handover_carries_every_part_of_the_plate(
     assert joined.bounds.size[0] > first.mesh.bounds.size[0], "beide Teile, nicht eines"
 
 
-def test_the_cura_handover_keeps_the_coordinates_of_the_document(
-    tmp_path: Path, profile: Profile
-) -> None:
+def test_the_cura_handover_moves_the_points_onto_the_bed(tmp_path: Path, profile: Profile) -> None:
     """Ein STL trägt keine Platzierungsmatrix — es hat nur seine Punkte.
 
-    Umso wichtiger ist, dass sie unverschoben bleiben: ``CuraEngine`` bekommt
-    ``machine_center_is_zero``, rechnet also dieselbe Welt wie Solidon.
+    Also werden die Punkte verschoben: ``CuraEngine`` bekommt eine Maschine,
+    die von der Ecke misst (``machine_center_is_zero=false``), und die Teile
+    in deren Koordinaten. Unverschoben lagen sie um den halben Bauraum neben
+    der Platte (Gesamtreview 05.09.2026, CORE-17).
     """
     written, _findings = write_assembly(
         [scene_object()],
@@ -1172,24 +1172,28 @@ def test_the_cura_handover_keeps_the_coordinates_of_the_document(
         place_on_bed=True,
     )
 
+    width, depth, _height = profile.printer.build_volume
     before = scene_object().mesh.bounds.centre
     centre = read_mesh(written.read_bytes(), ".stl").bounds.centre
-    assert centre[0] == pytest.approx(before[0], abs=0.01)
-    assert centre[1] == pytest.approx(before[1], abs=0.01)
+    assert centre[0] == pytest.approx(before[0] + width / 2.0, abs=0.01)
+    assert centre[1] == pytest.approx(before[1] + depth / 2.0, abs=0.01)
 
 
-def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Profile) -> None:
-    """Wer um den Ursprung rechnet, darf die Teile nicht ans Bett schieben.
+def test_every_family_gets_the_parts_in_bed_coordinates(tmp_path: Path, profile: Profile) -> None:
+    """Der Drucker misst von der Ecke — jeder, den Solidon kennt.
 
-    Solidon rechnet zentriert, und für Cura wie für PrusaSlicer schreibt die
-    Übergabe genau das: ``machine_center_is_zero`` beim einen, eine Bettform
-    von ``-128`` bis ``128`` beim anderen. Die Verschiebung um den halben
-    Bauraum kam trotzdem — gemessen im G-Code lag ein Würfel, den das Dokument
-    bei −10 … 10 hat, bei 110,9 … 137,8. PrusaSlicer lehnte ihn gleich ganz ab
-    („All objects are outside of the print volume"), Cura druckte ihn
-    schweigend woanders. Nur die Orca-Familie misst von der Ecke.
+    Bis zum 05.09.2026 bekamen nur die Orca-Ableger die Teile ans Bett
+    geschoben; Cura und PrusaSlicer bekamen Solidons Welt um den Ursprung
+    erklärt und die Teile unverschoben. Der Slicer war damit mit sich im
+    Reinen und schrieb Bahnen bei ``-13,6`` — Koordinaten, die es auf einem
+    MK4S oder einem Centauri nicht gibt; ein mittiges Teil lag um den halben
+    Bauraum neben der Platte (Gesamtreview, CORE-17, mit PrusaSlicer 2.9.6
+    gemessen). Was die frühere Fassung dieses Tests als Verschiebung
+    beanstandete — ein Würfel bei -10…10 im G-Code bei 118…138 —, ist auf
+    einem Drucker mit Eckursprung die Bettmitte.
     """
-    for flavour in ("cura", "prusa"):
+    width, depth, _height = profile.printer.build_volume
+    for flavour in ("cura", "prusa", "orca"):
         written, _findings = write_assembly(
             [scene_object()],
             tmp_path / flavour,
@@ -1200,21 +1204,17 @@ def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Pro
         )
         if flavour == "cura":
             centre = read_mesh(written.read_bytes(), ".stl").bounds.centre
-            assert centre[0] == pytest.approx(0.0, abs=0.01), flavour
+            assert centre[0] == pytest.approx(width / 2.0, abs=0.01), flavour
+            assert centre[1] == pytest.approx(depth / 2.0, abs=0.01), flavour
         else:
-            text = zipfile.ZipFile(BytesIO(written.read_bytes())).read(threemf.MODEL_PATH)
-            assert b"transform" not in text, flavour
-
-    orca, _findings = write_assembly(
-        [scene_object()],
-        tmp_path / "orca",
-        project_name="uebergabe",
-        profile=profile,
-        flavour="orca",
-        place_on_bed=True,
-    )
-    text = zipfile.ZipFile(BytesIO(orca.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
-    assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
+            text = (
+                zipfile.ZipFile(BytesIO(written.read_bytes()))
+                .read(threemf.MODEL_PATH)
+                .decode("utf-8")
+            )
+            assert f'transform="1 0 0 0 1 0 0 0 1 {width / 2.0:g} {depth / 2.0:g} 0"' in text, (
+                flavour
+            )
 
 
 def _asks_only_a_flavour(function: object) -> bool:
@@ -1242,8 +1242,8 @@ def test_every_flavour_answers_every_property() -> None:
     nicht unbemerkt umdreht, und sie ist die Liste, die jemand ausfüllen muss,
     der eine vierte Familie einführt.
 
-    Der Bestand ist ausdrücklich **kein** Muster: Sechs der neun Zeilen
-    trennen die Orca-Familie von den anderen beiden, eine stellt Cura allein
+    Der Bestand ist ausdrücklich **kein** Muster: Fünf der neun Zeilen
+    trennen die Orca-Familie von den anderen beiden, eine gilt für alle, eine stellt Cura allein
     (``has_key_definitions``), und wer daraus „Orca kann alles" liest, hat die
     Ursache verwechselt. Sie kann es, weil sie ihre
     Profile als Dateien führt, die Solidon lesen kann; Cura führt seine
@@ -1254,7 +1254,9 @@ def test_every_flavour_answers_every_property() -> None:
     jedes Mal wird diese Tabelle rot.
     """
     expected: dict[str, dict[SlicerFlavour, bool]] = {
-        "wants_bed_coordinates": {"prusa": False, "orca": True, "cura": False},
+        # Seit dem 05.09.2026 jede: Der Drucker misst von der Ecke, gleich
+        # welcher Slicer die Datei schreibt (CORE-17, siehe das Prädikat).
+        "wants_bed_coordinates": {"prusa": True, "orca": True, "cura": True},
         "has_user_profile_tree": {"prusa": False, "orca": True, "cura": False},
         "has_filament_profiles": {"prusa": False, "orca": True, "cura": False},
         "reads_settings_from_project_file": {"prusa": False, "orca": True, "cura": False},
@@ -1302,7 +1304,7 @@ def test_every_flavour_answers_every_property() -> None:
 def test_the_bed_box_asks_the_same_source_as_the_handover(profile: Profile) -> None:
     """Wo das Bett liegt, wird an einer Stelle entschieden, nicht an zweien.
 
-    Der Test darüber prüft, *dass* nur die Orca-Familie von der Ecke misst.
+    Der Test darüber prüft, *dass* jede Familie von der Ecke misst.
     Dieser hier prüft, dass beide Stellen, die das wissen müssen, dieselbe
     Quelle fragen: ``wants_bed_coordinates``. ``bed_box`` verglich lange
     selbst gegen ``"orca"`` — dieselbe Frage, zweimal formuliert, und der
@@ -1331,7 +1333,7 @@ def test_the_bed_box_asks_the_same_source_as_the_handover(profile: Profile) -> N
     Er ist damit kein Verhaltenstest, sondern ein **Regressionswächter**: Er
     wird genau dann rot, wenn jemand den Namensvergleich zurückholt, während
     die Quelle etwas anderes sagt. Das ist die Zusage, die hier gebraucht
-    wird — den Fall „nur die Orca-Familie misst von der Ecke" prüft der Test
+    wird — den Fall „jede Familie misst von der Ecke" prüft der Test
     darüber, und zwar am geschriebenen Ergebnis.
     """
     flavours = get_args(SlicerFlavour)
@@ -1765,3 +1767,96 @@ def test_an_empty_object_says_what_to_do_about_it(tmp_path: Path, profile: Profi
     assert "change_selection" in wege, wege
     assert "show_history" in wege, wege
     assert treffer[0].object_id == "obj_1", "der Befund nennt das Objekt, um das es geht"
+
+
+def test_numbering_never_lands_on_a_name_the_job_already_uses(profile: Profile) -> None:
+    """Gesamtreview 05.09.2026, CORE-18: ``A``, ``A`` und ``A-1`` wurden
+    ``A-1``, ``A-2``, ``A-1`` — die laufende Nummer wurde nie gegen die
+    geplanten Namen geprüft, und das erste Teil verschwand unter dem dritten,
+    während ``write_plan`` drei Pfade meldete."""
+    objects = [
+        scene_object("obj_1", "A"),
+        scene_object("obj_2", "A"),
+        scene_object("obj_3", "A-1"),
+    ]
+
+    plan = plan_export(objects, project_name="P", profile=profile, scheme="{object}")
+
+    names = [entry.filename for entry in plan.entries]
+    assert names == ["A-2.stl", "A-3.stl", "A-1.stl"], "was allein steht, behält seinen Namen"
+    assert len({name.casefold() for name in names}) == 3
+
+
+def test_numbering_treats_upper_and_lower_case_as_one_name(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """``A.stl`` und ``a.stl`` sind auf Windows und macOS dieselbe Datei:
+    zwei gemeldete Pfade, einer auf der Platte, der erste Körper weg. Die
+    Kollisionsregel faltet den Namen, auf jeder Plattform."""
+    objects = [scene_object("obj_1", "A"), scene_object("obj_2", "a")]
+
+    plan = plan_export(objects, project_name="P", profile=profile, scheme="{object}")
+    names = [entry.filename for entry in plan.entries]
+    assert len({name.casefold() for name in names}) == 2, names
+
+    written = write_plan(plan, tmp_path)
+    assert len(written) == 2
+    assert len(list(tmp_path.glob("*.stl"))) == 2, "zwei Dateien auf der Platte"
+
+
+def test_glb_keeps_every_region_when_slot_names_collide() -> None:
+    """Gesamtreview 05.09.2026, CORE-19: Die Teilnetze wurden nach dem
+    bereinigten Anzeigenamen abgelegt — zwei Slots namens „Farbe", oder
+    ``A/B`` neben ``AB``, ersetzten einander: sechs statt zwölf Dreiecke,
+    eine ganze Farbregion fehlte. Die Slotnummer ist die Identität."""
+    plain = body()
+    two_tone = MeshData(raw=plain.raw, slots=tuple(0 if index < 6 else 1 for index in range(12)))
+    for names in (("Farbe", "Farbe"), ("A/B", "AB")):
+        slots = [
+            MaterialSlot(index=0, name=names[0], colour=(1.0, 0.0, 0.0)),
+            MaterialSlot(index=1, name=names[1], colour=(0.0, 0.0, 1.0)),
+        ]
+        written = trimesh.load(
+            BytesIO(export_bytes(two_tone, "glb", slots=slots, name="Schild")),
+            file_type="glb",
+        )
+        assert sum(len(geometry.faces) for geometry in written.geometry.values()) == 12, names
+
+
+def test_same_colour_but_another_material_stays_its_own_extruder() -> None:
+    """Gesamtreview 05.09.2026, CORE-21: Zwei Teile, je ein Slot „Schwarz" in
+    Schwarz — eines PLA, eines PETG. Zusammengelegt wurde über Name und
+    Farbe: ein Materialeintrag, jedes Dreieck an Düse 0, das PETG-Profil weg.
+    Gleicher Name und gleiche Farbe fallen nur zusammen, wenn auch Profil und
+    Materialart gleich sind."""
+    black = (0.0, 0.0, 0.0)
+    pla = MaterialSlot(
+        index=0, name="Schwarz", colour=black, material="PLA Basic", material_type="PLA"
+    )
+    petg = MaterialSlot(
+        index=0, name="Schwarz", colour=black, material="PETG Basic", material_type="PETG"
+    )
+    parts = [
+        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box()), name="A", slots=(pla,)),
+        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box()), name="B", slots=(petg,)),
+    ]
+
+    merged = threemf.merge_slots(parts)
+    assert [(slot.index, slot.material_type) for slot in merged] == [(0, "PLA"), (1, "PETG")]
+
+    payload = threemf.write_assembly(parts)
+    model = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
+    assert model.count("<base ") == 2, "zwei Materialien in der Baugruppe"
+    assert 'p1="1"' in model, "und das zweite Teil zeigt auf das zweite"
+
+    twin = MaterialSlot(
+        index=0, name="Schwarz", colour=black, material="PLA Basic", material_type="PLA"
+    )
+    assert (
+        len(
+            threemf.merge_slots(
+                [parts[0], threemf.AssemblyPart(mesh=parts[1].mesh, name="C", slots=(twin,))]
+            )
+        )
+        == 1
+    ), "dasselbe Filament bleibt eine Düse"

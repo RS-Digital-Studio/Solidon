@@ -669,3 +669,75 @@ def test_a_carbon_filled_filament_is_not_the_plain_material(tmp_path: Path) -> N
     assert sp.material_of(profil("Bambu PA6-CF"), arten) == "", (
         "was Solidon nicht führt, bekommt keine Art — die Suche bleibt der Weg dorthin"
     )
+
+
+# --- Erben über Baumgrenzen -----------------------------------------------------
+
+
+def _own_filament(tmp_path: Path, name: str, inherits: str) -> tuple[Path, Path]:
+    """Ein im Slicer angelegtes Filament unter ``user/<Konto>/filament/`` —
+    setzt nur den Fluss und erbt alles Übrige."""
+    user = tmp_path / "settings" / "OrcaSlicer" / "user" / "default"
+    own = user / "filament" / f"{name}.json"
+    _write(
+        own, {"name": name, "from": "User", "inherits": inherits, "filament_flow_ratio": ["0.96"]}
+    )
+    return user, own
+
+
+def test_an_own_profile_inherits_from_the_installed_vendor_base(
+    slicer: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-14: Das eigene Profil liegt unter
+    ``user/<Konto>/filament/``, seine Basis unter ``resources/profiles/``.
+    Die Kette suchte nur im eigenen ``filament/``-Ordner, fand die Basis nie
+    und endete ohne Meldung beim Nutzerdelta — das ausgeschriebene Profil
+    ging ohne Temperatur und Materialtyp zum Slicer.
+
+    Mit den Wurzeln der Installation reicht die Kette hinüber.
+    """
+    user, own = _own_filament(tmp_path, "Meine Spule", "Elegoo PETG @base")
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+
+    roots = sp.profile_roots("orca", slicer)
+    values = sp.resolve_values(own, roots)
+
+    assert values["filament_flow_ratio"] == ["0.96"], "das eigene Delta gewinnt"
+    assert values["hot_plate_temp"] == ["70"], "von der Herstellerbasis geerbt"
+    assert values["filament_density"] == ["1.24"], "und aus deren Wurzel"
+    assert "inherits" not in values
+
+    profile = sp._read(own, "filament", True)
+    assert profile is not None
+    assert sp.type_of(profile, roots) == "PETG", "auch der Materialtyp kommt aus der Basis"
+
+
+def test_an_own_profile_finds_the_system_copy_beside_its_user_folder(tmp_path: Path) -> None:
+    """Die Orca-Familie kopiert die gewählten Herstellerbündel nach
+    ``<Programm>/system/`` neben ``user/``. Wer nur die Datei kennt — ohne
+    Wurzeln —, findet die Basis dort trotzdem."""
+    user, own = _own_filament(tmp_path, "Meine Spule", "Elegoo PETG @base")
+    _write(
+        user.parent.parent / "system" / "Elegoo" / "filament" / "Elegoo PETG @base.json",
+        {"type": "filament", "name": "Elegoo PETG @base", "hot_plate_temp": ["70"]},
+    )
+
+    values = sp.resolve_values(own)
+
+    assert values["hot_plate_temp"] == ["70"]
+    assert values["filament_flow_ratio"] == ["0.96"]
+
+
+def test_a_base_that_is_nowhere_is_said_out_loud(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Eine Basis, die es nirgends gibt, bleibt sichtbar: Die Kette endet beim
+    Delta, und das Protokoll sagt es — statt still ein halbes Profil
+    auszuschreiben."""
+    _user, own = _own_filament(tmp_path, "Verwaist", "Gibt es nicht @base")
+
+    with caplog.at_level("WARNING"):
+        values = sp.resolve_values(own)
+
+    assert values == {"filament_flow_ratio": ["0.96"]}
+    assert any("Gibt es nicht @base" in record.message for record in caplog.records)
