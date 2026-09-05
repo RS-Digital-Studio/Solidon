@@ -6529,3 +6529,133 @@ def test_read_number_follows_the_rule_of_the_last_separator() -> None:
     assert read_number(" 7 ") == 7.0
     assert read_number("abc") is None
     assert read_number("") is None
+
+
+def _sketch(*elements: tuple[str, tuple[tuple[float, float], ...]]) -> object:
+    """Eine Skizze auf der XY-Ebene aus (Art, Punkte)-Paaren."""
+    from app.core.types import Sketch, SketchElement
+
+    return Sketch(
+        plane="plane:xy",
+        elements=tuple(SketchElement(kind, points) for kind, points in elements),
+    )
+
+
+def test_an_arc_catches_only_its_own_span_not_the_full_circle(qt_app: QApplication) -> None:
+    """Gesamtreview 05.09.2026, UI-07: Der Bogentreffer prüfte nur den Abstand
+    zum Radius. Ein Viertelbogen im ersten Quadranten fing damit einen Klick
+    bei (-5, 0) ab, obwohl dort eine Linie liegt — und verschoben oder
+    gelöscht wurde danach die falsche Geometrie."""
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.set_sketch(
+            _sketch(
+                ("arc", ((0.0, 0.0), (5.0, 0.0), (0.0, 5.0))),
+                ("line", ((-10.0, 0.0), (-2.0, 0.0))),
+            )
+        )
+        canvas.resize(600, 600)
+        canvas.fit_view()
+
+        assert canvas._select_at(canvas._to_screen(-5.0, 0.0))
+        kinds = {kind for kind, _flats in canvas.selection}
+        assert kinds == {"line"}, f"getroffen: {canvas.selection}"
+
+        assert canvas._select_at(canvas._to_screen(5.0 * 0.7071, 5.0 * 0.7071))
+        assert {kind for kind, _flats in canvas.selection} == {"arc"}, "auf der Spanne trifft er"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_move_after_undo_closes_the_redo_branch(qt_app: QApplication) -> None:
+    """Gesamtreview 05.09.2026, UI-31: Die Zugwege gingen an ``_apply`` vorbei
+    und ließen den Redo-Zweig offen — Wiederholen ersetzte die eben
+    verschobene Zeichnung durch den alten Stand."""
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        one = _sketch(("line", ((0.0, 0.0), (10.0, 0.0))))
+        two = _sketch(("line", ((0.0, 0.0), (10.0, 0.0))), ("line", ((0.0, 5.0), (10.0, 5.0))))
+        canvas.set_sketch(one)
+        canvas._apply(two)
+        canvas.undo()
+        assert canvas.can_redo(), "die Voraussetzung: es gibt etwas zu wiederholen"
+
+        # Wie der Viewport es tut: greifen, dann ziehen.
+        canvas.grab_point(0)
+        canvas.move_point(0, 1.0, 1.0)
+
+        assert not canvas.can_redo(), "eine neue Bewegung schließt den zurückgenommenen Zweig"
+        assert len(canvas.sketch.elements) == 1
+        canvas.redo()
+        assert len(canvas.sketch.elements) == 1, (
+            "und Wiederholen holt die zweite Linie nicht zurück"
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_a_circle_counts_with_its_rim_when_the_bed_and_the_view_are_measured(
+    qt_app: QApplication,
+) -> None:
+    """Gesamtreview 05.09.2026, UI-32: Grenzen kamen aus ``points()`` — für einen
+    Kreis Mitte und ein Randpunkt. Ein Kreis um (100, 0) mit Randpunkt (0, 0)
+    reicht bis 200; auf einem 220-mm-Bett meldete die Skizze keinen Überstand,
+    und Einpassen zeigte die halbe Fläche."""
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.set_sketch(_sketch(("circle", ((100.0, 0.0), (0.0, 0.0)))))
+        canvas.set_bed((220.0, 220.0))
+
+        assert canvas.outside_bed(), "der Rand bei x = 200 liegt außerhalb der 110 mm"
+        extent = canvas._extent_points()
+        assert (200.0, 0.0) in extent and (100.0, 100.0) in extent and (100.0, -100.0) in extent
+
+        canvas.set_sketch(_sketch(("arc", ((0.0, 0.0), (5.0, 0.0), (0.0, 5.0)))))
+        extent = canvas._extent_points()
+        assert (0.0, 5.0) in extent, "das Ende des Bogens"
+        assert (-5.0, 0.0) not in extent, "aber nicht die Seite, auf der er nicht liegt"
+    finally:
+        panel.deleteLater()
+
+
+def test_delete_in_the_constraint_list_removes_the_constraint_not_the_line(
+    qt_app: QApplication,
+) -> None:
+    """Gesamtreview 05.09.2026, UI-33: Das panelweite Entf-Kürzel löschte die
+    gewählte Linie, bevor der Listenfilter die Taste je sah — die Liste
+    kündigt an, nur die gewählte Bedingung zu entfernen."""
+    from PySide6.QtTest import QTest
+
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        canvas = panel.canvas
+        canvas.set_sketch(_sketch(("line", ((0.0, 0.0), (10.0, 0.0)))))
+        canvas.add_constraint("horizontal", (0, 1))
+        canvas._select(("line", (0, 1)), False)
+        panel.show()
+        panel.activateWindow()
+        QApplication.processEvents()
+        assert panel.constraint_list.count() == 1
+        panel.constraint_list.setCurrentRow(0)
+        panel.constraint_list.setFocus()
+        QApplication.processEvents()
+
+        QTest.keyClick(panel.constraint_list, Qt.Key.Key_Delete)
+        QApplication.processEvents()
+
+        assert len(canvas.sketch.elements) == 1, "die Linie bleibt"
+        assert len(canvas.sketch.constraints) == 0, "nur die Bedingung ist weg"
+    finally:
+        panel.close()
+        panel.deleteLater()

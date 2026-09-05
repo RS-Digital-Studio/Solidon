@@ -1103,7 +1103,38 @@ class SketchCanvas(QWidget):
         if self._bed is None:
             return False
         half_x, half_y = self._bed[0] / 2.0, self._bed[1] / 2.0
-        return any(abs(x) > half_x or abs(y) > half_y for x, y in self.points())
+        return any(abs(x) > half_x or abs(y) > half_y for x, y in self._extent_points())
+
+    def _extent_points(self) -> list[tuple[float, float]]:
+        """Die gelösten Punkte samt den Rändern von Kreisen und Bögen.
+
+        ``points()`` nennt für einen Kreis nur Mitte und einen Randpunkt: Ein
+        Kreis um (100, 0) mit Randpunkt (0, 0) reicht bis 200, und Einpassen
+        wie Bauraumprüfung sahen die andere Hälfte nicht (Gesamtreview
+        05.09.2026, UI-32). Für einen Bogen zählen sein Ende und die
+        Achsenextreme, die in seiner Spanne liegen.
+        """
+        points = self.points()
+        found = list(points)
+        offsets = edit.offsets_of(self.sketch)
+        for index, element in enumerate(self.sketch.elements):
+            if element.kind not in ("circle", "arc"):
+                continue
+            begin = offsets[index]
+            centre, rim = points[begin], points[begin + 1]
+            radius = math.hypot(rim[0] - centre[0], rim[1] - centre[1])
+            extremes = [
+                (centre[0] + radius, centre[1]),
+                (centre[0] - radius, centre[1]),
+                (centre[0], centre[1] + radius),
+                (centre[0], centre[1] - radius),
+            ]
+            if element.kind == "arc":
+                end = points[begin + 2]
+                found.append(end)
+                extremes = [spot for spot in extremes if _on_arc(centre, rim, end, spot, 0.0)]
+            found.extend(extremes)
+        return found
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Solange die Ansicht der Einpassung folgt, folgt sie auch der Größe."""
@@ -1132,7 +1163,7 @@ class SketchCanvas(QWidget):
         """
         if keep_following:
             self._fitting = True
-        points = self.points()
+        points = self._extent_points()
         if points:
             xs = [x for x, _y in points]
             ys = [y for _x, y in points]
@@ -1201,6 +1232,15 @@ class SketchCanvas(QWidget):
 
     def _remember(self) -> None:
         self._undo.append(self.sketch)
+        # **Eine neue Änderung schließt den zurückgenommenen Zweig.** Sonst
+        # führte ein Wiederholen nach dem nächsten Strich in eine Zeichnung,
+        # die es so nie gab — dieselbe Regel wie im Verlauf des Dokuments.
+        # Hier und nicht nur in ``_apply``: Die Zugwege (``move_point``,
+        # ``move_selected``, der genaue Punktdialog) gehen an ``_apply``
+        # vorbei und ließen den Zweig offen — Wiederholen ersetzte die eben
+        # verschobene Zeichnung durch den alten Stand (Gesamtreview
+        # 05.09.2026, UI-31).
+        self._redo.clear()
 
     def undo(self) -> None:
         """Ctrl+Z gilt auch hier — der Editor ist kein Ort ohne Rückweg."""
@@ -1228,10 +1268,6 @@ class SketchCanvas(QWidget):
 
     def _apply(self, sketch: Sketch) -> None:
         self._remember()
-        # **Eine neue Änderung schließt den zurückgenommenen Zweig.** Sonst
-        # führte ein Wiederholen nach dem nächsten Strich in eine Zeichnung,
-        # die es so nie gab — dieselbe Regel wie im Verlauf des Dokuments.
-        self._redo.clear()
         self.sketch = sketch
         self._resolve()
 
@@ -1818,6 +1854,13 @@ class SketchCanvas(QWidget):
                 radius = math.hypot(rim[0] - centre[0], rim[1] - centre[1])
                 span = math.hypot(wx - centre[0], wy - centre[1])
                 if abs(span - radius) <= tolerance:
+                    if element.kind == "arc" and not _on_arc(
+                        centre, rim, points[begin + 2], (wx, wy), tolerance
+                    ):
+                        # Ein Bogen fängt nur seine eigene Spanne — nicht den
+                        # unsichtbaren Vollkreis, auf dem daneben eine Linie
+                        # liegt (Gesamtreview 05.09.2026, UI-07).
+                        continue
                     flats = tuple(range(begin, begin + len(element.points)))
                     return (element.kind, flats)
             elif element.kind == "spline" and len(element.points) > 1:
@@ -3374,6 +3417,36 @@ class SketchCanvas(QWidget):
         painter.drawLine(
             QPointF(spot.x(), spot.y() - SNAP_MARK_PX), QPointF(spot.x(), spot.y() + SNAP_MARK_PX)
         )
+
+
+def _arc_sweep(
+    centre: tuple[float, float], start: tuple[float, float], end: tuple[float, float]
+) -> tuple[float, float]:
+    """Anfangswinkel und Spanne eines Bogens in Grad, gegen den Uhrzeigersinn —
+    dieselbe Rechnung wie beim Zeichnen."""
+    begin = math.degrees(math.atan2(start[1] - centre[1], start[0] - centre[0]))
+    finish = math.degrees(math.atan2(end[1] - centre[1], end[0] - centre[0]))
+    return begin, (finish - begin) % 360.0
+
+
+def _on_arc(
+    centre: tuple[float, float],
+    start: tuple[float, float],
+    end: tuple[float, float],
+    spot: tuple[float, float],
+    tolerance: float,
+) -> bool:
+    """Ob ein Punkt am Rand auch innerhalb der Winkelspanne des Bogens liegt.
+
+    ``tolerance`` ist die Trefferbreite in Millimetern; am Rand des Bogens
+    darf sie als Winkel dazukommen, sonst wäre der Anfangspunkt selbst kein
+    Treffer.
+    """
+    begin, sweep = _arc_sweep(centre, start, end)
+    radius = math.hypot(start[0] - centre[0], start[1] - centre[1])
+    slack = math.degrees(tolerance / radius) if radius > 0.0 else 360.0
+    angle = (math.degrees(math.atan2(spot[1] - centre[1], spot[0] - centre[0])) - begin) % 360.0
+    return angle <= sweep + slack or angle >= 360.0 - slack
 
 
 def _segment_distance(
@@ -5299,6 +5372,17 @@ class SketchPanel(QWidget):
 
         if stop_watching_the_dying(self, watched, event):
             return False
+        if (
+            watched is self.constraint_list
+            and event.type() == QEvent.Type.ShortcutOverride
+            and event.key() == Qt.Key.Key_Delete
+        ):
+            # **Entf gehört der Liste, solange sie den Fokus hat.** Das Kürzel
+            # des Panels gewinnt sonst vor jedem KeyPress und löschte die ganze
+            # Linie samt Bedingungen, obwohl die Liste ankündigt, nur die
+            # gewählte Bedingung zu entfernen (Gesamtreview 05.09.2026, UI-33).
+            event.accept()
+            return True
         if (
             watched is self.constraint_list
             and event.type() == QEvent.Type.KeyPress
