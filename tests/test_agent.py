@@ -2082,3 +2082,34 @@ def test_an_accepted_proposal_keeps_the_ids_it_was_computed_with(profile: Profil
     history.undo()
     with pytest.raises(UserError):
         agent_apply.accept(proposal, history)
+
+
+def test_a_wrongly_typed_extra_tool_argument_is_an_invalid_call_not_a_crash(
+    project: Project, profile: Profile
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-03: ``ask_user`` mit ``options: null``
+    oder ``read_digest`` mit ``objects: 3`` sind lesbares JSON — und brachen
+    ``propose()`` mit einem TypeError ab: die gesammelte Arbeit des Zuges war
+    weg, der Nutzer bekam den allgemeinen Fehlerpfad. Operationen lehnen
+    solche Werte als Werkzeugantwort ab; die Zusatzwerkzeuge tun es jetzt
+    genauso, und der Zug geht weiter."""
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="1", name="ask_user", arguments={"question": "Welche?", "options": None}
+                    ),
+                )
+            ),
+            Reply(tool_calls=(ToolCall(id="2", name="read_digest", arguments={"objects": 3}),)),
+            Reply(text="Dann eben so."),
+        ],
+    )
+
+    proposal = agent.propose("Bau mir was")
+
+    assert proposal.answer == "Dann eben so.", "der Zug lief bis zur Antwort"
+    assert proposal.invalid_calls == 2

@@ -453,6 +453,32 @@ class AgentSession:
         # §40: die Suite misst über ``readings``, ob eine Frage nachgesehen
         # oder geraten wurde. Eingetragen wird erst NACH der Prüfung des
         # jeweiligen Zweigs — ein abgelehnter Aufruf hat nichts gelesen.
+        # **Falsch typisierte Werte brechen den Zug nicht ab.** Ein lesbares
+        # JSON ist noch kein passendes: ``ask_user`` mit ``options: null``,
+        # ``read_digest`` mit ``objects: 3`` endeten als TypeError mitten im
+        # Zug — die bisherige Arbeit des Vorschlags war verloren, und das
+        # Modell erfuhr nichts, was es korrigieren könnte (Gesamtreview
+        # 05.09.2026, CORE-03). Operationen lehnen solche Werte längst als
+        # Werkzeugantwort ab; die Zusatzwerkzeuge tun es jetzt genauso.
+        try:
+            handled = self._extra_tool(name, arguments, proposal, working, scene)
+        except (TypeError, AttributeError, ValueError) as error:
+            proposal.invalid_calls += 1
+            return f"{tr('Ungültige Werte')}: {error}", scene
+        if handled is not None:
+            return handled
+        return self._operation(call, proposal, working, history, scene)
+
+    def _extra_tool(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        proposal: Proposal,
+        working: Document,
+        scene: Scene,
+    ) -> tuple[str, Scene] | None:
+        """Die Werkzeuge neben den Operationen — ``None`` heißt: das ist eine
+        Operation, und die geht ihren eigenen Weg."""
         if name == ASK_USER:
             return self._ask_user(arguments, proposal), scene
         if name == READ_REPORT:
@@ -498,7 +524,7 @@ class AgentSession:
             return self._fit(arguments, proposal, working), scene
         if name == SET_PRINT_TARGET:
             return self._print_target(arguments, proposal, working), scene
-        return self._operation(call, proposal, working, history, scene)
+        return None
 
     def _ask_user(self, arguments: dict[str, Any], proposal: Proposal) -> str:
         """§26.2: Fragen ist Pflicht. Die Antwort geht auch in den Vorschlag,

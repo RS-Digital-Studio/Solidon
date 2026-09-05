@@ -165,10 +165,26 @@ def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
     :func:`check_call` abweisen wird, in der Liste zu führen, hieße, der
     Gegenstelle einen Weg zu zeigen, den es nicht gibt."""
     return tuple(
-        entry
+        _as_mcp_tool(entry)
         for entry in tool_schemas(registry)
         if entry["name"] not in DENIED and not runs_foreign_source(str(entry["name"]))
     )
+
+
+def _as_mcp_tool(entry: dict[str, Any]) -> dict[str, Any]:
+    """Das interne Werkzeugschema in der Form, die der MCP-Vertrag verlangt.
+
+    Der Tool-Datentyp der Spezifikation (2024-11-05, ``server/tools``) nennt
+    das Schema ``inputSchema``; intern heißt es ``input_schema``, wie bei den
+    Sprachmodellen. Bis zum 05.09.2026 ging der interne Name unverändert über
+    die Leitung — alle 110 Einträge ohne ``inputSchema``, und ein Client, der
+    den Vertrag prüft, konnte keinen davon einlesen (Gesamtreview, CORE-04).
+    """
+    tool = dict(entry)
+    schema = tool.pop("input_schema", None)
+    if schema is not None:
+        tool["inputSchema"] = schema
+    return tool
 
 
 def looks_like_path(value: str) -> bool:

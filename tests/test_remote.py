@@ -589,3 +589,17 @@ def test_a_gathered_parameter_is_refused_over_the_wire() -> None:
 
     with pytest.raises(remote.RemoteRefusedError):
         remote.check_call(name, {"objects": ["obj_1"], feld: "geraten"})
+
+
+def test_the_tool_list_speaks_the_mcp_contract() -> None:
+    """Gesamtreview 05.09.2026, CORE-04: Alle 110 Einträge trugen
+    ``input_schema``, keiner das ``inputSchema``, das der Tool-Datentyp der
+    MCP-Spezifikation (2024-11-05) verlangt — ein Client, der den Vertrag
+    prüft, konnte kein Werkzeug einlesen."""
+    answer = remote.handle(request("tools/list"), _Bridge())
+    tools = answer["result"]["tools"]
+    assert tools, "ohne Werkzeugliste prüft der Vergleich darunter nichts"
+    for entry in tools:
+        assert "inputSchema" in entry, entry["name"]
+        assert "input_schema" not in entry, entry["name"]
+        assert entry["inputSchema"].get("type") == "object", entry["name"]
