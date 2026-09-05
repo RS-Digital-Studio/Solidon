@@ -467,7 +467,7 @@ def test_switched_off_the_device_is_still_seen_but_moves_nothing(qt_app: QApplic
     assert view.draws == 0
 
 
-def test_without_a_plotter_nothing_happens(qt_app: QApplication) -> None:
+def test_without_a_renderer_nothing_happens(qt_app: QApplication) -> None:
     """Offscreen gibt es keinen Renderer — und keinen Fehler."""
     controller, _view, _settings, _fits = _controller(qt_app, viewport=_Viewport(renderer=None))
     controller.handle_report(report(1, 350, 0, 0))
