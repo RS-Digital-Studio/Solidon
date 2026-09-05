@@ -449,7 +449,7 @@ def iter_limited(
                 return
             raise ResponseTimeoutUnavailableError("response socket timeout is unavailable")
         try:
-            chunk = response.read(min(chunk_size, limit + 1 - received))
+            chunk = _read_some(response, min(chunk_size, limit + 1 - received))
         except TimeoutError as problem:
             raise ResponseDeadlineError("response deadline exceeded") from problem
         if timer() > deadline:
@@ -462,6 +462,23 @@ def iter_limited(
         if received > limit:
             raise ResponseTooLargeError(received, limit)
         yield chunk
+
+
+def _read_some(response: ReadableResponse, size: int) -> bytes:
+    """Ein Lesezugriff, nicht ein gefüllter Block.
+
+    ``HTTPResponse.read(n)`` füllt seinen Block aus beliebig vielen
+    Socket-Lesezugriffen, und der Socket-Timeout beginnt bei jedem neu: Ein
+    Gegenüber, das alle 25 ms ein Byte schickt, hielt eine Gesamtfrist von
+    80 ms so über eine halbe Sekunde offen — bei größerem ``Content-Length``
+    bis zum ganzen 64-KiB-Block (Gesamtreview 05.09.2026, CORE-06). ``read1``
+    kehrt nach **einem** Lesezugriff zurück, und :func:`iter_limited` prüft
+    die Frist dazwischen. Testtransporte ohne ``read1`` lesen wie bisher.
+    """
+    reader = getattr(response, "read1", None)
+    if callable(reader):
+        return cast(bytes, reader(size))
+    return response.read(size)
 
 
 def read_limited(
