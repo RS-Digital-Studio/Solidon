@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,10 +124,11 @@ class Outcome:
         #
         # Teilmenge und nicht Gleichheit: Der mechanische Test daneben
         # (``tests/test_agent_suite.py``) verlangt die exakte Liste, hier zählt,
-        # dass keine erwartete **Art** fehlt. Wie oft eine Art vorkommt — zwei
-        # Schraubenlöcher statt einem — ist eine eigene Frage.
+        # dass keine erwartete Art fehlt — **und zwar so oft, wie sie erwartet
+        # ist.** Als Menge verglichen galt der Halter mit zwei M4-Löchern schon
+        # mit einem Schraubenloch als erfüllt (Gesamtreview 05.09.2026, R36).
         # Gefunden von 3d-druck-46 beim Gegenlesen, vor dem ersten Modelllauf.
-        return set(self.case.expects_ops) <= set(self.operations)
+        return Counter(self.case.expects_ops) <= Counter(self.operations)
 
 
 def project_with_plate() -> Project:

@@ -1048,3 +1048,24 @@ def test_the_scene_stays_evaluable_after_every_case(project: Project, profile: P
 
         result = evaluate(made.document, profile, sources=ProjectSources(made))
         assert result.complete, f"{case.id} left the stack in a state that stops"
+
+
+def test_the_score_counts_how_often_an_expected_operation_must_appear() -> None:
+    """Gesamtreview 05.09.2026, R36: Der Halter mit zwei M4-Löchern erwartet
+    zwei ``insert_screw_hole``; als Mengen verglichen galt ein einziges Loch
+    als erfüllt, und die Quote sah eine halbe Arbeit als Treffer."""
+    from tests.agent_cases import by_id
+    from tools.run_agent_suite import Outcome
+
+    case = by_id("bracket")
+    assert case.expects_ops.count("insert_screw_hole") == 2, "der Fall, um den es geht"
+
+    half = Outcome(case=case, operations=("create_box", "insert_screw_hole"), parameters=1)
+    whole = Outcome(
+        case=case,
+        operations=("create_box", "insert_screw_hole", "insert_screw_hole"),
+        parameters=1,
+    )
+
+    assert not half.good, "ein Loch von zweien ist kein Treffer"
+    assert whole.good
