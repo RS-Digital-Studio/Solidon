@@ -29,6 +29,7 @@
 ## Roberts Vorgaben
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — muss der Kunde raten, ist es falsch.
+- [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) — die letzten acht Jahre müssen laufen, ältere Karten sind kein Kriterium (Robert, 05.09.2026).
 - [Fehlerzählung ist kein Nutzen](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) — zwölf behobene Knöpfe sagen dem Kunden, dass zwölf kaputt waren.
 - [Kundentexte sagen Version](kundentexte-sagen-version.md) — nicht „Fassung“; intern darf es bleiben.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — sieben Merkmale; Rückspiegeln ist eines.
@@ -53,6 +54,7 @@
 - [Technische Produktreife](technische-produktreife-konzept.md) — Qualitätsvertrag, messbare KI, Updates.
 - [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker und Einmalkauf bleiben der Kurs.
 - [Modellkette vor Freigabe](modellkette-vor-erzeugerfreigabe.md) — TripoSG bleibt (Robert, 02.09.2026).
+- [Viewport: zwei Renderer messen](viewport-zwei-renderer-messen.md) — PyVista fällt; VTK direkt und pygfx hinter einem Adapter, gemessen; Aufwand egal (Robert, 05.09.2026).
 - [KI-Hinweis sperrt](ki-hinweis-sperrt-den-ersten-modellaufruf.md) — an jeder Modellgrenze erneut.
 - [Kein Rechteübergang](neu-speichern-aendert-keine-urheberschaft.md) — CC BY/SA und Provenienz bleiben.
 - [Baustein je Sprache](baustein-begriff-je-sprache.md) — bloque, bloc, blocco, bloco; pieza/peça heißt Teil.
