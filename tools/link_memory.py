@@ -81,6 +81,14 @@ def link(target: Path, source: Path) -> None:
         target.symlink_to(source, target_is_directory=True)
 
 
+def _kept(entry: Path, im_repo: Path) -> bool:
+    """Hat diese lokale Datei im Repository einen Ort — gleich oder daneben?"""
+    if im_repo.is_file() and im_repo.read_bytes() == entry.read_bytes():
+        return True
+    aside = im_repo.with_name(f"{im_repo.stem}.dieser-maschine{im_repo.suffix}")
+    return aside.is_file() and aside.read_bytes() == entry.read_bytes()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pruefen", action="store_true", help="nur berichten, nichts ändern")
@@ -112,25 +120,49 @@ def main(argv: list[str] | None = None) -> int:
 
     IN_REPO.mkdir(parents=True, exist_ok=True)
     if target.is_dir():
-        # Was diese Maschine allein gelernt hat, kommt zuerst ins Repository.
-        adopted = []
-        for entry in sorted(target.glob("*.md")):
-            im_repo = IN_REPO / entry.name
+        # Was diese Maschine allein gelernt hat, kommt zuerst ins Repository —
+        # **alles**, und zwar bevor hier irgendetwas gelöscht wird. Bis zum
+        # 05.09.2026 wurden nur die Markdown-Dateien der obersten Ebene
+        # übernommen, und davon nur die, deren Name im Repository fehlte; eine
+        # abweichende Fassung bekam allein ``MEMORY.md`` beiseite gelegt.
+        # Danach fiel das ganze Verzeichnis: Eine lokal ergänzte ``topic.md``
+        # verschwand ersatzlos, sobald im Repository eine andere ``topic.md``
+        # lag, Unterordner und Nicht-Markdown-Dateien gleich mit
+        # (Gesamtreview, R19). Jetzt gilt: gleich → nichts zu tun, neu →
+        # übernommen, abweichend → daneben gelegt; und gelöscht wird erst,
+        # wenn jede Datei nachweislich einen Ort hat.
+        adopted: list[str] = []
+        aside_names: list[str] = []
+        for entry in sorted(target.rglob("*")):
+            if not entry.is_file():
+                continue
+            relative = entry.relative_to(target)
+            im_repo = IN_REPO / relative
             if not im_repo.exists():
+                im_repo.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(entry, im_repo)
-                adopted.append(entry.name)
+                adopted.append(relative.as_posix())
+            elif im_repo.read_bytes() != entry.read_bytes():
+                aside = im_repo.with_name(f"{im_repo.stem}.dieser-maschine{im_repo.suffix}")
+                shutil.copy2(entry, aside)
+                aside_names.append(aside.relative_to(IN_REPO).as_posix())
         if adopted:
             print("Aus dem Nutzerprofil übernommen: " + ", ".join(adopted))
-        # MEMORY.md ist das Verzeichnis und kann auf beiden Seiten Zeilen haben,
-        # die die andere nicht kennt. Zusammenführen ist Handarbeit, also wird
-        # eine abweichende Fassung daneben gelegt statt überschrieben.
-        local = target / "MEMORY.md"
-        shared = IN_REPO / "MEMORY.md"
-        if local.is_file() and shared.is_file() and local.read_bytes() != shared.read_bytes():
-            aside = IN_REPO / "MEMORY.dieser-maschine.md"
-            shutil.copy2(local, aside)
-            print(f"MEMORY.md wich ab — die Fassung dieser Maschine liegt als {aside.name}.")
+        if aside_names:
+            # Zusammenführen ist Handarbeit — eine abweichende Fassung liegt
+            # daneben statt überschrieben zu werden.
+            print(
+                "Abweichend, die Fassung dieser Maschine liegt daneben: " + ", ".join(aside_names)
+            )
             print("Zeilen von Hand übernehmen und die Datei danach löschen.")
+        unsaved = [
+            entry.relative_to(target).as_posix()
+            for entry in sorted(target.rglob("*"))
+            if entry.is_file() and not _kept(entry, IN_REPO / entry.relative_to(target))
+        ]
+        if unsaved:
+            print("Nicht gesichert, deshalb bleibt das Nutzerprofil stehen: " + ", ".join(unsaved))
+            return 2
         shutil.rmtree(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     link(target, IN_REPO)

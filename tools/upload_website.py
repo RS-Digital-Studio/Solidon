@@ -1299,6 +1299,12 @@ def main() -> int:
         elif any(path.suffix.lower() == ".html" for path in files):
             files = with_outdated_page_assets(files, root, remote)
         files = hold_back_version(session, root, files)
+        # Noch einmal, über der **endgültigen** Auswahl: Bei ``--fehlend`` war
+        # die Liste bei der Prüfung oben noch leer und wurde erst aus dem
+        # Serverabgleich gefüllt — eine von ``make_download.py`` bewusst ohne
+        # Unterschrift geschriebene ``version.json`` ging so an der Sperre
+        # vorbei und ersetzte die gültige (Gesamtreview 05.09.2026, R21).
+        refuse_unsigned_version(files)
         print(f"{len(files)} Datei(en) → {access['host']}:{root}")
         for path in files:
             upload(session, access, path)

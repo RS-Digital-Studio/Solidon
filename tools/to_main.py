@@ -162,7 +162,25 @@ def deliver(who: str, check_only: bool) -> int:
     # `main` einen Stand bekommt, den das Tor nie gesehen hat.
     if git("switch", MAIN).returncode != 0:
         return 4
-    git("merge", "--ff-only", own_branch)
+    # Der Rückgabewert zählt, und danach wird nachgemessen: Trägt das
+    # lokale ``main`` einen eigenen, noch nicht veröffentlichten Commit,
+    # scheitert das Vorspulen — und der Push danach kann trotzdem gelingen.
+    # Draußen war dann dieses ungeprüfte ``main``, während hier „steht in
+    # main und ist draußen" über den geprüften Branch stand (Gesamtreview
+    # 05.09.2026, R20). Veröffentlicht wird nur, was genau der geprüfte
+    # Commit ist.
+    forwarded = git("merge", "--ff-only", own_branch)
+    same_commit = (
+        git("rev-parse", MAIN).stdout.strip() == git("rev-parse", own_branch).stdout.strip()
+    )
+    if forwarded.returncode != 0 or not same_commit:
+        git("switch", own_branch)
+        print(
+            f"  {MAIN} lässt sich nicht vorspulen — es trägt einen Stand, den das Tor nie "
+            f"gesehen hat. Nichts geht hinaus. Erst {MAIN} holen, {own_branch} darauf "
+            "setzen, dann noch einmal."
+        )
+        return 6
     pushed = git("push", "origin", MAIN, check=False)
     git("switch", own_branch)
     if pushed.returncode != 0:
