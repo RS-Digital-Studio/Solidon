@@ -311,8 +311,35 @@ def on_surface(
     # Die Schranke: exakter Abstand zum Dreieck mit dem nächsten Schwerpunkt.
     _, nearest = tree.query(queries)
     nearest = np.atleast_1d(nearest)
-    bound_spot = closest_on(triangles[nearest], queries)
+    # **Die Division durch null wird hier erwartet, nicht verhindert.** Ein
+    # Dreieck ohne Fläche lässt ``closest_point`` baryzentrisch durch eine
+    # Kantenlänge von null teilen; numpy warnt, und die Suite behandelt jede
+    # Warnung als Fehler. Unterdrückt wird sie genau dort, wo das NaN danach
+    # ausdrücklich abgefangen wird — beide Stellen prüfen unmittelbar auf
+    # ``isfinite``. Ein Filter in der Testkonfiguration wäre die schlechtere
+    # Antwort: Er gölte für den ganzen Lauf.
+    with np.errstate(invalid="ignore", divide="ignore"):
+        bound_spot = closest_on(triangles[nearest], queries)
     bound = np.linalg.norm(queries - bound_spot, axis=1)
+
+    # **Ein entartetes Dreieck macht die Schranke zu NaN, und ein NaN-Radius
+    # findet nichts.** ``closest_point`` rechnet baryzentrisch und teilt dabei
+    # durch die Kantenlänge; bei einem Dreieck ohne Fläche ist das eine
+    # Division durch null. Gemessen an einem Gyroid-Gitter mit 1 201 216
+    # Dreiecken: **ein einziger** von 11 322 Abfragepunkten bekam so eine
+    # NaN-Schranke, seine Kugel fand keinen Kandidaten, und die Zeile darunter
+    # brach mit „need at least one array to concatenate" ab — der Kunde las
+    # beim Verringern der Dreiecke „Im Programm ist ein unerwarteter Fehler
+    # aufgetreten".
+    #
+    # Ersetzt wird die Schranke durch eine, die dasselbe Dreieck umschließt und
+    # immer endlich ist: Abstand zu seinem Schwerpunkt plus seine Spanne. Sie
+    # ist größer als die exakte, also bleibt die Kandidatenmenge eine
+    # Obermenge — gesucht wird etwas weiter, gefunden dasselbe.
+    unusable = ~np.isfinite(bound)
+    if unusable.any():
+        loose = np.linalg.norm(queries[unusable] - centroids[nearest[unusable]], axis=1)
+        bound[unusable] = loose + span[nearest[unusable]]
 
     # Alle Dreiecke, die sie noch unterbieten könnten. Pro Größenband genügt
     # dessen größte Spanne als Radius; ein großes Dreieck weitet damit nur die
@@ -353,7 +380,37 @@ def on_surface(
         rows = np.arange(lower, upper)
         owners = np.repeat(rows - lower, counts[rows])
         candidates = np.concatenate([grouped[row] for row in rows]).astype(np.int64)
-        spots = closest_on(triangles[candidates], queries[rows][owners])
+        with np.errstate(invalid="ignore", divide="ignore"):
+            spots = closest_on(triangles[candidates], queries[rows][owners])
+        # **Dasselbe entartete Dreieck, eine Stufe später.** Oben rettet der
+        # Ersatz für die Schranke die Kandidatensuche; hier gäbe dieselbe
+        # Division durch null einen NaN-Abstand. Solange ein gesunder Kandidat
+        # danebensteht, verliert der NaN von selbst — ``lexsort`` sortiert ihn
+        # ans Ende. Ist er der **einzige**, käme ohne diese Zeilen ein NaN als
+        # Ergebnis heraus, und der Kunde läse „Abweichung: nan mm".
+        #
+        # Ein flaches Dreieck ist geometrisch die Vereinigung seiner drei
+        # Kanten. Auf die nächste davon zu projizieren bleibt deshalb auch bei
+        # einer langen Restkante exakt; nur die nächste Ecke zu nehmen machte
+        # den Fehler so groß wie die halbe Kante.
+        broken = ~np.isfinite(spots).all(axis=1)
+        if broken.any():
+            corners = triangles[candidates[broken]]
+            asked = queries[rows][owners][broken]
+            starts = corners
+            edges = np.roll(corners, -1, axis=1) - starts
+            squared = np.einsum("nij,nij->ni", edges, edges)
+            along = np.zeros_like(squared)
+            np.divide(
+                np.einsum("nij,nij->ni", asked[:, None, :] - starts, edges),
+                squared,
+                out=along,
+                where=squared > 0.0,
+            )
+            along = np.clip(along, 0.0, 1.0)
+            projections = starts + along[:, :, None] * edges
+            nearest_edge = np.linalg.norm(projections - asked[:, None, :], axis=2).argmin(axis=1)
+            spots[broken] = projections[np.arange(len(projections)), nearest_edge]
         gaps = np.linalg.norm(queries[rows][owners] - spots, axis=1)
         order = np.lexsort((gaps, owners))
         best = order[np.searchsorted(owners[order], np.arange(len(rows)), side="left")]

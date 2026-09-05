@@ -4,6 +4,7 @@ Zahl, Konflikte mit benanntem Paar, Maße über die Parametergrammatik."""
 from __future__ import annotations
 
 import math
+from itertools import pairwise
 
 import numpy as np
 import pytest
@@ -1291,6 +1292,82 @@ def test_a_self_crossing_chain_is_refused_with_a_place_to_look() -> None:
         regions_of(solve_sketch(crossing))
     assert caught.value.suggestions
     assert "kreuzt" in str(caught.value.detail)
+
+
+def test_a_chain_crossing_its_arc_is_refused() -> None:
+    """Ein Bogen ist an derselben Eindeutigkeitsgrenze wie eine Linie."""
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import regions_of
+
+    crossing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("arc", ((0.0, 0.0), (1.0, 0.0), (-1.0, 0.0))),
+            SketchElement("line", ((-1.0, 0.0), (0.0, 2.0))),
+            SketchElement("line", ((0.0, 2.0), (1.0, 0.0))),
+        ),
+    )
+
+    with pytest.raises(GeometryError, match="kreuzt"):
+        regions_of(solve_sketch(crossing))
+
+
+def test_a_chain_crossing_a_two_point_spline_is_refused() -> None:
+    """Auch ein exakt gerader Spline darf nicht aus der Prüfung fallen."""
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import regions_of
+
+    crossing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("spline", ((0.0, 0.0), (10.0, 10.0))),
+            SketchElement("line", ((10.0, 10.0), (10.0, 0.0))),
+            SketchElement("line", ((10.0, 0.0), (0.0, 20.0))),
+            SketchElement("line", ((0.0, 20.0), (0.0, 0.0))),
+        ),
+    )
+
+    with pytest.raises(GeometryError, match="kreuzt"):
+        regions_of(solve_sketch(crossing))
+
+
+def test_a_self_crossing_exact_spline_is_refused() -> None:
+    """Geprüft wird dieselbe B-Spline-Kurve, die der B-Rep-Kern extrudiert."""
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import regions_of
+
+    points = ((-10.0, -5.0), (0.0, 5.0), (-6.0, 0.0), (-9.0, 0.0))
+    crossing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("spline", points),
+            SketchElement("line", (points[-1], points[0])),
+        ),
+    )
+
+    with pytest.raises(GeometryError, match="kreuzt"):
+        regions_of(solve_sketch(crossing))
+
+
+def test_a_narrow_but_valid_arc_outline_is_not_rejected_by_its_chords() -> None:
+    """Eine Sehne darf keine Kreuzung erfinden, die der exakte Bogen nicht besitzt."""
+    from app.core.sketch.profile import regions_of
+
+    radius = 100.0
+    inner_radius = radius - 0.01
+    count = 8
+    angles = [math.pi, *(math.pi * (1.0 - (index + 0.5) / count) for index in range(count)), 0.0]
+    inner = tuple(
+        (inner_radius * math.cos(angle), inner_radius * math.sin(angle)) for angle in angles
+    )
+    elements = [
+        SketchElement("arc", ((0.0, 0.0), (radius, 0.0), (-radius, 0.0))),
+        SketchElement("line", ((-radius, 0.0), inner[0])),
+        *(SketchElement("line", (start, end)) for start, end in pairwise(inner)),
+        SketchElement("line", (inner[-1], (radius, 0.0))),
+    ]
+
+    assert len(regions_of(solve_sketch(Sketch("plane:xy", tuple(elements))))) == 1
 
 
 def test_a_concave_outline_is_not_a_crossing() -> None:

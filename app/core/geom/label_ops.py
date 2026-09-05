@@ -401,7 +401,13 @@ def label_text(ctx: OpContext) -> OpResult:
         slots = _with_slot_named(slots, params.slot)
 
     kind: BooleanKind = "union" if mode == "raised" else "difference"
-    outcome = boolean(kind, [body_mesh, placed], quality=ctx.quality, cut_slot=0)
+    outcome = boolean(
+        kind,
+        [body_mesh, placed],
+        quality=ctx.quality,
+        cut_slot=0,
+        cancelled=ctx.cancelled,
+    )
 
     # Eine Beschriftung, die den Körper nicht erreicht hat, sagt das (§2.7).
     #

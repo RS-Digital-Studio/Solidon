@@ -493,6 +493,77 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         assert triangle.dtype == np.int64
 
 
+def test_a_triangle_with_two_equal_corners_does_not_stop_the_search() -> None:
+    """Ein Dreieck ohne Fläche brachte die ganze Suche zum Absturz.
+
+    ``closest_point`` von trimesh rechnet baryzentrisch und teilt dabei durch
+    eine Kantenlänge. Ist eine Kante **exakt null** — zwei identische Ecken —,
+    ist das eine Division durch null: Der Ort kommt als NaN zurück, die
+    Schranke wird NaN, und eine Kugel mit NaN-Radius findet keinen einzigen
+    Kandidaten. Die Zeile darunter brach dann mit „need at least one array to
+    concatenate" ab.
+
+    **Nicht kollinear, sondern doppelt** — das ist der Unterschied, an dem die
+    erste Probe vorbeiging: Drei Punkte auf einer Geraden mit drei
+    verschiedenen Ecken laufen sauber durch.
+
+    Gemessen am 04.09.2026 an einem Gyroid-Gitter mit 1 201 216 Dreiecken:
+    **eines** davon so gebaut, **ein** Abfragepunkt von 11 322 traf es, und
+    „Dreiecke verringern" endete für den Kunden mit „Im Programm ist ein
+    unerwarteter Fehler aufgetreten". Der Absturz verdeckte dabei genau den
+    Befund, der gewarnt hätte: Dieselbe Operation meldet danach
+    ``mesh.not_watertight``.
+
+    Geprüft wird beides — dass die Suche nicht mehr anhält **und** dass sie
+    eine endliche Zahl liefert. Nur das Erste zu prüfen wäre die halbe Zusage:
+    Nach dem ersten Griff lief sie durch und gab ``nan`` zurück, und ein
+    Prüfbericht mit „Abweichung: nan mm" ist nicht besser als ein Absturz.
+    """
+    from app.core.geom.mesh import on_surface
+
+    box = trimesh.creation.box((20.0, 20.0, 20.0))
+    twice = [40.0, 0.0, 0.0]
+    corners = np.vstack([box.vertices, [twice, twice, [40.005, 0.004, 0.0]]])
+    last = len(box.vertices)
+    faces = np.vstack([box.faces, [[last, last + 1, last + 2]]])
+    # ``process=False``: Beim normalen Laden verschweißt trimesh doppelte
+    # Ecken, und dann gäbe es den Fall gar nicht mehr. Er entsteht im Betrieb
+    # auch nicht beim Einlesen, sondern beim Rechnen — hier stand er nach
+    # Aushöhlen und Gitterfüllung.
+    body = trimesh.Trimesh(vertices=corners, faces=faces, process=False)
+
+    points = np.array([[40.004, 0.004, 0.0]])
+    closest, distance, triangle = on_surface(body, points)
+
+    assert np.isfinite(distance).all(), f"ein Dreieck ohne Fläche gab keine Zahl: {distance}"
+    assert np.isfinite(closest).all(), f"und auch keinen Ort: {closest}"
+    segment_start = np.asarray(twice)
+    segment_end = np.asarray((40.005, 0.004, 0.0))
+    direction = segment_end - segment_start
+    share = float((points[0] - segment_start) @ direction / (direction @ direction))
+    expected = segment_start + np.clip(share, 0.0, 1.0) * direction
+    assert closest[0] == pytest.approx(expected)
+    assert distance[0] == pytest.approx(np.linalg.norm(points[0] - expected))
+    assert int(triangle[0]) == len(faces) - 1, "das entartete Dreieck ist das nächste"
+
+
+def test_a_collapsed_triangle_projects_onto_its_remaining_segment() -> None:
+    """Die Notlösung bleibt auch bei einer langen Restkante geometrisch exakt."""
+    from app.core.geom.mesh import on_surface
+
+    body = trimesh.Trimesh(
+        vertices=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (20.0, 0.0, 0.0)),
+        faces=((0, 1, 2),),
+        process=False,
+    )
+
+    closest, distance, triangle = on_surface(body, np.asarray(((10.0, 1.0, 0.0),)))
+
+    assert closest[0] == pytest.approx((10.0, 0.0, 0.0))
+    assert distance[0] == pytest.approx(1.0)
+    assert int(triangle[0]) == 0
+
+
 def test_one_large_triangle_does_not_widen_every_surface_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

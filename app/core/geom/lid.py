@@ -32,6 +32,7 @@ from app.core.scene.placement import faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import (
     BaseParams,
+    CancelToken,
     Feature,
     Finding,
     OpContext,
@@ -292,6 +293,7 @@ def build(
     clearance: float,
     z: float,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> tuple[MeshData, SolverInfo | None]:
     """Platte plus Kragen, stehend auf dem Rand der Öffnung.
 
@@ -323,7 +325,9 @@ def build(
     joined = MeshData.of(bodies[0])
     stages: list[SolverInfo | None] = []
     for entry in bodies[1:]:
-        outcome = boolean("union", [joined, MeshData.of(entry)], quality=quality)
+        outcome = boolean(
+            "union", [joined, MeshData.of(entry)], quality=quality, cancelled=cancelled
+        )
         joined = outcome.mesh
         stages.append(outcome.solver)
     return joined, deepest(stages)
@@ -435,6 +439,7 @@ def create_lid(ctx: OpContext) -> OpResult:
         clearance=clearance,
         z=z,
         quality=ctx.quality,
+        cancelled=ctx.cancelled,
     )
 
     _log.info("lid over %d cavities at z=%.2f, clearance %.2f", len(cavities), z, clearance)
@@ -512,7 +517,12 @@ def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
 
 
 def _pipe(
-    outer: float, inner: float, height: float, z: float, quality: Quality = "fine"
+    outer: float,
+    inner: float,
+    height: float,
+    z: float,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> MeshData:
     """Ein Materialring, stehend auf ``z``, ganz durchgehend offen."""
     shell = trimesh.creation.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
@@ -526,7 +536,12 @@ def _pipe(
     # Dieselbe Stufe wie die vier anderen Booleschen des Drehdeckels: fest auf
     # „fine" konnte dieser eine Schnitt beim Iterieren bis zur Voxelstufe laufen,
     # während der Rest in Entwurfsqualität nach Stufe 2 endet (§17.2, §31).
-    return boolean("difference", [MeshData.of(shell), MeshData.of(bore)], quality=quality).mesh
+    return boolean(
+        "difference",
+        [MeshData.of(shell), MeshData.of(bore)],
+        quality=quality,
+        cancelled=cancelled,
+    ).mesh
 
 
 def _lifted(body: MeshData, z: float) -> MeshData:
@@ -679,13 +694,15 @@ def screw_lid(ctx: OpContext) -> OpResult:
     # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
     # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße der
     # Gang im Material und änderte gar nichts.
-    neck = _pipe(core, bore, params.height, z, ctx.quality)
+    neck = _pipe(core, bore, params.height, z, ctx.quality, ctx.cancelled)
     turns = _lifted(thread_body(major, params.pitch, params.height), z)
-    with_neck = boolean("union", [mesh, neck], quality=ctx.quality)
-    with_thread = boolean("union", [with_neck.mesh, turns], quality=ctx.quality)
+    with_neck = boolean("union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled)
+    with_thread = boolean(
+        "union", [with_neck.mesh, turns], quality=ctx.quality, cancelled=ctx.cancelled
+    )
     threaded = with_thread.mesh
 
-    lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality)
+    lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality, ctx.cancelled)
     solver = deepest([with_neck.solver, with_thread.solver, cap_solver])
 
     neck_thread = Feature(
@@ -748,7 +765,11 @@ def screw_lid(ctx: OpContext) -> OpResult:
 
 
 def _screw_cap(
-    major: float, params: ScrewLidParams, clearance: float, quality: Quality = "fine"
+    major: float,
+    params: ScrewLidParams,
+    clearance: float,
+    quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> tuple[MeshData, SolverInfo | None]:
     """Der Deckel: eine Kappe, deren Innenseite das Gegenstück zum
     Halsgewinde trägt.
@@ -785,6 +806,8 @@ def _screw_cap(
     groove_height = max(EPS_GEOM, skirt - params.pitch * RIDGE_END)
     groove = thread_body(inside, params.pitch, groove_height, internal=True)
 
-    cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality)
-    cut = boolean("difference", [MeshData.of(body), cutter.mesh], quality=quality)
+    cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled)
+    cut = boolean(
+        "difference", [MeshData.of(body), cutter.mesh], quality=quality, cancelled=cancelled
+    )
     return cut.mesh, deepest([cutter.solver, cut.solver])

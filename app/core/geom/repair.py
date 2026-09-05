@@ -12,6 +12,7 @@ ihren Befunden.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,6 +20,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
+from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
 from app.core.types import Finding
@@ -59,10 +61,16 @@ def remove_degenerate_faces(mesh: MeshData) -> tuple[MeshData, int]:
     """Null-Flächen-Dreiecke, Nadeln und Duplikate."""
     body = mesh.raw.copy()
     before = len(body.faces)
-    body.update_faces(body.nondegenerate_faces(height=EPS_GEOM))
-    body.update_faces(body.unique_faces())
+    kept = np.arange(before, dtype=np.int64)
+    nondegenerate = np.asarray(body.nondegenerate_faces(height=EPS_GEOM))
+    kept = kept[np.flatnonzero(nondegenerate) if nondegenerate.dtype == bool else nondegenerate]
+    body.update_faces(nondegenerate)
+    unique = np.asarray(body.unique_faces())
+    kept = kept[np.flatnonzero(unique) if unique.dtype == bool else unique]
+    body.update_faces(unique)
     body.remove_unreferenced_vertices()
-    return mesh.replacing(body), before - len(body.faces)
+    slots = tuple(mesh.slots[int(index)] for index in kept) if mesh.slots else ()
+    return MeshData.of(body, slots=slots), before - len(body.faces)
 
 
 def unify_normals(mesh: MeshData) -> tuple[MeshData, bool]:
@@ -197,8 +205,12 @@ def stitch_t_junctions(mesh: MeshData) -> tuple[MeshData, int]:
         face_attributes=face_attributes,
         process=False,
     )
+    slots: tuple[int, ...] = ()
+    if mesh.slots:
+        original = np.asarray(mesh.slots, dtype=np.int64)
+        slots = tuple(int(slot) for slot in np.concatenate([original[kept], original[added_from]]))
     _log.info("stitched %d T-junction(s)", len(added) // 2)
-    return mesh.replacing(stitched), len(added) // 2
+    return MeshData.of(stitched, slots=slots), len(added) // 2
 
 
 def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
@@ -213,6 +225,41 @@ def _lies_on(point: np.ndarray, start: np.ndarray, end: np.ndarray) -> bool:
         return False
     distance = float(np.linalg.norm(offset - travelled * along))
     return distance <= ON_EDGE_TOLERANCE * max(length, 1.0)
+
+
+def _slots_after_fill(source: MeshData, body: trimesh.Trimesh) -> tuple[int, ...]:
+    """Behält alte Slots und leitet neue Deckflächen von ihrem Rand ab."""
+    if not source.slots:
+        return ()
+    old_faces = np.asarray(source.raw.faces, dtype=np.int64)
+    new_faces = np.asarray(body.faces, dtype=np.int64)
+    if len(new_faces) < len(old_faces) or not np.array_equal(
+        new_faces[: len(old_faces)], old_faces
+    ):
+        return transfer(MeshData.of(body), [source]).slots
+
+    slots = list(source.slots)
+    edge_slots: dict[tuple[int, int], list[int]] = {}
+    for face, slot in zip(old_faces, slots, strict=True):
+        for start, end in ((face[0], face[1]), (face[1], face[2]), (face[2], face[0])):
+            key = (min(int(start), int(end)), max(int(start), int(end)))
+            edge_slots.setdefault(key, []).append(slot)
+
+    fallback_counts = Counter(slots)
+    fallback = min(fallback_counts, key=lambda slot: (-fallback_counts[slot], slot))
+    for face in new_faces[len(old_faces) :]:
+        neighbours: list[int] = []
+        edges = ((face[0], face[1]), (face[1], face[2]), (face[2], face[0]))
+        for start, end in edges:
+            key = (min(int(start), int(end)), max(int(start), int(end)))
+            neighbours.extend(edge_slots.get(key, ()))
+        counts = Counter(neighbours)
+        slot = min(counts, key=lambda entry: (-counts[entry], entry)) if counts else fallback
+        slots.append(slot)
+        for start, end in edges:
+            key = (min(int(start), int(end)), max(int(start), int(end)))
+            edge_slots.setdefault(key, []).append(slot)
+    return tuple(slots)
 
 
 def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
@@ -236,17 +283,18 @@ def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
     gefüllt, ob dicht oder nicht. Ob das Netz danach dicht ist, sagt
     ``MeshData.is_watertight`` — der Aufrufer hat das Netz ja in der Hand.
     """
-    body = mesh.raw.copy()
+    working = mesh
+    body = working.raw.copy()
     if body.is_watertight:
         return mesh, False
     before = open_edge_count(mesh)
     if stitch:
-        stitched, _seams = stitch_t_junctions(mesh.replacing(body))
-        body = stitched.raw.copy()
+        working, _seams = stitch_t_junctions(working)
+        body = working.raw.copy()
         if body.is_watertight:
-            return mesh.replacing(body), True
+            return working, True
     trimesh.repair.fill_holes(body)
-    filled = mesh.replacing(body)
+    filled = MeshData.of(body, slots=_slots_after_fill(working, body))
     return filled, open_edge_count(filled) < before
 
 
@@ -270,7 +318,12 @@ def remove_small_components(
         mask[piece] = True
     body.update_faces(mask)
     body.remove_unreferenced_vertices()
-    return mesh.replacing(body), len(pieces) - len(keep)
+    slots = (
+        tuple(slot for slot, kept in zip(mesh.slots, mask, strict=True) if kept)
+        if mesh.slots
+        else ()
+    )
+    return MeshData.of(body, slots=slots), len(pieces) - len(keep)
 
 
 def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
@@ -309,7 +362,7 @@ def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
         return mesh, False
     if rebuilt is None or not len(rebuilt.faces):
         return mesh, False
-    return mesh.replacing(rebuilt), True
+    return transfer(MeshData.of(rebuilt), [mesh]), True
 
 
 def repair(

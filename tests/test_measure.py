@@ -76,6 +76,37 @@ def test_wall_thickness_of_a_solid_cube() -> None:
     assert wall_thickness(cube(), (0.0, 0.0, 10.0)) == pytest.approx(20.0, abs=1e-3)
 
 
+def test_wall_thickness_uses_the_face_below_an_off_centre_point() -> None:
+    """Eine große Deckfläche darf nicht gegen ihren Schwerpunkt verlieren."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    plate = MeshData.of(trimesh.creation.box(extents=(100.0, 100.0, 2.0)))
+
+    assert wall_thickness(plate, (40.0, 0.0, 1.0)) == pytest.approx(2.0, abs=1e-3)
+
+
+def test_wall_thickness_ignores_a_degenerate_face_on_the_clicked_surface() -> None:
+    """Eine Nullfläche besitzt keine Normale und darf die tragende Fläche nicht verdecken."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    plate = trimesh.creation.box(extents=(100.0, 100.0, 2.0))
+    vertices = np.vstack(
+        (
+            np.asarray(((-50.0, 0.0, 1.0), (50.0, 0.0, 1.0), (50.0, 0.0, 1.0))),
+            plate.vertices,
+        )
+    )
+    faces = np.vstack((np.asarray(((0, 1, 2),)), plate.faces + 3))
+    with_zero_face = MeshData.of(trimesh.Trimesh(vertices=vertices, faces=faces, process=False))
+
+    assert wall_thickness(with_zero_face, (-30.0, 0.0, 1.0)) == pytest.approx(2.0, abs=1e-3)
+
+
 def test_wall_thickness_in_a_given_direction() -> None:
     assert wall_thickness(cube(), (0.0, 0.0, -10.0), (0.0, 0.0, 1.0)) == pytest.approx(
         20.0, abs=1e-3

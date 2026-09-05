@@ -210,6 +210,22 @@ def test_extending_reaches_the_next_edge() -> None:
     assert flat(extended.elements[0].points) == pytest.approx([0.0, 0.0, 12.0, 0.0])
 
 
+def test_extending_at_the_start_ignores_crossings_inside_the_line() -> None:
+    """Ein innerer Treffer darf aus Verlängern kein Trimmen machen."""
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((2.0, -5.0), (2.0, 5.0))),
+            SketchElement(kind="line", points=((-5.0, -5.0), (-5.0, 5.0))),
+        ),
+    )
+
+    extended = edit.extend(sketch, 0, (1.0, 0.0))
+
+    assert flat(extended.elements[0].points) == pytest.approx([-5.0, 0.0, 10.0, 0.0])
+
+
 def test_extending_reaches_a_circle_like_trimming_does() -> None:
     """Verlängern sah nur Linien — ein Kreis als Ziel existierte nicht.
 

@@ -7,6 +7,7 @@ Frage danach: Gehören zwei davon zusammen, und was folgt daraus?
 from __future__ import annotations
 
 import dataclasses
+import math
 from pathlib import Path
 
 import trimesh
@@ -20,6 +21,7 @@ from app.core.perceive.relations import (
     bore_and_widening_at,
     sleeve_at,
 )
+from app.core.types import Feature
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -68,6 +70,58 @@ def test_the_sleeve_answers_from_both_sides() -> None:
     assert from_inside == from_outside, (
         f"von innen {from_inside}, von außen {from_outside} — dasselbe Rohr"
     )
+
+
+def test_the_sleeve_uses_the_same_axis_tolerance_from_both_sides() -> None:
+    """Die Auswahlseite darf die geometrische Beziehung nicht verändern."""
+    features = detect(_tube())
+    bore = next(f for f in features.values() if f.kind == "hole")
+    pin = next(f for f in features.values() if f.kind == "pin")
+    centre = tuple(float(value) for value in pin.params["centre"])
+    shifted = dataclasses.replace(
+        pin,
+        params={**pin.params, "centre": (centre[0] + 2.5, centre[1], centre[2])},
+    )
+    shifted_features = {**features, pin.id: shifted}
+
+    from_inside = sleeve_at(bore, shifted_features)
+    from_outside = sleeve_at(shifted, shifted_features)
+
+    assert from_inside == from_outside
+
+
+def test_the_sleeve_uses_the_bore_axis_from_both_sides() -> None:
+    """Auch innerhalb der Winkelschwelle darf die Aufrufseite die Überdeckung nicht ändern."""
+    angle = math.radians(1.9)
+    bore = Feature(
+        id="bore",
+        kind="hole",
+        provenance="recognised",
+        params={
+            "diameter": 16.0,
+            "depth": 20.0,
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+        },
+    )
+    wall = Feature(
+        id="wall",
+        kind="pin",
+        provenance="recognised",
+        params={
+            "diameter": 28.0,
+            "depth": 20.0,
+            "centre": (2.0, 0.0, 9.97),
+            "axis": (math.sin(angle), 0.0, math.cos(angle)),
+        },
+    )
+    features = {bore.id: bore, wall.id: wall}
+
+    from_inside = sleeve_at(bore, features)
+    from_outside = sleeve_at(wall, features)
+
+    assert from_inside is not None, "entlang der Bohrungsachse überdeckt sich das Paar knapp"
+    assert from_inside == from_outside
 
 
 def test_a_post_above_a_bore_is_not_a_sleeve() -> None:

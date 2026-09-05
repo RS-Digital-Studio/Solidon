@@ -710,7 +710,13 @@ def apply_texture(ctx: OpContext) -> OpResult:
 
     kind: BooleanKind = "union" if params.mode == "raised" else "difference"
     body_mesh = as_mesh_data(source.mesh)
-    outcome = boolean(kind, [body_mesh, placed], quality=ctx.quality, cut_slot=0)
+    outcome = boolean(
+        kind,
+        [body_mesh, placed],
+        quality=ctx.quality,
+        cut_slot=0,
+        cancelled=ctx.cancelled,
+    )
 
     # Ein Muster, das den Körper nicht erreicht hat, sagt das (§2.7) — dieselbe
     # Auskunft wie bei der Beschriftung, die aus denselben Bausteinen entsteht;

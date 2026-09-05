@@ -14,7 +14,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import Final, Literal
+from itertools import pairwise
+from typing import Any, Final, Literal
 
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
 from app.core.sketch.planes import to_world
@@ -212,20 +213,119 @@ def _outline(profile: Profile) -> list[Point2]:
 
 
 def _crosses_itself(loop: Profile) -> bool:
-    """Ob zwei Linien der Kette sich im Inneren schneiden.
+    """Ob zwei Teilstücke der Kette sich in ihrem Inneren schneiden.
 
-    Nur Linienpaare, keine Bögen oder Splines: Deren Näherungspolylinie
-    könnte eine Kreuzung melden, wo die exakte Kurve keine hat — eine falsche
-    Ablehnung wäre schlimmer als die alte Lücke. Ein geteilter Endpunkt zählt
-    nicht (benachbarte Segmente teilen ihn immer), und ein Punkt, der eine
-    fremde Linie nur berührt, auch nicht — gemeldet wird der echte Schnitt.
+    Wenn der B-Rep-Kern installiert ist, prüft OpenCASCADE genau die Bögen und
+    interpolierenden B-Splines, die später den Körper bilden. Damit kann weder
+    eine grobe Sehne eine Kreuzung erfinden noch eine Abtastung eine schmale
+    Schleife übersehen. Ohne B-Rep bleibt die Punktfolge als Rückfall; dann
+    kann aus diesen Profilen ohnehin kein exakter Körper entstehen.
+
+    Geteilte Endpunkte und bloße Berührungen zählen weiterhin nicht.
     """
-    lines = [segment for segment in loop.segments if segment.kind == "line"]
-    for index, one in enumerate(lines):
-        for other in lines[index + 1 :]:
-            if any(_joins(a, b) for a in (one.start, one.end) for b in (other.start, other.end)):
-                continue
-            if _strictly_crossing(one.start, one.end, other.start, other.end):
+    exact = _crosses_exactly(loop)
+    if exact is not None:
+        return exact
+    return _crosses_approximately(loop)
+
+
+def _crosses_exactly(loop: Profile) -> bool | None:
+    """Prüft den Umriss mit den exakten zweidimensionalen Kernkurven.
+
+    ``None`` heißt ausschließlich, dass der optionale B-Rep-Kern nicht
+    installiert ist. Fehler beim Kurvenbau werden nicht verschluckt.
+    """
+    from app.core.brep.kernel import available
+
+    if not available():
+        return None
+
+    from OCP.GCE2d import GCE2d_MakeArcOfCircle, GCE2d_MakeSegment
+    from OCP.Geom2d import Geom2d_Circle
+    from OCP.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_PointsToBSpline
+    from OCP.gp import gp_Ax2d, gp_Dir2d, gp_Pnt2d
+    from OCP.TColgp import TColgp_Array1OfPnt2d
+
+    def point(value: Point2) -> Any:
+        return gp_Pnt2d(value[0], value[1])
+
+    def line(start: Point2, end: Point2) -> Any | None:
+        if _joins(start, end):
+            return None
+        return GCE2d_MakeSegment(point(start), point(end)).Value()
+
+    curves: list[tuple[Any, ProfileSegment]] = []
+    for segment in loop.segments:
+        curve: Any | None
+        if segment.kind == "spline":
+            through = segment.through or (segment.start, segment.end)
+            if len(through) < 2 or all(_joins(through[0], other) for other in through[1:]):
+                curve = None
+            else:
+                array = TColgp_Array1OfPnt2d(1, len(through))
+                for index, value in enumerate(through, start=1):
+                    array.SetValue(index, point(value))
+                curve = Geom2dAPI_PointsToBSpline(array).Curve()
+        elif segment.kind == "arc" and segment.via is not None:
+            turn = arc_through(segment.start, segment.via, segment.end)
+            if turn is None:
+                curve = line(segment.start, segment.end)
+            elif abs(turn[2]) >= 2.0 * math.pi:
+                curve = Geom2d_Circle(gp_Ax2d(point(turn[0]), gp_Dir2d(1.0, 0.0)), turn[1])
+            else:
+                curve = GCE2d_MakeArcOfCircle(
+                    point(segment.start), point(segment.via), point(segment.end)
+                ).Value()
+        else:
+            curve = line(segment.start, segment.end)
+        if curve is not None:
+            curves.append((curve, segment))
+
+    def lies_at_an_end(intersection: Any, segment: ProfileSegment) -> bool:
+        value = (float(intersection.X()), float(intersection.Y()))
+        return _joins(value, segment.start) or _joins(value, segment.end)
+
+    for curve, segment in curves:
+        if segment.kind != "spline":
+            continue
+        found = Geom2dAPI_InterCurveCurve(curve, EPS_GEOM)
+        for index in range(1, found.NbPoints() + 1):
+            if not lies_at_an_end(found.Point(index), segment):
+                return True
+
+    for index, (first, first_segment) in enumerate(curves):
+        for second, second_segment in curves[index + 1 :]:
+            found = Geom2dAPI_InterCurveCurve(first, second, EPS_GEOM)
+            for point_index in range(1, found.NbPoints() + 1):
+                intersection = found.Point(point_index)
+                if not lies_at_an_end(intersection, first_segment) and not lies_at_an_end(
+                    intersection, second_segment
+                ):
+                    return True
+    return False
+
+
+def _crosses_approximately(loop: Profile) -> bool:
+    """Rückfallprüfung über die gezeichnete Punktfolge ohne B-Rep-Kern."""
+    pieces: list[tuple[Point2, Point2]] = []
+    for segment in loop.segments:
+        points: tuple[Point2, ...]
+        if segment.kind == "arc" and segment.via is not None:
+            arc = arc_through(segment.start, segment.via, segment.end)
+            points = (
+                (segment.start, segment.end)
+                if arc is None
+                else _along_arc(arc[0], segment.start, arc[2], arc[1])
+            )
+        elif segment.kind == "spline":
+            points = _along_spline(segment.through or (segment.start, segment.end))
+        else:
+            points = (segment.start, segment.end)
+        pieces.extend(pairwise(points))
+
+    for index, one in enumerate(pieces):
+        for other in pieces[index + 1 :]:
+            if _strictly_crossing(one[0], one[1], other[0], other[1]):
                 return True
     return False
 

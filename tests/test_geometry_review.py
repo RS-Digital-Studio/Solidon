@@ -25,10 +25,12 @@ from app.core.bootstrap import load_operations
 from app.core.errors import OperationCancelled
 from app.core.geom import boolean as boolean_module
 from app.core.geom import hollow as hollow_module
+from app.core.geom import label_ops as label_module
 from app.core.geom import lattice as lattice_module
 from app.core.geom import lid as lid_module
 from app.core.geom import pins as pins_module
 from app.core.geom import prepare as prepare_module
+from app.core.geom import texture_ops as texture_module
 from app.core.geom.hollow import erosion_steps, hollow
 from app.core.geom.lattice import _cavity_bounds
 from app.core.geom.measure import ray_distances
@@ -694,8 +696,16 @@ def test_the_quality_setting_reaches_the_boolean_chain(
         (hollow_module, "hollow_object", {"wall": 2.0, "vents": 1}),
         (lattice_module, "lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
         (pins_module, "split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
+        (lid_module, "create_lid", {"thickness": 2.4, "collar": 4.0}),
+        (lid_module, "screw_lid", {"pitch": 3.0, "height": 8.0}),
+        (label_module, "label_text", {"text": "I", "size": 6.0, "depth": 0.6, "z": 40.0}),
+        (
+            texture_module,
+            "apply_texture",
+            {"pattern": "rib", "width": 4.0, "height": 4.0, "pitch": 2.0, "z": 40.0},
+        ),
     ],
-    ids=["hollow", "lattice", "pins"],
+    ids=["hollow", "lattice", "pins", "lid", "screw_lid", "label", "texture"],
 )
 def test_the_cancel_token_reaches_the_boolean_chain(
     module: Any, op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
@@ -718,7 +728,9 @@ def test_the_cancel_token_reaches_the_boolean_chain(
         return original(kind, meshes, **kwargs)
 
     monkeypatch.setattr(target, "boolean", recording)
-    if op == "lattice_fill":
+    if op in {"create_lid", "screw_lid"}:
+        source = tin()
+    elif op == "lattice_fill":
         source = hollow(cube(standing=True), 3.0, vents=0).mesh
     else:
         source = cube(standing=True)

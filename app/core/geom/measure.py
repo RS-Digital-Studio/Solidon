@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from app.core.geom.mesh import RAY_PARALLEL_EPS, MeshData
+from app.core.deferred import trimesh
+from app.core.geom.mesh import RAY_PARALLEL_EPS, MeshData, on_surface
 from app.core.types import BoundingBox, Vec3
 from app.core.units import EPS_GEOM, round_display
 
@@ -359,10 +360,27 @@ def _inward_direction(
         length = float(np.linalg.norm(ray))
         return ray / length if length > EPS_GEOM else None
 
-    triangles = np.asarray(mesh.raw.triangles_center, dtype=float)
-    if not len(triangles):
+    if not mesh.triangle_count:
         return None
-    nearest = int(np.argmin(np.linalg.norm(triangles - origin, axis=1)))
-    normal = np.asarray(mesh.raw.face_normals[nearest], dtype=float)
+    normals = np.asarray(mesh.raw.face_normals, dtype=float)
+    lengths = np.linalg.norm(normals, axis=1)
+    usable = np.isfinite(normals).all(axis=1) & (lengths > EPS_GEOM)
+    if not usable.any():
+        return None
+
+    indices = np.flatnonzero(usable)
+    surface = mesh.raw
+    if len(indices) != mesh.triangle_count:
+        # Nullflächen sind im Viewport unsichtbar und besitzen keine Richtung.
+        # Sie dürfen deshalb auch dann nicht gewinnen, wenn ihre Restkante
+        # genau unter dem Klick liegt. Das nächste tragende Dreieck entscheidet.
+        surface = trimesh.Trimesh(
+            vertices=np.asarray(mesh.raw.vertices, dtype=float),
+            faces=np.asarray(mesh.raw.faces, dtype=np.int64)[indices],
+            process=False,
+        )
+    _closest, _distance, faces = on_surface(surface, origin.reshape(1, 3))
+    nearest = int(indices[int(faces[0])])
+    normal = normals[nearest]
     length = float(np.linalg.norm(normal))
     return -normal / length if length > EPS_GEOM else None

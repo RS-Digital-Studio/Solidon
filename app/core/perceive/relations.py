@@ -170,8 +170,6 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
         return None
 
     inside = is_a_cavity(feature)
-    radius = diameter / 2.0
-    across_limit = radius * SINK_FIT_LIMIT
     best: Sleeve | None = None
     for candidate in features.values():
         if candidate.id == feature.id or is_a_cavity(candidate) == inside:
@@ -193,13 +191,25 @@ def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve
             continue
         if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
             continue
-        offset = other_centre - centre
-        along = float(offset @ axis)
-        across = offset - along * axis
+        # Alle Lagewerte werden aus Sicht der Bohrung gerechnet. Sie ist bei
+        # beiden Aufrufrichtungen dasselbe Merkmal; die Achsen dürfen innerhalb
+        # der Erkennungsschwelle leicht voneinander abweichen, und dann würden
+        # zwei wechselnde Bezugsachsen sonst zwei verschiedene Überdeckungen
+        # liefern.
+        bore_axis = axis if inside else other_axis
+        bore_centre = centre if inside else other_centre
+        wall_centre = other_centre if inside else centre
+        bore_depth = depth if inside else other_depth
+        wall_depth = other_depth if inside else depth
+        offset = wall_centre - bore_centre
+        along = float(offset @ bore_axis)
+        across = offset - along * bore_axis
+        bore_radius = (diameter if inside else other_diameter) / 2.0
+        across_limit = bore_radius * SINK_FIT_LIMIT
         if float(np.linalg.norm(across)) > across_limit:
             continue
 
-        share = _overlap(along, depth, other_depth)
+        share = _overlap(along, bore_depth, wall_depth)
         if share < SLEEVE_OVERLAP:
             continue
         bore_diameter = diameter if inside else other_diameter

@@ -46,6 +46,20 @@ def test_degenerate_triangles_go_away() -> None:
     assert mesh.triangle_count == 12, "the cube stays, the junk goes"
 
 
+def test_removing_degenerate_triangles_keeps_the_slots_of_surviving_faces() -> None:
+    """Eine entfernte Fläche darf die Farben der übrigen nicht löschen."""
+    body = trimesh.Trimesh(
+        vertices=((0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (2.0, 0.0, 0.0)),
+        faces=((0, 1, 2), (1, 1, 3)),
+        process=False,
+    )
+
+    fixed, removed = remove_degenerate_faces(MeshData.of(body, slots=(4, 9)))
+
+    assert removed == 1
+    assert fixed.slots == (4,)
+
+
 def test_filling_closes_a_single_missing_triangle() -> None:
     body, _welded = merge_vertices(raw("cube_clean.stl"))
     with_hole = body.replacing(body.raw.submesh([range(1, 12)], append=True))
@@ -56,6 +70,19 @@ def test_filling_closes_a_single_missing_triangle() -> None:
     assert worked
     assert closed.is_watertight
     assert closed.volume == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_filling_a_hole_keeps_existing_face_slots() -> None:
+    """Die neue Deckfläche darf die Zuweisung der alten Flächen nicht leeren."""
+    body, _welded = merge_vertices(raw("cube_clean.stl"))
+    opened = body.raw.submesh([range(1, body.triangle_count)], append=True)
+    with_hole = MeshData.of(opened, slots=(7,) * len(opened.faces))
+
+    closed, worked = fill_holes(with_hole)
+
+    assert worked
+    assert len(closed.slots) == closed.triangle_count
+    assert closed.slots[: with_hole.triangle_count] == with_hole.slots
 
 
 def test_filling_reaches_its_limit_on_a_missing_wall() -> None:
@@ -106,6 +133,17 @@ def test_removing_small_components_keeps_the_big_one() -> None:
 
     assert dropped == 1
     assert mesh.volume == pytest.approx(8000.0, rel=1e-3)
+
+
+def test_removing_small_components_keeps_the_surviving_face_slots() -> None:
+    body, _welded = merge_vertices(raw("two_components.stl"))
+    coloured = MeshData.of(body.raw, slots=tuple(range(body.triangle_count)))
+
+    mesh, dropped = remove_small_components(coloured)
+
+    assert dropped == 1
+    assert len(mesh.slots) == mesh.triangle_count
+    assert set(mesh.slots) < set(coloured.slots)
 
 
 def test_repair_reports_every_step_it_took() -> None:
@@ -220,6 +258,19 @@ def test_stitching_keeps_the_source_of_a_split_face() -> None:
     assert sorted(counts) == [1] * (broken.triangle_count - 1) + [2], (
         "nur das geteilte Dreieck kommt zweimal zurück"
     )
+
+
+def test_stitching_keeps_the_slot_of_a_split_face() -> None:
+    """Beide neuen Hälften tragen den Slot ihres gemeinsamen Vorgängers."""
+    broken = t_junction()
+    coloured = MeshData.of(broken.raw, slots=tuple(range(broken.triangle_count)))
+
+    fixed, seams = stitch_t_junctions(coloured)
+
+    assert seams == 1
+    assert len(fixed.slots) == fixed.triangle_count
+    counts = [fixed.slots.count(slot) for slot in coloured.slots]
+    assert sorted(counts) == [1] * (broken.triangle_count - 1) + [2]
 
 
 def test_stitching_ignores_scalar_metadata_instead_of_crashing() -> None:
@@ -374,6 +425,20 @@ def test_a_closed_body_still_gets_resolved() -> None:
 
     assert changed, "an einem geschlossenen Körper arbeitet er weiter"
     assert got.is_watertight
+
+
+def test_resolving_self_intersections_transfers_material_slots() -> None:
+    """Eine Neuvernetzung behält die nächstgelegene Quellfarbe."""
+    from app.core.geom.repair import resolve_self_intersections
+
+    body, _ = merge_vertices(raw("broken_selfint.stl"))
+    coloured = MeshData.of(body.raw, slots=(6,) * body.triangle_count)
+
+    got, changed = resolve_self_intersections(coloured)
+
+    assert changed
+    assert len(got.slots) == got.triangle_count
+    assert set(got.slots) == {6}
 
 
 def test_a_skipped_step_says_so_in_the_report() -> None:

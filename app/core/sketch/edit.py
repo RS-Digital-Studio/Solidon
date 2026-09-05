@@ -265,7 +265,11 @@ def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
         )
 
     towards_end = _parameter_on(line, at) >= 0.5
-    candidates = [point for point in reach if (_parameter_on(line, point) > 1.0) == towards_end]
+    candidates = [
+        point
+        for point in reach
+        if (_parameter_on(line, point) > 1.0 if towards_end else _parameter_on(line, point) < 0.0)
+    ]
     if not candidates:
         raise ValidationError(
             "element",
