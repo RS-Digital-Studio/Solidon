@@ -264,9 +264,18 @@ def ensure_ai_disclosure(
         return DisclosureResult.FAILED
     try:
         remember_disclosure(settings, target)
-        save_settings(settings)
+        stored = save_settings(settings)
     except (OSError, TypeError, ValueError):
         _log.exception("AI disclosure record could not be stored")
+        clear_disclosure(settings)
+        return DisclosureResult.FAILED
+    if stored is None:
+        # ``save_settings`` wirft bei einem Dateifehler nicht mehr, es gibt
+        # ``None`` zurück — und der Nachweis blieb im Speicher: Freigabe
+        # erteilt, Datei nie geschrieben, beim nächsten Aufruf „aktuell"
+        # (Gesamtreview 05.09.2026, UI-05). Geschlossen bleiben heißt: ohne
+        # geschriebenen Nachweis keine Freigabe.
+        _log.error("AI disclosure record could not be stored: settings file not written")
         clear_disclosure(settings)
         return DisclosureResult.FAILED
     return DisclosureResult.ACCEPTED

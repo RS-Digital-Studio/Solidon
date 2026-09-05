@@ -263,7 +263,16 @@ def rebuild_for_language(
 
     geometry = window.saveGeometry()
     fresh = Window(window.session, settings)
+    # **Erst den alten Dienst stoppen, dann den neuen starten.** Der alte
+    # Server hielt den Port; das neue Fenster übernahm die eingeschaltete
+    # Einstellung und startete keinen Ersatz — nach dem Sprachwechsel war die
+    # Fernbedienung bis zum nächsten Speichern der Einstellungen weg
+    # (Gesamtreview 05.09.2026, UI-09).
+    if window._remote is not None:
+        window._remote.stop()
+        window._remote = None
     fresh._apply_settings()
+    fresh._apply_remote()
     fresh.restoreGeometry(geometry)
     fresh.show()
 
@@ -283,10 +292,7 @@ def rebuild_for_language(
     # „Verwerfen" räumte dort die automatische Sicherung des
     # **weiterlaufenden** Projekts (§38), „Abbrechen" würde vom
     # ``deleteLater`` überrollt. Den Fernsteuerdienst stoppt sonst nur der
-    # ``closeEvent``, also hier — vor ihm hielte er den Port des neuen.
-    if window._remote is not None:
-        window._remote.stop()
-        window._remote = None
+    # ``closeEvent``; er ist oben schon gestoppt, vor dem Start des neuen.
     window.release()
     window.hide()
     window.deleteLater()

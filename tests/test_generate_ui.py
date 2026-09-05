@@ -1073,3 +1073,47 @@ def test_the_check_shows_that_it_is_running(qt_app: QApplication) -> None:
             release(dialog)
         for _ in range(3):
             qt_app.processEvents()
+
+
+class _HeldBackend(ScriptedMeshBackend):
+    """Ein Generator, der erst liefert, wenn der Test ihn lässt — und zählt."""
+
+    def __init__(self, gate: threading.Event) -> None:
+        super().__init__(fallback=(MESHES / "cube_clean.stl").read_bytes())
+        self.gate = gate
+        self.calls = 0
+
+    def text_to_mesh(self, prompt: str, **kwargs: object) -> object:
+        self.calls += 1
+        self.gate.wait(10.0)
+        return super().text_to_mesh(prompt, **kwargs)  # type: ignore[arg-type]
+
+
+def test_another_attempt_during_a_run_does_not_start_a_second_job(qt_app: QApplication) -> None:
+    """Gesamtreview 05.09.2026, UI-23: ``_running`` sperrte nur den Hauptknopf;
+    „Noch ein Versuch" blieb bedienbar, und ``_start`` hatte keinen eigenen
+    Wächter — zwei schnelle Klicks starteten zwei Aufträge, und Abbrechen
+    erreichte nur den zuletzt gemerkten."""
+    gate = threading.Event()
+    backend = _HeldBackend(gate)
+    dialog = GenerateDialog(backend=backend)
+    try:
+        wait_for_readiness(dialog, qt_app)
+        dialog.prompt.setText("Würfel")
+        dialog._start()
+        first = dialog._worker
+        assert first is not None, "der erste Auftrag läuft"
+        assert not dialog.again.isEnabled(), "der Wiederholknopf ist während des Laufs gesperrt"
+
+        dialog._try_again()
+
+        assert dialog._worker is first, "kein zweiter Auftrag, solange der erste läuft"
+        gate.set()
+        assert first.wait(10_000)
+        qt_app.processEvents()
+        assert backend.calls == 1
+        assert dialog.again.isEnabled(), "nach dem Lauf steht der Knopf wieder"
+    finally:
+        gate.set()
+        dialog.release()
+        dialog.deleteLater()

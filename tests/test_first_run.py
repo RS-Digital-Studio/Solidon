@@ -2014,3 +2014,51 @@ def test_a_language_change_from_the_settings_swaps_the_window(qt_app: object) ->
     finally:
         install_language("de")
         set_language("de")
+
+
+def test_the_remote_service_survives_the_language_switch(qt_app: object) -> None:
+    """Gesamtreview 05.09.2026, UI-09: ``rebuild_for_language`` stoppte den
+    Fernsteuerdienst des alten Fensters, und das neue startete keinen Ersatz
+    — die Einstellung blieb eingeschaltet, erreichbar war nichts mehr, bis
+    jemand die Einstellungen erneut speicherte."""
+    import socket
+
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.app import rebuild_for_language
+
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = int(probe.getsockname()[1])
+
+    install_language("de")
+    set_language("de")
+    settings = UiSettings()
+    settings.language = "de"
+    settings.remote_enabled = True
+    settings.remote_port = port
+    window = MainWindow(Session(), settings)
+    fresh: MainWindow | None = None
+    try:
+        window._apply_remote()
+        assert window._remote is not None, "die Voraussetzung: der Dienst läuft"
+
+        settings.language = "en"
+        application = QApplication.instance()
+        assert application is not None
+        fresh = rebuild_for_language(application, window, settings)
+
+        assert window._remote is None, "der alte Dienst gibt den Port frei"
+        assert fresh._remote is not None, "und das neue Fenster hat wieder einen"
+    finally:
+        for win in (fresh, window):
+            if win is not None and win._remote is not None:
+                win._remote.stop()
+                win._remote = None
+        if fresh is not None:
+            fresh.close()
+            fresh.deleteLater()
+        install_language("de")
+        set_language("de")

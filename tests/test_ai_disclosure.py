@@ -972,3 +972,46 @@ def test_all_languages_targets_sizes_and_text_scales_fit_and_unlock_at_the_top(
     finally:
         install_language("de")
         set_language("de")
+
+
+def test_a_settings_file_that_cannot_be_written_keeps_the_disclosure_closed(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    window: MainWindow,
+) -> None:
+    """Gesamtreview 05.09.2026, UI-05: ``save_settings`` wirft bei einem
+    Dateifehler nicht mehr, es gibt None zurück — und ``ensure_ai_disclosure``
+    sah nur die Ausnahme. Der Nachweis blieb im Speicher, die Freigabe galt,
+    beim nächsten Aufruf hieß es „aktuell", und die Datei fehlte. Der Fehler
+    sitzt hier im echten Schreibweg, nicht am ersetzten Funktionsrand."""
+    from app.ui import settings as settings_module
+
+    # Die Autouse-Fixture ersetzt save_settings durch eine Attrappe; hier gilt
+    # der echte Schreibweg, und der Fehler sitzt an seinem Dateiwechsel.
+    monkeypatch.setattr("app.ui.ai_disclosure.save_settings", settings_module.save_settings)
+    backend = ProviderSpy("anthropic")
+    window.session.set_agent_backend(backend)
+    monkeypatch.setattr(window, "action_llm_key", lambda: None)
+    monkeypatch.setattr(
+        "app.ui.ai_disclosure.AiDisclosureDialog.exec",
+        lambda dialog: _show_and_accept(dialog, qt_app),
+    )
+    original_replace = Path.replace
+
+    def refuse(self: Path, target: Path) -> Path:
+        if Path(target).name == settings_module.settings_path().name:
+            raise OSError("disk full")
+        return original_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", refuse)
+
+    assert ensure_ai_disclosure(window.settings, backend, window) is DisclosureResult.FAILED
+    assert not window.settings.ai_disclosure_target, "der vorgemerkte Nachweis ist wieder weg"
+
+    window.chat.input.setPlainText("Bleibt hier.")
+    window.chat._send()
+
+    assert not backend.seen, "ohne geschriebenen Nachweis geht nichts hinaus"
+    assert window.chat.input.toPlainText() == "Bleibt hier."
+    assert not window.settings.ai_disclosure_target, "der vorgemerkte Nachweis ist wieder weg"
+    assert ensure_ai_disclosure(window.settings, backend, window) is DisclosureResult.FAILED

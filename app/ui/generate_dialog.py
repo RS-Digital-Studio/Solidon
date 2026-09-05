@@ -688,6 +688,7 @@ class GenerateDialog(QDialog):
         """
         self._busy = running
         self._lock_make(not running)
+        self.again.setEnabled(not running)
         self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setEnabled(True)
 
     def _lock_make(self, free: bool) -> None:
@@ -725,7 +726,11 @@ class GenerateDialog(QDialog):
         # Dieselbe Frage wie am Knopf (:attr:`_worth_starting`) und nicht
         # ``available``: Wo die beiden auseinanderliefen, war *Erzeugen*
         # klickbar und der Klick folgenlos.
-        if not self._worth_starting:
+        if not self._worth_starting or self._busy:
+            # ``_worth_starting`` hält den Knopf grau, nicht den Weg: „Noch ein
+            # Versuch" blieb während des Laufs bedienbar, und zwei schnelle
+            # Klicks starteten zwei Aufträge, von denen Abbrechen nur den
+            # letzten erreichte (Gesamtreview 05.09.2026, UI-23).
             return
         self._remember_models()
         self._running(True)
