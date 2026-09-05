@@ -654,3 +654,28 @@ def test_the_upload_tool_accepts_the_version_file_we_publish() -> None:
         pytest.skip("version.json führt noch keine Pakete — vor dem ersten Release ist das richtig")
 
     upload_website._validate_remote_version(payload)
+
+
+def test_the_read_timeout_caps_a_single_read_below_the_total_deadline() -> None:
+    """CORE-28: Ohne eigene Grenze war der Socket-Timeout die Restzeit bis zur
+    Gesamtfrist — eine großzügige Frist für ein großes Paket hätte auch einen
+    Stillstand so lange stehen lassen. ``read_timeout`` deckelt jede
+    Leseoperation für sich."""
+    from app.core.http import iter_limited
+
+    clock = _Clock()
+    body = _Body(b"abcdef", clock=clock, step=0.0)
+
+    received = b"".join(
+        iter_limited(
+            body,
+            limit=10,
+            deadline=deadline_after(1000.0, timer=clock),
+            timer=clock,
+            chunk_size=3,
+            read_timeout=60.0,
+        )
+    )
+
+    assert received == b"abcdef"
+    assert body.timeouts and all(seconds == pytest.approx(60.0) for seconds in body.timeouts)

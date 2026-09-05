@@ -415,8 +415,15 @@ def iter_limited(
     timer: Timer = monotonic,
     require_timeout: bool = True,
     chunk_size: int = READ_CHUNK_BYTES,
+    read_timeout: float | None = None,
 ) -> Iterator[bytes]:
     """Liest bis EOF mit Byte-Grenze und monotoner Gesamtfrist.
+
+    ``read_timeout`` deckelt, wie lange **eine** Leseoperation stehen darf —
+    unabhängig von der Gesamtfrist. Ohne ihn ist der Socket-Timeout die
+    Restzeit bis zur Frist, und wer eine großzügige Gesamtfrist für ein
+    großes Paket setzt, ließe damit auch einen Stillstand so lange stehen
+    (Gesamtreview 05.09.2026, CORE-28).
 
     Bei produktiven urllib-Antworten wird vor jedem Lesen die noch übrige
     Gesamtzeit am Socket gesetzt. Injizierte Testtransporte können denselben
@@ -434,7 +441,9 @@ def iter_limited(
         remaining = deadline - timer()
         if remaining <= 0:
             raise ResponseDeadlineError("response deadline exceeded")
-        controlled = _set_read_timeout(response, remaining)
+        controlled = _set_read_timeout(
+            response, remaining if read_timeout is None else min(remaining, read_timeout)
+        )
         if require_timeout and not controlled:
             if _response_finished(response):
                 return

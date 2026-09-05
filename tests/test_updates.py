@@ -1427,3 +1427,18 @@ def test_a_nonsense_total_from_the_server_counts_as_none() -> None:
     )
     assert echt is not None
     assert echt.omitted("de") == 114
+
+
+def test_the_download_deadline_grows_with_the_package() -> None:
+    """Gesamtreview 05.09.2026, CORE-28: Der Lese-Timeout von einer Minute
+    war zugleich die Gesamtfrist — ein Paket, das bei laufend ankommenden
+    Daten länger brauchte, wurde nach 60 Sekunden abgebrochen und als „nicht
+    erreichbar" gemeldet. Die Gesamtfrist folgt der Paketgröße und der
+    langsamsten unterstützten Leitung; die Leseoperation bleibt bei ihrem
+    Stillstands-Timeout."""
+    small = updates.download_deadline_seconds(1024)
+    large = updates.download_deadline_seconds(180 * 1024 * 1024)
+
+    assert small >= updates.DOWNLOAD_TIMEOUT_SECONDS
+    assert large > 1500.0, "180 MB brauchen bei 100 KiB/s eine halbe Stunde"
+    assert updates.download_deadline_seconds(None) > large, "unbekannt heißt: das größte Paket"

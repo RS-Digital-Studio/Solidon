@@ -165,6 +165,24 @@ MAX_TEXT_LENGTH: Final = 800
 #: vier Sekunden.
 DOWNLOAD_TIMEOUT_SECONDS: Final = 60.0
 
+#: Die langsamste Leitung, für die der Download in der Anwendung noch taugt:
+#: 100 KiB/s, also 180 MB in einer halben Stunde. Daraus entsteht die
+#: **Gesamtfrist** (:func:`download_deadline_seconds`); die einzelne
+#: Leseoperation bleibt bei :data:`DOWNLOAD_TIMEOUT_SECONDS`. Bis zum
+#: 05.09.2026 war der Lese-Timeout zugleich die Gesamtfrist: Ein Paket, das
+#: bei laufend ankommenden Daten länger als eine Minute brauchte, wurde nach
+#: 60 Sekunden abgebrochen, die Teildatei gelöscht, und angezeigt stand „Die
+#: Adresse war nicht erreichbar" (Gesamtreview, CORE-28).
+MIN_DOWNLOAD_RATE: Final = 100 * 1024
+
+
+def download_deadline_seconds(size: int | None) -> float:
+    """Wie lange ein Download insgesamt dauern darf — nach Paketgröße und der
+    langsamsten unterstützten Leitung, mindestens ein Lese-Timeout."""
+    expected = size if size and size > 0 else MAX_PACKAGE_BYTES
+    return DOWNLOAD_TIMEOUT_SECONDS + expected / MIN_DOWNLOAD_RATE
+
+
 #: Was ein Paket höchstens wiegen darf. Die Versionsdatei nennt die erwartete
 #: Größe, und mehr als das wird nicht gelesen — diese Grenze fängt den Fall,
 #: dass sie eine unsinnige Zahl nennt.
@@ -1081,7 +1099,7 @@ def download(
         allow_query=False,
         allow_fragment=False,
     )
-    deadline = deadline_after(DOWNLOAD_TIMEOUT_SECONDS)
+    deadline = deadline_after(download_deadline_seconds(package.size))
     request = urllib.request.Request(address, headers={"User-Agent": f"Solidon/{APP_VERSION}"})
 
     try:
@@ -1162,6 +1180,10 @@ def _store_download(
                 deadline=deadline,
                 require_timeout=strict_timeout,
                 chunk_size=CHUNK_BYTES,
+                # Der Stillstand einer Leseoperation bleibt bei einer Minute,
+                # auch wenn die Gesamtfrist für ein großes Paket eine halbe
+                # Stunde trägt (CORE-28).
+                read_timeout=DOWNLOAD_TIMEOUT_SECONDS,
             ):
                 if cancelled is not None:
                     cancelled.raise_if_cancelled()
