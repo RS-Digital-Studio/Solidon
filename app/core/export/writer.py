@@ -1113,6 +1113,11 @@ def export_bytes(
     return data if isinstance(data, bytes) else str(data).encode("utf-8")
 
 
+#: glTF rechnet in Metern (Spezifikation 2.0, Abschnitt 3.4), Solidon in
+#: Millimetern — der Faktor beim Schreiben eines GLB.
+GLB_METRES_PER_MM: Final = 0.001
+
+
 def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "") -> bytes:
     """GLB mit Namen und Farben — die Datei zum Herzeigen.
 
@@ -1167,9 +1172,18 @@ def _glb_bytes(mesh: MeshData, slots: list[MaterialSlot] | None, name: str = "")
             bodies[key] = part
     # Alle Teilnetze mit derselben Matrix, sonst steckt eines quer im anderen.
     # Kopien sind es ohnehin — ``copy()`` oben, ``submesh`` in _parts_by_slot.
+    #
+    # **Und in Metern.** glTF 2.0 legt die Einheit fest (Abschnitt 3.4): Eine
+    # Koordinate ist ein Meter. Bis zum 05.09.2026 gingen die Millimeter
+    # unverändert hinaus — ein Quader 10 x 20 x 40 mm kam als 10 x 40 x 20 m
+    # an, und nur ein Betrachter mit automatischem Einpassen verbarg das
+    # (Gesamtreview, CORE-33). Der Leser (``read_mesh``) skaliert bewusst
+    # nicht zurück: Er liest denselben Payload, der bei einem erzeugten Modell
+    # als Quelle im Projekt liegt, und die Einheit fragt die Eingangsstufe.
     upright = trimesh.transformations.rotation_matrix(-np.pi / 2.0, (1.0, 0.0, 0.0))
     for body in bodies.values():
         body.apply_transform(upright)
+        body.apply_scale(GLB_METRES_PER_MM)
     scene = trimesh.Scene(bodies)  # type: ignore[arg-type]
     data = scene.export(file_type="glb")
     return data if isinstance(data, bytes) else str(data).encode("utf-8")

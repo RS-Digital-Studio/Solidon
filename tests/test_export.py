@@ -328,8 +328,10 @@ def test_glb_keeps_the_measurements_it_was_given() -> None:
     back = read_mesh(export_bytes(original, "glb"), ".glb")
 
     assert back.triangle_count == original.triangle_count
-    assert back.volume == pytest.approx(original.volume, rel=1e-6)
-    assert back.bounds.size == pytest.approx((10.0, 40.0, 20.0), abs=1e-6)
+    # In Metern, seit dem 05.09.2026 (CORE-33): der Leser skaliert bewusst nicht
+    # zurueck, die Einheit fragt die Eingangsstufe.
+    assert back.volume == pytest.approx(original.volume * 1e-9, rel=1e-6)
+    assert back.bounds.size == pytest.approx((0.010, 0.040, 0.020), abs=1e-9)
 
 
 def test_glb_carries_the_slot_colours() -> None:
@@ -1860,3 +1862,15 @@ def test_same_colour_but_another_material_stays_its_own_extruder() -> None:
         )
         == 1
     ), "dasselbe Filament bleibt eine Düse"
+
+
+def test_glb_is_written_in_metres(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, CORE-33: glTF 2.0 legt den Meter als Einheit
+    fest (Abschnitt 3.4). Die Millimeter gingen unverändert hinaus — ein
+    Quader 10 x 20 x 40 mm kam als 10 x 40 x 20 m an, und nur ein Betrachter
+    mit automatischem Einpassen verbarg das."""
+    original = MeshData.of(trimesh.creation.box(extents=(10.0, 20.0, 40.0)))
+    written = trimesh.load(BytesIO(export_bytes(original, "glb")), file_type="glb")
+    extents = written.bounds[1] - written.bounds[0]
+
+    assert sorted(extents) == pytest.approx([0.01, 0.02, 0.04], abs=1e-9)

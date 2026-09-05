@@ -18,7 +18,7 @@ import pytest
 import trimesh
 
 from app.core.export import threemf
-from app.core.export.writer import check_filament_changes, export_bytes
+from app.core.export.writer import GLB_METRES_PER_MM, check_filament_changes, export_bytes
 from app.core.geom.mesh import MeshData
 from app.core.ingest import threemf as threemf_reader
 from app.core.knowledge import print_settings, profiles
@@ -63,6 +63,13 @@ def _slab() -> MeshData:
     return MeshData.of(trimesh.creation.box(extents=(10.0, 20.0, 40.0)))
 
 
+def _metres(*millimetres: float) -> tuple[float, ...]:
+    """glTF kennt genau eine Einheit, und Solidon schreibt sie seit dem 05.09.2026
+    auch (Gesamtreview, CORE-33): Was hier in Millimetern gebaut wird, steht in
+    der Datei in Metern."""
+    return tuple(value * GLB_METRES_PER_MM for value in millimetres)
+
+
 def test_a_glb_stands_upright_for_the_viewer_that_receives_it() -> None:
     """Der glTF-2.0-Standard schreibt in Abschnitt 3.5 +Y oben vor, Solidon
     rechnet Z-oben.
@@ -74,7 +81,7 @@ def test_a_glb_stands_upright_for_the_viewer_that_receives_it() -> None:
     """
     written = _extents_in(export_bytes(_slab(), "glb"))
 
-    assert written == pytest.approx((10.0, 40.0, 20.0)), "die Höhe gehört auf die Y-Achse"
+    assert written == pytest.approx(_metres(10.0, 40.0, 20.0)), "die Höhe gehört auf die Y-Achse"
 
 
 def test_the_slot_meshes_of_a_glb_turn_together() -> None:
@@ -92,7 +99,7 @@ def test_the_slot_meshes_of_a_glb_turn_together() -> None:
 
     written = _extents_in(export_bytes(two_tone, "glb", slots=slots, name="Schild"))
 
-    assert written == pytest.approx((10.0, 40.0, 20.0))
+    assert written == pytest.approx(_metres(10.0, 40.0, 20.0))
 
 
 # --- die Extrudernummer des Auftrags -------------------------------------------
