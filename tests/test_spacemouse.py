@@ -366,21 +366,21 @@ class _Camera:
 
 
 @dataclass
-class _Plotter:
+class _Renderer:
     camera: _Camera = field(default_factory=_Camera)
 
 
 @dataclass
 class _Viewport:
-    plotter: _Plotter | None = field(default_factory=_Plotter)
+    renderer: _Renderer | None = field(default_factory=_Renderer)
     sketch_active: bool = False
     draws: int = 0
     settled: int = 0
     parallel_scale: float | None = None
 
     def camera_pose(self) -> tuple[object, object, object, float | None]:
-        assert self.plotter is not None
-        camera = self.plotter.camera
+        assert self.renderer is not None
+        camera = self.renderer.camera
         return (camera.position, camera.focal_point, camera.up, self.parallel_scale)
 
     def set_camera_pose(
@@ -390,10 +390,10 @@ class _Viewport:
         view_up: object,
         parallel_scale: float | None = None,
     ) -> None:
-        assert self.plotter is not None
-        self.plotter.camera.position = position  # type: ignore[assignment]
-        self.plotter.camera.focal_point = focal_point  # type: ignore[assignment]
-        self.plotter.camera.up = view_up  # type: ignore[assignment]
+        assert self.renderer is not None
+        self.renderer.camera.position = position  # type: ignore[assignment]
+        self.renderer.camera.focal_point = focal_point  # type: ignore[assignment]
+        self.renderer.camera.up = view_up  # type: ignore[assignment]
         if parallel_scale is not None:
             self.parallel_scale = parallel_scale
         self.draws += 1
@@ -449,8 +449,8 @@ def test_advance_moves_the_camera_and_draws_once(qt_app: QApplication) -> None:
     controller.handle_report(report(1, 350, 0, 0))
     assert controller.advance(DT)
     assert view.draws == 1
-    assert view.plotter is not None
-    assert view.plotter.camera.position[0] < 0.0
+    assert view.renderer is not None
+    assert view.renderer.camera.position[0] < 0.0
     assert controller.motion.x == 1.0
 
 
@@ -468,8 +468,8 @@ def test_switched_off_the_device_is_still_seen_but_moves_nothing(qt_app: QApplic
 
 
 def test_without_a_plotter_nothing_happens(qt_app: QApplication) -> None:
-    """Offscreen gibt es keinen Plotter — und keinen Fehler."""
-    controller, _view, _settings, _fits = _controller(qt_app, viewport=_Viewport(plotter=None))
+    """Offscreen gibt es keinen Renderer — und keinen Fehler."""
+    controller, _view, _settings, _fits = _controller(qt_app, viewport=_Viewport(renderer=None))
     controller.handle_report(report(1, 350, 0, 0))
     assert not controller.advance(DT)
 
@@ -480,10 +480,10 @@ def test_in_sketch_mode_the_view_keeps_its_direction(qt_app: QApplication) -> No
     assert not controller.advance(DT), "Drehen tut im Zeichenmodus nichts"
     controller.handle_report(report(1, 0, 350, 0))
     assert controller.advance(DT)
-    assert view.plotter is not None
+    assert view.renderer is not None
     assert forward(
         CameraPose(
-            view.plotter.camera.position, view.plotter.camera.focal_point, view.plotter.camera.up
+            view.renderer.camera.position, view.renderer.camera.focal_point, view.renderer.camera.up
         )
     ) == pytest.approx(forward(START))
 

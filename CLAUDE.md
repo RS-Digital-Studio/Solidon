@@ -84,8 +84,9 @@ bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
 .venv\Scripts\python.exe -m pytest -q -m performance   # was dabei fehlt (§31)
 ```
 
-Das Skript sucht die Fensterdateien selbst (`grep -lE "MainWindow|Viewport|pyvista"`),
-eine neue braucht also keinen Eintrag. Es liegt unter `.claude/.state/` und ist
+Das Skript sucht die Fensterdateien selbst (`tools/list_windowed_tests.py` liest
+den Fixture-Graphen: jede Datei mit einem `qt_app`-Test), eine neue braucht
+also keinen Eintrag. Es liegt unter `.claude/.state/` und ist
 seit dem 22.08.2026 eingecheckt — vorher schloss `.gitignore` den ganzen Ordner
 aus, und ein frischer Klon hatte damit den einzigen Weg nicht, auf dem das Tor
 durchläuft.
@@ -140,10 +141,10 @@ Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in 
   (3d-druck-11, eigener Arbeitsbaum auf `8cf774c7`), und **dreimal von dreimal
   auf reinem HEAD ohne jede fremde Änderung im Baum** (3d-druck-f9). Der
   dritte Beleg ist der stärkste: Er schließt uns als Ursache aus.
-- **„Keine Tests gesammelt" ist kein Fehllauf.** Das Skript sucht seine
-  Fensterdateien im *Text* (`grep -lE "MainWindow|Viewport|pyvista"`), damit eine
-  neue keinen Eintrag braucht. Es erwischt damit auch eine Datei, die über eine
-  Ansicht **schreibt**, statt eine zu bauen: `tests/test_performance.py` landete
+- **„Keine Tests gesammelt" ist kein Fehllauf.** Das Skript suchte seine
+  Fensterdateien bis Version 0.3.0 im *Text* (`grep -lE "MainWindow|Viewport|pyvista"`),
+  damit eine neue keinen Eintrag braucht, und erwischte damit auch eine Datei,
+  die über eine Ansicht **schreibt**, statt eine zu bauen: `tests/test_performance.py` landete
   wegen zweier Docstrings in der Fenstergruppe, lief dort mit
   `-m "not performance"`, sammelte nichts und endete mit **Exit 5**. Das Skript
   wertet das nicht mehr als Fehllauf — wer einen eigenen Lauf baut, sollte es

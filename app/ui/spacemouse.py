@@ -889,8 +889,8 @@ class SpaceMouseController(QObject):
 
     def advance(self, dt: float) -> bool:
         """Einen Schritt fahren; wahr, wenn sich die Kamera bewegt hat."""
-        plotter = getattr(self._viewport, "plotter", None)
-        if plotter is None or not self._motion.active() or not self._settings.spacemouse_enabled:
+        renderer = getattr(self._viewport, "renderer", None)
+        if renderer is None or not self._motion.active() or not self._settings.spacemouse_enabled:
             return False
         pose = CameraPose(*self._viewport.camera_pose())
         moved = camera_step(

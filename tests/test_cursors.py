@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from app.ui import cursors
 from app.ui.theme import THEMES
+from tests.render_fakes import RecordingRenderer
 
 
 def test_every_role_yields_a_cursor(qt_app: QApplication) -> None:
@@ -346,7 +347,7 @@ def test_a_drag_stops_the_hover_search(qt_app: QApplication) -> None:
 def test_the_cursor_actually_reaches_the_interactor(qt_app: QApplication) -> None:
     """Der Test, ohne den alle anderen nichts wert wären.
 
-    Offscreen ist ``plotter`` None, und jeder Pfad, der den Zeiger setzt, steigt
+    Offscreen ist ``renderer`` None, und jeder Pfad, der den Zeiger setzt, steigt
     vorher aus — die Rollenlogik könnte also vollständig stimmen, während im
     Fenster nie ein Zeiger ankommt. Eine Attrappe mit genau der einen Methode,
     die benutzt wird, schließt die Lücke ohne OpenGL.
@@ -363,21 +364,18 @@ def test_the_cursor_actually_reaches_the_interactor(qt_app: QApplication) -> Non
         def height(self) -> int:
             return 480
 
-    class FakePlotter:
-        def __init__(self) -> None:
-            self.interactor = FakeInteractor()
-
     viewport = Viewport()
-    plotter = FakePlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    renderer.widget = FakeInteractor()
+    viewport.renderer = renderer
 
     viewport.set_sculpting(True)
-    assert plotter.interactor.cursors, "der Pinselzeiger kam nie am Fenster an"
+    assert renderer.widget.cursors, "der Pinselzeiger kam nie am Fenster an"
     assert viewport._cursor_role == "sculpt"
 
-    before = len(plotter.interactor.cursors)
+    before = len(renderer.widget.cursors)
     viewport.set_drag_cursor("rotate")
-    assert len(plotter.interactor.cursors) == before + 1
+    assert len(renderer.widget.cursors) == before + 1
 
 
 def test_the_same_role_twice_does_not_set_it_twice(qt_app: QApplication) -> None:
@@ -395,17 +393,15 @@ def test_the_same_role_twice_does_not_set_it_twice(qt_app: QApplication) -> None
         def height(self) -> int:
             return 480
 
-    class FakePlotter:
-        def __init__(self) -> None:
-            self.interactor = FakeInteractor()
-
     viewport = Viewport()
-    viewport.plotter = FakePlotter()
+    renderer = RecordingRenderer()
+    renderer.widget = FakeInteractor()
+    viewport.renderer = renderer
 
     viewport.set_drag_cursor("rotate")
     viewport.set_drag_cursor("rotate")
     viewport.set_drag_cursor("rotate")
-    assert viewport.plotter.interactor.count == 1
+    assert renderer.widget.count == 1
 
 
 def test_the_panels_get_the_same_pointer_as_the_view(qt_app: QApplication) -> None:
@@ -442,15 +438,17 @@ def _role_literals() -> dict[str, list[str]]:
     Gesammelt wird über den Syntaxbaum, nicht über eine Textsuche: „section"
     kommt im Quelltext dutzendfach als Werkzeugname vor und nie als
     Zeigerrolle — eine Textsuche zählte das Falsche. Rollen fließen auf drei
-    Wegen: als erstes Argument von ``set_drag_cursor``/``cursor``/``_tell``
-    und als Return-Literal in ``_resting_role``.
+    Wegen: als erstes Argument von ``set_drag_cursor``/``cursor``/``on_cursor``
+    und als Return-Literal in ``_resting_role``. Die Kameraführung setzt ihre
+    vier Rollen im Navigator unter ``app/ui/render/``, deshalb liest die Suche
+    das Verzeichnis samt Unterordnern.
     """
     import ast
     from pathlib import Path
 
     found: dict[str, list[str]] = {}
-    calls = {"set_drag_cursor", "cursor", "_tell"}
-    for path in sorted((Path(__file__).parent.parent / "app" / "ui").glob("*.py")):
+    calls = {"set_drag_cursor", "cursor", "on_cursor"}
+    for path in sorted((Path(__file__).parent.parent / "app" / "ui").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):

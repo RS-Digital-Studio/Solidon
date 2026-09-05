@@ -487,3 +487,31 @@ def test_a_scheme_switch_takes_effect_on_the_next_press(
     navigator.handle(release(240, 150))
     assert renderer.pose.position != (0.0, -100.0, 0.0), "im Orbit-Schema dreht links"
     assert ("rotate_start",) in log.calls
+
+
+def test_a_wobbly_click_stays_a_click(scene: tuple[_FlatRenderer, _Log]) -> None:
+    """Fünf Bildpunkte Wandern beim Klicken bleiben ein Klick — sonst rutscht
+    der Körper bei jedem Klick ein Stück (Robert, 23.08.2026)."""
+    renderer, _quiet = scene
+    log = _Log(body=True)
+    navigator = Navigator(renderer, "solidon", log.callbacks())
+    navigator.handle(press(100, 200))
+    navigator.handle(move(104, 203))
+    navigator.handle(release(104, 203))
+    assert ("pick", 104, 203) in log.calls, "ein leicht wackliger Klick wählt weiterhin aus"
+    phases = [call[1] for call in log.calls if call[0] == "body"]
+    assert "start" not in phases, f"aus dem Wackeln wurde ein Zug: {log.calls}"
+
+
+def test_where_nothing_is_chosen_the_camera_keeps_the_button(
+    scene: tuple[_FlatRenderer, _Log],
+) -> None:
+    """Liegt unter dem Zeiger nichts Gewähltes, bleibt die linke Taste, was
+    sie im Schema war — kein ``move`` erreicht den Körperzug."""
+    renderer, log = scene
+    navigator = Navigator(renderer, "solidon", log.callbacks())
+    navigator.handle(press(100, 200))
+    navigator.handle(move(160, 250))
+    navigator.handle(release(160, 250))
+    phases = [call[1] for call in log.calls if call[0] == "body"]
+    assert phases == ["ready"], f"nach einem abgelehnten Zug darf kein move kommen: {phases}"

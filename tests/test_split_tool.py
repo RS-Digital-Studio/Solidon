@@ -24,6 +24,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.split_bar import POINTS_NEEDED, SplitBar, state_text
+from tests.render_fakes import RecordingRenderer
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -180,41 +181,19 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
     """
     from app.ui.viewport import Viewport
 
-    class FakePlotter:
-        def __init__(self) -> None:
-            self.points: list[object] = []
-            self.lines: list[object] = []
-            self.meshes: list[object] = []
-            self.removed: list[object] = []
-            # Der Zeiger hängt am selben Plotter; ohne ihn scheitert der Test
-            # an einer Stelle, um die es nicht geht.
-            self.interactor = FakeInteractor()
-
-        def add_points(self, marks: object, **_values: object) -> str:
-            self.points.append(marks)
-            return f"points:{len(self.points)}"
-
-        def add_lines(self, marks: object, **_values: object) -> str:
-            self.lines.append(marks)
-            return f"lines:{len(self.lines)}"
-
-        def add_mesh(self, mesh: object, **_values: object) -> str:
-            self.meshes.append(mesh)
-            return f"mesh:{len(self.meshes)}"
-
-        def remove_actor(self, actor: object, **_values: object) -> None:
-            self.removed.append(actor)
-
-        def render(self) -> None:
-            pass
+    def kinds() -> list[str]:
+        return [kind for kind, _kwargs in renderer.drawn]
 
     viewport = Viewport()
-    plotter = FakePlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    # Der Zeiger hängt am selben Renderer; ohne ihn scheitert der Test an
+    # einer Stelle, um die es nicht geht.
+    renderer.widget = FakeInteractor()
+    viewport.renderer = renderer
 
     viewport.show_split_line([(0.0, 0.0, 0.0)])
-    assert len(plotter.points) == 1, "der erste Punkt bekommt ein Zeichen"
-    assert not plotter.lines, "eine Linie ist er noch nicht"
+    assert kinds().count("points") == 1, "der erste Punkt bekommt ein Zeichen"
+    assert "lines" not in kinds(), "eine Linie ist er noch nicht"
 
     import trimesh
 
@@ -238,56 +217,45 @@ def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
         plane=SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0),
         target="obj_1",
     )
-    assert len(plotter.lines) == 1, "zwei Punkte sind eine Linie"
-    assert len(plotter.meshes) == 1, "die ganze Schnittebene wird als Fläche sichtbar"
-    assert plotter.points[-1][0] == pytest.approx((240.0, 0.0, 0.0))
-    assert plotter.lines[-1][0] == pytest.approx((240.0, 0.0, 0.0))
-    surface = plotter.meshes[0]
-    assert surface.center == pytest.approx((240.0, 0.0, 0.0)), (
+    lines = [kwargs["name"] for kind, kwargs in renderer.drawn if kind == "lines"]
+    assert lines == ["split:line", "split:rim"], (
+        "zwei Punkte sind eine Linie, die Ebene hat einen Rand"
+    )
+    assert len(renderer.meshes) == 1, "die ganze Schnittebene wird als Fläche sichtbar"
+    assert renderer.item_of("split:ends").points[0] == pytest.approx((240.0, 0.0, 0.0))
+    assert renderer.item_of("split:line").points[0] == pytest.approx((240.0, 0.0, 0.0))
+    vertices, _faces = renderer.meshes[0]
+    assert vertices.mean(axis=0) == pytest.approx((240.0, 0.0, 0.0)), (
         "auf Platte 2 liegen Linie und Ebene am angeklickten Körper"
     )
-    assert surface.bounds[1] - surface.bounds[0] > 20.0
-    assert surface.bounds[3] - surface.bounds[2] > 20.0, (
+    assert vertices[:, 0].max() - vertices[:, 0].min() > 20.0
+    assert vertices[:, 1].max() - vertices[:, 1].min() > 20.0, (
         "der Rand der Ebene steht über den undurchsichtigen Körper hinaus"
     )
 
     # Gezählt wird der Zuwachs, nicht der Bestand: Das Neuzeichnen räumt selbst
     # auf, der erste Punkt ist also längst wieder heraus.
-    before = len(plotter.removed)
+    before = len(renderer.removed)
     viewport.clear_split_line()
-    assert len(plotter.removed) - before == 3, "Zeichen, Linie und Fläche gehen wieder heraus"
+    assert len(renderer.removed) - before == 4, (
+        "Zeichen, Linie, Fläche und ihr Rand gehen wieder heraus"
+    )
 
 
 def test_leaving_the_tool_takes_the_line_out_of_the_view(qt_app: QApplication) -> None:
     """Regel 2: Was das Fenster währenddessen zeigt, ist eine Vorschau."""
     from app.ui.viewport import Viewport
 
-    class FakePlotter:
-        def __init__(self) -> None:
-            self.removed: list[object] = []
-            self.interactor = FakeInteractor()
-
-        def add_points(self, _marks: object, **_values: object) -> str:
-            return "points"
-
-        def add_lines(self, _marks: object, **_values: object) -> str:
-            return "lines"
-
-        def remove_actor(self, actor: object, **_values: object) -> None:
-            self.removed.append(actor)
-
-        def render(self) -> None:
-            pass
-
     viewport = Viewport()
-    plotter = FakePlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    renderer.widget = FakeInteractor()
+    viewport.renderer = renderer
     viewport.set_splitting(True)
     viewport.show_split_line([(0.0, 0.0, 0.0), (10.0, 0.0, 0.0)])
 
     viewport.set_splitting(False)
 
-    assert plotter.removed, "der Strich blieb stehen, nachdem das Werkzeug zu war"
+    assert renderer.removed, "der Strich blieb stehen, nachdem das Werkzeug zu war"
 
 
 # --- das Werkzeug im Fenster ----------------------------------------------------------

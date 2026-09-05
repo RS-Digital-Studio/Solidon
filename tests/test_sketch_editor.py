@@ -37,6 +37,7 @@ from app.ui.sketch_editor import (
     _constraint_label,
 )
 from app.ui.viewport import FIT_ROOM, camera_for_span
+from tests.render_fakes import RecordingRenderer
 
 
 def test_a_drawn_line_becomes_determined_by_constraints(qt_app: QApplication) -> None:
@@ -3010,36 +3011,27 @@ def test_switching_to_parallel_keeps_the_section_instead_of_jumping_to_two_milli
 
     from app.ui.viewport import Viewport
 
-    class _Camera:
-        parallel_projection = True
-        parallel_scale = 1.0
-        view_angle = 30.0
-
-    camera = _Camera()
-
-    class _Plotter:
-        pass
-
-    plotter = _Plotter()
-    plotter.camera = camera  # type: ignore[attr-defined]
+    renderer = RecordingRenderer()
+    renderer.parallel = True
+    renderer.scale_value = 1.0
 
     viewport = Viewport()
-    viewport.plotter = plotter  # type: ignore[assignment]
+    viewport.renderer = renderer
 
     viewport._fit_parallel_scale(200.0)
     erwartet = 200.0 * math.tan(math.radians(30.0) / 2.0)
-    assert camera.parallel_scale == pytest.approx(erwartet)
-    assert camera.parallel_scale == pytest.approx(53.59, abs=0.01), (
+    assert renderer.scale_value == pytest.approx(erwartet)
+    assert renderer.scale_value == pytest.approx(53.59, abs=0.01), (
         "gut hundert Millimeter sichtbare Höhe und nicht zwei"
     )
 
     # Steht die Kamera perspektivisch, wird nichts angefasst: dort ist
     # ``parallel_scale`` bedeutungslos, und ein Wert darin wäre eine Falle für
     # den nächsten, der umschaltet.
-    camera.parallel_projection = False
-    camera.parallel_scale = 7.0
+    renderer.parallel = False
+    renderer.scale_value = 7.0
     viewport._fit_parallel_scale(200.0)
-    assert camera.parallel_scale == pytest.approx(7.0)
+    assert renderer.scale_value == pytest.approx(7.0)
 
 
 def test_the_measure_field_moves_to_the_viewport_and_back(qt_app: QApplication) -> None:
@@ -3137,10 +3129,9 @@ def test_the_viewport_routes_digits_to_the_lent_measure_field(qt_app: QApplicati
         class _Interactor:
             pass
 
-        class _Plotter:
-            interactor = _Interactor()
-
-        viewport.plotter = _Plotter()
+        renderer = RecordingRenderer()
+        renderer.widget = _Interactor()
+        viewport.renderer = renderer
         viewport._sketch_frame = object()
         begun: list[str] = []
         viewport.set_sketch_entry(lambda: 12.0, lambda event: begun.append(event.text()) or True)
@@ -3148,16 +3139,16 @@ def test_the_viewport_routes_digits_to_the_lent_measure_field(qt_app: QApplicati
         override = QKeyEvent(
             QEvent.Type.ShortcutOverride, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2"
         )
-        assert viewport.eventFilter(_Plotter.interactor, override)
+        assert viewport.eventFilter(renderer.widget, override)
         assert override.isAccepted(), "die Ziffer gehört dem Maß, nicht der Ebene"
 
         press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2")
-        assert viewport.eventFilter(_Plotter.interactor, press)
+        assert viewport.eventFilter(renderer.widget, press)
         assert begun == ["2"], "der Tastendruck erreicht den Canvas"
 
         viewport.set_sketch_entry(None, None)
         press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2")
-        assert not viewport.eventFilter(_Plotter.interactor, press), (
+        assert not viewport.eventFilter(renderer.widget, press), (
             "abgeklemmt läuft nichts mehr in ein totes Panel"
         )
     finally:
@@ -3774,7 +3765,7 @@ def test_a_pointer_step_that_changes_nothing_does_not_redraw(qt_app: QApplicatio
     viewport = Viewport()
     try:
         viewport._sketch_frame = frame
-        viewport.plotter = _StillPlotter()  # type: ignore[assignment]
+        viewport.renderer = RecordingRenderer()
         # Der Maßstab kommt aus dem Renderer, den es offscreen nicht gibt —
         # geprüft wird hier die Sparsamkeit und nicht seine Messung.
         viewport.pixels_per_mm = lambda _frame: 10.0  # type: ignore[method-assign]
@@ -3800,22 +3791,8 @@ def test_a_pointer_step_that_changes_nothing_does_not_redraw(qt_app: QApplicatio
         viewport.show_sketch_cursor((12.0, 10.0))
         assert len(gezeichnet) > erste, "ein echter Sprung muss zeichnen"
     finally:
-        viewport.plotter = None  # type: ignore[assignment]
+        viewport.renderer = None
         viewport.deleteLater()
-
-
-class _StillPlotter:
-    """Gerade so viel Plotter, wie die Fangmarke anfasst.
-
-    Offscreen gibt es keinen, und was hinter dieser Wache liegt, prüft sonst
-    niemand — dieselbe Bauart wie die Attrappe in ``tests/test_cursors.py``.
-    """
-
-    def add_mesh(self, mesh: object, **_: object) -> object:
-        return mesh
-
-    def remove_actor(self, actor: object, **_: object) -> None:
-        return None
 
 
 def test_fitting_the_view_says_what_it_fitted(qt_app: QApplication) -> None:
@@ -5761,8 +5738,8 @@ def test_enter_and_double_click_close_a_spline_in_the_viewport(qt_app: QApplicat
         canvas = panel.canvas
         canvas.set_tool("spline")
 
-        plotter = getattr(window.viewport, "plotter", None)
-        ziel = getattr(plotter, "interactor", None) if plotter is not None else None
+        renderer = getattr(window.viewport, "renderer", None)
+        ziel = getattr(renderer, "widget", None) if renderer is not None else None
 
         def _drei_punkte(versatz: float) -> None:
             for punkt in ((0.0, versatz), (10.0, versatz + 5.0), (20.0, versatz)):

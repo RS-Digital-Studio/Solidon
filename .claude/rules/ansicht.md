@@ -201,7 +201,7 @@ Was ein Weltmaß zeigt, gehört als Ring in die Szene.
 
 **Gesetzt wird an einer Stelle**, `Viewport._update_cursor`. Alle Auslöser
 melden nur ihren Zustand: `set_painting`, `set_measure_mode`,
-`set_drag_cursor` (vom Interaktionsstil) und die Mausbewegung im
+`set_drag_cursor` (vom Navigator über `on_cursor`) und die Mausbewegung im
 `eventFilter`. Verteilt auf die Aufrufer wäre jeder Pfad für sich richtig und
 das Ergebnis trotzdem falsch — wer beim Loslassen den Auswahlzeiger setzt,
 überschreibt damit den Pinsel. Die Rangfolge in `_resting_role` ist dieselbe
@@ -210,25 +210,31 @@ anderes, als der Klick tut.
 
 Drei Fallen an dieser Kette, alle drei schon zugeschnappt:
 
-* **`setMouseTracking(True)`** auf dem Interactor, sonst kommt eine Bewegung
-  erst mit gedrückter Taste — der Zeiger wüsste nie, worüber er schwebt.
-* **VTK zählt Y von unten, Qt von oben.** Ohne die Umrechnung in
-  `_note_pointer` sucht das Hover-Picking am gespiegelten Ort, was in der
+* **`setMouseTracking(True)`** auf dem Widget des Renderers, sonst kommt eine
+  Bewegung erst mit gedrückter Taste — der Zeiger wüsste nie, worüber er
+  schwebt.
+* **Der Vertrag zählt Bildpunkte wie Qt** — von oben links, in Gerätepixeln.
+  VTK zählt Y von unten, und diese Umrechnung liegt **einmal** im Renderer
+  (`VtkRenderer._flip`), nicht an den Zeichenstellen. Bis zum 05.09.2026
+  spiegelte `_note_pointer` selbst; wer das heute noch einmal tut, spiegelt
+  doppelt, und das Hover-Picking sucht am gespiegelten Ort — was in der
   Bildmitte oft genug stimmt, um lange nicht aufzufallen.
-* **Der Rückruf aus dem Interaktionsstil geht über `weakref`**, wie
-  `on_context` und `on_pick` daneben (alle fünf in `_weak_callbacks`). Eine
-  starke Referenz baut die Schleife Stil → Viewport → Plotter → Interactor →
-  Stil, und die ist der Absturz ohne Zeile am Ende eines Laufs. Das ist **ein**
-  Fall der allgemeinen Regel und nicht der einzige — sie steht oben unter „Ein
-  Rückruf an ein eigenes Kind hält schwach", samt der Messung, die zeigt, dass
-  ein Zeitgeber dasselbe anrichtet.
+* **Die Rückrufe des Navigators gehen über `weakref`** — `on_cursor` wie
+  `on_context` und `on_pick` daneben (alle in `_weak_callbacks`, gebündelt als
+  `NavigatorCallbacks`), und der Zeiger-Zuhörer am Renderer (`_listen_to`)
+  ebenso. Eine starke Referenz baut die Schleife Navigator → Viewport →
+  Renderer → Zuhörer → Viewport, und die ist der Absturz ohne Zeile am Ende
+  eines Laufs. Das ist **ein** Fall der allgemeinen Regel und nicht der
+  einzige — sie steht oben unter „Ein Rückruf an ein eigenes Kind hält
+  schwach", samt der Messung, die zeigt, dass ein Zeitgeber dasselbe anrichtet.
 
 **Gesucht wird erst, wenn die Maus steht** (`HOVER_DELAY_MS`, einmaliger
 Timer). Bei jeder Bewegung zu picken hieße, den Tiefenpuffer hunderte Male in
 der Sekunde im Qt-Hauptthread zu lesen. Ein Zug an der Kamera stoppt die Suche
 ganz — wer dreht, will nicht wissen, was unter dem Zeiger liegt.
 
-**Offscreen gibt es keinen Plotter**, und jeder Setzpfad steigt vorher aus: Ein
+**Offscreen gibt es keinen Renderer** (`_available()` meldet sich ab, und
+`Viewport.renderer` bleibt `None`), und jeder Setzpfad steigt vorher aus: Ein
 Test, der nur `_cursor_role` prüft, wäre auch dann grün, wenn im Fenster nie
 ein Zeiger ankommt. `tests/test_cursors.py` hält deshalb eine Attrappe mit
 genau der einen Methode, die benutzt wird.
@@ -478,7 +484,7 @@ wäre wieder das, was die Stichprobe gerade vermeidet.
 Bohrung wählt zweierlei aus, den Körper und die Stelle; gefärbt wird die Stelle.
 `highlighted_object()` gibt `None` zurück, solange ein Merkmal gewählt ist, und
 `highlighted_faces()` nennt dessen Dreiecke — beide als eigene Auskunft, weil es
-offscreen keinen Plotter gibt. Dass der Körper trotzdem ausgewählt ist, steht im
+offscreen keinen Renderer gibt. Dass der Körper trotzdem ausgewählt ist, steht im
 Objektbaum und in der Statusleiste; dieselbe Ausnahme gilt für einen Körper unter
 einer Analysekarte (§19.1). Das gewählte Merkmal trägt seine Beschriftung auch
 bei ausgeschalteter Überlagerung — ohne sie wäre die Aussage allein die Farbe
@@ -521,7 +527,7 @@ Umgebungsverdeckung und Kontaktschatten weichen, solange eine Analysekarte
 läuft: beide dunkeln nach, und die Karte färbt nach Zahlen — der abgelesene
 Wert wäre ein anderer als der gemeldete. Beide hängen deshalb an einer
 Eigenschaft (`ambient_occlusion`, `contact_shadows`) und nicht am Zustand des
-Plotters: offscreen gibt es keinen, und ein Test, der sich dort überspringt,
+Renderers: offscreen gibt es keinen, und ein Test, der sich dort überspringt,
 prüft nie etwas.
 
 Der Kontaktschatten ist **selbst projiziert**, nicht `enable_shadows`: VTKs
@@ -529,15 +535,18 @@ Schattenwurf verschattet ganze Seitenflächen schwarz und lässt die Ränder der
 Platte auslaufen. Geworfen wird schräg — senkrecht projiziert liegt der
 Schatten unter dem Körper und ist von ihm verdeckt.
 
-**Der Schatten folgt der Kamera, weil das Licht es tut.** pyvistas Lichtsatz
-hängt an der Kamera: ein Körper ist in jeder Ansicht von vorn beleuchtet. Eine
+**Der Schatten folgt der Kamera, weil das Licht es tut.** Das Frontlicht des
+Renderers hängt an der Kamera: ein Körper ist in jeder Ansicht von vorn beleuchtet. Eine
 feste Weltrichtung für den Schatten passt deshalb zu *keinem* Blickwinkel —
 sie stand hier, mit einer Begründung, die auf eine Standardansicht verwies, die
 es so nicht gab. `shadow_direction` leitet sie aus der Kamerastellung ab,
-`_redraw_shadows` zieht sie bei jedem Ansichtswechsel nach. Der Beobachter
-hängt am **Interactor** (`EndInteractionEvent`) und nicht am Interaktionsstil:
-den tauscht jeder Schemawechsel aus, und der Orientierungswürfel dreht an ihm
-vorbei.
+`_redraw_shadows` zieht sie bei jedem Ansichtswechsel nach — am Ende jeder
+Kamerageste (`on_end` des Navigators), nach jedem Schritt der 3D-Maus und
+nach jeder Kameravorgabe, nicht an einem VTK-Ereignis. Bis zum 05.09.2026
+hing dafür ein Beobachter am `EndInteractionEvent` des Interactors, weil der
+Orientierungswürfel am Interaktionsstil vorbei drehte; das Achsenkreuz des
+eigenen Renderers ist Anzeige und kein Griff (`set_axes_marker`), und niemand
+bewegt die Kamera mehr an der Ansicht vorbei.
 
 ### Zwei Werte hängen am Thema, und beide aus demselben Grund
 
@@ -577,7 +586,7 @@ Richtung der Werte, dass `set_theme` sie setzt, und dass das Zeichnen sie
 liest.
 
 **Die Anwendung setzt ihre Startkamera selbst.** Ohne `view_from("iso")` beim
-Aufbau erbt sie pyvistas Stellung über (1, 1, 1), und die eigene Vorgabe aus
+Aufbau erbt sie die Startstellung des Renderers, und die eigene Vorgabe aus
 `VIEW_DIRECTIONS` sieht nur, wer „Isometrisch" im Menü wählt — ein Sprung aus
 einer Ansicht in eine andere, die man zu sehen glaubte.
 
@@ -598,18 +607,23 @@ schneiden. **Und sie gehört der Platte des Körpers**, nicht der ersten
 eines Körpers auf Platte 2 eine Bettbreite weiter, und am Umriss von Platte 1
 geschnitten wäre sein Schatten restlos weg.
 
-## Was VTK beschriftet, ist ASCII — und sonst nichts
+## Was am Griff steht, ist ASCII — und sonst nichts
 
-Die Griffbeschriftung ist ein `vtkStringArray`. pyvista lehnt darin jedes
-Zeichen außerhalb von ASCII ab, und zwar nicht mit einer Warnung:
+Die Griffbeschriftung war ein `vtkStringArray` in PyVistas Hand, und PyVista
+lehnte darin jedes Zeichen außerhalb von ASCII ab, und zwar nicht mit einer
+Warnung:
 
 ```
 ValueError: String array contains non-ASCII characters that are not supported by VTK
 ```
 
-Der ganze Griffaufbau stürzt damit ab. **Das ist der eine Ort in der
-Oberfläche, an den ein übersetzter Text nicht darf** — überall sonst zeichnet
-Qt, und Qt kann jede Sprache.
+Der ganze Griffaufbau stürzte damit ab. Der eigene Renderer schreibt das Feld
+seit dem 05.09.2026 selbst, und VTK nimmt darin UTF-8 an — gemessen ohne
+Fenster mit `add_labels` und „Côté supérieure", „↕ Größe": ein Bild, keine
+Ausnahme. **Die Regel bleibt trotzdem**, denn ihr zweiter Grund steht noch:
+Der Griff ist der eine Ort in der Oberfläche, an den ein übersetzter Text nicht
+gehört — überall sonst zeichnet Qt, und ein Wort am Griff stünde in sechs
+Sprachen an einer Stelle, die keine Prüfung sieht.
 
 **Der Fall wäre auf Deutsch nie aufgefallen.** Deutsch ist „Oberseite",
 „Unterseite", „Vorderseite" — alles ASCII. Französisch nicht: `Face
@@ -627,35 +641,33 @@ und zwar mit genau diesen vier französischen Namen als Eingabe. Ein Absatz
 hier wird gelesen, wenn jemand ihn sucht; der Test wird rot, wenn jemand es
 wieder tut.
 
-## Der Bewegen-Griff gehorchte niemandem (03.09.2026)
+## Der Bewegen-Griff ist eigener Code, kein fremdes Widget (05.09.2026)
 
-Zwei Fehler, die einander verdeckten, und aus jedem eine Regel
-(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026):
+Bis zum 05.09.2026 war der Griff PyVistas `AffineWidget3D`, und er hatte zwei
+Fehler übereinander, die einander verdeckten (Vorfall: ROADMAP-ARCHIV.md,
+04.09.2026): Das Widget suchte seinen Renderer über den Interaktionsstil
+(`_parent`), den Solidons eigener Stil nicht hatte — jede Mausbewegung über
+dem Griff endete in einem `AttributeError`, den pyvistaqt zu einer Warnung
+machte, die niemand sieht. Und sein `vtkHardwarePicker` traf in dieser
+Umgebung nichts, nicht einmal den Körper in der Bildmitte. **Der Griff war
+nicht greifbar**; was weiter ging, war die eigene Zuggeste am Körper.
 
-**pyvistas Widget sucht seinen Renderer über den Interaktionsstil.**
-`AffineWidget3D._move_callback` beginnt mit
-`interactor.GetInteractorStyle()._parent()._plotter…`, und Solidon setzt für
-seine fünf Navigationsschemata einen eigenen Stil. Der hat kein `_parent`:
-Jede Mausbewegung über dem Griff endete in `AttributeError: 'Style' object has
-no attribute '_parent'`, den pyvistaqt zu einer Warnung macht, die niemand
-sieht. Derselbe Rückruf setzt `_selected_actor`, und ohne den tut
-`_press_callback` nichts — **der Griff war nicht greifbar**; was weiter ging,
-war unsere eigene Zuggeste am Körper.
+Beides ist mit dem Widget verschwunden. `app/ui/render/gizmo.py` zeichnet
+Pfeile, Ringe und Würfel über den Vertrag, pickt über `pick_item` und
+bekommt die Zeigerereignisse **vor** dem Navigator (`Viewport._on_pointer`).
+Was davon bleibt, sind zwei Regeln:
 
-Dass pyvista diesen Weg geht, stand seit je im Docstring von
-`_InteractorStyle` — für `enable_point_picking`, das deshalb selbst gebaut
-ist. Der Griff bekommt sein `_parent` (ein `weakref` auf `plotter.iren`).
-
-**Und der Picker des Widgets trifft in dieser Umgebung nichts.** Es stellt
-sich beim Anhängen selbst einen `vtkHardwarePicker` hin (`enable_mesh_picking
-(picker='hardware')`), und der findet nicht einmal den Körper in der Bildmitte,
-während ein `vtkCellPicker` an derselben Stelle antwortet; `vtkPropPicker`
-ebenso wenig — beide gehen über die Hardware. Ohne
-Treffer kein `_selected_actor`, also derselbe tote Griff eine Ebene tiefer.
-`_give_the_widget_a_picker_that_hits` setzt deshalb einen Zell-Picker, **nach**
-dem Anhängen (vorher wäre er in derselben Zeile wieder weg) und an **beiden**
-Objekten: `plotter.interactor` ist das Qt-Widget, `plotter.iren.interactor` der
-VTK-Interactor, und der Rückruf fragt den zweiten.
+* **Der Griff pickt über den Vertrag, nie mit einem eigenen Picker.**
+  `pick_item` fragt in zwei Stufen — erst, was vor dem Material liegt
+  (`keep_in_front`), dann alles andere — mit einer Toleranz in Bildpunkten
+  (`PICK_SLACK_PIXELS`). Ein Griff, der seinen eigenen Picker mitbringt,
+  trifft auf der einen Maschine und auf der anderen nicht.
+* **Was der Griff zeigt, solange gezogen wird, ist Vorschau** (Regel 2):
+  `set_matrix` am Element des Körpers, und beim Loslassen wird die Matrix zu
+  Operationen (`_on_gizmo_released`) — oder zu nichts, wenn der Zug unter der
+  Fangschwelle blieb. Deshalb wird der Griff nach jedem Zug **frisch gebaut**:
+  Er rechnet gegen die Matrix, mit der er anfing, und ein stehen gelassener
+  Griff hinge nach der Auswertung an einem Element, das nicht mehr im Bild ist.
 
 ### Frei drehen, aber 45 Grad treffen
 
@@ -668,15 +680,16 @@ aber kurzes einrasten bei allen 45 grad winkeln außer man dreht weiter."
 fragt es über `_settled_angle` — hat die Leiste einen Winkelfang eingestellt,
 gilt der hart, sonst der Magnet (`TURN_MAGNET_STEP` 45°, `TURN_MAGNET_ZONE` 4°).
 
-**Sichtbar wird das über einen eigenen Beobachter**, nicht über den Rückruf des
-Widgets: Das ruft seinen `interact_callback` **vor** dem Setzen der neuen
-Matrix und übergibt ihm die alte — was dort gesetzt würde, wäre in derselben
-Zeile wieder weg. `_magnetise_turn` hängt an `MouseMoveEvent`, läuft danach und
-dreht um die Differenz zurück (`rotation_about` im Kern, denn die Ansicht
-rechnet keine Geometrie). Die Rechnung des Widgets bleibt unberührt: Sie geht
-jedes Mal von `_cached_matrix` und der Zeigerstelle aus, nicht vom letzten
-Ergebnis. Der Beobachter lebt genau so lange wie der Griff
-(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+**Sichtbar wird das über den `interact_callback` des Griffs**: Er bekommt
+jeden Zwischenstand und darf eine berichtigte Matrix zurückgeben, und die
+wird gesetzt, nicht die rohe (`_on_gizmo_interacted`, gedreht über
+`rotation_about` im Kern, denn die Ansicht rechnet keine Geometrie). Die
+Rechnung des Griffs bleibt unberührt: Sie geht jedes Mal von der Matrix beim
+Greifen und der Zeigerstelle aus, nicht vom letzten Ergebnis. PyVistas Widget
+rief seinen Rückruf **vor** dem Setzen und übergab die alte Matrix; dafür
+brauchte es einen eigenen Beobachter am `MouseMoveEvent` (`_magnetise_turn`),
+und den gibt es nicht mehr (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Geprüft
+in `tests/test_transform_ui.py::test_the_magnet_corrects_the_turn_while_it_runs`.
 
 ## Was die Ansicht sich merkt — und was VTK nicht annimmt (03.09.2026)
 
@@ -692,19 +705,20 @@ des Nutzers, also wird sie nicht gespeichert.
 
 ### Durchsichtige Körper werden von hinten nach vorn gezeichnet
 
-Der Fund kam aus dem Quelltext (3d-druck-85): `enable_depth_peeling` gibt es
-im Viewport nicht, also mischt VTK halbdurchsichtige Flächen in der
+Der Fund kam aus dem Quelltext (3d-druck-85): Tiefenschälung (Depth Peeling)
+gibt es im Viewport nicht, also mischt VTK halbdurchsichtige Flächen in der
 Reihenfolge, in der die Aktoren angelegt wurden.
 
 **Und zweimal gemessen nicht behebbar** — jedenfalls nicht auf diesem Weg:
-`enable_depth_peeling()` beim Umschalten in den Modus wie auch **vor** dem
-ersten Bild, mit acht Schichten und `occlusion_ratio=0`, ergibt
-`UseDepthPeeling=1`, `LastRenderingUsedDepthPeeling=0` und ein unverändertes
-Bild. Die Voraussetzungen stimmen dabei (`MultiSamples=0`, `AlphaBitPlanes=1`), und
-`enable_depth_peeling` gibt `True` zurück — VTK nimmt die Sortierung an und
-fährt sie trotzdem nicht. Der Aufruf ist deshalb **nicht** eingebaut: Ein
-Aufruf, der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas
-bewirkt (dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
+Depth Peeling beim Umschalten in den Modus wie auch **vor** dem ersten Bild,
+mit acht Schichten und `occlusion_ratio=0`, ergibt `UseDepthPeeling=1`,
+`LastRenderingUsedDepthPeeling=0` und ein unverändertes Bild. Die
+Voraussetzungen stimmen dabei (`MultiSamples=0`, `AlphaBitPlanes=1`), und der
+Aufruf meldet Erfolg — VTK nimmt die Sortierung an und fährt sie trotzdem
+nicht (gemessen unter PyVista mit `enable_depth_peeling`; der eigene Renderer
+misst dasselbe VTK). Der Aufruf ist deshalb **nicht** eingebaut: Ein Aufruf,
+der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas bewirkt
+(dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
 Fensterchrom).
 
 **Ein dritter Weg war halb richtig**: `vtkDepthSortPolyData` vor dem Mapper
@@ -729,9 +743,10 @@ Drei Dinge daran sind tragend:
 * **Sie merkt sich, wofür sie geordnet hat** (Kameralage und Körperliste).
   An der Zeichenstelle läuft sie sonst bei jedem Bild, auch mitten in einem
   Zug.
-* **Umgehängt wird auf der VTK-Ebene** (`renderer.RemoveActor`/`AddActor`),
-  nicht über `plotter.remove_actor`: Jenes nähme die Aktoren aus pyvistas
-  Namensverzeichnis, und das braucht sie unter ihren Namen weiter.
+* **Umgehängt wird über den Vertrag** (`set_draw_order`), und der
+  VTK-Renderer setzt die Prop-Reihenfolge um, ohne ein Element aufzugeben:
+  Die Elemente bleiben, was sie sind — mit Namen, Sichtbarkeit und Matrix.
+  Ein Weg über Entfernen und Neuanlegen verlöre all das.
 
 ### Die Druckplatte scheint durch, wenn etwas darunter liegt
 
@@ -801,12 +816,13 @@ gerahmt, *weil* die Szene entwachsen ist — ein neuer 400er Körper
 neben einem Zwei-Millimeter-Teil, die Kamera in seinem Inneren. Ein Rahmen um
 den kleinen Ausgewählten beantwortete genau das nicht.
 
-Der Test dazu (`test_fitting_frames_the_chosen_body`) war in seiner ersten
+Der Test dazu (heute `test_fitting_frames_the_bodies_with_air`) war in seiner ersten
 Fassung **grün, als ich die Änderung wieder ausbaute**: Er maß
 `_selected_bounds` und `_fit_once_for`, also die Vorarbeit, und nicht die
-Kamera. Offscreen gibt es keinen Plotter, und `reset_camera` steigt an seiner
-Wache aus, bevor irgendetwas gerahmt wird. Erst eine Attrappe mit genau einer
-Methode (`_FramingPlotter.reset_camera`) hat den Unterschied gemessen.
+Kamera. Offscreen gibt es keinen Renderer, und `reset_camera` steigt an seiner
+Wache aus, bevor irgendetwas gerahmt wird. Erst eine Attrappe am Vertrag
+(`RecordingRenderer.reset_bounds` in `tests/render_fakes.py`) hat den
+Unterschied gemessen.
 
 ### Die Kantensuche läuft einmal je Netz, nicht einmal je Aufbau
 
@@ -868,7 +884,7 @@ vorbelegtes Feld ließe die Startfarben ungesetzt. Seine Prüfung steht
 nicht, ist jede Zeile darunter Arbeit für dasselbe Bild.
 
 **Der Test dafür misst nicht bei allen dasselbe.** `set_theme` steigt
-offscreen vor `show_scene` aus (`if self.plotter is None`); ein Test über
+offscreen vor `show_scene` aus (`if self.renderer is None`); ein Test über
 den Aufbau-Zähler wäre dort grün, ohne etwas zu sagen. Geprüft
 wird er deshalb an seiner Wirkung (den gesetzten Farben), die anderen sieben am
 Zähler. Gegenprobe: jede der acht Prüfungen **einzeln** ausgebaut,
@@ -891,8 +907,10 @@ genau eines. Drei Dinge hängen daran:
   verteilt: Eine Szene mit einer Platte sieht danach Bild für Bild aus wie
   vorher, und wer eine zweite dazubekommt, sieht sie kommen statt die erste
   wegrutschen zu sehen.
-* **Die Actors tragen die Nummer im Namen.** pyvistas `name=` ersetzt, was
-  denselben Namen hat — mit festen Namen bliebe von vier Betten eines übrig.
+* **Die Elemente tragen die Nummer im Namen.** Der Name ist die Adresse, unter
+  der ein Test (`item_of`) und das Aufräumen ein Element finden — mit festen
+  Namen wären vier Betten nicht auseinanderzuhalten, und unter PyVista, dessen
+  `name=` Gleichnamiges ersetzte, blieb von vieren eines übrig.
 * **Ein Klick muss zurückgerechnet werden** (`plate_at`, `_from_view`, ganz oben
   in `_on_picked`). Was der Nutzer trifft, liegt in der Ansicht; was eine
   Operation als Ort bekommt, muss in der Szene liegen. Ohne die Umkehrung setzte
@@ -944,55 +962,57 @@ Zeichenfläche war ein halber Millimeter fein, weil `MIN_GRID_PX` auf sieben
 stand — ein Wert, der bei kleinem Fenster nie auffiel. Wer eine Ansicht ändert,
 sieht sie bei **beiden** Enden an: der Mindestgröße und dem vollen Bildschirm.
 
-**pyvista-Widgets werden nie weiterbenutzt, immer frisch gebaut.** Das
-`AffineWidget3D` rechnet gegen die `user_matrix` seines Actors und merkt sie
-sich über Züge hinweg — ein stehen gelassener Griff wendet den vorigen Zug
-beim nächsten doppelt an, und nach einer Auswertung hängt er an einem Actor,
-der nicht mehr im Bild ist. Und die API vor dem Aufruf lesen: `Off()` gab es
-dort nie (`remove()`, `disable()`, `enable()` sind die Methoden), der
-AttributeError verschwand in Qts Slot-Behandlung und fiel nirgends auf. Ein
-Fake im Test spiegelt deshalb die **echte** API-Oberfläche, nicht die
-vermutete — ein Fake mit `Off()` hätte den Absturz genau so versteckt wie
-die Suite.
+**Der Griff wird nie weiterbenutzt, immer frisch gebaut.** Er rechnet gegen
+die Matrix seines Ziels beim Greifen und merkt sie sich über den Zug — ein
+stehen gelassener Griff wendete den vorigen Zug beim nächsten doppelt an, und
+nach einer Auswertung hinge er an einem Element, das nicht mehr im Bild ist.
+Das galt für PyVistas Widget und gilt für `gizmo.Gizmo` genauso, weil die
+Rechnung dieselbe ist. Und die Attrappen der Suite (`tests/render_fakes.py`)
+erben vom Vertrag, und der ist abstrakt: Eine Methode, die es dort nicht gibt,
+gibt es auch in der Attrappe nicht. Das ist die Lehre aus dem `Off()`, das es
+an PyVistas Widget nie gab — der `AttributeError` verschwand in Qts
+Slot-Behandlung, und ein Fake mit `Off()` hätte den Absturz genau so versteckt
+wie die Suite.
 
-Zwei Nachbarn derselben Falle: pyvistas Widget schaltet beim Greifen auf
-seinen Trackball-Stil um und stellt beim Loslassen **seinen** Standard
-wieder her, nicht unseren — jedes Zugende ruft deshalb `set_navigation`,
-sonst sind Auswahl-Klick, Kontextmenü und Schema nach dem ersten Zug weg.
-Und der Skaliergriff (`app/ui/scale_widget.py`) ist diesem Widget
-absichtlich Zeile für Zeile nachgebaut — wer dort etwas am
-Interaktionsmuster ändert, ändert es an beiden Stellen.
+Zwei Nachbarn: **Ein Zug am Griff lässt die Navigation in Ruhe.** PyVistas
+Widget schaltete beim Greifen auf seinen Trackball-Stil um und stellte beim
+Loslassen *seinen* Standard wieder her, nicht unseren, und jedes Zugende
+musste `set_navigation` rufen. Der eigene Griff sieht die Zeigerereignisse vor
+dem Navigator und gibt frei, was er nicht braucht;
+`tests/test_analysis_ui.py::test_a_drag_leaves_the_navigation_in_place` hält
+fest, dass kein Zugende den Navigator neu baut. Und der Skaliergriff
+(`app/ui/scale_widget.py`) folgt demselben Muster wie `gizmo.py` — Hover über
+`pick_item`, Zug in der Kameraebene über `ray_plane_hit`, Ergebnis beim
+Loslassen —, und wer das Interaktionsmuster an einer Stelle ändert, ändert es
+an beiden.
 
-## Der Interaktionsstil wird über `iren.style` gesetzt, nie daran vorbei (04.09.2026)
+## Die Navigation ist eigener Code am Vertrag, kein VTK-Interaktionsstil (05.09.2026)
 
-`set_navigation` hängt den eigenen Stil über pyvistas Eigenschaft an
-(`plotter.iren.style = style`) und **nicht** über `SetInteractorStyle` am
-Interactor. Der Unterschied ist nicht Geschmack, sondern die Frage, wer den
-Stil für den seinen hält: pyvistas `RenderWindowInteractor` führt daneben
-`_style_class` und setzt es bei jeder Gelegenheit über `update_style()`
-wieder durch. Wer daran vorbei anhängt, verliert seinen Stil bei der
-nächsten dieser Gelegenheiten — und der Interactor fährt danach mit VTKs
-Trackball: links dreht, nichts wählt aus.
+`app/ui/render/navigator.py` liest die Zeigerereignisse des Renderers
+(`add_pointer_listener`) und stellt die Kamera über den Vertrag
+(`camera_pose`, `set_camera_pose`, `dolly`). VTKs Trackball ist abgeschaltet
+(`SetInteractorStyle(None)`), und damit ist auch die Falle verschwunden, die
+diesen Abschnitt bis zum 05.09.2026 füllte: PyVista führte neben VTK einen
+eigenen Stil (`_style_class`) und setzte ihn bei jeder Gelegenheit über
+`update_style()` wieder durch — auch beim Doppelklick, den es immer anmeldete.
+Die gestufte Auswahl (§18.5) heißt zwei Klicks auf dieselbe Stelle, und nach
+dem zweiten waren Auswahl, Kontextmenü und Schema weg (Vorfall:
+ROADMAP-ARCHIV.md, 04.09.2026). Der Navigator kennt keinen zweiten Halter
+seines Zustands.
 
-**Eine dieser Gelegenheiten ist der Doppelklick.** pyvista meldet
-`_toggle_chart_interaction` als Rückruf für zwei schnelle Linksklicks an,
-immer, auch ohne ein einziges Diagramm in der Szene; findet er keines, endet
-er in `_set_context_style(None)`, und dessen letzte Zeile ist
-`update_style()`. Das trifft die gestufte Auswahl (§18.5) ins Herz: erst der
-Körper, dann das Merkmal darin heißt zwei Klicks auf dieselbe Stelle — also
-genau einen Doppelklick. Wer eine Bohrung anwählte, verlor im selben Moment
-Auswahl, Kontextmenü, die Abwahl durch einen Klick ins Leere und das
-eingestellte Schema (Robert, 04.09.2026).
+Was davon als Regel bleibt:
 
-Die Regel gilt für jeden weiteren Zustand, den pyvista neben VTK doppelt
-führt: **über pyvista setzen, nicht an ihm vorbei.** Der Griff bleibt die
-Ausnahme, die trotzdem nachziehen muss — `enable_trackball_style` tauscht
-`_style_class` selbst aus, statt es nur erneut durchzusetzen, und deshalb
-steht der `set_navigation`-Ruf am Zugende weiter dort.
-
-Geprüft in `tests/test_viewport_decisions.py` an einem echten
-`pv.Plotter(off_screen=True)`: angehängt, `_set_context_style(None)`
-gerufen, und der eigene Stil muss noch hängen.
+* **Wer ein Ereignis vor der Navigation braucht, bekommt es vor ihr.**
+  `Viewport._on_pointer` reicht jedes Ereignis erst an den Zeiger, dann an
+  Griff und Skalierwürfel, zuletzt an den Navigator — eine Vorfahrt an einer
+  Stelle statt dreier Beobachter am Interactor.
+* **Ein Klick ist ein Klick, auch mit Zittern**, und ein Klick, der nichts
+  wählt, lässt die Taste der Kamera (`tests/test_navigator.py`,
+  `test_a_wobbly_click_stays_a_click` und
+  `test_where_nothing_is_chosen_the_camera_keeps_the_button`).
+* **Die Tabelle `_NAVIGATION` ist ohne Fenster prüfbar.** `tests/test_navigator.py`
+  fährt sie gegen ein Renderer-Doppel — welches Schema auf welche Taste was
+  tut, und wo die Kamera danach steht.
 
 ## Die Skizze ist Vordergrund, der Körper Zusammenhang (29.08.2026)
 
@@ -1091,9 +1111,9 @@ ein Vorbild haben.
 * **Das Kippen ist keine VTK-Bewegung.** Der Trackball dreht in beiden Achsen;
   „nur nach oben und unten" gibt es dort nicht, und `Rotate` dafür zu
   überschreiben hieße, am Zustand des Interactors zu drehen. Gerechnet wird
-  mit `spacemouse.camera_step` — der Stil meldet nur die senkrechte Strecke
-  seit dem letzten Ereignis (`_tilt_at`), das Rechnen bleibt in der reinen
-  Funktion und damit ohne Fenster prüfbar.
+  mit `spacemouse.camera_step` — der Navigator meldet nur die senkrechte
+  Strecke seit dem letzten Ereignis (`_tilt_at`), das Rechnen bleibt in der
+  reinen Funktion und damit ohne Fenster prüfbar.
 * **Fliegen ist nicht Zoomen, und der Unterschied ist der Blickpunkt.**
   `camera_step(..., fly=True)` schiebt Standort **und** Blickpunkt entlang der
   Blickrichtung; ohne den Schalter ändert die Achse `y` nur den Abstand. Der
@@ -1127,13 +1147,19 @@ ein Vorbild haben.
   und die Eingabetaste wirkt
   (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
-**Was kein Test prüfen kann, prüft ein Werkzeug von Hand.** Offscreen bleibt
-`Viewport.plotter` auf `None` — die Suite kann VTK also gar nicht erst nach
-der Bewegung fragen, und ob der Interaktionsstil ausführt, was die Tabelle
-verspricht, steht in keinem Lauf. `.claude/.state/steuerung-2026-09-03/`
-schließt die Lücke: ein echtes Fenster, VTKs eigene Ereignisse, die
-Kamerastellung vorher und nachher. Zu fahren nach jeder Änderung an
-`_NAVIGATION`, am Stil oder an `camera_step`. Die README daneben nennt die
+**Was die Suite prüft, und was nur ein Werkzeug von Hand prüft.** Seit dem
+05.09.2026 führt der Navigator die Kamera über den Vertrag, und
+`tests/test_navigator.py` fährt die Tabelle gegen ein Renderer-Doppel — welches
+Schema auf welche Taste was tut, und wo die Kamera danach steht. Was kein Test
+prüft, ist die Kette davor: Qt-Ereignis → Widget des Renderers →
+`PointerEvent`. Offscreen bleibt `Viewport.renderer` auf `None`, die Suite
+kann das Fenster also gar nicht erst nach der Bewegung fragen.
+`.claude/.state/steuerung-2026-09-03/` schließt die Lücke: ein echtes Fenster,
+echte Ereignisse, die Kamerastellung vorher und nachher. Zu fahren nach jeder
+Änderung an `_NAVIGATION`, am Navigator oder an `camera_step` — **und vorher
+umzubauen**: Der Prüfstand schickt noch VTK-Ereignisse an den Interactor, und
+die erreichen den Navigator nicht mehr (Registerpunkt in `ROADMAP.md`). Die
+README daneben nennt die
 drei Fallen, die dabei zuschnappen — Millimeter sagen nichts (jede Bewegung
 skaliert mit der Entfernung), Bildpunkte hier gar nichts (das Renderfenster
 bleibt 160×160), und `session.apply` blockiert den Hauptthread.
@@ -1174,7 +1200,7 @@ gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
   Beides endet bei der Mitte der Körper, nicht bei „kein Drehpunkt".
 * **Das gedrückte Rad bekommt ihn auch.** `camera_step` kippt um den
   Blickpunkt, genau wie VTKs Trackball dreht; der `tilt`-Zweig des
-  Interaktionsstils ruft `on_rotate_start` deshalb ebenso. Ein Drehpunkt, der
+  Navigators ruft `on_rotate_start` deshalb ebenso. Ein Drehpunkt, der
   je nach Taste ein anderer ist, lässt sich niemandem erklären.
 * **Und das Bild ändert sich beim Setzen um nichts.** Der neue Fokus liegt auf
   dem Sichtstrahl, Stellung und Blickrichtung bleiben — die Bedingung von
@@ -1183,7 +1209,8 @@ gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
 
 **Geprüft wird das nicht in der Suite**, denn offscreen gibt es keinen Picker:
 Die Tests in `tests/test_viewport_decisions.py` setzen an die Stelle des
-Plotters eine Attrappe und prüfen damit die Regel, nicht die Kette bis in VTK.
+Renderers eine Attrappe (`RecordingRenderer`) und prüfen damit die Regel,
+nicht die Kette bis in VTK.
 `.claude/.state/drehpunkt-2026-09-04/` fährt sie am echten Fenster. Gemessen,
 `plate_holes.stl`, Blick schräg auf die Platte, Zug nach rechts:
 
@@ -1211,25 +1238,26 @@ um die Bildwaagerechte; das Oben folgt daraus, statt mitgeschleift zu werden.
 Die Hebung wird an `POLE_LIMIT_DEGREES` **begrenzt und nicht abgeschnitten** —
 wer fast senkrecht darüber steht, dreht weiter waagerecht und kommt jederzeit
 zurück; aus einer Draufsicht des Menüs führt der Weg ebenso heraus. Die
-Empfindlichkeit ist die der Basisklasse (20 Grad je Fensterhälfte mal ihrem
-`MotionFactor` von 10), damit die Änderung nicht nebenbei die gewohnte
+Empfindlichkeit ist die des VTK-Trackballs (20 Grad je Fensterhälfte mal
+seinem `MotionFactor` von 10, `TURN_MOTION_FACTOR`), damit die Änderung nicht nebenbei die gewohnte
 Geschwindigkeit verstellt. Es gilt für alle fünf Schemata: Cura, Bambu Studio
 und Blender bleiben alle aufrecht, und ein Nachbau, der neigt, wo sein Vorbild
 es nicht tut, ist keiner.
 
-**Der erste Anlauf war eine überschriebene `Rotate`-Methode, und er war
-wirkungslos.** Die Rechnung stimmte, drei Einheitstests waren grün, und am
-laufenden Fenster blieben **35,8 Grad** Schräglage — die alte Bewegung:
+**Der erste Anlauf war eine überschriebene `Rotate`-Methode am
+VTK-Interaktionsstil, und er war wirkungslos.** Die Rechnung stimmte, drei
+Einheitstests waren grün, und am laufenden Fenster blieben **35,8 Grad**
+Schräglage — die alte Bewegung:
 
 > VTKs `OnMouseMove` ist C++ und ruft die Methode **seiner eigenen** Klasse,
 > nie die einer Python-Unterklasse.
 
-Das ist derselbe Grund, aus dem hier alles über `AddObserver` läuft, und die
-Schwester des Abschnitts über `iren.style`: Was pyvista oder VTK selbst führt,
-lässt sich nicht von außen überschreiben — man hängt sich davor. Gedreht wird
-deshalb im Beobachter (`_mouse_move` → `_turn`), genau wie gekippt wird.
-`StartRotate` bleibt trotzdem stehen: nicht für die Bewegung, sondern für das
-`EndInteractionEvent`, an dem `cameraMoved` und der Schattenwurf hängen.
+Seit dem 05.09.2026 gibt es diesen Stil nicht mehr: Der `Navigator` liest die
+Zeigerereignisse des Renderers und stellt die Kamera selbst
+(`turntable_camera`, `set_camera_pose`) — es gibt nichts Fremdes mehr, dem
+man sich vorhängen müsste. Die Lehre bleibt, weil sie über VTK hinausgeht:
+**Was ein fremdes Programm selbst führt, lässt sich nicht von außen
+überschreiben** — man hängt sich davor, oder man führt es selbst.
 
 **Und die Lehre über die Prüfung, die teurer war als der Fehler:**
 Einheitstests über eine reine Funktion sagen nichts darüber, ob jemand sie

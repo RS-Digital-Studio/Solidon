@@ -320,8 +320,8 @@ def shoot(widget: QWidget, key: str, language: str, *, from_screen: bool = False
 def release_viewport(window: Any) -> None:
     """Den OpenGL-Kontext des Hauptfensters freigeben, bevor das nächste kommt.
 
-    ``close()`` allein tut das nicht: das ``QtInteractor`` bleibt am Fenster
-    hängen, und mit ihm sein Renderfenster. **Die Anwendung merkt das nie** —
+    ``close()`` allein tut das nicht: das Renderfenster bleibt am Fenster
+    hängen, und mit ihm sein OpenGL-Kontext. **Die Anwendung merkt das nie** —
     sie baut ein Hauptfenster und dann keins mehr. Dieses Werkzeug baut je
     Sprache eines, und das zweite bekommt einen Kontext, der dem ersten noch
     gehört.
@@ -332,14 +332,9 @@ def release_viewport(window: Any) -> None:
     und ein Z. Ein Bild mit einem Fehler, den die Anwendung nicht hat, ist
     schlimmer als gar keines — ihm glaubt man.
     """
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
-    if plotter is None:
-        return
-    try:
-        plotter.close()
-    except Exception as problem:  # pragma: no cover - hängt am Treiber
-        print(f"  (Viewport ließ sich nicht schließen: {problem})")
-    window.viewport.plotter = None
+    release = getattr(getattr(window, "viewport", None), "release_renderer", None)
+    if callable(release):
+        release()
 
 
 def prepared(

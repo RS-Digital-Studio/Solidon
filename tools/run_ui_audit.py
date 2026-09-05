@@ -560,11 +560,9 @@ def main() -> int:
     session.start_new()
     until_quiet(app, session)
     window.close()
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
-    if plotter is not None:
-        with contextlib.suppress(Exception):
-            plotter.close()
-        window.viewport.plotter = None
+    release = getattr(getattr(window, "viewport", None), "release_renderer", None)
+    if callable(release):
+        release()
     print(f"\nGeschrieben nach: {out}")
     return code
 

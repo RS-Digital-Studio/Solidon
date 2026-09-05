@@ -181,3 +181,44 @@ def test_a_press_beside_the_handles_belongs_to_nobody(scene: tuple) -> None:
     assert np.allclose(body.matrix(), np.eye(4))
     gizmo.remove()
     assert gizmo.items == ()
+
+
+def test_the_scale_cube_scales_the_body_about_its_centre(scene: tuple) -> None:
+    """Das dritte Drittel von §18.11: Der Würfel auf der Raumdiagonale
+    skaliert gleichmäßig um die Mitte des Körpers — doppelt so weit vom
+    Zentrum gezogen heißt doppelt so groß, und die Mitte bleibt, wo sie war."""
+    from app.ui.scale_widget import HOVER_COLOUR, ScaleHandle
+
+    renderer, body, _gizmo, _releases = scene
+    centre = np.asarray(body.centre())
+    factors: list[float] = []
+    seen: list[float] = []
+    handle = ScaleHandle(
+        renderer,
+        body,
+        scale=0.4,
+        colour="#00c0ff",
+        release_callback=factors.append,
+        interact_callback=seen.append,
+    )
+    renderer.render()
+    gx, gy, _depth = renderer.world_to_display(handle.grip_position)
+    cx, cy, _depth = renderer.world_to_display(tuple(float(v) for v in centre))  # type: ignore[arg-type]
+    handle.handle(hover(gx, gy))
+    assert handle.item.colour() == HOVER_COLOUR, "der Würfel leuchtet unter dem Zeiger"
+    assert handle.handle(press(gx, gy))
+    fx, fy = cx + 2.0 * (gx - cx), cy + 2.0 * (gy - cy)
+    assert handle.handle(move(fx, fy))
+    matrix = body.matrix()
+    factor = matrix[0, 0]
+    assert factor == pytest.approx(2.0, abs=0.15), factor
+    assert matrix[1, 1] == pytest.approx(factor) and matrix[2, 2] == pytest.approx(factor)
+    assert np.allclose(matrix @ np.append(centre, 1.0), np.append(centre, 1.0), atol=1e-6)
+    assert seen and seen[-1] == pytest.approx(factor)
+    assert handle.handle(release(fx, fy))
+    assert factors == [pytest.approx(factor)]
+    assert not handle.pressing
+    handle.handle(hover(5, 5))
+    assert handle.item.colour() == "#00c0ff"
+    assert not handle.handle(press(5, 5)), "neben dem Würfel gehört die Geste niemandem"
+    handle.remove()

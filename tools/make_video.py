@@ -1051,7 +1051,7 @@ def viewport_rect(window: QWidget) -> tuple[int, int, int, int]:
     war aber einer beim Messen.
     """
     viewport = window.viewport  # type: ignore[attr-defined]
-    target = getattr(getattr(viewport, "plotter", None), "interactor", None) or viewport
+    target = getattr(getattr(viewport, "renderer", None), "widget", None) or viewport
     corner = target.mapTo(window, target.rect().topLeft())
     size = target.size()
     return (corner.x(), corner.y(), size.width(), size.height())
@@ -1103,25 +1103,6 @@ def show_panels(window: Any, visible: bool) -> None:
         tools.setVisible(visible)
 
 
-def hide_orientation_widget(window: Any) -> None:
-    """Den Orientierungswürfel abschalten.
-
-    In der Anwendung ist er richtig — er sagt, wo oben ist, und man kann ihn
-    anfassen. In einem Werbevideo ist er ein Bedienelement, das niemand
-    bedient, und er sitzt genau in der Ecke, in der auf beiden Plattformen die
-    Oberfläche des Abspielers liegt.
-    """
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
-    # Seit pyvista 0.46 hängen die Widgets an ``plotter.widgets``; der alte
-    # Weg lebt noch, meldet sich aber mit einer Verfallswarnung.
-    holder = getattr(plotter, "widgets", plotter)
-    for widget in getattr(holder, "camera_widgets", ()):
-        try:
-            widget.Off()
-        except Exception as problem:  # pragma: no cover - hängt am Treiber
-            print(f"  (Orientierungswürfel blieb an: {problem})")
-
-
 def settle_resize(window: Any, app: QApplication, seconds: float = 1.5) -> None:
     """Nach einer Größenänderung warten — und das Fenster auf den Schirm holen.
 
@@ -1147,9 +1128,9 @@ def settle_resize(window: Any, app: QApplication, seconds: float = 1.5) -> None:
     while time.monotonic() < deadline:
         app.processEvents()
         time.sleep(0.02)
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
-    if plotter is not None:
-        plotter.render()
+    renderer = getattr(getattr(window, "viewport", None), "renderer", None)
+    if renderer is not None:
+        renderer.render()
     settle(app, 30)
 
 
@@ -1524,15 +1505,15 @@ def orbit(
     """
     frames.mkdir(parents=True, exist_ok=True)
     viewport = window.viewport  # type: ignore[attr-defined]
-    plotter = viewport.plotter
+    renderer = viewport.renderer
     screen = window.screen() or QApplication.primaryScreen()
 
     viewport.reset_camera()
     settle(app, 20)
 
-    camera = plotter.camera
-    focal = tuple(float(value) for value in camera.focal_point)
-    position = tuple(float(value) for value in camera.position)
+    pose = renderer.camera_pose()
+    focal = pose.focal_point
+    position = pose.position
     offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
     # Der ganze Vektor wird skaliert, nicht nur seine Länge in der Ebene:
     # sonst rückt die Kamera näher, bleibt aber auf ihrer Höhe stehen, und aus
@@ -1544,10 +1525,11 @@ def orbit(
     total = int(seconds * FPS)
     for index in range(total):
         angle = start + 2.0 * math.pi * index / total
-        camera.position = (
-            focal[0] + radius * math.cos(angle),
-            focal[1] + radius * math.sin(angle),
-            height,
+        _aim_camera(
+            renderer,
+            (focal[0] + radius * math.cos(angle), focal[1] + radius * math.sin(angle), height),
+            focal,
+            pose.view_up,
         )
         # Die Schatten hängen an der Blickrichtung (§18.6). Ohne diese Zeile
         # steht das Licht still, während sich das Teil dreht — es sieht aus,
@@ -1555,7 +1537,7 @@ def orbit(
         redraw = getattr(viewport, "_redraw_shadows", None)
         if callable(redraw):
             redraw()
-        plotter.render()
+        renderer.render()
         app.processEvents()
         shot = screen.grabWindow(window.winId())
         shot.save(str(frames / f"{index:05d}.png"))
@@ -1828,12 +1810,12 @@ def orbit_step(
     reduzierter Bewegung das einzige ist, was der Besucher je sieht.
     """
     viewport = window.viewport  # type: ignore[attr-defined]
-    plotter = viewport.plotter
+    renderer = viewport.renderer
     viewport.reset_camera()
     settle(app, 20)
-    camera = plotter.camera
-    focal = tuple(float(value) for value in camera.focal_point)
-    position = tuple(float(value) for value in camera.position)
+    pose = renderer.camera_pose()
+    focal = pose.focal_point
+    position = pose.position
     offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
     radius = math.hypot(offset_x, offset_y) * zoom
     height = focal[2] + (position[2] - focal[2]) * zoom
@@ -1841,15 +1823,16 @@ def orbit_step(
 
     def step(index: int, total: int) -> None:
         angle = start_angle + 2.0 * math.pi * turns * index / max(1, total)
-        camera.position = (
-            focal[0] + radius * math.cos(angle),
-            focal[1] + radius * math.sin(angle),
-            height,
+        _aim_camera(
+            renderer,
+            (focal[0] + radius * math.cos(angle), focal[1] + radius * math.sin(angle), height),
+            focal,
+            pose.view_up,
         )
         redraw = getattr(viewport, "_redraw_shadows", None)
         if callable(redraw):
             redraw()
-        plotter.render()
+        renderer.render()
 
     return step
 
@@ -1883,10 +1866,10 @@ def morph_step(
     document = session.project.document
     low, high = span
     viewport = window.viewport  # type: ignore[attr-defined]
-    plotter = viewport.plotter
-    camera = plotter.camera
-    focal = tuple(float(value) for value in camera.focal_point)
-    start = tuple(float(value) for value in camera.position)
+    renderer = viewport.renderer
+    pose = renderer.camera_pose()
+    focal = pose.focal_point
+    start = pose.position
 
     def step(index: int, total: int) -> None:
         # Sinus statt linear: die Bewegung beginnt und endet ruhig, statt
@@ -1912,15 +1895,20 @@ def morph_step(
         # Bild und die Bewegung ruhig. Im Hochformat ist es der Unterschied
         # zwischen einem Gehäuse und einem angeschnittenen Gehäuse.
         away = 1.0 + (value / low - 1.0) * 0.8
-        camera.position = (
-            focal[0] + (start[0] - focal[0]) * away,
-            focal[1] + (start[1] - focal[1]) * away,
-            focal[2] + (start[2] - focal[2]) * away,
+        _aim_camera(
+            renderer,
+            (
+                focal[0] + (start[0] - focal[0]) * away,
+                focal[1] + (start[1] - focal[1]) * away,
+                focal[2] + (start[2] - focal[2]) * away,
+            ),
+            focal,
+            pose.view_up,
         )
         redraw = getattr(viewport, "_redraw_shadows", None)
         if callable(redraw):
             redraw()
-        plotter.render()
+        renderer.render()
 
     return step
 
@@ -1949,12 +1937,12 @@ def explode_step(
     stehendes Bild, in dem etwas ruckt.
     """
     viewport = window.viewport  # type: ignore[attr-defined]
-    plotter = viewport.plotter
+    renderer = viewport.renderer
     viewport.reset_camera()
     settle(app, 20)
-    camera = plotter.camera
-    focal = tuple(float(value) for value in camera.focal_point)
-    position = tuple(float(value) for value in camera.position)
+    pose = renderer.camera_pose()
+    focal = pose.focal_point
+    position = pose.position
     offset_x, offset_y = position[0] - focal[0], position[1] - focal[1]
     radius = math.hypot(offset_x, offset_y) * zoom
     height = focal[2] + (position[2] - focal[2]) * zoom
@@ -1970,26 +1958,27 @@ def explode_step(
         # nicht mehr das, was gilt.
         viewport.set_explosion(low + (high - low) * share)
         angle = start_angle + 2.0 * math.pi * turns * index / max(1, total)
-        camera.position = (
-            focal[0] + radius * math.cos(angle),
-            focal[1] + radius * math.sin(angle),
-            height,
+        _aim_camera(
+            renderer,
+            (focal[0] + radius * math.cos(angle), focal[1] + radius * math.sin(angle), height),
+            focal,
+            pose.view_up,
         )
         redraw = getattr(viewport, "_redraw_shadows", None)
         if callable(redraw):
             redraw()
-        plotter.render()
+        renderer.render()
 
     return step
 
 
 def hold_step(window: QWidget, app: QApplication) -> StepFn:
     """Stehen bleiben — für Szenen, in denen der Text die Arbeit macht."""
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
+    renderer = getattr(getattr(window, "viewport", None), "renderer", None)
 
     def step(index: int, total: int) -> None:
-        if plotter is not None:
-            plotter.render()
+        if renderer is not None:
+            renderer.render()
 
     return step
 
@@ -2148,14 +2137,11 @@ def _feature_click(window: Any) -> tuple[Any, tuple[float, float, float], tuple[
     world = (centre[0] + diameter / 2.0, centre[1], centre[2] + depth / 4.0)
     viewport = window.viewport
     display = viewport._display_of(world)
-    interactor = viewport.plotter.interactor
+    interactor = viewport.renderer.widget
     if display is None:
         raise SystemExit("Die Bohrung ließ sich nicht ins Videobild projizieren")
     ratio = float(interactor.devicePixelRatioF()) or 1.0
-    local = QPoint(
-        round(display[0] / ratio),
-        round(interactor.height() - display[1] / ratio),
-    )
+    local = QPoint(round(display[0] / ratio), round(display[1] / ratio))
     visible = interactor.mapTo(window, local)
     return interactor, world, (float(visible.x()), float(visible.y()))
 
@@ -2194,7 +2180,7 @@ def feature_demo_step(
     if scene == "recognise":
         target_id = _feature_target_id(session)
         _interactor, world, feature_point = _feature_click(window)
-        viewport = window.viewport.plotter.interactor
+        viewport = window.viewport.renderer.widget
         start = _widget_centre(window, viewport)
         clicked = False
 
@@ -2210,7 +2196,7 @@ def feature_demo_step(
                 if window.object_tree.selected_feature() != target_id:
                     raise SystemExit(f"Der sichtbare Klick hat {target_id} nicht ausgewählt")
                 clicked = True
-            window.viewport.plotter.render()
+            window.viewport.renderer.render()
 
         def select_pointer(index: int, total: int) -> tuple[float, float, bool]:
             point = _ease(start, feature_point, index / max(1.0, total * 0.45))
@@ -2240,7 +2226,7 @@ def feature_demo_step(
                 if feature_id != target_id:
                     raise SystemExit("Strg+Z hat die entfernte Bohrung nicht wiederhergestellt")
                 restored = True
-            window.viewport.plotter.render()
+            window.viewport.renderer.render()
 
         return undo_step, None
 
@@ -2305,7 +2291,7 @@ def feature_demo_step(
                 if window.viewport.highlighted_object() is not None:
                     raise SystemExit("Die Mehrfachauswahl färbt den ganzen Körper")
                 selected = True
-            window.viewport.plotter.render()
+            window.viewport.renderer.render()
 
         def pair_pointer(index: int, total: int) -> tuple[float, float, bool]:
             point = _ease(feature_point, target, index / max(1.0, total * 0.40))
@@ -2351,7 +2337,7 @@ def feature_demo_step(
                 if not every.isChecked():
                     raise SystemExit("Der sichtbare Sammelhaken blieb aus")
                 selected_all = True
-            window.viewport.plotter.render()
+            window.viewport.renderer.render()
 
         def edit_pointer(index: int, total: int) -> tuple[float, float, bool]:
             if scene == "all_prepare" and index >= round(total * 0.48):
@@ -2436,7 +2422,7 @@ def feature_demo_step(
                             "Die Duplizierung erzeugte nicht genau eine weitere Bohrung"
                         )
             applied = True
-        window.viewport.plotter.render()
+        window.viewport.renderer.render()
 
     def apply_pointer(index: int, total: int) -> tuple[float, float, bool]:
         point = _ease(origin_point, button_point, index / max(1.0, total * 0.34))
@@ -3282,6 +3268,18 @@ TURNTABLE_QUALITY = 80
 TURNTABLE_ZOOM = 0.62
 
 
+def _aim_camera(
+    renderer: Any,
+    position: tuple[float, float, float],
+    focal: tuple[float, float, float],
+    up: tuple[float, float, float],
+) -> None:
+    """Die Kamera des Renderers stellen — gezeichnet wird danach vom Aufrufer."""
+    from app.ui.render.api import CameraPose
+
+    renderer.set_camera_pose(CameraPose(position, focal, up))
+
+
 def hide_axis_marker(window: Any) -> None:
     """Das Achsenkreuz in der Ecke abschalten.
 
@@ -3290,19 +3288,16 @@ def hide_axis_marker(window: Any) -> None:
     Bedienelemente ins Bild. In der Drehreihe ist es das **Teil**, und ein
     Achsenkreuz, das sich mitdreht, ist Werkzeug im Schaufenster.
 
-    **Es hängt am Renderer, nicht am Plotter.** ``plotter.axes_widget`` gibt es
-    in pyvista 0.48 nicht; ein ``getattr`` darauf liefert still ``None``, und
-    das Kreuz bliebe stehen, ohne dass irgendein Aufruf sich beschwert. Der
-    Weg dorthin steht in ``app.ui.viewport.axes_widget_of`` — hier
-    nachgebildet, weil ``tools`` die Oberfläche nicht importiert.
+    Über den Vertrag des Renderers (``set_axes_marker(None)``) und nicht über
+    VTK-Innereien: Ein ``getattr`` auf ein Widget, das es nicht gibt, liefert
+    still ``None``, und das Kreuz bliebe stehen, ohne dass sich ein Aufruf
+    beschwert.
     """
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
-    renderer = getattr(plotter, "renderer", None) if plotter is not None else None
-    marker = getattr(renderer, "axes_widget", None)
-    if marker is None:
+    renderer = getattr(getattr(window, "viewport", None), "renderer", None)
+    if renderer is None:
         return
     try:
-        marker.EnabledOff()
+        renderer.set_axes_marker(None)
     except Exception as problem:  # pragma: no cover - hängt am Treiber
         print(f"  (Achsenkreuz blieb an: {problem})")
 
@@ -3364,7 +3359,6 @@ def shoot_turntable(
         raise SystemExit(f"Kein Körper in der Szene ({project.name}).")
 
     show_panels(window, False)
-    hide_orientation_widget(window)
     hide_axis_marker(window)
     settle(app, 30)
 
@@ -3677,7 +3671,6 @@ def shoot_language(
     else:
         print("Aufnahme hoch:")
         show_panels(window, False)
-        hide_orientation_widget(window)
         window.resize(*PORTRAIT)
         settle_resize(window, app)
         portrait = shoot_storyboard(

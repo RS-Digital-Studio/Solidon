@@ -794,21 +794,42 @@ def test_the_turn_handle_sticks_at_forty_five_degrees(qt_app: QApplication) -> N
     )
 
 
-def test_the_magnet_watch_lives_and_dies_with_the_handle(qt_app: QApplication) -> None:
-    """Der Beobachter des Magneten gehört zum Griff — nicht zur Sitzung.
+def test_the_magnet_corrects_the_turn_while_it_runs(qt_app: QApplication) -> None:
+    """Der Magnet sitzt im Rückruf des Griffs: aus 43 Grad werden 45, und der
+    Griff bekommt die berichtigte Matrix zurück (§18.11).
 
-    Ein vergessener zöge am Griff der vorigen Auswahl weiter, dieselbe Familie
-    wie beim Skaliergriff. Offscreen gibt es keinen Plotter, also prüft dieser
-    Test das, was **vor** der Wache steht: dass der Abbau ihn abmeldet und das
-    Feld leert, auch wenn nie einer angemeldet wurde.
+    Bis zum 05.09.2026 hing er an einem eigenen Beobachter, weil PyVistas
+    Widget seinen Rückruf vor dem Setzen der Matrix rief. Der eigene Griff
+    setzt, was der Rückruf zurückgibt — der Beobachter ist damit weg, und
+    ein vergessener kann nicht mehr am Griff der vorigen Auswahl ziehen.
     """
+    import numpy as np
+
+    from app.core.geom.transform import decompose_transform, rotation_about
+    from app.ui.render import shapes
+    from app.ui.render.gizmo import Gizmo
     from app.ui.viewport import Viewport
+    from tests.render_fakes import RecordingItem, RecordingRenderer
 
     viewport = Viewport()
-    assert viewport._magnet_watch is None, "ohne Griff kein Beobachter"
+    try:
+        renderer = RecordingRenderer(scale=20.0)
+        viewport.renderer = renderer
+        vertices, _faces = shapes.cube((0.0, 0.0, 0.0), 10.0)
+        body = RecordingItem("object:obj_1", np.asarray(vertices), "#ffffff")
+        viewport._gizmo = Gizmo(renderer, body, scale=0.3)
 
-    viewport._detach_gizmo()
-    assert viewport._magnet_watch is None, "und der Abbau hält das aus"
+        roh = rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), 43.0)
+        corrected = viewport._on_gizmo_interacted(roh)
+        assert corrected is not None, "knapp neben der Raste greift der Magnet"
+        assert decompose_transform(np.asarray(corrected)).angle == pytest.approx(45.0, abs=1e-6)
+
+        # Weit genug weg von jeder Raste bleibt es beim rohen Wert.
+        frei = rotation_about((0.0, 0.0, 1.0), (0.0, 0.0, 0.0), 30.0)
+        assert viewport._on_gizmo_interacted(frei) is None
+    finally:
+        viewport.renderer = None
+        viewport.deleteLater()
 
 
 def test_a_face_offers_only_moving(qt_app: QApplication) -> None:

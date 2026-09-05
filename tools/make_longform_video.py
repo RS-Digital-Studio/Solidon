@@ -63,6 +63,7 @@ from app.i18n.catalog import read_catalog  # noqa: E402
 from app.ui.app import install_qt_translations  # noqa: E402
 from app.ui.dialogs import ParameterDialog  # noqa: E402
 from app.ui.main_window import MainWindow  # noqa: E402
+from app.ui.render.api import CameraPose  # noqa: E402
 from app.ui.session import Session  # noqa: E402
 from app.ui.settings import UiSettings  # noqa: E402
 from app.ui.theme import apply_theme  # noqa: E402
@@ -271,8 +272,8 @@ class Recorder:
     ) -> None:
         """Das Modell in einer kurzen, ruhigen Kamerafahrt räumlich zeigen."""
         viewport = self.window.viewport
-        plotter = viewport.plotter
-        if plotter is None:
+        renderer = viewport.renderer
+        if renderer is None:
             self.add(title, detail, seconds, target=viewport)
             return
         self.window.raise_()
@@ -290,9 +291,9 @@ class Recorder:
             viewport.zoom(zoom)
         video_base.settle(self.app, 16)
 
-        camera = plotter.camera
-        focal = tuple(float(value) for value in camera.focal_point)
-        position = tuple(float(value) for value in camera.position)
+        pose = renderer.camera_pose()
+        focal = pose.focal_point
+        position = pose.position
         offset_x = position[0] - focal[0]
         offset_y = position[1] - focal[1]
         radius = math.hypot(offset_x, offset_y)
@@ -303,15 +304,21 @@ class Recorder:
             phase = index / count
             eased = phase * phase * (3.0 - 2.0 * phase)
             angle = start + math.radians(degrees) * eased
-            camera.position = (
-                focal[0] + radius * math.cos(angle),
-                focal[1] + radius * math.sin(angle),
-                height,
+            renderer.set_camera_pose(
+                CameraPose(
+                    (
+                        focal[0] + radius * math.cos(angle),
+                        focal[1] + radius * math.sin(angle),
+                        height,
+                    ),
+                    focal,
+                    pose.view_up,
+                )
             )
             redraw = getattr(viewport, "_redraw_shadows", None)
             if callable(redraw):
                 redraw()
-            plotter.render()
+            renderer.render()
             self.app.processEvents()
             frame = self._capture_frame(
                 title,

@@ -9,30 +9,30 @@ import pytest
 from tools.window_bench import EVENT_DRAIN_ROUNDS, shutdown_window
 
 
-class _Plotter:
+class _Renderer:
     def __init__(self, events: list[str]) -> None:
         self.events = events
 
     def close(self) -> None:
-        self.events.append("plotter.close")
+        self.events.append("renderer.close")
 
 
 class _Viewport:
-    def __init__(self, events: list[str], *, with_plotter: bool) -> None:
-        self.plotter: Any | None = _Plotter(events) if with_plotter else None
+    def __init__(self, events: list[str], *, with_renderer: bool) -> None:
+        self.renderer: Any | None = _Renderer(events) if with_renderer else None
 
-    def release_plotter(self) -> None:
-        plotter = self.plotter
-        if plotter is None:
+    def release_renderer(self) -> None:
+        renderer = self.renderer
+        if renderer is None:
             return
-        plotter.close()
-        self.plotter = None
+        renderer.close()
+        self.renderer = None
 
 
 class _Window:
-    def __init__(self, events: list[str], *, with_plotter: bool = True) -> None:
+    def __init__(self, events: list[str], *, with_renderer: bool = True) -> None:
         self.events = events
-        self.viewport = _Viewport(events, with_plotter=with_plotter)
+        self.viewport = _Viewport(events, with_renderer=with_renderer)
 
     def release(self) -> None:
         self.events.append("window.release")
@@ -50,21 +50,21 @@ class _Application:
 
 
 def test_vtk_closes_while_its_qt_parent_is_still_alive() -> None:
-    """Der native Plotter stirbt vor seinem Elternfenster, nicht beim Prozessende."""
+    """Der native Renderer stirbt vor seinem Elternfenster, nicht beim Prozessende."""
     events: list[str] = []
     window = _Window(events)
 
     shutdown_window(window, _Application(events))
 
-    assert events[:3] == ["window.release", "plotter.close", "window.close"]
+    assert events[:3] == ["window.release", "renderer.close", "window.close"]
     assert events[3:] == ["application.processEvents"] * EVENT_DRAIN_ROUNDS
-    assert window.viewport.plotter is None
+    assert window.viewport.renderer is None
 
 
 def test_offscreen_shutdown_uses_the_same_platform_neutral_order() -> None:
     """Ohne Plotter bleibt derselbe Weg auf allen Qt-Plattformen gültig."""
     events: list[str] = []
-    window = _Window(events, with_plotter=False)
+    window = _Window(events, with_renderer=False)
 
     shutdown_window(window, _Application(events))
 
@@ -98,8 +98,8 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         def wait_for_workers(self, _timeout_ms: int) -> bool:
             return True
 
-        def release_plotter(self) -> None:
-            events.append("viewport.release_plotter")
+        def release_renderer(self) -> None:
+            events.append("viewport.release_renderer")
 
     class _SpaceMouse:
         def stop(self) -> None:
@@ -148,7 +148,7 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         "spacemouse.stop",
         "settings.save",
         "usage.stop",
-        "viewport.release_plotter",
+        "viewport.release_renderer",
     ]
 
 

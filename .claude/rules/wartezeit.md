@@ -238,11 +238,12 @@ Das war der letzte Halter des Hauptfensters, und er ist gefunden worden,
 nachdem alle 27 Lambdas darin schon umgebaut waren.
 
 Von Hand geschriebene `weakref.ref`-Blöcke braucht es nur noch, wo mehrere
-Rückrufe zusammen entstehen — `viewport._weak_callbacks` ist der Fall, fünf
-Stück für einen Interaktionsstil.
+Rückrufe zusammen entstehen — `viewport._weak_callbacks` ist der Fall, zehn
+Stück für den Navigator (`NavigatorCallbacks`).
 
-**Der Interactor ist ein Fall davon, nicht der Fall.** Diese Regel nannte lange
-allein ihn — Stil → Viewport → Plotter → Interactor → Stil —, und deshalb hat
+**Der Navigator (bis zum 05.09.2026 der VTK-Interaktionsstil) ist ein Fall
+davon, nicht der Fall.** Diese Regel nannte lange allein ihn — Stil →
+Viewport → Plotter → Interactor → Stil —, und deshalb hat
 niemand nach einem Zeitgeber gesucht. Gefunden wurde einer in
 `viewport.py:1428`: ein Lambda am eigenen `QTimer` der Schichtvorschau.
 Gemessen, am 22.08.2026:

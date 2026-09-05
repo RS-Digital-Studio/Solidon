@@ -29,6 +29,7 @@ from app.ui.labels import feature_label, length
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from tests.render_fakes import RecordingItem, RecordingRenderer
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -223,7 +224,6 @@ def test_a_painted_body_is_drawn_in_its_filament_colours(qt_app: QApplication) -
     Geprüft wird die Farbtabelle, nicht das Bild: sie entscheidet, welcher
     Slot welche Farbe bekommt, und sie ist ohne OpenGL-Kontext zu haben.
     """
-    pv = pytest.importorskip("pyvista")
     import trimesh
 
     from app.core.geom.mesh import MeshData
@@ -245,16 +245,17 @@ def test_a_painted_body_is_drawn_in_its_filament_colours(qt_app: QApplication) -
 
     viewport = Viewport()
     try:
-        surface = pv.Cube().triangulate()
-        extra = viewport._slot_colours(surface, mesh, entry, 12)
-        assert extra["cmap"][1] == "#ff0000"
-        assert extra["cmap"][2] == "#0000ff"
-        assert extra["clim"] == (0, 2)
-        assert list(surface.cell_data["slot"]) == [1] * 6 + [2] * 6
+        colours = viewport._slot_colours(mesh, entry, 12)
+        assert colours is not None and colours.categorical, "eine Tabelle je Slot, keine Leiter"
+        assert colours.colormap is not None
+        assert colours.colormap[1] == "#ff0000"
+        assert colours.colormap[2] == "#0000ff"
+        assert colours.limits == (0, 2)
+        assert list(colours.values) == [1] * 6 + [2] * 6
 
         # Ein Körper ohne Bemalung bleibt in der Objektfarbe.
         plain = SceneObject(id=2, name="Grau", mesh=MeshData.of(body))
-        assert viewport._slot_colours(surface, plain.mesh, plain, 12) == {}
+        assert viewport._slot_colours(plain.mesh, plain, 12) is None
     finally:
         viewport.deleteLater()
 
@@ -267,24 +268,22 @@ def test_feature_edges_leave_a_round_body_alone() -> None:
     Facetten nicht als Kanten bekommen, sonst ist das Ergebnis dasselbe wie
     „Massiv mit Kanten" — und dafür gibt es diesen Modus schon.
     """
-    pv = pytest.importorskip("pyvista")
+    import trimesh
+
+    from app.ui.render.edges import feature_edges
     from app.ui.viewport import FEATURE_EDGE_ANGLE
 
-    def edges_of(mesh: object) -> int:
-        found = mesh.extract_feature_edges(  # type: ignore[attr-defined]
-            feature_angle=FEATURE_EDGE_ANGLE,
-            boundary_edges=True,
-            non_manifold_edges=False,
-            feature_edges=True,
-            manifold_edges=False,
-        )
-        return int(found.n_cells)
+    def edges_of(mesh: trimesh.Trimesh) -> int:
+        found = feature_edges(mesh.vertices, mesh.faces, FEATURE_EDGE_ANGLE)
+        return len(found) // 2
 
-    assert edges_of(pv.Sphere(theta_resolution=120, phi_resolution=120)) == 0
-    assert edges_of(pv.Cylinder(resolution=96).triangulate()) > 0, (
+    assert edges_of(trimesh.creation.icosphere(subdivisions=5)) == 0
+    assert edges_of(trimesh.creation.cylinder(radius=10.0, height=20.0, sections=96)) > 0, (
         "die Deckflächen eines Zylinders treffen die Mantelfläche im rechten Winkel"
     )
-    assert edges_of(pv.Cube().triangulate()) == 12, "ein Würfel hat zwölf Kanten"
+    assert edges_of(trimesh.creation.box(extents=(20.0, 20.0, 20.0))) == 12, (
+        "ein Würfel hat zwölf Kanten"
+    )
 
 
 # --- die Legende ----------------------------------------------------------------
@@ -396,22 +395,22 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
     from app.ui.viewport import FINDING_MARK_MS
 
     viewport = window.viewport
-    owned_plotter: Any | None = None
+    owned_renderer: RecordingRenderer | None = None
     before_rebuild: list[tuple[object | None, tuple[Any, ...], frozenset[str]]] = []
     after_rebuild: list[tuple[object | None, tuple[Any, ...], frozenset[str]]] = []
     original_set_map = viewport.set_analysis_map
 
     def actor_names() -> frozenset[str]:
-        plotter = viewport.plotter
-        assert plotter is not None
-        renderer = plotter.renderer
-        return frozenset(str(name) for name in renderer.actors)
+        renderer = viewport.renderer
+        assert renderer is not None
+        if isinstance(renderer, RecordingRenderer):
+            gone = {id(item) for item in renderer.removed}
+            return frozenset(item.name for item in renderer.items if id(item) not in gone)
+        # Der echte Renderer führt seine Elemente unter ihrem Aktor.
+        return frozenset(item.name for item in getattr(renderer, "_items", {}).values())
 
     def has_actor(names: frozenset[str], wanted: str) -> bool:
-        # ``add_point_labels`` hängt im nativen PyVista-Renderer die Rolle an
-        # den vergebenen Namen (``finding_label-labels``). Der Ring bleibt
-        # dagegen als ``finding_ring`` unverändert.
-        return any(name == wanted or name.startswith(f"{wanted}-") for name in names)
+        return wanted in names
 
     def observe_map(analysis: Any, object_id: Any) -> None:
         before_rebuild.append(
@@ -423,10 +422,9 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         )
 
     try:
-        if viewport.plotter is None:
-            pyvista = pytest.importorskip("pyvista")
-            owned_plotter = pyvista.Plotter(off_screen=True)
-            viewport.plotter = owned_plotter
+        if viewport.renderer is None:
+            owned_renderer = RecordingRenderer()
+            viewport.renderer = owned_renderer
             viewport.show_scene(window.session.last_result)
         viewport.set_analysis_map = observe_map  # type: ignore[method-assign]
 
@@ -490,15 +488,8 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
         viewport.set_analysis_map = original_set_map  # type: ignore[method-assign]
         viewport._finding_timer.stop()
         viewport._hide_finding_mark(render=False)
-        if owned_plotter is not None:
-            owned_plotter.close()
-            viewport.plotter = None
-        elif viewport.plotter is not None:
-            # Der native Interactor gehört dem Prozess und darf zwischen zwei
-            # Fenstern nicht geschlossen werden (``MainWindow.release``).
-            # Seine Szene räumen wir trotzdem explizit, damit der sichtbare
-            # Beleg keine VTK-Aktoren bis zum Prozessende festhält.
-            viewport.plotter.clear()
+        if owned_renderer is not None:
+            viewport.renderer = None
 
 
 def test_a_warning_without_a_map_still_finds_its_place(window: MainWindow) -> None:
@@ -1072,76 +1063,27 @@ def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> N
     assert picked == "hole_3"
 
 
-class _PickyPlotter:
-    """Ein Plotter, der sich beim Picking verhält wie pyvista.
+def test_switching_navigation_keeps_the_navigator(qt_app: QApplication) -> None:
+    """Ein Schemawechsel tauscht das Schema, nicht die Kameraführung (§2.9).
 
-    Der echte lehnt ein zweites ``enable_point_picking`` mit einer Ausnahme ab.
-    Offscreen gibt es keinen Plotter, also führt kein Test den Zweig aus, in
-    dem das Picking eingeschaltet wird — genau darum startete die Anwendung
-    nach dem Anschließen der Auswahl nicht mehr, und die Suite war grün dabei.
-    """
-
-    def __init__(self) -> None:
-        self.enabled = False
-        self.rounds = 0
-
-    def enable_point_picking(self, **_: object) -> None:
-        if self.enabled:
-            raise RuntimeError("Picking is already enabled")
-        self.enabled = True
-        self.rounds += 1
-
-    def disable_picking(self) -> None:
-        self.enabled = False
-
-
-def test_switching_navigation_keeps_the_picking_alive(qt_app: QApplication) -> None:
-    """Ein Stilwechsel darf das Picking nicht abhängen (§18.5).
-
-    Der Test hat lange geprüft, dass ``plotter.enable_point_picking`` nach
-    jedem Wechsel neu läuft. Das war richtig gedacht und half nichts: pyvista
-    sucht sich den Renderer über ``GetInteractorStyle()._parent()``, also über
-    seinen **eigenen** Stil, und Solidon setzt für die vier
-    Navigationsschemata einen eigenen. Jeder Klick endete in einem
-    ``AttributeError``, den pyvistaqt zu einer Warnung macht — die Auswahl im
-    Viewport hat nie funktioniert, und der Test war grün dabei.
-
-    Jetzt löst der Stil das Picking selbst aus. Geprüft wird also, was
-    tatsächlich zählt: dass ein Klick nach dem Wechsel ankommt.
-    """
-    from app.ui.viewport import _InteractorStyle
-
-    seen: list[tuple[int, int]] = []
-
-    style = _InteractorStyle(None, "slicer", None, lambda x, y: seen.append((x, y)))
-    assert hasattr(style, "_left_at"), "der Stil merkt sich, wo gedrückt wurde"
-
-    # Ohne Interactor lässt sich kein Klick nachstellen; was hier zählt, ist
-    # die Verdrahtung — dass der Rückruf im Stil steckt und nicht bei pyvista.
-    assert style.GetClassName().startswith("vtkInteractorStyle")
-
-
-def test_picking_needs_no_plotter_call_any_more(qt_app: QApplication) -> None:
-    """Und ``_enable_picking`` fasst den Plotter nicht mehr an.
-
-    Der ``_PickyPlotter`` lehnt ein zweites ``enable_point_picking`` ab, wie es
-    der echte tut. Wird er gar nicht erst gerufen, kann auch nichts doppelt
-    angeschaltet werden — das war der eigentliche Grund für die Klimmzüge
-    davor.
+    Der Navigator hängt am Renderer und bekommt jede Zeigergeste; ihn bei
+    jedem Wechsel neu anzumelden hieße, die Auswahl an der alten Anmeldung
+    vorbeizuführen — genau der Fehler, den der pyvista-Stil zweimal hatte.
     """
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
     try:
-        plotter = _PickyPlotter()
-        viewport.plotter = plotter
+        viewport.renderer = RecordingRenderer()
+        viewport.set_navigation("slicer")
+        navigator = viewport._navigator
+        assert navigator is not None and navigator.scheme == "slicer"
 
-        viewport._enable_picking()
-        viewport._enable_picking()
-
-        assert plotter.rounds == 0, "das Picking hängt am eigenen Stil, nicht am Plotter"
+        viewport.set_navigation("solidon")
+        assert viewport._navigator is navigator, "derselbe Navigator, neues Schema"
+        assert navigator.scheme == "solidon"
     finally:
-        viewport.plotter = None
+        viewport.renderer = None
         viewport.deleteLater()
 
 
@@ -1481,46 +1423,20 @@ def test_the_camera_is_fitted_once_and_then_left_alone(window: MainWindow) -> No
     )
 
 
-class _CameraPlotter:
-    """Ein Plotter, der nur Buch führt.
-
-    Offscreen gibt es keinen echten — und genau dort spielt dieser Fehler:
-    ein Test, der sich ohne Plotter überspringt, hätte nie gemerkt, dass das
-    Einpassen wirkungslos war.
-    """
-
-    def __init__(self) -> None:
-        self.camera_set = False
-        self.fitted_to: list[object] = []
-
-    def reset_camera(self, bounds: object = None) -> None:
-        self.fitted_to.append(bounds)
-
-
-def test_fitting_tells_pyvista_that_it_is_done(window: MainWindow) -> None:
-    """Sonst passt pyvista gleich noch einmal ein — über alles.
-
-    ``reset_camera(bounds=…)`` lässt ``camera_set`` auf False stehen, und der
-    nächste Zugriff auf ``plotter.camera`` (beim Rendern, beim Stilwechsel, bei
-    jeder Achsansicht) setzt die Kamera daraufhin selbst — diesmal über *alle*
-    Aktoren. Der Bauraum gewann also jedes Mal, obwohl hier die Maße der Körper
-    standen: „Alles einpassen" tat sichtbar nichts.
-
-    Eingepasst wird **mit Luft**: genau auf die Grenzen berührte ein 40 mm
-    großer Quader links und rechts den Bildrand.
-    """
+def test_fitting_frames_the_bodies_with_air(window: MainWindow) -> None:
+    """Eingepasst wird auf die Körper, **mit Luft**: genau auf die Grenzen
+    berührte ein 40 mm großer Quader links und rechts den Bildrand."""
     from app.ui.viewport import with_margin
 
     window.viewport.show_scene(window.session.last_result)
-    plotter = _CameraPlotter()
-    window.viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    window.viewport.renderer = renderer
 
     window.viewport.reset_camera()
 
     bounds = window.viewport._object_bounds()
     assert bounds is not None
-    assert plotter.fitted_to == [with_margin(bounds)], "auf die Körper, mit Luft darum"
-    assert plotter.camera_set, "und danach fasst pyvista die Kamera nicht mehr an"
+    assert renderer.reset_bounds == [with_margin(bounds)], "auf die Körper, mit Luft darum"
 
 
 def test_a_problem_note_stays_inside_the_legend_layout(qt_app: QApplication) -> None:
@@ -1561,16 +1477,15 @@ def test_an_axis_view_fits_on_the_bodies_not_the_backdrop(window: MainWindow) ->
     from app.ui.viewport import with_margin
 
     window.viewport.show_scene(window.session.last_result)
-    plotter = _CameraPlotter()
-    window.viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    window.viewport.renderer = renderer
     window.viewport._shadow_hulls.clear()
 
     window.viewport.view_from("front")
 
     bounds = window.viewport._object_bounds()
     assert bounds is not None
-    assert plotter.fitted_to == [with_margin(bounds)], "auf die Körper, mit Luft darum"
-    assert plotter.camera_set, "sonst rahmt der nächste Zugriff wieder alles"
+    assert renderer.reset_bounds == [with_margin(bounds)], "auf die Körper, mit Luft darum"
 
 
 def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
@@ -1586,15 +1501,14 @@ def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
     from app.ui.viewport import with_margin
 
     window.viewport.show_scene(None)
-    plotter = _CameraPlotter()
-    window.viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    window.viewport.renderer = renderer
 
     window.viewport.reset_camera()
 
     volume = window.viewport._volume_bounds()
     assert volume is not None, "das Fenster hat ein Profil, also gilt ein Bauraum"
-    assert plotter.fitted_to == [with_margin(volume)]
-    assert plotter.camera_set
+    assert renderer.reset_bounds == [with_margin(volume)]
 
 
 def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) -> None:
@@ -1613,8 +1527,8 @@ def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) 
     viewport.show_scene(window.session.last_result)
     assert viewport._fitted_to == "objects"
 
-    plotter = _CameraPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     # In derselben Reihenfolge wie ``show_scene``: erst steht die neue Szene,
     # dann wird eingepasst. Andersherum misst ``reset_camera`` die Körper der
     # vorigen und passt auf etwas ein, das nicht mehr da ist.
@@ -1625,13 +1539,15 @@ def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) 
 
     volume = viewport._volume_bounds()
     assert volume is not None
-    assert plotter.fitted_to == [with_margin(volume)], "die leere Szene passt auf den Bauraum ein"
+    assert renderer.reset_bounds == [with_margin(volume)], (
+        "die leere Szene passt auf den Bauraum ein"
+    )
     assert viewport._bed_extent is not None, "der Bauraum gilt auch ohne Plotter"
     assert viewport._fitted_to == "bed"
 
-    plotter.fitted_to.clear()
+    renderer.reset_bounds.clear()
     viewport._fit_once_for(None)
-    assert plotter.fitted_to == [], "der nächste leere Aufbau lässt die Kamera in Ruhe"
+    assert renderer.reset_bounds == [], "der nächste leere Aufbau lässt die Kamera in Ruhe"
 
 
 def test_a_scene_that_outgrows_the_view_gets_fitted_again() -> None:
@@ -1701,15 +1617,15 @@ def test_the_camera_follows_a_body_that_dwarfs_the_scene(window: MainWindow) -> 
     assert viewport._fitted_to == "objects"
     assert viewport._fitted_bounds is not None, "worauf eingepasst wurde, wird gemerkt"
 
-    plotter = _CameraPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     viewport._fit_once_for(window.session.last_result)
-    assert plotter.fitted_to == [], "derselbe Stand lässt die Kamera in Ruhe"
+    assert renderer.reset_bounds == [], "derselbe Stand lässt die Kamera in Ruhe"
 
     # Die Szene wächst: derselbe Zustand „objects", aber ein Vielfaches groß.
     viewport._fitted_bounds = (-1.0, 1.0, -1.0, 1.0, 0.0, 1.0)
     viewport._fit_once_for(window.session.last_result)
-    assert plotter.fitted_to, "der Sprung wird neu gerahmt"
+    assert renderer.reset_bounds, "der Sprung wird neu gerahmt"
 
 
 def test_the_build_volume_is_a_hint_not_a_cage() -> None:
@@ -1775,221 +1691,67 @@ def test_the_gizmo_is_big_enough_to_grab() -> None:
     assert GIZMO_LINE_RADIUS > 0.02, "und ihre Strichstärke"
 
 
-class _GizmoActor:
-    """Ein Actor mit genau dem, was Auswahl, Beschriftung und Griffe anfassen."""
+def _gizmo_viewport() -> tuple[Any, RecordingRenderer]:
+    """Ein Viewport mit Renderer-Doppel und zwei Körpern im Bild.
 
-    def __init__(self) -> None:
-        self.prop = SimpleNamespace(color=None)
-        self.center = (0.0, 0.0, 0.0)
-        self.mapper = SimpleNamespace(
-            SetResolveCoincidentTopologyToPolygonOffset=lambda: None,
-            SetRelativeCoincidentTopologyPolygonOffsetParameters=lambda *_args: None,
-        )
-        self.user_matrix = None
-
-    def GetLength(self) -> float:  # noqa: N802 — VTK-Name
-        return 10.0
-
-
-class _GizmoWidget:
-    """Spiegelt die echte API: ``AffineWidget3D`` hat ``remove()`` — und
-    kein ``Off()``. Ein Fake mit ``Off`` hätte den Absturz beim Abschalten
-    genau so versteckt, wie die Suite ihn versteckt hat."""
-
-    def __init__(self, actor: object) -> None:
-        self.actor = actor
-        self.removed = False
-
-    def remove(self) -> None:
-        self.removed = True
-
-
-class _GizmoInteractor:
-    """Verbucht, wer den Picker setzt.
-
-    **Die Attrappe spiegelt die echte API-Oberfläche, nicht die vermutete.**
-    ``SetPicker`` steht hier, weil der Viewport es ruft: pyvistas Griff fragt
-    bei jeder Mausbewegung ``interactor.GetPicker()``, und der Picker, den das
-    Widget selbst hinstellt, trifft in dieser Umgebung nichts. Ohne diese
-    Methode fielen acht Tests mit ``AttributeError`` — dieselbe Sorte, vor der
-    der Docstring am Griff selbst warnt.
-
-    ``SetInteractorStyle`` stand hier und ist es nicht mehr: Der Viewport hängt
-    seinen Stil seit dem 04.09.2026 über pyvistas Eigenschaft an
-    (``iren.style``), weil ein daran vorbei gesetzter Stil beim nächsten
-    ``update_style()`` verlorenging — beim Doppelklick etwa, also bei jedem
-    zweiten Klick der gestuften Auswahl. Verbucht wird deshalb dort, wo der
-    Aufruf hingeht (:class:`_GizmoObservers`); eine Attrappe, die die alte
-    Stelle weiter anbietet, verstünde einen Rückfall als Erfolg.
+    Zwanzig Bildpunkte je Millimeter, damit der Deckel des Griffs in
+    Bildpunkten (``GIZMO_LEAST_PIXELS``) nicht greift und der Griff die Größe
+    des Gewählten nimmt.
     """
+    import numpy as np
 
-    def __init__(self) -> None:
-        self.pickers: list[object] = []
-
-    def SetPicker(self, picker: object) -> None:  # noqa: N802 — VTK-Name
-        self.pickers.append(picker)
-
-
-class _GizmoObservers:
-    """Der ``iren`` des Fakes: zählt Beobachter an und wieder ab.
-
-    Der Skaliergriff meldet drei an und muss alle drei wieder loswerden —
-    ein vergessener zieht am Griff der vorigen Auswahl weiter.
-    """
-
-    def __init__(self) -> None:
-        self.active: dict[int, str] = {}
-        self._next = 0
-        self.styles: list[object] = []
-        """Wer den Interaktionsstil gesetzt hat — der Weg, den der Viewport
-        wirklich nimmt (siehe :class:`_GizmoInteractor`)."""
-
-    @property
-    def style(self) -> object | None:
-        return self.styles[-1] if self.styles else None
-
-    @style.setter
-    def style(self, style: object) -> None:
-        self.styles.append(style)
-
-    def add_observer(
-        self,
-        event: str,
-        _call: object,
-        interactor_style_fallback: bool = True,
-    ) -> int:
-        self._next += 1
-        self.active[self._next] = event
-        return self._next
-
-    def remove_observer(self, identifier: int) -> None:
-        del self.active[identifier]
-
-
-class _GizmoPlotter:
-    """Ein Plotter, der Griffe und Beschriftungen nur verbucht."""
-
-    def __init__(self) -> None:
-        self.widgets: list[_GizmoWidget] = []
-        self.interactor = _GizmoInteractor()
-        self.iren = _GizmoObservers()
-        # **Eine Kamera im VTK-Stil.** Seit der Griff seine Länge in
-        # Bildpunkten deckelt (`_gizmo_scale_for`), fragt er über
-        # `_pixels_per_mm_at` die Projektion — und die ruft `GetPosition`,
-        # nicht `position`. Ohne diese drei stirbt jeder Test, der einen Griff
-        # anhängt, am Massstab statt an seiner Sache.
-        self.camera = SimpleNamespace(
-            GetPosition=lambda: (100.0, 100.0, 100.0),
-            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
-            GetViewUp=lambda: (0.0, 0.0, 1.0),
-        )
-
-    def add_affine_transform_widget(self, actor: object, **_kwargs: object) -> _GizmoWidget:
-        widget = _GizmoWidget(actor)
-        self.widgets.append(widget)
-        return widget
-
-    def add_point_labels(self, *_args: object, **_kwargs: object) -> object:
-        return object()
-
-    def remove_actor(self, _actor: object, render: bool = True) -> None:
-        pass
-
-    def add_mesh(self, *_args: object, **_kwargs: object) -> _GizmoActor:
-        return _GizmoActor()
-
-    def add_lines(self, *_args: object, **_kwargs: object) -> _GizmoActor:
-        # Seit dem Drehbogen (:meth:`Viewport._draw_turn_arc`) zeichnet der Zug
-        # auch Linien. Eine Attrappe, der eine Methode fehlt, macht aus einer
-        # neuen Anzeige einen roten Test in einer fremden Datei — hier
-        # `AttributeError: '_GizmoPlotter' object has no attribute 'add_lines'`.
-        return _GizmoActor()
-
-    def render(self) -> None:
-        pass
-
-
-def _gizmo_viewport() -> tuple[object, _GizmoPlotter]:
-    """Ein Viewport mit Buchführungs-Plotter und zwei Körpern im Bild."""
+    from app.ui.render import shapes
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    plotter = _GizmoPlotter()
-    viewport.plotter = plotter
-    viewport._actors = {"obj_1": _GizmoActor(), "obj_2": _GizmoActor()}
-    return viewport, plotter
+    renderer = RecordingRenderer(scale=20.0)
+    viewport.renderer = renderer
+    vertices, _faces = shapes.cube((0.0, 0.0, 5.0), 10.0)
+    viewport._actors = {
+        "obj_1": RecordingItem("object:obj_1", np.asarray(vertices), "#b9c4d0"),
+        "obj_2": RecordingItem(
+            "object:obj_2", np.asarray(vertices) + np.array([30.0, 0.0, 0.0]), "#b9c4d0"
+        ),
+    }
+    return viewport, renderer
 
 
 def test_the_gizmo_comes_off_again(qt_app: QApplication) -> None:
-    """Abschalten nimmt den Griff aus dem Bild.
-
-    ``AffineWidget3D`` hat kein ``Off()`` — der alte Aufruf endete als
-    ``AttributeError``, den Qt verschluckte: der Griff blieb stehen, obwohl
-    der Schalter aus war. Die Gizmo-Tests prüften bis dahin nur die reinen
-    Funktionen, nie das Widget selbst.
-    """
-    viewport, plotter = _gizmo_viewport()
+    """Abschalten nimmt den Griff aus dem Bild — Pfeile, Ringe, Würfel, Buchstaben."""
+    viewport, renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
-        assert viewport._gizmo is plotter.widgets[-1]
+        gizmo = viewport._gizmo
+        assert gizmo is not None
+        parts = list(gizmo.items)
+        assert len(parts) == 6, "drei Pfeile, drei Ringe"
 
         viewport.set_gizmo(False)
         assert viewport._gizmo is None
-        assert plotter.widgets[-1].removed, "über remove(), die Methode, die es gibt"
+        assert all(part in renderer.removed for part in parts), "der Griff geht aus dem Bild"
     finally:
-        viewport.deleteLater()
-
-
-def test_leaving_the_gizmo_restores_the_global_depth_resolution(qt_app: QApplication) -> None:
-    """Der Bewegen-Modus darf keine Spuren in der ganzen Ansicht hinterlassen.
-
-    pyvistas ``AffineWidget3D`` und der nachgebaute Skaliergriff rufen
-    ``SetResolveCoincidentTopologyToPolygonOffset()`` — eine **statische**
-    VTK-Einstellung, die prozessweit jeden Mapper trifft (gemessen: über einen
-    zweiten, unbeteiligten Mapper gelesen). Ohne Rückstellung stachen nach dem
-    ersten Besuch im Bewegen-Modus die Kantenlinien aller Körper dauerhaft
-    durch die Flächen — als Striche an den Kantenmitten, die den Modus
-    überlebten und in keiner Aktor-Eigenschaft standen (Gesamtreview
-    25.08.2026, A3). Der Test stellt die Einstellung so um, wie das echte
-    Widget es tut, und verlangt sie nach dem Abschalten zurück.
-    """
-    from vtkmodules.vtkRenderingCore import vtkMapper
-
-    viewport, _plotter = _gizmo_viewport()
-    before = int(vtkMapper.GetResolveCoincidentTopology())
-    try:
-        viewport.select("obj_1")
-        viewport.set_gizmo(True)
-        vtkMapper.SetResolveCoincidentTopologyToPolygonOffset()
-        viewport.set_gizmo(False)
-
-        assert int(vtkMapper.GetResolveCoincidentTopology()) == before
-    finally:
-        vtkMapper.SetResolveCoincidentTopology(before)
         viewport.deleteLater()
 
 
 def test_the_gizmo_follows_the_selection(qt_app: QApplication) -> None:
-    """§18.11: wer ein anderes Objekt wählt, will es auch bewegen.
-
-    Der Griff hing bis dahin an der Auswahl zum Zeitpunkt des Einschaltens —
-    ein Wechsel im Objektbaum ließ ihn am vorigen Körper stehen, und nach
-    jeder Auswertung sogar an einem Actor, der gar nicht mehr im Bild war.
-    """
-    viewport, _plotter = _gizmo_viewport()
+    """§18.11: wer ein anderes Objekt wählt, will es auch bewegen — nicht das
+    vorige. Und ohne Auswahl bleibt die Entscheidung, nur der Griff geht."""
+    viewport, renderer = _gizmo_viewport()
     try:
         viewport.set_gizmo(True)
         assert viewport._gizmo is None, "ohne Auswahl gibt es nichts zu greifen"
 
         viewport.select("obj_1")
-        assert viewport._gizmo is not None, "die Auswahl bringt den Griff mit"
         first = viewport._gizmo
-        assert first.actor is viewport._actors["obj_1"]
+        assert first is not None, "die Auswahl bringt den Griff mit"
+        assert first.target is viewport._actors["obj_1"]
+        first_parts = list(first.items)
 
         viewport.select("obj_2")
-        assert first.removed, "der alte Griff geht weg"
-        assert viewport._gizmo.actor is viewport._actors["obj_2"], "der neue sitzt am neuen"
+        assert all(part in renderer.removed for part in first_parts), "der alte Griff geht weg"
+        assert viewport._gizmo is not None
+        assert viewport._gizmo.target is viewport._actors["obj_2"], "der neue sitzt am neuen"
 
         viewport.select(None)
         assert viewport._gizmo is None
@@ -2000,34 +1762,34 @@ def test_the_gizmo_follows_the_selection(qt_app: QApplication) -> None:
 
 def test_a_drag_below_the_snap_leaves_no_ghost(qt_app: QApplication) -> None:
     """Ein Zug unter der Fangschwelle erzeugt keine Operation — dann darf er
-    auch kein Bild hinterlassen.
-
-    pyvistas Widget verschiebt den Actor schon während des Ziehens und merkt
-    sich die Matrix für den nächsten Zug. Ohne Neuanhängen stand der Körper
-    im Bild versetzt, während die Szene ihn nie bewegt hat — und der nächste
-    Zug hätte den vorigen gleich noch einmal angewandt.
-    """
+    auch keinen versetzten Griff hinterlassen: Er wird frisch angehängt."""
     from app.core.geom.transform import translation
 
-    viewport, _plotter = _gizmo_viewport()
+    viewport, renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
         viewport.set_snapping(1.0, 15.0)
         first = viewport._gizmo
+        assert first is not None
+        first_parts = list(first.items)
         dragged: list[object] = []
         viewport.transformDragged.connect(dragged.append)
 
         viewport._on_gizmo_released(translation((0.4, 0.0, 0.0)))
         assert dragged == [], "0,4 mm bei 1 mm Raster ist kein Zug"
-        assert first.removed, "der Griff wird frisch angehängt"
+        assert all(part in renderer.removed for part in first_parts), (
+            "der Griff wird frisch angehängt"
+        )
         assert viewport._gizmo is not None
         assert viewport._gizmo is not first, "mit leerer Matrix statt der alten"
 
         second = viewport._gizmo
+        second_parts = list(second.items)
         viewport._on_gizmo_released(translation((5.0, 0.0, 0.0)))
         assert len(dragged) == 1, "ein echter Zug kommt als Schritte an"
-        assert second.removed and viewport._gizmo is not second
+        assert all(part in renderer.removed for part in second_parts)
+        assert viewport._gizmo is not second
     finally:
         viewport.deleteLater()
 
@@ -2053,20 +1815,22 @@ def test_the_axis_letters_travel_with_the_drag(qt_app: QApplication) -> None:
     assert turned[0] == pytest.approx((0.0, 10.0, 0.0), abs=1e-9), "X-Marke wandert auf die Y-Achse"
 
     # Und am Griff: die Punkte hinter der Beschriftung folgen dem Ereignis.
-    viewport, _plotter = _gizmo_viewport()
+    viewport, renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
-        assert viewport._gizmo_label_data is not None
-        assert viewport._gizmo_label_data.n_points == 4, "X, Y, Z und das S des Würfels"
-        before = viewport._gizmo_label_data.points.copy()
+        labels = viewport._gizmo_labels
+        assert labels is not None and viewport._gizmo_label_base is not None
+        assert viewport._gizmo_label_texts == ["X", "Y", "Z", "S"], "X, Y, Z und das S des Würfels"
+        before = viewport._gizmo_label_base.copy()
 
         viewport._on_gizmo_interacted(translation((7.0, 0.0, 0.0)))
-        after = viewport._gizmo_label_data.points
+        after = renderer.item_of("gizmo_labels").points
         assert after[:, 0] == pytest.approx(before[:, 0] + 7.0)
 
         viewport.set_gizmo(False)
-        assert viewport._gizmo_label_data is None, "mit dem Griff geht auch das Dataset"
+        assert viewport._gizmo_labels is None, "mit dem Griff gehen auch die Buchstaben"
+        assert labels in renderer.removed
     finally:
         viewport.deleteLater()
 
@@ -2105,20 +1869,18 @@ def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) ->
     """
     from app.core.types import Feature
 
-    viewport, plotter = _gizmo_viewport()
+    viewport, renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
-        assert viewport._scale_handle is not None, "am Objekt gibt es den Würfel"
-        assert len(plotter.iren.active) == 4, (
-            "drei Beobachter des Skaliergriffs — Bewegen, Drücken, Loslassen — "
-            "und der vierte, der den Drehgriff auf seine Raste zieht"
-        )
-        assert viewport._gizmo_label_data.n_points == 4, "X, Y, Z — und S"
+        handle = viewport._scale_handle
+        assert handle is not None, "am Objekt gibt es den Würfel"
+        assert handle.item in renderer.items and handle.item not in renderer.removed
+        assert viewport._gizmo_label_texts == ["X", "Y", "Z", "S"], "X, Y, Z — und S"
 
         viewport.set_gizmo(False)
         assert viewport._scale_handle is None
-        assert plotter.iren.active == {}, "alle Beobachter sind wieder abgemeldet"
+        assert handle.item in renderer.removed, "der Würfel geht mit dem Griff"
 
         # An der Fläche gibt es keinen Würfel: sie kennt nur vor und zurück.
         face = Feature(
@@ -2144,7 +1906,7 @@ def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) ->
         # passieren. Der Name der Fläche steht in der Statusleiste, wo Qt
         # zeichnet: VTK nimmt in dieser Beschriftung kein Zeichen außerhalb
         # von ASCII, und die Flächennamen werden übersetzt.
-        assert viewport._gizmo_label_data.n_points == 1, "an der Fläche eine Richtung"
+        assert viewport._gizmo_label_texts == ["<->"], "an der Fläche eine Richtung"
     finally:
         viewport.deleteLater()
 
@@ -2153,21 +1915,23 @@ def test_a_scale_drag_becomes_an_operation(qt_app: QApplication) -> None:
     """Loslassen am Würfel meldet den Faktor — ein Zug, eine Operation,
     ein Undo (§18.11, §2.1). Ein Faktor von eins meldet nichts.
     """
-    viewport, plotter = _gizmo_viewport()
+    viewport, renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
         first = viewport._gizmo
+        assert first is not None
+        first_parts = list(first.items)
         factors: list[float] = []
         viewport.scaleDragged.connect(factors.append)
 
         viewport._on_scale_released(1.00001)
         assert factors == [], "wer nicht gezogen hat, hat nichts skaliert"
-        assert first.removed and viewport._gizmo is not first, "der Griffsatz ist frisch"
+        assert all(part in renderer.removed for part in first_parts)
+        assert viewport._gizmo is not first, "der Griffsatz ist frisch"
 
         viewport._on_scale_released(1.5)
         assert factors == [1.5]
-        assert len(plotter.iren.styles) == 2, "und das Schema ist beide Male zurück"
     finally:
         viewport.deleteLater()
 
@@ -2182,7 +1946,7 @@ def test_the_drag_shows_its_number_while_it_runs(qt_app: QApplication) -> None:
     """
     from app.core.geom.transform import rotation, translation
 
-    viewport, _plotter = _gizmo_viewport()
+    viewport, _renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
@@ -2220,7 +1984,7 @@ def test_a_typed_number_is_applied_exactly(qt_app: QApplication) -> None:
     """
     from app.core.geom.transform import translation
 
-    viewport, _plotter = _gizmo_viewport()
+    viewport, _renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
@@ -2265,7 +2029,7 @@ def test_a_typed_scale_factor_becomes_the_operation(qt_app: QApplication) -> Non
     """Auch am Würfel gilt: die getippte Zahl schlägt den Mausweg — und ein
     Faktor, der nichts ändert oder nichts übrig ließe, wird nicht angewandt.
     """
-    viewport, _plotter = _gizmo_viewport()
+    viewport, _renderer = _gizmo_viewport()
     try:
         viewport.select("obj_1")
         viewport.set_gizmo(True)
@@ -2288,108 +2052,32 @@ def test_a_typed_scale_factor_becomes_the_operation(qt_app: QApplication) -> Non
         viewport.deleteLater()
 
 
-def test_a_drag_gives_the_navigation_back(qt_app: QApplication) -> None:
-    """Nach dem Loslassen gilt wieder das gewählte Schema.
+def test_a_drag_leaves_the_navigation_in_place(qt_app: QApplication) -> None:
+    """Nach dem Loslassen gilt weiter das gewählte Schema — ohne dass jemand
+    es zurückstellen müsste.
 
-    pyvistas Widget schaltet beim Greifen auf seinen Trackball-Stil um und
-    stellt beim Loslassen *seinen* Standard wieder her — nicht unseren. Ohne
-    die Wiederherstellung waren nach dem ersten Zug Auswahl-Klick,
-    Kontextmenü und das Navigationsschema verschwunden, und kein Test sah
-    es, weil keiner je einen Zug zu Ende fuhr.
+    Bis zum 05.09.2026 schaltete PyVistas Griff beim Greifen auf seinen
+    Trackball und stellte beim Loslassen **seinen** Standard wieder her;
+    jedes Zugende rief deshalb ``set_navigation``. Der Navigator kennt keinen
+    Stilwechsel: Der Griff nimmt seine Gesten vor der Kamera, sonst nichts.
     """
     from app.core.geom.transform import translation
 
-    viewport, plotter = _gizmo_viewport()
+    viewport, _renderer = _gizmo_viewport()
     try:
+        viewport.set_navigation("blender")
+        navigator = viewport._navigator
+        assert navigator is not None
         viewport.select("obj_1")
         viewport.set_gizmo(True)
-        assert plotter.iren.styles == [], "bis hierhin hat niemand den Stil angefasst"
 
         viewport._on_gizmo_released(translation((5.0, 0.0, 0.0)))
-        assert len(plotter.iren.styles) == 1, "der eigene Stil ist zurück"
+        assert viewport._navigator is navigator and navigator.scheme == "blender"
 
         viewport._on_gizmo_released(translation((0.2, 0.0, 0.0)))
-        assert len(plotter.iren.styles) == 2, "auch ein Zug unter der Fangschwelle"
+        assert viewport._navigator is navigator, "auch ein Zug unter der Fangschwelle"
     finally:
         viewport.deleteLater()
-
-
-class _FakeRenderer:
-    """Ein Renderer, der nur rechnet, was für diese Prüfung nötig ist.
-
-    Offscreen gibt es kein VTK — ``_available`` verbietet es ausdrücklich,
-    weil ein fehlender OpenGL-Kontext den Prozess mitnähme. Ein Test, der sich
-    dort überspringt, prüft nie etwas; also wird die **Verwendung** der
-    VTK-Schnittstelle geprüft und nicht VTK selbst: die Reihenfolge der
-    Aufrufe und die homogene Division, die man vergessen kann.
-    """
-
-    def __init__(self, scale: float = 2.0) -> None:
-        self.scale = scale
-        """Wie viele Bildpunkte ein Millimeter bekommt."""
-        self._world = (0.0, 0.0, 0.0, 1.0)
-        self._display = (0.0, 0.0, 0.0)
-
-    def GetActiveCamera(self) -> object:  # noqa: N802 — VTK-Name
-        return self
-
-    def GetFocalPoint(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        return (0.0, 0.0, 0.0)
-
-    def SetWorldPoint(self, x: float, y: float, z: float, w: float) -> None:  # noqa: N802
-        self._world = (x, y, z, w)
-
-    def WorldToDisplay(self) -> None:  # noqa: N802 — VTK-Name
-        x, y, z, _w = self._world
-        self._display = (x * self.scale, y * self.scale, z)
-
-    def GetDisplayPoint(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        return self._display
-
-    def SetDisplayPoint(self, x: float, y: float, z: float) -> None:  # noqa: N802
-        self._display = (x, y, z)
-
-    def DisplayToWorld(self) -> None:  # noqa: N802 — VTK-Name
-        x, y, z = self._display
-        # Mit einem Gewicht ungleich eins: wer die Division vergisst, bekommt
-        # hier den doppelten Wert und fällt auf.
-        self._world = (x / self.scale * 2.0, y / self.scale * 2.0, z * 2.0, 2.0)
-
-    def GetWorldPoint(self) -> tuple[float, float, float, float]:  # noqa: N802
-        return self._world
-
-
-def test_the_point_under_the_pointer_is_computed_in_world_units() -> None:
-    """Handbuch und Code-Kommentar behaupteten beide, das Rad zoome dorthin,
-    wo der Zeiger steht. Nachgemessen wanderte der Punkt weg — VTKs
-    Trackball-Stil dollyt entlang der Kamera-Achse, und man zoomt an dem
-    vorbei, was man ansehen wollte.
-
-    Die Rechnung dahinter: Bildpunkt zurück in die Welt, auf der Tiefe des
-    Fokuspunkts, mit homogener Division. An der echten Kamera gemessen bleibt
-    der Punkt danach auf null Komma null Millimeter stehen; hier wird geprüft,
-    dass die Schnittstelle richtig benutzt wird.
-    """
-    from app.ui.viewport import _world_under
-
-    renderer = _FakeRenderer(scale=2.0)
-
-    point = _world_under(renderer, 100, 50)
-
-    assert point is not None
-    assert point == pytest.approx((50.0, 25.0, 0.0)), "geteilt, nicht nur umgerechnet"
-
-
-def test_a_pointer_without_a_world_point_says_nothing() -> None:
-    """Ein Gewicht von null hieße Division durch null — dann lieber kein
-    Punkt als eine Ausnahme mitten in einer Mausbewegung."""
-    from app.ui.viewport import _world_under
-
-    class _Degenerate(_FakeRenderer):
-        def DisplayToWorld(self) -> None:  # noqa: N802 — VTK-Name
-            self._world = (1.0, 1.0, 1.0, 0.0)
-
-    assert _world_under(_Degenerate(), 10, 10) is None
 
 
 def test_a_click_on_the_body_selects_it(window: MainWindow) -> None:
@@ -2966,25 +2654,26 @@ def test_the_shadow_hull_holds_the_corners_and_drops_the_rest(qt_app: QApplicati
     zählen nur die Punkte der konvexen Hülle — bei einem Quader acht von
     Hunderten.
     """
-    pv = pytest.importorskip("pyvista")
     import numpy as np
+    import trimesh
 
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
     try:
-        body = pv.Box(bounds=(0.0, 20.0, 0.0, 20.0, 0.0, 30.0)).triangulate().subdivide(3)
+        box = trimesh.creation.box(extents=(20.0, 20.0, 30.0)).subdivide().subdivide().subdivide()
+        body = np.asarray(box.vertices, dtype=float) + np.array([10.0, 10.0, 15.0])
         hull = viewport._shadow_hull_of(body)
         assert len(hull) == 8, "ein Quader hat acht Ecken, wie fein er auch vernetzt ist"
-        assert len(hull) < body.n_points / 10
+        assert len(hull) < len(body) / 10
 
         outline = viewport._shadow_outline_of(hull, (0.5, 0.0))
-        assert outline is not None and outline.n_cells > 0
-        assert np.allclose(outline.points[:, 2], 0.05), "der Schatten liegt auf der Platte"
+        assert outline is not None and len(outline) > 0
+        assert np.allclose(outline[:, 2], 0.05), "der Schatten liegt auf der Platte"
         # 30 mm hoch, halber Versatz je Millimeter: der Umriss reicht 15 mm
         # weiter als der Körper.
-        assert outline.points[:, 0].max() == pytest.approx(35.0)
-        assert outline.points[:, 1].max() == pytest.approx(20.0)
+        assert outline[:, 0].max() == pytest.approx(35.0)
+        assert outline[:, 1].max() == pytest.approx(20.0)
     finally:
         viewport.deleteLater()
 
@@ -3030,13 +2719,13 @@ def test_a_body_too_thin_for_a_hull_still_gets_one(qt_app: QApplication) -> None
     Qhull gibt bei entarteten Punktwolken auf. Sein Fehler darf nicht der
     Fehler der Ansicht werden: die paar Punkte gehen dann unverändert weiter.
     """
-    pv = pytest.importorskip("pyvista")
+    import numpy as np
 
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
     try:
-        flat = pv.PolyData([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
+        flat = np.array([[0.0, 0.0, 5.0], [10.0, 0.0, 5.0], [10.0, 10.0, 5.0], [0.0, 10.0, 5.0]])
         hull = viewport._shadow_hull_of(flat)
         assert hull is not None and len(hull) == 4
         assert viewport._shadow_outline_of(hull, (0.5, 0.5)) is not None
@@ -3053,7 +2742,6 @@ def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplicati
     neben der Grundplatte auf — ein Fleck ohne Verbindung zu dem, was ihn
     wirft.
     """
-    pytest.importorskip("pyvista")
     import numpy as np
 
     from app.ui.viewport import Viewport, outline_of
@@ -3077,17 +2765,16 @@ def test_a_body_standing_on_another_throws_its_shadow_onto_it(qt_app: QApplicati
         ground, window = catchers[1]
         outline = viewport._shadow_outline_of(tower, (0.5, 0.0), ground, window)
         assert outline is not None
-        assert np.allclose(outline.points[:, 2], 12.05), "er liegt auf der Grundplatte"
+        assert np.allclose(outline[:, 2], 12.05), "er liegt auf der Grundplatte"
         # 40 mm über ihr, halber Versatz je Millimeter: 20 mm weiter als der
         # Turm, nicht 26 wie bei der Rechnung ab null.
-        assert outline.points[:, 0].max() == pytest.approx(30.0)
+        assert outline[:, 0].max() == pytest.approx(30.0)
     finally:
         viewport.deleteLater()
 
 
 def test_a_body_on_the_plate_has_only_the_plate_below_it(qt_app: QApplication) -> None:
     """Ein Körper daneben ist kein Boden, solange er nicht darunter liegt."""
-    pytest.importorskip("pyvista")
     import numpy as np
 
     from app.ui.viewport import Viewport, outline_of
@@ -3111,7 +2798,6 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
     dunkler Umriss ohne Fläche darunter — die einzige Stelle, an der die
     Ansicht Boden behauptete, wo keiner ist.
     """
-    pytest.importorskip("pyvista")
     import numpy as np
 
     from app.ui.viewport import Viewport
@@ -3123,7 +2809,7 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
         ground, window = viewport._shadow_catchers("body")[0]
         outline = viewport._shadow_outline_of(body, (0.5, 0.0), ground, window)
         assert outline is not None
-        assert outline.points[:, 0].max() == pytest.approx(50.0), "an der Kante ist Schluss"
+        assert outline[:, 0].max() == pytest.approx(50.0), "an der Kante ist Schluss"
 
         far = body + np.array([200.0, 0.0, 0.0])
         assert viewport._shadow_outline_of(far, (0.5, 0.0), ground, window) is None, (
@@ -3135,7 +2821,6 @@ def test_the_shadow_is_cut_at_the_edge_of_the_plate(qt_app: QApplication) -> Non
 
 def test_without_a_build_volume_nothing_is_cut(qt_app: QApplication) -> None:
     """Ohne gezeigten Bauraum gibt es keine Kante, an der zu schneiden wäre."""
-    pytest.importorskip("pyvista")
 
     from app.ui.viewport import Viewport
 
@@ -3242,30 +2927,34 @@ def test_a_click_in_the_middle_of_a_face_has_to_hit_something() -> None:
     während Rad und Rechtsziehen die Kamera bewegten. Die Verdrahtung war seit
     ihrer Reparatur richtig — das Werkzeug nicht.
 
-    Geprüft wird an einem eigenen Offscreen-Renderer und nicht am Viewport: der
-    baut ohne Bildschirm keinen Plotter, und ein Test, der sich selbst
+    Geprüft wird an einem eigenen Renderer ohne Fenster und nicht am Viewport:
+    der baut ohne Bildschirm keinen Renderer, und ein Test, der sich selbst
     überspringt, prüft nie etwas.
     """
-    import pyvista as pv
     from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkPointPicker
 
+    from app.ui.render import shapes
+    from app.ui.render.api import CameraPose, SurfaceStyle
+    from app.ui.render.vtk_renderer import VtkRenderer
     from app.ui.viewport import PICK_TOLERANCE
 
-    plotter = pv.Plotter(off_screen=True, window_size=(400, 400))
+    view = VtkRenderer(offscreen=True, size=(400, 400))
     try:
-        plotter.add_mesh(pv.Cube(center=(0.0, 0.0, 0.0), x_length=20, y_length=20, z_length=20))
-        plotter.view_xy()
-        plotter.render()
+        vertices, faces = shapes.cube((0.0, 0.0, 0.0), 20.0)
+        view.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
+        view.set_camera_pose(CameraPose((0.0, 0.0, 100.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0)))
+        view.reset_camera((-10.0, 10.0, -10.0, 10.0, -10.0, 10.0))
+        view.render()
         middle = (200.0, 200.0)  # die Bildmitte, und dort liegt die Deckfläche
 
         points = vtkPointPicker()
         cells = vtkCellPicker()
         cells.SetTolerance(PICK_TOLERANCE)
 
-        hit_point = points.Pick(middle[0], middle[1], 0.0, plotter.renderer)
-        hit_cell = cells.Pick(middle[0], middle[1], 0.0, plotter.renderer)
+        hit_point = points.Pick(middle[0], middle[1], 0.0, view.renderer)
+        hit_cell = cells.Pick(middle[0], middle[1], 0.0, view.renderer)
     finally:
-        plotter.close()
+        view.close()
 
     assert not hit_point, "genau darum ging nichts: mitten auf der Fläche liegt kein Eckpunkt"
     assert hit_cell, "das Dreieck darunter gibt es, und darauf zeigt der Nutzer"
@@ -3880,11 +3569,11 @@ def test_nothing_is_fitted_before_a_build_volume_exists(qt_app: QApplication) ->
 
     viewport = Viewport()
     try:
-        plotter = _CameraPlotter()
-        viewport.plotter = plotter
+        renderer = RecordingRenderer()
+        viewport.renderer = renderer
         viewport._fit_once_for(None)
 
-        assert plotter.fitted_to == [], "ohne Bauraum wird nicht eingepasst"
+        assert renderer.reset_bounds == [], "ohne Bauraum wird nicht eingepasst"
         assert viewport._fitted_to == "", "und nichts gilt als erledigt"
     finally:
         viewport.deleteLater()
@@ -4351,150 +4040,6 @@ def test_a_click_into_a_hole_selects_the_hole(window: MainWindow) -> None:
     daneben = (mitte[0] + radius * 4.0, mitte[1] + radius * 4.0, mitte[2])
     assert viewport._feature_at(daneben) != bohrungen[0], (
         "vier Radien daneben ist nicht mehr diese Bohrung"
-    )
-
-
-class _FakeInteractor:
-    """Nur so viel Interactor, wie ``_left_down`` und Verwandte lesen."""
-
-    def __init__(self) -> None:
-        self.position = (100, 200)
-        self.shift = 0
-
-    def GetEventPosition(self) -> tuple[int, int]:  # noqa: N802 - VTK gibt den Namen
-        return self.position
-
-    def GetShiftKey(self) -> int:  # noqa: N802 - VTK gibt den Namen
-        return self.shift
-
-
-def _style_with_mouse(starts: bool = True) -> tuple[Any, _FakeInteractor, list[Any]]:
-    """Ein Interaktionsstil, dessen Maus sich von Hand führen lässt.
-
-    Die Kamera-Methoden werden stillgelegt: ohne echten Interactor stürzt VTK
-    in ``EndPan`` ab (gemessen, Segmentation fault). Geprüft wird hier die
-    Verdrahtung, nicht VTKs Kameraführung.
-    """
-    from app.ui.viewport import _InteractorStyle
-
-    seen: list[Any] = []
-    style = _InteractorStyle(
-        None,
-        "slicer",
-        None,
-        lambda x, y: seen.append(("pick", x, y)),
-        on_body_drag=lambda phase, x, y: (seen.append((phase, x, y)), starts)[1],
-    )
-    interactor = _FakeInteractor()
-    style.GetInteractor = lambda: interactor
-    for name in ("EndPan", "EndRotate", "StartPan", "StartRotate", "OnMouseMove"):
-        setattr(style, name, lambda *_: None)
-    return style, interactor, seen
-
-
-def test_the_left_button_reaches_the_body_drag(qt_app: QApplication) -> None:
-    """Die Maus ruft den Zug — und nicht bloß die Methode dahinter.
-
-    **Robert am 23.08.2026:** „wenn ich das modell mit linksklick auswähle kann
-    ich es immer noch nicht verschieben."
-
-    Alles unterhalb war gebaut: ``begin_body_drag``, ``begin_body_drag_at``,
-    ``continue_body_drag``, ``finish_body_drag``, der Rückruf ``on_body_drag``
-    und seine Übergabe an ``_ViewCallbacks``. Nur stand ``on_body_drag`` im
-    175-Zeilen-Rumpf des Interaktionsstils **genau einmal**: als Parameter. Die
-    Kette endete eine Ebene vor der Maus.
-
-    **Warum kein Test das fing**, obwohl es einen gab: Er setzte bei
-    ``begin_body_drag_at`` an, also hinter der Lücke, und begründete es
-    richtig — offscreen rendert VTK nicht, ein Picker über einem nie
-    gezeichneten Bild trifft nichts. Eine zutreffende Begründung, die eine
-    Lücke deckt, ist schwerer zu sehen als eine falsche. Testart **Anschluss**
-    (AGENTS.md): nicht „der Viewport kann ziehen", sondern „die Maus tut es".
-    """
-    style, interactor, seen = _style_with_mouse()
-
-    style._left_down()
-    interactor.position = (160, 250)
-    style._mouse_move()
-    style._left_up()
-
-    assert [entry[0] for entry in seen] == ["ready", "start", "move", "end"], (
-        "Drücken, Ziehen und Loslassen erreichen den Rückruf nicht vollständig"
-    )
-    assert seen[1][1:] == (100, 200), (
-        "der Zug beginnt nicht dort, wo gedrückt wurde — der Körper spränge um die "
-        "bereits zurückgelegte Strecke"
-    )
-
-
-def test_a_click_without_dragging_still_selects(qt_app: QApplication) -> None:
-    """Und ein Klick bleibt ein Klick — sonst wäre die Bohrung nicht mehr wählbar.
-
-    Der Zug beginnt schon beim Drücken, weil erst dann feststeht, ob dort der
-    gewählte Körper liegt. Ohne diesen Fall zöge ein Klick auf eine Bohrung
-    **des gewählten Körpers** künftig den ganzen Körper, statt die Bohrung zu
-    wählen — Roberts anderer Auftrag wäre damit rückwärts gegangen.
-
-    Aufgefangen wird das an zwei Stellen: ``finish_body_drag`` verwirft alles
-    unterhalb von ``EPS_DRAG``, und das Loslassen läuft danach weiter zu
-    ``on_pick``.
-    """
-    style, _interactor, seen = _style_with_mouse()
-
-    style._left_down()
-    style._left_up()
-
-    assert ("pick", 100, 200) in seen, "ein Klick ohne Bewegung wählt weiterhin aus"
-    assert [entry[0] for entry in seen] == ["ready", "pick"], (
-        f"ein Klick darf keinen Zug erzeugen, auch keinen verworfenen: {seen}"
-    )
-
-
-def test_the_camera_keeps_the_button_where_nothing_is_selected(qt_app: QApplication) -> None:
-    """Liegt dort nichts Gewähltes, bleibt die linke Taste, was sie war.
-
-    Der Rückruf urteilt selbst und gibt ``False`` zurück. Ohne diese Trennung
-    wäre das Ziehen ein Modus mit anderem Namen: Wer die Ansicht drehen will,
-    dürfte nicht erst wegklicken müssen.
-    """
-    style, interactor, seen = _style_with_mouse(starts=False)
-
-    style._left_down()
-    interactor.position = (160, 250)
-    style._mouse_move()
-
-    assert [entry[0] for entry in seen] == ["ready"], (
-        "nach einem abgelehnten Zug darf kein 'move' mehr kommen — die Kamera führt"
-    )
-
-
-def test_a_wobbly_click_still_selects_instead_of_nudging_the_body(qt_app: QApplication) -> None:
-    """Fünf Pixel Wandern beim Klicken bleiben ein Klick.
-
-    **Robert am 23.08.2026:** „wenn ich ein merkmal auswähle und im viewport
-    dann wieder auf das modell oder einem anderen merkmal klicke wechseln wir
-    auch nicht."
-
-    Zwei Schwellen entschieden dasselbe und waren verschieden: ``EPS_DRAG``
-    misst 0,05 mm — je nach Zoom ein Drittel Pixel — und ``CLICK_SLACK`` maß
-    zwei Pixel. Dazwischen lag ein Klick, der **beides** verfehlte: Er erzeugte
-    einen Verschiebeschritt im Verlauf und wechselte die Auswahl nicht.
-    Gemessen kippte es bei drei Pixeln, und drei Pixel sind beim Klicken
-    normal.
-
-    Jetzt entscheidet eine einzige Schwelle, und der Zug beginnt genau dort,
-    wo der Klick aufhört.
-    """
-    style, interactor, seen = _style_with_mouse()
-
-    style._left_down()
-    interactor.position = (105, 204)
-    style._mouse_move()
-    style._left_up()
-
-    assert ("pick", 105, 204) in seen, "ein leicht wackliger Klick wählt nicht mehr aus"
-    assert "start" not in [entry[0] for entry in seen], (
-        f"aus dem Wackeln wurde ein Zug — der Körper rutscht bei jedem Klick: {seen}"
     )
 
 

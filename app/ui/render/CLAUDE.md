@@ -14,6 +14,7 @@ beides und mess“; Gedächtnis `viewport-zwei-renderer-messen`).
 | `shapes.py` | Die kleinen Netze der Ansicht als NumPy-Felder — Scheibe, Zylinder, Kegel, Pfeil, Würfel, Fläche, Raster, Ringlinie —, damit beide Renderer dasselbe zeichnen und `tests/test_render_shapes.py` sie ohne Fenster nachmisst (geschlossen, nach außen, Volumen nach Formel) |
 | `gizmo.py` | Der Bewegungsgriff (§18.11) auf dem Vertrag: drei Pfeile, drei Ringe, Hover über `pick_item`, Zug als Lot des Sichtstrahls auf die Achse beziehungsweise Schnitt mit der Ebene quer dazu. `handle(event)` sagt mit `True`, dass die Geste ihm gehört; `interact_callback` darf die Matrix berichtigen (der Magnet auf 45°). Der Skalierwürfel daneben liegt in `app/ui/scale_widget.py` und ist genauso gebaut |
 | `navigator.py` | Die Kameraführung ohne VTK: die Tabelle `_NAVIGATION` (welche Taste in welchem Schema was tut), `turntable_camera` (der Drehteller, der die Ansicht aufrecht hält), `is_click`, und der `Navigator`, der `PointerEvent`s in Drehen, Kippen, Schieben, Radzoom am Zeiger, Körperzug, Malen und die Rückrufe an die Ansicht übersetzt (`NavigatorCallbacks`). Gemessen mit einem Renderer-Doppel in `tests/test_navigator.py` |
+| `edges.py` | Die Kantensuche der Ansicht: `feature_edges(vertices, faces, angle)` gibt Knick- und Randkanten als Punktpaare — was `vtkFeatureEdges` tat, als NumPy, damit beide Renderer dieselben Kanten zeichnen und `tests/test_render_shapes.py` sie am Würfel, an der Platte und am Dach nachzählt |
 
 ## Drei Festlegungen, die der Viewport voraussetzt
 
@@ -21,8 +22,9 @@ beides und mess“; Gedächtnis `viewport-zwei-renderer-messen`).
   Gerätepixeln. VTK zählt von unten; `VtkRenderer._flip` rechnet an der
   Grenze um, in `world_to_display`, `display_to_world` und beim Picking.
 * **Kein Interaktionsstil.** VTKs Trackball ist abgeschaltet; Zeigergesten
-  kommen als `PointerEvent` beim Viewport an, und der führt die Kamera über
-  den Vertrag (`set_camera_pose`, `dolly`).
+  kommen als `PointerEvent` beim Viewport an (`_on_pointer`), der sie erst
+  dem Zeiger, dann den Griffen und zuletzt dem Navigator gibt. Die Kamera
+  führt der Navigator über den Vertrag (`set_camera_pose`, `dolly`).
 * **Zeichnen an einer Stelle.** Kein Aufruf hier zeichnet von selbst;
   `render()` ruft der Viewport in `_draw`.
 * **Was vorn gezeichnet wird, wird vorn gepickt.** `keep_in_front` rückt

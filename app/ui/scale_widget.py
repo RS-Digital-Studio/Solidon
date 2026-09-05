@@ -1,7 +1,7 @@
 """Der Skaliergriff am Gizmo (Bauplan §18.11).
 
-§18.11 nennt Verschieben, Drehen **und Skalieren** — pyvistas
-``AffineWidget3D`` kann nur die ersten beiden. Dieser Griff ergänzt das
+§18.11 nennt Verschieben, Drehen **und Skalieren** — der Bewegungsgriff
+(``render/gizmo.py``) kann die ersten beiden. Dieser Griff ergänzt das
 dritte: ein Würfel schräg über dem Gizmo, auf der Raumdiagonale zwischen den
 drei Pfeilen. Ziehen vom Zentrum weg vergrößert, zum Zentrum hin verkleinert;
 die Vorschau skaliert live um die Mitte des Körpers, und erst das Loslassen
@@ -9,19 +9,26 @@ wird eine Operation — dieselbe Zusage wie bei jedem anderen Zug (§2.1).
 
 Die Form trägt die Bedeutung, nicht die Farbe (Regel 18): ein Würfel neben
 Pfeilen und Ringen, dazu das S der Beschriftung. Beim Überfahren leuchtet er
-in derselben Farbe wie pyvistas eigene Griffe — ein Griff-Satz, eine Sprache.
+in derselben Farbe wie die Pfeile des Bewegungsgriffs — ein Griff-Satz, eine
+Sprache.
 
-Die Interaktion folgt Zeile für Zeile dem Muster des ``AffineWidget3D``:
-dieselben drei Beobachter am Interactor, derselbe Stilwechsel beim Greifen
-(sonst drehte der Zug die Kamera mit), dieselbe Rückgabe beim Loslassen. Wer
-dort etwas ändert, prüft hier.
+Bis zum 05.09.2026 war er PyVistas ``AffineWidget3D`` Zeile für Zeile
+nachgebaut: drei Beobachter am Interactor, ein Stilwechsel beim Greifen. Auf
+dem Renderer-Vertrag ist er gebaut wie der Bewegungsgriff daneben —
+:meth:`ScaleHandle.handle` bekommt jede Zeigergeste und sagt mit ``True``,
+dass sie ihm gehört; der Viewport gibt sie dann nicht an die Kameraführung
+weiter. Wer dort etwas am Gestenmuster ändert, prüft hier.
 """
 
 from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from typing import Any
+
+from app.core.units import EPS_GEOM
+from app.ui.render import shapes
+from app.ui.render.api import Colour, Item, PointerEvent, Renderer, SurfaceStyle, Vec3
+from app.ui.render.gizmo import ARROW_SHARE, HIGHLIGHT, ray_plane_hit
 
 #: Kantenlänge des Würfels als Anteil der Hüllquader-Diagonale des Körpers.
 #: Im Maß der Pfeildicke gehalten: greifbar, ohne die Ringe zu verdecken.
@@ -36,33 +43,19 @@ DIAGONAL = (0.577350269, 0.577350269, 0.577350269)
 #: eine Zahl und keinen Mausweg.
 FACTOR_RANGE = (0.05, 20.0)
 
-#: Die Hervorhebung beim Überfahren — pyvistas eigener Wert, damit alle
-#: Griffe des Gizmos dieselbe Sprache sprechen.
-HOVER_COLOUR = "#ffc700"
+#: Die Hervorhebung beim Überfahren — dieselbe wie an Pfeilen und Ringen,
+#: damit alle Griffe des Gizmos dieselbe Sprache sprechen.
+HOVER_COLOUR: Colour = HIGHLIGHT
 
-
-def ray_plane_hit(
-    start: tuple[float, float, float],
-    direction: tuple[float, float, float],
-    plane_point: tuple[float, float, float],
-    normal: tuple[float, float, float],
-) -> tuple[float, float, float] | None:
-    """Wo ein Strahl eine Ebene trifft — oder nichts, wenn er ihr parallel läuft.
-
-    Selbst gerechnet statt aus pyvistas ``affine_widget`` importiert: das
-    Modul ist Innenleben ohne Bestandszusage, und die Rechnung sind vier
-    Zeilen.
-    """
-    denominator = sum(direction[axis] * normal[axis] for axis in range(3))
-    if abs(denominator) < 1e-12:
-        return None
-    offset = sum((plane_point[axis] - start[axis]) * normal[axis] for axis in range(3))
-    step = offset / denominator
-    return (
-        start[0] + direction[0] * step,
-        start[1] + direction[1] * step,
-        start[2] + direction[2] * step,
-    )
+__all__ = [
+    "CUBE_SHARE",
+    "DIAGONAL",
+    "FACTOR_RANGE",
+    "HOVER_COLOUR",
+    "ScaleHandle",
+    "dragged_factor",
+    "ray_plane_hit",
+]
 
 
 def dragged_factor(
@@ -88,160 +81,141 @@ class ScaleHandle:
 
     ``release_callback`` bekommt den Faktor des Zugs, ``interact_callback``
     jeden Zwischenstand — für die Zahl im Eingabefeld, nicht für Geometrie:
-    die Vorschau ist eine ``user_matrix`` am Actor und verschwindet mit ihm.
+    Die Vorschau ist eine Matrix am Griff des Körpers
+    (:meth:`Item.set_matrix`) und verschwindet mit ihm.
+
+    ``scale`` ist der Maßstab des Bewegungsgriffs daneben. Der Würfel liegt
+    im selben Abstand wie dessen Pfeilspitzen (``scale · ARROW_SHARE`` der
+    Körperlänge), damit er zwischen den Spitzen steht und nicht vor ihnen.
     """
 
     def __init__(
         self,
-        plotter: Any,
-        actor: Any,
+        renderer: Renderer,
+        target: Item,
         *,
-        colour: str,
+        scale: float,
+        colour: Colour,
         release_callback: Callable[[float], None],
         interact_callback: Callable[[float], None] | None = None,
     ) -> None:
-        import pyvista as pv
-
         from app.core.geom.transform import scaling
 
-        self._plotter = plotter
-        self._actor = actor
+        self._renderer = renderer
+        self._target = target
         self._release = release_callback
         self._interact = interact_callback
         self._scaling = scaling
-        self._centre = (
-            float(actor.center[0]),
-            float(actor.center[1]),
-            float(actor.center[2]),
-        )
-        self._length = float(actor.GetLength())
+        self._centre = target.centre()
+        self._length = float(target.length())
         self._colour = colour
-        self._start: tuple[float, float, float] | None = None
+        self._start: Vec3 | None = None
         self._factor = 1.0
         self._hovered = False
+        self.pressing = False
 
-        reach = self._length * self.arm_share()
+        reach = self._length * scale * ARROW_SHARE
         size = self._length * CUBE_SHARE
-        position = tuple(self._centre[axis] + DIAGONAL[axis] * reach for axis in range(3))
-        self.grip_position = position
-        """Wo der Würfel sitzt — die Beschriftung stellt ihr S dahinter."""
-        cube = pv.Cube(center=position, x_length=size, y_length=size, z_length=size)
-        self._cube = plotter.add_mesh(
-            cube,
-            color=colour,
-            lighting=False,
-            name="scale-handle",
-            render=False,
-            reset_camera=False,
+        self.grip_position: Vec3 = (
+            self._centre[0] + DIAGONAL[0] * reach,
+            self._centre[1] + DIAGONAL[1] * reach,
+            self._centre[2] + DIAGONAL[2] * reach,
         )
-        # Sichtbar auch vor dem Körper — derselbe Kniff, mit dem pyvista
-        # seine Pfeile und Ringe nach vorn holt.
-        self._cube.mapper.SetResolveCoincidentTopologyToPolygonOffset()
-        self._cube.mapper.SetRelativeCoincidentTopologyPolygonOffsetParameters(0, -20000)
+        """Wo der Würfel sitzt — die Beschriftung stellt ihr S dahinter."""
+        vertices, faces = shapes.cube(self.grip_position, size)
+        # Sichtbar auch vor dem Körper — derselbe Kniff, mit dem Pfeile und
+        # Ringe des Bewegungsgriffs nach vorn kommen.
+        self._cube = renderer.add_surface(
+            vertices,
+            faces,
+            name="scale-handle",
+            style=SurfaceStyle(colour=colour, lighting=False, keep_in_front=True, pickable=True),
+        )
 
-        self._observers = [
-            ("MouseMoveEvent", plotter.iren.add_observer("MouseMoveEvent", self._on_move)),
-            (
-                "LeftButtonPressEvent",
-                plotter.iren.add_observer(
-                    "LeftButtonPressEvent", self._on_press, interactor_style_fallback=False
-                ),
-            ),
-            (
-                "LeftButtonReleaseEvent",
-                plotter.iren.add_observer(
-                    "LeftButtonReleaseEvent", self._on_release, interactor_style_fallback=False
-                ),
-            ),
-        ]
-
-    @staticmethod
-    def arm_share() -> float:
-        """Abstand des Würfels vom Zentrum, im Maß der Pfeile des Gizmos.
-
-        pyvista streckt seine Pfeile auf ``scale · 1,15`` der Körperlänge;
-        der Würfel liegt im selben Abstand, damit er zwischen den Spitzen
-        steht und nicht vor ihnen.
-        """
-        from app.ui.viewport import GIZMO_SCALE
-
-        return GIZMO_SCALE * 1.15
+    @property
+    def item(self) -> Item:
+        """Der Würfel im Renderer — für die Beschriftung und die Tests."""
+        return self._cube
 
     def remove(self) -> None:
-        """Beobachter abmelden und den Würfel aus dem Bild nehmen."""
-        for _event, identifier in self._observers:
-            self._plotter.iren.remove_observer(identifier)
-        self._observers = []
-        self._plotter.remove_actor(self._cube, render=False)
+        """Den Würfel aus dem Bild nehmen; eine laufende Geste endet damit."""
+        self._renderer.remove(self._cube)
+        self._hovered = False
+        self.pressing = False
+        self._start = None
 
-    # --- Interaktion, dem AffineWidget3D nachgebaut -------------------------------
+    # --- Gesten, dem Bewegungsgriff nachgebaut ---------------------------------------
 
-    def _grip_at_pointer(self, interactor: Any) -> bool:
-        """Ob der Zeiger auf dem Würfel steht."""
-        x, y = interactor.GetEventPosition()
-        picker = interactor.GetPicker()
-        renderer = interactor.GetRenderWindow().GetRenderers().GetFirstRenderer()
-        picker.Pick(x, y, 0, renderer)
-        return picker.GetActor() is self._cube
+    def handle(self, event: PointerEvent) -> bool:
+        """Eine Zeigergeste — wahr, wenn sie dem Würfel gehört."""
+        if event.kind == "move":
+            if self.pressing:
+                self._drag(event)
+                return True
+            self._hover(event)
+            return False
+        if event.kind == "press" and event.button == "left":
+            if not self._hovered:
+                return False
+            grip = self._pointer_on_plane(event)
+            if grip is None or math.dist(self._centre, grip) < 1e-9:
+                return False
+            self._start = grip
+            self._factor = 1.0
+            self.pressing = True
+            return True
+        if event.kind == "release" and event.button == "left" and self.pressing:
+            self.pressing = False
+            self._start = None
+            self._release(self._factor)
+            return True
+        if event.kind == "leave" and not self.pressing:
+            self._set_hovered(False)
+        return False
 
-    def _pointer_on_plane(self, interactor: Any) -> tuple[float, float, float] | None:
+    def _hover(self, event: PointerEvent) -> None:
+        hovered = self._renderer.pick_item(event.x, event.y) is self._cube
+        if hovered != self._hovered:
+            self._set_hovered(hovered)
+            self._renderer.render()
+
+    def _set_hovered(self, hovered: bool) -> None:
+        self._hovered = hovered
+        self._cube.set_colour(HOVER_COLOUR if hovered else self._colour)
+
+    def _pointer_on_plane(self, event: PointerEvent) -> Vec3 | None:
         """Der Zeiger in Weltkoordinaten, auf der Kameraebene durchs Zentrum.
 
-        Auf der Ebene senkrecht zur Blickrichtung, wie beim Drehgriff von
-        pyvista: dort ist der Abstand zum Zentrum unabhängig davon, wie tief
-        der Strahl in die Szene liefe.
+        Auf der Ebene senkrecht zur Blickrichtung, wie beim Drehring des
+        Bewegungsgriffs: Dort ist der Abstand zum Zentrum unabhängig davon,
+        wie tief der Strahl in die Szene liefe.
         """
-        from vtkmodules.vtkRenderingCore import vtkCoordinate
-
-        x, y = interactor.GetEventPosition()
-        coordinate = vtkCoordinate()
-        coordinate.SetCoordinateSystemToDisplay()
-        coordinate.SetValue(x, y, 0)
-        renderer = interactor.GetRenderWindow().GetRenderers().GetFirstRenderer()
-        world = coordinate.GetComputedWorldValue(renderer)
-        camera = renderer.GetActiveCamera().GetPosition()
+        near = self._renderer.display_to_world(event.x, event.y, 0.0)
+        far = self._renderer.display_to_world(event.x, event.y, 1.0)
+        if near is None or far is None:
+            return None
+        direction = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
+        camera = self._renderer.camera_pose().position
         towards = tuple(camera[axis] - self._centre[axis] for axis in range(3))
-        span = math.sqrt(sum(value * value for value in towards)) or 1.0
+        span = math.sqrt(sum(value * value for value in towards))
+        if span <= EPS_GEOM:
+            return None
         normal = (towards[0] / span, towards[1] / span, towards[2] / span)
-        return ray_plane_hit(
-            (float(world[0]), float(world[1]), float(world[2])), towards, self._centre, normal
-        )
+        hit = ray_plane_hit(near, direction, self._centre, normal)
+        if hit is None:
+            return None
+        return (float(hit[0]), float(hit[1]), float(hit[2]))
 
-    def _on_move(self, interactor: Any, _event: Any) -> None:
-        if self._start is not None:
-            grip = self._pointer_on_plane(interactor)
-            if grip is None:
-                return
-            self._factor = dragged_factor(self._centre, self._start, grip)
-            self._actor.user_matrix = self._scaling(
-                (self._factor, self._factor, self._factor), about=self._centre
-            )
-            if self._interact is not None:
-                self._interact(self._factor)
-            self._plotter.render()
-            return
-        hovered = self._grip_at_pointer(interactor)
-        if hovered != self._hovered:
-            self._hovered = hovered
-            self._cube.prop.color = HOVER_COLOUR if hovered else self._colour
-            self._plotter.render()
-
-    def _on_press(self, interactor: Any, _event: Any) -> None:
-        if not self._hovered:
-            return
-        grip = self._pointer_on_plane(interactor)
-        if grip is None or math.dist(self._centre, grip) < 1e-9:
-            return
-        self._start = grip
-        self._factor = 1.0
-        # Wie pyvista beim Greifen: der Kamerastil würde den Zug als Drehung
-        # der Ansicht lesen. Zurückgestellt wird beim Loslassen — und der
-        # Viewport stellt danach sein eigenes Schema wieder her.
-        self._plotter.enable_trackball_actor_style()
-
-    def _on_release(self, _interactor: Any, _event: Any) -> None:
+    def _drag(self, event: PointerEvent) -> None:
         if self._start is None:
             return
-        self._start = None
-        self._plotter.enable_trackball_style()
-        self._release(self._factor)
+        grip = self._pointer_on_plane(event)
+        if grip is None:
+            return
+        self._factor = dragged_factor(self._centre, self._start, grip)
+        self._target.set_matrix(
+            self._scaling((self._factor, self._factor, self._factor), about=self._centre)
+        )
+        if self._interact is not None:
+            self._interact(self._factor)
+        self._renderer.render()

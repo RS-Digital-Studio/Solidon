@@ -67,8 +67,8 @@ hängengeblieben.
 
 Die CI löst das mit je einem Prozess pro Fensterdatei, und dafür gibt es ein
 Skript: `suite-getrennt.sh` unter `.claude/.state/oberflaechen-durchsicht-2026-08-19/`.
-Es sucht die Fensterdateien selbst (`MainWindow|Viewport|pyvista`) und zählt am
-Ende „Läufe mit Fehler: N".
+Es sucht die Fensterdateien selbst (über den Fixture-Graphen,
+`tools/list_windowed_tests.py`) und zählt am Ende „Läufe mit Fehler: N".
 
 **Es lässt die Leistungstests aus** (`-m "not performance"`), also gehören sie
 als eigener Lauf dazu. Der geteilte Lauf allein ist nicht das Tor.

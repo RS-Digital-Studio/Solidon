@@ -9574,7 +9574,7 @@ class MainWindow(QMainWindow):
         menu = self.object_tree.context_menu()
         if menu is None:
             return
-        menu.exec(self.viewport.mapToGlobal(self._from_vtk_point(x, y)))
+        menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
 
     def _on_sketch_menu(self, point: object, x: int, y: int) -> None:
         """Das Kontextmenü der Zeichnung, am Zeiger (§30.1, P4).
@@ -9591,19 +9591,19 @@ class MainWindow(QMainWindow):
         menu = panel.canvas.context_menu_on_plane((float(point[0]), float(point[1])))
         if menu.isEmpty():
             return
-        menu.exec(self.viewport.mapToGlobal(self._from_vtk_point(x, y)))
+        menu.exec(self.viewport.mapToGlobal(self._from_view_point(x, y)))
 
-    def _from_vtk_point(self, x: int, y: int) -> QPoint:
-        """Eine VTK-Fensterstelle als Qt-Logikpunkt des Viewports.
+    def _from_view_point(self, x: int, y: int) -> QPoint:
+        """Eine Stelle der Ansicht als Qt-Logikpunkt des Viewports.
 
-        VTK zählt von unten und in Gerätepunkten (pyvistas ``rwi`` rechnet
-        jede Mausposition mit ``devicePixelRatio`` hoch); Qt zählt von oben
-        und in Logikpunkten. Wer nur die Höhe umrechnet, öffnet auf einem
-        skalierten Bildschirm das Menü neben dem Zeiger. Bei dpr 1,0 ändert
-        der Faktor nichts.
+        Die Ansicht meldet in Gerätepixeln, gezählt wie Qt (oben links); das
+        Menü braucht Logikpunkte. Wer den Faktor vergisst, öffnet auf einem
+        skalierten Bildschirm das Menü neben dem Zeiger — bei dpr 1,0 ändert
+        er nichts. Bis zum 05.09.2026 rechnete diese Stelle auch VTKs Zählung
+        von unten um; die gibt es an dieser Grenze nicht mehr.
         """
         ratio = float(self.viewport.devicePixelRatioF()) or 1.0
-        return QPoint(int(x / ratio), int(self.viewport.height() - y / ratio))
+        return QPoint(int(x / ratio), int(y / ratio))
 
     def _on_sketch_on_face(self, feature_id: str) -> None:
         """Ein Klick auf eine Fläche beginnt dort eine Skizze (§30.1).
@@ -12943,7 +12943,7 @@ class MainWindow(QMainWindow):
 
         **Was hier ausdrücklich nicht steht, ist der Viewport.** Ihn zu
         schließen war der zweite Anlauf gegen den Absturz auf dem Ubuntu-Runner,
-        und er hat ihn nur verschoben: mit geschlossenem Plotter stirbt der
+        und er hat ihn nur verschoben: mit geschlossenem Renderer stirbt der
         **nächste** Fensteraufbau in ``render_window_interactor.initialize``,
         weil VTKs Zustand dem Prozess gehört und nicht dem Widget. Beides
         gemessen, in Fenstern nacheinander.
@@ -13061,13 +13061,13 @@ class MainWindow(QMainWindow):
         self._store_settings()
         self._usage.stop()
         # Erst hier steht fest, dass das echte Anwendungsfenster wirklich
-        # endet. Der VTK-Plotter braucht seinen noch lebenden Qt-OpenGL-Kontext
+        # endet. Der Renderer braucht seinen noch lebenden Qt-OpenGL-Kontext
         # zum Abbau; Qts später Prozessabriss kommt dafür zu spät und meldet
         # je nach Treiber unvollständige Framebuffer oder ``wglMakeCurrent``.
         # ``release()`` darf das ausdrücklich nicht tun: Es bedient auch den
         # Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
         # lebt.
-        self.viewport.release_plotter()
+        self.viewport.release_renderer()
         event.accept()
 
     def _store_settings(self) -> bool:

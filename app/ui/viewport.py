@@ -14,10 +14,9 @@ import math
 import os
 import weakref
 from collections.abc import Callable, Sequence
-from contextlib import suppress
 from dataclasses import replace
 from itertools import pairwise
-from typing import Any, Final, Literal, NamedTuple, cast
+from typing import Any, Final, Literal, NamedTuple
 
 from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication, QKeySequence
@@ -41,7 +40,12 @@ from app.core.geom.measure import (
     snap,
     wall_thickness,
 )
-from app.core.geom.mesh import distance_to_triangles, hull_planes, ray_span_in_hull
+from app.core.geom.mesh import (
+    distance_to_triangles,
+    face_components,
+    hull_planes,
+    ray_span_in_hull,
+)
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut, plane_patch
 from app.core.geom.transform import (
@@ -101,14 +105,22 @@ from app.ui.palette import (
     readable_on,
     text_colour,
 )
-from app.ui.render.api import MouseButton
-from app.ui.render.navigator import (
-    WHEEL_STEP,
-    NavigationScheme,
-    is_click,
-    navigation_action,
-    turntable_camera,
+from app.ui.render import shapes
+from app.ui.render.api import (
+    AxesMarkerStyle,
+    CameraPose,
+    CellColours,
+    Item,
+    LabelsItem,
+    LabelStyle,
+    PointerEvent,
+    Renderer,
+    SurfaceStyle,
+    hex_of,
 )
+from app.ui.render.edges import feature_edges
+from app.ui.render.gizmo import ARROW_SHARE, Gizmo
+from app.ui.render.navigator import NavigationScheme, Navigator, NavigatorCallbacks
 from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
@@ -167,7 +179,7 @@ Shading = Literal["flat", "smooth"]
 Projection = Literal["perspective", "orthographic"]
 """Zum Messen ist die orthographische Ansicht Pflicht (§18.1)."""
 
-#: Display modes as pyvista arguments: style, edges, opacity.
+#: Darstellungsarten (§18.1): Stil, Kanten, Deckkraft — gelesen in ``_apply_scene``.
 DISPLAY_MODES: dict[DisplayMode, dict[str, Any]] = {
     "solid": {"style": "surface", "show_edges": False, "opacity": 1.0},
     "solid_edges": {"style": "surface", "show_edges": True, "opacity": 1.0},
@@ -243,7 +255,7 @@ def camera_for_span(
 
     Gibt Position, Brennpunkt, Oben-Richtung und ``parallel_scale`` zurück —
     alles, was :meth:`Viewport.show_span_on_plane` setzt, und keines davon dort
-    gerechnet: Hinter der Plotter-Wache läuft offscreen nichts, und ein Test
+    gerechnet: Hinter der Renderer-Wache läuft offscreen nichts, und ein Test
     dahinter besteht, weil er nichts tut. Dieselbe Aufteilung wie bei
     :func:`camera_for_plane`, :func:`bore_span` und :func:`shadow_points`
     (Konzept „Skizze im Raum", Entscheidung G).
@@ -275,8 +287,9 @@ def camera_for_span(
 def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Vec3, Vec3]:
     """Die Kamerastellung, die senkrecht auf eine Zeichenebene sieht (§30.1).
 
-    Position, Blickpunkt und Oben — in der Reihenfolge, die
-    ``plotter.camera_position`` erwartet. Die achte Kameravorgabe neben den
+    Position, Blickpunkt und Oben — die drei Felder von
+    :class:`~app.ui.render.api.CameraPose`, in dieser Reihenfolge. Die achte
+    Kameravorgabe neben den
     sieben festen aus :data:`VIEW_DIRECTIONS`, nur dass sie nicht in einer
     Tabelle steht, sondern aus dem Rahmen gerechnet wird: Eine Skizzenebene
     kann auf jeder planaren Fläche eines Körpers liegen und beliebig geneigt
@@ -307,7 +320,7 @@ def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Ve
     ``plane:xy`` geprüft — die zwei Fälle, in denen der Unterschied nicht
     sichtbar wird.
 
-    Eine freie Funktion und keine Methode: Offscreen gibt es keinen Plotter,
+    Eine freie Funktion und keine Methode: Offscreen gibt es keinen Renderer,
     und was hinter dieser Wache liegt, läuft in der Suite nie. Die Rechnung
     davor zu trennen ist der einzige Weg, sie gegen Zahlen zu prüfen —
     dieselbe Aufteilung wie bei :func:`bore_span` und :func:`shadow_points`.
@@ -455,18 +468,6 @@ def rgb_of(colour: str) -> tuple[float, float, float]:
     return (value.redF(), value.greenF(), value.blueF())
 
 
-def _centre_of(actor: Any) -> tuple[float, float, float]:
-    """Die Mitte eines Aktors — und (0, 0, 0), wo keine zu holen ist."""
-    bounds = getattr(actor, "GetBounds", None)
-    if not callable(bounds):
-        return (0.0, 0.0, 0.0)
-    try:
-        low_x, high_x, low_y, high_y, low_z, high_z = bounds()
-    except Exception:
-        return (0.0, 0.0, 0.0)
-    return ((low_x + high_x) / 2.0, (low_y + high_y) / 2.0, (low_z + high_z) / 2.0)
-
-
 def turn_arc(origin: Any, axis: Any, radius: float, angle: float, *, steps: int = 32) -> Any:
     """Die Punkte eines Bogens von 0 bis ``angle`` um ``axis``, im Uhrzeigersinn.
 
@@ -477,7 +478,7 @@ def turn_arc(origin: Any, axis: Any, radius: float, angle: float, *, steps: int 
     wächst, macht die Drehung sichtbar und das Einrasten dazu.
 
     Als freie Funktion und ohne Qt, aus demselben Grund wie
-    :func:`shadow_points`: Was hinter der Plotter-Wache steht, prüft offscreen
+    :func:`shadow_points`: Was hinter der Renderer-Wache steht, prüft offscreen
     niemand mehr. Hier ist es reine Rechnung, also ist es hier prüfbar.
 
     Zurück kommen die Punkte **paarweise** für ``add_lines`` — jeder innere
@@ -705,7 +706,7 @@ def sketch_grid(
     wählt sie aus der 1-2-5-Folge), die Ausdehnung aus dem Bauraum.
 
     Eine freie Funktion aus demselben Grund wie :func:`volume_edges` und
-    :func:`bed_scale`: Offscreen gibt es keinen Plotter, und was hinter dieser
+    :func:`bed_scale`: Offscreen gibt es keinen Renderer, und was hinter dieser
     Wache gerechnet wird, prüft in der Suite niemand mehr.
 
     Nichts kommt zurück, wo nichts zu zeichnen ist — eine Weite oder eine
@@ -1027,7 +1028,7 @@ def pulled_height(reach: float, step: float, limits: tuple[float, float]) -> flo
     Grenze wäre schlechter als keine.
 
     Eine freie Funktion, weil die Hälfte davor (:meth:`Viewport._pick_ray`)
-    offscreen nicht läuft: Was hinter dem Plotter liegt, prüft in der Suite
+    offscreen nicht läuft: Was hinter dem Renderer liegt, prüft in der Suite
     niemand mehr (§35).
     """
     if step > 0.0:
@@ -1080,44 +1081,6 @@ def polyline_distance(points: Sequence[tuple[float, float]], at: tuple[float, fl
         foot = (start[0] + share * span[0], start[1] + share * span[1])
         best = min(best, math.dist(foot, at))
     return best
-
-
-def polyline_spans(counts: Sequence[int]) -> list[int]:
-    """Die Linienstruktur, mit der VTK mehrere Polylinien in einem Netz führt.
-
-    VTK erwartet je Linie zuerst ihre Punktzahl und dann ihre Indizes, alles
-    in **einer** flachen Liste: Zwei Strecken über vier Punkten ergeben
-    ``[2, 0, 1, 2, 2, 3]``. Die Zahlen dazwischen sehen aus wie Indizes und
-    sind Längen — genau deshalb steht die Rechnung hier und nicht mitten im
-    Zeichnen, wo niemand sie prüfen kann.
-
-    Gezählt wird über die Punktzahlen in derselben Reihenfolge, in der die
-    Punkte im Netz liegen. Eine Linie mit weniger als zwei Punkten wird
-    übergangen — sie hätte keine Strecke, und VTK bekäme eine Länge, die ins
-    Leere zeigt.
-    """
-    spans: list[int] = []
-    start = 0
-    for count in counts:
-        if count >= 2:
-            spans.append(count)
-            spans.extend(range(start, start + count))
-        start += count
-    return spans
-
-
-def axes_widget_of(plotter: Any) -> Any:
-    """Das Achsen-Widget eines Plotters — oder ``None``.
-
-    **Es hängt am Renderer, nicht am Plotter.** ``plotter.axes_widget`` gibt es
-    in pyvista 0.48 nicht; ein ``getattr`` darauf liefert still ``None``, und
-    die Anzeige bliebe für immer dort stehen, wo sie beim Aufbau landete —
-    also mitten im Bild, weil das Fenster da noch keine Größe hat. Der Fehler
-    fällt an keiner Ausnahme auf, sondern nur im Bild, und genau so ist er
-    aufgefallen: als handtellergroßes Achsenkreuz quer über dem Modell.
-    """
-    renderer = getattr(plotter, "renderer", None) if plotter is not None else None
-    return getattr(renderer, "axes_widget", None)
 
 
 def orientation_corner(width: int, height: int) -> tuple[float, float, float, float]:
@@ -1407,7 +1370,8 @@ SHADOW_OPACITY = {"light": 0.03, "dark": 0.18}
 #: mit der die Anwendung startete, war ohnehin eine dritte — der Schatten fiel
 #: dort mit 0,81 seiner Länge auf den Betrachter zu, also genau davor.
 #:
-#: Der eigentliche Grund liegt tiefer: pyvistas Lichtsatz hängt an der Kamera.
+#: Der eigentliche Grund liegt tiefer: Das Frontlicht des Renderers hängt an
+#: der Kamera.
 #: Ein Körper ist in jeder Ansicht von vorn beleuchtet, und eine feste
 #: Weltrichtung für den Schatten passt deshalb zu **keinem** Blickwinkel. Die
 #: Richtung folgt jetzt der Kamera (:func:`shadow_direction`), und damit tritt
@@ -1523,7 +1487,7 @@ def plate_shift(plate: int, width: float, gap: float = PLATE_GAP) -> tuple[float
     die Teile ineinander.
 
     Als reine Funktion, aus demselben Grund wie :func:`bed_scale`: offscreen
-    gibt es keinen Plotter, und die Rechnung ist das, was ein Test prüfen kann.
+    gibt es keinen Renderer, und die Rechnung ist das, was ein Test prüfen kann.
     """
     return (max(0, plate) * (width + gap), 0.0, 0.0)
 
@@ -1572,8 +1536,10 @@ def _available() -> bool:
     if platform.startswith("wayland"):
         return False
     try:
-        import pyvista  # noqa: F401
-        import pyvistaqt  # noqa: F401
+        import vtkmodules.vtkRenderingOpenGL2  # noqa: F401
+        from vtkmodules.qt.QVTKRenderWindowInteractor import (  # noqa: F401
+            QVTKRenderWindowInteractor,
+        )
     except Exception:  # pragma: no cover - hängt an der Maschine
         return False
     return True
@@ -1615,7 +1581,7 @@ def unavailable_hint() -> str:
 
 
 def _hex(colour: tuple[float, float, float]) -> str:
-    """Eine Slotfarbe (0 bis 1 je Kanal, §20) als Hexwert für den Plotter."""
+    """Eine Slotfarbe (0 bis 1 je Kanal, §20) als Hexwert für den Renderer."""
     red, green, blue = (round(max(0.0, min(1.0, part)) * 255) for part in colour)
     return f"#{red:02x}{green:02x}{blue:02x}"
 
@@ -1810,7 +1776,7 @@ FEATURE_EDGE_LIMIT = DISPLAY_DECIMATION_TARGET
 def shadow_direction(position: Any, focal_point: Any) -> tuple[float, float]:
     """Wohin der Schatten aus dieser Kamerastellung fällt (§18.6).
 
-    Vom Betrachter weg und ein Stück nach rechts. Der Lichtsatz von pyvista
+    Vom Betrachter weg und ein Stück nach rechts. Das Frontlicht des Renderers
     hängt an der Kamera — ein Körper ist also in jeder Ansicht von vorn
     beleuchtet, und ein Schatten, der das nicht mitmacht, sieht in jeder
     Ansicht falsch aus. Er macht es jetzt mit.
@@ -1819,7 +1785,7 @@ def shadow_direction(position: Any, focal_point: Any) -> tuple[float, float]:
     Schatten nach hinten rechts, denn eine Draufsicht hat eine Oberkante, und
     die ist dort, wo bei jeder anderen Ansicht das Hinten liegt.
 
-    Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
+    Als eigene Funktion, damit die Rechnung ohne Renderer prüfbar bleibt.
     """
     import numpy as np
 
@@ -1845,7 +1811,7 @@ def rotation_focus(
     bekommt die Tiefe der Körper. Nichts zurück heißt: so lassen — die Mitte
     liegt hinter der Kamera, oder der Fokus stimmt schon.
 
-    Als eigene Funktion, damit die Regel ohne Plotter prüfbar bleibt —
+    Als eigene Funktion, damit die Regel ohne Renderer prüfbar bleibt —
     dieselbe Begründung wie bei :meth:`Viewport.rotation_centre`.
     """
     import numpy as np
@@ -1902,7 +1868,7 @@ def shadow_points(points: Any, direction: tuple[float, float], ground: float = 0
     Schatten um die volle Bauhöhe weg und läge neben dem Körper, der ihn
     auffängt.
 
-    Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
+    Als eigene Funktion, damit die Rechnung ohne Renderer prüfbar bleibt.
     """
     import numpy as np
 
@@ -2031,7 +1997,7 @@ def with_margin(
     """Die Grenzen um ihre Mitte geweitet, im VTK-Format.
 
     Als eigene Funktion, aus demselben Grund wie :func:`bed_scale`: offscreen
-    gibt es keinen Plotter, und was nur im Zeichnen steht, prüft niemand.
+    gibt es keinen Renderer, und was nur im Zeichnen steht, prüft niemand.
 
     Eine Achse ohne Ausdehnung bleibt, wie sie ist — eine flache Skizze soll
     nicht in die Tiefe wachsen, nur weil sie eingepasst wird.
@@ -2098,7 +2064,7 @@ def outgrown(
     Kamera, die bei jeder Bohrung neu einpasst, macht den Zoom zweimal.
 
     Als reine Funktion, aus demselben Grund wie :func:`with_margin`: offscreen
-    gibt es keinen Plotter, und was nur im Zeichnen steht, prüft niemand.
+    gibt es keinen Renderer, und was nur im Zeichnen steht, prüft niemand.
     """
     if fitted is None or current is None:
         return False
@@ -2120,7 +2086,7 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
     zu messen — und das ist der Zweck der Platte in echter Größe.
 
     Als eigene Funktion und nicht im Zeichnen versteckt: offscreen gibt es
-    keinen Plotter, und eine Prüfung, die sich dort überspringt, prüft nie
+    keinen Renderer, und eine Prüfung, die sich dort überspringt, prüft nie
     etwas.
 
     **Die Zahlen tragen ihr Vorzeichen, und die Null steht in der Mitte ihrer
@@ -2165,8 +2131,8 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
 CORNER_FRACTION = 0.08
 
 #: Länge der Gizmo-Pfeile als Anteil der Diagonale **dessen, woran der Griff
-#: hängt**, und die Dicke ihrer Schäfte im selben Maß. pyvistas Vorgaben
-#: (0.15 und 0.02) ergaben auf einem 80-mm-Teil ein Gebilde aus dünnen Linien
+#: hängt**, und die Dicke ihrer Schäfte im selben Maß. Die Vorgaben von
+#: PyVistas Widget (0.15 und 0.02) ergaben auf einem 80-mm-Teil ein Gebilde aus dünnen Linien
 #: von etwa vierzig Bildpunkten — zu klein, um es mit der Maus zu treffen.
 #:
 #: **Der Bezug ist das Gewählte, nicht das Teil** (Entscheidung Robert,
@@ -2240,11 +2206,11 @@ GIZMO_LABEL_GAP = 1.2
 
 #: Was am Griff steht, wenn er auf einer Fläche sitzt: vor und zurück.
 #:
-#: **Reines ASCII, und das ist keine Vorliebe, sondern eine Grenze von VTK.**
-#: Diese Beschriftung ist ein ``vtkStringArray``, und pyvista lehnt jedes
-#: Zeichen darin ab, das nicht ASCII ist — nicht mit einer Warnung, sondern
-#: mit ``ValueError: String array contains non-ASCII characters``. Der ganze
-#: Griffaufbau stürzt damit ab.
+#: **Reines ASCII, und das ist keine Vorliebe.** Die Grenze kam von PyVista,
+#: das in einem ``vtkStringArray`` jedes Zeichen außerhalb von ASCII mit
+#: ``ValueError: String array contains non-ASCII characters`` ablehnte — der
+#: ganze Griffaufbau stürzte damit ab. Der eigene Renderer nimmt UTF-8 an
+#: (gemessen am 05.09.2026); die Regel bleibt aus dem Grund darunter.
 #:
 #: Hier stand deshalb kurz ein Doppelpfeil „↕" und dahinter der Name der
 #: Fläche aus ``feature_name``. Beides ging nicht, und der Name war der
@@ -2338,7 +2304,7 @@ def volume_edges(
     Bild, die nichts sagt, was der Boden nicht schon sagt.
 
     Als eigene Funktion und nicht im Zeichnen versteckt: offscreen gibt es
-    keinen Plotter, und eine Prüfung, die sich dort überspringt, prüft nie
+    keinen Renderer, und eine Prüfung, die sich dort überspringt, prüft nie
     etwas.
     """
     half_width, half_depth = width / 2.0, depth / 2.0
@@ -3040,8 +3006,9 @@ class Viewport(QWidget):
     """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
     geklickt, die Auswahl fällt weg."""
     contextMenuAt = Signal(int, int)
-    """Ein Rechtsklick, der nichts gedreht hat — trägt die Position in VTKs
-    Zählung (von unten). Das Fenster zeigt dort das Menü zur Auswahl."""
+    """Ein Rechtsklick, der nichts gedreht hat — trägt die Stelle in
+    Gerätepixeln, gezählt wie Qt (von oben links). Das Fenster zeigt dort das
+    Menü zur Auswahl."""
     pointPicked = Signal(object)
     """Ein Klick auf eine Stelle ohne Merkmal — trägt den Punkt in
     Weltkoordinaten. Ein offener Dialog, der nach einer Position fragt, trägt
@@ -3105,8 +3072,15 @@ class Viewport(QWidget):
         self.setAccessibleName(tr("3D-Ansicht"))
         self._layout = QVBoxLayout(self)
         self._layout.setContentsMargins(0, 0, 0, 0)
-        self.plotter: Any | None = None
-        self._actors: dict[ObjectId, Any] = {}
+        self.renderer: Renderer | None = None
+        """Der Renderer hinter dem Bild (``app.ui.render``) — ``None`` ohne
+        3D-Ansicht: offscreen, Wayland ohne X11, ``SOLIDON_NO_VIEWPORT``.
+        Alles, was zeichnet, steigt an dieser Wache aus."""
+        self._navigator: Navigator | None = None
+        """Die Kameraführung (§2.9); sie bekommt jede Zeigergeste, die kein
+        Griff nimmt (:meth:`_on_pointer`)."""
+        self._pointer_token: int | None = None
+        self._actors: dict[ObjectId, Item] = {}
         self._frame_actors: list[Any] = []
         self._bed_visible = True
         self._bed_surfaces: list[Any] = []
@@ -3243,19 +3217,19 @@ class Viewport(QWidget):
 
         Getrennt von ``_sketch_actors``, weil sie an der Maus hängt und nicht
         an der Zeichnung — der Grund steht bei :meth:`clear_sketch`."""
-        self._cursor_mesh: Any = None
-        """Das Netz der Marke, damit sie nicht je Mausbewegung neu entsteht.
+        self._cursor_mesh: Item | None = None
+        """Die Linien der Marke, damit sie nicht je Mausbewegung neu entstehen.
 
-        Ein Kreuz hat immer vier Punkte; bewegt es sich, ändern sich nur deren
-        Koordinaten."""
+        Ein Kreuz hat immer vier Punkte; bewegt es sich, bekommt es nur neue
+        Koordinaten (``update_points``)."""
+        self._cursor_count = 0
         self._cursor_at: tuple[tuple[float, float], float] | None = None
         """Wo die Marke zuletzt lag und bei welchem Maßstab.
 
         Der Vergleich davor spart das Neuzeichnen: Ein Render kostet gemessen
         6,9 ms, und die Marke sitzt am **gefangenen** Ort — zwischen zwei
         Rasterpunkten ändert sie sich nicht."""
-        self._preview_actor: Any | None = None
-        self._preview_mesh: Any | None = None
+        self._preview_actor: Item | None = None
         self._preview_shape: tuple[int, ...] = ()
         self._preview_at: tuple[tuple[Vec3, ...], ...] = ()
         """Die mitfliegende Geometrie zwischen zwei Klicks.
@@ -3358,32 +3332,19 @@ class Viewport(QWidget):
         self._snap_shown: SnapResult | None = None
         """Was die Marke gerade zeigt. Auskunft für Tests und Schutz davor,
         dieselbe Stelle bei jeder Ruhepause neu zu zeichnen."""
-        self._gizmo: Any | None = None
-        self._magnet_watch: Any = None
-        """Der Beobachter, der den Drehgriff auf seine Raste zieht — er lebt
-        genau so lange wie der Griff."""
+        self._gizmo: Gizmo | None = None
         self._gizmo_wanted = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
         Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
-        self._coincident_before: int | None = None
-        """Die globale Tiefen-Auflösung von VTK, bevor der Gizmo sie umstellte.
-
-        ``SetResolveCoincidentTopologyToPolygonOffset()`` sieht aus wie eine
-        Mapper-Eigenschaft und ist eine **statische**: pyvistas Widget und der
-        Skaliergriff stellen damit prozessweit jeden Mapper um. Ohne
-        Rückstellung stachen nach dem ersten Bewegen-Besuch die Kantenlinien
-        aller Körper dauerhaft durch die Flächen — Striche an den
-        Kantenmitten, die in keiner Aktor-Eigenschaft standen."""
-        self._gizmo_labels: Any | None = None
-        """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm."""
-        self._gizmo_label_data: Any | None = None
-        """Die Punkte hinter den Buchstaben, als lebendes PolyData: wer sie
-        setzt, bewegt die Beschriftung — so reisen die Buchstaben während
-        des Zugs mit."""
+        self._gizmo_labels: LabelsItem | None = None
+        """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm — und
+        während des Zugs mit der Matrix (``update_labels`` in
+        :meth:`_on_gizmo_interacted`)."""
         self._gizmo_label_base: Any | None = None
         """Die Startpositionen der Buchstaben, auf die jede Zug-Matrix
         angewandt wird."""
+        self._gizmo_label_texts: list[str] = []
         self._face_actor: Any | None = None
         self._ghost_actor: Any | None = None
         self._shape_actor: Any | None = None
@@ -3596,7 +3557,8 @@ class Viewport(QWidget):
         Bei jeder Bewegung zu suchen hieße, den Tiefenpuffer hunderte Male in
         der Sekunde zu lesen, und zwar im Qt-Hauptthread."""
         self._hover_at: tuple[int, int] | None = None
-        """Wo die Maus zuletzt stand, in VTK-Koordinaten."""
+        """Wo die Maus zuletzt stand — in Gerätepixeln, gezählt wie Qt
+        (oben links), so wie der Renderer sie meldet und beantwortet."""
         self._hover_feature = False
         """Ob unter dem Zeiger ein benanntes Merkmal liegt (§18.5)."""
         self._hovered_object: ObjectId | None = None
@@ -3648,70 +3610,85 @@ class Viewport(QWidget):
             self._layout.addWidget(notice)
             return
 
-        from pyvistaqt import QtInteractor
+        from app.ui.render.vtk_renderer import VtkRenderer
 
-        # Als Any typisiert: pyvista umhüllt seine Plotter-Methoden, Annotationen
-        # überleben das nicht.
-        self.plotter = cast(Any, QtInteractor(self))
+        self.renderer = VtkRenderer(self)
+        widget = self.renderer.widget
         # Qt malt hier nichts, VTK malt alles.
         #
-        # Das Fenster des Interactors ist ein natives OpenGL-Fenster
+        # Das Fenster des Renderers ist ein natives OpenGL-Fenster
         # (``WA_PaintOnScreen``), und trotzdem stand ``WA_NoSystemBackground``
         # auf ``False``: Qt füllte den Bereich also mit dem Hintergrund seines
         # Stils, bevor VTK darin zeichnen konnte. Zusammen mit dem Stylesheet
         # am ``OverlayHost`` darüber ist das der Verdächtige für das Bild, in
         # dem nur die Achsenmarker stehen und der Körper beim Bewegen der
         # Kamera aufblitzt.
-        self.plotter.interactor.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
-        self._layout.addWidget(self.plotter.interactor)
+        widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self._layout.addWidget(widget)
         # Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK — der
         # Filter sitzt deshalb auf dem Fenster, das die Tasten bekommt.
-        self.plotter.interactor.installEventFilter(self)
+        widget.installEventFilter(self)
         # Ohne das kommt eine Mausbewegung erst, wenn eine Taste unten ist —
         # und der Zeiger wüsste nie, worüber er schwebt, sondern nur, worauf
         # jemand schon geklickt hat.
-        self.plotter.interactor.setMouseTracking(True)
-        self.plotter.interactor.setCursor(cursors.cursor(self._cursor_role, self))
+        widget.setMouseTracking(True)
+        widget.setCursor(cursors.cursor(self._cursor_role, self))
+        # **Ein Eingang für alle Zeigergesten.** Der Renderer meldet sie in
+        # Gerätepixeln, wie Qt zählt; :meth:`_on_pointer` verteilt sie in
+        # fester Vorfahrt — Griffe vor der Kamera.
+        self._listen_to(self.renderer)
         self._add_orientation_widget()
         self._apply_render_quality()
         self.set_theme("dark")
-        # Schaltet das Picking gleich mit ein — ein Stilwechsel und der erste
-        # Aufbau sind für die Ansicht dasselbe.
-        #
         # **Das gesetzte Schema, nicht ein fest eingetragenes.** Hier stand
-        # ``"slicer"``, und der Plotter entsteht später als
+        # ``"slicer"``, und der Renderer entsteht später als
         # ``_apply_settings``: Was der Kunde eingestellt hatte, wurde beim
         # Aufbau überschrieben. Menü und Dialog zeigten sein Schema, die Maus
         # fuhr das andere. Solange die Vorgabe ``slicer`` hieß, traf es nur
         # den, der umstellte; seit dem 03.09.2026 träfe es jeden.
         self.set_navigation(self._scheme)
-        self._watch_camera()
-        # **Die eigene Iso, nicht die von pyvista.** Ohne diese Zeile erbte die
-        # Anwendung pyvistas Stellung über (1, 1, 1) — und ihre eigene Vorgabe
-        # aus `VIEW_DIRECTIONS` bekam nur zu sehen, wer „Isometrisch" im Menü
+        # **Die eigene Iso, nicht die von VTK.** Ohne diese Zeile erbte die
+        # Anwendung VTKs Startstellung — und ihre eigene Vorgabe aus
+        # `VIEW_DIRECTIONS` bekam nur zu sehen, wer „Isometrisch" im Menü
         # wählte. Wer das tat, sprang aus einer Ansicht in eine andere, obwohl
         # er die zu sehen glaubte, in der er stand.
         self.view_from("iso")
 
-    def release_plotter(self) -> None:
-        """Finalisiert den nativen Renderer vor seinem Qt-Elternfenster.
+    def _listen_to(self, renderer: Renderer) -> None:
+        """Die Zeigergesten dieses Renderers abonnieren — schwach.
 
-        Dieser Weg gehört ausschließlich zum Ende der Anwendung. Beim
-        Sprachwechsel bleibt VTK bewusst bestehen: Dort wird zuerst ein neues
-        Fenster aufgebaut und das alte anschließend mit
-        :meth:`MainWindow.release <app.ui.main_window.MainWindow.release>`
-        von Sitzung und Arbeitern getrennt. Würde diese Methode dort laufen,
-        verlöre der folgende Interactor den prozessweiten VTK-Zustand.
-
-        ``None`` macht den Aufruf auch nach einem bereits abgebauten oder
-        offscreen erzeugten Viewport sicher und wiederholbar.
+        Der Renderer hält seine Zuhörer, die Ansicht hält den Renderer; ein
+        gebundenes ``_on_pointer`` schlösse den Ring, und eine Ansicht, die auf
+        den Speicherbereiniger wartet, stirbt mit ihrem Renderfenster im
+        falschen Moment. Dieselbe Regel wie für :func:`_weak_callbacks`.
         """
-        plotter = self.plotter
-        if plotter is None:
+        weak = weakref.ref(self)
+
+        def on_pointer(event: PointerEvent) -> None:
+            found = weak()
+            if found is not None:
+                found._on_pointer(event)
+
+        self._pointer_token = renderer.add_pointer_listener(on_pointer)
+
+    def release_renderer(self) -> None:
+        """Den Renderer schließen, solange sein OpenGL-Kontext noch lebt.
+
+        Gerufen aus dem ``closeEvent`` des Fensters: Qts später Prozessabriss
+        käme für den Abbau des Renderfensters zu spät und meldet je nach
+        Treiber unvollständige Framebuffer oder ``wglMakeCurrent``.
+        ``release()`` darf das ausdrücklich nicht tun — es bedient auch den
+        Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
+        lebt. Ein zweiter Aufruf tut nichts mehr.
+        """
+        renderer = self.renderer
+        if renderer is None:
             return
-        self.plotter = None
+        self.renderer = None
+        self._navigator = None
+        self._pointer_token = None
         try:
-            plotter.close()
+            renderer.close()
         except Exception as problem:  # pragma: no cover - hängt am nativen Treiber
             # Der Qt-Abbau muss weiterlaufen. Bliebe die Referenz gesetzt oder
             # die Ausnahme liefe bis ins ``closeEvent``, hielte ein bereits
@@ -3720,32 +3697,31 @@ class Viewport(QWidget):
             # ab.
             _log.warning("the viewport renderer could not close: %s", problem)
 
-    def _watch_camera(self) -> None:
-        """Am Ende jeder Kamerabewegung die Schatten nachziehen (§18.6).
+    def _on_pointer(self, event: PointerEvent) -> None:
+        """Jede Zeigergeste des Renderers, in fester Vorfahrt.
 
-        Am Interactor und nicht am Interaktionsstil: den Stil tauscht jeder
-        Schemawechsel aus, und der Orientierungswürfel dreht die Kamera an ihm
-        vorbei. ``EndInteractionEvent`` bekommt beides mit.
-
-        Schwach gehalten wie bei :meth:`set_navigation` — VTK hält den
-        Beobachter, und eine starke Referenz von dort auf den Viewport überlebt
-        jedes Schließen.
+        Zuerst der Zeiger selbst (Hover, Skizzenvorschau), dann die Griffe —
+        Bewegungsgriff und Skalierwürfel sagen mit ``True``, dass die Geste
+        ihnen gehört —, zuletzt die Kameraführung. Was ein Griff nimmt, dreht
+        keine Kamera; das ist die ganze Vorfahrt, und sie steht an einer
+        Stelle statt in drei Beobachtern am Interactor wie bis zum 05.09.2026.
         """
-        if self.plotter is None:
-            return
-        weak = weakref.ref(self)
+        if event.kind == "move":
+            self._note_pointer(event.x, event.y)
+        elif event.kind == "leave":
+            self._forget_pointer()
+        for handle in (self._gizmo, self._scale_handle):
+            if handle is not None and handle.handle(event):
+                return
+        if self._navigator is not None:
+            self._navigator.handle(event)
 
-        def on_end(*_: Any) -> None:
-            view = weak()
-            if view is not None:
-                view._settle_sketch_view()
-                view._redraw_shadows()
-                # Dreh- und Schiebezüge enden hier; der Radzoom meldet sich
-                # selbst (``on_camera`` im Interaktionsstil), weil er kein
-                # ``EndInteractionEvent`` auslöst.
-                view.cameraMoved.emit()
-
-        self.plotter.interactor.AddObserver("EndInteractionEvent", on_end)
+    def _device_ratio(self) -> float:
+        """Gerätepixel je Logikpunkt des Fensters — 1,0 ohne Bild."""
+        widget = getattr(self.renderer, "widget", None) if self.renderer is not None else None
+        if widget is None:
+            return 1.0
+        return float(widget.devicePixelRatioF()) or 1.0
 
     def _settle_sketch_view(self) -> str | None:
         """Eine nahe Hauptansicht einrasten und ihren Namen melden.
@@ -3769,24 +3745,24 @@ class Viewport(QWidget):
         Gemeldet wird der Name nur für die Skizze: ``sketchViewChanged``
         füllt das Ebenenfeld, und außerhalb gibt es keines.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None
-        camera = getattr(self.plotter, "camera", None)
-        position = getattr(camera, "position", None)
-        focus = getattr(camera, "focal_point", None)
-        if position is None or focus is None:
-            return None
+        pose = self.renderer.camera_pose()
+        position, focus = pose.position, pose.focal_point
         sketching = self._sketch_frame is not None
         table = SKETCH_VIEW_DIRECTIONS if sketching else AXIS_VIEW_DIRECTIONS
         found = sketch_view_near(position, focus) if sketching else axis_view_near(position, focus)
         if found is not None:
             direction, up = table[found]
             distance = max(math.dist(tuple(position), tuple(focus)), EPS_GEOM)
-            snapped = tuple(float(focus[axis]) + direction[axis] * distance for axis in range(3))
-            self.plotter.camera_position = [snapped, tuple(focus), up]
-            with suppress(Exception):  # pragma: no cover - hängt an der VTK-Version
-                self.plotter.renderer.ResetCameraClippingRange()
-            self.plotter.render()
+            snapped = (
+                float(focus[0]) + direction[0] * distance,
+                float(focus[1]) + direction[1] * distance,
+                float(focus[2]) + direction[2] * distance,
+            )
+            self.renderer.set_camera_pose(CameraPose(snapped, focus, up))
+            self.renderer.reset_clipping_range()
+            self.renderer.render()
         if not sketching:
             return found
         self.sketchViewChanged.emit(found or "")
@@ -3797,51 +3773,33 @@ class Viewport(QWidget):
     def _add_orientation_widget(self, theme: str = "dark") -> None:
         """Das Achsenkreuz unten links: die Anzeige, wo oben ist.
 
-        **Der Docstring stand hier lange auf dem Kopf.** Er beschrieb einen
-        anklickbaren Würfel und schloss mit „er ersetzt aber ``add_axes``" —
-        während die Zeilen darunter genau ``add_axes`` aufrufen und einen
-        Würfel im ganzen Quelltext niemand findet. Von den zwei Anzeigen, die
-        damals doppelt im Bild standen, ist der Würfel gegangen und dieses
-        Kreuz geblieben; nachgezogen wurde der Text nicht. Wer ihn las, hielt
-        die einzige Orientierungsanzeige der Anwendung für abgeschafft.
-
-        Sie ist die einzige, also muss man sie sehen — wo sie sitzt und warum
-        das ausgerechnet in Bildpunkten gerechnet wird, steht bei
-        :func:`orientation_corner`.
+        Pfeile, keine Kugeln: ein kräftiger Schaft mit einer Spitze darauf ist
+        das, was jeder aus einem Konstruktionsprogramm kennt. Die Werte sind
+        aufeinander abgestimmt — ein dünner Schaft mit dicker Spitze sieht aus
+        wie ein Stecknadelkopf, ein dicker mit kurzer Spitze wie ein abgesägter
+        Balken. Die Schriftfarbe wechselt mit dem Thema: VTKs Vorgabe ist
+        Schwarz, und das ist auf dem dunklen Hintergrund unlesbar.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        # Die Schriftfarbe kommt aus dem Thema des Plotters — ``add_axes``
-        # nimmt sie von dort und lässt sich daneben kein zweites Mal sagen.
-        # VTKs Vorgabe ist Schwarz, und das ist auf dem dunklen Hintergrund,
-        # mit dem die Anwendung startet, unlesbar.
         try:
-            self.plotter.theme.font.color = (
-                AXIS_LABEL_DARK if theme != "light" else AXIS_LABEL_LIGHT
-            )
-        except Exception as problem:  # pragma: no cover - hängt an pyvista
-            _log.info("axis labels keep their colour: %s", problem)
-        try:
-            self.plotter.add_axes(
-                viewport=orientation_corner(self.width(), self.height()),
-                # Pfeile, keine Kugeln: ein kräftiger Schaft mit einer Spitze
-                # darauf ist das, was jeder aus einem Konstruktionsprogramm
-                # kennt. Die Werte sind aufeinander abgestimmt — ein dünner
-                # Schaft mit dicker Spitze sieht aus wie ein Stecknadelkopf,
-                # ein dicker mit kurzer Spitze wie ein abgesägter Balken.
-                cone_radius=0.5,
-                shaft_length=0.78,
-                tip_length=0.28,
-                line_width=3,
-                x_color=AXIS_X,
-                y_color=AXIS_Y,
-                z_color=AXIS_Z,
-                label_size=(0.3, 0.16),
-                ambient=0.4,
+            self.renderer.set_axes_marker(
+                AxesMarkerStyle(
+                    x_colour=AXIS_X,
+                    y_colour=AXIS_Y,
+                    z_colour=AXIS_Z,
+                    label_colour=AXIS_LABEL_DARK if theme != "light" else AXIS_LABEL_LIGHT,
+                    shaft_length=0.78,
+                    tip_length=0.28,
+                    cone_radius=0.5,
+                    line_width=3.0,
+                    ambient=0.4,
+                )
             )
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget unavailable: %s", problem)
             return
+        self._place_orientation_widget()
 
     def view_point_of(self, point: Vec3, object_id: str = "") -> Vec3:
         """Einen Ort aus der Szene dorthin rechnen, wo er im Bild liegt (§25).
@@ -3891,27 +3849,26 @@ class Viewport(QWidget):
         Punktliste an ``add_point_labels``: gemessen am 30.08.2026 geht
         „Face supérieure" hier durch und fällt dort.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
 
         self._finding_timer.stop()
         self._finding_mark = (point, title, object_id)
         self._draw_finding_mark()
-        self.plotter.render()
+        self.renderer.render()
         self._finding_timer.start(FINDING_MARK_MS)
 
     def _draw_finding_mark(self) -> None:
-        """Die gemerkte Warnungsmarke in den aktuellen Renderer zeichnen.
+        """Ring und Beschriftung der gemerkten Warnungsmarke zeichnen.
 
-        Der Zeitgeber gehört zur Nutzerhandlung in :meth:`mark_finding` und
-        wird hier bewusst nicht neu gestartet. Eine Analysekarte darf die
-        Marke wiederherstellen, aber nicht länger sichtbar halten.
+        Aus ``_finding_mark`` — Szenenort, Text, Körper — und nicht aus alten
+        Aktoren: Ein Neuaufbau derselben Auswertung nimmt die aus dem Renderer,
+        und aus den drei Werten lässt sich die Marke ehrlich neu zeichnen.
         """
-        if self.plotter is None or self._finding_mark is None:
+        if self.renderer is None or self._finding_mark is None:
             return
 
         import numpy as np
-        import pyvista as pv
 
         self._remove_finding_actors()
         point, title, object_id = self._finding_mark
@@ -3924,13 +3881,11 @@ class Viewport(QWidget):
                 # der Körper nicht im Bild steht, darf aber auch sein Hinweis
                 # nicht körperlos im Raum schweben.
                 return
-        camera = self.plotter.camera
-        towards = np.asarray(camera.position, dtype=float) - np.asarray(
-            camera.focal_point, dtype=float
-        )
+        pose = self.renderer.camera_pose()
+        towards = np.asarray(pose.position, dtype=float) - np.asarray(pose.focal_point, dtype=float)
         # Wie hoch das Bild an dieser Stelle ist: orthografisch steht es als
-        # ``parallel_scale``, perspektivisch wächst es mit dem Abstand.
-        span = float(getattr(camera, "parallel_scale", 0.0) or 0.0)
+        # Parallelmaßstab, perspektivisch wächst es mit dem Abstand.
+        span = float(self.renderer.parallel_scale() or 0.0)
         if span <= 0.0:
             span = float(np.linalg.norm(towards)) * 0.5
         radius = max(span * FINDING_RING_SHARE, EPS_GEOM)
@@ -3946,34 +3901,24 @@ class Viewport(QWidget):
         # **Eine Marke neben der Sache ist schlechter als eine halb verdeckte.**
         # Die Beschriftung trägt ``always_visible`` und steht in jedem Fall.
         ring = _ring_points(centre, towards, radius)
-        line = pv.PolyData(ring)
-        line.lines = np.hstack([[len(ring) + 1], np.arange(len(ring)), [0]])
         self._finding_actors.append(
-            self.plotter.add_mesh(
-                line,
-                color=SELECTED_COLOUR,
-                line_width=3,
+            self.renderer.add_lines(
+                shapes.closed_ring(ring),
                 name="finding_ring",
-                render=False,
-                reset_camera=False,
-                pickable=False,
+                colour=SELECTED_COLOUR,
+                width=3.0,
+                connected=True,
             )
         )
         if title:
             self._finding_actors.append(
-                self.plotter.add_point_labels(
+                self.renderer.add_labels(
                     np.asarray([centre + np.array([0.0, 0.0, radius])], dtype=float),
                     [title],
-                    text_color=SELECTED_COLOUR,
-                    font_size=12,
-                    bold=True,
-                    show_points=False,
-                    always_visible=True,
-                    shape=None,
                     name="finding_label",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    style=LabelStyle(
+                        text_colour=SELECTED_COLOUR, font_size=12, bold=True, always_visible=True
+                    ),
                 )
             )
 
@@ -3981,13 +3926,13 @@ class Viewport(QWidget):
         """Nur die nativen Aktoren entfernen, den semantischen Ort behalten."""
         actors = list(self._finding_actors)
         self._finding_actors.clear()
-        if self.plotter is None:
+        if self.renderer is None:
             return bool(actors)
         import contextlib
 
         for actor in actors:
             with contextlib.suppress(Exception):  # hängt am Treiber
-                self.plotter.remove_actor(actor, render=False)
+                self.renderer.remove(actor)
         return bool(actors)
 
     def _hide_finding_mark(self, *, render: bool = True) -> None:
@@ -3995,8 +3940,8 @@ class Viewport(QWidget):
         self._finding_timer.stop()
         self._finding_mark = None
         removed = self._remove_finding_actors()
-        if render and removed and self.plotter is not None:
-            self.plotter.render()
+        if render and removed and self.renderer is not None:
+            self.renderer.render()
 
     def _prepare_finding_mark(self, result: EvaluationResult | None) -> bool:
         """Ob dieselbe Auswertung ihre aktive Marke erneut zeichnen darf."""
@@ -4010,20 +3955,17 @@ class Viewport(QWidget):
     def _light_the_body(self, theme: str) -> None:
         """Das Frontlicht auf den Wert dieses Themas setzen (:data:`HEADLIGHT`).
 
-        **Gesucht wird über die Art, nicht über die Stelle in der Liste.**
-        Welche Lichter pyvista aufstellt und in welcher Reihenfolge, ist seine
-        Sache und kann sich mit einer neuen Fassung ändern; dass genau eines
-        davon ein Headlight ist, ist die Eigenschaft, an der hier etwas hängt.
-        Findet sich keines, bleibt es beim Vorgabewert — ein Körper ohne
-        Frontlicht ist dunkler, aber sichtbar.
+        Über den Vertrag (``set_headlight``): Welche Lichter der Renderer
+        aufstellt und in welcher Reihenfolge, ist seine Sache; dass eines
+        davon das Frontlicht ist, ist die Eigenschaft, an der hier etwas
+        hängt. Meldet der Treiber einen Fehler, bleibt es beim Vorgabewert —
+        ein Körper ohne Frontlicht ist dunkler, aber sichtbar.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         wanted = HEADLIGHT["light" if theme == "light" else "dark"]
         try:
-            for light in self.plotter.renderer.lights:
-                if str(getattr(light, "light_type", "")).lower().startswith("headlight"):
-                    light.intensity = wanted
+            self.renderer.set_headlight(wanted)
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("headlight unavailable: %s", problem)
 
@@ -4041,10 +3983,10 @@ class Viewport(QWidget):
         bekommen und keinen Absturz. Was nicht ging, steht im Protokoll — nicht
         vor dem Nutzer, der hat nichts davon.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         try:
-            self.plotter.enable_anti_aliasing("fxaa")
+            self.renderer.set_anti_aliasing(True)
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("anti-aliasing unavailable: %s", problem)
         self._apply_ambient_occlusion()
@@ -4059,8 +4001,8 @@ class Viewport(QWidget):
         Farbe, wo die Karte etwas aussagt — der abgelesene Wert wäre ein
         anderer als der gemeldete. Schönheit vor Ablesbarkeit gibt es nicht.
 
-        Als Eigenschaft und nicht als Zustand des Plotters, damit die **Regel**
-        prüfbar bleibt: auf der Offscreen-Plattform gibt es keinen Plotter, und
+        Als Eigenschaft und nicht als Zustand des Renderers, damit die **Regel**
+        prüfbar bleibt: auf der Offscreen-Plattform gibt es keinen Renderer, und
         ein Test, der sich dort überspringt, prüft nie etwas.
         """
         return self._map is None
@@ -4090,7 +4032,7 @@ class Viewport(QWidget):
         """
         wanted = BED_SUNKEN_OPACITY if self.sunken_body() else 1.0
         for surface in self._bed_surfaces:
-            surface.prop.opacity = wanted
+            surface.set_opacity(wanted)
 
     @property
     def sees_through(self) -> bool:
@@ -4100,9 +4042,9 @@ class Viewport(QWidget):
         und der Skizzenmodus, der den vorhandenen Körper leise stellt, damit
         die Zeichnung darauf lesbar bleibt (:data:`SKETCH_CONTEXT_OPACITY`).
 
-        Als Eigenschaft und nicht als Zustand des Plotters, aus demselben
+        Als Eigenschaft und nicht als Zustand des Renderers, aus demselben
         Grund wie bei :attr:`ambient_occlusion`: Offscreen gibt es keinen
-        Plotter, und eine Regel, die nur dort gilt, wo niemand sie prüfen
+        Renderer, und eine Regel, die nur dort gilt, wo niemand sie prüfen
         kann, ist keine.
         """
         return (
@@ -4115,80 +4057,50 @@ class Viewport(QWidget):
         )
 
     def _order_by_depth(self) -> None:
-        """Zeichnet die Körper von hinten nach vorn, solange man durchsieht.
+        """Durchsichtige Körper von hinten nach vorn zeichnen — der Maleralgorithmus
+        auf Objektebene (Hinweis 3d-druck-85, 03.09.2026).
 
-        **Ein durchsichtiges Bild hing daran, in welcher Reihenfolge die
-        Körper entstanden sind.** VTK mischt transluzente Flächen in der
-        Reihenfolge der Prop-Sammlung, und die folgt dem Anlegen. Gemessen an
-        zwei transparenten Quadern hintereinander, dieselbe Szene in zwei
-        Einfügereihenfolgen: 13 784 Bildpunkte Unterschied, größte Abweichung
-        47 von 255 (Robert, 03.09.2026: „warum kann man bei dem bild nicht
-        durch das viewport schauen"; am Quelltext gefunden von 3d-druck-85).
+        Halbdurchsichtige Flächen mischt VTK in der Reihenfolge der Aktoren;
+        ein Depth Peeling nimmt es an und fährt es nicht (gemessen, siehe
+        ``ansicht.md``). Sortiert wird nach dem Abstand des Mittelpunkts zur
+        Kamera, der fernste zuerst — richtig für getrennte Körper, machtlos bei
+        sich durchdringenden. Die Bettflächen zählen mit, sobald sie
+        durchscheinen: Sie liegen unter allen Körpern, und eine falsch
+        einsortierte Fläche verdeckt genau das, was sie zeigen soll.
 
-        **Drei Wege sind gemessen, nur dieser trägt:**
-
-        * ``enable_depth_peeling`` nimmt an und fährt nicht:
-          ``LastRenderingUsedDepthPeeling`` bleibt 0, das Bild ändert sich um
-          keinen Punkt — zweimal versucht, beim Umschalten und vor dem
-          allerersten Bild.
-        * ``vtkDepthSortPolyData`` je Aktor bringt 9 897 statt 13 784
-          Bildpunkte: Er sortiert **innerhalb** eines Körpers, nicht zwischen
-          zweien.
-        * Die Aktoren umhängen: **0 Bildpunkte Unterschied.**
-
-        Es ist der Maleralgorithmus auf Objektebene: richtig für getrennte
-        Körper, machtlos bei sich durchdringenden. Genau der gemeldete Fall.
-
-        Gerechnet wird über den Mittelpunkt des Aktors — also über das, was im
-        Bild steht, samt Plattenversatz und Auseinanderziehen. Umgehängt wird
-        auf der VTK-Ebene (``renderer.RemoveActor``/``AddActor``), damit
-        pyvistas Namensverzeichnis unberührt bleibt: Es kennt seine Aktoren
-        weiter unter denselben Namen, und ``remove_actor`` würde sie
-        herausnehmen.
-
-        Nur bei :attr:`sees_through`: Opake Geometrie ordnet der Tiefenpuffer,
-        und die Arbeit wäre umsonst.
+        Hängt an ``_draw`` und merkt sich, wofür sie geordnet hat — an der
+        Zeichenstelle darf sie nichts kosten, solange sich nichts bewegt.
         """
-        if self.plotter is None or not self.sees_through:
+        if self.renderer is None or not self.sees_through:
             return
         if len(self._actors) + len(self._bed_surfaces) < 2:
             return
 
         import numpy as np
 
-        renderer = self.plotter.renderer
-        eye = np.asarray(self.plotter.camera.GetPosition(), dtype=float)
-        # Nichts tun, wo nichts zu tun ist: Diese Methode hängt an ``_draw``
-        # und läuft damit bei jedem Bild, auch während eines Zugs.
+        eye = np.asarray(self.renderer.camera_pose().position, dtype=float)
         seen = (tuple(eye.tolist()), tuple(self._actors), len(self._bed_surfaces))
         if seen == self._depth_order_for:
             return
         self._depth_order_for = seen
-        # Die Bettflächen gehören dazu, sobald sie durchscheinen: Sie liegen
-        # unter allen Körpern, und eine falsch einsortierte Fläche verdeckt
-        # genau das, was sie zeigen soll.
         ordered = [*self._actors.values(), *self._bed_surfaces]
         ranked = [
-            (float(np.linalg.norm(np.asarray(actor.GetCenter(), dtype=float) - eye)), index, actor)
-            for index, actor in enumerate(ordered)
+            (float(np.linalg.norm(np.asarray(item.centre(), dtype=float) - eye)), index, item)
+            for index, item in enumerate(ordered)
         ]
-        for _far, _index, actor in ranked:
-            renderer.RemoveActor(actor)
         # Der Index hält die Reihenfolge stabil, wo zwei Körper gleich weit
         # weg sind — sonst tauschten sie bei jedem Zeichnen die Plätze.
-        for _far, _index, actor in sorted(ranked, key=lambda entry: (-entry[0], entry[1])):
-            renderer.AddActor(actor)
+        self.renderer.set_draw_order(
+            [item for _far, _index, item in sorted(ranked, key=lambda entry: (-entry[0], entry[1]))]
+        )
 
     def _apply_ambient_occlusion(self) -> None:
-        """Die Regel an den Plotter geben, wenn es einen gibt."""
+        """Die Regel an den Renderer geben, wenn es einen gibt."""
         wanted = self.ambient_occlusion
-        if self.plotter is None or self._occlusion_applied == wanted:
+        if self.renderer is None or self._occlusion_applied == wanted:
             return
         try:
-            if wanted:
-                self.plotter.enable_ssao(radius=SSAO_RADIUS, bias=SSAO_BIAS)
-            else:
-                self.plotter.disable_ssao()
+            self.renderer.set_ambient_occlusion(wanted, radius=SSAO_RADIUS, bias=SSAO_BIAS)
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("ambient occlusion unavailable: %s", problem)
             return
@@ -4210,100 +4122,78 @@ class Viewport(QWidget):
 
     def _shadow_direction(self) -> tuple[float, float]:
         """Die Lichtrichtung, die zur aktuellen Kamerastellung gehört."""
-        if self.plotter is None:
+        if self.renderer is None:
             return (SHADOW_SIDE, SHADOW_REACH)
-        camera = self.plotter.camera
-        return shadow_direction(camera.position, camera.focal_point)
+        pose = self.renderer.camera_pose()
+        return shadow_direction(pose.position, pose.focal_point)
 
-    def _shadow_hulls_for(self, object_id: ObjectId, surface: Any, source: Any) -> list[Any]:
-        """Die Hüllen dieses Körpers — neu gerechnet nur bei einem anderen Netz.
+    def _shadow_hulls_for(
+        self, object_id: ObjectId, points: Any, mesh: Any, source: Any
+    ) -> list[Any]:
+        """Die Schattenhüllen eines Körpers — aus dem Cache, solange sein Netz dasselbe ist.
 
-        ``_shadow_hulls_of`` zerlegt den Körper, und das kostet 21 ms bei
-        zweiundachtzigtausend Dreiecken. Sein Docstring nannte das „einmal je
-        Szenenaufbau" und meinte damit „selten" — das stimmte nicht.
-        ``show_scene`` läuft auch bei jeder Auswahl, jedem Themenwechsel und
-        **bei jedem Schritt der Schieber** für Explosion, Schnitt und Schicht.
-        Bei zwanzig Teilen auf der Platte sind das über vierhundert
-        Millisekunden je Schieberschritt, im Qt-Hauptthread.
-
-        Verglichen wird die **Identität** des Netzes, nicht sein Inhalt: Ein
-        Hash über zweiundachtzigtausend Dreiecke wäre nicht billiger als die
-        Zerlegung, die er sparen soll. Solange die Auswertung steht, ist das
-        Netz dasselbe Objekt — unter der Dezimierungsschwelle reicht
-        ``_for_display`` es unverändert durch, darüber kommt es aus seinem
-        Cache.
-
-        **Der Schnittschieber trifft den Cache absichtlich nicht.** ``cut``
-        erzeugt dort wirklich ein neues Netz, und ein Körper, der zerschnitten
-        wurde, zerfällt womöglich in andere Stücke als vorher — die Zerlegung
-        ist dann keine Ersparnis, sondern die richtige Antwort.
+        Verglichen wird die **Identität** des Netzes (``source``), nicht sein
+        Inhalt: Ein Hash über Millionen Dreiecke wäre nicht billiger als die
+        Zerlegung, die er spart. ``show_scene`` läuft bei jeder Auswahl, jedem
+        Themenwechsel und jedem Schieberschritt; das Netz dahinter bleibt
+        dabei dasselbe. **Der Schnittschieber trifft den Cache absichtlich
+        nicht**: ``cut`` erzeugt dort wirklich ein neues Netz.
         """
         cached = self._shadow_splits.get(object_id)
         if cached is not None and source is not None and cached[0] is source:
             return cached[1]
-        hulls = self._shadow_hulls_of(surface)
+        hulls = self._shadow_hulls_of(points, mesh)
         if source is not None:
             self._shadow_splits[object_id] = (source, hulls)
         return hulls
 
-    def _shadow_hulls_of(self, surface: Any) -> list[Any]:
+    def _shadow_hulls_of(self, points: Any, mesh: Any) -> list[Any]:
         """Die Punkte, aus denen ein Körper seinen Schatten wirft — je Stück eines.
 
-        **Ein Körper ist nicht immer ein Stück.** Ein Baustein, dessen Träger zu
-        schmal ist, hinterlässt drei: den Träger und zwei Haken daneben. Eine
-        gemeinsame Hülle darüber spannt über die Luft dazwischen und wirft
-        einen Schatten in der Form eines Dings, das es nicht gibt (Befund
-        Robert, 25.08.2026, am Bildschirm gesehen).
-
-        Der übliche Fall bleibt der billige: ``split_bodies`` gibt bei einem
-        einteiligen Körper ein Stück zurück, und dann ist das hier genau die
-        Rechnung von vorher. Gemessen kostet das Zerlegen 1,5 ms bei
-        eintausendzweihundert Dreiecken und 21 ms bei zweiundachtzigtausend.
-
-        Hier stand „einmal je Szenenaufbau, nicht je Bild", und das war als
-        Beruhigung gemeint und als Behauptung falsch: Ein Szenenaufbau ist
-        nicht selten — jede Auswahl und jeder Schritt der Schieber ist einer.
-        Gerufen wird deshalb über ``_shadow_hulls_for``, das die Zerlegung
-        behält, solange das Netz dasselbe ist. **Wer hier vorbei ruft, zahlt
-        die Millisekunden je Aufbau.**
+        Ein Körper aus mehreren Stücken wirft je Stück einen Schatten (Robert,
+        25.08.2026, am Bildschirm gesehen). Welche Dreiecke ein Stück bilden,
+        sagt der Kern (:func:`face_components`); die Hülle je Stück kommt aus
+        seinen Punkten — bereits mit dem Versatz der Ansicht, wie ``points``
+        gezeichnet wird.
         """
-        bodies = surface.split_bodies()
-        if len(bodies) <= 1:
-            single = self._shadow_hull_of(surface)
+        import numpy as np
+
+        raw = getattr(mesh, "raw", None)
+        pieces = face_components(raw) if raw is not None else []
+        if raw is None or len(pieces) <= 1:
+            single = self._shadow_hull_of(points)
             return [single] if single is not None else []
-        # Die Punkte genügen — ``_shadow_hull_of`` liest ohnehin nur ``points``,
-        # und ein ``extract_surface`` je Stück wäre eine Umwandlung für nichts.
+        faces = np.asarray(raw.faces, dtype=np.int64)
+        grid = np.asarray(points, dtype=float)
         hulls = []
-        for block in bodies:
-            hull = self._shadow_hull_of(block)
+        for piece in pieces:
+            used = np.unique(faces[np.asarray(piece, dtype=np.int64)].ravel())
+            hull = self._shadow_hull_of(grid[used])
             if hull is not None:
                 hulls.append(hull)
         return hulls
 
-    def _shadow_hull_of(self, surface: Any) -> Any:
-        """Die Punkte, aus denen ein Stück seinen Schatten wirft.
+    def _shadow_hull_of(self, points: Any) -> Any:
+        """Die Punkte, aus denen ein Stück seinen Schatten wirft: seine konvexe Hülle.
 
-        Die konvexe Hülle in **drei** Dimensionen, und zwar einmal je Körper und
-        Szenenaufbau. Sie hängt nicht an der Lichtrichtung: welcher Punkt den
-        Umriss des Schattens bestimmt, wechselt mit ihr, aber es ist immer
-        einer von diesen. Damit kostet ein Ansichtswechsel nur noch die
-        Projektion und die ebene Hülle darüber — statt einer Triangulierung
-        über jeden Punkt des Anzeigenetzes (gemessen: 31 ms bei zwanzigtausend
-        Dreiecken, 127 ms bei zweiundachtzigtausend, je Körper).
+        Einmal je Körper statt einer Triangulierung über jeden Punkt des
+        Anzeigenetzes bei jedem Ansichtswechsel (gemessen: 31 ms bei
+        zwanzigtausend Dreiecken, 127 ms bei zweiundachtzigtausend, je
+        Körper). ``_thinned_for_hull`` deckelt die Kosten bei feinen Kugeln.
         """
         import numpy as np
         from scipy.spatial import ConvexHull, QhullError
 
-        points = _thinned_for_hull(np.asarray(surface.points, dtype=float))
-        if len(points) < 4:
-            return points if len(points) >= 3 else None
+        thinned = _thinned_for_hull(np.asarray(points, dtype=float))
+        if len(thinned) < 4:
+            return thinned if len(thinned) >= 3 else None
         try:
-            return points[ConvexHull(points).vertices]
+            return thinned[ConvexHull(thinned).vertices]
         except QhullError as problem:
             # Ein ebener oder entarteter Körper hat keine räumliche Hülle. Seine
             # Punkte sind dann ohnehin wenige — sie gehen unverändert weiter.
             _log.info("shadow hull unavailable: %s", problem)
-            return points
+            return thinned
 
     def _shadow_catchers(self, object_id: ObjectId) -> list[tuple[float, Any]]:
         """Die Flächen, die den Schatten dieses Körpers auffangen (§18.6).
@@ -4348,75 +4238,51 @@ class Viewport(QWidget):
         ground: float = 0.0,
         window: Any = None,
     ) -> Any:
-        """Der Schatten eines Körpers auf der Platte, entlang der Lichtrichtung.
+        """Der Umriss eines Schattens auf der Fläche ``ground`` — als Ecken
+        eines konvexen Vielecks, ``(n, 3)``, oder nichts.
 
-        **Nicht** über ``enable_shadows``. Der VTK-Schattenwurf wurde in vier
-        Anläufen geprüft und in allen verworfen: mit drei Lichtern verschattet
-        er ganze Seitenflächen des Körpers schwarz, mit einem einzelnen
-        genauso, und die Schattenkarte deckt die Platte nicht ab — ihre Ränder
-        laufen schwarz aus. Mit gefüllter Platte kam ein richtiger Schatten
-        heraus, die schwarzen Ränder blieben.
-
-        Die Projektion kann alles, was hier gebraucht wird, und nichts davon
-        hängt am Treiber. **Schräg und nicht senkrecht:** senkrecht projiziert
-        liegt der Schatten exakt unter dem Körper und ist von ihm verdeckt — im
-        Bild war er schlicht nicht da. Entlang der Lichtrichtung geworfen tritt
-        er seitlich hervor, und weil sein Versatz mit der Höhe wächst,
-        beantwortet er nebenbei die Frage, die er beantworten soll: ein
-        schwebendes Teil hat seinen Schatten weiter weg.
-
-        Die konvexe Hülle ist bewusst gröber als der echte Umriss — ein Schatten
-        zeigt den Ort, nicht die Form; wer die Form sucht, dreht die Ansicht.
-
-        ``window`` ist der Rand der auffangenden Fläche. Was darüber hinausläuft,
-        wird abgeschnitten: ein Schatten neben der Platte lag auf blankem
-        Hintergrund und behauptete Boden, wo keiner ist.
+        Die Hülle wird schräg projiziert (:func:`shadow_points`), ihr Umriss
+        von oben genommen (:func:`outline_of`) und am Umriss der Fläche
+        geschnitten, auf die er fällt (:func:`clip_polygon`) — außerhalb lag
+        er auf blankem Hintergrund und behauptete Boden, wo keiner ist. Ein
+        einziges Vieleck statt einer Triangulierung: Die Punkte liegen bereits
+        in der Reihenfolge des Randes, ``shapes.polygon`` fächert sie auf.
         """
         import numpy as np
-        import pyvista as pv
 
         if hull_points is None or len(hull_points) < 3:
             return None
-        cast = shadow_points(hull_points, direction, ground)
-        outline = outline_of(cast)
+        cast_points = shadow_points(hull_points, direction, ground)
+        outline = outline_of(cast_points)
         if outline is None:
             return None
         if window is not None:
             outline = clip_polygon(outline, window)
             if len(outline) < 3:
                 return None
-        corners = np.column_stack((outline, np.full(len(outline), ground + SHADOW_LIFT)))
-        # Ein einziges konvexes Vieleck statt einer Triangulierung: die Punkte
-        # liegen bereits in der Reihenfolge des Randes, und VTK zeichnet es als
-        # Fläche. Delaunay darüber wäre dieselbe Fläche aus mehr Zellen.
-        return pv.PolyData(corners, faces=np.hstack(([len(corners)], np.arange(len(corners)))))
+        return np.column_stack((outline, np.full(len(outline), ground + SHADOW_LIFT)))
 
     # --- scene ------------------------------------------------------------------
 
     def show_preview_mesh(self, object_id: str, mesh: Any) -> None:
-        """Einen Körper zeigen, wie er nach dem laufenden Werkzeug aussähe.
+        """Die Vorschau eines Zugs: dieselben Punkte, anderswo — ohne Neuaufbau.
 
-        **Nur die Punkte, kein Neuaufbau** — das ist der Weg, den P16.2
-        gemessen hat: Ein Pinselzug trifft zehntausend von vier Millionen
-        Eckpunkten, und die Vollkopie kostet das Vierzigfache. Ein neuer Actor
-        je Zug wäre noch teurer und würde nebenbei Auswahl, Kanten und Schatten
-        neu aufbauen.
-
-        Die Dreiecke bleiben dieselben; passt die Punktzahl nicht, ist das
-        keine Vorschau derselben Sache, und es passiert nichts.
+        Ein Pinselstrich oder ein Skelettzug verschiebt Punkte und ändert die
+        Dreiecke nicht; der Aktor bekommt nur neue Koordinaten. Passt die Zahl
+        nicht mehr, ist es keine Vorschau, sondern ein Aufbau — dann tut diese
+        Methode nichts, und ``show_scene`` übernimmt.
         """
         import numpy as np
 
         actor = self._actors.get(object_id)
-        if actor is None or self.plotter is None:
+        if actor is None or self.renderer is None:
             return
-        data = actor.mapper.dataset
         points = np.asarray(mesh.raw.vertices, dtype=float)
-        if len(points) != data.n_points:
+        try:
+            actor.update_points(points)
+        except ValueError:
             return
-        data.points = points
-        data.Modified()
-        self.plotter.render()
+        self.renderer.render()
 
     def clear_preview_mesh(self) -> None:
         """Zurück zu dem, was wirklich in der Szene steht.
@@ -4484,7 +4350,7 @@ class Viewport(QWidget):
     ):
         """Die nötige Aufbereitung, wenn mindestens ein Schritt teuer ist."""
 
-        if result is None or self.plotter is None:
+        if result is None or self.renderer is None:
             return None
         plane = self._section
         if plane is None and self._layer is not None:
@@ -4634,14 +4500,14 @@ class Viewport(QWidget):
         # jede Auswertung vier Betten neu, die schon stehen.
         if self._profile is not None and self._beds_for_view() != self._beds_drawn:
             self.show_build_volume(self._profile)
-        # Vor dem Plotter-Zweig: ob ein Projekt schon einmal im Bild stand, ist
+        # Vor dem Renderer-Zweig: ob ein Projekt schon einmal im Bild stand, ist
         # eine Aussage über die Szene und nicht über VTK — offscreen gibt es
-        # keinen Plotter, und ein Test, der sich dort überspringt, prüft nie
+        # keinen Renderer, und ein Test, der sich dort überspringt, prüft nie
         # etwas.
         self._fit_once_for(result)
         if result is None:
             # Eine leere Szene hat keine Auswahl, kein gewähltes Merkmal und
-            # keine Maße. Vor dem Plotter-Zweig, aus demselben Grund wie das
+            # keine Maße. Vor dem Renderer-Zweig, aus demselben Grund wie das
             # Einpassen: das sind Aussagen über die Szene, nicht über VTK.
             self._selected = None
             self._selected_more = ()
@@ -4651,10 +4517,10 @@ class Viewport(QWidget):
             self._hovered_object = None
             self._hovered_feature = None
             self.measurements.clear()
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in self._actors.values():
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._actors.clear()
         # **Und mit ihnen die gemerkten Farben.** Ein neuer Aktor kommt grau
         # aus der Geometrie; stünde hier noch der Stand von vorhin, hielte
@@ -4673,10 +4539,10 @@ class Viewport(QWidget):
         # doppelt versetzen.
         self._actor_home.clear()
         for actor in self._edge_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._edge_actors.clear()
         for actor in self._shadow_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._shadow_actors.clear()
         self._shadow_owners.clear()
         # Die Hüllen gehören zu den Körpern, die gerade weggeräumt wurden. Ein
@@ -4724,11 +4590,11 @@ class Viewport(QWidget):
             return
 
         import numpy as np
-        import pyvista as pv
 
-        style = dict(DISPLAY_MODES[self._mode])
+        mode = DISPLAY_MODES[self._mode]
+        opacity = float(mode["opacity"])
         if self._sketch_frame is not None:
-            style["opacity"] = min(float(style.get("opacity", 1.0)), SKETCH_CONTEXT_OPACITY)
+            opacity = min(opacity, SKETCH_CONTEXT_OPACITY)
         for object_id, entry in result.scene.objects.items():
             if not self._in_view(object_id, entry):
                 continue
@@ -4744,50 +4610,46 @@ class Viewport(QWidget):
             raw = getattr(mesh, "raw", None)
             if raw is None or not len(raw.faces):
                 continue
-            faces = np.hstack(
-                [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
-            ).ravel()
-            points = np.asarray(raw.vertices, dtype=float) + self._view_offset(entry, result)
-            surface = pv.PolyData(points, faces)
-            scalars = self._scalars_for(object_id, len(raw.faces))
-            extra: dict[str, Any] = {}
+            faces = np.asarray(raw.faces, dtype=np.int64)
+            offset = np.asarray(self._view_offset(entry, result), dtype=float)
+            local = np.asarray(raw.vertices, dtype=float)
+            points = local + offset
+            scalars = self._scalars_for(object_id, len(faces))
+            cell_colours: CellColours | None = None
             if scalars is not None and self._map is not None:
-                surface.cell_data[str(self._map.kind)] = scalars
-                extra = {
-                    "scalars": str(self._map.kind),
-                    "cmap": list(VIRIDIS),
-                    "clim": (self._map.low, max(self._map.high, self._map.low + 1e-6)),
-                    "show_scalar_bar": False,
-                    "nan_color": "#4a4f57",
-                }
+                cell_colours = CellColours(
+                    scalars,
+                    colormap=tuple(VIRIDIS),
+                    limits=(self._map.low, max(self._map.high, self._map.low + 1e-6)),
+                    nan_colour="#4a4f57",
+                )
             elif self._map is None:
-                extra = self._slot_colours(surface, mesh, entry, len(raw.faces))
-            actor = self.plotter.add_mesh(
-                surface,
-                color=self._object_colour,
-                smooth_shading=self._shading == "smooth",
-                backface_params={"color": BACKFACE_COLOUR},
+                cell_colours = self._slot_colours(mesh, entry, len(faces))
+            # Eingepasst wird ausdrücklich, in `_fit_once_for` — der Renderer
+            # rührt die Kamera beim Einfügen nicht an.
+            actor = self.renderer.add_surface(
+                points,
+                faces,
                 name=f"object:{object_id}",
-                render=False,
-                # Die Ansicht wird bei jeder Änderung neu aufgebaut, und pyvista
-                # setzt die Kamera zurück, sobald es den ersten Aktor bekommt —
-                # nach dem Leerräumen ist jeder Körper der erste. Damit sprang
-                # die Ansicht bei jeder Auswahl auf Anfang, und ein
-                # Heranzoomen überlebte keinen Klick. Eingepasst wird
-                # ausdrücklich, in `_fit_once_for`.
-                reset_camera=False,
-                **style,
-                **extra,
+                style=SurfaceStyle(
+                    colour=self._object_colour,
+                    opacity=opacity,
+                    wireframe=mode["style"] == "wireframe",
+                    show_edges=bool(mode["show_edges"]),
+                    smooth=self._shading == "smooth",
+                    backface_colour=BACKFACE_COLOUR,
+                    pickable=True,
+                ),
+                cell_colours=cell_colours,
             )
             self._actors[object_id] = actor
             # ``mesh`` als Schlüssel, aus demselben Grund wie beim Schatten
-            # eine Zeile tiefer: Das PolyData entsteht in jeder Runde neu, das
+            # eine Zeile tiefer: Die Felder entstehen in jeder Runde neu, das
             # Netz dahinter bleibt dasselbe, solange sich nichts geändert hat.
-            self._draw_feature_edges(surface, object_id, mesh)
-            # ``mesh`` und nicht ``surface``: Das PolyData entsteht in jeder
-            # Runde neu, das Netz dahinter bleibt dasselbe, solange sich nichts
-            # geändert hat. Daran erkennt der Schatten, ob er neu zerlegen muss.
-            self._remember_shadow(surface, object_id, mesh)
+            self._draw_feature_edges(local, faces, offset, object_id, mesh)
+            # ``mesh`` und nicht ``points``: Daran erkennt der Schatten, ob er
+            # neu zerlegen muss.
+            self._remember_shadow(points, mesh, object_id, mesh)
 
         # Erst jetzt: ein Schatten fällt auf die Fläche, auf der sein Körper
         # steht, und welche das ist, weiß nur die vollständige Szene.
@@ -4858,22 +4720,19 @@ class Viewport(QWidget):
         Körperaktoren, und die Mitte kommt aus den Körpern, nie aus dem
         Renderer.
         """
-        if self.plotter is None:
-            return
-        renderer = getattr(self.plotter, "renderer", None)
-        if renderer is None:
+        if self.renderer is None:
             return
         centre = self.centre_hit()
         if centre is None:
             centre = self.rotation_centre()
         if centre is None:
             return
-        camera = renderer.GetActiveCamera()
-        target = rotation_focus(camera.GetPosition(), camera.GetFocalPoint(), centre)
+        pose = self.renderer.camera_pose()
+        target = rotation_focus(pose.position, pose.focal_point, centre)
         if target is None:
             return
-        camera.SetFocalPoint(*target)
-        renderer.ResetCameraClippingRange()
+        self.renderer.set_camera_pose(CameraPose(pose.position, target, pose.view_up))
+        self.renderer.reset_clipping_range()
 
     def centre_hit(self) -> Vec3 | None:
         """Der Körperpunkt in der Bildmitte — oder nichts, wo keiner liegt.
@@ -4891,16 +4750,12 @@ class Viewport(QWidget):
         Vor dem ersten Bild hat der Renderer keine Ausdehnung; dann gibt es
         keine Mitte, und der Aufrufer nimmt seinen anderen Weg.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None
-        renderer = getattr(self.plotter, "renderer", None)
-        if renderer is None:
-            return None
-        width, height = renderer.GetSize()
+        width, height = self.renderer.view_size()
         if width < 1 or height < 1:
             return None
-        left, bottom = renderer.GetOrigin()
-        return self._world_at(left + width // 2, bottom + height // 2)
+        return self._world_at(width // 2, height // 2)
 
     def rotation_centre(self) -> Vec3 | None:
         """Der Punkt, um den gedreht wird — die Mitte der Körper, oder nichts.
@@ -4908,7 +4763,7 @@ class Viewport(QWidget):
         Der Rückfall hinter :meth:`centre_hit`: Was die Bildmitte nicht
         beantwortet, beantwortet die Ausdehnung der Körper.
 
-        Als eigene Auskunft, damit die Regel ohne Plotter prüfbar bleibt:
+        Als eigene Auskunft, damit die Regel ohne Renderer prüfbar bleibt:
         offscreen gibt es keinen, und ein Test, der sich dort überspringt,
         prüft nie etwas.
         """
@@ -4928,11 +4783,9 @@ class Viewport(QWidget):
         Ausdehnung geändert, und die alten Ebenen können den neuen Körper
         wegschneiden.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        renderer = getattr(self.plotter, "renderer", None)
-        if renderer is not None:
-            renderer.ResetCameraClippingRange()
+        self.renderer.reset_clipping_range()
         self._draw()
 
     def _draw(self) -> None:
@@ -4943,7 +4796,7 @@ class Viewport(QWidget):
         ankommt, ist das ein Fehler weiter unten und wird dort behoben, nicht
         hier durch Wiederholen verdeckt.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         # **Vor jedem Bild, nicht bei jedem Anlass.** Die Tiefenordnung hängt
         # an der Kamera, und die ändert sich an einem Dutzend Stellen —
@@ -4952,104 +4805,68 @@ class Viewport(QWidget):
         # ``_order_by_depth`` merkt sich die letzte Lage und tut nichts, wenn
         # sich nichts geändert hat.
         self._order_by_depth()
-        self.plotter.render()
+        self.renderer.render()
 
-    def _slot_colours(self, surface: Any, mesh: Any, entry: Any, face_count: int) -> dict[str, Any]:
-        """Ein bemalter Körper wird in seinen Filamentfarben gezeichnet (§20).
+    def _slot_colours(self, mesh: Any, entry: Any, face_count: int) -> CellColours | None:
+        """Die Zellfarben eines Körpers — aus seinen Materialslots oder aus der
+        Datei, aus der er kam; ``None`` heißt Körperfarbe.
 
-        Solidon kennt Materialslots seit P9: ``paint_slot`` setzt sie,
-        ``slots_from_texture`` leitet sie ab, der 3MF-Export macht daraus den
-        Farbwechsel für den Drucker. Die Ansicht malte trotzdem alles grau —
-        wer ein Teil zweifarbig bemalte, sah das Ergebnis zum ersten Mal im
-        Slicer.
-
-        Das ist keine Dekoration: die Farbe steht im Dokument, sie ist der
-        Wert, der exportiert wird, und sie hier zu zeigen ist die einzige
-        Gelegenheit, einen Fehlgriff zu bemerken, solange er noch billig ist.
-
-        Eine Analysekarte hat Vorrang; sie färbt nach Zahlen, und zwei
-        Bedeutungen auf derselben Fläche wären keine.
+        Ein Slot ohne eigene Farbe bekommt eine aus der Ersatzpalette
+        (``theme.slot_colour``): Der Pinsel legt Slots mit ``colour=None`` an,
+        und mit der Körperfarbe an dieser Stelle war das Bemalen im Bild
+        folgenlos — zwei Striche in zwei Slots sahen aus wie keiner. Ein
+        einziger Slot ist kein Mehrfarbdruck, sondern die Vorgabe.
         """
         slots = getattr(entry, "material_slots", None)
         indices = getattr(mesh, "slots", ())
+        import numpy as np
+
         if not slots or len(indices) != face_count:
             colours = source_colours(mesh, face_count)
             if colours is None:
-                return {}
-            surface.cell_data["source_colour"] = colours
-            return {
-                "scalars": "source_colour",
-                "rgb": True,
-                "show_scalar_bar": False,
-            }
-
-        import numpy as np
+                return None
+            return CellColours(np.asarray(colours, dtype=float) / 255.0)
 
         known = {slot.index: slot for slot in slots}
         highest = max(known)
-        table = []
+        table: list[str] = []
         for index in range(highest + 1):
             slot = known.get(index)
             colour = slot.colour if slot is not None else None
             if colour is not None:
                 table.append(_hex(colour))
                 continue
-            # **Ein Slot ohne eigene Farbe bekommt eine aus der Palette.** Hier
-            # stand die Körperfarbe, und damit war das ganze Bemalen im Bild
-            # folgenlos: Der Pinsel legt einen Slot mit ``colour=None`` an, zwei
-            # Striche in zwei Slots ergaben zwei gleiche Einträge in dieser
-            # Tabelle, und das Teil sah aus wie vorher. Dieselbe Lücke bei der
-            # Schrift und bei „Slot zuweisen" ohne Farbeingabe — drei der vier
-            # Stellen, die Slots anlegen. Der Docstring oben beschreibt das als
-            # behoben; behoben war es nur für Slots, die schon eine Farbe hatten.
             table.append(slot_colour(index) or self._object_colour)
         if len(table) < 2:
-            # Ein einziger Slot ist kein Mehrfarbdruck, sondern die Vorgabe.
-            return {}
-        surface.cell_data["slot"] = np.asarray(indices, dtype=np.int32)
-        return {
-            "scalars": "slot",
-            "cmap": table,
-            "clim": (0, highest),
-            "show_scalar_bar": False,
-        }
+            return None
+        return CellColours(
+            np.asarray(indices, dtype=np.int32),
+            colormap=tuple(table),
+            limits=(0.0, float(highest)),
+            categorical=True,
+        )
 
-    def _feature_edges_for(self, object_id: ObjectId, surface: Any, source: Any) -> Any:
-        """Die Körperkanten dieses Körpers — neu gesucht nur bei einem anderen Netz.
+    def _feature_edges_for(
+        self, object_id: ObjectId, vertices: Any, faces: Any, source: Any
+    ) -> Any:
+        """Die Körperkanten eines Netzes — aus dem Cache, solange es dasselbe ist.
 
-        ``extract_feature_edges`` läuft linear über die Dreiecke, und der
-        Kommentar bei :data:`FEATURE_EDGE_LIMIT` rechnet damit: 0,15 ms je
-        tausend, an der Grenze dreißig Millisekunden „je Körper und
-        Szenenaufbau". Die Rechnung stimmt, ihre Annahme nicht — ein
-        Szenenaufbau ist nicht selten.
+        Dieselbe Bauart wie ``_shadow_hulls_for``, aus demselben Grund: Die
+        Kantensuche kostete an einem Kundenmodell mit 32 Körpern 453 ms bei
+        jedem Aufbau, und ``show_scene`` läuft bei jeder Auswahl, jedem
+        Themenwechsel und jedem Schieberschritt. Verglichen wird die Identität
+        des Netzes; der Schnittschieber trifft den Cache absichtlich nicht.
 
-        **Gemessen am Kundenmodell `chufang.3mf`** (32 Körper, 5 476 596
-        Dreiecke, 03.09.2026): Ein Aufbau kostet **1,0 s**, und **453 ms davon
-        sind diese Suche** — bei jeder Auswahl eines Körpers, jedem
-        Themenwechsel, jedem Schritt der Schieber für Explosion, Schnitt und
-        Schicht. Es ist damit der teuerste einzelne Posten des Aufbaus; die
-        Dezimierung dahinter kostet beim zweiten Mal nichts mehr, weil sie
-        längst cacht, und die Schattenzerlegung fiel aus demselben Grund von
-        1504 auf 28 ms.
-
-        Verglichen wird die **Identität** des Netzes, nicht sein Inhalt —
-        wörtlich die Begründung aus :meth:`_shadow_hulls_for`: Ein Hash über
-        Millionen Dreiecke wäre nicht billiger als die Suche, die er spart.
-        Und der Schnittschieber trifft den Cache aus demselben Grund
-        absichtlich nicht: ``cut`` erzeugt dort wirklich ein neues Netz, und
-        dessen Kanten sind andere.
+        **In Körperkoordinaten, ohne den Versatz der Ansicht.** Der Cache
+        überlebt einen Wechsel der Platte oder der Explosion, und ein
+        gemerkter Versatz stünde danach falsch; der Versatz kommt beim
+        Zeichnen dazu.
         """
         cached = self._edge_meshes.get(object_id)
         if cached is not None and source is not None and cached[0] is source:
             return cached[1]
         try:
-            edges = surface.extract_feature_edges(
-                feature_angle=FEATURE_EDGE_ANGLE,
-                boundary_edges=True,
-                non_manifold_edges=False,
-                feature_edges=True,
-                manifold_edges=False,
-            )
+            edges = feature_edges(vertices, faces, FEATURE_EDGE_ANGLE)
         except Exception as problem:  # pragma: no cover - hängt an der Geometrie
             _log.info("feature edges unavailable: %s", problem)
             return None
@@ -5057,57 +4874,43 @@ class Viewport(QWidget):
             self._edge_meshes[object_id] = (source, edges)
         return edges
 
-    def _draw_feature_edges(self, surface: Any, object_id: ObjectId, source: Any = None) -> None:
-        """Die Kanten des *Körpers*, nicht die des Netzes (§18.1).
+    def _draw_feature_edges(
+        self, vertices: Any, faces: Any, offset: Any, object_id: ObjectId, source: Any = None
+    ) -> None:
+        """Die Kanten eines Körpers als Linien über die Flächen — nur in ``solid``.
 
-        „Massiv mit Kanten" zeichnet jede Dreieckskante — das beantwortet die
-        Frage, wie fein das Netz ist, und dafür ist es da. Es beantwortet
-        nicht, wo das Teil eine Kante hat: bei einem Zylinder aus zweihundert
-        Segmenten geht die eine Kante, auf die es ankommt, in
-        zweihundertneunundneunzig anderen unter.
-
-        Hier stehen deshalb nur Kanten, an denen zwei Flächen wirklich
-        aufeinandertreffen, dazu die offenen Ränder — bei einem undichten Netz
-        also genau die Stellen, die der Prüfbericht meldet. Ein rundes Teil
-        bekommt gar keine: eine Kugel hat keine Kante, und eine erfundene wäre
-        schlimmer als keine.
-
-        Nur im massiven Modus. In den anderen drei ist entweder alles schon
-        gezeichnet oder man sieht hindurch, und dann wäre eine zweite
-        Linienlage nur Gitter.
+        Ab :data:`FEATURE_EDGE_LIMIT` Dreiecken gibt es keine: Die Suche läuft
+        linear, und Netze dieser Größe sind Scans oder erzeugte Körper, die
+        bei dreißig Grad ohnehin fast keine Kanten haben.
         """
-        if self.plotter is None or self._mode != "solid":
+        if self.renderer is None or self._mode != "solid":
             return
-        if surface.n_cells > FEATURE_EDGE_LIMIT:
+        if len(faces) > FEATURE_EDGE_LIMIT:
             return
-        edges = self._feature_edges_for(object_id, surface, source)
-        if edges is None or edges.n_cells == 0:
+        edges = self._feature_edges_for(object_id, vertices, faces, source)
+        if edges is None or len(edges) == 0:
             return
         self._edge_actors.append(
-            self.plotter.add_mesh(
-                edges,
-                color=self._edge_colour,
-                line_width=FEATURE_EDGE_WIDTH,
+            self.renderer.add_lines(
+                edges + offset,
                 name=f"edges:{object_id}",
-                render=False,
-                pickable=False,
+                colour=self._edge_colour,
+                width=float(FEATURE_EDGE_WIDTH),
             )
         )
 
-    def _remember_shadow(self, surface: Any, object_id: ObjectId, source: Any = None) -> None:
-        """Was dieser Körper zum Schattenwurf beiträgt — geworfen wird später.
+    def _remember_shadow(
+        self, points: Any, mesh: Any, object_id: ObjectId, source: Any = None
+    ) -> None:
+        """Die Hüllen eines Körpers für den Schattenwurf merken (§18.6).
 
-        Getrennt vom Setzen, weil ein Schatten wissen muss, worauf er fällt:
-        welcher Körper unter welchem steht, steht erst fest, wenn alle
-        gezeichnet sind.
-
-        ``source`` ist das Netz, aus dem ``surface`` gebaut wurde — der
-        Schlüssel, an dem ``_shadow_hulls_for`` erkennt, ob sich überhaupt
-        etwas geändert hat.
+        Gezeichnet wird erst, wenn die ganze Szene steht (``_place_shadows``):
+        Ein Schatten fällt auf die Fläche, auf der sein Körper steht, und
+        welche das ist, weiß nur die vollständige Szene.
         """
-        if self.plotter is None or not self.contact_shadows:
+        if self.renderer is None or not self.contact_shadows:
             return
-        hulls = self._shadow_hulls_for(object_id, surface, source)
+        hulls = self._shadow_hulls_for(object_id, points, mesh, source)
         self._shadow_hulls[object_id] = hulls
         usable = [hull for hull in hulls if hull is not None and len(hull) >= 3]
         if not usable:
@@ -5120,16 +4923,16 @@ class Viewport(QWidget):
         # über seine Stücke: Ein Turm auf einer Grundplatte wirft auf sie, und
         # ob die Platte aus einem Stück besteht, ändert daran nichts. Der
         # Umriss dafür kommt weiter aus allen Punkten zusammen.
-        points = np.vstack([np.asarray(hull, dtype=float) for hull in usable])
+        stacked = np.vstack([np.asarray(hull, dtype=float) for hull in usable])
         self._shadow_ground[object_id] = (
-            float(points[:, 2].min()),
-            float(points[:, 2].max()),
-            outline_of(points),
+            float(stacked[:, 2].min()),
+            float(stacked[:, 2].max()),
+            outline_of(stacked),
         )
 
     def _place_shadows(self, direction: tuple[float, float]) -> None:
         """Die Schatten aller Körper aus den gemerkten Hüllen setzen."""
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for object_id, hulls in self._shadow_hulls.items():
             for part, hull in enumerate(hulls):
@@ -5137,18 +4940,19 @@ class Viewport(QWidget):
                     outline = self._shadow_outline_of(hull, direction, ground, window)
                     if outline is None:
                         continue
-                    actor = self.plotter.add_mesh(
-                        outline,
-                        color=SHADOW_COLOUR,
-                        opacity=self._shadow_opacity,
-                        lighting=False,
-                        # Der Name trägt jetzt auch das Stück: Zwei Schatten
-                        # desselben Körpers auf derselben Fläche hätten sonst
-                        # denselben Namen, und pyvista ersetzt gleichnamige
-                        # Aktoren — von drei Haken bliebe einer.
+                    vertices, faces = shapes.polygon(outline)
+                    actor = self.renderer.add_surface(
+                        vertices,
+                        faces,
+                        # Der Name trägt auch das Stück: Zwei Schatten desselben
+                        # Körpers auf derselben Fläche hießen sonst gleich.
                         name=f"shadow:{object_id}:{part}:{index}",
-                        render=False,
-                        pickable=False,
+                        style=SurfaceStyle(
+                            colour=SHADOW_COLOUR,
+                            opacity=self._shadow_opacity,
+                            lighting=False,
+                            pickable=False,
+                        ),
                     )
                     self._shadow_actors.append(actor)
                     self._shadow_owners.setdefault(object_id, []).append(actor)
@@ -5163,14 +4967,14 @@ class Viewport(QWidget):
         """
         # Läuft eine Analysekarte, steht hier ohnehin nichts: `_draw_shadow`
         # legt dann keine Hülle ab, und `show_scene` räumt die alten weg.
-        if self._sketch_frame is not None or self.plotter is None or not self._shadow_hulls:
+        if self._sketch_frame is not None or self.renderer is None or not self._shadow_hulls:
             return
         direction = self._shadow_direction()
         if math.dist(self._shadow_cast, direction) < EPS_GEOM:
             return
         self._shadow_cast = direction
         for actor in self._shadow_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._shadow_actors.clear()
         self._shadow_owners.clear()
         self._place_shadows(direction)
@@ -5440,13 +5244,13 @@ class Viewport(QWidget):
         # ``highlighted_objects`` ihn doppelt, und ein Vergleich auf Gleichheit
         # gegen den Objektbaum schlägt fehl, ohne dass etwas fehlt.
         #
-        # **Gegen die Aktoren zu filtern wäre hier falsch.** Ohne Plotter ist
+        # **Gegen die Aktoren zu filtern wäre hier falsch.** Ohne Renderer ist
         # ``_actors`` leer, und die Auswahl käme offscreen nie an — eine
         # Bedingung, die genau dort nicht greift, wo geprüft wird. Ob es einen
         # Körper noch gibt, entscheidet die Auswertung in ``show_scene``; dort
-        # ist die Szene bekannt und der Plotter unerheblich.
+        # ist die Szene bekannt und der Renderer unerheblich.
         self._selected_more = tuple(dict.fromkeys(o for o in more if o != object_id))
-        if self.plotter is None:
+        if self.renderer is None:
             return
         self._apply_selection_colour()
         # Der Griff folgt der Auswahl (§18.11): wer ein anderes Objekt wählt,
@@ -5466,7 +5270,7 @@ class Viewport(QWidget):
         Ausnahme, die für einen Körper unter einer Analysekarte längst gilt
         (§19.1).
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         highlighted = () if self._sketch_frame is not None else self.highlighted_objects()
         wanted = {
@@ -5512,7 +5316,7 @@ class Viewport(QWidget):
         „für den Fall, dass" wäre die Stelle, an der die beiden auseinander
         laufen.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         # Eine noch laufende Blende gehört zu einer Auswahl, die es nicht mehr
         # gibt. Liefe sie weiter, schriebe sie ihre alten Farben über die neuen.
@@ -5535,18 +5339,18 @@ class Viewport(QWidget):
         moving = animations_enabled()
 
         def step(fraction: float) -> None:
-            plotter = self.plotter
-            if plotter is None:
+            renderer = self.renderer
+            if renderer is None:
                 return
             for identifier, start in starts.items():
                 actor = self._actors.get(identifier)
                 if actor is None:
                     continue
                 blend = mix(start, ends[identifier], fraction)
-                actor.prop.color = blend
+                actor.set_colour(hex_of(blend))
                 self._live_colours[identifier] = blend
             if moving:
-                plotter.render()
+                renderer.render()
 
         # **Die Referenz fällt mit der Animation.** ``tween`` startet mit
         # ``DeleteWhenStopped``: Nach dem letzten Bild ist das C++-Objekt weg,
@@ -5584,10 +5388,12 @@ class Viewport(QWidget):
         """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
         (§18.6) — **je Platte eines** (§25).
 
-        **Kein Aufruf hier setzt die Kamera.** Der Bauraum ist Kulisse, und
-        pyvista passt bei der ersten Netzfläche einer leeren Szene von selbst
-        ein — das machte jedes Einpassen auf die Körper wieder zunichte, weil
-        die Kulisse danach gezeichnet wurde.
+        **Kein Aufruf hier setzt die Kamera.** Der Bauraum ist Kulisse. PyVista
+        passte bei der ersten Netzfläche einer leeren Szene von selbst ein und
+        machte damit jedes Einpassen auf die Körper zunichte, weil die Kulisse
+        danach gezeichnet wurde; der eigene Renderer passt nie von selbst ein,
+        und die Regel bleibt, weil sie ihren Anlass überlebt: Kulisse stellt
+        keine Kamera.
 
         **Warum mehrere Betten.** Jede Platte hat ihren eigenen Nullpunkt, und
         die Anordnung setzt Platte 2 an denselben Ort wie Platte 1. Ein Bett
@@ -5598,38 +5404,36 @@ class Viewport(QWidget):
         width, depth, height = profile.printer.build_volume
         # Gemerkt, weil der Kontaktschatten an dieser Kante geschnitten wird —
         # und weil ``_fit_once_for`` daran erkennt, ob es auf einer leeren Szene
-        # überhaupt etwas einzupassen gibt. Vor dem Plotter-Zweig, aus demselben
+        # überhaupt etwas einzupassen gibt. Vor dem Renderer-Zweig, aus demselben
         # Grund wie dort: dass ein Bauraum gilt, ist eine Aussage über die
         # Szene und nicht über VTK.
         self._bed_extent = (width, depth)
         self._build_volume = (width, depth, height)
         self._profile = profile
-        # Die Zahl **vor** dem Plotter-Zweig, damit ``_plate_offset`` offscreen
+        # Die Zahl **vor** dem Renderer-Zweig, damit ``_plate_offset`` offscreen
         # dasselbe sagt wie im Bild: sonst hinge die Verschiebung an VTK, und
         # kein Test käme an sie heran.
         beds = self._beds_for_view()
         self._beds_drawn = beds
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        import pyvista as pv
-
         for actor in self._frame_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._frame_actors.clear()
         self._ground_actors.clear()
         self._bed_surfaces.clear()
         for plate in range(beds):
-            self._draw_one_bed(pv, plate, plate_shift(plate, width)[0], width, depth, height)
+            self._draw_one_bed(plate, plate_shift(plate, width)[0], width, depth, height)
         # Der Zustand entscheidet, nicht die Aufruf-Reihenfolge: Während des
         # Zeichnens tritt der Boden ab (siehe ``set_sketching``), und ein hier
         # frisch gebautes Bett hat sich daran zu halten — sonst liegen Bett-
         # und Zeichenraster wieder übereinander, sobald eine Platte dazukommt.
         if self._sketch_frame is not None:
             for actor in self._ground_actors:
-                actor.SetVisibility(False)
+                actor.set_visible(False)
         if not self._bed_visible:
             for actor in self._frame_actors:
-                actor.SetVisibility(False)
+                actor.set_visible(False)
         self._apply_bed_transparency()
         self._draw()
 
@@ -5647,125 +5451,96 @@ class Viewport(QWidget):
         bleibt der Boden ohnehin weg.
         """
         self._bed_visible = bool(visible)
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in self._frame_actors:
             hidden_by_sketch = self._sketch_frame is not None and actor in self._ground_actors
-            actor.SetVisibility(self._bed_visible and not hidden_by_sketch)
+            actor.set_visible(self._bed_visible and not hidden_by_sketch)
         self._draw()
 
     def _draw_one_bed(
         self,
-        pv: Any,
         plate: int,
         shift: float,
         width: float,
         depth: float,
         height: float,
     ) -> None:
-        """Ein Bett samt Bauraum und Maßstab, ``shift`` Millimeter nach +X.
+        """Ein Bett zeichnen: Grundfläche, Raster, Bauraumkanten, Maßskala.
 
-        Die Namen der Actors tragen die Plattennummer: ``name=`` ersetzt in
-        pyvista, was denselben Namen hat — mit festen Namen bliebe von vier
-        Betten eines übrig.
+        Je Platte eines, um ``shift`` nach +X gerückt (§25); die Namen tragen
+        die Plattennummer, damit vier Betten vier Aktoren sind.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
+
+        import numpy as np
 
         # Ein gefüllter Grund unter dem Raster. Bis hierhin war die Platte ein
         # Drahtgitter über dem Hintergrund — hübsch, aber ohne Fläche: ein
         # Schatten darauf fiel auf nichts und war im Bild schlicht nicht da.
         # Knapp unter null, damit er nicht mit dem Raster um dieselbe Tiefe
         # streitet.
-        surface = self.plotter.add_mesh(
-            pv.Plane(
-                center=(shift, 0.0, -BED_SURFACE_DROP),
-                direction=(0.0, 0.0, 1.0),
-                i_size=width,
-                j_size=depth,
-            ),
-            color=self._bed_surface,
-            ambient=0.45,
-            diffuse=0.55,
-            specular=0.0,
-            name=f"bed_surface_{plate}",
-            render=False,
-            reset_camera=False,
-            pickable=False,
-        )
-        self._bed_surfaces.append(surface)
+        #
         # **Von unten schaut man hindurch** (Robert, 23.08.2026): Wer eine
         # Unterseite bearbeitet, dreht die Ansicht unter das Teil — und sah
-        # dort die Platte statt des Teils.
-        #
-        # ``culling`` und nicht ``opacity``: Die Fläche gibt es, damit ein
-        # Schatten auf etwas fällt, und eine durchscheinende Platte nähme ihm
-        # den Grund. Die Ebene zeigt mit ``direction=(0, 0, 1)`` nach oben;
-        # von unten sieht man ihre **Rückseite**, und die lässt sich wegwerfen,
-        # ohne die Vorderseite anzufassen. Gemessen von 3d-druck-3a an einem
-        # roten Körper über grauer Platte, in Bildpunkten gezählt:
+        # dort die Platte statt des Teils. ``cull_backfaces`` und nicht
+        # ``opacity``: Die Fläche gibt es, damit ein Schatten auf etwas fällt,
+        # und eine durchscheinende Platte nähme ihm den Grund. Die Ebene zeigt
+        # nach oben; von unten sieht man ihre **Rückseite**, und die lässt
+        # sich wegwerfen, ohne die Vorderseite anzufassen. Gemessen von
+        # 3d-druck-3a an einem roten Körper über grauer Platte, in Bildpunkten
+        # gezählt:
         #
         #     ohne culling   von unten:    0 rot   von oben: 4014
         #     culling back   von unten: 2417 rot   von oben: 4014
-        #
-        # Von oben ändert sich nichts — dieselbe Zahl, also bleiben Fläche und
-        # Schatten, wie sie waren.
-        surface.prop.culling = "back"
+        vertices, faces = shapes.plane((shift, 0.0, -BED_SURFACE_DROP), width, depth)
+        surface = self.renderer.add_surface(
+            vertices,
+            faces,
+            name=f"bed_surface_{plate}",
+            style=SurfaceStyle(
+                colour=self._bed_surface,
+                ambient=0.45,
+                diffuse=0.55,
+                specular=0.0,
+                pickable=False,
+                cull_backfaces=True,
+            ),
+        )
+        self._bed_surfaces.append(surface)
         self._frame_actors.append(surface)
         self._ground_actors.append(surface)
-        bed = pv.Plane(
-            center=(shift, 0.0, 0.0),
-            direction=(0.0, 0.0, 1.0),
-            i_size=width,
-            j_size=depth,
-            i_resolution=max(1, int(width // 10)),
-            j_resolution=max(1, int(depth // 10)),
-        )
-        grid = self.plotter.add_mesh(
-            bed,
-            color=self._bed_colour,
-            style="wireframe",
-            opacity=0.35,
+        grid_points, grid_spans = shapes.grid_lines((shift, 0.0, 0.0), width, depth, 10.0)
+        grid = self.renderer.add_lines(
+            grid_points,
             name=f"bed_{plate}",
-            render=False,
-            reset_camera=False,
+            colour=self._bed_colour,
+            width=1.0,
+            polylines=grid_spans,
         )
+        grid.set_opacity(0.35)
         self._frame_actors.append(grid)
         self._ground_actors.append(grid)
-        import numpy as np
 
         segments = volume_edges(width, depth, height)
         points = np.asarray([point for pair in segments for point in pair], dtype=float)
         points[:, 0] += shift
-        lines = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
-        self._frame_actors.append(
-            self.plotter.add_mesh(
-                pv.PolyData(points, lines=lines),
-                color=self._bed_colour,
-                opacity=0.35,
-                line_width=1,
-                name=f"build_volume_{plate}",
-                render=False,
-                reset_camera=False,
-                pickable=False,
-            )
+        volume = self.renderer.add_lines(
+            points, name=f"build_volume_{plate}", colour=self._bed_colour, width=1.0
         )
+        volume.set_opacity(0.35)
+        self._frame_actors.append(volume)
 
         marks = bed_scale(width, depth)
         anchors = np.asarray([point for point, _text in marks], dtype=float)
         anchors[:, 0] += shift
         self._frame_actors.append(
-            self.plotter.add_point_labels(
+            self.renderer.add_labels(
                 anchors,
                 [text for _point, text in marks],
-                text_color=self._bed_colour,
-                font_size=9,
-                show_points=False,
-                shape=None,
-                always_visible=True,
                 name=f"bed_scale_{plate}",
-                render=False,
-                reset_camera=False,
+                style=LabelStyle(text_colour=self._bed_colour, font_size=9, always_visible=True),
             )
         )
 
@@ -5814,9 +5589,9 @@ class Viewport(QWidget):
         self.plane_picker.set_theme(theme)
         self.sketch_selection.set_theme(theme)
         self.sketch_action.set_theme(theme)
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        self.plotter.set_background(colours["bottom"], top=colours["top"])
+        self.renderer.set_background(colours["bottom"], top=colours["top"])
         self._light_the_body(theme)
         # Die Achsenanzeige trägt eine Schriftfarbe und muss deshalb mit dem
         # Thema wechseln — eine schwarze Beschriftung auf dunklem Grund ist
@@ -5850,12 +5625,9 @@ class Viewport(QWidget):
         macht (§18.1).
         """
         self._projection = projection
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        if projection == "orthographic":
-            self.plotter.enable_parallel_projection()
-        else:
-            self.plotter.disable_parallel_projection()
+        self.renderer.set_parallel_projection(projection == "orthographic")
         self._draw()
 
     @property
@@ -5981,27 +5753,18 @@ class Viewport(QWidget):
         plane: SectionPlane | None = None,
         target: ObjectId | None = None,
     ) -> None:
-        """Zeichnet, was bisher geklickt wurde.
+        """Die Enden der Trennlinie, die Linie dazwischen und die Ebene, die
+        daraus wird (§25) — als Vorschau, die ein Werkzeugwechsel abräumt.
 
-        Ein Punkt ist eine Kugel in der Auswahlfarbe, zwei sind eine Linie mit
-        einer Kugel an jedem Ende. Ohne die erste Kugel sieht ein Klick auf ein
-        großes Teil aus, als sei nichts passiert — und der zweite Klick landet
-        dann irgendwo, weil niemand weiß, wo der erste war.
-
-        Sobald die Linie vollständig ist, liegt zusätzlich die **ganze
-        Schnittebene** als durchscheinende, umrandete Fläche im Zielkörper. Eine
-        Linie allein beantwortet nicht, welche Seite und welche Neigung durch
-        das Modell laufen; die Fläche tut es. Farbe und Umriss kodieren dieselbe
-        Aussage doppelt (Regel 18).
-
-        Beide Actors tragen einen Namen: Wo ``clear_split_line`` einmal nicht
-        gelaufen ist, ersetzt pyvista den gleichnamigen, statt einen zweiten
-        danebenzulegen.
+        Die Operation speichert Szenenkoordinaten. In „Alle Platten" steht
+        der Körper für die Anzeige versetzt; Linie und Ebene müssen genau
+        denselben reinen Anzeigeversatz bekommen, sonst erscheinen sie auf
+        Platte 1 statt auf dem angeklickten Teil.
         """
         import numpy as np
 
         self.clear_split_line()
-        if self.plotter is None or not points:
+        if self.renderer is None or not points:
             return
 
         entry = self._result.scene.objects.get(target) if self._result and target else None
@@ -6010,69 +5773,57 @@ class Viewport(QWidget):
             if entry is not None and self._result is not None
             else np.zeros(3)
         )
-        # Die Operation speichert Szenenkoordinaten. In „Alle Platten“ steht
-        # der Körper für die Anzeige versetzt; Linie und Ebene müssen genau
-        # denselben reinen Anzeigeversatz bekommen, sonst erscheinen sie auf
-        # Platte 1 statt auf dem angeklickten Teil.
         marks = np.asarray(points, dtype=float) + shift
         self._split_actors.append(
-            self.plotter.add_points(
-                marks,
-                color=SELECTED_COLOUR,
-                point_size=14,
-                render_points_as_spheres=True,
-                name="split:ends",
-                render=False,
-                reset_camera=False,
-                pickable=False,
-            )
+            self.renderer.add_points(marks, name="split:ends", colour=SELECTED_COLOUR, size=14.0)
         )
         if len(points) >= 2:
-            line = self.plotter.add_lines(
-                marks[:2], color=SELECTED_COLOUR, width=3, name="split:line"
+            self._split_actors.append(
+                self.renderer.add_lines(
+                    marks[:2], name="split:line", colour=SELECTED_COLOUR, width=3.0
+                )
             )
-            if hasattr(line, "PickableOff"):
-                line.PickableOff()
-            self._split_actors.append(line)
         if plane is not None and entry is not None:
             bounds = entry.mesh.bounds
             patch = plane_patch(bounds.minimum, bounds.maximum, plane)
             if patch:
-                import pyvista as pv
-
                 corners = np.asarray(patch, dtype=float)
                 centre = np.mean(corners, axis=0)
                 corners = centre + SPLIT_PLANE_SCALE * (corners - centre) + shift
-                face = np.concatenate(
-                    (np.asarray([len(corners)], dtype=np.int64), np.arange(len(corners)))
-                )
-                surface = pv.PolyData(corners, faces=face)
+                vertices, faces = shapes.polygon(corners)
                 self._split_actors.append(
-                    self.plotter.add_mesh(
-                        surface,
-                        color=SELECTED_COLOUR,
-                        opacity=0.22,
-                        show_edges=True,
-                        edge_color=SELECTED_COLOUR,
-                        line_width=2,
-                        lighting=False,
+                    self.renderer.add_surface(
+                        vertices,
+                        faces,
                         name="split:plane",
-                        render=False,
-                        reset_camera=False,
-                        pickable=False,
+                        style=SurfaceStyle(
+                            colour=SELECTED_COLOUR, opacity=0.22, lighting=False, pickable=False
+                        ),
                     )
                 )
-        self.plotter.render()
+                # Der Rand als eigene Linie und nicht als Kanten der Fläche:
+                # Die Fläche ist ein Fächer aus Dreiecken, und deren Kanten
+                # zeichneten die Diagonalen mit.
+                self._split_actors.append(
+                    self.renderer.add_lines(
+                        shapes.closed_ring(corners),
+                        name="split:rim",
+                        colour=SELECTED_COLOUR,
+                        width=2.0,
+                        connected=True,
+                    )
+                )
+        self.renderer.render()
 
     def clear_split_line(self) -> None:
         """Nimmt die Vorschau wieder heraus."""
-        if self.plotter is None:
+        if self.renderer is None:
             self._split_actors.clear()
             return
         for actor in self._split_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._split_actors.clear()
-        self.plotter.render()
+        self.renderer.render()
 
     def view_direction(self) -> Vec3:
         """Wohin die Kamera schaut — von ihr weg auf den Brennpunkt zu.
@@ -6083,18 +5834,16 @@ class Viewport(QWidget):
         Operation: Eine Op, die die Kamera läse, gäbe beim zweiten Auswerten
         ein anderes Ergebnis (§11.2).
 
-        Ohne Plotter — offscreen — der Blick aus der Vorgabestellung. Eine
+        Ohne Renderer — offscreen — der Blick aus der Vorgabestellung. Eine
         Ausnahme, die eine Rechnung überspringt, wäre ein Test, der nie etwas
         prüft.
         """
         import numpy as np
 
-        if self.plotter is None:
+        if self.renderer is None:
             return (0.0, 1.0, 0.0)
-        camera = self.plotter.camera
-        forward = np.asarray(camera.focal_point, dtype=float) - np.asarray(
-            camera.position, dtype=float
-        )
+        pose = self.renderer.camera_pose()
+        forward = np.asarray(pose.focal_point, dtype=float) - np.asarray(pose.position, dtype=float)
         length = float(np.linalg.norm(forward))
         if length <= 0.0:
             return (0.0, 1.0, 0.0)
@@ -6131,24 +5880,24 @@ class Viewport(QWidget):
             self._draw_brush()
 
     def _hide_brush(self) -> None:
-        if self._brush_actor is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._brush_actor, render=True)
+        if self._brush_actor is not None and self.renderer is not None:
+            self.renderer.remove(self._brush_actor)
+            self.renderer.render()
         self._brush_actor = None
 
     def _draw_brush(self) -> None:
-        """Den Ring dorthin legen, wo der Pinsel greifen würde.
+        """Den Pinselradius als Ring auf der Fläche unter dem Zeiger zeigen (§20).
 
-        Flach auf die Fläche, nicht in die Bildebene: Ein Kreis, der immer zum
-        Betrachter zeigt, sagt nichts darüber, wie schräg die Stelle unter ihm
-        steht — und schräg ist beim Formen der Normalfall.
+        Als Weltmaß in der Szene und nicht am Zeiger: Ein Zeiger hat feste
+        Punktgröße und weiß nichts von der Kamera. Der Ring liegt in der
+        Ebene der nächsten Ecke des Netzes.
         """
         import numpy as np
-        import pyvista as pv
 
-        if self.plotter is None or self._hover_at is None or self._brush_radius <= 0.0:
+        if self.renderer is None or self._hover_at is None or self._brush_radius <= 0.0:
             return
         x, y = self._hover_at
-        point = _world_under(self.plotter.renderer, x, y)
+        point = self.renderer.display_to_world(x, y, self.renderer.focal_depth())
         if point is None:
             self._hide_brush()
             return
@@ -6160,13 +5909,15 @@ class Viewport(QWidget):
         nearest = int(np.argmin(np.linalg.norm(vertices - np.asarray(point), axis=1)))
         normal = np.asarray(mesh.raw.vertex_normals, dtype=float)[nearest]
         ring = _ring_points(np.asarray(point, dtype=float), normal, self._brush_radius)
-        line = pv.PolyData(ring)
-        line.lines = np.hstack([[len(ring) + 1], np.arange(len(ring)), [0]])
         self._hide_brush()
-        self._brush_actor = self.plotter.add_mesh(
-            line, color=SELECTED_COLOUR, line_width=2, render=False, reset_camera=False
+        self._brush_actor = self.renderer.add_lines(
+            shapes.closed_ring(ring),
+            name="brush",
+            colour=SELECTED_COLOUR,
+            width=2.0,
+            connected=True,
         )
-        self.plotter.render()
+        self.renderer.render()
 
     # --- der Zeiger (§19.3) -----------------------------------------------------
 
@@ -6182,9 +5933,9 @@ class Viewport(QWidget):
         if role == self._cursor_role:
             return
         self._cursor_role = role
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        self.plotter.interactor.setCursor(cursors.cursor(role, self))
+        self.renderer.widget.setCursor(cursors.cursor(role, self))
 
     def _resting_role(self) -> str:
         """Was ein Klick jetzt täte, wenn die Kamera stillsteht.
@@ -6272,7 +6023,7 @@ class Viewport(QWidget):
         self._hover_feature = found
         self._hovered_object = object_id if found else None
         self._hovered_feature = feature_id
-        if target_changed and self.plotter is not None:
+        if target_changed and self.renderer is not None:
             self._redraw_features()
             self._draw()
         if role_changed:
@@ -6290,7 +6041,7 @@ class Viewport(QWidget):
         über einer Bohrung zeigt, wo der Klick sie nicht wählt, verspricht
         etwas, das nicht eintritt.
         """
-        if self.plotter is None or self._hover_at is None or self._dragging_role:
+        if self.renderer is None or self._hover_at is None or self._dragging_role:
             return
         x, y = self._hover_at
         if self._sculpting:
@@ -6325,24 +6076,18 @@ class Viewport(QWidget):
             object_id, feature_id = self._click_target(self._from_view(point))
         self._set_hover_target(object_id, feature_id)
 
-    def _note_pointer(self, position: Any) -> None:
-        """Merkt sich, wo die Maus steht, und stößt die Suche neu an.
+    def _note_pointer(self, x: int, y: int) -> None:
+        """Wo der Zeiger steht — in Gerätepixeln, gezählt wie Qt (oben links).
 
-        VTK zählt seine Y-Achse von unten, Qt von oben — ohne die Umrechnung
-        findet die Suche das Merkmal am gespiegelten Ort, was in der Mitte des
-        Bildes zufällig oft genug stimmt, um lange nicht aufzufallen.
+        Der Renderer meldet jede Bewegung als ``PointerEvent`` in genau der
+        Zählung, in der ``world_to_display`` und ``pick_surface`` antworten;
+        eine Umrechnung gibt es hier nicht mehr. Bis zum 05.09.2026 spiegelte
+        diese Stelle nach VTKs Zählung von unten, und wer sie vergaß, suchte am
+        gespiegelten Ort — in der Bildmitte zufällig richtig.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        # Dieselbe Rechnung wie pyvistas ``rwi``: Es multipliziert jede
-        # Mausposition mit ``devicePixelRatio``, bevor sie an VTK geht, und
-        # setzt die Renderfenstergröße ebenso. Wer hier in Qt-Logikpunkten
-        # rechnet, fragt auf einem skalierten Bildschirm die falsche Stelle —
-        # Fangkreuz und Vorschau stünden neben dem Klick. Bei dpr 1,0 ändert
-        # der Faktor nichts.
-        ratio = float(self.plotter.interactor.devicePixelRatioF())
-        height = self.plotter.interactor.height() * ratio
-        self._hover_at = (int(position.x() * ratio), int(height - position.y() * ratio))
+        self._hover_at = (int(x), int(y))
         # **Die Skizzenvorschau wartet nicht auf die Ruhepause** (§30.1, P4).
         # Die Merkmalssuche darunter tut es aus gutem Grund: Sie kostet einen
         # Zell-Pick, und den bei jeder Bewegung zu zahlen hieße, den
@@ -6545,17 +6290,13 @@ class Viewport(QWidget):
         ist (:data:`MEASURE_SNAP_PIXELS`).
 
         ``None`` heißt „keine Angabe" und lässt dem Kern seine eigene Weite —
-        ohne Plotter, ohne Projektion, ohne Bild gibt es keine Bildpunkte, in
+        ohne Renderer, ohne Projektion, ohne Bild gibt es keine Bildpunkte, in
         denen man rechnen könnte.
         """
         scale = self._pixels_per_mm_at(point)
         if scale is None or scale <= EPS_GEOM:
             return None
-        ratio = 1.0
-        interactor = getattr(self.plotter, "interactor", None) if self.plotter else None
-        if interactor is not None:
-            ratio = float(interactor.devicePixelRatioF())
-        return MEASURE_SNAP_PIXELS * ratio / scale
+        return MEASURE_SNAP_PIXELS * self._device_ratio() / scale
 
     def _pixels_per_mm_at(self, point: Vec3) -> float | None:
         """Wie viele Gerätepixel ein Millimeter an dieser Stelle im Bild misst.
@@ -6572,14 +6313,14 @@ class Viewport(QWidget):
         nebeneinander. Wer hier umrechnete, bräuchte eine Objektkennung, die
         an dieser Stelle niemand hat.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None
         import numpy as np
 
-        camera = self.plotter.camera
-        position = np.asarray(camera.GetPosition(), dtype=float)
-        focus = np.asarray(camera.GetFocalPoint(), dtype=float)
-        up = np.asarray(camera.GetViewUp(), dtype=float)
+        pose = self.renderer.camera_pose()
+        position = np.asarray(pose.position, dtype=float)
+        focus = np.asarray(pose.focal_point, dtype=float)
+        up = np.asarray(pose.view_up, dtype=float)
         sideways = np.cross(focus - position, up)
         span = float(np.linalg.norm(sideways))
         if span <= EPS_GEOM:
@@ -6607,21 +6348,15 @@ class Viewport(QWidget):
         self._draw_snap_preview(found)
 
     def _draw_snap_preview(self, found: SnapResult) -> None:
-        """Ein Stern an der Fangstelle, und seine Größe sagt, worauf gefangen
-        wurde.
+        """Die Fangmarke dort zeichnen, wohin ein Messklick fiele (§18.3).
 
-        **Die Größe trägt die Auskunft, nicht die Farbe** (Regel 18): Eine
-        Ecke bekommt den vollen Stern, eine Kante einen kleineren, eine freie
-        Stelle nur ein Kreuzchen. Wer nicht sieht, bekommt denselben
-        Unterschied als Satz — die Beschreibung der Ansicht nennt ihn, und
-        Bildschirmleser lesen sie vor.
-
-        Gezeichnet wird dort, wo der Körper im Bild steht — über
-        :meth:`view_point_of` mit dem Körper unter dem Zeiger, genau wie das
-        Maß danach (:meth:`_redraw_measurements`). Auf einer zweiten Platte
-        stünde die Marke sonst eine Bettbreite neben dem Teil, das sie meint.
+        Ein Kreuz mit einem Punkt in der Mitte, in der Bildebene und in
+        fester Bildgröße — die Größe ist die Auskunft (Regel 18): Ecke groß,
+        Kante mittel, freie Stelle klein. Vor dem Material, wie das Maß danach:
+        Eine Marke, die im Material verschwindet, sagt nichts über die Stelle,
+        die sie meint. Dieselbe Stelle wird nicht zweimal gezeichnet.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         if (
             self._snap_shown is not None
@@ -6646,28 +6381,24 @@ class Viewport(QWidget):
         arm = SNAP_MARK_PIXELS.get(found.kind, SNAP_MARK_PIXELS["free"]) / scale
         for index, direction in enumerate((across, upward)):
             step = direction * arm
-            actor = self.plotter.add_lines(
-                np.array([centre - step, centre + step], dtype=float),
-                color=MEASURE_COLOUR,
-                width=2,
-                name=f"measure_snap:{index}",
+            self._snap_actors.append(
+                self.renderer.add_lines(
+                    np.array([centre - step, centre + step], dtype=float),
+                    name=f"measure_snap:{index}",
+                    colour=MEASURE_COLOUR,
+                    width=2.0,
+                    keep_in_front=True,
+                )
             )
-            # Dieselbe Zusage wie an der Maßlinie: Eine Marke, die im Material
-            # verschwindet, sagt nichts über die Stelle, die sie meint.
-            actor.mapper.SetRelativeCoincidentTopologyLineOffsetParameters(0.0, -66000.0)
-            actor.SetForceOpaque(True)
-            self._snap_actors.append(actor)
-        dot = self.plotter.add_points(
-            np.array([centre], dtype=float),
-            color=MEASURE_COLOUR,
-            point_size=SNAP_DOT_PIXELS.get(found.kind, SNAP_DOT_PIXELS["free"]),
-            render_points_as_spheres=True,
-            name="measure_snap:dot",
-            render=False,
+        self._snap_actors.append(
+            self.renderer.add_points(
+                np.array([centre], dtype=float),
+                name="measure_snap:dot",
+                colour=MEASURE_COLOUR,
+                size=float(SNAP_DOT_PIXELS.get(found.kind, SNAP_DOT_PIXELS["free"])),
+                keep_in_front=True,
+            )
         )
-        dot.mapper.SetRelativeCoincidentTopologyPointOffsetParameter(-66000.0)
-        dot.SetForceOpaque(True)
-        self._snap_actors.append(dot)
         self._snap_shown = found
         self.setAccessibleDescription(snap_sentence(found.kind))
         self._draw()
@@ -6681,15 +6412,13 @@ class Viewport(QWidget):
         Entlang dieser beiden steht sie immer als sauberes Kreuz zum
         Betrachter.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None, None
         import numpy as np
 
-        camera = self.plotter.camera
-        forward = np.asarray(camera.GetFocalPoint(), dtype=float) - np.asarray(
-            camera.GetPosition(), dtype=float
-        )
-        up = np.asarray(camera.GetViewUp(), dtype=float)
+        pose = self.renderer.camera_pose()
+        forward = np.asarray(pose.focal_point, dtype=float) - np.asarray(pose.position, dtype=float)
+        up = np.asarray(pose.view_up, dtype=float)
         across = np.cross(forward, up)
         span = float(np.linalg.norm(across))
         if span <= EPS_GEOM:
@@ -6702,11 +6431,11 @@ class Viewport(QWidget):
         return across, upward / height
 
     def _remove_snap_actors(self) -> None:
-        if self.plotter is None:
+        if self.renderer is None:
             self._snap_actors.clear()
             return
         for actor in self._snap_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._snap_actors.clear()
 
     def _clear_snap_preview(self) -> None:
@@ -6846,67 +6575,60 @@ class Viewport(QWidget):
         return best
 
     def _redraw_measurements(self) -> None:
-        if self.plotter is None:
+        """Alle Maße neu zeichnen: Linie, Punkt und Zahl je Eintrag (§18.3).
+
+        **Ein Maß liegt in der Szene und wird im Bild gezeigt** (§25, §18.8).
+        Die beiden Orte sind nicht derselbe, sobald ein zweites Bett
+        danebensteht oder die Körper auseinandergezogen sind; gerechnet wird
+        je Punkt, denn die zwei Enden eines Maßes dürfen zu verschiedenen
+        Körpern gehören. **Und ein Maß läuft durch das Material, und dort war
+        es weg** (Robert, 03.09.2026): Es ist eine Auskunft über das Teil und
+        kein Teil davon — ``keep_in_front`` zeichnet es über das, was davor
+        liegt. Die Zahl geht über ``labels`` wie jede Anzeige (Regel 20).
+        """
+        if self.renderer is None:
             return
         for actor in self._measure_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._measure_actors.clear()
 
         import numpy as np
 
         for index, entry in enumerate(self.measurements.entries):
-            # **Ein Maß liegt in der Szene und wird im Bild gezeigt** (§25,
-            # §18.8). Die beiden Orte sind nicht derselbe, sobald ein zweites
-            # Bett danebensteht oder die Körper auseinandergezogen sind: Ein
-            # Maß an einem Körper auf Platte 2 lag eine Bettbreite neben dem
-            # Teil, das es misst. Gerechnet wird je Punkt, denn die zwei Enden
-            # eines Maßes dürfen zu verschiedenen Körpern gehören.
             owners = entry.object_ids or ("",) * len(entry.points)
             shown = tuple(
                 self.view_point_of(spot, owner)
                 for spot, owner in zip(entry.points, owners, strict=False)
             )
             if len(shown) == 2:
-                line = np.array([shown[0], shown[1]], dtype=float)
-                actor = self.plotter.add_lines(
-                    line, color=MEASURE_COLOUR, width=2, name=f"measure:{index}"
+                self._measure_actors.append(
+                    self.renderer.add_lines(
+                        np.array([shown[0], shown[1]], dtype=float),
+                        name=f"measure:{index}",
+                        colour=MEASURE_COLOUR,
+                        width=2.0,
+                        keep_in_front=True,
+                    )
                 )
-                # **Ein Maß läuft durch das Material, und dort war es weg.**
-                # Wer die Wandstärke misst oder zwei gegenüberliegende Flächen,
-                # setzt beide Punkte auf verschiedene Seiten — die Linie
-                # dazwischen liegt im Körper und verschwand hinter ihm
-                # (Robert, 03.09.2026: „die Kollisionen mit dem Körper beim
-                # Messen beachten"). Ein Maß ist eine Auskunft über das Teil
-                # und kein Teil davon: Es wird zuletzt gezeichnet und
-                # überdeckt, was davor liegt.
-                actor.mapper.SetRelativeCoincidentTopologyLineOffsetParameters(0.0, -66000.0)
-                actor.prop.SetLineWidth(2)
-                actor.SetForceOpaque(True)
-                self._measure_actors.append(actor)
-            # Über ``labels`` wie jede Anzeige: Die MeasureBar schrieb
-            # „2,3622 in", das Bild daneben „60 mm" — zwei Zahlen für dieselbe
-            # Messung, und ``grad`` stand fest deutsch da (Regel 20).
             label = (
                 localised(f"{entry.shown:g}°")
                 if entry.kind == "angle"
                 else length(float(entry.value))
             )
-            anchor = np.array([shown[-1]], dtype=float) if shown else None
-            if anchor is not None:
+            if shown:
                 self._measure_actors.append(
-                    self.plotter.add_point_labels(
-                        anchor,
+                    self.renderer.add_labels(
+                        np.array([shown[-1]], dtype=float),
                         [label],
-                        text_color=MEASURE_COLOUR,
-                        font_size=12,
-                        show_points=True,
-                        point_color=MEASURE_COLOUR,
-                        point_size=8,
                         name=f"measure_label:{index}",
-                        # Dieselbe Zusage wie an der Linie: Die Zahl gehört
-                        # nicht in den Körper, sie gehört darüber.
-                        always_visible=True,
-                        render=False,
+                        style=LabelStyle(
+                            text_colour=MEASURE_COLOUR,
+                            font_size=12,
+                            always_visible=True,
+                            show_points=True,
+                            point_colour=MEASURE_COLOUR,
+                            point_size=8,
+                        ),
                     )
                 )
         self._draw()
@@ -6948,13 +6670,13 @@ class Viewport(QWidget):
         weg sein muss, hängt an dessen Größe und nicht an der des größten Teils
         auf dem Bett.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         import numpy as np
 
-        camera = self.plotter.camera
-        position = np.asarray(camera.position, dtype=float)
-        focus = np.asarray(camera.focal_point, dtype=float)
+        pose = self.renderer.camera_pose()
+        position = np.asarray(pose.position, dtype=float)
+        focus = np.asarray(pose.focal_point, dtype=float)
         direction = position - focus
         length = float(np.linalg.norm(direction))
         if length <= 1e-9:
@@ -6962,11 +6684,17 @@ class Viewport(QWidget):
             length = float(np.linalg.norm(direction))
         reach = max(reach or self._scene_size() / distance_factor, 1.0)
         target = np.asarray(point, dtype=float)
-        camera.focal_point = tuple(target)
-        camera.position = tuple(target + direction / length * reach)
+        moved = target + direction / length * reach
+        self.renderer.set_camera_pose(
+            CameraPose(
+                (float(moved[0]), float(moved[1]), float(moved[2])),
+                (float(target[0]), float(target[1]), float(target[2])),
+                pose.view_up,
+            )
+        )
         # Nah heran heißt: die Nahebene neu legen, sonst schneidet sie ins
         # Material — und der Schatten gehört zur neuen Blickrichtung.
-        self.plotter.renderer.ResetCameraClippingRange()
+        self.renderer.reset_clipping_range()
         self._draw()
         self._redraw_shadows()
         self.cameraMoved.emit()
@@ -6989,7 +6717,7 @@ class Viewport(QWidget):
         Klick trifft immer; was sichtbar wird, ist die Frage der Beschriftung.
         """
         self._feature_overlay = active
-        if self.plotter is None:
+        if self.renderer is None:
             return
         self._redraw_features()
         self._draw()
@@ -7001,7 +6729,7 @@ class Viewport(QWidget):
         # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
         # zurück, sobald keines mehr gewählt ist.
         self._apply_selection_colour()
-        if self.plotter is not None:
+        if self.renderer is not None:
             # Auch der Griff wechselt mit: eine gewählte Fläche bekommt ihn
             # auf die Fläche, eine abgewählte gibt ihn ans Objekt zurück
             # (§18.11) — nicht erst beim nächsten Umschalten.
@@ -7023,7 +6751,7 @@ class Viewport(QWidget):
         # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
         # zurück, sobald keines mehr gewählt ist.
         self._apply_selection_colour()
-        if self.plotter is not None:
+        if self.renderer is not None:
             # Auch der Griff wechselt mit: eine gewählte Fläche bekommt ihn
             # auf die Fläche, eine abgewählte gibt ihn ans Objekt zurück
             # (§18.11) — nicht erst beim nächsten Umschalten.
@@ -7047,7 +6775,7 @@ class Viewport(QWidget):
         """Welcher Körper die Auswahlfarbe trägt — keiner, solange ein Merkmal
         gewählt ist (§19.1).
 
-        Als eigene Auskunft und nicht als Zustand des Plotters, aus demselben
+        Als eigene Auskunft und nicht als Zustand des Renderers, aus demselben
         Grund wie bei :meth:`gizmo_target`: offscreen gibt es keinen, und ein
         Test, der sich dort überspringt, prüft nie etwas.
         """
@@ -7092,8 +6820,8 @@ class Viewport(QWidget):
         """Welche Flächen dieses Körpers als Sichtflächen gesperrt sind.
 
         Ohne ``object_id`` die des gewählten Körpers. Als eigene Auskunft und
-        nicht als Zustand des Plotters, aus demselben Grund wie bei
-        :meth:`highlighted_faces`: offscreen gibt es keinen Plotter, und ein
+        nicht als Zustand des Renderers, aus demselben Grund wie bei
+        :meth:`highlighted_faces`: offscreen gibt es keinen Renderer, und ein
         Test, der sich dort überspringt, prüft nie etwas.
         """
         target = object_id if object_id is not None else self._selected
@@ -7173,13 +6901,13 @@ class Viewport(QWidget):
         return dict(entry.features) if entry is not None else {}
 
     def _redraw_features(self) -> None:
-        if self.plotter is None:
+        if self.renderer is None:
             return
         self._redraw_feature_patch()
         self._redraw_protected_patch()
         self._redraw_hover_patch()
         for actor in self._feature_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._feature_actors.clear()
         # Ohne Überlagerung bleibt das **gewählte** Merkmal beschriftet: seine
         # Fläche leuchtet in der Auswahlfarbe, und eine Aussage allein über
@@ -7226,25 +6954,23 @@ class Viewport(QWidget):
         if not points:
             return
 
+        # **Auch was im Material steckt** (``always_visible``): Eine Bohrung
+        # hat ihren Mittelpunkt auf halber Höhe im Körper; ohne das blieb ihre
+        # Beschriftung dahinter verborgen, und beschriftet waren nur die drei
+        # Flächen — bei einem Teil, das nach seinen vier Bohrungen benannt ist.
         self._feature_actors.append(
-            self.plotter.add_point_labels(
+            self.renderer.add_labels(
                 np.asarray(points, dtype=float),
                 labels,
-                text_color=FEATURE_LABEL_COLOUR,
-                font_size=11,
-                show_points=True,
-                point_color=MEASURE_COLOUR,
-                point_size=8,
-                # **Auch was im Material steckt.** Eine Bohrung hat ihren
-                # Mittelpunkt auf halber Höhe im Körper; ohne das blieb ihre
-                # Beschriftung dahinter verborgen, und beschriftet waren nur
-                # die drei Flächen — bei einem Teil, das nach seinen vier
-                # Bohrungen benannt ist.
-                always_visible=True,
-                shape=None,
                 name="features",
-                render=False,
-                reset_camera=False,
+                style=LabelStyle(
+                    text_colour=FEATURE_LABEL_COLOUR,
+                    font_size=11,
+                    always_visible=True,
+                    show_points=True,
+                    point_colour=MEASURE_COLOUR,
+                    point_size=8,
+                ),
             )
         )
 
@@ -7307,25 +7033,21 @@ class Viewport(QWidget):
         return corners + np.repeat(normals, 3, axis=0) * lift + offset
 
     def _redraw_candidates(self) -> None:
-        """Zeichnet die Kandidaten — Fläche in der Auskunftsfarbe, Kennung
-        daneben.
+        """Die Merkmale einer offenen Frage im Bild hervorheben (§21.3).
 
-        Die Kennung ist die zweite Kodierung (Regel 18) und zugleich die
-        Brücke zum Dialog: Dort steht dieselbe Zeichenkette in der Liste. Sie
-        ist ASCII und darf deshalb in eine VTK-Beschriftung — anders als ein
-        übersetzter Flächenname, der den ganzen Griffaufbau abstürzen ließ.
+        Je Kandidat seine Dreiecke, etwas über der Fläche, dazu die Kennung
+        als Beschriftung; das betonte Merkmal deckender als die anderen.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in self._candidate_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._candidate_actors.clear()
         if not self._candidates or self._result is None:
             self._draw()
             return
 
         import numpy as np
-        import pyvista as pv
 
         marks: list[tuple[Vec3, str]] = []
         for index, (object_id, feature_id) in enumerate(self._candidates):
@@ -7340,19 +7062,19 @@ class Viewport(QWidget):
             corners = self._lifted_corners(
                 raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
             )
-            faces = _triangle_faces(len(chosen))
             loud = (object_id, feature_id) == self._candidate_emphasis
             self._candidate_actors.append(
-                self.plotter.add_mesh(
-                    pv.PolyData(corners, faces),
-                    color=CANDIDATE_COLOUR,
-                    opacity=EMPHASIS_OPACITY if loud else CANDIDATE_OPACITY,
-                    backface_params={"color": CANDIDATE_COLOUR},
-                    lighting=False,
+                self.renderer.add_surface(
+                    corners,
+                    _triangle_faces(len(chosen)),
                     name=f"candidate:{index}",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    style=SurfaceStyle(
+                        colour=CANDIDATE_COLOUR,
+                        opacity=EMPHASIS_OPACITY if loud else CANDIDATE_OPACITY,
+                        backface_colour=CANDIDATE_COLOUR,
+                        lighting=False,
+                        pickable=False,
+                    ),
                 )
             )
             middle = corners.mean(axis=0)
@@ -7360,15 +7082,13 @@ class Viewport(QWidget):
 
         if marks:
             self._candidate_actors.append(
-                self.plotter.add_point_labels(
+                self.renderer.add_labels(
                     np.asarray([point for point, _text in marks], dtype=float),
                     [text for _point, text in marks],
-                    text_color=CANDIDATE_COLOUR,
-                    font_size=12,
-                    show_points=False,
                     name="candidate-labels",
-                    always_visible=True,
-                    render=False,
+                    style=LabelStyle(
+                        text_colour=CANDIDATE_COLOUR, font_size=12, always_visible=True
+                    ),
                 )
             )
         self._draw()
@@ -7379,25 +7099,18 @@ class Viewport(QWidget):
         return self._candidates
 
     def _redraw_feature_patch(self) -> None:
-        """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe (§18.5).
+        """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe über dem Körper.
 
-        Ein Klick auf eine Bohrung wählt zweierlei aus: den Körper und die
-        Stelle. Zu sehen war nur das Erste — der ganze Körper nahm die
-        Auswahlfarbe an, und die Bohrung, die gemeint war, unterschied sich
-        von der Wand daneben durch nichts. Gefärbt wird deshalb, was das
-        Merkmal ausmacht: die Dreiecke, die die Erkennung ihm zugeordnet hat
-        (``face_indices``).
-
-        Gegen das **Originalnetz**, nicht gegen das gezeigte: dezimiert und
-        geschnitten wird für die Anzeige (§18.9), die Indizes des Merkmals
-        zählen aber im Netz der Szene. Ein paar hundert Dreiecke kosten
-        nichts, und die Abweichung zum dezimierten Körper darunter fängt der
-        Versatz entlang der Flächennormalen ab.
+        Ohne sie hieß „Bohrung gewählt", dass der ganze Körper aufleuchtet —
+        die Auswahl zeigte das Objekt und nicht die Stelle. Eine
+        Bohrungsmarkierung verschließt die Öffnung nicht: Ihre Innenwand wird
+        von beiden Öffnungen durchscheinend gezeichnet; andere Merkmalsflächen
+        bleiben deckend und beidseitig sichtbar (``ansicht.md``).
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         if self._feature_patch is not None:
-            self.plotter.remove_actor(self._feature_patch, render=False)
+            self.renderer.remove(self._feature_patch)
             self._feature_patch = None
         highlighted = self.highlighted_faces()
         if not highlighted or self._result is None or self._selected is None:
@@ -7408,68 +7121,55 @@ class Viewport(QWidget):
             return
 
         import numpy as np
-        import pyvista as pv
 
         chosen = np.asarray(highlighted, dtype=np.int64)
         corners = self._lifted_corners(
             raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
         )
-        faces = _triangle_faces(len(chosen))
         features = [
             feature
             for feature_id in self.highlighted_features()
             if (feature := entry.features.get(feature_id)) is not None
         ]
         hole_surface = bool(features) and all(feature.kind == "hole" for feature in features)
-        side_kwargs: dict[str, Any] = (
-            {
-                "opacity": SELECTED_HOLE_OPACITY,
-                "backface_params": {
-                    "color": SELECTED_COLOUR,
-                    "opacity": SELECTED_HOLE_OPACITY,
-                },
-            }
+        style = (
+            SurfaceStyle(
+                colour=SELECTED_COLOUR,
+                opacity=SELECTED_HOLE_OPACITY,
+                backface_colour=SELECTED_COLOUR,
+                backface_opacity=SELECTED_HOLE_OPACITY,
+                lighting=False,
+                pickable=False,
+            )
             if hole_surface
-            else {"backface_params": {"color": SELECTED_COLOUR}}
+            else SurfaceStyle(
+                colour=SELECTED_COLOUR,
+                backface_colour=SELECTED_COLOUR,
+                lighting=False,
+                pickable=False,
+            )
         )
-        self._feature_patch = self.plotter.add_mesh(
-            pv.PolyData(corners, faces),
-            color=SELECTED_COLOUR,
-            **side_kwargs,
-            lighting=False,
-            name="feature-patch",
-            render=False,
-            reset_camera=False,
-            pickable=False,
+        self._feature_patch = self.renderer.add_surface(
+            corners, _triangle_faces(len(chosen)), name="feature-patch", style=style
         )
 
     def _redraw_protected_patch(self) -> None:
-        """Die gesperrten Sichtflächen: Tönung und Schraffur (§22.3, Regel 18).
+        """Gesperrte Sichtflächen (§22.3): eine Tönung samt Schraffur darüber.
 
-        Zwei Aktoren statt einem. Die Tönung sagt „hier ist etwas", die
-        Striche sagen „und zwar dieses" — wer Türkis von Bernstein nicht
-        unterscheiden kann, liest die Schraffur. Beide liegen über dem Körper,
-        wie der Merkmals-Patch, und aus demselben Grund: Für die Anzeige wird
-        dezimiert (§18.9), das gröbere Netz darunter läge sonst stellenweise
-        davor.
-
-        Anders als der Merkmals-Patch hängt das hier nicht an der Auswahl. Eine
-        gesperrte Fläche bleibt sichtbar, auch wenn gerade nichts gewählt ist —
-        sonst erführe der Nutzer erst beim Anklicken, was er selbst markiert
-        hat.
+        Die Striche liegen noch eine Spur höher als die Tönung, sonst
+        streiten sie mit ihr um dieselbe Tiefe und flimmern.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in (self._protected_patch, self._protected_hatch):
             if actor is not None:
-                self.plotter.remove_actor(actor, render=False)
+                self.renderer.remove(actor)
         self._protected_patch = None
         self._protected_hatch = None
         if not self._protected or self._result is None:
             return
 
         import numpy as np
-        import pyvista as pv
 
         lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
         spacing = max(self._scene_size() * PROTECTED_HATCH_SPACING, EPS_GEOM)
@@ -7489,57 +7189,46 @@ class Viewport(QWidget):
                 normals = np.asarray(raw.face_normals, dtype=float)[index]
                 patch = self._lifted_corners(raw, index, lift, offset)
                 corners.append(patch)
-                # Die Striche liegen noch eine Spur höher als die Tönung,
-                # sonst streiten sie mit ihr um dieselbe Tiefe und flimmern.
                 middle = normals.mean(axis=0)
                 strokes.extend(hatch_lines(patch + middle * lift, tuple(middle), spacing))
         if not corners:
             return
 
         points = np.vstack(corners)
-        faces = _triangle_faces(len(points) // 3)
-        self._protected_patch = self.plotter.add_mesh(
-            pv.PolyData(points, faces),
-            color=PROTECTED_COLOUR,
-            opacity=PROTECTED_OPACITY,
-            backface_params={"color": PROTECTED_COLOUR, "opacity": PROTECTED_OPACITY},
-            lighting=False,
+        self._protected_patch = self.renderer.add_surface(
+            points,
+            _triangle_faces(len(points) // 3),
             name="protected-patch",
-            render=False,
-            reset_camera=False,
-            pickable=False,
+            style=SurfaceStyle(
+                colour=PROTECTED_COLOUR,
+                opacity=PROTECTED_OPACITY,
+                backface_colour=PROTECTED_COLOUR,
+                backface_opacity=PROTECTED_OPACITY,
+                lighting=False,
+                pickable=False,
+            ),
         )
         if not strokes:
             return
         ends = np.asarray([end for stroke in strokes for end in stroke], dtype=float)
-        lines = np.hstack(
-            [
-                np.full((len(strokes), 1), 2, dtype=np.int64),
-                np.arange(len(strokes) * 2).reshape(len(strokes), 2),
-            ]
-        ).ravel()
-        self._protected_hatch = self.plotter.add_mesh(
-            pv.PolyData(ends, lines=lines),
-            color=PROTECTED_HATCH_COLOUR,
-            line_width=PROTECTED_HATCH_WIDTH,
-            lighting=False,
+        self._protected_hatch = self.renderer.add_lines(
+            ends,
             name="protected-hatch",
-            render=False,
-            reset_camera=False,
-            pickable=False,
+            colour=PROTECTED_HATCH_COLOUR,
+            width=float(PROTECTED_HATCH_WIDTH),
         )
 
     def _redraw_hover_patch(self) -> None:
-        """Das Merkmal unter dem Zeiger zeigen, ohne es als gewählt auszugeben.
+        """Die durchscheinende Fläche unter dem ruhenden Zeiger (§18.5).
 
-        Die Auswahl ist deckend bernsteinfarben, Hover durchscheinend in der
-        Merkmalsfarbe. Ist dasselbe Merkmal bereits gewählt oder zeigt die
-        Differenzansicht ihre eigenen Rollen, kommt keine zweite Fläche hinzu.
+        Schweben und Auswahl sind zwei sichtbare Zustände: halbdurchsichtig
+        hier, deckend dort. Was schon gewählt ist, bekommt keine zweite
+        Fläche, und eine Vorschau besitzt die Modellfarben allein.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         if self._hover_patch is not None:
-            self.plotter.remove_actor(self._hover_patch, render=False)
+            self.renderer.remove(self._hover_patch)
             self._hover_patch = None
         if (
             self._selection_marking_hidden()
@@ -7560,29 +7249,26 @@ class Viewport(QWidget):
             return
 
         import numpy as np
-        import pyvista as pv
 
         chosen = np.asarray(indices, dtype=np.int64)
         corners = self._lifted_corners(
             raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
         )
-        faces = _triangle_faces(len(chosen))
         feature = entry.features.get(self._hovered_feature)
         hole_surface = feature is not None and feature.kind == "hole"
         hover_opacity = HOVERED_HOLE_OPACITY if hole_surface else HOVERED_FEATURE_OPACITY
-        self._hover_patch = self.plotter.add_mesh(
-            pv.PolyData(corners, faces),
-            color=FEATURE_LABEL_COLOUR,
-            opacity=hover_opacity,
-            backface_params={
-                "color": FEATURE_LABEL_COLOUR,
-                "opacity": hover_opacity,
-            },
-            lighting=False,
+        self._hover_patch = self.renderer.add_surface(
+            corners,
+            _triangle_faces(len(chosen)),
             name="feature-hover",
-            render=False,
-            reset_camera=False,
-            pickable=False,
+            style=SurfaceStyle(
+                colour=FEATURE_LABEL_COLOUR,
+                opacity=hover_opacity,
+                backface_colour=FEATURE_LABEL_COLOUR,
+                backface_opacity=hover_opacity,
+                lighting=False,
+                pickable=False,
+            ),
         )
 
     def _feature_at(self, point: Vec3) -> FeatureId | None:
@@ -7902,28 +7588,16 @@ class Viewport(QWidget):
         return planes
 
     def _pick_ray(self, x: int, y: int) -> tuple[Vec3, Vec3] | None:
-        """Der Sichtstrahl durch eine Bildschirmstelle, in Ansichtskoordinaten.
+        """Der Sichtstrahl durch einen Bildpunkt: Startpunkt und Richtung.
 
-        Über die nahe und die ferne Ebene und nicht über die Kamerastellung:
-        Bei einer Parallelprojektion — jeder Ansicht von vorn, von oben, von
-        der Seite — läuft der Strahl nicht durch das Kameraauge, und eine
-        Richtung aus ``GetPosition()`` wäre dort falsch.
-
-        **Die Richtung ist der Schritt von nah nach fern und damit nicht
-        normiert** — sie ist hunderte Millimeter lang. Wer gegen sie
-        schwellwertet, prüft eine Länge und keinen Winkel: Bei einem Strahl
-        ``(1000, 0, -0,5)`` auf die XY-Ebene steht im Skalarprodukt 0,5, also
-        das Fünfhundertfache einer Schwelle von 1e-3, während der Winkel zur
-        Ebene ein halbes Tausendstel beträgt — die Prüfung löste nie aus.
-        (Gefunden von der Nachbarsitzung an ``sketch.planes.ray_hit``, die
-        denselben Strahl benutzt.) Wer einen Winkel braucht, teilt vorher durch
-        die Länge; :meth:`_bore_aim` tut genau das.
+        Aus der nahen und der fernen Schnittebene der Kamera — eine Blickrichtung
+        und kein Punkt, damit ein Klick auch das trifft, was der Strahl
+        durchquert (:meth:`_aim_at`, „Ein Klick ist eine Blickrichtung").
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None
-        renderer = self.plotter.renderer
-        near = _world_at_depth(renderer, x, y, 0.0)
-        far = _world_at_depth(renderer, x, y, 1.0)
+        near = self.renderer.display_to_world(x, y, 0.0)
+        far = self.renderer.display_to_world(x, y, 1.0)
         if near is None or far is None:
             return None
         step = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
@@ -7940,7 +7614,7 @@ class Viewport(QWidget):
         dort ist eine Stelle auf der Oberfläche gemeint und keine Bohrung, und
         ein Punkt in der Luft wäre dort falsch.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None
         point = self._world_at(x, y)
         ray = self._pick_ray(x, y)
@@ -7954,7 +7628,11 @@ class Viewport(QWidget):
         # Ansicht (§25). Verschoben wird um dasselbe Stück wie ein Punkt —
         # welches das ist, sagt die Stelle, auf die gezeigt wird. Ohne
         # Auftreffpunkt sagt es die Fokusebene, wie beim Zeiger.
-        reference = point if point is not None else _world_under(self.plotter.renderer, x, y)
+        reference = (
+            point
+            if point is not None
+            else self.renderer.display_to_world(x, y, self.renderer.focal_depth())
+        )
         if reference is None:
             return point
         scene = self._from_view(reference)
@@ -8136,7 +7814,7 @@ class Viewport(QWidget):
         self._apply_selection_colour()
         self._redraw_features()
         self._redraw_difference()
-        if self.plotter is not None:
+        if self.renderer is not None:
             self._draw()
 
     @property
@@ -8179,7 +7857,7 @@ class Viewport(QWidget):
         self._redraw_difference()
         self._apply_selection_colour()
         self._redraw_features()
-        if self.plotter is not None:
+        if self.renderer is not None:
             self._draw()
 
     @property
@@ -8187,10 +7865,10 @@ class Viewport(QWidget):
         return self._difference_held
 
     def _redraw_difference(self) -> None:
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in self._difference_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._difference_actors.clear()
         if self._difference is None or self._difference_held:
             return
@@ -8219,18 +7897,18 @@ class Viewport(QWidget):
             )
 
     def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
-        if self.plotter is None or mesh is None or not len(mesh.raw.faces):
+        if self.renderer is None or mesh is None or not len(mesh.raw.faces):
             return
         import numpy as np
-        import pyvista as pv
 
         raw = mesh.raw
-        faces = np.hstack(
-            [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
-        ).ravel()
-        surface = pv.PolyData(np.asarray(raw.vertices, dtype=float) + shift, faces)
         self._difference_actors.append(
-            self.plotter.add_mesh(surface, color=colour, opacity=opacity, name=name, render=False)
+            self.renderer.add_surface(
+                np.asarray(raw.vertices, dtype=float) + shift,
+                np.asarray(raw.faces, dtype=np.int64),
+                name=name,
+                style=SurfaceStyle(colour=colour, opacity=opacity),
+            )
         )
 
     def set_difference_palette(self, palette: DiffPalette) -> None:
@@ -8240,7 +7918,7 @@ class Viewport(QWidget):
         if not self.banner.isHidden():
             # Die Legende erklärt Farben; die haben sich gerade geändert.
             self.banner.show_preview(self.banner.note.text(), palette, self.banner.hint.text())
-        if self.plotter is not None:
+        if self.renderer is not None:
             self._draw()
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
@@ -8256,18 +7934,12 @@ class Viewport(QWidget):
         self._place_orientation_widget()
 
     def _place_orientation_widget(self) -> None:
-        """Zieht die Achsenanzeige an ihre Ecke nach.
-
-        Sie steht in Anteilen des Fensters, gemeint ist aber eine Größe in
-        Bildpunkten — ohne das Nachziehen wüchse sie mit dem Fenster und
-        verschwände wieder hinter der linken Spalte, sobald jemand das Fenster
-        aufzieht.
-        """
-        widget = axes_widget_of(self.plotter)
-        if widget is None:
+        """Das Achsenkreuz in seine Ecke setzen — in Bildpunkten gerechnet
+        (:func:`orientation_corner`), bei jeder Größenänderung neu."""
+        if self.renderer is None:
             return
         try:
-            widget.SetViewport(*orientation_corner(self.width(), self.height()))
+            self.renderer.place_axes_marker(orientation_corner(self.width(), self.height()))
         except Exception as problem:  # pragma: no cover - hängt am Treiber
             _log.info("orientation widget keeps its place: %s", problem)
 
@@ -8291,14 +7963,14 @@ class Viewport(QWidget):
         elif was is not None and layer is not None and was.z != layer.z:
             self._layer_rebuild.start()
         self._redraw_layer()
-        if self.plotter is not None:
+        if self.renderer is not None:
             self._draw()
 
     def _redraw_layer(self) -> None:
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in self._layer_actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         self._layer_actors.clear()
         layer = self._layer
         if layer is None:
@@ -8330,7 +8002,14 @@ class Viewport(QWidget):
     def _add_rings(
         self, rings: list[Any], z: float, colour: str, name: str, width: int = 2
     ) -> None:
-        if self.plotter is None:
+        """Geschlossene Konturen einer Schicht als **einen** Aktor je Rolle.
+
+        Eine texturierte Schicht hat tausende Konturen, und ebenso viele
+        einzelne Aktoren machten aus einem Schieberschritt Sekunden — VTK zahlt
+        je Aktor, nicht je Linie. Ein geschlossener Ring ist jeder Punkt
+        zweimal, bis auf die Enden — und Ringe hängen nicht aneinander.
+        """
+        if self.renderer is None:
             return
         import numpy as np
 
@@ -8340,13 +8019,11 @@ class Viewport(QWidget):
                 continue
             flat = np.asarray(ring, dtype=float)
             points = np.column_stack([flat, np.full(len(flat), z)])
-            # add_lines will Punktpaare; ein geschlossener Ring ist jeder Punkt
-            # zweimal, bis auf die Enden — und Ringe hängen nicht aneinander.
             pieces.append(np.repeat(points, 2, axis=0)[1:-1])
         if not pieces:
             return
         self._layer_actors.append(
-            self.plotter.add_lines(np.vstack(pieces), color=colour, width=width, name=name)
+            self.renderer.add_lines(np.vstack(pieces), name=name, colour=colour, width=float(width))
         )
 
     # --- direct manipulation (§18.11) -------------------------------------------
@@ -8374,8 +8051,8 @@ class Viewport(QWidget):
     def gizmo_target(self) -> Feature | None:
         """Die Fläche, an der der Gizmo hängt — oder ``None`` für das Objekt.
 
-        Als eigene Auskunft und nicht als Zustand des Plotters, damit die
-        Regel prüfbar bleibt: offscreen gibt es keinen Plotter, und ein Test,
+        Als eigene Auskunft und nicht als Zustand des Renderers, damit die
+        Regel prüfbar bleibt: offscreen gibt es keinen Renderer, und ein Test,
         der sich dort überspringt, prüft nie etwas.
 
         **Nur Flächen**, und das ist keine Einschränkung, sondern die Frage:
@@ -8427,21 +8104,15 @@ class Viewport(QWidget):
         return feature if feature.kind in movable_feature_kinds() else None
 
     def set_gizmo(self, active: bool) -> None:
-        """Hängt den Gizmo an die gewählte Fläche — sonst an das Objekt.
+        """Den Bewegungsgriff an die Auswahl hängen oder abnehmen (§18.11).
 
-        Ist ein Merkmal gewählt, ist es das Genauere von beidem: wer eine
-        Fläche angeklickt hat, will sie versetzen und nicht den Körper
-        verschieben (§18.11). Am Griff sieht man den Unterschied, denn er
-        sitzt dann auf der Fläche.
-
-        Der Griff wird hier immer frisch gebaut, nie weiterbenutzt: pyvistas
-        Widget rechnet gegen die ``user_matrix`` seines Actors und merkt sie
-        sich über Züge hinweg — ein weitergereichter Griff trüge den vorigen
-        Zug in den nächsten hinein, und einer am Actor der letzten Auswertung
-        zöge an einem Körper, der längst nicht mehr im Bild ist.
+        Frisch gebaut bei jedem Aufruf — ein stehen gelassener Griff rechnete
+        gegen die Matrix der vorigen Auswahl, und nach einer Auswertung hinge
+        er an einem Aktor, der nicht mehr im Bild ist. Die Griffe nehmen ihre
+        Gesten in :meth:`_on_pointer` vor der Kamera.
         """
         self._gizmo_wanted = active
-        if self.plotter is None:
+        if self.renderer is None:
             self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
@@ -8459,53 +8130,29 @@ class Viewport(QWidget):
             self.gizmoStatus.emit("")
             return
         self.gizmoStatus.emit(gizmo_sentence(chosen))
-        from vtkmodules.vtkRenderingCore import vtkMapper
-
-        # Vor dem Widget gemerkt: Es stellt die statische Tiefen-Auflösung um
-        # (siehe ``_coincident_before``), und zurückstellen kann nur, wer den
-        # Stand von vorher kennt.
-        self._coincident_before = int(vtkMapper.GetResolveCoincidentTopology())
-        self._gizmo = self.plotter.add_affine_transform_widget(
+        scale = self._gizmo_scale_for(
+            actor, self._face_seat[0] if chosen is not None and self._face_seat else None
+        )
+        self._gizmo = Gizmo(
+            self.renderer,
             actor,
+            scale=scale,
+            line_radius=GIZMO_LINE_RADIUS,
             release_callback=self._on_gizmo_released,
             interact_callback=self._on_gizmo_interacted,
-            scale=self._gizmo_scale_for(
-                actor, self._face_seat[0] if self._face_seat else (0.0, 0.0, 0.0)
-            ),
-            line_radius=GIZMO_LINE_RADIUS,
         )
-        # **Danach und nicht davor**: Das Widget schaltet beim Anhängen selbst
-        # ein Mesh-Picking ein (``picker='hardware'``), wenn noch keines läuft
-        # — ein vorher gesetzter Picker wäre in derselben Zeile wieder weg.
-        self._give_the_widget_a_picker_that_hits()
-        # Und ebenfalls danach: Der Magnet korrigiert, was das Widget gerade
-        # gesetzt hat, also muss sein Beobachter der spätere sein.
-        #
-        # **Schwach gehalten**, aus demselben Grund wie die fünf Rückrufe an
-        # den Interaktionsstil (:func:`_weak_callbacks`): VTK hält den
-        # Beobachter, der hielte sonst den Viewport, der den Plotter, der den
-        # Interactor — eine Schleife, die jedes Schließen überlebt und später
-        # als Access Violation ohne Zeile endet.
-        weak = weakref.ref(self)
-
-        def magnetise(*args: Any) -> None:
-            found = weak()
-            if found is not None:
-                found._magnetise_turn(*args)
-
-        self._magnet_watch = self.plotter.iren.add_observer("MouseMoveEvent", magnetise)
         if chosen is None:
-            # Das dritte Drittel von §18.11: pyvistas Widget verschiebt und
-            # dreht, der Würfel skaliert. **Nur am ganzen Objekt** — ein
-            # Merkmal hat keine Größe, die dieser Würfel ändern könnte: Eine
-            # Fläche kennt nur vor und zurück, und eine Bohrung wächst über
-            # ihren Durchmesser, nicht über einen Hüllquader. Ein Würfel
-            # daneben skalierte still das Teil, während der Griff daneben das
-            # Loch bewegt — zwei Gesten am selben Ort mit verschiedenen
-            # Zielen.
+            # Das dritte Drittel von §18.11: Der Griff verschiebt und dreht,
+            # der Würfel skaliert. **Nur am ganzen Objekt** — ein Merkmal hat
+            # keine Größe, die dieser Würfel ändern könnte: Eine Fläche kennt
+            # nur vor und zurück, und eine Bohrung wächst über ihren
+            # Durchmesser, nicht über einen Hüllquader. Ein Würfel daneben
+            # skalierte still das Teil, während der Griff daneben das Loch
+            # bewegt — zwei Gesten am selben Ort mit verschiedenen Zielen.
             self._scale_handle = ScaleHandle(
-                self.plotter,
+                self.renderer,
                 actor,
+                scale=scale,
                 colour=MEASURE_COLOUR,
                 release_callback=self._on_scale_released,
                 interact_callback=self._on_scale_interacted,
@@ -8518,7 +8165,7 @@ class Viewport(QWidget):
         **Marke und Werkzeug ziehen gegeneinander, und eine Millimeterzahl kann
         nur eines von beiden.** Die Scheibe soll das Merkmal genau abdecken
         (:meth:`_handle_radius`), also klein sein. Der Griff hängt an ihr, und
-        pyvista rechnet seine Pfeillänge als ``actor.GetLength() *
+        der Griff rechnet seine Pfeillänge aus ``target.length() *
         GIZMO_SCALE`` — bei einer Ø 4-Bohrung sind das 1,7 mm Pfeil und
         0,20 mm Schaft, auf einem 105-mm-Teil rund zehn Bildpunkte lang und
         gut einer dick. Der Kommentar an :data:`GIZMO_SCALE` nennt vierzig
@@ -8535,12 +8182,12 @@ class Viewport(QWidget):
         gescheitert sind: Die Marke bleibt am Merkmal, der Griff wird
         bedienbar, und keiner von beiden muss dafür der anderen folgen.
         """
-        length = float(actor.GetLength())
+        length = float(actor.length())
         wanted = length * GIZMO_SCALE
         if centre is None:
             # Ohne Angabe der Sitz der Marke — und ohne Marke die Mitte des
             # Aktors, an dem der Griff hängt.
-            centre = self._face_seat[0] if self._face_seat else _centre_of(actor)
+            centre = self._face_seat[0] if self._face_seat else actor.centre()
         # **Ohne Projektion gilt der Anteil**, und zwar ohne dass der Griff
         # deshalb ausfällt: Offscreen gibt es keinen Renderer, und dort sieht
         # den Griff ohnehin niemand. Ihn hier von der Projektion abhängig zu
@@ -8562,61 +8209,16 @@ class Viewport(QWidget):
         least = GIZMO_LEAST_PIXELS / scale
         return max(GIZMO_SCALE, least / length) if wanted < least else GIZMO_SCALE
 
-    def _give_the_widget_a_picker_that_hits(self) -> None:
-        """Setzt den Picker, mit dem pyvistas Griff seine Pfeile findet.
-
-        ``AffineWidget3D`` fragt bei jeder Mausbewegung
-        ``interactor.GetPicker()``, und pyvista stellt dort einen
-        ``vtkHardwarePicker`` hin — er liest das gerenderte Bild. **In dieser
-        Umgebung trifft er nichts**, und zwar nicht nur die dünnen Pfeile:
-        gemessen am laufenden Fenster fand er auch den Körper in der Bildmitte
-        nicht, während ein ``vtkCellPicker`` an derselben Stelle antwortet.
-        Dasselbe gilt für den ``vtkPropPicker``; beide gehen über die Hardware.
-
-        Das ist der zweite Grund, aus dem am Bewegen-Griff nichts geschah
-        (Robert, 03.09.2026). Der erste war das fehlende ``_parent`` am
-        eigenen Interaktionsstil — beide zusammen: Der Rückruf brach ab, und
-        wäre er durchgelaufen, hätte sein Picker nichts gefunden. Ohne einen
-        Treffer setzt das Widget kein ``_selected_actor``, und ohne das tut
-        sein Druck-Rückruf nichts. Der Griff war nicht greifbar.
-
-        Warum der Weg über den Interactor und nicht über das Widget: Es nimmt
-        keinen Picker entgegen. Und warum das nichts anderes stört: Solidon
-        pickt selbst (:meth:`_world_at`, aus genau demselben Grund mit einem
-        ``vtkCellPicker``) und benutzt pyvistas Auswahlfunktionen nicht.
-        """
-        if self.plotter is None:
-            return
-        from vtkmodules.vtkRenderingCore import vtkCellPicker
-
-        picker = vtkCellPicker()
-        picker.SetTolerance(PICK_TOLERANCE)
-        # **Und zwar an beiden**: ``plotter.interactor`` ist das Qt-Widget
-        # (``QtInteractor``), ``plotter.iren.interactor`` der VTK-Interactor
-        # (``vtkGenericRenderWindowInteractor``) — zwei verschiedene Objekte
-        # mit derselben Methode. Der Rückruf des Widgets hängt am zweiten und
-        # fragt dessen Picker; wer nur den ersten setzt, ändert nichts und
-        # sieht es nicht, weil beide die Methode kennen.
-        self.plotter.interactor.SetPicker(picker)
-        inner = getattr(getattr(self.plotter, "iren", None), "interactor", None)
-        if inner is not None and inner is not self.plotter.interactor:
-            inner.SetPicker(picker)
-
     def _detach_gizmo(self) -> None:
         """Nimmt Griff, Beschriftung und Flächenscheibe aus dem Bild.
 
-        Über ``remove()`` — eine ``Off``-Methode hat pyvistas
-        ``AffineWidget3D`` nicht, der Aufruf endete als ``AttributeError``,
-        den Qt schluckte: der Griff blieb stehen, obwohl der Schalter aus
-        war. Anders als :meth:`set_gizmo` lässt das den Schalterzustand in
+        Über ``Gizmo.remove()``. Bis zum 05.09.2026 stand hier ein ``Off()``
+        an PyVistas Widget, das es dort nie gab — der ``AttributeError``
+        verschwand in Qts Slot-Behandlung, und der Griff blieb stehen, obwohl
+        der Schalter aus war. Anders als :meth:`set_gizmo` lässt das den Schalterzustand in
         Ruhe — eine leere Szene nimmt den Griff weg, aber nicht die
         Entscheidung, dass einer gewünscht ist.
         """
-        if self._magnet_watch is not None and self.plotter is not None:
-            # Ein vergessener Beobachter zieht am Griff der vorigen Auswahl
-            # weiter — dieselbe Falle wie beim Skaliergriff daneben.
-            self.plotter.iren.remove_observer(self._magnet_watch)
-            self._magnet_watch = None
         if self._gizmo is not None:
             self._gizmo.remove()
             self._gizmo = None
@@ -8641,22 +8243,14 @@ class Viewport(QWidget):
         self._drop_turn_arc()
         self._drop_ghost()
         self._reset_shadow_offset()
-        if self._coincident_before is not None:
-            from vtkmodules.vtkRenderingCore import vtkMapper
-
-            # Die statische Umstellung des Widgets zurücknehmen — sie gilt
-            # prozessweit und überlebte sonst den Modus (Striche an allen
-            # Kantenmitten, siehe ``_coincident_before``).
-            vtkMapper.SetResolveCoincidentTopology(self._coincident_before)
-            self._coincident_before = None
 
     def gizmo_face_label(self) -> tuple[str, tuple[float, float, float]] | None:
         """Name und Richtung der Fläche am Griff — oder ``None`` fürs Objekt.
 
         **Als eigene Auskunft und nicht als Zeilen in ``_label_gizmo``**, aus
         demselben Grund wie bei :meth:`gizmo_target`: Jene Methode steigt bei
-        ``self.plotter is None`` sofort aus, und offscreen gibt es keinen
-        Plotter. Ein Test, der sie dort ruft, ist grün, ohne etwas geprüft zu
+        ``self.renderer is None`` sofort aus, und offscreen gibt es keinen
+        Renderer. Ein Test, der sie dort ruft, ist grün, ohne etwas geprüft zu
         haben — und die Verkabelung zwischen Auswahl und Beschriftung wäre
         genau das ungeprüfte Stück zwischen zwei geprüften Enden.
         """
@@ -8671,20 +8265,25 @@ class Viewport(QWidget):
             (float(normal[0]), float(normal[1]), float(normal[2])),
         )
 
-    def _label_gizmo(self, actor: Any) -> None:
-        """Schreibt X, Y und Z an die Achsen (Regel 18).
+    def _label_gizmo(self, actor: Item) -> None:
+        """Die Buchstaben an den Achsen des Griffs — X, Y, Z, das S am Würfel,
+        der Doppelpfeil an einer Fläche (§18.11).
 
-        Der Gizmo unterschied sie allein über Rot, Grün und Blau. Die
-        Buchstaben sitzen etwas hinter den Spitzen — auf ihnen läge die
-        Beschriftung dort, wo man greifen will.
+        Hinter den Spitzen, im Maß der wirklichen Pfeillänge des Griffs.
+        Reines ASCII, siehe :data:`FACE_ARROW`. Während des Zugs reisen die
+        Buchstaben mit (:meth:`_on_gizmo_interacted`).
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         import numpy as np
-        import pyvista as pv
 
-        length = float(actor.GetLength()) * GIZMO_SCALE * 1.15
-        centre = (float(actor.center[0]), float(actor.center[1]), float(actor.center[2]))
+        gizmo = self._gizmo
+        length = (
+            gizmo.arrow_length
+            if gizmo is not None
+            else float(actor.length()) * GIZMO_SCALE * ARROW_SHARE
+        )
+        centre = gizmo.origin if gizmo is not None else actor.centre()
         marks = gizmo_labels(centre, length, self.gizmo_face_label())
         if self._scale_handle is not None:
             # Das S hinter dem Würfel, im selben Abstand wie X, Y und Z
@@ -8700,57 +8299,67 @@ class Viewport(QWidget):
                     "S",
                 )
             )
-        # Als lebendes PolyData mit dem Textarray darin, nicht als Punktliste:
-        # nur so geht das Dataset selbst in die Label-Pipeline ein (eine
-        # Punktliste kopiert pyvista), und nur dann folgt die Beschriftung,
-        # wenn `_on_gizmo_interacted` die Punkte während des Zugs versetzt.
         base = np.asarray([point for point, _text in marks], dtype=float)
-        data = pv.PolyData(base.copy())
-        # pyvistas Stubs kennen nur Zahlenarrays; Textarrays nimmt das
-        # Dataset trotzdem — als vtkStringArray, genau was die Labels wollen.
-        data["labels"] = [text for _point, text in marks]  # type: ignore[type-var]
+        texts = [text for _point, text in marks]
         self._gizmo_label_base = base
-        self._gizmo_label_data = data
-        self._gizmo_labels = self.plotter.add_point_labels(
-            data,
-            "labels",
+        self._gizmo_label_texts = texts
+        self._gizmo_labels = self.renderer.add_labels(
+            base.copy(),
+            texts,
+            name="gizmo_labels",
             # In der Körperfarbe des Themas: hell im dunklen, dunkel im
             # hellen. Die Kantenfarbe war für Text auf dem Hintergrund zu
             # leise — im Bild kaum zu lesen.
-            text_color=self._object_colour,
-            font_size=13,
-            bold=True,
-            show_points=False,
-            shape=None,
-            always_visible=True,
-            name="gizmo_labels",
-            render=False,
-            reset_camera=False,
+            style=LabelStyle(
+                text_colour=self._object_colour, font_size=13, bold=True, always_visible=True
+            ),
         )
 
     def _drop_gizmo_labels(self) -> None:
-        if self._gizmo_labels is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._gizmo_labels, render=False)
+        if self._gizmo_labels is not None and self.renderer is not None:
+            self.renderer.remove(self._gizmo_labels)
         self._gizmo_labels = None
-        self._gizmo_label_data = None
         self._gizmo_label_base = None
+        self._gizmo_label_texts = []
 
-    def _on_gizmo_interacted(self, matrix: Any) -> None:
-        """Während des Zugs reisen Achsbuchstaben und Zahl mit (Regel 18, §18.11).
+    def _on_gizmo_interacted(self, matrix: Any) -> Any:
+        """Jeder Zwischenstand eines Zugs am Griff — und die Antwort darauf.
 
-        pyvista bewegt Griff und Körper, aber Beschriftung und Wertfeld sind
-        unsere: die Buchstaben standen fest an der Startposition, und die Zahl
-        zum Zug gab es gar nicht — wie weit man gezogen hatte, stand erst
-        hinterher im Verlauf. Gerendert wird nicht hier: pyvistas Move-Callback
-        rendert am Ende ohnehin, und die Matrix hinkt seinem Ereignis um eines
-        hinterher — beim Loslassen stellt das Neuanhängen alles exakt.
+        Der Griff ruft mit der rohen Matrix und setzt, was zurückkommt: Hier
+        sitzt der Magnet auf die Raste (§18.11, Robert: „freies drehen, aber
+        kurzes einrasten bei allen 45 grad winkeln außer man dreht weiter").
+        Was der Griff danach zeigt, ist die berichtigte Matrix, und dieselbe
+        bekommen Beschriftung, Schatten, Drehbogen und Vorschau — bis zum
+        05.09.2026 waren das zwei Beobachter am Interactor, und der eine sah
+        noch die Matrix des vorigen Schritts.
         """
-        if self._gizmo_label_data is not None and self._gizmo_label_base is not None:
-            self._gizmo_label_data.points = moved_marks(self._gizmo_label_base, matrix)
-
         import numpy as np
 
-        steps = decompose_transform(np.asarray(matrix, dtype=float))
+        applied = np.asarray(matrix, dtype=float)
+        steps = decompose_transform(applied)
+        corrected: np.ndarray | None = None
+        if steps.turns and steps.axis is not None and self._gizmo is not None:
+            settled = self._settled_angle(steps.angle)
+            difference = settled - steps.angle
+            if abs(difference) > EPS_DISPLAY:
+                index = ("x", "y", "z").index(steps.axis)
+                direction = self._gizmo.axes[index]
+                # ``rotation_about`` im Kern, denn die Ansicht rechnet keine
+                # Geometrie (§8).
+                corrected = (
+                    rotation_about(
+                        (float(direction[0]), float(direction[1]), float(direction[2])),
+                        self._gizmo.origin,
+                        difference,
+                    )
+                    @ applied
+                )
+                applied = corrected
+                steps = decompose_transform(applied)
+        if self._gizmo_labels is not None and self._gizmo_label_base is not None:
+            self._gizmo_labels.update_labels(
+                moved_marks(self._gizmo_label_base, applied), self._gizmo_label_texts
+            )
         self._drag_shadow(steps)
         self._draw_turn_arc(steps)
         self._drag_preview(steps)
@@ -8771,10 +8380,8 @@ class Viewport(QWidget):
             # **Gezeigt wird, was angewandt wird — der gerastete Wert.** Hier
             # stand der rohe, und das Loslassen rastete: Wer bei einem
             # Winkelfang von 15° um fünf Grad drehte, las „5,0°" mit und
-            # bekam nichts. Zweimal falsch — die Zahl versprach eine Drehung,
-            # die nicht kam, und der Kunde schloss daraus, das Drehen sei
-            # kaputt (Robert, 03.09.2026: „bei bewegen geht das drehen des
-            # modells nicht"). Mit dem gerasteten Wert springt die Zahl von
+            # bekam nichts (Robert, 03.09.2026: „bei bewegen geht das drehen
+            # des modells nicht"). Mit dem gerasteten Wert springt die Zahl von
             # 0 auf 15 auf 30, und man sieht, worauf man einrastet.
             self._drag_kind = "turn"
             self._drag_axis = steps.axis
@@ -8795,55 +8402,34 @@ class Viewport(QWidget):
             )
         # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
         # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
+        return corrected
+        # Solange sich nichts bewegt hat, gibt es keine Achse und keine Zahl —
+        # das Feld erscheint mit dem ersten sichtbaren Stück des Zugs.
 
     def _draw_turn_arc(self, steps: TransformSteps) -> None:
-        """Zeichnet den Bogen, der zeigt, wie weit gedreht wurde (§18.11).
+        """Der Bogen, der beim Drehen zeigt, wie weit — und wo er einrastet.
 
-        **Der Magnet rastet, und niemand sah es.** Bei jedem Vielfachen von
-        :data:`TURN_MAGNET_STEP` bleibt der gezeigte Winkel eine Weile stehen —
-        gemessen am laufenden Fenster dreiundzwanzig Zugschritte lang bei
-        45,0° —, und im Bild geschah nichts, was das erklärt. Die Zahl am
-        Zeiger allein liest niemand, während er zieht.
-
-        Der Bogen wächst vom Ausgangswinkel bis zum **gerasteten** Wert, also
-        bis zu dem, der auch angewandt wird. Damit zeigt er zweierlei: wie weit
-        man gedreht hat und dass es gerade einrastet.
-
-        Sein Radius ist der des Griffrings, an dem gezogen wird — ein eigener
-        wäre eine zweite Grösse für dieselbe Geste.
+        **Der Radius ist der des Griffs, nicht der des Körpers.** Hier stand
+        der Körperaktor, während ``set_gizmo`` bei einem gewählten Merkmal die
+        Scheibe übergibt — der Bogen war damit sechsmal so gross wie das
+        Werkzeug, dessen Drehung er zeigt (3d-druck-85, 03.09.2026).
         """
-        if self.plotter is None or not steps.turns or steps.axis is None:
+        if self.renderer is None or not steps.turns or steps.axis is None:
             return
         gizmo = self._gizmo
         if gizmo is None:
             return
-        import numpy as np
-
         index = ("x", "y", "z").index(steps.axis)
-        axes = getattr(gizmo, "axes", None)
-        direction = axes[index] if axes is not None else np.eye(3)[index]
-        origin = getattr(gizmo, "_origin", (0.0, 0.0, 0.0))
-        # **Der Radius ist der des Griffs, nicht der des Körpers.** Hier stand
-        # der Körperaktor, während `set_gizmo` bei einem gewählten Merkmal die
-        # Scheibe übergibt — der Bogen war damit sechsmal so gross wie das
-        # Werkzeug, dessen Drehung er zeigt, und lag weit ausserhalb des
-        # Merkmals (3d-druck-85, 03.09.2026). Der eigene Docstring versprach
-        # schon das Richtige; nur die Zeile darunter tat es nicht.
-        actor = getattr(gizmo, "_main_actor", None)
-        if actor is None:
-            actor = self._actors.get(self._selected) if self._selected is not None else None
-        radius = (
-            float(actor.GetLength()) * self._gizmo_scale_for(actor, origin)
-            if actor is not None
-            else 0.0
-        )
+        direction = gizmo.axes[index]
+        origin = gizmo.origin
+        radius = float(gizmo.target.length()) * self._gizmo_scale_for(gizmo.target, origin)
         points = turn_arc(origin, direction, radius, self._settled_angle(steps.angle))
         if points is None:
             return
         if self._arc_actor is not None:
-            self.plotter.remove_actor(self._arc_actor, render=False)
-        self._arc_actor = self.plotter.add_lines(
-            points, color=MEASURE_COLOUR, width=3, name="turn-arc"
+            self.renderer.remove(self._arc_actor)
+        self._arc_actor = self.renderer.add_lines(
+            points, name="turn-arc", colour=MEASURE_COLOUR, width=3.0
         )
 
     def _reset_shadow_offset(self) -> None:
@@ -8865,12 +8451,12 @@ class Viewport(QWidget):
         """
         for actors in self._shadow_owners.values():
             for actor in actors:
-                actor.position = (0.0, 0.0, 0.0)
+                actor.set_position((0.0, 0.0, 0.0))
 
     def _drop_turn_arc(self) -> None:
         """Nimmt den Bogen weg — der Zug ist vorbei."""
-        if self._arc_actor is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._arc_actor, render=False)
+        if self._arc_actor is not None and self.renderer is not None:
+            self.renderer.remove(self._arc_actor)
         self._arc_actor = None
 
     def _drag_shadow(self, steps: TransformSteps) -> None:
@@ -8917,7 +8503,7 @@ class Viewport(QWidget):
             0.0,
         )
         for actor in actors:
-            actor.position = offset
+            actor.set_position(offset)
 
     def _settled_angle(self, angle: float) -> float:
         """Der Winkel, der wirklich gilt — mit Raster oder mit Magnet.
@@ -8931,69 +8517,29 @@ class Viewport(QWidget):
             return snap_to_step(angle, self._angle_step)
         return snap_near(angle, TURN_MAGNET_STEP, TURN_MAGNET_ZONE)
 
-    def _magnetise_turn(self, *_args: Any) -> None:
-        """Zieht den **gezeigten** Körper auf die Raste, während man dreht.
-
-        Ohne das wäre der Magnet erst beim Loslassen zu spüren: Die Zahl am
-        Zeiger spränge auf 45, das Teil im Bild stünde schief, und beim
-        Loslassen ruckte es. „Kurzes Einrasten" heißt, dass man es **sieht**.
-
-        Warum ein eigener Beobachter und nicht der Rückruf des Widgets:
-        ``AffineWidget3D`` ruft ihn **vor** dem Setzen der neuen Matrix und
-        übergibt ihm die alte — was dort gesetzt würde, wäre in derselben
-        Zeile wieder weg. Dieser hier läuft danach und korrigiert um die
-        Differenz zurück; die Rechnung des Widgets bleibt unberührt, denn sie
-        geht jedes Mal von ``_cached_matrix`` und der Zeigerstelle aus.
-        """
-        griff = self._gizmo
-        if griff is None or not getattr(griff, "_pressing_down", False):
-            return
-        actor = getattr(griff, "_main_actor", None)
-        if actor is None:
-            return
-        matrix = getattr(actor, "user_matrix", None)
-        if matrix is None:
-            return
-
-        import numpy as np
-
-        steps = decompose_transform(np.asarray(matrix, dtype=float))
-        if not steps.turns or steps.axis is None:
-            return
-        settled = self._settled_angle(steps.angle)
-        difference = settled - steps.angle
-        if abs(difference) <= EPS_DISPLAY:
-            return
-
-        index = ("x", "y", "z").index(steps.axis)
-        axes = getattr(griff, "axes", None)
-        direction = axes[index] if axes is not None else np.eye(3)[index]
-        origin = getattr(griff, "_origin", (0.0, 0.0, 0.0))
-        correction = rotation_about(direction, origin, difference)
-        actor.user_matrix = correction @ np.asarray(matrix, dtype=float)
-
     def _on_scale_interacted(self, factor: float) -> None:
         """Der Zwischenstand am Skalierwürfel — die Zahl zum Zug (§18.11)."""
         self._drag_kind = "scale"
         self.drag_bar.follow(tr("Faktor"), factor, "", 3)
 
-    def _face_handle(self, feature: Feature) -> Any:
-        """Ein Griff am Merkmal, an dem der Gizmo sitzen kann.
+    def _face_handle(self, feature: Feature) -> Item | None:
+        """Die Scheibe, an der der Griff hängt, wenn ein Merkmal gewählt ist.
 
-        Der Gizmo braucht einen Actor. Das Merkmal selbst ist Teil des
-        Körperactors und lässt sich nicht einzeln greifen, also bekommt es
-        eine kleine Scheibe an seinem Mittelpunkt — sichtbar, damit klar ist,
-        woran gezogen wird, und flach, damit sie nichts verdeckt.
+        **Der Griff hängt an einer flachen Scheibe an der Öffnung, nicht am
+        Zylinder.** Ein Zylinder über die volle Tiefe hat seinen Schwerpunkt
+        auf halber Tiefe, und dort säße der Griff im Material (gemessen Mitte
+        z = 17,50 statt 35,00). Werkzeug und Marke sind zwei Dinge: Die
+        Vorschau in Merkmalsgestalt ist ein eigener Aktor
+        (:meth:`_show_preview`), der beim Zug mitgeschoben wird.
 
-        **Die Scheibe steht quer zu dem, was das Merkmal auszeichnet.** Eine
-        Fläche hat eine Normale, eine Bohrung eine Achse; beide sagen, wie das
-        Merkmal im Raum liegt, und eine Scheibe darauf liest sich als „hier".
-        Fehlt beides, liegt sie waagerecht — eine Scheibe an der richtigen
-        Stelle ist mehr wert als keine.
+        **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
+        genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
+        damit den Griff statt des Körpers, und die Bohrung liess sich nicht
+        mehr auswählen (Robert, 03.09.2026).
         """
         import numpy as np
 
-        if self.plotter is None:
+        if self.renderer is None:
             return None
         centre = np.asarray(feature.params["centre"], dtype=float)
         # Der Griff sitzt auf der gezeichneten Fläche, nicht auf der
@@ -9017,33 +8563,13 @@ class Viewport(QWidget):
         # beim nächsten Zuwachs auseinander, und dann läge der Ring neben der
         # Marke, die er begleiten soll.
         self._face_seat = (tuple(float(v) for v in centre), tuple(float(v) for v in normal), radius)
-        # **Der Griff hängt an einer flachen Scheibe an der Öffnung, nicht am
-        # Zylinder.** Ein Zylinder über die volle Tiefe hat seinen Schwerpunkt
-        # auf halber Tiefe — und pyvistas Widget hängt genau dort. Damit sass
-        # der Griff wieder im Material, obwohl :meth:`_handle_seat` ihn an die
-        # Öffnung gesetzt hatte: gemessen Mitte z = 17,50 statt 35,00.
-        #
-        # Werkzeug und Marke sind zwei Dinge — dieselbe Lehre wie bei der
-        # Grösse, hier an der **Lage**. Die Vorschau in Merkmalsgestalt ist ein
-        # eigener Aktor (:meth:`_show_preview`), der beim Zug mitgeschoben
-        # wird.
-        import pyvista as pv
-
-        disc = pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
-        # **Nicht anklickbar**, und das ist keine Feinheit: Die Scheibe liegt
-        # genau auf dem Merkmal, das sie zeigt. Ein Klick auf die Bohrung traf
-        # damit den Griff statt des Körpers, und die Bohrung liess sich nicht
-        # mehr auswählen (Robert, 03.09.2026). Der Gizmo braucht sie als
-        # Bezugsaktor, nicht als Ziel — seine Pfeile findet er über den eigenen
-        # Picker (:meth:`_give_the_widget_a_picker_that_hits`).
         self._show_preview(feature, centre, normal, radius)
-        self._face_actor = self.plotter.add_mesh(
-            disc,
-            color=MEASURE_COLOUR,
-            opacity=0.6,
+        vertices, faces = shapes.disc(centre, normal, radius, 24)
+        self._face_actor = self.renderer.add_surface(
+            vertices,
+            faces,
             name="face-handle",
-            render=False,
-            pickable=False,
+            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.6, pickable=False),
         )
         return self._face_actor
 
@@ -9083,10 +8609,10 @@ class Viewport(QWidget):
             return centre
         direction = direction / norm
         # Zur Kamera hin: Das Vorzeichen entscheidet, welche der beiden
-        # Öffnungen vorn liegt. Ohne Plotter (offscreen) gilt die Achsrichtung.
+        # Öffnungen vorn liegt. Ohne Renderer (offscreen) gilt die Achsrichtung.
         towards = 1.0
-        if self.plotter is not None:
-            eye = np.asarray(self.plotter.camera.position, dtype=float)
+        if self.renderer is not None:
+            eye = np.asarray(self.renderer.camera_pose().position, dtype=float)
             towards = (
                 1.0
                 if float(np.dot(eye - np.asarray(centre, dtype=float), direction)) >= 0
@@ -9127,69 +8653,39 @@ class Viewport(QWidget):
         return max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
 
     def _feature_shape(self, feature: Feature, centre: Any, normal: Any, radius: float) -> Any:
-        """Die Gestalt, in der ein Merkmal gezeigt wird — als Körper, wo es einer ist.
+        """Die Gestalt eines Merkmals für Vorschau und Geist: eine Scheibe, oder
+        bei einer Tiefe ein Zylinder, der vom Sitz aus in den Körper reicht.
 
-        „Nicht nur Ring, die ganze Vorschau mit Loch" (Robert, 03.09.2026).
-        Eine flache Scheibe sagt „hier ist etwas"; ein Zylinder in Durchmesser
-        **und** Tiefe sagt „hier ist die Bohrung". Beim Ziehen wandert er mit
-        dem Griff, und damit zeigt die Vorschau nicht einen Kreis an der
-        Zielstelle, sondern das Loch, das dort entsteht.
-
-        Der Körper selbst bleibt währenddessen still — seine Geometrie ändert
-        sich erst bei der Auswertung, und eine Boolesche Operation je Bild wäre
-        das Gegenteil einer Vorschau. Was wandert, ist das Merkmal.
-
-        **Eine Fläche bleibt eine Scheibe.** Sie hat keine Tiefe, und ein
-        Zylinder darauf behauptete eine Ausdehnung, die es nicht gibt.
+        Der Sitz liegt an der Öffnung (:meth:`_handle_seat`); der Zylinder
+        reicht von dort in den Körper hinein, also entgegen der Blickachse.
         """
-        import pyvista as pv
-
         depth = feature.params.get("depth")
         if depth is None:
-            return pv.Disc(center=centre, normal=normal, inner=0.0, outer=radius, c_res=24)
+            return shapes.disc(centre, normal, radius, 24)
         import numpy as np
 
         direction = np.asarray(normal, dtype=float)
-        # Der Sitz liegt an der Öffnung (:meth:`_handle_seat`); der Zylinder
-        # reicht von dort in den Körper hinein, also entgegen der Blickachse.
         axis = np.asarray(centre, dtype=float) - direction * float(depth) / 2.0
-        return pv.Cylinder(
-            center=axis, direction=direction, radius=radius, height=float(depth), resolution=24
-        )
+        return shapes.cylinder(axis, direction, radius, float(depth), 24)
 
     def _show_preview(self, feature: Feature, centre: Any, normal: Any, radius: float) -> None:
-        """Zeigt das Merkmal in seiner Gestalt — als Körper, wo es einer ist.
-
-        „Nicht nur Ring, die ganze Vorschau mit Loch" (Robert, 03.09.2026).
-        Eine flache Scheibe sagt „hier ist etwas"; ein Zylinder in Durchmesser
-        und Tiefe sagt „hier ist die Bohrung".
-
-        **Als eigener Aktor**, und das ist der Unterschied zum ersten Anlauf:
-        Hängt der Griff daran, zieht der Schwerpunkt des Zylinders ihn auf
-        halbe Tiefe — also ins Material, wo seine Pfeile niemand trifft. Der
-        Griff bleibt deshalb an der flachen Scheibe an der Öffnung, und die
-        Vorschau wird beim Zug mitgeschoben (:meth:`_drag_preview`).
-        """
+        """Das gewählte Merkmal in seiner Gestalt — ein eigener Aktor, damit
+        der Griff an der Öffnung bleibt und die Vorschau beim Zug mitgeht."""
         self._drop_preview()
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        shape = self._feature_shape(feature, centre, normal, radius)
-        if shape is None:
-            return
-        self._shape_actor = self.plotter.add_mesh(
-            shape,
-            color=MEASURE_COLOUR,
-            opacity=0.45,
-            lighting=False,
+        vertices, faces = self._feature_shape(feature, centre, normal, radius)
+        self._shape_actor = self.renderer.add_surface(
+            vertices,
+            faces,
             name="feature-preview",
-            render=False,
-            pickable=False,
+            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.45, lighting=False, pickable=False),
         )
 
     def _drop_preview(self) -> None:
         """Nimmt die Vorschau weg."""
-        if self._shape_actor is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._shape_actor, render=False)
+        if self._shape_actor is not None and self.renderer is not None:
+            self.renderer.remove(self._shape_actor)
         self._shape_actor = None
 
     def _drag_preview(self, steps: TransformSteps) -> None:
@@ -9202,57 +8698,35 @@ class Viewport(QWidget):
         """
         if self._shape_actor is None or not steps.moves or steps.turns:
             return
-        self._shape_actor.position = (
-            steps.offset[0],
-            steps.offset[1],
-            steps.offset[2],
-        )
+        self._shape_actor.set_position((steps.offset[0], steps.offset[1], steps.offset[2]))
 
     def _show_ghost(self, feature: Feature) -> None:
-        """Legt einen blassen Ring an die Stelle, an der das Merkmal steht.
+        """Der blasse Ring an der Ausgangsstelle, solange ein Merkmal gezogen wird.
 
-        „Die Bohrung, die beim Verschieben die Vorschau haben sollte" (Robert,
-        03.09.2026). Beim Ziehen wandert die Marke mit dem Griff, und seit sie
-        genau den Durchmesser des Merkmals hat, ist sie die Vorschau: ein Kreis
-        in Bohrungsgröße an der Zielstelle.
-
-        **Was fehlte, war der Bezug.** Der Körper steht während des Zugs still
-        — seine Geometrie ändert sich erst bei der Auswertung —, und ohne eine
-        Marke am Ausgangsort sah es aus, als bewege sich nichts oder als ziehe
-        man das ganze Teil. Der Ring bleibt stehen, wo die Bohrung **ist**, und
-        macht damit die Strecke sichtbar.
-
-        Ein Ring und keine Scheibe: Er soll nicht mit der Marke verwechselt
-        werden, die am Griff hängt, und er soll die Bohrung darunter nicht
-        zudecken.
+        Ohne ihn zeigt der Zug nur, **wohin** — nicht, von wo. **Der Geist
+        trägt dieselbe Gestalt wie die Marke** — bei einer Bohrung also
+        ebenfalls einen Zylinder: Zwei Formen für dasselbe Merkmal an zwei
+        Stellen läsen sich wie zwei verschiedene Dinge.
         """
-
         self._drop_ghost()
-        if self.plotter is None:
+        if self.renderer is None:
             return
         seat = self._face_seat
         if seat is None:
             return
         centre, normal, radius = seat
-        # **Der Geist trägt dieselbe Gestalt wie die Marke** — bei einer
-        # Bohrung also ebenfalls einen Zylinder. Zwei verschiedene Formen für
-        # dasselbe Merkmal an zwei Stellen läsen sich wie zwei verschiedene
-        # Dinge, und der Zug soll eine Strecke zeigen, nicht ein Paar.
-        ring = self._feature_shape(feature, centre, normal, radius)
-        self._ghost_actor = self.plotter.add_mesh(
-            ring,
-            color=MEASURE_COLOUR,
-            opacity=0.35,
-            lighting=False,
+        vertices, faces = self._feature_shape(feature, centre, normal, radius)
+        self._ghost_actor = self.renderer.add_surface(
+            vertices,
+            faces,
             name="feature-ghost",
-            render=False,
-            pickable=False,
+            style=SurfaceStyle(colour=MEASURE_COLOUR, opacity=0.35, lighting=False, pickable=False),
         )
 
     def _drop_ghost(self) -> None:
         """Nimmt den Ring weg — der Zug ist vorbei, die Auswertung gilt."""
-        if self._ghost_actor is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._ghost_actor, render=False)
+        if self._ghost_actor is not None and self.renderer is not None:
+            self.renderer.remove(self._ghost_actor)
         self._ghost_actor = None
 
     def _drop_face_handle(self) -> None:
@@ -9271,8 +8745,8 @@ class Viewport(QWidget):
         die niemand abgeräumt hat.
         """
         self._drop_preview()
-        if self._face_actor is not None and self.plotter is not None:
-            self.plotter.remove_actor(self._face_actor, render=False)
+        if self._face_actor is not None and self.renderer is not None:
+            self.renderer.remove(self._face_actor)
         self._face_actor = None
 
     def bounds_size(self) -> Vec3:
@@ -9289,24 +8763,23 @@ class Viewport(QWidget):
         """Ein Ziehen endet als Operationen, nicht als Matrix (§18.11, §2.1).
 
         Am Ende wird der Griff immer neu angehängt, ob ein Zug herauskam oder
-        nicht. Zweierlei hängt daran: pyvista reicht beim nächsten Zug die
-        Matrix *einschließlich* des vorigen mit — ein stehen gelassener Griff
-        wendete jede Bewegung beim zweiten Mal doppelt an. Und ein Zug unter
-        der Fangschwelle erzeugt keine Operation; ohne das Neuanhängen bliebe
-        der Körper im Bild dort stehen, wohin gezogen wurde, während die Szene
-        ihn nie bewegt hat.
+        nicht. Zweierlei hängt daran: Der Griff rechnet gegen die Matrix, die
+        sein Ziel beim Anhängen hatte — ein stehen gelassener Griff wendete
+        jede Bewegung beim zweiten Mal doppelt an. Und ein Zug unter der
+        Fangschwelle erzeugt keine Operation; ohne das Neuanhängen bliebe der
+        Körper im Bild dort stehen, wohin gezogen wurde, während die Szene ihn
+        nie bewegt hat.
 
-        Und der Navigationsstil wird wiederhergestellt: pyvistas Widget schaltet
-        beim Greifen auf seinen Trackball-Stil um und stellt beim Loslassen
-        *seinen* Standard wieder her, nicht unseren — ohne diesen Aufruf waren
-        nach dem ersten Zug Auswahl-Klick, Kontextmenü und das gewählte Schema
-        verschwunden.
+        Die Navigation bleibt dabei in Ruhe. PyVistas Widget schaltete beim
+        Greifen auf seinen Trackball-Stil um und stellte beim Loslassen
+        *seinen* Standard wieder her, nicht unseren — jedes Zugende musste
+        ``set_navigation`` rufen. Der eigene Griff nimmt sich die Geste vor
+        dem Navigator und gibt sie danach wieder frei.
         """
         if self.drag_bar.typing:
             # Der Zug gehört der Tastatur (§18.11): das Loslassen wendet
-            # nichts an, die Eingabetaste wird es tun. Griff frisch, Stil
-            # zurück — das Feld bleibt mit der getippten Zahl stehen.
-            self.set_navigation(self._scheme)
+            # nichts an, die Eingabetaste wird es tun. Der Griff wird frisch
+            # gebaut — das Feld bleibt mit der getippten Zahl stehen.
             self.set_gizmo(self._gizmo_wanted)
             return
 
@@ -9394,7 +8867,6 @@ class Viewport(QWidget):
         frisch anhängen — die Vorschau am alten Actor verschwindet mit ihm.
         """
         if self.drag_bar.typing:
-            self.set_navigation(self._scheme)
             self.set_gizmo(self._gizmo_wanted)
             return
         if abs(factor - 1.0) > SCALE_UNCHANGED:
@@ -9402,14 +8874,14 @@ class Viewport(QWidget):
         self._end_drag()
 
     def _end_drag(self) -> None:
-        """Der Zug ist vorbei: Zahl weg, Zustand weg, Stil zurück, Griff frisch.
+        """Der Zug ist vorbei: Zahl weg, Zustand weg, Griff frisch.
 
-        **Der Ziehgriff der Skizze geht einen anderen Weg zurück.** Er hängt
-        nicht an einem pyvista-Widget, das den Navigationsstil vertauscht hätte;
-        ihn hier durch ``set_navigation`` zu schicken baute den Interaktionsstil
-        mitten in der Geste neu auf, und das Loslassen käme bei einem Stil an,
-        der von seinem Drücken nichts weiß. Abzuräumen ist dort die Drahtform,
-        und die kennt nur :meth:`_end_pull`.
+        **Der Ziehgriff der Skizze geht einen anderen Weg zurück.** Er hat
+        keinen Bewegungsgriff, den es frisch zu bauen gäbe, und keinen Ring,
+        Geist oder Schatten abzuräumen; was dort weg muss, ist die Drahtform,
+        und die kennt nur :meth:`_end_pull`. (Bis zum 05.09.2026 kam dazu,
+        dass ``set_navigation`` von hier aus den VTK-Interaktionsstil mitten
+        in der Geste neu gebaut hätte.)
         """
         if self._drag_kind == "pull":
             self._end_pull()
@@ -9423,7 +8895,6 @@ class Viewport(QWidget):
         self._drop_preview()
         self._reset_shadow_offset()
         self.drag_bar.dismiss()
-        self.set_navigation(self._scheme)
         self.set_gizmo(self._gizmo_wanted)
 
     def _apply_typed(self) -> None:
@@ -9485,21 +8956,14 @@ class Viewport(QWidget):
         if stop_watching_the_dying(self, watched, event):
             return False
         kind = event.type()
-        # Der Zeiger zuerst, und immer: Er hängt an der Mausbewegung und nicht
-        # daran, ob gerade ein Zug läuft. Nichts davon wird geschluckt — VTK
-        # bekommt jede dieser Bewegungen weiterhin. Aber nur vom Interactor:
-        # Der Filter sitzt auch auf dem Wertfeld, und dessen Positionen als
-        # Viewport-Koordinaten gelesen setzten den Zeiger an den oberen Rand —
-        # falscher Hover nach der Ruhepause, Vorschausprung im Skizzenmodus.
-        plotter = getattr(self, "plotter", None)
-        interactor = getattr(plotter, "interactor", None) if plotter is not None else None
-        if watched is interactor:
-            if kind == QEvent.Type.MouseMove:
-                self._note_pointer(event.position())
-            elif kind == QEvent.Type.Leave:
-                self._forget_pointer()
-            elif kind == QEvent.Type.Enter:
-                self._update_cursor()
+        # Zeigergesten kommen als ``PointerEvent`` vom Renderer
+        # (:meth:`_on_pointer`); hier bleibt nur das Betreten, das keine
+        # Zeigergeste ist. Und nur vom Renderfenster: Der Filter sitzt auch
+        # auf dem Wertfeld.
+        renderer = getattr(self, "renderer", None)
+        interactor = getattr(renderer, "widget", None) if renderer is not None else None
+        if watched is interactor and kind == QEvent.Type.Enter:
+            self._update_cursor()
 
         # Qt kann den Filter schon während ``QWidget.__init__`` aufrufen. In
         # diesem kurzen Zustand gibt es weder Skizzen- noch Zugfelder; die
@@ -9588,14 +9052,14 @@ class Viewport(QWidget):
         Kamera in seinem Inneren). Ein Rahmen um den alten, kleinen Ausgewählten
         beantwortete genau das nicht.
 
-        ``plotter.reset_camera()`` nimmt alle Aktoren, und dazu gehört der
-        Rahmen des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte
+        Ein ``reset_camera()`` ohne Grenzen nimmt alle Elemente, und dazu gehört
+        der Rahmen des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte
         damit die Kulisse das Bild und das Teil war ein Fleck darin: „Alles
         einpassen" tat sichtbar nichts, weil schon eingepasst war.
 
         Ohne Körper bleibt der Bauraum das Maß — dann ist er das Einzige, was
-        es zu sehen gibt. Gerechnet wird er hier selbst, statt ihn pyvista über
-        alle Aktoren suchen zu lassen: nur so bekommt auch die leere Szene ihre
+        es zu sehen gibt. Gerechnet wird er hier selbst, statt ihn den Renderer
+        über alle Elemente suchen zu lassen: nur so bekommt auch die leere Szene ihre
         Luft, und nur so hängt das Ergebnis nicht daran, welche Kulisse gerade
         zusätzlich im Bild steht.
 
@@ -9605,8 +9069,8 @@ class Viewport(QWidget):
         bounds = self._object_bounds() or self._volume_bounds()
         # Worauf eingepasst wurde, wird gemerkt: ``_fit_once_for`` vergleicht
         # damit, ob die Szene der Ansicht inzwischen entwachsen ist. **Vor** dem
-        # Plotter-Zweig, aus demselben Grund wie bei der Umgebungsverdeckung:
-        # offscreen gibt es keinen Plotter, und eine Regel, die nur im Zeichnen
+        # Renderer-Zweig, aus demselben Grund wie bei der Umgebungsverdeckung:
+        # offscreen gibt es keinen Renderer, und eine Regel, die nur im Zeichnen
         # gilt, prüft niemand.
         #
         # **Und es bleibt die Szene, auch wenn die Kamera gleich einen
@@ -9625,19 +9089,12 @@ class Viewport(QWidget):
             chosen = self._selected_bounds()
             if chosen is not None:
                 bounds = chosen
-        if self.plotter is None:
+        if self.renderer is None:
             return
         if bounds is None:
-            self.plotter.reset_camera()
+            self.renderer.reset_camera()
         else:
-            self.plotter.reset_camera(bounds=with_margin(bounds))
-        # **Ohne diese Zeile war das Einpassen wirkungslos.** pyvistas
-        # ``reset_camera`` lässt ``camera_set`` auf False stehen, und der
-        # nächste Zugriff auf ``plotter.camera`` — beim Rendern, beim
-        # Stilwechsel, bei jeder Achsansicht — passt dann von selbst noch
-        # einmal ein, diesmal über *alle* Aktoren. Der Bauraum gewann also
-        # jedes Mal, obwohl hier die Maße der Körper standen.
-        self.plotter.camera_set = True
+            self.renderer.reset_camera(with_margin(bounds))
 
     def _fit_once_for(self, result: EvaluationResult | None) -> None:
         """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.
@@ -9759,9 +9216,9 @@ class Viewport(QWidget):
         Zeigegerät arbeitet, kam an ein Modell heran, sah es aber immer aus
         derselben Entfernung.
         """
-        if self.plotter is None or factor <= 0.0:
+        if self.renderer is None or factor <= 0.0:
             return
-        self.plotter.camera.zoom(factor)
+        self.renderer.dolly(factor)
         self._draw()
 
     @property
@@ -9776,42 +9233,33 @@ class Viewport(QWidget):
         view_up: tuple[float, float, float],
         parallel_scale: float | None = None,
     ) -> None:
-        """Standort, Blickpunkt und Oben in einem Zug — für die 3D-Maus (§2.9).
+        """Eine Kamerastellung setzen und einmal zeichnen — der eine Weg, auf
+        dem die 3D-Maus und die Flugtasten die Ansicht anfassen (§2.9).
 
-        Der zweite Treiber der Kamera neben der Maus. Er erzeugt keine
-        Operation und ändert nichts im Dokument; er setzt die Werte, die VTK
-        führt, und zeichnet einmal. ``parallel_scale`` ist die halbe sichtbare
-        Höhe in der Parallelprojektion — dort zoomt nur sie, ein Standort
-        näher am Blickpunkt ändert das Bild nicht (dieselbe Unterscheidung wie
-        beim Mausrad). Schatten und Skizzenraster ziehen erst nach dem Zug
-        nach (:meth:`settle_camera`), nicht bei jedem Takt.
+        Wer nah heranfährt, schneidet sonst die Nahebene ins Teil: VTK legt
+        die Schnittebenen nur nach, wenn man es sagt.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        camera = self.plotter.camera
-        camera.position = position
-        camera.focal_point = focal_point
-        camera.up = view_up
+        self.renderer.set_camera_pose(
+            CameraPose(
+                (float(position[0]), float(position[1]), float(position[2])),
+                (float(focal_point[0]), float(focal_point[1]), float(focal_point[2])),
+                (float(view_up[0]), float(view_up[1]), float(view_up[2])),
+            )
+        )
         if parallel_scale is not None:
-            camera.parallel_scale = parallel_scale
-        # Wer nah heranfährt, schneidet sonst die Nahebene ins Teil: VTK legt
-        # die Schnittebenen nur nach, wenn man es sagt — der Interaktor tut es
-        # bei jedem Mauszug, hier tut es diese Zeile.
-        self.plotter.renderer.ResetCameraClippingRange()
+            self.renderer.set_parallel_scale(float(parallel_scale))
+        self.renderer.reset_clipping_range()
         self._draw()
 
     def camera_pose(self) -> tuple[Vec3, Vec3, Vec3, float | None]:
-        """Standort, Blickpunkt, Oben — und die halbe Bildhöhe, wenn die
+        """Standort, Blickpunkt, Oben — und der Parallelmaßstab, wenn die
         Projektion parallel ist, sonst ``None``."""
-        assert self.plotter is not None
-        camera = self.plotter.camera
-        scale = float(camera.parallel_scale) if camera.parallel_projection else None
-        return (
-            tuple(camera.position),
-            tuple(camera.focal_point),
-            tuple(camera.up),
-            scale,
-        )
+        assert self.renderer is not None
+        pose = self.renderer.camera_pose()
+        scale = self.renderer.parallel_scale() if self.renderer.parallel_projection() else None
+        return (pose.position, pose.focal_point, pose.view_up, scale)
 
     def settle_camera(self) -> None:
         """Was nach einer Kamerafahrt fällig ist: Schatten neu, Raster neu.
@@ -9820,7 +9268,7 @@ class Viewport(QWidget):
         die 3D-Maus ruft es, sobald die Kappe ruht — bei sechzig Takten je
         Sekunde wären neue Schatten je Takt der teuerste Teil des Bildes.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         self._redraw_shadows()
         self.cameraMoved.emit()
@@ -9829,15 +9277,15 @@ class Viewport(QWidget):
         """Eine der sieben Kameravorgaben (§18.1).
 
         Eingepasst wird über :meth:`reset_camera` — auf die Körper, mit Luft,
-        und mit gesetztem ``camera_set``. ``plotter.reset_camera()`` stand
-        hier und rahmte alle Aktoren samt Bauraum-Kulisse: exakt der Fehler,
+        und mit gesetztem ``camera_set``. Ein ``reset_camera()`` ohne Grenzen
+        stand hier und rahmte alle Elemente samt Bauraum-Kulisse: exakt der Fehler,
         den :meth:`reset_camera` in eigenen Worten beschreibt, nur über die
         Achsansichten (Strg+0 bis Strg+6, ViewBar) wieder offen.
         """
-        if self.plotter is None or direction not in VIEW_DIRECTIONS:
+        if self.renderer is None or direction not in VIEW_DIRECTIONS:
             return
         position, up = VIEW_DIRECTIONS[direction]
-        self.plotter.camera_position = [position, (0.0, 0.0, 0.0), up]
+        self.renderer.set_camera_pose(CameraPose(position, (0.0, 0.0, 0.0), up))
         # Eine absolute Kameravorgabe enthält den bisherigen Ausgleich nicht
         # mehr. Der gespeicherte Weltvektor muss deshalb gleichzeitig fallen;
         # sonst zieht die nächste Größen- oder Zoomänderung einen Versatz ab,
@@ -9869,11 +9317,11 @@ class Viewport(QWidget):
         Deckfläche an den Bildrand. Der Ausschnitt bleibt, wie er war — es
         dreht sich nur die Blickrichtung.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
         distance = self._plane_distance()
         position, focus, up = camera_for_plane(frame, distance)
-        self.plotter.camera_position = [position, focus, up]
+        self.renderer.set_camera_pose(CameraPose(position, focus, up))
         self._fit_parallel_scale(distance)
         self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         self._apply_sketch_occlusion()
@@ -9900,9 +9348,8 @@ class Viewport(QWidget):
         25.08.2026: Kamera vor und nach dem Aufruf identisch, bei einer Skizze,
         die zu drei Vierteln außerhalb des Bildes lag.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        camera = getattr(self.plotter, "camera", None)
         position, focus, up, scale = camera_for_span(
             frame,
             centre,
@@ -9910,12 +9357,12 @@ class Viewport(QWidget):
             self._plane_distance(),
             (self.height() or 1) / (self.width() or 1),
         )
-        self.plotter.camera_position = [position, focus, up]
-        if camera is not None and getattr(camera, "parallel_projection", False):
-            camera.parallel_scale = scale
+        self.renderer.set_camera_pose(CameraPose(position, focus, up))
+        if self.renderer.parallel_projection():
+            self.renderer.set_parallel_scale(scale)
         self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         self._apply_sketch_occlusion()
-        self.plotter.render()
+        self.renderer.render()
         self.cameraMoved.emit()
 
     def set_zone_margins(self, left: int, right: int, bottom: int = 0) -> None:
@@ -9937,22 +9384,23 @@ class Viewport(QWidget):
             self._draw()
 
     def _apply_sketch_occlusion(self) -> bool:
-        """Den unteren Bildrand beim heutigen Maßstab ausgleichen.
+        """Die Kamera um die verdeckte untere Bildhöhe verschieben; wahr, wenn
+        sich dabei etwas geändert hat (§30.1).
 
-        Zoom, Fenstergröße und Kameradrehung können sich ändern, obwohl die
-        Werkzeugkarte gleich hoch bleibt. Deshalb wird der vorige Weltvektor
-        zuerst exakt entfernt und der neue aus dem aktuellen Bild berechnet.
+        In orthografischer Projektion rücken Standort und Blickpunkt gemeinsam
+        um genau die halbe verdeckte Bildhöhe (:func:`occluded_view_shift`).
+        Das ändert weder Blickrichtung noch Maßstab; der wirklich angewandte
+        Weltvektor steht in ``_sketch_occlusion_shift`` und lässt sich exakt
+        wieder abziehen.
         """
-        plotter = self.plotter
-        if plotter is None:
+        renderer = self.renderer
+        if renderer is None or not renderer.parallel_projection():
             return False
-        camera = getattr(plotter, "camera", None)
-        if camera is None or not getattr(camera, "parallel_projection", False):
-            return False
-        position, focus, up = plotter.camera_position
+        pose = renderer.camera_pose()
+        position, focus, up = pose.position, pose.focal_point, pose.view_up
         previous = self._sketch_occlusion_shift
         amount = occluded_view_shift(
-            float(camera.parallel_scale), self.height(), self._zone_margins[2]
+            float(renderer.parallel_scale()), self.height(), self._zone_margins[2]
         )
         wanted: Vec3 = (
             -float(up[0]) * amount,
@@ -9961,52 +9409,60 @@ class Viewport(QWidget):
         )
         if math.dist(previous, wanted) <= EPS_GEOM:
             return False
-        base_position = tuple(float(position[axis]) - previous[axis] for axis in range(3))
-        base_focus = tuple(float(focus[axis]) - previous[axis] for axis in range(3))
-        plotter.camera_position = [
-            tuple(base_position[axis] + wanted[axis] for axis in range(3)),
-            tuple(base_focus[axis] + wanted[axis] for axis in range(3)),
-            up,
-        ]
+        renderer.set_camera_pose(
+            CameraPose(
+                (
+                    float(position[0]) - previous[0] + wanted[0],
+                    float(position[1]) - previous[1] + wanted[1],
+                    float(position[2]) - previous[2] + wanted[2],
+                ),
+                (
+                    float(focus[0]) - previous[0] + wanted[0],
+                    float(focus[1]) - previous[1] + wanted[1],
+                    float(focus[2]) - previous[2] + wanted[2],
+                ),
+                up,
+            )
+        )
         self._sketch_occlusion_shift = wanted
         return True
 
     def _remove_sketch_occlusion(self) -> bool:
-        """Den angewandten Kameraausgleich ohne neue Maßrechnung entfernen."""
-        plotter = self.plotter
-        if plotter is None:
+        """Den Kameraausgleich der Skizze exakt zurücknehmen; wahr, wenn einer stand."""
+        renderer = self.renderer
+        if renderer is None:
             self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
             return False
         shift = self._sketch_occlusion_shift
         if math.dist(shift, (0.0, 0.0, 0.0)) <= EPS_GEOM:
             return False
-        position, focus, up = plotter.camera_position
-        plotter.camera_position = [
-            tuple(float(position[axis]) - shift[axis] for axis in range(3)),
-            tuple(float(focus[axis]) - shift[axis] for axis in range(3)),
-            up,
-        ]
+        pose = renderer.camera_pose()
+        renderer.set_camera_pose(
+            CameraPose(
+                (
+                    pose.position[0] - shift[0],
+                    pose.position[1] - shift[1],
+                    pose.position[2] - shift[2],
+                ),
+                (
+                    pose.focal_point[0] - shift[0],
+                    pose.focal_point[1] - shift[1],
+                    pose.focal_point[2] - shift[2],
+                ),
+                pose.view_up,
+            )
+        )
         self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
         return True
 
     def _fit_parallel_scale(self, distance: float) -> None:
-        """Den Ausschnitt der Parallelprojektion an den perspektivischen angleichen.
-
-        VTK führt für beide Projektionen **getrennte** Größen: die
-        Zentralprojektion lebt vom Blickwinkel, die Parallelprojektion von
-        ``parallel_scale`` — der halben sichtbaren Höhe in Weltmaßen. Wer
-        umschaltet, ohne die eine aus der anderen zu rechnen, springt auf
-        VTKs Startwert von 1,0: ein sichtbarer Ausschnitt von zwei
-        Millimetern.
-
-        Die Umrechnung gilt in der Fokusebene, und dort liegt die Zeichnung —
-        genau der Ort, an dem beide Projektionen dasselbe zeigen sollen.
-        """
-        camera = getattr(self.plotter, "camera", None) if self.plotter else None
-        if camera is None or not getattr(camera, "parallel_projection", False):
+        """Den Parallelmaßstab so setzen, dass die Ebene aus ``distance`` so
+        groß erscheint wie perspektivisch — sonst spränge das Bild beim
+        Umschalten der Projektion."""
+        if self.renderer is None or not self.renderer.parallel_projection():
             return
-        angle = float(getattr(camera, "view_angle", 30.0))
-        camera.parallel_scale = distance * math.tan(math.radians(angle) / 2.0)
+        angle = float(self.renderer.view_angle() or 30.0)
+        self.renderer.set_parallel_scale(distance * math.tan(math.radians(angle) / 2.0))
 
     def show_sketch(
         self,
@@ -10022,28 +9478,13 @@ class Viewport(QWidget):
         measure_labels: Sequence[tuple[Vec3, str]] = (),
         preview: Sequence[SketchCurve] = (),
     ) -> None:
-        """Die Skizze und ihr Raster in die Szene legen (§30.1, Stufe zwei).
+        """Die Zeichnung in die Szene legen: Raster, Achsen, Kurven, Punkte,
+        Maßkarten und der Ziehgriff (§30.1).
 
-        Sie liegt damit **da, wo sie liegt** — auf ihrer Ebene, im Raum, und
-        sie dreht sich mit der Kamera. Genau das war der Unterschied zum
-        Zeichenblatt: Dort war die Ebenenwahl eine Beschriftung, hier ist sie
-        zu sehen.
-
-        Nichts hier rechnet: Die Punkte kommen aus
-        :func:`app.core.sketch.profile.curves_of`, die Rasterlinien aus
-        :func:`sketch_grid`. Beides ist ohne Plotter prüfbar, und was diese
-        Methode hinzufügt, ist ausschließlich das Weiterreichen an VTK.
-
-        **Alles unpickbar** (``pickable=False``), und das ist keine
-        Feinheit: Der Zeiger fragt die Ebene rechnerisch
-        (:func:`app.core.sketch.planes.ray_hit`), nicht über einen Treffer auf
-        dem Raster. Ein pickbares Raster stünde der Auswahl von Körpern im
-        Weg — und der Merkmalssuche, die den Sichtstrahl gegen die Hüllen der
-        Szenenkörper prüft.
-
-        Konstruktionsgeometrie bekommt ihren eigenen Actor: Sie trägt
-        Bedingungen und bildet kein Profil, also darf sie auch nicht wie eine
-        Kante aussehen.
+        Alles ungreifbar (``pickable=False``): Kein Stück Zeichnung fängt einen
+        Klick von Zeichenebene oder Umriss ab. Breite und Deckkraft sind die
+        zweite Kodierung neben der Farbe (Regel 18) — Hilfsgeometrie dünn und
+        durchscheinend, Gewähltes breit.
         """
         self.clear_sketch()
         # Kameraereignisse melden Zoom und Drehung über ``cameraMoved``. Der
@@ -10052,18 +9493,17 @@ class Viewport(QWidget):
         self._apply_sketch_occlusion()
         self._sketch_step = step
         # **Vor der Wache gemerkt, nicht danach.** Der Ziehgriff fragt diese
-        # Kurven nach dem Umriss im Bild, und offscreen gibt es keinen Plotter:
-        # Eine Zuweisung hinter dem ``return`` prüfte in der Suite niemand
-        # (§35).
+        # Kurven nach dem Umriss im Bild, und offscreen gibt es keinen
+        # Renderer: Eine Zuweisung hinter dem ``return`` prüfte in der Suite
+        # niemand (§35).
         self._sketch_curves = tuple(curves)
         self._sketch_selected_curves = tuple(selected_curves)
         self._sketch_control_points = tuple(control_points)
         self._sketch_selected_points = tuple(selected_points)
-        plotter = self.plotter
-        if plotter is None:
+        renderer = self.renderer
+        if renderer is None:
             return
         import numpy as np
-        import pyvista as pv
 
         layers = sketch_grid_layers(frame, step, reach)
 
@@ -10078,17 +9518,39 @@ class Viewport(QWidget):
             if not segments:
                 return
             grid = np.asarray([point for pair in segments for point in pair], dtype=float)
-            spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
+            item = renderer.add_lines(grid, name=name, colour=colour, width=float(width))
+            item.set_opacity(opacity)
+            self._sketch_actors.append(item)
+
+        def add_label(point: Vec3, label: str, colour: str, name: str) -> None:
             self._sketch_actors.append(
-                plotter.add_mesh(
-                    pv.PolyData(grid, lines=spans),
-                    color=colour,
-                    line_width=width,
-                    opacity=opacity,
+                renderer.add_labels(
+                    np.asarray([point], dtype=float),
+                    [label],
                     name=name,
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    style=LabelStyle(
+                        text_colour=colour, font_size=10, bold=True, always_visible=True
+                    ),
+                )
+            )
+
+        def add_cards(
+            points: Sequence[Vec3], labels: Sequence[str], margin: int, name: str
+        ) -> None:
+            self._sketch_actors.append(
+                renderer.add_labels(
+                    np.asarray(points, dtype=float),
+                    list(labels),
+                    name=name,
+                    style=LabelStyle(
+                        text_colour=self._sketch_label_colour,
+                        font_size=10,
+                        bold=True,
+                        always_visible=True,
+                        background=self._sketch_label_background,
+                        background_opacity=0.94,
+                        margin=margin,
+                    ),
                 )
             )
 
@@ -10100,37 +9562,19 @@ class Viewport(QWidget):
             add_segments((layers.axes[0],), self._axis_y_colour, 2, 0.92, "sketch_axis_y")
             add_segments((layers.axes[1],), self._axis_x_colour, 2, 0.92, "sketch_axis_x")
             label_distance = AXIS_LABEL_PIXELS / max(self.pixels_per_mm(frame), EPS_GEOM)
-            for point, label, colour, name in (
-                (
+            if axis_names[0]:
+                add_label(
                     to_world(frame, (label_distance, 0.0)),
                     axis_names[0],
                     self._axis_x_colour,
                     "sketch_axis_x_label",
-                ),
-                (
+                )
+            if axis_names[1]:
+                add_label(
                     to_world(frame, (0.0, label_distance)),
                     axis_names[1],
                     self._axis_y_colour,
                     "sketch_axis_y_label",
-                ),
-            ):
-                if not label:
-                    continue
-                self._sketch_actors.append(
-                    plotter.add_point_labels(
-                        np.asarray([point], dtype=float),
-                        [label],
-                        text_color=colour,
-                        font_size=10,
-                        bold=True,
-                        show_points=False,
-                        shape=None,
-                        always_visible=True,
-                        name=name,
-                        render=False,
-                        reset_camera=False,
-                        pickable=False,
-                    )
                 )
 
         selected_curve_set = set(selected_curves)
@@ -10143,27 +9587,18 @@ class Viewport(QWidget):
                 and len(curve.points) > 1
             ]
             if chosen:
-                drawn = np.asarray(
-                    [point for curve in chosen for point in curve.points], dtype=float
+                item = renderer.add_lines(
+                    np.asarray([point for curve in chosen for point in curve.points], dtype=float),
+                    name=f"sketch_{'help' if construction else 'lines'}",
+                    colour=self._sketch_colour,
+                    width=1.0 if construction else 3.0,
+                    polylines=[len(curve.points) for curve in chosen],
                 )
-                self._sketch_actors.append(
-                    plotter.add_mesh(
-                        pv.PolyData(
-                            drawn,
-                            lines=polyline_spans([len(curve.points) for curve in chosen]),
-                        ),
-                        color=self._sketch_colour,
-                        line_width=1 if construction else 3,
-                        # Die zweite Kodierung neben der Strichbreite (Regel
-                        # 18): Hilfsgeometrie ist durchscheinend, und wer den
-                        # Unterschied in der Breite nicht sieht, sieht ihn hier.
-                        opacity=0.45 if construction else 1.0,
-                        name=f"sketch_{'help' if construction else 'lines'}",
-                        render=False,
-                        reset_camera=False,
-                        pickable=False,
-                    )
-                )
+                # Die zweite Kodierung neben der Strichbreite (Regel 18):
+                # Hilfsgeometrie ist durchscheinend, und wer den Unterschied in
+                # der Breite nicht sieht, sieht ihn hier.
+                item.set_opacity(0.45 if construction else 1.0)
+                self._sketch_actors.append(item)
 
         chosen_curves = [
             curve
@@ -10171,23 +9606,17 @@ class Viewport(QWidget):
             if index in selected_curve_set and len(curve.points) > 1
         ]
         if chosen_curves:
-            drawn = np.asarray(
-                [point for curve in chosen_curves for point in curve.points], dtype=float
-            )
             self._sketch_actors.append(
-                plotter.add_mesh(
-                    pv.PolyData(
-                        drawn,
-                        lines=polyline_spans([len(curve.points) for curve in chosen_curves]),
+                renderer.add_lines(
+                    np.asarray(
+                        [point for curve in chosen_curves for point in curve.points], dtype=float
                     ),
-                    color=SELECTED_COLOUR,
+                    name="sketch_selected_lines",
+                    colour=SELECTED_COLOUR,
                     # Breite ist die zweite Kodierung neben der Farbe: Auch
                     # ohne Farbunterscheidung bleibt klar, was gewählt ist.
-                    line_width=5,
-                    name="sketch_selected_lines",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    width=5.0,
+                    polylines=[len(curve.points) for curve in chosen_curves],
                 )
             )
 
@@ -10199,15 +9628,11 @@ class Viewport(QWidget):
             single = []
         if single:
             self._sketch_actors.append(
-                plotter.add_points(
+                renderer.add_points(
                     np.asarray(single, dtype=float),
-                    color=self._sketch_colour,
-                    point_size=SKETCH_POINT_PIXELS,
-                    render_points_as_spheres=True,
                     name="sketch_points",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    colour=self._sketch_colour,
+                    size=float(SKETCH_POINT_PIXELS),
                 )
             )
         selected_point_set = set(selected_points)
@@ -10219,99 +9644,61 @@ class Viewport(QWidget):
         ]
         if plain_controls:
             self._sketch_actors.append(
-                plotter.add_points(
+                renderer.add_points(
                     np.asarray(plain_controls, dtype=float),
-                    color=self._sketch_colour,
-                    point_size=7,
-                    render_points_as_spheres=True,
                     name="sketch_control_points",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    colour=self._sketch_colour,
+                    size=7.0,
                 )
             )
         if chosen_controls:
             self._sketch_actors.append(
-                plotter.add_points(
+                renderer.add_points(
                     np.asarray(chosen_controls, dtype=float),
-                    color=SELECTED_COLOUR,
-                    point_size=14,
-                    render_points_as_spheres=True,
                     name="sketch_selected_points",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    colour=SELECTED_COLOUR,
+                    size=14.0,
                 )
             )
         if measure_labels:
-            self._sketch_actors.append(
-                plotter.add_point_labels(
-                    np.asarray([point for point, _text in measure_labels], dtype=float),
-                    [text for _point, text in measure_labels],
-                    text_color=self._sketch_label_colour,
-                    font_size=10,
-                    bold=True,
-                    show_points=False,
-                    shape="rounded_rect",
-                    shape_color=self._sketch_label_background,
-                    fill_shape=True,
-                    margin=5,
-                    shape_opacity=0.94,
-                    always_visible=True,
-                    name="sketch_measures",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
-                )
+            add_cards(
+                [point for point, _text in measure_labels],
+                [text for _point, text in measure_labels],
+                5,
+                "sketch_measures",
             )
         full_handle = self._pull_handle_segments()
         handle = self._visible_pull_handle_segments(full_handle)
         if handle and self._pull_is_offered():
-            handle_points = np.asarray([point for pair in handle for point in pair], dtype=float)
-            handle_lines = np.hstack(
-                [[2, 2 * index, 2 * index + 1] for index in range(len(handle))]
-            )
             self._sketch_actors.append(
-                plotter.add_mesh(
-                    pv.PolyData(handle_points, lines=handle_lines),
-                    color=SELECTED_COLOUR,
-                    line_width=5,
+                renderer.add_lines(
+                    np.asarray([point for pair in handle for point in pair], dtype=float),
                     name="sketch_pull_handle",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    colour=SELECTED_COLOUR,
+                    width=5.0,
                 )
             )
             inward, outward = full_handle[0]
             size = math.dist(inward, outward) / 2.0
             label_shift = tuple(frame.x_axis[axis] * size * 1.1 for axis in range(3))
-            label_points = [
-                tuple(outward[axis] + label_shift[axis] for axis in range(3)),
+            label_points: list[Vec3] = [
+                (
+                    outward[0] + label_shift[0],
+                    outward[1] + label_shift[1],
+                    outward[2] + label_shift[2],
+                )
             ]
             labels = [str(tr("Hochziehen"))]
             if self._cut_pull_available():
-                label_points.append(tuple(inward[axis] + label_shift[axis] for axis in range(3)))
-                labels.append(str(tr("Abtragen")))
-            self._sketch_actors.append(
-                plotter.add_point_labels(
-                    np.asarray(label_points, dtype=float),
-                    labels,
-                    text_color=self._sketch_label_colour,
-                    font_size=10,
-                    bold=True,
-                    show_points=False,
-                    shape="rounded_rect",
-                    shape_color=self._sketch_label_background,
-                    fill_shape=True,
-                    margin=4,
-                    shape_opacity=0.94,
-                    always_visible=True,
-                    name="sketch_pull_labels",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                label_points.append(
+                    (
+                        inward[0] + label_shift[0],
+                        inward[1] + label_shift[1],
+                        inward[2] + label_shift[2],
+                    )
                 )
-            )
+                labels.append(str(tr("Abtragen")))
+            add_cards(label_points, labels, 4, "sketch_pull_labels")
         self._set_sketch_preview(preview)
         self._draw()
 
@@ -10336,52 +9723,23 @@ class Viewport(QWidget):
             self.sketch_action.place()
 
     def _set_sketch_cursor(self, point: tuple[float, float] | None) -> bool:
-        """Die Marke setzen, die zeigt, wohin der nächste Klick fällt.
+        """Die Fangmarke setzen oder wegnehmen; wahr, wenn sich im Bild etwas ändert.
 
-        ``point`` ist der **gefangene** Ort in Zeichenkoordinaten, so wie ihn
-        ``SketchCanvas.pointer_target`` liefert; ``None`` nimmt die Marke weg.
-        Warum sie sein muss, steht bei :func:`sketch_cursor`.
-
-        **Eigene Actorliste**, nicht ``_sketch_actors``: Die Marke folgt der
-        Maus, die Zeichnung ändert sich beim Zeichnen. Lägen beide zusammen,
-        räumte jedes ``_redraw_sketch`` die Marke weg, und sie käme erst mit
-        der nächsten Mausbewegung wieder — ein Flackern genau während des
-        Zeichnens.
-
-        **Die Größe steht in Bildpunkten** (:data:`CURSOR_PIXELS`) und wird
-        über den gemessenen Maßstab in Millimeter zurückgerechnet. Eine feste
-        Zahl in Millimetern wäre herausgezoomt ein Punkt und hineingezoomt ein
-        Kreuz über das halbe Bild; an die Rasterweite gekoppelt — der erste
-        Anlauf — war sie bei 10 mm Raster gut und bei 2 mm zwei Bildpunkte
-        groß. Gesehen hat das keine Rechnung, sondern die Aufnahme.
-
-        **Ein Zeigerschritt, der nichts ändert, zeichnet nicht.** Das ist die
-        Hälfte, an der die Sache steht: Ein Neuzeichnen der Szene kostet hier
-        gemessen **6,9 ms**, und bei sechzig Mausereignissen in der Sekunde
-        wären das 41 % eines Kerns im Qt-Hauptthread. Nicht die Rechnung ist
-        teuer (``pixels_per_mm`` misst 0,004 ms, der Schnitt mit der Ebene
-        0,006) und auch nicht der Actor — es ist ``render()`` selbst, und
-        gegen das hilft nur, es seltener zu rufen.
-
-        Das geht, weil die Marke am **gefangenen** Ort sitzt: Zwischen zwei
-        Rasterpunkten ändert sie sich nicht, und bei 2 mm Raster sind das rund
-        vierundzwanzig Bildpunkte Mausweg je Sprung. Verglichen wird Ort **und**
-        Maßstab — beim Zoomen bleibt der Ort gleich und die Marke müsste ihre
-        Größe ändern.
-
-        **Das Netz entsteht dabei einmal, danach wandern nur seine vier
-        Punkte.** Das allein hat nichts gebracht (gemessen 6,95 gegen 6,92 ms),
-        aber es ist die richtige Bauart und macht den Sprung billig, wenn er
-        kommt.
+        Das Kreuz hat immer vier Punkte: Steht es schon, bekommt es nur neue
+        Koordinaten — ein Render kostet gemessen 6,9 ms, und die Marke sitzt
+        am **gefangenen** Ort, zwischen zwei Rasterpunkten ändert sie sich
+        nicht. Die Größe ist in Bildpunkten (:data:`CURSOR_PIXELS`) und wird
+        über den Maßstab der Ebene in Millimeter umgerechnet.
         """
         frame = self._sketch_frame
-        if point is None or frame is None or self.plotter is None:
+        if point is None or frame is None or self.renderer is None:
             changed = bool(self._cursor_actors)
-            if self.plotter is not None:
+            if self.renderer is not None:
                 for actor in self._cursor_actors:
-                    self.plotter.remove_actor(actor, render=False)
+                    self.renderer.remove(actor)
             self._cursor_actors.clear()
             self._cursor_mesh = None
+            self._cursor_count = 0
             self._cursor_at = None
             return changed
         scale = self.pixels_per_mm(frame)
@@ -10393,71 +9751,56 @@ class Viewport(QWidget):
             return False
 
         import numpy as np
-        import pyvista as pv
 
         points = np.asarray([end for pair in segments for end in pair], dtype=float)
-        if self._cursor_mesh is not None and self._cursor_mesh.n_points == len(points):
+        if self._cursor_mesh is not None and self._cursor_count == len(points):
             # Der übliche Fall: dasselbe Kreuz, anderswo.
-            self._cursor_mesh.points = points
-            self._cursor_mesh.Modified()
+            self._cursor_mesh.update_points(points)
             return True
-
-        spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
-        mesh = pv.PolyData(points, lines=spans)
-        self._cursor_mesh = mesh
-        self._cursor_actors.append(
-            self.plotter.add_mesh(
-                mesh,
-                color=self._sketch_colour,
-                line_width=2,
-                name="sketch_cursor",
-                render=False,
-                reset_camera=False,
-                pickable=False,
-            )
+        self._cursor_mesh = self.renderer.add_lines(
+            points, name="sketch_cursor", colour=self._sketch_colour, width=2.0
         )
+        self._cursor_count = len(points)
+        self._cursor_actors.append(self._cursor_mesh)
         return True
 
     def _set_sketch_preview(self, curves: Sequence[SketchCurve]) -> bool:
-        """Die mitfliegende Geometrie ändern, ohne selbst zu rendern."""
+        """Die mitfliegende Geometrie zwischen zwei Klicks; wahr bei Änderung.
+
+        Bleibt die Form gleich, bekommt der Aktor nur neue Punkte — so braucht
+        ein Zeigerschritt einen gemeinsamen Render mit der Fangmarke.
+        """
         visible = tuple(curve for curve in curves if len(curve.points) > 1)
         signature = tuple(tuple(curve.points) for curve in visible)
         if signature == self._preview_at:
             return False
         self._preview_at = signature
-        if self.plotter is None or not visible:
+        if self.renderer is None or not visible:
             changed = self._preview_actor is not None
-            if self.plotter is not None and self._preview_actor is not None:
-                self.plotter.remove_actor(self._preview_actor, render=False)
+            if self.renderer is not None and self._preview_actor is not None:
+                self.renderer.remove(self._preview_actor)
             self._preview_actor = None
-            self._preview_mesh = None
             self._preview_shape = ()
             return changed
 
         import numpy as np
-        import pyvista as pv
 
         shape = tuple(len(curve.points) for curve in visible)
         points = np.asarray([point for curve in visible for point in curve.points], dtype=float)
-        if self._preview_mesh is not None and self._preview_shape == shape:
-            self._preview_mesh.points = points
-            self._preview_mesh.Modified()
+        if self._preview_actor is not None and self._preview_shape == shape:
+            self._preview_actor.update_points(points)
             return True
         if self._preview_actor is not None:
-            self.plotter.remove_actor(self._preview_actor, render=False)
-        mesh = pv.PolyData(points, lines=polyline_spans(shape))
-        self._preview_mesh = mesh
+            self.renderer.remove(self._preview_actor)
         self._preview_shape = shape
-        self._preview_actor = self.plotter.add_mesh(
-            mesh,
-            color=SELECTED_COLOUR,
-            line_width=2,
-            opacity=0.82,
+        self._preview_actor = self.renderer.add_lines(
+            points,
             name="sketch_preview",
-            render=False,
-            reset_camera=False,
-            pickable=False,
+            colour=SELECTED_COLOUR,
+            width=2.0,
+            polylines=list(shape),
         )
+        self._preview_actor.set_opacity(0.82)
         return True
 
     def show_sketch_cursor(self, point: tuple[float, float] | None) -> None:
@@ -10502,69 +9845,46 @@ class Viewport(QWidget):
         Zeichnens. Weggenommen wird sie, wo der Modus endet:
         :meth:`set_sketching` mit ``None``.
         """
-        if self.plotter is not None:
+        if self.renderer is not None:
             for actor in self._sketch_actors:
-                self.plotter.remove_actor(actor, render=False)
+                self.renderer.remove(actor)
         self._sketch_actors.clear()
 
     def snapshot(self) -> Any | None:
-        """Der Inhalt der Ansicht als Bild — oder ``None``, wenn keiner da ist.
+        """Ein Bild der Szene für den Fehlerbericht (§33.1) — oder nichts.
 
-        **Warum es das braucht.** Ein ``QWidget.grab`` über das Hauptfenster
-        bekommt hier nichts: Der Plotter zeichnet in ein natives
-        OpenGL-Kindfenster, und das malt nicht in Qts Puffer. Genau deshalb war
-        die Bildmitte auf jedem Bild leer, das der Fehlerbogen mitschickte —
-        ausgerechnet das Modell, um das es geht. Gemessen am 24.08.2026: eine
-        einzige Farbe auf 100 % der Fläche.
-
-        **Ein eigener Plotter, nicht der lebende.** ``self.plotter.screenshot``
-        wäre der kürzere Weg und liefert sogar das genauere Bild — Druckplatte,
-        Raster und Auswahl inbegriffen. Er greift aber in das Fenster, das der
-        Kunde gerade vor sich hat: VTK meldete dabei
-        ``FRAMEBUFFER_INCOMPLETE_ATTACHMENT``, und über die Suite stieg die
-        Abrissquote von 2 aus 9 auf 2 aus 3. Beweisen ließ sich der
-        Zusammenhang bei diesen Zahlen nicht — aber ein Bild für einen
-        Fehlerbericht darf die Lage nicht verschlimmern, in der es entsteht.
-        :mod:`app.ui.snapshots` geht denselben Weg und begründet ihn genauso:
-        kurzlebig, weil festgehaltene VTK-Objekte den Abbau mitreißen.
-
-        Der Preis ist ein Bild ohne Bauraum und Raster — das Modell aus der
-        Blickrichtung des Kunden, nicht seine ganze Kulisse. Für die Frage
-        „was hatte er vor sich?" ist das der Kern; die Kulisse steht in jedem
-        anderen Bild derselben Anwendung.
-
-        Ohne Plotter oder ohne Auswertung kommt ``None`` und kein schwarzes
-        Bild: Offscreen gibt es beides nicht, und der Aufrufer soll den
-        Unterschied sehen können.
+        Ein eigener Renderer ohne Fenster, in der Größe der Ansicht, mit
+        derselben Blickrichtung und **Farbe und Grund aus dem Fenster**: Ein
+        türkiser Körper auf weißem Grund wäre ein Bild, das der Support anders
+        sieht als der Kunde, und damit eine Auskunft, die in die Irre führt.
+        Ein Bild, das nicht entsteht, darf keinen Fehlerbericht verhindern —
+        der Bogen ist dann eben ohne Bildmitte, statt gar nicht abzugehen.
         """
-        if self.plotter is None or self._result is None or not self._result.scene.objects:
+        if self.renderer is None or self._result is None or not self._result.scene.objects:
             return None
-        import pyvista as pv
+        import numpy as np
         from PySide6.QtGui import QImage
 
         from app.core.geom.mesh import as_mesh_data
+        from app.ui.render.vtk_renderer import VtkRenderer
 
-        size = [max(16, self.width()), max(16, self.height())]
-        shot = pv.Plotter(off_screen=True, window_size=size)
+        size = (max(16, self.width()), max(16, self.height()))
+        shot = VtkRenderer(offscreen=True, size=size)
         try:
-            for entry in self._result.scene.objects.values():
-                # **Farbe und Grund kommen aus dem Fenster, nicht von
-                # pyvista.** Mit den Vorgaben stünde ein türkiser Körper auf
-                # weißem Grund — ein Bild, das der Support anders sieht als der
-                # Kunde, und damit eine Auskunft, die in die Irre führt.
-                shot.add_mesh(pv.wrap(as_mesh_data(entry.mesh).raw), color=self._object_colour)
-            shot.set_background(self.plotter.background_color)
+            for object_id, entry in self._result.scene.objects.items():
+                raw = as_mesh_data(entry.mesh).raw
+                shot.add_surface(
+                    np.asarray(raw.vertices, dtype=float),
+                    np.asarray(raw.faces, dtype=np.int64),
+                    name=f"object:{object_id}",
+                    style=SurfaceStyle(colour=self._object_colour),
+                )
+            shot.set_background(self.renderer.background())
             # Dieselbe Blickrichtung wie im Fenster — ein Bild aus einer
             # anderen Richtung beantwortete die Frage nicht, die es stellt.
-            shot.camera_position = self.plotter.camera_position
-            # ``transparent_background=False`` macht die Drei-Kanal-Annahme
-            # darunter zur **Zusage**: Die globale Theme-Einstellung könnte
-            # sonst vier Kanäle liefern, und dann stimmte die Zeilenlänge nicht.
-            raster = shot.screenshot(transparent_background=False, return_img=True)
+            shot.set_camera_pose(self.renderer.camera_pose())
+            raster = shot.screenshot()
         except Exception:  # pragma: no cover - Treiberlaunen, kein Programmfehler
-            # Ein Bild, das nicht entsteht, darf keinen Fehlerbericht
-            # verhindern — der Bogen ist dann eben ohne Bildmitte, statt gar
-            # nicht abzugehen.
             _log.warning("the viewport could not render itself for a screenshot")
             return None
         finally:
@@ -10575,8 +9895,8 @@ class Viewport(QWidget):
         # ``copy`` ist Pflicht, nicht Vorsicht: ``QImage`` **borgt** den Puffer,
         # und ``raw`` fällt beim Verlassen dieser Funktion weg. Ohne die Kopie
         # zeigte das zurückgegebene Bild auf freigegebenen Speicher.
-        raw = raster[:, :, :3].tobytes()
-        return QImage(raw, width, height, width * 3, QImage.Format.Format_RGB888).copy()
+        raw_bytes = np.ascontiguousarray(raster[:, :, :3]).tobytes()
+        return QImage(raw_bytes, width, height, width * 3, QImage.Format.Format_RGB888).copy()
 
     def pixels_per_mm(self, frame: PlaneFrame) -> float:
         """Wie viele Bildpunkte ein Millimeter auf dieser Ebene gerade misst.
@@ -10593,7 +9913,7 @@ class Viewport(QWidget):
         gerade gilt. Ein Kehrwert aus ``parallel_scale`` wäre die halbe
         Antwort und bei perspektivischer Ansicht die falsche.
 
-        Null kommt nie zurück: Ohne Plotter oder bei entarteter Projektion
+        Null kommt nie zurück: Ohne Renderer oder bei entarteter Projektion
         steht der Startwert der Zeichenfläche, und der ist eine brauchbare
         Vorgabe statt einer Division durch null.
         """
@@ -10612,17 +9932,15 @@ class Viewport(QWidget):
         Projektion daran ist keine Aussage über das Bild, das der Nutzer sieht.
         Siehe :data:`LEAST_VIEW_PIXELS`.
 
-        Null kommt nie zurück: Ohne Plotter oder bei entarteter Projektion
+        Null kommt nie zurück: Ohne Renderer oder bei entarteter Projektion
         steht :data:`FALLBACK_SCALE`, und der ist eine brauchbare Vorgabe statt
         einer Division durch null.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return FALLBACK_SCALE
-        interactor = getattr(self.plotter, "interactor", None)
-        if interactor is not None:
-            size = interactor.size()
-            if min(size.width(), size.height()) < LEAST_VIEW_PIXELS:
-                return FALLBACK_SCALE
+        width, height = self.renderer.view_size()
+        if min(width, height) < LEAST_VIEW_PIXELS:
+            return FALLBACK_SCALE
         first = self._display_of(here)
         second = self._display_of(there)
         if first is None or second is None:
@@ -10670,8 +9988,9 @@ class Viewport(QWidget):
         Schwenken erhalten bleibt.
 
         **Mit einer Untergrenze, und die ist kein Zierat.** In einem leeren
-        Fenster hat ``reset_camera`` nie stattgefunden, und pyvista startet mit
-        einer Kamera 1,62 Einheiten vor dem Ursprung. Diesen Abstand treu zu
+        Fenster hat ``reset_camera`` nie stattgefunden, und die Startkamera
+        steht dicht vor dem Ursprung (unter PyVista gemessen: 1,62 Einheiten).
+        Diesen Abstand treu zu
         übernehmen hieße, aus 1,6 Millimetern auf die Zeichenebene zu sehen:
         gemessen 918 Bildpunkte je Millimeter, ein Raster von 0,1 mm und ein
         Bild, in dem nichts von dem steht, was man zeichnet.
@@ -10681,12 +10000,10 @@ class Viewport(QWidget):
         beginnt. Mit geladenem Teil ist die Kamera längst eingepasst und die
         Grenze wirkungslos.
         """
-        camera = getattr(self.plotter, "camera", None) if self.plotter else None
-        position = getattr(camera, "position", None)
-        focus = getattr(camera, "focal_point", None)
-        if position is None or focus is None:
+        if self.renderer is None:
             return LEAST_PLANE_DISTANCE
-        span = math.dist(tuple(position), tuple(focus))
+        pose = self.renderer.camera_pose()
+        span = math.dist(pose.position, pose.focal_point)
         return max(span, LEAST_PLANE_DISTANCE)
 
     # --- navigation (§2.9) ------------------------------------------------------
@@ -10705,7 +10022,7 @@ class Viewport(QWidget):
         Kunden — und der Flug beginnt sofort statt nach der halben Sekunde, die
         das System vor der ersten Wiederholung wartet.
         """
-        if self._scheme != "solidon" or self.plotter is None:
+        if self._scheme != "solidon" or self.renderer is None:
             super().keyPressEvent(event)
             return
         axes = FLIGHT_KEYS.get(event.text().lower())
@@ -10770,7 +10087,7 @@ class Viewport(QWidget):
         und eine feste Zeitspanne machte die Bewegung dann langsamer statt
         gleich schnell. Dasselbe Vorgehen wie bei der 3D-Maus.
         """
-        if not self._flying or self.plotter is None:
+        if not self._flying or self.renderer is None:
             self._stop_flying()
             return
         seconds = self._flight_clock.restart() / 1000.0
@@ -10797,11 +10114,12 @@ class Viewport(QWidget):
         Dessen ``speed`` ist ein Faktor auf ``PAN_RATE``, nicht selbst eine
         Strecke. Eine Zahl, die man lesen kann, ohne die Kappe zu kennen.
         """
-        from app.ui.spacemouse import PAN_RATE, CameraPose, Motion, camera_step
+        from app.ui.spacemouse import PAN_RATE, Motion, camera_step
+        from app.ui.spacemouse import CameraPose as MousePose
 
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        pose = CameraPose(*self.camera_pose())
+        pose = MousePose(*self.camera_pose())
         # ``Motion`` führt neben den sechs Achsen die Tastenmaske als
         # ``int``; die Aufweitung eines ``dict[str, float]`` passt für mypy
         # deshalb nicht auf die Signatur. Gebaut wird darum aus den Achsen.
@@ -10840,11 +10158,12 @@ class Viewport(QWidget):
         eine Bewegung über die halbe Fensterhöhe die Ansicht etwa eine
         Vierteldrehung kippt.
         """
-        from app.ui.spacemouse import CameraPose, Motion, camera_step
+        from app.ui.spacemouse import CameraPose as MousePose
+        from app.ui.spacemouse import Motion, camera_step
 
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        pose = CameraPose(*self.camera_pose())
+        pose = MousePose(*self.camera_pose())
         turned = camera_step(pose, Motion(rx=step * TILT_PER_PIXEL), TILT_STEP_SECONDS)
         if turned is pose:
             return
@@ -10852,81 +10171,15 @@ class Viewport(QWidget):
         self.cameraMoved.emit()
 
     def set_navigation(self, scheme: NavigationScheme) -> None:
-        """Slicer-Gewohnheit als Vorgabe; CAD und Blender als Alternativen.
-
-        Die Vorgabe folgt dem, was die meisten ohnehin benutzen: links wählt,
-        rechts oder Mitte dreht, Umschalt und Ziehen schiebt, das Rad zoomt auf
-        den Zeiger.
-        """
+        """Das Navigationsschema (§2.9) setzen — am Navigator, der die Kamera
+        führt. Die Griffe haben Vorfahrt, siehe :meth:`_on_pointer`."""
         self._scheme = scheme
-        if self.plotter is None:
+        if self.renderer is None:
             return
-        calls = _weak_callbacks(self)
-        style = _InteractorStyle(
-            self.plotter,
-            scheme,
-            calls.on_context,
-            calls.on_pick,
-            calls.on_cursor,
-            on_paint=calls.on_paint,
-            is_sculpting=calls.is_sculpting,
-            on_body_drag=calls.on_body_drag,
-            on_rotate_start=calls.on_rotate_start,
-            on_camera=calls.on_camera,
-            on_tilt=calls.on_tilt,
-        )
-        # **pyvistas Widgets suchen ihren Renderer über den Stil**, und zwar
-        # als ``GetInteractorStyle()._parent()._plotter``. Ein eigener Stil hat
-        # dieses Attribut nicht: Bei jeder Mausbewegung über dem Bewegen-Griff
-        # brach ``AffineWidget3D._move_callback`` mit ``AttributeError:
-        # 'Style' object has no attribute '_parent'`` ab, und pyvistaqt machte
-        # daraus eine Warnung, die niemand sieht.
-        #
-        # Der Preis war nicht nur die Farbe: Derselbe Rückruf setzt
-        # ``_selected_actor``, und ohne den tut ``_press_callback`` gar nichts
-        # — der Griff war **nicht greifbar**. Robert am 03.09.2026: „bei
-        # bewegen geht das drehen des modells nicht nur das normale
-        # verschieben was auch so geht"; das normale Verschieben ist unsere
-        # eigene Zuggeste am Körper und ging deshalb weiter.
-        #
-        # Dass pyvista diesen Weg geht, stand seit je im Docstring von
-        # :func:`_InteractorStyle` — für ``enable_point_picking``, das wir
-        # deshalb selbst gebaut haben. Der zweite Fall derselben Sache hat
-        # zwei Monate gewartet.
-        style._parent = weakref.ref(self.plotter.iren)
-        # **Über pyvistas Eigenschaft und nicht am Interactor vorbei.** Das
-        # ist der Unterschied zwischen „unser Stil hängt dran" und „unser Stil
-        # ist der, den pyvista für den seinen hält", und er entscheidet über
-        # die ganze Bedienung der Ansicht.
-        #
-        # ``SetInteractorStyle`` hängt ihn an und sagt es pyvista nicht.
-        # Dessen ``RenderWindowInteractor`` führt daneben ``_style_class`` und
-        # setzt es bei jeder Gelegenheit wieder durch (``update_style``) — und
-        # eine dieser Gelegenheiten ist der **Doppelklick**: pyvista meldet
-        # ``_toggle_chart_interaction`` als Rückruf für zwei schnelle
-        # Linksklicks an, immer, auch ohne ein einziges Diagramm in der Szene.
-        # Der Rückruf findet keines, ruft ``_set_context_style(None)``, und
-        # das endet mit ``update_style()``.
-        #
-        # Genau das trifft die gestufte Auswahl (§18.5) ins Herz: Erst der
-        # Körper, dann das Merkmal darin heißt **zwei Klicks auf dieselbe
-        # Stelle**, und zwei Klicks auf dieselbe Stelle sind ein Doppelklick.
-        # Wer eine Bohrung anwählte, verlor damit im selben Moment den Stil —
-        # und mit ihm die Auswahl, das Kontextmenü, die Abwahl durch einen
-        # Klick ins Leere und das gewählte Navigationsschema. Danach fuhr die
-        # Ansicht mit VTKs Trackball: links dreht, nichts wählt aus. „Die neue
-        # Steuerung ist nicht vorgewählt" (Robert, 04.09.2026) war dieselbe
-        # Sache von vorn gesehen.
-        #
-        # Über die Eigenschaft gesetzt zeigt ``_style_class`` auf **uns**;
-        # dieselbe Zeile, die vorher den Stil wegnahm, setzt ihn jetzt wieder.
-        # Der Griff (:meth:`set_gizmo`) braucht seinen ``set_navigation``-Ruf
-        # trotzdem weiter: ``enable_trackball_style`` tauscht das Feld selbst
-        # aus, statt es nur erneut durchzusetzen.
-        self.plotter.iren.style = style
-        # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
-        # sonst noch einzuschalten wäre, steht dort.
-        self._enable_picking()
+        if self._navigator is None:
+            self._navigator = Navigator(self.renderer, scheme, _weak_callbacks(self))
+        else:
+            self._navigator.set_scheme(scheme)
 
     def _on_right_click(self, x: int, y: int) -> None:
         """Ein Rechtsklick wählt aus und fragt nach dem Menü — und **ohne
@@ -11007,47 +10260,24 @@ class Viewport(QWidget):
         return True
 
     def _world_at(self, x: int, y: int) -> Vec3 | None:
-        """Der Punkt auf dem Körper unter einer Bildschirmposition.
+        """Der Weltpunkt unter einem Bildpunkt — auf einem Körper, sonst nichts.
 
-        VTK zählt von unten, Qt von oben — umgerechnet wird beim Aufrufer, denn
-        hier kommt die Position aus dem Interactor und ist schon in VTKs
-        Zählung.
-
-        Gepickt wird die **Zelle** und nicht der Punkt. Ein ``vtkPointPicker``
-        trifft nur Eckpunkte: der Halter aus dem Beispielprojekt hat acht davon,
-        und ein Klick mitten auf eine Fläche fand nichts. Auswählen,
-        Kontextmenü am Merkmal (§18.5), Messen und Bemalen hingen alle daran und
-        taten nichts — nachgestellt an der laufenden Anwendung, während Rad und
-        Rechtsziehen die Kamera bewegten. Ein ``vtkCellPicker`` trifft das
-        Dreieck und damit jede Stelle, auf die jemand zeigen kann.
+        **Gesucht wird nur unter den Körpern.** Ein Zell-Picker trifft alles,
+        was im Bild steht, und im Bild steht mehr als die Szene: die Pfeile
+        des Bewegungsgriffs, sein Skalierwürfel, Marken, Schatten, das Bett.
+        Mit eingeschaltetem Griff traf ein Klick auf eine Bohrung dessen
+        Pfeil, und die Bohrung liess sich nicht mehr auswählen (Robert,
+        03.09.2026). Die Liste bleibt leer, wenn es keine Körper gibt
+        (Skizzenmodus, leeres Projekt); dann pickt der Renderer über die ganze
+        Szene. Die Toleranz ist ein Anteil der Bilddiagonale: VTKs Vorgabe ist
+        so klein, dass ein Klick an einer Kante wieder danebengeht.
         """
-        if self.plotter is None:
+        if self.renderer is None:
             return None
-        from vtkmodules.vtkRenderingCore import vtkCellPicker
-
-        picker = vtkCellPicker()
-        # Die Toleranz ist ein Anteil der Bilddiagonale; die Vorgabe von VTK
-        # ist so klein, dass ein Klick an einer Kante wieder danebengeht.
-        picker.SetTolerance(PICK_TOLERANCE)
-        # **Gesucht wird nur unter den Körpern.** Ein Zell-Picker trifft alles,
-        # was im Bild steht, und im Bild steht mehr als die Szene: die Pfeile
-        # des Bewegungsgriffs, sein Skalierwürfel, Marken, Schatten, das Bett.
-        # Mit eingeschaltetem Griff traf ein Klick auf eine Bohrung dessen
-        # Pfeil, und die Bohrung liess sich nicht mehr auswählen (Robert,
-        # 03.09.2026) — gemessen am laufenden Fenster: Griff aus ``hole_1``,
-        # Griff an **nichts**.
-        #
-        # Die Liste bleibt leer, wenn es keine Körper gibt (Skizzenmodus,
-        # leeres Projekt); dann pickt VTK wie zuvor über die ganze Szene, denn
-        # ``PickFromListOn`` mit leerer Liste träfe nie etwas.
-        for actor in self._actors.values():
-            picker.AddPickList(actor)
-        if self._actors:
-            picker.PickFromListOn()
-        if not picker.Pick(float(x), float(y), 0.0, self.plotter.renderer):
-            return None
-        position = picker.GetPickPosition()
-        return (float(position[0]), float(position[1]), float(position[2]))
+        hit = self.renderer.pick_surface(
+            x, y, among=list(self._actors.values()) or None, tolerance=PICK_TOLERANCE
+        )
+        return hit.point if hit is not None else None
 
     # --- den gewählten Körper direkt ziehen (§18.11) ---------------------------
 
@@ -11067,7 +10297,7 @@ class Viewport(QWidget):
         Modus mit anderem Namen:** Wer die Ansicht drehen will, dürfte nicht
         erst wegklicken müssen.
         """
-        point = self._world_at(x, y) if self.plotter is not None else None
+        point = self._world_at(x, y) if self.renderer is not None else None
         return self.begin_body_drag_at(point)
 
     def can_drag_body_at(self, point: Vec3 | None) -> bool:
@@ -11138,14 +10368,14 @@ class Viewport(QWidget):
             actor = self._actors.get(identifier)
             if actor is None:
                 continue
-            base = self._actor_home.setdefault(identifier, tuple(actor.GetPosition()))
-            actor.SetPosition(
-                base[0] + self._body_drag_offset[0], base[1] + self._body_drag_offset[1], base[2]
+            base = self._actor_home.setdefault(identifier, actor.position())
+            actor.set_position(
+                (base[0] + self._body_drag_offset[0], base[1] + self._body_drag_offset[1], base[2])
             )
             moved = True
         # Ein Bildaufbau für alle, nicht einer je Körper.
-        if moved and self.plotter is not None:
-            self.plotter.render()
+        if moved and self.renderer is not None:
+            self.renderer.render()
 
     def finish_body_drag(self) -> None:
         """Aus dem Zug wird ein Schritt im Verlauf — oder gar nichts.
@@ -11235,20 +10465,14 @@ class Viewport(QWidget):
         return self._pull_from is not None
 
     def _display_of(self, world: Sequence[float]) -> tuple[float, float] | None:
-        """Wo ein Weltpunkt im Bild liegt — in VTKs Zählung, von unten.
-
-        **Nicht** :meth:`sketch_screen_at`: Das rechnet in Qt-Logikpunkte um,
-        weil es ein Qt-Kind platziert. Hier wird gegen die Stelle eines
-        Mausereignisses verglichen, und die kommt aus dem Interactor, also in
-        Bildpunkten des Geräts und von unten gezählt.
-        """
-        if self.plotter is None:
+        """Ein Weltpunkt im Bild — in Gerätepixeln, gezählt wie Qt (oben links),
+        oder nichts ohne Bild."""
+        if self.renderer is None:
             return None
-        renderer = self.plotter.renderer
-        renderer.SetWorldPoint(float(world[0]), float(world[1]), float(world[2]), 1.0)
-        renderer.WorldToDisplay()
-        spot = renderer.GetDisplayPoint()
-        return (float(spot[0]), float(spot[1]))
+        x, y, _depth = self.renderer.world_to_display(
+            (float(world[0]), float(world[1]), float(world[2]))
+        )
+        return (x, y)
 
     def grip_reach(self, x: int, y: int) -> float:
         """Wie weit diese Bildstelle vom Umriss der Zeichnung entfernt ist.
@@ -11565,10 +10789,10 @@ class Viewport(QWidget):
         """Legt die Drahtform des Zugs in die Szene — oder nimmt sie weg."""
         actors = tuple(self._pull_actors)
         self._pull_actors.clear()
-        if self.plotter is None:
+        if self.renderer is None:
             return
         for actor in actors:
-            self.plotter.remove_actor(actor, render=False)
+            self.renderer.remove(actor)
         segments = (
             pull_cage(self._pull_frame(), self._sketch_curves, self._pull_height)
             if self._sketch_frame is not None
@@ -11579,19 +10803,11 @@ class Viewport(QWidget):
             return
 
         import numpy as np
-        import pyvista as pv
 
         points = np.asarray([end for pair in segments for end in pair], dtype=float)
-        spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
         self._pull_actors.append(
-            self.plotter.add_mesh(
-                pv.PolyData(points, lines=spans),
-                color=self._sketch_colour,
-                line_width=2,
-                name="sketch_pull",
-                render=False,
-                reset_camera=False,
-                pickable=False,
+            self.renderer.add_lines(
+                points, name="sketch_pull", colour=self._sketch_colour, width=2.0
             )
         )
         # Die Maßkarte am oberen Rand der Drahtform — dieselbe Karte, die die
@@ -11601,23 +10817,19 @@ class Viewport(QWidget):
             extreme = along.max() if self._pull_height >= 0.0 else along.min()
             rim = points[np.abs(along - extreme) <= EPS_GEOM]
             self._pull_actors.append(
-                self.plotter.add_point_labels(
+                self.renderer.add_labels(
                     np.asarray([rim.mean(axis=0)]),
                     [length(abs(self._pull_height))],
-                    text_color=self._sketch_label_colour,
-                    font_size=10,
-                    bold=True,
-                    show_points=False,
-                    shape="rounded_rect",
-                    shape_color=self._sketch_label_background,
-                    fill_shape=True,
-                    margin=5,
-                    shape_opacity=0.94,
-                    always_visible=True,
                     name="sketch_pull_measure",
-                    render=False,
-                    reset_camera=False,
-                    pickable=False,
+                    style=LabelStyle(
+                        text_colour=self._sketch_label_colour,
+                        font_size=10,
+                        bold=True,
+                        always_visible=True,
+                        background=self._sketch_label_background,
+                        background_opacity=0.94,
+                        margin=5,
+                    ),
                 )
             )
         self._draw()
@@ -11698,7 +10910,7 @@ class Viewport(QWidget):
         for object_id, home in self._actor_home.items():
             actor = self._actors.get(object_id)
             if actor is not None:
-                actor.SetPosition(*home)
+                actor.set_position(home)
         self._actor_home.clear()
 
     def _plane_point(self, x: int, y: int) -> tuple[float, float] | None:
@@ -11748,7 +10960,7 @@ class Viewport(QWidget):
         # ausblendet, nimmt dem Kunden die Auskunft dort, wo sie am meisten
         # wert ist.
         for actor in self._ground_actors:
-            actor.SetVisibility(frame is None and self._bed_visible)
+            actor.set_visible(frame is None and self._bed_visible)
         # **Der Körper ist Zusammenhang, nicht Zeichenfläche.** 45 %
         # Deckkraft ließen im Handbuchbild selbst eine eingeprägte Schrift
         # lauter erscheinen als die weiße Skizze. Beim Eintritt wird der
@@ -11761,9 +10973,9 @@ class Viewport(QWidget):
             else float(DISPLAY_MODES[self._mode]["opacity"])
         )
         for actor in self._actors.values():
-            actor.prop.opacity = opacity
+            actor.set_opacity(opacity)
         for actor in self._shadow_actors:
-            actor.SetVisibility(frame is None)
+            actor.set_visible(frame is None)
         self._apply_selection_colour()
         # Und ein Zug am Ziehgriff endet mit der Ebene, auf der er begann —
         # aus demselben Grund wie die Marke darüber.
@@ -11819,22 +11031,13 @@ class Viewport(QWidget):
             self._sketch_gesture = None
 
     def sketch_screen_at(self, point: tuple[float, float]) -> QPoint | None:
-        """Wo eine Stelle der Zeichenebene im Bild liegt — in Qt-Logikpunkten.
-
-        Die Umkehrung von :meth:`_sketch_hit`, für das verliehene Maßfeld:
-        Es liegt als Qt-Kind über der Ansicht und braucht deren Koordinaten.
-        ``None``, wenn es kein Bild gibt oder keine Ebene steht.
-        """
-        if self.plotter is None or self._sketch_frame is None:
+        """Ein Zeichenpunkt als Logikpunkt des Fensters — für ein Menü oder ein
+        Feld an genau dieser Stelle."""
+        if self.renderer is None or self._sketch_frame is None:
             return None
-        world = to_world(self._sketch_frame, point)
-        renderer = self.plotter.renderer
-        renderer.SetWorldPoint(world[0], world[1], world[2], 1.0)
-        renderer.WorldToDisplay()
-        display = renderer.GetDisplayPoint()
-        ratio = float(self.plotter.interactor.devicePixelRatioF()) or 1.0
-        height = float(self.plotter.interactor.height())
-        return QPoint(int(display[0] / ratio), int(height - display[1] / ratio))
+        x, y, _depth = self.renderer.world_to_display(to_world(self._sketch_frame, point))
+        ratio = self._device_ratio()
+        return QPoint(int(x / ratio), int(y / ratio))
 
     def _sketch_hit(self, x: int, y: int) -> tuple[float, float] | None:
         """Wo der Sichtstrahl durch diese Bildstelle die Zeichenebene trifft.
@@ -11893,22 +11096,6 @@ class Viewport(QWidget):
             return
         self._on_picked(point)
 
-    def _enable_picking(self) -> None:
-        """Nichts mehr zu tun — der eigene Stil löst das Picking selbst aus.
-
-        Vorher stand hier ``plotter.enable_point_picking``. Das hat nie
-        funktioniert und es auch nie gesagt: pyvista sucht sich den Renderer
-        über ``GetInteractorStyle()._parent()``, also über seinen eigenen Stil,
-        und Solidon setzt einen eigenen für die vier Navigationsschemata.
-        Jeder Klick endete in einem ``AttributeError``, den pyvistaqt zu einer
-        Warnung macht — im Fenster sah es aus, als käme der Klick nicht an, und
-        genau so stand es in zwei Durchsichten.
-
-        Die Methode bleibt als Ort für den Fall, dass doch wieder etwas beim
-        Wechsel des Schemas einzuschalten ist; gerufen wird sie von dort.
-        """
-        return
-
     @property
     def navigation(self) -> NavigationScheme:
         return self._scheme
@@ -11921,7 +11108,7 @@ def _ring_points(centre: Any, normal: Any, radius: float, count: int = 48) -> An
     sagt nichts darüber, wie schräg die Stelle unter ihm steht — und schräg ist
     beim Formen der Normalfall.
 
-    Als eigene Funktion, damit die Rechnung ohne Plotter prüfbar bleibt.
+    Als eigene Funktion, damit die Rechnung ohne Renderer prüfbar bleibt.
     """
     import numpy as np
 
@@ -11946,103 +11133,19 @@ def _ring_points(centre: Any, normal: Any, radius: float, count: int = 48) -> An
     )
 
 
-def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | None:
-    """Der Weltpunkt unter einer Bildschirmstelle, auf der Fokusebene.
-
-    Auf der Fokusebene und nicht auf der Geometrie: gezoomt wird auch über
-    leerem Hintergrund, und dort gäbe ein Picker nichts zurück.
-    """
-    camera = renderer.GetActiveCamera()
-    renderer.SetWorldPoint(*camera.GetFocalPoint(), 1.0)
-    renderer.WorldToDisplay()
-    return _world_at_depth(renderer, x, y, renderer.GetDisplayPoint()[2])
-
-
-def _world_at_depth(
-    renderer: Any, x: int, y: int, depth: float
-) -> tuple[float, float, float] | None:
-    """Der Weltpunkt hinter einer Bildschirmstelle in dieser Bildtiefe.
-
-    ``depth`` ist die Tiefe, in der VTK sein Bild aufspannt: 0 ist die nahe,
-    1 die ferne Ebene. Zwei Punkte daraus sind der Sichtstrahl
-    (:meth:`Viewport._pick_ray`), einer auf der Fokusebene ist der Ort unter
-    dem Zeiger (:func:`_world_under`).
-    """
-    renderer.SetDisplayPoint(float(x), float(y), float(depth))
-    renderer.DisplayToWorld()
-    point = renderer.GetWorldPoint()
-    if abs(point[3]) < EPS_GEOM:
-        return None
-    return (point[0] / point[3], point[1] / point[3], point[2] / point[3])
-
-
 def _triangle_faces(count: int) -> Any:
-    """Die Dreiecksliste für ``count`` Dreiecke mit je eigenen Eckpunkten.
-
-    Das Format, das ``pv.PolyData`` erwartet: je Dreieck die Zahl 3 und danach
-    seine drei Punktindizes, alles in einem flachen Feld. Weil die Punkte je
-    Dreieck eigene sind (siehe :meth:`Viewport._lifted_corners`), zählen die
-    Indizes einfach durch.
-
-    Stand bis zum 04.09.2026 viermal wortgleich in dieser Datei.
-    """
-    import numpy as np
-
-    return np.hstack(
-        [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]
-    ).ravel()
+    """Die Dreiecksliste für ``count`` Dreiecke mit je eigenen Eckpunkten —
+    das Gegenstück zu :meth:`Viewport._lifted_corners`, das jede Ecke je
+    Dreieck einzeln hinlegt."""
+    return shapes.triangle_soup(count)
 
 
-def apply_wheel_zoom(camera: Any, factor: float) -> None:
-    """Ein Radschritt an der Kamera — in **beiden** Projektionen.
+def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
+    """Die Rückrufe der Ansicht an den Navigator — alle über ``weakref``.
 
-    ``vtkCamera.Dolly`` bewegt nur die Position, und in der Parallelprojektion
-    bestimmt allein ``parallel_scale`` die Bildgröße — die Position ist ihr
-    gleichgültig. Das Rad war damit überall tot, wo orthografisch gearbeitet
-    wird, im Skizzenmodus also immer (§30.1 stellt dort orthografisch):
-    gemessen am 26.08.2026, acht Radschritte, Bild byteweise unverändert.
-    VTKs eigener Trackball-Dolly (rechte Taste im CAD-Schema) trägt dieselbe
-    Fallunterscheidung — nur der direkte ``Dolly``-Aufruf trug sie nicht.
-
-    Eine freie Funktion aus demselben Grund wie :func:`sketch_grid`:
-    Offscreen gibt es keinen Plotter, und was hinter dieser Wache gerechnet
-    wird, prüft in der Suite niemand mehr.
-    """
-    if camera.GetParallelProjection():
-        camera.SetParallelScale(camera.GetParallelScale() / factor)
-    else:
-        camera.Dolly(factor)
-
-
-class _ViewCallbacks(NamedTuple):
-    """Die Rückrufe, die der Interaktionsstil von der Ansicht bekommt."""
-
-    on_context: Callable[[int, int], None]
-    on_pick: Callable[[int, int], None]
-    on_cursor: Callable[[str | None], None]
-    on_paint: Callable[[int, int, bool], None]
-    is_sculpting: Callable[[], bool]
-    on_body_drag: Callable[[str, int, int], bool]
-    on_rotate_start: Callable[[], None]
-    on_camera: Callable[[], None]
-    on_tilt: Callable[[int], None]
-
-
-def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
-    """Rückrufe an die Ansicht, die sie **nicht** am Leben halten.
-
-    Schwach gehalten, mit Absicht: VTK hält den Stil, der Stil hielte sonst den
-    Viewport, und der hält den Plotter, der den Interactor hält. Diese Schleife
-    überlebt jedes Schließen — der Speicherbereiniger räumt sie später ab, und
-    dann steht ein C++-Objekt hinter einer Python-Referenz, die es nicht mehr
-    gibt. Das ist der Absturz ohne Zeile, den die Suite als Access Violation am
-    Ende eines Laufs zeigt.
-
-    **Als eigene Funktion, damit die Aussage prüfbar ist.** Sie stand in
-    ``set_navigation`` hinter dem Plotter-Zweig und lief damit offscreen nie:
-    Die einzige Vorkehrung gegen den bekanntesten Absturz des Projekts war die
-    einzige, die kein Test erreichte. Hier braucht sie kein VTK — der Stil
-    schon, die Rückrufe an ihn nicht (§35).
+    Der Navigator hängt am Renderer, der Renderer an der Ansicht; ein starker
+    Rückruf schlösse den Ring, und der ist der Absturz ohne Zeile am Ende
+    eines Laufs. Jeder Rückruf fragt erst, ob die Ansicht noch lebt.
     """
     weak = weakref.ref(view)
 
@@ -12071,20 +11174,17 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         return found is not None and found._sculpting
 
     def on_body_drag(phase: str, x: int, y: int) -> bool:
-        """Beginn, Fortgang und Ende eines Zugs am gewählten Körper.
+        """Der Körperzug in vier Phasen — ``ready``, ``start``, ``move``, ``end``.
 
-        Eine Funktion für drei Schritte statt drei Rückrufe: Der Stil hält sie
-        schwach, und drei schwache Verweise auf dieselbe Ansicht sind dreimal
-        dieselbe Prüfung auf ``None``.
+        **Im Skizzenmodus zieht dieselbe Geste eine Höhe** (§30.1). Derselbe
+        Rückruf und keine zweite Zustandsmaschine daneben: Drücken, Schwelle,
+        Ziehen, Loslassen sind hier wie dort dieselben vier Schritte, und zwei
+        Schwellen für „ist das ein Klick oder ein Zug" wären das Loch, das der
+        Körperzug schon einmal hatte.
         """
         found = weak()
         if found is None:
             return False
-        # **Im Skizzenmodus zieht dieselbe Geste eine Höhe** (§30.1). Derselbe
-        # Rückruf und keine zweite Zustandsmaschine daneben: Drücken, Schwelle,
-        # Ziehen, Loslassen sind hier wie dort dieselben vier Schritte, und zwei
-        # Schwellen für „ist das ein Klick oder ein Zug" wären das Loch, das der
-        # Körperzug schon einmal hatte.
         if found._sketch_frame is not None:
             if phase == "ready":
                 found._sketch_gesture = None
@@ -12141,7 +11241,7 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         if phase == "ready":
             # Nur die Frage, ob hier der gewählte Körper liegt — der Zug
             # beginnt erst, wenn die Bewegung die Klickschwelle verlässt.
-            world_point = found._world_at(x, y) if found.plotter is not None else None
+            world_point = found._world_at(x, y) if found.renderer is not None else None
             return found.can_drag_body_at(world_point)
         if phase == "start":
             return found.begin_body_drag(x, y)
@@ -12157,8 +11257,7 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
             found._aim_rotation()
 
     def on_camera() -> None:
-        # Der Radzoom läuft am Interactor-Ereignis vorbei (kein
-        # ``EndInteractionEvent``) — dieser Rückruf ist sein Meldeweg.
+        # Der Radzoom endet ohne Zugende — dieser Rückruf ist sein Meldeweg.
         found = weak()
         if found is not None:
             found.cameraMoved.emit()
@@ -12168,7 +11267,16 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         if found is not None:
             found.tilt_camera(step)
 
-    return _ViewCallbacks(
+    def on_end() -> None:
+        # Dreh-, Kipp- und Schiebezüge enden hier: nahe Hauptansicht
+        # einrasten, Schatten nachziehen, die Bewegung melden.
+        found = weak()
+        if found is not None:
+            found._settle_sketch_view()
+            found._redraw_shadows()
+            found.cameraMoved.emit()
+
+    return NavigatorCallbacks(
         on_context,
         on_pick,
         on_cursor,
@@ -12178,353 +11286,5 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         on_rotate_start,
         on_camera,
         on_tilt,
+        on_end,
     )
-
-
-def _InteractorStyle(  # noqa: N802
-    plotter: Any,
-    scheme: NavigationScheme,
-    on_context: Any = None,
-    on_pick: Any = None,
-    on_cursor: Any = None,
-    on_paint: Any = None,
-    on_tilt: Any = None,
-    is_sculpting: Any = None,
-    on_body_drag: Any = None,
-    on_rotate_start: Any = None,
-    on_camera: Any = None,
-) -> Any:
-    """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
-
-    ``on_pick`` bekommt einen Linksklick, der keiner Kamerabewegung galt. Das
-    steht hier und nicht bei pyvista, und dafür gibt es einen Grund: dessen
-    ``enable_point_picking`` sucht sich den Renderer über
-    ``GetInteractorStyle()._parent()``, also über seinen **eigenen** Stil. Mit
-    diesem hier scheiterte es bei jedem Klick an einem ``AttributeError``, den
-    pyvistaqt zu einer Warnung macht — die Auswahl im Viewport hat deshalb nie
-    funktioniert, und im Fenster sah es aus, als käme der Klick nicht an.
-    """
-    from vtkmodules.vtkInteractionStyle import vtkInteractorStyleTrackballCamera
-
-    base = vtkInteractorStyleTrackballCamera
-
-    class Style(base):  # type: ignore[misc, valid-type]
-        def __init__(self) -> None:
-            super().__init__()
-            self.AddObserver("LeftButtonPressEvent", self._left_down)
-            self.AddObserver("LeftButtonReleaseEvent", self._left_up)
-            self.AddObserver("RightButtonPressEvent", self._right_down)
-            self.AddObserver("RightButtonReleaseEvent", self._right_up)
-            # **Die mittlere Taste hatte gar keinen Beobachter**, und zwei
-            # Schemata versprechen sie im Namen: „Wie im CAD — mittlere Taste
-            # dreht" und „Wie in Blender". Wer aus einem CAD kam, drückte das
-            # Rad und es geschah nichts.
-            self.AddObserver("MiddleButtonPressEvent", self._middle_down)
-            self.AddObserver("MiddleButtonReleaseEvent", self._middle_up)
-            self.AddObserver("MouseWheelForwardEvent", self._wheel_in)
-            self.AddObserver("MouseWheelBackwardEvent", self._wheel_out)
-            self.AddObserver("MouseMoveEvent", self._mouse_move)
-            self._painting = False
-            """Ob die linke Taste gerade malt statt die Kamera zu führen.
-            Nur im Formzustand, und nur ohne Umschalt — schieben muss auch
-            mitten in der Sitzung gehen."""
-            self._right_at: tuple[int, int] | None = None
-            """Wo die rechte Taste heruntergegangen ist. In jedem Schema tut
-            Rechts auch etwas an der Kamera — das Menü darf nur aufgehen, wenn
-            niemand gezogen hat."""
-            self._left_at: tuple[int, int] | None = None
-            """Dasselbe für links. In drei der vier Schemata dreht die linke
-            Taste; ausgewählt wird deshalb, wo niemand gezogen hat, und nicht
-            danach, welches Schema gerade gilt."""
-            self._ready_to_drag = False
-            """Ob die linke Taste **auf** dem gewählten Körper heruntergegangen
-            ist. Noch keine Entscheidung: Erst die Bewegung sagt, ob daraus ein
-            Zug wird oder ein Klick."""
-            self._dragging_body = False
-            """Ob der Zug tatsächlich läuft — also die Klickschwelle
-            überschritten wurde."""
-            self._tilt_at: tuple[int, int] | None = None
-            """Wo der Zeiger beim letzten Kippschritt stand.
-
-            Das Kippen rechnet die Anwendung selbst (siehe ``on_tilt``), und
-            zwar schrittweise: Gemeldet wird die Strecke seit dem letzten
-            Ereignis, nicht die seit dem Drücken — sonst wüchse der Winkel
-            quadratisch mit der Bewegung."""
-            self._turn_at: tuple[int, int] | None = None
-            """Wo der Zeiger beim letzten Drehschritt stand.
-
-            Dasselbe Muster wie beim Kippen darüber, und aus demselben Grund:
-            Gedreht wird in der Anwendung (:func:`turntable_camera`), damit die
-            Ansicht aufrecht bleibt. **Eine überschriebene ``Rotate``-Methode
-            hätte das nicht getan** — VTKs ``OnMouseMove`` ist C++ und ruft
-            seine eigene, nicht die einer Python-Unterklasse. Gemessen am
-            laufenden Fenster: mit Überschreibung 35,8 Grad Schräglage nach
-            zwölf Zügen, also unverändert die alte Bewegung."""
-
-        def _shift(self) -> bool:
-            return bool(self.GetInteractor().GetShiftKey())
-
-        def _position(self) -> tuple[int, int]:
-            x, y = self.GetInteractor().GetEventPosition()
-            return int(x), int(y)
-
-        def _tell(self, role: str | None) -> None:
-            """Was die Kamera jetzt tut — der Zeiger hängt daran."""
-            if on_cursor is not None:
-                on_cursor(role)
-
-        def _left_down(self, *_: Any) -> None:
-            self._left_at = self._position()
-            if is_sculpting is not None and is_sculpting() and not self._shift():
-                # Malen statt Kamera (§18.11): Die Züge folgen dem gedrückten
-                # Zeiger, der erste sitzt beim Drücken. Ein Klick je Zug hieß
-                # zwanzig Klicks für einen Grat — in jedem Formprogramm ist
-                # das ein Zug. Umschalt behält die Kamera, schieben muss auch
-                # mitten in der Sitzung gehen.
-                self._painting = True
-                if on_paint is not None:
-                    on_paint(*self._left_at, True)
-                return
-            grabs = on_body_drag is not None and not self._shift()
-            if grabs and on_body_drag("ready", *self._left_at):
-                # **Auf dem gewählten Körper führt Links ihn, nicht die
-                # Kamera** (§18.11). Der Rückruf urteilt selbst und gibt
-                # ``False`` zurück, wenn dort nichts Gewähltes liegt — dann
-                # bleibt die linke Taste, was sie im jeweiligen Schema war.
-                #
-                # **Vorgemerkt, nicht gestartet.** Ob dies ein Klick oder ein
-                # Zug wird, entscheidet erst die Bewegung — und zwar an
-                # derselben Schwelle, an der auch :func:`is_click` urteilt.
-                # Zwei verschiedene Schwellen ergaben ein Loch: ``EPS_DRAG``
-                # misst 0,05 mm und entspricht je nach Zoom einem Drittel
-                # Pixel, ``CLICK_SLACK`` zehn (Qts eigene Zugschwelle).
-                # Dazwischen lag ein
-                # Klick, der den Körper um Bruchteile verschob **und** die
-                # Auswahl nicht wechselte (gemessen am 23.08.2026 an drei
-                # Pixeln Wackeln, wie es beim Klicken normal ist).
-                self._ready_to_drag = True
-                return
-            self._begin("left")
-
-        def _mouse_move(self, *_: Any) -> None:
-            if self._painting:
-                if on_paint is not None:
-                    on_paint(*self._position(), False)
-                return
-            if self._ready_to_drag or self._dragging_body:
-                now = self._position()
-                if not self._dragging_body:
-                    if is_click(self._left_at, now):
-                        # Noch im Klickbereich — hier passiert nichts, damit
-                        # ein Klick keinen Verlaufsschritt hinterlässt.
-                        return
-                    # **Von der Stelle des Drückens aus**, nicht von hier:
-                    # Sonst spränge der Körper um die zurückgelegte Strecke.
-                    if on_body_drag is None or not on_body_drag("start", *(self._left_at or now)):
-                        self._ready_to_drag = False
-                        return
-                    self._dragging_body = True
-                # **Ohne das ``return`` liefe die Kamera mit**: ``OnMouseMove``
-                # unten führt sie weiter, und der Körper wanderte vor einer
-                # Ansicht, die sich zugleich dreht.
-                if on_body_drag is not None:
-                    on_body_drag("move", *now)
-                return
-            if self._tilt_at is not None:
-                # Nur die senkrechte Strecke, und nur die seit dem letzten
-                # Ereignis. ``OnMouseMove`` bleibt aus: Sonst kippte die
-                # Anwendung und VTK drehte zugleich.
-                now = self._position()
-                step = now[1] - self._tilt_at[1]
-                self._tilt_at = now
-                if step and on_tilt is not None:
-                    on_tilt(step)
-                return
-            if self._turn_at is not None:
-                # Dasselbe für das Drehen, und aus demselben Grund: ``self``
-                # rechnet als Drehteller, VTK würde als Trackball daneben
-                # drehen. Ohne das ``return`` täten es beide.
-                now = self._position()
-                step_x = now[0] - self._turn_at[0]
-                step_y = now[1] - self._turn_at[1]
-                self._turn_at = now
-                if step_x or step_y:
-                    self._turn(step_x, step_y)
-                return
-            # Der Beobachter verdrängt die eingebaute Verarbeitung — ohne
-            # diesen Aufruf stünde die Kamera bei jedem Ziehen still.
-            self.OnMouseMove()
-
-        def _turn(self, dx: int, dy: int) -> None:
-            """Ein Drehschritt als Drehteller — die Ansicht bleibt aufrecht.
-
-            **Warum die Anwendung das selbst rechnet**, und zwar mit derselben
-            Begründung wie beim Kippen daneben: VTKs Trackball dreht um das
-            Oben der Kamera und schleift es mit, und ``Rotate`` dafür zu
-            überschreiben trägt nicht — ``OnMouseMove`` ist C++ und ruft die
-            Methode seiner eigenen Klasse, nie die einer Python-Unterklasse.
-            Das ist derselbe Grund, aus dem hier alles über Beobachter läuft.
-
-            Die drei Zeilen am Ende sind die Pflichten, die sonst die
-            Basisklasse erledigt: Schnittebenen nachziehen, das Licht der
-            Kamera folgen lassen — pyvistas Lichtsatz hängt an ihr, ein Körper
-            wäre sonst nach dem ersten Zug von der falschen Seite beleuchtet —
-            und zeichnen.
-            """
-            interactor = self.GetInteractor()
-            renderer = getattr(plotter, "renderer", None)
-            if interactor is None or renderer is None:
-                return
-            camera = renderer.GetActiveCamera()
-            position, up = turntable_camera(
-                camera.GetPosition(),
-                camera.GetFocalPoint(),
-                camera.GetViewUp(),
-                dx,
-                dy,
-                renderer.GetSize(),
-            )
-            camera.SetPosition(*position)
-            camera.SetViewUp(*up)
-            renderer.ResetCameraClippingRange()
-            if interactor.GetLightFollowCamera():
-                renderer.UpdateLightsGeometryToFollowCamera()
-            interactor.Render()
-
-        def _left_up(self, *_: Any) -> None:
-            painted, self._painting = self._painting, False
-            self._end()
-            started, self._left_at = self._left_at, None
-            dragged, self._dragging_body = self._dragging_body, False
-            self._ready_to_drag = False
-            if dragged and on_body_drag is not None:
-                # Hier entsteht der Schritt im Verlauf (Regel 2). Ein Zug, der
-                # gar nicht erst begonnen hat, kommt hier nicht an — er war ein
-                # Klick, und der wählt gleich darunter aus.
-                on_body_drag("end", *self._position())
-            if painted:
-                # Die Züge sind schon beim Drücken und Ziehen gesetzt — der
-                # Klickpfad malte denselben Punkt ein zweites Mal.
-                return
-            if on_pick is None:
-                return
-            x, y = self._position()
-            if is_click(started, (x, y)):
-                on_pick(x, y)
-
-        def _wheel_in(self, *_: Any) -> None:
-            self._zoom_at_pointer(1.0 + WHEEL_STEP)
-
-        def _wheel_out(self, *_: Any) -> None:
-            self._zoom_at_pointer(1.0 / (1.0 + WHEEL_STEP))
-
-        def _zoom_at_pointer(self, factor: float) -> None:
-            """Zoomt auf die Stelle unter dem Zeiger, nicht auf die Bildmitte.
-
-            VTKs Trackball-Stil dollyt entlang der Kamera-Achse — der Punkt
-            unter dem Zeiger wandert dabei weg, und man zoomt an dem vorbei,
-            was man ansehen wollte. Handbuch und Code-Kommentar behaupteten
-            beide das Gegenteil; nachgemessen stimmte keines von beiden.
-
-            Der Weg: den Weltpunkt unter dem Zeiger vorher merken, dollyn, ihn
-            danach neu bestimmen und die Kamera um die Differenz verschieben.
-            Damit bleibt genau dieser Punkt stehen, wo er war.
-            """
-            renderer = plotter.renderer
-            camera = renderer.GetActiveCamera()
-            x, y = self._position()
-
-            before = _world_under(renderer, x, y)
-            apply_wheel_zoom(camera, factor)
-            renderer.ResetCameraClippingRange()
-            after = _world_under(renderer, x, y)
-
-            if before is not None and after is not None:
-                shift = tuple(before[axis] - after[axis] for axis in range(3))
-                position = camera.GetPosition()
-                focus = camera.GetFocalPoint()
-                camera.SetPosition(*(position[axis] + shift[axis] for axis in range(3)))
-                camera.SetFocalPoint(*(focus[axis] + shift[axis] for axis in range(3)))
-                renderer.ResetCameraClippingRange()
-            plotter.render()
-            if on_camera is not None:
-                on_camera()
-
-        def _begin(self, button: MouseButton) -> None:
-            """Die Kamerabewegung dieser Taste starten — laut Schema.
-
-            Eine Stelle für alle drei Tasten: Die Zuordnung steht in
-            :data:`app.ui.render.navigator._NAVIGATION`, hier steht nur, wie VTK sie ausführt.
-            """
-            action = navigation_action(scheme, button, self._shift())
-            if action == "select":
-                return
-            if action == "pan":
-                self.StartPan()
-                self._tell("panning")
-                return
-            if action == "zoom":
-                self.StartDolly()
-                self._tell("zoom")
-                return
-            if action == "tilt":
-                # **Kein VTK-Start.** Der Trackball dreht in beiden Achsen;
-                # „nur nach oben und unten" ist keine seiner Bewegungen.
-                # Gerechnet wird deshalb in der Anwendung, und dieser Zweig
-                # merkt sich nur, wo es losgeht.
-                if on_rotate_start is not None:
-                    # **Auch hier.** ``camera_step`` kippt die Kamera um den
-                    # Blickpunkt, genau wie VTKs Trackball dreht — dieselbe
-                    # Bewegung um dieselbe Größe. Ein Drehpunkt, der bei der
-                    # rechten Taste die Bildmitte ist und beim gedrückten Rad
-                    # die Mitte der Körper, wäre eine Inkonsistenz, die sich
-                    # niemandem erklären ließe (§2.9).
-                    on_rotate_start()
-                self._tilt_at = self._position()
-                self._tell("tilt")
-                return
-            if on_rotate_start is not None:
-                # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
-                # Tiefe dessen, was in der Bildmitte steht, unsichtbar
-                # (§2.9, ``_aim_rotation``).
-                on_rotate_start()
-            self._turn_at = self._position()
-            # **``StartRotate`` bleibt, obwohl die Anwendung selbst dreht.**
-            # Nicht wegen der Bewegung — die fängt ``_mouse_move`` ab —,
-            # sondern wegen der Ereignisse: Erst der Zustandswechsel schickt
-            # beim Loslassen das ``EndInteractionEvent``, an dem ``cameraMoved``
-            # und mit ihm der Schattenwurf hängen (``_watch_camera``).
-            self.StartRotate()
-            self._tell("rotate")
-
-        def _end(self) -> None:
-            """Jede Bewegung beenden — welche lief, weiß hier niemand mehr."""
-            self._tilt_at = None
-            self._turn_at = None
-            self.EndRotate()
-            self.EndDolly()
-            self.EndPan()
-            self._tell(None)
-
-        def _middle_down(self, *_: Any) -> None:
-            self._begin("middle")
-
-        def _middle_up(self, *_: Any) -> None:
-            self._end()
-
-        def _right_down(self, *_: Any) -> None:
-            self._right_at = self._position()
-            self._begin("right")
-
-        def _right_up(self, *_: Any) -> None:
-            self._end()
-            started, self._right_at = self._right_at, None
-            if on_context is None:
-                return
-            # Ein Zug hat die Kamera bewegt und meint sie; ein Klick meint das,
-            # worauf er zeigt.
-            x, y = self._position()
-            if is_click(started, (x, y)):
-                on_context(x, y)
-
-    return Style()

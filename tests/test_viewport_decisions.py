@@ -1,6 +1,6 @@
 """Was die Ansicht *entscheidet*, nicht was sie zeichnet (§35).
 
-Offscreen ist ``Viewport.plotter`` None, und vierzig Methoden steigen an ihrer
+Offscreen ist ``Viewport.renderer`` None, und vierzig Methoden steigen an ihrer
 Wache aus, bevor ihr Rumpf läuft — bei dreißig davon läuft er in der ganzen
 Suite kein einziges Mal. Der Bauplan hat daraus eine Reihenfolge gemacht: Ein
 Test hinter einer Wache, die nie fällt, ist grün und prüft nichts; die Antwort
@@ -62,8 +62,10 @@ from PySide6.QtWidgets import QApplication
 from app.core.geom.measure import SnapResult
 from app.core.geom.mesh import MeshData
 from app.core.types import Profile
+from app.ui.render.api import CameraPose, Pick
 from app.ui.theme import THEMES, viewport_colours
 from app.ui.viewport import PLATE_GAP
+from tests.render_fakes import BrokenDriverRenderer, RecordingItem, RecordingRenderer
 
 # --- vor der Wache: was ohne VTK prüfbar ist ------------------------------------
 
@@ -237,34 +239,28 @@ def test_a_wayland_session_keeps_vtk_out_and_says_what_to_do(
     assert viewport.unavailable_hint() == "", "wo es nichts zu tun gibt, steht auch nichts"
 
 
-def test_plotter_release_is_idempotent(qt_app: QApplication) -> None:
+def test_renderer_release_is_idempotent(qt_app: QApplication) -> None:
     """Der native Renderer wird genau einmal und über eine Besitzstelle gelöst."""
     from app.ui.viewport import Viewport
 
-    class _Plotter:
-        def __init__(self) -> None:
-            self.close_calls = 0
-
-        def close(self) -> None:
-            self.close_calls += 1
-
     viewport = Viewport()
-    plotter = _Plotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
-    viewport.release_plotter()
-    viewport.release_plotter()
+    viewport.release_renderer()
+    viewport.release_renderer()
 
-    assert plotter.close_calls == 1
-    assert viewport.plotter is None
+    assert renderer.closed
+    assert viewport.renderer is None
 
 
-def test_failed_plotter_release_is_not_retried(qt_app: QApplication) -> None:
+def test_failed_renderer_release_is_not_retried(qt_app: QApplication) -> None:
     """Ein nativer Treiberfehler hält weder Qt offen noch den Besitzer fest."""
     from app.ui.viewport import Viewport
 
-    class _FailingPlotter:
+    class _FailingRenderer(RecordingRenderer):
         def __init__(self) -> None:
+            super().__init__()
             self.close_calls = 0
 
         def close(self) -> None:
@@ -272,14 +268,14 @@ def test_failed_plotter_release_is_not_retried(qt_app: QApplication) -> None:
             raise RuntimeError("native close failed")
 
     viewport = Viewport()
-    plotter = _FailingPlotter()
-    viewport.plotter = plotter
+    renderer = _FailingRenderer()
+    viewport.renderer = renderer
 
-    viewport.release_plotter()
-    viewport.release_plotter()
+    viewport.release_renderer()
+    viewport.release_renderer()
 
-    assert plotter.close_calls == 1
-    assert viewport.plotter is None
+    assert renderer.close_calls == 1
+    assert viewport.renderer is None
 
 
 def test_imported_colours_reach_the_viewport_as_rgb_cells(qt_app: QApplication) -> None:
@@ -289,15 +285,13 @@ def test_imported_colours_reach_the_viewport_as_rgb_cells(qt_app: QApplication) 
     body = trimesh.creation.box(extents=(20.0, 16.0, 12.0))
     body.visual.face_colors = np.tile([24, 140, 220, 255], (len(body.faces), 1))
     mesh = MeshData.of(body)
-    surface = SimpleNamespace(cell_data={})
     viewport = Viewport()
 
-    options = viewport._slot_colours(
-        surface, mesh, SimpleNamespace(material_slots=[]), mesh.triangle_count
-    )
+    colours = viewport._slot_colours(mesh, SimpleNamespace(material_slots=[]), mesh.triangle_count)
 
-    assert options == {"scalars": "source_colour", "rgb": True, "show_scalar_bar": False}
-    assert np.all(surface.cell_data["source_colour"] == [24, 140, 220])
+    assert colours is not None, "die Dateifarben kommen als Zellfarben an"
+    assert colours.colormap is None, "direkte Farben, keine Leiter"
+    assert np.allclose(colours.values * 255.0, [24, 140, 220])
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
@@ -425,147 +419,7 @@ def test_a_rebuilt_scene_forgets_a_feature_that_no_longer_exists(
     assert viewport.highlighted_object() == "obj_1", "der bleibende Körper übernimmt die Auswahl"
 
 
-# --- hinter der Wache: mit einer Attrappe ---------------------------------------
-
-
-class _RecordingActor:
-    """Was ``add_mesh`` zurückgibt — so viel davon, wie der Code benutzt.
-
-    Ein ``vtkActor`` trägt seine Darstellung in ``prop``, und Solidon setzt
-    dort das Verwerfen der Rückseite an der Plattenfläche. Die Attrappe
-    schreibt mit, statt zu tun, damit ein Test sie ansehen kann.
-    """
-
-    def __init__(self) -> None:
-        self.prop = _RecordingProperty()
-        self.centre = (0.0, 0.0, 0.0)
-        self.position = (0.0, 0.0, 0.0)
-
-    def GetCenter(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        """Die Mitte, nach der ``_order_by_depth`` sortiert."""
-        return self.centre
-
-    def GetPosition(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        """Der Versatz, den eine Zugvorschau am Actor setzt.
-
-        Sie ist der einzige Zustand, an dem ein Test sehen kann, **welche**
-        Körper ein Zug mitnimmt: Verschoben wird der Actor und nicht die
-        Geometrie (Regel 2), also steht die Antwort nirgends sonst.
-        """
-        return self.position
-
-    def SetPosition(self, x: float, y: float, z: float) -> None:  # noqa: N802 — VTK-Name
-        self.position = (x, y, z)
-
-
-class _RecordingProperty:
-    """Die Darstellung eines Actors — nur die Felder, die gesetzt werden."""
-
-    def __init__(self) -> None:
-        self.culling = "none"
-
-
-class _RecordingRenderer:
-    """Der Renderer, so weit ``_order_by_depth`` und ``_render_now`` ihn nutzen.
-
-    Reihenfolge und Zahl der Aufrufe sind hier nicht die Aussage — die Attrappe
-    steht, damit ``show_scene`` überhaupt bis an sein Ende läuft. Ohne sie hört
-    ein Aufbau mit gesetztem Plotter beim Tiefensortierer auf, und alles
-    dahinter bleibt ungeprüft.
-    """
-
-    def __init__(self) -> None:
-        self.added: list[object] = []
-
-    def RemoveActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
-        pass
-
-    def AddActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
-        self.added.append(actor)
-
-    def ResetCameraClippingRange(self) -> None:  # noqa: N802 — VTK-Name
-        pass
-
-
-class _RecordingPlotter:
-    """Eine Attrappe mit genau den Methoden, die das Zeichnen der Platte ruft.
-
-    Sie schreibt mit, statt darzustellen: Jeder Aufruf landet als
-    ``(name, kwargs)`` in :attr:`drawn`. Damit lassen sich zwei Aussagen prüfen,
-    die sonst niemand erreicht — welche Farbe an der Platte ankommt, und ob die
-    Namen der Actors die Plattennummer tragen.
-    """
-
-    def __init__(self) -> None:
-        self.drawn: list[tuple[str, dict[str, Any]]] = []
-        self.meshes: list[Any] = []
-        self.labelled: list[list[str]] = []
-        self.removed: list[object] = []
-        self.renders = 0
-        self.actors: list[_RecordingActor] = []
-        self.camera = SimpleNamespace(
-            position=(100.0, -100.0, 80.0),
-            focal_point=(0.0, 0.0, 0.0),
-            parallel_scale=50.0,
-            GetPosition=lambda: (100.0, -100.0, 80.0),
-        )
-        self.renderer = _RecordingRenderer()
-        """Die zurückgegebenen Actors, in der Reihenfolge von drawn.
-
-        Damit ein Test nicht nur sehen kann, **was** gezeichnet wurde, sondern
-        auch, was danach am Actor gesetzt wurde — die Plattenfläche etwa wirft
-        ihre Rückseite weg."""
-
-    def add_mesh(self, mesh: object, **kwargs: Any) -> object:
-        # Das Netz kommt mit: Bei der Merkmalsfläche ist die **Zahl der
-        # Dreiecke** die Aussage — gefärbt werden die des Merkmals und nicht
-        # die des ganzen Körpers.
-        self.meshes.append(mesh)
-        self.drawn.append(("mesh", kwargs))
-        # **Ein Actor, kein nacktes ``object()``.** Hier stand eines, und damit
-        # sagte die Attrappe zu, dass mit dem Rückgabewert nichts geschieht.
-        # Das stimmte, bis die Plattenfläche ihre Rückseite wegwerfen musste
-        # (``surface.prop.culling``) — dann fiel der Aufruf über eine Attrappe,
-        # die weniger kann als die Sache, die sie nachstellt. Ein echter Actor
-        # hat ``prop``; wer ihn nachstellt, gibt ihm eines.
-        actor = _RecordingActor()
-        self.actors.append(actor)
-        return actor
-
-    def add_point_labels(self, _points: object, labels: Any, **kwargs: Any) -> object:
-        # Die Beschriftungen kommen mit: Sie sind bei der Merkmals-Überlagerung
-        # die eigentliche Aussage, und ob sie erscheinen, ist die Frage von
-        # Regel 18 — nicht, ob überhaupt etwas gezeichnet wurde.
-        self.labelled.append([str(text) for text in labels])
-        self.drawn.append(("labels", kwargs))
-        return object()
-
-    def remove_actor(self, actor: object, **_kwargs: Any) -> None:
-        self.removed.append(actor)
-
-    def render(self) -> None:
-        self.renders += 1
-
-    def reset_camera(self, **_kwargs: Any) -> None:
-        """Gerahmt wird hier nichts — ``_fit_once_for`` ruft es trotzdem."""
-
-    def names(self) -> list[str]:
-        """Die Actor-Namen in der Reihenfolge, in der gezeichnet wurde."""
-        return [str(kwargs["name"]) for _kind, kwargs in self.drawn if "name" in kwargs]
-
-    def colour_of(self, name: str) -> str:
-        """Die Farbe, mit der dieser eine Actor gezeichnet wurde.
-
-        Je Name und nicht als Menge über alles: Eine Prüfung, die nur fragt, ob
-        eine Farbe *irgendwo* vorkommt, bleibt grün, wenn ein einzelner Actor
-        auf eine falsche wechselt — dieselbe Farbe steht an drei weiteren
-        Stellen. Gemessen: Die Gegenprobe mit einer fest verdrahteten Farbe im
-        Raster lief durch, bis diese Zuordnung da war.
-        """
-        for _kind, kwargs in self.drawn:
-            if str(kwargs.get("name")) == name:
-                return str(kwargs.get("color"))
-        raise AssertionError(f"kein Actor namens {name!r} — gezeichnet wurde: {self.names()}")
+# --- hinter der Wache: mit dem Renderer-Doppel (tests/render_fakes.py) ----------
 
 
 def test_the_bed_is_drawn_in_the_colours_of_the_theme(
@@ -583,18 +437,18 @@ def test_the_bed_is_drawn_in_the_colours_of_the_theme(
 
     viewport = Viewport()
     viewport.set_theme("light")
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     viewport.show_build_volume(profile)
 
-    assert plotter.drawn, "die Platte wurde nie gezeichnet"
-    assert plotter.colour_of("bed_0") == viewport._bed_colour, (
+    assert renderer.drawn, "die Platte wurde nie gezeichnet"
+    assert renderer.colour_of("bed_0") == viewport._bed_colour, (
         "das Raster nahm die Farbe des Themas nicht an"
     )
-    assert plotter.colour_of("bed_surface_0") == viewport._bed_surface, (
+    assert renderer.colour_of("bed_surface_0") == viewport._bed_surface, (
         "der Grund nahm die Farbe des Themas nicht an"
     )
-    assert plotter.colour_of("build_volume_0") == viewport._bed_colour, (
+    assert renderer.colour_of("build_volume_0") == viewport._bed_colour, (
         "der Eckwinkel des Bauraums nahm die Farbe des Themas nicht an"
     )
 
@@ -640,7 +494,7 @@ def test_a_heavy_scene_is_prepared_outside_the_qt_thread(
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = object()
+    viewport.renderer = RecordingRenderer()
     old = _scene_with_two_holes()
     new = _scene_with_two_holes()
     viewport._result = old
@@ -664,7 +518,7 @@ def test_a_heavy_scene_is_prepared_outside_the_qt_thread(
     qt_app.processEvents()
 
     assert seen and seen[0] != threading.get_ident()
-    viewport.plotter = None
+    viewport.renderer = None
 
 
 def test_viewport_cleanup_cancels_a_running_preparation(
@@ -675,7 +529,7 @@ def test_viewport_cleanup_cancels_a_running_preparation(
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = object()
+    viewport.renderer = RecordingRenderer()
     old = _scene_with_two_holes()
     viewport._result = old
     started = threading.Event()
@@ -700,7 +554,7 @@ def test_viewport_cleanup_cancels_a_running_preparation(
 
     assert viewport.wait_for_workers(0) is True
     assert viewport._result is old, "ein abgebrochener Auftrag wurde noch dargestellt"
-    viewport.plotter = None
+    viewport.renderer = None
 
 
 def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
@@ -711,7 +565,7 @@ def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = object()
+    viewport.renderer = RecordingRenderer()
     old = _scene_with_two_holes()
     new = _scene_with_two_holes()
     viewport._result = old
@@ -732,7 +586,7 @@ def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
     qt_app.processEvents()
 
     assert applied == [], "ein beim Abbau eingereihtes Ergebnis wurde noch dargestellt"
-    viewport.plotter = None
+    viewport.renderer = None
 
 
 def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
@@ -748,7 +602,7 @@ def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = object()
+    viewport.renderer = RecordingRenderer()
     old = _scene_with_two_holes()
     new = _scene_with_two_holes()
     viewport._result = old
@@ -787,7 +641,7 @@ def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
     qt_app.processEvents()
 
     assert applied and applied[-1] is new, "der Ansichtswechsel stellte die alte Szene wieder her"
-    viewport.plotter = None
+    viewport.renderer = None
 
 
 def _with_faces(result: Any, feature_id: str, faces: tuple[int, ...]) -> Any:
@@ -821,16 +675,16 @@ def test_the_chosen_feature_keeps_its_label_without_the_overlay(qt_app: QApplica
     viewport.show_scene(_scene_with_two_holes())
     viewport._selected = "obj_1"
     viewport._selected_feature = "hole_2"
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
     viewport.set_feature_overlay(True)
-    mit_overlay = [text for gruppe in plotter.labelled for text in gruppe]
+    mit_overlay = [text for gruppe in renderer.labelled for text in gruppe]
     assert len(mit_overlay) == 2, f"mit Überlagerung stehen beide da: {mit_overlay}"
 
-    plotter.labelled.clear()
+    renderer.labelled.clear()
     viewport.set_feature_overlay(False)
-    ohne_overlay = [text for gruppe in plotter.labelled for text in gruppe]
+    ohne_overlay = [text for gruppe in renderer.labelled for text in gruppe]
 
     assert len(ohne_overlay) == 1, (
         f"ohne Überlagerung bleibt genau die des gewählten Merkmals: {ohne_overlay}"
@@ -856,15 +710,15 @@ def test_an_invisible_feature_leaves_no_floating_marking(
         viewport._hidden = frozenset({"obj_1"})
     else:
         viewport._plate = 1
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
     viewport._redraw_features()
 
     assert viewport.highlighted_object() is None
     assert viewport.highlighted_faces() == ()
-    assert "feature-patch" not in plotter.names()
-    assert not plotter.labelled, "ohne Körper darf kein Merkmalsname im Raum schweben"
+    assert "feature-patch" not in renderer.names()
+    assert not renderer.labelled, "ohne Körper darf kein Merkmalsname im Raum schweben"
 
 
 def test_only_the_triangles_of_the_feature_take_the_selection_colour(
@@ -873,57 +727,43 @@ def test_only_the_triangles_of_the_feature_take_the_selection_colour(
     """§18.5: Ein Klick auf eine Bohrung wählt zweierlei — den Körper und die
     Stelle. Gefärbt wird die Stelle.
 
-    Vorher nahm der **ganze Körper** die Auswahlfarbe an, und die Bohrung, die
-    gemeint war, unterschied sich von der Wand daneben durch nichts. Der Rumpf,
-    der das behebt, liegt hinter der Offscreen-Wache und lief in keinem Test.
-
     Geprüft wird die **Zahl der Dreiecke**, denn genau daran hängt die Aussage:
-    zwei zugeordnete gegen zwölf des Quaders. Ein Test, der nur fragt, ob
-    überhaupt eine Fläche gezeichnet wurde, wäre auch vor der Behebung grün
-    gewesen.
-
-    Dazu der Versatz entlang der Flächennormalen: Ohne ihn läge die Fläche
-    exakt auf dem Netz darunter, und welche von beiden man sieht, entschiede
-    der Tiefenpuffer. Die Punkte müssen also **neben** dem Original liegen.
+    zwei zugeordnete gegen zwölf des Quaders. Dazu der Versatz entlang der
+    Flächennormalen: Ohne ihn läge die Fläche exakt auf dem Netz darunter, und
+    welche von beiden man sieht, entschiede der Tiefenpuffer.
     """
     import numpy as np
 
-    from app.ui.viewport import SELECTED_COLOUR, Viewport
+    from app.ui.viewport import SELECTED_COLOUR, SELECTED_HOLE_OPACITY, Viewport
 
     viewport = Viewport()
     viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
     viewport._selected = "obj_1"
     viewport._selected_feature = "hole_2"
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
     viewport._redraw_feature_patch()
 
-    flaeche = [kwargs for kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-patch"]
-    assert flaeche, f"keine Merkmalsfläche gezeichnet — gezeichnet wurde: {plotter.names()}"
-    assert str(flaeche[0].get("color")) == str(SELECTED_COLOUR), (
-        "die Fläche nahm die Auswahlfarbe nicht an"
-    )
-    from app.ui.viewport import SELECTED_HOLE_OPACITY
-
-    assert flaeche[0].get("opacity") == SELECTED_HOLE_OPACITY, (
+    style = renderer.style_of("feature-patch")
+    assert style.colour == SELECTED_COLOUR, "die Fläche nahm die Auswahlfarbe nicht an"
+    assert style.opacity == SELECTED_HOLE_OPACITY, (
         "eine deckende Bohrungswand schließt die Öffnung optisch wie ein Deckel"
     )
-    assert flaeche[0]["backface_params"]["opacity"] == SELECTED_HOLE_OPACITY, (
+    assert style.backface_opacity == SELECTED_HOLE_OPACITY, (
         "die Innenwand muss von beiden Öffnungen gleich durchscheinend bleiben"
     )
 
-    netz = plotter.meshes[-1]
-    assert netz.n_cells == 2, (
-        f"gefärbt sind die zwei Dreiecke des Merkmals, nicht die zwölf des Quaders: {netz.n_cells}"
+    vertices, faces = renderer.meshes[-1]
+    assert len(faces) == 2, (
+        f"gefärbt sind die zwei Dreiecke des Merkmals, nicht die zwölf des Quaders: {len(faces)}"
     )
 
     ergebnis = viewport._result
     assert ergebnis is not None
     roh: Any = ergebnis.scene.objects["obj_1"].mesh
     original = np.asarray(roh.raw.vertices, dtype=np.float64)
-    punkte = np.asarray(netz.points, dtype=float)
-    abstand = np.min(np.linalg.norm(punkte[:, None, :] - original[None, :, :], axis=2), axis=1)
+    abstand = np.min(np.linalg.norm(vertices[:, None, :] - original[None, :, :], axis=2), axis=1)
     assert float(abstand.max()) > 0.0, (
         "ohne Versatz liegt die Fläche exakt auf dem Netz, und der Tiefenpuffer entscheidet"
     )
@@ -948,35 +788,31 @@ def test_a_solid_feature_stays_opaque_while_only_hover_is_translucent(
     viewport.show_scene(result)
     viewport._selected = "obj_1"
     viewport._selected_feature = "hole_2"
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
     viewport._redraw_features()
 
-    selected = next(
-        kwargs for _kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-patch"
+    assert renderer.style_of("feature-patch").opacity == 1.0, (
+        "eine feste Fläche bleibt als Auswahl kräftig und deckend"
     )
-    assert "opacity" not in selected, "eine feste Fläche bleibt als Auswahl kräftig und deckend"
 
-    plotter.drawn.clear()
-    plotter.labelled.clear()
+    renderer.drawn.clear()
+    renderer.labelled.clear()
     viewport._selected_feature = None
     viewport._hover_feature = True
     viewport._hovered_object = "obj_1"
     viewport._hovered_feature = "hole_2"
     viewport._redraw_features()
 
-    hovered = next(
-        kwargs for _kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-hover"
-    )
-    assert hovered["opacity"] == HOVERED_FEATURE_OPACITY
+    assert renderer.style_of("feature-hover").opacity == HOVERED_FEATURE_OPACITY
 
 
 def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> None:
     """§18.5 unterscheidet Überfahren von Anklicken, nicht nur im Zeiger.
 
     Hover ist durchscheinend in der Merkmalsfarbe; die Auswahl ist deckend in
-    Bernstein. Ohne den eigenen Hover-Actor änderte sich beim Überfahren nur
+    Bernstein. Ohne den eigenen Hover-Aktor änderte sich beim Überfahren nur
     der Mauszeiger, obwohl der Bauplan das Merkmal selbst hervorhebt.
     """
     from app.ui.viewport import FEATURE_LABEL_COLOUR, HOVERED_HOLE_OPACITY, Viewport
@@ -987,28 +823,28 @@ def test_hover_and_selection_are_two_visible_states(qt_app: QApplication) -> Non
     viewport._hover_feature = True
     viewport._hovered_object = "obj_1"
     viewport._hovered_feature = "hole_2"
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
     viewport._redraw_features()
 
-    hover = [kwargs for kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-hover"]
-    assert len(hover) == 1
-    assert str(hover[0]["color"]) == FEATURE_LABEL_COLOUR
-    assert hover[0]["opacity"] == HOVERED_HOLE_OPACITY
-    assert "feature-patch" not in plotter.names(), "überfahren ist noch keine Auswahl"
-    labels = [text for group in plotter.labelled for text in group]
+    assert len(renderer.entries("feature-hover")) == 1
+    hover = renderer.style_of("feature-hover")
+    assert hover.colour == FEATURE_LABEL_COLOUR
+    assert hover.opacity == HOVERED_HOLE_OPACITY
+    assert "feature-patch" not in renderer.names(), "überfahren ist noch keine Auswahl"
+    labels = [text for group in renderer.labelled for text in group]
     assert len(labels) == 1 and "8" in labels[0], (
         "auch ohne dauerhafte Überlagerung sagt die Hervorhebung, welches Merkmal sie meint"
     )
 
     viewport._selected_feature = "hole_2"
-    plotter.drawn.clear()
-    plotter.labelled.clear()
+    renderer.drawn.clear()
+    renderer.labelled.clear()
     viewport._redraw_features()
 
-    assert "feature-patch" in plotter.names()
-    assert "feature-hover" not in plotter.names(), (
+    assert "feature-patch" in renderer.names()
+    assert "feature-hover" not in renderer.names(), (
         "die deckende Auswahl ersetzt Hover, statt zwei Flächen übereinanderzulegen"
     )
 
@@ -1081,32 +917,24 @@ def test_difference_colours_also_replace_a_whole_body_highlight(
 def test_a_round_body_gets_no_edges_and_a_box_does(qt_app: QApplication) -> None:
     """§18.1: Hier stehen die Kanten des *Körpers*, nicht die des Netzes.
 
-    „Massiv mit Kanten" zeichnet jede Dreieckskante — das beantwortet, wie fein
-    das Netz ist. Es beantwortet nicht, wo das Teil eine Kante hat: Bei einem
-    Zylinder aus zweihundert Segmenten geht die eine, auf die es ankommt, in
-    zweihundertneunundneunzig anderen unter.
-
-    Der Docstring sagt beides wörtlich zu — „ein rundes Teil bekommt gar
-    keine: eine Kugel hat keine Kante, und eine erfundene wäre schlimmer als
-    keine" —, und geprüft hat es nichts. Der Rumpf liegt hinter der
-    Offscreen-Wache.
-
     Zwei Körper, eine Frage: Der Quader hat zwölf echte Kanten, die Kugel
-    keine. Ein Test mit nur einem der beiden wäre auch dann grün, wenn die
-    Methode immer zeichnete oder nie.
+    keine — eine erfundene wäre schlimmer als keine. Ein Test mit nur einem
+    der beiden wäre auch dann grün, wenn die Methode immer zeichnete oder nie.
     """
-    import pyvista as pv
-
+    from app.ui.render import shapes
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    still = np.zeros(3)
 
-    viewport._draw_feature_edges(pv.Box().triangulate(), "obj_1")
-    viewport._draw_feature_edges(pv.Sphere(theta_resolution=32, phi_resolution=32), "obj_2")
+    vertices, faces = shapes.cube((0.0, 0.0, 0.0), 10.0)
+    viewport._draw_feature_edges(vertices, faces, still, "obj_1")
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=5.0)
+    viewport._draw_feature_edges(np.asarray(ball.vertices), np.asarray(ball.faces), still, "obj_2")
 
-    gezeichnet = plotter.names()
+    gezeichnet = renderer.names()
     assert "edges:obj_1" in gezeichnet, f"der Quader hat Kanten: {gezeichnet}"
     assert "edges:obj_2" not in gezeichnet, (
         f"eine Kugel hat keine Kante, und eine erfundene wäre schlimmer: {gezeichnet}"
@@ -1115,145 +943,68 @@ def test_a_round_body_gets_no_edges_and_a_box_does(qt_app: QApplication) -> None
 
 def test_edges_belong_to_the_solid_mode_only(qt_app: QApplication) -> None:
     """In den anderen drei Modi ist entweder alles schon gezeichnet oder man
-    sieht hindurch — dann wäre eine zweite Linienlage nur Gitter.
-
-    Die Bedingung steht in derselben Zeile wie die Offscreen-Wache
-    (``self._mode != "solid"``), und genau deshalb hat sie nie jemand gefahren.
-    """
-    import pyvista as pv
-
+    sieht hindurch — dann wäre eine zweite Linienlage nur Gitter."""
+    from app.ui.render import shapes
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
-    quader = pv.Box().triangulate()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    vertices, faces = shapes.cube((0.0, 0.0, 0.0), 10.0)
+    still = np.zeros(3)
 
     viewport._mode = "wireframe"
-    viewport._draw_feature_edges(quader, "obj_1")
-    assert "edges:obj_1" not in plotter.names(), "im Drahtgitter ist schon alles gezeichnet"
+    viewport._draw_feature_edges(vertices, faces, still, "obj_1")
+    assert "edges:obj_1" not in renderer.names(), "im Drahtgitter ist schon alles gezeichnet"
 
     viewport._mode = "solid"
-    viewport._draw_feature_edges(quader, "obj_1")
-    assert "edges:obj_1" in plotter.names(), "im massiven Modus gehören sie dazu"
+    viewport._draw_feature_edges(vertices, faces, still, "obj_1")
+    assert "edges:obj_1" in renderer.names(), "im massiven Modus gehören sie dazu"
 
 
-def test_the_pointer_is_flipped_from_qt_to_vtk(qt_app: QApplication) -> None:
-    """VTK zählt seine Y-Achse von unten, Qt von oben.
+def test_the_pointer_counts_like_qt_in_device_pixels(qt_app: QApplication) -> None:
+    """Der Zeiger kommt in Gerätepixeln an, gezählt wie Qt — und bleibt so.
 
-    Ohne die Umrechnung sucht das Hover-Picking am gespiegelten Ort — und das
-    ist die Sorte Fehler, die lange überlebt: **In der Bildmitte stimmt sie
-    zufällig.** Bei 600 Bildpunkten Höhe ist 600 − 300 wieder 300, und wer dort
-    prüft, sieht nichts.
-
-    Gemessen wird deshalb **außerhalb** der Mitte. Ein Test bei y = 300 wäre
-    auch dann grün, wenn die Zeile ganz fehlte.
+    Bis zum 05.09.2026 spiegelte ``_note_pointer`` nach VTKs Zählung von
+    unten, und wer die Zeile vergaß, suchte am gespiegelten Ort — in der
+    Bildmitte zufällig richtig. Seit der Renderer in Qt-Zählung antwortet,
+    gibt es an dieser Stelle nichts mehr umzurechnen: Was der Renderer meldet,
+    ist, was ``world_to_display`` und ``pick_surface`` verstehen. Gemessen
+    wird außerhalb der Mitte, damit eine Spiegelung auffiele.
     """
+    from app.ui.render.api import PointerEvent
     from app.ui.viewport import Viewport
 
-    class _Punkt:
-        def __init__(self, x: int, y: int) -> None:
-            self._x, self._y = x, y
-
-        def x(self) -> int:
-            return self._x
-
-        def y(self) -> int:
-            return self._y
-
-    class _Interactor:
-        ratio = 1.0
-
-        @staticmethod
-        def height() -> int:
-            return 600
-
-        @classmethod
-        def devicePixelRatioF(cls) -> float:  # noqa: N802 — Qt-Name
-            return cls.ratio
-
-    class _MitInteractor(_RecordingPlotter):
-        interactor = _Interactor()
-
     viewport = Viewport()
-    viewport.plotter = _MitInteractor()
+    viewport.renderer = RecordingRenderer(size=(800, 600))
 
-    viewport._note_pointer(_Punkt(120, 100))
-    assert viewport._hover_at == (120, 500), (
-        f"Qt zählt von oben, VTK von unten: {viewport._hover_at} statt (120, 500)"
+    viewport._on_pointer(PointerEvent("move", 120, 100))
+    assert viewport._hover_at == (120, 100), (
+        f"keine Spiegelung mehr: {viewport._hover_at} statt (120, 100)"
     )
-
-    # Und der Beleg, warum die Mitte nichts prüft: dort ist beides gleich.
-    viewport._note_pointer(_Punkt(120, 300))
-    assert viewport._hover_at == (120, 300), "in der Mitte fällt der Fehler nicht auf"
-
-    # **Und in Gerätepunkten, nicht in Logikpunkten** (Gesamtreview J-5):
-    # pyvistas ``rwi`` multipliziert jede Mausposition mit dem
-    # ``devicePixelRatio``, bevor sie an VTK geht — die Zeigersuche muss
-    # dieselbe Rechnung machen, sonst fragt sie auf einem skalierten
-    # Bildschirm die falsche Stelle. Höhe 600 Logikpunkte sind bei 1,5 dann
-    # 900 Gerätepunkte.
-    _Interactor.ratio = 1.5
-    viewport._note_pointer(_Punkt(120, 100))
-    assert viewport._hover_at == (180, 750), (
-        f"bei dpr 1,5 zählt VTK in Gerätepunkten: {viewport._hover_at} statt (180, 750)"
-    )
+    viewport._on_pointer(PointerEvent("move", 180, 750))
+    assert viewport._hover_at == (180, 750), "und keine Umrechnung mit dem Gerätefaktor"
 
 
-def test_orthographic_reaches_the_plotter(qt_app: QApplication) -> None:
-    """§18.1: Orthografisch ist das, was gemessene Längen vertrauenswürdig
-    macht.
-
-    Der Zustand steht **vor** der Wache (`self._projection = projection`) und
-    ist damit offscreen prüfbar — was dahinter liegt, ist der Aufruf am
-    Plotter, und der lief in keinem Test. Ein Umschalter, der seinen Zustand
-    merkt und ihn nicht weitergibt, sieht in jeder Abfrage richtig aus und
-    zeigt im Bild eine Perspektive, in der gemessene Längen nicht stimmen.
+def test_orthographic_reaches_the_renderer(qt_app: QApplication) -> None:
+    """§18.1: Orthografisch ist das, was gemessene Längen vertrauenswürdig macht.
 
     Beide Richtungen, weil eine allein auch dann grün wäre, wenn die Methode
     immer dasselbe täte.
     """
     from app.ui.viewport import Viewport
 
-    class _MitProjektion(_RecordingPlotter):
-        def __init__(self) -> None:
-            super().__init__()
-            self.gerufen: list[str] = []
-
-        def enable_parallel_projection(self) -> None:
-            self.gerufen.append("parallel an")
-
-        def disable_parallel_projection(self) -> None:
-            self.gerufen.append("parallel aus")
-
     viewport = Viewport()
-    plotter = _MitProjektion()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
 
     viewport.set_projection("orthographic")
-    assert plotter.gerufen[-1] == "parallel an", plotter.gerufen
+    assert renderer.parallel is True
     assert viewport._projection == "orthographic"
 
     viewport.set_projection("perspective")
-    assert plotter.gerufen[-1] == "parallel aus", plotter.gerufen
+    assert renderer.parallel is False
     assert str(viewport._projection) == "perspective"
-
-
-class _BrokenDriver(_RecordingPlotter):
-    """Ein Plotter, dessen OpenGL die schönen Sachen nicht kann.
-
-    Genau die Maschine, für die die ``try``-Blöcke geschrieben sind: Sie soll
-    ein einfacheres Bild bekommen und keinen Absturz.
-    """
-
-    def enable_anti_aliasing(self, _mode: str) -> None:
-        raise RuntimeError("kein FXAA auf diesem Treiber")
-
-    def enable_ssao(self, **_kwargs: Any) -> None:
-        raise RuntimeError("kein SSAO auf diesem Treiber")
-
-    def disable_ssao(self) -> None:
-        raise RuntimeError("kein SSAO auf diesem Treiber")
 
 
 def test_a_driver_without_the_extras_gets_a_simpler_picture(qt_app: QApplication) -> None:
@@ -1268,7 +1019,7 @@ def test_a_driver_without_the_extras_gets_a_simpler_picture(qt_app: QApplication
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = _BrokenDriver()
+    viewport.renderer = BrokenDriverRenderer()
 
     viewport._apply_render_quality()  # darf nicht werfen
 
@@ -1289,7 +1040,7 @@ def test_a_failed_occlusion_is_tried_again(qt_app: QApplication) -> None:
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = _BrokenDriver()
+    viewport.renderer = BrokenDriverRenderer()
     # Die Eigenschaft folgt der Regel „keine Analysekarte" und ist damit an;
     # gesetzt wird sie nicht, sie *ist* die Regel.
     assert viewport.ambient_occlusion is True
@@ -1301,43 +1052,63 @@ def test_a_failed_occlusion_is_tried_again(qt_app: QApplication) -> None:
     )
 
 
-def test_the_camera_watcher_holds_the_view_only_weakly(
+def test_the_navigator_holds_the_view_only_weakly(
     qt_app: QApplication, unpinned_windows: None
 ) -> None:
-    """VTK hält den Beobachter, und eine starke Referenz von dort auf den
-    Viewport überlebt jedes Schließen.
+    """Der Renderer hält den Navigator, der Navigator die Rückrufe — und eine
+    starke Referenz von dort auf den Viewport überlebte jedes Schließen.
 
-    Dieselbe Regel wie bei ``set_navigation`` und dieselbe Falle wie beim
-    Zeitgeber der Schichtvorschau: Wer `self` in den Rückruf fängt, schließt
-    einen Ring über die C++-Grenze, den Pythons Speicherbereiniger nicht
-    sieht.
+    Dieselbe Falle wie beim Zeitgeber der Schichtvorschau: Wer ``self`` in den
+    Rückruf fängt, schließt einen Ring über die C++-Grenze, den Pythons
+    Speicherbereiniger nicht sieht.
     """
     import gc
     import weakref
 
     from app.ui.viewport import Viewport
 
-    class _MitInteractor(_RecordingPlotter):
-        def __init__(self) -> None:
-            super().__init__()
-            self.beobachter: list[Any] = []
-            self.interactor = self
-
-        def AddObserver(self, _event: str, ruf: Any) -> int:  # noqa: N802 — VTK-Name
-            self.beobachter.append(ruf)
-            return 1
-
     viewport = Viewport()
-    plotter = _MitInteractor()
-    viewport.plotter = plotter
-    viewport._watch_camera()
+    viewport.renderer = RecordingRenderer()
+    viewport.set_navigation("solidon")
+    assert viewport._navigator is not None, "kein Navigator angelegt"
+    viewport.release_renderer()
 
-    assert plotter.beobachter, "kein Beobachter angemeldet"
     spur = weakref.ref(viewport)
     del viewport
     gc.collect()
 
-    assert spur() is None, "der Beobachter hält die Ansicht fest — VTK überlebt sie, und damit sie"
+    assert spur() is None, "die Kameraführung hält die Ansicht fest"
+
+
+def test_the_pointer_listener_holds_the_view_only_weakly(
+    qt_app: QApplication, unpinned_windows: None
+) -> None:
+    """Der Renderer hält seine Zuhörer, die Ansicht den Renderer — ein gebundenes
+    ``_on_pointer`` schlösse denselben Ring wie ein starker Navigator-Rückruf.
+
+    Beides in einem Test, weil das eine ohne das andere nichts sagt: Ein
+    Zuhörer, der die Ansicht nicht erreicht, hält sie auch nicht fest.
+    """
+    import gc
+    import weakref
+
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    renderer = RecordingRenderer()
+    viewport = Viewport()
+    viewport.renderer = renderer
+    viewport._listen_to(renderer)
+    assert len(renderer.listeners) == 1, "kein Zuhörer angemeldet"
+    (listener,) = renderer.listeners.values()
+    listener(PointerEvent(kind="move", x=40, y=30))
+    assert viewport._hover_at == (40, 30), "der Zuhörer erreicht die Ansicht nicht"
+
+    spur = weakref.ref(viewport)
+    del viewport
+    gc.collect()
+
+    assert spur() is None, "der Zeiger-Zuhörer hält die Ansicht fest"
 
 
 def test_the_callbacks_reach_the_view_while_it_lives(qt_app: QApplication) -> None:
@@ -1436,39 +1207,28 @@ def test_the_bed_surface_can_be_seen_through_from_below(
     """Von unten schaut man durch die Platte hindurch.
 
     **Robert am 23.08.2026:** „Man kann unten noch nicht durch die Druckfläche
-    schauen, also die Platte. Das müsste auch noch behoben werden, dass man da
-    durchschauen kann, wenn man's von unten bearbeiten will."
-
-    Die Fläche wird gebraucht — ohne sie fiele der Schatten auf nichts —, aber
-    nur von oben. ``culling = "back"`` wirft ihre Rückseite weg: Die Ebene
-    zeigt mit ``direction=(0, 0, 1)`` nach oben, von unten sieht man ihre
-    Rückseite, und die verschwindet, ohne die Vorderseite anzufassen.
-
-    **``opacity`` wäre die falsche Antwort gewesen** — eine durchscheinende
-    Platte nähme dem Schatten seinen Grund, und von oben sähe sie falsch aus.
-
-    Belegt wurde die Wirkung an Bildern aus einem eigenen Arbeitsbaum: Der
-    Stand davor zeigte von unten nur die Platte, danach den Körper. Dieser Test
-    hält fest, dass die Eigenschaft gesetzt **wird** — ein Bild kann er nicht
-    ansehen, und eine Zahl daraus war untauglich (sie zählte die Achsenmarke).
+    schauen, also die Platte." Die Fläche wird gebraucht — ohne sie fiele der
+    Schatten auf nichts —, aber nur von oben: ``cull_backfaces`` wirft ihre
+    Rückseite weg. ``opacity`` wäre die falsche Antwort gewesen — eine
+    durchscheinende Platte nähme dem Schatten seinen Grund. Dass das Bild
+    stimmt, misst ``tests/test_render_vtk.py``; hier steht, dass die
+    Eigenschaft gesetzt **wird**.
     """
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     viewport.show_build_volume(profile)
 
     flaechen = [
-        actor
-        for actor, (_art, kwargs) in zip(plotter.actors, plotter.drawn, strict=False)
+        kwargs["style"]
+        for _kind, kwargs in renderer.drawn
         if str(kwargs.get("name", "")).startswith("bed_surface_")
     ]
     assert flaechen, "keine Plattenfläche gezeichnet — dann prüft der Test nichts"
-    for actor in flaechen:
-        assert actor.prop.culling == "back", (
-            f"die Rückseite der Plattenfläche bleibt stehen: {actor.prop.culling}"
-        )
+    for style in flaechen:
+        assert style.cull_backfaces, "die Rückseite der Plattenfläche bleibt stehen"
 
 
 def test_each_plate_draws_under_its_own_names(profile: Profile, qt_app: QApplication) -> None:
@@ -1482,12 +1242,12 @@ def test_each_plate_draws_under_its_own_names(profile: Profile, qt_app: QApplica
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     viewport._beds_for_view = lambda: 3  # type: ignore[method-assign]
     viewport.show_build_volume(profile)
 
-    names = plotter.names()
+    names = renderer.names()
     assert len(names) == len(set(names)), f"zwei Actors teilen sich einen Namen: {names}"
     for plate in range(3):
         assert f"bed_{plate}" in names, f"Platte {plate + 1} bekam kein Raster"
@@ -1552,39 +1312,25 @@ def test_a_sketch_plane_without_a_plotter_changes_nothing(qt_app: QApplication) 
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    assert viewport.plotter is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
+    assert viewport.renderer is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
     viewport.view_on_plane(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
 
 
 def test_the_distance_falls_back_when_the_camera_has_no_span(qt_app: QApplication) -> None:
     """Eine Entfernung von null nähme der Kamerastellung ihre Richtung.
 
-    ``_plane_distance`` nimmt den bisherigen Abstand zum Blickpunkt, damit der
-    Ausschnitt beim Schwenken erhalten bleibt. Steht die Kamera auf ihrem
-    eigenen Blickpunkt — vor dem ersten Bild —, wäre die Position gleich dem
-    Ursprung und die Blickrichtung unbestimmt.
-
-    Zurück kommt seit dem 24.08.2026 die **Untergrenze** und nicht mehr 1,0:
-    Ein Millimeter ist zwar von null verschieden und rettet die Richtung, aber
-    aus einem Millimeter Abstand sieht man die Zeichenebene nicht. Der Test
-    daneben misst, woran das aufgefallen ist.
+    Steht die Kamera auf ihrem eigenen Blickpunkt — vor dem ersten Bild —,
+    kommt die **Untergrenze** zurück und nicht 1,0: Aus einem Millimeter
+    Abstand sieht man die Zeichenebene nicht.
     """
     from app.ui.viewport import LEAST_PLANE_DISTANCE, Viewport
 
     viewport = Viewport()
-    viewport.plotter = _StillCamera()  # type: ignore[assignment]
+    renderer = RecordingRenderer()
+    renderer.pose = CameraPose((7.0, 7.0, 7.0), (7.0, 7.0, 7.0), (0.0, 0.0, 1.0))
+    viewport.renderer = renderer
 
     assert viewport._plane_distance() == pytest.approx(LEAST_PLANE_DISTANCE)
-
-
-class _StillCamera:
-    """Eine Attrappe, deren Kamera auf ihrem Blickpunkt sitzt."""
-
-    class _Camera:
-        position = (7.0, 7.0, 7.0)
-        focal_point = (7.0, 7.0, 7.0)
-
-    camera = _Camera()
 
 
 # --- Das Raster einer Zeichenebene (§30.1, P2b) ------------------------------
@@ -1654,29 +1400,24 @@ def test_the_sketch_focus_tracks_zoom_and_is_removed_exactly(
     """Die Pixelhöhe der Karte bleibt gleich, ihr Weltmaß nach Zoom nicht."""
     from app.ui.viewport import Viewport
 
-    camera = SimpleNamespace(parallel_projection=True, parallel_scale=100.0)
-    plotter = SimpleNamespace(
-        camera=camera,
-        camera_position=[
-            (0.0, 0.0, 10.0),
-            (0.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-        ],
-    )
+    renderer = RecordingRenderer()
+    renderer.parallel = True
+    renderer.scale_value = 100.0
+    renderer.pose = CameraPose((0.0, 0.0, 10.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0))
     viewport = Viewport()
     viewport.resize(1000, 1000)
-    viewport.plotter = plotter
+    viewport.renderer = renderer
     viewport._zone_margins = (0, 0, 400)
 
     assert viewport._apply_sketch_occlusion()
-    assert plotter.camera_position[1] == pytest.approx((0.0, -40.0, 0.0))
+    assert renderer.pose.focal_point == pytest.approx((0.0, -40.0, 0.0))
 
-    camera.parallel_scale = 50.0
+    renderer.scale_value = 50.0
     assert viewport._apply_sketch_occlusion()
-    assert plotter.camera_position[1] == pytest.approx((0.0, -20.0, 0.0))
+    assert renderer.pose.focal_point == pytest.approx((0.0, -20.0, 0.0))
 
     assert viewport._remove_sketch_occlusion()
-    assert plotter.camera_position[1] == pytest.approx((0.0, 0.0, 0.0))
+    assert renderer.pose.focal_point == pytest.approx((0.0, 0.0, 0.0))
 
 
 def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
@@ -1686,18 +1427,13 @@ def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
     from app.core.sketch.planes import frame_of
     from app.ui.viewport import Viewport
 
-    camera = SimpleNamespace(parallel_projection=True, parallel_scale=100.0)
-    plotter = SimpleNamespace(
-        camera=camera,
-        camera_position=[
-            (0.0, -40.0, 10.0),
-            (0.0, -40.0, 0.0),
-            (0.0, 1.0, 0.0),
-        ],
-    )
+    renderer = RecordingRenderer()
+    renderer.parallel = True
+    renderer.scale_value = 100.0
+    renderer.pose = CameraPose((0.0, -40.0, 10.0), (0.0, -40.0, 0.0), (0.0, 1.0, 0.0))
     viewport = Viewport()
     viewport.resize(1000, 1000)
-    viewport.plotter = plotter
+    viewport.renderer = renderer
     viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
     viewport._zone_margins = (0, 0, 400)
     viewport._sketch_occlusion_shift = (0.0, -40.0, 0.0)
@@ -1708,7 +1444,7 @@ def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
 
     viewport.view_from("right")
 
-    assert plotter.camera_position[1] == pytest.approx((0.0, 0.0, -40.0))
+    assert renderer.pose.focal_point == pytest.approx((0.0, 0.0, -40.0))
     assert viewport._sketch_occlusion_shift == pytest.approx((0.0, 0.0, -40.0))
     assert settled == [True], "die ViewBar meldet die neue Skizzenansicht ans Ebenenfeld"
 
@@ -1769,36 +1505,6 @@ def test_on_the_flat_plane_the_grid_runs_along_the_axes() -> None:
         assert start[2] == pytest.approx(7.0) and end[2] == pytest.approx(7.0)
 
 
-def test_two_strokes_share_one_flat_line_list() -> None:
-    """VTK erwartet je Linie erst ihre Länge, dann ihre Indizes.
-
-    Zwei Strecken über vier Punkten sind ``[2, 0, 1, 2, 2, 3]``. Die dritte
-    Zahl ist eine **Länge** und sieht aus wie ein Index — deshalb ist diese
-    Rechnung eine eigene Funktion und nicht eine Zeile im Zeichnen.
-    """
-    from app.ui.viewport import polyline_spans
-
-    assert polyline_spans([2]) == [2, 0, 1]
-    assert polyline_spans([2, 2]) == [2, 0, 1, 2, 2, 3]
-    assert polyline_spans([3, 2]) == [3, 0, 1, 2, 2, 3, 4]
-
-
-def test_a_curve_with_one_point_is_skipped_but_still_counted() -> None:
-    """Der Fall, an dem eine naive Fassung stillschweigend falsch wird.
-
-    Ein einzelner Punkt hat keine Strecke und gehört nicht in die Linienliste
-    — aber er liegt im Netz und **verschiebt die Indizes aller folgenden**.
-    Wer ihn nur überspringt, ohne weiterzuzählen, zeichnet danach jede Linie
-    einen Punkt zu früh.
-    """
-    from app.ui.viewport import polyline_spans
-
-    assert polyline_spans([1, 2]) == [2, 1, 2], "die Strecke nutzt Punkt 1 und 2, nicht 0 und 1"
-    assert polyline_spans([2, 1, 2]) == [2, 0, 1, 2, 3, 4]
-    assert polyline_spans([1]) == []
-    assert polyline_spans([]) == []
-
-
 def test_showing_a_sketch_without_a_plotter_changes_nothing(qt_app: QApplication) -> None:
     """Offscreen gibt es keine Szene, und das darf nicht wehtun.
 
@@ -1811,7 +1517,7 @@ def test_showing_a_sketch_without_a_plotter_changes_nothing(qt_app: QApplication
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    assert viewport.plotter is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
+    assert viewport.renderer is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
 
     frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
     viewport.show_sketch(
@@ -1902,29 +1608,20 @@ def test_the_grid_follows_the_camera_and_not_the_hidden_drawing_area() -> None:
 def test_the_camera_keeps_its_distance_from_an_empty_scene(qt_app: QApplication) -> None:
     """Ohne Modell hat ``reset_camera`` nie stattgefunden.
 
-    pyvista startet dann mit einer Kamera 1,62 Einheiten vor dem Ursprung.
-    Diesen Abstand treu zu übernehmen hieße, aus 1,6 Millimetern auf die
+    VTK startet dann mit einer Kamera 1,62 Einheiten vor dem Ursprung. Diesen
+    Abstand treu zu übernehmen hieße, aus 1,6 Millimetern auf die
     Zeichenebene zu sehen — gemessen 918 Bildpunkte je Millimeter und ein
-    Raster von 0,1 mm.
-
-    Getroffen hätte es ausgerechnet **Weg 2**, neu konstruieren: Nur dort ist
-    die Szene leer, wenn der Skizzenmodus beginnt.
+    Raster von 0,1 mm. Getroffen hätte es ausgerechnet **Weg 2**.
     """
     from app.core.units import EPS_GEOM
     from app.ui.viewport import LEAST_PLANE_DISTANCE, Viewport
 
-    # Genau die Stellung, mit der pyvista einen leeren Plotter aufmacht.
-    class _FreshPlotter:
-        class _Camera:
-            position = (1.0, -1.0, 0.8)
-            focal_point = (0.0, 0.0, 0.0)
-
-        camera = _Camera()
-
+    renderer = RecordingRenderer()
+    renderer.pose = CameraPose((1.0, -1.0, 0.8), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
     viewport = Viewport()
-    viewport.plotter = _FreshPlotter()  # type: ignore[assignment]
+    viewport.renderer = renderer
 
-    span = math.dist(_FreshPlotter._Camera.position, _FreshPlotter._Camera.focal_point)
+    span = math.dist(renderer.pose.position, renderer.pose.focal_point)
     assert span == pytest.approx(1.6248, abs=1e-3), "die gemessene Startstellung"
     assert span > EPS_GEOM, "sie ist nicht null — die alte Untergrenze hätte sie durchgelassen"
 
@@ -1971,7 +1668,7 @@ def test_the_bed_floor_steps_aside_but_its_edges_stay(qt_app: QApplication) -> N
             self.name = name
             self.visible = True
 
-        def SetVisibility(self, on: bool) -> None:  # noqa: N802 - VTKs Name
+        def set_visible(self, on: bool) -> None:
             self.visible = bool(on)
 
     surface, grid = _Actor("Fläche"), _Actor("Raster")
@@ -2003,35 +1700,29 @@ def test_the_bed_floor_steps_aside_but_its_edges_stay(qt_app: QApplication) -> N
 
 
 def test_a_body_in_pieces_casts_one_shadow_per_piece(qt_app: QApplication) -> None:
-    """Ein Körper ist nicht immer ein Stück — und der Schatten weiß es jetzt.
+    """Ein Körper ist nicht immer ein Stück — und der Schatten weiß es.
 
-    Der Kontaktschatten ist die konvexe Hülle des Körpers. Über ein Stück ist
-    das richtig und billig: Ein Ansichtswechsel kostet dann nur die Projektion
-    statt einer Triangulierung über jeden Punkt des Anzeigenetzes. Über
-    **drei** Stücke spannt dieselbe Hülle über die Luft dazwischen und wirft
-    den Schatten eines Dings, das es nicht gibt.
-
-    Der Fall ist keiner aus dem Lehrbuch: Ein Baustein auf einem zu schmalen
-    Träger hinterlässt genau das — den Träger und zwei Haken daneben (Befund
-    Robert, 25.08.2026, am Bildschirm gesehen, bevor der Prüfbericht es sagte).
+    Über ein Stück ist die konvexe Hülle richtig und billig; über **drei**
+    Stücke spannt dieselbe Hülle über die Luft dazwischen und wirft den
+    Schatten eines Dings, das es nicht gibt (Befund Robert, 25.08.2026: ein
+    Träger und zwei Haken daneben).
     """
     import numpy as np
-    import pyvista as pv
 
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
     try:
-        one = pv.Cube(center=(0.0, 0.0, 0.0), x_length=10, y_length=10, z_length=10)
-        assert len(viewport._shadow_hulls_of(one.triangulate())) == 1, (
+        one = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        assert len(viewport._shadow_hulls_of(np.asarray(one.vertices), MeshData(one))) == 1, (
             "ein einteiliger Körper wirft einen Schatten — wie vorher"
         )
 
-        far = pv.Cube(center=(40.0, 0.0, 0.0), x_length=4, y_length=4, z_length=4)
-        farther = pv.Cube(center=(-40.0, 0.0, 0.0), x_length=4, y_length=4, z_length=4)
-        apart = (one + far + farther).triangulate()
+        far = trimesh.creation.box(extents=(4.0, 4.0, 4.0)).apply_translation((40.0, 0.0, 0.0))
+        farther = trimesh.creation.box(extents=(4.0, 4.0, 4.0)).apply_translation((-40.0, 0.0, 0.0))
+        apart = trimesh.util.concatenate([one, far, farther])
 
-        hulls = viewport._shadow_hulls_of(apart)
+        hulls = viewport._shadow_hulls_of(np.asarray(apart.vertices), MeshData(apart))
 
         assert len(hulls) == 3, f"drei Stücke, drei Hüllen — gefunden: {len(hulls)}"
         # Und keine davon reicht über den Zwischenraum: Die breiteste Hülle ist
@@ -2039,9 +1730,7 @@ def test_a_body_in_pieces_casts_one_shadow_per_piece(qt_app: QApplication) -> No
         widest = max(
             float(np.asarray(hull)[:, 0].max() - np.asarray(hull)[:, 0].min()) for hull in hulls
         )
-        assert widest < 20.0, (
-            f"eine Hülle spannt über {widest:.1f} mm — das ist der Abstand, nicht ein Stück"
-        )
+        assert widest == pytest.approx(10.0), f"eine Hülle spannt über die Lücke: {widest}"
     finally:
         viewport.deleteLater()
 
@@ -2091,96 +1780,45 @@ def test_a_fitting_focus_stays_and_a_dead_camera_cannot_aim() -> None:
     assert rotation_focus((7.0, 7.0, 7.0), (7.0, 7.0, 7.0), (0.0, 0.0, 0.0)) is None
 
 
-class _AimedCamera:
-    """Eine Attrappe mit den vier Methoden, die ``_aim_rotation`` benutzt."""
-
-    def __init__(self) -> None:
-        self.set_to: tuple[float, ...] | None = None
-
-    def GetPosition(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        return (0.0, -10.0, 0.0)
-
-    def GetFocalPoint(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        return (0.0, 0.0, 0.0)
-
-    def SetFocalPoint(self, *point: float) -> None:  # noqa: N802 — VTK-Name
-        self.set_to = point
-
-
-class _AimedPlotter:
-    """Renderer und Kamera, mehr braucht der Drehbeginn nicht.
-
-    Ohne Größe hat der Renderer keine Bildmitte — dann fragt der Drehbeginn
-    den Picker gar nicht erst, und die Attrappe braucht keinen.
-    """
-
-    class _Renderer:
-        def __init__(self, camera: _AimedCamera, size: tuple[int, int]) -> None:
-            self._camera = camera
-            self._size = size
-            self.clipped = False
-
-        def GetActiveCamera(self) -> _AimedCamera:  # noqa: N802 — VTK-Name
-            return self._camera
-
-        def GetSize(self) -> tuple[int, int]:  # noqa: N802 — VTK-Name
-            return self._size
-
-        def GetOrigin(self) -> tuple[int, int]:  # noqa: N802 — VTK-Name
-            return (0, 0)
-
-        def ResetCameraClippingRange(self) -> None:  # noqa: N802 — VTK-Name
-            self.clipped = True
-
-    def __init__(self, size: tuple[int, int] = (0, 0)) -> None:
-        self.camera = _AimedCamera()
-        self.renderer = self._Renderer(self.camera, size)
-
-
 def test_the_rotation_start_aims_over_the_weak_callback(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der Drehbeginn setzt den Fokus — über den schwachen Rückruf.
 
-    Der Weg ist derselbe wie bei den übrigen Rückrufen an den
-    Interaktionsstil: ``_weak_callbacks`` hält die Ansicht schwach, sonst
-    stünde die Schleife Stil → Viewport → Plotter → Interactor → Stil wieder
-    da. Geprüft wird die Kette bis in die Kamera, mit einer Attrappe, die
-    genau die benutzten VTK-Methoden trägt.
+    Auf dem Sichtstrahl, in der Tiefe des Drehpunkts; Stellung und
+    Blickrichtung bleiben (Robert, 23.08.2026: „kamera bei aktueller position
+    dann immer lassen"). Ein neuer Fokus braucht neue Schnittebenen.
     """
     from app.ui.viewport import Viewport, _weak_callbacks
 
     viewport = Viewport()
     try:
-        plotter = _AimedPlotter()
-        viewport.plotter = plotter  # type: ignore[assignment]
+        renderer = RecordingRenderer(size=(0, 0))
+        renderer.pose = CameraPose((0.0, -10.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        viewport.renderer = renderer
         monkeypatch.setattr(viewport, "rotation_centre", lambda: (30.0, 10.0, 4.0))
 
         _weak_callbacks(viewport).on_rotate_start()
 
-        assert plotter.camera.set_to == pytest.approx((0.0, 10.0, 0.0))
-        assert plotter.renderer.clipped, "ein neuer Fokus braucht neue Schnittebenen"
+        assert renderer.pose.focal_point == pytest.approx((0.0, 10.0, 0.0))
+        assert renderer.pose.position == pytest.approx((0.0, -10.0, 0.0)), "die Stellung bleibt"
+        assert renderer.clips, "ein neuer Fokus braucht neue Schnittebenen"
     finally:
-        viewport.plotter = None
+        viewport.renderer = None
         viewport.deleteLater()
 
 
 def test_the_rotation_point_is_what_the_middle_of_the_view_shows(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Gedreht wird um den Körper in der Bildmitte, nicht um die Mitte aller.
-
-    Robert, 04.09.2026: „beim rotieren der ansicht wollen wir uns um den
-    mittelpunkt des viewports drehen." Wer auf ein Detail zoomt, dreht sonst
-    um eine Tiefe, die eine halbe Bauhöhe dahinterliegt, und das Detail
-    schwenkt aus dem Bild.
-    """
+    """Gedreht wird um den Körper in der Bildmitte, nicht um die Mitte aller."""
     from app.ui.viewport import Viewport, _weak_callbacks
 
     viewport = Viewport()
     try:
-        plotter = _AimedPlotter(size=(800, 600))
-        viewport.plotter = plotter  # type: ignore[assignment]
+        renderer = RecordingRenderer(size=(800, 600))
+        renderer.pose = CameraPose((0.0, -10.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        viewport.renderer = renderer
         asked: list[tuple[int, int]] = []
 
         def _hit(x: int, y: int) -> tuple[float, float, float]:
@@ -2194,34 +1832,31 @@ def test_the_rotation_point_is_what_the_middle_of_the_view_shows(
         _weak_callbacks(viewport).on_rotate_start()
 
         assert asked == [(400, 300)], "gefragt wird die Mitte des Renderers"
-        assert plotter.camera.set_to == pytest.approx((0.0, -2.0, 0.0))
+        assert renderer.pose.focal_point == pytest.approx((0.0, -2.0, 0.0))
     finally:
-        viewport.plotter = None
+        viewport.renderer = None
         viewport.deleteLater()
 
 
 def test_without_a_body_in_the_middle_the_body_centre_decides(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Zeigt die Mitte auf den Hintergrund, bleibt es beim alten Weg.
-
-    Denselben Rückfall nimmt der Fall, in dem der Zell-Picker nichts findet,
-    weil der Strahl senkrecht in eine Bohrung läuft.
-    """
+    """Zeigt die Mitte auf den Hintergrund, bleibt es beim alten Weg."""
     from app.ui.viewport import Viewport, _weak_callbacks
 
     viewport = Viewport()
     try:
-        plotter = _AimedPlotter(size=(800, 600))
-        viewport.plotter = plotter  # type: ignore[assignment]
+        renderer = RecordingRenderer(size=(800, 600))
+        renderer.pose = CameraPose((0.0, -10.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        viewport.renderer = renderer
         monkeypatch.setattr(viewport, "_world_at", lambda x, y: None)
         monkeypatch.setattr(viewport, "rotation_centre", lambda: (30.0, 10.0, 4.0))
 
         _weak_callbacks(viewport).on_rotate_start()
 
-        assert plotter.camera.set_to == pytest.approx((0.0, 10.0, 0.0))
+        assert renderer.pose.focal_point == pytest.approx((0.0, 10.0, 0.0))
     finally:
-        viewport.plotter = None
+        viewport.renderer = None
         viewport.deleteLater()
 
 
@@ -2364,22 +1999,8 @@ def test_a_body_is_split_once_while_its_mesh_stays(
 ) -> None:
     """Zerlegt wird ein Körper, wenn sein Netz ein anderes ist — sonst nicht.
 
-    ``split_bodies`` kostet 21 ms bei zweiundachtzigtausend Dreiecken, und
-    ``_shadow_hulls_of`` nannte das „einmal je Szenenaufbau, nicht je Bild".
-    Der zweite Halbsatz stimmt, der erste beruhigt zu Unrecht: Ein Aufbau ist
-    nichts Seltenes. ``show_scene`` läuft bei jeder Auswahl, jedem
-    Themenwechsel, jedem Ein- und Ausblenden — und bei **jedem Schritt** der
-    Schieber für Explosion, Schnitt und Schicht. Bei zwanzig Teilen auf der
-    Platte sind das über vierhundert Millisekunden je Schieberschritt, im
-    Qt-Hauptthread.
-
-    Geprüft wird die **Entscheidung** und nicht die Zeit: wie oft zerlegt
-    wird. Eine Messung in Millisekunden gehört ins Leistungsbudget (§31) und
-    hieße hier auf jeder Maschine etwas anderes.
-
-    Der letzte Schritt ist der, der den Cache ehrlich hält: Ein anderes Netz
-    **muss** neu zerlegt werden. Der Schnittschieber erzeugt genau das, und
-    ein zerschnittener Körper zerfällt womöglich in andere Stücke als vorher.
+    Verglichen wird die Identität des Netzes; ``show_scene`` läuft bei jeder
+    Auswahl und jedem Schieberschritt, und das Netz bleibt dabei dasselbe.
     """
     from app.ui.viewport import Viewport
 
@@ -2387,8 +2008,8 @@ def test_a_body_is_split_once_while_its_mesh_stays(
     try:
         split: list[object] = []
 
-        def _count(surface: object) -> list[str]:
-            split.append(surface)
+        def _count(points: object, mesh: object) -> list[str]:
+            split.append(points)
             return ["hülle"]
 
         monkeypatch.setattr(viewport, "_shadow_hulls_of", _count)
@@ -2396,56 +2017,20 @@ def test_a_body_is_split_once_while_its_mesh_stays(
         mesh = object()
         other = object()
 
-        assert viewport._shadow_hulls_for("body_1", "fläche", mesh) == ["hülle"]
+        assert viewport._shadow_hulls_for("body_1", "punkte", "netz", mesh) == ["hülle"]
         assert len(split) == 1, "das erste Mal wird gerechnet"
 
-        viewport._shadow_hulls_for("body_1", "fläche", mesh)
-        viewport._shadow_hulls_for("body_1", "fläche", mesh)
+        viewport._shadow_hulls_for("body_1", "punkte", "netz", mesh)
+        viewport._shadow_hulls_for("body_1", "punkte", "netz", mesh)
         assert len(split) == 1, "dasselbe Netz wird kein zweites Mal zerlegt"
 
-        viewport._shadow_hulls_for("body_2", "fläche", mesh)
+        viewport._shadow_hulls_for("body_2", "punkte", "netz", mesh)
         assert len(split) == 2, "ein anderer Körper hat seinen eigenen Eintrag"
 
-        viewport._shadow_hulls_for("body_1", "fläche", other)
+        viewport._shadow_hulls_for("body_1", "punkte", "netz", other)
         assert len(split) == 3, "ein anderes Netz schon — der Schnitt baut eines"
     finally:
         viewport.deleteLater()
-
-
-def test_the_wheel_zooms_in_both_projections() -> None:
-    """Das Rad war orthografisch tot, und kein Test hat es gemessen.
-
-    ``vtkCamera.Dolly`` teilt die Distanz zur Fokusebene — in der
-    Parallelprojektion bestimmt aber allein ``parallel_scale`` die Bildgröße,
-    und die Position ist ihr gleichgültig. Der Skizzenmodus stellt
-    orthografisch (§30.1), also tat dort jeder Radschritt **nichts**:
-    gemessen am 26.08.2026 am echten Fenster, acht Schritte, Bild byteweise
-    unverändert. ``apply_wheel_zoom`` trägt die Fallunterscheidung, die VTKs
-    eigener Trackball-Dolly (rechte Taste im CAD-Schema) intern schon trug.
-
-    Gegen die echte ``vtkCamera`` und nicht gegen eine Attrappe: Die Aussage
-    „Dolly ändert die Scale nicht" ist eine über VTK, und eine Attrappe
-    bezeugte nur sich selbst. Ein Kameraobjekt braucht kein Fenster.
-    """
-    from vtkmodules.vtkRenderingCore import vtkCamera
-
-    from app.ui.viewport import apply_wheel_zoom
-
-    camera = vtkCamera()
-    camera.SetParallelProjection(True)
-    camera.SetParallelScale(50.0)
-    apply_wheel_zoom(camera, 2.0)
-    assert camera.GetParallelScale() == pytest.approx(25.0), (
-        "hineinzoomen muss den sichtbaren Ausschnitt verkleinern"
-    )
-
-    camera.SetParallelProjection(False)
-    camera.SetPosition(0.0, 0.0, 100.0)
-    camera.SetFocalPoint(0.0, 0.0, 0.0)
-    apply_wheel_zoom(camera, 2.0)
-    assert camera.GetDistance() == pytest.approx(50.0), (
-        "perspektivisch bleibt der Weg der alte: Dolly teilt die Distanz"
-    )
 
 
 # --- Der Ziehgriff der Querschau (§30.1) -------------------------------------
@@ -2678,7 +2263,7 @@ def gripping(viewport: Any, *, height: float | None = 10.0) -> None:
     """Stellt die Ansicht so, als läge der Zeiger auf dem Griff.
 
     **Ohne diese Attrappe ist jeder Test über den Griff grün und prüft
-    nichts** (§35). Offscreen ist ``plotter`` None, also gibt ``_display_of``
+    nichts** (§35). Offscreen ist ``renderer`` None, also gibt ``_display_of``
     nichts, ``grip_reach`` unendlich und ``sketch_pull_ready`` **immer**
     ``False`` — auch mit gesetztem Angebot. Die erste Fassung dieses Tests
     behauptete damit „ohne Frage kein Griff" und hätte auch bei einem Griff,
@@ -3517,57 +3102,6 @@ def test_the_stretch_is_bounded_by_the_snap_that_precedes_it() -> None:
         )
 
 
-def test_the_style_survives_what_pyvista_does_on_a_double_click(qt_app: QApplication) -> None:
-    """Zwei Klicks auf dieselbe Stelle sind ein Doppelklick — und der nahm uns
-    bis hierher die ganze Bedienung der Ansicht.
-
-    pyvista meldet ``_toggle_chart_interaction`` als Rückruf für den linken
-    Doppelklick an, immer, auch ohne ein einziges Diagramm in der Szene. Findet
-    er keines, endet er in ``_set_context_style(None)``, und dessen letzte
-    Zeile ist ``update_style()``: Der Interactor bekommt den Stil gesetzt, den
-    **pyvista** für den seinen hält. Wer seinen eigenen mit
-    ``SetInteractorStyle`` daran vorbei angehängt hat, verliert ihn dort.
-
-    Der Preis war nicht ein Detail, sondern §18.5 im Ganzen: Die gestufte
-    Auswahl braucht zwei Klicks auf dieselbe Stelle (erst der Körper, dann die
-    Bohrung darin) — also genau einen Doppelklick. Nach dem zweiten Klick fuhr
-    die Ansicht mit VTKs Trackball: keine Auswahl mehr, kein Kontextmenü, keine
-    Abwahl durch einen Klick ins Leere, und das eingestellte Schema war weg
-    (Robert, 04.09.2026: „ist die neue Steuerung nicht als Standard
-    vorgewählt … kann ich nichts anderes auswählen … das Abwählen … geht auch
-    nicht" — drei Meldungen, eine Ursache).
-
-    **Gemessen an einem echten pyvista-Interactor**, nicht an einer Attrappe:
-    ``pv.Plotter(off_screen=True)`` bringt ``iren`` mitsamt ``style`` und
-    ``update_style`` mit, und aufgerufen wird die Methode, die den Schaden
-    angerichtet hat.
-    """
-    import pyvista as pv
-
-    from app.ui.viewport import Viewport
-
-    viewport = Viewport()
-    plotter = pv.Plotter(off_screen=True)
-    try:
-        viewport.plotter = cast(Any, plotter)
-        viewport.set_navigation("solidon")
-
-        angehaengt = plotter.iren.interactor.GetInteractorStyle()
-        assert hasattr(angehaengt, "_left_down"), "der eigene Stil hängt am Interactor"
-
-        # Was pyvista beim Doppelklick zuletzt tut.
-        plotter.iren._set_context_style(None)
-
-        danach = plotter.iren.interactor.GetInteractorStyle()
-        assert hasattr(danach, "_left_down"), (
-            "nach pyvistas update_style muss der eigene Stil noch hängen — sonst "
-            "wählt der zweite Klick der gestuften Tiefe nichts mehr aus"
-        )
-    finally:
-        viewport.plotter = None
-        plotter.close()
-
-
 def test_each_navigation_scheme_does_what_its_name_promises() -> None:
     """Vier Schemata, und zwei hielten ihren eigenen Namen nicht (V3).
 
@@ -3704,53 +3238,22 @@ def test_the_body_gets_more_light_where_its_colour_is_darker() -> None:
 
 
 def test_the_theme_really_reaches_the_headlight() -> None:
-    """``set_theme`` stellt das Frontlicht ein — und findet es über seine Art.
+    """``set_theme`` stellt das Frontlicht ein — je Thema seine Stärke.
 
-    Offscreen gibt es keinen Plotter, also eine Attrappe mit genau dem, was
-    benutzt wird (wie in ``test_cursors.py``). Geprüft wird beides: dass der
-    Wert des Themas ankommt, und dass **nur** das Headlight ihn bekommt — die
-    vier Kameralichter des Light Kits stehen über und hinter dem Teil und
-    haben mit dieser Entscheidung nichts zu tun.
-
-    Gesucht wird über ``light_type`` und nicht über die Stelle in der Liste:
-    Welche Lichter pyvista aufstellt und in welcher Reihenfolge, ist seine
-    Sache und kann sich mit einer neuen Fassung ändern.
+    Eine themenabhängige Konstante nützt nichts, solange die Zeichenstelle
+    weiter die Konstante liest statt den gemerkten Wert (``ansicht.md``).
     """
-    from types import SimpleNamespace
-
     from app.ui.viewport import HEADLIGHT, Viewport
 
-    def lampe(art: str) -> SimpleNamespace:
-        return SimpleNamespace(light_type=art, intensity=0.25)
-
     for thema in ("light", "dark"):
-        lichter = [
-            lampe("Headlight"),
-            lampe("Camera Light"),
-            lampe("Camera Light"),
-            lampe("Camera Light"),
-            lampe("Camera Light"),
-        ]
-        attrappe = SimpleNamespace(renderer=SimpleNamespace(lights=lichter))
+        renderer = RecordingRenderer()
         blind = cast(Any, Viewport.__new__(Viewport))
-        blind.plotter = attrappe
+        blind.renderer = renderer
         Viewport._light_the_body(blind, thema)
 
-        assert lichter[0].intensity == HEADLIGHT[thema], (
-            f"{thema}: Frontlicht steht auf {lichter[0].intensity}, erwartet {HEADLIGHT[thema]}"
+        assert renderer.headlight == HEADLIGHT[thema], (
+            f"{thema}: Frontlicht steht auf {renderer.headlight}, erwartet {HEADLIGHT[thema]}"
         )
-        assert all(licht.intensity == 0.25 for licht in lichter[1:]), (
-            "die Kameralichter des Light Kits gehören nicht dazu"
-        )
-
-    # Und ohne Headlight passiert nichts, statt dass es kracht: Was pyvista
-    # aufstellt, ist seine Sache, und ein Körper ohne Frontlicht ist dunkler,
-    # aber sichtbar.
-    ohne = [lampe("Camera Light"), lampe("Scene Light")]
-    blind = cast(Any, Viewport.__new__(Viewport))
-    blind.plotter = SimpleNamespace(renderer=SimpleNamespace(lights=ohne))
-    Viewport._light_the_body(blind, "light")
-    assert all(licht.intensity == 0.25 for licht in ohne), "ohne Headlight bleibt alles stehen"
 
 
 def test_switching_the_theme_actually_touches_the_headlight() -> None:
@@ -3850,47 +3353,20 @@ def test_the_theme_reaches_the_shadow_and_the_drawing_reads_it() -> None:
 def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> None:
     """Die Marke einer angeklickten Warnung — und sie bleibt nicht stehen.
 
-    Ein Klick auf einen Befund brachte die Kamera an einen Ort und sonst
-    nichts; wo eine Analysekarte läuft, färbt sie die Stelle ein, und die
-    Hälfte der Befunde hat keine. Gemessen am 30.08.2026 über alle 58 Befunde
-    der Beispielprojekte: **keiner** löste überhaupt eine sichtbare Reaktion
-    aus.
-
-    Geprüft wird ohne Fenster über eine Attrappe mit genau den Methoden, die
-    ``mark_finding`` benutzt — wie in ``test_cursors.py``. Sie zählt mit, was
-    hinzugefügt und was wieder entfernt wird; das ist die Zusage, um die es
-    geht, denn eine Marke, die stehen bleibt, wäre eine zweite Auswahl neben
-    der echten.
+    Ring und Beschriftung entstehen aus dem semantischen Zustand; eine
+    Kartenberechnung zeichnet sie neu, ohne die Frist zu verlängern; ein
+    neues Ergebnis verwirft Aktoren und Zustand gemeinsam; nach der Frist
+    steht nichts mehr.
     """
-    from types import SimpleNamespace
-
     from app.ui.viewport import FINDING_MARK_MS, Viewport
 
-    gelegt: list[str] = []
     starts: list[int] = []
     stops: list[None] = []
-
-    class Attrappe:
-        camera = SimpleNamespace(
-            position=(0.0, -100.0, 60.0), focal_point=(0.0, 0.0, 0.0), parallel_scale=50.0
-        )
-
-        def add_mesh(self, *args: Any, **kwargs: Any) -> str:
-            gelegt.append(str(kwargs.get("name", "mesh")))
-            return str(kwargs.get("name", "mesh"))
-
-        def add_point_labels(self, *args: Any, **kwargs: Any) -> str:
-            gelegt.append(str(kwargs.get("name", "label")))
-            return str(kwargs.get("name", "label"))
-
-        def remove_actor(self, actor: Any, render: bool = True) -> None:
-            gelegt.remove(str(actor))
-
-        def render(self) -> None:
-            pass
+    renderer = RecordingRenderer()
+    renderer.pose = CameraPose((0.0, -100.0, 60.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
 
     blind = cast(Any, Viewport.__new__(Viewport))
-    blind.plotter = Attrappe()
+    blind.renderer = renderer
     blind._finding_actors = []
     blind._finding_mark = None
     current = SimpleNamespace(name="dieselbe Auswertung")
@@ -3900,9 +3376,13 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
         stop=lambda: stops.append(None),
     )
 
+    def standing() -> list[str]:
+        gone = {id(item) for item in renderer.removed}
+        return [item.name for item in renderer.items if id(item) not in gone]
+
     Viewport.mark_finding(blind, (10.0, 5.0, 2.0), "Wandstärke 0,8 mm")
-    assert gelegt == ["finding_ring", "finding_label"], (
-        f"Ring und Beschriftung gehören beide dazu: {gelegt}"
+    assert standing() == ["finding_ring", "finding_label"], (
+        f"Ring und Beschriftung gehören beide dazu: {standing()}"
     )
     assert blind._finding_mark == ((10.0, 5.0, 2.0), "Wandstärke 0,8 mm", "")
     assert starts == [FINDING_MARK_MS], "die Nutzerhandlung startet genau eine Frist"
@@ -3911,10 +3391,9 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
     # Ein Szenenneuaufbau kann die nativen Aktoren verlieren, während die
     # Python-Referenzen noch stehen. Dieselbe Auswertung zeichnet aus dem
     # semantischen Zustand neu, ohne den Zeitgeber noch einmal zu starten.
-    gelegt.clear()
     assert Viewport._prepare_finding_mark(blind, current)
     Viewport._draw_finding_mark(blind)
-    assert gelegt == ["finding_ring", "finding_label"]
+    assert standing() == ["finding_ring", "finding_label"]
     assert starts == [FINDING_MARK_MS], "eine Kartenberechnung verlängert die Marke nicht"
     assert len(stops) == stopped_after_mark, "dieselbe Auswertung beendet die Frist nicht"
 
@@ -3924,13 +3403,14 @@ def test_a_finding_gets_a_mark_that_goes_away_again(qt_app: QApplication) -> Non
     assert not Viewport._prepare_finding_mark(blind, changed)
     assert blind._finding_mark is None
     assert blind._finding_actors == []
+    assert standing() == []
 
     # Noch einmal setzen, damit auch das reguläre Ablaufen der Frist geprüft
     # wird und nicht nur der Wechsel auf ein neues Ergebnis.
     Viewport.mark_finding(blind, (10.0, 5.0, 2.0), "Wandstärke 0,8 mm")
 
     Viewport._hide_finding_mark(blind)
-    assert gelegt == [], f"nach der Frist steht nichts mehr: {gelegt}"
+    assert standing() == [], f"nach der Frist steht nichts mehr: {standing()}"
     assert blind._finding_actors == [], "und die Liste ist leer"
     assert blind._finding_mark is None, "auch der semantische Zustand ist abgelaufen"
 
@@ -3957,8 +3437,8 @@ def test_a_scene_rebuild_restores_only_a_visible_finding_mark(
     result = _scene_with_two_holes()
     viewport = Viewport()
     viewport.show_scene(result)
-    plotter = _RecordingPlotter()
-    viewport.plotter = plotter
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     starts: list[int] = []
     stops: list[None] = []
     viewport._finding_timer = cast(
@@ -3971,12 +3451,12 @@ def test_a_scene_rebuild_restores_only_a_visible_finding_mark(
     stopped_after_mark = len(stops)
     assert len(first) == 2
 
-    plotter.drawn.clear()
+    renderer.drawn.clear()
     viewport.show_scene(result)
     assert len(viewport._finding_actors) == 2
     assert tuple(viewport._finding_actors) != first, "der Neuaufbau zeichnet frische Aktoren"
-    assert plotter.names().count("finding_ring") == 1
-    assert plotter.names().count("finding_label") == 1
+    assert renderer.names().count("finding_ring") == 1
+    assert renderer.names().count("finding_label") == 1
     assert starts == [FINDING_MARK_MS], "der Kartenaufbau verlängert die Frist nicht"
     assert len(stops) == stopped_after_mark, "der Kartenaufbau beendet die Frist nicht"
 
@@ -4021,7 +3501,7 @@ def test_a_place_from_the_scene_is_shifted_into_the_view(qt_app: QApplication) -
     from app.ui.viewport import Viewport
 
     blind = cast(Any, Viewport.__new__(Viewport))
-    blind.plotter = None
+    blind.renderer = None
 
     # Ohne Kennung und ohne Auswertung bleibt der Punkt, wie er ist: Ein
     # Versatz, den man nicht zuordnen kann, ist keiner.
@@ -4479,18 +3959,16 @@ def test_the_snap_pulls_to_a_corner_only_within_its_reach(qt_app: QApplication) 
 def test_the_pointer_shows_where_the_measuring_click_would_land(qt_app: QApplication) -> None:
     """Der Zeiger stellt beim Messen dieselbe Frage wie der Klick.
 
-    Dieselbe Zusage wie bei der gestuften Auswahl: Eine Vorschau, die woanders
-    fängt als der Klick, verspricht etwas, das nicht eintritt. Geprüft wird
-    deshalb nicht, dass *irgendetwas* gezeichnet wird, sondern dass die
-    Ruhepause **dieselbe Rechnung mit demselben Punkt** anstößt — und dass sie
-    beim Messen die Merkmalssuche gar nicht erst fragt.
+    Der Kern zieht einen Messklick auf die nächste Ecke oder Kante; die
+    Marke davor kommt aus derselben Rechnung (Robert, 03.09.2026: „bei messen
+    ist das zielen relativ schwer"). Beim Messen wird kein Merkmal gesucht.
     """
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.plotter = SimpleNamespace(  # type: ignore[assignment]
-        renderer=None, interactor=SimpleNamespace(setCursor=lambda shape: None)
-    )
+    renderer = RecordingRenderer()
+    renderer.widget = SimpleNamespace(setCursor=lambda shape: None)
+    viewport.renderer = renderer
     viewport._hover_at = (120, 80)
     viewport.set_measure_mode("distance")
 
@@ -4713,94 +4191,47 @@ def test_the_candidates_of_a_question_are_shown_and_taken_back(
     assert viewport.candidates == (), "eine neue Auswertung räumt die Frage weg"
 
 
-class _DepthActor:
-    """So viel Aktor, wie die Tiefenordnung anfasst."""
-
-    def __init__(self, centre: tuple[float, float, float]) -> None:
-        self._centre = centre
-
-    def GetCenter(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-        return self._centre
-
-
-class _DepthRenderer:
-    """Der Renderer als Liste: Wer wird wann gezeichnet?"""
-
-    def __init__(self) -> None:
-        self.order: list[object] = []
-
-    def RemoveActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
-        if actor in self.order:
-            self.order.remove(actor)
-
-    def AddActor(self, actor: object) -> None:  # noqa: N802 — VTK-Name
-        self.order.append(actor)
-
-
 def test_transparent_bodies_are_drawn_from_back_to_front(qt_app: QApplication) -> None:
     """Ein durchsichtiges Bild darf nicht davon abhängen, in welcher
-    Reihenfolge die Körper entstanden sind.
+    Reihenfolge die Körper entstanden sind: der ferne zuerst, der nahe zuletzt.
 
-    **Der Befund, im Bild gemessen (Robert, 03.09.2026):** Zwei transparente
-    Quader hintereinander, dieselbe Szene in zwei Einfügereihenfolgen — 13 784
-    Bildpunkte Unterschied, größte Abweichung 47 von 255. VTK mischt
-    transluzente Flächen in der Reihenfolge der Prop-Sammlung, und die folgt
-    dem Anlegen (Quelltextfund 3d-druck-85).
-
-    Zwei andere Wege sind gemessen und gescheitert: `enable_depth_peeling`
-    nimmt an und fährt nicht, `vtkDepthSortPolyData` sortiert innerhalb eines
-    Körpers statt zwischen zweien. Die Aktoren selbst umzuhängen gibt **0**
-    Bildpunkte Unterschied.
-
-    Geprüft wird hier die Ordnung und die Wache davor — offscreen gibt es
-    keinen Plotter, also steht die Reihenfolge in einer Attrappe, die genau
-    die zwei Methoden kennt, die benutzt werden.
+    Die Ordnung hängt an ``_draw`` und merkt sich, wofür sie geordnet hat —
+    bei unveränderter Kamera fasst sie nichts an.
     """
-    from types import SimpleNamespace
-
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    nah = _DepthActor((0.0, -30.0, 0.0))
-    fern = _DepthActor((0.0, 30.0, 0.0))
-    renderer = _DepthRenderer()
-    renderer.order = [nah, fern]
-    viewport._actors = {"nah": nah, "fern": fern}  # type: ignore[assignment]
-    viewport.plotter = SimpleNamespace(  # type: ignore[assignment]
-        renderer=renderer,
-        camera=SimpleNamespace(GetPosition=lambda: (0.0, -500.0, 0.0)),
-    )
+    nah = RecordingItem("nah", np.array([[0.0, -30.0, 0.0]]), "#ffffff")
+    fern = RecordingItem("fern", np.array([[0.0, 30.0, 0.0]]), "#ffffff")
+    renderer = RecordingRenderer()
+    renderer.pose = CameraPose((0.0, -500.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+    viewport._actors = {"nah": nah, "fern": fern}
+    viewport.renderer = renderer
 
     # Massiv: der Tiefenpuffer ordnet, hier gibt es nichts zu tun.
     assert not viewport.sees_through
     viewport._order_by_depth()
-    assert renderer.order == [nah, fern], "ohne Durchsicht bleibt alles, wie es ist"
+    assert renderer.draw_orders == [], "ohne Durchsicht bleibt alles, wie es ist"
 
     # Der Modus wird hier gesetzt und nicht geschaltet: ``set_display_mode``
-    # baut die ganze Szene neu auf, und die Attrappe kennt genau die zwei
-    # Methoden, um die es geht. Dass der Schalter den Modus setzt, prüft der
-    # Test daneben.
+    # baut die ganze Szene neu auf. Dass der Schalter den Modus setzt, prüft
+    # der Test daneben.
     viewport._mode = "transparent"
     assert viewport.sees_through
     viewport._order_by_depth()
-    assert renderer.order == [fern, nah], (
+    assert renderer.draw_orders[-1] == [fern, nah], (
         "durchsichtig wird von hinten nach vorn gezeichnet — der ferne zuerst"
     )
 
-    # Zweiter Aufruf bei unveränderter Kamera: keine Arbeit. Die Methode hängt
-    # an ``_draw`` und läuft bei jedem Bild.
-    # **Verkehrt herum gelegt**, damit die Probe den Fall trifft: In richtiger
-    # Ordnung sähe ein zweiter Durchgang genauso aus wie keiner, und die
-    # Zusicherung wäre auch ohne Wache grün.
-    renderer.order = ["fremd", nah, fern]  # type: ignore[list-item]
+    # Zweiter Aufruf bei unveränderter Kamera: keine Arbeit.
+    ordered = len(renderer.draw_orders)
     viewport._order_by_depth()
-    assert renderer.order == ["fremd", nah, fern], "ohne Kamerabewegung wird nichts angefasst"
+    assert len(renderer.draw_orders) == ordered, "ohne Kamerabewegung wird nichts angefasst"
 
     # Und wenn die Kamera auf die andere Seite geht, dreht sich die Ordnung um.
-    viewport.plotter.camera = SimpleNamespace(GetPosition=lambda: (0.0, 500.0, 0.0))
-    renderer.order = [fern, nah]
+    renderer.pose = CameraPose((0.0, 500.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))
     viewport._order_by_depth()
-    assert renderer.order == [nah, fern], "von der anderen Seite ist der andere hinten"
+    assert renderer.draw_orders[-1] == [nah, fern], "von der anderen Seite ist der andere hinten"
 
     # Der Skizzenmodus zählt ebenso: Er stellt den Körper leise, damit die
     # Zeichnung darauf lesbar bleibt.
@@ -4808,13 +4239,6 @@ def test_transparent_bodies_are_drawn_from_back_to_front(qt_app: QApplication) -
     assert not viewport.sees_through
     viewport._sketch_frame = object()
     assert viewport.sees_through
-
-
-class _BedSurface:
-    """So viel Bettfläche, wie die Durchsicht anfasst."""
-
-    def __init__(self) -> None:
-        self.prop = SimpleNamespace(opacity=1.0)
 
 
 def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
@@ -4844,8 +4268,8 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     from app.ui.viewport import BED_SUNKEN_OPACITY, Viewport
 
     viewport = Viewport()
-    flaeche = _BedSurface()
-    viewport._bed_surfaces = [flaeche]  # type: ignore[list-item]
+    flaeche = RecordingItem("bed_surface_0", np.zeros((1, 3)), "#ffffff")
+    viewport._bed_surfaces = [flaeche]
 
     assert not viewport.sunken_body(), "ohne Auswertung liegt nichts unter der Platte"
 
@@ -4859,7 +4283,7 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     viewport._result = EvaluationResult(scene=Scene(objects={"oben": oben}))
     assert not viewport.sunken_body(), "ein Körper auf der Platte ragt nicht darunter"
     viewport._apply_bed_transparency()
-    assert flaeche.prop.opacity == 1.0, "und dann bleibt die Platte deckend"
+    assert flaeche.opacity() == 1.0, "und dann bleibt die Platte deckend"
     assert not viewport.sees_through
 
     unten = dataclasses.replace(
@@ -4872,7 +4296,7 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     viewport._result = EvaluationResult(scene=Scene(objects={"unten": unten}))
     assert viewport.sunken_body(), "dieser ragt darunter"
     viewport._apply_bed_transparency()
-    assert flaeche.prop.opacity == BED_SUNKEN_OPACITY, "und dann scheint die Platte durch"
+    assert flaeche.opacity() == BED_SUNKEN_OPACITY, "und dann scheint die Platte durch"
     assert viewport.sees_through, (
         "eine durchscheinende Fläche unter allen Körpern braucht die Tiefenordnung"
     )
@@ -4880,7 +4304,7 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     # Und zurück: Wer sein Teil wieder heraufholt, bekommt seine Platte wieder.
     viewport._result = EvaluationResult(scene=Scene(objects={"oben": oben}))
     viewport._apply_bed_transparency()
-    assert flaeche.prop.opacity == 1.0
+    assert flaeche.opacity() == 1.0
 
     # Ein ausgeblendeter Körper zählt nicht — was nicht im Bild ist, kann
     # niemand meinen (§18.8).
@@ -4888,17 +4312,6 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     assert viewport.sunken_body()
     viewport._hidden = frozenset({"unten"})
     assert not viewport.sunken_body(), "ausgeblendet ist nicht unter der Platte"
-
-
-class _FramingPlotter:
-    """So viel Plotter, wie das Einpassen anfasst: es rahmt und merkt sich das."""
-
-    def __init__(self) -> None:
-        self.framed: list[tuple[float, ...] | None] = []
-        self.camera_set = False
-
-    def reset_camera(self, bounds: tuple[float, ...] | None = None) -> None:
-        self.framed.append(bounds)
 
 
 def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
@@ -4974,10 +4387,10 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     # **Und jetzt die Kamera selbst.** Ohne diesen Teil war der Test grün, als
     # ich die Auswahl aus ``reset_camera`` wieder ausbaute — er maß die
     # Vorarbeit und nicht die Wirkung (Gegenprobe am 03.09.2026).
-    plotter = _FramingPlotter()
-    viewport.plotter = plotter  # type: ignore[assignment]
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     viewport.reset_camera()
-    gerahmt = plotter.framed[-1]
+    gerahmt = renderer.reset_bounds[-1]
     assert gerahmt is not None
     mitte = (gerahmt[0] + gerahmt[1]) / 2.0
     assert mitte == pytest.approx(0.0, abs=1.0), (
@@ -4988,7 +4401,7 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     # Ohne Auswahl dieselbe Frage, andere Antwort.
     viewport._selected = None
     viewport.reset_camera()
-    weit = plotter.framed[-1]
+    weit = renderer.reset_bounds[-1]
     assert weit is not None
     assert weit[1] - weit[0] > 200.0, "ohne Auswahl bleibt es die ganze Szene"
     viewport._selected = "klein"
@@ -4997,7 +4410,7 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     # nicht Gegenstand.
     viewport._sketch_frame = object()  # type: ignore[assignment]
     viewport.reset_camera()
-    beim_zeichnen = plotter.framed[-1]
+    beim_zeichnen = renderer.reset_bounds[-1]
     assert beim_zeichnen is not None
     assert beim_zeichnen[1] - beim_zeichnen[0] > 200.0
     viewport._sketch_frame = None
@@ -5012,66 +4425,49 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     assert gefragt == [False], "die Rahmung nach dem Wachsen nimmt die ganze Szene"
 
 
-class _EdgySurface:
-    """So viel PolyData, wie die Kantensuche anfasst — und sie zählt mit."""
-
-    def __init__(self, cells: int = 100) -> None:
-        self.n_cells = cells
-        self.searched = 0
-
-    def extract_feature_edges(self, **kwargs: object) -> _EdgySurface:
-        self.searched += 1
-        found = _EdgySurface(cells=12)
-        return found
-
-
-def test_the_body_edges_are_searched_once_per_mesh(qt_app: QApplication) -> None:
+def test_the_body_edges_are_searched_once_per_mesh(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Die Kantensuche lief bei jedem Aufbau neu — und ein Aufbau ist häufig.
 
-    **Gemessen am Kundenmodell `chufang.3mf`** (32 Körper, 5 476 596
-    Dreiecke, 03.09.2026): Ein Szenenaufbau kostete **1,02 s**, davon
-    **453 ms** allein `extract_feature_edges`. Das ist der teuerste einzelne
-    Posten — und `show_scene` läuft bei jeder Auswahl eines Körpers, jedem
-    Themenwechsel und jedem Schritt der Schieber für Explosion, Schnitt und
-    Schicht.
-
-    Der Kommentar bei :data:`FEATURE_EDGE_LIMIT` rechnet mit „dreißig
-    Millisekunden je Körper und Szenenaufbau"; die Rechnung stimmt, ihre
-    Annahme nicht. Dieselbe Fehleinschätzung stand schon einmal beim Schatten
-    (`_shadow_hulls_for`: „einmal je Szenenaufbau" hieß dort „selten"), und
-    dort ist sie längst behoben — die Kanten daneben blieben.
-
-    Mit dem Cache: **61 ms**, der Aufbau 0,74 s.
-
-    Geprüft wird, woran der Cache hängt (die Identität des Netzes, nicht sein
-    Inhalt) und dass ein anderes Netz neu sucht — der Schnittschieber erzeugt
-    genau das und soll den Cache nicht treffen.
+    Dieselbe Bauart wie beim Schatten: verglichen wird die Identität des
+    Netzes, ein geschnittener Körper ist ein anderes, und ohne Schlüssel gibt
+    es keinen Cache.
     """
+    from app.ui import viewport as viewport_module
+    from app.ui.render import shapes
     from app.ui.viewport import Viewport
 
+    searched: list[int] = []
+
+    def counting(vertices: Any, faces: Any, angle: float) -> Any:
+        searched.append(1)
+        return np.zeros((2, 3))
+
+    monkeypatch.setattr(viewport_module, "feature_edges", counting)
     viewport = Viewport()
-    fläche = _EdgySurface()
+    vertices, faces = shapes.cube((0.0, 0.0, 0.0), 10.0)
     netz = object()
 
-    zuerst = viewport._feature_edges_for("body", fläche, netz)
-    assert fläche.searched == 1
+    zuerst = viewport._feature_edges_for("body", vertices, faces, netz)
+    assert len(searched) == 1
     assert zuerst is not None
 
-    noch_einmal = viewport._feature_edges_for("body", fläche, netz)
-    assert fläche.searched == 1, "dasselbe Netz wird nicht zweimal durchsucht"
+    noch_einmal = viewport._feature_edges_for("body", vertices, faces, netz)
+    assert len(searched) == 1, "dasselbe Netz wird nicht zweimal durchsucht"
     assert noch_einmal is zuerst, "und es kommt dieselbe Geometrie zurück"
 
     # Ein geschnittener Körper ist ein anderes Netz — dort wäre der alte
     # Kantenzug falsch.
     geschnitten = object()
-    danach = viewport._feature_edges_for("body", fläche, geschnitten)
-    assert fläche.searched == 2, "ein anderes Netz wird durchsucht"
+    danach = viewport._feature_edges_for("body", vertices, faces, geschnitten)
+    assert len(searched) == 2, "ein anderes Netz wird durchsucht"
     assert danach is not zuerst
 
     # Ohne Netz gibt es nichts zu merken — dann bleibt es beim Suchen.
-    viewport._feature_edges_for("body", fläche, None)
-    viewport._feature_edges_for("body", fläche, None)
-    assert fläche.searched == 4, "ohne Schlüssel kein Cache"
+    viewport._feature_edges_for("body", vertices, faces, None)
+    viewport._feature_edges_for("body", vertices, faces, None)
+    assert len(searched) == 4, "ohne Schlüssel kein Cache"
 
 
 def _scene_with_a_hole_and_a_fillet() -> Any:
@@ -5342,115 +4738,66 @@ def test_a_drag_on_the_body_still_belongs_to_the_body(qt_app: QApplication) -> N
 def test_the_shadow_follows_the_part_while_it_is_dragged(qt_app: QApplication) -> None:
     """Ein Teil, dessen Schatten am Boden klebt, sieht falsch aus.
 
-    Gemessen am laufenden Fenster, ein Zug über 20 mm in X und 10 mm nach
-    oben: **null von drei** Schattenaktoren bewegten sich, während der Körper
-    wegwanderte. `_redraw_shadows` reagiert nur auf Kamerabewegungen, nicht
-    auf Objektbewegungen — es gab schlicht niemanden, der beim Ziehen
-    nachzieht.
-
-    Die Rechnung ist eine Translation: `shadow_points` wirft schräg, jeder
-    Punkt fällt um seine Höhe mal der waagerechten Lichtrichtung zur Seite.
-    Für **jeden** Punkt derselbe Versatz, also genügt es, den fertigen Aktor
-    zu setzen — und die Höhe wirkt dabei seitlich, was die beste Auskunft der
-    Geste ist: Wer ein Teil anhebt, sieht am Schatten, wie hoch es steht.
+    Der Schatten liegt auf dem Bett, er hebt sich nicht mit; eine Drehung
+    lässt ihn stehen — auch wenn sie mit einer Verschiebung kommt: Sie ändert
+    die Silhouette, und ein Schatten an der neuen Stelle in der alten Form
+    wäre schlechter als ein stehender.
     """
     from app.core.geom.transform import TransformSteps
     from app.ui.viewport import Viewport
 
-    class _Actor:
-        def __init__(self) -> None:
-            self.position = (0.0, 0.0, 0.0)
-
     viewport = Viewport()
     viewport.select("obj_1")
-    schatten = [_Actor(), _Actor()]
+    schatten = [RecordingItem("schatten", np.zeros((1, 3)), "#000000") for _ in range(2)]
     viewport._shadow_owners = {"obj_1": schatten}
     viewport._shadow_cast = (-0.5, -0.25)
 
     viewport._drag_shadow(TransformSteps(offset=(20.0, 0.0, 10.0), axis=None, angle=0.0, scale=1.0))
-    # 20 + 10·(-0,5) = 15 in X, 0 + 10·(-0,25) = -2,5 in Y, und immer 0 in Z:
-    # Der Schatten liegt auf dem Bett, er hebt sich nicht mit.
+    # 20 + 10·(-0,5) = 15 in X, 0 + 10·(-0,25) = -2,5 in Y, und immer 0 in Z.
     for aktor in schatten:
-        assert aktor.position == pytest.approx((15.0, -2.5, 0.0))
+        assert aktor.position() == pytest.approx((15.0, -2.5, 0.0))
 
-    # **Eine Drehung lässt ihn stehen — auch wenn sie mit einer Verschiebung
-    # kommt.** Sie ändert die Silhouette, und die liesse sich nur durch
-    # Neuprojizieren einholen; ein Schatten an der neuen Stelle in der alten
-    # Form wäre schlechter als ein stehender.
-    #
     # Der Versatz gehört zwingend in diesen Fall: Eine Drehung *ohne* ihn
     # ergäbe rechnerisch (0, 0, 0), und der Test könnte „stehen geblieben"
-    # nicht von „mitgezogen um nichts" unterscheiden — die Gegenprobe blieb
-    # damit grün.
+    # nicht von „mitgezogen um nichts" unterscheiden.
     for aktor in schatten:
-        aktor.position = (0.0, 0.0, 0.0)
+        aktor.set_position((0.0, 0.0, 0.0))
     viewport._drag_shadow(TransformSteps(offset=(20.0, 0.0, 10.0), axis="z", angle=30.0, scale=1.0))
     for aktor in schatten:
-        assert aktor.position == (0.0, 0.0, 0.0)
+        assert aktor.position() == (0.0, 0.0, 0.0)
 
 
 def test_the_handle_takes_the_size_of_what_is_selected(qt_app: QApplication) -> None:
     """Der Griff misst sich an dem, was gewählt ist — nicht am ganzen Teil.
 
-    Gemessen am laufenden Fenster an ``broomholdervcd_d35mm.stl``:
-
-        Körperaktor    133,58 mm  ->  Griff  40,07 mm
-        Scheibe hole_1  22,67 mm  ->  Griff   6,80 mm
-
-    **Und das ist Absicht** (Entscheidung Robert, 03.09.2026). Am selben Tag
-    war die Gegenfassung gebaut — ein Faktor, der beide gleich groß machte —,
-    und sie ist zurückgenommen worden: Wer eine Ø6-Bohrung gewählt hat, bewegt
-    die Bohrung, und ein Griff in Teilgröße läge weit über sie hinaus und sähe
-    aus, als ginge es um das ganze Teil.
-
-    Der Test hält damit eine **Entscheidung** fest und nicht bloß den
-    Ist-Zustand: Ohne ihn baut die nächste Sitzung denselben Faktor wieder ein
-    — die Beobachtung „der Griff ist an einer Bohrung winzig" stimmt ja, sie
-    ist nur kein Fehler.
-
-    Geprüft wird, was **ankommt**, nicht was dasteht: pyvista rechnet den
-    Anteil gegen die Diagonale des Aktors, den es bekommt. Also müssen beide
-    stimmen — der unveränderte Anteil und die Scheibe als Aktor.
+    An einer Bohrung hängt er an der Scheibe des Merkmals, und seine Pfeile
+    messen sich an ihr (Entscheidung Robert, 03.09.2026). Der Deckel in
+    Bildpunkten greift hier nicht: Das Doppel zählt zwanzig Bildpunkte je
+    Millimeter, damit die Scheibe groß genug ist.
     """
+    from app.ui.render.gizmo import ARROW_SHARE
     from app.ui.viewport import GIZMO_SCALE, Viewport
-
-    gesehen: dict[str, object] = {}
-
-    class _Nachgiebig:
-        """Antwortet auf alles — Attribut wie Aufruf.
-
-        Der Weg durch ``set_gizmo`` berührt Picker, Interactor und Beobachter;
-        sie einzeln nachzubauen hiesse, den Weg zu beschreiben statt ihn zu
-        gehen, und beim nächsten Zwischenschritt wäre der Test wieder rot,
-        ohne dass sich an seiner Zusage etwas geändert hat.
-        """
-
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        def add_affine_transform_widget(self, actor: Any, **kwargs: Any) -> Any:
-            gesehen["actor"] = actor
-            gesehen["scale"] = kwargs.get("scale")
-            return SimpleNamespace(_origin=(0.0, 0.0, 0.0), axes=None)
 
     viewport = Viewport()
     viewport.show_scene(_scene_with_a_hole_and_a_fillet())
     viewport.select("obj_1")
-    # Die Scheibe muss ihre Länge kennen: `_label_gizmo` misst daran, wie weit
-    # die Achsenbuchstaben hinter den Spitzen stehen.
-    scheibe = SimpleNamespace(GetLength=lambda: 22.67, center=(0.0, 0.0, 0.0))
+    # Die Scheibe hat eine Länge: `_label_gizmo` misst daran, wie weit die
+    # Achsenbuchstaben hinter den Spitzen stehen.
+    half = 22.67 / (2.0 * math.sqrt(3.0))
+    scheibe = RecordingItem(
+        "face-handle", np.array([[-half, -half, -half], [half, half, half]]), "#ffffff"
+    )
     viewport._face_handle = lambda feature: scheibe  # type: ignore[method-assign]
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.renderer = RecordingRenderer(scale=20.0)
 
     viewport.select_feature("hole_1")
     viewport.set_gizmo(True)
 
-    assert gesehen.get("actor") is scheibe, "der Griff hängt an der Scheibe des Merkmals"
-    assert gesehen.get("scale") == GIZMO_SCALE, (
+    gizmo = viewport._gizmo
+    assert gizmo is not None and gizmo.target is scheibe, (
+        "der Griff hängt an der Scheibe des Merkmals"
+    )
+    assert gizmo.arrow_length == pytest.approx(22.67 * GIZMO_SCALE * ARROW_SHARE), (
         "kein Umrechnungsfaktor auf die Körpergröße — am 03.09.2026 verworfen"
     )
 
@@ -5498,68 +4845,34 @@ def test_a_finished_fade_leaves_no_reference_to_a_dead_animation(qt_app: QApplic
 def test_a_click_looks_for_bodies_and_nothing_else(qt_app: QApplication) -> None:
     """Der Bewegungsgriff darf keine Auswahl abfangen.
 
-    „Ich kann die Bohrung in der Mitte nicht mehr auswählen wenn ich sie
-    anklicke" (Robert, 03.09.2026). Ein `vtkCellPicker` trifft alles, was im
-    Bild steht, und im Bild steht mehr als die Szene: die Pfeile des Griffs,
-    sein Skalierwürfel, Marken, Schatten, das Bett. Gemessen am laufenden
-    Fenster, Klick genau auf die Bohrungsmitte:
-
-        Griff aus                   -> 'hole_1'
-        Griff an, nichts gewählt    -> None       <- der Pfeil lag davor
-        Griff an, Bohrung gewählt   -> 'hole_1'
-
-    **Und der erste Prüfstand war grün.** Er fragte `_click_target(punkt)` mit
-    einem Weltpunkt und umging damit genau die Stelle, an der der Fehler saß.
-    Erst der Weg über `_world_at(x, y)` — der, den ein Klick nimmt — hat ihn
-    gezeigt.
-
-    Geprüft wird deshalb die Ursache: dass der Picker seine Kandidatenliste
-    aus den Körperaktoren füllt und ``PickFromListOn`` einschaltet. Ohne
-    Körper bleibt sie aus — im Skizzenmodus und im leeren Projekt gibt es
-    keine, und eine leere Liste träfe nie etwas.
+    Mit eingeschaltetem Griff traf ein Klick auf eine Bohrung dessen Pfeil,
+    und die Bohrung ließ sich nicht mehr auswählen (Robert, 03.09.2026).
+    Gesucht wird nur unter den Körpern — und ohne Körper über die ganze
+    Szene, denn eine leere Kandidatenliste träfe nie etwas.
     """
-    from app.ui.viewport import Viewport
-
-    gesehen: dict[str, object] = {}
-
-    class _Picker:
-        def SetTolerance(self, value: float) -> None:  # noqa: N802 — VTK-Name
-            gesehen["tolerance"] = value
-
-        def AddPickList(self, actor: Any) -> None:  # noqa: N802 — VTK-Name
-            gesehen.setdefault("liste", []).append(actor)  # type: ignore[union-attr]
-
-        def PickFromListOn(self) -> None:  # noqa: N802 — VTK-Name
-            gesehen["begrenzt"] = True
-
-        def Pick(self, *args: Any) -> int:  # noqa: N802 — VTK-Name
-            return 1
-
-        def GetPickPosition(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
-            return (1.0, 2.0, 3.0)
+    from app.ui.viewport import PICK_TOLERANCE, Viewport
 
     viewport = Viewport()
-    viewport.plotter = SimpleNamespace(renderer=object())  # type: ignore[assignment]
-    koerper = object()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    koerper = RecordingItem("object:obj_1", np.zeros((1, 3)), "#ffffff")
+    pfeil = RecordingItem("gizmo:arrow:0", np.zeros((1, 3)), "#ff0000")
     viewport._actors = {"obj_1": koerper}
 
-    import vtkmodules.vtkRenderingCore as VtkRenderingCore
+    renderer.picks[(700, 512)] = Pick((1.0, 2.0, 3.0), koerper, 0)
+    assert viewport._world_at(700, 512) == pytest.approx((1.0, 2.0, 3.0))
+    _x, _y, among, tolerance = renderer.pick_calls[-1]
+    assert among == [koerper], "nur die Körper stehen zur Wahl"
+    assert tolerance == PICK_TOLERANCE
 
-    echt = VtkRenderingCore.vtkCellPicker
-    VtkRenderingCore.vtkCellPicker = _Picker  # type: ignore[misc]
-    try:
-        assert viewport._world_at(700, 512) == pytest.approx((1.0, 2.0, 3.0))
-        assert gesehen.get("liste") == [koerper], "nur die Körper stehen zur Wahl"
-        assert gesehen.get("begrenzt") is True, "sonst trifft der Klick auch den Griff"
+    # Trifft der Picker den Pfeil des Griffs, zählt das nicht als Körper.
+    renderer.picks[(700, 512)] = Pick((1.0, 2.0, 3.0), pfeil, 0)
+    assert viewport._world_at(700, 512) is None, "sonst trifft der Klick auch den Griff"
 
-        # Ohne Körper bleibt die Begrenzung aus — sonst träfe nie etwas.
-        gesehen.clear()
-        viewport._actors = {}
-        viewport._world_at(700, 512)
-        assert "liste" not in gesehen
-        assert "begrenzt" not in gesehen, "eine leere Kandidatenliste trifft nie etwas"
-    finally:
-        VtkRenderingCore.vtkCellPicker = echt  # type: ignore[misc]
+    # Ohne Körper bleibt die Begrenzung aus — sonst träfe nie etwas.
+    viewport._actors = {}
+    assert viewport._world_at(700, 512) == pytest.approx((1.0, 2.0, 3.0))
+    assert renderer.pick_calls[-1][2] is None, "eine leere Kandidatenliste trifft nie etwas"
 
 
 def test_the_handle_of_a_hole_sits_at_its_mouth(qt_app: QApplication) -> None:
@@ -5744,7 +5057,7 @@ def test_a_view_setter_that_changes_nothing_rebuilds_nothing(qt_app: QApplicatio
         assert nach_dem_zweiten == 1, f"{name}: derselbe Wert baut nicht noch einmal auf"
 
     # **``set_theme`` wird an seiner Wirkung geprüft, nicht am Aufbau.** Er
-    # steigt offscreen vor ``show_scene`` aus (``if self.plotter is None``),
+    # steigt offscreen vor ``show_scene`` aus (``if self.renderer is None``),
     # und ein Test über den Zähler wäre hier grün, ohne etwas zu sagen — die
     # Prüfung sitzt aber davor und gilt auch ohne Plotter.
     viewport.set_theme("light")
@@ -5784,46 +5097,15 @@ def test_a_view_setter_that_changes_nothing_rebuilds_nothing(qt_app: QApplicatio
 def test_a_dragged_feature_leaves_a_mark_where_it_came_from(qt_app: QApplication) -> None:
     """Der Zug zeigt beides: wohin — und von wo.
 
-    „Die Bohrung, die beim Verschieben die Vorschau haben sollte" (Robert,
-    03.09.2026). Die Marke wandert mit dem Griff und hat seit `_handle_radius`
-    genau den Durchmesser des Merkmals; sie **ist** damit die Vorschau der
-    Zielstelle. Was fehlte, war der Bezug: Der Körper steht während des Zugs
-    still — seine Geometrie ändert sich erst bei der Auswertung —, und ohne
-    eine Marke am Ausgangsort sah es aus, als bewege sich nichts oder als ziehe
-    man das ganze Teil.
-
-    Gemessen am laufenden Fenster, Bohrung Ø 7,48, Zug über 25 mm:
-
-        vor dem Zug        kein Ring
-        während des Zugs   Ring bei (0, 0, 35), Ø 7,48 — die Ausgangsstelle
-        nach dem Zug       weg
-
-    **Er erscheint erst mit dem ersten sichtbaren Stück des Zugs.** Ihn schon
-    beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu behaupten, die
-    noch keine ist — dieselbe Zurückhaltung, die das Wertfeld daneben übt.
+    Der Geisterring markiert die Ausgangsstelle und fängt keine Klicks
+    (Robert, 03.09.2026); nach dem Zug gilt die Auswertung, nicht der Ring.
     """
     from app.core.types import Feature
     from app.ui.viewport import Viewport
 
-    gezeichnet: list[dict[str, object]] = []
-
-    class _Nachgiebig:
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
-            gezeichnet.append(dict(kwargs))
-            return SimpleNamespace(GetBounds=lambda: (0.0, 7.48, 0.0, 7.48, 35.0, 35.0))
-
-        def remove_actor(self, actor: Any, **kwargs: Any) -> None:
-            gezeichnet.append({"entfernt": True})
-
     viewport = Viewport()
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     loch = Feature(
         id="hole_1",
         kind="hole",
@@ -5841,8 +5123,9 @@ def test_a_dragged_feature_leaves_a_mark_where_it_came_from(qt_app: QApplication
     assert viewport._ghost_actor is None
     viewport._show_ghost(loch)
     assert viewport._ghost_actor is not None, "der Ring markiert die Ausgangsstelle"
-    ring = next(k for k in gezeichnet if k.get("name") == "feature-ghost")
-    assert ring["pickable"] is False, "eine Marke fängt keine Klicks (Robert, 03.09.2026)"
+    assert renderer.style_of("feature-ghost").pickable is False, (
+        "eine Marke fängt keine Klicks (Robert, 03.09.2026)"
+    )
 
     viewport._drop_ghost()
     assert viewport._ghost_actor is None, "nach dem Zug gilt die Auswertung, nicht der Ring"
@@ -6006,94 +5289,44 @@ def test_forward_flight_moves_the_camera_and_its_focus() -> None:
 def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) -> None:
     """Der Zug ruft, was er rufen soll — geprüft am Zug, nicht an den Methoden.
 
-    **Drei Tests standen daneben und deckten den Aufruf nicht.** Gemessen am
-    03.09.2026, jede Zeile einzeln aus `_on_gizmo_interacted` beziehungsweise
-    `_on_gizmo_released` entfernt:
-
-        self._drag_shadow(steps)          Tests bleiben grün
-        self._draw_turn_arc(steps)        Tests bleiben grün
-        self._emit_feature_drag(snapped)  Tests bleiben grün
-
-    Wer eine der Zeilen löscht, merkt es nicht: Schatten, Drehbogen und die
-    Merkmalsbewegung fielen still aus, und die Tests darüber prüfen weiter
-    fleissig die Methoden. Das ist die Falle „am Weg vorbei" aus
-    `.claude/rules/tests.md`, und der Hinweis darauf kam von 3d-druck-d4 —
-    „was du direkt setzt, ist nicht das, was ein Zug herstellt".
-
-    Dieser Test geht deshalb über die **Rückrufe des Widgets**, also über den
-    Weg, den pyvista beim Ziehen nimmt.
+    Ein Verschieben über den Rückruf des Griffs zieht den Schatten mit, ein
+    Drehen zeichnet den Bogen, und das Loslassen meldet die Merkmalsbewegung
+    statt einer am Objekt.
     """
+    import math
+
     import numpy as np
 
     from app.ui.viewport import Viewport
 
-    class _Actor:
-        def __init__(self) -> None:
-            self.position = (0.0, 0.0, 0.0)
-
-        def GetLength(self) -> float:  # noqa: N802 — VTK-Name
-            return 100.0
-
-    gezeichnet: list[str] = []
-
-    class _Nachgiebig:
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        # **Eine echte Kamera**, weil `shadow_direction` mit ihren Zahlen
-        # rechnet: Ein nachgiebiges Objekt kommt dort als `invalid
-        # __array_struct__` an. Eine Attrappe, die auf alles antwortet,
-        # antwortet auch dort, wo eine Zahl gebraucht wird.
-        camera = SimpleNamespace(
-            position=(100.0, 100.0, 100.0),
-            focal_point=(0.0, 0.0, 0.0),
-            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
-            # stirbt jeder Test, der über den Griff geht, am Massstab.
-            GetPosition=lambda: (100.0, 100.0, 100.0),
-            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
-            GetViewUp=lambda: (0.0, 0.0, 1.0),
-        )
-
-        def add_lines(self, *args: Any, **kwargs: Any) -> Any:
-            gezeichnet.append(str(kwargs.get("name")))
-            return _Nachgiebig()
-
     viewport = Viewport()
+    renderer = RecordingRenderer(scale=20.0)
+    viewport.renderer = renderer
     viewport.show_scene(_scene_with_a_hole_and_a_fillet())
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
     viewport.select("obj_1")
     viewport.select_feature("hole_1")
-    schatten = [_Actor()]
+    viewport.set_gizmo(True)
+    assert viewport._gizmo is not None, "an der Bohrung hängt ein Griff"
+    schatten = [RecordingItem("schatten", np.zeros((1, 3)), "#000000")]
     viewport._shadow_owners = {"obj_1": schatten}
     viewport._shadow_cast = (-0.5, -0.25)
-    viewport._actors = {"obj_1": _Actor()}
-    # `_end_drag` hängt den Griff neu an und räumt den alten ab — die Attrappe
-    # braucht deshalb ein `remove`, sonst stirbt der Test am Aufräumen statt
-    # an der Sache.
-    viewport._gizmo = SimpleNamespace(_origin=(0.0, 0.0, 0.0), axes=None, remove=lambda: None)
 
-    # **Ein Verschieben über den Rückruf des Widgets**, nicht über `_drag_shadow`.
+    # **Ein Verschieben über den Rückruf des Griffs**, nicht über `_drag_shadow`.
     versatz = np.eye(4)
     versatz[0, 3] = 20.0
     versatz[2, 3] = 10.0
     viewport._on_gizmo_interacted(versatz)
-    assert schatten[0].position == pytest.approx((15.0, -2.5, 0.0)), (
+    assert schatten[0].position() == pytest.approx((15.0, -2.5, 0.0)), (
         "der Zug hat den Schatten nicht mitgezogen — ist der Aufruf noch da?"
     )
 
     # **Und ein Drehen**, ebenfalls über den Rückruf.
-    import math
-
     winkel = math.radians(30.0)
     drehung = np.eye(4)
     drehung[0, 0] = drehung[1, 1] = math.cos(winkel)
     drehung[0, 1], drehung[1, 0] = -math.sin(winkel), math.sin(winkel)
     viewport._on_gizmo_interacted(drehung)
-    assert "turn-arc" in gezeichnet, "der Zug hat keinen Drehbogen gezeichnet"
+    assert "turn-arc" in renderer.names(), "der Zug hat keinen Drehbogen gezeichnet"
 
     # **Und das Loslassen** meldet die Merkmalsbewegung statt einer am Objekt.
     versetzt: list[str] = []
@@ -6106,43 +5339,13 @@ def test_the_drag_itself_reaches_shadow_arc_and_feature(qt_app: QApplication) ->
 
 
 def test_the_preview_goes_when_the_mark_goes(qt_app: QApplication) -> None:
-    """Die Vorschau überlebt die Marke nicht — sonst leuchtet ein Loch ohne Auswahl.
-
-    „Die Bohrung bleibt selektiert" (Robert, 03.09.2026, am Beispielprojekt
-    `weg1-halterung-anpassen.p3d`): Eine Bohrung leuchtete in der Auswahlfarbe,
-    während Statusleiste und Merkmalsfenster „Keine Auswahl" sagten.
-
-    **`MEASURE_COLOUR` und `SELECTED_COLOUR` sind dieselbe Farbe** (`#f0a54a`).
-    Eine Marke, die stehen bleibt, ist von einer Auswahl nicht zu
-    unterscheiden — und `_drop_preview` lief nur beim Zugende, nicht beim
-    Abhängen des Griffs.
-
-    Der Hinweis, der es entschieden hat, kam von 3d-druck-85 und stand im Bild:
-    **Die orange Fläche trug keine Beschriftung.** Ein gewähltes Merkmal wird
-    immer beschriftet; eine orange Fläche ohne Namen ist also keine Auswahl,
-    sondern eine Marke, die niemand abgeräumt hat.
-    """
+    """Die Vorschau überlebt die Marke nicht — sonst leuchtet ein Loch ohne Auswahl."""
     from app.core.types import Feature
     from app.ui.viewport import Viewport
 
-    entfernt: list[object] = []
-
-    class _Nachgiebig:
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
-            return SimpleNamespace(name=kwargs.get("name"))
-
-        def remove_actor(self, actor: Any, **kwargs: Any) -> None:
-            entfernt.append(getattr(actor, "name", actor))
-
     viewport = Viewport()
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
     loch = Feature(
         id="hole_1",
         kind="hole",
@@ -6161,64 +5364,16 @@ def test_the_preview_goes_when_the_mark_goes(qt_app: QApplication) -> None:
     assert viewport._shape_actor is None, (
         "die Vorschau blieb stehen, während die Marke ging — ein Loch in Auswahlfarbe"
     )
-    assert "feature-preview" in entfernt
+    assert any(item.name == "feature-preview" for item in renderer.removed)
 
 
 def test_a_new_result_drops_the_old_preview(qt_app: QApplication) -> None:
-    """Eine neue Auswertung macht jede Vorschau überholt.
-
-    Nach „Bohrung ändern" stand der alte Zylinder über der neuen Bohrung — an
-    derselben Stelle, mit Flimmermuster an der gemeinsamen Fläche. Und weil er
-    `MEASURE_COLOUR` trägt, also dieselbe Farbe wie `SELECTED_COLOUR`, sah es
-    aus, als sei die Bohrung noch gewählt, während Statusleiste und
-    Merkmalsfenster „Keine Auswahl" sagten (Robert, 03.09.2026).
-
-    **Dieser Test hat keine eigene Zeile im Code, und das ist Absicht.** Der
-    Weg läuft über `select` → `set_gizmo` → `_detach_gizmo` →
-    `_drop_face_handle`, also über den Fix aus `a62d477c`. Ein zusätzliches
-    `_drop_preview()` in `show_scene` wäre gemessen wirkungslos: Seine
-    Gegenprobe blieb grün.
-
-    Er steht trotzdem hier, weil er eine **Zusage** festhält und keinen Weg:
-    Nach einer neuen Auswertung steht keine Vorschau der vorigen mehr, gleich
-    über welchen Weg sie verschwindet. Baut jemand den Griff-Weg um, wird
-    dieser Test rot, bevor ein Kunde eine verwaiste Marke sieht.
-
-    Steht das Merkmal nach der Auswertung noch, legt `set_gizmo` die Vorschau
-    mit den **neuen** Massen wieder an — geprüft wird das Wegräumen des alten
-    Standes, nicht das Verschwinden der Anzeige.
-    """
+    """Eine neue Auswertung macht jede Vorschau überholt."""
     from app.core.types import Feature
     from app.ui.viewport import Viewport
 
-    class _Nachgiebig:
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        # Eine echte Kamera: `show_scene` rechnet über `shadow_direction` mit
-        # ihren Zahlen und meldet sonst `invalid __array_struct__`.
-        camera = SimpleNamespace(
-            position=(100.0, 100.0, 100.0),
-            focal_point=(0.0, 0.0, 0.0),
-            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
-            # stirbt jeder Test, der über den Griff geht, am Massstab.
-            GetPosition=lambda: (100.0, 100.0, 100.0),
-            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
-            GetViewUp=lambda: (0.0, 0.0, 1.0),
-        )
-
-        def add_mesh(self, mesh: Any, **kwargs: Any) -> Any:
-            # `prop` braucht der Auswahlübergang (`_fade_selection` setzt die
-            # Farbe darauf); ohne ihn stirbt der Test am Zeichnen statt an der
-            # Sache.
-            return SimpleNamespace(name=kwargs.get("name"), prop=SimpleNamespace(color=None))
-
     viewport = Viewport()
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.renderer = RecordingRenderer()
     loch = Feature(
         id="hole_1",
         kind="hole",
@@ -6240,54 +5395,17 @@ def test_a_new_result_drops_the_old_preview(qt_app: QApplication) -> None:
 
 
 def test_the_turn_arc_does_not_outlive_the_gizmo(qt_app: QApplication) -> None:
-    """Der Drehbogen überlebt weder das Abhängen des Griffs noch eine Auswertung.
-
-    **Selbst gefunden, nachdem 3d-druck-85 nach genau dieser Klasse gefragt
-    hatte** („gibt es einen Weg, auf dem eine Marke einen Werkzeugwechsel, ein
-    Undo oder ein Projekt-Schließen überlebt?"). Gemessen am 03.09.2026:
-
-        Bogen gesetzt          -> da
-        nach _detach_gizmo     -> BLEIBT
-        nach show_scene(None)  -> BLEIBT
-
-    Er wurde nur in `_end_drag` geräumt, weil er zum Zug gehört. Ein Zug endet
-    aber nicht immer dort: Ein Undo, ein Werkzeugwechsel oder ein geschlossenes
-    Projekt hängen den Griff ab, ohne dass jemand losgelassen hat. Und weil der
-    Bogen `MEASURE_COLOUR` trägt — dieselbe Farbe wie Auswahl und Messung —
-    sähe ein stehengebliebener aus wie eine Drehung, die noch läuft.
-
-    Das ist der dritte Fall derselben Klasse an einem Nachmittag, und alle drei
-    hatten dieselbe Form: Der Weg „abbrechen" war bedacht, der Weg „fertig"
-    nicht — oder umgekehrt.
-    """
+    """Der Drehbogen überlebt weder das Abhängen des Griffs noch eine Auswertung."""
     from app.ui.viewport import Viewport
 
-    class _Nachgiebig:
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        camera = SimpleNamespace(
-            position=(100.0, 100.0, 100.0),
-            focal_point=(0.0, 0.0, 0.0),
-            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
-            # stirbt jeder Test, der über den Griff geht, am Massstab.
-            GetPosition=lambda: (100.0, 100.0, 100.0),
-            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
-            GetViewUp=lambda: (0.0, 0.0, 1.0),
-        )
-
     viewport = Viewport()
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.renderer = RecordingRenderer()
 
-    viewport._arc_actor = SimpleNamespace(name="turn-arc")
+    viewport._arc_actor = RecordingItem("turn-arc", np.zeros((1, 3)), "#ffffff")
     viewport._detach_gizmo()
     assert viewport._arc_actor is None, "der Bogen überlebte das Abhängen des Griffs"
 
-    viewport._arc_actor = SimpleNamespace(name="turn-arc")
+    viewport._arc_actor = RecordingItem("turn-arc", np.zeros((1, 3)), "#ffffff")
     viewport.show_scene(None)
     assert viewport._arc_actor is None, "der Bogen überlebte eine neue Auswertung"
 
@@ -6295,60 +5413,25 @@ def test_the_turn_arc_does_not_outlive_the_gizmo(qt_app: QApplication) -> None:
 def test_the_shadow_returns_even_without_a_release(qt_app: QApplication) -> None:
     """Der Schattenversatz überlebt das Abhängen des Griffs nicht.
 
-    Die Rückstellung hing bis zum 03.09.2026 allein an `_end_drag`, also am
-    Loslassen. Wer *Bewegen* mitten im Zug ausschaltet, kommt dort nie an: Der
-    Griff wird über `_detach_gizmo` abgehängt, und der Schatten blieb an der
-    Zielstelle liegen, während das Teil an seinem Ort steht.
-
-        nach dem Zug        (15,0 / -2,5 / 0)
-        nach _detach_gizmo  (15,0 / -2,5 / 0)   <- blieb versetzt
-
-    **Gefunden, weil ich es vorher behauptet hatte.** Auf 3d-druck-85s Frage
-    nach Marken, die einen Werkzeugwechsel überleben, hatte ich geantwortet,
-    der Schatten sei gedeckt, „weil er bei jedem Szenenaufbau neu gebaut wird".
-    Das stimmt für den Aufbau und nicht für das Abhängen — und der Unterschied
-    fiel erst auf, als ich die Behauptung nachgemessen habe.
-
-    Derselbe Fall wie beim Drehbogen eine Stunde vorher: Was zum Zug gehört,
-    muss auch dann verschwinden, wenn der Zug nicht mit Loslassen endet.
+    Ein Undo, ein Werkzeugwechsel oder ein geschlossenes Projekt hängen den
+    Griff ab, ohne dass jemand losgelassen hat — der Schatten darf dann nicht
+    an der Zielstelle stehen, während das Teil an seinem Ort steht.
     """
     from app.core.geom.transform import TransformSteps
     from app.ui.viewport import Viewport
 
-    class _Nachgiebig:
-        def __getattr__(self, name: str) -> Any:
-            return _Nachgiebig()
-
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            return _Nachgiebig()
-
-    class _Plotter(_Nachgiebig):
-        camera = SimpleNamespace(
-            position=(100.0, 100.0, 100.0),
-            focal_point=(0.0, 0.0, 0.0),
-            # `_pixels_per_mm_at` fragt im VTK-Stil; ohne diese drei
-            # stirbt jeder Test, der über den Griff geht, am Massstab.
-            GetPosition=lambda: (100.0, 100.0, 100.0),
-            GetFocalPoint=lambda: (0.0, 0.0, 0.0),
-            GetViewUp=lambda: (0.0, 0.0, 1.0),
-        )
-
-    class _Actor:
-        def __init__(self) -> None:
-            self.position = (0.0, 0.0, 0.0)
-
     viewport = Viewport()
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.renderer = RecordingRenderer()
     viewport.select("obj_1")
-    schatten = _Actor()
+    schatten = RecordingItem("schatten", np.zeros((1, 3)), "#000000")
     viewport._shadow_owners = {"obj_1": [schatten]}
     viewport._shadow_cast = (-0.5, -0.25)
 
     viewport._drag_shadow(TransformSteps(offset=(20.0, 0.0, 10.0), axis=None, angle=0.0, scale=1.0))
-    assert schatten.position == pytest.approx((15.0, -2.5, 0.0)), "der Zug hat nicht gewirkt"
+    assert schatten.position() == pytest.approx((15.0, -2.5, 0.0)), "der Zug hat nicht gewirkt"
 
     viewport._detach_gizmo()
-    assert schatten.position == (0.0, 0.0, 0.0), (
+    assert schatten.position() == (0.0, 0.0, 0.0), (
         "der Schatten blieb an der Zielstelle, während das Teil an seinem Ort steht"
     )
 
@@ -6394,7 +5477,7 @@ def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
         )
 
     viewport = Viewport()
-    viewport.plotter = _Plotter()  # type: ignore[assignment]
+    viewport.renderer = _Plotter()  # type: ignore[assignment]
     viewport._arc_actor = SimpleNamespace(name="turn-arc")
     viewport._ghost_actor = SimpleNamespace(name="feature-ghost")
     viewport._shape_actor = SimpleNamespace(name="feature-preview")
@@ -6407,37 +5490,20 @@ def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
 
 
 def test_the_pointer_takes_the_brush_ring_with_it(qt_app: QApplication) -> None:
-    """Verlässt die Maus die Ansicht, geht der Pinselring mit (§18.11).
-
-    Er zeigt, wo der Pinsel greifen würde — eine Aussage über den Zeiger, und
-    der ist fort. Blieb er stehen, kam niemand mehr an ihn heran:
-    ``_draw_brush`` kehrt bei ``_hover_at is None`` sofort zurück, und
-    ``set_brush_radius`` ruft nur sie. Am Regler der Formleiste zu ziehen
-    änderte den Ring danach nicht mehr, während die Leiste einen anderen
-    Durchmesser anzeigte — und der Weg zum Regler führt aus der Ansicht
-    hinaus, weil die Leiste darunter liegt.
-    """
+    """Verlässt die Maus die Ansicht, geht der Pinselring mit (§18.11)."""
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-
-    class _Plotter:
-        def __init__(self) -> None:
-            self.removed: list[object] = []
-
-        def remove_actor(self, actor: object, render: bool = True) -> None:
-            self.removed.append(actor)
-
-    plotter = _Plotter()
-    viewport.plotter = plotter
-    marke = object()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    marke = RecordingItem("brush", np.zeros((1, 3)), "#ffffff")
     viewport._brush_actor = marke
     viewport._hover_at = (10, 10)
 
     viewport._forget_pointer()
 
     assert viewport._brush_actor is None, "der Ring ist weg"
-    assert marke in plotter.removed, "und zwar aus dem Bild, nicht nur aus dem Feld"
+    assert marke in renderer.removed, "und zwar aus dem Bild, nicht nur aus dem Feld"
 
 
 def test_what_moves_with_the_plate_is_redrawn_with_the_scene() -> None:
@@ -6566,7 +5632,7 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     # Ablage statt echter Actors: Es beantwortet eine andere Frage und hat
     # seinen eigenen Test.
     faded: list[dict[str, str]] = []
-    viewport.plotter = object()
+    viewport.renderer = RecordingRenderer()
     viewport._actors = {"obj_1": object(), "obj_2": object()}
     viewport._fade_selection = faded.append  # type: ignore[method-assign]
     viewport._apply_selection_colour()
@@ -6579,9 +5645,9 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     # Die Auswahl wieder ohne Plotter, weil ``select`` sonst den ganzen
     # Zeichenweg mitnimmt und die Attrappe dort auf VTK trifft; gefärbt wird
     # danach, in derselben Lage wie oben.
-    viewport.plotter = None
+    viewport.renderer = None
     viewport.select("obj_1")
-    viewport.plotter = object()
+    viewport.renderer = RecordingRenderer()
     viewport._apply_selection_colour()
     assert viewport.highlighted_objects() == ("obj_1",)
     assert viewport._shown_colours.get("obj_1") == SELECTED_COLOUR
@@ -6604,7 +5670,7 @@ def test_a_second_evaluation_keeps_every_selected_body(qt_app: QApplication) -> 
 
     **Die Attrappe steht vor ``show_scene`` und nicht dahinter**, und darin
     liegt der Grund, warum der Fehler so lange stand: Ohne Plotter kehrt
-    ``show_scene`` in seinem eigenen ``plotter is None``-Zweig zurück, lange
+    ``show_scene`` in seinem eigenen ``renderer is None``-Zweig zurück, lange
     bevor der Aufruf kommt, um den es hier geht. Jeder Test dieser Datei, der
     die Attrappe **danach** setzt, läuft an dieser Stelle vorbei — und offscreen
     gemessen sah der Fehler deshalb aus wie keiner: Beide Körper blieben
@@ -6616,7 +5682,7 @@ def test_a_second_evaluation_keeps_every_selected_body(qt_app: QApplication) -> 
     beide = tuple(ergebnis.scene.objects)
 
     viewport = Viewport()
-    viewport.plotter = _RecordingPlotter()
+    viewport.renderer = RecordingRenderer()
     viewport.show_scene(ergebnis)
     viewport.select(beide[0], more=beide[1:])
     assert viewport.highlighted_objects() == beide, "die Auswahl kam gar nicht erst an"
@@ -6632,42 +5698,19 @@ def test_a_second_evaluation_keeps_every_selected_body(qt_app: QApplication) -> 
 def test_a_drag_previews_every_selected_body(qt_app: QApplication) -> None:
     """Was der Zug am Ende bewegt, bewegt schon die Vorschau.
 
-    ``inputs_for_transform`` gibt die ganze Auswahl weiter, der Schritt beim
-    Loslassen trifft also beide Körper — die Vorschau versetzte bis zum
-    04.09.2026 nur den Actor von ``_selected``. Wer zwei Teile markierte und
-    eines zog, sah einen dem Zeiger folgen und beim Loslassen zwei springen.
-
-    **Warum das niemand meldet und der Test trotzdem sein muss:** Das
-    *Ergebnis* stimmt. Der Körper steht am Ende richtig, es hinkt nur die
-    Vorschau — das liest sich wie eine hakelige Anzeige und nicht wie ein
-    Fehler, und so etwas steht Monate (Hinweis solidon-b4, 04.09.2026).
-
-    **Geprüft werden beide Hälften des Fixes.** Dass die Actors sich bewegen,
-    ist die sichtbare; dass **jeder** seinen eigenen Eintrag in
-    ``_actor_home`` bekommt, ist die andere — an ihr hängt
-    ``_undo_body_preview``, das über genau diese Einträge zurückholt. Ohne sie
-    bliebe der zweite Körper nach einem folgenlosen Zug versetzt stehen.
+    Beim Loslassen trifft der Schritt die ganze Auswahl; folgte nur der
+    führende Körper dem Zeiger, sprängen beim Loslassen zwei. Jeder bekommt
+    seinen Ausgangsort, damit ein folgenloser Zug alle zurückholt.
     """
     from app.ui.viewport import Viewport
-
-    class _Zeiger:
-        """Was ``_update_cursor`` am Plotter anfasst, und sonst nichts."""
-
-        @staticmethod
-        def setCursor(cursor: object) -> None:  # noqa: N802 — Qt-Name
-            pass
-
-    class _MitZeiger(_RecordingPlotter):
-        # Dasselbe Muster wie bei ``_MitInteractor`` weiter oben: Was nur ein
-        # Test braucht, hängt an einer Unterklasse und nicht an der Attrappe —
-        # ein Feld dort verdeckte, was ein anderer Test selbst setzt.
-        interactor = _Zeiger()
 
     ergebnis = _scene_with_two_bodies()
     fuehrend, weiterer = tuple(ergebnis.scene.objects)
 
     viewport = Viewport()
-    viewport.plotter = _MitZeiger()
+    renderer = RecordingRenderer()
+    renderer.widget = SimpleNamespace(setCursor=lambda cursor: None)
+    viewport.renderer = renderer
     viewport.show_scene(ergebnis)
     viewport.select(fuehrend, more=(weiterer,))
 
@@ -6676,7 +5719,7 @@ def test_a_drag_previews_every_selected_body(qt_app: QApplication) -> None:
     viewport.continue_body_drag_at((10.0, 5.0))
 
     versetzt = {
-        kennung: viewport._actors[kennung].GetPosition()[:2] for kennung in (fuehrend, weiterer)
+        kennung: viewport._actors[kennung].position()[:2] for kennung in (fuehrend, weiterer)
     }
     assert versetzt == {fuehrend: (10.0, 5.0), weiterer: (10.0, 5.0)}, (
         f"die Vorschau nahm nicht beide Körper mit: {versetzt}"
@@ -6689,7 +5732,7 @@ def test_a_drag_previews_every_selected_body(qt_app: QApplication) -> None:
     # Und die Gegenrichtung: ein folgenloser Zug lässt keinen versetzt stehen.
     viewport._undo_body_preview()
     zurueck = {
-        kennung: viewport._actors[kennung].GetPosition()[:2] for kennung in (fuehrend, weiterer)
+        kennung: viewport._actors[kennung].position()[:2] for kennung in (fuehrend, weiterer)
     }
     assert zurueck == {fuehrend: (0.0, 0.0), weiterer: (0.0, 0.0)}, (
         f"ein Körper blieb nach dem Zurücknehmen versetzt: {zurueck}"

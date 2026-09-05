@@ -163,11 +163,8 @@ def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
     # **Das Achsenkreuz gehört nicht ins Galeriebild.** In der Anwendung sagt
     # es, wo oben ist, und dafür ist es da. Auf einem Bild, das ein Teil zeigen
     # soll, steht es davor — bei der Schraubdose mitten im Gewinde.
-    from app.ui.viewport import axes_widget_of
-
-    marker = axes_widget_of(view.plotter) if view.plotter is not None else None
-    if marker is not None:
-        marker.SetEnabled(0)
+    if view.renderer is not None:
+        view.renderer.set_axes_marker(None)
     # **Und das Verschiebe-Gizmo, aus demselben Grund** — gefunden erst am
     # fertigen Seitenausschnitt: Auf dem Bild der Klappbox stand der blaue
     # Pfeil mitten im Teil, dazu der rote und der grüne Ring. Es erscheint,
@@ -182,8 +179,10 @@ def shoot_part(window: Any, app: QApplication, stem: str) -> Path:
     # dem Schwenk wieder halb außerhalb: ``reset_camera`` rahmt für die Lage,
     # in der es gerufen wird.
     direction = VIEWS.get(stem)
-    if direction is not None and view.plotter is not None:
-        view.plotter.camera_position = [direction, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)]
+    if direction is not None and view.renderer is not None:
+        from app.ui.render.api import CameraPose
+
+        view.renderer.set_camera_pose(CameraPose(direction, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)))
         settle(app, 10)
         view.reset_camera()
         settle(app, 20)

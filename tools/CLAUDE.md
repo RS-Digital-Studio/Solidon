@@ -56,7 +56,7 @@ Posten zerlegen — misst, was offscreen unsichtbar ist: VTK und Aktoraufbau)
 
 `window_bench.py` beendet seinen einzigen Lauf in Besitzreihenfolge: erst
 Arbeiter und Sitzungsverbindungen lösen, dann über
-`Viewport.release_plotter()` den VTK-Plotter bei noch lebendem
+`Viewport.release_renderer()` den Renderer bei noch lebendem
 Qt-Elternfenster schließen, zuletzt das Fenster. Derselbe terminale Weg liegt
 am akzeptierten `MainWindow.closeEvent`; `MainWindow.release()` bleibt für
 mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.

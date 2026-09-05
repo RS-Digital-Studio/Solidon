@@ -78,7 +78,7 @@ def shutdown_window(window: Any, application: Any) -> None:
     denselben terminalen Viewport-Weg wie ``MainWindow.closeEvent``.
     """
     window.release()
-    window.viewport.release_plotter()
+    window.viewport.release_renderer()
     window.close()
     for _ in range(EVENT_DRAIN_ROUNDS):
         application.processEvents()

@@ -10794,18 +10794,26 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   Katalogzeile, die gegen die sichtbare Oberfläche geprüft werden muss.
 - [~] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
   direkt und pygfx/wgpu** (Entscheidung Robert, 05.09.2026: „bau beides und
-  mess“). Stand: `app/ui/render/api.py` (der Vertrag) und
-  `vtk_renderer.py` (VTK ohne PyVista) stehen und sind ohne Fenster am Bild
-  gemessen (`tests/test_render_vtk.py`). Es folgen: der renderer-neutrale
-  Navigator (Drehteller, Kippen, Schieben, Radzoom am Zeiger — heute
-  `_InteractorStyle`), der Bewegungsgriff ohne PyVistas Widget, die
-  Umstellung von `viewport.py`, `scale_widget.py` und `snapshots.py` auf den
-  Vertrag, dann `gfx_renderer.py` auf pygfx (Lizenzen zuerst: pygfx, wgpu,
-  rendercanvas, pylinalg, freetype-py, uharfbuzz, jinja2, hsluv), zuletzt
-  die Messtabelle auf Roberts Szenen und in einer VM — kopierte Bytes,
-  Aufbau- und Updatezeit, Drag-Framezeit, Speicher über Fenster- und
-  Sprachwechsel. Erst danach fallen PyVista und PyVistaQt aus den
-  Abhängigkeiten, und VTK darf auf 9.7.0.
+  mess“). Stand: Der Vertrag (`app/ui/render/api.py`), `vtk_renderer.py`
+  (VTK ohne PyVista), der Navigator, der Bewegungsgriff (`gizmo.py`), der
+  Skalierwürfel und die Kantensuche (`edges.py`) stehen; `viewport.py`,
+  `snapshots.py`, `main_window.py`, `spacemouse.py` und die Werkzeuge unter
+  `tools/` sprechen nur noch den Vertrag, und die Suite misst die Ansicht an
+  `tests/render_fakes.py` statt an Plotter-Attrappen. Es folgen:
+  `gfx_renderer.py` auf pygfx (Lizenzen zuerst: pygfx, wgpu, rendercanvas,
+  pylinalg, freetype-py, uharfbuzz, jinja2, hsluv), dann die Messtabelle auf
+  Roberts Szenen und in einer VM — kopierte Bytes, Aufbau- und Updatezeit,
+  Drag-Framezeit, Speicher über Fenster- und Sprachwechsel. Erst danach fallen
+  PyVista und PyVistaQt aus den Abhängigkeiten, und VTK darf auf 9.7.0.
+- [ ] **Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista**
+  (`.claude/.state/steuerung-2026-09-03/fahre_steuerung.py`,
+  `.claude/.state/drehpunkt-2026-09-04/fahre_drehpunkt.py`, 05.09.2026): Sie
+  schicken Ereignisse an `plotter.iren`, und seit dem Navigator kommen
+  Zeigergesten aus Qt-Mausereignissen am Widget des Renderers — die
+  VTK-Ereignisse erreichen die Kamera nicht mehr. Umbauen auf `QMouseEvent`
+  an `renderer.widget`, dann die fünf Schemata und den Drehpunkt einmal am
+  echten Fenster fahren; bis dahin ist die Kette Qt → Widget → `PointerEvent`
+  → Navigator nirgends gemessen.
 - [ ] **Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht
   gefahren** (05.09.2026): Die CI baut das Flatpak beim nächsten Tag-Lauf gegen
   26.08 (Manifest, Generator und Runner-Installation stehen darauf; 24.08 endet

@@ -162,8 +162,8 @@ zoomt, geht durch `apply_wheel_zoom`; `tests/test_viewport_decisions.py`
 prüft beide Projektionen gegen die echte `vtkCamera`.
 
 **Und die Kamera braucht dafür eine Untergrenze.** In einer leeren Szene hat
-`reset_camera` nie stattgefunden; pyvista startet mit einer Kamera 1,62
-Einheiten vor dem Ursprung, und `_plane_distance` übernahm sie treu — 918
+`reset_camera` nie stattgefunden; die Startkamera stand 1,62 Einheiten vor dem
+Ursprung (gemessen unter PyVista), und `_plane_distance` übernahm sie treu — 918
 Bildpunkte je Millimeter, ein Raster von 0,1 mm. Getroffen hätte es
 ausgerechnet **Weg 2**, neu konstruieren: nur dort ist die Szene beim Betreten
 leer, mit geladenem Teil ist die Kamera längst eingepasst und
@@ -399,12 +399,12 @@ Sechs Dinge hängen daran:
   gebrochene Zusage. Wer sie hier abschreibt, hat die zweite Wahrheit gebaut.
 
 **Und der Griff ist ohne Attrappe nicht prüfbar** (`gripping` in
-`tests/test_viewport_decisions.py`). Offscreen gibt es keinen Plotter, also
+`tests/test_viewport_decisions.py`). Offscreen gibt es keinen Renderer, also
 gibt `_display_of` nichts, `grip_reach` unendlich und `sketch_pull_ready`
 **immer** `False` — auch mit gesetztem Angebot. Der erste Test darüber
 behauptete „ohne Frage kein Griff" und wäre auch bei einem Griff grün geblieben,
 der jede Frage übergeht; `sketchPullBlocked` kam in der ganzen Suite nicht ein
-einziges Mal vor. Ersetzt werden genau die drei Methoden, die einen Plotter
+einziges Mal vor. Ersetzt werden genau die drei Methoden, die einen Renderer
 brauchen — Reichweite im Bild, Ort auf der Ebene, Maß entlang der Achse —, alles
 davor und danach ist echt. Das ist das Muster aus `ansicht.md`, und
 `test_cursors.py` macht es vor.

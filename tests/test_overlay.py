@@ -184,34 +184,34 @@ def test_the_axis_marker_does_not_hide_behind_a_card(window: MainWindow) -> None
         )
 
 
-def test_the_axis_marker_is_found_where_pyvista_keeps_it() -> None:
-    """Das Nachziehen greift nur, wenn es das Widget findet.
+def test_the_axis_marker_is_placed_over_the_renderer_contract(qt_app: QApplication) -> None:
+    """Das Nachziehen des Achsenkreuzes geht über den Vertrag des Renderers.
 
-    ``plotter.axes_widget`` gibt es in pyvista 0.48 nicht — es hängt am
-    Renderer. Ein ``getattr`` auf den Plotter liefert still ``None``, das
-    Nachziehen fällt aus, und die Anzeige bleibt dort stehen, wo sie beim
-    Aufbau landete: mitten im Bild, weil das Fenster da noch keine Größe hat.
-    Kein Fehler, keine Ausnahme, nur ein handtellergroßes Achsenkreuz quer über
-    dem Modell — zu sehen allein im Bild.
-
-    Geprüft wird gegen die **echte** API und nicht gegen eine Attrappe: Eine
-    Attrappe, die ``axes_widget`` am Plotter hat, hätte genau diesen Fehler
-    bestätigt statt ihn zu finden.
+    Bis zum 05.09.2026 suchte der Viewport das Widget in PyVistas Innereien —
+    ``plotter.axes_widget`` gab es in 0.48 nicht mehr, ein ``getattr`` lieferte
+    still ``None``, und die Anzeige blieb dort stehen, wo sie beim Aufbau
+    landete: mitten im Bild, weil das Fenster da noch keine Größe hat.
+    ``place_axes_marker`` ist eine Methode des Vertrags; fehlt sie, fällt der
+    Aufruf, statt zu schweigen.
     """
-    pyvista = pytest.importorskip("pyvista")
+    from app.ui.viewport import Viewport, orientation_corner
+    from tests.render_fakes import RecordingRenderer
 
-    from app.ui.viewport import axes_widget_of
-
-    plotter = pyvista.Plotter(off_screen=True)
+    viewport = Viewport()
     try:
-        plotter.add_axes()
-        widget = axes_widget_of(plotter)
-        assert widget is not None, "das Achsen-Widget ist woanders hingewandert"
-        assert hasattr(widget, "SetViewport"), "ohne SetViewport lässt es sich nicht setzen"
-    finally:
-        plotter.close()
+        renderer = RecordingRenderer()
+        viewport.renderer = renderer
+        viewport.resize(800, 600)
 
-    assert axes_widget_of(None) is None, "ohne Plotter darf nichts krachen"
+        viewport._place_orientation_widget()
+
+        assert renderer.marker_corners[-1] == orientation_corner(800, 600), (
+            "das Achsenkreuz wird in seine Ecke gesetzt"
+        )
+        viewport.renderer = None
+        viewport._place_orientation_widget()  # ohne Renderer darf nichts krachen
+    finally:
+        viewport.deleteLater()
 
 
 def test_placing_the_zones_never_runs_into_itself(

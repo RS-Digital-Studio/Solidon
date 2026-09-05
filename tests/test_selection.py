@@ -7,7 +7,7 @@ zur gestuften Tiefe nahm ``_feature_at`` das Merkmal mit dem nächsten
 Mittelpunkt und traf damit immer eines, egal wie weit weg der Klick lag.
 
 **Offscreen, und darum ohne Plotter.** Genau das ist hier die Falle: Vierzig
-Methoden des Viewports steigen bei ``self.plotter is None`` sofort aus, und ein
+Methoden des Viewports steigen bei ``self.renderer is None`` sofort aus, und ein
 Test, der einen von ihnen ruft, ist grün, ohne etwas geprüft zu haben. Alles,
 was hier zählt, hängt deshalb an Methoden ohne diese Wache —
 ``_click_target``, ``_feature_at``, ``_select_at``, ``selection_depth`` sind
@@ -37,6 +37,7 @@ from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.viewport import Viewport
+from tests.render_fakes import RecordingRenderer
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -733,7 +734,7 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
     """Und die Antwort kommt auch am Zeiger an, nicht nur in der Rechnung.
 
     Der Grund für die Attrappe: ``_look_under_pointer`` und ``_update_cursor``
-    steigen bei ``self.plotter is None`` beide aus, und offscreen gibt es
+    steigen bei ``self.renderer is None`` beide aus, und offscreen gibt es
     keinen Plotter. Ein Test ohne sie prüfte, dass die Methode umkehrt.
 
     **Gefälscht wird die Punktquelle, und die heißt jetzt ``_aim_at``** — vorher
@@ -755,14 +756,9 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
         def height(self) -> int:
             return 600
 
-    class FakePlotter:
-        renderer = object()
-        interactor = FakeInteractor()
-
-        def render(self) -> None:
-            """Die sichtbare Hover-Markierung fordert genau ein Neuzeichnen an."""
-
-    viewport.plotter = FakePlotter()
+    renderer = RecordingRenderer()
+    renderer.widget = FakeInteractor()
+    viewport.renderer = renderer
     try:
         viewport._aim_at = lambda *_args: point  # type: ignore[method-assign]
         # Dieser Test gilt dem Zeigerweg; die sichtbare Hover-Fläche hat ihren
@@ -779,7 +775,7 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
     finally:
         del viewport._aim_at
         del viewport._redraw_features
-        viewport.plotter = None
+        viewport.renderer = None
 
     assert shown, "und gesetzt wurde er wirklich, nicht nur vermerkt"
 
