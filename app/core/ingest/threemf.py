@@ -73,6 +73,54 @@ DEFAULT_COLOUR = (0.72, 0.72, 0.72)
 #: sagt etwas, sie hängt nicht).
 MAX_DEPTH = 32
 
+#: Mehr Körper trägt kein Projekt (``project.MAX_PROJECT_OBJECTS``): Jedes
+#: Blatt des Builds wird ein Objekt im Stapel, und eine Datei, die mehr davon
+#: erzeugt, ließe sich nie speichern.
+MAX_BODIES: Final = 10_000
+
+
+@dataclass(slots=True)
+class _Budget:
+    """Was das Auflösen des Builds bisher gekostet hat — Körper und
+    **instanzierte** Dreiecke.
+
+    Der Scan zählt gespeicherte Dreiecke, und die Zyklensperre hält nur eine
+    Komponente auf, die sich selbst nennt. Eine Unterbaugruppe, die zweimal
+    dieselbe nächsttiefere nennt, verdoppelt je Ebene: 432 Byte mit zehn
+    Ebenen wurden 1024 Körper, 469 Byte mit vierzehn Ebenen 16 384 — aus einem
+    einzigen gespeicherten Dreieck, und die Größenprüfung stand erst hinter
+    dem fertigen Blattwald (Gesamtreview 05.09.2026, B-04). Gezählt wird
+    deshalb beim Auflösen selbst, und die Grenze hält an, **bevor** das
+    nächste Blatt entsteht.
+    """
+
+    bodies: int = 0
+    triangles: int = 0
+
+    def take(self, mesh_node: ET.Element) -> None:
+        """Ein Blatt mehr — oder der Abbruch, wenn es eines zu viel ist."""
+        # Erst hier geholt: ``loader`` zieht die Auswertung nach, und die
+        # Dreiecksgrenze soll eine Zahl bleiben, die an genau einer Stelle
+        # steht — ein Test, der sie dort senkt, senkt sie auch hier.
+        from app.core.ingest.loader import MAX_TRIANGLES
+
+        self.bodies += 1
+        self.triangles += _entries_in(mesh_node, _TRIANGLES_TAG)
+        if self.bodies > MAX_BODIES:
+            raise ValidationError(
+                field="file",
+                detail=_("Die Baugruppe hat mehr Körper, als diese Anwendung verarbeitet."),
+                constraint="too_many_bodies",
+                values={"bodies": self.bodies, "limit": MAX_BODIES},
+            )
+        if self.triangles > MAX_TRIANGLES:
+            raise ValidationError(
+                field="file",
+                detail=_("Das Modell hat mehr Dreiecke, als diese Anwendung verarbeitet."),
+                constraint="too_many_triangles",
+                values={"triangles": self.triangles, "limit": MAX_TRIANGLES},
+            )
+
 
 @dataclass(frozen=True, slots=True)
 class Groups:
@@ -441,6 +489,7 @@ def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int
         path: {} for path in models
     }
     bodies = 0
+    budget = _Budget()
     for item in models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item"):
         identifier = item.get("objectid")
         if identifier is None:
@@ -454,6 +503,7 @@ def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int
             titles,
             item.get("name") or titles.get(identifier, ""),
             0,
+            budget,
         ):
             # Ein Mesh ohne Dreiecke ist kein Körper. Gezählt wurde es
             # trotzdem, und der Leser überging es — der Stapel bekam damit eine
@@ -464,7 +514,10 @@ def _scan(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int
                 bodies += 1
             else:
                 _log.warning("3MF body %r has no geometry — not counted", leaf.name)
-    return bodies, triangles
+    # Gespeichert **oder** instanziert, was größer ist: Das Parsen kostet die
+    # gespeicherten Dreiecke, die Körper danach die instanzierten — und ein
+    # Blatt, das der Build zehnmal erreicht, liegt zehnmal im Speicher.
+    return bodies, max(triangles, budget.triangles)
 
 
 def scan_assembly(payload: bytes, progress: ProgressFn = _silent_scan) -> tuple[int, int]:
@@ -535,6 +588,7 @@ def _leaves(payload: bytes) -> list[_Leaf]:
     materials = {path: _materials_in(model) for path, model in models.items()}
 
     found: list[_Leaf] = []
+    budget = _Budget()
     for item in models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item"):
         identifier = item.get("objectid")
         if identifier is None:
@@ -549,6 +603,7 @@ def _leaves(payload: bytes) -> list[_Leaf]:
                 titles,
                 item.get("name") or titles.get(identifier, ""),
                 0,
+                budget,
             )
         )
     return found
@@ -619,10 +674,14 @@ def _parts_of(
     titles: dict[str, str],
     inherited: str,
     depth: int,
+    budget: _Budget,
     seen: frozenset[tuple[str, str]] = frozenset(),
 ) -> list[_Leaf]:
     """Die Meshes, die ein Objekt beiträgt, mit den Transformationen darüber
     angewandt.
+
+    ``budget`` zählt jedes Blatt mit und hält an, sobald der Build mehr
+    Körper oder Dreiecke instanziert, als die Anwendung trägt (:class:`_Budget`).
     """
     if depth > MAX_DEPTH:
         _log.warning("3MF component nesting deeper than %d — stopped", MAX_DEPTH)
@@ -647,6 +706,7 @@ def _parts_of(
     )
     mesh_node = entry.find(f"{{{CORE_NAMESPACE}}}mesh")
     if mesh_node is not None:
+        budget.take(mesh_node)
         return [
             _Leaf(
                 name=name,
@@ -678,6 +738,7 @@ def _parts_of(
                 titles,
                 name,
                 depth + 1,
+                budget,
                 seen | {(path, identifier)},
             )
         )

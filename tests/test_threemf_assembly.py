@@ -674,3 +674,83 @@ def test_numbers_damaged_twice_are_not_silently_dropped(
     assert any(
         "unreadable" in entry.message or "damaged" in entry.message for entry in caplog.records
     ), "und er sagt es"
+
+
+# --- die Verdopplung ------------------------------------------------------------
+
+
+def doubling_container(levels: int) -> bytes:
+    """Eine Baugruppe, die je Ebene zweimal die nächsttiefere nennt — aus einem
+    einzigen gespeicherten Dreieck werden ``2 ** levels`` Blätter."""
+    leaf = (
+        '<object id="0" type="model"><mesh>'
+        '<vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/>'
+        '<vertex x="0" y="1" z="0"/></vertices>'
+        '<triangles><triangle v1="0" v2="1" v3="2"/></triangles>'
+        "</mesh></object>"
+    )
+    wrappers = "".join(
+        f'<object id="{level}" type="model"><components>'
+        f'<component objectid="{level - 1}"/><component objectid="{level - 1}"/>'
+        "</components></object>"
+        for level in range(1, levels + 1)
+    )
+    root = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<model unit="millimeter" xmlns="{CORE}"><resources>{leaf}{wrappers}</resources>'
+        f'<build><item objectid="{levels}"/></build></model>'
+    )
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr(threemf.MODEL_PATH, root)
+    return buffer.getvalue()
+
+
+def test_a_doubling_assembly_stops_at_the_body_limit_not_after_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Zyklensperre hält nur eine Komponente auf, die sich selbst nennt.
+    Zehn Verdopplungsebenen machten aus 432 Byte 1024 Körper, vierzehn 16 384
+    — und die Größenprüfung stand erst hinter dem fertigen Blattwald
+    (Gesamtreview 05.09.2026, B-04). Die Grenze hält jetzt am Blatt, das eines
+    zu viel ist, nicht nach dem letzten."""
+    from app.core.ingest import plan
+
+    payload = doubling_container(10)
+    monkeypatch.setattr(threemf_reader, "MAX_BODIES", 100)
+
+    for read in (threemf_reader.scan_assembly, threemf_reader.read_objects):
+        with pytest.raises(ValidationError) as refused:
+            read(payload)
+        assert refused.value.constraint == "too_many_bodies"
+        assert refused.value.values["bodies"] == 101, "am 101. Blatt, nicht nach dem 1024."
+        assert refused.value.suggestions, "Regel 17"
+
+    with pytest.raises(ValidationError) as refused:
+        plan.import_plan("src_1", "verdoppelt.3mf", payload)
+    assert refused.value.constraint == "too_many_bodies"
+
+
+def test_instanced_triangles_count_against_the_triangle_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gespeichert ist ein Dreieck, instanziert sind 1024 — und im Speicher
+    liegen die instanzierten. Die Dreiecksgrenze zählt, was der Build erzeugt."""
+    from app.core.ingest import loader
+
+    payload = doubling_container(10)
+    monkeypatch.setattr(loader, "MAX_TRIANGLES", 100)
+
+    with pytest.raises(ValidationError) as refused:
+        threemf_reader.scan_assembly(payload)
+    assert refused.value.constraint == "too_many_triangles"
+    assert refused.value.values["triangles"] == 101
+
+
+def test_a_small_doubling_assembly_still_reads_completely() -> None:
+    """Drei Ebenen sind acht Körper — eine gewöhnliche Baugruppe, und sie
+    kommt vollständig an; der Scan nennt die instanzierten Dreiecke."""
+    payload = doubling_container(3)
+
+    assert threemf_reader.scan_assembly(payload) == (8, 8)
+    assert len(threemf_reader.read_objects(payload)) == 8
