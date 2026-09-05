@@ -14,6 +14,7 @@ gesagt, bevor jemand eine Stunde wartet.
 from __future__ import annotations
 
 import io
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -456,3 +457,67 @@ def test_a_face_frame_survives_any_normal() -> None:
         assert np.isfinite(first).all() and np.isfinite(second).all()
         assert abs(float(np.dot(first, second))) < 1e-9, "die beiden stehen senkrecht"
         assert abs(float(np.dot(first, np.asarray(axis)))) < 1e-9, "und beide in der Ebene"
+
+
+def test_two_projects_with_different_images_never_share_a_cached_relief(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-11: Zwei Projekte, gleiche Quader, gleiche
+    Reliefoperation, je ein Bild namens ``src_1`` — aber verschiedene Bilder.
+    Der Cache-Schlüssel kannte die Inhaltsprüfsumme nur für ``kind="source"``,
+    und das Bild reist als ``kind="image"``: Das zweite Projekt bekam über den
+    Plattencache das Relief des ersten, mit ``complete=True``. Der Fehler
+    überlebte das Leeren des Sitzungscaches, weil die Platte länger lebt."""
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.project import Project, ProjectSources, new_project
+
+    load_operations()
+
+    def project_for(values: np.ndarray) -> Project:
+        project = new_project("centauri-carbon-2", "petg")
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="image", path="sources/relief.png", sha256=""
+        )
+        project.sources["src_1"] = image_bytes(values)
+        History(project.document).apply(
+            "Relief",
+            [
+                OperationDraft(op="create_box"),
+                OperationDraft(
+                    op="displace_image",
+                    inputs=("obj_1",),
+                    params={"source": "src_1", "strength": 2.0, "smooth": 0},
+                ),
+            ],
+        )
+        return project
+
+    bright = project_for(np.array([[0.0, 1.0], [0.0, 1.0]]))
+    flat = project_for(np.zeros((2, 2)))
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path / "cache")
+
+    first = evaluate(
+        bright.document,
+        profile,
+        sources=ProjectSources(bright),
+        cache=ResultCache(disk=disk),
+    )
+    cached = evaluate(
+        flat.document,
+        profile,
+        sources=ProjectSources(flat),
+        cache=ResultCache(disk=disk),
+    )
+    fresh = evaluate(flat.document, profile, sources=ProjectSources(flat))
+
+    assert first.complete and cached.complete and fresh.complete
+    volume = cached.scene.objects["obj_1"].mesh.volume
+    assert volume == pytest.approx(fresh.scene.objects["obj_1"].mesh.volume), (
+        "mit Plattencache dasselbe wie ohne"
+    )
+    assert volume != pytest.approx(first.scene.objects["obj_1"].mesh.volume), (
+        "das zweite Projekt bekam das Relief des ersten"
+    )

@@ -21,9 +21,11 @@ from app.core.types import (
     FeatureRef,
     Fit,
     OpContext,
+    Operation,
     OpResult,
     Origin,
     Parameter,
+    Profile,
     SolverInfo,
 )
 from app.i18n import _
@@ -1177,3 +1179,81 @@ def test_a_deleted_step_of_an_unknown_operation_keeps_its_number() -> None:
     )
 
     assert "9" in titel, titel
+
+
+def test_changing_the_input_of_a_one_to_one_step_moves_its_output_with_it(
+    profile: Profile,
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-07: Zwei Quader A und B, ein
+    Verschiebeschritt auf A; dann bekommt der Schritt B als Eingang. Ersetzt
+    wurden nur die Eingänge — der Ausgang hieß weiter A. Die Auswertung
+    räumte B als verbrauchten Eingang weg und legte das Ergebnis über A: ein
+    Körper verschwand, und der Lauf meldete ``complete=True``.
+
+    Eine 1:1-Operation gibt ihrem Eingang die Kennung zurück, die er hatte —
+    der Ausgang folgt dem neuen Eingang.
+    """
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    made = new_project("centauri-carbon-2", "petg")
+    history = History(made.document)
+    for size in (10.0, 20.0):
+        history.apply(
+            "Quader",
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={
+                        "width": size,
+                        "depth": size,
+                        "height": size,
+                        "anchor": "centre",
+                        "name": "",
+                    },
+                )
+            ],
+        )
+    history.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 40.0})],
+    )
+    op_id = history.operations[-1].id
+
+    history.change_inputs(op_id, ["obj_2"])
+
+    changed = history.operations[-1]
+    assert changed.inputs == ("obj_2",)
+    assert changed.outputs == ("obj_2",), "der Ausgang folgt dem Eingang"
+    result = evaluate(made.document, profile, sources=ProjectSources(made))
+    assert result.complete
+    assert set(result.scene.objects) == {"obj_1", "obj_2"}, "kein Körper verschwindet"
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(1000.0)
+    assert result.scene.objects["obj_2"].mesh.volume == pytest.approx(8000.0)
+    assert result.scene.objects["obj_2"].mesh.bounds.minimum[0] == pytest.approx(30.0), (
+        "B ist verschoben"
+    )
+    assert result.scene.objects["obj_1"].mesh.bounds.minimum[0] == pytest.approx(-5.0), "A blieb"
+
+    history.undo()
+    assert history.operations[-1].inputs == ("obj_1",)
+    assert history.operations[-1].outputs == ("obj_1",), "und das Undo bringt beides zurück"
+
+
+def test_outputs_follow_inputs_only_where_they_continued_them() -> None:
+    """Was frisch vergeben war, bleibt: Eine Vereinigung behält die Kennung
+    ihres Ergebnisses, und ein Duplikat behält seine Kopien."""
+    from app.core.scene.history import _outputs_following
+
+    def op(inputs: tuple[str, ...], outputs: tuple[str, ...]) -> Operation:
+        return Operation(id=1, op="x", inputs=inputs, outputs=outputs, params={})
+
+    assert _outputs_following(op(("obj_1",), ("obj_1",)), ["obj_2"]) == ("obj_2",)
+    assert _outputs_following(op(("obj_1", "obj_2"), ("obj_9",)), ["obj_3", "obj_4"]) == ("obj_9",)
+    assert _outputs_following(op(("obj_1", "obj_2"), ("obj_1",)), ["obj_3", "obj_4"]) == ("obj_3",)
+    assert _outputs_following(op(("obj_1",), ("obj_1", "obj_5", "obj_6")), ["obj_2"]) == (
+        "obj_2",
+        "obj_5",
+        "obj_6",
+    )
+    assert _outputs_following(op(("obj_1", "obj_2"), ("obj_1", "obj_2")), ["obj_3"]) == ("obj_3",)

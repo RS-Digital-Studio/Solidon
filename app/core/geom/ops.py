@@ -806,6 +806,11 @@ class AlignParams(BaseParams):
     target: str = param(
         title=_("Ziel"),
         default="",
+        # Ein Merkmal als **Ziel** auf einem fremden Körper: Der Cache-Schlüssel
+        # muss dessen Hash kennen, sonst bleibt der ausgerichtete Körper an der
+        # alten Lage, wenn das Ziel verschoben wird — der Schlüssel sah nur
+        # ``feature`` und nie dieses Feld (Gesamtreview 05.09.2026, CORE-13).
+        targets_feature=True,
         doc=_("Merkmal, auf das ausgerichtet wird, als obj_2:hole_1."),
     )
     flip: bool = param(

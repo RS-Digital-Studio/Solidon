@@ -28,7 +28,7 @@ from collections.abc import Sequence
 
 from app.core.agent.proposal import Proposal
 from app.core.agent.tools import runs_foreign_source
-from app.core.errors import AppError, ValidationError
+from app.core.errors import CANCEL, AppError, UserError, ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, Registry
 from app.core.scene.history import History, change_for
@@ -109,6 +109,8 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
         )
 
     transaction: Transaction | None = None
+    if proposal.drafts:
+        _refuse_shifted_numbering(proposal, history)
     if proposal.drafts or changes is not None:
         transaction = history.apply(
             _title(proposal), proposal.drafts, origin=proposal.origin, changes=changes
@@ -117,6 +119,31 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
     record(document, proposal, transaction)
     _log.info("proposal accepted as %s", transaction.id if transaction else "no transaction")
     return transaction
+
+
+def _refuse_shifted_numbering(proposal: Proposal, history: History) -> None:
+    """Hält an, wenn das Dokument seit dem Vorschlag Kennungen vergeben hat.
+
+    Der Vorschlag wurde auf einer Arbeitskopie gerechnet, und die Kennungen
+    seiner neuen Körper stehen in den Entwürfen — der zweite Schritt nennt
+    den Körper, den der erste anlegt. Legte der Nutzer zwischen Vorschlag und
+    Annahme selbst einen an, trug der die Kennung, die der Agent für seinen
+    vorgesehen hatte: Angenommen verschob der Vorschlag den Quader des
+    Nutzers und ließ seinen eigenen stehen (Gesamtreview 05.09.2026,
+    CORE-01). Die Kennungen werden seither übernommen, wie sie gerechnet
+    wurden — und ist eine davon inzwischen vergeben, wird nichts angewandt.
+    """
+    if history.outputs_still_free(proposal.drafts):
+        return
+    raise UserError(
+        title=_("Das Projekt hat sich seit diesem Vorschlag verändert."),
+        detail=_(
+            "Seit der Anfrage sind Körper dazugekommen, und die Schritte des Vorschlags "
+            "träfen andere als die, für die er gerechnet wurde. Angewandt wurde nichts — "
+            "dieselbe Anfrage noch einmal gestellt rechnet auf dem jetzigen Stand."
+        ),
+        suggestions=(CANCEL,),
+    )
 
 
 def discard(proposal: Proposal, document: Document) -> None:

@@ -1981,3 +1981,104 @@ def test_the_way_back_from_the_applied_bar_names_its_transaction(
 
     assert agent_apply.undo_applied(history, kennungen[-1])
     assert [entry.id for entry in project.document.transactions] == kennungen[:3]
+
+
+def test_an_accepted_proposal_keeps_the_ids_it_was_computed_with(profile: Profile) -> None:
+    """Gesamtreview 05.09.2026, CORE-01: Der Agent schlägt im leeren Projekt
+    einen Quader und dann ``translate_object(obj_1, dx=40)`` vor. Legt der
+    Nutzer vor der Annahme selbst einen Quader an, hieß der ``obj_1`` — und
+    die Annahme vergab dem Agentenquader ``obj_2``, während der zweite
+    Schritt weiter ``obj_1`` nannte: Verschoben wurde der Quader des
+    Nutzers, der des Agenten blieb stehen.
+
+    Die Entwürfe tragen seither die Kennungen, die die Arbeitskopie vergab,
+    und die Annahme übernimmt sie. Ist eine davon inzwischen vergeben, wird
+    nichts angewandt — mit einem Satz, der es sagt (Regel 17).
+    """
+    from app.core.errors import UserError
+
+    def proposing(made: Project) -> Proposal:
+        agent = session(
+            made,
+            profile,
+            [
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="1",
+                            name="create_box",
+                            arguments={
+                                "width": 10.0,
+                                "depth": 10.0,
+                                "height": 10.0,
+                                "anchor": "centre",
+                                "name": "",
+                            },
+                        ),
+                    )
+                ),
+                Reply(
+                    tool_calls=(
+                        ToolCall(
+                            id="2",
+                            name="translate_object",
+                            arguments={"objects": ["obj_1"], "dx": 40.0},
+                        ),
+                    )
+                ),
+                Reply(text="Quader angelegt und verschoben."),
+            ],
+        )
+        return agent.propose("Leg einen Quader an und schieb ihn nach rechts")
+
+    # Ohne Zwischenfall: die Kennungen aus der Arbeitskopie sind die der Annahme.
+    quiet = new_project("centauri-carbon-2", "petg")
+    proposal = proposing(quiet)
+    assert [draft.outputs for draft in proposal.drafts] == [("obj_1",), ("obj_1",)]
+    history = History(quiet.document)
+    assert agent_apply.accept(proposal, history) is not None
+    scene = scene_of(quiet, profile)
+    assert set(scene.objects) == {"obj_1"}
+    bounds = scene.objects["obj_1"].mesh.bounds
+    assert bounds.minimum[0] == pytest.approx(35.0) and bounds.maximum[0] == pytest.approx(45.0), (
+        "der Agentenquader steht bei x = 40"
+    )
+
+    # Mit Zwischenfall: der Nutzer legt vor der Annahme selbst einen Quader an.
+    busy = new_project("centauri-carbon-2", "petg")
+    proposal = proposing(busy)
+    history = History(busy.document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_box",
+                params={
+                    "width": 10.0,
+                    "depth": 10.0,
+                    "height": 10.0,
+                    "anchor": "centre",
+                    "name": "",
+                },
+            )
+        ],
+    )
+    before = len(busy.document.transactions)
+
+    with pytest.raises(UserError) as refused:
+        agent_apply.accept(proposal, history)
+    assert refused.value.suggestions, "Regel 17"
+
+    assert len(busy.document.transactions) == before, "angewandt wurde nichts"
+    scene = scene_of(busy, profile)
+    assert set(scene.objects) == {"obj_1"}
+    bounds = scene.objects["obj_1"].mesh.bounds
+    assert bounds.minimum[0] == pytest.approx(-5.0) and bounds.maximum[0] == pytest.approx(5.0), (
+        "der Nutzerquader steht, wo er stand"
+    )
+
+    # Auch eine vergebene und zurückgenommene Kennung ist nicht mehr der
+    # Stand, auf dem gerechnet wurde.
+    history.undo()
+    with pytest.raises(UserError):
+        agent_apply.accept(proposal, history)

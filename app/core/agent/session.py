@@ -23,7 +23,7 @@ from __future__ import annotations
 import copy
 import re
 from collections.abc import Callable, Container
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Any, Final, cast
 
@@ -736,7 +736,7 @@ class AgentSession:
         before = scene
         draft = OperationDraft(op=spec.name, inputs=inputs, params=arguments)
         try:
-            history.apply(spec.title, [draft])
+            applied = history.apply(spec.title, [draft])
         except AppError as error:
             # Ein Bedienfehler ist ein Aufruf, den das Modell hätte vermeiden
             # können — er zählt wie ein ungültiger. Ein `GeometryError` nicht:
@@ -750,6 +750,14 @@ class AgentSession:
             if isinstance(error, UserError):
                 proposal.invalid_calls += 1
             return f"{tr('Nicht anwendbar')}: {_error_text(error)}", scene
+
+        # Die Kennungen, die die Arbeitskopie vergeben hat, reisen im Entwurf
+        # mit: Der nächste Schritt des Modells nennt genau sie, und die
+        # Annahme übernimmt sie — statt neu zu vergeben und den zweiten
+        # Schritt auf einen Körper zu lenken, den inzwischen der Nutzer
+        # angelegt hat (Gesamtreview 05.09.2026, CORE-01). Ob sie beim
+        # Annehmen noch frei sind, prüft :func:`app.core.agent.apply.accept`.
+        draft = replace(draft, outputs=history.operation(applied.ops[-1]).outputs)
 
         result = self._evaluate(working)
         findings = checks.check(result, before)

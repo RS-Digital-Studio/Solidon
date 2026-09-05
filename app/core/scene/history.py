@@ -597,6 +597,20 @@ class History:
             seed = secrets.randbelow(2**31)
 
         outputs = draft.outputs if draft.outputs is not None else self._outputs_for(spec, draft)
+        if draft.outputs is not None:
+            # Vorgegebene Kennungen sind gerechnete: Ein Vorschlag bringt die
+            # mit, die seine Arbeitskopie vergab. Eine, die hier schon jemand
+            # trägt, darf kein zweites Mal ins Dokument — sonst legt die
+            # Auswertung das Ergebnis über einen fremden Körper.
+            taken = [entry for entry in outputs if entry not in draft.inputs and entry in known]
+            if taken:
+                raise ValidationError(
+                    field="out",
+                    detail=_("Die Operation will eine Kennung vergeben, die es schon gibt."),
+                    constraint="output_taken",
+                    values={"op": draft.op, "taken": taken},
+                    suggestions=(CANCEL,),
+                )
         return Operation(
             id=next(self._next_op),
             op=draft.op,
@@ -840,7 +854,9 @@ class History:
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
 
-        changed = dataclasses.replace(entry, inputs=tuple(inputs))
+        changed = dataclasses.replace(
+            entry, inputs=tuple(inputs), outputs=_outputs_following(entry, inputs)
+        )
         _log.info("changed inputs of op %s (%s) to %s", op_id, entry.op, list(inputs))
         return self._swap_operation(spec.title, entry, changed)
 
@@ -1351,6 +1367,31 @@ class History:
         )
         return max(found, self.document.highest_transaction)
 
+    def outputs_still_free(self, drafts: Sequence[OperationDraft]) -> bool:
+        """Ob die vorgegebenen Ausgabekennungen der Entwürfe hier noch zu
+        vergeben sind.
+
+        Ein Entwurf, der auf einer Kopie dieses Dokuments geplant wurde,
+        trägt die Kennungen, die die Kopie vergab — jede lag über der
+        damaligen Wasserlinie. Liegt eine heute darunter, hat das Dokument
+        seither selbst vergeben, und der Entwurf zeigt auf Fremdes: einen
+        Körper, den inzwischen der Nutzer anlegte, oder einen, den er anlegte
+        und zurücknahm. Beides ist nicht mehr der Stand, auf dem gerechnet
+        wurde (§26.5).
+
+        Kennungen, die ein Entwurf nur fortführt (Ausgang gleich Eingang),
+        zählen nicht — sie gehören dem Körper, den er bearbeitet.
+        """
+        waterline = self._highest_object_index()
+        for draft in drafts:
+            for object_id in draft.outputs or ():
+                if object_id in draft.inputs:
+                    continue
+                match = _OBJECT_PATTERN.match(object_id)
+                if match and int(match.group(1)) <= waterline:
+                    return False
+        return True
+
     def _highest_object_index(self) -> int:
         indices = [
             int(match.group(1))
@@ -1359,6 +1400,36 @@ class History:
             if (match := _OBJECT_PATTERN.match(object_id))
         ]
         return max(max(indices, default=0), self.document.highest_object)
+
+
+def _outputs_following(entry: Operation, inputs: Sequence[ObjectId]) -> tuple[ObjectId, ...]:
+    """Die Ausgabekennungen eines Schritts nach einem Eingabewechsel.
+
+    Eine 1:1-Operation gibt ihrem Eingang die Kennung zurück, die er hatte —
+    der Verschiebeschritt auf A heißt am Ausgang A. Wer nur die Eingänge
+    tauscht, lässt den Schritt B lesen und unter As Kennung ablegen: Die
+    Auswertung räumt B als verbrauchten Eingang weg und legt das Ergebnis
+    über A — ein Körper verschwand, und der Lauf meldete ``complete=True``
+    (Gesamtreview 05.09.2026, CORE-07).
+
+    Die Regeln von :meth:`History._outputs_for` haben eine Form: Was die
+    Kennung eines Eingangs fortführt, steht als Präfix in Eingangsreihenfolge;
+    was frisch vergeben wurde, folgt danach. Das Präfix folgt dem neuen
+    Eingang, das Frische bleibt — eine Vereinigung behält die Kennung ihres
+    Ergebnisses, und die Schritte danach finden sie weiter.
+    """
+    if entry.outputs == entry.inputs:
+        # Ganz identisch, in beide Richtungen: auch bei variabler Zahl —
+        # Anordnen gibt zurück, was es bekam, und nach dem Wechsel sind das
+        # die neuen.
+        return tuple(inputs)
+    kept = 0
+    while (
+        kept < min(len(entry.outputs), len(entry.inputs))
+        and entry.outputs[kept] == entry.inputs[kept]
+    ):
+        kept += 1
+    return (*tuple(inputs)[:kept], *entry.outputs[kept:])
 
 
 def _deletion_title(versions: Mapping[OpId, Operation]) -> TranslatableText:

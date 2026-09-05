@@ -53,6 +53,7 @@ from app.core.types import (
     CancelToken,
     Document,
     Feature,
+    FeatureRef,
     Finding,
     ObjectId,
     OpContext,
@@ -666,6 +667,15 @@ def evaluate(
 #: beschreiben einen Zustand, den es nicht mehr gibt. Als Hinweis wären sie
 #: nicht milder, sondern falsch. Was übrig bleibt, ist der Satz des Schritts,
 #: der es behoben hat — und der erzählt die ganze Geschichte.
+#: Die Parameterarten, deren Wert eine Quellenkennung ist — was eine
+#: Operation über ``ctx.sources`` liest. Jede davon gehört mit ihrer
+#: **Inhaltsprüfsumme** in den Cache-Schlüssel, nicht mit ihrem Namen: Jedes
+#: Projekt nennt sein erstes Bild ``src_1``. Bis zum 05.09.2026 stand hier nur
+#: ``source``, und ``displace_image`` liest sein Bild als ``image`` — zwei
+#: Projekte mit verschiedenen Bildern bekamen aus dem Plattencache dasselbe
+#: Relief, mit ``complete=True`` (Gesamtreview, CORE-11).
+SOURCE_KINDS: Final = frozenset({"source", "image"})
+
 SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     "ingest.not_watertight": frozenset({"repair.holes_filled"}),
     "ingest.small_components": frozenset({"repair.components_removed"}),
@@ -1598,7 +1608,7 @@ def _with_nested_context(
     Merkmalsnamen tragen, und der Schlüssel muss jede Lesart decken."""
     context: dict[str, Any] = {}
     for spec in params_class.spec():
-        if spec.kind == "source" and sources is not None:
+        if spec.kind in SOURCE_KINDS and sources is not None:
             source_id = resolved.get(spec.name)
             if isinstance(source_id, str) and source_id:
                 context[f"#{spec.name}"] = sources.identity(source_id)
@@ -1606,7 +1616,19 @@ def _with_nested_context(
         if spec.kind == "feature" or spec.targets_feature:
             named = resolved.get(spec.name)
             if isinstance(named, str) and named and objects is not None and hashes is not None:
-                carriers = _carrier_hashes(named, objects, hashes)
+                # Ein Ziel darf qualifiziert sein — ``obj_2:hole_1`` bei
+                # ``align_to_feature``. Dann zählt genau dieser Träger; ein
+                # nackter Merkmalsname deckt weiter jeden, der ihn trägt.
+                carrier_id: ObjectId | None = None
+                feature_id = named
+                if ":" in named:
+                    try:
+                        reference = FeatureRef.parse(named)
+                    except ValueError:
+                        reference = None
+                    if reference is not None:
+                        carrier_id, feature_id = reference.object_id, reference.feature_id
+                carriers = _carrier_hashes(feature_id, objects, hashes, object_id=carrier_id)
                 if carriers:
                     context[f"#{spec.name}"] = carriers
             continue

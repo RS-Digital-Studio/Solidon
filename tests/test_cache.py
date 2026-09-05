@@ -1156,3 +1156,85 @@ def test_a_payload_the_json_writer_cannot_take_stays_a_warning(
         "ein Payload, den der JSON-Schreiber nicht nimmt, ist ein Fehler und "
         "muss als Warnung stehen bleiben"
     )
+
+
+def test_the_key_reads_the_target_of_align_to_feature() -> None:
+    """Gesamtreview 05.09.2026, CORE-13: ``align_to_feature`` liest sein Ziel
+    über ``params.target`` — als ``obj_2:hole_1`` aus der ganzen Szene. Das
+    Feld trug weder ``kind="feature"`` noch ``targets_feature``; der
+    Schlüssel sah nur ``feature`` auf dem bewegten Körper, und ein
+    verschobenes Ziel ließ den Stift mit Cache an der alten Stelle.
+
+    Ein qualifiziertes Ziel zählt genau seinen Träger — zwei Körper mit
+    ``hole_1`` sind zwei Lesarten, und ``obj_2:hole_1`` meint eine davon.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+
+    params_class = REGISTRY.get("align_to_feature").params
+    resolved = {"feature": "pin_1", "target": "obj_2:hole_1"}
+    objects = {"obj_1": _face_carrier("obj_1", "pin_1"), "obj_2": _face_carrier("obj_2", "hole_1")}
+
+    before = _with_nested_context(
+        params_class, resolved, {}, None, objects, {"obj_1": "a", "obj_2": "h1"}
+    )
+    after = _with_nested_context(
+        params_class, resolved, {}, None, objects, {"obj_1": "a", "obj_2": "h2"}
+    )
+    assert "#target" in before, "der Träger des Ziels gehört in den Kontext"
+    assert before["#target"] != after["#target"], "sein Hash muss den Schlüssel ändern"
+
+    twins = {"obj_1": _face_carrier("obj_1", "hole_1"), "obj_2": _face_carrier("obj_2", "hole_1")}
+    qualified = _with_nested_context(
+        params_class, resolved, {}, None, twins, {"obj_1": "x", "obj_2": "y"}
+    )
+    assert qualified["#target"] == ("y",), "obj_2:hole_1 meint obj_2 und nicht jeden mit hole_1"
+
+    malformed = _with_nested_context(
+        params_class, {"feature": "pin_1", "target": ":"}, {}, None, objects, {"obj_2": "h1"}
+    )
+    assert "#target" not in malformed, "ein unbrauchbares Ziel kippt keinen Schlüssel"
+
+
+def test_the_key_reads_the_content_of_every_source_bearing_parameter() -> None:
+    """Gesamtreview 05.09.2026, CORE-11: Nur ``kind="source"`` kam mit seiner
+    Inhaltsprüfsumme in den Schlüssel. ``displace_image`` liest sein Bild als
+    ``kind="image"`` — und jedes Projekt nennt sein erstes Bild ``src_1``:
+    Zwei Projekte mit verschiedenen Bildern bekamen aus dem Plattencache
+    dasselbe Relief, mit ``complete=True``.
+
+    Geprüft über das Register, nicht über eine Liste hier: Jede Operation,
+    die eine Quelle nennt, gleich welcher Art, trägt deren Inhalt im Schlüssel.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import SOURCE_KINDS, _with_nested_context
+
+    class Sources:
+        def __init__(self, content: str) -> None:
+            self.content = content
+
+        def identity(self, source_id: str) -> str:
+            return f"{self.content}:{source_id}"
+
+    covered: list[tuple[str, str, str]] = []
+    for spec in REGISTRY.all():
+        for entry in spec.params.spec():
+            if entry.kind not in SOURCE_KINDS:
+                continue
+            resolved = {entry.name: "src_1"}
+            first = _with_nested_context(spec.params, resolved, {}, Sources("a"), None, None)  # type: ignore[arg-type]
+            second = _with_nested_context(spec.params, resolved, {}, Sources("b"), None, None)  # type: ignore[arg-type]
+            key = f"#{entry.name}"
+            assert key in first, f"{spec.name}.{entry.name} ({entry.kind}) fehlt im Schlüssel"
+            assert first[key] != second[key], f"{spec.name}.{entry.name}: der Inhalt zählt nicht"
+            covered.append((spec.name, entry.name, entry.kind))
+
+    assert ("displace_image", "source", "image") in covered, "das Relief liest ein Bild"
+    assert ("load", "source", "source") in covered
+    assert len(covered) >= 4, covered

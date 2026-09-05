@@ -314,6 +314,8 @@ _NOT_A_RANGE = frozenset(
         "not_a_face", "not_a_hole", "not_a_mesh", "not_a_number", "not_an_archive",
         "not_a_project", "private_destination",
         "not_a_twin", "not_movable", "not_outline", "not_step", "not_upright", "one_body",
+        # Eine vorgegebene Ausgabekennung, die es schon gibt (CORE-01): kein Feld.
+        "output_taken",
         "point_count",
         "recipe_format", "remove_failed", "restore_failed",
         "repair_not_for_exact_body",
@@ -325,6 +327,9 @@ _NOT_A_RANGE = frozenset(
         # stünde über den anderen falsch.
         "shared_resource_limit", "shared_rules", "source",
         "sweep_needs_xy", "target_behind", "target_count", "target_parallel", "toml",
+        # Zu groß für den Löser, zu viele Körper in der Baugruppe: Grenzen,
+        # aber keine Zahl in einem Feld — die Datei ist so, wie sie ist (G-09, B-04).
+        "too_large", "too_many_bodies",
         "too_many_triangles", "too_new", "type", "undo_with_changes", "unknown",
         "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",
         "unknown_placeholder", "unknown_region", "unknown_shape", "unknown_source",

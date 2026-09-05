@@ -27,6 +27,7 @@ import hashlib
 import json
 import math
 import os
+import secrets
 import sys
 import tempfile
 import unicodedata
@@ -1398,6 +1399,14 @@ def load(path: Path) -> Project:
                 )
 
             payloads: dict[SourceId, bytes] = {}
+            # Ein Eintrag wird **einmal** gelesen, egal wie viele Quellen ihn
+            # nennen. Das Archivbudget zählt jeden Eintrag einmal; wer ihn je
+            # Kennung erneut entpackte, hielt bei zehntausend Quellen auf
+            # denselben 256 MiB ein Vielfaches des Budgets im Speicher
+            # (Gesamtreview 05.09.2026, B-03). Der Altbestand darf denselben
+            # Pfad doppelt tragen, das Speichern lehnt ihn seither ab — beim
+            # Öffnen teilen sich die Quellen dann dieselben Bytes.
+            entry_payloads: dict[str, bytes] = {}
             linked_bytes = 0
             for source_id, source in document.sources.items():
                 if not source.embedded:
@@ -1422,7 +1431,10 @@ def load(path: Path) -> Project:
                         constraint="missing_payload",
                         values={"source": source_id, "path": source.path},
                     )
-                payload = _read_archive_entry(container, infos[source.path])
+                payload = entry_payloads.get(source.path)
+                if payload is None:
+                    payload = _read_archive_entry(container, infos[source.path])
+                    entry_payloads[source.path] = payload
                 if not source.sha256 or checksum(payload) != source.sha256:
                     raise ValidationError(
                         field=f"sources.{source_id}",
@@ -1504,9 +1516,9 @@ def _recovery_dir() -> Path:
     return ensure_dir(user_data_dir() / "recovery")
 
 
-def autosave_path(path: Path | None) -> Path:
+def autosave_path(path: Path | None, token: str | None = None) -> Path:
     """Neben dem Projekt — oder im Nutzerverzeichnis, solange es noch keinen
-    Namen hat.
+    Namen hat; dort unter der Kennung des Dokuments (:func:`recovery_token`).
 
     **Ein Beispiel bekommt seines nie daneben.** Beispiele liegen in der
     Installation (§37.2); dort zu schreiben ist unter „Programme" schlicht
@@ -1516,17 +1528,63 @@ def autosave_path(path: Path | None) -> Path:
     hängt, sagt nicht, warum.
     """
     if path is None:
-        return _recovery_dir() / f"unsaved{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
+        stem = f"{UNSAVED_STEM}-{token}" if token else UNSAVED_STEM
+        return _recovery_dir() / f"{stem}{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
     if path.parent == examples.directory():
         return _recovery_dir() / f"{path.name}{AUTOSAVE_SUFFIX}"
     return path.with_name(path.name + AUTOSAVE_SUFFIX)
 
 
-def write_autosave(project: Project, path: Path | None) -> Path:
-    return save(project, autosave_path(path))
+#: Der Dateistamm einer Sicherung ohne Projektnamen — ohne Kennung der
+#: Altbestand, mit Kennung (``unsaved-3f9a1c2b``) seit dem 05.09.2026.
+UNSAVED_STEM: Final = "unsaved"
 
 
-def find_recovery(path: Path | None) -> Path | None:
+def recovery_token() -> str:
+    """Die Kennung, unter der ein Projekt ohne Namen gesichert wird.
+
+    **Je Dokument eine, nicht je Rechner.** Zwei Fenster mit je einem neuen,
+    noch namenlosen Projekt schrieben in dieselbe ``unsaved.p3d.autosave``:
+    Die zweite Sicherung ersetzte die erste, und ein Aufräumen aus dem einen
+    Fenster löschte die Sicherung des anderen — nach einem Absturz stand
+    höchstens der zuletzt geschriebene Stand bereit (Gesamtreview 05.09.2026,
+    CORE-09). Die Sitzung zieht sich beim Anlegen eines Projekts eine Kennung
+    und reicht sie an jede der Funktionen hier weiter.
+    """
+    return secrets.token_hex(4)
+
+
+def recovery_token_of(candidate: Path) -> str | None:
+    """Die Kennung aus dem Namen einer namenlosen Sicherung — ``None`` beim
+    Altbestand ohne Kennung und bei jeder anderen Datei."""
+    suffix = f"{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}"
+    name = candidate.name
+    if not name.startswith(f"{UNSAVED_STEM}-") or not name.endswith(suffix):
+        return None
+    return name[len(UNSAVED_STEM) + 1 : -len(suffix)] or None
+
+
+def unsaved_recoveries(*, except_token: str | None = None) -> list[Path]:
+    """Alle Sicherungen ohne Projektnamen, jüngste zuerst — ohne die eigene.
+
+    Mehr als eine kann liegen: je abgestürztem Fenster eine. Angeboten wird
+    beim Start die jüngste; was der Nutzer annimmt oder ablehnt, verschwindet,
+    und der nächste Start bietet die nächste an.
+    """
+    own = autosave_path(None, except_token) if except_token else None
+    found = [
+        entry
+        for entry in _recovery_dir().glob(f"{UNSAVED_STEM}*{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}")
+        if entry.is_file() and entry != own
+    ]
+    return sorted(found, key=lambda entry: entry.stat().st_mtime, reverse=True)
+
+
+def write_autosave(project: Project, path: Path | None, token: str | None = None) -> Path:
+    return save(project, autosave_path(path, token))
+
+
+def find_recovery(path: Path | None, token: str | None = None) -> Path | None:
     """Ein Autosave, das sein Projekt überlebt hat, wird beim nächsten Start
     angeboten.
 
@@ -1542,15 +1600,20 @@ def find_recovery(path: Path | None) -> Path | None:
     dort hat jemand nach der Sicherung gespeichert, und dann gilt das
     Gespeicherte.
     """
+    if path is None:
+        # Namenlos: die jüngste fremde Sicherung, nicht die eigene — die
+        # eigene entsteht erst, wenn dieses Fenster etwas geändert hat.
+        found = unsaved_recoveries(except_token=token)
+        return found[0] if found else None
     candidate = autosave_path(path)
     if not candidate.is_file():
         return None
-    if path is not None and path.is_file() and candidate.stat().st_mtime < path.stat().st_mtime:
+    if path.is_file() and candidate.stat().st_mtime < path.stat().st_mtime:
         return None
     return candidate
 
 
-def clear_autosave(path: Path | None) -> None:
+def clear_autosave(path: Path | None, token: str | None = None) -> None:
     """Die Sicherung ist erledigt — nach dem Speichern und nach dem Verwerfen.
 
     Der Docstring nannte lange nur den ersten Fall, und dabei blieb es nicht:
@@ -1565,7 +1628,13 @@ def clear_autosave(path: Path | None) -> None:
     beim nächsten Öffnen; das ist die kleinere Störung, und sie steht im
     Protokoll.
     """
-    candidate = autosave_path(path)
+    discard_recovery(autosave_path(path, token))
+
+
+def discard_recovery(candidate: Path) -> None:
+    """Räumt eine bestimmte Sicherung weg — die angebotene, die der Nutzer
+    ablehnt, oder die eigene über :func:`clear_autosave`. Wirft nicht, aus
+    demselben Grund wie dort."""
     if not candidate.is_file():
         return
     try:

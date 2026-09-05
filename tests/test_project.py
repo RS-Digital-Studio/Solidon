@@ -1959,6 +1959,42 @@ def test_a_legacy_duplicate_path_stops_the_save_instead_of_losing_data(
     assert "sources/bracket.stl" in str(caught.value.values.get("path", ""))
 
 
+def test_sources_naming_the_same_entry_share_one_payload_when_loaded(
+    filled: Project,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Das Archivbudget zählt jeden Eintrag einmal — gelesen wurde er je
+    Quelle, die ihn nennt. Zehntausend Quellen auf denselben Eintrag hielten
+    damit das Zehntausendfache des Budgets im Speicher (Gesamtreview
+    05.09.2026, B-03). Der Eintrag wird einmal entpackt, die Quellen teilen
+    sich die Bytes."""
+    path = save(filled, tmp_path / "geteilt.p3d")
+    data = project_data(path)
+    original = data["sources"]["src_1"]
+    for number in range(2, 6):
+        twin = dict(original)
+        if "id" in twin:
+            twin["id"] = f"src_{number}"
+        data["sources"][f"src_{number}"] = twin
+    _rewrite_project_entry(path, data)
+    reads: list[str] = []
+    real_read = project_module._read_archive_entry
+
+    def counting_read(container: zipfile.ZipFile, info: zipfile.ZipInfo) -> bytes:
+        reads.append(info.filename)
+        return real_read(container, info)
+
+    monkeypatch.setattr(project_module, "_read_archive_entry", counting_read)
+
+    loaded = load(path)
+
+    assert reads.count(original["path"]) == 1
+    assert loaded.sources["src_1"] == filled.sources["src_1"]
+    for number in range(2, 6):
+        assert loaded.sources[f"src_{number}"] is loaded.sources["src_1"]
+
+
 def test_broken_but_valid_json_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
     """Syntaktisch gültiges, strukturell kaputtes JSON: fünf Wege verließen
     ``load()`` als rohe KeyError/ValueError/TypeError ohne Handlungsvorschlag
@@ -2135,3 +2171,52 @@ def test_a_value_that_is_not_json_is_named_before_it_is_written() -> None:
     for tree in ({"wert": Foreign()}, {"wert": [Foreign()]}, [Foreign()], Foreign()):
         with pytest.raises(ValueError, match="json_type"):
             project_module._validate_json_tree(tree)
+
+
+def test_two_unnamed_projects_keep_separate_recoveries(filled: Project) -> None:
+    """Gesamtreview 05.09.2026, CORE-09: Zwei Fenster mit je einem neuen,
+    namenlosen Projekt schrieben in dieselbe ``unsaved.p3d.autosave`` — die
+    zweite Sicherung ersetzte die erste, und ein Aufräumen aus dem einen
+    Fenster löschte die des anderen. Jedes Dokument sichert seither unter
+    einer eigenen Kennung; gefunden wird die fremde, geräumt nur die eigene
+    oder die ausdrücklich abgelehnte."""
+    from app.core.scene.project import (
+        discard_recovery,
+        recovery_token,
+        recovery_token_of,
+        unsaved_recoveries,
+    )
+
+    for leftover in unsaved_recoveries():
+        discard_recovery(leftover)
+    first, second = recovery_token(), recovery_token()
+    assert first != second
+
+    one = write_autosave(filled, None, first)
+    two = write_autosave(filled, None, second)
+    assert one != two, "zwei Dokumente, zwei Dateien"
+    assert recovery_token_of(one) == first
+    assert load(two).document.ops == filled.document.ops
+
+    # Jedes Fenster sieht die fremde Sicherung, nie seine eigene.
+    assert find_recovery(None, first) == two
+    assert find_recovery(None, second) == one
+
+    # Aufräumen trifft nur die eigene.
+    clear_autosave(None, first)
+    assert not one.is_file()
+    assert two.is_file(), "die Sicherung des anderen Fensters bleibt"
+
+    # Ein drittes Fenster bekommt die verwaiste angeboten; ablehnen räumt
+    # genau sie weg.
+    third = recovery_token()
+    assert find_recovery(None, third) == two
+    discard_recovery(two)
+    assert find_recovery(None, third) is None
+
+    # Der Altbestand ohne Kennung wird weiter gefunden und weiter geräumt.
+    legacy = write_autosave(filled, None)
+    assert recovery_token_of(legacy) is None
+    assert find_recovery(None, first) == legacy
+    clear_autosave(None)
+    assert find_recovery(None, first) is None
