@@ -19,6 +19,7 @@ jeder Schritt wird abgewartet und auf vollständige Auswertung geprüft.
 
 from __future__ import annotations
 
+import math
 import os
 import shutil
 import subprocess
@@ -42,6 +43,7 @@ from PySide6.QtWidgets import (  # noqa: E402
     QApplication,
     QDialog,
     QDialogButtonBox,
+    QMenu,
     QWidget,
 )
 
@@ -51,8 +53,6 @@ load_operations()
 
 from app.core.registry import REGISTRY  # noqa: E402
 from app.core.scene import OperationDraft  # noqa: E402
-from app.core.sketch import shapes  # noqa: E402
-from app.core.sketch.serialize import sketch_to_text  # noqa: E402
 from app.core.types import Parameter  # noqa: E402
 from app.i18n import install_catalog, set_language  # noqa: E402
 from app.i18n.catalog import read_catalog  # noqa: E402
@@ -95,6 +95,8 @@ class Recorder:
         self.folder = folder
         self.chapter = chapter
         self.slides: list[Slide] = []
+        self._pointer: QPoint | None = None
+        self._image_index = 0
         folder.mkdir(parents=True, exist_ok=True)
 
     @property
@@ -111,18 +113,67 @@ class Recorder:
         target: QWidget | QPoint | None = None,
         click: bool = False,
         title_card: bool = False,
+        overlays: Sequence[QWidget] = (),
+        caption_bottom: bool = False,
     ) -> None:
-        """Fenster, höchstens einen Dialog, Text und Systemzeiger aufnehmen."""
+        """Fenster, höchstens einen Dialog, Text und einen bewegten Zeiger aufnehmen."""
         if seconds <= 0.0:
             raise ValueError("Eine Folie braucht eine positive Dauer.")
+        frame = self._capture_frame(
+            title,
+            detail,
+            dialog=dialog,
+            title_card=title_card,
+            overlays=overlays,
+            caption_bottom=caption_bottom,
+        )
+        point = self._point_for(target)
+        movement = 0.0
+        if (
+            point is not None
+            and self._pointer is not None
+            and not click
+            and not title_card
+            and (point - self._pointer).manhattanLength() >= 24
+        ):
+            movement = min(0.6, max(0.0, seconds - 0.25))
+            count = max(2, round(movement * 30.0))
+            movement = count / 30.0
+            for index in range(1, count + 1):
+                phase = index / count
+                eased = phase * phase * (3.0 - 2.0 * phase)
+                moving = frame.copy()
+                x = self._pointer.x() + (point.x() - self._pointer.x()) * eased
+                y = self._pointer.y() + (point.y() - self._pointer.y()) * eased
+                video_base._paint_pointer(moving, (x, y, False))
+                self._store(moving, 1.0 / 30.0)
+
+        if point is not None:
+            video_base._paint_pointer(frame, (float(point.x()), float(point.y()), click))
+        self._store(frame, max(0.05, seconds - movement))
+        self._pointer = None if title_card else point or self._pointer
+
+    def _capture_frame(
+        self,
+        title: str,
+        detail: str,
+        *,
+        dialog: QDialog | None = None,
+        title_card: bool = False,
+        overlays: Sequence[QWidget] = (),
+        caption_bottom: bool = False,
+        settle_frames: int = 12,
+    ) -> QImage:
+        """Den aktuellen sichtbaren Zustand ohne Zeiger als Videobild greifen."""
         if dialog is not None:
             _place_dialog(self.window, dialog)
             dialog.raise_()
             dialog.activateWindow()
-        else:
+        elif not overlays:
             self.window.raise_()
             self.window.activateWindow()
-        video_base.settle(self.app, 12)
+        if settle_frames:
+            video_base.settle(self.app, settle_frames)
 
         screen = self.app.primaryScreen()
         if screen is None:
@@ -140,22 +191,84 @@ class Recorder:
 
         if dialog is not None:
             self._paint_dialog(frame, dialog)
-        self._paint_caption(frame, title, detail, title_card=title_card)
-        point = self._point_for(target)
-        if point is not None:
-            video_base._paint_pointer(frame, (float(point.x()), float(point.y()), click))
+        for overlay in overlays:
+            self._paint_dialog(frame, overlay)
+        self._paint_caption(
+            frame,
+            title,
+            detail,
+            title_card=title_card,
+            bottom=caption_bottom,
+        )
+        return frame
 
-        path = self.folder / f"{len(self.slides):03d}.png"
+    def _store(self, frame: QImage, seconds: float) -> None:
+        """Ein Einzelbild unter einer eindeutigen Nummer in die Zeitleiste schreiben."""
+        path = self.folder / f"{self._image_index:05d}.png"
         if not frame.save(str(path), "PNG"):
             raise SystemExit(f"Bild ließ sich nicht schreiben: {path}")
         self.slides.append(Slide(path, seconds))
+        self._image_index += 1
+
+    def orbit(
+        self,
+        title: str,
+        detail: str,
+        *,
+        seconds: float = 2.0,
+        degrees: float = 42.0,
+        zoom: float = 1.0,
+    ) -> None:
+        """Das Modell in einer kurzen, ruhigen Kamerafahrt räumlich zeigen."""
+        viewport = self.window.viewport
+        plotter = viewport.plotter
+        if plotter is None:
+            self.add(title, detail, seconds, target=viewport)
+            return
+        self.window.raise_()
+        self.window.activateWindow()
+        viewport.reset_camera()
+        if zoom != 1.0:
+            viewport.zoom(zoom)
+        video_base.settle(self.app, 16)
+
+        camera = plotter.camera
+        focal = tuple(float(value) for value in camera.focal_point)
+        position = tuple(float(value) for value in camera.position)
+        offset_x = position[0] - focal[0]
+        offset_y = position[1] - focal[1]
+        radius = math.hypot(offset_x, offset_y)
+        start = math.atan2(offset_y, offset_x)
+        height = position[2]
+        count = max(2, round(seconds * 20.0))
+        for index in range(1, count + 1):
+            phase = index / count
+            eased = phase * phase * (3.0 - 2.0 * phase)
+            angle = start + math.radians(degrees) * eased
+            camera.position = (
+                focal[0] + radius * math.cos(angle),
+                focal[1] + radius * math.sin(angle),
+                height,
+            )
+            redraw = getattr(viewport, "_redraw_shadows", None)
+            if callable(redraw):
+                redraw()
+            plotter.render()
+            self.app.processEvents()
+            frame = self._capture_frame(
+                title,
+                detail,
+                settle_frames=0,
+            )
+            self._store(frame, seconds / count)
+        self._pointer = None
 
     def click(
         self,
         title: str,
         detail: str,
         *,
-        dialog: QDialog,
+        dialog: QDialog | None = None,
         target: QWidget,
     ) -> None:
         """Einen kurzen, sichtbaren Klickring vor der Handlung ergänzen."""
@@ -167,8 +280,8 @@ class Recorder:
         if rest > 0.0:
             self.add(title, detail, rest + 1.0, title_card=True)
 
-    def _paint_dialog(self, frame: QImage, dialog: QDialog) -> None:
-        """Den einen offenen Dialog über den OpenGL-Fenstergriff legen."""
+    def _paint_dialog(self, frame: QImage, dialog: QWidget) -> None:
+        """Ein separates Dialog- oder Menüfenster über den Fenstergriff legen."""
         picture = dialog.grab().toImage()
         picture.setDevicePixelRatio(1.0)
         origin = self.window.mapToGlobal(QPoint(0, 0))
@@ -224,6 +337,7 @@ class Recorder:
         detail: str,
         *,
         title_card: bool,
+        bottom: bool = False,
     ) -> None:
         """Eine ruhige, telefonlesbare Einblendung über die Anwendung setzen."""
         painter = QPainter(frame)
@@ -251,21 +365,22 @@ class Recorder:
                 detail,
             )
         else:
-            box = QRectF(34, 24, 1230, 132)
+            top = 924 if bottom else 24
+            box = QRectF(34, top, 1230, 132)
             painter.setBrush(QColor(18, 22, 29, 228))
             painter.drawRoundedRect(box, 20, 20)
             painter.setBrush(QColor("#e08b4e"))
-            painter.drawRoundedRect(QRectF(34, 24, 12, 132), 6, 6)
+            painter.drawRoundedRect(QRectF(34, top, 12, 132), 6, 6)
             painter.setPen(QColor("#aeb8c8"))
             painter.setFont(QFont("Segoe UI", 15, QFont.Weight.DemiBold))
-            painter.drawText(QRectF(70, 37, 1170, 24), self.chapter.upper())
+            painter.drawText(QRectF(70, top + 13, 1170, 24), self.chapter.upper())
             painter.setPen(QColor("#f7f9fb"))
             painter.setFont(QFont("Segoe UI", 27, QFont.Weight.DemiBold))
-            painter.drawText(QRectF(70, 61, 1170, 42), title)
+            painter.drawText(QRectF(70, top + 37, 1170, 42), title)
             painter.setPen(QColor("#d4d9e1"))
             painter.setFont(QFont("Segoe UI", 17))
             painter.drawText(
-                QRectF(70, 104, 1170, 40),
+                QRectF(70, top + 80, 1170, 40),
                 Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignTop,
                 detail,
             )
@@ -305,6 +420,181 @@ def _button(dialog: QDialog) -> QWidget:
     return button
 
 
+def _menu_path(window: MainWindow, action: Any) -> list[tuple[QMenu, Any]]:
+    """Den sichtbaren Weg von der Menüleiste bis zu einer Aktion finden."""
+    menus = [menu for menu in window._menus if action in menu.actions()]
+    if not menus:
+        return []
+    menu = menus[0]
+    path: list[tuple[QMenu, Any]] = [(menu, action)]
+    top_actions = window.menuBar().actions()
+    while menu.menuAction() not in top_actions:
+        parent = next(
+            (candidate for candidate in window._menus if menu.menuAction() in candidate.actions()),
+            None,
+        )
+        if parent is None:
+            return []
+        path.append((parent, menu.menuAction()))
+        menu = parent
+    path.reverse()
+    return path
+
+
+def _show_action_path(
+    recorder: Recorder,
+    action: Any,
+    detail: str,
+    *,
+    seconds: float = 4.2,
+) -> bool:
+    """Eine echte Menüfolge mit Mausweg und hervorgehobenem Ziel zeigen."""
+    path = _menu_path(recorder.window, action)
+    if not path:
+        return False
+    root = path[0][0]
+    root_action = root.menuAction()
+    menu_bar = recorder.window.menuBar()
+    root_point = menu_bar.mapToGlobal(menu_bar.actionGeometry(root_action).center())
+    recorder.add(
+        f"Menü {root.title()} öffnen",
+        detail,
+        2.5,
+        target=root_point,
+        caption_bottom=True,
+    )
+    recorder.add(
+        f"Menü {root.title()} öffnen",
+        detail,
+        0.45,
+        target=root_point,
+        click=True,
+        caption_bottom=True,
+    )
+
+    visible: list[QMenu] = []
+    for index, (menu, chosen) in enumerate(path):
+        menu.ensurePolished()
+        menu.adjustSize()
+        if index == 0:
+            origin = menu_bar.mapToGlobal(menu_bar.actionGeometry(root_action).bottomLeft())
+        else:
+            parent, parent_action = path[index - 1]
+            origin = parent.mapToGlobal(parent.actionGeometry(parent_action).topRight())
+        menu.popup(origin)
+        menu.setActiveAction(chosen)
+        visible.append(menu)
+        video_base.settle(recorder.app, 8)
+
+    leaf_menu, leaf_action = path[-1]
+    point = leaf_menu.mapToGlobal(leaf_menu.actionGeometry(leaf_action).center())
+    labels = [root.title(), *(entry.text().replace("&", "") for _menu, entry in path)]
+    recorder.add(
+        " → ".join(labels),
+        "Dieser sichtbare Menüpunkt öffnet den nächsten gezeigten Dialog.",
+        seconds,
+        target=point,
+        overlays=tuple(visible),
+        caption_bottom=True,
+    )
+    recorder.add(
+        " → ".join(labels),
+        "Jetzt wird genau diese Funktion gewählt.",
+        0.45,
+        target=point,
+        click=True,
+        overlays=tuple(visible),
+        caption_bottom=True,
+    )
+    for menu in reversed(visible):
+        menu.close()
+    video_base.settle(recorder.app, 6)
+    return True
+
+
+def _operation_action(window: MainWindow, op_name: str) -> Any | None:
+    """Die Menüaktion einer Operation einschließlich Varianteneintrag liefern."""
+    return window._op_actions.get(op_name) or window._variant_actions.get(op_name)
+
+
+def _draw_rectangle(recorder: Recorder, panel: Any, length: float, width: float) -> None:
+    """Ein Rechteck über das echte Werkzeug, zwei Mausziele und zwei Maße zeichnen."""
+    recorder.add(
+        "Skizzenwerkzeug → Rechteck",
+        "Der Rechteckknopf ist der direkte Weg: eine Ecke setzen, dann die Gegenecke.",
+        2.8,
+        target=panel.shapes_button,
+    )
+    recorder.click(
+        "Rechteckwerkzeug aktivieren",
+        "Jetzt folgen die beiden Punkte direkt im Viewport.",
+        target=panel.shapes_button,
+    )
+    panel.shapes_button.click()
+    video_base.settle(recorder.app, 8)
+
+    first = (-length / 2.0, -width / 2.0)
+    opposite = (length / 2.0, width / 2.0)
+    first_local = recorder.window.viewport.sketch_screen_at(first)
+    opposite_local = recorder.window.viewport.sketch_screen_at(opposite)
+    if first_local is None or opposite_local is None:
+        raise SystemExit("Die beiden Rechteckpunkte sind im Skizzenviewport nicht sichtbar.")
+    first_point = recorder.window.viewport.mapToGlobal(first_local)
+    opposite_point = recorder.window.viewport.mapToGlobal(opposite_local)
+    recorder.add(
+        "Erste Rechteckecke setzen",
+        "Der Mausweg endet links unten am sichtbaren Rasterpunkt.",
+        2.4,
+        target=first_point,
+    )
+    recorder.add(
+        "Erste Rechteckecke setzen",
+        "Ein echter Skizzenklick legt den Startpunkt fest.",
+        0.3,
+        target=first_point,
+        click=True,
+    )
+    panel.canvas.place_on_plane(first)
+    panel.canvas.note_pointer(panel.canvas._to_screen(*opposite))
+    video_base.settle(recorder.app, 8)
+    recorder.add(
+        "Maus zur Gegenecke bewegen",
+        "Die Live-Vorschau zeigt bereits das entstehende Rechteck.",
+        2.8,
+        target=opposite_point,
+    )
+
+    panel.canvas.measure_field.set_value_mm(length)
+    recorder.add(
+        f"Breite exakt auf {length:g} mm setzen",
+        "Das Maßfeld steht direkt am Mauszeiger und speichert eine Bedingung.",
+        2.8,
+        target=panel.canvas.measure_field,
+    )
+    recorder.click(
+        f"{length:g} mm übernehmen",
+        "Tab wechselt danach zum zweiten Rechteckmaß.",
+        target=panel.canvas.measure_field,
+    )
+    panel.canvas.place_measured(length)
+    video_base.settle(recorder.app, 8)
+
+    panel.canvas.second_measure_field.set_value_mm(width)
+    recorder.add(
+        f"Höhe exakt auf {width:g} mm setzen",
+        "Auch das zweite Maß bleibt als editierbare Skizzenbedingung erhalten.",
+        2.8,
+        target=panel.canvas.second_measure_field,
+    )
+    recorder.click(
+        f"{width:g} mm übernehmen",
+        "Damit wird der geschlossene Umriss fertiggestellt.",
+        target=panel.canvas.second_measure_field,
+    )
+    panel.canvas.place_second_measured(width)
+    video_base.settle(recorder.app, 12)
+
+
 def _select(window: MainWindow, object_id: str) -> None:
     """Einen Wirtskörper sichtbar wählen."""
     window.object_tree.select_object(object_id)
@@ -320,6 +610,34 @@ def _fit(window: MainWindow, app: QApplication) -> None:
     window.viewport.view_from("iso")
     window.viewport.reset_camera()
     video_base.settle(app, 18)
+
+
+def _view(window: MainWindow, app: QApplication, direction: str, zoom: float = 1.0) -> None:
+    """Eine gezielte Ansicht einstellen und kleine Details lesbar heranholen."""
+    window.object_tree.tree.clearSelection()
+    window.viewport.view_from(direction)
+    window.viewport.reset_camera()
+    if zoom != 1.0:
+        window.viewport.zoom(zoom)
+    video_base.settle(app, 18)
+
+
+def _highlight_kind(window: MainWindow, session: Session, object_id: str, kind: str) -> int:
+    """Alle Merkmale einer Art in der blauen Merkmalsauswahl zeigen."""
+    result = session.last_result
+    if result is None or object_id not in result.scene.objects:
+        return 0
+    feature_ids = [
+        feature_id
+        for feature_id, feature in result.scene.objects[object_id].features.items()
+        if feature.kind == kind
+    ]
+    if not feature_ids:
+        return 0
+    _select(window, object_id)
+    window.viewport.select_features(feature_ids)
+    video_base.settle(QApplication.instance(), 12)  # type: ignore[arg-type]
+    return len(feature_ids)
 
 
 def _verify(session: Session, context: str) -> None:
@@ -358,6 +676,17 @@ def _add_parameter(
     maximum: float,
 ) -> None:
     """Den Parameterdialog zeigen und dasselbe Maß in die Sitzung übernehmen."""
+    recorder.add(
+        "Parameterleiste → Parameter anlegen …",
+        f"Hier beginnt der echte Bedienweg für das Projektmaß {title}.",
+        2.8,
+        target=recorder.window.parameters.add_button,
+    )
+    recorder.click(
+        "Parameter anlegen … öffnen",
+        "Der Klick öffnet den gleich gezeigten Dialog.",
+        target=recorder.window.parameters.add_button,
+    )
     dialog = ParameterDialog(session.project.document.parameters, recorder.window)
     dialog.name_field.setText(name)
     dialog.value_field.setValue(value)
@@ -405,32 +734,23 @@ def _edit_parameter(
     value: float,
     title: str,
 ) -> None:
-    """Einen vorhandenen Parameter sichtbar ändern und neu auswerten."""
-    existing = session.project.document.parameters[name]
-    dialog = ParameterDialog(
-        session.project.document.parameters,
-        recorder.window,
-        existing=existing,
-    )
-    dialog.value_field.setValue(value)
-    action = _button(dialog)
+    """Einen vorhandenen Parameter direkt in seiner echten Seitenzeile ändern."""
+    field = recorder.window.parameters._editors.get(name)
+    if field is None:
+        raise SystemExit(f"Parameterfeld ist in der Seitenleiste nicht sichtbar: {name}")
     recorder.add(
-        f"Variante testen: {title}",
-        f"Nur dieses Projektmaß wird auf {value:g} mm geändert.",
-        6.5,
-        dialog=dialog,
-        target=dialog.value_field,
+        f"Parameterleiste → {title}",
+        f"Das sichtbare Wertefeld wird von Hand auf {value:g} mm geändert.",
+        4.2,
+        target=field,
     )
     recorder.click(
-        "Neu aufbauen",
-        "Alle abhängigen Schritte bleiben erhalten und werden erneut gerechnet.",
-        dialog=dialog,
-        target=action,
+        f"{value:g} mm in das Feld eingeben",
+        "Nach der Eingabe rechnet Solidon alle abhängigen Schritte neu.",
+        target=field,
     )
-    dialog.close()
-    dialog.deleteLater()
-    if not session.change_parameter(name, value):
-        raise SystemExit(f"Parameter ließ sich nicht ändern: {name}")
+    field.setValue(value)
+    video_base.settle(recorder.app, 10)
     _verify(session, f"Parameter {name} ändern")
     _fit(recorder.window, recorder.app)
 
@@ -444,6 +764,11 @@ def _show_catalog(
     search: str = "",
 ) -> None:
     """Den echten Katalog mit genau einem gewählten Baustein zeigen."""
+    _show_action_path(
+        recorder,
+        recorder.window._catalog_action,
+        "Der Bausteinkatalog ist über die Menüleiste und Strg+K erreichbar.",
+    )
     catalog = recorder.window._make_catalog()
     catalog.resize(1120, 760)
     if search:
@@ -457,7 +782,14 @@ def _show_catalog(
     if item is not None:
         rectangle = catalog.list.visualItemRect(item)
         point = catalog.list.mapToGlobal(rectangle.center())
-    recorder.add(title, detail, 7.0, dialog=catalog, target=point)
+    recorder.add(title, detail, 5.8, dialog=catalog, target=point)
+    if catalog._insert is not None:
+        recorder.click(
+            "Gewählten Baustein einsetzen",
+            "Dieser Klick führt in den anschließend gezeigten Parameterdialog.",
+            dialog=catalog,
+            target=catalog._insert,
+        )
     catalog.release()
     catalog.close()
     catalog.deleteLater()
@@ -481,6 +813,13 @@ def _show_operation(
     """Eine Operation über ihren echten Dialog bestätigen und ihr Ergebnis zeigen."""
     if object_id:
         _select(recorder.window, object_id)
+    action = _operation_action(recorder.window, op_name)
+    if action is not None:
+        _show_action_path(
+            recorder,
+            action,
+            f"So wird „{REGISTRY.get(op_name).title}“ in der echten Anwendung aufgerufen.",
+        )
     spec = REGISTRY.get(op_name)
     if not spec.params.spec():
         # Eine Operation ohne Werte hat absichtlich keinen Dialog. Vorher und
@@ -513,6 +852,44 @@ def _show_operation(
     )
     dialog.accept()
     _verify(session, title)
+    _fit(recorder.window, recorder.app)
+    recorder.add(result_title, result_detail, result_seconds, target=recorder.window.viewport)
+
+
+def _show_bundled_operation(
+    recorder: Recorder,
+    session: Session,
+    title: str,
+    drafts: Sequence[OperationDraft],
+    dialog_title: str,
+    dialog_detail: str,
+    *,
+    focus: str,
+    result_title: str,
+    result_detail: str,
+    result_seconds: float = 7.0,
+) -> None:
+    """Eine Mehrfachtransaktion über den echten Dialog ihres ersten Teils zeigen."""
+    if not drafts:
+        raise ValueError("Eine Mehrfachtransaktion braucht mindestens eine Operation.")
+    first = drafts[0]
+    if first.inputs:
+        _select(recorder.window, first.inputs[0])
+    recorder.window.run_operation(REGISTRY.get(first.op), given=first.params)
+    video_base.settle(recorder.app, 20)
+    dialog = recorder.window._op_dialog
+    if dialog is None:
+        raise SystemExit(f"{first.op}: Operationsdialog ging nicht auf.")
+    target = dialog._editors.get(focus) or _button(dialog)
+    recorder.add(dialog_title, dialog_detail, 6.2, dialog=dialog, target=target)
+    recorder.click(
+        title,
+        f"Alle {len(drafts)} gleichartigen Einsätze werden gemeinsam übernommen.",
+        dialog=dialog,
+        target=_button(dialog),
+    )
+    dialog.reject()
+    _apply(session, title, drafts)
     _fit(recorder.window, recorder.app)
     recorder.add(result_title, result_detail, result_seconds, target=recorder.window.viewport)
 
@@ -579,16 +956,23 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
         maximum=64.0,
     )
 
-    sketch = sketch_to_text(shapes.rectangle(70.0, 45.0))
-    window.start_sketch("sketch_extrude", sketch)
+    sketch_action = _operation_action(window, "sketch_extrude")
+    if sketch_action is not None:
+        _show_action_path(
+            recorder,
+            sketch_action,
+            "Der Menüpunkt öffnet den Skizzenmodus für eine neue Grundform.",
+        )
+    window.start_sketch("sketch_extrude")
     video_base.settle(app, 30)
     panel = window._sketch_panel
     if panel is None:
         raise SystemExit("Skizzenmodus ging nicht auf.")
+    _draw_rectangle(recorder, panel, 70.0, 45.0)
     recorder.add(
-        "Rechteck auf der XY-Ebene zeichnen",
-        "70 x 45 mm - Raster, Fang und Maße bleiben direkt am Umriss sichtbar.",
-        8.0,
+        "Das Rechteck misst 70 x 45 mm",
+        "Raster, Fang und beide Maße bleiben direkt am fertigen Umriss sichtbar.",
+        5.0,
         target=window.viewport,
     )
     recorder.add(
@@ -645,7 +1029,7 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
             "countersink": True,
             "x": "=-@lochabstand/2",
             "y": 0.0,
-            "z": 0.0,
+            "z": "=@plattenstaerke",
         },
     )
     video_base.settle(app, 20)
@@ -679,7 +1063,7 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
                     "countersink": True,
                     "x": "=-@lochabstand/2",
                     "y": 0.0,
-                    "z": 0.0,
+                    "z": "=@plattenstaerke",
                 },
             ),
             OperationDraft(
@@ -691,16 +1075,18 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
                     "countersink": True,
                     "x": "=@lochabstand/2",
                     "y": 0.0,
-                    "z": 0.0,
+                    "z": "=@plattenstaerke",
                 },
             ),
         ],
     )
-    _fit(window, app)
+    _view(window, app, "top", 1.8)
+    if _highlight_kind(window, session, "obj_1", "hole") < 2:
+        raise SystemExit("Die zwei Schraubenlöcher sind im Ergebnis nicht sichtbar benannt.")
     recorder.add(
-        "Beide Bohrungen in einem Verlaufsschritt",
-        "Abstand und Senkung bleiben reproduzierbar; ein Rückgängig nimmt beide zusammen zurück.",
-        7.5,
+        "Jetzt sind beide M4-Senkbohrungen wirklich zu sehen",
+        "Die nahe Draufsicht und die blaue Merkmalsfläche zeigen Bohrung und Senkung eindeutig.",
+        8.5,
         target=window.viewport,
     )
 
@@ -732,8 +1118,17 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
         result_title="Leicht und steif statt einfach nur dick",
         result_detail="Der Katalogbaustein ist mit dem Grundkörper zu einer Komponente verbunden.",
     )
+    recorder.orbit(
+        "Bohrungen und Rippe aus mehreren Blickwinkeln",
+        "Die kurze Kamerafahrt zeigt Senkungen, Innenkanten und den Übergang der Rippe.",
+        seconds=2.6,
+        degrees=48.0,
+        zoom=1.08,
+    )
 
     _edit_parameter(recorder, session, "lochabstand", 60.0, "Lochabstand")
+    _view(window, app, "top", 1.8)
+    _highlight_kind(window, session, "obj_1", "hole")
     recorder.add(
         "Die Bohrungen wandern - die Rippe bleibt",
         (
@@ -745,7 +1140,8 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
     )
     session.undo()
     _verify(session, "Parameteränderung zurücknehmen")
-    _fit(window, app)
+    _view(window, app, "top", 1.8)
+    _highlight_kind(window, session, "obj_1", "hole")
     recorder.add(
         "Rückgängig stellt die vorige Variante wieder her",
         "Auch Parameteränderungen sind normale Verlaufsschritte.",
@@ -875,6 +1271,13 @@ def story_housing(app: QApplication, folder: Path) -> Recorder:
         result_detail="Innenraum, Boden und Wände sind ein zusammenhängender Körper.",
         result_seconds=8.0,
     )
+    recorder.orbit(
+        "Innenraum, Boden und Wandstärke räumlich prüfen",
+        "Die leichte Drehung macht die offene Oberseite und die gleichmäßige Schale sichtbar.",
+        seconds=2.8,
+        degrees=-44.0,
+        zoom=1.12,
+    )
 
     _show_catalog(
         recorder,
@@ -912,6 +1315,13 @@ def story_housing(app: QApplication, folder: Path) -> Recorder:
         8.0,
         target=window.viewport,
     )
+    recorder.orbit(
+        "Alle vier Einpressbuchsen aus der Nähe",
+        "Beim Drehen bleiben Einführfasen, Innenraum und die symmetrischen Abstände lesbar.",
+        seconds=2.6,
+        degrees=46.0,
+        zoom=1.14,
+    )
 
     _show_catalog(
         recorder,
@@ -942,13 +1352,26 @@ def story_housing(app: QApplication, folder: Path) -> Recorder:
         search="Versteifungsrippe",
     )
     rib_title, rib_drafts = steps[5]
-    _apply(session, rib_title, rib_drafts)
-    _fit(window, app)
-    recorder.add(
-        "Steifigkeit nur dort, wo sie gebraucht wird",
-        "Zwei verrundete Rippen verstärken den Boden, ohne das ganze Gehäuse dicker zu machen.",
-        8.0,
-        target=window.viewport,
+    _show_bundled_operation(
+        recorder,
+        session,
+        rib_title,
+        rib_drafts,
+        "Erste Rippe ausrichten",
+        "Länge, Höhe und Wandstärke sind im echten Katalogdialog sichtbar.",
+        focus="height",
+        result_title="Steifigkeit nur dort, wo sie gebraucht wird",
+        result_detail=(
+            "Zwei verrundete Rippen verstärken den Boden, ohne das ganze Gehäuse dicker zu machen."
+        ),
+        result_seconds=8.0,
+    )
+    recorder.orbit(
+        "Kabelweg und Rippen von der Seite",
+        "Die Kamerafahrt zeigt, wie Zugentlastung und Versteifungen in den Körper übergehen.",
+        seconds=2.8,
+        degrees=-50.0,
+        zoom=1.08,
     )
 
     _show_catalog(
@@ -959,13 +1382,16 @@ def story_housing(app: QApplication, folder: Path) -> Recorder:
         search="Standfuß",
     )
     foot_title, foot_drafts = steps[6]
-    _apply(session, foot_title, foot_drafts)
-    _fit(window, app)
-    recorder.add(
-        "Das Gehäuse bekommt Abstand zur Unterlage",
-        "Alle vier Füße gehören weiterhin zu derselben druckbaren Komponente.",
-        7.0,
-        target=window.viewport,
+    _show_bundled_operation(
+        recorder,
+        session,
+        foot_title,
+        foot_drafts,
+        "Ersten Standfuß einstellen",
+        "Durchmesser, Höhe und die berechnete Position stehen im Katalogdialog.",
+        focus="height",
+        result_title="Das Gehäuse bekommt Abstand zur Unterlage",
+        result_detail="Alle vier Füße gehören weiterhin zu derselben druckbaren Komponente.",
     )
 
     _lid_title, lid_drafts = steps[7]
@@ -991,25 +1417,117 @@ def story_housing(app: QApplication, folder: Path) -> Recorder:
         search="Rastnase",
     )
     latch_title, latch_drafts = steps[8]
-    _apply(session, latch_title, latch_drafts)
-    _fit(window, app)
-    recorder.add(
-        "Zwei Rastnasen schließen den Deckel",
-        "Breite, Höhe und Spiel bleiben als Bausteinwerte im Verlauf erhalten.",
-        7.0,
-        target=window.viewport,
+    _show_bundled_operation(
+        recorder,
+        session,
+        latch_title,
+        latch_drafts,
+        "Erste Rastnase einstellen",
+        "Breite, Höhe und Spiel bleiben als sichtbare Bausteinwerte erhalten.",
+        focus="width",
+        result_title="Zwei Rastnasen schließen den Deckel",
+        result_detail="Beide Rastnasen werden gemeinsam in einer Transaktion eingesetzt.",
     )
 
-    for title, drafts in steps[9:12]:
-        _apply(session, title, drafts)
-    _fit(window, app)
+    _colour_title, colour_drafts = steps[9]
+    _show_operation(
+        recorder,
+        session,
+        colour_drafts[0].op,
+        colour_drafts[0].params,
+        "Gehäusematerial und Farbe festlegen",
+        "Slot 1 benennt das hellgraue PETG direkt im Projekt.",
+        object_id="obj_1",
+        focus="colour",
+        result_title="Der Gehäusekörper ist eindeutig zugeordnet",
+        result_detail="Materialslot und Farbe bleiben am Körper gespeichert.",
+    )
+    _show_operation(
+        recorder,
+        session,
+        colour_drafts[1].op,
+        colour_drafts[1].params,
+        "Deckelmaterial und Farbe festlegen",
+        "Slot 2 hebt den Deckel orange vom Gehäuse ab.",
+        object_id="obj_2",
+        focus="colour",
+        result_title="Deckel und Gehäuse lassen sich sofort unterscheiden",
+        result_detail="Die Zuordnung ist Teil des nachvollziehbaren Verlaufs.",
+    )
+
+    _move_title, move_drafts = steps[10]
+    _show_operation(
+        recorder,
+        session,
+        move_drafts[0].op,
+        move_drafts[0].params,
+        "Deckel neben das Gehäuse verschieben",
+        "Der X-Versatz von 135 mm macht Innenraum und Deckel gleichzeitig sichtbar.",
+        object_id="obj_2",
+        focus="dx",
+        result_title="Deckel daneben - Innenaufbau sichtbar",
+        result_detail="Beide Körper bleiben getrennt und einzeln bearbeitbar.",
+        result_seconds=8.0,
+    )
+    _show_operation(
+        recorder,
+        session,
+        move_drafts[1].op,
+        move_drafts[1].params,
+        "Gehäuse auf das Druckbett setzen",
+        "Die Operation verschiebt nur in Z und verändert keine Geometrie.",
+        object_id="obj_1",
+        result_title="Der Gehäuseboden liegt auf Z = 0",
+        result_detail="Die Drucklage ist als eigener Verlaufsschritt sichtbar.",
+        result_seconds=5.0,
+    )
+    _show_operation(
+        recorder,
+        session,
+        move_drafts[2].op,
+        move_drafts[2].params,
+        "Auch den Deckel auf das Druckbett setzen",
+        "Der zweite Körper folgt über denselben sichtbaren Menüweg.",
+        object_id="obj_2",
+        result_title="Beide Körper stehen auf dem Bett",
+        result_detail="Gehäuse und Deckel bleiben dabei getrennt.",
+        result_seconds=5.0,
+    )
+
+    _label_title, label_drafts = steps[11]
+    _show_operation(
+        recorder,
+        session,
+        label_drafts[0].op,
+        label_drafts[0].params,
+        "Schriftzug auf dem Deckel anlegen",
+        "Text, Größe, Höhe und Materialslot stehen im echten Operationsdialog.",
+        object_id="obj_2",
+        focus="text",
+        result_title="Der Schriftzug ist echte Geometrie",
+        result_detail="Er bleibt ein eigener, editierbarer Schritt auf dem Deckel.",
+    )
     recorder.add(
         "Deckel daneben - Innenaufbau sichtbar",
         "Materialfarben und Schriftzug machen Boden und Deckel eindeutig unterscheidbar.",
-        9.0,
+        6.0,
         target=window.viewport,
     )
+    recorder.orbit(
+        "Gehäuse und Deckel als vollständiges System",
+        "Die Drehung zeigt Innenaufbau, Kragen, Rastnasen und beide getrennten Körper.",
+        seconds=3.2,
+        degrees=58.0,
+        zoom=1.05,
+    )
     final_title, final_drafts = steps[12]
+    arrange_action = _operation_action(window, final_drafts[0].op)
+    if arrange_action is not None:
+        _show_action_path(
+            recorder,
+            arrange_action,
+            "Nach der Mehrfachauswahl ordnet dieser Menüpunkt beide Körper auf dem Bett an.",
+        )
     _apply(session, final_title, final_drafts)
     _fit(window, app)
     recorder.add(
@@ -1072,16 +1590,23 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
     _add_parameter(recorder, session, "rohr", "Rohrdurchmesser", 35.0, minimum=20.0, maximum=45.0)
     _add_parameter(recorder, session, "platte", "Plattenstärke", 6.0, minimum=4.0, maximum=10.0)
 
-    sketch = sketch_to_text(shapes.rectangle(100.0, 70.0))
-    window.start_sketch("sketch_extrude", sketch)
+    sketch_action = _operation_action(window, "sketch_extrude")
+    if sketch_action is not None:
+        _show_action_path(
+            recorder,
+            sketch_action,
+            "Der Menüpunkt öffnet den Skizzenmodus für die Grundplatte.",
+        )
+    window.start_sketch("sketch_extrude")
     video_base.settle(app, 30)
     panel = window._sketch_panel
     if panel is None:
         raise SystemExit("Skizzenmodus ging nicht auf.")
+    _draw_rectangle(recorder, panel, 100.0, 70.0)
     recorder.add(
-        "Grundplatte direkt auf dem Druckbett zeichnen",
-        "100 x 70 mm bieten Platz für zwei SKÅDIS-Haken und den großen Halteclip.",
-        8.0,
+        "Die Grundplatte misst 100 x 70 mm",
+        "Sie bietet Platz für zwei SKÅDIS-Haken und den großen Halteclip.",
+        5.0,
         target=window.viewport,
     )
     recorder.add(
@@ -1117,9 +1642,22 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
     _fit(window, app)
     recorder.add(
         "Die stabile Basis ist fertig",
-        "Flach auf dem Bett konstruiert - eine stützfreundliche Ausgangslage.",
+        "Die Skizze liefert die Grundplatte; für die Montage richten wir sie jetzt senkrecht aus.",
         7.0,
         target=window.viewport,
+    )
+
+    _show_operation(
+        recorder,
+        session,
+        "rotate_object",
+        {"axis": "x", "angle": 90.0, "about": "centre"},
+        "Grundplatte in Montagelage drehen",
+        "So lassen sich Vorder- und Rückseite im nächsten Schritt eindeutig belegen.",
+        object_id="obj_1",
+        focus="angle",
+        result_title="Die Platte steht wie später an der Lochwand",
+        result_detail="Rückseitige Haken und vorderer Besenclip landen nun auf getrennten Seiten.",
     )
 
     _select(window, "obj_1")
@@ -1139,21 +1677,18 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
             "count": 2,
             "steps": 1,
             "latch": True,
-            "plate": 3.0,
+            "plate": 0.0,
+            "at_feature": "face_6",
             "x": 0.0,
-            "y": 18.0,
-            "z": "=@platte",
-            "axis": "z",
+            "y": 0.0,
+            "z": 18.0,
         },
-        "Zwei passende SKÅDIS-Haken einsetzen",
-        (
-            "Die Systemmaße kommen aus dem Katalog; nur Position und gewünschte "
-            "Variante werden gesetzt."
-        ),
+        "Zwei passende SKÅDIS-Haken auf die Rückseite setzen",
+        ("Die Rückfläche gibt Position und Richtung vor; die Systemmaße kommen aus dem Katalog."),
         object_id="obj_1",
         focus="count",
-        result_title="Die Befestigung ist Teil des Körpers",
-        result_detail="Zwei Haken und Verriegelung entstehen als eine druckbare Komponente.",
+        result_title="Die Haken sitzen ausschließlich hinten",
+        result_detail="Vorn bleibt die Fläche für die eigentliche Besenaufnahme frei.",
         result_seconds=8.0,
     )
 
@@ -1174,17 +1709,26 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
             "wall": 3.0,
             "grip": 4.0,
             "x": 0.0,
-            "y": -15.0,
-            "z": "=@platte",
-            "axis": "z",
+            "y": 0.0,
+            "z": -12.0,
+            "axis": "y",
         },
         "Clip auf den echten Stieldurchmesser einstellen",
         "@rohr steuert die Öffnung; Wand, Breite und Griff bleiben unabhängig.",
         object_id="obj_1",
         focus="diameter",
-        result_title="Der Besenhalter ist geometrisch vollständig",
-        result_detail="Grundplatte, SKÅDIS-Haken und 35-mm-Clip sind zu einem Körper verbunden.",
+        result_title="Der Clip sitzt vorn, die Haken sitzen hinten",
+        result_detail=(
+            "Damit kann der Halter wirklich an der Lochwand hängen und zugleich den Stiel greifen."
+        ),
         result_seconds=9.0,
+    )
+    recorder.orbit(
+        "Vorder- und Rückseite im direkten Vergleich",
+        "Die Kamerafahrt zeigt den 35-mm-Clip vorn und beide SKÅDIS-Haken auf der Gegenseite.",
+        seconds=3.0,
+        degrees=62.0,
+        zoom=1.08,
     )
 
     _edit_parameter(recorder, session, "rohr", 40.0, "Rohrdurchmesser")
@@ -1207,13 +1751,31 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
     _show_operation(
         recorder,
         session,
+        "rotate_object",
+        {"axis": "y", "angle": 90.0, "about": "centre"},
+        "Für belastbare Rastzungen auf die Seite drehen",
+        (
+            "Die Hakenfedern liegen dadurch in der Schichtebene statt zwischen "
+            "den Schichten zu reißen."
+        ),
+        object_id="obj_1",
+        focus="angle",
+        result_title="Die konstruktive Seite wird zur Druckunterseite",
+        result_detail="Diese Lage folgt der vorgesehenen Belastungsrichtung des SKÅDIS-Bausteins.",
+    )
+    _show_operation(
+        recorder,
+        session,
         "place_on_bed",
         {},
         "Drucklage festlegen",
-        "Die flache Rückseite liegt auf dem Bett; Haken und Clip wachsen nach oben.",
+        (
+            "Der tiefste Punkt wird auf Z = 0 gesetzt; die Rastzungen bleiben "
+            "schichtgerecht ausgerichtet."
+        ),
         object_id="obj_1",
-        result_title="Ein sinnvoll orientiertes Einteiler-Modell",
-        result_detail="Die Konstruktion ist für den praktischen FDM-Druck vorbereitet.",
+        result_title="Ein funktionaler Einteiler in sinnvoller Drucklage",
+        result_detail="Für den hohen, schmalen Aufbau empfiehlt sich im Slicer ein breiter Rand.",
         result_seconds=8.0,
     )
     window.right.setCurrentWidget(window.report)
@@ -1266,6 +1828,199 @@ STORIES: Final[dict[str, tuple[str, str, Callable[[QApplication, Path], Recorder
 }
 
 
+def _write_longform_music(target: Path, seconds: float, chapter: str) -> Path:
+    """Für jedes Tutorial ein eigenes, vollständig erzeugtes Musikstück schreiben."""
+    import wave
+
+    import numpy as np
+
+    styles: dict[
+        str,
+        tuple[float, tuple[tuple[int, ...], ...], tuple[int, ...], float, int],
+    ] = {
+        "Montagehalter aus Skizze": (
+            92.0,
+            (
+                (48, 55, 60, 64),
+                (45, 52, 57, 60),
+                (41, 48, 53, 57),
+                (43, 50, 55, 62),
+                (48, 55, 60, 67),
+                (40, 47, 52, 55),
+                (41, 48, 53, 60),
+                (43, 50, 59, 62),
+            ),
+            (0, 2, 1, 3, 2, 1, 3, 1),
+            0.17,
+            173,
+        ),
+        "Elektronikgehäuse": (
+            104.0,
+            (
+                (38, 45, 50, 53),
+                (46, 53, 58, 62),
+                (41, 48, 53, 57),
+                (48, 55, 60, 64),
+                (38, 45, 50, 57),
+                (45, 52, 57, 60),
+                (43, 50, 55, 58),
+                (45, 52, 57, 64),
+            ),
+            (0, 1, 2, 3, 1, 3, 2, 1),
+            0.28,
+            311,
+        ),
+        "SKÅDIS-Besenhalter": (
+            98.0,
+            (
+                (43, 50, 55, 59),
+                (50, 57, 62, 66),
+                (40, 47, 52, 55),
+                (48, 55, 60, 64),
+                (43, 50, 55, 62),
+                (47, 54, 59, 62),
+                (45, 52, 57, 60),
+                (50, 57, 62, 69),
+            ),
+            (0, 2, 3, 1, 2, 0, 3, 2),
+            0.22,
+            947,
+        ),
+    }
+    bpm, chords, arpeggio, colour, seed = styles[chapter]
+    rate = 48_000
+    count = max(1, round(seconds * rate))
+    stereo = np.zeros((count, 2), dtype=np.float64)
+    rng = np.random.default_rng(seed)
+
+    def frequency(note: int) -> float:
+        return 440.0 * 2.0 ** ((note - 69) / 12.0)
+
+    def add_tone(
+        start: float,
+        duration: float,
+        note: int,
+        amplitude: float,
+        pan: float,
+        *,
+        attack: float,
+        release: float,
+    ) -> None:
+        begin = max(0, round(start * rate))
+        end = min(count, round((start + duration) * rate))
+        if end <= begin:
+            return
+        local = np.arange(end - begin, dtype=np.float64) / rate
+        envelope = np.minimum(1.0, local / max(attack, 1.0 / rate))
+        envelope *= np.minimum(1.0, (duration - local) / max(release, 1.0 / rate))
+        envelope = np.clip(envelope, 0.0, 1.0) ** 1.35
+        hz = frequency(note)
+        phase = float(rng.uniform(0.0, 2.0 * math.pi))
+        tone = np.sin(2.0 * math.pi * hz * local + phase)
+        tone += colour * np.sin(4.0 * math.pi * hz * local + phase * 0.7)
+        tone += colour * 0.18 * np.sin(6.0 * math.pi * hz * local + phase * 1.3)
+        left = math.sqrt((1.0 - pan) / 2.0)
+        right = math.sqrt((1.0 + pan) / 2.0)
+        stereo[begin:end, 0] += amplitude * left * envelope * tone
+        stereo[begin:end, 1] += amplitude * right * envelope * tone
+
+    beat = 60.0 / bpm
+    chord_seconds = 8.0 * beat
+    chord_count = math.ceil(seconds / chord_seconds)
+    for index in range(chord_count):
+        chord = chords[index % len(chords)]
+        start = index * chord_seconds
+        # Das Pad wechselt alle zwei Takte und erhält durch wechselnde
+        # Umkehrungen einen eigenen Verlauf statt einer vierfachen Schleife.
+        inversion = (index // len(chords)) % len(chord)
+        voiced = tuple(
+            note + (12 if position < inversion else 0) for position, note in enumerate(chord)
+        )
+        for position, note in enumerate(voiced):
+            add_tone(
+                start - 0.12,
+                chord_seconds + 0.35,
+                note,
+                0.020 / (1.0 + position * 0.12),
+                -0.55 + 1.1 * position / max(1, len(voiced) - 1),
+                attack=0.55,
+                release=0.85,
+            )
+        for offset in (0.0, 4.0 * beat):
+            add_tone(
+                start + offset,
+                2.25 * beat,
+                chord[0] - 12,
+                0.050,
+                -0.08,
+                attack=0.025,
+                release=0.65,
+            )
+
+    step = beat / 2.0
+    position = 0
+    while position * step < seconds:
+        start = position * step
+        chord_index = int(start / chord_seconds)
+        chord = chords[chord_index % len(chords)]
+        pattern_index = arpeggio[position % len(arpeggio)]
+        note = chord[pattern_index]
+        if position % 16 in {6, 14}:
+            note += 12
+        # Jeder vierte Zweitakter atmet kurz; die drei Stücke unterscheiden
+        # sich dadurch auch im Arrangement, nicht nur in den Tonhöhen.
+        if chord_index % 4 != 3 or position % 16 >= 4:
+            add_tone(
+                start,
+                step * 0.72,
+                note,
+                0.024,
+                -0.42 if position % 2 == 0 else 0.42,
+                attack=0.008,
+                release=step * 0.28,
+            )
+        position += 1
+
+    # Leiser, je Tutorial anders gefärbter Rhythmus. Alle Geräusche entstehen
+    # aus berechnetem Rauschen und Sinusschwingungen, nicht aus Samples.
+    for beat_index, start in enumerate(np.arange(0.0, seconds, beat)):
+        begin = round(start * rate)
+        end = min(count, begin + round(0.24 * rate))
+        if end > begin and beat_index % 4 in {0, 2}:
+            local = np.arange(end - begin, dtype=np.float64) / rate
+            kick = np.sin(2.0 * math.pi * (72.0 * local - 22.0 * local**2))
+            kick *= np.exp(-local * 15.0) * (0.060 if beat_index % 4 == 0 else 0.040)
+            stereo[begin:end, 0] += kick
+            stereo[begin:end, 1] += kick
+        if beat_index % 2 == 1:
+            end = min(count, begin + round(0.055 * rate))
+            if end > begin:
+                local = np.arange(end - begin, dtype=np.float64) / rate
+                noise = rng.normal(0.0, 1.0, end - begin)
+                tick = noise * np.exp(-local * 62.0) * (0.010 + colour * 0.025)
+                stereo[begin:end, 0] += tick * 0.75
+                stereo[begin:end, 1] += tick
+
+    fade = min(count // 2, round(rate * 1.2))
+    master = np.ones(count, dtype=np.float64)
+    master[:fade] = np.sin(np.linspace(0.0, math.pi / 2.0, fade)) ** 2
+    master[-fade:] = np.sin(np.linspace(math.pi / 2.0, 0.0, fade)) ** 2
+    stereo *= master[:, None]
+    rms = float(np.sqrt(np.mean(stereo * stereo)))
+    peak = float(np.max(np.abs(stereo)))
+    if rms > 0.0 and peak > 0.0:
+        stereo *= min(0.095 / rms, 0.82 / peak)
+    pcm = np.round(np.clip(stereo, -1.0, 1.0) * 32767.0).astype("<i2")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(target), "wb") as stream:
+        stream.setnchannels(2)
+        stream.setsampwidth(2)
+        stream.setframerate(rate)
+        stream.writeframes(pcm.tobytes())
+    print(f"  Musik → {target.name}  {seconds:.1f} s · eigenes Arrangement: {chapter}")
+    return target
+
+
 def _encode(recorder: Recorder, target: Path) -> None:
     """Die Zustandsbilder ohne riesigen Rohbildordner als H.264/AAC kodieren."""
     if not recorder.slides:
@@ -1282,7 +2037,7 @@ def _encode(recorder: Recorder, target: Path) -> None:
     timeline.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     music = recorder.folder / "music.wav"
-    video_base.write_feature_music(music, recorder.seconds + 0.4)
+    _write_longform_music(music, recorder.seconds + 0.4, recorder.chapter)
     video_base.run_ffmpeg(
         [
             "-f",
