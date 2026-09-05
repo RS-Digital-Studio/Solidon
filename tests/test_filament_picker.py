@@ -737,3 +737,55 @@ def test_the_profile_of_a_spool_can_be_chosen_and_removed(qt_app: QApplication) 
     assert dialog.slicer_profile.text() == ""
     assert not dialog.clear_profile.isEnabled()
     assert dialog.filament()[3] == "", "ohne Profil kommen die Werte aus Solidon allein"
+
+
+def test_cancelling_a_new_filament_returns_to_the_previous_choice(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-24: Nach einem Abbruch sprang die Auswahl
+    auf die Zeile über „Neues Filament …" — den letzten freien Slot — statt
+    auf die Spule, die vorher gewählt war. Der Operationsdialog las danach
+    die falsche Nummer als Auftrag."""
+    from PySide6.QtWidgets import QDialog
+
+    field = FilamentField(
+        1,
+        slots=[
+            MaterialSlot(index=1, name="PETG Rot", colour=(0.8, 0.1, 0.1)),
+            MaterialSlot(index=3, name="PLA Blau", colour=(0.1, 0.1, 0.8)),
+        ],
+    )
+    third = field.findData(3)
+    field.setCurrentIndex(third)
+    field._chosen(third)
+    assert field.currentData() == 3
+    monkeypatch.setattr(NewFilamentDialog, "exec", lambda _dialog: QDialog.DialogCode.Rejected)
+
+    field._make_one(field.findData(NEW_FILAMENT))
+
+    assert field.currentData() == 3, "zurück auf die vorige Wahl"
+
+
+def test_every_spool_on_the_shelf_can_be_chosen_for_an_unpainted_body(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-25: Beim Auflisten bekam jede Spule einen
+    freien Slot vorgemerkt, und nach sieben brach die Schleife ab — die achte
+    verschwand aus der Wahl, obwohl der Körper noch keine trug."""
+    shelf = tuple(
+        filaments.CatalogueFilament(name=f"Spule {index}", colour="#336699", material_type="PLA")
+        for index in range(1, 9)
+    )
+    monkeypatch.setattr(filaments, "catalogue", lambda: shelf)
+
+    field = FilamentField(0)
+
+    names = [field.itemText(row) for row in range(field.count())]
+    assert all(any(f"Spule {index}" in text for text in names) for index in range(1, 9)), names
+    eighth = next(row for row in range(field.count()) if "Spule 8" in field.itemText(row))
+    assert field.itemData(eighth) is None, "ohne vorgemerkte Nummer"
+    assert field.model().item(eighth).isEnabled(), "aber wählbar — der Körper hat Platz"
+
+    field._chosen(eighth)
+
+    assert field.itemData(eighth) == 1, "beim Wählen bekommt sie die erste freie Nummer"

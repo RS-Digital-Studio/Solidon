@@ -31,7 +31,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QStandardItemModel
 from PySide6.QtWidgets import (
     QApplication,
     QColorDialog,
@@ -554,6 +554,9 @@ class FilamentField(QComboBox):
         super().__init__(parent)
         self._limit = limit
         self._slots = {int(entry.index): entry for entry in slots}
+        #: Die zuletzt wirklich gewählte Zeile — der Rückweg, wenn „Neues
+        #: Filament …" abgebrochen wird (UI-24).
+        self._last_position = -1
         self.setToolTip(
             tr(
                 "Welches Filament diese Fläche bekommt. Die Vorwahl steht darunter — "
@@ -587,19 +590,36 @@ class FilamentField(QComboBox):
             self.setItemData(self.count() - 1, str(entry.material_type or ""), _MATERIAL_TYPE_ROLE)
             self.setItemData(self.count() - 1, str(entry.material or ""), _PROFILE_ROLE)
 
-        # 2. Die Vorwahl — jedes Filament bekommt den nächsten freien Slot.
+        # 2. Die Vorwahl — jedes Filament bekommt den nächsten freien Slot,
+        #    solange es einen gibt. **Danach bleibt es trotzdem wählbar:** Hier
+        #    stand ein ``break``, und die achte Spule im Regal verschwand aus
+        #    der Liste, obwohl der Körper noch keine einzige trug. Wer eine
+        #    Spule ohne vorgemerkte Nummer wählt, bekommt sie beim Wählen
+        #    (:meth:`_chosen`), nicht beim Auflisten (Gesamtreview
+        #    05.09.2026, UI-25).
+        body_taken = set(taken)
         for filament in filaments.catalogue():
             if any(entry.name == filament.name for entry in self._slots.values()):
                 continue
             free = self._free_slot(taken)
-            if free is None:
-                break
-            taken.add(free)
-            self.addItem(
-                swatch(filament.colour),
-                self._label(free, filament.name, filament.material_type),
-                free,
-            )
+            if free is not None:
+                taken.add(free)
+                self.addItem(
+                    swatch(filament.colour),
+                    self._label(free, filament.name, filament.material_type),
+                    free,
+                )
+            else:
+                self.addItem(
+                    swatch(filament.colour),
+                    self._unnumbered_label(filament.name, filament.material_type),
+                    None,
+                )
+                model = self.model()
+                if self._free_slot(body_taken) is None and isinstance(model, QStandardItemModel):
+                    # Alle Nummern trägt der Körper selbst — dann gibt es für
+                    # eine weitere Spule wirklich keinen Platz.
+                    model.item(self.count() - 1).setEnabled(False)
             self.setItemData(self.count() - 1, filament.colour, _COLOUR_ROLE)
             self.setItemData(self.count() - 1, filament.name, _NAME_ROLE)
             self.setItemData(self.count() - 1, filament.material_type, _MATERIAL_TYPE_ROLE)
@@ -619,6 +639,7 @@ class FilamentField(QComboBox):
         position = self.findData(start)
         if position >= 0:
             self.setCurrentIndex(position)
+        self._last_position = self.currentIndex()
 
     def _label(self, index: int, name: str, material_type: str = "") -> str:
         """Wie ein Eintrag dasteht: Nummer und Name, oder was davon es gibt."""
@@ -629,12 +650,18 @@ class FilamentField(QComboBox):
             return tr("Ohne Filament — Farbe des Teils")
         if not name:
             return tr("Filament {number} — noch keines").format(number=index)
+        return f"{index} — {self._unnumbered_label(name, material_type)}"
+
+    @staticmethod
+    def _unnumbered_label(name: str, material_type: str = "") -> str:
+        """Name und Materialart — für eine Spule, die ihre Nummer erst beim
+        Wählen bekommt."""
         suffix = (
             f" · {material_type}"
             if material_type and material_type.casefold() not in name.casefold()
             else ""
         )
-        return f"{index} — {name}{suffix}"
+        return f"{name}{suffix}"
 
     def _free_slot(self, taken: set[int]) -> int | None:
         """Die nächste Nummer, die niemand hat. Null bleibt frei: Sie ist das
@@ -649,8 +676,16 @@ class FilamentField(QComboBox):
         if self.itemData(position) == NEW_FILAMENT:
             self._make_one(position)
             return
+        self._last_position = position
         name = self.itemData(position, _NAME_ROLE)
         colour = self.itemData(position, _COLOUR_ROLE)
+        if self.itemData(position) is None and name:
+            # Eine Spule ohne vorgemerkte Nummer bekommt jetzt die erste, die
+            # der Körper nicht trägt (UI-25).
+            body_taken = {index for index in self._slots if index < self._limit}
+            free = self._free_slot(body_taken)
+            if free is not None:
+                self.setItemData(position, free)
         if name:
             self.filamentChosen.emit(
                 str(name),
@@ -666,7 +701,13 @@ class FilamentField(QComboBox):
         einem Abbruch auf „Neues Filament …" stehen bliebe, hätte einen Wert,
         den keine Operation kennt.
         """
-        before = max(0, position - 1)
+        # **Zurück auf die vorige Wahl, nicht auf die Zeile davor.** Über
+        # „Neues Filament …" steht der letzte freie Slot; wer Slot 3 gewählt
+        # hatte und abbrach, stand danach auf einer anderen Nummer, und der
+        # Operationsdialog las sie als Auftrag (Gesamtreview 05.09.2026, UI-24).
+        before = self._last_position
+        if not (0 <= before < self.count()) or self.itemData(before) == NEW_FILAMENT:
+            before = max(0, position - 1)
         dialog = NewFilamentDialog(self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             self.setCurrentIndex(before)
