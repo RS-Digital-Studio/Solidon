@@ -1056,6 +1056,19 @@ seither vergeben, die Zusage nicht.) Drei Regeln:
   blockierend, im Hauptthread, ein Takt für Lesen und Fahren; die Vorzeichen
   der Achsen stammen aus einer aufgezeichneten Lesung im Korpus
   (`tests/data/spacemouse/`), nicht aus einer Annahme.
+* **Auf dem Mac geht es durch den Treiber, nicht neben ihm.** Dort hält
+  3DxWare das Gerät exklusiv, und `hidapi` bekommt keinen Bericht (der erste
+  Mac-Bericht eines Kunden, 05.09.2026). `DriverReader` lädt das
+  `3DconnexionClient`-Framework des Kunden zur Laufzeit — mitgeliefert wird
+  nichts, Regel 22 bleibt unberührt — und schreibt dessen Zustandsmeldungen
+  in dieselben Berichte um, die das Gerät roh liefert; `decode_report` und
+  alles dahinter kennen den Unterschied nicht. Angemeldet wird mit dem
+  Platzhalter wie in FreeCAD und Blender, gelesen nur, was an Solidons
+  Client-Kennung gerichtet ist. `default_reader` entscheidet je Rechner:
+  Mac mit Treiber → Treiber (HID als Rückfall, wenn er angehalten ist),
+  sonst HID. Die Plattform ist dort ein Parameter, damit der Mac-Zweig auf
+  jeder Maschine prüfbar bleibt. **Am Gerät gemessen ist nur Windows**; der
+  Mac-Weg wartet auf die Rückmeldung des Kunden.
 
 ## Die Ansicht hat eine eigene Steuerung (03.09.2026)
 

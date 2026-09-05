@@ -81,7 +81,8 @@ die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 `viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `overlay.py` (Zonen über der
 Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
-über hidapi, die Abbildung als reine Funktion — Regel in `ansicht.md`).
+über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des
+Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
 **`camera_step` hat drei Aufrufer, nicht einen:** die Kappe, das Kippen mit
 dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
 an allen dreien

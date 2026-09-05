@@ -3,6 +3,12 @@
 Stand 30.08.2026. **Entwurf und Messauftrag, keine Bau-Ansage** — Roberts
 „wäre schon spannend" führt `ROADMAP.md` selbst ausdrücklich als Interesse.
 
+**Nachtrag 05.09.2026.** Gebaut ist es seit dem 02.09.2026 (Windows, am
+Gerät bestätigt). Der erste Mac-Bericht eines Kunden brachte die zweite
+Bauart: Dort hält 3DxWare das Gerät exklusiv, rohes HID bleibt leer, und der
+Weg führt durch das Framework des Treibers (`DriverReader`, Abschnitt 7,
+Falle 2 und Abschnitt 10). Was offen ist, steht im Register von `ROADMAP.md`.
+
 Anlass: Die Kundenanfrage aus dem Dentalbereich (R. W. D., 30.08.2026). Ein
 Zahntechniker, der acht Stunden am Tag in exocad die linke Hand auf einer
 SpaceMouse liegen hat, steckt sie in Solidon ein und drückt — und das Bild
@@ -172,6 +178,18 @@ Berechtigung, sichtbar auf Flathub) **und** die udev-Regel trotzdem.
 **Linux ist die schwächste Plattform dieses Vorschlags — das gehört gesagt
 statt versprochen** (Entscheidung 7).
 
+*Nachtrag 05.09.2026 zu macOS:* Das Hindernis ist ein anderes als die
+Eingabeüberwachung. 3DxWare öffnet das Gerät auf dem Mac **exklusiv**, und
+`hidapi` öffnet seinerseits exklusiv — wer den Treiber installiert hat (und
+der Zahntechniker aus dem Anlass hat ihn, exocad braucht ihn), bekommt über
+HID keinen Bericht. Der Kunde meldete genau das: „die Maus tut nichts". Der
+Weg ist dort der, den Blender, FreeCAD und PrusaSlicer gehen: das
+`3DconnexionClient`-Framework des installierten Treibers zur Laufzeit laden,
+als Client mit Platzhalter anmelden und die Zustandsmeldungen lesen, die der
+Treiber an das vorderste Programm richtet. `app/ui/spacemouse.py` tut das
+in `DriverReader`; ohne Treiber bleibt HID. Am Gerät gemessen ist der
+Mac-Weg nicht — die Rückmeldung des Kunden prüft ihn.
+
 **Falle 3 — Gerätevielfalt:** Rund ein Dutzend Modelle in der Tabelle; was
 nicht drinsteht, tut nichts. Der Kunde hat ein konkretes Gerät — **ihn
 fragen kostet eine Mail**, das „Sie hören von mir" steht ohnehin an, und es
@@ -210,7 +228,11 @@ Kosten je Takt im Leerlauf, Bildrate bei 1 Mio. Dreiecken.
 **3DxWare-SDK:** proprietär, je Plattform ein Installer, ein
 Herstellertreiber als Voraussetzung in einem Programm mit der Zusage „ohne
 Konto, ohne Netz" — die Freigabeliste hat dafür keine Zeile und soll keine
-bekommen. **Objektmanipulation:** Abschnitt 4. **Fünftes
+bekommen. *(Nachtrag 05.09.2026: Das gilt für das SDK als Abhängigkeit. Auf
+dem Mac ist der Treiber des Kunden die einzige Tür zum Gerät, und Solidon
+lädt sein Framework dort zur Laufzeit, wenn es da ist — mitgeliefert und
+vorausgesetzt wird nichts, Abschnitt 7, Falle 2.)* **Objektmanipulation:**
+Abschnitt 4. **Fünftes
 Navigationsschema:** Kategorienfehler und Betriebsart. **Eigener HID-Leser
 als erste Wahl:** bleibt der Rückfall (Falle 1), nicht die Vorgabe. **Gar
 nicht bauen:** die ehrlichste Alternative, ausgesprochen statt versteckt —

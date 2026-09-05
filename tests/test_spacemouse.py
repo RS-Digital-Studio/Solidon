@@ -12,11 +12,13 @@ Leser bekommt seine Berichte hier direkt — die Naht ist
 
 from __future__ import annotations
 
+import ctypes
 import json
 import math
 import struct
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import QApplication
@@ -24,11 +26,25 @@ from PySide6.QtWidgets import QApplication
 from app.ui.spacemouse import (
     AXIS_RANGE,
     DEADZONE,
+    DRIVER_CLIENT_WILDCARD,
+    DRIVER_CMD_HANDLE_AXIS,
+    DRIVER_CMD_HANDLE_BUTTONS,
+    DRIVER_MASK_ALL,
+    DRIVER_MASK_ALL_BUTTONS,
+    DRIVER_MODE_TAKE_OVER,
+    DRIVER_MSG_DEVICE_STATE,
+    DRIVER_STATE_VERSION,
+    REPORTS_PER_TICK,
     CameraPose,
+    DriverReader,
+    DriverState,
+    HidReader,
     Motion,
     SpaceMouseController,
     camera_step,
     decode_report,
+    default_reader,
+    load_driver,
     speed_factor,
 )
 
@@ -746,3 +762,222 @@ def test_a_second_of_flight_carries_about_one_distance() -> None:
     vorher = math.dist(pose.position, pose.focal_point)
     nachher = math.dist(nach_einer_sekunde.position, nach_einer_sekunde.focal_point)
     assert nachher == pytest.approx(vorher), "der Flug hält den Abstand"
+
+
+# --- Der Treiberweg auf dem Mac ---------------------------------------------------
+
+
+class _Driver:
+    """Das ``3DconnexionClient``-Framework, nachgestellt.
+
+    Merkt sich die Rückruffunktionen aus ``SetConnexionHandlers`` und ruft sie
+    so, wie der Treiber es täte — über den C-Sprung der ctypes-Objekte, nicht
+    an ihnen vorbei. Die Methodennamen sind die Einsprungpunkte des SDK, daher
+    die Ausnahme von der Namensregel.
+    """
+
+    def __init__(self, client: int = 7, handlers_ok: bool = True) -> None:
+        self.client = client
+        self.handlers_ok = handlers_ok
+        self.calls: list[tuple[object, ...]] = []
+        self.message: Any = None
+        self.added: Any = None
+        self.removed: Any = None
+
+    def SetConnexionHandlers(  # noqa: N802
+        self, message: Any, added: Any, removed: Any, separate_thread: bool
+    ) -> int:
+        self.message, self.added, self.removed = message, added, removed
+        self.calls.append(("handlers", bool(separate_thread)))
+        return 0 if self.handlers_ok else -1
+
+    def RegisterConnexionClient(  # noqa: N802
+        self, signature: int, name: bytes | None, mode: int, mask: int
+    ) -> int:
+        self.calls.append(("register", signature, name, mode, mask))
+        return self.client
+
+    def SetConnexionClientButtonMask(self, client: int, mask: int) -> None:  # noqa: N802
+        self.calls.append(("buttons", client, mask))
+
+    def UnregisterConnexionClient(self, client: int) -> None:  # noqa: N802
+        self.calls.append(("unregister", client))
+
+    def CleanupConnexionHandlers(self) -> None:  # noqa: N802
+        self.calls.append(("cleanup",))
+
+    def plug(self) -> None:
+        self.added(0xC635)
+
+    def unplug(self) -> None:
+        self.removed(0xC635)
+
+    def send(
+        self,
+        *,
+        command: int,
+        axis: tuple[int, ...] = (0, 0, 0, 0, 0, 0),
+        buttons: int = 0,
+        client: int | None = None,
+        version: int = DRIVER_STATE_VERSION,
+        kind: int = DRIVER_MSG_DEVICE_STATE,
+    ) -> None:
+        state = DriverState(
+            version=version, client=self.client if client is None else client, command=command
+        )
+        state.axis = (ctypes.c_int16 * 6)(*axis)
+        state.buttons = buttons
+        self.message(0xC635, kind, ctypes.addressof(state))
+
+
+class _Closable:
+    def close(self) -> None:
+        pass
+
+
+class _Plugged(HidReader):
+    """Ein HID-Leser, an dem ein Gerät hängt — für den Rückfall."""
+
+    def open(self) -> bool:
+        self._device = _Closable()
+        return True
+
+    def read(self) -> list[bytes]:
+        return []
+
+
+def test_the_driver_state_has_the_two_byte_packing_of_the_sdk_header() -> None:
+    """Ein falsches Packen meldet sich nicht — es liefert Rauschen als Bewegung."""
+    assert ctypes.sizeof(DriverState) == 48
+    assert DriverState.time.offset == 12
+    assert DriverState.axis.offset == 30
+    assert DriverState.buttons.offset == 44
+
+
+def test_the_driver_reader_rewrites_axis_and_button_states_as_device_reports() -> None:
+    """Was der Treiber meldet, kommt als derselbe Bericht heraus, den das Gerät roh liefert."""
+    driver = _Driver()
+    reader = DriverReader(driver)
+    assert not reader.open(), "angemeldet, aber noch kein Gerät gemeldet"
+    driver.plug()
+    assert reader.open() and reader.is_open
+    driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=(350, -175, 0, 0, 0, 70))
+    driver.send(command=DRIVER_CMD_HANDLE_BUTTONS, buttons=0x0002)
+    reports = reader.read()
+    assert reports == [report(1, 350, -175, 0, 0, 0, 70), bytes([3, 2, 0])]
+    motion = decode_report(reports[0], Motion())
+    assert motion.x == 1.0
+    assert motion.y == pytest.approx(0.5)
+    assert motion.rz == pytest.approx(-0.2)
+    assert decode_report(reports[1], motion).buttons == 2
+    assert reader.read() == [], "gelesen ist gelesen"
+
+
+def test_the_driver_reader_registers_as_wildcard_and_leaves_cleanly() -> None:
+    """Anmeldung wie FreeCAD und Blender; beim Schließen bleibt beim Treiber nichts zurück."""
+    driver = _Driver(client=9)
+    reader = DriverReader(driver)
+    reader.open()
+    assert driver.calls == [
+        ("handlers", False),
+        ("register", DRIVER_CLIENT_WILDCARD, None, DRIVER_MODE_TAKE_OVER, DRIVER_MASK_ALL),
+        ("buttons", 9, DRIVER_MASK_ALL_BUTTONS),
+    ]
+    reader.close()
+    assert driver.calls[-2:] == [("unregister", 9), ("cleanup",)]
+    assert not reader.is_open
+
+
+def test_states_meant_for_another_client_or_of_another_kind_are_dropped() -> None:
+    """Der Treiber sendet an alle; gelesen wird nur, was an Solidon gerichtet ist."""
+    driver = _Driver(client=7)
+    reader = DriverReader(driver)
+    reader.open()
+    driver.plug()
+    full = (350, 350, 350, 350, 350, 350)
+    driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=full, client=8)
+    driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=full, version=0x1234)
+    driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=full, kind=0x33645043)
+    driver.send(command=1, axis=full)
+    assert reader.read() == []
+
+
+def test_unplugging_closes_the_driver_reader_and_replugging_opens_it() -> None:
+    driver = _Driver()
+    reader = DriverReader(driver)
+    reader.open()
+    driver.plug()
+    driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=(100, 0, 0, 0, 0, 0))
+    driver.unplug()
+    assert not reader.is_open
+    assert reader.read() == [], "ein abgezogenes Gerät hinterlässt keine Berichte"
+    driver.plug()
+    assert reader.open()
+
+
+def test_a_stalled_loop_keeps_only_the_last_tick_of_reports() -> None:
+    """Steht die Schleife, zählt danach die letzte Lage der Kappe, nicht die erste."""
+    driver = _Driver()
+    reader = DriverReader(driver)
+    reader.open()
+    driver.plug()
+    for value in range(REPORTS_PER_TICK + 5):
+        driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=(value, 0, 0, 0, 0, 0))
+    reports = reader.read()
+    assert len(reports) == REPORTS_PER_TICK
+    assert reports[-1] == report(1, REPORTS_PER_TICK + 4, 0, 0, 0, 0, 0)
+
+
+def test_a_driver_that_refuses_the_client_hands_over_to_hid() -> None:
+    """Installiert, aber angehalten: Der Treiber hält das Gerät dann auch nicht."""
+    driver = _Driver(client=0)
+    fallback = _Plugged()
+    reader = DriverReader(driver, fallback=fallback)
+    assert reader.open() and reader.is_open
+    assert driver.calls[-1] == ("cleanup",), "die Rückrufe gehen mit der verweigerten Anmeldung"
+    reader.close()
+    assert not fallback.is_open and not reader.is_open
+
+
+def test_without_the_framework_the_driver_reader_is_silent() -> None:
+    reader = DriverReader(loader=lambda: None)
+    assert not reader.open()
+    assert reader.read() == []
+    assert not reader.is_open
+    reader.close()
+
+
+def test_load_driver_answers_none_where_the_framework_is_absent(tmp_path: Path) -> None:
+    assert load_driver(str(tmp_path / "3DconnexionClient")) is None
+
+
+def test_the_default_reader_takes_the_driver_only_on_a_mac_that_has_it() -> None:
+    """Die Plattform ist ein Parameter — der Mac-Zweig ist auch hier prüfbar."""
+    assert isinstance(default_reader("darwin", driver_installed=lambda: True), DriverReader)
+    assert isinstance(default_reader("darwin", driver_installed=lambda: False), HidReader)
+    assert isinstance(default_reader("win32", driver_installed=lambda: True), HidReader)
+    assert isinstance(default_reader("linux", driver_installed=lambda: True), HidReader)
+
+
+def test_the_controller_drives_the_camera_from_driver_states(qt_app: QApplication) -> None:
+    """Der ganze Weg: anmelden, Gerät gemeldet, Zustand gemeldet, Kamera gefahren."""
+    driver = _Driver()
+    settings = _Settings()
+    view = _Viewport()
+    controller = SpaceMouseController(view, settings, lambda: None, reader=DriverReader(driver))
+    seen: list[int] = []
+    controller.deviceSeen.connect(lambda: seen.append(1))
+    controller.start()
+    controller._look_for_device()
+    assert controller._scan.isActive() and not controller._poll.isActive(), (
+        "angemeldet, aber ohne Gerät wird weiter gesucht"
+    )
+    assert seen == [], "die Anmeldung allein ist kein Gerät"
+    driver.plug()
+    controller._look_for_device()
+    assert seen == [1] and controller._poll.isActive()
+    driver.send(command=DRIVER_CMD_HANDLE_AXIS, axis=(350, 0, 0, 0, 0, 0))
+    controller._tick()
+    assert view.draws == 1
+    controller.stop()
+    assert driver.calls[-1] == ("cleanup",)

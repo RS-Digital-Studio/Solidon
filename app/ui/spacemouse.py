@@ -26,6 +26,16 @@ Das Modul zerfällt in zwei Teile, wie das Konzept es verlangt:
   bei laufendem 3DxWare). Nicht blockierend, im Hauptthread, kein eigener
   Faden — ein ``QTimer`` fragt mit ~60 Hz, was seit dem letzten Mal ankam;
   eine leere Lesung kostet unter einer Mikrosekunde (gemessen).
+
+  **Auf dem Mac gilt der Satz vom Nebeneinander nicht.** Dort hält 3DxWare
+  das Gerät exklusiv, und ``hidapi`` öffnet seinerseits exklusiv — wer den
+  Treiber installiert hat, bekommt über HID keinen Bericht (der erste
+  Mac-Bericht eines Kunden, 05.09.2026: „die Maus tut nichts"). Der Weg
+  führt dort durch den Treiber: :class:`DriverReader` lädt das
+  ``3DconnexionClient``-Framework des Kunden zur Laufzeit und schreibt
+  seine Zustandsmeldungen in dieselben Berichte um, die das Gerät roh
+  liefert. Nichts wird mitgeliefert, und ohne Treiber bleibt HID.
+  :func:`default_reader` entscheidet je Rechner.
 * **Abbilden** — :func:`camera_step`. Eine reine Funktion: sechs Achsen in
   [-1, 1], die Kamerastellung, die Zeitspanne und zwei Einstellungen hinein,
   eine neue Kamerastellung heraus. Sie kennt kein Qt, kein VTK und kein HID
@@ -49,12 +59,15 @@ nicht will, schaltet es in den 3Dconnexion-Einstellungen für Solidon ab.
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import logging
 import math
 import struct
+import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Any, Final
 
 from PySide6.QtCore import QObject, QTimer, Signal
@@ -120,6 +133,23 @@ KNOWN_VENDORS: Final = frozenset({0x256F, 0x046D})
 #: Maus; die Nutzung hält ihn heraus.
 USAGE_PAGE_GENERIC_DESKTOP: Final = 0x01
 USAGE_MULTI_AXIS_CONTROLLER: Final = 0x08
+
+#: Der Herstellertreiber auf dem Mac. 3DxWare öffnet das Gerät dort exklusiv,
+#: und ``hidapi`` käme an keinen Bericht heran; die Berichte kommen dann über
+#: sein Framework — dieselbe Tür, durch die Blender, FreeCAD und PrusaSlicer
+#: auf dem Mac gehen. Das Framework wird **nicht mitgeliefert**: Es liegt beim
+#: Kunden, und Solidon lädt es zur Laufzeit oder lässt es bleiben.
+DRIVER_FRAMEWORK: Final = "/Library/Frameworks/3DconnexionClient.framework/3DconnexionClient"
+#: Aus ``ConnexionClientAPI.h`` des Treibers — die ersten beiden sind
+#: Viererzeichen (``'3dSR'``, ``'****'``), als Zahl gelesen.
+DRIVER_MSG_DEVICE_STATE: Final = 0x33645352
+DRIVER_CLIENT_WILDCARD: Final = 0x2A2A2A2A
+DRIVER_STATE_VERSION: Final = 0x6D33
+DRIVER_CMD_HANDLE_BUTTONS: Final = 2
+DRIVER_CMD_HANDLE_AXIS: Final = 3
+DRIVER_MODE_TAKE_OVER: Final = 1
+DRIVER_MASK_ALL: Final = 0x3FFF
+DRIVER_MASK_ALL_BUTTONS: Final = 0xFFFFFFFF
 
 #: Die Hochachse des Bauraums — der Rückfall für ein „Oben", das mit der
 #: Blickrichtung zusammenfällt.
@@ -501,6 +531,244 @@ class HidReader:
                 device.close()
 
 
+class DriverState(ctypes.Structure):
+    """``ConnexionDeviceState`` aus dem SDK-Header, Byte für Byte.
+
+    Der Header packt die Struktur auf zwei Byte (``#pragma pack(push, 2)``):
+    ``time`` liegt damit bei Byte 12 und nicht bei 16, die sechs Achsen bei
+    30, die Tasten bei 44 — 48 Byte insgesamt. Ein Test hält die Zahlen fest,
+    denn ein falsches Packen gibt keine Fehlermeldung, sondern Rauschen als
+    Bewegung.
+    """
+
+    _pack_ = 2
+    _fields_ = (
+        ("version", ctypes.c_uint16),
+        ("client", ctypes.c_uint16),
+        ("command", ctypes.c_uint16),
+        ("param", ctypes.c_int16),
+        ("value", ctypes.c_int32),
+        ("time", ctypes.c_uint64),
+        ("report", ctypes.c_uint8 * 8),
+        ("buttons8", ctypes.c_uint16),
+        ("axis", ctypes.c_int16 * 6),
+        ("address", ctypes.c_uint16),
+        ("buttons", ctypes.c_uint32),
+    )
+
+
+#: Die Rückruffunktionen des Treibers: Zustandsmeldung (Produkt, Art, Zeiger
+#: auf :class:`DriverState`) und Gerät gekommen oder gegangen (Produkt).
+_MESSAGE_HANDLER = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p)
+_DEVICE_HANDLER = ctypes.CFUNCTYPE(None, ctypes.c_uint32)
+
+
+def load_driver(path: str = DRIVER_FRAMEWORK) -> Any | None:
+    """Das Framework des Herstellertreibers — ``None``, wo es fehlt oder nicht lädt.
+
+    Fünf Einsprungpunkte bekommen ihre Signaturen aus dem Header; fehlt einer
+    (ein Treiber vor 10.x kannte ``SetConnexionHandlers`` noch nicht), gilt
+    der Treiber als nicht vorhanden. Die Datei wird vor dem Laden geprüft:
+    ``CDLL`` auf einen fehlenden Pfad kostet eine Ausnahme, und diese
+    Funktion läuft bei jeder Suche nach einem Gerät.
+    """
+    if not Path(path).exists():
+        return None
+    try:
+        library = ctypes.CDLL(path)
+        library.SetConnexionHandlers.argtypes = [
+            _MESSAGE_HANDLER,
+            _DEVICE_HANDLER,
+            _DEVICE_HANDLER,
+            ctypes.c_bool,
+        ]
+        library.SetConnexionHandlers.restype = ctypes.c_int16
+        library.RegisterConnexionClient.argtypes = [
+            ctypes.c_uint32,
+            ctypes.c_char_p,
+            ctypes.c_uint16,
+            ctypes.c_uint32,
+        ]
+        library.RegisterConnexionClient.restype = ctypes.c_uint16
+        library.SetConnexionClientButtonMask.argtypes = [ctypes.c_uint16, ctypes.c_uint32]
+        library.SetConnexionClientButtonMask.restype = None
+        library.UnregisterConnexionClient.argtypes = [ctypes.c_uint16]
+        library.UnregisterConnexionClient.restype = None
+        library.CleanupConnexionHandlers.argtypes = []
+        library.CleanupConnexionHandlers.restype = None
+    except (OSError, AttributeError) as problem:
+        _log.debug("3D mouse driver not loaded: %s", problem)
+        return None
+    return library
+
+
+class DriverReader:
+    """Liest die 3D-Maus über den Herstellertreiber — der Weg auf dem Mac.
+
+    Dieselbe Naht wie :class:`HidReader` (``open``, ``read``, ``close``,
+    ``is_open``), dahinter ein anderer Kanal: Der Treiber ruft eine
+    Rückruffunktion über die Ereignisschleife des Hauptthreads (Qt fährt auf
+    dem Mac dieselbe ``CFRunLoop``), und was er meldet, wird hier zu
+    **denselben Berichten** umgeschrieben, die das Gerät roh liefert —
+    Kennung 1 mit sechs Achsen, Kennung 3 mit den Tasten.
+    :func:`decode_report` und alles dahinter kennen den Unterschied nicht.
+    Achsenfolge und Vorzeichen des Treibers sind die des rohen Berichts;
+    Blender rechnet beide Wege mit derselben Zuordnung um
+    (``GHOST_NDOFManagerCocoa`` gegen ``GHOST_SystemWin32``). **Am Gerät
+    gemessen ist dieser Weg nicht** — die erste Rückmeldung eines Kunden
+    prüft ihn.
+
+    Angemeldet wird mit dem Platzhalter statt mit einem Programmnamen, so wie
+    FreeCAD und Blender es tun: Der Treiber richtet seine Zustandsmeldungen an
+    den Client des vordersten Programms und trägt dessen Kennung im Feld
+    ``client``; was an einen anderen gerichtet ist, wird hier verworfen. So
+    liest Solidon nur, wenn es vorn ist, und ein CAD daneben behält seine
+    Maus.
+
+    Offen ist der Leser, wenn der Treiber ein Gerät gemeldet hat oder
+    Berichte anstehen. Die Anmeldung allein ist kein Gerät: Wer 3DxWare
+    installiert, aber die Maus nicht eingesteckt hat, sieht weiterhin keine
+    Einstellungszeile (Zusage 1). Verweigert der Treiber die Anmeldung —
+    installiert, aber angehalten —, hält er auch das Gerät nicht, und der
+    Rückfall auf HID übernimmt für den Rest der Sitzung.
+    """
+
+    def __init__(
+        self,
+        driver: Any | None = None,
+        *,
+        loader: Callable[[], Any | None] = load_driver,
+        fallback: HidReader | None = None,
+    ) -> None:
+        self._driver = driver
+        self._loader = loader
+        self._fallback = fallback
+        self._delegate: HidReader | None = None
+        self._unavailable = False
+        self._client = 0
+        self._devices = 0
+        self._pending: list[bytes] = []
+        self._handlers: tuple[Any, ...] = ()
+
+    @property
+    def is_open(self) -> bool:
+        if self._delegate is not None:
+            return self._delegate.is_open
+        return self._client != 0 and (self._devices > 0 or bool(self._pending))
+
+    def open(self) -> bool:
+        """Anmelden, wenn noch nicht geschehen; offen erst mit einem Gerät."""
+        if self._delegate is not None:
+            return self._delegate.open()
+        if self._client == 0 and not self._register():
+            if self._fallback is None:
+                return False
+            self._delegate = self._fallback
+            return self._delegate.open()
+        return self.is_open
+
+    def _register(self) -> bool:
+        if self._unavailable:
+            return False
+        if self._driver is None:
+            self._driver = self._loader()
+            if self._driver is None:
+                self._unavailable = True
+                return False
+        handlers = (
+            _MESSAGE_HANDLER(self._on_message),
+            _DEVICE_HANDLER(self._on_added),
+            _DEVICE_HANDLER(self._on_removed),
+        )
+        try:
+            if self._driver.SetConnexionHandlers(*handlers, False) != 0:
+                return False
+            client = int(
+                self._driver.RegisterConnexionClient(
+                    DRIVER_CLIENT_WILDCARD, None, DRIVER_MODE_TAKE_OVER, DRIVER_MASK_ALL
+                )
+            )
+            if client == 0:
+                self._driver.CleanupConnexionHandlers()
+                return False
+            self._driver.SetConnexionClientButtonMask(client, DRIVER_MASK_ALL_BUTTONS)
+        except (OSError, ValueError, ctypes.ArgumentError) as problem:
+            _log.debug("3D mouse driver refused the client: %s", problem)
+            return False
+        # Die Rückruffunktionen leben so lange wie die Anmeldung: Ein vom
+        # Aufräumer eingesammeltes ctypes-Objekt wäre für den Treiber ein
+        # Sprung ins Leere.
+        self._handlers = handlers
+        self._client = client
+        return True
+
+    def _on_message(self, _product: int, kind: int, argument: int | None) -> None:
+        if kind != DRIVER_MSG_DEVICE_STATE or not argument:
+            return
+        state = DriverState.from_address(argument)
+        if state.version != DRIVER_STATE_VERSION or state.client != self._client:
+            return
+        if state.command == DRIVER_CMD_HANDLE_AXIS:
+            self._queue(bytes([REPORT_TRANSLATION]) + struct.pack("<6h", *state.axis))
+        elif state.command == DRIVER_CMD_HANDLE_BUTTONS:
+            self._queue(bytes([REPORT_BUTTONS]) + struct.pack("<H", state.buttons & 0xFFFF))
+
+    def _queue(self, report: bytes) -> None:
+        self._pending.append(report)
+        # Mehr, als ein Takt liest, wird nicht aufbewahrt: Steht die Schleife
+        # eine Sekunde, zählt danach die letzte Lage der Kappe, nicht die erste.
+        del self._pending[:-REPORTS_PER_TICK]
+
+    def _on_added(self, _product: int) -> None:
+        self._devices += 1
+
+    def _on_removed(self, _product: int) -> None:
+        self._devices = max(0, self._devices - 1)
+        if self._devices == 0:
+            self._pending.clear()
+
+    def read(self) -> list[bytes]:
+        """Was der Treiber seit dem letzten Takt gemeldet hat — leer, wenn nichts."""
+        if self._delegate is not None:
+            return self._delegate.read()
+        reports, self._pending = self._pending, []
+        return reports
+
+    def close(self) -> None:
+        if self._delegate is not None:
+            self._delegate.close()
+            self._delegate = None
+        client, self._client = self._client, 0
+        self._devices = 0
+        self._pending = []
+        if client and self._driver is not None:
+            # Zwei Blöcke, nicht einer: Scheitert das Abmelden, müssen die
+            # Rückrufe trotzdem abgehängt werden, bevor ihre Objekte fallen.
+            with contextlib.suppress(OSError, ValueError, ctypes.ArgumentError):
+                self._driver.UnregisterConnexionClient(client)
+            with contextlib.suppress(OSError, ValueError, ctypes.ArgumentError):
+                self._driver.CleanupConnexionHandlers()
+        self._handlers = ()
+
+
+def default_reader(
+    platform: str | None = None, *, driver_installed: Callable[[], bool] | None = None
+) -> HidReader | DriverReader:
+    """Der Leser dieses Rechners.
+
+    Auf dem Mac mit installiertem 3DxWare der Treiber, HID als Rückfall für
+    den angehaltenen Treiber; überall sonst HID. Die Plattform ist ein
+    Parameter und keine Abfrage im Rumpf — dieselbe Überlegung wie bei
+    ``updates.install_kind``: Ein Zweig hinter ``sys.platform`` wird auf der
+    Maschine, auf der entwickelt wird, nie ausgeführt und nie geprüft.
+    """
+    chosen = sys.platform if platform is None else platform
+    installed = driver_installed or (lambda: Path(DRIVER_FRAMEWORK).exists())
+    if chosen == "darwin" and installed():
+        return DriverReader(fallback=HidReader())
+    return HidReader()
+
+
 class SpaceMouseController(QObject):
     """Verbindet Leser und Abbildung mit der Kamera des Viewports.
 
@@ -521,13 +789,13 @@ class SpaceMouseController(QObject):
         settings: Any,
         fit: Callable[[], None],
         parent: QObject | None = None,
-        reader: HidReader | None = None,
+        reader: HidReader | DriverReader | None = None,
     ) -> None:
         super().__init__(parent)
         self._viewport = viewport
         self._settings = settings
         self._fit = fit
-        self._reader = reader or HidReader()
+        self._reader: HidReader | DriverReader = reader or default_reader()
         self._motion = Motion()
         self._last_report = 0.0
         self._last_tick = 0.0
