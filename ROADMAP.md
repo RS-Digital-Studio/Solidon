@@ -122,7 +122,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
-| Die Oberflächenbefunde UI-03 bis UI-37 (30 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den nächsten Block derselben Arbeit — zuerst, was der Kunde als Fehler erlebt: verlorene Wiederherstellung (UI-06), Import trotz Abbrechen (UI-08), Speichern mit nicht endlicher Grenze (UI-26), zerstörte Widgets nach dem Katalog (UI-15) |
+| Die restlichen Oberflächenbefunde: UI-03, UI-04, UI-11, UI-12, UI-16, UI-18 bis UI-21, UI-27 bis UI-30, UI-37 (14 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den nächsten Block derselben Arbeit — Druckdialog (UI-18 bis UI-21) und Leisten (UI-27 bis UI-30) zuerst, die Schnittleiste und die Bildaufnahme (UI-03, UI-04) mit dem Viewport-Umbau |
 | Die Geometriebefunde G-03 bis G-38 (35 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach den Oberflächenbefunden; jeder braucht zuerst seine Korpusdatei (AGENTS.md: Test zuerst bei Geometrie), und die Reihenfolge folgt der Kundenwirkung — verschwindende Löcher (G-03), ungültige Körper ohne Befund (G-04), verlorene Materialzuweisungen (G-10, G-12) vor den Bausteinmaßen |
 | Werkzeuge und Website: R25, R26, R31, R35, R37, R38 | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach der Geometrie; R35 (FAQ zu den übertragenen Daten) und R38 (widersprüchliche Fachagenten) sind Texte in sechs Sprachen bzw. vierzehn Dateien und brauchen einen ruhigen Durchgang, kein Zwischenstück |
 | Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38 | Was der Gesamtreview liegen ließ (05.09.2026) | einen Katalogdurchgang je Sprache — fünf Zeilen, aber jede gegen die sichtbare Oberfläche geprüft (Menüname, Feldtitel, Verlaufstitel), nicht gegen die deutsche Quelle allein |
@@ -10759,7 +10759,16 @@ neue Test einmal ohne seinen Fix gefahren:
 Was liegen geblieben ist, steht hier mit seinem Grund; die Befunde selbst mit
 Fundstelle, Beleg und Reproduktion stehen im Review.
 
-- [ ] **Die Oberflächenbefunde UI-03 bis UI-37** (30 Punkte, alle P2): Schnittregler,
+- [x] **Sechzehn Oberflächenbefunde sind auf main** (Block 6, 05.09.2026): UI-05
+  (KI-Hinweis ohne geschriebenen Nachweis), UI-06 (Sicherung vor dem Speichern
+  gelöscht), UI-07 (Bogen fing den Vollkreis), UI-08 (Import trotz Abbrechen),
+  UI-09 (Fernbedienung nach Sprachwechsel), UI-10 (Rückgängig der verworfenen
+  Zeichnung), UI-13 (unvollständiger Variantensatz), UI-15 (Katalog nach dem
+  Schließen), UI-23 (zweiter Erzeugungsauftrag), UI-24 und UI-25
+  (Filamentwähler), UI-26 (nicht endliche Grenzen), UI-31 bis UI-33
+  (Skizzeneditor: Redo, Kreisränder, Entf), UI-34 (Escape in der
+  Variantenrechnung).
+- [ ] **Die restlichen Oberflächenbefunde** (14 Punkte, alle P2): Schnittregler,
   Bildaufnahme, KI-Sendegrenze bei Speicherfehlern, Wiederherstellung beim
   Speichern, Bogen-Treffer, Abbrechen beim Einlesen, Fernbedienung nach
   Sprachwechsel, Undo der ersten Zeichnung, Merkmalsdrehung, Variantensatz,
