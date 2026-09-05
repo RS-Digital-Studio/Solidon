@@ -243,3 +243,55 @@ def test_the_progress_reaches_the_widgets_on_the_interface_thread(
         assert set(seen) == {threading.get_ident()}, "ein Widget aus einem fremden Thread"
     finally:
         dialog.deleteLater()
+
+
+def test_an_incomplete_series_is_not_written_and_names_its_gaps(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-13: Bei ``not made.complete`` stand ein
+    Satz in der Statuszeile, und dann lief der Weg weiter zu Export und
+    ``accept()`` — der Kalibrierdruck hatte eine Lücke, und nach dem Schließen
+    stand nirgends mehr, welche."""
+    from app.ui import variants_dialog as module
+
+    session = session_with_parameter()
+    dialog = VariantsDialog(session)
+    try:
+        monkeypatch.setattr(
+            module.QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: str(tmp_path))
+        )
+        # Spiel -0,1 ergibt einen Zylinder mit Durchmesser -1: die erste Variante
+        # scheitert, die zweite (0,1) rechnet.
+        dialog.first.setValue(-0.1)
+        dialog.step.setValue(0.2)
+        dialog.count.setValue(2)
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None, "es wurde kein Arbeiter gestartet"
+        assert worker.wait(30_000), "der Arbeiter wurde nicht fertig"
+        QApplication.processEvents()
+
+        assert not list(tmp_path.glob("*")), "ein Satz mit Lücke wird nicht geschrieben"
+        assert dialog.result() != VariantsDialog.DialogCode.Accepted, "der Dialog bleibt offen"
+        assert "-0.1" in dialog.state.text(), dialog.state.text()
+    finally:
+        dialog.deleteLater()
+
+
+def test_escape_cancels_the_run_like_the_button_does(qt_app: QApplication) -> None:
+    """Gesamtreview 05.09.2026, UI-34: Escape führte zu ``QDialog.reject`` und
+    an Knopf und Kreuz vorbei — der Dialog verschwand, die Rechnung lief
+    weiter, und ``_finished`` schrieb später die Dateien."""
+    from types import SimpleNamespace
+
+    dialog = VariantsDialog(session_with_parameter())
+    try:
+        dialog._worker = SimpleNamespace(wait=lambda _ms: True)  # type: ignore[assignment]
+        assert not dialog._cancel.is_cancelled
+
+        dialog.reject()
+
+        assert dialog._cancel.is_cancelled, "Escape hält die Rechnung an"
+        assert dialog._worker is None
+    finally:
+        dialog.deleteLater()

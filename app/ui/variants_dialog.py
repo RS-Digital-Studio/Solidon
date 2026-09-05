@@ -268,8 +268,19 @@ class VariantsDialog(QDialog):
             self.state.setText(tr("Abgebrochen — es wurde nichts geschrieben."))
             return
         if not made.complete:
-            # §28.3: ein Satz mit einer Lücke darin ist kein Kalibrierdruck.
-            self.state.setText(tr("Nicht jede Variante ließ sich rechnen — siehe Prüfbericht."))
+            # §28.3: ein Satz mit einer Lücke darin ist kein Kalibrierdruck —
+            # und bis zum 05.09.2026 wurde er trotzdem geschrieben: ein Satz
+            # Statustext, dann Export und accept(), und nach dem Schließen
+            # stand die Lücke nirgends mehr (Gesamtreview, UI-13). Der Dialog
+            # bleibt offen und nennt die Werte ohne Ergebnis; der Kunde ändert
+            # die Reihe und rechnet neu.
+            stopped = [entry for entry in made.findings if entry.code == "variants.stopped"]
+            values = ", ".join(str(entry.values.get("value", "")) for entry in stopped)
+            text = tr("Nicht jede Variante ließ sich rechnen — nichts wurde geschrieben.")
+            if values:
+                text = f"{text} {tr('Ohne Ergebnis')}: {values}"
+            self.state.setText(text)
+            return
 
         objects = list(made.scene(self.session.profile).objects.values())
         if not objects:
@@ -328,6 +339,19 @@ class VariantsDialog(QDialog):
         if self._worker is not None:
             self._cancel.cancel()
         self._leash.wait_all(timeout_ms)
+
+    def reject(self) -> None:
+        """Escape nimmt denselben Weg wie der Knopf und das Kreuz.
+
+        ``QDialog.reject`` schloss den Dialog, ohne die Rechnung anzuhalten:
+        Sie lief weiter, und ``_finished`` schrieb danach die Dateien in den
+        gewählten Ordner, während der Dialog längst weg war (Gesamtreview
+        05.09.2026, UI-34).
+        """
+        if self._worker is not None:
+            self._cancel.cancel()
+            self._release()
+        super().reject()
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Ein laufender Arbeiter überlebt seinen Dialog nicht.
