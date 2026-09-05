@@ -384,3 +384,45 @@ def test_no_start_option_prepares_a_memory_limit() -> None:
         assert "preexec_fn" not in options, options
     assert not hasattr(process, "_memory_options"), "die Speichergrenze ist wieder da"
     assert not hasattr(process, "DEFAULT_MEMORY_LIMIT"), "die Speichergrenze ist wieder da"
+
+
+def test_a_group_that_outlives_its_parent_is_killed_after_the_grace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-23: Auf POSIX kehrte
+    ``terminate_process_tree`` zurück, sobald der Elternprozess weg war —
+    ein Nachkomme, der SIGTERM abfängt, lebte danach unbegrenzt weiter."""
+    alive = iter([True, True, False])
+    killed: list[tuple[int, bool]] = []
+    monkeypatch.setattr(process, "_group_alive", lambda _pid: next(alive, False))
+    monkeypatch.setattr(
+        process, "_kill_process_group", lambda pid, *, force: killed.append((pid, force))
+    )
+    monkeypatch.setattr(process.time, "sleep", lambda _seconds: None)
+    clock = iter([0.0, 0.0, 10.0])
+    monkeypatch.setattr(process.time, "monotonic", lambda: next(clock, 10.0))
+
+    process._finish_process_group(4711, 1.0)
+
+    assert killed == [(4711, True)], "wer die Schonfrist übersteht, bekommt SIGKILL"
+
+
+def test_the_posix_teardown_waits_for_the_group_after_the_parent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Elternprozess ist nach dem höflichen Signal sofort weg — die
+    Gruppe wird danach trotzdem abgewartet und nicht vergessen."""
+    monkeypatch.setattr(process.os, "name", "posix")
+    finished: list[int] = []
+    monkeypatch.setattr(process, "_kill_process_group", lambda _pid, *, force: None)
+    monkeypatch.setattr(process, "_finish_process_group", lambda pid, _grace: finished.append(pid))
+
+    class Parent:
+        pid = 4711
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+    process.terminate_process_tree(Parent(), grace_seconds=0.5)  # type: ignore[arg-type]
+
+    assert finished == [4711]

@@ -441,6 +441,29 @@ def _kill_process_group(process_id: int, *, force: bool) -> None:
     kill_group(process_id, int(getattr(signal, signal_name)))
 
 
+def _group_alive(process_id: int) -> bool:
+    """Ob in der Prozessgruppe noch jemand lebt — Signal 0 fragt nur nach."""
+    kill_group = cast(Callable[[int, int], None], vars(os)["killpg"])
+    try:
+        kill_group(process_id, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _finish_process_group(process_id: int, grace_seconds: float) -> None:
+    """Wartet die Schonfrist auf die Nachkommen und beendet, was sie übersteht."""
+    deadline = time.monotonic() + grace_seconds
+    while _group_alive(process_id):
+        if time.monotonic() >= deadline:
+            with suppress(ProcessLookupError):
+                _kill_process_group(process_id, force=True)
+            return
+        time.sleep(PROCESS_POLL_SECONDS)
+
+
 def _stop_remaining_descendants(process: subprocess.Popen[Any]) -> None:
     """Schließt nach normalem Elternende ebenfalls den zugehörigen Prozessbaum."""
     if os.name == "nt":
@@ -481,10 +504,18 @@ def terminate_process_tree(
             _kill_process_group(process.pid, force=False)
         try:
             process.wait(timeout=grace_seconds)
-            return
         except subprocess.TimeoutExpired:
             with suppress(ProcessLookupError):
                 _kill_process_group(process.pid, force=True)
+        else:
+            # **Der Elternprozess ist weg — seine Gruppe nicht unbedingt.** Ein
+            # Nachkomme, der SIGTERM abfängt oder länger aufräumt, überlebte
+            # den zugesagten Abbruch, weil hier nach dem Ende des Elternteils
+            # sofort zurückgekehrt wurde (Gesamtreview 05.09.2026, CORE-23).
+            # Gewartet wird auf die Gruppe, und wer die Schonfrist übersteht,
+            # bekommt SIGKILL.
+            _finish_process_group(process.pid, grace_seconds)
+            return
     try:
         process.wait(timeout=grace_seconds)
     except subprocess.TimeoutExpired:
