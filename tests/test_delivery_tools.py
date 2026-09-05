@@ -178,3 +178,56 @@ def test_the_missing_files_mode_does_not_pass_an_unsigned_manifest(
     assert not [name for name, _body in ftp.sent if "version.json" in name], (
         "die unsignierte Datei ging nicht hinaus"
     )
+
+
+# --- gate_lock -------------------------------------------------------------------
+
+
+def test_an_unreadable_old_lock_file_does_not_block_the_gate_forever(tmp_path: Path) -> None:
+    """R17: Eine leere Sperrdatei ließ ``_read`` ``None`` liefern, das
+    ``open("x")`` darunter scheiterte an ihr in jeder Runde, und das Tor
+    stand für jeden weiteren Lauf endlos. Alt und unlesbar heißt: ein Rest
+    ohne Halter, und der wird geräumt."""
+    import json
+    import os
+    import time
+
+    from tools import gate_lock
+
+    lock = tmp_path / "tor.lock"
+    lock.write_bytes(b"")
+    old = time.time() - 60.0
+    os.utime(lock, (old, old))
+
+    foreign = gate_lock._acquire(lock, "pruefstand", wait=0.0)
+
+    assert foreign is None, "das Schloss wurde genommen"
+    assert json.loads(lock.read_text(encoding="utf-8"))["wer"] == "pruefstand"
+
+
+# --- make_download ---------------------------------------------------------------
+
+
+def test_the_download_store_takes_the_new_bytes_even_at_the_same_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """B-15: Eine schon liegende Datei wurde nur bei abweichender Größe
+    ersetzt — ein neu gebautes Paket derselben Länge blieb liegen, und die
+    Prüfsumme darunter belegte das alte."""
+    import hashlib
+
+    from tools import make_download
+
+    store = tmp_path / "dl"
+    store.mkdir()
+    source = tmp_path / "Solidon3D-Setup.exe"
+    source.write_bytes(b"NEW_CONTENT")
+    (store / source.name).write_bytes(b"OLD_CONTENT")
+    monkeypatch.setattr(make_download, "STORE", store)
+    monkeypatch.setattr(make_download, "refuse_wrong_delivery", lambda _paths: None)
+
+    packages = make_download.read_packages([source])
+
+    assert (store / source.name).read_bytes() == b"NEW_CONTENT"
+    assert packages[0].hash_ == hashlib.sha256(b"NEW_CONTENT").hexdigest()
+    assert not list(store.glob("*.part")), "keine halbe Kopie bleibt liegen"

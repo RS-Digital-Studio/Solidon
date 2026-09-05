@@ -580,11 +580,32 @@ def _runnable(command: list[str]) -> list[str]:
     return command
 
 
+#: So lange darf eine unlesbare Sperrdatei jung sein, bevor sie als Rest gilt —
+#: das Fenster zwischen ``open("x")`` und dem geschriebenen Eintrag ist Millisekunden.
+UNREADABLE_GRACE_SECONDS = 5.0
+
+
 def _acquire(path: Path, who: str, wait: float) -> dict[str, object] | None:
     """Legt das Schloss an. Gibt den fremden Eintrag zurück, wenn es nicht geht."""
     deadline = time.monotonic() + wait
     while True:
         present = _read(path) if path.exists() else None
+        if present is None and path.exists():
+            # Eine leere oder halb geschriebene Datei: Jung ist sie das
+            # Fenster zwischen Anlegen und Schreiben eines anderen — kurz
+            # warten. Alt ist sie ein Rest, der keinen Halter mehr hat; das
+            # ``x`` darunter scheiterte an ihr in jeder Runde, und das Tor
+            # stand für jeden weiteren Lauf endlos (Gesamtreview 05.09.2026,
+            # R17).
+            try:
+                age = time.time() - path.stat().st_mtime
+            except OSError:
+                age = UNREADABLE_GRACE_SECONDS
+            if age < UNREADABLE_GRACE_SECONDS and time.monotonic() < deadline:
+                time.sleep(POLL_SECONDS)
+                continue
+            print("Unlesbares Schloss entfernt — es trug keinen Halter.", flush=True)
+            path.unlink(missing_ok=True)
         if present is not None:
             reason = _stale(present)
             if not reason:

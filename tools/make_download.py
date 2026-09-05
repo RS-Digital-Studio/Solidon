@@ -237,6 +237,16 @@ class Package:
         return f"{self.bytes_ / 1_000_000:.0f} MB"
 
 
+def _sha256(path: Path) -> str:
+    """Die Prüfsumme einer Datei — in Blöcken, nicht am Stück: ein
+    Installationspaket ist ein paar hundert Megabyte."""
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        while chunk := stream.read(1 << 20):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def kind_of(path: Path) -> str:
     """Zu welcher Plattform die Datei gehört — an ihrer Endung."""
     name = path.name.lower()
@@ -375,20 +385,22 @@ def read_packages(paths: list[Path]) -> list[Package]:
         seen.add(path.name)
 
         target = STORE / path.name
-        if not (target.exists() and target.stat().st_size == path.stat().st_size):
-            shutil.copy2(path, target)
+        # Verglichen wird der Inhalt, nicht die Größe: Ein neu gebautes Paket
+        # derselben Länge blieb liegen, und die Prüfsumme darunter belegte das
+        # alte — der Kasten nannte einen Hash, der zum beauftragten Paket nie
+        # gehört hat (Gesamtreview 05.09.2026, B-15). Kopiert wird daneben und
+        # atomar eingewechselt; eine halbe Kopie liegt nie unter dem Namen.
+        digest = _sha256(path)
+        if not (target.exists() and _sha256(target) == digest):
+            partial = target.with_name(target.name + ".part")
+            shutil.copy2(path, partial)
+            partial.replace(target)
+            if _sha256(target) != digest:
+                raise SystemExit(f"{target} stimmt nach dem Kopieren nicht mit {path} überein.")
 
-        # In Blöcken, nicht am Stück: ein Installationspaket ist ein paar
-        # hundert Megabyte, und die müssen nicht alle gleichzeitig im Speicher
-        # liegen.
-        digest = hashlib.sha256()
-        with target.open("rb") as stream:
-            while chunk := stream.read(1 << 20):
-                digest.update(chunk)
-
-        package = Package(kind, path.name, target.stat().st_size, digest.hexdigest())
+        package = Package(kind, path.name, target.stat().st_size, digest)
         found.append(package)
-        print(f"  {kind:8s} {path.name}  {package.size}  {digest.hexdigest()[:16]}…")
+        print(f"  {kind:8s} {path.name}  {package.size}  {digest[:16]}…")
 
     # Die Reihenfolge im Kasten ist die der Plattformen, und innerhalb einer
     # Plattform die der übergebenen Dateien. Die erste ist zugleich das Ziel
