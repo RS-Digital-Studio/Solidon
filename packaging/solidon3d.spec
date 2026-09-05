@@ -338,7 +338,7 @@ if sys.platform == "darwin":
             # die niemand in einer Plist sucht.
             "NSHighResolutionCapable": True,
             # Die älteste Version, auf der die mitgelieferten Qt-Räder laufen.
-            "LSMinimumSystemVersion": "12.0",
+            "LSMinimumSystemVersion": "13.0",
             # Die eigene Projektdatei, damit ein Doppelklick im Finder hier
             # ankommt. Zwei Einträge, und beide werden gebraucht: die
             # Deklaration sagt dem System, dass es den Typ überhaupt gibt und

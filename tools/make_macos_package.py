@@ -96,7 +96,7 @@ def distribution(architecture: str) -> str:
         # Das Volume muss die Systemversion tragen, die auch die Plist nennt
         # (LSMinimumSystemVersion in packaging/solidon3d.spec).
         "    <volume-check>\n"
-        '        <allowed-os-versions><os-version min="12.0" /></allowed-os-versions>\n'
+        '        <allowed-os-versions><os-version min="13.0" /></allowed-os-versions>\n'
         "    </volume-check>\n"
         f'    <pkg-ref id="{APP_ID}" version="{APP_VERSION}">component.pkg</pkg-ref>\n'
         "    <choices-outline>\n"

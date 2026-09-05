@@ -8,7 +8,7 @@
     <options customize="allow" require-scripts="false" hostArchitectures="arm64" />
     <domains enable_anywhere="true" enable_currentUserHome="true" enable_localSystem="true" />
     <volume-check>
-        <allowed-os-versions><os-version min="12.0" /></allowed-os-versions>
+        <allowed-os-versions><os-version min="13.0" /></allowed-os-versions>
     </volume-check>
     <pkg-ref id="de.rsdigital.solidon3d" version="0.3.4">component.pkg</pkg-ref>
     <choices-outline>
