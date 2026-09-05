@@ -1412,7 +1412,7 @@ def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
     meint sie, ein Klick meint das, worauf er zeigt. Sonst ginge nach jedem
     Drehen ein Menü auf.
     """
-    from app.ui.viewport import is_click
+    from app.ui.render.navigator import is_click
 
     assert is_click((100, 200), (100, 200)), "stillgehalten ist ein Klick"
     assert is_click((100, 200), (101, 199)), "eine Maus steht beim Drücken selten ganz still"

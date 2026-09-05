@@ -2264,7 +2264,7 @@ def test_the_view_stays_upright_while_it_turns() -> None:
     """
     from vtkmodules.vtkRenderingCore import vtkCamera
 
-    from app.ui.viewport import turntable_camera
+    from app.ui.render.navigator import turntable_camera
 
     focal = (0.0, 0.0, 0.0)
     size = (1100, 650)
@@ -2302,7 +2302,7 @@ def test_turning_stops_at_the_pole_and_finds_its_way_back() -> None:
     """
     import math
 
-    from app.ui.viewport import POLE_LIMIT_DEGREES, turntable_camera
+    from app.ui.render.navigator import POLE_LIMIT_DEGREES, turntable_camera
 
     def height_angle(position: tuple[float, float, float]) -> float:
         length = math.dist(position, (0.0, 0.0, 0.0))
@@ -2337,7 +2337,7 @@ def test_the_turn_keeps_its_distance_and_the_speed_it_had() -> None:
 
     from vtkmodules.vtkRenderingCore import vtkCamera
 
-    from app.ui.viewport import turntable_camera
+    from app.ui.render.navigator import turntable_camera
 
     focal = (0.0, 0.0, 0.0)
     size = (1100, 650)
@@ -3581,7 +3581,7 @@ def test_each_navigation_scheme_does_what_its_name_promises() -> None:
     holt — die Kette im Stil ist eine VTK-Klasse und lief offscreen nie;
     genau deshalb konnte der falsche Satz zwei Schemata lang dastehen.
     """
-    from app.ui.viewport import navigation_action
+    from app.ui.render.navigator import navigation_action
 
     # Cura und die Slicer-Familie bleiben, wie sie waren.
     assert navigation_action("slicer", "left", False) == "select"
@@ -3621,7 +3621,7 @@ def test_every_scheme_can_rotate_and_pan() -> None:
     (``_left_up``), gleich was die Taste beim Ziehen tut. Die Tabelle
     beschreibt das Ziehen, nicht den Klick.
     """
-    from app.ui.viewport import _NAVIGATION, navigation_action
+    from app.ui.render.navigator import _NAVIGATION, navigation_action
 
     for scheme in _NAVIGATION:
         reachable = {
@@ -3642,8 +3642,8 @@ def test_the_navigation_texts_say_what_the_scheme_does() -> None:
     muss die mittlere Taste drehen, und wo „links wählt" steht, darf links
     die Kamera nicht bewegen. Genau diese Zusage war zweimal gebrochen.
     """
+    from app.ui.render.navigator import _NAVIGATION, navigation_action
     from app.ui.settings_dialog import NAVIGATION
-    from app.ui.viewport import _NAVIGATION, navigation_action
 
     assert set(NAVIGATION) == set(_NAVIGATION), "jedes Schema hat genau eine Beschreibung"
 
@@ -5930,7 +5930,7 @@ def test_every_navigation_scheme_covers_every_button() -> None:
     """
     from typing import get_args
 
-    from app.ui.viewport import CameraAction, NavigationScheme, navigation_action
+    from app.ui.render.navigator import CameraAction, NavigationScheme, navigation_action
 
     erlaubt = set(get_args(CameraAction))
     for scheme in get_args(NavigationScheme):
@@ -5950,8 +5950,8 @@ def test_every_navigation_scheme_has_a_name_in_the_dialog() -> None:
     """
     from typing import get_args
 
+    from app.ui.render.navigator import NavigationScheme
     from app.ui.settings_dialog import NAVIGATION
-    from app.ui.viewport import NavigationScheme
 
     gebaut = set(get_args(NavigationScheme))
     benannt = set(NAVIGATION)

@@ -101,13 +101,19 @@ from app.ui.palette import (
     readable_on,
     text_colour,
 )
+from app.ui.render.api import MouseButton
+from app.ui.render.navigator import (
+    WHEEL_STEP,
+    NavigationScheme,
+    is_click,
+    navigation_action,
+    turntable_camera,
+)
 from app.ui.scale_widget import ScaleHandle
 from app.ui.style import ROOMY, TIGHT
 from app.ui.theme import THEMES, slot_colour, viewport_colours
 
 _log = get_logger(__name__)
-
-NavigationScheme = Literal["solidon", "slicer", "cad", "blender", "orbit"]
 
 #: Wie viel Kappenausschlag ein Bildpunkt senkrechter Mausbewegung bedeutet.
 #:
@@ -123,24 +129,10 @@ TILT_PER_PIXEL: Final = 0.05
 #: Ereignisse das System dafür schickt.
 TILT_STEP_SECONDS: Final = 0.05
 
-#: Wie weit die Ansicht sich der Senkrechten nähern darf (Grad).
-#:
-#: Genau über dem Teil gibt es kein Oben mehr: Blickrichtung und Welt-Hochachse
-#: fallen zusammen, und jede Aufrichtung wäre eine Division durch nichts. Ein
-#: Grad davor ist der Unterschied unsichtbar und die Rechnung wohldefiniert.
-POLE_LIMIT_DEGREES: Final = 89.0
-#: Die Empfindlichkeit des Drehens, übernommen von dem Stil, den
-#: :func:`turntable_camera` ersetzt: ``vtkInteractorStyleTrackballCamera``
-#: rechnet 20 Grad je Fensterhälfte mal seinem ``MotionFactor`` von 10.
-#: Übernommen und nicht neu gewählt — wer die Neigung abstellt, soll nicht
-#: nebenbei die gewohnte Geschwindigkeit ändern.
-TURN_PER_PIXEL: Final = 20.0
-TURN_MOTION_FACTOR: Final = 10.0
-
 #: Was eine Flugtaste an den Achsen von ``Motion`` bewegt (§2.9).
 #:
 #: **Als Tabelle und nicht als Kette von ``if``**, aus demselben Grund wie bei
-#: :data:`_NAVIGATION`: Der Text im Handbuch und das Verhalten sollen aus
+#: :data:`app.ui.render.navigator._NAVIGATION`: Der Text im Handbuch und das Verhalten sollen aus
 #: derselben Quelle kommen, und eine Tabelle lässt sich ohne Fenster prüfen.
 #:
 #: ``y`` ist negativ für „vorwärts": Die Achse heißt bei der Kappe
@@ -168,89 +160,6 @@ FLIGHT_TICK_MS: Final = 16
 #: Blickpunkt. Eins heißt: aus 300 mm Abstand 300 mm je Sekunde — der Bauraum
 #: von Rand zu Rand in etwa einer Sekunde.
 FLIGHT_RATE: Final = 1.0
-"""``slicer`` folgt §2.9 und damit Cura: links wählt, rechts dreht.
-``orbit`` ist die Aufteilung von Bambu Studio, OrcaSlicer und PrusaSlicer —
-links dreht, rechts schiebt. ``cad`` und ``blender`` legen das Drehen auf die
-mittlere Taste, wie die Programme, nach denen sie heißen."""
-
-MouseButton = Literal["left", "middle", "right"]
-CameraAction = Literal["select", "rotate", "pan", "zoom", "tilt"]
-
-#: Was eine Maustaste in einem Schema an der Kamera tut.
-#:
-#: **Eine reine Funktion und keine Kette im Interaktionsstil**, aus zwei
-#: Gründen. Der eine ist die Prüfbarkeit: Der Stil ist eine VTK-Klasse, seine
-#: Tastenkette lief offscreen nie, und deshalb konnte „mittlere Taste dreht"
-#: zwei Schemata lang im Einstellungsdialog stehen, **ohne dass die mittlere
-#: Taste überhaupt einen Beobachter hatte**. Der andere ist die eine Wahrheit:
-#: Der Text im Dialog und das Verhalten stammen jetzt aus derselben Tabelle.
-_NAVIGATION: Final[dict[NavigationScheme, dict[tuple[MouseButton, bool], CameraAction]]] = {
-    # **Die Vorgabe** (Entscheidung Robert, 03.09.2026): links verschiebt,
-    # rechts dreht um den Mittelpunkt, das gedrückte Rad kippt nach oben und
-    # unten. Dazu WASD zum Fliegen und Q/E zum Kippen — die Tastatur ist die
-    # eigentliche Neuheit dieses Schemas, die Maustasten ordnen sich ihr zu.
-    #
-    # Dass links **schiebt** und trotzdem **auswählt**, ist kein Widerspruch:
-    # ``_left_up`` fragt ``is_click`` und trennt Klick von Zug an der
-    # Zugschwelle des Systems. Wer zieht, bewegt die Ansicht; wer klickt,
-    # wählt. Auf dem gewählten Körper führt links weiter das Teil selbst.
-    "solidon": {
-        ("left", False): "pan",
-        ("left", True): "pan",
-        ("middle", False): "tilt",
-        ("middle", True): "tilt",
-        ("right", False): "rotate",
-        ("right", True): "rotate",
-    },
-    # Cura: links wählt, rechts dreht, Umschalt und Ziehen schiebt.
-    "slicer": {
-        ("left", False): "select",
-        ("left", True): "pan",
-        ("middle", False): "pan",
-        ("middle", True): "pan",
-        ("right", False): "rotate",
-        ("right", True): "rotate",
-    },
-    # Bambu Studio, OrcaSlicer, PrusaSlicer: links dreht, rechts schiebt.
-    "orbit": {
-        ("left", False): "rotate",
-        ("left", True): "rotate",
-        ("middle", False): "pan",
-        ("middle", True): "pan",
-        ("right", False): "pan",
-        ("right", True): "pan",
-    },
-    # CAD: die mittlere Taste dreht, mit Umschalt schiebt sie; links wählt,
-    # damit es überhaupt eine Auswahltaste gibt, und rechts zoomt.
-    "cad": {
-        ("left", False): "select",
-        ("left", True): "pan",
-        ("middle", False): "rotate",
-        ("middle", True): "pan",
-        ("right", False): "zoom",
-        ("right", True): "zoom",
-    },
-    # Blender: links wählt, die mittlere Taste dreht, Umschalt+Mitte schiebt.
-    "blender": {
-        ("left", False): "select",
-        ("left", True): "pan",
-        ("middle", False): "rotate",
-        ("middle", True): "pan",
-        ("right", False): "rotate",
-        ("right", True): "rotate",
-    },
-}
-
-
-def navigation_action(scheme: NavigationScheme, button: MouseButton, shift: bool) -> CameraAction:
-    """Was diese Taste in diesem Schema an der Kamera tut.
-
-    ``select`` heißt: Die Kamera rührt sich nicht — der Klick gehört der
-    Auswahl, dem Werkzeug oder dem Körper darunter.
-    """
-    return _NAVIGATION[scheme][(button, shift)]
-
-
 DisplayMode = Literal["solid", "solid_edges", "wireframe", "transparent"]
 """How a body is drawn (§18.1)."""
 
@@ -1736,36 +1645,6 @@ MeasureMode = Literal["off", "distance", "thickness", "angle"]
 
 MEASURE_COLOUR = ROLES["measure"]
 
-#: Wie weit die Maus zwischen Drücken und Loslassen wandern darf, damit es noch
-#: als Klick zählt. In jedem Schema tut die rechte Taste auch etwas an der
-#: Kamera; ein Zug meint sie, ein Klick meint das, worauf er zeigt.
-#:
-#: **Zehn Pixel und nicht zwei.** Die alte Begründung — „eine Maus steht beim
-#: Drücken selten ganz still" — war richtig, der Wert dazu zu knapp: Drei Pixel
-#: Wandern beim Klicken sind normal, und bis zum 23.08.2026 fiel damit die
-#: Auswahl aus. Robert gemeldet als „wenn ich ein merkmal auswähle und im
-#: viewport dann wieder auf das modell klicke wechseln wir auch nicht".
-#:
-#: Zehn ist ``QApplication.startDragDistance()`` auf dieser Plattform — der
-#: Wert, ab dem Qt selbst ein Drücken als Ziehen liest, und damit derselbe, den
-#: jedes andere Fenster auf dem Bildschirm benutzt. Als Konstante und nicht
-#: über Qt abgefragt, damit :func:`is_click` eine reine Rechnung bleibt.
-CLICK_SLACK = 10
-
-
-def is_click(start: tuple[int, int] | None, end: tuple[int, int]) -> bool:
-    """Ob zwischen Drücken und Loslassen genug stillgestanden wurde.
-
-    Als Funktion und nicht als Methode des Interaktionsstils: das ist eine
-    Rechnung über zwei Punkte, und ein Test dafür soll kein VTK-Objekt bauen
-    müssen. Ohne Anfang gab es keinen Druck, den dieses Loslassen beendet —
-    dann zählt es nicht.
-    """
-    if start is None:
-        return False
-    return abs(end[0] - start[0]) <= CLICK_SLACK and abs(end[1] - start[1]) <= CLICK_SLACK
-
-
 #: Der Griff auf einer Fläche, gemessen an der Diagonale des Objekts, und
 #: seine Untergrenze in Millimetern. Mitwachsend, weil ein fester Radius an
 #: einem Gehäuse verschwindet und einen Zapfen vollständig verdeckt.
@@ -2475,10 +2354,6 @@ def volume_edges(
             segments.append(((x, y, height), (x, y - arm_y if y > 0 else y + arm_y, height)))
     return segments
 
-
-#: Wie weit ein Rasterschritt am Mausrad zoomt. VTKs Vorgabe für den
-#: Trackball-Stil, damit sich das Rad wie überall sonst anfühlt.
-WHEEL_STEP = 0.1
 
 #: Abstand des Vorschaubands von der Oberkante des Viewports.
 BANNER_TOP = 12
@@ -12139,114 +12014,6 @@ def apply_wheel_zoom(camera: Any, factor: float) -> None:
         camera.Dolly(factor)
 
 
-def turntable_camera(
-    position: Sequence[float],
-    focal_point: Sequence[float],
-    view_up: Sequence[float],
-    dx: int,
-    dy: int,
-    size: Sequence[int],
-) -> tuple[Vec3, Vec3]:
-    """Ein Mauszug am Drehteller: neuer Standort und neues Oben (§2.9).
-
-    **Der Fehler, den das behebt** (Robert, 04.09.2026: „das rotieren neigt
-    immer noch statt den winkel zur mitte zu lassen"):
-    ``vtkInteractorStyleTrackballCamera`` dreht um das **Oben der Kamera** und
-    führt es dabei mit; ``OrthogonalizeViewUp`` stellt es hinterher nur wieder
-    senkrecht zur Blickrichtung, nicht auf. Über eine Geste summiert sich
-    daraus eine sichtbare Schräglage — an einer nackten ``vtkCamera``
-    nachgerechnet, zwölf diagonale Züge aus derselben Ausgangslage: **62,7 Grad
-    Neigung** gegen **0,0** hier.
-
-    Ein Drehteller dreht stattdessen waagerecht immer um die **Welt-Hochachse**
-    und senkrecht um die Bildwaagerechte. Das Oben folgt daraus, statt
-    mitgeschleift zu werden — es ist die Welt-Hochachse, auf die Bildebene
-    gestellt. So halten es Cura, Bambu Studio und Blender, und deshalb gilt es
-    hier für alle fünf Schemata: Ein Nachbau, der neigt, wo sein Vorbild
-    aufrecht bleibt, ist keiner.
-
-    **Die Hebung wird begrenzt, nicht abgeschnitten** (:data:`POLE_LIMIT_
-    DEGREES`): Wer schon fast senkrecht darüber steht, dreht weiter waagerecht
-    und kommt jederzeit wieder herunter — nur über den Pol hinaus geht es
-    nicht, denn dort gibt es kein Oben mehr. Aus einer Draufsicht heraus, die
-    das Menü setzt, führt der Weg deshalb ebenso zurück.
-
-    Reine Funktion auf Vektoren, aus demselben Grund wie
-    :func:`rotation_focus`: Offscreen gibt es keinen Plotter, und was hinter
-    dieser Wache gerechnet wird, prüft in der Suite sonst niemand.
-    """
-    import numpy as np
-
-    # Die Welt-Hochachse steht bei der 3D-Maus, und dort bleibt sie: Zwei
-    # Fassungen derselben Zahl wären zwei Wahrheiten.
-    from app.ui.spacemouse import WORLD_UP
-
-    width = max(int(size[0]), 1)
-    height = max(int(size[1]), 1)
-    azimuth = -float(dx) * TURN_PER_PIXEL / width * TURN_MOTION_FACTOR
-    elevation = -float(dy) * TURN_PER_PIXEL / height * TURN_MOTION_FACTOR
-
-    focal = np.asarray(focal_point, dtype=float)
-    offset = np.asarray(position, dtype=float) - focal
-    distance = float(np.linalg.norm(offset))
-    up = np.asarray(view_up, dtype=float)
-    if distance <= EPS_GEOM:
-        return (
-            (float(position[0]), float(position[1]), float(position[2])),
-            (float(view_up[0]), float(view_up[1]), float(view_up[2])),
-        )
-
-    world_up = np.asarray(WORLD_UP, dtype=float)
-    offset = _turned_about(offset, world_up, azimuth)
-    up = _turned_about(up, world_up, azimuth)
-
-    forward = -offset / distance
-    sideways = np.cross(forward, world_up)
-    if float(np.linalg.norm(sideways)) <= EPS_GEOM:
-        # Senkrechter Blick: Die Welt-Hochachse taugt hier nicht als Bezug,
-        # das Oben des Bildes schon.
-        sideways = np.cross(forward, up)
-    sideways = sideways / float(np.linalg.norm(sideways))
-
-    height_now = math.degrees(math.asin(max(-1.0, min(1.0, float(offset[2]) / distance))))
-    height_next = max(-POLE_LIMIT_DEGREES, min(POLE_LIMIT_DEGREES, height_now + elevation))
-    offset = _turned_about(offset, sideways, height_now - height_next)
-
-    forward = -offset / float(np.linalg.norm(offset))
-    upright = world_up - forward * float(np.dot(forward, world_up))
-    if float(np.linalg.norm(upright)) > EPS_GEOM:
-        up = upright / float(np.linalg.norm(upright))
-
-    moved = focal + offset
-    return (
-        (float(moved[0]), float(moved[1]), float(moved[2])),
-        (float(up[0]), float(up[1]), float(up[2])),
-    )
-
-
-def _turned_about(vector: Any, axis: Any, degrees: float) -> Any:
-    """Einen Vektor um eine Achse drehen (Rodrigues).
-
-    Eigene Rechnung statt ``vtkCamera.Azimuth`` und ``Elevation``: Jene drehen
-    um das Oben **der Kamera**, und genau das ist der Unterschied, um den es
-    in :func:`turntable_camera` geht.
-    """
-    import numpy as np
-
-    axis = np.asarray(axis, dtype=float)
-    length = float(np.linalg.norm(axis))
-    vector = np.asarray(vector, dtype=float)
-    if length <= EPS_GEOM:
-        return vector
-    axis = axis / length
-    angle = math.radians(degrees)
-    return (
-        vector * math.cos(angle)
-        + np.cross(axis, vector) * math.sin(angle)
-        + axis * float(np.dot(axis, vector)) * (1.0 - math.cos(angle))
-    )
-
-
 class _ViewCallbacks(NamedTuple):
     """Die Rückrufe, die der Interaktionsstil von der Ansicht bekommt."""
 
@@ -12687,7 +12454,7 @@ def _InteractorStyle(  # noqa: N802
             """Die Kamerabewegung dieser Taste starten — laut Schema.
 
             Eine Stelle für alle drei Tasten: Die Zuordnung steht in
-            :data:`_NAVIGATION`, hier steht nur, wie VTK sie ausführt.
+            :data:`app.ui.render.navigator._NAVIGATION`, hier steht nur, wie VTK sie ausführt.
             """
             action = navigation_action(scheme, button, self._shift())
             if action == "select":

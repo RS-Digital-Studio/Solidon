@@ -11,6 +11,7 @@ beides und mess“; Gedächtnis `viewport-zwei-renderer-messen`).
 |---|---|
 | `api.py` | Der Vertrag: `Renderer`, `Item`, `LabelsItem`, die Stile (`SurfaceStyle`, `CellColours`, `LabelStyle`, `AxesMarkerStyle`), `CameraPose`, `PointerEvent`, `Pick`. Farben als Hexwert (`rgb`, `hex_of`) |
 | `vtk_renderer.py` | VTK direkt, ohne die PyVista-Hülle: `vtkPolyData` aus NumPy, Aktoren, Farbleitern, Beschriftungen über `vtkLabelPlacementMapper`, Zell-Picking, Bildaufnahme, FXAA, SSAO, Achsenkreuz. Qt-Einbettung über VTKs eigenes `QVTKRenderWindowInteractor`; ohne Fenster (`offscreen=True`) für Agentenbilder und Tests |
+| `navigator.py` | Die Kameraführung ohne VTK: die Tabelle `_NAVIGATION` (welche Taste in welchem Schema was tut), `turntable_camera` (der Drehteller, der die Ansicht aufrecht hält), `is_click`, und der `Navigator`, der `PointerEvent`s in Drehen, Kippen, Schieben, Radzoom am Zeiger, Körperzug, Malen und die Rückrufe an die Ansicht übersetzt (`NavigatorCallbacks`). Gemessen mit einem Renderer-Doppel in `tests/test_navigator.py` |
 
 ## Drei Festlegungen, die der Viewport voraussetzt
 
