@@ -15,6 +15,7 @@ Für alle drei Uploads:
 ## 1. Montagehalter aus Skizze
 
 - Datei: `solidon3d-montagehalter-aus-skizze-en-1080p.mp4`
+- Titelbild: `solidon3d-montagehalter-en-thumbnail-1280x720.png`
 - Titel: `Design a 3D-printable mounting bracket | Solidon3D tutorial`
 - Dauer: 3:33
 
@@ -44,6 +45,7 @@ Chapters:
 ## 2. Elektronikgehäuse
 
 - Datei: `solidon3d-elektronikgehaeuse-en-1080p.mp4`
+- Titelbild: `solidon3d-elektronikgehaeuse-en-thumbnail-1280x720.png`
 - Titel: `Build an electronics enclosure: shell, lid & catalog parts | Solidon3D`
 - Dauer: 8:08
 
@@ -81,8 +83,13 @@ Chapters:
 ## 3. SKÅDIS-Besenhalter
 
 - Datei: `solidon3d-skadis-besenhalter-en-1080p.mp4`
+- Titelbild: `solidon3d-skadis-besenhalter-en-thumbnail-1280x720.png`
 - Titel: `Design a SKÅDIS broom holder with an adjustable clip | Solidon3D`
 - Dauer: 4:22
+
+**Vor Veröffentlichung korrigieren:** Der Schlussbericht bei 4:02 meldet ein nicht
+verbundenes Bauteil und zählt zwei Teile. Konstruktion und Aufnahme müssen diesen
+Befund beheben; das Titelbild anschließend gegen das korrigierte Modell abgleichen.
 
 Beschreibung:
 
