@@ -1602,3 +1602,28 @@ def test_a_late_import_failure_leaves_the_next_project_alone(
     assert "src_1" in session.project.document.sources, "die Quelle des neuen Projekts bleibt"
     assert session.project.sources["src_1"] == ganz, "samt Nutzdaten"
     assert gesehen.get("error") is None, "der alte Fehler gilt dem neuen Projekt nicht"
+
+
+def test_the_cleanup_keeps_the_filament_slots_of_the_remaining_triangles() -> None:
+    """B-05 aus dem Gesamtreview vom 05.09.2026: Beim Entfernen entarteter
+    und doppelter Dreiecke wurden die Slots nicht mitgeführt; ``replacing``
+    ließ sie bei abweichender Dreieckszahl ganz fallen, und ein rot-blauer
+    Würfel mit einem doppelten Dreieck kam einfarbig an."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.ingest.loader import normalise
+
+    box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    faces = np.vstack([box.faces, box.faces[:1]])  # das erste Dreieck noch einmal
+    doubled = trimesh.Trimesh(vertices=box.vertices, faces=faces, process=False)
+    slots = (*(0 if index < 6 else 1 for index in range(12)), 0)
+    mesh = MeshData(raw=doubled, slots=slots)
+
+    result = normalise(mesh, "mm")
+
+    assert result.mesh.triangle_count == 12, "das Duplikat ist weg"
+    assert len(result.mesh.slots) == 12, "die Slots reisen mit"
+    assert sorted(set(result.mesh.slots)) == [0, 1], "beide Farben bleiben"
+    assert result.info.removed_triangles == 1

@@ -791,6 +791,16 @@ def normalise(
     """Führt die sechs Schritte aus und meldet, was sie getan haben."""
     findings: list[Finding] = []
     body: trimesh.Trimesh = mesh.raw.copy()
+    # Die Filamentzuweisung je Dreieck reist mit — entlang derselben Masken,
+    # mit denen Dreiecke fallen. ``replacing`` konnte das nicht: Sobald die
+    # Dreieckszahl abwich, ließ es die Slots fallen, und ein rot-blauer Würfel
+    # mit einem doppelten Dreieck kam einfarbig an (Gesamtreview 05.09.2026,
+    # B-05). Dasselbe Nachziehen wie in der Reparatur (§20).
+    slots = (
+        np.asarray(mesh.slots, dtype=int)
+        if mesh.slots and len(mesh.slots) == len(body.faces)
+        else None
+    )
     scale = to_mm(1.0, unit)
 
     # 1 — Einheit. Die einzige Stelle außer der Anzeige, an der umgerechnet
@@ -860,8 +870,15 @@ def normalise(
         before = len(body.faces)
         was_closed = bool(body.is_watertight)
         intact = body.copy() if was_closed else None
-        body.update_faces(body.nondegenerate_faces(height=EPS_GEOM))
-        body.update_faces(body.unique_faces())
+        intact_slots = slots
+        keep = body.nondegenerate_faces(height=EPS_GEOM)
+        body.update_faces(keep)
+        if slots is not None:
+            slots = slots[np.asarray(keep, dtype=bool)]
+        unique = body.unique_faces()
+        body.update_faces(unique)
+        if slots is not None:
+            slots = slots[np.asarray(unique, dtype=bool)]
         body.remove_unreferenced_vertices()
         removed = before - len(body.faces)
         # **Dasselbe Zurücknehmen wie beim Verschweißen, aus demselben Grund.**
@@ -883,6 +900,7 @@ def normalise(
         if removed and intact is not None and not body.is_watertight:
             kept = removed
             body = intact
+            slots = intact_slots
             removed = 0
             findings.append(
                 Finding(
@@ -970,7 +988,9 @@ def normalise(
         "ingested mesh: %d triangles, unit %s, %d components", len(body.faces), unit, components
     )
     return IngestResult(
-        mesh=mesh.replacing(body),
+        mesh=MeshData(raw=body, slots=tuple(int(slot) for slot in slots))
+        if slots is not None and len(slots) == len(body.faces)
+        else mesh.replacing(body),
         info=IngestInfo(
             unit=unit,
             scale=scale,
