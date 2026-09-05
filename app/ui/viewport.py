@@ -1535,14 +1535,9 @@ def _available() -> bool:
     # Anwendungsaufbau X11 gewählt. :func:`unavailable_hint` sagt, was fehlt.
     if platform.startswith("wayland"):
         return False
-    try:
-        import vtkmodules.vtkRenderingOpenGL2  # noqa: F401
-        from vtkmodules.qt.QVTKRenderWindowInteractor import (  # noqa: F401
-            QVTKRenderWindowInteractor,
-        )
-    except Exception:  # pragma: no cover - hängt an der Maschine
-        return False
-    return True
+    from app.ui.render import choice
+
+    return choice.available(choice.backend())
 
 
 def _effective_platform() -> str:
@@ -3610,9 +3605,9 @@ class Viewport(QWidget):
             self._layout.addWidget(notice)
             return
 
-        from app.ui.render.vtk_renderer import VtkRenderer
+        from app.ui.render.choice import make_renderer
 
-        self.renderer = VtkRenderer(self)
+        self.renderer = make_renderer(self)
         widget = self.renderer.widget
         # Qt malt hier nichts, VTK malt alles.
         #
@@ -9866,10 +9861,10 @@ class Viewport(QWidget):
         from PySide6.QtGui import QImage
 
         from app.core.geom.mesh import as_mesh_data
-        from app.ui.render.vtk_renderer import VtkRenderer
+        from app.ui.render.choice import make_renderer
 
         size = (max(16, self.width()), max(16, self.height()))
-        shot = VtkRenderer(offscreen=True, size=size)
+        shot = make_renderer(offscreen=True, size=size)
         try:
             for object_id, entry in self._result.scene.objects.items():
                 raw = as_mesh_data(entry.mesh).raw

@@ -70,6 +70,10 @@ ui = [
   "PySide6>=6.7",
   "pyvista>=0.44",
   "pyvistaqt>=0.11",
+  # Der zweite Renderer hinter der Ansicht (§18): pygfx zeichnet über wgpu
+  # (Vulkan, Metal, DX12) und bringt wgpu, rendercanvas und pylinalg mit —
+  # alle vier BSD-2. Gemessen gegen VTK direkt, Entscheidung Robert 05.09.2026.
+  "pygfx>=0.17",
   # Die 3D-Maus (SpaceMouse) direkt über HID, ohne Herstellertreiber (§2.9,
   # Konzept 3D-Maus). Dreifach lizenziert; gewählt ist BSD-3.
   "hidapi>=0.14",
@@ -275,6 +279,9 @@ module = [
   "manifold3d.*",
   "networkx.*",
   "pyvista.*",
+  "pygfx.*",
+  "wgpu.*",
+  "rendercanvas.*",
   "hid",
   "scipy.*",
   "skimage.*",

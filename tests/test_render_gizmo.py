@@ -13,7 +13,7 @@ from collections.abc import Iterator
 import numpy as np
 import pytest
 
-from app.ui.render.api import CameraPose, PointerEvent, SurfaceStyle
+from app.ui.render.api import CameraPose, PointerEvent, Renderer, SurfaceStyle
 from app.ui.render.gizmo import (
     AXIS_COLOURS,
     HIGHLIGHT,
@@ -22,15 +22,14 @@ from app.ui.render.gizmo import (
     ray_plane_hit,
     rotation_matrix,
 )
-from app.ui.render.vtk_renderer import VtkRenderer
-from tests.test_render_vtk import cube
+from tests.test_render_vtk import BACKENDS, cube, make_renderer
 
 SIZE = (600, 450)
 
 
-@pytest.fixture
-def scene() -> Iterator[tuple[VtkRenderer, object, Gizmo, list]]:
-    renderer = VtkRenderer(offscreen=True, size=SIZE)
+@pytest.fixture(params=BACKENDS)
+def scene(request: pytest.FixtureRequest) -> Iterator[tuple[Renderer, object, Gizmo, list]]:
+    renderer = make_renderer(request.param, SIZE)
     renderer.set_background("#101418")
     vertices, faces = cube(20.0)
     body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
@@ -66,7 +65,7 @@ def hover(x: float, y: float) -> PointerEvent:
 
 
 def arrow_tip_pixel(
-    renderer: VtkRenderer, gizmo: Gizmo, axis: int, share: float = 0.7
+    renderer: Renderer, gizmo: Gizmo, axis: int, share: float = 0.7
 ) -> tuple[float, float]:
     """Der Bildpunkt eines Punkts auf dem Schaft der Achse ``axis``."""
     origin = np.asarray(gizmo.origin)

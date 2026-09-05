@@ -10794,17 +10794,24 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   Katalogzeile, die gegen die sichtbare Oberfläche geprüft werden muss.
 - [~] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
   direkt und pygfx/wgpu** (Entscheidung Robert, 05.09.2026: „bau beides und
-  mess“). Stand: Der Vertrag (`app/ui/render/api.py`), `vtk_renderer.py`
-  (VTK ohne PyVista), der Navigator, der Bewegungsgriff (`gizmo.py`), der
-  Skalierwürfel und die Kantensuche (`edges.py`) stehen; `viewport.py`,
-  `snapshots.py`, `main_window.py`, `spacemouse.py` und die Werkzeuge unter
-  `tools/` sprechen nur noch den Vertrag, und die Suite misst die Ansicht an
-  `tests/render_fakes.py` statt an Plotter-Attrappen. Es folgen:
-  `gfx_renderer.py` auf pygfx (Lizenzen zuerst: pygfx, wgpu, rendercanvas,
-  pylinalg, freetype-py, uharfbuzz, jinja2, hsluv), dann die Messtabelle auf
-  Roberts Szenen und in einer VM — kopierte Bytes, Aufbau- und Updatezeit,
-  Drag-Framezeit, Speicher über Fenster- und Sprachwechsel. Erst danach fallen
-  PyVista und PyVistaQt aus den Abhängigkeiten, und VTK darf auf 9.7.0.
+  mess“). Stand: **Beide stehen und sind gemessen.** Der Vertrag
+  (`app/ui/render/api.py`), `vtk_renderer.py` und `gfx_renderer.py`, der
+  Navigator, der Bewegungsgriff, der Skalierwürfel, die Kantensuche und die
+  Wahl (`choice.py`, `SOLIDON_RENDERER=vtk|gfx`, Vorgabe VTK); `viewport.py`,
+  `snapshots.py`, `main_window.py`, `spacemouse.py` und die Werkzeuge sprechen
+  nur noch den Vertrag, die Bildtests laufen über beide Renderer. Gemessen
+  am 05.09.2026 mit `tools/window_bench.py` (`weg4-figur-formen`, maximiert,
+  RTX 4080): Zug je Bild VTK 6,9 ms, pygfx 4,9 ms; Bild im Stand 7,2 gegen
+  3,8 ms; Arbeitsspeicher gleich (rund 495 MiB); pygfx braucht beim ersten
+  Bild rund anderthalb Sekunden für die Shader. Was pygfx nicht hat: keine
+  Umgebungsverdeckung (SSAO), Beschriftungsfelder als Balken statt gerundeter
+  Kästen, ein weicherer Lichtverlauf (lineares statt sRGB-Schattieren). Die
+  Tabelle steht in `app/ui/render/CLAUDE.md`. **Offen ist die Entscheidung**
+  (Robert): Erst danach fallen PyVista und PyVistaQt aus den Abhängigkeiten
+  — oder pygfx wieder heraus —, und VTK darf auf 9.7.0. Bis dahin bleibt VTK
+  die Vorgabe. Nicht gemessen: Speicher über Fenster- und Sprachwechsel und
+  die kopierten Bytes je Szene; beides braucht einen Prüfstand, der das
+  Fenster mehrfach baut.
 - [ ] **Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista**
   (`.claude/.state/steuerung-2026-09-03/fahre_steuerung.py`,
   `.claude/.state/drehpunkt-2026-09-04/fahre_drehpunkt.py`, 05.09.2026): Sie

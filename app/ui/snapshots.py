@@ -2,8 +2,9 @@
 
 Ein bildfähiges Modell bekommt neben dem Steckbrief zwei gerenderte Ansichten:
 schräg von oben und von oben. Sie entstehen ohne Fenster im eigenen Renderer
-(:mod:`app.ui.render.vtk_renderer`), damit sie auch dann kommen, wenn das
-Fenster gerade etwas anderes zeigt.
+(über :func:`app.ui.render.choice.make_renderer`, also im selben, den die
+Ansicht zeichnet), damit sie auch dann kommen, wenn das Fenster gerade etwas
+anderes zeigt.
 
 Kurzlebig ist Absicht: VTK-Objekte, die jemand über ihr Fenster hinaus
 festhält, reißen den Abriss am Prozessende mit — der Renderer wird im
@@ -31,12 +32,12 @@ def scene_views(scene: Scene) -> tuple[tuple[str, bytes], ...]:
     """Zwei PNG-Ansichten der Szene mit Beschriftung — oder nichts bei leerer Szene."""
     import numpy as np
 
-    from app.ui.render.vtk_renderer import VtkRenderer
+    from app.ui.render.choice import make_renderer
 
     if not scene.objects:
         return ()
 
-    view = VtkRenderer(offscreen=True, size=VIEW_SIZE)
+    view = make_renderer(offscreen=True, size=VIEW_SIZE)
     try:
         bounds: list[tuple[float, float, float, float, float, float]] = []
         for object_id, entry in scene.objects.items():

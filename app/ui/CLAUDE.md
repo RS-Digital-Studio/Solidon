@@ -79,8 +79,9 @@ die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 **Ansicht**
 
 `viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `render/` (die Renderer
-hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, VTK direkt,
-Kameraführung, Formen, Bewegungsgriff) · `overlay.py` (Zonen über der
+hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, VTK direkt und
+pygfx über wgpu, die Wahl in `choice.py`, Kameraführung, Formen,
+Bewegungsgriff) · `overlay.py` (Zonen über der
 Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des

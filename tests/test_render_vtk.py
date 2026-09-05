@@ -1,9 +1,14 @@
-"""Der VTK-Renderer hinter der 3D-Ansicht, gemessen am Bild (§18, §35).
+"""Die Renderer hinter der 3D-Ansicht, gemessen am Bild (§18, §35).
 
-Kein Fenster, keine Attrappe: Jeder Test baut den Renderer ohne Fenster auf,
+Kein Fenster, keine Attrappe: Jeder Test baut einen Renderer ohne Fenster auf,
 stellt etwas hinein und liest Bildpunkte oder Picks zurück. Was hier grün
-ist, hat VTK wirklich gezeichnet — die Fensterseite (Qt-Widget, Zeiger)
-prüft ``test_ui.py`` am gebauten Fenster.
+ist, hat VTK beziehungsweise pygfx wirklich gezeichnet — die Fensterseite
+(Qt-Widget, Zeiger) prüft ``test_ui.py`` am gebauten Fenster.
+
+**Jeder Test läuft über beide Renderer** (``BACKENDS``): Der Vertrag ist erst
+dann einer, wenn dasselbe Bild auf beiden entsteht. Fehlt pygfx ein
+wgpu-Adapter (eine CI ohne Grafikkarte), fällt dieser Zweig als Skip aus,
+nicht still — der Grund steht am Skip.
 """
 
 from __future__ import annotations
@@ -18,6 +23,7 @@ from app.ui.render.api import (
     CameraPose,
     CellColours,
     LabelStyle,
+    Renderer,
     SurfaceStyle,
     hex_of,
     rgb,
@@ -27,6 +33,46 @@ from app.ui.render.vtk_renderer import VtkRenderer
 SIZE = (400, 300)
 BACKGROUND = "#101418"
 BACKGROUND_RGB = tuple(round(part * 255) for part in rgb(BACKGROUND))
+
+#: Wie weit ein gemessener Bildpunkt von der Sollfarbe abweichen darf. pygfx
+#: rechnet in linearem Licht und zurück; das kostet je Kanal eine Stufe.
+COLOUR_SLACK = 2
+
+
+def _gfx_missing() -> str | None:
+    """Warum der pygfx-Zweig hier nicht laufen kann — oder ``None``."""
+    try:
+        import wgpu
+
+        adapter = wgpu.gpu.request_adapter_sync(power_preference="high-performance")
+    except Exception as problem:  # kein Paket, kein Treiber, kein Adapter
+        return str(problem) or type(problem).__name__
+    return None if adapter is not None else "kein wgpu-Adapter"
+
+
+GFX_MISSING = _gfx_missing()
+BACKENDS = [
+    "vtk",
+    pytest.param(
+        "gfx", marks=pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
+    ),
+]
+
+
+def make_renderer(backend: str, size: tuple[int, int] = SIZE) -> Renderer:
+    """Ein Renderer ohne Fenster — VTK oder pygfx, nach Namen."""
+    if backend == "gfx":
+        from app.ui.render.gfx_renderer import GfxRenderer
+
+        return GfxRenderer(offscreen=True, size=size)
+    return VtkRenderer(offscreen=True, size=size)
+
+
+def same(pixel: np.ndarray, expected: tuple[int, ...], slack: int = COLOUR_SLACK) -> bool:
+    """Ob ein Bildpunkt die Farbe trägt — bis auf die Stufe, die Gamma kostet."""
+    return all(
+        abs(int(have) - int(want)) <= slack for have, want in zip(pixel, expected, strict=True)
+    )
 
 
 def cube(edge: float = 20.0, origin: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> tuple:
@@ -67,9 +113,9 @@ def bright(image: np.ndarray, threshold: int = 100) -> np.ndarray:
     return image.sum(axis=2) > threshold
 
 
-@pytest.fixture
-def renderer() -> Iterator[VtkRenderer]:
-    view = VtkRenderer(offscreen=True, size=SIZE)
+@pytest.fixture(params=BACKENDS)
+def renderer(request: pytest.FixtureRequest) -> Iterator[Renderer]:
+    view = make_renderer(request.param)
     view.set_background(BACKGROUND)
     try:
         yield view
@@ -77,7 +123,7 @@ def renderer() -> Iterator[VtkRenderer]:
         view.close()
 
 
-def look_down(view: VtkRenderer, bounds: tuple) -> None:
+def look_down(view: Renderer, bounds: tuple) -> None:
     """Die Kamera senkrecht von oben auf einen Quader, mit Qt-Oben nach +y."""
     centre = ((bounds[0] + bounds[1]) / 2, (bounds[2] + bounds[3]) / 2, bounds[5])
     view.set_camera_pose(
@@ -87,7 +133,7 @@ def look_down(view: VtkRenderer, bounds: tuple) -> None:
 
 
 def test_a_surface_is_drawn_where_the_camera_looks_and_nowhere_else(
-    renderer: VtkRenderer,
+    renderer: Renderer,
 ) -> None:
     vertices, faces = cube()
     body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle(colour="#b9c4d0"))
@@ -95,13 +141,13 @@ def test_a_surface_is_drawn_where_the_camera_looks_and_nowhere_else(
     renderer.reset_camera(body.bounds())
     image = renderer.screenshot()
     assert image.shape == (SIZE[1], SIZE[0], 3) and image.dtype == np.uint8
-    assert tuple(image[5, 5]) == BACKGROUND_RGB, "die Ecke zeigt den Hintergrund"
+    assert same(image[5, 5], BACKGROUND_RGB), "die Ecke zeigt den Hintergrund"
     assert image[150, 200].sum() > sum(BACKGROUND_RGB) + 60, "die Mitte zeigt den Körper"
     assert renderer.background() == BACKGROUND
 
 
 def test_a_pick_in_the_middle_hits_the_body_and_a_pick_beside_it_hits_nothing(
-    renderer: VtkRenderer,
+    renderer: Renderer,
 ) -> None:
     vertices, faces = cube()
     body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
@@ -119,7 +165,7 @@ def test_a_pick_in_the_middle_hits_the_body_and_a_pick_beside_it_hits_nothing(
     assert renderer.pick_item(3, 3) is None
 
 
-def test_the_pick_list_decides_who_may_be_hit(renderer: VtkRenderer) -> None:
+def test_the_pick_list_decides_who_may_be_hit(renderer: Renderer) -> None:
     """Eine Platte vor dem Würfel fängt jeden Klick — außer sie steht nicht
     auf der Liste. Genau so hält der Bewegungsgriff seine Pfeile aus der
     Auswahl heraus (§18.11)."""
@@ -136,16 +182,16 @@ def test_the_pick_list_decides_who_may_be_hit(renderer: VtkRenderer) -> None:
     assert listed is not None and listed.item is body
 
 
-def test_visibility_colour_and_opacity_reach_the_pixels(renderer: VtkRenderer) -> None:
+def test_visibility_colour_and_opacity_reach_the_pixels(renderer: Renderer) -> None:
     vertices, faces = plate(z=0.0)
     body = renderer.add_surface(
         vertices, faces, name="plate", style=SurfaceStyle(colour="#ffffff", lighting=False)
     )
     look_down(renderer, body.bounds())
-    assert tuple(renderer.screenshot()[150, 200]) == (255, 255, 255)
+    assert same(renderer.screenshot()[150, 200], (255, 255, 255))
     body.set_colour("#ff0000")
     assert body.colour() == "#ff0000"
-    assert tuple(renderer.screenshot()[150, 200]) == (255, 0, 0)
+    assert same(renderer.screenshot()[150, 200], (255, 0, 0))
     body.set_opacity(0.5)
     blended = renderer.screenshot()[150, 200]
     assert 100 < blended[0] < 200 and blended[1] < 30, (
@@ -153,13 +199,13 @@ def test_visibility_colour_and_opacity_reach_the_pixels(renderer: VtkRenderer) -
     )
     body.set_visible(False)
     assert not body.visible()
-    assert tuple(renderer.screenshot()[150, 200]) == BACKGROUND_RGB
+    assert same(renderer.screenshot()[150, 200], BACKGROUND_RGB)
     body.set_visible(True)
     renderer.remove(body)
-    assert tuple(renderer.screenshot()[150, 200]) == BACKGROUND_RGB
+    assert same(renderer.screenshot()[150, 200], BACKGROUND_RGB)
 
 
-def test_display_coordinates_count_like_qt_from_the_top_left(renderer: VtkRenderer) -> None:
+def test_display_coordinates_count_like_qt_from_the_top_left(renderer: Renderer) -> None:
     """Ein Punkt, der in der Welt oben liegt, hat im Bild die kleinere y-Zahl —
     Qt-Zählung, nicht VTKs. Und der Weg zurück trifft denselben Weltpunkt."""
     vertices, faces = plate(z=0.0)
@@ -178,7 +224,7 @@ def test_display_coordinates_count_like_qt_from_the_top_left(renderer: VtkRender
     assert 0.0 < renderer.focal_depth() < 1.0
 
 
-def test_the_image_is_stored_top_down(renderer: VtkRenderer) -> None:
+def test_the_image_is_stored_top_down(renderer: Renderer) -> None:
     """Eine Platte in der oberen Bildhälfte liegt in den ersten Zeilen des
     Feldes — VTK legt sein Bild von unten ab, das Bild hier beginnt oben."""
     vertices, faces = plate(z=0.0)
@@ -196,7 +242,7 @@ def test_the_image_is_stored_top_down(renderer: VtkRenderer) -> None:
     assert lower > 0 and upper == 0, (upper, lower)
 
 
-def test_cell_colours_categorical_and_mapped(renderer: VtkRenderer) -> None:
+def test_cell_colours_categorical_and_mapped(renderer: Renderer) -> None:
     vertices, faces = plate(z=0.0)
     slots = renderer.add_surface(
         vertices,
@@ -212,8 +258,8 @@ def test_cell_colours_categorical_and_mapped(renderer: VtkRenderer) -> None:
     # Dreieck 0 liegt unten rechts (0,0)-(40,0)-(40,40), Dreieck 1 oben links.
     lower_right = image[int(SIZE[1] * 0.6), int(SIZE[0] * 0.6)]
     upper_left = image[int(SIZE[1] * 0.4), int(SIZE[0] * 0.4)]
-    assert tuple(lower_right) == (0, 255, 0)
-    assert tuple(upper_left) == (0, 0, 255)
+    assert same(lower_right, (0, 255, 0))
+    assert same(upper_left, (0, 0, 255))
     renderer.remove(slots)
 
     graded = renderer.add_surface(
@@ -227,8 +273,8 @@ def test_cell_colours_categorical_and_mapped(renderer: VtkRenderer) -> None:
     )
     look_down(renderer, graded.bounds())
     image = renderer.screenshot()
-    assert tuple(image[int(SIZE[1] * 0.6), int(SIZE[0] * 0.6)]) == (0, 0, 0)
-    assert tuple(image[int(SIZE[1] * 0.4), int(SIZE[0] * 0.4)]) == (255, 255, 255)
+    assert same(image[int(SIZE[1] * 0.6), int(SIZE[0] * 0.6)], (0, 0, 0))
+    assert same(image[int(SIZE[1] * 0.4), int(SIZE[0] * 0.4)], (255, 255, 255))
     renderer.remove(graded)
 
     direct = renderer.add_surface(
@@ -240,11 +286,11 @@ def test_cell_colours_categorical_and_mapped(renderer: VtkRenderer) -> None:
     )
     look_down(renderer, direct.bounds())
     image = renderer.screenshot()
-    assert tuple(image[int(SIZE[1] * 0.6), int(SIZE[0] * 0.6)]) == (255, 0, 0)
-    assert tuple(image[int(SIZE[1] * 0.4), int(SIZE[0] * 0.4)]) == (255, 255, 0)
+    assert same(image[int(SIZE[1] * 0.6), int(SIZE[0] * 0.6)], (255, 0, 0))
+    assert same(image[int(SIZE[1] * 0.4), int(SIZE[0] * 0.4)], (255, 255, 0))
 
 
-def test_labels_are_drawn_in_the_overlay_and_follow_their_anchors(renderer: VtkRenderer) -> None:
+def test_labels_are_drawn_in_the_overlay_and_follow_their_anchors(renderer: Renderer) -> None:
     labels = renderer.add_labels(
         np.array([[20.0, 20.0, 42.0]]),
         ["Mitte"],
@@ -264,7 +310,7 @@ def test_labels_are_drawn_in_the_overlay_and_follow_their_anchors(renderer: VtkR
     assert bright(renderer.screenshot()).sum() == 0
 
 
-def test_a_line_kept_in_front_stays_visible_inside_a_body(renderer: VtkRenderer) -> None:
+def test_a_line_kept_in_front_stays_visible_inside_a_body(renderer: Renderer) -> None:
     """Ein Maß läuft durch das Material — und war dort weg (Robert,
     03.09.2026). ``keep_in_front`` holt es nach vorn, ohne den Körper zu
     verändern."""
@@ -290,7 +336,7 @@ def test_a_line_kept_in_front_stays_visible_inside_a_body(renderer: VtkRenderer)
     assert with_front[0] > 200 and with_front[1] > 200 and with_front[2] < 80, with_front
 
 
-def test_points_are_drawn_as_dots_of_screen_size(renderer: VtkRenderer) -> None:
+def test_points_are_drawn_as_dots_of_screen_size(renderer: Renderer) -> None:
     dots = renderer.add_points(
         np.array([[20.0, 20.0, 0.0]]), name="dots", colour="#ff00ff", size=12.0
     )
@@ -300,11 +346,11 @@ def test_points_are_drawn_as_dots_of_screen_size(renderer: VtkRenderer) -> None:
     dots.set_colour("#00ff00")
     image = renderer.screenshot()
     x, y, _depth = renderer.world_to_display((20.0, 20.0, 0.0))
-    assert tuple(image[round(y), round(x)]) == (0, 255, 0)
+    assert same(image[round(y), round(x)], (0, 255, 0))
 
 
 def test_translucent_bodies_blend_the_same_whichever_order_they_were_added(
-    renderer: VtkRenderer,
+    renderer: Renderer,
 ) -> None:
     """Zwei durchscheinende Körper hintereinander mischen sich reihenfolge-
     unabhängig — gemessen an VTK 9.6.2, ohne Fenster wie mit PyVista.
@@ -336,16 +382,18 @@ def test_translucent_bodies_blend_the_same_whichever_order_they_were_added(
     renderer.set_draw_order([far, near])
     second = renderer.screenshot()
     assert int((first != second).any(axis=2).sum()) == 0, "die Reihenfolge ändert nichts"
-    # Die Reihenfolge selbst kommt trotzdem an — als Reihenfolge der Props.
-    props = list(renderer.renderer.GetViewProps())
-    assert [props.index(item.actor) for item in (far, near)] == sorted(
-        props.index(item.actor) for item in (far, near)
-    )
+    # Die Reihenfolge selbst kommt trotzdem an — bei VTK als Reihenfolge der
+    # Props; pygfx sortiert Durchscheinendes selbst von hinten nach vorn.
+    if isinstance(renderer, VtkRenderer):
+        props = list(renderer.renderer.GetViewProps())
+        assert [props.index(item.actor) for item in (far, near)] == sorted(
+            props.index(item.actor) for item in (far, near)
+        )
     centre = first[150, 200].astype(int)
     assert centre[0] > 60 and centre[2] > 60 and centre[1] < 30, centre
 
 
-def test_moving_a_body_moves_bounds_pick_and_pixels(renderer: VtkRenderer) -> None:
+def test_moving_a_body_moves_bounds_pick_and_pixels(renderer: Renderer) -> None:
     vertices, faces = cube()
     body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
     look_down(renderer, (-30.0, 50.0, -30.0, 50.0, 0.0, 20.0))
@@ -379,7 +427,7 @@ def test_moving_a_body_moves_bounds_pick_and_pixels(renderer: VtkRenderer) -> No
         body.update_points(vertices[:4])
 
 
-def test_camera_pose_projection_and_dolly(renderer: VtkRenderer) -> None:
+def test_camera_pose_projection_and_dolly(renderer: Renderer) -> None:
     vertices, faces = cube()
     body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
     pose = CameraPose((100.0, -100.0, 80.0), (10.0, 10.0, 10.0), (0.0, 0.0, 1.0))
@@ -407,7 +455,7 @@ def test_camera_pose_projection_and_dolly(renderer: VtkRenderer) -> None:
 
 
 def test_quality_switches_and_the_axes_marker_survive_without_a_window(
-    renderer: VtkRenderer,
+    renderer: Renderer,
 ) -> None:
     """FXAA und SSAO laufen ohne Fenster durch; das Achsenkreuz braucht einen
     Interactor und bleibt ohne Fenster still — kein Absturz, kein Bild."""
@@ -437,7 +485,8 @@ def test_colours_travel_as_hex_in_both_directions() -> None:
         rgb("#12345")
 
 
-def test_labels_render_in_a_fresh_interpreter() -> None:
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_labels_render_in_a_fresh_interpreter(backend: str) -> None:
     """Beschriftungen zeichnen auch in einem Interpreter, der nur den Renderer
     holt — so, wie die Anwendung ohne PyVista starten wird.
 
@@ -449,12 +498,16 @@ def test_labels_render_in_a_fresh_interpreter() -> None:
     import sys
     from pathlib import Path
 
+    module, name = {
+        "vtk": ("vtk_renderer", "VtkRenderer"),
+        "gfx": ("gfx_renderer", "GfxRenderer"),
+    }[backend]
     script = "\n".join(
         [
             "import numpy as np",
             "from app.ui.render.api import CameraPose, LabelStyle",
-            "from app.ui.render.vtk_renderer import VtkRenderer",
-            "view = VtkRenderer(offscreen=True, size=(200, 150))",
+            f"from app.ui.render.{module} import {name}",
+            f"view = {name}(offscreen=True, size=(200, 150))",
             "view.set_background('#000000')",
             "view.add_labels(np.array([[0.0, 0.0, 0.0]]), ['Mitte'], name='l', "
             "style=LabelStyle(font_size=18))",
@@ -476,18 +529,18 @@ def test_labels_render_in_a_fresh_interpreter() -> None:
     assert int(done.stdout.strip().splitlines()[-1]) > 50, done.stdout
 
 
-def test_a_gradient_background_runs_from_bottom_to_top(renderer: VtkRenderer) -> None:
+def test_a_gradient_background_runs_from_bottom_to_top(renderer: Renderer) -> None:
     renderer.set_background("#000000", top="#ffffff")
     image = renderer.screenshot()
     assert image[5, 200].sum() > image[-6, 200].sum() + 300, "oben hell, unten dunkel"
     assert renderer.background() == "#000000", "gemeldet wird die untere Farbe"
     renderer.set_background(BACKGROUND)
     image = renderer.screenshot()
-    assert tuple(image[5, 200]) == BACKGROUND_RGB and tuple(image[-6, 200]) == BACKGROUND_RGB
+    assert same(image[5, 200], BACKGROUND_RGB) and tuple(image[-6, 200]) == BACKGROUND_RGB
 
 
 def test_the_headlight_brightens_the_faces_that_look_at_the_camera(
-    renderer: VtkRenderer,
+    renderer: Renderer,
 ) -> None:
     """Das Frontlicht ist das eine Licht aus Kamerarichtung (`ansicht.md`,
     „Zwei Werte hängen am Thema"); seine Stärke muss im Bild ankommen —
@@ -503,7 +556,7 @@ def test_the_headlight_brightens_the_faces_that_look_at_the_camera(
     assert lit > dim + 60, (dim, lit)
 
 
-def test_polylines_chain_exactly_the_points_they_are_told_to(renderer: VtkRenderer) -> None:
+def test_polylines_chain_exactly_the_points_they_are_told_to(renderer: Renderer) -> None:
     """Eine Skizzenkurve ist eine Kette, ein Raster sind Paare — `polylines`
     sagt je Kette, wie viele Punkte sie hat, und dazwischen wird nichts
     verbunden."""
@@ -530,7 +583,7 @@ def test_polylines_chain_exactly_the_points_they_are_told_to(renderer: VtkRender
     assert not lit((25.0, 20.0, 0.0)), "zwischen Kette und Paar liegt nichts"
 
 
-def test_backfaces_take_their_own_colour_opacity_or_vanish(renderer: VtkRenderer) -> None:
+def test_backfaces_take_their_own_colour_opacity_or_vanish(renderer: Renderer) -> None:
     """Eine Bohrungsmarkierung zeigt ihre Innenwand von beiden Öffnungen
     durchscheinend (`ansicht.md`); die Druckplatte wirft ihre Rückseite weg,
     damit man von unten hindurchsieht."""
@@ -544,7 +597,7 @@ def test_backfaces_take_their_own_colour_opacity_or_vanish(renderer: VtkRenderer
         ),
     )
     look_down(renderer, body.bounds())
-    assert tuple(renderer.screenshot()[150, 200]) == (255, 255, 255), "von oben die Vorderseite"
+    assert same(renderer.screenshot()[150, 200], (255, 255, 255)), "von oben die Vorderseite"
     renderer.set_camera_pose(CameraPose((20.0, 20.0, -200.0), (20.0, 20.0, 0.0), (0.0, 1.0, 0.0)))
     renderer.reset_camera(body.bounds())
     below = renderer.screenshot()[150, 200].astype(int)
@@ -559,10 +612,10 @@ def test_backfaces_take_their_own_colour_opacity_or_vanish(renderer: VtkRenderer
         style=SurfaceStyle(colour="#ffffff", lighting=False, cull_backfaces=True),
     )
     renderer.reset_camera(culled.bounds())
-    assert tuple(renderer.screenshot()[150, 200]) == BACKGROUND_RGB, "die Rückseite ist weg"
+    assert same(renderer.screenshot()[150, 200], BACKGROUND_RGB), "die Rückseite ist weg"
 
 
-def test_a_label_background_grows_with_its_margin(renderer: VtkRenderer) -> None:
+def test_a_label_background_grows_with_its_margin(renderer: Renderer) -> None:
     def red_area(margin: int) -> int:
         labels = renderer.add_labels(
             np.array([[20.0, 20.0, 0.0]]),
@@ -583,7 +636,7 @@ def test_a_label_background_grows_with_its_margin(renderer: VtkRenderer) -> None
     assert wide > tight * 1.3, (tight, wide)
 
 
-def test_what_is_drawn_in_front_is_picked_in_front(renderer: VtkRenderer) -> None:
+def test_what_is_drawn_in_front_is_picked_in_front(renderer: Renderer) -> None:
     """Der Skalierwürfel an einem würfelförmigen Körper liegt in dessen
     Hüllquader; ``keep_in_front`` zeichnet ihn davor, und der Zeiger muss ihn
     dort auch finden — der Zell-Picker allein sähe zuerst die Körperfläche."""
@@ -600,7 +653,7 @@ def test_what_is_drawn_in_front_is_picked_in_front(renderer: VtkRenderer) -> Non
     look_down(renderer, (0.0, 20.0, 0.0, 20.0, 0.0, 20.0))
     renderer.render()
     x, y, _depth = renderer.world_to_display((10.0, 10.0, 15.0))
-    assert tuple(renderer.screenshot()[round(y), round(x)]) == (0, 192, 255), "im Bild vorn"
+    assert same(renderer.screenshot()[round(y), round(x)], (0, 192, 255)), "im Bild vorn"
     assert renderer.pick_item(x, y) is grip, "und deshalb auch beim Picken vorn"
     grip.set_visible(False)
     assert renderer.pick_item(x, y) is body
