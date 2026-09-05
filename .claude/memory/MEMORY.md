@@ -31,6 +31,7 @@
 
 - [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — muss der Kunde raten, ist es falsch.
 - [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) — die letzten acht Jahre müssen laufen, ältere Karten sind kein Kriterium (Robert, 05.09.2026).
+- [Plattformen gleich](plattformen-funktionieren-gleich.md) — was Windows kann, können Mac und Linux; eine Lücke ist ein Registerpunkt, keine Entscheidung im Docstring.
 - [Fehlerzählung ist kein Nutzen](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) — zwölf behobene Knöpfe sagen dem Kunden, dass zwölf kaputt waren.
 - [Kundentexte sagen Version](kundentexte-sagen-version.md) — nicht „Fassung“; intern darf es bleiben.
 - [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — sieben Merkmale; Rückspiegeln ist eines.
@@ -51,6 +52,7 @@
 ## Produkt und Entscheidungen
 
 - [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) — SKÅDIS-Kunde, maß die Platte selbst; sein Mac-Bericht steht aus.
+- [Ralph W. Dietrich](ralph-dietrich-mac-kunde-3d-maus.md) — Mac-Zahntechniker, Anlass der 3D-Maus; sein Bericht ist die Feldmessung für Treiberweg und Update-Hinweis.
 - [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) — vier Wege, eine Szene, ehrliche Übergabe.
 - [Technische Produktreife](technische-produktreife-konzept.md) — Qualitätsvertrag, messbare KI, Updates.
 - [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker und Einmalkauf bleiben der Kurs.
