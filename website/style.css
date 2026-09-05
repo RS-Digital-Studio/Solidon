@@ -639,7 +639,7 @@ nav.lang a.cta:hover {
 .turn-hint {
   margin: 0.6rem 0 0;
   font-size: var(--t-sm);
-  color: var(--ink-quiet, #9aa4b2);
+  color: var(--muted);
   text-align: center;
   transition: opacity 0.2s ease;
 }
@@ -664,7 +664,7 @@ nav.lang a.cta:hover {
 
 .dial label {
   font-size: var(--t-md);
-  color: var(--ink-quiet, #9aa4b2);
+  color: var(--muted);
   white-space: nowrap;
 }
 
@@ -2337,6 +2337,15 @@ table.req td:first-child {
   white-space: nowrap;
 }
 
+/* Unter 30 rem bricht auch die erste Spalte um: Bei 390 px erzwang „nowrap"
+   zusammen mit dem Mindestinhalt der zweiten Spalte eine Tabelle, die breiter
+   war als die Seite, und `overflow-x: clip` schnitt den Rest ab, statt ihn
+   erreichbar zu machen (Gesamtreview 05.09.2026, R29). */
+@media (max-width: 30rem) {
+  table.req td:first-child { white-space: normal; }
+  table.req td { padding-right: 0.5rem; }
+}
+
 /* ── Fragen ────────────────────────────────────────────────────────────── */
 
 .faq {
@@ -2823,7 +2832,7 @@ a { color: var(--accent); }
 }
 
 @keyframes draw {
-  from { stroke-dashoffset: var(--len, 300); }
+  from { stroke-dashoffset: 300; }
   to { stroke-dashoffset: 0; }
 }
 
@@ -3463,7 +3472,7 @@ p.footnote {
 
 .schau figcaption b {
   display: block;
-  color: var(--ink);
+  color: var(--fg);
   font-weight: 600;
 }
 
@@ -3509,7 +3518,7 @@ p.footnote {
   color: var(--muted);
 }
 
-.weg figcaption b { color: var(--ink); }
+.weg figcaption b { color: var(--fg); }
 
 .wrap > .hero-text {
   padding-top: clamp(2rem, 6vw, 4.5rem);
@@ -3524,7 +3533,7 @@ p.footnote {
   line-height: 1.5;
 }
 
-.hero-safety b { color: var(--ink); }
+.hero-safety b { color: var(--fg); }
 @media (prefers-color-scheme: dark) {
   .schau img,
   .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
@@ -3624,7 +3633,7 @@ p.footnote {
   color: var(--muted);
 }
 
-.beleg figcaption b { color: var(--ink); }
+.beleg figcaption b { color: var(--fg); }
 
 /* Die Dateiliste im Download-Kasten. Sie erscheint erst, wenn
    tools/make_download.py Pakete eingetragen hat — vorher steht dort die
@@ -3651,7 +3660,7 @@ p.footnote {
   border: 1px solid var(--line);
   border-radius: var(--r-xl);
   background: var(--card);
-  color: var(--text);
+  color: var(--fg);
   padding: 1.4rem 1.5rem 1.2rem;
   max-width: 27rem;
   width: calc(100% - 2rem);

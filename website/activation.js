@@ -338,6 +338,9 @@
   text.addEventListener("input", () => {
     resetResult();
     file.value = "";
+    // Die abgelehnte Datei ist weg — ihre Fehlermeldung muss es auch sein,
+    // sonst hält die Formularprüfung den Knopf an, der längst wieder geht.
+    file.setCustomValidity("");
     selectedFilename = "";
     updateFileName();
     updateSubmit();

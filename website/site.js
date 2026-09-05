@@ -201,6 +201,27 @@
   }
 })();
 
+/* Das System zuerst. Der Download-Kasten darunter liest `data-os`, und bis
+   zum 05.09.2026 stand diese Erkennung vierhundert Zeilen weiter unten: Beim
+   normalen Seitenaufruf lief `arrive()` sofort, `data-os` war noch leer, und
+   die Windows-Vorlage blieb auf jedem System vorn (Gesamtreview, R27). */
+(() => {
+  try {
+    const hint = navigator.userAgentData && navigator.userAgentData.platform;
+    const mark = String(hint || navigator.platform || navigator.userAgent || "").toLowerCase();
+    const agent = String(navigator.userAgent || "").toLowerCase();
+    let system = "";
+    if (!/android|iphone|ipad|ipod/.test(agent)) {
+      if (mark.includes("win")) system = "windows";
+      else if (mark.includes("mac") || mark.includes("darwin")) system = "macos";
+      else if (mark.includes("linux") || mark.includes("x11")) system = "linux";
+    }
+    if (system) document.documentElement.dataset.os = system;
+  } catch (problem) {
+    console.warn("site.js: das System bleibt unerkannt —", problem);
+  }
+})();
+
 /* Der Wechsel vom Warten zum Laden.
  *
  * Um achtzehn Uhr blendete sich bisher nur der Zähler aus — die Überschrift
@@ -629,13 +650,12 @@
             entry.target.pause();
             continue;
           }
-          /* **Erst wenn es wirklich läuft, verschwindet die Leiste.** Ein
-             Browser darf das Abspielen verweigern, und dann stünde der
-             Besucher sonst vor einem Standbild ohne Knopf. */
-          entry.target
-            .play()
-            .then(() => entry.target.removeAttribute("controls"))
-            .catch(() => {});
+          /* **Die Leiste bleibt.** Sie ist die einzige Pause für einen Loop, der
+             zwölf Sekunden lang neben dem Text läuft (WCAG 2.2.2); bis zum
+             05.09.2026 nahm das Skript sie nach dem ersten Abspielen weg
+             (Gesamtreview, R28). Ein Browser darf das Abspielen verweigern —
+             dann steht der Besucher vor einem Standbild mit Knopf. */
+          entry.target.play().catch(() => {});
         }
       },
       { rootMargin: "120px" }
@@ -689,23 +709,6 @@
     }
   } catch (problem) {
     console.warn("site.js: das mobile Kopfmenü bleibt offen —", problem);
-  }
-})();
-
-(() => {
-  try {
-    const hint = navigator.userAgentData && navigator.userAgentData.platform;
-    const mark = String(hint || navigator.platform || navigator.userAgent || "").toLowerCase();
-    const agent = String(navigator.userAgent || "").toLowerCase();
-    let system = "";
-    if (!/android|iphone|ipad|ipod/.test(agent)) {
-      if (mark.includes("win")) system = "windows";
-      else if (mark.includes("mac") || mark.includes("darwin")) system = "macos";
-      else if (mark.includes("linux") || mark.includes("x11")) system = "linux";
-    }
-    if (system) document.documentElement.dataset.os = system;
-  } catch (problem) {
-    console.warn("site.js: das System bleibt unerkannt —", problem);
   }
 })();
 

@@ -2237,3 +2237,78 @@ def test_the_pages_promise_only_feature_kinds_that_carry_the_action() -> None:
         carried = {spec.name for spec in REGISTRY.for_feature(kind)}
         missing = sorted(set(actions) - carried)
         assert not missing, f"für „{kind}“ fehlt {missing} — die Seiten versprechen es trotzdem"
+
+
+def test_typing_a_request_clears_the_rejected_file_choice() -> None:
+    """Gesamtreview 05.09.2026, B-12: Eine zu große Datei setzte am Dateifeld
+    einen Gültigkeitsfehler; der Texteingabeweg leerte die Dateiwahl, ließ den
+    Fehler aber stehen — der Knopf ging, die Formularprüfung hielt ihn an, und
+    keine Anfrage ging hinaus."""
+    script = (WEBSITE / "activation.js").read_text(encoding="utf-8")
+
+    handler = script.split('text.addEventListener("input", () =>', 1)[1].split("});", 1)[0]
+    assert 'file.value = "";' in handler
+    assert 'file.setCustomValidity("");' in handler, "die alte Ablehnung geht mit der Datei"
+
+
+def test_the_system_is_recognised_before_the_download_shelf_reads_it() -> None:
+    """Gesamtreview 05.09.2026, R27: Beim normalen Seitenaufruf lief
+    ``arrive()`` sofort, die Erkennung des Systems stand vierhundert Zeilen
+    weiter unten — ``data-os`` war leer, die Windows-Vorlage blieb auf jedem
+    System vorn, und der direkte Download im Hauptknopf kam nie zustande."""
+    script = (WEBSITE / "site.js").read_text(encoding="utf-8")
+
+    assert script.index("dataset.os = system") < script.index("const page = document.body;"), (
+        "die Erkennung steht vor ihrem ersten Leser"
+    )
+
+
+def test_every_autoplaying_loop_keeps_its_native_controls() -> None:
+    """Gesamtreview 05.09.2026, R28: Sobald ein Wegevideo lief, nahm das
+    Skript seine Bedienleiste weg — und einen anderen Pauseknopf gibt es nicht.
+    Ein Loop, der zwölf Sekunden neben dem Text läuft, braucht eine
+    (WCAG 2.2.2)."""
+    script = (WEBSITE / "site.js").read_text(encoding="utf-8")
+    assert 'removeAttribute("controls")' not in script
+
+    pages = [WEBSITE / "index.html", *sorted(WEBSITE.glob("*/index.html"))]
+    videos = [
+        (page.name, tag)
+        for page in pages
+        for tag in re.findall(r"<video\b[^>]*>", page.read_text(encoding="utf-8"), re.DOTALL)
+    ]
+    assert videos, "ohne Video prüft dieser Test nichts"
+    missing = [name for name, tag in videos if not re.search(r"\scontrols(\s|>)", tag)]
+    assert not missing, f"Videos ohne Bedienleiste: {missing}"
+
+
+def test_the_requirements_table_may_wrap_on_a_narrow_screen() -> None:
+    """Gesamtreview 05.09.2026, R29: Die erste Spalte durfte nie umbrechen;
+    bei 390 px wurde die Tabelle breiter als die Seite, und
+    ``overflow-x: clip`` schnitt Wortteile ab, ohne dass jemand scrollen
+    konnte."""
+    css = (WEBSITE / "style.css").read_text(encoding="utf-8")
+
+    rule = "table.req td:first-child { white-space: normal; }"
+    assert rule in css, "die erste Spalte darf schmal umbrechen"
+    position = css.index(rule)
+    media = css.rfind("@media (max-width: 30rem)", 0, position)
+    assert media != -1, "und zwar nur auf schmalen Bildschirmen"
+    inside = css[media:position]
+    assert inside.count("{") > inside.count("}"), "die Regel steht im Media-Block"
+
+
+def test_every_css_variable_the_stylesheet_uses_is_defined_in_it() -> None:
+    """Gesamtreview 05.09.2026, R32: ``--ink-quiet`` war nirgends definiert,
+    und der feste Ersatz ``#9aa4b2`` stand mit 2,3:1 auf dem hellen Papier.
+    Eine Variable ohne Definition fällt still auf ihren Ersatz zurück —
+    deshalb die Zusage für alle."""
+    css = (WEBSITE / "style.css").read_text(encoding="utf-8")
+
+    defined = set(re.findall(r"(--[a-z0-9-]+)\s*:", css))
+    # Auch mit Ersatzwert: ``var(--ink-quiet, #9aa4b2)`` war genau der Fall —
+    # die Variable gab es nie, und der Ersatz stand mit 2,3:1 auf dem Papier.
+    # Ein Ersatz, der immer gilt, ist eine Zahl und keine Variable.
+    used = set(re.findall(r"var\(\s*(--[a-z0-9-]+)", css))
+    assert used, "ohne Variablen prüft dieser Test nichts"
+    assert used <= defined, f"benutzt, aber nie definiert: {sorted(used - defined)}"
