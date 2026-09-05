@@ -474,3 +474,141 @@ def test_labels_render_in_a_fresh_interpreter() -> None:
     )
     assert done.returncode == 0, done.stderr[-800:]
     assert int(done.stdout.strip().splitlines()[-1]) > 50, done.stdout
+
+
+def test_a_gradient_background_runs_from_bottom_to_top(renderer: VtkRenderer) -> None:
+    renderer.set_background("#000000", top="#ffffff")
+    image = renderer.screenshot()
+    assert image[5, 200].sum() > image[-6, 200].sum() + 300, "oben hell, unten dunkel"
+    assert renderer.background() == "#000000", "gemeldet wird die untere Farbe"
+    renderer.set_background(BACKGROUND)
+    image = renderer.screenshot()
+    assert tuple(image[5, 200]) == BACKGROUND_RGB and tuple(image[-6, 200]) == BACKGROUND_RGB
+
+
+def test_the_headlight_brightens_the_faces_that_look_at_the_camera(
+    renderer: VtkRenderer,
+) -> None:
+    """Das Frontlicht ist das eine Licht aus Kamerarichtung (`ansicht.md`,
+    „Zwei Werte hängen am Thema"); seine Stärke muss im Bild ankommen —
+    auch dann, wenn VTK es noch gar nicht angelegt hat."""
+    vertices, faces = cube()
+    renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle(colour="#b9c4d0"))
+    renderer.set_camera_pose(CameraPose((60.0, -80.0, 50.0), (10.0, 10.0, 10.0), (0.0, 0.0, 1.0)))
+    renderer.reset_camera((0.0, 20.0, 0.0, 20.0, 0.0, 20.0))
+    renderer.set_headlight(0.2)
+    dim = int(renderer.screenshot()[150, 200].sum())
+    renderer.set_headlight(1.0)
+    lit = int(renderer.screenshot()[150, 200].sum())
+    assert lit > dim + 60, (dim, lit)
+
+
+def test_polylines_chain_exactly_the_points_they_are_told_to(renderer: VtkRenderer) -> None:
+    """Eine Skizzenkurve ist eine Kette, ein Raster sind Paare — `polylines`
+    sagt je Kette, wie viele Punkte sie hat, und dazwischen wird nichts
+    verbunden."""
+    points = np.array(
+        [
+            [0.0, 20.0, 0.0],
+            [20.0, 20.0, 0.0],
+            [20.0, 0.0, 0.0],
+            [30.0, 40.0, 0.0],
+            [40.0, 40.0, 0.0],
+        ]
+    )
+    renderer.add_lines(points, name="chains", colour="#ffff00", width=4, polylines=[3, 2])
+    look_down(renderer, (0.0, 40.0, 0.0, 40.0, 0.0, 1.0))
+    image = renderer.screenshot()
+
+    def lit(world: tuple[float, float, float]) -> bool:
+        x, y, _depth = renderer.world_to_display(world)
+        patch = image[round(y) - 2 : round(y) + 3, round(x) - 2 : round(x) + 3]
+        return bool((patch[:, :, 0] > 200).any() and (patch[:, :, 1] > 200).any())
+
+    assert lit((20.0, 10.0, 0.0)), "zweites Glied der Kette"
+    assert lit((35.0, 40.0, 0.0)), "das Paar dahinter"
+    assert not lit((25.0, 20.0, 0.0)), "zwischen Kette und Paar liegt nichts"
+
+
+def test_backfaces_take_their_own_colour_opacity_or_vanish(renderer: VtkRenderer) -> None:
+    """Eine Bohrungsmarkierung zeigt ihre Innenwand von beiden Öffnungen
+    durchscheinend (`ansicht.md`); die Druckplatte wirft ihre Rückseite weg,
+    damit man von unten hindurchsieht."""
+    vertices, faces = plate(z=0.0)
+    body = renderer.add_surface(
+        vertices,
+        faces,
+        name="plate",
+        style=SurfaceStyle(
+            colour="#ffffff", lighting=False, backface_colour="#ff0000", backface_opacity=0.4
+        ),
+    )
+    look_down(renderer, body.bounds())
+    assert tuple(renderer.screenshot()[150, 200]) == (255, 255, 255), "von oben die Vorderseite"
+    renderer.set_camera_pose(CameraPose((20.0, 20.0, -200.0), (20.0, 20.0, 0.0), (0.0, 1.0, 0.0)))
+    renderer.reset_camera(body.bounds())
+    below = renderer.screenshot()[150, 200].astype(int)
+    assert 60 < below[0] < 200 and below[1] < 40 and below[2] < 40, (
+        f"von unten die Rückseite, halb durchscheinend: {below}"
+    )
+    renderer.remove(body)
+    culled = renderer.add_surface(
+        vertices,
+        faces,
+        name="bed",
+        style=SurfaceStyle(colour="#ffffff", lighting=False, cull_backfaces=True),
+    )
+    renderer.reset_camera(culled.bounds())
+    assert tuple(renderer.screenshot()[150, 200]) == BACKGROUND_RGB, "die Rückseite ist weg"
+
+
+def test_a_label_background_grows_with_its_margin(renderer: VtkRenderer) -> None:
+    def red_area(margin: int) -> int:
+        labels = renderer.add_labels(
+            np.array([[20.0, 20.0, 0.0]]),
+            ["Maß"],
+            name="label",
+            style=LabelStyle(
+                text_colour="#ffffff", font_size=14, background="#ff0000", margin=margin
+            ),
+        )
+        look_down(renderer, (0.0, 40.0, 0.0, 40.0, 0.0, 1.0))
+        image = renderer.screenshot()
+        renderer.remove(labels)
+        return int(((image[:, :, 0] > 200) & (image[:, :, 1] < 80) & (image[:, :, 2] < 80)).sum())
+
+    tight = red_area(0)
+    wide = red_area(8)
+    assert tight > 0, "der Kasten zeichnet"
+    assert wide > tight * 1.3, (tight, wide)
+
+
+def test_what_is_drawn_in_front_is_picked_in_front(renderer: VtkRenderer) -> None:
+    """Der Skalierwürfel an einem würfelförmigen Körper liegt in dessen
+    Hüllquader; ``keep_in_front`` zeichnet ihn davor, und der Zeiger muss ihn
+    dort auch finden — der Zell-Picker allein sähe zuerst die Körperfläche."""
+    vertices, faces = cube()
+    body = renderer.add_surface(vertices, faces, name="body", style=SurfaceStyle())
+    inside_vertices, inside_faces = plate(z=15.0, size=4.0)
+    inside_vertices += np.array([8.0, 8.0, 0.0])
+    grip = renderer.add_surface(
+        inside_vertices,
+        inside_faces,
+        name="grip",
+        style=SurfaceStyle(colour="#00c0ff", lighting=False, keep_in_front=True),
+    )
+    look_down(renderer, (0.0, 20.0, 0.0, 20.0, 0.0, 20.0))
+    renderer.render()
+    x, y, _depth = renderer.world_to_display((10.0, 10.0, 15.0))
+    assert tuple(renderer.screenshot()[round(y), round(x)]) == (0, 192, 255), "im Bild vorn"
+    assert renderer.pick_item(x, y) is grip, "und deshalb auch beim Picken vorn"
+    grip.set_visible(False)
+    assert renderer.pick_item(x, y) is body
+    grip.set_visible(True)
+    renderer.remove(grip)
+    plain = renderer.add_surface(
+        inside_vertices, inside_faces, name="plain", style=SurfaceStyle(colour="#00c0ff")
+    )
+    renderer.render()
+    assert renderer.pick_item(x, y) is body, "ohne keep_in_front gewinnt die Fläche davor"
+    assert plain is not None

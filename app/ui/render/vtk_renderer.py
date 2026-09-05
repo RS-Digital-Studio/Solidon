@@ -17,6 +17,7 @@ Tests, die Bildpunkte messen statt Attrappen zu befragen.
 from __future__ import annotations
 
 import logging
+import math
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -50,6 +51,11 @@ _log = logging.getLogger(__name__)
 FRONT_OFFSET_UNITS = -66000.0
 FRONT_OFFSET_POLYGON_UNITS = -20000.0
 
+#: Wie weit neben einem Aktor der Zeiger ihn noch trifft, in Bildpunkten.
+#: VTK misst seine Toleranz als Bruchteil der Fensterdiagonale; dieselbe
+#: Zahl wäre am Laptop drei und am großen Schirm neunzehn Bildpunkte.
+PICK_SLACK_PIXELS = 4.0
+
 #: Einträge einer interpolierten Farbleiter (Analysekarten).
 LOOKUP_ENTRIES = 256
 
@@ -77,13 +83,20 @@ def _polydata(vertices: np.ndarray, faces: np.ndarray | None = None) -> Any:
     return data
 
 
-def _line_cells(count: int, connected: bool) -> Any:
-    """Die Linienzellen: je zwei Punkte ein Stück, oder eine Kette über alle."""
+def _line_cells(count: int, connected: bool, polylines: Sequence[int] | None = None) -> Any:
+    """Die Linienzellen: je zwei Punkte ein Stück, eine Kette über alle, oder
+    mehrere Ketten der Längen ``polylines`` hintereinander."""
     from vtkmodules.util.numpy_support import numpy_to_vtkIdTypeArray
     from vtkmodules.vtkCommonDataModel import vtkCellArray
 
     cells = vtkCellArray()
-    if connected:
+    if polylines is not None:
+        lengths = [int(length) for length in polylines if int(length) >= 2]
+        if sum(lengths) > count:
+            raise ValueError(f"{sum(lengths)} Kettenpunkte für {count} Punkte")
+        offsets = np.concatenate([[0], np.cumsum(lengths)]).astype(np.int64)
+        connectivity = np.arange(int(offsets[-1]), dtype=np.int64)
+    elif connected:
         offsets = np.array([0, count], dtype=np.int64)
         connectivity = np.arange(count, dtype=np.int64)
     else:
@@ -156,11 +169,15 @@ def _matrix_of(matrix: np.ndarray) -> Any:
 class VtkItem(Item):
     """Ein Aktor samt Mapper und Daten — der Griff des Viewports auf ihn."""
 
-    def __init__(self, name: str, actor: Any, mapper: Any, data: Any) -> None:
+    def __init__(
+        self, name: str, actor: Any, mapper: Any, data: Any, *, in_front: bool = False
+    ) -> None:
         self.name = name
         self.actor = actor
         self.mapper = mapper
         self.data = data
+        #: Vorn gezeichnet (Polygonversatz) — und deshalb auch vorn gepickt.
+        self.in_front = in_front
 
     def props(self) -> list[Any]:
         """Alle VTK-Props, die zum Griff gehören — für Hinzufügen und Entfernen."""
@@ -343,7 +360,7 @@ class VtkRenderer(Renderer):
 
         self._listeners: dict[int, Callable[[PointerEvent], None]] = {}
         self._next_token = 1
-        self._items: dict[str, Item] = {}
+        self._items: dict[str, VtkItem] = {}
         self._axes: Any = None
         self._axes_widget: Any = None
         self._axes_corner = (0.0, 0.0, 0.2, 0.2)
@@ -505,6 +522,8 @@ class VtkRenderer(Renderer):
             back = vtkProperty()
             back.DeepCopy(prop)
             back.SetColor(*rgb(style.backface_colour))
+            if style.backface_opacity is not None:
+                back.SetOpacity(float(style.backface_opacity))
             actor.SetBackfaceProperty(back)
         actor.SetPickable(bool(style.pickable))
         actor.SetForceOpaque(bool(style.force_opaque))
@@ -517,7 +536,9 @@ class VtkRenderer(Renderer):
             _apply_cell_colours(data, mapper, cell_colours)
         else:
             mapper.ScalarVisibilityOff()
-        return self._register(VtkItem(name, actor, mapper, data))
+        return self._register(
+            VtkItem(name, actor, mapper, data, in_front=bool(style.keep_in_front))
+        )
 
     def add_lines(
         self,
@@ -529,11 +550,12 @@ class VtkRenderer(Renderer):
         pickable: bool = False,
         keep_in_front: bool = False,
         connected: bool = False,
+        polylines: Sequence[int] | None = None,
     ) -> Item:
         from vtkmodules.vtkRenderingCore import vtkActor, vtkPolyDataMapper
 
         data = _polydata(points)
-        data.SetLines(_line_cells(data.GetNumberOfPoints(), connected))
+        data.SetLines(_line_cells(data.GetNumberOfPoints(), connected, polylines))
         mapper = vtkPolyDataMapper()
         mapper.SetInputData(data)
         mapper.ScalarVisibilityOff()
@@ -548,7 +570,7 @@ class VtkRenderer(Renderer):
         actor.SetPickable(bool(pickable))
         if keep_in_front:
             actor.SetForceOpaque(True)
-        return self._register(VtkItem(name, actor, mapper, data))
+        return self._register(VtkItem(name, actor, mapper, data, in_front=bool(keep_in_front)))
 
     def add_points(
         self,
@@ -580,7 +602,7 @@ class VtkRenderer(Renderer):
         actor.SetPickable(bool(pickable))
         if keep_in_front:
             actor.SetForceOpaque(True)
-        return self._register(VtkItem(name, actor, mapper, data))
+        return self._register(VtkItem(name, actor, mapper, data, in_front=bool(keep_in_front)))
 
     def add_labels(
         self, points: np.ndarray, texts: Sequence[str], *, name: str, style: LabelStyle
@@ -613,6 +635,7 @@ class VtkRenderer(Renderer):
             mapper.SetShapeToRoundedRect()
             mapper.SetBackgroundColor(*rgb(style.background))
             mapper.SetBackgroundOpacity(float(style.background_opacity))
+            mapper.SetMargin(int(style.margin))
             mapper.SetStyleToFilled()
         else:
             mapper.SetShapeToNone()
@@ -767,12 +790,38 @@ class VtkRenderer(Renderer):
 
         # Ein Zell-Picker, kein Hardware-Picker: Die treffen in dieser
         # Umgebung nichts (gemessen am 03.09.2026, `vtk-sagt-ja-und-tut-nichts`).
+        #
+        # **Und in zwei Stufen, weil der Picker geometrisch rechnet.** Ein
+        # Griff mit ``keep_in_front`` steht im Bild vor dem Körper, auch wenn
+        # er in dessen Hüllquader liegt — der Skalierwürfel an einem
+        # würfelförmigen Teil tut das immer. Der Picker sähe zuerst die
+        # Körperfläche davor; was vorn gezeichnet wird, wird deshalb zuerst
+        # gefragt (gemessen am 05.09.2026, `tests/test_render_vtk.py`).
         picker = vtkCellPicker()
-        picker.SetTolerance(0.01)
-        if not picker.Pick(float(x), float(self._flip(y)), 0.0, self.renderer):
-            return None
-        actor = picker.GetActor()
-        return self._items.get(_key(actor)) if actor is not None else None
+        width, height = self.view_size()
+        picker.SetTolerance(PICK_SLACK_PIXELS / max(math.hypot(width, height), 1.0))
+        front = [
+            item.actor
+            for item in self._items.values()
+            if item.in_front and item.actor.GetPickable() and item.actor.GetVisibility()
+        ]
+        for candidates in (front, None):
+            picker.InitializePickList()
+            if candidates is not None:
+                if not candidates:
+                    continue
+                for actor in candidates:
+                    picker.AddPickList(actor)
+                picker.PickFromListOn()
+            else:
+                picker.PickFromListOff()
+            if not picker.Pick(float(x), float(self._flip(y)), 0.0, self.renderer):
+                continue
+            actor = picker.GetActor()
+            found = self._items.get(_key(actor)) if actor is not None else None
+            if found is not None:
+                return found
+        return None
 
     # --- Bild ---------------------------------------------------------------------
 
@@ -795,8 +844,28 @@ class VtkRenderer(Renderer):
         # VTK legt die erste Zeile unten ab; ein Bild beginnt oben.
         return np.ascontiguousarray(raw[::-1])
 
-    def set_background(self, colour: Colour) -> None:
+    def set_background(self, colour: Colour, top: Colour | None = None) -> None:
         self.renderer.SetBackground(*rgb(colour))
+        if top is None:
+            self.renderer.GradientBackgroundOff()
+            return
+        self.renderer.SetBackground2(*rgb(top))
+        self.renderer.GradientBackgroundOn()
+
+    def set_headlight(self, intensity: float) -> None:
+        # VTK legt sein Frontlicht erst beim ersten Bild an; wer es vorher
+        # sucht, findet keines. Also hier anlegen, wenn es fehlt — genau das
+        # täte das erste Bild auch.
+        lights = self.renderer.GetLights()
+        if lights.GetNumberOfItems() == 0:
+            self.renderer.CreateLight()
+            lights = self.renderer.GetLights()
+        lights.InitTraversal()
+        light = lights.GetNextItem()
+        while light is not None:
+            if light.LightTypeIsHeadlight():
+                light.SetIntensity(float(intensity))
+            light = lights.GetNextItem()
 
     def background(self) -> Colour:
         return hex_of(self.renderer.GetBackground())

@@ -80,6 +80,7 @@ class _FlatRenderer(Renderer):
         pickable: bool = False,
         keep_in_front: bool = False,
         connected: bool = False,
+        polylines: Sequence[int] | None = None,
     ) -> Item:
         raise NotImplementedError
 
@@ -191,11 +192,14 @@ class _FlatRenderer(Renderer):
     def screenshot(self) -> np.ndarray:
         return np.zeros((SIZE[1], SIZE[0], 3), dtype=np.uint8)
 
-    def set_background(self, colour: Colour) -> None:
+    def set_background(self, colour: Colour, top: Colour | None = None) -> None:
         return
 
     def background(self) -> Colour:
         return "#000000"
+
+    def set_headlight(self, intensity: float) -> None:
+        return
 
     def set_anti_aliasing(self, enabled: bool) -> None:
         return

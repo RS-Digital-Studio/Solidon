@@ -85,6 +85,7 @@ class SurfaceStyle:
     edge_colour: Colour | None = None
     smooth: bool = False
     backface_colour: Colour | None = None
+    backface_opacity: float | None = None
     lighting: bool = True
     ambient: float | None = None
     diffuse: float | None = None
@@ -128,6 +129,7 @@ class LabelStyle:
     always_visible: bool = True
     background: Colour | None = None
     background_opacity: float = 1.0
+    margin: int = 0
     show_points: bool = False
     point_colour: Colour = "#ffffff"
     point_size: int = 8
@@ -294,8 +296,10 @@ class Renderer(ABC):
         pickable: bool = False,
         keep_in_front: bool = False,
         connected: bool = False,
+        polylines: Sequence[int] | None = None,
     ) -> Item:
-        """Linien: je zwei Punkte ein Stück, mit ``connected`` eine Kette."""
+        """Linien: je zwei Punkte ein Stück, mit ``connected`` eine Kette,
+        mit ``polylines`` mehrere Ketten dieser Längen hintereinander."""
 
     @abstractmethod
     def add_points(
@@ -401,10 +405,15 @@ class Renderer(ABC):
         """Das Bild als ``(h, w, 3)`` uint8."""
 
     @abstractmethod
-    def set_background(self, colour: Colour) -> None: ...
+    def set_background(self, colour: Colour, top: Colour | None = None) -> None:
+        """Eine Farbe — oder ein Verlauf von ``colour`` unten nach ``top`` oben."""
 
     @abstractmethod
     def background(self) -> Colour: ...
+
+    @abstractmethod
+    def set_headlight(self, intensity: float) -> None:
+        """Das Frontlicht, das mit der Kamera wandert — je Thema anders hell."""
 
     @abstractmethod
     def set_anti_aliasing(self, enabled: bool) -> None: ...
