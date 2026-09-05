@@ -985,3 +985,24 @@ def test_the_rule_files_count_the_operations_parameters_and_tools_they_claim() -
         f"der Stand in agentenschicht.md nennt {stand.group(2)} Werkzeuge, tool_schemas() hat "
         f"{werkzeuge}"
     )
+
+
+def test_a_variant_member_is_reached_through_its_group_not_through_an_entry_of_its_own() -> None:
+    """Gesamtreview 05.09.2026, CORE-22: ``menu_path`` nannte für die
+    Mitglieder einer Variantengruppe „Erzeugen → Grundform hochziehen" — einen
+    Menüeintrag, den es nicht gibt. Die Leiste zeigt je Gruppe einen Eintrag,
+    die Art wählt der Dialog; Handbuch und Werkzeugbeschreibungen schickten
+    trotzdem an den Eintrag ohne Ort."""
+    from app.core.registry import REGISTRY, VARIANT_GROUPS, menu_path
+
+    load_operations()
+    assert VARIANT_GROUPS, "ohne Gruppe prüft dieser Test nichts"
+    for group in VARIANT_GROUPS:
+        for member in group.members:
+            spec = REGISTRY.get(member)
+            path = menu_path(spec)
+            assert f"→ {group.title}" in path, f"{member}: {path}"
+            assert path.endswith(f"({group.choice}: {spec.title})"), f"{member}: {path}"
+            assert f"→ {spec.title}" not in path, (
+                f"{member}: der Weg nennt den Mitgliedstitel als Eintrag — den gibt es nicht"
+            )

@@ -408,6 +408,18 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     if spec.category in folded_categories(spec.category, source):
         steps.append(str(CATEGORIES.get(spec.category, spec.category)))
 
+    # **Eine Variante hat keinen eigenen Eintrag.** Die Menüleiste zeigt für
+    # ``VARIANT_GROUPS`` einen Eintrag je Gruppe („Aus Skizze erzeugen …"),
+    # die Art wählt der Dialog. Der Weg nannte trotzdem „Erzeugen → Grundform
+    # hochziehen" — einen Eintrag, den es nicht gibt, und der Agent schrieb
+    # ihn in jede Werkzeugbeschreibung (Gesamtreview 05.09.2026, CORE-22).
+    # Aus derselben Deklaration wie die Leiste: bis zur Gruppe ein Menüweg,
+    # danach die Wahl im Dialog.
+    group = next((entry for entry in VARIANT_GROUPS if spec.name in entry.members), None)
+    if group is not None:
+        steps.append(str(group.title))
+        return " → ".join(steps) + f" ({group.choice}: {spec.title})"
+
     steps.append(str(spec.title))
     return " → ".join(steps)
 
