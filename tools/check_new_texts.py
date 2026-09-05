@@ -28,6 +28,7 @@ Prüfung insgesamt rot ist: Dann liegt es an fremder Arbeit.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import subprocess
@@ -58,8 +59,24 @@ def added_texts() -> list[str]:
         if not line.startswith("+") or line.startswith("+++"):
             continue
         found.extend(CALL.findall(line))
-    # Escape-Folgen auflösen, damit der Vergleich mit dem Katalog trifft.
-    return [text.encode().decode("unicode_escape") if "\\" in text else text for text in found]
+    return [_literal(text) for text in found]
+
+
+def _literal(text: str) -> str:
+    """Der Text, wie Python ihn liest — Escape-Folgen aufgelöst, Umlaute heil.
+
+    Hier stand ``text.encode().decode("unicode_escape")``, und das las die
+    UTF-8-Bytes als einzelne Codepunkte: Ein Text mit Umlaut **und**
+    Zeilenumbruch wurde zu „WÃ¤hlen …", und seine vorhandene Übersetzung galt
+    als fehlend (Gesamtreview 05.09.2026, R18).
+    """
+    if "\\" not in text:
+        return text
+    try:
+        value = ast.literal_eval(f'"{text}"')
+    except (SyntaxError, ValueError):
+        return text
+    return value if isinstance(value, str) else text
 
 
 def missing(texts: list[str]) -> dict[str, list[str]]:

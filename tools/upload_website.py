@@ -562,6 +562,25 @@ def remote_version(session: ftplib.FTP_TLS, root: str) -> dict[str, Any]:
     return _validate_remote_version(value)
 
 
+def promised_sizes(payload: dict[str, Any]) -> dict[str, int]:
+    """Die Größe je versprochener Datei, wie ``version.json`` sie nennt."""
+    sizes: dict[str, int] = {}
+    for entry in payload.get("packages", {}).values():
+        if not isinstance(entry, dict):
+            continue
+        try:
+            size = int(entry.get("size", 0))
+        except (TypeError, ValueError):
+            continue
+        if size <= 0:
+            continue
+        for field in ("url", "file"):
+            name = str(entry.get(field, "")).split("/")[-1]
+            if name:
+                sizes[name] = size
+    return sizes
+
+
 def promised_files(payload: dict[str, Any]) -> set[str]:
     """Jeder Dateiname, den ``version.json`` nennt — aus **beiden** Feldern.
 
@@ -678,10 +697,12 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     wäre auch keine bessere Antwort, weil sie die neue Fassung verschweigt.
     """
     versprochen: set[str] = set()
+    erwartet: dict[str, int] = {}
     payload: dict[str, Any] = {}
     if any(path.name == "version.json" for path in files):
         payload = json.loads((LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
         versprochen |= promised_files(payload)
+        erwartet = promised_sizes(payload)
 
     # Was die hochzuladenden Seiten selbst im Kasten anbieten.
     im_kasten: set[str] = set()
@@ -712,16 +733,20 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
         ``remote_index`` liefert die Größe ohnehin mit; :func:`differs` und
         :func:`verify_downloads` vergleichen sie längst. Nur hier fehlte sie.
 
-        Ohne lokale Datei bleibt es beim Vorhandensein — dann gibt es kein
-        Vergleichsmaß, und ein Paket, das hier nicht mehr liegt, ist deshalb
-        nicht kaputt.
+        Ohne lokale Datei misst das **Manifest**: ``version.json`` nennt die
+        Größe jedes Pakets, und die ist unterschrieben. Bis zum 05.09.2026
+        galt hier das bloße Vorhandensein — auf einem frischen Klon liegen
+        die Pakete nie, und ein Byte oben gab die Auskunft frei
+        (Gesamtreview, R22). Nur was weder hier liegt noch im Manifest steht
+        — die Kastenpakete —, bleibt beim Vorhandensein.
         """
         if name not in oben:
             return False
         local_file = LOCAL_ROOT / "dl" / name
-        if not local_file.is_file():
-            return True
-        return oben[name] == local_file.stat().st_size
+        if local_file.is_file():
+            return oben[name] == local_file.stat().st_size
+        expected = erwartet.get(name)
+        return expected is None or oben[name] == expected
 
     def partial(name: str) -> bool:
         """Liegt oben, ist aber kürzer als hier — die Unterscheidung fürs Sagen."""
@@ -747,7 +772,8 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     )
     for name in fehlt_fuer_update:
         if partial(name):
-            full_size = (LOCAL_ROOT / "dl" / name).stat().st_size
+            local_file = LOCAL_ROOT / "dl" / name
+            full_size = local_file.stat().st_size if local_file.is_file() else erwartet[name]
             print(f"  {name} — liegt oben mit {oben[name]} statt {full_size} Bytes")
         else:
             print(f"  {name}")
@@ -775,10 +801,13 @@ def verify_downloads() -> int:
     keine Auskunft darüber, ob jemand das Paket entpacken kann.
     """
     promised: set[str] = set()
+    sizes: dict[str, int] = {}
 
     version_file = LOCAL_ROOT / "version.json"
     if version_file.is_file():
-        promised |= promised_files(json.loads(version_file.read_text(encoding="utf-8")))
+        payload = json.loads(version_file.read_text(encoding="utf-8"))
+        promised |= promised_files(payload)
+        sizes = promised_sizes(payload)
 
     for page in LOCAL_ROOT.glob("*/index.html"):
         promised.update(_LINKED.findall(page.read_text(encoding="utf-8", errors="ignore")))
@@ -804,7 +833,9 @@ def verify_downloads() -> int:
     broken: list[str] = []
     for name in sorted(promised):
         local = LOCAL_ROOT / "dl" / name
-        expected = local.stat().st_size if local.is_file() else 0
+        # Ohne lokale Datei misst das Manifest (R22) — eine beliebig kurze
+        # 200-Antwort ist sonst ein „ok".
+        expected = local.stat().st_size if local.is_file() else sizes.get(name, 0)
         address = _public_address(f"{base}/dl/{name}")
         request = urllib.request.Request(address, method="HEAD")
         try:

@@ -231,3 +231,60 @@ def test_the_download_store_takes_the_new_bytes_even_at_the_same_size(
     assert (store / source.name).read_bytes() == b"NEW_CONTENT"
     assert packages[0].hash_ == hashlib.sha256(b"NEW_CONTENT").hexdigest()
     assert not list(store.glob("*.part")), "keine halbe Kopie bleibt liegen"
+
+
+# --- check_new_texts -------------------------------------------------------------
+
+
+def test_the_commit_guard_reads_escapes_like_python_and_keeps_the_umlauts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """R18: ``text.encode().decode("unicode_escape")`` las die UTF-8-Bytes eines
+    Umlauts als einzelne Codepunkte, sobald daneben eine Escape-Folge stand —
+    aus „Wählen" wurde „WÃ¤hlen", und die vorhandene Übersetzung galt als
+    fehlend. Der Wächter hielt damit korrekt übersetzte Commits an."""
+    from types import SimpleNamespace
+
+    from tools import check_new_texts
+
+    diff = '+    tr("Wählen Sie eine Datei.\\nErneut versuchen.")\n+    _("Gerade")\n'
+    monkeypatch.setattr(
+        check_new_texts.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(stdout=diff)
+    )
+
+    assert check_new_texts.added_texts() == ["Wählen Sie eine Datei.\nErneut versuchen.", "Gerade"]
+
+
+# --- hold_back_version -------------------------------------------------------------
+
+
+def test_without_local_packages_the_manifest_size_decides_whether_a_package_is_whole(
+    tmp_path: Path,
+) -> None:
+    """R22: Fehlten die lokalen Pakete — auf jedem anderen Arbeitsrechner der
+    Normalfall —, galt jede Datei oben als vollständig, sobald sie da war. Ein
+    abgebrochener Upload von einem Byte gab ``version.json`` frei, und jede
+    Installation lud sich das halbe Paket."""
+    payload = json.loads((upload.LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
+    local = tmp_path / "website"
+    local.mkdir()
+    (local / "version.json").write_text(json.dumps(payload), encoding="utf-8")
+    remote = {"dl/" + entry["file"]: 1 for entry in payload["packages"].values()}
+    assert remote, "ohne versprochene Pakete prüft dieser Test nichts"
+
+    with (
+        patch.object(upload, "LOCAL_ROOT", local),
+        patch.object(upload, "remote_index", return_value=remote),
+    ):
+        kept = upload.hold_back_version(object(), "root", [local / "version.json"])  # type: ignore[arg-type]
+
+    assert kept == [], "ein Byte oben ist kein Paket — die Auskunft bleibt liegen"
+
+    whole = {"dl/" + entry["file"]: entry["size"] for entry in payload["packages"].values()}
+    with (
+        patch.object(upload, "LOCAL_ROOT", local),
+        patch.object(upload, "remote_index", return_value=whole),
+    ):
+        kept = upload.hold_back_version(object(), "root", [local / "version.json"])  # type: ignore[arg-type]
+
+    assert kept == [local / "version.json"], "stimmt die Größe, geht sie hoch"
