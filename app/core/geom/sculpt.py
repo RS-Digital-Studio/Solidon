@@ -451,6 +451,12 @@ def _from_baked(
     )
 
 
+#: Unter dieser Verschiebung gilt ein Eckpunkt als nicht bewegt: Rauschen der
+#: doppelten Genauigkeit, keine Geometrie. Weit unter jeder Toleranz eines
+#: Druckers und weit über dem, was ``warp`` an Rundung hinterlässt.
+MOVED_EPSILON_MM: Final = 1e-9
+
+
 def _sculpting_findings(
     before: MeshData,
     after: MeshData,
@@ -490,8 +496,11 @@ def _sculpting_findings(
     # Getroffen ist nicht gewirkt: Der Muldenzug des Schaustücks griff 321 von
     # 5770 Eckpunkten und trug dabei 0,41 mm ab, bei eingestellter Stärke 5,0.
     # Gemessen wird deshalb die Verschiebung, und die Grenze kommt aus dem
-    # Profil (Regel 7): Was unter einer Schichthöhe bleibt, entsteht im Druck
-    # nicht. ``warp`` lässt die Topologie stehen, die Punkte sind vergleichbar.
+    # Profil (Regel 7): Was unter einer Schichthöhe bleibt, zeigt der Druck
+    # kaum. **Verändert ist der Körper trotzdem** — bis zum 05.09.2026 hieß
+    # so eine Sitzung „hat den Körper nicht verändert", und eine
+    # Z-Schichthöhe ist kein Maß für eine seitliche Kontur (Gesamtreview,
+    # R39). ``warp`` lässt die Topologie stehen, die Punkte sind vergleichbar.
     shifted = np.linalg.norm(
         np.asarray(after.raw.vertices, dtype=float) - np.asarray(before.raw.vertices, dtype=float),
         axis=1,
@@ -499,33 +508,48 @@ def _sculpting_findings(
     moved = float(shifted.max()) if len(shifted) else 0.0
     layer = profile.printer.layer_height
 
+    changed = moved > MOVED_EPSILON_MM
     findings = [
         Finding(
             code="sculpt.applied",
             severity="info",
             message=_("Die Züge dieser Sitzung wurden auf den Körper übertragen."),
             object_id=object_id,
-            values={"strokes": len(strokes), "stages": len(parts)},
+            values={"strokes": len(strokes), "stages": len(parts), "moved_mm": round(moved, 3)},
         )
-        if moved >= layer
+        if changed
         else Finding(
             code="sculpt.no_effect",
             severity="warning",
             message=_(
-                "Diese Formsitzung hat den Körper nicht verändert — was sie bewegt hat, "
-                "bleibt unter einer Schichthöhe und entstünde auch im Druck nicht. Entweder "
-                "liegen die Züge neben der Fläche, oder ihre Stärke ist für dieses Teil zu "
-                "klein."
+                "Diese Formsitzung hat den Körper nicht verändert — kein Zug hat einen Punkt "
+                "der Fläche bewegt. Entweder liegen die Züge neben der Fläche, oder ihre "
+                "Stärke ist für dieses Teil zu klein."
             ),
             object_id=object_id,
-            values={
-                "strokes": len(strokes),
-                "stages": len(parts),
-                "moved_mm": round(moved, 3),
-                "layer_mm": round(layer, 3),
-            },
+            values={"strokes": len(strokes), "stages": len(parts)},
         )
     ]
+    if changed and moved < layer:
+        findings.append(
+            Finding(
+                code="sculpt.subtle",
+                severity="warning",
+                message=_(
+                    "Die größte Bewegung dieser Sitzung bleibt unter einer Schichthöhe. In "
+                    "Druckrichtung entsteht so wenig kaum, seitlich entscheidet der Slicer "
+                    "darüber. Wer mehr wollte: Entweder liegen die Züge neben der Fläche, "
+                    "oder ihre Stärke ist für dieses Teil zu klein."
+                ),
+                object_id=object_id,
+                values={
+                    "strokes": len(strokes),
+                    "stages": len(parts),
+                    "moved_mm": round(moved, 3),
+                    "layer_mm": round(layer, 3),
+                },
+            )
+        )
     if missed:
         findings.append(
             Finding(

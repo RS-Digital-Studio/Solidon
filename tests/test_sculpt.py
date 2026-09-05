@@ -465,14 +465,15 @@ def test_a_session_without_any_effect_does_not_claim_success(profile: Profile) -
     assert "sculpt.applied" not in codes, "was nicht geschah, wird nicht gemeldet"
 
 
-def test_a_stroke_shallower_than_a_layer_counts_as_no_effect(profile: Profile) -> None:
-    """Getroffen ist nicht gewirkt — die Schwelle ist eine Schichthöhe.
+def test_a_stroke_shallower_than_a_layer_is_applied_but_marked_subtle(profile: Profile) -> None:
+    """Getroffen und gewirkt — nur unter einer Schichthöhe.
 
     Der Daumenmulden-Zug des Schaustücks traf 321 von 5770 Eckpunkten und trug
-    dabei 0,41 mm ab, bei eingestellter Stärke 5,0: formal ein Treffer, im
-    Druck nichts. Gemessen wird deshalb die Verschiebung und nicht die
-    Trefferzahl, und die Grenze kommt aus dem Profil statt aus dem Code
-    (Regel 7).
+    dabei 0,41 mm ab, bei eingestellter Stärke 5,0. Bis zum 05.09.2026 hieß
+    das „hat den Körper nicht verändert" — falsch für die Geometrie, und eine
+    Z-Schichthöhe ist kein Maß für eine seitliche Kontur (Gesamtreview, R39).
+    Verändert ist verändert; die Druckwirkung steht getrennt daneben, und die
+    Grenze dafür kommt weiter aus dem Profil (Regel 7).
     """
     entry = SceneObject(id="obj_1", name="Kugel", mesh=ball())
     below = profile.printer.layer_height / 4.0
@@ -481,8 +482,11 @@ def test_a_stroke_shallower_than_a_layer_counts_as_no_effect(profile: Profile) -
     result = run(entry, profile, strokes=strokes_to_text(strokes))
 
     codes = {f.code for f in result.findings}
-    assert "sculpt.no_effect" in codes
-    assert "sculpt.strokes_missed" not in codes, "getroffen hat er, gewirkt nicht"
+    assert "sculpt.applied" in codes, "der Körper ist verändert, und das steht da"
+    assert "sculpt.no_effect" not in codes
+    subtle = next(f for f in result.findings if f.code == "sculpt.subtle")
+    assert 0.0 < subtle.values["moved_mm"] < subtle.values["layer_mm"]
+    assert "sculpt.strokes_missed" not in codes, "getroffen hat er"
 
 
 def test_a_stroke_that_lands_stays_quiet(profile: Profile) -> None:
