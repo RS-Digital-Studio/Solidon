@@ -1908,10 +1908,96 @@ def test_the_feature_film_proves_the_same_identity_in_both_languages() -> None:
     assert set(FEATURE_EDITING) == {"de", "en"}
     for language, scenes in FEATURE_EDITING.items():
         assert [key for key, _sentence in scenes] == expected, language
-        assert set(FEATURE_CAPTIONS[language]) == set(expected) - {"closing"}
+        assert set(expected) - {"closing"} <= set(FEATURE_CAPTIONS[language])
         timing = feature_timing(scenes)
         assert [key for key, _path, _seconds in timing] == expected
         assert sum(seconds for _key, _path, seconds in timing) == 27.0
+
+
+def test_the_press_short_series_proves_each_claim_in_one_clip() -> None:
+    """Redaktionen bekommen einzelne Belege statt eines allgemeinen Imagefilms."""
+    from tools.make_video import (
+        FEATURE_CAPTIONS,
+        FEATURE_COMMIT_BADGES,
+        FEATURE_SHORT_STEMS,
+        PRESS_APPLY_ALL,
+        PRESS_DISTANCE,
+        PRESS_DUPLICATE,
+        PRESS_REMOVE,
+        PRESS_RESIZE,
+        feature_timing,
+    )
+
+    expected = {
+        "presse-groesse": (
+            PRESS_RESIZE,
+            ["recognise", "resize_preview", "resize_apply", "closing"],
+        ),
+        "presse-alle": (
+            PRESS_APPLY_ALL,
+            ["recognise", "all_prepare", "all_apply", "closing"],
+        ),
+        "presse-abstand": (
+            PRESS_DISTANCE,
+            ["recognise", "pair_select", "distance_result", "closing"],
+        ),
+        "presse-duplizieren": (
+            PRESS_DUPLICATE,
+            ["recognise", "duplicate_preview", "duplicate_apply", "closing"],
+        ),
+        "presse-entfernen": (
+            PRESS_REMOVE,
+            ["recognise", "remove_apply", "remove_undo", "closing"],
+        ),
+    }
+    assert set(expected) < set(FEATURE_SHORT_STEMS)
+    for name, (script, scenes) in expected.items():
+        assert set(script) == {"de", "en"}, name
+        for language in ("de", "en"):
+            actual = [key for key, _sentence in script[language]]
+            assert actual == scenes, f"{name}/{language}"
+            assert set(scenes) - {"closing"} <= set(FEATURE_CAPTIONS[language])
+            duration = sum(seconds for _key, _path, seconds in feature_timing(script[language]))
+            assert 18.0 <= duration <= 22.0, (
+                f"{name}/{language} ist mit {duration:.1f} s kein knapper Beleg"
+            )
+
+        apply_scenes = {scene for scene in scenes if scene.endswith("_apply")}
+        for language in ("de", "en"):
+            assert apply_scenes <= set(FEATURE_COMMIT_BADGES[language]), (
+                f"{name}/{language} bestätigt die übernommene Operation nicht sichtbar"
+            )
+
+
+def test_video_input_opens_projects_and_imports_models() -> None:
+    """Projekt- und Modellpfade nehmen in allen Aufnahmearten denselben Weg."""
+    from tools.make_video import _open_video_input
+
+    class SessionStub:
+        def __init__(self) -> None:
+            self.calls: list[tuple[object, ...]] = []
+
+        def open_project(self, path: Path) -> None:
+            self.calls.append(("open", path))
+
+        def start_new(self) -> None:
+            self.calls.append(("new",))
+
+        def import_model(self, path: Path, *, raise_on_error: bool) -> None:
+            self.calls.append(("import", path, raise_on_error))
+
+    session = SessionStub()
+    project = Path("beispiel.p3d")
+    model = Path("beispiel.STL")
+
+    _open_video_input(session, project)
+    _open_video_input(session, model)
+
+    assert session.calls == [
+        ("open", project),
+        ("new",),
+        ("import", model, True),
+    ]
 
 
 def test_feature_music_is_original_stereo_and_reproducible(tmp_path: Path) -> None:

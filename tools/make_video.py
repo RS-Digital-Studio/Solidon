@@ -124,9 +124,16 @@ FPS = 30
 EXAMPLE = "gehaeuse-mit-bausteinen.p3d"
 
 #: Das eingelesene MIT-Korpusnetz für den Merkmalsfilm. Im Projekt stehen
-#: bereits Reparatur und Bettlage; die vier Bohrungen stammen weiterhin aus
+#: bereits Reparatur und Bettlage; die fünf Bohrungen stammen weiterhin aus
 #: der eingebetteten STL und nicht aus einer Solidon-Konstruktion.
 FEATURE_EXAMPLE = "weg1-halterung-anpassen.p3d"
+
+#: Eingaben, die das Aufnahmewerkzeug wie die sichtbare Anwendung unmittelbar
+#: einlesen darf. Damit kann ein Belegfilm ein wirkliches Nutzermodell zeigen,
+#: ohne es erst in ein nur für die Aufnahme gebautes Projekt umzupacken.
+MODEL_SUFFIXES = frozenset(
+    {".3mf", ".glb", ".gltf", ".obj", ".off", ".ply", ".step", ".stl", ".stp"}
+)
 
 #: Die eigene Umgebung für die Sprachausgabe.
 #:
@@ -534,6 +541,87 @@ FEATURE_EDITING: dict[str, tuple[tuple[str, str], ...]] = {
     ),
 }
 
+#: Fünf kurze Belege für Redaktionen. Jeder beantwortet genau eine Aussage
+#: aus der Pressemitteilung vom 04.09.2026 und bleibt deshalb auch eingebettet
+#: in einem Artikel verständlich. Englisch steht zuerst, weil die konkrete
+#: Rückfrage von All3DP kam. Die deutschen Fassungen laufen zeitversetzt im
+#: selben Zweitagesrhythmus, damit jede Sprache eine eigene Zielgruppe erreicht,
+#: ohne dass zwei nahezu gleiche Shorts am selben Tag gegeneinander antreten.
+PRESS_RESIZE: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        ("recognise", "Solidon erkennt eine Montagebohrung direkt in einer echten STL."),
+        ("resize_preview", "Durchmesser ändern und das Ergebnis vorab sehen."),
+        ("resize_apply", "Dieselbe erkannte Bohrung behält ihre Kennung in neuer Größe."),
+        ("closing", "Ein Merkmal ändern, ohne das Teil neu aufzubauen."),
+    ),
+    "en": (
+        ("recognise", "Solidon recognises a mounting hole directly in a real STL."),
+        ("resize_preview", "Change its diameter and see the result before applying it."),
+        ("resize_apply", "The same recognised hole keeps its identity at the new size."),
+        ("closing", "Resize a feature without rebuilding the part."),
+    ),
+}
+
+PRESS_APPLY_ALL: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        ("recognise", "Eine von fünf gleichen Bohrungen in der importierten STL wählen."),
+        ("all_prepare", "Einen Durchmesser für alle gleichen Merkmale festlegen."),
+        ("all_apply", "Alle fünf Bohrungen ändern sich in einer Transaktion."),
+        ("closing", "Eine Änderung für das gesamte Bohrungsmuster."),
+    ),
+    "en": (
+        ("recognise", "Select one of five matching holes in the imported STL."),
+        ("all_prepare", "Set one diameter and apply it to every matching feature."),
+        ("all_apply", "All five holes change in one transaction and one undo."),
+        ("closing", "One edit for the whole hole pattern."),
+    ),
+}
+
+PRESS_DISTANCE: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        ("recognise", "Die erste erkannte Bohrung in der importierten STL wählen."),
+        ("pair_select", "Eine zweite Bohrung zur Auswahl hinzufügen."),
+        ("distance_result", "Solidon zeigt Mittenabstand und Achsversatz sofort an."),
+        ("closing", "Vor dem Druck prüfen, ob das Teil wirklich passt."),
+    ),
+    "en": (
+        ("recognise", "Select the first recognised hole in the imported STL."),
+        ("pair_select", "Add a second hole to the selection."),
+        ("distance_result", "Solidon reports the centre distance and every axis offset."),
+        ("closing", "Check whether a downloaded part will fit before printing."),
+    ),
+}
+
+PRESS_DUPLICATE: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        ("recognise", "Eine erkannte Bohrung in der importierten STL wählen."),
+        ("duplicate_preview", "Die neue Position des Duplikats in der Vorschau festlegen."),
+        ("duplicate_apply", "Die neue Bohrung entsteht, ohne das Teil neu aufzubauen."),
+        ("closing", "Ein STL-Merkmal so direkt duplizieren wie in CAD."),
+    ),
+    "en": (
+        ("recognise", "Select a recognised hole in the imported STL."),
+        ("duplicate_preview", "Choose the position of its duplicate with a live preview."),
+        ("duplicate_apply", "The new hole appears without rebuilding the surrounding part."),
+        ("closing", "Duplicate an STL feature as directly as a CAD feature."),
+    ),
+}
+
+PRESS_REMOVE: dict[str, tuple[tuple[str, str], ...]] = {
+    "de": (
+        ("recognise", "Eine erkannte Bohrung in der importierten STL wählen."),
+        ("remove_apply", "Das Merkmal entfernen, während der STL-Körper bleibt."),
+        ("remove_undo", "Ein Strg+Z stellt die vollständige Änderung wieder her."),
+        ("closing", "Merkmalsbearbeitung, die vollständig rücknehmbar bleibt."),
+    ),
+    "en": (
+        ("recognise", "Select a recognised hole in the imported STL."),
+        ("remove_apply", "Remove the feature while the surrounding STL body stays."),
+        ("remove_undo", "One Ctrl+Z restores the complete edit."),
+        ("closing", "Feature editing that remains non-destructive."),
+    ),
+}
+
 SCRIPTS = {
     "einstieg": OPENING,
     "parametrik": STORYBOARD,
@@ -542,7 +630,24 @@ SCRIPTS = {
     "generieren": GENERIEREN,
     "formen": FORMEN,
     "merkmal": FEATURE_EDITING,
+    "presse-groesse": PRESS_RESIZE,
+    "presse-alle": PRESS_APPLY_ALL,
+    "presse-abstand": PRESS_DISTANCE,
+    "presse-duplizieren": PRESS_DUPLICATE,
+    "presse-entfernen": PRESS_REMOVE,
 }
+
+#: Drehbücher, die den echten Merkmalsweg mit Zeiger, Text im Bild und eigener
+#: Musik aufnehmen. Der Name entscheidet zugleich den eindeutigen Dateistamm.
+FEATURE_SHORT_STEMS = {
+    "merkmal": "solidon3d-stl-feature",
+    "presse-groesse": "solidon3d-press-resize-hole",
+    "presse-alle": "solidon3d-press-change-five-holes",
+    "presse-abstand": "solidon3d-press-measure-hole-spacing",
+    "presse-duplizieren": "solidon3d-press-duplicate-hole",
+    "presse-entfernen": "solidon3d-press-remove-hole",
+}
+FEATURE_SHORT_SCRIPTS = frozenset(FEATURE_SHORT_STEMS)
 
 #: Wie weit die Teile im Modul-Video auseinandergehen, als Faktor auf den
 #: Abstand zur Mitte. Eins ist der doppelte Abstand — genug, dass man die
@@ -621,7 +726,24 @@ FEATURE_DEMO_TARGET_X = -10.0
 #: Szenen, die den Merkmalsbeweis aufbauen. Der Name ist Teil des Vertrags mit
 #: :func:`prepare_feature_demo_scene`; ein Tippfehler soll dort auffallen und
 #: nicht still auf eine Kreisfahrt zurückfallen.
-FEATURE_DEMO_SCENES = frozenset({"mesh", "recognise", "preview_feature", "apply_feature"})
+FEATURE_DEMO_SCENES = frozenset(
+    {
+        "mesh",
+        "recognise",
+        "preview_feature",
+        "apply_feature",
+        "resize_preview",
+        "resize_apply",
+        "all_prepare",
+        "all_apply",
+        "pair_select",
+        "distance_result",
+        "duplicate_preview",
+        "duplicate_apply",
+        "remove_apply",
+        "remove_undo",
+    }
+)
 
 #: Der stumme Merkmalsfilm bekommt eine feste, bewusst knappe Uhr. Die
 #: Einblendungen brauchen weniger Zeit als ein Sprecher; sieben Sekunden für
@@ -631,6 +753,16 @@ FEATURE_SCENE_SECONDS = {
     "recognise": 5.0,
     "preview_feature": 7.0,
     "apply_feature": 7.0,
+    "resize_preview": 6.0,
+    "resize_apply": 5.0,
+    "all_prepare": 6.0,
+    "all_apply": 5.0,
+    "pair_select": 5.0,
+    "distance_result": 5.0,
+    "duplicate_preview": 6.0,
+    "duplicate_apply": 5.0,
+    "remove_apply": 6.0,
+    "remove_undo": 5.0,
     "closing": 4.0,
 }
 
@@ -649,6 +781,46 @@ FEATURE_CAPTIONS = {
             "DIESELBE BOHRUNG BLEIBT ERHALTEN",
             "Kennung hole_1 · Passungen bleiben verbunden",
         ),
+        "resize_preview": (
+            "DURCHMESSER DIREKT ÄNDERN",
+            "Ø 5,44 → 6,50 mm · Live-Vorschau",
+        ),
+        "resize_apply": (
+            "DIESELBE BOHRUNG · NEUE GRÖSSE",
+            "Kennung bleibt · Passungen bleiben verbunden",
+        ),
+        "all_prepare": (
+            "EINE ÄNDERUNG FÜR FÜNF BOHRUNGEN",
+            "Auf alle gleichen Merkmale anwenden",
+        ),
+        "all_apply": (
+            "FÜNF BOHRUNGEN · EIN UNDO",
+            "Eine Transaktion ändert das ganze Muster",
+        ),
+        "pair_select": (
+            "ZWEI BOHRUNGEN AUSWÄHLEN",
+            "Kein eigenes Messwerkzeug nötig",
+        ),
+        "distance_result": (
+            "MITTENABSTAND",
+            "Gesamt und X / Y / Z erscheinen sofort",
+        ),
+        "duplicate_preview": (
+            "ERKANNTE BOHRUNG DUPLIZIEREN",
+            "Neue Position wählen · Live-Vorschau",
+        ),
+        "duplicate_apply": (
+            "NEUE BOHRUNG · KEIN NEUBAU",
+            "Das ursprüngliche Merkmal bleibt erhalten",
+        ),
+        "remove_apply": (
+            "BOHRUNG ENTFERNEN · NICHT DAS TEIL",
+            "Der umgebende STL-Körper bleibt erhalten",
+        ),
+        "remove_undo": (
+            "EIN STRG+Z HOLT SIE ZURÜCK",
+            "Die vollständige Änderung bleibt rücknehmbar",
+        ),
     },
     "en": {
         "mesh": ("JUST AN STL", "Triangles · no CAD history"),
@@ -661,6 +833,69 @@ FEATURE_CAPTIONS = {
             "THE SAME HOLE IS PRESERVED",
             "Identity hole_1 · fits stay connected",
         ),
+        "resize_preview": (
+            "CHANGE THE DIAMETER DIRECTLY",
+            "Ø 5.44 → 6.50 mm · live preview",
+        ),
+        "resize_apply": (
+            "SAME HOLE · NEW SIZE",
+            "Identity preserved · later fits stay attached",
+        ),
+        "all_prepare": (
+            "ONE CHANGE FOR FIVE HOLES",
+            "Apply to all matching features",
+        ),
+        "all_apply": (
+            "FIVE HOLES · ONE UNDO",
+            "A single transaction changes the pattern",
+        ),
+        "pair_select": (
+            "SELECT TWO HOLES",
+            "No separate measuring tool",
+        ),
+        "distance_result": (
+            "CENTRE-TO-CENTRE DISTANCE",
+            "Total and X / Y / Z appear immediately",
+        ),
+        "duplicate_preview": (
+            "DUPLICATE THE RECOGNISED HOLE",
+            "Choose its new position · live preview",
+        ),
+        "duplicate_apply": (
+            "A NEW HOLE · NO REBUILD",
+            "The original feature stays intact",
+        ),
+        "remove_apply": (
+            "REMOVE THE HOLE · NOT THE PART",
+            "The surrounding STL body remains",
+        ),
+        "remove_undo": (
+            "ONE CTRL+Z BRINGS IT BACK",
+            "The complete edit stays reversible",
+        ),
+    },
+}
+
+#: Nach dem tatsächlichen Klick trennt ein kurzer Ergebnisstreifen die
+#: bestätigte Operation von ihrer unmittelbar davor gezeigten Vorschau. Ohne
+#: diese zweite Kodierung sieht ein korrektes Übernehmen im Film wie ein
+#: wirkungsloser Klick aus, weil Vorschau und Ergebnis dieselbe Geometrie
+#: zeigen. Der Streifen ist eine Filmeinblendung und kein nachgebautes
+#: Bedienelement der Anwendung.
+FEATURE_COMMIT_BADGES = {
+    "de": {
+        "apply_feature": "ANGEWENDET · 1 UNDO-SCHRITT",
+        "resize_apply": "ANGEWENDET · 1 UNDO-SCHRITT",
+        "all_apply": "5 BOHRUNGEN ANGEWENDET · 1 UNDO",
+        "duplicate_apply": "DUPLIZIERT · 1 UNDO-SCHRITT",
+        "remove_apply": "ENTFERNT · 1 UNDO-SCHRITT",
+    },
+    "en": {
+        "apply_feature": "APPLIED · 1 UNDO STEP",
+        "resize_apply": "APPLIED · 1 UNDO STEP",
+        "all_apply": "5 HOLES APPLIED · 1 UNDO",
+        "duplicate_apply": "DUPLICATED · 1 UNDO STEP",
+        "remove_apply": "REMOVED · 1 UNDO STEP",
     },
 }
 
@@ -790,6 +1025,15 @@ def await_result(app: QApplication, session: object, seconds: float = 900.0) -> 
             print(f"  … rechnet seit {waited:.0f} s")
         time.sleep(0.05)
     return False
+
+
+def _open_video_input(session: Any, source: Path) -> None:
+    """Ein Projekt öffnen oder ein Modell über den sichtbaren Importweg einlesen."""
+    if source.suffix.lower() == ".p3d":
+        session.open_project(source)
+        return
+    session.start_new()
+    session.import_model(source, raise_on_error=True)
 
 
 def viewport_rect(window: QWidget) -> tuple[int, int, int, int]:
@@ -1750,47 +1994,122 @@ def hold_step(window: QWidget, app: QApplication) -> StepFn:
     return step
 
 
+def _feature_target_id(session: Any) -> str:
+    """Die für den Film gewählte, über alle Szenen feste Merkmalskennung."""
+    return str(getattr(session, "_video_feature_id", "hole_1"))
+
+
 def _feature_demo_target(session: Any) -> tuple[str, str, Any]:
     """Den einen belegten Zielpunkt des Merkmalsfilms finden.
 
-    Das mitgelieferte Beispiel stammt aus ``plate_holes.stl`` und trägt die
-    erkannte Bohrung ``hole_1``. Ihre Kennung wird absichtlich verlangt statt
-    durch „die erste Bohrung“ ersetzt: Genau ihre Beständigkeit ist die
-    Aussage des Films. Würde die Erkennung sie anders benennen, soll der Lauf
-    anhalten, bevor ein falscher Beleg entsteht.
+    Die Kennung wird absichtlich verlangt statt durch „die erste Bohrung“
+    ersetzt: Genau ihre Beständigkeit ist die Aussage des Films. Würde die
+    Erkennung sie anders benennen, soll der Lauf anhalten, bevor ein falscher
+    Beleg entsteht.
     """
     result = session.last_result
     if result is None:
         raise SystemExit("Keine ausgewertete Szene für den Merkmalsfilm")
+    target_id = _feature_target_id(session)
     for object_id, entry in result.scene.objects.items():
-        feature = entry.features.get("hole_1")
+        feature = entry.features.get(target_id)
         if feature is not None and feature.kind == "hole":
-            return object_id, "hole_1", feature
-    raise SystemExit("Der Merkmalsfilm braucht die erkannte Bohrung hole_1")
+            return object_id, target_id, feature
+    raise SystemExit(f"Der Merkmalsfilm braucht die erkannte Bohrung {target_id}")
 
 
-def _feature_move_row(window: Any) -> tuple[Any, Any]:
-    """X-Feld und Knopf der sichtbaren Handlung „Merkmal verschieben“.
+def _feature_action_row(window: Any, op: str) -> tuple[list[Any], Any, Any | None]:
+    """Felder, Knopf und Sammelhaken einer sichtbaren Merkmalshandlung.
 
     Gesucht wird über den Registertitel und nicht über die Reihenfolge aller
     Eingabefelder. Im Panel stehen X/Y/Z zweimal — einmal fürs Verschieben und
     einmal fürs Duplizieren. „Das erste X-Feld“ wäre damit ein stiller Vertrag
     mit der heutigen Reihenfolge statt mit der gezeigten Handlung.
     """
-    from PySide6.QtWidgets import QLabel, QPushButton
+    from PySide6.QtWidgets import QCheckBox, QLabel, QPushButton
 
     from app.core.registry import REGISTRY
     from app.ui.labels import LengthSpin
 
-    title = str(REGISTRY.get("move_feature").title)
+    title = str(REGISTRY.get(op).title)
     for row in window.feature_panel._built:
-        if not any(label.text() == title for label in row.findChildren(QLabel)):
-            continue
         fields = row.findChildren(LengthSpin)
         buttons = [button for button in row.findChildren(QPushButton) if button.text() == title]
-        if fields and buttons:
-            return fields[0], buttons[0]
-    raise SystemExit("Im Merkmalfenster fehlt die Handlung „Merkmal verschieben“")
+        labels = [label for label in row.findChildren(QLabel) if label.text() == title]
+        if not buttons or (fields and not labels):
+            continue
+        every = next((box for box in row.findChildren(QCheckBox) if box.text()), None)
+        return list(fields), buttons[0], every
+    raise SystemExit(f"Im Merkmalfenster fehlt die Handlung {title!r}")
+
+
+def _feature_move_row(window: Any) -> tuple[Any, Any]:
+    """X-Feld und Knopf der sichtbaren Handlung „Merkmal verschieben“."""
+    fields, button, _every = _feature_action_row(window, "move_feature")
+    if not fields:
+        raise SystemExit("Im Merkmalfenster fehlt das X-Feld von „Merkmal verschieben“")
+    return fields[0], button
+
+
+def _feature_holes(session: Any) -> tuple[str, list[tuple[str, Any]]]:
+    """Die belegten Bohrungen der Presseplatte in stabiler Reihenfolge."""
+    result = session.last_result
+    if result is None:
+        raise SystemExit("Keine ausgewertete Szene für den Merkmalsfilm")
+    target_id = _feature_target_id(session)
+    for object_id, entry in result.scene.objects.items():
+        holes = sorted(
+            (
+                (feature_id, feature)
+                for feature_id, feature in entry.features.items()
+                if feature.kind == "hole"
+            ),
+            key=lambda pair: pair[0],
+        )
+        if any(feature_id == target_id for feature_id, _feature in holes):
+            return object_id, holes
+    raise SystemExit(f"Das Pressemodell mit {target_id} wurde nicht gefunden")
+
+
+def feature_caption(session: Any, language: str, scene: str) -> tuple[str, str]:
+    """Messwert und Anzahl aus dem gezeigten Modell statt aus Werbetext lesen."""
+    title, detail = FEATURE_CAPTIONS[language][scene]
+    if scene in {"recognise", "resize_preview"}:
+        from app.core.scene.placement import screw_for_bore
+
+        _object_id, _feature_id, feature = _feature_demo_target(session)
+        diameter = float(feature.params["diameter"])
+        size = screw_for_bore(diameter)
+        if scene == "resize_preview":
+            if language == "de":
+                value = f"{diameter:.2f}".replace(".", ",")
+                return title, f"Ø {value} → 6,50 mm · Live-Vorschau"
+            return title, f"Ø {diameter:.2f} → 6.50 mm · live preview"
+        if language == "de":
+            value = f"{diameter:.2f}".replace(".", ",")
+            suffix = f" · {size}-Durchgang" if size else ""
+            return title, f"Erkannt: ⌀ {value} mm{suffix}"
+        suffix = f" · {size} clearance" if size else ""
+        return title, f"Recognised: Ø {diameter:.2f} mm{suffix}"
+    if scene in {"all_prepare", "all_apply"}:
+        _object_id, holes = _feature_holes(session)
+        count = len(holes)
+        words = (
+            {2: "ZWEI", 3: "DREI", 4: "VIER", 5: "FÜNF", 6: "SECHS"}
+            if language == "de"
+            else {2: "TWO", 3: "THREE", 4: "FOUR", 5: "FIVE", 6: "SIX"}
+        )
+        word = words.get(count, str(count))
+        if scene == "all_prepare":
+            title = (
+                f"EINE ÄNDERUNG FÜR {word} BOHRUNGEN"
+                if language == "de"
+                else f"ONE CHANGE FOR {word} HOLES"
+            )
+            return title, detail
+        title = f"{word} BOHRUNGEN · EIN UNDO" if language == "de" else f"{word} HOLES · ONE UNDO"
+        return title, detail
+    return title, detail
 
 
 def _wait_for_feature_preview(window: Any, app: QApplication, seconds: float = 120.0) -> None:
@@ -1814,7 +2133,7 @@ def _widget_centre(window: Any, widget: Any) -> tuple[float, float]:
 
 
 def _feature_click(window: Any) -> tuple[Any, tuple[float, float, float], tuple[float, float]]:
-    """Eingabeziel und sichtbare Stelle auf der Innenwand von ``hole_1``.
+    """Eingabeziel und sichtbare Stelle auf der Innenwand der Zielbohrung.
 
     Die Mitte eines Durchgangslochs ist leer und deshalb kein Klickziel. Der
     Punkt liegt auf seiner zylindrischen Wand, ein Viertel der Tiefe unter der
@@ -1872,12 +2191,11 @@ def feature_demo_step(
     if scene == "mesh":
         return orbit_step(window, app, 1.0, turns=0.18), None
 
-    field, button = _feature_move_row(window) if scene != "recognise" else (None, None)
-    _interactor, world, feature_point = _feature_click(window)
-    viewport = window.viewport.plotter.interactor
-    start = _widget_centre(window, viewport)
-
     if scene == "recognise":
+        target_id = _feature_target_id(session)
+        _interactor, world, feature_point = _feature_click(window)
+        viewport = window.viewport.plotter.interactor
+        start = _widget_centre(window, viewport)
         clicked = False
 
         def select_step(index: int, total: int) -> None:
@@ -1889,8 +2207,8 @@ def feature_demo_step(
                 # Punkt liegt auf derselben Bohrungswand wie der Zeiger.
                 window.viewport._select_at(world)
                 app.processEvents()
-                if window.object_tree.selected_feature() != "hole_1":
-                    raise SystemExit("Der sichtbare Klick hat hole_1 nicht ausgewählt")
+                if window.object_tree.selected_feature() != target_id:
+                    raise SystemExit(f"Der sichtbare Klick hat {target_id} nicht ausgewählt")
                 clicked = True
             window.viewport.plotter.render()
 
@@ -1901,38 +2219,172 @@ def feature_demo_step(
 
         return select_step, select_pointer
 
-    assert field is not None and button is not None
-    field_point = _widget_centre(window, field)
-    button_point = _widget_centre(window, button)
+    if scene == "distance_result":
+        return hold_step(window, app), None
 
-    if scene == "preview_feature":
+    if scene == "remove_undo":
+        target_id = _feature_target_id(session)
+        restored = False
+
+        def undo_step(index: int, total: int) -> None:
+            nonlocal restored
+            if not restored and index >= round(total * 0.36):
+                QTest.keyClick(
+                    window,
+                    Qt.Key.Key_Z,
+                    Qt.KeyboardModifier.ControlModifier,
+                )
+                session.wait_for_idle(120_000)
+                settle(app, 30)
+                _object_id, feature_id, _feature = _feature_demo_target(session)
+                if feature_id != target_id:
+                    raise SystemExit("Strg+Z hat die entfernte Bohrung nicht wiederhergestellt")
+                restored = True
+            window.viewport.plotter.render()
+
+        return undo_step, None
+
+    if scene == "resize_preview":
+        # 5,14 auf 6,50 mm ist eine sinnvolle reale Änderung, aber in der
+        # Gesamtansicht nur wenige Pixel breit. Für die Vorschau fährt die
+        # Kamera deshalb näher an das ganze Teil. Der Blickpunkt bleibt in der
+        # Modellmitte: Ein Flug direkt an die Bohrung zeigte zwar ihr Maß, aber
+        # nur noch eine graue Ebene und verlor den Zusammenhang zum Halter.
+        # Die Folgeszene behält denselben Zoom für das bestätigte Ergebnis.
+        window.viewport.zoom(1.45)
+        settle(app, 20)
+
+    _interactor, _world, feature_point = _feature_click(window)
+
+    if scene == "pair_select":
+        from app.ui.panels import _feature_item
+
+        object_id, holes = _feature_holes(session)
+        target_id = _feature_target_id(session)
+        first = next(feature for feature_id, feature in holes if feature_id == target_id)
+        first_diameter = float(first.params.get("diameter", 0.0))
+        second_id, _second = min(
+            ((feature_id, feature) for feature_id, feature in holes if feature_id != target_id),
+            key=lambda pair: abs(float(pair[1].params.get("diameter", 0.0)) - first_diameter),
+        )
+        tree = window.object_tree.tree
+        tree.expandAll()
+        root = next(
+            (
+                tree.topLevelItem(index)
+                for index in range(tree.topLevelItemCount())
+                if tree.topLevelItem(index) is not None
+                and tree.topLevelItem(index).data(0, Qt.ItemDataRole.UserRole) == object_id
+            ),
+            None,
+        )
+        item = _feature_item(root, second_id)
+        if item is None:
+            raise SystemExit(f"Die zweite Bohrung {second_id} fehlt im Objektbaum")
+        tree.scrollToItem(item)
+        settle(app, 20)
+        local = tree.visualItemRect(item).center()
+        visible = tree.viewport().mapTo(window, local)
+        target = (float(visible.x()), float(visible.y()))
+        selected = False
+
+        def pair_step(index: int, total: int) -> None:
+            nonlocal selected
+            if not selected and index >= round(total * 0.44):
+                QTest.mouseClick(
+                    tree.viewport(),
+                    Qt.MouseButton.LeftButton,
+                    Qt.KeyboardModifier.ControlModifier,
+                    local,
+                )
+                app.processEvents()
+                if len(window.object_tree.selected_features()) != 2:
+                    raise SystemExit("Die sichtbare Mehrfachauswahl enthält nicht zwei Bohrungen")
+                if set(window.viewport.highlighted_features()) != {target_id, second_id}:
+                    raise SystemExit("Die erste Bohrung verlor ihre sichtbare Mehrfachauswahl")
+                if window.viewport.highlighted_object() is not None:
+                    raise SystemExit("Die Mehrfachauswahl färbt den ganzen Körper")
+                selected = True
+            window.viewport.plotter.render()
+
+        def pair_pointer(index: int, total: int) -> tuple[float, float, bool]:
+            point = _ease(feature_point, target, index / max(1.0, total * 0.40))
+            pressed = abs(index - round(total * 0.44)) <= 2
+            return (*point, pressed)
+
+        return pair_step, pair_pointer
+
+    edit_actions = {
+        "preview_feature": ("move_feature", "-10"),
+        "resize_preview": ("resize_hole", "6.5"),
+        "all_prepare": ("resize_hole", "6.5"),
+        "duplicate_preview": ("duplicate_feature", "-10"),
+    }
+    if scene in edit_actions:
+        op, typed_value = edit_actions[scene]
+        fields, _button, every = _feature_action_row(window, op)
+        if not fields:
+            raise SystemExit(f"Die Presseaufnahme braucht ein Längenfeld für {op}")
+        field = fields[0]
+        field_point = _widget_centre(window, field)
+        every_point = _widget_centre(window, every) if every is not None else field_point
         typed = False
-        checked = False
+        previewed = False
+        selected_all = False
 
         def edit_step(index: int, total: int) -> None:
-            nonlocal typed, checked
-            if not typed and index >= round(total * 0.32):
+            nonlocal typed, previewed, selected_all
+            if not typed and index >= round(total * 0.28):
                 QTest.mouseClick(field, Qt.MouseButton.LeftButton)
                 field.setFocus()
                 field.selectAll()
-                QTest.keyClicks(field, "-10")
+                QTest.keyClicks(field, typed_value)
                 QTest.keyClick(field, Qt.Key.Key_Return)
                 typed = True
-            if typed and not checked and index >= round(total * 0.58):
+            if typed and not previewed and index >= round(total * 0.54):
                 _wait_for_feature_preview(window, app)
-                checked = True
+                previewed = True
+            if scene == "all_prepare" and not selected_all and index >= round(total * 0.70):
+                if every is None:
+                    raise SystemExit("Der Sammelhaken für gleichartige Bohrungen fehlt")
+                QTest.mouseClick(every, Qt.MouseButton.LeftButton)
+                if not every.isChecked():
+                    raise SystemExit("Der sichtbare Sammelhaken blieb aus")
+                selected_all = True
             window.viewport.plotter.render()
 
         def edit_pointer(index: int, total: int) -> tuple[float, float, bool]:
-            point = _ease(feature_point, field_point, index / max(1.0, total * 0.28))
-            pressed = abs(index - round(total * 0.32)) <= 2
+            if scene == "all_prepare" and index >= round(total * 0.48):
+                share = (index - total * 0.48) / max(1.0, total * 0.18)
+                point = _ease(field_point, every_point, share)
+                pressed = abs(index - round(total * 0.70)) <= 2
+                return (*point, pressed)
+            point = _ease(feature_point, field_point, index / max(1.0, total * 0.24))
+            pressed = abs(index - round(total * 0.28)) <= 2
             return (*point, pressed)
 
         return edit_step, edit_pointer
 
-    if scene != "apply_feature":
+    apply_actions = {
+        "apply_feature": "move_feature",
+        "resize_apply": "resize_hole",
+        "all_apply": "resize_hole",
+        "duplicate_apply": "duplicate_feature",
+        "remove_apply": "remove_feature",
+    }
+    op = apply_actions.get(scene)
+    if op is None:
         raise SystemExit(f"Unbekannte Merkmalsfilmszene: {scene}")
+    fields, button, every = _feature_action_row(window, op)
+    if scene == "all_apply" and (every is None or not every.isChecked()):
+        raise SystemExit("Die Sammelhandlung begann ohne gesetzten Haken")
+    origin = every if scene == "all_apply" else (fields[0] if fields else None)
+    origin_point = _widget_centre(window, origin) if origin is not None else feature_point
+    button_point = _widget_centre(window, button)
     applied = False
+    before_transactions = len(session.project.document.transactions)
+    _object_id, holes_before = _feature_holes(session)
+    target_id = _feature_target_id(session)
 
     def apply_step(index: int, total: int) -> None:
         nonlocal applied
@@ -1940,21 +2392,54 @@ def feature_demo_step(
             QTest.mouseClick(button, Qt.MouseButton.LeftButton)
             session.wait_for_idle(120_000)
             settle(app, 30)
-            _object_id, feature_id, feature = _feature_demo_target(session)
-            centre = feature.params.get("centre")
-            if centre is None or not math.isclose(
-                float(centre[0]), FEATURE_DEMO_TARGET_X, abs_tol=0.5
-            ):
-                raise SystemExit(
-                    f"Die Bohrung wurde nicht an die belegte Zielstelle versetzt: {centre}"
-                )
-            if feature_id != "hole_1":
-                raise SystemExit(f"Die Bohrungskennung wechselte zu {feature_id}")
+            if scene == "remove_apply":
+                result = session.last_result
+                if result is None or _object_id not in result.scene.objects:
+                    raise SystemExit("Das Entfernen der Bohrung nahm den ganzen Körper mit")
+                if target_id in result.scene.objects[_object_id].features:
+                    raise SystemExit("Die gewählte Bohrung blieb nach Entfernen bestehen")
+            else:
+                _after_object, feature_id, feature = _feature_demo_target(session)
+                if feature_id != target_id:
+                    raise SystemExit(f"Die Bohrungskennung wechselte zu {feature_id}")
+                if scene == "apply_feature":
+                    centre = feature.params.get("centre")
+                    if centre is None or not math.isclose(
+                        float(centre[0]), FEATURE_DEMO_TARGET_X, abs_tol=0.5
+                    ):
+                        raise SystemExit(
+                            f"Die Bohrung wurde nicht an die belegte Zielstelle versetzt: {centre}"
+                        )
+                elif scene == "resize_apply" and not math.isclose(
+                    float(feature.params.get("diameter", 0.0)), 6.5, abs_tol=0.2
+                ):
+                    raise SystemExit("Die Bohrung wurde nicht auf 6,5 mm geändert")
+                elif scene == "all_apply":
+                    _after_object, holes_after = _feature_holes(session)
+                    measured = [
+                        float(hole.params.get("diameter", 0.0)) for _feature_id, hole in holes_after
+                    ]
+                    if len(measured) != len(holes_before) or not all(
+                        math.isclose(value, 6.5, abs_tol=0.2) for value in measured
+                    ):
+                        raise SystemExit(
+                            f"Nicht alle Bohrungen wurden gemeinsam geändert: {measured}"
+                        )
+                    if len(session.project.document.transactions) != before_transactions + 1:
+                        raise SystemExit(
+                            "Die Sammelhandlung wurde nicht als eine Transaktion gespeichert"
+                        )
+                elif scene == "duplicate_apply":
+                    _after_object, holes_after = _feature_holes(session)
+                    if len(holes_after) != len(holes_before) + 1:
+                        raise SystemExit(
+                            "Die Duplizierung erzeugte nicht genau eine weitere Bohrung"
+                        )
             applied = True
         window.viewport.plotter.render()
 
     def apply_pointer(index: int, total: int) -> tuple[float, float, bool]:
-        point = _ease(field_point, button_point, index / max(1.0, total * 0.34))
+        point = _ease(origin_point, button_point, index / max(1.0, total * 0.34))
         pressed = abs(index - round(total * 0.38)) <= 2
         return (*point, pressed)
 
@@ -1964,7 +2449,13 @@ def feature_demo_step(
 def reset_feature_demo(window: Any, app: QApplication, session: Any) -> None:
     """Den Merkmalsfilm auf die eingelesene Ausgangsdatei zurückstellen."""
     window._drop_feature_preview()
-    while session.project.document.ops and session.project.document.ops[-1].op == "move_feature":
+    edited = {
+        "move_feature",
+        "resize_hole",
+        "duplicate_feature",
+        "remove_feature",
+    }
+    while session.project.document.ops and session.project.document.ops[-1].op in edited:
         session.undo()
         session.wait_for_idle(120_000)
     object_id, _feature_id, _feature = _feature_demo_target(session)
@@ -2046,7 +2537,7 @@ def shoot_storyboard(
         if key in FEATURE_DEMO_SCENES:
             prepare_feature_demo_scene(window, app, session, key, feature_panel_visible)
             step, pointer = feature_demo_step(window, app, session, key)
-            caption = FEATURE_CAPTIONS[language][key]
+            caption = feature_caption(session, language, key)
         if key == "closing":
             # Die Schlusskarte kommt aus dem Zeichenprogramm, nicht aus dem
             # Fenster — sie zeigt nichts aus der Anwendung.
@@ -2253,13 +2744,15 @@ def compose_feature_short(
     target_frames: Path,
     timing: list[tuple[str, Path, float]],
     language: str,
+    captions: dict[str, tuple[str, str]] | None = None,
 ) -> Shot:
     """Aus der breiten Bedienaufnahme eine lesbare Short-Komposition bauen.
 
     Ein einfacher 9:16-Zuschnitt würde entweder das ausgewählte Loch oder das
-    Merkmalfenster verlieren. Deshalb zeigt jedes Bild den ganzen Ablauf und
-    darunter den gerade wichtigen Bereich vergrößert. Das ist absichtlich
-    dieselbe Aufnahme zweimal, keine nachgestellte zweite Bedienung.
+    Merkmalfenster verlieren. Deshalb zeigt jedes Bild das Modell groß und
+    darunter nur den gerade bedienten Bereich. Ein dauerhaftes Miniaturbild
+    des ganzen Fensters verschwendet auf dem Telefon Fläche und macht genau
+    die Felder unlesbar, die den Beleg tragen.
     """
     from PySide6.QtCore import QRect, QRectF, Qt
     from PySide6.QtGui import QColor, QFont, QFontMetrics, QImage, QPainter, QPen
@@ -2268,12 +2761,38 @@ def compose_feature_short(
         shutil.rmtree(target_frames)
     target_frames.mkdir(parents=True)
     width, height = 1080, 1920
+    model_rect = QRect(310, 0, 1358, 920)
     detail_rects = {
-        "mesh": QRect(260, 70, 1280, 780),
-        "recognise": QRect(360, 70, 1200, 780),
-        "preview_feature": QRect(760, 50, 1160, 780),
-        "apply_feature": QRect(760, 50, 1160, 780),
+        "mesh": QRect(310, 0, 1358, 920),
+        "recognise": QRect(1660, 70, 260, 220),
+        "preview_feature": QRect(1660, 135, 260, 210),
+        "apply_feature": QRect(1660, 135, 260, 210),
+        "resize_preview": QRect(1660, 315, 260, 190),
+        "resize_apply": QRect(1660, 315, 260, 190),
+        "all_prepare": QRect(1660, 315, 260, 190),
+        "all_apply": QRect(0, 690, 310, 245),
+        "pair_select": QRect(0, 80, 310, 220),
+        "distance_result": QRect(1660, 65, 260, 220),
+        "duplicate_preview": QRect(1660, 590, 260, 230),
+        "duplicate_apply": QRect(1660, 590, 260, 230),
+        "remove_apply": QRect(500, 250, 850, 575),
+        "remove_undo": QRect(10, 715, 200, 135),
     }
+
+    def cover(source: QImage, target_width: int, target_height: int) -> QImage:
+        """Einen Ausschnitt füllen, ohne Schrift oder Modell zu verzerren."""
+        scaled = source.scaled(
+            target_width,
+            target_height,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        left = max(0, (scaled.width() - target_width) // 2)
+        top = max(0, (scaled.height() - target_height) // 2)
+        return scaled.copy(left, top, target_width, target_height)
+
+    caption_map = captions or FEATURE_CAPTIONS[language]
+    commit_badges = FEATURE_COMMIT_BADGES[language]
     source_index = 0
     card_from = landscape.count
     for scene_number, (key, _path, seconds) in enumerate(timing):
@@ -2286,7 +2805,7 @@ def compose_feature_short(
                 source_index += 1
             continue
 
-        caption = FEATURE_CAPTIONS[language][key]
+        caption = caption_map[key]
         for _local_index in range(scene_count):
             source = QImage(str(landscape.frames / f"{source_index:05d}.png"))
             if source.isNull():
@@ -2329,16 +2848,11 @@ def compose_feature_short(
                 caption[1],
             )
 
-            overview = source.scaled(
-                960,
-                540,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
+            model = cover(source.copy(model_rect), 960, 650)
             painter.setPen(QPen(QColor("#39424d"), 2.0))
             painter.setBrush(QColor("#0f1216"))
-            painter.drawRoundedRect(QRectF(59.0, 294.0, 962.0, 542.0), 10.0, 10.0)
-            painter.drawImage(QRectF(60.0, 295.0, 960.0, 540.0), overview)
+            painter.drawRoundedRect(QRectF(59.0, 264.0, 962.0, 652.0), 10.0, 10.0)
+            painter.drawImage(QRectF(60.0, 265.0, 960.0, 650.0), model)
 
             label_font = QFont("Segoe UI")
             label_font.setPixelSize(24)
@@ -2347,21 +2861,34 @@ def compose_feature_short(
             painter.setPen(QColor("#7f8b99"))
             label = "DETAILANSICHT" if language == "de" else "DETAIL VIEW"
             painter.drawText(
-                QRectF(60.0, 870.0, 960.0, 38.0),
+                QRectF(60.0, 945.0, 960.0, 38.0),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 label,
             )
-            cropped = source.copy(detail_rects[key])
-            detailed = cropped.scaled(
-                960,
-                640,
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            )
+            detailed = cover(source.copy(detail_rects[key]), 960, 650)
             painter.setPen(QPen(QColor("#e08b4e"), 2.0))
             painter.setBrush(QColor("#0f1216"))
-            painter.drawRoundedRect(QRectF(59.0, 923.0, 962.0, 642.0), 10.0, 10.0)
-            painter.drawImage(QRectF(60.0, 924.0, 960.0, 640.0), detailed)
+            painter.drawRoundedRect(QRectF(59.0, 993.0, 962.0, 652.0), 10.0, 10.0)
+            painter.drawImage(QRectF(60.0, 994.0, 960.0, 650.0), detailed)
+
+            badge = commit_badges.get(key)
+            if badge is not None and _local_index >= round(scene_count * 0.50):
+                badge_rect = QRectF(352.0, 835.0, 676.0, 64.0)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(QColor(20, 23, 28, 232))
+                painter.drawRoundedRect(badge_rect, 10.0, 10.0)
+                painter.setBrush(QColor("#e08b4e"))
+                painter.drawRoundedRect(QRectF(352.0, 835.0, 8.0, 64.0), 4.0, 4.0)
+                badge_font = QFont("Segoe UI")
+                badge_font.setPixelSize(27)
+                badge_font.setWeight(QFont.Weight.Bold)
+                painter.setFont(badge_font)
+                painter.setPen(QColor("#f5f7fa"))
+                painter.drawText(
+                    QRectF(380.0, 835.0, 626.0, 64.0),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    badge,
+                )
 
             painter.setPen(QColor("#7f8b99"))
             footer = QFont("Segoe UI")
@@ -2373,7 +2900,7 @@ def compose_feature_short(
                 "solidon3d.de",
             )
             dot_y = 1835.0
-            for dot in range(len(FEATURE_DEMO_SCENES)):
+            for dot in range(len(timing)):
                 painter.setBrush(QColor("#e08b4e") if dot == scene_number else QColor("#46505c"))
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.drawEllipse(QRectF(475.0 + dot * 42.0, dot_y, 14.0, 14.0))
@@ -2567,10 +3094,13 @@ def main() -> int:
     arguments = sys.argv[2:]
     name = arguments[0] if arguments and arguments[0] in SCRIPTS else "einstieg"
     script = SCRIPTS[name]
-    # Ein Argument, das auf ``.p3d`` endet, ist das Projekt. Gebraucht für
-    # Drehbücher, die kein Beispielprojekt zeigen, sondern ein echtes — das
-    # Modul-Video tut das, und ein Druckprojekt wohnt nicht im Repository.
-    chosen = [entry for entry in arguments if entry.endswith(".p3d")]
+    # Ein Projekt oder Modell kann ausdrücklich das jeweilige Schaustück
+    # ersetzen. Ein STL läuft dabei durch denselben sichtbaren Importweg wie
+    # beim Nutzer; gerade für Pressebelege wäre ein vorher umgebautes P3D die
+    # falsche Aussage über das gezeigte Ausgangsmaterial.
+    chosen = [
+        entry for entry in arguments if Path(entry).suffix.lower() in MODEL_SUFFIXES | {".p3d"}
+    ]
     project = Path(chosen[0]) if chosen else None
     # ``loop`` schaltet auf die Website-Fassung um: stumm, 720p, kurz, in
     # zwei Formaten samt Standbild. Kein eigenes Werkzeug daneben — es ist
@@ -2619,7 +3149,12 @@ def main() -> int:
             start_degrees = float(value)
         break
 
-    skip = {morph_name, f"{morph_name}:{morph_span[0]:g}:{morph_span[1]:g}"}
+    feature_id = option(arguments, "--feature") or "hole_1"
+    skip = {
+        morph_name,
+        f"{morph_name}:{morph_span[0]:g}:{morph_span[1]:g}",
+        feature_id,
+    }
     if start_degrees:
         skip.add(f"{start_degrees:g}")
     wanted = [
@@ -2628,7 +3163,7 @@ def main() -> int:
         if entry not in SCRIPTS
         and entry != "loop"
         and entry != "short"
-        and not entry.endswith(".p3d")
+        and Path(entry).suffix.lower() not in MODEL_SUFFIXES | {".p3d"}
         and not entry.startswith("--")
         and entry not in skip
     ] or list(script)
@@ -2706,6 +3241,7 @@ def main() -> int:
             project,
             script_name=name,
             short_only=short_only,
+            feature_id=feature_id,
         )
 
     print(f"\nFertig: {out}")
@@ -2817,7 +3353,7 @@ def shoot_turntable(
     project = chosen if chosen is not None else examples.directory() / EXAMPLE
     if not project.is_file():
         raise SystemExit(f"Projekt fehlt: {project}")
-    session.open_project(project)
+    _open_video_input(session, project)
     if not await_result(app, session):
         raise SystemExit(f"Das Projekt rechnete nicht fertig: {project}")
 
@@ -2999,7 +3535,7 @@ def shoot_loop(
     project = chosen if chosen is not None else examples.directory() / EXAMPLE
     if not project.is_file():
         raise SystemExit(f"Projekt fehlt: {project}")
-    session.open_project(project)
+    _open_video_input(session, project)
     if not await_result(app, session):
         raise SystemExit(f"Das Projekt rechnete nicht fertig: {project}")
     settle(app, 30)
@@ -3045,6 +3581,7 @@ def shoot_language(
     chosen: Path | None = None,
     script_name: str = "einstieg",
     short_only: bool = False,
+    feature_id: str = "hole_1",
 ) -> None:
     """Ein vollständiger Durchgang für eine Sprache: vertonen, filmen, kodieren.
 
@@ -3060,15 +3597,16 @@ def shoot_language(
     from app.ui.session import Session
     from app.ui.settings import UiSettings
 
-    stem = "solidon3d-stl-feature" if script_name == "merkmal" else "solidon3d"
-    if script_name == "merkmal":
+    feature_short = script_name in FEATURE_SHORT_SCRIPTS
+    stem = FEATURE_SHORT_STEMS.get(script_name, "solidon3d")
+    if feature_short:
         # Der konkrete Höreindruck entscheidet: Eine künstliche Stimme, die
         # als solche auffällt, schwächt ausgerechnet einen Beweisfilm. Kurze
         # Einblendungen und ein eigenes Musikbett brauchen keine Behauptung,
         # die der Film nicht selbst zeigt.
         spoken = feature_timing(script[language])
         seconds = sum(entry[2] for entry in spoken)
-        audio = write_feature_music(out / "solidon3d-stl-feature-musik.wav", seconds)
+        audio = write_feature_music(out / f"{stem}-music.wav", seconds)
         for obsolete in (out / f"stimme-{language}.wav", out / f"{stem}-{language}.srt"):
             if obsolete.is_file():
                 obsolete.unlink()
@@ -3091,18 +3629,26 @@ def shoot_language(
         print(f"  zusammen {sum(entry[2] for entry in spoken):.1f} s")
 
     session = Session()
+    session._video_feature_id = feature_id
     window = MainWindow(session, UiSettings())
     window.resize(*WINDOW)
     window.show()
 
-    default_example = FEATURE_EXAMPLE if script_name == "merkmal" else EXAMPLE
+    default_example = FEATURE_EXAMPLE if feature_short else EXAMPLE
     project = chosen if chosen is not None else examples.directory() / default_example
     if not project.is_file():
         raise SystemExit(f"Projekt fehlt: {project}")
-    session.open_project(project)
+    _open_video_input(session, project)
     window._show_start_screen(False)
     if not await_result(app, session):
         raise SystemExit("Die Auswertung wurde nicht fertig — kein Video")
+    if feature_short:
+        # Prüfbericht und Merkmalfenster liegen beide rechts. Im normalen
+        # Arbeitsfenster darf der Nutzer beides zugleich sehen; im schmalen
+        # Belegfilm würden sie jedoch übereinander um dieselbe Modellfläche
+        # kämpfen. Für diese Aufnahme bleibt nur das bediente Merkmalfenster.
+        window.right.hide()
+        window.overlay.reflow()
     window.raise_()
     window.activateWindow()
     settle(app, 60)
@@ -3114,13 +3660,19 @@ def shoot_language(
     )
 
     portrait: Shot | None = None
-    if script_name == "merkmal":
+    if feature_short:
         print("Komposition Short:")
+        short_captions = {
+            key: feature_caption(session, language, key)
+            for key, _path, _seconds in spoken
+            if key != "closing"
+        }
         portrait = compose_feature_short(
             landscape,
             frames / "portrait",
             spoken,
             language,
+            short_captions,
         )
     else:
         print("Aufnahme hoch:")
@@ -3148,7 +3700,7 @@ def shoot_language(
         if obsolete_landscape.is_file():
             obsolete_landscape.unlink()
     if portrait is not None:
-        if script_name == "merkmal":
+        if feature_short:
             encode_feature_short(
                 portrait,
                 out / f"{stem}-{language}-short-1080x1920.mp4",
@@ -3164,6 +3716,13 @@ def shoot_language(
                 audio=audio,
             )
 
+    # Ein unmittelbar eingelesenes Modell ist „ungespeichert“, und auch ein
+    # geöffnetes P3D gilt nach den für den Film ausgeführten und rückgängig
+    # gemachten Schritten als geändert. Beim Schließen des Aufnahmewerkzeugs
+    # darf deshalb kein Speichern-Dialog auf Bedienung warten: Quelle und
+    # fertiger Film liegen bereits an ihren Zielorten, das geöffnete Dokument
+    # sollte nie geschrieben werden.
+    session._dirty = False
     window.close()
     release_viewport(window)
 
