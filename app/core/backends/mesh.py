@@ -539,7 +539,15 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
             # Gefunden hat das die CI: derselbe Test war auf dieser Maschine
             # grün und auf dem Windows-Runner rot (24.08.2026).
             return False
-        with socket.create_connection((parts.hostname, parts.port or 80), timeout=seconds):
+        # Der Standardport folgt dem Schema: ``https://rechner/comfy`` lauscht
+        # auf 443, und auf 80 antwortet dort niemand — die Bereitschaft
+        # meldete ABSENT, der Erzeugen-Knopf blieb gesperrt, obwohl jede
+        # spätere Anfrage HTTPS richtig benutzt hätte (Gesamtreview
+        # 05.09.2026, CORE-25).
+        default_port = 443 if (parts.scheme or "").lower() == "https" else 80
+        with socket.create_connection(
+            (parts.hostname, parts.port or default_port), timeout=seconds
+        ):
             return True
     except UNUSABLE_ADDRESS:
         # ``ValueError`` gehört dazu: Steht im Adressfeld ein Pfad statt einer

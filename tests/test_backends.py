@@ -1643,3 +1643,56 @@ def test_a_json_answer_from_comfyui_is_read_with_limits(
 
     assert backend._ahead_in_queue("auftrag") == 0
     assert not backend._still_working("auftrag")
+
+
+def test_the_content_type_is_no_secret_and_travels_over_plain_http(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-05: ``post_json`` lehnte über HTTP jedes
+    nicht leere Kopfzeilen-Wörterbuch ab — auch das ``Content-Type`` der
+    eigenen Geschwindigkeitsmessung. Die Messung endete vor dem Öffnen der
+    Verbindung ohne Zahl, und der Kunde ohne Grafikkarte bekam keine
+    Langsam-Warnung. Ein Zugangswert bleibt über HTTP weiter verboten."""
+    import json as json_module
+
+    opened: list[str] = []
+
+    class _Answer:
+        def __init__(self, address: str) -> None:
+            self._address = address
+
+        def __enter__(self) -> _Answer:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        @property
+        def url(self) -> str:
+            return self._address
+
+        def geturl(self) -> str:
+            return self._address
+
+        def read(self, size: int = -1) -> bytes:
+            return json_module.dumps(
+                {"prompt_eval_count": 4, "prompt_eval_duration": 10**9}
+            ).encode("utf-8")
+
+    class _Opener:
+        def open(self, request: object, timeout: float = 0.0) -> _Answer:
+            opened.append(request.full_url)  # type: ignore[attr-defined]
+            return _Answer(request.full_url)  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(llm, "opener_for", lambda _address: _Opener())
+    monkeypatch.setattr(llm, "read_limited", lambda answer, **_kwargs: answer.read(65536))
+
+    answer = llm.post_json(
+        "http://127.0.0.1:11434/api/chat", {"Content-Type": "application/json"}, {"model": "x"}
+    )
+    assert answer["prompt_eval_count"] == 4
+    assert opened == ["http://127.0.0.1:11434/api/chat"], "die Verbindung wurde geöffnet"
+
+    with pytest.raises(BackendUnavailable):
+        llm.post_json("http://127.0.0.1:11434/api/chat", {"Authorization": "Bearer x"}, {})
+    assert len(opened) == 1, "ein Zugangswert reist über blankes HTTP weiter nicht"

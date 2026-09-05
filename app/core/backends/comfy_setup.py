@@ -856,7 +856,7 @@ def weights_present(comfyui: Path) -> bool:
 #: Abbruch von außen kommt durch — ``_run`` beendet den Prozess, und eine
 #: Schleife im Kind hält das nicht auf.
 _FETCH_WEIGHTS = """
-import shutil, sys
+import os, shutil, sys
 from pathlib import Path
 from huggingface_hub import HfApi, snapshot_download
 
@@ -875,9 +875,19 @@ if resolved != revision:
 shutil.rmtree(scratch / ".cache", ignore_errors=True)
 print("Verschieben", flush=True)
 target.parent.mkdir(parents=True, exist_ok=True)
+# Ueber die Grenze eines Datentraegers kopiert shutil.move Datei fuer Datei.
+# Direkt ins Ziel kopiert lag model_index.json schon da, bevor die Gewichte
+# ankamen -- ein Abbruch dazwischen sah beim naechsten Einrichten wie ein
+# vollstaendiges Modell aus (CORE-24). Daneben kopieren, dann umbenennen:
+# innerhalb eines Datentraegers ist das ein Schritt, der ganz oder gar
+# nicht geschieht.
+staging = target.with_name(target.name + ".part")
+if staging.exists():
+    shutil.rmtree(staging, ignore_errors=True)
+shutil.move(str(scratch), str(staging))
 if target.exists():
     shutil.rmtree(target, ignore_errors=True)
-shutil.move(str(scratch), str(target))
+os.replace(str(staging), str(target))
 """
 
 

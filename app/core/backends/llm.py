@@ -285,7 +285,15 @@ def post_json(
         address = validate_http_url(url, allow_http=True)
     except ValueError as error:
         raise BackendUnavailable() from error
-    if urllib.parse.urlsplit(address).scheme == "http" and headers:
+    # **Über blankes HTTP reist kein Zugangswert** — ein Schlüssel im Kopf
+    # wäre auf der Leitung lesbar. Der Inhaltstyp ist keiner: Die eigene
+    # Geschwindigkeitsmessung schickt ihn an das lokale Ollama, und die Sperre
+    # ließ sie vor dem Öffnen der Verbindung mit „keine Messung" enden — genau
+    # der Kunde ohne Grafikkarte bekam damit keine Langsam-Warnung
+    # (Gesamtreview 05.09.2026, CORE-05).
+    if urllib.parse.urlsplit(address).scheme == "http" and any(
+        key.lower() != "content-type" for key in headers
+    ):
         raise BackendUnavailable()
     deadline = deadline_after(timeout)
     body = json.dumps(payload).encode("utf-8")

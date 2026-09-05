@@ -2366,3 +2366,87 @@ def test_every_role_that_can_be_chosen_has_a_name() -> None:
     for role in benutzt:
         spec = mesh_module.MODEL_ROLES[role]
         assert str(spec.title), f"die Rolle {role} steht in einem Ablauf und braucht einen Namen"
+
+
+def test_the_reachability_probe_takes_the_port_from_the_scheme(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-25: ``reachable`` prüfte ohne Portangabe
+    immer Port 80 — ein HTTPS-ComfyUI hinter einem Proxy antwortet auf 443,
+    und die Bereitschaft meldete ABSENT, der Erzeugen-Knopf blieb gesperrt."""
+    import socket
+
+    from app.core.backends import mesh
+
+    asked: list[tuple[str, int]] = []
+
+    class _Connection:
+        def __enter__(self) -> _Connection:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    def fake_connection(address: tuple[str, int], timeout: float = 0.0) -> _Connection:
+        asked.append(address)
+        return _Connection()
+
+    monkeypatch.setattr(socket, "create_connection", fake_connection)
+
+    assert mesh.reachable("https://rechner/comfy") is True
+    assert mesh.reachable("http://rechner/comfy") is True
+    assert mesh.reachable("https://rechner:8188/comfy") is True
+    assert asked == [("rechner", 443), ("rechner", 80), ("rechner", 8188)]
+
+
+def test_the_weights_are_staged_beside_the_target_and_swapped_in_whole(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-24: Über die Grenze eines Datenträgers
+    kopiert ``shutil.move`` Datei für Datei — direkt ins Ziel lag
+    ``model_index.json`` da, bevor die Gewichte ankamen, und ein Abbruch
+    dazwischen sah beim nächsten Einrichten wie ein vollständiges Modell
+    aus. Kopiert wird daneben, eingewechselt in einem Schritt."""
+    import shutil
+
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "models" / "TripoSG"
+    scratch = tmp_path / "scratch"
+
+    def download(_repo: str, **kwargs: object) -> str:
+        local_dir = Path(str(kwargs["local_dir"]))
+        local_dir.mkdir(parents=True, exist_ok=True)
+        (local_dir / "model_index.json").write_text("{}", encoding="utf-8")
+        return str(local_dir)
+
+    class Api:
+        def model_info(self, _repo: str, *, revision: str) -> SimpleNamespace:
+            return SimpleNamespace(sha=revision)
+
+    moves: list[Path] = []
+    real_move = shutil.move
+
+    def watched_move(source: str, destination: str) -> str:
+        moves.append(Path(destination))
+        return real_move(source, destination)
+
+    monkeypatch.setattr(shutil, "move", watched_move)
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(HfApi=Api, snapshot_download=download),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["-c", str(target), comfy_setup.WEIGHTS_REPO, str(scratch), comfy_setup.WEIGHTS_REVISION],
+    )
+
+    exec(comfy_setup._FETCH_WEIGHTS, {})
+
+    assert moves, "ohne Verschieben prüft dieser Test nichts"
+    assert target not in moves, "nie Datei für Datei ins Ziel"
+    assert all(path.parent == target.parent and path != target for path in moves)
+    assert (target / "model_index.json").is_file()
+    assert not list(target.parent.glob("*.part")), "die Zwischenstufe ist eingewechselt"
