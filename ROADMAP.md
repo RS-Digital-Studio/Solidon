@@ -134,7 +134,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Gerät. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** — von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Korrektur gebaut, Feldbestätigung offen.** Martin Doneckers Ausgabe nennt `bad X server connection. DISPLAY=`; `fallback-x11` gab VTK unter Wayland keinen X11-Display. Das Flatpak erlaubt deshalb nur noch `--socket=x11`, sodass Qt und VTK gemeinsam über Xwayland laufen. Der einmalige Gegenversuch ist `flatpak run --socket=x11 --nosocket=wayland --nosocket=fallback-x11 de.rsdigital.solidon3d`. **Seit dem 02.09.2026 auch außerhalb des Flatpaks abgesichert:** Qt 6 wählt ohne `QT_QPA_PLATFORM` in jeder Wayland-Sitzung `[wayland, xcb]` (belegt in `qguiapplication.cpp`, 6.8 bis 6.11), und VTKs Qt-Anbindung kennt nur X11 — AppImage und Archiv hätten Martins Fehler auf jedem KDE- und GNOME-Desktop gehabt. `app/ui/qt_platform.py` wählt vor dem Anwendungsaufbau xcb, sobald `DISPLAY` da ist (auch gegen ein global gesetztes `wayland`; der Fehlerbericht weist die Wahl mit dem Vorwert aus), `viewport._available()` lehnt Wayland mit einem Hinweis ab statt VTK nativ sterben zu lassen, das Manifest trägt zusätzlich `--env=QT_QPA_PLATFORM=xcb` nach FreeCADs Flathub-Muster. Geprüft ist die Weiche, nicht das Bild — ein echtes Wayland fehlt weiterhin |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
-| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. Es fehlt ein echtes Paket auf einem Mac; dort *Hilfe → Nach Updates suchen* drücken |
+| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | **Rückfall gebaut, Paket geprüft, Feldbestätigung offen:** Das macOS-Paket bringt certifis CA-Satz ausdrücklich mit und setzt ihn vor dem ersten Netzzugriff, sofern keine Firmenvorgabe besteht. **05.09.2026:** Das ausgelieferte Paket 0.3.4 (arm64) ist von Windows aus geöffnet worden — `Resources/certifi/cacert.pem`, `libssl.3.dylib`, `libcrypto.3.dylib` und `_ssl` reisen mit, und der Leser von 0.2.2 nimmt die heutige `version.json` an (gegen den Server gemessen). Was weiter fehlt, ist der Lauf auf einem Mac: Der Kunde R. W. D. hatte am 05.09. noch 0.2.2 — ob sein Mac den Hinweis auf 0.3.x je zeigte, steht in seiner `~/Library/Logs/Solidon3D/app.log` („update check did not answer: …" nennt den Grund). Dort *Hilfe → Nach Updates suchen* drücken |
 | AppImage erscheint erst mit der nächsten Version | Linux durfte nicht updaten, und Windows fragte sechsmal (28.08.2026) | **Entschieden, Robert 28.08.2026:** AppImage und Flatpak werden ab der nächsten Version ausgeliefert; das Archiv bleibt ein Bauartefakt. Bis dahin bleibt die aktuelle Download-Seite unverändert |
 | `rtree` liegt als Überrest auf den Entwicklungsmaschinen und macht vier Tests rot | Der Verkaufsstart und die vorerst entfallene Testphase (28.08.2026) | je Maschine einen Befehl: `python -m pip uninstall -y rtree`. Am 24.08. aus `pyproject.toml` entfernt und durch `geom/enclosure.py` ersetzt, seither auf der Sperrliste — eine Deinstallation reist aber in keinem `git pull` mit. Auf einer der drei Maschinen am 28.08. erledigt |
 | 3D-Maus — Windows am Gerät bestätigt; macOS über den Treiber gebaut, dort ungemessen; Linux und die Treiberemulation offen | Eine Kundenanfrage aus dem Dentalbereich (30.08.2026) | **nichts mehr für Windows** — Roberts SpaceMouse Compact hing am 02.09.2026 am Rechner. `app/ui/spacemouse.py` liest direkt über HID (`hidapi`, BSD-3 aus der Dreifachlizenz gewählt, Freigabeliste und Spec nachgezogen) — neben laufendem 3DxWare, das dieselben Berichte mitliest; Raw Input war der erste Anlauf und blieb leer, weil 3DxWare Rohdaten nur an Programme aus seiner Liste durchreicht. Die sechs Achsen bildet eine reine Funktion auf die Kamera ab (Objektmodus mit allen sechs Achsen, eine Gerätetaste = *Alles einpassen*), die Vorzeichen stammen aus einer geführten Aufzeichnung (`tests/data/spacemouse/compact-2026-09-02.jsonl`, 4189 Berichte), Robert hat es im Fenster gefahren (18 046 Berichte, 8 000 Kamerafahrten). Einstellungen: An/Aus, ein Regler, Richtung umkehren, sichtbar ab dem ersten gesehenen Gerät. Offen: (1) **macOS — Treiberweg gebaut, am Gerät ungemessen** (05.09.2026, Anlass: der erste Mac-Bericht des Kunden aus dem Anlass, R. W. D.: „die Maus tut nichts"). 3DxWare hält das Gerät dort exklusiv, `hidapi` bekommt keinen Bericht; `DriverReader` lädt das `3DconnexionClient`-Framework des Kunden zur Laufzeit, meldet sich mit Platzhalter an wie FreeCAD und Blender und schreibt die Zustandsmeldungen in die rohen Berichte um (Struktur mit Zwei-Byte-Packung, elf Tests gegen einen nachgestellten Treiber; `default_reader` wählt je Rechner). Bestätigt wird das durch seine Rückmeldung — und der Changelog-Punkt dazu kommt mit dem nächsten Release, nicht vorher. **Linux** — Rechte (udev-Regel) und ein Gerät zum Messen fehlen weiter (Konzept Falle 2); (2) **3DxWare emuliert für unbekannte Programme Mausbewegungen** (Robert: ein bisschen hat sich bewegt, aber nicht sinnvoll) — Abhilfe wäre eine Programmdatei mit `<Transport>RawInput</Transport>` im 3DxWare-Nutzerordner (Muster in `%APPDATA%\\3Dconnexion\\3DxWare\\Cfg`), die Solidon beim ersten gesehenen Gerät schreiben könnte; bis dahin schaltet der Kunde sie in den 3Dconnexion-Einstellungen ab; (3) die Handmessung Bildrate bei 1 Mio. Dreiecken (Konzept §9) |
@@ -11876,6 +11876,37 @@ hindert; die drei behobenen stehen oben und hier.
   sind jetzt auch als Laufzeitvertrag festgehalten. Drei Tests decken Paket,
   Entwicklungsumgebung und Firmenvorgabe. Was von Windows aus nicht geht:
   ein echtes `.pkg` starten und *Hilfe → Nach Updates suchen* drücken.
+  **Nachgemessen am 05.09.2026, soweit es von Windows aus geht:** Das
+  ausgelieferte `Solidon3D-0.3.4-macos-arm64.pkg` (295 MB, Prüfsumme wie in
+  `version.json`) ist mit 7-Zip geöffnet — `Contents/Resources/certifi/cacert.pem`,
+  `libssl.3.dylib`, `libcrypto.3.dylib`, `_ssl` und `hid.cpython-313-darwin.so`
+  liegen darin, `LSMinimumSystemVersion` und die `Distribution` sagen beide
+  12.0, signiert ist es nicht. Und der Leser von 0.2.2 nimmt die heutige
+  `version.json` an (Worktree auf `v0.2.2`, gegen den Server gefahren:
+  `0.3.4`, neuer, vier Pakete). Anlass war der Mac-Kunde R. W. D., der am
+  05.09. noch 0.2.2 hatte; ob sein Mac den Hinweis je zeigte, sagt seine
+  `~/Library/Logs/Solidon3D/app.log` — „update check did not answer: …"
+  nennt den Grund, wenn es einen gab.
+
+- [x] **Das Update endete auf dem Mac an der Download-Seite — geschlossen am
+  05.09.2026 (Entscheidung Robert).** Bis dahin nannte `updates.REPLACEABLE`
+  Windows-Setup und Flatpak, macOS nicht: Der Kunde sah „Solidon 0.3.4 ist da
+  — Sie haben 0.2.2" und einen Knopf zur Download-Seite, holte das Paket von
+  Hand und gab es in den Systemeinstellungen frei. Der Grund stand im Modul:
+  `open` reicht die Datei über LaunchServices an die Installer-App, die
+  Solidons geprüften Deskriptor nicht erbt. Der Grund gilt weiter, die
+  Folgerung nicht mehr: Der Mac bekommt den Windows-Weg — laden, prüfen, dann
+  `open -W -b com.apple.installer` auf den geprüften **Pfad** (mit Namen, damit
+  kein Paketbetrachter statt des Installers aufgeht), und sobald der Installer
+  zu ist, holt ein zweites `open` Solidon zurück — wie `/RESTARTAPP=1` und
+  `&& flatpak run` („auf jeder Plattform gleich", Robert). Das Restrisiko ist
+  benannt und in Kauf genommen: Ein Prozess desselben Nutzers könnte die Datei
+  zwischen Prüfung und Öffnen tauschen; ein signiertes und notarisiertes Paket
+  schließt den Spalt, weil der Installer die Signatur selbst prüft. Am Mac
+  gemessen ist der Weg nicht. Erwartet, nicht gemessen: Die aus Solidon
+  geladene Datei trägt kein Quarantäne-Attribut, Gatekeeper hält sie also
+  nicht an — anders als die Browser-Ladung des unsignierten Pakets. Der
+  Changelog-Punkt kommt mit dem nächsten Release.
 
 - [x] **Zwei Prüfungen halten weniger, als ihr Name sagt — geschlossen am
   28.08.2026.**

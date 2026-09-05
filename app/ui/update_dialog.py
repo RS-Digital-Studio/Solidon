@@ -273,10 +273,11 @@ class UpdateDialog(QDialog):
         **Zwei Sätze, weil es zwei Abläufe gibt.** Unter Windows und im Flatpak
         läuft das Einspielen ohne eine einzige Frage durch, und Solidon kommt
         danach von selbst zurück; auf dem Mac öffnet sich Apples Installer und
-        will durchgeklickt werden. Ein Satz für beides müsste einen der beiden
-        Fälle falsch beschreiben — und wer „dann startet das
-        Installationsprogramm" liest und nichts sieht, hält das Update für
-        gescheitert.
+        will durchgeklickt werden — zurück kommt Solidon danach ebenso (seit
+        dem 05.09.2026, ``updates._install_command``). Ein Satz für beides
+        müsste einen der beiden Fälle falsch beschreiben — und wer „spielt das
+        Update ein" liest und dann ein Fenster mit Lizenzvertrag und
+        Passwortfrage sieht, hält etwas für schiefgegangen.
 
         **„Prüfsumme" stand hier und ist herausgeflogen** (Robert, 28.08.2026):
         Sie interessiert einen Kunden nicht. Was ihn interessiert, ist, dass
@@ -294,8 +295,8 @@ class UpdateDialog(QDialog):
             )
             if updates.runs_unattended()
             else tr(
-                "Das Paket ist geladen und geprüft. "
-                "Solidon wird beendet, dann startet das Installationsprogramm."
+                "Das Paket ist geladen und geprüft. Solidon wird beendet, dann führt das "
+                "Installationsprogramm durch das Update — danach startet Solidon wieder."
             )
         )
 
