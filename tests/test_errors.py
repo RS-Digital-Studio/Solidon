@@ -293,6 +293,8 @@ _NOT_A_RANGE = frozenset(
         # „#RRGGBB" ist ein Format und keine Spanne: Eine Filamentfarbe kann
         # nicht „zu groß" sein, sie ist lesbar oder nicht.
         "changed", "colour",
+        # Unendlich und NaN sind keine Grenzverletzung, sondern keine Zahl.
+        "not_finite",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "expected_sha256",
         # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):

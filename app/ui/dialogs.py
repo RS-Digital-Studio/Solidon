@@ -7,6 +7,7 @@ nie in den Dialog.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -496,9 +497,15 @@ class ParameterDialog(QDialog):
                 found.append(None)
                 continue
             try:
-                found.append(float(raw))
+                number = float(raw)
             except ValueError:
                 return None
+            # ``float`` nimmt „inf" und „nan" an, die Projektdatei nicht: Der
+            # Parameter kam ins Dokument, und *Speichern* scheiterte ohne
+            # Meldung (Gesamtreview 05.09.2026, UI-26).
+            if not math.isfinite(number):
+                return None
+            found.append(number)
         return found[0], found[1]
 
     def _expression_typed(self, text: str) -> None:

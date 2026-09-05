@@ -1627,3 +1627,48 @@ def test_the_cleanup_keeps_the_filament_slots_of_the_remaining_triangles() -> No
     assert len(result.mesh.slots) == 12, "die Slots reisen mit"
     assert sorted(set(result.mesh.slots)) == [0, 1], "beide Farben bleiben"
     assert result.info.removed_triangles == 1
+
+
+def test_cancelling_during_the_import_plan_keeps_the_file_out(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-08: Der Abbrechen-Knopf setzte das Signal,
+    der fertige Plan wurde trotzdem angewandt, und die Auswertung danach
+    setzte das Signal still zurück — das Objekt stand, das Dokument war
+    geändert. Ein abgebrochener Plan verwirft seine Quelle."""
+    from app.ui import session as session_module
+    from app.ui.session import Session
+
+    modell = tmp_path / "wuerfel.stl"
+    modell.write_bytes(_stl(_cube()))
+    session = Session()
+    monkeypatch.setattr(session_module, "PLAN_IN_WORKER_ABOVE", 0)
+    gesehen, settle = _await_signal(session)
+
+    session.import_model_async(modell)
+    session.cancel_evaluation()
+    settle()
+
+    assert gesehen.get("error") is None, gesehen.get("error")
+    assert gesehen.get("accepted") is False, "abgebrochen heißt nicht übernommen"
+    assert not session.project.document.ops, "kein Ladeschritt"
+    assert not session.project.sources, "und die Quelle ist wieder draußen"
+    assert not session.cancel_signal.is_cancelled, "das Signal ist verbraucht"
+
+
+def test_an_unsaveable_document_says_so_instead_of_raising(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, UI-26: Ein nicht endlicher Wert im Dokument
+    ließ ``save`` einen nackten ValueError werfen, und der Speichern-Slot
+    fängt nur AppError — keine Datei, keine Meldung."""
+    from app.core.errors import AppError
+    from app.core.types import Parameter
+    from app.ui.session import Session
+
+    session = Session()
+    session.project.document.parameters["hoehe"] = Parameter(name="hoehe", value=float("inf"))
+
+    with pytest.raises(AppError) as raised:
+        session.save_project(tmp_path / "projekt.p3d")
+
+    assert raised.value.suggestions, "Regel 17: ein Fehler endet nie ohne Vorschlag"
+    assert not (tmp_path / "projekt.p3d").exists()

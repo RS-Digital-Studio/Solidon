@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import math
 import re
 import secrets
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -203,7 +204,25 @@ def change_for(
     der Fehler, den der Agent hatte — er führte seine eigene Buchhaltung über
     frühere Werte, und die Oberfläche kannte sie nicht. Wer hier ``fits``
     übergibt, meint die vollständige neue Liste, nicht die Ergänzung.
+
+    **Ein Projektmaß trägt endliche Zahlen.** ``float`` liest „inf" und „nan",
+    die Projektdatei schreibt beides nicht — ein solcher Parameter machte das
+    Projekt unspeicherbar, und die Ablehnung kam erst beim Speichern als
+    nackter ValueError (Gesamtreview 05.09.2026, UI-26). Geprüft wird hier,
+    wo jede Parameteränderung vorbeikommt: Dialog, Leiste und Agent.
     """
+    for parameter in (parameters or {}).values():
+        for field_name in ("value", "minimum", "maximum"):
+            number = getattr(parameter, field_name)
+            if isinstance(number, (int, float)) and not math.isfinite(number):
+                raise ValidationError(
+                    field=field_name,
+                    detail=_(
+                        "Ein Projektmaß braucht endliche Zahlen — für den Wert wie für die Grenzen."
+                    ),
+                    constraint="not_finite",
+                    values={"parameter": parameter.name, "field": field_name},
+                )
     return DocumentChange(
         before=DocumentState(
             parameters=(

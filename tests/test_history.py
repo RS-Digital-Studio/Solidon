@@ -1280,3 +1280,21 @@ def test_a_new_action_over_a_second_history_discards_the_old_redo_branch(
     assert session.redo() is None
     ids = [entry.id for entry in document.transactions]
     assert ids[-1] == made.id and undone.id not in ids and len(ids) == 2, ids
+
+
+@pytest.mark.parametrize("field_name", ["value", "minimum", "maximum"])
+def test_a_parameter_with_a_non_finite_number_is_refused_where_every_change_passes(
+    document: Document, field_name: str
+) -> None:
+    """Gesamtreview 05.09.2026, UI-26: Der Dialog ließ „inf" und „nan" als
+    Grenze durch, und der Kern nahm den Parameter; erst die Projektdatei
+    lehnte ab. ``change_for`` sieht jede Parameteränderung — Dialog, Leiste
+    und Agent — und prüft dort."""
+    fields = {"name": "hoehe", "value": 10.0, "minimum": 0.0, "maximum": 100.0}
+    fields[field_name] = float("nan")
+
+    with pytest.raises(ValidationError) as raised:
+        change_for(document, parameters={"hoehe": Parameter(**fields)})
+
+    assert raised.value.constraint == "not_finite"
+    assert raised.value.field == field_name

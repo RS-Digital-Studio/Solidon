@@ -699,11 +699,31 @@ class Session(QObject):
         target = path or self.path
         if target is None:
             raise AppError(tr("Für dieses Projekt gibt es noch keinen Dateinamen."))
+        try:
+            save(self.project, target)
+        except ValueError as problem:
+            # **Was die Serialisierung ablehnt, ist ein fachlicher Fehler.**
+            # ``non_finite_number`` und die Größengrenzen der Projektdatei
+            # kamen als nackter ValueError bis in den Speichern-Slot, der nur
+            # AppError fängt: keine Datei, keine Meldung (Gesamtreview
+            # 05.09.2026, UI-26). Die Grenze im Parameterdialog fängt den
+            # häufigsten Fall vorher; hier steht der Vertrag für alle anderen.
+            raise AppError(
+                tr("Das Projekt lässt sich so nicht speichern."),
+                tr(
+                    "Ein Wert darin ist keine endliche Zahl oder sprengt die Projektdatei. "
+                    "Prüfen Sie Parameter mit Grenzen wie unendlich, und speichern Sie "
+                    "danach erneut."
+                ),
+                values={"reason": str(problem)},
+            ) from problem
         # Die Sicherung des Zustands, der gerade gespeichert wird, hat sich
         # damit erledigt — auch die namenlose, aus der eine Wiederherstellung
-        # kam (§38).
+        # kam (§38). **Erst jetzt**: Bis zum 05.09.2026 fiel sie vor dem
+        # Schreiben, und ein volles oder gesperrtes Laufwerk ließ die neuen
+        # Änderungen nur noch im Speicher zurück — die Projektdatei trug den
+        # alten Stand, die Sicherung war weg (Gesamtreview, UI-06).
         clear_autosave(self.path, self.recovery_token)
-        save(self.project, target)
         self.path = target
         self._dirty = False
         self.projectChanged.emit()
@@ -1365,6 +1385,18 @@ class Session(QObject):
         """
         self.busyChanged.emit(False)
         if self._stale_import(source_id, generation):
+            return
+        if generation is not None and self._cancel_by_user and self.cancel_signal.is_cancelled:
+            # **Abbrechen gilt auch dem Plan.** Der Knopf und die Wartefläche
+            # führen zu ``cancel_evaluation``; das setzte das Signal, aber der
+            # fertige Plan wurde trotzdem angewandt, und die Auswertung danach
+            # setzte das Signal still zurück — das Objekt stand, das Dokument
+            # war geändert (Gesamtreview 05.09.2026, UI-08). Ein abgebrochener
+            # Einleseplan verwirft seine Quelle und wird nicht mehr angewandt.
+            self._cancel_by_user = False
+            self.cancel_signal.reset()
+            self._drop_source(source_id)
+            self.importFinished.emit(False)
             return
         try:
             accepted = self.apply(plan.title, [plan.draft], raise_on_error=True)
