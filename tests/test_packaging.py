@@ -1635,3 +1635,18 @@ def test_every_dropped_linux_library_is_really_orphaned() -> None:
             for name, nutzer in sorted(noch_gebraucht.items())
         )
     )
+
+
+def test_the_linux_installer_writes_the_launcher_path_into_the_menu_entry() -> None:
+    """Gesamtreview 05.09.2026, R24: Die Vorlage wurde unverändert ins Menü
+    kopiert, mit ``Exec=Solidon3D %f`` — und den Starter legt der Installer
+    nach ``$HOME/.local/bin``, das nicht in jedem PATH einer Arbeitsumgebung
+    liegt. Der Menüeintrag fand die Datei nicht, und der Hinweis daneben
+    versprach, er gehe trotzdem."""
+    from tools import make_linux_packages as tool
+
+    script = tool.install_script()
+
+    assert 'cp "$HERE/$SHORT.desktop"' not in script, "die Vorlage geht nicht ungeändert ins Menü"
+    assert 'Exec="%s" %%f' in script, "der Starter steht mit vollem Pfad im Eintrag"
+    assert "LAUNCHER_PATH=$(printf '%s' \"$BIN_DIR/$NAME\"" in script

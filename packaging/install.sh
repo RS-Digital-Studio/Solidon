@@ -200,7 +200,22 @@ LAUNCHER
 chmod 755 "$BIN_DIR/$NAME"
 ln -sf "$NAME" "$BIN_DIR/$SHORT"
 
-cp "$HERE/$SHORT.desktop" "$APP_DIR/$IDENTIFIER.desktop"
+# Der Menüeintrag nennt den Starter mit vollem Pfad: $HOME/.local/bin liegt
+# nicht in jedem PATH einer Arbeitsumgebung, und ein Exec= ohne Pfad wird genau
+# dort gesucht (Desktop-Entry-Spezifikation). Bis zum 05.09.2026 wurde die
+# Vorlage unverändert kopiert, und der Hinweis unten versprach trotzdem, der
+# Eintrag gehe (Gesamtreview, R24). In Anführungszeichen, weil ein Pfad
+# Leerzeichen tragen darf; die vier Zeichen, die darin zu maskieren sind,
+# maskiert sed.
+LAUNCHER_PATH=$(printf '%s' "$BIN_DIR/$NAME" | sed 's/[\\"`$]/\\&/g')
+{
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      Exec=*) printf 'Exec="%s" %%f\n' "$LAUNCHER_PATH" ;;
+      *) printf '%s\n' "$line" ;;
+    esac
+  done < "$HERE/$SHORT.desktop"
+} > "$APP_DIR/$IDENTIFIER.desktop"
 cp "$HERE/icon.svg" "$ICON_DIR/$IDENTIFIER.svg"
 if [ -f "$HERE/$IDENTIFIER.metainfo.xml" ]; then
   cp "$HERE/$IDENTIFIER.metainfo.xml" "$META_DIR/$IDENTIFIER.metainfo.xml"
