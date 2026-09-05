@@ -288,15 +288,24 @@ KIND_SOURCE: Final = "source"
 #:
 #: AppImage und Archiv bleiben außen: Das Archiv ist nur ein Bauartefakt, das
 #: AppImage wird ab der nächsten Version zwar ausgeliefert, ersetzt sich aber
-#: nicht selbst. macOS bleibt ebenfalls beim Download-Hinweis: ``open`` reicht
-#: ein Dokument über LaunchServices an die Installer-App weiter. Diese erbt
-#: Solidons geprüften Dateideskriptor nicht; ``/dev/fd/N`` würde dort deshalb
-#: einen anderen oder gar keinen Deskriptor bezeichnen. Ein erneutes Öffnen des
-#: Cachepfads wäre dagegen derselbe Austauschspalt, den die Startprüfung
-#: schließen soll. Erkannt werden alle Arten trotzdem — sonst bekäme ein
-#: AppImage-Nutzer ein ``flatpak install``, das scheitern muss, und die
-#: Auskunft „geht hier nicht" wäre eine Vermutung statt einer Feststellung.
-REPLACEABLE: Final = frozenset({KIND_WINDOWS_SETUP, KIND_FLATPAK})
+#: nicht selbst. **macOS stand bis zum 05.09.2026 ebenfalls außen**, mit dem
+#: Grund, dass ``open`` ein Dokument über LaunchServices an die Installer-App
+#: reicht und die Solidons geprüften Dateideskriptor nicht erbt — ``/dev/fd/N``
+#: bezeichnete dort einen anderen oder gar keinen. Der Grund gilt weiter, die
+#: Folgerung nicht mehr (Entscheidung Robert, 05.09.2026, nach dem ersten
+#: Mac-Bericht eines Kunden, der mit 0.2.2 vor der Download-Seite stand): Der
+#: Mac bekommt den Windows-Weg — laden, prüfen, Installer starten —, und der
+#: Installer bekommt den geprüften **Pfad** statt des Deskriptors. Was das
+#: offen lässt, steht bei :func:`start_installer`. Erkannt werden alle Arten
+#: trotzdem — sonst bekäme ein AppImage-Nutzer ein ``flatpak install``, das
+#: scheitern muss, und die Auskunft „geht hier nicht" wäre eine Vermutung statt
+#: einer Feststellung.
+REPLACEABLE: Final = frozenset({KIND_WINDOWS_SETUP, KIND_FLATPAK, KIND_MACOS_PACKAGE})
+
+#: Apples Installer, mit Namen. ``open`` ohne ``-b`` gäbe die Datei an das
+#: Programm, das der Nutzer für ``.pkg`` eingestellt hat — ein Paketbetrachter
+#: wie *Suspicious Package* zeigte sie dann, statt sie einzuspielen.
+MACOS_INSTALLER_BUNDLE: Final = "com.apple.installer"
 
 #: Womit die Setup-Datei beim Update aufgerufen wird.
 #:
@@ -1236,8 +1245,11 @@ def runs_unattended() -> bool:
     Zwei der drei Wege tun das: Die Setup-Datei bekommt ``/SILENT`` und den
     eigenen Neustart-Eintrag, das Flatpak-Bundle wird eingespielt und mit
     ``flatpak run`` zurückgeholt. Der dritte ist Apples Installer — er zeigt
-    den Lizenzvertrag, lässt den Ort wählen und startet danach nichts
-    (Entscheidung Robert, 28.08.2026: der ``.pkg``-Weg bleibt).
+    den Lizenzvertrag, lässt den Ort wählen und fragt nach dem Passwort
+    (Entscheidung Robert, 28.08.2026: der ``.pkg``-Weg bleibt). Zurück kommt
+    Solidon dort seit dem 05.09.2026 trotzdem (:func:`_install_command`
+    wartet auf den Installer); was den Satz unterscheidet, sind die Fragen
+    dazwischen, nicht das Ende.
 
     Der Dialog braucht die Auskunft für **einen Satz**, und der Satz ist keine
     Kosmetik: Wer „dann startet das Installationsprogramm" liest und
@@ -1304,8 +1316,15 @@ def _flatpak_command(file: Path, *, forwarded_descriptor: int | None = None) -> 
     """
     scope = "--user" if _flatpak_is_user() else "--system"
     identifier = os.environ.get("FLATPAK_ID") or APP_ID
+    # ``--bundle`` steht ausdrücklich da: Flatpak erkennt eine Bundle-Datei
+    # sonst nur an der Endung ``.flatpak`` — und ``/proc/self/fd/N`` hat
+    # keine. Der Helfer prüft allein den Basisnamen und löst den
+    # Deskriptorpfad nicht zum Paketnamen auf (flatpak 1.18.2,
+    # ``flatpak-builtins-install.c``); ohne den Schalter scheiterte der
+    # geprüfte Download am Einspielen, und das ``flatpak run`` dahinter lief
+    # nie (Gesamtreview 05.09.2026, CORE-30).
     line = (
-        f"flatpak install {scope} --assumeyes {shlex.quote(str(file))}"
+        f"flatpak install {scope} --assumeyes --bundle {shlex.quote(str(file))}"
         f" && flatpak run {shlex.quote(identifier)}"
     )
     command = ["sh", "-c", line]
@@ -1324,10 +1343,14 @@ def _install_command(file: Path, *, forwarded_descriptor: int | None = None) -> 
     Datei, alles andere gab sie an ``open``. Das war für macOS richtig und für
     Linux nie erreichbar, weil dort gar kein Paket angeboten wurde.
 
-    Zwei sichere Wege, und jeder ist der, den sein Format vorsieht: Die
-    Setup-Datei nimmt Schalter (:data:`SETUP_ARGUMENTS`), das Flatpak-Bundle
-    geht über seinen vererbten Deskriptor an ``flatpak install``. macOS bleibt
-    beim Download-Hinweis, weil LaunchServices diesen Deskriptor verliert.
+    Drei Wege, und jeder ist der, den sein Format vorsieht: Die Setup-Datei
+    nimmt Schalter (:data:`SETUP_ARGUMENTS`), das Flatpak-Bundle geht über
+    seinen vererbten Deskriptor an ``flatpak install``, das macOS-Paket geht
+    an Apples Installer (:data:`MACOS_INSTALLER_BUNDLE`) — und zwar über
+    seinen **Pfad**: LaunchServices reicht keinen Deskriptor weiter, deshalb
+    bekommt dieser Weg keinen (siehe :func:`start_installer`). ``open`` kehrt
+    zurück, sobald die Datei übergeben ist; der Installer läuft unabhängig von
+    Solidon weiter, das sich gleich danach beendet.
     """
     kind = install_kind()
     if kind == KIND_WINDOWS_SETUP:
@@ -1335,11 +1358,19 @@ def _install_command(file: Path, *, forwarded_descriptor: int | None = None) -> 
     if kind == KIND_FLATPAK:
         return _flatpak_command(file, forwarded_descriptor=forwarded_descriptor)
     if kind == KIND_MACOS_PACKAGE:
-        raise ExternalToolError(
-            tool="update",
-            detail=_("Das macOS-Paket lässt sich aus Solidon nicht sicher öffnen."),
-            suggestions=(OPEN_DOWNLOAD_PAGE,),
+        # ``-W`` wartet, bis der Installer zu ist, dann holt der zweite
+        # ``open`` Solidon über seine Bundle-Kennung zurück — dasselbe
+        # Versprechen wie ``/RESTARTAPP=1`` unter Windows und ``&& flatpak
+        # run`` im Flatpak (Robert, 05.09.2026: auf jeder Plattform gleich).
+        # Die Kette läuft in einer eigenen Shell, weil Solidon gleich nach dem
+        # Start beendet ist und niemand mehr da wäre, der auf den Installer
+        # wartet. Bricht der Nutzer die Installation ab, kommt Solidon trotzdem
+        # zurück — dann eben in der alten Fassung.
+        line = (
+            f"/usr/bin/open -W -b {MACOS_INSTALLER_BUNDLE} {shlex.quote(str(file))}"
+            f" && /usr/bin/open -b {shlex.quote(APP_ID)}"
         )
+        return ["sh", "-c", line]
     raise ExternalToolError(
         tool="update",
         detail=_("Diese Installationsart lässt sich nicht aus Solidon aktualisieren."),
@@ -1532,9 +1563,28 @@ def start_installer(file: Path) -> None:
         ),
     ):
         options = detached_process_options(graphical=True)
-        if os.name == "nt":
+        if os.name == "nt" or install_kind() == KIND_MACOS_PACKAGE:
+            # Windows hält den Namen bis zu CreateProcess gegen Austausch
+            # gesperrt. **macOS bekommt den Pfad ohne diese Sperre**, und das
+            # ist eine Entscheidung, keine Nachlässigkeit (Robert, 05.09.2026):
+            # ``open`` reicht die Datei über LaunchServices an die Installer-App,
+            # einen fremden Prozess, der den vererbten Deskriptor nicht kennt —
+            # ``/dev/fd/N`` bezeichnete dort etwas anderes oder nichts. Was
+            # bleibt, ist der Spalt zwischen dieser Prüfung und dem Öffnen im
+            # Installer: Ein Prozess **desselben Nutzers** könnte die Datei in
+            # der Zwischenzeit tauschen. Wer das kann, kann auch Solidon selbst
+            # umschreiben, und die Download-Seite im Browser gäbe ihm dieselbe
+            # Datei ohne jede Prüfung. Ein signiertes und notarisiertes Paket
+            # schließt den Spalt, weil der Installer die Signatur beim Öffnen
+            # selbst prüft — bis dahin steht er hier benannt. Erwartet, nicht
+            # gemessen: Die von hier geschriebene Datei trägt kein
+            # Quarantäne-Attribut, Gatekeeper hält sie also nicht als „nicht
+            # verifiziert" an, wie er es mit der Browser-Ladung des
+            # unsignierten Pakets tut.
             command = _install_command(verified_file)
         else:
+            # POSIX startet ausdrücklich vom vererbten Deskriptor; dort wäre
+            # der weiter offene Cachepfad allein keine Sperre.
             descriptor = source.fileno()
             inherited_path = _inherited_descriptor_path(descriptor)
             command = _install_command(
@@ -1543,9 +1593,6 @@ def start_installer(file: Path) -> None:
             )
             options["pass_fds"] = (descriptor,)
         try:
-            # Windows hält den Namen bis zu CreateProcess gegen Austausch
-            # gesperrt. POSIX startet ausdrücklich vom vererbten Deskriptor;
-            # dort wäre der weiter offene Cachepfad allein keine Sperre.
             subprocess.Popen(command, **options)
         except OSError as error:
             raise ExternalToolError(

@@ -597,3 +597,34 @@ def test_an_empty_result_in_draft_quality_points_at_the_stages_left() -> None:
     # Ausnahme wählt ihn danach, ob die Voxelstufe dran war. Zwei Stellen für
     # dieselbe Frage liefen auseinander, sobald jemand eine davon ändert.
     assert "Vorschau" in str(caught.value.title), str(caught.value.title)
+
+
+def test_the_voxel_stage_refuses_a_grid_it_cannot_afford(caplog: pytest.LogCaptureFixture) -> None:
+    """Gesamtreview 05.09.2026, G-13: Die Rasterweite folgt der größten
+    Einzeldiagonale, die Ausdehnung dem gemeinsamen Hüllquader. Zwei
+    1-mm-Würfel, einer um (1000, 1000, 1000) verschoben, forderten bei 0,05 mm
+    Rasterweite 20025³ Zellen an — acht Terabyte, ohne Budget vor
+    ``np.zeros``. Die Stufe gibt jetzt auf, bevor sie allokiert."""
+    from app.core.geom import boolean as boolean_module
+
+    near = box(1.0, (0.0, 0.0, 0.0))
+    far = box(1.0, (1000.0, 1000.0, 1000.0))
+
+    with caplog.at_level("WARNING"):
+        assert boolean_module._voxel("union", [near, far]) is None
+    assert any("budget" in record.message for record in caplog.records)
+
+
+def test_the_voxel_grid_of_a_difference_spans_only_the_body_that_shrinks() -> None:
+    """Eine Differenz macht den ersten Körper nur kleiner: Das Werkzeug daneben
+    braucht keine Zellen. Der ferne Würfel wird damit rechenbar, statt das
+    Raster über tausend Millimeter Leere zu spannen."""
+    from app.core.geom import boolean as boolean_module
+
+    near = box(10.0, (0.0, 0.0, 0.0))
+    far = box(1.0, (1000.0, 1000.0, 1000.0))
+
+    result = boolean_module._voxel("difference", [near, far])
+
+    assert result is not None
+    assert result.volume == pytest.approx(near.volume, rel=0.05), "das ferne Werkzeug trifft nichts"

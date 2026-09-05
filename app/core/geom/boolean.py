@@ -62,6 +62,10 @@ JITTER_AMPLITUDE = 1e-4
 
 #: Kantenlänge des Voxelrasters in Stufe 4, relativ zur Modelldiagonale.
 VOXEL_PITCH_RELATIVE = 0.004
+#: So viele Zellen darf das Raster der Voxelstufe haben — 50 Millionen sind
+#: 50 MB als Bool-Feld und ein Marching-Cubes-Lauf von Sekunden; darüber
+#: gibt die Stufe auf, statt den Speicher zu reißen (G-13, siehe ``_voxel``).
+MAX_VOXEL_CELLS: Final = 50_000_000
 
 #: Wie weit ein abziehendes Werkzeug über die Fläche hinausreichen soll, die es
 #: durchschneidet.
@@ -332,12 +336,39 @@ def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
     diagonal = max(mesh.bounds.diagonal for mesh in meshes)
     pitch = max(diagonal * VOXEL_PITCH_RELATIVE, 0.05)
 
-    # Ein Raster für alle Körper. Eine Differenz macht den ersten nur kleiner,
-    # alles andere darf über ihn hinauswachsen — das Raster spannt sich also
-    # über alle.
-    low = np.min([np.asarray(mesh.bounds.minimum) for mesh in meshes], axis=0) - pitch * 2
-    high = np.max([np.asarray(mesh.bounds.maximum) for mesh in meshes], axis=0) + pitch * 2
+    # Das Raster spannt sich über das, was im Ergebnis liegen kann — und das
+    # hängt an der Frage: Eine Vereinigung wächst über alle Körper, eine
+    # Differenz macht den ersten nur kleiner (das Werkzeug daneben braucht
+    # keine Zellen), ein Schnitt liegt im Überlappungsbereich. Bis zum
+    # 05.09.2026 spannte es sich immer über alle: Zwei 1-mm-Würfel, einer um
+    # (1000, 1000, 1000) verschoben, forderten bei 0,05 mm Rasterweite
+    # 20025³ Zellen an — acht Terabyte (Gesamtreview, G-13).
+    minima = [np.asarray(mesh.bounds.minimum) for mesh in meshes]
+    maxima = [np.asarray(mesh.bounds.maximum) for mesh in meshes]
+    if kind == "difference":
+        low, high = minima[0] - pitch * 2, maxima[0] + pitch * 2
+    elif kind == "intersection":
+        low = np.max(minima, axis=0) - pitch * 2
+        high = np.min(maxima, axis=0) + pitch * 2
+        if np.any(high <= low):
+            return meshes[0].replacing(trimesh.Trimesh())
+    else:
+        low = np.min(minima, axis=0) - pitch * 2
+        high = np.max(maxima, axis=0) + pitch * 2
     shape = tuple(int(np.ceil(value)) for value in (high - low) / pitch + 1)
+
+    # Und vor der Allokation ein Budget: Die Rasterweite folgt der größten
+    # Einzeldiagonale, die Ausdehnung dem gemeinsamen Hüllquader — der
+    # Abstand zweier kleiner Körper kann das Raster beliebig groß machen.
+    cells = int(np.prod(shape))
+    if cells > MAX_VOXEL_CELLS:
+        _log.warning(
+            "voxel stage skipped: %s cells at pitch %.3g exceed the budget of %s",
+            f"{cells:,}",
+            pitch,
+            f"{MAX_VOXEL_CELLS:,}",
+        )
+        return None
 
     combined = _rasterise(meshes[0], low, pitch, shape)
     for mesh in meshes[1:]:

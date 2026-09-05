@@ -1564,3 +1564,47 @@ def test_both_lists_of_constraint_kinds_stay_the_same() -> None:
         "nur beim Einlesen: "
         f"{sorted(set(_CONSTRAINT_KINDS) - set(_CONSTRAINT_TARGETS))}"
     )
+
+
+def test_a_sketch_beyond_the_solver_budget_is_named_not_allocated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Gesamtreview 05.09.2026, G-09: Eine Skizze mit 10 000 Punkten und
+    10 000 Fixierungen ist 958 KB Projektdatei — und forderte im Löser eine
+    dichte Matrix von 3,2 GB an, bevor eine Zeile gerechnet war. Der Löser
+    rechnet seither dünn besetzt; was danach dicht bleiben muss, hat ein
+    Budget, und eine Skizze darüber wird benannt statt gerechnet."""
+    from app.core.sketch import solver
+
+    monkeypatch.setattr(solver, "MAX_JACOBIAN_BYTES", 64)
+
+    with pytest.raises(ValidationError) as refused:
+        solve_sketch(rectangle(), {"width": 40.0, "height": 20.0})
+
+    assert refused.value.constraint == "too_large"
+    assert refused.value.values["points"] == sum(len(e.points) for e in rectangle().elements)
+    assert refused.value.suggestions, "Regel 17"
+
+
+def test_the_sparse_jacobian_matches_the_dense_one() -> None:
+    """Die Ableitungen schreiben unverändert ``out[zeile, punkt, koordinate]``;
+    der dünn besetzte Sammler muss dieselbe Matrix ergeben wie der dichte
+    Block, den es bis zum 05.09.2026 gab."""
+    from app.core.sketch import solver
+
+    equations, anchors = solver._build_equations(rectangle(), {"width": 40.0, "height": 20.0})
+    solved = solve_sketch(rectangle(), {"width": 40.0, "height": 20.0})
+    x = np.asarray(
+        [point for element in solved.elements for point in element.points], dtype=float
+    ).reshape(-1)
+    total_rows = sum(equation.rows for equation in equations)
+    dense = np.zeros((total_rows, anchors.size // 2, 2))
+    begin = 0
+    for equation in equations:
+        equation.grad(x.reshape(-1, 2), dense[begin : begin + equation.rows])
+        begin += equation.rows
+
+    _solution, _residuals, jacobian = solver._solve(equations, x.reshape(-1, 2))
+
+    assert jacobian.shape == (total_rows, anchors.size)
+    assert np.allclose(jacobian, dense.reshape(total_rows, anchors.size))

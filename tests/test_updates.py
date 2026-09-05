@@ -630,7 +630,12 @@ def test_linux_tells_its_three_formats_apart(monkeypatch: pytest.MonkeyPatch) ->
 def test_only_the_two_silent_ways_come_back_by_themselves(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Apples Installer startet nach dem Einspielen nichts — der Satz muss anders sein."""
+    """Apples Installer fragt zwischendurch — der Satz muss anders sein.
+
+    Zurück kommt Solidon auf dem Mac seit dem 05.09.2026 trotzdem
+    (``_install_command`` wartet auf den Installer); still ist der Weg deshalb
+    noch nicht.
+    """
     monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_WINDOWS_SETUP)
     assert updates.runs_unattended()
 
@@ -697,37 +702,72 @@ def test_a_flatpak_is_installed_from_the_bundle_and_started_again(
         f"--forward-fd={descriptor}",
     ], "sonst erreicht der geprüfte Deskriptor den Host nicht"
     line = command[-1]
-    assert "flatpak install --user --assumeyes" in line
+    assert "flatpak install --user --assumeyes --bundle " in line, (
+        "ohne --bundle erkennt Flatpak /proc/self/fd/N nicht als Bundle (CORE-30)"
+    )
     assert f"/proc/self/fd/{descriptor}" in line
     assert "&& flatpak run" in line, "ohne das bleibt das Fenster weg"
 
 
-def test_macos_package_stays_on_the_download_path_because_launchservices_loses_the_handle(
+def test_the_macos_package_is_startable_and_goes_to_apples_installer(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """LaunchServices reicht keinen geerbten ``/dev/fd`` an Installer weiter."""
+    """Der Mac bekommt den Windows-Weg (Entscheidung Robert, 05.09.2026).
+
+    Bis dahin endete er an der Download-Seite, weil LaunchServices den
+    geprüften Deskriptor nicht weiterreicht. Der Grund gilt weiter, die
+    Folgerung nicht: Der Installer bekommt den geprüften Pfad — und zwar
+    Apples Installer mit Namen, nicht das Programm, das der Nutzer für
+    ``.pkg`` eingestellt hat.
+    """
     package = package_for(b"macOS-Paket")
     release = updates.Release(
         version="99.0.0",
         packages={updates.PLATFORM_MACOS_ARM: package},
     )
-    started = False
-
     monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_MACOS_PACKAGE)
 
-    def note(*_args: object, **_kwargs: object) -> None:
-        nonlocal started
-        started = True
+    assert release.package(updates.PLATFORM_MACOS_ARM) is package
+    assert release.startable(updates.PLATFORM_MACOS_ARM) is package
+    command = updates._install_command(
+        PurePosixPath("/Users/wer/Library/Caches/Solidon3D/update/Solidon3D.pkg"),  # type: ignore[arg-type]
+    )
+    assert command == [
+        "sh",
+        "-c",
+        "/usr/bin/open -W -b com.apple.installer"
+        " /Users/wer/Library/Caches/Solidon3D/update/Solidon3D.pkg"
+        " && /usr/bin/open -b de.rsdigital.solidon3d",
+    ], "warten, bis der Installer zu ist, dann Solidon zurückholen — wie Windows und Flatpak"
 
+
+def test_starting_the_macos_package_hands_the_verified_path_to_the_installer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Kein Deskriptor über LaunchServices: Der Installer bekommt den geprüften Pfad.
+
+    Der Zweig läuft auf jeder Maschine, weil die Installationsart ein Parameter
+    ist — sonst wäre er auf dem Rechner, auf dem entwickelt wird, toter Code.
+    """
+    payload = b"ein macOS-Paket"
+    file = updates.download(package_for(payload), opener=serving(payload))
+    started: list[tuple[list[str], dict[str, object]]] = []
+
+    def note(command: list[str], **options: object) -> None:
+        started.append((command, options))
+
+    monkeypatch.setattr(updates, "install_kind", lambda: updates.KIND_MACOS_PACKAGE)
     monkeypatch.setattr(updates.subprocess, "Popen", note)
 
-    assert release.package(updates.PLATFORM_MACOS_ARM) is package
-    assert release.startable(updates.PLATFORM_MACOS_ARM) is None
-    with pytest.raises(ExternalToolError) as raised:
-        updates._install_command(Path("/dev/fd/41"), forwarded_descriptor=41)
+    updates.start_installer(file)
 
-    assert raised.value.suggestions
-    assert not started
+    command, options = started[0]
+    assert command[:2] == ["sh", "-c"]
+    assert f"/usr/bin/open -W -b {updates.MACOS_INSTALLER_BUNDLE} " in command[2]
+    assert str(file.resolve()) in command[2], "der geprüfte Pfad, nicht /dev/fd/N"
+    assert "/dev/fd/" not in command[2] and "/proc/self/fd/" not in command[2]
+    assert "pass_fds" not in options, "über LaunchServices reist kein Deskriptor"
+    assert options["stdout"] == updates.subprocess.DEVNULL
 
 
 def test_a_system_wide_flatpak_is_not_replaced_by_a_second_one() -> None:

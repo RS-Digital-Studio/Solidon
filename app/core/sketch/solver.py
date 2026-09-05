@@ -101,6 +101,41 @@ class _Equation:
     grad: _GradientFn
 
 
+#: So groß darf die **dichte** Jacobimatrix werden, die die Rangprüfung nach
+#: dem Lösen braucht (Zeilen mal 2 Punkte mal 8 Byte). 256 MiB sind rund 4000
+#: Bedingungen über 4000 Punkten — das Zwanzigfache des §31-Korpus. Eine
+#: Projektdatei bringt ihre Skizze als **einen** Text mit, und weder
+#: Skizzenleser noch Projektdeckel zählen darin Punkte: 10 000 Punkte mit
+#: 10 000 Fixierungen sind 958 KB Datei und forderten hier 3,2 GB an, bevor
+#: eine Zeile gerechnet war (Gesamtreview 05.09.2026, G-09). Der Löser selbst
+#: rechnet seither dünn besetzt (:class:`_SparseRows`); die Grenze gilt dem,
+#: was danach dicht bleiben muss.
+MAX_JACOBIAN_BYTES: Final = 256 * 1024 * 1024
+
+
+class _SparseRows:
+    """Nimmt die Ableitungen einer Gleichung entgegen wie der dichte Block
+    ``out[zeile, punkt, koordinate]`` — und legt nur ab, was gesetzt wird.
+
+    Jede Ableitung berührt zwei bis vier Punkte; die dichte Matrix trug
+    trotzdem jeden. Die Gleichungen schreiben unverändert
+    ``out[0, b, 0] += ux`` — hier landet das als Eintrag, aus dem
+    :meth:`_solve` die ``csr_matrix`` direkt baut.
+    """
+
+    __slots__ = ("entries", "offset")
+
+    def __init__(self, offset: int) -> None:
+        self.entries: dict[tuple[int, int, int], float] = {}
+        self.offset = offset
+
+    def __getitem__(self, key: tuple[int, int, int]) -> float:
+        return self.entries.get(key, 0.0)
+
+    def __setitem__(self, key: tuple[int, int, int], value: float) -> None:
+        self.entries[key] = float(value)
+
+
 def _unit(points: np.ndarray, tail: int, head: int) -> tuple[float, float, float]:
     """Einheitsrichtung von ``tail`` nach ``head`` und die echte Länge,
     gegen Länge null gesichert."""
@@ -465,17 +500,30 @@ def _solve(
             rows.extend(equation.fn(pts))
         return np.asarray(rows, dtype=float)
 
-    def jac(x: np.ndarray) -> np.ndarray:
+    def sparse_jac(x: np.ndarray) -> csr_matrix:
+        # Dünn besetzt von Anfang an: Jede Ableitung berührt eine Handvoll
+        # Punkte, und ein dichter Block über alle Punkte wuchs quadratisch —
+        # 3,2 GB bei 10 000 Punkten und 10 000 Bedingungen, angefordert
+        # bevor eine Zeile gerechnet war (Gesamtreview 05.09.2026, G-09).
         pts = x.reshape(-1, 2)
-        matrix = np.zeros((total_rows, points, 2))
+        rows: list[int] = []
+        cols: list[int] = []
+        data: list[float] = []
         begin = 0
         for equation in equations:
-            equation.grad(pts, matrix[begin : begin + equation.rows])
+            block = _SparseRows(begin)
+            equation.grad(pts, block)  # type: ignore[arg-type]
+            for (row, point, coordinate), value in block.entries.items():
+                rows.append(begin + row)
+                cols.append(point * 2 + coordinate)
+                data.append(value)
             begin += equation.rows
-        return matrix.reshape(total_rows, points * 2)
+        return csr_matrix((data, (rows, cols)), shape=(total_rows, points * 2))
 
-    def sparse_jac(x: np.ndarray) -> csr_matrix:
-        return csr_matrix(jac(x))
+    def jac(x: np.ndarray) -> np.ndarray:
+        """Die dichte Matrix für die Rangprüfung danach — innerhalb
+        von ``MAX_JACOBIAN_BYTES``, das prüft :func:`solve_sketch` vorher."""
+        return np.asarray(sparse_jac(x).toarray(), dtype=float)
 
     if not equations:
         return flat, np.zeros(0), np.zeros((0, flat.size))
@@ -605,6 +653,23 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
     if not sketch.elements:
         return SolvedSketch(elements=(), free_dof=0, max_residual=0.0)
 
+    # Vor der ersten Allokation: Der Löser rechnet dünn besetzt, die
+    # Rangprüfung danach braucht die Matrix dicht — und die wächst mit
+    # Bedingungen mal Punkten. Eine Skizze jenseits der Grenze wird benannt
+    # statt gerechnet (G-09).
+    total_rows = sum(equation.rows for equation in equations)
+    dense_bytes = total_rows * anchors.size * 8
+    if dense_bytes > MAX_JACOBIAN_BYTES:
+        raise ValidationError(
+            field="sketch",
+            detail=_("Die Skizze hat mehr Punkte und Bedingungen, als der Löser verarbeitet."),
+            constraint="too_large",
+            values={
+                "points": int(anchors.size // 2),
+                "constraints": len(sketch.constraints),
+                "limit": MAX_JACOBIAN_BYTES,
+            },
+        )
     solution, residuals, jacobian = _solve(equations, anchors)
     max_residual = float(np.max(np.abs(residuals))) if residuals.size else 0.0
     rank = int(np.linalg.matrix_rank(jacobian)) if residuals.size else 0
