@@ -270,7 +270,10 @@ def test_a_user_profile_wins_over_the_installed_profile_with_the_same_name(
     installed = bestand / "Elegoo" / "filament" / f"{name}.json"
     user_root = tmp_path / "user"
     user = user_root / "filament" / f"{name}.json"
-    _write(installed, {"type": "filament", "name": name, "filament_type": ["PETG"]})
+    _write(
+        installed,
+        {"type": "filament", "name": name, "instantiation": "true", "filament_type": ["PETG"]},
+    )
     _write(user, {"name": name, "from": "User", "filament_type": ["PCTG"]})
     monkeypatch.setattr(sp, "install_root", lambda _executable: bestand)
     monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user_root])
@@ -741,3 +744,51 @@ def test_a_base_that_is_nowhere_is_said_out_loud(
 
     assert values == {"filament_flow_ratio": ["0.96"]}
     assert any("Gibt es nicht @base" in record.message for record in caplog.records)
+
+
+def test_the_own_profile_takes_the_place_of_the_installed_one_in_the_list(
+    slicer: Path, bestand: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-15: ``find_profiles`` las zuerst die
+    Installation, dann den Nutzerbestand — und hängte das eigene Profil nur
+    an, statt das gleichnamige mitgelieferte zu ersetzen. ``profile_file``
+    nahm den ersten Treffer und las die Herstellerfassung."""
+    name = "Mein PETG"
+    installed = bestand / "Elegoo" / "filament" / f"{name}.json"
+    user_root = tmp_path / "user"
+    user = user_root / "filament" / f"{name}.json"
+    _write(
+        installed,
+        {"type": "filament", "name": name, "instantiation": "true", "filament_type": ["PETG"]},
+    )
+    _write(user, {"name": name, "from": "User", "filament_type": ["PCTG"]})
+    monkeypatch.setattr(sp, "install_root", lambda _executable: bestand)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user_root])
+
+    found = [
+        entry
+        for entry in sp.find_profiles(slicer, "orca", kinds=("filament",))
+        if entry.name == name
+    ]
+
+    assert len(found) == 1, "ein Name, ein Eintrag"
+    assert found[0].path == user, "und zwar der eigene"
+    assert found[0].from_user
+
+
+def test_a_versioned_appimage_still_finds_its_user_profiles(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-16: ``user_roots`` verlangte den ganzen
+    Dateistamm als Ordnernamen — ``OrcaSlicer_Linux_V2.1.1.AppImage`` suchte
+    nach ``orcaslicerlinuxv2.1.1`` und fand ``~/.config/OrcaSlicer`` nie;
+    eigene Profile, gewählter Drucker und Filamente fehlten nach jedem Update."""
+    config = tmp_path / "config"
+    account = config / "OrcaSlicer" / "user" / "default"
+    account.mkdir(parents=True)
+    executable = tmp_path / "OrcaSlicer_Linux_V2.1.1.AppImage"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(sp, "config_home", lambda _platform: str(config))
+
+    assert sp.user_roots("orca", executable) == [account]
+    assert sp.user_roots("orca", tmp_path / "BambuStudio_ubuntu-24.04_v01.09.AppImage") == []

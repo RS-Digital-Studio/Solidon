@@ -957,3 +957,29 @@ def test_the_workspace_of_a_sandboxed_program_lands_where_it_can_read(
         (folder / "platte.3mf").write_text("x")
 
     assert not folder.exists(), "der Ordner wird hinterher geräumt"
+
+
+def test_different_slicers_in_one_bin_folder_stay_apart(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, CORE-12: Unter Linux liegen ``prusa-slicer``
+    und ``CuraEngine`` beide in ``/usr/bin``, und die Zusammenfassung je
+    Ordner ließ genau einen übrig. Die zwei Wege in dasselbe Programm —
+    Fenster und Kommandozeile — fallen weiter zusammen."""
+    from app.core.tools import SLICERS
+
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    prusa = binaries / "prusa-slicer"
+    console = binaries / "prusa-slicer-console"
+    cura = binaries / "CuraEngine"
+    orca = binaries / "OrcaSlicer_Linux_V2.1.1.AppImage"
+    for entry in (prusa, console, cura, orca):
+        entry.write_bytes(b"")
+
+    kept = discover._one_per_installation([prusa, console, cura, orca], SLICERS)
+
+    assert kept == (prusa, cura, orca), (
+        "drei Programme, drei Einträge — die Konsole gehört zu Prusa"
+    )
+    assert discover.program_mark("UltiMaker-Cura.exe") == discover.program_mark("CuraEngine.exe")
+    assert discover.program_mark("OrcaSlicer_Linux_V2.1.1.AppImage") == "orcaslicer"
+    assert discover.program_mark("elegoo-slicer.exe") == "elegooslicer"

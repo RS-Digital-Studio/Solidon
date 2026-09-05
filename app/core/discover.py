@@ -449,15 +449,22 @@ def _one_per_installation(found: list[Path], names: tuple[str, ...]) -> tuple[Pa
     Kommandozeilenfassung dort, wo eine gebraucht wird.
     """
     rank = {plain_name(name): index for index, name in enumerate(names)}
-    best: dict[Path, Path] = {}
+    # Je Ordner **und** Programm: Unter Linux und in einem Homebrew-``bin``
+    # liegen verschiedene Slicer nebeneinander, und nach dem Ordner allein
+    # blieb dort einer übrig (CORE-12). Die zwei Wege in dasselbe Programm —
+    # Fenster und Kommandozeile — fallen weiter zusammen.
+    best: dict[tuple[Path, str], Path] = {}
     for entry in found:
-        folder = entry.parent
-        current = best.get(folder)
+        key = (entry.parent, program_mark(entry.name, names))
+        current = best.get(key)
         if current is None or rank.get(plain_name(entry.name), len(rank)) < rank.get(
             plain_name(current.name), len(rank)
         ):
-            best[folder] = entry
-    return tuple(best[folder] for folder in dict.fromkeys(entry.parent for entry in found))
+            best[key] = entry
+    return tuple(
+        best[key]
+        for key in dict.fromkeys((entry.parent, program_mark(entry.name, names)) for entry in found)
+    )
 
 
 def _all_from_folders(names: tuple[str, ...]) -> tuple[Path, ...]:
@@ -473,6 +480,29 @@ def _all_from_folders(names: tuple[str, ...]) -> tuple[Path, ...]:
                     if candidate.is_file():
                         found.append(candidate)
     return tuple(found)
+
+
+def program_mark(name: str, names: tuple[str, ...] | None = None) -> str:
+    """Welches Programm ein Dateiname meint — die kürzeste bekannte
+    Programmbezeichnung, die in seiner nackten Form steckt.
+
+    ``prusa-slicer`` und ``prusa-slicer-console`` sind ein Programm,
+    ``OrcaSlicer_Linux_V2.1.1.AppImage`` ist OrcaSlicer, ``CuraEngine`` und
+    ``UltiMaker-Cura`` sind Cura. Zwei Stellen brauchen genau das: Die
+    Zusammenfassung je Installation (:func:`_one_per_installation`) fasste
+    nach dem Ordner zusammen und ließ in ``/usr/bin`` von PrusaSlicer und
+    CuraEngine einen übrig; die Suche nach dem Nutzerbestand eines Slicers
+    (``slicer_profiles.user_roots``) verlangte den ganzen Dateistamm als
+    Ordnernamen und fand für ein versioniertes AppImage nie einen
+    (Gesamtreview 05.09.2026, CORE-12 und CORE-16).
+
+    Ohne Treffer bleibt die nackte Form selbst die Marke.
+    """
+    from app.core.tools import SLICERS
+
+    plain = plain_name(name)
+    marks = sorted({plain_name(entry) for entry in (names or SLICERS)}, key=len)
+    return next((mark for mark in marks if mark and mark in plain), plain)
 
 
 def plain_name(name: str) -> str:

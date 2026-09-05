@@ -168,10 +168,14 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     if not base:
         return []
 
-    stem = executable.stem.replace("-", "").replace("_", "").casefold()
+    # Die Programmmarke, nicht der ganze Dateistamm: ``OrcaSlicer_Linux_V2.1.1``
+    # legt seine Profile unter ``OrcaSlicer`` ab, und der Stamm traf diesen
+    # Ordner nie — eigene Profile, gewählter Drucker und Filamente fehlten
+    # nach jedem Update des AppImages (Gesamtreview 05.09.2026, CORE-16).
+    stem = discover.program_mark(executable.name)
     found: list[Path] = []
     for folder in Path(base).iterdir() if Path(base).is_dir() else []:
-        if not folder.is_dir() or folder.name.casefold() != stem:
+        if not folder.is_dir() or discover.plain_name(folder.name) != stem:
             continue
         user = folder / "user"
         if user.is_dir():
@@ -508,10 +512,27 @@ def find_profiles(
             if profile is None:
                 continue
             # Eigene schlagen mitgelieferte gleichen Namens — sie sind die
-            # Version, die der Nutzer im Slicer selbst sieht.
+            # Version, die der Nutzer im Slicer selbst sieht. **Und zwar an
+            # derselben Stelle**: Bis zum 05.09.2026 wurde das eigene nur
+            # angehängt, das mitgelieferte blieb davor in der Liste stehen —
+            # ``profile_file`` nahm den ersten Treffer und las die
+            # Herstellerfassung statt der geänderten Temperatur des Nutzers
+            # (Gesamtreview, CORE-15).
             key = f"{profile.kind}:{profile.name}"
-            if key in seen and not profile.from_user:
-                continue
+            if key in seen:
+                if not profile.from_user:
+                    continue
+                position = next(
+                    (
+                        index
+                        for index, known in enumerate(found)
+                        if f"{known.kind}:{known.name}" == key
+                    ),
+                    None,
+                )
+                if position is not None:
+                    found[position] = profile
+                    continue
             seen.add(key)
             found.append(profile)
 
