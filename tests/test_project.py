@@ -29,6 +29,7 @@ from app.core.scene.project import (
     find_recovery,
     load,
     new_project,
+    next_source_id,
     project_data,
     save,
     write_autosave,
@@ -264,6 +265,16 @@ def test_an_image_source_survives_the_round_trip(filled: Project, tmp_path: Path
 
     assert reopened.document.sources["src_9"].kind == "image"
     assert reopened.sources["src_9"] == payload
+
+
+def test_a_new_source_id_never_reuses_a_sparse_existing_number() -> None:
+    document = new_project().document
+    document.sources["src_1"] = Source(id="src_1", kind="import", path="sources/one.stl", sha256="")
+    document.sources["src_3"] = Source(
+        id="src_3", kind="import", path="sources/three.stl", sha256=""
+    )
+
+    assert next_source_id(document.sources) == "src_4"
 
 
 def test_the_licence_of_a_source_survives(filled: Project, tmp_path: Path) -> None:
@@ -841,11 +852,136 @@ def test_operation_schema_rejects_a_non_string_object_id(
     assert caught.value.suggestions
 
 
+def test_an_empty_solver_block_keeps_its_compatible_none_meaning(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "empty-solver.p3d")
+    data = project_data(path)
+    data["ops"][0]["solver"] = {}
+    _rewrite_project_entry(path, data)
+
+    reopened = load(path)
+
+    assert reopened.document.ops[0].solver is None
+
+
+def test_a_non_text_source_checksum_is_reported_as_a_damaged_file(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "checksum-schema.p3d")
+    data = project_data(path)
+    source = data["sources"]["src_1"]
+    source["embedded"] = False
+    # Genau 64 Einträge liefen an der Längenprüfung vorbei und erreichten als
+    # linke Operanden von ``in <string>`` eine rohe TypeError.
+    source["sha256"] = [{} for _ in range(64)]
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    ("path_parts", "invalid"),
+    [
+        (("parameters", "width", "value"), []),
+        (("sources", "src_1", "ingest"), []),
+        (("sources", "src_1", "origin"), ["not-a-mapping"]),
+        (("fits", 0, "a"), []),
+        (("transactions", 0, "ops"), [{}]),
+        (("transactions", 0, "origin"), ["not-a-mapping"]),
+        (("transactions", 0, "changes"), []),
+        (("transactions", 0, "changes", "before"), []),
+        (("chat", 1, "origin"), ["not-a-mapping"]),
+        (("numbering", "transaction"), []),
+        (("print_settings", "layers"), []),
+    ],
+)
+def test_nested_project_schema_errors_are_reported_as_damaged_files(
+    filled: Project,
+    tmp_path: Path,
+    path_parts: tuple[str | int, ...],
+    invalid: object,
+) -> None:
+    path = save(filled, tmp_path / "nested-schema.p3d")
+    data = project_data(path)
+    if path_parts[:3] == ("transactions", 0, "changes") and len(path_parts) > 3:
+        data["transactions"][0]["changes"] = {"before": {}, "after": {}}
+    if path_parts[0] == "print_settings":
+        data["print_settings"] = {}
+    target: object = data
+    for part in path_parts[:-1]:
+        target = target[part]  # type: ignore[index]
+    target[path_parts[-1]] = invalid  # type: ignore[index]
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+def test_slot_override_colour_type_error_is_reported_as_a_damaged_file(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "slot-override-schema.p3d")
+    data = project_data(path)
+    data["print_settings"] = {
+        "slot_overrides": [
+            {
+                "temperature": {},
+                "colour": [{}, {}, {}],
+            }
+        ]
+    }
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
 def test_report_schema_requires_a_finding_list(filled: Project, tmp_path: Path) -> None:
     path = save(filled, tmp_path / "schema-report.p3d")
     with zipfile.ZipFile(path) as container:
         entries = {name: container.read(name) for name in container.namelist()}
     entries[REPORT_ENTRY] = b'{"findings": {}}'
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        for name, payload in entries.items():
+            container.writestr(name, payload)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [("suggestions", None), ("location", [0.0])],
+)
+def test_nested_report_schema_errors_are_reported_as_damaged_files(
+    filled: Project,
+    tmp_path: Path,
+    field: str,
+    invalid: object,
+) -> None:
+    path = save(filled, tmp_path / "nested-report-schema.p3d")
+    with zipfile.ZipFile(path) as container:
+        entries = {name: container.read(name) for name in container.namelist()}
+    report_data = json.loads(entries[REPORT_ENTRY])
+    report_data["findings"][0][field] = invalid
+    entries[REPORT_ENTRY] = json.dumps(report_data).encode("utf-8")
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as container:
         for name, payload in entries.items():
             container.writestr(name, payload)
@@ -996,6 +1132,23 @@ def test_a_newer_file_is_declined_in_a_friendly_way(filled: Project, tmp_path: P
 
     with pytest.raises(ValidationError) as caught:
         load(path)
+    assert caught.value.constraint == "too_new"
+    assert caught.value.suggestions
+
+
+def test_a_newer_file_is_declined_before_its_future_schema_is_read(
+    filled: Project,
+    tmp_path: Path,
+) -> None:
+    path = save(filled, tmp_path / "future-schema.p3d")
+    data = project_data(path)
+    data["format_version"] = FORMAT_VERSION + 1
+    data["ops"] = [{"future_operation": "new shape"}]
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
     assert caught.value.constraint == "too_new"
     assert caught.value.suggestions
 

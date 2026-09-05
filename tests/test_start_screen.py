@@ -636,7 +636,7 @@ def test_primary_start_actions_are_large_and_examples_are_readable(
             screen.show()
             qt_app.processEvents()
             area = screen.findChild(DropArea)
-            assert area is not None and area.minimumHeight() == DROP_AREA_MIN_HEIGHT
+            assert area is not None and area.minimumHeight() >= DROP_AREA_MIN_HEIGHT
             for button in (
                 screen.new_button,
                 screen.import_button,
@@ -1111,5 +1111,24 @@ def test_a_click_on_the_drop_area_opens_the_file_dialog(screen: StartScreen) -> 
     screen.importRequested.connect(lambda: seen.append("import"))
 
     QTest.mouseClick(area, Qt.MouseButton.LeftButton)
+
+    assert seen == ["import"]
+
+
+def test_the_drop_area_is_a_keyboard_button(screen: StartScreen) -> None:
+    """Die Hauptfläche trägt eine Knopfrolle und denselben Weg ohne Maus."""
+
+    from PySide6.QtGui import QAccessible
+    from PySide6.QtTest import QTest
+
+    area = screen.findChild(DropArea)
+    assert area is not None
+    interface = QAccessible.queryAccessibleInterface(area)
+    assert interface is not None and interface.role() == QAccessible.Role.Button
+    seen: list[str] = []
+    screen.importRequested.connect(lambda: seen.append("import"))
+
+    area.setFocus()
+    QTest.keyClick(area, Qt.Key.Key_Space)
 
     assert seen == ["import"]

@@ -427,6 +427,125 @@ def test_a_zip_bomb_is_refused_before_anything_parses_it(monkeypatch) -> None:
     assert abgewiesen.value.suggestions, "Regel 17"
 
 
+def test_a_3mf_with_too_many_archive_entries_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.ingest import loader
+
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2, raising=False)
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as container:
+        for index in range(3):
+            container.writestr(f"Metadata/{index}.txt", b"")
+    payload = bytearray(buffer.getvalue())
+    end_record = payload.rfind(b"PK\x05\x06")
+    assert end_record >= 0
+    # Die beiden angekündigten Anzahlen sind fremde Daten. Der Vorflug zählt
+    # deshalb die tatsächlichen Verzeichniseinträge und glaubt nicht dieser 1.
+    struct.pack_into("<HH", payload, end_record + 8, 1, 1)
+    # ``ZipFile`` akzeptiert angehängte Bytes als Kommentar, auch wenn dessen
+    # Längenfeld sie nicht nennt. Das darf den frühen Zähler nicht umgehen.
+    payload.extend(b"nachlauf")
+
+    def must_not_open(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("ZipFile materialisierte das übergroße Zentralverzeichnis")
+
+    # PySide lädt beim Fixture-Abbau selbst ein ZIP. Deshalb muss die globale
+    # Standardbibliothek noch innerhalb des Tests wiederhergestellt sein.
+    with monkeypatch.context() as guarded:
+        guarded.setattr(zipfile, "ZipFile", must_not_open)
+        with pytest.raises(ValidationError) as refused:
+            loader.check_unpacked(bytes(payload))
+
+    assert refused.value.constraint == "file_too_large"
+    assert refused.value.suggestions
+
+
+def test_a_zip64_directory_cannot_hide_entries_from_the_preflight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.ingest import loader
+
+    monkeypatch.setattr(loader, "MAX_ARCHIVE_ENTRIES", 2, raising=False)
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as container:
+        for index in range(3):
+            container.writestr(f"Metadata/{index}.txt", b"")
+    payload = bytearray(buffer.getvalue())
+    end_offset = payload.rfind(b"PK\x05\x06")
+    assert end_offset >= 0
+    end_record = struct.unpack_from("<4s4H2LH", payload, end_offset)
+    directory_size = end_record[5]
+    directory_offset = end_record[6]
+    zip64_end = struct.pack(
+        "<4sQ2H2L4Q",
+        b"PK\x06\x06",
+        44,
+        45,
+        45,
+        0,
+        0,
+        3,
+        3,
+        directory_size,
+        directory_offset,
+    )
+    zip64_locator = struct.pack("<4sLQL", b"PK\x06\x07", 0, end_offset, 1)
+    payload[end_offset:end_offset] = zip64_end + zip64_locator
+    classic_offset = end_offset + len(zip64_end) + len(zip64_locator)
+    # Der Standardleser ersetzt diese absichtlich zu kleinen Werte durch die
+    # drei Zähler aus ZIP64. Der Vorflug muss dasselbe tun.
+    struct.pack_into("<HH", payload, classic_offset + 8, 1, 1)
+    struct.pack_into("<L", payload, classic_offset + 12, 0xFFFFFFFF)
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        assert len(container.infolist()) == 3
+
+    def must_not_open(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("ZipFile materialisierte das ZIP64-Zentralverzeichnis")
+
+    with monkeypatch.context() as guarded:
+        guarded.setattr(zipfile, "ZipFile", must_not_open)
+        with pytest.raises(ValidationError) as refused:
+            loader.check_unpacked(bytes(payload))
+
+    assert refused.value.constraint == "file_too_large"
+    assert refused.value.suggestions
+
+
+def test_a_3mf_with_duplicate_archive_entries_is_refused() -> None:
+    from app.core.ingest import loader
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w") as container:
+        container.writestr("3D/3dmodel.model", b"first")
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            container.writestr("3D/3dmodel.model", b"second")
+
+    with pytest.raises(ValidationError) as refused:
+        loader.check_unpacked(buffer.getvalue())
+
+    assert refused.value.constraint == "invalid_archive"
+    assert refused.value.suggestions
+
+
+def test_a_3mf_with_an_extreme_compression_ratio_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.ingest import loader
+
+    monkeypatch.setattr(loader, "MIN_RATIO_ENTRY_BYTES", 1, raising=False)
+    monkeypatch.setattr(loader, "MAX_COMPRESSION_RATIO", 2.0, raising=False)
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr("3D/3dmodel.model", bytes(10_000))
+
+    with pytest.raises(ValidationError) as refused:
+        loader.check_unpacked(buffer.getvalue())
+
+    assert refused.value.constraint == "file_too_large"
+    assert refused.value.suggestions
+
+
 def test_a_too_large_file_is_refused_for_every_format(monkeypatch: pytest.MonkeyPatch) -> None:
     """M7: die Größengrenze stand nur im 3MF-Zweig.
 

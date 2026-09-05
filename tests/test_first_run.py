@@ -945,6 +945,50 @@ def test_the_project_is_attached_only_when_asked(tmp_path: Path) -> None:
     assert (with_it / project.name).is_file()
 
 
+def test_an_attached_project_is_copied_in_bounded_blocks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    block_size = 1024 * 1024
+    payload = b"p" * (2 * block_size + 17)
+    project = tmp_path / "projekt.p3d"
+    project.write_bytes(payload)
+    original_open = Path.open
+    read_sizes: list[int] = []
+
+    class _BoundedReader:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+
+        def __enter__(self) -> _BoundedReader:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            self.stream.close()
+
+        def read(self, size: int = -1) -> bytes:
+            assert 0 < size <= block_size
+            read_sizes.append(size)
+            return self.stream.read(size)
+
+    def guarded_open(path: Path, *args: Any, **kwargs: Any) -> Any:
+        stream = original_open(path, *args, **kwargs)
+        if path == project and "r" in (args[0] if args else kwargs.get("mode", "r")):
+            return _BoundedReader(stream)
+        return stream
+
+    monkeypatch.setattr(Path, "open", guarded_open)
+    target = reports.write(
+        reports.ErrorReport(summary="x", include_project=True),
+        project,
+        tmp_path / "berichte",
+    )
+
+    assert read_sizes
+    with original_open(target / project.name, "rb") as copied:
+        assert copied.read() == payload
+
+
 def test_nothing_is_sent(tmp_path: Path) -> None:
     """§37.2: keine Telemetrie. Der Bericht ist ein Ordner und bleibt einer."""
     import inspect
@@ -974,6 +1018,40 @@ def test_the_dialog_still_writes_a_folder(
     text = (dialog.written / "bericht.txt").read_text(encoding="utf-8")
     assert "Der Deckel sitzt schief." in text
     assert "kaputt" in text, "der Stapelabzug reist mit, sonst ist der Bericht die halbe Miete"
+
+
+def test_a_report_write_error_keeps_both_recovery_ways(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein voller oder gesperrter Datenträger beendet den Supportdialog nicht."""
+    from app.core.errors import FileWriteError
+    from app.ui import support_dialog as module
+
+    problems: list[tuple[object, bool]] = []
+    opened: list[object] = []
+
+    def fail_write(_report: object) -> None:
+        raise OSError("voll")
+
+    monkeypatch.setattr(module.reports, "write", fail_write)
+    monkeypatch.setattr(
+        module.QDesktopServices,
+        "openUrl",
+        staticmethod(lambda url: opened.append(url)),
+    )
+    dialog = SupportDialog(message="Der Deckel sitzt schief.")
+    monkeypatch.setattr(
+        dialog,
+        "_show_problem",
+        lambda problem, *, ways: problems.append((problem, ways)),
+    )
+
+    assert dialog._write_folder() is False
+    dialog._open_mail()
+
+    assert len(problems) == 2
+    assert all(isinstance(problem, FileWriteError) and ways for problem, ways in problems)
+    assert not opened, "ohne abgelegte Anhänge darf keine Mail aufgehen"
 
 
 # --- die Rückmeldung, die wirklich hinausgeht (§37.2) ---------------------------------
@@ -1455,6 +1533,29 @@ def test_the_update_check_is_on_and_reaches_older_installations(tmp_path: Path) 
         geladen.check_for_updates = False
         settings_module.save_settings(geladen)
         assert settings_module.load_settings().check_for_updates is False
+
+
+def test_a_settings_write_error_preserves_the_last_complete_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Abbruch beim Ersetzen beschädigt den letzten gültigen Stand nicht."""
+    from app.ui import settings as settings_module
+
+    target = tmp_path / "settings.json"
+    target.write_text('{"theme": "light"}', encoding="utf-8")
+    original_replace = Path.replace
+
+    def denied_replace(path: Path, destination: Path) -> Path:
+        if destination == target:
+            raise PermissionError("gesperrt")
+        return original_replace(path, destination)
+
+    monkeypatch.setattr(settings_module, "settings_path", lambda: target)
+    monkeypatch.setattr(Path, "replace", denied_replace)
+
+    assert settings_module.save_settings(UiSettings(theme="dark")) is None
+    assert target.read_text(encoding="utf-8") == '{"theme": "light"}'
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> None:

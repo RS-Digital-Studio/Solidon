@@ -71,11 +71,11 @@ MAX_BUSY_WORKERS = 2
 BUSY_REJECT_TIMEOUT = 0.25
 BUSY_DRAIN_LIMIT = 64 * 1024
 
-#: Nach einer bereits gesendeten 413-Antwort dürfen unmittelbar anliegende
-#: Bytes kurz verworfen werden. Das ermöglicht auf Windows eine saubere
-#: HTTP-Antwort, ohne auf einen angekündigten langsamen Rumpf zu warten.
-OVERSIZE_DRAIN_TIMEOUT = 0.25
-OVERSIZE_DRAIN_LIMIT = MAX_BODY + 64 * 1024
+#: Nach einer bereits gesendeten Ablehnung dürfen unmittelbar anliegende Bytes
+#: kurz verworfen werden. Das ermöglicht auf Windows eine saubere HTTP-Antwort,
+#: ohne auf einen angekündigten langsamen Rumpf zu warten.
+REJECT_DRAIN_TIMEOUT = 0.25
+REJECT_DRAIN_LIMIT = MAX_BODY + 64 * 1024
 
 _RESPONSE_TOO_LARGE = json.dumps(
     {
@@ -340,6 +340,7 @@ class _Handler(BaseHTTPRequestHandler):
         length, length_error = self._content_length()
         if length_error is not None:
             self._send(length_error, b"")
+            self._discard_rejected_body(REJECT_DRAIN_LIMIT)
             return
         assert length is not None
         if self.path.rstrip("/") != ENDPOINT:
@@ -347,7 +348,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
         if length > MAX_BODY:
             self._send(413, b"")
-            self._discard_oversized_body(length)
+            self._discard_rejected_body(length)
             return
         try:
             payload = self.rfile.read(length)
@@ -386,17 +387,17 @@ class _Handler(BaseHTTPRequestHandler):
             return None, 400
         return int(raw), None
 
-    def _discard_oversized_body(self, length: int) -> None:
+    def _discard_rejected_body(self, limit: int) -> None:
         """Nach der Ablehnung kurz anliegende Bytes ohne Verarbeitung lesen.
 
-        Die Größenentscheidung und die 413-Antwort fallen vorher. Dieser
-        begrenzte Nachlauf verhindert lediglich einen Windows-RST, wenn ein
-        gutartiger Client den knapp zu großen Rumpf bereits vollständig
-        sendet. Ein langsamer oder beliebig großer Rumpf wird weder abgewartet
-        noch vollständig eingelesen.
+        Die Entscheidung und die Antwort fallen vorher. Dieser begrenzte
+        Nachlauf verhindert lediglich einen Windows-RST, wenn ein gutartiger
+        Client den abgewiesenen Rumpf bereits sendet. Ein langsamer oder
+        beliebig großer Rumpf wird weder abgewartet noch vollständig
+        eingelesen.
         """
-        remaining = min(length, OVERSIZE_DRAIN_LIMIT)
-        deadline = time.monotonic() + OVERSIZE_DRAIN_TIMEOUT
+        remaining = min(limit, REJECT_DRAIN_LIMIT)
+        deadline = time.monotonic() + REJECT_DRAIN_TIMEOUT
         try:
             while remaining:
                 timeout = deadline - time.monotonic()

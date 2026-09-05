@@ -31,6 +31,7 @@ from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
     CANCEL_SPLIT,
+    RETRY,
     AppError,
     InternalError,
     OperationCancelled,
@@ -41,7 +42,7 @@ from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.section import SectionPlane
-from app.core.ingest.loader import read_local_payload
+from app.core.ingest.loader import read_bounded_payload, read_local_payload
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
@@ -67,6 +68,7 @@ from app.core.scene.project import (
     embedded_source_path,
     load,
     new_project,
+    next_source_id,
     save,
     write_autosave,
 )
@@ -92,6 +94,14 @@ from app.i18n import TranslatableText, _, tr
 from app.ui.leash import Worker, WorkerLeash, undisturbed
 
 _log = get_logger(__name__)
+
+
+def _evaluation_busy_error() -> UserError:
+    """Meldet, dass eine Folgeaktion noch kein aktuelles Ergebnis hat."""
+    return UserError(
+        _("Ein Auftrag läuft noch. Der Knopf wird frei, sobald er fertig ist."),
+        suggestions=(RETRY,),
+    )
 
 
 @dataclass(slots=True)
@@ -1072,7 +1082,7 @@ class Session(QObject):
         Stelle, an der die Zusage steht, und die einzige.
         """
         document = self.project.document
-        source_id = f"src_{len(document.sources) + 1}"
+        source_id = next_source_id(document.sources)
         # ``None`` heißt „nenn sie nach ihrer Kennung". Die Aufrufstelle darf
         # diese Regel nicht nachrechnen — sie stand dort einmal, und eine
         # Kennung, die an zwei Stellen gebildet wird, geht irgendwann
@@ -1335,7 +1345,18 @@ class Session(QObject):
         derselben Grenze: Der Weg ändert das Dokument, also gilt Konzept §2 C.
         """
         activation.require(activation.CHANGE)
-        source_id = self._embed_source("import", path.name, path.read_bytes())
+        return self.embed_model_payload(path.name, read_local_payload(path))
+
+    def embed_model_payload(self, name: str, payload: bytes) -> str:
+        """Bettet einen bereits begrenzt gelesenen Modellinhalt ein.
+
+        Dieser zweite Eingang trennt Arbeiterarbeit von Dokumentänderung: Der
+        Arbeiter liest die Datei, der Hauptthread reicht nur noch Bytes und
+        Namen herein. Die Freischaltung wird an beiden öffentlichen Grenzen
+        selbst geprüft; kein Aufrufer muss ihren Zustand weiterreichen.
+        """
+        activation.require(activation.CHANGE)
+        source_id = self._embed_source("import", name, payload)
         self._dirty = True
         self.projectChanged.emit()
         return source_id
@@ -1357,7 +1378,16 @@ class Session(QObject):
         wirft selbst).
         """
         activation.require(activation.CHANGE)
-        source_id = self._embed_source("image", path.name, path.read_bytes())
+        return self.import_image_payload(path.name, read_bounded_payload(path))
+
+    def import_image_payload(self, name: str, payload: bytes) -> str:
+        """Bettet einen bereits begrenzt gelesenen Bildinhalt ein.
+
+        Der Aufrufer darf damit das Plattenlesen in einen Arbeiter verlegen,
+        ohne das Dokument außerhalb seines Hauptthreads anzufassen.
+        """
+        activation.require(activation.CHANGE)
+        source_id = self._embed_source("image", name, payload)
         self._dirty = True
         self.projectChanged.emit()
         return source_id
@@ -1381,7 +1411,8 @@ class Session(QObject):
         veralteten Netzes legte die Trennebene dorthin, wo das Teil nicht mehr
         ist.
         """
-        self.wait_for_idle()
+        if not self.wait_for_idle():
+            raise _evaluation_busy_error()
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
         if entry is None:
@@ -1546,7 +1577,9 @@ class Session(QObject):
                 )
             )
             return
-        self.wait_for_idle()
+        if not self.wait_for_idle():
+            self.failed.emit(_evaluation_busy_error())
+            return
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
         if entry is None:
@@ -2157,9 +2190,15 @@ class Session(QObject):
         self.wait_for_idle(timeout_ms)
         self._leash.wait_all()
 
-    def wait_for_idle(self, timeout_ms: int = 10_000) -> None:
-        """Blockiert, bis kein Lauf mehr übrig ist — auch der nicht, den eine
-        Entprellung eingereiht hat.
+    def wait_for_idle(self, timeout_ms: int = 10_000) -> bool:
+        """Blockiert bis zum Leerlauf und meldet, ob er rechtzeitig eintrat.
+
+        ``True`` heißt, dass kein Lauf mehr übrig ist — auch nicht der, den
+        eine Entprellung eingereiht hat. ``False`` heißt ausschließlich, dass
+        die Frist mit einem noch aktiven Arbeiter endete. Bestehende Aufrufer,
+        die nur warten wollen, dürfen den Rückgabewert weiter übergehen;
+        synchrone Grenzen wie die Fernsteuerung können einen Timeout damit
+        nicht mehr als fertiges Ergebnis ausgeben.
 
         Ereignisse werden verarbeitet, weil die Arbeiter ihre Ergebnisse über
         Signale zurückgeben und sonst nie ankämen. Eingaben aber nicht: sonst
@@ -2167,7 +2206,7 @@ class Session(QObject):
         die trifft auf einen Zustand, den gerade jemand anders umbaut.
         """
         deadline = time.monotonic() + timeout_ms / 1000.0
-        while time.monotonic() < deadline:
+        while True:
             # Auch Trennebenensuche, Vorschau **und der Agent** zählen: ein
             # Arbeiter, der das Fenster überlebt, nimmt beim Beenden den
             # Prozess mit.
@@ -2191,8 +2230,11 @@ class Session(QObject):
                 or next(iter(self._previews), None)
             )
             if worker is None:
-                break
-            worker.wait(50)
+                return True
+            remaining_ms = int((deadline - time.monotonic()) * 1000)
+            if remaining_ms <= 0:
+                return False
+            worker.wait(min(50, remaining_ms))
             application = QCoreApplication.instance()
             if application is not None:
                 # Ohne `undisturbed` räumt der Speicherbereiniger hier Fenster

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 from app.core.log import get_logger
 
@@ -288,8 +289,36 @@ def load_settings() -> UiSettings:
         return UiSettings()
 
 
-def save_settings(settings: UiSettings) -> Path:
+def save_settings(settings: UiSettings) -> Path | None:
+    """Die Einstellungen atomar schreiben; bei einem Dateifehler weiterlaufen.
+
+    Einstellungen dürfen weder einen halben JSON-Stand hinterlassen noch das
+    Schließen der Anwendung mitten in der Aufräumfolge abbrechen. ``None``
+    macht den Fehler für die Oberfläche beobachtbar, ohne jeden bestehenden
+    Aufrufer zum Ausnahmefänger zu machen.
+    """
     path = settings_path()
-    ensure_dir(path.parent)
-    path.write_text(json.dumps(asdict(settings), indent=2), encoding="utf-8")
-    return path
+    temporary: Path | None = None
+    try:
+        ensure_dir(path.parent)
+        with NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+            json.dump(asdict(settings), handle, indent=2)
+        temporary.replace(path)
+        return path
+    except OSError as problem:
+        _log.error("could not write settings: %s", problem)
+        return None
+    finally:
+        if temporary is not None and temporary != path:
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError as problem:
+                _log.warning("could not remove temporary settings file: %s", problem)

@@ -68,6 +68,23 @@ READABLE_SUFFIXES: Final[tuple[str, ...]] = (".stl", ".3mf", *TRIMESH_SUFFIXES[1
 MAX_TRIANGLES: Final = 20_000_000
 MAX_FILE_BYTES: Final = 512 * 1024 * 1024
 
+#: Ein 3MF-Archiv darf weder sein Zentralverzeichnis noch den Entpacker als
+#: zweite, von der Dateigröße unabhängige Ressource missbrauchen. Kleine XML-
+#: Dateien dürfen sich stark packen; erst ab einem MiB ist das Verhältnis
+#: aussagekräftig.
+MAX_ARCHIVE_ENTRIES: Final = 4096
+MIN_RATIO_ENTRY_BYTES: Final = 1024 * 1024
+MAX_COMPRESSION_RATIO: Final = 250.0
+_ZIP_END_SIGNATURE: Final = b"PK\x05\x06"
+_ZIP_CENTRAL_SIGNATURE: Final = b"PK\x01\x02"
+_ZIP64_END_SIGNATURE: Final = b"PK\x06\x06"
+_ZIP64_LOCATOR_SIGNATURE: Final = b"PK\x06\x07"
+_ZIP_END_RECORD: Final = struct.Struct("<4s4H2LH")
+_ZIP64_END_RECORD: Final = struct.Struct("<4sQ2H2L4Q")
+_ZIP64_LOCATOR: Final = struct.Struct("<4sLQL")
+_ZIP_CENTRAL_HEADER_BYTES: Final = 46
+_MAX_ZIP_COMMENT_BYTES: Final = 65_535
+
 #: Darüber sagt die Eingangsstufe etwas. Keine Grenze — die darüber liegt eine
 #: Größenordnung höher —, sondern die Größe, ab der die Analyse aufhört helfen
 #: zu können. Ein Community-Modell mit zwei Millionen Dreiecken ist etwas, das
@@ -147,6 +164,21 @@ def read_model(payload: bytes, suffix: str) -> MeshData:
     return read_mesh(payload, suffix)
 
 
+def read_bounded_payload(path: Path) -> bytes:
+    """Liest eine lokale Datei innerhalb der gemeinsamen Importgrenze.
+
+    Die Grenze steht vor dem Lesen. ``Path.read_bytes`` hob vorher auch eine
+    20-GiB-Datei erst vollständig in den Speicher und erklärte danach, dass
+    sie zu groß war. Der begrenzte Lesezug fängt zusätzlich eine Datei ab,
+    die zwischen Größenabfrage und Lesen wächst.
+    """
+    check_limits(path.stat().st_size, 0)
+    with path.open("rb") as stream:
+        payload = stream.read(MAX_FILE_BYTES + 1)
+    check_limits(len(payload), 0)
+    return payload
+
+
 def read_local_payload(path: Path) -> bytes:
     """Liest eine lokale Modelldatei als eigenständige Projektquelle.
 
@@ -161,14 +193,7 @@ def read_local_payload(path: Path) -> bytes:
     ziehen — ein ausgewähltes Modell ist keine Erlaubnis, die Platte zu lesen
     (§32).
     """
-    # Die Grenze steht vor dem Lesen. ``Path.read_bytes`` hob vorher auch eine
-    # 20-GiB-Datei erst vollständig in den Speicher und erklärte danach, dass
-    # sie zu groß war. Der begrenzte Lesezug fängt zusätzlich eine Datei ab,
-    # die zwischen Größenabfrage und Lesen wächst.
-    check_limits(path.stat().st_size, 0)
-    with path.open("rb") as stream:
-        payload = stream.read(MAX_FILE_BYTES + 1)
-    check_limits(len(payload), 0)
+    payload = read_bounded_payload(path)
     if path.suffix.lower() != ".gltf":
         return payload
     packed = _embed_gltf_dependencies(path, payload)
@@ -560,8 +585,93 @@ def check_readable(payload: bytes, suffix: str) -> None:
     )
 
 
+def _zip64_directory(payload: bytes, end_offset: int) -> tuple[int, int, int] | None:
+    """Liest Zähler, Größe und tatsächliches Ende eines ZIP64-Verzeichnisses."""
+    locator_offset = end_offset - _ZIP64_LOCATOR.size
+    if locator_offset < 0:
+        return None
+    locator = _ZIP64_LOCATOR.unpack_from(payload, locator_offset)
+    if locator[0] != _ZIP64_LOCATOR_SIGNATURE or locator[1] != 0 or locator[3] > 1:
+        return None
+
+    relative_offset = locator[2]
+    fixed_offset = locator_offset - _ZIP64_END_RECORD.size
+    if fixed_offset < 0 or relative_offset > fixed_offset:
+        return None
+    record_offset = relative_offset
+    if payload[record_offset : record_offset + 4] != _ZIP64_END_SIGNATURE:
+        # Bei vorangestellten Daten ist der Locator-Offset relativ zum
+        # eigentlichen Archiv. Der feste Ort direkt vor dem Locator bleibt
+        # dagegen absolut und ist auch der Rückfall des Standardlesers.
+        record_offset = fixed_offset
+    if payload[record_offset : record_offset + 4] != _ZIP64_END_SIGNATURE:
+        return None
+    record = _ZIP64_END_RECORD.unpack_from(payload, record_offset)
+    extra_bytes = fixed_offset - relative_offset if record_offset == relative_offset else 0
+    if record[9] + record[8] != relative_offset:
+        return None
+    if record[1] + 12 != _ZIP64_END_RECORD.size + extra_bytes:
+        return None
+    return max(int(record[6]), int(record[7])), int(record[8]), record_offset
+
+
+def _archive_entry_count(payload: bytes) -> int | None:
+    """Zählt das Zentralverzeichnis ohne ``ZipInfo``-Objekte anzulegen.
+
+    Die Anzahl im Endsatz ist fremd und kann kleiner als das Verzeichnis sein.
+    Deshalb werden dessen feste Köpfe durchlaufen. Ein ungültiger Aufbau ergibt
+    ``None``; der eigentliche ZIP-Leser liefert dafür anschließend seine genauere
+    Fehlermeldung, ohne zuvor mehr als die bereits gezählten Einträge anzulegen.
+    """
+    search_start = max(0, len(payload) - _ZIP_END_RECORD.size - _MAX_ZIP_COMMENT_BYTES)
+    end_offset = payload.rfind(_ZIP_END_SIGNATURE, search_start)
+    if end_offset < search_start or end_offset + _ZIP_END_RECORD.size > len(payload):
+        return None
+    # Wie ``ZipFile`` gilt die letzte Signatur im erlaubten Kommentarbereich.
+    # Dessen Längenfeld wird nicht geglaubt: Auch nachlaufende Bytes akzeptiert
+    # der Leser, also dürfen sie diese Vorprüfung nicht umgehen.
+    end_record = _ZIP_END_RECORD.unpack_from(payload, end_offset)
+
+    announced = max(int(end_record[3]), int(end_record[4]))
+    directory_bytes = int(end_record[5])
+    directory_end = end_offset
+    zip64 = _zip64_directory(payload, end_offset)
+    if zip64 is not None:
+        announced, directory_bytes, directory_end = zip64
+    if announced > MAX_ARCHIVE_ENTRIES:
+        return announced
+    cursor = directory_end - directory_bytes
+    if cursor < 0:
+        return None
+
+    counted = 0
+    while cursor < directory_end:
+        header_end = cursor + _ZIP_CENTRAL_HEADER_BYTES
+        if header_end > directory_end or payload[cursor : cursor + 4] != _ZIP_CENTRAL_SIGNATURE:
+            return None
+        name_bytes, extra_bytes, comment_bytes = struct.unpack_from("<HHH", payload, cursor + 28)
+        cursor = header_end + name_bytes + extra_bytes + comment_bytes
+        if cursor > directory_end:
+            return None
+        counted += 1
+        if counted > MAX_ARCHIVE_ENTRIES:
+            return counted
+    return max(announced, counted)
+
+
+def _too_many_archive_entries(entries: int) -> ValidationError:
+    """Baut die gemeinsame Absage für ein zu großes Zentralverzeichnis."""
+    return ValidationError(
+        suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+        field="file",
+        detail=_("Das 3MF-Archiv enthält mehr Einträge, als diese Anwendung verarbeitet."),
+        constraint="file_too_large",
+        values={"entries": entries, "limit": MAX_ARCHIVE_ENTRIES},
+    )
+
+
 def check_unpacked(payload: bytes) -> None:
-    """Die entpackte Summe eines Containers gegen dieselbe Grenze (§32).
+    """Prüft Verzeichnis, Eindeutigkeit und Entpackgröße eines 3MF (§32).
 
     Geprüft war nur die gepackte Größe: 2,6 MB wurden beim Lesen zu 1,08 GB —
     Verhältnis 412, und über ``ingest/fetch`` ist so eine Datei aus dem Netz
@@ -571,19 +681,63 @@ def check_unpacked(payload: bytes) -> None:
     import zipfile
     from io import BytesIO
 
+    announced_entries = _archive_entry_count(payload)
+    if announced_entries is not None and announced_entries > MAX_ARCHIVE_ENTRIES:
+        raise _too_many_archive_entries(announced_entries)
+
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
-            unpacked = sum(info.file_size for info in container.infolist())
+            infos = container.infolist()
     except zipfile.BadZipFile:
         # Keine gültige Zip — das meldet der eigentliche Leser mit seinem
         # eigenen, besseren Satz.
         return
-    if unpacked > MAX_FILE_BYTES:
+
+    if len(infos) > MAX_ARCHIVE_ENTRIES:
+        raise _too_many_archive_entries(len(infos))
+
+    seen: set[str] = set()
+    unpacked = 0
+    compressed = 0
+    for info in infos:
+        if info.filename in seen:
+            raise ValidationError(
+                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+                field="file",
+                detail=_("Das 3MF-Archiv enthält denselben Eintrag mehrfach."),
+                constraint="invalid_archive",
+                values={"entry": info.filename},
+            )
+        seen.add(info.filename)
+        unpacked += info.file_size
+        compressed += info.compress_size
+        if unpacked > MAX_FILE_BYTES:
+            raise ValidationError(
+                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+                field="file",
+                detail=_("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                constraint="file_too_large",
+                values={"unpacked": unpacked, "limit": MAX_FILE_BYTES},
+            )
+        if info.file_size >= MIN_RATIO_ENTRY_BYTES and (
+            info.file_size / max(info.compress_size, 1) > MAX_COMPRESSION_RATIO
+        ):
+            raise ValidationError(
+                suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
+                field="file",
+                detail=_("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
+                constraint="file_too_large",
+                values={"entry": info.filename, "limit": MAX_COMPRESSION_RATIO},
+            )
+    if unpacked >= MIN_RATIO_ENTRY_BYTES and (
+        unpacked / max(compressed, 1) > MAX_COMPRESSION_RATIO
+    ):
         raise ValidationError(
+            suggestions=(CHOOSE_ANOTHER_FILE, CANCEL),
             field="file",
             detail=_("Die Datei entpackt sich größer, als diese Anwendung verarbeitet."),
             constraint="file_too_large",
-            values={"unpacked": unpacked, "limit": MAX_FILE_BYTES},
+            values={"unpacked": unpacked, "limit": MAX_COMPRESSION_RATIO},
         )
 
 

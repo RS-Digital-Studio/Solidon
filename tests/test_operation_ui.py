@@ -18,6 +18,7 @@ import ast
 import contextlib
 import inspect
 import textwrap
+import threading
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,20 @@ def window(qt_app: QApplication) -> MainWindow:
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     return window
+
+
+def test_wait_for_idle_distinguishes_completion_from_timeout(qt_app: QApplication) -> None:
+    class NeverFinishes:
+        def wait(self, _timeout_ms: int) -> bool:
+            return False
+
+    session = Session()
+    assert session.wait_for_idle(0) is True
+    session._worker = NeverFinishes()  # type: ignore[assignment]
+    try:
+        assert session.wait_for_idle(1) is False
+    finally:
+        session._worker = None
 
 
 def select(window: MainWindow, feature_id: str | None = None) -> str:
@@ -940,6 +955,215 @@ def test_the_pick_button_imports_and_selects(window: MainWindow, tmp_path: Path)
     assert len(window.session.project.document.ops) == before, (
         "ein Bild bekommt keine load-Operation"
     )
+
+
+def test_a_deferred_picker_keeps_the_field_until_its_answer(window: MainWindow) -> None:
+    """Der Feldknopf verarbeitet eine nachgereichte Wahl ohne Eventloop im Dialog."""
+
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.ui.op_dialog import DeferredSourcePicker, ImageSourceField
+
+    callbacks: list[Any] = []
+    picker = DeferredSourcePicker(lambda complete: callbacks.append(complete))
+    dialog = OperationDialog(
+        REGISTRY.get("displace_image"), {}, window, images={}, pick_image=picker
+    )
+    editor = dialog._editors["source"]
+    assert isinstance(editor, ImageSourceField)
+
+    editor.button.click()
+
+    assert callbacks
+    assert not editor.button.isEnabled()
+    buttons = dialog.findChild(QDialogButtonBox)
+    assert buttons is not None
+    accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
+    assert accept is not None and not accept.isEnabled()
+    dialog.accept()
+    assert dialog.result() != int(OperationDialog.DialogCode.Accepted)
+    callbacks[0](("src_later", "relief.png"))
+    assert editor.button.isEnabled()
+    assert accept.isEnabled()
+    assert dialog.values()["source"] == "src_later"
+
+
+def test_rejecting_a_dialog_cancels_its_pending_source(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine verworfene Operation nimmt keine später eintreffende Quelle mehr auf."""
+    from app.ui.op_dialog import DeferredSourcePicker, ImageSourceField
+
+    source = tmp_path / "quelle.stl"
+    source.write_bytes(b"mesh")
+    started = threading.Event()
+    release = threading.Event()
+
+    def delayed(_path: Path) -> bytes:
+        started.set()
+        release.wait(2.0)
+        return b"mesh"
+
+    monkeypatch.setattr("app.core.ingest.loader.read_local_payload", delayed)
+    before = dict(window.session.project.document.sources)
+    picker = DeferredSourcePicker(
+        lambda complete: window._start_source_read(source, "model", complete),
+        window._cancel_source_read,
+    )
+    dialog = OperationDialog(
+        REGISTRY.get("load"),
+        {},
+        window,
+        sources={},
+        pick_source=picker,
+    )
+    editor = dialog._editors["source"]
+    assert isinstance(editor, ImageSourceField)
+    editor.button.click()
+    worker = window._source_worker
+    assert worker is not None and started.wait(1.0)
+
+    dialog.reject()
+    release.set()
+    assert worker.wait(2_000)
+    QApplication.processEvents()
+
+    assert window.session.project.document.sources == before
+
+
+def test_a_deferred_picker_ignores_an_answer_after_its_field_was_closed(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Ein später Arbeiter-Rückruf fasst kein zerstörtes Qt-Widget mehr an."""
+    from app.ui.op_dialog import DeferredSourcePicker, ImageSourceField
+
+    callbacks: list[Any] = []
+    dialog = OperationDialog(
+        REGISTRY.get("displace_image"),
+        {},
+        window,
+        images={},
+        pick_image=DeferredSourcePicker(lambda complete: callbacks.append(complete)),
+    )
+    editor = dialog._editors["source"]
+    assert isinstance(editor, ImageSourceField)
+    editor.button.click()
+    dialog.deleteLater()
+    qt_app.processEvents()
+
+    callbacks[0](("src_later", "relief.png"))
+
+
+def test_a_picker_reads_the_source_outside_the_qt_thread(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch eine zulässige große Quelle blockiert den Operationsdialog nicht."""
+
+    from PySide6.QtWidgets import QFileDialog
+
+    picture = tmp_path / "quelle.stl"
+    picture.write_bytes(b"mesh")
+    seen: list[int] = []
+
+    def read(_path: Path) -> bytes:
+        seen.append(threading.get_ident())
+        return b"mesh"
+
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(picture), "")),
+    )
+    monkeypatch.setattr("app.core.ingest.loader.read_local_payload", read)
+    choices: list[tuple[str, str] | None] = []
+
+    window._pick_model_source(choices.append)
+
+    worker = window._source_worker
+    assert worker is not None
+    assert window._progress_states["source"].active
+    worker.wait(20_000)
+    QApplication.processEvents()
+
+    assert seen and seen[0] != threading.get_ident()
+    assert choices and choices[0] is not None
+    assert choices[0][0] in window.session.project.document.sources
+
+
+def test_cancelling_a_source_read_keeps_the_project_unchanged(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Abbrechen-Knopf verwirft auch eine bereits lesende Quelle."""
+    source = tmp_path / "quelle.stl"
+    source.write_bytes(b"mesh")
+    started = threading.Event()
+    release = threading.Event()
+
+    def delayed(_path: Path) -> bytes:
+        started.set()
+        release.wait(2.0)
+        return b"mesh"
+
+    monkeypatch.setattr("app.core.ingest.loader.read_local_payload", delayed)
+    choices: list[tuple[str, str] | None] = []
+    before = dict(window.session.project.document.sources)
+    window._start_source_read(source, "model", choices.append)
+    worker = window._source_worker
+    assert worker is not None and started.wait(1.0)
+
+    window._cancel_source_read()
+    release.set()
+    assert worker.wait(2_000)
+    QApplication.processEvents()
+
+    assert choices == [None]
+    assert window.session.project.document.sources == before
+
+
+def test_cancelling_rejects_a_source_already_waiting_in_qt(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ein vor dem Knopfdruck eingereihtes Ergebnis bleibt verworfen."""
+    source = tmp_path / "quelle.stl"
+    source.write_bytes(b"mesh")
+    monkeypatch.setattr("app.core.ingest.loader.read_local_payload", lambda _path: b"mesh")
+    choices: list[tuple[str, str] | None] = []
+    before = dict(window.session.project.document.sources)
+
+    window._start_source_read(source, "model", choices.append)
+    worker = window._source_worker
+    assert worker is not None and worker.wait(2_000)
+
+    window._cancel_source_read()
+    QApplication.processEvents()
+
+    assert choices == [None]
+    assert window.session.project.document.sources == before
+
+
+@pytest.mark.parametrize(
+    ("method", "filename"),
+    [("import_image", "bild.png"), ("embed_model", "teil.stl")],
+)
+def test_a_picker_source_is_bounded_before_it_enters_the_document(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    filename: str,
+) -> None:
+    from app.core.ingest import loader
+
+    path = tmp_path / filename
+    path.write_bytes(b"123")
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 2)
+    session = Session()
+
+    with pytest.raises(ValidationError) as caught:
+        getattr(session, method)(path)
+
+    assert caught.value.constraint == "file_too_large"
+    assert not session.project.document.sources
+    assert not session.project.sources
 
 
 def test_a_field_without_effect_says_why(window: MainWindow) -> None:

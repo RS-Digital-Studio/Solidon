@@ -18,12 +18,14 @@ Schichtanalyse Arbeit braucht, kein Grund, eine von beiden still vorzuziehen.
 
 from __future__ import annotations
 
+import math
 import re
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from io import StringIO
 
 from app.core.log import get_logger
-from app.core.types import BoundingBox, Finding, MetricSource
+from app.core.types import BoundingBox, CancelToken, Finding, MetricSource
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -81,6 +83,46 @@ class GcodeMetrics:
         return None if volume is None else volume * density
 
 
+@dataclass(slots=True)
+class GcodeAnalysis:
+    """Alle Aussagen aus genau einem Durchlauf durch eine Druckdatei."""
+
+    metrics: GcodeMetrics
+    extrudes: bool
+    extent: BoundingBox | None
+    bed: BoundingBox | None
+    settings: dict[str, str]
+
+
+@dataclass(slots=True)
+class _Extent:
+    """Eine während des Lesens wachsende Hüllbox."""
+
+    minimum: list[float] = field(default_factory=lambda: [float("inf")] * 3)
+    maximum: list[float] = field(default_factory=lambda: [float("-inf")] * 3)
+    seen: bool = False
+
+    def add(self, *points: tuple[float | None, float | None, float | None]) -> None:
+        for point in points:
+            for axis, value in enumerate(point):
+                if value is None or not math.isfinite(value):
+                    continue
+                self.minimum[axis] = min(self.minimum[axis], value)
+                self.maximum[axis] = max(self.maximum[axis], value)
+                self.seen = True
+
+    def box(self) -> BoundingBox | None:
+        if not self.seen:
+            return None
+        for axis in range(3):
+            if self.minimum[axis] > self.maximum[axis]:
+                self.minimum[axis] = self.maximum[axis] = 0.0
+        return BoundingBox(
+            (self.minimum[0], self.minimum[1], self.minimum[2]),
+            (self.maximum[0], self.maximum[1], self.maximum[2]),
+        )
+
+
 #: Kommentarzeilen, die die verbreiteten Slicer schreiben. Ein Muster je
 #: Tatsache, nicht ein Parser je Slicer: ein neuer Slicer braucht meist nur
 #: eine weitere Zeile hier.
@@ -99,18 +141,18 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
 )
 
 _SUPPORT_TOOL = re.compile(r";\s*TYPE:\s*(?P<type>.+)", re.IGNORECASE)
-_EXTRUSION = re.compile(r"^G1\b(?=.*\bE(?P<e>-?[0-9.]+))(?=.*\b[XY])", re.IGNORECASE)
 
 #: Eine Bewegung — ``G0`` fährt leer, ``G1`` gerade, ``G2``/``G3`` im Bogen.
 #: Die Bogenformen stehen mit dabei, weil eine Kreiswand mit Bogenanpassung
 #: **nur** aus ihnen besteht: Wer sie überliest, verliert genau die Ausmaße
 #: eines Zylinders.
-_MOVE = re.compile(r"^G(?P<code>[0-3])\b", re.IGNORECASE)
-#: Die drei Achsen einzeln, in der Reihenfolge X, Y, Z.
-_AXES = tuple(re.compile(rf"\b{name}(-?[0-9.]+)", re.IGNORECASE) for name in "XYZ")
-#: Die E-Achse ohne die Bedingungen von :data:`_EXTRUSION` — für Bögen, die
-#: kein ``G1`` sind.
-_E_AXIS = re.compile(r"\bE(-?[0-9.]+)", re.IGNORECASE)
+_COMMAND = re.compile(
+    r"^(?P<family>[GMT])\s*(?P<code>[0-9]+)(?P<fraction>\.[0-9]+)?\b", re.IGNORECASE
+)
+_WORD = re.compile(
+    r"(?P<name>[A-Z])(?P<value>[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:E[-+]?[0-9]+)?)",
+    re.IGNORECASE,
+)
 
 #: Wo die erste Schicht anfängt — und damit, wo das Modell anfängt. Cura und
 #: die Orca-Familie schreiben ``;LAYER:0``, PrusaSlicer ``;LAYER_CHANGE``.
@@ -138,65 +180,196 @@ _WARNING = re.compile(r";\s*(?:WARNING|Warnung)[:\s]\s*(?P<text>.+)", re.IGNOREC
 
 #: Die Marke, mit der PrusaSlicer jeden Schichtwechsel ankündigt. Gezählt ist
 #: sie die Schichtzahl, die er sonst nirgends nennt.
-_LAYER_CHANGE = re.compile(r"^;\s*LAYER_CHANGE\s*$", re.IGNORECASE | re.MULTILINE)
+_LAYER_CHANGE = re.compile(r"^;\s*LAYER_CHANGE\s*$", re.IGNORECASE)
+_TIME_ELAPSED = re.compile(r";\s*TIME_ELAPSED:\s*([0-9.]+)", re.IGNORECASE)
+_SETTING_LINE = re.compile(r"^;\s*(?P<key>[a-z_0-9]+)\s*=\s*(?P<value>.*?)\s*$", re.IGNORECASE)
 
 
 def parse(text: str) -> GcodeMetrics:
     """Liest eine G-Code-Datei. Was nicht darin steht, bleibt unbekannt."""
+    return analyze(text).metrics
+
+
+def analyze(text: str, *, cancelled: CancelToken | None = None) -> GcodeAnalysis:
+    """Liest einen bereits vorliegenden Text ohne weitere Zeilenkopie."""
+    return analyze_lines(StringIO(text), cancelled=cancelled)
+
+
+def analyze_lines(lines: Iterable[str], *, cancelled: CancelToken | None = None) -> GcodeAnalysis:
+    """Liest eine Druckdatei zeilenweise, speicherbegrenzt und abbrechbar."""
     metrics = GcodeMetrics()
     warnings: list[str] = []
+    pattern_values: dict[int, tuple[str, str]] = {}
+    settings: dict[str, str] = {}
+    corners: list[tuple[float, float]] | None = None
+    bed_invalid = False
+    bed_height: float | None = None
+    last_elapsed: float | None = None
+    layer_changes = 0
 
-    for name, pattern in _PATTERNS:
+    position: list[float | None] = [None, None, None]
+    axes_absolute = True
+    arc_centres_absolute = False
+    extrusion_absolute = True
+    extrusion_position = 0.0
+    active_support = False
+    seen_type = False
+    total = 0.0
+    support = 0.0
+    has_first_layer = False
+    after_first_layer = False
+    all_paths = False
+    model_paths = False
+    all_extent = _Extent()
+    model_extent = _Extent()
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    for line in lines:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        stripped = line.strip()
+        first_layer = _FIRST_LAYER.match(stripped) is not None
+        if first_layer:
+            has_first_layer = True
+            after_first_layer = True
+
+        if stripped.startswith(";"):
+            for index, (_name, pattern) in enumerate(_PATTERNS):
+                if index in pattern_values:
+                    continue
+                found = re.search(pattern, stripped, re.IGNORECASE)
+                if found is not None:
+                    pattern_values[index] = (
+                        found.group("value").strip(),
+                        found.groupdict().get("unit") or "",
+                    )
+            found_warning = _WARNING.match(stripped)
+            if found_warning is not None:
+                warnings.append(found_warning.group("text").strip())
+            elapsed = _TIME_ELAPSED.search(stripped)
+            if elapsed is not None:
+                last_elapsed = float(elapsed.group(1))
+            if _LAYER_CHANGE.fullmatch(stripped):
+                layer_changes += 1
+            setting = _SETTING_LINE.match(stripped)
+            if setting is not None:
+                settings.setdefault(setting.group("key").casefold(), setting.group("value"))
+            kind = _SUPPORT_TOOL.match(stripped)
+            if kind is not None:
+                seen_type = True
+                active_support = "support" in kind.group("type").casefold()
+            shape = _BED_SHAPE.match(stripped)
+            if shape is not None and corners is None and not bed_invalid:
+                corners, bed_invalid = _bed_corners(shape.group("corners"))
+            tall = _BED_HEIGHT.match(stripped)
+            if tall is not None and bed_height is None:
+                bed_height = _number(tall.group("height"))
+            continue
+
+        command_text = stripped.split(";", 1)[0].strip()
+        command = _COMMAND.match(command_text)
+        if command is None:
+            continue
+        family = command.group("family").upper()
+        code = int(command.group("code"))
+        fraction = command.group("fraction")
+        if fraction is not None and any(digit != "0" for digit in fraction[1:]):
+            # G90.1/G91.1 steuern den Mittelpunkt von Bögen. Sie zu G90/G91
+            # abzuschneiden würde stattdessen den XYZ-Modus umschalten.
+            fractional_command = fraction.rstrip("0")
+            if family == "G" and code in (90, 91) and fractional_command == ".1":
+                arc_centres_absolute = code == 90
+            continue
+        words = {
+            found.group("name").upper(): float(found.group("value"))
+            for found in _WORD.finditer(command_text)
+        }
+        if family == "M" and code in (82, 83):
+            extrusion_absolute = code == 82
+            continue
+        if family != "G":
+            continue
+        if code in (90, 91):
+            axes_absolute = code == 90
+            continue
+        if code == 92:
+            for axis, name in enumerate("XYZ"):
+                if name in words:
+                    position[axis] = words[name]
+            if "E" in words:
+                extrusion_position = words["E"]
+            continue
+        if code not in (0, 1, 2, 3):
+            continue
+
+        start = (position[0], position[1], position[2])
+        endpoint = position.copy()
+        for axis, name in enumerate("XYZ"):
+            if name not in words:
+                continue
+            if axes_absolute:
+                endpoint[axis] = words[name]
+            elif (current := position[axis]) is not None:
+                endpoint[axis] = current + words[name]
+            else:
+                endpoint[axis] = None
+        position = endpoint
+
+        step: float | None = None
+        if "E" in words:
+            value = words["E"]
+            if extrusion_absolute:
+                step = value - extrusion_position
+                extrusion_position = value
+            else:
+                step = value
+                extrusion_position += value
+        travelled = "X" in words or "Y" in words or code in (2, 3)
+        if code == 0 or not travelled or step is None:
+            continue
+        total += step
+        if active_support and step > 0.0:
+            support += step
+        if step <= 0.0:
+            continue
+
+        end = (endpoint[0], endpoint[1], endpoint[2])
+        points = _path_points(
+            code,
+            start,
+            end,
+            words,
+            arc_centres_absolute=arc_centres_absolute,
+        )
+        all_paths = True
+        all_extent.add(*points)
+        if after_first_layer:
+            model_paths = True
+            model_extent.add(*points)
+
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    for index, (name, _pattern) in enumerate(_PATTERNS):
         if getattr(metrics, name) is not None and getattr(metrics, name) != "":
             continue
-        found = re.search(pattern, text, re.IGNORECASE)
-        if found is None:
-            continue
-        # Die Einheit steht im Muster, das getroffen hat — sie wird nicht aus
-        # der Größe der Zahl geraten (:func:`_length_mm`).
-        unit = found.groupdict().get("unit") or ""
-        _set(metrics, name, found.group("value").strip(), unit)
-
-    for line in text.splitlines():
-        found = _WARNING.match(line.strip())
-        if found:
-            warnings.append(found.group("text").strip())
-
-    # Die letzte Schichtmarke schlägt den Kopf. ``CuraEngine`` schreibt dort
-    # ``;TIME:6666`` — eine Vorlage, die im Fenster ersetzt wird und von der
-    # Kommandozeile aus stehen bleibt. Sie sieht aus wie eine Zeit (111
-    # Minuten), ist aber für jedes Modell dieselbe. Am Ende der Datei steht die
-    # gerechnete: gemessen 20,8 Minuten für einen 20-mm-Würfel, gegen 21 bei
-    # PrusaSlicer mit denselben Einstellungen.
-    elapsed = re.findall(r";\s*TIME_ELAPSED:\s*([0-9.]+)", text, re.IGNORECASE)
-    if elapsed:
-        metrics.print_seconds = float(elapsed[-1])
-
+        captured = pattern_values.get(index)
+        if captured is not None:
+            _set(metrics, name, *captured)
+    if last_elapsed is not None:
+        metrics.print_seconds = last_elapsed
     if metrics.layer_count is None:
-        # PrusaSlicer nennt die Schichtzahl nirgends im Kopf — er markiert
-        # jeden Wechsel. Gezählt sind das dieselbe Auskunft: gemessen hundert
-        # Marken für hundert Schichten eines 20-mm-Würfels. Ohne sie stand im
-        # Prüfbericht bei jedem Prusa-Lauf nichts, wo bei Cura eine Zahl steht.
-        changes = sum(1 for _ in _LAYER_CHANGE.finditer(text))
-        metrics.layer_count = changes or None
-
-    total, support = _extruded(text)
-    metrics.support_mm3 = None if support is None else support * FILAMENT_AREA
-    # Was der Kopf nicht sagt, sagen die Bahnen. Der Kopf hat trotzdem Vorrang:
-    # er ist die Aussage des Slicers über seinen eigenen Lauf, und die kennt
-    # Vorgänge, die keine Bahn zeigt — Vorschieben, Reinigungsturm,
-    # Werkzeugwechsel.
-    #
-    # Die Null ist dabei keine Aussage. ``CuraEngine`` schreibt den Kopf,
-    # **bevor** es rechnet, und füllt „Filament used" im Fenster nachträglich
-    # aus; von der Kommandozeile aus bleibt dort eine Vorlage stehen. Solidon
-    # meldete deshalb null Meter zu einer Datei, die 1,8 MB Bahnen mit Vorschub
-    # enthielt — und der Prüfbericht rechnete Kosten von null.
+        metrics.layer_count = layer_changes or None
+    metrics.support_mm3 = support * FILAMENT_AREA if seen_type else None
+    total = max(total, 0.0)
     if metrics.filament_mm is None or (metrics.filament_mm <= 0.0 and total > 0.0):
         metrics.filament_mm = total or None
     metrics.warnings = tuple(warnings)
+    bed = None if bed_invalid else _bed_box(corners, bed_height)
+    extent = model_extent.box() if has_first_layer else all_extent.box()
+    does_extrude = model_paths if has_first_layer else all_paths
     _log.info("read g-code of %s", metrics.slicer or "unknown slicer")
-    return metrics
+    return GcodeAnalysis(metrics, does_extrude, extent, bed, settings)
 
 
 def extrudes(text: str) -> bool:
@@ -207,9 +380,10 @@ def extrudes(text: str) -> bool:
     Bahn mit Vorschub ist kein Druck — sie ist ein Leerlauf über die Platte,
     und sie entsteht, wenn der Slicer das Modell nicht gefunden oder
     verworfen hat. Groß ist sie trotzdem, und ohne diese Frage sähe sie aus
-    wie ein geglückter Lauf.
+    wie ein geglückter Lauf. Wo eine erste Schicht markiert ist, zählt erst der
+    Modellbereich danach; eine bewegte Reinigungsbahn davor ist kein Modell.
     """
-    return any(_EXTRUSION.match(line) and float(_e_value(line)) > 0.0 for line in text.splitlines())
+    return analyze(text).extrudes
 
 
 def printed_extent(text: str) -> BoundingBox | None:
@@ -229,76 +403,18 @@ def printed_extent(text: str) -> BoundingBox | None:
     :func:`app.core.export.handover.off_the_bed` beurteilt das Maß, das hier
     herauskommt, und dort steht die Messung.
 
-    Gelesen wird der Absolutwert der Achsen; die Stelle wird über alle
-    Bewegungen nachgeführt, auch über die leeren, denn Z steht so gut wie nie
-    in derselben Zeile wie die Bahn. Relative Bewegungen (``G91``) kommen in
-    Druckdateien für die Platte nicht vor — der Vorschub ja, die Achsen
-    nicht —, und wo doch, fehlt ihnen der Bezug: sie werden übersprungen,
-    statt eine Zahl zu erfinden.
+    Die Stelle wird über alle Bewegungen nachgeführt, auch über die leeren,
+    denn Z steht so gut wie nie in derselben Zeile wie die Bahn. Relative
+    Bewegungen werden nur dann aufgelöst, wenn ihr Ausgangspunkt bekannt ist.
 
-    **Eine Bahn muss sich bewegen.** Dieselbe Bedingung, die
-    :data:`_EXTRUSION` von je trägt, und aus demselben Grund: ``G1 E6 F120``
-    fördert sechs Millimeter Material, ohne einen Millimeter zu fahren — das
-    ist die Reinigung vor dem Druck und keine Bahn. Der ElegooSlicer setzt sie
-    an ``Y -1,2``, also außerhalb des Betts, das er selbst nennt; ohne diese
-    Bedingung stand der ganze Druck 1,2 mm neben der Platte, und die Meldung
-    dazu kam bei **jedem** Orca-Lauf.
+    **Eine Bahn muss sich bewegen.** ``G1 E6 F120`` fördert sechs Millimeter
+    Material, ohne einen Millimeter zu fahren — das ist die Reinigung vor dem
+    Druck und keine Bahn. Der ElegooSlicer setzt sie an ``Y -1,2``, also
+    außerhalb des Betts, das er selbst nennt; ohne diese Bedingung stand der
+    ganze Druck 1,2 mm neben der Platte, und die Meldung dazu kam bei **jedem**
+    Orca-Lauf.
     """
-    position: list[float | None] = [None, None, None]
-    lowest = [float("inf")] * 3
-    highest = [float("-inf")] * 3
-    seen = False
-    relative = False
-    lines = text.splitlines()
-    # Die Stelle wird von der ersten Zeile an nachgeführt, gemessen wird erst ab
-    # der ersten Schicht — davor gehört die Datei dem Startcode der Maschine
-    # (:data:`_FIRST_LAYER`).
-    printing = not any(_FIRST_LAYER.match(line) for line in lines)
-    for line in lines:
-        if not printing and _FIRST_LAYER.match(line):
-            printing = True
-        head = line[:3].upper()
-        if head == "G91":
-            relative = True
-            continue
-        if head == "G90":
-            relative = False
-            continue
-        move = _MOVE.match(line)
-        if relative or move is None:
-            continue
-        # Erst die Stelle nachführen, dann fragen, ob dort gedruckt wurde: Z
-        # steht so gut wie nie in derselben Zeile wie die Bahn, und ein
-        # ``G1 Y30 E0.5`` behält sein X von vorher.
-        travelled = False
-        for axis, pattern in enumerate(_AXES):
-            found = pattern.search(line)
-            if found is not None:
-                position[axis] = float(found.group(1))
-                travelled = travelled or axis < 2
-        pushed = _E_AXIS.search(line)
-        if (
-            not printing
-            or move.group("code") == "0"
-            or not travelled
-            or pushed is None
-            or float(pushed.group(1)) <= 0.0
-        ):
-            continue
-        for axis, value in enumerate(position):
-            if value is None:
-                continue
-            lowest[axis] = min(lowest[axis], value)
-            highest[axis] = max(highest[axis], value)
-            seen = True
-    if not seen:
-        return None
-    # Wo eine Achse in keiner Bahn stand, bleibt der Anfangswert stehen — und
-    # daraus wird eine Null, keine Unendlichkeit.
-    for axis in range(3):
-        if lowest[axis] > highest[axis]:
-            lowest[axis] = highest[axis] = 0.0
-    return BoundingBox((lowest[0], lowest[1], lowest[2]), (highest[0], highest[1], highest[2]))
+    return analyze(text).extent
 
 
 def stated_bed(text: str) -> BoundingBox | None:
@@ -328,37 +444,122 @@ def stated_bed(text: str) -> BoundingBox | None:
     ein Druck, der sie berührt, ist ein anderer Befund als einer, der über den
     Rand hinausfährt.
     """
+    return analyze(text).bed
+
+
+def _path_points(
+    code: int,
+    start: tuple[float | None, float | None, float | None],
+    end: tuple[float | None, float | None, float | None],
+    words: dict[str, float],
+    *,
+    arc_centres_absolute: bool = False,
+) -> tuple[tuple[float | None, float | None, float | None], ...]:
+    """Stützpunkte einer Materialbahn einschließlich der Bogenextrema."""
+    points: list[tuple[float | None, float | None, float | None]] = [start, end]
+    if code not in (2, 3):
+        return tuple(points)
+    sx, sy = start[:2]
+    ex, ey = end[:2]
+    if sx is None or sy is None or ex is None or ey is None:
+        return tuple(points)
+    center = _arc_center(
+        (sx, sy),
+        (ex, ey),
+        words,
+        clockwise=code == 2,
+        centres_absolute=arc_centres_absolute,
+    )
+    if center is None:
+        return tuple(points)
+    cx, cy = center
+    radius = math.hypot(sx - cx, sy - cy)
+    if not math.isfinite(radius) or radius <= 0.0:
+        return tuple(points)
+    start_angle = math.atan2(sy - cy, sx - cx)
+    end_angle = math.atan2(ey - cy, ex - cx)
+    full = math.isclose(sx, ex) and math.isclose(sy, ey)
+    sweep = _arc_sweep(start_angle, end_angle, clockwise=code == 2, full=full)
+    for angle in (0.0, math.pi / 2.0, math.pi, 3.0 * math.pi / 2.0):
+        delta = _arc_sweep(start_angle, angle, clockwise=code == 2, full=False)
+        if delta < sweep or math.isclose(delta, sweep):
+            points.append((cx + radius * math.cos(angle), cy + radius * math.sin(angle), None))
+    return tuple(points)
+
+
+def _arc_center(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    words: dict[str, float],
+    *,
+    clockwise: bool,
+    centres_absolute: bool = False,
+) -> tuple[float, float] | None:
+    """Mittelpunkt eines Bogens aus I/J oder R; I/J hat nach G-Code Vorrang."""
+    sx, sy = start
+    ex, ey = end
+    if "I" in words or "J" in words:
+        if centres_absolute:
+            return words.get("I", sx), words.get("J", sy)
+        return sx + words.get("I", 0.0), sy + words.get("J", 0.0)
+    stated_radius = words.get("R")
+    if stated_radius is None:
+        return None
+    dx, dy = ex - sx, ey - sy
+    chord = math.hypot(dx, dy)
+    radius = abs(stated_radius)
+    if chord <= 0.0 or radius < chord / 2.0:
+        return None
+    midpoint = ((sx + ex) / 2.0, (sy + ey) / 2.0)
+    offset = math.sqrt(max(radius * radius - chord * chord / 4.0, 0.0))
+    normal = (-dy / chord, dx / chord)
+    candidates = (
+        (midpoint[0] + normal[0] * offset, midpoint[1] + normal[1] * offset),
+        (midpoint[0] - normal[0] * offset, midpoint[1] - normal[1] * offset),
+    )
+    want_major = stated_radius < 0.0
+
+    def matches_radius_sign(center: tuple[float, float]) -> bool:
+        start_angle = math.atan2(sy - center[1], sx - center[0])
+        end_angle = math.atan2(ey - center[1], ex - center[0])
+        sweep = _arc_sweep(start_angle, end_angle, clockwise=clockwise, full=False)
+        is_major = sweep > math.pi and not math.isclose(sweep, math.pi)
+        return is_major == want_major
+
+    return next((center for center in candidates if matches_radius_sign(center)), candidates[0])
+
+
+def _arc_sweep(start: float, end: float, *, clockwise: bool, full: bool) -> float:
+    """Positiver Winkelweg vom Anfang zum Ende in der gewählten Richtung."""
+    if full:
+        return math.tau
+    return (start - end) % math.tau if clockwise else (end - start) % math.tau
+
+
+def _bed_corners(value: str) -> tuple[list[tuple[float, float]] | None, bool]:
+    """Liest die Eckliste einer Bettangabe und weist beschädigte Angaben aus."""
     corners: list[tuple[float, float]] = []
-    height: float | None = None
-    for line in text.splitlines():
-        found = _BED_SHAPE.match(line)
-        if found is not None and not corners:
-            for corner in found.group("corners").split(","):
-                parts = corner.strip().split("x")
-                if len(parts) != 2:
-                    return None
-                try:
-                    corners.append((float(parts[0]), float(parts[1])))
-                except ValueError:
-                    return None
-        tall = _BED_HEIGHT.match(line)
-        if tall is not None and height is None:
-            try:
-                height = float(tall.group("height"))
-            except ValueError:
-                return None
+    for corner in value.split(","):
+        parts = corner.strip().split("x")
+        if len(parts) != 2:
+            return None, True
+        try:
+            corners.append((float(parts[0]), float(parts[1])))
+        except ValueError:
+            return None, True
+    return corners, False
+
+
+def _bed_box(corners: list[tuple[float, float]] | None, height: float | None) -> BoundingBox | None:
+    """Bildet aus gültigen Bettangaben deren Hüllbox."""
     if not corners:
         return None
     xs = [corner[0] for corner in corners]
     ys = [corner[1] for corner in corners]
     return BoundingBox(
-        (min(xs), min(ys), 0.0), (max(xs), max(ys), height if height is not None else float("inf"))
+        (min(xs), min(ys), 0.0),
+        (max(xs), max(ys), height if height is not None else float("inf")),
     )
-
-
-def _e_value(line: str) -> str:
-    found = _EXTRUSION.match(line)
-    return "0" if found is None else found.group("e")
 
 
 def _set(metrics: GcodeMetrics, name: str, value: str, unit: str = "") -> None:
@@ -429,114 +630,6 @@ def _seconds(value: str) -> float | None:
         found = True
         total += float(amount) * {"d": 86400.0, "h": 3600.0, "m": 60.0, "s": 1.0}[unit]
     return total if found else None
-
-
-#: ``M82`` (absolut) oder ``M83`` (relativ) als **Befehl** am Zeilenanfang.
-#: Führende Leerzeichen sind erlaubt, ein Semikolon davor nicht: In einem
-#: Kommentar ist das kein Befehl, sondern Text.
-_EXTRUSION_MODE = re.compile(r"^[ \t]*M(?P<code>8[23])\b", re.IGNORECASE | re.MULTILINE)
-
-#: Die erste Bahn, die Material fördert — dieselbe Bedingung wie
-#: :data:`_EXTRUSION`, nur über den ganzen Text gesucht statt Zeile für Zeile.
-#: Sie ist die Grenze zwischen Startcode und Druck: Was danach kommt, kann über
-#: den Anfang der Datei nichts mehr sagen.
-_FIRST_EXTRUSION = re.compile(
-    r"^[ \t]*G1\b(?=.*\bE-?[0-9.]+)(?=.*\b[XY])", re.IGNORECASE | re.MULTILINE
-)
-
-
-def _starts_absolute(text: str) -> bool:
-    """Fördert diese Datei absolut, bevor sie es selbst sagt?
-
-    Hier stand ``";" not in text or "M83" not in text``, und beide Hälften
-    gingen daneben. Cura hängt seine Einstellungen als ``;SETTING_3``-Block
-    ans Dateiende, und darin steht der Endcode der Maschine — mit ``M83``.
-    Eine absolut fördernde Datei ohne Modus-Zeile vor der ersten Bahn wurde
-    damit relativ gelesen: Statt der Differenzen summierte sich jeder Wert der
-    E-Achse, und die Gesamtlänge war um ein Vielfaches zu groß. Die andere
-    Hälfte fragte nach Kommentaren und schloss von ihrem Fehlen auf den Modus —
-    zwei Tatsachen, die nichts miteinander zu tun haben.
-
-    Gefragt wird deshalb nach dem **Befehl**: die erste Zeile, die mit ``M82``
-    oder ``M83`` beginnt, entscheidet. Findet sich keine, gilt absolut — so
-    steht es in der RepRap-Konvention, und so verhält sich jeder Drucker nach
-    dem Einschalten.
-
-    **Und gesucht wird nur vor der ersten Bahn.** Der Absatz darüber galt für
-    den Kommentar und ließ denselben Fehler als *Befehl* durch: Die
-    verbreitetste Redewendung im Endcode ist ein ``M83`` mit einem Rückzug
-    dahinter, und als erste Modus-Zeile der Datei gelesen machte sie eine
-    absolut fördernde Datei relativ — drei Bahnen mit E1, E2, E3 kamen als
-    6,0 mm heraus statt als 3,0. Was nach der ersten Bahn steht, sagt nichts
-    über den Anfang; was dort steht, liest die Schleife ohnehin an seiner
-    Stelle.
-    """
-    first = _FIRST_EXTRUSION.search(text)
-    limit = first.start() if first is not None else len(text)
-    found = _EXTRUSION_MODE.search(text, 0, limit)
-    return found is None or found.group("code") == "82"
-
-
-def _extruded(text: str) -> tuple[float, float | None]:
-    """Wie viel Filament durch die Düse ging — insgesamt und für Stützen (§28.1).
-
-    Gemessen, nicht geschätzt: die E-Achse sagt, wie viel Material in eine Bahn
-    ging, und die Typkommentare sagen, wofür. Ein Slicer, der den Typ nicht
-    schreibt, lässt den Stützanteil unbekannt — und das ist besser als eine
-    Zahl, die niemand prüfen kann. Die Gesamtlänge steht davon unabhängig, denn
-    sie braucht keinen Typ.
-
-    Ein Durchlauf für beide Zahlen: es ist dasselbe Band, dieselbe Achse und
-    dieselbe Buchführung über absolut und relativ.
-    """
-    active = False
-    seen_type = False
-    total = 0.0
-    support = 0.0
-    previous = 0.0
-    absolute = _starts_absolute(text)
-
-    for line in text.splitlines():
-        stripped = line.strip()
-        kind = _SUPPORT_TOOL.match(stripped)
-        if kind is not None:
-            seen_type = True
-            active = "support" in kind.group("type").casefold()
-            continue
-        if stripped.upper().startswith("M83"):
-            absolute = False
-            continue
-        if stripped.upper().startswith("M82"):
-            absolute = True
-            continue
-        if stripped.upper().startswith("G92") and " E" in stripped.upper():
-            # Auf den genannten Wert, nicht auf null: ``G92 E0`` ist zwar der
-            # Regelfall, aber die Gesamtsumme hängt an jedem Rücksetzpunkt —
-            # ein angenommener wäre ein Fehler, der sich über die ganze Datei
-            # fortschreibt.
-            previous = _reset_value(stripped)
-            continue
-
-        found = _EXTRUSION.match(stripped)
-        if found is None:
-            continue
-        value = float(found.group("e"))
-        step = value - previous if absolute else value
-        if absolute:
-            previous = value
-        # Für die Gesamtmenge zählt auch ein Rückschritt: was zurückgezogen
-        # wurde, ist nicht gefördert. Für die Stützen bleibt es beim positiven
-        # Anteil — ein Rückzug gehört keinem Abschnitt.
-        total += step
-        if active and step > 0.0:
-            support += step
-
-    return max(total, 0.0), support if seen_type else None
-
-
-def _reset_value(line: str) -> float:
-    found = re.search(r"\bE(-?[0-9.]+)", line, re.IGNORECASE)
-    return 0.0 if found is None else float(found.group(1))
 
 
 @dataclass(slots=True)

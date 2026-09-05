@@ -19,9 +19,9 @@ Herkunft steht im Hinweis, nicht im Kleingedruckten.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QMouseEvent
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QWidget
 
 from app.core.slice.estimate import Estimate
 from app.i18n import tr
@@ -69,20 +69,13 @@ def change(before: Estimate | None, after: Estimate) -> str:
     return tr("{sign}{grams} seit dem letzten Schritt").format(sign=sign, grams=mass(abs(delta)))
 
 
-class PrintFacts(QWidget):
+class PrintFacts(QToolButton):
     """Material, Dauer und die Änderung — eine Zeile in der Statusleiste."""
-
-    clicked = Signal()
-    """Der Kunde will wissen, wo diese Zahlen herkommen.
-
-    Eine Auskunft, die eine Frage aufwirft, sollte den Weg zu ihrer Antwort
-    kennen: „51 g · 3 h 30 min" ist geschätzt, und wer die Schätzung ändern
-    oder nachrechnen will, braucht die Druckeinstellungen. Der Weg dorthin
-    stand bisher nur im Menü, und im Menü sucht ihn niemand, der gerade auf
-    die Zahl sieht."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setAutoRaise(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._previous: Estimate | None = None
         self._project = ""
 
@@ -111,13 +104,23 @@ class PrintFacts(QWidget):
         self.setAccessibleName(tr("Materialverbrauch und Druckdauer"))
         self.setAccessibleDescription(f"{hint} {way}")
 
-    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 — Qt-Name
-        """Ein Klick auf die Zahlen führt dorthin, wo sie entstehen."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Die beiden Textzeilen bestimmen die Breite des flachen Knopfs."""
+
+        hint = super().sizeHint()
+        layout = self.layout()
+        if layout is None:
+            return hint
+        content = layout.sizeHint()
+        return QSize(max(hint.width(), content.width()), max(hint.height(), content.height()))
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 — Qt-Name
+        """Eingabe aktiviert dieselbe Handlung wie Leertaste und Klick."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self.click()
             event.accept()
             return
-        super().mousePressEvent(event)
+        super().keyPressEvent(event)
 
     def show_estimate(self, current: Estimate | None, project: str = "") -> None:
         """Die neue Schätzung zeigen und die vorige als Vergleich behalten.

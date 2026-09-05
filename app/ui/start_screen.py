@@ -29,7 +29,6 @@ from PySide6.QtGui import (
     QDragLeaveEvent,
     QDropEvent,
     QImage,
-    QMouseEvent,
     QPainter,
     QPixmap,
 )
@@ -121,7 +120,7 @@ WIDE_LAYOUT_MIN_WIDTH = 1600
 DROP_AREA_MIN_HEIGHT = 112
 
 
-class DropArea(QFrame):
+class DropArea(QPushButton):
     """Die große Ablagefläche für Projekte, Modelle und Bausteindateien.
 
     Vorher stand hier ein Satz in der Bildmitte, ohne Rahmen, ohne Feld, ohne
@@ -133,18 +132,16 @@ class DropArea(QFrame):
     fileDropped = Signal(Path)
     urlDropped = Signal(str)
     """Ein Verweis aus dem Browser, gezogen statt heruntergeladen (§16.3)."""
-    clicked = Signal()
-    """Ein Klick auf die Fläche — für den, der die Datei noch nicht offen hat.
-
-    Die Fläche sah aus wie ein Bedienelement (Rahmen, Symbol, Satz) und
-    reagierte nur auf Ziehen. Wer klickte, bekam nichts, nicht einmal eine
-    Statuszeile — der erste Meter des Hauptwegs endete am ersten Klick
-    (Review 02.09.2026).
-    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("dropArea")
+        self.setFlat(True)
+        self.setAutoDefault(False)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.MinimumExpanding)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
         self.setAcceptDrops(True)
         self.setMinimumHeight(DROP_AREA_MIN_HEIGHT)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -205,6 +202,49 @@ class DropArea(QFrame):
         self._painted: tuple[str, bool] | None = None
         self._paint("dark")
 
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Die Beschriftungen bestimmen die Höhe des zusammengesetzten Knopfs."""
+
+        hint = super().sizeHint()
+        layout = self.layout()
+        if layout is None:
+            return hint
+        content = layout.sizeHint()
+        wrapped_reserve = 2 * self.fontMetrics().height()
+        return QSize(
+            max(hint.width(), content.width()),
+            max(hint.height(), content.height() + wrapped_reserve),
+        )
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Auch bei großer Systemschrift keine Beschriftung zusammendrücken."""
+
+        layout = self.layout()
+        if layout is None:
+            return super().minimumSizeHint()
+        content = layout.minimumSize()
+        # QBoxLayout zählt bei umbrechenden Labels nur deren einzeilige
+        # Mindesthöhe. Zwei Zeilen Reserve halten auch die lange Formatliste
+        # bei großer Systemschrift vollständig sichtbar.
+        wrapped_reserve = 2 * self.fontMetrics().height()
+        return QSize(
+            content.width(),
+            max(DROP_AREA_MIN_HEIGHT, content.height() + wrapped_reserve),
+        )
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 — Qt-Name
+        """Der umbrochene Inhalt meldet seine Höhe an das äußere Layout."""
+
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 — Qt-Name
+        """Die Höhe sämtlicher umbrochener Beschriftungen bei ``width``."""
+
+        layout = self.layout()
+        if layout is None:
+            return DROP_AREA_MIN_HEIGHT
+        return max(DROP_AREA_MIN_HEIGHT, layout.heightForWidth(width))
+
     def _paint(self, theme: str) -> None:
         """Malt nur, wenn sich etwas geändert hat.
 
@@ -220,7 +260,7 @@ class DropArea(QFrame):
         fill = colours["alternate"] if self._hover else "transparent"
         self.setStyleSheet(
             f"#dropArea {{ border: 2px dashed {edge}; border-radius: {NORMAL}px;"
-            f" background: {fill}; }}"
+            f" background: {fill}; min-height: {DROP_AREA_MIN_HEIGHT}px; }}"
         )
 
     def changeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
@@ -233,13 +273,6 @@ class DropArea(QFrame):
             return
         self._hover = hover
         self._paint(current_theme())
-
-    def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802 - Qt name
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
-            event.accept()
-            return
-        super().mousePressEvent(event)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if accepted_path(event) is not None or accepted_url(event) is not None:

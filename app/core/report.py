@@ -17,6 +17,7 @@ die Geometrie, weshalb das Angebot es klar sagt, statt sie still anzuhängen.
 from __future__ import annotations
 
 import platform
+import shutil
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -37,6 +38,10 @@ REPORT_DIRNAME = "reports"
 #: Wie viel Protokoll mitreist. Die letzten paar hundert Zeilen tragen den
 #: Lauf, der scheiterte; der Rest ist gestern.
 LOG_LINES = 400
+
+#: Große Projektcontainer werden beim Anhängen nicht als zweite vollständige
+#: Bytefolge im Speicher gehalten.
+PROJECT_COPY_CHUNK_BYTES: Final = 1024 * 1024
 
 
 @dataclass(slots=True)
@@ -223,8 +228,10 @@ def write(report: ErrorReport, project: Path | None = None, directory: Path | No
     if report.include_log:
         _copy_log(target)
     if report.include_project and project is not None and project.is_file():
-        (target / project.name).write_bytes(project.read_bytes())
-        report.files.append(target / project.name)
+        attached = target / project.name
+        with project.open("rb") as source, attached.open("wb") as destination:
+            shutil.copyfileobj(source, destination, length=PROJECT_COPY_CHUNK_BYTES)
+        report.files.append(attached)
 
     _log.info("error report written to %s", target)
     return target

@@ -687,6 +687,18 @@ class MaterialField(QComboBox):
         return str(chosen) if chosen else ""
 
 
+class DeferredSourcePicker:
+    """Startet eine Dateiaufnahme und liefert ihre Wahl später zurück."""
+
+    def __init__(
+        self,
+        start: Callable[[Callable[[tuple[str, str] | None], None]], None],
+        cancel: Callable[[], None] | None = None,
+    ) -> None:
+        self.start = start
+        self.cancel = cancel
+
+
 class ImageSourceField(QWidget):
     """Eine Quelle wählen — oder eine neue von der Platte holen (§25, P16.7).
 
@@ -707,16 +719,18 @@ class ImageSourceField(QWidget):
     """
 
     changed = Signal()
+    pendingChanged = Signal(bool)
 
     def __init__(
         self,
         images: Mapping[str, str],
-        pick: Callable[[], tuple[str, str] | None] | None,
+        pick: Callable[[], tuple[str, str] | None] | DeferredSourcePicker | None,
         start: str = "",
         parent: QWidget | None = None,
         button_text: str | None = None,
     ) -> None:
         super().__init__(parent)
+        self._pending = False
         self.combo = QComboBox(self)
         for identifier, name in images.items():
             self.combo.addItem(name, identifier)
@@ -729,6 +743,7 @@ class ImageSourceField(QWidget):
                 index = self.combo.count() - 1
             self.combo.setCurrentIndex(index)
         self.button = QPushButton(button_text or tr("Bild wählen …"), self)
+        self._button_text = self.button.text()
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.combo, 1)
@@ -745,7 +760,16 @@ class ImageSourceField(QWidget):
     def _choose(self) -> None:
         if self._pick is None:
             return
-        chosen = self._pick()
+        if isinstance(self._pick, DeferredSourcePicker):
+            self._set_pending(True)
+            self._pick.start(weak_slot(self, ImageSourceField._picked, forward=True))
+            return
+        self._picked(self._pick())
+
+    def _picked(self, chosen: tuple[str, str] | None) -> None:
+        """Eine synchrone oder nachgereichte Wahl in das Feld übernehmen."""
+
+        self._set_pending(False)
         if chosen is None:
             return
         identifier, name = chosen
@@ -754,6 +778,33 @@ class ImageSourceField(QWidget):
             self.combo.addItem(name, identifier)
             index = self.combo.count() - 1
         self.combo.setCurrentIndex(index)
+
+    @property
+    def pending(self) -> bool:
+        """Ob dieser Wähler noch auf die gelesene Datei wartet."""
+
+        return self._pending
+
+    def cancel_pending(self) -> None:
+        """Die zu diesem Feld gehörende Dateiaufnahme logisch abbrechen."""
+
+        if (
+            self._pending
+            and isinstance(self._pick, DeferredSourcePicker)
+            and self._pick.cancel is not None
+        ):
+            self._pick.cancel()
+
+    def _set_pending(self, pending: bool) -> None:
+        """Feld und Umgebung über den Wartezustand auf demselben Stand halten."""
+
+        if self._pending == pending:
+            return
+        self._pending = pending
+        self.button.setText(tr("Datei wird gelesen …") if pending else self._button_text)
+        self.button.setEnabled(not pending)
+        self.combo.setEnabled(not pending)
+        self.pendingChanged.emit(pending)
 
     def value(self) -> str:
         data = self.combo.currentData()
@@ -1045,8 +1096,8 @@ class OperationDialog(QDialog):
         extra_label: str = "",
         surroundings: Any = None,
         images: Mapping[str, str] | None = None,
-        pick_image: Callable[[], tuple[str, str] | None] | None = None,
-        pick_source: Callable[[], tuple[str, str] | None] | None = None,
+        pick_image: Callable[[], tuple[str, str] | None] | DeferredSourcePicker | None = None,
+        pick_source: Callable[[], tuple[str, str] | None] | DeferredSourcePicker | None = None,
         note: str = "",
         slots: Sequence[Any] = (),
     ) -> None:
@@ -1277,8 +1328,14 @@ class OperationDialog(QDialog):
         # Klick tut. Dort heißt die Handlung „Einsetzen" — den Baustein
         # nennt der Fenstertitel (Robert, 25.08.2026, über 3d-druck-ce).
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
+        self._accept_button = ok
         if ok is not None:
             ok.setText(str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title))
+        self._source_fields = tuple(
+            editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
+        )
+        for field in self._source_fields:
+            field.pendingChanged.connect(self._follow_source_pending)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -1289,6 +1346,31 @@ class OperationDialog(QDialog):
         # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
         # selben Blickfeld (Befund B8).
         align_forms(self)
+
+    def _follow_source_pending(self, _pending: bool = False) -> None:
+        """Während des Lesens keine Operation mit einem alten Leerwert anwenden."""
+
+        pending = any(field.pending for field in self._source_fields)
+        button = self._accept_button
+        reason = tr("Datei wird gelesen …") if pending else ""
+        button.setEnabled(not pending)
+        button.setToolTip(reason)
+        button.setStatusTip(reason)
+        button.setAccessibleDescription(reason)
+
+    def accept(self) -> None:
+        """Erst anwenden, wenn jede nachgereichte Quelle wirklich feststeht."""
+
+        if any(field.pending for field in self._source_fields):
+            return
+        super().accept()
+
+    def reject(self) -> None:
+        """Eine verworfene Operation verwirft auch ihre laufende Dateiaufnahme."""
+
+        for field in self._source_fields:
+            field.cancel_pending()
+        super().reject()
 
     def _couple_dependent_fields(self) -> None:
         """Ein Feld ohne Wirkung steht nicht bedienbar da (§2.6).

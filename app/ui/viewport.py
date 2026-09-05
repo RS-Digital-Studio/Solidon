@@ -57,6 +57,7 @@ from app.core.log import get_logger
 from app.core.perceive.features import CURVATURE_LIMIT
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
+from app.core.scene.cancel import CancelSignal
 from app.core.sketch.planes import axis_hit, image_normal, ray_hit, to_plane, to_world
 from app.core.sketch.profile import SketchCurve
 from app.core.types import (
@@ -89,7 +90,7 @@ from app.ui.labels import (
     localised,
     read_number,
 )
-from app.ui.leash import stop_watching_the_dying, weak_slot
+from app.ui.leash import Worker, WorkerLeash, stop_watching_the_dying, weak_slot
 from app.ui.motion import ACCENT_MS, animations_enabled, mix, tween
 from app.ui.palette import (
     DIFF_PALETTES,
@@ -3016,6 +3017,73 @@ class SketchActionBadge(QLabel):
         self.raise_()
 
 
+class _PreparedScene(NamedTuple):
+    """Für den Renderer vorbereitete Netze samt neuen Cache-Einträgen."""
+
+    meshes: dict[ObjectId, Any]
+    cached: dict[tuple[ObjectId, int], Any]
+    uncapped: bool
+
+
+class _SceneMeshWorker(Worker):
+    """Dezimierung und Ansichtsbeschnitt abseits des Qt-Hauptthreads."""
+
+    done = Signal(int, object, object)
+
+    def __init__(
+        self,
+        generation: int,
+        result: EvaluationResult,
+        tasks: Sequence[tuple[ObjectId, Any, tuple[ObjectId, int] | None]],
+        plane: SectionPlane | None,
+        second: SectionPlane | None,
+    ) -> None:
+        super().__init__()
+        self._generation = generation
+        self._result = result
+        self._tasks = tuple(tasks)
+        self._plane = plane
+        self._second = second
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        """Die noch nicht begonnene Aufbereitung des Auftrags verwerfen."""
+        self.cancelled.cancel()
+
+    def _was_cancelled(self) -> bool:
+        """Den nebenläufig veränderlichen Abbruchzustand frisch lesen."""
+        return self.cancelled.is_cancelled
+
+    def work(self) -> None:
+        meshes: dict[ObjectId, Any] = {}
+        cached: dict[tuple[ObjectId, int], Any] = {}
+        uncapped = False
+        for object_id, source, cache_key in self._tasks:
+            if self._was_cancelled():
+                return
+            mesh = source
+            if cache_key is not None:
+                mesh = decimate(mesh, DISPLAY_DECIMATION_TARGET)
+                if self._was_cancelled():
+                    return
+                cached[cache_key] = mesh
+            if self._plane is not None:
+                to_mesh = getattr(mesh, "to_mesh", None)
+                if callable(to_mesh):
+                    mesh = to_mesh()
+                section = cut(mesh, self._plane, self._second)
+                if self._was_cancelled():
+                    return
+                mesh = section.mesh
+                uncapped = uncapped or not section.capped
+            meshes[object_id] = mesh
+        self.done.emit(
+            self._generation,
+            self._result,
+            _PreparedScene(meshes, cached, uncapped),
+        )
+
+
 class Viewport(QWidget):
     """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
 
@@ -3124,6 +3192,8 @@ class Viewport(QWidget):
     Die Combo im Panel spiegelt dieses Signal. Vor dem ersten Element wird
     daraus zugleich die Zeichenebene, danach ausschließlich die Ansicht.
     """
+    sceneFailed = Signal(str)
+    """Die Ansichtsaufbereitung brach ab; die letzte gültige Ansicht bleibt."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3223,6 +3293,8 @@ class Viewport(QWidget):
         self._section: SectionPlane | None = None
         self._slice_thickness: float | None = None
         self._result: EvaluationResult | None = None
+        self._requested_result: EvaluationResult | None = None
+        """Der jüngste Ansichtsauftrag, solange ``_result`` noch das sichtbare Bild trägt."""
         self._uncapped = False
         """Wahr, wenn ein Schnitt offen blieb, weil der Körper es ist (§18.2)."""
         self._object_colour = OBJECT_COLOUR
@@ -3514,6 +3586,7 @@ class Viewport(QWidget):
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
         self._selected_feature: FeatureId | None = None
+        self._selected_features: tuple[FeatureId, ...] = ()
         self._direct_picking = False
         """Ob ein Klick ohne Zwischenstufe das tiefste Ziel meint.
 
@@ -3651,6 +3724,10 @@ class Viewport(QWidget):
         self._display_cache: dict[tuple[ObjectId, int], Any] = {}
         """§18.9: die dezimierte Version des zuletzt gezeigten Körpers. Sie
         fließt nie in den Kern zurück."""
+        self._scene_generation = 0
+        self._scene_worker: _SceneMeshWorker | None = None
+        self._scene_leash = WorkerLeash(self)
+        """Die rechenintensive Aufbereitung der nächsten gültigen Ansicht."""
 
         self.banner = PreviewBanner(self)
         """Das Band über dem Bild, wenn eine Vorschau läuft."""
@@ -4459,7 +4536,7 @@ class Viewport(QWidget):
         wurde, war eine Vorschau, und der Dokumentzustand ist die einzige
         Wahrheit darüber, was danach zu sehen ist.
         """
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     def _rebuild_layer(self) -> None:
         """Der aufgeschobene Schnitt, wenn der Schichtschieber zur Ruhe kommt.
@@ -4468,10 +4545,141 @@ class Viewport(QWidget):
         gebundene Methode schwach, ein Lambda hielte die Ansicht am eigenen
         Kind fest (siehe ``__init__`` und `.claude/rules/oberflaeche.md`).
         """
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
+
+    def _scene_for_rebuild(self) -> EvaluationResult | None:
+        """Die jüngste Szene für einen Neuaufbau aus einer Ansichtsänderung.
+
+        Während ein Arbeiter R2 vorbereitet, bleibt ``_result`` absichtlich
+        auf dem sichtbaren R1. Ein Themen-, Filter- oder Schnittwechsel darf
+        daraus keinen neuen R1-Auftrag machen und damit R2 verwerfen.
+        """
+
+        return self._requested_result if self._scene_worker is not None else self._result
 
     def show_scene(self, result: EvaluationResult | None) -> None:
-        """Baut die Ansicht aus der letzten vollständigen Auswertung neu (§15.3)."""
+        """Bereitet teure Netze im Arbeiter vor und behält bis dahin das Bild."""
+
+        self._requested_result = result
+        self._scene_generation += 1
+        generation = self._scene_generation
+        previous = self._scene_worker
+        if previous is not None:
+            previous.cancel()
+            self._scene_leash.retire(previous)
+            self._scene_worker = None
+        prepared = self._scene_tasks(result)
+        if prepared is None:
+            self._apply_scene(result)
+            return
+        tasks, plane, second = prepared
+        assert result is not None
+        worker = _SceneMeshWorker(generation, result, tasks, plane, second)
+        self._scene_worker = worker
+        worker.done.connect(self._scene_ready)
+        worker.crashed.connect(weak_slot(self, Viewport._scene_crashed, generation, forward=True))
+        worker.finished.connect(
+            weak_slot(self, lambda view, done: view._scene_worker_done(done), worker)
+        )
+        self._scene_leash.start(worker)
+
+    def _scene_tasks(
+        self, result: EvaluationResult | None
+    ) -> (
+        tuple[
+            list[tuple[ObjectId, Any, tuple[ObjectId, int] | None]],
+            SectionPlane | None,
+            SectionPlane | None,
+        ]
+        | None
+    ):
+        """Die nötige Aufbereitung, wenn mindestens ein Schritt teuer ist."""
+
+        if result is None or self.plotter is None:
+            return None
+        plane = self._section
+        if plane is None and self._layer is not None:
+            plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=self._layer.z)
+        second = None
+        if self._section is not None and self._slice_thickness is not None:
+            offset = self._section.position - self._slice_thickness
+            second = SectionPlane(normal=self._section.normal, position=offset).flipped()
+
+        tasks: list[tuple[ObjectId, Any, tuple[ObjectId, int] | None]] = []
+        heavy = plane is not None
+        for object_id, entry in result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
+            mesh = entry.mesh
+            cache_key = None
+            may_decimate = not (self._map is not None and self._map_object == object_id)
+            if mesh.triangle_count > DISPLAY_DECIMATION_ABOVE and may_decimate:
+                key = (object_id, mesh.triangle_count)
+                found = self._display_cache.get(key)
+                if found is None:
+                    cache_key = key
+                    heavy = True
+                else:
+                    mesh = found
+            tasks.append((object_id, mesh, cache_key))
+        return (tasks, plane, second) if heavy else None
+
+    def _scene_ready(
+        self,
+        generation: int,
+        result: EvaluationResult,
+        prepared: _PreparedScene,
+    ) -> None:
+        """Nur das Ergebnis des jüngsten Ansichtsauftrags übernehmen."""
+
+        if generation != self._scene_generation:
+            return
+        self._apply_scene(result, prepared)
+
+    def _scene_crashed(self, generation: int, detail: str) -> None:
+        """Die alte Ansicht stehen lassen und den Fehler nach außen melden."""
+
+        if generation == self._scene_generation:
+            self.sceneFailed.emit(detail)
+
+    def _scene_worker_done(self, worker: _SceneMeshWorker) -> None:
+        """Den ausgelaufenen Aufbereiter identitätssicher loslassen."""
+
+        if self._scene_worker is worker:
+            self._scene_worker = None
+        self._scene_leash.hold_until_done(worker)
+
+    def wait_for_workers(self, timeout_ms: int = 2000) -> bool:
+        """Die Ansichtsaufbereitung vor dem Fensterabbau auslaufen lassen."""
+
+        # Ein ``done`` kann schon in Qts Ereignisschlange liegen, obwohl der
+        # Thread selbst nicht mehr läuft. Das Abbruchsignal erreicht diesen
+        # fertigen Auftrag nicht mehr; nur eine neue Generation macht auch
+        # seinen bereits eingereihten Rückruf zuverlässig ungültig.
+        self._scene_generation += 1
+        workers = (
+            self._scene_worker,
+            *self._scene_leash.pending(),
+        )
+        unique = {id(worker): worker for worker in workers if worker is not None}
+        for worker in unique.values():
+            worker.cancel()
+        for worker in unique.values():
+            if worker.isRunning():
+                worker.wait(timeout_ms)
+        return not any(worker.isRunning() for worker in unique.values())
+
+    def release(self, timeout_ms: int = 2000) -> None:
+        """Die einheitliche Aufräumgrenze für jedes Widget mit Halteleine."""
+
+        self.wait_for_workers(timeout_ms)
+
+    def _apply_scene(
+        self,
+        result: EvaluationResult | None,
+        prepared: _PreparedScene | None = None,
+    ) -> None:
+        """Baut die Ansicht aus einer vollständig vorbereiteten Auswertung neu (§15.3)."""
         # Ein voller Neuaufbau schneidet an der aktuellen Schichthöhe mit —
         # ein noch ausstehender Schnitt vom Schieber wäre danach derselbe
         # noch einmal.
@@ -4513,11 +4721,19 @@ class Viewport(QWidget):
             if selected_entry is None:
                 self._selected = None
                 self._selected_feature = None
+                self._selected_features = ()
             elif (
                 self._selected_feature is not None
                 and self._selected_feature not in selected_entry.features
             ):
                 self._selected_feature = None
+                self._selected_features = ()
+            else:
+                self._selected_features = tuple(
+                    feature_id
+                    for feature_id in self._selected_features
+                    if feature_id in selected_entry.features
+                )
         # Die vorbereiteten Merkmalsdreiecke gehören der vorigen Auswertung.
         # Eine Op, die eine Bohrung verschiebt, ändert ihre Dreiecke, und ein
         # Klick träfe danach, wo sie war.
@@ -4541,6 +4757,7 @@ class Viewport(QWidget):
             self._selected = None
             self._selected_more = ()
             self._selected_feature = None
+            self._selected_features = ()
             self._hover_feature = False
             self._hovered_object = None
             self._hovered_feature = None
@@ -4597,7 +4814,11 @@ class Viewport(QWidget):
             self._shadow_splits.clear()
             self._edge_meshes.clear()
         self._shadow_cast = self._shadow_direction()
-        self._uncapped = False
+        self._uncapped = prepared.uncapped if prepared is not None else False
+        if prepared is not None:
+            self._display_cache.update(prepared.cached)
+            while len(self._display_cache) > DISPLAY_CACHE_KEPT:
+                self._display_cache.pop(next(iter(self._display_cache)))
         if result is None:
             # Und im Bild dasselbe: ohne dieses Aufräumen blieben die orangen
             # Markierungen des vorigen Objekts stehen, während Objektbaum und
@@ -4622,7 +4843,11 @@ class Viewport(QWidget):
         for object_id, entry in result.scene.objects.items():
             if not self._in_view(object_id, entry):
                 continue
-            mesh = self._sectioned(self._for_display(object_id, entry.mesh))
+            mesh = (
+                prepared.meshes.get(object_id, entry.mesh)
+                if prepared is not None
+                else self._sectioned(self._for_display(object_id, entry.mesh))
+            )
             raw = getattr(mesh, "raw", None)
             if raw is None or not len(raw.faces):
                 continue
@@ -5069,7 +5294,7 @@ class Viewport(QWidget):
         if hidden == self._hidden:
             return
         self._hidden = hidden
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     # **Jeder Ansichts-Setter prüft auf Änderung, und das ist keine Feinarbeit.**
     # Gemessen am 03.09.2026 an ``aushoehlen-und-teilen.p3d``, Zähler um
@@ -5106,7 +5331,7 @@ class Viewport(QWidget):
         # Eine einzelne Platte heißt ein Bett; „Alle" heißt so viele, wie die
         # Szene belegt. ``show_scene`` zieht die Kulisse nach, sobald sich die
         # Zahl ändert — und ``_plate`` ist gesetzt, bevor sie gezählt wird.
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     def set_explosion(self, factor: float) -> None:
         """Zeichnet die Teile auseinander, um eine Teilung anzusehen (§18.8).
@@ -5122,7 +5347,7 @@ class Viewport(QWidget):
         if wanted == self._explosion:
             return
         self._explosion = wanted
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     def _view_offset(self, entry: Any, result: EvaluationResult) -> Any:
         """Alles, was einen Körper in der Ansicht von seinem Ort in der Szene
@@ -5710,7 +5935,7 @@ class Viewport(QWidget):
         # schwarze Bettfläche auf hellem Grund.
         if self._profile is not None:
             self.show_build_volume(self._profile)
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     # --- display (§18.1) --------------------------------------------------------
 
@@ -5719,13 +5944,13 @@ class Viewport(QWidget):
         if mode == self._mode:
             return
         self._mode = mode
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     def set_shading(self, shading: Shading) -> None:
         if shading == self._shading:
             return
         self._shading = shading
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     def set_projection(self, projection: Projection) -> None:
         """Orthografisch ist das, was gemessene Längen vertrauenswürdig
@@ -5758,7 +5983,7 @@ class Viewport(QWidget):
             return
         self._section = plane
         self._slice_thickness = thickness
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     @property
     def section(self) -> SectionPlane | None:
@@ -6811,7 +7036,7 @@ class Viewport(QWidget):
         # Solange Farbe eine Zahl bedeutet, darf nichts sie nachdunkeln —
         # weder die Verdeckung noch ein Schatten.
         self._apply_ambient_occlusion()
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
 
     @property
     def analysis_map(self) -> AnalysisMap | None:
@@ -6878,6 +7103,29 @@ class Viewport(QWidget):
 
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature = feature_id
+        self._selected_features = (feature_id,) if feature_id is not None else ()
+        self._redraw_features()
+        # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
+        # zurück, sobald keines mehr gewählt ist.
+        self._apply_selection_colour()
+        if self.plotter is not None:
+            # Auch der Griff wechselt mit: eine gewählte Fläche bekommt ihn
+            # auf die Fläche, eine abgewählte gibt ihn ans Objekt zurück
+            # (§18.11) — nicht erst beim nächsten Umschalten.
+            self.set_gizmo(self._gizmo_wanted)
+            self._draw()
+
+    def select_features(self, feature_ids: Sequence[FeatureId]) -> None:
+        """Mehrere Merkmale desselben Körpers gemeinsam hervorheben.
+
+        Die Einzelauswahl bleibt bewusst ``None``: Zwei Bohrungen sind kein
+        führendes Merkmal für eine Operation oder den Transformationsgriff.
+        Ihre sichtbare Auswahl darf deshalb aber weder verschwinden noch auf
+        den ganzen Körper zurückfallen.
+        """
+        chosen = tuple(dict.fromkeys(feature_ids))
+        self._selected_features = chosen
+        self._selected_feature = chosen[0] if len(chosen) == 1 else None
         self._redraw_features()
         # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
         # zurück, sobald keines mehr gewählt ist.
@@ -6893,6 +7141,15 @@ class Viewport(QWidget):
     def selected_feature(self) -> FeatureId | None:
         return self._selected_feature
 
+    def highlighted_features(self) -> tuple[FeatureId, ...]:
+        """Alle Merkmale, deren Flächen die Auswahlfarbe tragen."""
+        # Einige gezielte Viewport-Tests setzen den alten Einzelzustand direkt.
+        # Die öffentliche Auswahl läuft immer über ``select_feature`` oder
+        # ``select_features`` und hält beide Werte gemeinsam.
+        if self._selected_feature is not None:
+            return (self._selected_feature,)
+        return self._selected_features
+
     def highlighted_object(self) -> ObjectId | None:
         """Welcher Körper die Auswahlfarbe trägt — keiner, solange ein Merkmal
         gewählt ist (§19.1).
@@ -6901,7 +7158,7 @@ class Viewport(QWidget):
         Grund wie bei :meth:`gizmo_target`: offscreen gibt es keinen, und ein
         Test, der sich dort überspringt, prüft nie etwas.
         """
-        if self._selection_marking_hidden() or self._selected_feature is not None:
+        if self._selection_marking_hidden() or self.highlighted_features():
             return None
         return self._selected
 
@@ -6930,7 +7187,13 @@ class Viewport(QWidget):
         """
         if self._selection_marking_hidden():
             return ()
-        return self._face_indices(self._selected, self._selected_feature)
+        return tuple(
+            dict.fromkeys(
+                index
+                for feature_id in self.highlighted_features()
+                for index in self._face_indices(self._selected, feature_id)
+            )
+        )
 
     def protected_features(self, object_id: ObjectId | None = None) -> tuple[FeatureId, ...]:
         """Welche Flächen dieses Körpers als Sichtflächen gesperrt sind.
@@ -7031,7 +7294,7 @@ class Viewport(QWidget):
         shown: dict[tuple[ObjectId, FeatureId], Feature] = {}
         if self._selected is not None:
             for feature_id, feature in self._features_of_selection().items():
-                if self._feature_overlay or feature_id == self._selected_feature:
+                if self._feature_overlay or feature_id in self.highlighted_features():
                     shown[(self._selected, feature_id)] = feature
         # Beim Überfahren bleibt der Name auch bei ausgeschalteter
         # Überlagerung sichtbar. Farbe plus Merkmalszeiger allein würden sagen,
@@ -7259,12 +7522,12 @@ class Viewport(QWidget):
             raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
         )
         faces = _triangle_faces(len(chosen))
-        feature = (
-            entry.features.get(self._selected_feature)
-            if self._selected_feature is not None
-            else None
-        )
-        hole_surface = feature is not None and feature.kind == "hole"
+        features = [
+            feature
+            for feature_id in self.highlighted_features()
+            if (feature := entry.features.get(feature_id)) is not None
+        ]
+        hole_surface = bool(features) and all(feature.kind == "hole" for feature in features)
         side_kwargs: dict[str, Any] = (
             {
                 "opacity": SELECTED_HOLE_OPACITY,
@@ -7391,7 +7654,7 @@ class Viewport(QWidget):
             or self._hovered_feature is None
             or (
                 self._hovered_object == self._selected
-                and self._hovered_feature == self._selected_feature
+                and self._hovered_feature in self.highlighted_features()
             )
         ):
             return
@@ -7942,7 +8205,7 @@ class Viewport(QWidget):
         """
         if self._selected is None:
             return 0
-        return 2 if self._selected_feature is not None else 1
+        return 2 if self.highlighted_features() else 1
 
     def _would_pick_feature(self, point: Vec3) -> bool:
         """Ob der **nächste** Klick hier ein Merkmal wählen würde.
@@ -8131,7 +8394,7 @@ class Viewport(QWidget):
         # stehen bleibt.
         if (was is None) != (layer is None):
             self._layer_rebuild.stop()
-            self.show_scene(self._result)
+            self.show_scene(self._scene_for_rebuild())
         elif was is not None and layer is not None and was.z != layer.z:
             self._layer_rebuild.start()
         self._redraw_layer()
@@ -8205,7 +8468,7 @@ class Viewport(QWidget):
         Maß in der alten Einheit — bis irgendwann etwas anderes ein Neuzeichnen
         auslöst.
         """
-        self.show_scene(self._result)
+        self.show_scene(self._scene_for_rebuild())
         # ``show_scene`` zeichnet die Maße nur im Leer-Zweig neu — nach einem
         # Einheitenwechsel stünden sie sonst in der alten Einheit da.
         self._redraw_measurements()

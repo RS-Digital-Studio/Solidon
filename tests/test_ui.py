@@ -21,7 +21,7 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import QEvent, QLocale, QPoint, Qt
-from PySide6.QtGui import QAction, QContextMenuEvent, QKeySequence, QShortcut
+from PySide6.QtGui import QAction, QCloseEvent, QContextMenuEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -1421,6 +1421,9 @@ def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
     window.object_tree.featuresSelected.emit([(object_id, holes[0]), (object_id, holes[1])])
     QApplication.processEvents()
 
+    assert window.viewport.highlighted_features() == (holes[0], holes[1])
+    assert window.viewport.highlighted_object() is None, "der Körper bleibt grau"
+    assert window.viewport.highlighted_faces(), "beide Bohrungen bleiben im Viewport markiert"
     texte = " ".join(
         widget.text()
         for row in window.feature_panel._built
@@ -5006,6 +5009,43 @@ def test_every_worker_field_is_waited_for_when_the_window_closes() -> None:
     )
 
 
+def test_closing_keeps_the_window_alive_while_a_worker_is_running(
+    window: MainWindow,
+) -> None:
+    """Ein noch laufender QThread darf sein Fenster nicht überleben."""
+
+    class _RunningWorker:
+        def isRunning(self) -> bool:  # noqa: N802 — bildet die Qt-API nach
+            return True
+
+        def wait(self, _timeout_ms: int) -> bool:
+            return False
+
+    window._export_worker = _RunningWorker()
+    event = QCloseEvent()
+
+    window.closeEvent(event)
+
+    assert not event.isAccepted()
+    assert window._close_retry.isActive()
+    assert not window.isEnabled(), "nach der Verwerfentscheidung darf keine neue Änderung entstehen"
+
+    window._close_retry.stop()
+    window._close_requested = False
+    window._export_worker = None
+    window.setEnabled(True)
+
+
+def test_a_settings_write_error_is_visible_without_breaking_cleanup(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine gesperrte Einstellungsdatei wird gemeldet und nicht hochgeworfen."""
+    monkeypatch.setattr("app.ui.main_window.save_settings", lambda _settings: None)
+
+    assert window._store_settings() is False
+    assert "Schreibrechte" in window.status_message.text()
+
+
 def test_the_handlers_are_found_through_the_parent_window(window: MainWindow) -> None:
     """Ein Dialog im Fenster zeigt dieselben Handlungen wie das Fenster."""
     from app.ui.dialogs import handlers_of
@@ -5477,20 +5517,23 @@ def test_an_unreadable_gcode_file_says_so(
 
     window.action_check_gcode()
 
+    worker = window._gcode_worker
+    assert worker is not None
+    worker.wait(20_000)
+    QApplication.processEvents()
+
     assert gezeigt, "die fehlende Datei wurde stillschweigend übergangen"
     assert gezeigt[0].suggestions, "und der Fehler trägt keinen Handlungsvorschlag"
 
 
-def test_reading_a_gcode_file_stands_under_the_wait_cursor(
+def test_reading_a_gcode_file_runs_outside_the_qt_thread(
     window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """§2.8: Ein Strom von 10 MB kostet gemessen 520 ms — dafür gilt die
-    mittlere Zeile der Tabelle.
+    """§2.8: Ein Strom von 10 MB kostet gemessen 520 ms.
 
     ``action_check_gcode`` las die Datei und zerlegte sie im Qt-Hauptthread,
-    ohne dass irgendetwas davon zu sehen war: dreihunderttausend Zeilen sind
-    ein mittleres Teil, eine volle Platte ein Mehrfaches davon. Gemessen wird
-    am Zeiger während des Zerlegens, nicht an der Rechnung danach.
+    ohne dass das Fenster Ereignisse bearbeiten konnte. Gemessen wird am
+    Thread während des Zerlegens; die gestufte Anzeige beginnt zugleich.
     """
     from PySide6.QtWidgets import QFileDialog
 
@@ -5503,21 +5546,142 @@ def test_reading_a_gcode_file_stands_under_the_wait_cursor(
         "getOpenFileName",
         staticmethod(lambda *args, **kwargs: (str(datei), "")),
     )
-    gesehen: list[Any] = []
-    echt = gcode_module.parse
+    gesehen: list[tuple[int, object, object]] = []
+    echt = gcode_module.analyze_lines
 
-    def beobachtet(text: str, *args: Any, **kwargs: Any) -> Any:
-        gesehen.append(QApplication.overrideCursor())
-        return echt(text, *args, **kwargs)
+    def beobachtet(lines: Any, *, cancelled: Any = None) -> Any:
+        gesehen.append((threading.get_ident(), getattr(lines, "name", None), cancelled))
+        return echt(lines, cancelled=cancelled)
 
-    monkeypatch.setattr("app.ui.main_window.gcode.parse", beobachtet)
+    monkeypatch.setattr("app.ui.main_window.gcode.analyze_lines", beobachtet)
 
     window.action_check_gcode()
 
+    worker = window._gcode_worker
+    assert worker is not None
+    assert window._progress_states["gcode"].active
+    worker.wait(20_000)
+    QApplication.processEvents()
+
     assert gesehen, "zerlegt wurde nichts — der Test misst am falschen Ort"
-    assert gesehen[0] is not None, "zerlegt wurde ohne Wartezeiger"
-    assert gesehen[0].shape() == Qt.CursorShape.WaitCursor
-    assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
+    thread_id, stream_name, token = gesehen[0]
+    assert thread_id != threading.get_ident(), "zerlegt wurde im Qt-Hauptthread"
+    assert stream_name == str(datei), (
+        "die ganze Datei wurde vor dem Zerlegen in den Speicher gelesen"
+    )
+    assert token is worker.cancel, "der Abbrechen-Schalter erreicht den Zeilenparser nicht"
+    assert not window._progress_states["gcode"].active
+
+
+def test_cancelling_reaches_the_running_gcode_parser(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Abbrechen-Knopf beendet auch das Zerlegen, nicht nur Lesen und Zustellen."""
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.slice import gcode as gcode_module
+
+    path = tmp_path / "lang.gcode"
+    path.write_text("G1 X1 Y1 E1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(path), "")),
+    )
+    started = threading.Event()
+    pulse = threading.Event()
+    tokens: list[object] = []
+    echt = gcode_module.analyze_lines
+
+    def waits_for_cancel(_lines: Any, *, cancelled: Any = None) -> Any:
+        tokens.append(cancelled)
+        started.set()
+        if cancelled is None:
+            return echt(_lines, cancelled=cancelled)
+        while not cancelled.is_cancelled:
+            pulse.wait(0.01)
+        cancelled.raise_if_cancelled()
+
+    monkeypatch.setattr("app.ui.main_window.gcode.analyze_lines", waits_for_cancel)
+
+    window.action_check_gcode()
+    worker = window._gcode_worker
+    assert worker is not None and started.wait(1.0)
+
+    window._cancel_gcode()
+    assert worker.wait(2_000)
+    QApplication.processEvents()
+
+    assert tokens == [worker.cancel]
+    assert "abgebrochen" in window.status_message.text().lower()
+
+
+def test_cancelling_rejects_a_gcode_result_already_waiting_in_qt(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ein vor dem Knopfdruck eingereihtes Ergebnis bleibt verworfen."""
+    from PySide6.QtWidgets import QFileDialog
+
+    path = tmp_path / "fertig.gcode"
+    path.write_text(";LAYER:0\nG1 X10 Y10 E0.5 F1800\n", encoding="utf-8")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(path), "")),
+    )
+    added: list[object] = []
+    compared: list[object] = []
+    monkeypatch.setattr(
+        window.report,
+        "add_findings",
+        lambda findings, **_kwargs: added.append(findings),
+    )
+    monkeypatch.setattr(window, "_compare_totals", compared.append)
+
+    window.action_check_gcode()
+    worker = window._gcode_worker
+    assert worker is not None and worker.wait(2_000)
+
+    window._cancel_gcode()
+    QApplication.processEvents()
+
+    assert added == []
+    assert compared == []
+    assert not window._progress_states["gcode"].active
+
+
+def test_a_gcode_check_keeps_the_body_selected_when_it_started(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bedienbare Auswahl und späteres Worker-Ergebnis gehören nicht vermischt."""
+    from PySide6.QtWidgets import QFileDialog
+
+    path = tmp_path / "stuetzen.gcode"
+    path.write_text(
+        ";LAYER:0\n;TYPE:Support material\nG1 X10 Y10 E1 F1800\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(path), "")),
+    )
+    selected = ["body-at-start"]
+    compared: list[str] = []
+    monkeypatch.setattr(window.object_tree, "selected", lambda: selected[0])
+    monkeypatch.setattr(
+        window,
+        "_slice_of",
+        lambda object_id, _complete: compared.append(object_id),
+    )
+
+    window.action_check_gcode()
+    worker = window._gcode_worker
+    assert worker is not None and worker.wait(2_000)
+    selected[0] = "body-selected-later"
+    QApplication.processEvents()
+
+    assert compared == ["body-at-start"]
 
 
 def wait_for_export(window: MainWindow) -> None:
@@ -7603,6 +7767,20 @@ def test_a_remote_call_is_one_transaction_the_window_can_undo(window: MainWindow
     window.action_undo()
     window.session.wait_for_idle()
     assert window.session.project.document.ops == []
+
+
+def test_a_remote_timeout_never_reports_an_old_result_as_finished(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein abgelaufener Fernaufruf darf keinen alten Szenenstand als Erfolg melden."""
+
+    monkeypatch.setattr(window.session, "apply", lambda *args, **kwargs: None)
+    monkeypatch.setattr(window.session, "wait_for_idle", lambda timeout_ms: False)
+
+    answer = window.run_remote("create_box", {"width": 20.0, "depth": 20.0, "height": 20.0})
+
+    assert "rechnet noch" in answer
+    assert "fertig" not in answer
 
 
 def test_a_remote_call_says_where_it_came_from(window: MainWindow) -> None:

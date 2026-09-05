@@ -45,6 +45,7 @@ from __future__ import annotations
 
 import gc
 import math
+import threading
 import weakref
 from collections.abc import Iterator
 from types import SimpleNamespace
@@ -630,6 +631,165 @@ def _scene_with_two_holes() -> Any:
     )
 
 
+def test_a_heavy_scene_is_prepared_outside_the_qt_thread(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dezimierung hält den Hauptthread nicht an und leert das alte Bild nicht."""
+
+    from app.ui import viewport as viewport_module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = object()
+    old = _scene_with_two_holes()
+    new = _scene_with_two_holes()
+    viewport._result = old
+    seen: list[int] = []
+
+    def observed(mesh: Any, _target: int) -> Any:
+        seen.append(threading.get_ident())
+        return mesh
+
+    monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
+    monkeypatch.setattr(viewport_module, "decimate", observed)
+
+    viewport.show_scene(new)
+    worker = viewport._scene_worker
+    assert worker is not None
+    assert viewport._result is old, "die letzte gültige Ansicht wurde vorzeitig ersetzt"
+    worker.wait(20_000)
+    # Das Ergebnis absichtlich veralten lassen: Für diesen Test genügt die
+    # Aufbereitung; ein Renderer-Doppel würde nur PyVista nachbauen.
+    viewport._scene_generation += 1
+    qt_app.processEvents()
+
+    assert seen and seen[0] != threading.get_ident()
+    viewport.plotter = None
+
+
+def test_viewport_cleanup_cancels_a_running_preparation(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beim Fensterabbau darf kein Ansichtsarbeiter sein Widget überleben."""
+    from app.ui import viewport as viewport_module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = object()
+    old = _scene_with_two_holes()
+    viewport._result = old
+    started = threading.Event()
+    release = threading.Event()
+
+    def delayed(mesh: Any, _target: int) -> Any:
+        started.set()
+        release.wait(2.0)
+        return mesh
+
+    monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
+    monkeypatch.setattr(viewport_module, "decimate", delayed)
+    viewport.show_scene(_scene_with_two_holes())
+    worker = viewport._scene_worker
+    assert worker is not None and started.wait(1.0)
+
+    assert viewport.wait_for_workers(0) is False
+    assert worker.cancelled.is_cancelled
+    release.set()
+    assert worker.wait(2_000)
+    qt_app.processEvents()
+
+    assert viewport.wait_for_workers(0) is True
+    assert viewport._result is old, "ein abgebrochener Auftrag wurde noch dargestellt"
+    viewport.plotter = None
+
+
+def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein vor dem Schließen eingereihtes Ergebnis darf den Plotter nicht mehr anfassen."""
+    from app.ui import viewport as viewport_module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = object()
+    old = _scene_with_two_holes()
+    new = _scene_with_two_holes()
+    viewport._result = old
+    applied: list[Any] = []
+
+    def apply(result: Any, _prepared: Any = None) -> None:
+        applied.append(result)
+
+    monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
+    monkeypatch.setattr(viewport_module, "decimate", lambda mesh, _target: mesh)
+    monkeypatch.setattr(viewport, "_apply_scene", apply)
+
+    viewport.show_scene(new)
+    worker = viewport._scene_worker
+    assert worker is not None and worker.wait(2_000)
+    assert viewport.wait_for_workers(0) is True
+
+    qt_app.processEvents()
+
+    assert applied == [], "ein beim Abbau eingereihtes Ergebnis wurde noch dargestellt"
+    viewport.plotter = None
+
+
+def test_a_view_change_does_not_replace_the_pending_scene_with_the_old_one(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Ansichtswechsel während der Aufbereitung behält das jüngste Ergebnis.
+
+    ``_result`` ist bis zum fertigen Aufbau absichtlich die letzte gültige
+    Darstellung. Ein Setter, der daraus einen neuen Auftrag baut, darf deshalb
+    nicht die inzwischen angeforderte Szene durch genau diese alte ersetzen.
+    """
+    from app.ui import viewport as viewport_module
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = object()
+    old = _scene_with_two_holes()
+    new = _scene_with_two_holes()
+    viewport._result = old
+    first_started = threading.Event()
+    release_first = threading.Event()
+    calls = 0
+    applied: list[Any] = []
+
+    def delayed(mesh: Any, _target: int) -> Any:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            first_started.set()
+            release_first.wait(2.0)
+        return mesh
+
+    def apply(result: Any, _prepared: Any = None) -> None:
+        viewport._result = result
+        applied.append(result)
+
+    monkeypatch.setattr(viewport_module, "DISPLAY_DECIMATION_ABOVE", 0)
+    monkeypatch.setattr(viewport_module, "decimate", delayed)
+    monkeypatch.setattr(viewport, "_apply_scene", apply)
+
+    viewport.show_scene(new)
+    first = viewport._scene_worker
+    assert first is not None and first_started.wait(1.0)
+
+    viewport.set_hidden(frozenset({"nicht-vorhanden"}))
+    second = viewport._scene_worker
+    assert second is not None and second is not first
+
+    release_first.set()
+    assert first.wait(2_000)
+    assert second.wait(2_000)
+    qt_app.processEvents()
+
+    assert applied and applied[-1] is new, "der Ansichtswechsel stellte die alte Szene wieder her"
+    viewport.plotter = None
+
+
 def _with_faces(result: Any, feature_id: str, faces: tuple[int, ...]) -> Any:
     """Demselben Merkmal Dreiecke zuordnen, wie die Erkennung es täte."""
     import dataclasses
@@ -882,6 +1042,22 @@ def test_difference_colours_take_priority_over_selection(qt_app: QApplication) -
     assert viewport.highlighted_faces() == ()
     viewport.show_difference(None)
     assert viewport.highlighted_faces() == (0, 1), "nach der Vorschau ist die Auswahl wieder da"
+
+
+def test_multiple_features_keep_their_viewport_highlight(qt_app: QApplication) -> None:
+    """Zwei Merkmale leuchten gemeinsam, der Körper übernimmt ihre Farbe nicht."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    result = _with_faces(_scene_with_two_holes(), "hole_1", (0, 1))
+    viewport.show_scene(_with_faces(result, "hole_2", (2, 3)))
+    viewport.select("obj_1")
+    viewport.select_features(("hole_1", "hole_2"))
+
+    assert viewport.selected_feature is None, "keines der beiden ist ein führendes Merkmal"
+    assert viewport.highlighted_features() == ("hole_1", "hole_2")
+    assert viewport.highlighted_faces() == (0, 1, 2, 3)
+    assert viewport.highlighted_object() is None, "der Körper bleibt grau"
 
 
 def test_difference_colours_also_replace_a_whole_body_highlight(
@@ -6287,8 +6463,8 @@ def test_what_moves_with_the_plate_is_redrawn_with_the_scene() -> None:
     methoden = {
         knoten.name: knoten for knoten in ast.walk(baum) if isinstance(knoten, ast.FunctionDef)
     }
-    show_scene = methoden.get("show_scene")
-    assert show_scene is not None, "show_scene ist verschwunden"
+    show_scene = methoden.get("_apply_scene")
+    assert show_scene is not None, "der Szenenaufbau ist verschwunden"
 
     gerufen = {
         knoten.func.attr

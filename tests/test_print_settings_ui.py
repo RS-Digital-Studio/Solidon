@@ -8,6 +8,7 @@ Vorschläge kommen mit Begründung, und ohne Slicer bleibt er benutzbar.
 from __future__ import annotations
 
 import json
+import threading
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -878,26 +879,19 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     # wie es die Auswertung selbst tut.
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
     # ``with_settings`` wird mitgelesen und nicht nur geschluckt: Der
     # Übergabeweg reicht die Wahl des Kunden durch, und ein Ersatz mit
     # ``**kwargs`` wäre an dieser Stelle blind für sie.
     handed: list[bool] = []
 
-    def _run(
-        objects: object,
-        plate: int,
-        folder: Path,
-        name: str,
-        setup: object,
-        *,
-        with_settings: bool = True,
-    ) -> object:
-        handed.append(with_settings)
+    def _run(job: object, plate: int) -> object:
+        handed.append(job.with_settings)
         return module.PlateRun(
             plate=plate, model=written, slots=(), keep_arrangement=False, findings=()
         )
 
-    monkeypatch.setattr(dialog, "_plate_run", _run)
+    monkeypatch.setattr(module, "_prepare_plate", _run)
     opened: list[tuple[Path, object]] = []
     monkeypatch.setattr(
         module.handover, "open_in_slicer", lambda model, setup: opened.append((model, setup))
@@ -905,6 +899,9 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
 
     assert dialog.settings.handover == "slice", "die Vorgabe ist der bisherige Weg"
     dialog._open_in_slicer()
+    assert dialog._worker is not None
+    assert dialog._worker.wait(5_000)
+    QApplication.processEvents()
 
     assert opened and opened[0][0] == written, "das Fenster bekommt die geschriebene Datei"
     assert dialog.settings.handover == "open", "die benutzte Art ist gemerkt"
@@ -915,7 +912,183 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     # dessen eigenem Profil.
     dialog.ui_settings.print_settings_in_files = False
     dialog._open_in_slicer()
+    assert dialog._worker is not None
+    assert dialog._worker.wait(5_000)
+    QApplication.processEvents()
     assert handed == [True, False]
+
+
+def test_plate_files_are_prepared_outside_the_qt_thread(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die 3MF-Serialisierung steht vor dem Slicer und gehört mit in den Arbeiter."""
+    import threading
+    import types as types_module
+
+    from app.core.errors import OperationCancelled
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "prusa-slicer-console.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+
+    threads: list[int] = []
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"")
+
+    def prepare(_job: object, plate: int) -> object:
+        threads.append(threading.get_ident())
+        return module.PlateRun(plate=plate, model=model)
+
+    monkeypatch.setattr(module, "_prepare_plate", prepare)
+    monkeypatch.setattr(
+        module.handover,
+        "slice_model",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(OperationCancelled()),
+    )
+    qt_thread = threading.get_ident()
+
+    dialog._slice()
+
+    assert dialog.progress.isVisibleTo(dialog), "Fortschritt steht vor der Vorbereitung"
+    assert dialog.cancel_slice.isEnabled(), "auch die Vorbereitung lässt sich abbrechen"
+    assert dialog._worker is not None and dialog._worker.wait(5_000)
+    QApplication.processEvents()
+    assert threads and threads[0] != qt_thread, "die 3MF-Datei wurde im Qt-Thread geschrieben"
+
+
+def test_closing_does_not_wait_in_the_qt_thread_for_plate_preparation(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Schließen bleibt bedienbar, solange die 3MF-Datei geschrieben wird.
+
+    Der neue Aufbereiter kann nicht mitten in ``write_assembly`` anhalten.
+    Deshalb muss der Dialog den Abschluss abwarten, ohne seinerseits im
+    Qt-Hauptthread auf ``QThread.wait()`` stehen zu bleiben (§2.8).
+    """
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "prusa-slicer-console.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+
+    started = threading.Event()
+    release = threading.Event()
+    model = tmp_path / "platte.3mf"
+
+    def prepare(_job: object, plate: int) -> object:
+        started.set()
+        release.wait(1.0)
+        model.write_bytes(b"")
+        return module.PlateRun(plate=plate, model=model)
+
+    monkeypatch.setattr(module, "_prepare_plate", prepare)
+    dialog._slice()
+    worker = dialog._worker
+    assert worker is not None and started.wait(1.0)
+
+    delayed_release = threading.Timer(0.5, release.set)
+    delayed_release.start()
+    try:
+        begun = time.perf_counter()
+        dialog.reject()
+        elapsed = time.perf_counter() - begun
+    finally:
+        release.set()
+        delayed_release.cancel()
+
+    assert elapsed < 0.2, f"das Schließen blockierte den Qt-Thread {elapsed:.2f} s"
+    assert worker.cancelled.is_cancelled
+    assert worker.wait(2_000)
+
+    deadline = time.monotonic() + 1.0
+    while not dialog._settled and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.01)
+    assert dialog._settled, "der Dialog wurde nach dem Arbeiter nicht zu Ende geschlossen"
+
+
+def test_closing_ignores_a_worker_error_already_waiting_in_qt(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein eingereihtes Ergebnis darf nach dem Dialogausgang kein Fenster mehr öffnen."""
+    from app.ui import print_settings_dialog as module
+
+    source = tmp_path / "source.gcode"
+    source.write_bytes(b"G1 X1\n")
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("x", encoding="utf-8")
+    shown: list[object] = []
+    monkeypatch.setattr(module, "show_error", lambda problem, parent=None: shown.append(problem))
+
+    dialog._start_gcode_save(((source, blocker / "target.gcode"),))
+    worker = dialog._worker
+    assert worker is not None and worker.wait(2_000)
+
+    dialog.reject()
+    QApplication.processEvents()
+
+    assert shown == [], "ein vor dem Schließen eingereihter Fehler öffnete danach noch einen Dialog"
+
+
+def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein eingereihtes Slicer-Ergebnis wird nach Abbrechen nicht mehr übernommen."""
+    import types as types_module
+
+    from app.ui import print_settings_dialog as module
+
+    executable = tmp_path / "prusa-slicer-console.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="prusa")
+    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
+    monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    model = tmp_path / "platte.3mf"
+    model.write_bytes(b"")
+    output = tmp_path / "platte.gcode"
+    output.write_text("G1 X1\n", encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda _job, plate: module.PlateRun(plate=plate, model=model),
+    )
+    monkeypatch.setattr(
+        module.handover,
+        "slice_model",
+        lambda *_args, **_kwargs: handover.SliceOutcome(
+            gcode_path=output,
+            metrics=gcode.GcodeMetrics(),
+        ),
+    )
+    delivered: list[object] = []
+    dialog.sliced.connect(delivered.append)
+
+    dialog._slice()
+    worker = dialog._worker
+    assert worker is not None and worker.wait(2_000)
+
+    dialog._cancel_slice()
+    QApplication.processEvents()
+
+    assert dialog._gcode == []
+    assert delivered == []
+    assert tr("Abgebrochen.") in dialog.state.text()
 
 
 def test_opening_is_not_remembered_by_merely_looking(dialog: PrintSettingsDialog) -> None:
@@ -1312,6 +1485,103 @@ def test_slicing_makes_the_file_available(dialog: PrintSettingsDialog, tmp_path:
 
     assert dialog.save_button.isEnabled()
     assert dialog._gcode == [produced]
+
+
+def test_saving_gcode_reads_outside_the_qt_thread(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine große Druckdatei hält die Ereignisschleife beim Kopieren nicht an."""
+    source = tmp_path / "source.gcode"
+    target = tmp_path / "target.gcode"
+    source.write_bytes(b"G1 X1\n")
+    main_thread = threading.get_ident()
+    read_threads: list[int] = []
+    original_open = Path.open
+
+    def observed_open(path: Path, *args: object, **kwargs: object):
+        if path == source:
+            read_threads.append(threading.get_ident())
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", observed_open)
+    dialog._start_gcode_save(((source, target),))
+    deadline = time.monotonic() + 2.0
+    while dialog._worker is not None and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.005)
+
+    assert target.read_bytes() == b"G1 X1\n"
+    assert read_threads and all(thread != main_thread for thread in read_threads)
+    assert tr("Gespeichert") in dialog.state.text()
+
+
+def test_a_completed_gcode_copy_is_not_reported_as_cancelled(
+    dialog: PrintSettingsDialog, tmp_path: Path
+) -> None:
+    """Nach dem atomaren Ersetzen gewinnt die wahre, bereits sichtbare Wirkung."""
+    source = tmp_path / "source.gcode"
+    target = tmp_path / "target.gcode"
+    source.write_bytes(b"G1 X1\n")
+
+    dialog._start_gcode_save(((source, target),))
+    worker = dialog._worker
+    assert worker is not None and worker.wait(2_000)
+
+    dialog._cancel_slice()
+    QApplication.processEvents()
+
+    assert target.read_bytes() == b"G1 X1\n"
+    assert tr("Gespeichert") in dialog.state.text()
+
+
+def test_a_gcode_write_error_is_shown_as_a_recoverable_error(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein gesperrtes Ziel reißt den Speicherarbeiter nicht aus dem Dialog."""
+    from app.core.errors import FileWriteError
+    from app.ui import print_settings_dialog as module
+
+    source = tmp_path / "source.gcode"
+    source.write_bytes(b"G1 X1\n")
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("x", encoding="utf-8")
+    shown: list[object] = []
+    monkeypatch.setattr(module, "show_error", lambda problem, parent=None: shown.append(problem))
+
+    dialog._start_gcode_save(((source, blocker / "target.gcode"),))
+    deadline = time.monotonic() + 2.0
+    while dialog._worker is not None and time.monotonic() < deadline:
+        QApplication.processEvents()
+        time.sleep(0.005)
+
+    assert shown and isinstance(shown[0], FileWriteError)
+    assert dialog._save_copies, "Erneut versuchen braucht den letzten Auftrag"
+
+
+def test_a_plate_write_error_does_not_retry_an_old_gcode_copy(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Fehler der 3MF-Vorbereitung gehört nicht zum vorigen Speicherauftrag."""
+    from app.core.errors import FileWriteError
+    from app.ui import print_settings_dialog as module
+
+    source = tmp_path / "alt.gcode"
+    source.write_bytes(b"G1 X1\n")
+    dialog._save_copies = ((source, tmp_path / "alt-kopie.gcode"),)
+    retried: list[object] = []
+    monkeypatch.setattr(dialog, "_start_gcode_save", retried.append)
+
+    def choose_retry(problem: object, parent: object = None) -> None:
+        assert parent is dialog
+        handler = dialog.error_handlers().get("retry")
+        if handler is not None:
+            handler(problem)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(module, "show_error", choose_retry)
+
+    dialog._slice_failed(FileWriteError(str(tmp_path / "platte.3mf"), detail="voll"))
+
+    assert retried == []
 
 
 def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_path: Path) -> None:

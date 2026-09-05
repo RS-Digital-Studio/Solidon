@@ -3479,6 +3479,164 @@ def test_the_slicer_run_reads_back_the_file_it_asked_for(
     assert outcome.gcode_path.name == handover.OUTPUT_NAME
 
 
+def test_the_slicer_run_streams_the_print_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine große Druckdatei wird nicht als zweiter vollständiger String gehalten."""
+    profile = profiles.make_profile()
+    model, setup = _slicer_writing(
+        monkeypatch, tmp_path, _gcode_printing_at(-10.0, 10.0), flavour="cura"
+    )
+    original_read_text = Path.read_text
+
+    def guarded_read_text(path: Path, *args: object, **kwargs: object) -> str:
+        if path.suffix.casefold() in handover.GCODE_SUFFIXES:
+            raise AssertionError("Druckdateien müssen zeilenweise gelesen werden")
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", guarded_read_text)
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
+    )
+
+    assert outcome.gcode_path.is_file()
+
+
+def test_keeping_a_print_file_does_not_load_its_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch das Kopieren neben das Modell arbeitet mit begrenztem Speicher."""
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    produced = work / "print.gcode"
+    produced.write_text(_gcode_printing_at(-10.0, 10.0), encoding="utf-8")
+
+    def forbidden_read_bytes(_path: Path) -> bytes:
+        raise AssertionError("Druckdateien müssen als Stream kopiert werden")
+
+    monkeypatch.setattr(Path, "read_bytes", forbidden_read_bytes)
+
+    kept = handover._kept_beside(model, produced)
+
+    with kept.open("r", encoding="utf-8") as stream:
+        assert "G1 X10" in stream.read()
+
+
+def test_cancelling_the_copy_keeps_the_previous_print_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Abbruch hinterlässt weder eine Teildatei noch überschreibt er die alte."""
+    from app.core.errors import OperationCancelled
+
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    produced = tmp_path / "print.gcode"
+    produced.write_bytes(b"abcdefghijklmnop")
+    kept = model.with_suffix(".gcode")
+    kept.write_bytes(b"vorher")
+
+    class CancelDuringCopy:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        @property
+        def is_cancelled(self) -> bool:
+            return self.calls >= 3
+
+        def raise_if_cancelled(self) -> None:
+            self.calls += 1
+            if self.is_cancelled:
+                raise OperationCancelled
+
+    monkeypatch.setattr(handover, "COPY_BLOCK_BYTES", 4)
+
+    with pytest.raises(OperationCancelled):
+        handover._kept_beside(model, produced, cancelled=CancelDuringCopy())
+
+    assert kept.read_bytes() == b"vorher"
+    assert not list(tmp_path.glob(f".{kept.name}.*.tmp")), "die angefangene Kopie bleibt liegen"
+
+
+def test_the_slicer_run_passes_cancellation_into_readback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Prozessabbruch endet nicht am Kindprozess, sondern gilt auch danach."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    profile = profiles.make_profile()
+    model, setup = _slicer_writing(
+        monkeypatch, tmp_path, _gcode_printing_at(-10.0, 10.0), flavour="cura"
+    )
+    signal = CancelSignal()
+    original = handover.gcode.analyze_lines
+
+    def cancelling_readback(lines: object, *, cancelled: object = None) -> object:
+        assert cancelled is signal
+        signal.cancel()
+        return original(lines, cancelled=cancelled)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(handover.gcode, "analyze_lines", cancelling_readback)
+
+    with pytest.raises(OperationCancelled):
+        handover.slice_model(
+            model,
+            print_settings.resolve(profile),
+            profile,
+            setup,
+            output_dir=tmp_path,
+            cancelled=signal,
+        )
+
+
+def test_the_slicer_run_passes_cancellation_into_the_final_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch der Weg aus dem flüchtigen Arbeitsordner behält dasselbe Token."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "cura.exe"
+    executable.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=executable, flavour="cura")
+
+    def writes(*args: object, **_kwargs: object) -> _Finished:
+        workspace = args[1]
+        assert isinstance(workspace, Path)
+        (workspace / handover.OUTPUT_NAME).write_text(
+            _gcode_printing_at(-10.0, 10.0), encoding="utf-8"
+        )
+        return _Finished(b"")
+
+    signal = CancelSignal()
+    original = handover._kept_beside
+
+    def cancelling_copy(selected: Path, produced: Path, *, cancelled: object = None) -> Path:
+        assert cancelled is signal
+        signal.cancel()
+        return original(selected, produced, cancelled=cancelled)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(handover, "_run_slicer", writes)
+    monkeypatch.setattr(handover, "_kept_beside", cancelling_copy)
+
+    with pytest.raises(OperationCancelled):
+        handover.slice_model(
+            model,
+            print_settings.resolve(profile),
+            profile,
+            setup,
+            cancelled=signal,
+        )
+
+    assert not model.with_suffix(".gcode").exists()
+
+
 def test_a_print_file_that_cannot_be_kept_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

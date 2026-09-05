@@ -226,11 +226,17 @@ def sort_key(text: object) -> str:
     return str(text).casefold().translate(_FOLDED)
 
 
-#: Sprachen, die das Komma als Dezimaltrennzeichen schreiben. Englisch ist
-#: unter den europäischen Sprachen die Ausnahme, nicht die Regel — wer eine
-#: Sprache hinzufügt und sie hier vergisst, bekommt „0.2 mm" neben einer
-#: Oberfläche, die „2,40 mm" anzeigt.
-_DECIMAL_COMMA: Final = frozenset({"de", "es", "fr", "it", "pt"})
+def decimal_separator() -> str:
+    """Das Dezimalzeichen aus dem aktiven Sprachkatalog.
+
+    ``0,1`` ist zugleich Probe und Katalogmetadatum: Deutsch als Quellsprache
+    behält das Komma, jede weitere Sprache entscheidet mit ihrer Übersetzung.
+    Damit braucht eine neue Sprache keinen zweiten Eintrag in einer festen
+    Länderliste.
+    """
+
+    sample = tr("0,1")
+    return "," if "," in sample else "."
 
 
 def format_decimal(value: float | int, digits: int | None = None) -> str:
@@ -246,4 +252,4 @@ def format_decimal(value: float | int, digits: int | None = None) -> str:
     kurz da, wie sie exakt ist — ``5`` bleibt ``5``, nicht ``5,0``.
     """
     text = f"{value:.{digits}f}" if digits is not None else f"{value:g}"
-    return text.replace(".", ",") if _language in _DECIMAL_COMMA else text
+    return text.replace(".", decimal_separator())

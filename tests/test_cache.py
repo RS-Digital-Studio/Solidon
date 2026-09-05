@@ -6,6 +6,7 @@ import dataclasses
 import json
 import logging
 import os
+import shutil
 import time
 from pathlib import Path
 
@@ -153,6 +154,28 @@ def test_the_disk_level_survives_a_new_process(tmp_path: Path) -> None:
     assert restored is not None
     assert restored.objects[0].id == "obj_1"
     assert restored.objects[0].mesh.triangle_count == 42
+
+
+def test_a_cache_entry_may_disappear_before_its_access_time_is_updated(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("key", result(42))
+    folder = disk._folder("key")
+
+    def vanished(path: Path, _times: object = None) -> None:
+        assert path == folder
+        shutil.rmtree(path)
+        raise FileNotFoundError("gezieltes Rennen mit der Cache-Bereinigung")
+
+    monkeypatch.setattr(os, "utime", vanished)
+
+    restored = disk.get("key")
+
+    assert restored is not None
+    assert restored.objects[0].mesh.triangle_count == 42
+    assert not folder.exists(), "die LRU-Markierung darf keinen Datei-Knoten zurücklassen"
 
 
 def test_the_memory_level_fills_itself_from_disk(tmp_path: Path) -> None:

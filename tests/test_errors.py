@@ -302,7 +302,7 @@ _NOT_A_RANGE = frozenset(
         # Bereichs" stünde über jeder von ihnen falsch.
         "file_empty", "file_too_large", "file_truncated",
         "format", "grammar", "history_moved", "host",
-        "inverted",
+        "invalid_archive", "inverted",
         "known_pattern",
         "json_depth", "known_structure", "library_state", "missing_file", "missing_gathered",
         "missing_link",

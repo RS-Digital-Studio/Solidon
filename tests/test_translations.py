@@ -14,7 +14,7 @@ import pytest
 
 import app
 from app.core.knowledge.parts.registry import GROUPS
-from app.i18n import SOURCE_LANGUAGE, TranslatableText, set_language
+from app.i18n import SOURCE_LANGUAGE, TranslatableText, format_decimal, set_language
 from app.i18n.catalog import available_languages, install_language, read_catalog
 from app.i18n.extract import message_ids
 
@@ -176,6 +176,21 @@ def test_the_catalog_actually_switches_the_language() -> None:
     set_language("en")
     try:
         assert str(text) == "Cancel"
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+
+def test_each_catalog_defines_its_decimal_separator() -> None:
+    """Eine neue Sprache braucht keine zweite feste Liste für Zahlen."""
+
+    try:
+        for language in available_languages():
+            install_language(language)
+            set_language(language)
+            sample = "0,1" if language == SOURCE_LANGUAGE else read_catalog(language).get("0,1", "")
+            assert sample, f"{language}: Dezimalmetadatum fehlt"
+            shown = "1,5" if "," in sample else "1.5"
+            assert format_decimal(1.5, 1) == shown
     finally:
         set_language(SOURCE_LANGUAGE)
 

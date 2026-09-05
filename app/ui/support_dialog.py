@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
 from app.branding import SUPPORT_ADDRESS
 from app.core import feedback, support
 from app.core import report as reports
-from app.core.errors import CANCEL, AppError
+from app.core.errors import CANCEL, AppError, FileWriteError
 from app.core.log import get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.support import (
@@ -758,14 +758,29 @@ class SupportDialog(QDialog):
             _log.warning("digest for the report failed: %s", problem)
             return ""
 
-    def _write_folder(self) -> None:
+    def _write_folder(self) -> bool:
         """Denselben Inhalt als Ordner ablegen — der Weg von vorher."""
         ticket = self.ticket()
-        self.written = reports.write(self.report())
-        for entry in ticket.attachments:
-            (self.written / entry.name).write_bytes(entry.data)
+        written: Path | None = None
+        try:
+            written = reports.write(self.report())
+            for entry in ticket.attachments:
+                (written / entry.name).write_bytes(entry.data)
+        except AppError as problem:
+            self._show_problem(problem, ways=True)
+            return False
+        except OSError as problem:
+            target = written or self.written or user_data_dir()
+            self._show_problem(
+                FileWriteError(str(target), detail=str(problem)),
+                ways=True,
+            )
+            return False
+        assert written is not None
+        self.written = written
         self.state.setText(f"{tr('Abgelegt unter')}: {self.written}")
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.written)))
+        return True
 
     def _open_mail(self) -> None:
         """Die vorbereitete Mail im Mailprogramm des Nutzers.
@@ -774,8 +789,8 @@ class SupportDialog(QDialog):
         wenn das noch niemand getan hat — sonst stünde im Mailfenster ein
         Text, der auf Dateien verweist, die es nicht gibt.
         """
-        if self.written is None:
-            self._write_folder()
+        if self.written is None and not self._write_folder():
+            return
         QDesktopServices.openUrl(QUrl(support.mail_link(self.ticket())))
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:

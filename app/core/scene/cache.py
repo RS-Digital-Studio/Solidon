@@ -17,6 +17,7 @@ ohne ihn bleibt sie abgeschaltet, und es gibt nur die Speicherebene.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import threading
 from collections import OrderedDict
@@ -505,7 +506,13 @@ class DiskCache:
             _log.warning("dropping unreadable cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return None
-        folder.touch(exist_ok=True)
+        # Ein paralleler Aufräumer darf den gerade gelesenen Ordner nach dem
+        # letzten ``read_bytes`` entfernen. Das Ergebnis ist bereits sicher
+        # im Speicher; nur seine LRU-Markierung fällt in diesem Rennen aus.
+        # ``Path.touch`` wäre hier falsch: Nach dem Löschen legt es am alten
+        # Ordnerpfad eine reguläre Datei an und blockiert den nächsten Schreibzug.
+        with suppress(OSError):
+            os.utime(folder, None)
         return CachedResult(objects=objects, findings=findings, solver=solver, transform=transform)
 
     def put(self, key: str, result: CachedResult) -> None:

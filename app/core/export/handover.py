@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import json
 import math
-import re
 import subprocess
+import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -91,6 +91,10 @@ TIMEOUT_SECONDS: Final = 300.0
 #: lassen ausführliche Protokolle zu, ohne dass ein defekter Slicer den
 #: Arbeitsprozess mit einer endlosen Ausgabe füllen kann.
 SLICER_OUTPUT_LIMIT: Final = 8 * 1024 * 1024
+
+#: Beim Behalten wird höchstens dieser Teil der Druckdatei zugleich gelesen.
+#: Die Blockgrenze ist zugleich ein natürlicher Punkt für den Abbruchtest.
+COPY_BLOCK_BYTES: Final = 1024 * 1024
 
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 #:
@@ -2055,7 +2059,9 @@ def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
     return BoundingBox((-half_width, -half_depth, 0.0), (half_width, half_depth, height))
 
 
-def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Finding | None:
+def off_the_bed(
+    payload: str | gcode.GcodeAnalysis, profile: Profile, flavour: SlicerFlavour
+) -> Finding | None:
     """Druckt die geschriebene Datei über den Bauraum hinaus? (§29, Regel 14)
 
     **Gemessen an CuraEngine 5.13.0.** Ein Würfel 150 mm neben der Mitte, ein
@@ -2090,10 +2096,11 @@ def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Findi
     Millimeter passt, ist in Ordnung, und die Bahn selbst liegt mit ihrer
     halben Breite ohnehin neben der Mitte, die hier gemessen wird.
     """
-    extent = gcode.printed_extent(payload)
+    analysis = payload if isinstance(payload, gcode.GcodeAnalysis) else gcode.analyze(payload)
+    extent = analysis.extent
     if extent is None:
         return None
-    bed = gcode.stated_bed(payload) or bed_box(profile, flavour)
+    bed = analysis.bed or bed_box(profile, flavour)
     worst, axis = 0.0, 0
     for index in range(3):
         over = max(
@@ -2130,7 +2137,9 @@ def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Findi
 _REFUSES_THE_ARRANGE_FLAG: Final[set[Path]] = set()
 
 
-def too_short(payload: str, model_height: float, settings: PrintSettings) -> Finding | None:
+def too_short(
+    payload: str | gcode.GcodeAnalysis, model_height: float, settings: PrintSettings
+) -> Finding | None:
     """Ist die Druckdatei niedriger als das Modell? (§28.2, Regel 14)
 
     Der Fall, den keine andere Gegenprobe sieht: Ein Körper, der zur Hälfte
@@ -2146,7 +2155,8 @@ def too_short(payload: str, model_height: float, settings: PrintSettings) -> Fin
     Raster gerundet wird und die erste dicker sein darf; ein Raft macht die
     Datei höher, nie niedriger, und stört den Vergleich darum nicht.
     """
-    extent = gcode.printed_extent(payload)
+    analysis = payload if isinstance(payload, gcode.GcodeAnalysis) else gcode.analyze(payload)
+    extent = analysis.extent
     if extent is None or model_height <= 0.0:
         return None
     printed_height = float(extent.maximum[2])
@@ -2194,6 +2204,8 @@ def slice_model(
     Ein einzelner Pfad ist dabei der Sonderfall mit einem Eintrag, nicht ein
     anderer Weg.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     # §2 C: die Druckdatei ist ein herausgegebenes Ergebnis — wie der Export.
     activation.require(activation.SLICER)
     # Absolut, bevor irgendetwas damit geschieht: der Lauf unten setzt sein
@@ -2264,6 +2276,8 @@ def slice_model(
             setup,
             cancelled,
         )
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         # Der Name, den wir selbst genannt haben — die Orca-Familie benennt
         # selbst, für sie bleibt es bei der jüngsten Datei.
         expected = "" if names_its_own_output(setup.flavour) else OUTPUT_NAME
@@ -2282,6 +2296,8 @@ def slice_model(
                 setup,
                 cancelled,
             )
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             produced = _find_gcode(target, expected)
             if produced is not None:
                 _REFUSES_THE_ARRANGE_FLAG.add(setup.executable)
@@ -2322,8 +2338,9 @@ def slice_model(
                 suggestions=(CHOOSE_SLICER, SHOW_SLICER_OUTPUT, CHECK_SLICER_PROFILE, EXPORT_ONLY),
             )
 
-        payload = produced.read_text(encoding="utf-8", errors="replace")
-        if not gcode.extrudes(payload):
+        with produced.open("r", encoding="utf-8", errors="replace") as stream:
+            analysis = gcode.analyze_lines(stream, cancelled=cancelled)
+        if not analysis.extrudes:
             # Eine große Datei ohne eine einzige Förderbewegung. Der Slicer ist
             # durchgelaufen und hat den Rückgabewert 0 gemeldet, aber das
             # Modell nicht verarbeitet — meist, weil ihm eine Einstellung
@@ -2340,23 +2357,25 @@ def slice_model(
                 values={"output": _tail(completed.stdout, completed.stderr)},
                 suggestions=(CHECK_SLICER_PROFILE, SHOW_SLICER_OUTPUT, CHOOSE_SLICER, EXPORT_ONLY),
             )
-        metrics = gcode.parse(payload)
+        metrics = analysis.metrics
         # Und die zweite Gegenprobe, an der Geometrie statt an den Werten:
         # steht in dieser Datei ein Druck, der auf das Bett passt?
-        beyond = off_the_bed(payload, profile, setup.flavour)
+        beyond = off_the_bed(analysis, profile, setup.flavour)
         # Die dritte: Ist überhaupt das ganze Modell darin? ``None`` heißt
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
         # er wird nie geraten.
-        short = too_short(payload, model_height, settings) if model_height is not None else None
+        short = too_short(analysis, model_height, settings) if model_height is not None else None
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Version gelten mag oder nicht.
-        ignored = verify(payload, as_mapping(written_settings, setup.flavour))
+        ignored = verify_settings(analysis.settings, as_mapping(written_settings, setup.flavour))
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
-            produced = _kept_beside(models[0], produced)
+            produced = _kept_beside(models[0], produced, cancelled=cancelled)
 
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     findings = [
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
@@ -2402,6 +2421,8 @@ def slice_model(
             source="gcode",
         )
     )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     return SliceOutcome(
         gcode_path=produced,
         metrics=metrics,
@@ -2491,10 +2512,6 @@ def open_in_slicer(model: Path, setup: SlicerSetup) -> None:
     _log.info("opened %s in %s", model.name, program.name)
 
 
-#: Wie ein Slicer seine Konfiguration in die Datei schreibt. Alle drei
-#: Familien tun es, in leicht verschiedener Schreibweise.
-_SETTING_LINE = re.compile(r"^;\s*(?P<key>[a-z_0-9]+)\s*=\s*(?P<value>.*?)\s*$", re.IGNORECASE)
-
 #: Schlüssel, deren Wert der Slicer bewusst umrechnet oder ergänzt — eine
 #: Abweichung dort ist keine. ``filament_colour`` etwa wird zu einer Liste,
 #: weil ein Drucker mehrere Filamente führen kann.
@@ -2529,11 +2546,11 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
     abweicht: ein Schlüssel, den die Datei gar nicht nennt, sagt nichts —
     kein Slicer schreibt alles.
     """
-    found: dict[str, str] = {}
-    for line in text.splitlines():
-        match = _SETTING_LINE.match(line.strip())
-        if match is not None:
-            found.setdefault(match.group("key").casefold(), match.group("value"))
+    return verify_settings(gcode.analyze(text).settings, written)
+
+
+def verify_settings(found: Mapping[str, str], written: Mapping[str, str]) -> list[Finding]:
+    """Vergleicht bereits ausgelesene Einstellungen mit den geschriebenen."""
 
     ignored: list[str] = []
     for key, wanted in written.items():
@@ -2627,7 +2644,7 @@ def _tail(*streams: bytes, limit: int = 800) -> str:
     return "\n".join(lines)[-limit:]
 
 
-def _kept_beside(model: Path, produced: Path) -> Path:
+def _kept_beside(model: Path, produced: Path, *, cancelled: CancelToken | None = None) -> Path:
     """Legt die Druckdatei neben das Modell, bevor der Arbeitsordner
     verschwindet.
 
@@ -2636,15 +2653,49 @@ def _kept_beside(model: Path, produced: Path) -> Path:
     oder das Laufwerk voll sein. Ein roher ``OSError`` läuft hier aus einem
     Arbeits-Thread, der nur ``AppError`` fängt — danach geschieht im Fenster
     gar nichts mehr.
+
+    Kopiert wird blockweise in eine Nachbardatei und erst vollständig ersetzt.
+    Ein Abbruch lässt deshalb weder eine Teildatei als Ergebnis zurück noch
+    überschreibt er eine schon vorhandene Druckdatei.
     """
     target = model.with_suffix(".gcode")
+    temporary: Path | None = None
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     try:
-        target.write_bytes(produced.read_bytes())
+        with (
+            produced.open("rb") as source,
+            tempfile.NamedTemporaryFile(
+                mode="wb",
+                dir=target.parent,
+                prefix=f".{target.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as destination,
+        ):
+            temporary = Path(destination.name)
+            while True:
+                if cancelled is not None:
+                    cancelled.raise_if_cancelled()
+                block = source.read(COPY_BLOCK_BYTES)
+                if not block:
+                    break
+                destination.write(block)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        assert temporary is not None
+        temporary.replace(target)
     except OSError as problem:
         raise FileWriteError(
             target=str(problem.filename or target),
             detail=str(problem.strerror or problem),
         ) from problem
+    finally:
+        if temporary is not None and temporary.exists():
+            try:
+                temporary.unlink()
+            except OSError as problem:
+                _log.warning("could not remove partial print file %s: %s", temporary, problem)
     return target
 
 

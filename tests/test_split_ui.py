@@ -8,6 +8,7 @@ import pytest
 import trimesh
 from PySide6.QtWidgets import QApplication
 
+from app.core.errors import UserError
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
 from app.core.scene import History, OperationDraft
@@ -120,6 +121,57 @@ def test_the_session_splits_an_oversized_part(qt_app: QApplication) -> None:
     assert len(applied.fits) == 2
     assert session.last_result is not None
     assert set(session.last_result.scene.objects) == set(applied.object_ids)
+
+
+def test_sync_split_does_not_use_an_old_result_after_waiting_times_out(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nach einem Timeout ist auch ein vorhandenes ``last_result`` veraltet."""
+    from app.ui import session as session_module
+
+    session = Session()
+    loaded(session, "cube_clean.stl")
+    monkeypatch.setattr(session, "wait_for_idle", lambda: False)
+
+    def must_not_split(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("das veraltete Netz erreichte apply_split")
+
+    monkeypatch.setattr(session_module, "apply_split", must_not_split)
+
+    with pytest.raises(UserError) as caught:
+        session.auto_split("obj_1")
+
+    assert caught.value.suggestions
+
+
+def test_async_split_does_not_start_from_an_old_result_after_waiting_times_out(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der asynchrone Weg meldet den Timeout und startet keinen Arbeiter."""
+    from app.ui import session as session_module
+
+    session = Session()
+    loaded(session, "cube_clean.stl")
+    monkeypatch.setattr(session, "wait_for_idle", lambda: False)
+    monkeypatch.setattr(
+        session_module,
+        "_SplitWorker",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("das veraltete Netz erreichte den Split-Arbeiter")
+        ),
+    )
+    problems: list[UserError] = []
+    results: list[object] = []
+    session.failed.connect(problems.append)
+
+    session.split_async("obj_1", results.append)
+
+    assert len(problems) == 1
+    assert problems[0].suggestions
+    assert not results
+    assert session._split is None
 
 
 def test_auto_split_continues_after_an_existing_drawn_seam(qt_app: QApplication) -> None:

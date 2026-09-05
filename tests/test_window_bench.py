@@ -95,6 +95,9 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
             events.append("usage.stop")
 
     class _ExitViewport:
+        def wait_for_workers(self, _timeout_ms: int) -> bool:
+            return True
+
         def release_plotter(self) -> None:
             events.append("viewport.release_plotter")
 
@@ -112,23 +115,35 @@ def test_accepted_application_exit_uses_the_terminal_viewport_path(
         def _may_discard(self) -> bool:
             return True
 
-        def wait_for_workers(self) -> None:
+        def wait_for_workers(self, _timeout_ms: int = 2000) -> bool:
             events.append("window.wait_for_workers")
+            return True
+
+        _close_requested = False
+
+        class _Retry:
+            def stop(self) -> None:
+                pass
+
+        _close_retry = _Retry()
+
+        def setEnabled(self, enabled: bool) -> None:  # noqa: N802 — bildet die Qt-API nach
+            events.append(f"window.setEnabled:{enabled}")
 
         def saveGeometry(self) -> _Geometry:  # noqa: N802 — bildet die Qt-API nach
             return _Geometry()
 
-    monkeypatch.setattr(
-        main_window,
-        "save_settings",
-        lambda _settings: events.append("settings.save"),
-    )
+        def _store_settings(self) -> bool:
+            events.append("settings.save")
+            return False
+
     event = QCloseEvent()
 
     main_window.MainWindow.closeEvent(_ExitWindow(), event)
 
     assert event.isAccepted()
     assert events == [
+        "window.setEnabled:False",
         "window.wait_for_workers",
         "spacemouse.stop",
         "settings.save",

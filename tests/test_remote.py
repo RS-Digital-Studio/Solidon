@@ -12,6 +12,7 @@ und danach merkt, dass er nicht durfte, hat schon getan, was er nicht sollte.
 from __future__ import annotations
 
 import json
+import logging
 
 import pytest
 
@@ -326,6 +327,74 @@ def test_an_ordinary_call_still_passes() -> None:
     """Eine Sperre, die „Deckel 2" verschluckt, macht die Schnittstelle
     unbrauchbar und sieht dabei sicher aus."""
     remote.check_call("translate_object", {"objects": ["obj_1"], "dx": 1.0})
+
+
+def test_feature_references_are_not_mistaken_for_ntfs_streams() -> None:
+    remote.check_call(
+        "add_fit",
+        {
+            "name": "deckel_1",
+            "a": "obj_1:hole_2",
+            "b": "obj_2:op5.pin_1",
+            "kind": "clearance",
+        },
+    )
+
+
+@pytest.mark.parametrize("field,value", [("a", "obj_1"), ("b", ":pin_1")])
+def test_a_malformed_feature_reference_is_refused(field: str, value: str) -> None:
+    arguments = {"name": "deckel_1", "a": "obj_1:hole_1", "b": "obj_2:pin_1"}
+    arguments[field] = value
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call("add_fit", arguments)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("a", r"C:\Windows\system.ini"),
+        ("b", "/etc/passwd:hole_1"),
+        ("a", r"..\secret:hole_1"),
+        ("b", "obj_2:../secret"),
+    ],
+)
+def test_a_path_inside_a_feature_reference_stays_refused(field: str, value: str) -> None:
+    arguments = {"name": "deckel_1", "a": "obj_1:hole_1", "b": "obj_2:pin_1"}
+    arguments[field] = value
+
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call("add_fit", arguments)
+
+
+def test_a_path_outside_the_feature_fields_of_add_fit_stays_refused() -> None:
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call(
+            "add_fit",
+            {"name": "README:stream", "a": "obj_1:hole_1", "b": "obj_2:pin_1"},
+        )
+
+
+def test_an_unexpected_remote_failure_is_logged(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    secret = "API_KEY=hochgeheim"
+
+    class _Crashing(_Bridge):
+        def call(self, name: str, arguments: dict[str, object]) -> str:
+            raise RuntimeError(secret)
+
+    raw = json.dumps(
+        request(
+            "tools/call",
+            {"name": "translate_object", "arguments": {"objects": ["obj_1"], "dx": 1.0}},
+        )
+    ).encode("utf-8")
+    with caplog.at_level(logging.ERROR, logger="app.core.agent.remote"):
+        answer = json.loads(remote.answer_bytes(raw, _Crashing()))
+
+    assert answer["error"]["code"] == remote.INTERNAL_ERROR
+    assert any(record.exc_info is not None for record in caplog.records)
+    assert "hochgeheim" not in caplog.text
 
 
 # --- Was eine Operation tut, nicht wie sie heißt (Review 25.08.2026) ---------------

@@ -31,6 +31,7 @@ import sys
 import tempfile
 import unicodedata
 import zipfile
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
@@ -39,7 +40,12 @@ from typing import Any, Final
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import PROGRAMMING_ERRORS, ValidationError
-from app.core.ingest.loader import MAX_FILE_BYTES
+from app.core.ingest.loader import (
+    MAX_ARCHIVE_ENTRIES,
+    MAX_COMPRESSION_RATIO,
+    MAX_FILE_BYTES,
+    MIN_RATIO_ENTRY_BYTES,
+)
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
@@ -80,7 +86,6 @@ AUTOSAVE_SUFFIX: Final = ".autosave"
 MAX_ARCHIVE_ENTRY_BYTES: Final = MAX_FILE_BYTES
 MAX_ARCHIVE_UNPACKED_BYTES: Final = 2 * MAX_FILE_BYTES
 MAX_PROJECT_FILE_BYTES: Final = MAX_ARCHIVE_UNPACKED_BYTES + 16 * 1024 * 1024
-MAX_ARCHIVE_ENTRIES: Final = 4096
 
 #: Strukturierte Beilagen sind um Größenordnungen kleiner als ein Quellnetz.
 #: Eigene Grenzen halten manipulierte Dateien vor JSON-Decodierung,
@@ -114,12 +119,6 @@ MAX_REPORT_FINDINGS: Final = 100_000
 #: zulässig, öffneten damit zusammen nicht. Die Grenze je Datei prüft
 #: ``_read_linked_source`` weiterhin selbst (``MAX_FILE_BYTES``).
 MAX_LINKED_SOURCE_BYTES: Final = MAX_ARCHIVE_UNPACKED_BYTES
-
-#: Ein sehr kleines, gut komprimierbares JSON darf ein hohes Verhältnis
-#: haben. Ab einem MiB ist ein Verhältnis über 250 dagegen kein sinnvoller
-#: Projektinhalt mehr, sondern ein Dekompressionsangriff.
-MIN_RATIO_ENTRY_BYTES: Final = 1024 * 1024
-MAX_COMPRESSION_RATIO: Final = 250.0
 
 
 @dataclass(slots=True)
@@ -230,6 +229,29 @@ def new_project(printer: str = "", material: str = "") -> Project:
 
 def checksum(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def next_source_id(sources: Mapping[str, object]) -> SourceId:
+    """Vergibt eine Quellenkennung oberhalb aller vorhandenen Nummern.
+
+    Die Anzahl der Quellen ist keine Wasserlinie: Eine ältere oder von Hand
+    bearbeitete Datei darf Lücken tragen. Bei ``src_1`` und ``src_3`` würde
+    ``len + 1`` die dritte Quelle überschreiben und alle Schritte, die auf sie
+    zeigen, unbemerkt auf andere Bytes umbiegen.
+    """
+    numbers = [
+        int(suffix)
+        for source_id in sources
+        if source_id.startswith("src_")
+        and (suffix := source_id.removeprefix("src_")).isdecimal()
+        and len(suffix) <= 18
+    ]
+    number = max(numbers, default=0) + 1
+    candidate = SourceId(f"src_{number}")
+    while candidate in sources:
+        number += 1
+        candidate = SourceId(f"src_{number}")
+    return candidate
 
 
 def _read_linked_source(
@@ -779,6 +801,229 @@ def _validate_print_settings(data: dict[str, Any]) -> None:
             stack.extend((f"{where}[]", value) for value in current)
 
 
+def _nested_mapping(value: object, where: str, *, optional: bool = False) -> dict[str, Any] | None:
+    """Verlangt die Abbildung, auf der der Deserialisierer ``get`` aufruft."""
+    if value is None and optional:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"schema:{where}")
+    return value
+
+
+def _nested_records(value: object, where: str) -> list[dict[str, Any]]:
+    """Verlangt eine Liste aus Datensätzen für einen verschachtelten Block."""
+    if not isinstance(value, list) or any(not isinstance(entry, dict) for entry in value):
+        raise ValueError(f"schema:{where}")
+    return value
+
+
+def _schema_number(value: object, where: str) -> None:
+    """Verlangt eine JSON-Zahl und schließt ``bool`` als ``int``-Unterklasse aus."""
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"schema:{where}")
+
+
+def _schema_integer(value: object, where: str) -> None:
+    """Verlangt eine ganze JSON-Zahl ohne stilles Kürzen oder Textumwandlung."""
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValueError(f"schema:{where}")
+
+
+def _validate_origin_schema(value: object, where: str) -> None:
+    """Prüft die optionale Herkunft, bevor ``origin_from_data`` sie liest."""
+    origin = _nested_mapping(value, where, optional=True)
+    if origin is None:
+        return
+    temperature = origin.get("temperature")
+    if temperature is not None:
+        _schema_number(temperature, f"{where}.temperature")
+
+
+def _validate_parameter_schema(parameter: dict[str, Any], where: str) -> None:
+    """Prüft die numerischen Felder eines gespeicherten Parameters."""
+    _schema_number(parameter.get("value", 0.0), f"{where}.value")
+    for name in ("min", "max"):
+        value = parameter.get(name)
+        if value is not None:
+            _schema_number(value, f"{where}.{name}")
+
+
+def _validate_fit_schema(fit: dict[str, Any], where: str) -> None:
+    """Prüft die Pflichttexte einer Passung vor ``FeatureRef.parse``."""
+    if any(not isinstance(fit.get(name), str) for name in ("name", "a", "b")):
+        raise ValueError(f"schema:{where}")
+    tolerance = fit.get("tolerance", "auto:")
+    if isinstance(tolerance, bool) or not isinstance(tolerance, int | float | str):
+        raise ValueError(f"schema:{where}.tolerance")
+
+
+def _validate_operation_schema(
+    operation: dict[str, Any],
+    where: str,
+    *,
+    validate_solver_details: bool = True,
+) -> tuple[str, ...]:
+    """Prüft einen Schritt einschließlich der vom Leser betretenen Unterblöcke."""
+    if (
+        isinstance(operation.get("id"), bool)
+        or not isinstance(operation.get("id"), int)
+        or not isinstance(operation.get("op"), str)
+    ):
+        raise ValueError(f"schema:{where}")
+    outputs: tuple[str, ...] = ()
+    for name in ("in", "out"):
+        references = operation.get(name, [])
+        if not isinstance(references, list) or any(
+            not isinstance(reference, str) for reference in references
+        ):
+            raise ValueError(f"schema:{where}.{name}")
+        if name == "out":
+            outputs = tuple(references)
+    if not isinstance(operation.get("params", {}), dict):
+        raise ValueError(f"schema:{where}.params")
+    solver = _nested_mapping(operation.get("solver"), f"{where}.solver", optional=True)
+    if solver and validate_solver_details:
+        if not isinstance(solver.get("strategy"), str):
+            raise ValueError(f"schema:{where}.solver.strategy")
+        attempted = solver.get("attempted", [])
+        if not isinstance(attempted, list) or any(
+            not isinstance(entry, str) for entry in attempted
+        ):
+            raise ValueError(f"schema:{where}.solver.attempted")
+    matches = operation.get("matches", {})
+    if not isinstance(matches, dict) or any(
+        not isinstance(entry, dict) for entry in matches.values()
+    ):
+        raise ValueError(f"schema:{where}.matches")
+    translatable = operation.get("translatable", [])
+    if not isinstance(translatable, list) or any(
+        not isinstance(entry, str) for entry in translatable
+    ):
+        raise ValueError(f"schema:{where}.translatable")
+    return outputs
+
+
+def _validate_state_schema(value: object, where: str) -> None:
+    """Prüft eine Undo-Seite samt Parameter-, Passungs- und Op-Fassungen."""
+    state = _nested_mapping(value, where)
+    assert state is not None
+    parameters = _nested_mapping(state.get("parameters"), f"{where}.parameters", optional=True)
+    if parameters is not None:
+        for name, parameter in parameters.items():
+            if parameter is None:
+                continue
+            stored = _nested_mapping(parameter, f"{where}.parameters.{name}")
+            assert stored is not None
+            _validate_parameter_schema(stored, f"{where}.parameters.{name}")
+    fits = state.get("fits")
+    if fits is not None:
+        for index, fit in enumerate(_nested_records(fits, f"{where}.fits")):
+            _validate_fit_schema(fit, f"{where}.fits[{index}]")
+    edited = _nested_mapping(state.get("edited_ops"), f"{where}.edited_ops", optional=True)
+    if edited is not None:
+        for op_id, operation in edited.items():
+            try:
+                int(op_id)
+            except ValueError as problem:
+                raise ValueError(f"schema:{where}.edited_ops") from problem
+            if operation is None:
+                continue
+            stored = _nested_mapping(operation, f"{where}.edited_ops.{op_id}")
+            assert stored is not None
+            _validate_operation_schema(stored, f"{where}.edited_ops.{op_id}")
+
+
+def _validate_current_project_schema(data: dict[str, Any]) -> None:
+    """Prüft alle Formen, die die aktuelle Deserialisierung voraussetzt."""
+    parameters = _mapping(data, "parameters")
+    for name, parameter in parameters.items():
+        stored = _nested_mapping(parameter, f"parameters.{name}")
+        assert stored is not None
+        _validate_parameter_schema(stored, f"parameters.{name}")
+
+    sources = _mapping(data, "sources")
+    for source_id, source in sources.items():
+        stored = _nested_mapping(source, f"sources.{source_id}")
+        assert stored is not None
+        if not isinstance(stored.get("path"), str):
+            raise ValueError(f"schema:sources.{source_id}.path")
+        if not isinstance(stored.get("sha256", ""), str):
+            raise ValueError(f"schema:sources.{source_id}.sha256")
+        ingest = _nested_mapping(stored.get("ingest", {}), f"sources.{source_id}.ingest")
+        assert ingest is not None
+        _schema_number(ingest.get("scale", 1.0), f"sources.{source_id}.ingest.scale")
+        for name in ("removed_triangles", "components"):
+            _schema_integer(
+                ingest.get(name, 0 if name == "removed_triangles" else 1),
+                f"sources.{source_id}.ingest.{name}",
+            )
+        origin = _nested_mapping(stored.get("origin"), f"sources.{source_id}.origin", optional=True)
+        if origin is not None and origin.get("seed") is not None:
+            _schema_integer(origin["seed"], f"sources.{source_id}.origin.seed")
+
+    for index, fit in enumerate(_records(data, "fits")):
+        _validate_fit_schema(fit, f"fits[{index}]")
+
+    for index, transaction in enumerate(_records(data, "transactions")):
+        where = f"transactions[{index}]"
+        if not isinstance(transaction.get("id"), str):
+            raise ValueError(f"schema:{where}.id")
+        op_ids = transaction.get("ops", [])
+        if not isinstance(op_ids, list):
+            raise ValueError(f"schema:{where}.ops")
+        for op_id in op_ids:
+            _schema_integer(op_id, f"{where}.ops")
+        _validate_origin_schema(transaction.get("origin"), f"{where}.origin")
+        changes = _nested_mapping(transaction.get("changes"), f"{where}.changes", optional=True)
+        if changes is not None:
+            _validate_state_schema(changes.get("before", {}), f"{where}.changes.before")
+            _validate_state_schema(changes.get("after", {}), f"{where}.changes.after")
+
+    for index, entry in enumerate(_records(data, "chat")):
+        _validate_origin_schema(entry.get("origin"), f"chat[{index}].origin")
+
+    numbering = _mapping(data, "numbering")
+    for name in ("transaction", "op", "object"):
+        _schema_integer(numbering.get(name, 0), f"numbering.{name}")
+
+    settings = data.get("print_settings")
+    if settings is not None:
+        stored = _nested_mapping(settings, "print_settings")
+        assert stored is not None
+        for name in (
+            "layers",
+            "shell",
+            "infill",
+            "temperature",
+            "cooling",
+            "speed",
+            "support",
+            "adhesion",
+            "retraction",
+            "filament",
+        ):
+            _nested_mapping(stored.get(name, {}), f"print_settings.{name}")
+        slot_profiles = stored.get("slot_profiles", [])
+        if not isinstance(slot_profiles, list):
+            raise ValueError("schema:print_settings.slot_profiles")
+        slot_overrides = stored.get("slot_overrides", [])
+        if not isinstance(slot_overrides, list):
+            raise ValueError("schema:print_settings.slot_overrides")
+        for index, override in enumerate(slot_overrides):
+            if override is None:
+                continue
+            where = f"print_settings.slot_overrides[{index}]"
+            item = _nested_mapping(override, where)
+            assert item is not None
+            colour = item.get("colour")
+            if colour is None:
+                continue
+            if not isinstance(colour, list) or len(colour) != 3:
+                raise ValueError(f"schema:{where}.colour")
+            for channel in colour:
+                _schema_number(channel, f"{where}.colour")
+
+
 def _validate_project_schema(data: object) -> dict[str, Any]:
     """Prüft Form und Mengen des aktuellen Projekts vor der Deserialisierung."""
     _validate_json_tree(data)
@@ -787,6 +1032,11 @@ def _validate_project_schema(data: object) -> dict[str, Any]:
     version = data.get("format_version")
     if isinstance(version, bool) or not isinstance(version, int):
         raise ValueError("schema:format_version")
+    # Eine neuere Version darf Felder und Formen tragen, die dieser Stand noch
+    # nicht kennt. ``migrate`` lehnt sie anschließend gezielt als ``too_new``
+    # ab; vorher gelten nur die versionsunabhängigen JSON-Grenzen.
+    if version > FORMAT_VERSION:
+        return data
 
     for name in ("scene", "libs", "parameters", "sources", "numbering"):
         _mapping(data, name)
@@ -810,35 +1060,16 @@ def _validate_project_schema(data: object) -> dict[str, Any]:
     _validate_print_settings(data)
 
     objects: set[str] = set()
-    for operation in operations:
-        if (
-            isinstance(operation.get("id"), bool)
-            or not isinstance(operation.get("id"), int)
-            or not isinstance(operation.get("op"), str)
-        ):
-            raise ValueError("schema:op")
-        for name in ("in", "out"):
-            references = operation.get(name, [])
-            if not isinstance(references, list) or any(
-                not isinstance(reference, str) for reference in references
-            ):
-                raise ValueError(f"schema:op.{name}")
-            if name == "out":
-                objects.update(references)
-        if not isinstance(operation.get("params", {}), dict):
-            raise ValueError("schema:op.params")
-        if operation.get("solver") is not None and not isinstance(operation["solver"], dict):
-            raise ValueError("schema:op.solver")
-        matches = operation.get("matches", {})
-        if not isinstance(matches, dict) or any(
-            not isinstance(entry, dict) for entry in matches.values()
-        ):
-            raise ValueError("schema:op.matches")
-        translatable = operation.get("translatable", [])
-        if not isinstance(translatable, list) or any(
-            not isinstance(entry, str) for entry in translatable
-        ):
-            raise ValueError("schema:op.translatable")
+    for index, operation in enumerate(operations):
+        objects.update(
+            _validate_operation_schema(
+                operation,
+                f"ops[{index}]",
+                validate_solver_details=version == FORMAT_VERSION,
+            )
+        )
+    if version == FORMAT_VERSION:
+        _validate_current_project_schema(data)
     _check_schema_count("objects", len(objects), MAX_PROJECT_OBJECTS)
     return data
 
@@ -854,13 +1085,23 @@ def _validate_report_schema(data: object) -> dict[str, Any]:
     _check_schema_count("findings", len(findings), MAX_REPORT_FINDINGS)
     for finding in findings:
         suggestions = finding.get("suggestions", [])
-        if suggestions is not None and (
-            not isinstance(suggestions, list)
-            or any(not isinstance(entry, dict) for entry in suggestions)
+        if not isinstance(suggestions, list) or any(
+            not isinstance(entry, dict) for entry in suggestions
         ):
             raise ValueError("schema:report.suggestions")
         if not isinstance(finding.get("values", {}), dict):
             raise ValueError("schema:report.values")
+        feature_ids = finding.get("feature_ids", [])
+        if not isinstance(feature_ids, list) or any(
+            not isinstance(feature_id, str) for feature_id in feature_ids
+        ):
+            raise ValueError("schema:report.feature_ids")
+        location = finding.get("location")
+        if location is not None:
+            if not isinstance(location, list) or len(location) != 3:
+                raise ValueError("schema:report.location")
+            for coordinate in location:
+                _schema_number(coordinate, "report.location")
     return data
 
 

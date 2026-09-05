@@ -45,6 +45,7 @@ from app.core.scene.project import (
     embedded_source_path,
     load,
     new_project,
+    next_source_id,
     save,
 )
 from app.core.types import Source
@@ -293,7 +294,7 @@ def command_import(args: argparse.Namespace) -> int:
 
     payload = read_local_payload(incoming)
 
-    source_id = f"src_{len(project.document.sources) + 1}"
+    source_id = next_source_id(project.document.sources)
     project.document.sources[source_id] = Source(
         id=source_id,
         kind="import",

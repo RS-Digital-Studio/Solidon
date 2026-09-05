@@ -33,12 +33,16 @@ from typing import Any, Final, Protocol
 from urllib.parse import urlsplit
 
 from app.branding import APP_NAME, APP_VERSION
-from app.core.agent.tools import ASK_USER, runs_foreign_source, tool_schemas
+from app.core.agent.tools import ADD_FIT, ASK_USER, runs_foreign_source, tool_schemas
 from app.core.errors import AppError
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
+from app.core.log import get_logger
 from app.core.registry import Registry
+from app.core.types import FeatureRef
 from app.i18n import TranslatableText, _
+
+_log = get_logger(__name__)
 
 #: Die Version des Protokolls, auf die sich beide Seiten einigen.
 PROTOCOL_VERSION: Final = "2024-11-05"
@@ -288,6 +292,21 @@ def check_call(name: str, arguments: dict[str, Any], registry: Registry | None =
         raise RemoteRefusedError(_("Diese Operation gibt es nicht."))
     _refuse_gathered(name, arguments, registry)
     for key, value in arguments.items():
+        if name == ADD_FIT and key in {"a", "b"}:
+            try:
+                if not isinstance(value, str):
+                    raise ValueError
+                reference = FeatureRef.parse(value)
+            except ValueError as problem:
+                raise RemoteRefusedError(
+                    _("Ein Passungspaar braucht zwei Merkmale als obj_1:hole_2.")
+                ) from problem
+            # Doppelpunkt und Punkt gehören zur Schreibweise einer
+            # Merkmalreferenz. Die Teile dazwischen bleiben jedoch gewöhnliche
+            # Fernwerte und damit unter demselben zentralen Pfadwächter wie
+            # jedes andere Argument.
+            if not _holds_path((reference.object_id, reference.feature_id.split("."))):
+                continue
         if _holds_path(value):
             refused = _(
                 "Ein Wert sieht aus wie ein Dateipfad — über diese Schnittstelle geht das nicht."
@@ -468,8 +487,16 @@ def answer_bytes(raw: bytes, bridge: Bridge, *, max_bytes: int | None = None) ->
         return _dumped(handle(payload, bridge, max_response_bytes=max_bytes), max_bytes)
     except ResponseTooLargeError:
         raise
-    except Exception:
+    except Exception as problem:
         # Ein Server, der bei einer kaputten Anfrage abbricht, ist keiner.
+        # Der Fehler bleibt trotzdem im lokalen Protokoll nachlesbar. Die
+        # Meldung einer fremden Brücke kann jedoch Anfrageinhalt oder einen
+        # Zugangswert wiederholen; darum reist nur ihr Typ mit dem Stapel.
+        safe_problem = RuntimeError(type(problem).__qualname__)
+        _log.error(
+            "unerwarteter Fehler bei Fernanfrage",
+            exc_info=(RuntimeError, safe_problem, problem.__traceback__),
+        )
         return _dumped(
             _error(payload.get("id"), INTERNAL_ERROR, _("Unerwarteter Fehler.")), max_bytes
         )

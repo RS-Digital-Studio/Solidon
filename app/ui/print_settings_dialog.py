@@ -19,10 +19,11 @@ nicht getroffen hat.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import NamedTemporaryFile, TemporaryDirectory
+from time import monotonic
 from typing import Any, Final, Literal, cast
 
 from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
@@ -57,7 +58,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import activation, discover, tools
-from app.core.errors import AppError, InternalError, OperationCancelled
+from app.core.errors import AppError, FileWriteError, InternalError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import arrangement_holds, write_assembly
@@ -91,7 +92,7 @@ from app.ui.labels import (
     explain_choices,
     localised,
 )
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.palette import ROLES
 from app.ui.panels import align_forms, collapsible
 from app.ui.session import Session
@@ -1424,6 +1425,60 @@ class PlateRun:
     welche gemeint ist."""
 
 
+@dataclass(frozen=True, slots=True)
+class _PlateJob:
+    """Alles, was ein Arbeiter für die Slicer-Dateien braucht.
+
+    Keine Referenz auf den Dialog: Der Arbeiter darf nur unveränderliche
+    Werte und Kerndaten sehen, nie Widgets aus seinem fremden Thread.
+    """
+
+    objects: tuple[SceneObject, ...]
+    plates: tuple[int, ...]
+    folder: Path
+    name: str
+    setup: handover.SlicerSetup
+    settings: PrintSettings
+    profile: Profile
+    slot_profiles: Mapping[tuple[str, tuple[float, float, float] | None], str]
+    with_settings: bool = True
+
+
+def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
+    """Eine Platte schreiben, ohne irgendein Qt-Objekt anzufassen."""
+    objects = list(job.objects)
+    on_plate = [entry for entry in objects if entry.plate == plate]
+    keep = arrangement_holds([as_mesh_data(entry.mesh) for entry in on_plate], job.profile)
+    written, findings = write_assembly(
+        objects,
+        job.folder,
+        project_name=job.name if len(objects) == len(on_plate) else f"{job.name}-{plate + 1}",
+        profile=job.profile,
+        plate=plate,
+        settings=job.settings if job.with_settings else None,
+        flavour=job.setup.flavour,
+        place_on_bed=keep,
+        setup=job.setup,
+    )
+    slots = threemf.merge_slots(
+        [
+            threemf.AssemblyPart(mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots))
+            for entry in on_plate
+        ]
+    )
+    chosen = tuple(job.slot_profiles.get((str(slot.name), slot.colour), "") for slot in slots)
+    return PlateRun(
+        plate=plate,
+        model=written,
+        slots=handover.with_slot_profiles(slots, chosen),
+        keep_arrangement=keep,
+        model_height=max(
+            (as_mesh_data(entry.mesh).bounds.size[2] for entry in on_plate), default=None
+        ),
+        findings=tuple(findings),
+    )
+
+
 class _SliceWorker(Worker):
     """Die Slicer-Läufe abseits der Ereignisschleife (§2.8).
 
@@ -1495,6 +1550,118 @@ class _SliceWorker(Worker):
             outcome.findings = [*entry.findings, *outcome.findings]
             results.append(outcome)
         self.done.emit(results)
+
+
+class _PrepareAndSliceWorker(_SliceWorker):
+    """Baugruppen vorbereiten und danach slicen, vollständig neben Qt."""
+
+    def __init__(self, job: _PlateJob) -> None:
+        super().__init__((), job.settings, job.profile, job.setup)
+        self._job = job
+
+    def work(self) -> None:
+        runs: list[PlateRun] = []
+        for plate in self._job.plates:
+            if self.cancelled.is_cancelled:
+                return
+            try:
+                runs.append(_prepare_plate(self._job, plate))
+            except AppError as problem:
+                self.failed.emit(problem, [])
+                return
+        self._runs = runs
+        super().work()
+
+
+class _OpenInSlicerWorker(Worker):
+    """Baugruppen schreiben und ihre Fenster öffnen, ohne Qt aufzuhalten."""
+
+    done = Signal(object, int)
+    failed = Signal(object)
+
+    def __init__(self, job: _PlateJob) -> None:
+        super().__init__()
+        self._job = job
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        """Weitere Platten und das Öffnen nach dem aktuellen Schreiben verwerfen."""
+        self.cancelled.cancel()
+
+    def _was_cancelled(self) -> bool:
+        """Den nebenläufig veränderlichen Abbruchzustand frisch lesen."""
+        return self.cancelled.is_cancelled
+
+    def work(self) -> None:
+        findings: list[Finding] = []
+        opened = 0
+        for plate in self._job.plates:
+            if self._was_cancelled():
+                return
+            try:
+                run = _prepare_plate(self._job, plate)
+                if self._was_cancelled():
+                    return
+                handover.open_in_slicer(run.model, self._job.setup)
+            except AppError as problem:
+                self.failed.emit(problem)
+                return
+            findings.extend(run.findings)
+            opened += 1
+        self.done.emit(findings, opened)
+
+
+class _GcodeSaveWorker(Worker):
+    """Druckdateien kopieren, ohne das Dialogfenster anzuhalten."""
+
+    done = Signal(object)
+    failed = Signal(object)
+
+    def __init__(self, copies: Sequence[tuple[Path, Path]]) -> None:
+        super().__init__()
+        self._copies = tuple(copies)
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        """Das laufende Kopieren an der nächsten Blockgrenze beenden."""
+        self.cancelled.cancel()
+
+    def work(self) -> None:
+        written: list[Path] = []
+        for source, target in self._copies:
+            temporary: Path | None = None
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with (
+                    source.open("rb") as incoming,
+                    NamedTemporaryFile(
+                        mode="wb",
+                        dir=target.parent,
+                        prefix=f".{target.name}.",
+                        suffix=".tmp",
+                        delete=False,
+                    ) as outgoing,
+                ):
+                    temporary = Path(outgoing.name)
+                    while block := incoming.read(1024 * 1024):
+                        if self.cancelled.is_cancelled:
+                            return
+                        outgoing.write(block)
+                if self.cancelled.is_cancelled:
+                    return
+                temporary.replace(target)
+                temporary = None
+                written.append(target)
+            except OSError as problem:
+                self.failed.emit(FileWriteError(str(target), detail=str(problem)))
+                return
+            finally:
+                if temporary is not None:
+                    try:
+                        temporary.unlink(missing_ok=True)
+                    except OSError as problem:
+                        _log.warning("could not remove temporary g-code file: %s", problem)
+        self.done.emit(written)
 
 
 class _ProfileWorker(Worker):
@@ -1599,7 +1766,7 @@ class PrintSettingsDialog(QDialog):
         self._lifted = ""
         self._fields: dict[str, Field] = {}
         self._loading = False
-        self._worker: _SliceWorker | None = None
+        self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
         self._leash = WorkerLeash(self)
         """Hält ausgelaufene Arbeiter, bis Qt mit ihnen durch ist — das
@@ -1613,6 +1780,12 @@ class PrintSettingsDialog(QDialog):
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: list[Path] = []
         """Die Druckdateien des letzten Laufs — eine je Platte."""
+        self._save_copies: tuple[tuple[Path, Path], ...] = ()
+        """Der letzte Speicherauftrag für „Erneut versuchen"."""
+        self._gcode_save_succeeded = False
+        """Ob der aktuelle Kopierauftrag seine atomaren Zielwechsel vollendet hat."""
+        self._failed_save_copies: tuple[tuple[Path, Path], ...] | None = None
+        """Nur während der Meldung eines gescheiterten G-Code-Speicherauftrags."""
         self._state_shows_reason = False
         """Ob in der Zustandszeile gerade ein **Sperr-Grund** steht.
 
@@ -1626,6 +1799,14 @@ class PrintSettingsDialog(QDialog):
         self._settled = False
         """Ob schon aufgeräumt wurde — es gibt drei Wege hinaus (siehe
         :meth:`_settle`)."""
+        self._settling = False
+        """Ob ein Schließwunsch bereits Auswahl und Abbruch festgehalten hat."""
+        self._finish_result: int | None = None
+        """Der Dialogausgang, der nach den laufenden Arbeitern zugestellt wird."""
+        self._settle_timer = QTimer(self)
+        self._settle_timer.setSingleShot(True)
+        self._settle_timer.setInterval(50)
+        self._settle_timer.timeout.connect(self._finish_when_settled)
         self._pending_findings: list[Finding] = []
         """Was die Prüfung vor dem Schreiben fand (§29). Sie berichtet, sie
         blockiert nicht — also reist sie mit dem Ergebnis in den Prüfbericht."""
@@ -1793,7 +1974,13 @@ class PrintSettingsDialog(QDialog):
         Dialog nicht mehr regulär endet.
         """
         self.ui_settings.print_settings_in_files = on
-        save_settings(self.ui_settings)
+        if save_settings(self.ui_settings) is None:
+            self.state.setText(
+                tr(
+                    "Die Einstellungen ließen sich nicht speichern — prüfen Sie den freien "
+                    "Speicherplatz und die Schreibrechte."
+                )
+            )
 
     def show_materials(self, materials: Sequence[str]) -> None:
         """Woraus sich das Material ergibt — die Liste, sonst die Vorgabe
@@ -2422,6 +2609,15 @@ class PrintSettingsDialog(QDialog):
         auch ohne offenen Dialog auf.
         """
         known = dict(handlers_of(self.parentWidget()))
+        if self._failed_save_copies is not None:
+
+            def retry(_error: AppError) -> None:
+                copies = self._failed_save_copies
+                if copies is not None:
+                    self._start_gcode_save(copies)
+
+            known["retry"] = retry
+            known["save_elsewhere"] = lambda _error: self._save_gcode()
         known["show_output"] = self._show_slicer_output
         known["check_profile"] = lambda _error: self._open_slicer_section()
         known["choose_slicer"] = lambda _error: self._open_slicer_section()
@@ -2601,6 +2797,8 @@ class PrintSettingsDialog(QDialog):
         Profilbestand wird durchgesehen …" muss verschwinden, sonst steht er
         dort für immer und behauptet einen Vorgang, den es nicht mehr gibt.
         """
+        if self._settling:
+            return
         _log.warning("profile search crashed: %s", detail)
         self._profiles_pending = False
         self.profile_note.setText(
@@ -2614,6 +2812,8 @@ class PrintSettingsDialog(QDialog):
         self._show_slicer_state()
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
+        if self._settling:
+            return
         # **Zuerst lesen, was schon gewählt ist.** Nach dem ersten ``addItem``
         # steht der Index auf 0, und „was gewählt ist" wäre dann Qts
         # Vorbelegung statt einer Entscheidung — die Prüfung unten hielte den
@@ -3999,9 +4199,10 @@ class PrintSettingsDialog(QDialog):
         Fenster des Slicers braucht Sekunden zum Laden, und eine Datei, die
         vorher verschwindet, wäre eine Übergabe ins Leere.
 
-        Synchron und ohne Zeiger, wie der Bestand den Plattenaufbau in
-        :meth:`_slice` hält — gerechnet wird hier nichts, geschrieben in
-        Zehntelsekunden.
+        Der Plattenaufbau schreibt die gesamte Geometrie und kann bei dichten
+        Netzen viele Sekunden dauern. Er läuft deshalb wie das Slicen selbst
+        im Arbeiter; das fremde Fenster wird erst mit vollständiger Datei
+        geöffnet.
         """
         result = self.session.last_result
         objects = list(result.scene.objects.values()) if result is not None else []
@@ -4017,46 +4218,38 @@ class PrintSettingsDialog(QDialog):
         folder = discover.exchange_dir() / "open-in-slicer"
         name = self.session.path.stem if self.session.path else "solidon"
         plates = self._chosen_plates()
-        findings: list[Finding] = []
         try:
             folder.mkdir(parents=True, exist_ok=True)
             # ``plates`` ist nie leer, solange es Objekte gibt: ``_all_plates``
             # ist nur ohne ``last_result`` leer, und genau dann hat der frühe
             # Rückweg über ``objects`` oben schon geantwortet — dieselbe
             # Quelle, zwei Ecken. Ohne diese Kette stünde unten „0 Platten".
-            runs = [
-                self._plate_run(
-                    objects,
-                    plate,
-                    folder,
-                    name,
-                    setup,
-                    with_settings=self.ui_settings.print_settings_in_files,
-                )
-                for plate in plates
-            ]
-            for run in runs:
-                handover.open_in_slicer(run.model, setup)
-                findings.extend(run.findings)
-        except AppError as problem:
-            show_error(problem, self)
-            return
-        if findings:
-            # Die Vorprüfung gehört in den Bericht wie beim Rechen-Weg —
-            # nur dass es hier nie einen G-Code-Rückweg geben wird.
-            self.reported.emit(findings)
-        # Die Handlung quittiert sich (§2.8): Das fremde Fenster braucht
-        # Sekunden, und ein Knopf ohne Antwort wäre für genau diese
-        # Sekunden ein Knopf, der nichts tut.
-        self.state.setText(
-            tr("An {slicer} übergeben — das Fenster gehört jetzt Ihnen.").replace(
-                "{slicer}", _slicer_title(setup.executable)
+            job = self._plate_job(
+                objects,
+                plates,
+                folder,
+                name,
+                setup,
+                with_settings=self.ui_settings.print_settings_in_files,
             )
-            if len(runs) == 1
-            else tr("An {slicer} übergeben — {count} Platten, je eine Datei.")
-            .replace("{slicer}", _slicer_title(setup.executable))
-            .replace("{count}", str(len(runs)))
+        except OSError as problem:
+            self._slice_failed(InternalError(detail=str(problem)))
+            return
+        self._show_handover_progress(len(plates), tr("Die Slicer-Dateien werden vorbereitet …"))
+        worker = _OpenInSlicerWorker(job)
+        worker.done.connect(
+            weak_slot(
+                self,
+                PrintSettingsDialog._opened_in_slicer,
+                setup.executable,
+                forward=True,
+            )
         )
+        worker.failed.connect(self._slice_failed)
+        worker.crashed.connect(self._handover_crashed)
+        worker.finished.connect(self._slice_finished)
+        self._worker = worker
+        self._leash.start(worker)
 
     def _slice(self) -> None:
         result = self.session.last_result
@@ -4098,34 +4291,59 @@ class PrintSettingsDialog(QDialog):
         # Die gewählten, nicht alle: Wer Platte 2 slicen will, bekommt
         # eine Druckdatei und nicht drei, von denen er zwei wegwirft.
         plates = self._chosen_plates()
-        try:
-            runs = [self._plate_run(objects, plate, folder, name, setup) for plate in plates]
-        except AppError as problem:
-            show_error(problem, self)
-            return
+        job = self._plate_job(objects, plates, folder, name, setup)
+        self._show_handover_progress(len(plates), tr("Die Slicer-Dateien werden vorbereitet …"))
+        worker = _PrepareAndSliceWorker(job)
+        worker.done.connect(weak_slot(self, PrintSettingsDialog._slice_done, worker, forward=True))
+        worker.failed.connect(self._slice_failed)
+        worker.crashed.connect(self._handover_crashed)
+        worker.finished.connect(self._slice_finished)
+        worker.step.connect(self._slicing_plate)
+        self._worker = worker
+        self._leash.start(worker)
 
+    def _show_handover_progress(self, count: int, text: str) -> None:
+        """Beide langen Übergabewege vor dem Arbeiter sichtbar machen."""
         self.slice_button.setEnabled(False)
-        # Bei mehreren Platten ist die Plattenzahl die ehrlichste Schätzung
-        # (§2.8) — bei einer bliebe ein Balken „0 von 1" eine Zahl ohne
-        # Aussage, dann läuft er unbestimmt.
-        if len(runs) > 1:
-            self.progress.setRange(0, len(runs))
+        self.open_button.setEnabled(False)
+        if count > 1:
+            self.progress.setRange(0, count)
             self.progress.setValue(0)
         else:
             self.progress.setRange(0, 0)
         self.progress.setVisible(True)
         self.cancel_slice.setEnabled(True)
         self.cancel_slice.setVisible(True)
-        self.state.setText(tr("Der Slicer rechnet …"))
+        self.state.setText(text)
 
-        worker = _SliceWorker(runs, self.settings, self.session.profile, setup)
-        worker.done.connect(self._sliced)
-        worker.failed.connect(self._slice_failed)
-        worker.crashed.connect(lambda detail: self._slice_failed(InternalError(detail=detail)))
-        worker.finished.connect(self._slice_finished)
-        worker.step.connect(self._slicing_plate)
-        self._worker = worker
-        self._leash.start(worker)
+    def _plate_job(
+        self,
+        objects: Sequence[SceneObject],
+        plates: Sequence[int],
+        folder: Path,
+        name: str,
+        setup: handover.SlicerSetup,
+        *,
+        with_settings: bool = True,
+    ) -> _PlateJob:
+        """Einen unveränderlichen Auftrag aus dem sichtbaren Dialog bauen."""
+        shown = self._plate_slots()
+        slot_profiles = {
+            (str(slot.name), slot.colour): self.settings.slot_profiles[index]
+            for index, slot in enumerate(shown)
+            if index < len(self.settings.slot_profiles) and self.settings.slot_profiles[index]
+        }
+        return _PlateJob(
+            objects=tuple(objects),
+            plates=tuple(plates),
+            folder=folder,
+            name=name,
+            setup=setup,
+            settings=self.settings,
+            profile=self.session.profile,
+            slot_profiles=slot_profiles,
+            with_settings=with_settings,
+        )
 
     def _plate_run(
         self,
@@ -4147,71 +4365,56 @@ class PrintSettingsDialog(QDialog):
         ohne sie schriebe die zweite Platte die erste über, und beide Läufe
         legten ihren G-Code an dieselbe Stelle daneben.
         """
-        on_plate = [entry for entry in objects if entry.plate == plate]
-        # Hält die Anordnung, geht sie mit — und wird beim Aufruf auch
-        # durchgesetzt. Sonst ordnet der Slicer an, wie er es ohne uns täte:
-        # zwei Teile übereinander wären schlimmer als eine verworfene
-        # Anordnung (§29). Je Platte gefragt, denn jede ist eine eigene.
-        keep = arrangement_holds(
-            [as_mesh_data(entry.mesh) for entry in on_plate], self.session.profile
+        job = self._plate_job(objects, (plate,), folder, name, setup, with_settings=with_settings)
+        if not job.slot_profiles and self.settings.slot_profiles:
+            slots = threemf.merge_slots(
+                [
+                    threemf.AssemblyPart(
+                        mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
+                    )
+                    for entry in objects
+                    if entry.plate == plate
+                ]
+            )
+            job = replace(
+                job,
+                slot_profiles={
+                    (str(slot.name), slot.colour): self.settings.slot_profiles[index]
+                    for index, slot in enumerate(slots)
+                    if index < len(self.settings.slot_profiles)
+                    and self.settings.slot_profiles[index]
+                },
+            )
+        return _prepare_plate(job, plate)
+
+    def _opened_in_slicer(self, executable: Path, findings: Sequence[Finding], count: int) -> None:
+        """Den asynchronen Öffnen-Weg quittieren und seine Befunde zeigen."""
+        if self._settling:
+            return
+        if findings:
+            self.reported.emit(list(findings))
+        self._state_shows_reason = False
+        self.state.setText(
+            tr("An {slicer} übergeben — das Fenster gehört jetzt Ihnen.").replace(
+                "{slicer}", _slicer_title(executable)
+            )
+            if count == 1
+            else tr("An {slicer} übergeben — {count} Platten, je eine Datei.")
+            .replace("{slicer}", _slicer_title(executable))
+            .replace("{count}", str(count))
         )
-        written, findings = write_assembly(
-            objects,
-            folder,
-            project_name=name if len(objects) == len(on_plate) else f"{name}-{plate + 1}",
-            profile=self.session.profile,
-            plate=plate,
-            # Damit ein Teil bekommen kann, was nur es braucht — der Brim
-            # unter der Streuscheibe, nicht unter den zwölf Behältern.
-            #
-            # ``with_settings=False`` kommt vom Übergabeweg „Im Slicer öffnen":
-            # Dort gehört das Fenster danach dem Nutzer, und wer im Kopf des
-            # Dialogs den Haken weggenommen hat, will genau dort sein eigenes
-            # Profil sehen. Beim Rechen-Weg bleibt es dabei — dort misst
-            # Solidon mit seinen Werten und liest das Ergebnis zurück; ohne sie
-            # wäre die gemessene Zahl die eines fremden Profils.
-            settings=self.settings if with_settings else None,
-            flavour=setup.flavour,
-            place_on_bed=keep,
-            # Und das Systemprofil darunter: ohne es trägt die Datei zwar
-            # Solidons Werte, aber keinen Drucker, zu dem sie passen.
-            setup=setup,
-        )
-        # Die Materialslots der Platte: je Slot ein Filament (§20). Ohne sie
-        # bekäme jede Farbe die Werte der ersten. Je Platte eigene, denn die
-        # Plattenaufteilung folgt gerade dem Material (`plates_by_material`).
-        slots = threemf.merge_slots(
-            [
-                threemf.AssemblyPart(
-                    mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
-                )
-                for entry in on_plate
-            ]
-        )
-        chosen = self._profiles_for(slots)
-        return PlateRun(
-            plate=plate,
-            model=written,
-            # Die Wahl aus den Slot-Zeilen reist am Slot selbst: eingesammelt
-            # wurde sie schon immer, angekommen ist sie hier nie — alle Slots
-            # slicten mit dem Basisfilament, und „druckt mit" war eine Zusage
-            # ohne Deckung (§20).
-            slots=handover.with_slot_profiles(slots, chosen),
-            keep_arrangement=keep,
-            # Die höchste der Platte: Der Vergleich fragt, ob der G-Code so
-            # hoch wird wie das Modell, und ein niedrigeres Teil daneben
-            # ändert daran nichts.
-            model_height=max(
-                (as_mesh_data(entry.mesh).bounds.size[2] for entry in on_plate), default=None
-            ),
-            findings=tuple(findings),
-        )
+
+    def _handover_crashed(self, detail: str) -> None:
+        """Unerwartetes aus beiden Übergabearbeitern gleich behandeln."""
+        self._slice_failed(InternalError(detail=detail))
 
     def _slicing_plate(self, index: int, count: int) -> None:
         """Bei welcher Platte der Lauf steht (§2.8).
 
         Nur bei mehreren: „Platte 1 von 1" wäre eine Zahl ohne Aussage.
         """
+        if self._settling:
+            return
         if count > 1:
             self.progress.setValue(index - 1)
             self.state.setText(
@@ -4233,6 +4436,15 @@ class PrintSettingsDialog(QDialog):
         self.state.setText(tr("Wird abgebrochen …"))
         worker.cancel()
 
+    def _slice_done(
+        self, worker: _PrepareAndSliceWorker, outcomes: list[handover.SliceOutcome]
+    ) -> None:
+        """Nur das Ergebnis des noch aktiven, nicht abgebrochenen Laufs übernehmen."""
+
+        if self._worker is not worker or worker.cancelled.is_cancelled:
+            return
+        self._sliced(outcomes)
+
     def _sliced(self, outcomes: list[handover.SliceOutcome]) -> None:
         """Was der Lauf gebracht hat — über alle Platten zusammen.
 
@@ -4240,6 +4452,8 @@ class PrintSettingsDialog(QDialog):
         werden; die Schichtzahl steht nur bei einer, denn über zwei addiert
         wäre sie eine Zahl, die es nirgends gibt (:func:`gcode.combine`).
         """
+        if self._settling:
+            return
         if not outcomes:
             return
         metrics = gcode.combine([entry.metrics for entry in outcomes])
@@ -4347,9 +4561,33 @@ class PrintSettingsDialog(QDialog):
                 Path(folder) / f"{stem}-{index}.gcode" for index in range(1, len(written) + 1)
             ]
 
-        for target, source in zip(targets, written, strict=True):
-            target.write_bytes(source.read_bytes())
+        self._start_gcode_save(tuple(zip(written, targets, strict=True)))
+
+    def _start_gcode_save(self, copies: Sequence[tuple[Path, Path]]) -> None:
+        """Einen gewählten Speicherauftrag im Arbeiter beginnen."""
+        if self._worker is not None:
+            return
+        self._save_copies = tuple(copies)
+        self._gcode_save_succeeded = False
+        self._show_handover_progress(len(copies), tr("Druckdateien werden gespeichert …"))
+        worker = _GcodeSaveWorker(self._save_copies)
+        worker.done.connect(self._gcode_saved)
+        worker.failed.connect(self._slice_failed)
+        worker.crashed.connect(self._handover_crashed)
+        worker.finished.connect(self._slice_finished)
+        self._worker = worker
+        self._leash.start(worker)
+
+    def _gcode_saved(self, targets: object) -> None:
+        """Den erfolgreichen Speicherort sichtbar festhalten."""
+        if self._settling:
+            return
+        assert isinstance(targets, list)
+        if not targets:
+            return
+        for target in targets:
             _log.info("wrote g-code to %s", target)
+        self._gcode_save_succeeded = True
         self.state.setText(
             f"{tr('Gespeichert')}: {targets[0].name}"
             if len(targets) == 1
@@ -4370,26 +4608,42 @@ class PrintSettingsDialog(QDialog):
         Formulierung: Zwei Sätze über dieselbe Sache driften auseinander, und
         der hier trägt schon die Ursache.
         """
+        if self._settling:
+            return
         if findings:
             self.reported.emit(list(findings))
         self.state.setText(str(problem.detail) if problem.detail else tr("Abgebrochen."))
-        show_error(problem, self)
+        self._failed_save_copies = (
+            self._save_copies if isinstance(self._worker, _GcodeSaveWorker) else None
+        )
+        try:
+            show_error(problem, self)
+        finally:
+            self._failed_save_copies = None
 
     def _slice_finished(self) -> None:
-        self.progress.setVisible(False)
-        self.cancel_slice.setVisible(False)
         worker = self._worker
         self._worker = None
+        if worker is not None:
+            # `finished` heißt „`run` ist zurück", nicht „das Objekt darf
+            # weg" — das Loslassen übernimmt die Halteleine.
+            self._leash.hold_until_done(worker)
+        if self._settling:
+            return
+        self.progress.setVisible(False)
+        self.cancel_slice.setVisible(False)
+        save_succeeded = isinstance(worker, _GcodeSaveWorker) and self._gcode_save_succeeded
+        saved_state = self.state.text() if save_succeeded else ""
+        self._gcode_save_succeeded = False
         # Nicht blank freischalten: Der Knopf hat inzwischen drei Bedingungen
         # (Slicer, Lizenz, Profilwahl), und die eine Stelle kennt sie alle —
         # nach dem Austragen des Arbeiters, sonst hielte dessen Wache ihn zu.
         self._show_slicer_state()
         if worker is not None:
-            if worker.cancelled.is_cancelled:
+            if saved_state:
+                self.state.setText(saved_state)
+            elif worker.cancelled.is_cancelled:
                 self.state.setText(tr("Abgebrochen."))
-            # `finished` heißt „`run` ist zurück", nicht „das Objekt darf
-            # weg" — das Loslassen übernimmt die Halteleine.
-            self._leash.hold_until_done(worker)
 
     def reject(self) -> None:
         """Escape und der Schließen-Knopf gehen denselben Weg wie das X.
@@ -4397,12 +4651,16 @@ class PrintSettingsDialog(QDialog):
         Qt ruft bei ``reject()`` kein ``closeEvent`` — der Arbeiter lief
         unsichtbar weiter, und ``_temporary`` blieb als Ordner liegen.
         """
-        self._settle()
-        super().reject()
+        self.done(int(QDialog.DialogCode.Rejected))
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
-        self._settle()
-        super().closeEvent(event)
+        if self._settle(0):
+            super().closeEvent(event)
+            return
+        if self._finish_result is None:
+            self._finish_result = int(QDialog.DialogCode.Rejected)
+        event.ignore()
+        self._wait_without_blocking()
 
     def done(self, result: int) -> None:
         """Auch die Knöpfe räumen auf, nicht nur das Schließkreuz.
@@ -4414,8 +4672,13 @@ class PrintSettingsDialog(QDialog):
         Referenz fallen ließ. Ein Thread, der sein Fenster überlebt, nimmt den
         Prozess mit; genau dagegen ist die Halteleine geschrieben.
         """
-        self._settle()
-        super().done(result)
+        if self._finish_result is None:
+            self._finish_result = result
+        if self._settle(0):
+            self._finish_result = None
+            super().done(result)
+            return
+        self._wait_without_blocking()
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
@@ -4435,36 +4698,67 @@ class PrintSettingsDialog(QDialog):
         """
         self._settle(timeout_ms)
 
-    def _settle(self, timeout_ms: int | None = None) -> None:
+    def _wait_without_blocking(self) -> None:
+        """Den Dialog sichtbar behalten und den Arbeiter über die Ereignisschleife abholen."""
+
+        self.setEnabled(False)
+        self._settle_timer.start()
+
+    def _finish_when_settled(self) -> None:
+        """Einen aufgeschobenen Dialogausgang nach dem letzten Arbeiter zustellen."""
+
+        if not self._settle(0):
+            self._settle_timer.start()
+            return
+        result = self._finish_result
+        self._finish_result = None
+        if result is not None:
+            super().done(result)
+
+    def _settle(self, timeout_ms: int = 0) -> bool:
         """Den Ordner erst freigeben, wenn niemand mehr darin liest.
 
-        Der Slicer-Lauf wird abgebrochen statt abgewartet: ``worker.wait()``
-        ohne Grenze stand hier im Qt-Hauptthread, und wer während eines
-        großen Auftrags schloss, hatte eine eingefrorene Anwendung, bis der
-        externe Slicer von sich aus fertig war — Minuten. Das Warten bleibt,
-        aber nach dem Abbruch ist es kurz: der Kindprozess stirbt binnen
-        Sekunden, und ohne das Warten stürbe der Thread über einem
-        zerstörten Dialog.
+        Der Bedienweg fragt mit Frist null und kommt sofort zurück. Die
+        Aufräumhilfe der Suite darf begrenzt warten. In beiden Fällen bleibt
+        der Dialog samt Arbeitsordner bestehen, bis der letzte Arbeiter
+        tatsächlich ausgelaufen ist.
         """
-        # Genau einmal: Es gibt drei Wege hinaus (Knopf, Schließkreuz,
-        # Wegräumen), und zwei davon können hintereinander kommen. Zweimal
-        # aufzuräumen schriebe die Slicer-Wahl zweimal und wartete zweimal.
         if self._settled:
-            return
+            return True
+        if not self._settling:
+            self._settling = True
+            # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
+            # gleich nicht mehr gibt.
+            self._remember_slicer_choice(require_machine=True)
+            worker = self._worker
+            if worker is not None and worker.isRunning():
+                worker.cancel()
+                self.cancel_slice.setEnabled(False)
+                self.state.setText(tr("Wird abgebrochen …"))
+
+        pending = (
+            self._worker,
+            self._profile_worker,
+            *self._leash.pending(),
+        )
+        workers = {id(worker): worker for worker in pending if worker is not None}
+        deadline = monotonic() + max(timeout_ms, 0) / 1000.0
+        for worker in workers.values():
+            if not worker.isRunning():
+                continue
+            if timeout_ms <= 0:
+                worker.wait(0)
+                continue
+            remaining = max(0, int((deadline - monotonic()) * 1000))
+            if remaining <= 0:
+                break
+            worker.wait(remaining)
+        if any(worker.isRunning() for worker in workers.values()):
+            return False
+
         self._settled = True
-        # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
-        # gleich nicht mehr gibt.
-        self._remember_slicer_choice(require_machine=True)
-        worker = self._worker
-        if worker is not None and worker.isRunning():
-            worker.cancel()
-        for pending in (self._worker, self._profile_worker):
-            if pending is not None and pending.isRunning():
-                # Ohne Grenze, wenn der Weg über das Schließen geht (siehe
-                # oben); mit Grenze, wenn die Suite wegräumt — dort soll ein
-                # hängender Arbeiter den Lauf nicht anhalten, sondern auffallen.
-                pending.wait() if timeout_ms is None else pending.wait(timeout_ms)
-        self._leash.wait_all()
+        self._settle_timer.stop()
         if self._temporary is not None:
             self._temporary.cleanup()
             self._temporary = None
+        return True

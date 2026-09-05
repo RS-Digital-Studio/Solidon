@@ -29,7 +29,7 @@ from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.log import get_logger
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.scene.history import History, OperationDraft
-from app.core.scene.project import Project, checksum, embedded_source_path
+from app.core.scene.project import Project, checksum, embedded_source_path, next_source_id
 from app.core.types import ObjectId, Origin, ProgressFn, Source, SourceId, SourceOrigin
 from app.i18n import _
 
@@ -164,7 +164,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Gefunden von 3d-druck-46 im Lizenz-Audit.
     activation.require(activation.CHANGE)
 
-    source_id = f"src_{len(document.sources) + 1}"
+    source_id = next_source_id(document.sources)
     short = _short(name)
 
     document.sources[source_id] = Source(

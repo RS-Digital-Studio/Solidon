@@ -75,6 +75,25 @@ def test_the_line_shows_mass_and_duration(qt_app: QApplication) -> None:
     assert delta == "", "das erste Ergebnis hat nichts, womit es sich vergleicht"
 
 
+def test_the_facts_are_a_keyboard_button(qt_app: QApplication) -> None:
+    """Die klickbare Statusauskunft trägt Rolle und Tastaturweg eines Knopfs."""
+
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QAccessible
+    from PySide6.QtTest import QTest
+
+    facts = PrintFacts()
+    interface = QAccessible.queryAccessibleInterface(facts)
+    assert interface is not None and interface.role() == QAccessible.Role.Button
+    seen: list[bool] = []
+    facts.clicked.connect(lambda: seen.append(True))
+
+    facts.setFocus()
+    QTest.keyClick(facts, Qt.Key.Key_Return)
+
+    assert seen == [True]
+
+
 def test_a_second_result_names_the_difference(qt_app: QApplication) -> None:
     """Der eigentliche Gewinn: „hat sich das gelohnt"."""
     facts = PrintFacts()

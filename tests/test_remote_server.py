@@ -13,7 +13,6 @@ Bindung hält und ein anderer Pfad nichts hergibt.
 
 from __future__ import annotations
 
-import contextlib
 import http.client
 import io
 import json
@@ -120,18 +119,26 @@ def post_with_headers(
         connection.endheaders(body)
         if shutdown_write:
             assert connection.sock is not None
-            # Der Server lehnt eine solche Anfrage ab, ohne ihren Rumpf zu
-            # lesen, und schließt — mitunter, bevor diese Zeile läuft. Linux
-            # meldet das ``shutdown`` auf der schon getrennten Verbindung
-            # dann mit ENOTCONN (CI, 02.09.2026, einmal von etwa zehn Läufen),
-            # Windows schweigt. Die Antwort liegt in dem Fall bereits im
-            # Puffer; ``getresponse`` liest sie wie sonst auch.
-            with contextlib.suppress(OSError):
-                connection.sock.shutdown(socket.SHUT_WR)
+            # Ein absichtlich gekürzter Rumpf braucht ein eindeutiges Ende,
+            # damit der Server ihn sofort statt erst nach dem Timeout ablehnt.
+            connection.sock.shutdown(socket.SHUT_WR)
         answer = connection.getresponse()
         return int(answer.status), answer.read()
     finally:
         connection.close()
+
+
+def _record_rejected_body_discard(monkeypatch: pytest.MonkeyPatch) -> threading.Event:
+    """Meldet, wenn der Server anliegende Bytes einer Ablehnung verworfen hat."""
+    drained = threading.Event()
+    original_discard = remote_server._Handler._discard_rejected_body
+
+    def record_discard(handler: Any, limit: int) -> None:
+        original_discard(handler, limit)
+        drained.set()
+
+    monkeypatch.setattr(remote_server._Handler, "_discard_rejected_body", record_discard)
+    return drained
 
 
 def test_it_binds_to_the_loopback_and_nowhere_else(
@@ -217,8 +224,11 @@ def test_a_missing_content_length_is_rejected(server: tuple[RemoteServer, _Bridg
     assert bridge.calls == []
 
 
-def test_duplicate_content_lengths_are_rejected(server: tuple[RemoteServer, _Bridge]) -> None:
+def test_duplicate_content_lengths_are_rejected(
+    server: tuple[RemoteServer, _Bridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
     running, bridge = server
+    drained = _record_rejected_body_discard(monkeypatch)
 
     status, _body = post_with_headers(
         running.port,
@@ -227,6 +237,7 @@ def test_duplicate_content_lengths_are_rejected(server: tuple[RemoteServer, _Bri
     )
 
     assert status == 400
+    assert drained.wait(1.0), "anliegende Rumpfbytes wurden vor dem Schließen nicht verworfen"
     assert bridge.calls == []
 
 
@@ -264,8 +275,11 @@ def test_a_truncated_body_never_reaches_the_bridge(
     assert bridge.calls == []
 
 
-def test_chunked_requests_are_rejected(server: tuple[RemoteServer, _Bridge]) -> None:
+def test_chunked_requests_are_rejected(
+    server: tuple[RemoteServer, _Bridge], monkeypatch: pytest.MonkeyPatch
+) -> None:
     running, bridge = server
+    drained = _record_rejected_body_discard(monkeypatch)
 
     status, _body = post_with_headers(
         running.port,
@@ -275,6 +289,7 @@ def test_chunked_requests_are_rejected(server: tuple[RemoteServer, _Bridge]) -> 
     )
 
     assert status == 400
+    assert drained.wait(1.0), "anliegende Chunk-Bytes wurden vor dem Schließen nicht verworfen"
     assert bridge.calls == []
 
 

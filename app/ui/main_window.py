@@ -235,7 +235,7 @@ from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
-from app.ui.op_dialog import OperationDialog, SketchUseDialog
+from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, SketchUseDialog
 from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
 from app.ui.palette import text_colour
 from app.ui.panels import (
@@ -673,6 +673,8 @@ class _ProgressState:
 _PROGRESS_PRIORITY: Final = (
     "split",
     "download",
+    "source",
+    "gcode",
     "export",
     "part_file",
     "agent",
@@ -943,6 +945,86 @@ class _SliceWorker(Worker):
 
     def work(self) -> None:
         self.done.emit(slice_body(as_mesh_data(self._entry.mesh), self._layer_height))
+
+
+class _GcodeWorker(Worker):
+    """Eine G-Code-Datei abseits des Qt-Hauptthreads lesen und auswerten."""
+
+    done = Signal(object, object)
+    failed = Signal(object)
+    stopped = Signal()
+
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self._path = path
+        self.cancel = CancelSignal()
+
+    def _was_cancelled(self) -> bool:
+        """Den nebenläufig veränderlichen Abbruchzustand frisch lesen."""
+        return self.cancel.is_cancelled
+
+    def work(self) -> None:
+        try:
+            with self._path.open("r", encoding="utf-8", errors="replace") as lines:
+                analysis = gcode.analyze_lines(lines, cancelled=self.cancel)
+        except OperationCancelled:
+            self.stopped.emit()
+            return
+        except OSError as problem:
+            self.failed.emit(problem)
+            return
+        if self._was_cancelled():
+            self.stopped.emit()
+            return
+        metrics = analysis.metrics
+        findings = gcode.findings_for(metrics)
+        if self._was_cancelled():
+            self.stopped.emit()
+            return
+        self.done.emit(metrics, findings)
+
+
+class _SourceReadWorker(Worker):
+    """Eine neue Bild- oder Modellquelle begrenzt im Hintergrund lesen."""
+
+    done = Signal(bytes)
+    failed = Signal(object)
+    stopped = Signal()
+
+    def __init__(self, path: Path, kind: str) -> None:
+        super().__init__()
+        self._path = path
+        self._kind = kind
+        self.cancel = CancelSignal()
+
+    def work(self) -> None:
+        from app.core.ingest.loader import read_bounded_payload, read_local_payload
+
+        try:
+            payload = (
+                read_bounded_payload(self._path)
+                if self._kind == "image"
+                else read_local_payload(self._path)
+            )
+        except AppError as problem:
+            self.failed.emit(problem)
+            return
+        except OSError as problem:
+            self.failed.emit(
+                UserError(
+                    title=tr("Diese Datei ließ sich nicht lesen."),
+                    detail=tr(
+                        "Sie ist vielleicht verschoben worden, oder das Laufwerk ist "
+                        "gerade nicht erreichbar. Wählen Sie die Datei noch einmal aus."
+                    ),
+                    values={"path": self._path.name, "reason": str(problem)},
+                )
+            )
+            return
+        if self.cancel.is_cancelled:
+            self.stopped.emit()
+            return
+        self.done.emit(payload)
 
 
 def inputs_for(
@@ -1262,6 +1344,14 @@ class MainWindow(QMainWindow):
         richtet sich nach dem Zustand, nicht nach der Lebensdauer."""
         """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
         Halteleine, derselbe Grund."""
+        self._gcode_worker: Any = None
+        self._gcode_path: Path | None = None
+        """Die laufende G-Code-Gegenprobe und ihre ausgewählte Datei (§2.8)."""
+        self._source_worker: Any = None
+        self._source_path: Path | None = None
+        self._source_kind = ""
+        self._source_callback: Callable[[tuple[str, str] | None], None] | None = None
+        """Die nachgereichte Quelle eines offenen Operationsdialogs."""
         self._export_worker: Any = None
         self._exporting = False
         """Wie ``_downloading`` — der Export meldet sein Ende vor dem
@@ -1293,6 +1383,11 @@ class MainWindow(QMainWindow):
         self._leash = WorkerLeash(self)
         """Hält fertige und ersetzte Arbeiter, bis Qt mit ihnen durch ist —
         das Warum steht in :mod:`app.ui.leash`."""
+        self._close_requested = False
+        self._close_retry = QTimer(self)
+        self._close_retry.setInterval(50)
+        self._close_retry.timeout.connect(self._retry_close)
+        """Hält das Fenster offen, bis jeder angehaltene Arbeiter ausgelaufen ist."""
         self._proposal: Any = None
         self._applied_transaction: str | None = None
         """Die Transaktion hinter der Übernommen-Leiste (§26.5) — nur solange
@@ -1595,6 +1690,7 @@ class MainWindow(QMainWindow):
             )
         )
         self.viewport.measurementTaken.connect(self._on_measurement)
+        self.viewport.sceneFailed.connect(self._viewport_failed)
         self.section_bar = SectionBar(self)
         self.section_bar.sectionChanged.connect(self._on_section)
         self.measure_bar = MeasureBar(self)
@@ -2207,6 +2303,32 @@ class MainWindow(QMainWindow):
                 True,
                 True,
             ),
+            "gcode": _ProgressState(
+                False,
+                tr("G-Code wird gegenprüft …"),
+                0,
+                0,
+                0,
+                tr("G-Code gegenprüfen"),
+                tr("Die gewählte G-Code-Datei wird gelesen und ausgewertet."),
+                tr("Bricht die G-Code-Gegenprüfung ab. Der Bericht bleibt unverändert."),
+                True,
+                True,
+                False,
+            ),
+            "source": _ProgressState(
+                False,
+                tr("Datei wird gelesen …"),
+                0,
+                0,
+                0,
+                tr("Quelle lesen"),
+                tr("Die gewählte Datei wird begrenzt in das Projekt aufgenommen."),
+                tr("Bricht das Lesen ab. Das Projekt bleibt unverändert."),
+                True,
+                True,
+                False,
+            ),
             "split": _ProgressState(
                 False,
                 tr("Die Trennebenen werden gesucht …"),
@@ -2360,6 +2482,8 @@ class MainWindow(QMainWindow):
             "evaluation": self.session.cancel_evaluation,
             "agent": self.session.cancel_agent,
             "download": self._cancel_download,
+            "source": self._cancel_source_read,
+            "gcode": self._cancel_gcode,
             "split": self.session.cancel_split,
         }
         handler = handlers.get(owner)
@@ -4060,7 +4184,7 @@ class MainWindow(QMainWindow):
     def _forget_recent(self, path: Path) -> None:
         """Einen Eintrag aus „Zuletzt geöffnet" nehmen — die Datei bleibt."""
         self.settings.recent = [entry for entry in self.settings.recent if entry != str(path)]
-        save_settings(self.settings)
+        self._store_settings()
         self.start_screen.show_recent(self.settings.existing_recent())
 
     def _may_discard(self) -> bool:
@@ -4126,7 +4250,7 @@ class MainWindow(QMainWindow):
                 with waiting():
                     self.session.open_project(path)
                     self.settings.remember(path)
-                    save_settings(self.settings)
+                    self._store_settings()
                 # Beide fragen etwas, und beide erst außerhalb des
                 # Wartezeigers: ein Fenster, das um Antwort bittet und dabei
                 # „bitte warten" zeigt, sagt zweierlei.
@@ -4221,7 +4345,7 @@ class MainWindow(QMainWindow):
             return
         self._write_failure = None
         self.settings.remember(saved)
-        save_settings(self.settings)
+        self._store_settings()
         self.announce(tr("Gespeichert"))
 
     def action_import(self) -> None:
@@ -4411,6 +4535,8 @@ class MainWindow(QMainWindow):
             or self.session.split_running
             or self._exporting
             or self._downloading
+            or self._gcode_worker is not None
+            or self._source_worker is not None
         )
 
     def _progress_idle(self) -> None:
@@ -4622,14 +4748,14 @@ class MainWindow(QMainWindow):
         self.settings.bed_visible = visible
         self._bed_action.setChecked(visible)
         self.viewport.set_bed_visible(visible)
-        save_settings(self.settings)
+        self._store_settings()
         self.announce(tr("Druckplatte wieder da.") if visible else tr("Druckplatte ausgeblendet."))
 
     def action_toggle_right(self) -> None:
         visible = not self.settings.right_panel_visible
         self.right.setVisible(visible)
         self.settings.right_panel_visible = visible
-        save_settings(self.settings)
+        self._store_settings()
         self._mark_status_alerts()
 
     def action_variants(self) -> None:
@@ -4800,7 +4926,7 @@ class MainWindow(QMainWindow):
         if dialog.has_changes():
             self.session.set_print_settings(dialog.settings)
         self.settings.print_quality = dialog.settings.quality
-        save_settings(self.settings)
+        self._store_settings()
         # Ohne das blieb jede Öffnung samt Profilliste am Fenster hängen —
         # bei der Orca-Familie einige tausend Einträge je Aufruf.
         dialog.deleteLater()
@@ -4919,43 +5045,67 @@ class MainWindow(QMainWindow):
         Die gemessenen Zahlen landen als gemessen markiert im Prüfbericht; die
         interne Schätzung bleibt, wo sie war. Nichts wird still ersetzt (§22.5).
 
-        Lesen und Zerlegen laufen unter dem Wartezeiger: gemessen kostet ein
-        Strom von 10 MB — dreihunderttausend Zeilen, ein mittleres Teil —
-        520 ms im Qt-Hauptthread, und eine große Platte ist ein Mehrfaches
-        davon. Das ist die mittlere Zeile der Wartezeit-Tabelle, und dort stand
-        bisher nichts (§2.8). Der Zeiger endet vor jeder Meldung: eine Frage
-        unter einem Wartezeiger sagt zweierlei.
+        Lesen und Zerlegen laufen in einem Arbeiter: eine große Platte kostet
+        mehrere Sekunden, und in dieser Zeit bleibt die Oberfläche bedienbar.
         """
+        if self._gcode_worker is not None:
+            self.announce(tr("Eine G-Code-Datei wird bereits gegenprüft."))
+            return
         name, _filter = QFileDialog.getOpenFileName(
             self, tr("G-Code gegenprüfen"), "", gcode_filter()
         )
         if not name:
             return
 
-        try:
-            with waiting():
-                text = Path(name).read_text(encoding="utf-8", errors="replace")
-                metrics = gcode.parse(text)
-                findings = gcode.findings_for(metrics)
-        except OSError as problem:
-            # Zwischen Auswählen und Lesen kann eine Datei verschwinden, und
-            # auf einem getrennten Netzlaufwerk oder ohne Leserecht gelingt
-            # der Zugriff gar nicht. Ungefangen lief die Ausnahme in Qts
-            # Ereignisverteiler: kein Dialog, keine Zeile, die Handlung tat
-            # nichts — genau der stille Ausfall, den Regel 17 ausschließt.
-            show_error(
-                UserError(
-                    title=tr("Diese G-Code-Datei ließ sich nicht lesen."),
-                    detail=tr(
-                        "Sie ist vielleicht verschoben worden, oder das Laufwerk "
-                        "ist gerade nicht erreichbar. Wählen Sie die Datei noch "
-                        "einmal aus."
-                    ),
-                    values={"path": Path(name).name, "reason": str(problem)},
-                ),
+        path = Path(name)
+        target = self.object_tree.selected()
+        worker = _GcodeWorker(path)
+        self._gcode_worker = worker
+        self._gcode_path = path
+        worker.done.connect(
+            weak_slot(
                 self,
+                MainWindow._gcode_checked,
+                worker,
+                target,
+                forward=True,
             )
+        )
+        worker.failed.connect(weak_slot(self, MainWindow._gcode_failed, worker, forward=True))
+        worker.stopped.connect(weak_slot(self, MainWindow._gcode_stopped, worker))
+        worker.crashed.connect(weak_slot(self, MainWindow._gcode_crashed, worker, forward=True))
+        worker.finished.connect(
+            weak_slot(self, lambda view, done: view._gcode_worker_done(done), worker)
+        )
+        text = tr("G-Code wird gegenprüft …")
+        self._set_progress_state(
+            "gcode",
+            active=True,
+            text=text,
+            minimum=0,
+            maximum=0,
+            value=0,
+            accessible_description=text,
+            cancel_enabled=True,
+        )
+        self._update_waiting_state()
+        self._leash.start(worker)
+
+    def _gcode_checked(
+        self,
+        worker: _GcodeWorker,
+        target: ObjectId | None,
+        metrics: Any,
+        findings: list[Finding],
+    ) -> None:
+        """Die fertige Gegenprobe in Bericht und Statusleiste übernehmen."""
+
+        if self._gcode_worker is not worker:
             return
+        if worker.cancel.is_cancelled:
+            self._gcode_stopped(worker)
+            return
+        self._end_gcode_check()
 
         # Auch hier: Die gelesene Datei ist jetzt die aktuelle — was ein
         # früherer Lauf über eine andere gesagt hat, wird ersetzt.
@@ -4968,13 +5118,77 @@ class MainWindow(QMainWindow):
         # wird geholt, nicht erzwungen: liegt sie noch nicht vor, rechnet der
         # Arbeiter sie und der Vergleich kommt nach — die gemessenen Zahlen
         # stehen längst im Bericht (§22.5).
-        object_id = self.object_tree.selected()
-        if object_id is not None and metrics.support_mm3 is not None:
+        if target is not None and metrics.support_mm3 is not None:
             measured = metrics.support_mm3
             self._slice_of(
-                object_id,
+                target,
                 lambda estimate, measured=measured: self._compare_support(estimate, measured),
             )
+
+    def _cancel_gcode(self) -> None:
+        """Die laufende Gegenprobe logisch abbrechen."""
+
+        if self._gcode_worker is not None:
+            self._gcode_worker.cancel.cancel()
+            self._set_progress_state("gcode", cancel_enabled=False)
+
+    def _gcode_failed(self, worker: _GcodeWorker, problem: OSError) -> None:
+        """Einen Dateifehler im Hauptthread mit einem nächsten Weg zeigen."""
+
+        if self._gcode_worker is not worker:
+            return
+        if worker.cancel.is_cancelled:
+            self._gcode_stopped(worker)
+            return
+        path = self._gcode_path
+        self._end_gcode_check()
+        show_error(
+            UserError(
+                title=tr("Diese G-Code-Datei ließ sich nicht lesen."),
+                detail=tr(
+                    "Sie ist vielleicht verschoben worden, oder das Laufwerk "
+                    "ist gerade nicht erreichbar. Wählen Sie die Datei noch "
+                    "einmal aus."
+                ),
+                values={"path": path.name if path is not None else "", "reason": str(problem)},
+            ),
+            self,
+        )
+
+    def _gcode_crashed(self, worker: _GcodeWorker, detail: str) -> None:
+        """Auch unerwartete Parserfehler beenden die Warteanzeige sicher."""
+
+        if self._gcode_worker is not worker:
+            return
+        if worker.cancel.is_cancelled:
+            self._gcode_stopped(worker)
+            return
+        self._end_gcode_check()
+        show_error(InternalError(detail=detail), self)
+
+    def _gcode_stopped(self, worker: _GcodeWorker) -> None:
+        """Den bestätigten Abbruch sichtbar machen."""
+
+        if self._gcode_worker is not worker:
+            return
+        self._end_gcode_check()
+        self.announce(tr("Die G-Code-Gegenprüfung wurde abgebrochen."))
+
+    def _end_gcode_check(self) -> None:
+        """Den sichtbaren Zustand der G-Code-Gegenprobe beenden."""
+
+        self._set_progress_state("gcode", active=False)
+        self._update_waiting_state()
+
+    def _gcode_worker_done(self, worker: Any) -> None:
+        """Den ausgelaufenen Arbeiter ohne Identitätsrennen loslassen."""
+
+        if self._gcode_worker is worker:
+            self._gcode_worker = None
+            self._gcode_path = None
+            self._set_progress_state("gcode", active=False)
+            self._update_waiting_state()
+        self._hold_until_done(worker)
 
     def _compare_support(self, estimate: SliceResult | None, measured: float) -> None:
         """Geschätztes gegen gemessenes Stützvolumen (§22.5, Regel 14).
@@ -5984,7 +6198,7 @@ class MainWindow(QMainWindow):
             return
         spoken = self.settings.language
         dialog.apply_to(self.settings)
-        save_settings(self.settings)
+        self._store_settings()
         self._apply_settings()
         self._apply_remote()
         if self.settings.language != spoken:
@@ -9435,6 +9649,9 @@ class MainWindow(QMainWindow):
         man damit täte, ist eine andere Frage als „wie weit sitzen die zwei
         Bohrungen in diesem Teil".
         """
+        object_ids = {object_id for object_id, _feature_id in chosen}
+        if len(object_ids) == 1:
+            self.viewport.select_features([feature_id for _object_id, feature_id in chosen])
         if len(chosen) != 2:
             return
         (first_object, first_id), (second_object, second_id) = chosen
@@ -9588,7 +9805,7 @@ class MainWindow(QMainWindow):
         self.object_tree.set_theme(theme)
         self._apply_card_style(theme)
         self.settings.theme = theme
-        save_settings(self.settings)
+        self._store_settings()
         _tick(self._theme_group, theme)
 
     def _apply_card_style(self, theme: str) -> None:
@@ -9607,7 +9824,7 @@ class MainWindow(QMainWindow):
     def action_navigation(self, scheme: str) -> None:
         self.viewport.set_navigation(scheme)  # type: ignore[arg-type]
         self.settings.navigation = scheme
-        save_settings(self.settings)
+        self._store_settings()
         _tick(self._navigation_group, scheme)
 
     def action_display_mode(self, mode: str) -> None:
@@ -9620,14 +9837,14 @@ class MainWindow(QMainWindow):
         """
         self.viewport.set_display_mode(mode)  # type: ignore[arg-type]
         self.settings.display_mode = mode
-        save_settings(self.settings)
+        self._store_settings()
         _tick(self._mode_group, mode)
 
     def action_shading(self, shading: str) -> None:
         """Flach oder weich — dieselbe Bauart wie eine Methode darüber."""
         self.viewport.set_shading(shading)  # type: ignore[arg-type]
         self.settings.shading = shading
-        save_settings(self.settings)
+        self._store_settings()
         _tick(self._shading_group, shading)
 
     def action_projection(self, projection: str) -> None:
@@ -9639,7 +9856,7 @@ class MainWindow(QMainWindow):
         """
         self.viewport.set_projection(projection)  # type: ignore[arg-type]
         self.settings.projection = projection
-        save_settings(self.settings)
+        self._store_settings()
         _tick(self._projection_group, projection)
 
     def run_operation(
@@ -9887,8 +10104,8 @@ class MainWindow(QMainWindow):
                 extra_label=str(group.choice) if group is not None else "",
                 surroundings=self._sketch_surroundings(),
                 images=self._image_names(),
-                pick_image=self._pick_image_source,
-                pick_source=self._pick_model_source,
+                pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
+                pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
                 slots=self._slots_of_selection(),
                 note=note,
             )
@@ -10047,7 +10264,11 @@ class MainWindow(QMainWindow):
             [OperationDraft(op=name, inputs=inputs_for(spec, objects, chosen), params=values)],
             origin=Origin(by="agent", model=REMOTE_ORIGIN),
         )
-        self.session.wait_for_idle(REMOTE_WAIT_MS)
+        if not self.session.wait_for_idle(REMOTE_WAIT_MS):
+            return tr(
+                "Die Änderung rechnet noch. Warten Sie einen Moment und lesen Sie "
+                "danach den Prüfbericht oder Steckbrief erneut."
+            )
         return self._remote_state(spec)
 
     def _remote_state(self, spec: OperationSpec) -> str:
@@ -10222,8 +10443,8 @@ class MainWindow(QMainWindow):
             extra=exact,
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
-            pick_image=self._pick_image_source,
-            pick_source=self._pick_model_source,
+            pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
+            pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
             slots=self._slots_of_selection(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
@@ -10418,21 +10639,16 @@ class MainWindow(QMainWindow):
             if source.kind == "image"
         }
 
-    def _pick_image_source(self) -> tuple[str, str] | None:
+    def _pick_image_source(self, complete: Callable[[tuple[str, str] | None], None]) -> None:
         """Holt ein Bild von der Platte ins Projekt — der Rückruf des
         Bildwählers im Operationsdialog."""
         name, _filter = QFileDialog.getOpenFileName(self, tr("Bild wählen"), "", image_filter())
         if not name:
-            return None
-        path = Path(name)
-        try:
-            source_id = self.session.import_image(path)
-        except AppError as error:
-            show_error(error, self)
-            return None
-        return source_id, path.name
+            complete(None)
+            return
+        self._start_source_read(Path(name), "image", complete)
 
-    def _pick_model_source(self) -> tuple[str, str] | None:
+    def _pick_model_source(self, complete: Callable[[tuple[str, str] | None], None]) -> None:
         """Holt eine Modelldatei von der Platte ins Projekt — der Rückruf des
         Quellenwählers im Operationsdialog.
 
@@ -10443,14 +10659,136 @@ class MainWindow(QMainWindow):
         """
         name, _filter = QFileDialog.getOpenFileName(self, tr("Datei wählen"), "", model_filter())
         if not name:
-            return None
-        path = Path(name)
+            complete(None)
+            return
+        self._start_source_read(Path(name), "model", complete)
+
+    def _start_source_read(
+        self,
+        path: Path,
+        kind: str,
+        complete: Callable[[tuple[str, str] | None], None],
+    ) -> None:
+        """Eine Dialogquelle lesen, ohne den Qt-Hauptthread anzuhalten."""
+
+        if self._source_worker is not None:
+            self.announce(tr("Eine Datei wird bereits als Quelle gelesen."))
+            complete(None)
+            return
         try:
-            source_id = self.session.embed_model(path)
+            activation.require(activation.CHANGE)
         except AppError as error:
             show_error(error, self)
-            return None
-        return source_id, path.name
+            complete(None)
+            return
+
+        worker = _SourceReadWorker(path, kind)
+        self._source_worker = worker
+        self._source_path = path
+        self._source_kind = kind
+        self._source_callback = complete
+        worker.done.connect(weak_slot(self, MainWindow._source_read, worker, forward=True))
+        worker.failed.connect(weak_slot(self, MainWindow._source_failed, worker, forward=True))
+        worker.stopped.connect(weak_slot(self, MainWindow._source_stopped, worker))
+        worker.crashed.connect(weak_slot(self, MainWindow._source_crashed, worker, forward=True))
+        worker.finished.connect(
+            weak_slot(self, lambda view, done: view._source_worker_done(done), worker)
+        )
+        text = tr("Datei wird gelesen …")
+        self._set_progress_state(
+            "source",
+            active=True,
+            text=text,
+            minimum=0,
+            maximum=0,
+            value=0,
+            accessible_description=text,
+            cancel_enabled=True,
+        )
+        self._update_waiting_state()
+        self._leash.start(worker)
+
+    def _source_read(self, worker: _SourceReadWorker, payload: bytes) -> None:
+        """Gelesene Bytes im Hauptthread als Projektquelle eintragen."""
+
+        if self._source_worker is not worker:
+            return
+        if worker.cancel.is_cancelled:
+            self._source_stopped(worker)
+            return
+        path = self._source_path
+        kind = self._source_kind
+        if path is None:
+            self._finish_source_read(None)
+            return
+        try:
+            source_id = (
+                self.session.import_image_payload(path.name, payload)
+                if kind == "image"
+                else self.session.embed_model_payload(path.name, payload)
+            )
+        except AppError as error:
+            self._source_failed(worker, error)
+            return
+        self._finish_source_read((source_id, path.name))
+
+    def _source_failed(self, worker: _SourceReadWorker, error: AppError) -> None:
+        """Dateifehler zeigen und den wartenden Feldknopf wieder freigeben."""
+
+        if self._source_worker is not worker:
+            return
+        if worker.cancel.is_cancelled:
+            self._source_stopped(worker)
+            return
+        self._finish_source_read(None)
+        show_error(error, self)
+
+    def _source_crashed(self, worker: _SourceReadWorker, detail: str) -> None:
+        """Unerwartete Lesefehler ebenfalls aus dem Wartezustand holen."""
+
+        if self._source_worker is not worker:
+            return
+        if worker.cancel.is_cancelled:
+            self._source_stopped(worker)
+            return
+        self._finish_source_read(None)
+        show_error(InternalError(detail=detail), self)
+
+    def _source_stopped(self, worker: _SourceReadWorker) -> None:
+        """Den bestätigten Abbruch ohne Dokumentänderung zurückmelden."""
+
+        if self._source_worker is not worker:
+            return
+        self._finish_source_read(None)
+        self.announce(tr("Das Lesen der Quelle wurde abgebrochen."))
+
+    def _finish_source_read(self, choice: tuple[str, str] | None) -> None:
+        """Fortschritt beenden und die nachgereichte Wahl zustellen."""
+
+        callback = self._source_callback
+        self._source_callback = None
+        self._set_progress_state("source", active=False)
+        self._update_waiting_state()
+        if callback is not None:
+            callback(choice)
+
+    def _cancel_source_read(self) -> None:
+        """Die laufende Quellenlesung logisch abbrechen."""
+
+        if self._source_worker is not None:
+            self._source_worker.cancel.cancel()
+            self._set_progress_state("source", cancel_enabled=False)
+
+    def _source_worker_done(self, worker: Any) -> None:
+        """Den ausgelaufenen Quellenleser identitätssicher loslassen."""
+
+        if self._source_worker is worker:
+            self._source_worker = None
+            self._source_path = None
+            self._source_kind = ""
+            self._set_progress_state("source", active=False)
+            self._update_waiting_state()
+        self._hold_until_done(worker)
 
     def _slots_of_selection(self) -> tuple[Any, ...]:
         """Die Materialslots des gewählten Körpers — für den Filamentwähler.
@@ -10564,6 +10902,11 @@ class MainWindow(QMainWindow):
         return dict(values_for_object(spec, entry.features))
 
     # --- session replies --------------------------------------------------------
+
+    def _viewport_failed(self, detail: str) -> None:
+        """Ein Ansichtsfehler lässt das alte Bild stehen und erklärt den Ausweg."""
+
+        show_error(InternalError(detail=detail), self)
 
     def _on_scene(self, result: EvaluationResult) -> None:
         """Eine fertige Auswertung ins Fenster bringen — **nicht verschachtelt**.
@@ -11923,7 +12266,7 @@ class MainWindow(QMainWindow):
         # ausdrücklich neu ein; eine Dokumentauswertung wäre dafür weder nötig
         # noch bei einem nichtleeren Projekt zulässig.
         self.filaments.refresh_catalogue()
-        save_settings(self.settings)
+        self._store_settings()
         # Wer im Dialog den Chat eingerichtet hat, soll ihn nicht erst nach
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
         self.session.set_agent_backend(None)
@@ -12188,7 +12531,7 @@ class MainWindow(QMainWindow):
         address = dialog.contact.text().strip()
         if address and address != self.settings.support_contact:
             self.settings.support_contact = address
-            save_settings(self.settings)
+            self._store_settings()
 
     # --- window -----------------------------------------------------------------
 
@@ -12261,7 +12604,7 @@ class MainWindow(QMainWindow):
         """Die rechte Spalte zurückholen und den Bericht nach vorn."""
         self.right.setVisible(True)
         self.settings.right_panel_visible = True
-        save_settings(self.settings)
+        self._store_settings()
         self._focus_report(force=True)
         self._mark_status_alerts()
 
@@ -12301,7 +12644,7 @@ class MainWindow(QMainWindow):
             # unsichtbare Tour — und das Beispiel wurde gerade absichtlich
             # geöffnet. Einblenden wie über F9, samt Einstellung.
             self.settings.right_panel_visible = True
-            save_settings(self.settings)
+            self._store_settings()
             self.right.setVisible(True)
         self.right.setCurrentWidget(self.tour)
 
@@ -12491,17 +12834,19 @@ class MainWindow(QMainWindow):
         if not target:
             self.announce(tr("Bitte zuerst ein Objekt auswählen — das Bild wird ein Relief."))
             return
-        try:
-            # Auch das Bild kommt von der Platte, und auch hier liest die
-            # Sitzung es am Stück (§2.8).
-            with waiting():
-                source_id = self.session.import_image(path)
-        except AppError as error:
-            show_error(error, self)
-            return
-        self.run_operation(REGISTRY.get("displace_image"), given={"source": source_id})
+        self._start_source_read(
+            path,
+            "image",
+            weak_slot(self, MainWindow._dropped_image_ready, forward=True),
+        )
 
-    def wait_for_workers(self, timeout_ms: int = 2000) -> None:
+    def _dropped_image_ready(self, choice: tuple[str, str] | None) -> None:
+        """Nach dem Lesen den Reliefdialog mit der neuen Quelle öffnen."""
+
+        if choice is not None:
+            self.run_operation(REGISTRY.get("displace_image"), given={"source": choice[0]})
+
+    def wait_for_workers(self, timeout_ms: int = 2000) -> bool:
         """Jeden Arbeiter dieses Fensters auslaufen lassen.
 
         Ergebnisse, die niemand mehr sehen wird — aber **ein Thread, der sein
@@ -12515,11 +12860,14 @@ class MainWindow(QMainWindow):
         da war, die zu schreiben.
         """
         self.session.cancel()
-        self.session.wait_for_idle(timeout_ms)
+        session_idle = self.session.wait_for_idle(timeout_ms)
         # Die Analysekarte hat einen eigenen Schalter — ohne ihn läuft sie
         # ihre Sekunden zu Ende, während das Fenster schon zugeht.
         self._cancel_map_worker()
-        for worker in (
+        self._cancel_download()
+        self._cancel_source_read()
+        self._cancel_gcode()
+        workers = (
             self._map_worker,
             self._slice_worker,
             self._update_worker,
@@ -12532,12 +12880,32 @@ class MainWindow(QMainWindow):
             # überleben. Genau der Absturz, gegen den diese Liste geschrieben
             # wurde.
             self._download_worker,
+            self._source_worker,
+            self._gcode_worker,
             self._export_worker,
             self._part_file_worker,
             *self._leash.pending(),
-        ):
-            if worker is not None and worker.isRunning():
-                worker.wait(timeout_ms)
+        )
+        deadline = time.monotonic() + max(0, timeout_ms) / 1000.0
+        unique = {id(worker): worker for worker in workers if worker is not None}
+        for worker in unique.values():
+            if worker.isRunning():
+                remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                worker.wait(remaining)
+        remaining = max(0, int((deadline - time.monotonic()) * 1000))
+        viewport_idle = self.viewport.wait_for_workers(remaining)
+        return (
+            bool(session_idle)
+            and viewport_idle
+            and not any(worker.isRunning() for worker in unique.values())
+        )
+
+    def _retry_close(self) -> None:
+        """Nach einem angeforderten Schließen ohne Blockade erneut prüfen."""
+
+        if self._close_requested and self.wait_for_workers(0):
+            self._close_retry.stop()
+            self.close()
 
     def release(self, timeout_ms: int = 2000) -> None:
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält: seine
@@ -12629,10 +12997,23 @@ class MainWindow(QMainWindow):
         # Der Menühinweis versprach das seit jeher („Ungesichertes wird vorher
         # erfragt"), gefragt wurde nie: das Fenster schrieb eine automatische
         # Sicherung und ging zu. Wer die nicht kennt, hat seine Arbeit verloren.
-        if not self._may_discard():
+        if not getattr(self, "_close_requested", False) and not self._may_discard():
             event.ignore()
             return
-        self.wait_for_workers()
+        self._close_requested = True
+        # Ab hier ist das Schließen entschieden. Solange noch ein Arbeiter
+        # ausläuft, dürfte eine neue Eingabe den bereits geprüften
+        # Dokumentstand verändern und ohne zweite Verwerfentscheidung
+        # verschwinden.
+        self.setEnabled(False)
+        if self.wait_for_workers(0) is False:
+            self.announce(
+                tr("Solidon beendet die laufende Aufgabe und schließt danach das Fenster.")
+            )
+            self._close_retry.start()
+            event.ignore()
+            return
+        self._close_retry.stop()
         if self._remote is not None:
             self._remote.stop()
             self._remote = None
@@ -12647,7 +13028,7 @@ class MainWindow(QMainWindow):
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         self.settings.circle_measure = circle_measure()
-        save_settings(self.settings)
+        self._store_settings()
         self._usage.stop()
         # Erst hier steht fest, dass das echte Anwendungsfenster wirklich
         # endet. Der VTK-Plotter braucht seinen noch lebenden Qt-OpenGL-Kontext
@@ -12658,6 +13039,18 @@ class MainWindow(QMainWindow):
         # lebt.
         self.viewport.release_plotter()
         event.accept()
+
+    def _store_settings(self) -> bool:
+        """Oberflächeneinstellungen schreiben und einen Fehler sichtbar machen."""
+        if save_settings(self.settings) is not None:
+            return True
+        self.announce(
+            tr(
+                "Die Einstellungen ließen sich nicht speichern — prüfen Sie den freien "
+                "Speicherplatz und die Schreibrechte."
+            )
+        )
+        return False
 
 
 def _menu_entries(menu: Any) -> Iterator[Any]:

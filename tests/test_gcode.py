@@ -455,6 +455,7 @@ G1 X87 E20 F1200
 ;LAYER_COUNT:2
 ;LAYER:0
 G1 Z0.2
+G0 X120 Y120
 G1 X120 Y120 E0.5
 G1 X136 Y136 E0.5
 """
@@ -498,6 +499,100 @@ def test_a_purge_without_movement_is_never_a_path() -> None:
     stehend = "G90\nG1 X50 Y-9 F9000\nG1 E12 F120\n"
 
     assert gcode.printed_extent(stehend) is None
+
+
+def test_a_moving_purge_before_the_first_layer_is_not_a_model_print() -> None:
+    purge_only = "G90\nM83\nG1 X87 Y-1.2 E20\n;LAYER:0\nG0 X10 Y10 Z0.2\n"
+
+    assert not gcode.extrudes(purge_only)
+    assert gcode.printed_extent(purge_only) is None
+
+
+def test_the_first_printed_segment_includes_its_start() -> None:
+    text = "G90\nM83\n;LAYER:0\nG0 X-5 Y0 Z0.2\nG1 X5 Y0 E1\n"
+
+    box = gcode.printed_extent(text)
+
+    assert box is not None
+    assert box.minimum[0] == pytest.approx(-5.0)
+    assert box.maximum[0] == pytest.approx(5.0)
+
+
+def test_an_absolute_retraction_does_not_enlarge_the_printed_extent() -> None:
+    text = "G90\nM82\nG92 E0\n;LAYER:0\nG0 X0 Y10 Z0.2\nG1 X10 Y10 E10\nG1 X300 Y10 E9\n"
+
+    box = gcode.printed_extent(text)
+
+    assert box is not None
+    assert box.maximum[0] == pytest.approx(10.0)
+
+
+def test_a_full_circle_arc_counts_as_extrusion_with_its_whole_extent() -> None:
+    text = "G90\nM83\n;LAYER:0\nG0 X10 Y0 Z0.2\nG2 X10 Y0 I-10 J0 E1\n"
+
+    box = gcode.printed_extent(text)
+    metrics = gcode.parse(text)
+
+    assert gcode.extrudes(text)
+    assert metrics.filament_mm == pytest.approx(1.0)
+    assert box is not None
+    assert box.minimum[:2] == pytest.approx((-10.0, -10.0))
+    assert box.maximum[:2] == pytest.approx((10.0, 10.0))
+
+
+def test_the_arc_centre_mode_does_not_change_the_axis_mode() -> None:
+    """G91.1 steuert I/J, nicht die Koordinaten von X/Y/Z."""
+    text = "G90\nM83\n;LAYER:0\nG0 X10 Y0 Z0.2\nG91.1\nG1 X20 Y0 E1\n"
+
+    box = gcode.printed_extent(text)
+
+    assert box is not None
+    assert box.minimum[0] == pytest.approx(10.0)
+    assert box.maximum[0] == pytest.approx(20.0)
+
+
+def test_absolute_arc_centres_are_measured_in_their_own_mode() -> None:
+    """G90.1 macht I/J absolut, während X/Y durch G90 absolut bleiben."""
+    text = "G90\nM83\n;LAYER:0\nG0 X10 Y0 Z0.2\nG90.1\nG3 X20 Y10 I10 J10 E1\n"
+
+    box = gcode.printed_extent(text)
+
+    assert box is not None
+    assert box.minimum[:2] == pytest.approx((10.0, 0.0))
+    assert box.maximum[:2] == pytest.approx((20.0, 10.0))
+
+
+def test_streaming_keeps_the_metric_pattern_priority() -> None:
+    """Die frühere Zeile schlägt kein höher priorisiertes Format."""
+    analysis = gcode.analyze_lines(
+        iter(("; TIME:30\n", "; estimated printing time (normal mode) = 1h 2m 3s\n"))
+    )
+
+    assert analysis.metrics.print_seconds == pytest.approx(3723.0)
+
+
+def test_streaming_stops_between_two_lines_when_cancelled() -> None:
+    """Auch das Rücklesen einer großen Druckdatei bleibt jederzeit abbrechbar."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    signal = CancelSignal()
+    consumed = 0
+
+    def lines():
+        nonlocal consumed
+        consumed += 1
+        yield "G90\n"
+        signal.cancel()
+        consumed += 1
+        yield "G1 X1 Y1 E1\n"
+        consumed += 1
+        yield "G1 X2 Y2 E1\n"
+
+    with pytest.raises(OperationCancelled):
+        gcode.analyze_lines(lines(), cancelled=signal)
+
+    assert consumed == 2, "nach dem Abbruch darf keine weitere Zeile gelesen werden"
 
 
 def test_the_file_says_which_bed_it_printed_on() -> None:
