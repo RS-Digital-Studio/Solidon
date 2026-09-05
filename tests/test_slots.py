@@ -493,6 +493,41 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         assert triangle.dtype == np.int64
 
 
+def _trimesh_still_breaks_on_a_zero_length_edge() -> bool:
+    """Gibt ``closest_point`` für ein Dreieck ohne Fläche noch ``nan`` zurück?
+
+    Der Rückfall in :func:`app.core.geom.mesh.on_surface` und die zwei Tests
+    darunter hängen an dieser fremden Eigenschaft: trimesh rechnet
+    baryzentrisch und teilt dabei durch eine Kantenlänge, die null ist.
+    Repariert eine neue Fassung das, wird der Zweig nie mehr betreten — und
+    **beide Tests blieben grün, ohne noch etwas zu prüfen.** Genau davor warnt
+    `.claude/rules/tests.md`: Ein Verbotstest über eine leere Menge ist immer
+    grün, und man unterscheidet ihn nachher nicht mehr von einem tragenden.
+
+    Gemeldet wird es als Skip und nicht als Fehler. Rot wäre falsch: Eine
+    fremde Verbesserung ist kein Defekt, und ein Test, der sie rot macht,
+    schriebe den Fehler fest, den er beschreibt.
+
+    Gemessen mit trimesh 5.0.0 am 05.09.2026: ``[[nan nan nan]]``.
+    """
+    from trimesh.triangles import closest_point
+
+    twice = (40.0, 0.0, 0.0)
+    degenerate = np.asarray(((twice, twice, (40.005, 0.004, 0.0)),), dtype=float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        spot = closest_point(degenerate, np.asarray(((40.004, 0.004, 0.0),), dtype=float))
+    return not bool(np.isfinite(spot).all())
+
+
+#: Was der Lauf sagt, wenn der Auslöser verschwunden ist — an einer Stelle,
+#: damit beide Tests denselben Satz nennen.
+_NO_LONGER_BROKEN = (
+    "trimesh liefert für eine Nullkante jetzt einen endlichen Ort. Der Rückfall "
+    "in on_surface wird damit nie mehr betreten; vor seinem Ausbau an einem "
+    "echten Netz nachmessen (Elegoo_erster_Druck.3mf trägt 80 solche Dreiecke)."
+)
+
+
 def test_a_triangle_with_two_equal_corners_does_not_stop_the_search() -> None:
     """Ein Dreieck ohne Fläche brachte die ganze Suche zum Absturz.
 
@@ -520,6 +555,9 @@ def test_a_triangle_with_two_equal_corners_does_not_stop_the_search() -> None:
     Prüfbericht mit „Abweichung: nan mm" ist nicht besser als ein Absturz.
     """
     from app.core.geom.mesh import on_surface
+
+    if not _trimesh_still_breaks_on_a_zero_length_edge():
+        pytest.skip(_NO_LONGER_BROKEN)
 
     box = trimesh.creation.box((20.0, 20.0, 20.0))
     twice = [40.0, 0.0, 0.0]
@@ -550,6 +588,9 @@ def test_a_triangle_with_two_equal_corners_does_not_stop_the_search() -> None:
 def test_a_collapsed_triangle_projects_onto_its_remaining_segment() -> None:
     """Die Notlösung bleibt auch bei einer langen Restkante geometrisch exakt."""
     from app.core.geom.mesh import on_surface
+
+    if not _trimesh_still_breaks_on_a_zero_length_edge():
+        pytest.skip(_NO_LONGER_BROKEN)
 
     body = trimesh.Trimesh(
         vertices=((0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (20.0, 0.0, 0.0)),
