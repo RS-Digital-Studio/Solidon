@@ -65,9 +65,13 @@ mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.
 
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
 · `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
-`make_video.py` · `make_longform_video.py` (deutsche 3-Minuten+-Tutorials:
+`make_video.py` · `make_longform_video.py` (deutsche und englische 3-Minuten+-Tutorials:
 sichtbares leeres Projekt, echte Dialoge, höchstens einer zugleich,
-Katalogbausteine, Text statt Sprecher und selbst erzeugtes Musikbett) ·
+Katalogbausteine, Text statt Sprecher und selbst erzeugtes Musikbett;
+`--language en` wählt englische Oberfläche, Einblendungen aus
+`longform_video_en.json` und englische Projektmaße samt Formelverweisen.
+Die `.timeline.json` neben jedem MP4 enthält die tatsächlichen Einblendungszeiten
+für die YouTube-Kapitel) ·
 `make_showpiece.py` (das Schaustück der Website — ein
 Teil, das in einem Bild beantwortet, warum man das Programm haben will;
 gebaut über die Operations-API wie von einem Nutzer) ·

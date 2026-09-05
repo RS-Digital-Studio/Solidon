@@ -2,11 +2,12 @@
 
     .venv\\Scripts\\python.exe tools/make_longform_video.py
     .venv\\Scripts\\python.exe tools/make_longform_video.py montagehalter
+    .venv\\Scripts\\python.exe tools/make_longform_video.py --language en
 
 Die Filme beginnen in einem leeren Projekt und bauen ein wirklich
 ausgewertetes, druckbares Modell auf. Sie verwenden dieselben Dialoge,
 Operationen und Katalogeinträge wie die Anwendung. Gesprochen wird nicht:
-ruhige deutsche Einblendungen und ein vollständig selbst erzeugtes Musikbett
+ruhige deutsche oder englische Einblendungen und ein selbst erzeugtes Musikbett
 tragen den Ablauf.
 
 Anders als :mod:`tools.make_video` hält dieses Werkzeug nicht jede
@@ -19,14 +20,17 @@ jeder Schritt wird abgewartet und auf vollständige Auswertung geprüft.
 
 from __future__ import annotations
 
+import argparse
+import json
 import math
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -54,7 +58,7 @@ load_operations()
 from app.core.registry import REGISTRY  # noqa: E402
 from app.core.scene import OperationDraft  # noqa: E402
 from app.core.types import Parameter  # noqa: E402
-from app.i18n import install_catalog, set_language  # noqa: E402
+from app.i18n import get_language, install_catalog, set_language, tr  # noqa: E402
 from app.i18n.catalog import read_catalog  # noqa: E402
 from app.ui.app import install_qt_translations  # noqa: E402
 from app.ui.dialogs import ParameterDialog  # noqa: E402
@@ -70,6 +74,43 @@ from tools.make_showpiece import steps as housing_steps  # noqa: E402
 FRAME_SIZE: Final = (1920, 1080)
 MINIMUM_SECONDS: Final = 185.0
 OUTPUT_DIR: Final = ROOT / "marketing" / "video" / "longform"
+ENGLISH_PARAMETERS: Final = {
+    "plattenstaerke": "plate_thickness",
+    "lochabstand": "hole_spacing",
+    "breite": "width",
+    "tiefe": "depth",
+    "hoehe": "height",
+    "wand": "wall",
+    "rohr": "shaft_diameter",
+    "platte": "plate_thickness",
+}
+_captions: dict[str, str] = {}
+
+
+def _text(source: str, **values: object) -> str:
+    """Filmtexte aus dem eigenen Katalog, App-Begriffe aus der Anwendung übersetzen."""
+    translated = _captions.get(source, tr(source))
+    return translated.format(**values) if values else translated
+
+
+def _parameter_name(name: str) -> str:
+    """Benutzermaße im englischen Film samt ihren Ausdrücken englisch benennen."""
+    return ENGLISH_PARAMETERS.get(name, name) if get_language() == "en" else name
+
+
+def _localized_values(values: Mapping[str, Any]) -> dict[str, Any]:
+    """Nur Namen und Parameterverweise übersetzen; Geometriewerte bleiben erhalten."""
+    result = dict(values)
+    for key, value in result.items():
+        if isinstance(value, str) and value.startswith("="):
+            result[key] = re.sub(
+                r"@([A-Za-z_][A-Za-z_0-9]*)",
+                lambda match: "@" + _parameter_name(match.group(1)),
+                value,
+            )
+        elif key == "name" and isinstance(value, str):
+            result[key] = _text(value)
+    return result
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,6 +136,7 @@ class Recorder:
         self.folder = folder
         self.chapter = chapter
         self.slides: list[Slide] = []
+        self.events: list[dict[str, Any]] = []
         self._pointer: QPoint | None = None
         self._image_index = 0
         folder.mkdir(parents=True, exist_ok=True)
@@ -119,6 +161,14 @@ class Recorder:
         """Fenster, höchstens einen Dialog, Text und einen bewegten Zeiger aufnehmen."""
         if seconds <= 0.0:
             raise ValueError("Eine Folie braucht eine positive Dauer.")
+        self.events.append(
+            {
+                "start": self.seconds,
+                "duration": seconds,
+                "title": _text(title),
+                "detail": _text(detail),
+            }
+        )
         frame = self._capture_frame(
             title,
             detail,
@@ -227,6 +277,14 @@ class Recorder:
             return
         self.window.raise_()
         self.window.activateWindow()
+        self.events.append(
+            {
+                "start": self.seconds,
+                "duration": seconds,
+                "title": _text(title),
+                "detail": _text(detail),
+            }
+        )
         viewport.reset_camera()
         if zoom != 1.0:
             viewport.zoom(zoom)
@@ -340,6 +398,7 @@ class Recorder:
         bottom: bool = False,
     ) -> None:
         """Eine ruhige, telefonlesbare Einblendung über die Anwendung setzen."""
+        title, detail = _text(title), _text(detail)
         painter = QPainter(frame)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
@@ -373,7 +432,7 @@ class Recorder:
             painter.drawRoundedRect(QRectF(34, top, 12, 132), 6, 6)
             painter.setPen(QColor("#aeb8c8"))
             painter.setFont(QFont("Segoe UI", 15, QFont.Weight.DemiBold))
-            painter.drawText(QRectF(70, top + 13, 1170, 24), self.chapter.upper())
+            painter.drawText(QRectF(70, top + 13, 1170, 24), _text(self.chapter).upper())
             painter.setPen(QColor("#f7f9fb"))
             painter.setFont(QFont("Segoe UI", 27, QFont.Weight.DemiBold))
             painter.drawText(QRectF(70, top + 37, 1170, 42), title)
@@ -457,14 +516,14 @@ def _show_action_path(
     menu_bar = recorder.window.menuBar()
     root_point = menu_bar.mapToGlobal(menu_bar.actionGeometry(root_action).center())
     recorder.add(
-        f"Menü {root.title()} öffnen",
+        _text("Menü {title} öffnen", title=root.title()),
         detail,
         2.5,
         target=root_point,
         caption_bottom=True,
     )
     recorder.add(
-        f"Menü {root.title()} öffnen",
+        _text("Menü {title} öffnen", title=root.title()),
         detail,
         0.45,
         target=root_point,
@@ -566,13 +625,13 @@ def _draw_rectangle(recorder: Recorder, panel: Any, length: float, width: float)
 
     panel.canvas.measure_field.set_value_mm(length)
     recorder.add(
-        f"Breite exakt auf {length:g} mm setzen",
+        _text("Breite exakt auf {value:g} mm setzen", value=length),
         "Das Maßfeld steht direkt am Mauszeiger und speichert eine Bedingung.",
         2.8,
         target=panel.canvas.measure_field,
     )
     recorder.click(
-        f"{length:g} mm übernehmen",
+        _text("{value:g} mm übernehmen", value=length),
         "Tab wechselt danach zum zweiten Rechteckmaß.",
         target=panel.canvas.measure_field,
     )
@@ -581,13 +640,13 @@ def _draw_rectangle(recorder: Recorder, panel: Any, length: float, width: float)
 
     panel.canvas.second_measure_field.set_value_mm(width)
     recorder.add(
-        f"Höhe exakt auf {width:g} mm setzen",
+        _text("Höhe exakt auf {value:g} mm setzen", value=width),
         "Auch das zweite Maß bleibt als editierbare Skizzenbedingung erhalten.",
         2.8,
         target=panel.canvas.second_measure_field,
     )
     recorder.click(
-        f"{width:g} mm übernehmen",
+        _text("{value:g} mm übernehmen", value=width),
         "Damit wird der geschlossene Umriss fertiggestellt.",
         target=panel.canvas.second_measure_field,
     )
@@ -661,7 +720,8 @@ def _apply(
     bundle: bool = False,
 ) -> None:
     """Eine echte Transaktion anwenden und vollständig prüfen."""
-    session.apply(title, list(drafts), raise_on_error=True, bundle=bundle)
+    localized = [replace(draft, params=_localized_values(draft.params)) for draft in drafts]
+    session.apply(_text(title), localized, raise_on_error=True, bundle=bundle)
     _verify(session, title)
 
 
@@ -678,7 +738,7 @@ def _add_parameter(
     """Den Parameterdialog zeigen und dasselbe Maß in die Sitzung übernehmen."""
     recorder.add(
         "Parameterleiste → Parameter anlegen …",
-        f"Hier beginnt der echte Bedienweg für das Projektmaß {title}.",
+        _text("Hier beginnt der echte Bedienweg für das Projektmaß {title}.", title=_text(title)),
         2.8,
         target=recorder.window.parameters.add_button,
     )
@@ -688,20 +748,20 @@ def _add_parameter(
         target=recorder.window.parameters.add_button,
     )
     dialog = ParameterDialog(session.project.document.parameters, recorder.window)
-    dialog.name_field.setText(name)
+    dialog.name_field.setText(_parameter_name(name))
     dialog.value_field.setValue(value)
     dialog.minimum_field.setText(f"{minimum:g}")
     dialog.maximum_field.setText(f"{maximum:g}")
     action = _button(dialog)
     recorder.add(
-        f"Projektmaß: {title}",
-        f"{value:g} mm - mit sinnvollen Grenzen für spätere Varianten.",
+        _text("Projektmaß: {title}", title=_text(title)),
+        _text("{value:g} mm - mit sinnvollen Grenzen für spätere Varianten.", value=value),
         5.8,
         dialog=dialog,
         target=dialog.value_field,
     )
     recorder.click(
-        f"{title} anlegen",
+        _text("{title} anlegen", title=_text(title)),
         "Der Name kann in allen folgenden Operationen mit @ verwendet werden.",
         dialog=dialog,
         target=action,
@@ -709,10 +769,10 @@ def _add_parameter(
     dialog.close()
     dialog.deleteLater()
     parameter = Parameter(
-        name=name,
+        name=_parameter_name(name),
         value=value,
         unit="mm",
-        title=title,
+        title=_text(title),
         minimum=minimum,
         maximum=maximum,
     )
@@ -720,7 +780,7 @@ def _add_parameter(
         raise SystemExit(f"Parameter ließ sich nicht anlegen: {name}")
     _verify(session, f"Parameter {name}")
     recorder.add(
-        f"{title} steht im Projekt",
+        _text("{title} steht im Projekt", title=_text(title)),
         "Die Parameterleiste wird zur zentralen Stelle für Varianten.",
         4.2,
         target=recorder.window.parameters,
@@ -735,17 +795,17 @@ def _edit_parameter(
     title: str,
 ) -> None:
     """Einen vorhandenen Parameter direkt in seiner echten Seitenzeile ändern."""
-    field = recorder.window.parameters._editors.get(name)
+    field = recorder.window.parameters._editors.get(_parameter_name(name))
     if field is None:
         raise SystemExit(f"Parameterfeld ist in der Seitenleiste nicht sichtbar: {name}")
     recorder.add(
-        f"Parameterleiste → {title}",
-        f"Das sichtbare Wertefeld wird von Hand auf {value:g} mm geändert.",
+        _text("Parameterleiste → {title}", title=_text(title)),
+        _text("Das sichtbare Wertefeld wird von Hand auf {value:g} mm geändert.", value=value),
         4.2,
         target=field,
     )
     recorder.click(
-        f"{value:g} mm in das Feld eingeben",
+        _text("{value:g} mm in das Feld eingeben", value=value),
         "Nach der Eingabe rechnet Solidon alle abhängigen Schritte neu.",
         target=field,
     )
@@ -772,7 +832,7 @@ def _show_catalog(
     catalog = recorder.window._make_catalog()
     catalog.resize(1120, 760)
     if search:
-        catalog.search.setText(search)
+        catalog.search.setText(_text(search))
     catalog.show_file_result("", part_name=part_name)
     catalog.set_can_insert(True)
     catalog.set_feature_chosen(False)
@@ -818,7 +878,10 @@ def _show_operation(
         _show_action_path(
             recorder,
             action,
-            f"So wird „{REGISTRY.get(op_name).title}“ in der echten Anwendung aufgerufen.",
+            _text(
+                "So wird „{title}“ in der echten Anwendung aufgerufen.",
+                title=REGISTRY.get(op_name).title,
+            ),
         )
     spec = REGISTRY.get(op_name)
     if not spec.params.spec():
@@ -826,7 +889,7 @@ def _show_operation(
         # nachher zeigen ist hier die ehrliche Bedienfolge; einen erfundenen
         # Bestätigungsknopf darf der Film nicht ergänzen.
         recorder.add(title, detail, 6.0, target=recorder.window.viewport)
-        recorder.window.run_operation(spec, given=dict(values))
+        recorder.window.run_operation(spec, given=_localized_values(values))
         _verify(session, title)
         _fit(recorder.window, recorder.app)
         recorder.add(
@@ -836,7 +899,7 @@ def _show_operation(
             target=recorder.window.viewport,
         )
         return
-    recorder.window.run_operation(spec, given=dict(values))
+    recorder.window.run_operation(spec, given=_localized_values(values))
     video_base.settle(recorder.app, 20)
     dialog = recorder.window._op_dialog
     if dialog is None:
@@ -875,7 +938,7 @@ def _show_bundled_operation(
     first = drafts[0]
     if first.inputs:
         _select(recorder.window, first.inputs[0])
-    recorder.window.run_operation(REGISTRY.get(first.op), given=first.params)
+    recorder.window.run_operation(REGISTRY.get(first.op), given=_localized_values(first.params))
     video_base.settle(recorder.app, 20)
     dialog = recorder.window._op_dialog
     if dialog is None:
@@ -884,7 +947,9 @@ def _show_bundled_operation(
     recorder.add(dialog_title, dialog_detail, 6.2, dialog=dialog, target=target)
     recorder.click(
         title,
-        f"Alle {len(drafts)} gleichartigen Einsätze werden gemeinsam übernommen.",
+        _text(
+            "Alle {count} gleichartigen Einsätze werden gemeinsam übernommen.", count=len(drafts)
+        ),
         dialog=dialog,
         target=_button(dialog),
     )
@@ -901,7 +966,7 @@ def _begin_video(
 ) -> tuple[Session, MainWindow, Recorder]:
     """Ein leeres sichtbares Projekt für genau einen Film öffnen."""
     session = Session()
-    window = MainWindow(session, UiSettings())
+    window = MainWindow(session, UiSettings(language=get_language()))
     window.resize(*FRAME_SIZE)
     window.move(0, 0)
     window.show()
@@ -983,7 +1048,7 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
     )
     window.finish_sketch(
         keep=True,
-        given={"height": "=@plattenstaerke", "name": "Montagehalter"},
+        given=_localized_values({"height": "=@plattenstaerke", "name": "Montagehalter"}),
     )
     video_base.settle(app, 25)
     dialog = window._op_dialog
@@ -1023,14 +1088,16 @@ def story_mounting_bracket(app: QApplication, folder: Path) -> Recorder:
     )
     recorder.window.run_operation(
         REGISTRY.get("insert_screw_hole"),
-        given={
-            "size": "M4",
-            "depth": "=@plattenstaerke",
-            "countersink": True,
-            "x": "=-@lochabstand/2",
-            "y": 0.0,
-            "z": "=@plattenstaerke",
-        },
+        given=_localized_values(
+            {
+                "size": "M4",
+                "depth": "=@plattenstaerke",
+                "countersink": True,
+                "x": "=-@lochabstand/2",
+                "y": 0.0,
+                "z": "=@plattenstaerke",
+            }
+        ),
     )
     video_base.settle(app, 20)
     dialog = window._op_dialog
@@ -1288,7 +1355,9 @@ def story_housing(app: QApplication, folder: Path) -> Recorder:
     )
     heat_title, heat_drafts = steps[3]
     _select(window, "obj_1")
-    window.run_operation(REGISTRY.get("insert_heatset_m4"), given=heat_drafts[0].params)
+    window.run_operation(
+        REGISTRY.get("insert_heatset_m4"), given=_localized_values(heat_drafts[0].params)
+    )
     video_base.settle(app, 20)
     dialog = window._op_dialog
     if dialog is None:
@@ -1617,7 +1686,7 @@ def story_skadis_holder(app: QApplication, folder: Path) -> Recorder:
     )
     window.finish_sketch(
         keep=True,
-        given={"height": "=@platte", "name": "SKÅDIS-Besenhalter"},
+        given=_localized_values({"height": "=@platte", "name": "SKÅDIS-Besenhalter"}),
     )
     video_base.settle(app, 25)
     dialog = window._op_dialog
@@ -2068,6 +2137,9 @@ def _encode(recorder: Recorder, target: Path) -> None:
         ]
     )
     _verify_video(target)
+    target.with_suffix(".timeline.json").write_text(
+        json.dumps(recorder.events, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def _verify_video(path: Path) -> None:
@@ -2110,18 +2182,30 @@ def _verify_video(path: Path) -> None:
 
 def main() -> int:
     """Gewählte oder alle drei Hobby-Tutorials erzeugen."""
+    global _captions
     os.environ.pop("QT_QPA_PLATFORM", None)
-    wanted = sys.argv[1:] or list(STORIES)
-    unknown = [name for name in wanted if name not in STORIES]
-    if unknown:
-        raise SystemExit(f"Unbekannt: {', '.join(unknown)}. Möglich: {', '.join(STORIES)}")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--language", choices=("de", "en"), default="de")
+    parser.add_argument("stories", nargs="*", metavar="VIDEO")
+    args = parser.parse_args()
+    wanted = args.stories or list(STORIES)
+    for name in wanted:
+        if name not in STORIES:
+            parser.error(f"Unbekannt: {name}. Möglich: {', '.join(STORIES)}")
+    language = args.language
+    if language == "en":
+        _captions = json.loads(
+            Path(__file__).with_name("longform_video_en.json").read_text("utf-8")
+        )
+    else:
+        _captions = {}
 
     app = QApplication.instance() or QApplication([])
     assert isinstance(app, QApplication)
     video_base.require_screen(app)
-    install_catalog("de", read_catalog("de"))
-    set_language("de")
-    install_qt_translations(app, "de")
+    install_catalog(language, read_catalog(language))
+    set_language(language)
+    install_qt_translations(app, language)
     apply_theme(app, "dark")
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -2129,12 +2213,12 @@ def main() -> int:
         root = Path(temporary)
         for name in wanted:
             filename, label, story = STORIES[name]
-            print(f"\n=== {label} ===")
+            print(f"\n=== {_text(label)} ({language}) ===", flush=True)
             recorder = story(app, root / name)
-            target = OUTPUT_DIR / filename
-            print(f"Kodiere {recorder.seconds:.1f} Sekunden nach {target}")
+            target = OUTPUT_DIR / filename.replace("-de-", f"-{language}-")
+            print(f"Kodiere {recorder.seconds:.1f} Sekunden nach {target}", flush=True)
             _encode(recorder, target)
-            print(f"Geprüft: {target}")
+            print(f"Geprüft: {target}", flush=True)
 
     print(f"\nFertig: {OUTPUT_DIR}")
     return 0
