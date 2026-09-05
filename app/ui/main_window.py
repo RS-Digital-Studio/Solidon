@@ -3575,7 +3575,13 @@ class MainWindow(QMainWindow):
         # feuern, dieselbe Falle wie bei R und C oben.
         # `gesturing`, nicht nur `drawing`: auch die Formsitzung belegt
         # Strg+Z mit ihrem eigenen Zug-Rückgängig (P16.6).
-        self.undo_action.setEnabled(self.session.history.can_undo and not gesturing)
+        # **Und die verworfene Zeichnung zählt mit.** ``_remember_discarded``
+        # versprach Strg+Z, aber in einem frischen Projekt ist der Verlauf
+        # leer, und die Aktion blieb grau — der Rückweg war da und nicht zu
+        # erreichen (Gesamtreview 05.09.2026, UI-10).
+        self.undo_action.setEnabled(
+            (self.session.history.can_undo or self._discarded_sketch is not None) and not gesturing
+        )
         self.redo_action.setEnabled(self.session.history.can_redo and not gesturing)
         # Und die Darstellung. **Von den zwei Gründen dafür gilt seit dem
         # Schnitt (§30.1, P4) nur noch einer.** Der erste — „im Skizzenmodus
@@ -5616,15 +5622,16 @@ class MainWindow(QMainWindow):
         affected = self._part_usage(name)
         self._part_file_undo = ("remove", (name, installed.stored_sha256, affected))
         self._part_file_affected_step = affected[0] if affected else None
-        catalog.invalidate_preview(name)
-        catalog.refresh()
         text = self._part_usage_text(tr("Baustein hinzugefügt"), len(affected))
-        catalog.show_file_result(
-            text,
-            part_name=name,
-            can_undo=True,
-            can_show_affected_step=bool(affected),
-        )
+        if isValid(catalog):
+            catalog.invalidate_preview(name)
+            catalog.refresh()
+            catalog.show_file_result(
+                text,
+                part_name=name,
+                can_undo=True,
+                can_show_affected_step=bool(affected),
+            )
         self.statusBar().showMessage(text, 8000)
         _log.info("part file imported: %s", installed.sha256)
 
@@ -5646,6 +5653,10 @@ class MainWindow(QMainWindow):
     ) -> None:
         """Den Dateifehler mit lokalen, ausführbaren Handlungen verbinden."""
         handlers = self.error_handlers()
+        if not isValid(catalog):
+            # Ohne Katalog gibt es die zwei Auswege nicht mehr, die ihn brauchen.
+            show_error(problem, self, handlers)
+            return
         handlers["choose"] = lambda _error: self._adopt_part(catalog)
         if payload is not None:
             handlers["use_suggested_name"] = lambda error: self._use_suggested_part_name(
@@ -5744,7 +5755,8 @@ class MainWindow(QMainWindow):
         self._end_part_file_attempt()
         self._write_failure = None
         text = tr("Baustein weitergegeben. Die Datei kann lokal hinzugefügt werden.")
-        catalog.show_file_result(text, part_name=name)
+        if isValid(catalog):
+            catalog.show_file_result(text, part_name=name)
         self.statusBar().showMessage(text, 8000)
 
     def _remove_part(self, catalog: PartCatalog, name: str) -> None:
@@ -5789,9 +5801,12 @@ class MainWindow(QMainWindow):
         name = removed.recipe.name
         self._part_file_undo = ("restore", (removed.undo, affected))
         self._part_file_affected_step = affected[0] if affected else None
+        text = self._part_usage_text(tr("Baustein entfernt"), len(affected))
+        if not isValid(catalog):
+            self.statusBar().showMessage(text, 8000)
+            return
         catalog.invalidate_preview(name)
         catalog.refresh()
-        text = self._part_usage_text(tr("Baustein entfernt"), len(affected))
         catalog.show_file_result(
             text,
             can_undo=True,
@@ -5814,7 +5829,7 @@ class MainWindow(QMainWindow):
         handlers["retry"] = lambda _error: self._start_part_remove(
             catalog, name, expected_sha256, affected
         )
-        show_error(problem, catalog, handlers)
+        show_error(problem, self._catalog_or_self(catalog), handlers)
 
     def _start_part_restore(
         self,
@@ -5888,12 +5903,25 @@ class MainWindow(QMainWindow):
         token, affected = cast(tuple[Any, tuple[int, ...]], data)
         self._start_part_restore(catalog, token, affected)
 
+    def _catalog_or_self(self, catalog: PartCatalog) -> QWidget:
+        """Der Katalog, solange es ihn gibt — sonst das Fenster.
+
+        Import, Export und Entfernen laufen im Arbeiter, und der Katalog
+        bleibt währenddessen schließbar; ``_exec_catalog`` gibt ihn danach
+        frei. Kam das Ergebnis später, schrieb ``_part_export_done`` in ein
+        gelöschtes QLabel und riss mit einem RuntimeError (Gesamtreview
+        05.09.2026, UI-15). Die Meldung bekommt der Kunde trotzdem — am
+        Fenster, das noch steht.
+        """
+        return catalog if isValid(catalog) else self
+
     def _clear_part_file_result(self, catalog: PartCatalog) -> None:
         """Eine alte Ergebnisaktion vor der nächsten Bibliothekshandlung einziehen."""
 
         self._part_file_undo = None
         self._part_file_affected_step = None
-        catalog.show_file_result("")
+        if isValid(catalog):
+            catalog.show_file_result("")
 
     def _part_usage(self, name: str) -> tuple[int, ...]:
         """Schritte des offenen Dokuments, die den Bibliotheksbaustein verwenden."""
@@ -5983,7 +6011,7 @@ class MainWindow(QMainWindow):
     def _part_file_crashed(self, catalog: PartCatalog, detail: str) -> None:
         """Auch ein unerwarteter Workerfehler lässt keinen Wartezustand zurück."""
         self._end_part_file_attempt()
-        show_error(InternalError(detail=detail), catalog)
+        show_error(InternalError(detail=detail), self._catalog_or_self(catalog))
 
     def _part_file_worker_done(self, worker: Any) -> None:
         if self._part_file_worker is worker:
@@ -7747,6 +7775,7 @@ class MainWindow(QMainWindow):
             steps=len(self.session.history.operations),
         )
         self.announce(tr("Zeichnung verworfen — Strg+Z holt sie zurück."))
+        self._update_actions()
 
     def restore_discarded_sketch(self) -> bool:
         """Die verworfene Zeichnung zurückholen — der erste Griff von Strg+Z.

@@ -13215,3 +13215,73 @@ def test_a_remote_undo_takes_the_transaction_it_was_asked_for(window: MainWindow
     answer = window.run_remote(UNDO_TRANSACTION, {"transaction": known[-1]})
     assert known[-1] in answer
     assert [entry.id for entry in session.project.document.transactions] == known[:1]
+
+
+def test_a_failed_save_keeps_the_last_recovery(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-06: ``save_project`` räumte die Sicherung,
+    bevor ``save`` zurückgekommen war. Ein volles oder gesperrtes Laufwerk
+    ließ die Projektdatei auf dem alten Stand, die Sicherung war weg, und die
+    neuen Änderungen lebten nur noch im Speicher."""
+    from app.core.errors import AppError, FileWriteError
+    from app.core.scene.project import find_recovery, write_autosave
+    from app.ui import session as session_module
+
+    named = tmp_path / "projekt.p3d"
+    window.session.save_project(named)
+    write_autosave(window.session.project, named)
+    window.session._dirty = True
+
+    def refuse(_project, target):
+        raise FileWriteError(target=target.name, detail="das Laufwerk ist voll")
+
+    monkeypatch.setattr(session_module, "save", refuse)
+    with pytest.raises(AppError):
+        window.session.save_project(named)
+
+    assert find_recovery(named) is not None, "die letzte Sicherung bleibt, bis die Datei steht"
+    assert window.session._dirty, "und das Dokument gilt weiter als geändert"
+
+
+def test_the_parameter_dialog_refuses_bounds_that_are_not_finite(qt_app: QApplication) -> None:
+    """Gesamtreview 05.09.2026, UI-26: ``float("inf")`` und ``float("nan")``
+    gingen als Grenze durch; der Parameter kam ins Dokument, und Speichern
+    scheiterte ohne Meldung."""
+    from app.ui.dialogs import ParameterDialog
+
+    dialog = ParameterDialog({})
+    dialog.name_field.setText("hoehe")
+    assert dialog.validation_problem() is None
+
+    for text in ("inf", "-inf", "nan", "NaN"):
+        dialog.maximum_field.setText(text)
+        assert dialog.validation_problem() is not None, f"{text!r} ist keine Grenze"
+    dialog.maximum_field.setText("120")
+    assert dialog.validation_problem() is None
+
+
+def test_a_discarded_sketch_makes_undo_available_even_in_an_empty_project(
+    window: MainWindow,
+) -> None:
+    """Gesamtreview 05.09.2026, UI-10: Die Statuszeile versprach Strg+Z, aber
+    die Aktion hing allein an ``history.can_undo`` — in einem frischen Projekt
+    blieb sie grau, und ihr Auslösen holte nichts zurück."""
+    from app.core.sketch import shapes
+
+    assert not window.session.history.can_undo, "der Verlauf ist leer — das ist der Fall"
+    window.start_sketch("sketch_extrude")
+    panel = window._sketch_panel
+    assert panel is not None
+    panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+    drawn = panel.sketch_text()
+    assert drawn
+
+    window.finish_sketch(keep=False)
+
+    assert window._discarded_sketch is not None
+    assert window.undo_action.isEnabled(), "der versprochene Rückweg ist bedienbar"
+    window.action_undo()
+    assert window._sketch_panel is not None, "Strg+Z holt die Zeichnung zurück"
+    assert window._sketch_panel.sketch_text() == drawn
+    window.finish_sketch(keep=False)

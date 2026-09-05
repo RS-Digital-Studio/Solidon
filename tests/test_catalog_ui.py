@@ -1519,3 +1519,53 @@ def test_every_locked_button_says_its_reason_to_a_screen_reader(qt_app: QApplica
     finally:
         catalog.release()
         catalog.deleteLater()
+
+
+def test_a_file_result_after_the_catalog_closed_still_reaches_the_window(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-15: Export und Import laufen im Arbeiter,
+    der Katalog bleibt schließbar, und ``_exec_catalog`` gibt ihn danach
+    frei. Kam das Ergebnis später, schrieb der Rückruf in ein gelöschtes
+    QLabel und riss mit einem RuntimeError. Die Meldung gehört ans Fenster,
+    das noch steht."""
+    from PySide6.QtCore import QEvent
+    from shiboken6 import isValid
+
+    from app.core.errors import InternalError
+    from app.ui import main_window as _mw
+    from app.ui.catalog import PartCatalog
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    catalogs: list[PartCatalog] = []
+    shown: list[object] = []
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    monkeypatch.setattr(
+        _mw, "show_error", lambda _problem, parent=None, handlers=None: shown.append(parent)
+    )
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        qt_app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        assert not isValid(catalog), "der Katalog ist nach dem Schließen wirklich weg"
+
+        window._part_export_done(catalog, "irgendein_baustein", tmp_path / "x.solidon-part")
+        assert "weitergegeben" in window.statusBar().currentMessage()
+
+        window._part_file_crashed(catalog, "Probe")
+        assert shown and shown[-1] is window, "der Fehler steht am Fenster, nicht am toten Katalog"
+
+        window._clear_part_file_result(catalog)
+        window._part_import_failed(catalog, None, InternalError(detail="Probe"))
+        assert shown[-1] is window
+    finally:
+        window.close()
