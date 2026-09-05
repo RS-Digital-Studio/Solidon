@@ -8,13 +8,18 @@ im September MESZ / GMT+0200. Je Thema erscheinen Deutsch und Englisch gleichzei
 
 | Thema | Deutsch | Englisch | Termin / Status |
 |---|---|---|---|
-| Montagehalter | [9ortwswAjYo](https://youtu.be/9ortwswAjYo) | [1rBeEHF1-cE](https://youtu.be/1rBeEHF1-cE) | 05.09.2026, 12:00 — geplant |
-| Elektronikgehäuse | [cag_at7SCDo](https://youtu.be/cag_at7SCDo) | [P9vMMX-cbc8](https://youtu.be/P9vMMX-cbc8) | 12.09.2026, 12:00 — geplant |
-| SKÅDIS-Besenhalter | [Q1lK1bnC4FU](https://youtu.be/Q1lK1bnC4FU) | [hCjc5MlRn8s](https://youtu.be/hCjc5MlRn8s) | Privat; 19.09.2026, 12:00 nur vorgeschlagen, NICHT gespeichert |
+| Montagehalter | [9ortwswAjYo](https://youtu.be/9ortwswAjYo) | [1rBeEHF1-cE](https://youtu.be/1rBeEHF1-cE) | 05.09.2026 — beide gemeinsam sofort veröffentlicht, öffentlich geprüft |
+| Elektronikgehäuse | [cag_at7SCDo](https://youtu.be/cag_at7SCDo) | [P9vMMX-cbc8](https://youtu.be/P9vMMX-cbc8) | 07.09.2026, 12:00 — geplant |
+| SKÅDIS-Besenhalter | [Q1lK1bnC4FU](https://youtu.be/Q1lK1bnC4FU) | [hCjc5MlRn8s](https://youtu.be/hCjc5MlRn8s) | Privat; 09.09.2026, 12:00 als nächster freier Platz nach Korrektur vorgeschlagen, NICHT gespeichert |
 
-Der erste Termin liegt noch in der Zukunft: „geplant“ bedeutet hier nicht bereits
-öffentlich. Keine Premiere aktiviert, keine Änderung an den Videodateien oder
-hochgeladenen Titelbildern.
+Robert hat den Takt präzisiert: zuerst ein Sprachpaar sofort, danach Langvideos
+um 12:00 an den Tagen ohne Shorts — kein Wochenabstand. Die Montagehalter wurden
+in einer gemeinsamen Sichtbarkeitsänderung veröffentlicht; der bisherige Termin
+heute um 12:00 ist damit ersetzt, keine zweite Veröffentlichung. Beide
+Gehäuse-Termine wurden nach dem Speichern erneut auf 07.09., 12:00 und GMT+0200
+geprüft. Keine Premiere aktiviert, keine Änderung an den Videodateien oder
+hochgeladenen Titelbildern. Der Platz am 09.09. ist noch keine Freigabe für das
+fehlerhafte Besenhalter-Paar.
 
 ### Gespeicherte Optimierung
 
@@ -62,8 +67,10 @@ YouTube-Studio-Player weiterhin „1 error“ und der Hinweis auf ein nicht
 verbundenes Bauteil gesehen. Derselbe Befund liegt im lokalen Film vor.
 Die Antwort „die neusten versionen sind oben“ hat diesen sichtbaren Befund nicht
 aufgelöst. Robert wurde nochmals gefragt, ob das Paar bis zur Korrektur privat
-bleiben oder unverändert für den 19.09. eingeplant werden soll. Noch keine
-Antwort auf diese zweite Rückfrage; deshalb keine Freigabe und kein Abspann.
+bleiben oder unverändert eingeplant werden soll. Noch keine Antwort auf diese
+zweite Rückfrage; deshalb keine Freigabe und kein Abspann. Der neue Kalender
+ersetzt den damaligen Vorschlag 19.09. durch den freien Platz am 09.09., 12:00,
+sofern bis dahin korrigierte Fassungen vorliegen und geprüft sind.
 
 ## Shorts
 
