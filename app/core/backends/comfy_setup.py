@@ -70,6 +70,8 @@ WEIGHTS_REVISION: Final = "2c1c516d22d58db486a058d98d31bb6177344e06"
 #: dafür und keine zweite Version des Ablaufs.
 BACKGROUND_REPO: Final = "Comfy-Org/BiRefNet"
 BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
+BACKGROUND_REVISION: Final = "5a1bd8ae750548f8cd42e3c8afa854fd3eba0fb1"
+BACKGROUND_SHA256: Final = "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154"
 
 #: Das Bildmodell für den **Textweg** — und der einzige Posten dieser Liste,
 #: den Solidon **nicht** selbst holt.
@@ -147,17 +149,27 @@ NEEDED_GIGABYTES: Final = 9.0
 #: ``tests/test_licences.py`` hält die beiden Listen zusammen. Hier stand
 #: einmal „alle Lizenzen sind geprüft" — genau so eine Behauptung war der
 #: GPL-Knoten ``RMBG``: wahr gemeint, von keinem Test gehalten (Regel 22).
-PACKAGES: Final = (
-    "jaxtyping",
-    "typeguard",
-    "fast-simplification",
-    "trimesh",
-    "diffusers",
-    "scikit-image",
-    "lazy_loader",
-    "omegaconf",
-    "antlr4-python3-runtime==4.9.3",
+ANTLR_PACKAGE: Final = "antlr4-python3-runtime==4.9.3"
+ANTLR_SOURCE: Final = (
+    "antlr4-python3-runtime @ "
+    "https://files.pythonhosted.org/packages/3e/38/"
+    "7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/"
+    "antlr4-python3-runtime-4.9.3.tar.gz"
+    "#sha256=f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"
 )
+BINARY_PACKAGES: Final = (
+    "jaxtyping==0.3.7; python_version < '3.11'",
+    "jaxtyping==0.3.11; python_version >= '3.11'",
+    "typeguard==4.6.0",
+    "fast-simplification==0.2.0",
+    "trimesh==5.0.0",
+    "diffusers==0.40.0",
+    "scikit-image==0.25.2; python_version < '3.11'",
+    "scikit-image==0.26.0; python_version >= '3.11'",
+    "lazy_loader==0.5",
+    "omegaconf==2.3.1",
+)
+PACKAGES: Final = (*BINARY_PACKAGES, ANTLR_PACKAGE)
 
 
 #: Wo ComfyUI erfahrungsgemäß liegt, wenn niemand etwas anderes sagt.
@@ -456,6 +468,8 @@ def _run(
     mit Zeitscheibe: Alle :data:`WATCH_SECONDS` wird gefragt, ob abgebrochen
     wurde und ob die Frist steht — mit Ausgabe oder ohne.
     """
+    if cancelled is not None and cancelled():
+        raise Cancelled(str(what))
     progress(what)
     _log.info("comfy setup: %s", command[0])
     # **Nur der Schluss wird behalten**, denn nur er wird gebraucht: Die
@@ -743,11 +757,42 @@ def install_packages(
 
     ``--no-deps`` ist hier kein Geiz, sondern Notwehr: Die Anforderungsliste
     von TripoSG nennt ``numpy==1.22.3``, und wer das durchlässt, hat danach ein
-    ComfyUI, das nicht mehr startet.
+    ComfyUI, das nicht mehr startet. Für die binären Pakete lässt
+    ``--only-binary=:all:`` ausschließlich Wheels zu. ComfyUI unterstützt
+    auch Python 3.10; zwei Pakete tragen deshalb je eine festgeschriebene
+    Fassung für 3.10 und eine für neuere Interpreter. ANTLR 4.9.3 gibt es nur
+    als Quellpaket; dessen unveränderliche PyPI-Adresse und SHA-256 sind
+    deshalb festgeschrieben, und die isolierte Bauumgebung darf keine weiteren
+    Pakete nachladen.
     """
     _run(
-        [str(python), "-s", "-m", "pip", "install", "--no-deps", *PACKAGES],
+        [
+            str(python),
+            "-s",
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--only-binary=:all:",
+            *BINARY_PACKAGES,
+        ],
         _("Pakete für TripoSG nachziehen"),
+        progress,
+        cancelled,
+    )
+    _run(
+        [
+            str(python),
+            "-s",
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-build-isolation",
+            "--require-hashes",
+            ANTLR_SOURCE,
+        ],
+        _("ANTLR-Laufzeit für TripoSG nachziehen"),
         progress,
         cancelled,
     )
@@ -868,6 +913,8 @@ def fetch_background(
             BACKGROUND_REPO,
             BACKGROUND_FILE,
             str(scratch_dir("dl-bg")),
+            BACKGROUND_REVISION,
+            BACKGROUND_SHA256,
         ],
         _("Modell fürs Freistellen laden — 445 MB"),
         progress,
@@ -879,16 +926,36 @@ def fetch_background(
 #: für den kurzen Ordner wie bei :data:`_FETCH_WEIGHTS`, und dieselbe
 #: Wiederholung: Die Leitung entscheidet, nicht die Dateigröße.
 _FETCH_FILE = """
-import shutil, sys
+import hashlib, shutil, sys
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 target, repo, name = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 scratch = Path(sys.argv[4])
+revision, expected = sys.argv[5], sys.argv[6]
 scratch.mkdir(parents=True, exist_ok=True)
-got = hf_hub_download(repo, name, local_dir=str(scratch))
+got = Path(hf_hub_download(repo, name, revision=revision, local_dir=str(scratch)))
+digest = hashlib.sha256()
+with got.open("rb") as stream:
+    while block := stream.read(1024 * 1024):
+        digest.update(block)
+actual = digest.hexdigest()
+if actual != expected:
+    got.unlink(missing_ok=True)
+    raise RuntimeError(
+        f"Die Prüfsumme der geladenen Gewichte ist {actual} statt {expected}. "
+        "Starten Sie die Einrichtung erneut."
+    )
 target.mkdir(parents=True, exist_ok=True)
-shutil.move(got, str(target / Path(name).name))
+destination = target / Path(name).name
+staged = destination.with_name(destination.name + ".part")
+staged.unlink(missing_ok=True)
+try:
+    shutil.move(str(got), str(staged))
+    staged.replace(destination)
+except BaseException:
+    staged.unlink(missing_ok=True)
+    raise
 shutil.rmtree(scratch, ignore_errors=True)
 """
 

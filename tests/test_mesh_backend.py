@@ -7,13 +7,16 @@ samt dem Nachfragen und den Platzhaltern im Workflow.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import shutil
 import sys
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from packaging.requirements import Requirement
 
 from app.core.backends.mesh import (
     WORKFLOW_DIR,
@@ -749,13 +752,14 @@ def test_a_step_can_be_cancelled_while_it_runs(
 
     monkeypatch.setattr(comfy_setup.subprocess, "Popen", lambda *a, **k: Endlos())
     gesehen: list[str] = []
+    abfragen = iter((False, True))
 
     with pytest.raises(comfy_setup.Cancelled):
         comfy_setup._run(
             ["git", "clone"],
             "TripoSG holen",
             lambda step: gesehen.append(str(step)),
-            cancelled=lambda: True,
+            cancelled=lambda: next(abfragen, True),
         )
 
     assert getoetet == [True], "der Kindprozess wird beendet, nicht abgewartet"
@@ -864,10 +868,79 @@ def test_the_package_list_carries_what_a_fresh_comfyui_lacks() -> None:
     """
     from app.core.backends import comfy_setup
 
-    for name in ("trimesh", "diffusers", "scikit-image", "lazy_loader", "omegaconf"):
-        assert name in comfy_setup.PACKAGES, name
-    antlr = [p for p in comfy_setup.PACKAGES if p.startswith("antlr4")]
-    assert antlr == ["antlr4-python3-runtime==4.9.3"], "die Version gehört dazu"
+    assert comfy_setup.PACKAGES == (
+        "jaxtyping==0.3.7; python_version < '3.11'",
+        "jaxtyping==0.3.11; python_version >= '3.11'",
+        "typeguard==4.6.0",
+        "fast-simplification==0.2.0",
+        "trimesh==5.0.0",
+        "diffusers==0.40.0",
+        "scikit-image==0.25.2; python_version < '3.11'",
+        "scikit-image==0.26.0; python_version >= '3.11'",
+        "lazy_loader==0.5",
+        "omegaconf==2.3.1",
+        "antlr4-python3-runtime==4.9.3",
+    )
+
+
+@pytest.mark.parametrize(
+    ("python_version", "jaxtyping", "scikit_image"),
+    [
+        ("3.10", "==0.3.7", "==0.25.2"),
+        ("3.11", "==0.3.11", "==0.26.0"),
+        ("3.14", "==0.3.11", "==0.26.0"),
+    ],
+)
+def test_fixed_packages_cover_every_supported_comfy_python(
+    python_version: str,
+    jaxtyping: str,
+    scikit_image: str,
+) -> None:
+    """ComfyUI unterstützt 3.10; neuere Wheels dürfen diesen Weg nicht sperren."""
+    from app.core.backends import comfy_setup
+
+    selected: dict[str, list[str]] = {}
+    for raw in comfy_setup.BINARY_PACKAGES:
+        requirement = Requirement(raw)
+        if requirement.marker is None or requirement.marker.evaluate(
+            {"python_version": python_version}
+        ):
+            selected.setdefault(requirement.name, []).append(str(requirement.specifier))
+
+    assert selected["jaxtyping"] == [jaxtyping]
+    assert selected["scikit-image"] == [scikit_image]
+
+
+def test_package_installation_allows_only_fixed_artifacts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Wheels sind Pflicht; das einzige Quellpaket trägt eine Prüfsumme."""
+    from app.core.backends import comfy_setup
+
+    commands: list[list[str]] = []
+
+    def remember(command, _what, _progress, _cancelled=None) -> None:
+        commands.append(command)
+
+    monkeypatch.setattr(comfy_setup, "_run", remember)
+
+    comfy_setup.install_packages(Path("python"))
+
+    assert len(commands) == 2
+    assert "--no-deps" in commands[0]
+    assert "--only-binary=:all:" in commands[0]
+    assert commands[0][-len(comfy_setup.BINARY_PACKAGES) :] == list(comfy_setup.BINARY_PACKAGES)
+    assert "--no-deps" in commands[1]
+    assert "--only-binary=:all:" not in commands[1]
+    assert "--require-hashes" in commands[1]
+    assert "--no-build-isolation" in commands[1]
+    assert commands[1][-1] == (
+        "antlr4-python3-runtime @ "
+        "https://files.pythonhosted.org/packages/3e/38/"
+        "7859ff46355f76f8d19459005ca000b6e7012f2f1ca597746cbcd1fbfe5e/"
+        "antlr4-python3-runtime-4.9.3.tar.gz"
+        "#sha256=f224469b4168294902bb1efa80a8bf7855f24c99aef99cbefc1bcd3cce77881b"
+    )
 
 
 def test_setting_up_looks_whether_the_nodes_load(
@@ -1069,6 +1142,148 @@ def test_triposg_weights_reject_a_different_resolved_revision(
 
     assert scratch.is_dir(), "der falsche Stand wird nicht an den Zielort verschoben"
     assert not target.exists()
+
+
+def test_background_weights_use_a_fixed_revision_and_verify_the_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "scratch_dir", lambda name: tmp_path / name)
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        comfy_setup,
+        "_run_repeatedly",
+        lambda command, *_args, **_kwargs: commands.append(command),
+    )
+
+    comfy_setup.fetch_background(tmp_path / "ComfyUI", Path("python"))
+
+    command = commands[0]
+    assert command[-2:] == [
+        "5a1bd8ae750548f8cd42e3c8afa854fd3eba0fb1",
+        "9ab37426bf4de0567af6b5d21b16151357149139362e6e8992021b8ce356a154",
+    ]
+
+    payload = "geprüfte Gewichte".encode()
+    expected = hashlib.sha256(payload).hexdigest()
+    scratch = tmp_path / "scratch"
+    target = tmp_path / "target"
+    calls: list[tuple[str, str, str]] = []
+
+    def download(
+        repo: str,
+        name: str,
+        *,
+        revision: str,
+        local_dir: str,
+    ) -> str:
+        calls.append((repo, name, revision))
+        downloaded = Path(local_dir) / name
+        downloaded.parent.mkdir(parents=True, exist_ok=True)
+        downloaded.write_bytes(payload)
+        return str(downloaded)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(hf_hub_download=download),
+    )
+    # ``hashlib.file_digest`` gibt es erst ab Python 3.11. Das Programm läuft
+    # in ComfyUIs Python, und ComfyUI unterstützt ausdrücklich auch 3.10.
+    monkeypatch.setitem(sys.modules, "hashlib", SimpleNamespace(sha256=hashlib.sha256))
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["-c", str(target), "repo", "weights.bin", str(scratch), "revision", expected],
+    )
+
+    exec(comfy_setup._FETCH_FILE, {})
+
+    assert calls == [("repo", "weights.bin", "revision")]
+    assert (target / "weights.bin").read_bytes() == payload
+
+
+def test_background_weights_with_a_wrong_hash_never_reach_the_target(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "target"
+    scratch = tmp_path / "scratch"
+
+    def download(_repo: str, name: str, **kwargs: object) -> str:
+        downloaded = Path(str(kwargs["local_dir"])) / name
+        downloaded.parent.mkdir(parents=True, exist_ok=True)
+        downloaded.write_bytes(b"falscher Inhalt")
+        return str(downloaded)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(hf_hub_download=download),
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["-c", str(target), "repo", "weights.bin", str(scratch), "revision", "0" * 64],
+    )
+
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        exec(comfy_setup._FETCH_FILE, {})
+
+    assert not target.exists()
+
+
+def test_an_interrupted_background_copy_never_looks_installed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Abbruch beim Laufwerkswechsel darf keine gültig benannte Teildatei lassen."""
+    from app.core.backends import comfy_setup
+
+    payload = b"richtige Gewichte"
+    comfyui = tmp_path / "ComfyUI"
+    target = comfyui / "models" / "background_removal"
+    scratch = tmp_path / "scratch"
+
+    def download(_repo: str, name: str, **kwargs: object) -> str:
+        downloaded = Path(str(kwargs["local_dir"])) / name
+        downloaded.parent.mkdir(parents=True, exist_ok=True)
+        downloaded.write_bytes(payload)
+        return str(downloaded)
+
+    def interrupted(_source: object, destination: object) -> None:
+        Path(str(destination)).write_bytes(b"Teil")
+        raise OSError("Kopie unterbrochen")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "huggingface_hub",
+        SimpleNamespace(hf_hub_download=download),
+    )
+    monkeypatch.setattr(shutil, "move", interrupted)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "-c",
+            str(target),
+            "repo",
+            "birefnet.safetensors",
+            str(scratch),
+            "revision",
+            hashlib.sha256(payload).hexdigest(),
+        ],
+    )
+
+    with pytest.raises(OSError, match="unterbrochen"):
+        exec(comfy_setup._FETCH_FILE, {})
+
+    assert not (target / "birefnet.safetensors").exists()
+    assert not comfy_setup.background_present(comfyui)
 
 
 def test_a_broken_download_is_resumed_and_not_thrown_away() -> None:
@@ -1932,6 +2147,31 @@ def test_a_silent_child_process_is_still_cancellable() -> None:
         )
 
     assert time.monotonic() - begonnen < 10.0, "der Abbruch wartet nicht auf den Prozess"
+
+
+def test_a_step_cancelled_before_launch_never_starts_a_child(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein schon gesetzter Abbruch gilt vor dem nächsten Teilprozess."""
+    from app.core.backends import comfy_setup
+
+    started: list[list[str]] = []
+
+    def start(command: list[str], **_kwargs: object) -> object:
+        started.append(command)
+        raise AssertionError("Der Kindprozess hätte nicht starten dürfen")
+
+    monkeypatch.setattr(comfy_setup.subprocess, "Popen", start)
+
+    with pytest.raises(comfy_setup.Cancelled):
+        comfy_setup._run(
+            [sys.executable, "-c", "pass"],
+            "Schon abgebrochen",
+            comfy_setup._silent,
+            lambda: True,
+        )
+
+    assert not started
 
 
 def test_a_silent_child_process_still_hits_its_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
