@@ -1,0 +1,7 @@
+# Die beiden Unity-Server gehören zu anderen Projekten und sind in Claude Code
+# für Solidon ebenfalls abgeschaltet.
+[mcp_servers.unity-mcp]
+enabled = false
+
+[mcp_servers.unity-mcp-hwi]
+enabled = false

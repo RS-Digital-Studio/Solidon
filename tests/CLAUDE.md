@@ -84,6 +84,7 @@ mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
 | Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
+| Blockieren die gemeinsamen Projekt-Hooks verwerfende Codex-Befehle mit dem unterstützten Protokoll? | `test_solidon3d_hooks.py` |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` — fcntl-Puffergrenze über den Quelltext, die Nutzerverzeichnisse für darwin, win32 und linux |
 
 ## Der Korpus

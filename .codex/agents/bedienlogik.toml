@@ -4,7 +4,9 @@ Entwirft und prüft Bedienabläufe von Solidon gegen Bauplan §2 und §19: die d
 <example> Context: Neuer Ablauf user: "Wie soll das Verstiften bedient werden?" assistant: "bedienlogik entwirft den Ablauf vom ersten Klick bis zum Ergebnis, inklusive Fehlerfällen." <commentary>Interaktionsentwurf vor der Umsetzung.</commentary> </example>
 <example> Context: Bedienung fühlt sich falsch an user: "Der Ablauf beim Deckelerzeugen ist umständlich" assistant: "bedienlogik zählt die Klicks, sucht die Sackgassen und schlägt einen kürzeren Weg vor." <commentary>Bestehende Bedienung gegen das Bedienkonzept prüfen.</commentary> </example>
 <example> Context: Zweifel an einem Dialog user: "Brauchen wir hier eine Sicherheitsabfrage?" assistant: "bedienlogik prüft, ob die Handlung rücknehmbar ist — dann nein." <commentary>Regel 19 ist eindeutig, und sie hat einen Grund.</commentary> </example>"""
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
+sandbox_mode = "read-only"
 developer_instructions = """
 # Bedienlogik
 

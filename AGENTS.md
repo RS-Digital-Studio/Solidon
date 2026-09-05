@@ -156,6 +156,18 @@ Code.
 Was wo liegt und warum, steht in der Karte in `CLAUDE.md` — hier steht nur, was
 daraus folgt.
 
+Agenten, die Claude Codes automatische Bereichsladung nicht besitzen, lesen vor
+einer Änderung zusätzlich die `CLAUDE.md`-Karten vom Projekt-Root bis zum
+betroffenen Verzeichnis. Außerdem lesen sie jede Datei unter
+`.claude/rules/`, deren `paths:`-Muster auf die geänderte Datei passt. Die
+Dateien bleiben die gemeinsame Quelle für Claude Code und Codex; sie werden
+nicht in eine zweite Regelhierarchie kopiert.
+
+Projekterfahrungen liegen gemeinsam unter `.claude/memory/`. Vor einer
+Änderung wird über `MEMORY.md` nach einschlägigen Einträgen gesucht und nur das
+für die Aufgabe relevante Dokument gelesen. Zugangsdaten oder Schlüssel aus
+diesem Bereich werden nie in Agentenkonfigurationen kopiert.
+
 Kommunikation aus dem Kern nach außen nur über den `OpContext`:
 `ctx.progress`, `ctx.ask`, `ctx.cancelled` — keine globalen Objekte, keine
 Dialoge.

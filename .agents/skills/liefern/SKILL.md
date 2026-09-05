@@ -41,7 +41,7 @@ Wenn es einen Grund gibt, den man später sucht, steht er im Rumpf — was war,
 warum es falsch war, was jetzt gilt. Am Ende:
 
 ```
-Co-Authored-By: Codex Opus 5 <noreply@anthropic.com>
+Co-Authored-By: Codex <noreply@openai.com>
 ```
 
 ## 4. Danach
@@ -313,7 +313,7 @@ jedes Mal ging die fremde Zeile mit:
 
     git show b304f04a --numstat -- app/i18n/locales/it.json
     1  1                    <- angesagt war 0/1
-    git show aaad3d94 --numstat -- .Codex/memory/MEMORY.md
+    git show aaad3d94 --numstat -- .claude/memory/MEMORY.md
     2  0                    <- angesagt war 1/0
 
 **Und die Kontrolle davor konnte es nicht sehen, weil sie das Falsche maß.**
@@ -335,7 +335,7 @@ Zwei Sätze, die daraus folgen:
 #### Und ein Index, den es nicht gibt, löscht alles
 
 Der teuerste Fall dieser Familie, am 27.08.2026: Ein Commit auf `origin/main`
-löschte **1175 Dateien** — halbe Anwendung, `.Codex/rules/`, Teile der Suite.
+löschte **1175 Dateien** — halbe Anwendung, `.claude/rules/`, Teile der Suite.
 Er stand zwei Minuten, dann war er repariert.
 
 Die Ursache ist eine Zeile, die richtig aussieht:
@@ -424,8 +424,8 @@ kostet mehr, als er heilt. Drei Schritte, in dieser Reihenfolge:
 
 **Wo mehrere an derselben Datei schreiben, hilft nur Reihenfolge statt
 Gleichzeitigkeit** — sagen, wann man hineingeht, melden, wenn man heraus ist.
-Ein eigener Arbeitsbaum (`Codex --worktree <name>`) ist die vollständige
-Antwort; er kostet aber jedes Mal einen Umzug.
+Ein eigener Codex-Arbeitsbaum ist die vollständige Antwort; er kostet aber
+jedes Mal einen Umzug.
 
 **Die zweite Spalte von `git status --short` lügt mit.** Das ist die Form, in
 der einem der veraltete Index zuerst begegnet, und sie führt in die falsche

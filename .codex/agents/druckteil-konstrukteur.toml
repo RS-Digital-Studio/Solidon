@@ -3,6 +3,7 @@ description = """
 Konstruiert parametrische Druckteile für den Ordner „3D Drucker" mit trimesh/manifold3d oder OpenSCAD: Passungen, Klemmungen, Gewinde, Scharniere, Verschraubungen, Dichtnuten. Verifiziert jedes Teil (wasserdicht, eine Komponente, Wandstärke) und schreibt die Bauteil-Spezifikation dazu.
 <example> Context: Neues Teil user: "Ich brauche einen Adapter, der über das flache Blech am Tor greift" assistant: "druckteil-konstrukteur baut ihn parametrisch, prüft das Netz und legt die Spezifikation an." <commentary>Parametrische Konstruktion mit Verifikation, nicht ein einzelnes STL.</commentary> </example>
 <example> Context: Passung stimmt nicht user: "Der Deckel sitzt zu stramm" assistant: "druckteil-konstrukteur ändert das Spiel am benannten Parameter und schlägt ein Prüfstück vor." <commentary>Passung wird über einen Parameter geändert, nicht über eine neue Geometrie.</commentary> </example>"""
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 # Druckteile konstruieren

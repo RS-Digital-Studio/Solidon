@@ -1,0 +1,67 @@
+{
+  "description": "Solidon-Projekthinweise, Prüfungen und Schutz vor verwerfenden Git-Befehlen.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || P=python3; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsstart --codex'",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') sitzungsstart --codex }\"",
+            "timeout": 25
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" vor-bash --codex'",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') vor-bash --codex }\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" nach-aenderung --codex'",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') nach-aenderung --codex }\"",
+            "timeout": 90,
+            "statusMessage": "Formatiere und prüfe die Datei"
+          }
+        ]
+      },
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" testlauf --codex'",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') testlauf --codex }\"",
+            "timeout": 20
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" abschluss --codex'",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') abschluss --codex }\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

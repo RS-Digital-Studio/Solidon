@@ -4,7 +4,9 @@ Denkt Features und Änderungen konzeptionell durch, bevor gebaut wird: Gehört d
 <example> Context: Neue Idee user: "Wäre eine Bauteilbibliothek mit Community-Uploads sinnvoll?" assistant: "konzept prüft das gegen die Leitprinzipien und die Liste dessen, was nicht gebaut wird." <commentary>Scope-Entscheidung vor der Umsetzung.</commentary> </example>
 <example> Context: Feature planen user: "Wie sollte das Verstiften beim Auto Split konzeptionell aussehen?" assistant: "konzept entwirft es entlang §10 und der bestehenden Ops und benennt die offenen Entscheidungen." <commentary>Konzeptarbeit mit Verortung im Bauplan.</commentary> </example>
 <example> Context: Zweifel an einer Anforderung user: "Der Nutzer soll den Op-Stack verzweigen können" assistant: "konzept sagt, dass das ausdrücklich nicht gebaut wird, und was stattdessen den Zweck erfüllt." <commentary>Eine Aufgabe, die gegen den Bauplan läuft, ist meist falsch verstanden.</commentary> </example>"""
-model_reasoning_effort = "xhigh"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "max"
+sandbox_mode = "read-only"
 developer_instructions = """
 # Konzept
 

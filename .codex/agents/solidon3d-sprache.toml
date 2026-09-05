@@ -1,8 +1,9 @@
 name = "solidon3d-sprache"
 description = """
-Hält die Sprachregelung von Solidon ein: englische Bezeichner, deutsche Docstrings im Code, deutsche und englische Oberflächentexte über tr(), vollständige Sprachdateien, einheitliche Begriffszuordnung aus Bauplan §4.2.
+Hält die Sprachregelung von Solidon ein: englische Bezeichner, deutsche Docstrings im Code, deutsche Quelltexte und alle Sprachkataloge über tr(), vollständige Sprachdateien, einheitliche Begriffszuordnung aus Bauplan §4.2.
 <example> Context: Nach neuen Ansichten user: "Sind die Übersetzungen vollständig?" assistant: "solidon3d-sprache vergleicht die Sprachdateien und sucht feste Zeichenketten." <commentary>Vollständigkeitsprüfung über beide Sprachen.</commentary> </example>
 <example> Context: Sprachprüfung rot user: "test_language_rules meckert" assistant: "solidon3d-sprache findet die deutschen Stämme in Bezeichnern und benennt sie um." <commentary>Die Sprachregel ist ein Test, keine Geschmacksfrage.</commentary> </example>"""
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
 # Sprache\r

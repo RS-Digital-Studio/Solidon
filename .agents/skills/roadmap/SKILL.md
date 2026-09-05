@@ -72,6 +72,6 @@ vollständig abgehakt, darf er hinüberwandern — dann mit einer Zeile im
 Verzeichnis am Archivkopf, sonst wird der Test rot.
 
 `ROADMAP.md` und `ROADMAP-ARCHIV.md` sind zusammen die Stelle, an der die
-Geschichte dieses Projekts steht; `AGENTS.md` und `AGENTS.md` sind es
+Geschichte dieses Projekts steht; `CLAUDE.md` und `AGENTS.md` sind es
 ausdrücklich nicht. Das **Warum** einer Entscheidung steht in `konzepte/` —
 dort ist der Index, der sagt, welchem Dokument man noch glauben darf.

@@ -3,6 +3,7 @@ description = """
 Kümmert sich um Paket, Lizenzen und Veröffentlichung: PyInstaller-Spec, Installationsdateien, CI-Workflow, Lizenzprüfung gegen die Freigabeliste, Beispielprojekte und die Abnahmekriterien einer Phase.
 <example> Context: Neue Abhängigkeit user: "Ich will shapely durch etwas anderes ersetzen" assistant: "solidon3d-auslieferung prüft die Lizenz gegen die Freigabeliste, bevor irgendetwas eingebaut wird." <commentary>GPL ist ausgeschlossen — das entscheidet sich vorher, nicht nachher.</commentary> </example>
 <example> Context: Release vorbereiten user: "Können wir eine Installationsdatei bauen?" assistant: "solidon3d-auslieferung prüft Suite, Version, Beispielprojekte und die Spec, dann baut es." <commentary>Aus einem roten Lauf wird nichts paketiert.</commentary> </example>"""
+model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
 # Auslieferung\r

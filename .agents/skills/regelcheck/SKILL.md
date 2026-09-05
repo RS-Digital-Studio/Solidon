@@ -33,10 +33,10 @@ Signatur abweichend von Bauplan §9?
 Zahlenkonstante statt `auto:<material>`? Streuzahl statt Projektparameter?
 Zufall ohne `ctx.seed` oder ohne `deterministic=False`?
 
-**Sicherheit (10–15)** — `eval`? OpenSCAD ohne Quelltextprüfung? Absoluter Pfad
-in einer Projektdatei? Eigener Baustein, der mitreisen könnte? Kennzahlen aus
-Schichtanalyse und G-Code vermischt? Neue Abhängigkeit ohne Lizenzeintrag oder
-mit GPL?
+**Sicherheit (10–15)** — `eval`? Operation, die ein fremdes Programm startet
+(→ `foreign.SCRIPTED_OPS`)? Absoluter Pfad in einer Projektdatei? Eigener
+Baustein, der mitreisen könnte? Kennzahlen aus Schichtanalyse und G-Code
+vermischt? Abhängigkeit unter GPL?
 
 **Bedienung (16–20)** — Agentenvorschlag mit mehr als einer Transaktion?
 Ausnahme ohne Handlungsvorschlag? Bedeutung allein über Farbe?
@@ -46,8 +46,8 @@ Bestätigungsdialog vor einer rücknehmbaren Handlung? Feste Zeichenkette statt
 **Haltung (21–22)** — Wurde geraten, wo `ctx.ask` hingehört? Neue Abhängigkeit
 ohne Eintrag in der Lizenzliste?
 
-Dazu, ohne Regelnummer, aber genauso ein Fund: deutscher Bezeichner oder
-Docstring in `app/`, fehlende Übersetzung, fehlender Test zu neuem Verhalten.
+Dazu, ohne Regelnummer, aber genauso ein Fund: deutscher Bezeichner in
+`app/`, fehlende Übersetzung, fehlender Test zu neuem Verhalten.
 
 ## Ergebnis
 

@@ -12,6 +12,16 @@ allowed-tools: Bash, Read, Edit, Grep, Glob
 
 # Erzeugen und Ausliefern
 
+**Wann:** Bilder, Website-Bilder, Handbuch und PDFs werden **vor einem
+Release** erzeugt — nicht nach jedem Schritt (Entscheidung Robert,
+02.09.2026). Und auch dort nur, was sich geändert hat: Hat sich seit dem
+letzten Lauf weder die Oberfläche noch ein Katalog noch eine Handbuchseite
+geändert, bleiben die Bilder stehen; hat sich nur eine Sprache geändert,
+läuft nur sie (`make_figures.py <sprache>`). Der volle Lauf über alle sechs
+Sprachen gehört zu einem Release, bei dem sich die Oberfläche geändert hat —
+und er bleibt ein Werkzeug, denn der `TypeError` der Statuszeile am
+02.09.2026 fiel nur auf, weil alle Bilder liefen.
+
 Alle Werkzeuge laufen über die virtuelle Umgebung, nie über das System-Python.
 Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
 
@@ -20,6 +30,7 @@ Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
 .venv\Scripts\python.exe tools/make_web_images.py               # dieselben Fenster kleiner plus Bausteinband, für die Verkaufsseiten
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
+.venv\Scripts\python.exe tools/make_longform_video.py           # drei deutsche 3-Minuten+-Tutorials aus leeren Projekten; ohne Sprecher, mit eigener Musik
 .venv\Scripts\python.exe tools/make_seo.py                      # robots.txt, sitemap.xml, llms.txt, FAQ-Auszeichnung — nach den beiden darüber
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
 .venv\Scripts\python.exe tools/make_linux_packages.py --files   # Menüeintrag, Flatpak-Manifest, AppStream — läuft überall
@@ -79,16 +90,19 @@ gh run download <lauf-id> -D dist/ci                    # vier Artefakte
 Die Artefakte heißen `solidon3d-setup-windows`, `solidon3d-linux`,
 `solidon3d-macos-X64` und `solidon3d-macos-ARM64`, jedes mit seiner `.sha256`.
 
-**Acht Dateien kommen an, vier gehen hinaus.** Linux baut drei (Archiv,
-AppImage, Flatpak), macOS zwei je Architektur. Angeboten wird eine je
-Zielsystem, und zwar diese:
+**Acht Dateien kommen an, fünf gehen hinaus.** Linux baut drei (Archiv,
+AppImage, Flatpak), macOS zwei je Architektur. Angeboten werden diese:
 
 | Zielsystem | Datei |
 |---|---|
 | Windows | `Solidon3D-Setup-<version>.exe` |
-| Linux | `Solidon3D-<version>-x86_64.flatpak` |
+| Linux (direkter Start) | `Solidon3D-<version>-x86_64.AppImage` |
+| Linux (verwaltet) | `Solidon3D-<version>-x86_64.flatpak` |
 | macOS (Apple Silicon) | `Solidon3D-<version>-macos-arm64.pkg` |
 | macOS (Intel) | `Solidon3D-<version>-macos-x86_64.pkg` |
+
+Nicht hinaus gehen: das Linux-Archiv (`.tar.gz`, setzt ein Terminal voraus) und
+die beiden macOS-Archive (`.zip`, Bauartefakte des Signierwegs).
 
 `make_download.py` weist seit dem 27.08.2026 alles andere ab (`DELIVERED`) —
 davor stand die Liste nirgends außer in der Gewohnheit dessen, der die Dateien

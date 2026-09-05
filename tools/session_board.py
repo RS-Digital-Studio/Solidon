@@ -1,7 +1,9 @@
-"""Wer arbeitet gerade woran — damit zwei Sitzungen nicht dasselbe anfassen.
+"""Wer arbeitet gerade woran — damit Sitzungen nicht dasselbe anfassen.
 
-An diesem Projekt laufen oft zwei bis vier Claude-Sitzungen. Sie können
-einander schreiben, und das reicht für zwei; ab drei reicht es nicht mehr.
+An diesem Projekt laufen oft zwei bis vier Claude-Code- und Codex-Sitzungen.
+Claude-Code-Sitzungen können einander schreiben, und das reicht für zwei; ab
+drei reicht es nicht mehr. Codex braucht das Board außerdem als gemeinsame
+Grenze zu den Claude-Code-Sitzungen.
 
 **Der Grund steht im Protokoll vom 22.08.2026.** Zwei Sitzungen haben ihre
 Gebiete in zwei Nachrichten verabredet, und es hat getragen — aber zweimal
@@ -63,7 +65,8 @@ def _own_mailbox() -> str:
 
     Claude Code reicht es jedem Hook und jedem Bash-Befehl als
     ``CLAUDE_CODE_MESSAGING_SOCKET`` durch. Fehlt es, trägt der Eintrag keinen
-    Lebensnachweis, und dann zählt nur noch das Alter.
+    Lebensnachweis, und dann zählt nur noch das Alter. Codex stellt kein
+    vergleichbares Postfach bereit und nutzt deshalb immer diesen Rückfall.
     """
     return str(os.environ.get("CLAUDE_CODE_MESSAGING_SOCKET") or "")
 
@@ -76,13 +79,14 @@ def _own_name() -> str:
     keiner, weil ihn niemand anschreiben kann.
     """
     pid = str(os.environ.get("CLAUDE_PID") or "")
-    if not pid:
-        return ""
-    entry = Path.home() / ".claude" / "sessions" / f"{pid}.json"
-    try:
-        return str(json.loads(entry.read_text(encoding="utf-8")).get("name") or "")
-    except (OSError, ValueError):
-        return ""
+    if pid:
+        entry = Path.home() / ".claude" / "sessions" / f"{pid}.json"
+        try:
+            return str(json.loads(entry.read_text(encoding="utf-8")).get("name") or "")
+        except (OSError, ValueError):
+            return ""
+    codex_id = str(os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID") or "")
+    return f"Codex {codex_id[:8]}" if codex_id else ""
 
 
 #: Wie alt ein Eintrag ohne Postfach werden darf, bevor er als verlassen gilt.
@@ -120,7 +124,11 @@ def _entries() -> list[tuple[Path, dict[str, object]]]:
 
 def _key() -> str:
     """Der Dateiname des eigenen Eintrags — je Sitzung genau einer."""
-    return _own_name() or str(os.environ.get("CLAUDE_PID") or "unbenannt")
+    pid = str(os.environ.get("CLAUDE_PID") or "")
+    if pid:
+        return _own_name() or pid
+    codex_id = str(os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID") or "")
+    return f"codex-{codex_id}" if codex_id else "unbenannt"
 
 
 def claim(area: str, files: str, note: str) -> int:

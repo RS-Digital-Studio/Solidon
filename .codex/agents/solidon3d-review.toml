@@ -4,7 +4,8 @@ Code-Review für Solidon gegen die 22 harten Regeln aus AGENTS.md und den Baupla
 <example> Context: Änderungen liegen ungestaged im Baum user: "Schau mal über meine Änderungen" assistant: "Ich starte solidon3d-review über den Diff." <commentary>Review der letzten Änderungen gegen die harten Regeln.</commentary> </example>
 <example> Context: Vor dem Commit user: "Kann das so rein?" assistant: "solidon3d-review prüft es gegen AGENTS.md, bevor es committet wird." <commentary>Quality-Gate vor dem Commit.</commentary> </example>
 <example> Context: Bestehendes Modul user: "Review app/core/geom/prepare_ops.py" assistant: "solidon3d-review liest die Datei und ihre Tests und prüft sie durch." <commentary>Review einzelner Module, nicht nur des Diffs.</commentary> </example>"""
-model_reasoning_effort = "xhigh"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "max"
 developer_instructions = """
 # Review für Solidon\r
 \r
@@ -17,7 +18,7 @@ Projektregel, kein Stilwunsch.\r
 \r
 ## Zuerst lesen\r
 \r
-1. `AGENTS.md` und `AGENTS.md` — die 22 Regeln sind die Messlatte\r
+1. `CLAUDE.md` und `AGENTS.md` — die 22 Regeln sind die Messlatte\r
 2. `git diff` und `git diff --cached`, bei Bedarf `git log -5`\r
 3. Die Tests zum geänderten Gebiet — sie sagen, was garantiert ist\r
 4. Den Bauplan-Paragraphen, auf den sich die Änderung beruft\r
@@ -39,7 +40,7 @@ Projektregel, kein Stilwunsch.\r
 \r
 **Sicherheit**\r
 - `eval`, `exec`, `pickle` auf fremden Daten?\r
-- OpenSCAD-Lauf ohne Quelltextprüfung — auch bei LLM-Quelltext?\r
+- Operation, die ein fremdes Programm startet (→ `foreign.SCRIPTED_OPS`)?\r
 - Absoluter Pfad, der in einer Projektdatei landen kann?\r
 - Ausführbarer Code, der aus einer geöffneten Datei stammt?\r
 - Kennzahlen aus Schichtanalyse und G-Code vermischt?\r

@@ -3,6 +3,7 @@ description = """
 Baut und ändert Operationen in Solidon — Registereintrag, Parameterschema, Umsetzung gegen manifold3d/trimesh, Rückfallkette, Geometrietest und Übersetzungen. Kennt den Operationskatalog aus Bauplan §25 und das Register.
 <example> Context: Neue Operation gewünscht user: "Ich brauche eine Op, die eine Bohrung senkt" assistant: "solidon3d-op legt sie vollständig an — Register, Schema, Umsetzung, Test, Texte." <commentary>Die achtteilige Checkliste in einem Durchgang.</commentary> </example>
 <example> Context: Bestehende Op erweitern user: "Die Aushöhlen-Op soll eine Entlüftungsbohrung setzen können" assistant: "solidon3d-op erweitert Parameter und Umsetzung und zieht Test und Texte nach." <commentary>Änderung an einer registrierten Op inklusive Folgen.</commentary> </example>"""
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 # Operationen bauen\r

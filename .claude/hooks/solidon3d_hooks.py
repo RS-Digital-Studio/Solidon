@@ -1,4 +1,4 @@
-"""Hooks für Claude Code in diesem Projekt.
+"""Hooks für Claude Code und Codex in diesem Projekt.
 
 Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
 
@@ -16,7 +16,13 @@ Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
     abschluss        Stop: erinnert daran, wenn seit der letzten Änderung an
                      app/ oder tests/ keine Suite gelaufen ist.
     vor-bash         PreToolUse (Bash): fragt nach, bevor ein Befehl Arbeit
-                     verwirft (Regel „niemals reverten").
+                     verwirft (Regel „niemals reverten"). Codex blockiert den
+                     ersten Versuch, weil es die Entscheidung „ask" noch
+                     nicht unterstützt.
+
+Codex-Aufrufe tragen zusätzlich das zweite Argument ``--codex``. Die
+Kennzeichnung kommt aus der jeweiligen Hook-Konfiguration und hängt damit
+nicht von internen, nicht zugesagten Umgebungsvariablen ab.
 
 Grundsatz: Ein Hook stört nie die Arbeit. Jeder Fehler endet still mit 0 —
 lieber ein ausgefallener Hinweis als eine blockierte Sitzung.
@@ -48,11 +54,20 @@ VERWIRFT = re.compile(
     r"git\s+(?:checkout\s+(?:--|\.|HEAD)|restore\b|reset\s+--hard\b|clean\s+-[a-z]*f)"
     r"|git\s+push\s+.*--force(?!-with-lease)"
 )
+CODEX_APPROVAL_MARKER = re.compile(
+    r"SOLIDON3D_REVERT_FREIGEGEBEN\s*(?:=|:)\s*['\"]?ja\b", re.IGNORECASE
+)
+CODEX_ARGUMENT = "--codex"
 #: Befehle, die eine Datei geschrieben haben können, ohne dass Write oder Edit
 #: es gesehen hätte — ein Skript über die Shell, ein `sed -i`, eine Umleitung.
 SCHREIBT_DATEI = re.compile(
     r"write_text|writelines|\bsed\s+-i|>\s*\S+\.py|\btee\b|ruff\s+format(?!\s+--check)"
 )
+
+
+def is_codex() -> bool:
+    """Läuft der Hook in einer Codex-Sitzung?"""
+    return CODEX_ARGUMENT in sys.argv[2:]
 
 
 def nachbarsitzungen() -> list[str]:
@@ -109,7 +124,7 @@ def eingabe() -> dict:
 
 
 def melden(ereignis: str, text: str) -> None:
-    """Gibt Claude einen Hinweis mit, ohne die Handlung anzuhalten."""
+    """Gibt dem Agenten einen Hinweis mit, ohne die Handlung anzuhalten."""
     json.dump(
         {"hookSpecificOutput": {"hookEventName": ereignis, "additionalContext": text}},
         sys.stdout,
@@ -192,6 +207,15 @@ def _nachbarhinweis() -> str:
     andere = nachbarsitzungen()
     if not andere:
         return ""
+    if is_codex():
+        return (
+            " ES ARBEITEN SCHON CLAUDE-CODE-SITZUNGEN HIER: "
+            + ", ".join(andere)
+            + ". Lies vor der ersten Änderung `python tools/session_board.py list`, "
+            "meide ihre Gebiete und trag dein eigenes mit "
+            '`python tools/session_board.py claim --area "…" --files "…"` ein. '
+            "Codex kann diese Sitzungen nicht direkt anschreiben."
+        )
     return (
         " ES ARBEITEN SCHON ANDERE SITZUNGEN HIER: "
         + ", ".join(andere)
@@ -208,6 +232,20 @@ def _nachbarhinweis() -> str:
 
 def sitzungsstart() -> None:
     eingabe()
+    if is_codex():
+        workflow_note = (
+            "Nach jedem Schritt laufen die betroffenen Tests; vor dem Commit das "
+            "vollständige Tor mit `$pruefen` und der Regelcheck mit `$regelcheck`. "
+            "Parallele Codex-Arbeit läuft in eigenen Aufgaben oder Worktrees. "
+        )
+    else:
+        workflow_note = (
+            "Nach jedem Schritt laufen die betroffenen Tests; vor dem Commit das "
+            "vollständige Tor mit `/pruefen` und der Regelcheck mit `/regelcheck`. "
+            "Hier arbeiten oft zwei bis vier Sitzungen gleichzeitig: `/list-agents` "
+            "zeigt sie, `claude --worktree <name>` gibt jeder ihren eigenen Baum, und "
+            "/pruefen nimmt ein Schloss, damit Messungen sich nicht verfälschen. "
+        )
     melden(
         "SessionStart",
         "Projekt Solidon: Python mit PySide6, kein Avalonia und kein MVVM — "
@@ -215,59 +253,81 @@ def sitzungsstart() -> None:
         "Bezeichner, Dateinamen und Modulnamen auf Englisch; Docstrings, Kommentare, "
         "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
         "Der Kern (app/core) bleibt ohne Qt. "
-        "Nach jedem Schritt läuft die Suite — /pruefen. Vor dem Commit /regelcheck. "
-        "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan. "
-        "Hier arbeiten oft zwei bis vier Sitzungen gleichzeitig: `/list-agents` "
-        "zeigt sie, `claude --worktree <name>` gibt jeder ihren eigenen Baum, und "
-        "/pruefen nimmt ein Schloss, damit Messungen sich nicht verfälschen."
+        + workflow_note
+        + "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan."
         + _nachbarhinweis()
         + umgebungshinweis(),
     )
 
 
-def nach_aenderung() -> None:
-    daten = eingabe()
-    roh = (daten.get("tool_input") or {}).get("file_path")
-    if not roh:
-        return
-    datei = Path(roh)
-    if datei.suffix != ".py" or not datei.exists():
-        return
-    try:
-        relativ = datei.resolve().relative_to(WURZEL)
-    except ValueError:
-        return  # außerhalb des Projekts, geht diesen Hook nichts an
+def _changed_files(data: dict) -> list[Path]:
+    """Liest geänderte Pfade aus Claude- oder Codex-Werkzeugeingaben."""
+    tool_input = data.get("tool_input") or {}
+    raw_paths: list[str] = []
+    file_path = tool_input.get("file_path")
+    if isinstance(file_path, str) and file_path:
+        raw_paths.append(file_path)
 
-    hinweise: list[str] = []
+    patch = tool_input.get("command")
+    if isinstance(patch, str):
+        raw_paths.extend(
+            match.group(1).strip()
+            for match in re.finditer(r"^\*\*\* (?:Add|Update) File: (.+)$", patch, re.MULTILINE)
+        )
 
-    ruff("format", "--force-exclude", str(datei))
-    schluss, ausgabe = ruff("check", "--quiet", "--force-exclude", str(datei))
+    files: list[Path] = []
+    for raw_path in dict.fromkeys(raw_paths):
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = WURZEL / path
+        try:
+            path.resolve().relative_to(WURZEL)
+        except ValueError:
+            continue
+        if path.suffix == ".py" and path.exists():
+            files.append(path)
+    return files
+
+
+def _check_changed_file(path: Path) -> list[str]:
+    """Formatiert und prüft genau eine vom Werkzeug geänderte Python-Datei."""
+    relative = path.resolve().relative_to(WURZEL)
+    notes: list[str] = []
+
+    ruff("format", "--force-exclude", str(path))
+    schluss, ausgabe = ruff("check", "--quiet", "--force-exclude", str(path))
     if schluss != 0 and ausgabe.strip():
-        hinweise.append("ruff check meldet:\n" + ausgabe.strip()[:1500])
+        notes.append("ruff check meldet:\n" + ausgabe.strip()[:1500])
 
     try:
-        text = datei.read_text(encoding="utf-8", errors="ignore")
+        text = path.read_text(encoding="utf-8", errors="ignore")
     except OSError:
         text = ""
 
-    im_kern = relativ.parts[:2] == ("app", "core")
+    im_kern = relative.parts[:2] == ("app", "core")
     if im_kern and QT_IMPORT.search(text):
-        hinweise.append(
+        notes.append(
             "Regel 1: Qt unterhalb von ui/. In app/core darf kein PySide6 importiert "
             "werden — test_core_isolation.py fällt darüber. Kommunikation nach außen "
             "läuft über den OpContext."
         )
     if im_kern and PRINT_AUFRUF.search(text):
-        hinweise.append(
+        notes.append(
             "Der Kern gibt nichts aus. Fortschritt über ctx.progress, Rückfragen über "
             "ctx.ask, alles andere ins Protokoll."
         )
-    if relativ.parts[:1] == ("app",) and EVAL_AUFRUF.search(text):
-        hinweise.append(
+    if relative.parts[:1] == ("app",) and EVAL_AUFRUF.search(text):
+        notes.append(
             "Regel 10: kein eval/exec. Parameterausdrücke laufen über den eigenen "
             "Auswerter mit beschränkter Grammatik (§32)."
         )
 
+    return notes
+
+
+def nach_aenderung() -> None:
+    daten = eingabe()
+    hinweise = [note for path in _changed_files(daten) for note in _check_changed_file(path)]
     if hinweise:
         melden("PostToolUse", "\n\n".join(hinweise))
 
@@ -409,6 +469,14 @@ def _commit_hinweis(befehl: str) -> str:
     andere = nachbarsitzungen()
     if not andere:
         return ""
+    if is_codex():
+        return (
+            "Es arbeiten Claude-Code-Sitzungen an diesem Projekt: "
+            + ", ".join(andere)
+            + ". Ein Commit ändert den gemeinsamen Stand. Prüfe deshalb "
+            "`python tools/session_board.py list`; Codex kann diese Sitzungen nicht "
+            "direkt anschreiben."
+        )
     return (
         "Es arbeiten weitere Sitzungen an diesem Projekt: "
         + ", ".join(andere)
@@ -460,7 +528,8 @@ def abschluss() -> None:
             "Stop",
             f"Seit der letzten Änderung ({gezeigt}) lief die Suite nicht. "
             "Die Arbeitsweise dieses Projekts verlangt sie nach jedem Schritt: "
-            ".venv\\Scripts\\python.exe -m pytest -q — oder /pruefen für alle vier Läufe. "
+            ".venv\\Scripts\\python.exe -m pytest -q — oder "
+            f"{'$pruefen' if is_codex() else '/pruefen'} für das vollständige Tor. "
             "Der Hook sieht nur den Zeitstempel, nicht den Urheber: stammt die Änderung "
             "aus einer parallel laufenden Sitzung, gehört sie nicht dir. Dann weder "
             "prüfen noch anfassen, sondern es beim Berichten erwähnen.",
@@ -471,6 +540,24 @@ def vor_bash() -> None:
     daten = eingabe()
     befehl = (daten.get("tool_input") or {}).get("command") or ""
     if not VERWIRFT.search(befehl):
+        return
+    if is_codex():
+        if CODEX_APPROVAL_MARKER.search(befehl):
+            return
+        json.dump(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    "permissionDecisionReason": (
+                        "Dieser Befehl verwirft Arbeit. Frage Robert ausdrücklich. "
+                        "Nach seiner Freigabe darf derselbe Befehl mit dem Marker "
+                        "SOLIDON3D_REVERT_FREIGEGEBEN=ja erneut ausgeführt werden."
+                    ),
+                }
+            },
+            sys.stdout,
+        )
         return
     json.dump(
         {

@@ -62,7 +62,7 @@ Vor dem Export, und das Ergebnis wird gezeigt, nicht behauptet:
 - Was noch zu prüfen ist, bevor das ganze Teil gedruckt wird
 
 Iterationen kommen in `Versuch N/`, der aktuelle Stand in den Projekt-Root.
-Zum Schluss `3D Drucker/AGENTS.md` um den Projekteintrag ergänzen.
+Zum Schluss `3D Drucker/CLAUDE.md` um den Projekteintrag ergänzen.
 
 ## Haltung
 

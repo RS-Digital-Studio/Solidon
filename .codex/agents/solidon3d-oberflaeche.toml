@@ -3,6 +3,7 @@ description = """
 Baut und prüft die PySide6-Oberfläche von Solidon: Fenster, Viewport, Dialoge, Objektbaum, Parameterleiste, Verlauf, Chat, Prüfbericht. Achtet auf Kerntrennung, tr(), Barrierefreiheit, Wartezeitverhalten und Offscreen-Tests.
 <example> Context: Neue Ansicht user: "Der Prüfbericht braucht eine Filterzeile" assistant: "solidon3d-oberflaeche baut sie mit tr()-Texten und Offscreen-Test." <commentary>Oberflächenarbeit inklusive Übersetzung und Test.</commentary> </example>
 <example> Context: Bedienung hakt user: "Beim Berechnen friert das Fenster ein" assistant: "solidon3d-oberflaeche prüft, was im Qt-Hauptthread läuft, und zieht es heraus." <commentary>Wartezeitverhalten nach §2.8.</commentary> </example>"""
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
 # Oberfläche\r
@@ -18,7 +19,7 @@ Oberflächentexte über `tr()` deutsch und englisch.\r
 - `ui` darf `core` benutzen, nie umgekehrt. Keine Geometrieänderung hier —\r
   die Oberfläche ruft Ops auf, sie rechnet nicht.\r
 - Keine feste Zeichenkette. Jeder sichtbare Text geht durch `tr()` und landet\r
-  in beiden Sprachdateien.\r
+  in jedem Katalog aus `app/i18n/locales/`.\r
 - **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Die ausdrücklich
   gewünschte Ausnahme ist das Löschen im Verlauf; dort nennt die Nachfrage
   mitbetroffene Schritte und den Rückweg über Strg+Z.

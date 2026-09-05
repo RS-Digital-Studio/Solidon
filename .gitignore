@@ -54,6 +54,8 @@ htmlcov/
 # --- Laufzeitdaten -----------------------------------------------------------
 *.log
 /out/
+# Lokale Vorschauen, Prüfberichte und wiederherstellbare Review-Zwischenstände.
+/output/
 /.cache/
 
 # --- Erzeugte Auslieferungsdateien --------------------------------------------

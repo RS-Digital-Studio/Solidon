@@ -3,7 +3,8 @@ description = """
 Diagnostiziert Geometrieprobleme in Solidon: Netz nicht wasserdicht, Boolesche Operation scheitert, Rückfallkette landet auf voxel, Volumen unplausibel, Selbstdurchdringung, Komponenten zerfallen, Schnitt liefert nichts, B-Rep-Kern weicht vom Mesh-Kern ab.
 <example> Context: Op liefert falsches Ergebnis user: "Die Differenz frisst plötzlich das halbe Modell" assistant: "solidon3d-geometrie verfolgt die Rückfallkette und prüft die Eingangsnetze." <commentary>Systematische Diagnose statt Raten an Parametern.</commentary> </example>
 <example> Context: Schnitt schlägt fehl user: "Hohle Querschnitte kommen als nichts zurück" assistant: "solidon3d-geometrie prüft die Konturhierarchie und baut einen Testfall aus dem Korpus." <commentary>Fehlerbild wird zur Testdatei, nicht zum Sonderfall im Code.</commentary> </example>"""
-model_reasoning_effort = "xhigh"
+model = "gpt-5.6-sol"
+model_reasoning_effort = "max"
 developer_instructions = """
 # Geometrie-Diagnose\r
 \r
