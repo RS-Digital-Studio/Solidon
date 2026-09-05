@@ -2004,3 +2004,39 @@ def test_a_closed_body_is_split_without_that_warning(profile: Profile) -> None:
 
     assert outcome.divided
     assert "split.uncapped" not in [finding.code for finding in outcome.findings]
+
+
+def test_new_fit_pairs_never_take_a_name_that_is_already_in_use(loaded, profile: Profile) -> None:
+    """Gesamtreview 05.09.2026, CORE-31: Die Stiftpaare wurden durchgezählt
+    — ``stift_{Anzahl + 1}`` —, und neben einer einzigen vorhandenen Passung
+    namens ``stift_2`` bekam der nächste Schnitt eine Namensschwester. Beim
+    Beheben verlorener Verweise traf die gewählte Zuordnung danach die erste,
+    unbeteiligte Passung."""
+    from app.core.scene.history import change_for
+    from app.core.types import FeatureRef, Fit
+
+    project, mesh = loaded
+    History(project.document).apply(
+        "Zwei Klötze",
+        [
+            OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 5.0}),
+            OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 5.0}),
+        ],
+    )
+    by_hand = Fit(
+        name="stift_2",
+        a=FeatureRef("obj_2", "face_top"),
+        b=FeatureRef("obj_3", "face_top"),
+        kind="clearance",
+        tolerance="auto:petg",
+    )
+    History(project.document).apply(
+        "Passung von Hand", changes=change_for(project.document, fits=[by_hand])
+    )
+
+    apply_split(project.document, mesh, "obj_1", profile)
+
+    names = [fit.name for fit in project.document.fits]
+    assert names[0] == "stift_2", "die eigene bleibt, sie hängt an unbeteiligten Körpern"
+    assert len(names) > 1, "ohne neue Paare prüft dieser Test nichts"
+    assert len(names) == len(set(names)), f"doppelte Namen: {names}"

@@ -15,7 +15,7 @@ Paare hierher — §14 sagt genau das.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -307,6 +307,7 @@ def apply_planned(
                     profile,
                     len(existing) + len(created),
                     feature_start=feature_start,
+                    taken=[entry.name for entry in (*existing, *created)],
                 )
             )
         return change_for(document, fits=[*existing, *created])
@@ -387,6 +388,7 @@ def apply_line_split(
                 profile,
                 len(surviving),
                 feature_start=feature_start,
+                taken=[entry.name for entry in (*surviving, *fits)],
             )
         )
         return change_for(document, fits=[*surviving, *fits])
@@ -495,6 +497,7 @@ def _pairs(
     made_so_far: int,
     *,
     feature_start: int = 1,
+    taken: Iterable[str] = (),
 ) -> list[Fit]:
     """Ein Paar je Stift: der Stift auf der einen Hälfte, die Bohrung auf der
     anderen.
@@ -502,10 +505,26 @@ def _pairs(
     Die Toleranz ist ein Verweis ins Materialprofil, nie die Zahl selbst
     (AGENTS.md Regel 7) — eine Kalibrierung danach muss ein Teil erreichen,
     das vor ihr geteilt wurde.
+
+    **Der Name wird gegen die belegten vergeben, nicht gezählt.** Gezählt
+    wurde die Zahl der vorhandenen Passungen, und eine von Hand benannte
+    ``stift_2`` bekam ihre Namensschwester: Beim Beheben verlorener Verweise
+    traf die gewählte Zuordnung dann die erste, unbeteiligte Passung
+    (Gesamtreview 05.09.2026, CORE-31). ``taken`` sind die Namen, die es
+    schon gibt.
     """
+    used = set(taken)
+    names: list[str] = []
+    number = made_so_far
+    for _index in range(pins):
+        number += 1
+        while f"stift_{number}" in used:
+            number += 1
+        used.add(f"stift_{number}")
+        names.append(f"stift_{number}")
     return [
         Fit(
-            name=f"stift_{made_so_far + offset + 1}",
+            name=names[offset],
             a=FeatureRef(first, f"pin_{index}"),
             b=FeatureRef(second, f"bore_{index}"),
             kind="clearance",
