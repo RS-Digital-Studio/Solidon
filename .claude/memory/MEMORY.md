@@ -21,6 +21,8 @@
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen teilen die Dateien.
 - [Abgebrochener Lauf hinterlässt Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) — vier Prozesse ohne lebenden Elternteil; „rechnet er“ und „wem gehört er“ sind zwei Fragen.
 - [Wartebedingung kennt nur einen Zustand](wartebedingung-kennt-nur-einen-zustand.md) — ein Muster mit Umlaut trifft nie; `until !` meldet dann sofort Vollzug.
+- [make_manual kennt kein --help](make-manual-kennt-kein-help.md) — jedes Argument erzeugt alles, ohne Stempel; danach stamp_assets.py.
+- [commit-msg verlangt echte Umlaute](commit-msg-hook-verlangt-echte-umlaute.md) — ASCII-Ersatz bricht den Commit; Python-Ausgaben enden auf \r.
 - [Agenten-Suite](agenten-suite-lauf-praxis.md) — ~1,5 h je Modell; Exit 1 ist eine Quote.
 - [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) — Bedienung, Fusion, ElegooSlicer.
 
