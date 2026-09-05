@@ -64,15 +64,24 @@ class _VariantWorker(Worker):
 
     done = Signal(object)
     failed = Signal(object)
+    progressed = Signal(float, str)
+    """Der Fortschritt, **als Signal**: ``build_variants`` ruft seinen Rückruf
+    synchron aus dem Arbeits-Thread, und der Rückruf war die gebundene
+    Widgetmethode — ``QProgressBar`` und ``QLabel`` wurden aus einem fremden
+    Thread gesetzt, gemessen an den Thread-Kennungen (Gesamtreview 05.09.2026,
+    UI-14). Ein Signal stellt die Meldung über die Ereignisschleife zu."""
 
     def __init__(self, cancel: CancelSignal, **arguments: Any) -> None:
         super().__init__()
         self._cancel = cancel
         self._arguments = arguments
 
+    def _report(self, share: float, text: str) -> None:
+        self.progressed.emit(share, text)
+
     def work(self) -> None:
         try:
-            made = build_variants(**self._arguments, cancelled=self._cancel)
+            made = build_variants(**self._arguments, progress=self._report, cancelled=self._cancel)
         except AppError as error:
             self.failed.emit(error)
             return
@@ -207,8 +216,8 @@ class VariantsDialog(QDialog):
             step=self.step.value(),
             count=self.count.value(),
             sources=ProjectSources(project),
-            progress=self._advance,
         )
+        worker.progressed.connect(self._advance)
         worker.done.connect(self._finished)
         worker.failed.connect(self._broke)
         worker.crashed.connect(lambda detail: self._broke(InternalError(detail=detail)))
@@ -222,11 +231,13 @@ class VariantsDialog(QDialog):
         self._leash.start(worker)
 
     def _advance(self, share: float, text: str) -> None:
-        """Fortschritt, gemeldet aus dem Arbeits-Thread.
+        """Fortschritt, angekommen im Oberflächen-Thread.
 
-        Gesetzt wird über ein Signal des Arbeiters und nicht von seinem Thread
-        aus: ein Widget aus einem fremden Thread anzufassen ist der Absturz, der
-        erst in der zehnten Wiederholung auffällt.
+        Zugestellt über ``_VariantWorker.progressed`` und nicht von seinem
+        Thread aus: ein Widget aus einem fremden Thread anzufassen ist der
+        Absturz, der erst in der zehnten Wiederholung auffällt — und genau so
+        stand es hier, mit einem Kommentar, der das Signal behauptete, das es
+        nicht gab (UI-14).
         """
         self.progress.setValue(int(max(0.0, min(1.0, share)) * 100))
         if text:

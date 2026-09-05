@@ -204,3 +204,42 @@ def test_the_progress_bar_appears_only_while_something_runs(
         assert ok.isEnabled(), "danach muss „Erzeugen“ wieder gehen"
     finally:
         dialog.deleteLater()
+
+
+def test_the_progress_reaches_the_widgets_on_the_interface_thread(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-14: Der Dialog reichte seine gebundene
+    Widgetmethode als ``progress`` in den Arbeiter, und ``build_variants``
+    rief sie synchron aus dem Arbeits-Thread — ``QProgressBar`` und
+    ``QLabel`` wurden aus einem fremden Thread gesetzt, während der Kommentar
+    daneben ein Signal behauptete, das es nicht gab. Gemessen an den
+    Thread-Kennungen: jeder Aufruf von ``_advance`` gehört dem
+    Oberflächen-Thread."""
+    from app.ui import variants_dialog as module
+
+    seen: list[int] = []
+    real_advance = VariantsDialog._advance
+
+    def watching(self: VariantsDialog, share: float, text: str) -> None:
+        seen.append(threading.get_ident())
+        real_advance(self, share, text)
+
+    monkeypatch.setattr(VariantsDialog, "_advance", watching)
+    monkeypatch.setattr(
+        module.QFileDialog, "getExistingDirectory", staticmethod(lambda *_a, **_k: str(tmp_path))
+    )
+    session = session_with_parameter()
+    dialog = VariantsDialog(session)
+    try:
+        dialog.count.setValue(2)
+        dialog._build()
+        worker = dialog._worker
+        assert worker is not None
+        assert worker.wait(30_000), "der Arbeiter wurde nicht fertig"
+        QApplication.processEvents()
+
+        assert seen, "der Fortschritt kam nie an"
+        assert set(seen) == {threading.get_ident()}, "ein Widget aus einem fremden Thread"
+    finally:
+        dialog.deleteLater()

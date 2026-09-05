@@ -1569,3 +1569,36 @@ def test_the_scan_counts_what_the_reader_would_return() -> None:
         "und dieselbe Zusage gilt für die Dreiecke — an ihnen hängt die Größengrenze"
     )
     assert bodies > 0, "ohne einen Körper prüft dieser Test nichts"
+
+
+def test_a_late_import_failure_leaves_the_next_project_alone(
+    qt_app: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-01: Der Planarbeiter meldete Erfolg oder
+    Fehler ohne Bindung an das Projekt, für das er lief. Ein neues Projekt
+    trägt wieder eine eigene ``src_1`` — und der verspätete Fehler des alten
+    Imports räumte genau diese Quelle aus dem **neuen** Dokument, samt
+    Nutzdaten. Jede Meldung trägt seither den Stempel ihres Dokuments."""
+    from app.ui import session as session_module
+    from app.ui.session import Session
+
+    kaputt = tmp_path / "halb.stl"
+    ganz = _stl(_cube())
+    kaputt.write_bytes(ganz[:84] + ganz[84:134])
+
+    session = Session()
+    monkeypatch.setattr(session_module, "PLAN_IN_WORKER_ABOVE", 0)
+    gesehen, settle = _await_signal(session)
+    session.import_model_async(kaputt)
+    assert list(session.project.document.sources) == ["src_1"], "der alte Import trägt src_1"
+
+    # Bevor der Arbeiter antwortet: ein neues Projekt mit einer eigenen src_1.
+    session.start_new("centauri-carbon-2", "petg")
+    own = session._embed_source("import", "eigenes.stl", ganz)
+    assert own == "src_1", "das neue Projekt vergibt dieselbe Kennung"
+
+    settle()
+
+    assert "src_1" in session.project.document.sources, "die Quelle des neuen Projekts bleibt"
+    assert session.project.sources["src_1"] == ganz, "samt Nutzdaten"
+    assert gesehen.get("error") is None, "der alte Fehler gilt dem neuen Projekt nicht"

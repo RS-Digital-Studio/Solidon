@@ -12,6 +12,7 @@ Anfrage ersetzt eine wartende, statt sich dahinter anzustellen.
 
 from __future__ import annotations
 
+import dataclasses
 import threading
 import time
 from collections.abc import Mapping, Sequence
@@ -65,10 +66,12 @@ from app.core.scene.project import (
     ProjectSources,
     checksum,
     clear_autosave,
+    discard_recovery,
     embedded_source_path,
     load,
     new_project,
     next_source_id,
+    recovery_token,
     save,
     write_autosave,
 )
@@ -494,6 +497,10 @@ class Session(QObject):
         unabhängig, und ein abgebrochener Vorschlag darf keine laufende
         Berechnung mitreißen (§15.6)."""
         self.path: Path | None = None
+        self.recovery_token: str = recovery_token()
+        """Unter welcher Kennung dieses Dokument gesichert wird, solange es
+        keinen Namen hat — je Dokument eine, damit zwei Fenster ihre
+        Sicherungen nicht teilen (:func:`app.core.scene.project.recovery_token`)."""
         self.quality: Quality = "draft"
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
     auf fein (§31)."""
@@ -555,6 +562,10 @@ class Session(QObject):
         der zerstört das C++-Objekt unter dem Thread: ein Absturz ohne
         Zeile, irgendwann später."""
         self._preview_generation = 0
+        self._project_generation = 0
+        """Welches Dokument gerade offen ist, als Zähler: ``_reset_for`` zählt
+        hoch, und ein Arbeiter, der für ein früheres gestartet wurde, erkennt
+        seine Meldung als veraltet (UI-01)."""
         """Stempel der jüngsten Vorschau-Anfrage (§18.7) — eine verspätete
         Antwort auf eine ältere wird verworfen statt gezeigt."""
         self._backend: LLMBackend | None = None
@@ -675,6 +686,13 @@ class Session(QObject):
         self.pending_foreign_check = True
         self._reset_for(into)
         self._dirty = True
+        if into is None:
+            # Die Sicherung gehört jetzt diesem Fenster: unter der eigenen
+            # Kennung neu geschrieben und die angebotene weggeräumt — sonst
+            # böte der nächste Start sie noch einmal an, und ein zweites
+            # Fenster hielte sie für seine (CORE-09).
+            write_autosave(self.project, None, self.recovery_token)
+            discard_recovery(path)
         self.projectChanged.emit()
 
     def save_project(self, path: Path | None = None) -> Path:
@@ -684,7 +702,7 @@ class Session(QObject):
         # Die Sicherung des Zustands, der gerade gespeichert wird, hat sich
         # damit erledigt — auch die namenlose, aus der eine Wiederherstellung
         # kam (§38).
-        clear_autosave(self.path)
+        clear_autosave(self.path, self.recovery_token)
         save(self.project, target)
         self.path = target
         self._dirty = False
@@ -694,12 +712,18 @@ class Session(QObject):
     def autosave(self) -> None:
         """Container zur Absturz-Wiederherstellung neben dem Projekt (§38)."""
         if self._dirty:
-            write_autosave(self.project, self.path)
+            write_autosave(self.project, self.path, self.recovery_token)
 
     def _reset_for(self, path: Path | None) -> None:
         self.history = History(self.project.document)
         self.cache.clear()
         self.path = path
+        # Ein anderes Dokument, eine andere Kennung — die Sicherung des
+        # vorigen bleibt liegen, bis ``_may_discard`` sie geräumt hat.
+        self.recovery_token = recovery_token()
+        # Und ein anderer Stempel: Was ein Arbeiter für das vorige Dokument
+        # noch meldet, gilt diesem nicht (UI-01).
+        self._project_generation += 1
         self._dirty = False
         self.last_result = None
         self.projectChanged.emit()
@@ -1040,9 +1064,28 @@ class Session(QObject):
         den Zügen nichts mehr ändern. Die Nachfrage stellt der Aufrufer, nicht
         diese Methode — der Kern fragt nie selbst (Regel 21).
         """
-        result = self.last_result
-        operation = next((entry for entry in self.project.document.ops if entry.id == op_id), None)
-        if result is None or operation is None or operation.op != "sculpt_strokes":
+        document = self.project.document
+        operation = next((entry for entry in document.ops if entry.id == op_id), None)
+        if operation is None or operation.op != "sculpt_strokes":
+            return False
+        # Der Stand **unmittelbar nach dieser Formsitzung**, nicht der am Ende
+        # des Stapels: ``last_result`` trug auch, was danach auf dem Körper
+        # geschah — Verschieben um 10 mm steckte in der eingebetteten STL und
+        # lief bei der nächsten Auswertung ein zweites Mal, aus 5…15 wurden
+        # 15…25 (Gesamtreview 05.09.2026, UI-17). Gerechnet wird bis zu diesem
+        # Schritt; die Auswertung sortiert nach Kennung, und der Cache kennt
+        # jeden Schritt davor.
+        up_to = dataclasses.replace(
+            document, ops=[entry for entry in document.ops if entry.id <= op_id]
+        )
+        result = evaluate(
+            up_to,
+            self.profile,
+            quality=self.quality,
+            cache=self.cache,
+            sources=ProjectSources(self.project, base_dir=self.base_dir),
+        )
+        if result.stopped_at is not None:
             return False
         # Ein Körper hinein, einer heraus: Die Operation behält die
         # Objektkennung ihrer Eingabe, und das gesuchte Ergebnis steht unter
@@ -1269,12 +1312,26 @@ class Session(QObject):
         # Arbeiters, also weit weg von der Ursache. ``hold_until_done`` hält
         # ihn, bis ``isRunning`` nein sagt.
         worker.finished.connect(partial(self._on_plan_done, worker))
-        worker.readyWith.connect(self._on_plan_ready)
-        worker.failedWith.connect(self._on_plan_failed)
+        # **Jede Meldung trägt das Dokument, für das sie gilt.** Zwischen Start
+        # und Antwort kann der Nutzer ein neues Projekt anlegen oder ein anderes
+        # öffnen — und das trägt wieder eine eigene ``src_1``. Ein verspäteter
+        # Fehler räumte dann diese Quelle aus dem **neuen** Dokument samt
+        # Nutzdaten (Gesamtreview 05.09.2026, UI-01). Der Zähler steht im
+        # Aufruf, nicht im Arbeiter: Er ist die Zusage, dass die Antwort zu
+        # dem Dokument gehört, das sie verändert.
+        stamp = self._project_generation
+        worker.readyWith.connect(
+            lambda plan, src, stamp=stamp: self._on_plan_ready(plan, src, stamp)
+        )
+        worker.failedWith.connect(
+            lambda error, src, stamp=stamp: self._on_plan_failed(error, src, stamp)
+        )
         # Wie bei der Auswertung: Was niemand erwartet hat, wird zu einem
         # ``InternalError`` — sonst bliebe der Wartezustand für immer stehen.
         worker.crashed.connect(
-            lambda detail, src=source_id: self._on_plan_failed(InternalError(detail=detail), src)
+            lambda detail, src=source_id, stamp=stamp: self._on_plan_failed(
+                InternalError(detail=detail), src, stamp
+            )
         )
         self._leash.start(worker)
 
@@ -1289,13 +1346,26 @@ class Session(QObject):
             self._plan = None
         self._leash.hold_until_done(worker)
 
-    def _on_plan_ready(self, plan: Any, source_id: str) -> None:
+    def _stale_import(self, source_id: str, generation: int | None) -> bool:
+        """Ob diese Meldung einem Dokument gilt, das nicht mehr offen ist.
+
+        ``None`` ist der gerade Weg ohne Arbeiter: Er antwortet im selben
+        Aufruf, in dem er gestartet wurde, und kann nicht veralten.
+        """
+        if generation is None or generation == self._project_generation:
+            return False
+        _log.info("import result for %s arrived after the project changed — ignored", source_id)
+        return True
+
+    def _on_plan_ready(self, plan: Any, source_id: str, generation: int | None = None) -> None:
         """Der Plan steht — anwenden gehört in den Hauptthread.
 
         ``History.apply`` ändert das Dokument und fragt die Lizenzgrenze; beides
         gehört dorthin, wo auch alles andere am Dokument geschieht.
         """
         self.busyChanged.emit(False)
+        if self._stale_import(source_id, generation):
+            return
         try:
             accepted = self.apply(plan.title, [plan.draft], raise_on_error=True)
         except AppError as error:
@@ -1306,14 +1376,20 @@ class Session(QObject):
             self._drop_source(source_id)
         self.importFinished.emit(accepted)
 
-    def _on_plan_failed(self, error: Any, source_id: str) -> None:
+    def _on_plan_failed(self, error: Any, source_id: str, generation: int | None = None) -> None:
         """Die Quelle wird zurückgenommen, wie im synchronen Weg auch.
 
         Sonst bliebe sie als Waise im Dokument und wanderte mit dem nächsten
         Speichern in die Projektdatei — bei einer abgewiesenen 63-MB-Datei ist
         das nicht theoretisch.
+
+        **Aber nur aus dem Dokument, für das der Import lief.** Nach einem
+        Projektwechsel trägt das neue womöglich dieselbe Kennung, und die
+        gehört ihm (UI-01).
         """
         self.busyChanged.emit(False)
+        if self._stale_import(source_id, generation):
+            return
         self._drop_source(source_id)
         self.importFailed.emit(error)
 

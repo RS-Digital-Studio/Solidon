@@ -6739,3 +6739,35 @@ def test_fitting_the_view_takes_every_selected_body(qt_app: QApplication) -> Non
         "mit gewähltem Merkmal ließ sich nicht mehr einpassen — die Färbungsausnahme "
         "ist in die Kamera gerutscht"
     )
+
+
+def test_the_display_cache_follows_the_geometry_not_only_the_id(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, UI-02: Der Anzeigecache lag nach Kennung und
+    Dreieckszahl — beides bleibt beim Skalieren gleich, und ein anderes Projekt
+    trägt dieselben Kennungen. Eine Icosphere von 20 auf 40 mm skaliert zeigte
+    weiter 20 mm. Der Objekthash der Auswertung gehört in den Schlüssel."""
+    from app.core.geom.mesh import MeshData
+    from app.ui import viewport as module
+    from app.ui.viewport import Viewport, _display_key
+
+    monkeypatch.setattr(module, "DISPLAY_DECIMATION_ABOVE", 10)
+    small = MeshData.of(trimesh.creation.icosphere(subdivisions=2, radius=10.0))
+    big = MeshData.of(trimesh.creation.icosphere(subdivisions=2, radius=20.0))
+    assert small.triangle_count == big.triangle_count, "gleiche Zahl, andere Geometrie"
+    assert _display_key("obj_1", small, "h1") != _display_key("obj_1", big, "h2")
+
+    viewport = Viewport()
+    try:
+        first = viewport._for_display("obj_1", small, "h1")
+        second = viewport._for_display("obj_1", big, "h2")
+        assert second is not first
+        assert second.bounds.size[0] == pytest.approx(2.0 * first.bounds.size[0], rel=0.1), (
+            "die Anzeige zeigt die neue Größe"
+        )
+        assert viewport._for_display("obj_1", small, "h1") is first, (
+            "gleiche Geometrie, gleicher Eintrag"
+        )
+    finally:
+        viewport.deleteLater()

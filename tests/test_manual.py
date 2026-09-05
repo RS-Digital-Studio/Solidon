@@ -1632,3 +1632,36 @@ def test_a_click_on_a_manual_link_really_reaches_the_allowlist(
     finally:
         window.close()
         window.deleteLater()
+
+
+def test_the_manual_loads_no_image_but_its_own_figures(
+    qt_app: QApplication, tmp_path: Path
+) -> None:
+    """Gesamtreview 05.09.2026, UI-22: ``loadResource`` reichte alles außer
+    ``figure:`` an Qt weiter, und Qt lädt — eine Rezeptbeschreibung mit
+    ``![Bild](file:///…)`` ließ schon das Öffnen der Seite die Datei lesen,
+    ohne Klick und an der Hostprüfung der Links vorbei. Das Handbuch kennt
+    genau eine Bildquelle: seinen Abbildungskatalog."""
+    from PySide6.QtCore import QUrl
+    from PySide6.QtGui import QImage, QTextDocument
+
+    from app.ui.manual_window import PageView
+
+    image = tmp_path / "fremd.png"
+    picture = QImage(4, 4, QImage.Format.Format_RGB32)
+    picture.fill(0xFF00FF00)
+    assert picture.save(str(image))
+
+    view = PageView()
+    try:
+        view.setMarkdown(f"# Seite\n\n![Bild]({image.as_uri()})\n")
+        qt_app.processEvents()
+
+        served = view.loadResource(QTextDocument.ResourceType.ImageResource, QUrl(image.as_uri()))
+        assert served is None, "eine fremde Bildquelle wird nicht bedient"
+        held = view.document().resource(
+            QTextDocument.ResourceType.ImageResource, QUrl(image.as_uri())
+        )
+        assert not (isinstance(held, QImage) and not held.isNull()), "und liegt nicht im Dokument"
+    finally:
+        view.deleteLater()

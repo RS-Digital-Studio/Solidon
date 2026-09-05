@@ -50,7 +50,10 @@ from PySide6.QtWidgets import (
 
 from app.branding import APP_NAME, WEBSITE_URL
 from app.core import drawing, figures, manual
+from app.core.log import get_logger
 from app.i18n import get_language, tr
+
+_log = get_logger(__name__)
 
 #: Was der Textspalte neben der Abbildung bleibt — Innenabstand und Rollbalken.
 #: Ohne diesen Abzug läge eine Zeichnung genau auf der Kante und der
@@ -111,10 +114,20 @@ class PageView(QTextBrowser):
     def loadResource(  # noqa: N802 — Qt gibt den Namen vor
         self, kind: int, name: QUrl | str
     ) -> object:
-        """Löst ``figure:``-Verweise auf; alles andere macht Qt wie bisher."""
+        """Löst ``figure:``-Verweise auf — und sonst nichts.
+
+        Alles andere ging an Qt, und Qt lädt: Eine Rezeptbeschreibung mit
+        ``![Bild](file:///…)`` kam über ``recipe.register`` ungefiltert in die
+        Handbuchreferenz, und schon das **Öffnen** der Seite las die Datei —
+        ohne Klick, an der Hostprüfung von ``_open_link`` vorbei; unter
+        Windows wäre eine UNC-Anforderung dieselbe Zeile (Gesamtreview
+        05.09.2026, UI-22). Das Handbuch kennt genau eine Bildquelle, seinen
+        Abbildungskatalog, und die ist lokal.
+        """
         url = QUrl(name) if isinstance(name, str) else name
         if url.scheme() != "figure":
-            return super().loadResource(kind, name)
+            _log.info("manual page asked for %s — only figure: is served", url.toString())
+            return None
         return self._image(url.path() or url.toString().removeprefix("figure:"))
 
     def _image(self, key: str) -> QImage | None:

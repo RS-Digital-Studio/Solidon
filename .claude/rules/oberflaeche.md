@@ -382,6 +382,15 @@ Nutzers zu überstimmen. Drei Regeln, alle drei einmal gebrochen gewesen:
   „Speichern" schrieb nach `…p3d.autosave`, die eigentliche Datei blieb
   unberührt, und die wiederhergestellte Arbeit war beim nächsten Öffnen wieder
   fort.
+* **Namenlos heißt je Dokument eine Kennung, nicht je Rechner eine Datei.**
+  Zwei Fenster mit je einem neuen, ungespeicherten Projekt schrieben beide
+  `unsaved.p3d.autosave`: Die zweite Sicherung ersetzte die erste, und das
+  Aufräumen aus dem einen Fenster löschte die des anderen (Gesamtreview
+  05.09.2026, CORE-09). `Session.recovery_token` kommt aus
+  `project.recovery_token()`, `_reset_for` zieht je Dokument eine neue, und
+  jede der vier Sicherungsfunktionen nimmt sie entgegen. Angeboten wird beim
+  Start die jüngste **fremde** Sicherung; abgelehnt wird genau sie geräumt
+  (`discard_recovery`), angenommen wandert sie unter die eigene Kennung.
 
 ## Die Oberfläche wächst nicht mit
 

@@ -99,6 +99,17 @@ wer danach die Szene fragte, bekam eine leere. Wer einen Arbeiter dazubaut,
 trägt ihn dort ein; sonst wartet die Schleife auf einen Lauf, den es noch gar
 nicht gibt.
 
+**Und seine Antwort trägt das Dokument, für das er lief.** Zwischen Start und
+Antwort kann ein neues Projekt offen sein, und das trägt wieder eine eigene
+`src_1`: Der verspätete Fehler des alten Imports räumte sie aus dem **neuen**
+Dokument, samt Nutzdaten (Gesamtreview 05.09.2026, UI-01).
+`Session._project_generation` zählt bei jedem `_reset_for` hoch, der Stempel
+reist in den Slots mit, und `_stale_import` lässt eine veraltete Meldung
+fallen — dieselbe Frage, die `_outdated` für die Auswertung beantwortet. Wer
+einen weiteren Arbeiter am Dokument baut, gibt ihm denselben Stempel mit; und
+was ein Arbeiter an Widgets meldet, geht als **Signal** (`_VariantWorker.progressed`),
+nie als gebundene Widgetmethode im Rückruf (UI-14).
+
 
 **Ein Export bekommt Fortschritt, aber kein Abbrechen** (`_ExportWorker`). Die
 Regel darüber ist nicht aufgeweicht, sie greift hier nur anders: Ein halb

@@ -659,3 +659,40 @@ def test_the_bar_answers_exactly_what_a_stroke_asks_for() -> None:
     # Und die Namen, die ein Zug zwingend braucht, sind dabei — sonst wäre das
     # Auspacken ein TypeError beim ersten Klick und kein Typfehler beim Prüfen.
     assert {"radius", "strength"} <= offered
+
+
+def test_baking_freezes_the_state_right_after_the_sculpt_step(window: MainWindow) -> None:
+    """Gesamtreview 05.09.2026, UI-17: Festgeschrieben wurde ``last_result``,
+    also der Stand am **Ende** des Stapels. Lag nach der Formsitzung noch ein
+    Verschieben um 10 mm auf dem Körper, steckte es in der eingebetteten STL
+    und lief bei der nächsten Auswertung ein zweites Mal — aus 5…15 wurden
+    15…25. Festgeschrieben wird der Stand unmittelbar nach der Formsitzung."""
+    from app.core.scene import OperationDraft
+
+    object_id = with_a_body(window)
+    window.start_sculpt(object_id)
+    window._on_sculpt((0.0, 0.0, 82.0))
+    window.finish_sculpt()
+    window.session.wait_for_idle()
+    sculpt = next(
+        entry for entry in window.session.project.document.ops if entry.op == "sculpt_strokes"
+    )
+    window.session.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=(object_id,), params={"dx": 10.0})],
+    )
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    assert result is not None
+    before = result.scene.objects[object_id].mesh.bounds
+
+    assert window.session.bake_strokes(sculpt.id)
+    window.session.wait_for_idle()
+
+    result = window.session.last_result
+    assert result is not None
+    after = result.scene.objects[object_id].mesh.bounds
+    assert after.minimum[0] == pytest.approx(before.minimum[0], abs=0.05), (
+        "das Verschieben lief ein zweites Mal"
+    )
+    assert after.maximum[0] == pytest.approx(before.maximum[0], abs=0.05)

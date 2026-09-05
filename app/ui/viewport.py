@@ -1894,6 +1894,20 @@ SCALE_UNCHANGED = 1e-4
 #: dezimierte beide jedes Mal neu, im Qt-Hauptthread (§2.8).
 DISPLAY_CACHE_KEPT = 4
 
+#: Der Schlüssel des Anzeigecaches: Kennung, Dreieckszahl **und** Inhalt.
+#: Kennung und Dreieckszahl allein blieben beim Skalieren und Verschieben
+#: gleich — und ein anderes Projekt trägt dieselben Kennungen: Eine Icosphere
+#: mit 1,3 Millionen Dreiecken zeigte nach dem Skalieren von 20 auf 40 mm
+#: weiter 20 mm, aus beiden Zugriffen dasselbe Cacheobjekt (Gesamtreview
+#: 05.09.2026, UI-02). Der Objekthash der Auswertung ist die Geometrie.
+DisplayKey = tuple[ObjectId, int, str]
+
+
+def _display_key(object_id: ObjectId, mesh: Any, identity: str) -> DisplayKey:
+    """Wonach ein dezimiertes Anzeigenetz abgelegt wird."""
+    return (object_id, mesh.triangle_count, identity)
+
+
 #: Wie lange der Schichtschieber stehen muss, bevor die Körper an der neuen
 #: Höhe gekappt werden. Der Schnitt ist echte Geometrie und kostet an einem
 #: texturierten Netz um die Sekunde — kurz genug, dass er nach dem Loslassen
@@ -3021,7 +3035,7 @@ class _PreparedScene(NamedTuple):
     """Für den Renderer vorbereitete Netze samt neuen Cache-Einträgen."""
 
     meshes: dict[ObjectId, Any]
-    cached: dict[tuple[ObjectId, int], Any]
+    cached: dict[DisplayKey, Any]
     uncapped: bool
 
 
@@ -3034,7 +3048,7 @@ class _SceneMeshWorker(Worker):
         self,
         generation: int,
         result: EvaluationResult,
-        tasks: Sequence[tuple[ObjectId, Any, tuple[ObjectId, int] | None]],
+        tasks: Sequence[tuple[ObjectId, Any, DisplayKey | None]],
         plane: SectionPlane | None,
         second: SectionPlane | None,
     ) -> None:
@@ -3056,7 +3070,7 @@ class _SceneMeshWorker(Worker):
 
     def work(self) -> None:
         meshes: dict[ObjectId, Any] = {}
-        cached: dict[tuple[ObjectId, int], Any] = {}
+        cached: dict[DisplayKey, Any] = {}
         uncapped = False
         for object_id, source, cache_key in self._tasks:
             if self._was_cancelled():
@@ -3721,7 +3735,7 @@ class Viewport(QWidget):
         self._hidden: frozenset[ObjectId] = frozenset()
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""
-        self._display_cache: dict[tuple[ObjectId, int], Any] = {}
+        self._display_cache: dict[DisplayKey, Any] = {}
         """§18.9: die dezimierte Version des zuletzt gezeigten Körpers. Sie
         fließt nie in den Kern zurück."""
         self._scene_generation = 0
@@ -4587,7 +4601,7 @@ class Viewport(QWidget):
         self, result: EvaluationResult | None
     ) -> (
         tuple[
-            list[tuple[ObjectId, Any, tuple[ObjectId, int] | None]],
+            list[tuple[ObjectId, Any, DisplayKey | None]],
             SectionPlane | None,
             SectionPlane | None,
         ]
@@ -4605,7 +4619,7 @@ class Viewport(QWidget):
             offset = self._section.position - self._slice_thickness
             second = SectionPlane(normal=self._section.normal, position=offset).flipped()
 
-        tasks: list[tuple[ObjectId, Any, tuple[ObjectId, int] | None]] = []
+        tasks: list[tuple[ObjectId, Any, DisplayKey | None]] = []
         heavy = plane is not None
         for object_id, entry in result.scene.objects.items():
             if not self._in_view(object_id, entry):
@@ -4614,7 +4628,7 @@ class Viewport(QWidget):
             cache_key = None
             may_decimate = not (self._map is not None and self._map_object == object_id)
             if mesh.triangle_count > DISPLAY_DECIMATION_ABOVE and may_decimate:
-                key = (object_id, mesh.triangle_count)
+                key = _display_key(object_id, mesh, result.object_hashes.get(object_id, ""))
                 found = self._display_cache.get(key)
                 if found is None:
                     cache_key = key
@@ -4846,7 +4860,11 @@ class Viewport(QWidget):
             mesh = (
                 prepared.meshes.get(object_id, entry.mesh)
                 if prepared is not None
-                else self._sectioned(self._for_display(object_id, entry.mesh))
+                else self._sectioned(
+                    self._for_display(
+                        object_id, entry.mesh, result.object_hashes.get(object_id, "")
+                    )
+                )
             )
             raw = getattr(mesh, "raw", None)
             if raw is None or not len(raw.faces):
@@ -5459,7 +5477,7 @@ class Viewport(QWidget):
 
         return np.asarray(self._map.values, dtype=float)
 
-    def _for_display(self, object_id: ObjectId, mesh: Any) -> Any:
+    def _for_display(self, object_id: ObjectId, mesh: Any, identity: str = "") -> Any:
         """Eine für die Anzeige dezimierte Version ab der Schwelle aus §31.
 
         §18.9 verlangt sie, und es gab sie nicht: der Viewport zeichnete immer
@@ -5475,7 +5493,7 @@ class Viewport(QWidget):
         if self._map is not None and self._map_object == object_id:
             return mesh
 
-        key = (object_id, mesh.triangle_count)
+        key = _display_key(object_id, mesh, identity)
         found = self._display_cache.pop(key, None)
         if found is None:
             found = decimate(mesh, DISPLAY_DECIMATION_TARGET)

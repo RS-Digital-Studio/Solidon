@@ -155,7 +155,7 @@ from app.core.scene import (
 )
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import repair_is_available
-from app.core.scene.project import clear_autosave, find_recovery
+from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
 from app.core.sketch.planes import feature_plane, frame_for_plane, to_world
 from app.core.sketch.profile import SketchCurve, curves_of
 from app.core.slice import gcode
@@ -4209,7 +4209,7 @@ class MainWindow(QMainWindow):
         # Absturz da (§38) — nicht dafür, eine Entscheidung des Nutzers zu
         # überstimmen. Bleibt sie liegen, bietet das nächste Öffnen genau den
         # Stand wieder an, den er hier gerade weggeworfen hat.
-        clear_autosave(self.session.path)
+        clear_autosave(self.session.path, self.session.recovery_token)
         return True
 
     def open_path(self, path: Path) -> None:
@@ -12206,7 +12206,7 @@ class MainWindow(QMainWindow):
         Wer vor dem ersten Speichern abstürzte, hatte die Arbeit verloren,
         obwohl sie auf der Platte lag.
         """
-        candidate = find_recovery(None)
+        candidate = find_recovery(None, self.session.recovery_token)
         if candidate is None:
             return
         if not self._ask_recovery(
@@ -12217,8 +12217,9 @@ class MainWindow(QMainWindow):
         ):
             # Dieselbe Begründung wie beim benannten Fall: sonst begrüßt
             # dieselbe Frage jeden Start, bis irgendwann jemand die Datei von
-            # Hand löscht.
-            clear_autosave(None)
+            # Hand löscht. Weggeräumt wird **die angebotene** — jede
+            # Sicherung trägt die Kennung ihres Dokuments (CORE-09).
+            discard_recovery(candidate)
             return
         try:
             self.session.recover(candidate)
