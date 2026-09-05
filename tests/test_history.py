@@ -1257,3 +1257,26 @@ def test_outputs_follow_inputs_only_where_they_continued_them() -> None:
         "obj_6",
     )
     assert _outputs_following(op(("obj_1", "obj_2"), ("obj_1", "obj_2")), ["obj_3"]) == ("obj_3",)
+
+
+def test_a_new_action_over_a_second_history_discards_the_old_redo_branch(
+    document: Document, registry: Registry
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-08: Undo in der Sitzungs-History, dann
+    eine neue Handlung über eine zweite ``History`` (Trennen, Deckeln, Auto
+    Split) — und Strg+Y hängte die zurückgenommene Transaktion hinter die
+    neue: ``t1, t3, t2``. Eine neue Handlung verwirft den Zweig, gleich über
+    welches Verlaufsobjekt sie kam."""
+    session = History(document, registry)
+    create(session)
+    undone = session.apply(_("Vorschlag"), [OperationDraft(op="make_object")])
+    session.undo()
+    assert session.can_redo
+
+    other = History(document, registry)
+    made = other.apply(_("Deckel erzeugen"), [OperationDraft(op="make_object")])
+
+    assert not session.can_redo, "das Dokument hat sich seit dem Undo bewegt"
+    assert session.redo() is None
+    ids = [entry.id for entry in document.transactions]
+    assert ids[-1] == made.id and undone.id not in ids and len(ids) == 2, ids

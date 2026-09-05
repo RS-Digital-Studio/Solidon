@@ -258,6 +258,9 @@ class History:
         auch wenn er gleichartig wäre."""
         self._undone: list[Transaction] = []
         self._undone_ops: dict[OpId, Operation] = {}
+        self._undone_anchor: tuple[int, TransactionId | None] | None = None
+        """Der Dokumentstand, an dem der Redo-Stapel entstand — siehe
+        :meth:`_drop_stale_undone`."""
         self._reseed()
 
     # --- Lesen -----------------------------------------------------------------
@@ -277,11 +280,13 @@ class History:
 
     @property
     def can_redo(self) -> bool:
+        self._drop_stale_undone()
         return bool(self._undone)
 
     @property
     def discardable(self) -> int:
         """Transaktionen, die die nächste Änderung wegwerfen würde (§15.4)."""
+        self._drop_stale_undone()
         return len(self._undone)
 
     @property
@@ -291,6 +296,7 @@ class History:
         Der zeigte nur den aktuellen Stand; ob es noch etwas
         wiederherzustellen gab, verriet allein der Zustand des Menüeintrags.
         """
+        self._drop_stale_undone()
         return tuple(self._undone)
 
     def operation(self, op_id: OpId) -> Operation:
@@ -1187,6 +1193,7 @@ class History:
         """
         if not self.document.transactions:
             return None
+        self._drop_stale_undone()
         # Ein Undo schließt jedes offene Bündel: Der nächste Zug ist eine neue
         # Absicht und darf den zurückgenommenen Zweig nicht stehen lassen.
         self._open_bundle = None
@@ -1201,9 +1208,11 @@ class History:
         if transaction.changes is not None:
             restore(self.document, transaction.changes.before)
         self._undone.append(transaction)
+        self._undone_anchor = self._document_mark()
         return transaction
 
     def redo(self) -> Transaction | None:
+        self._drop_stale_undone()
         if not self._undone:
             return None
         self._open_bundle = None
@@ -1214,7 +1223,28 @@ class History:
         self.document.transactions.append(transaction)
         if transaction.changes is not None:
             restore(self.document, transaction.changes.after)
+        self._undone_anchor = self._document_mark()
         return transaction
+
+    def _document_mark(self) -> tuple[int, TransactionId | None]:
+        """Woran sich eine fremde Handlung erkennen lässt: Zahl und Kennung der
+        letzten Transaktion im Dokument."""
+        transactions = self.document.transactions
+        return (len(transactions), transactions[-1].id if transactions else None)
+
+    def _drop_stale_undone(self) -> None:
+        """Ein Redo-Stapel gilt nur für den Dokumentstand, an dem er entstand.
+
+        Trennen, Deckeln und Auto Split bauen sich eine **zweite** ``History``
+        über demselben Dokument. Eine neue Handlung dort ließ den Redo-Stapel
+        der Sitzungs-History stehen, und Strg+Y hängte danach die alte
+        Transaktion hinter die neue — ``t1, t3, t2``, obwohl eine neue
+        Handlung den zurückgenommenen Zweig verwirft (Gesamtreview
+        05.09.2026, CORE-08). Hat sich das Dokument seit dem Undo bewegt, ist
+        der Zweig weg — wie bei einer eigenen neuen Handlung auch.
+        """
+        if self._undone and self._document_mark() != self._undone_anchor:
+            self._forget_undone()
 
     def _forget_undone(self) -> None:
         for transaction in self._undone:
