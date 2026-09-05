@@ -262,6 +262,21 @@ def affected(
                     reasons.setdefault(graph.modules[name], "selbst geändert")
                 if name.startswith(("app.", "tools.")) or name in ("app", "tools"):
                     touches_code = True
+            elif name.startswith(("app.", "tools.")):
+                # Gelöscht: Das Modul steht in keinem Graphen mehr, also kennt
+                # der Graph auch seine Importeure nicht — und die Auswahl war
+                # leer, obwohl der fachliche Test schon beim Import scheitern
+                # würde (Gesamtreview 05.09.2026, B-14). Eine entfernte Datei
+                # unter app/ oder tools/ ist eine Codeänderung, und wer sie
+                # beim Namen nennt, ist betroffen.
+                touches_code = True
+                for test_name, test_path in graph.modules.items():
+                    if (
+                        test_name.startswith("tests.")
+                        and test_path.name.startswith("test_")
+                        and name in test_path.read_text(encoding="utf-8")
+                    ):
+                        reasons.setdefault(test_path, f"nennt {name}, und die Datei ist gelöscht")
         else:
             for name, reason in _named_readers(graph, graph.root / relative).items():
                 reasons.setdefault(graph.modules[name], reason)

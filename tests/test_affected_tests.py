@@ -175,3 +175,19 @@ def test_the_real_graph_knows_this_file() -> None:
     assert reasons[graph.root / "tests" / "test_affected_tests.py"] == (
         "importiert eine geänderte Datei"
     )
+
+
+def test_a_deleted_module_still_counts_as_a_code_change(tree: Path) -> None:
+    """B-14 aus dem Gesamtreview vom 05.09.2026: Ein gelöschtes Modul stand
+    in keinem Graphen mehr, also fiel weder sein Name noch ``touches_code``
+    an — die Auswahl war leer, obwohl der fachliche Test schon beim Import
+    scheitern würde."""
+    removed = tree / "app" / "x.py"
+    removed.unlink()
+
+    files, reasons = affected([removed], ImportGraph(tree))
+
+    names = _names(files, tree)
+    assert "tests/test_typed.py" in names, "nennt app.x im Quelltext"
+    assert "tests/test_reader.py" in names, "eine Codeänderung erreicht die Baumleser"
+    assert any("gelöscht" in reason for reason in reasons.values())
