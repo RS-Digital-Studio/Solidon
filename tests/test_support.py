@@ -388,3 +388,20 @@ def test_the_subject_never_exceeds_a_mime_word() -> None:
     )
 
     assert done.stdout == "ok", f"{done.stdout}\n{done.stderr}"
+
+
+def test_two_reports_in_the_same_second_get_two_folders(tmp_path: Path) -> None:
+    """Gesamtreview 05.09.2026, CORE-27: Der Sekundenstempel allein war der
+    Ordnername, und ein vorhandener Ordner wurde erneut geöffnet — der zweite
+    Bericht überschrieb den ersten in ``bericht.txt``, und die Anhänge des
+    ersten lagen weiter daneben."""
+    from app.core import report as report_module
+
+    first = report_module.write(report_module.ErrorReport(summary="erster"), directory=tmp_path)
+    second = report_module.write(report_module.ErrorReport(summary="zweiter"), directory=tmp_path)
+
+    assert first != second
+    assert (first / "bericht.txt").read_text(encoding="utf-8") != (
+        second / "bericht.txt"
+    ).read_text(encoding="utf-8")
+    assert "erster" in (first / "bericht.txt").read_text(encoding="utf-8")

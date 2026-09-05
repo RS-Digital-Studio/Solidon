@@ -213,6 +213,27 @@ def as_text(report: ErrorReport) -> str:
     return "\n".join(lines)
 
 
+def _fresh_folder(base: Path, stem: str) -> Path:
+    """Ein Ordner, den es noch nicht gab — angelegt, nicht nur benannt.
+
+    Der Sekundenstempel allein war der Name, und ein vorhandener Ordner wurde
+    erneut geöffnet: Zwei Berichte derselben Sekunde — ein zweiter Klick,
+    zwei Fenster — überschrieben einander in ``bericht.txt`` und mischten ihre
+    Anhänge (Gesamtreview 05.09.2026, CORE-27). ``mkdir`` ohne
+    ``exist_ok`` entscheidet, wer den Namen bekommt; der Nächste zählt hoch.
+    """
+    ensure_dir(base)
+    number = 1
+    while True:
+        candidate = base / (stem if number == 1 else f"{stem}-{number}")
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            number += 1
+            continue
+        return candidate
+
+
 def write(report: ErrorReport, project: Path | None = None, directory: Path | None = None) -> Path:
     """Stellt den Bericht in einem Ordner zusammen und gibt ihn zurück.
 
@@ -220,8 +241,7 @@ def write(report: ErrorReport, project: Path | None = None, directory: Path | No
     passiert, ist seine Entscheidung (§37.2).
     """
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    target = (directory or user_data_dir() / REPORT_DIRNAME) / f"bericht-{stamp}"
-    ensure_dir(target)
+    target = _fresh_folder(directory or user_data_dir() / REPORT_DIRNAME, f"bericht-{stamp}")
 
     (target / "bericht.txt").write_text(as_text(report), encoding="utf-8")
 
