@@ -19,22 +19,22 @@ sha256 = "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
 [[text]]
 path = "third_party_licenses/OCP-Apache-2.0.txt"
 packages = ["cadquery-ocp-novtk", "cadquery-ocp-proxy"]
-versions = ["7.9.3.1.1"]
-source = "https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE"
+versions = ["8.0.1.0.0"]
+source = "https://raw.githubusercontent.com/CadQuery/OCP/b0495a71d10168b96cef8043ac39020a3fa45372/LICENSE"
 sha256 = "a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd"
 
 [[text]]
 path = "third_party_licenses/OCCT-exception-1.0.txt"
 packages = ["cadquery-ocp-novtk"]
-versions = ["7.9.3.1.1"]
-source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/OCCT_LGPL_EXCEPTION.txt"
+versions = ["8.0.1.0.0"]
+source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V8_0_1/OCCT_LGPL_EXCEPTION.txt"
 sha256 = "04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b"
 
 [[text]]
 path = "third_party_licenses/OCCT-LGPL-2.1.txt"
 packages = ["cadquery-ocp-novtk"]
-versions = ["7.9.3.1.1"]
-source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/LICENSE_LGPL_21.txt"
+versions = ["8.0.1.0.0"]
+source = "https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V8_0_1/LICENSE_LGPL_21.txt"
 sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
 
 [[text]]
@@ -143,9 +143,9 @@ versions = ["6.11.2"]
 id = "opencascade-technology"
 name = "Open CASCADE Technology"
 notice_package = "cadquery-ocp-novtk"
-source = "https://github.com/Open-Cascade-SAS/OCCT/tree/V7_9_3"
+source = "https://github.com/Open-Cascade-SAS/OCCT/tree/V8_0_1"
 source_delivery = true
-versions = ["7.9.3"]
+versions = ["8.0.1"]
 
 [[runtime]]
 id = "geos"

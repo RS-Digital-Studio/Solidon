@@ -240,11 +240,11 @@ def _crosses_exactly(loop: Profile) -> bool | None:
     if not available():
         return None
 
-    from OCP.GCE2d import GCE2d_MakeArcOfCircle, GCE2d_MakeSegment
+    from OCP.collections import Array1_gp_Pnt2d
+    from OCP.GC import GC_MakeArcOfCircle2d, GC_MakeSegment2d
     from OCP.Geom2d import Geom2d_Circle
     from OCP.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_PointsToBSpline
     from OCP.gp import gp_Ax2d, gp_Dir2d, gp_Pnt2d
-    from OCP.TColgp import TColgp_Array1OfPnt2d
 
     def point(value: Point2) -> Any:
         return gp_Pnt2d(value[0], value[1])
@@ -252,7 +252,7 @@ def _crosses_exactly(loop: Profile) -> bool | None:
     def line(start: Point2, end: Point2) -> Any | None:
         if _joins(start, end):
             return None
-        return GCE2d_MakeSegment(point(start), point(end)).Value()
+        return GC_MakeSegment2d(point(start), point(end)).Value()
 
     curves: list[tuple[Any, ProfileSegment]] = []
     for segment in loop.segments:
@@ -262,7 +262,7 @@ def _crosses_exactly(loop: Profile) -> bool | None:
             if len(through) < 2 or all(_joins(through[0], other) for other in through[1:]):
                 curve = None
             else:
-                array = TColgp_Array1OfPnt2d(1, len(through))
+                array = Array1_gp_Pnt2d(1, len(through))
                 for index, value in enumerate(through, start=1):
                     array.SetValue(index, point(value))
                 curve = Geom2dAPI_PointsToBSpline(array).Curve()
@@ -273,7 +273,7 @@ def _crosses_exactly(loop: Profile) -> bool | None:
             elif abs(turn[2]) >= 2.0 * math.pi:
                 curve = Geom2d_Circle(gp_Ax2d(point(turn[0]), gp_Dir2d(1.0, 0.0)), turn[1])
             else:
-                curve = GCE2d_MakeArcOfCircle(
+                curve = GC_MakeArcOfCircle2d(
                     point(segment.start), point(segment.via), point(segment.end)
                 ).Value()
         else:

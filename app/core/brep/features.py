@@ -47,9 +47,11 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     eingepasst.
     """
     from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+    from OCP.collections import (
+        IndexedDataMap_TopoDS_Shape_List_TopoDS_Shape_TopTools_ShapeMapHasher as NeighbourMap,
+    )
     from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
     from OCP.TopExp import TopExp
-    from OCP.TopTools import TopTools_IndexedDataMapOfShapeListOfShape
 
     found: dict[FeatureId, Feature] = {}
     counts = {"hole": 0, "pin": 0, "face": 0, "fillet": 0, "sphere": 0}
@@ -59,7 +61,7 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     # Welche Flächen an einer Kante zusammenstoßen — auch einmal je Körper. Eine
     # kugelige Fläche ist daran zu erkennen, dass ihre Nachbarn Verrundungen
     # sind: dann ist sie die Ecke, an der die verrundeten Kanten zusammenlaufen.
-    neighbours = TopTools_IndexedDataMapOfShapeListOfShape()
+    neighbours = NeighbourMap()
     TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
 
     for index, face in enumerate(solid.faces()):
@@ -265,7 +267,7 @@ def _rounded_neighbours(neighbours: Any, face: Any) -> int:
 
     rounded = 0
     for other in seen:
-        surface = BRepAdaptor_Surface(TopoDS.Face_s(other))
+        surface = BRepAdaptor_Surface(TopoDS.Face(other))
         if surface.GetType() != GeomAbs_Cylinder:
             continue
         turn = abs(surface.LastUParameter() - surface.FirstUParameter())

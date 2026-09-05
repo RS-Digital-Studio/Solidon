@@ -78,6 +78,25 @@ def _same_point(a: tuple[float, float, float], b: tuple[float, float, float]) ->
     return is_close(a[0], b[0]) and is_close(a[1], b[1]) and is_close(a[2], b[2])
 
 
+def box_limits(box: Any) -> tuple[float, float, float, float, float, float]:
+    """Die sechs Grenzen eines ``Bnd_Box``, über seine beiden Eckpunkte.
+
+    ``Bnd_Box.Get`` gibt seit OpenCASCADE 8 eine ``Limits``-Struktur zurück,
+    die OCP nicht bindet — der Aufruf endet in einem ``TypeError``. Die
+    Eckpunkte gibt es in jeder Fassung, und sie sagen dasselbe.
+    """
+    low = box.CornerMin()
+    high = box.CornerMax()
+    return (
+        float(low.X()),
+        float(low.Y()),
+        float(low.Z()),
+        float(high.X()),
+        float(high.Y()),
+        float(high.Z()),
+    )
+
+
 def available() -> bool:
     """Ist der Kern da? Wird gefragt, bevor sich eine Handlung anbietet (§36)."""
     try:
@@ -175,11 +194,11 @@ class Solid:
         Zwei Körper, die sich berühren, ohne sich zu durchdringen, sind hier
         zwei — und im Netz je nach Vernetzung eines.
         """
+        from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
         from OCP.TopAbs import TopAbs_SOLID
         from OCP.TopExp import TopExp
-        from OCP.TopTools import TopTools_IndexedMapOfShape
 
-        found = TopTools_IndexedMapOfShape()
+        found = ShapeMap()
         TopExp.MapShapes_s(self.shape, TopAbs_SOLID, found)
         return int(found.Extent())
 
@@ -265,7 +284,7 @@ class Solid:
         BRepBndLib.AddOptimal_s(self.shape, box, False, False)
         if box.IsVoid():
             return self.mesh.bounds
-        low_x, low_y, low_z, high_x, high_y, high_z = box.Get()
+        low_x, low_y, low_z, high_x, high_y, high_z = box_limits(box)
         return BoundingBox(
             (float(low_x), float(low_y), float(low_z)),
             (float(high_x), float(high_y), float(high_z)),
@@ -319,16 +338,16 @@ class Solid:
         cached = self._cache.get(f"list:{kind}")
         if cached is not None:
             return list(cached)
+        from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
         from OCP.TopAbs import TopAbs_EDGE, TopAbs_FACE
         from OCP.TopExp import TopExp
         from OCP.TopoDS import TopoDS
-        from OCP.TopTools import TopTools_IndexedMapOfShape
 
-        found = TopTools_IndexedMapOfShape()
+        found = ShapeMap()
         TopExp.MapShapes_s(self.shape, TopAbs_FACE if kind == "face" else TopAbs_EDGE, found)
         # Die Karte gibt nackte Formen zurück; alles danach will den echten
         # Typ, und ein falscher Cast hier scheitert erst viel weiter weg.
-        as_typed = TopoDS.Face_s if kind == "face" else TopoDS.Edge_s
+        as_typed = TopoDS.Face if kind == "face" else TopoDS.Edge
         entities = [as_typed(found.FindKey(index)) for index in range(1, found.Extent() + 1)]
         self._cache[f"list:{kind}"] = entities
         return list(entities)
@@ -353,7 +372,7 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
     face_index = 0
     face_sources: list[int] = []
     while explorer.More():
-        face = TopoDS.Face_s(explorer.Current())
+        face = TopoDS.Face(explorer.Current())
         location = TopLoc_Location()
         triangulation = BRep_Tool.Triangulation_s(face, location)
         explorer.Next()

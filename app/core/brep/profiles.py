@@ -15,7 +15,7 @@ import math
 from collections.abc import Callable
 from typing import Any, Final
 
-from app.core.brep.kernel import DEFLECTION, Solid, require
+from app.core.brep.kernel import DEFLECTION, Solid, box_limits, require
 from app.core.errors import (
     PROGRAMMING_ERRORS,
     Action,
@@ -114,10 +114,10 @@ def _spline_curve(points: tuple[Point2, ...], lift: _Lift) -> Any:
     Der Kern bekommt damit die exakte Kurve und keine Segmentfolge (§30) —
     dieselbe Zusage, die für Bögen seit P13 gilt.
     """
+    from OCP.collections import Array1_gp_Pnt
     from OCP.GeomAPI import GeomAPI_PointsToBSpline
-    from OCP.TColgp import TColgp_Array1OfPnt
 
-    array = TColgp_Array1OfPnt(1, len(points))
+    array = Array1_gp_Pnt(1, len(points))
     for index, point in enumerate(points, start=1):
         array.SetValue(index, lift(point))
     return GeomAPI_PointsToBSpline(array).Curve()
@@ -163,10 +163,10 @@ def _face(profile: Profile, lift: _Lift) -> Any:
     for hole in profile.holes:
         wire = _wire(hole, lift)
         # Läuft das Loch im selben Drehsinn wie die Außenkontur, wird es
-        # umgedreht (``Reversed`` gibt eine Form, ``TopoDS.Wire_s`` zieht sie
+        # umgedreht (``Reversed`` gibt eine Form, ``TopoDS.Wire`` zieht sie
         # zum Draht zurück); lief es schon dagegen, bleibt es.
         if (signed_area(hole) >= 0.0) == outer_left:
-            wire = TopoDS.Wire_s(wire.Reversed())
+            wire = TopoDS.Wire(wire.Reversed())
         maker.Add(wire)
     return maker.Face()
 
@@ -374,7 +374,7 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
     höchsten Ebene des Körpers liegen — bei einem Kasten der Deckel."""
     require()
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
-    from OCP.TopTools import TopTools_ListOfShape
+    from OCP.collections import List_TopoDS_Shape
 
     require_positive("wall", thickness)
     tops = _top_faces(solid)
@@ -382,7 +382,7 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
         raise GeometryError(
             detail=_("Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe."),
         )
-    removed = TopTools_ListOfShape()
+    removed = List_TopoDS_Shape()
     for face in tops:
         removed.Append(face)
     builder = BRepOffsetAPI_MakeThickSolid()
@@ -829,7 +829,7 @@ def bounds(solid: Solid) -> tuple[float, float, float, float, float, float]:
 
     box = Bnd_Box()
     BRepBndLib.AddOptimal_s(solid.shape, box, False, False)
-    xmin, ymin, zmin, xmax, ymax, zmax = box.Get()
+    xmin, ymin, zmin, xmax, ymax, zmax = box_limits(box)
     return (xmin, ymin, zmin, xmax, ymax, zmax)
 
 

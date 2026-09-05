@@ -1238,3 +1238,36 @@ def test_every_twin_pair_answers_the_same_question_the_same_way(profile: Profile
             abweichend.append(f"{exakt} schweigt zu {sorted(fehlt_exakt)} bei {werte}")
 
     assert not abweichend, abweichend
+
+
+def test_every_opencascade_import_in_the_application_resolves() -> None:
+    """Jeder ``from OCP.… import …`` in ``app/`` und ``tools/`` trifft einen Namen.
+
+    OCP 8 hat Module leer zurückgelassen, statt sie zu entfernen: ``OCP.GCE2d``
+    und ``OCP.TColgp`` importieren, aber ``GCE2d_MakeSegment`` und
+    ``TColgp_Array1OfPnt2d`` gibt es nicht mehr. Der Fehler fällt erst, wenn die
+    Zeile läuft — bei der Selbstschnittprüfung der Skizze war das kein Test in
+    dieser Datei, sondern das Beispielprojekt „skizze-mit-massen" (05.09.2026).
+    Statisch geprüft trifft es jede Stelle, auch die, die kein Test hier fährt.
+    """
+    import ast
+    import importlib
+
+    root = Path(__file__).resolve().parent.parent
+    missing: list[str] = []
+    for path in sorted([*(root / "app").rglob("*.py"), *(root / "tools").rglob("*.py")]):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ImportFrom) or not node.module:
+                continue
+            if node.module != "OCP" and not node.module.startswith("OCP."):
+                continue
+            for alias in node.names:
+                try:
+                    getattr(importlib.import_module(node.module), alias.name)
+                except Exception as problem:
+                    missing.append(
+                        f"{path.relative_to(root)}:{node.lineno} {node.module}.{alias.name}"
+                        f" ({type(problem).__name__})"
+                    )
+    assert not missing, "\n".join(missing)

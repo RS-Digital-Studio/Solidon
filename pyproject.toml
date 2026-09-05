@@ -84,7 +84,7 @@ agent = ["keyring>=25.0"]
 # wird er wie PySide6 als dynamisch gelinkte Bibliothek benutzt (§36). „novtk",
 # weil pyvista VTK schon mitbringt; zwei Kopien in einem Prozess sind eine zu
 # viel.
-brep = ["cadquery-ocp-novtk>=7.8"]
+brep = ["cadquery-ocp-novtk>=8.0.1"]
 dev = [
   "pytest>=8.0",
   # Jeder Test in einem eigenen Fork (`--forked`, nur POSIX). Gebraucht in

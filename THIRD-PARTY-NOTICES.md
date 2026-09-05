@@ -7,16 +7,16 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | Paket | Version | SPDX-Ausdruck | Quelle |
 |---|---:|---|---|
 | attrs | 26.1.0 | `MIT` | [Quelltext](https://www.attrs.org/) |
-| cadquery-ocp-novtk | 7.9.3.1.1 | `Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE) |
-| cadquery-ocp-proxy | 7.9.3.1.1 | `Apache-2.0` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE) |
+| cadquery-ocp-novtk | 8.0.1.0.0 | `Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/b0495a71d10168b96cef8043ac39020a3fa45372/LICENSE) |
+| cadquery-ocp-proxy | 8.0.1.0.0 | `Apache-2.0` | [Quelltext](https://raw.githubusercontent.com/CadQuery/OCP/b0495a71d10168b96cef8043ac39020a3fa45372/LICENSE) |
 | certifi | 2026.7.22 | `MPL-2.0` | [Quelltext](https://github.com/certifi/python-certifi) |
 | charset-normalizer | 3.5.1 | `MIT` | [Quelltext](https://github.com/jawah/charset_normalizer/blob/master/CHANGELOG.md) |
 | contourpy | 1.3.3 | `BSD-3-Clause` | [Quelltext](https://github.com/contourpy/contourpy) |
 | cycler | 0.12.1 | `BSD-3-Clause` | [Quelltext](https://github.com/matplotlib/cycler) |
-| cyclopts | 4.23.2 | `Apache-2.0` | [Quelltext](https://github.com/BrianPugh/cyclopts) |
+| cyclopts | 4.24.0 | `Apache-2.0` | [Quelltext](https://github.com/BrianPugh/cyclopts) |
 | docstring_parser | 0.18.0 | `MIT` | [Quelltext](https://github.com/rr-/docstring_parser) |
 | fast_simplification | 0.2.0 | `MIT` | [Quelltext](https://github.com/pyvista/fast-simplification) |
-| fonttools | 4.63.0 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
+| fonttools | 4.64.0 | `MIT` | [Quelltext](http://github.com/fonttools/fonttools) |
 | hidapi | 0.15.0 | `BSD-3-Clause` | [Quelltext](https://github.com/trezor/cython-hidapi) |
 | idna | 3.19 | `BSD-3-Clause` | [Quelltext](https://github.com/kjd/idna) |
 | ImageIO | 2.37.4 | `BSD-2-Clause` | [Quelltext](https://github.com/imageio/imageio) |
@@ -24,9 +24,9 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | jaraco.context | 6.1.2 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.context) |
 | jaraco.functools | 4.6.0 | `MIT` | [Quelltext](https://github.com/jaraco/jaraco.functools) |
 | keyring | 25.7.0 | `MIT` | [Quelltext](https://github.com/jaraco/keyring) |
-| kiwisolver | 1.5.0 | `BSD-3-Clause` | [Quelltext](https://github.com/nucleic/kiwi) |
+| kiwisolver | 1.5.1 | `BSD-3-Clause` | [Quelltext](https://github.com/nucleic/kiwi) |
 | lazy-loader | 0.5 | `BSD-3-Clause` | [Quelltext](https://github.com/scientific-python/lazy-loader) |
-| lxml | 6.1.2 | `BSD-3-Clause` | [Quelltext](https://github.com/lxml/lxml) |
+| lxml | 6.1.3 | `BSD-3-Clause` | [Quelltext](https://github.com/lxml/lxml) |
 | manifold3d | 3.5.2 | `Apache-2.0` | [Quelltext](https://github.com/elalish/manifold) |
 | markdown-it-py | 4.2.0 | `MIT` | [Quelltext](https://github.com/executablebooks/markdown-it-py) |
 | matplotlib | 3.11.1 | `LicenseRef-Matplotlib` | [Quelltext](https://matplotlib.org) |
@@ -36,7 +36,7 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | numpy | 2.5.2 | `BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0` | [Quelltext](https://github.com/numpy/numpy) |
 | packaging | 26.3 | `Apache-2.0 OR BSD-2-Clause` | [Quelltext](https://github.com/pypa/packaging) |
 | pillow | 12.3.0 | `MIT-CMU` | [Quelltext](https://github.com/python-pillow/Pillow) |
-| platformdirs | 4.11.4 | `MIT` | [Quelltext](https://github.com/tox-dev/platformdirs) |
+| platformdirs | 4.11.7 | `MIT` | [Quelltext](https://github.com/tox-dev/platformdirs) |
 | pooch | 1.9.0 | `BSD-3-Clause` | [Quelltext](https://www.fatiando.org/pooch) |
 | Pygments | 2.21.0 | `BSD-2-Clause` | [Quelltext](https://github.com/pygments/pygments) |
 | pyparsing | 3.3.2 | `MIT` | [Quelltext](https://github.com/pyparsing/pyparsing.git) |
@@ -45,7 +45,7 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | PySide6_Essentials | 6.11.2 | `LGPL-3.0-only` | [Quelltext](https://code.qt.io/cgit/pyside/pyside-setup.git/) |
 | python-dateutil | 2.9.0.post0 | `BSD-3-Clause OR Apache-2.0` | [Quelltext](https://github.com/dateutil/dateutil) |
 | pyvista | 0.48.4 | `MIT` | [Quelltext](https://github.com/pyvista/pyvista) |
-| pyvistaqt | 0.12.0 | `MIT` | [Quelltext](https://github.com/pyvista/pyvistaqt) |
+| pyvistaqt | 0.13.0 | `MIT` | [Quelltext](https://github.com/pyvista/pyvistaqt) |
 | pywin32-ctypes | 0.2.3 | `BSD-3-Clause` | [Quelltext](https://github.com/enthought/pywin32-ctypes) |
 | QtPy | 2.4.3 | `MIT` | [Quelltext](https://github.com/spyder-ide/qtpy) |
 | requests | 2.34.2 | `Apache-2.0` | [Quelltext](https://github.com/psf/requests) |
@@ -59,7 +59,7 @@ und die im Repository mit SHA-256 festgeschriebenen Ergänzungen.
 | six | 1.17.0 | `MIT` | [Quelltext](https://github.com/benjaminp/six) |
 | svg.path | 7.1 | `MIT` | [Quelltext](https://github.com/regebro/svg.path) |
 | tifffile | 2026.8.23 | `BSD-3-Clause` | [Quelltext](https://www.cgohlke.com) |
-| trimesh | 5.0.0 | `MIT` | [Quelltext](https://github.com/mikedh/trimesh) |
+| trimesh | 5.1.0 | `MIT` | [Quelltext](https://github.com/mikedh/trimesh) |
 | typing_extensions | 4.16.0 | `PSF-2.0` | [Quelltext](https://github.com/python/typing_extensions) |
 | urllib3 | 2.7.0 | `MIT` | [Quelltext](https://github.com/urllib3/urllib3/blob/main/CHANGES.rst) |
 | vhacdx | 0.0.10 | `BSD-3-Clause` | [Quelltext](https://github.com/trimesh/vhacdx) |
@@ -102,13 +102,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-### cadquery-ocp-novtk 7.9.3.1.1
+### cadquery-ocp-novtk 8.0.1.0.0
 
 SPDX-Ausdruck: `Apache-2.0 AND (LGPL-2.1-only WITH OCCT-exception-1.0)`
 
 #### OCP-Apache-2.0.txt
 
-Quelle: https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE
+Quelle: https://raw.githubusercontent.com/CadQuery/OCP/b0495a71d10168b96cef8043ac39020a3fa45372/LICENSE
 
 SHA-256: `a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd`
 
@@ -318,7 +318,7 @@ SHA-256: `a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd`
 
 #### OCCT-exception-1.0.txt
 
-Quelle: https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/OCCT_LGPL_EXCEPTION.txt
+Quelle: https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V8_0_1/OCCT_LGPL_EXCEPTION.txt
 
 SHA-256: `04580a884ea6cea294402649ff7b5cbb167d47462d1340a4ed33e550db10a81b`
 
@@ -337,7 +337,7 @@ of or is based on facilities provided by the Open CASCADE Technology software.
 
 #### OCCT-LGPL-2.1.txt
 
-Quelle: https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V7_9_3/LICENSE_LGPL_21.txt
+Quelle: https://raw.githubusercontent.com/Open-Cascade-SAS/OCCT/V8_0_1/LICENSE_LGPL_21.txt
 
 SHA-256: `4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987`
 
@@ -846,13 +846,13 @@ necessary.  Here is a sample; alter the names:
 That's all there is to it!
 ```
 
-### cadquery-ocp-proxy 7.9.3.1.1
+### cadquery-ocp-proxy 8.0.1.0.0
 
 SPDX-Ausdruck: `Apache-2.0`
 
 #### OCP-Apache-2.0.txt
 
-Quelle: https://raw.githubusercontent.com/CadQuery/OCP/9fbe5c36907537fc6564d90f0ee52b3347c85c43/LICENSE
+Quelle: https://raw.githubusercontent.com/CadQuery/OCP/b0495a71d10168b96cef8043ac39020a3fa45372/LICENSE
 
 SHA-256: `a13caea71627202ad33cc4cafafdd18e667e16716488f8d9c568127121fb89fd`
 
@@ -1209,13 +1209,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### cyclopts 4.23.2
+### cyclopts 4.24.0
 
 SPDX-Ausdruck: `Apache-2.0`
 
-#### cyclopts-4.23.2.dist-info/licenses/LICENSE
+#### cyclopts-4.24.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:cyclopts-4.23.2.dist-info/licenses/LICENSE
+Quelle: wheel:cyclopts-4.24.0.dist-info/licenses/LICENSE
 
 SHA-256: `f14b20048c12393cb9920065c47fadc030210b0f9cab9849ce0a68a063ededc5`
 
@@ -1491,13 +1491,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### fonttools 4.63.0
+### fonttools 4.64.0
 
 SPDX-Ausdruck: `MIT`
 
-#### fonttools-4.63.0.dist-info/licenses/LICENSE
+#### fonttools-4.64.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:fonttools-4.63.0.dist-info/licenses/LICENSE
+Quelle: wheel:fonttools-4.64.0.dist-info/licenses/LICENSE
 
 SHA-256: `6787208f83f659ccbc2223b2fde952ffa6f7e8aca62f1a8a2bf5bc51bb1b2383`
 
@@ -1525,9 +1525,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### fonttools-4.63.0.dist-info/licenses/LICENSE.external
+#### fonttools-4.64.0.dist-info/licenses/LICENSE.external
 
-Quelle: wheel:fonttools-4.63.0.dist-info/licenses/LICENSE.external
+Quelle: wheel:fonttools-4.64.0.dist-info/licenses/LICENSE.external
 
 SHA-256: `94a83aaee0729a0f302d34acc4acecbd9d58366f262429075fe557e4a54b2e69`
 
@@ -2880,13 +2880,13 @@ IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTI
 USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-### kiwisolver 1.5.0
+### kiwisolver 1.5.1
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### kiwisolver-1.5.0.dist-info/licenses/LICENSE
+#### kiwisolver-1.5.1.dist-info/licenses/LICENSE
 
-Quelle: wheel:kiwisolver-1.5.0.dist-info/licenses/LICENSE
+Quelle: wheel:kiwisolver-1.5.1.dist-info/licenses/LICENSE
 
 SHA-256: `529c40e5f67f2f88904657a9f7879ae2f8dc76bc9bfef9cb10d988b48804ed61`
 
@@ -3006,13 +3006,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### lxml 6.1.2
+### lxml 6.1.3
 
 SPDX-Ausdruck: `BSD-3-Clause`
 
-#### lxml-6.1.2.dist-info/licenses/LICENSE.txt
+#### lxml-6.1.3.dist-info/licenses/LICENSE.txt
 
-Quelle: wheel:lxml-6.1.2.dist-info/licenses/LICENSE.txt
+Quelle: wheel:lxml-6.1.3.dist-info/licenses/LICENSE.txt
 
 SHA-256: `8fc2b568133516e46845d2147917adeee1648e70ae9ab5ed6c5417afef4ce855`
 
@@ -3050,9 +3050,9 @@ NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-#### lxml-6.1.2.dist-info/licenses/LICENSES.txt
+#### lxml-6.1.3.dist-info/licenses/LICENSES.txt
 
-Quelle: wheel:lxml-6.1.2.dist-info/licenses/LICENSES.txt
+Quelle: wheel:lxml-6.1.3.dist-info/licenses/LICENSES.txt
 
 SHA-256: `388fa99f3bde4447cd5a4cbb114037be026854db6cfe89e112691c1d8abdcf3c`
 
@@ -9079,13 +9079,13 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-### platformdirs 4.11.4
+### platformdirs 4.11.7
 
 SPDX-Ausdruck: `MIT`
 
-#### platformdirs-4.11.4.dist-info/licenses/LICENSE
+#### platformdirs-4.11.7.dist-info/licenses/LICENSE
 
-Quelle: wheel:platformdirs-4.11.4.dist-info/licenses/LICENSE
+Quelle: wheel:platformdirs-4.11.7.dist-info/licenses/LICENSE
 
 SHA-256: `29e0fd62e929850e86eb28c3fdccf0cefdf4fa94879011cffb3d0d4bed6d4db6`
 
@@ -12299,13 +12299,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-### pyvistaqt 0.12.0
+### pyvistaqt 0.13.0
 
 SPDX-Ausdruck: `MIT`
 
-#### pyvistaqt-0.12.0.dist-info/licenses/AUTHORS.rst
+#### pyvistaqt-0.13.0.dist-info/licenses/AUTHORS.rst
 
-Quelle: wheel:pyvistaqt-0.12.0.dist-info/licenses/AUTHORS.rst
+Quelle: wheel:pyvistaqt-0.13.0.dist-info/licenses/AUTHORS.rst
 
 SHA-256: `f5b3884d20d064bc6f4b537ae5f77e0fa940f0f4b61845c98b21b193c0465ae3`
 
@@ -12331,9 +12331,9 @@ Developers":
 - Guillaume Favelier, (`@GuillaumeFavelier <https://github.com/GuillaumeFavelier/>`_)
 ```
 
-#### pyvistaqt-0.12.0.dist-info/licenses/LICENSE
+#### pyvistaqt-0.13.0.dist-info/licenses/LICENSE
 
-Quelle: wheel:pyvistaqt-0.12.0.dist-info/licenses/LICENSE
+Quelle: wheel:pyvistaqt-0.13.0.dist-info/licenses/LICENSE
 
 SHA-256: `ef781b94ef972e69777b03022520150b77ae9bd1c6e0225c452a14e82251e9e5`
 
@@ -16092,13 +16092,13 @@ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
 
-### trimesh 5.0.0
+### trimesh 5.1.0
 
 SPDX-Ausdruck: `MIT`
 
-#### trimesh-5.0.0.dist-info/licenses/LICENSE.md
+#### trimesh-5.1.0.dist-info/licenses/LICENSE.md
 
-Quelle: wheel:trimesh-5.0.0.dist-info/licenses/LICENSE.md
+Quelle: wheel:trimesh-5.1.0.dist-info/licenses/LICENSE.md
 
 SHA-256: `fe27b5ef8710676cc85255da28a32f394e2ef3f4ce47075a1c732a9ea1d7bd03`
 
