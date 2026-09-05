@@ -530,9 +530,14 @@ class DiskCache:
                 len(keeps),
             )
             return
-        folder = ensure_dir(self._folder(key))
         entries: list[dict[str, Any]] = []
+        folder: Path | None = None
         try:
+            # Im selben Fehlerpfad wie das Schreiben: Eine volle Platte oder
+            # entzogene Rechte beim Anlegen des Unterordners warfen die rohe
+            # OSError durch ``evaluate`` — und mit ihr das fertig gerechnete
+            # Ergebnis (Gesamtreview 05.09.2026, CORE-10).
+            folder = ensure_dir(self._folder(key))
             for position, entry in enumerate(result.objects):
                 name = f"{position}{self.codec.suffix}"
                 (folder / name).write_bytes(self.codec.dumps(entry.mesh))
@@ -579,7 +584,8 @@ class DiskCache:
             # bekannten Stellen ab; eine dritte wäre ein weiteres Feld dieses
             # Payloads.
             _log.warning("could not write cache entry %s: %s", key, problem)
-            shutil.rmtree(folder, ignore_errors=True)
+            if folder is not None:
+                shutil.rmtree(folder, ignore_errors=True)
             return
         self._account_for(folder)
 

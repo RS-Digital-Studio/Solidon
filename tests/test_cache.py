@@ -1238,3 +1238,26 @@ def test_the_key_reads_the_content_of_every_source_bearing_parameter() -> None:
     assert ("displace_image", "source", "image") in covered, "das Relief liest ein Bild"
     assert ("load", "source", "source") in covered
     assert len(covered) >= 4, covered
+
+
+def test_a_failing_cache_folder_does_not_take_the_result_with_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gesamtreview 05.09.2026, CORE-10: Die Ordneranlage stand vor dem
+    OSError-Fang in ``DiskCache.put``. Eine volle Platte beim Anlegen des
+    Unterordners warf die rohe Ausnahme durch ``evaluate`` — und mit ihr das
+    fertig gerechnete Ergebnis. Der Cache ist eine Beilage, kein Vertrag."""
+    import errno
+
+    from app.core.scene import cache as cache_module
+
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+
+    def full(path: Path) -> Path:
+        raise OSError(errno.ENOSPC, "No space left on device", str(path))
+
+    monkeypatch.setattr(cache_module, "ensure_dir", full)
+
+    disk.put("key", CachedResult(objects=(make_object("obj_1", triangles=42),)))  # wirft nicht
+
+    assert disk.get("key") is None, "abgelegt wurde nichts — und das ist die ganze Folge"
