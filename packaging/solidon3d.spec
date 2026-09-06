@@ -154,7 +154,19 @@ binaries = [
 ]
 binaries += [(str(entry), "app/core/slice") for entry in SLICE_CORE]
 
+# Der Renderer der 3D-Ansicht. Die drei Pakete bringen eigene
+# PyInstaller-Hooks mit (``wgpu/__pyinstaller``, ``pygfx``,
+# ``rendercanvas``), die die native wgpu-Bibliothek, die Shader und die
+# Schriften einsammeln — aber die Qt-Anbindung lädt rendercanvas
+# dynamisch (``importlib.import_module(".QtCore", libname)``), und ein
+# Hook, auf den man sich verlässt, ohne ihn zu nennen, fällt beim
+# nächsten Paketwechsel still aus. Deshalb steht hier, was die Ansicht
+# wirklich braucht.
 hiddenimports = [
+    "rendercanvas.qt",
+    "wgpu.backends.wgpu_native",
+    "pygfx.renderers.wgpu",
+
     # Die Operationen registrieren sich beim Import selbst (§10); PyInstaller
     # sieht keinen Import, der nur über eine Zeichenkette im Bootstrap
     # passiert. Eingesammelt wird der **ganze** eigene Kern: die

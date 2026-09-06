@@ -571,7 +571,10 @@ def flatpak_manifest() -> str:
       sucht, und erspart Qt den ersten Fehlversuch, denn
       ``XDG_SESSION_TYPE=wayland`` reist ebenfalls mit und lässt Qt 6 Wayland
       vor xcb probieren. Flathub macht es bei FreeCAD genauso.
-    * ``--device=dri`` — der Viewport rechnet mit OpenGL (§18).
+    * ``--device=dri`` — der Viewport rechnet über wgpu auf der Grafikkarte
+      (§18). Die Freigabe gibt ``/dev/dri`` frei; den Vulkan-Loader und
+      seinen Treiber bringt die Laufzeit mit (Mesa), nicht dieses Paket.
+      Bis zum 06.09.2026 stand hier OpenGL — das galt für den VTK-Viewport.
     * ``--filesystem=home`` — Modelle liegen beim Nutzer, und ein Dateidialog,
       der nur in einen Sandkasten sehen darf, ist kein Dateidialog. Portale
       wären der feinere Weg; sie setzen voraus, dass jeder Öffnen- und
