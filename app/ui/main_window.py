@@ -8641,17 +8641,21 @@ class MainWindow(QMainWindow):
         self._cancel_map_worker()
         self._retire(self._map_worker)
         self._map_worker = None
-        self.viewport.set_analysis_map(None, None)
-        self.analysis_bar.show_legend(None)
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result else None
         if entry is None:
+            self.viewport.set_analysis_map(None, None)
+            self.analysis_bar.show_legend(None)
             return
-
         key = (object_id, kind, entry.mesh.triangle_count)
         if key in self._map_cache:
+            # **Eine gecachte Karte ersetzt die alte in einem Zug.** Erst zu
+            # leeren und dann zu setzen baute die Szene zweimal — jeder Wechsel
+            # zwischen zwei gerechneten Karten kostete zwei Aufbauten statt einem.
             self._show_map(self._map_cache[key], object_id)
             return
+        self.viewport.set_analysis_map(None, None)
+        self.analysis_bar.show_legend(None)
 
         self.analysis_bar.show_problem(tr("Die Analysekarte wird berechnet …"))
         request = object()
@@ -9718,6 +9722,7 @@ class MainWindow(QMainWindow):
                 feature,
                 features=entry.features,
                 mesh=as_mesh_data(entry.mesh),
+                alone=result is not None and len(result.scene.objects) == 1,
             )
             self.feature_dock.reveal()
         else:
@@ -13145,12 +13150,25 @@ class MainWindow(QMainWindow):
         )
 
     def _dropped_image_ready(self, target: ObjectId, choice: tuple[str, str] | None) -> None:
-        """Nach dem Lesen den Reliefdialog mit der neuen Quelle öffnen."""
+        """Nach dem Lesen den Reliefdialog mit der neuen Quelle öffnen.
 
-        if choice is not None:
-            self.run_operation(
-                REGISTRY.get("displace_image"), given={"source": choice[0]}, on_bodies=(target,)
+        Der Zielkörper stammt vom Ablegen (UI-04); zwischen Ablegen und Lesen
+        kann ein Undo oder ein Löschen ihn entfernt haben. Dann gilt das Bild
+        keinem Körper mehr — die Meldung sagt es, statt einen Dialog auf ein
+        Objekt zu öffnen, das es nicht gibt.
+        """
+
+        if choice is None:
+            return
+        result = self.session.last_result
+        if result is None or target not in result.scene.objects:
+            self.announce(
+                tr("Das Objekt für das Relief gibt es nicht mehr. Bitte das Bild erneut ablegen.")
             )
+            return
+        self.run_operation(
+            REGISTRY.get("displace_image"), given={"source": choice[0]}, on_bodies=(target,)
+        )
 
     def wait_for_workers(self, timeout_ms: int = 2000) -> bool:
         """Jeden Arbeiter dieses Fensters auslaufen lassen.

@@ -13793,3 +13793,30 @@ def test_a_finding_becomes_an_error_with_its_cause() -> None:
 
     plain = Finding(code="ingest.very_large", severity="warning", message=tr("Fein vernetzt."))
     assert as_error(plain).detail is None
+
+
+def test_a_relief_for_a_vanished_body_is_announced_instead_of_started(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwischen Ablegen und Lesen kann ein Undo den Zielkörper entfernt haben (UI-04).
+
+    Dann öffnet sich kein Dialog auf ein Objekt, das es nicht gibt; die
+    Statuszeile sagt, was zu tun ist. Ein lebender Körper bekommt sein Relief.
+    """
+    calls: list[dict[str, Any]] = []
+    announcements: list[str] = []
+    monkeypatch.setattr(window, "run_operation", lambda spec, **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(window, "announce", announcements.append)
+
+    window._dropped_image_ready("obj_999", ("src_1", "image"))
+    assert calls == []
+    assert announcements and "Relief" in announcements[0]
+
+    session = window.session
+    assert session.apply("Ein Körper", [OperationDraft(op="create_box")])
+    assert session.wait_for_idle(30000)
+    result = session.last_result
+    assert result is not None and "obj_1" in result.scene.objects
+    window._dropped_image_ready("obj_1", ("src_1", "image"))
+    assert calls and calls[0]["on_bodies"] == ("obj_1",)
+    assert len(announcements) == 1

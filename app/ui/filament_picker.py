@@ -963,7 +963,18 @@ class FilamentPanel(QWidget):
                 count,
                 slot is not None and threemf.slot_identity(slot) in overrides,
             )
-            for slot, count in sorted(used.values(), key=lambda item: str(item[0]))
+            # Sortiert nach Spulennummer, „Ohne Filament" zuletzt — nicht nach
+            # ``repr(MaterialSlot)``, dessen Reihenfolge an der Feldfolge der
+            # Klasse hinge und mit jedem umgestellten Feld die Kundenliste
+            # umsortierte.
+            for slot, count in sorted(
+                used.values(),
+                key=lambda item: (
+                    item[0] is None,
+                    int(item[0].index) if item[0] is not None else 0,
+                    str(item[0].name) if item[0] is not None else "",
+                ),
+            )
         )
         self._fill()
 

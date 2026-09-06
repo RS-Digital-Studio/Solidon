@@ -1224,6 +1224,7 @@ def test_selecting_a_feature_passes_its_mesh_to_the_action_panel(
         *,
         features: Any = None,
         mesh: MeshData | None = None,
+        alone: bool = False,
     ) -> None:
         received.append((feature_id, feature, alike, features, mesh))
 
@@ -4803,3 +4804,50 @@ def test_a_problem_without_a_way_out_stays_a_sentence(qt_app: QApplication) -> N
         assert bar.legend.note.text() == "Die Analysekarte ließ sich nicht berechnen."
     finally:
         bar.deleteLater()
+
+
+def test_a_cached_map_replaces_the_shown_one_in_a_single_pass(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Wechsel zwischen zwei gerechneten Karten setzt die Ansicht einmal.
+
+    Bis zum 06.09.2026 wurde erst geleert und dann gesetzt — zwei Szenenaufbauten
+    für einen Klick, und der erste zeigte für einen Moment gar keine Karte.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    host = MainWindow(Session(), UiSettings())
+    body = SceneObject(id="obj_1", name="Quader", mesh=MeshData(trimesh.creation.box()))
+    result = EvaluationResult(Scene(objects={"obj_1": body}))
+    host.session.last_result = result
+    host.object_tree.show_scene(result)
+    host.object_tree.select_object("obj_1")
+    first = maps.AnalysisMap(
+        kind="support", title="Stützen", values=(1.0,) * 12, unit="mm", low=0.0, high=1.0
+    )
+    second = maps.AnalysisMap(
+        kind="overhang", title="Überhang", values=(0.0,) * 12, unit="°", low=0.0, high=90.0
+    )
+    host._map_cache[("obj_1", "support", 12)] = first
+    host._map_cache[("obj_1", "overhang", 12)] = second
+    host.analysis_bar.show_map("support")
+    host._analysis_map("support", "obj_1")
+    assert host.viewport.analysis_map is first
+
+    shown: list[Any] = []
+    real = host.viewport.set_analysis_map
+
+    def counted(analysis: Any, object_id: Any) -> None:
+        shown.append(analysis)
+        real(analysis, object_id)
+
+    monkeypatch.setattr(host.viewport, "set_analysis_map", counted)
+    host.analysis_bar.show_map("overhang")
+    host._analysis_map("overhang", "obj_1")
+    assert shown == [second], "eine gecachte Karte ersetzt die alte in einem Zug"
+    assert host.viewport.analysis_map is second
+    host.release()
