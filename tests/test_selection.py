@@ -19,6 +19,7 @@ werden, nach dem Muster von ``tests/test_cursors.py``.
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -34,6 +35,7 @@ from app.core.perceive.features import detect
 from app.core.scene.evaluate import EvaluationResult
 from app.core.types import Scene, SceneObject
 from app.ui.main_window import MainWindow
+from app.ui.render.api import Pick
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.viewport import Viewport
@@ -44,6 +46,194 @@ MESHES = Path(__file__).parent / "data" / "meshes"
 #: Die Platte aus dem Korpus: 80 x 50 x 8 mm, vier Bohrungen Ø5,19 an
 #: (±25, ±15), sechs erkannte Flächen. Die Deckfläche liegt auf z = +4.
 PLATE = MESHES / "plate_holes.stl"
+
+
+def test_surface_pick_keeps_its_body_among_overlapping_bounds(qt_app: QApplication) -> None:
+    """Ein sichtbarer Treffer gehört seinem Aktor, auch im kleineren Hüllquader."""
+    import trimesh
+
+    small = MeshData(trimesh.creation.box(extents=(8.0, 8.0, 4.0)))
+    large = MeshData(trimesh.creation.box(extents=(10.0, 10.0, 4.0)))
+    entries = {
+        key: SceneObject(id=key, name=key, mesh=mesh, features=detect(mesh))
+        for key, mesh in (("small", small), ("large", large))
+    }
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view.show_scene(EvaluationResult(scene=Scene(objects=entries)))
+    point = (0.0, 0.0, 2.0)
+    renderer.picks[(200, 200)] = Pick(point, view._actors["large"], 4)
+
+    assert view._world_at(200, 200) == point
+    assert view._object_at_view(point) == "large"
+    assert view._click_target(view._from_view(point))[0] == "large"
+    assert view._nearest_mesh(view._from_view(point)) is large
+
+
+def test_surface_triangle_breaks_the_tie_between_adjacent_features(qt_app: QApplication) -> None:
+    """Auf einer gemeinsamen Kante entscheidet das tatsächlich gepickte Dreieck."""
+    import numpy as np
+    import trimesh
+
+    mesh = MeshData(trimesh.creation.box(extents=(10.0, 10.0, 4.0)))
+    top = next(
+        feature
+        for feature in detect(mesh).values()
+        if feature.params.get("normal") == (0.0, 0.0, 1.0)
+    )
+    first, second = top.face_indices
+    features = {
+        key: dataclasses.replace(top, id=key, face_indices=(index,))
+        for key, index in (("first", first), ("second", second))
+    }
+    shared = np.intersect1d(mesh.raw.faces[first], mesh.raw.faces[second])
+    point = tuple(float(value) for value in mesh.raw.vertices[shared].mean(axis=0))
+    entry = SceneObject(id="body", name="Körper", mesh=mesh, features=features)
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view.show_scene(EvaluationResult(scene=Scene(objects={"body": entry})))
+    renderer.picks[(200, 200)] = Pick(point, view._actors["body"], second)
+
+    assert view._world_at(200, 200) == point
+    assert view._click_target(view._from_view(point), direct=True) == ("body", "second")
+
+
+def test_surface_pick_is_converted_from_the_exploded_view(qt_app: QApplication) -> None:
+    """Der Ansichtsversatz darf keine Auswahl- oder Messkoordinaten verändern."""
+    import numpy as np
+    import trimesh
+
+    entries = {}
+    for key, x in (("left", -20.0), ("right", 20.0)):
+        raw = trimesh.creation.box(extents=(10.0, 10.0, 4.0))
+        raw.apply_translation((x, 0.0, 0.0))
+        mesh = MeshData(raw)
+        entries[key] = SceneObject(id=key, name=key, mesh=mesh, features=detect(mesh))
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    result = EvaluationResult(scene=Scene(objects=entries))
+    view.show_scene(result)
+    view.set_explosion(1.0)
+    point = (20.0, 0.0, 2.0)
+    shown = tuple(np.asarray(point) + view._view_offset(entries["right"], result))
+    renderer.picks[(200, 200)] = Pick(shown, view._actors["right"], 4)
+
+    assert view._world_at(200, 200) == shown
+    assert view._from_view(shown) == pytest.approx(point)
+    assert view._click_target(view._from_view(shown))[0] == "right"
+
+
+def test_changed_display_topology_uses_the_surface_distance(qt_app: QApplication) -> None:
+    """Gleich viele Dreiecke bedeuten nach einem Schnitt keine gleiche Zuordnung."""
+    import numpy as np
+    import trimesh
+
+    mesh = MeshData(trimesh.creation.box(extents=(10.0, 10.0, 4.0)))
+    features = detect(mesh)
+    top = next(
+        feature for feature in features.values() if feature.params.get("normal") == (0.0, 0.0, 1.0)
+    )
+    changed = mesh.raw.copy()
+    order = np.roll(np.arange(len(changed.faces)), -top.face_indices[0])
+    changed.faces = changed.faces[order]
+    display = MeshData(changed)
+    entry = SceneObject(id="body", name="Körper", mesh=mesh, features=features)
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view._for_display = lambda *_args: display  # type: ignore[method-assign]
+    view.show_scene(EvaluationResult(scene=Scene(objects={"body": entry})))
+    point = tuple(float(value) for value in changed.triangles_center[0])
+    renderer.picks[(200, 200)] = Pick(point, view._actors["body"], 0)
+
+    assert view._world_at(200, 200) == point
+    assert view._click_target(view._from_view(point), direct=True) == ("body", top.id)
+
+
+@pytest.mark.parametrize("layout", ["plates", "exploded"])
+def test_looking_into_a_hole_keeps_the_body_in_the_shown_layout(
+    qt_app: QApplication, layout: str
+) -> None:
+    """Durchs Loch sehen behält die zweite Platte und den Explosionsversatz."""
+    import numpy as np
+    import trimesh
+
+    raw = trimesh.load(PLATE)
+    mesh = MeshData(raw)
+    first = SceneObject(id="first", name="Erste Platte", mesh=mesh, features=detect(mesh))
+    if layout == "plates":
+        second = dataclasses.replace(first, id="second", plate=1)
+    else:
+        shifted = raw.copy()
+        shifted.apply_translation((200.0, 0.0, 0.0))
+        second_mesh = MeshData(shifted)
+        second = dataclasses.replace(
+            first, id="second", mesh=second_mesh, features=detect(second_mesh)
+        )
+    result = EvaluationResult(scene=Scene(objects={"first": first, "second": second}))
+    view = Viewport()
+    view.show_scene(result)
+    view.renderer = RecordingRenderer()
+    view._plate = -1
+    view._beds_drawn = 2 if layout == "plates" else 1
+    view._bed_extent = (256.0, 256.0)
+    view._explosion = 1.0 if layout == "exploded" else 0.0
+    feature = second.features["hole_1"]
+    centre = np.asarray(feature.params["centre"])
+    shown = centre + view._view_offset(second, result)
+    ray = ((float(shown[0]), float(shown[1]), 100.0), (0.0, 0.0, -1.0))
+    view._pick_ray = lambda *_args: ray  # type: ignore[method-assign]
+
+    point = view._aim_at(200, 200)
+    assert point is not None
+    assert view._click_target(view._from_view(point), direct=True) == ("second", "hole_1")
+    assert view._from_view(point) == pytest.approx(centre)
+
+
+def test_a_new_pick_and_scene_forget_the_old_surface_target(qt_app: QApplication) -> None:
+    """Ein misslungener Pick und eine neue Auswertung dürfen nichts erben."""
+    import trimesh
+
+    mesh = MeshData(trimesh.creation.box())
+    entry = SceneObject(id="body", name="Körper", mesh=mesh, features=detect(mesh))
+    result = EvaluationResult(scene=Scene(objects={"body": entry}))
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view.show_scene(result)
+    point = tuple(float(value) for value in mesh.raw.triangles_center[0])
+    renderer.picks[(200, 200)] = Pick(point, view._actors["body"], 0)
+    view._world_at(200, 200)
+    assert view._hit_at(point) is not None
+    assert view._world_at(100, 100) is None
+    assert view._hit_at(point) is None
+    view._world_at(200, 200)
+    view.show_scene(result)
+    assert view._hit_at(point) is None
+
+
+def test_a_body_without_features_does_not_borrow_the_selected_bodys_features(
+    qt_app: QApplication,
+) -> None:
+    """Eine unerkannte Fläche bekommt keine Merkmalskennung ihres Nachbarn."""
+    import trimesh
+
+    mesh = MeshData(trimesh.creation.box())
+    plain = SceneObject(id="plain", name="Ohne Merkmale", mesh=mesh)
+    known = dataclasses.replace(plain, id="known", features=detect(mesh))
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view.show_scene(EvaluationResult(scene=Scene(objects={"known": known, "plain": plain})))
+    view.select("known")
+    point = tuple(float(value) for value in mesh.raw.triangles_center[0])
+    renderer.picks[(200, 200)] = Pick(point, view._actors["plain"], 0)
+
+    view._world_at(200, 200)
+    assert view._click_target(point, direct=True) == ("plain", None)
 
 
 @pytest.fixture
@@ -66,6 +256,106 @@ def hole_centre(window: MainWindow) -> tuple[float, float, float]:
     entry = window.session.last_result.scene.objects["obj_1"]
     centre = entry.features["hole_1"].params["centre"]
     return (float(centre[0]), float(centre[1]), float(centre[2]))
+
+
+def test_free_body_drag_resolves_feature_selection_before_its_preview(window: MainWindow) -> None:
+    """Der sichtbare Körperzug darf beim Loslassen nicht nur eine Bohrung verschieben."""
+    import numpy as np
+
+    view = window.viewport
+    renderer = RecordingRenderer()
+    renderer.widget = view
+    view.renderer = renderer
+    view.show_scene(window.session.last_result)
+    window.object_tree.select_feature("obj_1", "hole_1")
+    before = np.asarray(window.session.last_result.scene.objects["obj_1"].mesh.raw.bounds).copy()
+    count = len(window.session.project.document.ops)
+    assert window.object_tree.selected_feature() == "hole_1"
+
+    assert view.begin_body_drag_at((0.0, 0.0, float(before[1, 2])))
+    assert window.object_tree.selected_feature() is None
+    assert window.object_tree.selected() == "obj_1"
+    view.continue_body_drag_at((3.0, 2.0))
+    assert len(window.session.project.document.ops) == count
+    assert np.allclose(window.session.last_result.scene.objects["obj_1"].mesh.raw.bounds, before)
+    view.finish_body_drag()
+    window.session.wait_for_idle()
+
+    assert str(window.session.project.document.ops[-1].op) == "translate_object"
+    assert len(window.session.project.document.ops) == count + 1
+    assert np.allclose(
+        window.session.last_result.scene.objects["obj_1"].mesh.raw.bounds,
+        before + np.asarray((3.0, 2.0, 0.0)),
+    )
+
+
+def test_free_body_drag_preserves_mixed_feature_and_body_selection(window: MainWindow) -> None:
+    """Loch an A plus Körper B: Vorschau, Transaktion und ein Undo betreffen beide Teile."""
+    import numpy as np
+    from PySide6.QtCore import Qt
+
+    bodies = two_bodies(window)
+    first = "obj_1"
+    second = next(identifier for identifier in bodies if identifier != first)
+    view = window.viewport
+    renderer = RecordingRenderer()
+    renderer.widget = view
+    view.renderer = renderer
+    view.show_scene(window.session.last_result)
+    window.object_tree.select_feature(first, "hole_1")
+    tree = window.object_tree.tree
+    second_item = next(
+        tree.topLevelItem(index)
+        for index in range(tree.topLevelItemCount())
+        if tree.topLevelItem(index).data(0, Qt.ItemDataRole.UserRole) == second
+    )
+    second_item.setSelected(True)
+    assert window.object_tree.selected_objects() == (first, second)
+    assert window.object_tree.selected_feature() is None
+    assert view.selected_feature == "hole_1"
+    assert view._selected_more == (second,)
+
+    scene = window.session.last_result.scene
+    before = {
+        identifier: (entry.mesh.raw.vertices.copy(), entry.mesh.raw.faces.copy())
+        for identifier, entry in scene.objects.items()
+    }
+    document = window.session.project.document
+    operation_count = len(document.ops)
+    transaction_count = len(document.transactions)
+    top = float(scene.objects[first].mesh.raw.bounds[1, 2])
+    assert view.begin_body_drag_at((0.0, 0.0, top))
+    assert window.object_tree.selected_objects() == (first, second)
+    view.continue_body_drag_at((3.0, 2.0))
+    assert len(document.ops) == operation_count
+    assert len(document.transactions) == transaction_count
+    offset = np.asarray((3.0, 2.0, 0.0))
+    for identifier, (vertices, faces) in before.items():
+        assert np.allclose(view._actors[identifier].position(), offset)
+        assert np.array_equal(scene.objects[identifier].mesh.raw.vertices, vertices)
+        assert np.array_equal(scene.objects[identifier].mesh.raw.faces, faces)
+
+    view.finish_body_drag()
+    assert window.session.wait_for_idle()
+    operations = document.ops[operation_count:]
+    assert len(document.transactions) == transaction_count + 1
+    assert len(operations) == 2
+    assert all(str(operation.op) == "translate_object" for operation in operations)
+    assert {operation.inputs for operation in operations} == {(first,), (second,)}
+    for identifier, (vertices, faces) in before.items():
+        moved = window.session.last_result.scene.objects[identifier].mesh.raw
+        assert np.allclose(moved.vertices, vertices + offset, rtol=0, atol=1e-9)
+        assert np.array_equal(moved.faces, faces)
+
+    assert window.undo_action.isEnabled()
+    window.undo_action.trigger()
+    assert window.session.wait_for_idle()
+    assert len(document.transactions) == transaction_count
+    assert len(document.ops) == operation_count
+    for identifier, (vertices, faces) in before.items():
+        restored = window.session.last_result.scene.objects[identifier].mesh.raw
+        assert np.array_equal(restored.vertices, vertices)
+        assert np.array_equal(restored.faces, faces)
 
 
 def on_the_bore_wall(window: MainWindow, feature_id: str = "hole_1") -> tuple[float, float, float]:
@@ -305,6 +595,117 @@ def test_a_ray_well_beside_the_hole_aims_at_nothing(window: MainWindow) -> None:
     assert viewport._bore_aim(origin, direction, until_the_top_face(window)) is None
 
 
+@pytest.mark.parametrize("recess", [False, True], ids=["outer_rounding", "inner_ring_groove"])
+def test_a_torus_does_not_capture_the_visible_plane_through_its_centre(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, recess: bool
+) -> None:
+    """Eine Ringrundung vor der Fläche macht ihre ganze Hülle nicht zur Bohrung."""
+    import numpy as np
+    import trimesh
+
+    from app.core.types import Feature
+
+    ring = trimesh.creation.torus(
+        major_radius=12.0, minor_radius=1.0, major_sections=32, minor_sections=8
+    )
+    ring.apply_translation((0.0, 0.0, 20.0))
+    if recess:
+        ring.invert()
+    plate = trimesh.creation.box(extents=(100.0, 100.0, 1.0))
+    plate.apply_translation((0.0, 0.0, -0.5))
+    raw = trimesh.util.concatenate((ring, plate))
+    plate_faces = tuple(
+        int(index) + len(ring.faces) for index in np.flatnonzero(plate.face_normals[:, 2] > 0.9)
+    )
+    features = {
+        "rounding": Feature(
+            id="rounding",
+            kind="torus",
+            provenance="detected",
+            params={
+                "diameter": 24.0,
+                "tube_diameter": 2.0,
+                "axis": (0.0, 0.0, 1.0),
+                "centre": (0.0, 0.0, 20.0),
+                "recess": recess,
+            },
+            face_indices=tuple(range(len(ring.faces))),
+        ),
+        "plane": Feature(
+            id="plane",
+            kind="face",
+            provenance="detected",
+            params={"normal": (0.0, 0.0, 1.0)},
+            face_indices=plate_faces,
+        ),
+    }
+    entry = SceneObject(id="body", name="Ring über Platte", mesh=MeshData(raw), features=features)
+    view = Viewport()
+    renderer = RecordingRenderer()
+    view.renderer = renderer
+    view.show_scene(EvaluationResult(scene=Scene(objects={entry.id: entry})))
+    view.select(entry.id)
+    # Ohne Originalzellkennung muss auch der LOD-Ortsfang dieselbe sichtbare
+    # Fläche finden; die Ringmitte liegt weit von sämtlichen Ringdreiecken.
+    view._original_pick_cells.clear()
+    point = (2.0, 1.0, 0.0)
+    renderer.picks[(200, 200)] = Pick(point, view._actors[entry.id], plate_faces[0])
+    monkeypatch.setattr(view, "_pick_ray", lambda *_: ((2.0, 1.0, 100.0), (0.0, 0.0, -1.0)))
+    aimed = view._aim_at(200, 200)
+    assert aimed is not None
+    assert view._click_target(view._from_view(aimed), direct=True) == (entry.id, "plane")
+    assert view._feature_at((2.0, 1.0, 20.0)) is None
+
+    # Die wirkliche Ringoberfläche bleibt trotz ausgeschlossener Zielhilfe
+    # über ihre Originaldreiecke erreichbar.
+    ring_point = tuple(float(value) for value in ring.triangles_center[0])
+    renderer.picks[(220, 200)] = Pick(ring_point, view._actors[entry.id], 0)
+    assert view._world_at(220, 200) == ring_point
+    assert view._click_target(ring_point, direct=True) == (entry.id, "rounding")
+
+
+def test_a_countersink_keeps_its_opening_target(qt_app: QApplication) -> None:
+    """Durch die offene Senkung gezielt bleibt ihre axiale Zielhilfe erhalten."""
+    import numpy as np
+    import trimesh
+
+    from app.core.types import Feature
+
+    angles = np.arange(16) * math.tau / 16
+    rings = [
+        np.column_stack((radius * np.cos(angles), radius * np.sin(angles), np.full(16, height)))
+        for radius, height in ((4.0, 15.0), (8.0, 20.0))
+    ]
+    faces = [
+        triangle
+        for index in range(16)
+        for triangle in (
+            (index, index + 16, (index + 1) % 16),
+            ((index + 1) % 16, index + 16, (index + 1) % 16 + 16),
+        )
+    ]
+    mesh = MeshData(trimesh.Trimesh(vertices=np.vstack(rings), faces=faces, process=False))
+    feature = Feature(
+        id="countersink",
+        kind="cone",
+        provenance="detected",
+        params={
+            "diameter": 16.0,
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (0.0, 0.0, 17.5),
+            "recess": True,
+        },
+        face_indices=tuple(range(len(faces))),
+    )
+    entry = SceneObject(id="body", name="Offene Senkung", mesh=mesh, features={feature.id: feature})
+    view = Viewport()
+    view.show_scene(EvaluationResult(scene=Scene(objects={entry.id: entry})))
+    view.select(entry.id)
+    aimed = view._bore_aim((0.0, 0.0, 100.0), (0.0, 0.0, -1.0), math.inf)
+    assert aimed is not None
+    assert view._feature_at(aimed) == feature.id
+
+
 def test_a_hole_behind_the_surface_is_not_aimed_at(window: MainWindow) -> None:
     """Von der Seite gesehen liegt die Bohrung hinter dem Material.
 
@@ -325,6 +726,45 @@ def test_a_hole_behind_the_surface_is_not_aimed_at(window: MainWindow) -> None:
     assert viewport._bore_aim(origin, direction, float("inf")) is not None, (
         "ohne Grenze wäre sie es — genau deshalb braucht die Rechnung den Auftreffpunkt"
     )
+
+
+def test_bore_target_slack_cannot_cross_a_blind_hole_back_wall(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine größere Zielhilfe darf die geschlossene Rückwand nicht überbrücken."""
+    import numpy as np
+
+    from app.core.geom.measure import ray_distances
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    mesh = normalise(
+        read_mesh((MESHES / "plate_countersunk_blind.stl").read_bytes(), ".stl"), "mm"
+    ).mesh
+    entry = SceneObject(id="body", name="Sackbohrung", mesh=mesh, features=detect(mesh))
+    view = Viewport()
+    view.show_scene(EvaluationResult(scene=Scene(objects={"body": entry})))
+    # Am großen Nutzermodell überstieg die seitliche Zielhilfe die Wandstärke.
+    monkeypatch.setattr(view, "_feature_reach", lambda _object_id: 3.0)
+    origin = np.array([0.0, 0.0, -100.0])
+    direction = np.array([0.0, 0.0, 1.0])
+    distances = ray_distances(mesh, origin, direction)
+    until = float(distances[distances > 0.0].min())
+
+    assert until == pytest.approx(96.0)
+    assert view._bore_aim(tuple(origin), tuple(direction), until) is None
+    assert view._bore_aim(tuple(origin), tuple(direction), float("inf")) is not None
+
+
+def test_bore_target_slack_cannot_cross_a_closed_side_wall(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Seitliche Zielhilfe erlaubt einen Öffnungsrand, keinen Blick durch Material."""
+    viewport = window.viewport
+    centre = hole_centre(window)
+    monkeypatch.setattr(viewport, "_feature_reach", lambda _object_id: 9.0)
+
+    assert viewport._bore_aim((centre[0], -100.0, 2.0), (0.0, 1.0, 0.0), 75.0) is None
 
 
 def test_bore_span_along_the_axis(window: MainWindow) -> None:

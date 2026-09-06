@@ -694,6 +694,232 @@ def test_the_chosen_feature_keeps_its_label_without_the_overlay(qt_app: QApplica
     )
 
 
+def _feature_box_for_layers() -> Any:
+    """Sechs benannte Flächen eines 12 mm hohen Körpers, ohne Erkennungsheuristik."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    raw = trimesh.creation.box(extents=(10.0, 10.0, 12.0))
+    raw.apply_translation((0.0, 0.0, 6.0))
+    features = {}
+    for number, indices in enumerate(raw.facets):
+        normal = raw.face_normals[indices[0]]
+        key = "top" if normal[2] > 0.9 else "bottom" if normal[2] < -0.9 else f"side_{number}"
+        features[key] = Feature(
+            id=key,
+            kind="face",
+            provenance="detected",
+            params={
+                "centre": tuple(raw.triangles_center[indices].mean(axis=0)),
+                "normal": tuple(normal),
+            },
+            face_indices=tuple(int(index) for index in indices),
+        )
+    return EvaluationResult(
+        scene=Scene(
+            objects={
+                "body": SceneObject(
+                    id="body", name="Prüfkörper", mesh=MeshData(raw), features=features
+                )
+            }
+        )
+    )
+
+
+def test_layer_overlay_labels_only_the_features_crossing_that_layer(qt_app: QApplication) -> None:
+    """Über der ersten Schicht dürfen keine Labels der kompletten Bauhöhe schweben."""
+    from app.core.types import LayerInfo
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    view.show_scene(_feature_box_for_layers())
+    view._selected = "body"
+    view._layer = LayerInfo(z=0.5, contours=(), area=0, overhang_area=0, islands=(), min_width=0)
+    view.renderer = renderer = RecordingRenderer()
+    view.set_feature_overlay(True)
+    markers = renderer.entries("feature-markers")[-1]["item"]
+    assert len(markers.points) == 4, "nur die vier Seiten schneiden die Schicht"
+    assert np.allclose(markers.points[:, 2], 0.5), "Merkmalsanker gehören in den sichtbaren Schnitt"
+    assert view._feature_overlay is True
+
+    view._layer = None
+    view._redraw_features()
+    assert len(renderer.entries("feature-markers")[-1]["item"].points) == 6
+    assert view._feature_overlay is True, "Schichtansicht darf den Nutzerschalter nicht ändern"
+
+
+@pytest.mark.parametrize("role", ["selected", "hover", "protected", "candidate"])
+def test_feature_markings_do_not_restore_geometry_above_the_layer(
+    qt_app: QApplication, role: str
+) -> None:
+    """Die gemeinsame Markierungsfläche wird wie ihr Körper geschnitten."""
+    from app.core.types import LayerInfo
+    from app.ui.viewport import Viewport
+
+    result = _feature_box_for_layers()
+    feature_id = next(
+        key for key in result.scene.objects["body"].features if key.startswith("side")
+    )
+    view = Viewport()
+    view.show_scene(result)
+    view._selected = "body"
+    view._layer = LayerInfo(z=0.5, contours=(), area=0, overhang_area=0, islands=(), min_width=0)
+    view.renderer = renderer = RecordingRenderer()
+    if role == "selected":
+        view._selected_feature = feature_id
+        view._redraw_features()
+        name = "feature-patch"
+    elif role == "hover":
+        view._hovered_object, view._hovered_feature = "body", feature_id
+        view._redraw_features()
+        name = "feature-hover"
+    elif role == "protected":
+        view._protected = {"body": frozenset({feature_id})}
+        view._redraw_features()
+        name = "protected-patch"
+    else:
+        view.show_candidates((("body", feature_id),))
+        name = "candidate:0"
+    points = renderer.entries(name)[-1]["item"].points
+    assert len(points) > 0
+    assert float(points[:, 2].max()) <= 0.5 + 1e-8
+    assert float(points[:, 2].min()) >= -1e-8
+
+
+def test_a_cut_off_feature_keeps_its_selection_but_no_floating_marking(
+    qt_app: QApplication,
+) -> None:
+    """Die Auswahl lebt weiter; beim Schließen der Schicht erscheint ihre Fläche wieder."""
+    from app.core.types import LayerInfo
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    view.show_scene(_feature_box_for_layers())
+    view._selected, view._selected_feature = "body", "top"
+    view._layer = LayerInfo(z=0.5, contours=(), area=0, overhang_area=0, islands=(), min_width=0)
+    view.renderer = renderer = RecordingRenderer()
+    view._redraw_features()
+    assert "feature-patch" not in renderer.names()
+    assert "features" not in renderer.names()
+    assert view.selected_feature == "top"
+    view._layer = None
+    view._redraw_features()
+    assert "feature-patch" in renderer.names()
+    assert "features" in renderer.names()
+    assert view.selected_feature == "top"
+
+
+def test_feature_markings_respect_both_boundaries_of_a_section_slice(qt_app: QApplication) -> None:
+    """Eine Schnittscheibe begrenzt Fläche und Etikett oben und unten."""
+    from app.core.geom.section import SectionPlane
+    from app.ui.viewport import Viewport
+
+    result = _feature_box_for_layers()
+    side = next(key for key in result.scene.objects["body"].features if key.startswith("side"))
+    view = Viewport()
+    view.show_scene(result)
+    view._selected, view._selected_feature = "body", side
+    view._section, view._slice_thickness = SectionPlane.along("z", 5.0), 2.0
+    view.renderer = renderer = RecordingRenderer()
+    view._redraw_features()
+    for name in ("feature-patch", "feature-markers"):
+        points = renderer.entries(name)[-1]["item"].points
+        assert float(points[:, 2].min()) >= 3.0 - 1e-8
+        assert float(points[:, 2].max()) <= 5.0 + 1e-8
+
+
+@pytest.mark.parametrize("feature_id", ["top", "bottom"])
+def test_a_feature_exactly_on_a_section_boundary_keeps_its_marking(
+    qt_app: QApplication, feature_id: str
+) -> None:
+    """Der Abstand gegen Flimmern darf eine sichtbare Grenzfläche nicht wegschneiden."""
+    from app.core.geom.section import SectionPlane
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    view.show_scene(_feature_box_for_layers())
+    view._selected, view._selected_feature = "body", feature_id
+    view._section, view._slice_thickness = SectionPlane.along("z", 12.0), 12.0
+    view.renderer = renderer = RecordingRenderer()
+    view._redraw_features()
+    assert "feature-patch" in renderer.names()
+    points = renderer.entries("feature-patch")[-1]["item"].points
+    assert np.allclose(points[:, 2], 12.0 if feature_id == "top" else 0.0)
+
+
+def test_lifted_feature_faces_keep_their_shared_vertices(qt_app: QApplication) -> None:
+    """Eine leicht geneigte Nachbarfläche darf die Markierung nicht am gemeinsamen Rand öffnen."""
+    from app.ui.viewport import Viewport
+
+    raw = trimesh.Trimesh(
+        vertices=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 1.0, 0.02]],
+        faces=[[0, 1, 2], [1, 3, 2]],
+        process=False,
+    )
+    viewport = Viewport()
+    lifted = viewport._lifted_corners(raw, np.array([0, 1]), 0.3, np.zeros(3)).reshape(-1, 3, 3)
+    assert lifted[0, 1] == pytest.approx(lifted[1, 0], abs=1e-12)
+    assert lifted[0, 2] == pytest.approx(lifted[1, 2], abs=1e-12)
+    assert np.linalg.norm(lifted[0, 1] - raw.vertices[1]) == pytest.approx(0.3)
+
+
+def test_lifted_feature_normals_ignore_unselected_neighbours(qt_app: QApplication) -> None:
+    """Eine große benachbarte Seitenfläche kippt die gewählte obere Markierung nicht."""
+    from app.ui.viewport import Viewport
+
+    raw = trimesh.Trimesh(
+        vertices=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 100.0]],
+        faces=[[0, 1, 2], [1, 0, 3]],
+        process=False,
+    )
+    viewport = Viewport()
+    lifted = viewport._lifted_corners(raw, np.array([0]), 0.3, np.zeros(3))
+    np.testing.assert_allclose(lifted, raw.vertices[:3] + np.array([0.0, 0.0, 0.3]))
+
+
+def test_lifted_feature_faces_preserve_separate_coincident_vertices(qt_app: QApplication) -> None:
+    """Eine reine Markierung verschweißt keine absichtlich getrennten 3MF-Eckpunkte."""
+    from app.ui.viewport import Viewport
+
+    raw = trimesh.Trimesh(
+        vertices=[
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.02],
+        ],
+        faces=[[0, 1, 2], [3, 4, 5]],
+        process=False,
+    )
+    viewport = Viewport()
+    lifted = viewport._lifted_corners(raw, np.array([0, 1]), 0.3, np.zeros(3))
+    assert np.linalg.norm(lifted[0] - lifted[3]) > 0.001
+    assert len(raw.vertices) == 6
+
+
+@pytest.mark.parametrize("feature_id", ["top", "bottom"])
+def test_protected_hatching_stays_inside_both_section_boundaries(
+    qt_app: QApplication,
+    feature_id: str,
+) -> None:
+    """Auch der zweite Abstand gegen Flimmern darf die Schnittgrenzen nicht verlassen."""
+    from app.core.geom.section import SectionPlane
+    from app.ui.viewport import Viewport
+
+    view = Viewport()
+    view.show_scene(_feature_box_for_layers())
+    view._protected = {"body": {feature_id}}
+    view._section, view._slice_thickness = SectionPlane.along("z", 12.0), 12.0
+    view.renderer = renderer = RecordingRenderer()
+    view._redraw_features()
+    points = renderer.item_of("protected-hatch").points
+    assert len(points) > 0
+    assert float(points[:, 2].min()) >= -1e-8
+    assert float(points[:, 2].max()) <= 12.0 + 1e-8
+
+
 @pytest.mark.parametrize("filtered", ["hidden", "other_plate"])
 def test_an_invisible_feature_leaves_no_floating_marking(
     filtered: str,
@@ -1438,9 +1664,9 @@ def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
     viewport._zone_margins = (0, 0, 400)
     viewport._sketch_occlusion_shift = (0.0, -40.0, 0.0)
     settled: list[bool] = []
-    viewport.reset_camera = lambda: None
-    viewport._settle_sketch_view = lambda: settled.append(True)  # type: ignore[method-assign]
-    viewport._redraw_shadows = lambda: None
+    viewport._fit_camera = lambda: None  # type: ignore[method-assign]
+    viewport._settle_sketch_view = lambda **kwargs: settled.append(True)  # type: ignore[method-assign]
+    viewport._redraw_shadows = lambda **kwargs: None  # type: ignore[method-assign]
 
     viewport.view_from("right")
 
@@ -4314,6 +4540,175 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     assert not viewport.sunken_body(), "ausgeblendet ist nicht unter der Platte"
 
 
+def test_bed_visibility_reuses_the_decision_until_scene_or_visibility_changes(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kamera und Zeichnen fragen keine unveränderten exakten CAD-Grenzen neu ab."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    mesh = MeshData(trimesh.creation.box())
+    entry = SceneObject(id="body", name="Body", mesh=mesh)
+    source = EvaluationResult(scene=Scene(objects={entry.id: entry}))
+    viewport._result = source
+    original = MeshData.bounds.fget
+    assert original is not None
+    calls = 0
+
+    def measured_bounds(value: MeshData):
+        nonlocal calls
+        calls += 1
+        return original(value)
+
+    monkeypatch.setattr(MeshData, "bounds", property(measured_bounds))
+    for _ in range(20):
+        assert viewport.sunken_body()
+        assert viewport.sees_through
+    assert calls == 1
+
+    viewport._hidden = frozenset({entry.id})
+    assert not viewport.sunken_body()
+    assert calls == 1
+    viewport._hidden = frozenset()
+    assert viewport.sunken_body()
+    assert calls == 2
+
+    viewport._result = EvaluationResult(scene=source.scene)
+    assert viewport.sunken_body()
+    assert calls == 3
+    viewport._result = None
+    assert not viewport.sunken_body()
+
+
+def test_bed_visibility_uses_the_drawn_scene_and_preserves_uncut_geometry(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein neues Rechenergebnis oder ein Schnitt ersetzt nicht die gezeichnete Szene."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    below = MeshData(trimesh.creation.box())
+    above = MeshData(trimesh.creation.box().apply_translation((0.0, 0.0, 2.0)))
+    old_entry = SceneObject(id="body", name="Body", mesh=below)
+    new_entry = SceneObject(id="body", name="Body", mesh=above)
+    drawn = EvaluationResult(scene=Scene(objects={old_entry.id: old_entry}))
+    pending = EvaluationResult(scene=Scene(objects={new_entry.id: new_entry}))
+    viewport._actor_scene = drawn
+    viewport._result = pending
+    # Die sichtbare Schnittfläche liegt oben; die Dokumentgeometrie reicht darunter.
+    actor = RecordingItem("body", np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]]), "#ffffff")
+    viewport._actors = {old_entry.id: actor}
+    original = MeshData.bounds.fget
+    assert original is not None
+
+    def only_drawn_bounds(value: MeshData):
+        assert value is below, "the pending geometry must not be queried by painting"
+        return original(value)
+
+    monkeypatch.setattr(MeshData, "bounds", property(only_drawn_bounds))
+    assert viewport.sunken_body()
+    viewport._hidden = frozenset({old_entry.id})
+    assert viewport.sunken_body(), "the current actor remains visible until the next image"
+    actor.set_visible(False)
+    assert not viewport.sunken_body()
+    monkeypatch.setattr(MeshData, "bounds", property(original))
+    viewport._actor_scene = pending
+    actor.set_visible(True)
+    assert not viewport.sunken_body()
+
+
+def test_explicit_fitting_draws_once_but_automatic_fitting_waits(qt_app: QApplication) -> None:
+    """Pos1 liefert selbst ein Bild; der Szenenaufbau zeichnet erst seine neuen Aktoren."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport._build_volume = (200.0, 200.0, 200.0)
+    viewport._bed_extent = (200.0, 200.0)
+    viewport.reset_camera()
+    assert renderer.renders == 1
+    viewport._fit_once_for(None)
+    assert renderer.renders == 1
+
+
+@pytest.mark.parametrize("shadows", [False, True])
+@pytest.mark.parametrize("sketch", [False, True])
+def test_an_axis_view_draws_once_without_shadow_geometry(
+    qt_app: QApplication, shadows: bool, sketch: bool
+) -> None:
+    """Schatten und Skizzenrasten bleiben im selben fertigen Bild der Achsentaste."""
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    viewport._build_volume = (200.0, 200.0, 200.0)
+    if shadows:
+        viewport._shadow_hulls = {"body": []}
+        viewport._shadow_cast = (1.0, 0.0, -1.0)
+        viewport._shadow_direction = lambda: (0.0, 1.0, -1.0)  # type: ignore[method-assign]
+        viewport._place_shadows = lambda direction: None  # type: ignore[method-assign]
+    if sketch:
+        viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    viewport.view_from("front")
+    assert renderer.renders == 1
+
+
+@pytest.mark.parametrize("parallel", [False, True])
+@pytest.mark.parametrize("ratio", [1.0, 2.0])
+def test_fitting_keeps_depth_corners_inside_the_free_card_area(
+    parallel: bool, ratio: float
+) -> None:
+    """Alle acht Ecken passen trotz Tiefe und asymmetrischer Karten in die freie Fläche."""
+    from itertools import product
+
+    from app.ui.viewport import camera_in_free_area
+
+    pose = CameraPose((0.0, 0.0, 50.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    bounds = (-15.0, 15.0, -30.0, 30.0, -20.0, 20.0)
+    width, height = 1600 * ratio, 900 * ratio
+    left, right, bottom = 420 * ratio, 240 * ratio, 200 * ratio
+    fitted, scale = camera_in_free_area(
+        pose, bounds, (width, height), (left, right, bottom), 45.0, 40.0 if parallel else None
+    )
+    tangent = math.tan(math.radians(45.0) / 2.0)
+    for point in product(bounds[:2], bounds[2:4], bounds[4:]):
+        relative = np.asarray(point) - np.asarray(fitted.position)
+        half_height = scale if parallel else -relative[2] * tangent
+        assert half_height is not None and half_height > 0.0
+        x = width / 2.0 + relative[0] / half_height * height / 2.0
+        y = height / 2.0 - relative[1] / half_height * height / 2.0
+        assert left - 1e-8 <= x <= width - right + 1e-8
+        assert -1e-8 <= y <= height - bottom + 1e-8
+    assert fitted.focal_point[0] < 0.0 and fitted.focal_point[1] < 0.0
+
+
+def test_opening_body_cards_does_not_refit_the_camera(qt_app: QApplication) -> None:
+    """Nur ausdrückliches Einpassen ändert den Ausschnitt wegen einer geöffneten Karte."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    before = renderer.pose
+    viewport.set_zone_margins(320, 340, 180)
+    assert renderer.pose == before
+    assert not renderer.reset_bounds
+    assert renderer.renders == 0
+
+
 def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
     """Pos1 zeigt das gewählte Teil, nicht wieder die ganze Baugruppe.
 
@@ -4417,7 +4812,7 @@ def test_fitting_frames_the_chosen_body(qt_app: QApplication) -> None:
 
     # Der automatische Weg fragt ausdrücklich nicht nach der Auswahl.
     gefragt: list[bool] = []
-    viewport.reset_camera = lambda **kwargs: gefragt.append(  # type: ignore[method-assign]
+    viewport._fit_camera = lambda **kwargs: gefragt.append(  # type: ignore[method-assign]
         bool(kwargs.get("follow_selection", True))
     )
     viewport._fitted_to = None

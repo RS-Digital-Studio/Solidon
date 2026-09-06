@@ -90,6 +90,90 @@ Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
 dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
 an allen dreien
 
+**Die Auswahl behält den sichtbaren Treffer.** Ein Oberflächen-Pick trägt
+Körper, Weltpunkt und Dreieck bis zur Merkmalsauswahl und Messung. Nur wenn
+das gezeichnete Netz das unveränderte Originalnetz ist, bestimmt seine
+Dreieckskennung das Merkmal direkt; Schnitt- und vereinfachte Netze nutzen
+den Ortsfang. Platten- und Explosionsversatz werden für jeden Körper getrennt
+zurückgerechnet. Ein Treffer gehört seinem Körper, auch wenn ein kleinerer
+Hüllquader davor liegt. Die Öffnungszielhilfe gibt Körper und Merkmal gemeinsam
+zurück. Dreieckszuordnung und vorbereitete Bohrungsachsen werden pro Auswertung
+gespeichert und beim Szenenaufbau verworfen; Hover projiziert dadurch nicht
+wiederholt alle Bohrungsdreiecke.
+Die Öffnungszielhilfe verlängert keine axialen Bohrungsgrenzen. Seitlicher
+Randfang gilt nur am sichtbaren Eintritt oder bei einem belegten Treffer des
+wirklichen Bohrungszylinders; eine Rückwand bleibt eine Sichtgrenze.
+Nur Bohrungen, Senkungen (`cone` mit `recess`) und Innengewinde bilden axiale
+Öffnungsziele. Rundungen, Ringnuten und äußere Flächen bleiben Dreieckstreffer.
+Die Rückrechnung liest den beim Aktoraufbau gespeicherten Versatz und die
+tatsächlich gezeichneten Körper. Während eines neuen Ansichtsauftrags und
+nach dessen Fehler bleibt dieses letzte Bild die Grundlage des Picks;
+angeforderte Platten- oder Explosionszustände greifen erst mit dem neuen Bild.
+Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
+deren sichtbare Körpermenge. Ihre Entscheidung wird bis zu einem Wechsel
+dieser beiden Eingaben behalten; Kamerabewegungen lösen keine erneute exakte
+CAD-Grenzenberechnung aus. Maßgeblich bleiben die ursprünglichen Körpergrenzen,
+nicht die vereinfachten oder beschnittenen Anzeigeaktoren.
+Merkmalsnamen und Maße stehen auf einem Feld in den Themenfarben, wie
+Skizzenmaße. Der Text bleibt damit auch über heller Geometrie lesbar;
+Merkmalsfläche und Ankerpunkt tragen weiterhin die Auswahl- beziehungsweise
+Merkmalsfarbe.
+Beschriftungen und Markierungsflächen benutzen dieselben Schnitt- und
+Schichtebenen wie die Körper. Das automatische Schichtoverlay benennt nur
+Merkmale, deren Dreiecke die aktuelle Ebene schneiden; die Anker liegen im
+sichtbaren Schnitt. Auswahl und Hover dürfen erhaltene Geometrie darunter
+benennen. Vollständig abgeschnittene Merkmale verlieren ihre Darstellung,
+ihre Auswahl bleibt bestehen. Auswahl, Hover, Schutz und Kandidaten werden
+ohne zusätzliche Schnittkappen begrenzt. Beim Schließen der Schicht gilt
+wieder der unveränderte Merkmalschalter.
+Markierungsflächen heben gemeinsame Originaleckpunkte gemeinsam an, mit den
+flächengewichteten Normalen ausschließlich ausgewählter Dreiecke. Erst danach
+werden die Punkte zur Dreiecksliste expandiert und geschnitten; weder fremde
+Nachbarflächen noch ein Verschweißen gleicher Koordinaten verändern den Patch.
+Die Akkumulation und Kreuzprodukte bleiben auf die ausgewählten Dreiecke begrenzt.
+Das normale Merkmalslayout reserviert zuerst Leseraum für Auswahl und Hover.
+Automatische Namen erscheinen nur an kollisionsfreien Plätzen nahe ihrem
+Anker; alle Merkmalsmarker, Flächen und Baumziele bleiben erhalten. Versetzte
+Namen sind mit dem dargestellten Merkmalsanker verbunden. Die Bildraumrechnung
+berücksichtigt Kartenränder, interne Leisten und Gerätepixeldichte und folgt
+Kamera sowie Größenänderungen. Sie benutzt nur Projektion und Textmaße, keine
+Geometriesuche oder GPU-Rücklesung. Gleiche Kamera- und Layoutdaten werden
+wiederverwendet; gleiche Textlisten und Linienzahlen verschieben vorhandene
+Rendererobjekte. Bei Körpervorschauen folgen Marker, Text, Verbindungslinien
+sowie Auswahl- und Hoverflächen der Matrix und Position ihres Körperaktors.
+`select_feature_refs` hält objektübergreifende Merkmalsauswahl als vollständige
+Paare aus Körper- und Merkmalskennung; gleiche lokale Kennungen bleiben getrennt.
+Das erste gültige Paar führt die Körperauswahl, mehrere Paare erzeugen kein
+scheinbares Einzelmerkmal. Jede Körpergruppe behält ihre eigene Auswahlfläche,
+Vorschaumatrix und Schnittbegrenzung. `select_features` bleibt der Adapter für
+Merkmalskennungen am führenden Körper; Neuauswertung und Abwahl räumen alte Paare ab.
+Getrennte Konturaktoren sind ebenfalls ihrem Körper zugeordnet: Freier Zug,
+Gizmo und Skalierwürfel gleichen ihre Matrix und Position vor dem vorhandenen
+Gestenbild ab, auch ohne Merkmalsanzeige. Unveränderte Werte werden nicht erneut
+gesetzt; Rücknahme und Szenenabbau nehmen die Konturen vollständig mit.
+Die gespeicherten Originalanker bleiben unverändert; Rücknahme, Kamerawechsel
+und die nächste Szene lesen denselben jeweils sichtbaren Aktorstand.
+Der freie Körperzug wechselt bei genau einem gewählten Körper eine Merkmalsauswahl
+vor seiner Vorschau über `objectPicked` auf die Körperstufe. Eine gemischte
+Mehrfachauswahl bleibt vollständig erhalten; der gemeinsame Anschluss bestätigt
+dieselbe Körpermenge, die die Vorschau bewegt;
+das gezielte Merkmalwerkzeug behält seine eigene Merkmalsoperation.
+Verbindungen reichen bis zum Textanker und liegen unter dem deckenden
+Beschriftungsfeld; die größere Kollisionsreserve begrenzt keine sichtbare Linie.
+Die Schutzschraffur berücksichtigt dieselben Schnittgrenzen
+auch bei ihrer zusätzlichen Anhebung gegen Flimmern.
+Flächenmarker in Schnitt- und Schichtansichten wählen einen Kandidaten aus dem
+sichtbaren Rest eines einzelnen Originaldreiecks. Die vektorisierte Zuordnung
+verhindert Mittelpunkte im leeren Zwischenraum nichtkonvexer oder getrennter Reste.
+Bohrungs- und Achsenmitten sowie die unbeschnittene Darstellung bleiben erhalten.
+
+Ausdrückliches Einpassen zeichnet einmal über den gemeinsamen Viewport-Pfad.
+Die interne Kamerarahmung zeichnet noch nicht: Szenenaufbau und Achsansicht
+stellen erst ihren fertigen Zustand dar. Die Rahmung berücksichtigt die
+gemeldete freie Kartenfläche und Gerätepixeldichte; perspektivisch zählen
+alle acht Hüllquaderpunkte mit ihrer Tiefe. Eine Karte zu öffnen verändert
+den gewählten Ausschnitt im Körpermodus nicht.
+
 **Panels und Leisten**
 
 `panels.py` (die drei Panels links, Prüfbericht rechts, §2.5) ·
