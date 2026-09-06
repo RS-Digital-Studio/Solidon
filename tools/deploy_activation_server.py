@@ -80,7 +80,7 @@ def _seed_matches(path: Path) -> bool:
     """Prüft den privaten Teil, ohne ihn oder eine Ableitung davon auszugeben."""
     try:
         seed = bytes.fromhex(path.read_text(encoding="ascii").strip())
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return False
     return (
         len(seed) == ed25519.POINT_BYTES
@@ -92,7 +92,7 @@ def _operator_token_is_valid(path: Path) -> bool:
     """Prüft Form und Entropielänge, ohne den Betreiberzugang auszugeben."""
     try:
         token = path.read_text(encoding="ascii").strip()
-    except (OSError, UnicodeError):
+    except OSError, UnicodeError:
         return False
     return re.fullmatch(r"[0-9a-f]{64}", token) is not None
 

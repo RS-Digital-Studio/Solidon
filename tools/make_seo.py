@@ -161,9 +161,20 @@ def _plain(markup: str) -> str:
     französische Typografie bewusst ein Leerzeichen, und die Seite tut das
     auch — ein Fix über alle Satzzeichen würde sie brechen.
     """
-    stripped = re.sub(r"<[^>]+>", " ", markup)
+    code: list[str] = []
+
+    def keep_code(match: re.Match[str]) -> str:
+        """Befehle behalten ihre eigenen Leerzeichen und Satzzeichen."""
+        code.append(html.unescape(re.sub(r"<[^>]+>", "", match.group(1))))
+        return f"\x00{len(code) - 1}\x00"
+
+    protected = re.sub(
+        r"<code\b[^>]*>(.*?)</code>", keep_code, markup, flags=re.DOTALL | re.IGNORECASE
+    )
+    stripped = re.sub(r"<[^>]+>", " ", protected)
     text = re.sub(r"\s+", " ", html.unescape(stripped)).strip()
-    return re.sub(r" +([,.])", r"\1", text)
+    text = re.sub(r" +([,.])", r"\1", text)
+    return re.sub(r"\x00(\d+)\x00", lambda match: code[int(match.group(1))], text)
 
 
 def faq_entries(text: str) -> tuple[str, list[tuple[str, str]]]:

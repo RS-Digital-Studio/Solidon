@@ -1733,7 +1733,9 @@ def test_the_generated_faq_markup_keeps_no_gap_before_a_comma(page: str) -> None
     assert antworten, f"{page} trägt keine FAQ-Auszeichnung — prüft dieser Test noch etwas?"
 
     for text in antworten:
-        luecken = re.findall(r"\S (?=[,.])", text)
+        # Ein relativer Dateipfad im Befehl (install ./paket) braucht den
+        # Abstand. Er ist kein Satzpunkt; _plain bewahrt Code unverändert.
+        luecken = re.findall(r"\S (?=,|\.(?!/))", text)
         assert not luecken, (
             f"{page}: Auszeichnung endet vor einem Satzzeichen und hinterlässt eine "
             f"Lücke — {luecken}. Im sichtbaren Text die Auszeichnung ans Satzende "

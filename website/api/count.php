@@ -277,6 +277,13 @@ function count_write_private_state(string $path, $stream, string $data): bool
     return count_stream_is_named_private($path, $stream);
 }
 
+/** Der Zähltag folgt derselben Zeitzone wie die Auswertung. */
+function count_day(DateTimeImmutable $moment): string
+{
+    // Dieselbe Tagesgrenze wie DISPLAY_ZONE in stats.php; Zeitstempel bleiben UTC.
+    return $moment->setTimezone(new DateTimeZone('Europe/Berlin'))->format('Y-m-d');
+}
+
 /**
  * Der Zufallswert des Tages, aus dem das Besucherkennzeichen entsteht.
  *
@@ -607,7 +614,7 @@ function record(string $kind, string $value): bool
     }
 
     try {
-        $day = $now->format('Y-m-d');
+        $day = count_day($now);
         $salt = day_salt($dir, $day);
         $line = json_encode(
             [

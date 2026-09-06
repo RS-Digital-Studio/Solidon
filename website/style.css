@@ -3392,8 +3392,20 @@ table.compare td {
 
 table.compare tr:hover td { background: var(--card); }
 
-table.compare .yes { color: var(--accent); font-weight: 600; white-space: nowrap; }
-table.compare .no { color: var(--muted); white-space: nowrap; }
+table.compare .yes { color: var(--accent); font-weight: 600; }
+table.compare .no { color: var(--muted); }
+
+@media (max-width: 32rem) {
+  table.compare { table-layout: fixed; }
+  table.compare th:not(:first-child),
+  table.compare td:not(:first-child) { width: 28%; }
+  table.compare th,
+  table.compare td { overflow-wrap: anywhere; padding-right: 0.4rem; }
+  table.compare th { font-size: 0.75rem; letter-spacing: normal; text-transform: none; }
+  .price > *, .price-list li > span { min-width: 0; overflow-wrap: anywhere; }
+  .price-card .amount { flex-wrap: wrap; }
+  .price-card .amount b { overflow-wrap: normal; }
+}
 
 /* **Die Kante war der falsche Gewinn.** Die Fußnote stand auf 44 rem unter
    einem 46-rem-Block und lief um zwei rem gegen dessen Kante; angeglichen auf

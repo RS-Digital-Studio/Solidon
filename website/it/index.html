@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=a7599376">
+<link rel="stylesheet" href="../style.css?v=2e1a72a9">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -101,7 +101,7 @@
       "name": "Devo usare un'IA?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No. La chat è una via su quattro. Senza chiave e senza Ollama resta pienamente utilizzabile tutto tranne la chat — menu, menu contestuali, riga di comando e tutte le 100 operazioni."
+        "text": "No. La chat è una via su quattro. Senza chiave e senza Ollama resta pienamente utilizzabile tutto tranne la chat — menu, menu contestuali, riga di comando e tutte le 102 operazioni."
       }
     },
     {
@@ -125,7 +125,7 @@
       "name": "I miei modelli vanno da qualche parte?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Solo se usi la chat con una chiave API di terzi — allora a quel fornitore va la scheda della scena: gli oggetti con le loro quote, i nomi delle caratteristiche, i parametri e la cronologia in breve. Niente geometria, niente file. Con Ollama anche quello resta in locale. Senza chat non esce quasi nulla dal computer: nessun account, nessun archivio in rete, nessuna telemetria. Restano due eccezioni. All'avvio, Solidon3D controlla facoltativamente se esiste una versione più recente — la richiesta indica solo il proprio numero di versione e si può disattivare nelle impostazioni. E quello che invii tu: un riscontro al supporto, il cui contenuto vedi prima in un'anteprima."
+        "text": "I tuoi file di progetto restano sul tuo computer. Nella chat, il modello linguistico scelto riceve il tuo messaggio, un riepilogo della scena e la cronologia della conversazione. Se supporta le immagini, possono essere incluse anche viste renderizzate del modello. Con Anthropic o un server Ollama remoto, questi dati lasciano il tuo computer. Ollama sul tuo computer li elabora localmente. Prima della prima richiesta al modello, Solidon3D mostra la destinazione scelta. La rete serve anche per attivare il dispositivo, controllare gli aggiornamenti —un’opzione disattivabile— e scaricare ciò che richiedi. I messaggi all’assistenza mostrano il contenuto prima dell’invio. Solidon3D non trasmette statistiche di utilizzo e non salva i tuoi progetti nel cloud."
       }
     },
     {
@@ -133,7 +133,7 @@
       "name": "Quali formati legge e scrive Solidon3D?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Legge STL, 3MF (anche come assieme), OBJ e GLB, più STEP con facce e spigoli veri. Inoltre PLY, OFF e glTF — e come disegno SVG e DXF, il cui contorno diventa un solido. Scrive STL, 3MF — con cambi colore e disposizione sui piatti —, OBJ, PLY, GLB e STEP; STEP compare nel dialogo di esportazione non appena un corpo può sostenerlo. GLB è il formato per far vedere: colori e nome viaggiano insieme, e il destinatario gira il pezzo nel browser. Un progetto è un file ZIP con dentro project.json : si apre anche senza Solidon3D."
+        "text": "Legge STL, 3MF (anche come assieme), OBJ e GLB, più STEP con facce e spigoli veri. Inoltre PLY, OFF e glTF — e come disegno SVG e DXF, il cui contorno diventa un solido. Scrive STL, 3MF — con cambi colore e disposizione sui piatti —, OBJ, PLY, GLB e STEP; STEP compare nel dialogo di esportazione non appena un corpo può sostenerlo. GLB è il formato per far vedere: colori e nome viaggiano insieme, e il destinatario gira il pezzo nel browser. Un progetto è un file ZIP con dentro project.json: si apre anche senza Solidon3D."
       }
     },
     {
@@ -149,7 +149,7 @@
       "name": "Come installo il Flatpak su Linux?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Un Flatpak non è un installatore da doppio clic, ma un pacchetto che recepisce il gestore dei pacchetti. Apri un terminale nella cartella in cui l'hai scaricato e digita: flatpak install./Solidon3D-*.flatpak Poi Solidon3D compare nel menu delle applicazioni. Si avvia anche con flatpak run de.rsdigital.solidon3d e si rimuove con flatpak uninstall de.rsdigital.solidon3d. Se il tuo sistema non conosce il comando flatpak, la tua distribuzione lo installa con questo stesso nome."
+        "text": "Un Flatpak non è un installatore da doppio clic, ma un pacchetto che recepisce il gestore dei pacchetti. Apri un terminale nella cartella in cui l'hai scaricato e digita: flatpak install ./Solidon3D-*.flatpak Poi Solidon3D compare nel menu delle applicazioni. Si avvia anche con flatpak run de.rsdigital.solidon3d e si rimuove con flatpak uninstall de.rsdigital.solidon3d. Se il tuo sistema non conosce il comando flatpak, la tua distribuzione lo installa con questo stesso nome."
       }
     },
     {
@@ -355,7 +355,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>100</b><span>operazioni nel registro</span></div>
+        <div><b>102</b><span>operazioni nel registro</span></div>
         <div><b>27</b><span>blocchi verificati</span></div>
         <div><b>51</b><span>misure normalizzate in tabella</span></div>
         <div><b>16</b><span>profili di stampante di serie</span></div>
@@ -748,8 +748,8 @@
     <div class="wrap">
       <h2>Requisiti di sistema</h2>
       <table class="req">
-        <tr><td>Sistema operativo</td><td>Windows 10/11 (64 bit), macOS 13 o
-        successivo, oppure Linux — sul Mac in versioni separate per Apple
+        <tr><td>Sistema operativo</td><td>Windows 10 (1809 o successivo)/11 (x64), macOS 13 o
+        successivo, oppure Linux (x64, X11/Xwayland) — sul Mac in versioni separate per Apple
         Silicon e Intel. La versione Mac non è ancora notarizzata presso
         Apple: macOS non apre il pacchetto di installazione con un doppio
         clic. Nell'avviso scegli «Fine» — non «Sposta nel Cestino» — e
@@ -757,8 +757,8 @@
         Sicurezza», con «Apri comunque».</td></tr>
         <tr><td>Spazio su disco</td><td>circa 750 MB installata, download
         tra 218 e 380 MB a seconda del sistema</td></tr>
-        <tr><td>Uso di base</td><td>8 GB di RAM e una grafica che
-        parli OpenGL — le righe IA qui sotto sono extra, non
+        <tr><td>Uso di base</td><td>8 GB di RAM e una scheda grafica con
+        OpenGL 3.2 o successivo — le righe IA qui sotto sono extra, non
         requisiti minimi</td></tr>
         <tr><td>Schermo</td><td>Almeno 1920 × 1080 pixel (16:9, Full HD) o
         1920 × 1200 pixel (16:10). Consigliato: 2560 × 1440 pixel
@@ -846,7 +846,7 @@
           <summary>Devo usare un'IA?</summary>
           <p>No. La chat è una via su quattro. Senza chiave e senza Ollama
           resta pienamente utilizzabile tutto tranne la chat — menu, menu
-          contestuali, riga di comando e tutte le 100 operazioni.</p>
+          contestuali, riga di comando e tutte le 102 operazioni.</p>
         </details>
         <details>
           <summary>L'IA calcola la mia geometria?</summary>
@@ -866,17 +866,9 @@
         </details>
         <details>
           <summary>I miei modelli vanno da qualche parte?</summary>
-          <p>Solo se usi la chat con una chiave API di terzi — allora a quel
-          fornitore va la scheda della scena: gli oggetti con le loro quote,
-          i nomi delle caratteristiche, i parametri e la cronologia in breve.
-          Niente geometria, niente file. Con Ollama anche quello resta in
-          locale. Senza chat non esce quasi nulla dal computer: nessun
-          account, nessun archivio in rete, nessuna telemetria.</p>
-          <p>Restano due eccezioni. All'avvio, Solidon3D controlla
-          facoltativamente se esiste una versione più recente — la richiesta
-          indica solo il proprio numero di versione e si può disattivare
-          nelle impostazioni. E quello che invii tu: un riscontro al
-          supporto, il cui contenuto vedi prima in un'anteprima.</p>
+          <p>I tuoi file di progetto restano sul tuo computer. Nella chat, il modello linguistico scelto riceve il tuo messaggio, un riepilogo della scena e la cronologia della conversazione. Se supporta le immagini, possono essere incluse anche viste renderizzate del modello.</p>
+          <p>Con Anthropic o un server Ollama remoto, questi dati lasciano il tuo computer. Ollama sul tuo computer li elabora localmente. Prima della prima richiesta al modello, Solidon3D mostra la destinazione scelta.</p>
+          <p>La rete serve anche per attivare il dispositivo, controllare gli aggiornamenti —un’opzione disattivabile— e scaricare ciò che richiedi. I messaggi all’assistenza mostrano il contenuto prima dell’invio. Solidon3D non trasmette statistiche di utilizzo e non salva i tuoi progetti nel cloud.</p>
         </details>
         <details>
           <summary>Quali formati legge e scrive Solidon3D?</summary>

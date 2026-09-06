@@ -570,7 +570,7 @@ def promised_sizes(payload: dict[str, Any]) -> dict[str, int]:
             continue
         try:
             size = int(entry.get("size", 0))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         if size <= 0:
             continue
@@ -950,7 +950,7 @@ def differs(root: str, path: Path, remote_size: int | None) -> bool:
     except urllib.error.HTTPError as problem:
         problem.close()
         return True
-    except (ResponseTooLargeError, ValueError):
+    except ResponseTooLargeError, ValueError:
         return True
     except (
         urllib.error.URLError,

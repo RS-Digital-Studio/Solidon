@@ -730,3 +730,93 @@ def test_a_trickling_real_http_response_stops_at_the_deadline_not_at_the_block()
 
     assert received, "vor der Frist kam nichts an — der Leser wartete auf den ganzen Block"
     assert len(received) < total, "und die Frist galt, nicht der angekündigte Block"
+
+
+@pytest.mark.parametrize("part", ["extension", "trailer"])
+def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
+    """Auch gültige HTTP-Metadaten dürfen die absolute Frist nicht umgehen."""
+    import http.client
+
+    left, right = socket.socketpair()
+    stop = threading.Event()
+    prefix = b"" if part == "extension" else b"1\r\nx\r\n0\r\n"
+    slow = (
+        b"1;extension=abcdefghijklmnopqrst\r\nx\r\n0\r\n\r\n"
+        if part == "extension"
+        else b"X-Trailer: abcdefghijklmnopqrst\r\n\r\n"
+    )
+
+    def send() -> None:
+        try:
+            right.sendall(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n" + prefix)
+            for value in slow:
+                if stop.wait(0.02):
+                    break
+                right.sendall(bytes([value]))
+        except OSError:
+            pass
+        finally:
+            right.close()
+
+    writer = threading.Thread(target=send, daemon=True)
+    writer.start()
+    response = http.client.HTTPResponse(left)
+    response.begin()
+    started = time.monotonic()
+    try:
+        with pytest.raises(ResponseDeadlineError):
+            read_limited(response, limit=100, deadline=deadline_after(0.08))
+        elapsed = time.monotonic() - started
+        assert elapsed < 0.30, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
+    finally:
+        stop.set()
+        response.close()
+        left.close()
+        writer.join(timeout=1.0)
+    assert not writer.is_alive()
+
+
+@pytest.mark.parametrize("part", ["status", "headers"])
+def test_initial_http_lines_share_the_absolute_deadline(
+    monkeypatch: pytest.MonkeyPatch, part: str
+) -> None:
+    """Die Frist beginnt vor dem ersten Antwortbyte, nicht erst am Inhalt."""
+    from app.core import http
+
+    left, right = socket.socketpair()
+    stop = threading.Event()
+    monkeypatch.setattr(http, "resolve_public_addresses", lambda *_args, **_kwargs: ("8.8.8.8",))
+    monkeypatch.setattr(http, "verify_public_peer", lambda *_args: None)
+    monkeypatch.setattr(socket, "create_connection", lambda *_args, **_kwargs: left)
+
+    def send() -> None:
+        try:
+            right.recv(4096)
+            if part == "headers":
+                right.sendall(b"HTTP/1.1 200 OK\r\n")
+            payload = (
+                b"HTTP/1.1 200 Long Reason Phrase\r\nContent-Length: 0\r\n\r\n"
+                if part == "status"
+                else b"X-Header: abcdefghijklmnopqrst\r\nContent-Length: 0\r\n\r\n"
+            )
+            for value in payload:
+                if stop.wait(0.02):
+                    break
+                right.sendall(bytes([value]))
+        except OSError:
+            pass
+        finally:
+            right.close()
+
+    writer = threading.Thread(target=send, daemon=True)
+    writer.start()
+    started = time.monotonic()
+    try:
+        with pytest.raises(ResponseDeadlineError):
+            http.open_public_url("http://example.org/model", deadline=deadline_after(0.08))
+        assert time.monotonic() - started < 0.30
+    finally:
+        stop.set()
+        left.close()
+        writer.join(timeout=1.0)
+    assert not writer.is_alive()

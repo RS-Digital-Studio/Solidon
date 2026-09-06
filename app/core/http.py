@@ -14,7 +14,8 @@ import queue
 import socket
 import ssl
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Buffer, Callable, Iterator
+from contextlib import contextmanager
 from time import monotonic
 from typing import IO, Any, Final, Protocol, cast
 from urllib.parse import SplitResult, urlsplit, urlunsplit
@@ -270,6 +271,9 @@ class _PinnedResponse:
     def read(self, size: int = -1) -> bytes:
         return self._response.read(size)
 
+    def read1(self, size: int = -1) -> bytes:
+        return self._response.read1(size)
+
     def set_read_timeout(self, seconds: float) -> None:
         candidates = [self._sock]
         for path in (("fp", "raw", "_sock"), ("fp", "_sock")):
@@ -318,6 +322,17 @@ def open_public_url(
     timer: Timer = monotonic,
 ) -> _PinnedResponse:
     """Öffnet eine öffentliche URL an genau einer zuvor geprüften IP-Adresse."""
+
+    class DeadlineResponse(http.client.HTTPResponse):
+        """Auch Statuszeile und Kopfzeilen gehören zur Gesamtfrist."""
+
+        def begin(self) -> None:
+            try:
+                with _socket_deadline(self, deadline, timer, None):
+                    super().begin()
+            except TimeoutError as problem:
+                raise ResponseDeadlineError("response headers deadline exceeded") from problem
+
     checked = validate_http_url(url, allow_http=True, allow_fragment=False)
     parts = urlsplit(checked)
     hostname = parts.hostname
@@ -351,6 +366,7 @@ def open_public_url(
             return socket.create_connection((pinned_address, target[1]), timeout, source_address)
 
         connection.__dict__["_create_connection"] = pinned_connection
+        connection.response_class = DeadlineResponse
         try:
             connection.connect()
             sock = connection.sock
@@ -407,6 +423,45 @@ def response_url(response: object, fallback: str) -> str:
     return str(value or fallback)
 
 
+@contextmanager
+def _socket_deadline(
+    response: ReadableResponse, deadline: float, timer: Timer, read_timeout: float | None
+) -> Iterator[None]:
+    """Begrenzt jeden Netzgriff, auch innerhalb von Chunk-Köpfen und Trailern.
+
+    ``BufferedReader.readline`` kann beliebig viele Socketzugriffe ausführen.
+    Der instanzeigene SocketIO-Leser erhält deshalb für die Dauer dieses
+    Lesewegs die jeweils aktuelle Restfrist. Puffer, HTTP-Parser und Eigentum
+    bleiben unverändert; nach dem Lesen wird die Instanz zurückgesetzt.
+    """
+    answer: Any = response._response if isinstance(response, _PinnedResponse) else response
+    if not isinstance(answer, http.client.HTTPResponse):
+        answer = getattr(answer, "fp", None)
+    raw = getattr(getattr(answer, "fp", None), "raw", None)
+    if not isinstance(raw, socket.SocketIO):
+        yield
+        return
+    original = raw.readinto
+    previous = vars(raw).get("readinto")
+
+    def readinto(b: Buffer) -> int | None:
+        remaining = deadline - timer()
+        if remaining <= 0:
+            raise ResponseDeadlineError("response deadline exceeded")
+        sock: socket.socket = vars(raw)["_sock"]
+        sock.settimeout(remaining if read_timeout is None else min(remaining, read_timeout))
+        return original(b)
+
+    raw.readinto = readinto  # type: ignore[method-assign]
+    try:
+        yield
+    finally:
+        if previous is None:
+            del raw.readinto
+        else:
+            raw.readinto = previous  # type: ignore[method-assign]
+
+
 def iter_limited(
     response: ReadableResponse,
     *,
@@ -436,32 +491,33 @@ def iter_limited(
     if announced is not None and announced > limit:
         raise ResponseTooLargeError(announced, limit)
 
-    received = 0
-    while True:
-        remaining = deadline - timer()
-        if remaining <= 0:
-            raise ResponseDeadlineError("response deadline exceeded")
-        controlled = _set_read_timeout(
-            response, remaining if read_timeout is None else min(remaining, read_timeout)
-        )
-        if require_timeout and not controlled:
-            if _response_finished(response):
+    with _socket_deadline(response, deadline, timer, read_timeout):
+        received = 0
+        while True:
+            remaining = deadline - timer()
+            if remaining <= 0:
+                raise ResponseDeadlineError("response deadline exceeded")
+            controlled = _set_read_timeout(
+                response, remaining if read_timeout is None else min(remaining, read_timeout)
+            )
+            if require_timeout and not controlled:
+                if _response_finished(response):
+                    return
+                raise ResponseTimeoutUnavailableError("response socket timeout is unavailable")
+            try:
+                chunk = _read_some(response, min(chunk_size, limit + 1 - received))
+            except TimeoutError as problem:
+                raise ResponseDeadlineError("response deadline exceeded") from problem
+            if timer() > deadline:
+                raise ResponseDeadlineError("response deadline exceeded")
+            if not isinstance(chunk, bytes):
+                raise InvalidResponseBodyError("response stream did not return bytes")
+            if not chunk:
                 return
-            raise ResponseTimeoutUnavailableError("response socket timeout is unavailable")
-        try:
-            chunk = _read_some(response, min(chunk_size, limit + 1 - received))
-        except TimeoutError as problem:
-            raise ResponseDeadlineError("response deadline exceeded") from problem
-        if timer() > deadline:
-            raise ResponseDeadlineError("response deadline exceeded")
-        if not isinstance(chunk, bytes):
-            raise InvalidResponseBodyError("response stream did not return bytes")
-        if not chunk:
-            return
-        received += len(chunk)
-        if received > limit:
-            raise ResponseTooLargeError(received, limit)
-        yield chunk
+            received += len(chunk)
+            if received > limit:
+                raise ResponseTooLargeError(received, limit)
+            yield chunk
 
 
 def _read_some(response: ReadableResponse, size: int) -> bytes:
@@ -519,7 +575,7 @@ def _content_length(response: ReadableResponse) -> int | None:
         return None
     try:
         value = int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return value if value >= 0 else None
 

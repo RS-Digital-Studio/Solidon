@@ -117,7 +117,8 @@ def _post(url: str, text: str) -> tuple[int, str]:
         with urlopen(request, timeout=5) as response:
             return response.status, response.read().decode("utf-8")
     except HTTPError as problem:
-        return problem.code, problem.read().decode("utf-8")
+        with problem:
+            return problem.code, problem.read().decode("utf-8")
 
 
 def _operator_post(url: str, token: str, payload: dict[str, str]) -> tuple[int, str]:
@@ -134,7 +135,8 @@ def _operator_post(url: str, token: str, payload: dict[str, str]) -> tuple[int, 
         with urlopen(request, timeout=5) as response:
             return response.status, response.read().decode("utf-8")
     except HTTPError as problem:
-        return problem.code, problem.read().decode("utf-8")
+        with problem:
+            return problem.code, problem.read().decode("utf-8")
 
 
 def _get(url: str) -> tuple[int, str]:
@@ -142,7 +144,8 @@ def _get(url: str) -> tuple[int, str]:
         with urlopen(url, timeout=5) as response:
             return response.status, response.read().decode("utf-8")
     except HTTPError as problem:
-        return problem.code, problem.read().decode("utf-8")
+        with problem:
+            return problem.code, problem.read().decode("utf-8")
 
 
 def test_php_issues_one_idempotent_device_certificate(
