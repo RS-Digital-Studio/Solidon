@@ -69,6 +69,15 @@ Qt-Elternfenster schließen, zuletzt das Fenster. Derselbe terminale Weg liegt
 am akzeptierten `MainWindow.closeEvent`; `MainWindow.release()` bleibt für
 mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.
 
+`window_memory.py` stellt die andere Frage am selben Fenster: **was ein
+Fenster- und ein Sprachwechsel liegen lassen.** Es baut nacheinander Fenster
+auf und ab und wechselt danach über `app.ui.app.rebuild_for_language` die
+Sprache, misst je Runde den Arbeitssatz und meldet die **Steigung über die
+zweite Hälfte** — die erste trägt den einmaligen Aufbau, und wer sie
+mitrechnet, findet ein Leck, das keines ist. Es teilt Messprofil,
+Arbeitssatzmessung und Abbaureihenfolge mit `window_bench.py`, statt sie zu
+wiederholen. Ohne Bildschirm und wgpu-Adapter misst es nichts und sagt es.
+
 **Erzeugen** — alles hierunter läuft über den Skill `/erzeugen`
 
 Der Importgraph von `affected_tests.py` behält auch nicht mehr vorhandene

@@ -487,10 +487,15 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     import tokenize
 
     workflow = WORKFLOW.read_text(encoding="utf-8")
+    # **Die Sache, nicht die Zahl.** Hier stand ``== 2``, und einen halben Tag
+    # später kam ein dritter Lauf dazu (die Fensterdateien laufen in der CI
+    # wieder, 06.09.2026) — eine richtige Änderung, die einen Test rot machte,
+    # der sie gar nicht beurteilen wollte. Geprüft wird, dass überhaupt so
+    # gesucht wird und dass niemand zum Textmuster zurückkehrt.
     calls = re.findall(r"windowed=\$\(python tools/list_windowed_tests\.py", workflow)
-    assert len(calls) == 2, (
-        "beide Stellen des Workflows bilden die Fenstergruppe über "
-        "tools/list_windowed_tests.py — gefunden: " + str(len(calls))
+    assert calls, (
+        "keine Stelle im Workflow bildet die Fenstergruppe über "
+        "tools/list_windowed_tests.py — dann prüft dieser Test nichts"
     )
     assert "windowed=$(grep" not in workflow, "das alte Textmuster steht noch im Workflow"
 
@@ -505,7 +510,10 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     windowed = {Path(entry).name for entry in listed}
     assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
 
-    builders = {"MainWindow", "Viewport", "SketchPanel", "OverlayHost", "Plotter"}
+    # ``Plotter`` stand hier bis zum 06.09.2026 mit: PyVistas Klasse, die der
+    # Viewport hielt. Sie ist mit dem VTK-Renderer gegangen, und ein Name, den
+    # es nicht mehr gibt, kann keine Datei mehr finden — er sah nur so aus.
+    builders = {"MainWindow", "Viewport", "SketchPanel", "OverlayHost"}
 
     def builds_a_window(path: Path) -> bool:
         previous = None

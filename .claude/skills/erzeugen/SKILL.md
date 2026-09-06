@@ -31,6 +31,7 @@ Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
 .venv\Scripts\python.exe tools/make_seo.py                      # robots.txt, sitemap.xml, llms.txt, FAQ-Auszeichnung — nach den beiden darüber
+.venv\Scripts\python.exe tools/make_longform_video.py           # drei deutsche Tutorialfilme über drei Minuten, je mit .timeline.json für die YouTube-Kapitel
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 7 oder 6
 .venv\Scripts\python.exe tools/make_linux_packages.py --files   # Menüeintrag, Flatpak-Manifest, AppStream — läuft überall
 .venv\Scripts\python.exe tools/make_download.py <pakete>        # Pakete in den Download-Kasten aller sechs Sprachen, mit SHA-256; ohne Argument leert es ihn
@@ -284,8 +285,12 @@ etwas *bricht* — dass es überhaupt eine neuere *gäbe*, sagt er niemandem.
 Dafür ist `--outdated` da; es trennt, was gehen würde, von dem, was eine
 Grenze in `pyproject.toml` ausschließt — **dort steht seit dem 14.08.2026 keine
 mehr**, denn die letzte (`trimesh<5`) ist mit der Migration gefallen. Kommt eine
-neue dazu, ist sie eine Entscheidung und gehört begründet. Die nächste zeichnet
-sich schon ab, und sie liegt nicht in unserer Hand: `vtk 9.7.0` ist da, aber
-`pyvista` verlangt `vtk<9.7.0`. Steht der Satz länger als drei Monate, erinnert
-der Sitzungsstart-Hook daran. Der Weg zum neuen Stand ist immer derselbe:
+neue dazu, ist sie eine Entscheidung und gehört begründet. Hier stand eine
+Ankündigung — `vtk 9.7.0` sei da, aber `pyvista` verlange `vtk<9.7.0`, und ein
+Hook erinnere daran, falls es länger als drei Monate dauere. Beides ist
+hinfällig: Mit dem Ausbau des VTK-Renderers am 06.09.2026 ist PyVista aus dem
+Projekt verschwunden, `constraints.txt` steht auf `vtk==9.7.0`, und die
+Erinnerung hat es nie gegeben — in `.claude/hooks/` findet sich weder `vtk`
+noch eine Frist. Eine Zusage ohne Einlösung sagt weniger als keine.
+Der Weg zum neuen Stand ist immer derselbe:
 aktualisieren, **Suite fahren**, dann `--freeze` — nie umgekehrt.

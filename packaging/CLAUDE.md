@@ -96,8 +96,11 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
 
 - **Eine neue Abhängigkeit** kann in der `.spec` fehlen und erst im gebauten
   Paket auffallen — dort, wo kein `pip` mehr hilft.
-  Die Ansicht bindet VTK unmittelbar und daneben pygfx/wgpu ein. PyVista,
-  PyVistaQt und QtPy gehören nicht zum Laufzeitbaum. Die Entwicklungsvorschau
+  Die Ansicht zeichnet mit pygfx über wgpu; ohne Adapter für Direct3D 12,
+  Vulkan oder Metal fällt sie aus, und wgpu bringt für diesen Fall WARP
+  beziehungsweise lavapipe mit. VTK reist nur noch als kopflose
+  Geometriebibliothek der Bereichsprüfung mit; PyVista, PyVistaQt und QtPy
+  gehören nicht zum Laufzeitbaum. Die Entwicklungsvorschau
   der Lizenzbeilage wird nach einer Änderung mit dem Interpreter des neuen
   Versionssatzes erzeugt; sie ersetzt keinen nativen Paketnachweis.
   Der Schichtkern wird über `build_slice_core.current_extensions()` ausgewählt:

@@ -706,6 +706,41 @@ def test_projection_queries_keep_cached_matrices_until_size_or_pose_changes(
     assert sizes == [(200.0, 600.0)]
 
 
+def test_the_vertex_normals_are_computed_once_and_not_per_shader(
+    renderer: GfxRenderer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Körper mit Kanten rechnete seine Normalen zweimal.
+
+    Fläche und Kantengitter hängen an derselben ``gfx.Geometry`` — aber jeder
+    Shader fragt seine Bindungen selbst an, und ohne mitgegebene Normalen
+    rechnet pygfx sie dabei jedes Mal neu. Gezählt am Tetraeder vor dem Fix:
+    ohne Kanten ein Lauf, mit Kanten zwei. Am 3,15-Millionen-Dreiecke-Netz
+    kostet ein Lauf rund 0,7 Sekunden, und die Darstellungsart „Massiv mit
+    Kanten" zahlte ihn doppelt.
+
+    Gezählt wird der Aufruf, nicht die Zeit: Eine Zahl bleibt auch unter
+    Fremdlast wahr.
+    """
+    import pygfx.renderers.wgpu.shaders.meshshader as meshshader
+
+    calls = 0
+    original = meshshader.normals_from_vertices
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(meshshader, "normals_from_vertices", counted)
+
+    body = renderer.add_surface(*cube(), name="body", style=SurfaceStyle(show_edges=True))
+    look_down(renderer, body.bounds())
+    renderer.render()
+
+    assert calls == 0, "pygfx rechnet Normalen, obwohl add_surface sie mitgibt"
+    assert renderer._items, "der Körper steht in der Szene"
+
+
 def test_the_axes_letters_stay_inside_their_field(renderer: GfxRenderer) -> None:
     """Die Buchstaben des Achsenkreuzes sind in jeder Blickrichtung ganz zu sehen.
 

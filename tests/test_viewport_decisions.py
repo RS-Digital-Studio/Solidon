@@ -239,6 +239,44 @@ def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(
     assert viewport.unavailable_hint() == "", "wo es nichts zu tun gibt, steht auch nichts"
 
 
+def test_a_machine_without_a_graphics_adapter_is_told_what_to_install(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne wgpu-Adapter fehlte der Weg heraus — der häufigste Fall auf Linux.
+
+    Bis zum Ausbau des VTK-Renderers (06.09.2026) hieß „keine 3D-Ansicht" fast
+    immer Wayland, und dafür stand ein Hinweis. Seither zeichnet die Ansicht
+    über Direct3D 12, Vulkan oder Metal, und auf einem Linux ohne
+    Vulkan-Treiber sagt ``factory.available`` nein — nicht weil der Rechner zu
+    alt wäre, sondern weil zwei Pakete fehlen. Der Kunde las dazu einen Satz
+    ohne Ausweg (Regel 17).
+
+    Gemessen wird der Hinweis, nicht der Adapter: Welche Antwort ``factory``
+    gibt, hängt an der Maschine, die diesen Test fährt.
+    """
+    from app.ui import viewport
+
+    monkeypatch.setattr(viewport, "_effective_platform", lambda: "xcb")
+
+    monkeypatch.setattr(viewport.sys, "platform", "linux")
+    hint = viewport.unavailable_hint()
+    assert "mesa-vulkan-drivers" in hint and "libvulkan1" in hint, hint
+    assert "vulkan-loader" in hint, "Fedora und openSUSE nennen die Pakete anders"
+
+    for system in ("win32", "darwin"):
+        monkeypatch.setattr(viewport.sys, "platform", system)
+        hint = viewport.unavailable_hint()
+        assert "Direct3D 12" in hint and "Metal" in hint, (system, hint)
+        assert "mesa-vulkan-drivers" not in hint, "Paketnamen gehören nur auf Linux"
+
+    # Was ausdrücklich so gewollt ist, bekommt keinen Rat.
+    monkeypatch.setattr(viewport, "_effective_platform", lambda: "offscreen")
+    assert viewport.unavailable_hint() == ""
+    monkeypatch.setattr(viewport, "_effective_platform", lambda: "xcb")
+    monkeypatch.setenv(viewport.HEADLESS_VARIABLE, "1")
+    assert viewport.unavailable_hint() == ""
+
+
 def test_renderer_release_is_idempotent(qt_app: QApplication) -> None:
     """Der native Renderer wird genau einmal und über eine Besitzstelle gelöst."""
     from app.ui.viewport import Viewport
@@ -1437,7 +1475,7 @@ def test_the_bed_surface_can_be_seen_through_from_below(
     Schatten auf nichts —, aber nur von oben: ``cull_backfaces`` wirft ihre
     Rückseite weg. ``opacity`` wäre die falsche Antwort gewesen — eine
     durchscheinende Platte nähme dem Schatten seinen Grund. Dass das Bild
-    stimmt, misst ``tests/test_render_vtk.py``; hier steht, dass die
+    stimmt, misst ``tests/test_render_contract.py``; hier steht, dass die
     Eigenschaft gesetzt **wird**.
     """
     from app.ui.viewport import Viewport
@@ -2122,7 +2160,17 @@ def test_the_view_stays_upright_while_it_turns() -> None:
     Commit-Meldung lebt: Dieselben zwölf Züge, mit ``Azimuth``, ``Elevation``
     und ``OrthogonalizeViewUp`` gerechnet — also so, wie die Basisklasse es
     tut —, kippen den Horizont um mehr als sechzig Grad.
+
+    **Gemessen an der echten ``vtkCamera``, und deshalb übersprungen, wenn es
+    sie nicht gibt.** Ein Nachbau der Formel wäre keine Gegenprobe mehr,
+    sondern dieselbe Rechnung zweimal. ``vtk`` steckt heute noch als kopflose
+    Geometriebibliothek in der Bereichsprüfung; fällt es ganz (Registerpunkt),
+    verschwindet mit ihm diese Messung — und nicht der Test, der den
+    Drehteller prüft.
     """
+    pytest.importorskip(
+        "vtkmodules.vtkRenderingCore", reason="ohne VTK gibt es die Gegenprobe nicht mehr"
+    )
     from vtkmodules.vtkRenderingCore import vtkCamera
 
     from app.ui.render.navigator import turntable_camera
@@ -2192,10 +2240,15 @@ def test_the_turn_keeps_its_distance_and_the_speed_it_had() -> None:
     Das Zweite ist die stille Zusage dieser Änderung: Wer das Neigen abstellt,
     darf nicht nebenbei die Empfindlichkeit verstellen. Geprüft gegen
     ``vtkCamera.Azimuth`` mit der Formel der Basisklasse — bei einem rein
-    waagerechten Zug müssen beide denselben Standort ergeben.
+    waagerechten Zug müssen beide denselben Standort ergeben. Wie die
+    Gegenprobe darüber hängt auch diese am echten VTK und überspringt sich
+    ohne es.
     """
     import math
 
+    pytest.importorskip(
+        "vtkmodules.vtkRenderingCore", reason="ohne VTK gibt es die Gegenprobe nicht mehr"
+    )
     from vtkmodules.vtkRenderingCore import vtkCamera
 
     from app.ui.render.navigator import turntable_camera

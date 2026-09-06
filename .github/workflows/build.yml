@@ -82,16 +82,24 @@ jobs:
           python-version: "3.14.7"
           cache: pip
 
-      - name: Qt-Systembibliotheken (Linux)
+      - name: Qt-Systembibliotheken und Vulkan (Linux)
         # PySide6 lädt libEGL auch offscreen; ohne sie scheitert schon der
         # Import in jedem UI-Test. Dazu Xvfb — die Begründung steht unten beim
         # Testschritt.
+        #
+        # **Und Vulkan, seit die Ansicht mit pygfx über wgpu zeichnet**
+        # (06.09.2026): ``libvulkan1`` ist der Loader, ``mesa-vulkan-drivers``
+        # bringt lavapipe mit — den Software-Adapter, den ein Runner ohne
+        # Grafikkarte braucht. Ohne beides findet ``factory.available()``
+        # nichts, und jeder Renderertest überspringt sich mit Grund: Der
+        # Lauf bleibt grün und misst den Renderer trotzdem nie. Genau so
+        # war es zwischen dem Ausbau und diesem Schritt.
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libegl1 libgl1 libdbus-1-3 xvfb \
-            libgl1-mesa-dri \
+            libgl1-mesa-dri libvulkan1 mesa-vulkan-drivers \
             libxkbcommon0 libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
@@ -159,17 +167,17 @@ jobs:
         # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
         # etwas zu ändern.
         #
-        # **Gesucht wird nach dem Aufbau, nicht nach der Erwähnung.** Nach
-        # `MainWindow` allein fehlten zwei Dateien, die einen `Viewport` bauen,
-        # ohne das Fenster zu nennen: `tests/test_cursors.py` mit acht Aufbauten
-        # und `tests/test_plates.py` mit einem. Neun Fenster mehr im großen
-        # Stapel, ohne dass es auffiel — bei einem Absturz, der genau an dieser
-        # Zahl hängt.
-        #
-        # Nach `Viewport(` mit Klammer und nicht nach dem nackten Namen: sieben
-        # weitere Dateien *erwähnen* ihn oder `pyvista` nur, in einem Import,
-        # einem Kommentar, der Lizenzliste von `test_licences.py`. Die bekämen
-        # sonst einen eigenen Prozess für nichts.
+        # **Gefragt wird der Fixture-Graph, nicht der Text.** Bis zum
+        # 05.09.2026 suchte diese Stelle nach `MainWindow`, `Viewport(` und
+        # `pyvista` im Quelltext, und beide Fehler dieser Sorte sind
+        # aufgetreten: Nach `MainWindow` allein fehlten zwei Dateien, die eine
+        # Ansicht bauen, ohne das Fenster zu nennen (`test_cursors.py` mit acht
+        # Aufbauten, `test_plates.py` mit einem) — neun Fenster mehr im großen
+        # Stapel, bei einem Absturz, der genau an dieser Zahl hängt. Und in die
+        # Gegenrichtung geriet `tests/test_performance.py` wegen zweier
+        # Docstrings in die Fenstergruppe, sammelte dort nichts und endete mit
+        # Exit 5. `tools/list_windowed_tests.py` fragt stattdessen, welche
+        # Datei das `qt_app`-Fixture wirklich anzieht, auch mittelbar.
         #
         # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
         # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
@@ -301,7 +309,54 @@ jobs:
           # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
           # Sie schließt sich mit einem Probelauf ohne diese Auslassung; bis
           # dahin steht sie in ROADMAP.md.
-          echo "::warning::Fensterdateien übersprungen (Probelauf nach dem VTK-Ausbau steht aus): $windowed"
+          echo "::warning::Fensterdateien laufen im Probelauf daneben, nicht hier: $windowed"
+
+      - name: Probelauf der Fensterdateien (Linux, blockiert nicht)
+        # **Der Probelauf, den das Register seit dem VTK-Ausbau verlangt.**
+        #
+        # Er steht bewusst neben dem Tor und nicht darin: Die Auslassung
+        # entstand am 20.08.2026, weil ein Fremdcode-Absturz in einer
+        # Umgebung, die niemand benutzt, wochenlang die Auslieferung aller
+        # vier Plattformen verhinderte. Diesen Fehler ein zweites Mal zu
+        # machen, wäre schlimmer als die Lücke. ``continue-on-error``
+        # heißt deshalb: Das Ergebnis steht in der Zusammenfassung, der
+        # Paketier-Job hängt nicht daran.
+        #
+        # Je Datei ein eigener Prozess, wie lokal in
+        # ``suite-getrennt.sh``: Die Suite baut sonst hunderte Fenster in
+        # einem Prozess auf, und irgendwann reißt eine Grenze.
+        #
+        # ``tr -d '\r'`` ist nicht Zierde: Das Werkzeug schreibt unter
+        # Windows CRLF, und ein Dateiname mit Wagenrücklauf ist ein Pfad,
+        # den es nicht gibt — pytest sammelt dann nichts und meldet es
+        # nicht (06.09.2026).
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          QT_QPA_PLATFORM: xcb
+        run: |
+          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+          echo "Fensterdateien: $(echo $windowed | wc -w)"
+          gruen=0
+          rot=""
+          for file in $windowed; do
+            if xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+                 python -m pytest -q -m "not performance and not rendered" "$file"; then
+              gruen=$((gruen + 1))
+            else
+              rot="$rot $file($?)"
+            fi
+          done
+          echo "### Probelauf der Fensterdateien" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Grün: $gruen von $(echo $windowed | wc -w)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$rot" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nicht grün (Datei mit Exit-Code):$rot" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Fensterdateien im Probelauf nicht grün:$rot"
+          else
+            echo "::notice::Alle Fensterdateien liefen grün — die Auslassung im Tor kann fallen."
+          fi
 
   package:
     name: Paket (${{ matrix.os }})
@@ -369,7 +424,11 @@ jobs:
           # hart an ihnen, PyInstaller bündelt nur, was der Runner hat — und der
           # hatte sie nicht. Auf einem Ubuntu-GNOME fehlt libxcb-cursor0
           # regelmäßig, und Qt startet dann nicht (make_sbom.LINUX_LIBRARY_FAMILIES).
+          # ``libvulkan1`` und ``mesa-vulkan-drivers``: Die Ansicht zeichnet
+          # über wgpu, und der Paketlauf soll auf demselben Boden stehen wie
+          # der Testlauf darüber.
           sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3 pkg-config \
+            libvulkan1 mesa-vulkan-drivers \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
             libxcb-shape0 libxcb-util1 libxcb-xkb1 libxkbcommon-x11-0
 

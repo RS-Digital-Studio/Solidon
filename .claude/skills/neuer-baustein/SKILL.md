@@ -30,9 +30,13 @@ stimmt es oder es existiert nicht.
 3. Benannte Features zurückgeben: die Provenienz-IDs, an denen Ops und
    Passungen ansetzen
 4. `to_scad()` ergänzen
-5. **Test über den gesamten Parameterbereich**: wasserdicht,
-   Mindestwandstärke, keine Selbstdurchdringung an den Grenzen, Features
-   korrekt benannt. An den Rändern bricht Geometrie, nicht in der Mitte.
+5. **Bereichstest von Hand** für den neuen Baustein — `check_part(spec,
+   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an
+   den Grenzen, Features korrekt benannt. An den Rändern bricht Geometrie,
+   nicht in der Mitte. Der Lauf über *alle* Bausteine ist am 03.09.2026
+   gefallen, weil er eine halbe Stunde je Torlauf kostete
+   (`.claude/rules/bausteine.md`); für den einen, den du gerade baust,
+   dauert er eine Minute. **Der Testlauf unten prüft ihn nicht.**
 6. Normteilmaße aus der Tabelle, nie hart im Baustein
 7. Vorschaubild rendern lassen
 8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen,

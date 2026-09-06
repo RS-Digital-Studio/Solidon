@@ -126,9 +126,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Geometriebefunde G-03 bis G-38 (35 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach den Oberflächenbefunden; jeder braucht zuerst seine Korpusdatei (AGENTS.md: Test zuerst bei Geometrie), und die Reihenfolge folgt der Kundenwirkung — verschwindende Löcher (G-03), ungültige Körper ohne Befund (G-04), verlorene Materialzuweisungen (G-10, G-12) vor den Bausteinmaßen |
 | Werkzeuge und Website: R25, R26, R31, R35, R37, R38 | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach der Geometrie; R35 (FAQ zu den übertragenen Daten) und R38 (widersprüchliche Fachagenten) sind Texte in sechs Sprachen bzw. vierzehn Dateien und brauchen einen ruhigen Durchgang, kein Zwischenstück |
 | Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38 | Was der Gesamtreview liegen ließ (05.09.2026) | einen Katalogdurchgang je Sprache — fünf Zeilen, aber jede gegen die sichtbare Oberfläche geprüft (Menüname, Feldtitel, Verlaufstitel), nicht gegen die deutsche Quelle allein |
-| Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | Was der Gesamtreview liegen ließ (05.09.2026) | **entschieden, gebaut — und der zweite Renderer ist am selben Tag wieder ausgebaut (06.09.2026): pygfx zeichnet allein** (`app/ui/render/factory.py`; Robert: „dann ausbau sauber“). PyVista, PyVistaQt und `vtk_renderer.py` sind weg, `vtk` bleibt als kopflose Geometriebibliothek der Bereichsprüfung im Kern. Was offen ist: die Bereichsprüfung ohne VTK rechnen (eigene Strahl- und Dreieckspaarprüfung, validiert über alle 27 Bausteine — dann fällt das Paket ganz; bis dahin kann `vtk` auf 9.7.0 gehoben werden, eigener Lauf mit Tor); das erste Bild eines großen Netzes (4 s am 3,15-Millionen-Baum, je rund eine Sekunde Pipelines, Punktnormalen auf der CPU und Pufferupload — Aufbauprofil in `ABNAHME.md`; zwei Hebel sind mit Zahl benannt und keiner gebaut: die Shader beim Start an einem kleinen Netz vorwärmen, und Punktnormalen mitgeben statt pygfx sie rechnen zu lassen); Speicher über Fenster- und Sprachwechsel messen; die Fensterdateien in der CI wieder einschalten (Probelauf); den wgpu-Fensterweg unter nativem Wayland fahren; und die zwei Prüfstände am echten Fenster (eigener Registerpunkt). Die Modellabnahme über 23 Kundendateien, die Leistungsreihe und das Aufbauprofil liegen in `.claude/.state/renderer-audit-2026-09-05-01a07353/` (`ABNAHME.md`) |
+| Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | Was der Gesamtreview liegen ließ (05.09.2026) | **entschieden, gebaut — und der zweite Renderer ist am selben Tag wieder ausgebaut (06.09.2026): pygfx zeichnet allein** (`app/ui/render/factory.py`; Robert: „dann ausbau sauber“). PyVista, PyVistaQt und `vtk_renderer.py` sind weg, `vtk` bleibt als kopflose Geometriebibliothek der Bereichsprüfung im Kern. Was offen ist: die Bereichsprüfung ohne VTK rechnen (eigene Strahl- und Dreieckspaarprüfung, validiert über alle 27 Bausteine — dann fällt das Paket ganz; bis dahin kann `vtk` auf 9.7.0 gehoben werden, eigener Lauf mit Tor); das erste Bild eines großen Netzes (nachgemessen 06.09.2026: die 4 s des Profils sind der cProfile-Aufschlag, ohne Profiler 1,3 s; Vorwärmen wirkt, kostet aber mehr als es spart und ist zurückgenommen; die Punktnormalen entstehen seither einmal statt je Shader — mit Kanten waren es zwei Läufe); Speicher über Fenster- und Sprachwechsel messen; die Fensterdateien in der CI wieder einschalten (Probelauf); den wgpu-Fensterweg unter nativem Wayland fahren; und die zwei Prüfstände am echten Fenster (eigener Registerpunkt). Die Modellabnahme über 23 Kundendateien, die Leistungsreihe und das Aufbauprofil liegen in `.claude/.state/renderer-audit-2026-09-05-01a07353/` (`ABNAHME.md`) |
 | Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht gefahren | Was der Gesamtreview liegen ließ (05.09.2026) | einen Tag-Lauf der CI für das Flatpak und danach eine Messung im echten Flatpak auf einem Linux (Grafik, Qt-Bibliotheken, Start ohne Netz); für Inno Setup 7 (lokal seit dem 05.09.2026 als 7.1.0 installiert) einen Bau samt Installation |
 | CORE-02 (verworfene Vorschläge reisen als Antworten weiter) und CORE-26 (nachträgliche Kragenhöhe) | Was der Gesamtreview liegen ließ (05.09.2026) | eine Entscheidung Roberts: CORE-02 ist eine Änderung der Projektdatei (Markierung am ChatEntry, format_version 20 mit Migration), CORE-26 macht die Deckelpassung parametrisch statt fest — beides Architektur, nicht Reparatur |
+| Der Renderer ist nur auf Windows gemessen | Was der Gesamtreview liegen ließ (05.09.2026) | **den ersten grünen CI-Lauf mit Vulkan** — bis zum 06.09.2026 fehlte dem Linux-Runner der Loader, jeder Renderertest übersprang sich mit Grund, und kein Lauf hat je einen Renderer gebaut; `libvulkan1` und `mesa-vulkan-drivers` stehen seither im Test- und im Paketjob. Dazu: das Linux-Paket deklariert Vulkan nirgends (AppImage und Archiv laufen gegen das Hostsystem, der Hinweis in der Anwendung nennt die zwei Pakete), auf macOS ist seit der Umstellung nichts gelaufen (letzter Tag `v0.3.4` vom 04.09.2026), und der Linux-Weg von `present_method="screen"` öffnet eine zweite X11-Verbindung, die nie gefahren wurde |
+| Nativer Wayland ist nicht ungefahren, sondern nicht gebaut | Was der Gesamtreview liegen ließ (05.09.2026) | **nichts zu tun, nur beobachten** — in `rendercanvas` 2.7.2 steht der Wayland-Zweig hinter einem `if False:`; die X11-Bevorzugung ist Voraussetzung, nicht Vorsicht. Der Punkt steht, damit ihn niemand als Messaufgabe aufgreift |
 | Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista | Was der Gesamtreview liegen ließ (05.09.2026) | den Umbau der beiden Fahrskripte (`fahre_steuerung.py`, `fahre_drehpunkt.py`) auf `QMouseEvent` an `renderer.widget`, danach die fünf Schemata und den Drehpunkt einmal am echten Fenster — bis dahin ist die Kette Qt → Widget → `PointerEvent` → Navigator nirgends gemessen |
 | Die Prompt-Tokenzahl des lokalen Modells ist seit 113 Werkzeugen nicht gemessen | Was der Gesamtreview liegen ließ (05.09.2026) | einen Lauf mit erreichbarem Ollama: `PROMPT_TOKENS` in `backends/llm.py` steht auf der Messung mit 111 Werkzeugen (22 856 Token); Kegel und Ring als Grundkörper kamen am 06.09.2026 dazu, und `PROMPT_TOOL_COUNT` nennt 113 — die Wartezeitschätzung des Chats ist bis dahin eine untere Grenze (rund 23 190 nach 165 Token je Operation) |
 | Der erste Kundenbericht aus 0.3.4 nennt keine Ursache (S-20260906-9ca141) | Der erste Kundenbericht aus 0.3.4 (06.09.2026) | den nächsten Bericht desselben Fehlers — seit 96da8fd0 trägt protokoll.txt den Traceback und der Bericht den Grund; ohne Rückadresse ist die Datei des Kunden nicht zu bekommen |
@@ -10993,21 +10995,88 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   kein Qt, kein GL. **Noch offen:** die Bereichsprüfung ohne VTK rechnen
   (eigene Strahl- und Dreieckspaarprüfung, validiert über alle 27 Bausteine),
   dann fällt das Paket ganz; die Fensterdateien in der CI wieder einschalten
-  (Probelauf, siehe Register); den wgpu-Fensterweg unter nativem Wayland
-  fahren (die X11-Bevorzugung in `qt_platform.py` stammt aus der VTK-Zeit);
-  Speicher über Fenster- und Sprachwechsel und die kopierten Bytes je Szene —
-  beides braucht einen Prüfstand, der das Fenster mehrfach baut; und das
-  erste Bild eines großen Netzes (Aufbauprofil 06.09.2026: 4 s am
-  3,15-Millionen-Baum, je rund eine Sekunde für die Pipelines, die
-  Punktnormalen, die pygfx auf der CPU rechnet, und den Pufferupload —
-  vorwärmen beim Start und Normalen mitgeben sind die zwei Hebel, beide
-  ungebaut). Aus der Modellabnahme sind zwei Nachläufe am selben Tag
+  (Probelauf, siehe Register); Speicher über Fenster- und Sprachwechsel und
+  die kopierten Bytes je Szene —
+  beides braucht einen Prüfstand, der das Fenster mehrfach baut. **Das
+  erste Bild großer Netze ist am selben Tag nachgemessen und zur Hälfte
+  behoben** — und dabei hat sich das Profil in zwei von drei Punkten
+  selbst widerlegt:
+  * Die 4 Sekunden aus dem Aufbauprofil sind der Aufschlag von cProfile.
+    Ohne Profiler kostet dasselbe Bild rund 1,3 s. Wer aus einem Profil
+    eine Zeitzusage ableitet, misst den Profiler mit.
+  * **Vorwärmen wirkt und wird trotzdem nicht gebaut.** Ein Dreieck mit
+    denselben Materialien nimmt dem ersten Bild fast die ganze
+    Materialarbeit (`create_render_pipeline` 1043 → 2 ms unter dem
+    Profiler, WGSL 856 → 45 ms, Renderzustand 304 → 55 ms) — aber es
+    kostet dieselbe Sekunde, die es spart, und die läge im Qt-Hauptthread
+    (§2.8). Gemessen: vorwärmen 1128 ms, erstes Bild danach 820 statt
+    1300 ms. Ein schlechter Tausch, zurückgenommen.
+  * **Die Normalen entstehen jetzt einmal statt je Shader** (gebaut).
+    Der vermutete Weg — sie von trimesh nehmen — wäre falsch gewesen:
+    trimesh rechnet sie kalt in 1210 ms, pygfx in 696 ms. Der wirkliche
+    Fund liegt daneben: Fläche und Kantengitter teilen dieselbe
+    `Geometry`, fragen ihre Bindungen aber getrennt an, und pygfx rechnet
+    dabei **zweimal**. Gezählt am Tetraeder: ohne Kanten ein Lauf, mit
+    Kanten zwei, mit mitgegebenen Normalen keiner. `add_surface` gibt sie
+    seither mit — dieselbe Funktion, dasselbe Bild, ein Lauf weniger je
+    Körper in der Darstellungsart „Massiv mit Kanten".
+  Was bleibt, ist der eine Normalenlauf und der Pufferupload; beides hängt
+  am Netz und nicht am Weg. Aus der Modellabnahme sind zwei Nachläufe am selben Tag
   gelandet: Die Zielhilfe meint die Fläche, die man durch eine Öffnung
   sieht (Fall 4 am Desk-Organizer), und das Achsenkreuz hat eine
   orthografische Kamera, je Blickrichtung auf den längsten sichtbaren Pfeil
   eingepasst, damit es das Feld immer füllt und seine Buchstaben in jeder
   Blickrichtung darin bleiben — im größten Feld, das der Streifen unter
   den Karten lässt.
+- [ ] **Der Renderer ist nur auf Windows gemessen** (Plattformdurchsicht
+  06.09.2026, nach dem VTK-Ausbau). Die Modellabnahme, die Leistungsreihe und
+  jeder Fensterlauf stammen von einer Maschine: Windows 11, RTX 4080. Was
+  daraus folgt, in der Reihenfolge des Risikos:
+  * **Der Probelauf der Fensterdateien läuft** (06.09.2026), als eigener
+    Schritt neben dem Tor und mit `continue-on-error`: Sein Ergebnis steht in
+    der Zusammenfassung des Laufs, der Paketier-Job hängt nicht daran. Ein
+    Probelauf, der die Auslieferung blockieren kann, wäre der Fehler vom
+    20.08.2026 noch einmal. Sind alle Dateien grün, kann die Auslassung im
+    Tor fallen — das sagt der Lauf dann selbst.
+  * **Kein CI-Lauf hatte je einen Renderer gebaut.** Auf dem Linux-Runner
+    fehlte der Vulkan-Loader, `factory.available()` sagte nein, und jeder
+    Renderertest übersprang sich mit Grund — der Lauf blieb grün und maß
+    nichts. Behoben am selben Tag: `libvulkan1` und `mesa-vulkan-drivers`
+    stehen jetzt im Test- **und** im Paketjob (`build.yml`), lavapipe ist der
+    Adapter ohne Grafikkarte. **Der erste Lauf danach ist die eigentliche
+    Messung** — bis er grün ist, gilt der Punkt als offen.
+  * **Das Linux-Paket deklariert Vulkan nirgends.** AppImage und `tar.gz`
+    laufen gegen das Hostsystem, und dort steht die Anforderung nur auf der
+    Website. Fehlt der Treiber, startet Solidon ohne 3D-Ansicht und nennt
+    seit dem 06.09.2026 die zwei Pakete beim Namen (`unavailable_hint`) —
+    besser als ein Absturz, aber ein Paket, das seine Abhängigkeit selbst
+    mitbringt oder wenigstens fordert, wäre besser. Für das Flatpak bringt
+    die Laufzeit Mesa mit; **geprüft ist das nicht**, und die Laufzeit 26.08
+    ist ohnehin nie gefahren worden (eigener Punkt).
+  * **Auf macOS ist seit der Umstellung nichts gelaufen.** Der letzte Tag ist
+    `v0.3.4` vom 04.09.2026, zwei Tage vor dem Wechsel auf pygfx; seither
+    lief nur `ubuntu-latest`. Die Spec nennt den Renderer inzwischen
+    ausdrücklich (`rendercanvas.qt`, `wgpu.backends.wgpu_native`,
+    `pygfx.renderers.wgpu`), statt sich auf die Hersteller-Hooks zu
+    verlassen. Ob die native wgpu-Bibliothek im signierten `.app` ankommt,
+    zeigt erst ein Tag-Lauf.
+  * **Der Linux-Weg von `present_method="screen"` ist ein anderer als der
+    von Windows und macOS.** `rendercanvas` öffnet dort über
+    `ctypes.util.find_library("X11")` eine **zweite** X11-Verbindung neben
+    Qts (`core/coreutils.py`), während Windows und macOS nur `winId()`
+    durchreichen. Diese Zeile ist nie gefahren worden. Und rendercanvas
+    warnt selbst: `screen` ist schneller, `bitmap` ist die Vorgabe, „can
+    cause problems, especially in some Linux environments".
+- [ ] **Nativer Wayland ist nicht ungefahren, sondern nicht gebaut**
+  (06.09.2026). Der Registerpunkt las sich bis dahin wie eine Messaufgabe;
+  er ist keine. In `rendercanvas` 2.7.2 steht der Wayland-Zweig von
+  `_get_surface_ids()` hinter einem `if False:` — die Bibliothek reicht auf
+  Linux immer X11-Kennungen durch. Die X11-Bevorzugung in `qt_platform.py`
+  ist damit keine Vorsicht aus der VTK-Zeit, sondern Voraussetzung, und sie
+  bleibt es, bis rendercanvas den Zweig einschaltet. Zu tun ist hier nichts
+  außer beobachten; der Punkt steht, damit ihn niemand als Messaufgabe
+  aufgreift.
+
 - [ ] **Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista**
   (`.claude/.state/steuerung-2026-09-03/fahre_steuerung.py`,
   `.claude/.state/drehpunkt-2026-09-04/fahre_drehpunkt.py`, 05.09.2026): Sie

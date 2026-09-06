@@ -133,8 +133,8 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     Aufräumung, mit Löschen und ganz ohne, riss er in jeder Version.
 
     Eine Ursache ist inzwischen gefunden und behoben: der Interaktionsstil des
-    Viewports hielt eine gebundene Methode und damit den Viewport, der den
-    Plotter hält, der den Interactor hält, der den Stil hält. Diese Schleife
+    Viewports hielt eine gebundene Methode und damit den Viewport, der damals
+    den Plotter hielt, der den Interactor hielt, der den Stil hielt. Diese Schleife
     überlebt jedes Schließen; abgeräumt wird sie später, und dann steht ein
     C++-Objekt hinter einer Python-Referenz, die es nicht mehr gibt. Mit einer
     schwachen Referenz läuft die Suite wieder in einem Zug.
@@ -633,10 +633,11 @@ def test_a_report_click_keeps_its_mark_across_the_async_map(
     von der sichtbaren Berichtszeile bis zu ``set_analysis_map`` und lässt den
     echten ``QTimer`` in der Qt-Ereignisschleife ablaufen.
 
-    Headless bekommt einen echten PyVista-Renderer statt einer Methodenattrappe;
-    auf einer Bildschirmplattform bleibt der wirkliche ``QtInteractor`` des
-    Fensters im Einsatz. Damit prüft auch der normale Lauf native VTK-Aktoren,
-    und der Windows-Beleg zusätzlich ihren Produktweg.
+    Offscreen hängt der Test einen aufzeichnenden Renderer in den Viewport,
+    statt eine Methode zu ersetzen; auf einer Bildschirmplattform bleibt der
+    wirkliche Renderer des Fensters im Einsatz. Damit prüft der normale Lauf
+    die aufgezeichneten Elemente, und der Windows-Beleg zusätzlich die des
+    echten Renderers.
     """
     from PySide6.QtCore import Qt
     from PySide6.QtTest import QTest
@@ -1687,10 +1688,10 @@ def test_an_empty_scene_still_shows_the_build_volume(qt_app: QApplication) -> No
 def test_the_camera_is_fitted_once_and_then_left_alone(window: MainWindow) -> None:
     """Ein Zoom überlebt die nächste Auswahl.
 
-    Die Ansicht wird bei jeder Änderung neu aufgebaut; pyvista setzt die Kamera
-    zurück, sobald es den ersten Aktor bekommt, und nach dem Leerräumen ist
-    jeder Körper der erste. Damit sprang die Ansicht bei jedem Klick auf
-    Anfang.
+    Die Ansicht wird bei jeder Änderung neu aufgebaut; unter PyVista, bis
+    05.09.2026, setzte der Renderer die Kamera zurück, sobald er den ersten
+    Aktor bekam, und nach dem Leerräumen war jeder Körper der erste. Damit
+    sprang die Ansicht bei jedem Klick auf Anfang.
     """
     result = window.session.last_result
     window.viewport.show_scene(result)
@@ -2186,8 +2187,9 @@ def test_the_scale_handle_lives_and_dies_with_the_gizmo(qt_app: QApplication) ->
         # versprachen dort drei Richtungen, von denen zwei verfallen — wer
         # nicht aus dem CAD kommt, zieht in eine davon und sieht nichts
         # passieren. Der Name der Fläche steht in der Statusleiste, wo Qt
-        # zeichnet: VTK nimmt in dieser Beschriftung kein Zeichen außerhalb
-        # von ASCII, und die Flächennamen werden übersetzt.
+        # zeichnet: Die Flächennamen werden übersetzt, und ein übersetzter
+        # Text am Griff stünde in sechs Sprachen an einer Stelle, die keine
+        # Prüfung sieht (``FACE_ARROW``).
         assert viewport._gizmo_label_texts == ["<->"], "an der Fläche eine Richtung"
     finally:
         viewport.deleteLater()
@@ -2787,8 +2789,8 @@ def test_the_bed_scale_signs_its_numbers_and_puts_zero_in_the_middle() -> None:
 
 def test_a_small_bed_still_gets_a_scale() -> None:
     """Und eine Platte, die kleiner ist als ein Schritt, bekommt wenigstens
-    ihren Nullpunkt — statt einer leeren Beschriftungsliste, über die VTK
-    stolpert."""
+    ihren Nullpunkt — den Bezug, an dem eine Skala anfängt (und unter VTK, bis
+    06.09.2026, stolperte der Renderer über eine leere Beschriftungsliste)."""
     from app.ui.viewport import bed_scale
 
     marks = bed_scale(60.0, 60.0)
@@ -4210,8 +4212,9 @@ def test_a_selected_body_moves_by_dragging_it(window: MainWindow) -> None:
     viewport.transformDragged.connect(steps.append)
 
     # **Über den Weltpunkt und nicht über Bildschirmkoordinaten.** Offscreen
-    # rendert VTK nicht, und ein Picker über einem nie gezeichneten Bild trifft
-    # nichts — ein Test mit Pixelkoordinaten prüfte hier die Testumgebung.
+    # gibt es keinen Renderer, und ein Pick über einem nie gezeichneten Bild
+    # trifft nichts — ein Test mit Pixelkoordinaten prüfte hier die
+    # Testumgebung.
     entry = window.session.last_result.scene.objects[chosen]
     middle = entry.mesh.bounds.centre
 

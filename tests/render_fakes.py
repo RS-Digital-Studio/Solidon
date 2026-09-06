@@ -6,7 +6,7 @@ an ihrer Wache aus. Dieses Doppel erfüllt den Vertrag aus
 welche Aktoren unter welchem Namen und mit welchem Stil entstanden sind,
 welche Beschriftungen, was entfernt wurde, wohin die Kamera gestellt wurde.
 Es rechnet nichts nach — wer das Bild messen will, nimmt den echten Renderer
-ohne Fenster (``tests/test_render_vtk.py``).
+ohne Fenster (``tests/test_render_contract.py``).
 """
 
 from __future__ import annotations
