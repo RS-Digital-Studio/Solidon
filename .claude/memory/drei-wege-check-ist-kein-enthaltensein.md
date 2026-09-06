@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 604362f2-7546-4f58-8ac6-a717d093adc0
-  modified: 2026-09-06T15:40:42.842Z
+  modified: 2026-09-06T18:43:20.934Z
 ---
 
 Am 06.09.2026 lagen 33 Einzelpatches eines Codex-Worktrees vor, gerechnet
@@ -36,3 +36,15 @@ Patchliste vollständig aus, die 22 neue Dateien nicht kennt.
 
 Verwandt: [[probe-worktree-altert]] (ein Diff gegen einen weitergewanderten
 Baum nimmt Fremdes zurück), [[exakte-passung-ist-kein-beweis]].
+
+**Und dieselbe Frage stellt sich einer Prüfung, die man selbst schreibt
+(06.09.2026).** Ein Fix sollte den mitgelieferten CA-Satz genau dort setzen,
+wo der Sandkasten keinen Vertrauensspeicher hat, und fragte dafür: „Gibt es
+das Zertifikatsverzeichnis?" Die Antwort im Flatpak ist **ja** — und der Fix
+hätte den Kunden, für den er gebaut wurde, verfehlt: Die freedesktop-Laufzeit
+legt dort die Zertifikate ab, aber nicht die Verweise `<hash>.<n>`, über die
+OpenSSL nachschlägt. Gefunden nur, weil Robert fragte, ob es beim Kunden
+*wirklich* geht; die Recherche stand danach in einem Satz da
+(`flatpak/freedesktop-sdk-base#3`). **Eine Prüfung muss messen, was das
+fremde Werkzeug misst — nicht, was man selbst für dasselbe hält.** Vorhanden
+ist nicht brauchbar, so wenig wie „der Patch greift" enthalten heißt.
