@@ -26,6 +26,8 @@ kaputtes Bildsymbol.
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QByteArray, Qt, QTimer, QUrl
 from PySide6.QtGui import (
     QDesktopServices,
@@ -59,6 +61,13 @@ _log = get_logger(__name__)
 #: Ohne diesen Abzug läge eine Zeichnung genau auf der Kante und der
 #: Rollbalken schnitte ihren rechten Rand ab.
 COLUMN_MARGIN = 40
+
+
+#: Markdown-Bild, dessen Ziel nicht der eigene Abbildungskatalog ist. Der
+#: negative Vorgriff lässt ``figure:`` durch, alles andere fällt — auch
+#: ``file:``, ``http:`` und UNC-Pfade, die eine fremde Rezeptbeschreibung
+#: mitbringen kann (UI-22).
+_FOREIGN_IMAGE = re.compile(r"!\[([^\]]*)\]\((?!figure:)[^)]*\)")
 
 
 class PageView(QTextBrowser):
@@ -105,6 +114,13 @@ class PageView(QTextBrowser):
         :meth:`ManualWindow._open_link`.
         """
         self._asked.clear()
+        # **Fremde Bilder kommen gar nicht erst ins Dokument.** Ein leeres
+        # ``QByteArray`` aus ``loadResource`` reichte nicht: Qts Bildhandler
+        # lädt danach selbst von der Adresse nach (``source.load(name)``), und
+        # das Bild stand gemessen im gezeichneten Dokument (UI-22, 06.09.2026).
+        # Bleibt der Alt-Text — kursiv, damit der Leser sieht, dass hier ein
+        # Bild gemeint war, das das Handbuch nicht zeigt.
+        markdown = _FOREIGN_IMAGE.sub(r"*\1*", markdown)
         self.document().setMarkdown(
             markdown,
             QTextDocument.MarkdownFeature.MarkdownDialectGitHub
@@ -127,10 +143,14 @@ class PageView(QTextBrowser):
         url = QUrl(name) if isinstance(name, str) else name
         if url.scheme() != "figure":
             _log.info("manual page asked for %s — only figure: is served", url.toString())
-            # None ist ein ungültiger QVariant und erlaubt QTextDocument,
-            # selbst von der Adresse nachzuladen. Leere Daten sind dagegen
-            # eine beantwortete Anfrage: keine zweite Quelle hinter Qt.
-            return QByteArray()
+            # Zweite Schicht hinter dem Filter in ``setMarkdown``. Ein
+            # **gültiges** Bild, nicht ``None`` und nicht leere Daten: Bei
+            # allem, woraus Qt kein Bild bauen kann, lädt es selbst von der
+            # Adresse nach — ein transparentes Pixel ist ein Bild, und damit
+            # ist die Anfrage beantwortet.
+            blank = QImage(1, 1, QImage.Format.Format_ARGB32)
+            blank.fill(0)
+            return blank
         return self._image(url.path() or url.toString().removeprefix("figure:"))
 
     def _image(self, key: str) -> QImage | None:
