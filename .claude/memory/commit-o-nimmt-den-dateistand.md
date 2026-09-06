@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
-  modified: 2026-08-30T16:01:11.512Z
+  modified: 2026-09-06T15:41:19.402Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -534,3 +534,13 @@ HEAD lesen, die eigene Änderung darauf anwenden, hashen, in den Index legen.
 Ein Nachtrag zur Bedienung: `-o` nimmt nur Pfade, die Git kennt. Eine Datei,
 die im HEAD **gelöscht** ist, muss erst `git add` bekommen — dort hilft `-o`
 also nicht, und genau dort lag die Reparatur dieses Falls.
+
+**Und eine neue Datei genauso — auch hinter einem Verzeichnis-Pathspec
+(06.09.2026).** `git commit -o -F msg -- website` nahm 47 geänderte Dateien
+unter `website/` und ließ die neue `website/api/day_zone.php` liegen, ohne
+Warnung: `--only` staged nur, was der Index schon kennt. Der Commit war damit
+kaputt — `count.php` und `stats.php` verlangten eine Datei, die es in HEAD
+nicht gab. Gefangen hat es die Sollprobe „Rest im Baum muss leer sein" nach
+der Kette (`git status --short` zeigte `??`). Regel: Vor einer `-o`-Kette
+`git status --short | grep '^??'` lesen und jede eigene neue Datei vorher
+`git add`; oder die Kette mit `git add -N <neu>` beginnen.
