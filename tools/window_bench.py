@@ -187,7 +187,7 @@ def main() -> int:
         "--renderer",
         choices=("vtk", "gfx"),
         default=None,
-        help="welcher Renderer zeichnet (sonst SOLIDON_RENDERER, Vorgabe vtk)",
+        help="welcher Renderer zeichnet (sonst SOLIDON_RENDERER, Vorgabe gfx)",
     )
     parser.add_argument(
         "--drag-frames",
