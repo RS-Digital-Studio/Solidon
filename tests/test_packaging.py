@@ -510,7 +510,10 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     windowed = {Path(entry).name for entry in listed}
     assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
 
-    builders = {"MainWindow", "Viewport", "SketchPanel", "OverlayHost", "Plotter"}
+    # ``Plotter`` stand hier bis zum 06.09.2026 mit: PyVistas Klasse, die der
+    # Viewport hielt. Sie ist mit dem VTK-Renderer gegangen, und ein Name, den
+    # es nicht mehr gibt, kann keine Datei mehr finden — er sah nur so aus.
+    builders = {"MainWindow", "Viewport", "SketchPanel", "OverlayHost"}
 
     def builds_a_window(path: Path) -> bool:
         previous = None

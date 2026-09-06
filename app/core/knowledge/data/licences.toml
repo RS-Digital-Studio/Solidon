@@ -132,7 +132,8 @@ fast-simplification = { licence = "MIT", note = "Quadrik-Dezimierung für erzeug
 hidapi = { licence = "BSD-3-Clause", note = "HID-Leser für die 3D-Maus (§2.9, Konzept 3D-Maus); das Paket ist dreifach lizenziert (GPL-3.0 OR BSD-3-Clause OR HIDAPI), gewählt ist BSD-3 — die Metadaten nennen nur Klassifikatoren, deshalb steht die Wahl hier" }
 xxhash = { licence = "BSD-2-Clause", note = "schneller Array-Hash für trimeshs Cache-Prüfungen; ohne ihn fällt trimesh auf blake2b zurück" }
 "svg.path" = { licence = "MIT", note = "SVG-Pfade lesen für den Zeichnungsimport (§25)" }
-# Der zweite Renderer hinter der 3D-Ansicht (§18): pygfx über wgpu. Die vier
+# Der Renderer hinter der 3D-Ansicht (§18): pygfx über wgpu. Seit dem Ausbau
+# von VTK am 06.09.2026 ist er der einzige. Die vier
 # Pakete der pygfx-Familie nennen ihre Lizenz nur in der Datei, nicht in den
 # Metadaten; die Beilage übernimmt die Lizenzdateien der Wheels.
 pygfx = { licence = "BSD-2-Clause", note = "Renderer über wgpu (§18); Lizenzdatei im Wheel, Metadaten leer" }
@@ -183,15 +184,12 @@ markdown-it-py = { licence = "MIT" }
 mdurl = { licence = "MIT" }
 packaging = { licence = "Apache-2.0 OR BSD-2-Clause" }
 platformdirs = { licence = "MIT" }
-pooch = { licence = "BSD-3-Clause" }
 Pygments = { licence = "BSD-2-Clause" }
 pyparsing = { licence = "MIT" }
 python-dateutil = { licence = "BSD-3-Clause OR Apache-2.0" }
-QtPy = { licence = "MIT" }
 requests = { licence = "Apache-2.0" }
 rich = { licence = "MIT" }
 rich-rst = { licence = "MIT" }
-scooby = { licence = "MIT" }
 six = { licence = "MIT" }
 typing_extensions = { licence = "PSF-2.0" }
 urllib3 = { licence = "MIT" }
