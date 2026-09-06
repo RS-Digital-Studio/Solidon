@@ -91,6 +91,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Patchskript schneidet Fremdes](patchskript-schneidet-fremdes-weg.md) · [Sicherung ist Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — Patch und Sicherung nehmen Fremdes mit.
 - [Drei-Wege-Check ist kein Enthaltensein](drei-wege-check-ist-kein-enthaltensein.md) — fremde Patches gegen Namen, Marker und Testfunktionen im Baum messen, nicht gegen `apply --check`.
 - [Probe-Worktree altert](probe-worktree-altert.md) · [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) · [Probe mit Commits](probe-die-commits-erzeugt-schaltet-push-ab.md) — eigener Worktree, gegen HEAD; post-commit läuft überall.
+- [Drei-Wege-Check ist kein Enthaltensein](drei-wege-check-ist-kein-enthaltensein.md) — fremde Patches gegen Namen, Marker und Testfunktionen im Baum messen, nicht gegen `apply --check`; ungetrackte Dateien fehlen in jedem Diff.
 - [Deutscher Text nicht durch die Shell](deutscher-text-geht-nicht-durch-die-shell.md) — Write-Datei, `-F`; `!r`; newline beidseits.
 - [Kette mit ; läuft nach dem Kill weiter](kette-mit-semikolon-laeuft-nach-dem-kill-weiter.md) · [Agent-Edits schreiben CRLF](agent-edits-schreiben-crlf.md) — erst den Wrapper beenden, `&&` statt `;`; nach jedem Prosa-Durchgang `git diff --stat` auf CRLF-Warnungen lesen, AST-Vergleich sagt „nur Prosa“.
 - [Geteilte Umgebung fragt das Schloss](geteilte-umgebung-fragt-das-schloss.md) — vor Tausch oder pip in .venv erst gate_lock.py status und das „fertig“ der anderen.

@@ -459,6 +459,105 @@ def test_the_search_lays_a_flat_plate_down_instead_of_standing_it_up() -> None:
     assert found.best.first_layer_area == pytest.approx(1200.0, rel=0.05)
 
 
+def test_a_part_that_already_stands_without_support_is_not_searched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Steht die Ausgangslage schon stützfrei, schneidet die Suche keine zweite Lage.
+
+    Der Filamenthalter (offener Kasten, 260 988 Dreiecke nach dem Aushöhlen)
+    meldete am 06.09.2026 in jeder der 200 Lagen null Stützraum — und die
+    Suche verglich eine halbe Stunde lang Nullen, während der Kunde auf das
+    Öffnen wartete. Gezählt wird, wie oft geschnitten wird.
+    """
+    from app.core.slice import orientation
+
+    calls: list[object] = []
+    original = orientation.judge
+
+    def counting(*args: object, **kwargs: object) -> object:
+        calls.append(args[1])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(orientation, "judge", counting)
+    box = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 20.0)))
+    found = search(box, count=200, seed=1)
+
+    assert len(calls) == 1, "nur die Ausgangslage wurde geschnitten"
+    assert found.tried == 1
+    assert found.best.support_volume == 0.0
+    searched = next(f for f in found.findings if f.code == "orient.searched")
+    assert searched.values["sliced"] == 1
+
+
+def test_the_search_slices_only_the_finalists_of_the_footprint_ranking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Heuristik sortiert vor, die Schichtanalyse sieht nur noch die Finalisten.
+
+    „Meistens entscheidet die unterste Schicht" (Robert, 06.09.2026): Standfläche
+    und Überhang aus den Flächennormalen ordnen alle Richtungen, geschnitten
+    werden höchstens ``FINALISTS`` plus die Ausgangslage — statt aller 200.
+    """
+    from app.core.slice import orientation
+
+    calls: list[object] = []
+    original = orientation.judge
+
+    def counting(*args: object, **kwargs: object) -> object:
+        calls.append(args[1])
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(orientation, "judge", counting)
+    # Ein Pilz: Hut oben auf dem Stiel, also braucht die Ausgangslage Stützen.
+    cap = trimesh.creation.box(extents=(40.0, 40.0, 4.0))
+    cap.apply_translation((0.0, 0.0, 22.0))
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    stem.apply_translation((0.0, 0.0, 10.0))
+    mushroom = MeshData.of(trimesh.util.concatenate([cap, stem]))
+    found = search(mushroom, count=200, seed=2)
+
+    assert 1 < len(calls) <= orientation.FINALISTS + 1
+    searched = next(f for f in found.findings if f.code == "orient.searched")
+    assert searched.values["candidates"] > searched.values["sliced"]
+    assert found.best.support_volume < found.baseline.support_volume, "der Hut liegt jetzt unten"
+
+
+def test_a_standing_plate_is_laid_down_by_the_search() -> None:
+    """Die Vorauswahl findet die flache Lage — und die Schichtanalyse bestätigt sie."""
+    plate = trimesh.creation.box(extents=(40.0, 30.0, 0.4))
+    plate.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, [1.0, 0.0, 0.0]))
+    standing = MeshData.of(plate)
+    assert standing.bounds.size[2] > 20.0, "sie steht wirklich"
+
+    found = search(standing, count=60, seed=3)
+
+    assert found.mesh.bounds.size[2] == pytest.approx(0.4, abs=0.1), "flach auf der Platte"
+    assert found.best.first_layer_area == pytest.approx(1200.0, rel=0.05)
+
+
+def test_a_dense_body_is_judged_on_a_smaller_twin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Über der Dreiecksgrenze urteilt die Suche an einem dezimierten Netz, dreht aber das echte."""
+    from app.core.slice import orientation
+
+    seen: list[int] = []
+    original = orientation.decimate
+
+    def recording(mesh: MeshData, target: int) -> MeshData:
+        seen.append(mesh.triangle_count)
+        return original(mesh, target)
+
+    monkeypatch.setattr(orientation, "decimate", recording)
+    dense = trimesh.creation.icosphere(subdivisions=5, radius=15.0)
+    dense = trimesh.util.concatenate([dense, trimesh.creation.box(extents=(60.0, 60.0, 2.0))])
+    body = MeshData.of(dense)
+    assert body.triangle_count > orientation.SEARCH_TRIANGLES
+
+    found = search(body, count=24, seed=4)
+
+    assert seen and seen[0] == body.triangle_count, "das volle Netz ging in die Dezimierung"
+    assert found.mesh.triangle_count == body.triangle_count, "gedreht wird das echte Netz"
+
+
 def test_a_layer_height_of_zero_is_refused() -> None:
     """Und zwar mit einem Satz, den ein Kunde lesen kann (Regel 17).
 
