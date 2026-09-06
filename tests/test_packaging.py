@@ -476,27 +476,60 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
     großen Stapel, ohne dass es auffiel.
 
-    Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
-    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
-    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
+    Seit dem 06.09.2026 sucht der Workflow nicht mehr mit einem Textmuster,
+    sondern fragt ``tools/list_windowed_tests.py`` — denselben Fixture-Graphen,
+    aus dem die geteilte Suite ihre Fenstergruppe bildet. Geprüft wird deshalb
+    zweierlei: Beide Stellen des Workflows rufen das Werkzeug, und das Werkzeug
+    nennt jede Datei, die ein Fenster wirklich **baut**. Erwähnungen zählen
+    nicht — ein Docstring oder ein Import bekämen sonst einen eigenen Prozess
+    für nichts; deshalb liest die Gegenprobe Namen, nicht Text.
     """
+    import tokenize
+
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
-    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
-    pattern = re.compile(found.group(1))
+    calls = re.findall(r"windowed=\$\(python tools/list_windowed_tests\.py", workflow)
+    assert len(calls) == 2, (
+        "beide Stellen des Workflows bilden die Fenstergruppe über "
+        "tools/list_windowed_tests.py — gefunden: " + str(len(calls))
+    )
+    assert "windowed=$(grep" not in workflow, "das alte Textmuster steht noch im Workflow"
 
-    builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
-    missed = []
-    for path in sorted((ROOT / "tests").glob("test_*.py")):
-        source = path.read_text(encoding="utf-8")
-        if not builders.search(source):
-            continue
-        if not pattern.search(source):
-            missed.append(path.name)
+    listed = subprocess.run(
+        [sys.executable, "tools/list_windowed_tests.py"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=True,
+    ).stdout.split()
+    windowed = {Path(entry).name for entry in listed}
+    assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
 
+    builders = {"MainWindow", "Viewport", "SketchPanel", "OverlayHost", "Plotter"}
+
+    def builds_a_window(path: Path) -> bool:
+        previous = None
+        with path.open("rb") as handle:
+            for token in tokenize.tokenize(handle.readline):
+                if (
+                    token.type == tokenize.OP
+                    and token.string == "("
+                    and previous is not None
+                    and previous.type == tokenize.NAME
+                    and previous.string in builders
+                ):
+                    return True
+                previous = token
+        return False
+
+    missed = [
+        path.name
+        for path in sorted((ROOT / "tests").glob("test_*.py"))
+        if builds_a_window(path) and path.name not in windowed
+    ]
     assert not missed, (
         f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
-        "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
+        "tools/list_windowed_tests.py nennt sie nicht."
     )
 
 
