@@ -571,7 +571,7 @@ def test_stopping_aborts_a_partial_request() -> None:
         assert time.monotonic() - started < 1.0
         try:
             remaining = connection.recv(1)
-        except (ConnectionError, OSError):
+        except ConnectionError, OSError:
             remaining = b""
         assert remaining == b""
     finally:

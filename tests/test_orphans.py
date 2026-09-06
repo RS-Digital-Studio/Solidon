@@ -559,3 +559,31 @@ def test_the_same_identifier_on_two_bodies_is_announced_twice(scene: Scene) -> N
     paare = _candidate_pairs(beide, FeatureRef(object_id="", feature_id=gemeinsam[0]), gemeinsam)
 
     assert sorted(paare) == [("obj_1", gemeinsam[0]), ("obj_2", gemeinsam[0])]
+
+
+def test_opening_checks_only_references_of_the_current_stage(scene: Scene) -> None:
+    """Vergangene und künftige Eingänge werden nicht gegen den Zwischenstand geprüft."""
+    document = document_with_op("hole_999")
+    document.ops[0] = replace(document.ops[0], inputs=("consumed",))
+    document.ops.extend(
+        [
+            replace(document.ops[0], id=2, inputs=("obj_1",)),
+            replace(document.ops[0], id=3, inputs=("future",)),
+        ]
+    )
+    document.fits.append(fit_to("hole_4"))
+    asked = []
+    result = orphans.check(
+        document,
+        scene,
+        lambda question, choices: asked.append(question) or "hole_2",
+        pending=orphans.pending_references(document, 2),
+    )
+    assert result.rewritten == 1 and len(asked) == 1
+    assert [operation.params["at_feature"] for operation in document.ops] == [
+        "hole_999",
+        "hole_2",
+        "hole_999",
+    ]
+    final = orphans.pending_references(document, None)
+    assert final and all(reference.kind == "fit" for reference in final)

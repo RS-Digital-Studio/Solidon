@@ -138,6 +138,40 @@ def _quieten() -> None:
 _quiet = False
 
 
+def copy_shape(shape: Any) -> Any:
+    """Eigene Topologie und Geometrie, ohne eine fremde Vernetzung zu übernehmen."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+
+    return BRepBuilderAPI_Copy(shape, True, False).Shape()
+
+
+def boolean_builder(kind: str, first: Any, second: Any, *, tolerance: float | None = None) -> Any:
+    """Konfiguriert vor dem ersten Build den Schutz beider Eingabeformen.
+
+    Der Zwei-Shape-Konstruktor führt bereits Build aus. Optionen nach diesem
+    Konstruktor kämen für die erste Bearbeitung deshalb zu spät.
+    """
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
+    from OCP.collections import List_TopoDS_Shape
+
+    maker = {
+        "union": BRepAlgoAPI_Fuse,
+        "difference": BRepAlgoAPI_Cut,
+        "intersection": BRepAlgoAPI_Common,
+    }[kind]
+    operation = maker()
+    operation.SetNonDestructive(True)
+    if tolerance is not None:
+        operation.SetFuzzyValue(tolerance)
+    arguments = List_TopoDS_Shape()
+    arguments.Append(first)
+    tools = List_TopoDS_Shape()
+    tools.Append(second)
+    operation.SetArguments(arguments)
+    operation.SetTools(tools)
+    return operation
+
+
 @dataclass(frozen=True, slots=True)
 class Solid:
     """Ein B-Rep-Körper. Erfüllt das ``Mesh``-Protokoll, indem er sich selbst
@@ -147,7 +181,11 @@ class Solid:
     shape: Any
     """``TopoDS_Shape``. Absichtlich lose typisiert — die Anbindung ist optional."""
     deflection: float = DEFLECTION
-    _cache: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
+    _cache: dict[str, Any] = field(default_factory=dict, init=False, compare=False, repr=False)
+
+    def __post_init__(self) -> None:
+        """Übernimmt eine eigene Form; die übergebene bleibt Eigentum des Aufrufers."""
+        object.__setattr__(self, "shape", copy_shape(self.shape))
 
     # --- die exakten Antworten --------------------------------------------------
 
@@ -354,30 +392,34 @@ class Solid:
 
 
 def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
-    """Dreiecke für eine Form, fein genug, dass eine Verrundung rund wirkt."""
+    """Vernetzt eine private Kopie und behält die Flächenkennungen der Eingabe."""
     import numpy as np
     import trimesh
     from OCP.BRep import BRep_Tool
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
     from OCP.BRepMesh import BRepMesh_IncrementalMesh
+    from OCP.collections import IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap
     from OCP.TopAbs import TopAbs_FACE, TopAbs_REVERSED
-    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopExp import TopExp
     from OCP.TopLoc import TopLoc_Location
     from OCP.TopoDS import TopoDS
 
-    BRepMesh_IncrementalMesh(shape, deflection, False, ANGULAR_DEFLECTION, True)
+    copied = BRepBuilderAPI_Copy(shape, True, False)
+    BRepMesh_IncrementalMesh(copied.Shape(), deflection, False, ANGULAR_DEFLECTION, True)
 
     points: list[tuple[float, float, float]] = []
     faces: list[tuple[int, int, int]] = []
-    explorer = TopExp_Explorer(shape, TopAbs_FACE)
-    face_index = 0
+    source_faces = ShapeMap()
+    TopExp.MapShapes_s(shape, TopAbs_FACE, source_faces)
     face_sources: list[int] = []
-    while explorer.More():
-        face = TopoDS.Face(explorer.Current())
+    for face_index in range(source_faces.Extent()):
+        # Die Kopie muss nicht dieselbe Besuchsreihenfolge haben. Der Builder
+        # benennt die Kopie jeder Originalfläche; derselbe Indexraum wie faces().
+        source_face = source_faces.FindKey(face_index + 1)
+        face = TopoDS.Face(copied.ModifiedShape(source_face))
         location = TopLoc_Location()
         triangulation = BRep_Tool.Triangulation_s(face, location)
-        explorer.Next()
         if triangulation is None:
-            face_index += 1
             continue
 
         transform = location.Transformation()
@@ -386,7 +428,9 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
             node = triangulation.Node(index).Transformed(transform)
             points.append((node.X(), node.Y(), node.Z()))
 
-        reversed_face = face.Orientation() == TopAbs_REVERSED
+        # ModifiedShape liefert die Unterform ohne die im Körper komponierte
+        # Orientierung. Der Umlaufsinn stammt deshalb aus der Originalfläche.
+        reversed_face = source_face.Orientation() == TopAbs_REVERSED
         for index in range(1, triangulation.NbTriangles() + 1):
             first, second, third = triangulation.Triangle(index).Get()
             # **Ein Dreieck mit doppeltem Knoten ist keines.** Am Pol einer
@@ -433,8 +477,6 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
                 (corners[0] - 1 + offset, corners[1] - 1 + offset, corners[2] - 1 + offset)
             )
             face_sources.append(face_index)
-        face_index += 1
-
     if not faces:
         return MeshData.of(trimesh.Trimesh())
     body = trimesh.Trimesh(

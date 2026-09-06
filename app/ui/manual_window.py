@@ -127,7 +127,10 @@ class PageView(QTextBrowser):
         url = QUrl(name) if isinstance(name, str) else name
         if url.scheme() != "figure":
             _log.info("manual page asked for %s — only figure: is served", url.toString())
-            return None
+            # None ist ein ungültiger QVariant und erlaubt QTextDocument,
+            # selbst von der Adresse nachzuladen. Leere Daten sind dagegen
+            # eine beantwortete Anfrage: keine zweite Quelle hinter Qt.
+            return QByteArray()
         return self._image(url.path() or url.toString().removeprefix("figure:"))
 
     def _image(self, key: str) -> QImage | None:

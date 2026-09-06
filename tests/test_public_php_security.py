@@ -44,6 +44,22 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
+def _mbstring_options(php: str) -> list[str]:
+    """Die Erweiterung, die support.php für Längen und Kopfzeilen braucht.
+
+    Ohne ``php.ini`` sucht PHP seine Erweiterungen unter dem eingebauten
+    Standardpfad — bei einer entpackten Installation liegen sie neben der
+    ausführbaren Datei (dieselbe Regel wie in ``test_support.py``). Ein PHP
+    mit ini, das mbstring schon lädt, meldet höchstens eine Doppelladung nach
+    stderr, und das geht hier nach DEVNULL.
+    """
+    options = ["-d", "extension=mbstring"]
+    extensions = Path(php).parent / "ext"
+    if extensions.is_dir():
+        options[:0] = ["-d", f"extension_dir={extensions}"]
+    return options
+
+
 def _php_command(
     php: str,
     port: int,
@@ -64,6 +80,7 @@ def _php_command(
     """
     command = [
         php,
+        *_mbstring_options(php),
         "-d",
         "sendmail_path=/nonexistent/solidon-keine-post",
         "-d",
@@ -154,7 +171,8 @@ def _request(
         with urlopen(request, timeout=5) as response:
             return response.status, response.headers, response.read().decode("utf-8")
     except HTTPError as problem:
-        return problem.code, problem.headers, problem.read().decode("utf-8")
+        with problem:
+            return problem.code, problem.headers, problem.read().decode("utf-8")
 
 
 def _chmod_private(path: Path) -> None:
@@ -1777,7 +1795,8 @@ def _without_redirects(url: str, method: str) -> tuple[int, str]:
         with build_opener(_Bleibt).open(request, timeout=5) as response:
             return response.status, response.headers.get("Location", "")
     except HTTPError as problem:
-        return problem.code, problem.headers.get("Location", "")
+        with problem:
+            return problem.code, problem.headers.get("Location", "")
 
 
 def test_a_head_request_is_served_and_never_counted(tmp_path: Path) -> None:
@@ -1980,7 +1999,8 @@ def _redirect_target(base: str, name: str) -> tuple[int, str]:
         with build_opener(_Stay).open(f"{root}/dl/veraltet.php?datei={name}", timeout=5) as answer:
             return answer.status, answer.headers.get("Location", "")
     except HTTPError as problem:
-        return problem.code, problem.headers.get("Location", "")
+        with problem:
+            return problem.code, problem.headers.get("Location", "")
 
 
 def test_an_old_download_link_leads_to_the_current_one(tmp_path: Path) -> None:
@@ -2186,6 +2206,82 @@ def test_the_test_server_never_lets_a_mail_out() -> None:
     assert "SMTP=127.0.0.1" in flags and "smtp_port=1" in flags
     assert command[-2:] == ["-t", "website"]
     assert _php_command("php", 1, docroot=Path("anderswo"))[-1] == "anderswo"
+
+
+@pytest.mark.parametrize("lost_temporary", [False, True])
+def test_a_lost_upload_is_rejected_before_the_support_mail(
+    tmp_path: Path,
+    lost_temporary: bool,
+) -> None:
+    """Auch nach erfolgreicher PHP-Annahme muss der wirkliche Anhang lesbar bleiben."""
+    prepend = tmp_path / "upload-lost.php"
+    mutation = (
+        "unlink($_FILES['anhang']['tmp_name']);"
+        if lost_temporary
+        else "$_FILES['anhang']['tmp_name'] = '';"
+    )
+    prepend.write_text("<?php\n" + mutation, encoding="utf-8")
+    boundary = "solidon-lost-upload"
+    body = (
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="message"\r\n\r\n'
+        "Prüfung\r\n"
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="kind"\r\n\r\n'
+        "idea\r\n"
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="anhang"; filename="test.txt"\r\n'
+        "Content-Type: text/plain\r\n\r\n"
+        "vollständiger Inhalt\r\n"
+        f"--{boundary}--\r\n"
+    ).encode()
+    with _php_server(tmp_path, prepend=prepend) as base:
+        status, _headers, text = _request(
+            f"{base}/support.php",
+            method="POST",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+    assert status == 400, text
+    assert json.loads(text)["ok"] is False
+
+
+def test_visitor_identity_rotates_at_the_displayed_day_boundary(tmp_path: Path) -> None:
+    """UTC-Mitternacht innerhalb desselben Anzeigetages zählt keinen zweiten Besucher."""
+    php = php_executable()
+    counter = (API / "count.php").read_text(encoding="utf-8")
+    stats = (API / "stats.php").read_text(encoding="utf-8")
+    zone = next(line for line in stats.splitlines() if line.startswith("const DISPLAY_ZONE"))
+    moments = [
+        "2026-09-04T23:59:00Z",
+        "2026-09-05T00:01:00Z",
+        "2026-09-05T21:59:00Z",
+        "2026-09-05T22:01:00Z",
+        "2026-01-05T22:59:00Z",
+        "2026-01-05T23:01:00Z",
+    ]
+    probe = tmp_path / "days.php"
+    probe.write_text(
+        "<?php\n"
+        + zone
+        + "\n"
+        + _php_function(counter, "count_day")
+        + "\n"
+        + "$answer = []; foreach (json_decode($argv[1]) as $text) { "
+        + "$at = new DateTimeImmutable($text); $answer[] = [count_day($at), "
+        + "$at->setTimezone(new DateTimeZone(DISPLAY_ZONE))->format('Y-m-d')]; } "
+        + "echo json_encode($answer);",
+        encoding="utf-8",
+    )
+    result = subprocess.run(
+        [php, str(probe), json.dumps(moments)], capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0, result.stderr
+    days = json.loads(result.stdout)
+    assert all(counter == shown for counter, shown in days)
+    assert days[0][0] == days[1][0] == days[2][0]
+    assert days[2][0] != days[3][0]
+    assert days[4][0] != days[5][0]
 
 
 def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:

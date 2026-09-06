@@ -24,7 +24,7 @@ from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
 from app.core.types import Finding
-from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
+from app.core.units import EPS_GEOM, format_length, weld_digits, weld_tolerance
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -380,8 +380,26 @@ def repair(
     result = RepairResult(mesh=mesh)
 
     if weld:
-        result.mesh, removed = merge_vertices(result.mesh)
-        if removed:
+        candidate, removed = merge_vertices(result.mesh)
+        # Dieselbe Zusicherung wie beim Import: nahe Punkte können zu zwei
+        # getrennten Schalen gehören. Das Zusammenlegen darf deren Kanten
+        # nicht zu nichtmannigfaltigen Verbindungen machen.
+        if removed and result.mesh.is_watertight and not candidate.is_watertight:
+            result.findings.append(
+                Finding(
+                    code="repair.weld_skipped",
+                    severity="info",
+                    message=_(
+                        "Doppelte Punkte blieben stehen — sie zu verschweißen hätte das "
+                        "geschlossene Netz aufgerissen."
+                    ),
+                    values={
+                        "tolerance": format_length(weld_tolerance(result.mesh.bounds.diagonal))
+                    },
+                )
+            )
+        elif removed:
+            result.mesh = candidate
             result.changed = True
             result.findings.append(
                 Finding(
@@ -393,8 +411,24 @@ def repair(
             )
 
     if degenerate:
-        result.mesh, removed = remove_degenerate_faces(result.mesh)
-        if removed:
+        candidate, removed = remove_degenerate_faces(result.mesh)
+        # Auch ein flaches Dreieck kann zwei Nachbarflächen topologisch
+        # verbinden. Ein geschlossener Eingang bleibt einschließlich seiner
+        # Materialzuweisungen erhalten, wenn das Entfernen ihn öffnen würde.
+        if removed and result.mesh.is_watertight and not candidate.is_watertight:
+            result.findings.append(
+                Finding(
+                    code="repair.degenerate_kept",
+                    severity="info",
+                    message=_(
+                        "Entartete Dreiecke blieben stehen — sie zu entfernen hätte das "
+                        "geschlossene Netz aufgerissen."
+                    ),
+                    values={"kept": removed},
+                )
+            )
+        elif removed:
+            result.mesh = candidate
             result.changed = True
             result.findings.append(
                 Finding(

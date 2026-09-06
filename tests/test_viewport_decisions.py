@@ -4906,6 +4906,35 @@ def _scene_with_a_hole_and_a_fillet() -> Any:
     )
 
 
+@pytest.mark.parametrize("kind", ["move", "turn"])
+def test_a_typed_drag_value_moves_only_the_selected_feature(
+    qt_app: QApplication, kind: str
+) -> None:
+    """Eingabetaste und Mausende richten sich nach derselben Merkmalsauswahl."""
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    viewport.show_scene(_scene_with_a_hole_and_a_fillet())
+    viewport.select("obj_1")
+    viewport.select_feature("hole_1")
+    moved, turned, bodies = [], [], []
+    viewport.featureMoved.connect(lambda feature, target: moved.append((feature, target)))
+    viewport.featureTurned.connect(
+        lambda feature, axis, angle: turned.append((feature, axis, angle))
+    )
+    viewport.transformDragged.connect(bodies.append)
+    viewport._drag_kind = kind
+    viewport._drag_axis = "y"
+    viewport.drag_bar.value.setText("37")
+    viewport._apply_typed()
+    assert not bodies
+    assert moved == ([("hole_1", (-10.0, 37.0, 5.0))] if kind == "move" else [])
+    assert turned == ([("hole_1", "y", 37.0)] if kind == "turn" else [])
+    viewport.renderer = None
+    viewport.deleteLater()
+
+
 def test_the_handle_sits_on_every_feature_that_can_be_moved(qt_app: QApplication) -> None:
     """„Wenn man die Wulst wählt verschiebt man die Wulst, immer das
     Ausgewählte" (Robert, 03.09.2026).

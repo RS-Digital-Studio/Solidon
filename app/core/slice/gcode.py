@@ -130,9 +130,11 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     ("print_seconds", r";\s*estimated printing time.*?=\s*(?P<value>[0-9hmsd ]+)"),
     ("print_seconds", r";\s*TIME:\s*(?P<value>[0-9.]+)"),
     ("print_seconds", r";\s*total print time.*?:\s*(?P<value>[0-9hmsd ]+)"),
-    ("filament_mm", r";\s*filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>[0-9.]+)"),
+    ("filament_mm", r";\s*total filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>[0-9.]+)"),
+    ("filament_grams", r";\s*total filament used \[g\]\s*=\s*(?P<value>[0-9.]+)"),
+    ("filament_mm", r";\s*filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>[0-9., ]+)"),
     ("filament_mm", r";\s*Filament used:\s*(?P<value>[0-9.]+)\s*(?P<unit>m)\b"),
-    ("filament_grams", r";\s*filament used \[g\]\s*=\s*(?P<value>[0-9.]+)"),
+    ("filament_grams", r";\s*filament used \[g\]\s*=\s*(?P<value>[0-9., ]+)"),
     ("layer_count", r";\s*(?:total )?layer count\s*[:=]\s*(?P<value>[0-9]+)"),
     ("layer_count", r";\s*LAYER_COUNT:\s*(?P<value>[0-9]+)"),
     ("layer_height", r";\s*layer_height\s*=\s*(?P<value>[0-9.]+)"),
@@ -563,13 +565,22 @@ def _bed_box(corners: list[tuple[float, float]] | None, height: float | None) ->
 
 
 def _set(metrics: GcodeMetrics, name: str, value: str, unit: str = "") -> None:
+    number: float | None
     if name == "slicer":
         metrics.slicer = value
         return
     if name == "print_seconds":
         metrics.print_seconds = _seconds(value)
         return
-    number = _number(value)
+    if name in ("filament_mm", "filament_grams"):
+        # Die Kommas trennen Extruder, keine Dezimalstellen. Eine explizite
+        # Gesamtsumme steht im Musterregister vor den gerundeten Einzelwerten.
+        amounts = [_number(part.strip()) for part in value.split(",")]
+        if any(amount is None or not math.isfinite(amount) or amount < 0 for amount in amounts):
+            return
+        number = sum(amount for amount in amounts if amount is not None)
+    else:
+        number = _number(value)
     if number is None:
         return
     if name == "filament_mm":

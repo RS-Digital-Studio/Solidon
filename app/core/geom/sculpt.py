@@ -433,7 +433,16 @@ def _from_baked(
             constraint="no_sources",
             suggestions=(CANCEL,),
         )
-    mesh = read_mesh(ctx.sources.read(params.baked), ".stl")
+    payload = ctx.sources.read(params.baked)
+    from app.core.ingest.loader import MAX_FILE_BYTES
+
+    # Neue Etappen verwenden dieselbe verlustfreie Form wie der Mesh-Cache.
+    # Alte Projekte mit eingebettetem STL bleiben weiterhin lesbar.
+    mesh = (
+        MeshData.from_bytes(payload, maximum_bytes=MAX_FILE_BYTES)
+        if payload.startswith(b"PK\x03\x04")
+        else read_mesh(payload, ".stl")
+    )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh)],
         findings=[

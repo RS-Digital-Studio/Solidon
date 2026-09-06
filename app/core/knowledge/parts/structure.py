@@ -19,6 +19,7 @@ from typing import cast
 
 import numpy as np
 
+from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
@@ -26,6 +27,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    MATERIAL_OF_TARGET,
     MOUTH_AT_ORIGIN,
     FeatureRequirement,
     PartChange,
@@ -37,14 +39,18 @@ from app.core.types import BaseParams, PartResult
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
+CABLE_CLIP_OPENING_CORRECTED = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Die automatische Verengung war als Materialübermaß gefüllt und auf den "
+    "aufgeweiteten Sitz bezogen.",
+    effect="Die Öffnung ist um die gewählte Verengung je Seite enger als das Kabel; das Spiel "
+    "folgt dem Zielmaterial. Eine vollständig geschlossene Öffnung wird abgewiesen.",
+)
+
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
 )
-
-#: Was von der Öffnung eines Clips mindestens bleibt, wenn die Verengung sie
-#: rechnerisch schließen würde. Kein Maß aus einer Tabelle, sondern die Grenze,
-#: unter der ein Quader keine Breite mehr hat.
-MIN_GAP = 0.2
 
 THIN_WALL_KEEPS_THE_RIB_PRINTABLE = PartChange(
     version="5",
@@ -322,7 +328,7 @@ class CableGlandParams(BaseParams):
         "Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die "
         "zieht jeder Ruck am Kabel direkt an der Lötstelle."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET],
 )
 def cable_gland(raw: BaseParams) -> PartResult:
     params = cast(CableGlandParams, raw)
@@ -412,7 +418,7 @@ class ProfileTongueParams(BaseParams):
         "Nutrichtung flach — steht sie senkrecht, ist die Schulter unter dem "
         "Kopf ein Überhang."
     ),
-    changes=[PROFILE_TONGUE_ADDED, FACE_GIVES_DIRECTION],
+    changes=[PROFILE_TONGUE_ADDED, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET],
 )
 def profile_tongue(raw: BaseParams) -> PartResult:
     params = cast(ProfileTongueParams, raw)
@@ -532,6 +538,7 @@ class CableClipParams(BaseParams):
 
 @register_part(
     name="cable_clip",
+    grip_from_profile=False,
     title=_("Kabelclip"),
     group="routing",
     params=CableClipParams,
@@ -545,7 +552,7 @@ class CableClipParams(BaseParams):
         "Nicht für Kabel, die unter Zug stehen — dafür ist die Kabeldurchführung "
         "mit Zugentlastung da. Ein Clip führt, er hält nicht fest."
     ),
-    changes=[CABLE_CLIP_ADDED, CABLE_CLIP_FACET_WALL_FIXED],
+    changes=[CABLE_CLIP_ADDED, CABLE_CLIP_FACET_WALL_FIXED, CABLE_CLIP_OPENING_CORRECTED],
 )
 def cable_clip(raw: BaseParams) -> PartResult:
     """Ein liegender C-Bügel auf einem Sockel.
@@ -559,7 +566,8 @@ def cable_clip(raw: BaseParams) -> PartResult:
     params = cast(CableClipParams, raw)
     entry = standards.tube(params.size)
 
-    inner = (params.diameter or entry.outer) + params.play
+    diameter = params.diameter or entry.outer
+    inner = diameter + params.play
     # Gleich ausgerichtete 48-Ecke messen zwischen ihren parallelen Facetten
     # nur ``wall * cos(pi / SEGMENTS)``. Die analytische Gegenkorrektur plus
     # zwei Geometrietoleranzen und zwei Float32-Einheiten am Außenradius hält
@@ -572,14 +580,17 @@ def cable_clip(raw: BaseParams) -> PartResult:
     base = params.wall
     centre = base + inner / 2.0
 
-    # **Die Verengung wird gekappt, nicht abgelehnt.** Der Bereichstest fährt
-    # genau diese Ecke: Bei ``grip`` = 5 und einem 4-mm-Schlauch bliebe eine
-    # Öffnung von minus sechs Millimetern, und ein Quader mit negativer Breite
-    # ist kein Fehler des Nutzers, sondern einer der Grenze. Was bleibt, ist
-    # ein Clip, der ganz geschlossen ist — unbrauchbar, aber baubar, und die
-    # Grenzen des Feldes sagen es vorher.
-    grip = params.grip or inner / 5.0
-    gap = max(inner - 2.0 * grip, MIN_GAP)
+    grip = params.grip or diameter / 5.0
+    gap = diameter - 2.0 * grip
+    if gap <= EPS_GEOM:
+        raise ValidationError(
+            "grip",
+            _(
+                "Die Verengung schließt die Öffnung. Eine Verengung kleiner als der halbe "
+                "Kabeldurchmesser wählen."
+            ),
+            values={"diameter": diameter, "grip": grip},
+        )
 
     def lying(diameter: float, length: float) -> MeshData:
         """Ein Zylinder mit der Achse in Y — das Kabel läuft längs, nicht quer."""

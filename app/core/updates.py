@@ -1413,7 +1413,7 @@ def _package_authorized(package: Package) -> bool:
     try:
         release = load_json(package.signed_release, max_bytes=MAX_ANSWER_BYTES)
         entry = release["packages"][package.release_key]
-    except (KeyError, TypeError, StrictJsonError):
+    except KeyError, TypeError, StrictJsonError:
         return False
     if not isinstance(entry, dict):
         return False

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 import math
 from pathlib import Path
-from types import SimpleNamespace
-from typing import cast
 
 import pytest
 import trimesh
@@ -111,7 +109,16 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
     class BrokenBoolean:
         """Kleinster Ersatz für einen Booleschen Builder ohne Ergebnis."""
 
-        def __init__(self, _first: object, _second: object) -> None:
+        def __init__(self) -> None:
+            pass
+
+        def SetNonDestructive(self, _value: bool) -> None:  # noqa: N802
+            pass
+
+        def SetArguments(self, _values: object) -> None:  # noqa: N802
+            pass
+
+        def SetTools(self, _values: object) -> None:  # noqa: N802
             pass
 
         def Build(self) -> None:  # noqa: N802 - bildet die externe OCP-API nach
@@ -121,7 +128,7 @@ def test_a_failed_difference_names_the_editing_not_a_connection(
             return False
 
     monkeypatch.setattr(brep_api, "BRepAlgoAPI_Cut", BrokenBoolean)
-    part = cast(Solid, SimpleNamespace(shape=object()))
+    part = block()
 
     with pytest.raises(GeometryError) as caught:
         edit.boolean("difference", [part, part])
@@ -1271,3 +1278,82 @@ def test_every_opencascade_import_in_the_application_resolves() -> None:
                         f" ({type(problem).__name__})"
                     )
     assert not missing, "\n".join(missing)
+
+
+def test_an_open_result_of_an_exact_resize_is_an_error_not_a_scene_object(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Vertrag, nicht die Ursache: Ein offener Körper kommt nie in die Szene.
+
+    An der Teppichklammer (Durchsicht vom 05.09.2026, Datei 19) kam
+    ``resize_hole`` mit offener Tessellation zurück, und die Operation galt
+    als gelungen — Volumen und Flächen waren da. Die Ursache ist behoben
+    (``brep.features`` legt die Mitte auf die Achse); hier wird der Fall
+    gestellt, damit die Frage nach der Geschlossenheit zum Erfolg gehört.
+    """
+    from app.core.geom import prepare_ops
+
+    original = edit.bore(block(), position=(0.0, 0.0, HEIGHT), axis="z", diameter=6.0)
+    features = features_of(original)
+    bore = next(entry for entry in features.values() if entry.kind == "hole")
+    source = SceneObject(id="obj_1", name="Block", mesh=original, kind="brep", features=features)
+
+    class Open(Solid):
+        @property
+        def is_closed(self) -> bool:
+            return False
+
+    honest = edit.resize_bore(
+        original,
+        position=bore.params["centre"],
+        direction=bore.params["axis"],
+        previous_diameter=6.0,
+        diameter=7.0,
+        depth=float(bore.params["depth"]),
+    )
+    monkeypatch.setattr(
+        edit,
+        "resize_bore",
+        lambda *args, **kwargs: Open(honest.shape),
+    )
+
+    with pytest.raises(GeometryError) as caught:
+        run("resize_hole", source, profile, at_feature=bore.id, diameter=7.0)
+
+    assert caught.value.title == prepare_ops.OPEN_BODY_TITLE
+    assert caught.value.suggestions, "Regel 17: ein Fehler trägt einen Handlungsvorschlag"
+
+
+def test_the_exact_primitives_take_the_same_placement_as_their_twins(profile: Profile) -> None:
+    """Ein Umschalten zwischen den Kernen lässt den Körper, wo er ist (§15.4).
+
+    Seit die Grundkörper eine freie Position und Richtung tragen, müssen beide
+    Zwillinge sie kennen — sonst stünde der exakte Quader nach dem Haken
+    „Flächen und Kanten später bearbeiten" wieder im Ursprung, und der
+    Umschalter verschwiege sechs Felder (``test_a_twin_toggle_says_what_it_takes_away``).
+    Gemessen an den Hüllquadern: Der Quader ist in beiden Kernen exakt, der
+    Zylinder des Netzes ein 128-Eck, das der Anzeigetoleranz genügt.
+    """
+    placement = {"x": 12.0, "y": -7.0, "z": 30.0, "nx": 1.0, "ny": 0.0, "nz": 1.0}
+    size = {"width": 40.0, "depth": 30.0, "height": 20.0}
+
+    twin = run("create_box", None, profile, anchor="centre", **size, **placement).outputs[0]
+    exact = run("create_brep_box", None, profile, **size, **placement).outputs[0]
+    assert exact.kind == "brep"
+    assert exact.mesh.bounds.minimum == pytest.approx(twin.mesh.bounds.minimum, abs=EPS_DISPLAY)
+    assert exact.mesh.bounds.maximum == pytest.approx(twin.mesh.bounds.maximum, abs=EPS_DISPLAY)
+
+    round_twin = run(
+        "create_cylinder", None, profile, diameter=20.0, height=15.0, segments=128, **placement
+    ).outputs[0]
+    round_exact = run(
+        "create_brep_cylinder", None, profile, diameter=20.0, height=15.0, **placement
+    ).outputs[0]
+    assert round_exact.mesh.bounds.centre == pytest.approx(
+        round_twin.mesh.bounds.centre, abs=EPS_DISPLAY
+    )
+    assert round_exact.mesh.volume == pytest.approx(math.pi * 100.0 * 15.0, rel=1e-9)
+
+    # Und ohne Angaben steht alles, wo es stand: kein Versatz, keine Drehung.
+    plain = run("create_brep_box", None, profile, **size).outputs[0]
+    assert plain.mesh.bounds.minimum == pytest.approx((-20.0, -15.0, 0.0), abs=EPS_GEOM)

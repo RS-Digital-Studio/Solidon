@@ -31,11 +31,19 @@ gab anderthalb Stunden lang kein einziges Zeichen aus und stand dabei längst.
 Also: in eine Datei schreiben, den Rückgabewert **davon** lesen, danach die
 Datei ansehen.
 
+Vor den Befehlen den **geprüften Interpreter dieses Arbeitsbaums** im aufrufenden Prozess als
+Umgebungsvariable `SUITE_PYTHON` setzen, beispielsweise den absoluten Pfad zu
+`.venv314/Scripts/python.exe` in der privaten Python-3.14-Prüfumgebung.
+Eine reguläre Umgebung liegt unter `.venv/Scripts/python.exe`, auf Linux und
+macOS unter `.venv/bin/python`. Die Versionsprobe muss zu `constraints.txt`
+und der Prüfakte passen. Ein ausdrücklich gesetzter ungültiger Pfad stoppt;
+er darf nicht durch eine ältere Umgebung ersetzt werden.
+
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; .venv/Scripts/python.exe -m ruff check . > "$TEMP/ruff-$S.txt" 2>&1; echo "Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/ruff-$S.txt" 2>&1; echo "Exit=$?"
 ```
 
-Wer den Fortschritt sehen will, nimmt `python -u`.
+Wer den Fortschritt sehen will, nimmt `"$SUITE_PYTHON" -u`.
 
 **Der Sitzungsmarker im Dateinamen ist kein Schmuck.** `$TEMP` ist
 benutzerweit, und an diesem Projekt arbeiten zwei bis vier Sitzungen. Bis zum
@@ -60,7 +68,8 @@ in PowerShell. Der Einstieg und zugleich die Probe für Interpreter und
 Slash-Pfad lautet:
 
 ```powershell
-& 'C:\Program Files\Git\bin\bash.exe' -lc '.venv/Scripts/python.exe --version'
+$env:SUITE_PYTHON = (Resolve-Path '.venv314/Scripts/python.exe').Path
+& 'C:\Program Files\Git\bin\bash.exe' -lc '"$SUITE_PYTHON" --version'
 ```
 
 Die Probe muss eine Python-Version und Exit 0 liefern. Danach denselben Einstieg
@@ -75,8 +84,10 @@ hängengeblieben.
 
 Die CI löst das mit je einem Prozess pro Fensterdatei, und dafür gibt es ein
 Skript: `suite-getrennt.sh` unter `.claude/.state/oberflaechen-durchsicht-2026-08-19/`.
-Es sucht die Fensterdateien selbst (`MainWindow|Viewport|pyvista`) und zählt am
-Ende „Läufe mit Fehler: N".
+Es bestimmt die Fensterdateien aus Pytests aufgelöstem Fixture-Graphen,
+auch über mittelbare `qt_app`-Abhängigkeiten, und zählt am Ende „Läufe mit
+Fehler: N". Ein Sammlungsfehler hält an; eine Teilmenge wird nicht still zur
+vollständigen Liste erklärt.
 
 **Es lässt die Leistungstests aus** (`-m "not performance"`), also gehören sie
 als eigener Lauf dazu. Der geteilte Lauf allein ist nicht das Tor.
@@ -106,16 +117,16 @@ Mit Argument läuft nur `pytest` darauf, und zwar direkt — ein einzelner Lauf
 braucht weder Teilung noch Schloss:
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; .venv/Scripts/python.exe -m pytest -q $ARGUMENTS > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m pytest -q $ARGUMENTS > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"
 ```
 
 Ohne Argument das ganze Tor. Die drei Werkzeuge zuerst, weil sie Sekunden
 dauern und die teuren Läufe erübrigen, wenn sie rot sind:
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; .venv/Scripts/python.exe -m ruff check . > "$TEMP/g1-$S.txt" 2>&1; echo "ruff check   Exit=$?"
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; .venv/Scripts/python.exe -m ruff format --check . > "$TEMP/g2-$S.txt" 2>&1; echo "ruff format  Exit=$?"
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; .venv/Scripts/python.exe -m mypy > "$TEMP/g3-$S.txt" 2>&1; echo "mypy         Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/g1-$S.txt" 2>&1; echo "ruff check   Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m ruff format --check . > "$TEMP/g2-$S.txt" 2>&1; echo "ruff format  Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m mypy > "$TEMP/g3-$S.txt" 2>&1; echo "mypy         Exit=$?"
 ```
 
 Die Zuweisung steht **vor** dem Lauf, nicht dahinter: `$?` gehört dem letzten
@@ -125,7 +136,17 @@ Dann die Suite und die Leistungstests, beide unter dem Schloss, beide in einem
 Aufruf, damit das Schloss nur einmal genommen wird:
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; export S; .venv/Scripts/python.exe tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4-$S.txt" 2>&1; echo "geteilt Exit=$?"; .venv/Scripts/python.exe -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1; echo "performance Exit=$?"'
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"
+export S SUITE_PYTHON
+"$SUITE_PYTHON" tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '
+  .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4-$S.txt" 2>&1
+  suite_status=$?
+  echo "geteilt Exit=$suite_status"
+  "$SUITE_PYTHON" -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1
+  performance_status=$?
+  echo "performance Exit=$performance_status"
+  [ "$suite_status" -eq 0 ] && [ "$performance_status" -eq 0 ]
+'
 ```
 
 `export S`, weil der innere `bash -c` eine eigene Shell ist — ohne das stünde
@@ -136,12 +157,15 @@ dort ein leerer Marker, und beide Läufe schrieben wieder in dieselbe Datei.
 benennt deshalb Schloss und Ausgabedateien.
 
 Alle fünf ausführen, auch wenn einer früh fehlschlägt — ein vollständiges Bild
-ist mehr wert als ein schneller Abbruch. Fehlt `.venv`, sag das mit dem
-Einrichtungsbefehl aus `CLAUDE.md`, statt auf das System-Python auszuweichen.
+ist mehr wert als ein schneller Abbruch. Der gemeinsame Schlossaufruf bewahrt
+beide Rückgabewerte und ist nur bei zwei erfolgreichen Prozessen erfolgreich.
+Fehlt die geprüfte Umgebung, den Einrichtungsbefehl aus `CLAUDE.md` nennen,
+statt auf ein ungeprüftes System-Python auszuweichen.
 
-**In einem von Codex angelegten Arbeitsbaum** gibt es kein `.venv`. Dann den
-Interpreter des Hauptbaums mit vollem Pfad rufen und `cwd` im Arbeitsbaum
-lassen; gemessen am 22.08.2026, die Suite läuft so.
+**In einem Arbeitsbaum ohne eigene Umgebung** einen ausdrücklich geprüften
+Interpreter mit vollem Pfad als `SUITE_PYTHON` setzen und `cwd` im Arbeitsbaum
+lassen. Der isolierte Python-Runner übernimmt selbst seinen aufrufenden
+Interpreter; er sucht keine zweite Umgebung.
 
 ## Zählen
 
@@ -156,22 +180,18 @@ Gezählt wird über die **Fortschrittszeichen** (`.` bestanden, `s`
 
 Die Zusicherung ist immer der **Exit-Code**, nie eine Zeile im Text.
 
-## Ein grün gemeldeter Lauf, der rot endet, ist kein roter Test
+## Ein Nichtnull-Prozessausgang bleibt rot
 
-Drei Fensterdateien enden nach „N passed" mit `0xC0000409` oder einer
-Zugriffsverletzung — ein Riss beim **Abbau**, nachdem jeder Test bestanden hat
-(`test_ui.py`, `test_chat_ui.py`, `test_first_run.py`). Zwei Fensterdateien
-enden inzwischen mit **127** statt mit dem bekannten Code, einzeln gefahren
-auch — ein eigener offener Punkt, nicht derselbe Absturz.
+Auch „N passed" oder vollständige Fortschrittszeichen machen einen nativen
+Abbruch beim Aufräumen nicht erfolgreich. Das geteilte Tor zählt jeden
+Nichtnull-Exit, einschließlich erfolgloser Sammlungen, und gibt insgesamt
+0 oder 1 zurück.
 
-`suite-getrennt.sh` unterscheidet das selbst: `zaehlt_als_fehler` vergleicht
-die Zahl der Fortschrittszeichen mit der Sollgröße aus `--collect-only`, und
-ein Lauf, der alle Tests durch hatte und erst beim Aufräumen riss, zählt als
-grün (`tests/test_suite_script.py`). **Ein Exit ungleich null des Skripts ist
-deshalb ein echter Befund** — ein roter Test, oder ein Riss, der Tests
-verschluckt hat. Wer ihn für den bekannten Abbau-Abriss hält, sucht an der
-falschen Stelle; das Protokoll sagt, wie viele Zeichen vor dem Abbruch
-standen. Der offene Punkt steht in `ROADMAP.md`.
+Portionen mit fehlenden Tests werden weiterhin zur Diagnose halbiert. Der
+ursprüngliche Abbruch wird vor der Wiederholung erfasst und bleibt im
+Ergebnis. Erfolgreiche kleinere Teilstücke ergänzen den Nachweis; sie löschen
+keinen Fehler desselben Laufs. Ein späterer vollständig sauberer Lauf ist
+als eigener Lauf mit seinem echten Prozessausgang auszuweisen.
 
 ## Melden
 

@@ -15,12 +15,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from app.core.errors import PROGRAMMING_ERRORS, GeometryError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.types import Finding, ObjectId, Quality, Scene, SceneObject, SolverInfo
-from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -129,7 +130,7 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
             # zum Vergleichen. Die Differenz ist eine Auskunft und keine
             # Zusage — sie fehlt dann, statt den Zug abzubrechen.
             continue
-        if abs(first.volume - second.volume) < NOISE_VOLUME and _same_bounds(first, second):
+        if _same_geometry(first, second):
             continue
         difference = compare(first, second, quality=quality)
         difference.object_id = object_id
@@ -181,22 +182,15 @@ def _whole_body(entry: SceneObject, object_id: str, *, added: bool) -> Differenc
     )
 
 
-def _same_bounds(first: MeshData, second: MeshData) -> bool:
-    """Billige Vorprüfung: gleiches Volumen und gleicher Quader heißt, dass
-    sich auch nichts bewegt hat.
+def _same_geometry(first: MeshData, second: MeshData) -> bool:
+    """Nur identische Netzarrays sparen die geometrische Differenzrechnung.
 
-    Verglichen wird mit ``EPS_GEOM``: Beide Seiten sind Millimeter, also ist es
-    dieselbe Frage, die §11.2 mit dieser Toleranz beantwortet. Hier stand die
-    Zahl ``1e-6`` — derselbe Wert, nur ohne den Namen, und damit eine Stelle,
-    die eine Änderung an ``EPS_GEOM`` nicht mitbekommen hätte.
+    Das ist eine Identitätsprüfung, kein geometrischer Toleranzvergleich.
+    Gleiche Kennzahlen allein übersehen etwa ein verschobenes Loch.
     """
-    return all(
-        abs(a - b) < EPS_GEOM
-        for a, b in zip(
-            (*first.bounds.minimum, *first.bounds.maximum),
-            (*second.bounds.minimum, *second.bounds.maximum),
-            strict=True,
-        )
+    return first.raw is second.raw or (
+        np.array_equal(first.raw.vertices, second.raw.vertices)
+        and np.array_equal(first.raw.faces, second.raw.faces)
     )
 
 

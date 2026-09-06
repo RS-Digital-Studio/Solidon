@@ -94,7 +94,7 @@ def manifest_reason(manifest_file: Path | None = None) -> str:
     manifest_file = manifest_file or ROOT / "packaging" / "build" / "licence.manifest"
     try:
         signed = json.loads(manifest_file.read_text(encoding="utf-8"))["files"]
-    except (OSError, ValueError, KeyError):
+    except OSError, ValueError, KeyError:
         return (
             "Das signierte Manifest fehlt oder ist unlesbar — zuerst: "
             "python tools/build_licence_module.py"

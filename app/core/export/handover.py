@@ -909,10 +909,34 @@ def unreachable_overrides(
     nicht — der Slicer kann nicht mehr —, aber eine Auskunft schon
     (Regel 17: mit Handlungsvorschlag, nicht mit „fehlgeschlagen").
     """
+    present = {threemf.slot_identity(slot) for slot in slots}
+    unassigned = [
+        entry
+        for entry in settings.slot_overrides
+        if entry is not None
+        and not entry.empty
+        and entry.key not in present
+        and any(entry.key[:2] == identity[:2] for identity in present)
+    ]
+    findings = (
+        [
+            Finding(
+                code="slicer.overrides_unassigned",
+                severity="warning",
+                message=_(
+                    "Gespeicherte Filamentwerte sind keinem aktuellen Material eindeutig "
+                    "zugeordnet und werden nicht verwendet. Öffnen Sie die Werte der "
+                    "betroffenen Spule und übernehmen oder ersetzen Sie die alten Werte."
+                ),
+                values={"slots": len(unassigned)},
+            )
+        ]
+        if unassigned
+        else []
+    )
     if has_filament_profiles(setup.flavour):
-        return []
-    reachable = (slots[0].name, slots[0].colour) if slots else None
-    present = {(slot.name, slot.colour) for slot in slots}
+        return findings
+    reachable = threemf.slot_identity(slots[0]) if slots else None
     affected = [
         position
         for position, entry in enumerate(settings.slot_overrides)
@@ -922,8 +946,9 @@ def unreachable_overrides(
         and (reachable is None or entry.key != reachable)
     ]
     if not affected:
-        return []
+        return findings
     return [
+        *findings,
         Finding(
             code="slicer.overrides_unreachable",
             severity="warning",
@@ -934,14 +959,14 @@ def unreachable_overrides(
                 "Bambu Studio."
             ),
             values={"slots": len(affected), "slicer": setup.name},
-        )
+        ),
     ]
 
 
 def override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | None:
     """Der Übersteuerer dieses Filaments, wenn es einen gibt (§20).
 
-    Gesucht wird über die **Identität** — Name und Farbe, derselbe Schlüssel
+    Gesucht wird über **Name, Farbe, Profil und Materialtyp**, denselben Schlüssel
     wie in :func:`app.core.export.threemf.merge_slots` —, nicht über die
     Position in der Liste. Der Grund steht bei :class:`SlotOverride`: Was der
     Dialog zeigt und was ein Plattenlauf fährt, sind zwei verschiedene
@@ -952,7 +977,22 @@ def override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | 
     Teil hat gar keine.
     """
     for entry in settings.slot_overrides:
-        if entry is not None and entry.key == (slot.name, slot.colour):
+        if entry is not None and entry.key == threemf.slot_identity(slot):
+            return entry
+    return None
+
+
+def unbound_override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | None:
+    """Alte Werte zum ausdrücklichen Übernehmen im Dialog, niemals zum Drucken."""
+    for entry in settings.slot_overrides:
+        if (
+            entry is not None
+            and not entry.empty
+            and entry.material is None
+            and entry.material_type is None
+            and entry.key[:2] == (slot.name, slot.colour)
+            and entry.key != threemf.slot_identity(slot)
+        ):
             return entry
     return None
 
@@ -964,7 +1004,7 @@ def with_slot_override(
 ) -> PrintSettings:
     """Setzt oder entfernt die eigenen Werte eines Filaments (§20, §29).
 
-    Der Schlüssel ist Name und Farbe, nicht die Position. Die Oberfläche zeigt
+    Der Schlüssel umfasst Name, Farbe, Profil und Materialtyp. Die Oberfläche zeigt
     die Zusammenlegung aller gewählten Platten, ein einzelner Slicerlauf kann
     dieselben Filamente in einer anderen Reihenfolge führen. Ein positionsweiser
     Austausch gäbe dann wieder der falschen Spule die Temperatur.
@@ -973,15 +1013,22 @@ def with_slot_override(
     Das hält alte Projekte klein und macht ``None`` weiterhin eindeutig:
     Dieses Filament benutzt die Projektwerte.
     """
-    key = (slot.name, slot.colour)
+    key = threemf.slot_identity(slot)
+    previous = unbound_override_for(settings, slot)
     kept = tuple(
         entry
         for entry in settings.slot_overrides
-        if entry is not None and entry.key != key and not entry.empty
+        if entry is not None and entry.key != key and entry is not previous and not entry.empty
     )
     if override is None or override.empty:
         return replace(settings, slot_overrides=kept)
-    identified = replace(override, name=slot.name, colour=slot.colour)
+    identified = replace(
+        override,
+        name=slot.name,
+        colour=slot.colour,
+        material=slot.material,
+        material_type=slot.material_type,
+    )
     return replace(settings, slot_overrides=(*kept, identified))
 
 
@@ -1776,7 +1823,7 @@ def _definition_keys(path: Path) -> set[str]:
     """Alle Einstellungsnamen einer Cura-Definition, über alle Ebenen."""
     try:
         loaded = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return set()
     found: set[str] = set()
 

@@ -117,9 +117,34 @@ def label_solid(shapes: list[Any], depth: float) -> MeshData | None:
     return MeshData.of(concatenated(parts))
 
 
-#: Ab welcher z-Komponente eine Normale als waagerecht gilt — dann gibt es
-#: kein „oben" auf der Fläche, und die Ausrichtung bleibt die der Ebene.
-UPRIGHT_LIMIT: Final = 1.0 - 1e-6
+def local_text_body(
+    text: str,
+    size: float,
+    font: str,
+    depth: float,
+    *,
+    mode: Literal["raised", "engraved", "body"] = "body",
+    angle: float = 0.0,
+) -> MeshData:
+    """Dieselben zentrierten Buchstaben für Operation und Platzierungsvorschau."""
+    if not text.strip():
+        raise ValidationError(
+            field="text", detail=_("Ohne Text gibt es nichts aufzubringen."), constraint="empty"
+        )
+    shapes = outlines(text, size, font)
+    height = depth + (BOOLEAN_OVERLAP if mode != "body" else 0.0)
+    body = label_solid(shapes, height) if shapes else None
+    if body is None:
+        raise ValidationError(
+            field="text",
+            detail=_("Aus diesem Text ließ sich keine Form bilden."),
+            value=text,
+            constraint="no_outline",
+        )
+    middle = body.bounds.centre
+    lift = -BOOLEAN_OVERLAP if mode == "raised" else -depth if mode == "engraved" else 0.0
+    result = apply(body, translation((-middle[0], -middle[1], lift)))
+    return apply(result, rotation("z", angle)) if angle else result
 
 
 def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> MeshData:
@@ -145,20 +170,12 @@ def place(body: MeshData, position: Vec3, normal: Vec3, angle: float = 0.0) -> M
     direction = np.asarray(normal, dtype=float)
     length = float(np.linalg.norm(direction))
     if length > EPS_GEOM:
+        from app.core.sketch.planes import frame_of
+
         outward = direction / length
-        if abs(float(outward[2])) < UPRIGHT_LIMIT:
-            # Rechts ist, was Welt-z und Normale aufspannen; oben liegt in der
-            # Fläche und zeigt nach Welt-oben. Spalten der Matrix: wohin die
-            # Text-Achsen x, y, z gehen.
-            right = np.cross([0.0, 0.0, 1.0], outward)
-            right /= np.linalg.norm(right)
-            up = np.cross(outward, right)
-            matrix = np.eye(4)
-            matrix[:3, 0] = right
-            matrix[:3, 1] = up
-            matrix[:3, 2] = outward
-        else:
-            matrix = trimesh.geometry.align_vectors([0.0, 0.0, 1.0], outward)
+        frame = frame_of((float(outward[0]), float(outward[1]), float(outward[2])), position)
+        matrix = np.eye(4)
+        matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
         turned = placed.raw.copy()
         turned.apply_transform(matrix)
         placed = placed.replacing(turned)
@@ -354,24 +371,7 @@ def label_text(ctx: OpContext) -> OpResult:
             constraint="empty",
         )
 
-    shapes = outlines(params.text, params.size, params.font)
-    if not shapes:
-        raise ValidationError(
-            field="text",
-            detail=_("Aus diesem Text ließ sich keine Form bilden."),
-            value=params.text,
-            constraint="no_outline",
-        )
-
     mode = cast(Placement, params.mode)
-    depth = params.depth + BOOLEAN_OVERLAP
-    body = label_solid(shapes, depth)
-    if body is None:
-        raise ValidationError(
-            field="text",
-            detail=_("Aus diesem Text ließ sich keine Form bilden."),
-            constraint="no_outline",
-        )
 
     # Zentriert auf dem angeklickten Punkt, nicht dort beginnend: eine
     # Beschriftung wächst um ihren Ort herum, und genau das erwartet, wer eine
@@ -381,9 +381,7 @@ def label_text(ctx: OpContext) -> OpResult:
     # Fläche, nur die Überlappung reicht hinein. Graviert: die Tiefe reicht
     # hinein, nur die Überlappung steht über — sonst nimmt der Schnitt die
     # Überlappung weg und lässt die Buchstaben als Kratzer zurück.
-    middle = body.bounds.centre
-    lift = -BOOLEAN_OVERLAP if mode == "raised" else -params.depth
-    body = apply(body, translation((-middle[0], -middle[1], lift)))
+    body = local_text_body(params.text, params.size, params.font, params.depth, mode=mode)
 
     placed = place(
         body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz), params.angle
@@ -475,6 +473,16 @@ class LabelBodyParams(BaseParams):
     z: float = param(
         title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
     )
+    nx: float = param(title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING)
+    ny: float = param(title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    nz: float = param(title=_("Normale Z"), default=0.0, placement="advanced", doc=_FACING_MORE)
+    angle: float = param(
+        title=_("Drehung"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        placement="advanced",
+        doc=_("Dreht die Schrift in ihrer Fläche um den gewählten Punkt."),
+    )
     name: str = param(
         title=_("Name"),
         default="",
@@ -511,21 +519,8 @@ def create_label(ctx: OpContext) -> OpResult:
             constraint="empty",
         )
 
-    shapes = outlines(params.text, params.size, params.font)
-    body = label_solid(shapes, params.depth) if shapes else None
-    if body is None:
-        raise ValidationError(
-            field="text",
-            detail=_("Aus diesem Text ließ sich keine Form bilden."),
-            value=params.text,
-            constraint="no_outline",
-        )
-
-    middle = body.bounds.centre
-    placed = apply(
-        body,
-        translation((params.x - middle[0], params.y - middle[1], params.z)),
-    )
+    body = local_text_body(params.text, params.size, params.font, params.depth, angle=params.angle)
+    placed = place(body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz))
     return OpResult(
         outputs=[SceneObject(id="", name=params.name or params.text.strip()[:20], mesh=placed)]
     )

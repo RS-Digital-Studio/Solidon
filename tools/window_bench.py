@@ -173,6 +173,44 @@ def shutdown_window(window: Any, application: Any) -> None:
         application.processEvents()
 
 
+def await_scene(
+    window: Any,
+    application: Any,
+    previous: Any,
+    calls: dict[str, int],
+    spent: dict[str, float],
+    *,
+    settle: float,
+    timeout: float = 240.0,
+    timer: Any = time.perf_counter,
+    pause: Any = time.sleep,
+) -> None:
+    """Wartet auf die neue fertige Szene und ihre Übernahme in die Ansicht."""
+    deadline = timer() + timeout
+    last_state = (dict(calls), dict(spent))
+    quiet_since = timer()
+    while timer() < deadline:
+        application.processEvents()
+        pause(0.002)
+        result = window.session.last_result
+        ready = (
+            result is not None
+            and result is not previous
+            and result.complete
+            and bool(result.scene.objects)
+            and not window.session.busy
+            and window.viewport._result is result
+            and window.viewport.renderer is not None
+        )
+        state = (dict(calls), dict(spent))
+        if state != last_state or not ready:
+            last_state = state
+            quiet_since = timer()
+        elif timer() - quiet_since >= settle:
+            return
+    raise TimeoutError("Auswertung und Ansicht wurden innerhalb des Messbudgets nicht fertig.")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("example", nargs="?", default="weg4-figur-formen")
@@ -278,32 +316,16 @@ def main() -> int:
         application.processEvents()
     since = mark("anzeigen", since)
 
+    previous = session.last_result
     window.open_path(ROOT / "app" / "examples" / f"{arguments.example}.p3d")
     since = mark("open_path (Rückkehr)", since)
 
-    deadline = time.perf_counter() + 240.0
-    last_state = (dict(calls), dict(spent))
-    quiet_since = time.perf_counter()
-    while time.perf_counter() < deadline:
-        application.processEvents()
-        # Ohne die Pause frisst diese Schleife den Interpreter, und der
-        # Arbeiter, der die Auswertung rechnet, kommt nicht an den GIL — das
-        # Öffnen stand dann bei „Quader anlegen 0 %" (05.09.2026).
-        time.sleep(0.002)
-        state = (dict(calls), dict(spent))
-        if state != last_state:
-            last_state = state
-            quiet_since = time.perf_counter()
-            continue
-        quiet = time.perf_counter() - quiet_since
-        # Fertig ist das Öffnen erst, wenn die Ansicht einmal gezeichnet hat:
-        # ``open_project`` kehrt vor der Auswertung zurück, und unter Last
-        # vergingen mehr als zwei ruhige Sekunden, bevor der erste Aufbau kam
-        # — die Aufnahme zeigte dann „Projekt wird geladen" (05.09.2026).
-        result = getattr(session, "last_result", None)
-        loaded = result is not None and bool(getattr(result.scene, "objects", None))
-        if calls.get("Session.open_project") and loaded and quiet > arguments.settle:
-            break
+    try:
+        await_scene(window, application, previous, calls, spent, settle=arguments.settle)
+    except TimeoutError as problem:
+        print(str(problem), file=sys.stderr, flush=True)
+        shutdown_window(window, application)
+        return 1
     mark("auswertung+bild (bis ruhig)", since)
     renderer = getattr(window.viewport, "renderer", None)
     print(f"Renderer: {type(renderer).__name__}", flush=True)

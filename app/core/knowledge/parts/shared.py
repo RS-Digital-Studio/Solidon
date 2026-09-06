@@ -30,7 +30,7 @@ from app.core.knowledge.parts.recipe import (
     Recipe,
 )
 from app.core.knowledge.parts.registry import GROUPS, NAME_PATTERN
-from app.core.registry import REGISTRY
+from app.core.registry import REGISTRY, Registry
 from app.core.scene.serialise import has_lone_surrogate
 
 #: Wie groß eine Austauschdatei höchstens sein darf.
@@ -109,7 +109,7 @@ class Finding:
         return self.text()
 
 
-def rules() -> dict[str, Any]:
+def rules(registry: Registry | None = None) -> dict[str, Any]:
     """Die Erlaubnisliste als Daten — die eine Quelle für beide Dateirichtungen.
 
     Alles darin ist **abgeleitet**: die Rezeptschlüssel aus der Dataclass, die
@@ -119,12 +119,12 @@ def rules() -> dict[str, Any]:
     """
     return {
         "format": 1,
-        "recipe_format_versions": [FORMAT_VERSION],
+        "recipe_format_versions": [1, FORMAT_VERSION],
         "recipe_keys": sorted(field.name for field in dataclasses.fields(Recipe)),
-        "operations": sorted(entry.name for entry in REGISTRY.all()),
+        "operations": sorted(entry.name for entry in (registry or REGISTRY).all()),
         "operation_params": {
             entry.name: sorted(param.name for param in entry.params.spec())
-            for entry in REGISTRY.all()
+            for entry in (registry or REGISTRY).all()
         },
         "max_file_bytes": MAX_FILE_BYTES,
         "max_title_chars": MAX_TITLE_CHARS,
@@ -247,7 +247,7 @@ def inspect(payload: bytes, known: dict[str, Any] | None = None) -> list[Finding
 
     try:
         data = json.loads(payload, parse_constant=_reject_json_constant)
-    except (UnicodeDecodeError, ValueError, RecursionError):
+    except UnicodeDecodeError, ValueError, RecursionError:
         findings.append(Finding("check_not_json"))
         return findings
     if _json_is_too_deep(data, int(allowed["max_json_depth"])) or has_lone_surrogate(data):
@@ -566,7 +566,7 @@ def _payload_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[Fin
             continue
         try:
             decoded_total += len(base64.b64decode(value, validate=True))
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             findings.append(Finding("check_payload_not_base64", {"name": key}))
     if decoded_total > int(allowed["max_decoded_payload_bytes"]):
         findings.append(
@@ -592,7 +592,7 @@ def for_export(recipe: Recipe) -> bytes:
     Anwendung Dateien erzeugen, die sie selbst nicht wieder einliest.
     """
     from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
-    from app.core.knowledge.parts.recipe import file_data
+    from app.core.knowledge.parts.recipe import dependency_registry, file_data
     from app.i18n import _
 
     data = file_data(recipe)
@@ -602,7 +602,7 @@ def for_export(recipe: Recipe) -> bytes:
     data.setdefault("license", "")
     data.setdefault("author", "")
     payload = json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
-    findings = inspect(payload)
+    findings = inspect(payload, rules(dependency_registry(recipe)) if recipe.dependencies else None)
     if findings:
         raise ValidationError(
             field="title",

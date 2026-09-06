@@ -26,7 +26,7 @@ ROOT = Path(SPECPATH).resolve().parent
 sys.path.insert(0, str(ROOT))
 from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
 from app.branding import PART_FILE_MIME_TYPE, PART_FILE_SUFFIX  # noqa: E402
-from tools import asset_rights, make_linux_packages, make_sbom  # noqa: E402
+from tools import asset_rights, build_slice_core, make_linux_packages, make_sbom  # noqa: E402
 
 # Bilder, Symbole und Schriften sind Teil des Kundenpakets und brauchen vor
 # PyInstaller dieselbe Freigabe auf allen drei Zielsystemen. Website-only-
@@ -55,12 +55,7 @@ if not (LICENCE_BUILD / "licence.manifest").is_file() or not list(
 # Quellbaum darf sie fehlen und fällt dann ehrlich auf GEOS zurück; ein
 # Kundenpaket wird dagegen nur gebaut, wenn der plattformeigene Rechenkern aus
 # dem unmittelbar vorherigen CI-Schritt wirklich da ist.
-SLICE_CORE = sorted(
-    [
-        *(ROOT / "app" / "core" / "slice").glob("_chain.*.pyd"),
-        *(ROOT / "app" / "core" / "slice").glob("_chain.*.so"),
-    ]
-)
+SLICE_CORE = build_slice_core.current_extensions()
 if not SLICE_CORE:
     raise SystemExit("Der schnelle Schichtkern fehlt — erst: python tools/build_slice_core.py")
 

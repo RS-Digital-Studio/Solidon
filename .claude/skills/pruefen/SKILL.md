@@ -117,11 +117,25 @@ Dann die Suite und die Leistungstests, beide unter dem Schloss, beide in einem
 Aufruf, damit das Schloss nur einmal genommen wird:
 
 ```
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; export S; .venv\Scripts\python.exe tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4-$S.txt" 2>&1; echo "geteilt Exit=$?"; .venv/Scripts/python.exe -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1; echo "performance Exit=$?"'
+S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; export S
+.venv\Scripts\python.exe tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '
+  .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4-$S.txt" 2>&1
+  suite_status=$?
+  echo "geteilt Exit=$suite_status"
+  .venv/Scripts/python.exe -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1
+  performance_status=$?
+  echo "performance Exit=$performance_status"
+  [ "$suite_status" -eq 0 ] && [ "$performance_status" -eq 0 ]
+'
 ```
 
 `export S`, weil der innere `bash -c` eine eigene Shell ist — ohne das stünde
 dort ein leerer Marker, und beide Läufe schrieben wieder in dieselbe Datei.
+**Und die letzte Zeile des inneren Blocks ist die Prüfung der beiden Codes,
+kein `echo`:** `gate_lock.py` meldet den Status des inneren Befehls, und ein
+`echo` am Ende gelingt immer — so stand am 24.08.2026 „Exit 0" über einer
+roten Suite. Mit der Verknüpfung als letzter Zeile ist das Schloss genau dann
+grün, wenn beide Läufe es sind.
 
 **Und `--who` nimmt denselben Marker.** Dort stand `"$CLAUDE_SESSION_NAME"`
 allein; die Variable ist leer, wenn die Sitzung keinen Namen trägt, und das

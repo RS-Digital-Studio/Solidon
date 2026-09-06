@@ -180,7 +180,7 @@ def read() -> Progress:
     """
     try:
         data = json.loads(state_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return Progress()
     if not isinstance(data, dict):
         return Progress()

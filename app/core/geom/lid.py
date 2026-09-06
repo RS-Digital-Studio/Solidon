@@ -24,7 +24,7 @@ from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.build import face
-from app.core.knowledge.parts.shapes import RIDGE_END, RIDGE_SHARE, thread_body
+from app.core.knowledge.parts.shapes import RIDGE_SHARE, moved, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -127,7 +127,7 @@ def _narrowest(cavities: list[Any]) -> float:
 
 
 def _measurable(
-    identifier: str, area: float, centre: tuple[float, float, float], width: float
+    identifier: str, area: float, centre: tuple[float, float, float], width: float, *, inner: bool
 ) -> tuple[str, Feature]:
     """Ein Flächenmerkmal, das zusätzlich seine Weite kennt.
 
@@ -140,6 +140,7 @@ def _measurable(
     key, feature = face(identifier, area, centre)
     params = dict(feature.params)
     params["diameter"] = round(width, 4)
+    params["fit_role"] = "inner" if inner else "outer"
     return key, dataclasses.replace(feature, params=params)
 
 
@@ -168,6 +169,7 @@ def _collar_feature(
                 # Öffnung — beidseitig, also zweimal. Dieselbe Rechnung, die
                 # ``build`` mit ``buffer`` an der Kontur macht.
                 _narrowest(cavities) - clearance,
+                inner=False,
             )
         ]
     )
@@ -182,7 +184,11 @@ def _with_cavity(source: SceneObject, cavities: list[Any], z: float) -> dict[str
     """
     features = dict(source.features)
     key, feature = _measurable(
-        CAVITY_FEATURE, _area_of(cavities), _centre_of(cavities, z), _narrowest(cavities)
+        CAVITY_FEATURE,
+        _area_of(cavities),
+        _centre_of(cavities, z),
+        _narrowest(cavities),
+        inner=True,
     )
     features[key] = feature
     return features
@@ -694,8 +700,21 @@ def screw_lid(ctx: OpContext) -> OpResult:
     # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
     # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße der
     # Gang im Material und änderte gar nichts.
-    neck = _pipe(core, bore, params.height, z, ctx.quality, ctx.cancelled)
-    turns = _lifted(thread_body(major, params.pitch, params.height), z)
+    neck = _pipe(core + 2.0 * BOOLEAN_OVERLAP, bore, params.height, z, ctx.quality, ctx.cancelled)
+    bounded = boolean(
+        "intersection",
+        [
+            thread_body(major, params.pitch, params.height),
+            _pipe(major * 2.0, 0.0, params.height, 0.0),
+        ],
+        quality=ctx.quality,
+        cancelled=ctx.cancelled,
+    )
+    turns = _lifted(bounded.mesh, z)
+    left, bottom, right, top = max(cavities, key=lambda ring: ring.area).bounds
+    centre_x, centre_y = (left + right) / 2.0, (bottom + top) / 2.0
+    neck = moved(neck, (centre_x, centre_y, 0.0))
+    turns = moved(turns, (centre_x, centre_y, 0.0))
     with_neck = boolean("union", [mesh, neck], quality=ctx.quality, cancelled=ctx.cancelled)
     with_thread = boolean(
         "union", [with_neck.mesh, turns], quality=ctx.quality, cancelled=ctx.cancelled
@@ -703,7 +722,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     threaded = with_thread.mesh
 
     lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality, ctx.cancelled)
-    solver = deepest([with_neck.solver, with_thread.solver, cap_solver])
+    solver = deepest([bounded.solver, with_neck.solver, with_thread.solver, cap_solver])
 
     neck_thread = Feature(
         id=NECK_THREAD_FEATURE,
@@ -712,7 +731,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
         params={
             "diameter": round(major, 4),
             "pitch": round(params.pitch, 4),
-            "centre": (0.0, 0.0, z + params.height / 2.0),
+            "centre": (centre_x, centre_y, z + params.height / 2.0),
             "axis": (0.0, 0.0, 1.0),
             "internal": False,
         },
@@ -795,19 +814,24 @@ def _screw_cap(
     # auf Kerndurchmesser, und die Nut, die von ihr bis zum Außendurchmesser
     # reicht.
     hollow = trimesh.creation.cylinder(
-        radius=inside / 2.0, height=skirt + BOOLEAN_OVERLAP, sections=NECK_SECTIONS
+        radius=inside / 2.0 + BOOLEAN_OVERLAP,
+        height=skirt + BOOLEAN_OVERLAP,
+        sections=NECK_SECTIONS,
     )
     hollow.apply_translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
-    # Der Gang reicht um ``pitch * RIDGE_END`` über seine Höhe hinaus (shapes.py).
-    # Auf die volle Schürze geschnitten, durchbrach er die Deckeldecke, sobald
-    # dieser Überstand die Deckelstärke erreichte — bei Steigung 4 mm ein Loch,
-    # darüber ein offener Deckel. Um den Überstand gekürzt endet die Nut an der
-    # Schürze, und die Stärke darüber bleibt stehen.
-    groove_height = max(EPS_GEOM, skirt - params.pitch * RIDGE_END)
-    groove = thread_body(inside, params.pitch, groove_height, internal=True)
+    # Die Wendel wird vollständig aufgebaut und anschließend an der Decke
+    # beschnitten. Eine kürzer aufgebaute Wendel ließe den letzten Nutumlauf
+    # weg, obwohl das passende Außengewinde dort noch Material trägt.
+    groove = thread_body(inside, params.pitch, skirt, internal=True)
 
     cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality, cancelled=cancelled)
-    cut = boolean(
-        "difference", [MeshData.of(body), cutter.mesh], quality=quality, cancelled=cancelled
+    bounded = boolean(
+        "intersection",
+        [cutter.mesh, _pipe(outer * 2.0, 0.0, skirt + BOOLEAN_OVERLAP, -BOOLEAN_OVERLAP)],
+        quality=quality,
+        cancelled=cancelled,
     )
-    return cut.mesh, deepest([cutter.solver, cut.solver])
+    cut = boolean(
+        "difference", [MeshData.of(body), bounded.mesh], quality=quality, cancelled=cancelled
+    )
+    return cut.mesh, deepest([cutter.solver, bounded.solver, cut.solver])

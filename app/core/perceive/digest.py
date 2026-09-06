@@ -435,7 +435,7 @@ def _place(centre: object) -> str:
         return ""
     try:
         numbers = ", ".join(_rounded(float(value)) for value in centre)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return ""
     return f", {tr('bei')} ({numbers})"
 

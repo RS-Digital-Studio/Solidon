@@ -13,6 +13,7 @@ Struktur, auf die es ankommt, in der Datei sichtbar ist, die sie prüft.
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 import zipfile
 from io import BytesIO
 
@@ -754,3 +755,28 @@ def test_a_small_doubling_assembly_still_reads_completely() -> None:
 
     assert threemf_reader.scan_assembly(payload) == (8, 8)
     assert len(threemf_reader.read_objects(payload)) == 8
+
+
+def test_empty_repeated_components_are_bounded_during_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """B-04: Auch ein wiederholter Zweig ohne Netz verbraucht Rechenarbeit."""
+    source = doubling_container(10)
+    with zipfile.ZipFile(BytesIO(source)) as container:
+        root = ET.fromstring(container.read(threemf.MODEL_PATH))
+    leaf = root.find(f"{{{CORE}}}resources/{{{CORE}}}object")
+    assert leaf is not None
+    mesh = leaf.find(f"{{{CORE}}}mesh")
+    assert mesh is not None
+    leaf.remove(mesh)
+    payload = BytesIO()
+    with zipfile.ZipFile(payload, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr(threemf.MODEL_PATH, ET.tostring(root))
+    monkeypatch.setattr(threemf_reader, "MAX_BODIES", 2)
+
+    for read in (threemf_reader.scan_assembly, threemf_reader.read_objects):
+        with pytest.raises(ValidationError) as refused:
+            read(payload.getvalue())
+        assert refused.value.constraint == "too_many_components"
+        assert refused.value.values["components"] == 2 * (threemf_reader.MAX_DEPTH + 1) + 1
+        assert refused.value.suggestions

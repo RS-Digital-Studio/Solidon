@@ -26,9 +26,32 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, OpResult, Profile, Quality, Scene, SceneObject
+from app.core.types import MaterialSlot, OpContext, OpResult, Profile, Quality, Scene, SceneObject
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+@pytest.mark.parametrize("operation", ["remesh_mesh", "remesh_uniform", "subdivide_surface"])
+def test_remeshing_preserves_the_material_of_each_side(operation: str, profile: Profile) -> None:
+    """Neue Dreiecke behalten die räumliche Zuordnung der sechs Würfelseiten."""
+    body = trimesh.creation.box(extents=(10, 10, 10))
+
+    def side_ids(normals: np.ndarray) -> tuple[int, ...]:
+        axes = np.argmax(np.abs(normals), axis=1)
+        return tuple(
+            int(2 * axis + (normal[axis] > 0)) for axis, normal in zip(axes, normals, strict=True)
+        )
+
+    source = MeshData.of(body, slots=side_ids(body.face_normals))
+    palette = [
+        MaterialSlot(index=index, name=f"Seite {index}", material_type="PETG") for index in range(6)
+    ]
+    entry = SceneObject(id="obj_1", name="Sechs Seiten", mesh=source, material_slots=palette)
+    result = run(operation, entry, profile, edge=5.0)
+    mesh = result.outputs[0].mesh
+    assert mesh.triangle_count > source.triangle_count
+    assert mesh.slot_indices == side_ids(mesh.raw.face_normals)
+    assert result.outputs[0].material_slots == palette
 
 
 def corpus(name: str) -> MeshData:
@@ -344,6 +367,66 @@ def test_subdivision_says_how_far_the_surface_moved(profile: Profile) -> None:
 
     measured = next(f for f in result.findings if f.code == "mesh.deviation")
     assert float(measured.values["deviation_mm"]) > 0.0
+
+
+def test_dense_cylinder_uses_a_bounded_fallback_when_simplification_stalls(
+    profile: Profile,
+) -> None:
+    """Der echte Zylinderfall aus dem Nutzerdurchgang, als eigener Körper.
+
+    Der erste Vereinfacher zieht an den dicht triangulierten Kappen keine
+    einzige Kante zusammen. Boden und Mantel gehen getrennt, der vollständige
+    Körper blieb jedoch bei 1440 Dreiecken stehen und die Oberfläche meldete
+    nur, sie habe sich kaum verschoben. Der Rückfall darf das Ziel nur innerhalb
+    derselben Abweichungsgrenze erreichen, die der Prüfbericht bereits benutzt.
+    """
+    cylinder = corpus("dense_cylinder.stl")
+    target = 1152
+    direct = cylinder.raw.simplify_quadric_decimation(face_count=target)
+    assert len(direct.faces) == cylinder.triangle_count, "der erste Vereinfacher muss stehen"
+
+    result = run("decimate_mesh", object_of(cylinder), profile, triangles=target)
+
+    after = result.outputs[0].mesh
+    limit = max(cylinder.bounds.diagonal, 1.0) * mesh_ops.DEVIATION_WARN
+    assert after.triangle_count <= target
+    assert after.is_watertight
+    assert after.component_count == cylinder.component_count == 1
+    assert after.volume == pytest.approx(cylinder.volume, rel=mesh_ops.DEVIATION_WARN)
+    assert max(mesh_ops.deviation(cylinder, after), mesh_ops.deviation(after, cylinder)) <= limit
+    fallback = next(f for f in result.findings if f.code == "mesh.simplification_fallback")
+    assert fallback.values["solver"] == "manifold"
+    assert fallback.values["before"] == cylinder.triangle_count
+    assert fallback.values["after"] == after.triangle_count
+
+
+def test_manifold_fallback_does_not_take_over_an_open_mesh(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    body = corpus("dense_cylinder.stl").raw.copy()
+    body.update_faces(np.arange(len(body.faces) - 1))
+    opened = MeshData.of(body)
+    assert not opened.is_watertight, "die Gegenprobe braucht eine offene Kante"
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("ein offenes Netz darf nicht in den Volumenkern fallen")
+
+    monkeypatch.setattr(mesh_ops, "_as_solid", unexpected)
+    mesh_ops.decimate(opened, 1152)
+
+
+def test_manifold_fallback_does_not_run_after_successful_fast_simplification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sphere = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0))
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("ein erreichtes Ziel braucht keinen zweiten Solver")
+
+    monkeypatch.setattr(mesh_ops, "_manifold_decimation", unexpected)
+    after = mesh_ops.decimate(sphere, 800)
+
+    assert after.triangle_count <= 800
 
 
 def _hollow_sphere(profile: Profile) -> MeshData:

@@ -520,7 +520,7 @@ def test_a_rigid_motion_keeps_a_feature_when_detection_misses_it(
     import importlib
 
     evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda _mesh: {})
+    monkeypatch.setattr(evaluation, "detect", lambda _mesh, **_kwargs: {})
     findings = []
 
     result = _with_features(
@@ -566,7 +566,7 @@ def test_arranging_keeps_a_feature_when_detection_misses_it(monkeypatch) -> None
     matrix = translation((-120.0, 45.0, 0.0))
     moved = apply(mesh, matrix)
     evaluation = importlib.import_module("app.core.scene.evaluate")
-    monkeypatch.setattr(evaluation, "detect", lambda _mesh: {})
+    monkeypatch.setattr(evaluation, "detect", lambda _mesh, **_kwargs: {})
     findings = []
 
     result = _with_features(

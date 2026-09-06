@@ -3273,6 +3273,8 @@ class Viewport(QWidget):
     """
     sceneFailed = Signal(str)
     """Die Ansichtsaufbereitung brach ab; die letzte gültige Ansicht bleibt."""
+    sceneApplied = Signal()
+    """Die neue Szene ist übernommen; abhängige Regler können ihre Grenzen lesen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3304,6 +3306,7 @@ class Viewport(QWidget):
         Griff nimmt (:meth:`_on_pointer`)."""
         self._pointer_token: int | None = None
         self._actors: dict[ObjectId, Item] = {}
+        self._placement_pointer: Callable[[PointerEvent], bool] | None = None
         self._actor_offsets: dict[ObjectId, Any] = {}
         self._actor_scene: EvaluationResult | None = None
         self._frame_actors: list[Any] = []
@@ -3961,6 +3964,8 @@ class Viewport(QWidget):
         keine Kamera; das ist die ganze Vorfahrt, und sie steht an einer
         Stelle statt in drei Beobachtern am Interactor wie bis zum 05.09.2026.
         """
+        if self._placement_pointer is not None and self._placement_pointer(event):
+            return
         if event.kind == "move":
             self._note_pointer(event.x, event.y)
         elif event.kind == "leave":
@@ -3973,6 +3978,26 @@ class Viewport(QWidget):
             self._navigator.handle(event)
         if event.kind in ("move", "wheel"):
             self._queue_feature_label_layout()
+
+    def set_placement_pointer(self, handler: Callable[[PointerEvent], bool] | None) -> None:
+        """Gibt einer laufenden Platzierung die linke Taste; die Kamera bleibt bedienbar."""
+        self._placement_pointer = handler
+
+    def placement_hit(
+        self, x: int, y: int
+    ) -> tuple[ObjectId, Vec3, int, tuple[Vec3, Vec3] | None] | None:
+        """Liefert das sichtbare Ziel mit Originalindex oder zu prüfendem Sichtstrahl."""
+        self._world_at(x, y)
+        hit = self._selection_hit
+        if hit is None:
+            return None
+        ray = self._pick_ray(x, y)
+        if ray is not None:
+            shift = tuple(a - b for a, b in zip(hit.view_point, hit.scene_point, strict=True))
+            origin = tuple(a - b for a, b in zip(ray[0], shift, strict=True))
+            ray = (origin, ray[1])  # type: ignore[assignment]
+        cell = hit.cell if hit.object_id in self._original_pick_cells else -1
+        return hit.object_id, hit.scene_point, cell, ray
 
     def _device_ratio(self) -> float:
         """Gerätepixel je Logikpunkt des Fensters — 1,0 ohne Bild."""
@@ -4603,6 +4628,10 @@ class Viewport(QWidget):
 
         return self._requested_result if self._scene_worker is not None else self._result
 
+    def is_scene_applied(self, result: EvaluationResult | None) -> bool:
+        """Ob die angefragte Szene bereits die sichtbaren Pick-Flächen trägt."""
+        return result is not None and self._result is result
+
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Bereitet teure Netze im Arbeiter vor und behält bis dahin das Bild."""
 
@@ -4617,6 +4646,7 @@ class Viewport(QWidget):
         prepared = self._scene_tasks(result)
         if prepared is None:
             self._apply_scene(result)
+            self.sceneApplied.emit()
             return
         tasks, plane, second = prepared
         assert result is not None
@@ -4675,6 +4705,7 @@ class Viewport(QWidget):
         if generation != self._scene_generation:
             return
         self._apply_scene(result, prepared)
+        self.sceneApplied.emit()
 
     def _scene_crashed(self, generation: int, detail: str) -> None:
         """Die alte Ansicht stehen lassen und den Fehler nach außen melden."""
@@ -4919,10 +4950,11 @@ class Viewport(QWidget):
             scalars = self._scalars_for(object_id, len(faces))
             cell_colours: CellColours | None = None
             if scalars is not None and self._map is not None:
+                low, high = self._map.display_limits
                 cell_colours = CellColours(
                     scalars,
                     colormap=tuple(VIRIDIS),
-                    limits=(self._map.low, max(self._map.high, self._map.low + 1e-6)),
+                    limits=(low, max(high, low + 1e-6)),
                     nan_colour="#4a4f57",
                 )
             elif self._map is None:
@@ -5496,9 +5528,7 @@ class Viewport(QWidget):
             return None
         if len(self._map.values) != faces:
             return None
-        import numpy as np
-
-        return np.asarray(self._map.values, dtype=float)
+        return self._map.display_values()
 
     def _for_display(self, object_id: ObjectId, mesh: Any, identity: str = "") -> Any:
         """Eine für die Anzeige dezimierte Version ab der Schwelle aus §31.
@@ -9905,13 +9935,17 @@ class Viewport(QWidget):
                 self.faceDragged.emit(self._drag_normal, float(value))
         elif kind == "turn" and self._drag_axis is not None:
             if abs(value) > EPS_DISPLAY:
-                self.transformDragged.emit(TransformSteps(axis=self._drag_axis, angle=float(value)))
+                steps = TransformSteps(axis=self._drag_axis, angle=float(value))
+                if not self._emit_feature_drag(steps):
+                    self.transformDragged.emit(steps)
         elif kind == "move" and self._drag_axis is not None:
             if abs(value) > EPS_DISPLAY:
                 index = ("x", "y", "z").index(self._drag_axis)
                 offset = [0.0, 0.0, 0.0]
                 offset[index] = float(value)
-                self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], offset[2])))
+                steps = TransformSteps(offset=(offset[0], offset[1], offset[2]))
+                if not self._emit_feature_drag(steps):
+                    self.transformDragged.emit(steps)
         elif kind == "scale" and abs(value - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(value))
         elif kind == "pull":

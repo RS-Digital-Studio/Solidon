@@ -388,13 +388,24 @@ def test_a_card_glides_when_the_user_caused_it(
     host.resize(800, 600)
     qt_app.processEvents()
 
-    start = left.geometry()
-    host._move(left, QRect(start.x(), start.y(), start.width(), start.height() + 120), moving=True)
+    try:
+        start = left.geometry()
+        host._move(
+            left, QRect(start.x(), start.y(), start.width(), start.height() + 120), moving=True
+        )
 
-    assert host._moves, "eine Bewegung läuft"
-    assert left.geometry() != QRect(start.x(), start.y(), start.width(), start.height() + 120), (
-        "und sie ist noch unterwegs"
-    )
+        assert host._moves, "eine Bewegung läuft"
+        assert left.geometry() != QRect(
+            start.x(), start.y(), start.width(), start.height() + 120
+        ), "und sie ist noch unterwegs"
+    finally:
+        # **Nicht dem Speicherbereiniger überlassen.** Ein verwaister Host mit
+        # laufender Animation starb irgendwann später — zwei Tests weiter
+        # brach ``sizeHintForRow`` mit „Aborted" ab. Derselbe Abbau wie im
+        # Nachbartest über die Freigabe der Bewegungsobjekte.
+        host.close()
+        host.deleteLater()
+        qt_app.processEvents()
 
 
 def test_dragging_the_window_lets_nothing_lag_behind(
@@ -418,6 +429,38 @@ def test_dragging_the_window_lets_nothing_lag_behind(
 
     assert not host._moves, "ein Resize bewegt nichts, es setzt"
     assert right.geometry().right() == 1000 - MARGIN - 1, "und sitzt sofort richtig"
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_finished_card_movements_release_their_qobjects(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, interrupted: bool
+) -> None:
+    """Abgeschlossene wie ersetzte Bewegungen hinterlassen keine Qt-Kinder."""
+    from PySide6.QtCore import QCoreApplication, QEvent, QPropertyAnimation
+
+    monkeypatch.setattr(overlay, "MOVE_MS", 200)
+    host = OverlayHost(QLabel("Ansicht"))
+    zone = QWidget(host)
+    host.resize(800, 600)
+    host.show()
+    zone.show()
+    qt_app.processEvents()
+    try:
+        for index in range(12):
+            target = QRect(10 + index, 10, 100, 100)
+            host._move(zone, target, moving=True)
+            movement = host._moves[id(zone)]
+            assert host.findChildren(QPropertyAnimation), "der geprüfte Lauf muss existieren"
+            if interrupted:
+                host._move(zone, QRect(40 + index, 20, 100, 100), moving=False)
+            else:
+                movement.setCurrentTime(movement.duration())
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            assert not host._moves
+            assert not host.findChildren(QPropertyAnimation), "auch das Qt-Objekt wird freigegeben"
+    finally:
+        host.close()
+        host.deleteLater()
 
 
 def test_a_wrapped_finding_is_measured_at_its_real_height(window: MainWindow) -> None:

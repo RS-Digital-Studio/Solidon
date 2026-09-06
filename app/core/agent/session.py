@@ -729,7 +729,23 @@ class AgentSession:
             return f"{tr('Dieses Werkzeug gibt es nicht')}: {call.name}", scene
 
         arguments = dict(call.arguments)
-        inputs = tuple(str(entry) for entry in arguments.pop(OBJECTS_FIELD, ()) or ())
+        objects = arguments.pop(OBJECTS_FIELD, [])
+        # Das Strukturfeld steht neben dem Parameterschema. Vor jeder
+        # Iteration prüfen: Ein Skalar darf weder den Zug abbrechen noch als
+        # leere Auswahl eine unbestellte Erzeugung oder Szenenoperation auslösen.
+        if not isinstance(objects, list) or any(
+            not isinstance(entry, str) or not entry.strip() for entry in objects
+        ):
+            proposal.invalid_calls += 1
+            return (
+                f"{tr('Ungültige Werte')}: "
+                + tr(
+                    "Geben Sie objects als Liste von Objektkennungen an, zum Beispiel "
+                    '["obj_1"]. Wiederholen Sie den Aufruf mit dieser Liste.'
+                ),
+                scene,
+            )
+        inputs = tuple(objects)
         if spec.takes_whole_scene and not inputs:
             # Anordnen wirkt auf alles (§25). Das Modell jedes Objekt aufzählen
             # zu lassen wäre eine Gelegenheit, eines zu vergessen — und die
@@ -903,7 +919,7 @@ def parse_number(value: Any) -> float:
     """
     try:
         number = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         raise ValueError(f"{tr('Dieser Wert ist keine Zahl')}: {value!r}") from None
     if not isfinite(number):
         raise ValueError(f"{tr('Dieser Wert ist keine endliche Zahl')}: {number}")

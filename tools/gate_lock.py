@@ -48,6 +48,11 @@ import sys
 import time
 from pathlib import Path
 
+if str(Path(__file__).resolve().parent.parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from tools.licence_archive import ArchiveBusyError, archive_lock
+
 #: Wie lange ein Schloss höchstens gilt, auch wenn sein Prozess noch lebt.
 #:
 #: Der zweite Rettungsanker neben der Prozessnummer, für den Fall, dass ein
@@ -201,7 +206,7 @@ def _descendants(root: int) -> set[int]:
             try:
                 fields = (entry / "stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
                 parents[int(entry.name)] = int(fields[1])
-            except (OSError, ValueError, IndexError):
+            except OSError, ValueError, IndexError:
                 continue
 
     tree = {root}
@@ -261,7 +266,7 @@ def _test_processes() -> set[int]:
                 check=False,
             )
             data = json.loads(raw.stdout or "[]")
-        except (OSError, ValueError, subprocess.SubprocessError):
+        except OSError, ValueError, subprocess.SubprocessError:
             return found
         if isinstance(data, dict):
             data = [data]
@@ -326,7 +331,7 @@ def _cpu_seconds(pid: int) -> float | None:
         fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
         ticks = float(fields[11]) + float(fields[12])
         return ticks / os.sysconf("SC_CLK_TCK")
-    except (OSError, ValueError, IndexError):
+    except OSError, ValueError, IndexError:
         return None
 
 
@@ -371,7 +376,7 @@ def _started_at(pid: int) -> float | None:
         ticks = float(fields[19]) / os.sysconf("SC_CLK_TCK")
         uptime = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
         return time.time() - (uptime - ticks)
-    except (OSError, ValueError, IndexError):
+    except OSError, ValueError, IndexError:
         return None
 
 
@@ -502,7 +507,7 @@ def _head_commit() -> str:
             text=True,
             timeout=10,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return ""
     return finished.stdout.strip() if finished.returncode == 0 else ""
 
@@ -536,7 +541,7 @@ def _moved_sources(before: dict[str, float]) -> set[str]:
 def _read(path: Path) -> dict[str, object] | None:
     try:
         return dict(json.loads(path.read_text(encoding="utf-8")))
-    except (OSError, ValueError):
+    except OSError, ValueError, TypeError:
         return None
 
 
@@ -589,48 +594,70 @@ def _acquire(path: Path, who: str, wait: float) -> dict[str, object] | None:
     """Legt das Schloss an. Gibt den fremden Eintrag zurück, wenn es nicht geht."""
     deadline = time.monotonic() + wait
     while True:
-        present = _read(path) if path.exists() else None
-        if present is None and path.exists():
-            # Eine leere oder halb geschriebene Datei: Jung ist sie das
-            # Fenster zwischen Anlegen und Schreiben eines anderen — kurz
-            # warten. Alt ist sie ein Rest, der keinen Halter mehr hat; das
-            # ``x`` darunter scheiterte an ihr in jeder Runde, und das Tor
-            # stand für jeden weiteren Lauf endlos (Gesamtreview 05.09.2026,
-            # R17).
-            try:
-                age = time.time() - path.stat().st_mtime
-            except OSError:
-                age = UNREADABLE_GRACE_SECONDS
-            if age < UNREADABLE_GRACE_SECONDS and time.monotonic() < deadline:
-                time.sleep(POLL_SECONDS)
-                continue
-            print("Unlesbares Schloss entfernt — es trug keinen Halter.", flush=True)
-            path.unlink(missing_ok=True)
-        if present is not None:
-            reason = _stale(present)
-            if not reason:
-                if time.monotonic() < deadline:
-                    time.sleep(POLL_SECONDS)
-                    continue
-                return present
-            print(f"Verwaistes Schloss übernommen — {reason}.", flush=True)
-            path.unlink(missing_ok=True)
-
-        entry = {"wer": who, "pid": os.getpid(), "seit": time.time()}
         try:
-            # ``x`` und nicht ``w``: Zwei Sitzungen, die im selben Augenblick
-            # zugreifen, dürfen nicht beide gewinnen. Das Anlegen ist die
-            # Entscheidung, nicht das Schreiben danach.
-            with path.open("x", encoding="utf-8") as file:
-                file.write(json.dumps(entry, ensure_ascii=False))
-        except FileExistsError:
-            continue
+            # Dieselbe betriebssystemgestützte Sperre wie beim Archiv schützt
+            # ausschließlich die kurze Änderung dieser temporären Tordatei.
+            # Ein Prozessende gibt sie automatisch frei; kein weiterer PID-
+            # Wächter muss über die Gültigkeit der Änderung entscheiden.
+            with archive_lock(path, timeout=0.0):
+                foreign = _try_acquire(path, who)
+        except ArchiveBusyError:
+            foreign = _unwritten()
         except OSError as problem:
-            # Ein Schloss darf nie das Tor verhindern. Kein Eintrag heißt: der
-            # Lauf geht, nur ungeschützt — und das steht dann auch da.
-            print(f"Ohne Schloss (es ließ sich nicht anlegen: {problem}).", flush=True)
+            print(f"Torschloss nicht zugänglich: {problem}. Ablageort prüfen und erneut versuchen.")
+            return _unwritten()
+        if foreign is None:
             return None
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.0:
+            return foreign
+        time.sleep(min(POLL_SECONDS, remaining))
+
+
+def _unwritten() -> dict[str, object]:
+    """Ein noch nicht lesbarer Eintrag belegt das Tor, statt es freizugeben."""
+    return {"wer": "Sperrdatei wird gerade geschrieben", "pid": 0, "seit": time.time()}
+
+
+def _signature(path: Path) -> tuple[int, int, int, int, int] | None:
+    """Identität und Schreibstand der Datei; Lesen und Prüfen müssen zusammenpassen."""
+    try:
+        stamp = path.stat()
+    except FileNotFoundError:
         return None
+    return stamp.st_dev, stamp.st_ino, stamp.st_size, stamp.st_mtime_ns, stamp.st_ctime_ns
+
+
+def _try_acquire(path: Path, who: str) -> dict[str, object] | None:
+    """Ein Versuch unter der gemeinsamen Schreibsperre; gewartet wird außerhalb."""
+    before = _signature(path)
+    present = _read(path) if before is not None else None
+    if before is not None and present is None:
+        # Auch ein alter unlesbarer Eintrag kann zwischen Lesen und Prüfen
+        # fertig werden. Dann gehört die Datei dem inzwischen lesbaren Halter.
+        if _signature(path) != before:
+            return _read(path) or _unwritten()
+        age = time.time() - before[3] / 1e9
+        if age < UNREADABLE_GRACE_SECONDS:
+            return _unwritten()
+        again = _read(path)
+        if again is not None:
+            return again
+        if _signature(path) != before:
+            return _unwritten()
+        path.unlink(missing_ok=True)
+        print("Unlesbares altes Schloss entfernt — es trug keinen Halter.", flush=True)
+    elif present is not None:
+        if not _discard_unlocked(path, present):
+            return _read(path) or _unwritten()
+
+    entry = {"wer": who, "pid": os.getpid(), "seit": time.time()}
+    try:
+        with path.open("x", encoding="utf-8") as file:
+            file.write(json.dumps(entry, ensure_ascii=False))
+    except FileExistsError:
+        return _read(path) or _unwritten()
+    return None
 
 
 def run(who: str, wait: float, command: list[str]) -> int:
@@ -700,9 +727,17 @@ def run(who: str, wait: float, command: list[str]) -> int:
         # übernommen — weil dieser Lauf über die Altersgrenze kam —, gehört es
         # ihm, und ihm wegzunehmen wäre schlimmer als der Stau.
         if held:
-            current = _read(path)
-            if current is not None and current.get("pid") == os.getpid():
-                path.unlink(missing_ok=True)
+            try:
+                with archive_lock(path, timeout=0.0):
+                    current = _read(path)
+                    if current is not None and (current.get("pid"), current.get("seit")) == (
+                        mine.get("pid"),
+                        mine.get("seit"),
+                    ):
+                        path.unlink(missing_ok=True)
+            except ArchiveBusyError:
+                # Ein späterer Blick erkennt den inzwischen beendeten Halter.
+                pass
         commit_after = _head_commit()
         moved = _moved_sources(before)
         if commit_before:
@@ -729,6 +764,15 @@ def run(who: str, wait: float, command: list[str]) -> int:
 
 
 def _discard(path: Path, present: dict[str, object]) -> bool:
+    """Prüfen und Entfernen benutzen dieselbe Schreibsperre wie das Anlegen."""
+    try:
+        with archive_lock(path, timeout=0.0):
+            return _discard_unlocked(path, present)
+    except ArchiveBusyError:
+        return False
+
+
+def _discard_unlocked(path: Path, present: dict[str, object]) -> bool:
     """Ein verwaistes Schloss wegräumen — aber nur genau dieses.
 
     **Zwischen Lesen und Löschen kann ein neuer Halter angelegt haben.** Dann
@@ -765,6 +809,9 @@ def release() -> int:
     path = _lock_file()
     present = _read(path) if path.exists() else None
     if present is None:
+        if path.exists():
+            print("Das Torschloss ist noch nicht lesbar — erneut prüfen, nichts weggeräumt.")
+            return 1
         print("Das Tor ist frei — nichts wegzuräumen.")
         return 0
     reason = _stale(present)
@@ -784,6 +831,9 @@ def status() -> int:
     path = _lock_file()
     present = _read(path) if path.exists() else None
     if present is None:
+        if path.exists():
+            print("Das Torschloss ist noch nicht lesbar — erneut prüfen.")
+            return 1
         print("Das Tor ist frei.")
         return 0
     reason = _stale(present)

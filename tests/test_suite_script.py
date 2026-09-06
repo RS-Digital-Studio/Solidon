@@ -154,26 +154,22 @@ def test_a_run_that_swallowed_tests_is_told_apart_from_a_red_one(tmp_path: Path)
     )
 
 
-def test_a_teardown_crash_stays_green_and_a_swallowed_run_does_not(tmp_path: Path) -> None:
-    """Die zweite Entscheidung: Was zählt am Ende als Fehllauf?
-
-    Beide Fälle enden mit einem Absturz und ohne Schlusszeile. Sie
-    unterscheidet nichts als die **Anzahl** der Fortschrittszeichen — und
-    genau darin lag der Unterschied zwischen „alles gelaufen, Riss beim
-    Aufräumen" und „ein Drittel gelaufen, Rest unbekannt".
-    """
+def test_native_crashes_stay_red_even_after_all_tests_passed(tmp_path: Path) -> None:
+    """Erfolgreiche Zusicherungen ersetzen keinen sauber beendeten Prozess."""
     teardown = "." * 60 + "\n"
     torn = "." * 33 + "\n"
+    assert ask('zaehlt_als_fehler 127 "$P" 60', teardown, tmp_path)
+    assert ask('zaehlt_als_fehler 139 "$P" 60', torn, tmp_path)
+    assert ask('zaehlt_als_fehler 139 "$P" ""', teardown, tmp_path)
 
-    assert not ask('zaehlt_als_fehler 127 "$P" 60', teardown, tmp_path), (
-        "sechzig von sechzig gelaufen — das ist kein Fehllauf"
+    # Ein Shell-Aufruf prüft alle Statuswerte, auch den ursprünglichen
+    # Windows-Code; die Entscheidung darf von der Ausgabe nicht abhängen.
+    decision = (
+        "for code in 1 3 5 127 134 139 3221226505; do "
+        'zaehlt_als_fehler "$code" "$P" 60 || exit 1; done; '
+        '! zaehlt_als_fehler 0 "$P" 60'
     )
-    assert ask('zaehlt_als_fehler 139 "$P" 60', torn, tmp_path), (
-        "dreiunddreißig von sechzig: siebenundzwanzig Tests sind nie gelaufen"
-    )
-    assert ask('zaehlt_als_fehler 139 "$P" ""', teardown, tmp_path), (
-        "ohne Soll-Größe bleibt es bei der strengen Bewertung"
-    )
+    assert ask(decision, teardown + "60 passed in 0.01s\n", tmp_path)
 
 
 def test_native_crash_text_is_not_mistaken_for_failed_test_markers(tmp_path: Path) -> None:
@@ -193,187 +189,169 @@ def test_native_crash_text_is_not_mistaken_for_failed_test_markers(tmp_path: Pat
     )
 
 
-def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -> None:
-    """Die Portionsgröße pflegt sich selbst — das ist der ganze Punkt von G18.
+def fake_suite(
+    tmp_path: Path, *, queue_only: bool = False, **options: str
+) -> subprocess.CompletedProcess[str]:
+    """Die echte Torsteuerung mit einem schnellen Interpreter-Doppel ausführen.
 
-    Gemessen am 31.08.2026: ``test_ui.py`` kommt mit sechzig durch,
-    ``test_print_settings_ui.py`` riss schon bei vierzig, und zwar an keinem
-    einzelnen Test — dreiundzwanzig rissen, vierundzwanzig nicht,
-    vierunddreißig liefen, vierzig rissen wieder. Eine gepflegte Zahl je Datei
-    wäre am Tag ihres Eintrags schon falsch. Am 04.09.2026 zeigte
-    ``test_sculpt_session.py`` dieselbe Grenze mit nur 31 Tests; deshalb muss
-    auch eine Datei unterhalb der normalen Portionsgröße in diesen Weg kommen.
-
-    Geprüft wird mit einem **gefälschten pytest**, das über einer Grenze reißt
-    und darunter durchläuft. Nur so lässt sich zeigen, dass das Skript kleiner
-    wird, statt eine Konstante zu brauchen: Ein echter Lauf wäre langsam, von
-    der Maschine abhängig und würde genau die Eigenschaft nicht beweisen.
+    Das Doppel beantwortet Importprobe, Fixture-Sammlung und pytest-Aufrufe,
+    ohne weitere Python-Interpreter, Qt oder reale Tests zu starten.
     """
-    fake = tmp_path / "fakepytest.py"
-    fake.write_text(
-        # Zählt die Testnamen im Aufruf. Über der Grenze schreibt es so viele
-        # Punkte, wie es *geschafft* hätte, und stirbt; darunter läuft es durch
-        # und schreibt die Schlusszeile.
-        "import sys\n"
-        "names = [a for a in sys.argv if '::' in a]\n"
-        "limit = int(__import__('os').environ.get('FAKE_LIMIT', '8'))\n"
-        "if not names:\n"
-        "    print('1 passed in 0.01s')\n"
-        "    sys.exit(0)\n"
-        "if len(names) > limit:\n"
-        "    print('.' * (len(names) // 3))\n"
-        "    sys.exit(139)\n"
-        "print('.' * len(names))\n"
-        "print(f'{len(names)} passed in 0.01s')\n",
-        encoding="utf-8",
-    )
-    listing = tmp_path / "list_windowed_tests.py"
-    listing.write_text("print('tests/test_fake.py')\n", encoding="utf-8")
-
-    # Ein Stub für ``--collect-only``: zwanzig Namen, die das Skript in
-    # Portionen schneidet.
-    collect = tmp_path / "collect.py"
-    collect.write_text(
-        "import sys\n"
-        # Der Wrapper bekommt **jeden** Aufruf des Skripts, auch den nach der
-        # Dateiliste. Ohne diesen Zweig las das Skript die Schlusszeile des
-        # Stubs als Dateinamen und fuhr „1", „passed" und „in" als Testdateien.
-        "if any('list_windowed_tests' in a for a in sys.argv):\n"
-        "    print('tests/test_fake.py')\n"
-        "    sys.exit(0)\n"
-        "if '--collect-only' in sys.argv:\n"
-        "    for i in range(20):\n"
-        "        print(f'tests/test_fake.py::test_{i}')\n"
-        "    sys.exit(0)\n"
-        f"exec(open(r'{fake}').read())\n",
-        encoding="utf-8",
-    )
-
-    # ``SUITE_PYTHON`` erwartet ein Programm, das wie ``python.exe`` gerufen
-    # wird (``"$PY" -m pytest …``). Ein Wrapper schiebt die Argumente an den
-    # Stub weiter; ``-m pytest`` interessiert ihn nicht, er sucht Testnamen.
-    wrapper = tmp_path / "fakepy.sh"
-    interpreter = Path(__import__("sys").executable).as_posix()
+    wrapper = tmp_path / "fakepython.sh"
     wrapper.write_text(
-        f'#!/usr/bin/env bash\nexec "{interpreter}" "{collect.as_posix()}" "$@"\n',
+        """#!/usr/bin/env bash
+case "$*" in
+  *list_windowed_tests.py*)
+    printf '%s\n' 'tests/test_fake.py'
+    exit "${FAKE_LIST_EXIT:-0}" ;;
+  *--collect-only*)
+    for ((i=0; i<${FAKE_COUNT:-6}; i++)); do
+      printf 'tests/test_fake.py::test_%s\n' "$i"
+    done
+    exit "${FAKE_COLLECT_EXIT:-0}" ;;
+esac
+[ "${1:-}" = "-c" ] && exit 0
+count=0
+for argument in "$@"; do
+  case "$argument" in *::*) count=$((count + 1));; esac
+done
+if [ "$count" -eq 0 ]; then
+  printf '1 passed in 0.01s\n'
+  exit 0
+fi
+if [ "$count" -gt "${FAKE_LIMIT:-2}" ]; then
+  for ((i=0; i<count/3; i++)); do printf '.'; done
+  printf '\n'
+  exit 139
+fi
+for ((i=0; i<count; i++)); do printf '.'; done
+printf '\n%s passed in 0.01s\n' "$count"
+""",
         encoding="utf-8",
         newline="\n",
     )
     wrapper.chmod(0o755)
-
     environment = dict(os.environ)
-    environment["SUITE_WURZEL"] = str(tmp_path)
-    environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
-    # Die zwanzig Tests liegen absichtlich unter der Obergrenze. Vor dem
-    # 04.09.2026 nahm das Skript dann den direkten Weg, riss und teilte nie.
-    environment["SUITE_PORTION"] = "60"
-    environment["SUITE_MIN_PORTION"] = "2"
-    environment["FAKE_LIMIT"] = "4"
-    environment["SUITE_PYTHON"] = str(wrapper)
-
-    (tmp_path / "tools").mkdir(exist_ok=True)
-    shutil.copy(listing, tmp_path / "tools" / "list_windowed_tests.py")
-    (tmp_path / "tests").mkdir(exist_ok=True)
-    (tmp_path / "tests" / "test_fake.py").write_text("", encoding="utf-8")
-
-    result = subprocess.run(
-        [BASH or "bash", str(SCRIPT)],
+    environment.update(
+        SUITE_WURZEL=tmp_path.as_posix(),
+        SUITE_KOPIE=(tmp_path / "kopie.sh").as_posix(),
+        SUITE_PORTION="60",
+        SUITE_MIN_PORTION="2",
+        SUITE_PYTHON=wrapper.as_posix(),
+    )
+    environment.update(options)
+    script = SCRIPT
+    if queue_only:
+        # Hier ist ausschließlich die echte Warteschlange der Prüfling.
+        # Sammlung und Diagnoseklassifikation haben eigene Gegenproben oben
+        # und unten. Der Stub liefert ausschließlich native Abbrüche ohne F/E.
+        _before, separator, queue = SCRIPT.read_text(encoding="utf-8").partition(
+            "\nfor file in $windowed; do\n"
+        )
+        assert separator, "die echte Warteschlange fehlt"
+        script = tmp_path / "queue.sh"
+        script.write_text(
+            f'SUITE_NUR_FUNKTIONEN=1\nsource "{SCRIPT.as_posix()}"\n'
+            'windowed="tests/test_fake.py"\nPORTION=60\nMINDEST=2\n'
+            'sammelgruppe="1 passed in 0.01s"\n'
+            f'protokoll="{(tmp_path / "queue.log").as_posix()}"\n'
+            "PY=fake_python\n"
+            # Der Stub beendet nur seinen Kindprozess, nicht die Torsteuerung.
+            f'fake_python() ( source "{wrapper.as_posix()}" "$@"; )\n'
+            "namen_von() { for ((i=0; i<${FAKE_COUNT:-6}; i++)); do "
+            'printf "tests/test_fake.py::test_%s\\n" "$i"; done; }\n'
+            'nicht_gelaufen() { [ "$1" -ne 0 ]; }\n' + separator + queue,
+            encoding="utf-8",
+            newline="\n",
+        )
+    return subprocess.run(
+        [BASH or "bash", str(script)],
         capture_output=True,
         text=True,
-        # **Kodierung ausdrücklich**, sonst liest Python die Ausgabe in der
-        # Systemkodierung: Aus „Läufe" wurde „L�ufe", und der Vergleich
-        # scheiterte an einem Wort, das im Protokoll richtig dastand.
         encoding="utf-8",
         errors="replace",
         env=environment,
         cwd=tmp_path,
+        timeout=60,
     )
-    output = result.stdout + result.stderr
 
-    assert "geteilt in" in output, (
-        "das Skript hat nicht geteilt, obwohl der Lauf Tests verschluckte:\n" + output[-2000:]
-    )
-    # Zwanzig Tests in der ersten Portion, und das gefälschte pytest reißt über
-    # vier: Zwanzig reißen, zehn reißen, fünf reißen, zwei und drei laufen.
-    # Also mehrere Teilungen — und am Ende kein Fehllauf, ohne dass jemand eine
-    # Zahl je Datei gepflegt hätte.
-    assert output.count("geteilt in") >= 2, f"nur einmal geteilt:\n{output[-2000:]}"
-    assert "Läufe mit Fehler: 0" in output, (
-        "nach dem Verkleinern lief alles durch, das Skript meldet trotzdem einen Fehler:\n"
-        + output[-2000:]
-    )
+
+def test_a_portion_that_swallows_tests_is_halved_until_it_runs(tmp_path: Path) -> None:
+    """Die Diagnose erreicht jeden Test, frühere Prozessabbrüche bleiben rot."""
+    result = fake_suite(tmp_path, queue_only=True)
+    output = result.stdout + result.stderr
+    # Sechs reißen, beide Dreier ebenfalls; Eins und Zwei laufen durch.
+    assert output.count("geteilt in") == 3, output
+    assert output.count("1 passed in 0.01s") == 3, output
+    assert output.count("2 passed in 0.01s") == 2, output
+    assert "Läufe mit Fehler: 3" in output, output
+    assert result.returncode == 1, output
 
 
 def test_a_portion_that_never_runs_stops_at_the_floor(tmp_path: Path) -> None:
-    """Wer immer reißt, wird gemeldet — nicht endlos geteilt.
+    """Die vorhandene Mindestgröße beendet erfolglose Diagnoseversuche."""
+    result = fake_suite(tmp_path, queue_only=True, FAKE_COUNT="4", FAKE_LIMIT="0")
+    output = result.stdout + result.stderr
+    assert output.count("geteilt in") == 1, output
+    assert "Läufe mit Fehler: 3" in output, output
+    assert result.returncode == 1, output
 
-    Die Mindestgröße ist kein Feinschliff, sondern der Schutz gegen eine
-    Schleife, die nie endet: Ohne sie teilte das Skript weiter, bis eine
-    „Portion" keinen einzigen Test mehr enthält, und legte sich selbst
-    schlafen. Eine Gegenprobe hat gezeigt, dass genau dieser Zweig ungeprüft
-    war — der Fall darüber wird grün, bevor er den Boden erreicht.
 
-    Geprüft wird mit einem pytest, das **jede** Portion reißen lässt. Das
-    Skript muss dann aufhören und einen Fehllauf melden, statt weiterzuteilen.
-    """
-    fake = tmp_path / "fakepytest.py"
-    fake.write_text(
-        "import sys\n"
-        "names = [a for a in sys.argv if '::' in a]\n"
-        "if any('list_windowed_tests' in a for a in sys.argv):\n"
-        "    print('tests/test_fake.py')\n"
-        "    sys.exit(0)\n"
-        "if '--collect-only' in sys.argv:\n"
-        "    for i in range(8):\n"
-        "        print(f'tests/test_fake.py::test_{i}')\n"
-        "    sys.exit(0)\n"
-        "if not names:\n"
-        "    print('1 passed in 0.01s')\n"
-        "    sys.exit(0)\n"
-        # Reißt immer, und zwar nach der Hälfte — ein Riss, den kein Teilen
-        # heilt, weil er nicht an der Menge liegt.
-        "print('.' * (len(names) // 2))\n"
-        "sys.exit(139)\n",
-        encoding="utf-8",
-    )
-    wrapper = tmp_path / "fakepy.sh"
-    interpreter = Path(__import__("sys").executable).as_posix()
-    wrapper.write_text(
-        f'#!/usr/bin/env bash\nexec "{interpreter}" "{fake.as_posix()}" "$@"\n',
+def test_a_clean_stub_suite_has_a_successful_process_exit(tmp_path: Path) -> None:
+    """Alle erfolgreichen Teilprozesse ergeben auch einen erfolgreichen Torprozess."""
+    result = fake_suite(tmp_path, FAKE_LIMIT="6")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Läufe mit Fehler: 0" in result.stdout
+
+
+def test_a_failed_windowed_collection_does_not_run_the_core_group(tmp_path: Path) -> None:
+    """Auch eine teilweise ausgegebene Fensterliste darf den Fehler nicht verdecken."""
+    result = fake_suite(tmp_path, FAKE_LIST_EXIT="3")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Exit 3" in result.stderr
+    assert "Rest in einem Zug" not in result.stdout
+
+
+def test_a_failed_node_collection_is_not_run_as_a_partial_list(tmp_path: Path) -> None:
+    """Ein Sammelfehler mit einigen gültigen Namen bleibt ein Befund."""
+    result = fake_suite(tmp_path, FAKE_COLLECT_EXIT="2")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "Sammlung,Exit:2" in result.stdout
+    assert "--> Teil" not in result.stdout
+
+
+@pytest.mark.parametrize("interpreter", ["", "does-not-exist/python"])
+def test_an_explicit_invalid_interpreter_never_uses_a_fallback(
+    tmp_path: Path, interpreter: str
+) -> None:
+    """Eine vorhandene alte Umgebung darf die ausdrücklich gewählte nicht ersetzen."""
+    fallback = tmp_path / ".venv" / "bin" / "python"
+    fallback.parent.mkdir(parents=True)
+    marker = tmp_path / "fallback-used"
+    fallback.write_text(
+        f'#!/usr/bin/env bash\nprintf used > "{marker.as_posix()}"\nexit 0\n',
         encoding="utf-8",
         newline="\n",
     )
-    wrapper.chmod(0o755)
+    fallback.chmod(0o755)
+    result = fake_suite(tmp_path, SUITE_PYTHON=interpreter)
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "SUITE_PYTHON ist nicht ausführbar" in result.stderr
+    assert not marker.exists(), "der ungültige Wunsch wurde still ersetzt"
 
-    environment = dict(os.environ)
-    environment["SUITE_WURZEL"] = str(tmp_path)
-    environment["SUITE_KOPIE"] = str(tmp_path / "kopie.sh")
-    environment["SUITE_PORTION"] = "4"
-    environment["SUITE_MIN_PORTION"] = "2"
-    environment["SUITE_PYTHON"] = str(wrapper)
 
-    (tmp_path / "tools").mkdir(exist_ok=True)
-    (tmp_path / "tools" / "list_windowed_tests.py").write_text("", encoding="utf-8")
-    (tmp_path / "tests").mkdir(exist_ok=True)
-    (tmp_path / "tests" / "test_fake.py").write_text("", encoding="utf-8")
-
-    result = subprocess.run(
-        [BASH or "bash", str(SCRIPT)],
-        capture_output=True,
-        text=True,
+@pytest.mark.parametrize("failures", [0, 1, 256, 257])
+def test_the_final_exit_does_not_wrap_after_256_failures(tmp_path: Path, failures: int) -> None:
+    """Der tatsächliche Schlussblock muss einen booleschen Prozessstatus liefern."""
+    _prefix, separator, ending = SCRIPT.read_text(encoding="utf-8").partition(
+        '\necho "======================================"\n'
+    )
+    assert separator, "der echte Abschlussblock fehlt"
+    probe = tmp_path / "abschluss.sh"
+    probe.write_text(
+        f'fails={failures}\nschlecht="probe"\nsammelgruppe="1 passed"\n' + ending,
         encoding="utf-8",
-        errors="replace",
-        env=environment,
-        cwd=tmp_path,
-        timeout=120,
+        newline="\n",
     )
-    output = result.stdout + result.stderr
-
-    assert "Läufe mit Fehler: 0" not in output, (
-        "ein Lauf, der nie durchkam, wurde als grün gemeldet:\n" + output[-1500:]
-    )
-    # Und nicht endlos: Bei acht Tests, Portionen zu vier und einem Boden von
-    # zwei sind höchstens zwei Teilungen je Portion möglich.
-    assert output.count("geteilt in") <= 4, (
-        f"das Skript teilte {output.count('geteilt in')} Mal — der Boden greift nicht"
-    )
+    result = subprocess.run([BASH or "bash", str(probe)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == (0 if failures == 0 else 1)

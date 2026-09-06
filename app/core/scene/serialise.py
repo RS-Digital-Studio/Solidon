@@ -201,6 +201,7 @@ def fit_to_data(fit: Fit) -> dict[str, Any]:
         "b": str(fit.b),
         "type": fit.kind,
         "tolerance": fit.tolerance,
+        "when_positive": list(fit.when_positive) if fit.when_positive is not None else None,
     }
 
 
@@ -227,6 +228,9 @@ def fit_from_data(data: dict[str, Any]) -> Fit:
         b=FeatureRef.parse(data["b"]),
         kind=kind,
         tolerance=data.get("tolerance", "auto:"),
+        when_positive=(data["when_positive"][0], data["when_positive"][1])
+        if data.get("when_positive") is not None
+        else None,
     )
 
 
@@ -450,6 +454,7 @@ def chat_to_data(entry: ChatEntry) -> dict[str, Any]:
             "role": entry.role,
             "text": entry.text,
             "transaction": entry.transaction_id,
+            "discarded": entry.discarded,
             "origin": origin_to_data(entry.origin) if entry.origin is not None else None,
         }
     )
@@ -462,6 +467,7 @@ def chat_from_data(data: dict[str, Any]) -> ChatEntry:
         text=str(data.get("text", "")),
         transaction_id=data.get("transaction"),
         origin=origin_from_data(data["origin"]) if data.get("origin") else None,
+        discarded=data.get("discarded", False),
     )
 
 
@@ -724,6 +730,8 @@ def _override_to_data(override: SlotOverride | None) -> dict[str, Any] | None:
     data: dict[str, Any] = {
         "name": _name_to_data(override.name),
         "colour": list(override.colour) if override.colour is not None else None,
+        "material": override.material,
+        "material_type": override.material_type,
     }
     for group in _OVERRIDE_GROUPS:
         section = getattr(override, group)
@@ -755,6 +763,8 @@ def _override_from_data(data: Any) -> SlotOverride | None:
     colour = data.get("colour")
     return SlotOverride(
         name=_name_from_data(data.get("name", "")),
+        material=data.get("material"),
+        material_type=data.get("material_type"),
         colour=tuple(float(one) for one in colour)  # type: ignore[arg-type]
         if isinstance(colour, (list, tuple)) and len(colour) == 3
         else None,

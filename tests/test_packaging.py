@@ -354,6 +354,24 @@ def test_the_customer_package_builds_the_fast_slice_core() -> None:
     assert '"app/core/slice"' in specification, "der Schichtkern reist nicht als Binärdatei mit"
 
 
+@pytest.mark.parametrize(
+    "suffix", [".cp314-win_amd64.pyd", ".cpython-314-x86_64-linux-gnu.so", ".cpython-314-darwin.so"]
+)
+def test_the_slice_package_requires_the_current_interpreter_abi(tmp_path, monkeypatch, suffix):
+    """Eine alte oder fremde Erweiterung erfüllt den Paketvertrag nicht."""
+    from tools import build_slice_core
+
+    monkeypatch.setattr(build_slice_core, "PACKAGE", tmp_path)
+    monkeypatch.setattr(build_slice_core.sysconfig, "get_config_var", lambda name: suffix)
+    for other in (".cp313-win_amd64.pyd", ".cpython-313-darwin.so", ".abi3.so"):
+        (tmp_path / f"_chain{other}").write_bytes(b"fremde ABI")
+    assert build_slice_core.current_extensions() == []
+    wanted = tmp_path / f"_chain{suffix}"
+    wanted.write_bytes(b"richtige ABI")
+    assert build_slice_core.current_extensions() == [wanted]
+    assert "SLICE_CORE = build_slice_core.current_extensions()" in SPEC.read_text(encoding="utf-8")
+
+
 def test_cleaning_the_slice_core_keeps_other_build_products(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -458,14 +476,37 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
     großen Stapel, ohne dass es auffiel.
 
-    Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
-    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
-    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
+    **Gesucht wird seit der Gesamtdurchsicht nicht mehr im Text, sondern im
+    Fixture-Graphen:** `tools/list_windowed_tests.py` nennt jede Datei, die
+    `qt_app` braucht — auch über einen Umweg —, und genau dieses Werkzeug
+    rufen beide CI-Jobs, so wie es lokal `suite-getrennt.sh` tut. Die
+    Textsuche davor erwischte Dateien, die über eine Ansicht *schreiben*, und
+    übersah mittelbare Abhängigkeiten. Geprüft wird die Liste des Werkzeugs
+    gegen die Dateien, die wirklich ein Fenster **bauen**. Erwähnungen zählen
+    nicht: ein Import oder die Lizenzliste bekämen sonst einen eigenen Prozess
+    für nichts.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
-    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
-    pattern = re.compile(found.group(1))
+    calls = re.findall(
+        r"windowed=\$\(python tools/list_windowed_tests\.py \| tr '\\n' ' '\)", workflow
+    )
+    assert len(calls) == 2, (
+        "beide Jobs der CI — Suite und Neueste Versionen — lesen die Fenstergruppe aus "
+        "tools/list_windowed_tests.py; gefunden: " + str(len(calls))
+    )
+
+    listed = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "list_windowed_tests.py")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=600,
+    )
+    windowed = {
+        line.strip().replace("\\", "/") for line in listed.stdout.splitlines() if line.strip()
+    }
+    assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
 
     builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
     missed = []
@@ -473,12 +514,12 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
         source = path.read_text(encoding="utf-8")
         if not builders.search(source):
             continue
-        if not pattern.search(source):
+        if f"tests/{path.name}" not in windowed:
             missed.append(path.name)
 
     assert not missed, (
         f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
-        "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
+        "tools/list_windowed_tests.py findet sie nicht — ihr Fenster hängt nicht an qt_app."
     )
 
 

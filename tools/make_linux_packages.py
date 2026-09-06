@@ -411,9 +411,22 @@ chmod 755 "$TARGET/$NAME"
 
 # Der Starter ist ein Skript: der Bootloader sucht seine Bibliotheken neben
 # sich, und ein exec mit vollem Pfad stimmt auf jeder Distribution.
+quote_value() {
+  remaining_text=$1
+  while :; do
+    case "$remaining_text" in
+      *"'"*)
+        printf '%s' "${remaining_text%%"'"*}" "'\\''"
+        remaining_text=${remaining_text#*"'"}
+        ;;
+      *) printf '%s' "$remaining_text"; break ;;
+    esac
+  done
+}
+TARGET_QUOTED=$(quote_value "$TARGET/$NAME")
 cat > "$BIN_DIR/$NAME" <<LAUNCHER
 #!/bin/sh
-exec "$TARGET/$NAME" "\$@"
+exec '$TARGET_QUOTED' "\$@"
 LAUNCHER
 chmod 755 "$BIN_DIR/$NAME"
 ln -sf "$NAME" "$BIN_DIR/$SHORT"
@@ -425,7 +438,7 @@ ln -sf "$NAME" "$BIN_DIR/$SHORT"
 # Eintrag gehe (Gesamtreview, R24). In Anführungszeichen, weil ein Pfad
 # Leerzeichen tragen darf; die vier Zeichen, die darin zu maskieren sind,
 # maskiert sed.
-LAUNCHER_PATH=$(printf '%s' "$BIN_DIR/$NAME" | sed 's/[\\"`$]/\\&/g')
+LAUNCHER_PATH=$(printf '%s' "$BIN_DIR/$NAME" | sed 's/[\\"`$]/\\&/g; s/\\/\\\\/g; s/%/%%/g')
 {
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
@@ -457,9 +470,20 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache -f -t "${ICON_DIR%/scalable/apps}" >/dev/null 2>&1 || true
 fi
 
-cat > "$TARGET/uninstall.sh" <<UNINSTALL
-#!/bin/sh
-# Entfernt $NAME wieder. Projektdateien und Einstellungen bleiben, wo sie sind.
+{
+  printf '#!/bin/sh\n'
+  # Pfade werden als Shellwerte gespeichert, ohne sie beim späteren Start
+  # nochmals als Variablen oder Befehle zu lesen.
+  for variable in NAME SHORT IDENTIFIER TARGET BIN_DIR APP_DIR ICON_DIR META_DIR MIME_DIR; do
+    case "$variable" in
+      NAME) value=$NAME ;; SHORT) value=$SHORT ;; IDENTIFIER) value=$IDENTIFIER ;;
+      TARGET) value=$TARGET ;; BIN_DIR) value=$BIN_DIR ;; APP_DIR) value=$APP_DIR ;;
+      ICON_DIR) value=$ICON_DIR ;; META_DIR) value=$META_DIR ;; MIME_DIR) value=$MIME_DIR ;;
+    esac
+    printf "%s='%s'\n" "$variable" "$(quote_value "$value")"
+  done
+  cat <<'UNINSTALL'
+# Entfernt die Anwendung wieder. Projektdateien und Einstellungen bleiben, wo sie sind.
 set -eu
 echo "$NAME wird entfernt / removing $NAME"
 rm -f "$BIN_DIR/$NAME" "$BIN_DIR/$SHORT"
@@ -474,6 +498,7 @@ if command -v update-desktop-database >/dev/null 2>&1; then
 fi
 rm -rf "$TARGET"
 UNINSTALL
+} > "$TARGET/uninstall.sh"
 chmod 755 "$TARGET/uninstall.sh"
 
 echo

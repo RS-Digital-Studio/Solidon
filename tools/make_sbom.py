@@ -46,7 +46,8 @@ NON_SPDX_LICENCES: Final = {
     "PSF-based",
     "Microsoft Visual Studio Runtime license",
 }
-WINDOWS_LIBFFI_VERSIONS: Final = {"3.13.14": "3.4.4", "3.13.15": "3.4.4"}
+# CPython-Tags: PCbuild/python.props setzt in jedem dieser Windows-Bauten 3.4.4.
+WINDOWS_LIBFFI_VERSIONS: Final = {"3.13.14": "3.4.4", "3.13.15": "3.4.4", "3.14.7": "3.4.4"}
 #: Die Microsoft-Laufzeit im Windows-Paket: C++-Laufzeit, UCRT und ihre
 #: Weiterleitungs-DLLs. ``api-ms-win-core-*`` fehlte hier — 29 Dateien ohne
 #: Besitzer im Windows-Artefakt, gemessen am 31.08.2026.
@@ -245,6 +246,23 @@ NATIVE_COMPONENTS: Final = (
         "vtk-native",
         "BSD-3-Clause",
         "https://docs.vtk.org/en/latest/about.html",
+    ),
+    NativeComponent(
+        "wgpu", "wgpu-native", "wgpu-native", "MIT", "https://github.com/gfx-rs/wgpu-native"
+    ),
+    NativeComponent(
+        "freetype-py",
+        "FreeType (freetype-py)",
+        "freetype-py-native",
+        "FTL",
+        "https://freetype.org/",
+    ),
+    NativeComponent(
+        "uharfbuzz",
+        "HarfBuzz (uharfbuzz)",
+        "uharfbuzz-native",
+        "LicenseRef-HarfBuzz-Old-MIT",
+        "https://github.com/harfbuzz/harfbuzz",
     ),
 )
 
@@ -511,7 +529,7 @@ def _pe_file_version(path: Path) -> str:
             int(record.FileVersionLS) & 0xFFFF,
         )
         return ".".join(str(part) for part in parts)
-    except (OSError, ValueError, pefile.PEFormatError):
+    except OSError, ValueError, pefile.PEFormatError:
         return "unbekannt"
     finally:
         if image is not None:
@@ -613,7 +631,7 @@ def _openblas_version(owner: str) -> str:
         config = package.__config__.CONFIG
         value = config["Build Dependencies"]["blas"]["version"]
         return str(value)
-    except (AttributeError, KeyError, TypeError):
+    except AttributeError, KeyError, TypeError:
         return "unbekannt"
 
 
@@ -640,7 +658,7 @@ def _libffi_version(
             text=True,
             timeout=5.0,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError, subprocess.TimeoutExpired:
         return "unbekannt", "pkg-config für libffi war nicht ausführbar"
     version = completed.stdout.strip()
     if completed.returncode != 0 or not re.fullmatch(
@@ -679,7 +697,7 @@ def _dpkg_version(soname: str) -> tuple[str, str]:
         search = subprocess.run(
             [tool, "-S", soname], capture_output=True, text=True, check=False, timeout=30
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return "unbekannt", "dpkg-query -S war nicht ausführbar"
     package = ""
     for line in search.stdout.splitlines():
@@ -697,7 +715,7 @@ def _dpkg_version(soname: str) -> tuple[str, str]:
             check=False,
             timeout=30,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return "unbekannt", "dpkg-query -W war nicht ausführbar"
     full = shown.stdout.strip()
     if not full:
@@ -885,12 +903,31 @@ def _visible_dependencies(
 
 def _native_version(component: NativeComponent, package: metadata.Distribution) -> str:
     """Nutzt die native Version, soweit sie ohne Dateiraten feststellbar ist."""
+    if component.slug == "wgpu-native":
+        # Den registrierenden Backend-Import vermeiden: seine feste Zielversion
+        # steht als Literal im installierten Wrapper, kein Grafikadapter wird angefragt.
+        source = Path(package.locate_file("wgpu/backends/wgpu_native/__init__.py"))
+        try:
+            match = re.search(
+                r'^__version__ = "([0-9.]+)"$', source.read_text(encoding="utf-8"), re.MULTILINE
+            )
+        except OSError:
+            return "unbekannt"
+        return match.group(1) if match else "unbekannt"
+    if component.slug == "freetype-py-native":
+        import freetype
+
+        return ".".join(str(part) for part in freetype.version())
+    if component.slug == "uharfbuzz-native":
+        import uharfbuzz
+
+        return str(uharfbuzz.version_string())
     if component.slug == "geos":
         try:
             import shapely
 
             return str(shapely.geos_version_string)
-        except (AttributeError, ImportError):
+        except AttributeError, ImportError:
             return package.version
     if component.slug == "opencascade-technology":
         match = re.match(r"\d+\.\d+\.\d+", package.version)

@@ -4,11 +4,14 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
+    LengthUnit,
     clamp,
     format_area,
     format_length,
@@ -117,6 +120,38 @@ def test_a_volume_keeps_its_meaning_at_every_size() -> None:
     assert format_volume(1.0) == "1 mm³"
 
 
+@pytest.mark.parametrize(
+    ("value", "unit", "expected"),
+    [
+        (1e-9, "mm", "<0.00001 mm³"),
+        (-1e-9, "mm", ">-0.00001 mm³"),
+        (1e-9, "in", "<0.00001 in³"),
+        (-1e-9, "in", ">-0.00001 in³"),
+        (1e-9 * 25.4**3, "in", "<0.00001 in³"),
+        (-1e-9 * 25.4**3, "in", ">-0.00001 in³"),
+        (0.0, "mm", "0 mm³"),
+        (0.0, "in", "0.00 in³"),
+        (0.00001, "mm", "0.00001 mm³"),
+        (-0.00001, "mm", "-0.00001 mm³"),
+        (math.nextafter(0.00001, 0.0), "mm", "<0.00001 mm³"),
+        (-math.nextafter(0.00001, 0.0), "mm", ">-0.00001 mm³"),
+        (math.nextafter(0.00001, math.inf), "mm", "0.00001 mm³"),
+        (-math.nextafter(0.00001, math.inf), "mm", "-0.00001 mm³"),
+        (0.000009 * 25.4**3, "in", "<0.00001 in³"),
+        (-0.000009 * 25.4**3, "in", ">-0.00001 in³"),
+        (0.00001 * 25.4**3, "in", "0.00001 in³"),
+        (-0.00001 * 25.4**3, "in", "-0.00001 in³"),
+        (0.00002 * 25.4**3, "in", "0.00002 in³"),
+        (-0.00002 * 25.4**3, "in", "-0.00002 in³"),
+    ],
+)
+def test_tiny_volumes_keep_their_sign_and_display_bound(
+    value: float, unit: LengthUnit, expected: str
+) -> None:
+    """Nichtnull bleibt als Schranke sichtbar; an der Grenze stehen wieder Zahlen."""
+    assert format_volume(value, unit) == expected
+
+
 def test_formatting_matches_the_display_precision() -> None:
     assert format_length(4.2) == "4.20 mm"
     assert format_length(25.4, "in") == "1.0000 in"
@@ -125,20 +160,43 @@ def test_formatting_matches_the_display_precision() -> None:
 
 
 def test_an_area_follows_the_display_unit() -> None:
-    """Laenge und Volumen folgten der Umschaltung seit je, die Flaeche nicht.
+    """Länge und Volumen folgten der Umschaltung seit je, die Fläche nicht.
 
-    Wer in Zoll arbeitete, sah Masse in Zoll, Volumen in Kubikzoll — und
-    daneben "4334 mm2". Vier Stellen der Oberflaeche zeigen Flaechen, und alle
+    Wer in Zoll arbeitete, sah Maße in Zoll, Volumen in Kubikzoll — und
+    daneben "4334 mm²". Vier Stellen der Oberfläche zeigen Flächen, und alle
     vier hatten die Einheit fest eingebaut.
 
-    In Millimetern bleibt es bei ganzen Quadratmillimetern: So steht es im
-    Pruefbericht und in der Schichtanalyse, und eine Nachkommastelle waere dort
-    eine Genauigkeit, die keine Messung traegt. In Zoll wachsen die Stellen wie
-    beim Volumen — ein Quadratmillimeter ist ein Anderthalbtausendstel
-    Quadratzoll.
+    Kleine Flächen bleiben sichtbar; ab einem Quadratmillimeter genügt die
+    ganze Zahl. In Zoll wachsen die Stellen wie beim Volumen.
     """
     assert format_area(4334.0) == "4334 mm²"
-    assert format_area(0.6) == "1 mm²"
+    assert format_area(0.6) == "0.60 mm²"
     assert format_area(645.16, "in") == "1.00 in²"
     assert format_area(4334.0, "in") == "6.72 in²"
     assert float(format_area(1.0, "in").split()[0]) > 0.0, "was nicht null ist, sieht nicht so aus"
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (0.0, "0 mm²"),
+        (1.0, "1 mm²"),
+        (0.125, "0.12 mm²"),
+        (0.005, "0.0050 mm²"),
+        (0.00001, "0.00001 mm²"),
+        (0.000009, "<0.00001 mm²"),
+        (1e-12, "<0.00001 mm²"),
+        (-0.005, "-0.0050 mm²"),
+        (-1e-12, ">-0.00001 mm²"),
+    ],
+)
+def test_small_layer_areas_never_disappear_in_rounding(value: float, expected: str) -> None:
+    """Vorhandene Schichten und Überhänge bleiben auch unter der Anzeigegrenze erkennbar."""
+    assert format_area(value) == expected
+
+
+def test_tiny_square_inches_show_a_bound_instead_of_zero() -> None:
+    """Die Zusage kleiner Flächen gilt auch nach der Einheitenumrechnung."""
+    assert format_area(1e-9, "in") == "<0.00001 in²"
+    assert format_area(-1e-9, "in") == ">-0.00001 in²"
+    assert format_area(0.0, "in") == "0.00 in²"

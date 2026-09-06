@@ -78,7 +78,7 @@ def _number(value: object) -> float | None:
     """Ein Parameterwert als Zahl — Ausdrücke (``=@name``) sind keine."""
     try:
         return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -143,7 +143,7 @@ def _undo_put_back(name: str, field: str, value: float) -> StepCheck:
         current = entry.params.get(field, value)
         try:
             return is_close(float(current), value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return False
 
     return check

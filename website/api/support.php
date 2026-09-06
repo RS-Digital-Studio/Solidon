@@ -517,7 +517,7 @@ if (count($_FILES) > MAX_FILES) {
 }
 foreach ($_FILES as $entry) {
     if (!is_array($entry)) {
-        continue;
+        answer(false, 'Ein Anhang kam nicht vollständig an.', '', 400);
     }
     $problem = (int) ($entry['error'] ?? UPLOAD_ERR_NO_FILE);
     if ($problem === UPLOAD_ERR_NO_FILE) {
@@ -542,11 +542,11 @@ foreach ($_FILES as $entry) {
     // Annahme, sie sei entbehrlich, hält nur so lange wie die Annahme.
     $temporary = (string) ($entry['tmp_name'] ?? '');
     if ($temporary === '' || !is_uploaded_file($temporary)) {
-        continue;
+        answer(false, 'Ein Anhang kam nicht vollständig an.', '', 400);
     }
-    $data = file_get_contents($temporary);
+    $data = @file_get_contents($temporary);
     if ($data === false) {
-        continue;
+        answer(false, 'Ein Anhang konnte nicht gelesen werden. Bitte erneut senden.', '', 400);
     }
     $actualFileBytes += strlen($data);
     if ($actualFileBytes > MAX_BYTES || $actualFieldBytes + $actualFileBytes > MAX_BYTES) {

@@ -191,6 +191,7 @@ def record(
         text=proposal.answer or proposal.summary(),
         transaction_id=None if discarded else (transaction.id if transaction else None),
         origin=proposal.origin,
+        discarded=discarded,
     )
     document.chat.extend([question, answer])
     return question, answer

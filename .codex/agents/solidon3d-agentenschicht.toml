@@ -6,58 +6,64 @@ Arbeitet an der LLM-Schicht von Solidon: Systemprompt, Werkzeuge, Steckbrief, Vo
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
-# Agentenschicht\r
-\r
-Der LLM-Agent steuert denselben Operations-API fern, den auch die Menüs\r
-benutzen. Er bekommt keine Sonderwege, keine eigene Geometrie, keinen eigenen\r
-Zustand.\r
-\r
-Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.** Der\r
-Systemprompt selbst ist Text für ein Modell — dessen Sprache richtet sich nach\r
-dem, was dort bereits steht.\r
-\r
-## Die Grundsätze, die du verteidigst\r
-\r
-- **Ein Vorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn vollständig\r
-  zurück. Wer zwei Dinge auf einmal vorschlägt, hat einen Fehler gebaut.\r
-- **Bausteine vor Primitiven, Op-Liste vor OpenSCAD, Parameter vor Zahlen,\r
-  Fragen vor Raten.** Alle vier im Systemprompt verankert, alle vier in der\r
-  Suite gemessen.\r
-- **`ask_user` ist Pflicht.** Die Suite enthält absichtlich mehrdeutige\r
-  Anfragen und zählt, ob gefragt statt geraten wurde.\r
-- **Jeder Chatbeitrag verweist auf seine Transaktion.** Wird sie\r
-  zurückgenommen, gilt der Beitrag als verworfen. Ohne diese Kopplung\r
-  argumentiert der Agent nach jedem Undo über einen Zustand, den es nicht\r
-  mehr gibt.\r
-- **`origin` an jeder Transaktion**: Urheber, Modell, Version des\r
-  Systemprompts, Version der Regelsammlung, Temperatur. Die Projektdatei ist\r
-  auch Fehlerbericht — das ist der einzige Weg, später zu verstehen, unter\r
-  welchen Bedingungen eine Op entstanden ist.\r
-\r
-## Sicherheit ist hier nicht optional\r
-\r
-Quelltext aus dem Modell ist so fremd wie Quelltext aus einer geschickten\r
-Datei: OpenSCAD wird vor jedem Lauf geprüft (`import`, `include`, `use`,\r
-`surface` nur relativ, unterhalb des Arbeitsordners), kein `eval` für\r
-Ausdrücke, fester Arbeitsordner, Zeit- und Speicherlimit, kein Netzzugriff.\r
-\r
-## Messen statt behaupten\r
-\r
-Eine Änderung an Systemprompt oder Regelsammlung ist eine\r
-Verhaltensänderung. Also:\r
-\r
-1. Eintrag unter `core/knowledge/rules/` mit Datum und Anlass\r
-2. Version erhöhen\r
-3. `tools/run_agent_suite.py` vorher und nachher, **beide Ergebnisse\r
-   festhalten** — der Lauf kostet Geld und braucht einen Schlüssel, also\r
-   ankündigen statt einfach starten\r
-4. Verschlechtert sich die Quote, wird die Regel **zurückgenommen**\r
-\r
-`tests/test_agent_suite.py` prüft ohne Modell, was das Gerüst garantiert. Was\r
-nur mit Modell messbar ist, gehört nicht in die Suite.\r
-\r
-## Abschluss\r
-\r
-Melde: Was geändert wurde, welche Version stieg, welche Quote vorher und\r
-nachher stand — und wenn keine gemessen wurde, sag das deutlich, statt die\r
-Änderung für gut zu erklären."""
+# Agentenschicht
+
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die
+betroffenen Tests, vor dem Commit das getrennte Tor.
+
+Der LLM-Agent steuert denselben Operations-API fern, den auch die Menüs
+benutzen. Er bekommt keine Sonderwege, keine eigene Geometrie, keinen eigenen
+Zustand.
+
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.** Der
+Systemprompt selbst ist Text für ein Modell — dessen Sprache richtet sich nach
+dem, was dort bereits steht.
+
+## Die Grundsätze, die du verteidigst
+
+- **Ein Vorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn vollständig
+  zurück. Mehrere Änderungen eines Vorschlags bleiben in derselben Transaktion.
+- **Vorrangregeln aus `app/core/agent/prompt.py` und der Regelsammlung**
+  gegen den Bauplan prüfen. Registrierte Ops und geprüfte Bausteine bleiben
+  die einzigen Geometriewege; OpenSCAD wird nicht ausgeführt.
+- **`ask_user` ist Pflicht.** Die Suite enthält absichtlich mehrdeutige
+  Anfragen und zählt, ob gefragt statt geraten wurde.
+- **Jeder Chatbeitrag verweist auf seine Transaktion.** Wird sie
+  zurückgenommen, gilt der Beitrag als verworfen. Ohne diese Kopplung
+  argumentiert der Agent nach jedem Undo über einen Zustand, den es nicht
+  mehr gibt.
+- **`origin` an jeder Transaktion**: Urheber, Modell, Version des
+  Systemprompts, Version der Regelsammlung, Temperatur. Die Projektdatei ist
+  auch Fehlerbericht — das ist der einzige Weg, später zu verstehen, unter
+  welchen Bedingungen eine Op entstanden ist.
+
+## Sicherheit ist hier nicht optional
+
+Quelltext aus dem Modell oder einer geöffneten Datei wird niemals ausgeführt.
+Es gibt keinen OpenSCAD-Ausführungsweg. `.scad` ist ausschließlich ein
+Quelltext-Export. Parameterausdrücke laufen durch den eigenen Auswerter,
+nie durch `eval`. Neue Ausführungspfade verletzen Regel 11.
+
+## Messen statt behaupten
+
+Eine Änderung an Systemprompt oder Regelsammlung ist eine
+Verhaltensänderung. Also:
+
+1. Eintrag unter `app/core/knowledge/data/rules.toml` mit Datum und Anlass
+2. Version erhöhen
+3. `tools/run_agent_suite.py` vorher und nachher, **beide Ergebnisse
+   festhalten** — der Lauf kostet Geld und braucht einen Schlüssel, also
+   ankündigen statt einfach starten
+4. Verschlechtert sich die Quote, wird die Regel **zurückgenommen**
+
+`tests/test_agent_suite.py` prüft ohne Modell, was das Gerüst garantiert. Was
+nur mit Modell messbar ist, gehört nicht in die Suite.
+
+## Abschluss
+
+Melde: Was geändert wurde, welche Version stieg, welche Quote vorher und
+nachher stand — und wenn keine gemessen wurde, sag das deutlich, statt die
+Änderung für gut zu erklären.
+"""

@@ -15,7 +15,7 @@ import math
 from collections.abc import Callable
 from typing import Any, Final
 
-from app.core.brep.kernel import DEFLECTION, Solid, box_limits, require
+from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, box_limits, require
 from app.core.errors import (
     PROGRAMMING_ERRORS,
     Action,
@@ -25,7 +25,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.sketch.planes import to_world
-from app.core.sketch.profile import Profile, arc_through, signed_area
+from app.core.sketch.profile import Profile, arc_through, signed_area, spline_controls
 from app.core.types import PlaneFrame, Point2
 from app.core.units import EPS_GEOM, is_zero
 from app.i18n import _
@@ -88,7 +88,18 @@ def _wire(profile: Profile, lift: _Lift) -> Any:
         if segment.kind == "line":
             edge = BRepBuilderAPI_MakeEdge(lift(segment.start), lift(segment.end)).Edge()
         elif segment.kind == "spline":
-            edge = BRepBuilderAPI_MakeEdge(_spline_curve(segment.through, lift)).Edge()
+            # Ein kubisches Stück je Kante: Flächenintegrale des Kernes
+            # müssen an den inneren Splineknoten getrennt werden. Eine
+            # einzige zusammengesetzte Kante lieferte falsche Volumina.
+            from OCP.collections import Array1_gp_Pnt
+            from OCP.Geom import Geom_BezierCurve
+
+            for piece in spline_controls(segment.through):
+                poles = Array1_gp_Pnt(1, 4)
+                for index, point in enumerate(piece, start=1):
+                    poles.SetValue(index, lift(point))
+                maker.Add(BRepBuilderAPI_MakeEdge(Geom_BezierCurve(poles)).Edge())
+            continue
         else:
             assert segment.via is not None  # profile_of setzt via bei jedem Bogen
             turn = arc_through(segment.start, segment.via, segment.end)
@@ -104,23 +115,41 @@ def _wire(profile: Profile, lift: _Lift) -> Any:
 
 
 def _spline_curve(points: tuple[Point2, ...], lift: _Lift) -> Any:
-    """Eine B-Spline-Kurve **durch** die gegebenen Punkte, nicht daneben.
-
-    ``GeomAPI_PointsToBSpline`` interpoliert: die Kurve trifft jeden Punkt,
-    statt von ihm angezogen zu werden. Das ist die Erwartung an einer Skizze —
-    wer einen Punkt setzt, meint ihn, und ein Maß darauf wäre sonst eine
-    Aussage über etwas, das die Kurve nur ungefähr tut.
-
-    Der Kern bekommt damit die exakte Kurve und keine Segmentfolge (§30) —
-    dieselbe Zusage, die für Bögen seit P13 gilt.
-    """
+    """Die gezeichneten kubischen Stücke als exakte, zusammenhängende Kurve."""
     from OCP.collections import Array1_gp_Pnt
-    from OCP.GeomAPI import GeomAPI_PointsToBSpline
+    from OCP.Geom import Geom_BSplineCurve
 
-    array = Array1_gp_Pnt(1, len(points))
-    for index, point in enumerate(points, start=1):
-        array.SetValue(index, lift(point))
-    return GeomAPI_PointsToBSpline(array).Curve()
+    return _spline_from_controls(points, lift, Array1_gp_Pnt, Geom_BSplineCurve)
+
+
+def spline_curve_2d(points: tuple[Point2, ...]) -> Any:
+    """Dieselbe Kurve für die ebene Schnittprüfung vor dem Körperbau."""
+    from OCP.collections import Array1_gp_Pnt2d
+    from OCP.Geom2d import Geom2d_BSplineCurve
+    from OCP.gp import gp_Pnt2d
+
+    return _spline_from_controls(
+        points, lambda point: gp_Pnt2d(*point), Array1_gp_Pnt2d, Geom2d_BSplineCurve
+    )
+
+
+def _spline_from_controls(
+    points: tuple[Point2, ...], lift: Any, array_type: Any, curve_type: Any
+) -> Any:
+    """Bézier-Stücke werden über gemeinsame Endpole in einen B-Spline gefasst."""
+    from OCP.collections import Array1_double, Array1_int
+
+    pieces = spline_controls(points)
+    controls = [points[0], *(point for piece in pieces for point in piece[1:])]
+    poles = array_type(1, len(controls))
+    for index, point in enumerate(controls, start=1):
+        poles.SetValue(index, lift(point))
+    knots = Array1_double(1, len(pieces) + 1)
+    multiplicities = Array1_int(1, len(pieces) + 1)
+    for index in range(len(pieces) + 1):
+        knots.SetValue(index + 1, float(index))
+        multiplicities.SetValue(index + 1, 4 if index in (0, len(pieces)) else 3)
+    return curve_type(poles, knots, multiplicities, 3, False)
 
 
 def _circle_edge(centre: Point2, radius: float, lift: _Lift) -> Any:
@@ -377,7 +406,8 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
     from OCP.collections import List_TopoDS_Shape
 
     require_positive("wall", thickness)
-    tops = _top_faces(solid)
+    working = Solid(solid.shape, deflection=solid.deflection)
+    tops = _top_faces(working)
     if not tops:
         raise GeometryError(
             detail=_("Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe."),
@@ -386,7 +416,7 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
     for face in tops:
         removed.Append(face)
     builder = BRepOffsetAPI_MakeThickSolid()
-    builder.MakeThickSolidByJoin(solid.shape, removed, -thickness, EPS_GEOM)
+    builder.MakeThickSolidByJoin(working.shape, removed, -thickness, EPS_GEOM)
     return _finished(builder, _("Für diese Wandstärke ist im Körper kein Platz."), solid)
 
 
@@ -403,11 +433,12 @@ def draft_vertical(solid: Solid, angle_deg: float) -> Solid:
         raise ValidationError(
             "angle", _("Der Winkel muss zwischen null und 30 Grad liegen."), value=angle_deg
         )
-    uprights = _upright_faces(solid)
+    working = Solid(solid.shape, deflection=solid.deflection)
+    uprights = _upright_faces(working)
     if not uprights:
         raise GeometryError(detail=_("Dieser Körper hat keine senkrechten Flächen."))
     neutral = gp_Pln(gp_Ax3(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0)))
-    builder = BRepOffsetAPI_DraftAngle(solid.shape)
+    builder = BRepOffsetAPI_DraftAngle(working.shape)
     for face in uprights:
         builder.Add(face, gp_Dir(0.0, 0.0, 1.0), math.radians(angle_deg), neutral)
     return _finished(
@@ -767,7 +798,8 @@ def _sewn(solid: Solid, tolerance: float = 0.0) -> Solid:
     """
     from OCP.ShapeFix import ShapeFix_Shape
 
-    fix = ShapeFix_Shape(solid.shape)
+    working = Solid(solid.shape, deflection=solid.deflection)
+    fix = ShapeFix_Shape(working.shape)
     if tolerance > 0.0:
         fix.SetPrecision(tolerance)
         fix.SetMaxTolerance(tolerance)
@@ -781,22 +813,7 @@ def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EP
     ``tolerance`` ist die zweite Stufe aus :func:`_joined_rod`: gröber, wenn
     die feine Rechnung eine Naht offen gelassen hat.
     """
-    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
-
-    if kind == "union":
-        maker = BRepAlgoAPI_Fuse
-    elif kind == "difference":
-        maker = BRepAlgoAPI_Cut
-    else:
-        maker = BRepAlgoAPI_Common
-    operation = maker(first.shape, second.shape)
-    operation.SetFuzzyValue(tolerance)
-    # OCCT darf seine Argumente ändern, solange man es nicht verbietet — und
-    # es tut es. Wer dieselben Formen ein zweites Mal verrechnet (die grobe
-    # Stufe in `_joined_rod`), verrechnet dann Reste der ersten: auf dem
-    # Linux-Runner ein Segmentierungsfehler ohne Zeile, hier ein stilles
-    # falsches Ergebnis. Kostet Speicher, spart die Suche danach.
-    operation.SetNonDestructive(True)
+    operation = boolean_builder(kind, first.shape, second.shape, tolerance=tolerance)
     # **Nicht „fehlgeschlagen"** (Regel 17). Der Satz stand hier wörtlich so,
     # und er sagt weder, was nicht ging, noch was jetzt möglich ist — dabei ist
     # der Fall eng: Diese Verknüpfung fügt den Kern eines Gewindes mit seinem
@@ -939,7 +956,6 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
     beide Richtungen kürzer, und der Test sagte es sofort.
     """
     require()
-    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
     from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
     from OCP.gp import gp_Vec
 
@@ -949,7 +965,8 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
             _("Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein."),
             value=distance,
         )
-    wanted = _facing(solid, direction)
+    working = Solid(solid.shape, deflection=solid.deflection)
+    wanted = _facing(working, direction)
     if not wanted:
         raise ValidationError(
             "nx",
@@ -958,11 +975,11 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
             constraint="no_face",
         )
 
-    shape = solid.shape
+    shape = working.shape
     for face, normal in wanted:
         reach = gp_Vec(*(value * abs(distance) for value in normal))
         prism = BRepPrimAPI_MakePrism(face, reach if distance > 0 else reach.Reversed()).Shape()
-        joined = BRepAlgoAPI_Fuse(shape, prism) if distance > 0 else BRepAlgoAPI_Cut(shape, prism)
+        joined = boolean_builder("union" if distance > 0 else "difference", shape, prism)
         # ``_finished`` statt blindem ``Shape()``: Ein Schritt ohne ``IsDone``
         # lieferte sonst wortlos irgendetwas — bis hin zu gar nichts.
         shape = _finished(

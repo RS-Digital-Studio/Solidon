@@ -22,6 +22,7 @@ from PySide6.QtCore import QCoreApplication, QEvent, QObject, Qt
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QAbstractSlider,
     QAbstractSpinBox,
     QLineEdit,
     QPlainTextEdit,
@@ -95,7 +96,7 @@ def belongs_to_the_focus(key: int, widget: object) -> bool:
     Zwei Bedingungen, beide nötig: die Taste bewegt sich im Inhalt (siehe
     :data:`NAVIGATION_KEYS`), und im Fokus steht etwas, das einen Inhalt hat,
     in dem man sich bewegen kann — eine Liste, ein Baum, ein Textfeld, ein
-    Zahlenfeld.
+    Zahlenfeld oder Regler.
 
     Als reine Funktion, damit die Regel prüfbar bleibt, ohne Tasten zu
     simulieren: Was Qt aus einem Tastendruck macht, hängt an der Fensterhülle,
@@ -103,7 +104,9 @@ def belongs_to_the_focus(key: int, widget: object) -> bool:
     """
     if int(key) not in NAVIGATION_KEYS:
         return False
-    return isinstance(widget, (QAbstractItemView, QAbstractSpinBox, QLineEdit, QPlainTextEdit))
+    return isinstance(
+        widget, (QAbstractItemView, QAbstractSlider, QAbstractSpinBox, QLineEdit, QPlainTextEdit)
+    )
 
 
 class NavigationKeys(QObject):

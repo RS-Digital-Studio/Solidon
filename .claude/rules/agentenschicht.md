@@ -39,7 +39,7 @@ mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
 vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
-84 Werkzeuge nicht — heute sind es 100 Operationen und elf Zusatzwerkzeuge:
+84 Werkzeuge nicht — heute sind es 102 Operationen und elf Zusatzwerkzeuge:
 sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
@@ -117,11 +117,11 @@ Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
 Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
 Fensters, wurde gekürzt.
 
-**Stand 03.09.2026: 100 Operationen, 111 Werkzeuge** — die Zahlen hält
+**Stand 06.09.2026: 102 Operationen, 113 Werkzeuge** — die Zahlen hält
 `tests/test_registry_consistency.py` gegen Register und `tool_schemas()`.
 Systemprompt und Werkzeugsatz zusammen waren am 26.08.2026 (90 Operationen,
 nach dem OpenSCAD-Ausbau eines weniger) 149 061 Zeichen im vollen und 110 027
-im kompakten Satz; seither sind fünf Operationen dazugekommen, und die
+im kompakten Satz; seither sind weitere Operationen dazugekommen, und die
 Zeichenzahl ist nicht neu gemessen.
 
 Die Tokenmessung darunter ist **älter als diese Zahlen** und steht trotzdem

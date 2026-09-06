@@ -75,6 +75,7 @@ allowed = [
   "LGPL-2.1-or-later",
   "LGPL-3.0-only",
   "LicenseRef-Matplotlib",
+  "LicenseRef-HarfBuzz-Old-MIT",
   # Die fünf unten kommen aus den Systembibliotheken, die das Linux-Paket
   # bündelt (`make_sbom.LINUX_FAMILY_COMPONENTS`), und sind am 03.09.2026
   # nacherfasst worden: Sie liegen seit 0.2.1 im ausgelieferten Paket, es ist
@@ -136,6 +137,7 @@ xxhash = { licence = "BSD-2-Clause", note = "schneller Array-Hash für trimeshs 
 # Metadaten; die Beilage übernimmt die Lizenzdateien der Wheels.
 pygfx = { licence = "BSD-2-Clause", note = "Renderer über wgpu (§18); Lizenzdatei im Wheel, Metadaten leer" }
 wgpu = { licence = "BSD-2-Clause", note = "WebGPU-Anbindung unter pygfx; bringt wgpu-native (Apache-2.0 OR MIT) als Binärdatei mit" }
+rubicon-objc = { licence = "BSD-3-Clause", note = "Objective-C-Anbindung von wgpu unter macOS; PyPI 0.5.6 nennt BSD-3-Clause" }
 rendercanvas = { licence = "BSD-2-Clause", note = "die Leinwand für pygfx — Qt-Widget und Puffer ohne Fenster" }
 pylinalg = { licence = "BSD-2-Clause", note = "lineare Algebra für pygfx" }
 freetype-py = { licence = "BSD-3-Clause", note = "Schrift für pygfx-Beschriftungen; bringt FreeType (FTL) mit — die Metadaten sagen nur „BSD License“" }

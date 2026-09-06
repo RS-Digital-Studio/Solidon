@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import math
 from collections import OrderedDict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, NamedTuple
 
@@ -30,7 +30,7 @@ from app.core.deferred import trimesh
 from app.core.geom.mesh import MeshData, face_components, fully_stitched
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
-from app.core.perceive.helix import find_helices
+from app.core.perceive.helix import Helix, find_helices
 from app.core.types import Feature, FeatureId, Vec3
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 
@@ -316,6 +316,19 @@ CONE_MAX_ANGLE = 85.0
 #: die für Zylinder und Kegel gilt" — im Singular, für beide.
 CONE_TOLERANCE = CYLINDER_TOLERANCE
 
+#: Höchster Winkelfehler einer Kegelnormale nach Abzug der
+#: Facettenauflösung, in Grad.
+#:
+#: Vier echte Senkungsübergänge und ein eigenständiger Kegel aus dem
+#: Gartenhalter bleiben nach dieser Korrektur praktisch ausreißerfrei. Der
+#: belegte Freiformfleck ``cone_48`` trägt dagegen auf 46,38 Prozent seiner
+#: Fläche einen größeren Widerspruch. Ein selbst erzeugter 45°-Teilbogen in
+#: drei Vernetzungen und beiden Flächenrichtungen bleibt ohne Ausreißer.
+CONE_NORMAL_ERROR = 5.0
+
+#: Mindestens 95 Prozent der belegten Fläche müssen die Kegelnormalen tragen.
+CONE_NORMAL_OUTLIER_SHARE = 0.05
+
 #: Wie gut ein Fleck zur eingepassten Kugel oder zum Torus passen muss —
 #: **strenger als bei Zylinder und Kegel, und das ist gemessen.**
 #:
@@ -329,6 +342,57 @@ CONE_TOLERANCE = CYLINDER_TOLERANCE
 #: Antwort, die Reihenfolge in :func:`_fitted` die andere — Kugel und Torus
 #: werden erst gefragt, wenn Zylinder und Kegel abgelehnt haben.
 ROUND_TOLERANCE = 0.02
+
+#: Höchster Winkelfehler zwischen der Flächennormale und der Normalen des
+#: eingepassten Torus nach Abzug der Facettenauflösung, in Grad.
+#:
+#: Der Punktabstand allein ist kein Formbeweis: Am Gartenhalter bestanden acht
+#: örtlich doppelt gekrümmte Freiformflecken den Torusfit, obwohl ihre Normalen
+#: um 9,97 bis 19,90 Grad abwichen. Der echte Ring, die echte Kantenrundung und
+#: ein in beiden Richtungen beschnittener analytischer Torus liegen bei
+#: höchstens 4,51 Grad. Fünf Grad liegen in der gemessenen Lücke.
+TORUS_NORMAL_ERROR = 5.0
+
+#: Höchster Flächenanteil außerhalb des Normalenwinkels oben.
+#:
+#: Die analytische Torusnormale ändert sich schon **innerhalb** eines groben
+#: Dreiecks. Diese Änderung wird je Facette abgezogen; damit bleiben selbst
+#: zwölfseitige Röhren bei zwei verschiedenen Ringauflösungen ohne Ausreißer.
+#: Beim echten Garten-Ring gilt dasselbe. Die acht falschen Funde tragen danach
+#: auf 6,31 bis 33,24 Prozent ihrer Fläche einen größeren Fehler. Fünf Prozent
+#: verlangen die Zusage für mindestens 95 Prozent der belegten Oberfläche.
+TORUS_NORMAL_OUTLIER_SHARE = 0.05
+
+#: Höchste Konditionszahl für einen bestimmbaren Kugelmittelpunkt.
+#:
+#: Die Auskunft kommt ausschließlich aus den **zentrierten Einheitsnormalen**:
+#: Sie ist damit unabhängig von Lage, Maßstab und Einheit. Zwei selbst erzeugte
+#: 5°-Kalotten mit verschiedener Triangulierung liegen bei 852 und 952; eine
+#: nur 0,049 mm hohe 2°-Kalotte bei 6615. Die größten falschen Kugeln des
+#: Gartenhalters lagen bei 4427 und 6178. Zweitausend hält die echte flache
+#: Kalotte mit Faktor zwei Abstand und gibt keinen unbestimmten Fernmittelpunkt
+#: als bearbeitbares Merkmal aus.
+SPHERE_MAX_CENTRED_CONDITION = 2_000.0
+
+#: Kleinster Anteil der zweiten an der ersten Normalen-Krümmungsrichtung.
+#:
+#: Eine Kugelkalotte belegt ihre Krümmung in zwei Richtungen. Die beiden
+#: verschieden triangulierten 5°-Kalotten liegen bei 0,96 und 1,00, die
+#: Referenzpfanne bei 0,99. Ein 40° langer, aber nur 4° breiter Kugelstreifen
+#: liegt bei 0,10: Seine Punkte stammen zwar von einer Kugel, der Ausschnitt
+#: allein belegt aber kein sicher bearbeitbares Kugelmerkmal. Die Hälfte lässt
+#: der Triangulierung weiten Abstand, ohne solche Bänder umzudeuten.
+SPHERE_MIN_CURVATURE_BALANCE = 0.5
+
+#: Mittlerer radialer Fehler als Anteil der lokalen Fleckausdehnung.
+#:
+#: Der bisherige Rückstand bleibt für den Vergleich mit Kegeln auf den Radius
+#: bezogen. Als alleinige Güte täuscht er bei großen Fit-Radien: Eine um vier
+#: Prozent gestreckte Kugel besteht ihn mit 0,0101. Lokal liegt ihr Fehler bei
+#: 0,0029; die echte Referenzpfanne, drei reparierte Figurenkugeln und zwei
+#: 5°-Kalotten reichen von 0,0001 bis 0,0007. 0,002 liegt zwischen den
+#: gemessenen Familien und ist weiterhin frei von Lage, Drehung und Maßstab.
+SPHERE_LOCAL_TOLERANCE = 0.002
 
 #: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
 #: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
@@ -460,7 +524,7 @@ CURVATURE_JUMP = 0.5
 #:
 #: **Der Grund ist geometrisch, nicht statistisch.** Eine gekrümmte Fläche
 #: lässt sich örtlich immer an eine Kugel anpassen — das ist die Definition
-#: der Krümmung. :func:`_split_by_curvature` teilt eine Freiform an ihren
+#: der Krümmung. :func:`_split_patches_by_curvature` teilt eine Freiform an ihren
 #: Krümmungssprüngen in Flecken annähernd gleicher Krümmung, und auf jeden
 #: davon passt eine Kugel oder ein Ring innerhalb der Toleranz. Ein
 #: Kiefer-Scan eines Kunden (05.09.2026) trug so 162 Kuppeln, 98 Pfannen,
@@ -652,11 +716,17 @@ def _one_body(mesh: MeshData) -> MeshData:
     return welded if gone else mesh
 
 
-def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
+def detect(
+    mesh: MeshData, *, check_cancelled: Callable[[], None] | None = None
+) -> dict[FeatureId, Feature]:
     """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 
     Bohrungen und Stifte teilen ihre Suche (siehe :func:`_cylinders`) — beide
     zu erfragen kostet also, was früher eines kostete.
+
+    ``check_cancelled`` darf ``OperationCancelled`` werfen (§2.8). Geprüft
+    wird zwischen Phasen und Fitflecken; ein laufender nativer Aufruf endet
+    vorher. Nur ein vollständiger Durchgang wird im Merkmalscache abgelegt.
     """
     # **Einmal suchen, zweimal lesen** — hier, und nicht in den beiden
     # Aufrufern. Der Docstring von :func:`_cylinders` beschreibt genau das seit
@@ -677,7 +747,11 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     # jeder Operation, auch nach einem Cache-Treffer, wo die Geometrie gar
     # nicht gerechnet wurde — und ein bitgleiches Netz kann keine anderen
     # Merkmale haben. Der Grund und die Zahlen stehen bei :data:`_FEATURE_CACHE`.
+    if check_cancelled is not None:
+        check_cancelled()
     key = _mesh_key(mesh)
+    if check_cancelled is not None:
+        check_cancelled()
     remembered = _FEATURE_CACHE.get(key)
     if remembered is not None:
         _FEATURE_CACHE.move_to_end(key)
@@ -687,6 +761,8 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
         return dict(remembered)
 
     mesh = _one_body(mesh)
+    if check_cancelled is not None:
+        check_cancelled()
     # **Die Sperre gehört um den ganzen Durchgang, nicht nur um die
     # Einpassung.** Die Begründung steht bei ihrer Schwester in
     # :func:`_fitted`; hier zählt die Reichweite. Gemessen am selben Segel mit
@@ -698,21 +774,51 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     # gibt bei mehreren Komponenten ein neues zurück, und eine Sperre auf dem
     # alten hielte ein Netz still, das niemand mehr liest.
     with mesh.raw._cache:
-        fitted = _fitted(mesh)
+        planar = _large_facet_faces(mesh.raw, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
+        fitted = _fitted(mesh, planar=planar, check_cancelled=check_cancelled)
+        sphere_candidates = _sphere_candidates(mesh, fitted.spheres)
+        sphere_features = detect_spheres(mesh, sphere_candidates)
+        torus_candidates = _torus_candidates(mesh, fitted.tori)
+        torus_features = detect_tori(mesh, torus_candidates)
+        recognised_round_faces = {
+            frozenset(feature.face_indices) for feature in (*sphere_features, *torus_features)
+        }
+        helix_faces = [set(helix.face_indices) for helix in fitted.helices]
+        unpublished_round_shapes = sum(
+            1
+            for _fit, patch in (*sphere_candidates, *torus_candidates)
+            if frozenset(patch) not in recognised_round_faces
+            and not any(
+                sum(face in faces for face in patch) * 2 > len(patch) for faces in helix_faces
+            )
+        )
         found: dict[FeatureId, Feature] = {}
-        for feature in [
-            *detect_holes(mesh, fitted.cylinders, fitted.cones),
-            *detect_pins(mesh, fitted.cylinders),
-            *detect_fillets(mesh, fitted.fillets),
-            *detect_cones(mesh, fitted.cones),
-            *detect_spheres(mesh, fitted.spheres),
-            *detect_tori(mesh, fitted.tori),
-            *detect_faces(mesh),
-            *detect_edge_loops(mesh),
-        ]:
-            found[feature.id] = feature
-        found = _threads_instead_of_phantoms(mesh, found)
-        found, left_out = _shapes_on_a_freeform(found)
+        for phase in (
+            lambda: detect_holes(mesh, fitted.cylinders, fitted.cones),
+            lambda: detect_pins(mesh, fitted.cylinders),
+            lambda: detect_fillets(mesh, fitted.fillets),
+            lambda: detect_cones(mesh, fitted.cones),
+            lambda: sphere_features,
+            lambda: torus_features,
+            lambda: detect_faces(mesh, planar=planar, check_cancelled=check_cancelled),
+            lambda: detect_edge_loops(mesh),
+        ):
+            if check_cancelled is not None:
+                check_cancelled()
+            for feature in phase():
+                found[feature.id] = feature
+        if check_cancelled is not None:
+            check_cancelled()
+        found = _threads_instead_of_phantoms(mesh, found, helices=fitted.helices)
+        if check_cancelled is not None:
+            check_cancelled()
+        found, left_out = _shapes_on_a_freeform(
+            found, unpublished_round_shapes=unpublished_round_shapes
+        )
+    if check_cancelled is not None:
+        check_cancelled()
     _log.info("detected %d features, %d left out as freeform", len(found), left_out)
     _FEATURE_CACHE[key] = found
     _CACHE_INDICES[key] = sum(len(feature.face_indices) for feature in found.values())
@@ -745,7 +851,10 @@ _SWALLOWED_BY_A_HELIX: Final[frozenset[str]] = frozenset(
 
 
 def _threads_instead_of_phantoms(
-    mesh: MeshData, found: dict[FeatureId, Feature]
+    mesh: MeshData,
+    found: dict[FeatureId, Feature],
+    *,
+    helices: Sequence[Helix] | None = None,
 ) -> dict[FeatureId, Feature]:
     """Wo eine Wendel liegt, steht ein Gewinde statt einer Handvoll Erfundener.
 
@@ -760,7 +869,8 @@ def _threads_instead_of_phantoms(
     ohnehin in der Szene und läuft nie durch ``detect``; hier entsteht die
     Auskunft für alles, was von außen kommt.
     """
-    helices = find_helices(mesh)
+    if helices is None:
+        helices = find_helices(mesh)
     if not helices:
         return found
 
@@ -794,26 +904,29 @@ def _threads_instead_of_phantoms(
 # --- Freiformen ------------------------------------------------------------------
 
 
-def is_a_freeform(found: Mapping[FeatureId, Feature]) -> bool:
+def is_a_freeform(found: Mapping[FeatureId, Feature], *, unpublished_round_shapes: int = 0) -> bool:
     """Ob diese Merkmalsliste von einer Freiform stammt.
 
-    Zwei Zahlen, beide an der fertigen Liste gezählt und keine an der
-    Geometrie: Wie viele Kugeln und Ringe es sind (:data:`FREEFORM_ROUND_COUNT`)
-    und welchen Anteil sie an allen Merkmalen haben
-    (:data:`FREEFORM_ROUND_SHARE`). Die Begründung beider Zahlen steht an den
-    Konstanten; die Kegel zählen hier **nicht** mit, weil sie auf
-    Konstruiertem häufig und echt sind (Nozzle-Box: 22 Senkungen).
+    Zwei Zahlen, beide an den gefundenen Flecken gezählt: Wie viele Kugeln und
+    Ringe es sind (:data:`FREEFORM_ROUND_COUNT`) und welchen Anteil sie an
+    allen Merkmalen haben (:data:`FREEFORM_ROUND_SHARE`). Algebraische Kugel-
+    und Toruskandidaten, die für ein bearbeitbares Merkmal zu schlecht bestimmt
+    sind, reisen dafür nur als Zahl mit. Die Kegel zählen hier **nicht** mit,
+    weil sie auf Konstruiertem häufig und echt sind (Nozzle-Box: 22 Senkungen).
     """
-    if not found:
+    total = len(found) + unpublished_round_shapes
+    if not total:
         return False
-    round_shapes = sum(1 for feature in found.values() if feature.kind in ("sphere", "torus"))
-    return (
-        round_shapes >= FREEFORM_ROUND_COUNT and round_shapes / len(found) >= FREEFORM_ROUND_SHARE
+    round_shapes = unpublished_round_shapes + sum(
+        1 for feature in found.values() if feature.kind in ("sphere", "torus")
     )
+    return round_shapes >= FREEFORM_ROUND_COUNT and round_shapes / total >= FREEFORM_ROUND_SHARE
 
 
 def _shapes_on_a_freeform(
     found: dict[FeatureId, Feature],
+    *,
+    unpublished_round_shapes: int = 0,
 ) -> tuple[dict[FeatureId, Feature], int]:
     """Auf einer Freiform bleiben Bohrung, Zapfen, Fläche und Gewinde — die
     Rundformen gehen.
@@ -836,14 +949,14 @@ def _shapes_on_a_freeform(
     Loch; die Senkung darüber ist auf einer Freiform der seltenere Fall als
     die hundert erfundenen, und gemessen ist er noch an keinem Modell.
     """
-    if not is_a_freeform(found):
+    if not is_a_freeform(found, unpublished_round_shapes=unpublished_round_shapes):
         return found, 0
     kept = {
         name: feature
         for name, feature in found.items()
         if feature.kind not in _SHAPES_ON_A_FREEFORM
     }
-    return kept, len(found) - len(kept)
+    return kept, len(found) - len(kept) + unpublished_round_shapes
 
 
 def freeform_dropped(mesh: MeshData) -> int:
@@ -888,6 +1001,7 @@ class Fitted(NamedTuple):
     spheres: Spheres
     tori: Tori
     fillets: Fillets
+    helices: list[Helix]
 
 
 def _cylinders(mesh: MeshData) -> Cylinders:
@@ -895,7 +1009,12 @@ def _cylinders(mesh: MeshData) -> Cylinders:
     return _fitted(mesh).cylinders
 
 
-def _fitted(mesh: MeshData) -> Fitted:
+def _fitted(
+    mesh: MeshData,
+    *,
+    planar: set[int] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> Fitted:
     """Jeder gekrümmte Fleck des Körpers, einmal eingepasst.
 
     Bohrungen und Stifte sind dieselbe Suche, zweimal gelesen, und die Suche
@@ -904,9 +1023,11 @@ def _fitted(mesh: MeshData) -> Fitted:
     machen verdoppelte die Erkennungszeit für nichts — also passiert sie hier,
     und beide Aufrufer filtern das Ergebnis.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     body = mesh.raw
     if not len(body.faces):
-        return Fitted([], [], [], [], [])
+        return Fitted([], [], [], [], [], [])
 
     # **Der Cache bleibt stehen, solange hier gemessen wird — und das ist
     # dreiviertel der Erkennungszeit.**
@@ -940,10 +1061,13 @@ def _fitted(mesh: MeshData) -> Fitted:
         # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
         # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
         # Facette" schon.
-        planar = _large_facet_faces(body)
+        if planar is None:
+            planar = _large_facet_faces(body, check_cancelled=check_cancelled)
+        if check_cancelled is not None:
+            check_cancelled()
         curved = [index for index in range(len(body.faces)) if index not in planar]
         if not curved:
-            return Fitted([], [], [], [], [])
+            return Fitted([], [], [], [], [], [])
 
         found: Cylinders = []
         cones: Cones = []
@@ -952,8 +1076,11 @@ def _fitted(mesh: MeshData) -> Fitted:
 
         def classify(patch: list[int]) -> bool:
             """Die erste Form, die auf diesen Fleck passt — oder keine."""
+            if check_cancelled is not None:
+                check_cancelled()
             if len(patch) < MIN_PATCH_FACES:
                 return False
+            ball: SphereFit | None = None
             # **Die Normalen entscheiden, welche Form es ist — nicht der
             # Rückstand.** Der naheliegende Weg wäre, zuerst einen Zylinder
             # einzupassen und den Kegel als Auffang zu nehmen. Er ist falsch, und
@@ -968,20 +1095,24 @@ def _fitted(mesh: MeshData) -> Fitted:
             #
             # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
             cone = fit_cone(body, patch)
+            if check_cancelled is not None:
+                check_cancelled()
             if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
-                if (
-                    cone.good
-                    and _fits_in_the_body(mesh, cone)
-                    and not _a_ball_fits_far_better(body, patch, cone)
-                ):
-                    cones.append((cone, patch))
-                    return True
+                if cone.good and _fits_in_the_body(mesh, cone):
+                    ball = fit_sphere(body, patch)
+                    if check_cancelled is not None:
+                        check_cancelled()
+                    if not _a_ball_fits_far_better(cone, ball):
+                        cones.append((cone, patch))
+                        return True
                 # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
                 # Normalen, und daran ändert ein schlechter Rückstand nichts. Die
                 # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
                 # hat einen Kegelwinkel, ohne ein Kegel zu sein.
             else:
                 fit = fit_cylinder(body, patch)
+                if check_cancelled is not None:
+                    check_cancelled()
                 if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
                     found.append((fit, patch))
                     return True
@@ -992,40 +1123,70 @@ def _fitted(mesh: MeshData) -> Fitted:
             # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
             # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
             # Antwort ist ``ROUND_TOLERANCE``.
-            ball = fit_sphere(body, patch)
+            if ball is None:
+                ball = fit_sphere(body, patch)
+            if check_cancelled is not None:
+                check_cancelled()
             if ball is not None and ball.good and _fits_in_the_body_by_size(mesh, ball.radius):
                 spheres.append((ball, patch))
                 return True
             ring = fit_torus(body, patch)
+            if check_cancelled is not None:
+                check_cancelled()
             if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
                 tori.append((ring, patch))
                 return True
             return False
 
-        jumps: np.ndarray | None = None
-        for patch in _connected_patches(body, curved):
+        patches = _connected_patches(body, curved)
+        curvature_splits: list[list[list[int]]] | None = None
+        for patch_index, patch in enumerate(patches):
+            if check_cancelled is not None:
+                check_cancelled()
             if len(patch) < MIN_PATCH_FACES or classify(patch):
                 continue
             # **Zweite Runde für das, was nichts ergeben hat.** Eine Verrundung
             # schließt tangential an, also trennt kein Knick sie ab — Mantel und
             # Kehle einer Säule liegen in einem Fleck, auf den keine Form passt.
-            # Nachgetrennt wird deshalb erst hier: Wo etwas erkannt wurde, bleibt
-            # es, wie es ist (siehe :func:`_split_by_curvature`).
-            if jumps is None:
-                # **Träge, und das ist der Punkt.** Die Rechnung geht über alle
-                # Nachbarpaare des Körpers; ein Netz, an dem jede Form auf Anhieb
-                # passt, soll sie gar nicht erst bezahlen.
+            # Nachgetrennt wird deshalb nur hier: Wo etwas erkannt wurde, bleibt
+            # es, wie es ist (siehe :func:`_split_patches_by_curvature`).
+            #
+            # Die Krümmung und der Nachbarschaftsindex gehen beide über den ganzen
+            # Körper. Beim ersten Fehlschlag werden sie einmal für alle ursprünglichen
+            # Flecken gebaut. Die Splitstücke werden trotzdem sofort klassifiziert;
+            # damit bleibt auch die bisherige Reihenfolge der Einpassungen erhalten.
+            if curvature_splits is None:
+                if check_cancelled is not None:
+                    check_cancelled()
                 jumps = _curvature_jumps(body)
-            pieces = _split_by_curvature(body, patch, jumps)
+                curvature_splits = _split_patches_by_curvature(
+                    body, patches, jumps, check_cancelled=check_cancelled
+                )
+            if check_cancelled is not None:
+                check_cancelled()
+            pieces = curvature_splits[patch_index]
             if len(pieces) > 1:
                 for piece in pieces:
                     classify(piece)
 
+        if check_cancelled is not None:
+            check_cancelled()
         found = _merged_cylinders(body, mesh, found)
+        if check_cancelled is not None:
+            check_cancelled()
         cones = _merged_cones(body, cones)
+        if check_cancelled is not None:
+            check_cancelled()
         tori = _merged_tori(body, tori)
-        found = _without_thread_turns(body, found)
+        if check_cancelled is not None:
+            check_cancelled()
+        helices = find_helices(mesh)
+        found = _without_thread_turns(body, found, helices=helices)
+        if check_cancelled is not None:
+            check_cancelled()
         found, fillets = _split_off_fillets(body, found)
+        if check_cancelled is not None:
+            check_cancelled()
 
         # Nach Position sortiert, damit die Nummerierung für denselben Körper
         # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
@@ -1069,7 +1230,7 @@ def _fitted(mesh: MeshData) -> Fitted:
                     round(entry[0].centre[2], 3),
                 )
             )
-        return Fitted(found, cones, spheres, tori, fillets)
+        return Fitted(found, cones, spheres, tori, fillets, helices)
 
 
 def detect_holes(
@@ -1246,7 +1407,12 @@ def _split_off_fillets(body: trimesh.Trimesh, found: Cylinders) -> tuple[Cylinde
     return whole, fillets
 
 
-def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
+def _without_thread_turns(
+    body: trimesh.Trimesh,
+    found: Cylinders,
+    *,
+    helices: Sequence[Helix] = (),
+) -> Cylinders:
     """Gewindegänge sind keine Zapfen, und sie treten in Rudeln auf.
 
     **Ein M6-Gewinde meldete acht.** Jede Windung ist für sich ein
@@ -1277,20 +1443,30 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
     vieren. Ein Scharnier, ein Gelenk, eine Kabeldurchführung — alle drei
     verloren ihre Bohrungen still.
 
-    Ein Gewinde ist ein **durchgehender Lauf**, und darin liegt der
-    Unterschied: Seine Gänge berühren oder überlappen sich auf der Achse.
+    Ein Gewinde ist ein **fortschreitender Lauf**, und darin liegt der
+    Unterschied: Seine Gänge berühren oder überlappen sich auf der Achse und
+    jeder weitere Gang verlängert den Lauf. Ineinander liegende Restflecken
+    derselben Zylinderwand tun das nicht. Beim Verkleinern einer Bohrung im
+    Gartenhalter lagen zwölf solche Flecken zusammen mit dem neuen Mantel vor;
+    der Filter entfernte damit die richtig erkannte Bohrung.
+
     Gemessen an ``printed_thread`` über sechs Größen, beide Richtungen und
     drei Längen ist die größte Lücke innerhalb eines Gangstapels **0,0000 mm**
     — die Windungen laufen ineinander, weil die Helix stetig steigt. Drei
-    Wände dagegen haben Lücken von Millimetern (0…6, 10…16, 20…26). Verlangt
-    wird deshalb, dass der Stapel **eine** Spanne bildet; die Toleranz dafür
-    ist ``EPS_GEOM``, denn gemessen wird keine, und dieselbe Zahl trennt in
-    :func:`_same_cylinder` schon heute überlappende von getrennten
-    Abschnitten.
+    Wände dagegen haben Lücken von Millimetern (0…6, 10…16, 20…26). Für den
+    Zusammenhang gilt deshalb ``EPS_GEOM``. Ob ein Abschnitt die Spanne
+    wirklich verlängert, wird gegen die Schweißtoleranz des Netzes geprüft;
+    kleinere Abweichungen bezeichnen denselben Endring.
+
+    Nach einer robusteren Vereinigung können drei verschieden dicke Fits
+    dieselbe Achsspanne überlagern. Diese Form beweist allein nichts: Dass sie
+    ein Gewinde beschreibt, muss zusätzlich dieselbe erkannte Wendel durch
+    die Mehrheit der Flächen jedes Fits belegen.
     """
     if len(found) < THREAD_TURNS:
         return found
 
+    advance_tolerance = weld_tolerance(float(np.linalg.norm(body.extents)))
     used: set[int] = set()
     for index, (fit, _patch) in enumerate(found):
         if index in used:
@@ -1316,7 +1492,8 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
 
         thread_stack: list[int] = []
         if len(stack) >= THREAD_TURNS and _one_run(
-            [_axial_span(body, found[entry][1], fit.axis) for entry in stack]
+            [_axial_span(body, found[entry][1], fit.axis) for entry in stack],
+            advance_tolerance=advance_tolerance,
         ):
             thread_stack = stack
         elif len(coaxial) >= THREAD_TURNS:
@@ -1324,12 +1501,14 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
             # mehr als viele gleich große Ringe, sondern als drei koaxiale
             # Zylinder verschiedener Radien, die sich über denselben axialen
             # Abschnitt überlagern. Drei gewöhnliche Stufen liegen dagegen
-            # hintereinander. Nur eine echte gemeinsame Spanne macht aus der
-            # zweiten Form deshalb ebenfalls einen Gewindestapel — eine
-            # schärfere Forderung als der Lauf oben, und deshalb bleibt sie,
-            # wie sie ist.
+            # hintereinander. Die gemeinsame Spanne reicht trotzdem nicht:
+            # Dieselbe Überlagerung blieb beim Ändern einer Bohrung aus altem
+            # und neuem Mantel zurück. Erst die erkannte Wendel durch die
+            # Flächen jedes Fits belegt hier ein Gewinde.
             spans = [_axial_span(body, found[entry][1], fit.axis) for entry in coaxial]
-            if min(high for _low, high in spans) > max(low for low, _high in spans) + EPS_GEOM:
+            if min(high for _low, high in spans) > max(
+                low for low, _high in spans
+            ) + EPS_GEOM and _fits_lie_on_one_helix(found, coaxial, helices):
                 thread_stack = coaxial
 
         if len(thread_stack) >= THREAD_TURNS:
@@ -1364,22 +1543,49 @@ def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
     return [entry for index, entry in enumerate(found) if index not in used]
 
 
-def _one_run(spans: list[tuple[float, float]]) -> bool:
-    """Bilden diese Abschnitte **einen** durchgehenden Lauf auf der Achse?
+def _one_run(
+    spans: list[tuple[float, float]],
+    *,
+    advance_tolerance: float = EPS_GEOM,
+) -> bool:
+    """Bilden mindestens drei Abschnitte einen fortschreitenden Achslauf?
 
     Die Frage, die ein Gewinde von einem Stapel Wände trennt: Die Gänge einer
     Helix gehen ineinander über, zwei Bohrungen durch zwei Wände haben eine
     Lücke dazwischen. Berührung zählt als Zusammenhang — ``EPS_GEOM`` ist die
     Toleranz, mit der :func:`_same_cylinder` dieselbe Frage für ein Paar
-    beantwortet.
+    beantwortet. Ein Abschnitt zählt nur, wenn er die bisher erreichte Spanne
+    um mehr als die Schweißtoleranz des Netzes verlängert. Damit werden
+    verschachtelte Fragmente derselben Wand nicht zu mehreren Gewindegängen.
     """
-    ordered = sorted(spans)
+    ordered = sorted(spans, key=lambda span: (span[0], -span[1]))
+    last_start = ordered[0][0]
     reach = ordered[0][1]
+    advancing = 1
     for low, high in ordered[1:]:
         if low > reach + EPS_GEOM:
             return False
+        if low > last_start + advance_tolerance and high > reach + advance_tolerance:
+            last_start = low
+            advancing += 1
         reach = max(reach, high)
-    return True
+    return advancing >= THREAD_TURNS
+
+
+def _fits_lie_on_one_helix(
+    found: Cylinders,
+    entries: Sequence[int],
+    helices: Sequence[Helix],
+) -> bool:
+    """Belegt eine Wendel jeden überlagerten Zylinderfit über seine Flächen?"""
+    for helix in helices:
+        faces = set(helix.face_indices)
+        if all(
+            patch and sum(face in faces for face in patch) * 2 > len(patch)
+            for _fit, patch in (found[entry] for entry in entries)
+        ):
+            return True
+    return False
 
 
 def _same_cylinder(
@@ -1415,7 +1621,7 @@ def _same_cylinder(
     return not (other_low > high + EPS_GEOM or other_high < low - EPS_GEOM)
 
 
-def angular_span(body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]) -> float:
+def angular_span(body: trimesh.Trimesh, fit: CylinderFit | ConeFit, patch: list[int]) -> float:
     """Wie viel Grad um die Achse ein Fleck wirklich überdeckt.
 
     **Die Zahl, die eine Verrundung von einem Zapfen trennt.** Ein Zapfen ist
@@ -1491,13 +1697,14 @@ def _too_small_to_make(size: float) -> bool:
     return size < MIN_CYLINDER_DIAMETER
 
 
-def _a_ball_fits_far_better(body: trimesh.Trimesh, patch: list[int], cone: ConeFit) -> bool:
+def _a_ball_fits_far_better(cone: ConeFit, ball: SphereFit | None) -> bool:
     """Ob dieser Fleck in Wahrheit eine Kugelfläche ist.
 
     **Gefragt wird nur, wenn der Kegel schon durchgekommen ist** — die
     Reihenfolge Kegel-vor-Kugel bleibt unangetastet, und ein Fleck, den der
-    Kegel ablehnt, erreicht den Kugelzweig ohnehin. Diese Frage kostet also
-    einen Kugelfit je *angenommenem* Kegel und nichts sonst.
+    Kegel ablehnt, erreicht den Kugelzweig ohnehin. Der bereits berechnete Fit
+    reist danach in den Kugelzweig weiter; derselbe Fleck wird nicht zweimal
+    eingepasst.
 
     Die Zahlen und der Fall stehen bei :data:`SPHERE_BEATS_CONE`. Kurz: Eine
     Pfanne wurde zur Senkung, sobald das Netz fein genug war, weil der
@@ -1508,7 +1715,6 @@ def _a_ball_fits_far_better(body: trimesh.Trimesh, patch: list[int], cone: ConeF
         # Ein exakter Kegel ist ein Kegel. Ohne diesen Zweig teilte die
         # Rechnung unten durch fast null.
         return False
-    ball = fit_sphere(body, patch)
     if ball is None or not ball.good:
         return False
     return cone.residual >= ball.residual * SPHERE_BEATS_CONE
@@ -1535,12 +1741,10 @@ def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Featu
     Grund: In eine Pfanne setzt man etwas hinein, auf eine Kuppel nicht.
     """
     found = _fitted(mesh).spheres if spheres is None else spheres
-    # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
-    # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
     big = [
         entry
-        for entry in found
-        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+        for entry in _sphere_candidates(mesh, found)
+        if _sphere_is_recognisable(mesh.raw, entry[0], entry[1])
     ]
     return [
         Feature(
@@ -1559,27 +1763,58 @@ def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Featu
     ]
 
 
+def _sphere_candidates(mesh: MeshData, spheres: Spheres) -> Spheres:
+    """Kugelfits mit herstellbarem Maß und ausreichend breiter Oberfläche."""
+    # Dieselbe Werkzeugschranke wie bei Bohrung, Zapfen und Verrundung
+    # (:data:`MIN_CYLINDER_DIAMETER`) — siehe :func:`_too_small_to_make`.
+    return [
+        entry
+        for entry in spheres
+        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+    ]
+
+
+def _sphere_is_recognisable(body: trimesh.Trimesh, fit: SphereFit, patch: list[int]) -> bool:
+    """Nur örtlich bestimmte, zweifach gekrümmte Kugelflächen veröffentlichen.
+
+    Der algebraische Kugelfit bleibt für die Formauswahl in :func:`_fitted`
+    verfügbar. Eine unsichere Kugel darf dort einen noch schlechteren Kegel-
+    oder Torusfit verdrängen, ohne anschließend selbst als bearbeitbares
+    Merkmal im Objektbaum zu erscheinen.
+    """
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    centred_normals = normals - normals.mean(axis=0)
+    curvature = np.linalg.svd(centred_normals, compute_uv=False)
+    if (
+        curvature[0] <= EPS_GEOM
+        or curvature[1] < curvature[0] * SPHERE_MIN_CURVATURE_BALANCE
+        or curvature[-1] * SPHERE_MAX_CENTRED_CONDITION < math.sqrt(len(normals))
+    ):
+        return False
+
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+    local_centres = centres - centres.mean(axis=0)
+    local_span = float(2.0 * np.linalg.norm(local_centres, axis=1).max())
+    absolute_residual = float(
+        np.mean(np.abs(np.linalg.norm(centres - fit.centre, axis=1) - fit.radius))
+    )
+    return local_span > EPS_GEOM and absolute_residual <= local_span * SPHERE_LOCAL_TOLERANCE
+
+
 def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
     """Torusförmige Flecken (§21.1, Ausbaustufe §41).
 
     Zwei Durchmesser, und der zweite ist der interessante: ``diameter`` ist der
     Ring, ``tube_diameter`` die Röhre — an einer Verrundung um eine runde Kante
-    ist die Röhre ihr Maß. Ein Torus**stück** wird
-    hier noch nicht erkannt — die Einpassung liest Ring- und Röhrenradius aus
-    den Extremen des Flecks, und das setzt einen ganzen Ring voraus. Was fehlt,
-    steht als eigener Punkt in der Roadmap.
+    ist die Röhre ihr Maß. Ein ausreichend bestimmtes Torus**stück** reicht;
+    vor der Veröffentlichung müssen neben dem Punktabstand auch seine
+    Flächennormalen zur eingepassten Ringfläche gehören.
     """
     found = _fitted(mesh).tori if tori is None else tori
-    # **Das kleinere der beiden Maße entscheidet**, und das ist meist die
-    # Röhre: Ein Ring von 40 mm aus einem Rohr von drei Zehnteln ist nichts,
-    # was ein Drucker legen kann. Umgekehrt gibt es den ausgearteten Fall
-    # (Röhre größer als Ring) auch, und ``min`` fängt beide, ohne dass man
-    # entscheiden müsste, welcher der häufigere ist.
     big = [
         entry
-        for entry in found
-        if not _too_small_to_make(min(entry[0].ring_radius, entry[0].tube_radius) * 2.0)
-        and not _a_sliver(mesh.raw, entry[1])
+        for entry in _torus_candidates(mesh, found)
+        if _torus_is_recognisable(mesh.raw, entry[0], entry[1])
     ]
     return [
         Feature(
@@ -1603,6 +1838,21 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
             face_indices=tuple(patch),
         )
         for number, (fit, patch) in enumerate(big, start=1)
+    ]
+
+
+def _torus_candidates(mesh: MeshData, tori: Tori) -> Tori:
+    """Torusfits mit herstellbarem Maß und ausreichend breiter Oberfläche."""
+    # **Das kleinere der beiden Maße entscheidet**, und das ist meist die
+    # Röhre: Ein Ring von 40 mm aus einem Rohr von drei Zehnteln ist nichts,
+    # was ein Drucker legen kann. Umgekehrt gibt es den ausgearteten Fall
+    # (Röhre größer als Ring) auch, und ``min`` fängt beide, ohne dass man
+    # entscheiden müsste, welcher der häufigere ist.
+    return [
+        entry
+        for entry in tori
+        if not _too_small_to_make(min(entry[0].ring_radius, entry[0].tube_radius) * 2.0)
+        and not _a_sliver(mesh.raw, entry[1])
     ]
 
 
@@ -1714,7 +1964,9 @@ def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
     big = [
         entry
         for entry in found
-        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+        if not _too_small_to_make(entry[0].radius * 2.0)
+        and not _a_sliver(mesh.raw, entry[1])
+        and _cone_is_recognisable(mesh.raw, entry[0], entry[1])
     ]
     return [
         Feature(
@@ -1758,7 +2010,9 @@ def _curved_faces(body: trimesh.Trimesh) -> set[int]:
     return {int(index) for index in pairs.ravel()}
 
 
-def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
+def _large_facet_faces(
+    body: trimesh.Trimesh, *, check_cancelled: Callable[[], None] | None = None
+) -> set[int]:
     """Dreiecke, die zu einem ebenen Fleck gehören, der groß genug für eine
     eigene Fläche ist.
 
@@ -1770,6 +2024,8 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
     nichts heraus. Ein Fleck aus vielen koplanaren Dreiecken ist eine Fläche,
     egal welche Größe er neben dem Rest des Teils hat.
     """
+    if check_cancelled is not None:
+        check_cancelled()
     facets = list(body.facets)
     if not facets:
         return set()
@@ -1802,7 +2058,7 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
     # Facette. Danach passt die Erkennung dort eine Kugel Ø 23 ein.
     # Der Anteil statt des Vorkommens trennt es nicht: die Streifen liegen bei
     # 0,00 bis 0,85, die echte Deckfläche bei 0,15.
-    return {
+    planar = {
         int(index)
         for facet, area in zip(facets, areas, strict=True)
         if len(facet) >= MIN_FLAT_FACES
@@ -1810,6 +2066,63 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
         or (area >= limit and not any(int(index) in curved for index in facet))
         for index in facet
     }
+    # Viele Dreiecke machen aus einem Mantelstreifen noch keine eigenständige
+    # Ebene. Das gilt auch dann, wenn der Streifen breiter als
+    # ``MIN_SURFACE_WIDTH`` ist: Der Boolesche Kern unterteilt einen
+    # 48-seitigen Bohrungsmantel längs und erzeugt so zehn koplanare Dreiecke
+    # je Facette. Ihre Naht zu den Nachbarfacetten belegt die Rundung.
+    #
+    # Zurückgegeben wird trotzdem nicht jede berührte Facette. Erst der
+    # vollständige, gemeinsam eingepasste Mantel unten darf sie aus ``planar``
+    # herausnehmen. Eine Deckfläche am Gewinde bleibt dadurch geschützt: Sie
+    # kann eine Rundung berühren, ergibt aber keinen vollständigen Zylinder.
+    # Breite Deckflächen werden gar nicht erst zur Gegenprobe zugelassen.
+    recoverable = {
+        int(index)
+        for facet, area in zip(facets, areas, strict=True)
+        if len(facet) >= MIN_FLAT_FACES
+        and area < broad
+        and (_a_sliver(body, list(facet)) or any(int(face) in curved for face in facet))
+        for index in facet
+    }
+    if not recoverable:
+        return planar
+    protected = planar - recoverable
+    candidates = [index for index in range(len(body.faces)) if index not in protected]
+    mesh = MeshData.of(body)
+    for patch in _connected_patches(body, candidates):
+        if check_cancelled is not None:
+            check_cancelled()
+        if len(patch) < MIN_PATCH_FACES or recoverable.isdisjoint(patch) or _a_sliver(body, patch):
+            continue
+        cone = fit_cone(body, patch)
+        fit: CylinderFit | ConeFit | None
+        if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
+            fit = cone
+            if _a_ball_fits_far_better(cone, fit_sphere(body, patch)):
+                continue
+        else:
+            fit = fit_cylinder(body, patch)
+        if (
+            fit is not None
+            and fit.good
+            and _fits_in_the_body(mesh, fit)
+            and angular_span(body, fit, patch) >= FULL_TURN_SPAN
+        ):
+            planar.difference_update(patch)
+    return planar
+
+
+def _patch_axial_midpoint(body: trimesh.Trimesh, patch: list[int], axis: np.ndarray) -> float:
+    """Die Mitte der echten Patch-Ausdehnung entlang einer Achse.
+
+    Dreiecksschwerpunkte gewichten dicht unterteilte Bereiche stärker. Die
+    Endpunkte beschreiben dagegen dieselbe Zylinderlage unabhängig davon, wie
+    viele Ringe dazwischen trianguliert wurden.
+    """
+    indices = np.unique(np.asarray(body.faces)[patch])
+    positions = np.asarray(body.vertices)[indices] @ axis
+    return float((positions.min() + positions.max()) / 2.0)
 
 
 def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
@@ -1839,8 +2152,7 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
     width = float(np.sqrt(np.mean(body.area_faces[patch]) * 2.0))
     spread = float(np.mean(np.abs(distances - radius)) / width) if width > EPS_GEOM else 0.0
 
-    origin = centres.mean(axis=0)
-    along = float(origin @ axis)
+    along = _patch_axial_midpoint(body, patch, axis)
     centre = basis_u * centre_2d[0] + basis_v * centre_2d[1] + axis * along
 
     towards = centre - centres
@@ -1952,19 +2264,33 @@ def fit_sphere(body: trimesh.Trimesh, patch: list[int]) -> SphereFit | None:
     Das **Vorzeichen** des Radius ist die Auskunft, die den Rest trägt: Zeigen
     die Normalen nach außen, kommt +R heraus, bei einer Pfanne -R. Das trennt
     die Kalotte von der Kuppel, ohne dass jemand nachmisst.
+
+    Alle vier Unbekannten müssen bestimmt sein. Bei einer senkrecht
+    extrudierten Kurve fehlt den Normalen die Komponente entlang der
+    Extrusionsachse; das System hat dann nur Rang drei. Die
+    Kleinste-Quadrate-Lösung setzt den unbestimmten Mittelpunktanteil abhängig
+    von der absoluten Lage und kann daraus trotzdem einen kleinen Rückstand
+    errechnen. Ein solcher Fleck ist keine eindeutig lokalisierte Kugel.
     """
     normals = np.asarray(body.face_normals[patch], dtype=float)
     centres = np.asarray(body.triangles_center[patch], dtype=float)
 
     system = np.column_stack([normals, np.ones(len(normals))])
-    solution, *_ = np.linalg.lstsq(system, np.einsum("ij,ij->i", normals, centres), rcond=None)
-    centre, signed = solution[:3], float(solution[3])
+    origin = centres.mean(axis=0)
+    local_centres = centres - origin
+    solution, _residuals, rank, _singular_values = np.linalg.lstsq(
+        system, np.einsum("ij,ij->i", normals, local_centres), rcond=None
+    )
+    if rank < system.shape[1]:
+        return None
+    centre, signed = solution[:3] + origin, float(solution[3])
     radius = abs(signed)
     if radius <= EPS_GEOM:
         return None
 
     distance = np.linalg.norm(centres - centre, axis=1)
-    residual = float(np.mean(np.abs(distance - radius)) / radius)
+    absolute_residual = float(np.mean(np.abs(distance - radius)))
+    residual = absolute_residual / radius
     return SphereFit(
         centre=(float(centre[0]), float(centre[1]), float(centre[2])),
         radius=radius,
@@ -2086,6 +2412,138 @@ def _tube_centres(
     length = np.linalg.norm(across, axis=1)
     length = np.where(length > EPS_GEOM, length, 1.0)
     return np.asarray(centre + across / length[:, None] * ring_radius, dtype=float)
+
+
+def _torus_is_recognisable(body: trimesh.Trimesh, fit: TorusFit, patch: list[int]) -> bool:
+    """Nur Flecken mit belegten Normalen des eingepassten Torus veröffentlichen.
+
+    :func:`fit_torus` bleibt für die Formauswahl und Diagnose verfügbar. Erst
+    diese Prüfung entscheidet, ob der algebraisch passende Fleck auch als
+    sicher bearbeitbares Merkmal in den Objektbaum darf.
+    """
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+    corners = np.asarray(body.triangles[patch], dtype=float)
+    centre = np.asarray(fit.centre, dtype=float)
+    axis = np.asarray(fit.axis, dtype=float)
+
+    def expected_normals(points: np.ndarray) -> np.ndarray | None:
+        """Torusnormalen an Punkten, unabhängig von ihrer Flächenrichtung."""
+        tube_centres = _tube_centres(centre, axis, points, fit.ring_radius)
+        radial = points - tube_centres
+        lengths = np.linalg.norm(radial, axis=1)
+        if bool(np.any(lengths <= EPS_GEOM)):
+            return None
+        return np.asarray(radial / lengths[:, None], dtype=float)
+
+    expected = expected_normals(centres)
+    corner_expected = expected_normals(corners.reshape(-1, 3))
+    if expected is None or corner_expected is None:
+        return False
+    corner_expected = corner_expected.reshape(-1, 3, 3)
+    return _surface_normals_are_consistent(
+        body,
+        patch,
+        expected,
+        corner_expected,
+        max_error=TORUS_NORMAL_ERROR,
+        max_outlier_share=TORUS_NORMAL_OUTLIER_SHARE,
+    )
+
+
+def _cone_vertices_are_consistent(body: trimesh.Trimesh, fit: ConeFit, patch: list[int]) -> bool:
+    """Ob alle wirklichen Facettenecken den eingepassten Kegelmantel tragen.
+
+    :func:`fit_cone` mittelt denselben dimensionslosen Abstand über die
+    Dreiecksschwerpunkte. Für die Veröffentlichung gilt seine bestehende
+    Toleranz zusätzlich an jeder Ecke: Eine breite Facette darf nicht weit
+    neben dem behaupteten Werkzeugmantel enden, nur weil ihre Mitte passt.
+    """
+    axis = np.asarray(fit.axis, dtype=float)
+    apex = np.asarray(fit.apex, dtype=float)
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+    centre_relative = centres - apex
+    centre_along = centre_relative @ axis
+    centre_radial = np.linalg.norm(centre_relative - np.outer(centre_along, axis), axis=1)
+    mean_radius = float(centre_radial.mean())
+    if mean_radius <= EPS_GEOM:
+        return False
+
+    vertex_indices = np.unique(np.asarray(body.faces[patch], dtype=np.intp))
+    relative = np.asarray(body.vertices[vertex_indices], dtype=float) - apex
+    along = relative @ axis
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+    expected = along * math.tan(math.radians(fit.half_angle))
+    return float(np.max(np.abs(radial - expected))) <= mean_radius * CONE_TOLERANCE
+
+
+def _cone_is_recognisable(body: trimesh.Trimesh, fit: ConeFit, patch: list[int]) -> bool:
+    """Nur Flecken mit belegten Punkten und Normalen als Kegel veröffentlichen."""
+    if not _cone_vertices_are_consistent(body, fit, patch):
+        return False
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+    corners = np.asarray(body.triangles[patch], dtype=float)
+    apex = np.asarray(fit.apex, dtype=float)
+    axis = np.asarray(fit.axis, dtype=float)
+    sine = math.sin(math.radians(fit.half_angle))
+    cosine = math.cos(math.radians(fit.half_angle))
+
+    def expected_normals(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Kegelnormalen und ihre Gültigkeit an beliebigen Punkten."""
+        relative = points - apex
+        along = relative @ axis
+        radial = relative - np.outer(along, axis)
+        lengths = np.linalg.norm(radial, axis=1)
+        valid = lengths > EPS_GEOM
+        directions = radial / np.where(valid, lengths, 1.0)[:, None]
+        return np.asarray(directions * cosine - axis * sine, dtype=float), valid
+
+    expected, centre_valid = expected_normals(centres)
+    if not bool(np.all(centre_valid)):
+        return False
+    corner_expected, corner_valid = expected_normals(corners.reshape(-1, 3))
+    corner_expected = corner_expected.reshape(-1, 3, 3)
+    corner_valid = corner_valid.reshape(-1, 3)
+    # An der Kegelspitze gibt es keine eindeutige glatte Normale. Sie trägt
+    # keine zusätzliche Auflösung bei und übernimmt deshalb die Normale des
+    # zugehörigen Dreiecksschwerpunkts.
+    corner_expected = np.where(corner_valid[:, :, None], corner_expected, expected[:, None, :])
+    return _surface_normals_are_consistent(
+        body,
+        patch,
+        expected,
+        corner_expected,
+        max_error=CONE_NORMAL_ERROR,
+        max_outlier_share=CONE_NORMAL_OUTLIER_SHARE,
+    )
+
+
+def _surface_normals_are_consistent(
+    body: trimesh.Trimesh,
+    patch: list[int],
+    expected: np.ndarray,
+    corner_expected: np.ndarray,
+    *,
+    max_error: float,
+    max_outlier_share: float,
+) -> bool:
+    """Ob eine analytische Normalenfamilie den Fleck flächengewichtet trägt."""
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    areas = np.asarray(body.area_faces[patch], dtype=float)
+    total_area = float(areas.sum())
+    if total_area <= EPS_GEOM:
+        return False
+
+    agreement = np.einsum("ij,ij->i", normals, expected)
+    orientation = 1.0 if float(agreement @ areas) >= 0.0 else -1.0
+    error = np.degrees(np.arccos(np.clip(agreement * orientation, -1.0, 1.0)))
+    # Ein grobes Dreieck darf nicht an der glatten Schwerpunktnormale gemessen
+    # werden. Die größte Änderung bis zu seinen drei Ecken ist genau die
+    # Winkelauskunft, welche die gewählte Vernetzung selbst noch auflösen kann.
+    resolution = np.degrees(
+        np.arccos(np.clip(np.einsum("fvi,fi->fv", corner_expected, expected), -1.0, 1.0))
+    ).max(axis=1)
+    outlier_area = float(areas[error > resolution + max_error].sum())
+    return outlier_area <= total_area * max_outlier_share
 
 
 def _centred_moment(normals: np.ndarray) -> np.ndarray:
@@ -2301,7 +2759,7 @@ def _curvature_jumps(body: trimesh.Trimesh) -> np.ndarray:
 
     **Einmal je Körper, nicht einmal je Fleck.** Sie ist hier eine eigene
     Funktion, weil sie über *alle* Nachbarpaare rechnet: Aus
-    :func:`_split_by_curvature` heraus aufgerufen lief sie für jeden Fleck neu,
+    :func:`_split_patches_by_curvature` heraus aufgerufen lief sie für jeden Fleck neu,
     der keine Form ergeben hatte, und das ist bei einem großen Körper einmal zu
     oft. Gemessen an einem Netz aus 150 000 Dreiecken riss der Speicher
     (``MemoryError`` beim Anlegen eines Feldes über 225 000 Nachbarschaften) —
@@ -2331,10 +2789,14 @@ def _curvature_jumps(body: trimesh.Trimesh) -> np.ndarray:
     return jump
 
 
-def _split_by_curvature(
-    body: trimesh.Trimesh, patch: list[int], jump: np.ndarray
-) -> list[list[int]]:
-    """Denselben Fleck noch einmal teilen, jetzt am **Sprung der Krümmung**.
+def _split_patches_by_curvature(
+    body: trimesh.Trimesh,
+    patches: list[list[int]],
+    jump: np.ndarray,
+    *,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[list[list[int]]]:
+    """Flecken am **Sprung der Krümmung** in einem Körperdurchgang teilen.
 
     **Die zweite Runde, und nur für Flecken, auf die keine Form gepasst hat.**
     Eine Verrundung schließt tangential an — das ist ihr Zweck —, und
@@ -2357,27 +2819,71 @@ def _split_by_curvature(
     So herum kann das nicht passieren: Wo eine Form erkannt wurde, wird nicht
     nachgetrennt. Es ändert sich also nichts an dem, was heute funktioniert —
     es kommt nur dort etwas dazu, wo bisher nichts war.
+
+    ``patches`` sind disjunkte Komponenten der kantenbegrenzten Suche. Der
+    Besitz jedes Dreiecks ordnet deshalb ein Nachbarpaar eindeutig einem Fleck
+    zu. Ein gemeinsamer Komponentenlauf beschriftet den ganzen Graphen; die
+    anschließende Gruppierung je Originalfleck bewahrt dieselbe Reihenfolge von
+    Gruppen und Dreiecken wie der frühere einzelne Durchgang.
     """
+    if check_cancelled is not None:
+        check_cancelled()
+    if not patches:
+        return []
+
     pairs = np.asarray(body.face_adjacency)
     if not len(pairs):
-        return [patch]
+        return [[patch] for patch in patches]
 
-    wanted = set(patch)
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
-    adjacency = [
-        pair
-        for pair, angle, step in zip(pairs, angles, jump, strict=True)
-        if angle < CURVATURE_LIMIT
-        and step <= CURVATURE_JUMP
-        and int(pair[0]) in wanted
-        and int(pair[1]) in wanted
-    ]
-    if not adjacency:
-        return [patch]
-    groups = trimesh.graph.connected_components(
-        np.asarray(adjacency), nodes=np.asarray(patch), engine="scipy"
-    )
-    return [[int(index) for index in group] for group in groups]
+    owners = np.full(len(body.faces), -1, dtype=np.intp)
+    for patch_index, patch in enumerate(patches):
+        if check_cancelled is not None:
+            check_cancelled()
+        owners[np.asarray(patch, dtype=np.intp)] = patch_index
+
+    eligible = (angles < CURVATURE_LIMIT) & (jump <= CURVATURE_JUMP)
+    adjacency = np.asarray(pairs[eligible], dtype=np.intp)
+    if len(adjacency):
+        edge_owners = owners[adjacency[:, 0]]
+        same_patch = (edge_owners >= 0) & (edge_owners == owners[adjacency[:, 1]])
+        adjacency = adjacency[same_patch]
+        edge_owners = edge_owners[same_patch]
+    else:
+        edge_owners = np.zeros(0, dtype=np.intp)
+    if check_cancelled is not None:
+        check_cancelled()
+
+    order = np.argsort(edge_owners, kind="stable")
+    edge_owners = edge_owners[order]
+    adjacency = adjacency[order]
+    boundaries = np.searchsorted(edge_owners, np.arange(len(patches) + 1), side="left")
+
+    active = boundaries[1:] > boundaries[:-1]
+    split: list[list[list[int]]] = []
+    if not bool(active.any()):
+        for patch in patches:
+            if check_cancelled is not None:
+                check_cancelled()
+            split.append([patch])
+        return split
+
+    if check_cancelled is not None:
+        check_cancelled()
+    labels = trimesh.graph.connected_component_labels(adjacency, node_count=len(body.faces))
+    if check_cancelled is not None:
+        check_cancelled()
+
+    for patch_index, patch in enumerate(patches):
+        if check_cancelled is not None:
+            check_cancelled()
+        if not active[patch_index]:
+            split.append([patch])
+            continue
+        nodes = np.unique(np.asarray(patch, dtype=np.intp))
+        groups = trimesh.grouping.group(labels[nodes], min_len=1)
+        split.append([[int(index) for index in nodes[group]] for group in groups])
+    return split
 
 
 def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
@@ -2418,7 +2924,12 @@ def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int
 # --- Flächen ---------------------------------------------------------------------
 
 
-def detect_faces(mesh: MeshData) -> list[Feature]:
+def detect_faces(
+    mesh: MeshData,
+    *,
+    planar: set[int] | None = None,
+    check_cancelled: Callable[[], None] | None = None,
+) -> list[Feature]:
     """Koplanare Flecken: Normale, Fläche, Mittelpunkt (§21.1)."""
     body = mesh.raw
     facets = list(body.facets)
@@ -2431,7 +2942,10 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     # entweder eine Fläche oder Teil einer gekrümmten Oberfläche, nie beides,
     # nie keines. Was auf einer Rundung sitzt, wird dort als Zylinder gemeldet
     # und hier nicht noch einmal als achtundvierzig Rechtecke.
-    planar = _large_facet_faces(body)
+    if planar is None:
+        planar = _large_facet_faces(body, check_cancelled=check_cancelled)
+    if check_cancelled is not None:
+        check_cancelled()
     entries = [
         (facet, area, _facet_centre(body, facet))
         for facet, area in zip(facets, areas, strict=True)
@@ -2474,6 +2988,8 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     centres = [np.asarray(centre, dtype=float) for _f, _a, centre in entries]
     inner_flags: list[bool] = []
     for index, (normal, centre) in enumerate(zip(normals, centres, strict=True)):
+        if check_cancelled is not None:
+            check_cancelled()
         inner_flags.append(
             any(
                 other != index

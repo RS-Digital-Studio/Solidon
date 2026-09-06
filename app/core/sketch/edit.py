@@ -256,6 +256,11 @@ def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
     Trimmen, nur andersherum.
     """
     element = sketch.elements[index]
+    if element.kind != "line":
+        raise ValidationError(
+            "element",
+            _("Trimmen und Verlängern arbeiten an Linien — dieses Element ist eine andere Art."),
+        )
     line = (element.points[0], element.points[1])
     reach = _meetings(sketch, index, line)
     if not reach:

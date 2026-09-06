@@ -183,7 +183,9 @@ def conversation(entries: Sequence[ChatEntry], document: Document) -> list[Messa
             )
         )
     for entry in list(entries)[-HISTORY_LIMIT:]:
-        discarded = entry.transaction_id is not None and entry.transaction_id not in active
+        discarded = entry.discarded or (
+            entry.transaction_id is not None and entry.transaction_id not in active
+        )
         if discarded:
             messages.append(
                 Message(
@@ -202,6 +204,8 @@ def is_discarded(entry: ChatEntry, document: Document) -> bool:
     """Ob ein Beitrag zurückgenommen wurde — die Oberfläche graut ihn
     aus (§26.3).
     """
+    if entry.discarded:
+        return True
     if entry.transaction_id is None:
         return False
     return entry.transaction_id not in {transaction.id for transaction in document.transactions}

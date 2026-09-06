@@ -1127,6 +1127,26 @@ def warnings_for(
     # der Druck lief mit zwanzig Grad zu kaltem Bett los, und im Bericht stand
     # kein Wort. Ein **Befund** und kein Vorschlag, denn kein Wert behebt es:
     # 80 Grad sind bereits das Höchste, was die Maschine hergibt (§17.3).
+    wanted_nozzle = settings_table.material_temperature(profile.material.id, "nozzle")
+    if wanted_nozzle is not None and wanted_nozzle > profile.printer.nozzle_temperature_max:
+        findings.append(
+            Finding(
+                code="settings.nozzle_below_material",
+                severity="warning",
+                message=_(
+                    "Dieses Material braucht eine höhere Düsentemperatur, als dieser "
+                    "Drucker erreicht. Ein anderes Material oder einen Drucker mit "
+                    "ausreichender Düsentemperatur wählen."
+                ),
+                values={
+                    "material": profile.material.title,
+                    "printer": profile.printer.title,
+                    "wanted": float(wanted_nozzle),
+                    "possible": float(profile.printer.nozzle_temperature_max),
+                },
+            )
+        )
+
     wanted_bed = settings_table.material_temperature(profile.material.id, "bed")
     if wanted_bed is not None and wanted_bed > profile.printer.bed_temperature_max:
         findings.append(

@@ -22,6 +22,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    MATERIAL_OF_TARGET,
     FeatureRequirement,
     PartChange,
     WallRequirement,
@@ -31,6 +32,13 @@ from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
+
+SNAP_ARM_ANCHOR_ON_SURFACE = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Der Anker der Federarmfläche lag in der Mitte des Arms.",
+    effect="Der Anker liegt auf der bezeichneten Außenfläche bei minus halber Armdicke.",
+)
 
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
@@ -138,7 +146,7 @@ class BearingSeatParams(BaseParams):
     caveat=_(
         "Für eine durchgehende Welle zuerst ein Loch setzen und den Lagersitz darauf platzieren."
     ),
-    changes=[BEARING_SEAT_ADDED],
+    changes=[BEARING_SEAT_ADDED, MATERIAL_OF_TARGET],
 )
 def bearing_seat(raw: BaseParams) -> PartResult:
     """Eine zylindrische Aufnahme, bündig unter ihrer gewählten Fläche."""
@@ -217,7 +225,7 @@ class SnapFitParams(BaseParams):
         "Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist "
         "mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, SNAP_FIT_HOOK_FIXED],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, SNAP_FIT_HOOK_FIXED, SNAP_ARM_ANCHOR_ON_SURFACE],
 )
 def snap_fit(raw: BaseParams) -> PartResult:
     params = cast(SnapFitParams, raw)
@@ -229,7 +237,12 @@ def snap_fit(raw: BaseParams) -> PartResult:
     body = _snap_fit_body(params.width, length, params.thickness, params.hook, hook_height)
     return result(
         body,
-        face("arm_1", params.width * length, (0.0, 0.0, length / 2.0), (0.0, -1.0, 0.0)),
+        face(
+            "arm_1",
+            params.width * length,
+            (0.0, -params.thickness / 2.0, length / 2.0),
+            (0.0, -1.0, 0.0),
+        ),
         face(
             "hook_1",
             params.width * params.hook,
@@ -331,7 +344,7 @@ class LatchParams(BaseParams):
         "Haltefläche nach unten — "
         "druckt ohne Stütze und hält gegen Zug."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET],
 )
 def latch(raw: BaseParams) -> PartResult:
     params = cast(LatchParams, raw)
@@ -522,6 +535,7 @@ class DowelParams(BaseParams):
         ),
         FACE_GIVES_DIRECTION,
         DOWEL_DOVETAIL_PROFILE_FIXED,
+        MATERIAL_OF_TARGET,
     ],
 )
 def dowel(raw: BaseParams) -> PartResult:
@@ -741,6 +755,7 @@ class SnapConnectorParams(BaseParams):
             effect=FACE_GIVES_DIRECTION.effect,
         ),
         SNAP_CONNECTOR_FEATURES_FIXED,
+        MATERIAL_OF_TARGET,
     ],
 )
 def snap_connector(raw: BaseParams) -> PartResult:
@@ -932,7 +947,7 @@ class HingeEyeParams(BaseParams):
         "Ein halbes Scharnier: Das zweite Auge gehört an das Gegenstück, der "
         "Bolzen kommt aus der Bibliothek (Passstift) oder aus dem Handel."
     ),
-    changes=[HINGE_EYE_ADDED, HINGE_EYE_FACET_WALL_FIXED],
+    changes=[HINGE_EYE_ADDED, HINGE_EYE_FACET_WALL_FIXED, MATERIAL_OF_TARGET],
 )
 def hinge_eye(raw: BaseParams) -> PartResult:
     """Lasche mit Auge, die Achse liegt parallel zur Fläche.
@@ -1075,7 +1090,7 @@ class BarrelHingeParams(BaseParams):
         "schlackert. Er kommt aus dem kalibrierten Material — wer das Material "
         "wechselt, druckt ein Prüfstück, bevor er zwanzig Scharniere druckt."
     ),
-    changes=[BARREL_HINGE_ADDED, BARREL_HINGE_CLEARANCE_FIXED],
+    changes=[BARREL_HINGE_ADDED, BARREL_HINGE_CLEARANCE_FIXED, MATERIAL_OF_TARGET],
 )
 def barrel_hinge(raw: BaseParams) -> PartResult:
     """Zwei Laschen um einen mitgedruckten Bolzen, Achse parallel zur Fläche.

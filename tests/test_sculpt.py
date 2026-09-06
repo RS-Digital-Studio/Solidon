@@ -625,6 +625,18 @@ def test_a_small_session_is_not_pestered(profile: Profile) -> None:
     assert "sculpt.consider_baking" not in {finding.code for finding in result.findings}
 
 
+def test_baked_mesh_keeps_exact_vertices_and_material_slots(profile: Profile) -> None:
+    body = trimesh.creation.box(extents=(10, 10, 10))
+    body.apply_translation((0.123456789, 0, 0))
+    mesh = MeshData.of(body, slots=tuple([1] * 6 + [2] * 6))
+    entry = SceneObject(id="obj_1", name="Farben", mesh=mesh)
+    result = run_with_sources(entry, profile, mesh.to_bytes(), strokes="", baked="src_9")
+    restored = result.outputs[0].mesh
+    assert restored.slot_indices == mesh.slot_indices
+    assert np.array_equal(restored.raw.vertices, body.vertices)
+    assert np.array_equal(restored.raw.faces, body.faces)
+
+
 def test_a_baked_session_comes_from_its_source(profile: Profile) -> None:
     """Ist der Stand festgeschrieben, wird nichts mehr gerechnet.
 
@@ -673,3 +685,27 @@ def test_baking_without_sources_says_so(profile: Profile) -> None:
         run(entry, profile, strokes="", baked="src_9")
 
     assert raised.value.suggestions
+
+
+def test_baked_array_headers_cannot_request_more_than_the_stored_data(monkeypatch):
+    import io
+    import zipfile
+
+    import numpy as np
+
+    from app.core.geom.mesh import MeshData
+
+    array = io.BytesIO()
+    np.lib.format.write_array_header_1_0(
+        array, {"descr": "<f8", "fortran_order": False, "shape": (1000000000, 3)}
+    )
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr("vertices.npy", array.getvalue())
+
+    def forbidden_load(*args, **kwargs):
+        raise AssertionError("unvalidated array reached numpy.load")
+
+    monkeypatch.setattr(np, "load", forbidden_load)
+    with pytest.raises(ValueError, match="invalid_mesh_array_size"):
+        MeshData.from_bytes(payload.getvalue(), maximum_bytes=1024)

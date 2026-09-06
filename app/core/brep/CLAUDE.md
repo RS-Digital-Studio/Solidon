@@ -3,6 +3,57 @@
 Boundary Representation über OpenCASCADE, **neben** dem Mesh-Kern, nicht an
 seiner Stelle (§30).
 
+## Eigentum an der nativen Form
+
+`Solid` übernimmt beim Eintritt eine eigene Kopie von Topologie und Geometrie
+ohne fremde Triangulation (`BRepBuilderAPI_Copy`, `copyGeom=True`,
+`copyMesh=False`). Seine veröffentlichte `shape` sowie die Flächen-/Kanten-
+Handles werden intern nur gelesen. Ein `frozen`-Dataclass allein schützt
+keinen OCCT-Handle gegen native Mutationen.
+
+Tessellation arbeitet auf einer weiteren privaten Arbeitsform. Sie schreibt
+nie an die Shape eines Szene- oder Cache-Eintrags. Die Dreieckzuordnung läuft
+über `ModifiedShape(original_face)` der Kopie und die ursprüngliche
+Flächenkarte, nicht über eine angenommene gleiche Besuchsreihenfolge.
+`brep_to_mesh` ruft diesen Weg direkt auf; ein zusätzlicher Qualitäts-Solid
+wäre vor der Mesherkopie redundant.
+
+Boolesche Operationen werden durch `kernel.boolean_builder` leer angelegt:
+NonDestructive und gegebenenfalls Fuzzy-Toleranz stehen **vor** dem ersten
+Build. Der Zwei-Shape-Konstruktor rechnet bereits und wird nicht benutzt.
+Fillet, Chamfer, Shell, Draft, ShapeFix und Press/Pull erhalten private
+Eingabeformen einschließlich der daraus gewählten Flächen/Kanten. Ein neuer
+Ergebnis-Solid trennt anschließend auch die vom Builder geteilten Unterformen.
+
+Exakte Bounds bleiben eine Float64-Antwort aus `AddOptimal` ohne Triangulation
+und Formtoleranz; Zeichenwege sollen dafür keinen nativen Aufruf je Frame
+auslösen. Ein Bounds-Cache ersetzt keinen Eigentumsvertrag.
+
+Planare Merkmalsnormalen folgen der Orientierung der B-Rep-Fläche:
+`TopAbs_REVERSED` kehrt die Trägerebenennormale um. Damit verwenden
+Auswahlrahmen, Taschen und Ziehen dieselbe nach außen gerichtete Normale.
+
+Der Mittelpunkt einer Bohrung oder eines Zapfens liegt **auf der Achse, in
+der Mitte der V-Spanne** des Mantels — nicht im Flächenschwerpunkt, der bei
+einem schräg beschnittenen Mantel radial und axial daneben liegt und den
+Schneidzylinder von `edit.resize_bore` aus der Achse schob. Ob ein Loch
+durchgeht (`through`), sagen die Nachbarflächen des Mantels: Reicht eine bis
+an die Achse (Boden, Bohrerspitze, Kalotte), ist es ein Sackloch; der Abstand
+wird gemessen, nicht geschnitten, weil eine Kegelspitze im Schnitt ein
+entarteter Punkt ist.
+
+Splines aus Skizzen übernehmen die kubischen Kontrollpunkte aus
+`sketch.profile.spline_controls`; sie werden nicht neu interpoliert.
+Der Draht erhält eine exakte Bézier-Kante je Stück, damit Flächen- und
+Volumenintegrale auch an den inneren Kurvenknoten stimmen.
+
+`thread_exact` benennt sein Außengewinde als erzeugtes `thread_1` mit den
+unveränderten Werten für Durchmesser, Steigung und bewendelte Länge. Der
+Mittelpunkt liegt bei halber Länge, die Achse zeigt nach +Z. Das Merkmal
+trägt die wirklichen Manteldreiecke; planare Anschnitte bleiben getrennte
+Flächen. Es verwendet denselben Gewindevertrag wie die Bausteine, ohne die
+exakten Operationswerte für die Anzeige zu runden.
+
 ## Was er einbringt
 
 Was ein Netz nicht geben kann: echte Kanten — und damit Fasen und

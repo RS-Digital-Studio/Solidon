@@ -5,7 +5,7 @@ stellt:
 
 * die **Toleranzleiter** — Stifte und Bohrungen mit gestaffeltem Spiel: welcher
   Spalt gleitet und welcher klemmt;
-* die **Wandstärkenleiter** — Wände von einer bis sechs Extrusionsbreiten: wo
+* die **Wandstärkenleiter** — Wände von einer bis mehreren Extrusionsbreiten: wo
   der Drucker aufhört, Material abzulegen;
 * der **Überhangfächer** — Flächen von senkrecht bis fast flach: wo Stützen
   wirklich nötig werden.
@@ -28,6 +28,7 @@ from typing import cast
 import numpy as np
 
 from app.core.deferred import trimesh
+from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
@@ -42,6 +43,23 @@ from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
 from app.i18n import _
+
+WALL_LADDER_SEPARATE_STEPS = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Breitere Messwände überlappten ihre Nachbarn.",
+    effect="Jede Stufe bleibt einzeln messbar; die Sockelbreite wächst um alle Wandstärken und "
+    "Zwischenräume.",
+)
+
+OVERHANG_FROM_VERTICAL = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Die angegebene Senkrechte war durch vertauschte Sinus- und Kosinusanteile zur "
+    "Waagerechten geworden.",
+    effect="Jede Rampe hat ihren eingetragenen Winkel zur Senkrechten. Kombinationen mit einem "
+    "letzten Winkel ab 90 Grad werden vor dem Bauen erklärt.",
+)
 
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Testkörper für die Selbstkalibrierung (§28.3)."
@@ -242,21 +260,23 @@ class WallLadderParams(BaseParams):
         "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker "
         "wirklich noch Material legt — die Grundlage für die Mindestwandstärke."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, WALL_LADDER_SEPARATE_STEPS],
 )
 def wall_ladder(raw: BaseParams) -> PartResult:
     params = cast(WallLadderParams, raw)
     base_height = 2.0
     gap = params.extrusion * 6.0
-    width = gap * (params.steps + 1)
+    thicknesses = [params.extrusion * (index + 1) for index in range(params.steps)]
+    width = sum(thicknesses) + gap * (params.steps + 1)
 
     base = shapes.box(width, params.length, base_height)
     bodies = [base]
-    for index in range(params.steps):
-        thickness = params.extrusion * (index + 1)
-        x = -width / 2.0 + gap * (index + 1)
+    left = -width / 2.0 + gap
+    for thickness in thicknesses:
+        x = left + thickness / 2.0
         wall = shapes.box(thickness, params.length, params.height)
         bodies.append(shapes.moved(wall, (x, 0.0, base_height)))
+        left += thickness + gap
 
     body = union(*bodies)
     return result(
@@ -321,10 +341,20 @@ class OverhangFanParams(BaseParams):
         "Flächen von steil bis flach. Zeigt, ab welchem Winkel dieser Drucker mit "
         "diesem Material wirklich Stützen braucht — statt der Faustregel 45 Grad."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, OVERHANG_FROM_VERTICAL],
 )
 def overhang_fan(raw: BaseParams) -> PartResult:
     params = cast(OverhangFanParams, raw)
+    last = params.first + params.step * (params.steps - 1)
+    if last >= 90.0:
+        raise ValidationError(
+            "steps",
+            _(
+                "Der letzte Winkel erreicht oder überschreitet 90 Grad. Weniger Stufen, eine "
+                "kleinere Schrittweite oder einen kleineren Anfangswinkel wählen."
+            ),
+            values={"last_angle": last},
+        )
     base_height = 3.0
     total = params.width * params.steps
     depth = 6.0
@@ -335,14 +365,11 @@ def overhang_fan(raw: BaseParams) -> PartResult:
     start = depth / 2.0 - 1.0
 
     for index in range(params.steps):
-        # Über 85 Grad liegt eine Rampe flach und faltet sich in ihre Nachbarin.
-        # Der deklarierte Bereich erlaubt die Kombination, also hält der Baustein
-        # die Grenze selbst ein.
-        degrees = min(params.first + params.step * index, 85.0)
+        degrees = params.first + params.step * index
         angle = math.radians(degrees)
         x = -total / 2.0 + params.width * (index + 0.5)
-        reach = params.length * math.cos(angle)
-        rise = params.length * math.sin(angle)
+        reach = params.length * math.sin(angle)
+        rise = params.length * math.cos(angle)
         bodies.append(
             shapes.moved(
                 _ramp(params.width, reach, rise), (x, start, base_height - BOOLEAN_OVERLAP)

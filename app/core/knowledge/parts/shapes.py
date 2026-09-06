@@ -243,7 +243,8 @@ def thread_body(
     if depth is None:
         depth = pitch * RIDGE_SHARE
     radius = diameter / 2.0
-    inner = radius + depth if internal else radius - depth
+    root_radius = radius if internal else radius - depth
+    crest_radius = radius + depth if internal else radius
 
     angles = np.linspace(0.0, 2.0 * math.pi * height / pitch, steps + 1)
     heights = np.linspace(0.0, height, steps + 1)
@@ -252,8 +253,8 @@ def thread_body(
     for angle, level in zip(angles, heights, strict=True):
         direction = np.array([math.cos(angle), math.sin(angle), 0.0])
         up = np.array([0.0, 0.0, 1.0])
-        crest = direction * radius
-        root = direction * inner
+        crest = direction * crest_radius
+        root = direction * root_radius
         rings.append(
             [
                 root + up * level,

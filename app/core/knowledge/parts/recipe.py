@@ -110,7 +110,8 @@ _UNSUPPORTED_DIRECTORY_SYNC: Final = frozenset(
 
 #: Version der Rezept-Hülle. Der Dokument-Ausschnitt darin trägt seine eigene
 #: (``document.format_version``) und reist über deren Migrationen.
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
+MAX_DEPENDENCIES: Final = 32
 
 #: Wo eigene Rezepte liegen: neben den ``.py``-Bausteinen, als eigener
 #: Unterordner — eine Datei je Rezept, der Dateiname ist der Name.
@@ -239,6 +240,8 @@ class Recipe:
     payloads: dict[str, bytes] = field(default_factory=dict)
     """Inhalte eingebetteter Quellen des Ausschnitts. Ein Rezept aus einem
     eingelesenen Modell trägt sein Netz mit — Daten, kein Code."""
+    dependencies: dict[str, dict[str, Any]] = field(default_factory=dict)
+    """Flache, vollständige Rezeptbeilagen; die Beilagen selbst tragen keine weiteren."""
     exposed: tuple[ExposedParam, ...] = ()
     features: dict[str, str] = field(default_factory=dict)
     """Öffentlicher Merkmalsname → Merkmals-ID im ausgewerteten Körper
@@ -305,6 +308,9 @@ def to_data(recipe: Recipe) -> dict[str, Any]:
             key: base64.b64encode(value).decode("ascii")
             for key, value in sorted(recipe.payloads.items())
         },
+        "dependencies": {
+            name: to_data(from_data(data)) for name, data in sorted(recipe.dependencies.items())
+        },
         "exposed": [dataclasses.asdict(entry) for entry in recipe.exposed],
         "features": dict(sorted(recipe.features.items())),
     }
@@ -367,6 +373,8 @@ def from_data(data: dict[str, Any]) -> Recipe:
 
     if has_lone_surrogate(data):
         raise ValueError("unicode_scalar")
+    data = migrate_format(data)
+    dependency_order(data)
     return Recipe(
         name=str(data["name"]),
         title=_checked_text(
@@ -381,6 +389,7 @@ def from_data(data: dict[str, Any]) -> Recipe:
         payloads={
             key: base64.b64decode(value) for key, value in dict(data.get("payloads", {})).items()
         },
+        dependencies=dict(data.get("dependencies", {})),
         exposed=tuple(ExposedParam(**entry) for entry in data.get("exposed", ())),
         features=dict(data.get("features", {})),
         format_version=int(data.get("format_version", 1)),
@@ -389,6 +398,155 @@ def from_data(data: dict[str, Any]) -> Recipe:
         imported_origin=_imported_origin_from(data.get("imported_origin")),
         range_report=_report_from(data.get("range_report")),
     )
+
+
+def migrate_format(data: dict[str, Any]) -> dict[str, Any]:
+    """Rezepthülle v1 → v2; das Dokument hat seinen eigenen Migrationsweg."""
+    version = data.get("format_version", 1)
+    if type(version) is not int or version not in (1, FORMAT_VERSION):
+        raise ValueError("recipe_format_version")
+    converted = dict(data)
+    if version == 1:
+        if converted.get("dependencies"):
+            raise ValueError("dependencies_in_recipe_v1")
+        converted["dependencies"] = {}
+        converted["format_version"] = 2
+    return converted
+
+
+def dependency_order(data: dict[str, Any]) -> list[str]:
+    """Prüft den flachen Graphen und zählt die tatsächlich expandierten Schritte."""
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.knowledge.parts.shared import MAX_OPERATIONS
+
+    attached = data.get("dependencies", {})
+    if not isinstance(attached, dict) or len(attached) > MAX_DEPENDENCIES:
+        raise ValueError("recipe_dependencies")
+    root_name = data.get("name")
+    if not isinstance(root_name, str):
+        raise ValueError("recipe_name")
+    documents = {root_name: data}
+    for name, item in attached.items():
+        if (
+            not isinstance(name, str)
+            or not isinstance(item, dict)
+            or item.get("name") != name
+            or name == root_name
+            or item.get("dependencies")
+        ):
+            raise ValueError("recipe_dependency_shape")
+        documents[name] = item
+    visiting: set[str] = set()
+    costs: dict[str, int] = {}
+    ordered: list[str] = []
+    names_by_op = {op_name(name): name for name in documents if isinstance(name, str)}
+
+    def visit(name: str) -> int:
+        if name in visiting:
+            raise ValueError("recipe_dependency_cycle")
+        if name in costs:
+            return costs[name]
+        visiting.add(name)
+        document = documents[name].get("document", {})
+        operations = document.get("ops", []) if isinstance(document, dict) else []
+        if not isinstance(operations, list) or len(operations) > MAX_OPERATIONS:
+            raise ValueError("recipe_operation_budget")
+        cost = 0
+        for operation in operations:
+            if not isinstance(operation, dict):
+                raise ValueError("recipe_operation_shape")
+            operation_name = operation.get("op")
+            if not isinstance(operation_name, str):
+                raise ValueError("recipe_operation_name")
+            dependency = names_by_op.get(operation_name)
+            cost += 1 + (visit(dependency) if dependency is not None else 0)
+            if cost > MAX_OPERATIONS:
+                raise ValueError("recipe_operation_budget")
+        visiting.remove(name)
+        costs[name] = cost
+        if name != root_name:
+            ordered.append(name)
+        return cost
+
+    visit(root_name)
+    if len(ordered) != len(attached):
+        raise ValueError("unused_recipe_dependency")
+    return ordered
+
+
+def with_dependencies(part: Recipe, parts: PartRegistry | None = None) -> Recipe:
+    """Liefert eine austauschbare Fassung oder einen behebbaren Rezeptfehler."""
+    try:
+        return _collect_dependencies(part, parts)
+    except (TypeError, ValueError, KeyError) as problem:
+        raise ValidationError(
+            field="dependencies",
+            detail=_(
+                "Die verwendeten Rezepte lassen sich nicht gemeinsam speichern. "
+                "Zirkel entfernen, unterschiedliche Fassungen eindeutig benennen "
+                "oder den Ausschnitt verkleinern."
+            ),
+            constraint="recipe_dependencies",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        ) from problem
+
+
+def _collect_dependencies(part: Recipe, parts: PartRegistry | None = None) -> Recipe:
+    """Packt jede benötigte Rezeptfassung einmal; fremde Namensstände werden nicht geraten."""
+    from app.core.knowledge.parts.registry import PARTS, used_parts
+
+    source = parts or PARTS
+    pool = dict(part.dependencies)
+    collected: dict[str, dict[str, Any]] = {}
+    pending = list(used_parts(part.document.ops))
+    while pending:
+        name = pending.pop()
+        if name in collected:
+            continue
+        raw = pool.get(name)
+        if raw is None and source.has(name):
+            stored = source.get(name).recipe_data
+            raw = dict(stored) if stored is not None else None
+        if raw is None:
+            continue
+        raw = dict(raw)
+        for child_name, child in raw.get("dependencies", {}).items():
+            previous = pool.get(child_name, collected.get(child_name))
+            if previous is not None:
+                previous = {**previous, "dependencies": {}}
+                current = {**child, "dependencies": {}}
+                if fingerprint(from_data(previous)) != fingerprint(from_data(current)):
+                    raise ValueError("recipe_dependency_versions_conflict")
+            pool[child_name] = child
+        raw["dependencies"] = {}
+        raw["format_version"] = FORMAT_VERSION
+        collected[name] = raw
+        nested = from_data(raw)
+        pending.extend(used_parts(nested.document.ops))
+        if len(collected) > MAX_DEPENDENCIES:
+            raise ValueError("recipe_dependencies")
+    bundled = dataclasses.replace(part, dependencies=collected, format_version=FORMAT_VERSION)
+    dependency_order(file_data(bundled))
+    return bundled
+
+
+def dependency_registry(part: Recipe, base: Registry | None = None) -> Registry:
+    """Ein privates Operationsregister; Rezeptbeilagen ändern nie den lokalen Katalog."""
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    operations = Registry()
+    for operation in (base or REGISTRY).all():
+        operations.register(operation)
+    parts = PartRegistry()
+    for name in dependency_order(file_data(part)):
+        if PARTS.has(name) and PARTS.get(name).source == "shipped":
+            raise ValueError("recipe_dependency_shadows_shipped_part")
+        child = from_data(part.dependencies[name])
+        operations.remove(part_ops.op_name(name))
+        register(child, parts, operations)
+    return operations
 
 
 def _imported_origin_from(data: Any) -> ImportedOrigin | None:
@@ -462,6 +620,8 @@ def build(
     from app.core.scene.evaluate import evaluate
     from app.core.scene.project import Project, ProjectSources
 
+    if recipe.dependencies:
+        registry = dependency_registry(recipe, registry)
     document = _with_values(recipe.document, recipe, values or {})
     project = Project(document=document, sources=dict(recipe.payloads))
     result = evaluate(
@@ -688,9 +848,20 @@ def register(
     def build_with_profile(
         params: BaseParams, profile: Profile | None, quality: Quality = "fine"
     ) -> PartResult:
+        from app.core.registry import REGISTRY
+
         chosen = profile or _default_profile()
         values = {entry.name: float(getattr(params, entry.name)) for entry in recipe.exposed}
-        return build(recipe, values, profile=chosen, quality=quality)
+        # Ein Katalogregister kann nur Bausteine enthalten. Die eingebauten
+        # Operationen bleiben verfügbar; private Rezeptfassungen haben Vorrang.
+        available = Registry()
+        for operation in REGISTRY.all():
+            available.register(operation)
+        if registry is not None:
+            for operation in registry.all():
+                available.remove(operation.name)
+                available.register(operation)
+        return build(recipe, values, profile=chosen, quality=quality, registry=available)
 
     def fn(params: BaseParams) -> PartResult:
         return build_with_profile(params, None)
@@ -1271,7 +1442,7 @@ def _recover_interrupted_removals(directory: Path) -> None:
                 )
                 continue
             _restore_pending_removal(pending, target)
-        except (FileExistsError, FileNotFoundError):
+        except FileExistsError, FileNotFoundError:
             continue
         except OSError as problem:
             _log.warning(
@@ -1555,6 +1726,8 @@ def file_data(recipe: Recipe) -> dict[str, Any]:
     der Empfänger soll die Warnung aus §24.5 sehen, ohne selbst zu prüfen.
     """
     data = to_data(recipe)
+    if recipe.dependencies:
+        data["dependencies"] = dict(sorted(recipe.dependencies.items()))
     # Neben den Daten, nicht darin — wie der Bericht, und aus demselben Grund
     # (siehe ``Recipe.range_report``): Sie gehören in die Datei, aber nicht in
     # den Hash.
@@ -1725,6 +1898,7 @@ def capture(
         transactions=[],
         chat=[],
         fits=[],
+        print_settings=None,
     )
     recipe = Recipe(
         name=name,
@@ -1741,6 +1915,7 @@ def capture(
         license=licence,
         author=author,
     )
+    recipe = with_dependencies(recipe)
     build(recipe, profile=profile)  # die Probe — wirft mit Handlungsvorschlag
     return recipe
 
@@ -1771,7 +1946,13 @@ def for_container(document: Document, parts: PartRegistry | None = None) -> dict
 
     source = parts or PARTS
     travelling: dict[str, str] = {}
-    for name in sorted(set(used_parts(document.ops))):
+    pending = sorted(set(used_parts(document.ops)))
+    visited: set[str] = set()
+    while pending:
+        name = pending.pop()
+        if name in visited:
+            continue
+        visited.add(name)
         if not source.has(name):
             continue
         spec = source.get(name)
@@ -1780,6 +1961,8 @@ def for_container(document: Document, parts: PartRegistry | None = None) -> dict
         travelling[name] = json.dumps(
             dict(spec.recipe_data), ensure_ascii=False, indent=2, sort_keys=True
         )
+        nested = from_data(dict(spec.recipe_data))
+        pending.extend(sorted(set(used_parts(nested.document.ops)) - visited))
     return travelling
 
 
@@ -1836,29 +2019,26 @@ def adopt(
             local = source.get(name)
             if local.version == mark:
                 return announced
-            name = f"{arrived.name}_travelled"
+            stem = arrived.name
+            suffix = "_travelled"
+            name = f"{stem[: 120 - len(suffix)].rstrip('_')}{suffix}"
             # Verglichen wird der Abdruck der **umbenannten** Fassung: Der
             # Name gehört zu den kanonischen Daten, und ein Vergleich gegen
             # den unumbenannten Abdruck wäre nie gleich — jedes erneute
             # Öffnen tauschte dann ein identisches Rezept gegen sich selbst.
-            arrived = dataclasses.replace(arrived, name=name)
-            mark = fingerprint(arrived)
-            if source.has(name):
-                # Noch einmal geöffnet in derselben Sitzung — oder zwei
-                # Projekte mit demselben fremden Rezept: derselbe Abdruck
-                # heißt dasselbe Rezept, nichts zu tun. Ein **anderer**
-                # Abdruck tauscht den mitgereisten Eintrag aus, samt seiner
-                # Operation: Die zuletzt geöffnete Datei gilt. Vorher stand
-                # hier eine Absage mit dem Rat, das andere Projekt zu
-                # schließen — ein Mittel ohne Wirkung, denn Schließen meldet
-                # nichts ab (Fund des Gesamtreviews vom 25.08.2026).
+            ordinal = 1
+            while source.has(name):
+                candidate = dataclasses.replace(arrived, name=name)
+                mark = fingerprint(candidate)
                 if source.get(name).version == mark:
                     return announced
-                from app.core.knowledge.parts import ops as part_ops
-                from app.core.registry import REGISTRY
-
-                source.remove(name)
-                (registry or REGISTRY).remove(part_ops.op_name(name))
+                # Auch der abgeleitete Name kann dem Nutzer gehören. Jeder
+                # vorhandene Stand bleibt erhalten, einschließlich anderer
+                # noch geöffneter Projekte mit mitgereisten Fassungen.
+                ordinal += 1
+                numbered = f"{suffix}_{ordinal}"
+                name = f"{stem[: 120 - len(numbered)].rstrip('_')}{numbered}"
+            arrived = dataclasses.replace(arrived, name=name)
         register(arrived, source, registry, source=catalog_source)
         return announced
     except Exception as problem:  # Regel 17: Befund statt Abbruch

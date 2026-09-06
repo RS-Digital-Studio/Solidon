@@ -111,6 +111,16 @@ class PartChange:
     """Was sie an den Maßen ändert — das, worauf es für alte Projekte ankommt."""
 
 
+MATERIAL_OF_TARGET = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Automatische Passungswerte wurden aus dem Projektmaterial statt aus dem Material "
+    "des Zielkörpers gelesen.",
+    effect="An ausdrücklich anders zugeordneten Körpern folgen Spiel und Übermaß jetzt deren "
+    "Material. Bestehende Passungen an solchen Körpern prüfen.",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class WallRequirement:
     """Der fachliche Mindestwandvertrag eines Bausteins."""
@@ -376,6 +386,8 @@ class PartSpec:
     greifen soll.
     """
     changes: tuple[PartChange, ...] = ()
+    grip_from_profile: bool = True
+    """Ob ``grip=0`` das Materialübermaß meint; konstruktive Verengungen nicht."""
     source: str = "shipped"
     """``shipped``, ``user`` oder ``recipe`` — der Katalog weist die Herkunft
     aus (§24.5). ``user`` heißt weiter: eine ``.py`` aus dem Nutzerordner; ein
@@ -570,6 +582,7 @@ def register_part(
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
     changes: Sequence[PartChange] = (),
+    grip_from_profile: bool = True,
     source: str = "shipped",
     registry: PartRegistry | None = None,
 ) -> Callable[[PartFn], PartFn]:
@@ -615,6 +628,7 @@ def register_part(
                 doc=doc,
                 caveat=caveat,
                 changes=tuple(changes),
+                grip_from_profile=grip_from_profile,
                 source=source,
             )
         )
@@ -649,7 +663,7 @@ def register_part(
 #: des radialen Druckspalts, der kleinste Schwalbenschwanzstift behält einen
 #: druckbaren Querschnitt, und der Standfuß trägt keine innere Ringschulter
 #: mehr (``mechanics.py``, ``mounting.py``, 31.08.2026).
-LIBRARY_VERSION: Final = "14"
+LIBRARY_VERSION: Final = "15"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

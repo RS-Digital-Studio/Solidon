@@ -41,7 +41,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-597 Parameter der 100 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+751 Parameter der 102 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -680,7 +680,7 @@ steht er vorn, wenn er der Grund ist, aus dem der Dialog aufgeht.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
 **Eine Grenze steht dort, wo gewählt wird.** `caveat` im Registereintrag sagt,
-wann eine Operation die falsche Wahl ist. Sechsundzwanzig von hundert
+wann eine Operation die falsche Wahl ist. Sechsundzwanzig von hundertzwei
 Operationen tragen einen (die Zahl prüft `tests/test_registry_consistency.py`;
 ungeprüft altert sie still). Er gehört überall dorthin, wo gewählt wird, nicht
 allein in die Handbuchreferenz: `caveat_line()` (`app/core/registry/surfaces.py`)
@@ -877,7 +877,7 @@ Register. Ist der einfache Buchstabe belegt, kommt Umschalt dazu (*Vereinigen*
 Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist auch das belegt, **bleibt die
 Operation ohne Kürzel**. *Skalieren* ist der Fall: S gehört dem Speichern,
 Umschalt+S dem Speichern unter, und ein erfundener Buchstabe wäre schlechter als
-keiner. Vierzehn der hundert Operationen führen eines; wer eine fünfzehnte Taste
+keiner. Vierzehn der hundertzwei Operationen führen eines; wer eine fünfzehnte Taste
 vergibt, prüft vorher am **gebauten Fenster** gegen die dreiundvierzig, die
 nicht aus dem Register kommen — Ansichten, Werkzeugzeile, Dateibefehle,
 Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus
@@ -983,4 +983,3 @@ Sie haben eigene Regeln, und sie laden mit den Dateien, die sie betreffen:
 
 Ebenso — `wartezeit.md` lädt mit `session.py`, `loading.py`, `leash.py`,
 `splash.py` und `main_window.py`.
-

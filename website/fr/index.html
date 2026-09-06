@@ -27,7 +27,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="../style.css?v=a7599376">
+<link rel="stylesheet" href="../style.css?v=2e1a72a9">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -101,7 +101,7 @@
       "name": "Suis-je obligé d'utiliser une IA ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Non. Le chat est une voie parmi quatre. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, menus contextuels, ligne de commande et les 100 opérations."
+        "text": "Non. Le chat est une voie parmi quatre. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, menus contextuels, ligne de commande et les 102 opérations."
       }
     },
     {
@@ -125,7 +125,7 @@
       "name": "Mes modèles partent-ils quelque part ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Seulement si vous utilisez le chat avec la clé API d'un fournisseur tiers — la fiche de la scène part alors chez ce fournisseur : les objets avec leurs cotes, les noms des caractéristiques, les paramètres et l'historique en abrégé. Pas de géométrie, pas de fichiers. Avec Ollama, même cela reste local. Sans le chat, presque rien ne quitte la machine : aucun compte, aucun stockage en ligne, aucune télémétrie. Deux exceptions demeurent. Au démarrage, Solidon3D vérifie en option si une version plus récente existe — la requête n'indique que son propre numéro de version et se désactive dans les réglages. Et ce que vous envoyez vous-même : un retour au support, dont vous voyez le contenu au préalable dans un aperçu."
+        "text": "Tes fichiers de projet restent sur ton ordinateur. Dans le chat, le modèle de langage choisi reçoit ton message, un résumé de la scène et l’historique de la conversation. S’il accepte les images, des vues rendues du modèle peuvent aussi être transmises. Avec Anthropic ou un serveur Ollama distant, ces données quittent ton ordinateur. Ollama installé sur ton propre ordinateur les traite localement. Avant la première requête au modèle, Solidon3D affiche la destination choisie. Le réseau sert aussi à l’activation de l’appareil, à la recherche de mises à jour —que tu peux désactiver— et aux téléchargements que tu lances. Un message au support affiche son contenu avant l’envoi. Solidon3D ne transmet aucune statistique d’utilisation et ne stocke pas tes projets dans le cloud."
       }
     },
     {
@@ -149,7 +149,7 @@
       "name": "Comment installer le Flatpak sous Linux ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Un Flatpak n'est pas un installeur à double-clic, mais un paquet que le gestionnaire de paquets prend en charge. Ouvrez un terminal dans le dossier où vous l'avez téléchargé et saisissez : flatpak install./Solidon3D-*.flatpak Solidon3D apparaît ensuite dans le menu des applications. Il démarre aussi avec flatpak run de.rsdigital.solidon3d et se retire avec flatpak uninstall de.rsdigital.solidon3d. Si votre système ne connaît pas la commande flatpak, votre distribution l'installe sous ce nom exact."
+        "text": "Un Flatpak n'est pas un installeur à double-clic, mais un paquet que le gestionnaire de paquets prend en charge. Ouvrez un terminal dans le dossier où vous l'avez téléchargé et saisissez : flatpak install ./Solidon3D-*.flatpak Solidon3D apparaît ensuite dans le menu des applications. Il démarre aussi avec flatpak run de.rsdigital.solidon3d et se retire avec flatpak uninstall de.rsdigital.solidon3d. Si votre système ne connaît pas la commande flatpak, votre distribution l'installe sous ce nom exact."
       }
     },
     {
@@ -355,7 +355,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>100</b><span>opérations au registre</span></div>
+        <div><b>102</b><span>opérations au registre</span></div>
         <div><b>27</b><span>blocs testés</span></div>
         <div><b>51</b><span>cotes de pièces normalisées</span></div>
         <div><b>16</b><span>profils d'imprimante fournis</span></div>
@@ -755,8 +755,8 @@
     <div class="wrap">
       <h2>Configuration requise</h2>
       <table class="req">
-        <tr><td>Système d'exploitation</td><td>Windows 10/11 (64 bits),
-        macOS 13 ou plus récent, ou Linux — sur Mac, en versions séparées
+        <tr><td>Système d'exploitation</td><td>Windows 10 (1809 ou ultérieur)/11 (x64),
+        macOS 13 ou plus récent, ou Linux (x64, X11/Xwayland) — sur Mac, en versions séparées
         pour Apple Silicon et Intel. La version Mac n'est pas encore
         notariée chez Apple&nbsp;: macOS n'ouvre pas le paquet
         d'installation d'un double-clic. Dans l'avertissement, choisir
@@ -767,7 +767,7 @@
         <tr><td>Espace disque</td><td>environ 750&nbsp;Mo installés,
         téléchargement entre 218 et 380&nbsp;Mo selon le système</td></tr>
         <tr><td>Usage de base</td><td>8&nbsp;Go de RAM et une carte
-        graphique qui parle OpenGL — les lignes IA ci-dessous sont
+        graphique compatible OpenGL 3.2 ou ultérieur — les lignes IA ci-dessous sont
         des extras, pas des minimums</td></tr>
         <tr><td>Écran</td><td>Au moins 1920 × 1080 pixels (16:9, Full HD) ou
         1920 × 1200 pixels (16:10). Recommandé : 2560 × 1440 pixels
@@ -859,7 +859,7 @@
           <summary>Suis-je obligé d'utiliser une IA&nbsp;?</summary>
           <p>Non. Le chat est une voie parmi quatre. Sans clé et sans
           Ollama, tout reste entièrement utilisable, hormis le chat — menus,
-          menus contextuels, ligne de commande et les 100 opérations.</p>
+          menus contextuels, ligne de commande et les 102 opérations.</p>
         </details>
         <details>
           <summary>L'IA calcule-t-elle ma géométrie&nbsp;?</summary>
@@ -881,18 +881,9 @@
         </details>
         <details>
           <summary>Mes modèles partent-ils quelque part&nbsp;?</summary>
-          <p>Seulement si vous utilisez le chat avec la clé API d'un
-          fournisseur tiers — la fiche de la scène part alors chez ce
-          fournisseur&nbsp;: les objets avec leurs cotes, les noms des
-          caractéristiques, les paramètres et l'historique en abrégé. Pas de
-          géométrie, pas de fichiers. Avec Ollama, même cela reste local.
-          Sans le chat, presque rien ne quitte la machine&nbsp;: aucun
-          compte, aucun stockage en ligne, aucune télémétrie.</p>
-          <p>Deux exceptions demeurent. Au démarrage, Solidon3D vérifie en
-          option si une version plus récente existe — la requête n'indique
-          que son propre numéro de version et se désactive dans les
-          réglages. Et ce que vous envoyez vous-même : un retour au support,
-          dont vous voyez le contenu au préalable dans un aperçu.</p>
+          <p>Tes fichiers de projet restent sur ton ordinateur. Dans le chat, le modèle de langage choisi reçoit ton message, un résumé de la scène et l’historique de la conversation. S’il accepte les images, des vues rendues du modèle peuvent aussi être transmises.</p>
+          <p>Avec Anthropic ou un serveur Ollama distant, ces données quittent ton ordinateur. Ollama installé sur ton propre ordinateur les traite localement. Avant la première requête au modèle, Solidon3D affiche la destination choisie.</p>
+          <p>Le réseau sert aussi à l’activation de l’appareil, à la recherche de mises à jour —que tu peux désactiver— et aux téléchargements que tu lances. Un message au support affiche son contenu avant l’envoi. Solidon3D ne transmet aucune statistique d’utilisation et ne stocke pas tes projets dans le cloud.</p>
         </details>
         <details>
           <summary>Quels formats Solidon3D lit-il et écrit-il&nbsp;?</summary>

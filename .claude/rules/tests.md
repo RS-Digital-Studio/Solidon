@@ -223,19 +223,11 @@ das *neben* dem Testlauf stand.
   seinen eigenen Exit-Code in eine Datei (`…; echo "Exit=$?" > …`), und gelesen
   wird der, nicht die Meldung.
 
-Und die Umkehrung, die dabei aufgefallen ist: Ein Lauf, der **grün meldet und
-rot endet**, ist kein roter Test. Drei Fensterdateien enden nach „N passed" mit
-`0xC0000409` beziehungsweise einer Zugriffsverletzung — ein Riss beim Abbau. Der
-Unterschied steht in `ROADMAP.md`; wer ihn nicht kennt, sucht den Fehler in
-einem Test, der nie fehlgeschlagen ist.
-
-**Und die Kehrseite davon, die genauso teuer ist: Ein `F` unmittelbar vor einem
-bekannten Riss sieht aus wie Teil des Risses.** Der Abschnitt darüber warnt vor
-der einen Richtung — einen Abriss für einen Testfehler zu halten. Diese hier ist
-die andere: **einen Testfehler für einen Abriss zu halten.** Wer nur eine der
-beiden kennt, macht zuverlässig die andere, und diese Richtung ist die
-gefährlichere — die erste kostet eine Stunde Suche, die zweite geht ins Paket
-(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+**Ein Prozessabbruch macht das Tor auch nach „N passed" rot.** Ein Riss
+beim Aufräumen und eine fehlgeschlagene Zusicherung sind unterschiedliche
+Ursachen. Beide verhindern die Abnahme; Fortschrittszeichen und Schlusszeile
+ersetzen keinen erfolgreichen Prozessausgang. Zur Diagnose gehören sowohl
+native Rückgabewerte als auch schon vorher gemeldete `F`/`E` ins Ergebnis.
 
 Praktisch: **Beim Melden eines Laufs gehört die Zahl der `F` dazu, nicht nur die
 Zusammenfassung.** Ein Riss verschluckt die Zusammenfassung, in der die Namen
@@ -257,8 +249,10 @@ die Sollzahl, und die Fortschrittszeichen nennen die Istzahl. Sind sie
 ungleich, ist das Ergebnis **unvollständig** und nicht grün.
 `suite-getrennt.sh` halbiert dann die betroffene Portion und reiht beide
 Hälften wieder ein — auch wenn die ganze Fensterdatei kleiner als die normale
-Portionsgröße ist. Sonst bliebe ausgerechnet eine Datei mit 31 Tests rot,
-obwohl zwei vollständige Hälften die gesamte Aussage liefern.
+Portionsgröße ist. Der ursprüngliche Prozessabbruch bleibt gezählt;
+erfolgreiche kleinere Teile ergänzen die Diagnose und machen diesen Lauf
+nicht rückwirkend grün. Das Tor endet mit 0 oder 1, nie mit einer Anzahl,
+die bei 256 Fehlern auf 0 umbrechen kann.
 
 Und der Grund, aus dem gerade diese Gestalt so leicht durchgeht: Die beiden
 anderen fühlen sich wie ein Urteil an — man entscheidet, ob ein Zeichen ein
@@ -721,9 +715,9 @@ def test_identifiers_are_english(path: Path) -> None: ...
 ```
 
 Ist `source_files()` leer, wird **kein Test rot**. pytest sammelt null Tests,
-meldet `no tests ran` und gibt **Exit 5** — derselbe Exit, den `suite-getrennt.sh`
-seit einer Datei ohne passende Marker kennt, nur hier als *stiller Erfolg*. Eine
-Zusicherung im Testkörper fängt das nicht: Sie liefe nie.
+meldet `no tests ran` und gibt **Exit 5**. Das geteilte Tor wertet diesen
+Nichtnull-Exit als Fehler. Eine Zusicherung im Testkörper fängt eine leere
+Parameterliste dennoch nicht: Sie liefe nie.
 
 Sie gehört in die Funktion, die die Parameterliste liefert.
 

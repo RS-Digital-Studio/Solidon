@@ -1,6 +1,6 @@
 """Die Suite fahren, je Testdatei ein Prozess.
 
-    .venv\\Scripts\\python.exe tools/run_suite_isolated.py [muster …]
+    python tools/run_suite_isolated.py [muster …]
 
 **Wofür das da ist.** Ein Absturz reißt die Suite seit Tagen sporadisch ab —
 eine Zugriffsverletzung ohne Traceback, die Roadmap führt ihn als offenen
@@ -38,7 +38,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-PYTHON = ROOT / ".venv" / "Scripts" / "python.exe"
+PYTHON = Path(sys.executable)
 
 #: Wie lange eine einzelne Datei laufen darf. Großzügig: ``test_performance``
 #: misst gegen das Budget aus §31 und braucht seine Zeit.

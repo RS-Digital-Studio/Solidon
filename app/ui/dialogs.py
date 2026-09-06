@@ -1140,6 +1140,7 @@ class KeyDialog(QDialog):
             self._pull.cancel()
             return
         model = self._chosen_model()
+        self.model_field.setEnabled(False)
         self.pull_progress.setRange(0, 0)
         self.pull_progress.setVisible(True)
         self.pull_button.setText(tr("Abbrechen"))
@@ -1152,7 +1153,7 @@ class KeyDialog(QDialog):
 
         worker = _PullWorker(model)
         worker.step.connect(self._pull_step)
-        worker.done.connect(self._pull_done)
+        worker.done.connect(weak_slot(self, KeyDialog._pull_done, model, forward=True))
         worker.crashed.connect(self._crashed)
         worker.finished.connect(self._worker_finished)
         self._pull = worker
@@ -1168,7 +1169,8 @@ class KeyDialog(QDialog):
         percent = f" — {int(share * 100)} %" if share >= 0.0 else ""
         self.probe_result.setText(f"{status}{percent}")
 
-    def _pull_done(self, problem: object) -> None:
+    def _pull_done(self, model: str, problem: object) -> None:
+        self.model_field.setEnabled(True)
         self.pull_progress.setVisible(False)
         self.pull_button.setText(tr("Modell holen"))
         self.look()
@@ -1179,7 +1181,8 @@ class KeyDialog(QDialog):
             # und einen Chat, der weiter auf das alte Modell zeigt. Das
             # Herunterladen ist eine Tatsache; nur die Eingabefelder warten
             # auf eine Entscheidung.
-            llm.remember_ollama_model(self._chosen_model())
+            llm.remember_ollama_model(model)
+            self._select_model(model)
             set_role(
                 self.probe_result,
                 "ok",
@@ -1199,6 +1202,7 @@ class KeyDialog(QDialog):
         _log.warning("chat setup worker crashed: %s", detail)
         self.pull_progress.setVisible(False)
         self.pull_button.setText(tr("Modell holen"))
+        self.model_field.setEnabled(True)
         self.service_button.setEnabled(True)
         self.probe_button.setEnabled(True)
         for kanal in (

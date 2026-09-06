@@ -117,7 +117,7 @@ def model_state() -> tuple[bool | None, int | None]:
                 limit=MAX_STATE_RESPONSE_BYTES,
                 timeout=15,
             ).get("models")
-    except (urllib.error.URLError, OSError, ValueError, TimeoutError):
+    except urllib.error.URLError, OSError, ValueError, TimeoutError:
         return None, None
     if not isinstance(raw_models, list) or not raw_models or not isinstance(raw_models[0], dict):
         return None, None

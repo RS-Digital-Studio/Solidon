@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from app.core.geom.mesh import read_mesh
 from app.core.geom.transform import place_on_bed
@@ -446,6 +449,92 @@ def clearance_fit() -> Fit:
     )
 
 
+@pytest.mark.parametrize("kind", ["pin", "cone", "face"])
+def test_two_diameters_do_not_prove_a_fit(kind: FeatureKind, profile: Profile) -> None:
+    """Zwei Zahlen belegen weder eine Öffnung noch ihr Gegenstück."""
+    scene = pin_and_hole(5.25, 5.0, profile)
+    for entry in scene.objects.values():
+        entry.features = {key: replace(value, kind=kind) for key, value in entry.features.items()}
+    scene.fits.append(clearance_fit())
+    assert fit_check.check(scene, profile)[0].code == "fit.not_measurable"
+    assert not fit_check.pair_kinds(
+        *[next(iter(entry.features.values())) for entry in scene.objects.values()]
+    )
+
+
+def _thread_pair(profile: Profile) -> Scene:
+    scene = pin_and_hole(5.0 + profiles.resolve_tolerance("auto:", "thread", profile), 5.0, profile)
+    for entry, internal in zip(scene.objects.values(), (True, False), strict=True):
+        entry.features = {
+            key: replace(
+                value, kind="thread", params={**value.params, "internal": internal, "pitch": 1.0}
+            )
+            for key, value in entry.features.items()
+        }
+    scene.fits.append(replace(clearance_fit(), kind="thread"))
+    return scene
+
+
+def test_threads_need_opposite_roles_and_the_same_pitch(profile: Profile) -> None:
+    scene = _thread_pair(profile)
+    assert not fit_check.check(scene, profile)
+    outer = scene.objects["obj_2"].features["pin_1"]
+    scene.objects["obj_2"].features["pin_1"] = replace(outer, params={**outer.params, "pitch": 1.5})
+    assert fit_check.check(scene, profile)[0].code == "fit.pitch_mismatch"
+    assert not fit_check.pair_kinds(
+        scene.objects["obj_1"].features["hole_1"], scene.objects["obj_2"].features["pin_1"]
+    )
+    scene.objects["obj_2"].features["pin_1"] = replace(
+        outer, params={**outer.params, "internal": True}
+    )
+    assert fit_check.check(scene, profile)[0].code == "fit.not_measurable"
+
+
+@pytest.mark.parametrize("value", [None, False, 0.0, float("nan"), float("inf")])
+def test_a_thread_without_a_positive_pitch_is_not_proven(value: object, profile: Profile) -> None:
+    scene = _thread_pair(profile)
+    feature = scene.objects["obj_1"].features["hole_1"]
+    scene.objects["obj_1"].features["hole_1"] = replace(
+        feature, params={**feature.params, "pitch": value}
+    )
+    assert fit_check.check(scene, profile)[0].code == "fit.not_measurable"
+
+
+def test_thread_material_comes_from_the_internal_role_not_the_larger_diameter(
+    profile: Profile,
+) -> None:
+    scene = _thread_pair(profile)
+    scene.objects["obj_1"].material = "tpu-95a"
+    target, _materials = fit_check.target(scene, scene.fits[0], profile)
+    assert target == pytest.approx(profiles.resolve_tolerance("auto:tpu-95a", "thread", profile))
+    scene.fits[0] = replace(scene.fits[0], a=scene.fits[0].b, b=scene.fits[0].a)
+    assert fit_check.target(scene, scene.fits[0], profile)[0] == pytest.approx(target)
+
+
+def test_a_legacy_clearance_between_threads_remains_a_radial_check(profile: Profile) -> None:
+    scene = _thread_pair(profile)
+    scene.fits[0] = replace(scene.fits[0], kind="clearance")
+    assert all(item.code != "fit.not_measurable" for item in fit_check.check(scene, profile))
+    assert fit_check.target(scene, scene.fits[0], profile)[0] == pytest.approx(
+        profile.material.clearance
+    )
+
+
+def test_the_visible_target_follows_both_body_materials(profile: Profile) -> None:
+    """Die Anlegeauskunft benutzt dieselbe Materialwahl wie die spätere Prüfung."""
+    scene = pin_and_hole(5.0, 5.0, profile)
+    scene.objects["obj_2"].material = "tpu-95a"
+    fit = clearance_fit()
+    value, names = fit_check.target(scene, fit, profile)
+    assert value == pytest.approx(profiles.material("tpu-95a").clearance)
+    assert set(names) == {profile.material.title, profiles.material("tpu-95a").title}
+    for entry in scene.objects.values():
+        entry.material = "pla"
+    value, names = fit_check.target(scene, fit, profile)
+    assert value == pytest.approx(profiles.material("pla").clearance)
+    assert names == (profiles.material("pla").title,)
+
+
 def test_a_fit_that_matches_the_profile_says_nothing(profile: Profile) -> None:
     gap = profiles.material("petg").clearance
     scene = pin_and_hole(5.0 + gap, 5.0, profile)
@@ -568,6 +657,34 @@ def test_a_flush_fit_needs_two_faces(profile: Profile) -> None:
     findings = fit_check.check(scene, profile)
 
     assert findings and findings[0].code == "fit.not_measurable"
+
+
+def test_scaled_normals_do_not_change_a_flush_result(profile: Profile) -> None:
+    scene = two_faces(0.02, (0.0, 0.0, -0.001), profile)
+    first = scene.objects["obj_1"].features["face_1"]
+    scene.objects["obj_1"].features["face_1"] = replace(
+        first, params={**first.params, "normal": (0.0, 0.0, 1000.0)}
+    )
+    scene.fits.append(flush_fit())
+    assert not fit_check.check(scene, profile)
+
+
+def test_five_degrees_at_the_same_centre_is_not_flush(profile: Profile) -> None:
+    import math
+
+    scene = two_faces(0.0, (math.sin(math.radians(5)), 0.0, math.cos(math.radians(5))), profile)
+    scene.fits.append(flush_fit())
+    assert "parallel" in str(fit_check.check(scene, profile)[0].message)
+
+
+@pytest.mark.parametrize("role", [["inner"], {"role": "inner"}])
+def test_foreign_nonhashable_fit_roles_are_not_evidence(role: object, profile: Profile) -> None:
+    scene = two_faces(0.0, (0.0, 0.0, 1.0), profile)
+    first = scene.objects["obj_1"].features["face_1"]
+    second = scene.objects["obj_2"].features["face_1"]
+    first = replace(first, params={**first.params, "diameter": 5.25, "fit_role": role})
+    second = replace(second, params={**second.params, "diameter": 5.0, "fit_role": "outer"})
+    assert fit_check.pair_problem("clearance", first, second) is not None
 
 
 def test_a_fit_pointing_at_nothing_is_an_error(profile: Profile) -> None:

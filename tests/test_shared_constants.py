@@ -77,14 +77,14 @@ def value_of(node: ast.expr) -> object | None:
     """
     try:
         return ast.literal_eval(node)
-    except (ValueError, SyntaxError, TypeError):
+    except ValueError, SyntaxError, TypeError:
         pass
     if isinstance(node, ast.BinOp) and type(node.op) in ARITHMETIC:
         left, right = value_of(node.left), value_of(node.right)
         if isinstance(left, (int, float)) and isinstance(right, (int, float)):
             try:
                 return ARITHMETIC[type(node.op)](left, right)
-            except (ZeroDivisionError, OverflowError):
+            except ZeroDivisionError, OverflowError:
                 return None
     return None
 

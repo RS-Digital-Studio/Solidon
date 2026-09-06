@@ -8,9 +8,9 @@ meine globalen Vorgaben auf dieses Projekt nicht passen.
 
 ## Was dieses Projekt ist
 
-Solidon — eine Desktop-Anwendung in **Python (3.13 oder neuer) mit PySide6**,
+Solidon — eine Desktop-Anwendung in **Python (3.14 oder neuer) mit PySide6**,
 kein Avalonia/.NET. Die Untergrenze steht in `pyproject.toml`; die
-Arbeitsumgebung fährt derzeit 3.14, die CI 3.13.
+Arbeitsumgebung und CI verwenden CPython 3.14.7.
 
 Die Unterlagen in ihrer Rangfolge:
 
@@ -115,40 +115,20 @@ Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in 
   des **letzten** Befehls, und `echo` gelingt so zuverlässig wie `tail`. Wer
   den Code braucht, liest ihn unmittelbar (`befehl > datei; echo "Exit: $?"`),
   bevor irgendetwas anderes läuft — nicht am Ende einer Kette.
-- **Ein Abriss beim Abbau ist kein roter Test.** `suite-getrennt.sh` gab an
-  jenem Tag Exit 3, obwohl jeder Test grün war: drei Fensterdateien melden
-  „passed" und stürzen danach beim Aufräumen (`0xC0000409`). Der Fall steht in
-  `ROADMAP.md` unter „Der Changelog schickte den Kunden ins Handbuch, und dort
-  war nichts"; wer ihn nicht kennt, hält einen grünen Stand für rot.
-
-  **Drei** Fensterdateien enden inzwischen mit **127** statt mit dem bekannten
-  Code, und zwar einzeln gefahren auch: `test_install.py`,
-  `test_print_settings.py` und `test_widget_lifetime.py`. Das ist ein eigener
-  offener Punkt und nicht derselbe Absturz.
-
-  **Und sie sind nicht dieselbe Sorte — der Unterschied ist der Punkt.** Die
-  ersten beiden melden vorher „passed" und sterben beim Aufräumen; ihr
-  Ergebnis gilt, jede Zusicherung stand. `test_widget_lifetime.py` **hört
-  mitten drin auf**: 55 gesammelt, **43 gelaufen**, Heap-Abriss
-  (`0xc0000374`) beim `gc.collect()` in
-  `test_a_released_widget_is_actually_released` (Zeile 282). Zwölf Tests haben
-  nie stattgefunden, und wer den Satz über den harmlosen Fall liest, hält auch
-  diesen für einen — genau die Sorte Auskunft, der beim nächsten Mal jemand
-  glaubt.
-
-  Belegt am 04.09.2026 von drei Sitzungen unabhängig: deterministisch und
-  allein reproduzierbar (3d-druck-4d), auf dem Stand vor den Commits des Tages
-  (3d-druck-11, eigener Arbeitsbaum auf `8cf774c7`), und **dreimal von dreimal
-  auf reinem HEAD ohne jede fremde Änderung im Baum** (3d-druck-f9). Der
-  dritte Beleg ist der stärkste: Er schließt uns als Ursache aus.
-- **„Keine Tests gesammelt" ist kein Fehllauf.** Das Skript suchte seine
-  Fensterdateien bis Version 0.3.0 im *Text* (`grep -lE "MainWindow|Viewport|pyvista"`),
-  damit eine neue keinen Eintrag braucht, und erwischte damit auch eine Datei,
-  die über eine Ansicht **schreibt**, statt eine zu bauen: `tests/test_performance.py` landete
-  wegen zweier Docstrings in der Fenstergruppe, lief dort mit
-  `-m "not performance"`, sammelte nichts und endete mit **Exit 5**. Das Skript
-  wertet das nicht mehr als Fehllauf — wer einen eigenen Lauf baut, sollte es
-  auch nicht.
+- **Jeder Nichtnull-Prozessausgang macht das Tor rot**, auch nach „passed"
+  oder vollständigen Fortschrittszeichen. Ein nativer Abbruch und eine
+  fehlgeschlagene Zusicherung sind unterschiedliche Ursachen, aber beide
+  verhindern die Abnahme. Die Shell kann verschiedene Windows-Nativcodes
+  als 127 melden; zur Diagnose zählt der direkte Prozessausgang.
+- **Diagnosewiederholungen löschen keinen früheren Fehler.** Das geteilte
+  Tor halbiert weiterhin Portionen mit fehlenden Tests. Es zählt den
+  ursprünglichen Abbruch vor der Teilung und endet insgesamt mit Exit 1.
+  Ein späterer sauberer Lauf ist ein eigener Nachweis.
+- **Sammlungsfehler werden nicht übergangen.** Die Fenstergruppe kommt aus
+  Pytests Fixture-Graphen, einschließlich mittelbarer `qt_app`-Abhängigkeiten.
+  Scheitert die Gruppen- oder Testnamensammlung, bleibt das Tor rot; eine
+  teilweise ausgegebene Liste wird nicht als vollständig gefahren. Ein
+  ausdrücklich gesetztes `SUITE_PYTHON` wird nie still ersetzt.
 
 Weiteres:
 

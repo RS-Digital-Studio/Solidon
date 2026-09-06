@@ -155,9 +155,9 @@ def _as_toml(table: dict[str, dict[str, Any]]) -> str:
         "",
     ]
     for name, entry in sorted(table.items()):
-        lines.append(f"[{name}]")
+        lines.append(f"[{_literal(name)}]")
         for key, value in entry.items():
-            lines.append(f"{key} = {_literal(value)}")
+            lines.append(f"{_literal(key)} = {_literal(value)}")
         lines.append("")
     return "\n".join(lines)
 

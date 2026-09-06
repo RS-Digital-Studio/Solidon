@@ -13,6 +13,7 @@ liefen durch.
 
 from __future__ import annotations
 
+import math
 from itertools import pairwise
 from typing import Any
 
@@ -21,6 +22,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
+from app.core.errors import ValidationError
 from app.core.geom.boolean import _plausible
 from app.core.geom.hollow import hollow
 from app.core.geom.measure import angle_between
@@ -28,10 +30,11 @@ from app.core.geom.mesh import MeshData, ray_hit_distances
 from app.core.geom.pins import PIN_MIN_ENGAGEMENT, PIN_WALL, add_pins, plan_pins
 from app.core.geom.prepare import split_at_plane
 from app.core.geom.section import SectionPlane
+from app.core.perceive.features import detect
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.slice.analysis import cross_section
-from app.core.types import Finding, OpContext, Profile, Scene, SceneObject, Vec3
+from app.core.types import Finding, OpContext, Profile, Quality, Scene, SceneObject, Vec3
 from app.core.units import EPS_GEOM
 
 load_operations()
@@ -41,7 +44,12 @@ load_operations()
 
 
 def run(
-    op: str, entry: SceneObject | None = None, profile: Profile | None = None, **params: Any
+    op: str,
+    entry: SceneObject | None = None,
+    profile: Profile | None = None,
+    *,
+    quality: Quality = "fine",
+    **params: Any,
 ) -> Any:
     """Eine Operation so fahren, wie die Auswertung sie fährt."""
     spec = REGISTRY.get(op)
@@ -52,7 +60,7 @@ def run(
             inputs=[entry] if entry is not None else [],
             params=spec.params(**params),
             profile=profile,
-            quality="fine",
+            quality=quality,
             seed=None,
             progress=lambda fraction, text: None,
             ask=lambda question, choices: choices[0],
@@ -336,7 +344,151 @@ def test_more_segments_never_make_the_sphere_coarser() -> None:
     assert counts[2] == counts[3], "ab 60 Segmenten ist die Grenze erreicht"
 
 
-# --- G-5: was als Ergebnis einer Booleschen durchging ---------------------------
+# --- G-5: Kegel, Kegelstumpf und Ring direkt anlegen -----------------------------
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_created_frustum_has_its_measured_shape_and_is_recognised(quality: Quality) -> None:
+    bottom, top, height = 20.0, 10.0, 12.0
+
+    result = run(
+        "create_cone",
+        quality=quality,
+        bottom_diameter=bottom,
+        top_diameter=top,
+        height=height,
+        segments=96,
+        name="",
+    )
+    mesh = result.outputs[0].mesh
+    expected_volume = math.pi * height * (bottom**2 + bottom * top + top**2) / 12.0
+
+    assert mesh.is_watertight and mesh.component_count == 1
+    assert mesh.volume == pytest.approx(expected_volume, rel=0.005)
+    assert mesh.bounds.minimum == pytest.approx((-bottom / 2.0, -bottom / 2.0, 0.0))
+    assert mesh.bounds.maximum == pytest.approx((bottom / 2.0, bottom / 2.0, height))
+    cones = [feature for feature in detect(mesh).values() if feature.kind == "cone"]
+    assert len(cones) == 1
+    assert cones[0].params["recess"] is False
+
+
+@pytest.mark.parametrize(("bottom", "top"), [(18.0, 0.0), (0.0, 18.0)])
+def test_a_created_cone_may_end_in_one_point(bottom: float, top: float) -> None:
+    diameter, height = 18.0, 15.0
+
+    result = run(
+        "create_cone",
+        bottom_diameter=bottom,
+        top_diameter=top,
+        height=height,
+        segments=96,
+        name="",
+    )
+    mesh = result.outputs[0].mesh
+
+    assert mesh.is_watertight and mesh.component_count == 1
+    assert mesh.volume == pytest.approx(math.pi * (diameter / 2.0) ** 2 * height / 3.0, rel=0.005)
+    assert mesh.bounds.minimum[2] == pytest.approx(0.0)
+    assert mesh.bounds.maximum[2] == pytest.approx(height)
+    assert any(feature.kind == "cone" for feature in detect(mesh).values())
+
+
+def test_two_zero_cone_diameters_are_rejected() -> None:
+    with pytest.raises(ValidationError) as caught:
+        run(
+            "create_cone",
+            bottom_diameter=0.0,
+            top_diameter=0.0,
+            height=10.0,
+            segments=48,
+            name="",
+        )
+
+    assert caught.value.field == "bottom_diameter"
+    assert caught.value.constraint == "range"
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_a_created_torus_has_its_measured_shape_and_is_recognised(quality: Quality) -> None:
+    outer, tube = 40.0, 8.0
+    major_radius = (outer - tube) / 2.0
+    minor_radius = tube / 2.0
+
+    result = run(
+        "create_torus",
+        quality=quality,
+        outer_diameter=outer,
+        tube_diameter=tube,
+        segments=64,
+        name="",
+    )
+    mesh = result.outputs[0].mesh
+    expected_volume = 2.0 * math.pi**2 * major_radius * minor_radius**2
+
+    assert mesh.is_watertight and mesh.component_count == 1
+    volume_tolerance = 0.02 if quality == "draft" else 0.005
+    assert mesh.volume == pytest.approx(expected_volume, rel=volume_tolerance)
+    assert mesh.bounds.minimum == pytest.approx((-outer / 2.0, -outer / 2.0, 0.0))
+    assert mesh.bounds.maximum == pytest.approx((outer / 2.0, outer / 2.0, tube))
+    rings = [feature for feature in detect(mesh).values() if feature.kind == "torus"]
+    assert len(rings) == 1
+    assert rings[0].params["diameter"] == pytest.approx(major_radius * 2.0, abs=0.2)
+    assert rings[0].params["tube_diameter"] == pytest.approx(tube, abs=0.2)
+
+
+def test_a_torus_that_reaches_its_axis_is_rejected() -> None:
+    with pytest.raises(ValidationError) as caught:
+        run(
+            "create_torus",
+            outer_diameter=20.0,
+            tube_diameter=10.0,
+            segments=48,
+            name="",
+        )
+
+    assert caught.value.field == "tube_diameter"
+    assert caught.value.constraint == "crosses_axis"
+
+
+@pytest.mark.parametrize("quality", ["draft", "fine"])
+def test_an_odd_torus_segment_count_keeps_the_declared_bounds(quality: Quality) -> None:
+    outer, tube = 50.0, 10.0
+
+    mesh = (
+        run(
+            "create_torus",
+            quality=quality,
+            outer_diameter=outer,
+            tube_diameter=tube,
+            segments=31,
+            name="",
+        )
+        .outputs[0]
+        .mesh
+    )
+
+    assert mesh.bounds.minimum == pytest.approx((-outer / 2.0, -outer / 2.0, 0.0))
+    assert mesh.bounds.maximum == pytest.approx((outer / 2.0, outer / 2.0, tube))
+
+
+@pytest.mark.parametrize(
+    ("op", "params"),
+    [
+        (
+            "create_cone",
+            {"bottom_diameter": 20.0, "top_diameter": 8.0, "height": 12.0},
+        ),
+        ("create_torus", {"outer_diameter": 40.0, "tube_diameter": 8.0}),
+    ],
+)
+def test_round_primitives_are_lighter_in_draft(op: str, params: dict[str, float]) -> None:
+    draft = run(op, quality="draft", segments=96, name="", **params).outputs[0].mesh
+    fine = run(op, quality="fine", segments=96, name="", **params).outputs[0].mesh
+
+    assert draft.triangle_count < fine.triangle_count
+
+
+# --- G-6: was als Ergebnis einer Booleschen durchging ---------------------------
 
 
 def test_an_inverted_body_is_not_an_answer() -> None:

@@ -34,6 +34,12 @@ auf sein Datum wartet.
 | `check_message.py` | Der `commit-msg`-Hook: Ersatzschreibung statt Umlaut in einer Commit-Meldung |
 | `to_main.py` | Der Weg nach `main`: prüfen, was wirklich committet wird |
 
+`gate_lock.py` schützt Lesen, Erzeugen und Entfernen der Besitzerdatei durch
+die Betriebssystemsperre aus `licence_archive.py`. Eine junge unlesbare Datei
+bleibt auch ohne Wartebudget belegt. `link_memory.py` reserviert bei Konflikten
+freie Sicherungsnamen exklusiv; vor dem Entfernen des lokalen Bestands wird
+jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
+
 **Messen und Prüfen** (keines davon ist ein Testlauf)
 
 `run_suite_isolated.py` (je Testdatei ein Prozess) · `run_agent_suite.py`
@@ -65,6 +71,10 @@ mehrere Fenster in einem Prozess bewusst ohne Viewport-Abbau.
 
 **Erzeugen** — alles hierunter läuft über den Skill `/erzeugen`
 
+Der Importgraph von `affected_tests.py` behält auch nicht mehr vorhandene
+Importziele als Knoten, damit gelöschte Module ihre direkten und indirekten
+Testabhängigkeiten behalten.
+
 `make_manual.py` · `make_figures.py` (Bildschirmfotos) · `make_web_images.py`
 · `make_icon.py` · `make_changelog.py` · `make_seo.py` · `make_legal.py` · `make_examples.py` ·
 `make_video.py` · `make_longform_video.py` (deutsche und englische 3-Minuten+-Tutorials:
@@ -88,6 +98,11 @@ den ganzen Seiten- und PDF-Rahmen. Eine neue Sprache darf dort keine neue
 Tabellenzeile verlangen; ihr Katalog und das Pfadschema müssen genügen.
 
 **Bauen und Ausliefern**
+
+Der Linux-Installer serialisiert gespeicherte Shellwerte mit einfachen
+Anführungszeichen und gesonderter Apostrophmaskierung. Sein Desktop-Entry
+maskiert zuerst das Exec-Argument, danach dessen Backslashes auf der
+Desktop-Stringebene; wörtliche Prozentzeichen werden verdoppelt.
 
 `bump_version.py` (die zwei Stellen, die die Version tragen, plus drei
 abgeleitete) · `make_installer.py` (baut lokal oder schreibt mit
@@ -130,6 +145,12 @@ Schichtanalyse)
 **Sonstiges** `setup_comfyui.py` · `speak_chatterbox.py`
 
 ## Drei Dinge, die man einmal falsch macht
+
+`check_env --freeze` übernimmt lokale Paketversionen und erhält ausschließlich
+die in `PLATFORM_PINS` belegten Abhängigkeiten anderer Zielplattformen.
+Ändert sich eine bedingte Kante im Laufzeit-/Bauwerkzeugbaum, werden diese Liste
+und die vollständige Windows-/Linux-/macOS-Auflösung zusammen geprüft;
+entfernte allgemeine Pakete werden nicht durch einen Freeze wieder aufgenommen.
 
 - **`stamp_assets.py` läuft als Letztes** vor dem Upload. Wer die Reihenfolge
   ändert, macht `test_every_reference_carries_the_stamp_of_the_file_it_points_at`

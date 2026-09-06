@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 
 from app.core.ingest import threemf
-from app.core.ingest.loader import HEAVY_TRIANGLES, normalise, read_model
+from app.core.ingest.loader import normalise, read_model
 from app.core.perceive.features import detect
 from app.core.slice.analysis import slice_body
 
@@ -61,7 +61,7 @@ def test_a_plain_printed_part_goes_through_without_a_complaint() -> None:
     assert not severe, [entry.code for entry in severe]
 
 
-def test_a_very_fine_model_is_told_it_is_one() -> None:
+def test_a_very_fine_model_is_told_it_is_one(monkeypatch: pytest.MonkeyPatch) -> None:
     """Der Fund, den dieser Korpus erbrachte: eine Million Dreiecke war früher
     still.
 
@@ -69,10 +69,20 @@ def test_a_very_fine_model_is_told_it_is_one() -> None:
     jede Karte und die Merkmalserkennung weisen ein Modell dieser Größe ab —
     eines gereicht zu bekommen und nichts zu sagen ließ Leute also auf etwas
     warten, das nie kam.
+
+    **Die Schwelle kommt hier von außen.** Seit die Importbereinigung doppelte
+    Dreiecke entfernt (Gesamtdurchsicht, B-05) und die Merkmalsgrenze bei einer
+    Million liegt, zählt das schwerste Modell des Korpus 604 146 Dreiecke und
+    liegt unter der Schwelle von 900 000. Gemessen wird der Weg — Zählung,
+    Vergleich, Befund —, nicht die Zahl: Die Schwelle wird auf die Größe des
+    Korpus gesenkt, und das Modell muss dann sagen, was es ist.
     """
+    from app.core.ingest import loader
+
+    monkeypatch.setattr(loader, "HEAVY_TRIANGLES", 500_000)
     result = load(HEAVY)
 
-    assert result.mesh.triangle_count > HEAVY_TRIANGLES
+    assert result.mesh.triangle_count > loader.HEAVY_TRIANGLES
     codes = {entry.code for entry in result.findings}
     assert "ingest.very_large" in codes
     assert "ingest.multiple_components" in codes, "forty-one pieces, and it says so"

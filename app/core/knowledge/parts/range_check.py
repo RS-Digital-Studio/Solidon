@@ -17,7 +17,7 @@ from __future__ import annotations
 import gc
 import itertools
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import Any, Final, SupportsInt, cast
 
 from app.core.knowledge.parts.ops import PLAY_FIELD
 from app.core.knowledge.parts.registry import FeatureRequirement, PartSpec, WallRequirement
@@ -101,11 +101,6 @@ class _Silent:
     def raise_if_cancelled(self) -> None:
         return None
 
-
-#: Wie viele Eckpunkte die Spaltmessung abtastet. Der engste Spalt liegt bei
-#: einem gedruckten Gelenk auf einer Fläche und nicht auf einer Ecke, also
-#: genügt eine Stichprobe — und der Bereichstest fährt viele Ecken.
-GAP_SAMPLE: Final = 200
 
 #: Zwei Flächen bilden eine Wand, wenn ihre Normalen höchstens rund 18 Grad
 #: von der Gegenrichtung abweichen. Eine Fase oder Keilspitze ist damit kein
@@ -223,7 +218,9 @@ def local_wall_thickness(mesh: Any, cancelled: CancelToken | None = None) -> flo
             )
             if not found:
                 continue
-            opposite = normals[int(cell_id)]
+            # VTK schreibt hier eine ganzzahlige Zellkennung. Der reference-Stub
+            # führt deren zur Laufzeit vorhandenes __int__ nicht auf.
+            opposite = normals[int(cast(SupportsInt, cell_id))]
             if float(np.dot(normal, opposite)) > OPPOSING_NORMAL:
                 continue
             least = min(least, float(np.linalg.norm(np.asarray(point) - origin)))
@@ -1129,31 +1126,28 @@ def has_self_intersections(mesh: Any, cancelled: CancelToken | None = None) -> b
     return check.run()
 
 
-def printable_gap(mesh: Any, profile: Profile) -> float | None:
-    """Der engste Spalt zwischen den Teilen eines mehrteiligen Bausteins.
-
-    ``None``, wenn es nur ein Teil gibt — dann gibt es keinen Spalt, und eine
-    Zahl wäre eine Behauptung.
-
-    Gerechnet gegen den nächsten **Ort auf dem Dreieck** und nicht gegen den
-    nächsten Eckpunkt: Zwischen zwei Zylinderflächen liegen die nächsten
-    Punkte fast nie auf Ecken, und der Unterschied ist bei einem Spalt von
-    zwei Zehnteln kein Feinschliff. Über eine Stichprobe der Eckpunkte, weil
-    der Bereichstest die Ecken des Parameterraums fährt und nicht eine Ecke —
-    gemessen am Bolzenscharnier: 247 Punkte gegen 392 Dreiecke, 26 ms, und der
-    gefundene Spalt traf den eingestellten auf drei Stellen.
-    """
-    import numpy as np
-
-    from app.core.geom.mesh import distance_to_triangles
+def printable_gap(
+    mesh: Any, profile: Profile, *, cancelled: CancelToken | None = None
+) -> float | None:
+    """Kleinster Flächenabstand aller Komponenten, unabhängig von ihrer Reihenfolge."""
+    from app.core.geom.measure import surface_gap
+    from app.core.geom.mesh import MeshData
 
     pieces = mesh.raw.split(only_watertight=False)
     if len(pieces) < 2:
         return None
-    first, rest = pieces[0], pieces[1:]
-    triangles = np.concatenate([piece.triangles for piece in rest])
-    points = first.vertices[:: max(1, len(first.vertices) // GAP_SAMPLE)]
-    return min(distance_to_triangles(triangles, np.asarray(p, dtype=float)) for p in points)
+    closest = float(mesh.bounds.diagonal)
+    for index, first in enumerate(pieces):
+        for second in pieces[index + 1 :]:
+            if cancelled is not None and cancelled.is_cancelled:
+                return None
+            measured = surface_gap(MeshData.of(first), MeshData.of(second), closest)
+            if measured is None:
+                return None
+            closest = min(closest, measured)
+            if closest <= EPS_GEOM:
+                return 0.0
+    return closest
 
 
 def check(
@@ -1288,9 +1282,21 @@ def check(
             break
         announce(index, 3)
 
+        gap = printable_gap(mesh, profile, cancelled=token) if bodies > 1 else None
+        if _is_cancelled(token):
+            break
+        if bodies > 1 and gap is None and mesh.component_count > 1:
+            add(
+                entered,
+                str(
+                    _(
+                        "Der Abstand zwischen den Teilkörpern ist nicht messbar. "
+                        "Die Geometrie reparieren und erneut prüfen."
+                    )
+                ),
+            )
         if (
-            bodies > 1
-            and (gap := printable_gap(mesh, profile)) is not None
+            gap is not None
             # **``EPS_DISPLAY`` und nicht ``EPS_GEOM``**: Das hier ist eine
             # Fertigungsfrage, kein Rechenvergleich. Der gemessene Spalt fällt
             # um Bruchteile kleiner aus als der eingestellte, weil ein

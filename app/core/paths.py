@@ -224,7 +224,7 @@ def installed_language() -> str | None:
         base = Path(__file__).resolve().parent.parent.parent
     try:
         text = (base / INSTALL_LANGUAGE_FILE).read_text(encoding="utf-8").strip()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
     return text if text in set(available_languages()) else None
 

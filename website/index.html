@@ -30,7 +30,7 @@
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="/icon.svg?v=a72d0c52" type="image/svg+xml">
-<link rel="stylesheet" href="style.css?v=a7599376">
+<link rel="stylesheet" href="style.css?v=2e1a72a9">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -104,7 +104,7 @@
       "name": "Muss ich eine KI benutzen?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs, Kontextmenüs, Kommandozeile und alle 100 Operationen."
+        "text": "Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs, Kontextmenüs, Kommandozeile und alle 102 Operationen."
       }
     },
     {
@@ -128,7 +128,7 @@
       "name": "Gehen meine Modelle irgendwohin?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt — dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch das lokal. Ohne Chat verlässt fast nichts den Rechner: keine Konten, keine Ablage im Netz, keine Telemetrie. Zwei Ausnahmen bleiben. Beim Start fragt Solidon3D optional nach, ob eine neuere Version da ist — die Anfrage nennt nur die eigene Versionsnummer und lässt sich in den Einstellungen abschalten. Und was du selbst absendest: eine Rückmeldung an den Support, deren Inhalt vorher in der Vorschau steht."
+        "text": "Deine Projektdateien bleiben auf deinem Rechner. Im Chat erhält das gewählte Sprachmodell deine Nachricht, den Szenensteckbrief und den Gesprächsverlauf. Unterstützt es Bilder, können auch gerenderte Ansichten des Modells mitgeschickt werden. Bei Anthropic oder einem entfernten Ollama-Server verlassen diese Daten den Rechner. Ollama auf deinem eigenen Rechner verarbeitet sie lokal. Vor dem ersten Modellkontakt zeigt Solidon3D das gewählte Ziel an. Netzverbindungen gibt es außerdem für die Geräteaktivierung, die abschaltbare Versionsprüfung und Downloads, die du anstößt. Eine Supportnachricht zeigt ihren Inhalt vor dem Senden. Solidon3D überträgt keine Nutzungsstatistik und speichert deine Projekte nicht in einer Cloud."
       }
     },
     {
@@ -152,7 +152,7 @@
       "name": "Wie installiere ich das Flatpak unter Linux?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ein Flatpak ist kein Installationsprogramm zum Doppelklicken, sondern ein Paket, das die Paketverwaltung einspielt. Öffne ein Terminal in dem Ordner, in den du geladen hast, und gib ein: flatpak install./Solidon3D-*.flatpak Danach steht Solidon3D im Startmenü. Starten geht auch mit flatpak run de.rsdigital.solidon3d, entfernen mit flatpak uninstall de.rsdigital.solidon3d. Kennt dein System den Befehl flatpak nicht, installiert ihn die Paketverwaltung deiner Distribution unter genau diesem Namen."
+        "text": "Ein Flatpak ist kein Installationsprogramm zum Doppelklicken, sondern ein Paket, das die Paketverwaltung einspielt. Öffne ein Terminal in dem Ordner, in den du geladen hast, und gib ein: flatpak install ./Solidon3D-*.flatpak Danach steht Solidon3D im Startmenü. Starten geht auch mit flatpak run de.rsdigital.solidon3d, entfernen mit flatpak uninstall de.rsdigital.solidon3d. Kennt dein System den Befehl flatpak nicht, installiert ihn die Paketverwaltung deiner Distribution unter genau diesem Namen."
       }
     },
     {
@@ -361,7 +361,7 @@
   <section class="tint band">
     <div class="wrap">
       <div class="stats">
-        <div><b>100</b><span>Operationen im Register</span></div>
+        <div><b>102</b><span>Operationen im Register</span></div>
         <div><b>27</b><span>geprüfte Bausteine</span></div>
         <div><b>51</b><span>Normteilmaße hinterlegt</span></div>
         <div><b>16</b><span>Druckerprofile ab Werk</span></div>
@@ -772,8 +772,8 @@
     <div class="wrap">
       <h2>Systemvoraussetzungen</h2>
       <table class="req">
-        <tr><td>Betriebssystem</td><td>Windows 10/11 (64 Bit), macOS 13 oder
-        neuer, oder Linux — auf dem Mac für Apple Silicon und Intel getrennt.
+        <tr><td>Betriebssystem</td><td>Windows 10 (ab 1809)/11 (x64), macOS 13 oder
+        neuer, oder Linux (x64, X11/Xwayland) — auf dem Mac für Apple Silicon und Intel getrennt.
         Die Mac-Version ist noch nicht bei Apple notarisiert: macOS öffnet das
         Installationspaket deshalb nicht per Doppelklick. Im Hinweis „Fertig“
         wählen — nicht „In den Papierkorb“ — und das Paket danach in den
@@ -782,7 +782,7 @@
         <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download je
         nach System zwischen 218 und 380 MB</td></tr>
         <tr><td>Grundbetrieb</td><td>8 GB Arbeitsspeicher und eine
-        Grafik, die OpenGL kann — die KI-Zeilen darunter sind Zusätze,
+        Grafik mit OpenGL 3.2 oder neuer — die KI-Zeilen darunter sind Zusätze,
         keine Mindestanforderungen</td></tr>
         <tr><td>Bildschirm</td><td>Mindestens 1920 × 1080 Pixel (16:9, Full HD) oder
         1920 × 1200 Pixel (16:10). Empfohlen: 2560 × 1440 Pixel
@@ -870,7 +870,7 @@
           <summary>Muss ich eine KI benutzen?</summary>
           <p>Nein. Der Chat ist ein Weg von vieren. Ohne Schlüssel und ohne
           Ollama bleibt alles außer dem Chat vollständig benutzbar — Menüs,
-          Kontextmenüs, Kommandozeile und alle 100 Operationen.</p>
+          Kontextmenüs, Kommandozeile und alle 102 Operationen.</p>
         </details>
         <details>
           <summary>Rechnet die KI meine Geometrie?</summary>
@@ -890,17 +890,9 @@
         </details>
         <details>
           <summary>Gehen meine Modelle irgendwohin?</summary>
-          <p>Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt —
-          dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit
-          ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf
-          in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch
-          das lokal. Ohne Chat verlässt fast nichts den Rechner: keine Konten,
-          keine Ablage im Netz, keine Telemetrie.</p>
-          <p>Zwei Ausnahmen bleiben. Beim Start fragt Solidon3D optional
-          nach, ob eine neuere Version da ist — die Anfrage nennt nur die
-          eigene Versionsnummer und lässt sich in den Einstellungen
-          abschalten. Und was du selbst absendest: eine Rückmeldung an den
-          Support, deren Inhalt vorher in der Vorschau steht.</p>
+          <p>Deine Projektdateien bleiben auf deinem Rechner. Im Chat erhält das gewählte Sprachmodell deine Nachricht, den Szenensteckbrief und den Gesprächsverlauf. Unterstützt es Bilder, können auch gerenderte Ansichten des Modells mitgeschickt werden.</p>
+          <p>Bei Anthropic oder einem entfernten Ollama-Server verlassen diese Daten den Rechner. Ollama auf deinem eigenen Rechner verarbeitet sie lokal. Vor dem ersten Modellkontakt zeigt Solidon3D das gewählte Ziel an.</p>
+          <p>Netzverbindungen gibt es außerdem für die Geräteaktivierung, die abschaltbare Versionsprüfung und Downloads, die du anstößt. Eine Supportnachricht zeigt ihren Inhalt vor dem Senden. Solidon3D überträgt keine Nutzungsstatistik und speichert deine Projekte nicht in einer Cloud.</p>
         </details>
         <details>
           <summary>Welche Formate liest und schreibt Solidon3D?</summary>

@@ -41,6 +41,7 @@ from app.core.perceive.matching import (
 from app.core.registry import REGISTRY, OperationSpec, Registry, validate
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
+from app.core.scene.fits import active_fits
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
 from app.core.scene.orphans import feature_ref_of_sketch
@@ -77,10 +78,13 @@ from app.i18n import TranslatableText, _, source_text
 
 _log = get_logger(__name__)
 
-#: Darüber wird die Erkennung übersprungen — und sagt es. §31 setzt das Ziel
-#: bei einer Sekunde für 200 000 Dreiecke; sie nach jeder Operation auf einer
-#: Million laufen zu lassen, kostete mehr, als es wert ist.
-FEATURE_LIMIT_TRIANGLES = 200_000
+#: Feine Kundennetze werden unverändert erkannt: Schlauchhalter und Figur mit
+#: rund 400 000 beziehungsweise 900 000 Dreiecken benötigen kalt 7 bis 13 Sekunden,
+#: aus dem Cache unter 50 Millisekunden. Die Schranke bleibt: ein Schiff mit
+#: 1,22 Millionen Dreiecken benötigt 157 Sekunden und deutlich mehr Speicher.
+#: Die Topologie entscheidet mit: auf 990 000 reduziert bleibt es bei 123 Sekunden.
+#: §31 bleibt das Leistungsziel; dieses Budget begrenzt die zugelassenen Netze.
+FEATURE_LIMIT_TRIANGLES = 1_000_000
 
 #: Und darüber läuft die **Zuordnung** nicht — dieselbe Bremse, die andere
 #: Größe.
@@ -339,6 +343,10 @@ def evaluate(
         # Festgehalten, bevor die Operation läuft: die Bezeichner, auf die die
         # neuen Merkmale danach abgebildet werden müssen (§21.2).
         previous_features = {entry.id: dict(entry.features) for entry in inputs}
+        inherited_feature_ids = {
+            name for entry in inputs for name in (*entry.reserved_feature_ids, *entry.features)
+        }
+        active_feature_ids = {name for entry in inputs for name in entry.features}
         # Dazu der Hüllquader, in dem sie gemessen wurden — siehe _with_features.
         previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
         try:
@@ -418,6 +426,22 @@ def evaluate(
                 # Erfolg mit dem alten Ergebnis. Die nächste ungeschützte
                 # json.loads in einem Sammelparameter-Leser wäre sonst
                 # derselbe Fund noch einmal.
+                #
+                # **Und der Traceback gehört ins Protokoll.** Der Kundenbericht
+                # S-20260906-9ca141 (0.3.4) trug zweimal
+                # ``op.load.InternalError`` mit dem Titel und sonst nichts: Die
+                # Ausnahmeart lag in ``values`` versteckt, der Traceback stand
+                # nirgends, und mit dem Bericht in der Hand war der Fehler nicht
+                # zu finden. ``exc_info`` schreibt ihn in die Zeilen, die der
+                # Bericht als „protokoll.txt" mitschickt.
+                _log.error(
+                    "op %s (%s) raised %s: %s",
+                    operation.id,
+                    operation.op,
+                    type(problem).__name__,
+                    problem,
+                    exc_info=problem,
+                )
                 wrapped = InternalError(
                     detail=f"{type(problem).__name__}: {problem}",
                     values={"operation": str(operation.op)},
@@ -541,7 +565,15 @@ def evaluate(
                 # Ausgaben derselben Operation hinweg.
                 if recorded:
                     matches.setdefault(operation.id, {}).update(recorded)
-            hashes[object_id] = object_hash(key, index)
+            objects[object_id] = _with_feature_reservations(
+                objects[object_id], inherited_feature_ids, active_feature_ids
+            )
+            hashes[object_id] = object_hash(
+                key,
+                index,
+                objects[object_id].reserved_feature_ids,
+                getattr(objects[object_id].mesh, "cavity", None),
+            )
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
             # Wörtlich festgehalten, nicht als Verweis: Der Name, den ein
@@ -604,13 +636,13 @@ def evaluate(
     scene = Scene(
         objects=objects,
         parameters=parameters,
-        fits=list(document.fits),
+        fits=active_fits(document),
         profile=profile,
         report=Report(tuple(findings)),
     )
     # §14: Passungen werden bei jeder Auswertung geprüft, nie nur auf Nachfrage.
     if stopped_at is None and scene.fits:
-        findings.extend(check_fits(scene, profile))
+        findings.extend(check_fits(scene, profile, document=document))
         scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     # Und aus demselben Grund die Lage zum Bauraum: ein Körper, der halb unter
     # der Bauplatte steckt, ist nicht druckbar, und die Schichtanalyse rechnet
@@ -752,7 +784,14 @@ def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
     # offenen Kanten geschlossen` — roh geschrieben stünden im Protokoll die
     # Platzhalter statt der Zahlen, also gerade das, wonach der Support sucht.
     # Dieselbe Funktion löst das für Dateinamen (`Slot number.stl`).
-    return f"{last.code}: {source_text(last.message)}"
+    reason = f"{last.code}: {source_text(last.message)}"
+    # **Der Grund eines Programmfehlers steht nicht in der Meldung.** Die ist
+    # je Klasse gleich — „Im Programm ist ein unerwarteter Fehler
+    # aufgetreten" —, und Ausnahmeart und -text liegen in ``values["detail"]``.
+    # Im Kundenprotokoll vom 06.09.2026 (S-20260906-9ca141) hieß die Zeile
+    # zweimal dasselbe und sagte beide Male nichts.
+    detail = last.values.get("detail")
+    return f"{reason} — {detail}" if detail else reason
 
 
 def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
@@ -943,6 +982,35 @@ def _outside(feature: Feature | None, bounds: BoundingBox, moved: bool) -> bool:
     )
 
 
+def _with_feature_reservations(
+    entry: SceneObject, inherited: set[str], active: set[str]
+) -> SceneObject:
+    """Vergebene Kennungen überleben jede Operation und jeden Cachetreffer.
+
+    Auch eine neue Erkennung darf einen früher gelöschten Namen nicht
+    wiederbeleben. Überlebende Merkmale behalten dagegen ihre Zuordnung.
+    """
+    taken = inherited | set(entry.reserved_feature_ids) | set(entry.features)
+    features = {}
+    for name, feature in entry.features.items():
+        if name in inherited and name not in active:
+            stem, separator, tail = name.rpartition("_")
+            prefix = stem if separator and tail.isdigit() else name
+            highest = max(
+                (
+                    int(key.rpartition("_")[2])
+                    for key in taken
+                    if key.rpartition("_")[0] == prefix and key.rpartition("_")[2].isdigit()
+                ),
+                default=0,
+            )
+            name = f"{prefix}_{highest + 1}"
+            feature = dataclasses.replace(feature, id=name)
+            taken.add(name)
+        features[name] = feature
+    return dataclasses.replace(entry, features=features, reserved_feature_ids=tuple(sorted(taken)))
+
+
 def _with_features(
     entry: SceneObject,
     previous: dict[str, Any],
@@ -1078,7 +1146,8 @@ def _with_features(
     watch.raise_if_cancelled()
     if say is not None:
         say(str(_("Merkmale erkennen")))
-    detected = detect(mesh)
+    detected = detect(mesh, check_cancelled=watch.raise_if_cancelled)
+    watch.raise_if_cancelled()
 
     # **Was auf einer Freiform weggelassen wurde, steht hier, nicht nirgends.**
     # ``detect`` nimmt Kugeln, Ringe, Kegel und Verrundungen von einem Modell,

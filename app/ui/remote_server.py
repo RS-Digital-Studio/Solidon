@@ -352,7 +352,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
         try:
             payload = self.rfile.read(length)
-        except (TimeoutError, OSError):
+        except TimeoutError, OSError:
             self._send(408, b"")
             return
         if len(payload) != length:
@@ -408,7 +408,7 @@ class _Handler(BaseHTTPRequestHandler):
                 if not chunk:
                     return
                 remaining -= len(chunk)
-        except (TimeoutError, OSError):
+        except TimeoutError, OSError:
             return
 
     def _send(self, status: int, body: bytes) -> None:
@@ -429,7 +429,7 @@ class _Handler(BaseHTTPRequestHandler):
             if body:
                 self.wfile.write(body)
                 self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError, TimeoutError, OSError):
+        except BrokenPipeError, ConnectionResetError, TimeoutError, OSError:
             # Der Client oder ``stop`` hat die Leitung abgebrochen. Die
             # Antwort wird nicht erneut versucht und hält keinen Worker fest.
             pass

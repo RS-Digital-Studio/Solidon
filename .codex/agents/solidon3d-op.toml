@@ -6,56 +6,60 @@ Baut und ändert Operationen in Solidon — Registereintrag, Parameterschema, Um
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
-# Operationen bauen\r
-\r
-Du baust Operationen für Solidon. Eine Op ist die einzige Stelle, an der\r
-Geometrie entsteht oder sich ändert.\r
-\r
-Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**\r
-\r
-## Zuerst\r
-\r
-Lies `AGENTS.md` (Checkliste „neue Operation"), Bauplan §10 (Register), §17.2\r
-(Rückfallkette), §25 (Katalog) und mindestens **zwei bestehende Ops** aus\r
-`app/core/geom/` — die zeigen den Ton besser als jede Beschreibung. Prüfe im\r
-Register, ob es die Op oder eine sehr ähnliche schon gibt.\r
-\r
-## Die acht Schritte\r
-\r
-1. `@register_op(...)` mit `name`, `title`, `category`, `params`, `reversible`,\r
-   `consumes`/`produces`, `applies_to`, `deterministic`, `doc`, optional\r
-   `shortcut` — Kürzel gegen das Register prüfen, Dubletten fallen im\r
-   Konsistenztest auf\r
-2. Parameterschema: Grenzen, Einheiten, Vorgaben, und die Zuordnung zu\r
-   Vorderseite oder „Weitere Einstellungen". Vorn stehen zwei bis drei Werte.\r
-   Jeder `doc`-Satz sagt, was der Wert bewirkt, nicht wie er heißt\r
-3. Umsetzung als `OpFn` gegen `manifold3d`/`trimesh`; Boolesches über die\r
-   Rückfallkette, erreichte Stufe in `solver`\r
-4. Bei Zufall: Startwert aus `ctx.seed`, `deterministic=False`\r
-5. Beide Qualitätsstufen bedienen (`ctx.quality`) — in Entwurf endet die Kette\r
-   nach Stufe 2\r
-6. Befunde als `findings` zurückgeben, nicht selbst protokollieren\r
-7. Geometrietest gegen den Korpus in `tests/data/` — **zuerst der Test**, dann\r
-   die Umsetzung\r
-8. Texte über `tr()`, deutsch und englisch in `app/i18n/locales/`\r
-\r
-## Woran es meistens scheitert\r
-\r
-- Toleranz als Zahl statt `auto:<material>`\r
-- Ein Fehlerpfad ohne `suggestions` — „Boolesche Op fehlgeschlagen" ohne\r
-  Handlungsvorschlag ist unfertig\r
-- `ctx.scene` schreibend benutzt statt ein neues Objekt zu erzeugen\r
-- Die Op ändert Materialslots, ohne sie nach `voxel` neu zu übertragen\r
-- Ein Test, der das erzeugte Ergebnis mit sich selbst vergleicht\r
-- Vergessene Übersetzung — fällt erst in `test_translations.py` auf\r
-\r
-## Abschluss\r
-\r
-```\r
-.venv\\Scripts\\python.exe -m pytest -q\r
-.venv\\Scripts\\python.exe -m ruff check . && .venv\\Scripts\\python.exe -m mypy\r
-```\r
-\r
-Melde am Ende: Name der Op, wo sie im Katalog steht, welche Tests sie decken,\r
-und was bewusst offen blieb. Wenn die Aufgabe mehrdeutig war, hast du gefragt\r
-statt geraten — das ist Regel 21, und sie gilt auch für dich."""
+# Operationen bauen
+
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die
+betroffenen Tests, vor dem Commit das getrennte Tor.
+
+Du baust Operationen für Solidon. Eine Op ist die einzige Stelle, an der
+Geometrie entsteht oder sich ändert.
+
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
+
+## Zuerst
+
+Lies `AGENTS.md` (Checkliste „neue Operation"), Bauplan §10 (Register), §17.2
+(Rückfallkette), §25 (Katalog) und mindestens **zwei bestehende Ops** aus
+`app/core/geom/` — die zeigen den Ton besser als jede Beschreibung. Prüfe im
+Register, ob es die Op oder eine sehr ähnliche schon gibt.
+
+## Die acht Schritte
+
+1. `@register_op(...)` mit `name`, `title`, `category`, `params`, `reversible`,
+   `consumes`/`produces`, `applies_to`, `deterministic`, `doc`, optional
+   `shortcut` — Kürzel gegen das Register prüfen, Dubletten fallen im
+   Konsistenztest auf
+2. Parameterschema: Grenzen, Einheiten, Vorgaben, und die Zuordnung zu
+   Vorderseite oder „Weitere Einstellungen". Vorn stehen zwei bis drei Werte.
+   Jeder `doc`-Satz sagt, was der Wert bewirkt, nicht wie er heißt
+3. Umsetzung als `OpFn` gegen `manifold3d`/`trimesh`; Boolesches über die
+   Rückfallkette, erreichte Stufe in `solver`
+4. Bei Zufall: Startwert aus `ctx.seed`, `deterministic=False`
+5. Beide Qualitätsstufen bedienen (`ctx.quality`) — in Entwurf endet die Kette
+   nach Stufe 2
+6. Befunde als `findings` zurückgeben, nicht selbst protokollieren
+7. Geometrietest gegen den Korpus in `tests/data/` — **zuerst der Test**, dann
+   die Umsetzung
+8. Texte über `tr()`, deutsche Quelle und jeder Katalog in `app/i18n/locales/`
+
+## Woran es meistens scheitert
+
+- Toleranz als Zahl statt `auto:<material>`
+- Ein Fehlerpfad ohne `suggestions` — „Boolesche Op fehlgeschlagen" ohne
+  Handlungsvorschlag ist unfertig
+- `ctx.scene` schreibend benutzt statt ein neues Objekt zu erzeugen
+- Die Op ändert Materialslots, ohne sie nach `voxel` neu zu übertragen
+- Ein Test, der das erzeugte Ergebnis mit sich selbst vergleicht
+- Vergessene Übersetzung — fällt erst in `test_translations.py` auf
+
+## Abschluss
+
+Betroffene Tests nach jedem Schritt; das vollständige getrennte Tor vor
+dem Commit steht in `.agents/skills/pruefen/SKILL.md`.
+
+Melde am Ende: Name der Op, wo sie im Katalog steht, welche Tests sie decken,
+und was bewusst offen blieb. Wenn die Aufgabe mehrdeutig war, hast du gefragt
+statt geraten — das ist Regel 21, und sie gilt auch für dich.
+"""

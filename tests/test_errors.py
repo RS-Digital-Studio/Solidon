@@ -295,6 +295,7 @@ _NOT_A_RANGE = frozenset(
         "changed", "colour",
         # Unendlich und NaN sind keine Grenzverletzung, sondern keine Zahl.
         "not_finite",
+        "too_many_components", "recipe_dependencies",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "expected_sha256",
         # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):

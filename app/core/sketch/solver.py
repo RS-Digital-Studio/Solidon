@@ -657,7 +657,11 @@ def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> S
     # Rangprüfung danach braucht die Matrix dicht — und die wächst mit
     # Bedingungen mal Punkten. Eine Skizze jenseits der Grenze wird benannt
     # statt gerechnet (G-09).
-    total_rows = sum(equation.rows for equation in equations)
+    # Die spätere Rangprüfung ergänzt je Kreis eine dichte Eichzeile, auch
+    # wenn überhaupt keine explizite Bedingung vorliegt.
+    total_rows = sum(equation.rows for equation in equations) + sum(
+        element.kind == "circle" for element in sketch.elements
+    )
     dense_bytes = total_rows * anchors.size * 8
     if dense_bytes > MAX_JACOBIAN_BYTES:
         raise ValidationError(

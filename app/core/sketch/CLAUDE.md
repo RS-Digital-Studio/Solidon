@@ -49,6 +49,17 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
 
 ## Grenzen
 
+- **Eine Splinekurve für Vorschau und Körper.** `profile.spline_controls`
+  liefert die Catmull-Rom-Bézierstücke; die 2D-Schnittprüfung und der
+  B-Rep-Kern verwenden dieselben Kontrollpunkte. Jede kubische Teilkurve
+  erhält eine eigene B-Rep-Kante, damit auch Flächenintegrale an den
+  Stückgrenzen getrennt werden. Der Drehsinn folgt dem exakten Integral.
+- **Ringe müssen getrennte Grenzen haben.** Kreisverschachtelung wird
+  analytisch entschieden, andere exakte Umrisse über ihre B-Rep-Grenzen.
+  Kreuzungen, Berührungen und doppelte Ringe halten mit Vorschlag an.
+- **Das Löserbudget zählt alle dichten Zeilen**, einschließlich der
+  zusätzlichen Kreis-Eichzeilen bei ansonsten freien Skizzen.
+
 - **Der Löser rät nicht.** Ein unterbestimmtes System bleibt unterbestimmt;
   ein widersprüchliches meldet `SketchConflictError` mit Handlungsvorschlag.
 - **Kein Qt.** Der Editor ruft hier herein, nie umgekehrt.

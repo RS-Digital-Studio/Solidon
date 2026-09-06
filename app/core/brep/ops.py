@@ -19,7 +19,7 @@ from typing import Literal, cast
 
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
-from app.core.brep.kernel import Solid, require
+from app.core.brep.kernel import Solid, require, tessellate
 from app.core.errors import (
     CANCEL,
     CORRECT_INPUT,
@@ -32,9 +32,10 @@ from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, witho
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
 from app.core.geom.prepare import bore_diameter, compensation_findings, over_the_edge
 from app.core.geom.prepare_ops import DrillParams
+from app.core.geom.primitive_ops import PositionedPrimitiveParams, placement_transform
 from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
 from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
 from app.i18n import _
 
@@ -45,7 +46,7 @@ _CHOICE_DOC = _("Welche Kanten gemeint sind — senkrechte, waagerechte, oben, u
 
 
 @op_params
-class BrepBoxParams(BaseParams):
+class BrepBoxParams(PositionedPrimitiveParams):
     width: float = param(
         title=_("Breite"),
         default=40.0,
@@ -93,12 +94,16 @@ class BrepBoxParams(BaseParams):
 def create_brep_box(ctx: OpContext) -> OpResult:
     params = cast(BrepBoxParams, ctx.params)
     require()
-    solid = edit.box(params.width, params.depth, params.height)
+    # Dieselbe Lage wie beim Netz-Zwilling: Position und Richtung sind
+    # Felder beider Dialoge, und der Haken zwischen den Kernen behält sie.
+    solid = edit.transformed(
+        edit.box(params.width, params.depth, params.height), placement_transform(params)
+    )
     return OpResult(outputs=[_object(params.name or str(_("Quader")), solid)])
 
 
 @op_params
-class BrepCylinderParams(BaseParams):
+class BrepCylinderParams(PositionedPrimitiveParams):
     diameter: float = param(
         title=_("Durchmesser"),
         default=20.0,
@@ -141,7 +146,9 @@ class BrepCylinderParams(BaseParams):
 def create_brep_cylinder(ctx: OpContext) -> OpResult:
     params = cast(BrepCylinderParams, ctx.params)
     require()
-    solid = edit.cylinder(params.diameter, params.height)
+    solid = edit.transformed(
+        edit.cylinder(params.diameter, params.height), placement_transform(params)
+    )
     return OpResult(outputs=[_object(params.name or str(_("Zylinder")), solid)])
 
 
@@ -438,7 +445,31 @@ def thread_exact(ctx: OpContext) -> OpResult:
     params = cast(ThreadParams, ctx.params)
     require()
     solid = profiles.threaded_rod(params.diameter, params.pitch, params.length)
-    return OpResult(outputs=[_object(params.name or str(_("Gewindebolzen")), solid)])
+    entry = _object(params.name or str(_("Gewindebolzen")), solid)
+    # Der Erzeuger kennt den Gang genau; die analytischen Einzelflächen allein
+    # beschreiben seine Steigung nicht. Planare Anschnitte bleiben separat
+    # auswählbar, der übrige Mantel gehört zum benannten Gewinde.
+    ends = {
+        index
+        for feature in entry.features.values()
+        if feature.kind == "face"
+        for index in feature.face_indices
+    }
+    entry.features["thread_1"] = Feature(
+        id="thread_1",
+        kind="thread",
+        provenance="generated",
+        params={
+            "diameter": params.diameter,
+            "pitch": params.pitch,
+            "length": params.length,
+            "centre": (0.0, 0.0, params.length / 2.0),
+            "axis": (0.0, 0.0, 1.0),
+            "internal": False,
+        },
+        face_indices=tuple(index for index in range(solid.triangle_count) if index not in ends),
+    )
+    return OpResult(outputs=[entry])
 
 
 @register_op(
@@ -579,7 +610,9 @@ def brep_to_mesh(ctx: OpContext) -> OpResult:
     """
     params = cast(ToMeshParams, ctx.params)
     source, body = brep_input(ctx)
-    mesh = Solid(shape=body.shape, deflection=params.deflection).to_mesh()
+    # tessellate besitzt seine Arbeitskopie; ein weiterer Solid würde hier
+    # dieselbe Eingabe vor der eigentlichen Vernetzung unnötig doppelt kopieren.
+    mesh = tessellate(body.shape, params.deflection)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, kind="mesh", features={})],
         findings=[

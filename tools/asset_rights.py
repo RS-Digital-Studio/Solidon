@@ -194,7 +194,7 @@ def _inside_root(path: Path, root: Path) -> bool:
     """Auch nach dem Auflösen aller Symlinks im erlaubten Quellbaum bleiben."""
     try:
         return path.resolve(strict=True).is_relative_to(root.resolve(strict=True))
-    except (OSError, RuntimeError):
+    except OSError, RuntimeError:
         return False
 
 

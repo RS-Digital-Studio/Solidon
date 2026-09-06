@@ -1336,7 +1336,9 @@ def test_a_self_crossing_exact_spline_is_refused() -> None:
     from app.core.errors import GeometryError
     from app.core.sketch.profile import regions_of
 
-    points = ((-10.0, -5.0), (0.0, 5.0), (-6.0, 0.0), (-9.0, 0.0))
+    # Echte Kreuzung der gezeichneten Catmull-Rom-Kurve; das alte Beispiel
+    # kreuzte nur die abweichende PointsToBSpline-Interpolation.
+    points = ((-10.0, -5.0), (10.0, 5.0), (-10.0, 5.0), (10.0, -5.0))
     crossing = Sketch(
         plane="plane:xy",
         elements=(

@@ -87,10 +87,11 @@ Jeder Baustein sitzt an einer Stelle, und die sechs Angaben dafür heißen
 überall gleich: ``x`` ist die Position im Koordinatensystem des Objekts, ``y``
 die zweite Achse dazu, ``z`` die Höhe über seiner Grundfläche. ``axis`` ist
 die Richtung, in die der Baustein zeigt — solange kein Merkmal gewählt ist.
-``angle`` dreht ihn um seine eigene Achse. ``at_feature`` nimmt den Namen
-eines erkannten Merkmals, zum Beispiel ``hole_1``; ist er gesetzt, gibt das
-Merkmal Ort und Richtung vor. Auch das steht bei den Bausteinen nicht noch
-einmal.
+``angle`` dreht ihn um seine eigene Achse. ``nx``, ``ny`` und ``nz`` sind die
+Richtung nach außen an der gewählten Oberfläche; drei Nullen lassen ``axis``
+gelten. ``at_feature`` nimmt den Namen eines erkannten Merkmals, zum Beispiel
+``hole_1``; ist er gesetzt, gibt das Merkmal Ort und Richtung vor. Auch das
+steht bei den Bausteinen nicht noch einmal.
 
 Antworte kurz und auf Deutsch. Beschreibe am Ende in einem Satz, was dein
 Vorschlag ändert.

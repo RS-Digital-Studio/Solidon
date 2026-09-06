@@ -129,6 +129,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | Was der Gesamtreview liegen ließ (05.09.2026) | **entschieden, gebaut — und der zweite Renderer ist am selben Tag wieder ausgebaut (06.09.2026): pygfx zeichnet allein** (`app/ui/render/factory.py`; Robert: „dann ausbau sauber“). PyVista, PyVistaQt und `vtk_renderer.py` sind weg, `vtk` bleibt als kopflose Geometriebibliothek der Bereichsprüfung im Kern. Was offen ist: die Bereichsprüfung ohne VTK rechnen (eigene Strahl- und Dreieckspaarprüfung, validiert über alle 27 Bausteine — dann fällt das Paket ganz; bis dahin kann `vtk` auf 9.7.0 gehoben werden, eigener Lauf mit Tor); das erste Bild eines großen Netzes (4 s am 3,15-Millionen-Baum, je rund eine Sekunde Pipelines, Punktnormalen auf der CPU und Pufferupload — Aufbauprofil in `ABNAHME.md`; zwei Hebel sind mit Zahl benannt und keiner gebaut: die Shader beim Start an einem kleinen Netz vorwärmen, und Punktnormalen mitgeben statt pygfx sie rechnen zu lassen); Speicher über Fenster- und Sprachwechsel messen; die Fensterdateien in der CI wieder einschalten (Probelauf); den wgpu-Fensterweg unter nativem Wayland fahren; und die zwei Prüfstände am echten Fenster (eigener Registerpunkt). Die Modellabnahme über 23 Kundendateien, die Leistungsreihe und das Aufbauprofil liegen in `.claude/.state/renderer-audit-2026-09-05-01a07353/` (`ABNAHME.md`) |
 | Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht gefahren | Was der Gesamtreview liegen ließ (05.09.2026) | einen Tag-Lauf der CI für das Flatpak und danach eine Messung im echten Flatpak auf einem Linux (Grafik, Qt-Bibliotheken, Start ohne Netz); für Inno Setup 7 (lokal seit dem 05.09.2026 als 7.1.0 installiert) einen Bau samt Installation |
 | CORE-02 (verworfene Vorschläge reisen als Antworten weiter) und CORE-26 (nachträgliche Kragenhöhe) | Was der Gesamtreview liegen ließ (05.09.2026) | eine Entscheidung Roberts: CORE-02 ist eine Änderung der Projektdatei (Markierung am ChatEntry, format_version 20 mit Migration), CORE-26 macht die Deckelpassung parametrisch statt fest — beides Architektur, nicht Reparatur |
+| Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista | Was der Gesamtreview liegen ließ (05.09.2026) | den Umbau der beiden Fahrskripte (`fahre_steuerung.py`, `fahre_drehpunkt.py`) auf `QMouseEvent` an `renderer.widget`, danach die fünf Schemata und den Drehpunkt einmal am echten Fenster — bis dahin ist die Kette Qt → Widget → `PointerEvent` → Navigator nirgends gemessen |
+| Die Prompt-Tokenzahl des lokalen Modells ist seit 113 Werkzeugen nicht gemessen | Was der Gesamtreview liegen ließ (05.09.2026) | einen Lauf mit erreichbarem Ollama: `PROMPT_TOKENS` in `backends/llm.py` steht auf der Messung mit 111 Werkzeugen (22 856 Token); Kegel und Ring als Grundkörper kamen am 06.09.2026 dazu, und `PROMPT_TOOL_COUNT` nennt 113 — die Wartezeitschätzung des Chats ist bis dahin eine untere Grenze (rund 23 190 nach 165 Token je Operation) |
+| Der erste Kundenbericht aus 0.3.4 nennt keine Ursache (S-20260906-9ca141) | Der erste Kundenbericht aus 0.3.4 (06.09.2026) | den nächsten Bericht desselben Fehlers — seit 96da8fd0 trägt protokoll.txt den Traceback und der Bericht den Grund; ohne Rückadresse ist die Datei des Kunden nicht zu bekommen |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
 | Kommt xxhash im gebauten Paket an? | Eine Kunden-3MF hängt vier Minuten im Hash (30.08.2026) | den nächsten CI-Bau — die Diagnose ist durch (kein Hänger am frischen Prozess; jeder Kunde hashte 50-mal zu langsam, behoben mit `dedd2b8d`), aber die Kundenwirkung belegt erst das Paket selbst |
 | Die Chat-Grundlast frisst drei Viertel des Fensters vor dem ersten Objekt | Der Chat-Kontext ist nach einem Objekt zu drei Vierteln voll (30.08.2026) | **nur noch die Verhaltens-Abnahme (wartet auf Roberts Schlüssel) — die Token-Messlatte ist eingelöst:** 24 161 → **19 641** Token (−18,7 %, 73,7 → 59,9 % des Fensters), beide Läufe im selben Skript und derselben Maschinenlage; der Vorher-Wert bestätigt die Registerzahl unabhängig (41 Token neben ces 24 120 — zwei Verfahren, ein Ergebnis), der Systemprompt wächst als ehrlicher Preis um 161 (was aus 106 Schemata verschwindet, steht einmal in ihm); dazu `c0860793` — vier von der Messung überholte Kommentare tragen jetzt Zahl, Datum und den Merksatz „die Dauer misst die Maschine, die Token messen das Schema"; der Vorher-Worktree bleibt für den Suite-Lauf stehen. Ursprünglich: ein Paket „kompakte Werkzeugschemata" — **erster Zug gelandet (`68d01a75`, d3, reviewt)** mit einem Fund, der schwerer wiegt als die Ersparnis: Der Systemprompt versprach in jedem Zug den Menü-Ort „in jeder Werkzeugbeschreibung", und `compact=True` (= jedes lokale Modell) ließ genau ihn weg — 95 Werkzeuge voll, null kompakt, seit dem 30.08.; jetzt entscheidet session.py einmal und beide Seiten sagen dasselbe. Zerlegung gemessen: 96 % Schemata, davon 53 % der Parametertexte wortgleich (der `objects`-Satz stand 79-mal, 5 226 Zeichen — jetzt einmal im Prompt), −5,8 % als **Zeichen**messung; die Tokenmessung läuft (Ollama lädt je Aufruf neu, 3:51 je Lauf), die Agenten-Suite-Stichprobe folgt danach, damit nicht zwei Ollama-Läufe um die Maschine konkurrieren. **Zwei weitere Hebel sind Entscheidungen, keine Bauaufgaben** (beide tauschen Grundlast gegen Quote): Marken-Indirektion −13 %, default-Verzicht −8 % — liegen bis Token- und Suite-Messung; und die §2.6-Tür (`list_operations` statt aller Schemata) ist ein Bedienentwurf für Robert. **Fortschreibung 31.08.: Zweiter Schritt `31af16a3` (−15,2 % Zeichen kumuliert), und ein VERDACHT MIT ZAHL, der größer sein könnte als das Paket: Ollama beantwortete die volle Werkzeugliste (106 kompakte Werkzeuge, 117 613 Bytes) nach 882 s mit HTTP 500** — genau diese Nutzlast schickt AgentSession je Zug; träfe es den Kundenpfad, bekäme ein lokales Modell keinen Chat, sondern einen Serverfehler, und keine Suite sähe es. Ein Fehlschlag ist keine Zuordnung (die Maschine war eng, kein Modell geladen, Kaltstart 3:51): Grenzsuche läuft (0/20/50/80/106), danach der Kundenpfad-Test. **Von d3 selbst binnen Minuten richtiggestellt, mit Ansage: Der Gegenbeleg stand im Code** — `llm.py` dokumentiert, dass am 28.08. dieselben 106 Werkzeuge (23 891 Token) „im Fenster noch ganz ankamen", und ihre Änderung machte das Schema seither KLEINER; die wahrscheinlichere Erklärung ist die Fremdlast (fünf Sitzungen, Modell je Lauf neu von Platte — die Leistungstest-Regel in Reinform). **Keine Entwarnung, der Befund bleibt offen**: Bricht die Grenzsuche unter gleichen Bedingungen wieder ab, ist es ein Kundenfehler erster Ordnung — `llm.py` fängt `BackendUnavailable` zwar und reicht es mit Anbieter weiter (`session.py::_on_failed` zeigt den Dialog — Review 02.09.2026), aber die Vorschläge „Einstellungen öffnen"/„Erneut versuchen" helfen dann beide nicht. Der gealterte session.py-Kommentar („96 mit 110 KB") wird nachgezogen, sobald eine belastbare eigene Zahl da ist — nicht eine veraltete durch eine ungemessene ersetzen. **ROBERTS DOPPEL-FREIGABE („Ja mach alles", 31.08.):** Die zwei Agenten-Suite-Läufe sind freigegeben (Vorher im Worktree vor 68d01a75, Nachher auf HEAD, dieselbe Tageslage — d3 fährt), **doch die Freigabe lief ins Leere: Auf dieser Maschine ist kein LLM-Schlüssel hinterlegt** (keyring leer, `SOLIDON3D_LLM_KEY` nicht gesetzt — der Vorher-Lauf endete nach 45 s mit „Kein Sprachmodell erreichbar", Exit 2). Nur Robert kann ihn hinterlegen (Einstellungen der Anwendung oder Umgebungsvariable — **niemals im Chat**, keine Sitzung nimmt einen Schlüssel entgegen); sobald er gesetzt ist, laufen beide Suiten in derselben Tageslage. Die Ollama-Ersatz-Suite ist als Abnahme wertlos (Memory: 4/33 mit 17 Zeitüberschreitungen — eine Quote über die Maschine, nicht den Prompt) und wird nicht gefahren. Und d3s Karten-Beobachtung gehört hierher: **Die Auflage „Suite vorher und nachher" setzt stillschweigend einen Zugang voraus, den diese Maschine nicht hat** — eine Auflage, die hier nicht erfüllbar ist, sollte das sagen; dieselbe Familie wie der Menüort-Fund, eine Ebene höher. Und **die Video-Machart ist abgenommen** — Weg 4 und die 16/7-Bühne werden in derselben Machart fertiggestellt. **ROBERTS HERO-LOCH IST ZU** (15s `1d2bccb0` auf 3as Bühne `db4d9aa5`, von 72 mit vorab notierten Sollwerten durch die Latte): Versatz 8 Punkte (behauptet ≤10), die sechs Zusagen sichtbar bei scrollY 0, die Download-Karte beginnt bei 620 im ersten Bildschirm, Bühne exakt 16/7 — alle sechs Fassungen baugleich, Foto bestätigt. **Die „erster Bildschirm"-Zusage gilt für die breite Lage (@1440)** — @375×812 stapelt richtig (Textspalte samt CTA und allen sechs Zusagen im ersten Bildschirm, Bühne darunter ab 652, Karte bei 962; Dokumentbreite exakt 375, Höhe 19 558; Zusagen glatt 2 je Reihe — der ungleiche 4+2-Umbruch ist eine reine Desktop-Frage), kein Punkt, aber die Breite gehört zur Zusage. Die @375-Zahlen sind im Browser-Pane gemessen und **nicht im Bild bestätigt** (der QtWebEngine-Fotoweg hängt bei 375 vor seinem eigenen Timeout — zwei Läufe nach 32 und 25 Minuten abgebrochen); nach eigener Regel Vorfilter, als solcher gekennzeichnet, Foto-Bestätigung in der nächsten Live-Durchsicht. 72s Beinahe-Fehlbefund dabei (−122 statt 8: das Bild gemessen statt der Spalte) fiel VOR dem Melden — „erst die Frage prüfen" arbeitet. Zwei unmessbare Beobachtungen bleiben Notiz ohne Punkt: Hero-Knopf und Kartentitel tragen denselben Wortlaut im selben Bildschirm (üblich, funktional verschieden — Aktion gegen Überschrift), und der Zusagen-Umbruch 4+2 bei 1440. **Z6b ist von 72 selbst geschlossen worden** — Messung statt Foto-Eindruck, Rücknahme zu eigenen Ungunsten (Details am Kästchen der Zeichenmodus-Serie). **Drei der fünf Latten-Landungen sind durch, gegen den JETZIGEN Stand gemessen:** 6aadde29 hält (79 var()-Regeln auf den acht Stufen — eine seit dem Commit dazugekommen; drei feste Reste, zwei erklärt), ed6fe730 hält exakt (9× 48 px, 3× 88 an genau den Kapitelanfängen), 736cabd8 hält am Oberflächenweg (alle drei Slicer-Wörter finden ins Bild, „zwiebelfisch" ehrlich leer; **145 von 147 Schlüsseln landen mit dem ersten Treffer auf dem gemeinten Feld**, die zwei Nachbarn tragen eine „1 von 2"-Anzeige — auf 72s Empfehlung kein Punkt: Der Kunde kommt mit einem Enter hin). **Und ein Werkzeug-Befund für alle, die an der Website messen:** Der Browser-Pane und Puppeteer bekommen von der Startseite kein Foto (Rendering-Timeout nach 5 s, auch ohne Animationen) — durch kommt nur QtWebEngine, und nur aus einem **Hintergrund**lauf mit `os._exit(0)` nach dem Speichern; **zwei parallele QtWebEngine-Läufe teilen sich einen Renderer-Prozess und blockieren einander** — nacheinander fahren, je fünf bis sechs Minuten; 72s Skripte (foto.py, messen.py) liegen in ihrem Scratchpad und sind auf Zuruf teilbar. **Auf dem Weg zum elften Beispiel fiel der eigentliche Fix (50, `812df37b`, reviewt): Die Klick-Zusage war bei Passungen nur zufällig erfüllt** — sieben Befunde in scene/fits.py nannten weder Körper noch Merkmal (die `values` trugen, was im SATZ steht, nicht, was der KLICK braucht — die Absicht stand da, die Angabe löste sie nicht ein), und `location_of` las die Werte-Geometrie der Passungs-Merkmale nicht (der Flug hatte keinen Ort); jetzt obj+Merkmale+Ort, 127 Tests grün. Die Lehre: **Eine Warnung, deren Klick ins Leere führt, sieht in jedem Test grün aus — der Nachweis war die Prüfung, nicht das Beispiel.** Der Beispiel-Auslöser steht und ist die Kundengeschichte in einem Satz: Materialwechsel PLA→TPU, und die Dosen-Passung meldet beim Öffnen „sitzt enger als vorgesehen" (0,20 statt 0,35 mm) — du hast das Material gewechselt, und das Spiel muss ein anderes sein; der Fix ist eine Zahl. **Und 15 startet die Trennen-Serie: T1 in Arbeit** — der Zeilenlängen-Nachzug ist zu (`3d9ed2d0`: funktionen 89→71, ki-modelle 101→63; die Fußnote war die Rücknahme ihrer eigenen Morgen-Änderung — „die bündige Kante sagt dem Auge gleichrangig, und das ist eine Fußnote gerade nicht: schmaler ist dort Information", d3s Punkt). Neue Zahlen-Lehre daraus: **70 ch sind nicht 70 Zeichen** — ch ist die Breite der Null, und je Sprache passt Verschiedenes hinein (bei 70 ch: de 72, fr 78, it 83) — **Breiten-Marken werden an den längsten Fassungen gemessen**, die Schwester der Sechs-Fassungen-Zählregel, nur für Zahlen statt Klassen. Der rote Beispiel-Zähler (10 gegen 11) gehört 50s laufendem Beispiel-Bau und ist ihr zugerufen |
@@ -5048,6 +5051,30 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       **Praktische Folge für alle Sitzungen: Wer `test_widget_lifetime` misst,
       nimmt einen eigenen Arbeitsbaum.** Im Hauptbaum ist er reproduzierbar
       rot, ohne dass der Code etwas dafürkann.
+
+      **Nachtrag vom 04.09.2026, drei Sitzungen unabhängig:** Drei Fensterdateien
+      endeten mit **127** statt mit dem bekannten Code, auch einzeln gefahren:
+      `test_install.py`, `test_print_settings.py` und `test_widget_lifetime.py`.
+      Und sie sind nicht dieselbe Sorte — der Unterschied ist der Punkt. Die
+      ersten beiden melden vorher „passed" und sterben beim Aufräumen
+      (`0xC0000409`); ihr Ergebnis gilt, jede Zusicherung stand.
+      `test_widget_lifetime.py` **hört mitten drin auf**: 55 gesammelt, **43
+      gelaufen**, Heap-Abriss (`0xc0000374`) beim `gc.collect()` in
+      `test_a_released_widget_is_actually_released` (Zeile 282); zwölf Tests
+      haben nie stattgefunden. Belegt deterministisch und allein reproduzierbar
+      (3d-druck-4d), auf dem Stand vor den Commits des Tages (3d-druck-11,
+      eigener Arbeitsbaum auf `8cf774c7`) und dreimal von dreimal auf reinem
+      HEAD ohne fremde Änderung im Baum (3d-druck-f9) — der dritte Beleg
+      schließt uns als Ursache aus. Seit der Gesamtdurchsicht macht jeder
+      Nichtnull-Prozessausgang das Tor rot (`suite-getrennt.sh`), ein Abriss
+      beim Abbau also auch.
+
+      **Beobachtung vom 06.09.2026 (3d-druck-85), Python 3.14.7 mit VTK 9.7.0
+      im Reparatur-Worktree:** `test_widget_lifetime.py` lief zweimal einzeln
+      vollständig durch — 55 Tests, Exit 0 —, und `test_install.py` sowie
+      `test_print_settings.py` endeten im geteilten Lauf ohne 127. Ob die
+      neue Laufzeit den Abriss beseitigt hat oder nur seinen Zeitpunkt
+      verschiebt, sagt erst der Torlauf auf dem zusammengeführten main.
 
       **Nachtrag vom 24.08.2026 (3d-druck-b0): wer im geteilten Baum misst,
       während jemand schreibt, misst nichts.** 3d-druck-43 fand ein billiges
@@ -10739,6 +10766,33 @@ und braucht einen Umbau statt eines Tests.
   Datenrunde und Oberfläche getrennt, die letzte den konkreten
   Geometriefehler statt nur ein künstliches Feld.
 
+## Der erste Kundenbericht aus 0.3.4 (06.09.2026)
+
+Vorgang S-20260906-9ca141, Art crash, 0.3.4 auf Windows 11 mit Python 3.13.14,
+Sprache de, keine Rückadresse. Der Kunde hat zweimal ein Modell eingefügt
+(13:18:08 und 13:18:40 seiner Zeit), beide Male hielt die Auswertung beim
+ersten Schritt an: `op.load.InternalError: Im Programm ist ein unerwarteter
+Fehler aufgetreten.` Mehr sagen weder Bericht noch Protokoll — der Titel stand
+an beiden Stellen, Ausnahmeart und -text lagen in `values["detail"]` des
+Befunds, der Traceback nirgends. Die Datei selbst ist nicht dabei, und ohne
+Rückadresse lässt sie sich nicht erfragen. Auf dem Rechner lief Cura 5.11.
+
+Gemessen am 06.09.2026 (3d-druck-85): Siebzehn synthetische Grenzfälle des
+Ladewegs — leere und entartete STL, NaN-Knoten, ASCII-STL in cp1252, OBJ nur
+mit Punkten oder Linien, leere PLY, 3MF ohne Objekte, ohne Netz, mit
+Komponente ins Leere, ohne Dreiecke, in Zoll, Zip ohne Modell, STEP-Text als
+STL — laufen durch die vollständige Lade-Operation im Stand v0.3.4 wie im
+heutigen als `ValidationError` oder sauber durch (`output/review/
+landung-01a07020-2026-09-06/probe_load_op.py`). Der Fehler ist also
+dateispezifisch und mit dem, was der Bericht trägt, nicht zu finden.
+
+- [ ] **Der erste Kundenbericht aus 0.3.4 nennt keine Ursache.** Seit
+  Commit 96da8fd0 schreibt die Auswertung eine fremde Ausnahme
+  mit Traceback als Fehlerzeile ins Protokoll, die Abbruchzeile nennt den
+  Grund, und der Fehlerbericht aus dem Prüfbericht trägt ihn — der nächste
+  Bericht desselben Fehlers ist damit zu lesen. Bis dahin bleibt der Fall
+  offen; wer ihn schließt, nennt hier Ausnahme und Datei.
+
 ## Was der Gesamtreview liegen ließ (05.09.2026)
 
 Der Gesamtreview vom 05.09.2026 (`output/review/gesamt-review-2026-09-05.md`,
@@ -10792,7 +10846,7 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   Fachagenten unter `.codex/agents/`.
 - [ ] **Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38** — je eine
   Katalogzeile, die gegen die sichtbare Oberfläche geprüft werden muss.
-- [x] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
+- [~] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
   direkt und pygfx/wgpu** (Entscheidung Robert, 05.09.2026: „bau beides und
   mess“; 06.09.2026: „wir werden dann den gfx renderer benutzen“). Der
   Vertrag (`app/ui/render/api.py`), `vtk_renderer.py` und `gfx_renderer.py`,
@@ -10853,6 +10907,14 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   an `renderer.widget`, dann die fünf Schemata und den Drehpunkt einmal am
   echten Fenster fahren; bis dahin ist die Kette Qt → Widget → `PointerEvent`
   → Navigator nirgends gemessen.
+- [ ] **Die Prompt-Tokenzahl des lokalen Modells ist seit 113 Werkzeugen nicht
+  gemessen.** `PROMPT_TOKENS` in `backends/llm.py` trägt die Messung vom
+  31.08.2026 mit 111 Werkzeugen (22 856 Token); mit Kegel und Ring als
+  Grundkörper sind es seit dem 06.09.2026 113, und beim Landen der
+  Gesamtdurchsicht war kein Ollama erreichbar. Der Test gegen
+  `PROMPT_TOOL_COUNT` ist grün, weil die Werkzeugzahl nachgezogen ist; die
+  Tokenzahl ist eine untere Grenze, bis ein Lauf mit erreichbarem Ollama
+  sie neu setzt (`tools/measure_local_model.py` nennt `prompt_eval_count`).
 - [ ] **Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht
   gefahren** (05.09.2026): Die CI baut das Flatpak beim nächsten Tag-Lauf gegen
   26.08 (Manifest, Generator und Runner-Installation stehen darauf; 24.08 endet

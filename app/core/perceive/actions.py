@@ -27,12 +27,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from app.core.registry import REGISTRY
 from app.core.types import Feature, FeatureId
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:
+    from app.core.geom.mesh import MeshData
 
 #: Die Zeilen des Panels, je Zeile die Operationen, die sie einlösen können.
 #:
@@ -113,10 +116,9 @@ NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
         "lässt sich reparieren, aber nicht versetzen."
     ),
     "torus": _(
-        "Ein Ring gehört zu dem, was er umschließt — einer Rille um eine "
-        "Bohrung, einem Wulst um einen Zapfen. Versetzt man ihn allein, läge "
-        "die Rille neben ihrer Bohrung. Wer beides bewegen will, versetzt das "
-        "Merkmal in der Mitte."
+        "Eine einzelne Ringfläche lässt sich nicht direkt ändern. "
+        "Für eine andere Lage bewegen Sie den ganzen Körper. "
+        "Für eine neue Rille oder einen Wulst können Sie einen Ring als Werkzeug verwenden."
     ),
 }
 
@@ -131,13 +133,27 @@ _UNKNOWN_KIND: Final = _("Für diese Art von Merkmal gibt es noch keine Handlung
 #:
 #: Was hier fehlt, behält die Vorgabe aus dem Parameterschema. Für ``angle`` ist
 #: das richtig: Es gibt keinen gemessenen Winkel, nur einen gewünschten.
-_FROM_FEATURE: Final[dict[str, Any]] = {
+FeatureValueSource = tuple[str, int | None]
+"""Kennzahl und gegebenenfalls Komponente, aus der ein Handlungsfeld liest."""
+
+
+_FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
     "x": ("centre", 0),
     "y": ("centre", 1),
     "z": ("centre", 2),
     "diameter": ("diameter", None),
     "depth": ("depth", None),
 }
+
+
+def feature_value_source(field: str) -> FeatureValueSource | None:
+    """Die gemessene Kennzahl hinter einem Handlungsfeld.
+
+    Die Gruppenauskunft liest damit dieselbe Zuordnung wie das Panel. Ein
+    Index kennzeichnet eine Komponente der Position; ohne Index ist es ein
+    skalares Maß des Merkmals.
+    """
+    return _FROM_FEATURE.get(field)
 
 
 @dataclass(frozen=True, slots=True)
@@ -206,7 +222,7 @@ def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
         return float(measured) + beside
     try:
         return float(measured[index]) + beside
-    except (IndexError, TypeError):
+    except IndexError, TypeError:
         return spec.default  # type: ignore[no-any-return]
 
 
@@ -228,12 +244,19 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
             choices=tuple((choice, choice) for choice in entry.choices),
         )
         for entry in spec.params.spec()
-        if entry.kind != "feature"
+        # Die freie Oberflächenrichtung gehört zum Platzierungsdialog.
+        # Die Schnellbearbeitung verschiebt das gewählte Merkmal mit seiner
+        # bisherigen Richtung; eine Änderung erfolgt über die eigene Drehzeile.
+        if entry.kind != "feature" and entry.name not in {"nx", "ny", "nz"}
     )
 
 
 def actions_for(
-    feature: Feature, features: Mapping[FeatureId, Feature] | None = None
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None = None,
+    *,
+    mesh: MeshData | None = None,
+    cavity: tuple[Feature, ...] | None = None,
 ) -> list[FeatureAction]:
     """Was sich an diesem Merkmal tun lässt — und was nicht, mit Grund.
 
@@ -241,7 +264,8 @@ def actions_for(
     heutigem Wert. Gilt sie nicht, steht sie **trotzdem** in der Liste, mit
     ``op=None`` und einem Satz: Ein Panel, das bei einer Verrundung nur den
     Radius zeigt, lässt den Kunden raten, ob der Rest fehlt oder vergessen
-    wurde.
+    wurde. Mit ``mesh`` folgt der Hinweis aufs gemeinsame Versetzen der echten
+    Randringkette; ohne bleibt die bisherige Paar-Auskunft für ältere Aufrufer.
     """
     actions: list[FeatureAction] = []
     for candidates in ACTION_ORDER:
@@ -256,7 +280,7 @@ def actions_for(
                 FeatureAction(
                     title=fitting.title,
                     op=fitting.name,
-                    note=_note_for(fitting.name, feature, features),
+                    note=_note_for(fitting.name, feature, features, mesh=mesh, cavity=cavity),
                     fields=_fields_of(fitting, feature),
                 )
             )
@@ -276,14 +300,26 @@ def actions_for(
 
 
 def _note_for(
-    op: str, feature: Feature, features: Mapping[FeatureId, Feature] | None
+    op: str,
+    feature: Feature,
+    features: Mapping[FeatureId, Feature] | None,
+    *,
+    mesh: MeshData | None,
+    cavity: tuple[Feature, ...] | None = None,
 ) -> TranslatableText | str:
     """Eine Folge der Handlung, die erst aus der Nachbarschaft hervorgeht."""
     if op != "move_feature" or features is None:
         return ""
-    from app.core.perceive.relations import bore_and_widening_at
+    from app.core.perceive.relations import bore_and_widening_at, cavity_chain_at
 
-    if bore_and_widening_at(feature, features) is None:
+    linked = cavity
+    if linked is None:
+        linked = (
+            bore_and_widening_at(feature, features)
+            if mesh is None
+            else cavity_chain_at(feature, features, mesh)
+        )
+    if not linked:
         return ""
     return _("Verknüpft: Bohrung und Senkung werden gemeinsam verschoben.")
 

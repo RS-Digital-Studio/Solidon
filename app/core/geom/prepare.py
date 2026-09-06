@@ -7,8 +7,8 @@ vergessen würden:
 * eine Bohrung wird größer gebohrt als nominal, denn FDM druckt Löcher zu
   eng — und der Betrag kommt aus dem kalibrierten Materialprofil, nie aus
   einem Literal (AGENTS.md Regel 7);
-* Boolesche Schnitte überlappen immer um einen hundertstel Millimeter, damit
-  nie zwei Flächen zusammenfallen;
+* durchgehende Werkzeuge reichen über den Körper hinaus; eine Blindbohrung
+  endet dagegen genau an ihrer eingegebenen Tiefe;
 * was den Bauraum verlässt, wird gemeldet, nicht still skaliert.
 """
 
@@ -22,7 +22,7 @@ from typing import Any, Literal, Protocol
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS
+from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS, ValidationError
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -30,7 +30,8 @@ from app.core.geom.boolean import (
     shared_volume,
     without_effect,
 )
-from app.core.geom.mesh import MeshData, concatenated, on_surface, ray_hit_distances
+from app.core.geom.measure import surface_gap
+from app.core.geom.mesh import MeshData, concatenated, ray_hit_distances
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
@@ -292,20 +293,126 @@ def resize_bore(
     )
 
 
+def drill_tool(
+    *,
+    diameter: float,
+    depth: float,
+    profile: Profile,
+    compensate: bool = True,
+    widening_diameter: float = 0.0,
+    widening_depth: float = 0.0,
+    transition_angle: float = 90.0,
+) -> MeshData:
+    """Gemeinsamer Schneidkörper zwischen Mündung null und exakt -depth.
+
+    Eine Blindbohrung bekommt an keinem Ende eine Geometriezugabe, auch nicht
+    beim historischen Mittenanker. Durchgangsaufrufer wählen ausdrücklich eine
+    Tiefe über die Körpergrenze hinaus; Vorschau und Operation teilen den Körper.
+    """
+    if not math.isfinite(depth) or depth <= EPS_GEOM:
+        raise ValidationError(
+            field="depth", detail=_("Wählen Sie eine positive Bohrtiefe für den Werkzeugkörper.")
+        )
+    radius = bore_diameter(diameter, profile, compensate) / 2.0
+    if (
+        not math.isfinite(widening_diameter)
+        or widening_diameter < 0.0
+        or widening_diameter > EPS_GEOM
+    ):
+        if (
+            not all(
+                math.isfinite(value)
+                for value in (widening_diameter, widening_depth, transition_angle)
+            )
+            or widening_diameter <= diameter + EPS_GEOM
+            or widening_depth < 0.0
+            or not 0.0 < transition_angle <= 180.0
+        ):
+            raise ValidationError(
+                field="widening_diameter",
+                detail=_(
+                    "Die Aufweitung muss breiter als die Bohrung sein. "
+                    "Prüfen Sie Durchmesser, Tiefe und Übergangswinkel."
+                ),
+            )
+        wide_radius = bore_diameter(widening_diameter, profile, compensate) / 2.0
+        transition = (wide_radius - radius) / math.tan(math.radians(transition_angle / 2.0))
+        if widening_depth + transition >= depth - EPS_GEOM:
+            raise ValidationError(
+                field="depth",
+                detail=_(
+                    "Aufweitung und Übergang reichen tiefer als die Bohrung. "
+                    "Vergrößern Sie die Bohrtiefe oder verkleinern Sie die Aufweitung."
+                ),
+            )
+        # Ein geschlossener Rotationskörper erhält gemeinsame Ringe zwischen
+        # engem Schaft, Übergang und Aufweitung auch nach dem Booleschen Schnitt.
+        outline = [
+            (0.0, -depth),
+            (radius, -depth),
+            (radius, -widening_depth - transition),
+            (wide_radius, -widening_depth),
+            (wide_radius, 0.0),
+            (0.0, 0.0),
+            (0.0, -depth),
+        ]
+        return MeshData.of(trimesh.creation.revolve(outline, sections=BORE_SECTIONS))
+    cylinder = trimesh.creation.cylinder(
+        radius=radius,
+        height=depth,
+        sections=BORE_SECTIONS,
+    )
+    cylinder.apply_translation((0.0, 0.0, -depth / 2.0))
+    return MeshData.of(cylinder)
+
+
+def _restore_drill_end_planes(
+    body: trimesh.Trimesh,
+    original_vertices: np.ndarray,
+    world_to_local: np.ndarray,
+    planes: tuple[float, float],
+) -> None:
+    """Nur Float64-Transformationsrauschen an den bekannten Werkzeugenden bereinigen.
+
+    Vier Produkte, ihre Summation und der Ebenenvergleich werden konservativ
+    durch gamma_8 begrenzt. Die Schranke folgt je Eckpunkt aus den Beträgen
+    der wirklichen Matrixterme; sie ist weder Materialzugabe noch geometrische
+    Schweißtoleranz. Ein darüber hinausgehender Abstand bleibt unangetastet.
+    """
+    unit_roundoff = np.finfo(np.float64).eps / 2.0
+    gamma = 8.0 * unit_roundoff / (1.0 - 8.0 * unit_roundoff)
+    magnitude = np.abs(original_vertices) @ np.abs(world_to_local[2, :3]) + abs(
+        float(world_to_local[2, 3])
+    )
+    vertices = np.asarray(body.vertices, dtype=np.float64).copy()
+    changed = False
+    for plane in planes:
+        close = np.abs(vertices[:, 2] - plane) <= gamma * (magnitude + abs(plane))
+        if bool(np.any(close)):
+            vertices[close, 2] = plane
+            changed = True
+    if changed:
+        body.vertices = vertices
+
+
 def drill(
     mesh: MeshData,
     *,
     position: Vec3,
     axis: Axis,
+    normal: Vec3 = (0.0, 0.0, 0.0),
     diameter: float,
     depth: float = 0.0,
+    widening_diameter: float = 0.0,
+    widening_depth: float = 0.0,
+    transition_angle: float = 90.0,
     anchor: BoreAnchor = "mouth",
     profile: Profile,
     compensate: bool = True,
     quality: Quality = "fine",
     seed: int | None = None,
 ) -> BoreResult:
-    """Schneidet eine zylindrische Bohrung. Tiefe null bohrt ganz durch.
+    """Schneidet eine Bohrung mit optionaler Aufweitung. Tiefe null bohrt ganz durch.
 
     ``anchor`` sagt, was die Position bedeutet. ``mouth`` ist, was jemand
     meint, der eine Fläche anklickt: dort fängt die Bohrung an und geht von da
@@ -313,16 +420,85 @@ def drill(
     das taten alle Bohrungen bis Formatversion 7, und ein Klick auf die
     Oberseite bohrte darum nur halb so tief wie verlangt.
 
-    Für eine durchgehende Bohrung macht es keinen Unterschied: „durch" ist
-    „durch", und der Zylinder ist lang genug, um von jeder Position aus in
-    beide Richtungen hinauszureichen.
+    Eine gerade durchgehende Bohrung reicht von jeder Position aus in beide
+    Richtungen hinaus. Ihre Aufweitung beginnt dagegen an der Mündung; auf
+    einer abgestuften Fläche verschiebt der höchste Nachbar diesen Bezug nicht.
     """
     cut_diameter = bore_diameter(diameter, profile, compensate)
     through = depth <= EPS_GEOM
+    direction = np.asarray(normal, dtype=np.float64)
+    if not np.isfinite(direction).all():
+        raise ValidationError(
+            field="nx", detail=_("Wählen Sie eine endliche Richtung für die Bohrung.")
+        )
+    length = float(np.linalg.norm(direction))
+    if length <= EPS_GEOM and widening_diameter > EPS_GEOM:
+        direction[AXIS_INDEX[axis]] = -_into_the_material(mesh, axis, position)
+        length = 1.0
+    if length > EPS_GEOM:
+        from app.core.sketch.planes import frame_of
+
+        outward = direction / length
+        frame = frame_of((float(outward[0]), float(outward[1]), float(outward[2])), position)
+        to_world = np.eye(4)
+        to_world[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+        to_world[:3, 3] = position
+        world_to_local = np.linalg.inv(to_world)
+        local_body = mesh.raw.copy()
+        local_body.apply_transform(world_to_local)
+        if through:
+            low, high = float(local_body.bounds[0, 2]), float(local_body.bounds[1, 2])
+            if widening_diameter > EPS_GEOM and anchor == "mouth":
+                height, mouth = -low + BOOLEAN_OVERLAP, 0.0
+            else:
+                height = high - low + BOOLEAN_OVERLAP * 2.0
+                mouth = high + BOOLEAN_OVERLAP
+        else:
+            height, mouth = depth, depth / 2.0 if anchor == "centre" else 0.0
+        _restore_drill_end_planes(
+            local_body,
+            np.asarray(mesh.raw.vertices, dtype=np.float64),
+            world_to_local,
+            (mouth, mouth - height),
+        )
+        tool = drill_tool(
+            diameter=diameter,
+            depth=height,
+            profile=profile,
+            compensate=compensate,
+            widening_diameter=widening_diameter,
+            widening_depth=widening_depth,
+            transition_angle=transition_angle,
+        )
+        cylinder = tool.raw.copy()
+        cylinder.apply_translation((0.0, 0.0, mouth))
+        outcome = boolean(
+            "difference",
+            [mesh.replacing(local_body), MeshData.of(cylinder)],
+            quality=quality,
+            seed=seed,
+        )
+        world_body = outcome.mesh.raw.copy()
+        world_body.apply_transform(to_world)
+        result = outcome.mesh.replacing(world_body)
+        findings = list(outcome.findings)
+        nothing = without_effect(mesh, result, "difference", profile)
+        if nothing is not None:
+            findings.append(nothing)
+        findings.extend(over_the_edge_along(mesh, position, frame.normal, cut_diameter))
+        findings.extend(compensation_findings(diameter, cut_diameter, compensate))
+        return BoreResult(result, outcome.solver, cut_diameter, findings)
     height = _through_length(mesh, axis) * 2.0 if through else depth
-    cylinder = trimesh.creation.cylinder(
-        radius=cut_diameter / 2.0, height=height + BOOLEAN_OVERLAP * 2, sections=BORE_SECTIONS
-    )
+    cylinder = drill_tool(
+        diameter=diameter,
+        depth=height,
+        profile=profile,
+        compensate=compensate,
+        widening_diameter=widening_diameter,
+        widening_depth=widening_depth,
+        transition_angle=transition_angle,
+    ).raw.copy()
+    cylinder.apply_translation((0.0, 0.0, height / 2.0))
     cylinder.apply_transform(_axis_alignment(axis))
     offset = np.asarray(position, dtype=float)
     if not through and anchor == "mouth":
@@ -1428,14 +1604,12 @@ def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool
     # Auseinander, aber vielleicht nicht weit genug. Gemessen ab der
     # Oberfläche — das ist es, was ein Abstand auf der Platte bedeutet.
     try:
-        _closest, distance, _face = on_surface(
-            first.raw, np.asarray(second.raw.vertices, dtype=float)
-        )
+        distance = surface_gap(first, second, clearance)
     except PROGRAMMING_ERRORS:
         raise
     except Exception:  # eine Abstandsanfrage an einen kaputten Körper scheitert auf eigene Arten
-        return False
-    return bool(len(distance)) and float(np.min(distance)) < clearance
+        return None
+    return distance < clearance if distance is not None else None
 
 
 def _boxes_overlap(first: BoundingBox, second: BoundingBox, clearance: float) -> bool:

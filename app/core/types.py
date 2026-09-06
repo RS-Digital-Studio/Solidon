@@ -111,7 +111,7 @@ def vec3_or_none(value: object) -> Vec3 | None:
         return None
     try:
         return as_vec3(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -350,6 +350,12 @@ class SceneObject:
     Fehler (§25)."""
     created_by: OpId = 0
     visible: bool = True
+    reserved_feature_ids: tuple[FeatureId, ...] = ()
+    """Sortierte bisher vergebene Merkmalskennungen, auch nach ihrem Entfernen.
+
+    Die Auswertung rekonstruiert sie aus dem Verlauf; der Ergebniscache trägt
+    sie mit, damit ein alter Verweis nie ein späteres anderes Merkmal trifft.
+    """
 
 
 # --- Parameter, Passungen, Profile ---------------------------------------------
@@ -411,6 +417,8 @@ class Fit:
     b: FeatureRef
     kind: FitKind = "clearance"
     tolerance: Tolerance = "auto:"
+    when_positive: tuple[OpId, str] | None = None
+    """Gilt nur, solange dieser Operationsparameter positiv ist, etwa ein Deckelkragen."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -724,7 +732,7 @@ class SlotOverride:
     """
 
     name: TranslatableText | str = ""
-    """Zu welchem Filament das gehört — zusammen mit :attr:`colour` der Schlüssel.
+    """Name des Filaments; Farbe, Profil und Materialtyp ergänzen seine Identität.
 
     **Nicht die Position.** Sie stand hier zuerst, und sie war falsch: Was der
     Dialog zeigt, ist die Zusammenlegung der gewählten Platten; gedruckt wird
@@ -735,16 +743,19 @@ class SlotOverride:
     Filamentprofilen wandert dabei die Temperatur mit; hier *ist* sie der Wert.
 
     Derselbe Schlüssel wie in :func:`app.core.export.threemf.merge_slots` —
-    zwei Teile in derselben Farbe sind ein Filament, und ein Übersteuerer
-    gehört dem Filament, nicht dem Platz in einer Liste.
+    nur derselbe Name, dieselbe Farbe, dasselbe Profil und derselbe Materialtyp
+    gehören zusammen. Ein Übersteuerer gehört dem Filament, nicht seinem Listenplatz.
     """
     colour: tuple[float, float, float] | None = None
-    """Die Farbe des Filaments, zweite Hälfte des Schlüssels."""
+    """Die Farbe des Filaments als Teil seiner Identität."""
 
     temperature: TemperatureSettings | None = None
     cooling: CoolingSettings | None = None
     retraction: RetractionSettings | None = None
     filament: FilamentSettings | None = None
+
+    material: str | None = None
+    material_type: str | None = None
 
     @property
     def empty(self) -> bool:
@@ -752,9 +763,11 @@ class SlotOverride:
         return not any((self.temperature, self.cooling, self.retraction, self.filament))
 
     @property
-    def key(self) -> tuple[TranslatableText | str, tuple[float, float, float] | None]:
+    def key(
+        self,
+    ) -> tuple[TranslatableText | str, tuple[float, float, float] | None, str | None, str | None]:
         """Der Schlüssel, unter dem dieser Übersteuerer sein Filament findet."""
-        return (self.name, self.colour)
+        return (self.name, self.colour, self.material, self.material_type)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1336,9 +1349,9 @@ class ChatEntry:
     Ohne das argumentiert der Agent nach jedem Undo mit einem Zustand, den es
     nicht mehr gibt.
 
-    Ob ein Beitrag verworfen ist, wird nicht gespeichert — es folgt daraus, ob
-    seine Transaktion noch im Dokument steht; ein Redo holt ihn so von selbst
-    zurück.
+    Eine ausdrückliche Ablehnung wird gespeichert. Bei angenommenen Vorschlägen
+    folgt der Zustand weiterhin aus der Transaktion; ein Redo holt diese von
+    selbst zurück.
     """
 
     id: str
@@ -1348,6 +1361,8 @@ class ChatEntry:
     origin: Origin | None = None
     """Gefüllt bei Agentenbeiträgen: Modell, Prompt- und Regelversion,
     Temperatur (§26.4)."""
+    discarded: bool = False
+    """Ausdrücklich verworfen, bevor eine Transaktion übernommen wurde."""
 
 
 @dataclass(frozen=True, slots=True)

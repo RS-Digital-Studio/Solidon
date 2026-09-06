@@ -1176,7 +1176,7 @@ class SupportWindow:
             self.results.delete(item)
         try:
             self.found = find_licences(self.query.get(), self.records)
-        except (OperatorError, key.LicenceKeyError):
+        except OperatorError, key.LicenceKeyError:
             self.found = []
             self.message.set(
                 tr("Die Suche war nicht verwendbar. Lizenzschlüssel oder Suchtext prüfen.")

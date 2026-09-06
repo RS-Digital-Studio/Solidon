@@ -74,7 +74,7 @@ def _literal(text: str) -> str:
         return text
     try:
         value = ast.literal_eval(f'"{text}"')
-    except (SyntaxError, ValueError):
+    except SyntaxError, ValueError:
         return text
     return value if isinstance(value, str) else text
 

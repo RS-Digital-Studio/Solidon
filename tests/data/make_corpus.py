@@ -32,6 +32,20 @@ def cube_clean() -> None:
     write(trimesh.creation.box(extents=(20.0, 20.0, 20.0)), "cube_clean.stl")
 
 
+def dense_cylinder() -> None:
+    """Ein dicht facettierter Zylinder, dessen Kappen den ersten
+    Vereinfacher festhalten.
+
+    Der Anlass sind die Masten des Piratenschiffs aus dem Nutzerdurchgang:
+    Mantel und Boden lassen sich getrennt vereinfachen, der geschlossene
+    Körper blieb jedoch bei jeder Aggressivität vollständig unverändert.
+    """
+    write(
+        trimesh.creation.cylinder(radius=2.5, height=40.0, sections=360),
+        "dense_cylinder.stl",
+    )
+
+
 def bracket_inch() -> None:
     """Eine in Zoll gespeicherte Platte — 4 x 2 x 0,25 in, die Einheit ist
     also mehrdeutig.
@@ -128,6 +142,68 @@ def sphere_socket() -> None:
     ball = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
     ball.apply_translation((0.0, 0.0, 7.5))
     write(trimesh.boolean.difference([block, ball]), "sphere_socket.stl")
+
+
+def _surface_patch(body: trimesh.Trimesh, faces: np.ndarray) -> trimesh.Trimesh:
+    """Aus gewählten Dreiecken eine eigenständige offene Prüffläche bauen."""
+    patch = trimesh.Trimesh(
+        vertices=np.asarray(body.vertices),
+        faces=np.asarray(body.faces)[faces],
+        process=False,
+    )
+    patch.remove_unreferenced_vertices()
+    return patch
+
+
+def shallow_sphere_caps() -> None:
+    """Zwei echte 5°-Kalotten mit verschiedener Triangulierung.
+
+    Eine flache Kalotte bestimmt ihren großen Radius nur über eine kleine
+    Normalenänderung. Sie bleibt trotzdem ein Kugelmerkmal, wenn die Krümmung
+    kreisförmig in zwei Richtungen belegt ist. Icosphere und UV-Gitter halten
+    fest, dass das nicht an einer bestimmten Dreiecksanordnung hängt.
+    """
+    radius = 80.0
+    threshold = radius * math.cos(math.radians(5.0))
+    icosphere = trimesh.creation.icosphere(subdivisions=5, radius=radius)
+    selected = np.flatnonzero(np.asarray(icosphere.triangles_center)[:, 2] >= threshold)
+    write(_surface_patch(icosphere, selected), "shallow_sphere_cap_icosphere.stl")
+
+    uv_sphere = trimesh.creation.uv_sphere(radius=radius, count=(64, 32))
+    selected = np.flatnonzero(np.asarray(uv_sphere.triangles_center)[:, 2] >= threshold)
+    write(_surface_patch(uv_sphere, selected), "shallow_sphere_cap_uv.stl")
+
+
+def indeterminate_sphere_cap() -> None:
+    """Eine fast ebene 2°-Kalotte, deren Mittelpunkt nicht belastbar ist."""
+    radius = 80.0
+    sphere = trimesh.creation.icosphere(subdivisions=6, radius=radius)
+    threshold = radius * math.cos(math.radians(2.0))
+    selected = np.flatnonzero(np.asarray(sphere.triangles_center)[:, 2] >= threshold)
+    write(_surface_patch(sphere, selected), "indeterminate_sphere_cap.stl")
+
+
+def ambiguous_sphere_ribbon() -> None:
+    """Ein exakter, aber nur in einer Richtung belegter Kugelstreifen.
+
+    Der Radius des Ausgangskörpers ist bekannt. Der schmale Ausschnitt allein
+    belegt aber kein bearbeitbares Kugelmerkmal: Entlang seiner kurzen Richtung
+    ändern sich die Normalen zehnmal weniger als entlang der langen.
+    """
+    radius = 80.0
+    sphere = trimesh.creation.uv_sphere(radius=radius, count=(128, 64))
+    centres = np.asarray(sphere.triangles_center)
+    longitude = np.degrees(np.arctan2(centres[:, 1], centres[:, 0]))
+    latitude = np.degrees(np.arcsin(centres[:, 2] / np.linalg.norm(centres, axis=1)))
+    selected = np.flatnonzero((np.abs(latitude) <= 2.0) & (np.abs(longitude) <= 20.0))
+    write(_surface_patch(sphere, selected), "ambiguous_sphere_ribbon.stl")
+
+
+def near_sphere_ellipsoid() -> None:
+    """Eine nur vier Prozent gestreckte Kugel, die keine Kugeloperation darf."""
+    body = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
+    body.apply_scale((1.0, 1.0, 1.04))
+    write(body, "near_sphere_ellipsoid.stl")
 
 
 def torus_ring() -> None:
@@ -569,6 +645,7 @@ def clean_figure() -> None:
 
 if __name__ == "__main__":
     cube_clean()
+    dense_cylinder()
     bracket_inch()
     plate_cm()
     plate_holes()
@@ -576,6 +653,10 @@ if __name__ == "__main__":
     plate_countersunk()
     plate_countersunk_blind()
     sphere_socket()
+    shallow_sphere_caps()
+    indeterminate_sphere_cap()
+    ambiguous_sphere_ribbon()
+    near_sphere_ellipsoid()
     torus_ring()
     post_with_fillet()
     block_with_rounded_edge()

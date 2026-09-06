@@ -6,11 +6,9 @@
 # irgendwann und selten reproduzierbar. Der CI-Workflow löst das seit dem
 # 12.08.2026 so; lokal auf Windows ging es bisher gut, bis es nicht mehr ging.
 #
-# **Gesucht statt gepflegt**, wie in der CI: Wer eine neue Fensterdatei anlegt,
-# bekommt ihren eigenen Prozess, ohne hier etwas zu ändern. Gesucht wird nach
-# ``MainWindow`` **und** nach ``Viewport``/``pyvista`` — acht Dateien bauen ein
-# VTK-Fenster, ohne ``MainWindow`` zu erwähnen, und liefen deshalb im großen
-# Stapel mit.
+# Die Fenstergruppe kommt aus Pytests aufgelöstem Fixture-Graphen:
+# tools/list_windowed_tests.py findet auch mittelbare qt_app-Abhängigkeiten.
+# Neue Testdateien brauchen deshalb keinen handgepflegten Eintrag.
 set -u
 
 # **Das Skript fährt eine Kopie seiner selbst, und zwar aus einem gemessenen
@@ -64,16 +62,24 @@ cd "$SUITE_WURZEL" || exit 1
 # dort mit „Kein Interpreter gefunden", Exit 2, bevor eine Funktion
 # definiert war, und drei Tests waren rot, ohne dass eine Zähllogik
 # falsch gewesen wäre.
-PY=${SUITE_PYTHON:-.venv/Scripts/python.exe}
-[ -x "$PY" ] || PY=.venv/bin/python
-if [ ! -x "$PY" ]; then
-  haupt=$(git rev-parse --git-common-dir 2>/dev/null)
-  PY="${haupt%/.git}/.venv/Scripts/python.exe"
-  [ -x "$PY" ] || PY="${haupt%/.git}/.venv/bin/python"
-fi
-if [ ! -x "$PY" ]; then
-  echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2
-  exit 2
+if [ -n "${SUITE_PYTHON+x}" ]; then
+  PY=$SUITE_PYTHON
+  if [ ! -x "$PY" ]; then
+    echo "SUITE_PYTHON ist nicht ausführbar: $PY" >&2
+    exit 2
+  fi
+else
+  PY=.venv/Scripts/python.exe
+  [ -x "$PY" ] || PY=.venv/bin/python
+  if [ ! -x "$PY" ]; then
+    haupt=$(git rev-parse --git-common-dir 2>/dev/null)
+    PY="${haupt%/.git}/.venv/Scripts/python.exe"
+    [ -x "$PY" ] || PY="${haupt%/.git}/.venv/bin/python"
+  fi
+  if [ ! -x "$PY" ]; then
+    echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2
+    exit 2
+  fi
 fi
 # **Zuerst die Frage, ob der Baum überhaupt importierbar ist.**
 #
@@ -93,16 +99,19 @@ fi
 # denselben Kern importieren, hat er alle zwölf umgeworfen.
 #
 # Vorgeschlagen von 3d-druck-64 nach dem Fall.
-import_meldung=$(mktemp)
-if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_meldung"; then
-  echo "Der Baum ist gerade nicht importierbar — mit hoher Wahrscheinlichkeit"
-  echo "ist das nicht deine Änderung. Sieh auf den Zeitstempel der genannten"
-  echo "Datei, bevor du im eigenen Diff suchst:"
-  sed 's/^/    /' "$import_meldung"
+# Beim reinen Funktionen-Prüfstand laufen weder App-Import noch Sammlung.
+if [ -z "${SUITE_NUR_FUNKTIONEN:-}" ]; then
+  import_meldung=$(mktemp)
+  if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_meldung"; then
+    echo "Der Baum ist gerade nicht importierbar — mit hoher Wahrscheinlichkeit"
+    echo "ist das nicht deine Änderung. Sieh auf den Zeitstempel der genannten"
+    echo "Datei, bevor du im eigenen Diff suchst:"
+    sed 's/^/    /' "$import_meldung"
+    rm -f "$import_meldung"
+    exit 4
+  fi
   rm -f "$import_meldung"
-  exit 4
 fi
-rm -f "$import_meldung"
 # Pytest löst auch indirekte Fixtures aus ``conftest.py`` auf. Damit hängt die
 # Trennung daran, ob ein Test wirklich ``qt_app`` braucht — nicht daran, ob in
 # Quelltext oder Docstring zufällig MainWindow, Viewport oder pyvista steht.
@@ -115,34 +124,21 @@ rm -f "$import_meldung"
 if [ -n "${SUITE_NUR_FUNKTIONEN:-}" ]; then
   windowed=""
 else
-  windowed=$("$PY" tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+  if windowed=$("$PY" tools/list_windowed_tests.py); then
+    windowed=$(printf '%s' "$windowed" | tr -d '\r' | tr '\n' ' ')
+  else
+    status=$?
+    echo "Die Fensterdateien konnten nicht gesammelt werden (Exit $status)." >&2
+    exit 1
+  fi
 fi
 ignores=""
 for file in $windowed; do ignores="$ignores --ignore=$file"; done
 
-# **Exit 5 ist kein Fehllauf — für eine Fensterdatei.** pytest meldet damit
-# „keine Tests gesammelt“, und das ist keine Aussage über den Code. Der Fall
-# entsteht aus der Suche oben: Sie findet die Fensterdateien im *Text* und erwischt damit auch eine
-# Datei, die über eine Ansicht **schreibt** statt eine zu bauen — stehen darin
-# nur Leistungstests, sammelt `-m "not performance"` nichts. Am 22.08.2026
-# landete `tests/test_performance.py` wegen zweier Docstrings hier und zählte
-# als Fehllauf.
-#
-# **Und ein Abriss beim Abbau ist kein roter Test.** Drei Fensterdateien melden
-# „N passed" und sterben danach beim Aufräumen — mit 127 oder mit einer
-# Zugriffsverletzung. `CLAUDE.md` kennt den Fall und sagt ausdrücklich: Wer ihn
-# nicht kennt, sucht den Fehler in einem Test, der nie fehlgeschlagen ist.
-# Dieses Skript kannte ihn nicht, zählte ihn als Fehllauf — und damit war das
-# Tor dauerhaft rot, ganz gleich wie sauber der Code war.
-#
-# Erkannt wird er an dem, was er ist: eine vollständige Zusammenfassung ohne
-# ein einziges `failed` oder `error`. Wer sie hat, hat alle Tests bestanden;
-# was danach passiert, ist ein Abriss und keine Aussage über den Code.
-# **Verschwiegen wird nichts** — die Zeile „--> Exit 127" steht weiter da, sie
-# zählt nur nicht mehr als Fehlschlag.
-#
-# Ohne Protokoll bleibt es bei der alten, strengen Bewertung: Ein Aufrufer, der
-# die Ausgabe nicht mitschreibt, bekommt keinen Freibrief.
+# Jeder gestartete Prozess muss mit Exit 0 enden. Eine Zusammenfassung oder
+# vollständige Fortschrittszeichen können einen nativen Abbruch nicht heilen.
+# Auch eine erfolglose Sammlung ist ein Fehler; leere oder teilweise Listen
+# dürfen keine Tests unbemerkt in die falsche Prozessgruppe verschieben.
 #
 # **Für die Sammelgruppe gilt das Gegenteil, und das hat am 24.08.2026 eine
 # halbe Prüfung gekostet.** Dort sind 3554 Tests zu erwarten; „keine gesammelt“
@@ -242,48 +238,7 @@ nicht_gelaufen() {
 }
 
 zaehlt_als_fehler() {
-  status=$1
-  protokoll=${2:-}
-  #: Wie viele Tests der Lauf umfassen sollte. Leer heißt „unbekannt", und
-  #: dann bleibt es bei der strengen Bewertung — ein Aufrufer, der die Zahl
-  #: nicht kennt, bekommt keinen Freibrief.
-  soll=${3:-}
-  [ "$status" -eq 0 ] && return 1
-  [ "$status" -eq 5 ] && return 1
-  if [ -n "$protokoll" ] && [ -f "$protokoll" ]; then
-    if grep -qE "^[0-9]+ passed" "$protokoll" &&
-       ! grep -qE "[0-9]+ (failed|error)" "$protokoll"; then
-      return 1
-    fi
-    # **Und ohne Schlusszeile entscheiden die Zeichen — aber nur, wenn sie
-    # vollzählig sind.**
-    #
-    # Ein Riss beim Abbau nimmt die Zusammenfassung mit; die Punkte davor
-    # stehen noch da. Sie allein genügen jedoch nicht: Ein Riss **mitten** im
-    # Lauf hinterlässt ebenfalls nur Punkte, und dreißig gelaufene von sechzig
-    # sähen aus wie ein sauberer Durchlauf. Die beiden Fälle unterscheidet
-    # nichts als die **Anzahl** — deshalb kommt die Soll-Größe als dritter
-    # Parameter herein, und ohne sie bleibt es bei der strengen Bewertung.
-    #
-    # ``s`` (übersprungen) und ``x`` (erwartet fehlgeschlagen) zählen als
-    # gelaufen und als grün: Ein übersprungener Test ist eine Entscheidung des
-    # Tests, kein Fehlschlag. Rot sind ``F``, ``E`` und ``X`` — das große X ist
-    # ein Test, der bestehen sollte und es unerwartet tut, und auch das will
-    # jemand wissen.
-    # Grün wird hier nur, was **beides** erfüllt: keine roten Zeichen und so
-    # viele Zeichen, wie Tests erwartet wurden. Ohne bekannte Soll-Größe bleibt
-    # es bei der strengen Bewertung — ein Aufrufer, der die Zahl nicht kennt,
-    # bekommt keinen Freibrief. (Der erste Entwurf schrieb an dieser Stelle
-    # ein return 1, also grün, und der Kommentar daneben behauptete das
-    # Gegenteil. Eine zutreffende Begründung deckt eine Lücke besonders gut.)
-    zeichen=$(fortschritt "$protokoll" || true)
-    if [ -n "$zeichen" ] && ! printf '%s' "$zeichen" | grep -q "[FEX]"; then
-      if [ -n "$soll" ] && [ "${#zeichen}" -ge "$soll" ]; then
-        return 1
-      fi
-    fi
-  fi
-  return 0
+  [ "$1" -ne 0 ]
 }
 
 fails=0
@@ -316,9 +271,12 @@ KERNE=${SUITE_KERNE:-8}
 protokoll=$(mktemp)
 trap 'rm -f "$protokoll"' EXIT
 
+# Direkt in die Datei schreiben und den Prozessstatus vor jeder Ausgabe sichern.
+# -u hält die Fortschrittszeichen im laufenden Protokoll aktuell.
 echo "=== der Rest in einem Zug (-n $KERNE) ==="
-PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" $ignores -n "$KERNE"   2>&1 | tee "$protokoll"
-status=${PIPESTATUS[0]}
+PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" $ignores -n "$KERNE" > "$protokoll" 2>&1
+status=$?
+cat "$protokoll"
 echo "--> Exit $status"
 # Erst die Frage, ob überhaupt gelaufen wurde, dann die, ob es grün war. In
 # dieser Reihenfolge, weil ein Nichtlauf sonst als gewöhnlicher Fehllauf
@@ -365,12 +323,21 @@ MINDEST=${SUITE_MIN_PORTION:-4}
 # CRLF; bleibt das ``\r`` am Namen, sucht pytest wörtlich danach und findet
 # nichts.
 namen_von() {
-  "$PY" -m pytest --collect-only -q -m "not performance" "$1" 2>/dev/null \
-    | grep -E "^tests/" | tr -d "\r"
+  local gesammelt
+  gesammelt=$("$PY" -m pytest --collect-only -q -m "not performance" "$1") || return $?
+  printf '%s\n' "$gesammelt" | grep -E "^tests/" | tr -d "\r"
 }
 
 for file in $windowed; do
-  namen=$(namen_von "$file")
+  if namen=$(namen_von "$file"); then
+    :
+  else
+    status=$?
+    fails=$((fails + 1))
+    schlecht="$schlecht $file(Sammlung,Exit:$status)"
+    echo "Die Tests in $file konnten nicht gesammelt werden (Exit $status)." >&2
+    continue
+  fi
   anzahl=$(printf '%s\n' "$namen" | grep -c "::" || true)
 
   # Auch eine kleine Datei kann zu groß für einen einzigen Qt-Prozess sein.
@@ -382,8 +349,9 @@ for file in $windowed; do
   # Datei ursprünglich größer oder kleiner als diese Obergrenze war.
   if [ "$anzahl" -eq 0 ]; then
     echo "=== $file ==="
-    PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"     2>&1 | tee "$protokoll"
-    status=${PIPESTATUS[0]}
+    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" "$file" > "$protokoll" 2>&1
+    status=$?
+    cat "$protokoll"
     echo "--> Exit $status"
     if zaehlt_als_fehler "$status" "$protokoll" "$anzahl"; then
       fails=$((fails + 1))
@@ -403,9 +371,8 @@ for file in $windowed; do
   # **Eine Warteschlange und keine feste Schrittweite.** Reißt ein Stück so,
   # dass Tests darin nie liefen, wird es halbiert und beide Hälften kommen
   # vorn wieder herein — dieselbe Datei, kleinere Häppchen, ohne dass jemand
-  # eine Zahl pflegt. Ein Riss beim *Abbau* (alle Zeichen da) zählt
-  # ausdrücklich nicht: Dort ist jeder Test gelaufen, und Teilen brächte nur
-  # einen zweiten Prozessstart.
+  # eine Zahl pflegt. Ein Riss beim Abbau bleibt ebenfalls ein Fehler;
+  # die Vollständigkeit der Zeichen entscheidet nur, ob noch Tests fehlen.
   warteschlange=()
   von=1
   while [ "$von" -le "$anzahl" ]; do
@@ -438,11 +405,17 @@ for file in $windowed; do
     while IFS= read -r name; do
       [ -n "$name" ] && portion+=("$name")
     done < <(printf '%s\n' "$namen" | sed -n "${von},${bis}p")
-    PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "${portion[@]}" \
-      2>&1 | tee "$protokoll"
-    status=${PIPESTATUS[0]}
+    PYTHONIOENCODING=utf-8 "$PY" -u -m pytest -q -m "not performance" "${portion[@]}" \
+      > "$protokoll" 2>&1
+    status=$?
+    cat "$protokoll"
     groesse=$((bis - von + 1))
     echo "--> Teil $teil (Tests $von-$bis, $groesse Stück): Exit $status"
+    # Erst den wirklichen Prozessausgang behalten, dann zur Diagnose teilen.
+    if zaehlt_als_fehler "$status" "$protokoll" "$groesse"; then
+      fails=$((fails + 1))
+      schlecht="$schlecht $file:Teil$teil(Exit:$status)"
+    fi
     if nicht_gelaufen "$status" "$protokoll" "$groesse" && [ "$groesse" -gt "$MINDEST" ]; then
       # Vorn einreihen und nicht hinten: Die Hälften gehören zu dieser Datei
       # und sollen unmittelbar folgen, damit das Protokoll in der Reihenfolge
@@ -451,10 +424,6 @@ for file in $windowed; do
       warteschlange=("$von:$mitte" "$((mitte + 1)):$bis" ${warteschlange[@]+"${warteschlange[@]}"})
       echo "--> geteilt in $von-$mitte und $((mitte + 1))-$bis (der Lauf verschluckte Tests)"
       continue
-    fi
-    if zaehlt_als_fehler "$status" "$protokoll" "$groesse"; then
-      fails=$((fails + 1))
-      schlecht="$schlecht $file:Teil$teil(Exit:$status)"
     fi
   done
 done
@@ -479,4 +448,5 @@ echo "Läufe mit Fehler: $fails"
 for entry in $schlecht; do
   echo "  $entry"
 done
-exit $fails
+[ "$fails" -eq 0 ] && exit 0
+exit 1

@@ -76,7 +76,7 @@ class Outcome:
 
     @property
     def broke(self) -> bool:
-        return bool(self.error)
+        return bool(self.error) or self.objects == 0 or self.exported == 0
 
 
 def settle(app: QApplication, rounds: int = 10) -> None:
@@ -254,7 +254,9 @@ def export_round(session: Any, target: Path, name: str) -> tuple[int, list[str]]
 
     result = session.last_result
     if result is None or not result.scene.objects:
-        return 0, ["kein Ergebnis"]
+        raise RuntimeError("Kein ausgewertetes Objekt zum Exportieren.")
+    if not result.complete:
+        raise RuntimeError(f"Auswertung bei Operation {result.stopped_at} abgebrochen.")
     objects = list(result.scene.objects.values())
     plan = plan_export(
         objects,
@@ -265,13 +267,9 @@ def export_round(session: Any, target: Path, name: str) -> tuple[int, list[str]]
     )
     target.mkdir(parents=True, exist_ok=True)
     notes = describe(list(plan.findings))
-    try:
-        written = write_plan(plan, target, "3mf")
-    except Exception as problem:
-        # Das Schreiben verlangt eine Freischaltung (§2 C) — Planen und Prüfen
-        # nicht. Fehlt sie, ist das ein Befund über diese Maschine und kein
-        # Fehler der Anwendung; der geprüfte Plan steht trotzdem.
-        return 0, [*notes, f"kein Schreiben: {type(problem).__name__}"]
+    written = write_plan(plan, target, "3mf")
+    if not written or any(not path.is_file() or path.stat().st_size == 0 for path in written):
+        raise RuntimeError("Der Export hat keine vollständigen Dateien geschrieben.")
     return len(written), notes
 
 
@@ -294,7 +292,7 @@ def walk_projects(app: QApplication, window: Any, session: Any, out: Path) -> li
                 outcome.objects = len(result.scene.objects)
                 outcome.findings = describe(list(result.scene.report.findings))
                 if not result.complete:
-                    outcome.findings.insert(0, f"ABBRUCH@op{result.stopped_at}")
+                    raise RuntimeError(f"Auswertung bei Operation {result.stopped_at} abgebrochen.")
                 count, extra = export_round(session, out / "projekte" / name, name)
                 outcome.exported = count
                 outcome.findings.extend(extra)
@@ -354,6 +352,9 @@ def walk_models(
                 result = session.last_result
                 outcome.objects = len(result.scene.objects)
                 outcome.findings = describe(list(result.scene.report.findings))
+                count, extra = export_round(session, out / "modelle" / name, path.stem)
+                outcome.exported = count
+                outcome.findings.extend(extra)
         except Exception as problem:
             outcome.error = f"{type(problem).__name__}: {problem}"[:160]
         outcome.seconds = time.monotonic() - started
@@ -473,7 +474,8 @@ def report(groups: dict[str, list[Outcome]], questions: list[str]) -> int:
     if broken:
         print(f"\n{len(broken)} Stück haben die Anwendung stolpern lassen:")
         for entry in broken:
-            print(f"  {entry.kind} {entry.name}: {entry.error}")
+            reason = entry.error or "Auswertung oder Export unvollständig"
+            print(f"  {entry.kind} {entry.name}: {reason}")
         return 1
     print("\nNichts ist gestolpert.")
     return 0

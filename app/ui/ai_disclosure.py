@@ -242,7 +242,7 @@ def ensure_ai_disclosure(
             if isinstance(backend_or_target, AiDisclosureTarget)
             else target_for_backend(backend_or_target)
         )
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         _log.exception("AI disclosure target could not be resolved")
         return DisclosureResult.FAILED
     if target is None or disclosure_is_current(settings, target):
@@ -265,7 +265,7 @@ def ensure_ai_disclosure(
     try:
         remember_disclosure(settings, target)
         stored = save_settings(settings)
-    except (OSError, TypeError, ValueError):
+    except OSError, TypeError, ValueError:
         _log.exception("AI disclosure record could not be stored")
         clear_disclosure(settings)
         return DisclosureResult.FAILED
@@ -458,7 +458,7 @@ class AiDisclosureDialog(QDialog):
             self._fit_wrapped_paragraphs()
             bar.setValue(max(bar.minimum(), min(reading_position, bar.maximum())))
             ready = self._accessible_content_is_reachable()
-        except (RuntimeError, ValueError):
+        except RuntimeError, ValueError:
             ready = False
         self._reading_position = None
         if not ready:

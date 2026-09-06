@@ -20,7 +20,7 @@ braucht.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 
@@ -120,9 +120,10 @@ def hollow(
     before = mesh.volume
     _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
     outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
+    enclosed = boolean("intersection", [mesh, cavity], quality=quality, cancelled=cancelled)
     body = outcome.mesh
-    findings = list(outcome.findings)
-    stages: list[SolverInfo | None] = [outcome.solver]
+    findings = [*outcome.findings, *enclosed.findings]
+    stages: list[SolverInfo | None] = [outcome.solver, enclosed.solver]
 
     if open_top and field is not None:
         opening = _mouth(field[0])
@@ -211,7 +212,7 @@ def hollow(
             )
         )
     return HollowResult(
-        mesh=body,
+        mesh=replace(body, cavity=enclosed.mesh),
         removed=removed,
         vents=placed,
         findings=findings,

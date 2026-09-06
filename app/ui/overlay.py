@@ -596,6 +596,10 @@ class OverlayHost(QWidget):
         running = self._moves.pop(id(zone), None)
         if running is not None:
             running.stop()
+            # ``stop()`` sendet kein ``finished``, und allein das Entfernen
+            # aus ``_moves`` löst die Elternbindung nicht: Ohne diese Zeile
+            # bliebe je ersetzter Bewegung ein Qt-Kind am Host stehen.
+            running.deleteLater()
 
         if zone.geometry() == target:
             return
@@ -612,6 +616,12 @@ class OverlayHost(QWidget):
         move.setStartValue(zone.geometry())
         move.setEndValue(target)
         move.finished.connect(lambda: self._moves.pop(id(zone), None))
+        # **Über die Ereignisschleife, nicht über ``DeleteWhenStopped``.** Die
+        # Löschregel ließ Qt die Animation beim Anhalten sofort freigeben —
+        # auch beim Abbau des Hosts, dessen Kind sie ist; der Host gab sie dann
+        # ein zweites Mal frei, und zwei Tests später brach ``sizeHintForRow``
+        # mit einem beschädigten Heap ab (test_overlay: Gleiten, dann Messen).
+        move.finished.connect(move.deleteLater)
         # Die Maske wächst mit, nicht erst am Ziel: eine wachsende Zone unter
         # der alten Maske zeigt ihren neuen Teil sonst erst nach 160 ms — und
         # gar nicht, wenn eine neue Bewegung diese hier unterwegs ersetzt,

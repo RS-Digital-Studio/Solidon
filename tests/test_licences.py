@@ -24,6 +24,7 @@ def test_the_runtime_tree_is_actually_walked() -> None:
     packages = {name.lower() for name in licences.runtime_packages()}
     for expected in ("trimesh", "manifold3d", "numpy", "scipy", "pyside6", "pygfx", "vtk"):
         assert expected in packages, f"{expected} is missing from the checked tree"
+    assert not packages.intersection({"pyvista", "pyvistaqt", "qtpy"})
 
 
 def test_gpl_is_refused_and_lgpl_is_not() -> None:

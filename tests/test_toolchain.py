@@ -577,6 +577,35 @@ def test_freezing_keeps_the_head_that_explains_the_file(tmp_path, monkeypatch) -
     assert geschrieben.strip().splitlines()[-2:] == ["numpy==2.5.0", "Zebra==1.0"]
 
 
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+def test_freezing_keeps_only_foreign_platform_pins(tmp_path, monkeypatch, platform):
+    """Ein Windows-Freeze bewahrt Linux/macOS, aber keine ausgebauten Adapter."""
+    from types import SimpleNamespace
+
+    target = tmp_path / "constraints.txt"
+    target.write_text(
+        "\n".join(f"{name}==1.0" for name in check_env.PLATFORM_PINS)
+        + "\nnumpy==1.0\npyvista==0.48.4\npyvistaqt==0.13.0\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(check_env, "CONSTRAINTS", target)
+    monkeypatch.setattr(check_env, "sys", SimpleNamespace(platform=platform))
+    monkeypatch.setattr(
+        check_env.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="numpy==2.5.2\n", stderr=""),
+    )
+    assert check_env.freeze(Path("python")) == 0
+    assert check_env.pinned() == {
+        "numpy": ("numpy", "2.5.2"),
+        **{
+            name: (name, "1.0")
+            for name, system in check_env.PLATFORM_PINS.items()
+            if system != platform
+        },
+    }
+
+
 # --- Der Zugang zum Webserver -------------------------------------------------------
 
 
@@ -1828,6 +1857,10 @@ def test_the_stripped_answer_keeps_no_gap_before_a_comma() -> None:
     )
     assert _plain("<p>eins</p><p>zwei</p>") == "eins zwei", "die Absatzgrenze ging verloren"
     assert _plain("un terminal&nbsp;: <code>flatpak</code>") == "un terminal : flatpak"
+    assert _plain("Befehl: <code>flatpak install ./Solidon3D-*.flatpak</code>.") == (
+        "Befehl: flatpak install ./Solidon3D-*.flatpak."
+    )
+    assert _plain("<code>one  ,  two &amp; three</code>") == "one  ,  two & three"
 
 
 def test_a_foreign_file_does_not_take_a_delivery_slot() -> None:

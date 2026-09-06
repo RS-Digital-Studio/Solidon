@@ -45,7 +45,12 @@ def finish(dialog: GenerateDialog, qt_app: QApplication) -> None:
     dialog._start()
     worker = dialog._worker
     assert worker is not None
-    worker.wait(5000)
+    # **Warten, bis der Arbeiter wirklich fertig ist — nicht fünf Sekunden.**
+    # Sein erster Aufruf importiert trimesh (``app.core.deferred``), und der
+    # Import dauert auf einer Maschine unter Last über fünf Sekunden; die
+    # feste Frist lief dann ab, ``processEvents`` fand kein ``done`` vor, und
+    # ``result_mesh`` blieb leer, obwohl der Arbeiter kurz darauf lieferte.
+    assert worker.wait(60000), "the worker did not finish within a minute"
     qt_app.processEvents()
 
 

@@ -35,6 +35,7 @@ from app.core.perceive.features import (
     detect_spheres,
     detect_tori,
     fit_cylinder,
+    fit_sphere,
     fit_torus,
     forget_cache,
     freeform_dropped,
@@ -908,15 +909,34 @@ def test_the_expensive_search_runs_once_per_detection(monkeypatch: pytest.Monkey
     calls = 0
     original = features._fitted
 
-    def counted(mesh: MeshData) -> object:
+    def counted(mesh: MeshData, **kwargs: object) -> object:
         nonlocal calls
         calls += 1
-        return original(mesh)
+        return original(mesh, **kwargs)
 
     monkeypatch.setattr(features, "_fitted", counted)
     features.detect(plate())
 
     assert calls == 1, f"the search ran {calls} times for one detection"
+
+
+def test_the_planar_mask_is_shared_by_fits_and_faces(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die beiden Erkennungsphasen brauchen dieselbe Maske nur einmal."""
+    original = features_module._large_facet_faces
+    calls = 0
+
+    def counted(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(features_module, "_large_facet_faces", counted)
+    forget_cache()
+    found = detect(plate())
+
+    assert calls == 1
+    assert any(feature.kind == "hole" for feature in found.values())
+    assert any(feature.kind == "face" for feature in found.values())
 
 
 # --- Kegel (§21.1) ---------------------------------------------------------------
@@ -963,6 +983,42 @@ def test_a_socket_is_recognised_as_a_sphere() -> None:
     # der Kappe — dort, wo eine Kugel läge, die man hineinsetzt.
     assert spheres[0].params["centre"][2] == pytest.approx(7.5, abs=0.05)
     assert spheres[0].params["recess"] is True
+
+
+def test_an_extruded_curve_wall_is_not_a_sphere_at_any_height() -> None:
+    """Ein senkrecht extrudierter Kurvenzug bestimmt keinen Kugelmittelpunkt.
+
+    Die Mantelnormalen haben keine Z-Komponente. Damit hat das Kugelsystem nur
+    Rang drei: Eine Verschiebung in Z darf aus demselben Fleck weder eine
+    andere Kugel noch ein anderes Güteurteil machen.
+    """
+
+    def wall_at(z_offset: float) -> tuple[trimesh.Trimesh, list[int]]:
+        angles = np.linspace(-0.04, 0.04, 5)
+        lower = np.column_stack(
+            [100.0 * np.cos(angles), 100.0 * np.sin(angles), np.full(5, z_offset)]
+        )
+        upper = lower.copy()
+        upper[:, 2] += 10.0
+        vertices = np.vstack([lower, upper])
+        faces: list[tuple[int, int, int]] = []
+        for index in range(4):
+            faces.extend(
+                [
+                    (index, index + 1, index + 6),
+                    (index, index + 6, index + 5),
+                ]
+            )
+        body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+        return body, list(range(len(faces)))
+
+    for z_offset in (0.0, 20.0):
+        body, patch = wall_at(z_offset)
+        assert (
+            np.linalg.matrix_rank(np.column_stack([body.face_normals[patch], np.ones(len(patch))]))
+            == 3
+        )
+        assert fit_sphere(body, patch) is None
 
 
 def test_a_ring_is_recognised_as_a_torus() -> None:
@@ -1487,6 +1543,62 @@ def test_a_changed_mesh_is_examined_again() -> None:
     assert heights_after != heights_before, "das verschobene Netz bekam die alte Antwort"
 
 
+@pytest.mark.parametrize("phase", ["fit_cone", "detect_faces", "_shapes_on_a_freeform"])
+def test_cancelled_recognition_does_not_fill_the_caches(
+    monkeypatch: pytest.MonkeyPatch, phase: str
+) -> None:
+    """Abbruch im Fit, zwischen Detektoren und vor Veröffentlichung bleibt ohne Teilresultat."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    mesh = plate()
+    vertices, faces = mesh.raw.vertices.copy(), mesh.raw.faces.copy()
+    signal = CancelSignal()
+    forget_cache()
+    original = getattr(features_module, phase)
+    calls = 0
+
+    def cancel_after_phase(*args: object, **kwargs: object) -> object:
+        nonlocal calls
+        calls += 1
+        result = original(*args, **kwargs)
+        signal.cancel()
+        return result
+
+    with monkeypatch.context() as patch:
+        patch.setattr(features_module, phase, cancel_after_phase)
+        with pytest.raises(OperationCancelled):
+            detect(mesh, check_cancelled=signal.raise_if_cancelled)
+
+    assert calls == 1, "nach dem Abbruch darf kein weiterer Fleck derselben Phase rechnen"
+    assert not features_module._FEATURE_CACHE
+    assert not features_module._CACHE_INDICES
+    assert not features_module._FREEFORM_DROPPED
+    np.testing.assert_array_equal(mesh.raw.vertices, vertices)
+    np.testing.assert_array_equal(mesh.raw.faces, faces)
+    signal.reset()
+    assert detect(mesh, check_cancelled=signal.raise_if_cancelled)
+
+
+def test_cancelled_recognition_does_not_reorder_a_warm_cache() -> None:
+    """Auch ein schneller Cachetreffer achtet den schon verlangten Abbruch."""
+    from app.core.errors import OperationCancelled
+    from app.core.scene.cancel import CancelSignal
+
+    forget_cache()
+    first, second = cube(), plate()
+    detect(first)
+    detect(second)
+    before = list(features_module._FEATURE_CACHE.items())
+    signal = CancelSignal()
+    signal.cancel()
+
+    with pytest.raises(OperationCancelled):
+        detect(first, check_cancelled=signal.raise_if_cancelled)
+
+    assert list(features_module._FEATURE_CACHE.items()) == before
+
+
 def test_a_long_history_stays_in_the_feature_cache() -> None:
     """Ein warmer langer Verlauf darf den Cache nicht beim Lesen leeren.
 
@@ -1751,7 +1863,9 @@ def test_an_edge_loop_is_told_why_nothing_applies() -> None:
     assert any("Netz" in str(entry.reason) for entry in actions)
 
 
-def test_no_feature_is_smaller_than_the_tool_that_would_make_it() -> None:
+def test_no_feature_is_smaller_than_the_tool_that_would_make_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Kegel, Kugel und Torus hatten die Werkzeugschranke auch nicht.
 
     **Der Befund, eine Stunde nach der Verrundung (03.09.2026):** Ich hatte
@@ -1800,12 +1914,18 @@ def test_no_feature_is_smaller_than_the_tool_that_would_make_it() -> None:
         residual=0.0,
         recess=False,
     )
+    # Dieser Test isoliert die Werkzeuggröße. Die geometrische Kegelgüte prüft
+    # ``test_cone_fit_quality.py`` an echten Flächen statt an Würfelflächen.
+    monkeypatch.setattr(features_module, "_cone_is_recognisable", lambda *_args: True)
     gefunden = detect_cones(mesh, [(kegel, fläche), (replace(kegel, radius=winzig), fläche)])
     assert [f.params["diameter"] for f in gefunden] == [6.0], "ein Kegel unter Werkzeuggröße"
     assert [f.id for f in gefunden] == ["cone_1"], "und die Nummern bleiben lückenlos"
     assert len(detect_cones(mesh, [(replace(kegel, radius=genau), fläche)])) == 1
 
     kugel = SphereFit(centre=(0.0, 0.0, 0.0), radius=3.0, residual=0.0, recess=False)
+    # Dieser Test isoliert die Werkzeuggröße. Die geometrische Kugelgüte prüft
+    # ``test_sphere_fit_quality.py`` an echten Flächen statt an Würfelflächen.
+    monkeypatch.setattr(features_module, "_sphere_is_recognisable", lambda *_args: True)
     gefunden = detect_spheres(mesh, [(kugel, fläche), (replace(kugel, radius=winzig), fläche)])
     assert [f.params["diameter"] for f in gefunden] == [6.0], "eine Kugel unter Werkzeuggröße"
     assert [f.id for f in gefunden] == ["sphere_1"]
@@ -1819,6 +1939,8 @@ def test_no_feature_is_smaller_than_the_tool_that_would_make_it() -> None:
         residual=0.0,
         recess=False,
     )
+    # Entsprechend gehört die Torusgüte in ``test_torus_fit_quality.py``.
+    monkeypatch.setattr(features_module, "_torus_is_recognisable", lambda *_args: True)
     # **Der Ring ist groß, die Röhre nicht** — genau der Fall, den ein Blick
     # allein auf ``diameter`` durchgelassen hätte.
     dünn = replace(torus, tube_radius=winzig)
@@ -2185,6 +2307,35 @@ def test_a_socket_stays_a_socket_when_the_mesh_gets_finer(profile: Profile) -> N
     assert not detect_spheres(sunk), "und wird keine Pfanne"
 
 
+def test_a_sphere_that_beats_a_cone_is_fitted_only_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenprobe zum Vortritt der Kugel zählt die teure Einpassung.
+
+    Ein feines Kugelsegment besteht den Kegelfit, wird aber wegen seines viel
+    kleineren Kugelrückstands als Kugel erkannt. Derselbe Fleck braucht dafür
+    keine zweite identische Kleinste-Quadrate-Rechnung.
+    """
+    block = trimesh.creation.box(extents=(60.0, 60.0, 20.0))
+    ball = trimesh.creation.icosphere(subdivisions=4, radius=8.0)
+    ball.apply_translation((0.0, 0.0, 14.0))
+    mesh = MeshData(trimesh.boolean.difference([block, ball]))
+    original = features_module.fit_sphere
+    patches: list[tuple[int, ...]] = []
+
+    def counted(body: trimesh.Trimesh, patch: list[int]) -> features_module.SphereFit | None:
+        patches.append(tuple(patch))
+        return original(body, patch)
+
+    monkeypatch.setattr(features_module, "fit_sphere", counted)
+    forget_cache()
+
+    found = detect(mesh)
+
+    assert any(feature.kind == "sphere" for feature in found.values())
+    assert len(patches) == len(set(patches)), patches
+
+
 def test_a_countersink_knows_the_bore_it_widens() -> None:
     """Die Senkung findet ihre Bohrung — und der Zapfen findet keine.
 
@@ -2377,6 +2528,119 @@ def test_the_search_does_not_rehash_the_mesh_for_every_patch() -> None:
     )
 
 
+def _curvature_patch_family(count: int, *, noisy: bool = False) -> MeshData:
+    """Viele getrennte Rundflecken wie an einem gegliederten Druckteil.
+
+    Die Form jedes Glieds bleibt gleich, nur ihre Zahl wächst. Leichtes
+    Radialrauschen erzeugt innerhalb jedes Flecks echte Krümmungssprünge, ohne
+    die Flecken miteinander zu verbinden.
+    """
+    rng = np.random.default_rng(7291)
+    parts: list[trimesh.Trimesh] = []
+    subdivisions = 2 if noisy else 1
+    for index in range(count):
+        part = trimesh.creation.icosphere(subdivisions=subdivisions, radius=1.0)
+        vertices = np.asarray(part.vertices, dtype=float).copy()
+        if noisy:
+            vertices *= (1.0 + rng.normal(0.0, 0.02, len(vertices)))[:, None]
+        part = trimesh.Trimesh(vertices=vertices, faces=part.faces, process=False)
+        part.apply_scale((1.0, 1.3, 0.7))
+        part.apply_translation((index * 4.0, 0.0, 0.0))
+        parts.append(part)
+    return MeshData.of(trimesh.util.concatenate(parts))
+
+
+def test_curvature_splitting_scans_adjacency_once_for_many_failed_patches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mehr Flecken dürfen keinen weiteren Ganznetz-Durchlauf auslösen.
+
+    Der Kundenfall hatte 392 532 Dreiecke und viele Flecken, auf die keine
+    Grundform passte. Jeder davon durchlief bislang sämtliche
+    Flächennachbarschaften erneut. Gezählt wird der Zugriff auf genau diese
+    Grundmenge; eine Zeitgrenze wäre maschinenabhängig.
+    """
+    descriptor = trimesh.Trimesh.face_adjacency
+    assert descriptor.fget is not None
+    reads = 0
+
+    def counted(body: trimesh.Trimesh) -> np.ndarray:
+        nonlocal reads
+        reads += 1
+        return np.asarray(descriptor.fget(body))
+
+    monkeypatch.setattr(trimesh.Trimesh, "face_adjacency", property(counted))
+    for name in ("fit_cone", "fit_cylinder", "fit_sphere", "fit_torus"):
+        monkeypatch.setattr(features_module, name, lambda *_args, **_kwargs: None)
+
+    def reads_for(count: int) -> int:
+        nonlocal reads
+        reads = 0
+        forget_cache()
+        assert detect(_curvature_patch_family(count)) == {}
+        return reads
+
+    few = reads_for(4)
+    many = reads_for(32)
+
+    assert many <= few + 2, f"vier Flecken: {few}, zweiunddreißig Flecken: {many}"
+
+
+def test_batched_curvature_splitting_matches_the_previous_result() -> None:
+    """Die einmalige Indexierung ändert keinen Flecken und keine Reihenfolge."""
+    body = _curvature_patch_family(6, noisy=True).raw
+    faces = list(range(len(body.faces)))
+    patches = features_module._connected_patches(body, faces)
+    jumps = features_module._curvature_jumps(body)
+    pairs = np.asarray(body.face_adjacency)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+
+    def previous(patch: list[int]) -> list[list[int]]:
+        wanted = set(patch)
+        adjacency = [
+            pair
+            for pair, angle, step in zip(pairs, angles, jumps, strict=True)
+            if angle < features_module.CURVATURE_LIMIT
+            and step <= features_module.CURVATURE_JUMP
+            and int(pair[0]) in wanted
+            and int(pair[1]) in wanted
+        ]
+        if not adjacency:
+            return [patch]
+        groups = trimesh.graph.connected_components(
+            np.asarray(adjacency), nodes=np.asarray(patch), engine="scipy"
+        )
+        return [[int(index) for index in group] for group in groups]
+
+    expected = [previous(patch) for patch in patches]
+    actual = features_module._split_patches_by_curvature(body, patches, jumps)
+
+    assert any(len(pieces) > 1 for pieces in expected), "die Probe erzeugt keinen Krümmungssprung"
+    assert actual == expected
+
+
+def test_batched_curvature_splitting_checks_for_cancellation_inside_the_work() -> None:
+    """Ein Abbruch wartet nicht bis hinter alle Flecken und Fits."""
+
+    class StopHereError(RuntimeError):
+        pass
+
+    body = _curvature_patch_family(32).raw
+    patches = features_module._connected_patches(body, list(range(len(body.faces))))
+    jumps = features_module._curvature_jumps(body)
+    checks = 0
+
+    def stop() -> None:
+        nonlocal checks
+        checks += 1
+        if checks == 8:
+            raise StopHereError
+
+    with pytest.raises(StopHereError):
+        features_module._split_patches_by_curvature(body, patches, jumps, check_cancelled=stop)
+    assert checks == 8
+
+
 def _mast_after_moving_its_pin(tmp_path: Path) -> tuple[MeshData, dict[str, object]]:
     """Ein eingelesener Mast, dessen Zapfen einmal versetzt wurde.
 
@@ -2546,7 +2810,7 @@ def _scan_like_blob(seed: int = 7) -> MeshData:
     unten eine ebene Standfläche.
 
     **Ohne das Rauschen findet die Erkennung an so einem Körper nichts** —
-    die Krümmung ändert sich zu stetig, als dass ``_split_by_curvature``
+    die Krümmung ändert sich zu stetig, als dass ``_split_patches_by_curvature``
     Flecken abteilte (gemessen am 05.09.2026: zwei Flächen, sonst nichts).
     Mit ihm zerfällt die Oberfläche in Dutzende Flecken annähernd gleicher
     Krümmung, und auf jeden passt eine Kugel — genau der Mechanismus, der auf
@@ -2593,6 +2857,10 @@ def test_the_freeform_verdict_needs_the_count_and_the_share() -> None:
     ), "die Nozzle-Box: konstruiert, 59 Prozent rund"
     assert not is_a_freeform(_listed({"sphere": 11, "face": 1})), "elf sind zu wenige"
     assert not is_a_freeform(_listed({"torus": 1})), "torus_ring.stl: ein Ring ist ein Ring"
+    assert is_a_freeform(
+        _listed({"torus": 12, "cone": 7, "face": 1}),
+        unpublished_round_shapes=27,
+    ), "unsichere Kugelfits bleiben als Freiformbeleg erhalten"
     assert not is_a_freeform({})
 
 
@@ -2626,17 +2894,17 @@ def test_a_scan_keeps_its_flat_base_and_loses_the_invented_round_shapes() -> Non
     assert "face" in kinds, "die Standfläche ist echt und bleibt"
 
 
-def test_without_the_rule_the_same_scan_carries_dozens_of_round_shapes(
+def test_without_the_freeform_rule_the_same_scan_keeps_only_supported_round_shapes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Die Gegenprobe: Der Test darüber misst die Regel und nicht den Körper."""
+    """Die Gegenprobe trennt Flächengüte und Urteil über das ganze Modell."""
     monkeypatch.setattr(features_module, "FREEFORM_ROUND_COUNT", 10**6)
     forget_cache()
 
     found = detect(_scan_like_blob())
 
     round_shapes = [f for f in found.values() if f.kind in ("sphere", "torus")]
-    assert len(round_shapes) >= FREEFORM_ROUND_COUNT, len(round_shapes)
+    assert 0 < len(round_shapes) < FREEFORM_ROUND_COUNT, len(round_shapes)
     assert freeform_dropped(_scan_like_blob()) == 0
 
 

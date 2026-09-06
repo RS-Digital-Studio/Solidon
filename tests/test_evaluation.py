@@ -1635,6 +1635,62 @@ def test_a_stopped_evaluation_says_why_in_the_log(caplog: pytest.LogCaptureFixtu
     assert "." in zeilen[0].split("op 1: ")[-1], f"nennt keinen Befundcode: {zeilen[0]}"
 
 
+def test_an_unexpected_error_leaves_its_traceback_and_cause_in_the_log(
+    registry: Registry, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Programmfehler in einer Operation nennt im Protokoll Ursache und Traceback.
+
+    Der Kundenbericht S-20260906-9ca141 (0.3.4, 06.09.2026) trug zweimal
+    ``op.load.InternalError: Im Programm ist ein unerwarteter Fehler
+    aufgetreten.`` und sonst nichts — Titel im Protokoll, Titel im Bericht,
+    die Ausnahmeart in ``values`` versteckt, der Traceback nirgends. Mit dem
+    Bericht in der Hand war der Fehler nicht zu finden.
+
+    Geprüft an einer Operation, die einen ``TypeError`` wirft: Der Befund
+    trägt Ausnahmeart und -text, die Abbruchzeile nennt sie, und davor steht
+    der Traceback als Fehlerzeile — die drei Dinge, die ein Bericht braucht.
+    """
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.project import new_project
+    from app.core.types import Operation
+
+    @register_op(
+        name="blow_up",
+        title=_("Explodieren"),
+        category="scene",
+        params=EmptyParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def blow_up(ctx: OpContext) -> OpResult:
+        raise TypeError("bounds() got an unexpected keyword argument 'tight'")
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.ops.append(Operation(id=1, op="blow_up", inputs=(), outputs=("obj_1",), params={}))
+
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        result = evaluate(document, make_profile("centauri-carbon-2", "petg"), registry=registry)
+
+    assert result.stopped_at == 1
+    finding = next(
+        entry for entry in result.scene.report.findings if entry.code == "op.blow_up.InternalError"
+    )
+    cause = "TypeError: bounds() got an unexpected keyword argument 'tight'"
+    assert finding.values["detail"] == cause
+
+    stopped = [r.getMessage() for r in caplog.records if "evaluation stopped" in r.getMessage()]
+    assert stopped and cause in stopped[0], f"die Abbruchzeile nennt den Grund nicht: {stopped}"
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR and r.exc_info]
+    assert errors, "kein Traceback im Protokoll"
+    assert "blow_up" in caplog.text and cause in caplog.text, (
+        "der Traceback nennt weder die Operation noch die Ausnahme"
+    )
+
+
 def test_the_log_reason_carries_the_numbers_not_the_placeholders() -> None:
     """Der Abbruchgrund nennt die Zahlen — sonst hilft er dem Support wieder nicht.
 
@@ -1946,6 +2002,53 @@ def _small_body() -> object:
     return MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
 
 
+@pytest.mark.parametrize(
+    ("triangles", "recognized"),
+    [(392_532, True), (885_570, True), (1_000_000, True), (1_000_001, False)],
+)
+def test_fine_customer_meshes_reach_recognition_with_a_bounded_budget(
+    monkeypatch: pytest.MonkeyPatch, triangles: int, recognized: bool
+) -> None:
+    """Feine Kundennetze erreichen die Erkennung; die obere Schranke bleibt.
+
+    Schlauchhalter und Figur lagen mit 392 532 beziehungsweise 885 570
+    Dreiecken bei rund zwölf Sekunden Erkennung, wurden aber vollständig
+    übersprungen. Hier wird der Anschluss geprüft, nicht die Geometriezeit:
+    Die echte Erkennung misst der Korpus, diese Probe meldet ihren Aufruf.
+    """
+    from importlib import import_module
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import Operation, SceneObject
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    mesh = _small_body()
+    calls: list[object] = []
+
+    def detect(body: object, **kwargs: object) -> dict[str, object]:
+        calls.append(body)
+        return _many_features(1)
+
+    monkeypatch.setattr(MeshData, "triangle_count", property(lambda _body: triangles))
+    monkeypatch.setattr(evaluate_module, "detect", detect)
+    monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda _body: 0)
+    findings: list[Finding] = []
+    result = evaluate_module._with_features(
+        SceneObject(id="obj_1", name="Kundenteil", mesh=mesh),
+        {},
+        Operation(id=1, op="load"),
+        lambda _question, choices: choices[0],
+        findings,
+    )
+
+    assert bool(calls) is recognized
+    assert bool(result.features) is recognized
+    limited = [finding for finding in findings if finding.code == "perceive.too_large"]
+    assert bool(limited) is not recognized
+    if limited:
+        assert limited[0].values == {"triangles": triangles, "limit": 1_000_000}
+
+
 def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1980,7 +2083,7 @@ def test_a_named_feature_keeps_the_surface_found_in_the_current_mesh(
         params=params,
         face_indices=(2, 3),
     )
-    monkeypatch.setattr(evaluate_module, "detect", lambda _mesh: {"hole_1": detected})
+    monkeypatch.setattr(evaluate_module, "detect", lambda _mesh, **kwargs: {"hole_1": detected})
     entry = SceneObject(
         id="obj_1",
         name="Halter",
@@ -2041,7 +2144,7 @@ def test_too_many_features_stop_the_matching_and_say_so(monkeypatch: pytest.Monk
 
     limit = evaluate_module.FEATURE_LIMIT_COUNT
     crowd = _many_features(limit + 1)
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(crowd))
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(crowd))
 
     ran: list[int] = []
     monkeypatch.setattr(
@@ -2078,7 +2181,7 @@ def test_a_model_below_the_feature_limit_is_matched_as_before(
     from app.core.types import Operation, SceneObject
 
     crowd = _many_features(evaluate_module.FEATURE_LIMIT_COUNT)
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(crowd))
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(crowd))
 
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
     findings: list[Finding] = []
@@ -2108,7 +2211,7 @@ def test_the_recognition_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
     signal.cancel()
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
 
-    def must_not_run(mesh: object) -> dict[str, object]:
+    def must_not_run(mesh: object, **kwargs: object) -> dict[str, object]:
         raise AssertionError("nach dem Abbrechen darf nicht mehr erkannt werden")
 
     monkeypatch.setattr(evaluate_module, "detect", must_not_run)
@@ -2117,6 +2220,51 @@ def test_the_recognition_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> No
         evaluate_module._with_features(
             entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], [], cancelled=signal
         )
+
+
+def test_cancellation_during_first_recognition_does_not_publish_a_result(
+    monkeypatch: pytest.MonkeyPatch,
+    history: History,
+    document: Document,
+    profile: Profile,
+    registry: Registry,
+) -> None:
+    """Ein Abbruch während der ersten Erkennung darf weder Szene noch Cache liefern."""
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    signal = CancelSignal()
+    cache = ResultCache()
+
+    @register_op(
+        name="load_test_mesh",
+        title=_("Testnetz laden"),
+        category="import",
+        params=EmptyParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def load_test_mesh(ctx: OpContext) -> OpResult:
+        return OpResult(outputs=[SceneObject(id="", name="Teil", mesh=_small_body())])
+
+    def cancelled_detection(mesh: object, **kwargs: object) -> dict[str, object]:
+        check_cancelled = kwargs["check_cancelled"]
+        assert callable(check_cancelled)
+        check_cancelled()
+        signal.cancel()
+        with pytest.raises(OperationCancelled):
+            check_cancelled()
+        return _many_features(1)
+
+    monkeypatch.setattr(evaluate_module, "detect", cancelled_detection)
+    history.apply(_("Einfügen"), [OperationDraft(op="load_test_mesh")])
+
+    with pytest.raises(OperationCancelled):
+        evaluate(document, profile, registry=registry, cancelled=signal, cache=cache)
+
+    assert len(cache) == 0, "ein abgebrochener Erstimport darf keinen fertigen Stand ablegen"
 
 
 def test_the_recognition_reports_what_it_is_doing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2131,7 +2279,7 @@ def test_the_recognition_reports_what_it_is_doing(monkeypatch: pytest.MonkeyPatc
     evaluate_module = import_module("app.core.scene.evaluate")
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(_many_features(2)))
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(2)))
     said: list[str] = []
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
 
@@ -2162,7 +2310,7 @@ def test_what_the_recognition_left_out_on_a_freeform_is_said(
     evaluate_module = import_module("app.core.scene.evaluate")
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 281)
 
     entry = SceneObject(id="obj_1", name="Kiefer", mesh=_small_body())
@@ -2187,7 +2335,7 @@ def test_a_model_that_is_no_freeform_gets_no_such_finding(
     evaluate_module = import_module("app.core.scene.evaluate")
     from app.core.types import Operation, SceneObject
 
-    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(_many_features(3)))
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh, **kwargs: dict(_many_features(3)))
     monkeypatch.setattr(evaluate_module, "freeform_dropped", lambda mesh: 0)
 
     entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())

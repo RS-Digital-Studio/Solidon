@@ -46,6 +46,43 @@ def test_degenerate_triangles_go_away() -> None:
     assert mesh.triangle_count == 12, "the cube stays, the junk goes"
 
 
+@pytest.mark.parametrize("holes", [False, True])
+@pytest.mark.parametrize("damage", ["touching_shells", "collapsed_face"])
+def test_repair_preserves_closed_topology_and_face_slots(damage: str, holes: bool) -> None:
+    """Aufräumen darf geschlossene Schalen weder verbinden noch aufreißen."""
+    import numpy as np
+
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    if damage == "touching_shells":
+        second = body.copy()
+        second.apply_translation((0.0, 0.0, 10.0))
+        body = trimesh.util.concatenate([body, second])
+        expected_code = "repair.weld_skipped"
+    else:
+        first, second, third = body.faces[0]
+        body.vertices[first] = (body.vertices[second] + body.vertices[third]) / 2.0
+        expected_code = "repair.degenerate_kept"
+    original = MeshData.of(body, slots=tuple(range(len(body.faces))))
+    vertices, faces = body.vertices.copy(), body.faces.copy()
+    assert original.is_watertight
+
+    result = repair(original, holes=holes)
+
+    assert result.mesh.is_watertight
+    assert not result.changed
+    assert result.mesh.volume == pytest.approx(original.volume)
+    assert result.mesh.slots == original.slots
+    np.testing.assert_array_equal(result.mesh.raw.vertices, vertices)
+    np.testing.assert_array_equal(result.mesh.raw.faces, faces)
+    np.testing.assert_array_equal(original.raw.vertices, vertices)
+    np.testing.assert_array_equal(original.raw.faces, faces)
+    codes = {finding.code for finding in result.findings}
+    assert expected_code in codes
+    assert not codes.intersection(
+        {"repair.welded", "repair.degenerate_removed", "repair.still_open"}
+    )
+
+
 def test_removing_degenerate_triangles_keeps_the_slots_of_surviving_faces() -> None:
     """Eine entfernte Fläche darf die Farben der übrigen nicht löschen."""
     body = trimesh.Trimesh(

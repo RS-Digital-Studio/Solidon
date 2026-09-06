@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "solidon3d"
 version = "0.3.4"
 description = "Desktop application for building, generating and editing printable models"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 license = { file = "LICENSE" }
 authors = [{ name = "RS Digital" }]
 dependencies = [
@@ -157,13 +157,12 @@ include = ["app*"]
 testpaths = ["tests"]
 filterwarnings = [
   "error",
-  # numpy 2.5 hat `arr.shape = ...` als veraltet markiert; VTK 9.6 und
-  # scikit-image 0.26 benutzen es noch, beides Fremdcode. Der eigene Kern kommt
-  # ohne diese Zuweisung aus, deshalb eng auf die zwei Module begrenzt statt
+  # numpy 2.5 hat `arr.shape = ...` als veraltet markiert; scikit-image 0.26
+  # benutzt es noch. Der eigene Kern kommt ohne diese Zuweisung aus,
+  # deshalb eng auf dieses Fremdmodul begrenzt statt
   # numpy nach oben zu deckeln — eine Obergrenze hielte das ganze Projekt auf
-  # einer alten Version fest. Fällt weg, sobald beide nachgezogen haben; der
+  # einer alten Version fest. Fällt weg, sobald scikit-image nachgezogen hat; der
   # wöchentliche Lauf gegen die neuesten Versionen meldet es.
-  'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:vtkmodules\..*',
   'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:skimage\..*',
 ]
 markers = [
@@ -174,7 +173,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-target-version = "py313"
+target-version = "py314"
 # Der Sitzungszustand wird nicht geprüft.
 #
 # Seit „Der Sitzungszustand reist mit" (`a92b0bc`) liegen die Messskripte
@@ -201,6 +200,17 @@ target-version = "py313"
 # nur eine neue Gestalt: nicht die Pipeline und nicht die Schlusszeile, sondern
 # ein fremder Ordner im Prüfpfad.
 extend-exclude = [".claude/.state/", ".codex-*/", "3D Drucker/"]
+
+[tool.ruff.per-file-target-version]
+# Der Umgebungsprüfer muss eine ältere Installation noch erklären können,
+# bevor eine passende Projektumgebung existiert (tomllib benötigt Python 3.11).
+"tools/check_env.py" = "py311"
+# Cython 3.3 baut diese Module für Python 3.14, versteht aber noch keine
+# ungeklammerten Ausnahmegruppen. Die Bauquellen behalten Python-3.13-Syntax.
+"app/core/activation/*.py" = "py313"
+# Die Sitzungs-Hooks laufen vor jeder Umgebung: SessionStart fällt ohne .venv
+# auf ein System-Python zurück, und das kann 3.11 sein.
+".claude/hooks/*.py" = "py311"
 
 [tool.ruff.lint]
 # Die sechs hinteren kamen am 14.08.2026 dazu, nachgemessen mit 13 Befunden im
@@ -265,7 +275,7 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN",
 "tests/*" = ["RUF001", "RUF002"]
 
 [tool.mypy]
-python_version = "3.13"
+python_version = "3.14"
 files = ["app"]
 strict = true
 warn_unreachable = true

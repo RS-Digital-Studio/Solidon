@@ -16,9 +16,12 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.core.types import Operation, Profile, Quality
+
+if TYPE_CHECKING:
+    from app.core.geom.mesh import MeshData
 
 
 def _canonical(value: Any) -> Any:
@@ -80,6 +83,18 @@ def operation_hash(
     )
 
 
-def object_hash(operation_key: str, position: int) -> str:
+def object_hash(
+    operation_key: str,
+    position: int,
+    reserved_feature_ids: Sequence[str] = (),
+    cavity: MeshData | None = None,
+) -> str:
     """Die Identität eines Ausgabeobjekts einer Operation."""
-    return digest(operation_key, position)
+    cavity_key = None
+    if cavity is not None:
+        # Die geometrische Auskunft ist ein weiterer Op-Eingang. Keine
+        # JSON-Punktlisten: Die numerischen Arrays lassen sich direkt hashen.
+        checksum = hashlib.sha256(cavity.raw.vertices.tobytes())
+        checksum.update(cavity.raw.faces.tobytes())
+        cavity_key = checksum.hexdigest()
+    return digest(operation_key, position, sorted(reserved_feature_ids), cavity_key)

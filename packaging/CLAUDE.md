@@ -96,6 +96,13 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
 
 - **Eine neue Abhängigkeit** kann in der `.spec` fehlen und erst im gebauten
   Paket auffallen — dort, wo kein `pip` mehr hilft.
+  Die Ansicht bindet VTK unmittelbar und daneben pygfx/wgpu ein. PyVista,
+  PyVistaQt und QtPy gehören nicht zum Laufzeitbaum. Die Entwicklungsvorschau
+  der Lizenzbeilage wird nach einer Änderung mit dem Interpreter des neuen
+  Versionssatzes erzeugt; sie ersetzt keinen nativen Paketnachweis.
+  Der Schichtkern wird über `build_slice_core.current_extensions()` ausgewählt:
+  Erweiterungen anderer Python-ABIs oder Architekturen erfüllen die Baugrenze
+  nicht und werden nicht mit eingesammelt.
 - **Ein Asset ohne Rechtefreigabe** stoppt die `.spec` vor `Analysis` über
   `tools/asset_rights.py`. Maßgeblich ist `ASSET-RIGHTS.toml`; das Tor prüft
   Schema und beigefügte Nachweise sowie die vollständige, überschneidungsfreie

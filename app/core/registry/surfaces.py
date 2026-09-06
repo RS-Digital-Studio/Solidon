@@ -688,7 +688,13 @@ CATEGORY_FIGURES: dict[str, str] = {
 #: das Register die Bausteinbibliothek nicht importieren darf. Ein Test hält
 #: beide Listen deckungsgleich. Das Handbuch erklärt sie einmal am Kopf der
 #: Kategorie, statt sechs identische Zeilen in jede Bausteintabelle zu setzen.
-PART_PLACEMENT_PARAMS: Final = ("x", "y", "z", "axis", "angle", "at_feature")
+PART_PLACEMENT_PARAMS: Final = ("x", "y", "z", "nx", "ny", "nz", "axis", "angle", "at_feature")
+
+
+def part_placement_params(spec: OperationSpec) -> frozenset[str]:
+    """Die Ortsfelder dieses Schemas, auch bei gleichnamigen Rezeptmaßen."""
+    normal = getattr(spec.params, "_surface_normal_fields", ("nx", "ny", "nz"))
+    return frozenset(PART_PLACEMENT_PARAMS).difference(("nx", "ny", "nz")).union(normal)
 
 
 def documentation(registry: Registry | None = None, category: str = "") -> str:
@@ -710,7 +716,9 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             lines.append("")
         if name == "parts" and entries:
             shared = tuple(
-                entry for entry in entries[0].params.spec() if entry.name in PART_PLACEMENT_PARAMS
+                entry
+                for entry in entries[0].params.spec()
+                if entry.name in part_placement_params(entries[0])
             )
             if shared:
                 lines.append(
@@ -755,7 +763,7 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
             if name == "parts":
                 # Die geteilten Ortsangaben stehen einmal am Kategoriekopf.
                 parameters = tuple(
-                    entry for entry in parameters if entry.name not in PART_PLACEMENT_PARAMS
+                    entry for entry in parameters if entry.name not in part_placement_params(spec)
                 )
             if parameters:
                 lines.extend(parameter_table(parameters))

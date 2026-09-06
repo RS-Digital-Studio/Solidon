@@ -120,6 +120,10 @@ class ImportGraph:
         self.importers: dict[str, set[str]] = defaultdict(set)
         for name, path in self.modules.items():
             for target in imports_of(path, name):
+                # Auch fehlende Ziele bleiben Knoten: Nach dem Löschen
+                # müssen relative und mittelbare Importe noch auffindbar sein.
+                if target != name:
+                    self.importers[target].add(name)
                 resolved = self.resolve(target)
                 if resolved is not None and resolved != name:
                     self.importers[resolved].add(name)
@@ -244,6 +248,7 @@ def affected(
     graph = graph or ImportGraph()
     reasons: dict[Path, str] = {}
     changed_modules: set[str] = set()
+    deleted_modules: set[str] = set()
     touches_code = False
     for path in changed:
         relative = (
@@ -270,6 +275,8 @@ def affected(
                 # unter app/ oder tools/ ist eine Codeänderung, und wer sie
                 # beim Namen nennt, ist betroffen.
                 touches_code = True
+                changed_modules.add(name)
+                deleted_modules.add(name)
                 for test_name, test_path in graph.modules.items():
                     if (
                         test_name.startswith("tests.")
@@ -283,7 +290,12 @@ def affected(
     for name in graph.dependents(changed_modules):
         path = graph.modules[name]
         if name.startswith("tests.") and path.name.startswith("test_"):
-            reasons.setdefault(path, "importiert eine geänderte Datei")
+            reasons.setdefault(
+                path,
+                "importiert eine gelöschte Datei"
+                if deleted_modules
+                else "importiert eine geänderte Datei",
+            )
     if touches_code:
         for name in _tree_readers(graph):
             reasons.setdefault(graph.modules[name], "liest den ganzen Baum")

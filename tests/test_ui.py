@@ -59,6 +59,335 @@ from app.ui.settings import UiSettings
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def test_rebuilding_the_object_tree_preserves_click_order(window: MainWindow) -> None:
+    """Einheiten- und Szenenwechsel vertauschen keine Booleschen Operanden."""
+    assert window.session.apply(
+        "Zwei Körper",
+        [OperationDraft(op="create_box"), OperationDraft(op="create_box")],
+    )
+    assert window.session.wait_for_idle(30000)
+    tree = window.object_tree
+    tree.tree.clearSelection()
+    tree.tree.topLevelItem(1).setSelected(True)
+    tree.tree.topLevelItem(0).setSelected(True)
+    assert tree.selected_objects() == ("obj_2", "obj_1")
+    tree.set_unit("in")
+    assert tree.selected_objects() == ("obj_2", "obj_1")
+    tree.show_scene(window.session.last_result, window.session.project.document)
+    assert tree.selected_objects() == ("obj_2", "obj_1")
+
+
+def test_derived_parameter_labels_follow_the_evaluated_expression(window: MainWindow) -> None:
+    """Die Anzeige folgt dem neu gerechneten Maß, nicht seinem Erfassungswert."""
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.geom.mesh import as_mesh_data
+
+    session = window.session
+    assert session.add_parameter(Parameter(name="base", value=20.0))
+    assert session.wait_for_idle(30000)
+    assert session.add_parameter(Parameter(name="derived", value=10.0, expression="@base / 2"))
+    assert session.wait_for_idle(30000)
+    assert session.apply("Quader", [OperationDraft(op="create_box", params={"height": "@derived"})])
+    assert session.wait_for_idle(30000)
+    assert session.change_parameter("base", 40.0)
+    assert session.wait_for_idle(30000)
+    result = session.last_result
+    assert result is not None and result.complete
+    assert as_mesh_data(result.scene.objects["obj_1"].mesh).bounds.size[2] == pytest.approx(20.0)
+    labels = [
+        label.text()
+        for label in window.parameters.findChildren(QLabel)
+        if label.toolTip() == "@base / 2"
+    ]
+    assert labels == ["20,00"]
+
+
+@pytest.mark.parametrize(
+    "change,fail", [("selection", False), ("project", False), ("project", True), ("cancel", False)]
+)
+def test_a_delayed_image_source_keeps_its_project_and_target(
+    window: MainWindow,
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+    fail: bool,
+) -> None:
+    """Echte späte Dateiergebnisse verändern nur ihren ursprünglichen Kontext."""
+    from PySide6.QtGui import QImage
+
+    session = window.session
+    assert session.apply(
+        "Zwei Körper", [OperationDraft(op="create_box"), OperationDraft(op="create_box")]
+    )
+    assert session.wait_for_idle(30000)
+    filename = tmp_path / "relief.png"
+    picture = QImage(5, 5, QImage.Format.Format_RGB32)
+    picture.fill(0xFF123456)
+    assert picture.save(str(filename))
+    entered, proceed = threading.Event(), threading.Event()
+    real_work = main_window_module._SourceReadWorker.work
+
+    def held_work(worker: Any) -> None:
+        entered.set()
+        assert proceed.wait(15)
+        real_work(worker)
+
+    monkeypatch.setattr(main_window_module._SourceReadWorker, "work", held_work)
+    calls: list[dict[str, Any]] = []
+    errors: list[Exception] = []
+    monkeypatch.setattr(window, "run_operation", lambda spec, **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(main_window_module, "show_error", lambda error, *args: errors.append(error))
+    window.object_tree.select_object("obj_1")
+    window._drop_image(filename)
+    worker = window._source_worker
+    try:
+        assert worker is not None and entered.wait(5)
+        if change == "selection":
+            window.object_tree.select_object("obj_2")
+        else:
+            session.start_new()
+            assert session.wait_for_idle(30000)
+            own = session._embed_source("generated", "own.bin", b"neues Projekt")
+            assert own == "src_1"
+        if fail:
+            filename.unlink()
+        if change == "cancel":
+            worker.cancel.cancel()
+            announcements = []
+            monkeypatch.setattr(window, "announce", announcements.append)
+        proceed.set()
+        assert worker.wait(15000)
+        qt_app.processEvents()
+        assert not errors
+        if change == "cancel":
+            assert not announcements, "der Abbruch des vorigen Projekts meldet hier keinen Zustand"
+        if change == "selection":
+            assert len(calls) == 1
+            assert calls[0].get("on_bodies") == ("obj_1",)
+            assert calls[0]["given"]["source"] in session.project.document.sources
+        else:
+            assert calls == []
+            assert list(session.project.document.sources) == ["src_1"]
+            assert session.project.sources["src_1"] == b"neues Projekt"
+            assert not session.project.document.ops
+    finally:
+        proceed.set()
+        if worker is not None:
+            worker.wait(15000)
+
+
+def test_filaments_leave_the_modal_print_dialog_and_offer_a_way_back(
+    window: MainWindow,
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Knopf muss die Filamentkarte tatsächlich bedienbar machen."""
+    from PySide6.QtCore import QTimer
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    dialog = PrintSettingsDialog(window.session, window.settings, window)
+    dialog.filamentsRequested.connect(lambda: window._show_filaments(dialog))
+    blocked = []
+
+    def choose_filaments():
+        dialog.material_link.click()
+        blocked.append(qt_app.activeModalWidget() is dialog)
+        if blocked[-1]:
+            dialog.reject()
+
+    QTimer.singleShot(0, choose_filaments)
+    dialog.exec()
+    assert blocked == [False]
+    assert not window.filaments.return_to_print_button.isHidden()
+    requested = []
+
+    class ReturnedDialog(PrintSettingsDialog):
+        def exec(self):
+            requested.append(self.settings)
+            return QDialog.DialogCode.Rejected
+
+    monkeypatch.setattr(main_window_module, "PrintSettingsDialog", ReturnedDialog)
+    monkeypatch.setattr(main_window_module, "ensure_print_disclosure", lambda *args: None)
+    window.filaments.return_to_print_button.click()
+    assert len(requested) == 1
+    assert window.filaments.return_to_print_button.isHidden()
+    dialog.deleteLater()
+
+
+def test_section_controls_follow_the_scene_when_its_worker_finishes(
+    window: MainWindow, qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Schnittleiste übernimmt neue Grenzen erst mit der tatsächlich gezeigten Szene."""
+    from threading import Event
+
+    from app.core.scene import OperationDraft
+    from app.ui import viewport as module
+
+    session = window.session
+    session.history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 400.0, "depth": 200.0, "height": 300.0})],
+    )
+    result = session.run_evaluation()
+    entered, release = Event(), Event()
+    original = module._SceneMeshWorker.work
+
+    def held(worker):
+        entered.set()
+        assert release.wait(10)
+        original(worker)
+
+    monkeypatch.setattr(module._SceneMeshWorker, "work", held)
+    monkeypatch.setattr(
+        window.viewport,
+        "_scene_tasks",
+        lambda scene: (
+            [(key, entry.mesh, None) for key, entry in scene.scene.objects.items()],
+            None,
+            None,
+        ),
+    )
+    worker = None
+    try:
+        window._show_scene(result)
+        worker = window.viewport._scene_worker
+        assert worker is not None and entered.wait(5)
+        release.set()
+        assert worker.wait(10000)
+        qt_app.processEvents()
+        assert window.section_bar._ranges == window.viewport.section_ranges()
+        assert window.section_bar._ranges["x"] == pytest.approx((-200.0, 200.0))
+        assert window.section_bar._ranges["z"] == pytest.approx((0.0, 300.0))
+    finally:
+        release.set()
+        if worker is not None:
+            worker.wait(10000)
+
+
+def test_another_running_session_keeps_its_recovery(qt_app: QApplication) -> None:
+    """Ein zweites Fenster darf die Sicherung des ersten weder anbieten noch verwerfen."""
+    from app.core.scene.project import autosave_path, discard_recovery, unsaved_recoveries
+
+    first, second = Session(), Session()
+    try:
+        first._dirty = True
+        first.autosave()
+        saved = autosave_path(None, first.recovery_token)
+        assert saved.is_file()
+        assert saved not in unsaved_recoveries(except_token=second.recovery_token)
+        discard_recovery(saved)
+        assert saved.is_file()
+        first.release()
+        assert saved in unsaved_recoveries(except_token=second.recovery_token)
+        discard_recovery(saved)
+        assert not saved.exists()
+    finally:
+        first.release()
+        second.release()
+
+
+def test_opening_repairs_the_reference_at_the_stopped_operation(
+    session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der echte Öffnungs-Worker ordnet den Verweis im vorbereiteten Zwischenstand neu zu."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    session.history.apply("Körper", [OperationDraft(op="create_box")])
+    session.history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_999", "diameter": 6.0},
+            )
+        ],
+    )
+    stopped = session.project.document.ops[-1].id
+    scene = Scene(
+        objects={
+            "obj_1": SceneObject(
+                id="obj_1",
+                name="Platte",
+                mesh=MeshData(trimesh.creation.box()),
+                features={
+                    "hole_2": Feature(
+                        id="hole_2", kind="hole", params={"diameter": 5.0}, provenance="detected"
+                    )
+                },
+            )
+        }
+    )
+
+    def evaluate(*_args):
+        pending = session.project.document.ops[-1].params["at_feature"] == "hole_999"
+        return EvaluationResult(
+            scene=scene,
+            completed=(1,) if pending else (1, stopped),
+            stopped_at=stopped if pending else None,
+        )
+
+    monkeypatch.setattr(session, "run_evaluation", evaluate)
+    path = session.save_project(tmp_path / "verloren.p3d")
+    requests = []
+    session.askRequested.connect(
+        lambda request: (requests.append(request), request.reply("hole_2"))
+    )
+    try:
+        session.open_project(path)
+        assert session.wait_for_idle()
+        assert requests, "die unvollständige Auswertung muss die Wiederzuordnung erreichen"
+        assert requests[0].candidates == (("obj_1", "hole_2"),)
+        assert requests[0].preview is not None and requests[0].preview.scene is scene
+        assert session.project.document.ops[-1].params["at_feature"] == "hole_2"
+        assert session.last_result.complete
+        assert session.modified, "die neue Zuordnung muss beim Schließen gespeichert werden"
+    finally:
+        session.release()
+
+
+def test_the_question_shows_its_intermediate_scene_before_the_choices(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Rückfrage markiert Kandidaten in genau dem mitgelieferten Zwischenstand."""
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+    from app.ui import main_window as module
+
+    preview = EvaluationResult(scene=Scene(objects={}), stopped_at=2)
+    shown = []
+    monkeypatch.setattr(window, "_on_scene", lambda result: shown.append(("scene", result)))
+    monkeypatch.setattr(
+        window.viewport, "show_candidates", lambda *args: shown.append(("candidates", args))
+    )
+
+    class Answer(module.AskDialog):
+        def exec(self):
+            shown.append(("dialog", None))
+            return self.DialogCode.Accepted
+
+        def chosen(self):
+            return "hole_2"
+
+    monkeypatch.setattr(module, "AskDialog", Answer)
+    request = AskRequest(
+        "Bohrung zuordnen", ["hole_2"], preview=preview, candidates=(("obj_1", "hole_2"),)
+    )
+    window._on_ask(request)
+    assert shown[0] == ("scene", preview)
+    assert [entry[0] for entry in shown].index("candidates") < [entry[0] for entry in shown].index(
+        "dialog"
+    )
+    assert request.answer == "hole_2" and request.answered.is_set()
+
+
 @pytest.fixture
 def session(qt_app: QApplication) -> Session:
     return Session()
@@ -736,11 +1065,13 @@ def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> No
 
 
 def test_the_right_panel_folds_away(window: MainWindow) -> None:
-    assert window.right.isVisible() or True  # noch nicht sichtbar, aber verdrahtet
+    assert not window.right.isHidden()
     window.action_toggle_right()
     assert not window.settings.right_panel_visible
+    assert window.right.isHidden()
     window.action_toggle_right()
     assert window.settings.right_panel_visible
+    assert not window.right.isHidden()
 
 
 def test_view_menu_and_settings_share_theme_and_navigation_names(window: MainWindow) -> None:
@@ -1433,9 +1764,10 @@ def test_two_selected_features_show_their_distance(window: MainWindow) -> None:
     assert tr("in X") in texte and tr("in Z") in texte
 
 
-def test_three_selected_features_show_nothing_new(window: MainWindow) -> None:
-    """Bei dreien gibt es keine Strecke, sondern drei — und welche gemeint
-    wäre, kann niemand wissen. Das Panel bleibt dann, was es war."""
+def test_three_selected_features_explain_the_pair_limit(window: MainWindow) -> None:
+    """Bei drei Merkmalen wird keine Beziehung geraten; die Auskunft nennt die Grenze."""
+    from PySide6.QtWidgets import QLabel
+
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
     result = window.session.evaluate_now()
@@ -1445,12 +1777,134 @@ def test_three_selected_features_show_nothing_new(window: MainWindow) -> None:
     window.object_tree.select_object(object_id)
     window.object_tree.select_feature(object_id, holes[0])
     QApplication.processEvents()
-    vorher = len(window.feature_panel._built)
-
     window.object_tree.featuresSelected.emit([(object_id, hole) for hole in holes[:3]])
     QApplication.processEvents()
+    assert any("genau zwei" in label.text() for label in window.feature_panel.findChildren(QLabel))
+    assert not window.session.project.document.fits
 
-    assert len(window.feature_panel._built) == vorher, "das Panel wurde nicht umgebaut"
+
+def _manual_face_pair(window: MainWindow) -> tuple[tuple[str, str], tuple[str, str]]:
+    """Zwei echte Quader mit parallelen, um einen Millimeter versetzten Deckflächen."""
+    assert window.session.apply(
+        "Zwei Teile",
+        [
+            OperationDraft(op="create_box"),
+            OperationDraft(op="create_box"),
+            OperationDraft(op="translate_object", inputs=("obj_2",), params={"dz": 1.0}),
+        ],
+    )
+    assert window.session.wait_for_idle(30000)
+    result = window.session.last_result
+    assert result is not None and result.complete
+    references = []
+    for identifier, entry in result.scene.objects.items():
+        face = max(
+            (feature for feature in entry.features.values() if feature.kind == "face"),
+            key=lambda feature: feature.params["centre"][2],
+        )
+        references.append((identifier, face.id))
+    assert len(references) == 2
+    return references[0], references[1]
+
+
+def test_manual_fit_from_two_tree_rows_is_one_saved_undoable_relationship(
+    window: MainWindow, tmp_path: Path
+) -> None:
+    """Reale Baumwahl und Schaltfläche schreiben eine Passung ohne Geometrieoperation."""
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLabel
+
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.types import FeatureRef
+    from app.ui.panels import _feature_item
+
+    a, b = _manual_face_pair(window)
+    window.show()
+    tree = window.object_tree.tree
+    window.object_tree.select_features((a, b))
+    QApplication.processEvents()
+    # Tatsächlicher Mehrfachklick mit der auf dieser Plattform vorgesehenen Taste.
+    tree.clearSelection()
+    for index, (object_id, feature_id) in enumerate((a, b)):
+        parent = next(
+            tree.topLevelItem(i)
+            for i in range(tree.topLevelItemCount())
+            if tree.topLevelItem(i).data(0, Qt.ItemDataRole.UserRole) == object_id
+        )
+        item = _feature_item(parent, feature_id)
+        assert item is not None
+        parent.setExpanded(True)
+        tree.scrollToItem(item)
+        QApplication.processEvents()
+        QTest.mouseClick(
+            tree.viewport(),
+            Qt.MouseButton.LeftButton,
+            Qt.KeyboardModifier.ControlModifier if index else Qt.KeyboardModifier.NoModifier,
+            tree.visualItemRect(item).center(),
+        )
+    QApplication.processEvents()
+    assert set(window.object_tree.selected_features()) == {a, b}
+    document = window.session.project.document
+    operations = tuple(document.ops)
+    transaction_count = len(document.transactions)
+    result = window.session.last_result
+    assert result is not None
+    before = {
+        key: as_mesh_data(entry.mesh).raw.vertices.copy()
+        for key, entry in result.scene.objects.items()
+    }
+    assert document.fits == []
+    button = window.feature_panel._fit_button
+    assert button is not None and button.isEnabled()
+    window.session.evaluate_async()
+    assert not button.isEnabled(), "der bestehende Knopf wird beim Start sichtbar gesperrt"
+    assert window.session.wait_for_idle(30000)
+    QApplication.processEvents()
+    button = window.feature_panel._fit_button
+    assert button is not None and button.isEnabled(), (
+        "dieselbe Auswahl wird nach der Auswertung wieder nutzbar"
+    )
+    button.setFocus()
+    QTest.keyClick(button, Qt.Key.Key_Space)
+    QApplication.processEvents()
+    assert window.session.wait_for_idle(30000)
+    QApplication.processEvents()
+    assert len(document.fits) == 1 and len(document.transactions) == transaction_count + 1
+    fit = document.fits[0]
+    assert {fit.a, fit.b} == {FeatureRef(*a), FeatureRef(*b)}
+    assert fit.kind == "flush" and fit.tolerance == "auto:"
+    assert tuple(document.ops) == operations
+    result = window.session.last_result
+    assert result is not None
+    for key, entry in result.scene.objects.items():
+        assert as_mesh_data(entry.mesh).raw.vertices == pytest.approx(before[key])
+    assert any(finding.code == "fit.violated" for finding in result.scene.report.findings)
+    destination = tmp_path / "manuelle-passung.p3d"
+    window.session.save_project(destination)
+    assert load(destination).document.fits == [fit]
+    window.object_tree.select_features((b, a))
+    QApplication.processEvents()
+    assert window.feature_panel._fit_button is None
+    assert any(fit.name in label.text() for label in window.feature_panel.findChildren(QLabel))
+    assert window.session.undo() is not None
+    assert window.session.wait_for_idle(30000)
+    assert document.fits == [] and tuple(document.ops) == operations
+    window.session.redo()
+    assert window.session.wait_for_idle(30000)
+    assert document.fits == [fit]
+
+
+def test_queued_manual_fit_does_not_write_after_the_selection_changes(window: MainWindow) -> None:
+    """Die Auskunft gehört zur damaligen Auswahl, auch bei einem bereits eingereihten Klick."""
+    a, b = _manual_face_pair(window)
+    window.object_tree.select_features((a, b))
+    QApplication.processEvents()
+    button = window.feature_panel._fit_button
+    assert button is not None and button.isEnabled()
+    button.click()
+    window.object_tree.select_feature(*a)
+    QApplication.processEvents()
+    assert window.session.project.document.fits == []
 
 
 def test_one_handling_for_all_alike_features_is_one_transaction(window: MainWindow) -> None:
@@ -1472,18 +1926,31 @@ def test_one_handling_for_all_alike_features_is_one_transaction(window: MainWind
     QApplication.processEvents()
     vorher = len(window.session.project.document.transactions)
 
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.relations import alike_for_action
+
+    group = alike_for_action("resize_hole", holes[0], entry.features, as_mesh_data(entry.mesh))
+    targets = [member.target for member in group.members]
+    assert len(targets) >= 2
     window.feature_panel.operationRequestedForEach.emit(
-        "resize_hole", {"diameter": 6.5, "compensate": False}, list(holes)
+        "resize_hole",
+        {"at_feature": holes[0], "diameter": 6.5, "compensate": False},
+        [*targets, "hole_missing"],
+    )
+    assert len(window.session.project.document.transactions) == vorher
+    assert not any(op.op == "resize_hole" for op in window.session.project.document.ops)
+    window.feature_panel.operationRequestedForEach.emit(
+        "resize_hole", {"at_feature": holes[0], "diameter": 6.5, "compensate": False}, targets
     )
     window.session.wait_for_idle()
 
     schritte = [step.op for step in window.session.project.document.ops]
-    assert schritte.count("resize_hole") == len(holes), "je Bohrung ein Schritt"
+    assert schritte.count("resize_hole") == len(targets), "je belegter Bohrung ein Schritt"
     assert len(window.session.project.document.transactions) == vorher + 1, "und eine Handlung"
     danach = window.session.evaluate_now().scene.objects[object_id]
     gemessen = [
         round(float(danach.features[hole].params["diameter"]), 1)
-        for hole in holes
+        for hole in targets
         if hole in danach.features
     ]
     assert gemessen and all(abs(wert - 6.5) < 0.2 for wert in gemessen), gemessen
@@ -1636,7 +2103,22 @@ def test_applying_drops_the_waiting_preview_too(window: MainWindow) -> None:
     window.feature_panel.valuesChanged.emit("resize_hole", {**values, "at_feature": holes[1]})
     assert window._feature_preview.isActive(), "Voraussetzung für den zweiten Weg"
 
-    window._apply_to_each_feature("resize_hole", {"diameter": 9.5, "compensate": False}, holes)
+    # Denselben Weg wie die Merkmalsleiste: das gewählte Merkmal steht in
+    # ``at_feature``, die Ziele sind die Gruppe, die das Fenster beim Anbieten
+    # gebildet hat — sonst hält das Fenster die Gruppe für geändert und wendet
+    # nichts an (Gesamtreview 05.09.2026).
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.relations import alike_for_action
+
+    body = window.session.last_result.scene.objects[object_id]
+    group = alike_for_action("resize_hole", holes[1], body.features, as_mesh_data(body.mesh))
+    targets = [member.target for member in group.members]
+    assert holes[1] in targets, "Voraussetzung: die gewählte Bohrung gehört zu ihrer Gruppe"
+    window._apply_to_each_feature(
+        "resize_hole",
+        {"at_feature": holes[1], "diameter": 9.5, "compensate": False},
+        targets,
+    )
     window.session.wait_for_idle()
     QApplication.processEvents()
 
@@ -13286,3 +13768,29 @@ def test_a_discarded_sketch_makes_undo_available_even_in_an_empty_project(
     assert window._sketch_panel is not None, "Strg+Z holt die Zeichnung zurück"
     assert window._sketch_panel.sketch_text() == drawn
     window.finish_sketch(keep=False)
+
+
+def test_a_finding_becomes_an_error_with_its_cause() -> None:
+    """Der Fehlerbericht aus dem Prüfbericht nennt die Ursache, nicht nur den Titel.
+
+    ``report_error`` schreibt ``str(error)`` in den Bericht, und der ist ohne
+    ``detail`` allein der Titel. Der Kundenbericht S-20260906-9ca141 (0.3.4)
+    stand deshalb zweimal bei „Im Programm ist ein unerwarteter Fehler
+    aufgetreten", während die Ausnahmeart im Befund lag. ``as_error`` nimmt
+    sie jetzt mit — und nur, wo es eine gibt.
+    """
+    from app.ui.panels import as_error
+
+    crashed = Finding(
+        code="op.load.InternalError",
+        severity="error",
+        message=tr("Im Programm ist ein unerwarteter Fehler aufgetreten."),
+        op_id=1,
+        values={"detail": "TypeError: bounds of an empty mesh", "operation": "load"},
+    )
+    error = as_error(crashed)
+    assert error.detail == "TypeError: bounds of an empty mesh"
+    assert "TypeError: bounds of an empty mesh" in str(error)
+
+    plain = Finding(code="ingest.very_large", severity="warning", message=tr("Fein vernetzt."))
+    assert as_error(plain).detail is None

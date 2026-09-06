@@ -1677,7 +1677,7 @@ def _system_pointer_image() -> Any | None:
             Qt.AspectRatioMode.KeepAspectRatio,
             Qt.TransformationMode.SmoothTransformation,
         )
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 

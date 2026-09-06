@@ -66,6 +66,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
+from app.core.scene.fits import active_fits
 from app.core.slice import advise, gcode
 from app.core.types import (
     BoundingBox,
@@ -602,7 +603,7 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "speed.top_surface",
-        _("Oberfläche"),
+        _("Oberfläche", context="Druckgeschwindigkeit"),
         "speed",
         unit="mm/s",
         minimum=1.0,
@@ -1245,6 +1246,7 @@ class FilamentOverrideDialog(QDialog):
         self.slot = slot
         self.settings = settings
         self.existing = existing
+        self._legacy = handover.unbound_override_for(settings, slot) if existing is None else None
         self.editors: dict[str, QWidget] = {}
         self.groups: dict[str, QGroupBox] = {}
         self.group_bodies: dict[str, QWidget] = {}
@@ -1286,6 +1288,18 @@ class FilamentOverrideDialog(QDialog):
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
+
+        self.legacy_values_button = QPushButton(tr("Alte Filamentwerte übernehmen"), self)
+        self.legacy_values_button.setVisible(self._legacy is not None)
+        self.legacy_values_button.setToolTip(
+            tr(
+                "Die alten Werte kennen das Material noch nicht. Übernehmen lädt sie in diesen "
+                "Dialog; erst das Bestätigen ordnet sie dieser Spule zu."
+            )
+        )
+        self.legacy_values_button.setAccessibleDescription(self.legacy_values_button.toolTip())
+        self.legacy_values_button.clicked.connect(self._take_legacy_values)
+        layout.addWidget(self.legacy_values_button)
 
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
@@ -1359,6 +1373,21 @@ class FilamentOverrideDialog(QDialog):
         layout.addWidget(buttons)
         self._fit_depth()
 
+    def _take_legacy_values(self) -> None:
+        """Alte Angaben ausdrücklich laden; das Projekt bleibt bis zur Bestätigung unverändert."""
+        if self._legacy is None:
+            return
+        self.existing = self._legacy
+        for group, box in self.groups.items():
+            own = getattr(self._legacy, group)
+            source = own or getattr(self.settings, group)
+            for field in FILAMENT_FIELDS:
+                section, _, name = field.path.partition(".")
+                if section == group:
+                    _set_setting_editor(self.editors[field.path], field, getattr(source, name))
+            box.setChecked(own is not None)
+        self.legacy_values_button.setEnabled(False)
+
     def _fit_depth(self, _checked: bool | None = None) -> None:
         """Die Dialoghöhe an geöffnete Gruppen und den Bildschirm anpassen."""
         self._sections.activate()
@@ -1394,7 +1423,13 @@ class FilamentOverrideDialog(QDialog):
             values[group] = replace(section, **changed)
         if not values:
             return None
-        return SlotOverride(name=self.slot.name, colour=self.slot.colour, **values)
+        return SlotOverride(
+            name=self.slot.name,
+            colour=self.slot.colour,
+            material=self.slot.material,
+            material_type=self.slot.material_type,
+            **values,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1780,6 +1815,8 @@ class PrintSettingsDialog(QDialog):
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: list[Path] = []
         """Die Druckdateien des letzten Laufs — eine je Platte."""
+        self._result_context: tuple[Any, ...] | None = None
+        self._job_context: tuple[Any, ...] | None = None
         self._save_copies: tuple[tuple[Path, Path], ...] = ()
         """Der letzte Speicherauftrag für „Erneut versuchen"."""
         self._gcode_save_succeeded = False
@@ -2709,8 +2746,36 @@ class PrintSettingsDialog(QDialog):
         Slicer gehört, gehört nicht zum neuen.
         """
         self._gcode = []
+        self._result_context = None
         self._hold_the_save()
         self.state.setText("")
+
+    def _print_context(self) -> tuple[Any, ...]:
+        """Alle Eingaben, die den Druckauftrag bestimmen, ohne Programme abzufragen."""
+        return (
+            self.settings,
+            self.session.profile,
+            id(self.session.last_result),
+            tuple(self._chosen_plates()),
+            self._slicer_path,
+            self.machine_choice.currentData(),
+            self.process_choice.currentData(),
+            self.filament_choice.currentData(),
+        )
+
+    def _check_print_result(self) -> None:
+        """Geänderte Aufträge entwerten alte Dateien und noch ausstehende Ergebnisse."""
+        if self._result_context is None and self._job_context is None:
+            return
+        context = self._print_context()
+        if self._gcode and self._result_context != context:
+            self._forget_result()
+        if (
+            self._job_context is not None
+            and self._job_context != context
+            and isinstance(self._worker, _PrepareAndSliceWorker)
+        ):
+            self._worker.cancel()
 
     def _clear_profile_choices(self) -> None:
         """Die Profilauswahl leeren, bevor eine neue Suche etwas hineinschreibt.
@@ -3016,16 +3081,17 @@ class PrintSettingsDialog(QDialog):
         """
         mine = self.session.profile.printer.id
         known = profiles.printer_profiles()
-        # Eine gemerkte Wahl bleibt immer stehen, auch wenn sie nicht zum
-        # eingestellten Drucker gehört: Wer einmal abgewichen ist, meinte es so
-        # (`test_a_remembered_choice_wins_over_the_match`). Ohne diese Zeile
-        # nahm der Filter genau die Entscheidung weg, die jemand getroffen hat.
+        # Eine eigene, nicht zugeordnete Maschine darf gewählt bleiben. Die
+        # bekannte Maschine eines anderen Druckers ist dagegen keine Vorgabe
+        # für einen gerade neu gewählten Drucker.
         remembered = self.ui_settings.slicer_machine_profile
         fitting = [
             entry
             for entry in machines
             if slicer_profiles.printer_for(entry.name, known) == mine
-            or str(entry.path) == remembered
+            or (
+                str(entry.path) == remembered and not slicer_profiles.printer_for(entry.name, known)
+            )
         ]
         if fitting:
             return fitting
@@ -3121,7 +3187,9 @@ class PrintSettingsDialog(QDialog):
             index = self.filament_choice.findText(wanted)
         if index < 0:
             material = slicer_keys.filament_type(self.session.profile.material.id)
-            preferred = slicer_profiles.match_filament(self._profiles, machine, material)
+            preferred = slicer_profiles.match_filament(
+                self._profiles, machine, material, self._profile_roots()
+            )
             if preferred is not None:
                 index = self.filament_choice.findData(str(preferred.path))
         self.filament_choice.setCurrentIndex(max(index, 0))
@@ -3133,7 +3201,7 @@ class PrintSettingsDialog(QDialog):
             for entry in fitting:
                 box.addItem(entry.title(tr("eigenes")), str(entry.path))
             box.setEnabled(True)
-            remembered = self.settings.slot_profiles
+            remembered = self._profiles_for(self._plate_slots())
             name = remembered[position] if position < len(remembered) else ""
             found = self._filament_index(box, name)
             box.setCurrentIndex(found if found >= 0 else self.filament_choice.currentIndex())
@@ -3153,7 +3221,7 @@ class PrintSettingsDialog(QDialog):
         slots = self._plate_slots()
         if len(slots) < 2:
             return
-        stored = self.settings.slot_profiles
+        stored = self._profiles_for(slots)
         self._slot_names = []
         for index, slot in enumerate(slots):
             box = QComboBox(self.slicer_inner)
@@ -3316,7 +3384,7 @@ class PrintSettingsDialog(QDialog):
         self.refresh_materials()
         self._show_slicer_state()
 
-    def _plate_slots(self) -> list[MaterialSlot]:
+    def _plate_slots(self, *, all_plates: bool = False) -> list[MaterialSlot]:
         """Die Materialslots der gewählten Platten, zusammengelegt wie beim Export.
 
         **Der gewählten, nicht der ersten.** Solange hier ``min(entry.plate)``
@@ -3327,7 +3395,7 @@ class PrintSettingsDialog(QDialog):
         result = self.session.last_result
         if result is None:
             return []
-        wanted = set(self._chosen_plates())
+        wanted = set(self._all_plates() if all_plates else self._chosen_plates())
         objects = [entry for entry in result.scene.objects.values() if entry.plate in wanted]
         if not objects:
             return []
@@ -3341,26 +3409,15 @@ class PrintSettingsDialog(QDialog):
         )
 
     def _profiles_for(self, slots: Sequence[MaterialSlot]) -> tuple[str, ...]:
-        """Die gewählten Filamentprofile in der Reihenfolge **dieser** Slots.
+        """Ordnet die global gespeicherten Profile den angefragten Spulen zu.
 
-        ``settings.slot_profiles`` ist positionsbezogen, und die Position
-        meint die Liste, die im Dialog **stand**, als der Kunde wählte. Die
-        Liste eines Laufs ist eine andere: Angezeigt wird die
-        Zusammenlegung der gewählten Platten, gedruckt wird Platte für
-        Platte, und jede legt für sich zusammen (`_plate_run`). Bei „Alle
-        Platten" mit Rot auf Platte 1 und Weiß+Rot auf Platte 2 standen
-        deshalb [Rot, Weiß] im Dialog und [Weiß, Rot] im Lauf der zweiten
-        Platte — gemessen bekam **Weiß das Rot-Profil**, und mit dem Profil
-        wandert die Temperatur (26.08.2026).
-
-        Übersetzt wird über die Identität des Slots — Name und Farbe, genau
-        der Schlüssel, über den auch ``threemf.merge_slots`` zusammenlegt.
-        Das Speicherformat bleibt, wie es ist: Was der Kunde einmal wählte,
-        gilt weiter je Position seiner Liste; nur die Zuordnung zum Lauf
-        fragt jetzt, **welcher Slot** gemeint war.
+        Die Speicherposition bezieht sich auf die Zusammenlegung aller
+        Projektplatten. Plattenauswahl und Slicer-Lauf dürfen eine andere
+        Reihenfolge haben; sie werden über die vollständige Materialidentität
+        auf diese feste Liste abgebildet.
         """
         stored = self.settings.slot_profiles
-        shown = self._plate_slots()
+        shown = self._plate_slots(all_plates=True)
         if not shown:
             # Ohne Anzeigeliste gibt es nichts zu übersetzen — dann gilt die
             # Position, wie bisher. Ein leeres Ergebnis wäre schlechter als
@@ -3368,11 +3425,11 @@ class PrintSettingsDialog(QDialog):
             # Wer keine Szene hat, hat auch keine zweite Reihenfolge.
             return tuple(stored)
         by_slot = {
-            (str(slot.name), slot.colour): stored[index]
+            threemf.slot_identity(slot): stored[index]
             for index, slot in enumerate(shown)
             if index < len(stored) and stored[index]
         }
-        return tuple(by_slot.get((str(slot.name), slot.colour), "") for slot in slots)
+        return tuple(by_slot.get(threemf.slot_identity(slot), "") for slot in slots)
 
     def _slot_filament_chosen(self, position: int) -> None:
         """Die Wahl für einen Slot festhalten (§20).
@@ -3395,10 +3452,18 @@ class PrintSettingsDialog(QDialog):
             return
         box = self.slot_rows[position][1]
         chosen = self._profile_name(box.currentData()) or box.currentText()
+        shown = self._plate_slots()
+        all_slots = self._plate_slots(all_plates=True)
+        key = threemf.slot_identity(shown[position]) if position < len(shown) else None
+        stored_position = next(
+            (index for index, slot in enumerate(all_slots) if threemf.slot_identity(slot) == key),
+            position,
+        )
         names = list(self.settings.slot_profiles)
-        names += [""] * (len(self.slot_rows) - len(names))
-        names[position] = chosen
+        names += [""] * (max(len(all_slots), stored_position + 1) - len(names))
+        names[stored_position] = chosen
         self.settings = replace(self.settings, slot_profiles=tuple(names))
+        self._check_print_result()
         self.state.setText(
             tr("{slot} druckt mit {profile}.")
             # Aus den Daten und nicht aus der Beschriftung: Die Zeile trägt
@@ -3426,7 +3491,7 @@ class PrintSettingsDialog(QDialog):
         chosen = self.filament_choice.currentData()
         if not chosen:
             return
-        values = slicer_profiles.filament_values(Path(str(chosen)))
+        values = slicer_profiles.filament_values(Path(str(chosen)), self._profile_roots())
         if not values:
             return
         settings = self.settings
@@ -3647,6 +3712,7 @@ class PrintSettingsDialog(QDialog):
         Menü, mit dem Grund an beiden Kodierungen (Regel 18: Tooltip,
         Statuszeile, Bildschirmleser).
         """
+        self._check_print_result()
         found = self._slicer_path
         state = activation.state()
         # **Der häufigste Grund stand in keinem der Zweige.** Beide Knöpfe
@@ -3946,6 +4012,13 @@ class PrintSettingsDialog(QDialog):
             return entries
         return [entry for entry in entries if slicer_keys.takes(flavour, entry.path)]
 
+    def _profile_roots(self) -> tuple[Path, ...]:
+        """Nutzer- und Herstellerprofile gehören zu demselben gewählten Slicer."""
+        flavour = self._current_flavour()
+        if self._slicer_path is None or flavour is None:
+            return ()
+        return slicer_profiles.profile_roots(flavour, self._slicer_path)
+
     def _current_flavour(self) -> slicer_keys.SlicerFlavour | None:
         """Die Familie des eingestellten Slicers, solange einer dasteht."""
         if self._slicer_path is None:
@@ -3987,18 +4060,11 @@ class PrintSettingsDialog(QDialog):
     def _fits_in_play(self) -> tuple[str, ...]:
         """Welche Passungen trägt dieses Projekt — eingetragene und gebaute?
 
-        Eingetragene Passungen stehen im Dokument. Gebaute stehen nirgends: der
-        Deckel aus ``create_lid`` bekommt sein Spiel aus dem Materialprofil, die
-        Mutternfalle ihres aus der Normteiltabelle, und keiner von beiden trägt
-        es ins Dokument ein. Damit liefen genau die Regeln nicht, die es für
-        Passungen gibt — genaue Außenwand, gebremste Beschleunigung, Bügeln der
-        Gleitfläche —, und der gedruckte Gewürzdeckel bekam keine davon.
-
-        Hier zählt deshalb auch, was im Stapel steht. Das ist die kleine Hälfte
-        der Sache: die Passung selbst gehört ins Dokument, damit auch die
-        Prüfung sie sieht und ein Nutzer sie ändern kann. Das ändert den
-        Vertrag aus §9 (eine Op müsste Passungen zurückgeben können) und ist
-        eine eigene Runde wert.
+        Eingetragene Passungen tragen ihre Art und gegebenenfalls eine
+        Bedingung. Ein Deckel ohne Kragen deaktiviert seine Beziehung; der
+        ergänzende Blick auf den Stapel darf sie nicht wieder einschalten.
+        Er gilt deshalb nur für Schritte ohne ausdrücklich gebundene Passung,
+        etwa eine ältere Mutternfalle mit Spiel aus der Normteiltabelle.
 
         Zurück kommen die **Arten**, nicht bloß ein Ja: eine bündige Passung
         verlangt eine Einstellung mehr als ein Schiebesitz, und die Regel
@@ -4008,8 +4074,13 @@ class PrintSettingsDialog(QDialog):
         als keine.
         """
         document = self.session.project.document
-        kinds = [entry.kind for entry in document.fits]
-        if any(entry.op in FITTING_OPS for entry in document.ops):
+        kinds = [entry.kind for entry in active_fits(document)]
+        bound_operations = {
+            entry.when_positive[0] for entry in document.fits if entry.when_positive is not None
+        }
+        if any(
+            entry.op in FITTING_OPS and entry.id not in bound_operations for entry in document.ops
+        ):
             kinds.append("clearance")
         return tuple(dict.fromkeys(kinds))
 
@@ -4038,6 +4109,7 @@ class PrintSettingsDialog(QDialog):
         return str(value)
 
     def _refresh_advice(self) -> None:
+        self._check_print_result()
         entries = self._current_advice()
         self.advice_view.clear()
         for entry in entries:
@@ -4294,6 +4366,7 @@ class PrintSettingsDialog(QDialog):
         job = self._plate_job(objects, plates, folder, name, setup)
         self._show_handover_progress(len(plates), tr("Die Slicer-Dateien werden vorbereitet …"))
         worker = _PrepareAndSliceWorker(job)
+        self._job_context = self._print_context()
         worker.done.connect(weak_slot(self, PrintSettingsDialog._slice_done, worker, forward=True))
         worker.failed.connect(self._slice_failed)
         worker.crashed.connect(self._handover_crashed)
@@ -4443,6 +4516,8 @@ class PrintSettingsDialog(QDialog):
 
         if self._worker is not worker or worker.cancelled.is_cancelled:
             return
+        if self._job_context != self._print_context():
+            return
         self._sliced(outcomes)
 
     def _sliced(self, outcomes: list[handover.SliceOutcome]) -> None:
@@ -4518,6 +4593,7 @@ class PrintSettingsDialog(QDialog):
         Ein Hinweis, der an einem freigegebenen Knopf hängen bleibt, ist die
         Umkehrung des Fehlers: Er sagt, etwas fehle, während es da ist.
         """
+        self._result_context = self._print_context()
         self.save_button.setEnabled(True)
         self.save_button.setToolTip("")
         self.save_button.setStatusTip("")
@@ -4535,6 +4611,7 @@ class PrintSettingsDialog(QDialog):
         stehen ohnehin fest, sobald der Auftrag einen hat — sie unterscheiden
         sich nur in der Plattennummer.
         """
+        self._check_print_result()
         written = [path for path in self._gcode if path.is_file()]
         if not written:
             return
@@ -4624,6 +4701,7 @@ class PrintSettingsDialog(QDialog):
     def _slice_finished(self) -> None:
         worker = self._worker
         self._worker = None
+        self._job_context = None
         if worker is not None:
             # `finished` heißt „`run` ist zurück", nicht „das Objekt darf
             # weg" — das Loslassen übernimmt die Halteleine.

@@ -42,6 +42,22 @@ PYPROJECT: Final = ROOT / "pyproject.toml"
 #: Die Gruppen, die ein Arbeitsplatz braucht — dieselben wie in CLAUDE.md.
 EXTRAS: Final = "dev,geom,ui,agent,brep"
 
+# Ausschließlich bedingte Abhängigkeiten des vollständigen Zielbaums. Beim
+# Freeze auf einer anderen Plattform bleiben ihre Pins erhalten; ausgebaute
+# gewöhnliche Pakete werden dagegen entfernt. Herkunft: keyring → SecretStorage
+# → jeepney/cryptography, wgpu → rubicon-objc, PyInstaller → macholib/pefile/
+# pywin32-ctypes sowie pytest → colorama. Die Zielmatrix prüft neue Kanten mit.
+PLATFORM_PINS: Final = {
+    "secretstorage": "linux",
+    "jeepney": "linux",
+    "cryptography": "linux",
+    "macholib": "darwin",
+    "rubicon-objc": "darwin",
+    "pefile": "win32",
+    "pywin32-ctypes": "win32",
+    "colorama": "win32",
+}
+
 #: Ab wann die Versionspflege fällig ist. Der wöchentliche CI-Lauf „Neueste
 #: Versionen" meldet gebrochene Versionen; er sagt aber niemandem, dass es
 #: etwas Neues *gäbe*. Nach einem Vierteljahr ohne Nachziehen ist der Satz
@@ -261,7 +277,7 @@ def newer_versions(python: Path) -> tuple[list[str], list[str]] | None:
 
 
 def freeze(python: Path) -> int:
-    """Schreibt `constraints.txt` aus dem Ist — und behält den Kopf.
+    """Schreibt lokale Pins neu, behält fremde Plattformpins und den Kopf.
 
     `pip freeze > constraints.txt` wäre der naheliegende Weg und würde die
     neunzehn Zeilen Erklärung darüber löschen, also genau das, was die Datei
@@ -286,10 +302,18 @@ def freeze(python: Path) -> int:
     head = [line for line in old if line.startswith("#") or not line.strip()]
     while head and not head[-1].strip():
         head.pop()
-    new = sorted(
-        (line for line in result.stdout.splitlines() if _LINE.match(line.strip())),
-        key=lambda line: normal(str(_LINE.match(line.strip()).group(1))),  # type: ignore[union-attr]
-    )
+    selected: dict[str, str] = {}
+    for line in old:
+        match = _LINE.match(line.strip())
+        if match:
+            name = normal(match.group(1))
+            if name in PLATFORM_PINS and PLATFORM_PINS[name] != sys.platform:
+                selected[name] = line.strip()
+    for line in result.stdout.splitlines():
+        match = _LINE.match(line.strip())
+        if match:
+            selected[normal(match.group(1))] = line.strip()
+    new = [selected[name] for name in sorted(selected)]
     CONSTRAINTS.write_text("\n".join([*head, "", *new]) + "\n", encoding="utf-8")
     print(f"`constraints.txt` neu geschrieben: {len(new)} Pakete, Kopf erhalten.")
     print("Jetzt die Suite fahren — grün heißt, der Satz taugt.")

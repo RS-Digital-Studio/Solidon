@@ -268,6 +268,7 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         # Anzahlen mit Unter- oder Obergrenze.
         "corner_count",
         "pattern_count",
+        "pattern_size",
         "build_volume",
         # Längen und Dicken gegen eine gerechnete Grenze.
         "too_short",

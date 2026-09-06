@@ -661,6 +661,10 @@ def colour_name(value: str) -> str:
 #: stimmt, bekommt der Wert einen eigenen Schlüssel — nicht diese Liste eine
 #: zweite Ebene.
 _CHOICE_NAMES: dict[str, TranslatableText] = {
+    "clearance": _("Spielpassung"),
+    "press": _("Presspassung"),
+    "thread": _("Gewindepassung"),
+    "flush": _("Bündige Passung"),
     "mouth": _("Mündung"),
     "centre": _("Mitte"),
     # Bei Mehrfachauswahl setzt das Fenster ihn auf die Mitte der
@@ -791,6 +795,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
 #: Satz Tapete.
 _CHOICE_NOTES: dict[str, TranslatableText] = {
+    "clearance": _("Prüft das Spiel zwischen Öffnung und Gegenstück anhand ihrer Materialien."),
+    "press": _("Prüft das Übermaß der Verbindung anhand ihrer Materialien."),
+    "thread": _(
+        "Prüft Innen- und Außengewinde auf gleiche Steigung und das vorgesehene Durchmesserspiel."
+    ),
+    "flush": _("Prüft, ob beide Flächen parallel und in derselben Ebene liegen."),
     "mouth": _("Die Position ist die Öffnung: Die Bohrung beginnt dort und geht ins Material."),
     # ``centre`` gilt an drei Stellen — Bohranker, Bezugspunkt der Grundkörper,
     # Fixpunkt von Drehen und Skalieren — und der Satz muss an allen dreien
@@ -906,23 +916,31 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # Wächter nur Wörterbücher sah und keine Aufrufe.
     "action": _("Handlung"),
     "affected": _("Betroffene Transaktionen"),
+    "anchor": _("Bezugspunkt"),
     "announced": _("Angekündigt"),
     "answer": _("Antwortanfang"),
     "attempted": _("Versuchte Stufen"),
     "bodies": _("Körper"),
+    "centre": _("Mittelpunkt"),
     "constraints": _("Bedingungen"),
+    "drop": _("Einhängeweg"),
     "dropped_call": _("Verworfener Aufruf"),
     "eroded": _("Wirklich abgetragen"),
     "exit_code": _("Rückgabewert"),
     "first": _("Erste Bedingung"),
     "first_layer": _("Erste Schicht"),
+    "grip": _("Verengung"),
+    "head_room": _("Kopftiefe"),
+    "last_angle": _("Letzter Winkel"),
     "outer": _("Senkung"),
     "overshoot": _("Überstand je Achse"),
     "plane": _("Ebene"),
+    "play": _("Spiel"),
     "points": _("Punkte"),
     "previous": _("Bisher"),
     "recipe": _("Rezept"),
     "second": _("Zweite Bedingung"),
+    "solver": _("Rechenstufe"),
     "stopped_at": _("Angehalten bei Schritt"),
     "taken": _("Vergeben"),
     "tool": _("Programm"),
@@ -969,6 +987,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "dropped": _("Weggelassen"),
     "body_diameter": _("Breiteste Stelle des Körpers"),
     "diameter": _("Durchmesser"),
+    "volume_change": _("Volumenänderung"),
     "widening": _("Senkung darüber"),
     "wrap_diameter": _("Durchmesser des Wickelzylinders"),
     "drawn_width": _("Gezeichnete Breite"),
@@ -1187,7 +1206,7 @@ def value_text(key: str, value: object) -> str:
             continue
         try:
             number = float(value)  # type: ignore[arg-type]
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             # Keine Zahl, also keine Umrechnung. Die Einheit des Schlüssels
             # bleibt stehen: Sie ist dann die einzige Auskunft, die es gibt.
             return f"{localised_value(value)} {unit}"

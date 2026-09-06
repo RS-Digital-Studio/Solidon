@@ -12,7 +12,7 @@ den Wert, die Operation speichert, was wirklich angewandt wurde.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
@@ -77,7 +77,10 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
     angefasst (AGENTS.md Regel 3)."""
     body = mesh.raw.copy()
     body.apply_transform(matrix)
-    return mesh.replacing(body)
+    return replace(
+        mesh.replacing(body),
+        cavity=apply(mesh.cavity, matrix) if mesh.cavity is not None else None,
+    )
 
 
 def place_on_bed(mesh: MeshData) -> MeshData:
@@ -125,7 +128,11 @@ def decompose_transform(matrix: np.ndarray) -> TransformSteps:
     scales, _shear, angles, offset, _perspective = trimesh.transformations.decompose_matrix(
         np.asarray(matrix, dtype=float)
     )
-    degrees = [math.degrees(value) for value in angles]
+    from scipy.spatial.transform import Rotation
+
+    # Eulerwinkel wechseln jenseits von ±90° ihre Darstellung. Der
+    # Rotationsvektor bewahrt dagegen die tatsächlich gezogene Hauptachse.
+    degrees = np.degrees(Rotation.from_euler("xyz", angles).as_rotvec())
     largest = max(range(3), key=lambda index: abs(degrees[index]))
     axis: Axis | None = ("x", "y", "z")[largest]
     angle = degrees[largest]

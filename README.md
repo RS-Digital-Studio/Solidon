@@ -116,6 +116,9 @@ Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 
 ## Entwickeln
 
+Entwicklung und CI verwenden CPython 3.14.7. Die 3D-Ansicht bindet VTK direkt
+ein; pygfx bleibt als zweiter Renderer für den Vergleich vorhanden.
+
 ```
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,brep]"
@@ -148,7 +151,7 @@ Verknüpfung.
 ## Paketieren
 
 ```
-.venv/Scripts/python.exe -m pip install pyinstaller
+.venv/Scripts/python.exe -m pip install -c constraints.txt pyinstaller
 .venv/Scripts/pyinstaller.exe packaging/solidon3d.spec --noconfirm
 ```
 
@@ -200,8 +203,11 @@ laufenden Dienstes. Beide Angaben bleiben getrennt erhalten. *Lokal starten*
 wechselt bewusst auf Port 8188; die zuvor eingetragene Netzadresse bleibt für
 einen späteren Wechsel gespeichert.
 
-Ohne funktionierendes OpenGL startet die Anwendung ohne 3D-Ansicht; erzwingen
-lässt sich das mit `SOLIDON3D_NO_VIEWPORT=1`.
+Die vorgegebene VTK-Ansicht braucht OpenGL 3.2 oder neuer, unter Linux X11
+beziehungsweise Xwayland. `SOLIDON3D_NO_VIEWPORT=1` startet ohne 3D-Ansicht.
+Für den internen Renderer-Vergleich wählt `SOLIDON_RENDERER=gfx` pygfx über
+Vulkan, Metal oder Direct3D 12; es gibt keinen automatischen Wechsel zwischen
+den Renderern.
 
 ## Sprachmodell für den Chat
 

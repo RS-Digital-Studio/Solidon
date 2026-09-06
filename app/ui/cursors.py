@@ -304,7 +304,7 @@ def _from_macos_defaults() -> int:
             timeout=2.0,
             output_limit=4096,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return 0
     if answer.returncode != 0:
         return 0

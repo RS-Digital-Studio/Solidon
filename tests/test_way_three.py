@@ -291,32 +291,22 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
 
 
-def test_a_mesh_between_the_two_old_limits_keeps_its_features(
+def test_a_fine_generated_mesh_keeps_resolution_within_the_recognition_budget(
     project: Project, profile: Profile
 ) -> None:
-    """Die Zwickmühle aus zwei Grenzen, die sich widersprachen.
+    """Erkennbare Netze behalten ihre Auflösung auch im Erzeugungsweg.
 
-    Die Merkmalserkennung steigt oberhalb von 200 000 Dreiecken aus, die
-    Automatik dezimierte aber erst ab 500 000 — begründet mit
-    ``agent.analysis.TRIANGLE_LIMIT``, was die Grenze des *Steckbriefs* ist und
-    nicht die der *Erkennung*. Was dazwischen lag, behielt seine Auflösung und
-    verlor die Merkmale: kein Klick auf eine Bohrung, keine Passung, nichts für
-    den Agenten. Bei externen Generatoren ist das der Normalfall.
-
-    Aufgelöst werden konnte das erst, nachdem ``decimate`` ein unverschweißtes
-    Netz nicht mehr zerriss — vorher tauschte jede Senkung dieser Grenze
-    wasserdicht gegen Merkmale. Deshalb prüft dieser Test **beides** an einem
-    Körper: dass er dezimiert wird, dass er dabei geschlossen bleibt, und dass
-    am Ende Merkmale dastehen.
+    Die Automatik und die Erkennung beziehen ihre Grenze aus derselben
+    Quelle. Ein feines Netz unter dem angehobenen Budget wird deshalb nicht
+    unnötig vereinfacht und verliert trotzdem keine erkannten Merkmale.
     """
     import trimesh
 
     from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 
-    # Genau der Bereich, der vorher durchfiel: über der Erkennungsgrenze,
-    # unter den alten 500 000.
+    # Dieses feine Netz wurde von der alten 200-000-Grenze vereinfacht.
     mittel = trimesh.creation.icosphere(subdivisions=7, radius=30.0)
-    assert FEATURE_LIMIT_TRIANGLES < len(mittel.faces) < 500_000, (
+    assert 200_000 < len(mittel.faces) <= FEATURE_LIMIT_TRIANGLES, (
         f"{len(mittel.faces)} Dreiecke liegen nicht im Bereich, um den es geht"
     )
     payload = bytes(trimesh.exchange.export.export_mesh(mittel, None, file_type="ply"))
@@ -324,17 +314,16 @@ def test_a_mesh_between_the_two_old_limits_keeps_its_features(
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Vase", seed=7)
 
-    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren"
+    assert len(generation.transactions) == 3, "Laden, Größe, Reparieren — keine Dezimierung"
 
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
 
-    assert entry.mesh.triangle_count <= FEATURE_LIMIT_TRIANGLES, (
-        f"{entry.mesh.triangle_count} Dreiecke — über der Grenze der Erkennung"
-    )
-    assert entry.mesh.is_watertight, "beim Dezimieren aufgerissen"
+    assert entry.mesh.triangle_count == len(mittel.faces), "unnötig Auflösung verloren"
+    assert entry.features, "Erkennung trotz zulässiger Auflösung übersprungen"
+    assert entry.mesh.is_watertight, "im Erzeugungsweg aufgerissen"
     assert entry.mesh.component_count == 1, (
-        f"beim Dezimieren in {entry.mesh.component_count} Teile zerfallen"
+        f"im Erzeugungsweg in {entry.mesh.component_count} Teile zerfallen"
     )
     codes = {finding.code for finding in result.scene.report.findings}
     assert "perceive.too_large" not in codes, (

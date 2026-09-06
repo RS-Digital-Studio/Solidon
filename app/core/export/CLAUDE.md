@@ -16,6 +16,11 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 STEP geht über `brep/step.py`, nicht von hier.
 
+Profilvererbung wird mit sämtlichen Profilwurzeln des gewählten Slicers
+aufgelöst: Nutzerprofile können von installierten Profilen erben. Diese
+Wurzeln gehören auch in Filamenterkennung, Materialvergleich und Auslesen
+der Werte im Druckdialog; der Ordner der Blattdatei allein reicht nicht.
+
 ## Warum `slicer_keys.py` existiert
 
 Weil dieselbe Einstellung in Cura, PrusaSlicer, OrcaSlicer und ElegooSlicer

@@ -34,6 +34,71 @@ from tests.render_fakes import RecordingItem, RecordingRenderer
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize("chosen", [("obj_2", "obj_4"), ()])
+def test_a_bundle_context_menu_uses_the_same_body_choice_as_its_button(
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    chosen: tuple[str, ...],
+) -> None:
+    """Der Rechtsklick bietet dieselbe Körperwahl und denselben Abbruchweg."""
+    from PySide6.QtWidgets import QMenu
+
+    from app.ui import panels
+
+    host = MainWindow(Session(), UiSettings())
+    report = panels.ReportPanel(host)
+    bodies = ("obj_1", "obj_2", "obj_3", "obj_4")
+    report._live_objects = frozenset(bodies)
+    report.add_findings(
+        [
+            Finding(
+                code="perceive.too_large",
+                severity="info",
+                message="Für die Merkmalserkennung ist dieses Modell zu groß.",
+                object_id=body,
+                values={"triangles": 4000000, "limit": 2000000},
+            )
+            for body in bodies
+        ]
+    )
+    report.resize(650, 600)
+    report.show()
+    qt_app.processEvents()
+    bundle = next(
+        report.list.item(index)
+        for index in range(report.list.count())
+        if report.list.item(index).data(panels._BODIES_ROLE) == bodies
+    )
+    direct: list[str | None] = []
+    offered: list[tuple[str, ...]] = []
+    applied: list[tuple[str, tuple[str, ...]]] = []
+    monkeypatch.setattr(
+        host,
+        "error_handlers",
+        lambda: {"decimate_mesh": lambda error: direct.append(error.object_id)},
+    )
+    monkeypatch.setattr(
+        panels.BodyChoiceDialog,
+        "ask",
+        lambda parent, title, ids, names: offered.append(tuple(ids)) or chosen,
+    )
+
+    class ChoosingMenu(QMenu):
+        def exec(self, position):
+            return self.actions()[0]
+
+    monkeypatch.setattr(panels, "QMenu", ChoosingMenu)
+    report.actionOnBodies.connect(lambda action, ids: applied.append((action, tuple(ids))))
+    try:
+        report._on_menu(report.list.visualItemRect(bundle).center())
+        assert offered == [bodies]
+        assert direct == [], "kein stillschweigender Auftrag am ersten Körper"
+        assert applied == ([("decimate_mesh", chosen)] if chosen else [])
+    finally:
+        report.close()
+        report.deleteLater()
+
+
 @pytest.fixture
 def window(qt_app: QApplication) -> Iterator[MainWindow]:
     """Ein Fenster für einen Test — und danach warten, bis es still ist.
@@ -126,6 +191,67 @@ def wait_for_map(window: MainWindow) -> None:
 
 
 # --- die Kartenauswahl ----------------------------------------------------------
+
+
+@pytest.mark.parametrize("late", ["too_large", "crashed", "done", "none", "scene"])
+def test_a_map_request_discards_old_colours_and_late_replies(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, late: str
+) -> None:
+    """Der echte Signalanschluss hält Karte, Absage und Fehler an ihrer Anfrage."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    def make_object() -> SceneObject:
+        return SceneObject(id="obj_1", name="Quader", mesh=MeshData(trimesh.creation.box()))
+
+    host = MainWindow(Session(), UiSettings())
+    result = EvaluationResult(Scene(objects={"obj_1": make_object()}))
+    host.session.last_result = result
+    host.object_tree.show_scene(result)
+    host.object_tree.select_object("obj_1")
+    workers: list[Any] = []
+    errors: list[Any] = []
+    monkeypatch.setattr(host._leash, "start", workers.append)
+    monkeypatch.setattr(host, "_on_error", errors.append)
+    old_map = maps.AnalysisMap(
+        kind="fits", title="Passung", values=(1.0,) * 12, unit="mm", low=0.0, high=1.0
+    )
+    host._show_map(old_map, "obj_1")
+    host.analysis_bar.show_map("support")
+    host._analysis_map("support", "obj_1")
+    previous = workers[-1]
+    assert host.viewport.analysis_map is None, "the previous map belongs to another kind"
+    previous.tooLarge.emit(120000)
+    assert host.viewport.analysis_map is None
+    assert "120000" in host.analysis_bar.legend.note.text()
+
+    newest = maps.AnalysisMap(
+        kind="overhang", title="Überhang", values=(0.0,) * 12, unit="°", low=0.0, high=90.0
+    )
+    host._map_cache[("obj_1", "overhang", 12)] = newest
+    host.analysis_bar.show_map("overhang")
+    host._analysis_map("overhang", "obj_1")
+    if late == "none":
+        host.analysis_bar.show_map(None)
+        host._on_map_changed(None)
+    elif late == "scene":
+        # Dieselbe Kennung und Dreieckszahl, aber eine andere Auswertung.
+        host.session.last_result = EvaluationResult(Scene(objects={"obj_1": make_object()}))
+    before = host.analysis_bar.legend.note.text()
+    if late in {"none", "scene", "too_large"}:
+        previous.tooLarge.emit(200000)
+    elif late == "crashed":
+        previous.crashed.emit("obsolete worker")
+    else:
+        previous.done.emit(old_map)
+    assert host.analysis_bar.legend.note.text() == before
+    assert not errors, "obsolete worker errors must not interrupt a new choice"
+    assert host.viewport.analysis_map is (None if late == "none" else newest)
+    assert ("obj_1", "support", 12) not in host._map_cache
+    host.release()
 
 
 def test_every_map_of_the_table_is_offered(qt_app: QApplication) -> None:
@@ -351,7 +477,130 @@ def test_the_colours_of_the_legend_rise_in_luminance() -> None:
     assert is_monotonic(VIRIDIS)
 
 
+def test_a_large_feature_legend_represents_the_whole_colour_range(qt_app: QApplication) -> None:
+    """Viele Merkmale dürfen keine gleichfarbige, irreführende Legende ergeben."""
+    from app.ui.analysis_bar import LEGEND_MAX_ENTRIES, _legend_entries
+
+    categories = tuple(f"feature_{index}" for index in range(120))
+    analysis = maps.AnalysisMap(
+        kind="features",
+        title="Merkmale",
+        values=(0.0, 119.0),
+        unit="",
+        low=0.0,
+        high=119.0,
+        categories=categories,
+    )
+    names = {key: f"Fläche {index}" for index, key in enumerate(categories)}
+    legend = MapLegend()
+    try:
+        legend.show_map(analysis, names)
+        samples = legend.entries[:-1]
+        assert len(samples) == LEGEND_MAX_ENTRIES
+        assert len({colour for _label, colour in samples}) >= 7
+        assert samples[0][0] == names[categories[0]]
+        assert samples[-1][0] == names[categories[-1]]
+        assert all(sample in _legend_entries(analysis, names) for sample in samples)
+        assert "112" in legend.entries[-1][0]
+    finally:
+        legend.deleteLater()
+
+
 # --- Von einer Warnung zur Stelle -------------------------------------------------
+
+
+def test_curvature_legend_keeps_physical_units_with_nonlinear_colours(qt_app: QApplication) -> None:
+    """Kleine Radien bleiben farblich unterscheidbar, während die Legende echte Maße nennt."""
+    analysis = maps.AnalysisMap(
+        kind="curvature",
+        title="Krümmung",
+        values=(1.0, 3.0, 5.5, 6508.77),
+        unit="mm",
+        low=0.0,
+        high=6508.77,
+        display_scale="asinh",
+    )
+    legend = MapLegend()
+    try:
+        legend.show_map(analysis)
+        labels = [text for text, _colour in legend.entries]
+        assert labels[0] == length(0.0)
+        assert labels[-1] == length(6508.77)
+        assert labels[2] == length(analysis.value_at_display_fraction(0.5))
+        assert labels[2] != length(3254.385)
+        assert "logarithmisch" in legend.note.text()
+        assert analysis.values == (1.0, 3.0, 5.5, 6508.77)
+        legend.show_map(dataclasses.replace(analysis, kind="wall", display_scale="linear"))
+        assert legend.entries[2][0] == length(3254.385)
+        assert "logarithmisch" not in legend.note.text()
+    finally:
+        legend.deleteLater()
+
+
+def test_constant_map_legend_does_not_invent_a_larger_measured_range(qt_app: QApplication) -> None:
+    """Ein konstanter Messbereich darf keine erfundene Spannweite von einem Millimeter nennen."""
+    from app.ui.palette import VIRIDIS
+
+    legend = MapLegend()
+    try:
+        legend.show_map(
+            maps.AnalysisMap(
+                kind="curvature", title="x", values=(0.0,), unit="mm", low=0.0, high=0.0
+            )
+        )
+        assert legend.entries == [(length(0.0), VIRIDIS[0])]
+    finally:
+        legend.deleteLater()
+
+
+@pytest.mark.parametrize("scale", ["linear", "asinh"])
+def test_viewport_passes_the_maps_display_space_to_the_renderer(
+    qt_app: QApplication, scale: Any
+) -> None:
+    """Renderer erhalten den Farbraum der Legende; die Messdaten bleiben im Kern unverändert."""
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    mesh = MeshData(trimesh.creation.box())
+    values = (1.0, 3.0, 5.5, 6508.77) * 3
+    analysis = maps.AnalysisMap(
+        kind="curvature",
+        title="x",
+        values=values,
+        unit="mm",
+        low=0.0,
+        high=6508.77,
+        display_scale=scale,
+    )
+    result = EvaluationResult(
+        scene=Scene(objects={"obj_1": SceneObject(id="obj_1", name="Prüfkörper", mesh=mesh)})
+    )
+    viewport = Viewport()
+    renderer = RecordingRenderer()
+    viewport.renderer = renderer
+    try:
+        viewport.show_scene(result)
+        viewport.set_analysis_map(analysis, "obj_1")
+        surfaces = [
+            entry
+            for kind, entry in renderer.drawn
+            if kind == "surface" and entry["name"] == "object:obj_1"
+        ]
+        colours = surfaces[-1]["cell_colours"]
+        assert colours is not None
+        assert np.array_equal(colours.values, analysis.display_values())
+        assert colours.limits == analysis.display_limits
+        assert viewport._scalars_for("another-object", 12) is None
+        assert viewport._scalars_for("obj_1", 11) is None
+        assert analysis.values == values
+    finally:
+        viewport.release_renderer()
+        viewport.deleteLater()
 
 
 def test_clicking_a_warning_switches_the_map_and_moves_the_camera(window: MainWindow) -> None:
@@ -956,6 +1205,38 @@ def test_selecting_a_feature_reaches_the_viewport(window: MainWindow) -> None:
 
     assert window.object_tree.selected_feature() == "hole_2"
     assert window.object_tree.selected() == "obj_1"
+
+
+def test_selecting_a_feature_passes_its_mesh_to_the_action_panel(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Randringbeweis erreicht das Panel zusammen mit den Merkmalen."""
+    from app.core.geom.mesh import MeshData, as_mesh_data
+
+    select_plate(window)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    received: list[tuple[str, Any, Any, Any, MeshData | None]] = []
+
+    def show_feature(
+        feature_id: str,
+        feature: Any,
+        alike: Any = (),
+        *,
+        features: Any = None,
+        mesh: MeshData | None = None,
+    ) -> None:
+        received.append((feature_id, feature, alike, features, mesh))
+
+    monkeypatch.setattr(window.feature_panel, "show_feature", show_feature)
+
+    window._on_feature_selected("hole_2")
+
+    assert len(received) == 1
+    feature_id, feature, _alike, available, mesh = received[0]
+    assert feature_id == "hole_2"
+    assert feature is entry.features[feature_id]
+    assert available is entry.features
+    assert mesh is as_mesh_data(entry.mesh)
 
 
 def test_the_diameter_of_a_bore_reaches_the_status_bar(window: MainWindow) -> None:
@@ -4364,6 +4645,60 @@ def test_a_countersink_stands_under_its_bore(qt_app: QApplication) -> None:
             "die Senkung hängt unter "
             f"{eltern.data(1, Qt.ItemDataRole.UserRole)} statt unter {bore.id}"
         )
+    finally:
+        tree.deleteLater()
+
+
+def test_a_complete_cavity_chain_is_nested_with_one_topology_pass(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Bohrung, Übergang und Senkung bilden einen Ast ohne wiederholte Netzanalyse."""
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+    from app.core.perceive import relations
+    from app.core.perceive.features import detect
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree
+
+    quelle = Path(__file__).parent / "data" / "meshes" / "plate_countersunk.stl"
+    body = normalise(read_mesh(quelle.read_bytes(), ".stl"), "mm").mesh
+    detected = detect(body)
+    bore = next(feature for feature in detected.values() if feature.kind == "hole")
+    transition = next(feature for feature in detected.values() if feature.kind == "cone")
+    counterbore = dataclasses.replace(
+        bore,
+        id="hole_outer",
+        params={
+            **bore.params,
+            "centre": (0.0, 0.0, 4.0),
+            "diameter": float(transition.params["diameter"]),
+        },
+    )
+    linked = {
+        counterbore.id: counterbore,
+        transition.id: transition,
+        bore.id: bore,
+    }
+    asked: list[tuple[Any, Any]] = []
+
+    def chains_of(available: Any, mesh: Any) -> tuple[tuple[Any, ...], ...]:
+        asked.append((available, mesh))
+        return ((bore, transition, counterbore),)
+
+    monkeypatch.setattr(relations, "cavity_chains", chains_of)
+    entry = SceneObject(id="obj_1", name="Senkbohrung", mesh=body, features=linked)
+    tree = ObjectTree()
+    try:
+        tree.show_scene(EvaluationResult(scene=Scene(objects={entry.id: entry})))
+
+        assert asked == [(linked, body)], "je Körper genau eine Randringbildung"
+        root = tree.tree.topLevelItem(0)
+        middle = _feature_row(root, transition.id)
+        outer = _feature_row(root, counterbore.id)
+        assert middle is not None and outer is not None
+        assert middle.parent().data(1, Qt.ItemDataRole.UserRole) == bore.id
+        assert outer.parent().data(1, Qt.ItemDataRole.UserRole) == transition.id
     finally:
         tree.deleteLater()
 

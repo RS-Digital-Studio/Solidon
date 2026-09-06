@@ -331,7 +331,7 @@ def pose_parameter_references(text: str) -> frozenset[str]:
             for angle in values:
                 if is_expression(angle):
                     found |= references(angle)
-    except (ValueError, TypeError, AttributeError):
+    except ValueError, TypeError, AttributeError:
         return frozenset()
     return frozenset(found)
 
@@ -356,7 +356,7 @@ def pose_angles(text: str) -> dict[str, tuple[float | str, ...]]:
             found[str(name)] = tuple(
                 value if is_expression(value) else float(value) for value in entry
             )
-    except (ValueError, TypeError, AttributeError):
+    except ValueError, TypeError, AttributeError:
         return {}
     return found
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import manifold3d
 import numpy as np
@@ -27,7 +27,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult, Severity
+from app.core.types import BaseParams, CancelToken, Finding, OpContext, OpResult, Severity
 from app.core.units import DEGREE_UNIT
 from app.i18n import _
 
@@ -60,6 +60,14 @@ DENSE_FACTOR = 100
 #: an einer gescannten Oberfläche normal; ein Viertel heißt, dass der Körper
 #: nicht mehr der ist, den jemand geglättet haben wollte.
 SMOOTH_LOSS_WARN = 0.25
+
+#: Schritte der Bisektion, die für den Rückfall die kleinste noch ausreichende
+#: Oberflächenabweichung sucht. Das ist eine Rechengrenze, keine
+#: Geometrietoleranz; die zulässige Abweichung bleibt :data:`DEVIATION_WARN`.
+SIMPLIFY_SEARCH_STEPS = 32
+
+SimplificationSolver = Literal["none", "fast_simplification", "manifold"]
+SimplificationDeviation = tuple[float, float]
 
 
 def deviation(before: MeshData, after: MeshData) -> float:
@@ -100,12 +108,46 @@ def decimate(mesh: MeshData, target: int) -> MeshData:
     Material. (Bis zum 24.08.2026 lief die Anfrage über einen ``rtree``-Index;
     warum er weg ist, steht an :func:`app.core.geom.mesh.on_surface`.)
     """
+    return _decimate_with_solver(mesh, target)[0]
+
+
+def _decimate_with_solver(
+    mesh: MeshData,
+    target: int,
+    cancelled: CancelToken | None = None,
+) -> tuple[MeshData, SimplificationSolver, SimplificationDeviation | None]:
+    """Vereinfacht und nennt das tatsächlich verwendete Verfahren.
+
+    Der öffentliche Helfer darüber behält seinen bisherigen Vertrag. Die
+    Operation braucht zusätzlich den Namen, damit ein Rückfall nicht still als
+    dasselbe Verfahren erscheint.
+    """
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
-        return mesh
+        return mesh, "none", None
     source = _welded_for_simplify(mesh)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     reduced = source.raw.simplify_quadric_decimation(face_count=target)
+    if len(reduced.faces) >= source.triangle_count:
+        fallback = _manifold_decimation(source, target, cancelled)
+        if fallback is not None:
+            fallback_mesh, measured = fallback
+            _log.info(
+                "decimated %d to %d triangles with manifold fallback",
+                mesh.triangle_count,
+                fallback_mesh.triangle_count,
+            )
+            return (
+                transfer(fallback_mesh, [mesh], tolerance=math.inf),
+                "manifold",
+                measured,
+            )
     _log.info("decimated %d to %d triangles", mesh.triangle_count, len(reduced.faces))
-    return transfer(source.replacing(reduced), [mesh], tolerance=math.inf)
+    return (
+        transfer(source.replacing(reduced), [mesh], tolerance=math.inf),
+        "fast_simplification",
+        None,
+    )
 
 
 #: Ab welchem Verhältnis Punkte zu Dreiecken ein Netz als unverschweißt gilt.
@@ -150,6 +192,60 @@ def _welded_for_simplify(mesh: MeshData) -> MeshData:
     return welded
 
 
+def _manifold_decimation(
+    mesh: MeshData,
+    target: int,
+    cancelled: CancelToken | None,
+) -> tuple[MeshData, SimplificationDeviation] | None:
+    """Rückfall für geschlossene Körper, an denen der erste Solver stillsteht.
+
+    ``manifold3d`` vereinfacht nach Oberflächenabweichung statt nach einer
+    Dreieckszahl. Eine Bisektion sucht deshalb die kleinste Abweichung, die das
+    Ziel erreicht. Ihre Obergrenze ist genau die vorhandene Warnschwelle; ein
+    Ergebnis wird nur übernommen, wenn Wasserdichtheit, Komponentenzahl,
+    Volumen und die beidseitig gemessene Oberflächenabweichung standhalten.
+    """
+    if not mesh.raw.is_volume:
+        return None
+    try:
+        solid = _as_solid(mesh)
+    except NotManifoldError:
+        return None
+
+    limit = max(mesh.bounds.diagonal, 1.0) * DEVIATION_WARN
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    best = solid.simplify(limit)
+    if best.is_empty() or best.num_tri() > target:
+        return None
+
+    low = 0.0
+    high = limit
+    for _step in range(SIMPLIFY_SEARCH_STEPS):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        middle = (low + high) / 2.0
+        candidate = solid.simplify(middle)
+        if not candidate.is_empty() and candidate.num_tri() <= target:
+            high = middle
+            best = candidate
+        else:
+            low = middle
+
+    result = _as_mesh(mesh, best)
+    if not result.is_watertight or result.component_count != mesh.component_count:
+        return None
+    if not math.isfinite(result.volume) or result.volume <= 0.0:
+        return None
+    if abs(result.volume - mesh.volume) / mesh.volume > SMOOTH_LOSS_WARN:
+        return None
+    forward = deviation(mesh, result)
+    bounded = max(forward, deviation(result, mesh))
+    if bounded > limit:
+        return None
+    return result, (forward, bounded)
+
+
 def smooth(mesh: MeshData, iterations: int) -> MeshData:
     """Nimmt das Rauschen von einer Oberfläche, ohne sie einzuziehen.
 
@@ -183,7 +279,7 @@ def _subdivided_on_demand(mesh: MeshData, edge: float) -> MeshData:
     )
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     body.merge_vertices()
-    return mesh.replacing(body)
+    return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
 def _subdivided_evenly(mesh: MeshData, edge: float) -> MeshData:
@@ -205,7 +301,7 @@ def _subdivided_evenly(mesh: MeshData, edge: float) -> MeshData:
         vertices, faces = trimesh.remesh.subdivide(vertices, faces)
     body = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
     body.merge_vertices()
-    return mesh.replacing(body)
+    return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
 def estimated_triangles(mesh: MeshData, edge: float) -> int:
@@ -364,7 +460,7 @@ def _as_mesh(mesh: MeshData, solid: Any) -> MeshData:
         process=False,
     )
     body.merge_vertices()
-    return mesh.replacing(body)
+    return transfer(MeshData.of(body), [mesh], tolerance=math.inf)
 
 
 def uniform(mesh: MeshData, edge: float, deviation: float) -> MeshData:
@@ -459,8 +555,36 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
     params = cast(DecimateParams, ctx.params)
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
-    after = decimate(before, params.triangles)
-    findings = _deviation_findings(before, after, source.id)
+    after, solver, measured = _decimate_with_solver(before, params.triangles, ctx.cancelled)
+    findings = _deviation_findings(
+        before,
+        after,
+        source.id,
+        moved=measured[0] if measured is not None else None,
+    )
+    if solver == "manifold":
+        findings.insert(
+            0,
+            Finding(
+                code="mesh.simplification_fallback",
+                severity="info",
+                message=_(
+                    "Das Netz wurde mit einer formtreuen Ersatzmethode vereinfacht, "
+                    "weil das erste Verfahren keine Dreiecke entfernen konnte."
+                ),
+                object_id=source.id,
+                values={
+                    "solver": solver,
+                    "attempted": "fast_simplification",
+                    "target": params.triangles,
+                    "before": before.triangle_count,
+                    "after": after.triangle_count,
+                    "deviation_mm": round(measured[1], 6) if measured is not None else 0.0,
+                    "volume_change_mm3": round(after.volume - before.volume, 6),
+                    "components": after.component_count,
+                },
+            ),
+        )
     findings.extend(_simplification_findings(before, after, params.triangles, source.id))
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=after)],
@@ -813,6 +937,8 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
 #: trifft jedes Ziel exakt; Euler-Zahl 0 — ein Körper mit Durchgangsloch, also
 #: jede Hülse, jeder Ring, jedes Gehäuse mit Durchbruch — bleibt stehen, ohne
 #: entartete Dreiecke und ohne eine offene Kante.
+#: Ein vollständig unverändertes Netz meldet sich unabhängig vom Verhältnis:
+#: null Wirkung ist keine übliche Zielstreuung.
 SIMPLIFY_MISSED = 1.5
 
 
@@ -847,7 +973,10 @@ def _simplification_findings(
     """
     if after.triangle_count <= target or after.triangle_count > before.triangle_count:
         return []
-    if after.triangle_count < target * SIMPLIFY_MISSED:
+    if (
+        after.triangle_count < before.triangle_count
+        and after.triangle_count < target * SIMPLIFY_MISSED
+    ):
         return []
     return [
         Finding(
@@ -867,7 +996,13 @@ def _simplification_findings(
     ]
 
 
-def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> list[Finding]:
+def _deviation_findings(
+    before: MeshData,
+    after: MeshData,
+    object_id: str,
+    *,
+    moved: float | None = None,
+) -> list[Finding]:
     """Sagt, was es gekostet hat — gemessen an der Oberfläche, nicht aus
     Zahlen geraten.
 
@@ -884,7 +1019,7 @@ def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> li
     Einlesen, Export und Agentenzug, und die Familie trägt dieselben zwei
     Handlungen (``FINDING_ACTIONS``).
     """
-    moved = deviation(before, after)
+    moved = deviation(before, after) if moved is None else moved
     limit = max(before.bounds.diagonal, 1.0) * DEVIATION_WARN
     severity: Severity = "warning" if moved > limit else "info"
     findings = [
