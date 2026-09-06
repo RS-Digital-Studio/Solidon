@@ -1027,9 +1027,10 @@ def build_bom(
 ) -> dict[str, Any]:
     """Baut eine deterministische CycloneDX-1.6-Stückliste.
 
-    ``python_version`` ist die Laufzeit des Artefakts — ohne Angabe die des
-    laufenden Interpreters. Ein Test auf einer Entwicklermaschine mit 3.14
-    beschreibt damit trotzdem das Paket, das die CI mit 3.13 baut.
+    ``python_version`` ist die Laufzeit des **Artefakts** — ohne Angabe die des
+    laufenden Interpreters. Beide sind seit dem 06.09.2026 dieselbe Fassung;
+    der Parameter bleibt trotzdem, denn eine Stückliste beschreibt das Paket
+    und nicht den Rechner, auf dem sie entstanden ist.
     """
     selected_extras = tuple(extras)
     graph = runtime_graph(
