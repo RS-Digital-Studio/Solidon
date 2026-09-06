@@ -16,6 +16,7 @@ venv/
 # Nebenumgebungen: eine Version ausprobieren, ohne die Umgebung umzubauen, in
 # der gerade jemand arbeitet (`.venv-py314`, `.venv-trimesh5`, …).
 /.venv-*/
+/.venv314/
 
 # --- Videowerkzeug -----------------------------------------------------------
 # Eigene Umgebung, damit espeak-ng (GPL) hinter piper nicht in derselben venv
