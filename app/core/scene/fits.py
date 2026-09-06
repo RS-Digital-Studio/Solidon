@@ -19,6 +19,7 @@ from app.core.expressions import resolve as resolve_parameters
 from app.core.expressions import resolve_value
 from app.core.knowledge.profiles import for_object, resolve_tolerance
 from app.core.log import get_logger
+from app.core.perceive.features import EPS_ANGLE
 from app.core.types import (
     AUTO_TOLERANCE_PREFIX,
     Document,
@@ -408,11 +409,16 @@ def _check_flush(fit: Fit, first: Feature, second: Feature) -> list[Finding]:
     normal = (normal[0] / normal_size, normal[1] / normal_size, normal[2] / normal_size)
     other = (other[0] / other_size, other[1] / other_size, other[2] / other_size)
     signed = sum(a * b for a, b in zip(normal, other, strict=True))
-    direction = 1.0 if signed >= 0.0 else -1.0
-    # Bündig verlangt dieselbe Ebene, keinen acht Grad breiten Winkelbereich.
-    # Die normierten Richtungen vergleichen wir mit der vorhandenen numerischen
-    # Geometriegenauigkeit; das Materialspiel ist keine Winkeltoleranz.
-    if math.dist(normal, tuple(direction * value for value in other)) > EPS_GEOM:
+    # Bündig verlangt dieselbe Ebene, keinen acht Grad breiten Winkelbereich —
+    # aber eine **Winkel**toleranz, keine Längentoleranz: ``EPS_GEOM`` auf dem
+    # Abstand zweier Einheitsvektoren wären 0,00006 Grad, und schon der
+    # Float32-Umlauf einer STL streut die Normalen einer ebenen Fläche um das
+    # Zehnfache (gemessen 06.09.2026: 5,7e-6 an einer 10-mm-Platte bei 180 mm).
+    # Parallel ist, was der Erkenner selbst als eine Ebene führt (§21):
+    # ``EPS_ANGLE`` in Grad, dieselbe Schwelle wie beim Zusammenfassen der
+    # Dreiecke zu einer Fläche.
+    angle = math.degrees(math.acos(min(1.0, abs(signed))))
+    if angle > EPS_ANGLE:
         return [
             Finding(
                 code="fit.violated",
