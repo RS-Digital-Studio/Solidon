@@ -68,12 +68,14 @@ geom = [
 # Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
 ui = [
   "PySide6>=6.7",
-  "pyvista>=0.44",
-  "pyvistaqt>=0.11",
-  # Der zweite Renderer hinter der Ansicht (§18): pygfx zeichnet über wgpu
-  # (Vulkan, Metal, DX12) und bringt wgpu, rendercanvas und pylinalg mit —
-  # alle vier BSD-2. Gemessen gegen VTK direkt, Entscheidung Robert 05.09.2026.
+  # Der Renderer hinter der Ansicht (§18): pygfx zeichnet über wgpu (Vulkan,
+  # Metal, DX12) und bringt wgpu, rendercanvas und pylinalg mit — alle vier
+  # BSD-2. Gemessen gegen VTK direkt, Entscheidung Robert 06.09.2026: pygfx.
   "pygfx>=0.17",
+  # Der zweite Renderer hinter demselben Vertrag, VTK direkt und ohne die
+  # PyVista-Hülle (`SOLIDON_RENDERER=vtk`); dazu die Bereichsprüfung der
+  # Bausteine und die Plattformwahl. BSD-3.
+  "vtk>=9.3",
   # Die 3D-Maus (SpaceMouse) direkt über HID, ohne Herstellertreiber (§2.9,
   # Konzept 3D-Maus). Dreifach lizenziert; gewählt ist BSD-3.
   "hidapi>=0.14",
@@ -86,8 +88,8 @@ agent = ["keyring>=25.0"]
 # in einem Satz, und alles andere bleibt unberührt. Die Anbindung ist
 # Apache-2.0, der Kern darunter LGPL-2.1 mit der OCCT-Linking-Ausnahme, also
 # wird er wie PySide6 als dynamisch gelinkte Bibliothek benutzt (§36). „novtk",
-# weil pyvista VTK schon mitbringt; zwei Kopien in einem Prozess sind eine zu
-# viel.
+# weil VTK schon für den zweiten Renderer da ist; zwei Kopien in einem
+# Prozess sind eine zu viel.
 brep = ["cadquery-ocp-novtk>=8.0.1"]
 dev = [
   "pytest>=8.0",
@@ -278,7 +280,6 @@ exclude = "app/core/backends/data/comfyui/"
 module = [
   "manifold3d.*",
   "networkx.*",
-  "pyvista.*",
   "pygfx.*",
   "wgpu.*",
   "rendercanvas.*",

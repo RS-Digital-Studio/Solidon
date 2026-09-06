@@ -65,7 +65,6 @@ pefile==2024.8.26
 pillow==12.3.0
 platformdirs==4.11.7
 pluggy==1.6.0
-pooch==1.9.0
 psutil==7.2.2
 pycparser==3.0
 pygfx==0.17.0
@@ -82,10 +81,7 @@ pytest==9.1.1
 pytest-forked==1.7.5
 pytest-xdist==3.8.0
 python-dateutil==2.9.0.post0
-pyvista==0.48.4
-pyvistaqt==0.13.0
 pywin32-ctypes==0.2.3
-QtPy==2.4.3
 rendercanvas==2.7.2
 requests==2.34.2
 rich==15.0.0
@@ -93,7 +89,6 @@ rich-rst==2.1.0
 ruff==0.16.6
 scikit-image==0.26.0
 scipy==1.18.1
-scooby==0.11.2
 setuptools==84.0.0
 shapely==2.1.2
 shiboken6==6.11.2

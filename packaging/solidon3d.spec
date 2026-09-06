@@ -88,9 +88,8 @@ datas = [
     # Der KI-Hinweis öffnet diese Fassung lokal im Fenster, ohne Webabruf.
     (str(ROOT / "DATENSCHUTZ.md"), "."),
 ]
-# trimesh und pyvista lesen beim Import eigene Datendateien.
+# trimesh liest beim Import eigene Datendateien.
 datas += collect_data_files("trimesh")
-datas += collect_data_files("pyvista")
 # OpenSSLs Vorgabepfad zeigt im macOS-Paket auf den Bauserver. Die Anwendung
 # setzt dort ``SSL_CERT_FILE`` auf certifis CA-Satz; ohne dessen Datendatei
 # wäre der richtige Pfad im Quellcode trotzdem eine Lücke im Paket.
