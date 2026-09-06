@@ -267,7 +267,7 @@ def test_the_system_is_asked_once_and_forgotten_on_demand(
 
 # --- der Anschluss im Viewport ------------------------------------------------
 #
-# Offscreen gibt es keinen Plotter; ``_cursor_role`` wird trotzdem gepflegt.
+# Offscreen gibt es keinen Renderer; ``_cursor_role`` wird trotzdem gepflegt.
 # Das ist Absicht: Was der Zeiger sein *soll*, ist eine Frage des Zustands und
 # nicht der Grafikkarte — und nur so lässt es sich ohne Bild prüfen.
 

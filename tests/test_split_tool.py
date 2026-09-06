@@ -5,7 +5,7 @@ Werkzeugzeile, dann die Punkte, die der Viewport meldet. Geprüft wird, was ein
 Nutzer sieht und was danach im Dokument steht — nicht, ob eine Methode
 aufgerufen wurde.
 
-Der Viewport hat offscreen keinen Plotter. Das ist hier kein Mangel: Er meldet
+Der Viewport hat offscreen keinen Renderer. Das ist hier kein Mangel: Er meldet
 Punkte über ein Signal, und das Signal von Hand auszulösen ist genau der Weg,
 den ein Klick nimmt.
 """
@@ -171,7 +171,7 @@ class FakeInteractor:
 
 
 def test_the_drawn_line_really_reaches_the_view(qt_app: QApplication) -> None:
-    """Offscreen gibt es keinen Plotter, und ``show_split_line`` steigt vorher
+    """Offscreen gibt es keinen Renderer, und ``show_split_line`` steigt vorher
     aus.
 
     Ein Test, der nur ``window._split_points`` prüft, wäre also auch dann grün,

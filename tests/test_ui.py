@@ -8677,7 +8677,8 @@ def test_the_menu_path_matches_the_built_menu_for_every_operation(window: MainWi
 
 def test_scene_views_render_labelled_pngs(window: MainWindow) -> None:
     """§23: zwei beschriftete Ansichten als PNG — gerendert von einem
-    kurzlebigen Offscreen-Plotter, der den sichtbaren Viewport nicht anfasst.
+    kurzlebigen Renderer ohne Fenster, der den sichtbaren Viewport nicht
+    anfasst.
     """
     from app.ui.snapshots import scene_views
 
@@ -12140,9 +12141,9 @@ def test_the_camera_swings_onto_the_plane_that_is_drawn_on(window: MainWindow) -
     assert frame is not None, "die Grundebene hat einen Rahmen"
     assert frame.normal == pytest.approx((0.0, 0.0, 1.0)), "XY ist die Vorgabe"
 
-    # Offscreen gibt es keinen Plotter, der Schwenk selbst ist also nicht
+    # Offscreen gibt es keinen Renderer, der Schwenk selbst ist also nicht
     # messbar (Entscheidung G). Prüfbar ist, dass er mit der richtigen Ebene
-    # gerufen würde — und dass das Zeichnen ohne Plotter nicht scheitert.
+    # gerufen würde — und dass das Zeichnen ohne Renderer nicht scheitert.
     panel.canvas.set_tool("line")
     panel.canvas.place_on_plane((0.0, 0.0))
     panel.canvas.place_on_plane((20.0, 0.0))
@@ -12154,7 +12155,7 @@ def test_the_camera_swings_onto_the_plane_that_is_drawn_on(window: MainWindow) -
 def test_a_click_in_the_view_draws_on_the_plane(window: MainWindow) -> None:
     """Der Anschluss (§30.1, P4): Klick in der Ansicht, Punkt in der Skizze.
 
-    Offscreen gibt es keinen Plotter, der Sichtstrahl selbst ist also nicht
+    Offscreen gibt es keinen Renderer, der Sichtstrahl selbst ist also nicht
     messbar (Entscheidung G). Prüfbar ist die Kette dahinter — und genau die
     war der Punkt: ``_sketch_hit`` rechnet den Strahl gegen die Ebene, das
     Signal trägt zwei Zahlen in Millimetern, und die Zeichenfläche macht
@@ -12163,7 +12164,7 @@ def test_a_click_in_the_view_draws_on_the_plane(window: MainWindow) -> None:
     **Was dieser Test ausdrücklich nicht prüft**, und das ist gemessen: Dass
     ``_on_left_click`` den Skizzenmodus vor der Auswahlkette abfragt. Entfernt
     man diesen Zweig, bleibt der Test grün — er sendet das Signal selbst,
-    statt einen Klick auszulösen, und einen echten Klick gibt es ohne Plotter
+    statt einen Klick auszulösen, und einen echten Klick gibt es ohne Renderer
     nicht (``_pick_ray`` gibt dort ``None``). Diese eine Zeile gehört zur
     Bild-Hälfte und wird im Prüfstand mit echtem Fenster gemessen, nicht hier.
     """

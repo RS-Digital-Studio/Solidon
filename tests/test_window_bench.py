@@ -129,7 +129,7 @@ def test_the_renderer_closes_while_its_qt_parent_is_still_alive() -> None:
 
 
 def test_offscreen_shutdown_uses_the_same_platform_neutral_order() -> None:
-    """Ohne Plotter bleibt derselbe Weg auf allen Qt-Plattformen gültig."""
+    """Ohne Renderer bleibt derselbe Weg auf allen Qt-Plattformen gültig."""
     events: list[str] = []
     window = _Window(events, with_renderer=False)
 

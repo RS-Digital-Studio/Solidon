@@ -134,10 +134,10 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
 
     Eine Ursache ist inzwischen gefunden und behoben: der Interaktionsstil des
     Viewports hielt eine gebundene Methode und damit den Viewport, der damals
-    den Plotter hielt, der den Interactor hielt, der den Stil hielt. Diese Schleife
-    überlebt jedes Schließen; abgeräumt wird sie später, und dann steht ein
-    C++-Objekt hinter einer Python-Referenz, die es nicht mehr gibt. Mit einer
-    schwachen Referenz läuft die Suite wieder in einem Zug.
+    den Plotter hielt, der den Interactor hielt, der den Stil hielt. Diese
+    Schleife überlebt jedes Schließen; abgeräumt wird sie später, und dann
+    steht ein C++-Objekt hinter einer Python-Referenz, die es nicht mehr gibt.
+    Mit einer schwachen Referenz läuft die Suite wieder in einem Zug.
 
     Es bleibt dasselbe Muster, das die Roadmap als „ersetzte Arbeiter lassen
     ihre Referenz los" führt. Reißt es wieder, ist die erste Frage: welche
@@ -316,7 +316,7 @@ def test_ambient_occlusion_yields_to_a_map(qt_app: QApplication) -> None:
     nach Zahlen färbt und ihren Wertebereich als Legende danebenstellt, wäre
     der abgelesene Wert damit ein anderer als der gemeldete.
 
-    Geprüft wird die Regel, nicht der Plotter: offscreen gibt es keinen, und
+    Geprüft wird die Regel, nicht der Renderer: offscreen gibt es keinen, und
     ein Test, der sich dort überspringt, prüft nie etwas.
     """
     from app.ui.viewport import Viewport
@@ -1262,7 +1262,7 @@ def test_the_rotation_centre_is_the_body_and_not_the_scenery(window: MainWindow)
     aus dem Abbildungswerkzeug heraus.
 
     Geprüft wird die Auskunft, nicht die Kamera: offscreen gibt es keinen
-    Plotter, und ein Test, der sich dort überspringt, prüft nie etwas.
+    Renderer, und ein Test, der sich dort überspringt, prüft nie etwas.
     """
     select_plate(window)
     window.viewport.show_scene(window.session.last_result)
@@ -1292,7 +1292,7 @@ def test_a_chosen_feature_lights_up_instead_of_its_body(window: MainWindow) -> N
     (§19.1).
 
     Geprüft wird die Entscheidung, nicht das Bild: offscreen gibt es keinen
-    Plotter, und ein Test, der sich dort überspringt, prüft nie etwas.
+    Renderer, und ein Test, der sich dort überspringt, prüft nie etwas.
     """
     select_plate(window)
     window.viewport.show_scene(window.session.last_result)
@@ -1804,7 +1804,7 @@ def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) 
     um zu erfahren, dass alles in Ordnung ist.
 
     Geprüft wird ``_fit_once_for`` und nicht ``show_scene``: die Entscheidung
-    fällt dort, und der Buchhalter-Plotter kennt nur ``reset_camera``.
+    fällt dort, und der aufzeichnende Renderer kennt nur ``reset_camera``.
     """
     viewport = window.viewport
     viewport.show_scene(window.session.last_result)
@@ -1844,7 +1844,7 @@ def test_a_scene_that_outgrows_the_view_gets_fitted_again() -> None:
     dunkelrote Fläche. Der Prüfbericht warnte richtig, das Bild sagte nichts.
 
     Geprüft wird die Entscheidung als reine Funktion: offscreen gibt es keinen
-    Plotter, und was nur im Zeichnen steht, prüft niemand.
+    Renderer, und was nur im Zeichnen steht, prüft niemand.
     """
     from app.ui.viewport import OUTGROWN_FACTOR, diagonal_of, outgrown
 
@@ -2737,8 +2737,8 @@ def test_the_bed_carries_numbers_not_just_lines() -> None:
     einordnen lässt, ohne es zu messen — und genau dafür steht die Platte in
     echter Größe da.
 
-    Als reine Rechnung geprüft: offscreen gibt es keinen Plotter, und ein Test,
-    der sich dort überspringt, prüft nie etwas.
+    Als reine Rechnung geprüft: offscreen gibt es keinen Renderer, und ein
+    Test, der sich dort überspringt, prüft nie etwas.
     """
     from app.ui.viewport import BED_SCALE_STEP, bed_scale
 
@@ -4554,7 +4554,7 @@ def test_the_camera_keeps_the_body_in_view_after_a_finding_flight(window: MainWi
     )
 
     # **Gemessen wird der verlangte Abstand, nicht die Kamerastellung.** Im
-    # Offscreen-Betrieb gibt es keinen Plotter und damit keine Kamera; was der
+    # Offscreen-Betrieb gibt es keinen Renderer und damit keine Kamera; was der
     # Code entscheidet, ist die Reichweite, die er `fly_to` mitgibt. Das
     # Umsetzen in eine Position ist Qt-Mechanik und gehört nicht hierher.
     verlangt: list[float | None] = []

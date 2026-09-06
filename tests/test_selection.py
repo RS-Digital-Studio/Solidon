@@ -831,7 +831,7 @@ def test_a_tool_that_sets_a_place_does_not_look_for_a_bore(window: MainWindow) -
     der Luft: bemalt würde nichts, gemessen würde von einer Stelle, an der kein
     Material ist, und der Pinselring stünde im Leeren.
 
-    Geprüft wird an :meth:`_means_a_feature`, weil offscreen kein Plotter
+    Geprüft wird an :meth:`_means_a_feature`, weil offscreen kein Renderer
     existiert und :meth:`_on_left_click` deshalb nichts täte — die Weiche ist
     die Aussage, nicht der Klick.
     """
@@ -1209,7 +1209,7 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
 
     Der Grund für die Attrappe: ``_look_under_pointer`` und ``_update_cursor``
     steigen bei ``self.renderer is None`` beide aus, und offscreen gibt es
-    keinen Plotter. Ein Test ohne sie prüfte, dass die Methode umkehrt.
+    keinen Renderer. Ein Test ohne sie prüfte, dass die Methode umkehrt.
 
     **Gefälscht wird die Punktquelle, und die heißt jetzt ``_aim_at``** — vorher
     stand hier ``module._world_under``. Der Zeiger fragt dasselbe wie der Klick,
@@ -1236,7 +1236,7 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
     try:
         viewport._aim_at = lambda *_args: point  # type: ignore[method-assign]
         # Dieser Test gilt dem Zeigerweg; die sichtbare Hover-Fläche hat ihren
-        # eigenen Plotter-Test in ``test_viewport_decisions.py``.
+        # eigenen Renderer-Test in ``test_viewport_decisions.py``.
         viewport._redraw_features = lambda: None  # type: ignore[method-assign]
         viewport._hover_at = (10, 10)
 
@@ -1640,7 +1640,7 @@ def test_the_handle_on_a_face_says_which_face_it_is() -> None:
     kommt, liest drei Achsen als „hier geht es in drei Richtungen" und zieht in
     eine, die verfällt.
 
-    Geprüft wird die reine Funktion und nicht der Plotter: Offscreen gibt es
+    Geprüft wird die reine Funktion und nicht der Renderer: Offscreen gibt es
     keinen, und ein Test, der sich dort überspringt, ist grün über einer leeren
     Menge (siehe den Kopf dieser Datei).
     """
@@ -1710,8 +1710,8 @@ def test_choosing_a_face_reaches_the_handle_label(window: MainWindow) -> None:
     ``feature_name`` benennt sie kundengerecht — aber ob die Auswahl je dort
     ankommt, sagt keines von beiden. Durchgereicht ist nicht gerufen.
 
-    Offscreen prüfbar, weil ``gizmo_face_label`` keine Plotter-Wache trägt:
-    ``_label_gizmo`` steigt bei fehlendem Plotter sofort aus und wäre hier
+    Offscreen prüfbar, weil ``gizmo_face_label`` keine Renderer-Wache trägt:
+    ``_label_gizmo`` steigt bei fehlendem Renderer sofort aus und wäre hier
     grün über einer leeren Menge.
     """
     entry = window.session.last_result.scene.objects["obj_1"]

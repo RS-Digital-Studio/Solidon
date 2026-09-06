@@ -3373,7 +3373,7 @@ def test_the_snap_step_is_the_grid_that_is_drawn(qt_app: QApplication) -> None:
     hat damit etwas versprochen, das nicht eintrat. Robert am 24.08.2026: „das
     fang sollte immer das raster sein."
 
-    Geprüft wird ohne Plotter, also über ``follow_grid`` selbst — offscreen
+    Geprüft wird ohne Renderer, also über ``follow_grid`` selbst — offscreen
     gibt es keine Kamera, an der ein Maßstab zu messen wäre (Entscheidung G).
     Dass die Weite im Fenster wirklich ankommt, prüft der Test darunter.
     """
@@ -3565,7 +3565,7 @@ def test_the_pointer_mark_sits_where_the_click_lands(qt_app: QApplication) -> No
 
 
 def test_the_pointer_mark_is_a_cross_and_not_a_dot() -> None:
-    """Zwei gekreuzte Strecken, quer zum Raster — und ohne Plotter prüfbar.
+    """Zwei gekreuzte Strecken, quer zum Raster — und ohne Renderer prüfbar.
 
     Quer, weil die Marke meistens auf einer Rasterlinie sitzt: Ein
     achsparalleles Kreuz verschwände genau dort. Ein Punkt wiederum sähe aus
@@ -3676,7 +3676,7 @@ def test_the_pointer_mark_does_not_survive_a_change_of_plane(qt_app: QApplicatio
     wer über die Ziffern wechselt und die Hand stillhält, sah genau das.
 
     Geprüft wird die Verdrahtung und nicht der Actor: Offscreen gibt es keinen
-    Plotter, dort entsteht nie eine Marke, und ein Test über eine leere Liste
+    Renderer, dort entsteht nie eine Marke, und ein Test über eine leere Liste
     wäre immer grün.
     """
     from app.core.types import PlaneFrame
@@ -3805,7 +3805,7 @@ def test_fitting_the_view_says_what_it_fitted(qt_app: QApplication) -> None:
     lag — ein Knopf, der genau dagegen da ist.
 
     Geprüft wird die **Rechnung**, nicht das Bild: Offscreen gibt es keinen
-    Plotter, und ein Test über die Kamera wäre dort grün, weil er nichts tut
+    Renderer, und ein Test über die Kamera wäre dort grün, weil er nichts tut
     (Konzept „Skizze im Raum", Entscheidung G). Was hier zählt, ist, dass die
     Fläche die Werte überhaupt nach außen gibt.
     """
@@ -3832,7 +3832,7 @@ def test_the_window_listens_when_the_sketch_fits_itself() -> None:
     """Und das Fenster hört zu — sonst endet die Kette am vorletzten Glied.
 
     Am Quelltext geprüft und nicht am laufenden Fenster: Der Skizzenmodus
-    braucht ein Ergebnis, einen Plotter und ein Beispielprojekt, und ein Test,
+    braucht ein Ergebnis, einen Renderer und ein Beispielprojekt, und ein Test,
     der sich das alles baut, prüft am Ende die Attrappen. Was hier fehlen kann,
     ist eine einzige Zeile — dass jemand das Signal anschließt.
     """
@@ -3922,7 +3922,7 @@ def test_a_camera_move_redraws_the_grid_in_the_scene(qt_app: QApplication) -> No
         assert window._sketch_panel is not None, "ohne offene Skizze prüft dieser Test nichts"
 
         # ``show_sketch`` schreibt die gezeichnete Weite **vor** der
-        # Plotter-Wache (offscreen gibt es keinen) — sie ist damit der eine
+        # Renderer-Wache (offscreen gibt es keinen) — sie ist damit der eine
         # messbare Beleg, dass wirklich neu gezeichnet wurde.
         window.viewport._sketch_step = -1.0
         window.viewport.cameraMoved.emit()

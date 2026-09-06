@@ -291,7 +291,7 @@ def test_two_painted_slots_do_not_look_the_same(profile: Profile) -> None:
     hatten.
 
     Geprüft wird die Tabelle und nicht das Bild: Offscreen gibt es keinen
-    Plotter, und die Aussage steckt in den Farben, nicht im Rendern.
+    Renderer, und die Aussage steckt in den Farben, nicht im Rendern.
     """
     from app.ui.theme import SLOT_COLOURS, slot_colour
 
