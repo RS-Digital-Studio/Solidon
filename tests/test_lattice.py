@@ -219,17 +219,32 @@ def test_vented_concave_cavity_survives_storage_and_stays_inside():
     assert result.outputs[0].mesh.volume > shell.volume
     outside = boolean("difference", [result.outputs[0].mesh, outer], allow_empty=True)
     assert outside.mesh.volume < 1e-6
-    # Das Entlüftungsloch muss Innen- und Außenfläche tatsächlich verbinden.
-    # Getrennte geschlossene Innenflächen bleiben beim Import ausdrücklich nutzbar.
+
+
+def test_an_imported_vented_shell_without_cavity_data_is_refused():
+    """Ohne ``MeshData.cavity`` bleibt ein entlüftetes Importnetz eine einzige
+    Schale, und die Füllung kann seinen Innenraum nicht kennen — sie sagt es.
+
+    Bis zum 06.09.2026 stand diese Prüfung hinter einem ``if`` am Winkelkörper
+    oben, dessen Entlüftung eine getrennte Restschale lässt: Der Zweig lief nie.
+    Am schlichten Würfel verbindet die Entlüftung beide Schalen nachweislich.
+    """
+    from app.core.geom.hollow import hollow
+
+    shell = hollow(MeshData.of(trimesh.creation.box((20, 20, 20))), 2, vents=1).mesh
     imported = MeshData.of(shell.raw.copy())
-    if len(imported.raw.split(only_watertight=False)) == 1:
-        with pytest.raises(ValidationError):
-            run(
-                SceneObject(id="obj_1", name="Import", mesh=imported),
-                structure="cubic",
-                cell=5,
-                wall=1,
-            )
+    assert imported.cavity is None
+    assert len(imported.raw.split(only_watertight=False)) == 1, (
+        "die Entlüftung muss Innen- und Außenschale zu einer verbinden, sonst prüft "
+        "dieser Fall nichts"
+    )
+    with pytest.raises(ValidationError):
+        run(
+            SceneObject(id="obj_1", name="Import", mesh=imported),
+            structure="cubic",
+            cell=5,
+            wall=1,
+        )
 
 
 def test_cavity_metadata_is_not_recursively_serialized():

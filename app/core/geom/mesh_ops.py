@@ -66,6 +66,13 @@ SMOOTH_LOSS_WARN = 0.25
 #: Geometrietoleranz; die zulässige Abweichung bleibt :data:`DEVIATION_WARN`.
 SIMPLIFY_SEARCH_STEPS = 32
 
+#: Wann die Bisektion aufhört, bevor die Schritte aufgebraucht sind: sobald das
+#: Intervall der Abweichung auf ein Tausendstel der zulässigen geschrumpft
+#: ist. Feiner unterscheidet die Suche keine andere Dreieckszahl mehr — jeder
+#: weitere Schritt wäre ein voller ``simplify``-Lauf über den ganzen Körper
+#: für dasselbe Ergebnis. Auch das ist eine Rechengrenze, keine Toleranz.
+SIMPLIFY_SEARCH_RESOLUTION = 1e-3
+
 SimplificationSolver = Literal["none", "fast_simplification", "manifold"]
 SimplificationDeviation = tuple[float, float]
 
@@ -137,8 +144,10 @@ def _decimate_with_solver(
                 mesh.triangle_count,
                 fallback_mesh.triangle_count,
             )
+            # ``_as_mesh`` hat die Slots schon übertragen; ein zweiter
+            # ``transfer`` suchte dieselben nächsten Flächen noch einmal.
             return (
-                transfer(fallback_mesh, [mesh], tolerance=math.inf),
+                fallback_mesh,
                 "manifold",
                 measured,
             )
@@ -222,6 +231,8 @@ def _manifold_decimation(
     low = 0.0
     high = limit
     for _step in range(SIMPLIFY_SEARCH_STEPS):
+        if high - low <= limit * SIMPLIFY_SEARCH_RESOLUTION:
+            break
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         middle = (low + high) / 2.0
