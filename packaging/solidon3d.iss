@@ -28,11 +28,12 @@ DefaultDirName={autopf}\{#AppName}
 ; nicht mehr heran. Vorbelegt bleibt der alte Pfad; es ist eine Seite mehr, und
 ; sie hat einen Knopf „Weiter".
 DisableDirPage=no
-; Windows 10 oder neuer — so steht es auf der Download-Seite. Ohne die Zeile
+; Windows 10 ab 1809 (Build 17763) — die Untergrenze der mitgelieferten Qt-Version.
+; Ohne die Zeile
 ; installiert sich das Paket auch auf Windows 7 und scheitert erst beim Start
 ; an einer fehlenden Systembibliothek, und dann sucht der Nutzer den Fehler bei
 ; sich.
-MinVersion=10.0
+MinVersion=10.0.17763
 ; Eine Programmgruppe mit einem einzigen Eintrag ist eine Frage zu viel (§19.3
 ; dem Geist nach): der Startmenü-Eintrag entsteht ohne Rückfrage.
 DisableProgramGroupPage=yes

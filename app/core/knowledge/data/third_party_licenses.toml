@@ -66,14 +66,13 @@ sha256 = "4fd46f32582c29007657e2daad8d0a6d954cf4e9d2e47bae8f8d8c32765fc987"
 # den nativen Bestandteil abdecken. ``source_delivery`` sperrt den Release,
 # bis ein RS-kontrolliertes Quellarchiv und Austauschhinweise belegt sind.
 
-# Zwei Fassungen, solange die lokale Umgebung (3.13.14) und die CI (3.13.15)
-# beide Pakete bauen; wie bei OpenSSL nennt die Quelle deshalb das Repository.
+# Aktueller CPython-Bau sowie die weiterhin prüfbaren vorherigen Artefakte.
 [[runtime]]
 id = "cpython"
 name = "CPython runtime"
 notice_source = "python-runtime"
 source = "https://github.com/python/cpython"
-versions = ["3.13.14", "3.13.15"]
+versions = ["3.13.14", "3.13.15", "3.14.7"]
 
 [[runtime]]
 id = "appimage-type2-runtime"
@@ -100,7 +99,7 @@ name = "OpenSSL"
 # Apache-2.0; die Quelle nennt deshalb das Repository und nicht einen
 # einzelnen Baum, denn eine Zeile kann nicht auf zwei Tags zeigen.
 source = "https://github.com/openssl/openssl"
-versions = ["3.0.13", "3.0.21"]
+versions = ["3.0.13", "3.0.21", "3.5.7"]
 
 [[runtime]]
 id = "libffi"
@@ -159,8 +158,8 @@ versions = ["3.13.1"]
 id = "vtk-native"
 name = "VTK native libraries"
 notice_package = "vtk"
-source = "https://gitlab.kitware.com/vtk/vtk/-/tree/v9.6.2"
-versions = ["9.6.2"]
+source = "https://gitlab.kitware.com/vtk/vtk/-/tree/v9.7.0"
+versions = ["9.7.0"]
 
 # Systembibliotheken, die das Linux-Paket bewusst mitnimmt (Familien aus
 # ``make_sbom.LINUX_LIBRARY_FAMILIES``, Ausschlussliste in
@@ -523,3 +522,45 @@ path = "third_party_licenses/zlib-1.3.txt"
 runtime = ["zlib"]
 source = "https://raw.githubusercontent.com/madler/zlib/v1.3/LICENSE"
 sha256 = "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+
+[[text]]
+path = "third_party_licenses/wgpu-native-29.0.1.1-MIT.txt"
+packages = ["wgpu"]
+versions = ["0.32.0"]
+source = "https://raw.githubusercontent.com/gfx-rs/wgpu-native/6aed50955d934ac36049ba8d002034841633ae02/LICENSE.MIT"
+sha256 = "c7fea58d1cfe49634cd92e54fc10a9d871f4b275321a4cd8c09e449122caaeb4"
+
+[[runtime]]
+id = "wgpu-native"
+name = "wgpu-native"
+notice_package = "wgpu"
+source = "https://raw.githubusercontent.com/gfx-rs/wgpu-native/6aed50955d934ac36049ba8d002034841633ae02/LICENSE.MIT"
+versions = ["29.0.1.1"]
+
+[[text]]
+path = "third_party_licenses/HarfBuzz-14.4.0-COPYING.txt"
+packages = ["uharfbuzz"]
+versions = ["0.56.1"]
+source = "https://raw.githubusercontent.com/harfbuzz/harfbuzz/14.4.0/COPYING"
+sha256 = "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64"
+
+[[runtime]]
+id = "uharfbuzz-native"
+name = "HarfBuzz (uharfbuzz)"
+notice_package = "uharfbuzz"
+source = "https://raw.githubusercontent.com/harfbuzz/harfbuzz/14.4.0/COPYING"
+versions = ["14.4.0"]
+
+[[text]]
+path = "third_party_licenses/freetype-FTL-2.13.2.txt"
+packages = ["freetype-py"]
+versions = ["2.5.1"]
+source = "https://gitlab.freedesktop.org/freetype/freetype/-/raw/VER-2-13-2/docs/FTL.TXT"
+sha256 = "08c135755dd589039470f1fdbb400daaabaaa50d0b366d19cebff4d22986baa1"
+
+[[runtime]]
+id = "freetype-py-native"
+name = "FreeType (freetype-py)"
+notice_package = "freetype-py"
+source = "https://gitlab.freedesktop.org/freetype/freetype/-/tree/VER-2-13-2"
+versions = ["2.13.2"]

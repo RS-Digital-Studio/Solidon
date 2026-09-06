@@ -125,6 +125,12 @@ def test_native_libraries_are_owned_by_their_distributions() -> None:
     ]
     assert components["geos"]["licenses"] == [{"expression": "LGPL-2.1-or-later"}]
     assert components["vtk native libraries"]["licenses"] == [{"expression": "BSD-3-Clause"}]
+    assert components["wgpu-native"]["version"] == "29.0.1.1"
+    assert components["wgpu-native"]["licenses"] == [{"expression": "MIT"}]
+    assert components["freetype (freetype-py)"]["licenses"] == [{"expression": "FTL"}]
+    assert components["harfbuzz (uharfbuzz)"]["licenses"] == [
+        {"expression": "LicenseRef-HarfBuzz-Old-MIT"}
+    ]
     assert properties["solidon:component-boundary"] == (
         "Declared Python runtime dependency closure with bundled native components"
     )
@@ -364,9 +370,9 @@ def test_the_finished_artifact_exposes_every_native_file_and_runtime_family(
 
 def test_windows_libffi_is_bound_to_the_pinned_cpython_build() -> None:
     """ABI 8 allein darf nicht als Quellversion in der Lizenzakte landen."""
-    # Beide Fassungen, die heute bauen: die lokale Umgebung (3.13.14) und die
-    # CI (3.13.15); PCbuild/python.props nennt in beiden libffi-3.4.4.
-    for python_version in ("3.13.14", "3.13.15"):
+    # Aktueller Bau und die weiterhin zuordenbaren alten Artefakte:
+    # PCbuild/python.props nennt jeweils libffi-3.4.4.
+    for python_version in ("3.13.14", "3.13.15", "3.14.7"):
         assert make_sbom._libffi_version(
             target_platform="win32", python_version=python_version
         ) == (

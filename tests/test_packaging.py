@@ -354,6 +354,24 @@ def test_the_customer_package_builds_the_fast_slice_core() -> None:
     assert '"app/core/slice"' in specification, "der Schichtkern reist nicht als Binärdatei mit"
 
 
+@pytest.mark.parametrize(
+    "suffix", [".cp314-win_amd64.pyd", ".cpython-314-x86_64-linux-gnu.so", ".cpython-314-darwin.so"]
+)
+def test_the_slice_package_requires_the_current_interpreter_abi(tmp_path, monkeypatch, suffix):
+    """Eine alte oder fremde Erweiterung erfüllt den Paketvertrag nicht."""
+    from tools import build_slice_core
+
+    monkeypatch.setattr(build_slice_core, "PACKAGE", tmp_path)
+    monkeypatch.setattr(build_slice_core.sysconfig, "get_config_var", lambda name: suffix)
+    for other in (".cp313-win_amd64.pyd", ".cpython-313-darwin.so", ".abi3.so"):
+        (tmp_path / f"_chain{other}").write_bytes(b"fremde ABI")
+    assert build_slice_core.current_extensions() == []
+    wanted = tmp_path / f"_chain{suffix}"
+    wanted.write_bytes(b"richtige ABI")
+    assert build_slice_core.current_extensions() == [wanted]
+    assert "SLICE_CORE = build_slice_core.current_extensions()" in SPEC.read_text(encoding="utf-8")
+
+
 def test_cleaning_the_slice_core_keeps_other_build_products(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
