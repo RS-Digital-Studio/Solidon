@@ -1,229 +1,92 @@
 # Memory — Solidon3D (F:\3D Druck)
 
+Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschreibung.
+
 ## Diese Maschine
 
-- [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) — in Dokumenten; gehört in den Passwortmanager.
-- [Release-Schlüssel](release-schluessel-fuer-version-json.md) — unterschreibt version.json; ohne ihn wird kein Update angeboten.
-- [MSVC bei VS 18](msvc-erkennung-vs18.md) — setuptools findet ihn nicht; über vcvars64.bat bauen.
-- [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Stamm je Domain; meist der SSH-Schalter.
-- [Fusion ist da](zeichnen-an-fusion-orientieren.md) — Skizzeneditor daran messen.
-- [Slicer sind da](slicer-lokal-zum-gegenmessen.md) — CuraEngine, PrusaSlicer; Vergleichslauf entscheidet.
-- [PHP lokal](php-lokal-fuer-die-gegenstelle.md) — support.php bis zur fertigen Mail prüfbar.
-- [Website im Browser](website-im-browser-pruefen.md) — QtWebEngine; heller Modus nur per Chromium-Flag.
-- [ComfyUI](comfyui-installation-d-ai.md) — auf D:\AI; Hunyuan3D 2.1 hat andere Knoten.
-- [Eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) — Ollama und ComfyUI serialisieren, VRAM freigeben.
-- [Ollama-Werkzeuge](ollama-werkzeugaufrufe-modellwahl.md) — ohne num_ctx wird der Prompt still gekürzt.
-- [Kein Schalter fürs Config-Dir](config-dir-hat-keinen-schalter.md) — eine Sonde mit save_settings trifft Roberts echte settings.json.
-- [.venv auf 3.13](lokale-umgebung-python-version.md) — sonst prüft mypy still null Dateien.
-- [.venv verliert Dateien](venv-dateien-verschwinden.md) — RECORD nennt die fehlende, check_env nicht.
-- [Installer-Probe](installer-probe-nicht-mit-fenster.md) — Robert klickt durch; {app} zeigt auf HKCU.
-- [Inno Setup 7 nicht über winget](inno-setup-7-nicht-ueber-winget.md) — winget kennt nur 6.7.3; die 7 kommt signiert aus dem GitHub-Release, per Benutzer neben die 6.
-- [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — HID und Raw Input bleiben leer.
-- [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen teilen die Dateien.
-- [Abgebrochener Lauf hinterlässt Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) — vier Prozesse ohne lebenden Elternteil; „rechnet er“ und „wem gehört er“ sind zwei Fragen.
-- [Wartebedingung kennt nur einen Zustand](wartebedingung-kennt-nur-einen-zustand.md) — ein Muster mit Umlaut trifft nie; `until !` meldet dann sofort Vollzug.
-- [make_manual kennt kein --help](make-manual-kennt-kein-help.md) — jedes Argument erzeugt alles, ohne Stempel; danach stamp_assets.py.
-- [commit-msg verlangt echte Umlaute](commit-msg-hook-verlangt-echte-umlaute.md) — ASCII-Ersatz bricht den Commit; Python-Ausgaben enden auf \r.
-- [Agenten-Suite](agenten-suite-lauf-praxis.md) — ~1,5 h je Modell; Exit 1 ist eine Quote.
-- [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) — Bedienung, Fusion, ElegooSlicer.
+- [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) · [Release-Schlüssel](release-schluessel-fuer-version-json.md) — gehören in den Passwortmanager; ohne Release-Schlüssel kein Update.
+- [MSVC bei VS 18](msvc-erkennung-vs18.md) · [Inno Setup 7](inno-setup-7-nicht-ueber-winget.md) · [Installer-Probe](installer-probe-nicht-mit-fenster.md) — vcvars64.bat; signiert aus dem GitHub-Release; Robert klickt durch.
+- [Webserver-Zugang](solidon3d-webserver-zugang.md) · [PHP lokal](php-lokal-fuer-die-gegenstelle.md) · [Website im Browser](website-im-browser-pruefen.md) — netcup-Stamm je Domain; support.php lokal; QtWebEngine.
+- [Fusion ist da](zeichnen-an-fusion-orientieren.md) · [Slicer sind da](slicer-lokal-zum-gegenmessen.md) · [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) — Vergleichswerkzeuge lokal.
+- [ComfyUI](comfyui-installation-d-ai.md) · [Eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) · [Ollama-Werkzeuge](ollama-werkzeugaufrufe-modellwahl.md) · [Agenten-Suite](agenten-suite-lauf-praxis.md) — D:\AI; VRAM serialisieren; num_ctx; ~1,5 h.
+- [Config-Dir ohne Schalter](config-dir-hat-keinen-schalter.md) · [$TEMP maschinenweit](temp-dateien-sind-maschinenweit.md) · [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — Sonden treffen Roberts echte Daten.
+- [.venv auf 3.13](lokale-umgebung-python-version.md) · [.venv verliert Dateien](venv-dateien-verschwinden.md) — sonst prüft mypy null Dateien; RECORD nennt die fehlende.
+- [Abgebrochener Lauf: Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) · [Fremde Prozesskette](fremde-prozesskette-nach-abbruch.md) · [Wartebedingung](wartebedingung-kennt-nur-einen-zustand.md) — Prozesse ohne Eltern; die Elternkette lügt nach einem Tod, nur die eigene Ausgabedatei beweist, was meins ist; `until !` mit Umlaut meldet sofort.
+- [make_manual ohne --help](make-manual-kennt-kein-help.md) · [commit-msg verlangt Umlaute](commit-msg-hook-verlangt-echte-umlaute.md) — jedes Argument erzeugt alles; ASCII bricht den Commit.
 
 ## Roberts Vorgaben
 
-- [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) — muss der Kunde raten, ist es falsch.
-- [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) — die letzten acht Jahre müssen laufen, ältere Karten sind kein Kriterium (Robert, 05.09.2026).
-- [Plattformen gleich](plattformen-funktionieren-gleich.md) — was Windows kann, können Mac und Linux; eine Lücke ist ein Registerpunkt, keine Entscheidung im Docstring.
-- [Fehlerzählung ist kein Nutzen](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) — zwölf behobene Knöpfe sagen dem Kunden, dass zwölf kaputt waren.
-- [Kundentexte sagen Version](kundentexte-sagen-version.md) — nicht „Fassung“; intern darf es bleiben.
-- [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — sieben Merkmale; Rückspiegeln ist eines.
-- [Beheben statt notieren](beheben-statt-notieren.md) — Fund → Messung → Fix → Test in dieser Sitzung.
-- [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) — je Schritt affected_tests; Tor vor dem Commit.
-- [Review vollständig](review-immer-vollstaendig.md) — jeden Diff ganz lesen.
-- [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) — test_language_rules und `ruff check .` ohne Pfad.
-- [Push und Pull selbst](git-push-pull-selbststaendig.md) — nach grüner Suite; Merge, kein Rebase.
-- [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — nicht fragen; bump_version.py.
-- [Weitergegebene Anweisungen](weitergegebene-anweisungen-gelten.md) — von einer Sitzung weitergegeben zählt.
-- [Freies Gebiet](freies-gebiet-einfach-machen.md) — bei niemandem eingetragen → machen, nicht vorlegen.
-- [Worktrees enden auf main](worktrees-enden-auf-main.md) — Probe-Bäume fallen; alles Gebaute liegt auf main.
-- [Übersetzung neu](uebersetzung-neu-statt-flicken.md) — anhängen nur, wenn der Zusatz für sich steht.
-- [Härtung trifft alten Zustand](haertung-trifft-alten-zustand.md) — die neue Prüfung deckt auf, was seit Tagen falsch steht; nach dem Upload die Endpunkte abfragen.
-- [Ein Weg, der nie bis zum Ende lief](weg-nie-bis-zum-ende-gemessen.md) — zwölf Tag-Läufe für 0.3.0, zwölf verschiedene Orte, keine Ursache zweimal.
-- [Durchsicht je Version](durchsicht-je-version.md) — „offen" wird am Code nachgemessen, nicht abgeschrieben.
+- [Aus Kundensicht perfekt](aus-kundensicht-perfekt.md) · [Fehlerzählung](zaehlung-eigener-fehler-ist-kein-kundennutzen.md) · [Version statt Fassung](kundentexte-sagen-version.md) · [Nicht nach KI klingen](nicht-nach-ki-klingen.md) — Kundentexte.
+- [Hardware-Fenster acht Jahre](hardware-fenster-acht-jahre.md) · [Plattformen gleich](plattformen-funktionieren-gleich.md) — alte Karten kein Kriterium; was Windows kann, können Mac und Linux.
+- [Beheben statt notieren](beheben-statt-notieren.md) · [Durchsicht je Version](durchsicht-je-version.md) · [Härtung trifft Altes](haertung-trifft-alten-zustand.md) — Fund → Messung → Fix → Test; „offen" am Code nachmessen.
+- [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen.
+- [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Worktrees enden auf main](worktrees-enden-auf-main.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — Merge, kein Rebase; bump_version.py.
+- [Weitergegebene Anweisungen](weitergegebene-anweisungen-gelten.md) · [Freies Gebiet](freies-gebiet-einfach-machen.md) — weitergegeben zählt; unbesetzt heißt machen.
+- [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) — anhängen nur, wenn es für sich steht; zwölf Tag-Läufe, keine Ursache zweimal.
 
 ## Produkt und Entscheidungen
 
-- [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) — SKÅDIS-Kunde, maß die Platte selbst; sein Mac-Bericht steht aus.
-- [Ralph W. Dietrich](ralph-dietrich-mac-kunde-3d-maus.md) — Mac-Zahntechniker, Anlass der 3D-Maus; sein Bericht ist die Feldmessung für Treiberweg und Update-Hinweis.
-- [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) — vier Wege, eine Szene, ehrliche Übergabe.
-- [Technische Produktreife](technische-produktreife-konzept.md) — Qualitätsvertrag, messbare KI, Updates.
-- [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker und Einmalkauf bleiben der Kurs.
-- [Modellkette vor Freigabe](modellkette-vor-erzeugerfreigabe.md) — TripoSG bleibt (Robert, 02.09.2026).
-- [Viewport: zwei Renderer messen](viewport-zwei-renderer-messen.md) — PyVista fällt; VTK direkt und pygfx hinter einem Adapter, gemessen; Aufwand egal (Robert, 05.09.2026).
-- [KI-Hinweis sperrt](ki-hinweis-sperrt-den-ersten-modellaufruf.md) — an jeder Modellgrenze erneut.
-- [Kein Rechteübergang](neu-speichern-aendert-keine-urheberschaft.md) — CC BY/SA und Provenienz bleiben.
-- [Baustein je Sprache](baustein-begriff-je-sprache.md) — bloque, bloc, blocco, bloco; pieza/peça heißt Teil.
-- [Bausteinbereich ist Vertrag](bausteinbereich-ist-ein-produktionsvertrag.md) — Parameterprodukt und Wandvertrag.
-- [Generatorrahmen](generatorrahmen-ist-teil-der-sprache.md) — Navigation und PDF-Rand übersetzen.
-- [Gestellte Daten](gestellte-daten-widersprechen-echten-daneben.md) — Erzeugnisse aus echten Läufen.
-- [Beispielmaße gegen Parameter](beispiel-masse-gegen-parameter-messen.md) — 40,01 statt 40,00; Hülle je Schritt.
-- [Bündel erbt kein Ziel](ein-buendel-erbt-nicht-das-erste-ziel.md) — Ziele und Auswege je Mitglied prüfen.
+- [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) · [Ralph W. Dietrich](ralph-dietrich-mac-kunde-3d-maus.md) — SKÅDIS-Kunde; Mac-Zahntechniker (3D-Maus); Mac-Berichte stehen aus.
+- [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) · [Technische Produktreife](technische-produktreife-konzept.md) · [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker, Einmalkauf, ehrliche Übergabe.
+- [Viewport: zwei Renderer messen](viewport-zwei-renderer-messen.md) — PyVista fällt; **GFX (pygfx) gewählt** (Robert, 06.09.2026), VTK bleibt zweiter.
+- [Modellkette vor Freigabe](modellkette-vor-erzeugerfreigabe.md) · [KI-Hinweis sperrt](ki-hinweis-sperrt-den-ersten-modellaufruf.md) · [Kein Rechteübergang](neu-speichern-aendert-keine-urheberschaft.md) — TripoSG bleibt; je Modellgrenze; Provenienz bleibt.
+- [Baustein je Sprache](baustein-begriff-je-sprache.md) · [Bausteinbereich ist Vertrag](bausteinbereich-ist-ein-produktionsvertrag.md) · [Generatorrahmen](generatorrahmen-ist-teil-der-sprache.md) — Begriffe und Rahmen je Sprache.
+- [Gestellte Daten](gestellte-daten-widersprechen-echten-daneben.md) · [Beispielmaße](beispiel-masse-gegen-parameter-messen.md) · [Bündel erbt kein Ziel](ein-buendel-erbt-nicht-das-erste-ziel.md) — aus echten Läufen; je Mitglied prüfen.
 
 ## Paket, Release, Website
 
-- [SBOM aus dem Artefakt](sbom-aus-dem-kundenartefakt.md) — das Paket liefert CPython und jede native Datei.
-- [Lizenzmanifest neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) — nach Grenzdatei neu bauen, nicht löschen.
-- [Signierung getrennt](signierung-ist-ein-eigener-vertrauensraum.md) — Windows lokal, macOS in geschützten Jobs.
-- [Download-Kasten](download-kasten-vier-pakete.md) — vier von acht Paketen; `--nachpruefen` am Ende.
-- [Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s; ein halbes Paket sieht ganz aus.
-- [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — die AppImage steht in keiner version.json; jede Prüfung überspringt sie.
-- [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) — der Code-Hash räumt nur beim Entwickler auf.
-- [Paketfix ist kein Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) — im Manifest behoben, im AppImage noch da.
-- [Rechnung warnt, sie erlaubt nicht](rechnung-warnt-sie-erlaubt-nicht.md) — was weg soll, wird benannt; „überall vorhanden" ist keine Messung.
-- [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — einmal über ein echtes Paket fahren.
-- [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen anderes.
-- [Zusage über die Umgebung](zusage-ueber-die-umgebung.md) — vorausgesetzt statt hergestellt; rot nur auf der Plattform, wo sie nicht zufällig hält.
-- [Datei zuerst, Register danach](datei-zuerst-register-danach.md) — atomar veröffentlichen, nur vorwärts aktivieren.
-- [Behoben, aber nie draußen](behobener-fehler-war-nie-draussen.md) — `git tag --contains`: war der Fehler je in einer Version?
-- [Erzeugte Datei](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md) — Befund hier, Antwort im fremden Werkzeug.
+- [SBOM aus dem Artefakt](sbom-aus-dem-kundenartefakt.md) · [Lizenzmanifest neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) · [Signierung getrennt](signierung-ist-ein-eigener-vertrauensraum.md) — Paketinhalt, Lizenzen, Signatur.
+- [Download-Kasten](download-kasten-vier-pakete.md) · [Upload großer Dateien](website-upload-grosse-dateien.md) · [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — vier Pakete; ~1,8 MB/s; AppImage ohne Prüfer.
+- [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) · [Paketfix ≠ Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) · [Behoben, nie draußen](behobener-fehler-war-nie-draussen.md) — Paket sieht anderes; `git tag --contains`.
+- [Rechnung warnt](rechnung-warnt-sie-erlaubt-nicht.md) · [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — was weg soll, wird benannt; einmal über ein echtes Paket fahren.
+- [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) · [Zusage über die Umgebung](zusage-ueber-die-umgebung.md) — Windows-Tor und Linux-CI sehen anderes.
+- [Datei zuerst, Register danach](datei-zuerst-register-danach.md) · [Erzeugte Datei](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md) — atomar veröffentlichen; Antwort im fremden Werkzeug.
 
 ## Qt, VTK, Oberfläche
 
-- [VTK/Qt-Referenzen](vtk-qt-referenzen-halten-zu-lange.md) — wer hält, was weg sein sollte?
-- [Renderfenster bleibt 160x160](renderfenster-bleibt-briefmarkengross.md) — egal wie groß das Widget ist; in Bildpunkten misst man die Umgebung.
-- [VTK sagt ja und tut nichts](vtk-sagt-ja-und-tut-nichts.md) — Hardware-Picker treffen hier nichts, Depth Peeling läuft nie.
-- [Verwaiste Widgets](verwaiste-widgets-sterben-im-falschen-moment.md) — gc.disable trennt Zeitpunkt und Zerstörung.
-- [Prüfstand misst zu früh](qt-pruefstand-misst-zu-frueh.md) — processEvents stellt DeferredDelete nicht zu.
-- [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) — isVisible und hasFocus antworten falsch.
-- [Gesetzt ist nicht gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) — QMenu verschluckt Tooltips.
-- [Suite ohne Stylesheet](suite-faehrt-ohne-stylesheet.md) — ein Farbtest misst Windows.
-- [Signal am falschen Slot](signal-passt-an-den-falschen-slot.md) — Qt verbindet nach Stelligkeit.
-- [Warnungsmarke ist Zustand](warnungsmarke-ist-semantischer-zustand.md) — Aktoren überleben keinen Szenenaufbau.
-- [Kalenderdatum](kalenderdatum-folgt-appsprache.md) — `QLocale()` ohne Argument folgt dem Prozess.
-- [Sprachwechsel: zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert.
-- [Startfläche](startflaeche-braucht-breite-und-skalierung.md) — Breite und Skalierung getrennt prüfen.
-- [Oberfläche von Hand](oberflaeche-von-hand-fahren.md) — echte Plattform, Dialoge und Popups abfangen.
-- [Prüfstand auf dem Klickweg](pruefstand-geht-den-weg-der-oberflaeche.md) — der Kern direkt misst ohne Klick.
-- [Katalogschlüssel sind Wörter](katalog-schluessel-sind-woerter.md) — ein neues Label kapert einen Quelltext.
-- [Marke im span zerteilt](marke-im-span-zerteilt.md) — ein Tag im Namen entkommt jeder Suche.
-- [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) — {platzhalter} bleibt im Kern stehen.
-- [Fehlertexte nur Titel](fehlertexte-nur-titel.md) — der Grund steht im detail.
-- [Session.apply meldet](session-apply-meldet-statt-zu-werfen.md) — ein `try` läuft ins Leere; Ergebnis fragen.
-- [Ops am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung.
-- [Register zählen](register-zaehlen-load-operations.md) — ohne load_operations() fehlen die Bausteine.
-- [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) — freigegeben bei A, ausgeführt bei B.
-- [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) — Suffix atomar ersetzen, ersten Klick sperren.
-- [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — durchgereicht ist nicht gerufen.
-- [Rezept ist der Fund](rezept-ist-der-fund-op-ist-die-ursache.md) — die Prüfung fehlte in der Operation.
+- [VTK/Qt-Referenzen](vtk-qt-referenzen-halten-zu-lange.md) · [Verwaiste Widgets](verwaiste-widgets-sterben-im-falschen-moment.md) · [Prüfstand misst zu früh](qt-pruefstand-misst-zu-frueh.md) — wer hält; gc.disable; DeferredDelete.
+- [Renderfenster 160x160](renderfenster-bleibt-briefmarkengross.md) · [VTK sagt ja, tut nichts](vtk-sagt-ja-und-tut-nichts.md) — Bildpunkte messen die Umgebung; Picker und Depth Peeling laufen nie.
+- [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) · [Gesetzt ≠ gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) · [Suite ohne Stylesheet](suite-faehrt-ohne-stylesheet.md) — isVisible, Tooltips, Farben nur am Fenster.
+- [Signal am falschen Slot](signal-passt-an-den-falschen-slot.md) · [Warnungsmarke ist Zustand](warnungsmarke-ist-semantischer-zustand.md) — Stelligkeit; Aktoren überleben keinen Szenenaufbau.
+- [Kalenderdatum](kalenderdatum-folgt-appsprache.md) · [Sprachwechsel](sprachwechsel-zwei-schritte.md) · [Katalogschlüssel](katalog-schluessel-sind-woerter.md) · [Marke im span](marke-im-span-zerteilt.md) — Sprache und Kataloge.
+- [Startfläche](startflaeche-braucht-breite-und-skalierung.md) · [Oberfläche von Hand](oberflaeche-von-hand-fahren.md) · [Klickweg](pruefstand-geht-den-weg-der-oberflaeche.md) — echte Plattform, Klickweg, Skalierung.
+- [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) · [Fehlertexte nur Titel](fehlertexte-nur-titel.md) · [Session.apply meldet](session-apply-meldet-statt-zu-werfen.md) — Titel, detail, Signal statt try.
+- [Ops am Stück](ops-reihendurchlauf-kundensicht.md) · [Register zählen](register-zaehlen-load-operations.md) · [Rezept ist der Fund](rezept-ist-der-fund-op-ist-die-ursache.md) — load_operations(); Prüfung in der Op.
+- [Knopf und Handlung](knopf-und-handlung-fragen-verschieden.md) · [Reparatur vor den Fehler](reparatur-muss-vor-den-fehler.md) · [Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — Klickketten bis zum Ende.
 - [Architektur-Sonde](architektur-sonde-type-checking.md) — TYPE_CHECKING ausschließen; Kernänderung = Suite.
 
 ## Messen und Prüfen
 
-- [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) — fünf Bauarten mit ihren Warnzeichen.
-- [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — ansehen, mutieren, durchfahren.
-- [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) — viermal an einem Abend: Notiz gekannt, Fehler gemacht.
-- [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) — LRU zählt Einträge; wiegen die verschieden, hält er ein Gigabyte.
-- [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) — der erste Fall gibt die Größenordnung, nicht die Grenze.
-- [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — dazwischen sind beide Antworten falsch.
-- [Roh gegen gerendert](roh-gegen-gerendert-vergleichen.md) — Maskierung mitprüfen.
-- [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — nach der Verneinung suchen.
-- [Verweis ins Leere](verweis-auf-nichtexistierendes.md) — liest sich so glatt wie ein gültiger.
-- [Wächter sieht nur Getanes](waechter-sieht-nur-das-getane.md) — blind für das Framework.
-- [Regel gilt weiter als gemeint](regel-gilt-weiter-als-gemeint.md) — richtige Regel, ungeprüfter Rand.
-- [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) — fragte „voll?" statt „was drin?".
-- [Verkürzung ist eine Messung](jede-verkuerzung-ist-eine-messung.md) — `head`, `[:165]`, Kontextfenster, fehlende Wortgrenze.
-- [Testprojekt trifft nicht](testprojekt-trifft-den-fall-nicht.md) — selbst gebaut enthält, was man hineinlegt.
-- [Voraussetzung nur im Namen](voraussetzung-im-namen-statt-hergestellt.md) — fünf Korpusse formal sauber, unbrauchbar.
-- [Gegenprobe bei neuer Bauart](gegenprobe-bei-geaenderter-bauart.md) — die Mutation baut die alte Bauart nach.
-- [Zufall ist keine Zuordnung](zufallsziehung-ist-keine-zuordnung.md) — erst eine Verteilung ordnet zu.
-- [Familie ≠ Auslöser](bekannte-familie-erklaert-nicht-den-ausloeser.md) — Gegenprobe auf dem Stand davor.
-- [Verursacher wird gemessen](verursacher-wird-gemessen-nicht-gelesen.md) — `git show --stat` lesen.
-- [Absturz-Frame](absturz-frame-ist-die-naechste-allokation.md) — wandert er, ist keine Stelle die Ursache.
-- [Speicherriss ohne auslösende Zeile](speicherriss-hat-keine-ausloesende-zeile.md) — zwei leere dicts rissen die Datei; fünf Proben an der Zeile blieben rot.
-- [Zwei Zeilen](zwei-zeilen-sind-nicht-die-funktion.md) — lesen, was mit dem Rückgabewert geschieht.
-- [Versatz sieht aus wie viele Abweichungen](versatz-sieht-aus-wie-viele-abweichungen.md) — zwei Listen über den Index, eine hat einen Eintrag mehr; echte Abweichungen sind punktuell.
-- [Suche prüft ihre Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) — nichts getroffen sieht aus wie nichts da.
-- [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene.
-- [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) — zwei Messungen derselben falschen Frage.
-- [Zahl beschreibt die Regel](zahl-beschreibt-die-regel-nicht-das-bild.md) — getComputedStyle liest den Basiswert.
-- [Zustandswert widerlegt keinen Hänger](zustandswert-widerlegt-keinen-haenger.md) — nur eine Differenz trennt.
-- [Exakte Passung ist kein Beweis](exakte-passung-ist-kein-beweis.md) — die Kette dahinter war erfunden.
-- [Prüfstand misst seine Nachstellung](pruefstand-misst-seine-nachstellung.md) — die alte Bauart nachgebaut statt geholt; fünf von fünf rot, kein Fehler.
-- [any misst den Rand](any-ueber-einen-flicken-misst-den-rand.md) — „grenzt an" statt „ist"; jeder Fleck hat einen Rand.
-- [Periode antwortet auf Teiler](periodizitaet-antwortet-auch-auf-teiler.md) — p/2 kann höher stehen als p; der größte Gipfel gilt.
-- [Welche Bedingung entscheidet allein](welche-bedingung-entscheidet-allein.md) — fünf sahen tragend aus, eine war es.
-- [Sondenbau](sondenbau.md) — im großen Lauf misst eine Sonde den Unterschied.
-- [Hilfsmodul verstellt den Suchpfad](hilfsmodul-verstellt-den-suchpfad.md) — run_ui_audit setzt `F:\3D Druck` an sys.path[0]; der Fix sieht wirkungslos aus.
-- [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) — grün heißt zuerst „die Probe griff nicht".
-- [Messung trägt nur am Ort](messung-traegt-nur-am-ort-ihrer-messung.md) — echt gemessen, woanders gültig.
-- [Docstring nennt den ungefahrenen Weg](docstring-nennt-den-weg-den-der-test-nicht-faehrt.md) — die Begründung sichert zu, was der Rumpf nicht ruft.
-- [Gefahren ist nicht gefordert](gefahren-ist-nicht-gefordert.md) — der gemeinte Test hieß anders.
-- [Fortschritt ≠ collect](fortschrittszeichen-zaehlen-nicht-wie-collect.md) — das n-te `F` ist nicht die n-te Zeile.
-- [Hintergrundlauf meldet die Hülle](hintergrundlauf-meldet-seinen-wrapper.md) — 282 von 448 bei Exit 0; Zeichen gegen Soll zählen.
-- [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy davor, Suite danach; der Reexport fehlt beiden.
-- [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „heilt sich später“ setzt jemanden voraus, der heilen kann; „trifft heute noch nicht“ ist dieselbe Behauptung in der Gegenwart.
-- [Fehlalarm zu mehreren](fehlalarm-den-mehrere-fuer-einen-halten.md) — verrechnet ist keine bloße Messung.
-- [Beleg im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — erst suchen, dann eine Lücke behaupten.
-- [Zusicherung wird stumpf](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) — anderswo geändert, der Test bleibt grün.
-- [Test auf Abwesenheit](test-der-eine-abwesenheit-festschreibt.md) — meldet, wenn die Begründung fürs Fehlen wegfällt.
-- [Zahl im Fließtext](zahl-im-fliesstext-hat-begleiter.md) — daneben rechnet eine zweite mit.
-- [Vorgabelage bricht fremde Tests](vorgabelage-bricht-fremde-tests.md) — 17 rot in 5 Dateien, keine vom Einlesen.
-- [Abgelesene Zahl altert](abgelesene-zahl-altert-still.md) — stimmt nur in ihrer Entstehungslage.
-- [Messung galt dem Stand davor](messung-galt-fuer-den-stand-davor.md) — nach dem Umbau ist sie über gestern.
-- [Spanne ist keine Zahl](eine-spanne-ist-keine-zahl.md) — Vereinheitlichen frisst das Bewegliche.
-- [Eigener Messfehler](eigener-messfehler-widerlegt-den-befund-nicht.md) — zwei getrennte Fragen.
-- [Am Eingang drehen](am-eingang-drehen.md) — antwortet die Messung immer gleich, misst sie nichts.
-- [Form festhalten, eine Achse variieren](form-festhalten-eine-achse-variieren.md) — `subdivide` trennt Form von Dreieckszahl; Modellvergleich und Reihe beantworten Verschiedenes.
-- [Eingestellt ≠ Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — `ch` ist nicht Zeichen, String nicht Bild.
-- [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md) — je schlimmer der Fall, desto stiller.
-- [Benannte Falle schützt nicht](benannte-falle-schuetzt-nicht.md) — der Satz liest sich als Beleg.
-- [Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — bis ein Fall mit bekanntem Ausgang es prüft.
-- [Iterierte die Schlüssel](messung-iterierte-die-schluessel.md) — `for o in <dict>` gibt Schlüssel.
-- [Wächter-Reichweite](waechter-reichweite-nur-im-kommentar.md) — der Kommentar zählte, was das Muster nie traf.
-- [Wächter lesen Kommentare](waechter-lesen-kommentare-mit.md) — verbotene Muster nie zitieren.
-- [Zusage nur in der Oberfläche](zusage-die-nur-die-oberflaeche-einloest.md) — applies_to galt im Menü, nicht im Kern; Chat und Kommandozeile gingen vorbei.
-- [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) — quer zur Achse sind sie einer.
-- [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — prüft Aktualität statt Richtigkeit.
-- [Rückbau kann scheitern](rueckbau-kann-scheitern.md) — `finally` garantiert den Lauf, nicht das Gelingen.
-- [Fix macht nicht grün](fix-der-nicht-gruen-macht.md) — dann war die Diagnose falsch.
-- [Schutz verliert ein Geschwister](schutz-verliert-ein-geschwister.md) — den alten Namen überall grepen.
-- [Zwei Dinge, eines geprüft](zwei-dinge-nur-eines-geprueft.md) — die geteilte Zahl ist nur der häufigste Fall; auch eine Aufzählung im Docstring altert.
-- [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen.
-- [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — ruff format bricht den Suchtext um; der Patch greift halb.
-- [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) — Hauptwert geprüft, Nachbar nicht; ein Feld von sieben.
-- [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
-- [Fremde Erklärung altert mit](fremde-erklaerung-altert-mit.md) — beim zweiten Mal prüfen, nicht erklären.
-- [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — allein fahren, bevor man Regression glaubt.
-- [Erzeugtes nicht in der CI](erzeugtes-laeuft-nicht-in-der-ci.md) — Marker `rendered`, kuratierte Liste in test_toolchain; neue eintragen.
-- [rtree-Abstürze](rtree-abstuerze-im-langen-lauf.md) — die volle Suite stirbt; portionsweise fahren.
-- [Native Bibliotheken](native-bibliotheken-speicher.md) — rtree, _elementtree, Abriss: eine Familie.
-- [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) — die Hülle überlebt; je Lauf ein Ordner.
-- [Schreibfehler auf eine vorhandene Datei](schreibfehler-auf-eine-vorhandene-datei.md) — OSError 22/13: eigener Handle oder fremde Sitzung; daneben schreiben und umbenennen.
-- [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) — eigener Prozessbaum, Blätter zuerst.
+- [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) · [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) · [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) · [Am Eingang drehen](am-eingang-drehen.md) — jede Messung antwortet auf ihre eigene Frage.
+- [Was die Suite nicht findet](was-die-suite-nicht-findet.md) · [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) · [Benannte Falle](benannte-falle-schuetzt-nicht.md) · [Fremde Erklärung altert](fremde-erklaerung-altert-mit.md) — ansehen, mutieren; Notiz gekannt, Fehler gemacht.
+- [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) · [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) · [Zwei Schwellen](zwei-schwellen-eine-frage.md) · [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md) — Grenzen.
+- [Roh gegen gerendert](roh-gegen-gerendert-vergleichen.md) · [Zahl beschreibt die Regel](zahl-beschreibt-die-regel-nicht-das-bild.md) · [Eingestellt ≠ Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — das Bild misst, nicht der Wert.
+- [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) · [Verweis ins Leere](verweis-auf-nichtexistierendes.md) · [Docstring, ungefahrener Weg](docstring-nennt-den-weg-den-der-test-nicht-faehrt.md) · [Zwei Dinge, eines geprüft](zwei-dinge-nur-eines-geprueft.md) — Texte.
+- [Wächter sieht nur Getanes](waechter-sieht-nur-das-getane.md) · [Regel gilt weiter](regel-gilt-weiter-als-gemeint.md) · [Wächter zählt das Falsche](waechter-zaehlt-das-falsche.md) · [Wächter-Reichweite](waechter-reichweite-nur-im-kommentar.md) · [Wächter lesen Kommentare](waechter-lesen-kommentare-mit.md) — Wächter.
+- [Verkürzung ist Messung](jede-verkuerzung-ist-eine-messung.md) · [Suche prüft Trefferzahl](suche-prueft-ihre-eigene-trefferzahl.md) · [Iterierte die Schlüssel](messung-iterierte-die-schluessel.md) · [Versatz sieht aus wie viele](versatz-sieht-aus-wie-viele-abweichungen.md) — Suchen.
+- [Testprojekt trifft nicht](testprojekt-trifft-den-fall-nicht.md) · [Voraussetzung nur im Namen](voraussetzung-im-namen-statt-hergestellt.md) · [Nachstellung](pruefstand-misst-seine-nachstellung.md) · [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — Testbau.
+- [Gegenprobe bei neuer Bauart](gegenprobe-bei-geaenderter-bauart.md) · [Mutation trifft nicht](mutation-die-den-fall-nicht-trifft.md) · [Fix macht nicht grün](fix-der-nicht-gruen-macht.md) · [Test auf Abwesenheit](test-der-eine-abwesenheit-festschreibt.md) — Mutation.
+- [Familie ≠ Auslöser](bekannte-familie-erklaert-nicht-den-ausloeser.md) · [Verursacher wird gemessen](verursacher-wird-gemessen-nicht-gelesen.md) · [Welche Bedingung allein](welche-bedingung-entscheidet-allein.md) · [Zufall ≠ Zuordnung](zufallsziehung-ist-keine-zuordnung.md) — Ursache.
+- [Absturz-Frame](absturz-frame-ist-die-naechste-allokation.md) · [Speicherriss ohne Zeile](speicherriss-hat-keine-ausloesende-zeile.md) · [rtree-Abstürze](rtree-abstuerze-im-langen-lauf.md) · [Native Bibliotheken](native-bibliotheken-speicher.md) — Abrisse: eine Familie.
+- [Zwei Zeilen](zwei-zeilen-sind-nicht-die-funktion.md) · [Exakte Passung](exakte-passung-ist-kein-beweis.md) · [Zustandswert](zustandswert-widerlegt-keinen-haenger.md) · [Beleg im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — Code lesen.
+- [any misst den Rand](any-ueber-einen-flicken-misst-den-rand.md) · [Periode antwortet auf Teiler](periodizitaet-antwortet-auch-auf-teiler.md) · [Form festhalten](form-festhalten-eine-achse-variieren.md) · [Spanne ≠ Zahl](eine-spanne-ist-keine-zahl.md) — Flächen, Reihen.
+- [Sondenbau](sondenbau.md) · [Hilfsmodul verstellt Suchpfad](hilfsmodul-verstellt-den-suchpfad.md) · [Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) · [Eigener Messfehler](eigener-messfehler-widerlegt-den-befund-nicht.md) — Sonden.
+- [Gefahren ≠ gefordert](gefahren-ist-nicht-gefordert.md) · [Fortschritt ≠ collect](fortschrittszeichen-zaehlen-nicht-wie-collect.md) · [Hintergrundlauf meldet Hülle](hintergrundlauf-meldet-seinen-wrapper.md) · [Vier Torläufe](vier-torlaeufe-ein-stand.md) — Läufe und Exit-Codes.
+- [Messung nur am Ort](messung-traegt-nur-am-ort-ihrer-messung.md) · [Abgelesene Zahl altert](abgelesene-zahl-altert-still.md) · [Stand davor](messung-galt-fuer-den-stand-davor.md) · [Zahl im Fließtext](zahl-im-fliesstext-hat-begleiter.md) — Zahlen altern.
+- [Prognose ohne Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) · [Fehlalarm zu mehreren](fehlalarm-den-mehrere-fuer-einen-halten.md) · [Zusicherung wird stumpf](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) · [Zusage nur in der Oberfläche](zusage-die-nur-die-oberflaeche-einloest.md) — Zusagen.
+- [Vorgabelage bricht Tests](vorgabelage-bricht-fremde-tests.md) · [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) · [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) · [Speicherzusage zu dritt](speicherzusage-zu-dritt.md) · [Erzeugtes nicht in der CI](erzeugtes-laeuft-nicht-in-der-ci.md) — Lage; die Suite auch aus einem Worktree nur unter gate_lock, sonst reißt die Speicherzusage.
+- [Rückbau kann scheitern](rueckbau-kann-scheitern.md) · [Schutz verliert Geschwister](schutz-verliert-ein-geschwister.md) · [Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) · [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — nach dem Fix.
+- [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) · [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
+- [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) · [Schreibfehler auf Datei](schreibfehler-auf-eine-vorhandene-datei.md) · [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) · [Hintergrundlauf stirbt mit der Sitzung](hintergrundlauf-stirbt-mit-der-sitzung.md) — je Lauf ein Ordner; OSError 22/13; Blätter zuerst; lange Läufe abkoppeln.
 
 ## Geteilter Baum und Shell
 
-- [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Baum ändert sich mitten in der Sitzung.
-- [Parallele Sitzung im Baum](parallele-sitzung-im-arbeitsbaum.md) — Fremdes aussortieren, privater Index.
-- [Fremder Zwischenstand](fremder-zwischenstand-statt-repository.md) — auf HEAD messen, sonst gilt die Antwort für keinen Baum.
-- [Werkzeug las mitten im Schreiben](werkzeug-las-mitten-im-schreiben.md) — identische `-`/`+`-Zeile im Diff; echt gemessen und über nichts.
-- [Sitzung sendet ins Leere](sitzung-sendet-ohne-erreichbar-zu-sein.md) — der Kanal ist nicht beidseitig.
-- [Git-Identität mitgeben](git-identitaet-mitgeben.md) — sonst Exit 128.
-- [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — neue Maschine: link_memory.py.
-- [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) — `katalog[k]=v` fragt nicht; `git diff HEAD --numstat` findet es.
-- [Geteilter Index hält Altes](geteilter-index-haelt-alten-stand.md) — committet Fremdes als gelöscht.
-- [Index altert](index-altert-zwischen-lesen-und-commit.md) — Sorgfalt vergrößert das Fenster.
-- [Sollprobe gegen eigenen Hash](sollprobe-liest-den-fremden-commit.md) — nie gegen HEAD.
-- [Commit-Meldung ist geteilt](commit-meldung-ist-eine-geteilte-datei.md) — den Betreff der Ausgabe lesen.
-- [Privater Index: fester Name](privater-index-fester-name.md) — `$$` zeigt beim nächsten Aufruf ins Leere.
-- [Privater Index: Spuren](privater-index-hinterlaesst-spuren.md) — eine neue Datei steht danach als gelöscht.
-- [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — nicht den fremden Stand einer gemeinsamen Datei.
-- [Privater Index schützt die Kataloge nicht](privater-index-schuetzt-die-kataloge-nicht.md) — fünf fremde Zeilen in en.json gingen unter meiner Meldung hinaus.
-- [Blob-Commit verliert](blob-commit-verliert-den-wettlauf.md) — „cannot lock ref" heißt nicht passiert.
-- [Patchskript schneidet Fremdes](patchskript-schneidet-fremdes-weg.md) — „ab Marke bis Ende" löscht den Nachbarn.
-- [Sicherung ist Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — spielt den ganzen Stand von damals zurück.
-- [Probe-Worktree altert](probe-worktree-altert.md) — gegen den aktuellen HEAD prüfen.
-- [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) — was den Bestand ändert, in einen eigenen Worktree.
-- [Geteilter Baum: ein Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — `git diff HEAD` vorher.
-- [Zeuge wird überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) — vor jeder Wiederholung den Diff lesen.
-- [Fremde Zwischenstände](fremde-zwischenstaende-verfaelschen-messungen.md) — erst den Zeitstempel der Datei lesen.
-- [Probe mit Commits](probe-die-commits-erzeugt-schaltet-push-ab.md) — der post-commit läuft in jedem Worktree.
+- [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) · [Parallele Sitzung im Baum](parallele-sitzung-im-arbeitsbaum.md) · [Fremder Zwischenstand](fremder-zwischenstand-statt-repository.md) — Fremdes aussortieren; auf HEAD messen.
+- [Werkzeug las mitten im Schreiben](werkzeug-las-mitten-im-schreiben.md) · [Zeuge überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) · [Fremde Zwischenstände](fremde-zwischenstaende-verfaelschen-messungen.md) · [Ein Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — Diff vorher.
+- [Sitzung sendet ins Leere](sitzung-sendet-ohne-erreichbar-zu-sein.md) · [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — Kanal einseitig; Exit 128; link_memory.py.
+- [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) · [Index schützt Kataloge nicht](privater-index-schuetzt-die-kataloge-nicht.md) — `git diff HEAD --numstat` vor dem Commit.
+- [Geteilter Index hält Altes](geteilter-index-haelt-alten-stand.md) · [Index altert](index-altert-zwischen-lesen-und-commit.md) · [Sollprobe](sollprobe-liest-den-fremden-commit.md) · [Commit-Meldung geteilt](commit-meldung-ist-eine-geteilte-datei.md) — Index und Commit.
+- [Privater Index: fester Name](privater-index-fester-name.md) · [Spuren](privater-index-hinterlaesst-spuren.md) · [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) · [Blob-Commit verliert](blob-commit-verliert-den-wettlauf.md) — privater Index.
+- [Patchskript schneidet Fremdes](patchskript-schneidet-fremdes-weg.md) · [Sicherung ist Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — Patch und Sicherung nehmen Fremdes mit.
+- [Probe-Worktree altert](probe-worktree-altert.md) · [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) · [Probe mit Commits](probe-die-commits-erzeugt-schaltet-push-ab.md) — eigener Worktree, gegen HEAD; post-commit läuft überall.
 - [Deutscher Text nicht durch die Shell](deutscher-text-geht-nicht-durch-die-shell.md) — Write-Datei, `-F`; `!r`; newline beidseits.

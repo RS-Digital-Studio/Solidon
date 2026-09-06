@@ -1600,7 +1600,7 @@ def _available() -> bool:
         return False
     from app.ui.render import choice
 
-    return choice.available(choice.backend())
+    return choice.effective_backend() is not None
 
 
 def _effective_platform() -> str:
@@ -3593,6 +3593,9 @@ class Viewport(QWidget):
         """Für welche Kameralage und welche Körper zuletzt nach Tiefe geordnet
         wurde — die Ordnung läuft an der Zeichenstelle und darf dort nichts
         kosten, solange sich nichts bewegt."""
+        self._bed_visibility_result: EvaluationResult | None = None
+        self._bed_visibility_objects: tuple[ObjectId, ...] = ()
+        self._bed_has_sunken_body = False
         self._edge_actors: dict[ObjectId, Item] = {}
         self._shadow_actors: list[Any] = []
         self._shadow_owners: dict[ObjectId, list[Any]] = {}
@@ -4265,15 +4268,41 @@ class Viewport(QWidget):
         Die Frage entscheidet, ob die Platte durchscheinend wird — und sie
         wird an der **Szene** gestellt, nicht am Bild: Ein Körper, der unten
         heraussteht, tut das aus jeder Kamerastellung.
+
+        Maßgeblich bleibt die vollständig aufgebaute Szene, während die nächste
+        rechnet. Die Entscheidung gilt bis zu deren Wechsel oder einer anderen
+        sichtbaren Körpermenge; ein Kamerabild fragt keine exakten CAD-Grenzen
+        erneut ab. Schnitt- und Vorschaunetze ersetzen diese Dokumentgrenzen nicht.
         """
-        if self._result is None:
+        result = self._actor_scene if self._actor_scene is not None else self._result
+        if result is None:
+            self._bed_visibility_result = None
+            self._bed_visibility_objects = ()
+            self._bed_has_sunken_body = False
             return False
-        for object_id, entry in self._result.scene.objects.items():
-            if not self._in_view(object_id, entry):
-                continue
-            if float(entry.mesh.bounds.minimum[2]) < -BED_SURFACE_DROP - EPS_GEOM:
-                return True
-        return False
+        if self._actor_scene is not None:
+            visible = tuple(
+                object_id
+                for object_id in result.scene.objects
+                if (actor := self._actors.get(object_id)) is not None and actor.visible()
+            )
+        else:
+            visible = tuple(
+                object_id
+                for object_id, entry in result.scene.objects.items()
+                if self._in_view(object_id, entry)
+            )
+        if self._bed_visibility_result is result and self._bed_visibility_objects == visible:
+            return self._bed_has_sunken_body
+        sunken = any(
+            float(result.scene.objects[object_id].mesh.bounds.minimum[2])
+            < -BED_SURFACE_DROP - EPS_GEOM
+            for object_id in visible
+        )
+        self._bed_visibility_result = result
+        self._bed_visibility_objects = visible
+        self._bed_has_sunken_body = sunken
+        return sunken
 
     def _apply_bed_transparency(self) -> None:
         """Setzt die Deckkraft der Bettflächen nach dieser Regel.
@@ -7625,20 +7654,27 @@ class Viewport(QWidget):
         on_layer = self._layer is not None and self._section is None and not explicit
 
         def visible(points: Any) -> Any:
-            """Punkte in beiden sichtbaren Halbräumen, bei Schichten auf der Ebene."""
+            """Maske für beide sichtbaren Halbräume, bei Schichten für die Ebene."""
             distances = points @ normals.T - positions
             keep = np.all(distances <= EPS_GEOM, axis=1)
             if on_layer:
                 keep &= np.abs(distances[:, 0]) <= EPS_GEOM
-            return points[keep]
+            return keep
 
         raw = getattr(entry.mesh, "raw", None)
         indices = self._face_indices(entry.id, feature_id)
         if raw is None or not indices:
-            points = visible(np.asarray(centre, dtype=float).reshape(1, 3))
-            return points[0] if len(points) else None
+            points = np.asarray(centre, dtype=float).reshape(1, 3)
+            return points[0] if visible(points)[0] else None
         triangles = np.asarray(raw.vertices[raw.faces[list(indices)]], dtype=float)
-        pieces = [visible(triangles.reshape(-1, 3))]
+        points = triangles.reshape(-1, 3)
+        mask = visible(points)
+        pieces = [points[mask]]
+        # Jede konvexe Kombination bleibt nur innerhalb desselben Dreiecks
+        # sicher auf der Fläche. Die Kennungen zählen im ausgewählten Patch,
+        # damit große Netze keinen Speicher für unbeteiligte Dreiecke benötigen.
+        triangle_ids = np.repeat(np.arange(len(triangles)), 3) if feature.kind == "face" else None
+        owners = [triangle_ids[mask]] if triangle_ids is not None else []
         left = triangles[:, [0, 1, 2]].reshape(-1, 3)
         right = triangles[:, [1, 2, 0]].reshape(-1, 3)
         for normal, position in zip(normals, positions, strict=True):
@@ -7651,12 +7687,28 @@ class Viewport(QWidget):
                 continue
             fraction = before[crossing] / (before[crossing] - after[crossing])
             points = left[crossing] + (right[crossing] - left[crossing]) * fraction[:, None]
-            pieces.append(visible(points))
+            mask = visible(points)
+            pieces.append(points[mask])
+            if triangle_ids is not None:
+                owners.append(triangle_ids[crossing][mask])
         points = np.vstack(pieces)
         if not len(points):
             return None
-        anchor = visible(np.asarray(centre, dtype=float).reshape(1, 3))
-        return anchor[0] if len(anchor) else points.mean(axis=0)
+        if triangle_ids is not None:
+            identifiers = np.concatenate(owners)
+            counts = np.bincount(identifiers, minlength=len(triangles))
+            occupied = counts > 0
+            sums = np.column_stack(
+                [
+                    np.bincount(identifiers, weights=points[:, axis], minlength=len(triangles))
+                    for axis in range(3)
+                ]
+            )
+            candidates = sums[occupied] / counts[occupied, None]
+            distances = np.sum((candidates - np.asarray(centre, dtype=float)) ** 2, axis=1)
+            return candidates[int(np.argmin(distances))]
+        anchor = np.asarray(centre, dtype=float).reshape(1, 3)
+        return anchor[0] if visible(anchor)[0] else points.mean(axis=0)
 
     def show_candidates(
         self,

@@ -1,0 +1,207 @@
+{
+  "source": "final-source-v7",
+  "scope": "Native Screenshots: Karten, Labels, Marker, Merkmals- und Schnittanschluss; keine neuen Prozesse oder Tests für diese Sichtprüfung.",
+  "cases": [
+    {
+      "backend": "gfx",
+      "index": 1,
+      "run_id": "18f3a5e9563849fdb834b3bc02c3ac28",
+      "images": [
+        "all-features-before-layers.png",
+        "04-layers-first.png",
+        "04-layers-middle.png",
+        "04-layers-last.png",
+        "section-z.png",
+        "feature-00-hole.png",
+        "feature-03-face.png",
+        "theme-light.png",
+        "theme-dark.png",
+        "gesture-body-held-preview.png",
+        "30-feature-01-resize_hole-plus-0.5-mm.png"
+      ],
+      "findings": [
+        {
+          "kind": "sichtbarer Anschluss mit offener Ursache",
+          "image": "30-feature-01-resize_hole-plus-0.5-mm.png",
+          "detail": "Panel und 3D-Label zeigen Bohrung 1 nach der Änderung; im sichtbaren Baum beginnt die Liste bei Bohrung 2 und trägt keine aktive Merkmalszeile. Die Bilder belegen nicht, ob die Zeile weiter unten einsortiert ist oder die Baumwahl fehlt."
+        }
+      ],
+      "observations": [
+        "Keine überlappenden automatischen Namen; Marker und Leader bleiben lesbar.",
+        "Erste, mittlere und letzte Schicht beschriften sichtbare Schnittanker; kein global schwebender Labelteppich.",
+        "Merkmalsmaß und Verlauf folgen sichtbarer Bohrungsänderung.",
+        "Karten und Labelränder verdecken den dargestellten Körper nicht."
+      ]
+    },
+    {
+      "backend": "vtk",
+      "index": 1,
+      "run_id": "9ec54c1328344590b9189d38d2efb2d1",
+      "images": [
+        "all-features-before-layers.png",
+        "04-layers-first.png",
+        "04-layers-middle.png",
+        "04-layers-last.png",
+        "section-z.png",
+        "feature-00-hole.png",
+        "theme-light.png",
+        "theme-dark.png",
+        "gesture-body-held-preview.png",
+        "30-feature-01-resize_hole-plus-0.5-mm.png"
+      ],
+      "findings": [
+        {
+          "kind": "sichtbarer Anschluss mit offener Ursache",
+          "image": "30-feature-01-resize_hole-plus-0.5-mm.png",
+          "detail": "Panel und 3D-Label zeigen Bohrung 1 nach der Änderung; im sichtbaren Baum beginnt die Liste bei Bohrung 2 und trägt keine aktive Merkmalszeile. Die Bilder belegen nicht, ob die Zeile weiter unten einsortiert ist oder die Baumwahl fehlt."
+        }
+      ],
+      "observations": [
+        "Rechteckige Textfelder vollständig und lesbar, keine Überlappung; Leader und Marker bleiben verbunden.",
+        "Schichtfolge trägt nur sichtbare Schnittanker und lesbare Höhenangaben.",
+        "Körperzug und Bohrungsänderung zeigen passende Auswahl-/Bearbeitungsanschlüsse.",
+        "Karten und Felder lassen den Körper frei."
+      ]
+    },
+    {
+      "backend": "gfx",
+      "index": 13,
+      "run_id": "70eee8145a834144ae9f614f22a3496c",
+      "images": [
+        "all-features-before-layers.png",
+        "04-layers-first.png",
+        "04-layers-middle.png",
+        "04-layers-last.png",
+        "section-z.png",
+        "feature-00-face.png",
+        "gesture-body-held-preview.png",
+        "theme-light.png",
+        "theme-dark.png"
+      ],
+      "findings": [
+        {
+          "kind": "Konturrest während Körperzug",
+          "image": "gesture-body-held-preview.png",
+          "detail": "Neben den versetzten Zweigspitzen und links am verschobenen Tellerrand stehen kurze graue Konturreste am ursprünglichen Standort. Die übrigen Körper-, Marker- und Labelpositionen folgen dem Zug."
+        }
+      ],
+      "observations": [
+        "Labelgruppen am Teller lesbar und kollisionsfrei, Zweige bleiben frei.",
+        "Schichtbilder tragen keine globalen Merkmalsnamen über dem abgeschnittenen Baum; Schnittkarte und Höhenanzeige lesbar.",
+        "Hell/dunkel und gewählte Unterseite behalten lesbares Feld und Leader."
+      ]
+    },
+    {
+      "backend": "vtk",
+      "index": 13,
+      "run_id": "fc3a630d6841489ba2d7edac7bbcbb2c",
+      "images": [
+        "all-features-before-layers.png",
+        "04-layers-first.png",
+        "04-layers-middle.png",
+        "04-layers-last.png",
+        "section-z.png",
+        "gesture-body-held-preview.png",
+        "theme-light.png",
+        "theme-dark.png"
+      ],
+      "findings": [
+        {
+          "kind": "Konturrest während Körperzug",
+          "image": "gesture-body-held-preview.png",
+          "detail": "Wie auf GFX bleiben an Zweigspitzen und am Tellerrand graue Konturen am ursprünglichen Ort sichtbar, während Körper und Labelanker dem Zug folgen."
+        }
+      ],
+      "observations": [
+        "Label-/Feldrechtecke lesbar und nicht überlappend.",
+        "Schichtansicht zeigt keinen global schwebenden Labelteppich; Schnitt- und Schichtkarten bleiben frei bedienbar.",
+        "Licht/Dunkel-Felder bleiben ausreichend gegen den Körper abgesetzt."
+      ]
+    },
+    {
+      "backend": "gfx",
+      "index": 18,
+      "run_id": "d2e9467990cf4bf4a3547f99128b0e65",
+      "images": [
+        "all-features-before-layers.png",
+        "feature-03-face.png",
+        "04-layers-first.png",
+        "04-layers-middle.png",
+        "04-layers-last.png",
+        "gesture-body-held-preview.png",
+        "theme-light.png",
+        "theme-dark.png",
+        "section-z.png"
+      ],
+      "findings": [
+        {
+          "kind": "Konturrest während Körperzug",
+          "image": "gesture-body-held-preview.png",
+          "detail": "Getrennte graue Konturen stehen an beiden oberen Armen am ursprünglichen Ort."
+        },
+        {
+          "kind": "Schichtmarker ohne sichtbare Auflage",
+          "image": "04-layers-last.png",
+          "detail": "Schrägfläche · 1514 mm² und Rechte Seite · 42328 mm² führen zu einem gemeinsamen Marker frei zwischen den oberen Armen (ca. x731/y280); sichtbare Geometrie liegt dort nicht unter dem Marker. Ursache ungeprüft."
+        }
+      ],
+      "observations": [
+        "Dichte Namen bleiben lesbar und kollisionsfrei; Karten lassen das Modell frei.",
+        "Gewählte große Seitenfläche geschlossen, die zuvor schwarzen Löcher in der Markierung fehlen.",
+        "Erste und mittlere Schicht haben wenige lokale Namen mit sichtbarem Anschluss."
+      ]
+    },
+    {
+      "backend": "gfx",
+      "index": 19,
+      "run_id": "2d0fc2e8bcbf4f18ae01bc69625eb1ac",
+      "images": [
+        "all-features-before-layers.png",
+        "feature-02-hole.png",
+        "gesture-body-held-preview.png",
+        "04-layers-first.png",
+        "04-layers-middle.png",
+        "04-layers-last.png",
+        "section-z.png",
+        "theme-light.png",
+        "theme-dark.png",
+        "30-feature-01-resize_hole-plus-0.5-mm.png"
+      ],
+      "findings": [
+        {
+          "kind": "Konturrest während Körperzug",
+          "image": "gesture-body-held-preview.png",
+          "detail": "Graue Linien bleiben an Oberkante und linkem Außenrand am alten Ort zurück."
+        }
+      ],
+      "observations": [
+        "Schichten tragen eine kleine, lesbare Auswahl schichtbezogener Namen mit sichtbaren Konturankern.",
+        "Dichte Beschriftung hält Abstand zwischen den Textfeldern.",
+        "Der gewählte Bohrungsname ist in Baum, Label und Panel konsistent.",
+        "In all-features und section-z verdeckt die linke Karte einen Rand des groß gezoomten Körpers. Diese Bilder belegen keinen Fehler eines ausdrücklichen Pos1-Aufrufs."
+      ]
+    }
+  ],
+  "not_accepted": [
+    {
+      "backend": "vtk",
+      "index": 18,
+      "run_id": "b42a56e7904a4be8a4a711afc3ff3fe0",
+      "exit": 3221225477,
+      "reason": "Unvollständig; nicht als final gesichtet."
+    },
+    {
+      "backend": "vtk",
+      "index": 19,
+      "run_id": "4af4f245a4fb41088e42fbfc44fc73f5",
+      "exit": 3221225477,
+      "reason": "Unvollständig; nicht als final gesichtet."
+    }
+  ],
+  "limits": [
+    "Die aufgelisteten PNGs wurden tatsächlich angesehen; andere Bilder sind nicht eingeschlossen.",
+    "Keine automatische Kamerafahrt beim Öffnen einer Karte verlangt. Kartenüberdeckung bei freier Kameralage ist kein Beleg gegen Pos1.",
+    "Der angeforderte Kantenfix wird im Arbeitsbaum vorbereitet; dieser Bericht beschreibt weiterhin den unveränderten V7-Stand.",
+    "Renderqualität und Performance sind getrennt bei gfx_pruefung dokumentiert."
+  ]
+}

@@ -476,14 +476,37 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
     großen Stapel, ohne dass es auffiel.
 
-    Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
-    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
-    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
+    **Gesucht wird seit der Gesamtdurchsicht nicht mehr im Text, sondern im
+    Fixture-Graphen:** `tools/list_windowed_tests.py` nennt jede Datei, die
+    `qt_app` braucht — auch über einen Umweg —, und genau dieses Werkzeug
+    rufen beide CI-Jobs, so wie es lokal `suite-getrennt.sh` tut. Die
+    Textsuche davor erwischte Dateien, die über eine Ansicht *schreiben*, und
+    übersah mittelbare Abhängigkeiten. Geprüft wird die Liste des Werkzeugs
+    gegen die Dateien, die wirklich ein Fenster **bauen**. Erwähnungen zählen
+    nicht: ein Import oder die Lizenzliste bekämen sonst einen eigenen Prozess
+    für nichts.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
-    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
-    pattern = re.compile(found.group(1))
+    calls = re.findall(
+        r"windowed=\$\(python tools/list_windowed_tests\.py \| tr '\\n' ' '\)", workflow
+    )
+    assert len(calls) == 2, (
+        "beide Jobs der CI — Suite und Neueste Versionen — lesen die Fenstergruppe aus "
+        "tools/list_windowed_tests.py; gefunden: " + str(len(calls))
+    )
+
+    listed = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "list_windowed_tests.py")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=600,
+    )
+    windowed = {
+        line.strip().replace("\\", "/") for line in listed.stdout.splitlines() if line.strip()
+    }
+    assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
 
     builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
     missed = []
@@ -491,12 +514,12 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
         source = path.read_text(encoding="utf-8")
         if not builders.search(source):
             continue
-        if not pattern.search(source):
+        if f"tests/{path.name}" not in windowed:
             missed.append(path.name)
 
     assert not missed, (
         f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
-        "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
+        "tools/list_windowed_tests.py findet sie nicht — ihr Fenster hängt nicht an qt_app."
     )
 
 

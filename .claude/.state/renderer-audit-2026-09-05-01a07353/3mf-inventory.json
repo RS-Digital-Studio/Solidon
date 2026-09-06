@@ -1,0 +1,44 @@
+[
+  {
+    "index": 1,
+    "name": "drill-holder.3mf",
+    "parts": [
+      {
+        "entry": "3D/3dmodel.model",
+        "triangles": 30562,
+        "vertices": 15379,
+        "objects": 1
+      }
+    ]
+  },
+  {
+    "index": 16,
+    "name": "the-over-engineered-backpack-wall-mount-v2.3mf",
+    "parts": [
+      {
+        "entry": "3D/3dmodel.model",
+        "triangles": 0,
+        "vertices": 0,
+        "objects": 1
+      },
+      {
+        "entry": "3D/Objects/object_1.model",
+        "triangles": 143890,
+        "vertices": 71943,
+        "objects": 1
+      }
+    ]
+  },
+  {
+    "index": 18,
+    "name": "countercleaner.3mf",
+    "parts": [
+      {
+        "entry": "3D/3dmodel.model",
+        "triangles": 701900,
+        "vertices": 350950,
+        "objects": 1
+      }
+    ]
+  }
+]

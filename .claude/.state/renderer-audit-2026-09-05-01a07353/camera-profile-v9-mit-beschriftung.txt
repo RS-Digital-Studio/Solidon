@@ -1,0 +1,60 @@
+Renderer: GfxRenderer Objekte: 1
+Merkmalsaktoren: 3 Labels: 157
+Bild je Kamerastellung: Median 66.4 ms, p95 85.4 ms, max 112.1 ms
+         5937540 function calls (5836592 primitive calls) in 2.707 seconds
+
+   Ordered by: cumulative time
+   <Invalid regular expression 'app\\ui|pygfx|rendercanvas|wgpu'>
+   List reduced from 987 to 45 due to restriction <45>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    41/40    0.001    0.000    2.710    0.068 C:\Users\rober\AppData\Local\Temp\claude\F--3D-Druck\c8bf1d70-6f46-4992-9b9e-5becddfdbd88\scratchpad\label_profile.py:75(frame)
+       40    0.001    0.000    2.690    0.067 F:\3D Druck\app\ui\viewport.py:10187(set_camera_pose)
+       40    0.002    0.000    2.283    0.057 F:\3D Druck\app\ui\viewport.py:5062(_draw)
+       40    0.000    0.000    1.537    0.038 F:\3D Druck\app\ui\render\gfx_renderer.py:1443(render)
+       40    0.000    0.000    1.537    0.038 F:\3D Druck\.venv\Lib\site-packages\rendercanvas\base.py:489(force_draw)
+       40    0.000    0.000    1.537    0.038 F:\3D Druck\.venv\Lib\site-packages\rendercanvas\qt.py:420(_rc_force_paint)
+       40    0.002    0.000    1.537    0.038 {method 'repaint' of 'PySide6.QtWidgets.QWidget' objects}
+    80/40    0.000    0.000    1.534    0.038 F:\3D Druck\.venv\Lib\site-packages\rendercanvas\qt.py:298(event)
+    80/40    0.001    0.000    1.534    0.038 {function QRenderWidget.event at 0x0000015B6CA92980}
+       40    0.000    0.000    1.532    0.038 F:\3D Druck\.venv\Lib\site-packages\rendercanvas\qt.py:339(paintEvent)
+       40    0.000    0.000    1.532    0.038 F:\3D Druck\.venv\Lib\site-packages\rendercanvas\base.py:534(_time_to_paint)
+       40    0.001    0.000    1.532    0.038 F:\3D Druck\.venv\Lib\site-packages\rendercanvas\base.py:545(_draw_and_present)
+       40    0.000    0.000    1.513    0.038 F:\3D Druck\app\ui\render\gfx_renderer.py:1368(_draw)
+       40    0.011    0.000    1.470    0.037 F:\3D Druck\app\ui\render\gfx_renderer.py:1386(_draw_with_occlusion)
+      120    0.004    0.000    1.281    0.011 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderer.py:624(render)
+       40    0.014    0.000    0.739    0.018 F:\3D Druck\app\ui\viewport.py:7463(_layout_feature_labels)
+      120    0.003    0.000    0.698    0.006 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderer.py:162(collect_pipelines_container_groups)
+     5264    0.004    0.000    0.695    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:166(get_pipeline_container_group)
+     5264    0.004    0.000    0.680    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:213(update)
+      440    0.001    0.000    0.641    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:323(update)
+       40    0.008    0.000    0.545    0.014 F:\3D Druck\app\ui\render\gfx_renderer.py:461(update_labels)
+      440    0.006    0.000    0.522    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:349(update_shader_data)
+      200    0.004    0.000    0.501    0.003 F:\3D Druck\app\ui\render\gfx_renderer.py:415(_new_label)
+       39    0.003    0.000    0.494    0.013 F:\3D Druck\app\ui\render\gfx_renderer.py:355(build)
+       80    0.001    0.000    0.394    0.005 F:\3D Druck\app\ui\render\gfx_renderer.py:1127(_fit_depth)
+       80    0.005    0.000    0.389    0.005 F:\3D Druck\app\ui\render\gfx_renderer.py:1112(_scene_bounds)
+     6080    0.011    0.000    0.373    0.000 F:\3D Druck\app\ui\render\gfx_renderer.py:252(bounds)
+     6080    0.006    0.000    0.361    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\objects\_base.py:618(get_world_bounding_box)
+12440/6280    0.047    0.000    0.264    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\objects\_base.py:572(get_bounding_box)
+      200    0.003    0.000    0.249    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\objects\_text.py:192(__init__)
+      440    0.001    0.000    0.242    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shader\base.py:172(get_bindings_info)
+     1939    0.019    0.000    0.234    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\resources\_buffer.py:64(__init__)
+       40    0.001    0.000    0.226    0.006 F:\3D Druck\app\ui\render\gfx_renderer.py:957(set_camera_pose)
+      440    0.007    0.000    0.210    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:415(update_bind_groups)
+       40    0.000    0.000    0.191    0.005 F:\3D Druck\app\ui\render\gfx_renderer.py:1048(reset_clipping_range)
+    12240    0.090    0.000    0.188    0.000 F:\3D Druck\.venv\Lib\site-packages\pylinalg\misc.py:37(aabb_transform)
+      120    0.001    0.000    0.177    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderstate.py:29(get_renderstate)
+      440    0.001    0.000    0.175    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shader\base.py:228(define_bindings)
+     2400    0.002    0.000    0.174    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shader\bindings.py:34(define_binding)
+      520    0.001    0.000    0.172    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\objects\_base.py:648(look_at)
+      120    0.000    0.000    0.172    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderstate.py:444(prepare_for_draw)
+      120    0.011    0.000    0.171    0.001 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderstate.py:331(prepare_for_draw)
+     1472    0.002    0.000    0.165    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\objects\_text.py:305(_update_object)
+      520    0.004    0.000    0.165    0.000 F:\3D Druck\.venv\Lib\site-packages\pygfx\utils\transform.py:404(forward)
+    38692    0.110    0.000    0.164    0.000 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_helpers.py:352(proxy_func)
+
+
+
+         5937540 function calls (5836592 primitive calls) in 2.707 seconds
+

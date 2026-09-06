@@ -1,0 +1,11 @@
+{
+  "original_run_unchanged": "core-crash-v7-01",
+  "original_script_unchanged": "0eb02ce0770b26443c6b962e770f1eb37eb5f16d7ce7b5f7983dd8f5da8d4fb5",
+  "corrected_manifest_sha256": "b78158db85b0ce94cc83084f014f7b949ca18644188bc5e8726718c6dfc5afa9",
+  "matched_features": 57,
+  "renamed_final_to_cache": {
+    "fillet_32": "fillet_2",
+    "fillet_33": "fillet_3"
+  },
+  "validation": "Nur gespeicherte JSON-Metadaten über Python-Standardbibliothek abgeglichen; kein Mesh-/Export-/Qt-/GPU-Lauf. Vollständiger Native-Fingerprint wird beim freizugebenden Kernlauf zwingend geprüft."
+}

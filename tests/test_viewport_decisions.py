@@ -4540,6 +4540,93 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
     assert not viewport.sunken_body(), "ausgeblendet ist nicht unter der Platte"
 
 
+def test_bed_visibility_reuses_the_decision_until_scene_or_visibility_changes(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Kamera und Zeichnen fragen keine unveränderten exakten CAD-Grenzen neu ab."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    mesh = MeshData(trimesh.creation.box())
+    entry = SceneObject(id="body", name="Body", mesh=mesh)
+    source = EvaluationResult(scene=Scene(objects={entry.id: entry}))
+    viewport._result = source
+    original = MeshData.bounds.fget
+    assert original is not None
+    calls = 0
+
+    def measured_bounds(value: MeshData):
+        nonlocal calls
+        calls += 1
+        return original(value)
+
+    monkeypatch.setattr(MeshData, "bounds", property(measured_bounds))
+    for _ in range(20):
+        assert viewport.sunken_body()
+        assert viewport.sees_through
+    assert calls == 1
+
+    viewport._hidden = frozenset({entry.id})
+    assert not viewport.sunken_body()
+    assert calls == 1
+    viewport._hidden = frozenset()
+    assert viewport.sunken_body()
+    assert calls == 2
+
+    viewport._result = EvaluationResult(scene=source.scene)
+    assert viewport.sunken_body()
+    assert calls == 3
+    viewport._result = None
+    assert not viewport.sunken_body()
+
+
+def test_bed_visibility_uses_the_drawn_scene_and_preserves_uncut_geometry(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein neues Rechenergebnis oder ein Schnitt ersetzt nicht die gezeichnete Szene."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    below = MeshData(trimesh.creation.box())
+    above = MeshData(trimesh.creation.box().apply_translation((0.0, 0.0, 2.0)))
+    old_entry = SceneObject(id="body", name="Body", mesh=below)
+    new_entry = SceneObject(id="body", name="Body", mesh=above)
+    drawn = EvaluationResult(scene=Scene(objects={old_entry.id: old_entry}))
+    pending = EvaluationResult(scene=Scene(objects={new_entry.id: new_entry}))
+    viewport._actor_scene = drawn
+    viewport._result = pending
+    # Die sichtbare Schnittfläche liegt oben; die Dokumentgeometrie reicht darunter.
+    actor = RecordingItem("body", np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]]), "#ffffff")
+    viewport._actors = {old_entry.id: actor}
+    original = MeshData.bounds.fget
+    assert original is not None
+
+    def only_drawn_bounds(value: MeshData):
+        assert value is below, "the pending geometry must not be queried by painting"
+        return original(value)
+
+    monkeypatch.setattr(MeshData, "bounds", property(only_drawn_bounds))
+    assert viewport.sunken_body()
+    viewport._hidden = frozenset({old_entry.id})
+    assert viewport.sunken_body(), "the current actor remains visible until the next image"
+    actor.set_visible(False)
+    assert not viewport.sunken_body()
+    monkeypatch.setattr(MeshData, "bounds", property(original))
+    viewport._actor_scene = pending
+    actor.set_visible(True)
+    assert not viewport.sunken_body()
+
+
 def test_explicit_fitting_draws_once_but_automatic_fitting_waits(qt_app: QApplication) -> None:
     """Pos1 liefert selbst ein Bild; der Szenenaufbau zeichnet erst seine neuen Aktoren."""
     from app.ui.viewport import Viewport

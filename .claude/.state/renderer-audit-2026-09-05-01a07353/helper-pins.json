@@ -1,0 +1,100 @@
+{
+  "version": 8,
+  "reason": "STL unabhängig mit vollständigen orientierten Welt-Dreiecksmengen vergleichen; rote Oberflächenpixel mit Originalnetz und exakter Pose sichern",
+  "hashes": {
+    "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+    "menu_driver.py": "c76c401a02b902434d8d01d94066563bc93ab219303e1202642835e74e9bdbcf",
+    "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+    "general_checks.py": "08ed50a41479ef1cad3ceeef4d123c93f7457e900b37a45f5dabbc2499880238",
+    "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d",
+    "run_context.py": "69303d341cb505902c69981bdad253a809bb74e48609de3f24b6356a3b9c3648",
+    "gesture_checks.py": "f7df2184de01b3f719bcd8b0bc821debd5e47b1c3ad85a925e26f0c2bb07ae07",
+    "stl_export_checks.py": "f6b37ba52a07eeeb1fcfb434fd572fdfdb571ddbd713a9a3881731f7a1f3cd52",
+    "surface_pick_footprint.py": "69a2898b1610d2cd5a7827df6962626fef7dec4de7a7d752ea9bdaf27b6d7f52"
+  },
+  "history": [
+    {
+      "version": 1,
+      "hashes": {
+        "probe_helpers.py.inc": "ecd3a62eb55d8e3ad06617fafb229f14d0c94646408a9ec6a89153252fc97688",
+        "menu_driver.py": "7e64f0aaf676f764a7adcd2085db2e123e122ca9df70f0774cbec796c0841b21",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a"
+      }
+    },
+    {
+      "version": 2,
+      "reason": "Qt-Ereignispumpe mit DeferredDelete; lokale Analyseprüfung eingefroren",
+      "hashes": {
+        "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+        "menu_driver.py": "7e64f0aaf676f764a7adcd2085db2e123e122ca9df70f0774cbec796c0841b21",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a",
+        "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d"
+      }
+    },
+    {
+      "version": 3,
+      "reason": "Menü-Warteschleifen verwenden ebenfalls die gemeinsame Qt-Ereignispumpe",
+      "hashes": {
+        "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+        "menu_driver.py": "c76c401a02b902434d8d01d94066563bc93ab219303e1202642835e74e9bdbcf",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a",
+        "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d"
+      }
+    },
+    {
+      "version": 4,
+      "reason": "CPU-Last im tatsächlichen Render-Messfenster protokollieren",
+      "hashes": {
+        "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+        "menu_driver.py": "c76c401a02b902434d8d01d94066563bc93ab219303e1202642835e74e9bdbcf",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a",
+        "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d",
+        "run_context.py": "69303d341cb505902c69981bdad253a809bb74e48609de3f24b6356a3b9c3648",
+        "gesture_checks.py": "b2c3292b531266b10ac783edb32a3f29d2582cf66cee1516a72ff69d23dffcc8"
+      }
+    },
+    {
+      "version": 5,
+      "reason": "Native Körperziehprüfung mit Dokument-/Geometrievergleich und echtem Undo ergänzt",
+      "hashes": {
+        "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+        "menu_driver.py": "c76c401a02b902434d8d01d94066563bc93ab219303e1202642835e74e9bdbcf",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a",
+        "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d",
+        "run_context.py": "69303d341cb505902c69981bdad253a809bb74e48609de3f24b6356a3b9c3648",
+        "gesture_checks.py": "94704554ff4bd67ccf7ecedf6fc0f26ec7cba9a2b0f1bad5bfff24b231d94959"
+      }
+    },
+    {
+      "version": 6,
+      "reason": "Viewport-Merkmalsauswahl ist eine Property; isolierte Gestenkalibrierung",
+      "hashes": {
+        "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+        "menu_driver.py": "c76c401a02b902434d8d01d94066563bc93ab219303e1202642835e74e9bdbcf",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a",
+        "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d",
+        "run_context.py": "69303d341cb505902c69981bdad253a809bb74e48609de3f24b6356a3b9c3648",
+        "gesture_checks.py": "94704554ff4bd67ccf7ecedf6fc0f26ec7cba9a2b0f1bad5bfff24b231d94959"
+      }
+    },
+    {
+      "version": 7,
+      "reason": "Sichtbare Beschriftungen über eindeutige Zuordnung von Text und bewegtem Leaderanfang prüfen, doppelte Texte korrekt behandeln",
+      "hashes": {
+        "probe_helpers.py.inc": "2c40f7688a2607971e737966d1edd6282724a38b964a13a28a2fc93fde1119e0",
+        "menu_driver.py": "c76c401a02b902434d8d01d94066563bc93ab219303e1202642835e74e9bdbcf",
+        "feature_checks.py": "f7185f3b74d83ebdafae6720f8e182bc29d0c5bdfa6b7da7b5a0b69be15f5a49",
+        "general_checks.py": "d6577725a341f48d15282779627249dc72b4df70407ec633a20ced099f81576a",
+        "analysis_checks.py": "5506e8d1a51a2765a772a7d98963a152d164ba6d8bb3ef2362bf2d9a9e45bd1d",
+        "run_context.py": "69303d341cb505902c69981bdad253a809bb74e48609de3f24b6356a3b9c3648",
+        "gesture_checks.py": "f7df2184de01b3f719bcd8b0bc821debd5e47b1c3ad85a925e26f0c2bb07ae07"
+      }
+    }
+  ]
+}

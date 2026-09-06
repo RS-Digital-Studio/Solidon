@@ -1,0 +1,121 @@
+{
+  "source": "F:\\3D Druck\\app\\ui\\viewport.py",
+  "cache": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\preflight-v6\\gfx\\file-18\\profile\\LOCALAPPDATA\\RS Digital\\Solidon3D\\cache\\results\\0.3.4+bc92bb\\03\\0310a09dd646502d4f4a510d1e05c6f6\\objects.json",
+  "camera": {
+    "position": [
+      441.7836072038741,
+      -441.7836072038741,
+      439.5960141630993
+    ],
+    "focal_point": [
+      0.0,
+      7.105427357601002e-15,
+      86.1691284
+    ],
+    "view_up": [
+      -0.34815531191139826,
+      0.34815531191139826,
+      0.8703882797784672
+    ]
+  },
+  "camera_origin": "Gespeicherte Kamera nach späterem Projektionswechsel; beide Projektionsarten geprüft",
+  "lod_point_limit": "Native Ergebnisdatei enthält den LOD-Zellindex, aber keinen LOD-Trefferpunkt",
+  "rows": [
+    {
+      "pixel": [
+        710.0,
+        487.0
+      ],
+      "original_cell": 44131,
+      "original_point": [
+        -63.909845576804884,
+        89.14186642157833,
+        2.3999938999999983
+      ],
+      "recorded_lod_cell": 13693,
+      "recorded_ui_feature": "torus_13",
+      "nearest_original_features": [
+        [
+          0.0,
+          "face_6"
+        ],
+        [
+          2.3999938999999983,
+          "face_5"
+        ],
+        [
+          9.015478946730235,
+          "face_2"
+        ],
+        [
+          11.090154423195116,
+          "face_1"
+        ]
+      ],
+      "ray_checks": [
+        {
+          "projection": "perspective",
+          "aim": null,
+          "selected": null,
+          "feature_at": "face_6",
+          "candidates": []
+        },
+        {
+          "projection": "parallel",
+          "aim": null,
+          "selected": null,
+          "feature_at": "face_6",
+          "candidates": []
+        }
+      ]
+    },
+    {
+      "pixel": [
+        685.0,
+        526.0
+      ],
+      "original_cell": 44330,
+      "original_point": [
+        -46.66704130810126,
+        53.60171896413897,
+        2.3999938999999983
+      ],
+      "recorded_lod_cell": 13727,
+      "recorded_ui_feature": "torus_13",
+      "nearest_original_features": [
+        [
+          0.0,
+          "face_6"
+        ],
+        [
+          2.3999938999999983,
+          "face_5"
+        ],
+        [
+          26.043783012801672,
+          "face_2"
+        ],
+        [
+          28.33295869189874,
+          "face_1"
+        ]
+      ],
+      "ray_checks": [
+        {
+          "projection": "perspective",
+          "aim": null,
+          "selected": null,
+          "feature_at": "face_6",
+          "candidates": []
+        },
+        {
+          "projection": "parallel",
+          "aim": null,
+          "selected": null,
+          "feature_at": "face_6",
+          "candidates": []
+        }
+      ]
+    }
+  ]
+}

@@ -126,7 +126,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Geometriebefunde G-03 bis G-38 (35 Punkte) | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach den Oberflächenbefunden; jeder braucht zuerst seine Korpusdatei (AGENTS.md: Test zuerst bei Geometrie), und die Reihenfolge folgt der Kundenwirkung — verschwindende Löcher (G-03), ungültige Körper ohne Befund (G-04), verlorene Materialzuweisungen (G-10, G-12) vor den Bausteinmaßen |
 | Werkzeuge und Website: R25, R26, R31, R35, R37, R38 | Was der Gesamtreview liegen ließ (05.09.2026) | den Block nach der Geometrie; R35 (FAQ zu den übertragenen Daten) und R38 (widersprüchliche Fachagenten) sind Texte in sechs Sprachen bzw. vierzehn Dateien und brauchen einen ruhigen Durchgang, kein Zwischenstück |
 | Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38 | Was der Gesamtreview liegen ließ (05.09.2026) | einen Katalogdurchgang je Sprache — fünf Zeilen, aber jede gegen die sichtbare Oberfläche geprüft (Menüname, Feldtitel, Verlaufstitel), nicht gegen die deutsche Quelle allein |
-| Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | Was der Gesamtreview liegen ließ (05.09.2026) | die Umstellung des Viewports auf den Vertrag, dann den zweiten Renderer und die Messtabelle — in Arbeit (3d-druck-c7) |
 | Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht gefahren | Was der Gesamtreview liegen ließ (05.09.2026) | einen Tag-Lauf der CI für das Flatpak und danach eine Messung im echten Flatpak auf einem Linux (Grafik, Qt-Bibliotheken, Start ohne Netz); für Inno Setup 7 (lokal seit dem 05.09.2026 als 7.1.0 installiert) einen Bau samt Installation |
 | CORE-02 (verworfene Vorschläge reisen als Antworten weiter) und CORE-26 (nachträgliche Kragenhöhe) | Was der Gesamtreview liegen ließ (05.09.2026) | eine Entscheidung Roberts: CORE-02 ist eine Änderung der Projektdatei (Markierung am ChatEntry, format_version 20 mit Migration), CORE-26 macht die Deckelpassung parametrisch statt fest — beides Architektur, nicht Reparatur |
 | Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista | Was der Gesamtreview liegen ließ (05.09.2026) | den Umbau der beiden Fahrskripte (`fahre_steuerung.py`, `fahre_drehpunkt.py`) auf `QMouseEvent` an `renderer.widget`, danach die fünf Schemata und den Drehpunkt einmal am echten Fenster — bis dahin ist die Kette Qt → Widget → `PointerEvent` → Navigator nirgends gemessen |
@@ -10818,26 +10817,37 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   Fachagenten unter `.codex/agents/`.
 - [ ] **Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38** — je eine
   Katalogzeile, die gegen die sichtbare Oberfläche geprüft werden muss.
-- [~] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
+- [x] **Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK
   direkt und pygfx/wgpu** (Entscheidung Robert, 05.09.2026: „bau beides und
-  mess“). Stand: **Beide stehen und sind gemessen.** Der Vertrag
-  (`app/ui/render/api.py`), `vtk_renderer.py` und `gfx_renderer.py`, der
-  Navigator, der Bewegungsgriff, der Skalierwürfel, die Kantensuche und die
-  Wahl (`choice.py`, `SOLIDON_RENDERER=vtk|gfx`, Vorgabe VTK); `viewport.py`,
-  `snapshots.py`, `main_window.py`, `spacemouse.py` und die Werkzeuge sprechen
-  nur noch den Vertrag, die Bildtests laufen über beide Renderer. Gemessen
-  am 05.09.2026 mit `tools/window_bench.py` (`weg4-figur-formen`, maximiert,
-  RTX 4080): Zug je Bild VTK 6,9 ms, pygfx 4,9 ms; Bild im Stand 7,2 gegen
-  3,8 ms; Arbeitsspeicher gleich (rund 495 MiB); pygfx braucht beim ersten
-  Bild rund anderthalb Sekunden für die Shader. Was pygfx nicht hat: keine
-  Umgebungsverdeckung (SSAO), Beschriftungsfelder als Balken statt gerundeter
-  Kästen, ein weicherer Lichtverlauf (lineares statt sRGB-Schattieren). Die
-  Tabelle steht in `app/ui/render/CLAUDE.md`. **Offen ist die Entscheidung**
-  (Robert): Erst danach fallen PyVista und PyVistaQt aus den Abhängigkeiten
-  — oder pygfx wieder heraus —, und VTK darf auf 9.7.0. Bis dahin bleibt VTK
-  die Vorgabe. Nicht gemessen: Speicher über Fenster- und Sprachwechsel und
-  die kopierten Bytes je Szene; beides braucht einen Prüfstand, der das
-  Fenster mehrfach baut.
+  mess“; 06.09.2026: „wir werden dann den gfx renderer benutzen“). Der
+  Vertrag (`app/ui/render/api.py`), `vtk_renderer.py` und `gfx_renderer.py`,
+  der Navigator, der Bewegungsgriff, der Skalierwürfel, die Kantensuche und
+  die Wahl (`choice.py`: **Vorgabe `gfx`**, `SOLIDON_RENDERER=vtk` wählt den
+  zweiten, `effective_backend()` springt auf VTK, wenn kein wgpu-Adapter da
+  ist); `viewport.py`, `snapshots.py`, `main_window.py`, `spacemouse.py` und
+  die Werkzeuge sprechen nur noch den Vertrag, die Bildtests laufen über
+  beide Renderer. Gemessen am 05.09.2026 mit `tools/window_bench.py`
+  (`weg4-figur-formen`, maximiert, RTX 4080): Zug je Bild VTK 6,9 ms, pygfx
+  4,9 ms; Bild im Stand 7,2 gegen 3,8 ms; Arbeitsspeicher gleich (rund 495
+  MiB); pygfx braucht beim ersten Bild rund anderthalb Sekunden für die
+  Shader. Was pygfx am 05.09. noch nicht hatte, hat die Renderer-Sitzung
+  01a07353 nachgebaut: Umgebungsverdeckung als eigener Durchgang
+  (`gfx_occlusion.py`), Tiefenlinien gegen Rasterlücken (`gfx_lines.py`),
+  Picks mit genauem Sichtstrahlpunkt, Beschriftungsfelder aus dem echten
+  Textlayout, das Beschriftungslayout ohne Überlappung (`viewport.py`).
+  Danach (3d-druck-f7): Körperkanten als Drahtgitter über derselben
+  Geometrie statt einer Kantenliste auf der CPU (5,8 s und 114 MB am
+  3,15-Millionen-Dreiecke-Baum gespart), ruhende Beschriftungen statt
+  Neuaufbau je Bild und ein Hüllquader-Cache (Drillholder mit 157 Namen:
+  66 → 34 ms je Kamerastellung unter dem Profiler). PyVista und PyVistaQt
+  sind aus `pyproject.toml`, `constraints.txt`, der Freigabeliste, der Spec
+  und der Lizenzbeilage; `vtk` steht direkt im `ui`-Extra. Die Tabelle steht
+  in `app/ui/render/CLAUDE.md`, die Modellabnahme und die Leistungsreihe in
+  `.claude/.state/renderer-audit-2026-09-05-01a07353/ABNAHME.md`. **Noch
+  offen:** `vtk` von 9.6.2 auf 9.7.0 heben (pyvistas Sperre ist weg, ein
+  eigener Lauf mit Tor); Speicher über Fenster- und Sprachwechsel und die
+  kopierten Bytes je Szene — beides braucht einen Prüfstand, der das Fenster
+  mehrfach baut.
 - [ ] **Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista**
   (`.claude/.state/steuerung-2026-09-03/fahre_steuerung.py`,
   `.claude/.state/drehpunkt-2026-09-04/fahre_drehpunkt.py`, 05.09.2026): Sie

@@ -1,11 +1,13 @@
 """Welcher Renderer die Ansicht zeichnet — und ob er hier kann (§18).
 
 Zwei Renderer stehen hinter dem Vertrag aus :mod:`app.ui.render.api`, und
-beide werden gemessen (Entscheidung Robert, 05.09.2026). Solange die Messung
-läuft, wählt die Umgebungsvariable ``SOLIDON_RENDERER``: ``vtk`` (Vorgabe)
-oder ``gfx``. Eine Einstellung in der Oberfläche gibt es absichtlich nicht —
-ein Kunde soll nie vor der Frage stehen, welche Grafikbibliothek er möchte;
-die Entscheidung fällt einmal, hier im Code.
+beide sind gemessen (Entscheidung Robert, 05.09.2026: „bau beides und mess“).
+Gezeichnet wird mit pygfx über wgpu — ``gfx`` ist die Vorgabe (Entscheidung
+Robert, 06.09.2026, nach der Modellabnahme mit beiden). VTK bleibt der zweite
+Renderer hinter demselben Vertrag; die Umgebungsvariable ``SOLIDON_RENDERER``
+wählt ihn mit ``vtk``. Eine Einstellung in der Oberfläche gibt es absichtlich
+nicht — ein Kunde soll nie vor der Frage stehen, welche Grafikbibliothek er
+möchte; die Entscheidung fällt einmal, hier im Code.
 
 Alles, was einen Renderer baut, geht über :func:`make_renderer` — der
 Viewport, seine Bildaufnahme und die Ansichten für den Agenten —, damit ein
@@ -37,20 +39,30 @@ _NAMES: dict[str, Backend] = {
 }
 
 
-def backend(environ: Mapping[str, str] | None = None) -> Backend:
-    """Der gewählte Renderer — ``vtk``, solange niemand etwas anderes sagt.
+#: Der Renderer, der ohne Umgebungsvariable zeichnet.
+DEFAULT_BACKEND: Backend = "gfx"
 
-    Ein unbekannter Wert fällt auf VTK zurück und sagt es im Protokoll: Ein
-    Tippfehler soll die Ansicht nicht kosten, aber auch nicht still bleiben.
+
+def backend(environ: Mapping[str, str] | None = None) -> Backend:
+    """Der gewählte Renderer — ``gfx``, solange niemand etwas anderes sagt.
+
+    Ein unbekannter Wert fällt auf die Vorgabe zurück und sagt es im
+    Protokoll: Ein Tippfehler soll die Ansicht nicht kosten, aber auch nicht
+    still bleiben.
     """
     source = os.environ if environ is None else environ
     raw = source.get(RENDERER_VARIABLE, "").strip().lower()
     if not raw:
-        return "vtk"
+        return DEFAULT_BACKEND
     chosen = _NAMES.get(raw)
     if chosen is None:
-        _log.warning("%s=%r ist kein Renderer; es bleibt bei VTK", RENDERER_VARIABLE, raw)
-        return "vtk"
+        _log.warning(
+            "%s=%r ist kein Renderer; es bleibt bei %s",
+            RENDERER_VARIABLE,
+            raw,
+            DEFAULT_BACKEND.upper(),
+        )
+        return DEFAULT_BACKEND
     return chosen
 
 
@@ -81,6 +93,24 @@ def available(kind: Backend) -> bool:
     return True
 
 
+def effective_backend(environ: Mapping[str, str] | None = None) -> Backend | None:
+    """Der Renderer, der auf dieser Maschine wirklich zeichnet.
+
+    Die Wahl, sofern die Maschine sie kann — sonst der andere, und das steht
+    im Protokoll. ``None`` heißt: keiner von beiden, und dann bleibt die
+    Ansicht leer (der Viewport sagt dem Nutzer, was fehlt). Ein Kunde ohne
+    wgpu-Adapter bekommt so weiterhin eine 3D-Ansicht, nur über VTK.
+    """
+    chosen = backend(environ)
+    if available(chosen):
+        return chosen
+    other: Backend = "vtk" if chosen == "gfx" else "gfx"
+    if available(other):
+        _log.warning("%s kann hier nicht zeichnen; es zeichnet %s", chosen, other)
+        return other
+    return None
+
+
 def make_renderer(
     parent: Any = None,
     *,
@@ -88,8 +118,12 @@ def make_renderer(
     size: tuple[int, int] = (640, 480),
     kind: Backend | None = None,
 ) -> Renderer:
-    """Ein Renderer nach Wahl — mit Qt-Widget unter ``parent`` oder ohne Fenster."""
-    chosen = backend() if kind is None else kind
+    """Ein Renderer nach Wahl — mit Qt-Widget unter ``parent`` oder ohne Fenster.
+
+    Ohne ``kind`` zeichnet, was :func:`effective_backend` nennt: die Wahl,
+    oder der andere, wenn die Maschine die Wahl nicht kann.
+    """
+    chosen = (effective_backend() or backend()) if kind is None else kind
     if chosen == "gfx":
         from app.ui.render.gfx_renderer import GfxRenderer
 

@@ -148,6 +148,11 @@ Die Rückrechnung liest den beim Aktoraufbau gespeicherten Versatz und die
 tatsächlich gezeichneten Körper. Während eines neuen Ansichtsauftrags und
 nach dessen Fehler bleibt dieses letzte Bild die Grundlage des Picks;
 angeforderte Platten- oder Explosionszustände greifen erst mit dem neuen Bild.
+Auch die Durchsicht der Druckplatte liest die zuletzt aufgebaute Szene und
+deren sichtbare Körpermenge. Ihre Entscheidung wird bis zu einem Wechsel
+dieser beiden Eingaben behalten; Kamerabewegungen lösen keine erneute exakte
+CAD-Grenzenberechnung aus. Maßgeblich bleiben die ursprünglichen Körpergrenzen,
+nicht die vereinfachten oder beschnittenen Anzeigeaktoren.
 Merkmalsnamen und Maße stehen auf einem Feld in den Themenfarben, wie
 Skizzenmaße. Der Text bleibt damit auch über heller Geometrie lesbar;
 Merkmalsfläche und Ankerpunkt tragen weiterhin die Auswahl- beziehungsweise
@@ -196,6 +201,10 @@ Verbindungen reichen bis zum Textanker und liegen unter dem deckenden
 Beschriftungsfeld; die größere Kollisionsreserve begrenzt keine sichtbare Linie.
 Die Schutzschraffur berücksichtigt dieselben Schnittgrenzen
 auch bei ihrer zusätzlichen Anhebung gegen Flimmern.
+Flächenmarker in Schnitt- und Schichtansichten wählen einen Kandidaten aus dem
+sichtbaren Rest eines einzelnen Originaldreiecks. Die vektorisierte Zuordnung
+verhindert Mittelpunkte im leeren Zwischenraum nichtkonvexer oder getrennter Reste.
+Bohrungs- und Achsenmitten sowie die unbeschnittene Darstellung bleiben erhalten.
 
 Ausdrückliches Einpassen zeichnet einmal über den gemeinsamen Viewport-Pfad.
 Die interne Kamerarahmung zeichnet noch nicht: Szenenaufbau und Achsansicht
