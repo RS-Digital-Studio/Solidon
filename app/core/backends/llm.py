@@ -311,7 +311,7 @@ def post_json(
         try:
             raw = read_limited(error, limit=MAX_ERROR_BYTES, deadline=deadline)
             detail = redact_external(raw.decode("utf-8", errors="replace"))
-        except (ResponseDeadlineError, ResponseTooLargeError, ValueError):
+        except ResponseDeadlineError, ResponseTooLargeError, ValueError:
             detail = ""
         finally:
             error.close()
@@ -859,7 +859,7 @@ def _count(usage: dict[str, Any], key: str) -> int:
         return 0
     try:
         return int(float(value))
-    except (ValueError, OverflowError):
+    except ValueError, OverflowError:
         return 0
 
 
@@ -1168,7 +1168,7 @@ class OllamaBackend:
                 post_json(address, {}, payload, timeout=OLLAMA_RELEASE_SECONDS)
             else:
                 self.transport(address, {}, payload)
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             # Freigabe ist Aufräumen. Ein fertiger Vorschlag bleibt gültig,
             # selbst wenn ein gerade beendetes Ollama dabei nicht mehr antwortet.
             _log.warning("Ollama-Modell %s konnte nicht entladen werden", self.model)
@@ -1618,7 +1618,7 @@ def pull_model(
         try:
             raw = read_limited(error, limit=MAX_ERROR_BYTES, deadline=deadline)
             detail = redact_external(raw.decode("utf-8", errors="replace"), limit=200)
-        except (ResponseDeadlineError, ResponseTooLargeError, ValueError):
+        except ResponseDeadlineError, ResponseTooLargeError, ValueError:
             detail = ""
         finally:
             error.close()
@@ -1771,7 +1771,7 @@ def ollama_tool_check(
         backend.url = url
     try:
         reply = backend.complete([Message(role="user", content=PROBE_REQUEST)], tools=[PROBE_TOOL])
-    except (AppError, OSError, ValueError):
+    except AppError, OSError, ValueError:
         return None
     return reply.wants_tools
 
@@ -1808,12 +1808,18 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: 22 691 auf 22 856, eine einzige Operation. Das ist die Größenordnung, in
 #: der eine neue Operation den Chat kostet: knapp zwei Zehntel Prozent des
 #: Fensters und eine halbe Minute Wartezeit auf dem Prozessorweg.
+#:
+#: **Seit dem 06.09.2026 sind es 113 Werkzeuge** (Gesamtdurchsicht: Kegel und
+#: Ring als Grundkörper), und die Zahl darunter ist seitdem **nicht neu
+#: gemessen** — beim Landen war kein Ollama erreichbar. Sie ist damit eine
+#: untere Grenze; nach der Rate von 165 Token je Operation wären es rund
+#: 23 190. Die Nachmessung steht im Register der ROADMAP.
 PROMPT_TOKENS: Final = 22856
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen.
-PROMPT_TOOL_COUNT: Final = 111
+PROMPT_TOOL_COUNT: Final = 113
 
 
 @dataclass(frozen=True, slots=True)
@@ -1879,7 +1885,7 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
         answer = transport(
             ollama_endpoint(backend.url), {"Content-Type": "application/json"}, payload
         )
-    except (AppError, OSError, ValueError):
+    except AppError, OSError, ValueError:
         return Speed()
     count = answer.get("prompt_eval_count")
     duration = answer.get("prompt_eval_duration")

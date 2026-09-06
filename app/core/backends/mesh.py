@@ -698,7 +698,7 @@ class ComfyBackend:
             return Readiness.READY
         try:
             missing = self.missing_nodes(workflow)
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             # Antwortet der Port und nicht diese Frage, ist es kein ComfyUI,
             # das wir kennen — behauptet wird dann nichts. ``AppError`` steht
             # hier, seit ein unlesbares JSON ein ``GenerationFailed`` ist und
@@ -711,7 +711,7 @@ class ComfyBackend:
         try:
             if self.missing_models(workflow):
                 return Readiness.NO_MODEL
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             return Readiness.UNKNOWN
         return Readiness.READY
 
@@ -823,7 +823,7 @@ class ComfyBackend:
         """Der Ablauf als Daten, oder ``None`` wenn er nicht zu lesen ist."""
         try:
             loaded = json.loads((self.workflows / f"{workflow}.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except OSError, ValueError:
             return None
         return loaded if isinstance(loaded, dict) else None
 
@@ -1169,7 +1169,7 @@ class ComfyBackend:
                     json.dumps(values).encode("utf-8"),
                     {"Content-Type": "application/json"},
                 )
-            except (AppError, OSError, ValueError):
+            except AppError, OSError, ValueError:
                 _log.warning("ComfyUI job %s could not be cancelled via %s", job, path)
 
     def _release_resources(self) -> None:
@@ -1182,7 +1182,7 @@ class ComfyBackend:
                 json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8"),
                 {"Content-Type": "application/json"},
             )
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             # Das Ergebnis des Auftrags bleibt gültig. Der Rückfall ist
             # ComfyUIs eigene Speicherverwaltung, kein Grund, das Netz zu
             # verwerfen, das bereits bei Solidon angekommen ist.
@@ -1198,7 +1198,7 @@ class ComfyBackend:
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
             queue = _answer_json(answer)
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             return False
         for group in ("queue_running", "queue_pending"):
             for entry in queue.get(group) or ():
@@ -1220,7 +1220,7 @@ class ComfyBackend:
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
             queue = _answer_json(answer)
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             return False
         for entry in queue.get("queue_running") or ():
             if isinstance(entry, list) and job in [str(field) for field in entry]:
@@ -1243,7 +1243,7 @@ class ComfyBackend:
         try:
             answer = self.transport(f"{self.base}/queue", None, {})
             queue = _answer_json(answer)
-        except (AppError, OSError, ValueError):
+        except AppError, OSError, ValueError:
             return 0
         pending = queue.get("queue_pending") or ()
         for index, entry in enumerate(pending):

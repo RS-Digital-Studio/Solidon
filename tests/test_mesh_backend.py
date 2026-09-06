@@ -1079,13 +1079,14 @@ def test_triposg_weights_use_and_verify_the_fixed_revision(
     def download(repo: str, *, revision: str, local_dir: str, max_workers: int) -> str:
         assert max_workers == 8
         calls.append(("laden", repo, revision))
-        (Path(local_dir) / "model_index.json").write_text("{}", encoding="utf-8")
+        _write_test_weights(Path(local_dir))
         return local_dir
 
     class Api:
-        def model_info(self, repo: str, *, revision: str) -> SimpleNamespace:
+        def model_info(self, repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
             calls.append(("prüfen", repo, revision))
-            return SimpleNamespace(sha=revision)
+            assert files_metadata
+            return _test_weights_info(revision)
 
     monkeypatch.setitem(
         sys.modules,
@@ -1116,7 +1117,7 @@ def test_triposg_weights_reject_a_different_resolved_revision(
         return str(local_dir)
 
     class Api:
-        def model_info(self, _repo: str, *, revision: str) -> SimpleNamespace:
+        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
             assert revision == comfy_setup.WEIGHTS_REVISION
             return SimpleNamespace(sha="0" * 40)
 
@@ -2399,6 +2400,41 @@ def test_the_reachability_probe_takes_the_port_from_the_scheme(
     assert asked == [("rechner", 443), ("rechner", 80), ("rechner", 8188)]
 
 
+def _write_test_weights(root: Path) -> None:
+    """Ein kleiner vollständiger Download mit einer getrennten Gewichtsdatei."""
+    (root / "model_index.json").write_text("{}", encoding="utf-8")
+    (root / "transformer").mkdir(exist_ok=True)
+    (root / "transformer/model.safetensors").write_bytes(b"weights")
+
+
+def _test_weights_info(revision: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        sha=revision,
+        siblings=[
+            SimpleNamespace(rfilename="model_index.json", size=2),
+            SimpleNamespace(rfilename="transformer/model.safetensors", size=7),
+        ],
+    )
+
+
+def test_incomplete_legacy_weights_do_not_count_as_ready(tmp_path: Path) -> None:
+    from app.core.backends import comfy_setup
+
+    root = tmp_path / "models/triposg/TripoSG"
+    root.mkdir(parents=True)
+    (root / "model_index.json").write_text("{}", encoding="utf-8")
+    assert not comfy_setup.weights_present(tmp_path)
+    _write_test_weights(root)
+    marker = {
+        "revision": comfy_setup.WEIGHTS_REVISION,
+        "files": {"model_index.json": 2, "transformer/model.safetensors": 7},
+    }
+    (root / ".solidon-complete.json").write_text(json.dumps(marker), encoding="utf-8")
+    assert comfy_setup.weights_present(tmp_path)
+    (root / "transformer/model.safetensors").write_bytes(b"half")
+    assert not comfy_setup.weights_present(tmp_path)
+
+
 def test_the_weights_are_staged_beside_the_target_and_swapped_in_whole(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2417,12 +2453,13 @@ def test_the_weights_are_staged_beside_the_target_and_swapped_in_whole(
     def download(_repo: str, **kwargs: object) -> str:
         local_dir = Path(str(kwargs["local_dir"]))
         local_dir.mkdir(parents=True, exist_ok=True)
-        (local_dir / "model_index.json").write_text("{}", encoding="utf-8")
+        _write_test_weights(local_dir)
         return str(local_dir)
 
     class Api:
-        def model_info(self, _repo: str, *, revision: str) -> SimpleNamespace:
-            return SimpleNamespace(sha=revision)
+        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
+            assert files_metadata
+            return _test_weights_info(revision)
 
     moves: list[Path] = []
     real_move = shutil.move
@@ -2450,3 +2487,55 @@ def test_the_weights_are_staged_beside_the_target_and_swapped_in_whole(
     assert all(path.parent == target.parent and path != target for path in moves)
     assert (target / "model_index.json").is_file()
     assert not list(target.parent.glob("*.part")), "die Zwischenstufe ist eingewechselt"
+
+
+@pytest.mark.parametrize("failure", ["truncated", "publish", "none"])
+def test_weight_replacement_preserves_the_previous_installation_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Nach Abbruch bleibt der alte Bestand, nach Erfolg gilt nur der vollständige neue."""
+    import os
+
+    from app.core.backends import comfy_setup
+
+    target = tmp_path / "models/triposg/TripoSG"
+    target.mkdir(parents=True)
+    (target / "model_index.json").write_text("alt", encoding="utf-8")
+    scratch = tmp_path / "scratch"
+
+    def download(_repo: str, **kwargs: object) -> str:
+        local_dir = Path(str(kwargs["local_dir"]))
+        _write_test_weights(local_dir)
+        if failure == "truncated":
+            (local_dir / "transformer/model.safetensors").write_bytes(b"half")
+        return str(local_dir)
+
+    class Api:
+        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
+            return _test_weights_info(revision)
+
+    original_replace = os.replace
+
+    def replace(source: str, destination: str) -> None:
+        if failure == "publish" and Path(source).name.endswith(".part"):
+            raise OSError("Datenträger getrennt")
+        original_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", replace)
+    monkeypatch.setitem(
+        sys.modules, "huggingface_hub", SimpleNamespace(HfApi=Api, snapshot_download=download)
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["-c", str(target), comfy_setup.WEIGHTS_REPO, str(scratch), comfy_setup.WEIGHTS_REVISION],
+    )
+    if failure == "none":
+        exec(comfy_setup._FETCH_WEIGHTS, {})
+        assert comfy_setup.weights_present(tmp_path)
+        assert not list(target.parent.glob("*.previous-*"))
+    else:
+        with pytest.raises((OSError, RuntimeError)):
+            exec(comfy_setup._FETCH_WEIGHTS, {})
+        assert (target / "model_index.json").read_text(encoding="utf-8") == "alt"
+        assert not comfy_setup.weights_present(tmp_path)

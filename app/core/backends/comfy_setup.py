@@ -327,7 +327,7 @@ def _from_desktop() -> list[Path]:
     record = _desktop_record()
     try:
         listed = json.loads(record.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return []
     if not isinstance(listed, list):
         return []
@@ -799,8 +799,37 @@ def install_packages(
 
 
 def weights_present(comfyui: Path) -> bool:
-    """Liegen die Gewichte schon da?"""
-    return (comfyui / "models" / "triposg" / "TripoSG" / "model_index.json").is_file()
+    """Prüft den abgeschlossenen Download samt Dateigrößen, ohne Netz oder Modellladen."""
+    root = comfyui / "models" / "triposg" / "TripoSG"
+    marker = root / ".solidon-complete.json"
+    try:
+        if marker.stat().st_size > 64 * 1024:
+            return False
+        stored = json.loads(marker.read_text(encoding="utf-8"))
+        if not isinstance(stored, dict) or stored.get("revision") != WEIGHTS_REVISION:
+            return False
+        files = stored.get("files")
+        if not isinstance(files, dict) or "model_index.json" not in files:
+            return False
+        if not any(name.endswith((".safetensors", ".bin")) for name in files):
+            return False
+        for name, size in files.items():
+            relative = Path(name)
+            if (
+                relative.is_absolute()
+                or ".." in relative.parts
+                or ":" in name
+                or not isinstance(size, int)
+                or isinstance(size, bool)
+                or size < 0
+                or not (root / relative).resolve().is_relative_to(root.resolve())
+                or not (root / relative).is_file()
+                or (root / relative).stat().st_size != size
+            ):
+                return False
+        return True
+    except OSError, ValueError, TypeError:
+        return False
 
 
 #: Das Programm, das die Gewichte holt. Es steht hier als Text, weil es im
@@ -856,7 +885,7 @@ def weights_present(comfyui: Path) -> bool:
 #: Abbruch von außen kommt durch — ``_run`` beendet den Prozess, und eine
 #: Schleife im Kind hält das nicht auf.
 _FETCH_WEIGHTS = """
-import os, shutil, sys
+import json, os, shutil, sys, uuid
 from pathlib import Path
 from huggingface_hub import HfApi, snapshot_download
 
@@ -866,28 +895,57 @@ scratch = Path(sys.argv[3])
 revision = sys.argv[4]
 scratch.mkdir(parents=True, exist_ok=True)
 snapshot_download(repo, revision=revision, local_dir=str(scratch), max_workers=8)
-resolved = HfApi().model_info(repo, revision=revision).sha
+info = HfApi().model_info(repo, revision=revision, files_metadata=True)
+resolved = info.sha
 if resolved != revision:
     raise RuntimeError(
         f"Der geladene Modellstand ist {resolved} statt {revision}. "
         "Löschen Sie den Zwischenordner und starten Sie die Einrichtung erneut."
     )
+files = {entry.rfilename: entry.size for entry in info.siblings}
+if "model_index.json" not in files or not any(
+    name.endswith((".safetensors", ".bin")) for name in files
+):
+    raise RuntimeError("Der Modellbestand ist unvollständig. Starten Sie die Einrichtung erneut.")
+for name, size in files.items():
+    path = scratch / name
+    if (
+        not path.resolve().is_relative_to(scratch.resolve())
+        or not isinstance(size, int) or size < 0
+        or not path.is_file() or path.stat().st_size != size
+    ):
+        raise RuntimeError(
+            f"Die Modelldatei {name} ist unvollständig. "
+            "Starten Sie die Einrichtung erneut."
+        )
 shutil.rmtree(scratch / ".cache", ignore_errors=True)
 print("Verschieben", flush=True)
 target.parent.mkdir(parents=True, exist_ok=True)
-# Ueber die Grenze eines Datentraegers kopiert shutil.move Datei fuer Datei.
+# Über die Grenze eines Datenträgers kopiert shutil.move Datei für Datei.
 # Direkt ins Ziel kopiert lag model_index.json schon da, bevor die Gewichte
-# ankamen -- ein Abbruch dazwischen sah beim naechsten Einrichten wie ein
-# vollstaendiges Modell aus (CORE-24). Daneben kopieren, dann umbenennen:
-# innerhalb eines Datentraegers ist das ein Schritt, der ganz oder gar
+# ankamen — ein Abbruch dazwischen sah beim nächsten Einrichten wie ein
+# vollständiges Modell aus (CORE-24). Daneben kopieren, dann umbenennen:
+# innerhalb eines Datenträgers ist das ein Schritt, der ganz oder gar
 # nicht geschieht.
 staging = target.with_name(target.name + ".part")
 if staging.exists():
     shutil.rmtree(staging, ignore_errors=True)
 shutil.move(str(scratch), str(staging))
+# Erst der vollständig kopierte Bestand trägt die Abschlussmarkierung.
+(staging / ".solidon-complete.json").write_text(
+    json.dumps({"revision": revision, "files": files}), encoding="utf-8"
+)
+backup = target.with_name(target.name + ".previous-" + uuid.uuid4().hex)
 if target.exists():
-    shutil.rmtree(target, ignore_errors=True)
-os.replace(str(staging), str(target))
+    os.replace(str(target), str(backup))
+try:
+    os.replace(str(staging), str(target))
+except OSError:
+    if backup.exists():
+        os.replace(str(backup), str(target))
+    raise
+if backup.exists():
+    shutil.rmtree(backup)
 """
 
 

@@ -30,6 +30,67 @@ from tests.scripted_backend import ScriptedBackend
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize("problem", [None, "Das Holen wurde abgebrochen."])
+def test_the_download_remembers_the_model_that_was_actually_requested(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, problem: str | None
+) -> None:
+    """Auch ein später verändertes Eingabefeld benennt keinen laufenden Auftrag um."""
+    from threading import Event
+
+    from app.ui import dialogs as module
+
+    tool = module.tools.by_id("ollama")
+    assert tool is not None
+    monkeypatch.setattr(module.keys, "source", lambda account: "none")
+    monkeypatch.setattr(
+        module._Look,
+        "work",
+        lambda worker: worker.done.emit(
+            module.ChatState(
+                "Lokale Probe", module.tools.ToolState(tool, None, True), ("model-a", "model-b")
+            )
+        ),
+    )
+    started, release = Event(), Event()
+    fetched: list[str] = []
+
+    def pull(model: str, **kwargs: object) -> str | None:
+        fetched.append(model)
+        started.set()
+        assert release.wait(10)
+        return problem
+
+    monkeypatch.setattr(llm, "pull_model", pull)
+    llm.remember_ollama_model("previous")
+    dialog = module.KeyDialog(settings=UiSettings())
+    worker = None
+    try:
+        assert dialog.wait_for_look(5000)
+        qt_app.processEvents()
+        dialog.model_field.setEditText("model-a")
+        dialog.pull_button.click()
+        worker = dialog._pull
+        assert worker is not None and started.wait(5)
+        blocked = not dialog.model_field.isEnabled()
+        dialog.model_field.setEditText("model-b")
+        release.set()
+        assert worker.wait(5000)
+        qt_app.processEvents()
+        assert dialog.wait_for_look(5000)
+        qt_app.processEvents()
+        assert fetched == ["model-a"]
+        assert llm.configured_ollama_model() == ("model-a" if problem is None else "previous")
+        assert blocked, "Die Modellwahl zeigt während des Downloads den festen Auftrag."
+        assert dialog.model_field.isEnabled()
+    finally:
+        release.set()
+        if worker is not None:
+            worker.wait(5000)
+        dialog.release(5000)
+        dialog.hide()
+        dialog.deleteLater()
+
+
 @pytest.fixture
 def window(qt_app: QApplication) -> MainWindow:
     made = MainWindow(Session(), UiSettings())
@@ -1148,7 +1209,7 @@ def test_a_fetched_model_counts_even_without_saving(
     dialog = KeyDialog()
     dialog.model_field.setEditText("qwen3:8b")
 
-    dialog._pull_done(None)
+    dialog._pull_done("qwen3:8b", None)
 
     try:
         assert llm.configured_ollama_model() == "qwen3:8b", "gemerkt, ohne Speichern"
@@ -1168,7 +1229,7 @@ def test_a_failed_fetch_changes_no_setting(
     dialog = KeyDialog()
     dialog.model_field.setEditText("gibtesnicht:1b")
 
-    dialog._pull_done("Ollama hat den Namen nicht angenommen.")
+    dialog._pull_done("gibtesnicht:1b", "Ollama hat den Namen nicht angenommen.")
 
     assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
 

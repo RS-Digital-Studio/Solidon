@@ -681,7 +681,7 @@ def _install_language() -> None:
     try:
         raw = (user_config_dir() / "settings.json").read_text(encoding="utf-8")
         data = json.loads(raw)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         data = None
     if isinstance(data, dict):
         chosen = data.get("language", "")

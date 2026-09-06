@@ -69,7 +69,7 @@ def _silent(fraction: float, text: str) -> None:
 #:
 #: Hier stand 500 000, begründet mit ``agent.analysis.TRIANGLE_LIMIT``. Das ist
 #: aber die Grenze des **Steckbriefs** und nicht die der **Erkennung**, und die
-#: liegt bei 200 000 (``scene.evaluate.FEATURE_LIMIT_TRIANGLES``). Was
+#: lag damals bei 200 000 (``scene.evaluate.FEATURE_LIMIT_TRIANGLES``). Was
 #: dazwischen lag, behielt seine Auflösung und verlor die Merkmale — kein Klick
 #: auf eine Bohrung, keine Passung, nichts für den Agenten. Bei TripoSG war das
 #: der Normalfall.

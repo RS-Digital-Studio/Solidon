@@ -1137,6 +1137,21 @@ def test_a_discarded_proposal_keeps_the_conversation(project: Project, profile: 
     assert proposal.empty
 
 
+def test_explicit_discard_is_not_sent_as_an_executed_answer(
+    project: Project, profile: Profile
+) -> None:
+    """CORE-02: Eine verworfene Zusage ist kein unveränderter Auskunftsbeitrag."""
+    agent = session(project, profile, [Reply(text="Der Quader ist erzeugt.")])
+    proposal = agent.propose("Erzeuge einen Quader.")
+    agent_apply.discard(proposal, project.document)
+
+    answer = project.document.chat[-1]
+    assert context.is_discarded(answer, project.document)
+    messages = context.conversation(project.document.chat, project.document)
+    assert messages[-1].content == "[verworfen]"
+    assert "Der Quader ist erzeugt." not in str(messages)
+
+
 def test_the_origin_records_the_conditions(project: Project, profile: Profile) -> None:
     """§26.4: model, prompt version, rule version, temperature."""
     agent = session(project, profile, [Reply(text="ja")])
@@ -2113,3 +2128,72 @@ def test_a_wrongly_typed_extra_tool_argument_is_an_invalid_call_not_a_crash(
 
     assert proposal.answer == "Dann eben so.", "der Zug lief bis zur Antwort"
     assert proposal.invalid_calls == 2
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"objects": 3},
+        {"objects": None},
+        {"objects": False},
+        {"objects": "obj_1"},
+        {"objects": {}},
+        {"objects": ["obj_1", 2]},
+        {"objects": ["obj_1", None]},
+        {"objects": [["obj_1"]]},
+        {"objects": [""]},
+        {"objects": ["obj_1"], "dx": []},
+        {"objects": ["obj_1"], "params": None},
+        {"objects": ["obj_1"], "outputs": ["obj_2"]},
+        {"objects": ["obj_1"], "seed": {}},
+    ],
+)
+def test_malformed_operation_fields_keep_the_existing_proposal_and_allow_correction(
+    arguments: dict[str, Any], profile: Profile
+) -> None:
+    """CORE-03: Strukturfelder werden vor Iteration geprüft; der Zug bleibt korrigierbar."""
+    project = new_project("centauri-carbon-2", "petg")
+    backend = ScriptedBackend(
+        answers=[
+            Reply(tool_calls=(ToolCall(id="1", name="create_box", arguments={}),)),
+            Reply(tool_calls=(ToolCall(id="2", name="translate_object", arguments=arguments),)),
+            Reply(
+                tool_calls=(
+                    ToolCall(
+                        id="3", name="translate_object", arguments={"objects": ["obj_1"], "dx": 7.0}
+                    ),
+                )
+            ),
+            Reply(text="Korrigiert."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend, document=project.document, profile=profile, sources=ProjectSources(project)
+    )
+    proposal = agent.propose("Quader verschieben")
+    assert proposal.answer == "Korrigiert."
+    assert proposal.invalid_calls == 1
+    assert [draft.op for draft in proposal.drafts] == ["create_box", "translate_object"]
+    assert proposal.drafts[-1].inputs == ("obj_1",)
+    assert proposal.drafts[-1].params["dx"] == pytest.approx(7.0)
+    assert project.document.ops == [], "the working proposal must not mutate the document"
+    response = next(message.content for message in backend.seen[2] if message.tool_call_id == "2")
+    assert "Ungültige Werte" in response
+    assert "objects" in response or any(key in response for key in arguments if key != "objects")
+
+
+def test_malformed_objects_cannot_become_an_unrequested_default_creation(profile: Profile) -> None:
+    """Ein falscher leerer Wert ist keine Erlaubnis, einen Vorgabekörper zu erzeugen."""
+    project = new_project("centauri-carbon-2", "petg")
+    agent = session(
+        project,
+        profile,
+        [
+            Reply(tool_calls=(ToolCall(id="1", name="create_box", arguments={"objects": 0}),)),
+            Reply(text="Bitte wiederholen."),
+        ],
+    )
+    proposal = agent.propose("Noch kein Körper")
+    assert proposal.invalid_calls == 1
+    assert not proposal.drafts
+    assert proposal.answer == "Bitte wiederholen."
