@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 import os
+import sys
 import weakref
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -1632,14 +1633,28 @@ def unavailable_hint() -> str:
     """Was der Nutzer tun kann, wenn es hier keine 3D-Ansicht gibt — leer, wo
     es nichts zu tun gibt (§2.7: kein Fehler ohne Handlungsvorschlag).
 
+    ``_available`` sagt aus drei Gründen nein, und zwei davon sind dem Nutzer
+    zu erklären.
+
     Auf Wayland ist die Lage benennbar. Mit ``DISPLAY`` hat die Anwendung X11
     selbst an die erste Stelle gesetzt (``app.ui.qt_platform``); läuft sie
     trotzdem auf Wayland, ließ sich Qts X11-Plugin nicht laden — und das
     heißt fast immer: eine der neun Systembibliotheken fehlt, die das
     Linux-Paket nicht mitbringt, allen voran ``libxcb-cursor0`` (Qt warnt seit
     6.5 ausdrücklich davor). Ohne ``DISPLAY`` fehlt Xwayland selbst.
+
+    Bleibt der **wgpu-Adapter**, und der ist seit dem Ausbau des VTK-Renderers
+    (06.09.2026) der wahrscheinlichere Fall: Die Ansicht zeichnet über
+    Direct3D 12, Vulkan oder Metal, und auf einem Linux ohne Vulkan-Treiber
+    findet ``factory.available`` nichts. Das ist kein alter Rechner, sondern
+    ein fehlendes Paket — und stand bis dahin als „steht nicht zur Verfügung"
+    ohne einen Weg dahinter.
+
+    Die dritte Lage — Offscreen oder ``SOLIDON3D_NO_VIEWPORT`` — ist gewollt
+    und bekommt keinen Rat.
     """
-    if _effective_platform().casefold().startswith("wayland"):
+    platform = _effective_platform().casefold()
+    if platform.startswith("wayland"):
         if os.environ.get("DISPLAY", "").strip():
             return tr(
                 "Die 3D-Ansicht braucht Qts X11-Anbindung, und die ließ sich nicht laden — "
@@ -1654,7 +1669,20 @@ def unavailable_hint() -> str:
             "Schalten Sie Xwayland in Ihrer Arbeitsumgebung ein oder melden Sie sich in "
             "einer X11-Sitzung an; X11 wird dann von selbst gewählt."
         )
-    return ""
+    if os.environ.get(HEADLESS_VARIABLE) or platform in ("offscreen", "minimal", "vnc"):
+        return ""
+    if sys.platform.startswith("linux"):
+        return tr(
+            "Die 3D-Ansicht zeichnet über die Grafikkarte, und dafür fehlt hier Vulkan. "
+            "Installieren Sie die Pakete „mesa-vulkan-drivers“ und „libvulkan1“ — unter "
+            "Fedora und openSUSE heißen sie „mesa-vulkan-drivers“ und „vulkan-loader“ — "
+            "und starten Sie das Programm neu."
+        )
+    return tr(
+        "Die 3D-Ansicht zeichnet über die Grafikkarte und braucht Direct3D 12, Vulkan "
+        "oder Metal. Ein aktueller Grafiktreiber des Herstellers behebt das meist; auf "
+        "sehr alten Geräten bleibt die Ansicht aus."
+    )
 
 
 def _hex(colour: tuple[float, float, float]) -> str:
