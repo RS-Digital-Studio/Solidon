@@ -426,6 +426,22 @@ def evaluate(
                 # Erfolg mit dem alten Ergebnis. Die nächste ungeschützte
                 # json.loads in einem Sammelparameter-Leser wäre sonst
                 # derselbe Fund noch einmal.
+                #
+                # **Und der Traceback gehört ins Protokoll.** Der Kundenbericht
+                # S-20260906-9ca141 (0.3.4) trug zweimal
+                # ``op.load.InternalError`` mit dem Titel und sonst nichts: Die
+                # Ausnahmeart lag in ``values`` versteckt, der Traceback stand
+                # nirgends, und mit dem Bericht in der Hand war der Fehler nicht
+                # zu finden. ``exc_info`` schreibt ihn in die Zeilen, die der
+                # Bericht als „protokoll.txt" mitschickt.
+                _log.error(
+                    "op %s (%s) raised %s: %s",
+                    operation.id,
+                    operation.op,
+                    type(problem).__name__,
+                    problem,
+                    exc_info=problem,
+                )
                 wrapped = InternalError(
                     detail=f"{type(problem).__name__}: {problem}",
                     values={"operation": str(operation.op)},
@@ -768,7 +784,14 @@ def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
     # offenen Kanten geschlossen` — roh geschrieben stünden im Protokoll die
     # Platzhalter statt der Zahlen, also gerade das, wonach der Support sucht.
     # Dieselbe Funktion löst das für Dateinamen (`Slot number.stl`).
-    return f"{last.code}: {source_text(last.message)}"
+    reason = f"{last.code}: {source_text(last.message)}"
+    # **Der Grund eines Programmfehlers steht nicht in der Meldung.** Die ist
+    # je Klasse gleich — „Im Programm ist ein unerwarteter Fehler
+    # aufgetreten" —, und Ausnahmeart und -text liegen in ``values["detail"]``.
+    # Im Kundenprotokoll vom 06.09.2026 (S-20260906-9ca141) hieß die Zeile
+    # zweimal dasselbe und sagte beide Male nichts.
+    detail = last.values.get("detail")
+    return f"{reason} — {detail}" if detail else reason
 
 
 def _without_settled(findings: Sequence[Finding]) -> list[Finding]:

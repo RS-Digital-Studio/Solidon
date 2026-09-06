@@ -1635,6 +1635,62 @@ def test_a_stopped_evaluation_says_why_in_the_log(caplog: pytest.LogCaptureFixtu
     assert "." in zeilen[0].split("op 1: ")[-1], f"nennt keinen Befundcode: {zeilen[0]}"
 
 
+def test_an_unexpected_error_leaves_its_traceback_and_cause_in_the_log(
+    registry: Registry, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Programmfehler in einer Operation nennt im Protokoll Ursache und Traceback.
+
+    Der Kundenbericht S-20260906-9ca141 (0.3.4, 06.09.2026) trug zweimal
+    ``op.load.InternalError: Im Programm ist ein unerwarteter Fehler
+    aufgetreten.`` und sonst nichts — Titel im Protokoll, Titel im Bericht,
+    die Ausnahmeart in ``values`` versteckt, der Traceback nirgends. Mit dem
+    Bericht in der Hand war der Fehler nicht zu finden.
+
+    Geprüft an einer Operation, die einen ``TypeError`` wirft: Der Befund
+    trägt Ausnahmeart und -text, die Abbruchzeile nennt sie, und davor steht
+    der Traceback als Fehlerzeile — die drei Dinge, die ein Bericht braucht.
+    """
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.project import new_project
+    from app.core.types import Operation
+
+    @register_op(
+        name="blow_up",
+        title=_("Explodieren"),
+        category="scene",
+        params=EmptyParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=registry,
+    )
+    def blow_up(ctx: OpContext) -> OpResult:
+        raise TypeError("bounds() got an unexpected keyword argument 'tight'")
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.ops.append(Operation(id=1, op="blow_up", inputs=(), outputs=("obj_1",), params={}))
+
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        result = evaluate(document, make_profile("centauri-carbon-2", "petg"), registry=registry)
+
+    assert result.stopped_at == 1
+    finding = next(
+        entry for entry in result.scene.report.findings if entry.code == "op.blow_up.InternalError"
+    )
+    cause = "TypeError: bounds() got an unexpected keyword argument 'tight'"
+    assert finding.values["detail"] == cause
+
+    stopped = [r.getMessage() for r in caplog.records if "evaluation stopped" in r.getMessage()]
+    assert stopped and cause in stopped[0], f"die Abbruchzeile nennt den Grund nicht: {stopped}"
+
+    errors = [r for r in caplog.records if r.levelno == logging.ERROR and r.exc_info]
+    assert errors, "kein Traceback im Protokoll"
+    assert "blow_up" in caplog.text and cause in caplog.text, (
+        "der Traceback nennt weder die Operation noch die Ausnahme"
+    )
+
+
 def test_the_log_reason_carries_the_numbers_not_the_placeholders() -> None:
     """Der Abbruchgrund nennt die Zahlen — sonst hilft er dem Support wieder nicht.
 

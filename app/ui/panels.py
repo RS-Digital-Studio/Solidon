@@ -603,9 +603,18 @@ def as_error(finding: Finding, document: Document | None = None) -> AppError:
     — er trägt aber genau die zwei Angaben, die sie lesen: den Körper und die
     Zahlen. Sie zweimal zu schreiben, einmal für Fehler und einmal für
     Befunde, hieße zwei Wahrheiten über dieselbe Handlung.
+
+    **Mit dem Grund, nicht nur mit dem Titel.** ``_finding_from`` legt das
+    unübersetzte Detail eines Fehlers — bei einem Programmfehler Ausnahmeart
+    und -text — in ``values["detail"]``; ohne diese Zeile kam beim
+    Fehlerbericht ein Fehler mit dem Titel an, und ``str(error)`` schrieb in
+    den Bericht S-20260906-9ca141 nur „Im Programm ist ein unerwarteter
+    Fehler aufgetreten".
     """
+    detail = finding.values.get("detail")
     return AppError(
         title=finding.message,
+        detail=str(detail) if detail is not None else None,
         suggestions=finding.suggestions,
         object_id=_object_for_finding(finding, document),
         op_id=finding.op_id,

@@ -13767,3 +13767,29 @@ def test_a_discarded_sketch_makes_undo_available_even_in_an_empty_project(
     assert window._sketch_panel is not None, "Strg+Z holt die Zeichnung zurück"
     assert window._sketch_panel.sketch_text() == drawn
     window.finish_sketch(keep=False)
+
+
+def test_a_finding_becomes_an_error_with_its_cause() -> None:
+    """Der Fehlerbericht aus dem Prüfbericht nennt die Ursache, nicht nur den Titel.
+
+    ``report_error`` schreibt ``str(error)`` in den Bericht, und der ist ohne
+    ``detail`` allein der Titel. Der Kundenbericht S-20260906-9ca141 (0.3.4)
+    stand deshalb zweimal bei „Im Programm ist ein unerwarteter Fehler
+    aufgetreten", während die Ausnahmeart im Befund lag. ``as_error`` nimmt
+    sie jetzt mit — und nur, wo es eine gibt.
+    """
+    from app.ui.panels import as_error
+
+    crashed = Finding(
+        code="op.load.InternalError",
+        severity="error",
+        message=tr("Im Programm ist ein unerwarteter Fehler aufgetreten."),
+        op_id=1,
+        values={"detail": "TypeError: bounds of an empty mesh", "operation": "load"},
+    )
+    error = as_error(crashed)
+    assert error.detail == "TypeError: bounds of an empty mesh"
+    assert "TypeError: bounds of an empty mesh" in str(error)
+
+    plain = Finding(code="ingest.very_large", severity="warning", message=tr("Fein vernetzt."))
+    assert as_error(plain).detail is None
