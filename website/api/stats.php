@@ -44,6 +44,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/day_zone.php';
+
 if (PHP_VERSION_ID < 80100) {
     http_response_code(503);
     exit;
@@ -57,9 +59,10 @@ const STATS_MAX_MONTH_BYTES = 16 * 1024 * 1024;
 const STATS_MAX_LINE_BYTES = 1024;
 const STATS_MAX_ROWS = 16384;
 
-/** In welcher Zeitzone die Tage gezählt werden. Gespeichert wird UTC; wer
- *  die Zahlen liest, denkt in seiner eigenen Zeit. */
-const DISPLAY_ZONE = 'Europe/Berlin';
+/** In welcher Zeitzone die Tage gezählt werden — dieselbe wie in count.php
+ *  (day_zone.php). Gespeichert wird UTC; wer die Zahlen liest, denkt in
+ *  seiner eigenen Zeit. */
+const DISPLAY_ZONE = DAY_ZONE;
 
 /** Wie viele Zeilen die Ranglisten zeigen. */
 const TOP = 25;

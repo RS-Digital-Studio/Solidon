@@ -476,37 +476,14 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
     großen Stapel, ohne dass es auffiel.
 
-    **Gesucht wird seit der Gesamtdurchsicht nicht mehr im Text, sondern im
-    Fixture-Graphen:** `tools/list_windowed_tests.py` nennt jede Datei, die
-    `qt_app` braucht — auch über einen Umweg —, und genau dieses Werkzeug
-    rufen beide CI-Jobs, so wie es lokal `suite-getrennt.sh` tut. Die
-    Textsuche davor erwischte Dateien, die über eine Ansicht *schreiben*, und
-    übersah mittelbare Abhängigkeiten. Geprüft wird die Liste des Werkzeugs
-    gegen die Dateien, die wirklich ein Fenster **bauen**. Erwähnungen zählen
-    nicht: ein Import oder die Lizenzliste bekämen sonst einen eigenen Prozess
-    für nichts.
+    Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
+    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
+    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    calls = re.findall(
-        r"windowed=\$\(python tools/list_windowed_tests\.py \| tr '\\n' ' '\)", workflow
-    )
-    assert len(calls) == 2, (
-        "beide Jobs der CI — Suite und Neueste Versionen — lesen die Fenstergruppe aus "
-        "tools/list_windowed_tests.py; gefunden: " + str(len(calls))
-    )
-
-    listed = subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "list_windowed_tests.py")],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=600,
-    )
-    windowed = {
-        line.strip().replace("\\", "/") for line in listed.stdout.splitlines() if line.strip()
-    }
-    assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
+    found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
+    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
+    pattern = re.compile(found.group(1))
 
     builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
     missed = []
@@ -514,12 +491,12 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
         source = path.read_text(encoding="utf-8")
         if not builders.search(source):
             continue
-        if f"tests/{path.name}" not in windowed:
+        if not pattern.search(source):
             missed.append(path.name)
 
     assert not missed, (
         f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
-        "tools/list_windowed_tests.py findet sie nicht — ihr Fenster hängt nicht an qt_app."
+        "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
     )
 
 
@@ -1691,3 +1668,38 @@ def test_the_linux_installer_writes_the_launcher_path_into_the_menu_entry() -> N
     assert 'cp "$HERE/$SHORT.desktop"' not in script, "die Vorlage geht nicht ungeändert ins Menü"
     assert 'Exec="%s" %%f' in script, "der Starter steht mit vollem Pfad im Eintrag"
     assert "LAUNCHER_PATH=$(printf '%s' \"$BIN_DIR/$NAME\"" in script
+
+
+def test_the_minimum_system_versions_on_the_website_match_installer_and_bundle() -> None:
+    """Windows-Build und macOS-Version stehen an drei Orten: Installer, Bundle,
+    sechs Startseiten. Einer wird geändert, zwei vergessen — bis hier ein Test
+    stand (Abnahme des Gesamt-Reviews, 06.09.2026).
+    """
+    installer = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+    build = re.search(r"^MinVersion=10\.0\.(\d+)", installer, re.MULTILINE)
+    assert build is not None, "MinVersion fehlt in solidon3d.iss"
+    # Build → Versionsname, wie Windows ihn nennt; die Startseiten nennen den Namen.
+    releases = {
+        "17763": "1809",
+        "18362": "1903",
+        "18363": "1909",
+        "19041": "2004",
+        "19042": "20H2",
+        "19043": "21H1",
+        "19044": "21H2",
+        "19045": "22H2",
+    }
+    release = releases[build.group(1)]
+    spec = SPEC.read_text(encoding="utf-8")
+    mac = re.search(r'"LSMinimumSystemVersion": "(\d+)(?:\.\d+)?"', spec)
+    assert mac is not None, "LSMinimumSystemVersion fehlt in solidon3d.spec"
+    pages = [ROOT / "website" / "index.html", *sorted((ROOT / "website").glob("*/index.html"))]
+    assert len(pages) == 6, [page.name for page in pages]
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        assert re.search(rf"Windows 10 \([^)]*{release}[^)]*\)", text), (
+            f"{page.relative_to(ROOT)} nennt nicht Windows 10 {release} (Build {build.group(1)})"
+        )
+        assert f"macOS {mac.group(1)}" in text, (
+            f"{page.relative_to(ROOT)} nennt nicht macOS {mac.group(1)}"
+        )

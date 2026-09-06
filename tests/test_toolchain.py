@@ -589,7 +589,9 @@ def test_freezing_keeps_only_foreign_platform_pins(tmp_path, monkeypatch, platfo
         encoding="utf-8",
     )
     monkeypatch.setattr(check_env, "CONSTRAINTS", target)
-    monkeypatch.setattr(check_env, "sys", SimpleNamespace(platform=platform))
+    # Nur das Attribut, nicht das Modul: ``check_env`` liest auch ``sys.executable``
+    # und ``sys.version_info``, und ein Namensraum mit einem Feld verdeckte beides.
+    monkeypatch.setattr(check_env.sys, "platform", platform)
     monkeypatch.setattr(
         check_env.subprocess,
         "run",
