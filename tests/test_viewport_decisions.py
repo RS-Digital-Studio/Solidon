@@ -2160,7 +2160,17 @@ def test_the_view_stays_upright_while_it_turns() -> None:
     Commit-Meldung lebt: Dieselben zwölf Züge, mit ``Azimuth``, ``Elevation``
     und ``OrthogonalizeViewUp`` gerechnet — also so, wie die Basisklasse es
     tut —, kippen den Horizont um mehr als sechzig Grad.
+
+    **Gemessen an der echten ``vtkCamera``, und deshalb übersprungen, wenn es
+    sie nicht gibt.** Ein Nachbau der Formel wäre keine Gegenprobe mehr,
+    sondern dieselbe Rechnung zweimal. ``vtk`` steckt heute noch als kopflose
+    Geometriebibliothek in der Bereichsprüfung; fällt es ganz (Registerpunkt),
+    verschwindet mit ihm diese Messung — und nicht der Test, der den
+    Drehteller prüft.
     """
+    pytest.importorskip(
+        "vtkmodules.vtkRenderingCore", reason="ohne VTK gibt es die Gegenprobe nicht mehr"
+    )
     from vtkmodules.vtkRenderingCore import vtkCamera
 
     from app.ui.render.navigator import turntable_camera
@@ -2230,10 +2240,15 @@ def test_the_turn_keeps_its_distance_and_the_speed_it_had() -> None:
     Das Zweite ist die stille Zusage dieser Änderung: Wer das Neigen abstellt,
     darf nicht nebenbei die Empfindlichkeit verstellen. Geprüft gegen
     ``vtkCamera.Azimuth`` mit der Formel der Basisklasse — bei einem rein
-    waagerechten Zug müssen beide denselben Standort ergeben.
+    waagerechten Zug müssen beide denselben Standort ergeben. Wie die
+    Gegenprobe darüber hängt auch diese am echten VTK und überspringt sich
+    ohne es.
     """
     import math
 
+    pytest.importorskip(
+        "vtkmodules.vtkRenderingCore", reason="ohne VTK gibt es die Gegenprobe nicht mehr"
+    )
     from vtkmodules.vtkRenderingCore import vtkCamera
 
     from app.ui.render.navigator import turntable_camera

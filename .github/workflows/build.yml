@@ -167,17 +167,17 @@ jobs:
         # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
         # etwas zu ändern.
         #
-        # **Gesucht wird nach dem Aufbau, nicht nach der Erwähnung.** Nach
-        # `MainWindow` allein fehlten zwei Dateien, die einen `Viewport` bauen,
-        # ohne das Fenster zu nennen: `tests/test_cursors.py` mit acht Aufbauten
-        # und `tests/test_plates.py` mit einem. Neun Fenster mehr im großen
-        # Stapel, ohne dass es auffiel — bei einem Absturz, der genau an dieser
-        # Zahl hängt.
-        #
-        # Nach `Viewport(` mit Klammer und nicht nach dem nackten Namen: sieben
-        # weitere Dateien *erwähnen* ihn oder `pyvista` nur, in einem Import,
-        # einem Kommentar, der Lizenzliste von `test_licences.py`. Die bekämen
-        # sonst einen eigenen Prozess für nichts.
+        # **Gefragt wird der Fixture-Graph, nicht der Text.** Bis zum
+        # 05.09.2026 suchte diese Stelle nach `MainWindow`, `Viewport(` und
+        # `pyvista` im Quelltext, und beide Fehler dieser Sorte sind
+        # aufgetreten: Nach `MainWindow` allein fehlten zwei Dateien, die eine
+        # Ansicht bauen, ohne das Fenster zu nennen (`test_cursors.py` mit acht
+        # Aufbauten, `test_plates.py` mit einem) — neun Fenster mehr im großen
+        # Stapel, bei einem Absturz, der genau an dieser Zahl hängt. Und in die
+        # Gegenrichtung geriet `tests/test_performance.py` wegen zweier
+        # Docstrings in die Fenstergruppe, sammelte dort nichts und endete mit
+        # Exit 5. `tools/list_windowed_tests.py` fragt stattdessen, welche
+        # Datei das `qt_app`-Fixture wirklich anzieht, auch mittelbar.
         #
         # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
         # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
