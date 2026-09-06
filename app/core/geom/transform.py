@@ -13,13 +13,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import Literal
+from typing import Literal, cast
 
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom.mesh import MeshData
-from app.core.types import Vec3
+from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.types import Mesh, Transform, Vec3
 from app.core.units import EPS_DISPLAY, EPS_GEOM
 
 Axis = Literal["x", "y", "z"]
@@ -81,6 +81,50 @@ def apply(mesh: MeshData, matrix: np.ndarray) -> MeshData:
         mesh.replacing(body),
         cavity=apply(mesh.cavity, matrix) if mesh.cavity is not None else None,
     )
+
+
+def is_rigid(matrix: np.ndarray) -> bool:
+    """Ob die Matrix eine starre Bewegung ist — Drehung, Spiegelung, Verschiebung.
+
+    Nur solche Matrizen lässt OpenCASCADE auf einen exakten Körper los, und
+    nur unter ihnen bleibt er exakt: Eine Scherung oder ein ungleichmäßiger
+    Maßstab verbiegt Zylinder zu Ellipsen, die kein Zylinder mehr sind.
+    Geprüft wird die obere 3x3 auf Orthonormalität; die Spiegelung
+    (Determinante -1) gehört dazu, ``mirror_object`` ist eine.
+    """
+    linear = np.asarray(matrix, dtype=float)[:3, :3]
+    product = linear @ linear.T
+    return bool(np.allclose(product, np.eye(3), atol=1e-9))
+
+
+def moved_body(mesh: Mesh, matrix: np.ndarray) -> Mesh:
+    """Bewegt einen Körper und behält dabei seine Darstellung.
+
+    **Der Unterschied zu :func:`apply` ist der Rückweg.** ``apply`` arbeitet
+    auf Dreiecken, und wer ihm einen exakten Körper gibt, bekommt Dreiecke
+    zurück — eine Einbahnstraße (§30). Für eine Bewegung ist das unnötig:
+    Verschieben, Drehen, Spiegeln und Aufs-Bett-Setzen ändern die Form nicht,
+    und der B-Rep-Kern führt sie exakt aus.
+
+    Gemessen am 06.09.2026: Ein Filamenthalter aus einer Skizze — exakter
+    Körper — war nach „Auf dem Bett anordnen“ ein Netz, und *Verrunden* stand
+    danach ausgegraut im Menü mit dem Hinweis, man möge die Schritte
+    zurücknehmen. Die Bewegung war der ganze Grund.
+
+    Ohne B-Rep-Kern, bei einer nicht starren Matrix oder bei einem Körper, der
+    ohnehin ein Netz ist, bleibt es beim alten Weg.
+    """
+    if isinstance(mesh, MeshData):
+        return apply(mesh, matrix)
+    if is_rigid(matrix):
+        from app.core.brep import edit
+        from app.core.brep.kernel import Solid, available
+
+        if available() and isinstance(mesh, Solid):
+            rows = np.asarray(matrix, dtype=float)
+            cells = cast(Transform, tuple(tuple(float(value) for value in row) for row in rows))
+            return edit.transformed(mesh, cells)
+    return apply(as_mesh_data(mesh), matrix)
 
 
 def place_on_bed(mesh: MeshData) -> MeshData:
