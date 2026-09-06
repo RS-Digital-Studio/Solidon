@@ -60,3 +60,7 @@ Regelsammlung angefasst? Dann:
 
 Der Suite-Lauf kostet Geld und rund anderthalb Stunden je Modell
 (`tools/run_agent_suite.py`). Er ist kein Testlauf.
+
+Kalibrierung schreibt TOML-Tabellen- und Feldkennungen als zitierte Literale.
+Materialkennungen mit Leerraum, Punkten oder Anführungszeichen bleiben so
+beim Aktualisieren eines anderen Profils unverändert lesbar.

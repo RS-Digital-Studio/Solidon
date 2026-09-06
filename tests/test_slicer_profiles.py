@@ -27,8 +27,9 @@ def _write(path: Path, document: dict[str, object]) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
 
 
+@pytest.mark.parametrize("own", [False, True])
 def test_the_loaded_filaments_carry_profile_colour_and_type(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, own: bool
 ) -> None:
     """Die Farbe steht in der Slicer-Konfiguration, der Typ im Profil."""
     executable = tmp_path / "ElegooSlicer" / "elegoo-slicer.exe"
@@ -46,6 +47,13 @@ def test_the_loaded_filaments_carry_profile_colour_and_type(
             "filament_type": ["PETG"],
         },
     )
+    chosen = "Elegoo PETG PRO @ECC2"
+    if own:
+        chosen = "Meine eigene Spule"
+        _write(
+            user / "filament" / f"{chosen}.json",
+            {"name": chosen, "inherits": "Elegoo PETG PRO @ECC2", "from": "User"},
+        )
     config = user.parent.parent / "ElegooSlicer.conf"
     _write(
         config,
@@ -54,7 +62,7 @@ def test_the_loaded_filaments_carry_profile_colour_and_type(
             "elegoo_presets": [
                 {
                     "machine": "Elegoo Centauri Carbon 2 0.4 nozzle",
-                    "filament": "Elegoo PETG PRO @ECC2",
+                    "filament": chosen,
                     "filament_colors": "#9AA0A6",
                 }
             ],
@@ -65,7 +73,7 @@ def test_the_loaded_filaments_carry_profile_colour_and_type(
 
     assert sp.configured_filaments("orca", executable) == (
         sp.SlicerFilament(
-            profile="Elegoo PETG PRO @ECC2",
+            profile=chosen,
             colour="#9AA0A6",
             material_type="PETG",
         ),
@@ -713,6 +721,11 @@ def test_an_own_profile_inherits_from_the_installed_vendor_base(
     profile = sp._read(own, "filament", True)
     assert profile is not None
     assert sp.type_of(profile, roots) == "PETG", "auch der Materialtyp kommt aus der Basis"
+    machine = sp.SlicerProfile(Path("machine.json"), "Centauri", "machine")
+    assert sp.match_filament([profile], machine, "PETG", roots) == profile
+    readback = sp.filament_values(own, roots)
+    assert readback["temperature.bed"] == 70
+    assert readback["filament.flow_ratio"] == pytest.approx(0.96)
 
 
 def test_an_own_profile_finds_the_system_copy_beside_its_user_folder(tmp_path: Path) -> None:

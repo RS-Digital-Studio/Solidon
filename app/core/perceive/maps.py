@@ -45,12 +45,13 @@ from app.core.types import (
     SliceResult,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
 MapKind = Literal["wall", "overhang", "defects", "curvature", "features", "fits", "support"]
+MapScale = Literal["linear", "asinh"]
 
 #: Darüber wird eine Karte abgelehnt statt minutenlang gerechnet (§31).
 #:
@@ -151,6 +152,12 @@ class AnalysisMap:
     Die Fußzeile zählte sie („17 mal nicht bestimmbar") und ließ die Zahl
     unerklärt stehen. Für jede Karte heißt es etwas anderes, also sagt es jede
     selbst; kurz genug, damit es in dieselbe Zeile passt."""
+    display_scale: MapScale = "linear"
+    """Abbildung physischer Werte auf die Farbrampe.
+
+    Die Werte, Grenzen und Schwellen bleiben immer in der Einheit der Karte.
+    Nur Renderer und Legende benutzen diese monotone Anzeigeabbildung.
+    """
 
     @property
     def known(self) -> tuple[float, ...]:
@@ -159,6 +166,33 @@ class AnalysisMap:
     @property
     def unknown_count(self) -> int:
         return sum(1 for value in self.values if math.isnan(value))
+
+    def display_values(self) -> np.ndarray:
+        """Werte für die lineare Farbrampe, ohne die Messwerte zu verändern."""
+        values = np.asarray(self.values, dtype=float)
+        if self.display_scale == "asinh":
+            return np.arcsinh(values / EPS_DISPLAY)
+        return values
+
+    @property
+    def display_limits(self) -> tuple[float, float]:
+        """Grenzen in demselben Raum wie :meth:`display_values`."""
+        if self.display_scale == "asinh":
+            return (
+                math.asinh(self.low / EPS_DISPLAY),
+                math.asinh(self.high / EPS_DISPLAY),
+            )
+        return self.low, self.high
+
+    def value_at_display_fraction(self, fraction: float) -> float:
+        """Den physischen Wert an einem Anteil der Farbrampe zurückgeben."""
+        if self.high <= self.low:
+            return self.low
+        low, high = self.display_limits
+        displayed = low + (high - low) * fraction
+        if self.display_scale == "asinh":
+            return math.sinh(displayed) * EPS_DISPLAY
+        return displayed
 
 
 class MapTooLarge(UserError):
@@ -397,7 +431,7 @@ def wall_thickness_map(
         title=TITLES["wall"],
         values=tuple(thickness),
         unit="mm",
-        low=min(known) if known else 0.0,
+        low=0.0,
         high=capped if capped > 0.0 else top,
         highlighted=highlighted,
         threshold=minimum,
@@ -696,6 +730,7 @@ def _curvature_result(values: np.ndarray, sharp: set[int], exact: set[int]) -> A
         high=float(known.max()) if len(known) else 0.0,
         highlighted=tuple(sorted(sharp)),
         note=note,
+        display_scale="asinh",
     )
 
 
@@ -1009,7 +1044,7 @@ def location_of(entry: SceneObject, finding: Finding) -> Vec3 | None:
             if isinstance(middle, list | tuple) and len(middle) == 3:
                 try:
                     return (float(middle[0]), float(middle[1]), float(middle[2]))
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     continue
         return None
     middle = centres[indices].mean(axis=0)

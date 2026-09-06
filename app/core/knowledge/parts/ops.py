@@ -21,10 +21,10 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Container, Iterable
+from collections.abc import Container, Iterable, Mapping
 from typing import Any
 
-from app.core.errors import Action, AppError
+from app.core.errors import Action, AppError, ValidationError
 from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
@@ -35,6 +35,7 @@ from app.core.geom.boolean import (
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
+from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.types import (
@@ -45,6 +46,7 @@ from app.core.types import (
     OpResult,
     PartResult,
     Profile,
+    Quality,
     SceneObject,
     Vec3,
 )
@@ -108,6 +110,38 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             unit="mm",
             placement="advanced",
             doc=_("Höhe über der Grundfläche des Objekts."),
+        ),
+    ),
+    (
+        "nx",
+        "float",
+        param(
+            title=_("Normalenrichtung X"),
+            default=0.0,
+            placement="advanced",
+            doc=_(
+                "Richtung nach außen an der gewählten Oberfläche. Drei Nullen verwenden die Achse."
+            ),
+        ),
+    ),
+    (
+        "ny",
+        "float",
+        param(
+            title=_("Normalenrichtung Y"),
+            default=0.0,
+            placement="advanced",
+            doc=_("Zweite Komponente der Oberflächenrichtung — siehe Normalenrichtung X."),
+        ),
+    ),
+    (
+        "nz",
+        "float",
+        param(
+            title=_("Normalenrichtung Z"),
+            default=0.0,
+            placement="advanced",
+            doc=_("Dritte Komponente der Oberflächenrichtung — siehe Normalenrichtung X."),
         ),
     ),
     (
@@ -187,7 +221,12 @@ def build_params(spec: PartSpec) -> type[BaseParams]:
     """Die Parameter des Bausteins plus den Ort, an den er gehört, als ein
     Schema (§10).
     """
-    namespace: dict[str, Any] = {"__annotations__": {}}
+    normal = ("nx", "ny", "nz")
+    owned = {entry.name for entry in spec.params.fields()}
+    while owned.intersection(normal):
+        normal = (f"surface_{normal[0]}", f"surface_{normal[1]}", f"surface_{normal[2]}")
+    names = dict(zip(("nx", "ny", "nz"), normal, strict=True))
+    namespace: dict[str, Any] = {"__annotations__": {}, "_surface_normal_fields": normal}
     for entry in spec.params.fields():
         namespace["__annotations__"][entry.name] = entry.type
         namespace[entry.name] = (
@@ -196,11 +235,18 @@ def build_params(spec: PartSpec) -> type[BaseParams]:
             else dataclasses.field(metadata=entry.metadata)
         )
     for name, annotation, declaration in _PLACEMENT:
+        name = names.get(name, name)
         namespace["__annotations__"][name] = annotation
         namespace[name] = declaration
 
     made = type(f"{_camel(spec.name)}OpParams", (BaseParams,), namespace)
     return op_params(made)
+
+
+def normal_fields(params: type[BaseParams]) -> tuple[str, str, str]:
+    """Die Richtungsfelder des Op-Schemas, getrennt von gleichnamigen Rezeptmaßen."""
+    names = getattr(params, "_surface_normal_fields", ("nx", "ny", "nz"))
+    return names[0], names[1], names[2]
 
 
 def _camel(name: str) -> str:
@@ -481,16 +527,8 @@ def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding 
 def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
-    values = _part_values(spec, ctx.params, ctx.profile)
-    # Ein Rezept baut mit dem Profil des Dokuments (``build_with_profile``):
-    # eine ``auto:``-Toleranz darin gehört mit dem Material des Kunden
-    # aufgelöst. Für die ``.py``-Bausteine bleibt ``fn`` der ganze Vertrag.
-    part_params = spec.params(**values)
-    if spec.build_with_profile is not None:
-        produced = spec.build_with_profile(part_params, ctx.profile, ctx.quality)
-    else:
-        produced = spec.fn(part_params)
-
+    profile = for_object(ctx.profile, source) if ctx.profile is not None else None
+    part_params, produced = _built_part(spec, ctx.params, profile, ctx.quality)
     built = as_mesh_data(produced.mesh)
     anchor, direction = _anchor(source, ctx.params, spec, built)
     flat = _lying_flat(spec, ctx.params, direction)
@@ -626,6 +664,46 @@ def _concatenated_with_slots(body: MeshData, placed: MeshData) -> MeshData:
     return MeshData.of(mesh, slots=(*body_slots, *placed_slots))
 
 
+def _built_part(
+    spec: PartSpec,
+    params: BaseParams,
+    profile: Profile | None,
+    quality: Quality,
+) -> tuple[BaseParams, PartResult]:
+    """Vorschau und Operation bauen dieselben Maße mit demselben Materialprofil."""
+    part_params = spec.params(**_part_values(spec, params, profile))
+    if spec.build_with_profile is not None:
+        produced = spec.build_with_profile(part_params, profile, quality)
+    else:
+        produced = spec.fn(part_params)
+    return part_params, produced
+
+
+def placement_tool(spec: PartSpec, values: Mapping[str, Any], profile: Profile) -> MeshData:
+    """Der wirkliche Baustein lokal an einer Oberfläche, vor deren Rahmenmatrix.
+
+    Drehung, Einsenken und Schnittspiegelung sind enthalten. Der Aufrufer legt
+    nur noch ``frame_of`` darüber. Ausdruckswerte müssen vorher wie für die
+    Operation aufgelöst werden; ein Zielmaterial übergibt er über ``for_object``.
+    """
+    from app.core.registry import validate
+
+    schema = build_params(spec)
+    known = {entry.name for entry in schema.fields()}
+    local = {name: value for name, value in values.items() if name in known}
+    local.update(x=0.0, y=0.0, z=0.0, at_feature="")
+    local.update(zip(normal_fields(schema), (0.0, 0.0, 1.0), strict=True))
+    params = validate(schema, local)
+    _part_params, produced = _built_part(spec, params, profile, "fine")
+    mesh = as_mesh_data(produced.mesh)
+    subtractive = cuts(spec, params)
+    sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
+    flip = subtractive and _extends_above_mouth(mesh)
+    return _place(
+        mesh, params, sink=sink, direction=(0.0, 0.0, 1.0), keeps_up=spec.keeps_up, flip=flip
+    )
+
+
 def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[str, Any]:
     """Die eigenen Parameter des Bausteins aus denen der Operation, mit dem
     eingefüllten Spiel.
@@ -636,7 +714,12 @@ def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[s
         # Regel 7: die Toleranz ist ein Verweis ins Materialprofil, nie eine Zahl
         # in der Datei.
         values[PLAY_FIELD] = profile.material.clearance
-    if GRIP_FIELD in values and not values[GRIP_FIELD] and profile is not None:
+    if (
+        spec.grip_from_profile
+        and GRIP_FIELD in values
+        and not values[GRIP_FIELD]
+        and profile is not None
+    ):
         # Dasselbe für das Übermaß, und ``press`` steht im Profil negativ:
         # gemeint ist der Betrag, um den es enger wird.
         values[GRIP_FIELD] = abs(profile.material.press)
@@ -660,14 +743,14 @@ def _placed_by_hand(params: Any) -> bool:
     Ein Parameterausdruck (``=@wand``) zählt als eingetragen, auch wenn er sich
     zu null auswertet: Wer ihn hinschreibt, hat eine Absicht.
     """
-    for field in ("x", "y", "z"):
+    for field in ("x", "y", "z", *normal_fields(type(params))):
         value = getattr(params, field, 0.0)
         if isinstance(value, str):
             return True
         try:
             if float(value) != 0.0:
                 return True
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return True
     return False
 
@@ -737,7 +820,7 @@ def _anchor(
                     ),
                 ),
             )
-        return (0.0, 0.0, 0.0), None
+        return (0.0, 0.0, 0.0), _free_direction(params)
 
     feature = source.features.get(name)
     if feature is None:
@@ -837,9 +920,31 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: MeshData) 
     """
     name = str(getattr(params, "at_feature", "") or "")
     feature = source.features.get(name) if name else None
+    if not name and _free_direction(params) is not None:
+        return _extends_above_mouth(built)
     if feature is None or feature.kind != "face":
         return False
+    return _extends_above_mouth(built)
+
+
+def _extends_above_mouth(built: MeshData) -> bool:
+    """Die eine Spiegelungsentscheidung für Schnittvorschau und tatsächliche Op."""
     return float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
+
+
+def _free_direction(params: Any) -> Vec3 | None:
+    """Normiert die gespeicherte Oberflächenrichtung, ohne Null auf eine Achse zu raten."""
+    names = normal_fields(type(params))
+    values = tuple(float(getattr(params, name, 0.0)) for name in names)
+    length = math.hypot(*values)
+    if not math.isfinite(length):
+        raise ValidationError(
+            field=names[0],
+            detail=_("Die Oberflächenrichtung ist ungültig. Die Fläche erneut wählen."),
+        )
+    if not length:
+        return None
+    return (values[0] / length, values[1] / length, values[2] / length)
 
 
 def _direction_of(feature: Feature) -> Vec3 | None:
@@ -1090,11 +1195,21 @@ def _matrix(
     if direction is not None:
         from app.core.geom.align import rotation_between
 
-        if angle:
-            matrix = rotation("z", angle) @ matrix
-        matrix = rotation_between((0.0, 0.0, 1.0), direction) @ matrix
-        if keeps_up:
-            matrix = _roll_upright(direction) @ matrix
+        if not getattr(params, "at_feature", "") and _free_direction(params) is not None:
+            from app.core.sketch.planes import frame_of
+
+            frame = frame_of(direction, (0.0, 0.0, 0.0))
+            basis = np.eye(4, dtype=np.float64)
+            basis[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+            # Im Flächenrahmen zeigt +Y nach oben; die Bausteine hängen an -Y.
+            local_angle = angle + (180.0 if keeps_up else 0.0)
+            matrix = basis @ rotation("z", local_angle) @ matrix
+        else:
+            if angle:
+                matrix = rotation("z", angle) @ matrix
+            matrix = rotation_between((0.0, 0.0, 1.0), direction) @ matrix
+            if keeps_up:
+                matrix = _roll_upright(direction) @ matrix
     else:
         if axis != "z":
             # Den Baustein so umlegen, dass sein eigenes +Z entlang der

@@ -125,3 +125,54 @@ unberührt.
 `check.py` vergleicht die beiden beim Öffnen — daher die Meldung „dieser
 Baustein hat sich geändert". `AGENTS.md` sagt verkürzt „`parts_version`
 erhöhen"; gemeint ist die Konstante der Bibliothek.
+
+## Material, Messkörper und Reise
+
+Beim Einsetzen bestimmt `profiles.for_object` das Material des Zielkörpers,
+auch für `build_with_profile` eines Rezepts. `grip_from_profile` kennzeichnet
+Materialübermaß; eine konstruktive Verengung wie am Kabelclip ist davon
+unabhängig und wird gegen den Kabeldurchmesser bemessen. Unmögliche
+Parameterkombinationen werden mit Änderungsvorschlag abgewiesen; Messwinkel
+werden nicht still gekappt. Innen- und Außengewinde teilen denselben
+helikalen Flankenverlauf, mit dem eingestellten Spiel dazwischen.
+
+Die Spaltprüfung berücksichtigt alle Komponentenpaare und den tatsächlichen
+Flächenabstand, einschließlich Kanteninnerem. Der Körperaufbau bleibt
+vom Bereichsbericht getrennt.
+
+Ein erfasster Geometrieausschnitt enthält keine Auftragseinstellungen.
+Projektcontainer sammeln Rezeptabhängigkeiten transitiv mit Besuchsmenge.
+Mitgereiste Namenskonflikte erhalten einen freien abgeleiteten Namen;
+vorhandene lokale oder bereits mitgereiste Fassungen bleiben unverändert.
+
+Das eigenständige Rezeptformat v2 trägt benötigte Rezepte in einer flachen
+`dependencies`-Tabelle. v1 wird ohne Änderung der Quelldaten migriert; die
+Dokumentmigration bleibt davon getrennt. Der Graph ist auf 32 Beilagen und
+64 tatsächlich expandierte Operationen begrenzt, kreisfrei und vollständig
+erreichbar. Jede Beilage durchläuft denselben Daten- und Quellenprüfer wie
+das Hauptrezept. Ein privates Operationsregister löst die eingebetteten
+Fassungen auf, ohne lokale Katalogeinträge oder eingebaute Teile zu ersetzen.
+Import, Export, erneutes Laden und Bauen benutzen denselben Vertrag.
+
+Freie Oberflächenplatzierung speichert `x/y/z` und die Außenrichtung
+`nx/ny/nz`. Drei Nullen erhalten die frühere `axis`-Semantik; ein echtes
+`at_feature` hat Vorrang. Freie Richtungen verwenden den Rahmen aus
+`sketch.planes.frame_of`, der auch die Vorschau orientiert. `placement_tool`
+liefert die Originalgeometrie bereits mit lokaler Drehung, Einsenkung und
+gegebenenfalls Schnittspiegelung; die Oberfläche legt nur die Rahmenmatrix
+darüber. Vorschau und Operation teilen den Aufbau mit dem Materialprofil
+des Zielkörpers. Ein abziehendes Werkzeug wächst ins Material, ein
+hinzufügendes von seiner Basis nach außen.
+
+Ein eigener Baustein darf `nx`, `ny` oder `nz` als fachliches Maß besitzen.
+`build_params` verschiebt in diesem Fall alle drei Richtungsfelder gemeinsam
+in einen freien `surface_`-Namensraum, bei weiterer Kollision wiederholt.
+`normal_fields(op_schema)` ist die einzige Zuordnung für Vorbelegung,
+Vorschau und Auswertung. Eigene Maße und bereits gespeicherte Werte bleiben
+dabei unverändert; die Richtungsfelder haben weiterhin Null als Vorgabe.
+
+Schraubenbohrung, Senkkegel und Kopfzone haben getrennte benannte Merkmale.
+Der Senkkegel behält `countersink_1` mit Art `cone`, Öffnungswinkel und
+Innenraumkennzeichnung; `head_room_1` nennt die zylindrische Kopfzone.
+Kopfzylinder und Kegel teilen ihren vollständigen Stirnrand. Ein Überstand
+unter diesen Rand würde einen Ringsims erzeugen und die Hohlraumkette trennen.

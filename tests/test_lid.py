@@ -428,3 +428,32 @@ def test_a_chosen_rim_decides_the_height(profile: Profile) -> None:
     result = make_lid(entry, profile, collar=4.0, at_feature=rim.id)
 
     assert result.findings[0].values["z_mm"] == pytest.approx(OUTER[2])
+
+
+def test_screw_neck_follows_the_translated_opening(profile):
+    import dataclasses
+
+    entry = jar()
+    shifted = entry.mesh.raw.copy()
+    shifted.apply_translation((50, -20, 0))
+    entry = dataclasses.replace(entry, mesh=MeshData.of(shifted))
+    result = make_screw_lid(entry, profile, height=8, pitch=3)
+    neck = result.outputs[0]
+    assert neck.mesh.component_count == 1
+    assert neck.mesh.bounds.minimum[0] >= 30 - 1e-6
+    assert neck.mesh.bounds.maximum[0] <= 70 + 1e-6
+    from app.core.geom.lid import NECK_THREAD_FEATURE
+
+    assert neck.features[NECK_THREAD_FEATURE].params["centre"][:2] == pytest.approx((50, -20))
+
+
+@pytest.mark.parametrize("height,pitch", [(8.0, 3.0), (7.3, 2.0), (5.0, 4.0)])
+def test_screw_cap_accepts_the_entire_neck_without_intersection(profile, height, pitch):
+    from app.core.geom.boolean import shared_volume
+
+    result = make_screw_lid(jar(wall=5), profile, height=height, pitch=pitch)
+    neck, cap = (entry.mesh for entry in result.outputs)
+    assembled = cap.raw.copy()
+    assembled.apply_translation((0, 0, 60))
+    assert shared_volume(neck.raw, assembled) < 1e-5
+    assert neck.bounds.maximum[2] == pytest.approx(60 + height, abs=1e-5)

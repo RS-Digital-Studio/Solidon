@@ -3,7 +3,37 @@
 Die einzige Stelle, an der Geometrie entsteht oder sich ändert (Regel 2).
 Gerechnet wird gegen `manifold3d` und `trimesh`.
 
+`move_feature` versetzt eine eindeutig topologisch verbundene Senkbohrung
+als ganzen Hohlraum: alle Abschnitte aus `perceive.relations.cavity_chain_at`
+begrenzen gemeinsam den Werkzeugkörper, alle Kennungen und Mittelpunkte
+reisen mit. Zwei äußere Randringe werden geschlossen; eine unvollständige
+oder mehrdeutige Fläche bleibt abgelehnt. Größenänderungen bleiben einzelne
+Abschnitte und melden die übrigen; bei mehrteiligen Ketten wird keine
+unvollständige automatische Änderung einer einzelnen Senkung vorgeschlagen.
+
 Die Regeln stehen in `.claude/rules/operationen.md`.
+
+`repair()` übernimmt Verschweißen und Dreiecksbereinigung nur, wenn ein
+geschlossener Eingang danach geschlossen bleibt. Andernfalls bleiben das
+Netz und seine Materialzuweisungen erhalten; ein Befund nennt den ausgelassenen
+Schritt. Die Zusicherung entspricht `ingest.loader.normalise`. Die einzelnen
+Reparaturhilfen bleiben für ausdrücklich gesteuerte Reparaturketten verfügbar.
+
+Merkmalswerkzeuge verwenden die gemessene Tiefe unabhängig vom Durchmesser.
+Nach einem Versatz entscheidet die Zielgeometrie über den Durchgang, auch bei
+rein seitlicher Bewegung. Verlorener Durchgang erzeugt einen Befund und
+korrigiert das Merkmal. Entfernte Kennungen bleiben in
+`SceneObject.reserved_feature_ids` für spätere Kopien gesperrt (§21.2).
+
+Materialslots werden nach einer Booleschen Operation anhand der erhaltenen
+Eingangsflächen übertragen; eine gleiche Dreieckszahl beweist keine gleiche
+Zuordnung. Rasterbudgets multiplizieren mit unbegrenzten Ganzzahlen.
+Die Differenzansicht überspringt ausschließlich identische Netzarrays,
+keine bloß gleichen Hüllquader und Volumina.
+
+Eine mitgeführte exakte `MeshData.cavity` folgt in `transform.apply` derselben
+Matrix wie der Körper. Änderungen der Topologie verwerfen die Auskunft,
+solange ihre Gültigkeit nicht eigens hergestellt wird.
 
 ## Die Boolesche Rückfallkette (§17.2)
 
@@ -44,11 +74,20 @@ in Flucht bringen)
 
 **Körper erzeugen und formen**
 
-`primitive_ops.py` · `blend.py` (weiches Verschmelzen) · `displace.py`
+`primitive_ops.py` (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring;
+Kegel und Ring dienen auch als verständliche Werkzeugkörper für Boolesche Ops)
+· `blend.py` (weiches Verschmelzen) · `displace.py`
 (Höhenfeld) · `lattice.py` (Gitterfüllung) · `texture_ops.py`
 (Oberflächentexturen als echte Geometrie) · `sculpt.py` · `pose.py`
 (Skelett und Stellung) · `sketch_solid.py` (einen Skizzenumriss zu einem Netz
 aufziehen)
+
+Die fünf analytischen Grundkörper entstehen lokal über
+`primitive_local_tool()`. Operation und temporäre Oberflächenvorschau beziehen
+damit denselben Körper auf denselben Ursprung. `x/y/z` verschieben diesen
+Bezugspunkt; eine gesetzte `nx/ny/nz`-Richtung legt sein lokales +Z über
+`sketch.planes.frame_of()` in den Raum. Der Nullvektor bewahrt die bisherige
+aufrechte Lage.
 
 `sketch_solid.py` ist das Gegenstück zu `brep/profiles.extrude` für den Fall,
 dass kein exakter Körper vorliegt — und dieser Fall ist der häufigste: Wer ein
@@ -100,6 +139,31 @@ in ein Filament färben) · `texture.py` (von einer Textur zu druckbaren Slots)
 
 ## Grenzen
 
+- **Freie Platzierung verwendet den gemeinsamen `frame_of()`-Rahmen.**
+  Bei `drill_hole`, `move_feature` und `duplicate_feature` bewahrt der
+  Nullvektor die frühere Achsen- beziehungsweise Verschiebungssemantik.
+  Die freie Bohrungsnormale zeigt vom Material weg; ihr Werkzeug verläuft
+  ab der Mündung nach lokal -Z. `drill_tool()` erzeugt auch Aufweitung und
+  Übergang als einen geschlossenen Rotationskörper. Die tatsächliche Op
+  und ihre Vorschau verwenden das Material des Zielkörpers.
+  Das Werkzeug reicht exakt von null bis zur negativen Eingabetiefe; ein
+  Blindboden erhält keine Überlappungszugabe, auch nicht beim Mittenanker.
+  Durchgangsaufrufer wählen ausdrücklich größere Höhen. An den bekannten
+  lokalen Werkzeugenden bereinigt `drill()` ausschließlich Float64-Rauschen
+  der Koordinatentransformation, je Vertex begrenzt durch die wirklichen
+  Matrixterme. Echte Flächenabstände oberhalb dieser Rechengrenze bleiben
+  erhalten; Materialtoleranz und globale Schweißtoleranz ändern sich nicht.
+- **Merkmalswerkzeuge umfassen die belegte vollständige Form.**
+  `feature_placement_geometry()` bestimmt den wirklichen Materialanschluss
+  und schließt zusammenhängende Bohrketten gemeinsam. `x/y/z` bleiben die
+  Zielmitte des gewählten Merkmals; ein lokaler Versatz verbindet sie mit der
+  angeklickten Mündung oder Basis. Weitere Kettenglieder behalten beim
+  Versetzen ihre Kennungen und bekommen beim Kopieren jeweils neue.
+- **Textvorschauen verwenden echte Konturen.** `local_text_body()` wird von
+  der Operation und der Platzierung verwendet; lokale Drehung und
+  Überlappung entstehen nur einmal. Der Anzeigeaktor verändert keine
+  gespeicherte Geometrie.
+
 - **Millimeter, doppelte Genauigkeit.** Vergleich über `units.is_close()`,
   nie mit `==`.
 - **Keine Zahlenkonstante für Toleranzen** — `auto:<material>` verweist ins
@@ -107,3 +171,20 @@ in ein Filament färben) · `texture.py` (von einer Textur zu druckbaren Slots)
 - **Nie eine Eingabe verändern.** `OpResult.outputs` sind neue Objekte.
 - **Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern** werden ausdrücklich
   nicht gebaut. Dafür ist `brep/` da.
+
+## Innenraum und verlustfreie Netze
+
+`MeshData.cavity` ist eine optionale, geschlossene Schnittgeometrie des
+tatsächlich ausgehöhlten Innenraums. Sie hat höchstens eine Ebene und reist
+als eigene Vertex-/Flächentabellen im NPZ-Cache. `transform.apply` führt
+dieselbe Matrix auf beiden Netzen aus; sonstige Geometrieänderungen verwerfen
+die Auskunft, solange kein belegbarer Folgeraum berechnet wird.
+`lattice_fill` beschneidet das Gitter auf diesen Raum. Ohne Auskunft sind nur
+geschlossene, nach innen gerichtete Innenschalen eine eindeutige Grundlage.
+Ein Hüllquader oder eine konvexe Hülle ersetzt keinen Innenraum.
+
+Neuvernetzung überträgt Slots über `attributes.transfer`; Skulptur-Etappen
+verwenden das verlustfreie NPZ statt STL. Beim Lesen aus Projektquellen werden
+NPY-Header und entpackte Größe vor der Array-Allokation geprüft.
+`measure.surface_gap` verwendet den räumlichen Index von Manifold mit
+`Mesh64`; fehlende Körperübernahme ist keine Abstandsaussage.

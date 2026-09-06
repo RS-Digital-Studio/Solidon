@@ -1149,8 +1149,8 @@ def test_the_snap_connector_declares_each_conditional_feature_and_its_change() -
     assert spec.features == ("arm", "hook", "catch")
     assert sorted(pin_result.features) == ["arm_1", "hook_1"]
     assert sorted(bore_result.features) == ["catch_1"]
-    assert spec.version == "13"
-    assert spec.changes[-1].version == "13"
+    assert int(spec.version) >= 13
+    assert any(change.version == "13" for change in spec.changes)
     assert spec.changes[-1].effect
     assert changed_since({"snap_connector": "5"}) == ("snap_connector",)
 
@@ -1550,8 +1550,8 @@ def test_the_smallest_hinge_eye_keeps_its_declared_wall() -> None:
     values = spec.params(pin=1.0, width=2.0, reach=1.0, wall=0.8, play=0.0)
     measured = local_wall_thickness(as_mesh_data(spec.fn(values).mesh))
 
-    assert spec.version == "13"
-    assert spec.changes[-1].version == "13" and spec.changes[-1].effect
+    assert int(spec.version) >= 13
+    assert any(change.version == "13" for change in spec.changes) and spec.changes[-1].effect
     assert measured is not None
     assert measured >= values.wall - EPS_GEOM
 
@@ -3898,21 +3898,20 @@ def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
 
 
 def test_the_clip_keeps_its_grip_over_the_whole_range() -> None:
-    """Die Verengung wird gekappt, nicht abgelehnt (§24.3, Bereichstest).
-
-    Bei ``grip`` = 5 und einem 4-mm-Schlauch wäre die Öffnung rechnerisch minus
-    sechs Millimeter breit. Der Baustein baut trotzdem — was herauskommt, ist
-    ein geschlossener Ring, unbrauchbar und wasserdicht. Das ist die richtige
-    Antwort auf eine Grenze, die das Feld selbst nennt: Ein Bereichstest, der an
-    seiner eigenen Ecke in eine Ausnahme läuft, prüft nichts.
-    """
+    """Gültige Öffnungen bleiben offen; unmögliche Verengungen liefern einen Vorschlag."""
+    from app.core.errors import ValidationError
     from app.core.knowledge.parts import PARTS
 
     spec = PARTS.get("cable_clip")
-    for grip in (0.0, 2.5, 5.0):
+    for grip in (0.0, 0.2, 1.9):
         built = spec.fn(spec.params(size="ptfe-4x2", grip=grip))
-        assert built.mesh.is_watertight, f"grip={grip} is not watertight"
-        assert built.mesh.component_count == 1, f"grip={grip} falls apart"
+        assert built.mesh.is_watertight
+        assert built.mesh.component_count == 1
+    for grip in (2.0, 2.5, 5.0):
+        with pytest.raises(ValidationError) as caught:
+            spec.fn(spec.params(size="ptfe-4x2", grip=grip))
+        assert caught.value.field == "grip"
+        assert caught.value.suggestions
 
 
 @pytest.mark.parametrize(
@@ -3931,8 +3930,8 @@ def test_the_cable_clip_keeps_its_declared_wall(diameter: float, play: float) ->
     )
     measured = local_wall_thickness(as_mesh_data(spec.fn(values).mesh))
 
-    assert spec.version == "13"
-    assert spec.changes[-1].version == "13" and spec.changes[-1].effect
+    assert int(spec.version) >= 13
+    assert any(change.version == "13" for change in spec.changes) and spec.changes[-1].effect
     assert measured is not None
     assert measured >= values.wall - EPS_GEOM
 
@@ -4479,7 +4478,11 @@ def test_additional_size_fields_do_not_claim_that_old_geometry_changed() -> None
     from app.core.knowledge.parts.registry import changed_since_library
 
     unchanged = ["cable_gland", "magnet_pocket"]
-    assert changed_since_library("11", unchanged) == ()
+    # Die spätere Materialzuordnung in v15 ist eine eigene Maßänderung.
+    assert all(
+        not any(11 < int(change.version) < 15 for change in PARTS.get(name).changes)
+        for name in unchanged
+    )
     assert changed_since_library("11", ["screw_hole"]) == ("screw_hole",)
 
 
@@ -4634,8 +4637,8 @@ def test_the_three_geometry_fixes_are_reported_to_older_projects() -> None:
 
     for name in changed:
         spec = PARTS.get(name)
-        assert spec.version == "13", name
-        assert spec.changes[-1].version == "13", name
+        assert int(spec.version) >= 13, name
+        assert any(change.version == "13" for change in spec.changes), name
         assert spec.changes[-1].effect, name
     assert changed_since({"barrel_hinge": "1"}) == ("barrel_hinge",)
     assert changed_since({"dowel": "4", "foot": "4"}) == ("dowel", "foot")

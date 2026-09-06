@@ -29,7 +29,7 @@ import numpy as np
 
 from app.core.deferred import trimesh
 from app.core.errors import CORRECT_INPUT, ValidationError, require_positive
-from app.core.geom.mesh import MeshData, concatenated, ray_hit_distances
+from app.core.geom.mesh import MeshData, concatenated
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import (
@@ -56,13 +56,6 @@ SAMPLES_PER_CELL: Final = 10
 #: Wie viele Abtastpunkte eine Achse höchstens bekommt. Ein großer Körper mit
 #: feinen Zellen sprengt sonst den Speicher, bevor irgendetwas entsteht.
 MAX_SAMPLES: Final = 160
-
-#: Wie viele Strahlen je Achse den Körper nach eingeschlossenem Leerraum
-#: absuchen (:func:`_enclosed_span`). Neun je Richtung heißt sieben mal sieben
-#: Strahlen im Inneren und dreimal 49 Läufe über die Dreiecke — genug, um einen
-#: Hohlraum zu finden, der eine Füllung überhaupt lohnt, und wenig genug, dass
-#: es bei einem Zehntel einer Sekunde bleibt.
-RAY_SAMPLES: Final = 9
 
 
 def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
@@ -109,7 +102,7 @@ def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None
     walled = np.pad(np.abs(field) - level, 1, constant_values=abs(level) + 1.0)
     try:
         points, faces, _normals, _values = measure.marching_cubes(walled, 0.0, spacing=step)
-    except (ValueError, RuntimeError):
+    except ValueError, RuntimeError:
         return None
     # Die Polsterung verschiebt den Ursprung um einen Schritt je Achse zurück.
     origin = low - np.asarray(step, dtype=float)
@@ -333,16 +326,8 @@ class LatticeParams(BaseParams):
     ),
 )
 def lattice_fill(ctx: OpContext) -> OpResult:
-    """Die Füllung in den Hohlraum legen.
-
-    Der Hohlraum ist, was zwischen der Außenhaut und dem Vollkörper darüber
-    fehlt: gerechnet als Differenz aus der konvexen Hülle des Körpers und dem
-    Körper selbst — nein, einfacher und richtiger: die Struktur wird über den
-    ganzen Hüllquader gebaut und dann mit dem Körper verschnitten. Was im
-    Material liegt, verschwindet in der Vereinigung; was im Hohlraum liegt,
-    bleibt und trägt.
-    """
-    from app.core.geom.boolean import boolean
+    """Beschneidet die Füllung auf die belegte Innengeometrie des Körpers."""
+    from app.core.geom.boolean import boolean, deepest
     from app.core.geom.mesh import as_mesh_data
 
     params = cast(LatticeParams, ctx.params)
@@ -350,13 +335,13 @@ def lattice_fill(ctx: OpContext) -> OpResult:
 
     source = ctx.inputs[0]
     body = as_mesh_data(source.mesh)
-    cavity = _cavity_bounds(body)
+    cavity = _cavity_mesh(body)
     if cavity is None:
         raise ValidationError(
             "structure",
             _(
-                "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. "
-                "Erst aushöhlen, dann füllen."
+                "Der Innenraum lässt sich nicht eindeutig bestimmen. Den Körper mit "
+                "Aushöhlen vorbereiten oder ein Modell mit geschlossener Innenfläche wählen."
             ),
             value=params.structure,
             constraint="no_cavity",
@@ -367,7 +352,7 @@ def lattice_fill(ctx: OpContext) -> OpResult:
         ctx.progress(0.2, str(_("Gitter bauen")))
     grid = build(
         params.structure,
-        cavity,
+        (cavity.bounds.minimum, cavity.bounds.maximum),
         params.cell,
         params.wall,
         cancelled=ctx.cancelled,
@@ -381,19 +366,16 @@ def lattice_fill(ctx: OpContext) -> OpResult:
             suggestions=[replace(CORRECT_INPUT, label=_("Zelle verkleinern"))],
         )
 
-    # Erst auf den Hohlraum beschneiden, dann anfügen: eine Struktur, die durch
-    # die Außenwand stößt, wäre außen sichtbar und innen unbrauchbar.
-    #
-    # **Als Differenz gegen den Körper und nicht als Verschneidung mit der
-    # Innenschale.** Die Innenschale gibt es nur, solange sie eine eigene
-    # Schale ist — eine Entlüftung verschweißt sie mit der äußeren, und dann
-    # war der Hohlraum unerreichbar. Das Gitter ist ohnehin im Quader des
-    # Hohlraums gebaut, liegt also ganz im Körper; was dort kein Material ist,
-    # ist Hohlraum. Dieselbe Menge, ohne die Annahme über die Schalen.
+    # Der Hüllquader dient nur dem Aufbau; erst der Schnitt mit dem echten
+    # Innenraum verhindert außen angefügte Gitterstücke an runden oder konkaven Wänden.
     if ctx.progress is not None:
         ctx.progress(0.6, str(_("Gitter beschneiden")))
     inside = boolean(
-        "difference", [grid, body], quality=ctx.quality, allow_empty=True, cancelled=ctx.cancelled
+        "intersection",
+        [grid, cavity],
+        quality=ctx.quality,
+        allow_empty=True,
+        cancelled=ctx.cancelled,
     )
     if inside.mesh.triangle_count == 0:
         raise ValidationError(
@@ -410,99 +392,37 @@ def lattice_fill(ctx: OpContext) -> OpResult:
     _log.info("filled with %r, cell %.1f", params.structure, params.cell)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=filled.mesh, features={})],
-        solver=filled.solver,
+        solver=deepest([inside.solver, filled.solver]),
         findings=[
+            *inside.findings,
+            *filled.findings,
             Finding(
                 code="lattice.filled",
                 severity="info",
                 message=_("Der Hohlraum trägt jetzt eine Gitterstruktur."),
-            )
+            ),
         ],
     )
 
 
+def _cavity_mesh(body: MeshData) -> MeshData | None:
+    """Eine belegte Schnittgeometrie oder geschlossene, nach innen gerichtete Schalen.
+
+    Entlüftete Importnetze verraten ihre frühere Außenhülle nicht eindeutig.
+    Die Auskunft der Aushöhlen-Operation bleibt deshalb getrennt erhalten.
+    """
+    if body.cavity is not None:
+        return body.cavity
+    cavities: list[MeshData] = []
+    for shell in body.raw.split(only_watertight=False):
+        if shell.is_watertight and shell.volume < -EPS_GEOM:
+            inner = shell.copy()
+            inner.invert()
+            cavities.append(MeshData.of(inner))
+    return MeshData.of(concatenated([inner.raw for inner in cavities])) if cavities else None
+
+
 def _cavity_bounds(body: MeshData) -> tuple[Vec3, Vec3] | None:
-    """Der Hüllquader des Hohlraums, oder ``None`` bei einem Vollkörper.
-
-    **Zwei Wege, und der zweite ist der Fund.** Der erste zählt Schalen: Ein
-    Vollkörper hat genau eine, ein ausgehöhlter zwei, und die innere ist der
-    Hohlraum. Das stimmt — bis jemand aushöhlt, wie die Vorgabe es tut, nämlich
-    **mit Entlüftung**. Die verbindet innen und außen zu einer einzigen Schale,
-    und ``Aushöhlen`` gefolgt von ``Gitter füllen`` — die naheliegendste Folge
-    überhaupt — endete an „Dieser Körper hat keinen Hohlraum. Erst aushöhlen,
-    dann füllen." Der Vorschlag riet genau das, was der Nutzer gerade getan
-    hatte.
-
-    Der zweite Weg fragt darum nicht die Schalen, sondern den Raum: Ein Strahl
-    durch einen Vollkörper trifft zwei Flächen, einer durch einen hohlen vier.
-    Was zwischen der zweiten und der dritten liegt, ist eingeschlossener
-    Leerraum, egal über wie viele Kanäle er nach draußen reicht
-    (:func:`_enclosed_span`).
-    """
-    parts = body.raw.split(only_watertight=False)
-    outer = max(parts, key=lambda part: float(np.prod(part.extents))) if parts else None
-    inner = [part for part in parts if part is not outer]
-    if inner:
-        low = np.min([part.bounds[0] for part in inner], axis=0)
-        high = np.max([part.bounds[1] for part in inner], axis=0)
-        return (
-            (float(low[0]), float(low[1]), float(low[2])),
-            (float(high[0]), float(high[1]), float(high[2])),
-        )
-    return _enclosed_span(body)
-
-
-def _enclosed_span(body: MeshData) -> tuple[Vec3, Vec3] | None:
-    """Der Hüllquader des eingeschlossenen Leerraums, mit Strahlen gemessen.
-
-    Über drei Achsen ein Raster von Strahlen, exakt gerechnet und ohne
-    Raumindex (:func:`app.core.geom.mesh.ray_hit_distances`). Sortiert man die
-    Treffer eines Strahls, wechseln sich Material und Leerraum ab: Das erste
-    Paar ist Wand, das zweite Hohlraum, das dritte wieder Wand. Alles, was in
-    einem Hohlraum-Abschnitt liegt, geht in den Quader ein.
-
-    Über **drei** Achsen, weil ein flacher Hohlraum unter einer flachen Decke
-    von oben gesehen groß und von der Seite gesehen ein Strich ist — und ein
-    einzelner Strich trifft ihn zufällig oder gar nicht.
-
-    Doppelte Treffer auf geteilten Kanten sind hier der Grund für das Runden:
-    Die Funktion zählt einen Kantentreffer je angrenzendem Dreieck, und mit
-    einer ungeraden Trefferzahl kippt die Abfolge Wand/Hohlraum. Ein Strahl,
-    dessen Zahl nach dem Zusammenfassen ungerade bleibt, wird verworfen statt
-    geraten (Regel 21).
-    """
-    triangles = np.asarray(body.raw.triangles, dtype=float)
-    if not len(triangles):
-        return None
-    low = np.asarray(body.bounds.minimum, dtype=float)
-    high = np.asarray(body.bounds.maximum, dtype=float)
-    span = high - low
-    found: list[np.ndarray] = []
-    for axis in range(3):
-        first, second = (other for other in range(3) if other != axis)
-        direction = np.zeros(3)
-        direction[axis] = 1.0
-        # Die Ränder werden ausgelassen: Ein Strahl genau auf der Außenfläche
-        # trifft sie streifend und zählt anders als einer daneben.
-        for a in np.linspace(low[first], high[first], RAY_SAMPLES)[1:-1]:
-            for b in np.linspace(low[second], high[second], RAY_SAMPLES)[1:-1]:
-                origin = np.zeros(3)
-                origin[axis] = low[axis] - max(float(span[axis]), 1.0)
-                origin[first], origin[second] = float(a), float(b)
-                hits = np.unique(np.round(ray_hit_distances(triangles, origin, direction), 6))
-                if len(hits) < 4 or len(hits) % 2:
-                    continue
-                for start, end in zip(hits[1:-1:2], hits[2::2], strict=True):
-                    if end - start <= EPS_GEOM:
-                        continue
-                    found.append(origin + direction * start)
-                    found.append(origin + direction * end)
-    if not found:
-        return None
-    points = np.asarray(found, dtype=float)
-    inside_low = points.min(axis=0)
-    inside_high = points.max(axis=0)
-    return (
-        (float(inside_low[0]), float(inside_low[1]), float(inside_low[2])),
-        (float(inside_high[0]), float(inside_high[1]), float(inside_high[2])),
-    )
+    """Der Aufbauquader einer nachweisbaren Innengeometrie."""
+    cavity = _cavity_mesh(body)
+    return (cavity.bounds.minimum, cavity.bounds.maximum) if cavity is not None else None

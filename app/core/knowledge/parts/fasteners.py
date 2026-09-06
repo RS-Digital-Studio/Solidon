@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge import standards
@@ -21,6 +22,7 @@ from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, result, subtract, thread, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    MATERIAL_OF_TARGET,
     FeatureRequirement,
     PartChange,
     WallRequirement,
@@ -33,6 +35,15 @@ from app.i18n import _
 _SCREWS = standards.screw_sizes()
 _NUTS = standards.nut_sizes()
 _INSERTS = standards.insert_sizes()
+
+THREAD_PROFILES_MATCH = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Die innere Wendel hatte entgegengesetzte Flanken; die zugehörigen Druckgewinde "
+    "überschnitten sich.",
+    effect="Innen- und Außengang haben denselben Verlauf mit radialem Profilspiel. Auch die "
+    "automatische Toleranz folgt dem Zielmaterial.",
+)
 
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
@@ -124,6 +135,17 @@ SCREW_HEADS_USE_THEIR_OWN_RECESSES = PartChange(
     ),
 )
 
+SCREW_HOLE_ZONES = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Die Senkung war als zylindrische Bohrung benannt, die Kopfaussparung gar nicht. "
+    "Außerdem folgte das automatische Spiel nicht dem Zielmaterial.",
+    effect="Die vorhandene Kennung countersink_1 bezeichnet den echten 90-Grad-Kegel; "
+    "head_room_1 bezeichnet die eingestellte zylindrische Kopftiefe. Beide treffen sich "
+    "ohne den bisherigen 0,01-mm-Ringsims. Das automatische Spiel "
+    "der Scheibentasche folgt dem Zielmaterial.",
+)
+
 
 @op_params
 class ScrewHoleParams(BaseParams):
@@ -170,7 +192,7 @@ class ScrewHoleParams(BaseParams):
     group="fasteners",
     params=ScrewHoleParams,
     subtractive=True,
-    features=["bore", "countersink", "washer"],
+    features=["bore", "countersink", "washer", "head_room"],
     wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     feature_requirements=(
         FeatureRequirement("bore"),
@@ -187,6 +209,7 @@ class ScrewHoleParams(BaseParams):
         FACE_GIVES_DIRECTION,
         HEAD_ROOM_CUTS_DOWNWARD,
         SCREW_HEADS_USE_THEIR_OWN_RECESSES,
+        SCREW_HOLE_ZONES,
     ],
 )
 def screw_hole(raw: BaseParams) -> PartResult:
@@ -221,22 +244,23 @@ def screw_hole(raw: BaseParams) -> PartResult:
         depth = (screw.countersink - screw.clearance) / 2.0
         sink = shapes.cone(screw.clearance, screw.countersink, depth)
         parts.append(shapes.moved(sink, (0.0, 0.0, top - depth)))
-        features.append(
-            bore("countersink_1", screw.countersink, (0.0, 0.0, top - depth / 2.0), depth=depth)
-        )
+        features.append(_countersink_feature(screw.countersink, top, depth))
 
     if params.head_room > 0.0:
-        # Von der Mündung (mit einem Hundertstel Überstand) bis über die Senkung
-        # hinab, damit der Zylinder mit ihr zusammenhängt statt einen Spalt zu
-        # lassen. Liegt darunter eine Unterlegscheibe, bleibt der ganze Weg so
+        # Die volle Stirnfläche verbindet Zylinder und Kegel. Ein Überstand
+        # unter den Kegelrand erzeugte einen schmalen Ringsims und trennte die
+        # beiden Mantelflächen. Liegt darunter eine Unterlegscheibe, bleibt der ganze Weg so
         # breit wie die Scheibe: Eine kopfbreite Öffnung über einer größeren
         # Tasche wäre ein gedruckter Hinterschnitt, durch den sich die Scheibe
         # nicht einsetzen ließe.
         head_diameter = screw.countersink if params.countersink else screw.head
         if washer is not None:
             head_diameter = max(head_diameter, washer_diameter)
-        room = shapes.cylinder(head_diameter, params.head_room + 2.0 * BOOLEAN_OVERLAP)
-        parts.append(shapes.moved(room, (0.0, 0.0, top - BOOLEAN_OVERLAP)))
+        room = shapes.cylinder(head_diameter, params.head_room + BOOLEAN_OVERLAP)
+        parts.append(shapes.moved(room, (0.0, 0.0, top)))
+        features.append(
+            bore("head_room_1", head_diameter, (0.0, 0.0, top / 2.0), depth=params.head_room)
+        )
 
     if washer is not None:
         recess = shapes.cylinder(washer_diameter, washer.thickness + 2.0 * BOOLEAN_OVERLAP)
@@ -260,6 +284,24 @@ def screw_hole(raw: BaseParams) -> PartResult:
         )
 
     return result(union(*parts), *features)
+
+
+def _countersink_feature(diameter: float, top: float, depth: float) -> tuple[str, Feature]:
+    """Die benannte 90-Grad-Senkung für Schraubenloch und gedruckten Schraubenkopf."""
+    identifier = "countersink_1"
+    return identifier, Feature(
+        id=identifier,
+        kind="cone",
+        provenance="generated",
+        params={
+            "diameter": diameter,
+            "angle": 90.0,
+            "axis": (0.0, 0.0, 1.0),
+            "centre": (0.0, 0.0, top - depth / 2.0),
+            "depth": depth,
+            "recess": True,
+        },
+    )
 
 
 # --- heat-set insert ---------------------------------------------------------------
@@ -505,6 +547,7 @@ class NutTrapParams(BaseParams):
         FACE_GIVES_DIRECTION,
         NUT_HEIGHT_FROM_ISO,
         NUT_TRAP_SINKS_ON_A_FACE,
+        MATERIAL_OF_TARGET,
     ],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
@@ -697,6 +740,7 @@ class ThreadParams(BaseParams):
         FACE_GIVES_DIRECTION,
         THREAD_CUTS_INWARD,
         PRINTED_THREAD_ROOT_OVERLAPS_CORE,
+        THREAD_PROFILES_MATCH,
     ],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
@@ -731,6 +775,15 @@ def _printed_thread(size: str, length: float, internal: bool, play: float) -> Pa
         core = shapes.cylinder(diameter + 2.0 * BOOLEAN_OVERLAP, length)
     else:
         diameter = screw.nominal - play
+        if diameter <= 2.0 * depth:
+            raise ValidationError(
+                "play",
+                _(
+                    "Das Spiel lässt keinen Gewindekern stehen. Ein kleineres Spiel "
+                    "oder eine größere Schraube wählen."
+                ),
+                values={"maximum": screw.nominal - 2.0 * depth, "play": play},
+            )
         core = shapes.cylinder(
             diameter - 2.0 * depth + 2.0 * BOOLEAN_OVERLAP,
             length,
@@ -820,6 +873,7 @@ class PrintedScrewParams(BaseParams):
         PRINTED_FASTENERS,
         PRINTED_SCREW_PREPARES_COUNTERSINK,
         PRINTED_SCREW_GEOMETRY_FIXED,
+        THREAD_PROFILES_MATCH,
     ],
 )
 def printed_screw(raw: BaseParams) -> PartResult:
@@ -876,20 +930,7 @@ def _printed_screw_countersink(raw: BaseParams) -> PartResult | None:
     depth = (screw.countersink - screw.clearance) / 2.0
     cutter = shapes.cone(screw.clearance, screw.countersink, depth)
     cutter = shapes.moved(cutter, (0.0, 0.0, -depth))
-    identifier = "countersink_1"
-    feature = Feature(
-        id=identifier,
-        kind="cone",
-        provenance="generated",
-        params={
-            "diameter": round(screw.countersink, 4),
-            "angle": 90.0,
-            "axis": (0.0, 0.0, 1.0),
-            "centre": (0.0, 0.0, -depth / 2.0),
-            "recess": True,
-        },
-    )
-    return result(cutter, (identifier, feature))
+    return result(cutter, _countersink_feature(screw.countersink, 0.0, depth))
 
 
 @op_params
@@ -919,7 +960,7 @@ class PrintedNutParams(BaseParams):
         "kommt aus dem Materialprofil. Für hohe Lasten oder häufiges Lösen sind "
         "Metallschrauben mit Mutternfalle oder Heat-Set-Buchse zuverlässiger."
     ),
-    changes=[PRINTED_FASTENERS, PRINTED_THREAD_ROOT_OVERLAPS_CORE],
+    changes=[PRINTED_FASTENERS, PRINTED_THREAD_ROOT_OVERLAPS_CORE, THREAD_PROFILES_MATCH],
 )
 def printed_nut(raw: BaseParams) -> PartResult:
     """Eine Sechskantmutter, deren Innengewinde zum gedruckten Bolzen passt."""

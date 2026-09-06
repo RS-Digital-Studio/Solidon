@@ -1020,8 +1020,136 @@ def test_fixed_historical_recipe_migrates_opens_and_exports() -> None:
     parsed = PartFileIO().validate(payload)
 
     assert parsed.document.format_version == FORMAT_VERSION
+    assert stored["format_version"] == 1
+    assert parsed.format_version == recipe.FORMAT_VERSION == 2
+    assert parsed.dependencies == {}
+    assert json.loads(payload) == stored, "die historische Datei wird nicht verändert"
     assert parsed.title == "Historischer Quader"
     assert PartFileIO().validate(PartFileIO().export_file(parsed)) == parsed
+
+
+def _nested_part_data(part: recipe.Recipe) -> dict[str, Any]:
+    """Eine echte zweistufige Konstruktion ohne Abhängigkeit vom Nutzerkatalog."""
+    child = recipe.file_data(dataclasses.replace(part, name="review_inner"))
+    parent = recipe.file_data(dataclasses.replace(part, name="review_outer"))
+    parent["dependencies"] = {"review_inner": child}
+    parent["document"]["ops"].append(
+        {
+            "id": 2,
+            "op": "insert_review_inner",
+            "in": ["obj_1"],
+            "out": ["obj_1"],
+            "params": {"x": 1, "z": 4},
+        }
+    )
+    return parent
+
+
+def test_nested_part_installs_and_reopens_in_a_fresh_receiver(part, tmp_path):
+    payload = PartFileIO().export_file(recipe.from_data(_nested_part_data(part)))
+    target = tmp_path / "nested.solidon-part"
+    target.write_bytes(payload)
+    isolation = tmp_path / "recipient"
+    isolation.mkdir()
+    env = dict(os.environ)
+    for key in (
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ):
+        env[key] = str(isolation)
+    script = textwrap.dedent("""
+        import json, sys
+        from pathlib import Path
+        from app.core.bootstrap import load_operations
+        from app.core.knowledge import profiles
+        from app.core.knowledge.parts import recipe, PARTS
+        from app.core.knowledge.parts.part_file import PartFileIO
+        from app.core.registry import REGISTRY
+        load_operations()
+        assert Path(recipe.__file__).resolve().is_relative_to(Path.cwd())
+        assert not PARTS.has("review_inner") and not PARTS.has("review_outer")
+        installed = PartFileIO().install_file(Path(sys.argv[1]).read_bytes())
+        result = PARTS.get("review_outer").fn(PARTS.get("review_outer").params())
+        assert result.mesh.is_watertight and result.mesh.volume > 20 * 18 * 8
+        assert not PARTS.has("review_inner"), "der private Anhang ersetzt keinen Katalogeintrag"
+        PARTS.remove("review_outer")
+        REGISTRY.remove("insert_review_outer")
+        loaded = recipe.load_all()
+        assert "review_outer" in loaded.loaded and not loaded.findings
+        reopened = PARTS.get("review_outer").fn(PARTS.get("review_outer").params())
+        assert abs(reopened.mesh.volume - result.mesh.volume) < 1e-7
+        print(json.dumps({"volume": reopened.mesh.volume, "installed": str(installed.path)}))
+    """)
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(target)],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=45,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("problem", ["cycle", "nested", "count", "unknown", "budget", "shipped"])
+def test_nested_recipe_boundaries_stop_before_build(part, monkeypatch, problem):
+    data = _nested_part_data(part)
+    inner = data["dependencies"]["review_inner"]
+    if problem == "cycle":
+        inner["document"]["ops"][0]["op"] = "insert_review_outer"
+    elif problem == "nested":
+        inner["dependencies"] = {"unexpected": {}}
+    elif problem == "count":
+        data["dependencies"] = {str(index): {} for index in range(recipe.MAX_DEPENDENCIES + 1)}
+    elif problem == "unknown":
+        inner["document"]["ops"][0]["op"] = "unknown_recipe_step"
+    elif problem == "budget":
+        data["document"]["ops"] = [data["document"]["ops"][-1]] * shared.MAX_OPERATIONS
+    else:
+        inner["name"] = "dowel"
+        data["dependencies"] = {"dowel": inner}
+        data["document"]["ops"][-1]["op"] = "insert_dowel"
+    monkeypatch.setattr(
+        recipe, "build", lambda *args, **kwargs: pytest.fail("kein Bau vor Prüfung")
+    )
+    with pytest.raises(ValidationError) as raised:
+        PartFileIO().validate(json.dumps(data).encode())
+    assert raised.value.suggestions
+
+
+def test_embedded_recipe_does_not_replace_a_different_local_version(part):
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    data = _nested_part_data(part)
+    expected = recipe.build(
+        PartFileIO().validate(json.dumps(data).encode()), profile=profiles.make_profile()
+    ).mesh.volume
+    local = dataclasses.replace(
+        part,
+        name="review_inner",
+        doc="lokaler eigener Stand",
+        exposed=tuple(
+            dataclasses.replace(entry, default=10) if entry.name == "width" else entry
+            for entry in part.exposed
+        ),
+    )
+    try:
+        recipe.register(local)
+        previous = PARTS.get("review_inner")
+        imported = PartFileIO().validate(json.dumps(data).encode())
+        assert recipe.build(imported, profile=profiles.make_profile()).mesh.volume == pytest.approx(
+            expected
+        )
+        assert PARTS.get("review_inner") is previous
+    finally:
+        PARTS.remove("review_inner")
+        REGISTRY.remove("insert_review_inner")
 
 
 @pytest.mark.parametrize(

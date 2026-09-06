@@ -1049,12 +1049,17 @@ def test_a_simplification_that_changed_nothing_says_so() -> None:
     body = trimesh.creation.icosphere(subdivisions=4)
     same = MeshData.of(body)
 
-    findings = mesh_ops._simplification_findings(same, same, 400, "obj_1")
+    # Datei 13 aus dem Nutzerdurchgang verlangte nur zwanzig Prozent weniger:
+    # 2878 hinein, Ziel 2302, 2878 heraus. Das Verhältnis 1,25 zum Ziel lag
+    # unter der allgemeinen 1,5-Schwelle und ließ einen vollständig wirkungslosen
+    # Schritt stumm. Gar keine Wirkung ist unabhängig von diesem Verhältnis.
+    target = int(same.triangle_count * 0.8)
+    findings = mesh_ops._simplification_findings(same, same, target, "obj_1")
 
     assert [f.code for f in findings] == ["mesh.not_simplified"], (
         f"ein Lauf ohne jede Wirkung blieb stumm: {[f.code for f in findings]}"
     )
-    assert findings[0].values["target"] == 400
+    assert findings[0].values["target"] == target
     assert findings[0].values["after"] == same.triangle_count
 
 
@@ -1133,15 +1138,20 @@ def test_the_operation_actually_asks(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     from app.core.registry import REGISTRY
 
-    monkeypatch.setattr(mesh_ops, "decimate", lambda mesh, target: mesh)
+    monkeypatch.setattr(
+        mesh_ops,
+        "_decimate_with_solver",
+        lambda mesh, target, cancelled: (mesh, "fast_simplification", None),
+    )
     spec = REGISTRY.get("decimate_mesh")
     body = MeshData.of(trimesh.creation.icosphere(subdivisions=4))
     entry = SceneObject(id="obj_1", name="Kugel", mesh=body)
+    target = int(body.triangle_count * 0.8)
     result = spec.fn(
         OpContext(
             scene=Scene(objects={entry.id: entry}),
             inputs=[entry],
-            params=spec.params(triangles=400),
+            params=spec.params(triangles=target),
             profile=profiles.make_profile("centauri-carbon-2", "petg"),
             quality="fine",
             seed=None,

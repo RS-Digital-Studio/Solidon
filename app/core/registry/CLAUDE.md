@@ -97,3 +97,8 @@ von der Platte trennen.
 ## Grenzen
 
 Hier steht **keine Geometrie**. Das Register deklariert, `geom/` rechnet.
+
+Die gemeinsamen Bausteinfelder liest die Referenz über `part_placement_params`
+aus dem jeweiligen Schema. Die `_surface_normal_fields`-Metadaten halten
+Platzierungsrichtungen von gleichnamigen fachlichen Rezeptmaßen getrennt;
+solche Maße bleiben in ihrer Parametertabelle sichtbar.

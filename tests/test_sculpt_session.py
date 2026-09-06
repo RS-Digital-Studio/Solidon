@@ -402,6 +402,59 @@ def test_leaving_the_session_stops_the_check(window: MainWindow) -> None:
 # --- Einbacken (Entscheidung D) -------------------------------------------------
 
 
+def test_baking_and_reopening_keeps_the_face_materials(
+    window: MainWindow,
+    tmp_path: Path,
+) -> None:
+    """Festschreiben und Projektdatei behalten die bemalten Dreiecke samt Palette."""
+    from app.core.scene import OperationDraft
+
+    session = window.session
+    session.history.apply(
+        "Zwei Farben",
+        [
+            OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 10.0}),
+            OperationDraft(
+                op="assign_slot",
+                inputs=("obj_1",),
+                params={"slot": 1, "name": "Rot", "colour": "#ff0000"},
+            ),
+        ],
+    )
+    initial = session.evaluate_now()
+    face = next(
+        key
+        for key, entry in initial.scene.objects["obj_1"].features.items()
+        if entry.kind == "face" and entry.face_indices
+    )
+    session.history.apply(
+        "Fläche und Formsitzung",
+        [
+            OperationDraft(
+                op="paint_slot",
+                inputs=("obj_1",),
+                params={"slot": 2, "name": "Blau", "colour": "#0000ff", "at_feature": face},
+            ),
+            OperationDraft(op="sculpt_strokes", inputs=("obj_1",), params={"strokes": ""}),
+        ],
+    )
+    before = session.evaluate_now().scene.objects["obj_1"]
+    assert set(before.mesh.slot_indices) == {1, 2}
+    operation = session.project.document.ops[-1]
+    assert session.bake_strokes(operation.id)
+    assert session.wait_for_idle()
+    baked = session.evaluate_now().scene.objects["obj_1"]
+    assert baked.mesh.slot_indices == before.mesh.slot_indices
+    assert baked.material_slots == before.material_slots
+    path = tmp_path / "bemalt.p3d"
+    session.save_project(path)
+    session.open_project(path)
+    assert session.wait_for_idle()
+    restored = session.evaluate_now().scene.objects["obj_1"]
+    assert restored.mesh.slot_indices == before.mesh.slot_indices
+    assert restored.material_slots == before.material_slots
+
+
 def test_the_history_offers_baking_only_for_a_live_session(window: MainWindow) -> None:
     """Der Eintrag steht an einer Formsitzung und an keinem anderen Schritt.
 

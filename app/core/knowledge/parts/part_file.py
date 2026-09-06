@@ -23,6 +23,7 @@ from app.branding import PART_FILE_SUFFIX
 from app.core.errors import CANCEL, CHOOSE, RETRY, AppError, FileWriteError, ValidationError
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import recipe, shared
+from app.core.registry import REGISTRY, Registry
 from app.core.scene.migrations import migrate
 from app.core.scene.serialise import has_lone_surrogate
 from app.i18n import TranslatableText, _
@@ -97,6 +98,7 @@ class PartFileIO:
         from app.core.bootstrap import load_operations
 
         load_operations()
+        part = recipe.with_dependencies(part)
         payload = shared.for_export(part) + b"\n"
         self._validated_recipe(payload)
         return payload
@@ -371,13 +373,16 @@ class PartFileIO:
             timestamp = timestamp.replace(tzinfo=UTC)
         return timestamp.astimezone(UTC).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def _validated_recipe(self, payload: bytes) -> recipe.Recipe:
+    def _validated_recipe(
+        self, payload: bytes, *, _registry: Registry | None = None, _build: bool = True
+    ) -> recipe.Recipe:
         """Prüft die Dateiregeln und baut das Rezept einmal vollständig."""
 
         from app.core.bootstrap import load_operations
 
         load_operations()
-        limits = shared.rules()
+        active_registry = _registry or REGISTRY
+        limits = shared.rules(active_registry)
         if len(payload) > int(limits["max_file_bytes"]):
             raise self._resource_error(
                 "recipe",
@@ -389,7 +394,30 @@ class PartFileIO:
             if not isinstance(raw, dict):
                 raise TypeError("recipe")
             self._resource_preflight(raw, limits)
-            normalized = dict(raw)
+            normalized = recipe.migrate_format(raw)
+            order = recipe.dependency_order(normalized)
+            if order:
+                from app.core.knowledge.parts import ops as part_ops
+                from app.core.knowledge.parts.registry import PARTS, PartRegistry
+
+                private_registry = Registry()
+                for operation in active_registry.all():
+                    private_registry.register(operation)
+                active_registry = private_registry
+                private_parts = PartRegistry()
+                normalized["dependencies"] = dict(normalized["dependencies"])
+                for name in order:
+                    if PARTS.has(name) and PARTS.get(name).source == "shipped":
+                        raise ValueError("recipe_dependency_shadows_shipped_part")
+                    child_payload = json.dumps(
+                        normalized["dependencies"][name], ensure_ascii=False
+                    ).encode("utf-8")
+                    child = self._validated_recipe(
+                        child_payload, _registry=active_registry, _build=False
+                    )
+                    normalized["dependencies"][name] = recipe.file_data(child)
+                    active_registry.remove(part_ops.op_name(name))
+                    recipe.register(child, private_parts, active_registry)
             document = raw.get("document")
             if isinstance(document, dict):
                 normalized["document"] = migrate(dict(document))
@@ -399,7 +427,7 @@ class PartFileIO:
                 separators=(",", ":"),
                 sort_keys=True,
             ).encode("utf-8")
-            normalized_limits = dict(limits)
+            normalized_limits = shared.rules(active_registry)
             normalized_limits["max_file_bytes"] = max(
                 int(limits["max_file_bytes"]),
                 len(normalized_payload),
@@ -407,7 +435,7 @@ class PartFileIO:
             # Die strikte Formprüfung läuft vor den sprechenden Befunden. So
             # kann kein fremder Schlüssel oder Pfad als Platzhalterwert in eine
             # spätere Fehlermeldung gelangen.
-            self._strict_shape(normalized)
+            self._strict_shape(normalized, registry=active_registry)
             findings = shared.inspect(normalized_payload, normalized_limits)
             if findings:
                 raise ValidationError(
@@ -443,8 +471,9 @@ class PartFileIO:
                 suggestions=(CHOOSE, CANCEL),
             ) from problem
 
-        self._check_sources(parsed)
-        recipe.build(parsed, profile=profiles.make_profile())
+        self._check_sources(parsed, registry=active_registry)
+        if _build:
+            recipe.build(parsed, profile=profiles.make_profile(), registry=active_registry)
         return parsed
 
     def _resource_preflight(self, data: dict[str, Any], limits: dict[str, Any]) -> None:
@@ -606,10 +635,11 @@ class PartFileIO:
             suggestions=(CHOOSE, CANCEL),
         )
 
-    def _strict_shape(self, data: dict[str, Any]) -> None:
+    def _strict_shape(self, data: dict[str, Any], *, registry: Registry | None = None) -> None:
         """Weist unbeachtete Zusatzfelder in den ausführbaren Rezeptdaten ab."""
 
-        limits = shared.rules()
+        active_registry = registry or REGISTRY
+        limits = shared.rules(active_registry)
         self._known_keys(data, set(limits["recipe_keys"]), "recipe")
         for field, maximum, required in (
             ("name", 120, True),
@@ -786,7 +816,6 @@ class PartFileIO:
         operations = document.get("ops")
         if not isinstance(operations, list):
             raise self._recipe_error(_("Die Schrittliste des Rezepts ist ungültig."))
-        from app.core.registry import REGISTRY
 
         operation_ids: set[int] = set()
         for index, operation in enumerate(operations):
@@ -806,12 +835,12 @@ class PartFileIO:
                 )
             operation_ids.add(identifier)
             name = operation.get("op")
-            if not isinstance(name, str) or not REGISTRY.has(name):
+            if not isinstance(name, str) or not active_registry.has(name):
                 raise self._recipe_error(
                     _("Ein Schritt des Rezepts ist in dieser Solidon-Version nicht bekannt."),
                     field=f"ops.{index}.op",
                 )
-            spec = REGISTRY.get(name)
+            spec = active_registry.get(name)
             if spec.requires_seed and operation.get("seed") is None:
                 raise self._recipe_error(
                     _("Der Startwert eines Rezeptschritts ist ungültig."),
@@ -1338,10 +1367,10 @@ class PartFileIO:
                     field=f"sources.{source_id}.ingest.{key}",
                 )
 
-    def _check_sources(self, parsed: recipe.Recipe) -> None:
+    def _check_sources(self, parsed: recipe.Recipe, *, registry: Registry | None = None) -> None:
         """Erlaubt nur eingebettete, relative Quellen mit richtiger Prüfsumme."""
 
-        from app.core.registry import REGISTRY
+        active_registry = registry or REGISTRY
 
         source_ids = set(parsed.document.sources)
         payload_ids = set(parsed.payloads)
@@ -1355,7 +1384,7 @@ class PartFileIO:
         consumers: list[tuple[str, str, str]] = []
         source_pattern = str(shared.rules()["name_pattern"])
         for operation in parsed.document.ops:
-            spec = REGISTRY.get(operation.op)
+            spec = active_registry.get(operation.op)
             for parameter in spec.params.spec():
                 if parameter.kind not in {"source", "image"}:
                     continue
@@ -1411,7 +1440,7 @@ class PartFileIO:
                         and origin.password is None
                         and (origin.port is None or 0 < origin.port <= 65_535)
                     )
-                except (AttributeError, TypeError, ValueError):
+                except AttributeError, TypeError, ValueError:
                     secure_origin = False
                 if not secure_origin:
                     raise self._recipe_error(

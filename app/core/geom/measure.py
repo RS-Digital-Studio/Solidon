@@ -48,6 +48,29 @@ SNAP_RADIUS_RELATIVE = 0.02
 #: aber auch.
 SHARP_EDGE_ANGLE = math.radians(20.0)
 
+
+def surface_gap(first: MeshData, second: MeshData, search_length: float) -> float | None:
+    """Kleinster Flächenabstand bis zur Suchweite, einschließlich Kante gegen Kante.
+
+    Der vorhandene Geometriekern prüft sämtliche Dreiecke über seinen Raumindex.
+    Eine fehlgeschlagene Körperübernahme ist keine Abstandsaussage.
+    """
+    import manifold3d
+
+    solids = [
+        manifold3d.Manifold(
+            manifold3d.Mesh64(
+                np.asarray(mesh.raw.vertices, dtype=np.float64),
+                np.asarray(mesh.raw.faces, dtype=np.uint64),
+            )
+        )
+        for mesh in (first, second)
+    ]
+    if any(solid.status() != manifold3d.Error.NoError or solid.is_empty() for solid in solids):
+        return None
+    return float(solids[0].min_gap(solids[1], search_length))
+
+
 #: Wie viele sichtbare Kanten an einem Punkt zusammenlaufen müssen, damit er
 #: eine **Ecke** ist.
 #:

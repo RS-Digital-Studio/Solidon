@@ -974,7 +974,7 @@ def test_no_cura_key_passes_a_value_through_verbatim() -> None:
     for row in slicer_keys.CURA:
         try:
             umgewandelt = row[2](fremd)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             # Ein Zahlenwandler lehnt einen Text ohnehin ab — das ist die
             # strengere Antwort und genau die gewünschte.
             continue
@@ -1314,7 +1314,13 @@ def test_a_slot_override_survives_the_project_file(tmp_path: Path) -> None:
     # beim nächsten Öffnen nicht wieder.
     assert daten["slot_overrides"][0]["name"] == "Rot"
     assert daten["slot_overrides"][0]["colour"] == [1.0, 0.0, 0.0]
-    assert set(daten["slot_overrides"][0]) == {"name", "colour", "temperature"}
+    assert set(daten["slot_overrides"][0]) == {
+        "name",
+        "colour",
+        "material",
+        "material_type",
+        "temperature",
+    }
 
     # Und eine Datei ohne das Feld öffnet weiterhin — der Normalfall bei
     # jedem Projekt, das vor dieser Fassung entstanden ist.
@@ -1558,7 +1564,7 @@ def _profile_keys(root: Path, kind: str) -> set[str]:
     for path in (root / kind).rglob("*.json"):
         try:
             loaded = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except OSError, ValueError:
             continue
         if isinstance(loaded, dict):
             found |= set(loaded)
@@ -1637,7 +1643,7 @@ def _cura_definitions() -> dict[str, dict[str, object]] | None:
                         continue
                     try:
                         loaded = json.loads(path.read_text(encoding="utf-8"))
-                    except (OSError, ValueError):
+                    except OSError, ValueError:
                         continue
                     settings = loaded.get("settings")
                     if isinstance(settings, dict):
@@ -3137,6 +3143,8 @@ def test_a_slot_override_wins_over_its_selected_filament_profile(tmp_path: Path)
             SlotOverride(
                 name=slot.name,
                 colour=slot.colour,
+                material=slot.material,
+                material_type=slot.material_type,
                 temperature=temperature,
             ),
         ),

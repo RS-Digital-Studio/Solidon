@@ -24,6 +24,20 @@ from app.core.types import PrinterProfile
 NOZZLE = PrinterProfile(id="test", title="Test", build_volume=(220.0, 220.0, 250.0))
 
 
+@pytest.mark.parametrize("height,pitch", [(122.0, 2.0), (121.7, 2.0), (244.0, 1.0)])
+def test_wave_sampling_tracks_each_period(height: float, pitch: float) -> None:
+    """Auch hohe Felder behalten Amplitude und Periode der Wellen."""
+    from shapely.geometry import LineString
+
+    shapes = texture_ops.pattern_shapes("wave", 8.0, height, pitch, seed=0)
+    band = min(shapes, key=lambda shape: abs(shape.centroid.x))
+    at_peak = band.intersection(LineString([(-4.0, pitch / 4), (4.0, pitch / 4)]))
+    at_trough = band.intersection(LineString([(-4.0, -pitch / 4), (4.0, -pitch / 4)]))
+    next_peak = band.intersection(LineString([(-4.0, 1.25 * pitch), (4.0, 1.25 * pitch)]))
+    assert at_peak.bounds[0] - at_trough.bounds[0] == pytest.approx(pitch / 2)
+    assert next_peak.bounds[0] == pytest.approx(at_peak.bounds[0])
+
+
 def test_every_pattern_reaches_the_edge_of_its_field() -> None:
     """Kein Muster hat einen Saum, den niemand bestellt hat.
 
@@ -484,3 +498,13 @@ def test_the_flat_way_is_untouched() -> None:
     spec = REGISTRY.get("apply_texture")
     wrap = next(entry for entry in spec.params.spec() if entry.name == "wrap")
     assert wrap.default == "flat"
+
+
+def test_an_excessively_dense_wave_is_refused_before_allocating():
+    from app.core.errors import ValidationError
+    from app.core.geom.texture_ops import pattern_shapes
+
+    with pytest.raises(ValidationError) as caught:
+        pattern_shapes("wave", 10000, 10000, 0.1)
+    assert caught.value.field == "pitch"
+    assert caught.value.suggestions

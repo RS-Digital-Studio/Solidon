@@ -95,6 +95,35 @@ def test_the_overhang_fan_leans_further_step_by_step() -> None:
 # --- calibration (§28.3) --------------------------------------------------------------
 
 
+@pytest.mark.parametrize("name", ["PLA matte", "PLA.matte", 'PLA "matt"'])
+def test_calibration_preserves_quoted_material_ids(own_profiles: Path, name: str) -> None:
+    """Eine zweite Kalibrierung erhält fremde gültige TOML-Kennungen."""
+    import json
+    import tomllib
+
+    own_profiles.mkdir(parents=True, exist_ok=True)
+    path = own_profiles / calibration.USER_MATERIALS
+    original = {
+        name: {
+            "title": name,
+            "clearance": 0.32,
+            "press": -0.1,
+            "hole_compensation": 0.2,
+            "elephant_foot": 0.1,
+        }
+    }
+    path.write_text(
+        f"[{json.dumps(name)}]\ntitle = {json.dumps(name)}\nclearance = 0.32\n"
+        "press = -0.1\nhole_compensation = 0.2\nelephant_foot = 0.1\n",
+        encoding="utf-8",
+    )
+    profiles.reload()
+    calibration.apply(calibration.from_measurements("petg", clearance=0.3))
+    saved = tomllib.loads(path.read_text(encoding="utf-8"))
+    assert saved[name] == original[name]
+    assert saved["petg"]["clearance"] == pytest.approx(0.3)
+
+
 def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None:
     """Schritt drei aus §28.3: die Werte gehen ins Profil, nicht in ein Modell."""
     before = profiles.material("petg")

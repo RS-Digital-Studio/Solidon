@@ -13,6 +13,7 @@ from __future__ import annotations
 import io
 import json
 import math
+import zipfile
 from dataclasses import dataclass, field
 from typing import Final
 
@@ -40,6 +41,12 @@ class MeshData:
 
     raw: trimesh.Trimesh
     slots: tuple[int, ...] = field(default_factory=tuple)
+    cavity: MeshData | None = None
+
+    def __post_init__(self) -> None:
+        """Die belegte Innengeometrie trägt selbst keine weitere Innengeometrie."""
+        if self.cavity is not None and self.cavity.cavity is not None:
+            raise ValueError("nested_cavity")
 
     # --- Protokoll --------------------------------------------------------------
 
@@ -128,11 +135,23 @@ class MeshData:
             faces=np.asarray(self.raw.faces, dtype=np.int64),
             slots=np.asarray(self.slots, dtype=np.int32),
             face_colours=stored_colours,
+            cavity_vertices=(
+                np.asarray(self.cavity.raw.vertices, dtype=np.float64)
+                if self.cavity is not None
+                else np.empty((0, 3), dtype=np.float64)
+            ),
+            cavity_faces=(
+                np.asarray(self.cavity.raw.faces, dtype=np.int64)
+                if self.cavity is not None
+                else np.empty((0, 3), dtype=np.int64)
+            ),
         )
         return buffer.getvalue()
 
     @classmethod
-    def from_bytes(cls, payload: bytes) -> MeshData:
+    def from_bytes(cls, payload: bytes, *, maximum_bytes: int | None = None) -> MeshData:
+        if maximum_bytes is not None:
+            _check_array_storage(payload, maximum_bytes)
         with np.load(io.BytesIO(payload)) as data:
             mesh = trimesh.Trimesh(vertices=data["vertices"], faces=data["faces"], process=False)
             slots = tuple(int(entry) for entry in data["slots"])
@@ -143,12 +162,45 @@ class MeshData:
                     mesh=mesh,
                     face_colors=np.column_stack((colours, alpha)),
                 )
-        return cls(raw=mesh, slots=slots)
+            cavity = None
+            if "cavity_faces" in data.files and len(data["cavity_faces"]):
+                cavity = cls.of(
+                    trimesh.Trimesh(
+                        vertices=data["cavity_vertices"],
+                        faces=data["cavity_faces"],
+                        process=False,
+                    )
+                )
+        return cls(raw=mesh, slots=slots, cavity=cavity)
 
     def to_stl(self) -> bytes:
         """Binäres STL, für den Export und die Übergabe an einen Slicer (§29)."""
         result: bytes = trimesh.exchange.stl.export_stl(self.raw)
         return result
+
+
+def _check_array_storage(payload: bytes, maximum_bytes: int) -> None:
+    """Prüft Dateigröße und Arrayform vor einer Allokation aus einem Projekt."""
+    with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+        entries = archive.infolist()
+        if sum(entry.file_size for entry in entries) > maximum_bytes:
+            raise ValueError("mesh_storage_too_large")
+        if len({entry.filename for entry in entries}) != len(entries):
+            raise ValueError("duplicate_mesh_array")
+        for entry in entries:
+            with archive.open(entry) as stream:
+                version = np.lib.format.read_magic(stream)
+                if version == (1, 0):
+                    shape, _order, dtype = np.lib.format.read_array_header_1_0(stream)
+                elif version == (2, 0):
+                    shape, _order, dtype = np.lib.format.read_array_header_2_0(stream)
+                else:
+                    raise ValueError("unsupported_mesh_array")
+                if (
+                    dtype.hasobject
+                    or math.prod(shape) * dtype.itemsize != entry.file_size - stream.tell()
+                ):
+                    raise ValueError("invalid_mesh_array_size")
 
 
 def as_mesh_data(mesh: Mesh) -> MeshData:

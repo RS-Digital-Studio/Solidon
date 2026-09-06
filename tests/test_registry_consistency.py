@@ -428,7 +428,7 @@ def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> N
         try:
             source = textwrap.dedent(inspect.getsource(module))
             tree = ast.parse(source)
-        except (OSError, SyntaxError, TypeError):  # pragma: no cover - Vorsicht
+        except OSError, SyntaxError, TypeError:  # pragma: no cover - Vorsicht
             continue
         where = module.__name__
 
@@ -443,7 +443,7 @@ def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> N
                 continue
             try:
                 parameters = inspect.signature(target).parameters
-            except (TypeError, ValueError):  # pragma: no cover - Vorsicht
+            except TypeError, ValueError:  # pragma: no cover - Vorsicht
                 continue
             if any(p.kind is p.VAR_KEYWORD for p in parameters.values()):
                 continue
@@ -655,7 +655,7 @@ def _reads_from_outside(seeds: Iterable[Any], inside: tuple[str, ...]) -> list[s
         visited.add(where)
         try:
             tree = ast.parse(textwrap.dedent(inspect.getsource(function)))
-        except (OSError, SyntaxError, TypeError):  # pragma: no cover - Vorsicht
+        except OSError, SyntaxError, TypeError:  # pragma: no cover - Vorsicht
             continue
         namespace = vars(module)
         aliases = _import_aliases(tree)
@@ -887,6 +887,7 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "fünfundneunzig": 95,
     "neunundneunzig": 99,
     "hundert": 100,
+    "hundertzwei": 102,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
 }

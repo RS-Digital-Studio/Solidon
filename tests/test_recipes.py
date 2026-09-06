@@ -84,6 +84,113 @@ def _recipe(profile: Profile, name: str = "probe_halter") -> recipe.Recipe:
 # --- Das Format (E2) --------------------------------------------------------------
 
 
+def test_capture_after_print_settings_exports_a_geometry_recipe(
+    profile: Profile, tmp_path: Path
+) -> None:
+    from app.core.knowledge import print_settings
+    from app.core.knowledge.parts.part_file import PartFileIO
+
+    document = _document()
+    document.print_settings = print_settings.resolve(profile)
+    made = recipe.capture(
+        document,
+        {},
+        name="settings_box",
+        title="Quader",
+        group="structure",
+        op_ids=(1,),
+        exposed=(),
+        features={"top": "face_top"},
+        profile=profile,
+    )
+    path = PartFileIO().export_to_file(made, tmp_path / "quader.solidon-part")
+    restored = PartFileIO().import_file(path.read_bytes()).recipe
+    assert restored.document.print_settings is None
+    assert document.print_settings is not None
+    assert recipe.build(restored, profile=profile).mesh.volume == pytest.approx(4800.0)
+
+
+def test_a_travelled_alias_never_overwrites_a_local_recipe(profile: Profile) -> None:
+    parts, registry = PartRegistry(), Registry()
+    local = _recipe(profile)
+    alias = _recipe(profile, "probe_halter_travelled")
+    recipe.register(local, parts, registry)
+    recipe.register(alias, parts, registry)
+    original = parts.get(alias.name)
+    arrived = dataclasses.replace(local, document=_document(50))
+    assert recipe.adopt(recipe.file_data(arrived), parts, registry) == []
+    assert parts.get(alias.name) is original
+    assert parts.get("probe_halter_travelled_2").source == recipe.TRAVELLED_SOURCE
+    assert recipe.adopt(recipe.file_data(arrived), parts, registry) == []
+    assert not parts.has("probe_halter_travelled_3")
+
+
+def test_nested_recipes_reach_a_project_receiver_without_local_recipes(
+    profile: Profile, tmp_path: Path
+) -> None:
+    import zipfile
+
+    from app.core.scene import evaluate
+    from app.core.scene.project import Project, ProjectSources, load, save
+
+    names = ("review_z_inner", "review_a_outer")
+    try:
+        recipe.register(_recipe(profile, names[0]))
+        document = _document(40)
+        document.ops.append(
+            Operation(
+                id=2,
+                op=part_ops.op_name(names[0]),
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"x": 1, "z": 4},
+            )
+        )
+        outer = recipe.capture(
+            document,
+            {},
+            name=names[1],
+            title="Hülle",
+            group="structure",
+            op_ids=(1, 2),
+            exposed=(),
+            features={"top": "face_top"},
+            profile=profile,
+        )
+        recipe.register(outer)
+        target = _document(50)
+        target.ops.append(
+            Operation(
+                id=2,
+                op=part_ops.op_name(names[1]),
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"x": 1, "z": 4},
+            )
+        )
+        project = Project(document=target)
+        before = evaluate(target, profile, sources=ProjectSources(project))
+        assert before.complete
+        path = save(project, tmp_path / "nested.solidon")
+        with zipfile.ZipFile(path) as archive:
+            assert {f"recipes/{name}.json" for name in names} <= set(archive.namelist())
+        from app.core.knowledge.parts.part_file import PartFileIO
+
+        exchanged = PartFileIO().export_file(outer)
+        _clean_globals(*names)
+        imported = PartFileIO().import_file(exchanged)
+        imported_mesh = recipe.build(imported.recipe, profile=profile).mesh
+        assert imported_mesh.volume > 0
+        reopened = load(path)
+        after = evaluate(reopened.document, profile, sources=ProjectSources(reopened))
+        assert after.complete, after.scene.report.findings
+        assert after.scene.objects["obj_1"].mesh.volume == pytest.approx(
+            before.scene.objects["obj_1"].mesh.volume
+        )
+    finally:
+        _clean_globals(*names)
+
+
 def test_a_recipe_survives_the_round_trip_and_keeps_its_hash(profile: Profile) -> None:
     """Der Hash ist die Version (§24.4) — er muss die Rundreise überleben.
 
@@ -677,6 +784,100 @@ def test_a_saved_recipe_loads_into_catalog_and_register(profile: Profile, tmp_pa
     assert spec.build_with_profile is not None, "das Profil des Kunden erreicht die Auswertung"
 
 
+@pytest.mark.parametrize("parameter", ["nx", "ny", "nz", "surface_nx"])
+def test_recipe_dimensions_do_not_collide_with_surface_normals(
+    profile, tmp_path, parameter, monkeypatch
+):
+    """Ein vorhandenes Rezeptmaß bleibt nach Laden und Platzieren ein Maß."""
+    import numpy as np
+
+    document = _document()
+    document.parameters = {parameter: Parameter(name=parameter, value=30.0)}
+    document.ops[0] = dataclasses.replace(
+        document.ops[0], params={**document.ops[0].params, "width": f"@{parameter}"}
+    )
+    made = recipe.capture(
+        document,
+        {},
+        name="normal_named_box",
+        title="Quader mit eigenem Maß",
+        group="structure",
+        op_ids=(1,),
+        exposed=(
+            recipe.ExposedParam(
+                name=parameter, title="Breite", default=30.0, minimum=10.0, maximum=90.0
+            ),
+        ),
+        features={"top": "face_top"},
+        profile=profile,
+    )
+    recipe.save(made, tmp_path)
+    parts, registry = PartRegistry(), Registry()
+    assert recipe.load_all(tmp_path, parts, registry).loaded == (made.name,)
+    spec = parts.get(made.name)
+    schema = registry.get(part_ops.op_name(made.name)).params
+    assert getattr(schema(), parameter) == pytest.approx(30.0)
+    normal = part_ops.normal_fields(schema)
+    assert parameter not in normal
+    assert part_ops.normal_fields(part_ops.build_params(spec)) == normal
+    from app.core.registry.surfaces import documentation, part_placement_params
+
+    operation = registry.get(part_ops.op_name(made.name))
+    assert parameter not in part_placement_params(operation)
+    assert set(normal).issubset(part_placement_params(operation))
+    reference = documentation(registry, category="parts").split("### ", 1)[1]
+    assert f"Breite `{parameter}`" in reference
+    assert not any(f"`{name}`" in reference for name in normal)
+    preview = part_ops.placement_tool(spec, {parameter: 40.0}, profile)
+    assert np.ptp(preview.raw.vertices[:, 0]) == pytest.approx(40.0)
+    params = schema(**{parameter: 40.0, **dict(zip(normal, (0.0, 0.0, -1.0), strict=True))})
+    placed = part_ops._place(
+        as_mesh_data(spec.fn(spec.params(**{parameter: 40.0})).mesh),
+        params,
+        direction=part_ops._free_direction(params),
+    )
+    assert placed.bounds.size == pytest.approx((40.0, 20.0, 8.0))
+    assert placed.bounds.maximum[2] == pytest.approx(0.0)
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import placement
+    from app.core.scene.cancel import NeverCancelled
+    from app.core.types import OpContext, Scene, SceneObject
+
+    body = trimesh.creation.box((100.0, 100.0, 10.0))
+    body.apply_translation((0.0, 0.0, 5.0))
+    source = SceneObject(id="obj_1", name="Träger", mesh=MeshData.of(body))
+    prepared = placement.prepare_surface(source.mesh, int(np.argmin(body.face_normals[:, 2])))
+    hit = placement.at_point(prepared, (0.123456789012, 0.0, 0.0))
+    operation = registry.get(part_ops.op_name(made.name))
+    monkeypatch.setitem(part_ops.PARTS._parts, made.name, spec)
+    preset = placement.surface_values(operation, hit)
+    assert parameter not in preset
+    assert tuple(preset[name] for name in normal) == pytest.approx((0.0, 0.0, -1.0))
+    inserted = operation.fn(
+        OpContext(
+            scene=Scene(objects={source.id: source}),
+            inputs=[source],
+            params=schema(**{parameter: 40.0, **preset}),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+    actual = as_mesh_data(inserted.outputs[0].mesh)
+    assert actual.component_count == 1
+    section = actual.raw.section(plane_origin=(0, 0, -1), plane_normal=(0, 0, 1))
+    assert np.ptp(section.vertices[:, 0]) == pytest.approx(40.0)
+    basis = np.column_stack((hit.frame.x_axis, hit.frame.y_axis, hit.frame.normal))
+    expected = preview.raw.vertices @ basis.T + np.asarray(hit.point)
+    assert section.vertices[:, 0].min() == pytest.approx(expected[:, 0].min(), abs=1e-5)
+
+
 def test_a_foreign_recipe_stays_foreign_after_restart(
     profile: Profile,
     tmp_path: Path,
@@ -806,6 +1007,7 @@ def test_the_recipe_file_is_data_not_code(profile: Profile, tmp_path: Path) -> N
         "doc",
         "document",
         "payloads",
+        "dependencies",
         "exposed",
         "features",
     }
@@ -1713,11 +1915,8 @@ def test_an_adopted_recipe_is_marked_as_travelled(profile: Profile) -> None:
         _clean_globals("probe_halter")
 
 
-def test_a_newer_travelled_version_swaps_the_older_one(profile: Profile, tmp_path: Path) -> None:
-    """Zwei Projekte, zwei Fassungen desselben fremden Rezepts: Die zuletzt
-    geöffnete gilt. Vorher stand hier eine Absage mit dem Rat, das andere
-    Projekt zu schließen — ein Mittel ohne Wirkung, denn Schließen meldet
-    nichts ab (Fund des Gesamtreviews vom 25.08.2026)."""
+def test_different_travelled_versions_remain_available(profile: Profile, tmp_path: Path) -> None:
+    """Ein weiteres Projekt ersetzt keinen bereits verfügbaren Rezeptstand."""
     import dataclasses
 
     from app.core.knowledge.parts.registry import PARTS
@@ -1732,13 +1931,77 @@ def test_a_newer_travelled_version_swaps_the_older_one(profile: Profile, tmp_pat
         first = dataclasses.replace(made, doc="erste fremde Fassung")
         second = dataclasses.replace(made, doc="zweite fremde Fassung")
         assert recipe.adopt(recipe.file_data(first)) == []
-        assert recipe.adopt(recipe.file_data(second)) == [], "kein Befund, ein Tausch"
+        previous = PARTS.get("probe_halter_travelled")
+        assert recipe.adopt(recipe.file_data(second)) == []
 
-        arrived = PARTS.get("probe_halter_travelled")
-        renamed = dataclasses.replace(second, name="probe_halter_travelled")
+        assert PARTS.get("probe_halter_travelled") is previous
+        arrived = PARTS.get("probe_halter_travelled_2")
+        renamed = dataclasses.replace(second, name="probe_halter_travelled_2")
         assert arrived.version == recipe.fingerprint(renamed), "die neuere Fassung gilt"
         # Und dieselbe Fassung noch einmal ist ein stiller Kurzschluss, kein Tausch.
         assert recipe.adopt(recipe.file_data(second)) == []
         assert REGISTRY.has(part_ops.op_name("probe_halter_travelled"))
     finally:
-        _clean_globals("probe_halter", "probe_halter_travelled")
+        _clean_globals("probe_halter", "probe_halter_travelled", "probe_halter_travelled_2")
+
+
+def test_container_dependency_collection_terminates_at_a_recipe_cycle(profile):
+    parts, registry = PartRegistry(), Registry()
+    recipe.register(_nesting_recipe("probe_zwei", "probe_eins"), parts, registry)
+    recipe.register(_nesting_recipe("probe_eins", "probe_zwei"), parts, registry)
+    document = _document()
+    document.ops.append(
+        Operation(id=2, op=part_ops.op_name("probe_eins"), outputs=("obj_2",), params={})
+    )
+    assert set(recipe.for_container(document, parts)) == {"probe_eins", "probe_zwei"}
+
+
+def test_inserting_a_recipe_uses_the_material_of_the_target(profile):
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    name = "review_material_recipe"
+    try:
+        document = _document()
+        document.ops.append(
+            Operation(
+                id=2,
+                op="insert_dowel",
+                inputs=("obj_1",),
+                outputs=("obj_1",),
+                params={"kind": "bore", "diameter": 4, "length": 6, "x": 10, "y": 10, "z": 8},
+            )
+        )
+        made = recipe.capture(
+            document,
+            {},
+            name=name,
+            title="Bohrung",
+            group="structure",
+            op_ids=(1, 2),
+            exposed=(),
+            features={"hole": "dowel_bore_1"},
+            profile=profile,
+        )
+        recipe.register(made)
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply(
+            "Material",
+            [
+                OperationDraft(op="create_box", params={"width": 60, "depth": 40, "height": 4}),
+                OperationDraft(
+                    op="assign_slot", inputs=("obj_1",), params={"slot": 0, "material_type": "TPU"}
+                ),
+                OperationDraft(
+                    op=part_ops.op_name(name), inputs=("obj_1",), params={"x": 0, "y": 0, "z": 4}
+                ),
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, result.scene.report.findings
+        assert any(
+            feature.params.get("diameter") == pytest.approx(4.35)
+            for feature in result.scene.objects["obj_1"].features.values()
+        )
+    finally:
+        _clean_globals(name)

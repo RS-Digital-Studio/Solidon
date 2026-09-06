@@ -126,11 +126,27 @@ def _waves(width: float, height: float, pitch: float) -> list[Any]:
 
     land = pitch * LAND_SHARE
     amplitude = pitch / 4.0
-    steps = np.linspace(-height / 2.0 - pitch, height / 2.0 + pitch, WAVE_STEPS * 8)
+    # Das Raster ist an der Periode verankert, damit auch ihre Maxima und
+    # Minima getroffen werden. Eine feste Punktzahl aliasierte hohe Felder
+    # bis zur geraden Rippe; die Feldgrenze beschneidet erst danach.
+    step = pitch / WAVE_STEPS
+    last = math.ceil((height / 2.0 + pitch) / step)
+    points = (2 * last + 1) * (math.ceil(width / pitch) + 4) * 2
+    if points > MAX_CELLS * WAVE_STEPS * 2:
+        raise ValidationError(
+            "pitch",
+            _(
+                "Das Wellenmuster wird mit dieser Teilung zu dicht. Die Teilung vergrößern oder "
+                "eine kleinere Fläche wählen."
+            ),
+            value=pitch,
+            constraint="pattern_size",
+        )
+    steps = np.arange(-last, last + 1, dtype=float) * step
+    offsets = amplitude * np.sin(2.0 * math.pi * steps / pitch)
     shapes: list[Any] = []
     columns, _rows = _grid_positions(width, height, pitch)
     for centre in columns:
-        offsets = amplitude * np.sin(2.0 * math.pi * steps / pitch)
         left = [(float(centre + shift), float(y)) for y, shift in zip(steps, offsets, strict=True)]
         right = [
             (float(centre + shift + land), float(y))

@@ -28,6 +28,7 @@ from app.core.knowledge.parts.build import bore, face, result, subtract, union
 from app.core.knowledge.parts.mechanics import SNAP_LEAD_ANGLE, SNAP_MIN_ARM, SNAP_RATIO
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
+    MATERIAL_OF_TARGET,
     MOUTH_AT_ORIGIN,
     FeatureRequirement,
     PartChange,
@@ -38,6 +39,15 @@ from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import is_greater
 from app.i18n import _
+
+KEYHOLE_RETAINS_HEAD = PartChange(
+    version="15",
+    date="2026-09-06",
+    reason="Der Kopfkanal war zur Mündung offen und konnte den Schraubenkopf nicht zurückhalten.",
+    effect="Nur der Einstieg ist kopfbreit offen, über dem Haltekanal bleibt eine Lippe. Tiefe "
+    "und Einhängeweg werden auf eine mögliche Rückhaltung geprüft; das Spiel folgt dem "
+    "Zielmaterial.",
+)
 
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
@@ -251,6 +261,7 @@ class MagnetPocketParams(BaseParams):
         FACE_GIVES_DIRECTION,
         LIP_GRIPS_THE_MAGNET,
         LIP_GRIP_FROM_PROFILE,
+        MATERIAL_OF_TARGET,
     ],
 )
 def magnet_pocket(raw: BaseParams) -> PartResult:
@@ -511,6 +522,7 @@ class KeyholeParams(BaseParams):
         SLOT_RUNS_DOWNWARD,
         HEAD_PLAY_FROM_PROFILE,
         HEAD_PLAY_ADDS_INSTEAD_OF_REPLACING,
+        KEYHOLE_RETAINS_HEAD,
     ],
 )
 def keyhole(raw: BaseParams) -> PartResult:
@@ -552,10 +564,32 @@ def keyhole(raw: BaseParams) -> PartResult:
     # braucht ein Kopf, der hindurchfallen soll" und „wie viel Maß verliert
     # dieser Drucker in diesem Material". Beides gilt, also wird addiert.
     clearance = HEAD_CLEARANCE + params.play
+    minimum_drop = math.sqrt(((screw.head + clearance) / 2.0) ** 2 - (screw.head / 2.0) ** 2)
+    if params.drop <= minimum_drop:
+        raise ValidationError(
+            "drop",
+            _(
+                "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg "
+                "vergrößern oder das Kopfspiel verkleinern."
+            ),
+            values={"minimum": minimum_drop, "drop": params.drop},
+        )
 
-    # Die Tasche, in die der Kopf versinkt: am Eingang rund, dann ein Schlitz.
+    if params.head_room >= params.depth:
+        raise ValidationError(
+            "head_room",
+            _(
+                "Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante "
+                "bleibt."
+            ),
+            values={"depth": params.depth, "head_room": params.head_room},
+        )
+    # Nur der Einstieg reicht kopfbreit bis zur Mündung. Der Kopfkanal
+    # liegt darunter; über seinem Halteende bleibt die Rückhaltekante.
+    entrance = shapes.cylinder(screw.head + clearance, params.depth + BOOLEAN_OVERLAP)
+    entrance = shapes.moved(entrance, (0.0, 0.0, -params.depth))
     pocket = falling(screw.head + clearance, screw.head + clearance + params.drop, params.head_room)
-    pocket = shapes.moved(pocket, (0.0, drop, -params.head_room))
+    pocket = shapes.moved(pocket, (0.0, drop, -params.depth))
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
     shaft = falling(
@@ -563,14 +597,14 @@ def keyhole(raw: BaseParams) -> PartResult:
     )
     shaft = shapes.moved(shaft, (0.0, drop, -params.depth - BOOLEAN_OVERLAP))
 
-    body = union(pocket, shaft)
+    body = union(entrance, pocket, shaft)
     return result(
         body,
         bore(
             "pocket_1",
             screw.head + clearance,
-            (0.0, 0.0, -params.head_room / 2.0),
-            depth=params.head_room,
+            (0.0, 0.0, -params.depth / 2.0),
+            depth=params.depth,
         ),
         bore(
             "bore_1",
@@ -904,6 +938,7 @@ class PegboardHookParams(BaseParams):
         HOOK_FEATURE_ON_A_REAL_FACE,
         HOOK_HOLDS_WHEN_LIFTED,
         HOOK_BODIES_JOIN_WITH_VOLUME,
+        MATERIAL_OF_TARGET,
     ],
 )
 def pegboard_hook(raw: BaseParams) -> PartResult:
@@ -1239,7 +1274,7 @@ class FootParams(BaseParams):
         "Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine "
         "hineingesetzt stünde die Schraube auf dem Tisch."
     ),
-    changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE, FOOT_PROFILE_FIXED],
+    changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE, FOOT_PROFILE_FIXED, MATERIAL_OF_TARGET],
 )
 def foot(raw: BaseParams) -> PartResult:
     """Ein Kegelstumpf, der auf der schmalen Seite steht — oder ein Loch dafür.

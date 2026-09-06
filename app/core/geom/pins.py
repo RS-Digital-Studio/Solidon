@@ -159,7 +159,7 @@ def _connector_extent(feature: Feature, plane_normal: np.ndarray) -> float | Non
         diameter = float(feature.params["diameter"])
         depth = float(feature.params["depth"])
         direction = np.asarray(axis, dtype=float)
-    except (KeyError, TypeError, ValueError):
+    except KeyError, TypeError, ValueError:
         return None
     axis_length = float(np.linalg.norm(direction))
     if axis_length <= EPS_GEOM or diameter < 0.0 or depth < 0.0:

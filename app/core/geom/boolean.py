@@ -20,6 +20,7 @@ schnell (§31).
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol
@@ -260,9 +261,8 @@ def _keep_slots(
 ) -> MeshData:
     """§20: die Slot-Zuweisung überlebt die Operation.
 
-    Belassen wird sie nur, wo der Kern die Dreiecke wirklich unverändert
-    durchgereicht hat. Nach der Voxelstufe ist das nie der Fall — die
-    Vernetzung wurde ersetzt —, dort läuft die Übertragung immer.
+    Die Zuordnung folgt der nächsten erhaltenen Eingangsfläche. Eine gleiche
+    Dreieckszahl ist kein Beleg für gleiche Flächen oder ihre Reihenfolge.
 
     Nur die Körper, die noch *im* Ergebnis sind, geben ihre Farbe weiter. Bei
     einer Differenz ist das Werkzeug fort, und die Bohrungswand, die es
@@ -270,8 +270,8 @@ def _keep_slots(
     ein Loch durch ein rotes Teil in der Farbe heraus, die das Werkzeug
     zufällig hatte.
     """
-    if stage != "voxel" and len(result.slots) == len(result.raw.faces) and result.slots:
-        return result
+    # Gleiche Dreieckszahl beweist keine Flächenidentität: Schon eine
+    # halbierte Box hat wieder zwölf Dreiecke in anderer Reihenfolge.
     tolerance = None
     if stage == "voxel":
         # Die Treppe des Rasters ist überall einen halben Voxel tief; enger
@@ -360,7 +360,7 @@ def _voxel(kind: BooleanKind, meshes: list[MeshData]) -> MeshData | None:
     # Und vor der Allokation ein Budget: Die Rasterweite folgt der größten
     # Einzeldiagonale, die Ausdehnung dem gemeinsamen Hüllquader — der
     # Abstand zweier kleiner Körper kann das Raster beliebig groß machen.
-    cells = int(np.prod(shape))
+    cells = math.prod(shape)
     if cells > MAX_VOXEL_CELLS:
         _log.warning(
             "voxel stage skipped: %s cells at pitch %.3g exceed the budget of %s",

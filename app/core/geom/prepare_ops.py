@@ -82,6 +82,7 @@ from app.core.types import (
     Mesh,
     OpContext,
     OpResult,
+    PlaneFrame,
     Quality,
     SceneObject,
     Vec3,
@@ -243,6 +244,27 @@ class DrillParams(BaseParams):
     axis: str = param(
         title=_("Achse"), default="z", choices=_AXES, doc=_ALONG, placement="advanced"
     )
+    nx: float = param(
+        title=_("Normale X"),
+        default=0.0,
+        placement="advanced",
+        doc=_(
+            "Freie Richtung aus der gewählten Fläche. "
+            "Null in allen drei Feldern verwendet die Achse."
+        ),
+    )
+    ny: float = param(
+        title=_("Normale Y"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+    )
+    nz: float = param(
+        title=_("Normale Z"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+    )
     depth: float = param(
         title=_("Tiefe"),
         default=0.0,
@@ -251,6 +273,36 @@ class DrillParams(BaseParams):
         placement="advanced",
         doc=_("Null bohrt durch das ganze Teil."),
     )
+    widening_diameter: float = param(
+        title=_("Durchmesser der Aufweitung"),
+        default=0.0,
+        minimum=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_(
+            "Null lässt die Bohrung gerade. Ein größerer Durchmesser "
+            "schafft Platz über ihrer Mündung."
+        ),
+    )
+    widening_depth: float = param(
+        title=_("Tiefe der Aufweitung"),
+        default=0.0,
+        minimum=0.0,
+        unit="mm",
+        placement="advanced",
+        doc=_("Tiefe des breiteren geraden Abschnitts, gemessen ab der angeklickten Fläche."),
+    )
+    transition_angle: float = param(
+        title=_("Übergangswinkel"),
+        default=90.0,
+        minimum=5.0,
+        maximum=180.0,
+        unit=DEGREE_UNIT,
+        placement="advanced",
+        doc=_(
+            "Voller Winkel zwischen Bohrung und Aufweitung. 180 Grad erzeugt eine flache Schulter."
+        ),
+    )
     anchor: str = param(
         title=_("Bezugspunkt"),
         default="mouth",
@@ -258,7 +310,7 @@ class DrillParams(BaseParams):
         placement="advanced",
         doc=_(
             "Was die Position bedeutet: die Mündung, an der die Bohrung anfängt, "
-            "oder ihre Mitte. Bei einer durchgehenden Bohrung ändert es nichts."
+            "oder ihre Mitte. Eine Aufweitung beginnt an der Mündung."
         ),
     )
     compensate: bool = param(
@@ -289,10 +341,14 @@ def drill_hole(ctx: OpContext) -> OpResult:
         as_mesh_data(source.mesh),
         position=(params.x, params.y, params.z),
         axis=cast(Axis, params.axis),
+        normal=(params.nx, params.ny, params.nz),
         diameter=params.diameter,
         depth=params.depth,
+        widening_diameter=params.widening_diameter,
+        widening_depth=params.widening_depth,
+        transition_angle=params.transition_angle,
         anchor=cast(BoreAnchor, params.anchor),
-        profile=ctx.profile,
+        profile=for_object(ctx.profile, source),
         compensate=params.compensate,
         quality=ctx.quality,
         seed=ctx.seed,
@@ -419,7 +475,7 @@ def _feature_solid(
     # und eine, die durchgeht, den ganzen Körper. Die gemessene Tiefe ist die
     # Untergrenze, die Zugabe an beiden Enden deckt die Messungenauigkeit.
     depth = float(feature.params.get("depth", 0.0))
-    height = max(depth, diameter) + 2.0 * FEATURE_OVERLAP
+    height = (depth if depth > EPS_GEOM else diameter) + 2.0 * FEATURE_OVERLAP
 
     if feature.kind == "cone":
         body = trimesh.creation.cone(
@@ -581,8 +637,8 @@ def _body_from_faces(
     return MeshData.of(closed)
 
 
-def _paired_cavity_body(mesh: MeshData, bore: Feature, widening: Feature) -> MeshData | None:
-    """Der gemeinsame Hohlraum einer Bohrung mit ihrer Senkung.
+def _paired_cavity_body(mesh: MeshData, *features: Feature) -> MeshData | None:
+    """Der gemeinsame Hohlraum aller topologisch verbundenen Abschnitte.
 
     Die Kegelfläche allein hat zwei Randringe und darf deshalb nicht als
     eigener Körper verschoben werden. Zusammen mit der Bohrungswand bleiben
@@ -590,9 +646,11 @@ def _paired_cavity_body(mesh: MeshData, bore: Feature, widening: Feature) -> Mes
     entsteht das Volumen, das an der alten Stelle gefüllt und an der neuen
     ausgeschnitten werden muss — ohne Maße oder Winkel nachzubauen.
     """
+    from app.core.perceive.relations import cavity_surface_indices
+
     return _body_from_faces(
         mesh,
-        (*bore.face_indices, *widening.face_indices),
+        cavity_surface_indices(mesh, features),
         allowed_rings=(2,),
     )
 
@@ -863,8 +921,329 @@ def _tool_for(
     return MeshData.of(body)
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class FeaturePlacementGeometry:
+    """Das vollständige Merkmal im lokalen Mund-/Basisrahmen der Platzierung."""
+
+    mesh: MeshData
+    frame: PlaneFrame
+    selected_offset: Vec3
+    related: tuple[Feature, ...]
+    cavity: bool
+
+
+def _feature_mount(
+    mesh: MeshData, feature: Feature, related: tuple[Feature, ...], tool: MeshData
+) -> PlaneFrame:
+    """Mündung oder Basis aus dem äußeren Rand und seiner angrenzenden Materialfläche.
+
+    Ein Verschlussdeckel des Zapfens oder der Boden eines Sacklochs ist keine
+    Ansatzfläche: seine Nachbarflächen liegen innerhalb des Randrings. Der
+    Materialrand liegt außerhalb. Bei zwei gleich großen Durchgangsmündungen
+    entscheidet die bereits gespeicherte Merkmalsachse die äquivalente Seite.
+    """
+    from shapely.geometry import Point, Polygon
+
+    from app.core.perceive.relations import _boundary_rings, cavity_surface_indices
+    from app.core.sketch.planes import frame_of
+
+    # Innere Ringschultern gehören zur Hohlraumhaut. Ohne sie würde ihr
+    # größerer Rand eine tiefer liegende Ansatzfläche vortäuschen.
+    indices = (
+        cavity_surface_indices(mesh, related) if len(related) > 1 else tuple(feature.face_indices)
+    )
+    combined = dataclasses.replace(feature, face_indices=indices)
+    rings = _boundary_rings(mesh.raw, combined)
+    outward = np.asarray(_feature_direction(feature), dtype=np.float64)
+    candidates: list[tuple[float, float, PlaneFrame]] = []
+    if rings:
+        owners: dict[tuple[int, int], list[int]] = {}
+        for index, face in enumerate(mesh.raw.faces):
+            for a, b in ((face[0], face[1]), (face[1], face[2]), (face[2], face[0])):
+                owners.setdefault((min(int(a), int(b)), max(int(a), int(b))), []).append(index)
+        selected = set(indices)
+        for ring in rings:
+            neighbours: dict[int, list[int]] = {}
+            adjacent: set[int] = set()
+            for a, b in ring:
+                neighbours.setdefault(a, []).append(b)
+                neighbours.setdefault(b, []).append(a)
+                adjacent.update(index for index in owners.get((a, b), ()) if index not in selected)
+            first = min(neighbours)
+            ordered = [first]
+            previous, current = -1, first
+            while True:
+                following = next(value for value in neighbours[current] if value != previous)
+                if following == first:
+                    break
+                ordered.append(following)
+                previous, current = current, following
+            points = np.asarray(mesh.raw.vertices, dtype=np.float64)[ordered]
+            origin = points.mean(axis=0)
+            _, _, directions = np.linalg.svd(points - origin, full_matrices=False)
+            normal = directions[-1]
+            if np.max(np.abs((points - origin) @ normal)) > EPS_GEOM:
+                continue
+            trial = frame_of(
+                cast(Vec3, tuple(float(value) for value in normal)),
+                cast(Vec3, tuple(float(value) for value in origin)),
+            )
+            xy = np.column_stack(
+                ((points - origin) @ trial.x_axis, (points - origin) @ trial.y_axis)
+            )
+            polygon = Polygon(xy)
+            if not polygon.is_valid or polygon.area <= EPS_GEOM:
+                continue
+            for index in sorted(adjacent):
+                other_normal = np.asarray(mesh.raw.face_normals[index], dtype=np.float64)
+                if abs(float(other_normal @ normal)) < 1.0 - EPS_GEOM:
+                    continue
+                centre = np.asarray(mesh.raw.triangles_center[index]) - origin
+                if polygon.covers(
+                    Point(float(centre @ trial.x_axis), float(centre @ trial.y_axis))
+                ):
+                    continue
+                # Randpunkte sind nicht gleichmäßig verteilt: zusätzliche
+                # Dreiecke an einer Seite dürfen den Anschluss nicht versetzen.
+                # Rotationsformen verwenden ihren Achsschnitt mit der Ebene;
+                # freie Formen den Flächenschwerpunkt des tatsächlichen Rings.
+                centroid = polygon.centroid
+                mount = (
+                    origin
+                    + centroid.x * np.asarray(trial.x_axis)
+                    + centroid.y * np.asarray(trial.y_axis)
+                )
+                alignment = float(outward @ other_normal)
+                if feature.kind in PARAMETRIC_KINDS and abs(alignment) > EPS_GEOM:
+                    axis_centre = np.asarray(feature.params["centre"], dtype=np.float64)
+                    mount = (
+                        axis_centre
+                        + outward * float((origin - axis_centre) @ other_normal) / alignment
+                    )
+                frame = frame_of(
+                    cast(Vec3, tuple(float(value) for value in other_normal)),
+                    cast(Vec3, tuple(float(value) for value in mount)),
+                )
+                candidates.append((float(polygon.area), float(other_normal @ outward), frame))
+                break
+    if candidates:
+        largest = max(area for area, _, _ in candidates)
+        return max(
+            (entry for entry in candidates if entry[0] >= largest - EPS_GEOM),
+            key=lambda entry: entry[1],
+        )[2]
+    if feature.kind not in PARAMETRIC_KINDS:
+        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+    # Parametrische Altmerkmale können ohne Dreieckszuordnung vorliegen. Die
+    # Materialseite ihrer beiden Enden entscheidet auch bei einem Zapfen an
+    # der Unterseite. Eine freie Form bekommt diesen Ersatz nie.
+    centre = np.asarray(feature.params["centre"], dtype=np.float64)
+    depth = float(feature.params.get("depth", 0.0))
+    if depth <= EPS_GEOM:
+        projected = (np.asarray(tool.raw.vertices) - centre) @ outward
+        depth = float(np.ptp(projected))
+    from app.core.geom.mesh import on_surface
+
+    ends = centre + np.array([-1.0, 1.0])[:, None] * outward * (depth / 2.0 + EPS_GEOM * 16.0)
+    closest, _, faces = on_surface(mesh.raw, ends)
+    signed = np.einsum("ij,ij->i", ends - closest, np.asarray(mesh.raw.face_normals)[faces])
+    inside = signed < -EPS_GEOM
+    if inside.all():
+        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+    if inside[1] and not inside[0]:
+        outward = -outward
+    origin = centre + outward * depth / 2.0 * (1.0 if _feature_is_a_cavity(feature) else -1.0)
+    return frame_of(
+        cast(Vec3, tuple(float(value) for value in outward)),
+        cast(Vec3, tuple(float(value) for value in origin)),
+    )
+
+
+def feature_placement_geometry(
+    source: SceneObject, feature: Feature, operation: str
+) -> FeaturePlacementGeometry:
+    """Eine einzelne belegte Form oder ihre vollständige zusammenhängende Bohrkette."""
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    feature = _movable_feature(source, feature.id, operation)
+    body = as_mesh_data(source.mesh)
+    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
+    if chain is None and touches_other:
+        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+    centre = cast(Vec3, tuple(float(value) for value in feature.params["centre"]))
+    related = chain or (feature,)
+    built = _paired_cavity_body(body, *chain) if chain else _tool_for(body, feature, centre)
+    if built is None:
+        raise ValidationError(field="at_feature", detail=_NO_OWN_BODY, constraint="not_movable")
+    frame = _feature_mount(body, feature, related, built)
+    rotation = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    to_local = np.eye(4)
+    to_local[:3, :3] = rotation.T
+    to_local[:3, 3] = -rotation.T @ np.asarray(frame.origin)
+    local = built.raw.copy()
+    local.apply_transform(to_local)
+    offset = rotation.T @ (np.asarray(centre) - frame.origin)
+    return FeaturePlacementGeometry(
+        MeshData.of(local),
+        frame,
+        cast(Vec3, tuple(float(value) for value in offset)),
+        related,
+        _feature_is_a_cavity(feature),
+    )
+
+
+def _place_oriented_feature(ctx: OpContext, *, duplicate: bool) -> OpResult:
+    """Der freie Platzierungsweg; alte Nullnormalen bleiben im bisherigen Ablauf."""
+    from app.core.sketch.planes import frame_of
+
+    params = cast(MoveFeatureParams | DuplicateFeatureParams, ctx.params)
+    source = ctx.inputs[0]
+    operation = "duplicate_feature" if duplicate else "move_feature"
+    feature = _movable_feature(source, params.at_feature, operation)
+    geometry = feature_placement_geometry(source, feature, operation)
+    target = np.asarray((params.x, params.y, params.z), dtype=np.float64)
+    frame = frame_of((params.nx, params.ny, params.nz), (params.x, params.y, params.z))
+    new_rotation = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    old_rotation = np.column_stack(
+        (geometry.frame.x_axis, geometry.frame.y_axis, geometry.frame.normal)
+    )
+    delta_rotation = new_rotation @ old_rotation.T
+    old_centre = np.asarray(feature.params["centre"], dtype=np.float64)
+    to_world = np.eye(4)
+    to_world[:3, :3] = new_rotation
+    to_world[:3, 3] = target - new_rotation @ np.asarray(geometry.selected_offset)
+    if np.allclose(delta_rotation, np.eye(3), atol=EPS_GEOM, rtol=0.0) and np.allclose(
+        target, old_centre, atol=EPS_GEOM, rtol=0.0
+    ):
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code=f"{operation}.unchanged",
+                    severity="info",
+                    message=_("Das Merkmal liegt schon dort — nichts zu versetzen."),
+                    feature_ids=(feature.id,),
+                )
+            ],
+        )
+    tool = geometry.mesh.raw.copy()
+    tool.apply_transform(to_world)
+    body = as_mesh_data(source.mesh)
+    findings: list[Finding] = []
+    closed_solver = None
+    if not duplicate:
+        if len(geometry.related) > 1:
+            old_matrix = np.eye(4)
+            old_matrix[:3, :3] = old_rotation
+            old_matrix[:3, 3] = geometry.frame.origin
+            old_tool = geometry.mesh.raw.copy()
+            old_tool.apply_transform(old_matrix)
+            closed = boolean(
+                "union",
+                [body, MeshData.of(old_tool)],
+                quality=ctx.quality,
+                seed=ctx.seed,
+                cancelled=ctx.cancelled,
+            )
+        else:
+            closed = _closed_at(
+                body,
+                feature,
+                cast(Vec3, tuple(float(value) for value in old_centre)),
+                geometry.cavity,
+                quality=ctx.quality,
+                seed=ctx.seed,
+                cancelled=ctx.cancelled,
+            )
+        body, closed_solver = closed.mesh, closed.solver
+        findings.extend(closed.findings)
+    kind: BooleanKind = "difference" if geometry.cavity else "union"
+    placed = boolean(
+        kind, [body, MeshData.of(tool)], quality=ctx.quality, seed=ctx.seed, cancelled=ctx.cancelled
+    )
+    findings.extend(placed.findings)
+    if duplicate:
+        nothing = without_effect(source.mesh, placed.mesh, kind, ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
+    features = dict(source.features)
+    reserved = {*source.reserved_feature_ids, *source.features}
+    for related in geometry.related:
+        centre = target + delta_rotation @ (
+            np.asarray(related.params["centre"], dtype=np.float64) - old_centre
+        )
+        values = {**related.params, "centre": tuple(float(value) for value in centre)}
+        for name in ("axis", "normal"):
+            if name in related.params:
+                vector = delta_rotation @ np.asarray(related.params[name], dtype=np.float64)
+                values[name] = tuple(float(value) for value in vector)
+        identifier = related.id
+        if duplicate:
+            identifier = _free_feature_id(
+                dataclasses.replace(
+                    source, features=features, reserved_feature_ids=tuple(sorted(reserved))
+                ),
+                related.kind,
+            )
+        moved = dataclasses.replace(
+            related, id=identifier, params=values, face_indices=(), provenance="generated"
+        )
+        lost = _throughness_lost(
+            placed.mesh,
+            moved,
+            values["centre"],
+            operation,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        findings.extend(lost)
+        if lost:
+            moved = dataclasses.replace(moved, params={**values, "through": False})
+        features[identifier] = moved
+        reserved.add(identifier)
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=placed.mesh,
+                features=features,
+                reserved_feature_ids=tuple(sorted(reserved)),
+            )
+        ],
+        solver=deepest((closed_solver, placed.solver)),
+        findings=findings,
+    )
+
+
 @op_params
-class MoveFeatureParams(BaseParams):
+class FeaturePlacementParams(BaseParams):
+    """Freie Zielrichtung; ein Nullvektor bewahrt die bisherige reine Verschiebung."""
+
+    nx: float = param(
+        title=_("Normale X"),
+        default=0.0,
+        placement="advanced",
+        doc=_(
+            "Freie Richtung am neuen Ort. Null in allen drei Feldern erhält die bisherige Richtung."
+        ),
+    )
+    ny: float = param(
+        title=_("Normale Y"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+    )
+    nz: float = param(
+        title=_("Normale Z"),
+        default=0.0,
+        placement="advanced",
+        doc=_("Weitere Achse der Richtung — siehe Normale X."),
+    )
+
+
+@op_params
+class MoveFeatureParams(FeaturePlacementParams):
     at_feature: str = param(
         title=_("Merkmal"),
         default="",
@@ -952,16 +1331,16 @@ def _movable_feature(source: SceneObject, name: str, op: str) -> Feature:
 #: einer Quelle; hier bleibt der eine Fall, den das Panel nicht kennt, weil er
 #: nicht an der Merkmalsart hängt, sondern am Netz.
 #:
-#: ``move_feature`` fängt das erkannte Paar aus Bohrung und Senkung vor
-#: ``_tool_for`` ab und versetzt seinen gemeinsamen Hohlraum. Dieser Satz
+#: ``move_feature`` fängt die erkannte Kette aus Bohrung und Senkungen vor
+#: ``_tool_for`` ab und versetzt ihren gemeinsamen Hohlraum. Dieser Satz
 #: bleibt für die anderen Handlungen und für Netze, auf denen die Beziehung
 #: nicht eindeutig erkannt werden kann. Dort trägt weiter nur der gemessene
 #: Weg über Zahlen: ein Stopfen mit dem Durchmesser der Senkung über die volle
 #: Wandstärke schließt beides in einem Zug.
 _NO_OWN_BODY: Final = _(
     "Dieses Merkmal geht in ein anderes über — eine Senkung über einer "
-    "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Versetzt "
-    "würde die Bohrung darunter mit zugehen. Verschließen Sie beides in einem "
+    "Bohrung etwa —, und sein Hohlraum gehört nicht ihm allein. Eine einzelne "
+    "Bearbeitung würde die Bohrung darunter mit verschließen. Verschließen Sie beides in einem "
     "Zug: „Bohrung verschließen“ ohne Merkmal, mit dem Durchmesser der Senkung "
     "und der vollen Wandstärke — danach setzen Sie es an der neuen Stelle neu."
 )
@@ -996,8 +1375,9 @@ def move_feature(ctx: OpContext) -> OpResult:
     alten Stelle das Gegenteil dessen, was das Merkmal ist, an der neuen das
     Merkmal selbst. Ein Hohlraum wird also gefüllt und neu ausgeschnitten, ein
     Zapfen abgetragen und neu angesetzt. Eine Bohrung mit Senkung bildet dabei
-    einen gemeinsamen, aus beiden Flächengruppen geschlossenen Hohlraum; egal
-    welche Hälfte gewählt ist, beide Kennungen und Mittelpunkte reisen mit.
+    einen gemeinsamen, aus allen verbundenen Flächengruppen geschlossenen
+    Hohlraum; unabhängig vom gewählten Abschnitt reisen alle Kennungen und
+    Mittelpunkte mit.
     Alle Wege gehen über die Boolesche Rückfallkette, und die benutzte Stufe
     steht im Ergebnis (§39).
 
@@ -1005,11 +1385,12 @@ def move_feature(ctx: OpContext) -> OpResult:
     von Hand ausmacht.
     """
     params = cast(MoveFeatureParams, ctx.params)
+    if np.linalg.norm((params.nx, params.ny, params.nz)) > EPS_GEOM:
+        return _place_oriented_feature(ctx, duplicate=False)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "move_feature")
-    from app.core.perceive.relations import bore_and_widening_at
+    from app.core.perceive.relations import cavity_chain_state_at
 
-    pair = bore_and_widening_at(feature, source.features)
     # **Erst in eine Liste, dann drei Werte einzeln.** Ein Generatorausdruck über
     # die Achsen hat für mypy keine feste Länge; ``Vec3`` verlangt genau drei.
     measured = [float(value) for value in feature.params["centre"]]
@@ -1030,11 +1411,19 @@ def move_feature(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
+    chain, touches_other = cavity_chain_state_at(feature, source.features, body)
+    if chain is None and touches_other:
+        raise ValidationError(
+            field="at_feature",
+            detail=_NO_OWN_BODY,
+            values={"feature": feature.id},
+            constraint="not_movable",
+        )
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     travel = np.asarray(target, dtype=float) - np.asarray(centre, dtype=float)
-    if pair is not None:
-        bore, widening = pair
-        cavity_body = _paired_cavity_body(body, bore, widening)
+    if chain is not None:
+        bore, widening = chain[0], chain[-1]
+        cavity_body = _paired_cavity_body(body, *chain)
         if cavity_body is None:
             raise ValidationError(
                 field="at_feature",
@@ -1060,7 +1449,7 @@ def move_feature(ctx: OpContext) -> OpResult:
             cancelled=ctx.cancelled,
         )
         features = dict(source.features)
-        for related in pair:
+        for related in chain:
             related_centre = np.asarray(related.params["centre"], dtype=float) + travel
             features[related.id] = dataclasses.replace(
                 related,
@@ -1106,19 +1495,22 @@ def move_feature(ctx: OpContext) -> OpResult:
         through_target = target
 
     findings = [*closed.findings, *placed.findings]
-    # Nur, wenn sie entlang ihrer eigenen Achse gewandert ist: Quer versetzt
-    # bleibt eine durchgehende Bohrung durchgehend, und die Messung kostet eine
-    # Boolesche, die dann nichts zu sagen hätte.
-    axial = float(np.dot(travel, np.asarray(_feature_direction(through_feature), dtype=float)))
-    if abs(axial) > EPS_GEOM:
-        findings += _throughness_lost(
-            placed.mesh,
-            through_feature,
-            through_target,
-            "move_feature",
-            quality=ctx.quality,
-            seed=ctx.seed,
-            cancelled=ctx.cancelled,
+    # Auch quer kann die Wand dicker werden. Die tatsächliche Zielgeometrie
+    # entscheidet; die Bewegungsrichtung allein beweist keinen Durchgang.
+    lost = _throughness_lost(
+        placed.mesh,
+        through_feature,
+        through_target,
+        "move_feature",
+        quality=ctx.quality,
+        seed=ctx.seed,
+        cancelled=ctx.cancelled,
+    )
+    findings += lost
+    if lost:
+        updated = features[through_feature.id]
+        features[through_feature.id] = dataclasses.replace(
+            updated, params={**updated.params, "through": False}
         )
     return OpResult(
         outputs=[
@@ -1157,7 +1549,7 @@ def _free_feature_id(source: SceneObject, kind: str) -> FeatureId:
       jüngste.
     """
     highest = 0
-    for name in source.features:
+    for name in (*source.features, *source.reserved_feature_ids):
         head, _, tail = name.rpartition("_")
         if head == kind and tail.isdigit():
             highest = max(highest, int(tail))
@@ -1165,7 +1557,7 @@ def _free_feature_id(source: SceneObject, kind: str) -> FeatureId:
 
 
 @op_params
-class DuplicateFeatureParams(BaseParams):
+class DuplicateFeatureParams(FeaturePlacementParams):
     at_feature: str = param(
         title=_("Merkmal"),
         default="",
@@ -1250,6 +1642,8 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     dürfen davon nichts merken.
     """
     params = cast(DuplicateFeatureParams, ctx.params)
+    if np.linalg.norm((params.nx, params.ny, params.nz)) > EPS_GEOM:
+        return _place_oriented_feature(ctx, duplicate=True)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "duplicate_feature")
     measured = [float(value) for value in feature.params["centre"]]
@@ -1325,6 +1719,9 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
                 source,
                 mesh=placed.mesh,
                 features={**source.features, copy.id: copy},
+                reserved_feature_ids=tuple(
+                    sorted({*source.reserved_feature_ids, *source.features, copy.id})
+                ),
             )
         ],
         findings=findings,
@@ -1406,7 +1803,16 @@ def remove_feature(ctx: OpContext) -> OpResult:
         ),
     ]
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=closed.mesh, features=remaining)],
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=closed.mesh,
+                features=remaining,
+                reserved_feature_ids=tuple(
+                    sorted({*source.reserved_feature_ids, *source.features})
+                ),
+            )
+        ],
         findings=findings,
         solver=closed.solver,
     )
@@ -1572,7 +1978,6 @@ class ResizeFeatureParams(BaseParams):
         default=8.0,
         unit="mm",
         minimum=0.5,
-        maximum=200.0,
         placement="front",
         doc=_("Der neue Durchmesser. Beim Anklicken steht hier sein gemessener."),
     )
@@ -1681,7 +2086,6 @@ class ResizeHoleParams(BaseParams):
         default=5.0,
         unit="mm",
         minimum=0.2,
-        maximum=200.0,
         placement="front",
         doc=_(
             "Neuer fertiger Durchmesser der erkannten Bohrung. Beim Anklicken steht "
@@ -1712,6 +2116,16 @@ class ResizeHoleParams(BaseParams):
             "Aus bleibt das gemessene Maß unverändert."
         ),
     )
+
+
+#: Der exakte Kern hat gerechnet, und heraus kam ein Körper, der nicht mehr
+#: geschlossen ist. Für den Kunden ist das kein Ergebnis — im Objektbaum stünde
+#: ein Körper, der sich nicht drucken lässt, und gesagt hätte es erst der Export.
+OPEN_BODY_TITLE: Final = _("Die geänderte Bohrung ließ den Körper offen.")
+OPEN_BODY_DETAIL: Final = _(
+    "Der exakte Kern konnte die neue Wand nicht mit dem Körper schließen. "
+    "Der Körper bleibt, wie er war."
+)
 
 
 @register_op(
@@ -1761,6 +2175,20 @@ def resize_hole(ctx: OpContext) -> OpResult:
             raise GeometryError(
                 title=NOTHING_LEFT_TITLE,
                 detail=NOTHING_LEFT_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        # **Ob der Körper noch geschlossen ist, gehört zum Erfolg dazu.** An der
+        # Teppichklammer (Datei 19 der Durchsicht vom 05.09.2026) kam ein
+        # Körper mit offener Tessellation zurück, und weder ``IsDone`` der
+        # Booleschen Operation noch die zwei Prüfungen darüber sagten ein Wort:
+        # Volumen war da, Flächen waren da. Der Kunde sah es erst im Export.
+        # Die Ursache — ein Schneidzylinder neben der Achse — ist in
+        # ``brep.features`` behoben; die Frage bleibt, weil sie zum Vertrag
+        # gehört und nicht zu einer Ursache.
+        if not solid.is_closed:
+            raise GeometryError(
+                title=OPEN_BODY_TITLE,
+                detail=OPEN_BODY_DETAIL,
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
         findings: list[Finding] = []
@@ -1853,9 +2281,31 @@ def _widening_findings(source: SceneObject, feature: Feature, diameter: float) -
     # Der Import steht hier und nicht oben: ``perceive`` zieht die Erkennung
     # mit, und die kostet beim Laden des Moduls Zeit, die eine Operation ohne
     # Senkung nie braucht — dieselbe Aufteilung wie bei ``detect`` weiter unten.
-    from app.core.perceive.relations import widening_at_the_mouth
+    from app.core.perceive.relations import cavity_chain_at, widening_at_the_mouth
 
-    widening = widening_at_the_mouth(feature, source.features)
+    mesh = as_mesh_data(source.mesh)
+    chain = cavity_chain_at(feature, source.features, mesh)
+    if chain is not None and len(chain) > 2:
+        position = next(index for index, section in enumerate(chain) if section.id == feature.id)
+        swallowed = (
+            position + 1 < len(chain)
+            and diameter >= float(chain[position + 1].params["diameter"]) - EPS_GEOM
+        )
+        return [
+            Finding(
+                code="resize.cavity_sections_kept",
+                severity="warning" if swallowed else "info",
+                message=_(
+                    "Die Bohrung und ihre Senkungen bilden einen gemeinsamen Hohlraum. "
+                    "Geändert wurde nur dieser Durchmesser. Prüfen Sie die übrigen "
+                    "Abschnitte oder korrigieren Sie die Eingabe."
+                ),
+                feature_ids=tuple(section.id for section in chain),
+                values={"diameter": diameter, "previous": float(feature.params["diameter"])},
+                suggestions=(CORRECT_INPUT,),
+            )
+        ]
+    widening = widening_at_the_mouth(feature, source.features, mesh=mesh)
     if widening is None:
         return []
     outer = float(widening.params.get("diameter") or 0.0)
