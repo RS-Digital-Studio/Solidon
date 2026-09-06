@@ -37,6 +37,99 @@ DISPLAY_CALLS = frozenset(
     }
 )
 
+
+def test_english_feature_names_distinguish_a_ring_groove_from_a_fillet() -> None:
+    """Zwei verschiedene erkannte Formen dürfen nicht beide Fillet heißen."""
+    from app.core.types import Feature
+    from app.ui.labels import feature_name
+
+    install_language("en")
+    set_language("en")
+    try:
+        groove = Feature(id="torus_1", kind="torus", provenance="detected", params={"recess": True})
+        fillet = Feature(
+            id="fillet_1", kind="fillet", provenance="detected", params={"recess": False}
+        )
+        assert feature_name(groove.id, groove) == "Groove"
+        assert feature_name(fillet.id, fillet) == "Fillet"
+    finally:
+        set_language("de")
+
+
+@pytest.mark.parametrize(
+    "example,parameter",
+    [
+        ("weg2-halter-konstruieren", "breite"),
+        ("gehaeuse-mit-bausteinen", "wand"),
+    ],
+)
+def test_english_tour_names_the_visible_parameter(example: str, parameter: str) -> None:
+    """Die Anleitung führt zum Feldtitel des wirklich geladenen Beispiels."""
+    from app.core import examples
+    from app.core.scene.project import load
+    from app.core.tour import tour_for
+
+    install_language("en")
+    set_language("en")
+    try:
+        project = load(examples.directory() / f"{example}.p3d")
+        title = str(project.document.parameters[parameter].title)
+        tour = tour_for(example)
+        assert tour is not None
+        assert any(title in str(step.text) for step in tour.steps)
+        assert all(not re.search(rf"\b{parameter}\b", str(step.text)) for step in tour.steps)
+    finally:
+        set_language("de")
+
+
+def test_spanish_tours_name_the_visible_actions() -> None:
+    """Transaktion, Werkzeug und Abschluss heißen wie ihre echten Gegenstücke."""
+    from app.core import examples
+    from app.core.scene.project import load
+    from app.core.tour import tour_for
+    from app.i18n import tr
+
+    install_language("es")
+    set_language("es")
+    try:
+        project = load(examples.directory() / "drucker-kalibrieren.p3d")
+        ops = {op.id for op in project.document.ops if op.op == "arrange_bed"}
+        title = next(
+            str(tx.title) for tx in project.document.transactions if ops.intersection(tx.ops)
+        )
+        tour = tour_for("drucker-kalibrieren")
+        assert tour is not None and any(title in str(step.text) for step in tour.steps)
+        sculpt = tour_for("weg4-figur-formen")
+        assert sculpt is not None
+        assert any(
+            str(tr("Formen")) in str(step.text) and str(tr("Fertig")) in str(step.text)
+            for step in sculpt.steps
+        )
+    finally:
+        set_language("de")
+
+
+def test_french_range_check_warns_for_any_failed_corner() -> None:
+    """Ein einziger gescheiterter Eckpunkt ist bereits ein Warnfall."""
+    catalog = read_catalog("fr")
+    body = next(
+        value for key, value in catalog.items() if key.startswith("Der Halter für die Werkbank")
+    )
+    assert "à l'un des points testés, aucun corps utilisable" in body
+    assert "Si nulle part" not in body
+
+
+def test_italian_sculpt_manual_names_the_actual_modify_menu() -> None:
+    """Cambia enthält die Booleschen Operationen, Modifica das Bearbeiten-Menü."""
+    catalog = read_catalog("it")
+    body = next(
+        value for key, value in catalog.items() if key.startswith("Manche Formen lassen sich")
+    )
+    assert f"nel menu «{catalog['Ändern']}»" in body
+    assert f"nel menu «{catalog['Bearbeiten']}»" not in body
+    assert catalog["Dreiecke angleichen"] in body
+
+
 #: Statische Meldungsfenster-Aufrufe. Nur an QMessageBox gezählt —
 #: ``log.warning`` ist kein Dialog.
 BOX_CALLS = frozenset({"information", "question", "warning", "critical"})
