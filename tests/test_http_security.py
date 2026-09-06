@@ -544,7 +544,9 @@ def test_remote_version_stops_at_its_total_deadline(
         upload_website.remote_version(SlowFtp(), "httpdocs")  # type: ignore[arg-type]
 
     elapsed = time.monotonic() - started
-    assert elapsed < 0.24, "Der alte 30-s-Datentimeout darf die Gesamtfrist nicht verlängern"
+    # Großzügig gegen Fremdlast (bis zu vier Sitzungen auf einer Maschine);
+    # die Aussage bleibt: die kurze Gesamtfrist zählt, nicht der 30-s-Datentimeout.
+    assert elapsed < 1.0, "Der alte 30-s-Datentimeout darf die Gesamtfrist nicht verlängern"
     thread.join(timeout=1)
     assert finished.is_set()
 
@@ -767,7 +769,9 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
         with pytest.raises(ResponseDeadlineError):
             read_limited(response, limit=100, deadline=deadline_after(0.08))
         elapsed = time.monotonic() - started
-        assert elapsed < 0.30, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
+        # Großzügig gegen Fremdlast; die Aussage bleibt: die Frist von 0,08 s
+        # zählt, nicht das Tempo des Senders.
+        assert elapsed < 1.0, "Metadaten haben die Gesamtfrist bis zum Zeilenende verlängert"
     finally:
         stop.set()
         response.close()

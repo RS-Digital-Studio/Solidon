@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import IO, Final
 
 from app.core import discover
+from app.core.errors import AppError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -949,6 +950,80 @@ if backup.exists():
 """
 
 
+#: Einen Bestand, der vor der Abschlussmarke geladen wurde, prüfen statt
+#: 7,5 GB neu zu holen: Die Marke schrieb bis zum 06.09.2026 nur der neue
+#: Kopierweg, und jede ältere Installation galt damit als unvollständig
+#: (Gesamtreview CORE-24, Nachprüfung). Gefragt wird die Dateiliste des
+#: Modellstands (wenige KB), verglichen wird Datei für Datei mit Größe; nur
+#: ein vollständiger Bestand bekommt die Marke. Fehlt eine Datei, endet das
+#: Programm mit einem Satz, und der gewöhnliche Download läuft.
+_ADOPT_WEIGHTS = """
+import json, sys
+from pathlib import Path
+from huggingface_hub import HfApi
+
+target = Path(sys.argv[1])
+repo = sys.argv[2]
+revision = sys.argv[3]
+info = HfApi().model_info(repo, revision=revision, files_metadata=True)
+if info.sha != revision:
+    raise SystemExit(f"Der Modellstand ist {info.sha} statt {revision}.")
+files = {entry.rfilename: entry.size for entry in info.siblings}
+if "model_index.json" not in files or not any(
+    name.endswith((".safetensors", ".bin")) for name in files
+):
+    raise SystemExit("Der Modellbestand ist unvollständig.")
+for name, size in files.items():
+    path = target / name
+    if (
+        not path.resolve().is_relative_to(target.resolve())
+        or not isinstance(size, int) or size < 0
+        or not path.is_file() or path.stat().st_size != size
+    ):
+        raise SystemExit(f"Die Modelldatei {name} fehlt oder ist unvollständig.")
+(target / ".solidon-complete.json").write_text(
+    json.dumps({"revision": revision, "files": files}), encoding="utf-8"
+)
+print("Vorhandene Gewichte übernommen", flush=True)
+"""
+
+
+def _discard_replaced_weights(target: Path) -> None:
+    """Räumt liegen gebliebene ``.previous-*``-Ordner eines abgebrochenen Austauschs.
+
+    ``_FETCH_WEIGHTS`` stellt den alten Bestand daneben, bevor es den neuen
+    einwechselt, und löscht ihn erst danach. Stirbt der Prozess dazwischen,
+    liegen 7,5 GB ohne Aufgabe herum — ``.part`` räumt der nächste Lauf, also
+    räumt er auch das.
+    """
+    for leftover in target.parent.glob(target.name + ".previous-*"):
+        if leftover.is_dir():
+            shutil.rmtree(leftover, ignore_errors=True)
+
+
+def adopt_weights(
+    comfyui: Path,
+    python: Path,
+    progress: ProgressFn = _silent,
+    cancelled: CancelledFn | None = None,
+) -> bool:
+    """Einen Bestand ohne Abschlussmarke prüfen und, wenn er vollständig ist, übernehmen."""
+    target = comfyui / "models" / "triposg" / "TripoSG"
+    if not (target / "model_index.json").is_file():
+        return False
+    try:
+        _run(
+            [str(python), "-s", "-c", _ADOPT_WEIGHTS, str(target), WEIGHTS_REPO, WEIGHTS_REVISION],
+            _("Vorhandene Gewichte prüfen"),
+            progress,
+            cancelled,
+        )
+    except AppError as problem:
+        _log.info("vorhandene TripoSG-Gewichte nicht übernommen: %s", problem)
+        return False
+    return weights_present(comfyui)
+
+
 def background_present(comfyui: Path) -> bool:
     """Liegt ein Freistell-Modell da? Welches, entscheidet die Rolle.
 
@@ -1109,6 +1184,9 @@ def fetch_weights(
     if weights_present(comfyui):
         return
     target = comfyui / "models" / "triposg" / "TripoSG"
+    _discard_replaced_weights(target)
+    if adopt_weights(comfyui, python, progress, cancelled):
+        return
     scratch = scratch_dir("dl-triposg")
     _space_or_stop(scratch)
     _space_or_stop(target)

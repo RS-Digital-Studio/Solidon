@@ -438,6 +438,15 @@ def _bind_old_lid_fits(data: dict[str, Any]) -> dict[str, Any]:
     Fit-Entfernung steht, wird die fehlende Beziehung ergänzt. Die echten
     History-Rückschritte lösen dabei auch alte Neuplanungen und Op-Fassungen
     auf; eine aktuelle Kennung gehört nicht ungeprüft in eine Undo-Seite.
+
+    **Dieser Schritt ist anders als alle vor ihm.** Die siebzehn älteren
+    Migrationen sind reine Wörterbuchumformungen; dieser ruft ``History``,
+    ``document_from_data`` und ``fit_for_lid`` in ihrer **heutigen** Fassung.
+    Das trägt, solange diese Funktionen v20-Daten noch lesen. Beim nächsten
+    Formatwechsel wird er deshalb gegen eine eingecheckte v19-Datei mit
+    Deckel nachgemessen, bevor v21 einen Schlüssel einführt, den
+    ``document_from_data`` dann erwartet (Abnahme des Gesamt-Reviews,
+    06.09.2026; Register in ROADMAP.md).
     """
     from app.core.errors import AppError
     from app.core.expressions import resolve, resolve_value
