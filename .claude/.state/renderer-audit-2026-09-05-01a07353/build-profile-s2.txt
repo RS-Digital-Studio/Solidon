@@ -1,0 +1,43 @@
+Dreiecke: 3153920
+add_surface 35 ms | erstes Bild 4055 ms | zweites Bild 4.4 ms
+         3930139 function calls (3909086 primitive calls) in 4.087 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1317 to 583 due to restriction <'gfx_renderer|pygfx|numpy|wgpu'>
+   List reduced from 583 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        2    0.000    0.000    3.977    1.988 F:\3D Druck\app\ui\render\gfx_renderer.py:1530(render)
+        2    0.000    0.000    3.977    1.988 F:\3D Druck\app\ui\render\gfx_renderer.py:1455(_draw)
+        2    0.000    0.000    3.977    1.988 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderer.py:624(render)
+        2    0.000    0.000    2.557    1.278 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderer.py:162(collect_pipelines_container_groups)
+        4    0.000    0.000    2.557    0.639 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:166(get_pipeline_container_group)
+        4    0.000    0.000    2.556    0.639 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:213(update)
+        2    0.000    0.000    2.556    1.278 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:323(update)
+        2    0.000    0.000    1.698    0.849 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:390(update_wgpu_data)
+      143    1.320    0.009    1.321    0.009 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_helpers.py:352(proxy_func)
+        2    0.000    0.000    1.103    0.552 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:597(_compose_pipeline)
+        3    0.000    0.000    1.043    0.348 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_api.py:2000(create_render_pipeline)
+        2    0.000    0.000    1.043    0.521 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:121(get_cached_render_pipeline)
+        2    0.000    0.000    0.858    0.429 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:349(update_shader_data)
+        2    0.000    0.000    0.856    0.428 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shader\base.py:172(get_bindings_info)
+        1    0.031    0.031    0.855    0.855 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shaders\meshshader.py:136(get_bindings)
+        1    0.605    0.605    0.823    0.823 F:\3D Druck\.venv\Lib\site-packages\pygfx\utils\__init__.py:275(normals_from_vertices)
+      182    0.001    0.000    0.817    0.004 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_api.py:121(_new_struct_p)
+       12    0.000    0.000    0.678    0.057 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\update.py:33(update_resource)
+       12    0.000    0.000    0.678    0.057 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\update.py:58(_update_buffer)
+       14    0.000    0.000    0.678    0.048 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_api.py:3839(write_buffer)
+        2    0.000    0.000    0.595    0.298 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:582(_get_shader)
+        2    0.000    0.000    0.595    0.297 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\pipeline.py:74(get_cached_shader_module)
+        2    0.000    0.000    0.538    0.269 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shader\base.py:199(generate_wgsl)
+       80    0.000    0.000    0.455    0.006 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_api.py:92(new_struct_p)
+        3    0.000    0.000    0.420    0.140 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\shader\templating.py:53(apply_templating)
+      102    0.000    0.000    0.363    0.004 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_api.py:110(new_struct)
+        2    0.000    0.000    0.309    0.154 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderstate.py:29(get_renderstate)
+        3    0.000    0.000    0.305    0.102 F:\3D Druck\.venv\Lib\site-packages\wgpu\backends\wgpu_native\_api.py:2085(_create_render_pipeline_descriptor)
+      4/2    0.000    0.000    0.304    0.152 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderstate.py:65(obtain_from_hash)
+        1    0.000    0.000    0.304    0.304 F:\3D Druck\.venv\Lib\site-packages\pygfx\renderers\wgpu\engine\renderstate.py:429(__init__)
+
+
+
+Exit profile: 0

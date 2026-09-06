@@ -194,15 +194,57 @@ Was daraus folgt:
 - **Arbeitsspeicher gleich:** 406 gegen 391 MiB bei 197 000, 1116 gegen 1175
   MiB beim vollen 3,15-Millionen-Netz.
 
+## Nachtrag: Aufbauprofil (14:00 Uhr) und der Ausbau
+
+`build_profile.py --stage 2` misst `GfxRenderer.add_surface` samt erstem
+Bild am Baum mit 3 153 920 Dreiecken, ohne Fenster, unter cProfile
+(`build-profile-s2.txt`):
+
+| Posten | Zeit |
+|---|---|
+| `add_surface` selbst | 35 ms |
+| erstes Bild | 4 055 ms |
+| davon: Renderpipelines übersetzen (`create_render_pipeline`, 3 Aufrufe) | 1 043 ms |
+| davon: Punktnormalen auf der CPU (`pygfx.utils.normals_from_vertices`) | 823 ms |
+| davon: Pufferupload (`write_buffer`, 14 Aufrufe) | 678 ms |
+| davon: WGSL erzeugen und Bindungen (`generate_wgsl`, `get_bindings`) | 856 ms |
+| davon: Renderzustand (`get_renderstate`) | 304 ms |
+| zweites Bild | 4,4 ms |
+
+Der „Szenenaufbau“ der Leistungsreihe (3,8 s) ist also das **erste Bild**,
+nicht das Anlegen: `add_surface` legt nur Python-Objekte an, pygfx baut
+Geometrie, Shader und Pipelines beim ersten `render()`. Zwei Hebel, beide mit
+Zahl und beide ungebaut:
+
+- **Vorwärmen beim Start.** Pipelines und Shadermodule cacht pygfx je
+  Shaderquelle; ein kleines Netz mit demselben Material beim Anzeigen des
+  Fensters (im Leerlauf, nicht vor dem ersten Bild) nähme dem ersten
+  Kundenmodell rund 1,9 s ab (Pipelines, WGSL, Renderzustand). Kostet den
+  Start dieselbe Zeit, aber dort sieht sie niemand.
+- **Normalen mitgeben.** Übergibt `add_surface` Punktnormalen, rechnet pygfx
+  keine; die Ansicht hat sie vom Netz oft schon (trimesh cacht
+  `vertex_normals`). Spart bis 0,8 s je großem Netz; braucht einen
+  optionalen Parameter im Vertrag.
+
+**Ausbau (Robert, 06.09.2026: „dann ausbau sauber“):** Der VTK-Renderer ist
+aus dem Baum; `factory.py` baut den einen Renderer, die Bildtests heißen
+`test_render_contract.py` und laufen über pygfx allein. Die
+VTK-Spalten dieser Abnahme bleiben als Messlatte stehen, sie sind nicht mehr
+reproduzierbar.
+
 ## Offen
 
-- Szenenaufbau bei GFX profilieren (Normalen, Kopien): 3,8 s gegen 2,0 s beim
-  3,15-Millionen-Netz.
+- Das erste Bild eines großen Netzes (profiliert, siehe Nachtrag): vorwärmen
+  beim Start und Normalen mitgeben — beides ungebaut.
 - Zahl der Konturlinien am dezimierten Netz — der Anzeigeweg ist je Bild
   teurer als das volle Netz.
 
-- Bedienentscheidung zu Fall 4 (oben).
+- Fall 4 ist entschieden und gebaut: Die Zielhilfe gilt, solange das Sichtbare
+  in Reichweite hinter dem Austritt der Öffnung liegt; weiter dahinter meint
+  der Klick die Fläche, die er sieht (`_bore_aim`, Test in
+  `test_selection.py`).
 - Leistungsreihe und Leistungstests nach dem Commit; Nachtrag folgt.
-- `vtk` kann jetzt auf 9.7.0 gehoben werden (PyVistas Sperre `vtk<9.7` ist weg) —
-  eigener Schritt mit Tor.
+- `vtk` ist seit dem Ausbau des VTK-Renderers nur noch die Geometriebibliothek
+  der Bereichsprüfung; auf 9.7.0 heben (eigener Schritt mit Tor) oder durch
+  eine eigene Strahl- und Dreieckspaarprüfung ersetzen, dann fällt es ganz.
 - Speicher über Fenster- und Sprachwechsel ist für GFX nicht gemessen.
