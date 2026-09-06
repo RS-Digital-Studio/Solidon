@@ -22,7 +22,7 @@ from app.core.geom.transform import (
     Axis,
     anchor_point,
     apply,
-    place_on_bed,
+    moved_body,
     rotation,
     scaling,
     translation,
@@ -189,7 +189,9 @@ def translate_object(ctx: OpContext) -> OpResult:
     params = cast(TranslateParams, ctx.params)
     source = ctx.inputs[0]
     matrix = translation((params.dx, params.dy, params.dz))
-    moved = apply(as_mesh_data(source.mesh), matrix)
+    # ``moved_body`` statt ``apply``: Ein exakter Körper übersteht eine
+    # Verschiebung als exakter Körper, und Verrunden bleibt danach möglich.
+    moved = moved_body(source.mesh, matrix)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=moved)],
         transform=as_transform(matrix),
@@ -268,7 +270,7 @@ def rotate_object(ctx: OpContext) -> OpResult:
         as_mesh_data(source.mesh), cast(Anchor, params.about)
     )
     matrix = rotation(cast(Axis, params.axis), params.angle, pivot)
-    turned = apply(as_mesh_data(source.mesh), matrix)
+    turned = moved_body(source.mesh, matrix)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=turned)],
         transform=as_transform(matrix),
@@ -510,7 +512,7 @@ def mirror_object(ctx: OpContext) -> OpResult:
     matrix = scaling((factors[0], factors[1], factors[2]), pivot)
 
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=apply(mesh, matrix), features={})],
+        outputs=[dataclasses.replace(source, mesh=moved_body(source.mesh, matrix), features={})],
         transform=as_transform(matrix),
     )
 
@@ -787,10 +789,9 @@ class PlaceOnBedParams(BaseParams):
 )
 def place_object_on_bed(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
-    mesh = as_mesh_data(source.mesh)
-    matrix = translation((0.0, 0.0, -mesh.bounds.minimum[2]))
+    matrix = translation((0.0, 0.0, -source.mesh.bounds.minimum[2]))
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=place_on_bed(mesh))],
+        outputs=[dataclasses.replace(source, mesh=moved_body(source.mesh, matrix))],
         transform=as_transform(matrix),
     )
 

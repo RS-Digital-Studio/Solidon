@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
-  modified: 2026-09-06T15:41:19.402Z
+  modified: 2026-09-06T18:44:01.301Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -534,6 +534,19 @@ HEAD lesen, die eigene Änderung darauf anwenden, hashen, in den Index legen.
 Ein Nachtrag zur Bedienung: `-o` nimmt nur Pfade, die Git kennt. Eine Datei,
 die im HEAD **gelöscht** ist, muss erst `git add` bekommen — dort hilft `-o`
 also nicht, und genau dort lag die Reparatur dieses Falls.
+
+**Dieselbe Falle beim Push, und zwar in der Kette danach (06.09.2026).** Ein
+`git push … | tail -2 && git worktree remove --force …` räumte den Worktree ab,
+obwohl der Push an einem weitergewanderten `origin/main` gescheitert war: `tail`
+gelingt, `&&` sah einen Erfolg. Der Commit lag danach nur noch im
+Objektspeicher, ohne Ref — erreichbar, aber unsichtbar. Repariert mit einem
+frischen Worktree auf `origin/main` und `git cherry-pick <sha>`; nichts ging
+verloren, weil das `.git` geteilt ist und der Commit darin blieb. **Der Push
+gehört in einen eigenen Aufruf, sein Exit-Code unmittelbar danach gelesen**
+(`git push … > datei 2>&1; echo "Exit: $?"`), und erst ein `git fetch` mit
+sichtbar vorgerücktem `origin/main` erlaubt das Aufräumen. Es ist die Falle
+aus `CLAUDE.md` (der Shell-Status ist der des letzten Befehls), an einer
+Stelle, an der sie nicht in der Liste stand.
 
 **Und eine neue Datei genauso — auch hinter einem Verzeichnis-Pathspec
 (06.09.2026).** `git commit -o -F msg -- website` nahm 47 geänderte Dateien

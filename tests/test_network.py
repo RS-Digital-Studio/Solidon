@@ -92,22 +92,59 @@ def test_the_anchor_count_answers_even_when_the_store_refuses(
     assert network.trusted_anchors() == 0
 
 
-def test_a_certificate_directory_counts_as_a_working_store(
+def test_only_a_directory_openssl_can_look_things_up_in_counts_as_a_store(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Ein vorhandenes ``capath`` trägt, auch wenn der Zähler auf null steht."""
+    """Ein ``capath`` trägt erst mit den Namen, über die OpenSSL nachschlägt.
+
+    **Der Fall, der den Kunden getroffen hätte.** Die
+    ``org.freedesktop.Platform``-Laufzeit legt unter ``/etc/ssl/certs`` die
+    Zertifikate ab, aber nicht die Verweise ``<hash>.<n>``, über die OpenSSL
+    sie findet (``flatpak/freedesktop-sdk-base#3``). Wer nur fragt, ob es das
+    Verzeichnis gibt, hält diesen Sandkasten für versorgt — und der Kunde
+    bekommt weiter „unable to get local issuer certificate".
+    """
     folder = tmp_path / "certs"
     folder.mkdir()
-    monkeypatch.setattr(
-        network.ssl,
-        "get_default_verify_paths",
-        lambda: network.ssl.DefaultVerifyPaths(
-            None, None, "SSL_CERT_FILE", str(tmp_path / "fehlt.pem"), "SSL_CERT_DIR", str(folder)
-        ),
-    )
+
+    def paths() -> object:
+        return network.ssl.DefaultVerifyPaths(
+            None,
+            str(folder),
+            "SSL_CERT_FILE",
+            str(tmp_path / "fehlt.pem"),
+            "SSL_CERT_DIR",
+            str(folder),
+        )
+
+    monkeypatch.setattr(network.ssl, "get_default_verify_paths", paths)
+
+    (folder / "ca-certificates.crt").write_text("Zertifikate ohne Verweise", encoding="utf-8")
+    assert not network.default_paths_exist(), "ohne Hash-Namen findet OpenSSL hier nichts"
+
+    (folder / "4f316efb.0").write_text("Verweis", encoding="utf-8")
     assert network.default_paths_exist()
 
-    folder.rmdir()
+
+def test_a_missing_directory_is_no_store(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Fehlt beides, bleibt nur der mitgelieferte Satz.
+
+    ``ssl.get_default_verify_paths`` setzt ``cafile`` und ``capath`` selbst auf
+    ``None``, wo nichts liegt; die kompilierten Pfade daneben stehen trotzdem
+    da. Sie als Rückfall zu lesen hieße, die Frage für die Antwort zu halten.
+    """
+
+    def paths() -> object:
+        return network.ssl.DefaultVerifyPaths(
+            None,
+            None,
+            "SSL_CERT_FILE",
+            "/usr/lib/ssl/cert.pem",
+            "SSL_CERT_DIR",
+            "/usr/lib/ssl/certs",
+        )
+
+    monkeypatch.setattr(network.ssl, "get_default_verify_paths", paths)
     assert not network.default_paths_exist()
 
 

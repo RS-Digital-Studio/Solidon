@@ -69,7 +69,7 @@ from app.core.geom.prepare import (
     split_at_plane,
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
-from app.core.geom.transform import Axis, place_on_bed
+from app.core.geom.transform import Axis, moved_body, place_on_bed, translation
 from app.core.knowledge.profiles import for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
@@ -1438,12 +1438,12 @@ def move_feature(ctx: OpContext) -> OpResult:
             seed=ctx.seed,
             cancelled=ctx.cancelled,
         )
-        moved_body = cavity_body.raw.copy()
-        moved_body.apply_translation(travel)
+        shifted_cavity = cavity_body.raw.copy()
+        shifted_cavity.apply_translation(travel)
         ctx.progress(0.6, str(_("Das Merkmal wird an seiner neuen Stelle gesetzt …")))
         placed = boolean(
             "difference",
-            [closed.mesh, MeshData.of(moved_body)],
+            [closed.mesh, MeshData.of(shifted_cavity)],
             quality=ctx.quality,
             seed=ctx.seed,
             cancelled=ctx.cancelled,
@@ -3550,8 +3550,19 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
             progress=ctx.progress,
             cancelled=ctx.cancelled,
         )
+        # **Gedreht wird der echte Körper, nicht das Urteil.** ``search``
+        # arbeitet auf Dreiecken; ein exakter Körper käme als Netz zurück, und
+        # danach ist kein Verrunden mehr möglich. Dieselbe Matrix legt
+        # ``moved_body`` exakt auf den Eingang.
         return OpResult(
-            outputs=[dataclasses.replace(ctx.inputs[0], mesh=found.mesh)],
+            outputs=[
+                dataclasses.replace(
+                    ctx.inputs[0],
+                    mesh=moved_body(
+                        ctx.inputs[0].mesh, print_transform(mesh, found.best.direction)
+                    ),
+                )
+            ],
             findings=found.findings,
             # Dieselbe Bewegung, die die Suche gefahren ist — aus derselben
             # Funktion, damit die zwei nicht auseinanderlaufen können.
@@ -3560,7 +3571,11 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
 
     result = orient_for_print(mesh)
     return OpResult(
-        outputs=[dataclasses.replace(ctx.inputs[0], mesh=result.mesh)],
+        outputs=[
+            dataclasses.replace(
+                ctx.inputs[0], mesh=moved_body(ctx.inputs[0].mesh, result.transform)
+            )
+        ],
         findings=result.findings,
         transform=as_transform(result.transform),
     )
@@ -3736,7 +3751,25 @@ def arrange_bed(ctx: OpContext) -> OpResult:
 
     return OpResult(
         outputs=[
-            dataclasses.replace(entry, mesh=mesh, plate=plate)
+            # **Der Versatz statt des Netzes.** ``arrange_on_bed`` rechnet auf
+            # Dreiecken und gibt verschobene Netze zurück; ein exakter Körper
+            # käme so als Netz heraus, und danach ist kein Verrunden mehr
+            # möglich. Das Anordnen verschiebt nur — der Versatz steht in den
+            # Hüllquadern, und ``moved_body`` legt ihn exakt auf den Eingang.
+            dataclasses.replace(
+                entry,
+                mesh=moved_body(
+                    entry.mesh,
+                    translation(
+                        (
+                            mesh.bounds.minimum[0] - entry.mesh.bounds.minimum[0],
+                            mesh.bounds.minimum[1] - entry.mesh.bounds.minimum[1],
+                            mesh.bounds.minimum[2] - entry.mesh.bounds.minimum[2],
+                        )
+                    ),
+                ),
+                plate=plate,
+            )
             for entry, mesh, plate in zip(ctx.inputs, result.meshes, result.plates, strict=True)
         ],
         findings=findings,

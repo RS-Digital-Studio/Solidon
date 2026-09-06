@@ -134,7 +134,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista | Was der Gesamtreview liegen ließ (05.09.2026) | den Umbau der beiden Fahrskripte (`fahre_steuerung.py`, `fahre_drehpunkt.py`) auf `QMouseEvent` an `renderer.widget`, danach die fünf Schemata und den Drehpunkt einmal am echten Fenster — bis dahin ist die Kette Qt → Widget → `PointerEvent` → Navigator nirgends gemessen |
 | Die Prompt-Tokenzahl des lokalen Modells ist seit 113 Werkzeugen nicht gemessen | Was der Gesamtreview liegen ließ (05.09.2026) | einen Lauf mit erreichbarem Ollama: `PROMPT_TOKENS` in `backends/llm.py` steht auf der Messung mit 111 Werkzeugen (22 856 Token); Kegel und Ring als Grundkörper kamen am 06.09.2026 dazu, und `PROMPT_TOOL_COUNT` nennt 113 — die Wartezeitschätzung des Chats ist bis dahin eine untere Grenze (rund 23 190 nach 165 Token je Operation) |
 | Der erste Kundenbericht aus 0.3.4 nennt keine Ursache (S-20260906-9ca141) | Der erste Kundenbericht aus 0.3.4 (06.09.2026) | den nächsten Bericht desselben Fehlers — seit 96da8fd0 trägt protokoll.txt den Traceback und der Bericht den Grund; ohne Rückadresse ist die Datei des Kunden nicht zu bekommen |
-| Die Eingabefelder unter Wayland nehmen keine Tastatur an | Der erste Linux-Kunde, und was sein Protokoll trug (06.09.2026) | eine Rückmeldung aus 0.3.4 oder einen eigenen Manjaro-Lauf. Der Kunde tippte im Flatpak 0.2.2 in kein Feld, Einfügen ging; seine Fassung legte die Qt-Plattform noch nicht fest |
+| Die Eingabefelder unter Wayland nehmen keine Tastatur an | Der erste Linux-Kunde, und was sein Protokoll trug (06.09.2026) | eine Rückmeldung aus 0.3.4 oder neuer. Der Kunde tippte im Flatpak 0.2.2 in kein Feld, Einfügen ging; seine Fassung lief mit Qt nativ auf Wayland, wo im Sandkasten die Eingabemethode fehlt. Seit 0.3.0 ist `xcb` erzwungen — damit sollte er tippen können, und das ist die belastbarste Messung |
 | Der Mailweg liefert den Bericht prozentkodiert | Der erste Linux-Kunde, und was sein Protokoll trug (06.09.2026) | eine Entscheidung: Der `mailto`-Link ist korrekt kodiert, sein Empfänger dekodiert nicht. Ein kurzer Text mit Verweis auf den abgelegten Ordner träfe jeden Handler |
 | Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht | Der erste Linux-Kunde, und was sein Protokoll trug (06.09.2026) | den Satz zum Befund `split.uncapped`: warum keine Schnittfläche entsteht (tausende offene Kanten) und dass „Reparieren“ davor gehört |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record sowie spätestens am 25.10. der Verkaufsbau mit `DEMO_UNTIL = None` und `TRIAL_FROM = None`. Eine Verlängerung wäre nach der Entscheidung vom 28.08. kein automatischer Rückfall, sondern bräuchte eine neue ausdrückliche Entscheidung |
@@ -10787,12 +10787,21 @@ die er nicht gesehen hat.
 darüber. Das ist `95ead235` vom 03.09.2026, ausgeliefert seit 0.3.1 — seine
 Fassung ist zwei Versionen alt. Zweitens: In Eingabefelder lässt sich nichts
 tippen, Einfügen aus der Zwischenablage geht; er hat seine Rückmeldung deshalb
-in einem fremden Editor geschrieben. Das ist am Code nicht nachzuweisen und
-betrifft nur Linux; seine Fassung setzte die Qt-Plattform noch nicht fest
-(`c36a83f1` erzwingt seit 0.3.0 `QT_QPA_PLATFORM=xcb`, damals wegen VTK). Mit
-dem Ausbau des VTK-Renderers heute ist der Grund für diese Festlegung entfallen
-— ob die Ansicht unter Wayland nativ zeichnen soll, ist eine eigene Entscheidung
-und steht im Register.
+in einem fremden Editor geschrieben. Seine Fassung setzte die Qt-Plattform noch
+nicht fest (`c36a83f1` erzwingt seit 0.3.0 `QT_QPA_PLATFORM=xcb`), lief also
+mit Qt nativ auf Wayland — und dort fehlt im Sandkasten die Eingabemethode.
+Einfügen geht ohne sie, Tippen nicht.
+
+**Der Satz, der hier zuerst stand, war falsch**, und die Korrektur gehört
+hierher, weil er eine Änderung nahelegte, die das Produkt beschädigt hätte: Der
+Ausbau des VTK-Renderers habe den Grund für `xcb` beseitigt, die Ansicht könne
+unter Wayland nun nativ zeichnen. Sie kann es nicht. 3d-druck-c4 hat den
+Fremdcode gelesen: In `rendercanvas` 2.7.2 steht der Wayland-Zweig von
+`_get_surface_ids()` hinter einem `if False:`; die Bibliothek reicht auf Linux
+immer X11-Kennungen durch und öffnet dafür über `ctypes.util.find_library`
+eine zweite X11-Verbindung. `--socket=wayland` ohne `xcb` schaltete die
+3D-Ansicht beim Kunden ab. **Nativer Wayland ist nicht ungefahren, sondern
+nicht gebaut** — das steht als eigener Punkt im Register.
 
 **Was sein Protokoll trug.** Sechsmal `CERTIFICATE_VERIFY_FAILED: unable to get
 local issuer certificate`: bei jeder Update-Prüfung und bei beiden Versuchen,

@@ -22,23 +22,25 @@ freischalten können.
 
 **Gemessen statt geraten**, und die Messung braucht zwei Fragen. Die erste:
 Trägt der Vorgabespeicher dieses Prozesses überhaupt einen Anker? Die zweite:
-Gibt es die Pfade, aus denen er sie holen würde? Beide zusammen, weil keine
+Käme er aus seinen Vorgabepfaden an einen heran? Beide zusammen, weil keine
 für sich reicht — OpenSSL lädt ein Zertifikats**verzeichnis** (``capath``)
-nicht beim Start, sondern erst beim Prüfen, über einen Hash-Zugriff auf die
-gesuchte Kette. Ein System mit ``/etc/ssl/certs`` meldet deshalb null Anker
-und prüft trotzdem tadellos; wer nur zählt, tauscht dort einen tragenden
-Speicher gegen den mitgelieferten aus und hebelt jede Firmen-CA aus, die in
-diesem Verzeichnis liegt.
+nicht beim Start, sondern erst beim Prüfen, über den Subjekt-Hash der gesuchten
+Kette. Ein System mit ``/etc/ssl/certs`` meldet deshalb null Anker und prüft
+trotzdem tadellos; wer nur zählt, tauscht dort einen tragenden Speicher gegen
+den mitgelieferten aus und hebelt jede Firmen-CA aus, die darin liegt.
 
-Der mitgelieferte Satz gilt also erst, wenn **keiner** der Vorgabepfade
-existiert und der Speicher leer ist. Das ist genau die Lage im Sandkasten:
-Die Pfade zeigen dorthin, wo der Bauserver seine Zertifikate hatte, und dort
-ist nichts.
+Der mitgelieferte Satz gilt also erst, wenn der Speicher leer ist **und** die
+Vorgabepfade nichts hergeben. Das ist die Lage im Sandkasten, und zwar aus zwei
+Gründen zugleich: Die kompilierten Pfade zeigen dorthin, wo der Bauserver seine
+Zertifikate hatte, und das Verzeichnis, das die Laufzeit stattdessen mitbringt,
+trägt die Hash-Namen nicht, über die OpenSSL nachschlägt (siehe
+:func:`default_paths_exist`).
 """
 
 from __future__ import annotations
 
 import os
+import re
 import ssl
 import sys
 from pathlib import Path
@@ -62,16 +64,40 @@ def trusted_anchors() -> int:
         return 0
 
 
-def default_paths_exist() -> bool:
-    """Ob es die Datei oder das Verzeichnis gibt, aus denen OpenSSL laden würde.
+#: Wie OpenSSL eine Datei in einem ``capath``-Verzeichnis nennen muss, damit es
+#: sie findet: acht Hexziffern des Subjekt-Hashes, ein Punkt, eine laufende
+#: Nummer. Ein Verzeichnis ohne solche Namen ist für OpenSSL leer, und mag es
+#: noch so viele Zertifikate enthalten.
+_HASHED_CERTIFICATE = re.compile(r"^[0-9a-f]{8}\.[0-9]+$")
 
-    Auf Windows fragt Python den Systemspeicher und nicht diese Pfade; dort
-    ist die Antwort ohne Belang, weil dann bereits der Zähler trägt.
+
+def default_paths_exist() -> bool:
+    """Ob OpenSSL aus seinen Vorgabepfaden wirklich etwas holen könnte.
+
+    ``ssl.get_default_verify_paths`` prüft die Existenz bereits: ``cafile`` und
+    ``capath`` sind ``None``, wo die Datei oder das Verzeichnis fehlt. Die
+    kompilierten Pfade daneben stehen unabhängig davon da und dürfen deshalb
+    **nicht** als Rückfall dienen — sie sind die Frage, nicht die Antwort.
+
+    **Ein vorhandenes Verzeichnis genügt trotzdem nicht.** OpenSSL sucht darin
+    über den Subjekt-Hash, also nach Namen wie ``4f316efb.0``; die
+    ``org.freedesktop.Platform``-Laufzeit legt genau diese Verweise nicht an
+    (bekannt seit ``flatpak/freedesktop-sdk-base#3``). Ein Sandkasten hat dort
+    also ein Verzeichnis voller Zertifikate, aus dem OpenSSL keines findet —
+    und der Kunde bekommt „unable to get local issuer certificate", obwohl
+    alles da zu sein scheint. Deshalb zählt hier nicht das Verzeichnis, sondern
+    ein Name darin, den OpenSSL auch nachschlagen würde.
     """
     paths = ssl.get_default_verify_paths()
-    cafile = paths.cafile or paths.openssl_cafile
-    capath = paths.capath or paths.openssl_capath
-    return bool(cafile and Path(cafile).is_file()) or bool(capath and Path(capath).is_dir())
+    if paths.cafile:
+        return True
+    if not paths.capath:
+        return False
+    try:
+        return any(_HASHED_CERTIFICATE.match(entry.name) for entry in Path(paths.capath).iterdir())
+    except OSError:
+        # Ein Verzeichnis, das sich nicht lesen lässt, trägt nichts bei.
+        return False
 
 
 def configure_certificates(
