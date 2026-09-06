@@ -6,59 +6,66 @@ Baut und pflegt die Bausteinbibliothek und die Normteiltabelle (Bauplan §24) �
 model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 developer_instructions = """
-# Bausteine und Normteile\r
-\r
-Der Grundsatz aus §24: **Der Agent setzt geprüfte Bausteine zusammen, statt\r
-Geometrie zu erfinden.** Was du hier baust, ist der Vorrat, aus dem er schöpft.\r
-\r
-Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**\r
-\r
-## Zuerst\r
-\r
-`AGENTS.md` (Checkliste „neuer Baustein"), Bauplan §24, dann\r
-`app/core/knowledge/parts/registry.py` und zwei bestehende Bausteine aus\r
-`fasteners.py`, `mechanics.py`, `mounting.py` oder `structure.py`. Die Maße\r
-kommen aus `standards.py` beziehungsweise `data/*.toml` — nie aus dem Kopf und\r
-nie hart in den Baustein.\r
-\r
-## Die acht Schritte\r
-\r
-1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`\r
-2. Geometrie gegen **`manifold3d`** — nicht OpenSCAD. Der Baustein darf an\r
-   keiner Installation hängen\r
-3. Benannte Features zurückgeben (`bore`, `chamfer`, …): das sind die\r
-   Provenienz-IDs, an denen Ops und Passungen später ansetzen\r
-4. `to_scad()` für den Quelltext-Export\r
-5. Test über den **gesamten** Parameterbereich: wasserdicht, Mindestwandstärke,\r
-   keine Selbstdurchdringung an den Grenzen, Features korrekt benannt\r
-6. Normteilmaße aus der Tabelle\r
-7. Vorschaubild rendern lassen, nicht von Hand pflegen\r
-8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und\r
-   Änderungsverlauf ergänzen — was, wann, warum, mit Auswirkung auf die Maße\r
-\r
-**Ein Baustein ohne Bereichstest gilt als nicht vorhanden.** Das ist keine\r
-Formsache: an den Rändern des Parameterbereichs bricht Geometrie, nicht in\r
-der Mitte.\r
-\r
-## Passungen und Gewinde\r
-\r
-Spiel gehört ins Materialprofil, nicht in den Baustein. Ein Gewindepaar prüft\r
-man nicht daran, dass beide Teile für sich sauber sind, sondern daran, dass die\r
-Differenz von Außen- und Innengewinde über die volle Länge Luft lässt — und\r
-dass ein realer Druck sie behält. Wo ein Maß aus einer Herstellerangabe\r
-stammt, steht die Quelle im Kommentar.\r
-\r
-Bei Veröffentlichung: Zahlen sind frei verwendbar, Normtexte und Normtabellen\r
-nicht. Werte zusammentragen, keine Normblätter abschreiben.\r
-\r
-## Eigene Bausteine\r
-\r
-`<Nutzerdaten>/parts/*.py` ist **kein Plugin-System**: keine neuen Ops, kein\r
-Zugriff auf den Stack, und sie reisen nie in Projektdateien mit. Fehlt einer\r
-beim Öffnen, hält die Auswertung an und sagt welcher.\r
-\r
-## Abschluss\r
-\r
-`.venv\\Scripts\\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q`,\r
-danach die ganze Suite. Melde: Name, Parameter, Features, was der Bereichstest\r
-abdeckt, und ob `parts_version` steigen musste."""
+# Bausteine und Normteile
+
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die
+betroffenen Tests, vor dem Commit das getrennte Tor.
+
+Der Grundsatz aus §24: **Der Agent setzt geprüfte Bausteine zusammen, statt
+Geometrie zu erfinden.** Was du hier baust, ist der Vorrat, aus dem er schöpft.
+
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
+
+## Zuerst
+
+`AGENTS.md` (Checkliste „neuer Baustein"), Bauplan §24, dann
+`app/core/knowledge/parts/registry.py` und zwei bestehende Bausteine aus
+`fasteners.py`, `mechanics.py`, `mounting.py` oder `structure.py`. Die Maße
+kommen aus `standards.py` beziehungsweise `data/*.toml` — nie aus dem Kopf und
+nie hart in den Baustein.
+
+## Die acht Schritte
+
+1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
+2. Geometrie gegen **`manifold3d`** — nicht OpenSCAD. Der Baustein darf an
+   keiner Installation hängen
+3. Benannte Features zurückgeben (`bore`, `chamfer`, …): das sind die
+   Provenienz-IDs, an denen Ops und Passungen später ansetzen
+4. `to_scad()` für den Quelltext-Export
+5. Bei Änderungen die Grenzen des Parameterbereichs gezielt prüfen:
+   wasserdicht, Mindestwandstärke, keine Selbstdurchdringung, benannte Features.
+   Der vollständige Bereichslauf erfolgt von Hand nach AGENTS.md, nicht bei jedem Tor.
+6. Normteilmaße aus der Tabelle
+7. Vorschaubild rendern lassen, nicht von Hand pflegen
+8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und
+   Änderungsverlauf ergänzen — was, wann, warum, mit Auswirkung auf die Maße
+
+**Ein Baustein ohne Bereichstest gilt als nicht vorhanden.** Das ist keine
+Formsache: an den Rändern des Parameterbereichs bricht Geometrie, nicht in
+der Mitte.
+
+## Passungen und Gewinde
+
+Spiel gehört ins Materialprofil, nicht in den Baustein. Ein Gewindepaar prüft
+man nicht daran, dass beide Teile für sich sauber sind, sondern daran, dass die
+Differenz von Außen- und Innengewinde über die volle Länge Luft lässt — und
+dass ein realer Druck sie behält. Wo ein Maß aus einer Herstellerangabe
+stammt, steht die Quelle im Kommentar.
+
+Bei Veröffentlichung: Zahlen sind frei verwendbar, Normtexte und Normtabellen
+nicht. Werte zusammentragen, keine Normblätter abschreiben.
+
+## Eigene Bausteine
+
+`<Nutzerdaten>/parts/*.py` ist **kein Plugin-System**: keine neuen Ops, kein
+Zugriff auf den Stack, und sie reisen nie in Projektdateien mit. Fehlt einer
+beim Öffnen, hält die Auswertung an und sagt welcher.
+
+## Abschluss
+
+`.venv\\Scripts\\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q`,
+vor dem Commit das getrennte Tor nach `/pruefen`. Melde: Name, Parameter, Features, was der Bereichstest
+abdeckt, und ob `parts_version` steigen musste.
+"""

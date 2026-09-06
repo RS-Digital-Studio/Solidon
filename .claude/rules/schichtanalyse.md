@@ -259,8 +259,9 @@ er über ihre Zusammengehörigkeit selbst, und was Solidon über die Platte
 weiß, ist verloren.
 
 Die Materialslots werden dabei über **alle** Teile zusammengelegt
-(`merge_slots`), über Name und Farbe. Ein Slot ist ein Filament, kein
-Objektmerkmal — zwei Teile in derselben Farbe kommen aus derselben Düse. Die
+(`merge_slots`), über Name, Farbe, Materialprofil und Materialart. Ein Slot ist
+ein Filament, kein Objektmerkmal — dieselbe Farbe allein beweist nicht dieselbe
+Spule. Die
 Reihenfolge der zusammengelegten Liste *ist* die Extruderbelegung.
 
 **Und jede Platte ist ein Lauf.** Eine Szene mit mehr Teilen, als auf ein Bett

@@ -7,6 +7,18 @@ Die Regeln stehen in `.claude/rules/tests.md` — dort auch die Messfallen, die
 schon einmal zugeschnappt sind. Hier steht, **wie sie gefahren wird** und
 **was wo geprüft wird**.
 
+`test_geometry_review_regressions.py` verbindet kleine analytische
+Geometriefälle mit den registrierten Kundenwegen: Skizzenringe und Splines,
+Flächentaschen und Normalen, Merkmalsbearbeitung sowie Auswertung mit frischem
+Plattencache. Speichergrenzen werden vor jeder großen Allokation abgefangen.
+
+`test_surface_placement.py` prüft Originalflächen, gedrehte Maßrahmen,
+Aussparungen, Schnittansichten und den identischen Werkzeugkörper in
+Vorschau und Operation. Gestufte Bohrungen werden nach dem echten Schnitt
+als zusammenhängende Kette erkannt; Merkmale werden mit ihren verwandten
+Formen und Kennungen versetzt oder kopiert. Kreisfacetten benötigen belegte
+Rundungsmerkmale, während echte regelmäßige Vielecke Bezugskanten behalten.
+
 ## Die Fahrweise — nicht `pytest -q` am Stück
 
 Der ganze Lauf in einem Prozess kommt seit dem 16.08.2026 nicht mehr durch:
@@ -53,11 +65,13 @@ mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
   durch eine Pipeline lesen.** `… | tail -30` meldet den Status von `tail`,
   und `tail` gelingt immer. Dasselbe gilt für ein `echo` als letzten Befehl.
   Sicher ist: **Ausgabe in eine Datei, danach lesen.**
-- **Ein Abriss beim Abbau ist kein roter Test.** Drei Fensterdateien melden
-  „passed" und stürzen danach beim Aufräumen (`0xC0000409`).
-- **„Keine Tests gesammelt" ist kein Fehllauf.** Exit 5 entsteht, wenn das
-  Skript eine Datei in die Fenstergruppe zieht, die dort nichts zu sammeln
-  hat.
+- **Jeder Nichtnull-Exit bleibt ein Fehllauf**, auch nach „passed" oder
+  vollständigen Fortschrittszeichen. Das gilt ebenfalls für Exit 5 und
+  fehlerhafte Sammlungen.
+- **Halbierung dient der Diagnose.** Erfolgreiche kleinere Teilstücke löschen
+  den ursprünglichen Prozessabbruch nicht; der Gesamtlauf endet mit Exit 1.
+  `test_suite_script.py` prüft das mit echten Shell-Prozessausgängen und
+  simulierten pytest-Aufrufen, einschließlich 256 gezählter Fehler.
 
 ## Was wo geprüft wird
 

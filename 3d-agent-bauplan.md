@@ -1624,7 +1624,8 @@ Vertices verschmelzen
 skalieren, auf Bett ausrichten, druckoptimal orientieren
 
 **Boolesch** — Vereinigung, Differenz, Schnitt (mit Rückfallkette §17.2);
-Primitive einfügen; **Baustein an ein erkanntes Feature setzen** (§24)
+Primitive einfügen (Quader, Zylinder, Kegel oder Kegelstumpf, Kugel und Ring);
+**Baustein an ein erkanntes Feature setzen** (§24)
 
 **Skizze** (§30.1, B-Rep) — Grundform anlegen (Rechteck, Langloch, Kreisbild,
 Vieleck), Skizze extrudieren, rotieren, als Tasche schneiden, entlang Pfad

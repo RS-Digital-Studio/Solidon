@@ -6,50 +6,51 @@ Kümmert sich um Paket, Lizenzen und Veröffentlichung: PyInstaller-Spec, Instal
 model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
-# Auslieferung\r
-\r
-Was ausgeliefert wird, ist grün und rechtlich sauber. Beides ist prüfbar,\r
-also wird es geprüft.\r
-\r
-Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**\r
-\r
-## Lizenzen\r
-\r
-- **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. OpenSCAD und\r
-  Slicer werden extern aufgerufen, nie mitgeliefert.\r
-- LGPL-Bibliotheken (PySide6, OCCT hinter `cadquery-ocp`) bleiben **dynamisch\r
-  gebunden**.\r
-- Jede neue Abhängigkeit: Lizenz feststellen, in die Freigabeliste eintragen,\r
-  bei Bedarf Hinweis im Über-Dialog, `tests/test_licences.py` grün.\r
-- Die Prüfung läuft **bevor** die Abhängigkeit eingebaut wird. Eine\r
-  GPL-Bibliothek, die schon im Code steckt, ist teurer als eine Alternative,\r
-  die vorher gesucht wurde.\r
-\r
-## Paket\r
-\r
-`packaging/solidon3d.spec` mit PyInstaller. Vor dem Bauen:\r
-\r
-```\r
-.venv\\Scripts\\python.exe -m pytest -q\r
-.venv\\Scripts\\python.exe -m ruff check . && .venv\\Scripts\\python.exe -m ruff format --check .\r
-.venv\\Scripts\\python.exe -m mypy\r
-.venv\\Scripts\\python.exe tools/make_examples.py\r
-```\r
-\r
-Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die drei\r
-Beispielprojekte sind zugleich Dokumentation, Abnahmeprüfung und Inhalt des\r
-Startbildschirms — sie werden erzeugt, nicht von Hand gepflegt.\r
-\r
-## CI\r
-\r
-`.github/workflows/build.yml` prüft auf Windows, Linux und macOS, paketiert auf\r
-Windows und Linux, und signiert nur, wenn das Zertifikat als Secret vorliegt.\r
-Der Signaturschritt überspringt sich selbst, damit ein Fork eine unsignierte\r
-Version bekommt statt eines Fehlschlags. Beim Ändern des Workflows: die\r
-Reihenfolge bleibt Suite → Paket.\r
-\r
-## Phasenabschluss\r
-\r
-Eine Phase gilt als fertig, wenn ihre Abnahmekriterien aus Bauplan §40 grün\r
-sind — nicht wenn sie sich vollständig anfühlt. Prüfe gegen die Kriterien, und\r
-melde jedes offene ausdrücklich, statt es abzurunden."""
+# Auslieferung
+
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die
+betroffenen Tests, vor dem Commit das getrennte Tor.
+
+Was ausgeliefert wird, ist grün und rechtlich sauber. Beides ist prüfbar,
+also wird es geprüft.
+
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.**
+
+## Lizenzen
+
+- **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Slicer werden nur
+  extern aufgerufen. OpenSCAD wird nicht ausgeführt; `.scad` bleibt Exportformat.
+- LGPL-Bibliotheken (PySide6, OCCT hinter `cadquery-ocp`) bleiben **dynamisch
+  gebunden**.
+- Jede neue Abhängigkeit: Lizenz feststellen, in die Freigabeliste eintragen,
+  bei Bedarf Hinweis im Über-Dialog, `tests/test_licences.py` grün.
+- Die Prüfung läuft **bevor** die Abhängigkeit eingebaut wird. Eine
+  GPL-Bibliothek, die schon im Code steckt, ist teurer als eine Alternative,
+  die vorher gesucht wurde.
+
+## Paket
+
+`packaging/solidon3d.spec` mit PyInstaller. Vor dem Bauen:
+
+Das vollständige getrennte Tor nach `/pruefen` ausführen. Beispielprojekte
+über `tools/make_examples.py` erzeugen, wenn ihre Quellen geändert wurden.
+
+Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die mitgelieferten
+Beispielprojekte sind zugleich Dokumentation, Abnahmeprüfung und Inhalt des
+Startbildschirms — sie werden erzeugt, nicht von Hand gepflegt.
+
+## CI
+
+`.github/workflows/build.yml` ist die Quelle für Plattformen, Prüfmatrizen
+und Signierbedingungen. Windows, Linux sowie macOS auf Intel und Apple Silicon
+gemeinsam prüfen; ein lokaler Windows-Lauf bestätigt nicht die anderen Plattformen. Beim Ändern des Workflows: die
+Reihenfolge bleibt Suite → Paket.
+
+## Phasenabschluss
+
+Eine Phase gilt als fertig, wenn ihre Abnahmekriterien aus Bauplan §40 grün
+sind — nicht wenn sie sich vollständig anfühlt. Prüfe gegen die Kriterien, und
+melde jedes offene ausdrücklich, statt es abzurunden.
+"""
