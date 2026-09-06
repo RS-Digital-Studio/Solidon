@@ -620,7 +620,10 @@ class History:
                 # Objektbaum, und dafür gibt es jetzt einen Knopf.
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
-        if spec.consumes and len(draft.inputs) != spec.consumes:
+        # ``VARIABLE`` heißt: so viele, wie gewählt sind — die Booleschen
+        # Operationen nehmen seit dem 06.09.2026 alle Körper auf einmal,
+        # statt vier Laschen in vier Schritten anzuschweißen.
+        if spec.consumes > 0 and len(draft.inputs) != spec.consumes:
             raise ValidationError(
                 field="in",
                 detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),
@@ -888,7 +891,7 @@ class History:
                 values={"op": entry.op, "missing": missing},
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
-        if spec.consumes and len(inputs) != spec.consumes:
+        if spec.consumes > 0 and len(inputs) != spec.consumes:
             raise ValidationError(
                 field="in",
                 detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),

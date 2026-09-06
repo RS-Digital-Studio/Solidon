@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
-from app.core.errors import CANCEL, CORRECT_INPUT, Action, AppError, GeometryError
+from app.core.errors import CANCEL, CHOOSE, CORRECT_INPUT, Action, AppError, GeometryError
 from app.core.geom.align import align_matrix
 from app.core.geom.attributes import used_slots
 from app.core.geom.boolean import BooleanKind, boolean, without_effect
@@ -27,7 +27,7 @@ from app.core.geom.transform import (
     scaling,
     translation,
 )
-from app.core.registry import op_params, param, register_op
+from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import (
     BaseParams,
     FeatureRef,
@@ -657,10 +657,24 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
       schon ganz im anderen steckt, ließ sonst einen Schritt im Verlauf und ein
       unverändertes Bild zurück.
     """
-    first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
+    # **Alle Eingänge, nicht die ersten zwei.** „man sollte es schon mit allen
+    # können" (Robert, 06.09.2026): Vier Laschen an einen Kasten zu schweißen
+    # waren vier Verlaufsschritte, weil die Operation genau zwei Körper nahm —
+    # und der Dialog sagte „Erwartet: 2, Vorhanden: 5", nachdem der Nutzer alle
+    # fünf gewählt hatte. Der Kern rechnet die Liste ohnehin am Stück
+    # (``_kernel`` reicht sie an manifold3d durch); begrenzt hat sie nur das
+    # Register. Beim Abziehen gilt dieselbe Lesart wie bei zweien: Der erste
+    # Körper bleibt, alle weiteren gehen von ihm ab.
+    bodies = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
+    if len(bodies) < 2:
+        raise GeometryError(
+            _("Diese Operation braucht mindestens zwei Objekte."),
+            detail=_("Wähle im Objektbaum oder im Bild einen zweiten Körper dazu."),
+            suggestions=(CHOOSE, CANCEL),
+        )
     outcome = boolean(
         kind,
-        [first, second],
+        bodies,
         quality=ctx.quality,
         seed=seed,
         allow_empty=kind == "intersection",
@@ -678,7 +692,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
     else:
-        nothing = without_effect(first, outcome.mesh, kind, ctx.profile)
+        nothing = without_effect(bodies[0], outcome.mesh, kind, ctx.profile)
         if nothing is not None:
             findings.append(nothing)
     return OpResult(
@@ -699,7 +713,8 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     title=_("Vereinigen"),
     category="boolean",
     params=BooleanParams,
-    consumes=2,
+    consumes=VARIABLE,
+    minimum_inputs=2,
     produces=1,
     keeps_inputs=1,
     deterministic=False,
@@ -716,8 +731,8 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     # Bei sechs von sechsundachtzig war nebenbei wenig zu lernen.
     shortcut="Ctrl+Shift+V",
     doc=_(
-        "Verschmilzt zwei Objekte zu einem. Das zuerst angeklickte bleibt mit "
-        "seinem Namen und Material — das zweite geht darin auf."
+        "Verschmilzt die gewählten Objekte zu einem. Das zuerst angeklickte bleibt "
+        "mit seinem Namen und Material — die übrigen gehen darin auf."
     ),
 )
 def union_objects(ctx: OpContext) -> OpResult:
@@ -729,7 +744,8 @@ def union_objects(ctx: OpContext) -> OpResult:
     title=_("Abziehen"),
     category="boolean",
     params=BooleanParams,
-    consumes=2,
+    consumes=VARIABLE,
+    minimum_inputs=2,
     produces=1,
     keeps_inputs=1,
     deterministic=False,
@@ -754,7 +770,8 @@ def subtract_objects(ctx: OpContext) -> OpResult:
     title=_("Schnittmenge"),
     category="boolean",
     params=BooleanParams,
-    consumes=2,
+    consumes=VARIABLE,
+    minimum_inputs=2,
     produces=1,
     keeps_inputs=1,
     deterministic=False,
