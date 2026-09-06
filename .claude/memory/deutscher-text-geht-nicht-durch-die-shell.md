@@ -1,8 +1,11 @@
 ---
 name: deutscher-text-geht-nicht-durch-die-shell
-description: Fünf Fallen einer Familie — Escape-Folgen, Backticks, stdin-Codepage, deutsches Schlusszeichen, CRLF-Verdopplung — und die eine Regel dagegen: Text über das Write-Werkzeug in eine Datei, Skripte aus Dateien fahren, danach lesen, was dasteht.
-metadata:
+description: "Fünf Fallen einer Familie — Escape-Folgen, Backticks, stdin-Codepage, deutsches Schlusszeichen, CRLF-Verdopplung — und die eine Regel dagegen: Text über das Write-Werkzeug in eine Datei, Skripte aus Dateien fahren, danach lesen, was dasteht."
+metadata: 
+  node_type: memory
   type: feedback
+  originSessionId: 604362f2-7546-4f58-8ac6-a717d093adc0
+  modified: 2026-09-06T13:27:05.677Z
 ---
 
 Zwischen dem, was ich schreibe, und dem, was in der Datei oder im Commit
@@ -66,3 +69,13 @@ mit `data.replace(b"\x00", b"\0")` — wieder im Heredoc — änderte nichts, we
 dieselbe Übersetzung sie traf. Sicher war erst die escape-freie Form:
 `bytes([0])` und `bytes([92, 48])`. Wer im Heredoc Backslashes braucht, baut sie
 aus `chr(92)` oder Byte-Zahlen, oder schreibt das Skript mit dem Write-Werkzeug.
+
+**Nachtrag 06.09.2026 — auch `<<'PYEOF'` schützt Backslashes nicht.** Ein
+Patchskript mit `'"<?php\\n"\n'` im quoted Heredoc fand seinen Anker nicht
+(`count == 0`), obwohl der Ankertext wörtlich in der Datei stand; dasselbe Skript
+über das Write-Werkzeug als Datei traf sofort. Und ein Heredoc mit `„…“` im
+Python-Quelltext brach die Shell ganz („unexpected EOF while looking for
+matching `''“). Regel für diese Umgebung: **jedes Patchskript, das
+Backslashes, typografische Anführungszeichen oder mehr als ein paar Zeilen
+hat, entsteht über das Write-Werkzeug**; das Heredoc bleibt für ASCII-kurze
+Einzeiler.

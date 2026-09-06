@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 4e2b249b-1d42-4020-bb0e-bdcf350ef625
-  modified: 2026-08-29T18:19:16.145Z
+  modified: 2026-09-06T13:27:15.180Z
 ---
 
 Ein Probe-Worktree von HEAD ist der richtige Weg, einen Commit zu bauen, dessen
@@ -48,3 +48,13 @@ Zusicherung im selben Skript gegen denselben HEAD ziehen (`added == meine
 Schlüssel and not changed`), und die Sollprobe im Index gegen den aktuellen
 HEAD lesen. Und: Zeigt `git diff HEAD --numstat` genau die eigene Zahl, ist
 der Baumstand der sicherere Weg — kein Blob nötig.
+
+**Dieselbe Alterung trifft einen Patch aus zwei Bäumen (06.09.2026).** Ein
+Patch als `diff(fremder Worktree, eigener Baum)` über *alle* abweichenden
+Dateien war richtig, solange der eigene Baum eine Kopie des Worktrees plus
+eigene Änderungen war. Dann nahm der Worktree `main` auf — und der Diff
+führte 59 Dateien, darunter `tools/window_bench.py` und zwölf SVGs, die ich
+nie angefasst hatte: jede fremde Änderung als Rücknahme. **How to apply:**
+Einen Patch nur über die **eigene Dateiliste** rechnen (`eigene-dateien.txt`,
+gepflegt beim Ändern), nie über „alles, was abweicht" — die Menge der
+Abweichungen gehört nicht mir, sobald der Vergleichsbaum weiterwandert.
