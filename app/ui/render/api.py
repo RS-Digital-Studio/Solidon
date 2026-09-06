@@ -119,7 +119,7 @@ class LabelStyle:
 
     ``always_visible`` zeichnet jede, auch wo sie sich überlappen — die
     Marken einer Frage müssen alle da sein, sonst fehlt eine Antwort.
-    ``background`` legt ein abgerundetes Feld hinter den Text (Skizzenmaße
+    ``background`` legt ein Feld hinter den Text (Skizzenmaße
     über dem Körper). ``show_points`` setzt einen Punkt an den Anker.
     """
 
