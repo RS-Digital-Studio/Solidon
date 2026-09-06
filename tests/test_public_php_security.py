@@ -44,22 +44,6 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def _mbstring_options(php: str) -> list[str]:
-    """Die Erweiterung, die support.php für Längen und Kopfzeilen braucht.
-
-    Ohne ``php.ini`` sucht PHP seine Erweiterungen unter dem eingebauten
-    Standardpfad — bei einer entpackten Installation liegen sie neben der
-    ausführbaren Datei (dieselbe Regel wie in ``test_support.py``). Ein PHP
-    mit ini, das mbstring schon lädt, meldet höchstens eine Doppelladung nach
-    stderr, und das geht hier nach DEVNULL.
-    """
-    options = ["-d", "extension=mbstring"]
-    extensions = Path(php).parent / "ext"
-    if extensions.is_dir():
-        options[:0] = ["-d", f"extension_dir={extensions}"]
-    return options
-
-
 def _php_command(
     php: str,
     port: int,
@@ -80,7 +64,6 @@ def _php_command(
     """
     command = [
         php,
-        *_mbstring_options(php),
         "-d",
         "sendmail_path=/nonexistent/solidon-keine-post",
         "-d",
@@ -2214,6 +2197,11 @@ def test_a_lost_upload_is_rejected_before_the_support_mail(
     lost_temporary: bool,
 ) -> None:
     """Auch nach erfolgreicher PHP-Annahme muss der wirkliche Anhang lesbar bleiben."""
+    # support.php misst Nachrichten- und Feldlängen mit mb_strlen; ohne mbstring
+    # antwortet PHP mit einem Fatal statt mit 400, und der Test fragte gar nicht
+    # nach dem Anhang. Wie bei sodium: lokal überspringen und sagen, was fehlt —
+    # in der CI, die die Erweiterung einrichtet, bleibt es ein roter Test.
+    php_extension("mbstring")
     prepend = tmp_path / "upload-lost.php"
     mutation = (
         "unlink($_FILES['anhang']['tmp_name']);"
@@ -2246,12 +2234,21 @@ def test_a_lost_upload_is_rejected_before_the_support_mail(
     assert json.loads(text)["ok"] is False
 
 
+def _day_zone_line() -> str:
+    """Die eine Zeile aus day_zone.php, die count.php und stats.php teilen."""
+    source = (API / "day_zone.php").read_text(encoding="utf-8")
+    return next(line for line in source.splitlines() if line.startswith("const DAY_ZONE"))
+
+
 def test_visitor_identity_rotates_at_the_displayed_day_boundary(tmp_path: Path) -> None:
     """UTC-Mitternacht innerhalb desselben Anzeigetages zählt keinen zweiten Besucher."""
     php = php_executable()
     counter = (API / "count.php").read_text(encoding="utf-8")
     stats = (API / "stats.php").read_text(encoding="utf-8")
     zone = next(line for line in stats.splitlines() if line.startswith("const DISPLAY_ZONE"))
+    # Seit dem 06.09.2026 zeigt DISPLAY_ZONE auf DAY_ZONE aus day_zone.php; die Probe
+    # braucht beide Zeilen, sonst kennt sie den Namen nicht.
+    day_zone = _day_zone_line()
     moments = [
         "2026-09-04T23:59:00Z",
         "2026-09-05T00:01:00Z",
@@ -2263,6 +2260,8 @@ def test_visitor_identity_rotates_at_the_displayed_day_boundary(tmp_path: Path) 
     probe = tmp_path / "days.php"
     probe.write_text(
         "<?php\n"
+        + day_zone
+        + "\n"
         + zone
         + "\n"
         + _php_function(counter, "count_day")
@@ -2290,10 +2289,14 @@ def test_the_month_comparison_carries_its_completeness(tmp_path: Path) -> None:
     weg, und ein zu großer Monat stand im Vergleich als vollständige Summe."""
     php = php_executable()
     source = (API / "stats.php").read_text(encoding="utf-8")
-    constants = "\n".join(
-        line
-        for line in source.splitlines()
-        if line.startswith(("const STATS_MAX_", "const DISPLAY_ZONE"))
+    constants = (
+        _day_zone_line()
+        + "\n"
+        + "\n".join(
+            line
+            for line in source.splitlines()
+            if line.startswith(("const STATS_MAX_", "const DISPLAY_ZONE"))
+        )
     )
     probe = tmp_path / "probe.php"
     probe.write_text(

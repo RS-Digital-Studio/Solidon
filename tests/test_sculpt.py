@@ -707,5 +707,9 @@ def test_baked_array_headers_cannot_request_more_than_the_stored_data(monkeypatc
         raise AssertionError("unvalidated array reached numpy.load")
 
     monkeypatch.setattr(np, "load", forbidden_load)
-    with pytest.raises(ValueError, match="invalid_mesh_array_size"):
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as caught:
         MeshData.from_bytes(payload.getvalue(), maximum_bytes=1024)
+    assert caught.value.constraint == "invalid_mesh_array_size"
+    assert caught.value.suggestions, "auch ein beschädigter Stand nennt einen Weg (Regel 17)"

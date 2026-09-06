@@ -125,8 +125,9 @@ def merge_slots(
 
     Ein Slot ist ein Filament, kein Objektmerkmal: zwei Teile in derselben
     Farbe sollen aus derselben Düse kommen und nicht aus zweien. Zusammengelegt
-    wird deshalb über Name und Farbe, und die Reihenfolge des Ergebnisses ist
-    die Reihenfolge der Extruder.
+    wird deshalb über :func:`slot_identity` — Name, Farbe, Profil **und**
+    Materialart (CORE-21: gleichfarbiges PLA und PETG sind zwei Spulen) —, und
+    die Reihenfolge des Ergebnisses ist die Reihenfolge der Extruder.
 
     Ohne diese Zusammenlegung bekäme eine Baugruppe aus drei einfarbigen Teilen
     drei Materialien — und der Slicer fragte nach drei Filamenten für einen

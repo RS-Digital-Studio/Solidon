@@ -7,6 +7,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
+from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, rotation
 from app.core.registry import REGISTRY
@@ -71,7 +72,7 @@ def test_a_small_hole_is_not_filled_by_the_placement_patch():
     opening = np.asarray(prepared.area.interiors[0].coords).mean(axis=0)
     from app.core.sketch.planes import to_world
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValidationError):
         placement.at_point(prepared, to_world(prepared.frame, tuple(opening)))
 
 
@@ -128,7 +129,7 @@ def test_editing_distances_cannot_put_the_point_into_a_cutout():
     distances = tuple(
         float(np.dot(np.asarray((0.0, 0.0, 8.0)) - edge.start, edge.inward)) for edge in hit.edges
     )
-    with pytest.raises(ValueError, match="außerhalb"):
+    with pytest.raises(ValidationError, match="außerhalb"):
         placement.point_with_distances(prepared, hit, distances)
     assert hit.point == (18.0, 13.0, 8.0)
 
@@ -456,6 +457,39 @@ def test_blind_drill_keeps_the_exact_bottom_and_anchor(route, side, anchor, wide
         assert float(hits.min()) == pytest.approx(11.0 - (mouth - depth), abs=1e-8)
 
 
+def test_the_mouth_overlap_stays_above_the_surface_and_leaves_the_floor(profile):
+    """Die Zugabe an der Mündung schneidet Luft: Boden exakt, Mündung darüber.
+
+    Ohne sie endete das Werkzeug im Achsenweg genau auf der angeklickten
+    Fläche — zwei zusammenfallende Flächen, der Fall, für den
+    :data:`BOOLEAN_OVERLAP` in der Rückfallkette da ist (Review 06.09.2026).
+    """
+    import numpy as np
+
+    from app.core.geom.boolean import BOOLEAN_OVERLAP
+    from app.core.geom.prepare import drill_tool
+
+    for values in ({}, {"widening_diameter": 8.0, "widening_depth": 1.0}):
+        exact = drill_tool(diameter=4.0, depth=5.0, profile=profile, compensate=False, **values)
+        padded = drill_tool(
+            diameter=4.0,
+            depth=5.0,
+            profile=profile,
+            compensate=False,
+            mouth_overlap=BOOLEAN_OVERLAP,
+            **values,
+        )
+        assert padded.bounds.minimum[2] == pytest.approx(-5.0, abs=1e-9)
+        assert padded.bounds.maximum[2] == pytest.approx(BOOLEAN_OVERLAP, abs=1e-9)
+        assert exact.bounds.maximum[2] == pytest.approx(0.0, abs=1e-9)
+        # Unter der Fläche sind beide Werkzeuge dasselbe; die Zugabe ist eine
+        # Scheibe mit dem Querschnitt der Mündung (bei der Senkung der weite).
+        radius = values.get("widening_diameter", 4.0) / 2.0
+        assert np.isclose(
+            padded.volume - exact.volume, np.pi * radius**2 * BOOLEAN_OVERLAP, rtol=0.03
+        )
+
+
 @pytest.mark.parametrize("widened", [False, True])
 def test_the_shared_drill_tool_has_no_hidden_end_allowance(widened, profile):
     """Auch nicht gerundete Eingabetiefen bleiben im Werkzeugkörper exakt erhalten."""
@@ -778,9 +812,9 @@ def test_centre_offsets_are_editable_in_the_actual_rotated_plane():
     reference = next(item for item in result.centres if item.feature_id == centre.id)
     assert reference.offset == pytest.approx((3.123456789, 4.0), abs=1e-12)
     assert reference.distance == pytest.approx(math.hypot(3.123456789, 4.0))
-    with pytest.raises(ValueError, match="außerhalb"):
+    with pytest.raises(ValidationError, match="außerhalb"):
         placement.point_with_centre(prepared, result, centre.id, (0.0, 0.0))
-    with pytest.raises(ValueError, match="außerhalb"):
+    with pytest.raises(ValidationError, match="außerhalb"):
         placement.point_with_centre(prepared, result, centre.id, (100.0, 100.0))
 
 

@@ -8,6 +8,7 @@ für welchen Zweck zulässig ist, beim jeweiligen Fachmodul.
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import ipaddress
 import queue
@@ -443,6 +444,8 @@ def _socket_deadline(
         return
     original = raw.readinto
     previous = vars(raw).get("readinto")
+    held: socket.socket | None = vars(raw).get("_sock")
+    resting_timeout = held.gettimeout() if held is not None else None
 
     def readinto(b: Buffer) -> int | None:
         remaining = deadline - timer()
@@ -460,6 +463,12 @@ def _socket_deadline(
             del raw.readinto
         else:
             raw.readinto = previous  # type: ignore[method-assign]
+        # Der Socket bekommt seine Ruhefrist zurück: Die zuletzt gesetzte
+        # Restfrist konnte winzig sein, und wer die Verbindung weiterbenutzt,
+        # liefe sonst mit ihr in den nächsten Timeout.
+        if held is not None:
+            with contextlib.suppress(OSError):
+                held.settimeout(resting_timeout)
 
 
 def iter_limited(

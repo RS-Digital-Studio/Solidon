@@ -42,6 +42,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/day_zone.php';
+
 if (PHP_VERSION_ID < 80100) {
     http_response_code(503);
     exit;
@@ -280,8 +282,8 @@ function count_write_private_state(string $path, $stream, string $data): bool
 /** Der Zähltag folgt derselben Zeitzone wie die Auswertung. */
 function count_day(DateTimeImmutable $moment): string
 {
-    // Dieselbe Tagesgrenze wie DISPLAY_ZONE in stats.php; Zeitstempel bleiben UTC.
-    return $moment->setTimezone(new DateTimeZone('Europe/Berlin'))->format('Y-m-d');
+    // Dieselbe Tagesgrenze wie die Anzeige in stats.php; Zeitstempel bleiben UTC.
+    return $moment->setTimezone(new DateTimeZone(DAY_ZONE))->format('Y-m-d');
 }
 
 /**

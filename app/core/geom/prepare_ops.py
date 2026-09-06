@@ -1963,6 +1963,33 @@ def _turned(feature: Feature, axis: Axis, angle: float) -> Vec3:
     return (float(spun[0]), float(spun[1]), float(spun[2]))
 
 
+#: Wie weit ein neuer Durchmesser über die Diagonale des Körpers hinausgehen
+#: darf, bevor er kein Merkmal mehr ist, sondern ein Speicherproblem: Die
+#: Felder tragen absichtlich keine feste Obergrenze — ein gemessenes Maß von
+#: 250 mm darf nicht beim bloßen Übernehmen geklemmt werden —, aber ein
+#: Werkzeug von tausend Metern baut niemand absichtlich (Review 06.09.2026,
+#: dieselbe Familie wie G-09 und G-13).
+OVERSIZE_FACTOR = 4.0
+
+
+def _reject_oversized(field: str, diameter: float, mesh: Mesh) -> None:
+    """Lehnt einen Durchmesser ab, der ein Vielfaches des ganzen Körpers misst."""
+    limit = OVERSIZE_FACTOR * max(float(mesh.bounds.diagonal), 1.0)
+    if diameter > limit:
+        raise ValidationError(
+            field,
+            _(
+                "Ein Durchmesser von {given} übersteigt den Körper um ein Vielfaches. "
+                "Wählen Sie höchstens {limit}.",
+                given=format_length(diameter),
+                limit=format_length(limit),
+            ),
+            value=diameter,
+            constraint="maximum",
+            values={"maximum": limit},
+        )
+
+
 @op_params
 class ResizeFeatureParams(BaseParams):
     at_feature: str = param(
@@ -2022,6 +2049,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
     previous = float(feature.params.get("diameter", 0.0))
+    _reject_oversized("diameter", params.diameter, source.mesh)
 
     if is_close(params.diameter, previous):
         return OpResult(
@@ -2149,6 +2177,7 @@ def resize_hole(ctx: OpContext) -> OpResult:
     axis = _bore_vector(feature, "axis")
     previous = _bore_number(feature, "diameter")
     depth = _bore_number(feature, "depth")
+    _reject_oversized("diameter", params.diameter, source.mesh)
     cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
 
     if source.kind == "brep":

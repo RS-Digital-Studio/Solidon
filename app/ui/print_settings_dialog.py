@@ -2755,7 +2755,7 @@ class PrintSettingsDialog(QDialog):
         return (
             self.settings,
             self.session.profile,
-            id(self.session.last_result),
+            self.session.result_generation,
             tuple(self._chosen_plates()),
             self._slicer_path,
             self.machine_choice.currentData(),

@@ -589,7 +589,9 @@ def test_freezing_keeps_only_foreign_platform_pins(tmp_path, monkeypatch, platfo
         encoding="utf-8",
     )
     monkeypatch.setattr(check_env, "CONSTRAINTS", target)
-    monkeypatch.setattr(check_env, "sys", SimpleNamespace(platform=platform))
+    # Nur das Attribut, nicht das Modul: ``check_env`` liest auch ``sys.executable``
+    # und ``sys.version_info``, und ein Namensraum mit einem Feld verdeckte beides.
+    monkeypatch.setattr(check_env.sys, "platform", platform)
     monkeypatch.setattr(
         check_env.subprocess,
         "run",
@@ -1721,11 +1723,21 @@ def test_the_version_file_waits_for_its_packages(monkeypatch: pytest.MonkeyPatch
 
 
 def _ganze_groesse(name: str) -> int:
-    """Die Größe, die eine vollständig hochgeladene Datei oben hätte."""
+    """Die Größe, die eine vollständig hochgeladene Datei oben hätte.
+
+    Dieselbe Reihenfolge wie ``hold_back_version.complete`` seit R22
+    (05.09.2026): Liegt das Paket hier, zählt seine Datei; sonst die Größe,
+    die ``version.json`` unterschrieben nennt. Auf einem frischen Klon liegt
+    kein Paket, und ein erfundenes Byte war dort ein halbes Paket — der Test
+    hielt die Auskunft für zu Unrecht zurückgehalten.
+    """
     import tools.upload_website as upload
 
     hier = upload.LOCAL_ROOT / "dl" / name
-    return hier.stat().st_size if hier.is_file() else 1
+    if hier.is_file():
+        return hier.stat().st_size
+    manifest = json.loads((upload.LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
+    return upload.promised_sizes(manifest).get(name, 1)
 
 
 def test_the_version_file_waits_for_a_package_that_only_looks_complete(

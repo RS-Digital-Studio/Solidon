@@ -669,6 +669,23 @@ def test_scaled_normals_do_not_change_a_flush_result(profile: Profile) -> None:
     assert not fit_check.check(scene, profile)
 
 
+def test_float32_noise_on_a_normal_is_still_flush(profile: Profile) -> None:
+    """Eine STL kennt nur Float32: Die Normalen einer ebenen Fläche streuen nach
+    dem Umlauf um bis zu 6e-6 (gemessen 06.09.2026). Das ist keine Schräge."""
+    scene = two_faces(0.0, (6e-6, 0.0, 1.0), profile)
+    scene.fits.append(flush_fit())
+    assert not fit_check.check(scene, profile)
+
+
+def test_a_tenth_of_a_degree_is_not_flush(profile: Profile) -> None:
+    """Die Schwelle ist die des Erkenners (``EPS_ANGLE``), nicht die alten acht Grad."""
+    import math
+
+    scene = two_faces(0.0, (math.sin(math.radians(0.1)), 0.0, math.cos(math.radians(0.1))), profile)
+    scene.fits.append(flush_fit())
+    assert "parallel" in str(fit_check.check(scene, profile)[0].message)
+
+
 def test_five_degrees_at_the_same_centre_is_not_flush(profile: Profile) -> None:
     import math
 

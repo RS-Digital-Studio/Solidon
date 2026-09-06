@@ -691,10 +691,25 @@ CATEGORY_FIGURES: dict[str, str] = {
 PART_PLACEMENT_PARAMS: Final = ("x", "y", "z", "nx", "ny", "nz", "axis", "angle", "at_feature")
 
 
+def normal_fields_of(spec: OperationSpec) -> tuple[str, str, str]:
+    """Die Namen der Richtungsfelder dieses Schemas.
+
+    ``nx``, ``ny``, ``nz`` — außer ein Rezept trägt ein gleichnamiges Fachmaß,
+    dann hat ``knowledge/parts/ops.py`` sie ``surface_nx`` … genannt und den
+    Namen am Schema hinterlegt. Wer die Felder erkennen will (Register,
+    Handbuch, Schnellbearbeitung), fragt hier und nicht die feste Dreiergruppe.
+    """
+    names = getattr(spec.params, "_surface_normal_fields", ("nx", "ny", "nz"))
+    return str(names[0]), str(names[1]), str(names[2])
+
+
 def part_placement_params(spec: OperationSpec) -> frozenset[str]:
     """Die Ortsfelder dieses Schemas, auch bei gleichnamigen Rezeptmaßen."""
-    normal = getattr(spec.params, "_surface_normal_fields", ("nx", "ny", "nz"))
-    return frozenset(PART_PLACEMENT_PARAMS).difference(("nx", "ny", "nz")).union(normal)
+    return (
+        frozenset(PART_PLACEMENT_PARAMS)
+        .difference(("nx", "ny", "nz"))
+        .union(normal_fields_of(spec))
+    )
 
 
 def documentation(registry: Registry | None = None, category: str = "") -> str:

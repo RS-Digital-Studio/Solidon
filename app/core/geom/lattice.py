@@ -420,9 +420,3 @@ def _cavity_mesh(body: MeshData) -> MeshData | None:
             inner.invert()
             cavities.append(MeshData.of(inner))
     return MeshData.of(concatenated([inner.raw for inner in cavities])) if cavities else None
-
-
-def _cavity_bounds(body: MeshData) -> tuple[Vec3, Vec3] | None:
-    """Der Aufbauquader einer nachweisbaren Innengeometrie."""
-    cavity = _cavity_mesh(body)
-    return (cavity.bounds.minimum, cavity.bounds.maximum) if cavity is not None else None

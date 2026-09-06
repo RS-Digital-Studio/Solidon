@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from app.core.registry import REGISTRY
+from app.core.registry.surfaces import normal_fields_of
 from app.core.types import Feature, FeatureId
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
@@ -104,7 +105,7 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
 NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
     "face": _(
         "Eine Fläche gehört zur Oberfläche des Körpers und lässt sich nicht "
-        "einzeln versetzen. Mit „Fläche verschieben“ wird sie hinein- oder "
+        "einzeln versetzen. Mit „Fläche versetzen“ wird sie hinein- oder "
         "herausgezogen."
     ),
     "fillet": _(
@@ -247,7 +248,9 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
         # Die freie Oberflächenrichtung gehört zum Platzierungsdialog.
         # Die Schnellbearbeitung verschiebt das gewählte Merkmal mit seiner
         # bisherigen Richtung; eine Änderung erfolgt über die eigene Drehzeile.
-        if entry.kind != "feature" and entry.name not in {"nx", "ny", "nz"}
+        # Gefragt wird das Schema nach seinen Richtungsfeldern — ein Rezept
+        # mit eigenem Maß ``nx`` nennt sie anders, und die blieben sonst stehen.
+        if entry.kind != "feature" and entry.name not in normal_fields_of(spec)
     )
 
 

@@ -1642,7 +1642,7 @@ def test_the_manual_loads_no_image_but_its_own_figures(
     ``![Bild](file:///…)`` ließ schon das Öffnen der Seite die Datei lesen,
     ohne Klick und an der Hostprüfung der Links vorbei. Das Handbuch kennt
     genau eine Bildquelle: seinen Abbildungskatalog."""
-    from PySide6.QtCore import QByteArray, QUrl
+    from PySide6.QtCore import QSize, QUrl
     from PySide6.QtGui import QImage, QPixmap, QTextDocument
 
     from app.ui.manual_window import PageView
@@ -1657,15 +1657,47 @@ def test_the_manual_loads_no_image_but_its_own_figures(
         view.setMarkdown(f"# Seite\n\n![Bild]({image.as_uri()})\n")
         qt_app.processEvents()
 
+        # Gemessen wird das **gezeichnete** Dokument: Ein leerer Rückgabewert
+        # allein hielt Qt nicht davon ab, die Datei selbst zu laden (die
+        # Nachprüfung vom 05.09.2026 fand genau diesen Weg übersehen).
+        assert _painted_pixels(view.document(), 0xFF00FF00) == 0, (
+            "das fremde Bild darf nirgends im gezeichneten Handbuch stehen"
+        )
+        assert "Bild" in view.document().toPlainText(), "der Alt-Text bleibt lesbar"
+
         served = view.loadResource(QTextDocument.ResourceType.ImageResource, QUrl(image.as_uri()))
-        assert isinstance(served, QByteArray) and served.isEmpty(), (
-            "eine beantwortete leere Ressource sperrt Qts eigenen Dateileser"
+        assert isinstance(served, QImage) and served.size() == QSize(1, 1), (
+            "eine fremde Anfrage bekommt ein gültiges leeres Pixel, kein None und keine Daten"
         )
         held = view.document().resource(
             QTextDocument.ResourceType.ImageResource, QUrl(image.as_uri())
         )
-        assert not (isinstance(held, (QImage, QPixmap)) and not held.isNull()), (
-            "Qt darf die Datei auch nicht als QPixmap nachladen"
-        )
+        assert not (
+            isinstance(held, (QImage, QPixmap)) and not held.isNull() and held.size() != QSize(1, 1)
+        ), "Qt darf die Datei auch nicht als QPixmap nachladen — höchstens unser leeres Pixel"
     finally:
         view.deleteLater()
+
+
+def _painted_pixels(document: object, colour: int) -> int:
+    """Zeichnet das Dokument und zählt die Pixel einer Farbe."""
+    from PySide6.QtCore import QSizeF
+    from PySide6.QtGui import QImage, QPainter
+
+    document.setTextWidth(320)  # type: ignore[attr-defined]
+    size: QSizeF = document.size()  # type: ignore[attr-defined]
+    canvas = QImage(
+        max(1, int(size.width())), max(1, int(size.height())), QImage.Format.Format_RGB32
+    )
+    canvas.fill(0xFFFFFFFF)
+    painter = QPainter(canvas)
+    try:
+        document.drawContents(painter)  # type: ignore[attr-defined]
+    finally:
+        painter.end()
+    return sum(
+        1
+        for y in range(canvas.height())
+        for x in range(canvas.width())
+        if canvas.pixel(x, y) == colour
+    )

@@ -196,6 +196,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das `pv.PolyData` jedes Körpers wird bei jedem Szenenaufbau neu gebaut | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Cache über Netz-Identität **und** `_view_offset` — der hängt an Platte und Explosion und ändert sich, ohne dass das Netz sich ändert. Kanten und Schattenzerlegung daneben sind längst gecacht. Messung davor und danach, sonst ist der Gewinn eine Behauptung |
 | Zwei rote Tests sind Altlast | Was eine Aufräum-Durchsicht offenließ (04.09.2026) | einen Erzeugerlauf für `THIRD-PARTY-NOTICES.md` (`hidapi` fehlt im Erzeugnis) und eine Klärung der Stützwahl in `test_autosplit` (Zusicherung um mehr als das Doppelte verfehlt). Beide auf HEAD in einem wegwerfbaren Worktree ziffernidentisch reproduziert — weder Regression noch einer Sitzung zuzurechnen |
 | `rotate_feature` ändert das Volumen ohne Befund | Was die Erkennung erklärt — und was nicht (04.09.2026) | entscheiden, ob und wie der Prüfbericht die geometrisch richtige Volumenänderung einer schräg gedrehten Bohrung sichtbar macht; gemessen sind 2,5 bis 92,9 mm³ an vier Modellen |
+| Die Gitterfüllung kennt bei einem eingelesenen, entlüfteten Hohlkörper keinen Innenraum mehr | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine Entscheidung: Das Strahlverfahren `_enclosed_span` ist mit dem Reparaturstand gefallen (es riet; die Absage ist getestet). Frisch ausgehöhlte Körper tragen `MeshData.cavity` und füllen weiter. Entweder ein Schätzweg mit ausgewiesenem Befund, oder die Absage bleibt und steht im Handbuch |
+| Die Merkmalserkennung läuft bis eine Million Dreiecke — §31 hat dafür keine Zeile | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine Messung: `FEATURE_LIMIT_TRIANGLES` stieg von 200 000 auf 1 000 000; der eigene Kommentar nennt 123 s bei 990 000 Dreiecken. Entweder §31 bekommt die Zeile mit dem gemessenen Wert und der Begründung (abbrechbar, gecacht), oder die Grenze geht auf den Wert zurück, für den eine Messung existiert |
+| Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url` | Die Abnahme des Gesamt-Reviews (06.09.2026) | denselben `DeadlineResponse` an den vier übrigen Aufrufern (`llm.post_json`, `pull_model`, `ollama_tags`, `mesh.py`); der Körper ist dort begrenzt, die Statuszeile nur je Lesezug |
+| Die Migration 19→20 rechnet mit lebendem Code | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine eingecheckte v19-Beispieldatei **mit** Deckel; der Satz im Modul, dass dieser Schritt beim nächsten Formatwechsel gegen sie nachzumessen ist, steht seit dem 06.09.2026. Alle älteren Migrationen sind reine Wörterbuchumformungen, dieser ruft `History`, `document_from_data` und `fit_for_lid` in ihrer heutigen Fassung |
+| Drei ungemessene Laufzeitkosten des Reparaturstands | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine Messung je Stelle: `hollow` rechnet für `cavity` eine zweite Boolesche bei jedem Aushöhlen; `Solid.__post_init__` kopiert jede Form, dazu sechs ausdrückliche `working = Solid(...)`; `cavity_chains` läuft im Qt-Hauptthread bei jedem Szenenaufbau ohne Grenze (an `build_tray_v3.step` mit 234 Merkmalen messen) |
 
 ---
 
@@ -10792,6 +10797,50 @@ dateispezifisch und mit dem, was der Bericht trägt, nicht zu finden.
   Grund, und der Fehlerbericht aus dem Prüfbericht trägt ihn — der nächste
   Bericht desselben Fehlers ist damit zu lesen. Bis dahin bleibt der Fall
   offen; wer ihn schließt, nennt hier Ausnahme und Datei.
+
+## Die Abnahme des Gesamt-Reviews (06.09.2026)
+
+Der Reparaturstand des Gesamt-Reviews (Codex 01a07020, Worktree
+`F:\Solidon-Fixes-01a07020`, Basis `782f98bb`) ist vor seiner Landung von vier
+Review-Agenten nur lesend geprüft worden: Geometrie und Bausteine, Oberfläche
+und Kataloge, Kern und Backends, Werkzeuge und Website. Die kuratierte Liste
+ihrer Befunde mit Stand liegt in `output/review/abnahme-2026-09-06/befunde-agenten.md`
+(lokal, `output/` ist nicht eingecheckt); die Reparatur selbst hat 3d-druck-85
+gelandet (`ca77fb5f`), die Nacharbeit kam als fünfzehn Commits danach.
+
+Was die Nacharbeit trägt, in einem Satz je Gruppe: Passungen messen
+Parallelität als Winkel; das Bohrwerkzeug ragt nur an der Mündung über und
+weist absurde Durchmesser vor dem Werkzeugbau ab; Oberflächenplatzierung,
+Netzspeicher und Rezepte melden Validierungsfehler mit Kennung; Bausteine
+erklären ihre Bedingungen zwischen Parametern statt still zu kappen; der
+Agent liest Kennungslisten an einer Stelle; die Sitzung meldet ihre
+Waisenprüfung einmal und zählt Ergebnisse statt Adressen; das Handbuchfenster
+lädt keine fremden Bilder; das Merkmalsfeld kennt jede Gruppenkennung des
+Kerns; ComfyUI übernimmt vorhandene Gewichte; die Website schrumpft ihre
+Merkmalsliste unter 333 Punkten, zählt Tage in einer Zeitzone und hält ihre
+Mindestversionen an drei Orten gleich.
+
+Drei Dinge wurden **nicht** geändert, mit Grund: Die offenen Obergrenzen der
+Durchmesserfelder bleiben (ein erkannter Durchmesser von 250 mm muss unverändert
+in den Dialog kommen; die Laufzeitgrenze liegt relativ zur Körperdiagonale),
+`objects: null` bleibt für den Agenten ein Fehlaufruf (ein Wert, kein fehlendes
+Feld), und die italienische Übersetzung „Fine" für den Endpunkt einer Linie
+ist richtig — der gemeldete Wechsel zu „Fatto" hätte aus einem Ort eine
+Handlung gemacht. Was Entscheidungen oder Messungen braucht, steht oben im
+Register unter dieser Überschrift:
+
+- [ ] **Die Gitterfüllung kennt bei einem eingelesenen, entlüfteten Hohlkörper
+  keinen Innenraum mehr** — ein Schätzweg mit ausgewiesenem Befund, oder die
+  Absage bleibt und steht im Handbuch.
+- [ ] **Die Merkmalserkennung läuft bis eine Million Dreiecke** — §31 bekommt
+  die Zeile mit dem gemessenen Wert, oder die Grenze geht auf den Wert zurück,
+  für den eine Messung existiert.
+- [ ] **Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url`**
+  — derselbe `DeadlineResponse` an den vier übrigen Aufrufern.
+- [ ] **Die Migration 19→20 rechnet mit lebendem Code** — eine eingecheckte
+  v19-Beispieldatei mit Deckel; der Satz im Modul steht.
+- [ ] **Drei ungemessene Laufzeitkosten des Reparaturstands** — `hollow` für
+  `cavity`, `Solid.__post_init__` und `cavity_chains` im Qt-Hauptthread.
 
 ## Was der Gesamtreview liegen ließ (05.09.2026)
 

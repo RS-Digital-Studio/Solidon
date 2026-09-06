@@ -877,3 +877,62 @@ def test_a_nearly_nominal_bore_explains_why_it_is_not_assigned(qt_app: QApplicat
     text = " ".join(label.text() for label in panel.findChildren(QLabel))
     assert "knapp unter dem Nennmaß von M2" in text
     assert "Zu welcher Schraube" not in text
+
+
+def test_every_group_literal_of_the_core_has_a_sentence_in_the_panel() -> None:
+    """Ein neuer Nachweis oder Grund im Kern war sonst ein ``KeyError`` in der Auswahl."""
+    from typing import get_args
+
+    from app.core.perceive.relations import (
+        FeatureActionGroup,
+        FeatureGroupEvidence,
+        FeatureGroupMember,
+        FeatureGroupReason,
+        FeatureGroupUncertainty,
+    )
+    from app.ui.panels import _feature_group_note, _group_evidence_texts, _group_reason_texts
+
+    assert set(get_args(FeatureGroupEvidence)) == set(_group_evidence_texts())
+    assert set(get_args(FeatureGroupReason)) == set(_group_reason_texts())
+    group = FeatureActionGroup(
+        id="g",
+        action="resize_feature",
+        selected="hole_1",
+        members=(
+            FeatureGroupMember(target="hole_1", scope=("hole_1",)),
+            FeatureGroupMember(target="hole_2", scope=("hole_2",)),
+        ),
+        evidence=tuple(get_args(FeatureGroupEvidence)),
+        uncertain=tuple(
+            FeatureGroupUncertainty(feature_ids=("hole_9",), reason=reason)
+            for reason in get_args(FeatureGroupReason)
+        ),
+    )
+    note = _feature_group_note(group)
+    for text in (*_group_evidence_texts().values(), *_group_reason_texts().values()):
+        assert str(text) in note
+
+
+def test_the_fit_hint_needs_a_second_body(qt_app: QApplication) -> None:
+    """Im Einzelkörperprojekt gibt es kein Gegenstück — der Satz dazu entfällt.
+
+    Bis zum 06.09.2026 stand er unter jedem Merkmal, auch wenn der Klick im
+    Objektbaum, zu dem er riet, nichts hätte finden können.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    def hints(panel: FeaturePanel) -> list[str]:
+        return [
+            label.text()
+            for label in panel.findChildren(QLabel)
+            if label.text().startswith("Für eine Passung")
+        ]
+
+    identifier, feature = a_hole()
+    single = FeaturePanel()
+    single.show_feature(identifier, feature, alone=True)
+    assert hints(single) == [], "ohne zweiten Körper gibt es kein Gegenstück"
+
+    several = FeaturePanel()
+    several.show_feature(identifier, feature)
+    assert len(hints(several)) == 1

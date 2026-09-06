@@ -38,7 +38,7 @@ from app.core.knowledge.parts.registry import (
 from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import is_greater
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 KEYHOLE_RETAINS_HEAD = PartChange(
     version="15",
@@ -499,6 +499,36 @@ class KeyholeParams(BaseParams):
     play: float = play_param(maximum=2.0)
 
 
+KEYHOLE_DROP_TOO_SHORT = _(
+    "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg "
+    "vergrößern oder das Kopfspiel verkleinern."
+)
+KEYHOLE_HEAD_ROOM_TOO_DEEP = _(
+    "Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante bleibt."
+)
+
+
+def _keyhole_minimum_drop(head: float, clearance: float) -> float:
+    """Der Einhängeweg, ab dem über dem Kopf noch eine Kante stehen bleibt."""
+    return math.sqrt(((head + clearance) / 2.0) ** 2 - (head / 2.0) ** 2)
+
+
+def _keyhole_without_ledge(params: KeyholeParams) -> TranslatableText | None:
+    """Die erklärte Bedingung des Schlüssellochs: eine Rückhaltekante muss übrig bleiben.
+
+    Zwei Maße gegen zwei andere: der Einhängeweg gegen Kopf und Spiel, die
+    Kopftiefe gegen die Gesamttiefe. Beides liegt innerhalb der Einzelgrenzen
+    und ist trotzdem kein Schlüsselloch — deshalb steht es hier, am Vertrag,
+    und der Bereichstest fährt diese Ecken als erklärten Ausschluss.
+    """
+    screw = standards.screw(params.size)
+    if params.drop <= _keyhole_minimum_drop(screw.head, HEAD_CLEARANCE + params.play):
+        return KEYHOLE_DROP_TOO_SHORT
+    if params.head_room >= params.depth:
+        return KEYHOLE_HEAD_ROOM_TOO_DEEP
+    return None
+
+
 @register_part(
     name="keyhole",
     title=_("Schlüsselloch-Aufhängung"),
@@ -524,6 +554,7 @@ class KeyholeParams(BaseParams):
         HEAD_PLAY_ADDS_INSTEAD_OF_REPLACING,
         KEYHOLE_RETAINS_HEAD,
     ],
+    feasible=lambda raw: _keyhole_without_ledge(cast(KeyholeParams, raw)),
 )
 def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)
@@ -564,24 +595,20 @@ def keyhole(raw: BaseParams) -> PartResult:
     # braucht ein Kopf, der hindurchfallen soll" und „wie viel Maß verliert
     # dieser Drucker in diesem Material". Beides gilt, also wird addiert.
     clearance = HEAD_CLEARANCE + params.play
-    minimum_drop = math.sqrt(((screw.head + clearance) / 2.0) ** 2 - (screw.head / 2.0) ** 2)
-    if params.drop <= minimum_drop:
+    minimum_drop = _keyhole_minimum_drop(screw.head, clearance)
+    unbuildable = _keyhole_without_ledge(params)
+    if unbuildable is KEYHOLE_DROP_TOO_SHORT:
         raise ValidationError(
             "drop",
-            _(
-                "Der Einhängeweg ist zu kurz für eine Rückhaltekante. Den Einhängeweg "
-                "vergrößern oder das Kopfspiel verkleinern."
-            ),
+            unbuildable,
+            constraint="feasible",
             values={"minimum": minimum_drop, "drop": params.drop},
         )
-
-    if params.head_room >= params.depth:
+    if unbuildable is KEYHOLE_HEAD_ROOM_TOO_DEEP:
         raise ValidationError(
             "head_room",
-            _(
-                "Die Kopftiefe muss kleiner als die Gesamttiefe sein, damit eine Rückhaltekante "
-                "bleibt."
-            ),
+            unbuildable,
+            constraint="feasible",
             values={"depth": params.depth, "head_room": params.head_room},
         )
     # Nur der Einstieg reicht kopfbreit bis zur Mündung. Der Kopfkanal

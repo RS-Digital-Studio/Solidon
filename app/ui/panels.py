@@ -4121,16 +4121,26 @@ def _and_then(gathered: str, further: str) -> str:
     return f"{gathered} und {further}"
 
 
-def _feature_group_note(group: FeatureActionGroup) -> str:
-    """Die Belege und Grenzen der Kern-Gruppe als lesbare Auskunft."""
-    evidence = {
+def _group_evidence_texts() -> dict[str, str]:
+    """Ein Satz je Nachweis der Kern-Gruppe (``FeatureGroupEvidence``).
+
+    Zur Laufzeit übersetzt, nicht beim Import — die Sprache kann wechseln.
+    ``test_feature_panel`` hält die Schlüssel mit dem Literal des Kerns
+    deckungsgleich; ein neuer Wert dort ist sonst ein ``KeyError`` mitten in
+    der Merkmalsauswahl.
+    """
+    return {
         "same_target_dimensions": tr("Gleiches Ausgangsmaß für diese Änderung."),
         "complete_surface_patch": tr("Die vollständige bearbeitete Form stimmt überein."),
         "parallel_axes": tr("Die Achsen sind parallel ausgerichtet."),
         "shared_boundary_role": tr("Die Merkmale haben dieselbe Rolle in ihrer Bohrungskette."),
         "translation_consistent": tr("Die zugehörigen Abschnitte liegen gleich zueinander."),
     }
-    reasons = {
+
+
+def _group_reason_texts() -> dict[str, str]:
+    """Ein Satz je Grund, warum ein Merkmal nicht sicher dazugehört."""
+    return {
         "selected_feature_unavailable": tr("Das gewählte Merkmal ist nicht mehr vorhanden."),
         "action_not_applicable": tr("Diese Handlung passt nicht zu den weiteren Merkmalen."),
         "ambiguous_cavity_chain": tr("Die zugehörigen Bohrungsabschnitte sind nicht eindeutig."),
@@ -4144,10 +4154,29 @@ def _feature_group_note(group: FeatureActionGroup) -> str:
             "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt."
         ),
     }
-    parts = [str(evidence[key]) for key in group.evidence] if len(group.members) > 1 else []
+
+
+def _feature_group_note(group: FeatureActionGroup) -> str:
+    """Die Belege und Grenzen der Kern-Gruppe als lesbare Auskunft.
+
+    Ein Nachweis oder Grund ohne Satz fällt aus der Auskunft, statt sie zu
+    stürzen — der Test hält die Listen deckungsgleich, das Fenster bleibt
+    trotzdem stehen, wenn der Kern einmal schneller war.
+    """
+    evidence = _group_evidence_texts()
+    reasons = _group_reason_texts()
+    parts = (
+        [str(evidence[key]) for key in group.evidence if key in evidence]
+        if len(group.members) > 1
+        else []
+    )
     if group.uncertain:
         parts.append(str(tr("Nicht sicher zugeordnete Merkmale bleiben ausgenommen.")))
-        parts.extend(dict.fromkeys(str(reasons[item.reason]) for item in group.uncertain))
+        parts.extend(
+            dict.fromkeys(
+                str(reasons[item.reason]) for item in group.uncertain if item.reason in reasons
+            )
+        )
     return " ".join(parts)
 
 
@@ -4253,8 +4282,12 @@ class FeaturePanel(QWidget):
         *,
         features: Mapping[str, Feature] | None = None,
         mesh: MeshData | None = None,
+        alone: bool = False,
     ) -> None:
         """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern.
+
+        ``alone`` sagt, dass dieser Körper der einzige im Projekt ist: Dann gibt
+        es kein Gegenstück, und der Satz über die Passung entfällt.
 
         Gleichartige Merkmale werden je Handlung durch den Kern belegt:
         Eine Maßänderung braucht andere Übereinstimmungen als das Versetzen
@@ -4301,16 +4334,21 @@ class FeaturePanel(QWidget):
                 self._rows.insertWidget(self._rows.count() - 1, box)
                 self._built.append(box)
 
-        # Qt bildet Control für die jeweilige Plattform ab; die sichtbare Taste
-        # kommt aus QKeySequence statt aus einem fest eingebauten Windows-Text.
-        key = (
-            QKeySequence("Ctrl+A").toString(QKeySequence.SequenceFormat.NativeText)[:-1].rstrip("+")
-        )
-        self.show_note(
-            tr(
-                "Für eine Passung ein Gegenstück mit {key} und Klick im Objektbaum hinzuwählen."
-            ).format(key=key)
-        )
+        # **Ein Gegenstück gibt es nur neben einem zweiten Körper.** Im
+        # Einzelkörperprojekt wies der Satz auf einen Klick, der nichts findet.
+        if not alone:
+            # Qt bildet Control für die jeweilige Plattform ab; die sichtbare
+            # Taste kommt aus QKeySequence statt aus einem festen Windows-Text.
+            key = (
+                QKeySequence("Ctrl+A")
+                .toString(QKeySequence.SequenceFormat.NativeText)[:-1]
+                .rstrip("+")
+            )
+            self.show_note(
+                tr(
+                    "Für eine Passung ein Gegenstück mit {key} und Klick im Objektbaum hinzuwählen."
+                ).format(key=key)
+            )
 
         # **Was die Anwendung über diese Bohrung weiß, sagt sie hier.**
         # ``bore_advice`` steht seit je im Bohrdialog und beantwortet die

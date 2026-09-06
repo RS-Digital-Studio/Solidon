@@ -397,7 +397,10 @@ def evaluate(
                         for object_id, entry in objects.items()
                     },
                     parameters=dict(parameters),
-                    fits=list(document.fits),
+                    # Dieselbe Liste wie in der Ergebnisszene unten: Eine durch
+                    # ``when_positive`` abgeschaltete Passung gehört auch hier
+                    # nicht hinein, sonst läse eine Operation zwei Wahrheiten.
+                    fits=active_fits(document),
                     profile=profile,
                     report=Report(tuple(findings)),
                 ),

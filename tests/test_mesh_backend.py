@@ -2435,6 +2435,82 @@ def test_incomplete_legacy_weights_do_not_count_as_ready(tmp_path: Path) -> None
     assert not comfy_setup.weights_present(tmp_path)
 
 
+def test_complete_legacy_weights_are_adopted_without_a_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein vor der Abschlussmarke geladener, vollständiger Bestand bekommt die Marke —
+    statt 7,5 GB neu zu laden (Nachprüfung CORE-24, 06.09.2026)."""
+    from app.core.backends import comfy_setup
+
+    root = tmp_path / "models/triposg/TripoSG"
+    root.mkdir(parents=True)
+    _write_test_weights(root)
+    assert not comfy_setup.weights_present(tmp_path), "ohne Marke gilt nichts als fertig"
+
+    class Api:
+        def model_info(self, _repo: str, *, revision: str, files_metadata: bool) -> SimpleNamespace:
+            assert files_metadata
+            return _test_weights_info(revision)
+
+    monkeypatch.setitem(sys.modules, "huggingface_hub", SimpleNamespace(HfApi=Api))
+    monkeypatch.setattr(
+        sys, "argv", ["-c", str(root), comfy_setup.WEIGHTS_REPO, comfy_setup.WEIGHTS_REVISION]
+    )
+    exec(comfy_setup._ADOPT_WEIGHTS, {})
+    assert comfy_setup.weights_present(tmp_path)
+
+    # Eine halbe Datei bekommt keine Marke — dann lädt der gewöhnliche Weg.
+    (root / ".solidon-complete.json").unlink()
+    (root / "transformer/model.safetensors").write_bytes(b"half")
+    with pytest.raises(SystemExit):
+        exec(comfy_setup._ADOPT_WEIGHTS, {})
+    assert not (root / ".solidon-complete.json").exists()
+
+
+def test_fetch_weights_adopts_a_legacy_installation_and_clears_replacement_leftovers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Einstieg räumt ``.previous-*`` eines abgebrochenen Austauschs und lädt
+    nicht, wenn der vorhandene Bestand die Prüfung besteht."""
+    from app.core.backends import comfy_setup
+
+    root = tmp_path / "models/triposg/TripoSG"
+    root.mkdir(parents=True)
+    _write_test_weights(root)
+    leftover = root.with_name(root.name + ".previous-abc123")
+    leftover.mkdir()
+    (leftover / "model_index.json").write_text("{}", encoding="utf-8")
+
+    downloads: list[list[str]] = []
+    checks: list[list[str]] = []
+
+    def fake_run(command: list[str], *_args: object, **_kwargs: object) -> None:
+        checks.append(command)
+        # Das Prüfprogramm schreibt die Marke wie der echte Lauf.
+        (root / ".solidon-complete.json").write_text(
+            json.dumps(
+                {
+                    "revision": comfy_setup.WEIGHTS_REVISION,
+                    "files": {"model_index.json": 2, "transformer/model.safetensors": 7},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(comfy_setup, "_run", fake_run)
+    monkeypatch.setattr(
+        comfy_setup, "_run_repeatedly", lambda command, *a, **k: downloads.append(command)
+    )
+    monkeypatch.setattr(comfy_setup, "_space_or_stop", lambda _where: None)
+
+    comfy_setup.fetch_weights(tmp_path, Path(sys.executable))
+
+    assert not leftover.exists(), "der liegen gebliebene alte Bestand ist geräumt"
+    assert checks and comfy_setup._ADOPT_WEIGHTS in checks[0], "der Bestand wurde geprüft"
+    assert downloads == [], "ein vollständiger Bestand wird nicht neu geladen"
+    assert comfy_setup.weights_present(tmp_path)
+
+
 def test_the_weights_are_staged_beside_the_target_and_swapped_in_whole(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

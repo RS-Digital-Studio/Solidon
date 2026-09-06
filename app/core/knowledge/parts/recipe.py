@@ -542,7 +542,20 @@ def dependency_registry(part: Recipe, base: Registry | None = None) -> Registry:
     parts = PartRegistry()
     for name in dependency_order(file_data(part)):
         if PARTS.has(name) and PARTS.get(name).source == "shipped":
-            raise ValueError("recipe_dependency_shadows_shipped_part")
+            # Auch auf dem Bauweg ein Satz mit Vorschlag, kein Codestring:
+            # ``with_dependencies`` hüllt denselben Fall ein, ``build`` ruft
+            # diese Funktion aber unmittelbar (Review 06.09.2026).
+            raise ValidationError(
+                "dependencies",
+                _(
+                    "Das Rezept bringt einen Baustein namens {name} mit, aber so heißt "
+                    "ein gelieferter Baustein. Das Rezept ohne diesen Baustein "
+                    "speichern oder ihn umbenennen.",
+                    name=name,
+                ),
+                constraint="recipe_dependencies",
+                suggestions=(CANCEL,),
+            )
         child = from_data(part.dependencies[name])
         operations.remove(part_ops.op_name(name))
         register(child, parts, operations)

@@ -52,7 +52,7 @@ from app.core.agent.tools import (
     untrusted_recipe_text,
 )
 from app.core.backends.llm import LLMBackend, Message, ToolCall, UnreadableArguments
-from app.core.errors import AppError, UserError, ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, AppError, InternalError, UserError, ValidationError
 from app.core.knowledge import rules
 from app.core.log import get_logger
 from app.core.perceive.digest import digest, new_feature_lines
@@ -237,6 +237,29 @@ def _written_call_finding(name: str) -> Finding:
         ),
         values={"op": name},
     )
+
+
+def _names_from(arguments: dict[str, Any], field: str, *, required: bool = False) -> list[str]:
+    """Ein Listenfeld des Aufrufs als Namen — oder ein Satz, der sagt, was fehlt.
+
+    Ein fehlendes Feld heißt „keine Auswahl“, sofern es nicht ``required``
+    ist; ``null`` ist dagegen ein Wert, und zwar ein falscher — genau wie ein
+    Skalar (``objects: 3``, ``objects: "obj_1"``): keine Liste — die
+    Zeichenkette zerfiele in Buchstaben, die Zahl brach den ganzen Zug ab
+    (Gesamtreview 05.09.2026, CORE-03). Beides bekommt dieselbe Antwort, und
+    das Modell wiederholt den Aufruf mit einer Liste.
+    """
+    raw = arguments.get(field, None if required else [])
+    if not isinstance(raw, list) or any(
+        not isinstance(entry, str) or not entry.strip() for entry in raw
+    ):
+        raise ValueError(
+            tr(
+                "Geben Sie {field} als Liste von Kennungen an, zum Beispiel "
+                '["obj_1"]. Wiederholen Sie den Aufruf mit dieser Liste.'
+            ).format(field=field)
+        )
+    return [entry.strip() for entry in raw]
 
 
 def _unknown_objects(wanted: tuple[str, ...], scene: Scene) -> str:
@@ -462,9 +485,16 @@ class AgentSession:
         # Werkzeugantwort ab; die Zusatzwerkzeuge tun es jetzt genauso.
         try:
             handled = self._extra_tool(name, arguments, proposal, working, scene)
-        except (TypeError, AttributeError, ValueError) as error:
+        except ValueError as error:
+            # Ausdrücklich abgelehnte Werte — ``_names_from`` und die
+            # Werkzeuge selbst sagen, was falsch war. Nur die.
             proposal.invalid_calls += 1
             return f"{tr('Ungültige Werte')}: {error}", scene
+        except PROGRAMMING_ERRORS as error:
+            # Ein Fehler in unserem Code darf dem Modell nie wie sein eigener
+            # Aufruffehler erscheinen (kern.md): Es korrigierte dann Werte, die
+            # richtig waren. Als Programmfehler nach außen, mit Fehlerbericht.
+            raise InternalError(detail=f"{type(error).__name__}: {error}") from error
         if handled is not None:
             return handled
         return self._operation(call, proposal, working, history, scene)
@@ -490,7 +520,7 @@ class AgentSession:
         if name == READ_DIGEST:
             # Der Steckbrief der Arbeitskopie — mit allem, was die bisherigen
             # Schritte dieses Zuges erzeugt haben (Konzept Agent-Vertiefung 3.1).
-            wanted = tuple(str(entry) for entry in arguments.get(OBJECTS_FIELD, ()) or ())
+            wanted = tuple(_names_from(arguments, OBJECTS_FIELD))
             unknown = _unknown_objects(wanted, scene)
             if unknown:
                 proposal.invalid_calls += 1
@@ -532,7 +562,7 @@ class AgentSession:
         wurde.
         """
         text = str(arguments.get("question", "")).strip()
-        options = [str(entry) for entry in arguments.get("options", ())]
+        options = _names_from(arguments, "options", required=True)
         question = Question(text=text, options=tuple(options))
         proposal.questions.append(question)
         answer = self.ask(text, options)
@@ -643,7 +673,7 @@ class AgentSession:
         if kind not in ANALYSIS_KINDS:
             proposal.invalid_calls += 1
             return f"{tr('Diese Analyse gibt es nicht')}: {kind} ({', '.join(ANALYSIS_KINDS)})"
-        wanted = tuple(str(entry) for entry in arguments.get(OBJECTS_FIELD, ()) or ())
+        wanted = tuple(_names_from(arguments, OBJECTS_FIELD))
         unknown = _unknown_objects(wanted, scene)
         if unknown:
             proposal.invalid_calls += 1
@@ -729,22 +759,15 @@ class AgentSession:
             return f"{tr('Dieses Werkzeug gibt es nicht')}: {call.name}", scene
 
         arguments = dict(call.arguments)
-        objects = arguments.pop(OBJECTS_FIELD, [])
         # Das Strukturfeld steht neben dem Parameterschema. Vor jeder
         # Iteration prüfen: Ein Skalar darf weder den Zug abbrechen noch als
         # leere Auswahl eine unbestellte Erzeugung oder Szenenoperation auslösen.
-        if not isinstance(objects, list) or any(
-            not isinstance(entry, str) or not entry.strip() for entry in objects
-        ):
+        try:
+            objects = _names_from(arguments, OBJECTS_FIELD)
+        except ValueError as error:
             proposal.invalid_calls += 1
-            return (
-                f"{tr('Ungültige Werte')}: "
-                + tr(
-                    "Geben Sie objects als Liste von Objektkennungen an, zum Beispiel "
-                    '["obj_1"]. Wiederholen Sie den Aufruf mit dieser Liste.'
-                ),
-                scene,
-            )
+            return f"{tr('Ungültige Werte')}: {error}", scene
+        arguments.pop(OBJECTS_FIELD, None)
         inputs = tuple(objects)
         if spec.takes_whole_scene and not inputs:
             # Anordnen wirkt auf alles (§25). Das Modell jedes Objekt aufzählen

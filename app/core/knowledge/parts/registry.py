@@ -121,6 +121,10 @@ MATERIAL_OF_TARGET = PartChange(
 )
 
 
+Feasibility = Callable[[BaseParams], "TranslatableText | str | None"]
+"""Die erklärte Bedingung eines Bausteins zwischen seinen Parametern (:attr:`PartSpec.feasible`)."""
+
+
 @dataclass(frozen=True, slots=True)
 class WallRequirement:
     """Der fachliche Mindestwandvertrag eines Bausteins."""
@@ -387,6 +391,17 @@ class PartSpec:
     """
     changes: tuple[PartChange, ...] = ()
     grip_from_profile: bool = True
+    feasible: Feasibility | None = None
+    """Eine erklärte Bedingung **zwischen** Parametern, die keine Einzelgrenze
+    ausdrücken kann: Gibt den fachlichen Grund zurück, wenn eine Kombination
+    innerhalb der Grenzen keinen Baustein ergibt (eine Verengung, die das Kabel
+    ganz einschließt; ein Fächer, dessen letzte Stufe 90 Grad erreicht), sonst
+    ``None``. Der Baustein wirft an derselben Stelle eine ``ValidationError``
+    mit demselben Grund — und der Bereichstest (§24.3) fährt diese Ecken als
+    **erklärte Ausschlüsse**, nicht als Bruch. Das ist der Vertrag aus dem
+    Gedächtnis „Bausteinbereich ist ein Produktionsvertrag“: bedingte
+    Eigenschaften stehen als Metadaten am Baustein, nicht als Sonderfall im
+    Prüfkern und nicht als stille Kappung im Baustein."""
     """Ob ``grip=0`` das Materialübermaß meint; konstruktive Verengungen nicht."""
     source: str = "shipped"
     """``shipped``, ``user`` oder ``recipe`` — der Katalog weist die Herkunft
@@ -583,6 +598,7 @@ def register_part(
     caveat: TranslatableText | str = "",
     changes: Sequence[PartChange] = (),
     grip_from_profile: bool = True,
+    feasible: Feasibility | None = None,
     source: str = "shipped",
     registry: PartRegistry | None = None,
 ) -> Callable[[PartFn], PartFn]:
@@ -629,6 +645,7 @@ def register_part(
                 caveat=caveat,
                 changes=tuple(changes),
                 grip_from_profile=grip_from_profile,
+                feasible=feasible,
                 source=source,
             )
         )
@@ -662,7 +679,12 @@ def register_part(
 #: Version 13: Das Bolzenscharnier bemisst seine zugesagte Wandstärke außerhalb
 #: des radialen Druckspalts, der kleinste Schwalbenschwanzstift behält einen
 #: druckbaren Querschnitt, und der Standfuß trägt keine innere Ringschulter
-#: mehr (``mechanics.py``, ``mounting.py``, 31.08.2026).
+#: mehr (``mechanics.py``, ``mounting.py``, 31.08.2026). Version 14: Die
+#: Passungsleiter beschriftet ihre Stufen nach der Stufe, nicht nach der
+#: letzten Ziffer des Spiels (``testbodies.py``, 02.09.2026). Version 15:
+#: Automatische Passungswerte lesen das Material des Zielkörpers statt des
+#: Projekts (``MATERIAL_OF_TARGET``), und der Kabelclip misst seine Verengung
+#: am Kabel statt am aufgeweiteten Sitz (``structure.py``, 06.09.2026).
 LIBRARY_VERSION: Final = "15"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie

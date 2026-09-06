@@ -32,7 +32,7 @@ from app.core.geom import pins as pins_module
 from app.core.geom import prepare as prepare_module
 from app.core.geom import texture_ops as texture_module
 from app.core.geom.hollow import erosion_steps, hollow
-from app.core.geom.lattice import _cavity_bounds
+from app.core.geom.lattice import _cavity_mesh
 from app.core.geom.measure import ray_distances
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import orient_for_print, print_transform
@@ -405,7 +405,7 @@ def test_repair_leaves_a_sound_mesh_unchanged(profile: Profile) -> None:
 def test_a_vented_cavity_is_still_a_cavity() -> None:
     """Die Entlüftung verschweißt Innen- und Außenschale zu einer.
 
-    ``_cavity_bounds`` zählte Schalen und fand eine — der Vorschlag lautete
+    ``_cavity_mesh`` zählte Schalen und fand eine — der Vorschlag lautete
     „Erst aushöhlen, dann füllen", also genau das, was der Nutzer gerade getan
     hatte.
     """
@@ -413,7 +413,14 @@ def test_a_vented_cavity_is_still_a_cavity() -> None:
     vented = hollow(cube(standing=True), 3.0, vents=1).mesh
     assert len(vented.raw.split(only_watertight=False)) == 1, "eine einzige Schale"
 
-    assert _cavity_bounds(vented) == pytest.approx(np.asarray(_cavity_bounds(sealed)), abs=0.6)
+    vented_cavity, sealed_cavity = _cavity_mesh(vented), _cavity_mesh(sealed)
+    assert vented_cavity is not None and sealed_cavity is not None
+    assert np.asarray(vented_cavity.bounds.minimum) == pytest.approx(
+        np.asarray(sealed_cavity.bounds.minimum), abs=0.6
+    )
+    assert np.asarray(vented_cavity.bounds.maximum) == pytest.approx(
+        np.asarray(sealed_cavity.bounds.maximum), abs=0.6
+    )
 
 
 def test_a_vented_body_can_be_filled_with_a_lattice(profile: Profile) -> None:
@@ -429,7 +436,7 @@ def test_a_vented_body_can_be_filled_with_a_lattice(profile: Profile) -> None:
 
 def test_a_solid_body_still_has_no_cavity() -> None:
     """Die Gegenprobe: der Vollkörper darf nicht plötzlich einen bekommen."""
-    assert _cavity_bounds(cube()) is None
+    assert _cavity_mesh(cube()) is None
 
 
 # --- C-9: eine Bewegung verlor zwei Felder --------------------------------------

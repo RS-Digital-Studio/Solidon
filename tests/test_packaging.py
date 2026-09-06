@@ -476,50 +476,60 @@ def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
     großen Stapel, ohne dass es auffiel.
 
-    **Gesucht wird seit der Gesamtdurchsicht nicht mehr im Text, sondern im
-    Fixture-Graphen:** `tools/list_windowed_tests.py` nennt jede Datei, die
-    `qt_app` braucht — auch über einen Umweg —, und genau dieses Werkzeug
-    rufen beide CI-Jobs, so wie es lokal `suite-getrennt.sh` tut. Die
-    Textsuche davor erwischte Dateien, die über eine Ansicht *schreiben*, und
-    übersah mittelbare Abhängigkeiten. Geprüft wird die Liste des Werkzeugs
-    gegen die Dateien, die wirklich ein Fenster **bauen**. Erwähnungen zählen
-    nicht: ein Import oder die Lizenzliste bekämen sonst einen eigenen Prozess
-    für nichts.
+    Seit dem 06.09.2026 sucht der Workflow nicht mehr mit einem Textmuster,
+    sondern fragt ``tools/list_windowed_tests.py`` — denselben Fixture-Graphen,
+    aus dem die geteilte Suite ihre Fenstergruppe bildet. Geprüft wird deshalb
+    zweierlei: Beide Stellen des Workflows rufen das Werkzeug, und das Werkzeug
+    nennt jede Datei, die ein Fenster wirklich **baut**. Erwähnungen zählen
+    nicht — ein Docstring oder ein Import bekämen sonst einen eigenen Prozess
+    für nichts; deshalb liest die Gegenprobe Namen, nicht Text.
     """
+    import tokenize
+
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    calls = re.findall(
-        r"windowed=\$\(python tools/list_windowed_tests\.py \| tr '\\n' ' '\)", workflow
-    )
+    calls = re.findall(r"windowed=\$\(python tools/list_windowed_tests\.py", workflow)
     assert len(calls) == 2, (
-        "beide Jobs der CI — Suite und Neueste Versionen — lesen die Fenstergruppe aus "
-        "tools/list_windowed_tests.py; gefunden: " + str(len(calls))
+        "beide Stellen des Workflows bilden die Fenstergruppe über "
+        "tools/list_windowed_tests.py — gefunden: " + str(len(calls))
     )
+    assert "windowed=$(grep" not in workflow, "das alte Textmuster steht noch im Workflow"
 
     listed = subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "list_windowed_tests.py")],
+        [sys.executable, "tools/list_windowed_tests.py"],
         cwd=ROOT,
         capture_output=True,
         text=True,
-        check=True,
         timeout=600,
-    )
-    windowed = {
-        line.strip().replace("\\", "/") for line in listed.stdout.splitlines() if line.strip()
-    }
+        check=True,
+    ).stdout.split()
+    windowed = {Path(entry).name for entry in listed}
     assert windowed, "das Werkzeug nennt keine einzige Fensterdatei"
 
-    builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
-    missed = []
-    for path in sorted((ROOT / "tests").glob("test_*.py")):
-        source = path.read_text(encoding="utf-8")
-        if not builders.search(source):
-            continue
-        if f"tests/{path.name}" not in windowed:
-            missed.append(path.name)
+    builders = {"MainWindow", "Viewport", "SketchPanel", "OverlayHost", "Plotter"}
 
+    def builds_a_window(path: Path) -> bool:
+        previous = None
+        with path.open("rb") as handle:
+            for token in tokenize.tokenize(handle.readline):
+                if (
+                    token.type == tokenize.OP
+                    and token.string == "("
+                    and previous is not None
+                    and previous.type == tokenize.NAME
+                    and previous.string in builders
+                ):
+                    return True
+                previous = token
+        return False
+
+    missed = [
+        path.name
+        for path in sorted((ROOT / "tests").glob("test_*.py"))
+        if builds_a_window(path) and path.name not in windowed
+    ]
     assert not missed, (
         f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
-        "tools/list_windowed_tests.py findet sie nicht — ihr Fenster hängt nicht an qt_app."
+        "tools/list_windowed_tests.py nennt sie nicht."
     )
 
 
@@ -1693,3 +1703,38 @@ def test_the_linux_installer_writes_the_launcher_path_into_the_menu_entry() -> N
     assert 'cp "$HERE/$SHORT.desktop"' not in script, "die Vorlage geht nicht ungeändert ins Menü"
     assert 'Exec="%s" %%f' in script, "der Starter steht mit vollem Pfad im Eintrag"
     assert "LAUNCHER_PATH=$(printf '%s' \"$BIN_DIR/$NAME\"" in script
+
+
+def test_the_minimum_system_versions_on_the_website_match_installer_and_bundle() -> None:
+    """Windows-Build und macOS-Version stehen an drei Orten: Installer, Bundle,
+    sechs Startseiten. Einer wird geändert, zwei vergessen — bis hier ein Test
+    stand (Abnahme des Gesamt-Reviews, 06.09.2026).
+    """
+    installer = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+    build = re.search(r"^MinVersion=10\.0\.(\d+)", installer, re.MULTILINE)
+    assert build is not None, "MinVersion fehlt in solidon3d.iss"
+    # Build → Versionsname, wie Windows ihn nennt; die Startseiten nennen den Namen.
+    releases = {
+        "17763": "1809",
+        "18362": "1903",
+        "18363": "1909",
+        "19041": "2004",
+        "19042": "20H2",
+        "19043": "21H1",
+        "19044": "21H2",
+        "19045": "22H2",
+    }
+    release = releases[build.group(1)]
+    spec = SPEC.read_text(encoding="utf-8")
+    mac = re.search(r'"LSMinimumSystemVersion": "(\d+)(?:\.\d+)?"', spec)
+    assert mac is not None, "LSMinimumSystemVersion fehlt in solidon3d.spec"
+    pages = [ROOT / "website" / "index.html", *sorted((ROOT / "website").glob("*/index.html"))]
+    assert len(pages) == 6, [page.name for page in pages]
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        assert re.search(rf"Windows 10 \([^)]*{release}[^)]*\)", text), (
+            f"{page.relative_to(ROOT)} nennt nicht Windows 10 {release} (Build {build.group(1)})"
+        )
+        assert f"macOS {mac.group(1)}" in text, (
+            f"{page.relative_to(ROOT)} nennt nicht macOS {mac.group(1)}"
+        )

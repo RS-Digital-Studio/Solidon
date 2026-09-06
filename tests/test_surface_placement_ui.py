@@ -189,6 +189,18 @@ def test_return_to_values_preserves_position_without_an_operation(flow: Any) -> 
     assert len(session.project.document.ops) == before
 
 
+def test_escape_forgets_the_target_body(flow: Any) -> None:
+    """Nach Escape bohrt der Dialog wieder, was der Nutzer gewählt hat — nicht den
+    einen Körper, den die Platzierung getroffen hatte (Review 06.09.2026)."""
+    controller, session, _viewport, _dialog = flow
+    controller.start()
+    assert session.wait_for_idle(30_000)
+    _point(controller, session)
+    assert controller.target, "der Treffer hat ein Ziel"
+    controller.back()
+    assert controller.target == "", "Escape gibt das Ziel frei; nur Übernehmen behält es"
+
+
 def test_invalid_surface_cannot_reuse_the_previous_position(flow: Any) -> None:
     controller, session, viewport, _dialog = flow
     before = len(session.project.document.ops)
