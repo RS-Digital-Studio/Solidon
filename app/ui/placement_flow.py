@@ -70,8 +70,9 @@ class _Dimensions(QWidget):
         """Nur die wirkliche Tinte belegen; alles andere gehört dem nativen Renderfenster.
 
         Ein vollflächiges Kind mit WA_NoSystemBackground blitzt hier den alten
-        Qt-Backingstore über GFX und VTK, einschließlich längst verborgener
-        Ladeanzeige. Wie bei den Overlaykarten beschränkt eine Maske die Fläche.
+        Qt-Backingstore über das native Renderfenster, einschließlich längst
+        verborgener Ladeanzeige. Wie bei den Overlaykarten beschränkt eine
+        Maske die Fläche.
         Innerhalb dieser kleinen Maske wird jeder Pixel definiert neu gezeichnet.
         """
         strokes = QPainterPath()

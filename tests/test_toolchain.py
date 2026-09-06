@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -108,6 +109,42 @@ def test_ruff_targets_the_version_that_is_demanded() -> None:
 
     assert configured == f"py{required[0]}{required[1]}", (
         f"ruff zielt auf {configured}, das Projekt verlangt py{required[0]}{required[1]}."
+    )
+
+
+def test_the_workflow_runs_the_interpreter_the_project_demands() -> None:
+    """Jeder CI-Job mit Python fährt die Fassung aus ``requires-python``.
+
+    **Der Wert, der einen Job zwangsläufig rot macht, war der einzige
+    ungewachte.** Die drei Prüfungen darüber halten ``requires-python`` gegen
+    mypy, gegen ruff und gegen den laufenden Interpreter — und keine sah in den
+    Workflow. Als die Untergrenze am 06.09.2026 von 3.13 auf 3.14 stieg, kam
+    mit ihr die ungeklammerte Ausnahmegruppe aus PEP 758 in den Baum: 98
+    Stellen in 52 Dateien, die ein 3.13 nicht einmal **parst**. Ein Job, der
+    dort zurückgeblieben wäre, hätte nicht einen Test verloren, sondern jeden
+    — und zwar in einem Lauf, der nichts über die Änderung aussagt, die ihn
+    ausgelöst hat.
+
+    Geprüft wird die Untergrenze, nicht die Patchfassung: Der Workflow nennt
+    ``3.14.7``, das Projekt verlangt ``>=3.14``. Eine neuere Patchversion ist
+    kein Fehler, eine ältere Nebenversion schon.
+    """
+    workflow = (_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    required = _required_version()
+
+    named = re.findall(r'python-version:\s*"?([0-9]+(?:\.[0-9]+)*)"?', workflow)
+    assert named, "keine python-version im Workflow gefunden — dann prüft dieser Test nichts"
+
+    behind = sorted(
+        {
+            version
+            for version in named
+            if tuple(int(part) for part in version.split(".")[:2]) < required
+        }
+    )
+    assert not behind, (
+        f"Diese CI-Jobs fahren {', '.join(behind)}, das Projekt verlangt aber mindestens "
+        f"{required[0]}.{required[1]}. Ein solcher Job parst den eigenen Quelltext nicht mehr."
     )
 
 
@@ -1937,6 +1974,54 @@ def test_every_film_ends_on_the_closing_card() -> None:
         "Filme, die ohne Schlusskarte enden — ihr Vorschaubild auf der Website "
         "wird dann ein Ausschnitt der Oberfläche:\n" + "\n".join(ohne_karte)
     )
+
+
+def test_every_longform_story_names_a_file_a_title_and_a_way_to_shoot_it() -> None:
+    """Die drei Tutorialfilme sind vollständig beschrieben, bevor einer läuft.
+
+    **Das größte Werkzeug des Tages war das einzige ohne Zusicherung.**
+    ``make_longform_video.py`` schreibt Kundenmaterial — drei Filme und je eine
+    ``.timeline.json``, aus der YouTube seine Kapitel nimmt —, und ein Fehler
+    darin fällt erst auf, wenn jemand das fertige Video ansieht. Ein Lauf
+    dauert Minuten und braucht Qt und ffmpeg; diese Prüfung liest deshalb die
+    Beschreibung, nicht das Ergebnis: drei Einträge, je ein Dateiname, ein
+    Titel und eine aufrufbare Aufnahme.
+    """
+    from tools.make_longform_video import STORIES
+
+    assert STORIES, "keine Filme beschrieben — sonst prüft dieser Test nichts"
+    unvollstaendig = [
+        f"{name}: {eintrag}"
+        for name, eintrag in STORIES.items()
+        if not (
+            len(eintrag) == 3
+            and str(eintrag[0]).endswith(".mp4")
+            and str(eintrag[1]).strip()
+            and callable(eintrag[2])
+        )
+    ]
+    assert not unvollstaendig, (
+        "Diese Filme sind unvollständig beschrieben — Dateiname, Titel und "
+        "Aufnahme gehören zusammen: " + " | ".join(unvollstaendig)
+    )
+
+    namen = [str(eintrag[0]) for eintrag in STORIES.values()]
+    assert len(set(namen)) == len(namen), f"zwei Filme schreiben in dieselbe Datei: {namen}"
+
+
+def test_a_longform_film_is_long_enough_to_be_one() -> None:
+    """Die Untergrenze ist die Aussage des Werkzeugs über sich selbst.
+
+    „Longform“ heißt auf YouTube: kein Kurzvideo. Fiele die Grenze unter eine
+    Minute, hieße das Werkzeug weiter so und träfe seinen Zweck nicht mehr —
+    und niemand sähe es an der Datei, sondern erst am Kanal.
+    """
+    from tools.make_longform_video import FRAME_SIZE, MINIMUM_SECONDS
+
+    assert MINIMUM_SECONDS >= 180.0, (
+        f"ein Tutorialfilm soll über drei Minuten laufen, die Grenze steht auf {MINIMUM_SECONDS} s"
+    )
+    assert FRAME_SIZE == (1920, 1080), f"die Filme sind 1080p, hier steht {FRAME_SIZE}"
 
 
 def test_the_feature_film_proves_the_same_identity_in_both_languages() -> None:

@@ -1475,7 +1475,7 @@ def test_the_bed_surface_can_be_seen_through_from_below(
     Schatten auf nichts —, aber nur von oben: ``cull_backfaces`` wirft ihre
     Rückseite weg. ``opacity`` wäre die falsche Antwort gewesen — eine
     durchscheinende Platte nähme dem Schatten seinen Grund. Dass das Bild
-    stimmt, misst ``tests/test_render_vtk.py``; hier steht, dass die
+    stimmt, misst ``tests/test_render_contract.py``; hier steht, dass die
     Eigenschaft gesetzt **wird**.
     """
     from app.ui.viewport import Viewport

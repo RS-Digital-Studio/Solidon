@@ -91,16 +91,17 @@ agent = ["keyring>=25.0"]
 # in einem Satz, und alles andere bleibt unberührt. Die Anbindung ist
 # Apache-2.0, der Kern darunter LGPL-2.1 mit der OCCT-Linking-Ausnahme, also
 # wird er wie PySide6 als dynamisch gelinkte Bibliothek benutzt (§36). „novtk",
-# weil VTK schon für den zweiten Renderer da ist; zwei Kopien in einem
+# weil VTK schon als Geometriebibliothek der Bereichsprüfung da ist; zwei Kopien in einem
 # Prozess sind eine zu viel.
 brep = ["cadquery-ocp-novtk>=8.0.1"]
 dev = [
   "pytest>=8.0",
   # Jeder Test in einem eigenen Fork (`--forked`, nur POSIX). Gebraucht in
-  # der CI für die Dateien, die Fenster bauen: ein VTK-Fenster darf weder
-  # sterben noch bleiben — zerstören nimmt VTKs Zustand mit, ansammeln
-  # füllt den Speicher des Runners. Ein Fork löst beides, weil er mit dem
-  # Test endet. MIT, reine Testabhängigkeit.
+  # der CI für die Dateien, die Fenster bauen: ein natives Renderfenster
+  # darf weder sterben noch bleiben — zerstören nimmt den Grafikzustand
+  # mit, ansammeln füllt den Speicher des Runners. Ein Fork löst beides,
+  # weil er mit dem Test endet. Der Anlass war VTK; mit pygfx über wgpu
+  # gilt dasselbe. MIT, reine Testabhängigkeit.
   "pytest-forked>=1.6",
   # Verteilt den Rest der Suite auf mehrere Prozesse (`-n`). Gebraucht von
   # `.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, das

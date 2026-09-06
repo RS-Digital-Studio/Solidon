@@ -635,7 +635,8 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
     address = url
     try:
         # Derselbe Absender wie beim Paketholen weiter unten: Ohne ihn ging
-        # die Anfrage als ``Python-urllib/3.13`` hinaus — manche CDNs sperren
+        # die Anfrage als ``Python-urllib/3.13`` hinaus (die Fassung von damals)
+        # — manche CDNs sperren
         # das, die Prüfung scheiterte still, und der Datenschutztext
         # verspricht ein Programm-Kennzeichen statt eines Bibliotheksnamens
         # (Gesamtreview L-6).

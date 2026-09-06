@@ -41,4 +41,4 @@ weil sie über dem Dokument stehen statt in ihm.
 ```
 
 Die Kommandozeile ist der schnellste Weg, eine Operation ohne Fenster
-auszuprobieren — und der einzige, der in einem Testlauf ohne VTK durchkommt.
+auszuprobieren — und der einzige, der in einem Testlauf ohne Fenster durchkommt.

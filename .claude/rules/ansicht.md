@@ -1,6 +1,10 @@
 ---
 paths:
   - "app/ui/viewport.py"
+  # Das Renderer-Paket ist am 05./06.09.2026 entstanden und fiel bis dahin
+  # aus dieser Liste: Wer am Renderer arbeitete, bekam die Ansichtsregeln
+  # nicht zu sehen, obwohl sie über seine Dateien sprechen.
+  - "app/ui/render/**/*.py"
   - "app/ui/qt_platform.py"
   - "app/ui/overlay.py"
   - "app/ui/cursors.py"
