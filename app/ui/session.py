@@ -572,7 +572,8 @@ class Session(QObject):
         self._selection: tuple[str, str] | None = None
         self._pending_views: tuple[tuple[str, bytes], ...] = ()
         """Die Ansichten des nächsten Zuges (§23) — im Hauptthread gerendert,
-        vom Arbeiter nur gelesen; VTK gehört nie in einen zweiten Thread."""
+        vom Arbeiter nur gelesen; der Renderer gehört nie in einen zweiten
+        Thread."""
         self._accepted: dict[str, str | None] = {}
         self._rerun_pending = False
         self._dirty = False
@@ -1958,11 +1959,11 @@ class Session(QObject):
         if self._agent is not None and self._agent.isRunning():
             return
         self._selection = selection
-        # §23: die Ansichten entstehen HIER, im Hauptthread — VTK ist nicht
-        # threadsicher, und ein zweiter OpenGL-Kontext im Arbeiter neben dem
-        # lebenden Viewport ist genau die Familie von Abstürzen, die dieses
-        # Projekt schon zweimal gejagt hat. Zwei kleine Bilder kosten deutlich
-        # unter 200 ms (§2.8); scheitert das Rendern, läuft der Zug ohne
+        # §23: die Ansichten entstehen HIER, im Hauptthread — der Renderer ist
+        # nicht threadsicher, und ein zweiter Grafikkontext im Arbeiter neben
+        # dem lebenden Viewport ist genau die Familie von Abstürzen, die dieses
+        # Projekt unter VTK schon zweimal gejagt hat. Zwei kleine Bilder kosten
+        # deutlich unter 200 ms (§2.8); scheitert das Rendern, läuft der Zug ohne
         # Bilder statt gar nicht (Leitprinzip 8).
         self._pending_views = ()
         if backend.supports_images and self.last_result is not None:

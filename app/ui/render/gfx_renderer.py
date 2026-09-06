@@ -6,7 +6,9 @@ Kamera ist eine ``PerspectiveCamera`` (mit ``fov = 0`` orthografisch), das
 Bild entsteht über ``WgpuRenderer`` — auf einer Qt-Leinwand
 (``rendercanvas.qt.QRenderWidget``) oder ohne Fenster in einen Puffer.
 
-Was hier anders gelöst ist als bei VTK, weil pygfx es anders kann:
+Was hier so gelöst ist, wie pygfx es kann (bis zum 06.09.2026 stand daneben
+ein VTK-Renderer hinter demselben Vertrag; die Zahlen des Lichtsatzes und
+der Kamera stammen von dort und sind gegen ihn gemessen):
 
 * **Gepickt wird aus dem Bild.** Ein eigener Durchgang enthält nur Pickbares;
   unveränderte Szene und Kamera verwenden ihn erneut. Die Treffertoleranz
@@ -96,6 +98,7 @@ OVERLAY_QUEUE = 4000
 
 #: Abstand der Achsenkreuz-Kamera vom Ursprung, in Pfeillängen.
 AXES_CAMERA_DISTANCE = 4.2
+AXES_LABEL_SIZE = 12.0
 
 #: Wie viele verborgene Text-Feld-Paare eine Beschriftung für später behält.
 #:

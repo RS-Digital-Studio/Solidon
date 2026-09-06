@@ -38,8 +38,8 @@ Das Modul zerfällt in zwei Teile, wie das Konzept es verlangt:
   :func:`default_reader` entscheidet je Rechner.
 * **Abbilden** — :func:`camera_step`. Eine reine Funktion: sechs Achsen in
   [-1, 1], die Kamerastellung, die Zeitspanne und zwei Einstellungen hinein,
-  eine neue Kamerastellung heraus. Sie kennt kein Qt, kein VTK und kein HID
-  und ist damit offscreen vollständig prüfbar — hier sitzt jeder künftige
+  eine neue Kamerastellung heraus. Sie kennt kein Qt, keinen Renderer und
+  kein HID und ist damit offscreen vollständig prüfbar — hier sitzt jeder künftige
   Fehler (Achsen, Vorzeichen, Bezugssystem).
 
 Die Bedienung folgt dem, was der Hersteller *Objektmodus* nennt und was in
@@ -188,7 +188,8 @@ PARALLEL_REACH: Final = 1.0 / math.tan(math.radians(15.0))
 
 @dataclass(frozen=True, slots=True)
 class CameraPose:
-    """Eine Kamerastellung, so wie VTK sie führt: Standort, Blickpunkt, Oben.
+    """Eine Kamerastellung, so wie der Vertrag der Ansicht sie führt: Standort,
+    Blickpunkt, Oben.
 
     ``parallel_scale`` ist die halbe sichtbare Höhe, wenn die Projektion
     parallel ist — dann zoomt nur sie, und der Standort bleibt, wo er ist.
@@ -373,8 +374,9 @@ def camera_step(
         if _length(right) > 0.0:
             break
         right = _unit(_cross(forward, helper))
-    # VTK verlangt kein senkrechtes „Oben"; gerechnet wird mit dem senkrechten,
-    # sonst hängt jede Drehung davon ab, wie schief der Wert gerade steht.
+    # Die Stellung verlangt kein senkrechtes „Oben"; gerechnet wird mit dem
+    # senkrechten, sonst hängt jede Drehung davon ab, wie schief der Wert
+    # gerade steht.
     up = _unit(_cross(right, forward))
 
     changed = False

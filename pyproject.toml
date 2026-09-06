@@ -64,18 +64,21 @@ geom = [
   "fast-simplification>=0.1.9",
   # SVG-Pfade hinter dem Zeichnungsimport (§25). MIT; DXF liest trimesh selbst.
   "svg.path>=6.3",
+  # Kopflose Geometrie der Bereichsprüfung der Bausteine (§24):
+  # ``vtkStaticCellLocator`` und ``vtkCollisionDetectionFilter`` in
+  # ``knowledge/parts/range_check.py``. Kein Rendering — der VTK-Renderer ist
+  # seit dem 06.09.2026 ausgebaut; die eigene Rechnung dafür ist ein
+  # Registerpunkt. BSD-3.
+  "vtk>=9.3",
 ]
 # Desktop-Hülle. PySide6 ist LGPL und bleibt dynamisch gelinkt (§36).
 ui = [
   "PySide6>=6.7",
   # Der Renderer hinter der Ansicht (§18): pygfx zeichnet über wgpu (Vulkan,
   # Metal, DX12) und bringt wgpu, rendercanvas und pylinalg mit — alle vier
-  # BSD-2. Gemessen gegen VTK direkt, Entscheidung Robert 06.09.2026: pygfx.
+  # BSD-2. Gemessen gegen VTK direkt und gewählt (Robert, 06.09.2026); der
+  # VTK-Renderer ist am selben Tag ausgebaut.
   "pygfx>=0.17",
-  # Der zweite Renderer hinter demselben Vertrag, VTK direkt und ohne die
-  # PyVista-Hülle (`SOLIDON_RENDERER=vtk`); dazu die Bereichsprüfung der
-  # Bausteine und die Plattformwahl. BSD-3.
-  "vtk>=9.3",
   # Die 3D-Maus (SpaceMouse) direkt über HID, ohne Herstellertreiber (§2.9,
   # Konzept 3D-Maus). Dreifach lizenziert; gewählt ist BSD-3.
   "hidapi>=0.14",

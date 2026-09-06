@@ -451,7 +451,7 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
 def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
     """Die CI gibt jeder Fensterdatei einen eigenen Prozess — sie muss sie finden.
 
-    Der Absturz auf den Linux-Runnern hängt an der Zahl der VTK-Fenster, die ein
+    Der Absturz auf den Linux-Runnern hing an der Zahl der Renderfenster, die ein
     Prozess nacheinander aufbaut; deshalb laufen die Fensterdateien einzeln. Die
     Liste wird gesucht und nicht gepflegt, und genau daran ist sie
     zurückgeblieben: Nach `MainWindow` allein fehlten `test_cursors.py` (acht
@@ -573,11 +573,13 @@ def test_every_platform_can_do_the_same_things() -> None:
         "ohne Netz kann der Kunde weder eine Rückmeldung senden noch nach "
         "Aktualisierungen sehen — auf Windows und macOS kann er beides"
     )
-    # Der Viewport rechnet mit OpenGL, und der Schlüssel des Agenten liegt im
-    # Schlüsselbund — beides braucht seine Zeile. VTK braucht den X11-Display;
-    # ``fallback-x11`` ließe ihn in einer Wayland-Sitzung weg und macht den
-    # Viewport nach dem Laden eines Modells leer. Qt läuft mit ihm über Xwayland,
-    # damit nicht zwei Fenstersysteme im selben Fenster gegeneinander arbeiten.
+    # Der Viewport rechnet auf der Grafikkarte (wgpu über ``dri``), und der
+    # Schlüssel des Agenten liegt im Schlüsselbund — beides braucht seine
+    # Zeile. Die Ansicht braucht ein X11-Fenster: Der wgpu-Fensterweg ist nur
+    # dort geprüft, und mit dem früheren VTK-Renderer ließ ``fallback-x11`` den
+    # Display in einer Wayland-Sitzung weg und machte den Viewport nach dem
+    # Laden eines Modells leer. Qt läuft über Xwayland, damit nicht zwei
+    # Fenstersysteme im selben Fenster gegeneinander arbeiten.
     assert "--device=dri" in manifest
     assert "--socket=x11" in manifest
     assert "--socket=wayland" not in manifest

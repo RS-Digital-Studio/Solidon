@@ -489,7 +489,7 @@ def take_transformation() -> tuple[Path, Path]:
     verlässt. Transformation ist die überzeugendste Bildform für „aus kaputt
     wird druckbar", und dieses Paar zeigt sie ohne ein Wort.
 
-    **Ohne Fenster, ohne Qt, ohne VTK** — als einziges Motiv dieser Datei.
+    **Ohne Fenster, ohne Qt, ohne Renderer** — als einziges Motiv dieser Datei.
     ``drawing.project`` zeichnet das Netz als SVG, dieselbe Projektion, aus der
     auch die Vorschaubilder der Bausteine entstehen. Damit hängt das Bild an
     keiner Bildschirmgröße, keiner Schriftmetrik und keiner Betriebslage; es

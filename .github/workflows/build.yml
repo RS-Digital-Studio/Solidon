@@ -142,17 +142,18 @@ jobs:
         # also an keinem Test.
         #
         # Was reparierbar war, ist repariert (`tests/conftest.py`: die Sitzung
-        # ruft nicht mehr in weggeräumte Widgets). Der Rest ist VTK: es will
-        # einen GL-Kontext, und Qts Offscreen-Plattform gibt ihm keinen — auf
-        # einem Runner ohne Anzeige rechnet es sich einen aus Software zurecht,
-        # bis eine Grenze reißt. Xvfb ist die Anzeige, die es sucht; es ist
-        # zugleich der Weg, den pyvista selbst für CI empfiehlt.
+        # ruft nicht mehr in weggeräumte Widgets). Der Rest war VTK: es wollte
+        # einen GL-Kontext, und Qts Offscreen-Plattform gab ihm keinen — auf
+        # einem Runner ohne Anzeige rechnete es sich einen aus Software
+        # zurecht, bis eine Grenze riss. Seit dem 06.09.2026 zeichnet pygfx,
+        # und offscreen entsteht gar kein Renderer; Xvfb bleibt, weil Qt auf
+        # Linux unter xcb einen X-Server braucht.
         #
         # `QT_QPA_PLATFORM` bleibt ungesetzt: unter Xvfb läuft Qt normal, und
         # `tests/conftest.py` setzt offscreen nur, wenn nichts anderes dasteht.
         #
         # **Und je Fensterdatei ein eigener Prozess.** Xvfb allein hat den
-        # Absturz nur nach vorn geholt: er hängt an der Zahl der VTK-Fenster,
+        # Absturz nur nach vorn geholt: er hing an der Zahl der Renderfenster,
         # die ein Prozess nacheinander aufbaut, und die Suite baut siebenhundert.
         # Die Liste wird nicht gepflegt, sondern gesucht — wer eine neue
         # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
@@ -161,7 +162,7 @@ jobs:
         # **Gesucht wird nach dem Aufbau, nicht nach der Erwähnung.** Nach
         # `MainWindow` allein fehlten zwei Dateien, die einen `Viewport` bauen,
         # ohne das Fenster zu nennen: `tests/test_cursors.py` mit acht Aufbauten
-        # und `tests/test_plates.py` mit einem. Neun VTK-Fenster mehr im großen
+        # und `tests/test_plates.py` mit einem. Neun Fenster mehr im großen
         # Stapel, ohne dass es auffiel — bei einem Absturz, der genau an dieser
         # Zahl hängt.
         #
@@ -192,18 +193,11 @@ jobs:
           # offscreen stehen. Hier stand „xcb" für alle drei — eine Plattform,
           # die es außerhalb von Linux nicht gibt.
           QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'xcb' || 'offscreen' }}
-          # **Software-Rendering, ausdrücklich.** Kein Runner hat eine
-          # Grafikkarte; VTK sucht trotzdem einen echten GL-Kontext und
-          # bekommt einen halb emulierten. Dabei stirbt es mit SIGSEGV — auf
-          # Linux im geforkten Test, auf Windows ohne Fork, in beiden Fällen
-          # wandernd und lokal nie: `test_chat_ui.py` läuft hier in sieben
-          # Sekunden mit fünfundzwanzig grünen Tests durch.
-          #
-          # Mesa ausdrücklich zu verlangen ist der Weg, den pyvista für CI
-          # nennt, und er nimmt die Zufälligkeit heraus: langsamer, aber
-          # derselbe Kontext auf jedem Lauf.
-          LIBGL_ALWAYS_SOFTWARE: 1
-          GALLIUM_DRIVER: llvmpipe
+          # Kein Runner hat eine Grafikkarte. Mit VTK brauchte das ein
+          # ausdrückliches Software-GL (Mesa); seit pygfx zeichnet
+          # (06.09.2026), fragt die Ansicht vor dem Aufbau nach einem
+          # wgpu-Adapter und bleibt ohne ihn leer — die Tests laufen dann
+          # ohne Renderer, wie lokal offscreen.
         run: |
           set -e
           windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
@@ -227,7 +221,7 @@ jobs:
           # Laufzeit), findet die Menge nicht mehr, an der sie reißt.
 
           # **Ein Absturz wird einmal wiederholt.** Nicht jeder Fehlschlag: nur
-          # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK stirbt auf
+          # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK starb auf
           # den Runnern gelegentlich mit SIGSEGV — am 20.08.2026 einmal in
           # `test_header.py` unter Linux (fünf andere Tests derselben Datei
           # grün, lokal dreimal grün) und einmal im Dateilauf unter Windows.
@@ -279,13 +273,18 @@ jobs:
           # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
           # Entscheidung mit Datum: 20.08.2026.
           #
-          # Kein Runner hat eine Grafikkarte. VTK sucht trotzdem einen echten
-          # GL-Kontext, bekommt einen emulierten und stirbt darin mit SIGSEGV —
+          # Kein Runner hat eine Grafikkarte. VTK suchte trotzdem einen echten
+          # GL-Kontext, bekam einen emulierten und starb darin mit SIGSEGV —
           # auf Linux im geforkten Test, auf Windows ohne Fork, mit und ohne
           # LIBGL_ALWAYS_SOFTWARE, mal in `test_header`, mal in `test_chat_ui`,
-          # mal in `pyvistaqt/plotting.py` selbst. Der Absturz wandert, hängt an
-          # keinem Test und ist lokal nicht zu sehen: dieselben Dateien laufen
+          # mal in `pyvistaqt/plotting.py` selbst. Der Absturz wanderte, hing an
+          # keinem Test und war lokal nicht zu sehen: dieselben Dateien laufen
           # auf einer Maschine mit GL in Sekunden grün durch, 4021 Tests.
+          #
+          # **Seit dem 06.09.2026 zeichnet pygfx, und VTK ist als Renderer
+          # ausgebaut.** Offscreen baut die Ansicht keinen Renderer mehr; der
+          # Grund für die Auslassung ist damit weg, die Auslassung selbst
+          # bleibt, bis ein Probelauf in der CI sie aufhebt (Registerpunkt).
           #
           # Was das anrichtete, war unverhältnismäßig: Der Paketier-Job hängt an
           # dieser Suite, also verhinderte ein Fremdcode-Absturz in einer
@@ -296,9 +295,9 @@ jobs:
           # Website, Paketierung —, und die Fenster prüft, wer einen Bildschirm
           # hat. **Das ist eine Lücke und keine Lösung**: Wer eine Ansicht
           # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
-          # Sie schließt sich, sobald VTK dort läuft oder die Runner GL
-          # bekommen; bis dahin steht sie in ROADMAP.md.
-          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+          # Sie schließt sich mit einem Probelauf ohne diese Auslassung; bis
+          # dahin steht sie in ROADMAP.md.
+          echo "::warning::Fensterdateien übersprungen (Probelauf nach dem VTK-Ausbau steht aus): $windowed"
 
   package:
     name: Paket (${{ matrix.os }})
@@ -1298,7 +1297,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         # **Dieselbe Auslassung wie in der Suite**, und aus demselben Grund:
-        # VTK stirbt auf einem Runner ohne Grafikkarte mit SIGSEGV. Ohne sie
+        # VTK starb auf einem Runner ohne Grafikkarte mit SIGSEGV. Ohne sie
         # war dieser Job am 20.08.2026 rot, obwohl er nichts gefunden hatte —
         # der `union-attr`-Fund davor war echt und ist behoben, dahinter kam
         # der Absturz zum Vorschein.
@@ -1311,7 +1310,7 @@ jobs:
           windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
-          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+          echo "::warning::Fensterdateien übersprungen (Probelauf nach dem VTK-Ausbau steht aus): $windowed"
           # Wie in der Suite oben: ohne die Bausteinbereichstests, sonst steht
           # auch dieser Lauf Stunden bei 49 Prozent.
           # Dieselbe Trennung wie im Suite-Job darüber: die Dialogdatei in

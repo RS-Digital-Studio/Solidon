@@ -60,8 +60,9 @@ einen halben Schritt neben dem Zeiger — bei 2 mm Raster elf Bildpunkte, bei
 10 mm sechzig. Der Canvas zeigte dafür seit je ein Kreuz; seit die Zeichnung
 im Viewport liegt (§30.1, P4), sieht das niemand mehr. Gemeldet als „die
 Klicks sind wo anders als ich klick", und es war ausdrücklich **kein**
-Koordinatenfehler: `devicePixelRatio` ist 1.0, Qt- und VTK-Größe des
-Interactors stimmen überein, der Ereignisfilter sitzt auf demselben Widget.
+Koordinatenfehler: `devicePixelRatio` war 1.0, Qt- und Renderergröße des
+Fensters (damals VTKs Interactor) stimmten überein, der Ereignisfilter saß auf
+demselben Widget.
 
 Drei Dinge daran, alle drei gemessen:
 
@@ -144,22 +145,24 @@ Kante, und sie fehlte: Feld → Bild läuft über `sketchChanged`, Bild → Feld
 ohne dass irgendwer neu zeichnete. Das Raster zeigte die Weite vom Betreten,
 und erst der nächste Strich ließ es springen (gemeldet von Robert am
 26.08.2026: „die Gitterlinien sollten genau das Raster sein"). Gesendet wird
-am **Ende** einer Bewegung — `EndInteractionEvent` für Dreh- und Schiebezug,
-der Radzoom und `show_span_on_plane` melden selbst, weil sie kein
-Interactor-Ereignis auslösen. Ein Neuzeichnen kostet gemessen 7,8 ms; wer
+am **Ende** einer Bewegung — vom Zugende des Navigators (`on_end` in
+`_weak_callbacks`) für Dreh-, Kipp- und Schiebezug; der Radzoom, die
+Kameravorgaben, die 3D-Maus (`settle_camera`) und `show_span_on_plane` melden
+selbst, weil sie keinen Zug haben. Ein
+Neuzeichnen kostet gemessen 7,8 ms; wer
 hier ein Ereignis je Mausbewegung sendet statt je Zug, bezahlt es im
 Qt-Hauptthread. `_pinned_step` gilt dabei unverändert: Die Kamera-Kante ruft
 `_redraw_sketch`, und dort gewinnt eine eingetippte Weite wie überall.
 
 **Das Rad war orthografisch tot, und im Skizzenmodus ist orthografisch
-immer** (`apply_wheel_zoom` in `viewport.py`). `vtkCamera.Dolly` teilt nur
-die Distanz — in der Parallelprojektion bestimmt `parallel_scale` die
-Bildgröße, und die Position ist ihr gleichgültig: acht Radschritte, Bild
-byteweise unverändert (gemessen 26.08.2026, am echten Fenster). VTKs eigener
-Trackball-Dolly (rechte Taste im CAD-Schema) trägt die Fallunterscheidung
-intern — nur der direkte `Dolly`-Aufruf trug sie nicht. Wer an der Kamera
-zoomt, geht durch `apply_wheel_zoom`; `tests/test_viewport_decisions.py`
-prüft beide Projektionen gegen die echte `vtkCamera`.
+immer** (`apply_wheel_zoom` in `viewport.py`). Ein Dolly teilt nur die
+Distanz — in der Parallelprojektion bestimmt `parallel_scale` die Bildgröße,
+und die Position ist ihr gleichgültig: acht Radschritte, Bild byteweise
+unverändert (gemessen 26.08.2026 unter VTK, am echten Fenster, wo der
+direkte `Dolly`-Aufruf die Fallunterscheidung nicht trug, die der Trackball
+intern hatte). Wer an der Kamera zoomt, geht durch `apply_wheel_zoom`, und
+das unterscheidet die beiden Projektionen; `tests/test_viewport_decisions.py`
+prüft beide.
 
 **Und die Kamera braucht dafür eine Untergrenze.** In einer leeren Szene hat
 `reset_camera` nie stattgefunden; die Startkamera stand 1,62 Einheiten vor dem
@@ -181,9 +184,10 @@ die Zeile darunter „Draufsicht (XY)" meldete.
 Zwei Dinge hängen daran. Beim Verlassen wird auf den Wert des Nutzers
 zurückgestellt und nicht auf „perspektivisch" — wer orthografisch arbeitet,
 hat das gewählt. Und `view_on_plane` rechnet `parallel_scale` aus der
-Kameradistanz (`_fit_parallel_scale`): VTK führt für beide Projektionen
-getrennte Größen, und wer umschaltet, ohne die eine aus der anderen zu
-rechnen, landet auf dem Startwert 1,0 — ein sichtbarer Ausschnitt von zwei
+Kameradistanz (`_fit_parallel_scale`): Der Vertrag führt für beide
+Projektionen getrennte Größen (`parallel_scale` neben dem Abstand), und wer
+umschaltet, ohne die eine aus der anderen zu rechnen, landet auf einem
+Startwert — unter VTK war es 1,0, ein sichtbarer Ausschnitt von zwei
 Millimetern.
 
 **Die Ebene ist eine Ansicht, und sie steht im Bild.** Benannt wird sie danach,

@@ -66,8 +66,9 @@ bevor es jemand wusste:
 
 `app.py` (Einstiegspunkt, §38) · `qt_platform.py` (welche Qt-Plattform die
 3D-Ansicht braucht — entschieden vor der `QGuiApplication`, ohne Qt-Import;
-Qt 6 nähme in einer Wayland-Sitzung sonst Wayland, und dort hat VTK kein
-Fenster) · `main_window.py` (**rund 8 900 Zeilen** — das
+Qt 6 nähme in einer Wayland-Sitzung sonst Wayland, und der wgpu-Fensterweg ist
+nur unter X11 und Xwayland geprüft — nativer Wayland-Betrieb von rendercanvas
+ist ein offener Punkt) · `main_window.py` (**rund 8 900 Zeilen** — das
 Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
 `start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py`
 
@@ -78,9 +79,9 @@ die ihr überwachtes Objekt überleben: `stop_watching_the_dying`)
 
 **Ansicht**
 
-`viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `render/` (die Renderer
-hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, VTK direkt und
-pygfx über wgpu, die Wahl in `choice.py`, Kameraführung, Formen,
+`viewport.py` (**rund 8 200 Zeilen** — §18, §2.9) · `render/` (der Renderer
+hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, pygfx über wgpu
+in `gfx_renderer.py`, gebaut über `factory.py`, Kameraführung, Formen,
 Bewegungsgriff) · `overlay.py` (Zonen über der
 Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
@@ -343,6 +344,6 @@ selbst. Zwei Fallen, beide gemessen:
 - **Gesetzt heißt nicht gezeigt.** `QMenu` verschluckt Tooltips; ein Test über
   den Wert eines Hinweises sagt nichts über seine Sichtbarkeit.
 
-Die Suite baut über siebenhundert VTK-Fenster nacheinander auf und reißt am
-Stück ab. Fensterdateien werden **je Prozess einzeln** gefahren — siehe
-`CLAUDE.md` im Wurzelverzeichnis.
+Die Suite baut über siebenhundert Fenster mit Ansicht nacheinander auf und
+reißt am Stück ab. Fensterdateien werden **je Prozess einzeln** gefahren —
+siehe `CLAUDE.md` im Wurzelverzeichnis.

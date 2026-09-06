@@ -2918,48 +2918,6 @@ def test_every_list_in_the_bottom_bars_knows_that(qt_app: QApplication) -> None:
     )
 
 
-def test_a_click_in_the_middle_of_a_face_has_to_hit_something() -> None:
-    """Warum der Viewport eine Zelle pickt und keinen Punkt (§18.5).
-
-    Ein ``vtkPointPicker`` trifft **Eckpunkte**. Ein Würfel hat acht davon, und
-    ein Klick mitten auf seine Fläche fand nichts: Auswählen, Kontextmenü am
-    Merkmal, Messen und Bemalen taten in der laufenden Anwendung nichts,
-    während Rad und Rechtsziehen die Kamera bewegten. Die Verdrahtung war seit
-    ihrer Reparatur richtig — das Werkzeug nicht.
-
-    Geprüft wird an einem eigenen Renderer ohne Fenster und nicht am Viewport:
-    der baut ohne Bildschirm keinen Renderer, und ein Test, der sich selbst
-    überspringt, prüft nie etwas.
-    """
-    from vtkmodules.vtkRenderingCore import vtkCellPicker, vtkPointPicker
-
-    from app.ui.render import shapes
-    from app.ui.render.api import CameraPose, SurfaceStyle
-    from app.ui.render.vtk_renderer import VtkRenderer
-    from app.ui.viewport import PICK_TOLERANCE
-
-    view = VtkRenderer(offscreen=True, size=(400, 400))
-    try:
-        vertices, faces = shapes.cube((0.0, 0.0, 0.0), 20.0)
-        view.add_surface(vertices, faces, name="cube", style=SurfaceStyle())
-        view.set_camera_pose(CameraPose((0.0, 0.0, 100.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0)))
-        view.reset_camera((-10.0, 10.0, -10.0, 10.0, -10.0, 10.0))
-        view.render()
-        middle = (200.0, 200.0)  # die Bildmitte, und dort liegt die Deckfläche
-
-        points = vtkPointPicker()
-        cells = vtkCellPicker()
-        cells.SetTolerance(PICK_TOLERANCE)
-
-        hit_point = points.Pick(middle[0], middle[1], 0.0, view.renderer)
-        hit_cell = cells.Pick(middle[0], middle[1], 0.0, view.renderer)
-    finally:
-        view.close()
-
-    assert not hit_point, "genau darum ging nichts: mitten auf der Fläche liegt kein Eckpunkt"
-    assert hit_cell, "das Dreieck darunter gibt es, und darauf zeigt der Nutzer"
-
-
 def test_a_click_on_a_feature_selects_its_body_too(window: MainWindow) -> None:
     """Sonst tut der erste Klick nichts (§18.5).
 

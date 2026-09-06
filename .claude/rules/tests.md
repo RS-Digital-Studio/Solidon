@@ -494,7 +494,7 @@ py-spy dump --pid 60560 --native
 ```
 
 `--native` ist der Teil, der zählt: Ohne ihn endet der Stapel an der
-Python-Grenze, und genau dahinter liegt die Frage — in Qt, in VTK, im Warten
+Python-Grenze, und genau dahinter liegt die Frage — in Qt, in wgpu, im Warten
 auf ein Ereignis, das nicht kommt.
 
 **Es liegt in der Nutzer-Umgebung und nicht in der `.venv`**

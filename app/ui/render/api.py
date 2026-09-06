@@ -2,8 +2,9 @@
 
 Der Viewport beschreibt, **was** im Bild steht — Körper, Kanten, Marken,
 Beschriftungen, Kamera, Zeiger —, ein Renderer entscheidet, **wie** es auf den
-Schirm kommt. Zwei Renderer stehen dahinter: ``vtk_renderer`` zeichnet mit
-VTK direkt (ohne die PyVista-Hülle), ``gfx_renderer`` mit pygfx über wgpu.
+Schirm kommt. Dahinter steht ``gfx_renderer`` (pygfx über wgpu); bis zum
+06.09.2026 zeichnete daneben ``vtk_renderer`` mit VTK direkt, und dass beide
+denselben Vertrag erfüllten, hat ihn so knapp gemacht, wie er ist.
 Der Viewport kennt nur diese Datei; was hier nicht steht, gibt es für ihn
 nicht — und was ein Renderer nicht kann, ist ein Loch in ihm, kein Sonderweg
 im Viewport (Entscheidung Robert, 05.09.2026: beide bauen, beide messen).
@@ -11,8 +12,8 @@ im Viewport (Entscheidung Robert, 05.09.2026: beide bauen, beide messen).
 Drei Festlegungen, die beide Renderer teilen:
 
 * **Bildpunkte zählen wie Qt**: Ursprung oben links, y nach unten, in den
-  Gerätepixeln des Widgets. VTK zählt von unten; das rechnet der
-  VTK-Renderer an seiner Grenze um, damit der Viewport nicht mehr an
+  Gerätepixeln des Widgets. pygfx zählt in logischen Bildpunkten; das
+  rechnet der Renderer an seiner Grenze um, damit der Viewport nicht an
   drei Stellen spiegeln muss.
 * **Farben sind Hexwerte** (``#rrggbb``), Deckkraft eine Zahl von 0 bis 1.
   Der Kern liefert Slotfarben als Tripel; :func:`hex_of` bringt sie hierher.

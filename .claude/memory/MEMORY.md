@@ -28,7 +28,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 
 - [Alexander Schneider](alexander-schneider-kunde-und-mac-tester.md) · [Ralph W. Dietrich](ralph-dietrich-mac-kunde-3d-maus.md) — SKÅDIS-Kunde; Mac-Zahntechniker (3D-Maus); Mac-Berichte stehen aus.
 - [Vorstufe vor dem Slicer](solidon-ist-die-vorstufe-vor-dem-slicer.md) · [Technische Produktreife](technische-produktreife-konzept.md) · [Firmennutzung](marktwert-zielgruppe-und-firmenvalidierung.md) — Maker, Einmalkauf, ehrliche Übergabe.
-- [Viewport: zwei Renderer messen](viewport-zwei-renderer-messen.md) — PyVista fällt; **GFX (pygfx) gewählt** (Robert, 06.09.2026), VTK bleibt zweiter.
+- [Viewport: zwei Renderer messen](viewport-zwei-renderer-messen.md) — PyVista fällt; **GFX (pygfx) gewählt** (Robert, 06.09.2026), der VTK-Renderer ist ausgebaut.
 - [Modellkette vor Freigabe](modellkette-vor-erzeugerfreigabe.md) · [KI-Hinweis sperrt](ki-hinweis-sperrt-den-ersten-modellaufruf.md) · [Kein Rechteübergang](neu-speichern-aendert-keine-urheberschaft.md) — TripoSG bleibt; je Modellgrenze; Provenienz bleibt.
 - [Baustein je Sprache](baustein-begriff-je-sprache.md) · [Bausteinbereich ist Vertrag](bausteinbereich-ist-ein-produktionsvertrag.md) · [Generatorrahmen](generatorrahmen-ist-teil-der-sprache.md) — Begriffe und Rahmen je Sprache.
 - [Gestellte Daten](gestellte-daten-widersprechen-echten-daneben.md) · [Beispielmaße](beispiel-masse-gegen-parameter-messen.md) · [Bündel erbt kein Ziel](ein-buendel-erbt-nicht-das-erste-ziel.md) — aus echten Läufen; je Mitglied prüfen.

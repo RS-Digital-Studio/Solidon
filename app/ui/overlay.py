@@ -10,9 +10,10 @@ Hier liegen dieselben drei Zonen als Karten **über** der Ansicht. Die Ansicht
 füllt das Fenster; wo nichts steht, sieht man das Modell. Zugeklappt gibt eine
 Zone ihre Fläche vollständig zurück, statt eine leere Spalte zu hinterlassen.
 
-**Warum das mit VTK geht.** Der Kommentar am Skizzenumschalter warnt davor, Qt
-über OpenGL zu legen — er meint ein Modul, das die Ansicht *ersetzt*, und für
-das gilt er weiter. Ein Kind-Widget über dem Plotter ist etwas anderes: der
+**Warum das über einem nativen Renderfenster geht.** Der Kommentar am
+Skizzenumschalter warnt davor, Qt über die Grafikfläche des Renderers zu
+legen — er meint ein Modul, das die Ansicht *ersetzt*, und für das gilt er
+weiter. Ein Kind-Widget über dem Renderfenster ist etwas anderes: der
 Vorschau-Banner tut es seit je. Neu ist nur, dass diese Karten auch Klicks
 annehmen, und das wurde vor dem Umbau gemessen — Knopf, Eingabefeld und
 ``childAt`` an derselben Stelle.

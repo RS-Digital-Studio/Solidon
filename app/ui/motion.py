@@ -204,8 +204,8 @@ def tween(
 
     Der Unterschied zu allem darüber: Hier bewegt sich **kein Widget**. Was
     ``on_step`` mit der Zahl tut, entscheidet der Aufrufer — eine Farbe an
-    einem VTK-Aktor mischen, einen Bogen wachsen lassen, einen Schatten
-    nachziehen. ``motion`` weiss davon nichts und soll es nicht wissen.
+    einem Element des Renderers mischen, einen Bogen wachsen lassen, einen
+    Schatten nachziehen. ``motion`` weiss davon nichts und soll es nicht wissen.
 
     **Ist Bewegung abgeschaltet, bekommt ``on_step`` genau einmal die 1.0.**
     Das ist die eigentliche Zusage dieser Funktion: Der Endzustand steht immer,

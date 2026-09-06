@@ -734,8 +734,8 @@ def curves_of(solved: SolvedSketch, frame: PlaneFrame) -> tuple[SketchCurve, ...
     Element wird in der Ebene abgetastet und über
     :func:`app.core.sketch.planes.to_world` an seinen Ort gelegt.
 
-    **Ohne Qt und ohne VTK**, und das ist der Zweck. Offscreen gibt es keinen
-    Plotter, und was hinter dieser Wache gerechnet wird, prüft in der Suite
+    **Ohne Qt und ohne Renderer**, und das ist der Zweck. Offscreen gibt es
+    keinen, und was hinter dieser Wache gerechnet wird, prüft in der Suite
     niemand mehr. Hier steht die ganze Aussage darüber, *was* zu zeichnen ist;
     die Ansicht reicht sie weiter, ohne sie zu verändern.
 

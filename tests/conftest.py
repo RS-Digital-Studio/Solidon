@@ -56,7 +56,7 @@ _SHIPPED_TRIAL_FROM = activation_store.TRIAL_FROM
 
 
 #: Fenster und eigenständig gebaute Viewports, die die Suite absichtlich bis
-#: zum Prozessende hält. Beide tragen VTK-Zustand; nur das Hauptfenster zu
+#: zum Prozessende hält. Beide tragen Renderer-Zustand; nur das Hauptfenster zu
 #: halten schützt Dateien nicht, die den Viewport als eigene Prüfeinheit bauen.
 _PINNED_UI: list[object] = []
 
@@ -69,7 +69,7 @@ def _pin_ui_widgets(module: object) -> None:
     """Hängt den Pin an ``MainWindow`` und ``Viewport`` — je Typ einmal.
 
     Ein Hauptfenster hält seinen Viewport ohnehin. Einige Ansichtsprüfungen
-    bauen den Viewport aber absichtlich allein; dessen VTK-Zustand braucht
+    bauen den Viewport aber absichtlich allein; dessen Renderer-Zustand braucht
     denselben Lebenszeitvertrag wie das ganze Fenster.
     """
     for type_name in ("MainWindow", "Viewport"):
@@ -176,7 +176,7 @@ def _orphaned_widgets_die_between_tests(request: pytest.FixtureRequest) -> Itera
     **Nur dort, wo die Suite keine Fenster hält.** Ein ``gc.collect()`` nach
     jedem Test ist am 23.08.2026 gefallen (die Messreihe steht in
     ``_no_worker_outlives_its_window``): In einer Fensterdatei zerstört es
-    auch, was VTK-Zustand trägt, und das reißt für sich. Der Pin
+    auch, was Renderer-Zustand trägt, und das reißt für sich. Der Pin
     (``_windows_live_to_the_end``) hält seither jedes Fenster bis zum
     Prozessende — und solange eines gepinnt ist, bleibt der Sammler hier
     unangetastet, deren Vertrag gilt. Wo keines ist, räumt er nach jedem
@@ -214,7 +214,7 @@ def _windows_live_to_the_end() -> Iterator[None]:
 
     **Warum, mit Messreihe vom 25.08.2026.** Die Mine darunter steht in
     ``_no_worker_outlives_its_window``: Die Zerstörung eines Fensters mit
-    VTK-Zustand mitten im Prozess reißt den Lauf — gleich, ob der
+    Renderer-Zustand mitten im Prozess reißt den Lauf — gleich, ob der
     Speicherbereiniger sie auslöst oder die Referenzzählung, gleich in
     welchem Thread. Seit dem Ring-Umbau sterben die Fenster über die
     Referenzzählung, sobald ihr Fixture die letzte Referenz fallen lässt;
@@ -733,7 +733,7 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # ``deleteLater`` allein änderte nichts (``processEvents`` führt
     # ``DeferredDelete`` nicht aus), und mit ``sendPostedEvents`` dazu
     # verschob sich der Absturz nur: ein zerstörtes Fenster nimmt den
-    # VTK-Zustand mit, und der **nächste** Aufbau stirbt in
+    # Renderer-Zustand mit, und der **nächste** Aufbau stirbt in
     # ``render_window_interactor.initialize``. Beides gemessen, in Fenstern
     # nacheinander, nicht erlitten in einem zwanzigminütigen Lauf.
     #
@@ -800,7 +800,7 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # Zerstörung gehört in den Hauptthread (``deleteLater``), aber die zwei
     # gescheiterten Anläufe oben zeigen die zweite Klippe — ``processEvents``
     # führt ``DeferredDelete`` nicht aus, und mit ``sendPostedEvents`` dazu
-    # nimmt ein zerstörtes Fenster den VTK-Zustand mit. Wer nur die erste löst,
+    # nimmt ein zerstörtes Fenster den Renderer-Zustand mit. Wer nur die erste löst,
     # trifft die zweite.
     #
     # **Hier stand ein ``gc.collect()``, und es ist am 23.08.2026 gefallen.**
@@ -900,7 +900,7 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # und **ohne** gc im Stapel: Die Fenster sterben seit dem Ring-Umbau über
     # die Referenzzählung, der Sammler ist an ihrem Tod meist unbeteiligt.
     # Wer hier weitersucht: Die Mine ist die Zerstörung eines Fensters mit
-    # VTK-Zustand mitten in der Suite, gleich durch wen und in welchem
+    # Renderer-Zustand mitten in der Suite, gleich durch wen und in welchem
     # Thread. Messwerte vom 25.08.2026: test_ui.py mit vollem Testbestand
     # riss 3/3 deterministisch an fester Position (0xc0000374); die Position
     # wandert mit der Zusammensetzung, nicht mit einem Test.

@@ -79,7 +79,7 @@ def right(pose: CameraPose) -> tuple[float, float, float]:
 
 
 def square_up(pose: CameraPose) -> tuple[float, float, float]:
-    """Das senkrechte „Oben" der Stellung — VTK richtet den Wert selbst so aus."""
+    """Das senkrechte „Oben" der Stellung — so, wie ``camera_step`` es selbst ausrichtet."""
     rx, ry, rz = right(pose)
     fx, fy, fz = forward(pose)
     return (ry * fz - rz * fy, rz * fx - rx * fz, rx * fy - ry * fx)

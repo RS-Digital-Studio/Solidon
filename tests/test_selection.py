@@ -6,12 +6,12 @@ stimmt, und dass der **Treffer** stimmt. Die zweite ist die ältere Frage: Bis
 zur gestuften Tiefe nahm ``_feature_at`` das Merkmal mit dem nächsten
 Mittelpunkt und traf damit immer eines, egal wie weit weg der Klick lag.
 
-**Offscreen, und darum ohne Plotter.** Genau das ist hier die Falle: Vierzig
+**Offscreen, und darum ohne Renderer.** Genau das ist hier die Falle: Vierzig
 Methoden des Viewports steigen bei ``self.renderer is None`` sofort aus, und ein
 Test, der einen von ihnen ruft, ist grün, ohne etwas geprüft zu haben. Alles,
 was hier zählt, hängt deshalb an Methoden ohne diese Wache —
 ``_click_target``, ``_feature_at``, ``_select_at``, ``selection_depth`` sind
-Aussagen über die Szene und nicht über VTK. Wo doch ein Plotter nötig ist
+Aussagen über die Szene und nicht über den Renderer. Wo doch einer nötig ist
 (der Mauszeiger), steht eine Attrappe mit genau den Feldern, die benutzt
 werden, nach dem Muster von ``tests/test_cursors.py``.
 """
@@ -526,7 +526,8 @@ def until_the_top_face(window: MainWindow) -> float:
 def test_looking_straight_into_a_through_hole_aims_at_it(window: MainWindow) -> None:
     """Der gemeldete Fehler: in der Draufsicht war eine Bohrung nicht anklickbar.
 
-    **Gemessen am echten ``vtkCellPicker``** in einem sichtbaren Fenster, Platte
+    **Gemessen am echten Picker (damals VTKs ``vtkCellPicker``)** in einem
+    sichtbaren Fenster, Platte
     aus dem Korpus, Bohrung 32 Pixel breit: Ein Klick 0 bis 8 Pixel neben der
     Bohrungsmitte gab ``kein Treffer`` — der Picker fand nichts, weil die
     Zylinderwand parallel zum Strahl liegt und hinter der Durchgangsbohrung
@@ -1180,8 +1181,8 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
     **Gefälscht wird die Punktquelle, und die heißt jetzt ``_aim_at``** — vorher
     stand hier ``module._world_under``. Der Zeiger fragt dasselbe wie der Klick,
     und das schließt den Blick durch eine Bohrung hindurch ein; hinter
-    ``_aim_at`` liegt ein echter ``vtkCellPicker``, der eine Attrappe als
-    Renderer nicht annimmt. Was diese Kette **davor** tut, steht in den Tests
+    ``_aim_at`` liegt der Oberflächen-Pick des Renderers, und die Attrappe
+    hier hat keinen. Was diese Kette **davor** tut, steht in den Tests
     zu ``_bore_aim`` weiter oben; was sie **danach** tut, ist genau das, was
     hier geprüft wird.
     """
@@ -1706,12 +1707,16 @@ def test_choosing_a_face_reaches_the_handle_label(window: MainWindow) -> None:
 
 
 def test_nothing_on_the_gizmo_leaves_ascii() -> None:
-    """VTK nimmt in dieser Beschriftung kein Zeichen außerhalb von ASCII.
+    """Am Griff steht ASCII — und sonst nichts.
 
-    **Kein Stilwunsch, sondern eine harte Grenze.** Die Griffbeschriftung ist
-    ein ``vtkStringArray``; pyvista lehnt alles andere ab, und zwar nicht mit
-    einer Warnung, sondern mit ``ValueError: String array contains non-ASCII
-    characters``. Der ganze Griffaufbau stürzt damit ab.
+    **Der erste Grund war eine harte Grenze:** Die Griffbeschriftung war ein
+    ``vtkStringArray``, und pyvista lehnte alles andere ab, nicht mit einer
+    Warnung, sondern mit ``ValueError: String array contains non-ASCII
+    characters``; der ganze Griffaufbau stürzte damit ab. Die Grenze ist mit
+    VTK gegangen, **die Regel bleibt**, denn ihr zweiter Grund steht: Der
+    Griff ist der eine Ort, an den ein übersetzter Text nicht gehört —
+    überall sonst zeichnet Qt, und ein Wort am Griff stünde in sechs Sprachen
+    an einer Stelle, die keine Prüfung sieht.
 
     **Der Fall ist einmal passiert und wäre in der deutschen Fassung nie
     aufgefallen:** Am Griff standen kurz ein Doppelpfeil „↕" und der Name der
@@ -1736,6 +1741,6 @@ def test_nothing_on_the_gizmo_leaves_ascii() -> None:
     for marken in laeufe:
         for _punkt, text in marken:
             assert text.isascii(), (
-                f"VTK kann {text!r} nicht zeichnen und wirft beim Aufbau des Griffs "
-                "einen ValueError — übersetzte Texte gehören in die Statusleiste"
+                f"am Griff steht {text!r} — übersetzte Texte gehören in die Statusleiste, "
+                "nicht an den Griff"
             )

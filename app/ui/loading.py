@@ -162,9 +162,10 @@ class LoadingVeil(QWidget):
     """Die Anzeige steht wirklich — erst jetzt, nicht schon bei ``begin``.
 
     Das Hauptfenster verbirgt daraufhin die Ansicht. Verdecken allein reicht
-    nicht: Das Ansichtsfenster ist ein natives Fenster (VTK), und ein natives
-    Kind liegt auf dem Bildschirm über jedem gemalten Geschwister, egal was
-    die Qt-Stapelung sagt. Solange es gezeigt und noch nie gerendert ist,
+    nicht: Das Ansichtsfenster ist ein natives Fenster (die Grafikfläche des
+    Renderers), und ein natives Kind liegt auf dem Bildschirm über jedem
+    gemalten Geschwister, egal was die Qt-Stapelung sagt. Solange es gezeigt
+    und noch nie gerendert ist,
     stehen dort alte Pixel — beim Öffnen von Weg 1 sechs Sekunden lang der
     Startbildschirm bzw. Schwarz, und Robert hielt es zweimal für einen
     Absturz, während dieser Schleier unsichtbar darunter lag."""

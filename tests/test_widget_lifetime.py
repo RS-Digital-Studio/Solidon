@@ -239,7 +239,7 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
         ("VariantsDialog", lambda: VariantsDialog(Session())),
         # Der echte Viewport steht oben bereits selbst in der Prüfung. Ihn hier
         # als bloßen Elternträger ein zweites Mal je Runde zu bauen, erzeugt
-        # weitere native VTK-Renderer und misst deren Sammelabbau statt des
+        # weitere Viewports und misst deren Sammelabbau statt des
         # Referenzrings von ``HoldToCompare``. Der schmale Wirt erhält genau die
         # entscheidende Bauart: Elternbesitz plus Rückverweis vom Kind.
         (

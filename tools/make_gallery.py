@@ -27,8 +27,8 @@ wollen qualität zeigen."
    Galeriebild verschenkte Fläche; ein Zoom danach holt das Teil heran.
 
 **Nicht offscreen.** Wie ``make_figures`` und ``make_web_images``: Dort hat Qt
-keine Schriften, und VTK zeichnet nicht in ein Bild, das ``grab`` abholen
-könnte. Aufgenommen wird über ``screen.grabWindow``.
+keine Schriften, und die Ansicht baut keinen Renderer — ``grab`` bekäme ein
+leeres Bild. Aufgenommen wird über ``screen.grabWindow``.
 """
 
 from __future__ import annotations

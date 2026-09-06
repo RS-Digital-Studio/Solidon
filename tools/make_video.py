@@ -2187,9 +2187,9 @@ def feature_demo_step(
         def select_step(index: int, total: int) -> None:
             nonlocal clicked
             if not clicked and index >= round(total * 0.48):
-                # QTest-Ereignisse enden am eingebetteten VTK-Interactor,
-                # bevor dessen eigener Zell-Picker sie sieht. ``_select_at``
-                # ist genau der UI-Weg nach diesem Picker; der projizierte
+                # QTest-Ereignisse endeten am eingebetteten Renderfenster,
+                # bevor der Pick sie sah (gemessen unter VTK). ``_select_at``
+                # ist genau der UI-Weg nach dem Pick; der projizierte
                 # Punkt liegt auf derselben Bohrungswand wie der Zeiger.
                 window.viewport._select_at(world)
                 app.processEvents()
@@ -3289,7 +3289,7 @@ def hide_axis_marker(window: Any) -> None:
     Achsenkreuz, das sich mitdreht, ist Werkzeug im Schaufenster.
 
     Über den Vertrag des Renderers (``set_axes_marker(None)``) und nicht über
-    VTK-Innereien: Ein ``getattr`` auf ein Widget, das es nicht gibt, liefert
+    dessen Innereien: Ein ``getattr`` auf ein Widget, das es nicht gibt, liefert
     still ``None``, und das Kreuz bliebe stehen, ohne dass sich ein Aufruf
     beschwert.
     """

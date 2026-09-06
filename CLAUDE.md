@@ -73,8 +73,8 @@ oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
 
 **`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
 Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile — die Suite
-baut in einem Prozess über siebenhundert VTK-Fenster nacheinander auf, und
-irgendwann reißt eine Grenze. Gefahren wird sie deshalb wie in der CI: **ein
+baut in einem Prozess über siebenhundert Fenster mit Ansicht nacheinander auf,
+und irgendwann reißt eine Grenze. Gefahren wird sie deshalb wie in der CI: **ein
 Prozess je Fensterdatei**, alles übrige in einem Zug. Dazu kommen die
 Leistungstests, die der geteilte Lauf mit `-m "not performance"` ausdrücklich
 auslässt:

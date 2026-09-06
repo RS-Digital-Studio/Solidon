@@ -3,8 +3,8 @@
 Die übrigen Funktionen in `app/ui/motion.py` bewegen **Widgets**, und ihre
 Tests stehen bei den anderen Fensterprüfungen in `test_ui.py`. Diese zwei tun
 etwas anderes: Sie rechnen nur und überlassen dem Aufrufer, was mit dem Wert
-geschieht — für einen VTK-Aktor gibt es kein `QGraphicsOpacityEffect`, und die
-Farbe eines Körpers ist kein Qt-Property.
+geschieht — für ein Element des Renderers gibt es kein
+`QGraphicsOpacityEffect`, und die Farbe eines Körpers ist kein Qt-Property.
 
 Weil sie ohne Fenster auskommen, sind sie auch ohne Fenster prüfbar. Das ist
 kein Zufall, sondern der Grund für den Schnitt: Wo eine Blende auf ein Bild
@@ -37,7 +37,7 @@ def test_mixing_stays_inside_the_two_colours() -> None:
 
     `QEasingCurve.OutBack` und `OutElastic` geben Werte über 1 heraus; ohne
     Beschneidung käme dabei eine Farbkomponente über 1 zurück, und die ist
-    keine Farbe mehr. VTK nimmt sie trotzdem an und zeigt etwas Helles — ein
+    keine Farbe mehr. VTK nahm sie trotzdem an und zeigte etwas Helles — ein
     Fehler, der nicht auffällt, sondern nur falsch aussieht.
     """
     from app.ui.motion import mix

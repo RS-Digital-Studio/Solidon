@@ -9568,8 +9568,9 @@ class MainWindow(QMainWindow):
         dieselben Operationen aus ``applies_to``. Zwei Menüs mit derselben
         Aufgabe wären zwei Gelegenheiten, auseinanderzulaufen.
 
-        VTK zählt seine Fensterkoordinaten von unten, Qt von oben — die
-        Umrechnung passiert hier, weil hier beide Seiten bekannt sind.
+        Die Ansicht meldet Gerätepixel, das Menü braucht Logikpunkte — die
+        Umrechnung (``_from_view_point``) passiert hier, weil hier beide
+        Seiten bekannt sind.
         """
         menu = self.object_tree.context_menu()
         if menu is None:
@@ -11433,8 +11434,9 @@ class MainWindow(QMainWindow):
     def _on_veil_appeared(self) -> None:
         """Die Ansicht ist weg, solange der Schleier steht — nicht nur verdeckt.
 
-        Das Ansichtsfenster ist ein natives Fenster (VTK) und läge auf dem
-        Bildschirm über dem gemalten Schleier; solange es nie gerendert hat,
+        Das Ansichtsfenster ist ein natives Fenster (die Grafikfläche des
+        Renderers) und läge auf dem Bildschirm über dem gemalten Schleier;
+        solange es nie gerendert hat,
         zeigt es alte Pixel. Verborgen ist es kein Fenster, und der Schleier
         gewinnt. Der Wechsel zurück läuft über ``ended`` — denselben Weg, den
         auch der Seitenwechsel des ``middle_stack`` täglich geht.
@@ -12943,9 +12945,9 @@ class MainWindow(QMainWindow):
 
         **Was hier ausdrücklich nicht steht, ist der Viewport.** Ihn zu
         schließen war der zweite Anlauf gegen den Absturz auf dem Ubuntu-Runner,
-        und er hat ihn nur verschoben: mit geschlossenem Renderer stirbt der
-        **nächste** Fensteraufbau in ``render_window_interactor.initialize``,
-        weil VTKs Zustand dem Prozess gehört und nicht dem Widget. Beides
+        und er hat ihn nur verschoben: Mit geschlossenem Renderer starb der
+        **nächste** Fensteraufbau in VTKs ``render_window_interactor.initialize``,
+        weil dessen Zustand dem Prozess gehörte und nicht dem Widget. Beides
         gemessen, in Fenstern nacheinander.
 
         Die Ursache war nie die Lebenszeit des Fensters, sondern die

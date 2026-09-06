@@ -341,9 +341,9 @@ def test_the_drawn_figures_are_the_ones_the_code_draws(language: str) -> None:
 
     Geprüft werden nur die **gezeichneten** (``kind == "drawn"``): Sie entstehen
     aus `core.drawing` ohne Qt und sind damit Zeichen für Zeichen dieselbe
-    Datei. Gerendertes und Bildschirmfotos hängen an VTK, an Schriften und am
-    Bildschirm — die zu vergleichen hieße, die Maschine zu prüfen und nicht die
-    Anwendung.
+    Datei. Gerendertes und Bildschirmfotos hängen am Renderer, an Schriften
+    und am Bildschirm — die zu vergleichen hieße, die Maschine zu prüfen und
+    nicht die Anwendung.
     """
     from app.core import figures
     from app.i18n import install_catalog, set_language

@@ -53,9 +53,8 @@ Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
 `--run`; die Fenstertrennung kommt von `list_windowed_tests`) ·
 `window_bench.py` (Beispiel im **echten** Fenster öffnen und die Wartezeit in
 Posten zerlegen — misst, was offscreen unsichtbar ist: Renderer und
-Aktoraufbau; `--renderer vtk|gfx` wählt den Renderer, danach Arbeitsspeicher,
-`--drag-frames` Kamerastellungen je mit Bild und `--shot` eine
-Bildschirmaufnahme dessen, was der Kunde sieht)
+Aktoraufbau, danach Arbeitsspeicher, `--drag-frames` Kamerastellungen je mit
+Bild und `--shot` eine Bildschirmaufnahme dessen, was der Kunde sieht)
 
 `window_bench.py` beendet seinen einzigen Lauf in Besitzreihenfolge: erst
 Arbeiter und Sitzungsverbindungen lösen, dann über

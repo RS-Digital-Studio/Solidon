@@ -170,9 +170,17 @@ hiddenimports = [
         for name in collect_submodules("app.core")
         if name != "app.core.activation" and not name.startswith("app.core.activation.")
     ],
-    "vtkmodules.all",
+    # VTK zeichnet seit dem 06.09.2026 nicht mehr; geblieben ist die
+    # kopflose Geometrie der Bereichsprüfung (``range_check.py``), und die
+    # importiert ihre Module in Funktionen. Kein ``vtkmodules.all`` mehr —
+    # das lud beim Start jedes Modul samt Rendering.
+    "vtkmodules.util.numpy_support",
     "vtkmodules.util.data_model",
     "vtkmodules.util.execution_model",
+    "vtkmodules.vtkCommonCore",
+    "vtkmodules.vtkCommonDataModel",
+    "vtkmodules.vtkCommonMath",
+    "vtkmodules.vtkFiltersModeling",
     # Die optionalen Kerne werden innerhalb von Funktionen importiert, damit
     # die Anwendung ohne sie startet (§30, §22.3). Normale Funktionsimporte
     # findet PyInstallers Modulgraph; ausdrücklich stehen sie hier trotzdem

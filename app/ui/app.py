@@ -253,7 +253,7 @@ def rebuild_for_language(
 
     Gemessen, bevor es gebaut wurde: zwei Fenster nacheinander mit derselben
     Sitzung, das erste abgebaut, kein Absturz — die Stelle ist heikel, weil im
-    Viewport VTK hängt.
+    Viewport ein natives Renderfenster hängt.
     """
     from app.ui.main_window import MainWindow as Window
 

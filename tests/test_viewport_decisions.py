@@ -109,7 +109,7 @@ def _release_each_view_before_the_next() -> Iterator[None]:
     gc.collect()
 
 
-def test_the_effective_qt_platform_keeps_vtk_out_after_the_environment_changes(
+def test_the_effective_qt_platform_keeps_the_view_out_after_the_environment_changes(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Plattform steht beim ``QApplication``-Aufbau fest, nicht danach.
@@ -212,7 +212,7 @@ def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
     assert QT_PLATFORM_BEFORE_VARIABLE not in os.environ
 
 
-def test_a_wayland_session_keeps_vtk_out_and_says_what_to_do(
+def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Auf Wayland stirbt VTK nativ; die Wache greift davor, und die Ansicht

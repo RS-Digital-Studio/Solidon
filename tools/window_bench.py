@@ -2,7 +2,7 @@
 
 Warum es das Werkzeug gibt: Offscreen prüft nichts, was am Aktor hängt —
 ``Viewport.show_scene`` kehrt dort vor dem Aktoraufbau zurück, und jede
-Zusage über VTK, Aktoren oder Bildaufbau ist grün über einer leeren Menge.
+Zusage über Renderer, Aktoren oder Bildaufbau ist grün über einer leeren Menge.
 Genau deshalb stand „``weg4-figur-formen`` kostet 56 Sekunden, und keine
 davon liegt im Kern" monatelang ohne Messweg im Register: offscreen öffnete
 dasselbe Projekt in 0,82 s. Dieses Werkzeug öffnet das Projekt so, wie der
@@ -12,7 +12,6 @@ benannte Posten (Fensterbau, Laden, Auswertung samt Bild).
     python tools/window_bench.py                          # weg4-figur-formen
     python tools/window_bench.py dose-mit-deckel          # ein anderes Beispiel
     python tools/window_bench.py --settle 8               # längere Ruhe-Schwelle
-    python tools/window_bench.py --renderer gfx           # mit pygfx statt VTK
 
 Gemessen am 30.08.2026 (maximiert, warmes Messprofil): ``weg4-figur-formen``
 6,1 s · ``weg3-generiert-aufbereiten`` 5,8 s · ``dose-mit-deckel`` 4,4 s —
@@ -31,13 +30,13 @@ Drei Eigenheiten, alle drei aus den bekannten Prüfstand-Fallen:
 * **Das Fenster läuft maximiert.** Ein winziges Fenster rendert anders und
   meldete im Versuch Framebuffer-Fehler, die es maximiert nicht gibt.
 
-**Und seit dem 05.09.2026 misst es beide Renderer** (``--renderer vtk|gfx``,
-sonst ``SOLIDON_RENDERER``): nach dem Öffnen den Arbeitsspeicher des
-Prozesses, dann ``--drag-frames`` Kamerastellungen rund um den Blickpunkt
-über ``Viewport.set_camera_pose`` — jede mit Bild, Schatten und Ereignissen,
-also das, was ein Zug am Körper je Bildpunkt kostet — als Median und
-Maximum je Bild, und zuletzt ein Bild ohne Kameraänderung. Das ist die
-Messtabelle für die Entscheidung zwischen VTK und pygfx.
+**Und seit dem 05.09.2026 misst es den Renderer**: nach dem Öffnen den
+Arbeitsspeicher des Prozesses, dann ``--drag-frames`` Kamerastellungen rund
+um den Blickpunkt über ``Viewport.set_camera_pose`` — jede mit Bild, Schatten
+und Ereignissen, also das, was ein Zug am Körper je Bildpunkt kostet — als
+Median und Maximum je Bild, und zuletzt ein Bild ohne Kameraänderung. Mit
+dieser Tabelle fiel am 06.09.2026 die Entscheidung für pygfx; der
+VTK-Renderer ist seither ausgebaut.
 
 Kein Testlauf und kein Teil der Suite: Das Werkzeug öffnet ein sichtbares
 Fenster auf dem Bildschirm der Maschine, auf der es läuft.
@@ -152,15 +151,15 @@ def drag_frames(window: Any, application: Any, count: int) -> list[float]:
 
 
 def shutdown_window(window: Any, application: Any) -> None:
-    """Beendet Arbeiter, VTK und Qt in ihrer sicheren Besitzreihenfolge.
+    """Beendet Arbeiter, Renderer und Qt in ihrer sicheren Besitzreihenfolge.
 
-    Das Fenster besitzt den ``QtInteractor``. Wird nur das Elternfenster
-    geschlossen, räumt Python den noch lebenden VTK-Plotter erst beim
-    Prozessende auf; zu diesem Zeitpunkt ist sein Qt-OpenGL-Kontext nicht mehr
-    verlässlich aktuell. VTK meldet dann je nach Lauf unvollständige
-    Framebuffer. Deshalb werden zuerst die Arbeiter und Sitzungsverbindungen
-    gelöst, dann der Plotter bei noch lebendem Fenster geschlossen und zuletzt
-    das Qt-Fenster.
+    Das Fenster besitzt die Grafikfläche des Renderers. Wird nur das
+    Elternfenster geschlossen, räumt Python den noch lebenden Renderer erst
+    beim Prozessende auf; zu diesem Zeitpunkt ist sein Grafikkontext nicht
+    mehr verlässlich aktuell (mit VTK hieß das je nach Lauf „unvollständige
+    Framebuffer"). Deshalb werden zuerst die Arbeiter und
+    Sitzungsverbindungen gelöst, dann der Renderer bei noch lebendem Fenster
+    geschlossen und zuletzt das Qt-Fenster.
 
     ``MainWindow.release`` schließt den Viewport absichtlich nicht: In der
     Anwendung kann im selben Prozess ein weiteres Fenster folgen. Dieser
@@ -184,12 +183,6 @@ def main() -> int:
         help="Sekunden ohne Methodenarbeit, ab denen das Öffnen als fertig gilt",
     )
     parser.add_argument(
-        "--renderer",
-        choices=("vtk", "gfx"),
-        default=None,
-        help="welcher Renderer zeichnet (sonst SOLIDON_RENDERER, Vorgabe gfx)",
-    )
-    parser.add_argument(
         "--drag-frames",
         type=int,
         default=90,
@@ -208,8 +201,6 @@ def main() -> int:
         help="Messprofil für die Nutzerverzeichnisse (bleibt zwischen Läufen)",
     )
     arguments = parser.parse_args()
-    if arguments.renderer:
-        os.environ["SOLIDON_RENDERER"] = arguments.renderer
     isolate(arguments.profile)
     sys.path.insert(0, str(ROOT))
 

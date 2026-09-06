@@ -126,7 +126,7 @@ def test_the_veil_tells_when_it_really_stands(
     """``appeared`` kommt beim Erscheinen, ``ended`` nur nach einem Stand.
 
     Das Hauptfenster verbirgt am ``appeared`` die native Ansicht — zu früh
-    gesendet stünde das nie gerenderte VTK-Fenster über dem Schleier, zu
+    gesendet stünde das nie gerenderte Renderfenster über dem Schleier, zu
     spät bliebe die Ansicht verborgen. Ein ``ended`` ohne vorherigen Stand
     meldete etwas, das nie geschah: ``end`` läuft nach jedem Lauf, auch wenn
     die Verzögerung die Anzeige nie hat erscheinen lassen.

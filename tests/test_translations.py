@@ -474,8 +474,8 @@ def test_the_manual_finds_a_place_for_a_new_language(monkeypatch: pytest.MonkeyP
     und bis zu dieser Sitzung taten sie es beim *Import*. Dieser Test führt
     genau diesen Import aus, also galt die Änderung danach für den ganzen
     Prozess: `viewport._available()` sah keine Offscreen-Plattform mehr und
-    baute in jedem späteren Fenster einen echten VTK-Interactor — ohne
-    OpenGL-Kontext, und das nimmt den Prozess mit.
+    baute in jedem späteren Fenster einen echten Renderer — damals VTKs
+    Interactor ohne OpenGL-Kontext, und das nahm den Prozess mit.
 
     Das war beide Abstürze, die dieses Repository als „A" und „B" führte, und
     dass sie zu wandern schienen, lag an der zufälligen Dateireihenfolge:

@@ -1,14 +1,15 @@
-"""Die Renderer hinter der 3D-Ansicht, gemessen am Bild (§18, §35).
+"""Der Renderer hinter der 3D-Ansicht, gemessen am Bild (§18, §35).
 
-Kein Fenster, keine Attrappe: Jeder Test baut einen Renderer ohne Fenster auf,
+Kein Fenster, keine Attrappe: Jeder Test baut den Renderer ohne Fenster auf,
 stellt etwas hinein und liest Bildpunkte oder Picks zurück. Was hier grün
-ist, hat VTK beziehungsweise pygfx wirklich gezeichnet — die Fensterseite
-(Qt-Widget, Zeiger) prüft ``test_ui.py`` am gebauten Fenster.
+ist, hat pygfx wirklich gezeichnet — die Fensterseite (Qt-Widget, Zeiger)
+prüft ``test_ui.py`` am gebauten Fenster.
 
-**Jeder Test läuft über beide Renderer** (``BACKENDS``): Der Vertrag ist erst
-dann einer, wenn dasselbe Bild auf beiden entsteht. Fehlt pygfx ein
-wgpu-Adapter (eine CI ohne Grafikkarte), fällt dieser Zweig als Skip aus,
-nicht still — der Grund steht am Skip.
+Fehlt der Maschine ein wgpu-Adapter (eine CI ohne Grafikkarte), fällt die
+ganze Datei als Skip aus, nicht still — der Grund steht am Skip. Bis zum
+06.09.2026 lief jeder Test hier zusätzlich über VTK; der zweite Renderer ist
+ausgebaut, der Vertrag (``api.py``) blieb, und diese Tests sind es, die ihn
+festhalten.
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from app.ui.render.api import (
     hex_of,
     rgb,
 )
-from app.ui.render.vtk_renderer import VtkRenderer
+from app.ui.render.gfx_renderer import GfxRenderer
 
 SIZE = (400, 300)
 BACKGROUND = "#101418"
@@ -51,21 +52,12 @@ def _gfx_missing() -> str | None:
 
 
 GFX_MISSING = _gfx_missing()
-BACKENDS = [
-    "vtk",
-    pytest.param(
-        "gfx", marks=pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
-    ),
-]
+pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
 
 
-def make_renderer(backend: str, size: tuple[int, int] = SIZE) -> Renderer:
-    """Ein Renderer ohne Fenster — VTK oder pygfx, nach Namen."""
-    if backend == "gfx":
-        from app.ui.render.gfx_renderer import GfxRenderer
-
-        return GfxRenderer(offscreen=True, size=size)
-    return VtkRenderer(offscreen=True, size=size)
+def make_renderer(size: tuple[int, int] = SIZE) -> Renderer:
+    """Der Renderer ohne Fenster, in dieser Größe."""
+    return GfxRenderer(offscreen=True, size=size)
 
 
 def same(pixel: np.ndarray, expected: tuple[int, ...], slack: int = COLOUR_SLACK) -> bool:
@@ -113,9 +105,9 @@ def bright(image: np.ndarray, threshold: int = 100) -> np.ndarray:
     return image.sum(axis=2) > threshold
 
 
-@pytest.fixture(params=BACKENDS)
-def renderer(request: pytest.FixtureRequest) -> Iterator[Renderer]:
-    view = make_renderer(request.param)
+@pytest.fixture
+def renderer() -> Iterator[Renderer]:
+    view = make_renderer()
     view.set_background(BACKGROUND)
     try:
         yield view
@@ -382,13 +374,8 @@ def test_translucent_bodies_blend_the_same_whichever_order_they_were_added(
     renderer.set_draw_order([far, near])
     second = renderer.screenshot()
     assert int((first != second).any(axis=2).sum()) == 0, "die Reihenfolge ändert nichts"
-    # Die Reihenfolge selbst kommt trotzdem an — bei VTK als Reihenfolge der
-    # Props; pygfx sortiert Durchscheinendes selbst von hinten nach vorn.
-    if isinstance(renderer, VtkRenderer):
-        props = list(renderer.renderer.GetViewProps())
-        assert [props.index(item.actor) for item in (far, near)] == sorted(
-            props.index(item.actor) for item in (far, near)
-        )
+    # pygfx sortiert Durchscheinendes selbst von hinten nach vorn; die
+    # Reihenfolge des Viewports ist deshalb eine Auskunft und keine Anweisung.
     centre = first[150, 200].astype(int)
     assert centre[0] > 60 and centre[2] > 60 and centre[1] < 30, centre
 
@@ -485,8 +472,7 @@ def test_colours_travel_as_hex_in_both_directions() -> None:
         rgb("#12345")
 
 
-@pytest.mark.parametrize("backend", BACKENDS)
-def test_labels_render_in_a_fresh_interpreter(backend: str) -> None:
+def test_labels_render_in_a_fresh_interpreter() -> None:
     """Beschriftungen zeichnen auch in einem Interpreter, der nur den Renderer
     holt — so, wie die Anwendung ohne PyVista starten wird.
 
@@ -498,10 +484,7 @@ def test_labels_render_in_a_fresh_interpreter(backend: str) -> None:
     import sys
     from pathlib import Path
 
-    module, name = {
-        "vtk": ("vtk_renderer", "VtkRenderer"),
-        "gfx": ("gfx_renderer", "GfxRenderer"),
-    }[backend]
+    module, name = "gfx_renderer", "GfxRenderer"
     script = "\n".join(
         [
             "import numpy as np",

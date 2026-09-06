@@ -1058,8 +1058,9 @@ def test_the_plate_choice_appears_and_narrows_what_gets_sliced(qt_app: object) -
     ist also nicht die Zahl, sondern dieser Dialog ein zweites Mal.
 
     Das ist die bekannte Mine aus ``conftest.py`` — die Zerstörung eines
-    Fensters mit VTK-Zustand mitten in der Suite —, kein eigener Fehler und
-    hier nicht zu beheben. Ihr wird ausgewichen, und das steht hier, damit
+    Fensters mit Ansicht mitten in der Suite, gemessen unter VTK —, kein
+    eigener Fehler und hier nicht zu beheben. Ihr wird ausgewichen, und das
+    steht hier, damit
     der Nächste den Test trennen kann, sobald sie entschärft ist, statt sich
     über den Zuschnitt zu wundern.
 

@@ -1,6 +1,7 @@
 """Die Kameraführung ohne Renderer: Gesten hinein, Kamera und Rückrufe heraus.
 
-Der Navigator ersetzt den VTK-Interaktionsstil der 3D-Ansicht. Was er tut,
+Der Navigator führt die Kamera der 3D-Ansicht selbst — bis zum 05.09.2026 tat
+das VTKs Interaktionsstil. Was er tut,
 lässt sich ohne Fenster prüfen — mit einem Renderer-Doppel, das nur die
 Kamera und eine einfache Parallelprojektion kennt. Jeder Test hier stellt
 eine Zusage, die vorher hinter einer Wache lag, die offscreen nie fiel.
@@ -48,7 +49,7 @@ class _FlatRenderer(Renderer):
 
     Die Projektion ist absichtlich einfach: Bild-x läuft entlang „rechts“
     (Blickrichtung mal Oben), Bild-y entlang Oben nach unten, die Skala
-    kommt aus ``parallel_scale`` wie bei VTK (halbe Bildhöhe in Weltmaß).
+    kommt aus ``parallel_scale`` wie im Vertrag (halbe Bildhöhe in Weltmaß).
     """
 
     def __init__(self) -> None:

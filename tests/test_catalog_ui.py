@@ -233,8 +233,8 @@ def test_the_catalogue_grows_with_the_screen(qt_app: QApplication) -> None:
 
     # Gefragt wird nach dem Bildschirm, den dieser Lauf hat, statt einen
     # anzunehmen. Offscreen gibt es keinen und die Mindestgröße gilt; unter
-    # Xvfb — so läuft die CI, seit VTK dort einen GL-Kontext braucht — gibt es
-    # einen von 1920 mal 1080, und dann ist genau die Rechnung oben das
+    # Xvfb — so läuft die CI, seit sie für VTK einen GL-Kontext brauchte —
+    # gibt es einen von 1920 mal 1080, und dann ist genau die Rechnung oben das
     # erwartete Ergebnis. Die Annahme „hier ist nie ein Bildschirm" hat diesen
     # Test in der CI rot gemacht, ohne dass am Katalog etwas falsch war.
     screen = QApplication.primaryScreen() if QApplication.screens() else None

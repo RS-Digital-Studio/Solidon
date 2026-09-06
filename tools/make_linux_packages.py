@@ -529,11 +529,14 @@ def flatpak_manifest() -> str:
 
     Die Berechtigungen sind so knapp wie möglich, und jede hat einen Grund:
 
-    * ``--socket=x11`` — die Oberfläche. Der eingebettete VTK-Viewport braucht
-      den X11-Display auch in einer Wayland-Sitzung. ``fallback-x11`` gäbe ihn
-      dort gerade nicht frei; im Flatpak blieb ``DISPLAY`` leer und VTK brach
-      beim ersten Modell ab. Auch Qt läuft deshalb über Xwayland: zwei
-      Fenstersysteme innerhalb eines Fensters sind keine stabile Kombination.
+    * ``--socket=x11`` — die Oberfläche. Die eingebettete 3D-Ansicht braucht
+      den X11-Display auch in einer Wayland-Sitzung: Der wgpu-Fensterweg ist
+      nur unter X11 und Xwayland geprüft, nativer Wayland-Betrieb von
+      rendercanvas ist ein offener Punkt. ``fallback-x11`` gäbe ihn dort
+      gerade nicht frei; im Flatpak blieb ``DISPLAY`` leer, und der damalige
+      VTK-Viewport brach beim ersten Modell ab. Auch Qt läuft deshalb über
+      Xwayland: zwei Fenstersysteme innerhalb eines Fensters sind keine
+      stabile Kombination.
     * ``--env=QT_QPA_PLATFORM=xcb`` — dieselbe Entscheidung noch einmal, für
       den Fall, dass der Nutzer ``QT_QPA_PLATFORM=wayland`` global gesetzt
       hat: Flatpak reicht die Host-Umgebung durch (``flatpak_bwrap_new(NULL)``

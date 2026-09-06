@@ -60,10 +60,10 @@ Aufruf steht auf jedem Bild „Cancel", wo die Anwendung „Abbrechen" zeigt. We
 das für einen Fund hält, sucht einen Fehler, den es nicht gibt.
 
 **Für den Viewport gilt genau diese Zeile nicht.** `widget.grab()` malt den
-Qt-Widgetbaum ab und weiß nichts von dem, was OpenGL in den Viewport
-gezeichnet hat — das Bild kommt mit einer **schwarzen Mitte** zurück, und
-schlimmer als kein Bild ist eines, das eine leere Ansicht behauptet. Was
-OpenGL zeigt, holt nur der Bildschirm:
+Qt-Widgetbaum ab und weiß nichts von dem, was der Renderer auf der
+Grafikkarte in den Viewport gezeichnet hat — das Bild kommt mit einer
+**schwarzen Mitte** zurück, und schlimmer als kein Bild ist eines, das eine
+leere Ansicht behauptet. Was die Grafikkarte zeigt, holt nur der Bildschirm:
 
 ```python
 window.show()  # wirklich zeigen, nicht offscreen
@@ -76,31 +76,37 @@ einmal gefehlt:
 * **`bootstrap.load_operations()` vor dem ersten Registerzugriff**, sonst
   endet der erste Import in `unknown operation 'load'`.
 * **Kein `QT_QPA_PLATFORM`.** Offscreen hat Qt hier null Schriftfamilien und
-  VTK zeichnet gar nicht — beides ist genau das, was geprüft werden soll.
+  die Ansicht baut keinen Renderer — beides ist genau das, was geprüft werden
+  soll.
 * **Die Schritte an einer `QTimer.singleShot`-Kette**, nicht in einer
   Warteschleife: die hängt bei sichtbarem Fenster. Und
   `faulthandler.dump_traceback_later`, damit ein Hänger sich meldet, statt zu
   schweigen. `window.start()` wird **nicht** gerufen — es öffnet beim ersten
   Start einen modalen Dialog, und der Prüfstand stünde.
-* **`app.processEvents()` unmittelbar vor jedem Schuss.** VTK rendert sofort,
-  die Qt-Widgets erst im nächsten Ereignisdurchlauf: Ohne das zeigte ein Bild
+* **`app.processEvents()` unmittelbar vor jedem Schuss.** `render()` zeichnet
+  die Ansicht sofort, die Qt-Widgets malen erst im nächsten
+  Ereignisdurchlauf: Ohne das zeigte ein Bild
   eine Skizze in der Szene und daneben „Leere Skizze" in der Statuszeile —
   zwei Zustände in einem Bild, und beide echt. Wer dem geglaubt hätte, hätte
   einen Fehler gesucht, den es nicht gibt.
 
-**Ob VTK überhaupt starten darf, entscheidet die wirksame Qt-Plattform.** Sie
-steht beim Aufbau der `QGuiApplication` fest. Ein später gestartetes Werkzeug
-kann `QT_QPA_PLATFORM` aus der Umgebung entfernen, macht aus einer laufenden
-Offscreen-Anwendung aber keine Windows- oder XCB-Anwendung. Wer danach nur die
-Variable liest, baut einen nativen VTK-Interactor ohne passenden Qt-Kontext;
-der Prozess stirbt beim nächsten Fensteraufbau in
-`render_window_interactor.initialize`. Deshalb fragt `viewport._available()`
-zuerst `QGuiApplication.platformName()` und nimmt die Umgebungsvariable nur
-vor dem Anwendungsaufbau als Rückfall.
+**Ob der Renderer überhaupt starten darf, entscheidet die wirksame
+Qt-Plattform.** Sie steht beim Aufbau der `QGuiApplication` fest. Ein später
+gestartetes Werkzeug kann `QT_QPA_PLATFORM` aus der Umgebung entfernen, macht
+aus einer laufenden Offscreen-Anwendung aber keine Windows- oder
+XCB-Anwendung. Wer danach nur die Variable liest, baut ein natives
+Renderfenster ohne passenden Qt-Kontext — mit VTK starb der Prozess so beim
+nächsten Fensteraufbau in `render_window_interactor.initialize`, und ein
+wgpu-Renderer ohne Grafikfläche stirbt nicht höflicher. Deshalb fragt
+`viewport._available()` zuerst `QGuiApplication.platformName()`, nimmt die
+Umgebungsvariable nur vor dem Anwendungsaufbau als Rückfall und fragt erst
+danach `factory.available()` nach dem wgpu-Adapter.
 
-**Und auf Wayland darf VTK gar nicht erst starten.** Seine Qt-Anbindung
-übergibt `winId()` als X-Window; unter dem Wayland-Plugin ist das keine, VTK
-findet kein Display, fällt auf EGL zurück und nimmt den Prozess mit
+**Und auf Wayland wird die Ansicht nicht gebaut.** Der wgpu-Fensterweg ist
+nur unter X11 und Xwayland geprüft; den nativen Wayland-Betrieb von
+rendercanvas hat noch niemand gefahren (Registerpunkt in `ROADMAP.md`). Die
+Weiche ist älter als der Renderer: VTKs Qt-Anbindung übergab `winId()` als
+X-Window, fand unter dem Wayland-Plugin kein Display und nahm den Prozess mit
 (`std::bad_array_new_length` — Martin Donecker, CachyOS, 28.08.2026). Deshalb
 wählt `app/ui/qt_platform.py` **vor** der `QGuiApplication` xcb, sobald ein
 X11-Display da ist — Qt 6 nähme in einer Wayland-Sitzung sonst von sich aus
@@ -214,11 +220,12 @@ Drei Fallen an dieser Kette, alle drei schon zugeschnappt:
   Bewegung erst mit gedrückter Taste — der Zeiger wüsste nie, worüber er
   schwebt.
 * **Der Vertrag zählt Bildpunkte wie Qt** — von oben links, in Gerätepixeln.
-  VTK zählt Y von unten, und diese Umrechnung liegt **einmal** im Renderer
-  (`VtkRenderer._flip`), nicht an den Zeichenstellen. Bis zum 05.09.2026
-  spiegelte `_note_pointer` selbst; wer das heute noch einmal tut, spiegelt
-  doppelt, und das Hover-Picking sucht am gespiegelten Ort — was in der
-  Bildmitte oft genug stimmt, um lange nicht aufzufallen.
+  pygfx zählt in logischen Bildpunkten, und die Umrechnung mit dem
+  Geräteverhältnis liegt **einmal** im Renderer, nicht an den Zeichenstellen.
+  (VTK zählte Y von unten, und bis zum 05.09.2026 spiegelte `_note_pointer`
+  selbst.) Wer die Umrechnung an einer Zeichenstelle wiederholt, rechnet
+  doppelt, und das Hover-Picking sucht am falschen Ort — was bei einem
+  Geräteverhältnis von 1,0 immer stimmt und deshalb lange nicht auffällt.
 * **Die Rückrufe des Navigators gehen über `weakref`** — `on_cursor` wie
   `on_context` und `on_pick` daneben (alle in `_weak_callbacks`, gebündelt als
   `NavigatorCallbacks`), und der Zeiger-Zuhörer am Renderer (`_listen_to`)
@@ -378,8 +385,8 @@ verliert genau die Draufsicht.
 
 **Gefragt wird an drei Stellen, und an allen drei derselbe Aufruf**
 (`_aim_at`): Linksklick, Rechtsklick, Zeigersuche. Der Zeiger kostet damit
-einen Zell-Pick je Ruhepause statt eines Blicks in den Tiefenpuffer — gemessen
-0,16 ms, und die Zusage darunter ist es wert: Ein Zeiger, der die
+einen Oberflächen-Pick je Ruhepause statt eines Blicks in den Tiefenpuffer —
+gemessen 0,16 ms unter VTK, und die Zusage darunter ist es wert: Ein Zeiger, der die
 Merkmalsform über einer Bohrung zeigt, wo der Klick sie nicht wählt,
 verspricht etwas, das nicht eintritt. **Nicht** gefragt wird beim Messen,
 Bemalen und Ziehen — dort ist eine Stelle auf der Oberfläche gemeint, und ein
@@ -433,8 +440,9 @@ Stelle klein — und ein Satz in der Beschreibung der Ansicht
 (`snap_sentence`, gelesen von Bildschirmlesern). Nicht die Farbe (Regel 18),
 und nicht die Statuszeile: Die trägt beim Messen den Fortschritt („Erster Punkt
 gewählt"), und ein Satz, der bei jeder Mausbewegung wechselt, überschriebe ihn.
-Der Satz gehört auch **nicht** in die Szene — VTK nimmt in einer Beschriftung
-nur ASCII, und „Fläche" hat ein ä (siehe oben).
+Der Satz gehört auch **nicht** in die Szene — ein übersetzter Text am
+Renderer stünde in sechs Sprachen an einer Stelle, die keine Prüfung sieht
+(siehe „Was am Griff steht, ist ASCII").
 
 Weg ist die Marke, sobald der Zeiger das Bild verlässt, das Werkzeug wechselt
 oder die Szene neu aufgebaut wird. Die Maße überleben eine Auswertung, die
@@ -530,10 +538,12 @@ Eigenschaft (`ambient_occlusion`, `contact_shadows`) und nicht am Zustand des
 Renderers: offscreen gibt es keinen, und ein Test, der sich dort überspringt,
 prüft nie etwas.
 
-Der Kontaktschatten ist **selbst projiziert**, nicht `enable_shadows`: VTKs
-Schattenwurf verschattet ganze Seitenflächen schwarz und lässt die Ränder der
-Platte auslaufen. Geworfen wird schräg — senkrecht projiziert liegt der
-Schatten unter dem Körper und ist von ihm verdeckt.
+Der Kontaktschatten ist **selbst projiziert** und hängt an keinem
+Schattenwurf des Renderers: VTKs `enable_shadows` verschattete ganze
+Seitenflächen schwarz und ließ die Ränder der Platte auslaufen, und die eigene
+Projektion hat den Rendererwechsel unverändert überstanden. Geworfen wird
+schräg — senkrecht projiziert liegt der Schatten unter dem Körper und ist von
+ihm verdeckt.
 
 **Der Schatten folgt der Kamera, weil das Licht es tut.** Das Frontlicht des
 Renderers hängt an der Kamera: ein Körper ist in jeder Ansicht von vorn beleuchtet. Eine
@@ -542,11 +552,11 @@ sie stand hier, mit einer Begründung, die auf eine Standardansicht verwies, die
 es so nicht gab. `shadow_direction` leitet sie aus der Kamerastellung ab,
 `_redraw_shadows` zieht sie bei jedem Ansichtswechsel nach — am Ende jeder
 Kamerageste (`on_end` des Navigators), nach jedem Schritt der 3D-Maus und
-nach jeder Kameravorgabe, nicht an einem VTK-Ereignis. Bis zum 05.09.2026
-hing dafür ein Beobachter am `EndInteractionEvent` des Interactors, weil der
+nach jeder Kameravorgabe, nicht an einem Ereignis des Renderers. (Bis zum
+05.09.2026 hing dafür ein Beobachter an VTKs `EndInteractionEvent`, weil der
 Orientierungswürfel am Interaktionsstil vorbei drehte; das Achsenkreuz des
-eigenen Renderers ist Anzeige und kein Griff (`set_axes_marker`), und niemand
-bewegt die Kamera mehr an der Ansicht vorbei.
+eigenen Renderers ist Anzeige und kein Griff, `set_axes_marker`, und niemand
+bewegt die Kamera mehr an der Ansicht vorbei.)
 
 ### Zwei Werte hängen am Thema, und beide aus demselben Grund
 
@@ -555,9 +565,11 @@ dunkel wechselt. **Beleuchtung und Deckkraft wirken auf verschieden hellem
 Grund verschieden stark**, und wer sie als eine Zahl führt, hat sie für genau
 ein Thema richtig eingestellt.
 
-**Das Frontlicht** (`HEADLIGHT`): VTK stellt fünf Lichter auf, und nur eines —
-das Headlight aus der Kamerarichtung — trifft die zum Betrachter zeigenden
-Seitenwände; die vier Kameralichter stehen über und hinter dem Teil. Der Körper
+**Das Frontlicht** (`HEADLIGHT`): Der Renderer stellt fünf Lichter auf
+(`LIGHT_KIT` in `gfx_renderer.py` — der Lichtsatz, den PyVista und VTK
+aufstellten), und nur eines — das Frontlicht aus der Kamerarichtung — trifft
+die zum Betrachter zeigenden Seitenwände; die vier Kameralichter stehen über
+und hinter dem Teil. Der Körper
 ist im hellen Thema 2,45-mal dunkler als im dunklen (`#78828e` gegen
 `#b9c4d0`), Schattierung multipliziert, also sind auf ihm auch alle
 Helligkeitsunterschiede 2,45-mal kleiner — 0,0155 gegen 0,0380 zwischen zwei
@@ -610,17 +622,11 @@ geschnitten wäre sein Schatten restlos weg.
 ## Was am Griff steht, ist ASCII — und sonst nichts
 
 Die Griffbeschriftung war ein `vtkStringArray` in PyVistas Hand, und PyVista
-lehnte darin jedes Zeichen außerhalb von ASCII ab, und zwar nicht mit einer
-Warnung:
-
-```
-ValueError: String array contains non-ASCII characters that are not supported by VTK
-```
-
-Der ganze Griffaufbau stürzte damit ab. Der eigene Renderer schreibt das Feld
-seit dem 05.09.2026 selbst, und VTK nimmt darin UTF-8 an — gemessen ohne
-Fenster mit `add_labels` und „Côté supérieure", „↕ Größe": ein Bild, keine
-Ausnahme. **Die Regel bleibt trotzdem**, denn ihr zweiter Grund steht noch:
+lehnte darin jedes Zeichen außerhalb von ASCII ab — nicht mit einer Warnung,
+sondern mit `ValueError: String array contains non-ASCII characters that are
+not supported by VTK`; der ganze Griffaufbau stürzte damit ab. Diese Grenze
+war VTKs und ist mit ihm gegangen: Der Renderer zeichnet Beschriftungen
+selbst. **Die Regel bleibt trotzdem**, denn ihr zweiter Grund steht noch:
 Der Griff ist der eine Ort in der Oberfläche, an den ein übersetzter Text nicht
 gehört — überall sonst zeichnet Qt, und ein Wort am Griff stünde in sechs
 Sprachen an einer Stelle, die keine Prüfung sieht.
@@ -691,7 +697,7 @@ brauchte es einen eigenen Beobachter am `MouseMoveEvent` (`_magnetise_turn`),
 und den gibt es nicht mehr (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Geprüft
 in `tests/test_transform_ui.py::test_the_magnet_corrects_the_turn_while_it_runs`.
 
-## Was die Ansicht sich merkt — und was VTK nicht annimmt (03.09.2026)
+## Was die Ansicht sich merkt (03.09.2026)
 
 **Darstellung (massiv, mit Kanten, Drahtgitter, transparent), Schattierung
 und Projektion sind Einstellungen**, und ihre zwölf Menüeinträge tragen ein
@@ -705,25 +711,18 @@ des Nutzers, also wird sie nicht gespeichert.
 
 ### Durchsichtige Körper werden von hinten nach vorn gezeichnet
 
-Der Fund kam aus dem Quelltext (3d-druck-85): Tiefenschälung (Depth Peeling)
-gibt es im Viewport nicht, also mischt VTK halbdurchsichtige Flächen in der
-Reihenfolge, in der die Aktoren angelegt wurden.
-
-**Und zweimal gemessen nicht behebbar** — jedenfalls nicht auf diesem Weg:
-Depth Peeling beim Umschalten in den Modus wie auch **vor** dem ersten Bild,
-mit acht Schichten und `occlusion_ratio=0`, ergibt `UseDepthPeeling=1`,
-`LastRenderingUsedDepthPeeling=0` und ein unverändertes Bild. Die
-Voraussetzungen stimmen dabei (`MultiSamples=0`, `AlphaBitPlanes=1`), und der
-Aufruf meldet Erfolg — VTK nimmt die Sortierung an und fährt sie trotzdem
-nicht (gemessen unter PyVista mit `enable_depth_peeling`; der eigene Renderer
-misst dasselbe VTK). Der Aufruf ist deshalb **nicht** eingebaut: Ein Aufruf,
-der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas bewirkt
-(dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
-Fensterchrom).
-
-**Ein dritter Weg war halb richtig**: `vtkDepthSortPolyData` vor dem Mapper
-sortiert die Polygone **innerhalb** eines Aktors — der Fall hier liegt
-zwischen zweien.
+Der Fund kam aus dem Quelltext (3d-druck-85): Ohne Tiefenschälung mischt ein
+Renderer halbdurchsichtige Flächen in der Reihenfolge, in der die Aktoren
+angelegt wurden. Unter VTK war das zweimal gemessen nicht behebbar — Depth
+Peeling meldete Erfolg und fuhr nie (`LastRenderingUsedDepthPeeling=0` bei
+stimmenden Voraussetzungen), und `vtkDepthSortPolyData` sortiert nur
+**innerhalb** eines Aktors; der Aufruf wurde deshalb nie eingebaut, denn ein
+Aufruf, der nichts bewirkt, sieht in einem Jahr aus wie einer, der etwas
+bewirkt (dieselbe Entscheidung wie bei Mica und `DWMWA_BORDER_COLOR` am
+Fensterchrom). pygfx mischt Durchscheinendes gewichtet und
+reihenfolgeunabhängig (`weighted_blend`) und sortiert je Bild selbst nach dem
+Abstand zur Kamera — die Regel darunter bleibt dieselbe, und der Viewport
+rechnet sie weiter über den Vertrag.
 
 **Was trägt, ist die Ordnung der Aktoren selbst** (`_order_by_depth`): Sie
 werden nach dem Abstand ihres Mittelpunkts zur Kamera neu eingehängt, der
@@ -743,10 +742,12 @@ Drei Dinge daran sind tragend:
 * **Sie merkt sich, wofür sie geordnet hat** (Kameralage und Körperliste).
   An der Zeichenstelle läuft sie sonst bei jedem Bild, auch mitten in einem
   Zug.
-* **Umgehängt wird über den Vertrag** (`set_draw_order`), und der
-  VTK-Renderer setzt die Prop-Reihenfolge um, ohne ein Element aufzugeben:
-  Die Elemente bleiben, was sie sind — mit Namen, Sichtbarkeit und Matrix.
-  Ein Weg über Entfernen und Neuanlegen verlöre all das.
+* **Umgehängt wird über den Vertrag** (`set_draw_order`), und der Renderer
+  setzt die Reihenfolge um, ohne ein Element aufzugeben: Die Elemente
+  bleiben, was sie sind — mit Namen, Sichtbarkeit und Matrix. Ein Weg über
+  Entfernen und Neuanlegen verlöre all das. (pygfx sortiert Durchscheinendes
+  je Bild selbst nach dem Abstand zur Kamera; sein `set_draw_order` legt
+  keine eigene Reihenfolge darüber, weil die gemessen genau das aufhöbe.)
 
 ### Die Druckplatte scheint durch, wenn etwas darunter liegt
 
@@ -986,12 +987,13 @@ fest, dass kein Zugende den Navigator neu baut. Und der Skaliergriff
 Loslassen —, und wer das Interaktionsmuster an einer Stelle ändert, ändert es
 an beiden.
 
-## Die Navigation ist eigener Code am Vertrag, kein VTK-Interaktionsstil (05.09.2026)
+## Die Navigation ist eigener Code am Vertrag, kein fremder Interaktionsstil (05.09.2026)
 
 `app/ui/render/navigator.py` liest die Zeigerereignisse des Renderers
 (`add_pointer_listener`) und stellt die Kamera über den Vertrag
-(`camera_pose`, `set_camera_pose`, `dolly`). VTKs Trackball ist abgeschaltet
-(`SetInteractorStyle(None)`), und damit ist auch die Falle verschwunden, die
+(`camera_pose`, `set_camera_pose`, `dolly`). Der Renderer bringt keinen
+eigenen Kamerastil mit (unter VTK war der Trackball abgeschaltet), und damit
+ist auch die Falle verschwunden, die
 diesen Abschnitt bis zum 05.09.2026 füllte: PyVista führte neben VTK einen
 eigenen Stil (`_style_class`) und setzte ihn bei jeder Gelegenheit über
 `update_style()` wieder durch — auch beim Doppelklick, den es immer anmeldete.
@@ -1057,7 +1059,7 @@ seither vergeben, die Zusage nicht.) Drei Regeln:
 
 * **Die Abbildung ist eine reine Funktion.** `camera_step` bekommt sechs
   Achsen, eine Stellung, eine Zeitspanne und drei Einstellungen und gibt eine
-  Stellung zurück. Kein Qt, kein VTK, kein HID darin — jeder Achsenfehler
+  Stellung zurück. Kein Qt, kein Renderer, kein HID darin — jeder Achsenfehler
   (Vorzeichen, Bezugssystem) wird dort behoben und in
   `tests/test_spacemouse.py` mit einem Test je Achse festgehalten. Wer die
   Wirkung einer Achse ändert, macht genau einen Test rot. Objektmodus ist die
@@ -1108,9 +1110,10 @@ ein Vorbild haben.
   ausschließt, ist `pan` und ein *gezogenes* Werkzeug, nicht `pan` und ein
   Klick. Auf dem **gewählten** Körper führt links weiter das Teil (Robert,
   03.09.2026, gegen den Vorschlag, das dem Griff allein zu lassen).
-* **Das Kippen ist keine VTK-Bewegung.** Der Trackball dreht in beiden Achsen;
-  „nur nach oben und unten" gibt es dort nicht, und `Rotate` dafür zu
-  überschreiben hieße, am Zustand des Interactors zu drehen. Gerechnet wird
+* **Das Kippen ist eine eigene Rechnung, keine Bewegung des Renderers.**
+  (Unter VTK gab es „nur nach oben und unten" im Trackball nicht, und
+  `Rotate` dafür zu überschreiben hieße, am Zustand des Interactors zu
+  drehen.) Gerechnet wird
   mit `spacemouse.camera_step` — der Navigator meldet nur die senkrechte
   Strecke seit dem letzten Ereignis (`_tilt_at`), das Rechnen bleibt in der
   reinen Funktion und damit ohne Fenster prüfbar.
@@ -1157,8 +1160,8 @@ kann das Fenster also gar nicht erst nach der Bewegung fragen.
 `.claude/.state/steuerung-2026-09-03/` schließt die Lücke: ein echtes Fenster,
 echte Ereignisse, die Kamerastellung vorher und nachher. Zu fahren nach jeder
 Änderung an `_NAVIGATION`, am Navigator oder an `camera_step` — **und vorher
-umzubauen**: Der Prüfstand schickt noch VTK-Ereignisse an den Interactor, und
-die erreichen den Navigator nicht mehr (Registerpunkt in `ROADMAP.md`). Die
+umzubauen**: Der Prüfstand schickt noch VTK-Ereignisse an einen Interactor,
+den es nicht mehr gibt (Registerpunkt in `ROADMAP.md`). Die
 README daneben nennt die
 drei Fallen, die dabei zuschnappen — Millimeter sagen nichts (jede Bewegung
 skaliert mit der Entfernung), Bildpunkte hier gar nichts (das Renderfenster
@@ -1185,12 +1188,13 @@ jeder Punkt des Sichtstrahls ist es —, in der **Tiefe** aber die Mitte des
 ganzen Teils. Wer auf ein Detail zoomt, drehte um einen Punkt eine halbe
 Bauhöhe dahinter, und das Detail schwenkte aus dem Bild.
 
-Gefragt wird deshalb zuerst `centre_hit()`: derselbe Zell-Picker wie bei jedem
-Klick (`_world_at`), in der Mitte des Renderers. Erst wenn dort nichts steht,
-gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
+Gefragt wird deshalb zuerst `centre_hit()`: derselbe Oberflächen-Pick wie bei
+jedem Klick (`_world_at`), in der Mitte des Renderers. Erst wenn dort nichts
+steht, gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
 
 * **Die Kulisse kann den Drehpunkt nicht an sich ziehen**, und zwar ohne eine
-  eigene Regel: `_world_at` beschränkt seine PickList auf die Körperaktoren.
+  eigene Regel: `_world_at` fragt den Pick nur unter den Körperaktoren
+  (`among`).
   Das ist dieselbe Zusage, die 2026-08 als „gedreht wurde um die Kulisse"
   einmal fehlte — sie hängt jetzt an einer Zeile, die beim Aufräumen
   überflüssig aussieht.
@@ -1199,7 +1203,7 @@ gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
   Durchgangsbohrung ebenfalls nicht (siehe „Ein Klick ist eine Blickrichtung").
   Beides endet bei der Mitte der Körper, nicht bei „kein Drehpunkt".
 * **Das gedrückte Rad bekommt ihn auch.** `camera_step` kippt um den
-  Blickpunkt, genau wie VTKs Trackball dreht; der `tilt`-Zweig des
+  Blickpunkt, genau wie `turntable_camera` dreht; der `tilt`-Zweig des
   Navigators ruft `on_rotate_start` deshalb ebenso. Ein Drehpunkt, der
   je nach Taste ein anderer ist, lässt sich niemandem erklären.
 * **Und das Bild ändert sich beim Setzen um nichts.** Der neue Fokus liegt auf
@@ -1210,7 +1214,7 @@ gilt weiter `rotation_centre()`. Vier Dinge daran sind tragend:
 **Geprüft wird das nicht in der Suite**, denn offscreen gibt es keinen Picker:
 Die Tests in `tests/test_viewport_decisions.py` setzen an die Stelle des
 Renderers eine Attrappe (`RecordingRenderer`) und prüfen damit die Regel,
-nicht die Kette bis in VTK.
+nicht die Kette bis in den Renderer.
 `.claude/.state/drehpunkt-2026-09-04/` fährt sie am echten Fenster. Gemessen,
 `plate_holes.stl`, Blick schräg auf die Platte, Zug nach rechts:
 
@@ -1220,37 +1224,36 @@ nicht die Kette bis in VTK.
 | nur über `rotation_centre` | 3,14 mm |
 
 **Eine Falle beim Prüfen davon**, sofort zugeschnappt: Eine Gegenprobe, die
-knapp am Teil vorbeizielt, misst die Toleranz des Zell-Pickers und nicht den
+knapp am Teil vorbeizielt, misst die Toleranz des Picks und nicht den
 Hintergrund — sie bekam einen Treffer fünf Millimeter neben der Platte. Wer
 „da ist nichts" prüfen will, blickt in den Himmel.
 
 ## Gedreht wird als Drehteller, nicht als Trackball (04.09.2026)
 
 Robert: „das rotieren neigt immer noch statt den winkel zur mitte zu lassen."
-`vtkInteractorStyleTrackballCamera` dreht um das **Oben der Kamera** und führt
-es dabei mit; `OrthogonalizeViewUp` stellt es hinterher nur wieder senkrecht
-zur Blickrichtung, nicht auf. Über eine Geste summiert sich daraus eine
-Schräglage — an einer nackten `vtkCamera` nachgerechnet, zwölf diagonale Züge:
-**62,7 Grad** gegen **0,0** beim Drehteller.
+Ein Trackball (bis zum 05.09.2026 VTKs `vtkInteractorStyleTrackballCamera`)
+dreht um das **Oben der Kamera** und führt es dabei mit; hinterher wird es nur
+wieder senkrecht zur Blickrichtung gestellt, nicht auf. Über eine Geste
+summiert sich daraus eine Schräglage — nachgerechnet an zwölf diagonalen
+Zügen: **62,7 Grad** gegen **0,0** beim Drehteller.
 
 `turntable_camera` dreht waagerecht immer um die Welt-Hochachse und senkrecht
 um die Bildwaagerechte; das Oben folgt daraus, statt mitgeschleift zu werden.
 Die Hebung wird an `POLE_LIMIT_DEGREES` **begrenzt und nicht abgeschnitten** —
 wer fast senkrecht darüber steht, dreht weiter waagerecht und kommt jederzeit
 zurück; aus einer Draufsicht des Menüs führt der Weg ebenso heraus. Die
-Empfindlichkeit ist die des VTK-Trackballs (20 Grad je Fensterhälfte mal
-seinem `MotionFactor` von 10, `TURN_MOTION_FACTOR`), damit die Änderung nicht nebenbei die gewohnte
-Geschwindigkeit verstellt. Es gilt für alle fünf Schemata: Cura, Bambu Studio
+Empfindlichkeit ist die des alten VTK-Trackballs geblieben (20 Grad je
+Fensterhälfte mal seinem `MotionFactor` von 10, `TURN_MOTION_FACTOR`), damit
+der Umbau nicht nebenbei die gewohnte
+Geschwindigkeit verstellte. Es gilt für alle fünf Schemata: Cura, Bambu Studio
 und Blender bleiben alle aufrecht, und ein Nachbau, der neigt, wo sein Vorbild
 es nicht tut, ist keiner.
 
 **Der erste Anlauf war eine überschriebene `Rotate`-Methode am
-VTK-Interaktionsstil, und er war wirkungslos.** Die Rechnung stimmte, drei
+VTK-Interaktionsstil, und er war wirkungslos:** Die Rechnung stimmte, drei
 Einheitstests waren grün, und am laufenden Fenster blieben **35,8 Grad**
-Schräglage — die alte Bewegung:
-
-> VTKs `OnMouseMove` ist C++ und ruft die Methode **seiner eigenen** Klasse,
-> nie die einer Python-Unterklasse.
+Schräglage — weil VTKs `OnMouseMove` als C++ die Methode **seiner eigenen**
+Klasse rief und nie die einer Python-Unterklasse.
 
 Seit dem 05.09.2026 gibt es diesen Stil nicht mehr: Der `Navigator` liest die
 Zeigerereignisse des Renderers und stellt die Kamera selbst

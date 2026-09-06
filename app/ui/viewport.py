@@ -4,7 +4,9 @@ Kein Anzeigefenster, sondern das Prüfwerkzeug: Druckplatte und Bauraum in
 echter Größe, Rückseiten eingefärbt, damit umgedrehte Normalen auffallen, und
 drei Navigationsschemata, damit niemand seinen Slicer verlernen muss.
 
-Die 3D-Ansicht braucht VTK. Lässt sich das auf einer Maschine nicht starten,
+Die 3D-Ansicht braucht einen Renderer (pygfx über wgpu, gebaut in
+``app.ui.render.factory``), und der braucht einen wgpu-Adapter
+(``factory.available()``). Lässt sich das auf einer Maschine nicht starten,
 öffnet das Fenster trotzdem und sagt es — alles außer der Ansicht läuft weiter.
 """
 
@@ -133,8 +135,9 @@ _log = get_logger(__name__)
 #: ``camera_step`` erwartet Achsen zwischen -1 und 1 und rechnet sie mit
 #: ``ORBIT_RATE`` mal der Zeitspanne. Der Wert hier ist so gewählt, dass eine
 #: Bewegung über etwa die halbe Fensterhöhe (rund 400 Bildpunkte) eine
-#: Vierteldrehung ergibt — dieselbe Empfindlichkeit, die VTKs Trackball beim
-#: Drehen zeigt.
+#: Vierteldrehung ergibt — dieselbe Empfindlichkeit, mit der der Drehteller
+#: des Navigators dreht (``TURN_PER_PIXEL`` mal ``TURN_MOTION_FACTOR``, von
+#: VTKs Trackball übernommen, den er am 05.09.2026 ersetzt hat).
 TILT_PER_PIXEL: Final = 0.05
 #: Die Zeitspanne, mit der ein einzelner Kippschritt gerechnet wird. Ein
 #: Mausereignis hat keine Dauer; genommen wird deshalb ein fester Takt, damit
@@ -237,6 +240,7 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
 #: viele Punkte. Das ist der Zweck dieses Tests.
 ORIENTATION_SIZE = 52
 ORIENTATION_MARGIN = 4
+ORIENTATION_MARGIN = 2
 
 
 #: Wie viel Luft eine Einpassung um die Zeichnung lässt. Ohne Rand liegt
@@ -504,8 +508,10 @@ SNAP_DOT_PIXELS = {"vertex": 9.0, "edge": 7.0, "free": 5.0}
 def snap_sentence(kind: str) -> str:
     """Was die Fangmarke bedeutet, in einem Satz.
 
-    Er steht in der Beschreibung der Ansicht, nicht in der Szene: VTK nimmt in
-    einer Beschriftung nur ASCII an, und „Fläche" hat ein ä. Qt nimmt jede
+    Er steht in der Beschreibung der Ansicht, nicht in der Szene: Ein
+    übersetzter Text am Renderer stünde in sechs Sprachen an einer Stelle, die
+    keine Prüfung sieht (unter VTK, bis 05.09.2026, ging er dort gar nicht —
+    die Beschriftung nahm nur ASCII an, und „Fläche" hat ein ä). Qt nimmt jede
     Sprache, und ein Bildschirmleser liest die Beschreibung vor — damit trägt
     die Auskunft neben der Größe eine zweite Kodierung, die ohne Augen
     auskommt.
@@ -522,8 +528,9 @@ def rgb_of(colour: str) -> tuple[float, float, float]:
 
     Die Palette führt Hex-Zeichenketten (``#f0a54a``), weil das Stylesheet sie
     so braucht. Zum **Mischen** taugen sie nicht: `motion.mix` rechnet, und
-    zwischen zwei Zeichenketten gibt es keine Mitte. VTK nimmt beide Formen an,
-    also kostet die Umrechnung nichts ausser dieser Funktion.
+    zwischen zwei Zeichenketten gibt es keine Mitte. Der Renderer-Vertrag nimmt
+    nur Hexwerte; ``hex_of`` bringt das Gemischte zurück, also kostet die
+    Umrechnung nichts außer diesem Paar.
     """
     from PySide6.QtGui import QColor
 
@@ -1153,9 +1160,9 @@ def orientation_corner(width: int, height: int) -> tuple[float, float, float, fl
     frei lässt. Die Werkzeugzeile beginnt weiter rechts, also bleibt die Ecke
     selbst frei — bei eingeklappten Karten erst recht.
 
-    VTK erwartet Anteile von 0 bis 1, mit dem Ursprung unten links. Bei einem
-    Fenster, das kleiner ist als die Anzeige, bleibt sie am Rand kleben statt
-    hinauszulaufen.
+    Der Renderer erwartet Anteile von 0 bis 1, mit dem Ursprung unten links.
+    Bei einem Fenster, das kleiner ist als die Anzeige, bleibt sie am Rand
+    kleben statt hinauszulaufen.
     """
     span = max(float(ORIENTATION_SIZE), 1.0)
     left = ORIENTATION_MARGIN / max(width, 1)
@@ -1176,18 +1183,20 @@ AXIS_Y = "#7fb069"
 AXIS_Z = "#5b8fd4"
 
 #: Die Beschriftung der Achsen. Sie steht auf dem Hintergrund des Viewports und
-#: nicht auf einem eigenen Feld — schwarz, wie VTK sie vorgibt, ist im dunklen
-#: Thema unlesbar, und weiß wäre es im hellen.
+#: nicht auf einem eigenen Feld — schwarz (die Vorgabe des Renderers, den
+#: Solidon bis 06.09.2026 hatte) ist im dunklen Thema unlesbar, und weiß
+#: wäre es im hellen.
 AXIS_LABEL_DARK = "#e9e6e1"
 AXIS_LABEL_LIGHT = "#2b2a28"
 
 #: Wie hell das Frontlicht des Viewports je Thema brennt.
 #:
-#: VTK stellt fünf Lichter auf: ein *Headlight* aus der Kamerarichtung und vier
-#: Kameralichter (Haupt-, Füll- und zwei Gegenlichter). Das Headlight ist das
-#: einzige, das die zum Betrachter zeigenden Seitenwände trifft — die
-#: Kameralichter stehen über und hinter dem Teil und lassen senkrechte Flächen
-#: fast schwarz.
+#: Der Renderer stellt fünf Lichter auf (``LIGHT_KIT`` in ``gfx_renderer.py``
+#: — der Lichtsatz, den VTKs ``vtkLightKit`` aufstellte): ein *Headlight* aus
+#: der Kamerarichtung und vier Kameralichter (Haupt-, Füll- und zwei
+#: Gegenlichter). Das Headlight ist das einzige, das die zum Betrachter
+#: zeigenden Seitenwände trifft — die Kameralichter stehen über und hinter dem
+#: Teil und lassen senkrechte Flächen fast schwarz.
 #:
 #: **Warum das vom Thema abhängt.** Der Körper ist im hellen Thema ``#78828e``
 #: und im dunklen ``#b9c4d0``: 0,217 gegen 0,532 Luminanz, also **2,45-mal
@@ -1217,8 +1226,10 @@ AXIS_LABEL_LIGHT = "#2b2a28"
 #: Glanzanteil (0,08 bis 0,25) ändert an den Wänden fast nichts und am Deckel
 #: gar nichts; er sitzt an Stellen, an denen dieser Körper keine hat.
 #:
-#: Das dunkle Thema bleibt bei VTKs Vorgabe: Dort ist der Körper hell, die
-#: Wände trennen sich deutlich, und mehr Licht ließe ihn nur überstrahlen.
+#: Das dunkle Thema bleibt bei der Vorgabe des Lichtsatzes (0,25, ein Drittel
+#: des Schlüssellichts — ``DEFAULT_HEADLIGHT`` in ``gfx_renderer.py``): Dort
+#: ist der Körper hell, die Wände trennen sich deutlich, und mehr Licht ließe
+#: ihn nur überstrahlen.
 HEADLIGHT = {"light": 0.45, "dark": 0.25}
 
 #: Wie lange die Marke eines angeklickten Befunds stehen bleibt.
@@ -1270,8 +1281,10 @@ FEATURE_EDGE_WIDTH = 1.5
 
 #: Wie weit ein Klick danebengehen darf, als Anteil der Bilddiagonale.
 #:
-#: VTKs Vorgabe ist ein Tausendstel — bei einem Fenster von 1300 Pixeln also
-#: knapp zwei Pixel, und ein Klick auf eine Kante trifft dann wieder nichts.
+#: Ein Tausendstel — die Vorgabe des Zell-Pickers unter VTK, bis 06.09.2026 —
+#: wäre bei einem Fenster von 1300 Pixeln knapp zwei Pixel, und ein Klick auf
+#: eine Kante trifft dann wieder nichts. Der Wert geht an ``pick_surface``
+#: ausdrücklich mit; er hängt an keiner Vorgabe des Renderers.
 #: Fünf Tausendstel sind rund acht Pixel: genug, um eine dünne Wand zu
 #: Ab wann ein Zug am Körper ein Zug ist und kein Klick, in Millimetern.
 #:
@@ -1570,16 +1583,17 @@ def plate_at(x: float, plates: int, width: float, gap: float = PLATE_GAP) -> int
     return max(0, min(plates - 1, round(x / pitch)))
 
 
-#: Schalter für Maschinen und Testläufe ohne brauchbaren OpenGL-Kontext.
+#: Schalter für Maschinen und Testläufe ohne brauchbaren Grafikkontext.
 HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
 
 
 def _available() -> bool:
     """Ob sich hier eine 3D-Ansicht bauen lässt.
 
-    VTK braucht einen echten OpenGL-Kontext; auf der Offscreen-Qt-Plattform
-    scheiterte es nicht höflich, sondern nähme den Prozess mit. Also passiert
-    die Prüfung davor und nicht in einem except-Zweig.
+    Der Renderer braucht eine echte Grafikfläche und einen wgpu-Adapter; auf
+    der Offscreen-Qt-Plattform gibt es die erste nicht, und ein Renderer ohne
+    Adapter scheitert nicht höflich, sondern nähme den Prozess mit. Also
+    passiert die Prüfung davor und nicht in einem except-Zweig.
 
     Die Plattform wird beim Aufbau der ``QGuiApplication`` festgelegt. Ein
     späterer Werkzeugaufruf kann die Umgebungsvariable entfernen, ändert Qt
@@ -1591,16 +1605,18 @@ def _available() -> bool:
     platform = _effective_platform().casefold()
     if platform in ("offscreen", "minimal", "vnc"):
         return False
-    # Wayland: VTKs Qt-Anbindung kennt nur X11 und stirbt sonst nativ — nicht
-    # höflich, sondern mit dem Prozess (Martin Donecker, 28.08.2026). Bis
-    # hierher kommt Wayland nur, wenn Xwayland fehlt oder jemand es mit
-    # ``-platform`` erzwungen hat; sonst hat ``app.ui.qt_platform`` vor dem
-    # Anwendungsaufbau X11 gewählt. :func:`unavailable_hint` sagt, was fehlt.
+    # Wayland: Der Fensterweg des Renderers ist nur unter X11 und Xwayland
+    # geprüft (mit VTK starb Wayland nativ — Martin Donecker, 28.08.2026;
+    # den nativen Wayland-Weg von rendercanvas hat noch niemand gefahren,
+    # Registerpunkt in ``ROADMAP.md``). Bis hierher kommt Wayland nur, wenn
+    # Xwayland fehlt oder jemand es mit ``-platform`` erzwungen hat; sonst
+    # hat ``app.ui.qt_platform`` vor dem Anwendungsaufbau X11 gewählt.
+    # :func:`unavailable_hint` sagt, was fehlt.
     if platform.startswith("wayland"):
         return False
-    from app.ui.render import choice
+    from app.ui.render import factory
 
-    return choice.effective_backend() is not None
+    return factory.available()
 
 
 def _effective_platform() -> str:
@@ -1730,7 +1746,8 @@ def bore_span(
     diese Ansicht ist die, in der man Bohrungen anklickt.
 
     Als freie Funktion und nicht als Methode, aus demselben Grund wie
-    :func:`is_click`: eine Rechnung über Vektoren soll ohne VTK prüfbar sein.
+    :func:`is_click`: eine Rechnung über Vektoren soll ohne Renderer prüfbar
+    sein.
     """
     import numpy as np
 
@@ -2061,9 +2078,10 @@ CAMERA_MARGIN = 0.12
 def with_margin(
     bounds: tuple[float, float, float, float, float, float], share: float = CAMERA_MARGIN
 ) -> tuple[float, float, float, float, float, float]:
-    """Die Grenzen um ihre Mitte geweitet, im VTK-Format.
+    """Die Grenzen um ihre Mitte geweitet — ein Sechsertupel wie ``Bounds`` im Vertrag.
 
-    Als eigene Funktion, aus demselben Grund wie :func:`bed_scale`: offscreen
+    Das Format ist das des Renderer-Vertrags: (xmin, xmax, ymin, ymax, zmin,
+    zmax). Als eigene Funktion, aus demselben Grund wie :func:`bed_scale`: offscreen
     gibt es keinen Renderer, und was nur im Zeichnen steht, prüft niemand.
 
     Eine Achse ohne Ausdehnung bleibt, wie sie ist — eine flache Skizze soll
@@ -2088,7 +2106,7 @@ OUTGROWN_FACTOR = 5.0
 
 
 def diagonal_of(bounds: tuple[float, float, float, float, float, float]) -> float:
-    """Die Raumdiagonale eines Hüllquaders im VTK-Format."""
+    """Die Raumdiagonale eines Hüllquaders (xmin, xmax, ymin, ymax, zmin, zmax)."""
     spans = [high - low for low, high in zip(bounds[0::2], bounds[1::2], strict=True)]
     return math.sqrt(sum(span * span for span in spans))
 
@@ -2177,7 +2195,8 @@ def bed_scale(width: float, depth: float) -> list[tuple[tuple[float, float, floa
         """Die Marken einer Kante: die Null, dann schrittweise nach beiden Seiten.
 
         Eine Platte, die schmaler ist als ein Schritt, behält so ihre Null —
-        ohne sie stolpert VTK über eine leere Beschriftungsliste.
+        der Bezug, an dem eine Skala anfängt (und unter VTK, bis 06.09.2026,
+        stolperte der Renderer über eine leere Beschriftungsliste).
         """
         values = [0.0]
         position = step
@@ -2311,12 +2330,14 @@ def gizmo_labels(
     eine, die verfällt.
 
     ``face`` ist Name und Normale der Fläche. **Gezeichnet wird nur die
-    Richtung** (:data:`FACE_ARROW`) — der Name gehört nicht hierher, weil VTK
-    in dieser Beschriftung kein Zeichen außerhalb von ASCII annimmt und die
-    Flächennamen übersetzt werden. Er steht in der Statusleiste, wo Qt
-    zeichnet. Der Parameter trägt ihn trotzdem: Wer die Beschriftung einmal
-    über Qt legt, hat ihn dann zur Hand, und die Auskunft „welche Fläche" wird
-    an *einer* Stelle bestimmt statt an zweien.
+    Richtung** (:data:`FACE_ARROW`) — der Name gehört nicht hierher, weil die
+    Flächennamen übersetzt werden und ein übersetzter Text am Griff in sechs
+    Sprachen an einer Stelle stünde, die keine Prüfung sieht (unter VTK, bis
+    05.09.2026, nahm die Beschriftung dazu kein Zeichen außerhalb von ASCII
+    an). Er steht in der Statusleiste, wo Qt zeichnet. Der Parameter trägt ihn
+    trotzdem: Wer die Beschriftung einmal über Qt legt, hat ihn dann zur Hand,
+    und die Auskunft „welche Fläche" wird an *einer* Stelle bestimmt statt an
+    zweien.
     """
     reach = length * GIZMO_LABEL_GAP
     if face is not None:
@@ -3139,7 +3160,7 @@ class _SceneMeshWorker(Worker):
 
 
 class Viewport(QWidget):
-    """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn VTK fehlt."""
+    """Die 3D-Ansicht, oder ein schlichter Hinweis, wenn kein Renderer zu bauen ist."""
 
     measurementTaken = Signal(object)
     """A finished measurement — carries a ``Measurement``."""
@@ -3341,7 +3362,7 @@ class Viewport(QWidget):
         self._finding_mark: tuple[Vec3, str, str] | None = None
         """Szenenort, Text und Körper der kurzlebigen Warnungsmarke.
 
-        Die VTK-Aktoren allein reichen nicht als Zustand: Ein Neuaufbau
+        Die Aktoren im Renderer allein reichen nicht als Zustand: Ein Neuaufbau
         derselben Auswertung kann sie aus dem Renderer nehmen, während ihre
         Python-Referenzen weiterleben. Aus diesen drei Werten lässt sich die
         Marke nach dem Aufbau ehrlich neu zeichnen.
@@ -3836,23 +3857,27 @@ class Viewport(QWidget):
             self._layout.addWidget(notice)
             return
 
-        from app.ui.render.choice import make_renderer
+        from app.ui.render.factory import make_renderer
 
         self.renderer = make_renderer(self)
         widget = self.renderer.widget
-        # Qt malt hier nichts, VTK malt alles.
+        # Qt malt hier nichts, der Renderer malt alles.
         #
-        # Das Fenster des Renderers ist ein natives OpenGL-Fenster
-        # (``WA_PaintOnScreen``), und trotzdem stand ``WA_NoSystemBackground``
-        # auf ``False``: Qt füllte den Bereich also mit dem Hintergrund seines
-        # Stils, bevor VTK darin zeichnen konnte. Zusammen mit dem Stylesheet
-        # am ``OverlayHost`` darüber ist das der Verdächtige für das Bild, in
-        # dem nur die Achsenmarker stehen und der Körper beim Bewegen der
-        # Kamera aufblitzt.
+        # Die Grafikfläche des Renderers ist ein natives Fenster
+        # (``WA_PaintOnScreen``, das rendercanvas mit ``present_method="screen"``
+        # setzt), und trotzdem stand ``WA_NoSystemBackground`` auf ``False``:
+        # Qt füllte den Bereich also mit dem Hintergrund seines Stils, bevor
+        # der Renderer darin zeichnen konnte. Zusammen mit dem Stylesheet am
+        # ``OverlayHost`` darüber war das unter VTK der Verdächtige für das
+        # Bild, in dem nur die Achsenmarker stehen und der Körper beim Bewegen
+        # der Kamera aufblitzt. Der Renderer setzt das Attribut an seiner
+        # Grafikfläche inzwischen selbst; hier bleibt es, damit die Zusage
+        # nicht an einer Zeile in ``gfx_renderer.py`` hängt.
         widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self._layout.addWidget(widget)
-        # Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK — der
-        # Filter sitzt deshalb auf dem Fenster, das die Tasten bekommt.
+        # Während eines Zugs gehören Ziffern dem Wertfeld, nicht der
+        # Grafikfläche — der Filter sitzt deshalb auf dem Fenster, das die
+        # Tasten bekommt.
         widget.installEventFilter(self)
         # Ohne das kommt eine Mausbewegung erst, wenn eine Taste unten ist —
         # und der Zeiger wüsste nie, worüber er schwebt, sondern nur, worauf
@@ -3873,11 +3898,11 @@ class Viewport(QWidget):
         # fuhr das andere. Solange die Vorgabe ``slicer`` hieß, traf es nur
         # den, der umstellte; seit dem 03.09.2026 träfe es jeden.
         self.set_navigation(self._scheme)
-        # **Die eigene Iso, nicht die von VTK.** Ohne diese Zeile erbte die
-        # Anwendung VTKs Startstellung — und ihre eigene Vorgabe aus
-        # `VIEW_DIRECTIONS` bekam nur zu sehen, wer „Isometrisch" im Menü
-        # wählte. Wer das tat, sprang aus einer Ansicht in eine andere, obwohl
-        # er die zu sehen glaubte, in der er stand.
+        # **Die eigene Iso, nicht die des Renderers.** Ohne diese Zeile erbte
+        # die Anwendung die Startstellung des Renderers — und ihre eigene
+        # Vorgabe aus `VIEW_DIRECTIONS` bekam nur zu sehen, wer „Isometrisch"
+        # im Menü wählte. Wer das tat, sprang aus einer Ansicht in eine andere,
+        # obwohl er die zu sehen glaubte, in der er stand.
         self.view_from("iso")
 
     def _listen_to(self, renderer: Renderer) -> None:
@@ -3898,11 +3923,12 @@ class Viewport(QWidget):
         self._pointer_token = renderer.add_pointer_listener(on_pointer)
 
     def release_renderer(self) -> None:
-        """Den Renderer schließen, solange sein OpenGL-Kontext noch lebt.
+        """Den Renderer schließen, solange sein Grafikkontext noch lebt.
 
         Gerufen aus dem ``closeEvent`` des Fensters: Qts später Prozessabriss
-        käme für den Abbau des Renderfensters zu spät und meldet je nach
-        Treiber unvollständige Framebuffer oder ``wglMakeCurrent``.
+        käme für den Abbau der Grafikfläche zu spät (unter VTK, bis 06.09.2026,
+        meldete er je nach Treiber unvollständige Framebuffer oder
+        ``wglMakeCurrent``).
         ``release()`` darf das ausdrücklich nicht tun — es bedient auch den
         Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
         lebt. Ein zweiter Aufruf tut nichts mehr.
@@ -4007,8 +4033,9 @@ class Viewport(QWidget):
         das, was jeder aus einem Konstruktionsprogramm kennt. Die Werte sind
         aufeinander abgestimmt — ein dünner Schaft mit dicker Spitze sieht aus
         wie ein Stecknadelkopf, ein dicker mit kurzer Spitze wie ein abgesägter
-        Balken. Die Schriftfarbe wechselt mit dem Thema: VTKs Vorgabe ist
-        Schwarz, und das ist auf dem dunklen Hintergrund unlesbar.
+        Balken. Die Schriftfarbe wechselt mit dem Thema: Eine feste Farbe ist
+        auf einem der beiden Hintergründe unlesbar (VTKs Vorgabe war Schwarz,
+        und das auf dem dunklen).
         """
         if self.renderer is None:
             return
@@ -4073,11 +4100,13 @@ class Viewport(QWidget):
         etwa —, und dort gibt es gar keine Fläche, deren Normale man nehmen
         könnte.
 
-        **Der Titel darf jede Sprache tragen.** Die ASCII-Grenze von VTK gilt
-        für ein Textarray, das man als *Dataset-Feld* setzt
-        (``data["labels"] = …``, siehe ``_show_gizmo_labels``), nicht für eine
-        Punktliste an ``add_point_labels``: gemessen am 30.08.2026 geht
-        „Face supérieure" hier durch und fällt dort.
+        **Der Titel darf jede Sprache tragen.** Der Renderer nimmt
+        Beschriftungen in UTF-8 an; die ASCII-Regel des Griffs
+        (:data:`FACE_ARROW`) hat einen anderen Grund und gilt hier nicht.
+        (Unter VTK, bis 05.09.2026, galt dessen ASCII-Grenze nur für ein
+        Textarray als *Dataset-Feld*, nicht für eine Punktliste an
+        ``add_point_labels`` — gemessen am 30.08.2026 ging „Face supérieure"
+        hier durch und fiel dort.)
         """
         if self.renderer is None:
             return
@@ -4209,7 +4238,7 @@ class Viewport(QWidget):
         ohne eine einzige Linie als Vertiefung erkennbar.
 
         Beide laufen in einem ``try``, weil sie am Treiber hängen: eine
-        Maschine, deren OpenGL sie nicht kann, soll ein einfacheres Bild
+        Maschine, deren Grafiktreiber sie nicht kann, soll ein einfacheres Bild
         bekommen und keinen Absturz. Was nicht ging, steht im Protokoll — nicht
         vor dem Nutzer, der hat nichts davon.
         """
@@ -4316,8 +4345,11 @@ class Viewport(QWidget):
         """Durchsichtige Körper von hinten nach vorn zeichnen — der Maleralgorithmus
         auf Objektebene (Hinweis 3d-druck-85, 03.09.2026).
 
-        Halbdurchsichtige Flächen mischt VTK in der Reihenfolge der Aktoren;
-        ein Depth Peeling nimmt es an und fährt es nicht (gemessen, siehe
+        Ohne Tiefenschälung mischt ein Renderer halbdurchsichtige Flächen in
+        der Reihenfolge der Aktoren — unter VTK, bis 06.09.2026, zweimal
+        gemessen und nicht behebbar; pygfx mischt gewichtet und
+        reihenfolgeunabhängig, und die Ordnung geht weiter über den Vertrag
+        (``set_draw_order``), denn die Regel darunter bleibt dieselbe (siehe
         ``ansicht.md``). Sortiert wird nach dem Abstand des Mittelpunkts zur
         Kamera, der fernste zuerst — richtig für getrennte Körper, machtlos bei
         sich durchdringenden. Die Bettflächen zählen mit, sobald sie
@@ -4764,14 +4796,15 @@ class Viewport(QWidget):
         if self._profile is not None and self._beds_for_view() != self._beds_drawn:
             self.show_build_volume(self._profile)
         # Vor dem Renderer-Zweig: ob ein Projekt schon einmal im Bild stand, ist
-        # eine Aussage über die Szene und nicht über VTK — offscreen gibt es
-        # keinen Renderer, und ein Test, der sich dort überspringt, prüft nie
+        # eine Aussage über die Szene und nicht über den Renderer — offscreen
+        # gibt es keinen, und ein Test, der sich dort überspringt, prüft nie
         # etwas.
         self._fit_once_for(result)
         if result is None:
             # Eine leere Szene hat keine Auswahl, kein gewähltes Merkmal und
             # keine Maße. Vor dem Renderer-Zweig, aus demselben Grund wie das
-            # Einpassen: das sind Aussagen über die Szene, nicht über VTK.
+            # Einpassen: das sind Aussagen über die Szene, nicht über den
+            # Renderer.
             self._selected = None
             self._selected_more = ()
             self._selected_feature = None
@@ -4958,7 +4991,8 @@ class Viewport(QWidget):
     def _aim_rotation(self) -> None:
         """Der Drehpunkt bekommt beim Drehbeginn die Tiefe dessen, was man ansieht (§2.9).
 
-        VTK dreht um den Fokuspunkt der Kamera. Der wurde früher bei jedem
+        Der Drehteller des Navigators dreht um den Fokuspunkt der Kamera
+        (``CameraPose.focal_point``), wie VTK es tat. Der wurde früher bei jedem
         Szenenaufbau auf die Mitte der Körper gesetzt (``_centre_rotation``),
         und die Kamera rückte mit — nach einem Verschieben sprang damit das
         Bild (Robert, 23.08.2026: „nach jedem verschieben springt die kamera
@@ -5013,10 +5047,12 @@ class Viewport(QWidget):
         sucht nur unter den Körperaktoren: Druckplatte, Bauraum, Griffe und
         Schatten können den Drehpunkt also nicht an sich ziehen.
 
-        **Die Mitte braucht keine Umrechnung.** VTK zählt Y von unten, Qt von
-        oben; die Mitte ist in beiden Zählungen dieselbe Zeile, und der Picker
-        erwartet ohnehin VTKs Zählung. Der Ursprung kommt trotzdem vom
-        Renderer — Display-Koordinaten zählen im Fenster, nicht im Viewport.
+        **Gezählt wird, wie der Vertrag zählt**: ``view_size`` gibt
+        Gerätepixel, und ``pick_surface`` nimmt sie von oben links wie Qt —
+        dieselbe Zählung wie bei jedem Klick. (Unter VTK, bis 05.09.2026,
+        zählte der Picker Y von unten, und die Mitte war der eine Punkt, der in
+        beiden Zählungen dieselbe Zeile ist.) Die Größe kommt vom Renderer —
+        seine Bildpunkte zählen in seiner Grafikfläche, nicht im Viewport.
 
         Vor dem ersten Bild hat der Renderer keine Ausdehnung; dann gibt es
         keine Mitte, und der Aufrufer nimmt seinen anderen Weg.
@@ -5641,11 +5677,11 @@ class Viewport(QWidget):
         # gibt. Liefe sie weiter, schriebe sie ihre alten Farben über die neuen.
         self._stop_selection_fade()
         # **Die Startfarbe kommt aus dem eigenen Gedächtnis, nicht vom Aktor.**
-        # Zwei Gründe, und der zweite wiegt schwerer: VTKs Eigenschaftsobjekt
-        # gibt in Prüfständen nichts zurück (es zeichnet Zuweisungen nur auf),
-        # und mitten in einer abgelösten Blende stünde dort ein Zwischenwert,
+        # Mitten in einer abgelösten Blende stünde dort ein Zwischenwert,
         # dessen Herkunft niemand kennt. Was `_live_colours` sagt, hat diese
-        # Funktion selbst geschrieben.
+        # Funktion selbst geschrieben. (Bis zum 05.09.2026 kam ein zweiter
+        # Grund dazu: Die Attrappen der Prüfstände zeichneten Zuweisungen an
+        # VTKs Eigenschaftsobjekt nur auf und gaben nichts zurück.)
         grey = rgb_of(self._object_colour)
         starts = {identifier: self._live_colours.get(identifier, grey) for identifier in changed}
         ends = {identifier: rgb_of(colour) for identifier, colour in changed.items()}
@@ -5708,11 +5744,11 @@ class Viewport(QWidget):
         (§18.6) — **je Platte eines** (§25).
 
         **Kein Aufruf hier setzt die Kamera.** Der Bauraum ist Kulisse. PyVista
-        passte bei der ersten Netzfläche einer leeren Szene von selbst ein und
-        machte damit jedes Einpassen auf die Körper zunichte, weil die Kulisse
-        danach gezeichnet wurde; der eigene Renderer passt nie von selbst ein,
-        und die Regel bleibt, weil sie ihren Anlass überlebt: Kulisse stellt
-        keine Kamera.
+        (bis 05.09.2026) passte bei der ersten Netzfläche einer leeren Szene
+        von selbst ein und machte damit jedes Einpassen auf die Körper
+        zunichte, weil die Kulisse danach gezeichnet wurde; der eigene Renderer
+        passt nie von selbst ein, und die Regel bleibt, weil sie ihren Anlass
+        überlebt: Kulisse stellt keine Kamera.
 
         **Warum mehrere Betten.** Jede Platte hat ihren eigenen Nullpunkt, und
         die Anordnung setzt Platte 2 an denselben Ort wie Platte 1. Ein Bett
@@ -5725,13 +5761,13 @@ class Viewport(QWidget):
         # und weil ``_fit_once_for`` daran erkennt, ob es auf einer leeren Szene
         # überhaupt etwas einzupassen gibt. Vor dem Renderer-Zweig, aus demselben
         # Grund wie dort: dass ein Bauraum gilt, ist eine Aussage über die
-        # Szene und nicht über VTK.
+        # Szene und nicht über den Renderer.
         self._bed_extent = (width, depth)
         self._build_volume = (width, depth, height)
         self._profile = profile
         # Die Zahl **vor** dem Renderer-Zweig, damit ``_plate_offset`` offscreen
-        # dasselbe sagt wie im Bild: sonst hinge die Verschiebung an VTK, und
-        # kein Test käme an sie heran.
+        # dasselbe sagt wie im Bild: sonst hinge die Verschiebung am Renderer,
+        # und kein Test käme an sie heran.
         beds = self._beds_for_view()
         self._beds_drawn = beds
         if self.renderer is None:
@@ -7372,9 +7408,9 @@ class Viewport(QWidget):
         font = QFont(self.font())
         font.setPixelSize(self._feature_label_style.font_size)
         metrics = QFontMetricsF(font)
-        # Qt, VTK und pygfx formen Text mit verschiedenen Schriften und
-        # DPI-Regeln. Die gemeinsame Platzierung reserviert deshalb mehr als
-        # die Qt-Glyphenbreite; die sichtbare Schrift selbst bleibt 12 Pixel groß.
+        # Qt und pygfx formen Text mit verschiedenen Schriften und DPI-Regeln.
+        # Die gemeinsame Platzierung reserviert deshalb mehr als die
+        # Qt-Glyphenbreite; die sichtbare Schrift selbst bleibt 12 Pixel groß.
         padding = 2.0 * self._feature_label_style.margin + 4.0
         self._feature_label_sizes = {
             text: (
@@ -8899,8 +8935,9 @@ class Viewport(QWidget):
 
         # Ein Actor je Rolle, nicht je Ring: eine texturierte Schicht hat
         # tausende Konturen, und ebenso viele einzelne ``add_lines``-Aufrufe
-        # machten aus einem Schieberschritt Sekunden — VTK zahlt je Actor,
-        # nicht je Linie.
+        # machten aus einem Schieberschritt Sekunden — ein Renderer zahlt je
+        # Actor, nicht je Linie (unter VTK gemessen; bei pygfx ist jeder Actor
+        # ebenso ein eigenes Objekt in der Szene).
         contours = [
             ring for polygon in layer.contours for ring in (polygon.outline, *polygon.holes)
         ]
@@ -8926,9 +8963,11 @@ class Viewport(QWidget):
         """Geschlossene Konturen einer Schicht als **einen** Aktor je Rolle.
 
         Eine texturierte Schicht hat tausende Konturen, und ebenso viele
-        einzelne Aktoren machten aus einem Schieberschritt Sekunden — VTK zahlt
-        je Aktor, nicht je Linie. Ein geschlossener Ring ist jeder Punkt
-        zweimal, bis auf die Enden — und Ringe hängen nicht aneinander.
+        einzelne Aktoren machten aus einem Schieberschritt Sekunden — ein
+        Renderer zahlt je Aktor, nicht je Linie (unter VTK gemessen; bei pygfx
+        ist jeder Aktor ebenso ein eigenes Objekt in der Szene). Ein
+        geschlossener Ring ist jeder Punkt zweimal, bis auf die Enden — und
+        Ringe hängen nicht aneinander.
         """
         if self.renderer is None:
             return
@@ -9705,11 +9744,11 @@ class Viewport(QWidget):
         Körper im Bild dort stehen, wohin gezogen wurde, während die Szene ihn
         nie bewegt hat.
 
-        Die Navigation bleibt dabei in Ruhe. PyVistas Widget schaltete beim
-        Greifen auf seinen Trackball-Stil um und stellte beim Loslassen
-        *seinen* Standard wieder her, nicht unseren — jedes Zugende musste
-        ``set_navigation`` rufen. Der eigene Griff nimmt sich die Geste vor
-        dem Navigator und gibt sie danach wieder frei.
+        Die Navigation bleibt dabei in Ruhe. PyVistas Widget (bis 05.09.2026)
+        schaltete beim Greifen auf seinen Trackball-Stil um und stellte beim
+        Loslassen *seinen* Standard wieder her, nicht unseren — jedes Zugende
+        musste ``set_navigation`` rufen. Der eigene Griff nimmt sich die Geste
+        vor dem Navigator und gibt sie danach wieder frei.
         """
         if self.drag_bar.typing:
             # Der Zug gehört der Tastatur (§18.11): das Loslassen wendet
@@ -9881,12 +9920,12 @@ class Viewport(QWidget):
         self._end_drag()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
-        """Während eines Zugs gehören Ziffern dem Wertfeld, nicht VTK (§18.11).
+        """Während eines Zugs gehören Ziffern dem Wertfeld, nicht dem Renderer (§18.11).
 
-        Der Filter sitzt auf dem Interactor-Fenster und auf dem Feld selbst:
-        die erste Ziffer holt den Fokus ins Feld, Eingabetaste und Esc wirken
-        von beiden Seiten. VTKs eigene Tastenkürzel bleiben unangetastet —
-        geschluckt wird nur, was zum Zug gehört, und nur solange einer läuft.
+        Der Filter sitzt auf der Grafikfläche des Renderers und auf dem Feld
+        selbst: die erste Ziffer holt den Fokus ins Feld, Eingabetaste und Esc
+        wirken von beiden Seiten. Alles andere geht durch — geschluckt wird
+        nur, was zum Zug gehört, und nur solange einer läuft.
         """
         if stop_watching_the_dying(self, watched, event):
             return False
@@ -10159,7 +10198,7 @@ class Viewport(QWidget):
         return (low[0], high[0], low[1], high[1], low[2], high[2])
 
     def _object_bounds(self) -> tuple[float, float, float, float, float, float] | None:
-        """Der Hüllquader über alle Körper, im Format von VTK, oder nichts."""
+        """Der Hüllquader über alle Körper als Sechsertupel (``Bounds``), oder nichts."""
         if self._result is None or not self._result.scene.objects:
             return None
         boxes = [entry.mesh.bounds for entry in self._result.scene.objects.values()]
@@ -10194,8 +10233,10 @@ class Viewport(QWidget):
         """Eine Kamerastellung setzen und einmal zeichnen — der eine Weg, auf
         dem die 3D-Maus und die Flugtasten die Ansicht anfassen (§2.9).
 
-        Wer nah heranfährt, schneidet sonst die Nahebene ins Teil: VTK legt
-        die Schnittebenen nur nach, wenn man es sagt.
+        Wer nah heranfährt, schneidet sonst die Nahebene ins Teil: Der Vertrag
+        verspricht kein Nachlegen der Schnittebenen von selbst
+        (``reset_clipping_range`` ist ein eigener Aufruf, wie unter VTK), also
+        wird es hier gesagt.
         """
         if self.renderer is None:
             return
@@ -10826,7 +10867,7 @@ class Viewport(QWidget):
         from PySide6.QtGui import QImage
 
         from app.core.geom.mesh import as_mesh_data
-        from app.ui.render.choice import make_renderer
+        from app.ui.render.factory import make_renderer
 
         size = (max(16, self.width()), max(16, self.height()))
         shot = make_renderer(offscreen=True, size=size)
@@ -10949,7 +10990,8 @@ class Viewport(QWidget):
 
         **Mit einer Untergrenze, und die ist kein Zierat.** In einem leeren
         Fenster hat ``reset_camera`` nie stattgefunden, und die Startkamera
-        steht dicht vor dem Ursprung (unter PyVista gemessen: 1,62 Einheiten).
+        steht dicht vor dem Ursprung (unter PyVista, bis 05.09.2026, gemessen:
+        1,62 Einheiten).
         Diesen Abstand treu zu
         übernehmen hieße, aus 1,6 Millimetern auf die Zeichenebene zu sehen:
         gemessen 918 Bildpunkte je Millimeter, ein Raster von 0,1 mm und ein
@@ -11105,13 +11147,13 @@ class Viewport(QWidget):
     def tilt_camera(self, step: int) -> None:
         """Die Ansicht um *step* Bildpunkte nach oben oder unten kippen (§2.9).
 
-        **Warum die Anwendung das selbst rechnet.** VTKs Trackball dreht in
-        beiden Achsen; „nur nach oben und unten" ist keine seiner Bewegungen,
-        und ``Rotate`` dafür zu überschreiben hieße, am Zustand des Interactors
-        zu drehen. Gerechnet wird deshalb mit
-        :func:`app.ui.spacemouse.camera_step` — derselben reinen Funktion, die
-        die Kappe und die Tastatur bedienen, und der einzigen hier, die ohne
-        VTK prüfbar ist (§35).
+        **Warum die Anwendung das selbst rechnet.** Das Kippen ist eine eigene
+        Rechnung und keine Bewegung des Renderers (unter VTK, bis 05.09.2026,
+        kannte der Trackball „nur nach oben und unten" nicht, und ``Rotate``
+        dafür zu überschreiben hieße, am Zustand des Interactors zu drehen).
+        Gerechnet wird mit :func:`app.ui.spacemouse.camera_step` — derselben
+        reinen Funktion, die die Kappe und die Tastatur bedienen, und die ohne
+        Fenster prüfbar ist (§35).
 
         Der Schritt kommt in Bildpunkten und wird auf den Bereich der
         Kappenachsen umgerechnet: :data:`TILT_PER_PIXEL` ist so gewählt, dass
@@ -11229,8 +11271,10 @@ class Viewport(QWidget):
         Pfeil, und die Bohrung liess sich nicht mehr auswählen (Robert,
         03.09.2026). Die Liste bleibt leer, wenn es keine Körper gibt
         (Skizzenmodus, leeres Projekt); dann pickt der Renderer über die ganze
-        Szene. Die Toleranz ist ein Anteil der Bilddiagonale: VTKs Vorgabe ist
-        so klein, dass ein Klick an einer Kante wieder danebengeht.
+        Szene. Die Toleranz ist ein Anteil der Bilddiagonale und geht
+        ausdrücklich mit (:data:`PICK_TOLERANCE`): Die Vorgabe des Zell-Pickers
+        unter VTK war so klein, dass ein Klick an einer Kante wieder
+        danebenging.
         """
         self._selection_hit = None
         if self.renderer is None:
@@ -11292,10 +11336,10 @@ class Viewport(QWidget):
         """Dasselbe, aber ab dem Weltpunkt — die Stelle, an der geprüft wird.
 
         Getrennt von :meth:`begin_body_drag`, weil das Ablesen und das Urteilen
-        zwei Dinge sind: Offscreen rendert VTK nicht, und ein Picker über einem
-        nie gezeichneten Bild trifft nichts. Ein Test über Bildschirmkoordinaten
-        prüfte damit die Testumgebung; über den Weltpunkt prüft er die
-        Bedienung.
+        zwei Dinge sind: Offscreen gibt es keinen Renderer, und ein Picker über
+        einem nie gezeichneten Bild trifft nichts. Ein Test über
+        Bildschirmkoordinaten prüfte damit die Testumgebung; über den Weltpunkt
+        prüft er die Bedienung.
         """
         if not self.can_drag_body_at(point):
             return False
@@ -12028,11 +12072,12 @@ class Viewport(QWidget):
     def _sketch_hit(self, x: int, y: int) -> tuple[float, float] | None:
         """Wo der Sichtstrahl durch diese Bildstelle die Zeichenebene trifft.
 
-        **Gerechnet und nicht gepickt.** Ein ``vtkCellPicker`` trifft nur
-        Geometrie; die Zeichenebene ist keine, und über einer Durchgangsbohrung
-        gäbe es nicht einmal ein Dreieck dahinter (gemessen von ``formwerk-d1``
-        am Referenzkorpus). :func:`app.core.sketch.planes.ray_hit` trifft sie
-        immer — auch dort, wo der Körper ein Loch hat.
+        **Gerechnet und nicht gepickt.** Ein Oberflächen-Pick (``pick_surface``)
+        trifft nur Geometrie; die Zeichenebene ist keine, und über einer
+        Durchgangsbohrung gäbe es nicht einmal ein Dreieck dahinter (gemessen
+        von ``formwerk-d1`` am Referenzkorpus).
+        :func:`app.core.sketch.planes.ray_hit` trifft sie immer — auch dort, wo
+        der Körper ein Loch hat.
 
         **Der Strahl wird in die Szene zurückgerechnet**, und zwar nur sein
         Ursprung: Die Richtung ist ein Vektor und von der Plattenverschiebung

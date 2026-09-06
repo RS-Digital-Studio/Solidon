@@ -46,7 +46,8 @@ Vier Bedingungen, alle vier tragend:
   und jede unbedeckte Millisekunde gehört dem Punkt darunter.
 * **Solange sie steht, ist die Ansicht verborgen, nicht nur verdeckt**
   (`appeared`/`ended` → `middle_stack.setVisible`). Das Ansichtsfenster ist
-  ein natives Fenster (VTK): Auf dem Bildschirm liegt es über jedem gemalten
+  ein natives Fenster (die Grafikfläche des Renderers, an die wgpu zeichnet):
+  Auf dem Bildschirm liegt es über jedem gemalten
   Geschwister, egal was die Qt-Stapelung sagt, und bis zu seinem ersten
   Render zeigt es alte Pixel — Startbildschirm oder Schwarz. Genau so sah
   Robert sechs Sekunden „Absturz", während der Schleier unsichtbar darunter
@@ -55,8 +56,8 @@ Vier Bedingungen, alle vier tragend:
   diese Zone macht nur `grabWindow` (siehe „Was nur das Bild zeigt").
 
 Deckend gezeichnet, mit dem Verlauf aus `viewport_colours` — ein
-halbdurchsichtiges Qt-Widget über dem OpenGL-Fenster zeigt die Fensterfarbe,
-nicht die Ansicht dahinter.
+halbdurchsichtiges Qt-Widget über dem nativen Renderfenster zeigt die
+Fensterfarbe, nicht die Ansicht dahinter.
 
 **Die Ladeanzeige beginnt später, als das Warten beginnt.** Sie hängt am
 Fortschritt der Auswertung; was *davor* liegt — `load()` für eine Projektdatei,
@@ -265,8 +266,8 @@ den Arbeitssatz des Prozesses ablesen:
 | nachher | +17, +17, +18, +17, +18 MB — flach | 0 von 5 |
 
 Die Kurve **sättigt**: Das erste Fenster kostet einmalig rund 17 MB für Qt und
-VTK, jedes weitere kostet nichts mehr. Vorher wuchs sie ungebremst, und die
-Suite baut über siebenhundert Fenster nacheinander auf.
+den damaligen VTK-Renderer, jedes weitere kostet nichts mehr. Vorher wuchs sie
+ungebremst, und die Suite baut über siebenhundert Fenster nacheinander auf.
 
 **Und die Kehrseite, die erst am 23.08.2026 sichtbar wurde: Ein Fenster,
 das sterben kann, kann im falschen Thread sterben.** Solange die Lambda-Ringe
@@ -293,8 +294,8 @@ Der vollständige Stapelabzug beider Threads steht in `tests/conftest.py`,
 zusammen mit dem, was **nicht** hilft: `gc.collect()` (der Lauf im Hauptthread
 ist der harmlose), `leash.undisturbed()` (es hält den gc dieser Zeile an,
 während der Nebenthread weiter alloziert) und `deleteLater` (zweimal versucht,
-beide Male an VTK gescheitert). Wer einen vierten Anlauf nimmt, liest zuerst
-diese Notiz.
+beide Male an VTK gescheitert — ob der Weg mit pygfx offen ist, hat niemand
+gemessen). Wer einen vierten Anlauf nimmt, liest zuerst diese Notiz.
 
 Der Ring-Umbau bleibt trotzdem richtig — er hat den Speicher von linear auf
 flach gebracht. Aber er ist die Ursache dafür, dass es diesen Deadlock geben

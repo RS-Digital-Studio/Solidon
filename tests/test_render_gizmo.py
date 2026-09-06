@@ -22,14 +22,17 @@ from app.ui.render.gizmo import (
     ray_plane_hit,
     rotation_matrix,
 )
-from tests.test_render_vtk import BACKENDS, cube, make_renderer
+from tests.test_render_contract import GFX_MISSING, cube, make_renderer
 
 SIZE = (600, 450)
 
 
-@pytest.fixture(params=BACKENDS)
-def scene(request: pytest.FixtureRequest) -> Iterator[tuple[Renderer, object, Gizmo, list]]:
-    renderer = make_renderer(request.param, SIZE)
+pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
+
+
+@pytest.fixture
+def scene() -> Iterator[tuple[Renderer, object, Gizmo, list]]:
+    renderer = make_renderer(SIZE)
     renderer.set_background("#101418")
     vertices, faces = cube(20.0)
     body = renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle())

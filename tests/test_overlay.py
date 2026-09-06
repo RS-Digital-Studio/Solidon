@@ -154,7 +154,7 @@ def test_the_axis_marker_does_not_hide_behind_a_card(window: MainWindow) -> None
 
         view = host.view
         left, bottom, right, top = orientation_corner(view.width(), view.height())
-        # VTK zählt von unten, Qt von oben.
+        # ``orientation_corner`` zählt Anteile von unten links, Qt von oben.
         marker = QRect(
             round(left * view.width()),
             round((1.0 - top) * view.height()),

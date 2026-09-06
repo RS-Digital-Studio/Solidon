@@ -49,7 +49,7 @@ class _Application:
         self.events.append("application.processEvents")
 
 
-def test_vtk_closes_while_its_qt_parent_is_still_alive() -> None:
+def test_the_renderer_closes_while_its_qt_parent_is_still_alive() -> None:
     """Der native Renderer stirbt vor seinem Elternfenster, nicht beim Prozessende."""
     events: list[str] = []
     window = _Window(events)
@@ -75,7 +75,7 @@ def test_offscreen_shutdown_uses_the_same_platform_neutral_order() -> None:
 def test_accepted_application_exit_uses_the_terminal_viewport_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Nur ein bestätigtes echtes Schließen finalisiert den VTK-Renderer."""
+    """Nur ein bestätigtes echtes Schließen finalisiert den Renderer."""
     pytest.importorskip("PySide6")
     from PySide6.QtGui import QCloseEvent
 

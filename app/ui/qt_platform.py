@@ -1,11 +1,12 @@
 """Welche Qt-Plattform die 3D-Ansicht braucht — entschieden, bevor es eine Anwendung gibt.
 
-Die 3D-Ansicht ist ein VTK-Fenster in einem Qt-Fenster, und VTKs Qt-Anbindung
-(``vtkmodules.qt.QVTKRenderWindowInteractor``) kennt nur X11: Sie übergibt
-``winId()`` als X-Window an ``vtkXOpenGLRenderWindow``. Läuft Qt selbst auf
-Wayland, ist diese Nummer kein X-Fenster — VTK findet kein Display, fällt auf
-EGL zurück, zeichnet nichts und reißt den Prozess mit
-(``std::bad_array_new_length``; Martin Donecker, CachyOS, 28.08.2026).
+Die 3D-Ansicht ist eine eigene Grafikfläche (rendercanvas, wgpu) in einem
+Qt-Fenster, und dieser Fensterweg ist nur unter X11 und Xwayland geprüft.
+Mit dem früheren VTK-Renderer war Wayland tödlich: Seine Qt-Anbindung kannte
+nur X11 und riss den Prozess mit (``std::bad_array_new_length``; Martin
+Donecker, CachyOS, 28.08.2026). Der wgpu-Weg kennt Wayland zwar, ist dort
+aber von niemandem gefahren — bis das jemand tut, bleibt X11 die geprüfte
+Plattform (Registerpunkt in ``ROADMAP.md``).
 
 Qt 6 wählt ohne ``QT_QPA_PLATFORM`` aber genau so: Sobald ``WAYLAND_DISPLAY``
 gesetzt ist **oder** ``XDG_SESSION_TYPE`` auf ``wayland`` steht, versucht es
@@ -35,7 +36,7 @@ from app.core.report import QT_PLATFORM_BEFORE_VARIABLE, QT_PLATFORM_UNSET
 
 _log = get_logger(__name__)
 
-#: Die Plattform, auf der VTK sein Fenster bekommt.
+#: Die Plattform, auf der die 3D-Ansicht ihr Fenster bekommt.
 X11: Final = "xcb"
 #: Dasselbe in einer Wayland-Sitzung: X11 zuerst, Wayland als Netz darunter.
 X11_THEN_WAYLAND: Final = "xcb;wayland"

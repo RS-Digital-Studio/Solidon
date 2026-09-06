@@ -1028,8 +1028,10 @@ def test_building_the_display_version_of_a_million_triangles() -> None:
     ziehen kann; das ist spürbar, und es ist regressionsfähig.
 
     Was hier **nicht** gemessen wird, ist die Bildrate beim Ziehen. Die braucht
-    Bilder auf echter Grafik, und die hat das Tor nicht — das Register führt
-    dazu „VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr".
+    Bilder auf echter Grafik, und die hat das Tor nicht — die Fenstertests
+    laufen in der CI nicht (Registerpunkt in ``ROADMAP.md``, Entscheidung vom
+    20.08.2026; der Grund „VTK braucht GL" ist mit dem Renderer gegangen, das
+    Wiedereinschalten ist ein eigener Schritt mit Probelauf).
     Diese Marke tritt nicht an ihre Stelle, sie steht daneben.
     """
     from app.core.geom.mesh_ops import decimate

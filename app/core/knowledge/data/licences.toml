@@ -154,7 +154,7 @@ PySide6 = { licence = "LGPL-3.0-only", note = "dynamisch gebunden, §36" }
 PySide6-Essentials = { licence = "LGPL-3.0-only" }
 PySide6-Addons = { licence = "LGPL-3.0-only" }
 shiboken6 = { licence = "LGPL-3.0-only" }
-vtk = { licence = "BSD-3-Clause", note = "der zweite Renderer hinter der Ansicht, direkt und ohne PyVista (§18)" }
+vtk = { licence = "BSD-3-Clause", note = "kopflose Geometrie der Bereichsprüfung (§24); zeichnet seit dem 06.09.2026 nicht mehr" }
 matplotlib = { licence = "LicenseRef-Matplotlib", note = "eigene PSF-basierte matplotlib-Lizenz; Volltext aus dem Ziel-Wheel" }
 pillow = { licence = "MIT-CMU", note = "HPND, freizügig" }
 # Der Agent legt den eigenen Schlüssel im Schlüsselbund des Systems ab (§27).

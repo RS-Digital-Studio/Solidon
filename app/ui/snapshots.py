@@ -2,13 +2,13 @@
 
 Ein bildfähiges Modell bekommt neben dem Steckbrief zwei gerenderte Ansichten:
 schräg von oben und von oben. Sie entstehen ohne Fenster im eigenen Renderer
-(über :func:`app.ui.render.choice.make_renderer`, also im selben, den die
+(über :func:`app.ui.render.factory.make_renderer`, also im selben, den die
 Ansicht zeichnet), damit sie auch dann kommen, wenn das Fenster gerade etwas
 anderes zeigt.
 
-Kurzlebig ist Absicht: VTK-Objekte, die jemand über ihr Fenster hinaus
-festhält, reißen den Abriss am Prozessende mit — der Renderer wird im
-``finally`` geschlossen, gleich welchen Weg der Lauf nimmt.
+Kurzlebig ist Absicht: Ein Renderer, den jemand über seinen Zweck hinaus
+festhält, hält Grafikpuffer und Fenster mit — er wird im ``finally``
+geschlossen, gleich welchen Weg der Lauf nimmt.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ def scene_views(scene: Scene) -> tuple[tuple[str, bytes], ...]:
     """Zwei PNG-Ansichten der Szene mit Beschriftung — oder nichts bei leerer Szene."""
     import numpy as np
 
-    from app.ui.render.choice import make_renderer
+    from app.ui.render.factory import make_renderer
 
     if not scene.objects:
         return ()

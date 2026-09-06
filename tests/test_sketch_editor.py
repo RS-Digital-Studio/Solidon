@@ -2996,13 +2996,13 @@ def test_the_sketch_view_is_orthographic_and_gives_the_projection_back(
 def test_switching_to_parallel_keeps_the_section_instead_of_jumping_to_two_millimetres(
     qt_app: QApplication,
 ) -> None:
-    """VTK führt für beide Projektionen getrennte Größen.
+    """Der Vertrag führt für beide Projektionen getrennte Größen.
 
     Die Zentralprojektion lebt vom Blickwinkel, die Parallelprojektion von
     ``parallel_scale`` — der halben sichtbaren Höhe in Weltmaßen. Wer
-    umschaltet, ohne die eine aus der anderen zu rechnen, landet auf VTKs
-    Startwert von 1,0: ein sichtbarer Ausschnitt von zwei Millimetern, und die
-    Skizze wäre beim Betreten des Modus weg.
+    umschaltet, ohne die eine aus der anderen zu rechnen, landet auf dem
+    Startwert des Renderers — unter VTK 1,0: ein sichtbarer Ausschnitt von
+    zwei Millimetern, und die Skizze wäre beim Betreten des Modus weg.
 
     Gerechnet wird in der Fokusebene, denn dort liegt die Zeichnung — der eine
     Ort, an dem beide Projektionen dasselbe zeigen sollen.
@@ -5708,12 +5708,12 @@ def test_enter_and_double_click_close_a_spline_in_the_viewport(qt_app: QApplicat
     den letzten Punkt —, den der Hinweis nicht nennt.
 
     **Der Filter wird direkt gefüttert, und das hat einen Grund.** Er sitzt
-    auf dem VTK-Interactor — am gebauten Fenster gemessen ist genau das der
-    Empfänger, ein `sendEvent` an das Viewport-Widget bleibt folgenlos. In der
-    Suite läuft Qt offscreen, und dort gibt es keinen Plotter und damit keinen
-    Interactor; `eventFilter` bekommt hier deshalb dieselbe Kennung, die es im
-    Lauf sähe (beides ``None``), und die Vergleichszeile im Filter trifft wie
-    im echten Fenster.
+    auf dem Widget des Renderers — am gebauten Fenster gemessen (unter VTK)
+    ist genau das der Empfänger, ein `sendEvent` an das Viewport-Widget
+    bleibt folgenlos. In der Suite läuft Qt offscreen, und dort gibt es
+    keinen Renderer und damit kein Widget; `eventFilter` bekommt hier deshalb
+    dieselbe Kennung, die es im Lauf sähe (beides ``None``), und die
+    Vergleichszeile im Filter trifft wie im echten Fenster.
 
     Am laufenden Fenster ist beides zusätzlich mit echten Ereignissen gemessen
     worden: Eingabetaste 0 → 1 Element, Doppelklick 1 → 2, und ohne offenen Zug

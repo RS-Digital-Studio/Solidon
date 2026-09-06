@@ -9200,8 +9200,9 @@ def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow
 def test_the_veil_hides_the_native_view_while_it_stands(window: MainWindow) -> None:
     """Verborgen, nicht nur verdeckt (§2.8).
 
-    Die Ansicht ist ein natives Fenster (VTK): auf dem Bildschirm liegt es
-    über jedem gemalten Geschwister, egal was die Qt-Stapelung sagt — und
+    Die Ansicht ist ein natives Fenster (die Grafikfläche des Renderers): auf
+    dem Bildschirm liegt es über jedem gemalten Geschwister, egal was die
+    Qt-Stapelung sagt — und
     solange es nie gerendert hat, zeigt es alte Pixel. Beim Öffnen von Weg 1
     stand deshalb sechs Sekunden der Startbildschirm bzw. Schwarz, während
     der Schleier unsichtbar darunter lag; Robert hielt es zweimal für einen
@@ -11763,7 +11764,7 @@ def test_the_picture_for_the_support_asks_the_viewport_for_its_own(
     hat über ``window`` ein ganzes ``MainWindow`` gebaut, nur um zu sehen, dass
     ``snapshot`` ohne Plotter ``None`` gibt. Er hob die Abrissquote dieser Datei
     von 1 aus 3 auf 2 aus 3 — die Suite baut in einem Prozess hunderte
-    VTK-Fenster, und zwei weitere kippten sie. Ein nacktes ``QWidget`` genügt
+    Fenster mit Ansicht, und zwei weitere kippten sie. Ein nacktes ``QWidget`` genügt
     hier, denn die Frage ist der Aufruf und nicht das Bild.
     """
     from app.ui import support_dialog

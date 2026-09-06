@@ -1113,9 +1113,10 @@ def main() -> int:
     # jeden, der es importiert, statt es zu starten. `tests/test_translations.py`
     # führt es aus, um `page_for()` zu prüfen — danach galt für den ganzen
     # Testlauf keine Offscreen-Plattform mehr, `viewport._available()` sagte ja,
-    # und jedes später gebaute Fenster bekam einen echten VTK-Interactor ohne
-    # OpenGL-Kontext. Das nahm den Prozess mit. Wer dieses Werkzeug startet, hat
-    # die Variable ohnehin nicht gesetzt; der Pop bleibt für den Fall, dass doch.
+    # und jedes später gebaute Fenster bekam einen echten Renderer (damals
+    # VTKs Interactor, ohne OpenGL-Kontext). Das nahm den Prozess mit. Wer
+    # dieses Werkzeug startet, hat die Variable ohnehin nicht gesetzt; der Pop
+    # bleibt für den Fall, dass doch.
     os.environ.pop("QT_QPA_PLATFORM", None)
 
     load_operations()

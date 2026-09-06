@@ -264,7 +264,7 @@ def test_gfx_label_field_covers_its_leader_without_covering_picks(line_first: bo
     """Die Verbindung erreicht das Textfeld; darin bleiben Feld und Schrift unverdeckt."""
     from app.ui.render.api import CameraPose, LabelStyle, SurfaceStyle
     from app.ui.render.gfx_renderer import GfxRenderer
-    from tests.test_render_vtk import GFX_MISSING
+    from tests.test_render_contract import GFX_MISSING
 
     if GFX_MISSING is not None:
         pytest.skip(f"pygfx: {GFX_MISSING}")

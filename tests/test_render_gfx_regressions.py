@@ -14,7 +14,7 @@ import pytest
 
 from app.ui.render.api import AxesMarkerStyle, CameraPose, LabelStyle, SurfaceStyle
 from app.ui.render.gfx_renderer import GfxLabels, GfxRenderer
-from tests.test_render_vtk import GFX_MISSING, cube, look_down, plate
+from tests.test_render_contract import GFX_MISSING, cube, look_down, plate
 
 pytestmark = pytest.mark.skipif(GFX_MISSING is not None, reason=f"pygfx: {GFX_MISSING}")
 
@@ -704,3 +704,4 @@ def test_projection_queries_keep_cached_matrices_until_size_or_pose_changes(
     assert moved[:2] != pytest.approx(resized[:2])
     assert renderer.display_to_world(*moved) == pytest.approx(point)
     assert sizes == [(200.0, 600.0)]
+
