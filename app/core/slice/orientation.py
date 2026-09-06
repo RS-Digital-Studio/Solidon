@@ -22,8 +22,9 @@ from dataclasses import dataclass
 import numpy as np
 
 from app.core.geom.mesh import MeshData
+from app.core.geom.mesh_ops import decimate
 from app.core.geom.orient import candidates as face_candidates
-from app.core.geom.orient import ranked_orientations, rotation_to_down
+from app.core.geom.orient import evaluate_direction, ranked_orientations, rotation_to_down
 from app.core.geom.transform import apply, place_on_bed
 from app.core.log import get_logger
 from app.core.slice.analysis import slice_body
@@ -40,6 +41,19 @@ SEARCH_LAYER_HEIGHT = 1.0
 
 #: Vorgabeanzahl der versuchten Richtungen.
 DEFAULT_CANDIDATES = 200
+
+#: Mehr Dreiecke sieht die Suche nicht. Standfläche und Stützraum ändern sich
+#: durch eine Dezimierung kaum, die Schichtanalyse kostet aber linear: Der
+#: Filamenthalter kam mit 260 988 Dreiecken aus dem Aushöhlen, und jeder
+#: Kandidat brauchte rund fünf Sekunden — 200 Kandidaten wären eine halbe
+#: Stunde beim Öffnen gewesen (06.09.2026).
+SEARCH_TRIANGLES = 20_000
+
+#: So viele Lagen aus der Vorauswahl werden wirklich geschnitten. Die
+#: Heuristik (Standfläche gegen Überhang, ``geom.orient``) sortiert vor —
+#: „meistens entscheidet die unterste Schicht" (Robert, 06.09.2026) —, und
+#: die Schichtanalyse beurteilt nur noch, was vorn liegt.
+FINALISTS = 8
 
 
 #: Stützvolumen innerhalb dieses Anteils voneinander zählen als gleich gut,
@@ -201,6 +215,33 @@ def judge(
     )
 
 
+def search_proxy(mesh: MeshData) -> MeshData:
+    """Das Netz, an dem die Suche urteilt: höchstens ``SEARCH_TRIANGLES`` Dreiecke.
+
+    Große ebene Flächen bleiben bei der Dezimierung ebene Flächen, und mehr
+    braucht die Standfläche nicht; der Stützraum unter Überhängen ist ein
+    Volumen, das auf ein Prozent genau reicht, um Lagen zu ordnen.
+    """
+    if mesh.triangle_count <= SEARCH_TRIANGLES:
+        return mesh
+    return decimate(mesh, SEARCH_TRIANGLES)
+
+
+def settled(baseline: Candidate, floor: float, footprint: float, best_footprint: float) -> bool:
+    """Ob die Ausgangslage schon stützfrei auf der größten Standfläche steht.
+
+    Dann ist nichts zu suchen. ``footprint`` ist die Standfläche der
+    Ausgangslage aus der Vorauswahl, ``best_footprint`` die größte, die eine
+    Richtung dort erreicht; innerhalb von ``SUPPORT_TIE`` gilt beides als
+    gleich — dieselbe Toleranz, mit der :func:`best_of` Gleichstände entscheidet.
+    """
+    if baseline.support_volume > EPS_GEOM:
+        return False
+    if floor > 0.0 and not stands(baseline, floor):
+        return False
+    return footprint >= best_footprint * (1.0 - SUPPORT_TIE)
+
+
 def best_face_candidate(
     mesh: MeshData,
     *,
@@ -250,26 +291,54 @@ def search(
     baseline_direction: Vec3 = (0.0, 0.0, -1.0)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    baseline = judge(mesh, baseline_direction, layer_height, footing)
+    # Beurteilt wird ein verkleinertes Netz; gedreht wird am Ende das echte.
+    proxy = search_proxy(mesh)
+    baseline = judge(proxy, baseline_direction, layer_height, footing)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     field = [baseline]
-
     # Die Flächennormalen kommen mit: die beste Orientierung hat meist eine
     # ebene Fläche auf der Platte, und eine gleichmäßige Abtastung der Kugel
     # trifft eine exakte Achse nur zufällig.
     directions = _unique_directions(
-        [baseline_direction, *face_candidates(mesh), *sample_directions(count, seed)]
+        [baseline_direction, *face_candidates(proxy), *sample_directions(count, seed)]
     )[1:]
+    considered = 1 + len(directions)
+    # Stufe eins: Standfläche gegen Überhang aus den Flächennormalen, für jede
+    # Richtung, ohne eine einzige Schicht zu schneiden.
+    scored = [evaluate_direction(proxy, baseline_direction)]
     for index, direction in enumerate(directions, start=1):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if progress is not None:
-            progress(index / max(len(directions), 1), str(_("Ausrichtung suchen")))
-
-        field.append(judge(mesh, direction, layer_height, footing))
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
+            progress(0.5 * index / max(len(directions), 1), str(_("Ausrichtung suchen")))
+        scored.append(evaluate_direction(proxy, direction))
+    ranked = sorted(
+        scored,
+        key=lambda entry: (
+            -entry.score,
+            -entry.footprint,
+            entry.overhang,
+            entry.height,
+            entry.direction,
+        ),
+    )
+    # **Steht die Ausgangslage schon ohne Stützen und auf der größten
+    # Standfläche, gibt es nichts zu suchen.** Ein offener Kasten meldete in
+    # jeder der 200 Lagen null Stützraum, und die Suche verglich trotzdem eine
+    # halbe Stunde lang Nullen miteinander. Die Standfläche gehört in die
+    # Bedingung: Eine dünne Platte steht auch hochkant stützfrei, und die
+    # Suche soll sie hinlegen.
+    if not settled(baseline, floor, scored[0].footprint, ranked[0].footprint):
+        # Stufe zwei: nur die Finalisten bekommen die Schichtanalyse.
+        finalists = [entry for entry in ranked if entry.direction != baseline_direction][:FINALISTS]
+        for index, entry in enumerate(finalists, start=1):
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
+            if progress is not None:
+                fraction = 0.5 + 0.5 * index / max(len(finalists), 1)
+                progress(fraction, str(_("Ausrichtung suchen")))
+            field.append(judge(proxy, entry.direction, layer_height, footing))
 
     # Erst wenn alle vermessen sind, wird entschieden: Die
     # Fünf-Prozent-Toleranz macht den paarweisen Vergleich nicht transitiv,
@@ -284,7 +353,8 @@ def search(
             severity="info",
             message=_("Ausrichtung über die Schichtanalyse gesucht."),
             values={
-                "candidates": tried,
+                "candidates": considered,
+                "sliced": tried,
                 "support": round(best.support_volume / 1000.0, 2),
                 "saved": round((baseline.support_volume - best.support_volume) / 1000.0, 2),
             },
