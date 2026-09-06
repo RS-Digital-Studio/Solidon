@@ -1,0 +1,10 @@
+# Die Abnahme des Renderer-Pakets: Sonden, Berichte und Manifeste reisen mit,
+# die Beweisstücke bleiben auf der Maschine — Bildschirmfotos, Quellkopien,
+# Prozessprotokolle und der Basisstand sind zusammen über ein Gigabyte.
+*/
+*.zip
+*.png
+*.html
+*-processes.json
+summary.json
+__pycache__/

@@ -1,0 +1,6 @@
+{
+  "runner_sha256": "71a11e73c4f9b999af4fee18476420ca6e654c71954104ea1657c7f9afd1ab20",
+  "source_probe_sha256": "9fec406b126db95233fcc5966bff6bdb7af4d0fa7c3868ec8511d896e52c8448",
+  "footprint_helper_sha256": "69a2898b1610d2cd5a7827df6962626fef7dec4de7a7d752ea9bdaf27b6d7f52",
+  "scope": "Nur main verkürzt, Import- und echte Auswahlwege der vorhandenen Sonde erhalten"
+}

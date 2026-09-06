@@ -1,0 +1,24 @@
+{
+  "source_directory": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final-source-v7",
+  "counter_result": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\result.json",
+  "counter_project": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\bearbeitung-geprueft.p3d",
+  "counter_cache": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\profile\\LOCALAPPDATA\\RS Digital\\Solidon3D\\cache\\results\\0.3.4+bc92bb\\f2\\f21da894dc379a27f0ba8002b987c467",
+  "step_original": "C:\\Users\\rober\\Downloads\\carpet-corner-clip.step",
+  "input_sha256": {
+    "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final-source-v7\\audit-source-manifest.json": "91ef8ae4dc6088ab7b9a14a71273112e6c4197ba79c3ddf2b85cbd151ee3824b",
+    "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\result.json": "d241f86373debf443b48d99ea627904c6b5bb38662ddf10c6ef4cc98180ff46a",
+    "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\bearbeitung-geprueft.p3d": "698a7d5053dc10998b8bcd606481bed4eee970d3e324ee581093c3d16d62377b",
+    "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\profile\\LOCALAPPDATA\\RS Digital\\Solidon3D\\cache\\results\\0.3.4+bc92bb\\f2\\f21da894dc379a27f0ba8002b987c467\\objects.json": "cce35d08d1c8a5f08c1671f22644e29da6425eb82d0744cf05b5f464b5180d46",
+    "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\vtk\\file-18\\profile\\LOCALAPPDATA\\RS Digital\\Solidon3D\\cache\\results\\0.3.4+bc92bb\\f2\\f21da894dc379a27f0ba8002b987c467\\0.npz": "dffc423cdc34f67fe0cbcfbeec9bbab912f697ef5ec8be34d58d58346fa63ee6",
+    "C:\\Users\\rober\\Downloads\\carpet-corner-clip.step": "b551014308ba413a1142181f7cf5d0d183ad1f088305a674ceeed5c83164af4b",
+    "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\core_crash_probes_v7_corrected.py": "65965189ec52a45e08c2c759cab116f58ec29dd5c64faba9067573cddaf62655"
+  },
+  "execution": "Zwei frische Python-3.13-Prozesse, gemeinsames 85-Sekunden-Limit, ohne Qt/GPU",
+  "counter_scope": "Exakte gespeicherte Geometrie per Native-Fingerprint geprÃ¼ft; unmittelbarer threemf.write_assembly-XML-/ZIP-Kern im separaten Python-Arbeiterthread; Qt-Worker/ExportvorprÃ¼fung/Slicer-Suche ausgeschlossen.",
+  "supersedes_helper_only": {
+    "script": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\core_crash_probes_v7.py",
+    "manifest": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\core_crash_probes_v7_manifest.json",
+    "failed_run": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\core-crash-v7-01"
+  },
+  "correction": "Cachemerkmale vor finaler ID-Zuordnung werden bijektiv über Art, Dreieckszahl und transformierten Mittelpunkt zugeordnet; vollständiger nativer Fingerprint bleibt zwingend."
+}

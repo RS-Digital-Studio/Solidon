@@ -1,0 +1,166 @@
+{
+  "source": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final-source-v6\\app\\ui\\viewport.py",
+  "cache": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\preflight-v6\\gfx\\file-18\\profile\\LOCALAPPDATA\\RS Digital\\Solidon3D\\cache\\results\\0.3.4+bc92bb\\03\\0310a09dd646502d4f4a510d1e05c6f6\\objects.json",
+  "camera": {
+    "position": [
+      441.7836072038741,
+      -441.7836072038741,
+      439.5960141630993
+    ],
+    "focal_point": [
+      0.0,
+      7.105427357601002e-15,
+      86.1691284
+    ],
+    "view_up": [
+      -0.34815531191139826,
+      0.34815531191139826,
+      0.8703882797784672
+    ]
+  },
+  "camera_origin": "Gespeicherte Kamera nach späterem Projektionswechsel; beide Projektionsarten geprüft",
+  "lod_point_limit": "Native Ergebnisdatei enthält den LOD-Zellindex, aber keinen LOD-Trefferpunkt",
+  "rows": [
+    {
+      "pixel": [
+        710.0,
+        487.0
+      ],
+      "original_cell": 44131,
+      "original_point": [
+        -63.909845576804884,
+        89.14186642157833,
+        2.3999938999999983
+      ],
+      "recorded_lod_cell": 13693,
+      "recorded_ui_feature": "torus_13",
+      "nearest_original_features": [
+        [
+          0.0,
+          "face_6"
+        ],
+        [
+          2.3999938999999983,
+          "face_5"
+        ],
+        [
+          9.015478946730235,
+          "face_2"
+        ],
+        [
+          11.090154423195116,
+          "face_1"
+        ]
+      ],
+      "ray_checks": [
+        {
+          "projection": "perspective",
+          "aim": [
+            54.9446144009602,
+            -51.81359815282436,
+            106.81512679475702
+          ],
+          "selected": "torus_13",
+          "feature_at": "torus_13",
+          "candidates": [
+            {
+              "feature": "torus_13",
+              "kind": "torus",
+              "recess": false,
+              "span": [
+                638.5074826570932,
+                640.1049297818299
+              ],
+              "before_surface_mm": 215.1599507521638
+            }
+          ]
+        },
+        {
+          "projection": "parallel",
+          "aim": [
+            54.9446144009602,
+            -51.81359815282436,
+            106.81512679475702
+          ],
+          "selected": "torus_13",
+          "feature_at": "torus_13",
+          "candidates": [
+            {
+              "feature": "torus_13",
+              "kind": "torus",
+              "recess": false,
+              "span": [
+                632.8290869889065,
+                634.4686931530069
+              ],
+              "before_surface_mm": 220.83834642035038
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "pixel": [
+        685.0,
+        526.0
+      ],
+      "original_cell": 44330,
+      "original_point": [
+        -46.66704130810126,
+        53.60171896413897,
+        2.3999938999999983
+      ],
+      "recorded_lod_cell": 13727,
+      "recorded_ui_feature": "torus_13",
+      "nearest_original_features": [
+        [
+          0.0,
+          "face_6"
+        ],
+        [
+          2.3999938999999983,
+          "face_5"
+        ],
+        [
+          26.043783012801672,
+          "face_2"
+        ],
+        [
+          28.33295869189874,
+          "face_1"
+        ]
+      ],
+      "ray_checks": [
+        {
+          "projection": "perspective",
+          "aim": [
+            54.9446144009602,
+            -51.813598152824426,
+            106.81512679475712
+          ],
+          "selected": "torus_13",
+          "feature_at": "torus_13",
+          "candidates": [
+            {
+              "feature": "torus_13",
+              "kind": "torus",
+              "recess": false,
+              "span": [
+                634.0860667090526,
+                635.6724521338323
+              ],
+              "before_surface_mm": 187.57750042061548
+            }
+          ]
+        },
+        {
+          "projection": "parallel",
+          "aim": null,
+          "selected": null,
+          "feature_at": "face_6",
+          "candidates": []
+        }
+      ]
+    }
+  ]
+}

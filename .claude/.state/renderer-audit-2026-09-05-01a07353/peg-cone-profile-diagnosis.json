@@ -1,0 +1,279 @@
+{
+  "schema": 1,
+  "input": {
+    "path": "C:\\Users\\rober\\Downloads\\peg.stl",
+    "sha256": "758acc335b66003a805a238af9e4259c7a844535005e4c585d975c067c036b14",
+    "triangles": 504,
+    "watertight": true,
+    "components": 1,
+    "bounds_mm": [
+      [
+        -2.0,
+        20.200000762939453,
+        7.800000190734863
+      ],
+      [
+        2.0,
+        33.54999923706055,
+        47.79999923706055
+      ]
+    ]
+  },
+  "sources": {
+    "old_ui_result": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final\\gfx\\file-09\\result.json",
+    "old_source": "F:\\3D Druck\\.claude\\.state\\renderer-audit-2026-09-05-01a07353\\final-source-v4",
+    "new_source": "F:\\3D Druck\\.claude\\.state\\user-files-ui-audit-2026-09-05-01a0713a\\updated-source",
+    "new_features_sha256": "2eb05ae3399b28d10047149fa812e76f867b9aa297aa4edf6bd9a096ca5230cc"
+  },
+  "comparison": {
+    "old_cone_ids": [
+      "cone_1",
+      "cone_2",
+      "cone_3",
+      "cone_4",
+      "cone_5",
+      "cone_6"
+    ],
+    "new_cone_ids": [
+      "cone_1",
+      "cone_2",
+      "cone_3",
+      "cone_4",
+      "cone_5",
+      "cone_6"
+    ],
+    "same_parameters": {
+      "cone_1": true,
+      "cone_2": true,
+      "cone_3": true,
+      "cone_4": true,
+      "cone_5": true,
+      "cone_6": true
+    },
+    "new_filter_limits": {
+      "normal_error_after_resolution_deg": 5.0,
+      "outlier_area_share": 0.05
+    }
+  },
+  "profiles": {
+    "cone_1": {
+      "faces": 25,
+      "vertices": 27,
+      "area_mm2": 3.8450527777829895,
+      "connected_components": 1,
+      "boundary_edges": 27,
+      "axis": [
+        0.9999775471230773,
+        -0.004738828953704171,
+        -0.00473801117149232
+      ],
+      "centre": [
+        -1.5205637068985025,
+        29.591361552630698,
+        39.07434364446206
+      ],
+      "diameter_mm": 7.908987182767715,
+      "opening_angle_deg": 90.69244682101676,
+      "residual": 0.0005675895153173453,
+      "recess": false,
+      "axial_span_mm": 0.5024448920737665,
+      "radial_span_mm": 0.5161591130871002,
+      "azimuth_span_deg": 91.44777221538186,
+      "cone_shell_error_max_mm": 0.012401414566953761,
+      "cone_shell_error_mean_mm": 0.0049369432182685205,
+      "normal_error_p95_after_resolution_deg": 0.0,
+      "normal_outlier_area_share": 0.0,
+      "published_by_new_filter": true
+    },
+    "cone_2": {
+      "faces": 35,
+      "vertices": 37,
+      "area_mm2": 3.6596149121772656,
+      "connected_components": 1,
+      "boundary_edges": 37,
+      "axis": [
+        0.999999665146703,
+        1.2715403343828774e-07,
+        0.0008183559529243307
+      ],
+      "centre": [
+        -1.500254489034741,
+        31.549999596921282,
+        35.03139845440927
+      ],
+      "diameter_mm": 3.9995046269198613,
+      "opening_angle_deg": 90.04683637410696,
+      "residual": 0.00024191224405367825,
+      "recess": false,
+      "axial_span_mm": 0.500966361004638,
+      "radial_span_mm": 0.5017391167754075,
+      "azimuth_span_deg": 180.1524985117253,
+      "cone_shell_error_max_mm": 0.004675506545105845,
+      "cone_shell_error_mean_mm": 0.004257981596602298,
+      "normal_error_p95_after_resolution_deg": 0.0,
+      "normal_outlier_area_share": 0.0,
+      "published_by_new_filter": true
+    },
+    "cone_3": {
+      "faces": 48,
+      "vertices": 50,
+      "area_mm2": 11.968673786478202,
+      "connected_components": 1,
+      "boundary_edges": 50,
+      "axis": [
+        0.9999999563431301,
+        -0.00029548897739323536,
+        -4.608080713026741e-08
+      ],
+      "centre": [
+        -1.4982318678888915,
+        26.683303284794007,
+        10.666492956473729
+      ],
+      "diameter_mm": 13.269015482748593,
+      "opening_angle_deg": 89.99027417111795,
+      "residual": 0.02757974530715681,
+      "recess": false,
+      "axial_span_mm": 0.5024654957913888,
+      "radial_span_mm": 4.268015033042739,
+      "azimuth_span_deg": 295.59687826652095,
+      "cone_shell_error_max_mm": 4.06984460446483,
+      "cone_shell_error_mean_mm": 0.2081905817375102,
+      "normal_error_p95_after_resolution_deg": 0.0,
+      "normal_outlier_area_share": 0.0,
+      "published_by_new_filter": true
+    },
+    "cone_4": {
+      "faces": 48,
+      "vertices": 50,
+      "area_mm2": 11.968673786478202,
+      "connected_components": 1,
+      "boundary_edges": 50,
+      "axis": [
+        -0.9999999563431301,
+        -0.00029548897739323563,
+        -4.608080713019883e-08
+      ],
+      "centre": [
+        1.4982318678888915,
+        26.683303284794004,
+        10.666492956473723
+      ],
+      "diameter_mm": 13.269015482748582,
+      "opening_angle_deg": 89.99027417111793,
+      "residual": 0.02788963596969062,
+      "recess": false,
+      "axial_span_mm": 0.5024654957913888,
+      "radial_span_mm": 4.268015033042729,
+      "azimuth_span_deg": 295.59687826652083,
+      "cone_shell_error_max_mm": 4.069844604464846,
+      "cone_shell_error_mean_mm": 0.20819058173753355,
+      "normal_error_p95_after_resolution_deg": 0.0,
+      "normal_outlier_area_share": 0.0,
+      "published_by_new_filter": true
+    },
+    "cone_5": {
+      "faces": 35,
+      "vertices": 37,
+      "area_mm2": 3.659614912177266,
+      "connected_components": 1,
+      "boundary_edges": 37,
+      "axis": [
+        -0.999999665146703,
+        1.2715403343828774e-07,
+        0.0008183559529243308
+      ],
+      "centre": [
+        1.500254489034741,
+        31.54999959692136,
+        35.031398454409285
+      ],
+      "diameter_mm": 3.99950462692002,
+      "opening_angle_deg": 90.04683637410699,
+      "residual": 0.0002419122440552025,
+      "recess": false,
+      "axial_span_mm": 0.500966361004638,
+      "radial_span_mm": 0.5017391167754652,
+      "azimuth_span_deg": 180.15249851172422,
+      "cone_shell_error_max_mm": 0.004675506545168684,
+      "cone_shell_error_mean_mm": 0.004257981596595889,
+      "normal_error_p95_after_resolution_deg": 0.0,
+      "normal_outlier_area_share": 0.0,
+      "published_by_new_filter": true
+    },
+    "cone_6": {
+      "faces": 25,
+      "vertices": 27,
+      "area_mm2": 3.84505277778299,
+      "connected_components": 1,
+      "boundary_edges": 27,
+      "axis": [
+        -0.9999775471230773,
+        -0.004738828953704141,
+        -0.00473801117149229
+      ],
+      "centre": [
+        1.520563706898502,
+        29.591361552630694,
+        39.07434364446204
+      ],
+      "diameter_mm": 7.908987182767758,
+      "opening_angle_deg": 90.69244682101673,
+      "residual": 0.0005675895153195349,
+      "recess": false,
+      "axial_span_mm": 0.502444892073767,
+      "radial_span_mm": 0.5161591130871077,
+      "azimuth_span_deg": 91.44777221538152,
+      "cone_shell_error_max_mm": 0.012401414566916458,
+      "cone_shell_error_mean_mm": 0.004936943218222796,
+      "normal_error_p95_after_resolution_deg": 0.0,
+      "normal_outlier_area_share": 0.0,
+      "published_by_new_filter": true
+    }
+  },
+  "opposite_face_pairs": [
+    {
+      "ids": [
+        "cone_1",
+        "cone_6"
+      ],
+      "diameter_difference_mm": 4.263256414560601e-14,
+      "angle_difference_deg": 2.842170943040401e-14,
+      "axis_opposition_deg": 0.7678995911822805,
+      "face_count_equal": true
+    },
+    {
+      "ids": [
+        "cone_2",
+        "cone_5"
+      ],
+      "diameter_difference_mm": 1.5853984791647235e-13,
+      "angle_difference_deg": 2.842170943040401e-14,
+      "axis_opposition_deg": 0.09377669608495243,
+      "face_count_equal": true
+    },
+    {
+      "ids": [
+        "cone_3",
+        "cone_4"
+      ],
+      "diameter_difference_mm": 1.0658141036401503e-14,
+      "angle_difference_deg": 1.4210854715202004e-14,
+      "axis_opposition_deg": 0.03386054350331998,
+      "face_count_equal": true
+    }
+  ],
+  "verdict": {
+    "supported_partial_conical_chamfers": [
+      "cone_1",
+      "cone_2",
+      "cone_5",
+      "cone_6"
+    ],
+    "false_positive_cones": [
+      "cone_3",
+      "cone_4"
+    ],
+    "reason": "cone_1/2/5/6 erfüllen die Kegelgleichung an den Patchvertices bis 0,0125 mm. cone_3/4 haben bei nur 0,5025 mm Axialspanne 4,268 mm Radialspanne und 4,0698 mm Vertexfehler zur eingepassten Kegelfläche."
+  }
+}
