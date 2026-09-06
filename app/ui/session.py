@@ -177,6 +177,12 @@ class _EvaluationWorker(Worker):
 
             result = session.run_evaluation()
             if session.pending_orphan_check:
+                # **Einmal** geprüft, auch wenn der Nutzer die Frage abbricht:
+                # Der Merker fällt vor der Schleife, nicht danach — sonst
+                # warf ``OperationCancelled`` uns vor die Zeile, und jede
+                # weitere Auswertung stellte dieselbe Frage neu (§21.3).
+                session.pending_orphan_check = False
+                rewritten = False
                 while True:
                     session._pending.preview = result
                     try:
@@ -194,10 +200,14 @@ class _EvaluationWorker(Worker):
                     outside.extend(check.findings)
                     if not check.changed:
                         break
+                    rewritten = True
+                    result = session.run_evaluation()
+                if rewritten:
+                    # Erst melden, wenn der Arbeiter mit dem Dokument fertig
+                    # ist: Die Slots lesen es im Hauptthread, und die nächste
+                    # Runde von ``orphans._rewrite`` schrieb sonst noch daran.
                     session._dirty = True
                     session.projectChanged.emit()
-                    result = session.run_evaluation()
-                session.pending_orphan_check = False
             result = _with_findings(result, outside)
         except OperationCancelled:
             self.cancelled.emit()
@@ -579,6 +589,12 @@ class Session(QObject):
         Zeile, irgendwann später."""
         self._preview_generation = 0
         self._project_generation = 0
+        self.result_generation = 0
+        """Zählt jedes neue ``last_result``. Wer wissen will, ob seit seinem
+        Blick eine andere Auswertung kam, vergleicht diese Zahl — nicht
+        ``id(last_result)``: CPython vergibt die Adresse eines freigegebenen
+        Ergebnisses wieder, und zwei Auswertungen später sah der Druckdialog
+        „dasselbe" Ergebnis (UI-21)."""
         """Welches Dokument gerade offen ist, als Zähler: ``_reset_for`` zählt
         hoch, und ein Arbeiter, der für ein früheres gestartet wurde, erkennt
         seine Meldung als veraltet (UI-01)."""
@@ -1982,6 +1998,7 @@ class Session(QObject):
         self.cancel_signal.reset()
         result = self.run_evaluation("fine")
         self.last_result = result
+        self.result_generation += 1
         self.result_current = True
         self.sceneChanged.emit(result)
         return result
@@ -2233,6 +2250,7 @@ class Session(QObject):
             # Projekts über das Modell zu legen, das gerade geladen wird.
             return
         self.last_result = result
+        self.result_generation += 1
         self.result_current = not self._rerun_pending
         # §17.2: die Rückfallstufe behalten, die jede Operation getragen hat —
         # damit die Datei morgen gleich nachrechnet.
