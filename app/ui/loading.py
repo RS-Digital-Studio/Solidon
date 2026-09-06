@@ -17,7 +17,7 @@ egal wie lange gerechnet wird. Wer entscheidet das, steht im Hauptfenster
 (``_update_veil``); dieses Modul zeigt nur an.
 
 **Deckend, nicht durchscheinend.** Gezeichnet wird der Verlauf der leeren
-Ansicht selbst, aus denselben Themenfarben, die der Plotter bekommt. Damit
+Ansicht selbst, aus denselben Themenfarben, die der Renderer bekommt. Damit
 sieht die Fläche aus wie die Ansicht, in der gleich das Modell steht, statt
 wie ein Panel, das sich davorgeschoben hat — und es entsteht kein
 halbdurchsichtiges Qt-Widget über einem OpenGL-Fenster, bei dem am Ende die
@@ -332,7 +332,7 @@ class LoadingVeil(QWidget):
         text = QColor(colours["text"])
 
         # Der Verlauf der leeren Ansicht, aus denselben Farben, die der
-        # Plotter bekommt (``theme.viewport_colours``). Oben hell, unten
+        # Renderer bekommt (``theme.viewport_colours``). Oben hell, unten
         # dunkel — genau andersherum wäre eine andere Ansicht.
         gradient = QLinearGradient(0.0, 0.0, 0.0, float(self.height()))
         gradient.setColorAt(0.0, QColor(colours["viewport_top"]))

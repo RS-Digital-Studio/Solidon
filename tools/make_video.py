@@ -3559,9 +3559,11 @@ def shoot_loop(
     )
     files = encode_loop(shot, out / stem)
     # Ein Fenster je Aufnahme, und der Viewport wird ausdrücklich
-    # losgelassen: Ohne das behält das ``QtInteractor`` des ersten seinen
-    # OpenGL-Kontext, und im zweiten Loop liegt der Orientierungswürfel
-    # als handtellergroßes Achsenkreuz quer über dem Modell.
+    # losgelassen: Das Fenster besitzt die native Grafikfläche des Renderers,
+    # und die muss vor ihrem Elternfenster sterben — sonst räumt Python sie
+    # erst beim Prozessende ab. (Unter PyVistas ``QtInteractor``, bis
+    # 05.09.2026, lag der Orientierungswürfel im zweiten Loop als
+    # handtellergroßes Achsenkreuz quer über dem Modell.)
     release_viewport(window)
     return files
 
@@ -3580,9 +3582,11 @@ def shoot_language(
     """Ein vollständiger Durchgang für eine Sprache: vertonen, filmen, kodieren.
 
     Je Sprache ein eigenes Hauptfenster — und deshalb am Ende
-    :func:`release_viewport`. Ohne das behält das ``QtInteractor`` des ersten
-    Fensters seinen OpenGL-Kontext, und im zweiten Durchgang liegt der
-    Orientierungswürfel als handtellergroßes Achsenkreuz quer über dem Modell.
+    :func:`release_viewport`. Das Fenster besitzt die native Grafikfläche des
+    Renderers, und die muss vor ihrem Elternfenster geschlossen werden; sonst
+    räumt Python sie erst beim Prozessende ab. (Unter PyVistas
+    ``QtInteractor``, bis 05.09.2026, lag der Orientierungswürfel im zweiten
+    Durchgang als handtellergroßes Achsenkreuz quer über dem Modell.)
     Die Anwendung merkt das nie, sie baut ein Hauptfenster und dann keins mehr;
     dieses Werkzeug baut zwei.
     """

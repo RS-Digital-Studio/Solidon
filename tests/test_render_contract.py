@@ -345,14 +345,15 @@ def test_translucent_bodies_blend_the_same_whichever_order_they_were_added(
     renderer: Renderer,
 ) -> None:
     """Zwei durchscheinende Körper hintereinander mischen sich reihenfolge-
-    unabhängig — gemessen an VTK 9.6.2, ohne Fenster wie mit PyVista.
+    unabhängig — gemessen am Renderer; unter VTK 9.6.2, bis 06.09.2026, galt
+    dasselbe, ohne Fenster wie mit PyVista.
 
     Der Viewport hängt seine Aktoren bis heute von hinten nach vorn um
     (``_order_by_depth``), weil ein Bild vom 03.09.2026 an der Einfüge-
     reihenfolge hing. Dieser Test hält fest, was der Renderer hier tut: Beide
     Reihenfolgen ergeben dasselbe Bild, und beide Körper sind darin — Rot wie
-    Blau tragen bei. Ändert eine VTK-Fassung das, wird er rot, und dann
-    braucht der Viewport seine Umhängung wieder.
+    Blau tragen bei. Mischt eine pygfx-Fassung das anders, wird er rot, und
+    dann braucht der Viewport seine Umhängung wieder.
     """
     base, faces = cube()
     near = renderer.add_surface(
@@ -474,7 +475,7 @@ def test_colours_travel_as_hex_in_both_directions() -> None:
 
 def test_labels_render_in_a_fresh_interpreter() -> None:
     """Beschriftungen zeichnen auch in einem Interpreter, der nur den Renderer
-    holt — so, wie die Anwendung ohne PyVista starten wird.
+    holt — so, wie die Anwendung seit dem Ausbau von PyVista startet.
 
     In der Suite hat irgendein Import davor die Schriftmaschine längst
     geladen; hier lädt sie nur, was der Renderer selbst mitbringt.
@@ -526,8 +527,10 @@ def test_the_headlight_brightens_the_faces_that_look_at_the_camera(
     renderer: Renderer,
 ) -> None:
     """Das Frontlicht ist das eine Licht aus Kamerarichtung (`ansicht.md`,
-    „Zwei Werte hängen am Thema"); seine Stärke muss im Bild ankommen —
-    auch dann, wenn VTK es noch gar nicht angelegt hat."""
+    „Zwei Werte hängen am Thema"); seine Stärke muss im Bild ankommen und wird
+    deshalb dort gemessen, nicht am gesetzten Wert. (Unter VTK, bis
+    06.09.2026, war das Licht beim Setzen unter Umständen noch gar nicht
+    angelegt.)"""
     vertices, faces = cube()
     renderer.add_surface(vertices, faces, name="cube", style=SurfaceStyle(colour="#b9c4d0"))
     renderer.set_camera_pose(CameraPose((60.0, -80.0, 50.0), (10.0, 10.0, 10.0), (0.0, 0.0, 1.0)))

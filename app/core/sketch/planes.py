@@ -321,8 +321,8 @@ def ray_hit(frame: PlaneFrame, origin: Vec3, direction: Vec3) -> Point2 | None:
     daraus das Zahlenpaar, mit dem die Zeichnung arbeitet.
 
     **Sie steht im Kern, weil sie sonst nicht prüfbar wäre.** Offscreen gibt
-    es keinen Plotter (``Viewport._available``), also auch keinen Strahl —
-    alles, was hinter einem Plotter-Zugriff liegt, ist in der Suite ein
+    es keinen Renderer (``Viewport._available``), also auch keinen Strahl —
+    alles, was hinter einem Rendererzugriff liegt, ist in der Suite ein
     Rückgabebefehl. Die Rechnung davor zu trennen ist der einzige Weg, sie
     gegen Zahlen zu prüfen statt gegen ein Bild.
 

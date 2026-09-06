@@ -243,8 +243,8 @@ Rückrufe zusammen entstehen — `viewport._weak_callbacks` ist der Fall, zehn
 Stück für den Navigator (`NavigatorCallbacks`).
 
 **Der Navigator (bis zum 05.09.2026 der VTK-Interaktionsstil) ist ein Fall
-davon, nicht der Fall.** Diese Regel nannte lange allein ihn — Stil →
-Viewport → Plotter → Interactor → Stil —, und deshalb hat
+davon, nicht der Fall.** Diese Regel nannte lange allein ihn — damals
+Stil → Viewport → Plotter → Interactor → Stil —, und deshalb hat
 niemand nach einem Zeitgeber gesucht. Gefunden wurde einer in
 `viewport.py:1428`: ein Lambda am eigenen `QTimer` der Schichtvorschau.
 Gemessen, am 22.08.2026:

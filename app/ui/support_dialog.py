@@ -114,7 +114,7 @@ def _paint_viewports(picture: Any, widget: QWidget) -> None:
 
     # **Erst die Bilder, dann der Maler.** Ein ``QPainter`` auf dem Abbild zu
     # öffnen, wo es nichts einzusetzen gibt, ist nicht folgenlos: Offscreen gibt
-    # es keinen Plotter, jede Ansicht liefert ``None``, und der Maler liefe über
+    # es keinen Renderer, jede Ansicht liefert ``None``, und der Maler liefe über
     # ein Bild, das niemand ändert. In der Suite endete das nach einigen Dutzend
     # Fenstern in einer Speicherverletzung — an wandernder Stelle, also nicht
     # dort, wo sie entstand.
