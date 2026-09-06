@@ -85,9 +85,12 @@ datas = [
 ]
 # trimesh liest beim Import eigene Datendateien.
 datas += collect_data_files("trimesh")
-# OpenSSLs Vorgabepfad zeigt im macOS-Paket auf den Bauserver. Die Anwendung
-# setzt dort ``SSL_CERT_FILE`` auf certifis CA-Satz; ohne dessen Datendatei
-# wäre der richtige Pfad im Quellcode trotzdem eine Lücke im Paket.
+# OpenSSLs Vorgabepfad zeigt im gebauten Paket auf den Bauserver — auf dem Mac
+# ausnahmslos, unter Linux im Flatpak-Sandkasten (gemessen am Protokoll des
+# ersten Manjaro-Kunden, 06.09.2026: sechsmal CERTIFICATE_VERIFY_FAILED).
+# ``app.core.network`` setzt dann ``SSL_CERT_FILE`` auf certifis CA-Satz; ohne
+# dessen Datendatei wäre der richtige Pfad im Quellcode eine Lücke im Paket.
+# Die Zeile gilt für **jede** Plattform, nicht nur für macOS.
 datas += collect_data_files("certifi")
 
 # **Die Paketbeschreibungen von manifold3d und trimesh.** Ein Fehlerbericht
