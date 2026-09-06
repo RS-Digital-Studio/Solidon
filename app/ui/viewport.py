@@ -233,13 +233,16 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
 #: wird deshalb aus Punkten (:func:`orientation_corner`), und
 #: :meth:`Viewport.resizeEvent` zieht nach.
 #: Die Größe ist an den Streifen gebunden, den die Karten über dem unteren
-#: Rand frei lassen — er misst rund 63 Punkte, und darin muss die Anzeige samt
-#: Abstand Platz haben. Wächst die Werkzeugzeile, etwa weil jemand seine
-#: Systemschrift größer stellt, schrumpft der Streifen; dann wird
+#: Rand frei lassen — Werkzeugzeile und zweimal ihr Rand, 63 Punkte bei
+#: jeder Fenstergröße (gemessen 06.09.2026), und darin muss die Anzeige
+#: samt Abstand Platz haben: 60 und 2 sind das Höchstmaß. Wächst die
+#: Werkzeugzeile, etwa weil jemand seine Systemschrift größer stellt,
+#: schrumpft der Streifen; dann wird
 #: ``test_the_axis_marker_does_not_hide_behind_a_card`` rot und sagt, um wie
-#: viele Punkte. Das ist der Zweck dieses Tests.
-ORIENTATION_SIZE = 52
-ORIENTATION_MARGIN = 4
+#: viele Punkte. Das ist der Zweck dieses Tests. Größer als der Streifen
+#: kann die Anzeige an dieser Stelle nicht werden; was in das Feld passt,
+#: entscheidet die Achsenkamera des Renderers (``AXES_VIEW_SPAN``).
+ORIENTATION_SIZE = 60
 ORIENTATION_MARGIN = 2
 
 

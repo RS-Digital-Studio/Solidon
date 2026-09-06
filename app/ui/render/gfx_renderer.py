@@ -96,8 +96,43 @@ DEFAULT_HEADLIGHT = 0.25
 #: Die Warteschlange, in der pygfx Überlagerungen zeichnet (nach allem anderen).
 OVERLAY_QUEUE = 4000
 
-#: Abstand der Achsenkreuz-Kamera vom Ursprung, in Pfeillängen.
-AXES_CAMERA_DISTANCE = 4.2
+#: Wie viele Pfeillängen das Feld des Achsenkreuzes von Rand zu Rand zeigt.
+#:
+#: Die Achsenkamera ist orthografisch, und das ist keine Stilfrage: Mit
+#: Perspektive war ein Pfeil, der auf die Kamera zeigt, um ein Viertel
+#: länger als einer quer dazu, und die Buchstaben wanderten je nach
+#: Blickrichtung aus dem Feld — in der Vorderansicht fehlten X und Z ganz
+#: (gemessen ohne Fenster in sechs Blickrichtungen, 06.09.2026). Ohne
+#: Perspektive ist eine Pfeillänge in jeder Richtung höchstens ein Anteil
+#: von 1/``AXES_VIEW_SPAN`` der Feldbreite, und was hineinpasst, passt
+#: immer hinein. 2,2 füllt das Feld: Der längste sichtbare Pfeil reicht bis
+#: drei Bildpunkte vor den Rand, und die Buchstaben, die auf den Spitzen
+#: sitzen, bleiben in allen Richtungen vollständig.
+#:
+#: Der Ausschnitt gilt für den **längsten sichtbaren** Pfeil: Schräg von
+#: oben gesehen sind alle drei verkürzt, und ein fester Ausschnitt ließe
+#: das Kreuz dort um ein Fünftel schrumpfen — genau in der Ansicht, in der
+#: man es am meisten sieht. :meth:`GfxRenderer._place_axes` zieht den
+#: Ausschnitt deshalb je Blickrichtung auf den längsten projizierten Pfeil
+#: zusammen; kürzer als 82 Prozent wird der nie (drei orthogonale Achsen
+#: können nicht alle zugleich stärker verkürzt sein), also bleibt auch
+#: dann jeder Buchstabe im Feld (Robert, 06.09.2026: „die Anzeige von den
+#: Achsen könnte 20-30 % größer sein“ — im Feld von 60 Bildpunkten, mehr
+#: lässt der Streifen unter den Karten nicht zu, wurden die Pfeile so ein
+#: Viertel länger, in jeder Blickrichtung).
+AXES_VIEW_SPAN = 2.2
+
+#: Abstand der Achsenkreuz-Kamera vom Ursprung, in Pfeillängen. Ohne
+#: Perspektive bestimmt er nur den Tiefenbereich, nicht die Größe.
+AXES_CAMERA_DISTANCE = 4.0
+
+#: Wo die Buchstaben stehen, in Pfeillängen: auf dem Kegel, wie die
+#: Scheiben an Blenders Achsenkreuz. Hinter der Spitze schwebend hätten
+#: sie eine halbe Buchstabenbreite mehr Feld gebraucht, und das Feld hat
+#: sie nicht — jeder Punkt Abstand ginge von der Pfeillänge ab.
+AXES_LABEL_REACH = 0.85
+
+#: Schriftgröße der Achsenbuchstaben in logischen Bildpunkten.
 AXES_LABEL_SIZE = 12.0
 
 #: Wie viele verborgene Text-Feld-Paare eine Beschriftung für später behält.
@@ -1581,7 +1616,7 @@ class GfxRenderer(Renderer):
         gfx = self._gfx
         scene = gfx.Scene()
         scene.add(gfx.AmbientLight("#ffffff", 0.9))
-        camera = gfx.PerspectiveCamera(DEFAULT_VIEW_ANGLE, 1.0)
+        camera = gfx.OrthographicCamera(AXES_VIEW_SPAN, AXES_VIEW_SPAN)
         camera.world.reference_up = (0.0, 0.0, 1.0)
         camera.add(gfx.DirectionalLight("#ffffff", 1.6))
         scene.add(camera)
@@ -1619,7 +1654,7 @@ class GfxRenderer(Renderer):
             self._axes_objects.append(mesh)
             text = gfx.Text(
                 text=label,
-                font_size=13.0,
+                font_size=AXES_LABEL_SIZE,
                 screen_space=True,
                 anchor="middle-center",
                 material=gfx.TextMaterial(
@@ -1630,14 +1665,15 @@ class GfxRenderer(Renderer):
                     pick_write=False,
                 ),
             )
-            text.local.position = np.asarray(axis, dtype=float) * (length * 1.22)
+            text.local.position = np.asarray(axis, dtype=float) * (length * AXES_LABEL_REACH)
             scene.add(text)
         self._axes_scene = scene
         self._axes_camera = camera
 
     def _place_axes(self) -> None:
         """Die Achsenkamera dreht wie die Hauptkamera — das Kreuz zeigt die
-        Weltrichtungen, nicht die des Bildes."""
+        Weltrichtungen, nicht die des Bildes. Ihr Ausschnitt bleibt
+        :data:`AXES_VIEW_SPAN`; die Stellung bestimmt nur die Richtung."""
         camera = self._axes_camera
         direction = self._direction()
         camera.world.reference_up = self._camera.world.reference_up
@@ -1645,6 +1681,10 @@ class GfxRenderer(Renderer):
         camera.look_at(np.zeros(3))
         camera.depth_range = (0.1, AXES_CAMERA_DISTANCE * 3.0)
         camera.set_view_size(1.0, 1.0)
+        # Der Ausschnitt folgt dem längsten sichtbaren Pfeil (siehe
+        # ``AXES_VIEW_SPAN``): Was in Blickrichtung liegt, ist im Bild kurz.
+        longest = max(math.sqrt(max(1.0 - float(part) ** 2, 0.0)) for part in direction)
+        camera.width = camera.height = AXES_VIEW_SPAN * max(longest, 0.5)
         # Ohne Tiefentest zählt die Reihenfolge: Was ferner liegt, zuerst.
         position = np.asarray(camera.world.position, dtype=float)
         for mesh in self._axes_objects:

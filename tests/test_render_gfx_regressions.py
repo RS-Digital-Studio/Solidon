@@ -705,3 +705,62 @@ def test_projection_queries_keep_cached_matrices_until_size_or_pose_changes(
     assert renderer.display_to_world(*moved) == pytest.approx(point)
     assert sizes == [(200.0, 600.0)]
 
+
+def test_the_axes_letters_stay_inside_their_field(renderer: GfxRenderer) -> None:
+    """Die Buchstaben des Achsenkreuzes sind in jeder Blickrichtung ganz zu sehen.
+
+    Mit perspektivischer Achsenkamera standen sie am Feldrand oder dahinter:
+    In der Vorderansicht fehlten X und Z vollständig, in der Iso-Ansicht war
+    Z angeschnitten (gemessen ohne Fenster, 06.09.2026) — und ein halber
+    Buchstabe sieht aus wie ein Grafikfehler. Gemessen wird in dem Feld, das
+    der Viewport der Anzeige gibt, in sechs Blickrichtungen: Kein weißer
+    Bildpunkt liegt auf dem Feldrand, jeder Buchstabe hat welche im Feld —
+    und das Kreuz füllt das Feld in jeder Richtung, auch schräg von oben,
+    wo ein fester Ausschnitt es um ein Fünftel schrumpfen ließe.
+    """
+    from app.ui.viewport import orientation_corner
+
+    width, height = 400, 300
+    renderer.set_background("#202428")
+    renderer.set_axes_marker(AxesMarkerStyle())
+    left, bottom, right, top = orientation_corner(width, height)
+    renderer.place_axes_marker((left, bottom, right, top))
+    x0, x1 = round(left * width), round(right * width)
+    y0, y1 = round((1.0 - top) * height), round((1.0 - bottom) * height)
+    letters = [child for child in renderer._axes_scene.children if type(child).__name__ == "Text"]
+    assert len(letters) == 3
+
+    def white_in_field() -> np.ndarray:
+        field = renderer.screenshot()[y0:y1, x0:x1]
+        return field.min(axis=2) > 200
+
+    poses = {
+        "iso": ((100.0, -100.0, 80.0), (0.0, 0.0, 1.0)),
+        "oben": ((0.0, 0.0, 100.0), (0.0, 1.0, 0.0)),
+        "vorn": ((0.0, -100.0, 0.0), (0.0, 0.0, 1.0)),
+        "rechts": ((100.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+        "flach": ((100.0, -100.0, 25.0), (0.0, 0.0, 1.0)),
+        "von unten": ((70.0, -100.0, -40.0), (0.0, 0.0, 1.0)),
+    }
+    for name, (position, up) in poses.items():
+        renderer.set_camera_pose(CameraPose(position, (0.0, 0.0, 0.0), up))
+        for letter in letters:
+            letter.visible = False
+        field = renderer.screenshot()[y0:y1, x0:x1].astype(int)
+        coloured = (np.abs(field - np.array([0x20, 0x24, 0x28])).sum(axis=2) > 40) & ~(
+            field.min(axis=2) > 200
+        )
+        rows, cols = np.nonzero(coloured)
+        centre = (y1 - y0) / 2.0
+        reach = np.hypot(rows + 0.5 - centre, cols + 0.5 - centre).max()
+        assert reach >= 0.8 * centre, f"{name}: the arrows fill only {reach:.0f} of {centre:.0f} px"
+        without = white_in_field().sum()
+        for letter in letters:
+            letter.visible = True
+            white = white_in_field()
+            letter.visible = False
+            assert white.sum() - without >= 12, f"{name}: a letter is missing from the field"
+            edge = white[0].any() or white[-1].any() or white[:, 0].any() or white[:, -1].any()
+            assert not edge, f"{name}: a letter touches the edge of the field"
+        for letter in letters:
+            letter.visible = True
