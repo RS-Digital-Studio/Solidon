@@ -166,6 +166,19 @@ def _alpha_mode(opacity: float) -> str:
     return "weighted_blend" if opacity < 1.0 else "auto"
 
 
+def _normals(positions: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    """Punktnormalen für ein Netz — dieselbe Rechnung, die pygfx sonst führt.
+
+    Siehe :meth:`GfxRenderer.add_surface`: Mitgegeben entsteht sie einmal
+    statt je Shader.
+    """
+    from pygfx.utils import normals_from_vertices
+
+    return np.ascontiguousarray(
+        normals_from_vertices(positions, np.asarray(indices, dtype=np.int32)), dtype=np.float32
+    )
+
+
 def _positions(points: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(points, dtype=np.float32).reshape(-1, 3))
 
@@ -872,6 +885,15 @@ class GfxRenderer(Renderer):
         fields: dict[str, Any] = {"positions": positions, "indices": indices}
         if cell_colours is not None:
             fields["colors"] = _face_colours(cell_colours, len(indices))
+        # **Die Punktnormalen entstehen hier, einmal.** Ohne sie rechnet pygfx
+        # sie beim ersten Bild selbst — und zwar je Shader, der die Geometrie
+        # anfragt: Ein Körper mit Kanten (`solid_edges`) hängt zwei Meshes an
+        # dieselbe ``Geometry``, und beide lösen den Lauf aus. Gezählt am
+        # Tetraeder: ohne Kanten einer, mit Kanten zwei, mit mitgegebenen
+        # Normalen keiner; am 3,15-Millionen-Netz kostet ein Lauf rund 0,7 s
+        # (06.09.2026). Gerechnet wird mit derselben Funktion, die pygfx
+        # nähme, das Bild ändert sich also um nichts.
+        fields["normals"] = _normals(positions, indices)
         geometry = gfx.Geometry(**fields)
         side = "front" if (style.cull_backfaces or style.backface_colour is not None) else "both"
         material = self._material(style, style.colour, style.opacity, side)
