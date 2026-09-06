@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -108,6 +109,42 @@ def test_ruff_targets_the_version_that_is_demanded() -> None:
 
     assert configured == f"py{required[0]}{required[1]}", (
         f"ruff zielt auf {configured}, das Projekt verlangt py{required[0]}{required[1]}."
+    )
+
+
+def test_the_workflow_runs_the_interpreter_the_project_demands() -> None:
+    """Jeder CI-Job mit Python fährt die Fassung aus ``requires-python``.
+
+    **Der Wert, der einen Job zwangsläufig rot macht, war der einzige
+    ungewachte.** Die drei Prüfungen darüber halten ``requires-python`` gegen
+    mypy, gegen ruff und gegen den laufenden Interpreter — und keine sah in den
+    Workflow. Als die Untergrenze am 06.09.2026 von 3.13 auf 3.14 stieg, kam
+    mit ihr die ungeklammerte Ausnahmegruppe aus PEP 758 in den Baum: 98
+    Stellen in 52 Dateien, die ein 3.13 nicht einmal **parst**. Ein Job, der
+    dort zurückgeblieben wäre, hätte nicht einen Test verloren, sondern jeden
+    — und zwar in einem Lauf, der nichts über die Änderung aussagt, die ihn
+    ausgelöst hat.
+
+    Geprüft wird die Untergrenze, nicht die Patchfassung: Der Workflow nennt
+    ``3.14.7``, das Projekt verlangt ``>=3.14``. Eine neuere Patchversion ist
+    kein Fehler, eine ältere Nebenversion schon.
+    """
+    workflow = (_ROOT / ".github" / "workflows" / "build.yml").read_text(encoding="utf-8")
+    required = _required_version()
+
+    named = re.findall(r'python-version:\s*"?([0-9]+(?:\.[0-9]+)*)"?', workflow)
+    assert named, "keine python-version im Workflow gefunden — dann prüft dieser Test nichts"
+
+    behind = sorted(
+        {
+            version
+            for version in named
+            if tuple(int(part) for part in version.split(".")[:2]) < required
+        }
+    )
+    assert not behind, (
+        f"Diese CI-Jobs fahren {', '.join(behind)}, das Projekt verlangt aber mindestens "
+        f"{required[0]}.{required[1]}. Ein solcher Job parst den eigenen Quelltext nicht mehr."
     )
 
 
