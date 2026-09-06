@@ -1642,8 +1642,8 @@ def test_the_manual_loads_no_image_but_its_own_figures(
     ``![Bild](file:///…)`` ließ schon das Öffnen der Seite die Datei lesen,
     ohne Klick und an der Hostprüfung der Links vorbei. Das Handbuch kennt
     genau eine Bildquelle: seinen Abbildungskatalog."""
-    from PySide6.QtCore import QUrl
-    from PySide6.QtGui import QImage, QTextDocument
+    from PySide6.QtCore import QByteArray, QUrl
+    from PySide6.QtGui import QImage, QPixmap, QTextDocument
 
     from app.ui.manual_window import PageView
 
@@ -1658,10 +1658,14 @@ def test_the_manual_loads_no_image_but_its_own_figures(
         qt_app.processEvents()
 
         served = view.loadResource(QTextDocument.ResourceType.ImageResource, QUrl(image.as_uri()))
-        assert served is None, "eine fremde Bildquelle wird nicht bedient"
+        assert isinstance(served, QByteArray) and served.isEmpty(), (
+            "eine beantwortete leere Ressource sperrt Qts eigenen Dateileser"
+        )
         held = view.document().resource(
             QTextDocument.ResourceType.ImageResource, QUrl(image.as_uri())
         )
-        assert not (isinstance(held, QImage) and not held.isNull()), "und liegt nicht im Dokument"
+        assert not (isinstance(held, (QImage, QPixmap)) and not held.isNull()), (
+            "Qt darf die Datei auch nicht als QPixmap nachladen"
+        )
     finally:
         view.deleteLater()
