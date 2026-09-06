@@ -2197,6 +2197,11 @@ def test_a_lost_upload_is_rejected_before_the_support_mail(
     lost_temporary: bool,
 ) -> None:
     """Auch nach erfolgreicher PHP-Annahme muss der wirkliche Anhang lesbar bleiben."""
+    # support.php misst Nachrichten- und Feldlängen mit mb_strlen; ohne mbstring
+    # antwortet PHP mit einem Fatal statt mit 400, und der Test fragte gar nicht
+    # nach dem Anhang. Wie bei sodium: lokal überspringen und sagen, was fehlt —
+    # in der CI, die die Erweiterung einrichtet, bleibt es ein roter Test.
+    php_extension("mbstring")
     prepend = tmp_path / "upload-lost.php"
     mutation = (
         "unlink($_FILES['anhang']['tmp_name']);"
