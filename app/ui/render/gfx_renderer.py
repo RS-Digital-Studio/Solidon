@@ -97,6 +97,14 @@ OVERLAY_QUEUE = 4000
 #: Abstand der Achsenkreuz-Kamera vom Ursprung, in Pfeillängen.
 AXES_CAMERA_DISTANCE = 4.2
 
+#: Wie viele verborgene Text-Feld-Paare eine Beschriftung für später behält.
+#:
+#: Beim Drehen wechselt die sichtbare Namensliste in fast jedem Bild; jedes
+#: neue ``gfx.Text`` kostet Glyphenlayout und einen Shaderaufbau (gemessen
+#: am Drillholder mit 157 Namen: fünf neue je Bild, rund 25 ms). Ruhende
+#: Paare bleiben deshalb verborgen im Baum, bis ihr Name wiederkommt.
+IDLE_LABEL_LIMIT = 256
+
 
 def _vec(values: Sequence[float] | np.ndarray) -> Vec3:
     return (float(values[0]), float(values[1]), float(values[2]))
@@ -122,14 +130,6 @@ def _alpha_mode(opacity: float) -> str:
 
 def _positions(points: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(points, dtype=np.float32).reshape(-1, 3))
-
-
-def _unique_edges(faces: np.ndarray) -> np.ndarray:
-    """Jede Dreieckskante einmal, als ``(k, 2)`` Indexpaare."""
-    triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
-    edges = np.vstack([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
-    edges.sort(axis=1)
-    return np.unique(edges, axis=0)
 
 
 def _face_colours(colours: CellColours, count: int) -> np.ndarray:
@@ -187,15 +187,18 @@ class GfxItem(Item):
         self._pickable = bool(pickable)
         self._position: Vec3 = (0.0, 0.0, 0.0)
         self._matrix = np.eye(4)
-        #: Kantenpaare für die Kantenlinie, damit ``update_points`` sie nachzieht.
-        self.edge_pairs: np.ndarray | None = None
+        #: Das Drahtgitter über der Fläche, wenn Kanten gewünscht sind — es
+        #: teilt die Geometrie des Netzes und zieht mit ``update_points`` nach.
         self.edge_line: Any = None
         #: Polylinien tragen zusätzliche NaN-Trenner, die keine Quellpunkte sind.
         self.point_map: np.ndarray | None = None
         self.point_count: int | None = None
         self.changed: Callable[[], None] | None = None
+        #: Der zuletzt gerechnete Hüllquader; jede Änderung am Item verwirft ihn.
+        self._bounds: Bounds | None = None
 
     def _changed(self) -> None:
+        self._bounds = None
         if self.changed is not None:
             self.changed()
 
@@ -258,18 +261,24 @@ class GfxItem(Item):
         self._changed()
 
     def bounds(self) -> Bounds:
+        # pygfx rechnet den Quader je Aufruf rekursiv über alle Kinder
+        # (rund 65 µs je Item); die Szene fragt ihn zweimal je Bild.
+        if self._bounds is not None:
+            return self._bounds
         box = self.root.get_world_bounding_box()
         if box is None:
-            return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        low, high = np.asarray(box, dtype=float)
-        return (
-            float(low[0]),
-            float(high[0]),
-            float(low[1]),
-            float(high[1]),
-            float(low[2]),
-            float(high[2]),
-        )
+            self._bounds = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        else:
+            low, high = np.asarray(box, dtype=float)
+            self._bounds = (
+                float(low[0]),
+                float(high[0]),
+                float(low[1]),
+                float(high[1]),
+                float(low[2]),
+                float(high[2]),
+            )
+        return self._bounds
 
     def set_pickable(self, pickable: bool) -> None:
         self._pickable = bool(pickable)
@@ -306,8 +315,6 @@ class GfxItem(Item):
             # rechnet beides frisch, ein überschriebenes nicht zuverlässig.
             obj.geometry = _geometry_like(geometry, fresh)
             replacements[id(geometry)] = obj.geometry
-        if self.edge_line is not None and self.edge_pairs is not None:
-            self.edge_line.geometry = _line_geometry(fresh[self.edge_pairs].reshape(-1, 3))
         self._changed()
 
     def set_line_width(self, width: float) -> None:
@@ -361,9 +368,16 @@ class GfxLabels(GfxItem, LabelsItem):
         self.dots: Any = None
         self.rebuilt: Callable[[GfxItem], None] | None = None
         self._field_state: tuple[Any, ...] | None = None
+        #: Verborgene Paare je Name, in der Reihenfolge ihres Ausscheidens.
+        self._idle: deque[tuple[str, Any, Any | None]] = deque()
 
     def build(self, points: np.ndarray, texts: Sequence[str]) -> None:
-        """Sichtbare Namen abgleichen; vorhandene Schrift- und Feldobjekte behalten."""
+        """Sichtbare Namen abgleichen; vorhandene Schrift- und Feldobjekte behalten.
+
+        Ein Name, der gerade nicht sichtbar ist, verliert seine Glyphen nicht:
+        Sein Paar bleibt verborgen im Baum (:data:`IDLE_LABEL_LIMIT`) und
+        kehrt beim nächsten Bild, das ihn zeigt, ohne neuen Shaderaufbau zurück.
+        """
         import pygfx as gfx
 
         anchors = _positions(points)
@@ -373,17 +387,34 @@ class GfxLabels(GfxItem, LabelsItem):
         available: dict[str, deque[tuple[Any, Any | None]]] = defaultdict(deque)
         for index, (text, label) in enumerate(zip(self.labels, self.texts, strict=True)):
             available[text].append((label, self.fields[index] if self.fields else None))
+        idle: dict[str, deque[tuple[Any, Any | None]]] = defaultdict(deque)
+        for text, label, field in self._idle:
+            idle[text].append((label, field))
         old_objects = set(self.objects)
         objects, label_objects, fields = [], [], []
         for anchor, text in zip(anchors, labels, strict=True):
             matching = available.get(text)
-            label, field = matching.popleft() if matching else self._new_label(anchor, text)
+            resting = idle.get(text)
+            if matching:
+                label, field = matching.popleft()
+            elif resting:
+                label, field = resting.popleft()
+                self._idle.remove((text, label, field))
+                self._wake(label, field)
+            else:
+                label, field = self._new_label(anchor, text)
             label.local.position = anchor
             if field is not None:
                 fields.append(field)
                 objects.append(field)
             label_objects.append(label)
             objects.append(label)
+        for text, pairs in available.items():
+            for label, field in pairs:
+                self._rest(text, label, field)
+        while len(self._idle) > IDLE_LABEL_LIMIT:
+            _text, label, field = self._idle.popleft()
+            self.root.remove(*([label] if field is None else [field, label]))
         if self.style.show_points and len(anchors):
             if self.dots is None:
                 self.dots = gfx.Points(
@@ -406,7 +437,8 @@ class GfxLabels(GfxItem, LabelsItem):
         else:
             self.dots = None
         new_objects = set(objects)
-        for obj in old_objects - new_objects:
+        resting_objects = {obj for _text, label, field in self._idle for obj in (label, field)}
+        for obj in old_objects - new_objects - resting_objects:
             self.root.remove(obj)
         # Gleiche Texte dürfen mehrfach vorkommen. Ihre Reihenfolge bestimmt
         # bei gleicher Tiefe auch die Reihenfolge beim Zeichnen.
@@ -421,6 +453,21 @@ class GfxLabels(GfxItem, LabelsItem):
             self.rebuilt(self)
         else:
             self._changed()
+
+    def _rest(self, text: str, label: Any, field: Any | None) -> None:
+        """Ein ausgeschiedenes Paar verbergen und für seinen Namen aufheben."""
+        label.visible = False
+        if field is not None:
+            field.visible = False
+        self._idle.append((text, label, field))
+
+    def _wake(self, label: Any, field: Any | None) -> None:
+        """Ein ruhendes Paar zeigen — mit der Farbe und Deckkraft von heute."""
+        label.visible = True
+        label.material.color = self._colour
+        label.material.opacity = self._opacity
+        if field is not None:
+            field.visible = True
 
     def _new_label(self, anchor: np.ndarray, text: str) -> tuple[Any, Any | None]:
         """Nur ein neuer sichtbarer Name braucht neue Glyphen und ein neues Feld."""
@@ -566,6 +613,7 @@ class GfxRenderer(Renderer):
         self._pick_objects: dict[int, Any] = {}
         self._scene_revision = 0
         self._pick_key: tuple[Any, ...] | None = None
+        self._bounds_cache: tuple[int, Bounds | None] | None = None
         self._label_items: list[GfxLabels] = []
         self._focal = np.zeros(3)
         self._parallel_scale = 1.0
@@ -707,16 +755,25 @@ class GfxRenderer(Renderer):
 
     def _register(self, item: GfxItem) -> GfxItem:
         self._scene.add(item.root)
-        item.changed = self._invalidate_pick
         self._register_objects(item)
         if isinstance(item, GfxLabels):
+            # Beschriftungen wandern mit jedem Bild (das Layout schiebt ihre
+            # Anker); der Hüllquader der Szene bleibt davon unberührt.
+            item.changed = self._invalidate_pick
             self._label_items.append(item)
             item.rebuilt = self._refresh_registration
+        else:
+            item.changed = self._invalidate_scene
+            self._bounds_cache = None
         return item
 
     def _invalidate_pick(self) -> None:
         self._scene_revision += 1
         self._pick_key = None
+
+    def _invalidate_scene(self) -> None:
+        self._invalidate_pick()
+        self._bounds_cache = None
 
     def _refresh_registration(self, item: GfxItem) -> None:
         obsolete = {key for key, registered in self._items.items() if registered is item}
@@ -811,26 +868,34 @@ class GfxRenderer(Renderer):
             name, root, objects, style.colour, opacity=style.opacity, pickable=style.pickable
         )
         if style.show_edges and not style.wireframe:
-            from app.ui.render.gfx_lines import DepthLineSegmentMaterial
-
-            pairs = _unique_edges(indices)
-            edges = gfx.Line(
-                _line_geometry(positions[pairs].reshape(-1, 3)),
-                DepthLineSegmentMaterial(
-                    thickness=1.0,
+            # **Die Kanten zeichnet die GPU aus demselben Netz.** Ein zweites
+            # Mesh im Drahtgittermodus teilt Geometrie und Tiefe mit der
+            # Fläche; ``depth_compare="<="`` lässt seine Kantenpunkte über der
+            # eigenen Fläche gewinnen, ohne Versatz und ohne dass eine
+            # angehobene Markierung darunter durchscheint. Der Weg davor —
+            # jede Dreieckskante einmal als Linienpaar auf der CPU — kostete
+            # 285 ms bei 197 000 und 5,8 s bei 3,15 Millionen Dreiecken, dazu
+            # 114 MB Linienpuffer, bei jedem Szenenaufbau (gemessen 06.09.2026).
+            edges = gfx.Mesh(
+                geometry,
+                gfx.MeshBasicMaterial(
                     color=style.edge_colour or "#000000",
+                    wireframe=True,
+                    wireframe_thickness=1.0,
+                    side=side,
                     opacity=style.opacity,
                     alpha_mode="solid" if style.force_opaque else _alpha_mode(style.opacity),
+                    depth_compare="<=",
                     pick_write=False,
                 ),
             )
             edges._solidon_coloured = False
+            edges._solidon_mesh = True
             edges._solidon_pickable = False
             edges._solidon_force_opaque = style.force_opaque
             root.add(edges)
             objects.append(edges)
             item.objects = objects
-            item.edge_pairs = pairs
             item.edge_line = edges
         return self._register(item)
 
@@ -939,7 +1004,7 @@ class GfxRenderer(Renderer):
         if isinstance(item, GfxLabels) and item in self._label_items:
             self._label_items.remove(item)
             item.rebuilt = None
-        self._invalidate_pick()
+        self._invalidate_scene()
 
     def set_draw_order(self, items: Sequence[Item]) -> None:
         # pygfx sortiert Durchscheinendes selbst von hinten nach vorn
@@ -1112,19 +1177,35 @@ class GfxRenderer(Renderer):
         self._camera.width = max(float(height), EPS_GEOM) * aspect
 
     def _scene_bounds(self) -> Bounds | None:
-        boxes = [item.bounds() for item in set(self._items.values()) if item.visible()]
+        """Der Hüllquader der sichtbaren Geometrie — je Szenenstand einmal gerechnet.
+
+        Jede Kamerastellung fragt ihn zweimal (Stellung und Tiefenbereich), und
+        pygfx rechnet ihn je Objekt rekursiv: 76 Objekte kosteten 5 ms je
+        Aufruf. Beschriftungen zählen nicht mit — wie VTKs 2D-Aktoren —, denn
+        ihre Anker verschiebt das Layout in jedem Bild; jede Änderung an einem
+        Geometrie-Item verwirft den Cache (:meth:`_invalidate_scene`).
+        """
+        if self._bounds_cache is not None:
+            return self._bounds_cache[1]
+        boxes = [
+            item.bounds()
+            for item in set(self._items.values())
+            if item.visible() and not isinstance(item, GfxLabels)
+        ]
         boxes = [box for box in boxes if box[1] > box[0] or box[3] > box[2] or box[5] > box[4]]
-        if not boxes:
-            return None
-        array = np.asarray(boxes, dtype=float)
-        return (
-            float(array[:, 0].min()),
-            float(array[:, 1].max()),
-            float(array[:, 2].min()),
-            float(array[:, 3].max()),
-            float(array[:, 4].min()),
-            float(array[:, 5].max()),
-        )
+        bounds: Bounds | None = None
+        if boxes:
+            array = np.asarray(boxes, dtype=float)
+            bounds = (
+                float(array[:, 0].min()),
+                float(array[:, 1].max()),
+                float(array[:, 2].min()),
+                float(array[:, 3].max()),
+                float(array[:, 4].min()),
+                float(array[:, 5].max()),
+            )
+        self._bounds_cache = (self._scene_revision, bounds)
+        return bounds
 
     def _fit_depth(self, radius: float | None = None) -> None:
         """Nah- und Fernebene um das, was im Bild steht — wie VTKs

@@ -56,6 +56,34 @@ def test_surface_edges_follow_the_surface_opacity(renderer: GfxRenderer) -> None
     assert renderer.screenshot().max() == 0
 
 
+def test_surface_edges_are_a_wireframe_over_the_same_geometry(renderer: GfxRenderer) -> None:
+    """Kein Linienpuffer je Kante: Das Drahtgitter teilt die Geometrie und folgt ihr."""
+    vertices, faces = cube()
+    item = renderer.add_surface(
+        vertices,
+        faces,
+        name="body",
+        style=SurfaceStyle(
+            colour="#0000ff", edge_colour="#ffffff", show_edges=True, lighting=False
+        ),
+    )
+    edges = item.edge_line
+    assert edges is not None and edges.material.wireframe
+    assert edges.geometry is item.objects[0].geometry
+    assert not edges.material.pick_write
+    look_down(renderer, item.bounds())
+    image = renderer.screenshot()
+    white = np.all(image[:, :, :3] > 200, axis=2)
+    blue = (image[:, :, 2] > 200) & (image[:, :, 0] < 60)
+    assert np.count_nonzero(white) > 50, "the edges must be visible over the face"
+    assert np.count_nonzero(blue) > np.count_nonzero(white), "the face stays a face"
+    item.update_points(np.asarray(vertices, dtype=float) + np.asarray((8.0, 0.0, 0.0)))
+    assert edges.geometry is item.objects[0].geometry
+    moved = renderer.screenshot()
+    assert not np.array_equal(moved, image)
+    assert np.count_nonzero(np.all(moved[:, :, :3] > 200, axis=2)) > 50
+
+
 def test_zero_opacity_foreground_does_not_capture_the_visible_body(renderer: GfxRenderer) -> None:
     body = renderer.add_surface(*cube(), name="body", style=SurfaceStyle())
     renderer.add_surface(*plate(25), name="invisible", style=SurfaceStyle(opacity=0))
@@ -433,7 +461,7 @@ def test_label_layout_moves_existing_glyphs_fields_and_dots(renderer: GfxRendere
 def test_changing_label_set_reuses_occurrences_and_releases_registration_without_gpu(
     monkeypatch, background
 ) -> None:
-    """Ein Sichtsatzwechsel erzeugt nur neue Namen und hält keine ausgeschiedenen Objekte."""
+    """Ein Sichtsatzwechsel erzeugt nur neue Namen; ausgeschiedene Paare ruhen verborgen."""
 
     class Root:
         """Kleine Szenengruppe ohne Grafikgerät."""
@@ -451,11 +479,13 @@ def test_changing_label_set_reuses_occurrences_and_releases_registration_without
             self.children.remove(obj)
 
     class Object:
-        """Identität, Pickkennung und Ortswert reichen für diesen Lebenszyklus."""
+        """Identität, Pickkennung, Sichtbarkeit und Ortswert reichen für diesen Lebenszyklus."""
 
         def __init__(self):
             self.id = id(self)
+            self.visible = True
             self.local = SimpleNamespace(position=None)
+            self.material = SimpleNamespace(color=None, opacity=None)
 
     created = []
 
@@ -495,11 +525,19 @@ def test_changing_label_set_reuses_occurrences_and_releases_registration_without
     assert id(third) not in view._items and id(duplicate) not in view._items
     assert third.id not in view._pick_objects and duplicate.id not in view._pick_objects
     assert set(view._items) == {id(obj) for obj in labels.objects}
+    # Ausgeschiedene Paare bleiben verborgen im Baum, ohne Pickregistrierung.
+    assert third in labels.root.children and duplicate in labels.root.children
+    assert not third.visible and not duplicate.visible
+    assert all(obj.visible for obj in labels.objects)
     labels.update_labels(np.empty((0, 3)), [])
-    assert labels.objects == labels.root.children == labels.texts == labels.fields == []
+    assert labels.objects == labels.texts == labels.fields == []
     assert not view._items and not view._pick_objects
-    labels.update_labels(np.zeros((1, 3)), ["A"])
-    assert created == ["A", "A", "B", "C", "A"], "removed names are not cached indefinitely"
+    assert labels.root.children and not any(obj.visible for obj in labels.root.children)
+    labels.update_labels(np.zeros((2, 3)), ["A", "B"])
+    assert created == ["A", "A", "B", "C"], "a resting name returns without new glyphs"
+    assert labels.texts[0] in (first, duplicate) and labels.texts[1] is third
+    assert all(obj.visible for obj in labels.objects)
+    assert set(view._items) == {id(obj) for obj in labels.objects}
     view.remove(labels)
     assert not view._items and not view._pick_objects and not view._label_items
 
