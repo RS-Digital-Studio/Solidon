@@ -35,6 +35,7 @@ if TYPE_CHECKING:
         Registry,
         group_for_variant,
         group_title,
+        needed_inputs,
         register_op,
         variant_members,
     )
@@ -83,6 +84,7 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     "OperationSpec": ("registry", "OperationSpec"),
     "Registry": ("registry", "Registry"),
     "group_title": ("registry", "group_title"),
+    "needed_inputs": ("registry", "needed_inputs"),
     "variant_members": ("registry", "variant_members"),
     "register_op": ("registry", "register_op"),
     "MAX_MENU_ROWS": ("surfaces", "MAX_MENU_ROWS"),
@@ -139,6 +141,7 @@ __all__ = [
     "json_schema",
     "menu_path",
     "menu_tree",
+    "needed_inputs",
     "op_params",
     "palette_entries",
     "param",

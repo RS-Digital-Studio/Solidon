@@ -542,3 +542,76 @@ def test_the_angle_between_two_directions_is_always_the_smaller_one(
     """Der Winkel hatte zwei Zweige, die dasselbe rechneten. Diese Zahlen
     halten fest, dass das Zusammenlegen nichts verschoben hat."""
     assert angle_between(first, second) == pytest.approx(expected)
+
+
+def test_a_union_takes_every_chosen_body_not_just_two() -> None:
+    """Fünf Körper sind eine Vereinigung, nicht vier.
+
+    **Der Fall.** Robert setzte am 06.09.2026 vier Laschen an einen Kasten,
+    wählte alle fünf Körper und bekam „Die Operation erwartet eine andere
+    Anzahl an Objekten. Erwartet: 2, Vorhanden: 5". Vier Laschen waren damit
+    vier Verlaufsschritte für eine Handlung — „man sollte es schon mit allen
+    können". Der Kern konnte es die ganze Zeit: ``_kernel`` reicht die Liste
+    an manifold3d durch. Begrenzt hat sie nur das Register.
+    """
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    project = new_project("centauri-carbon-2", "pla")
+    document = project.document
+    history = History(document)
+    for index in range(4):
+        history.apply(
+            f"Quader {index}",
+            [
+                OperationDraft(
+                    op="create_box",
+                    params={
+                        "width": 20.0,
+                        "depth": 20.0,
+                        "height": 20.0,
+                        "x": index * 15.0,
+                        "y": 0.0,
+                        "z": 0.0,
+                    },
+                )
+            ],
+        )
+    profile = make_profile("centauri-carbon-2", "pla")
+    before = evaluate(document, profile, sources=ProjectSources(project))
+    assert len(before.scene.objects) == 4
+
+    history.apply(
+        "Vereinigen",
+        [OperationDraft(op="union_objects", inputs=tuple(before.scene.objects))],
+    )
+    after = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert after.stopped_at is None, "die Vereinigung nimmt alle vier"
+    assert len(after.scene.objects) == 1, "und macht einen Körper daraus"
+    body = next(iter(after.scene.objects.values()))
+    assert body.mesh.bounds.size[0] == pytest.approx(65.0, abs=0.5), "vier Quader im Raster von 15"
+
+
+def test_a_union_of_one_body_says_what_is_missing() -> None:
+    """Ein Körper allein ist keine Vereinigung — und der Satz sagt, was fehlt."""
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    project = new_project("centauri-carbon-2", "pla")
+    document = project.document
+    history = History(document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1",))])
+    result = evaluate(
+        document, make_profile("centauri-carbon-2", "pla"), sources=ProjectSources(project)
+    )
+
+    assert result.stopped_at is not None
+    blamed = [f for f in result.scene.report.findings if f.op_id == result.stopped_at]
+    assert blamed and "zwei Objekte" in str(blamed[-1].message) + str(blamed[-1].values)

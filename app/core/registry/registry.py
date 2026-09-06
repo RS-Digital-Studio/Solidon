@@ -97,6 +97,16 @@ MENU_GROUPS: Final[tuple[tuple[TranslatableText, tuple[str, ...]], ...]] = (
 )
 
 
+def needed_inputs(spec: OperationSpec) -> int:
+    """Wie viele Objekte diese Operation mindestens braucht.
+
+    Eine Stelle, weil drei sie lesen: die Menüleiste, das Kontextmenü und der
+    Aufruf selbst. Bei fester Stelligkeit ist es ``consumes``; bei
+    ``VARIABLE`` die ausdrückliche Untergrenze.
+    """
+    return spec.minimum_inputs if spec.consumes == VARIABLE else spec.consumes
+
+
 def group_title(category: str) -> str:
     """Der Menütitel, unter dem diese Kategorie steht.
 
@@ -320,6 +330,15 @@ class OperationSpec:
     fn: OpFn
     reversible: bool = True
     consumes: int = 1
+    minimum_inputs: int = 0
+    """Wie viele Objekte mindestens nötig sind, wenn ``consumes`` variabel ist.
+
+    ``consumes=VARIABLE`` heißt „so viele, wie gewählt sind" — die Booleschen
+    Operationen nehmen seit dem 06.09.2026 alle Körper auf einmal. Nur ist
+    „alle" nicht „beliebig viele": Eine Vereinigung braucht zwei. Ohne diese
+    Zahl wüsste das Menü nicht, wann es den Eintrag freigeben darf, und der
+    Nutzer bekäme die Absage erst nach dem Klick (Regel 19).
+    """
     """Wie viele Objekte die Operation nimmt. Null heißt beliebig viele."""
     produces: int = 1
     """Wie viele sie zurückgibt. ``VARIABLE`` heißt so viele wie hineingegeben —
@@ -467,7 +486,7 @@ class Registry:
                 detail=f"{spec.name!r} applies to unknown feature kinds {unknown}",
                 values={"op": spec.name, "known": list(FEATURE_KINDS)},
             )
-        if spec.consumes < 0 or spec.produces < VARIABLE:
+        if spec.consumes < VARIABLE or spec.produces < VARIABLE:
             raise InternalError(
                 detail=f"{spec.name!r} declares a negative object count",
                 values={"op": spec.name},
@@ -561,6 +580,7 @@ def register_op(
     params: type[BaseParams],
     reversible: bool = True,
     consumes: int = 1,
+    minimum_inputs: int = 0,
     produces: int = 1,
     applies_to: Iterable[str] = (),
     requires_kind: str = "",
@@ -589,6 +609,7 @@ def register_op(
                 fn=fn,
                 reversible=reversible,
                 consumes=consumes,
+                minimum_inputs=minimum_inputs,
                 produces=produces,
                 applies_to=tuple(applies_to),
                 requires_kind=requires_kind,

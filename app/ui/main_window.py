@@ -134,6 +134,7 @@ from app.core.registry import (
     MENU_TWINS,
     REGISTRY,
     TWIN_TOGGLES,
+    VARIABLE,
     VARIANT_GROUPS,
     OperationSpec,
     PaletteEntry,
@@ -142,6 +143,7 @@ from app.core.registry import (
     folded_categories,
     group_for_variant,
     menu_tree,
+    needed_inputs,
     palette_entries,
     variant_members,
 )
@@ -1048,6 +1050,9 @@ def inputs_for(
     """
     if spec.takes_whole_scene:
         return tuple(objects)
+    if spec.consumes == VARIABLE:
+        # „So viele, wie gewählt sind" — die Booleschen nehmen alle.
+        return tuple(selected)
     return tuple(selected[: spec.consumes]) if spec.consumes else ()
 
 
@@ -3804,16 +3809,17 @@ class MainWindow(QMainWindow):
             if objects <= 0:
                 return str(_NEEDS_BODY)
             return None
-        if not spec.consumes:
+        braucht = needed_inputs(spec)
+        if not braucht:
             return None
-        if chosen < spec.consumes:
+        if chosen < braucht:
             if objects <= 0:
                 return str(_NEEDS_BODY)
-            if spec.consumes == 1:
+            if braucht == 1:
                 return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
             return str(
                 tr("Wählen Sie dafür {count} Objekte aus — im Bild oder im Objektbaum.").format(
-                    count=spec.consumes
+                    count=braucht
                 )
             )
         # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
@@ -10149,8 +10155,9 @@ class MainWindow(QMainWindow):
         # sonst fragte die Prüfung darunter nach einer Markierung, die für
         # diesen Weg nie gemeint war.
         chosen = tuple(on_bodies) if on_bodies else self.object_tree.selected_objects()
-        if spec.consumes and len(chosen) < spec.consumes:
-            QMessageBox.information(self, str(spec.title), _needs_objects(spec.consumes))
+        braucht = needed_inputs(spec)
+        if braucht and len(chosen) < braucht:
+            QMessageBox.information(self, str(spec.title), _needs_objects(braucht))
             return
 
         if spec.takes_whole_scene and not objects:
