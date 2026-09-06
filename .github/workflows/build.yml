@@ -309,7 +309,54 @@ jobs:
           # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
           # Sie schließt sich mit einem Probelauf ohne diese Auslassung; bis
           # dahin steht sie in ROADMAP.md.
-          echo "::warning::Fensterdateien übersprungen (Probelauf nach dem VTK-Ausbau steht aus): $windowed"
+          echo "::warning::Fensterdateien laufen im Probelauf daneben, nicht hier: $windowed"
+
+      - name: Probelauf der Fensterdateien (Linux, blockiert nicht)
+        # **Der Probelauf, den das Register seit dem VTK-Ausbau verlangt.**
+        #
+        # Er steht bewusst neben dem Tor und nicht darin: Die Auslassung
+        # entstand am 20.08.2026, weil ein Fremdcode-Absturz in einer
+        # Umgebung, die niemand benutzt, wochenlang die Auslieferung aller
+        # vier Plattformen verhinderte. Diesen Fehler ein zweites Mal zu
+        # machen, wäre schlimmer als die Lücke. ``continue-on-error``
+        # heißt deshalb: Das Ergebnis steht in der Zusammenfassung, der
+        # Paketier-Job hängt nicht daran.
+        #
+        # Je Datei ein eigener Prozess, wie lokal in
+        # ``suite-getrennt.sh``: Die Suite baut sonst hunderte Fenster in
+        # einem Prozess auf, und irgendwann reißt eine Grenze.
+        #
+        # ``tr -d '\r'`` ist nicht Zierde: Das Werkzeug schreibt unter
+        # Windows CRLF, und ein Dateiname mit Wagenrücklauf ist ein Pfad,
+        # den es nicht gibt — pytest sammelt dann nichts und meldet es
+        # nicht (06.09.2026).
+        if: runner.os == 'Linux'
+        continue-on-error: true
+        env:
+          QT_QPA_PLATFORM: xcb
+        run: |
+          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+          echo "Fensterdateien: $(echo $windowed | wc -w)"
+          gruen=0
+          rot=""
+          for file in $windowed; do
+            if xvfb-run -a --server-args="-screen 0 1920x1080x24" \
+                 python -m pytest -q -m "not performance and not rendered" "$file"; then
+              gruen=$((gruen + 1))
+            else
+              rot="$rot $file($?)"
+            fi
+          done
+          echo "### Probelauf der Fensterdateien" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Grün: $gruen von $(echo $windowed | wc -w)" >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$rot" ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Nicht grün (Datei mit Exit-Code):$rot" >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Fensterdateien im Probelauf nicht grün:$rot"
+          else
+            echo "::notice::Alle Fensterdateien liefen grün — die Auslassung im Tor kann fallen."
+          fi
 
   package:
     name: Paket (${{ matrix.os }})

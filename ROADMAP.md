@@ -11023,6 +11023,12 @@ Fundstelle, Beleg und Reproduktion stehen im Review.
   06.09.2026, nach dem VTK-Ausbau). Die Modellabnahme, die Leistungsreihe und
   jeder Fensterlauf stammen von einer Maschine: Windows 11, RTX 4080. Was
   daraus folgt, in der Reihenfolge des Risikos:
+  * **Der Probelauf der Fensterdateien läuft** (06.09.2026), als eigener
+    Schritt neben dem Tor und mit `continue-on-error`: Sein Ergebnis steht in
+    der Zusammenfassung des Laufs, der Paketier-Job hängt nicht daran. Ein
+    Probelauf, der die Auslieferung blockieren kann, wäre der Fehler vom
+    20.08.2026 noch einmal. Sind alle Dateien grün, kann die Auslassung im
+    Tor fallen — das sagt der Lauf dann selbst.
   * **Kein CI-Lauf hatte je einen Renderer gebaut.** Auf dem Linux-Runner
     fehlte der Vulkan-Loader, `factory.available()` sagte nein, und jeder
     Renderertest übersprang sich mit Grund — der Lauf blieb grün und maß
