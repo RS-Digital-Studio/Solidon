@@ -729,6 +729,39 @@ def test_a_hole_behind_the_surface_is_not_aimed_at(window: MainWindow) -> None:
     )
 
 
+def test_a_surface_far_behind_an_opening_is_what_the_click_means(window: MainWindow) -> None:
+    """Durch eine Öffnung auf einen Boden weit dahinter gesehen ist der Boden gemeint.
+
+    Gemessen am Desk-Organizer (Abnahme 06.09.2026): Der Sichtstrahl durchquerte
+    eine Senkung in der schrägen Wand und traf 56 mm dahinter den Boden — die
+    Anwendung wählte die Senkung, obwohl der Kunde auf den Boden sah und dort
+    klickte. Die Zielhilfe gilt, solange das Sichtbare in Reichweite hinter dem
+    Austritt liegt (die Rückwand einer Sackbohrung, ein Boden dicht dahinter);
+    was weiter dahinter liegt, meint der Klick.
+    """
+    viewport = window.viewport
+    centre = hole_centre(window)
+    origin, direction = looking_down(centre[0], centre[1])
+    bore = next(
+        target for target in viewport._prepared_bores("obj_1") if target.feature_id == "hole_1"
+    )
+    depth = bore.bounds[1] - bore.bounds[0]
+    reach = viewport._feature_reach("obj_1")
+    top = until_the_top_face(window)
+
+    close_behind = top + depth + 0.5 * reach
+    assert viewport._bore_aim(origin, direction, close_behind) is not None, (
+        "ein Boden dicht hinter dem Austritt lässt die Bohrung gemeint sein"
+    )
+    far_behind = top + depth + 3.0 * reach + 20.0
+    assert viewport._bore_aim(origin, direction, far_behind) is None, (
+        "weit dahinter ist die Fläche gemeint, die man durch das Loch sieht"
+    )
+    assert viewport._bore_aim(origin, direction, float("inf")) is not None, (
+        "ohne etwas dahinter bleibt es die Bohrung"
+    )
+
+
 def test_bore_target_slack_cannot_cross_a_blind_hole_back_wall(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

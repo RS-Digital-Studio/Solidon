@@ -8394,6 +8394,17 @@ class Viewport(QWidget):
                     at_entrance = (entrance - float(start @ line)) / along_ray
                     if abs(at_entrance - until) > EPS_GEOM:
                         continue
+                if math.isfinite(until):
+                    # Der Strahl verlässt die Öffnung und trifft erst weit
+                    # dahinter etwas Sichtbares — der Boden hinter einer
+                    # Senkung in der schrägen Wand, 56 mm weiter (Desk-
+                    # Organizer, Abnahme 06.09.2026). Gemeint ist dann die
+                    # Fläche, die man sieht, nicht das Loch davor. Dicht
+                    # hinter dem Austritt gilt die Zielhilfe weiter: die
+                    # Rückwand einer Sackbohrung, ein Boden in Reichweite.
+                    depth = max(bounds[1] - bounds[0], 0.0)
+                    if until > span[1] + depth + reach + EPS_GEOM:
+                        continue
                 enter = max(span[0], 0.0)
                 leave = min(span[1], until)
                 if leave < enter - EPS_GEOM:
