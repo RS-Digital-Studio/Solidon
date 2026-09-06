@@ -82,11 +82,35 @@ def link(target: Path, source: Path) -> None:
 
 
 def _kept(entry: Path, im_repo: Path) -> bool:
-    """Hat diese lokale Datei im Repository einen Ort — gleich oder daneben?"""
-    if im_repo.is_file() and im_repo.read_bytes() == entry.read_bytes():
-        return True
-    aside = im_repo.with_name(f"{im_repo.stem}.dieser-maschine{im_repo.suffix}")
-    return aside.is_file() and aside.read_bytes() == entry.read_bytes()
+    """Liegt die lokale Datei unverändert an ihrem tatsächlich gewählten Ort?"""
+    return im_repo.is_file() and im_repo.read_bytes() == entry.read_bytes()
+
+
+def _keep_local(entry: Path, destination: Path) -> Path:
+    """Sichert die Fassung in einer freien Datei, ohne ältere Sicherungen zu ersetzen."""
+    contents = entry.read_bytes()
+    candidate = destination
+    number = 1
+    while True:
+        if candidate.exists():
+            if candidate.is_file() and candidate.read_bytes() == contents:
+                return candidate
+            suffix = "" if number == 1 else f"-{number}"
+            candidate = destination.with_name(
+                f"{destination.stem}.dieser-maschine{suffix}{destination.suffix}"
+            )
+            number += 1
+            continue
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            # Die Namenswahl und ihre Reservierung müssen zusammenfallen,
+            # sonst könnte eine zweite Sitzung denselben freien Namen nehmen.
+            with candidate.open("xb"):
+                pass
+        except FileExistsError:
+            continue
+        shutil.copy2(entry, candidate)
+        return candidate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -133,19 +157,19 @@ def main(argv: list[str] | None = None) -> int:
         # wenn jede Datei nachweislich einen Ort hat.
         adopted: list[str] = []
         aside_names: list[str] = []
+        kept: dict[Path, Path] = {}
         for entry in sorted(target.rglob("*")):
             if not entry.is_file():
                 continue
             relative = entry.relative_to(target)
             im_repo = IN_REPO / relative
-            if not im_repo.exists():
-                im_repo.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(entry, im_repo)
+            existed = im_repo.exists()
+            saved = _keep_local(entry, im_repo)
+            kept[entry] = saved
+            if saved != im_repo:
+                aside_names.append(saved.relative_to(IN_REPO).as_posix())
+            elif not existed:
                 adopted.append(relative.as_posix())
-            elif im_repo.read_bytes() != entry.read_bytes():
-                aside = im_repo.with_name(f"{im_repo.stem}.dieser-maschine{im_repo.suffix}")
-                shutil.copy2(entry, aside)
-                aside_names.append(aside.relative_to(IN_REPO).as_posix())
         if adopted:
             print("Aus dem Nutzerprofil übernommen: " + ", ".join(adopted))
         if aside_names:
@@ -158,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         unsaved = [
             entry.relative_to(target).as_posix()
             for entry in sorted(target.rglob("*"))
-            if entry.is_file() and not _kept(entry, IN_REPO / entry.relative_to(target))
+            if entry.is_file() and (entry not in kept or not _kept(entry, kept[entry]))
         ]
         if unsaved:
             print("Nicht gesichert, deshalb bleibt das Nutzerprofil stehen: " + ", ".join(unsaved))

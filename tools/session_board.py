@@ -83,7 +83,7 @@ def _own_name() -> str:
         entry = Path.home() / ".claude" / "sessions" / f"{pid}.json"
         try:
             return str(json.loads(entry.read_text(encoding="utf-8")).get("name") or "")
-        except (OSError, ValueError):
+        except OSError, ValueError:
             return ""
     codex_id = str(os.environ.get("CODEX_THREAD_ID") or os.environ.get("CODEX_SESSION_ID") or "")
     return f"Codex {codex_id[:8]}" if codex_id else ""
@@ -109,7 +109,7 @@ def _entries() -> list[tuple[Path, dict[str, object]]]:
     for path in sorted(_board().glob("*.json")):
         try:
             entry = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except OSError, ValueError:
             continue
         if not isinstance(entry, dict):
             continue

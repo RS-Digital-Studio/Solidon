@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import shutil
 import sys
+import sysconfig
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,6 +45,15 @@ def built() -> list[Path]:
         for pattern in ("_chain.*.so", "_chain.*.pyd", "_chain.c")
         for path in PACKAGE.glob(pattern)
     ]
+
+
+def current_extensions() -> list[Path]:
+    """Nur der Schichtkern für ABI und Architektur des bauenden Interpreters."""
+    suffix = sysconfig.get_config_var("EXT_SUFFIX")
+    if not isinstance(suffix, str) or not suffix:
+        return []
+    path = PACKAGE / f"_chain{suffix}"
+    return [path] if path.is_file() else []
 
 
 def clean() -> None:
@@ -86,7 +96,7 @@ def build() -> int:
         ],
     )
 
-    made = [path for path in built() if path.suffix in (".so", ".pyd")]
+    made = current_extensions()
     if not made:
         print("übersetzt, aber nichts gefunden — bitte die Ausgabe oben lesen", file=sys.stderr)
         return 1
