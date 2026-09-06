@@ -8,3 +8,5 @@
 *-processes.json
 summary.json
 __pycache__/
+*.log
+*.err

@@ -124,7 +124,7 @@ Durchscheinendes und Überlagerungen, dann das Achsenkreuz) mit je rund 1,5 ms
 Lichtaufbereitung (`DirectionalLight._gfx_update_uniform_buffer` ruft je Licht
 `look_at`) und Pipelinesuche. Das ist Python im Renderer, keine GPU-Zeit
 (Zaun 0,4–0,7 ms). Die Leistungsreihe am Baum mit 197 000, 788 000 und 3,15
-Millionen Dreiecken (`run_budgets.py`) wird nach dem Commit gefahren und hier ergänzt.
+Millionen Dreiecken (`run_budgets.py`) steht im Nachtrag unten.
 
 ## Tor
 
@@ -142,9 +142,64 @@ Protokoll, `test_window_chrome.py` und `test_wording.py` einzeln grün;
 139 sind der bekannte Bestand aus `CLAUDE.md`; `test_operation_ui.py` riss einmal
 im Arbeiter-`__init__` (bekannte Familie) und lief geteilt vollständig grün;
 `test_ui.py::test_saving_shows_that_it_is_working` fiel mit WinError 112 (Platte
-voll) und ist einzeln grün. Leistungstests: siehe Nachtrag.
+voll) und ist einzeln grün. Leistungstests (`-m performance`, unter dem Schloss):
+um 11:40 Uhr 32 grün; ein zweiter Lauf um 12:42 Uhr, während drei Sitzungen und
+die Aufräumarbeit auf C: liefen, ließ
+`test_the_multicolour_example_opens_without_a_surface_search_explosion` mit
+zwei von zwei Regressionsstrichen fallen — dieselbe Quelle, derselbe Code. Auf
+dem zusammengeführten Stand ist das Tor allein zu fahren, bevor daraus ein
+Befund wird.
+
+## Nachtrag: Leistungsreihe am Baum (12:45–12:55 Uhr)
+
+`run_budgets.py --source final-source-v10 --name budget-final-v10`, je Lauf ein
+eigener Prozess, 120 Kamerastellungen, Bild bis GPU-fertig, Umgebungsverdeckung
+an, RTX 4080, während andere Sitzungen liefen (letzte Spalte: geschätzte fremde
+CPU-Last über 32 logische Prozessoren). `full` zeichnet das Netz unverändert,
+`lod` den regulären Anzeigeweg (Dezimierung auf 200 000 Dreiecke) mit
+Körperkanten; `solid-no-edges` nimmt nur die Kantengrenze aus dem Bild.
+
+| Lauf | Dreiecke im Bild | Bild Median ms | p95 ms | RSS MiB | Fremdlast CPU % |
+|---|---:|---:|---:|---:|---:|
+| `gfx-s0-full-product` | 197120 | 6,9 | 9,2 | 406 | 20,1 |
+| `gfx-s0-full-solid-no-edges` | 197120 | 7,2 | 15,0 | 406 | 22,6 |
+| `gfx-s1-full-solid-no-edges` | 788480 | 6,9 | 9,7 | 553 | 18,7 |
+| `gfx-s1-lod-product` | 200000 | 17,5 | 20,2 | 689 | 19,5 |
+| `gfx-s2-full-solid-no-edges` | 3153920 | 6,5 | 10,2 | 1116 | 18,4 |
+| `gfx-s2-lod-product` | 200000 | 10,6 | 15,8 | 1407 | 26,7 |
+| `vtk-s0-full-product` | 197120 | 2,2 | 7,2 | 391 | 10,7 |
+| `vtk-s0-full-solid-no-edges` | 197120 | 2,6 | 7,5 | 351 | 23,3 |
+| `vtk-s1-full-solid-no-edges` | 788480 | 2,5 | 8,4 | 521 | 20,4 |
+| `vtk-s1-lod-product` | 200000 | 13,8 | 17,9 | 642 | 20,0 |
+| `vtk-s2-full-solid-no-edges` | 3153920 | 2,3 | 10,0 | 1175 | 15,9 |
+| `vtk-s2-lod-product` | 200000 | 4,7 | 5,7 | 1349 | 26,7 |
+
+Was daraus folgt:
+
+- **Beide Renderer sind bei 3,15 Millionen Dreiecken bildstabil.** GFX bleibt
+  bei 6,5 bis 7,2 ms je Bild, unabhängig von der Dreieckszahl — das ist der
+  Python-Anteil von pygfx je `render()` (drei Aufrufe je Bild), nicht die GPU.
+  VTK liegt bei 2,2 bis 2,6 ms. Beides ist weit unter einem Bildwechsel bei
+  60 Hz; ein Unterschied, den ein Kunde am Zug nicht sieht.
+- **Der Szenenaufbau ist bei GFX doppelt so teuer wie bei VTK:** 3,8 s gegen
+  2,0 s beim vollen 3,15-Millionen-Netz (`ui_heartbeat.aufbau`), 1,5 gegen 1,0 s
+  bei 197 000. Der Verdacht liegt bei den Punktnormalen, die pygfx auf der CPU
+  rechnet, und den Puffer-Kopien beim Anlegen; nicht profiliert — ein eigener
+  Punkt (unten).
+- **Der Anzeigeweg mit Dezimierung kostet mehr je Bild als das volle Netz**
+  (GFX 10,6–17,5 ms, VTK 4,7–13,8 ms bei 200 000 Dreiecken): Die Kantensuche
+  liefert am dezimierten Netz viele Konturlinien, und der Baum trägt in dieser
+  Reihe keine Merkmale; die Spanne zwischen s1 und s2 liegt in der Fremdlast.
+  Auch das ist ein Posten für die Kantenzahl, nicht für den Renderer.
+- **Arbeitsspeicher gleich:** 406 gegen 391 MiB bei 197 000, 1116 gegen 1175
+  MiB beim vollen 3,15-Millionen-Netz.
 
 ## Offen
+
+- Szenenaufbau bei GFX profilieren (Normalen, Kopien): 3,8 s gegen 2,0 s beim
+  3,15-Millionen-Netz.
+- Zahl der Konturlinien am dezimierten Netz — der Anzeigeweg ist je Bild
+  teurer als das volle Netz.
 
 - Bedienentscheidung zu Fall 4 (oben).
 - Leistungsreihe und Leistungstests nach dem Commit; Nachtrag folgt.
