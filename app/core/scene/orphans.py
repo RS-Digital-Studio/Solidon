@@ -123,6 +123,23 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
     return found
 
 
+def pending_references(document: Document, stopped_at: int | None) -> list[Reference]:
+    """Prüft Verweise gegen den Stand, an dem sie tatsächlich gebraucht werden.
+
+    Vor dem angehaltenen Schritt sind seine Eingänge noch vorhanden. Frühere
+    Schritte wurden bereits erfolgreich aufgelöst; ihre später verbrauchten
+    Körper sind keine verwaisten Verweise. Zukünftige Schritte müssen warten,
+    bis ihre Eingänge erzeugt wurden. Passungen gelten erst im Endstand.
+    """
+    from app.core.scene.fits import active_fits
+
+    found = references(document)
+    if stopped_at is not None:
+        return [entry for entry in found if entry.kind != "fit" and entry.op_id == stopped_at]
+    active = {fit.name for fit in active_fits(document)}
+    return [entry for entry in found if entry.kind == "fit" and entry.fit_name in active]
+
+
 def _sketch_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
     """Parameter dieser Operation, die eine Skizze tragen — aus der
     Deklaration, wie bei :func:`_feature_fields`."""
@@ -189,6 +206,8 @@ def check(
     ask: Any,
     registry: Registry | None = None,
     announce: Callable[[tuple[tuple[str, str], ...]], None] | None = None,
+    *,
+    pending: Sequence[Reference] | None = None,
 ) -> CheckResult:
     """Löst jeden Verweis einmal auf und fragt, wo die Antwort nicht
     offensichtlich ist (§21.3).
@@ -214,7 +233,7 @@ def check(
     Regelfall und nicht der Sonderfall.
     """
     result = CheckResult()
-    for reference in references(document, registry):
+    for reference in references(document, registry) if pending is None else pending:
         if _resolves(scene, reference.ref):
             continue
         candidates = _candidates(scene, reference.ref)

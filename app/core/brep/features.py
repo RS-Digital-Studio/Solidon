@@ -20,7 +20,7 @@ from typing import Any
 from app.core.brep.kernel import Solid
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, FeatureKind, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, match_tolerance
 
 _log = get_logger(__name__)
 
@@ -64,8 +64,14 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
     neighbours = NeighbourMap()
     TopExp.MapShapesAndAncestors_s(solid.shape, TopAbs_EDGE, TopAbs_FACE, neighbours)
 
+    # Wie weit ein Achsstrahl reichen muss, um jede Nachbarfläche zu treffen,
+    # und ab wann ein Abstand „auf der Achse" heißt — beides einmal je Körper,
+    # aus seiner Größe (§11.2).
+    reach = solid.bounds.diagonal
+    tolerance = match_tolerance(reach)
+
     for index, face in enumerate(solid.faces()):
-        described = _describe(face, index, inside, neighbours)
+        described = _describe(face, index, inside, neighbours, reach, tolerance)
         if described is None:
             continue
         kind, params = described
@@ -93,13 +99,14 @@ def features_of(solid: Solid) -> dict[FeatureId, Feature]:
 
 
 def _describe(
-    face: Any, index: int, inside: Any, neighbours: Any
+    face: Any, index: int, inside: Any, neighbours: Any, reach: float, tolerance: float
 ) -> tuple[FeatureKind, dict[str, Any]] | None:
     """Was diese Fläche ist, im Vokabular von §21."""
     from OCP.BRepAdaptor import BRepAdaptor_Surface
     from OCP.BRepGProp import BRepGProp
     from OCP.GeomAbs import GeomAbs_Cylinder, GeomAbs_Plane, GeomAbs_Sphere
     from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_REVERSED
 
     surface = BRepAdaptor_Surface(face)
     props = GProp_GProps()
@@ -114,6 +121,8 @@ def _describe(
     if kind == GeomAbs_Plane:
         plane = surface.Plane()
         normal = plane.Axis().Direction()
+        if face.Orientation() == TopAbs_REVERSED:
+            normal.Reverse()
         return "face", {
             "area": round(area, 4),
             "centre": middle,
@@ -121,13 +130,13 @@ def _describe(
         }
 
     if kind == GeomAbs_Cylinder:
-        from OCP.TopAbs import TopAbs_REVERSED
-
         turn = abs(surface.LastUParameter() - surface.FirstUParameter())
         cylinder = surface.Cylinder()
         axis = cylinder.Axis().Direction()
         radius = float(cylinder.Radius())
-        depth = abs(surface.LastVParameter() - surface.FirstVParameter())
+        first_v = float(surface.FirstVParameter())
+        last_v = float(surface.LastVParameter())
+        depth = abs(last_v - first_v)
         # Loch oder Zapfen — das entscheidet, auf welcher Seite das Material
         # liegt, und das steht in der Orientierung der Fläche. Ohne diese
         # Unterscheidung war jeder Rundstab eine Bohrung: ein Ø-8-Zapfen aus
@@ -160,16 +169,37 @@ def _describe(
                 "recess": not _axis_in_material(inside, cylinder, centre),
             }
 
-        return "hole" if hollow else "pin", {
+        # **Der Mittelpunkt liegt auf der Achse, nicht im Flächenschwerpunkt.**
+        # Ein Mantel, den eine schräge Fläche beschneidet, ist auf einer Seite
+        # länger als auf der anderen, und sein Schwerpunkt wandert dorthin:
+        # radial von der Achse weg und axial zur längeren Seite. An der
+        # Teppichklammer (Datei 19 der Durchsicht vom 05.09.2026) lag er
+        # 0,026 mm neben und 0,2 mm über der Achsmitte, und der Zylinder, den
+        # ``edit.resize_bore`` daraus baute, war nicht koaxial zur Bohrung:
+        # unten blieb ein Rest des alten Mantels stehen, oben stand er über,
+        # und die Tessellation ging auf. Der Mantel nennt Achse und
+        # Parameterspanne selbst; seine Mitte ist der Achspunkt in der Mitte
+        # der Spanne — die Netzseite rechnet aus demselben Grund über die
+        # Endringe (``perceive``: „Ein Zylindermittelpunkt kommt aus seinen
+        # Endringen").
+        params: dict[str, Any] = {
             # Der Kern behält das Topologiemaß in doppelter Genauigkeit.
             # Gerundet wird erst in Baum und Dialog: Eine Bearbeitung, die
             # daraus wieder einen exakten Zylinder baut, darf sonst einen
             # losen Ring oder eine hauchdünne alte Lippe erzeugen.
             "diameter": radius * 2.0,
-            "centre": middle,
+            "centre": _axis_point(cylinder, (first_v + last_v) / 2.0),
             "axis": (axis.X(), axis.Y(), axis.Z()),
             "depth": depth,
         }
+        if hollow:
+            # Dasselbe Wort wie auf der Netzseite, und der Steckbrief liest es
+            # („Durchgang" oder „Sackloch"). Ohne den Schlüssel stand an jeder
+            # exakten Bohrung „Sackloch", auch an einem Loch durch eine Platte.
+            params["through"] = not _axis_covered(
+                neighbours, face, cylinder, first_v - reach, last_v + reach, tolerance
+            )
+        return "hole" if hollow else "pin", params
 
     if kind == GeomAbs_Sphere:
         ball = surface.Sphere()
@@ -197,6 +227,70 @@ def _describe(
 
     del index
     return None
+
+
+def _axis_point(cylinder: Any, along: float) -> Vec3:
+    """Der Punkt auf der Zylinderachse beim Parameter ``along``.
+
+    ``V`` einer Zylinderfläche ist die Länge entlang der Achse ab ihrem
+    Ursprung — derselbe Maßstab wie ``FirstVParameter``/``LastVParameter``.
+    """
+    origin = cylinder.Location()
+    direction = cylinder.Axis().Direction()
+    return (
+        float(origin.X() + direction.X() * along),
+        float(origin.Y() + direction.Y() * along),
+        float(origin.Z() + direction.Z() * along),
+    )
+
+
+def _axis_covered(
+    neighbours: Any, face: Any, cylinder: Any, first: float, last: float, tolerance: float
+) -> bool:
+    """Reicht eine Nachbarfläche dieses Mantels bis an die Bohrachse?
+
+    Ein Sackloch endet an einer Fläche, die über der Achse liegt — ein ebener
+    Boden, der Kegel einer Spitzenbohrung, die Kalotte eines Kugelfräsers —,
+    und die stößt an den Mantel an. Bei einer Durchgangsbohrung stoßen nur
+    Flächen an, in denen das Loch selbst liegt: Ihr Rand ist der Rand des
+    Lochs, und der bleibt einen Radius von der Achse entfernt.
+
+    **Nachbarn, nicht der ganze Körper.** Der Netzzwilling (``_is_through``)
+    zählt Dreiecke über der Achse im Abschnitt der Bohrung; hier sagt es die
+    Topologie: Der gegenüberliegende Schenkel eines U-Profils liegt zwar über
+    der Achse, grenzt aber nicht an den Mantel — und die Bohrung im ersten
+    Schenkel ist durchgehend.
+
+    **Abstand, nicht Schnitt.** Der erste Versuch schnitt die Achse als Gerade
+    mit jeder Nachbarfläche (``IntCurvesFace_Intersector``) und fand die
+    Spitze eines Bohrkegels nicht: Sie ist in der Flächenparametrisierung ein
+    entarteter Punkt, und der Schnitt meldet dort nichts. Der kleinste Abstand
+    zwischen Achse und Fläche kennt diese Ausnahme nicht — eine Spitze ist ein
+    Knoten der Fläche, und Knoten zählen mit. Gemessen an zehn Bauarten:
+    Platte, Sackloch, Spitzenbohrung, schräger Austritt, zylindrische und
+    kegelige Senkung, U-Profil, Kugelfräser, Kreuzbohrung, Stufenbohrung.
+    """
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge
+    from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+    from OCP.gp import gp_Lin
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+
+    probe = BRepBuilderAPI_MakeEdge(gp_Lin(cylinder.Axis()), first, last).Edge()
+    seen: list[Any] = []
+    walk = TopExp_Explorer(face, TopAbs_EDGE)
+    while walk.More():
+        edge = walk.Current()
+        walk.Next()
+        for other in neighbours.FindFromKey(edge):
+            if other.IsSame(face) or any(other.IsSame(known) for known in seen):
+                continue
+            seen.append(other)
+    for other in seen:
+        distance = BRepExtrema_DistShapeShape(probe, other)
+        if distance.IsDone() and distance.Value() <= tolerance:
+            return True
+    return False
 
 
 def _axis_in_material(inside: Any, cylinder: Any, centre: Any) -> bool:

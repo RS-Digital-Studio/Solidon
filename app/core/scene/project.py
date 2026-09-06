@@ -24,6 +24,7 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import hashlib
+import importlib
 import json
 import math
 import os
@@ -36,11 +37,11 @@ from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
-from typing import Any, Final
+from typing import Any, BinaryIO, Final
 
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
-from app.core.errors import PROGRAMMING_ERRORS, ValidationError
+from app.core.errors import PROGRAMMING_ERRORS, FileWriteError, ValidationError
 from app.core.ingest.loader import (
     MAX_ARCHIVE_ENTRIES,
     MAX_COMPRESSION_RATIO,
@@ -856,6 +857,16 @@ def _validate_fit_schema(fit: dict[str, Any], where: str) -> None:
     tolerance = fit.get("tolerance", "auto:")
     if isinstance(tolerance, bool) or not isinstance(tolerance, int | float | str):
         raise ValueError(f"schema:{where}.tolerance")
+    condition = fit.get("when_positive")
+    if condition is not None:
+        if (
+            not isinstance(condition, list)
+            or len(condition) != 2
+            or not isinstance(condition[1], str)
+            or not condition[1]
+        ):
+            raise ValueError(f"schema:{where}.when_positive")
+        _schema_integer(condition[0], f"{where}.when_positive")
 
 
 def _validate_operation_schema(
@@ -982,6 +993,8 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
 
     for index, entry in enumerate(_records(data, "chat")):
         _validate_origin_schema(entry.get("origin"), f"chat[{index}].origin")
+        if not isinstance(entry.get("discarded", False), bool):
+            raise ValueError(f"schema:chat[{index}].discarded")
 
     numbering = _mapping(data, "numbering")
     for name in ("transaction", "op", "object"):
@@ -1016,6 +1029,9 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
             where = f"print_settings.slot_overrides[{index}]"
             item = _nested_mapping(override, where)
             assert item is not None
+            for name in ("material", "material_type"):
+                if item.get(name) is not None and not isinstance(item[name], str):
+                    raise ValueError(f"schema:{where}.{name}")
             colour = item.get("colour")
             if colour is None:
                 continue
@@ -1564,6 +1580,53 @@ def recovery_token_of(candidate: Path) -> str | None:
     return name[len(UNSAVED_STEM) + 1 : -len(suffix)] or None
 
 
+def _lock_recovery(stream: BinaryIO) -> None:
+    """Belegt die Lebensdauersperre ohne Warten; das Schließen gibt sie frei."""
+    stream.seek(0)
+    if os.name == "nt":
+        _windows_msvcrt.locking(stream.fileno(), _windows_msvcrt.LK_NBLCK, 1)
+    else:
+        module = importlib.import_module("fcntl")
+        module.flock(stream.fileno(), module.LOCK_EX | module.LOCK_NB)
+
+
+def claim_recovery(token: str) -> BinaryIO:
+    """Hält die namenlose Sicherung für genau ihre lebende Sitzung belegt.
+
+    Die offene Datei bleibt bei der Sitzung. Auch ein Prozessabsturz löst
+    die Betriebssystemsperre; eine alte Kennung oder wiederverwendete PID
+    kann deshalb keine verwaiste Sicherung dauerhaft verbergen.
+    """
+    target = _recovery_dir() / f"{UNSAVED_STEM}-{token}.lock"
+    stream = None
+    try:
+        stream = target.open("a+b")
+        _lock_recovery(stream)
+        return stream
+    except OSError as problem:
+        if stream is not None:
+            stream.close()
+        raise FileWriteError(target=target.name, detail=str(problem)) from problem
+
+
+def recovery_is_live(candidate: Path) -> bool:
+    """Eine fremde belegte Sicherung wird weder angeboten noch gelöscht."""
+    token = recovery_token_of(candidate)
+    if token is None:
+        return False
+    lock = candidate.parent / f"{UNSAVED_STEM}-{token}.lock"
+    try:
+        with lock.open("r+b") as stream:
+            _lock_recovery(stream)
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # Eine nicht lesbare Sperre beweist keinen Absturz. Die Sicherung
+        # bleibt bestehen, bis sich ihre Verfügbarkeit feststellen lässt.
+        return True
+    return False
+
+
 def unsaved_recoveries(*, except_token: str | None = None) -> list[Path]:
     """Alle Sicherungen ohne Projektnamen, jüngste zuerst — ohne die eigene.
 
@@ -1575,7 +1638,7 @@ def unsaved_recoveries(*, except_token: str | None = None) -> list[Path]:
     found = [
         entry
         for entry in _recovery_dir().glob(f"{UNSAVED_STEM}*{PROJECT_SUFFIX}{AUTOSAVE_SUFFIX}")
-        if entry.is_file() and entry != own
+        if entry.is_file() and entry != own and not recovery_is_live(entry)
     ]
     return sorted(found, key=lambda entry: entry.stat().st_mtime, reverse=True)
 
@@ -1628,14 +1691,16 @@ def clear_autosave(path: Path | None, token: str | None = None) -> None:
     beim nächsten Öffnen; das ist die kleinere Störung, und sie steht im
     Protokoll.
     """
-    discard_recovery(autosave_path(path, token))
+    discard_recovery(autosave_path(path, token), owner_token=token)
 
 
-def discard_recovery(candidate: Path) -> None:
+def discard_recovery(candidate: Path, *, owner_token: str | None = None) -> None:
     """Räumt eine bestimmte Sicherung weg — die angebotene, die der Nutzer
     ablehnt, oder die eigene über :func:`clear_autosave`. Wirft nicht, aus
     demselben Grund wie dort."""
     if not candidate.is_file():
+        return
+    if recovery_token_of(candidate) != owner_token and recovery_is_live(candidate):
         return
     try:
         candidate.unlink()

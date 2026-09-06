@@ -262,7 +262,7 @@ def _taskkill(process_id: int, *, force: bool) -> None:
             close_fds=True,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return
 
 
@@ -547,7 +547,7 @@ def _drain(
                     state["size"] += min(len(chunk), remaining)
                 if len(chunk) > remaining:
                     exceeded.set()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return
 
 
@@ -566,7 +566,7 @@ def _feed_chunks(
                     break
                 except queue.Full:
                     continue
-    except (OSError, ValueError):
+    except OSError, ValueError:
         pass
     finally:
         while not stopped.is_set():

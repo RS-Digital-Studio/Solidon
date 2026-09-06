@@ -19,11 +19,9 @@ Ein Undo nimmt beides zusammen zurück.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Mapping
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from app.core.errors import AppError
-from app.core.expressions import resolve, resolve_value
 from app.core.geom.lid import (
     CAP_THREAD_FEATURE,
     CAVITY_FEATURE,
@@ -31,6 +29,7 @@ from app.core.geom.lid import (
     NECK_THREAD_FEATURE,
 )
 from app.core.log import get_logger
+from app.core.scene.fits import active_fits
 from app.core.scene.history import History, OperationDraft, change_for
 from app.core.types import (
     Document,
@@ -38,11 +37,11 @@ from app.core.types import (
     Finding,
     Fit,
     ObjectId,
+    Operation,
     Origin,
     Profile,
     TransactionId,
 )
-from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -67,7 +66,11 @@ def unique_name(document: Document, wanted: str = FIT_NAME) -> str:
     Eine Schachtel mit zwei Fächern bekommt zwei Deckel, und zwei Passungen
     desselben Namens wären eine, die die andere verdeckt.
     """
-    taken = {fit.name for fit in document.fits}
+    return _unused_name(document.fits, wanted)
+
+
+def _unused_name(fits: Sequence[Fit], wanted: str) -> str:
+    taken = {fit.name for fit in fits}
     if wanted not in taken:
         return wanted
     number = 2
@@ -76,34 +79,17 @@ def unique_name(document: Document, wanted: str = FIT_NAME) -> str:
     return f"{wanted}_{number}"
 
 
-def _collar_height(document: Document, params: Mapping[str, object]) -> float | None:
-    """Wie hoch der Kragen wird, oder ``None``, wenn es sich nicht sagen lässt.
-
-    **Ein Ausdruck ist hier ein Wert und keine Ausnahme.** ``float("@kragen")``
-    scheitert, und der Fehlschlag hieß bis hierhin „kein flacher Deckel" — also
-    genau das Gegenteil dessen, was ``@kragen = 0`` bedeutet. Die Passung
-    entstand, das Merkmal ``lid_collar`` gab es nicht, und beim nächsten Öffnen
-    stand ein verwaister Verweis im Prüfbericht (§21.3).
-
-    Aufgelöst wird über den eigenen Auswerter gegen die Projektparameter
-    (Regel 10, §13) — denselben Weg, den auch ``scene/evaluate.py`` für jeden
-    Operationsparameter geht. Kein ``eval``, und keine zweite Grammatik.
-
-    ``None`` heißt „nicht entscheidbar": Der Parameter fehlt (dann gilt die
-    Schemavorgabe von 4 mm), oder der Ausdruck lässt sich nicht auflösen. Im
-    zweiten Fall scheitert die Operation ohnehin an derselben Stelle; eine
-    Passung auf gut Glück wegzulassen wäre die schlechtere Antwort als die,
-    die der Nutzer beim Anlegen gesehen hat.
-    """
-    given = params.get("collar")
-    if given is None:
-        return None
-    try:
-        resolved = resolve_value(given, resolve(document.parameters))
-        return float(resolved)  # type: ignore[arg-type]
-    except (TypeError, ValueError, AppError) as problem:
-        _log.info("lid flow: the collar %r could not be resolved: %s", given, problem)
-        return None
+def fit_for_lid(operation: Operation, material: str, existing: Sequence[Fit]) -> Fit:
+    """Die gemeinsame Beziehung für den Ablauf und belegte alte Deckelschritte."""
+    threaded = operation.op == "screw_lid"
+    return Fit(
+        name=_unused_name(existing, FIT_NAME),
+        a=FeatureRef(operation.outputs[0], NECK_THREAD_FEATURE if threaded else CAVITY_FEATURE),
+        b=FeatureRef(operation.outputs[1], CAP_THREAD_FEATURE if threaded else COLLAR_FEATURE),
+        kind="clearance",
+        tolerance=f"auto:{material}",
+        when_positive=None if threaded else (operation.id, "collar"),
+    )
 
 
 def apply_lid(
@@ -138,30 +124,7 @@ def apply_lid(
         return LidApplied(object_ids=list(made), transaction=applied.id)
 
     box_id, lid_id = made[0], made[1]
-    if op == "screw_lid":
-        first_feature = NECK_THREAD_FEATURE
-        second_feature = CAP_THREAD_FEATURE
-    else:
-        collar = _collar_height(document, params)
-        # Nur ein ausdrücklich gesetzter Kragen von null zählt: fehlt der
-        # Parameter, gilt die Schemavorgabe (4 mm), und die behält ihre Passung.
-        flat = collar is not None and collar <= EPS_GEOM
-        if flat:
-            # Ohne Kragen gibt es kein ``lid_collar``-Merkmal (ein flacher Deckel
-            # trägt keines mehr) — eine Passung darauf zeigte ins Leere und
-            # meldete bei jedem Öffnen eine Geometrie, die es nicht gibt.
-            _log.info("lid flow: collar is zero, no fit to pair")
-            return LidApplied(object_ids=list(made), transaction=applied.id)
-        first_feature = CAVITY_FEATURE
-        second_feature = COLLAR_FEATURE
-
-    fit = Fit(
-        name=unique_name(document),
-        a=FeatureRef(box_id, first_feature),
-        b=FeatureRef(lid_id, second_feature),
-        kind="clearance",
-        tolerance=f"auto:{profile.material.id}",
-    )
+    fit = fit_for_lid(document.ops[-1], profile.material.id, document.fits)
     # Die Passung gehört in dieselbe Transaktion wie die Geometrie: sie ist
     # keine Operation, also reist sie als DocumentChange mit (§15.5). Ohne das
     # ließe ein Undo den Deckel verschwinden und die Passung stehen — sie
@@ -177,7 +140,7 @@ def apply_lid(
     _log.info("lid flow: %s ↔ %s as fit %s", box_id, lid_id, fit.name)
     return LidApplied(
         object_ids=list(made),
-        fit=fit,
+        fit=fit if fit in active_fits(document) else None,
         transaction=applied.id,
         findings=[
             Finding(
@@ -189,7 +152,9 @@ def apply_lid(
                 ),
                 values={"fit": fit.name, "tolerance": str(fit.tolerance)},
             )
-        ],
+        ]
+        if fit in active_fits(document)
+        else [],
     )
 
 
@@ -199,4 +164,4 @@ def features_of_lid() -> tuple[str, str]:
     return CAVITY_FEATURE, COLLAR_FEATURE
 
 
-__all__ = ["FIT_NAME", "LidApplied", "apply_lid", "features_of_lid", "unique_name"]
+__all__ = ["FIT_NAME", "LidApplied", "apply_lid", "features_of_lid", "fit_for_lid", "unique_name"]

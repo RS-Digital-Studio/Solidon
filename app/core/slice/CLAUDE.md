@@ -44,3 +44,11 @@ Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
 - Leistung wird gemessen, nicht gefühlt: `pytest -m performance`, Zielwerte
   §31, Regressionsschwelle 25 %.
 - Messungen unter Fremdlast sind keine Messungen — die Marke allein fahren.
+
+## Materialvorgaben und Verbrauch
+
+Warnungen vergleichen ungekürzte Materialvorgaben mit den Grenzen des
+Druckers. Ein vorher auf das Düsenmaximum gedeckelter Sollwert kann eine
+unzureichende Temperatur nicht mehr nachweisen. G-Code-Verbrauchslisten
+werden über alle Slots summiert; eine ausdrücklich ausgewiesene Gesamtsumme
+hat Vorrang vor gerundeten Einzelwerten.

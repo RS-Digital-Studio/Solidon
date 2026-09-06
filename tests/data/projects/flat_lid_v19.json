@@ -1,0 +1,19 @@
+{
+  "format_version": 19,
+  "app_version": "0.3.4",
+  "parts_version": "14",
+  "scene": {"printer": "centauri-carbon-2", "material": "petg"},
+  "parameters": {"collar": {"value": 0.0, "unit": "mm"}},
+  "sources": {},
+  "fits": [],
+  "transactions": [
+    {"id": "t1", "title": "Schachtel", "ops": [1]},
+    {"id": "t2", "title": "Aushöhlen", "ops": [2]},
+    {"id": "t3", "title": "Deckel erzeugen", "ops": [3]}
+  ],
+  "ops": [
+    {"id": 1, "op": "create_box", "in": [], "out": ["obj_1"], "params": {"width": 60.0, "depth": 40.0, "height": 30.0}},
+    {"id": 2, "op": "hollow_object", "in": ["obj_1"], "out": ["obj_1"], "params": {"wall": 3.0, "open_top": true}},
+    {"id": 3, "op": "create_lid", "in": ["obj_1"], "out": ["obj_1", "obj_2"], "params": {"collar": "@collar"}}
+  ]
+}

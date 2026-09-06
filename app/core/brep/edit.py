@@ -20,10 +20,10 @@ import math
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from app.core.brep.kernel import Solid, require
+from app.core.brep.kernel import Solid, boolean_builder, require
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
-from app.core.types import Vec3
+from app.core.types import Transform, Vec3
 from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
 
@@ -136,14 +136,15 @@ def fillet(solid: Solid, radius: float, choice: EdgeChoice = "all") -> Solid:
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
-    chosen = choose(solid, choice)
+    working = Solid(solid.shape, deflection=solid.deflection)
+    chosen = choose(working, choice)
     if not chosen:
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
             values={"choice": choice},
         )
 
-    builder = BRepFilletAPI_MakeFillet(solid.shape)
+    builder = BRepFilletAPI_MakeFillet(working.shape)
     for entry in chosen:
         builder.Add(radius, entry.edge)
     return _built(solid, builder, "fillet", radius, len(chosen))
@@ -154,14 +155,15 @@ def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 
-    chosen = choose(solid, choice)
+    working = Solid(solid.shape, deflection=solid.deflection)
+    chosen = choose(working, choice)
     if not chosen:
         raise GeometryError(
             detail=_("Zu dieser Auswahl gehört keine Kante."),
             values={"choice": choice},
         )
 
-    builder = BRepFilletAPI_MakeChamfer(solid.shape)
+    builder = BRepFilletAPI_MakeChamfer(working.shape)
     for entry in chosen:
         builder.Add(distance, entry.edge)
     return _built(solid, builder, "chamfer", distance, len(chosen))
@@ -230,18 +232,11 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
     Antwort ein echter Fehler statt eines gröberen Versuchs.
     """
     require()
-    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
-
     if len(parts) < 2:
         raise ValueError("a boolean operation needs at least two bodies")
-    makers = {
-        "union": BRepAlgoAPI_Fuse,
-        "difference": BRepAlgoAPI_Cut,
-        "intersection": BRepAlgoAPI_Common,
-    }
     shape = parts[0].shape
     for other in parts[1:]:
-        operation = makers[kind](shape, other.shape)
+        operation = boolean_builder(kind, shape, other.shape)
         operation.Build()
         if not operation.IsDone():
             # Nicht „fehlgeschlagen" (Regel 17), und nicht die geerbten
@@ -388,6 +383,30 @@ def _oriented_cylinder(origin: Vec3, direction: Vec3, radius: float, height: flo
     return Solid(BRepPrimAPI_MakeCylinder(frame, radius, height).Shape())
 
 
+def transformed(solid: Solid, matrix: Transform) -> Solid:
+    """Eine starre Bewegung — Drehung und Verschiebung — exakt auf den Körper.
+
+    Dieselbe Matrix, die der Netz-Zwilling auf seine Dreiecke legt
+    (``primitive_ops.placement_transform``), damit ein Umschalten zwischen
+    den Kernen (``MENU_TWINS``) den Körper an derselben Stelle lässt.
+    ``gp_Trsf`` nimmt nur starre Bewegungen an; eine Matrix mit Scherung oder
+    Maßstab weist OpenCASCADE zurück, und das ist richtig so — ein B-Rep
+    bleibt nur unter starren Bewegungen exakt. Die Einheitsmatrix lässt den
+    Körper, wie er ist, ohne eine Bewegung anzulegen.
+    """
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Transform
+    from OCP.gp import gp_Trsf
+
+    cells = [float(value) for row in matrix[:3] for value in row[:4]]
+    identity = [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+    if all(is_close(cell, wanted) for cell, wanted in zip(cells, identity, strict=True)):
+        return solid
+    transform = gp_Trsf()
+    transform.SetValues(*cells)
+    return solid.replacing(BRepBuilderAPI_Transform(solid.shape, transform, False).Shape())
+
+
 def moved(solid: Solid, offset: Vec3) -> Solid:
     """Verschiebt einen Körper. Starre Bewegungen bleiben auf einem B-Rep exakt."""
     require()
@@ -396,4 +415,7 @@ def moved(solid: Solid, offset: Vec3) -> Solid:
 
     transform = gp_Trsf()
     transform.SetTranslation(gp_Vec(offset[0], offset[1], offset[2]))
-    return solid.replacing(BRepBuilderAPI_Transform(solid.shape, transform, True).Shape())
+    # Die Translation ändert nur die Location. Der neue Solid übernimmt
+    # anschließend die eigene Geometrie; hier noch einmal tief zu kopieren
+    # wäre dieselbe Kopie zweimal.
+    return solid.replacing(BRepBuilderAPI_Transform(solid.shape, transform, False).Shape())

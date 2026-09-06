@@ -96,6 +96,21 @@ class _Budget:
 
     bodies: int = 0
     triangles: int = 0
+    components: int = 0
+
+    def visit(self) -> None:
+        """Begrenzt auch wiederholte Zweige, die gar kein Netz beitragen."""
+        self.components += 1
+        limit = MAX_BODIES * (MAX_DEPTH + 1)
+        if self.components > limit:
+            raise ValidationError(
+                field="file",
+                detail=_(
+                    "Die Baugruppe enthält zu viele verschachtelte oder wiederholte Komponenten."
+                ),
+                constraint="too_many_components",
+                values={"components": self.components, "limit": limit},
+            )
 
     def take(self, mesh_node: ET.Element) -> None:
         """Ein Blatt mehr — oder der Abbruch, wenn es eines zu viel ist."""
@@ -178,7 +193,7 @@ def read(payload: bytes, faces: int) -> Groups | None:
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
             model = ET.fromstring(container.read(MODEL_PATH))
-    except (KeyError, zipfile.BadZipFile, ET.ParseError):
+    except KeyError, zipfile.BadZipFile, ET.ParseError:
         return None
     except (NotImplementedError, RuntimeError) as problem:
         raise _unpackable(problem) from problem
@@ -296,7 +311,7 @@ def declared_unit(payload: bytes) -> str | None:
             for _event, element in ET.iterparse(stream, events=("start",)):
                 stated = (element.get("unit") or "").strip().lower()
                 return stated if stated in THREEMF_UNITS else None
-    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, NotImplementedError):
+    except KeyError, OSError, zipfile.BadZipFile, ET.ParseError, NotImplementedError:
         return None
     return None
 
@@ -683,6 +698,7 @@ def _parts_of(
     ``budget`` zählt jedes Blatt mit und hält an, sobald der Build mehr
     Körper oder Dreiecke instanziert, als die Anwendung trägt (:class:`_Budget`).
     """
+    budget.visit()
     if depth > MAX_DEPTH:
         _log.warning("3MF component nesting deeper than %d — stopped", MAX_DEPTH)
         return []

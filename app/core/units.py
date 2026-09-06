@@ -215,13 +215,22 @@ def _significant_decimals(size: float) -> int:
     :func:`format_volume` dieselbe Antwort auch dort — ein erzeugtes Netz kommt
     normiert an und misst Zehntel eines Kubikmillimeters.
 
-    Bei fünf Stellen ist Schluss. Wer in Zoll ein Volumen von einem
-    Millionstel liest, ist mit einer Null besser bedient als mit acht.
+    Bei fünf Stellen ist Schluss. Kleinere Nichtnullwerte zeigt die gemeinsame
+    Formatierung als Schranke statt als vermeintlich genau gemessene Null.
     """
     decimals = 2
     while decimals < 5 and 0.0 < size < 10.0 ** (1 - decimals):
         decimals += 1
     return decimals
+
+
+def _format_with_bound(value: float, decimals: int, suffix: str) -> str:
+    """Fläche und Volumen behalten unter ihrer letzten Anzeigestelle eine Schranke."""
+    smallest = 10.0**-decimals
+    if 0.0 < abs(value) < smallest:
+        bound = f"{smallest:.{decimals}f}"
+        return f"<{bound} {suffix}" if value > 0.0 else f">-{bound} {suffix}"
+    return f"{value:.{decimals}f} {suffix}"
 
 
 def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
@@ -243,13 +252,14 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
 
     In Zoll dasselbe Problem und dieselbe Antwort, nur ohne Einheitenwechsel:
     Kubikmillimeter neben Kubikzoll wären zwei Systeme in einer Zeile. Dort
-    wachsen stattdessen die Stellen, bis zwei geltende Ziffern dastehen — ein
-    Wert, der nicht null ist, sieht sonst wie null aus.
+    wachsen stattdessen die Stellen bis zu zwei geltenden Ziffern, höchstens
+    jedoch fünf Nachkommastellen. Kleinere Nichtnullwerte stehen als Schranke
+    mit ihrem Vorzeichen da, in Millimetern ebenso wie in Zoll.
     """
     if unit == "in":
         cubic_inches = value_mm3 / UNIT_TO_MM["in"] ** 3
         decimals = _significant_decimals(abs(cubic_inches))
-        return f"{cubic_inches:.{decimals}f} in³"
+        return _format_with_bound(cubic_inches, decimals, "in³")
     if 0.0 < abs(value_mm3) < 1.0:
         # **Und dieselbe Zusage nach unten.** Ganze Kubikmillimeter lösen den
         # Fall von oben („0,0 cm³" für ein Teil von zwei Millimetern) und
@@ -263,7 +273,7 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
         # Der Zollzweig darüber löst genau das seit je, und der Test dazu sagt
         # es wörtlich: „was nicht null ist, sieht nicht so aus". Die Zusage
         # galt nur in einer der beiden Einheiten.
-        return f"{value_mm3:.{_significant_decimals(abs(value_mm3))}f} mm³"
+        return _format_with_bound(value_mm3, _significant_decimals(abs(value_mm3)), "mm³")
     if abs(value_mm3) < 1000.0:
         return f"{value_mm3:.0f} mm³"
     cubic_centimetres = value_mm3 / 1000.0
@@ -280,18 +290,20 @@ def format_area(value_mm2: float, unit: LengthUnit = "mm") -> str:
     „4334 mm²". Vier Stellen zeigen Flächen, und alle vier hatten die Einheit
     fest eingebaut.
 
-    In Millimetern bleibt es bei ganzen Quadratmillimetern; das ist die
-    Schreibweise, die im Prüfbericht und in der Schichtanalyse steht, und eine
-    Nachkommastelle wäre dort eine Genauigkeit, die keine Messung trägt. In Zoll
-    wachsen die Stellen wie beim Volumen, bis zwei geltende Ziffern dastehen —
-    ein Quadratmillimeter ist ein Anderthalbtausendstel Quadratzoll, und mit
-    zwei festen Stellen sähe alles Kleine wie null aus.
+    Unter einem Quadratmillimeter wachsen die Stellen wie beim Volumen bis
+    zu zwei geltenden Ziffern, höchstens jedoch fünf Nachkommastellen. Noch
+    kleinere Flächen werden als Schranke gezeigt: Ein vorhandener Überhang
+    darf nicht wie eine Fläche von null aussehen. Ab einem Quadratmillimeter
+    bleibt es bei ganzen Zahlen. In Zoll wachsen die Stellen entsprechend.
     """
     if unit == "in":
         square_inches = value_mm2 / UNIT_TO_MM["in"] ** 2
-        decimals = _significant_decimals(abs(square_inches))
-        return f"{square_inches:.{decimals}f} in²"
-    return f"{value_mm2:.0f} mm²"
+        value, suffix = square_inches, "in²"
+        decimals = _significant_decimals(abs(value))
+    else:
+        value, suffix = value_mm2, "mm²"
+        decimals = _significant_decimals(abs(value)) if 0.0 < abs(value) < 1.0 else 0
+    return _format_with_bound(value, decimals, suffix)
 
 
 def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> str:

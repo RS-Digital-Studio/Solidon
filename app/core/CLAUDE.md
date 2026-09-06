@@ -35,6 +35,12 @@ selbst. Hier steht, **was wo liegt**.
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==` |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — es gibt kein `eval` |
 
+Flächen- und Volumenanzeigen bewahren kleine Nichtnullwerte: Unter einem
+Quadrat- beziehungsweise Kubikmillimeter wächst die Zahl der Nachkommastellen,
+unter der Anzeigegrenze steht eine Schranke mit Vorzeichen statt null.
+Die gemeinsame private Formatierung gilt ebenso in Zoll. Dies betrifft nur
+den Text; Geometrie und Kennzahlen behalten ihre ungerundeten Werte.
+
 **Umgebung und Nutzerdaten:**
 
 `paths.py` (wo Nutzerdaten liegen, §38) · `discover.py` (installierte Programme

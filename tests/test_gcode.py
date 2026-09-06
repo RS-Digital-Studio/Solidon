@@ -42,6 +42,21 @@ G1 X30 Y10 E5.0
 # --- reading (§28.1) ----------------------------------------------------------------
 
 
+@pytest.mark.parametrize("total", ["", "; total filament used [g] = 9.25\n"])
+def test_all_filaments_contribute_to_the_print_metrics(total: str) -> None:
+    """Listen sind Extruderwerte; die explizite Summe hat Vorrang."""
+    metrics = gcode.parse(
+        "; filament used [mm] = 0, 1000.5, 2000.25\n; filament used [g] = 0, 3.1, 6.15\n" + total
+    )
+    assert metrics.filament_mm == pytest.approx(3000.75)
+    assert metrics.filament_grams == pytest.approx(9.25)
+
+
+def test_an_explicit_material_total_wins_over_rounded_slot_values() -> None:
+    metrics = gcode.parse("; filament used [g] = 3, 6\n; total filament used [g] = 9.25\n")
+    assert metrics.filament_grams == pytest.approx(9.25)
+
+
 def test_a_prusa_file_gives_up_its_numbers() -> None:
     metrics = gcode.parse(PRUSA)
 

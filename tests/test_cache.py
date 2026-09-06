@@ -234,6 +234,34 @@ def test_objects_keep_their_features_through_the_disk_level(tmp_path: Path) -> N
     assert feature.face_indices == (1, 2, 3)
 
 
+def test_old_results_without_fit_roles_are_recomputed(tmp_path: Path) -> None:
+    """Ein alter Deckel-Cache darf die neue Innen-/Außenauskunft nicht verschlucken."""
+    from app.core.types import Feature
+
+    entry = make_object("obj_1")
+    entry.features["rim"] = Feature(
+        id="rim",
+        kind="face",
+        provenance="generated",
+        params={"diameter": 24.0},
+        face_indices=(0,),
+    )
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("lid", CachedResult(objects=(entry,)))
+    index = disk._folder("lid") / "objects.json"
+    historical = json.loads(index.read_text(encoding="utf-8"))
+    historical["format_version"] = 2
+    index.write_text(json.dumps(historical), encoding="utf-8")
+
+    assert disk.get("lid") is None, "the old output must not bypass the current producer"
+
+    entry.features["rim"].params["fit_role"] = "outer"
+    disk.put("lid", CachedResult(objects=(entry,)))
+    restored = disk.get("lid")
+    assert restored is not None
+    assert restored.objects[0].features["rim"].params["fit_role"] == "outer"
+
+
 def test_the_disk_cache_keeps_findings_solver_and_transform(tmp_path: Path) -> None:
     """Die drei Beifänge gehören zum Ergebnis wie die Körper selbst.
 

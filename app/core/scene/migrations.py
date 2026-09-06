@@ -13,8 +13,9 @@ von der allerersten Version an weiter.
 from __future__ import annotations
 
 import json
+import math
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Final
 
 from app.core.errors import CANCEL, CHECK_UPDATES, ValidationError
@@ -25,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 19
+FORMAT_VERSION: Final = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -374,7 +375,7 @@ def _rename_circle_measures(text: str) -> str:
     """
     try:
         sketch = json.loads(text)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return text
     if not isinstance(sketch, dict):
         return text
@@ -412,6 +413,129 @@ def _rename_circle_measures(text: str) -> str:
     return json.dumps(sketch, ensure_ascii=False) if changed else text
 
 
+def _keep_explicit_choices(data: dict[str, Any]) -> dict[str, Any]:
+    """Erhält alte Werte, ohne fehlende Material- oder Chatidentität zu erraten.
+
+    Alte Chatantworten verraten nicht, ob sie ohne Vorschlag entstanden oder
+    verworfen wurden. Alte Spulenwerte bleiben einem unbekannten Material
+    zugeordnet und müssen vor der Übernahme auf ein bekanntes bestätigt werden.
+    """
+    for entry in data.get("chat", []):
+        entry.setdefault("discarded", False)
+    settings = data.get("print_settings") or {}
+    for override in settings.get("slot_overrides", []):
+        if override is not None:
+            override.setdefault("material", None)
+            override.setdefault("material_type", None)
+    return _bind_old_lid_fits(data)
+
+
+def _bind_old_lid_fits(data: dict[str, Any]) -> dict[str, Any]:
+    """Bindet alte Deckelpassungen in jedem gespeicherten Undo-Zustand.
+
+    Ein flacher Deckel hatte früher überhaupt keine Beziehung. Nur wenn
+    sein nichtpositiver Wert belegt ist und nirgends eine bewusste
+    Fit-Entfernung steht, wird die fehlende Beziehung ergänzt. Die echten
+    History-Rückschritte lösen dabei auch alte Neuplanungen und Op-Fassungen
+    auf; eine aktuelle Kennung gehört nicht ungeprüft in eine Undo-Seite.
+    """
+    from app.core.errors import AppError
+    from app.core.expressions import resolve, resolve_value
+    from app.core.lid_flow import fit_for_lid
+    from app.core.scene.history import History, _living_objects
+    from app.core.scene.serialise import document_from_data, fit_to_data
+    from app.core.types import Document, Fit, Operation
+
+    versions = list(data.get("ops", []))
+    for transaction in data.get("transactions", []):
+        for state in (transaction.get("changes") or {}).values():
+            versions.extend(
+                version for version in (state.get("edited_ops") or {}).values() if version
+            )
+    if not any(version.get("op") == "create_lid" for version in versions):
+        return data
+
+    def lids(document: Document) -> dict[frozenset[str], Operation]:
+        """Nur ein eindeutig belegtes Ausgabepaar bekommt eine Bindung."""
+        found: dict[frozenset[str], Operation] = {}
+        ambiguous: set[frozenset[str]] = set()
+        for operation in document.ops:
+            if operation.op != "create_lid" or len(operation.outputs) != 2:
+                continue
+            proposed = fit_for_lid(operation, document.material, ())
+            key = frozenset((str(proposed.a), str(proposed.b)))
+            if key in found:
+                ambiguous.add(key)
+            found[key] = operation
+        return {key: operation for key, operation in found.items() if key not in ambiguous}
+
+    original = document_from_data(data)
+    existing = list(original.fits)
+    for transaction in original.transactions:
+        if transaction.changes is not None:
+            for state in (transaction.changes.before, transaction.changes.after):
+                existing.extend(state.fits or ())
+    represented = {frozenset((str(fit.a), str(fit.b))) for fit in existing}
+    missing: dict[frozenset[str], tuple[Operation, str]] = {}
+    history = History(original)
+    while True:
+        for key, operation in lids(original).items():
+            if key in represented:
+                continue
+            value = operation.params.get("collar")
+            if value is None:
+                continue  # Die damalige Vorgabe war positiv, kein belegter flacher Deckel.
+            try:
+                value = resolve_value(value, resolve(original.parameters))
+            except AppError, TypeError, ValueError, KeyError:
+                continue
+            if (
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(value)
+                and value <= 0.0
+            ):
+                missing[key] = (operation, original.material)
+        if history.undo() is None:
+            break
+
+    additions: dict[frozenset[str], Fit] = {}
+    for key, (operation, material) in sorted(missing.items(), key=lambda item: item[1][0].id):
+        fit = fit_for_lid(operation, material, existing)
+        additions[key] = fit
+        existing.append(fit)
+
+    def converted(document: Document) -> list[dict[str, Any]]:
+        current_lids = lids(document)
+        result = []
+        for fit in document.fits:
+            operation = current_lids.get(frozenset((str(fit.a), str(fit.b))))
+            if operation is not None and fit.when_positive is None:
+                fit = replace(fit, when_positive=(operation.id, "collar"))
+            result.append(fit)
+        living = _living_objects(document.ops)
+        for key, fit in additions.items():
+            operation = current_lids.get(key)
+            if operation is not None and set(operation.outputs) <= living:
+                result.append(replace(fit, when_positive=(operation.id, "collar")))
+        return [fit_to_data(fit) for fit in result]
+
+    original = document_from_data(data)
+    history = History(original)
+    after = converted(original)
+    data["fits"] = after
+    for transaction in reversed(data.get("transactions", [])):
+        history.undo()
+        before = converted(original)
+        changes = transaction.get("changes") or {}
+        if before != after or any(state.get("fits") is not None for state in changes.values()):
+            changes.setdefault("before", {})["fits"] = before
+            changes.setdefault("after", {})["fits"] = after
+            transaction["changes"] = changes
+        after = before
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -432,6 +556,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=16, to_version=17, apply=_allow_removed_operations),
     Step(from_version=17, to_version=18, apply=_allow_a_named_pivot),
     Step(from_version=18, to_version=19, apply=_name_the_radius_a_radius),
+    Step(from_version=19, to_version=20, apply=_keep_explicit_choices),
 )
 
 

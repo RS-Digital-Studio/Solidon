@@ -1569,7 +1569,14 @@ def test_a_bore_from_an_older_file_stays_where_it_was() -> None:
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     result = evaluate(project.document, profile, sources=ProjectSources(project))
 
-    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(31276.892, abs=0.01)
+    # **31 277,193, nicht mehr 31 276,892.** Der alte Sollwert trug den Überlapp
+    # des Werkzeugs in der Tiefe mit: gemessen 1,51 mm statt der anderthalb
+    # Millimeter aus der Datei (hole_5, depth 1.51 gegen 1.5). Seit der
+    # Gesamtdurchsicht (06.09.2026) folgt die Werkzeughöhe der Tiefe, die
+    # Bohrung ist genau 1,5 mm tief, und die 0,3 mm³ Unterschied sind exakt
+    # die 0,01 mm über dem Querschnitt von 28,3 mm². Topologie unverändert:
+    # 990 Dreiecke vorher wie nachher, der Anker wirkt wie zuvor.
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(31277.193, abs=0.01)
 
 
 def test_a_file_that_split_at_a_plane_still_splits_the_same() -> None:
@@ -2220,3 +2227,88 @@ def test_two_unnamed_projects_keep_separate_recoveries(filled: Project) -> None:
     assert find_recovery(None, first) == legacy
     clear_autosave(None)
     assert find_recovery(None, first) is None
+
+
+def test_live_recoveries_are_neither_offered_nor_removed(filled: Project) -> None:
+    """Nur eine beendete Sitzung gibt ihre namenlose Sicherung zur Wiederherstellung frei."""
+    from app.core.scene import project as module
+
+    token = module.recovery_token()
+    candidate = module.write_autosave(filled, None, token)
+    owner = module.claim_recovery(token)
+    try:
+        assert candidate not in module.unsaved_recoveries()
+        module.discard_recovery(candidate)
+        assert candidate.is_file()
+        module.clear_autosave(None, token)
+        assert not candidate.exists(), "die eigene Sitzung darf ihre Sicherung aufräumen"
+        module.write_autosave(filled, None, token)
+    finally:
+        owner.close()
+    assert candidate in module.unsaved_recoveries()
+    module.discard_recovery(candidate)
+    assert not candidate.exists()
+
+
+def test_a_process_exit_releases_its_recovery_without_cleanup(
+    filled: Project, tmp_path: Path
+) -> None:
+    """Die Sperre endet auch bei os._exit, wenn keine Aufräumfunktion mehr läuft."""
+    import os
+    import subprocess
+    import sys
+    import time
+
+    from app.core.scene import project as module
+
+    token = module.recovery_token()
+    candidate = module.write_autosave(filled, None, token)
+    ready = tmp_path / "ready"
+    code = """import os, sys
+from pathlib import Path
+from app.core.scene import project
+project._recovery_dir = lambda: Path(sys.argv[1])
+owner = project.claim_recovery(sys.argv[2])
+Path(sys.argv[3]).write_text('ready')
+sys.stdin.readline()
+os._exit(42)
+"""
+    environment = os.environ.copy()
+    for key in (
+        "HOME",
+        "USERPROFILE",
+        "APPDATA",
+        "LOCALAPPDATA",
+        "XDG_CONFIG_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CACHE_HOME",
+        "TEMP",
+        "TMP",
+    ):
+        isolated = tmp_path / key
+        isolated.mkdir()
+        environment[key] = str(isolated)
+    process = subprocess.Popen(
+        [sys.executable, "-B", "-c", code, str(candidate.parent), token, str(ready)],
+        stdin=subprocess.PIPE,
+        env=environment,
+        text=True,
+    )
+    try:
+        deadline = time.monotonic() + 5.0
+        while not ready.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert ready.exists(), "der isolierte Prozess hat seine Sicherung belegt"
+        assert module.recovery_is_live(candidate)
+        assert candidate not in module.unsaved_recoveries()
+        process.communicate("stop\n", timeout=5)
+        assert process.returncode == 42
+        assert not module.recovery_is_live(candidate)
+        assert candidate in module.unsaved_recoveries()
+    finally:
+        if process.stdin is not None:
+            process.stdin.close()
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
+        module.discard_recovery(candidate)

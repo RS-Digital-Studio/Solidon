@@ -457,15 +457,18 @@ def _pocket_in_mesh(
     # ``through`` greift über den ganzen Körper hinaus, damit die Differenz
     # sicher durchtrennt statt eine hauchdünne Haut stehen zu lassen.
     reach = depth if not through else depth + 2.0 * BOOLEAN_OVERLAP
+    # ``top`` ist eine Weltprojektion; der Rahmen trägt seinen Höhenanteil
+    # bereits. Nur die Differenz verschiebt ihn auf die Schnittoberkante.
+    rise = top - sum(a * b for a, b in zip(frame.origin, frame.normal, strict=True))
     # Ausgeschrieben statt als ``tuple(...)`` über einen Bereich:
     # ``PlaneFrame`` verlangt genau drei Zahlen, und eine Folge unbekannter
     # Länge ist etwas anderes — mypy sagt das zu Recht.
     lifted = _replace(
         frame,
         origin=(
-            frame.origin[0] + frame.normal[0] * top,
-            frame.origin[1] + frame.normal[1] * top,
-            frame.origin[2] + frame.normal[2] * top,
+            frame.origin[0] + frame.normal[0] * rise,
+            frame.origin[1] + frame.normal[1] * rise,
+            frame.origin[2] + frame.normal[2] * rise,
         ),
     )
 

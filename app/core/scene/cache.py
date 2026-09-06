@@ -56,6 +56,10 @@ DEFAULT_TRIANGLE_BUDGET: Final = 20_000_000
 #: Obergrenze des Platten-Caches; die ältesten Einträge gehen zuerst.
 DEFAULT_DISK_BUDGET_BYTES: Final = 2 * 1024 * 1024 * 1024
 
+#: Die Kompatibilität umfasst Geometrie und erzeugte Merkmalsauskunft, darunter
+#: exakte Blindböden, Gewinde und eindeutige Innen-/Außenrollen für Passungen.
+CACHE_FORMAT_VERSION: Final = 3
+
 
 @dataclass(frozen=True, slots=True)
 class CachedResult:
@@ -72,7 +76,11 @@ class CachedResult:
     @property
     def cost(self) -> int:
         """Dreiecke dieses Eintrags — das Maß, in dem das Budget zählt."""
-        return sum(entry.mesh.triangle_count for entry in self.objects)
+        return sum(
+            entry.mesh.triangle_count
+            + (cavity.triangle_count if (cavity := getattr(entry.mesh, "cavity", None)) else 0)
+            for entry in self.objects
+        )
 
 
 class MeshCodec(Protocol):
@@ -469,6 +477,8 @@ class DiskCache:
             return None
         try:
             data = json.loads(index.read_text(encoding="utf-8"))
+            if data.get("format_version") != CACHE_FORMAT_VERSION:
+                return None
             objects = tuple(
                 SceneObject(
                     id=entry["id"],
@@ -483,6 +493,7 @@ class DiskCache:
                     created_by=entry["created_by"],
                     visible=entry["visible"],
                     plate=entry.get("plate", 0),
+                    reserved_feature_ids=tuple(sorted(entry.get("reserved_feature_ids", ()))),
                 )
                 for entry in data["objects"]
             )
@@ -555,9 +566,10 @@ class DiskCache:
                         "created_by": entry.created_by,
                         "visible": entry.visible,
                         "plate": entry.plate,
+                        "reserved_feature_ids": list(entry.reserved_feature_ids),
                     }
                 )
-            payload: dict[str, Any] = {"objects": entries}
+            payload: dict[str, Any] = {"format_version": CACHE_FORMAT_VERSION, "objects": entries}
             if result.findings:
                 payload["findings"] = [finding_to_data(entry) for entry in result.findings]
             if result.solver is not None:

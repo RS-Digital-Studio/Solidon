@@ -13,6 +13,7 @@ und wird mit einem Vorschlag zurückgewiesen — nicht stillschweigend geflickt
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from itertools import pairwise
 from typing import Any, Final, Literal
@@ -85,13 +86,9 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     beim Verketten einfach übrig, und die Meldung sprach von einem offenen
     Ende, obwohl beide Ketten geschlossen waren.
 
-    Verschachtelung wird über einen Punkt der inneren Kette gegen die äußere
-    entschieden, an einer Näherungspolylinie. Die Näherung betrifft nur die
-    **Einordnung**; die Geometrie, die in den Kern geht, bleibt exakt — ein
-    Bogen bleibt ein Bogen. Eine Kette, die eine andere schneidet statt sie zu
-    umschließen, wird nicht in Teilflächen zerlegt: das wäre eine planare
-    Arrangement-Rechnung, und sie müsste jede Kurve polygonisieren, um sie
-    danach als Kurve auszugeben.
+    Verschachtelung folgt den echten Kurven. Sich schneidende oder berührende
+    Ringe werden mit einem Handlungsvorschlag abgelehnt; ihre Fläche wäre
+    ohne eine zusätzliche Entscheidung nicht eindeutig.
     """
     # Hilfsgeometrie trägt Bedingungen, aber keinen Umriss (§30.1). Eine
     # Mittellinie, an der zwei Bohrungen symmetrisch hängen, soll nicht als
@@ -172,8 +169,8 @@ def _one_loop(segments: list[ProfileSegment]) -> tuple[ProfileSegment, ...]:
 def _outline(profile: Profile) -> list[Point2]:
     """Eine Polylinie, die dem Umriss folgt — nur zum Einordnen.
 
-    Ein Kreis wird zu einem Zwölfeck: genau genug, um zu entscheiden, ob etwas
-    darin liegt, und nichts davon geht in den Kern.
+    Die Punktfolge dient der groben Flächenauswahl und dem Rückfall ohne
+    exakten Kern. Kreisgrenzen werden beim Verschachteln analytisch geprüft.
 
     **Ein Bogen wird abgetastet wie in der Ansicht** (:func:`_along_arc`), und
     zwar aus zwei Gründen. Der eine ist die Einordnung: Anfang und Stützpunkt
@@ -207,8 +204,10 @@ def _outline(profile: Profile) -> list[Point2]:
             # und bei einem vollen Umlauf der eigene Anfang.
             points.extend(_along_arc(centre, segment.start, sweep, radius)[:-1])
             continue
-        points.append(segment.start)
-        points.extend(segment.through[1:-1])
+        if segment.kind == "spline":
+            points.extend(_along_spline(segment.through)[:-1])
+        else:
+            points.append(segment.start)
     return points
 
 
@@ -240,10 +239,9 @@ def _crosses_exactly(loop: Profile) -> bool | None:
     if not available():
         return None
 
-    from OCP.collections import Array1_gp_Pnt2d
     from OCP.GC import GC_MakeArcOfCircle2d, GC_MakeSegment2d
     from OCP.Geom2d import Geom2d_Circle
-    from OCP.Geom2dAPI import Geom2dAPI_InterCurveCurve, Geom2dAPI_PointsToBSpline
+    from OCP.Geom2dAPI import Geom2dAPI_InterCurveCurve
     from OCP.gp import gp_Ax2d, gp_Dir2d, gp_Pnt2d
 
     def point(value: Point2) -> Any:
@@ -262,10 +260,9 @@ def _crosses_exactly(loop: Profile) -> bool | None:
             if len(through) < 2 or all(_joins(through[0], other) for other in through[1:]):
                 curve = None
             else:
-                array = Array1_gp_Pnt2d(1, len(through))
-                for index, value in enumerate(through, start=1):
-                    array.SetValue(index, point(value))
-                curve = Geom2dAPI_PointsToBSpline(array).Curve()
+                from app.core.brep.profiles import spline_curve_2d
+
+                curve = spline_curve_2d(through)
         elif segment.kind == "arc" and segment.via is not None:
             turn = arc_through(segment.start, segment.via, segment.end)
             if turn is None:
@@ -387,23 +384,38 @@ def signed_area(profile: Profile) -> float:
     """
     if profile.circle is not None:
         return math.pi * profile.circle[1] ** 2
-    points: list[Point2] = []
-    curved = 0.0
+    total = 0.0
     for segment in profile.segments:
-        points.append(segment.start)
-        # Beim Spline die Stützpunkte dazwischen; Anfang und Ende stehen schon
-        # da, das Ende als Anfang des nächsten Segments.
-        points.extend(segment.through[1:-1])
+        if segment.kind == "spline":
+            for piece in spline_controls(segment.through):
+                total += _bezier_signed_area(piece)
+            continue
+        total += (segment.start[0] * segment.end[1] - segment.end[0] * segment.start[1]) / 2.0
         if segment.kind != "arc" or segment.via is None:
             continue
         arc = arc_through(segment.start, segment.via, segment.end)
         if arc is not None:
             _, radius, sweep = arc
-            curved += radius * radius * (sweep - math.sin(sweep)) / 2.0
-    total = 0.0
-    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
-        total += x0 * y1 - x1 * y0
-    return total / 2.0 + curved
+            total += radius * radius * (sweep - math.sin(sweep)) / 2.0
+    return total
+
+
+def _bezier_signed_area(piece: tuple[Point2, ...]) -> float:
+    """Exaktes Polynom-Integral von (x·dy - y·dx)/2 eines kubischen Stücks."""
+    first, one, two, last = piece
+    coefficients = [
+        (
+            first[axis],
+            3.0 * (one[axis] - first[axis]),
+            3.0 * (first[axis] - 2.0 * one[axis] + two[axis]),
+            -first[axis] + 3.0 * one[axis] - 3.0 * two[axis] + last[axis],
+        )
+        for axis in range(2)
+    ]
+    x, y = coefficients
+    return (
+        sum(j * (x[i] * y[j] - y[i] * x[j]) / (i + j) for i in range(4) for j in range(1, 4)) / 2.0
+    )
 
 
 def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
@@ -420,14 +432,15 @@ def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
     if len(loops) == 1:
         return (loops[0],)
     outlines = [_outline(loop) for loop in loops]
-    areas = [_area(outline) for outline in outlines]
+    areas = [abs(signed_area(loop)) for loop in loops]
+    contains = _containment(loops, outlines)
     parents: list[int | None] = []
     for index, outline in enumerate(outlines):
         probe = outline[0]
         candidates = [
             other
             for other in range(len(loops))
-            if other != index and areas[other] > areas[index] and _inside(probe, outlines[other])
+            if other != index and areas[other] > areas[index] and contains(other, probe)
         ]
         parents.append(min(candidates, key=lambda other: areas[other]) if candidates else None)
 
@@ -446,6 +459,70 @@ def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
         for index, loop in enumerate(loops)
         if depth_of(index) % 2 == 0
     )
+
+
+def _containment(
+    loops: list[Profile], outlines: list[list[Point2]]
+) -> Callable[[int, Point2], bool]:
+    """Prüft die Randringe und liefert ihren gemeinsamen Punktklassifizierer.
+
+    Ohne B-Rep bleiben Kreise analytisch. Die übrigen Kurven folgen dann
+    derselben Polylinie wie der Netzkern; mit B-Rep werden echte Drähte und
+    Flächen geprüft, einschließlich sehr schmaler Schnitte und Berührungen.
+    """
+    from app.core.brep.kernel import available
+
+    exact = available()
+    if exact:
+        from OCP.BRepClass import BRepClass_FaceClassifier
+        from OCP.BRepExtrema import BRepExtrema_DistShapeShape
+        from OCP.gp import gp_Pnt2d
+        from OCP.TopAbs import TopAbs_IN
+
+        from app.core.brep.profiles import _face, _lift_xy, _wire
+
+        wires = [_wire(loop, _lift_xy) for loop in loops]
+        faces = [_face(loop, _lift_xy) for loop in loops]
+    else:
+        from shapely.geometry import LinearRing
+
+        rings = [LinearRing(outline) for outline in outlines]
+
+    for index, first in enumerate(loops):
+        for other in range(index + 1, len(loops)):
+            second = loops[other]
+            if first.circle is not None and second.circle is not None:
+                centre, radius = first.circle
+                middle, reach = second.circle
+                distance = math.dist(centre, middle)
+                touching = abs(radius - reach) - EPS_GEOM <= distance <= radius + reach + EPS_GEOM
+            elif exact:
+                measure = BRepExtrema_DistShapeShape(wires[index], wires[other])
+                if not measure.IsDone():
+                    raise _broken(_("Die Umrisse lassen sich nicht sicher voneinander trennen."))
+                touching = measure.Value() <= EPS_GEOM
+            else:
+                touching = rings[index].distance(rings[other]) <= EPS_GEOM
+            if touching:
+                raise _broken(
+                    _(
+                        "Zwei Umrisse schneiden oder berühren sich — verschieben Sie sie "
+                        "auseinander oder zeichnen Sie einen gemeinsamen Umriss."
+                    )
+                )
+
+    def inside(index: int, point: Point2) -> bool:
+        circle = loops[index].circle
+        if circle is not None:
+            return math.dist(circle[0], point) < circle[1]
+        if exact:
+            return bool(
+                BRepClass_FaceClassifier(faces[index], gp_Pnt2d(*point), EPS_GEOM).State()
+                == TopAbs_IN
+            )
+        return _inside(point, outlines[index])
+
+    return inside
 
 
 def shifted(profile: Profile, dx: float, dy: float) -> Profile:
@@ -689,6 +766,19 @@ def _flat_curve(element: SketchElement) -> tuple[Point2, ...]:
     return (points[0],)
 
 
+def spline_controls(points: tuple[Point2, ...]) -> tuple[tuple[Point2, ...], ...]:
+    """Kubische Bézier-Kontrollpunkte der gemeinsamen Catmull-Rom-Kurve."""
+    pieces = []
+    for index in range(len(points) - 1):
+        before = points[max(index - 1, 0)]
+        first, second = points[index], points[index + 1]
+        after = points[min(index + 2, len(points) - 1)]
+        one = (first[0] + (second[0] - before[0]) / 6.0, first[1] + (second[1] - before[1]) / 6.0)
+        two = (second[0] - (after[0] - first[0]) / 6.0, second[1] - (after[1] - first[1]) / 6.0)
+        pieces.append((first, one, two, second))
+    return tuple(pieces)
+
+
 def _along_spline(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
     """Ein Spline als Punktfolge — Catmull-Rom, wie ihn die Zeichenfläche malt.
 
@@ -703,12 +793,7 @@ def _along_spline(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
     steps = max(_LEAST_STEPS, min(_MOST_STEPS, 12 * (count - 1)))
     per_piece = max(1, steps // (count - 1))
     curve: list[Point2] = [points[0]]
-    for index in range(count - 1):
-        before = points[max(index - 1, 0)]
-        first, second = points[index], points[index + 1]
-        after = points[min(index + 2, count - 1)]
-        one = (first[0] + (second[0] - before[0]) / 6.0, first[1] + (second[1] - before[1]) / 6.0)
-        two = (second[0] - (after[0] - first[0]) / 6.0, second[1] - (after[1] - first[1]) / 6.0)
+    for first, one, two, second in spline_controls(points):
         for step in range(1, per_piece + 1):
             share = step / per_piece
             rest = 1.0 - share

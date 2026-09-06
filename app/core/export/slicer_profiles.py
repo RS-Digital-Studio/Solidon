@@ -235,6 +235,7 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
     """
     if not has_user_profile_tree(flavour):
         return ()
+    roots = profile_roots(flavour, executable)
     seen_configs: set[Path] = set()
     result: list[SlicerFilament] = []
     seen_filaments: set[tuple[str, str]] = set()
@@ -257,7 +258,7 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
         colours = _filament_colours(state)
         for index, name in enumerate(names):
             path = _named_profile(executable, flavour, name, "filament")
-            values = resolve_values(path) if path is not None else {}
+            values = resolve_values(path, roots) if path is not None else {}
             colour = colours[index] if index < len(colours) else ""
             if not _is_colour(colour):
                 colour = _first_string(values.get("filament_colour"))
@@ -357,7 +358,7 @@ def _named_profile(
                 continue
             try:
                 loaded = json.loads(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
+            except OSError, ValueError:
                 continue
             if isinstance(loaded, dict) and str(loaded.get("name", path.stem)) == name:
                 return path
@@ -436,7 +437,7 @@ def _first_number(value: Any) -> float:
         value = value[0]
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0.0
 
 
@@ -657,7 +658,7 @@ def _names_in(root: Path, kind: ProfileKind | None) -> dict[str, Path]:
             continue
         try:
             loaded = json.loads(entry.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        except OSError, ValueError:
             continue
         if isinstance(loaded, dict):
             index.setdefault(str(loaded.get("name", entry.stem)), entry)
@@ -840,7 +841,10 @@ def filaments(
 
 
 def match_filament(
-    profiles: list[SlicerProfile], machine: SlicerProfile | None, material_type: str
+    profiles: list[SlicerProfile],
+    machine: SlicerProfile | None,
+    material_type: str,
+    roots: Sequence[Path] = (),
 ) -> SlicerProfile | None:
     """Das Filamentprofil zu einem Material — die Vorgabe, nicht das Urteil.
 
@@ -871,7 +875,9 @@ def match_filament(
     # nachdem die Verträglichkeit die Liste von tausenden auf Dutzende
     # gebracht hat, sonst kostete es Sekunden statt Zehntel.
     fitting = [
-        entry for entry in filaments(profiles, machine) if type_of(entry).casefold() == wanted
+        entry
+        for entry in filaments(profiles, machine)
+        if type_of(entry, roots).casefold() == wanted
     ]
     if not fitting:
         return None
@@ -1071,7 +1077,7 @@ def material_of(entry: SlicerProfile, known: Sequence[str]) -> str:
     return ""
 
 
-def machine_values(path: Path) -> dict[str, Any]:
+def machine_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     """Was dieses Maschinenprofil über die Maschine sagt (§29).
 
     **Der Gegenpart zu** :func:`filament_values`, und aus demselben Grund
@@ -1101,11 +1107,11 @@ def machine_values(path: Path) -> dict[str, Any]:
     übernehmen** — die achtzig Werte hinter einem Profilnamen zeigen, statt ihn
     nur zu nennen. Wer das baut, hat sie schon.
     """
-    resolved = resolve_values(path)
+    resolved = resolve_values(path, roots)
     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
 
 
-def filament_values(path: Path) -> dict[str, float | int]:
+def filament_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, float | int]:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 
     Die Erbkette wird aufgelöst — ein Profil bei Elegoo setzt selbst drei Werte
@@ -1116,7 +1122,7 @@ def filament_values(path: Path) -> dict[str, float | int]:
     hat, ist keine Angabe des Herstellers, und ihn zu erfinden wäre schlimmer
     als ihn wegzulassen.
     """
-    resolved = resolve_values(path)
+    resolved = resolve_values(path, roots)
     values: dict[str, float | int] = {}
     for solidon, orca, kind in FILAMENT_READBACK:
         raw = resolved.get(orca)

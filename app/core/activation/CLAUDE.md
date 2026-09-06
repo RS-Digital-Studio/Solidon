@@ -43,6 +43,13 @@ ist **gitignoriert** — ändert sich eine der Grenzdateien, wird
 `tests/test_packaging.py` rot, und die Antwort ist ein neuer Bau, kein
 Löschen. Die CI überspringt diesen Test.
 
+Diese sieben Python-Quellen werden zusätzlich von Cython übersetzt. Ihr
+Ruff-Ziel bleibt deshalb Python 3.13: Cython 3.3 versteht die ungeklammerten
+Ausnahmegruppen von Python 3.14 noch nicht. Laufzeit und erzeugte Erweiterungen
+verwenden weiterhin die aktuelle Projektversion von Python. Bei einer
+Erweiterung der erlaubten Syntax gehört der tatsächliche native Modulbau zur
+Prüfung; ein erfolgreicher Python-Import allein reicht nicht.
+
 ## Grenzen
 
 - Nichts hier zeigt einen Dialog. Der Kern meldet, die Oberfläche fragt.

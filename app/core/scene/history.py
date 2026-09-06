@@ -478,6 +478,7 @@ class History:
             living.difference_update(set(repaired.inputs) - set(repaired.outputs))
             living.update(repaired.outputs)
 
+        replaced_ids: dict[OpId, OpId] = {}
         for entry in suffix:
             cloned = self._plan(
                 OperationDraft(
@@ -496,13 +497,30 @@ class History:
                 matches=entry.matches,
             )
             planned.append(cloned)
+            replaced_ids[entry.id] = cloned.id
             living.difference_update(set(cloned.inputs) - set(cloned.outputs))
             living.update(cloned.outputs)
 
         old_versions = {entry.id: entry for entry in suffix}
+        rebound_fits = tuple(
+            dataclasses.replace(
+                fit,
+                when_positive=(replaced_ids[fit.when_positive[0]], fit.when_positive[1]),
+            )
+            if fit.when_positive is not None and fit.when_positive[0] in replaced_ids
+            else fit
+            for fit in self.document.fits
+        )
+        fits_changed = rebound_fits != tuple(self.document.fits)
         changes = DocumentChange(
-            before=DocumentState(edited_ops=old_versions),
-            after=DocumentState(edited_ops=dict.fromkeys(old_versions)),
+            before=DocumentState(
+                edited_ops=old_versions,
+                fits=tuple(self.document.fits) if fits_changed else None,
+            ),
+            after=DocumentState(
+                edited_ops=dict.fromkeys(old_versions),
+                fits=rebound_fits if fits_changed else None,
+            ),
         )
         self._forget_undone()
         transaction = Transaction(
@@ -999,7 +1017,9 @@ class History:
         remaining_fits = tuple(
             fit
             for fit in self.document.fits
-            if fit.a.object_id not in disappeared and fit.b.object_id not in disappeared
+            if fit.a.object_id not in disappeared
+            and fit.b.object_id not in disappeared
+            and (fit.when_positive is None or fit.when_positive[0] not in removed_set)
         )
         fits_changed = len(remaining_fits) != len(self.document.fits)
         self._reseed()
