@@ -340,6 +340,13 @@ def search(
                 progress(fraction, str(_("Ausrichtung suchen")))
             field.append(judge(proxy, entry.direction, layer_height, footing))
 
+    if progress is not None:
+        # **Bis zum Ende, auch wenn nichts zu schneiden war.** Die zwei Stufen
+        # teilen sich den Balken; steht das Teil schon stützfrei, endet Stufe
+        # eins bei der Hälfte, und ein Balken, der bei 50 % stehen bleibt,
+        # sieht aus wie ein Hänger.
+        progress(1.0, str(_("Ausrichtung suchen")))
+
     # Erst wenn alle vermessen sind, wird entschieden: Die
     # Fünf-Prozent-Toleranz macht den paarweisen Vergleich nicht transitiv,
     # und dann hängt der Sieger an der Reihenfolge (:func:`best_of`).

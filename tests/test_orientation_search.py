@@ -15,7 +15,13 @@ from app.core.geom.transform import apply, place_on_bed, rotation
 from app.core.ingest.loader import normalise
 from app.core.scene import CancelSignal
 from app.core.slice.analysis import slice_body
-from app.core.slice.orientation import best_face_candidate, judge, sample_directions, search
+from app.core.slice.orientation import (
+    FINALISTS,
+    best_face_candidate,
+    judge,
+    sample_directions,
+    search,
+)
 from app.core.types import Profile
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -85,7 +91,13 @@ def test_a_tilted_plate_is_laid_down_again() -> None:
     found = search(tilted, count=48, seed=3)
 
     assert found.mesh.bounds.size[2] == pytest.approx(8.0, abs=1.0), "flat on the plate"
-    assert found.tried > 48, "the sampling plus the face normals plus the starting position"
+    # ``tried`` zählt seit dem 06.09.2026 die **geschnittenen** Lagen — die
+    # Suche prüft alle Richtungen an den Flächennormalen und schneidet nur
+    # die Finalisten. Die geprüfte Menge steht im Befund.
+    assert found.findings[0].values["candidates"] > 48, (
+        "the sampling plus the face normals plus the starting position"
+    )
+    assert found.tried <= FINALISTS + 1, "geschnitten wird nur, was vorn liegt"
 
 
 def bar() -> MeshData:
@@ -144,14 +156,20 @@ def test_a_pose_that_cannot_stand_never_wins(profile: Profile) -> None:
     ohne = search(body, count=60, seed=0)
     mit = search(body, count=60, seed=0, profile=profile)
 
-    assert ohne.best.first_layer_area < profile.smallest_first_layer, (
-        "ohne Profil gewinnt weiter die Kante"
+    assert mit.best.first_layer_area >= profile.smallest_first_layer, (
+        "mit Profil steht die gewählte Lage"
     )
-    assert mit.best.first_layer_area >= profile.smallest_first_layer
-    assert mit.best.support_volume > ohne.best.support_volume, (
-        "der Stand kostet Stützmaterial — das ist der Preis und der Sinn"
+    assert mit.best.height <= ohne.best.height, "und sie liegt, statt zu kippeln"
+    # **Ohne Profil gewinnt keine Kante mehr, und das ist gewollt.** Bis zum
+    # 06.09.2026 verglich die Suche nur Stützvolumen; ohne Profil fehlte ihr
+    # die Standflächenschranke, und sie wählte eine Lage mit 0,1 mm² erster
+    # Schicht. Seit die Vorauswahl nach Standfläche gegen Überhang sortiert,
+    # kommt eine solche Lage gar nicht mehr unter die Finalisten. Der Test
+    # hielt die alte Schwäche als Kontrast fest; er hält jetzt fest, dass sie
+    # weg ist.
+    assert ohne.best.first_layer_area > profile.smallest_first_layer, (
+        "auch ohne Profil steht die Lage — die Vorauswahl sortiert nach Standfläche"
     )
-    assert mit.best.height < ohne.best.height, "und sie liegt, statt zu kippeln"
 
 
 def test_the_floor_only_ranks_and_never_refuses(profile: Profile) -> None:
@@ -198,7 +216,10 @@ def test_the_result_says_what_it_saved() -> None:
 
     assert found.findings and found.findings[0].code == "orient.searched"
     assert found.findings[0].source == "internal", "§22.5: never mixed with G-code"
-    assert found.findings[0].values["candidates"] == found.tried
+    assert found.findings[0].values["candidates"] >= found.tried, (
+        "geprüft wird mehr, als geschnitten wird"
+    )
+    assert found.findings[0].values["sliced"] == found.tried
     assert found.improvement >= 0.0
 
 
