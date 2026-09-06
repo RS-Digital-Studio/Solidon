@@ -15,11 +15,11 @@ import os
 import weakref
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from itertools import pairwise
+from itertools import pairwise, product
 from typing import Any, Final, Literal, NamedTuple
 
 from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QGuiApplication, QKeySequence
+from PySide6.QtGui import QFont, QFontMetricsF, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -108,6 +108,7 @@ from app.ui.palette import (
 from app.ui.render import shapes
 from app.ui.render.api import (
     AxesMarkerStyle,
+    Bounds,
     CameraPose,
     CellColours,
     Item,
@@ -346,6 +347,68 @@ def occluded_view_shift(parallel_scale: float, height: int, bottom: int) -> floa
     if height <= 0 or parallel_scale <= 0.0:
         return 0.0
     return float(bottom) * parallel_scale / float(height)
+
+
+def camera_in_free_area(
+    pose: CameraPose,
+    bounds: Bounds,
+    size: tuple[float, float],
+    margins: tuple[float, float, float],
+    angle: float,
+    scale: float | None,
+) -> tuple[CameraPose, float | None]:
+    """Rahmt acht Hüllquaderpunkte zwischen den Karten, ohne die Blickrichtung zu ändern.
+
+    Größe und Ränder haben dieselbe Pixeleinheit. Perspektivisch wird jede
+    Ecke gegen die vier freien Bildränder gerechnet: Ein bloßes Verschieben
+    am Blickpunkt ließe nähere Ecken wieder unter eine Karte ragen.
+    """
+    import numpy as np
+
+    width, height = size
+    left, right, bottom = margins
+    if width <= left + right or height <= bottom or not any(margins):
+        return pose, scale
+    direction = np.asarray(pose.focal_point) - np.asarray(pose.position)
+    distance = float(np.linalg.norm(direction))
+    if distance <= EPS_GEOM:
+        return pose, scale
+    direction /= distance
+    across = np.cross(direction, pose.view_up)
+    across_length = float(np.linalg.norm(across))
+    if across_length <= EPS_GEOM:
+        return pose, scale
+    across /= across_length
+    up = np.cross(across, direction)
+    corners = np.asarray(list(product(bounds[:2], bounds[2:4], bounds[4:])), dtype=float)
+    centre = np.mean(corners, axis=0)
+    x, y, z = ((corners - centre) @ np.column_stack((across, up, direction))).T
+    low_x, high_x = -1.0 + 2.0 * left / width, 1.0 - 2.0 * right / width
+    low_y, high_y = -1.0 + 2.0 * bottom / height, 1.0
+    middle_x, middle_y = (low_x + high_x) / 2.0, (low_y + high_y) / 2.0
+    half_x, half_y = (high_x - low_x) / 2.0, (high_y - low_y) / 2.0
+    aspect = width / height
+    if scale is None:
+        tangent_y = math.tan(math.radians(angle) / 2.0)
+        tangent_x = tangent_y * aspect
+        distance = max(
+            distance,
+            float(np.max((x / tangent_x - high_x * z) / half_x)),
+            float(np.max((low_x * z - x / tangent_x) / half_x)),
+            float(np.max((y / tangent_y - high_y * z) / half_y)),
+            float(np.max((low_y * z - y / tangent_y) / half_y)),
+        )
+        half_height = distance * tangent_y
+    else:
+        scale = max(
+            scale,
+            float(np.max(np.abs(x))) / (aspect * half_x),
+            float(np.max(np.abs(y))) / half_y,
+        )
+        half_height = scale
+    focus = centre - across * middle_x * half_height * aspect - up * middle_y * half_height
+    position = focus - direction * distance
+    return CameraPose(tuple(position), tuple(focus), pose.view_up), scale
 
 
 #: Wie weit die Kamera im Skizzenmodus mindestens von der Ebene wegsteht, in mm.
@@ -1631,6 +1694,15 @@ FEATURE_REACH_SHARE = 0.01
 FEATURE_REACH_MINIMUM = 0.5
 
 
+def _is_opening_feature(feature: Feature) -> bool:
+    """Nur Bohrung, Senkung oder Innengewinde bezeichnen eine axiale Öffnung."""
+    return (
+        feature.kind == "hole"
+        or (feature.kind == "cone" and feature.params.get("recess") is True)
+        or (feature.kind == "thread" and feature.params.get("internal") is True)
+    )
+
+
 def bore_span(
     origin: Vec3,
     direction: Vec3,
@@ -2867,6 +2939,138 @@ class SketchActionBadge(QLabel):
         self.raise_()
 
 
+def layout_feature_labels(
+    anchors: Sequence[tuple[float, float]],
+    sizes: Sequence[tuple[float, float]],
+    priorities: Sequence[int],
+    room: tuple[float, float, float, float],
+    obstacles: Sequence[tuple[float, float, float, float]] = (),
+    *,
+    gap: float = 6.0,
+) -> list[tuple[int, tuple[float, float, float, float]]]:
+    """Platziert Beschriftungen ohne Überlappung; Auswahl und Hover haben Vorrang.
+
+    Automatische Namen bleiben nahe ihrem Anker. Explizite Namen dürfen einen
+    freien Platz weiter entfernt nutzen; die Ansicht verbindet ihn mit dem
+    unveränderten Merkmalspunkt. Ein Bildraster begrenzt die Kollisionskosten.
+    Alle Maße sind Bildpunkte, unabhängig von Renderer und Modellgeometrie.
+    """
+    left, top, right, bottom = room
+    cell = max(64.0, gap * 8.0)
+    occupied: dict[tuple[int, int], list[tuple[float, float, float, float]]] = {}
+
+    def cells(rect: tuple[float, float, float, float]) -> Any:
+        """Die wenigen Rasterfelder, die eine Beschriftung berührt."""
+        for x in range(math.floor(rect[0] / cell), math.floor(rect[2] / cell) + 1):
+            for y in range(math.floor(rect[1] / cell), math.floor(rect[3] / cell) + 1):
+                yield x, y
+
+    def reserve(rect: tuple[float, float, float, float]) -> None:
+        """Ein Feld einschließlich seines Leseabstands für folgende Namen belegen."""
+        for key in cells(rect):
+            occupied.setdefault(key, []).append(rect)
+
+    def fits(rect: tuple[float, float, float, float]) -> bool:
+        """Das ganze Feld muss frei und innerhalb der unverdeckten Ansicht liegen."""
+        if rect[0] < left or rect[1] < top or rect[2] > right or rect[3] > bottom:
+            return False
+        for key in cells(rect):
+            for other in occupied.get(key, ()):
+                if (
+                    rect[0] < other[2]
+                    and rect[2] > other[0]
+                    and rect[1] < other[3]
+                    and rect[3] > other[1]
+                ):
+                    return False
+        return True
+
+    for obstacle in obstacles:
+        reserve(obstacle)
+    placed = []
+    for index in sorted(range(len(anchors)), key=lambda item: (priorities[item], item)):
+        x, y = anchors[index]
+        width, height = sizes[index]
+        if not all(math.isfinite(value) for value in (x, y, width, height)):
+            continue
+        if width <= 0.0 or height <= 0.0 or width > right - left or height > bottom - top:
+            continue
+        candidates = [
+            (x + gap, y - gap - height),
+            (x - gap - width, y - gap - height),
+            (x + gap, y + gap),
+            (x - gap - width, y + gap),
+        ]
+        if priorities[index] < 2:
+            candidates = [
+                (min(max(px, left), right - width), min(max(py, top), bottom - height))
+                for px, py in candidates
+            ]
+            # Erst die Nähe, dann freie Zeilen: zwei explizite Namen am selben
+            # Anker bleiben beide lesbar, auch wenn eine Karte danebensteht.
+
+        def options(
+            initial: Sequence[tuple[float, float]],
+            anchor: tuple[float, float],
+            extent: tuple[float, float],
+            explicit: bool,
+        ) -> Any:
+            """Die Fernsuche erst beginnen, wenn die vier nahen Plätze belegt sind."""
+            yield from initial
+            x, y = anchor
+            width, height = extent
+            if explicit:
+                yield from sorted(
+                    (
+                        (px, py)
+                        for py in range(
+                            math.ceil(top),
+                            math.floor(bottom - height) + 1,
+                            max(math.ceil(height + gap), 1),
+                        )
+                        for px in range(
+                            math.ceil(left),
+                            math.floor(right - width) + 1,
+                            max(math.ceil(width + gap), 1),
+                        )
+                    ),
+                    key=lambda point: (
+                        (point[0] + width / 2.0 - x) ** 2 + (point[1] + height / 2.0 - y) ** 2
+                    ),
+                )
+
+        for px, py in options(candidates, (x, y), (width, height), priorities[index] < 2):
+            rect = (px, py, px + width, py + height)
+            if not fits(rect):
+                continue
+            placed.append((index, rect))
+            reserve(
+                (px - gap / 2.0, py - gap / 2.0, px + width + gap / 2.0, py + height + gap / 2.0)
+            )
+            break
+    return placed
+
+
+class _SelectionHit(NamedTuple):
+    """Ein Treffer behält Körper und Szeneort bis zur gemeinsamen Auswahlfrage."""
+
+    object_id: ObjectId
+    scene_point: Vec3
+    view_point: Vec3
+    cell: int = -1
+    feature_id: FeatureId | None = None
+
+
+class _BoreTarget(NamedTuple):
+    """Die für einen Sichtstrahl nötigen Bohrungsmaße, ohne Dreieckskopien."""
+
+    feature_id: FeatureId
+    centre: Vec3
+    axis: Any
+    radius: float
+    bounds: tuple[float, float]
+
+
 class _PreparedScene(NamedTuple):
     """Für den Renderer vorbereitete Netze samt neuen Cache-Einträgen."""
 
@@ -3045,6 +3249,8 @@ class Viewport(QWidget):
     """
     sceneFailed = Signal(str)
     """Die Ansichtsaufbereitung brach ab; die letzte gültige Ansicht bleibt."""
+    sceneApplied = Signal()
+    """Die neue Szene ist übernommen; abhängige Regler können ihre Grenzen lesen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -3076,6 +3282,9 @@ class Viewport(QWidget):
         Griff nimmt (:meth:`_on_pointer`)."""
         self._pointer_token: int | None = None
         self._actors: dict[ObjectId, Item] = {}
+        self._placement_pointer: Callable[[PointerEvent], bool] | None = None
+        self._actor_offsets: dict[ObjectId, Any] = {}
+        self._actor_scene: EvaluationResult | None = None
         self._frame_actors: list[Any] = []
         self._bed_visible = True
         self._bed_surfaces: list[Any] = []
@@ -3384,7 +3593,7 @@ class Viewport(QWidget):
         """Für welche Kameralage und welche Körper zuletzt nach Tiefe geordnet
         wurde — die Ordnung läuft an der Zeichenstelle und darf dort nichts
         kosten, solange sich nichts bewegt."""
-        self._edge_actors: list[Any] = []
+        self._edge_actors: dict[ObjectId, Item] = {}
         self._shadow_actors: list[Any] = []
         self._shadow_owners: dict[ObjectId, list[Any]] = {}
         """Welche Schattenaktoren zu welchem Körper gehören.
@@ -3430,8 +3639,25 @@ class Viewport(QWidget):
         self._edge_colour = "#4c5258"
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
+        self._feature_label_data: list[tuple[Vec3, str, int]] = []
+        self._feature_label_owners: list[ObjectId] = []
+        self._feature_label_points: Any = None
+        self._feature_marker_item: Item | None = None
+        self._feature_preview_state: tuple[Any, ...] | None = None
+        self._feature_text_item: LabelsItem | None = None
+        self._feature_leader_item: Item | None = None
+        self._feature_leader_count = 0
+        self._feature_label_state: tuple[Any, ...] | None = None
+        self._feature_label_content: Any = None
+        self._feature_label_style: LabelStyle | None = None
+        self._feature_label_sizes: dict[str, tuple[float, float]] = {}
+        self._feature_layout_timer = QTimer(self)
+        self._feature_layout_timer.setSingleShot(True)
+        self._feature_layout_timer.timeout.connect(self._refresh_feature_label_layout)
+        self.cameraMoved.connect(self._queue_feature_label_layout)
         self._selected_feature: FeatureId | None = None
         self._selected_features: tuple[FeatureId, ...] = ()
+        self._selected_feature_refs: tuple[tuple[ObjectId, FeatureId], ...] = ()
         self._direct_picking = False
         """Ob ein Klick ohne Zwischenstufe das tiefste Ziel meint.
 
@@ -3442,6 +3668,10 @@ class Viewport(QWidget):
         ersten Klick für verschluckt.
         """
         self._feature_geometry: dict[ObjectId, list[tuple[FeatureId, Any, Any, Any]]] = {}
+        self._selection_hit: _SelectionHit | None = None
+        self._original_pick_cells: set[ObjectId] = set()
+        self._feature_cells: dict[ObjectId, tuple[tuple[FeatureId, ...], Any]] = {}
+        self._feature_bores: dict[ObjectId, list[_BoreTarget]] = {}
         # Die konvexe Hülle je Körper, für den Blick durch eine Öffnung
         # (:meth:`_through_aim`). Wie die Merkmalsdreiecke gehört sie einer
         # Auswertung und wird mit ihnen geleert.
@@ -3457,6 +3687,7 @@ class Viewport(QWidget):
         Auswertung, nicht dem Viewport.
         """
         self._feature_patch: Any | None = None
+        self._feature_patches: dict[ObjectId, Item] = {}
         self._protected_patch: Any | None = None
         self._protected_hatch: Any | None = None
         # Welche Flächen als Sichtflächen gesperrt sind (§22.3), je Körper.
@@ -3701,15 +3932,40 @@ class Viewport(QWidget):
         keine Kamera; das ist die ganze Vorfahrt, und sie steht an einer
         Stelle statt in drei Beobachtern am Interactor wie bis zum 05.09.2026.
         """
+        if self._placement_pointer is not None and self._placement_pointer(event):
+            return
         if event.kind == "move":
             self._note_pointer(event.x, event.y)
         elif event.kind == "leave":
             self._forget_pointer()
         for handle in (self._gizmo, self._scale_handle):
             if handle is not None and handle.handle(event):
+                self._queue_feature_label_layout()
                 return
         if self._navigator is not None:
             self._navigator.handle(event)
+        if event.kind in ("move", "wheel"):
+            self._queue_feature_label_layout()
+
+    def set_placement_pointer(self, handler: Callable[[PointerEvent], bool] | None) -> None:
+        """Gibt einer laufenden Platzierung die linke Taste; die Kamera bleibt bedienbar."""
+        self._placement_pointer = handler
+
+    def placement_hit(
+        self, x: int, y: int
+    ) -> tuple[ObjectId, Vec3, int, tuple[Vec3, Vec3] | None] | None:
+        """Liefert das sichtbare Ziel mit Originalindex oder zu prüfendem Sichtstrahl."""
+        self._world_at(x, y)
+        hit = self._selection_hit
+        if hit is None:
+            return None
+        ray = self._pick_ray(x, y)
+        if ray is not None:
+            shift = tuple(a - b for a, b in zip(hit.view_point, hit.scene_point, strict=True))
+            origin = tuple(a - b for a, b in zip(ray[0], shift, strict=True))
+            ray = (origin, ray[1])  # type: ignore[assignment]
+        cell = hit.cell if hit.object_id in self._original_pick_cells else -1
+        return hit.object_id, hit.scene_point, cell, ray
 
     def _device_ratio(self) -> float:
         """Gerätepixel je Logikpunkt des Fensters — 1,0 ohne Bild."""
@@ -3718,7 +3974,7 @@ class Viewport(QWidget):
             return 1.0
         return float(widget.devicePixelRatioF()) or 1.0
 
-    def _settle_sketch_view(self) -> str | None:
+    def _settle_sketch_view(self, *, draw: bool = True) -> str | None:
         """Eine nahe Hauptansicht einrasten und ihren Namen melden.
 
         **Im Skizzenmodus und außerhalb**, und der Unterschied liegt nur in
@@ -3757,7 +4013,8 @@ class Viewport(QWidget):
             )
             self.renderer.set_camera_pose(CameraPose(snapped, focus, up))
             self.renderer.reset_clipping_range()
-            self.renderer.render()
+            if draw:
+                self._draw()
         if not sketching:
             return found
         self.sketchViewChanged.emit(found or "")
@@ -4307,6 +4564,10 @@ class Viewport(QWidget):
 
         return self._requested_result if self._scene_worker is not None else self._result
 
+    def is_scene_applied(self, result: EvaluationResult | None) -> bool:
+        """Ob die angefragte Szene bereits die sichtbaren Pick-Flächen trägt."""
+        return result is not None and self._result is result
+
     def show_scene(self, result: EvaluationResult | None) -> None:
         """Bereitet teure Netze im Arbeiter vor und behält bis dahin das Bild."""
 
@@ -4321,6 +4582,7 @@ class Viewport(QWidget):
         prepared = self._scene_tasks(result)
         if prepared is None:
             self._apply_scene(result)
+            self.sceneApplied.emit()
             return
         tasks, plane, second = prepared
         assert result is not None
@@ -4347,13 +4609,7 @@ class Viewport(QWidget):
 
         if result is None or self.renderer is None:
             return None
-        plane = self._section
-        if plane is None and self._layer is not None:
-            plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=self._layer.z)
-        second = None
-        if self._section is not None and self._slice_thickness is not None:
-            offset = self._section.position - self._slice_thickness
-            second = SectionPlane(normal=self._section.normal, position=offset).flipped()
+        plane, second = self._section_planes()
 
         tasks: list[tuple[ObjectId, Any, DisplayKey | None]] = []
         heavy = plane is not None
@@ -4385,6 +4641,7 @@ class Viewport(QWidget):
         if generation != self._scene_generation:
             return
         self._apply_scene(result, prepared)
+        self.sceneApplied.emit()
 
     def _scene_crashed(self, generation: int, detail: str) -> None:
         """Die alte Ansicht stehen lassen und den Fehler nach außen melden."""
@@ -4460,6 +4717,15 @@ class Viewport(QWidget):
         # Kennung intern stehen, der Körper verlor die Auswahlfarbe und im Bild
         # war weder die alte Fläche noch eine neue Auswahl zu sehen.
         if result is not None:
+            if self._selected_feature_refs:
+                self._remember_feature_refs(
+                    tuple(
+                        (object_id, feature_id)
+                        for object_id, feature_id in self._selected_feature_refs
+                        if (entry := result.scene.objects.get(object_id)) is not None
+                        and feature_id in entry.features
+                    )
+                )
             # Auch die weiteren: Ein Schritt, der einen von ihnen verschmilzt,
             # ließe seine Kennung sonst in der Menge stehen — unsichtbar, bis
             # eine spätere Auswertung sie unter demselben Namen neu vergibt.
@@ -4488,6 +4754,10 @@ class Viewport(QWidget):
         # Eine Op, die eine Bohrung verschiebt, ändert ihre Dreiecke, und ein
         # Klick träfe danach, wo sie war.
         self._feature_geometry.clear()
+        self._selection_hit = None
+        self._original_pick_cells.clear()
+        self._feature_cells.clear()
+        self._feature_bores.clear()
         self._object_hulls.clear()
         # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
         # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
@@ -4508,6 +4778,7 @@ class Viewport(QWidget):
             self._selected_more = ()
             self._selected_feature = None
             self._selected_features = ()
+            self._selected_feature_refs = ()
             self._hover_feature = False
             self._hovered_object = None
             self._hovered_feature = None
@@ -4517,6 +4788,8 @@ class Viewport(QWidget):
         for actor in self._actors.values():
             self.renderer.remove(actor)
         self._actors.clear()
+        self._actor_offsets.clear()
+        self._actor_scene = result
         # **Und mit ihnen die gemerkten Farben.** Ein neuer Aktor kommt grau
         # aus der Geometrie; stünde hier noch der Stand von vorhin, hielte
         # `_apply_selection_colour` die Auswahl für unverändert und **liesse
@@ -4533,7 +4806,7 @@ class Viewport(QWidget):
         # genommen (:meth:`continue_body_drag`, ``setdefault``) und den Körper
         # doppelt versetzen.
         self._actor_home.clear()
-        for actor in self._edge_actors:
+        for actor in self._edge_actors.values():
             self.renderer.remove(actor)
         self._edge_actors.clear()
         for actor in self._shadow_actors:
@@ -4612,10 +4885,11 @@ class Viewport(QWidget):
             scalars = self._scalars_for(object_id, len(faces))
             cell_colours: CellColours | None = None
             if scalars is not None and self._map is not None:
+                low, high = self._map.display_limits
                 cell_colours = CellColours(
                     scalars,
                     colormap=tuple(VIRIDIS),
-                    limits=(self._map.low, max(self._map.high, self._map.low + 1e-6)),
+                    limits=(low, max(high, low + 1e-6)),
                     nan_colour="#4a4f57",
                 )
             elif self._map is None:
@@ -4638,6 +4912,11 @@ class Viewport(QWidget):
                 cell_colours=cell_colours,
             )
             self._actors[object_id] = actor
+            self._actor_offsets[object_id] = offset.copy()
+            # Nur unveränderte Topologie übernimmt Dreiecksnummern aus der
+            # Szene. Schnitt- und LOD-Netze benutzen weiterhin den Ortsfang.
+            if raw is getattr(entry.mesh, "raw", None):
+                self._original_pick_cells.add(object_id)
             # ``mesh`` als Schlüssel, aus demselben Grund wie beim Schatten
             # eine Zeile tiefer: Die Felder entstehen in jeder Runde neu, das
             # Netz dahinter bleibt dasselbe, solange sich nichts geändert hat.
@@ -4800,6 +5079,7 @@ class Viewport(QWidget):
         # ``_order_by_depth`` merkt sich die letzte Lage und tut nichts, wenn
         # sich nichts geändert hat.
         self._order_by_depth()
+        self._layout_feature_labels()
         self.renderer.render()
 
     def _slot_colours(self, mesh: Any, entry: Any, face_count: int) -> CellColours | None:
@@ -4885,14 +5165,30 @@ class Viewport(QWidget):
         edges = self._feature_edges_for(object_id, vertices, faces, source)
         if edges is None or len(edges) == 0:
             return
-        self._edge_actors.append(
-            self.renderer.add_lines(
-                edges + offset,
-                name=f"edges:{object_id}",
-                colour=self._edge_colour,
-                width=float(FEATURE_EDGE_WIDTH),
-            )
+        self._edge_actors[object_id] = self.renderer.add_lines(
+            edges + offset,
+            name=f"edges:{object_id}",
+            colour=self._edge_colour,
+            width=float(FEATURE_EDGE_WIDTH),
         )
+
+    def _sync_edge_preview(self, object_id: ObjectId, matrix: Any = None) -> bool:
+        """Getrennte Konturen übernehmen nur geänderte Vorschauwerte ihres Körpers."""
+        import numpy as np
+
+        edge = self._edge_actors.get(object_id)
+        actor = self._actors.get(object_id)
+        if edge is None or actor is None:
+            return False
+        applied = actor.matrix() if matrix is None else matrix
+        position = actor.position()
+        if np.array_equal(edge.matrix(), applied) and edge.position() == position:
+            return False
+        # Die Linien tragen bereits denselben Platten-/Explosionsversatz wie
+        # der Körper. Nur seine Vorschau folgt; die Originalpunkte bleiben fest.
+        edge.set_matrix(applied)
+        edge.set_position(position)
+        return True
 
     def _remember_shadow(
         self, points: Any, mesh: Any, object_id: ObjectId, source: Any = None
@@ -4952,7 +5248,7 @@ class Viewport(QWidget):
                     self._shadow_actors.append(actor)
                     self._shadow_owners.setdefault(object_id, []).append(actor)
 
-    def _redraw_shadows(self) -> None:
+    def _redraw_shadows(self, *, draw: bool = True) -> None:
         """Die Schatten der neuen Kamerastellung anpassen (§18.6).
 
         Am Ende einer Drehung, nicht während ihr: die Hüllen liegen bereit, die
@@ -4973,7 +5269,8 @@ class Viewport(QWidget):
         self._shadow_actors.clear()
         self._shadow_owners.clear()
         self._place_shadows(direction)
-        self._draw()
+        if draw:
+            self._draw()
 
     def set_hidden(self, hidden: frozenset[ObjectId]) -> None:
         """Welche Körper nicht gezeichnet werden (§18.8).
@@ -5070,6 +5367,19 @@ class Viewport(QWidget):
             return np.zeros(3)
         return np.asarray(plate_shift(getattr(entry, "plate", 0), self._bed_extent[0]), dtype=float)
 
+    def _shown_offset(self, entry: Any, result: EvaluationResult) -> Any:
+        """Den Versatz des sichtbaren Aktors lesen, auch während ein neues Bild rechnet."""
+        if result is self._result and entry.id in self._actor_offsets:
+            return self._actor_offsets[entry.id]
+        return self._view_offset(entry, result)
+
+    def _in_pick_view(self, object_id: ObjectId, entry: Any) -> bool:
+        """Das letzte aufgebaute Bild bleibt maßgeblich, auch nach einem Arbeiterfehler."""
+        if self._actor_scene is not None and self._actor_scene is self._result:
+            actor = self._actors.get(object_id)
+            return actor is not None and actor.visible()
+        return self._in_view(object_id, entry)
+
     def _bed_outline_for(self, object_id: ObjectId) -> Any:
         """Der Umriss des Bettes, auf dem dieser Körper gezeichnet wird."""
         assert self._bed_extent is not None
@@ -5088,6 +5398,9 @@ class Viewport(QWidget):
         eine Bettbreite daneben — und weil dort meistens nichts ist, hätte er
         stumm nichts getan.
         """
+        hit = self._hit_at(point, view_space=True)
+        if hit is not None:
+            return hit.scene_point
         if self._plate >= 0 or self._beds_drawn < 2 or self._bed_extent is None:
             return point
         width = self._bed_extent[0]
@@ -5147,9 +5460,7 @@ class Viewport(QWidget):
             return None
         if len(self._map.values) != faces:
             return None
-        import numpy as np
-
-        return np.asarray(self._map.values, dtype=float)
+        return self._map.display_values()
 
     def _for_display(self, object_id: ObjectId, mesh: Any, identity: str = "") -> Any:
         """Eine für die Anzeige dezimierte Version ab der Schwelle aus §31.
@@ -5179,6 +5490,17 @@ class Viewport(QWidget):
             self._display_cache.pop(next(iter(self._display_cache)))
         return found
 
+    def _section_planes(self) -> tuple[SectionPlane | None, SectionPlane | None]:
+        """Dieselben sichtbaren Halbräume für Körper und Merkmalsmarkierungen."""
+        plane = self._section
+        if plane is None and self._layer is not None:
+            plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=self._layer.z)
+        second = None
+        if self._section is not None and self._slice_thickness is not None:
+            offset = self._section.position - self._slice_thickness
+            second = SectionPlane(normal=self._section.normal, position=offset).flipped()
+        return plane, second
+
     def _sectioned(self, mesh: Any) -> Any:
         """Wendet die Schnittebene an. Schneiden ist Geometrie, also tut es der
         Kern (§18.2).
@@ -5189,9 +5511,7 @@ class Viewport(QWidget):
         Wer eine Schicht gewählt hat, will sehen, was auf dieser Höhe steht,
         nicht was darüber liegt.
         """
-        plane = self._section
-        if plane is None and self._layer is not None:
-            plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=self._layer.z)
+        plane, second = self._section_planes()
         if plane is None:
             return mesh
         # **Ein B-Rep-Körper wird vorher vernetzt.** ``cut`` arbeitet auf
@@ -5211,10 +5531,6 @@ class Viewport(QWidget):
         to_mesh = getattr(mesh, "to_mesh", None)
         if callable(to_mesh):
             mesh = to_mesh()
-        second = None
-        if self._section is not None and self._slice_thickness is not None:
-            offset = plane.position - self._slice_thickness
-            second = SectionPlane(normal=plane.normal, position=offset).flipped()
         result = cut(mesh, plane, second)
         self._uncapped = self._uncapped or not result.capped
         return result.mesh
@@ -5234,6 +5550,13 @@ class Viewport(QWidget):
         und die Statuszeile hatte recht — gemessen 3d-druck-85, abgegeben von
         3d-druck-d4 am 03.09.2026.
         """
+        requested = (object_id, *more)
+        dropped_refs = bool(self._selected_feature_refs) and (
+            object_id != self._selected
+            or any(owner not in requested for owner, _feature_id in self._selected_feature_refs)
+        )
+        if dropped_refs:
+            self._remember_feature_refs(())
         self._selected = object_id
         # Der führende Körper steht nicht zweimal in der Auswahl: Sonst zählt
         # ``highlighted_objects`` ihn doppelt, und ein Vergleich auf Gleichheit
@@ -5247,6 +5570,8 @@ class Viewport(QWidget):
         self._selected_more = tuple(dict.fromkeys(o for o in more if o != object_id))
         if self.renderer is None:
             return
+        if dropped_refs:
+            self._redraw_features()
         self._apply_selection_colour()
         # Der Griff folgt der Auswahl (§18.11): wer ein anderes Objekt wählt,
         # will es auch bewegen — nicht das vorige. Und weil `show_scene` hier
@@ -6474,6 +6799,9 @@ class Viewport(QWidget):
         """
         if self._result is None:
             return None
+        hit = self._hit_at(point)
+        if hit is not None:
+            return self._result.scene.objects[hit.object_id].mesh
         best: Any = None
         best_offset = float("inf")
         for object_id, entry in self._result.scene.objects.items():
@@ -6511,6 +6839,9 @@ class Viewport(QWidget):
         """
         if self._result is None:
             return None
+        hit = self._hit_at(point, view_space=True)
+        if hit is not None:
+            return hit.object_id
         import numpy as np
 
         best: ObjectId | None = None
@@ -6549,6 +6880,9 @@ class Viewport(QWidget):
         """
         if self._result is None:
             return None
+        hit = self._hit_at(point)
+        if hit is not None:
+            return hit.object_id
         best: ObjectId | None = None
         best_volume = float("inf")
         for object_id, entry in self._result.scene.objects.items():
@@ -6718,6 +7052,7 @@ class Viewport(QWidget):
         self._draw()
 
     def select_feature(self, feature_id: FeatureId | None) -> None:
+        self._selected_feature_refs = ()
         self._selected_feature = feature_id
         self._selected_features = (feature_id,) if feature_id is not None else ()
         self._redraw_features()
@@ -6739,9 +7074,43 @@ class Viewport(QWidget):
         Ihre sichtbare Auswahl darf deshalb aber weder verschwinden noch auf
         den ganzen Körper zurückfallen.
         """
-        chosen = tuple(dict.fromkeys(feature_ids))
+        features = self._features_of_selection()
+        chosen = tuple(
+            feature_id for feature_id in dict.fromkeys(feature_ids) if feature_id in features
+        )
+        # Der bestehende Weg kann neben einem Merkmal weitere ganze Körper
+        # enthalten. Nur die neue vollständige Paarwahl ersetzt diese Menge.
+        self._selected_feature_refs = ()
         self._selected_features = chosen
         self._selected_feature = chosen[0] if len(chosen) == 1 else None
+        self._refresh_feature_selection()
+
+    def _remember_feature_refs(self, refs: tuple[tuple[ObjectId, FeatureId], ...]) -> None:
+        """Vollständige Merkmalsziele und den kompatiblen Einzelzustand gemeinsam merken."""
+        self._selected_feature_refs = refs
+        if refs:
+            owners = tuple(dict.fromkeys(owner for owner, _feature_id in refs))
+            self._selected, self._selected_more = owners[0], owners[1:]
+        self._selected_features = tuple(
+            feature_id for owner, feature_id in refs if owner == self._selected
+        )
+        self._selected_feature = refs[0][1] if len(refs) == 1 else None
+
+    def select_feature_refs(self, refs: Sequence[tuple[ObjectId, FeatureId]]) -> None:
+        """Exakte Merkmale mehrerer Körper wählen; das erste gültige Paar führt."""
+        result = self._result
+        chosen = tuple(
+            (object_id, feature_id)
+            for object_id, feature_id in dict.fromkeys(refs)
+            if result is not None
+            and (entry := result.scene.objects.get(object_id)) is not None
+            and feature_id in entry.features
+        )
+        self._remember_feature_refs(chosen)
+        self._refresh_feature_selection()
+
+    def _refresh_feature_selection(self) -> None:
+        """Die vollständig gesetzte Auswahl einmal an Markierung und Griff weitergeben."""
         self._redraw_features()
         # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
         # zurück, sobald keines mehr gewählt ist.
@@ -6758,13 +7127,21 @@ class Viewport(QWidget):
         return self._selected_feature
 
     def highlighted_features(self) -> tuple[FeatureId, ...]:
-        """Alle Merkmale, deren Flächen die Auswahlfarbe tragen."""
+        """Ausgewählte Merkmalskennungen am führenden Körper, ohne fremde Objektkennungen."""
         # Einige gezielte Viewport-Tests setzen den alten Einzelzustand direkt.
         # Die öffentliche Auswahl läuft immer über ``select_feature`` oder
         # ``select_features`` und hält beide Werte gemeinsam.
         if self._selected_feature is not None:
             return (self._selected_feature,)
         return self._selected_features
+
+    def highlighted_feature_refs(self) -> tuple[tuple[ObjectId, FeatureId], ...]:
+        """Die Auswahl mit Körperkennung; nackte Kennungen gelten nur am führenden Körper."""
+        if self._selected_feature_refs:
+            return self._selected_feature_refs
+        if self._selected is None:
+            return ()
+        return tuple((self._selected, feature_id) for feature_id in self.highlighted_features())
 
     def highlighted_object(self) -> ObjectId | None:
         """Welcher Körper die Auswahlfarbe trägt — keiner, solange ein Merkmal
@@ -6774,7 +7151,7 @@ class Viewport(QWidget):
         Grund wie bei :meth:`gizmo_target`: offscreen gibt es keinen, und ein
         Test, der sich dort überspringt, prüft nie etwas.
         """
-        if self._selection_marking_hidden() or self.highlighted_features():
+        if self._selection_marking_hidden() or self.highlighted_feature_refs():
             return None
         return self._selected
 
@@ -6881,7 +7258,7 @@ class Viewport(QWidget):
         if feature_id is None or self._result is None or object_id is None:
             return ()
         entry = self._result.scene.objects.get(object_id)
-        if entry is None or not self._in_view(object_id, entry):
+        if entry is None or not self._in_pick_view(object_id, entry):
             return ()
         feature = entry.features.get(feature_id)
         raw = getattr(entry.mesh, "raw", None)
@@ -6904,14 +7281,28 @@ class Viewport(QWidget):
         for actor in self._feature_actors:
             self.renderer.remove(actor)
         self._feature_actors.clear()
+        self._feature_label_data.clear()
+        self._feature_label_owners.clear()
+        self._feature_marker_item = None
+        self._feature_preview_state = None
+        self._feature_text_item = None
+        self._feature_leader_item = None
+        self._feature_leader_count = 0
+        self._feature_label_state = None
+        self._feature_label_content = None
         # Ohne Überlagerung bleibt das **gewählte** Merkmal beschriftet: seine
         # Fläche leuchtet in der Auswahlfarbe, und eine Aussage allein über
         # Farbe wäre genau die, die Regel 18 verbietet.
         shown: dict[tuple[ObjectId, FeatureId], Feature] = {}
+        selected_refs = self.highlighted_feature_refs()
         if self._selected is not None:
             for feature_id, feature in self._features_of_selection().items():
                 if self._feature_overlay or feature_id in self.highlighted_features():
                     shown[(self._selected, feature_id)] = feature
+        for object_id, feature_id in selected_refs:
+            selected_feature = self._features_of(object_id).get(feature_id)
+            if selected_feature is not None:
+                shown[(object_id, feature_id)] = selected_feature
         # Beim Überfahren bleibt der Name auch bei ausgeschalteter
         # Überlagerung sichtbar. Farbe plus Merkmalszeiger allein würden sagen,
         # *dass* dort etwas liegt, aber nicht *was* (§19.1).
@@ -6929,45 +7320,343 @@ class Viewport(QWidget):
         # Szenenkoordinaten — dieselbe Bohrung, zwei Orte, eine Bettbreite
         # auseinander (§25, §18.8).
         points: list[list[float]] = []
-        labels: list[str] = []
         for (object_id, feature_id), feature in shown.items():
-            centre = feature.params.get("centre")
+            entry = self._result.scene.objects.get(object_id) if self._result is not None else None
+            if entry is None or not self._in_pick_view(object_id, entry):
+                continue
+            explicit = (object_id, feature_id) in selected_refs or (object_id, feature_id) == (
+                self._hovered_object,
+                self._hovered_feature,
+            )
+            centre = self._feature_label_anchor(entry, feature_id, feature, explicit=explicit)
             if centre is None:
                 continue
-            entry = self._result.scene.objects.get(object_id) if self._result is not None else None
-            if entry is None or not self._in_view(object_id, entry):
-                continue
             shift = (
-                self._view_offset(entry, self._result)
+                self._shown_offset(entry, self._result)
                 if entry is not None and self._result is not None
                 else np.zeros(3)
             )
             points.append(
                 [float(value) + float(moved) for value, moved in zip(centre, shift, strict=True)]
             )
-            labels.append(feature_label(feature_id, feature))
+            priority = 0 if (object_id, feature_id) in selected_refs else 1 if explicit else 2
+            shown_point = (points[-1][0], points[-1][1], points[-1][2])
+            self._feature_label_data.append(
+                (shown_point, feature_label(feature_id, feature), priority)
+            )
+            self._feature_label_owners.append(object_id)
         if not points:
             return
 
-        # **Auch was im Material steckt** (``always_visible``): Eine Bohrung
-        # hat ihren Mittelpunkt auf halber Höhe im Körper; ohne das blieb ihre
-        # Beschriftung dahinter verborgen, und beschriftet waren nur die drei
-        # Flächen — bei einem Teil, das nach seinen vier Bohrungen benannt ist.
-        self._feature_actors.append(
-            self.renderer.add_labels(
-                np.asarray(points, dtype=float),
-                labels,
-                name="features",
-                style=LabelStyle(
-                    text_colour=FEATURE_LABEL_COLOUR,
-                    font_size=11,
-                    always_visible=True,
-                    show_points=True,
-                    point_colour=MEASURE_COLOUR,
-                    point_size=8,
-                ),
+        # Alle Anker bleiben sichtbar und die Geometrie bleibt auswählbar,
+        # auch wenn für einen automatischen Namen gerade kein Leseraum frei ist.
+        self._feature_marker_item = self.renderer.add_points(
+            np.asarray(points, dtype=float),
+            name="feature-markers",
+            colour=MEASURE_COLOUR,
+            size=8,
+            pickable=False,
+            keep_in_front=True,
+        )
+        self._feature_actors.append(self._feature_marker_item)
+        self._feature_label_style = LabelStyle(
+            text_colour=self._sketch_label_colour,
+            font_size=12,
+            always_visible=True,
+            background=self._sketch_label_background,
+            background_opacity=1.0,
+            margin=4,
+            show_points=False,
+            point_colour=MEASURE_COLOUR,
+            point_size=8,
+        )
+        font = QFont(self.font())
+        font.setPixelSize(self._feature_label_style.font_size)
+        metrics = QFontMetricsF(font)
+        # Qt, VTK und pygfx formen Text mit verschiedenen Schriften und
+        # DPI-Regeln. Die gemeinsame Platzierung reserviert deshalb mehr als
+        # die Qt-Glyphenbreite; die sichtbare Schrift selbst bleibt 12 Pixel groß.
+        padding = 2.0 * self._feature_label_style.margin + 4.0
+        self._feature_label_sizes = {
+            text: (
+                max(metrics.horizontalAdvance(text), 1.0) * 1.5 + padding,
+                max(metrics.height(), float(font.pixelSize())) * 1.5 + padding,
+            )
+            for _point, text, _priority in self._feature_label_data
+        }
+        self._layout_feature_labels()
+
+    def _queue_feature_label_layout(self) -> None:
+        """Kamera und Kartenänderungen im nächsten Qt-Durchlauf zusammenfassen."""
+        if (
+            self._feature_label_data
+            or self._feature_patch is not None
+            or self._feature_patches
+            or self._hover_patch is not None
+        ) and not self._feature_layout_timer.isActive():
+            self._feature_layout_timer.start(0)
+
+    def _refresh_feature_label_layout(self) -> None:
+        """Ein verändertes Layout anzeigen, ohne Geometrie oder Hover neu zu berechnen."""
+        if self._layout_feature_labels() and self.renderer is not None:
+            self.renderer.render()
+
+    def _sync_feature_preview(self) -> bool:
+        """Merkmalsmarken folgen der Aktorvorschau, ihre Originalanker bleiben erhalten."""
+        import numpy as np
+
+        edges_changed = False
+        for owner in self._edge_actors:
+            edges_changed = self._sync_edge_preview(owner) or edges_changed
+        owners = dict.fromkeys(
+            (
+                *self._feature_label_owners,
+                *self._feature_patches,
+                self._selected,
+                self._hovered_object,
             )
         )
+        transforms = {
+            owner: (actor.matrix(), actor.position())
+            for owner in owners
+            if owner is not None and (actor := self._actors.get(owner)) is not None
+        }
+        state = (
+            tuple(
+                (owner, tuple(matrix.ravel()), position)
+                for owner, (matrix, position) in transforms.items()
+            ),
+            id(self._feature_patch),
+            tuple((owner, id(patch)) for owner, patch in self._feature_patches.items()),
+            id(self._hover_patch),
+        )
+        if state == self._feature_preview_state:
+            return edges_changed
+        self._feature_preview_state = state
+        self._feature_label_state = None
+        points = np.asarray(
+            [point for point, _text, _priority in self._feature_label_data], dtype=float
+        ).reshape(-1, 3)
+        for owner, (matrix, position) in transforms.items():
+            indices = [
+                index
+                for index, identifier in enumerate(self._feature_label_owners)
+                if identifier == owner
+            ]
+            if indices:
+                points[indices] = moved_marks(points[indices], matrix) + np.asarray(position)
+        self._feature_label_points = points
+        if self._feature_marker_item is not None:
+            self._feature_marker_item.update_points(points)
+        patches: list[tuple[Item | None, ObjectId | None]] = [
+            (patch, owner) for owner, patch in self._feature_patches.items()
+        ]
+        if self._feature_patch is not None and self._selected not in self._feature_patches:
+            patches.append((self._feature_patch, self._selected))
+        patches.append((self._hover_patch, self._hovered_object))
+        for patch, patch_owner in patches:
+            if patch is not None and patch_owner is not None:
+                matrix, position = transforms.get(patch_owner, (np.eye(4), (0.0, 0.0, 0.0)))
+                patch.set_matrix(matrix)
+                patch.set_position(position)
+        return True
+
+    def _layout_feature_labels(self) -> bool:
+        """Textfelder in freiem Bildraum platzieren; Weltanker und Auswahl bleiben gleich."""
+        preview_changed = self._sync_feature_preview()
+        renderer = self.renderer
+        style = self._feature_label_style
+        if renderer is None or style is None or not self._feature_label_data:
+            return preview_changed
+        ratio = self._device_ratio()
+        width, height = renderer.view_size()
+        left, right, bottom = self._zone_margins
+        room = (
+            (left + TIGHT) * ratio,
+            TIGHT * ratio,
+            width - (right + TIGHT) * ratio,
+            height - (bottom + TIGHT) * ratio,
+        )
+        obstacles = []
+        for card in (
+            self.banner,
+            self.view_bar,
+            self.drag_bar,
+            self.plane_picker,
+            self.sketch_selection,
+            self.sketch_action,
+        ):
+            if not card.isVisibleTo(self):
+                continue
+            at = (
+                renderer.widget.mapFromGlobal(card.mapToGlobal(QPoint()))
+                if renderer.widget is not None
+                else card.pos()
+            )
+            obstacles.append(
+                (
+                    at.x() * ratio,
+                    at.y() * ratio,
+                    (at.x() + card.width()) * ratio,
+                    (at.y() + card.height()) * ratio,
+                )
+            )
+        state = (
+            renderer.camera_pose(),
+            renderer.parallel_projection(),
+            renderer.parallel_scale(),
+            renderer.view_angle(),
+            width,
+            height,
+            ratio,
+            room,
+            tuple(obstacles),
+        )
+        if state == self._feature_label_state:
+            return preview_changed
+        self._feature_label_state = state
+        projected = [
+            renderer.world_to_display(tuple(point)) for point in self._feature_label_points
+        ]
+        sizes = [
+            (self._feature_label_sizes[text][0] * ratio, self._feature_label_sizes[text][1] * ratio)
+            for _point, text, _priority in self._feature_label_data
+        ]
+        # Ein Anker hinter der Kamera darf kein scheinbares Merkmal vor ihr
+        # erzeugen. Die Kennung bleibt unabhängig davon im Objektbaum wählbar.
+        anchors = [
+            (x, y) if 0.0 <= depth <= 1.0 else (math.nan, math.nan) for x, y, depth in projected
+        ]
+        placed = layout_feature_labels(
+            anchors,
+            sizes,
+            [priority for _point, _text, priority in self._feature_label_data],
+            room,
+            obstacles,
+            gap=TIGHT * ratio,
+        )
+        import numpy as np
+
+        points = []
+        texts = []
+        leaders: list[Any] = []
+        for index, rect in placed:
+            _original, text, _priority = self._feature_label_data[index]
+            point = self._feature_label_points[index]
+            x, y, depth = projected[index]
+            centre_x, centre_y = (rect[0] + rect[2]) / 2.0, (rect[1] + rect[3]) / 2.0
+            before = renderer.display_to_world(x, y, depth)
+            after = renderer.display_to_world(centre_x, centre_y, depth)
+            if before is None or after is None:
+                continue
+            shifted = np.asarray(point) + np.asarray(after) - np.asarray(before)
+            points.append(tuple(float(value) for value in shifted))
+            texts.append(text)
+            # Die Kollisionsbox ist größer als das sichtbare Textfeld. Ihr
+            # Rand wäre nur eine kurze Kerbe neben dem Marker. Die Verbindung
+            # reicht deshalb bis zum Textanker; das deckende Feld liegt darüber.
+            leaders.extend((point, shifted))
+        content = (
+            tuple(points),
+            tuple(texts),
+            tuple(tuple(float(value) for value in point) for point in leaders),
+        )
+        if content == self._feature_label_content:
+            return preview_changed
+        self._feature_label_content = content
+        if self._feature_text_item is not None:
+            self._feature_text_item.update_labels(
+                np.asarray(points, dtype=float).reshape(-1, 3), texts
+            )
+            self._feature_text_item.set_visible(bool(points))
+        elif points:
+            self._feature_text_item = renderer.add_labels(
+                np.asarray(points, dtype=float),
+                texts,
+                name="features",
+                style=style,
+            )
+            self._feature_actors.append(self._feature_text_item)
+        if self._feature_leader_item is not None and len(leaders) != self._feature_leader_count:
+            renderer.remove(self._feature_leader_item)
+            self._feature_actors.remove(self._feature_leader_item)
+            self._feature_leader_item = None
+        if self._feature_leader_item is not None:
+            self._feature_leader_item.update_points(np.asarray(leaders, dtype=float))
+        elif leaders:
+            self._feature_leader_item = renderer.add_lines(
+                np.asarray(leaders, dtype=float),
+                name="feature-label-leaders",
+                colour=self._sketch_label_colour,
+                width=1.0,
+                pickable=False,
+                keep_in_front=True,
+            )
+            self._feature_actors.append(self._feature_leader_item)
+        self._feature_leader_count = len(leaders)
+        return True
+
+    def _feature_label_anchor(
+        self, entry: Any, feature_id: FeatureId, feature: Feature, *, explicit: bool
+    ) -> Any:
+        """Ein Etikett bleibt bei der sichtbaren Geometrie seines Merkmals.
+
+        Die automatische Schichtauflage benennt nur Merkmale am aktuellen
+        Schnitt. Auswahl und Hover dürfen auch sichtbare Bereiche darunter
+        benennen; vollständig abgeschnittene Merkmale behalten ihre Auswahl
+        im Baum, aber keine schwebende Marke in der Ansicht.
+        """
+        centre = feature.params.get("centre")
+        plane, second = self._section_planes()
+        if centre is None or plane is None:
+            return centre
+
+        import numpy as np
+
+        planes = (plane,) if second is None else (plane, second)
+        normals = np.asarray([part.normal for part in planes], dtype=float)
+        lengths = np.linalg.norm(normals, axis=1)
+        valid = lengths > EPS_GEOM
+        if not np.any(valid):
+            return centre
+        normals = normals[valid] / lengths[valid, None]
+        origins = np.asarray([part.origin for part in planes], dtype=float)[valid]
+        positions = np.einsum("ij,ij->i", origins, normals)
+        on_layer = self._layer is not None and self._section is None and not explicit
+
+        def visible(points: Any) -> Any:
+            """Punkte in beiden sichtbaren Halbräumen, bei Schichten auf der Ebene."""
+            distances = points @ normals.T - positions
+            keep = np.all(distances <= EPS_GEOM, axis=1)
+            if on_layer:
+                keep &= np.abs(distances[:, 0]) <= EPS_GEOM
+            return points[keep]
+
+        raw = getattr(entry.mesh, "raw", None)
+        indices = self._face_indices(entry.id, feature_id)
+        if raw is None or not indices:
+            points = visible(np.asarray(centre, dtype=float).reshape(1, 3))
+            return points[0] if len(points) else None
+        triangles = np.asarray(raw.vertices[raw.faces[list(indices)]], dtype=float)
+        pieces = [visible(triangles.reshape(-1, 3))]
+        left = triangles[:, [0, 1, 2]].reshape(-1, 3)
+        right = triangles[:, [1, 2, 0]].reshape(-1, 3)
+        for normal, position in zip(normals, positions, strict=True):
+            before = left @ normal - position
+            after = right @ normal - position
+            crossing = ((before > EPS_GEOM) & (after < -EPS_GEOM)) | (
+                (before < -EPS_GEOM) & (after > EPS_GEOM)
+            )
+            if not np.any(crossing):
+                continue
+            fraction = before[crossing] / (before[crossing] - after[crossing])
+            points = left[crossing] + (right[crossing] - left[crossing]) * fraction[:, None]
+            pieces.append(visible(points))
+        points = np.vstack(pieces)
+        if not len(points):
+            return None
+        anchor = visible(np.asarray(centre, dtype=float).reshape(1, 3))
+        return anchor[0] if len(anchor) else points.mean(axis=0)
 
     def show_candidates(
         self,
@@ -7008,24 +7697,92 @@ class Viewport(QWidget):
         return max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
 
     def _lifted_corners(self, raw: Any, chosen: Any, lift: float, offset: Any) -> Any:
-        """Die Eckpunkte einer Flächenauswahl, entlang ihrer Normalen angehoben.
+        """Gemeinsame Eckpunkte einer Flächenauswahl gemeinsam anheben.
 
-        **Je Dreieck eigene Punkte**: Die Fläche wird entlang **ihrer** Normalen
-        angehoben, und geteilte Eckpunkte würden das über die Kante hinaus in
-        den Nachbarn ziehen.
-
-        Bis zum 04.09.2026 stand die Rechnung viermal untereinander in dieser
-        Datei — in ``_redraw_candidates``, ``_redraw_feature_patch``,
-        ``_redraw_protected_patch`` und ``_redraw_hover_patch``. Die Begründung
-        darüber stand in **einer** der vier; die drei anderen trugen dieselben
-        sieben Zeilen ohne den Satz, der erklärt, warum sie so aussehen.
+        Der flächengewichtete Versatz benutzt nur ausgewählte Dreiecke.
+        Einzelne Dreiecksnormalen öffneten an leicht geneigten Nachbarn
+        sichtbare Spalten. Erst nach der Anhebung wird wieder zur bisherigen
+        Dreiecksliste expandiert. Gleiche Koordinaten mit verschiedenen
+        Originalkennungen bleiben getrennt; die Markierung verschweißt nichts.
         """
         import numpy as np
 
         triangles = np.asarray(raw.faces, dtype=np.int64)[chosen]
-        normals = np.asarray(raw.face_normals, dtype=float)[chosen]
-        corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
-        return corners + np.repeat(normals, 3, axis=0) * lift + offset
+        vertices, inverse = np.unique(triangles, return_inverse=True)
+        inverse = inverse.reshape(-1)
+        corners = np.asarray(raw.vertices, dtype=float)[vertices]
+        selected = corners[inverse].reshape(-1, 3, 3)
+        # Das Kreuzprodukt trägt bereits die doppelte Dreiecksfläche. So
+        # braucht ein kleiner Patch keine Flächentabelle des gesamten Netzes.
+        products = np.cross(selected[:, 1] - selected[:, 0], selected[:, 2] - selected[:, 0])
+        areas = np.linalg.norm(products, axis=1)
+        weighted = np.repeat(products, 3, axis=0)
+        summed = np.column_stack(
+            [
+                np.bincount(inverse, weights=weighted[:, axis], minlength=len(vertices))
+                for axis in range(3)
+            ]
+        )
+        weights = np.bincount(inverse, weights=np.repeat(areas, 3), minlength=len(vertices))
+        np.divide(summed, weights[:, None], out=summed, where=weights[:, None] > 0.0)
+        lengths = np.linalg.norm(summed, axis=1, keepdims=True)
+        averaged = np.divide(summed, lengths, out=np.zeros_like(summed), where=lengths > EPS_GEOM)
+        lifted = self._lift_within_section(corners, averaged * lift)
+        return self._clip_feature_corners(lifted[inverse]) + offset
+
+    def _lift_within_section(self, corners: Any, displacement: Any) -> Any:
+        """Markierungen an Grenzflächen nur innerhalb des sichtbaren Halbraums anheben."""
+        import numpy as np
+
+        displacement = np.broadcast_to(displacement, corners.shape).copy()
+        plane, second = self._section_planes()
+        for part in (plane, second):
+            if part is None:
+                continue
+            normal = np.asarray(part.normal, dtype=float)
+            length = float(np.linalg.norm(normal))
+            if length <= EPS_GEOM:
+                continue
+            normal /= length
+            boundary = np.abs((corners - np.asarray(part.origin)) @ normal) <= EPS_GEOM
+            # Der Abstand gegen Flimmern darf eine echte Grenzfläche nicht
+            # aus dem sichtbaren Halbraum heben und dadurch verschwinden lassen.
+            outward = np.maximum(displacement[boundary] @ normal, 0.0)
+            displacement[boundary] -= outward[:, None] * normal
+        return corners + displacement
+
+    def _clip_feature_corners(self, corners: Any) -> Any:
+        """Offene Markierungsdreiecke an denselben Ebenen wie den Körper begrenzen."""
+        plane, second = self._section_planes()
+        if plane is None or not len(corners):
+            return corners
+
+        import numpy as np
+
+        inside = True
+        for part in (plane,) if second is None else (plane, second):
+            normal = np.asarray(part.normal, dtype=float)
+            length = float(np.linalg.norm(normal))
+            if length <= EPS_GEOM:
+                continue
+            distances = (corners - np.asarray(part.origin, dtype=float)) @ (normal / length)
+            if np.all(distances > EPS_GEOM):
+                return np.empty((0, 3), dtype=float)
+            inside = inside and bool(np.all(distances <= EPS_GEOM))
+        if inside:
+            return corners
+
+        from app.core.deferred import trimesh
+        from app.core.geom.mesh import MeshData
+
+        # Getrennte Dreiecke sind eine offene Renderfläche. Der vorhandene
+        # Kern-Schnitt fügt ihr keine künstlichen Auswahlkappen hinzu und
+        # ändert weder Szenennetz noch den Deckelbefund des eigentlichen Körpers.
+        patch = MeshData(
+            trimesh.Trimesh(corners, _triangle_faces(len(corners) // 3), process=False)
+        )
+        clipped = cut(patch, plane, second).mesh.raw
+        return np.asarray(clipped.vertices[clipped.faces], dtype=float).reshape(-1, 3)
 
     def _redraw_candidates(self) -> None:
         """Die Merkmale einer offenen Frage im Bild hervorheben (§21.3).
@@ -7047,7 +7804,7 @@ class Viewport(QWidget):
         marks: list[tuple[Vec3, str]] = []
         for index, (object_id, feature_id) in enumerate(self._candidates):
             entry = self._result.scene.objects.get(object_id)
-            if entry is None or not self._in_view(object_id, entry):
+            if entry is None or not self._in_pick_view(object_id, entry):
                 continue
             feature = entry.features.get(feature_id)
             raw = getattr(entry.mesh, "raw", None)
@@ -7055,13 +7812,15 @@ class Viewport(QWidget):
                 continue
             chosen = np.asarray(feature.face_indices, dtype=np.int64)
             corners = self._lifted_corners(
-                raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
+                raw, chosen, self._patch_lift(), self._shown_offset(entry, self._result)
             )
+            if not len(corners):
+                continue
             loud = (object_id, feature_id) == self._candidate_emphasis
             self._candidate_actors.append(
                 self.renderer.add_surface(
                     corners,
-                    _triangle_faces(len(chosen)),
+                    _triangle_faces(len(corners) // 3),
                     name=f"candidate:{index}",
                     style=SurfaceStyle(
                         colour=CANDIDATE_COLOUR,
@@ -7104,49 +7863,77 @@ class Viewport(QWidget):
         """
         if self.renderer is None:
             return
-        if self._feature_patch is not None:
+        for patch in self._feature_patches.values():
+            self.renderer.remove(patch)
+        if (
+            self._feature_patch is not None
+            and self._feature_patch not in self._feature_patches.values()
+        ):
             self.renderer.remove(self._feature_patch)
-            self._feature_patch = None
-        highlighted = self.highlighted_faces()
-        if not highlighted or self._result is None or self._selected is None:
-            return
-        entry = self._result.scene.objects.get(self._selected)
-        raw = getattr(entry.mesh, "raw", None) if entry is not None else None
-        if entry is None or raw is None:
+        self._feature_patches.clear()
+        self._feature_patch = None
+        if self._selection_marking_hidden() or self._result is None:
             return
 
         import numpy as np
 
-        chosen = np.asarray(highlighted, dtype=np.int64)
-        corners = self._lifted_corners(
-            raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
-        )
-        features = [
-            feature
-            for feature_id in self.highlighted_features()
-            if (feature := entry.features.get(feature_id)) is not None
-        ]
-        hole_surface = bool(features) and all(feature.kind == "hole" for feature in features)
-        style = (
-            SurfaceStyle(
-                colour=SELECTED_COLOUR,
-                opacity=SELECTED_HOLE_OPACITY,
-                backface_colour=SELECTED_COLOUR,
-                backface_opacity=SELECTED_HOLE_OPACITY,
-                lighting=False,
-                pickable=False,
+        selected: dict[ObjectId, list[FeatureId]] = {}
+        for object_id, feature_id in self.highlighted_feature_refs():
+            selected.setdefault(object_id, []).append(feature_id)
+        for object_id, feature_ids in selected.items():
+            entry = self._result.scene.objects.get(object_id)
+            raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+            if entry is None or raw is None:
+                continue
+            highlighted = tuple(
+                dict.fromkeys(
+                    index
+                    for feature_id in feature_ids
+                    for index in self._face_indices(object_id, feature_id)
+                )
             )
-            if hole_surface
-            else SurfaceStyle(
-                colour=SELECTED_COLOUR,
-                backface_colour=SELECTED_COLOUR,
-                lighting=False,
-                pickable=False,
+            if not highlighted:
+                continue
+            chosen = np.asarray(highlighted, dtype=np.int64)
+            corners = self._lifted_corners(
+                raw, chosen, self._patch_lift(), self._shown_offset(entry, self._result)
             )
-        )
-        self._feature_patch = self.renderer.add_surface(
-            corners, _triangle_faces(len(chosen)), name="feature-patch", style=style
-        )
+            if not len(corners):
+                continue
+            features = [
+                feature
+                for feature_id in feature_ids
+                if (feature := entry.features.get(feature_id)) is not None
+            ]
+            hole_surface = bool(features) and all(feature.kind == "hole" for feature in features)
+            style = (
+                SurfaceStyle(
+                    colour=SELECTED_COLOUR,
+                    opacity=SELECTED_HOLE_OPACITY,
+                    backface_colour=SELECTED_COLOUR,
+                    backface_opacity=SELECTED_HOLE_OPACITY,
+                    lighting=False,
+                    pickable=False,
+                )
+                if hole_surface
+                else SurfaceStyle(
+                    colour=SELECTED_COLOUR,
+                    backface_colour=SELECTED_COLOUR,
+                    lighting=False,
+                    pickable=False,
+                )
+            )
+            patch = self.renderer.add_surface(
+                corners,
+                _triangle_faces(len(corners) // 3),
+                name="feature-patch"
+                if object_id == self._selected
+                else f"feature-patch:{object_id}",
+                style=style,
+            )
+            self._feature_patches[object_id] = patch
+            if object_id == self._selected:
+                self._feature_patch = patch
 
     def _redraw_protected_patch(self) -> None:
         """Gesperrte Sichtflächen (§22.3): eine Tönung samt Schraffur darüber.
@@ -7173,9 +7960,9 @@ class Viewport(QWidget):
         for object_id, features in self._protected.items():
             entry = self._result.scene.objects.get(object_id)
             raw = getattr(entry.mesh, "raw", None) if entry is not None else None
-            if entry is None or raw is None or not self._in_view(object_id, entry):
+            if entry is None or raw is None or not self._in_pick_view(object_id, entry):
                 continue
-            offset = self._view_offset(entry, self._result)
+            offset = self._shown_offset(entry, self._result)
             for feature_id in features:
                 chosen = self._face_indices(object_id, feature_id)
                 if not chosen:
@@ -7183,9 +7970,14 @@ class Viewport(QWidget):
                 index = np.asarray(chosen, dtype=np.int64)
                 normals = np.asarray(raw.face_normals, dtype=float)[index]
                 patch = self._lifted_corners(raw, index, lift, offset)
+                if not len(patch):
+                    continue
                 corners.append(patch)
                 middle = normals.mean(axis=0)
-                strokes.extend(hatch_lines(patch + middle * lift, tuple(middle), spacing))
+                # Auch der zweite Abstand gegen Flimmern gehört in dieselben
+                # Halbräume; die Rechnung benutzt dabei Szenenkoordinaten.
+                raised = self._lift_within_section(patch - offset, middle * lift) + offset
+                strokes.extend(hatch_lines(raised, tuple(middle), spacing))
         if not corners:
             return
 
@@ -7229,10 +8021,7 @@ class Viewport(QWidget):
             self._selection_marking_hidden()
             or self._hovered_object is None
             or self._hovered_feature is None
-            or (
-                self._hovered_object == self._selected
-                and self._hovered_feature in self.highlighted_features()
-            )
+            or (self._hovered_object, self._hovered_feature) in self.highlighted_feature_refs()
         ):
             return
         indices = self._face_indices(self._hovered_object, self._hovered_feature)
@@ -7247,14 +8036,16 @@ class Viewport(QWidget):
 
         chosen = np.asarray(indices, dtype=np.int64)
         corners = self._lifted_corners(
-            raw, chosen, self._patch_lift(), self._view_offset(entry, self._result)
+            raw, chosen, self._patch_lift(), self._shown_offset(entry, self._result)
         )
+        if not len(corners):
+            return
         feature = entry.features.get(self._hovered_feature)
         hole_surface = feature is not None and feature.kind == "hole"
         hover_opacity = HOVERED_HOLE_OPACITY if hole_surface else HOVERED_FEATURE_OPACITY
         self._hover_patch = self.renderer.add_surface(
             corners,
-            _triangle_faces(len(chosen)),
+            _triangle_faces(len(corners) // 3),
             name="feature-hover",
             style=SurfaceStyle(
                 colour=FEATURE_LABEL_COLOUR,
@@ -7302,12 +8093,19 @@ class Viewport(QWidget):
         """
         import numpy as np
 
+        hit = self._hit_at(point)
+        if hit is not None:
+            if hit.feature_id is not None:
+                return hit.feature_id, 0.0
+            feature_id = self._feature_on_cell(hit.object_id, hit.cell)
+            if feature_id is not None:
+                return feature_id, 0.0
         target = np.asarray(point, dtype=float)
         # Der Körper unter dem Zeiger, sonst der gewählte — und die Reichweite
         # gehört dem, dessen Merkmale gesucht werden, nicht dem anderen.
         source = self._object_at(point)
         prepared = self._prepared_features(source)
-        if not prepared:
+        if not prepared and hit is None:
             source = self._selected
             prepared = self._prepared_features(source)
         if not prepared:
@@ -7340,6 +8138,50 @@ class Viewport(QWidget):
         # für Merkmale, die einen Durchmesser und eine Achse haben.
         return self._feature_inside(target)
 
+    def _feature_on_cell(self, object_id: ObjectId, cell: int) -> FeatureId | None:
+        """Eindeutige Dreieckszuordnung, kompakt je Auswertung vorbereitet.
+
+        Überlappende Merkmale behalten den bestehenden Ortsfang. Ein Index
+        aus einem geschnittenen oder dezimierten Anzeigenetz gilt hier nie.
+        """
+        if self._result is None or object_id not in self._original_pick_cells or cell < 0:
+            return None
+        entry = self._result.scene.objects.get(object_id)
+        raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+        if entry is None or raw is None or cell >= len(raw.faces):
+            return None
+        cached = self._feature_cells.get(object_id)
+        if cached is None:
+            import numpy as np
+
+            ids = tuple(entry.features)
+            cells = np.full(len(raw.faces), -1, dtype=np.int32)
+            for number, feature in enumerate(entry.features.values()):
+                indices = np.asarray(feature.face_indices, dtype=np.int64)
+                indices = indices[(indices >= 0) & (indices < len(cells))]
+                previous = cells[indices]
+                cells[indices] = np.where(previous == -1, number, -2)
+            cached = ids, cells
+            self._feature_cells[object_id] = cached
+        ids, cells = cached
+        number = int(cells[cell])
+        return ids[number] if number >= 0 else None
+
+    def _hit_at(self, point: Vec3, *, view_space: bool = False) -> _SelectionHit | None:
+        """Nur der aktuelle Treffer an genau diesem Ort ergänzt einen Punkt.
+
+        Jeder Pick und jeder Szenenaufbau ersetzt ihn; andere Raumfragen
+        bleiben unabhängig von der letzten Mausposition.
+        """
+        hit = self._selection_hit
+        if hit is None or self._result is None:
+            return None
+        entry = self._result.scene.objects.get(hit.object_id)
+        if entry is None or not self._in_pick_view(hit.object_id, entry):
+            return None
+        at = hit.view_point if view_space else hit.scene_point
+        return hit if math.dist(at, point) <= EPS_GEOM else None
+
     def _feature_inside(self, target: Any) -> tuple[FeatureId, float] | None:
         """Das Loch, in dem dieser Punkt steht — oder nichts.
 
@@ -7361,6 +8203,8 @@ class Viewport(QWidget):
         best: FeatureId | None = None
         best_radius = float("inf")
         for feature_id, feature in entry.features.items():
+            if not _is_opening_feature(feature):
+                continue
             diameter = feature.params.get("diameter")
             axis = feature.params.get("axis")
             centre = feature.params.get("centre")
@@ -7396,7 +8240,9 @@ class Viewport(QWidget):
         diagonal = math.sqrt(float(sum(value * value for value in size)))
         return max(FEATURE_REACH_MINIMUM, diagonal * FEATURE_REACH_SHARE)
 
-    def _bore_aim(self, origin: Vec3, direction: Vec3, until: float) -> Vec3 | None:
+    def _bore_aim(
+        self, origin: Vec3, direction: Vec3, until: float, *, view_space: bool = False
+    ) -> Vec3 | None:
         """Die Stelle in der Bohrung, auf die dieser Sichtstrahl zeigt.
 
         **Der Klick ist eine Blickrichtung und nicht nur ein Punkt**, und das
@@ -7440,52 +8286,56 @@ class Viewport(QWidget):
         if length <= EPS_GEOM:
             return None
         forward = forward / length
-        start = np.asarray(origin, dtype=float)
+        origin_point = np.asarray(origin, dtype=float)
 
         best_enter = math.inf
         best_radius = math.inf
         found: Vec3 | None = None
+        picked: _SelectionHit | None = None
         for object_id, entry in self._result.scene.objects.items():
-            if not self._in_view(object_id, entry):
+            visible = (
+                self._in_pick_view(object_id, entry)
+                if view_space
+                else self._in_view(object_id, entry)
+            )
+            if not visible:
                 continue
+            shift = self._shown_offset(entry, self._result) if view_space else np.zeros(3)
+            start = origin_point - shift
             # Die Reichweite ist die **Zielhilfe**: Gezielt wird in Pixeln, und
             # der Rand einer M3-Bohrung ist an einem großen Teil wenige davon
             # breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals,
             # denn es ist dieselbe Frage — wie weit daneben meint noch dies.
             reach = self._feature_reach(object_id)
-            for feature_id, triangles, _low, _high in self._prepared_features(object_id):
-                feature = entry.features.get(feature_id)
-                if feature is None:
-                    continue
-                diameter = feature.params.get("diameter")
-                axis = feature.params.get("axis")
-                centre = feature.params.get("centre")
-                if not diameter or axis is None or centre is None:
-                    continue
-                line = np.asarray(axis, dtype=float)
-                extent = float(np.linalg.norm(line))
-                if extent <= EPS_GEOM:
-                    continue
-                line = line / extent
-                # Wie weit das Merkmal entlang seiner Achse reicht — aus seinen
-                # eigenen Dreiecken und nicht aus ``depth``: Der Hüllquader
-                # kennt die Achse nicht, und eine schräge Bohrung hat beides.
-                lengthwise = triangles.reshape(-1, 3) @ line
-                bounds = (float(lengthwise.min()), float(lengthwise.max()))
-                radius = float(diameter) / 2.0
+            for feature_id, centre, line, radius, bounds in self._prepared_bores(object_id):
+                ray_start = (float(start[0]), float(start[1]), float(start[2]))
+                ray_direction = (float(forward[0]), float(forward[1]), float(forward[2]))
+                ray_axis = (float(line[0]), float(line[1]), float(line[2]))
                 span = bore_span(
-                    (float(start[0]), float(start[1]), float(start[2])),
-                    (float(forward[0]), float(forward[1]), float(forward[2])),
+                    ray_start,
+                    ray_direction,
                     centre,
-                    (float(line[0]), float(line[1]), float(line[2])),
+                    ray_axis,
                     radius + reach,
-                    (bounds[0] - reach, bounds[1] + reach),
+                    bounds,
                 )
-                if span is None or span[1] <= 0.0 or span[0] >= until:
+                if span is None or span[1] <= 0.0 or span[0] > until + EPS_GEOM:
                     continue
+                visible_span = bore_span(ray_start, ray_direction, centre, ray_axis, radius, bounds)
+                if visible_span is None or visible_span[0] > until + EPS_GEOM:
+                    # Die Zielhilfe gilt seitlich am Öffnungsrand. Sie darf
+                    # weder eine Rückwand axial verlängern noch seitliches
+                    # Material vor der wirklichen Bohrung überbrücken.
+                    along_ray = float(forward @ line)
+                    if abs(along_ray) <= EPS_GEOM or not math.isfinite(until):
+                        continue
+                    entrance = bounds[0] if along_ray > 0.0 else bounds[1]
+                    at_entrance = (entrance - float(start @ line)) / along_ray
+                    if abs(at_entrance - until) > EPS_GEOM:
+                        continue
                 enter = max(span[0], 0.0)
                 leave = min(span[1], until)
-                if leave <= enter:
+                if leave < enter - EPS_GEOM:
                     continue
                 nearer = enter < best_enter - EPS_GEOM
                 tied = abs(enter - best_enter) <= EPS_GEOM and radius < best_radius
@@ -7502,10 +8352,66 @@ class Viewport(QWidget):
                 point = point + line * (middle - float(point @ line))
                 best_enter = enter
                 best_radius = radius
-                found = (float(point[0]), float(point[1]), float(point[2]))
+                scene_point = (float(point[0]), float(point[1]), float(point[2]))
+                shown = point + shift
+                found = (float(shown[0]), float(shown[1]), float(shown[2]))
+                picked = _SelectionHit(object_id, scene_point, found, feature_id=feature_id)
+        if view_space and picked is not None:
+            self._selection_hit = picked
         return found
 
-    def _through_aim(self, origin: Vec3, direction: Vec3) -> Vec3 | None:
+    def _prepared_bores(self, object_id: ObjectId) -> list[_BoreTarget]:
+        """Achsen und Längsgrenzen einmal berechnen, auch bei vielen Merkmalen.
+
+        Der Hover braucht keine Kopie sämtlicher ebener Merkmalsflächen und
+        keine erneute Projektion aller Bohrungsdreiecke bei jedem Zielwechsel.
+        Die Grenzen kommen weiter aus der Geometrie, nicht aus einem Tiefenwert.
+        """
+        cached = self._feature_bores.get(object_id)
+        if cached is not None:
+            return cached
+        entry = self._result.scene.objects.get(object_id) if self._result else None
+        if entry is None:
+            return []
+
+        import numpy as np
+
+        raw = getattr(entry.mesh, "raw", None)
+        prepared: list[_BoreTarget] = []
+        for feature_id, feature in entry.features.items():
+            # Ein Durchmesser benennt auch Ringrundungen, Kehlen und Zapfen.
+            # Ihre Zylinderhülle ist keine Öffnung vor der sichtbaren Fläche.
+            if not _is_opening_feature(feature):
+                continue
+            diameter = feature.params.get("diameter")
+            axis = feature.params.get("axis")
+            centre = feature.params.get("centre")
+            if not diameter or axis is None or centre is None:
+                continue
+            line = np.asarray(axis, dtype=float)
+            extent = float(np.linalg.norm(line))
+            if extent <= EPS_GEOM:
+                continue
+            line = line / extent
+            indices = [
+                index
+                for index in feature.face_indices
+                if raw is not None and 0 <= index < len(raw.faces)
+            ]
+            points = (
+                raw.vertices[raw.faces[indices]].reshape(-1, 3)
+                if raw is not None and indices
+                else np.asarray([centre], dtype=float)
+            )
+            lengthwise = points @ line
+            bounds = (float(lengthwise.min()), float(lengthwise.max()))
+            prepared.append(_BoreTarget(feature_id, centre, line, float(diameter) / 2.0, bounds))
+        self._feature_bores[object_id] = prepared
+        return prepared
+
+    def _through_aim(
+        self, origin: Vec3, direction: Vec3, *, view_space: bool = False
+    ) -> Vec3 | None:
         """Der Punkt in der Öffnung, durch die dieser Strahl hindurchgeht.
 
         **Die zweite Hälfte desselben Fundes, und sie brauchte eine andere
@@ -7546,13 +8452,21 @@ class Viewport(QWidget):
         if length <= EPS_GEOM:
             return None
         forward = forward / length
-        start = np.asarray(origin, dtype=float)
+        origin_point = np.asarray(origin, dtype=float)
 
         best_enter = math.inf
         found: Vec3 | None = None
+        picked: _SelectionHit | None = None
         for object_id, entry in self._result.scene.objects.items():
-            if not self._in_view(object_id, entry):
+            visible = (
+                self._in_pick_view(object_id, entry)
+                if view_space
+                else self._in_view(object_id, entry)
+            )
+            if not visible:
                 continue
+            shift = self._shown_offset(entry, self._result) if view_space else np.zeros(3)
+            start = origin_point - shift
             planes = self._hull_of(object_id)
             if planes is None:
                 continue
@@ -7564,7 +8478,12 @@ class Viewport(QWidget):
                 continue
             middle = start + forward * (enter + span[1]) / 2.0
             best_enter = enter
-            found = (float(middle[0]), float(middle[1]), float(middle[2]))
+            scene_point = (float(middle[0]), float(middle[1]), float(middle[2]))
+            shown = middle + shift
+            found = (float(shown[0]), float(shown[1]), float(shown[2]))
+            picked = _SelectionHit(object_id, scene_point, found)
+        if view_space and picked is not None:
+            self._selection_hit = picked
         return found
 
     def _hull_of(self, object_id: ObjectId) -> Any:
@@ -7619,41 +8538,25 @@ class Viewport(QWidget):
 
         import numpy as np
 
-        # Die Merkmale stehen in Szenenkoordinaten, der Strahl kommt aus der
-        # Ansicht (§25). Verschoben wird um dasselbe Stück wie ein Punkt —
-        # welches das ist, sagt die Stelle, auf die gezeigt wird. Ohne
-        # Auftreffpunkt sagt es die Fokusebene, wie beim Zeiger.
-        reference = (
-            point
-            if point is not None
-            else self.renderer.display_to_world(x, y, self.renderer.focal_depth())
-        )
-        if reference is None:
-            return point
-        scene = self._from_view(reference)
-        shift = np.asarray(reference, dtype=float) - np.asarray(scene, dtype=float)
         forward = np.asarray(direction, dtype=float)
         forward = forward / float(np.linalg.norm(forward))
-        start = np.asarray(origin, dtype=float) - shift
         until = (
             float((np.asarray(point, dtype=float) - np.asarray(origin, dtype=float)) @ forward)
             if point is not None
             else math.inf
         )
-        ray = (
-            (float(start[0]), float(start[1]), float(start[2])),
-            (float(forward[0]), float(forward[1]), float(forward[2])),
-        )
-        aimed = self._bore_aim(ray[0], ray[1], until)
+        # Jeder Körper hat seinen eigenen Ansichtsversatz. Ein einzelner
+        # Versatz vom Auftreffpunkt trifft auf anderen Platten oder bei der
+        # Explosionsansicht das falsche Loch.
+        aimed = self._bore_aim(origin, direction, until, view_space=True)
         if aimed is None and point is None:
             # Nichts getroffen und keine Bohrung im Weg: Vielleicht geht der
             # Blick durch eine Öffnung des Körpers, und dann ist er gemeint und
             # nicht das Nichts (:meth:`_through_aim`).
-            aimed = self._through_aim(ray[0], ray[1])
+            aimed = self._through_aim(origin, direction, view_space=True)
         if aimed is None:
             return point
-        back = np.asarray(aimed, dtype=float) + shift
-        return (float(back[0]), float(back[1]), float(back[2]))
+        return aimed
 
     def _prepared_features(
         self, object_id: ObjectId | None
@@ -7771,7 +8674,7 @@ class Viewport(QWidget):
         """
         if self._selected is None:
             return 0
-        return 2 if self.highlighted_features() else 1
+        return 2 if self.highlighted_feature_refs() else 1
 
     def _would_pick_feature(self, point: Vec3) -> bool:
         """Ob der **nächste** Klick hier ein Merkmal wählen würde.
@@ -7927,6 +8830,7 @@ class Viewport(QWidget):
         if self._sketch_frame is not None and self._apply_sketch_occlusion():
             self._draw()
         self._place_orientation_widget()
+        self._queue_feature_label_layout()
 
     def _place_orientation_widget(self) -> None:
         """Das Achsenkreuz in seine Ecke setzen — in Bildpunkten gerechnet
@@ -8358,6 +9262,17 @@ class Viewport(QWidget):
         self._drag_shadow(steps)
         self._draw_turn_arc(steps)
         self._drag_preview(steps)
+        if (
+            self._gizmo is not None
+            and self._selected is not None
+            and self._gizmo.target is self._actors.get(self._selected)
+        ):
+            # Der Griff zeichnet unmittelbar nach seinem Rückruf. Die
+            # korrigierte Matrix gilt deshalb schon für dessen Konturen.
+            self._sync_edge_preview(self._selected, applied)
+        # Der Griff setzt seine Matrix erst nach diesem Rückruf. Im nächsten
+        # Ereignisdurchlauf lesen alle Merkmalsmarken denselben neuen Aktorstand.
+        self._queue_feature_label_layout()
         # **Der Ring erscheint mit dem ersten sichtbaren Stück des Zugs.** Ihn
         # schon beim Anhängen des Griffs zu zeigen hiesse, eine Bewegung zu
         # behaupten, die noch keine ist.
@@ -8516,6 +9431,9 @@ class Viewport(QWidget):
         """Der Zwischenstand am Skalierwürfel — die Zahl zum Zug (§18.11)."""
         self._drag_kind = "scale"
         self.drag_bar.follow(tr("Faktor"), factor, "", 3)
+        if self._selected is not None:
+            self._sync_edge_preview(self._selected)
+        self._queue_feature_label_layout()
 
     def _face_handle(self, feature: Feature) -> Item | None:
         """Die Scheibe, an der der Griff hängt, wenn ein Merkmal gewählt ist.
@@ -8912,13 +9830,17 @@ class Viewport(QWidget):
                 self.faceDragged.emit(self._drag_normal, float(value))
         elif kind == "turn" and self._drag_axis is not None:
             if abs(value) > EPS_DISPLAY:
-                self.transformDragged.emit(TransformSteps(axis=self._drag_axis, angle=float(value)))
+                steps = TransformSteps(axis=self._drag_axis, angle=float(value))
+                if not self._emit_feature_drag(steps):
+                    self.transformDragged.emit(steps)
         elif kind == "move" and self._drag_axis is not None:
             if abs(value) > EPS_DISPLAY:
                 index = ("x", "y", "z").index(self._drag_axis)
                 offset = [0.0, 0.0, 0.0]
                 offset[index] = float(value)
-                self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], offset[2])))
+                steps = TransformSteps(offset=(offset[0], offset[1], offset[2]))
+                if not self._emit_feature_drag(steps):
+                    self.transformDragged.emit(steps)
         elif kind == "scale" and abs(value - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(value))
         elif kind == "pull":
@@ -8959,6 +9881,8 @@ class Viewport(QWidget):
         interactor = getattr(renderer, "widget", None) if renderer is not None else None
         if watched is interactor and kind == QEvent.Type.Enter:
             self._update_cursor()
+        if watched is interactor and kind == QEvent.Type.Resize:
+            self._queue_feature_label_layout()
 
         # Qt kann den Filter schon während ``QWidget.__init__`` aufrufen. In
         # diesem kurzen Zustand gibt es weder Skizzen- noch Zugfelder; die
@@ -9034,6 +9958,11 @@ class Viewport(QWidget):
         return False
 
     def reset_camera(self, *, follow_selection: bool = True) -> None:
+        """Passt ausdrücklich ein und zeichnet das fertige Bild genau einmal."""
+        self._fit_camera(follow_selection=follow_selection)
+        self._draw()
+
+    def _fit_camera(self, *, follow_selection: bool = True) -> None:
         """Passt auf die Körper ein — nicht auf den Bauraum.
 
         **Auf den gewählten Körper, wenn einer gewählt ist** (Entscheidung
@@ -9089,7 +10018,23 @@ class Viewport(QWidget):
         if bounds is None:
             self.renderer.reset_camera()
         else:
-            self.renderer.reset_camera(with_margin(bounds))
+            padded = with_margin(bounds)
+            self.renderer.reset_camera(padded)
+            if self._sketch_frame is None and any(self._zone_margins):
+                ratio = self._device_ratio()
+                left, right, bottom = self._zone_margins
+                pose, scale = camera_in_free_area(
+                    self.renderer.camera_pose(),
+                    padded,
+                    self.renderer.view_size(),
+                    (left * ratio, right * ratio, bottom * ratio),
+                    self.renderer.view_angle(),
+                    self.renderer.parallel_scale() if self.renderer.parallel_projection() else None,
+                )
+                self.renderer.set_camera_pose(pose)
+                if scale is not None:
+                    self.renderer.set_parallel_scale(scale)
+                self.renderer.reset_clipping_range()
 
     def _fit_once_for(self, result: EvaluationResult | None) -> None:
         """Passt ein, wenn die Ansicht zum ersten Mal etwas zu zeigen hat.
@@ -9138,7 +10083,7 @@ class Viewport(QWidget):
         if wanted != self._fitted_to or outgrown(
             self._fitted_bounds, self._object_bounds(), moved_only=self._moved_only
         ):
-            self.reset_camera(follow_selection=False)
+            self._fit_camera(follow_selection=False)
             self._fitted_to = wanted  # type: ignore[assignment]
             self._fitted_objects = here
 
@@ -9286,16 +10231,17 @@ class Viewport(QWidget):
         # sonst zieht die nächste Größen- oder Zoomänderung einen Versatz ab,
         # der in dieser neuen Kamera gar nicht steckt.
         self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
-        self.reset_camera()
+        self._fit_camera()
         if self._sketch_frame is not None:
             self._apply_sketch_occlusion()
             # Die sichtbare ViewBar bleibt auch im Skizzenmodus bedienbar. Ihr
             # Ansichtsname muss daher denselben Weg ins Ebenenfeld nehmen wie
             # ein eingerasteter Kamerazug.
-            self._settle_sketch_view()
+            self._settle_sketch_view(draw=False)
         else:
             self.cameraMoved.emit()
-        self._redraw_shadows()
+        self._redraw_shadows(draw=False)
+        self._draw()
 
     def view_on_plane(self, frame: PlaneFrame) -> None:
         """Die Kamera senkrecht auf eine Zeichenebene stellen (§30.1).
@@ -9375,6 +10321,7 @@ class Viewport(QWidget):
         )
         if not self.sketch_selection.isHidden():
             self.sketch_selection.place()
+        self._queue_feature_label_layout()
         if self._sketch_frame is not None and self._apply_sketch_occlusion():
             self._draw()
 
@@ -10267,11 +11214,25 @@ class Viewport(QWidget):
         Szene. Die Toleranz ist ein Anteil der Bilddiagonale: VTKs Vorgabe ist
         so klein, dass ein Klick an einer Kante wieder danebengeht.
         """
+        self._selection_hit = None
         if self.renderer is None:
             return None
         hit = self.renderer.pick_surface(
             x, y, among=list(self._actors.values()) or None, tolerance=PICK_TOLERANCE
         )
+        if hit is not None and self._result is not None:
+            object_id = next(
+                (key for key, actor in self._actors.items() if actor is hit.item), None
+            )
+            entry = self._result.scene.objects.get(object_id) if object_id else None
+            if entry is not None and object_id is not None:
+                shift = self._shown_offset(entry, self._result)
+                scene_point = (
+                    float(hit.point[0] - shift[0]),
+                    float(hit.point[1] - shift[1]),
+                    float(hit.point[2] - shift[2]),
+                )
+                self._selection_hit = _SelectionHit(object_id, scene_point, hit.point, hit.cell)
         return hit.point if hit is not None else None
 
     # --- den gewählten Körper direkt ziehen (§18.11) ---------------------------
@@ -10321,6 +11282,14 @@ class Viewport(QWidget):
         if not self.can_drag_body_at(point):
             return False
         assert point is not None
+        if not self._selected_more and (
+            self._selected_feature is not None or self._selected_features
+        ):
+            # Bei einem Körper muss die gemeinsame Auswahl vor der Vorschau
+            # auf die Körperstufe wechseln, sonst bewegt der Abschluss nur
+            # das Merkmal. Eine Mehrfachauswahl bezeichnet bereits die ganze
+            # Körpermenge und muss erhalten bleiben.
+            self.objectPicked.emit(self._selected or "")
         self._body_drag_from = point
         self._body_drag_offset = (0.0, 0.0)
         # "move", nicht "moving": Eine Rolle, die es nicht gibt, fällt still
@@ -10367,9 +11336,11 @@ class Viewport(QWidget):
             actor.set_position(
                 (base[0] + self._body_drag_offset[0], base[1] + self._body_drag_offset[1], base[2])
             )
+            self._sync_edge_preview(identifier)
             moved = True
         # Ein Bildaufbau für alle, nicht einer je Körper.
         if moved and self.renderer is not None:
+            self._layout_feature_labels()
             self.renderer.render()
 
     def finish_body_drag(self) -> None:
@@ -10906,7 +11877,9 @@ class Viewport(QWidget):
             actor = self._actors.get(object_id)
             if actor is not None:
                 actor.set_position(home)
+                self._sync_edge_preview(object_id)
         self._actor_home.clear()
+        self._queue_feature_label_layout()
 
     def _plane_point(self, x: int, y: int) -> tuple[float, float] | None:
         """Wo der Zeiger auf der Bettebene steht, in Weltkoordinaten."""

@@ -298,7 +298,8 @@ def test_retired_endpoint_is_404_without_state_or_mail(tmp_path: Path, method: s
                 request = Request(url, data=b"probe" if method == "POST" else None, method=method)
                 urlopen(request, timeout=1)
             except HTTPError as problem:
-                assert problem.code == 404
+                with problem:
+                    assert problem.code == 404
                 break
             except URLError:
                 time.sleep(0.05)

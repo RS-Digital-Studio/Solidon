@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import discover, tools
-from app.core.export import slicer_keys, slicer_profiles
+from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.handover import detect
 from app.core.knowledge import filaments, profiles
 from app.core.types import MaterialSlot, PrintSettings
@@ -781,6 +781,7 @@ class FilamentPanel(QWidget):
     #: Die Druckwerte gehören dem Projekt, nicht dem Regal. Das Hauptfenster
     #: öffnet den Dialog und schreibt das Ergebnis über die Sitzung zurück.
     overrideRequested = Signal(object)
+    printSettingsRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -814,6 +815,10 @@ class FilamentPanel(QWidget):
         buttons.addWidget(self.add_button)
         buttons.addWidget(self.settings_button)
         layout.addLayout(buttons)
+        self.return_to_print_button = QPushButton(tr("Zurück zu Druckeinstellungen"), self)
+        self.return_to_print_button.clicked.connect(self.printSettingsRequested)
+        self.return_to_print_button.hide()
+        layout.addWidget(self.return_to_print_button)
 
         self._used: tuple[tuple[MaterialSlot | None, str, str, int, bool], ...] = ()
         """Slot, Name, Farbe, Zahl der Körper und eigene Druckwerte."""
@@ -837,7 +842,14 @@ class FilamentPanel(QWidget):
         margins = layout.contentsMargins()
         gaps = max(layout.count() - 1, 0) * layout.spacing()
         buttons = max(self.add_button.sizeHint().height(), self.settings_button.sizeHint().height())
-        return margins.top() + margins.bottom() + gaps + self.hint.sizeHint().height() + buttons
+        back = (
+            0
+            if self.return_to_print_button.isHidden()
+            else self.return_to_print_button.sizeHint().height()
+        )
+        return (
+            margins.top() + margins.bottom() + gaps + self.hint.sizeHint().height() + buttons + back
+        )
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jede Spule zu sehen wäre.
@@ -916,9 +928,8 @@ class FilamentPanel(QWidget):
     ) -> None:
         """Trägt ein, welche Filamente die Körper der Szene benutzen.
 
-        Zusammengelegt über Name **und** Farbe — derselbe Schlüssel, über den
-        auch der Export die Extruder bildet (``threemf.merge_slots``). Zwei
-        Körper in derselben Farbe sind eine Spule, nicht zwei.
+        Zusammengelegt über Name, Farbe, Materialprofil und Materialart —
+        derselbe Schlüssel wie beim Export (``threemf.slot_identity``).
 
         **Ein Körper ohne Slot steht mit dabei**, als „Ohne Filament — Farbe
         des Teils" in der Körperfarbe. Er ist der Normalfall nach jedem
@@ -926,16 +937,15 @@ class FilamentPanel(QWidget):
         Modell eine leere Projekthälfte — während im Bild ein Körper stand,
         der sehr wohl in einer Farbe gedruckt wird (Robert, 27.08.2026).
         """
-        used: dict[tuple[str, str], tuple[MaterialSlot | None, int]] = {}
+        used: dict[threemf.SlotKey | None, tuple[MaterialSlot | None, int]] = {}
         for entry in objects:
             slots = getattr(entry, "material_slots", ()) or ()
             if not slots:
-                key = (str(tr("Ohne Filament — Farbe des Teils")), unpainted_colour())
-                previous = used.get(key, (None, 0))
-                used[key] = (None, previous[1] + 1)
+                previous = used.get(None, (None, 0))
+                used[None] = (None, previous[1] + 1)
                 continue
             for slot in slots:
-                key = (str(slot.name), shown_colour(int(slot.index), slot.colour))
+                key = threemf.slot_identity(slot)
                 previous = used.get(key, (slot, 0))
                 used[key] = (slot, previous[1] + 1)
         overrides = {
@@ -946,12 +956,14 @@ class FilamentPanel(QWidget):
         self._used = tuple(
             (
                 slot,
-                name,
-                colour,
+                str(slot.name) if slot is not None else tr("Ohne Filament — Farbe des Teils"),
+                shown_colour(int(slot.index), slot.colour)
+                if slot is not None
+                else unpainted_colour(),
                 count,
-                slot is not None and (slot.name, slot.colour) in overrides,
+                slot is not None and threemf.slot_identity(slot) in overrides,
             )
-            for (name, colour), (slot, count) in sorted(used.items())
+            for slot, count in sorted(used.values(), key=lambda item: str(item[0]))
         )
         self._fill()
 
@@ -971,7 +983,13 @@ class FilamentPanel(QWidget):
         if self._used:
             self._heading(tr("Im Projekt"))
             for slot, name, colour, count, has_override in self._used:
-                label = self._used_label(name, count)
+                shown_name = name
+                if slot is not None:
+                    if slot.material_type and slot.material_type.casefold() not in name.casefold():
+                        shown_name = f"{name} · {slot.material_type}"
+                    if slot.material:
+                        shown_name = f"{shown_name} · {slot.material}"
+                label = self._used_label(shown_name, count)
                 if has_override:
                     label = f"{label} · {tr('eigene Druckwerte')}"
                 item = QListWidgetItem(swatch(colour), label)

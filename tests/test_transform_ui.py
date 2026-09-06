@@ -22,6 +22,31 @@ from app.ui.transform_bar import TransformBar
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def test_the_values_bar_rotates_the_selected_feature_with_its_axis_and_angle(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Werte-Leiste liefert denselben Merkmalsauftrag wie ein Zug am Drehring."""
+    from app.core.scene.history import OperationDraft
+    from tests.test_viewport_decisions import _scene_with_a_hole_and_a_fillet
+
+    result = _scene_with_a_hole_and_a_fillet()
+    window.session.last_result = result
+    window.object_tree.show_scene(result)
+    window.object_tree.select_feature("obj_1", "hole_1")
+    drafts: list[OperationDraft] = []
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, entries, **kwargs: drafts.extend(entries) or True
+    )
+    window.transform_bar.role_buttons["rotate"].click()
+    window.transform_bar.axis.setCurrentIndex(1)
+    window.transform_bar.angle_value.setValue(37.0)
+    window.transform_bar.applyRequested.emit(*window.transform_bar.draft())
+    assert len(drafts) == 1
+    assert drafts[0].op == "rotate_feature"
+    assert drafts[0].inputs == ("obj_1",)
+    assert drafts[0].params == {"at_feature": "hole_1", "axis": "y", "angle": 37.0}
+
+
 @pytest.fixture
 def window(qt_app: QApplication) -> MainWindow:
     """Ein Fenster wie in ``test_ui.py`` — aufgeräumt wird zentral in conftest."""

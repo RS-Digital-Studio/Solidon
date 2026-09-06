@@ -11,9 +11,19 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
+from itertools import pairwise
 from typing import Any, Final, cast
 
-from PySide6.QtCore import QByteArray, QPoint, QSignalBlocker, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import (
+    QByteArray,
+    QItemSelectionModel,
+    QPoint,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -42,7 +52,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import drawing
+from app.core import drawing, expressions
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
@@ -65,7 +75,9 @@ from app.core.errors import (
     Action,
     AppError,
 )
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
+from app.core.perceive.relations import FeatureActionGroup
 from app.core.registry import MENU_TWINS, REGISTRY
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.registry.surfaces import folded_groups
@@ -79,7 +91,10 @@ from app.ui.icons import OVERSAMPLING, icon, icon_name_for
 from app.ui.labels import (
     LengthSpin,
     NumberSpin,
+    choice_label,
+    choice_note,
     compact_length,
+    explain_choices,
     feature_label,
     feature_measure,
     feature_name,
@@ -1106,6 +1121,7 @@ class ObjectTree(QWidget):
     def show_scene(self, result: EvaluationResult | None, document: Document | None = None) -> None:
         selected = self.selected_objects()
         selected_feature = self.selected_feature()
+        selected_features = self.selected_features()
         self._result = result
         self._document = document
         self.tree.clear()
@@ -1198,16 +1214,20 @@ class ObjectTree(QWidget):
             # zwei Bohrungen Ø 5,44 mit je einer Senkung Ø 8,16, die im Baum
             # vier Zeilen ohne erkennbaren Zusammenhang waren).
             #
-            # Die Zuordnung kommt aus dem Kern (`widening_at_the_mouth`) und
+            # Die Zuordnung kommt aus dem Kern (`cavity_chains`) und
             # nicht aus einer zweiten Rechnung hier: Dieselbe Nachbarschaft
             # entscheidet, was der Prüfbericht meldet, wenn die Bohrung wächst.
-            from app.core.perceive.relations import widening_at_the_mouth
+            from app.core.perceive.relations import cavity_chains
 
             under: dict[str, str] = {}
-            for feature_id, feature in entry.features.items():
-                widening = widening_at_the_mouth(feature, entry.features)
-                if widening is not None:
-                    under[widening.id] = feature_id
+            chains = (
+                cavity_chains(entry.features, as_mesh_data(entry.mesh))
+                if len(entry.features) > 1
+                else ()
+            )
+            for chain in chains:
+                for parent, nested in pairwise(chain):
+                    under[nested.id] = parent.id
             made: dict[str, QTreeWidgetItem] = {}
             waiting: list[tuple[str, QTreeWidgetItem]] = []
             for feature_id, feature in entry.features.items():
@@ -1290,7 +1310,10 @@ class ObjectTree(QWidget):
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
-        self._restore(selected, selected_feature)
+        if len(selected_features) > 1:
+            self.select_features(selected_features)
+        else:
+            self._restore(selected, selected_feature)
         self._fit()
         # Erst steht der Baum, dann kommen die Bilder nach. Andersherum wartet
         # der Nutzer auf eine Liste, die längst fertig gerechnet ist.
@@ -1392,28 +1415,37 @@ class ObjectTree(QWidget):
             return
         wanted = set(objects)
         self._order = list(objects)
-        for index in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(index)
-            if item is None or item.data(0, Qt.ItemDataRole.UserRole) not in wanted:
-                continue
-            if feature_id is not None and len(wanted) == 1:
-                # **Über alle Ebenen, nicht nur die erste.** Die Merkmale eines
-                # eingesetzten Bausteins stehen unter seinem Knoten; eine Suche
-                # in den direkten Kindern findet dort den Knoten und nicht das
-                # Merkmal. Ein Klick im Viewport auf eine Verrundung des
-                # Einhängers markierte damit nichts, und aus dem Prüfbericht
-                # führte der Sprung ins Leere.
-                found = _feature_item(item, feature_id)
-                if found is not None:
-                    found.setSelected(True)
-                    parent = found.parent()
-                    while parent is not None:
-                        parent.setExpanded(True)
-                        parent = parent.parent()
-                else:
-                    item.setSelected(True)
-                continue
-            item.setSelected(True)
+        # Erst die gesamte Auswahl wiederherstellen: Eine Zwischenmeldung
+        # nach dem ersten Körper würde die übrigen aus _order entfernen.
+        with QSignalBlocker(self.tree):
+            for index in range(self.tree.topLevelItemCount()):
+                item = self.tree.topLevelItem(index)
+                if item is None or item.data(0, Qt.ItemDataRole.UserRole) not in wanted:
+                    continue
+                if feature_id is not None and len(wanted) == 1:
+                    # Merkmale können unter Baustein- und Gruppenknoten liegen.
+                    found = _feature_item(item, feature_id)
+                    if found is not None:
+                        found.setSelected(True)
+                        self.tree.setCurrentItem(
+                            found, 0, QItemSelectionModel.SelectionFlag.NoUpdate
+                        )
+                        parent = found.parent()
+                        while parent is not None:
+                            parent.setExpanded(True)
+                            parent = parent.parent()
+                    else:
+                        item.setSelected(True)
+                    continue
+                item.setSelected(True)
+        self._on_selection()
+        QTimer.singleShot(0, self, self._reveal_current)
+
+    def _reveal_current(self) -> None:
+        """Nach dem Layout die heutige Auswahl zeigen; kein alter Zeiger reist im Timer."""
+        current = self.tree.currentItem()
+        if current is not None and current.isSelected():
+            self.tree.scrollToItem(current, QAbstractItemView.ScrollHint.EnsureVisible)
 
     def selected(self) -> ObjectId | None:
         items = self.tree.selectedItems()
@@ -1510,6 +1542,30 @@ class ObjectTree(QWidget):
         self.tree.clearSelection()
         self._restore((object_id,), feature_id)
         self._fit()
+
+    def select_features(self, references: Sequence[tuple[str, str]]) -> None:
+        """Vollständige Merkmalsbezüge auch über zwei Körper hinweg wiederherstellen."""
+        with QSignalBlocker(self.tree):
+            self.tree.clearSelection()
+            for object_id, feature_id in references:
+                for index in range(self.tree.topLevelItemCount()):
+                    body = self.tree.topLevelItem(index)
+                    if body is None or body.data(0, Qt.ItemDataRole.UserRole) != object_id:
+                        continue
+                    item = _feature_item(body, feature_id)
+                    if item is not None:
+                        item.setSelected(True)
+                        self.tree.setCurrentItem(
+                            item, 0, QItemSelectionModel.SelectionFlag.NoUpdate
+                        )
+                        parent = item.parent()
+                        while parent is not None:
+                            parent.setExpanded(True)
+                            parent = parent.parent()
+                    break
+        self._on_selection()
+        self._fit()
+        QTimer.singleShot(0, self, self._reveal_current)
 
     def _on_selection(self) -> None:
         self._remember_order()
@@ -2400,13 +2456,26 @@ class ParameterPanel(QWidget):
             self._fit()
             return
 
+        problem: AppError | None = None
+        try:
+            values = expressions.resolve(document.parameters)
+        except AppError as error:
+            values = {}
+            problem = error
         for name, parameter in document.parameters.items():
             unit = self._unit_editor(name, str(parameter.unit or ""))
             if parameter.expression:
                 # Abgeleitete Werte werden gezeigt, nicht bearbeitet — der Ausdruck
                 # besitzt sie.
-                label = QLabel(localised(f"{parameter.value:.2f}"), self)
-                label.setToolTip(parameter.expression)
+                value = values.get(name)
+                label = QLabel(
+                    localised(f"{value:.2f}") if value is not None else tr("Ausdruck prüfen"), self
+                )
+                note = parameter.expression
+                if problem is not None:
+                    note += f"\n{problem}"
+                label.setToolTip(note)
+                label.setAccessibleDescription(note)
                 # Wie die Spinbox darf auch die reine Anzeige in der festen
                 # linken Karte den Restplatz nutzen. Ohne ``Ignored`` machte
                 # allein „42,00“ die Karte breiter als ihre vorgesehenen
@@ -3237,14 +3306,18 @@ class ReportPanel(QWidget):
         items = self.list.selectedItems()
         if len(items) != 1:
             return
-        finding: Finding | None = items[0].data(Qt.ItemDataRole.UserRole)
+        self._run_action_for(items[0], action_id)
+
+    def _run_action_for(self, item: QListWidgetItem, action_id: str) -> None:
+        """Knopf und Kontextmenü benutzen dieselbe Ziel- und Abbruchentscheidung."""
+        finding: Finding | None = item.data(Qt.ItemDataRole.UserRole)
         # **Eine Sammelzeile fragt, für welche Körper sie gelten soll.** Sie
         # vertritt sechs oder zwölf, und ihr Befund trägt nur den ersten davon;
         # ihn stillschweigend zu nehmen wäre die Handlung an einem zufälligen
         # Ziel. Gefragt wird nur, wo es etwas zu wählen gibt — bei einem
         # einzigen Körper wäre der Dialog eine Bestätigung vor einer
         # rücknehmbaren Handlung, und die verbietet Regel 19.
-        bodies: tuple[str, ...] = items[0].data(_BODIES_ROLE) or ()
+        bodies: tuple[str, ...] = item.data(_BODIES_ROLE) or ()
         if finding is not None and len(bodies) > 1:
             action = next(
                 (
@@ -3819,10 +3892,7 @@ class ReportPanel(QWidget):
         picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))
         if picked is None:
             return
-        # Die Handler des Fensters arbeiten auf einem ``AppError`` — sie
-        # kommen aus dem Fehlerdialog. Ein Befund ist keiner, trägt aber
-        # dieselben zwei Angaben, die sie brauchen: den Körper und die Zahlen.
-        handlers[chosen[picked].id](as_error(finding, self._document))
+        self._run_action_for(item, chosen[picked].id)
 
 
 class MeasurementLabel(QLabel):
@@ -4042,6 +4112,36 @@ def _and_then(gathered: str, further: str) -> str:
     return f"{gathered} und {further}"
 
 
+def _feature_group_note(group: FeatureActionGroup) -> str:
+    """Die Belege und Grenzen der Kern-Gruppe als lesbare Auskunft."""
+    evidence = {
+        "same_target_dimensions": tr("Gleiches Ausgangsmaß für diese Änderung."),
+        "complete_surface_patch": tr("Die vollständige bearbeitete Form stimmt überein."),
+        "parallel_axes": tr("Die Achsen sind parallel ausgerichtet."),
+        "shared_boundary_role": tr("Die Merkmale haben dieselbe Rolle in ihrer Bohrungskette."),
+        "translation_consistent": tr("Die zugehörigen Abschnitte liegen gleich zueinander."),
+    }
+    reasons = {
+        "selected_feature_unavailable": tr("Das gewählte Merkmal ist nicht mehr vorhanden."),
+        "action_not_applicable": tr("Diese Handlung passt nicht zu den weiteren Merkmalen."),
+        "ambiguous_cavity_chain": tr("Die zugehörigen Bohrungsabschnitte sind nicht eindeutig."),
+        "cavity_topology_unavailable": tr(
+            "Die Verbindung der Bohrungsabschnitte ist nicht sicher erkannt."
+        ),
+        "dimensions_unavailable": tr("Die benötigten Maße sind nicht sicher erkannt."),
+        "complete_shape_unavailable": tr("Die vollständige Form ist nicht sicher vergleichbar."),
+        "orientation_unavailable": tr("Die Ausrichtung ist nicht sicher erkannt."),
+        "relative_position_unavailable": tr(
+            "Die Lage der zugehörigen Abschnitte ist nicht sicher erkannt."
+        ),
+    }
+    parts = [str(evidence[key]) for key in group.evidence] if len(group.members) > 1 else []
+    if group.uncertain:
+        parts.append(str(tr("Nicht sicher zugeordnete Merkmale bleiben ausgenommen.")))
+        parts.extend(dict.fromkeys(str(reasons[item.reason]) for item in group.uncertain))
+    return " ".join(parts)
+
+
 class FeaturePanel(QWidget):
     """Was man mit dem gewählten Merkmal tun kann — als Felder, nicht als Menü.
 
@@ -4084,6 +4184,7 @@ class FeaturePanel(QWidget):
     #: ein Empfänger, der beim falschen Signal ausführt, schreibt einen Schritt
     #: in den Verlauf, den niemand ausgelöst hat.
     valuesChanged = Signal(str, dict)
+    fitRequested = Signal(str, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -4113,7 +4214,10 @@ class FeaturePanel(QWidget):
         self._rows.addStretch(1)
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
-        self._alike: tuple[str, ...] = ()
+        self._groups: dict[str, FeatureActionGroup] = {}
+        self._fit_button: QPushButton | None = None
+        self._fit_choice: QComboBox | None = None
+        self._fit_reason = ""
 
     @property
     def feature_id(self) -> str | None:
@@ -4128,29 +4232,39 @@ class FeaturePanel(QWidget):
             widget.deleteLater()
         self._built.clear()
         self._feature_id = None
-        self._alike = ()
+        self._groups = {}
+        self._fit_button = None
+        self._fit_choice = None
         self._empty.setVisible(True)
 
     def show_feature(
         self,
         feature_id: str,
         feature: Feature,
-        alike: Sequence[str] = (),
         *,
         features: Mapping[str, Feature] | None = None,
+        mesh: MeshData | None = None,
     ) -> None:
         """Die Handlungen dieses Merkmals als Zeilen — Reihenfolge aus dem Kern.
 
-        ``alike`` sind die **gleichartigen Geschwister** am selben Körper. Wo es
-        sie gibt, bekommt jede Handlung einen Haken „auf alle N anwenden": Sechs
-        Bohrungen auf ein neues Maß zu bringen war bis dahin sechsmal derselbe
-        Weg, und der Objektbaum führt sie längst unter einem Dach.
+        Gleichartige Merkmale werden je Handlung durch den Kern belegt:
+        Eine Maßänderung braucht andere Übereinstimmungen als das Versetzen
+        einer ganzen Bohrungskette. ``mesh``
+        belegt die topologische Kette einer mehrteiligen Senkung; optional bleibt
+        es für Aufrufer, die nur die einzelne Merkmalsauskunft brauchen.
         """
+        from app.core.perceive import relations
         from app.core.perceive.actions import actions_for
 
+        cavity: tuple[Feature, ...] = ()
+        if features is not None:
+            cavity = (
+                relations.cavity_chain_at(feature, features, mesh)
+                if mesh is not None
+                else relations.bore_and_widening_at(feature, features)
+            ) or ()
         self.clear()
         self._feature_id = feature_id
-        self._alike = tuple(alike)
         self._empty.setVisible(False)
 
         heading = QLabel(f"{feature_name(feature_id, feature)}  ·  {feature_measure(feature)}")
@@ -4159,6 +4273,35 @@ class FeaturePanel(QWidget):
         set_level(heading, "section")
         self._rows.insertWidget(self._rows.count() - 1, heading)
         self._built.append(heading)
+
+        if features is not None:
+            sleeve = relations.sleeve_at(feature, features)
+            if sleeve is not None:
+                box = QWidget(self)
+                form = QFormLayout(box)
+                form.setContentsMargins(0, 0, 0, 0)
+                form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+                for label, value in (
+                    (tr("Innendurchmesser"), sleeve.bore_diameter),
+                    (tr("Außendurchmesser"), sleeve.outer_diameter),
+                    (tr("Wandstärke"), sleeve.thickness),
+                ):
+                    field = QLabel(length(value), box)
+                    field.setAccessibleName(label)
+                    form.addRow(label, field)
+                self._rows.insertWidget(self._rows.count() - 1, box)
+                self._built.append(box)
+
+        # Qt bildet Control für die jeweilige Plattform ab; die sichtbare Taste
+        # kommt aus QKeySequence statt aus einem fest eingebauten Windows-Text.
+        key = (
+            QKeySequence("Ctrl+A").toString(QKeySequence.SequenceFormat.NativeText)[:-1].rstrip("+")
+        )
+        self.show_note(
+            tr(
+                "Für eine Passung ein Gegenstück mit {key} und Klick im Objektbaum hinzuwählen."
+            ).format(key=key)
+        )
 
         # **Was die Anwendung über diese Bohrung weiß, sagt sie hier.**
         # ``bore_advice`` steht seit je im Bohrdialog und beantwortet die
@@ -4169,7 +4312,15 @@ class FeaturePanel(QWidget):
         if feature.kind == "hole" and diameter is not None:
             from app.core.scene.placement import bore_advice
 
-            said, _choices = bore_advice(float(diameter))
+            said, _choices = bore_advice(
+                float(diameter),
+                ask=False,
+                measured=localised(f"{float(diameter):.2f}"),
+                feature=feature,
+                features=features,
+                mesh=mesh,
+                cavity=cavity,
+            )
             note = QLabel(said, self)
             note.setWordWrap(True)
             note.setStatusTip(said)
@@ -4177,7 +4328,17 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, note)
             self._built.append(note)
 
-        actions = actions_for(feature, features)
+        actions = actions_for(feature, features, mesh=mesh, cavity=cavity)
+        if features is not None and mesh is not None:
+            self._groups = {
+                group.action: group
+                for group in relations.alike_for_actions(
+                    (str(action.op) for action in actions if action.op),
+                    feature_id,
+                    features,
+                    mesh,
+                )
+            }
         # **Derselbe Grund steht einmal da, nicht fünfmal.** Die abgelehnten
         # Handlungen tragen ihren Satz je Zeile, und bei den Arten, an denen
         # gar nichts geht, ist es immer wieder derselbe: An einer Fläche
@@ -4220,9 +4381,9 @@ class FeaturePanel(QWidget):
         Klicks ins Bild — zwei Zeilen im Baum anzuklicken ist der kürzere Weg,
         und markiert hat man sie ohnehin schon.
 
-        **Eine Auskunft und keine Handlung** (Regel 2): Hier wird nichts
-        geändert und nichts in den Verlauf geschrieben. Deshalb steht auch kein
-        Knopf darunter.
+        Diese Abstandsauskunft verändert weder Geometrie noch Verlauf (Regel 2).
+        Der Aufrufer kann darunter eine passende Prüfbeziehung anbieten;
+        deren ausdrückliche Anlage läuft getrennt über die Sitzung.
 
         Gezeigt werden der räumliche Abstand und die drei Achsabstände
         einzeln — die Mitte-zu-Mitte-Strecke beantwortet „passt der Schlüssel
@@ -4273,6 +4434,81 @@ class FeaturePanel(QWidget):
         self._rows.insertWidget(self._rows.count() - 1, box)
         self._built.append(box)
 
+    def show_note(self, text: str) -> None:
+        """Ein sichtbarer, umgebrochener Hinweis im aktuellen Merkmalsbereich."""
+        note = QLabel(text, self)
+        note.setWordWrap(True)
+        note.setAccessibleDescription(text)
+        fit_wrapped(note)
+        self._rows.insertWidget(self._rows.count() - 1, note)
+        self._built.append(note)
+
+    def show_fit_choices(self, choices: Mapping[str, str], token: object) -> None:
+        """Kerngeprüfte Arten und ihre Sollauskunft; nur der ausdrückliche Klick schreibt."""
+        box = QWidget(self)
+        form = QFormLayout(box)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        choice = QComboBox(box)
+        choice.setAccessibleName(tr("Passungsart"))
+        if len(choices) > 1:
+            choice.addItem(tr("Passungsart wählen …"), "")
+        for kind in choices:
+            choice.addItem(choice_label(kind), kind)
+        explain_choices(choice)
+        form.addRow(tr("Passungsart"), choice)
+        target = QLabel(box)
+        target.setWordWrap(True)
+        target.setAccessibleName(tr("Sollmaß"))
+        fit_wrapped(target)
+        form.addRow(target)
+        button = QPushButton(tr("Passung anlegen"), box)
+        button.setAccessibleDescription(
+            tr("Speichert die Prüfbeziehung. Rückgängig entfernt sie wieder.")
+        )
+        make_primary(button)
+        form.addRow(button)
+        self._fit_button = button
+        self._fit_choice = choice
+
+        def changed() -> None:
+            kind = str(choice.currentData() or "")
+            text = choices.get(kind, "")
+            note = choice_note(kind) or ""
+            if note:
+                text = f"{note}\n{text}"
+            for widget in (choice, form.labelForField(choice)):
+                if widget is not None:
+                    widget.setToolTip(note)
+                    widget.setStatusTip(note)
+                    widget.setAccessibleDescription(note)
+            target.setText(text)
+            self.limit_fit(self._fit_reason)
+
+        choice.currentIndexChanged.connect(changed)
+
+        def requested() -> None:
+            button.setEnabled(False)
+            self.fitRequested.emit(str(choice.currentData()), token)
+
+        button.clicked.connect(requested)
+        self._rows.insertWidget(self._rows.count() - 1, box)
+        self._built.append(box)
+        changed()
+
+    def limit_fit(self, reason: str) -> None:
+        """Nur den schreibenden Passungsknopf sperren, seine Auskunft bleibt sichtbar."""
+        self._fit_reason = reason
+        if self._fit_button is not None and self._fit_choice is not None:
+            chosen = bool(self._fit_choice.currentData())
+            note = reason or ("" if chosen else tr("Wählen Sie die gewünschte Passungsart."))
+            self._fit_button.setEnabled(not reason and chosen)
+            self._fit_button.setToolTip(note)
+            self._fit_button.setStatusTip(note)
+            self._fit_button.setAccessibleDescription(
+                note or tr("Speichert die Prüfbeziehung. Rückgängig entfernt sie wieder.")
+            )
+
     def _build_action(self, action: Any) -> QWidget:
         """Eine Handlung: Titel, ihre Felder untereinander, dann ihr Knopf.
 
@@ -4295,8 +4531,8 @@ class FeaturePanel(QWidget):
             # ein Satz, und ein Satz gehört nicht in eine Formularspalte.
             name = QLabel(f"{action.title} — {action.reason}", box)
             name.setWordWrap(True)
-            name.setEnabled(False)
             name.setStatusTip(str(action.reason))
+            name.setAccessibleDescription(str(action.reason))
             fit_wrapped(name)
             layout.addWidget(name)
             return box
@@ -4350,15 +4586,23 @@ class FeaturePanel(QWidget):
         # anwenden" wäre eine Frage ohne Unterschied; ab dem zweiten
         # gleichartigen Merkmal spart er fünf Wege.
         every: QCheckBox | None = None
-        if self._alike:
+        group = self._groups.get(str(action.op))
+        if group is not None and len(group.members) > 1:
             every = QCheckBox(
-                tr("Auf alle {count} gleichartigen anwenden").format(count=len(self._alike) + 1),
+                tr("Auf alle {count} gleichartigen anwenden").format(count=len(group.members)),
                 box,
             )
             every.setStatusTip(
                 tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
             )
             layout.addWidget(every)
+        if group is not None and (len(group.members) > 1 or group.uncertain):
+            said = _feature_group_note(group)
+            note = QLabel(said, box)
+            note.setWordWrap(True)
+            note.setAccessibleDescription(said)
+            fit_wrapped(note)
+            layout.addWidget(note)
 
         button = QPushButton(str(action.title), box)
         button.setStatusTip(str(action.reason) or str(action.title))
@@ -4462,7 +4706,14 @@ class FeaturePanel(QWidget):
         """
         params = self._values(fields, widgets)
         if every is not None and every.isChecked() and self._feature_id is not None:
-            self.operationRequestedForEach.emit(op, params, [self._feature_id, *self._alike])
+            group = self._groups.get(op)
+            if group is None:
+                return
+            targets = [member.target for member in group.members]
+            if self._feature_id in targets:
+                targets.remove(self._feature_id)
+                targets.insert(0, self._feature_id)
+            self.operationRequestedForEach.emit(op, params, targets)
             return
         self.operationRequested.emit(op, params)
 

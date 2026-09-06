@@ -153,6 +153,7 @@ from app.core.scene import (
     values_for,
     values_for_object,
 )
+from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.history import repair_is_available
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
@@ -167,7 +168,10 @@ from app.core.tour import tour_for
 from app.core.types import (
     Bone,
     Feature,
+    FeatureRef,
     Finding,
+    Fit,
+    FitKind,
     MaterialSlot,
     ObjectId,
     Origin,
@@ -854,7 +858,7 @@ class _PartExportWorker(Worker):
         except AppError as error:
             self.failed.emit(error)
             return
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             self.failed.emit(
                 ValidationError(
                     field="title",
@@ -1316,6 +1320,7 @@ class MainWindow(QMainWindow):
         aus. Hier steht, wofür ``_map_ready`` ihn nachholen soll.
         """
         self._map_worker: Any = None
+        self._map_request: object | None = None
         """Die Karte, die gerade gerechnet wird (§18.9). Eine neuere Anfrage ersetzt sie."""
         """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
     halten teuer."""
@@ -1349,6 +1354,7 @@ class MainWindow(QMainWindow):
         """Die laufende G-Code-Gegenprobe und ihre ausgewählte Datei (§2.8)."""
         self._source_worker: Any = None
         self._source_path: Path | None = None
+        self._source_project: object | None = None
         self._source_kind = ""
         self._source_callback: Callable[[tuple[str, str] | None], None] | None = None
         """Die nachgereichte Quelle eines offenen Operationsdialogs."""
@@ -1625,6 +1631,7 @@ class MainWindow(QMainWindow):
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
         self.filaments = FilamentPanel(self)
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
+        self.filaments.printSettingsRequested.connect(self.action_print_settings)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -1632,6 +1639,9 @@ class MainWindow(QMainWindow):
         # über einem Modell, das daneben keinen Platz hatte.
         self.feature_panel = FeaturePanel(self)
         self.feature_panel.operationRequested.connect(self._apply_from_feature_panel)
+        self.feature_panel.fitRequested.connect(
+            self._add_fit_from_panel, Qt.ConnectionType.QueuedConnection
+        )
         # **Die Vorschau wartet, das Tippen nicht.** Jeder Tastendruck in einem
         # Zahlenfeld wäre sonst eine Boolesche über das ganze Teil; dieselbe
         # Verzögerung wie im Operationsdialog (§18.7).
@@ -1691,6 +1701,7 @@ class MainWindow(QMainWindow):
         )
         self.viewport.measurementTaken.connect(self._on_measurement)
         self.viewport.sceneFailed.connect(self._viewport_failed)
+        self.viewport.sceneApplied.connect(self._sync_section_controls)
         self.section_bar = SectionBar(self)
         self.section_bar.sectionChanged.connect(self._on_section)
         self.measure_bar = MeasureBar(self)
@@ -3528,6 +3539,7 @@ class MainWindow(QMainWindow):
         # entwerten; außerdem trägt der Skizzeneditor selbst Entf. Deshalb gilt
         # hier dieselbe Sperre wie für alle anderen schreibenden Aktionen.
         self.history_panel.remove_action.setEnabled(not locked and not gesturing)
+        self.feature_panel.limit_fit(self._manual_fit_reason())
 
         # Welcher Bauart die Auswahl ist — das Menü fragte bisher nur, wie
         # viele Objekte darin liegen. „Verrunden" war damit bei einem Netz
@@ -4790,16 +4802,20 @@ class MainWindow(QMainWindow):
         allein zeigte auf eine Kopfzeile, unter der nichts steht — dieselbe
         Zusage wie beim Tourschritt (:meth:`_flash_area`).
 
-        Der Dialog bleibt dabei offen und tritt nur zurück: Er ist modal, also
-        wäre der Weg dorthin sonst einer, den man nicht gehen kann. Beim
-        Zurückkommen liest die Kopfzeile neu, was die Spulen jetzt sagen.
+        Die Änderungen bleiben beim regulären Dialogabschluss erhalten. Erst
+        nach dem Abschluss ist die Hauptansicht wieder bedienbar; der sichtbare
+        Rückweg öffnet die Druckeinstellungen mit den aktualisierten Spulen.
         """
-        dialog.hide()
+        dialog.finished.connect(weak_slot(self, MainWindow._focus_filaments))
+        dialog.accept()
+
+    def _focus_filaments(self) -> None:
+        """Die freigegebene Filamentkarte samt Rückweg in den Vordergrund holen."""
+        self.filaments.return_to_print_button.show()
         open_section(self.filaments)
+        self.filaments.list.setFocus()
         self.filaments.setStyleSheet(f"border: 2px solid {_flash_colour(self.filaments)};")
         QTimer.singleShot(FLASH_MS, self, lambda: self.filaments.setStyleSheet(""))
-        dialog.show()
-        dialog.refresh_materials()
 
     def _offer_generator_nodes(self, dialog: GenerateDialog) -> None:
         """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
@@ -4892,6 +4908,7 @@ class MainWindow(QMainWindow):
         # Textfassung und lässt dabei wählen, ob es so sein soll; danach steht
         # die Wahl in den Einstellungen. Er hält nichts an (Regel 19) — hier
         # verlässt nichts das Gerät, anders als beim KI-Hinweis.
+        self.filaments.return_to_print_button.hide()
         ensure_print_disclosure(self.settings, self)
         # Der Wartezeiger bleibt für den Aufbau: die Suche nach dem Slicer im
         # Konstruktor kostet eine knappe halbe Sekunde — unter der Grenze aus
@@ -8423,6 +8440,16 @@ class MainWindow(QMainWindow):
         spec = REGISTRY.get(twin)
         if feature.kind not in (spec.applies_to or ()):
             return None
+        if twin == "rotate_feature":
+            return OperationDraft(
+                op=twin,
+                inputs=(object_id,),
+                params={
+                    "at_feature": feature_id,
+                    "axis": params["axis"],
+                    "angle": params["angle"],
+                },
+            )
         centre = feature.params.get("centre")
         if centre is None or len(centre) != 3:
             return None
@@ -8594,6 +8621,8 @@ class MainWindow(QMainWindow):
         """
         object_id = self.object_tree.selected()
         if kind is None or object_id is None:
+            self._cancel_map_worker()
+            self._finding_awaiting_map = None
             self.viewport.set_analysis_map(None, None)
             self.analysis_bar.show_legend(None)
             if kind is not None:
@@ -8609,6 +8638,11 @@ class MainWindow(QMainWindow):
         antwortet, sieht kaputt aus. Eine neuere Anfrage ersetzt eine wartende —
         niemand will die Karte, von der er weggeklickt hat.
         """
+        self._cancel_map_worker()
+        self._retire(self._map_worker)
+        self._map_worker = None
+        self.viewport.set_analysis_map(None, None)
+        self.analysis_bar.show_legend(None)
         result = self.session.last_result
         entry = result.scene.objects.get(object_id) if result else None
         if entry is None:
@@ -8620,16 +8654,30 @@ class MainWindow(QMainWindow):
             return
 
         self.analysis_bar.show_problem(tr("Die Analysekarte wird berechnet …"))
+        request = object()
+        self._map_request = request
         worker = _MapWorker(kind, entry, self.session.profile, result.scene if result else None)
         # Stirbt der Arbeiter unerwartet, darf die Legende nicht für immer
         # „wird berechnet" sagen (Gesamtreview I-2): Wartezustand lösen, der
         # Grund geht den InternalError-Weg (§33.1).
-        worker.crashed.connect(self._map_crashed)
+        worker.crashed.connect(
+            lambda detail: (
+                self._map_crashed(detail) if self._map_is_current(request, result, key) else None
+            )
+        )
         worker.done.connect(
-            lambda analysis, key=key, object_id=object_id: self._map_ready(analysis, key, object_id)
+            lambda analysis: (
+                self._map_ready(analysis, key, object_id)
+                if self._map_is_current(request, result, key)
+                else None
+            )
         )
         worker.tooLarge.connect(
-            lambda limit, count=entry.mesh.triangle_count: self._map_too_large(count, limit)
+            lambda limit: (
+                self._map_too_large(entry.mesh.triangle_count, limit)
+                if self._map_is_current(request, result, key)
+                else None
+            )
         )
         # **Nicht** auf ``None`` setzen, wenn der Arbeiter fertig ist.
         #
@@ -8648,17 +8696,27 @@ class MainWindow(QMainWindow):
         # Vorher bekommt er das Abbruchzeichen: Sein Ergebnis will niemand
         # mehr, und bis er von allein fertig ist, rechnet er gegen den, der
         # gerade startet (§18.4).
-        self._cancel_map_worker()
-        self._retire(self._map_worker)
         self._map_worker = worker
         worker.finished.connect(lambda done=worker: self._map_worker_done(done))
         self._leash.start(worker)
 
     def _cancel_map_worker(self) -> None:
         """Der laufenden Karte sagen, dass niemand mehr auf sie wartet."""
+        self._map_request = None
         worker = self._map_worker
         if worker is not None and worker.isRunning():
             worker.cancel()
+
+    def _map_is_current(
+        self, request: object, result: EvaluationResult | None, key: tuple[str, str, int]
+    ) -> bool:
+        """Auch Absagen und Fehler gehören ihrer Anfrage und ausgewerteten Szene."""
+        return (
+            self._map_request is request
+            and self.session.last_result is result
+            and self.analysis_bar.chosen() == key[1]
+            and self.object_tree.selected() == key[0]
+        )
 
     def _map_worker_done(self, worker: Any) -> None:
         if self._map_worker is worker:
@@ -8692,6 +8750,7 @@ class MainWindow(QMainWindow):
         groß" beantwortet nicht, um wie viel — und genau das entscheidet, ob
         das Verringern eine Kleinigkeit oder ein Verlust an Form ist.
         """
+        self.viewport.set_analysis_map(None, None)
         self.analysis_bar.show_problem(
             tr(
                 "Für eine Analysekarte ist dieses Modell zu groß: "
@@ -8724,6 +8783,7 @@ class MainWindow(QMainWindow):
         )
 
     def _map_crashed(self, detail: str) -> None:
+        self.viewport.set_analysis_map(None, None)
         self.analysis_bar.show_problem(tr("Die Analysekarte ließ sich nicht berechnen."))
         self._on_error(InternalError(detail=detail))
 
@@ -9028,7 +9088,7 @@ class MainWindow(QMainWindow):
         backend = self.session.agent_backend
         try:
             target = target_for_backend(backend)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             result = DisclosureResult.FAILED
         else:
             result = (
@@ -9653,49 +9713,161 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry is not None else None
         if entry is not None and feature is not None:
             self.measurements.setText(f"{entry.name} · {feature_label(feature_id, feature)}")
-            # **Die gleichartigen Geschwister kommen mit.** Der Objektbaum
-            # führt sie längst unter einem Dach; das Panel bietet damit an, eine
-            # Handlung für alle zu tun, statt sie sechsmal zu wiederholen.
-            alike = [
-                other
-                for other, candidate in entry.features.items()
-                if other != feature_id and candidate.kind == feature.kind
-            ]
-            self.feature_panel.show_feature(feature_id, feature, alike, features=entry.features)
+            self.feature_panel.show_feature(
+                feature_id,
+                feature,
+                features=entry.features,
+                mesh=as_mesh_data(entry.mesh),
+            )
             self.feature_dock.reveal()
         else:
             self.feature_panel.clear()
 
     def _on_features_selected(self, chosen: list[Any]) -> None:
-        """Zwei markierte Merkmale: das Panel zeigt, wie weit sie auseinander
-        stehen.
-
-        **Nur bei genau zweien und nur am selben Körper.** Bei einem gilt der
-        gewöhnliche Weg (:meth:`_on_feature_selected` hat ihn schon gefüllt);
-        bei dreien gibt es keine Strecke, sondern drei, und welche gemeint
-        wäre, kann niemand wissen. Über zwei Körper hinweg wäre der Abstand
-        zwar rechenbar, aber die beiden stehen in verschiedenen Verläufen — was
-        man damit täte, ist eine andere Frage als „wie weit sitzen die zwei
-        Bohrungen in diesem Teil".
-        """
-        object_ids = {object_id for object_id, _feature_id in chosen}
-        if len(object_ids) == 1:
-            self.viewport.select_features([feature_id for _object_id, feature_id in chosen])
+        """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
+        if chosen:
+            self.viewport.select_feature_refs(chosen)
+            # **Die ganzen Körper daneben bleiben gewählt.** ``select_feature_refs``
+            # merkt sich die Besitzer der Merkmale als Auswahl; ein zweiter
+            # Körper, der ohne Merkmal im Baum markiert ist, fiel damit aus dem
+            # Bild — bewegt hätte ihn ein Zug an der Leiste trotzdem
+            # (``inputs_for_transform``, dieselbe Menge wie ``selected_objects``).
+            # Der Baum kennt die ganze Auswahl, also kommt sie von dort; die
+            # Merkmalsbezüge bleiben stehen, weil ihre Besitzer darin liegen.
+            bodies = self.object_tree.selected_objects()
+            if len(bodies) > 1:
+                self.viewport.select(bodies[0], more=bodies[1:])
         if len(chosen) != 2:
+            if len(chosen) > 2:
+                self.feature_panel.show_note(
+                    tr("Eine Passung verbindet zwei Merkmale. Wählen Sie genau zwei aus.")
+                )
             return
         (first_object, first_id), (second_object, second_id) = chosen
-        if first_object != second_object:
-            return
         result = self.session.last_result
-        entry = result.scene.objects.get(first_object) if result is not None else None
-        if entry is None:
+        if result is None:
+            return
+        entry = result.scene.objects.get(first_object)
+        other = result.scene.objects.get(second_object)
+        if entry is None or other is None:
             return
         first = entry.features.get(first_id)
-        second = entry.features.get(second_id)
+        second = other.features.get(second_id)
         if first is None or second is None:
             return
         self.feature_panel.show_pair(first_id, first, second_id, second)
         self.feature_dock.reveal()
+        if first_object == second_object:
+            self.feature_panel.show_note(
+                tr(
+                    "Passungen verbinden zwei Teile. Hier sehen Sie den Abstand "
+                    "innerhalb eines Teils."
+                )
+            )
+            return
+        self.feature_panel.show_note(
+            f"{entry.name} · {feature_label(first_id, first)}\n"
+            f"{other.name} · {feature_label(second_id, second)}"
+        )
+        a, b = FeatureRef(first_object, first_id), FeatureRef(second_object, second_id)
+        existing = next(
+            (fit for fit in self.session.project.document.fits if {fit.a, fit.b} == {a, b}), None
+        )
+        if existing is not None:
+            self.feature_panel.show_note(
+                tr("Passung vorhanden: {name}. Den Zustand zeigt der Prüfbericht.").format(
+                    name=existing.name
+                )
+            )
+            return
+        choices = fit_checks.pair_kinds(first, second)
+        if not choices:
+            wanted: FitKind = (
+                "thread"
+                if first.kind == "thread" or second.kind == "thread"
+                else ("flush" if first.kind == "face" and second.kind == "face" else "clearance")
+            )
+            self.feature_panel.show_note(str(fit_checks.pair_problem(wanted, first, second)))
+            return
+        offers: dict[str, str] = {}
+        for kind in choices:
+            fit = Fit(name="", a=a, b=b, kind=kind)
+            value, materials = fit_checks.target(result.scene, fit, self.session.profile)
+            text = tr("Sollmaß: {value}").format(value=length(value))
+            if materials:
+                text += "\n" + tr("Material: {materials}").format(materials=", ".join(materials))
+            if kind == "thread":
+                text += "\n" + tr("Steigung: {first} / {second}").format(
+                    first=length(float(first.params["pitch"])),
+                    second=length(float(second.params["pitch"])),
+                )
+            offers[kind] = text
+        self.feature_panel.show_note(
+            tr(
+                "Prüft die Maße und folgt den Teilmaterialien. "
+                "Die Teile werden dabei nicht verschoben."
+            )
+        )
+        self.feature_panel.show_fit_choices(offers, (self.session.project, result, a, b))
+        self.feature_panel.limit_fit(self._manual_fit_reason())
+
+    def _manual_fit_reason(self) -> str:
+        """Der sichtbare und erneut geprüfte Schreibzustand der Passungszeile."""
+        if not activation.state().unlocked:
+            return licence_lock_line()
+        if self._sketch_panel is not None or self.sculpting() or self.setting_armature():
+            return tr("Zuerst das aktive Werkzeug beenden.")
+        result = self.session.last_result
+        if not self.session.result_current or result is None or not result.complete:
+            return tr("Die aktuelle Auswertung abwarten oder den angehaltenen Schritt korrigieren.")
+        return ""
+
+    def _add_fit_from_panel(self, kind: str, token: object) -> None:
+        """Ein ausdrücklicher Klick, genau eine vorhandene Session-Transaktion."""
+        if not isinstance(token, tuple) or len(token) != 4:
+            return
+        project, result, a, b = token
+        if not isinstance(a, FeatureRef) or not isinstance(b, FeatureRef):
+            return
+        chosen = {FeatureRef(*reference) for reference in self.object_tree.selected_features()}
+        reason = self._manual_fit_reason()
+        current = self.session.last_result
+        if (
+            current is None
+            or project is not self.session.project
+            or result is not current
+            or chosen != {a, b}
+            or reason
+        ):
+            self.announce(
+                reason or tr("Die Auswahl hat sich geändert. Wählen Sie beide Merkmale erneut.")
+            )
+            return
+        first, second = fit_checks.resolve(current.scene, a), fit_checks.resolve(current.scene, b)
+        if first is None or second is None or kind not in fit_checks.pair_kinds(first, second):
+            self.announce(
+                tr(
+                    "Diese Merkmale lassen sich so nicht prüfen. "
+                    "Wählen Sie ein passendes Gegenstück."
+                )
+            )
+            return
+        document = project.document
+        if any({fit.a, fit.b} == {a, b} for fit in document.fits):
+            self._on_features_selected(list(self.object_tree.selected_features()))
+            return
+        taken = {fit.name for fit in document.fits}
+        number = 1
+        while f"fit_{number}" in taken:
+            number += 1
+        fit = Fit(name=f"fit_{number}", a=a, b=b, kind=kind, tolerance="auto:")
+        if self.session.add_fit(fit):
+            self.announce(
+                tr("Passung angelegt: {name}. Rückgängig entfernt sie wieder.").format(
+                    name=fit.name
+                )
+            )
+        self._on_features_selected(list(self.object_tree.selected_features()))
 
     def _apply_to_each_feature(
         self, op: str, params: dict[str, Any], feature_ids: list[str]
@@ -9709,6 +9881,29 @@ class MainWindow(QMainWindow):
         """
         selected = self.object_tree.selected()
         if selected is None or not REGISTRY.has(op) or not feature_ids:
+            return
+        from app.core.perceive.relations import alike_for_action
+
+        result = self.session.last_result
+        body = result.scene.objects.get(selected) if result else None
+        picked = str(params.get("at_feature", ""))
+        group = (
+            alike_for_action(op, picked, body.features, as_mesh_data(body.mesh))
+            if body is not None
+            else None
+        )
+        if (
+            group is None
+            or self.object_tree.selected_feature() != picked
+            or set(feature_ids) != {member.target for member in group.members}
+            or len(feature_ids) != len(group.members)
+        ):
+            self.announce(
+                tr(
+                    "Die Merkmalsgruppe hat sich geändert. Wählen Sie das Merkmal erneut "
+                    "und prüfen Sie die vorgeschlagene Gruppe."
+                )
+            )
             return
         drafts = [
             OperationDraft(op=op, inputs=(selected,), params={**params, "at_feature": feature_id})
@@ -9825,6 +10020,8 @@ class MainWindow(QMainWindow):
     def _on_section(self, plane: object, thickness: object) -> None:
         self.viewport.set_section(plane, thickness)  # type: ignore[arg-type]
         self.section_bar.show_capping_state(self.viewport.section_uncapped)
+        if self._ask_candidates:
+            self.viewport.show_candidates(self._ask_candidates)
 
     def action_theme(self, theme: str) -> None:
         application = QApplication.instance()
@@ -9979,7 +10176,14 @@ class MainWindow(QMainWindow):
         if feature is not None and feature.kind == "hole" and advises_on_bores(spec):
             diameter = feature.params.get("diameter")
             if diameter is not None:
-                said, choices = bore_advice(float(diameter))
+                said, choices = bore_advice(
+                    float(diameter),
+                    ask=False,
+                    measured=localised(f"{float(diameter):.2f}"),
+                    feature=feature,
+                    features=entry.features if entry else None,
+                    mesh=as_mesh_data(entry.mesh) if entry else None,
+                )
                 # **Eine Frage ohne Antwortweg ist keine Frage, sondern eine
                 # Sackgasse.** Wo keine Normgröße passt, endet der Satz aus dem
                 # Kern mit „Zu welcher Schraube gehört sie?" und bringt die
@@ -10157,14 +10361,36 @@ class MainWindow(QMainWindow):
             # dieselbe Differenzansicht wie beim Agentenvorschlag.
             self._wire_preview(
                 dialog,
-                lambda entered: [
-                    OperationDraft(op=chosen_spec().name, inputs=inputs, params=fitted(entered))
-                ],
+                lambda entered: (
+                    [
+                        OperationDraft(
+                            op=chosen_spec().name, inputs=(body,), params=fitted(entered)
+                        )
+                        for body in on_bodies
+                    ]
+                    if on_bodies
+                    else [
+                        OperationDraft(op=chosen_spec().name, inputs=inputs, params=fitted(entered))
+                    ]
+                ),
             )
             dialog.place_beside(self.viewport)
 
             def run_chosen() -> None:
                 picked = chosen_spec()
+                flow = dialog.placement_flow
+                if flow is not None and flow.target and picked.consumes == 1:
+                    self.session.apply(
+                        picked.title,
+                        [
+                            OperationDraft(
+                                op=picked.name,
+                                inputs=(flow.target,),
+                                params=fitted(dialog.values()),
+                            )
+                        ],
+                    )
+                    return
                 if picked is spec:
                     run(dialog.values())
                     return
@@ -10498,7 +10724,7 @@ class MainWindow(QMainWindow):
             dialog.switch_variant(chosen_spec())
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
-        self._wire_preview(dialog, None, change_op=op_id)
+        self._wire_preview(dialog, None, change_op=op_id, spec_of=chosen_spec)
         dialog.place_beside(self.viewport)
 
         def apply_change() -> None:
@@ -10563,7 +10789,12 @@ class MainWindow(QMainWindow):
         dialog.show()
 
     def _wire_preview(
-        self, dialog: OperationDialog, drafts_of: Any, *, change_op: int | None = None
+        self,
+        dialog: OperationDialog,
+        drafts_of: Any,
+        *,
+        change_op: int | None = None,
+        spec_of: Callable[[], OperationSpec] | None = None,
     ) -> None:
         """Verbindet einen Operationsdialog mit der Live-Vorschau (§18.7).
 
@@ -10576,6 +10807,9 @@ class MainWindow(QMainWindow):
         timer.setInterval(300)
 
         def request() -> None:
+            placement_flow = getattr(dialog, "placement_flow", None)
+            if placement_flow is not None and placement_flow.active:
+                return
             entered = dialog.values()
             if change_op is not None:
                 self.session.preview_async(
@@ -10586,6 +10820,24 @@ class MainWindow(QMainWindow):
 
         timer.timeout.connect(request)
         dialog.valuesChanged.connect(lambda: timer.start())
+        from app.ui.placement_flow import PlacementFlow
+
+        def placement_spec() -> OperationSpec:
+            if spec_of is not None:
+                return spec_of()
+            drafts = drafts_of(dialog.values()) if change_op is None else []
+            return REGISTRY.get(drafts[0].op) if drafts else dialog.spec
+
+        def placement_inputs() -> tuple[str, ...]:
+            if change_op is not None:
+                operation = self.session.history.operation(change_op)
+                return tuple(operation.inputs)
+            drafts = drafts_of(dialog.values())
+            return tuple(dict.fromkeys(body for draft in drafts for body in draft.inputs))
+
+        dialog.placement_flow = PlacementFlow(
+            dialog, self, placement_spec, placement_inputs, change_op=change_op
+        )
         request()
 
     def _show_preview(self, difference: Any) -> None:
@@ -10714,6 +10966,7 @@ class MainWindow(QMainWindow):
         worker = _SourceReadWorker(path, kind)
         self._source_worker = worker
         self._source_path = path
+        self._source_project = self.session.project
         self._source_kind = kind
         self._source_callback = complete
         worker.done.connect(weak_slot(self, MainWindow._source_read, worker, forward=True))
@@ -10742,6 +10995,9 @@ class MainWindow(QMainWindow):
 
         if self._source_worker is not worker:
             return
+        if self._source_project is not self.session.project:
+            self._finish_source_read(None)
+            return
         if worker.cancel.is_cancelled:
             self._source_stopped(worker)
             return
@@ -10766,6 +11022,9 @@ class MainWindow(QMainWindow):
 
         if self._source_worker is not worker:
             return
+        if self._source_project is not self.session.project:
+            self._finish_source_read(None)
+            return
         if worker.cancel.is_cancelled:
             self._source_stopped(worker)
             return
@@ -10777,6 +11036,9 @@ class MainWindow(QMainWindow):
 
         if self._source_worker is not worker:
             return
+        if self._source_project is not self.session.project:
+            self._finish_source_read(None)
+            return
         if worker.cancel.is_cancelled:
             self._source_stopped(worker)
             return
@@ -10787,6 +11049,9 @@ class MainWindow(QMainWindow):
         """Den bestätigten Abbruch ohne Dokumentänderung zurückmelden."""
 
         if self._source_worker is not worker:
+            return
+        if self._source_project is not self.session.project:
+            self._finish_source_read(None)
             return
         self._finish_source_read(None)
         self.announce(tr("Das Lesen der Quelle wurde abgebrochen."))
@@ -10814,6 +11079,7 @@ class MainWindow(QMainWindow):
         if self._source_worker is worker:
             self._source_worker = None
             self._source_path = None
+            self._source_project = None
             self._source_kind = ""
             self._set_progress_state("source", active=False)
             self._update_waiting_state()
@@ -10932,6 +11198,11 @@ class MainWindow(QMainWindow):
 
     # --- session replies --------------------------------------------------------
 
+    def _sync_section_controls(self) -> None:
+        """Schnittmaße und Abschlusszustand stammen aus der übernommenen Ansicht."""
+        self.section_bar.set_ranges(self.viewport.section_ranges())
+        self.section_bar.show_capping_state(self.viewport.section_uncapped)
+
     def _viewport_failed(self, detail: str) -> None:
         """Ein Ansichtsfehler lässt das alte Bild stehen und erklärt den Ausweg."""
 
@@ -10969,6 +11240,7 @@ class MainWindow(QMainWindow):
 
     def _show_scene(self, result: EvaluationResult) -> None:
         # Neue Geometrie heißt: jede Karte und jeder Schnitt sind veraltet.
+        self._cancel_map_worker()
         self._map_cache.clear()
         self._slice_key = None
         # Auch der Arbeiter, der noch an der alten rechnet, wird abgelöst:
@@ -11024,8 +11296,6 @@ class MainWindow(QMainWindow):
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
         self._reveal_split_result(result)
-        self.section_bar.set_ranges(self.viewport.section_ranges())
-        self.section_bar.show_capping_state(self.viewport.section_uncapped)
         self.history_panel.show_document(
             self.session.project.document, result.stopped_at, self.session.history.undone
         )
@@ -11349,6 +11619,7 @@ class MainWindow(QMainWindow):
             self._waiting = False
 
     def _on_busy(self, busy: bool) -> None:
+        self.feature_panel.limit_fit(self._manual_fit_reason())
         self._set_progress_state(
             "evaluation",
             active=busy,
@@ -11466,6 +11737,9 @@ class MainWindow(QMainWindow):
         wird keine betont, denn die Frage entscheidet dort über die Kennung
         und nicht über den Fundort.
         """
+        if request.preview is not None:
+            self._stop_waiting()
+            self._on_scene(request.preview)
         dialog = AskDialog(request.question, request.choices, self)
         self._ask_candidates = tuple(request.candidates)
         if self._ask_candidates:
@@ -12867,14 +13141,16 @@ class MainWindow(QMainWindow):
         self._start_source_read(
             path,
             "image",
-            weak_slot(self, MainWindow._dropped_image_ready, forward=True),
+            weak_slot(self, MainWindow._dropped_image_ready, target, forward=True),
         )
 
-    def _dropped_image_ready(self, choice: tuple[str, str] | None) -> None:
+    def _dropped_image_ready(self, target: ObjectId, choice: tuple[str, str] | None) -> None:
         """Nach dem Lesen den Reliefdialog mit der neuen Quelle öffnen."""
 
         if choice is not None:
-            self.run_operation(REGISTRY.get("displace_image"), given={"source": choice[0]})
+            self.run_operation(
+                REGISTRY.get("displace_image"), given={"source": choice[0]}, on_bodies=(target,)
+            )
 
     def wait_for_workers(self, timeout_ms: int = 2000) -> bool:
         """Jeden Arbeiter dieses Fensters auslaufen lassen.
@@ -13068,6 +13344,7 @@ class MainWindow(QMainWindow):
         # Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
         # lebt.
         self.viewport.release_renderer()
+        self.session.release_recovery()
         event.accept()
 
     def _store_settings(self) -> bool:

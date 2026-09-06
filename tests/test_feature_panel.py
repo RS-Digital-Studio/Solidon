@@ -11,6 +11,7 @@ Wert ist, sagt ``app.core.perceive.actions.actions_for``.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -27,11 +28,130 @@ from PySide6.QtWidgets import (
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.perceive import features
 from app.core.perceive.actions import actions_for
+from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
+from app.core.units import LengthUnit
 from app.ui.labels import LengthSpin
 from app.ui.panels import FeaturePanel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def test_a_manual_fit_needs_a_choice_and_an_explicit_click(qt_app: QApplication) -> None:
+    """Die Art allein schreibt nichts; der ausdrückliche Klick wird einmal weitergereicht."""
+    panel = FeaturePanel()
+    seen: list[tuple[str, object]] = []
+    token = object()
+    panel.fitRequested.connect(lambda kind, context: seen.append((kind, context)))
+    panel.show_fit_choices({"clearance": "PLA: 0,20 mm", "press": "PLA: −0,10 mm"}, token)
+    assert panel._fit_choice is not None and panel._fit_button is not None
+    assert panel._fit_choice.accessibleName() == "Passungsart"
+    assert not panel._fit_button.isEnabled()
+    panel._fit_choice.setCurrentIndex(panel._fit_choice.findData("press"))
+    assert not seen and panel._fit_button.isEnabled()
+    panel.limit_fit("Die Auswertung läuft.")
+    assert not panel._fit_button.isEnabled()
+    assert panel._fit_button.toolTip() == "Die Auswertung läuft."
+    panel.limit_fit("")
+    panel._fit_button.click()
+    panel._fit_button.click()
+    assert seen == [("press", token)]
+    assert panel._fit_button.accessibleDescription()
+
+
+@pytest.mark.parametrize("selected", ["hole_1", "pin_1"])
+@pytest.mark.parametrize("unit", ["mm", "in"])
+def test_the_feature_panel_shows_both_sides_of_a_sleeve(
+    qt_app: QApplication, selected: str, unit: LengthUnit
+) -> None:
+    """Die gemessene Hülle liefert beide Durchmesser und dieselbe Wand, auch in Zoll."""
+    from app.ui.labels import length, set_display_unit
+
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "diameter": 34.0,
+            "depth": 27.0,
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+        },
+    )
+    wall = replace(bore, id="pin_1", kind="pin", params={**bore.params, "diameter": 40.8})
+    found = {bore.id: bore, wall.id: wall}
+    panel = FeaturePanel()
+    try:
+        set_display_unit(unit)
+        panel.show_feature(selected, found[selected], features=found)
+        values = {
+            label.accessibleName(): label.text()
+            for row in panel._built
+            for label in row.findChildren(QLabel)
+            if label.accessibleName()
+        }
+        assert values["Innendurchmesser"] == length(34.0)
+        assert values["Außendurchmesser"] == length(40.8)
+        assert values["Wandstärke"] == length(3.4)
+        # Koaxial, aber ohne Längsüberdeckung: Die Auskunft darf nicht fortleben.
+        apart = replace(wall, params={**wall.params, "centre": (0.0, 0.0, 100.0)})
+        panel.show_feature(bore.id, bore, features={bore.id: bore, apart.id: apart})
+        assert not any(
+            label.accessibleName() == "Wandstärke"
+            for row in panel._built
+            for label in row.findChildren(QLabel)
+        )
+    finally:
+        set_display_unit("mm")
+
+
+def test_regrouping_keeps_the_selected_feature_current_and_visible(qt_app: QApplication) -> None:
+    """Neue Gruppenknoten dürfen weder Tastaturziel noch sichtbare Auswahl verlieren."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+    from app.ui.panels import ObjectTree, _feature_item
+
+    found = {
+        f"fillet_{index}": Feature(
+            id=f"fillet_{index}",
+            kind="fillet",
+            provenance="detected",
+            params={"radius": float(index + 1), "recess": True},
+        )
+        for index in range(60)
+    }
+    entry = SceneObject(id="obj_1", name="Viele Merkmale", mesh=plate(), features=found)
+    tree = ObjectTree()
+    tree.set_room(180)
+    tree.resize(420, 220)
+    tree.show_scene(EvaluationResult(Scene(objects={entry.id: entry})))
+    tree.show()
+    tree.select_feature(entry.id, "fillet_59")
+    QApplication.processEvents()
+    grouped = {
+        identifier: replace(feature, params={**feature.params, "radius": 100.0})
+        if int(identifier.split("_")[1]) >= 54
+        else feature
+        for identifier, feature in found.items()
+    }
+    result = EvaluationResult(Scene(objects={entry.id: replace(entry, features=grouped)}))
+    tree.show_scene(result)
+    QApplication.processEvents()
+    selected = _feature_item(tree.tree.topLevelItem(0), "fillet_59")
+    assert selected is not None and selected.parent() is not tree.tree.topLevelItem(0)
+    assert tree.tree.currentItem() is selected and selected.isSelected()
+    assert selected.parent().isExpanded()
+    assert tree.tree.viewport().rect().contains(tree.tree.visualItemRect(selected).center())
+    assert tree.tree.verticalScrollBar().value() > 0
+    tree.tree.setFocus()
+    QTest.keyClick(tree.tree, Qt.Key.Key_Up)
+    assert tree.tree.currentItem() is not selected, (
+        "die Tastatur setzt an der wiederhergestellten Zeile an"
+    )
+    tree.close()
 
 
 def plate() -> MeshData:
@@ -98,6 +218,67 @@ def test_every_number_starts_on_what_was_measured(qt_app: QApplication) -> None:
         assert spin.value_mm() == pytest.approx(float(measured))
 
 
+@pytest.mark.parametrize(
+    ("mesh_name", "scale", "kind", "operation"),
+    [
+        ("plate_holes.stl", 42.0, "hole", "resize_hole"),
+        ("sphere_socket.stl", 14.0, "sphere", "resize_feature"),
+    ],
+)
+def test_a_large_detected_diameter_reaches_the_edit_unchanged(
+    qt_app: QApplication,
+    mesh_name: str,
+    scale: float,
+    kind: str,
+    operation: str,
+) -> None:
+    """Ein vorhandenes Maß ist keine Erzeugungsgrenze.
+
+    Die beiden Korpusmodelle liefern echte erkannte Merkmale. Vergrößert man
+    sie über 200 mm, muss der gemessene Durchmesser sichtbar im Feld stehen,
+    unverändert aus dem Panel kommen und vom Parameterschema angenommen
+    werden. Sonst macht schon das bloße Übernehmen das Merkmal kleiner.
+    """
+    body = read_mesh((MESHES / mesh_name).read_bytes(), ".stl").raw.copy()
+    body.apply_scale(scale)
+    found = features.detect(MeshData.of(body))
+    identifier, feature = next(
+        (feature_id, detected) for feature_id, detected in found.items() if detected.kind == kind
+    )
+    measured = float(feature.params["diameter"])
+    assert measured > 200.0, "der Fall erreicht die alte Klemmgrenze nicht"
+
+    action = next(entry for entry in actions_for(feature) if entry.op == operation)
+    diameter = next(field for field in action.fields if field.name == "diameter")
+    assert diameter.value == pytest.approx(measured)
+
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+    panel.show()
+    QApplication.processEvents()
+    row = next(
+        entry
+        for entry in panel._built
+        if any(button.text() == str(action.title) for button in entry.findChildren(QPushButton))
+    )
+    spin = next(widget for widget in fields(row) if isinstance(widget, LengthSpin))
+    assert spin.isVisibleTo(panel), "der gemessene Durchmesser steht nicht sichtbar im Panel"
+    assert spin.value_mm() == pytest.approx(measured), "das Panel klemmt den Messwert"
+
+    emitted: list[tuple[str, dict[str, object]]] = []
+    panel.operationRequested.connect(lambda op, params: emitted.append((op, params)))
+    next(
+        button for button in row.findChildren(QPushButton) if button.text() == str(action.title)
+    ).click()
+
+    assert len(emitted) == 1
+    emitted_op, params = emitted[0]
+    assert emitted_op == operation
+    assert float(params["diameter"]) == pytest.approx(measured)
+    accepted = validate(REGISTRY.get(operation).params, params)
+    assert accepted.diameter == pytest.approx(measured)
+
+
 def test_pressing_an_action_names_the_operation_and_its_feature(qt_app: QApplication) -> None:
     """Das Panel rechnet nichts — es nennt Operation und Werte, wie der
     Operationsdialog auch. ``at_feature`` steht dabei nicht als Feld: Welches
@@ -162,6 +343,83 @@ def test_a_linked_countersink_is_named_before_the_bore_moves(qt_app: QApplicatio
     assert "gemeinsam verschoben" in text
 
 
+@pytest.mark.parametrize("pick_widening", [False, True])
+def test_the_panel_uses_the_mesh_for_a_complete_cavity_chain(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, pick_widening: bool
+) -> None:
+    """Auch eine mehrteilige Senkung nennt vor dem Klick den gemeinsamen Weg.
+
+    Die Kettenauskunft braucht das Netz für den gemeinsamen Randring. Bleibt es
+    auf dem Weg vom Fenster zum Kern liegen, sieht das Panel drei passende
+    Zahlen und verschiebt hinterher trotzdem nur die ausgewählte Fläche.
+    """
+    bore = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 0.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 6.0,
+            "depth": 10.0,
+        },
+    )
+    transition = Feature(
+        id="cone_1",
+        kind="cone",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 5.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 11.0,
+            "recess": True,
+        },
+    )
+    counterbore = Feature(
+        id="hole_2",
+        kind="hole",
+        provenance="detected",
+        params={
+            "centre": (0.0, 0.0, 8.0),
+            "axis": (0.0, 0.0, 1.0),
+            "diameter": 11.0,
+            "depth": 6.0,
+        },
+    )
+    linked = {feature.id: feature for feature in (bore, transition, counterbore)}
+    body = plate()
+    asked: list[tuple[Feature, object, MeshData]] = []
+
+    from app.core.perceive import relations
+
+    def chain_at(selected: Feature, available: object, mesh: MeshData) -> tuple[Feature, ...]:
+        asked.append((selected, available, mesh))
+        return bore, transition, counterbore
+
+    monkeypatch.setattr(relations, "cavity_chain_at", chain_at)
+    panel = FeaturePanel()
+
+    selected = counterbore if pick_widening else bore
+    panel.show_feature(selected.id, selected, features=linked, mesh=body)
+
+    assert asked == [(selected, linked, body)], (
+        "das Panel reicht Netz und Merkmale genau einmal durch"
+    )
+    if pick_widening:
+        explanations = [widget.text() for widget in panel._built if isinstance(widget, QLabel)]
+        assert any("Aufweitung misst 11,00 mm" in text for text in explanations)
+        assert not any("Zu welcher Schraube" in text for text in explanations)
+        assert any("engeren Bohrung" in text for text in explanations)
+    move = next(
+        row
+        for row in panel._built
+        if any(button.text() == "Merkmal verschieben" for button in row.findChildren(QPushButton))
+    )
+    text = " ".join(label.text() for label in move.findChildren(QLabel))
+    assert "Bohrung und Senkung" in text
+    assert "gemeinsam verschoben" in text
+
+
 def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) -> None:
     """Was nicht geht, steht als Satz und nicht als graues Feld.
 
@@ -183,6 +441,10 @@ def test_a_handling_that_does_not_apply_brings_its_reason(qt_app: QApplication) 
     panel.show_feature("edge_loop_1", loop)
 
     assert not buttons(panel), "keine Handlung ist anklickbar"
+    reasons = [
+        label for row in panel._built for label in row.findChildren(QLabel) if "—" in label.text()
+    ]
+    assert reasons and all(label.isEnabled() for label in reasons), "Erklärungen bleiben lesbar"
     texte = " ".join(
         label.text()
         for row in panel._built
@@ -281,7 +543,17 @@ def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> N
     ], "ohne Geschwister kein Haken"
 
     mit = FeaturePanel()
-    mit.show_feature(identifier, feature, ["hole_2", "hole_3"])
+    from app.core.perceive.relations import alike_for_actions
+
+    mesh = plate()
+    available = features.detect(mesh)
+    groups = alike_for_actions(
+        (str(action.op) for action in actions_for(feature) if action.op),
+        identifier,
+        available,
+        mesh,
+    )
+    mit.show_feature(identifier, feature, features=available, mesh=mesh)
     haken = [
         widget
         for row in mit._built
@@ -289,7 +561,9 @@ def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> N
         if "alle" in widget.text()
     ]
     assert haken, "mit Geschwistern schon"
-    assert "3" in haken[0].text(), "und er nennt die Zahl: das eigene plus zwei"
+    expected = [len(group.members) for group in groups if len(group.members) > 1]
+    assert len(haken) == len(expected)
+    assert all(str(count) in box.text() for count, box in zip(expected, haken, strict=True))
 
 
 def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
@@ -297,7 +571,9 @@ def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
     damit das Fenster eine Transaktion daraus machen kann (Regel 16)."""
     identifier, feature = a_hole()
     panel = FeaturePanel()
-    panel.show_feature(identifier, feature, ["hole_2", "hole_3"])
+    mesh = plate()
+    available = features.detect(mesh)
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
     fuer_alle: list[tuple[str, dict[str, object], list[str]]] = []
     einzeln: list[tuple[str, dict[str, object]]] = []
     panel.operationRequestedForEach.connect(
@@ -313,8 +589,12 @@ def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
 
     assert not einzeln, "gesetzt heißt: nicht nur dieses eine"
     assert fuer_alle, "die Sammelhandlung wurde nicht gemeldet"
-    _op, _params, ids = fuer_alle[-1]
-    assert ids == [identifier, "hole_2", "hole_3"], "alle drei, das eigene zuerst"
+    op, _params, ids = fuer_alle[-1]
+    from app.core.perceive.relations import alike_for_action
+
+    group = alike_for_action(op, identifier, available, mesh)
+    assert ids[0] == identifier
+    assert set(ids) == {member.target for member in group.members}
 
 
 def spread(panel: FeaturePanel, scroller: QScrollArea, height: int) -> int:
@@ -454,7 +734,10 @@ def test_a_hole_says_which_screw_fits(qt_app: QApplication) -> None:
     from app.core.scene.placement import bore_advice
 
     identifier, feature = a_hole()
-    erwartet, _choices = bore_advice(float(feature.params["diameter"]))
+    from app.ui.labels import localised
+
+    diameter = float(feature.params["diameter"])
+    erwartet, _choices = bore_advice(diameter, ask=False, measured=localised(f"{diameter:.2f}"))
 
     panel = FeaturePanel()
     panel.show_feature(identifier, feature)
@@ -582,3 +865,15 @@ def test_every_field_group_says_what_it_belongs_to(qt_app: QApplication) -> None
         )
     finally:
         panel.deleteLater()
+
+
+def test_a_nearly_nominal_bore_explains_why_it_is_not_assigned(qt_app: QApplication) -> None:
+    """Gleich gerundete 2-mm-Maße dürfen keine unerklärlich verschiedenen Normaussagen tragen."""
+    from dataclasses import replace
+
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, replace(feature, params={**feature.params, "diameter": 1.9999}))
+    text = " ".join(label.text() for label in panel.findChildren(QLabel))
+    assert "knapp unter dem Nennmaß von M2" in text
+    assert "Zu welcher Schraube" not in text

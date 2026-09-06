@@ -16,7 +16,7 @@ Fall wäre ein zweiter Ort, an dem sich ein Parameter vergessen lässt.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QEvent, QObject, QSignalBlocker, Qt, Signal
 from PySide6.QtWidgets import (
@@ -59,6 +59,9 @@ from app.ui.labels import (
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.panels import align_forms
 from app.ui.style import TIGHT, make_primary, set_level
+
+if TYPE_CHECKING:
+    from app.ui.placement_flow import PlacementFlow
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
 #: von 0,075 mm wurde bei zwei Nachkommastellen beim Öffnen des Dialogs zu 0,08
@@ -388,7 +391,7 @@ class ValueField(QWidget):
             try:
                 self._core = float(value)
                 self.spin.setValue(self._as_shown(float(value)))
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 # Ein Wert, der weder Zahl noch Ausdruck ist, gehört trotzdem
                 # gezeigt statt verschluckt — sonst stünde im Dialog etwas
                 # anderes, als im Dokument steht.
@@ -1083,6 +1086,11 @@ class OperationDialog(QDialog):
     valuesChanged = Signal()
     """Ein Wert hat sich geändert — die Live-Vorschau (§18.7) hört zu."""
 
+    surfaceRequested = Signal()
+    """Die Werte bleiben im Dialog, die Position wird auf dem Modell gewählt."""
+
+    placement_flow: PlacementFlow | None = None
+
     def __init__(
         self,
         spec: OperationSpec,
@@ -1338,6 +1346,14 @@ class OperationDialog(QDialog):
             field.pendingChanged.connect(self._follow_source_pending)
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
+        self.surface_button = QPushButton(tr("Im Modell platzieren"), self)
+        self.surface_button.setObjectName("place_on_surface")
+        self.surface_button.setToolTip(
+            tr("Auf eine Oberfläche zeigen und die Position mit sichtbaren Abständen festlegen.")
+        )
+        self.surface_button.clicked.connect(self.surfaceRequested)
+        self.surface_button.hide()
+        layout.addWidget(self.surface_button)
         layout.addWidget(buttons)
 
         self._couple_dependent_fields()
@@ -1864,6 +1880,22 @@ class OperationDialog(QDialog):
             if isinstance(editor, ValueField):
                 editor.set_value(float(value))
         return True
+
+    def take_placement(self, values: Mapping[str, Any]) -> None:
+        """Übernimmt eine vollständige Raumlage ohne gerundete Zwischenwerte."""
+        with QSignalBlocker(self):
+            for name, value in values.items():
+                editor = self._editors.get(name)
+                if isinstance(editor, ValueField):
+                    editor.toggle.setChecked(False)
+                    editor.set_value(value)
+                elif isinstance(editor, QComboBox):
+                    index = editor.findData(value)
+                    if index >= 0:
+                        editor.setCurrentIndex(index)
+                elif isinstance(editor, QLineEdit):
+                    editor.setText(str(value))
+        self.valuesChanged.emit()
 
     def switch_variant(self, spec: OperationSpec) -> None:
         """Der Dialog gehört jetzt einer anderen Variante derselben Handlung.

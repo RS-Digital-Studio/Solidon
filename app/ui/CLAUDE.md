@@ -62,6 +62,17 @@ bevor es jemand wusste:
 
 ## Die Karte
 
+Zwei benannte Merkmale verschiedener Körper werden im Objektbaum gemeinsam
+gewählt. Das Merkmalpanel zeigt beide Körper und Merkmale, die vom Kern
+geeigneten Passungsarten und deren materialfolgendes Sollmaß. Erst
+„Passung anlegen“ ruft einmal `Session.add_fit` auf; ein Undo entfernt die
+Beziehung. Vor dem Schreiben werden Projekt, Ergebnisstand, Auswahl und
+Eignung erneut geprüft. Bestehende ungeordnete Paare werden angezeigt statt
+doppelt angelegt. Rohrmaße liest das Panel aus `relations.sleeve_at`; es
+speichert dafür keine zusätzliche Beziehung. Nach einem Baumneuaufbau werden
+Auswahl, Tastaturzeile und Sichtbarkeit anhand der heutigen Kennungen
+wiederhergestellt; ein verzögerter Scroll-Aufruf hält keine alten Baumzeiger.
+
 **Rahmen und Einstieg**
 
 `app.py` (Einstiegspunkt, §38) · `qt_platform.py` (welche Qt-Plattform die
@@ -83,6 +94,7 @@ hinter der Ansicht, eigene `CLAUDE.md`: der Vertrag `api.py`, VTK direkt und
 pygfx über wgpu, die Wahl in `choice.py`, Kameraführung, Formen,
 Bewegungsgriff) · `overlay.py` (Zonen über der
 Ansicht statt neben ihr) · `loading.py` (Ladeanzeige, §2.8) · `cursors.py` ·
+`placement_flow.py` (Oberflächenplatzierung aus dem Operationsdialog, §18.5) ·
 `spacemouse.py` (die 3D-Maus als zweite Hand an derselben Kamera: HID-Leser
 über hidapi, auf dem Mac der Treiberweg über das 3Dconnexion-Framework des
 Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
@@ -90,12 +102,123 @@ Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
 dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
 an allen dreien
 
+**Platzieren bleibt eine Operation.** Der Operationsdialog übergibt Werte an
+`PlacementFlow`; der Controller zeigt nur einen temporären Werkzeugaktor und
+Maßpfeile. `Session.placement_async()` berechnet Originalfläche und
+`PlacementTool` außerhalb des Qt-Threads. Mausbewegungen und Maßänderungen
+verwenden diese Kontexte; der Merkmalskörper wird dabei nicht erneut gebaut.
+Der Kontext gehört zu Eingaben und Werten, verspätete Ergebnisse werden über
+Generation und Laufkennung verworfen. `Position übernehmen` bestätigt den
+vorhandenen Dialog und erzeugt genau dessen Transaktion; Escape behält die
+Zahlen ohne neuen Verlaufsschritt. Beim Bearbeiten eines historischen Schritts
+liefert `Session.placement_before()` dessen tatsächlichen Eingang. Auch ein
+fehlerhafter Schritt bleibt damit korrigierbar. `result_current` und
+`Viewport.is_scene_applied()` sperren Ziele bis zur aktuellen sichtbaren Szene.
+Maßfelder erhalten ihre Float64-Werte und werden gemeinsam außerhalb der
+tatsächlich sichtbaren `OverlayHost`-Karten angeordnet; Verbindungslinien halten
+verschobene Felder ihren Maßpfeilen zugeordnet.
+
+Die Maßfläche belegt über eine `QRegion`-Maske nur Linien, Pfeilspitzen und
+Zuordnungsmarken. Dort zeichnet sie deckend neu; der übrige Bereich bleibt dem
+nativen Renderer. Ein vollflächiges `WA_NoSystemBackground`-Widget ist über
+beiden Renderern ausgeschlossen.
+Die Maske nimmt die tatsächlichen Rechtecke aller Zahlenfelder und
+Beschriftungen aus; die native Stapelreihenfolge allein schützt deren
+Lesbarkeit nicht. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
+innere Dreieckskanten.
+Resize eigener Maßfelder ist ein Layoutergebnis und startet keinen weiteren
+Aufbau; nur Viewport und Rendererwidget verändern die verfügbare Fläche.
+
+**Die Auswahl behält den sichtbaren Treffer.** Ein Oberflächen-Pick trägt
+Körper, Weltpunkt und Dreieck bis zur Merkmalsauswahl und Messung. Nur wenn
+das gezeichnete Netz das unveränderte Originalnetz ist, bestimmt seine
+Dreieckskennung das Merkmal direkt; Schnitt- und vereinfachte Netze nutzen
+den Ortsfang. Platten- und Explosionsversatz werden für jeden Körper getrennt
+zurückgerechnet. Ein Treffer gehört seinem Körper, auch wenn ein kleinerer
+Hüllquader davor liegt. Die Öffnungszielhilfe gibt Körper und Merkmal gemeinsam
+zurück. Dreieckszuordnung und vorbereitete Bohrungsachsen werden pro Auswertung
+gespeichert und beim Szenenaufbau verworfen; Hover projiziert dadurch nicht
+wiederholt alle Bohrungsdreiecke.
+Die Öffnungszielhilfe verlängert keine axialen Bohrungsgrenzen. Seitlicher
+Randfang gilt nur am sichtbaren Eintritt oder bei einem belegten Treffer des
+wirklichen Bohrungszylinders; eine Rückwand bleibt eine Sichtgrenze.
+Nur Bohrungen, Senkungen (`cone` mit `recess`) und Innengewinde bilden axiale
+Öffnungsziele. Rundungen, Ringnuten und äußere Flächen bleiben Dreieckstreffer.
+Die Rückrechnung liest den beim Aktoraufbau gespeicherten Versatz und die
+tatsächlich gezeichneten Körper. Während eines neuen Ansichtsauftrags und
+nach dessen Fehler bleibt dieses letzte Bild die Grundlage des Picks;
+angeforderte Platten- oder Explosionszustände greifen erst mit dem neuen Bild.
+Merkmalsnamen und Maße stehen auf einem Feld in den Themenfarben, wie
+Skizzenmaße. Der Text bleibt damit auch über heller Geometrie lesbar;
+Merkmalsfläche und Ankerpunkt tragen weiterhin die Auswahl- beziehungsweise
+Merkmalsfarbe.
+Beschriftungen und Markierungsflächen benutzen dieselben Schnitt- und
+Schichtebenen wie die Körper. Das automatische Schichtoverlay benennt nur
+Merkmale, deren Dreiecke die aktuelle Ebene schneiden; die Anker liegen im
+sichtbaren Schnitt. Auswahl und Hover dürfen erhaltene Geometrie darunter
+benennen. Vollständig abgeschnittene Merkmale verlieren ihre Darstellung,
+ihre Auswahl bleibt bestehen. Auswahl, Hover, Schutz und Kandidaten werden
+ohne zusätzliche Schnittkappen begrenzt. Beim Schließen der Schicht gilt
+wieder der unveränderte Merkmalschalter.
+Markierungsflächen heben gemeinsame Originaleckpunkte gemeinsam an, mit den
+flächengewichteten Normalen ausschließlich ausgewählter Dreiecke. Erst danach
+werden die Punkte zur Dreiecksliste expandiert und geschnitten; weder fremde
+Nachbarflächen noch ein Verschweißen gleicher Koordinaten verändern den Patch.
+Die Akkumulation und Kreuzprodukte bleiben auf die ausgewählten Dreiecke begrenzt.
+Das normale Merkmalslayout reserviert zuerst Leseraum für Auswahl und Hover.
+Automatische Namen erscheinen nur an kollisionsfreien Plätzen nahe ihrem
+Anker; alle Merkmalsmarker, Flächen und Baumziele bleiben erhalten. Versetzte
+Namen sind mit dem dargestellten Merkmalsanker verbunden. Die Bildraumrechnung
+berücksichtigt Kartenränder, interne Leisten und Gerätepixeldichte und folgt
+Kamera sowie Größenänderungen. Sie benutzt nur Projektion und Textmaße, keine
+Geometriesuche oder GPU-Rücklesung. Gleiche Kamera- und Layoutdaten werden
+wiederverwendet; gleiche Textlisten und Linienzahlen verschieben vorhandene
+Rendererobjekte. Bei Körpervorschauen folgen Marker, Text, Verbindungslinien
+sowie Auswahl- und Hoverflächen der Matrix und Position ihres Körperaktors.
+`select_feature_refs` hält objektübergreifende Merkmalsauswahl als vollständige
+Paare aus Körper- und Merkmalskennung; gleiche lokale Kennungen bleiben getrennt.
+Das erste gültige Paar führt die Körperauswahl, mehrere Paare erzeugen kein
+scheinbares Einzelmerkmal. Jede Körpergruppe behält ihre eigene Auswahlfläche,
+Vorschaumatrix und Schnittbegrenzung. `select_features` bleibt der Adapter für
+Merkmalskennungen am führenden Körper; Neuauswertung und Abwahl räumen alte Paare ab.
+Getrennte Konturaktoren sind ebenfalls ihrem Körper zugeordnet: Freier Zug,
+Gizmo und Skalierwürfel gleichen ihre Matrix und Position vor dem vorhandenen
+Gestenbild ab, auch ohne Merkmalsanzeige. Unveränderte Werte werden nicht erneut
+gesetzt; Rücknahme und Szenenabbau nehmen die Konturen vollständig mit.
+Die gespeicherten Originalanker bleiben unverändert; Rücknahme, Kamerawechsel
+und die nächste Szene lesen denselben jeweils sichtbaren Aktorstand.
+Der freie Körperzug wechselt bei genau einem gewählten Körper eine Merkmalsauswahl
+vor seiner Vorschau über `objectPicked` auf die Körperstufe. Eine gemischte
+Mehrfachauswahl bleibt vollständig erhalten; der gemeinsame Anschluss bestätigt
+dieselbe Körpermenge, die die Vorschau bewegt;
+das gezielte Merkmalwerkzeug behält seine eigene Merkmalsoperation.
+Verbindungen reichen bis zum Textanker und liegen unter dem deckenden
+Beschriftungsfeld; die größere Kollisionsreserve begrenzt keine sichtbare Linie.
+Die Schutzschraffur berücksichtigt dieselben Schnittgrenzen
+auch bei ihrer zusätzlichen Anhebung gegen Flimmern.
+
+Ausdrückliches Einpassen zeichnet einmal über den gemeinsamen Viewport-Pfad.
+Die interne Kamerarahmung zeichnet noch nicht: Szenenaufbau und Achsansicht
+stellen erst ihren fertigen Zustand dar. Die Rahmung berücksichtigt die
+gemeldete freie Kartenfläche und Gerätepixeldichte; perspektivisch zählen
+alle acht Hüllquaderpunkte mit ihrer Tiefe. Eine Karte zu öffnen verändert
+den gewählten Ausschnitt im Körpermodus nicht.
+
 **Panels und Leisten**
 
 `panels.py` (die drei Panels links, Prüfbericht rechts, §2.5) ·
 `tool_strip.py` · `analysis_bar.py` · `section_bar.py` · `split_bar.py` ·
 `transform_bar.py` · `explode_bar.py` · `sculpt_bar.py` · `pose_bar.py` ·
 `scale_widget.py` · `facts.py` (was das Teil kostet, während man daran baut)
+
+Die Legende in `analysis_bar.py` verteilt bei vielen benannten Kartenstufen
+ihre Beispiele über den gesamten Farbbereich und nennt die Zahl ausgelassener
+Stufen. Jeder Beispielname behält exakt die Farbe seiner ursprünglichen Stufe.
+Bei kontinuierlichen Karten stammen Farbraum und inverse Skalenwerte aus
+`AnalysisMap`: Die Krümmung verwendet eine logarithmisch abgestufte Farbrampe,
+deren Legende weiterhin physische Millimeterwerte nennt und die Abstufung
+ausweist. Der Viewport reicht die transformierten Werte an beide Renderer;
+Messwerte, Schwellwerte und Hervorhebungen bleiben unverändert.
 
 **Dialoge**
 
@@ -194,11 +317,22 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 `manual_window.py` · `tour.py` · `shortcuts_window.py` ·
 `shortcut_schemes.py` (zwei Belegungen, eine Quelle) · `command_palette.py`
 
+**Navigationstasten gehören dem fokussierten Inhalt.** Der gemeinsame
+`NavigationKeys`-Filter schützt Pos1, Ende, Bild auf und Bild ab in Listen,
+Bäumen, Text- und Zahlenfeldern sowie Reglern (`QAbstractSlider`). Beim
+Fokuswechsel zur Ansicht gelten wieder die Fensterbefehle; Ziffern der
+Darstellungsarten bleiben auch im Inhalt Fensterbefehle.
+
 **Einstellungen** `settings.py` · `survey.py`
 
 ## Grenzen
 
 - **Keine feste Zeichenkette** — alles über `tr()` (Regel 20).
+- **Das Handbuch beantwortet fremde Ressourcen mit leeren Daten.** `None`
+  würde Qts eigenen Dateileser freigeben. Nur `figure:` wird über den lokalen
+  Abbildungskatalog aufgelöst; Links bleiben eine getrennte Klickentscheidung.
+- **Eine Kartenbewegung endet mit ihrem Qt-Objekt.** Die Animation verwendet
+  `DeleteWhenStopped`, auch beim Ersetzen einer noch laufenden Bewegung.
 - **Sprachabhängige Qt-Formate lesen die aktive Solidon-Sprache.**
   `QLocale()` ohne Argument folgt der Prozesssprache; für ausgeschriebene
   Datumswerte deshalb `QLocale(get_language())` verwenden und alle
@@ -231,6 +365,15 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
   dieselbe Menge längst als eine Zeile. `_restore` klappt das Dach auf, wenn
   das gewählte Merkmal darin liegt — sonst wäre ein Klick im Viewport auf eine
   Verrundung wieder ins Leere gegangen.
+- **Ein zusammenhängender Bohrungshohlraum ist ein vollständiger Ast.**
+  Bohrung, kegelige Übergänge und zylindrische Senkungen werden in der
+  Reihenfolge von `perceive.relations.cavity_chains` ineinander gehängt; eine
+  Kette mit drei Flächen darf nicht auf ein Paar gekürzt werden. Der Objektbaum
+  fragt die Bulk-Auskunft genau einmal je `SceneObject`, damit die Randringe
+  eines großen Netzes nicht für jedes Merkmal neu entstehen. Das
+  Merkmalspanel reicht das `MeshData` optional bis `actions_for` durch:
+  Aufrufer ohne Netz behalten die bisherige Paar-Auskunft, die Oberfläche mit
+  Netz nennt auch bei der vollständigen Kette vorab das gemeinsame Versetzen.
 - **Kurzlebige Warnungsmarken sind semantischer Ansichts-Zustand.** Ring und
   Beschriftung im nativen Renderer sind nur die Darstellung. Baut eine
   Analysekarte dieselbe Auswertung neu auf, werden beide aus Punkt, Text und
@@ -247,6 +390,39 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
   vorn** — `tests/test_interface_limits.py` zählt nach.
 - **Nichts rechnet im Qt-Hauptthread**, was länger dauert als ein Lidschlag
   (§2.8).
+
+## Zustandsbindung in asynchronen Bedienwegen
+
+- Quellenarbeiter gehören zu genau einem Projekt und gegebenenfalls zu einem
+  beim Start gewählten Zielkörper. Späte Signale dürfen weder einen später
+  gewählten Körper bearbeiten noch den Zustand eines anderen Projekts melden.
+- `Viewport.sceneApplied` bestätigt die tatsächlich aufgebaute Szene.
+  Schnittgrenzen und Kandidatenmarkierungen werden danach synchronisiert,
+  nicht schon beim Einreihen des Szenenaufbaus.
+- Die Merkmals-Sammelwahl stammt aus `relations.alike_for_actions`: ein
+  gemeinsamer Aufruf pro Auswahl liefert getrennte Gruppen je Handlung.
+  Das Panel zeigt deren Belege und ungeklärte Zuordnungen; vor Anwendung wird
+  die Gruppe am aktuellen Zustand erneut geprüft. Ein Schritt pro kanonischem
+  Ziel bleibt zusammen eine Transaktion.
+- Eine Normauskunft über eine Bohrungskette richtet sich nach dem engsten
+  Abschnitt. Das Panel benennt Aufweitungen und verwendet im Hinweis dieselbe
+  lokale Zahlenanzeige wie im Maßfeld. Unsichere Zuordnung wird erklärt, nicht
+  als unbeantwortbare Frage formuliert.
+- Druckergebnisse und laufende Druckaufträge tragen den Kontext aus Szene,
+  Platte, Druckeinstellungen und Slicerprofilen. Änderungen entwerten die
+  Ausgabe auch dann, wenn das fertige Arbeitersignal bereits eingereiht ist.
+- Analysekarten tragen eine Anfragekennung und ihre ausgewertete Szene bis
+  zu Ergebnis, Größenabsage und Fehler. Ein Kartenwechsel entfernt die alten
+  Farben sofort; auch ein Treffer im Cache oder „keine Karte“ entwertet
+  verspätete Antworten des vorherigen Arbeiters.
+- Der Wechsel aus dem modalen Druckdialog ins Filamentpanel schließt zuerst
+  den Dialog; ein sichtbarer Rückweg öffnet die Druckeinstellungen wieder.
+  Spulen werden über Name, Farbe, Materialprofil und Materialart unterschieden.
+  Alte Werte ohne Materialbindung werden erst nach ausdrücklicher Übernahme
+  und Bestätigung einer Spule zugeordnet.
+- Session hält die Eigentumssperre ihrer namenlosen Wiederherstellung bis zum
+  Projektwechsel oder echten Fensterschluss. Ein Oberflächen-Neuaufbau bei
+  Sprachwechsel beendet dieses Eigentum nicht.
 
 ## Testen
 

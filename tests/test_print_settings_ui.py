@@ -55,6 +55,187 @@ def session(qt_app: QApplication) -> Session:
     return Session()
 
 
+def test_the_filament_panel_keeps_material_identity_and_marks_the_right_override(
+    qt_app: QApplication,
+) -> None:
+    """Gleich benanntes PLA und PETG bleiben zwei Spulen mit getrennten Druckwerten."""
+    from types import SimpleNamespace
+
+    from app.ui.filament_picker import FilamentPanel
+
+    first = MaterialSlot(index=1, name="Schwarz", colour=(0.0, 0.0, 0.0), material_type="PLA")
+    second = replace(first, index=2, material_type="PETG")
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = handover.with_slot_override(
+        settings,
+        second,
+        SlotOverride(
+            name=second.name,
+            colour=second.colour,
+            temperature=replace(settings.temperature, nozzle=240),
+        ),
+    )
+    panel = FilamentPanel()
+    panel.show_scene([SimpleNamespace(material_slots=(first, second))], settings)
+    assert len(panel._used) == 2
+    assert {entry[0].material_type: entry[4] for entry in panel._used} == {
+        "PLA": False,
+        "PETG": True,
+    }
+
+
+def test_old_filament_values_need_an_explicit_transfer_before_binding(qt_app: QApplication) -> None:
+    """Öffnen verändert nichts; der sichtbare Übernahmeknopf füllt nur den offenen Dialog."""
+    from app.core.export.threemf import slot_identity
+
+    slot = MaterialSlot(index=1, name="Schwarz", colour=(0.0, 0.0, 0.0), material_type="PETG")
+    settings = print_settings.resolve(profiles.make_profile())
+    legacy = SlotOverride(
+        name=slot.name, colour=slot.colour, temperature=replace(settings.temperature, nozzle=240)
+    )
+    settings = replace(settings, slot_overrides=(legacy,))
+    dialog = FilamentOverrideDialog(slot, settings)
+    assert dialog.override() is None
+    assert dialog.legacy_values_button.isEnabled()
+    dialog.legacy_values_button.click()
+    adopted = dialog.override()
+    assert adopted is not None and adopted.key == slot_identity(slot)
+    assert adopted.temperature is not None and adopted.temperature.nozzle == 240
+    assert settings.slot_overrides == (legacy,), "erst Bestätigen bindet die Werte im Projekt"
+    dialog.reject()
+    assert handover.override_for(settings, slot) is None
+
+
+def test_changing_plates_preserves_filament_profile_identity(session: Session) -> None:
+    """Die weiße Spule behält auf ihrer Einzelplatte dasselbe Profil wie in der Gesamtansicht."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+
+    slots = [
+        MaterialSlot(index=1, name="Rot", colour=(1.0, 0.0, 0.0)),
+        MaterialSlot(index=2, name="Weiß", colour=(1.0, 1.0, 1.0)),
+    ]
+    session.last_result = EvaluationResult(
+        scene=Scene(
+            objects={
+                f"obj_{index + 1}": SceneObject(
+                    id=f"obj_{index + 1}",
+                    name=slot.name,
+                    plate=index,
+                    mesh=MeshData(trimesh.creation.box()),
+                    material_slots=[slot],
+                )
+                for index, slot in enumerate(slots)
+            }
+        )
+    )
+    made = PrintSettingsDialog(session, UiSettings())
+    made.settings = replace(made.settings, slot_profiles=("Rot-Profil", "Weiß-Profil"))
+    for plate, expected in (
+        (1, ("Weiß-Profil",)),
+        (0, ("Rot-Profil",)),
+        (None, ("Rot-Profil", "Weiß-Profil")),
+    ):
+        index = made.plate_choice.findData(plate)
+        made.plate_choice.setCurrentIndex(index)
+        made.plate_choice.activated.emit(index)
+        assert made._profiles_for(made._plate_slots()) == expected
+
+
+def test_a_new_printer_does_not_keep_a_known_foreign_machine_profile(session: Session) -> None:
+    """Eine frühere Wahl für Centauri ist beim Wechsel zu A1 keine Wahl für den neuen Drucker."""
+    session.change_scene_profile("centauri-carbon-2", "pla")
+    old = SlicerProfile(
+        Path("old.json"),
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+    )
+    new = SlicerProfile(
+        Path("new.json"),
+        "Bambu Lab A1 0.4 nozzle",
+        "machine",
+        printer_model="Bambu Lab A1",
+        nozzle=0.4,
+    )
+    made = PrintSettingsDialog(
+        session,
+        UiSettings(
+            slicer_machine_profile=str(old.path), slicer_profile_printer="centauri-carbon-2"
+        ),
+    )
+    made._profiles_found([old, new])
+    assert made.machine_choice.currentData() == str(old.path)
+    made.printer_choice.setCurrentIndex(made.printer_choice.findData("bambu-a1"))
+    assert session.wait_for_idle()
+    assert made.machine_choice.currentData() == str(new.path)
+
+
+@pytest.mark.parametrize("change", ["temperature", "quality", "machine", "process"])
+def test_a_changed_print_job_cannot_save_its_previous_gcode(
+    dialog: PrintSettingsDialog, tmp_path: Path, change: str
+) -> None:
+    """Eingabefelder und Profilauswahl entwerten die vorherige Druckdatei gemeinsam."""
+    previous = tmp_path / "previous.gcode"
+    previous.write_text("; vorheriger Auftrag\n", encoding="utf-8")
+    dialog._gcode = [previous]
+    dialog._release_the_save()
+    if change == "temperature":
+        field = dialog._editors["temperature.nozzle"]
+        field.setValue(field.value() + 10)
+    elif change == "quality":
+        dialog.quality.setCurrentIndex((dialog.quality.currentIndex() + 1) % dialog.quality.count())
+    else:
+        box = dialog.machine_choice if change == "machine" else dialog.process_choice
+        box.addItem("Anderes Profil", "different-profile.json")
+        box.setCurrentIndex(box.count() - 1)
+    assert not dialog._gcode
+    assert not dialog.save_button.isEnabled()
+    assert previous.is_file(), "die frühere Ausgabe wird entwertet, nicht gelöscht"
+
+
+def test_adopting_an_own_filament_includes_its_installed_base(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der sichtbare Übernahmeweg liest Temperatur und Bett aus dem Herstellerbestand."""
+    from app.core.export import slicer_profiles as sp
+
+    executable = tmp_path / "OrcaSlicer" / "orca-slicer.exe"
+    installed = executable.parent / "resources" / "profiles"
+    base = installed / "Vendor" / "filament" / "base.json"
+    user = tmp_path / "settings" / "OrcaSlicer" / "user" / "default"
+    own = user / "filament" / "Meine Spule.json"
+    for path, data in (
+        (
+            base,
+            {
+                "name": "PETG base",
+                "filament_type": ["PETG"],
+                "nozzle_temperature": ["250"],
+                "hot_plate_temp": ["80"],
+            },
+        ),
+        (own, {"name": "Meine Spule", "inherits": "PETG base", "filament_flow_ratio": ["0.96"]}),
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+    executable.write_text("", encoding="utf-8")
+    monkeypatch.setattr(sp, "install_root", lambda _executable: installed)
+    monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
+    dialog._slicer_path = executable
+    dialog.filament_choice.addItem("Meine Spule", str(own))
+    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
+    dialog.filament_choice.activated.emit(dialog.filament_choice.currentIndex())
+    assert dialog.settings.temperature.nozzle == 250
+    assert dialog.settings.temperature.bed == 80
+    assert dialog.settings.filament.flow_ratio == pytest.approx(0.96)
+    assert "Meine Spule" in dialog.state.text()
+
+
 @pytest.fixture
 def dialog(qt_app: QApplication, session: Session) -> PrintSettingsDialog:
     return PrintSettingsDialog(session, UiSettings())
@@ -174,7 +355,7 @@ def test_filament_dialog_builds_one_groupwise_override(qt_app: QApplication) -> 
 
     override = dialog.override()
     assert override is not None
-    assert override.key == (slot.name, slot.colour)
+    assert override.key == (slot.name, slot.colour, slot.material, slot.material_type)
     assert override.temperature is not None
     assert override.temperature.nozzle == 210
     assert override.cooling is None
@@ -1043,8 +1224,9 @@ def test_closing_ignores_a_worker_error_already_waiting_in_qt(
     assert shown == [], "ein vor dem Schließen eingereihter Fehler öffnete danach noch einen Dialog"
 
 
+@pytest.mark.parametrize("changed", [False, True])
 def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
-    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changed: bool
 ) -> None:
     """Ein eingereihtes Slicer-Ergebnis wird nach Abbrechen nicht mehr übernommen."""
     import types as types_module
@@ -1083,12 +1265,17 @@ def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
     worker = dialog._worker
     assert worker is not None and worker.wait(2_000)
 
-    dialog._cancel_slice()
+    if changed:
+        field = dialog._editors["temperature.nozzle"]
+        field.setValue(field.value() + 5)
+    else:
+        dialog._cancel_slice()
     QApplication.processEvents()
 
     assert dialog._gcode == []
     assert delivered == []
-    assert tr("Abgebrochen.") in dialog.state.text()
+    if not changed:
+        assert tr("Abgebrochen.") in dialog.state.text()
 
 
 def test_opening_is_not_remembered_by_merely_looking(dialog: PrintSettingsDialog) -> None:
@@ -1986,6 +2173,30 @@ def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> Non
         dialog.deleteLater()
 
 
+@pytest.mark.parametrize("collar,expected", [(0.0, ()), (4.0, ("clearance",))])
+def test_a_declared_lid_condition_also_controls_print_advice(
+    session: Session, qt_app: QApplication, collar: float, expected: tuple[str, ...]
+) -> None:
+    """Der Heuristikweg aktiviert keine ausdrücklich schlafende Passung erneut."""
+    from app.core.types import FeatureRef, Fit, Operation
+
+    document = session.project.document
+    document.ops.append(Operation(id="op_1", op="create_lid", params={"collar": collar}))
+    document.fits.append(
+        Fit(
+            "Deckel",
+            FeatureRef("obj_1", "lip"),
+            FeatureRef("obj_2", "rim"),
+            when_positive=("op_1", "collar"),
+        )
+    )
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        assert dialog._fits_in_play() == expected
+    finally:
+        dialog.deleteLater()
+
+
 # --- ein Filament je Materialslot (§20) -----------------------------------------
 
 
@@ -2023,7 +2234,7 @@ def test_a_second_slot_gets_its_own_choice(
     Temperaturen. Ohne diese Zeilen ließe sich das drucken, aber nicht sagen,
     und die zweite Farbe liefe mit den Werten der ersten.
     """
-    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self, **_kwargs: _two_slots())
     dialog = PrintSettingsDialog(session, UiSettings())
 
     assert len(dialog.slot_rows) == 2, "je Slot eine Zeile"
@@ -2060,7 +2271,7 @@ def test_a_slot_stores_the_profile_name_and_not_its_caption(
     Datensatz deshalb entzerrt, indem das Profil ein eigenes ist und seine
     Beschriftung damit einen Zusatz trägt.
     """
-    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self, **_kwargs: _two_slots())
     dialog = PrintSettingsDialog(session, UiSettings())
     eigenes = _profile("Haus PLA weiß", "filament", from_user=True, filament_type="PLA")
     dialog._profiles = [eigenes]
@@ -2103,7 +2314,7 @@ def test_the_slot_assignment_outlives_a_quality_change(
 
     **Beide Hälften**, sonst wäre „es ändert sich nichts mehr" auch grün.
     """
-    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self, **_kwargs: _two_slots())
     dialog = PrintSettingsDialog(session, UiSettings())
     dialog.settings = replace(dialog.settings, slot_profiles=("Haus PETG", "Haus PLA weiß"))
     assert dialog.settings.quality == "standard"
@@ -2156,7 +2367,7 @@ def test_the_slot_assignment_outlives_a_printer_change(
     Stufenwechsel: Die Rettung, die den Fehler behob, ließ genau diesen einen
     Wert liegen.
     """
-    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self, **_kwargs: _two_slots())
     dialog = PrintSettingsDialog(session, UiSettings())
     try:
         _select_printer(dialog, "generic-220")
@@ -2743,15 +2954,38 @@ def test_the_header_names_every_material_the_spools_bring(
     Slot-Entscheidung gemessen wurde. Die Anzeige darf ihn nicht auf eines der
     beiden verkürzen: Der Kunde soll sehen, was er eingelegt hat.
     """
-    from app.core.types import MaterialSlot
+    import trimesh
 
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import MaterialSlot, Scene
+
+    session.last_result = EvaluationResult(
+        scene=Scene(
+            objects={
+                "obj_1": SceneObject(
+                    id="obj_1",
+                    name="Zweifarbig",
+                    mesh=MeshData(trimesh.creation.box()),
+                    material_slots=[
+                        MaterialSlot(
+                            index=0, name="Gehäuse", colour=(0.0, 0.0, 0.0), material_type="PETG"
+                        ),
+                        MaterialSlot(
+                            index=1, name="Schrift", colour=(1.0, 1.0, 1.0), material_type="PLA"
+                        ),
+                    ],
+                )
+            }
+        )
+    )
     dialog = PrintSettingsDialog(session, UiSettings())
-    dialog.show_materials(["PETG", "PLA"])
+    dialog.refresh_materials()
 
     text = dialog.material_state.text()
     assert "PETG" in text and "PLA" in text, text
     assert str(tr("Projektvorgabe")) not in text, "mit Spulen ist die Vorgabe nicht die Quelle"
-    assert MaterialSlot is not None  # der Fall kommt aus Slots, nicht aus Text
+    assert "Spule" in dialog.material_state.toolTip()
 
 
 def test_the_material_line_leads_to_where_the_choice_is(

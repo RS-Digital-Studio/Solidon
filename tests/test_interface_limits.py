@@ -911,6 +911,62 @@ def test_the_navigation_keys_belong_to_the_list_with_the_focus(window: MainWindo
     )
 
 
+@pytest.mark.parametrize(
+    ("key_name", "expected"),
+    [("Home", 0), ("End", 860), ("PgUp", 440), ("PgDown", 420)],
+)
+def test_slider_navigation_keeps_window_shortcuts_out(qt_app, key_name, expected) -> None:
+    """Navigation gehört dem Regler; nach Fokuswechsel wieder dem Fenster."""
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
+    from PySide6.QtGui import QAction
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QMainWindow, QPushButton, QVBoxLayout, QWidget
+
+    from app.ui.labels import TrackSlider
+    from app.ui.shortcut_schemes import install_navigation_keys
+
+    install_navigation_keys()
+    frame = QMainWindow()
+    holder = QWidget(frame)
+    layout = QVBoxLayout(holder)
+    slider = TrackSlider(Qt.Orientation.Horizontal, holder)
+    slider.setRange(0, 860)
+    slider.setValue(430)
+    slider.setPageStep(10)
+    other = QPushButton("Ansicht", holder)
+    layout.addWidget(slider)
+    layout.addWidget(other)
+    frame.setCentralWidget(holder)
+    frame.resize(360, 140)
+    calls = []
+    action = QAction("Fensterbefehl", frame)
+    action.setShortcut(key_name)
+    action.triggered.connect(lambda: calls.append(key_name))
+    frame.addAction(action)
+    frame.show()
+    frame.activateWindow()
+    qt_app.processEvents()
+    key = QKeySequence(key_name)[0].key()
+    try:
+        QTest.mouseClick(slider, Qt.MouseButton.LeftButton, pos=slider.rect().center())
+        assert slider.hasFocus()
+        # Der Track-Klick darf bei ungerader Pixelzahl knapp daneben liegen.
+        # Der Ausgangswert gehört zum Testaufbau, nicht zur geprüften Bedienung.
+        slider.setValue(430)
+        QTest.keyClick(slider, key)
+        assert slider.value() == expected
+        assert not calls
+        QTest.keyClick(slider, Qt.Key.Key_Tab)
+        assert other.hasFocus()
+        QTest.keyClick(other, key)
+        assert calls == [key_name]
+        assert slider.value() == expected
+    finally:
+        frame.close()
+        frame.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 def test_a_scheme_only_changes_what_it_names() -> None:
     """Eine Belegung ist eine Änderung an einzelnen Tasten, keine zweite Liste.
 
@@ -1050,7 +1106,11 @@ def test_the_tool_strip_greys_out_on_an_empty_scene(window: MainWindow) -> None:
     assert not any(button.isEnabled() for button in buttons), (
         "auf leerer Szene ist keiner anklickbar"
     )
-    assert all(button.isVisible() or True for button in buttons), "sie bleiben aber sichtbar"
+    # Die Explosionsansicht wird ausdrücklich erst bei mehreren Körpern angeboten.
+    ordinary = [
+        button for button in buttons if button.text() != window.tools.tool_titles()["explode"]
+    ]
+    assert ordinary and all(button.isVisibleTo(window.tools) for button in ordinary)
     for button in buttons:
         assert "Körper" in button.toolTip(), f"{button.text()} sagt, was fehlt"
 

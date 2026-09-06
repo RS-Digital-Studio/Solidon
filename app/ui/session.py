@@ -15,12 +15,13 @@ from __future__ import annotations
 import dataclasses
 import threading
 import time
-from collections.abc import Mapping, Sequence
+import weakref
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import partial
 from math import isfinite
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, BinaryIO, Final
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
@@ -65,6 +66,7 @@ from app.core.scene.project import (
     Project,
     ProjectSources,
     checksum,
+    claim_recovery,
     clear_autosave,
     discard_recovery,
     embedded_source_path,
@@ -121,6 +123,9 @@ class AskRequest:
     answered: threading.Event = field(default_factory=threading.Event)
     answer: str | None = None
 
+    preview: EvaluationResult | None = None
+    """Der Zwischenstand, gegen den die Kandidaten aufgelöst wurden."""
+
     candidates: tuple[tuple[str, str], ...] = ()
     """Die Merkmale, zwischen denen die Frage entscheidet (§21.3).
 
@@ -171,23 +176,29 @@ class _EvaluationWorker(Worker):
                 outside.extend(part_check.check(session.project.document))
 
             result = session.run_evaluation()
-            result = _with_findings(result, outside)
-            if session.pending_orphan_check and result.complete:
-                # §21.3: jeder Merkmalsverweis einer geöffneten Datei wird einmal
-                # geprüft, hier im Arbeiter, wo Fragen blockieren darf, ohne das
-                # Fenster einzufrieren. Ein umgeschriebener Verweis heißt, dass die
-                # Szene neu gebaut werden muss — mit der Antwort darin, nicht
-                # darum herum.
-                session.pending_orphan_check = False
-                check = orphans.check(
-                    session.project.document,
-                    result.scene,
-                    session.ask_from_worker,
-                    announce=session.announce_candidates,
-                )
-                if check.changed:
+            if session.pending_orphan_check:
+                while True:
+                    session._pending.preview = result
+                    try:
+                        check = orphans.check(
+                            session.project.document,
+                            result.scene,
+                            session.ask_from_worker,
+                            announce=session.announce_candidates,
+                            pending=orphans.pending_references(
+                                session.project.document, result.stopped_at
+                            ),
+                        )
+                    finally:
+                        session._pending.preview = None
+                    outside.extend(check.findings)
+                    if not check.changed:
+                        break
+                    session._dirty = True
+                    session.projectChanged.emit()
                     result = session.run_evaluation()
-                result = _with_findings(result, check.findings)
+                session.pending_orphan_check = False
+            result = _with_findings(result, outside)
         except OperationCancelled:
             self.cancelled.emit()
         except AppError as error:
@@ -316,7 +327,7 @@ class _PreviewWorker(Worker):
     def work(self) -> None:
         try:
             _scene, difference = self._compute()
-        except (AppError, OperationCancelled):
+        except AppError, OperationCancelled:
             # Beim Tippen entstehen ungültige Zwischenstände; der echte
             # Fehler kommt beim Anwenden als Vorschlag (§2.7). Die Vorschau
             # zeigt dann schlicht nichts Neues.
@@ -497,6 +508,8 @@ class Session(QObject):
         unabhängig, und ein abgebrochener Vorschlag darf keine laufende
         Berechnung mitreißen (§15.6)."""
         self.path: Path | None = None
+        self._recovery_owner: BinaryIO | None = None
+        self._recovery_finalizer: Callable[[], object] | None = None
         self.recovery_token: str = recovery_token()
         """Unter welcher Kennung dieses Dokument gesichert wird, solange es
         keinen Namen hat — je Dokument eine, damit zwei Fenster ihre
@@ -507,6 +520,8 @@ class Session(QObject):
         self._quality_once: Quality | None = None
         """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
         self.last_result: EvaluationResult | None = None
+        self.result_current = False
+        """Ob die Szene bereits zum aktuellen Auswertungsauftrag gehört."""
         self.pending_orphan_check = False
         self._pending = threading.local()
         """Was die nächste Frage **dieses Fadens** zur Wahl stellt (§21.3).
@@ -554,6 +569,7 @@ class Session(QObject):
         self._split_cancel_confirmed = False
         """Ob der Abbruch des aktuellen Split-Arbeiters schon bestätigt wurde."""
         self._previews: list[_PreviewWorker] = []
+        self._placements: list[_PreviewWorker] = []
         """Jeder laufende Vorschau-Arbeiter, festgehalten bis ``finished``.
 
         Eine neuere Anfrage ersetzt die alte nur in der Anzeige — der alte
@@ -691,6 +707,7 @@ class Session(QObject):
             # Kennung neu geschrieben und die angebotene weggeräumt — sonst
             # böte der nächste Start sie noch einmal an, und ein zweites
             # Fenster hielte sie für seine (CORE-09).
+            self._claim_recovery()
             write_autosave(self.project, None, self.recovery_token)
             discard_recovery(path)
         self.projectChanged.emit()
@@ -732,9 +749,26 @@ class Session(QObject):
     def autosave(self) -> None:
         """Container zur Absturz-Wiederherstellung neben dem Projekt (§38)."""
         if self._dirty:
+            self._claim_recovery()
             write_autosave(self.project, self.path, self.recovery_token)
 
+    def _claim_recovery(self) -> None:
+        """Belegt die namenlose Sicherung vor dem ersten Schreibversuch."""
+        if self.path is None and self._recovery_owner is None:
+            self._recovery_owner = claim_recovery(self.recovery_token)
+            self._recovery_finalizer = weakref.finalize(self, self._recovery_owner.close)
+
+    def release_recovery(self) -> None:
+        """Gibt die Sicherung beim Dokumentwechsel oder endgültigen Schließen frei."""
+        if self._recovery_owner is not None:
+            self._recovery_owner.close()
+            self._recovery_owner = None
+        if self._recovery_finalizer is not None:
+            self._recovery_finalizer()
+            self._recovery_finalizer = None
+
     def _reset_for(self, path: Path | None) -> None:
+        self.release_recovery()
         self.history = History(self.project.document)
         self.cache.clear()
         self.path = path
@@ -762,6 +796,7 @@ class Session(QObject):
         durfte keine übersehen.
         """
         self._dirty = True
+        self.result_current = False
         self.projectChanged.emit()
         self.evaluate_async()
 
@@ -1114,7 +1149,9 @@ class Session(QObject):
         if entry is None:
             return False
 
-        source_id = self._embed_source("generated", None, as_mesh_data(entry.mesh).to_stl())
+        source_id = self._embed_source(
+            "generated", "sculpt.npz", as_mesh_data(entry.mesh).to_bytes()
+        )
         self.change_params(op_id, {"baked": source_id})
         return True
 
@@ -1636,6 +1673,57 @@ class Session(QObject):
         self._previews.append(worker)
         self._leash.start(worker)
 
+    def placement_async(self, compute: Any, then: Any, failed: Any) -> None:
+        """Berechnet einen Platzierungsbezug oder Anzeigegeist abseits des Fensters.
+
+        Der Aufrufer hält höchstens eine laufende Anfrage je Kanal und ersetzt
+        ihren Nachfolger. Die Sitzung hält den Arbeiter auch nach Dialogende;
+        das Ergebnis trägt niemals eine Änderung am Dokument.
+        """
+        worker = _PreviewWorker(self, 0, lambda: (None, compute()), CancelSignal())
+        # Die PySide-Kontextüberladung ist in den Stubs nicht erfasst. Der
+        # Empfänger bindet sämtliche Rückrufe an den Thread der Sitzung.
+        worker.done.connect(lambda _stamp, value: then(value), self)  # type: ignore[arg-type]
+        worker.crashed.connect(failed, self)  # type: ignore[arg-type]
+        worker.finished.connect(
+            lambda done=worker: self._placement_finished(done),
+            self,  # type: ignore[arg-type]
+        )
+        self._placements.append(worker)
+        self._leash.start(worker)
+
+    def placement_before(self, op_id: int, then: Any, failed: Any) -> None:
+        """Zeigt beim Korrigieren den Eingangszustand genau dieses Schritts.
+
+        Spätere Verschiebungen und Verformungen gehören nicht zu dessen
+        Koordinatenraum. Die Kopie entsteht vor dem Arbeiterstart; sie ist
+        eine Vorschau und wird niemals in das Dokument zurückgeschrieben.
+        """
+        import copy
+
+        document = copy.deepcopy(self.project.document)
+        document.ops[:] = [entry for entry in document.ops if entry.id < op_id]
+        sources = ProjectSources(self.project, base_dir=self.base_dir)
+        profile = self.profile
+        self.placement_async(
+            lambda: evaluate(
+                document,
+                profile,
+                quality=self.quality,
+                cache=self.cache,
+                sources=sources,
+                ask=_no_questions,
+            ),
+            then,
+            failed,
+        )
+
+    def _placement_finished(self, worker: _PreviewWorker) -> None:
+        """Die Rechenarbeit gehört bis zum zugestellten Ende der Sitzung."""
+        if worker in self._placements:
+            self._placements.remove(worker)
+        self._leash.hold_until_done(worker)
+
     def _preview_finished(self, worker: _PreviewWorker) -> None:
         if worker in self._previews:
             self._previews.remove(worker)
@@ -1824,6 +1912,7 @@ class Session(QObject):
 
     def evaluate_async(self) -> None:
         """Ein Lauf je Dokument; eine neuere Anfrage ersetzt eine wartende (§15.6)."""
+        self.result_current = False
         if self._worker is not None and self._worker.isRunning():
             self._rerun_pending = True
             self.cancel_signal.cancel()
@@ -1893,6 +1982,7 @@ class Session(QObject):
         self.cancel_signal.reset()
         result = self.run_evaluation("fine")
         self.last_result = result
+        self.result_current = True
         self.sceneChanged.emit(result)
         return result
 
@@ -2112,7 +2202,12 @@ class Session(QObject):
         """Reicht die Frage ans Fenster und wartet auf die Antwort."""
         candidates = getattr(self._pending, "candidates", ())
         self._pending.candidates = ()
-        request = AskRequest(question=question, choices=list(choices), candidates=candidates)
+        request = AskRequest(
+            question=question,
+            choices=list(choices),
+            candidates=candidates,
+            preview=getattr(self._pending, "preview", None),
+        )
         self.askRequested.emit(request)
         request.answered.wait()
         if request.answer is None:
@@ -2138,6 +2233,7 @@ class Session(QObject):
             # Projekts über das Modell zu legen, das gerade geladen wird.
             return
         self.last_result = result
+        self.result_current = not self._rerun_pending
         # §17.2: die Rückfallstufe behalten, die jede Operation getragen hat —
         # damit die Datei morgen gleich nachrechnet.
         self.history.record_solvers(result.solvers)
@@ -2297,6 +2393,7 @@ class Session(QObject):
         self.cancel()
         self.wait_for_idle(timeout_ms)
         self._leash.wait_all()
+        self.release_recovery()
 
     def wait_for_idle(self, timeout_ms: int = 10_000) -> bool:
         """Blockiert bis zum Leerlauf und meldet, ob er rechtzeitig eintrat.
@@ -2336,6 +2433,7 @@ class Session(QObject):
                 or self._agent
                 or self._split
                 or next(iter(self._previews), None)
+                or next(iter(self._placements), None)
             )
             if worker is None:
                 return True

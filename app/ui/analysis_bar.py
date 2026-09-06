@@ -133,7 +133,15 @@ class MapLegend(QWidget):
 
         shown = _legend_entries(analysis, names)
         extra = len(shown) - LEGEND_MAX_ENTRIES
-        for label, colour in shown[:LEGEND_MAX_ENTRIES]:
+        if extra > 0:
+            # Beispiele über die ganze Karte verteilen: Die ersten acht von
+            # 120 Stufen tragen sonst alle denselben Anfangston. Namen und
+            # Farben bleiben die ursprünglichen Zuordnungen der Karte.
+            shown = [
+                shown[round(index * (len(shown) - 1) / (LEGEND_MAX_ENTRIES - 1))]
+                for index in range(LEGEND_MAX_ENTRIES)
+            ]
+        for label, colour in shown:
             self.entries.append((label, colour))
             swatch = QLabel(label, self)
             swatch.setStyleSheet(
@@ -150,6 +158,8 @@ class MapLegend(QWidget):
 
         # §22.5: woher eine Zahl kommt, gehört neben die Zahl.
         parts = [f"{tr('Herkunft')}: {origin_label(analysis.source)}"]
+        if analysis.display_scale == "asinh":
+            parts.append(tr("Farben logarithmisch abgestuft"))
         if analysis.resolution is not None:
             parts.append(f"{tr('Raster')} {length(analysis.resolution)}")
         if analysis.note is not None:
@@ -201,13 +211,11 @@ def _legend_entries(
             for index, name in enumerate(analysis.categories)
         ]
 
-    low, high = analysis.low, analysis.high
-    if high <= low:
-        high = low + 1.0
     entries: list[tuple[str, str]] = []
-    for step in range(LEGEND_STEPS):
-        fraction = step / (LEGEND_STEPS - 1)
-        value = low + (high - low) * fraction
+    steps = 1 if analysis.high <= analysis.low else LEGEND_STEPS
+    for step in range(steps):
+        fraction = step / max(steps - 1, 1)
+        value = analysis.value_at_display_fraction(fraction)
         if analysis.unit == "mm":
             text = length(value)
         elif analysis.unit == "°":

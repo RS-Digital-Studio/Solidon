@@ -520,7 +520,6 @@ def test_typing_the_equals_sign_into_the_number_opens_the_expression(
     Geprüft wird über eine echte Tastatureingabe an das Zahlenfeld, nicht über
     einen Aufruf der Methode dahinter: Die Verbindung ist die Zusage.
     """
-    from PySide6.QtCore import Qt as QtCore_Qt
     from PySide6.QtTest import QTest
 
     from app.ui.op_dialog import ValueField
@@ -531,6 +530,10 @@ def test_typing_the_equals_sign_into_the_number_opens_the_expression(
     assert isinstance(field, ValueField)
     assert not field.toggle.isChecked(), "das Feld beginnt als Zahl"
 
+    dialog.show()
+    dialog.activateWindow()
+    qt_app.processEvents()
+    field.spin.setFocus()
     QTest.keyClicks(field.spin, "=")
 
     assert field.toggle.isChecked(), "das getippte = hat den Ausdruck nicht geöffnet"
@@ -540,7 +543,7 @@ def test_typing_the_equals_sign_into_the_number_opens_the_expression(
     assert field.text.text() == "=", f"das getippte Zeichen ging verloren: {field.text.text()!r}"
     # Und der Fokus geht mit: sonst liegt das Textfeld in der Tab-Reihenfolge
     # vor dem Umschalter, und der Kunde müsste Umschalt+Tab drücken.
-    assert field.text.hasFocus() or QtCore_Qt.FocusPolicy.NoFocus is not None
+    assert field.text.hasFocus()
 
 
 def test_typing_an_at_sign_into_the_number_opens_the_expression(
@@ -1376,7 +1379,7 @@ def conditional_fields(spec: Any) -> dict[str, set[str]]:
         return {}
     try:
         source = textwrap.dedent(inspect.getsource(spec.fn))
-    except (OSError, TypeError):  # pragma: no cover - nur bei erzeugtem Code
+    except OSError, TypeError:  # pragma: no cover - nur bei erzeugtem Code
         return {}
     tree = ast.parse(source)
 
@@ -1601,8 +1604,15 @@ def test_an_operation_without_a_caveat_shows_no_empty_warning(window: MainWindow
 
 
 def _length_param(spec: Any) -> Any:
-    """Der erste Parameter dieser Operation, der eine Länge ist."""
-    return next(entry for entry in spec.params.spec() if entry.unit == "mm")
+    """Der erste Parameter dieser Operation, der eine Länge über null ist.
+
+    Nicht einfach der erste mit Einheit: Seit die Primitive eine Position
+    tragen, steht ``x`` mit Vorgabe 0 vorn, und eine Null lässt sich in keiner
+    Einheit von einer anderen unterscheiden.
+    """
+    return next(
+        entry for entry in spec.params.spec() if entry.unit == "mm" and float(entry.default) > 0.0
+    )
 
 
 def test_a_field_in_inches_takes_inches_and_returns_millimetres(window: MainWindow) -> None:
@@ -2480,18 +2490,29 @@ def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -
     einklappbar und im Regelfall zu, also genügt kein Aufleuchten: Der
     Abschnitt geht auf, sonst zeigt der Rahmen auf eine Kopfzeile, unter der
     nichts steht (dieselbe Zusage wie beim Tourschritt).
+
+    **Und der Dialog kommt nicht zurück, sondern der Rückweg.** Bis zum
+    Gesamtreview (05.09.2026, UI-18) trat der modale Dialog nur zurück und
+    stand danach wieder über dem Fenster — der Filamentwähler war dann sichtbar
+    und nicht bedienbar. Jetzt schließt der Dialog mit seinen Werten, und die
+    Filamentkarte zeigt den Knopf zurück zu den Druckeinstellungen.
     """
+    from PySide6.QtWidgets import QDialog
+
     from app.ui.print_settings_dialog import PrintSettingsDialog
 
     dialog = PrintSettingsDialog(window.session, window.settings, window)
     dialog.filamentsRequested.connect(lambda: window._show_filaments(dialog))
     section = window.filaments.parentWidget()
     assert section is not None
+    assert window.filaments.return_to_print_button.isHidden(), "der Rückweg wartet auf den Hinweg"
 
     dialog.material_link.click()
 
     assert not window.filaments.isHidden(), "der Abschnitt steht offen"
-    assert dialog.isVisible() or not dialog.isHidden(), "und der Dialog ist wieder da"
+    assert dialog.result() == QDialog.DialogCode.Accepted, "der Dialog ging mit seinen Werten zu"
+    assert dialog.isHidden(), "und sperrt das Fenster nicht mehr"
+    assert not window.filaments.return_to_print_button.isHidden(), "der Rückweg steht da"
     dialog.deleteLater()
 
 
@@ -2983,7 +3004,10 @@ def test_a_bore_without_a_standard_size_offers_the_sizes_it_asks_about(
     monkeypatch.setattr(
         fenster,
         "bore_advice",
-        lambda _diameter: ("Passt zu keiner Normgröße.", ["M6", "M8", "Selbst eintragen"]),
+        lambda _diameter, **_context: (
+            "Passt zu keiner Normgröße.",
+            ["M6", "M8", "Selbst eintragen"],
+        ),
     )
 
     class _AbbruchError(Exception):
