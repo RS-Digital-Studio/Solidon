@@ -1451,3 +1451,71 @@ def test_a_scaled_body_becomes_a_mesh_and_says_so() -> None:
     after = next(iter(result.scene.objects.values()))
     assert after.kind == "mesh"
     assert "evaluate.exact_became_mesh" in {f.code for f in result.scene.report.findings}
+
+
+def _hollow_box(wall: float = 3.0) -> Solid:
+    """Ein exakt ausgehöhlter Kasten in Roberts Maßen — die Wand ist das Thema."""
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    project = new_project("centauri-carbon-2", "pla")
+    document = project.document
+    history = History(document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_brep_box", params={"width": 215.0, "depth": 75.0, "height": 215.0}
+            )
+        ],
+    )
+    history.apply(
+        "Aushöhlen", [OperationDraft(op="shell_exact", inputs=("obj_1",), params={"wall": wall})]
+    )
+    result = evaluate(
+        document, make_profile("centauri-carbon-2", "pla"), sources=ProjectSources(project)
+    )
+    return next(iter(result.scene.objects.values())).mesh
+
+
+@pytest.mark.parametrize("radius", [2.0, 2.9, 3.0, 5.0])
+def test_a_radius_that_eats_the_wall_is_refused_instead_of_taking_the_process(
+    radius: float,
+) -> None:
+    """Ein zu großer Radius an einer dünnen Wand endet mit einem Satz, nicht mit einem Absturz.
+
+    **Der Fall.** Roberts Filamenthalter, ein auf 3 mm ausgehöhlter Kasten:
+    Ein Radius von 3 mm auf den oberen Kanten nahm am 06.09.2026 den ganzen
+    Prozess mit — Zugriffsverletzung in ``BRepFilletAPI_MakeFillet::Build``,
+    kein Traceback, kein Dialog, die Arbeit weg. Zwischen 2,0 und 2,9 war es
+    subtiler: OpenCASCADE meldete Erfolg und lieferte einen Körper, der in
+    zwei Solids zerfallen war und acht Prozent mehr Volumen hatte als vorher.
+
+    Gemessen wurde beides an derselben Reihe: 1,2 und 1,4 gehen, ab 2,0 nicht
+    mehr, und ab 3,0 mit mehr als einer Kante stürzte es. Geprüft wird hier
+    die Absage — dass der Test überhaupt bis zu seiner Zusicherung kommt, ist
+    die halbe Aussage.
+    """
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen exakten Körper")
+
+    with pytest.raises(GeometryError) as raised:
+        edit.fillet(_hollow_box(), radius, "top")
+
+    assert raised.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
+    assert "Radius" in str(raised.value.detail)
+
+
+@pytest.mark.parametrize("radius", [0.8, 1.2, 1.4])
+def test_a_radius_that_fits_the_wall_still_works(radius: float) -> None:
+    """Und was passt, geht weiter durch — der Schutz sperrt nicht das Übliche."""
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen exakten Körper")
+
+    body = _hollow_box()
+    turned = edit.fillet(body, radius, "top")
+
+    assert turned.solid_count == 1, "ein Körper bleibt ein Körper"
+    assert turned.volume < body.volume, "eine Verrundung an einer Außenkante nimmt Material weg"
+    assert turned.volume > body.volume * 0.99, "aber nur wenig"

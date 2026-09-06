@@ -144,6 +144,7 @@ def fillet(solid: Solid, radius: float, choice: EdgeChoice = "all") -> Solid:
             values={"choice": choice},
         )
 
+    _fits_the_wall(working, radius, len(chosen), "fillet")
     builder = BRepFilletAPI_MakeFillet(working.shape)
     for entry in chosen:
         builder.Add(radius, entry.edge)
@@ -163,10 +164,56 @@ def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
             values={"choice": choice},
         )
 
+    _fits_the_wall(working, distance, len(chosen), "chamfer")
     builder = BRepFilletAPI_MakeChamfer(working.shape)
     for entry in chosen:
         builder.Add(distance, entry.edge)
     return _built(solid, builder, "chamfer", distance, len(chosen))
+
+
+def _thinnest_wall(solid: Solid) -> float:
+    """Die dünnste Stelle des Körpers in Millimetern, oder ``inf``.
+
+    **Warum das vor einer Verrundung steht: ein Absturz.** An Roberts
+    Filamenthalter, einem auf 3 mm ausgehöhlten Kasten, nahm ein Radius von
+    3 mm auf den oberen Kanten den ganzen Prozess mit — Zugriffsverletzung in
+    ``BRepFilletAPI_MakeFillet::Build``, kein Traceback, kein Dialog, die
+    Arbeit des Kunden weg (06.09.2026). Eine Rundung, die dicker ist als die
+    Wand, hat keinen Platz; OpenCASCADE merkt es erst mitten im Bau.
+
+    Gemessen wird auf der Tessellation über dieselbe Karte, die auch das
+    Messwerkzeug und die Analyseansicht benutzen (§18.3) — an dem Kasten
+    0,23 Sekunden und 2,09 mm für eine 3-mm-Wand. Die Karte misst also etwas
+    zu knapp, und das ist die richtige Richtung: Die Schranke fällt eher zu
+    streng aus als zu großzügig, und wo sie greift, steht ein Satz statt
+    eines Absturzes.
+    """
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.perceive.maps import wall_thickness_map
+
+    try:
+        values = [
+            value
+            for value in wall_thickness_map(as_mesh_data(solid)).values
+            if value == value and value > 0.0
+        ]
+    except PROGRAMMING_ERRORS:
+        raise
+    except Exception:  # eine Karte ist kein Versprechen
+        return math.inf
+    return min(values) if values else math.inf
+
+
+def _fits_the_wall(solid: Solid, size: float, edges: int, kind: str) -> None:
+    """Hält an, wo die Rundung dicker wäre als die dünnste Wand."""
+    thinnest = _thinnest_wall(solid)
+    if size < thinnest:
+        return
+    raise GeometryError(
+        detail=_too_large(kind),
+        suggestions=(CORRECT_INPUT, CANCEL),
+        values={"size_mm": round(size, 3), "edges": edges, "wall_mm": round(thinnest, 2)},
+    )
 
 
 def _too_large(kind: str) -> Any:
@@ -218,6 +265,22 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
             suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(size, 3), "edges": edges},
         ) from problem
+    # **Gebaut heißt nicht heil.** Zwischen der Größe, die OpenCASCADE
+    # ablehnt, und der, die es abstürzen lässt, liegt ein Bereich, in dem es
+    # ein Ergebnis liefert und ``IsDone()`` meldet — und der Körper darin ist
+    # kaputt: An Roberts Kasten trennte ein Radius von 2 mm die 3 mm dicke
+    # Wand auf, aus einem Solid wurden zwei, und das Volumen wuchs um acht
+    # Prozent. ``BRepCheck_Analyzer`` sagt es in Millisekunden; ohne diese
+    # Zeile reist der kaputte Körper weiter, bis eine spätere Operation an ihm
+    # scheitert oder der Drucker ihn nicht drucken kann.
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    if not BRepCheck_Analyzer(shape).IsValid():
+        raise GeometryError(
+            detail=_too_large(kind),
+            suggestions=(CORRECT_INPUT, CANCEL),
+            values={"size_mm": round(size, 3), "edges": edges},
+        )
     _log.info("%s of %.2f mm on %d edge(s)", kind, size, edges)
     return solid.replacing(shape)
 
