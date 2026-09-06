@@ -8,7 +8,9 @@ vergessen würden:
   eng — und der Betrag kommt aus dem kalibrierten Materialprofil, nie aus
   einem Literal (AGENTS.md Regel 7);
 * durchgehende Werkzeuge reichen über den Körper hinaus; eine Blindbohrung
-  endet dagegen genau an ihrer eingegebenen Tiefe;
+  endet dagegen genau an ihrer eingegebenen Tiefe und ragt nur an der Mündung
+  um :data:`BOOLEAN_OVERLAP` über die Fläche, damit nie zwei Flächen
+  zusammenfallen;
 * was den Bauraum verlässt, wird gemeldet, nicht still skaliert.
 """
 
@@ -302,16 +304,30 @@ def drill_tool(
     widening_diameter: float = 0.0,
     widening_depth: float = 0.0,
     transition_angle: float = 90.0,
+    mouth_overlap: float = 0.0,
 ) -> MeshData:
     """Gemeinsamer Schneidkörper zwischen Mündung null und exakt -depth.
 
-    Eine Blindbohrung bekommt an keinem Ende eine Geometriezugabe, auch nicht
-    beim historischen Mittenanker. Durchgangsaufrufer wählen ausdrücklich eine
-    Tiefe über die Körpergrenze hinaus; Vorschau und Operation teilen den Körper.
+    Der Boden liegt exakt bei ``-depth`` — eine Blindbohrung ist so tief, wie
+    sie eingegeben wurde, auch beim historischen Mittenanker. An der Mündung
+    darf der Aufrufer mit ``mouth_overlap`` über null hinausreichen: Endet das
+    Werkzeug genau auf der angeklickten Fläche, fallen zwei Flächen zusammen,
+    und genau davor schützt :data:`BOOLEAN_OVERLAP` in der Rückfallkette. Die
+    Zugabe schneidet Luft und ändert kein Maß. Durchgangsaufrufer wählen
+    ausdrücklich eine Tiefe über die Körpergrenze hinaus; Vorschau und
+    Operation teilen den Körper.
     """
+    if not math.isfinite(mouth_overlap) or mouth_overlap < 0.0:
+        raise ValidationError(
+            field="depth",
+            detail=_("Die Mündungszugabe des Werkzeugs muss null oder positiv sein."),
+            constraint="positive",
+        )
     if not math.isfinite(depth) or depth <= EPS_GEOM:
         raise ValidationError(
-            field="depth", detail=_("Wählen Sie eine positive Bohrtiefe für den Werkzeugkörper.")
+            field="depth",
+            detail=_("Wählen Sie eine positive Bohrtiefe für den Werkzeugkörper."),
+            constraint="positive",
         )
     radius = bore_diameter(diameter, profile, compensate) / 2.0
     if (
@@ -330,6 +346,7 @@ def drill_tool(
         ):
             raise ValidationError(
                 field="widening_diameter",
+                constraint="minimum",
                 detail=_(
                     "Die Aufweitung muss breiter als die Bohrung sein. "
                     "Prüfen Sie Durchmesser, Tiefe und Übergangswinkel."
@@ -340,6 +357,7 @@ def drill_tool(
         if widening_depth + transition >= depth - EPS_GEOM:
             raise ValidationError(
                 field="depth",
+                constraint="maximum",
                 detail=_(
                     "Aufweitung und Übergang reichen tiefer als die Bohrung. "
                     "Vergrößern Sie die Bohrtiefe oder verkleinern Sie die Aufweitung."
@@ -352,17 +370,17 @@ def drill_tool(
             (radius, -depth),
             (radius, -widening_depth - transition),
             (wide_radius, -widening_depth),
-            (wide_radius, 0.0),
-            (0.0, 0.0),
+            (wide_radius, mouth_overlap),
+            (0.0, mouth_overlap),
             (0.0, -depth),
         ]
         return MeshData.of(trimesh.creation.revolve(outline, sections=BORE_SECTIONS))
     cylinder = trimesh.creation.cylinder(
         radius=radius,
-        height=depth,
+        height=depth + mouth_overlap,
         sections=BORE_SECTIONS,
     )
-    cylinder.apply_translation((0.0, 0.0, -depth / 2.0))
+    cylinder.apply_translation((0.0, 0.0, (mouth_overlap - depth) / 2.0))
     return MeshData.of(cylinder)
 
 
@@ -497,15 +515,41 @@ def drill(
         widening_diameter=widening_diameter,
         widening_depth=widening_depth,
         transition_angle=transition_angle,
+        # Durchgehend reicht das Werkzeug ohnehin über beide Seiten hinaus.
+        # Am Mündungsanker liegt die Position auf der Fläche — dort braucht
+        # die Boolesche die Zugabe, der Boden bleibt bei der Tiefe. Der
+        # historische Mittenanker kennt keine Fläche: Seine Mündungsebene
+        # kann mitten im Material liegen, und eine Zugabe dort wäre ein
+        # tieferes Loch, kein Schutz.
+        mouth_overlap=BOOLEAN_OVERLAP if not through and anchor == "mouth" else 0.0,
     ).raw.copy()
-    cylinder.apply_translation((0.0, 0.0, height / 2.0))
-    cylinder.apply_transform(_axis_alignment(axis))
-    offset = np.asarray(position, dtype=float)
-    if not through and anchor == "mouth":
-        direction = np.zeros(3)
-        direction[AXIS_INDEX[axis]] = _into_the_material(mesh, axis, position)
-        offset = offset + direction * (height / 2.0)
-    cylinder.apply_translation(offset)
+    alignment = _axis_alignment(axis)
+    if through:
+        # Symmetrisch über beide Seiten hinaus: Mitte auf die Position.
+        cylinder.apply_translation((0.0, 0.0, height / 2.0))
+        cylinder.apply_transform(alignment)
+        cylinder.apply_translation(np.asarray(position, dtype=float))
+    else:
+        # Das Werkzeug ist nicht mehr symmetrisch: Mündung bei null mit
+        # Zugabe darüber, Boden exakt bei -height. Die Mündung muss aus dem
+        # Material heraus zeigen — und ``_axis_alignment`` legt die lokale
+        # z-Achse je nach Achse auf +x, -y oder +z. Also nachsehen, wohin
+        # sie zeigt, und das Werkzeug um seine Querachse drehen, wenn die
+        # Zugabe sonst am Boden läge (gemessen 06.09.2026 an der y-Achse).
+        into = _into_the_material(mesh, axis, position)
+        local_z = alignment[:3, :3] @ np.array([0.0, 0.0, 1.0])
+        if float(np.sign(local_z[AXIS_INDEX[axis]])) == into:
+            cylinder.apply_transform(
+                trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0))
+            )
+        cylinder.apply_transform(alignment)
+        along = np.zeros(3)
+        along[AXIS_INDEX[axis]] = into
+        offset = np.asarray(position, dtype=float)
+        if anchor == "centre":
+            # Historischer Anker: die Position ist die Mitte der Bohrlänge.
+            offset = offset - along * (height / 2.0)
+        cylinder.apply_translation(offset)
 
     outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
     findings = list(outcome.findings)

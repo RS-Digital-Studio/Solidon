@@ -158,13 +158,30 @@ def test_g14_same_volume_and_bounds_still_show_a_moved_hole() -> None:
 
 
 def test_g17_wall_scale_remains_ordered_when_every_wall_exceeds_the_cap(profile) -> None:
-    """Gedeckelte Wandkarten brauchen dieselben Grenzen in Bild und Legende."""
-    from app.core.perceive.maps import wall_thickness_map
+    """Gedeckelte Wandkarten brauchen dieselben Grenzen in Bild und Legende.
+
+    Bis zum 06.09.2026 prüfte der Test nur die Ordnung der drei Zahlen. Der
+    Befund war aber, dass Bild und Legende verschiedene Skalen zeigten — also
+    gehört hierher, wo die Skala beginnt, wo der Deckel liegt und dass die
+    Legende den Deckel auch nennt.
+    """
+    import math
+
+    from app.core.perceive.maps import WALL_SCALE_FACTOR, wall_thickness_map
 
     mesh = MeshData.of(trimesh.creation.box(extents=(20.0,) * 3))
-    result = wall_thickness_map(mesh, minimum=profile.minimum_wall_thickness)
-    assert result.low < result.high
-    assert result.low <= result.threshold <= result.high
+    minimum = profile.minimum_wall_thickness
+    result = wall_thickness_map(mesh, minimum=minimum)
+    known = [value for value in result.values if not math.isnan(value)]
+    assert max(known) > minimum * WALL_SCALE_FACTOR, "der Würfel muss den Deckel überschreiten"
+    assert result.low == 0.0
+    assert result.high == pytest.approx(minimum * WALL_SCALE_FACTOR)
+    assert result.threshold == minimum
+    assert result.low < result.threshold < result.high
+    assert result.note == (
+        "Untergrenze sind zwei Extrusionsbreiten. Die Skala endet weit darüber; "
+        "alles Dickere trägt dieselbe Farbe."
+    )
 
 
 @pytest.mark.parametrize("angle", [15.0, 45.0, 105.0, 225.0])
@@ -278,6 +295,34 @@ def _feature_run(name, entry, profile, **params):
             cancelled=NeverCancelled(),
         )
     )
+
+
+def test_an_absurd_diameter_is_rejected_before_any_tool_is_built(profile) -> None:
+    """Die Durchmesserfelder haben keine feste Obergrenze (ein gemessenes Maß darf
+    nicht geklemmt werden), aber ein Werkzeug von tausend Metern baut niemand."""
+    from app.core.geom.prepare import drill
+    from app.core.perceive.features import detect
+    from app.core.types import SceneObject
+
+    base = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 20.0)))
+    bored = drill(
+        base,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=8.0,
+        depth=0.0,
+        profile=profile,
+        compensate=False,
+    ).mesh
+    entry = SceneObject("obj_1", "Platte", bored, features=detect(bored))
+    hole = next(feature for feature in entry.features.values() if feature.kind == "hole")
+    with pytest.raises(ValidationError) as caught:
+        _feature_run("resize_hole", entry, profile, at_feature=hole.id, diameter=1_000_000.0)
+    assert caught.value.field == "diameter"
+    assert caught.value.constraint == "maximum"
+    # Ein großes, aber echtes Maß geht weiter durch.
+    result = _feature_run("resize_hole", entry, profile, at_feature=hole.id, diameter=30.0)
+    assert result.outputs
 
 
 def test_g34_shallow_wide_hole_copy_preserves_depth(profile) -> None:
