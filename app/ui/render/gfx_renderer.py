@@ -8,26 +8,25 @@ Bild entsteht über ``WgpuRenderer`` — auf einer Qt-Leinwand
 
 Was hier anders gelöst ist als bei VTK, weil pygfx es anders kann:
 
-* **Gepickt wird aus dem Bild.** pygfx schreibt je Bildpunkt, welches Objekt
-  und welches Dreieck dort steht; ``pick_surface`` und ``pick_item`` lesen das.
-  Ein Pick zeichnet deshalb vorher ein Bild — nur mit dem, was pickbar ist,
-  damit Unpickbares nicht verdeckt (VTKs Zell-Picker rechnet geometrisch und
-  übergeht Unpickbares von selbst).
+* **Gepickt wird aus dem Bild.** Ein eigener Durchgang enthält nur Pickbares;
+  unveränderte Szene und Kamera verwenden ihn erneut. Die Treffertoleranz
+  liest ein kleines Rechteck in einem Zug statt jeden Nachbarpunkt einzeln.
 * **Vorn bleibt, was ohne Tiefentest zeichnet.** ``keep_in_front`` heißt hier
   ``depth_test = False`` in der Überlagerungswarteschlange, nicht ein
   Polygonversatz. Ein Maß im Material ist damit vollständig sichtbar, nicht
   nur nach vorn gerückt.
 * **Beschriftungen sind Textobjekte im Bildraum**; das Feld dahinter ist ein
   bildbreiter Linienzug, den jedes Bild an die Kamera anpasst.
-* **Umgebungsverdeckung gibt es nicht.** pygfx hat keine SSAO; der Schalter
-  merkt sich den Wunsch und tut nichts — ein Loch im Renderer, kein Sonderweg
-  im Viewport.
+* **Umgebungsverdeckung liegt vor der Überlagerung.** Ein eigener
+  GPU-Durchgang schattiert nur deckende Flächen; durchscheinende Körper,
+  Linien, Beschriftungen und Achsen folgen danach.
 """
 
 from __future__ import annotations
 
 import logging
 import math
+from collections import defaultdict, deque
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -95,12 +94,16 @@ DEFAULT_HEADLIGHT = 0.25
 #: Die Warteschlange, in der pygfx Überlagerungen zeichnet (nach allem anderen).
 OVERLAY_QUEUE = 4000
 
-#: Wie viele Bildpunkte je Zeichen die Breite eines Beschriftungsfelds
-#: annimmt, als Anteil der Schriftgröße — für das Feld hinter dem Text.
-GLYPH_WIDTH_SHARE = 0.62
-
 #: Abstand der Achsenkreuz-Kamera vom Ursprung, in Pfeillängen.
 AXES_CAMERA_DISTANCE = 4.2
+
+#: Wie viele verborgene Text-Feld-Paare eine Beschriftung für später behält.
+#:
+#: Beim Drehen wechselt die sichtbare Namensliste in fast jedem Bild; jedes
+#: neue ``gfx.Text`` kostet Glyphenlayout und einen Shaderaufbau (gemessen
+#: am Drillholder mit 157 Namen: fünf neue je Bild, rund 25 ms). Ruhende
+#: Paare bleiben deshalb verborgen im Baum, bis ihr Name wiederkommt.
+IDLE_LABEL_LIMIT = 256
 
 
 def _vec(values: Sequence[float] | np.ndarray) -> Vec3:
@@ -127,14 +130,6 @@ def _alpha_mode(opacity: float) -> str:
 
 def _positions(points: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.asarray(points, dtype=np.float32).reshape(-1, 3))
-
-
-def _unique_edges(faces: np.ndarray) -> np.ndarray:
-    """Jede Dreieckskante einmal, als ``(k, 2)`` Indexpaare."""
-    triangles = np.asarray(faces, dtype=np.int64).reshape(-1, 3)
-    edges = np.vstack([triangles[:, [0, 1]], triangles[:, [1, 2]], triangles[:, [2, 0]]])
-    edges.sort(axis=1)
-    return np.unique(edges, axis=0)
 
 
 def _face_colours(colours: CellColours, count: int) -> np.ndarray:
@@ -172,35 +167,61 @@ def _face_colours(colours: CellColours, count: int) -> np.ndarray:
 class GfxItem(Item):
     """Eine Gruppe von pygfx-Objekten unter einem gemeinsamen Transform."""
 
-    def __init__(self, name: str, root: Any, objects: Sequence[Any], colour: Colour) -> None:
+    def __init__(
+        self,
+        name: str,
+        root: Any,
+        objects: Sequence[Any],
+        colour: Colour,
+        *,
+        opacity: float = 1.0,
+        pickable: bool = True,
+    ) -> None:
         self.name = name
         #: Der Träger des Transforms; Versatz und Matrix stehen hier.
         self.root = root
         #: Die Objekte, die gezeichnet werden — Netz, Rückseite, Kanten …
         self.objects = list(objects)
         self._colour = colour
-        self._opacity = 1.0
-        self._pickable = True
+        self._opacity = float(opacity)
+        self._pickable = bool(pickable)
         self._position: Vec3 = (0.0, 0.0, 0.0)
         self._matrix = np.eye(4)
-        #: Kantenpaare für die Kantenlinie, damit ``update_points`` sie nachzieht.
-        self.edge_pairs: np.ndarray | None = None
+        #: Das Drahtgitter über der Fläche, wenn Kanten gewünscht sind — es
+        #: teilt die Geometrie des Netzes und zieht mit ``update_points`` nach.
         self.edge_line: Any = None
+        #: Polylinien tragen zusätzliche NaN-Trenner, die keine Quellpunkte sind.
+        self.point_map: np.ndarray | None = None
+        self.point_count: int | None = None
+        self.changed: Callable[[], None] | None = None
+        #: Der zuletzt gerechnete Hüllquader; jede Änderung am Item verwirft ihn.
+        self._bounds: Bounds | None = None
+
+    def _changed(self) -> None:
+        self._bounds = None
+        if self.changed is not None:
+            self.changed()
 
     # --- Vertrag ------------------------------------------------------------------
 
     def set_visible(self, visible: bool) -> None:
         self.root.visible = bool(visible)
+        self._changed()
 
     def visible(self) -> bool:
         return bool(self.root.visible)
 
     def set_opacity(self, opacity: float) -> None:
         self._opacity = float(opacity)
-        for obj in self._coloured():
+        for obj in self._coloured() + ([self.edge_line] if self.edge_line is not None else []):
             obj.material.opacity = self._opacity
             if not getattr(obj, "_solidon_text", False):
-                obj.material.alpha_mode = _alpha_mode(self._opacity)
+                obj.material.alpha_mode = (
+                    "solid"
+                    if getattr(obj, "_solidon_force_opaque", False)
+                    else _alpha_mode(self._opacity)
+                )
+        self._changed()
 
     def opacity(self) -> float:
         return self._opacity
@@ -209,6 +230,10 @@ class GfxItem(Item):
         self._colour = colour
         for obj in self._coloured():
             obj.material.color = colour
+            ambient = getattr(obj, "_solidon_ambient", None)
+            if ambient is not None:
+                obj.material.emissive = (*(part * ambient for part in rgb(colour)), 1.0)
+        self._changed()
 
     def colour(self) -> Colour:
         return self._colour
@@ -233,41 +258,64 @@ class GfxItem(Item):
         shift = np.eye(4)
         shift[:3, 3] = self._position
         self.root.local.matrix = shift @ self._matrix
+        self._changed()
 
     def bounds(self) -> Bounds:
+        # pygfx rechnet den Quader je Aufruf rekursiv über alle Kinder
+        # (rund 65 µs je Item); die Szene fragt ihn zweimal je Bild.
+        if self._bounds is not None:
+            return self._bounds
         box = self.root.get_world_bounding_box()
         if box is None:
-            return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        low, high = np.asarray(box, dtype=float)
-        return (
-            float(low[0]),
-            float(high[0]),
-            float(low[1]),
-            float(high[1]),
-            float(low[2]),
-            float(high[2]),
-        )
+            self._bounds = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        else:
+            low, high = np.asarray(box, dtype=float)
+            self._bounds = (
+                float(low[0]),
+                float(high[0]),
+                float(low[1]),
+                float(high[1]),
+                float(low[2]),
+                float(high[2]),
+            )
+        return self._bounds
 
     def set_pickable(self, pickable: bool) -> None:
         self._pickable = bool(pickable)
         for obj in self.objects:
-            obj.material.pick_write = self._pickable
+            obj.material.pick_write = self._pickable and getattr(obj, "_solidon_pickable", True)
+        self._changed()
 
     def pickable(self) -> bool:
         return self._pickable
 
     def update_points(self, points: np.ndarray) -> None:
+        source = np.asarray(points, dtype=float).reshape(-1, 3)
         fresh = _positions(points)
+        if self.point_count is not None and len(fresh) != self.point_count:
+            raise ValueError(f"{self.name}: {len(fresh)} Punkte für {self.point_count}")
+        if self.point_map is not None:
+            mapped = np.full((len(self.point_map), 3), np.nan, dtype=np.float32)
+            valid = self.point_map >= 0
+            mapped[valid] = fresh[self.point_map[valid]]
+            fresh = mapped
+        replacements: dict[int, Any] = {}
         for obj in self._geometry_holders():
-            current = obj.geometry.positions
+            geometry = obj.geometry
+            current = geometry.positions
             if fresh.shape[0] != current.nitems:
                 raise ValueError(f"{self.name}: {fresh.shape[0]} Punkte für {current.nitems}")
+            if hasattr(obj, "_solidon_positions"):
+                obj._solidon_positions = source
+            if id(geometry) in replacements:
+                obj.geometry = replacements[id(geometry)]
+                continue
             current.set_data(fresh)
             # Normalen und Hüllquader hängen an den Ecken; ein neues Netz
             # rechnet beides frisch, ein überschriebenes nicht zuverlässig.
-            obj.geometry = _geometry_like(obj.geometry, fresh)
-        if self.edge_line is not None and self.edge_pairs is not None:
-            self.edge_line.geometry = _line_geometry(fresh[self.edge_pairs].reshape(-1, 3))
+            obj.geometry = _geometry_like(geometry, fresh)
+            replacements[id(geometry)] = obj.geometry
+        self._changed()
 
     def set_line_width(self, width: float) -> None:
         for obj in self.objects:
@@ -276,6 +324,7 @@ class GfxItem(Item):
                 material.thickness = float(width)
             elif hasattr(material, "wireframe_thickness"):
                 material.wireframe_thickness = float(width)
+        self._changed()
 
     # --- Hilfen -------------------------------------------------------------------
 
@@ -296,7 +345,7 @@ def _geometry_like(geometry: Any, positions: np.ndarray) -> Any:
     for name in ("indices", "colors", "texcoords"):
         attribute = getattr(geometry, name, None)
         if attribute is not None:
-            fields[name] = np.asarray(attribute.data).copy()
+            fields[name] = attribute
     return gfx.Geometry(**fields)
 
 
@@ -310,89 +359,188 @@ class GfxLabels(GfxItem, LabelsItem):
     """Beschriftungen: je Anker ein Textobjekt im Bildraum, dazu Feld und Punkt."""
 
     def __init__(self, name: str, root: Any, style: LabelStyle) -> None:
-        super().__init__(name, root, [], style.text_colour)
+        super().__init__(name, root, [], style.text_colour, pickable=style.pickable)
         self.style = style
         self.texts: list[Any] = []
         self.fields: list[Any] = []
         self.anchors = np.zeros((0, 3), dtype=np.float32)
         self.labels: list[str] = []
         self.dots: Any = None
+        self.rebuilt: Callable[[GfxItem], None] | None = None
+        self._field_state: tuple[Any, ...] | None = None
+        #: Verborgene Paare je Name, in der Reihenfolge ihres Ausscheidens.
+        self._idle: deque[tuple[str, Any, Any | None]] = deque()
 
     def build(self, points: np.ndarray, texts: Sequence[str]) -> None:
+        """Sichtbare Namen abgleichen; vorhandene Schrift- und Feldobjekte behalten.
+
+        Ein Name, der gerade nicht sichtbar ist, verliert seine Glyphen nicht:
+        Sein Paar bleibt verborgen im Baum (:data:`IDLE_LABEL_LIMIT`) und
+        kehrt beim nächsten Bild, das ihn zeigt, ohne neuen Shaderaufbau zurück.
+        """
         import pygfx as gfx
 
         anchors = _positions(points)
         if anchors.shape[0] != len(texts):
             raise ValueError(f"{self.name}: {anchors.shape[0]} Anker für {len(texts)} Texte")
-        for obj in list(self.objects):
-            self.root.remove(obj)
-        self.objects.clear()
-        self.texts.clear()
-        self.fields.clear()
-        self.anchors = anchors
-        self.labels = [str(text) for text in texts]
-        style = self.style
-        for anchor, text in zip(anchors, self.labels, strict=True):
-            if style.background is not None:
-                field = gfx.Line(
-                    gfx.Geometry(positions=np.vstack([anchor, anchor]).astype(np.float32)),
-                    gfx.LineMaterial(
-                        thickness=1.0,
-                        color=_rgba(style.background, style.background_opacity),
-                        alpha_mode=_alpha_mode(style.background_opacity),
-                        depth_test=not style.always_visible,
+        labels = [str(text) for text in texts]
+        available: dict[str, deque[tuple[Any, Any | None]]] = defaultdict(deque)
+        for index, (text, label) in enumerate(zip(self.labels, self.texts, strict=True)):
+            available[text].append((label, self.fields[index] if self.fields else None))
+        idle: dict[str, deque[tuple[Any, Any | None]]] = defaultdict(deque)
+        for text, label, field in self._idle:
+            idle[text].append((label, field))
+        old_objects = set(self.objects)
+        objects, label_objects, fields = [], [], []
+        for anchor, text in zip(anchors, labels, strict=True):
+            matching = available.get(text)
+            resting = idle.get(text)
+            if matching:
+                label, field = matching.popleft()
+            elif resting:
+                label, field = resting.popleft()
+                self._idle.remove((text, label, field))
+                self._wake(label, field)
+            else:
+                label, field = self._new_label(anchor, text)
+            label.local.position = anchor
+            if field is not None:
+                fields.append(field)
+                objects.append(field)
+            label_objects.append(label)
+            objects.append(label)
+        for text, pairs in available.items():
+            for label, field in pairs:
+                self._rest(text, label, field)
+        while len(self._idle) > IDLE_LABEL_LIMIT:
+            _text, label, field = self._idle.popleft()
+            self.root.remove(*([label] if field is None else [field, label]))
+        if self.style.show_points and len(anchors):
+            if self.dots is None:
+                self.dots = gfx.Points(
+                    gfx.Geometry(positions=anchors.copy()),
+                    gfx.PointsMaterial(
+                        size=float(self.style.point_size),
+                        color=self.style.point_colour,
+                        depth_test=not self.style.always_visible,
                         render_queue=OVERLAY_QUEUE,
-                        pick_write=False,
+                        pick_write=self._pickable,
                     ),
                 )
-                field._solidon_coloured = False
-                self.root.add(field)
-                self.objects.append(field)
-                self.fields.append(field)
-            label = gfx.Text(
-                text=text,
-                font_size=float(style.font_size),
-                screen_space=True,
-                anchor="middle-center",
-                material=gfx.TextMaterial(
-                    color=style.text_colour,
-                    weight_offset=300 if style.bold else 0,
-                    depth_test=not style.always_visible,
-                    render_queue=OVERLAY_QUEUE,
-                    pick_write=bool(style.pickable),
-                ),
-            )
-            label.local.position = anchor
-            label._solidon_text = True
-            self.root.add(label)
-            self.objects.append(label)
-            self.texts.append(label)
-        if self.dots is not None:
-            self.root.remove(self.dots)
+                self.dots._solidon_coloured = False
+            elif self.dots.geometry.positions.data.shape == anchors.shape:
+                self.dots.geometry.positions.data[:] = anchors
+                self.dots.geometry.positions.update_full()
+            else:
+                self.dots.geometry = gfx.Geometry(positions=anchors.copy())
+            objects.append(self.dots)
+        else:
             self.dots = None
-        if style.show_points and len(anchors):
-            self.dots = gfx.Points(
-                gfx.Geometry(positions=anchors.copy()),
-                gfx.PointsMaterial(
-                    size=float(style.point_size),
-                    color=style.point_colour,
+        new_objects = set(objects)
+        resting_objects = {obj for _text, label, field in self._idle for obj in (label, field)}
+        for obj in old_objects - new_objects - resting_objects:
+            self.root.remove(obj)
+        # Gleiche Texte dürfen mehrfach vorkommen. Ihre Reihenfolge bestimmt
+        # bei gleicher Tiefe auch die Reihenfolge beim Zeichnen.
+        self.root.add(*objects)
+        self.objects = objects
+        self.texts = label_objects
+        self.fields = fields
+        self.anchors = anchors
+        self.labels = labels
+        self._field_state = None
+        if old_objects != new_objects and self.rebuilt is not None:
+            self.rebuilt(self)
+        else:
+            self._changed()
+
+    def _rest(self, text: str, label: Any, field: Any | None) -> None:
+        """Ein ausgeschiedenes Paar verbergen und für seinen Namen aufheben."""
+        label.visible = False
+        if field is not None:
+            field.visible = False
+        self._idle.append((text, label, field))
+
+    def _wake(self, label: Any, field: Any | None) -> None:
+        """Ein ruhendes Paar zeigen — mit der Farbe und Deckkraft von heute."""
+        label.visible = True
+        label.material.color = self._colour
+        label.material.opacity = self._opacity
+        if field is not None:
+            field.visible = True
+
+    def _new_label(self, anchor: np.ndarray, text: str) -> tuple[Any, Any | None]:
+        """Nur ein neuer sichtbarer Name braucht neue Glyphen und ein neues Feld."""
+        import pygfx as gfx
+
+        style = self.style
+        field = None
+        if style.background is not None:
+            field = gfx.Line(
+                gfx.Geometry(positions=np.vstack([anchor, anchor]).astype(np.float32)),
+                gfx.LineMaterial(
+                    thickness=1.0,
+                    color=_rgba(style.background, style.background_opacity),
+                    alpha_mode=_alpha_mode(style.background_opacity),
                     depth_test=not style.always_visible,
-                    render_queue=OVERLAY_QUEUE,
-                    pick_write=bool(style.pickable),
+                    render_queue=OVERLAY_QUEUE + 1,
+                    pick_write=False,
                 ),
             )
-            self.dots._solidon_coloured = False
-            self.root.add(self.dots)
-            self.objects.append(self.dots)
-        self.set_opacity(self._opacity)
+            field._solidon_coloured = False
+            field._solidon_pickable = False
+        label = gfx.Text(
+            text=text,
+            font_size=float(style.font_size),
+            screen_space=False,
+            anchor="bottom-left" if style.show_points else "middle-center",
+            anchor_offset=(style.point_size / 2.0 + style.margin + 2.0) if style.show_points else 0,
+            material=gfx.TextMaterial(
+                color=self._colour,
+                opacity=self._opacity,
+                weight_offset=300 if style.bold else 0,
+                depth_test=not style.always_visible,
+                render_queue=OVERLAY_QUEUE + 2,
+                pick_write=self._pickable,
+            ),
+        )
+        # Das Layout kennt Glyphenbreite, Umlaute, Schrift und Zeilenhöhe.
+        # Im Bildraum gibt get_bounding_box nur den Anker zurück; die
+        # wirklichen Textmaße deshalb einmal vor dem Umschalten lesen.
+        text_bounds = label.get_bounding_box()
+        label._solidon_label_bounds = (
+            np.zeros((2, 3)) if text_bounds is None else np.asarray(text_bounds, dtype=float)
+        )
+        label.screen_space = True
+        label._solidon_text = True
+        return label, field
 
     def update_labels(self, points: np.ndarray, texts: Sequence[str]) -> None:
-        self.build(points, texts)
+        anchors = _positions(points)
+        labels = [str(text) for text in texts]
+        if anchors.shape[0] != len(labels):
+            raise ValueError(f"{self.name}: {anchors.shape[0]} Anker für {len(labels)} Texte")
+        if labels != self.labels:
+            self.build(anchors, labels)
+            return
+        if np.array_equal(anchors, self.anchors):
+            return
+        # Das Bildlayout verschiebt Texte bei jedem Kamerazug. Schriftlayout,
+        # Glyphen und Registrierungen bleiben dabei dieselben.
+        self.anchors = anchors
+        for label, anchor in zip(self.texts, anchors, strict=True):
+            label.local.position = anchor
+        if self.dots is not None:
+            self.dots.geometry.positions.data[:] = anchors
+            self.dots.geometry.positions.update_full()
+        self._field_state = None
+        self._changed()
 
     def bounds(self) -> Bounds:
         if not len(self.anchors):
             return (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        world = self.anchors.astype(float) + np.asarray(self._position, dtype=float)
+        matrix = np.asarray(self.root.world.matrix, dtype=float)
+        world = self.anchors.astype(float) @ matrix[:3, :3].T + matrix[:3, 3]
         low = world.min(axis=0)
         high = world.max(axis=0)
         return (
@@ -410,24 +558,35 @@ class GfxLabels(GfxItem, LabelsItem):
     def fit_fields(self, renderer: GfxRenderer) -> None:
         """Die Felder hinter den Texten auf Bildbreite bringen — je Bild neu,
         denn die Weltlänge eines Bildpunkts hängt an Kamera und Anker."""
-        if not self.fields:
+        if not self.fields or not self.visible():
             return
+        matrix = np.asarray(self.root.world.matrix, dtype=float)
+        state = (renderer._camera.camera_matrix.tobytes(), renderer.view_size(), matrix.tobytes())
+        if state == self._field_state:
+            return
+        self._field_state = state
         style = self.style
-        height = float(style.font_size) + 2.0 * float(style.margin)
         right = np.asarray(renderer._camera.world.right, dtype=float)
-        offset = np.asarray(self._position, dtype=float)
-        for field, anchor, text in zip(self.fields, self.anchors, self.labels, strict=True):
-            world = anchor.astype(float) + offset
-            per_pixel = renderer._world_per_pixel_at(world, right)
-            width_pixels = max(len(text), 1) * GLYPH_WIDTH_SHARE * float(style.font_size)
-            half = 0.5 * (width_pixels + 2.0 * float(style.margin)) * per_pixel
-            ends = np.vstack([anchor - half * right, anchor + half * right]).astype(np.float32)
-            field.geometry = gfx_geometry(ends)
+        up = np.asarray(renderer._camera.world.up, dtype=float)
+        local_axes = np.linalg.pinv(matrix[:3, :3]) @ np.column_stack((right, up))
+        local_right, local_up = local_axes[:, 0], local_axes[:, 1]
+        for field, anchor, label in zip(self.fields, self.anchors, self.texts, strict=True):
+            world = matrix[:3, :3] @ anchor.astype(float) + matrix[:3, 3]
+            # pygfx bemisst Text und Linienstärke in logischen Bildpunkten;
+            # der gemeinsame Renderer-Vertrag projiziert in Gerätepixel.
+            per_pixel = renderer._world_per_pixel_at(world, right) * renderer._ratio()
+            low, high = label._solidon_label_bounds
+            text_centre = (low + high) / 2.0
+            width = max(float(high[0] - low[0]), 1.0) + 2.0 * float(style.margin)
+            height = max(float(high[1] - low[1]), 1.0) + 2.0 * float(style.margin)
+            centre = anchor + per_pixel * (text_centre[0] * local_right + text_centre[1] * local_up)
+            half = 0.5 * max(width - height, 1.0) * per_pixel
+            ends = np.vstack([centre - half * local_right, centre + half * local_right]).astype(
+                np.float32
+            )
+            field.geometry.positions.data[:] = ends
+            field.geometry.positions.update_full()
             field.material.thickness = height
-
-
-def gfx_geometry(points: np.ndarray) -> Any:
-    return _line_geometry(points)
 
 
 class GfxRenderer(Renderer):
@@ -451,6 +610,10 @@ class GfxRenderer(Renderer):
         self._listeners: dict[int, Callable[[PointerEvent], None]] = {}
         self._next_token = 1
         self._items: dict[int, GfxItem] = {}
+        self._pick_objects: dict[int, Any] = {}
+        self._scene_revision = 0
+        self._pick_key: tuple[Any, ...] | None = None
+        self._bounds_cache: tuple[int, Bounds | None] | None = None
         self._label_items: list[GfxLabels] = []
         self._focal = np.zeros(3)
         self._parallel_scale = 1.0
@@ -460,6 +623,9 @@ class GfxRenderer(Renderer):
         self._axes_camera: Any = None
         self._axes_objects: list[Any] = []
         self._occlusion_wanted = False
+        self._occlusion: Any = None
+        self._occlusion_radius = 0.0
+        self._occlusion_bias = 0.0
         self.widget: Any = None
         if offscreen:
             from rendercanvas.offscreen import RenderCanvas
@@ -475,6 +641,7 @@ class GfxRenderer(Renderer):
         self._ambient = gfx.AmbientLight("#ffffff", AMBIENT_INTENSITY)
         self._scene.add(self._ambient)
         self._camera = gfx.PerspectiveCamera(DEFAULT_VIEW_ANGLE, 1.0)
+        self._camera_view_size: tuple[float, float] | None = None
         self._camera.world.reference_up = (0.0, 0.0, 1.0)
         self._headlight = gfx.DirectionalLight("#ffffff", DEFAULT_HEADLIGHT * HEADLIGHT_GAIN)
         self._camera.add(self._headlight)
@@ -588,11 +755,41 @@ class GfxRenderer(Renderer):
 
     def _register(self, item: GfxItem) -> GfxItem:
         self._scene.add(item.root)
+        self._register_objects(item)
+        if isinstance(item, GfxLabels):
+            # Beschriftungen wandern mit jedem Bild (das Layout schiebt ihre
+            # Anker); der Hüllquader der Szene bleibt davon unberührt.
+            item.changed = self._invalidate_pick
+            self._label_items.append(item)
+            item.rebuilt = self._refresh_registration
+        else:
+            item.changed = self._invalidate_scene
+            self._bounds_cache = None
+        return item
+
+    def _invalidate_pick(self) -> None:
+        self._scene_revision += 1
+        self._pick_key = None
+
+    def _invalidate_scene(self) -> None:
+        self._invalidate_pick()
+        self._bounds_cache = None
+
+    def _refresh_registration(self, item: GfxItem) -> None:
+        obsolete = {key for key, registered in self._items.items() if registered is item}
+        for key, registered in list(self._items.items()):
+            if registered is item:
+                del self._items[key]
+        self._pick_objects = {
+            key: obj for key, obj in self._pick_objects.items() if id(obj) not in obsolete
+        }
+        self._register_objects(item)
+
+    def _register_objects(self, item: GfxItem) -> None:
         for obj in item.objects:
             self._items[id(obj)] = item
-        if isinstance(item, GfxLabels):
-            self._label_items.append(item)
-        return item
+            self._pick_objects[obj.id] = obj
+        self._invalidate_pick()
 
     def _material(self, style: SurfaceStyle, colour: Colour, opacity: float, side: str) -> Any:
         gfx = self._gfx
@@ -608,7 +805,7 @@ class GfxRenderer(Renderer):
         if style.keep_in_front:
             common["depth_test"] = False
             common["render_queue"] = OVERLAY_QUEUE
-        common["alpha_mode"] = _alpha_mode(opacity)
+        common["alpha_mode"] = "solid" if style.force_opaque else _alpha_mode(opacity)
         if not style.lighting:
             return gfx.MeshBasicMaterial(**common)
         material = gfx.MeshPhongMaterial(**common)
@@ -644,6 +841,10 @@ class GfxRenderer(Renderer):
             material.color_mode = "face"
         mesh = gfx.Mesh(geometry, material)
         mesh._solidon_mesh = True
+        mesh._solidon_positions = np.asarray(vertices, dtype=float).reshape(-1, 3)
+        mesh._solidon_force_opaque = style.force_opaque
+        if style.ambient is not None and style.lighting:
+            mesh._solidon_ambient = max(0.0, min(1.0, float(style.ambient)))
         root = gfx.Group()
         root.add(mesh)
         objects = [mesh]
@@ -659,24 +860,42 @@ class GfxRenderer(Renderer):
             )
             back._solidon_coloured = False
             back._solidon_mesh = True
+            back._solidon_positions = mesh._solidon_positions
+            back._solidon_force_opaque = style.force_opaque
             root.add(back)
             objects.append(back)
-        item = GfxItem(name, root, objects, style.colour)
+        item = GfxItem(
+            name, root, objects, style.colour, opacity=style.opacity, pickable=style.pickable
+        )
         if style.show_edges and not style.wireframe:
-            pairs = _unique_edges(indices)
-            edges = gfx.Line(
-                _line_geometry(positions[pairs].reshape(-1, 3)),
-                gfx.LineSegmentMaterial(
-                    thickness=1.0,
+            # **Die Kanten zeichnet die GPU aus demselben Netz.** Ein zweites
+            # Mesh im Drahtgittermodus teilt Geometrie und Tiefe mit der
+            # Fläche; ``depth_compare="<="`` lässt seine Kantenpunkte über der
+            # eigenen Fläche gewinnen, ohne Versatz und ohne dass eine
+            # angehobene Markierung darunter durchscheint. Der Weg davor —
+            # jede Dreieckskante einmal als Linienpaar auf der CPU — kostete
+            # 285 ms bei 197 000 und 5,8 s bei 3,15 Millionen Dreiecken, dazu
+            # 114 MB Linienpuffer, bei jedem Szenenaufbau (gemessen 06.09.2026).
+            edges = gfx.Mesh(
+                geometry,
+                gfx.MeshBasicMaterial(
                     color=style.edge_colour or "#000000",
+                    wireframe=True,
+                    wireframe_thickness=1.0,
+                    side=side,
+                    opacity=style.opacity,
+                    alpha_mode="solid" if style.force_opaque else _alpha_mode(style.opacity),
+                    depth_compare="<=",
                     pick_write=False,
                 ),
             )
             edges._solidon_coloured = False
+            edges._solidon_mesh = True
+            edges._solidon_pickable = False
+            edges._solidon_force_opaque = style.force_opaque
             root.add(edges)
             objects.append(edges)
             item.objects = objects
-            item.edge_pairs = pairs
             item.edge_line = edges
         return self._register(item)
 
@@ -693,41 +912,55 @@ class GfxRenderer(Renderer):
         polylines: Sequence[int] | None = None,
     ) -> Item:
         gfx = self._gfx
+        from app.ui.render.gfx_lines import DepthLineMaterial, DepthLineSegmentMaterial
+
         positions = _positions(points)
-        extra: dict[str, Any] = {"pick_write": bool(pickable)}
+        point_map: np.ndarray | None = None
+        extra: dict[str, Any] = {"pick_write": bool(pickable), "depth_compare": "<="}
         if keep_in_front:
             extra["depth_test"] = False
             extra["render_queue"] = OVERLAY_QUEUE
         if polylines is not None:
-            lengths = [int(length) for length in polylines if int(length) >= 2]
+            lengths = [int(length) for length in polylines]
+            if any(length < 0 for length in lengths):
+                raise ValueError("Eine Linienkette braucht nichtnegative Punktzahlen")
             if sum(lengths) > len(positions):
                 raise ValueError(f"{sum(lengths)} Kettenpunkte für {len(positions)} Punkte")
             pieces: list[np.ndarray] = []
             start = 0
+            mapping: list[int] = []
             gap = np.full((1, 3), np.nan, dtype=np.float32)
             for length in lengths:
-                pieces.append(positions[start : start + length])
-                pieces.append(gap)
+                if length >= 2:
+                    pieces.append(positions[start : start + length])
+                    pieces.append(gap)
+                    mapping.extend(range(start, start + length))
+                    mapping.append(-1)
                 start += length
+            point_map = np.asarray(mapping, dtype=np.int64)
             chained = np.vstack(pieces) if pieces else positions[:0]
             line = gfx.Line(
                 _line_geometry(chained),
-                gfx.LineMaterial(thickness=float(width), color=colour, **extra),
+                DepthLineMaterial(thickness=float(width), color=colour, **extra),
             )
         elif connected:
             line = gfx.Line(
                 _line_geometry(positions),
-                gfx.LineMaterial(thickness=float(width), color=colour, **extra),
+                DepthLineMaterial(thickness=float(width), color=colour, **extra),
             )
         else:
             pairs = positions[: 2 * (len(positions) // 2)]
             line = gfx.Line(
                 _line_geometry(pairs),
-                gfx.LineSegmentMaterial(thickness=float(width), color=colour, **extra),
+                DepthLineSegmentMaterial(thickness=float(width), color=colour, **extra),
             )
         root = gfx.Group()
         root.add(line)
-        return self._register(GfxItem(name, root, [line], colour))
+        line._solidon_mesh = True
+        item = GfxItem(name, root, [line], colour, pickable=pickable)
+        item.point_map = point_map
+        item.point_count = len(positions)
+        return self._register(item)
 
     def add_points(
         self,
@@ -749,7 +982,8 @@ class GfxRenderer(Renderer):
         )
         root = gfx.Group()
         root.add(dots)
-        return self._register(GfxItem(name, root, [dots], colour))
+        dots._solidon_mesh = True
+        return self._register(GfxItem(name, root, [dots], colour, pickable=pickable))
 
     def add_labels(
         self, points: np.ndarray, texts: Sequence[str], *, name: str, style: LabelStyle
@@ -765,8 +999,12 @@ class GfxRenderer(Renderer):
         self._scene.remove(item.root)
         for obj in item.objects:
             self._items.pop(id(obj), None)
+            self._pick_objects.pop(obj.id, None)
+        item.changed = None
         if isinstance(item, GfxLabels) and item in self._label_items:
             self._label_items.remove(item)
+            item.rebuilt = None
+        self._invalidate_scene()
 
     def set_draw_order(self, items: Sequence[Item]) -> None:
         # pygfx sortiert Durchscheinendes selbst von hinten nach vorn
@@ -801,15 +1039,20 @@ class GfxRenderer(Renderer):
     def set_parallel_projection(self, parallel: bool) -> None:
         if parallel == self.parallel_projection():
             return
+        self._sync_camera()
         if parallel:
             # Was jetzt zu sehen ist, bleibt zu sehen: die Bildhöhe am
             # Blickpunkt wird die Höhe der Parallelprojektion.
             distance = self._distance()
-            self._parallel_scale = distance * math.tan(math.radians(self._camera.fov) / 2.0)
+            self._parallel_scale = distance / float(self._camera.projection_matrix[1, 1])
             self._camera.fov = 0
             self._set_height(2.0 * self._parallel_scale)
         else:
+            height = 2.0 / float(self._camera.projection_matrix[1, 1])
             self._camera.fov = DEFAULT_VIEW_ANGLE
+            self._camera.aspect = 1.0
+            distance = height * float(self._camera.projection_matrix[1, 1]) / 2.0
+            self._camera.world.position = self._focal - self._direction() * distance
         self._fit_depth()
 
     def parallel_scale(self) -> float:
@@ -823,7 +1066,14 @@ class GfxRenderer(Renderer):
             self._set_height(2.0 * self._parallel_scale)
 
     def view_angle(self) -> float:
-        return float(self._camera.fov) if self._camera.fov > 0 else DEFAULT_VIEW_ANGLE
+        if self._camera.fov > 0:
+            self._sync_camera()
+            return math.degrees(2.0 * math.atan(1.0 / self._camera.projection_matrix[1, 1]))
+        width, height = self.view_size()
+        aspect = max(width, 1) / max(height, 1)
+        return math.degrees(
+            2.0 * math.atan(math.tan(math.radians(DEFAULT_VIEW_ANGLE) / 2.0) / min(aspect, 1.0))
+        )
 
     def dolly(self, factor: float) -> None:
         factor = float(factor)
@@ -848,16 +1098,15 @@ class GfxRenderer(Renderer):
             radius = 1.0
         direction = self._direction()
         if self._camera.fov == 0:
-            self._set_height(2.0 * radius)
-            self._parallel_scale = radius
+            width, height = self.view_size()
+            self._parallel_scale = radius / min(width / max(height, 1), 1.0)
+            self._set_height(2.0 * self._parallel_scale)
             distance = self._distance()
         else:
-            width, height = self.view_size()
-            angle = math.radians(self._camera.fov)
-            aspect = width / height if height else 1.0
-            if aspect < 1.0:
-                angle = 2.0 * math.atan(math.tan(angle / 2.0) / aspect)
-            distance = radius / math.sin(angle / 2.0)
+            self._sync_camera()
+            projection = self._camera.projection_matrix
+            half_angle = min(math.atan(1.0 / projection[0, 0]), math.atan(1.0 / projection[1, 1]))
+            distance = radius / math.sin(half_angle)
         self._camera.world.position = centre - direction * distance
         self._camera.look_at(centre)
         self._focal = centre
@@ -876,7 +1125,11 @@ class GfxRenderer(Renderer):
 
     def _sync_camera(self) -> None:
         width, height = self._logical_size()
-        self._camera.set_view_size(max(width, 1.0), max(height, 1.0))
+        size = (max(width, 1.0), max(height, 1.0))
+        if size != self._camera_view_size:
+            # Auch identische Werte verwerfen bei pygfx die Projektionsmatrizen.
+            self._camera.set_view_size(*size)
+            self._camera_view_size = size
 
     def world_to_display(self, point: Vec3) -> tuple[float, float, float]:
         self._sync_camera()
@@ -924,19 +1177,35 @@ class GfxRenderer(Renderer):
         self._camera.width = max(float(height), EPS_GEOM) * aspect
 
     def _scene_bounds(self) -> Bounds | None:
-        boxes = [item.bounds() for item in set(self._items.values()) if item.visible()]
+        """Der Hüllquader der sichtbaren Geometrie — je Szenenstand einmal gerechnet.
+
+        Jede Kamerastellung fragt ihn zweimal (Stellung und Tiefenbereich), und
+        pygfx rechnet ihn je Objekt rekursiv: 76 Objekte kosteten 5 ms je
+        Aufruf. Beschriftungen zählen nicht mit — wie VTKs 2D-Aktoren —, denn
+        ihre Anker verschiebt das Layout in jedem Bild; jede Änderung an einem
+        Geometrie-Item verwirft den Cache (:meth:`_invalidate_scene`).
+        """
+        if self._bounds_cache is not None:
+            return self._bounds_cache[1]
+        boxes = [
+            item.bounds()
+            for item in set(self._items.values())
+            if item.visible() and not isinstance(item, GfxLabels)
+        ]
         boxes = [box for box in boxes if box[1] > box[0] or box[3] > box[2] or box[5] > box[4]]
-        if not boxes:
-            return None
-        array = np.asarray(boxes, dtype=float)
-        return (
-            float(array[:, 0].min()),
-            float(array[:, 1].max()),
-            float(array[:, 2].min()),
-            float(array[:, 3].max()),
-            float(array[:, 4].min()),
-            float(array[:, 5].max()),
-        )
+        bounds: Bounds | None = None
+        if boxes:
+            array = np.asarray(boxes, dtype=float)
+            bounds = (
+                float(array[:, 0].min()),
+                float(array[:, 1].max()),
+                float(array[:, 2].min()),
+                float(array[:, 3].max()),
+                float(array[:, 4].min()),
+                float(array[:, 5].max()),
+            )
+        self._bounds_cache = (self._scene_revision, bounds)
+        return bounds
 
     def _fit_depth(self, radius: float | None = None) -> None:
         """Nah- und Fernebene um das, was im Bild steht — wie VTKs
@@ -964,7 +1233,19 @@ class GfxRenderer(Renderer):
 
     def _pick_pass(self, among: Sequence[Item] | None) -> list[tuple[Any, bool]]:
         """Ein Bild nur mit dem Pickbaren — Unpickbares darf nicht verdecken."""
+        if min(self.view_size()) <= 0:
+            self._pick_key = None
+            return []
         wanted_items = {id(item) for item in among} if among is not None else None
+        self._sync_camera()
+        key = (
+            self._scene_revision,
+            None if wanted_items is None else frozenset(wanted_items),
+            self._camera.camera_matrix.tobytes(),
+            self.view_size(),
+        )
+        if key == self._pick_key:
+            return []
         restore: list[tuple[Any, bool]] = []
         for item in set(self._items.values()):
             allowed = item.visible() and item.pickable()
@@ -973,11 +1254,24 @@ class GfxRenderer(Renderer):
             if item.root.visible != allowed:
                 restore.append((item.root, item.root.visible))
                 item.root.visible = allowed
-        self._sync_camera()
+            if allowed:
+                for obj in item.objects:
+                    material = obj.material
+                    has_opacity = material.alpha_mode == "solid" or (
+                        material.opacity > 0.0 and material.color.a > 0.0
+                    )
+                    if obj.visible and (not material.pick_write or not has_opacity):
+                        restore.append((obj, True))
+                        obj.visible = False
         # Ohne Flush merkt sich pygfx den Durchgang als „noch nicht
         # aufgeräumt" und malte das nächste Bild über dieses — der
         # entfernte Körper blieb dann ein Bild lang stehen.
-        self._renderer.render(self._scene, self._camera, clear=True, flush=False)
+        try:
+            self._renderer.render(self._scene, self._camera, clear=True, flush=False)
+        except Exception:
+            self._restore(restore)
+            raise
+        self._pick_key = key
         return restore
 
     def _restore(self, restore: list[tuple[Any, bool]]) -> None:
@@ -985,12 +1279,122 @@ class GfxRenderer(Renderer):
             obj.visible = visible
 
     def _info_at(self, x: float, y: float) -> dict[str, Any]:
+        if min(self.view_size()) <= 0:
+            return {}
         ratio = self._ratio()
         return dict(self._renderer.get_pick_info((float(x) / ratio, float(y) / ratio)))
 
     def _item_of(self, info: dict[str, Any]) -> GfxItem | None:
         obj = info.get("world_object")
         return self._items.get(id(obj)) if obj is not None else None
+
+    def _info_near(self, x: float, y: float, radius: float) -> dict[str, Any]:
+        """Ein Trefferring mit genau einem Rücklesen statt bis zu 17 Wartezeiten.
+
+        pygfx bietet öffentlich nur einzelne Bildpunkte an. Der hier eng
+        begrenzte Zugriff liest dasselbe 64-Bit-Pickformat wie ``get_pick_info``;
+        die Objekte selbst dekodieren anschließend Dreieck und Koordinaten.
+        Bild- und Picktests sichern diese Grenze gegen die festgelegte Version.
+        """
+        view_width, view_height = self.view_size()
+        if min(view_width, view_height) <= 0:
+            return {}
+        texture = self._renderer._blender.get_texture("pick")
+        if texture is None:
+            return {}
+        width, height, _depth = texture.size
+        scale_x, scale_y = width / max(view_width, 1), height / max(view_height, 1)
+        px, py = float(x) * scale_x, float(y) * scale_y
+        low_x = max(0, math.floor(px - radius * scale_x))
+        low_y = max(0, math.floor(py - radius * scale_y))
+        high_x = min(width, math.ceil(px + radius * scale_x) + 1)
+        high_y = min(height, math.ceil(py + radius * scale_y) + 1)
+        if low_x >= high_x or low_y >= high_y:
+            return {}
+        span_x, span_y = high_x - low_x, high_y - low_y
+        data = self._renderer._device.queue.read_texture(
+            {"texture": texture, "mip_level": 0, "origin": (low_x, low_y, 0)},
+            {"offset": 0, "bytes_per_row": span_x * 8, "rows_per_image": span_y},
+            (span_x, span_y, 1),
+        )
+        values = np.frombuffer(data, dtype=np.uint64).reshape(span_y, span_x)
+        rows, columns = np.nonzero(values & ((1 << 20) - 1))
+        distances = ((columns + low_x + 0.5 - px) / scale_x) ** 2 + (
+            (rows + low_y + 0.5 - py) / scale_y
+        ) ** 2
+        for candidate in np.argsort(distances):
+            if distances[candidate] > radius * radius:
+                break
+            value = int(values[rows[candidate], columns[candidate]])
+            obj = self._pick_objects.get(value & ((1 << 20) - 1))
+            if obj is not None:
+                return {
+                    "world_object": obj,
+                    "screen_point": (
+                        (columns[candidate] + low_x + 0.5) / scale_x,
+                        (rows[candidate] + low_y + 0.5) / scale_y,
+                    ),
+                    **obj._wgpu_get_pick_info(value),
+                }
+        return {}
+
+    def _surface_point(self, info: dict[str, Any], x: float, y: float) -> Vec3 | None:
+        """Das getroffene Dreieck stammt aus der GPU, der Punkt aus dem Sichtstrahl.
+
+        pygfx speichert baryzentrische Anteile mit neun Bit und rundet auf
+        Bildpunkte. Für Maße und Bearbeitung schneiden wir stattdessen den
+        genauen Zeigerstrahl mit der ursprünglichen Float64-Dreiecksebene.
+        """
+        obj = info.get("world_object")
+        face = info.get("face_index")
+        source = getattr(obj, "_solidon_positions", None)
+        if obj is None or source is None or face is None:
+            return _picked_point(info)
+        indices = np.asarray(obj.geometry.indices.data).reshape(-1, 3)
+        if not 0 <= int(face) < len(indices):
+            return None
+        corners = source[indices[int(face)]]
+        matrix = np.asarray(obj.world.matrix, dtype=float)
+        triangle = corners @ matrix[:3, :3].T + matrix[:3, 3]
+        sample_x, sample_y = info.get("screen_point", (x, y))
+        near = self.display_to_world(sample_x, sample_y, 0.0)
+        far = self.display_to_world(sample_x, sample_y, 1.0)
+        if near is None or far is None:
+            return _picked_point(info)
+        origin = np.asarray(near)
+        direction = np.asarray(far) - origin
+        normal = np.cross(triangle[1] - triangle[0], triangle[2] - triangle[0])
+        denominator = float(np.dot(normal, direction))
+        if abs(denominator) <= np.finfo(float).eps * np.linalg.norm(normal) * np.linalg.norm(
+            direction
+        ):
+            return _picked_point(info)
+        distance = float(np.dot(normal, triangle[0] - origin)) / denominator
+        point = origin + distance * direction
+        # Am Rand kann der Mittelpunkt des Rasterpixels noch im Dreieck
+        # liegen, der genaue Zeiger aber schon daneben. Dann liegt der
+        # Bearbeitungspunkt auf der nächsten Dreieckskante, nie außerhalb.
+        edge_a, edge_b = triangle[1] - triangle[0], triangle[2] - triangle[0]
+        offset = point - triangle[0]
+        uu, uv, vv = np.dot(edge_a, edge_a), np.dot(edge_a, edge_b), np.dot(edge_b, edge_b)
+        determinant = uu * vv - uv * uv
+        if determinant <= np.finfo(float).eps * uu * vv:
+            return _picked_point(info)
+        first = (vv * np.dot(offset, edge_a) - uv * np.dot(offset, edge_b)) / determinant
+        second = (uu * np.dot(offset, edge_b) - uv * np.dot(offset, edge_a)) / determinant
+        if first >= 0 and second >= 0 and first + second <= 1:
+            return _vec(point)
+        candidates = []
+        for start, end in (
+            (triangle[0], triangle[1]),
+            (triangle[1], triangle[2]),
+            (triangle[2], triangle[0]),
+        ):
+            edge = end - start
+            length_squared = float(np.dot(edge, edge))
+            share = float(np.clip(np.dot(point - start, edge) / length_squared, 0.0, 1.0))
+            candidates.append(start + share * edge)
+        return _vec(min(candidates, key=lambda candidate: float(np.linalg.norm(candidate - point))))
 
     def pick_surface(
         self,
@@ -1004,9 +1408,12 @@ class GfxRenderer(Renderer):
         try:
             info = self._info_at(x, y)
             item = self._item_of(info)
+            if item is None and tolerance > 0:
+                info = self._info_near(x, y, float(tolerance) * math.hypot(*self.view_size()))
+                item = self._item_of(info)
             if item is None:
                 return None
-            point = _picked_point(info)
+            point = self._surface_point(info, x, y)
             if point is None:
                 return None
             return Pick(point, item, int(info.get("face_index", -1)))
@@ -1019,17 +1426,7 @@ class GfxRenderer(Renderer):
             found = self._item_of(self._info_at(x, y))
             if found is not None:
                 return found
-            # Ein Zeiger neben einer Linie trifft sie noch — dieselbe Toleranz
-            # wie beim VTK-Renderer, hier als Ring von Nachbarpunkten.
-            for radius in (PICK_SLACK_PIXELS / 2.0, PICK_SLACK_PIXELS):
-                for step in range(8):
-                    angle = math.tau * step / 8.0
-                    found = self._item_of(
-                        self._info_at(x + radius * math.cos(angle), y + radius * math.sin(angle))
-                    )
-                    if found is not None:
-                        return found
-            return None
+            return self._item_of(self._info_near(x, y, PICK_SLACK_PIXELS))
         finally:
             self._restore(restore)
 
@@ -1052,10 +1449,14 @@ class GfxRenderer(Renderer):
             light.target.local.position = self._focal
 
     def _draw(self) -> None:
+        self._pick_key = None
         self._sync_camera()
         self._place_lights()
         for labels in self._label_items:
             labels.fit_fields(self)
+        if self._occlusion_wanted and self._occlusion is not None:
+            self._draw_with_occlusion()
+            return
         if self._axes_scene is None:
             self._renderer.render(self._scene, self._camera, clear=True)
             return
@@ -1064,6 +1465,63 @@ class GfxRenderer(Renderer):
         self._renderer.render(
             self._axes_scene, self._axes_camera, rect=self._axes_rect(), clear=False, flush=True
         )
+
+    def _draw_with_occlusion(self) -> None:
+        """Deckende Flächen schattieren, danach Durchscheinendes und Marken.
+
+        Derselbe Tiefenpuffer bleibt erhalten, damit Überlagerungen ihre
+        normale Tiefenprüfung behalten. Der AO-Durchgang ändert ausschließlich
+        die Farbe und beeinflusst weder Auswahl noch Geometrie.
+        """
+        opaque: list[Any] = []
+        deferred: list[Any] = []
+        for item in set(self._items.values()):
+            if not item.visible():
+                continue
+            for obj in item.objects:
+                if not obj.visible:
+                    continue
+                material = obj.material
+                is_opaque = (
+                    isinstance(obj, self._gfx.Mesh)
+                    and not material.wireframe
+                    and material.depth_test
+                    and material.render_queue < OVERLAY_QUEUE
+                    and (
+                        material.alpha_mode == "solid"
+                        or (material.opacity >= 1.0 and material.color.a >= 1.0)
+                    )
+                )
+                (opaque if is_opaque else deferred).append(obj)
+        try:
+            for obj in deferred:
+                obj.visible = False
+            self._renderer.render(self._scene, self._camera, clear=True, flush=False)
+            if opaque:
+                self._occlusion.apply(
+                    self._renderer, self._camera, self._occlusion_radius, self._occlusion_bias
+                )
+            if deferred:
+                for obj in opaque:
+                    obj.visible = False
+                for obj in deferred:
+                    obj.visible = True
+                self._background.visible = False
+                self._renderer.render(self._scene, self._camera, clear=False, flush=False)
+        finally:
+            for obj in opaque + deferred:
+                obj.visible = True
+            self._background.visible = True
+        if self._axes_scene is not None:
+            self._place_axes()
+            self._renderer.render(
+                self._axes_scene,
+                self._axes_camera,
+                rect=self._axes_rect(),
+                clear=False,
+                flush=False,
+            )
+        self._renderer.flush()
 
     def render(self) -> None:
         if self.widget is not None:
@@ -1103,9 +1561,13 @@ class GfxRenderer(Renderer):
         self._renderer.ppaa = "ddaa" if enabled else "none"
 
     def set_ambient_occlusion(self, enabled: bool, *, radius: float, bias: float) -> None:
-        # pygfx kennt keine Umgebungsverdeckung im Bild (nur vorgerechnete
-        # AO-Karten). Der Wunsch wird gemerkt, damit die Messung ihn nennt.
         self._occlusion_wanted = bool(enabled)
+        self._occlusion_radius = max(float(radius), 0.0)
+        self._occlusion_bias = max(float(bias), 0.0)
+        if enabled and self._occlusion is None:
+            from app.ui.render.gfx_occlusion import AmbientOcclusionPass
+
+            self._occlusion = AmbientOcclusionPass()
 
     def set_axes_marker(self, style: AxesMarkerStyle | None) -> None:
         self._axes_scene = None
@@ -1209,6 +1671,11 @@ class GfxRenderer(Renderer):
 
     def close(self) -> None:
         self._listeners.clear()
+        for item in list(set(self._items.values()) | set(self._label_items)):
+            self.remove(item)
+        self._axes_scene = None
+        self._axes_objects.clear()
+        self._occlusion = None
         try:
             self._canvas.close()
         except Exception as problem:  # pragma: no cover - hängt am Treiber
@@ -1223,7 +1690,8 @@ def _picked_point(info: dict[str, Any]) -> Vec3 | None:
     obj = info.get("world_object")
     if obj is None or getattr(obj, "geometry", None) is None:
         return None
-    positions = np.asarray(obj.geometry.positions.data, dtype=float)
+    # Ein Treffer braucht drei Ecken, keine Float64-Kopie des ganzen Netzes.
+    positions = np.asarray(obj.geometry.positions.data)
     local: np.ndarray | None = None
     face = info.get("face_index")
     coord = info.get("face_coord")
@@ -1231,7 +1699,7 @@ def _picked_point(info: dict[str, Any]) -> Vec3 | None:
     if face is not None and coord is not None and indices is not None:
         corners = np.asarray(indices.data).reshape(-1, 3)
         if 0 <= int(face) < len(corners):
-            triangle = positions[corners[int(face)]]
+            triangle = np.asarray(positions[corners[int(face)]], dtype=float)
             weights = np.asarray(coord, dtype=float)
             local = weights @ triangle
     vertex = info.get("vertex_index")
