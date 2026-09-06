@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
+import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -58,6 +59,18 @@ PICK_SLACK_PIXELS = 4.0
 
 #: Einträge einer interpolierten Farbleiter (Analysekarten).
 LOOKUP_ENTRIES = 256
+
+
+def _render_sequence(*passes: Any) -> Any:
+    """Eine VTK-Passfolge hält ihre Unterpässe über native Referenzen."""
+    from vtkmodules.vtkRenderingOpenGL2 import vtkRenderPassCollection, vtkSequencePass
+
+    collection = vtkRenderPassCollection()
+    for render_pass in passes:
+        collection.AddItem(render_pass)
+    sequence = vtkSequencePass()
+    sequence.SetPasses(collection)
+    return sequence
 
 
 def _polydata(vertices: np.ndarray, faces: np.ndarray | None = None) -> Any:
@@ -250,33 +263,167 @@ class VtkItem(Item):
 
 
 class VtkLabels(VtkItem, LabelsItem):
-    """Beschriftungen über den Platzierer, dazu die Ankerpunkte, wenn gewünscht."""
+    """Beschriftungen mit gemeinsamem Textstil und optional sichtbaren Ankern."""
 
     def __init__(
-        self, name: str, actor: Any, mapper: Any, data: Any, points_actor: Any | None
+        self,
+        name: str,
+        actor: Any,
+        mapper: Any,
+        data: Any,
+        points_actor: Any | None,
+        text_property: Any,
+        style: LabelStyle,
+        label_data: Any,
     ) -> None:
         super().__init__(name, actor, mapper, data)
         self.points_actor = points_actor
+        self.text_property = text_property
         self._shift: Vec3 = (0.0, 0.0, 0.0)
+        self._always_visible = style.always_visible
+        self._label_data = label_data
+        self.background_actor: Any = None
+        self._field_data: Any = None
+        self._margin = max(0, int(style.margin))
+        self._layout_state: Any = None
+        self._metric_state: Any = None
+        self._text_bounds: list[tuple[int, ...]] = []
+        if style.background is not None and style.background_opacity > 0:
+            from vtkmodules.vtkRenderingCore import vtkActor2D, vtkPolyDataMapper2D
+
+            self._field_data = _polydata(np.empty((0, 3)))
+            field_mapper = vtkPolyDataMapper2D()
+            field_mapper.SetInputData(self._field_data)
+            field_mapper.ScalarVisibilityOff()
+            self.background_actor = vtkActor2D()
+            self.background_actor.SetMapper(field_mapper)
+            self.background_actor.GetProperty().SetColor(*rgb(style.background))
+            self.background_actor.GetProperty().SetOpacity(float(style.background_opacity))
+            self.background_actor.SetPickable(bool(style.pickable))
 
     def props(self) -> list[Any]:
-        return [self.actor] + ([self.points_actor] if self.points_actor is not None else [])
+        return (
+            ([self.background_actor] if self.background_actor is not None else [])
+            + [self.actor]
+            + ([self.points_actor] if self.points_actor is not None else [])
+        )
+
+    def prepare_labels(self, renderer: Any) -> None:
+        """Schrift und Felder teilen echte Textmaße sowie genau denselben sichtbaren Satz."""
+        from vtkmodules.util.numpy_support import vtk_to_numpy
+        from vtkmodules.vtkCommonDataModel import vtkCellArray
+        from vtkmodules.vtkRenderingCore import vtkTextRenderer
+
+        if (
+            self.background_actor is None and self._always_visible
+        ) or not self.actor.GetVisibility():
+            return
+        window = renderer.GetRenderWindow()
+        state = (
+            self.data.GetMTime(),
+            self.text_property.GetMTime(),
+            window.GetDPI(),
+            renderer.GetActiveCamera().GetMTime(),
+            renderer.GetSize(),
+            renderer.GetOrigin(),
+        )
+        if state == self._layout_state or min(renderer.GetSize()) <= 0:
+            return
+        labels = self.data.GetPointData().GetAbstractArray("labels")
+        texts = tuple(labels.GetValue(index) for index in range(labels.GetNumberOfValues()))
+        metric_state = (texts, self.text_property.GetMTime(), window.GetDPI())
+        if metric_state != self._metric_state:
+            text_renderer = vtkTextRenderer.GetInstance()
+            self._text_bounds = []
+            for text in texts:
+                measured = [0, 0, 0, 0]
+                text_renderer.GetBoundingBox(self.text_property, text, measured, window.GetDPI())
+                self._text_bounds.append(tuple(measured))
+            self._metric_state = metric_state
+        rectangles: list[tuple[int, int, int, int]] = []
+        selected: list[int] = []
+        origin_x, origin_y = renderer.GetOrigin()
+        width, height = renderer.GetSize()
+        for index, bounds in enumerate(self._text_bounds):
+            if not texts[index]:
+                continue
+            renderer.SetWorldPoint(*self.data.GetPoint(index), 1.0)
+            renderer.WorldToDisplay()
+            display = renderer.GetDisplayPoint()
+            if not np.isfinite(display).all():
+                continue
+            x, y = int(display[0]), int(display[1])
+            # vtkTextMapper legt die Textur eine Pixelecke vor die Bounds.
+            left, right = x + bounds[0] - self._margin - 1, x + bounds[1] + self._margin
+            bottom, top = y + bounds[2] - self._margin - 1, y + bounds[3] + self._margin
+            if not self._always_visible and (
+                not 0 <= display[2] <= 1
+                or right < origin_x
+                or left >= origin_x + width
+                or top < origin_y
+                or bottom >= origin_y + height
+                or any(
+                    left < other_right
+                    and right > other_left
+                    and bottom < other_top
+                    and top > other_bottom
+                    for other_left, other_right, other_bottom, other_top in rectangles
+                )
+            ):
+                continue
+            selected.append(index)
+            rectangles.append((left, right, bottom, top))
+        if not self._always_visible:
+            points = np.asarray([self.data.GetPoint(index) for index in selected]).reshape(-1, 3)
+            if self._label_data.GetNumberOfPoints() != len(selected):
+                self._label_data.SetPoints(_polydata(points).GetPoints())
+                self._label_data.SetVerts(_vertex_cells(len(selected)))
+            else:
+                target = vtk_to_numpy(self._label_data.GetPoints().GetData())  # type: ignore[no-untyped-call]
+                target[:] = points
+                self._label_data.GetPoints().GetData().Modified()
+            self._label_data.GetPointData().RemoveArray("labels")
+            self._label_data.GetPointData().AddArray(
+                _label_array([texts[index] for index in selected])
+            )
+            self._label_data.Modified()
+        if self.background_actor is not None:
+            count = len(rectangles)
+            if self._field_data.GetNumberOfPoints() != count * 4:
+                self._field_data.SetPoints(_polydata(np.zeros((count * 4, 3))).GetPoints())
+                cells = vtkCellArray()
+                for index in range(count):
+                    cells.InsertNextCell(4)
+                    for corner in range(4):
+                        cells.InsertCellPoint(index * 4 + corner)
+                self._field_data.SetPolys(cells)
+            positions = vtk_to_numpy(self._field_data.GetPoints().GetData())  # type: ignore[no-untyped-call]
+            for index, (left, right, bottom, top) in enumerate(rectangles):
+                positions[index * 4 : index * 4 + 4] = (
+                    (left, bottom, 0),
+                    (right, bottom, 0),
+                    (right, top, 0),
+                    (left, top, 0),
+                )
+            self._field_data.GetPoints().GetData().Modified()
+            self._field_data.Modified()
+        self._layout_state = state
 
     def set_visible(self, visible: bool) -> None:
         for prop in self.props():
             prop.SetVisibility(bool(visible))
 
     def set_opacity(self, opacity: float) -> None:
-        self.mapper.GetLabelTextProperty().SetOpacity(float(opacity))
+        self.text_property.SetOpacity(float(opacity))
 
     def opacity(self) -> float:
-        return float(self.mapper.GetLabelTextProperty().GetOpacity())
+        return float(self.text_property.GetOpacity())
 
     def set_colour(self, colour: Colour) -> None:
-        self.mapper.GetLabelTextProperty().SetColor(*rgb(colour))
+        self.text_property.SetColor(*rgb(colour))
 
     def colour(self) -> Colour:
-        return hex_of(self.mapper.GetLabelTextProperty().GetColor())
+        return hex_of(self.text_property.GetColor())
 
     def set_position(self, position: Vec3) -> None:
         # Ein 2D-Aktor kennt keinen Weltversatz; verschoben werden die Anker.
@@ -361,12 +508,18 @@ class VtkRenderer(Renderer):
         self._listeners: dict[int, Callable[[PointerEvent], None]] = {}
         self._next_token = 1
         self._items: dict[str, VtkItem] = {}
+        self._label_items: set[VtkLabels] = set()
         self._axes: Any = None
         self._axes_widget: Any = None
         self._axes_corner = (0.0, 0.0, 0.2, 0.2)
+        self._occlusion_pass: Any = None
+        self._occlusion_camera: Any = None
+        self._occlusion_sequences: tuple[Any, Any] | None = None
+        self._occlusion_bias = 0.0
         self.renderer = vtkRenderer()
         self.widget: Any = None
         self.interactor: Any = None
+        self._presentation_configured = offscreen or sys.platform != "win32"
         if offscreen:
             self.window = self._offscreen_window(size)
         else:
@@ -374,6 +527,8 @@ class VtkRenderer(Renderer):
             self.window = self.widget.GetRenderWindow()
             self.interactor = self.window.GetInteractor()
         self.window.AddRenderer(self.renderer)
+        self._label_observer = self.window.AddObserver("StartEvent", self._prepare_labels)
+        self._occlusion_observer = self.window.AddObserver("StartEvent", self._prepare_occlusion)
         self.renderer.SetBackground(0.0, 0.0, 0.0)
         # **Der Lichtsatz, nicht ein Frontlicht.** PyVista stellte einen
         # ``vtkLightKit`` auf — Schlüssellicht 50° über und 10° rechts der
@@ -484,10 +639,15 @@ class VtkRenderer(Renderer):
     def _register(self, item: VtkItem) -> VtkItem:
         for prop in item.props():
             self.renderer.AddActor(prop) if not _is_2d(prop) else self.renderer.AddViewProp(prop)
-        self._items[_key(item.actor)] = item
-        if isinstance(item, VtkLabels) and item.points_actor is not None:
-            self._items[_key(item.points_actor)] = item
+            self._items[_key(prop)] = item
+        if isinstance(item, VtkLabels):
+            self._label_items.add(item)
         return item
+
+    def _prepare_labels(self, _caller: Any, _event: str) -> None:
+        """Native Neuzeichnung und Bildaufnahme verwenden dieselben aktuellen Textfelder."""
+        for item in self._label_items:
+            item.prepare_labels(self.renderer)
 
     def add_surface(
         self,
@@ -618,11 +778,13 @@ class VtkRenderer(Renderer):
     def add_labels(
         self, points: np.ndarray, texts: Sequence[str], *, name: str, style: LabelStyle
     ) -> LabelsItem:
-        from vtkmodules.vtkRenderingCore import vtkActor, vtkActor2D, vtkPolyDataMapper
-        from vtkmodules.vtkRenderingLabel import (
-            vtkLabelPlacementMapper,
-            vtkPointSetToLabelHierarchy,
+        from vtkmodules.vtkRenderingCore import (
+            vtkActor,
+            vtkActor2D,
+            vtkPolyDataMapper,
+            vtkTextProperty,
         )
+        from vtkmodules.vtkRenderingLabel import vtkLabeledDataMapper
 
         anchors = np.ascontiguousarray(np.asarray(points, dtype=np.float64).reshape(-1, 3))
         if anchors.shape[0] != len(texts):
@@ -630,26 +792,26 @@ class VtkRenderer(Renderer):
         data = _polydata(anchors)
         data.SetVerts(_vertex_cells(len(texts)))
         data.GetPointData().AddArray(_label_array(texts))
-        hierarchy = vtkPointSetToLabelHierarchy()
-        hierarchy.SetInputData(data)
-        hierarchy.SetLabelArrayName("labels")
-        text = hierarchy.GetTextProperty()
+        text = vtkTextProperty()
         text.SetColor(*rgb(style.text_colour))
         text.SetFontSize(int(style.font_size))
         text.SetBold(bool(style.bold))
         text.SetJustificationToCentered()
         text.SetVerticalJustificationToCentered()
-        mapper = vtkLabelPlacementMapper()
-        mapper.SetInputConnection(hierarchy.GetOutputPort())
-        mapper.SetPlaceAllLabels(bool(style.always_visible))
-        if style.background is not None:
-            mapper.SetShapeToRoundedRect()
-            mapper.SetBackgroundColor(*rgb(style.background))
-            mapper.SetBackgroundOpacity(float(style.background_opacity))
-            mapper.SetMargin(int(style.margin))
-            mapper.SetStyleToFilled()
+        # Der direkte Mapper zeichnet jeden Eintrag genau einmal. Die
+        # optionale Kollision filtert Text und Feld gemeinsam, ohne VTKs
+        # doppelt gelieferten ersten Hierarchieeintrag erneut zu mischen.
+        if style.always_visible:
+            label_data = data
         else:
-            mapper.SetShapeToNone()
+            label_data = _polydata(anchors)
+            label_data.SetVerts(_vertex_cells(len(texts)))
+            label_data.GetPointData().AddArray(_label_array(texts))
+        mapper = vtkLabeledDataMapper()
+        mapper.SetInputData(label_data)
+        mapper.SetLabelModeToLabelFieldData()
+        mapper.SetFieldDataName("labels")
+        mapper.SetLabelTextProperty(text)
         actor = vtkActor2D()
         actor.SetMapper(mapper)
         actor.SetPickable(bool(style.pickable))
@@ -665,12 +827,14 @@ class VtkRenderer(Renderer):
             points_actor.GetProperty().SetRenderPointsAsSpheres(True)
             points_actor.GetProperty().SetLighting(False)
             points_actor.SetPickable(bool(style.pickable))
-        item = VtkLabels(name, actor, mapper, data, points_actor)
+        item = VtkLabels(name, actor, mapper, data, points_actor, text, style, label_data)
         self._register(item)
         return item
 
     def remove(self, item: Item) -> None:
         assert isinstance(item, VtkItem)
+        if isinstance(item, VtkLabels):
+            self._label_items.discard(item)
         for prop in item.props():
             if _is_2d(prop):
                 self.renderer.RemoveViewProp(prop)
@@ -681,10 +845,12 @@ class VtkRenderer(Renderer):
     def set_draw_order(self, items: Sequence[Item]) -> None:
         for item in items:
             assert isinstance(item, VtkItem)
-            self.renderer.RemoveActor(item.actor)
+            for prop in item.props():
+                self.renderer.RemoveViewProp(prop)
         for item in items:
             assert isinstance(item, VtkItem)
-            self.renderer.AddActor(item.actor)
+            for prop in item.props():
+                self.renderer.AddViewProp(prop)
 
     # --- Kamera -------------------------------------------------------------------
 
@@ -838,6 +1004,21 @@ class VtkRenderer(Renderer):
 
     def render(self) -> None:
         self.window.Render()
+        if (
+            not self._presentation_configured
+            and self.widget is not None
+            and self.widget.isVisible()
+        ):
+            # Erst das sichtbare Rendern stellt einen gültigen WGL-Kontext
+            # sicher. Windows komponiert die Ausgabe bereits; zusätzlich im
+            # Qt-Hauptthread auf den nächsten Bildwechsel zu warten bremst
+            # Navigation und Zeigerfeedback. Andere Plattformen und reine
+            # Bildpuffer behalten ihre Präsentationseinstellung.
+            self._presentation_configured = True
+            swap_control = getattr(self.window, "SetSwapControl", None)
+            if swap_control is not None:
+                self.window.MakeCurrent()
+                swap_control(0)
 
     def screenshot(self) -> np.ndarray:
         from vtkmodules.util.numpy_support import vtk_to_numpy
@@ -883,14 +1064,75 @@ class VtkRenderer(Renderer):
 
     def set_anti_aliasing(self, enabled: bool) -> None:
         self.renderer.SetUseFXAA(bool(enabled))
+        if self._occlusion_sequences is not None:
+            self._occlusion_camera.SetDelegatePass(self._occlusion_sequences[bool(enabled)])
 
     def set_ambient_occlusion(self, enabled: bool, *, radius: float, bias: float) -> None:
         self.renderer.SetUseSSAO(bool(enabled))
         if enabled:
+            if self._occlusion_pass is None:
+                self._make_occlusion_pass()
+            self._occlusion_bias = float(bias)
             self.renderer.SetSSAORadius(float(radius))
             self.renderer.SetSSAOBias(float(bias))
             self.renderer.SetSSAOKernelSize(128)
             self.renderer.SSAOBlurOn()
+            self._occlusion_pass.SetRadius(float(radius))
+            self.renderer.SetPass(self._occlusion_camera)
+        else:
+            # Ein eigener Pass hat Vorrang vor UseSSAO; das Flag allein
+            # würde die Umgebungsverdeckung einer Analysekarte nicht entfernen.
+            self.renderer.SetPass(None)  # type: ignore[arg-type]  # VTK nimmt nullptr an.
+
+    def _make_occlusion_pass(self) -> None:
+        """Verlauf, deckende Geometrie, Transparenz und Überlagerungen in VTK-Reihenfolge."""
+        from vtkmodules.vtkRenderingOpenGL2 import (
+            vtkCameraPass,
+            vtkLightsPass,
+            vtkOpaquePass,
+            vtkOpenGLFXAAPass,
+            vtkOrderIndependentTranslucentPass,
+            vtkOverlayPass,
+            vtkSSAOPass,
+            vtkTranslucentPass,
+            vtkVolumetricPass,
+        )
+
+        # Der eingebaute SSAO-Pfad löscht seinen Farbpuffer nur einfarbig.
+        # CameraPass zeichnet den Hintergrundverlauf im selben Puffer.
+        opaque = vtkCameraPass()
+        opaque.SetDelegatePass(vtkOpaquePass())
+        self._occlusion_pass = vtkSSAOPass()
+        self._occlusion_pass.SetDelegatePass(opaque)
+        self._occlusion_pass.SetKernelSize(128)
+        self._occlusion_pass.SetBlur(True)
+        translucent = vtkOrderIndependentTranslucentPass()
+        translucent.SetTranslucentPass(vtkTranslucentPass())
+        geometry = _render_sequence(vtkLightsPass(), self._occlusion_pass, translucent)
+        antialias = vtkOpenGLFXAAPass()
+        antialias.SetDelegatePass(geometry)
+        antialias.SetFXAAOptions(self.renderer.GetFXAAOptions())
+        volume, overlay = vtkVolumetricPass(), vtkOverlayPass()
+        self._occlusion_sequences = (
+            _render_sequence(geometry, volume, overlay),
+            _render_sequence(antialias, volume, overlay),
+        )
+        self._occlusion_camera = vtkCameraPass()
+        self._occlusion_camera.SetDelegatePass(
+            self._occlusion_sequences[bool(self.renderer.GetUseFXAA())]
+        )
+
+    def _prepare_occlusion(self, _caller: Any, _event: str) -> None:
+        """Der SSAO-Abstand berücksichtigt die Genauigkeit des Kamerapositionspuffers."""
+        if self._occlusion_pass is None or not self.renderer.GetUseSSAO():
+            return
+        # VTK 9.6 speichert Kamerapositionen fest in RGBA16F. Unterhalb einer
+        # binary16-Abstandsstufe wirft bereits eine ebene Platte Schatten auf
+        # sich selbst. frexp enthält das führende Bit; binary16 hat 10 weitere
+        # Mantissenbits und als kleinste Abstandsstufe 2**-24.
+        far = self.renderer.GetActiveCamera().GetClippingRange()[1]
+        precision = math.ldexp(1.0, max(-24, math.frexp(far)[1] - 11))
+        self._occlusion_pass.SetBias(max(self._occlusion_bias, precision))
 
     def set_axes_marker(self, style: AxesMarkerStyle | None) -> None:
         if self._axes_widget is not None:
@@ -951,6 +1193,9 @@ class VtkRenderer(Renderer):
 
     def close(self) -> None:
         self._listeners.clear()
+        self.window.RemoveObserver(self._label_observer)
+        self.window.RemoveObserver(self._occlusion_observer)
+        self._label_items.clear()
         if self._axes_widget is not None:
             try:
                 self._axes_widget.EnabledOff()
@@ -958,6 +1203,16 @@ class VtkRenderer(Renderer):
                 _log.info("axes marker did not switch off: %s", problem)
             self._axes_widget = None
         try:
+            if self._occlusion_sequences is not None:
+                # Auch ein nach AO-aus abgehängter Pass besitzt Texturen.
+                # Die vollständige Folge besucht außerdem den derzeit eventuell
+                # ausgeschalteten FXAA-Pass, solange der Kontext noch lebt.
+                self.window.MakeCurrent()
+                self._occlusion_sequences[1].ReleaseGraphicsResources(self.window)
+                self.renderer.SetPass(None)  # type: ignore[arg-type]  # VTK nimmt nullptr an.
+                self._occlusion_sequences = None
+                self._occlusion_camera = None
+                self._occlusion_pass = None
             if self.interactor is not None:
                 self.interactor.TerminateApp()
             self.window.Finalize()
