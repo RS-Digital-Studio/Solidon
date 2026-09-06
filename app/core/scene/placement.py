@@ -31,12 +31,13 @@ from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
 
+from app.core.errors import CORRECT_INPUT, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.types import Feature, PlaneFrame, Point2, Profile, SceneObject, Vec3, vec3_or_none
 from app.core.units import EPS_GEOM, format_length, round_display
-from app.i18n import tr
+from app.i18n import TranslatableText, tr
 
 if TYPE_CHECKING:
     from shapely.geometry.base import BaseGeometry
@@ -533,12 +534,26 @@ def _vec(values: Any) -> Vec3:
     return (float(values[0]), float(values[1]), float(values[2]))
 
 
-def _placement_error() -> ValueError:
-    return ValueError(
+def _reject(field: str, text: TranslatableText | str) -> ValidationError:
+    """Eine abgelehnte Platzierung — mit Feld, Kennung und Handlungsvorschlag.
+
+    Kein nackter ``ValueError``: Der Kunde erreicht diese Stellen mit einer
+    gewöhnlichen Geste (Klick neben die Fläche, zu großes Maß), und jede
+    Ausnahme trägt hier einen Vorschlag (AGENTS.md, Regel 17). Die Oberfläche
+    fängt ``ValidationError`` wie zuvor den ``ValueError``.
+    """
+    return ValidationError(
+        field, text, constraint="surface_placement", suggestions=(CORRECT_INPUT,)
+    )
+
+
+def _placement_error() -> ValidationError:
+    return _reject(
+        "point",
         tr(
             "Dieser Punkt liegt außerhalb der gewählten Fläche. "
             "Wählen Sie einen Punkt auf dem Material oder ändern Sie die Abstände."
-        )
+        ),
     )
 
 
@@ -548,18 +563,19 @@ def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool
 
     raw = mesh.raw
     if face_index < 0 or face_index >= len(raw.faces):
-        raise ValueError(
-            tr("Diese Fläche ist nicht mehr vorhanden. Klicken Sie das Modell erneut an.")
+        raise _reject(
+            "point", tr("Diese Fläche ist nicht mehr vorhanden. Klicken Sie das Modell erneut an.")
         )
     vertices = np.asarray(raw.vertices, dtype=np.float64)
     normals = np.asarray(raw.face_normals, dtype=np.float64)
     normal = normals[face_index]
     if not np.isfinite(normal).all() or np.linalg.norm(normal) <= EPS_GEOM:
-        raise ValueError(
+        raise _reject(
+            "point",
             tr(
                 "Diese Fläche hat keine brauchbare Richtung. "
                 "Wählen Sie eine andere Stelle auf dem Modell."
-            )
+            ),
         )
     # Exakte Ortsgleichheit verbindet auch unverschweißte STL-Dreiecke. Kein
     # Abstandsschwellwert darf einen tatsächlichen schmalen Spalt schließen.
@@ -660,11 +676,12 @@ def prepare_surface(
     xy = np.stack((relative @ frame.x_axis, relative @ frame.y_axis), axis=-1)
     area = union_all([Polygon(triangle) for triangle in xy])
     if area.is_empty or not area.is_valid or area.geom_type != "Polygon":
-        raise ValueError(
+        raise _reject(
+            "point",
             tr(
                 "Diese Fläche ist nicht eindeutig zusammenhängend. "
                 "Wählen Sie eine andere Stelle auf dem Modell."
-            )
+            ),
         )
     matching = [
         feature for feature in (features or {}).values() if face_index in feature.face_indices
@@ -824,11 +841,12 @@ def point_with_distances(
 ) -> SurfacePlacement:
     """Zwei angezeigte Kantenbezüge bearbeiten, ohne zur nächsten Kante zu springen."""
     if len(placement.edges) != 2 or not np.isfinite(distances).all():
-        raise ValueError(
+        raise _reject(
+            "distances",
             tr(
                 "Hier fehlen zwei unabhängige Bezugskanten. "
                 "Wählen Sie eine ebene Fläche oder setzen Sie den Punkt direkt."
-            )
+            ),
         )
     frame = prepared.frame
     rows, offsets = [], []
@@ -864,8 +882,9 @@ def point_with_centre(
         or not any(identifier == centre_id for identifier, _ in prepared.centres)
         or not np.isfinite(offset).all()
     ):
-        raise ValueError(
-            tr("Diese Bohrungsmitte ist hier nicht verfügbar. Wählen Sie die Fläche erneut.")
+        raise _reject(
+            "centre",
+            tr("Diese Bohrungsmitte ist hier nicht verfügbar. Wählen Sie die Fläche erneut."),
         )
     target = (
         np.asarray(reference.point, dtype=np.float64)
@@ -903,24 +922,27 @@ def surface_values(
     from app.core.knowledge.parts.ops import normal_fields
 
     if not supports_surface_placement(spec):
-        raise ValueError(
+        raise _reject(
+            "operation",
             tr(
                 "Diese Operation setzt kein Element auf eine Fläche. "
                 "Wählen Sie eine Bohrung, einen Baustein oder eine Beschriftung."
-            )
+            ),
         )
     target = placement.point
     if spec.name in {"move_feature", "duplicate_feature"}:
         if feature is None or source is None:
-            raise ValueError(tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört."))
+            raise _reject(
+                "feature", tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört.")
+            )
         if prepared_tool is None:
             from app.core.geom.prepare_ops import feature_placement_geometry
 
             offset = feature_placement_geometry(source, feature, spec.name).selected_offset
         else:
             if prepared_tool.feature_id != feature.id or prepared_tool.selected_offset is None:
-                raise ValueError(
-                    tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört.")
+                raise _reject(
+                    "feature", tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört.")
                 )
             offset = prepared_tool.selected_offset
         matrix = np.column_stack((placement.frame.x_axis, placement.frame.y_axis, placement.normal))
@@ -995,7 +1017,9 @@ def prepare_tool(
     """Werkzeug und Merkmalsbezug einmal im Worker berechnen und gemeinsam aufbewahren."""
     if spec.name in {"move_feature", "duplicate_feature"}:
         if feature is None or source is None:
-            raise ValueError(tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört."))
+            raise _reject(
+                "feature", tr("Wählen Sie zuerst das Merkmal, das an die neue Stelle gehört.")
+            )
         from app.core.geom.prepare_ops import feature_placement_geometry
 
         geometry = feature_placement_geometry(source, feature, spec.name)
@@ -1058,9 +1082,10 @@ def _creation_tool(
             mode=values.mode if spec.name == "label_text" else "body",
             angle=getattr(values, "angle", 0.0),
         )
-    raise ValueError(
+    raise _reject(
+        "operation",
         tr(
             "Diese Operation setzt kein Element auf eine Fläche. "
             "Wählen Sie eine Bohrung, einen Baustein oder eine Beschriftung."
-        )
+        ),
     )

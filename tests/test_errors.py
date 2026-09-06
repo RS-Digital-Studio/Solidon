@@ -295,7 +295,22 @@ _NOT_A_RANGE = frozenset(
         "changed", "colour",
         # Unendlich und NaN sind keine Grenzverletzung, sondern keine Zahl.
         "not_finite",
-        "too_many_components", "recipe_dependencies",
+        # Ein Klick neben die Fläche, eine Kante, die es nicht gibt: kein
+        # Maß außerhalb einer Spanne, sondern ein Ort ohne Fläche.
+        "surface_placement",
+        # Eine erklärte Bedingung zwischen Parametern (``PartSpec.feasible``):
+        # jeder Wert für sich ist erlaubt, nur nicht zusammen.
+        "feasible",
+        # Ein Rezept, das einen mitgelieferten Baustein verdeckt: eine
+        # Namensfrage, kein Maß.
+        "recipe_dependencies",
+        # Zu viele Komponenten in einem 3MF (85, 06.09.2026): eine Datei, die das
+        # Programm nicht annimmt, kein Feld mit einer Zahl.
+        "too_many_components",
+        # Ein eingebetteter Netzstand, der nicht zu seiner Größenangabe passt,
+        # ist beschädigt — nichts, was der Kunde in einem Feld korrigiert.
+        "mesh_storage_too_large", "duplicate_mesh_array", "unsupported_mesh_array",
+        "invalid_mesh_array_size",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "expected_sha256",
         # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):

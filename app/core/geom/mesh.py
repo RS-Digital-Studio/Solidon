@@ -179,14 +179,32 @@ class MeshData:
         return result
 
 
+_STORAGE_SUGGESTIONS = (CANCEL,)
+"""Ein eingebetteter Netzstand, dem nicht zu trauen ist, hat genau einen Weg:
+abbrechen — die Daten kommen aus einer geöffneten Projektdatei, und
+``evaluate`` reichte den früheren Codestring als ``InternalError`` bis zum
+Kunden durch. Jetzt ein Satz je Fall, die Kennung als ``constraint`` (sie
+steht in der Gegenliste von ``test_errors``)."""
+
+
 def _check_array_storage(payload: bytes, maximum_bytes: int) -> None:
     """Prüft Dateigröße und Arrayform vor einer Allokation aus einem Projekt."""
     with zipfile.ZipFile(io.BytesIO(payload)) as archive:
         entries = archive.infolist()
         if sum(entry.file_size for entry in entries) > maximum_bytes:
-            raise ValueError("mesh_storage_too_large")
+            raise ValidationError(
+                "baked",
+                _("Der eingebettete Netzstand ist größer, als eine Projektdatei tragen darf."),
+                constraint="mesh_storage_too_large",
+                suggestions=_STORAGE_SUGGESTIONS,
+            )
         if len({entry.filename for entry in entries}) != len(entries):
-            raise ValueError("duplicate_mesh_array")
+            raise ValidationError(
+                "baked",
+                _("Der eingebettete Netzstand enthält denselben Eintrag zweimal."),
+                constraint="duplicate_mesh_array",
+                suggestions=_STORAGE_SUGGESTIONS,
+            )
         for entry in entries:
             with archive.open(entry) as stream:
                 version = np.lib.format.read_magic(stream)
@@ -195,12 +213,22 @@ def _check_array_storage(payload: bytes, maximum_bytes: int) -> None:
                 elif version == (2, 0):
                     shape, _order, dtype = np.lib.format.read_array_header_2_0(stream)
                 else:
-                    raise ValueError("unsupported_mesh_array")
+                    raise ValidationError(
+                        "baked",
+                        _("Der eingebettete Netzstand hat ein unbekanntes Arrayformat."),
+                        constraint="unsupported_mesh_array",
+                        suggestions=_STORAGE_SUGGESTIONS,
+                    )
                 if (
                     dtype.hasobject
                     or math.prod(shape) * dtype.itemsize != entry.file_size - stream.tell()
                 ):
-                    raise ValueError("invalid_mesh_array_size")
+                    raise ValidationError(
+                        "baked",
+                        _("Der eingebettete Netzstand passt nicht zu seiner Größenangabe."),
+                        constraint="invalid_mesh_array_size",
+                        suggestions=_STORAGE_SUGGESTIONS,
+                    )
 
 
 def as_mesh_data(mesh: Mesh) -> MeshData:

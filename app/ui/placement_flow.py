@@ -26,6 +26,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
 from shiboken6 import isValid
 
 from app.core import expressions
+from app.core.errors import ValidationError
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge.parts.ops import normal_fields
 from app.core.knowledge.profiles import for_object
@@ -310,10 +311,17 @@ class PlacementFlow(QObject):
         self.redraw()
 
     def back(self) -> None:
-        """Escape behält alle Werte, übernimmt aber keinen Schritt."""
+        """Escape behält alle Werte, übernimmt aber keinen Schritt.
+
+        Auch kein Ziel: ``run_chosen`` verzweigt an :attr:`target`, und ein
+        stehen gebliebener Körper machte aus drei gewählten Körpern still
+        einen — der Dialog bohrte dann nur ihn. Nur :meth:`accept` trägt das
+        Ziel bis zum Dialog.
+        """
         if self._disposed:
             return
         self._stop()
+        self._object_id = ""
         self.dialog.show()
         self.dialog.raise_()
         self.dialog.activateWindow()
@@ -602,7 +610,7 @@ class PlacementFlow(QObject):
                 self._surface,
                 (self._measures[0].value_mm(), self._measures[1].value_mm()),
             )
-        except ValueError, ArithmeticError:
+        except ValidationError, ValueError, ArithmeticError:
             self._distance_valid = False
             self._note.setText(
                 tr("Diese Abstände liegen außerhalb der Fläche. Kleinere Werte eingeben.")
@@ -629,7 +637,7 @@ class PlacementFlow(QObject):
                 self._centre_id,
                 (self._centre_measures[0].value_mm(), self._centre_measures[1].value_mm()),
             )
-        except ValueError, ArithmeticError:
+        except ValidationError, ValueError, ArithmeticError:
             self._distance_valid = False
             self._note.setText(
                 tr("Diese Abstände liegen außerhalb der Fläche. Andere Werte eingeben.")
