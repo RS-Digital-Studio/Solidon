@@ -42,7 +42,7 @@ from app.core.knowledge.parts.registry import (
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 WALL_LADDER_SEPARATE_STEPS = PartChange(
     version="15",
@@ -326,6 +326,22 @@ class OverhangFanParams(BaseParams):
     )
 
 
+FAN_OVER_THE_TOP = _(
+    "Der letzte Winkel erreicht oder überschreitet 90 Grad. Weniger Stufen, eine "
+    "kleinere Schrittweite oder einen kleineren Anfangswinkel wählen."
+)
+
+
+def _fan_over_the_top(params: OverhangFanParams) -> TranslatableText | None:
+    """Die erklärte Bedingung des Fächers: Anfang, Schritt und Stufen zusammen unter 90 Grad.
+
+    Jede Grenze für sich ist erfüllbar (80 Grad, 30 Grad Schritt, zehn Stufen),
+    zusammen ergäben sie 350 Grad — kein Überhang mehr, sondern ein Rückwärts.
+    """
+    last = params.first + params.step * (params.steps - 1)
+    return FAN_OVER_THE_TOP if last >= 90.0 else None
+
+
 @register_part(
     name="overhang_fan",
     title=_("Überhangfächer"),
@@ -342,19 +358,14 @@ class OverhangFanParams(BaseParams):
         "diesem Material wirklich Stützen braucht — statt der Faustregel 45 Grad."
     ),
     changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, OVERHANG_FROM_VERTICAL],
+    feasible=lambda raw: _fan_over_the_top(cast(OverhangFanParams, raw)),
 )
 def overhang_fan(raw: BaseParams) -> PartResult:
     params = cast(OverhangFanParams, raw)
     last = params.first + params.step * (params.steps - 1)
-    if last >= 90.0:
-        raise ValidationError(
-            "steps",
-            _(
-                "Der letzte Winkel erreicht oder überschreitet 90 Grad. Weniger Stufen, eine "
-                "kleinere Schrittweite oder einen kleineren Anfangswinkel wählen."
-            ),
-            values={"last_angle": last},
-        )
+    over = _fan_over_the_top(params)
+    if over is not None:
+        raise ValidationError("steps", over, constraint="feasible", values={"last_angle": last})
     base_height = 3.0
     total = params.width * params.steps
     depth = 6.0

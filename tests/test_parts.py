@@ -3898,20 +3898,102 @@ def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
 
 
 def test_the_clip_keeps_its_grip_over_the_whole_range() -> None:
-    """Gültige Öffnungen bleiben offen; unmögliche Verengungen liefern einen Vorschlag."""
+    """Gültige Öffnungen bleiben offen; unmögliche Verengungen sind **erklärt**.
+
+    Eine Ablehnung innerhalb der Einzelgrenzen gibt es nur mit Erklärung am
+    Vertrag (``PartSpec.feasible``): Der Bereichstest fährt diese Ecken als
+    Ausschluss, und der Baustein wirft dort denselben Satz.
+    """
     from app.core.errors import ValidationError
     from app.core.knowledge.parts import PARTS
 
     spec = PARTS.get("cable_clip")
+    assert spec.feasible is not None
     for grip in (0.0, 0.2, 1.9):
+        assert spec.feasible(spec.params(size="ptfe-4x2", grip=grip)) is None
         built = spec.fn(spec.params(size="ptfe-4x2", grip=grip))
         assert built.mesh.is_watertight
         assert built.mesh.component_count == 1
     for grip in (2.0, 2.5, 5.0):
+        reason = spec.feasible(spec.params(size="ptfe-4x2", grip=grip))
+        assert reason is not None, "die geschlossene Öffnung ist am Vertrag erklärt"
         with pytest.raises(ValidationError) as caught:
             spec.fn(spec.params(size="ptfe-4x2", grip=grip))
         assert caught.value.field == "grip"
         assert caught.value.suggestions
+        assert str(reason) in str(caught.value.detail)
+
+
+@pytest.mark.parametrize(
+    ("name", "values", "field"),
+    [
+        ("overhang_fan", {"first": 80.0, "step": 30.0, "steps": 10}, "steps"),
+        ("keyhole", {"size": "M8", "drop": 2.0, "play": 2.0}, "drop"),
+        ("keyhole", {"size": "M4", "head_room": 20.0, "depth": 10.0}, "head_room"),
+    ],
+)
+def test_declared_conditions_reject_exactly_where_they_say(
+    name: str, values: dict[str, Any], field: str
+) -> None:
+    """Jede Ablehnung innerhalb der Grenzen hat ihre Erklärung am Vertrag — und umgekehrt."""
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get(name)
+    assert spec.feasible is not None, f"{name} lehnt innerhalb der Grenzen ab, ohne es zu erklären"
+    params = spec.params(**values)
+    reason = spec.feasible(params)
+    assert reason is not None
+    with pytest.raises(ValidationError) as caught:
+        spec.fn(params)
+    assert caught.value.field == field
+    assert str(reason) in str(caught.value.detail)
+    # Die Vorgabe des Bausteins ist baubar und unerklärt.
+    assert spec.feasible(spec.params()) is None
+
+
+def test_the_range_check_counts_declared_exclusions_apart_from_failures(
+    profile: Profile,
+) -> None:
+    """Ein erklärter Ausschluss ist kein Bruch; eine falsche Erklärung ist einer."""
+    from app.core.errors import ValidationError
+    from app.core.knowledge.parts import range_check
+    from app.core.registry import op_params, param
+
+    @op_params
+    class PairParams(BaseParams):
+        wide: float = param(title="wide", default=4.0, unit="mm", minimum=2.0, maximum=6.0)
+        narrow: float = param(title="narrow", default=1.0, unit="mm", minimum=1.0, maximum=8.0)
+
+    def declared(raw: BaseParams) -> str | None:
+        return "zu eng" if raw.narrow >= raw.wide else None  # type: ignore[attr-defined]
+
+    def honest(raw: BaseParams) -> Any:
+        if declared(raw):
+            raise ValidationError("narrow", "zu eng")
+        from app.core.knowledge.parts import shapes
+
+        return PartResult(mesh=shapes.box(raw.wide, raw.wide, raw.wide))  # type: ignore[attr-defined]
+
+    report = range_check.check(PairParams, honest, profile, feasible=declared)
+    assert report.checked == 4
+    assert report.passed, [failure.reason for failure in report.failures]
+    # Zwei Ecken sind erklärt: das enge Maß am Maximum gegen beide weiten.
+    assert len(report.excluded) == 2
+    assert all(entry.values["narrow"] == 8.0 for entry in report.excluded)
+
+    def careless(raw: BaseParams) -> Any:
+        from app.core.knowledge.parts import shapes
+
+        return PartResult(mesh=shapes.box(raw.wide, raw.wide, raw.wide))  # type: ignore[attr-defined]
+
+    report = range_check.check(PairParams, careless, profile, feasible=declared)
+    assert not report.passed
+    assert any("erklärt" in failure.reason for failure in report.failures)
+    assert not report.excluded
+
+    report = range_check.check(PairParams, honest, profile)
+    assert not report.passed, "ohne Erklärung bleibt dieselbe Ablehnung ein Bruch"
 
 
 @pytest.mark.parametrize(
@@ -4474,15 +4556,24 @@ def test_the_changed_parts_report_themselves_to_old_projects() -> None:
 
 
 def test_additional_size_fields_do_not_claim_that_old_geometry_changed() -> None:
-    """Neue optionale Eingaben sind kein Maßwechsel für bestehende Projekte."""
-    from app.core.knowledge.parts.registry import changed_since_library
+    """Neue optionale Eingaben sind kein Maßwechsel für bestehende Projekte.
+
+    Gemessen an der Funktion, die das Öffnen einer Datei fragt: Zwischen den
+    Sondermaßen (Version 12) und der Materialzuordnung (Version 15) meldet sie
+    für Kabelverschraubung und Magnettasche nichts; die 15 meldet sie — das
+    ist die eigene, ausdrückliche Maßänderung (``MATERIAL_OF_TARGET``).
+    """
+    from app.core.knowledge.parts.registry import MATERIAL_OF_TARGET, changed_since_library
 
     unchanged = ["cable_gland", "magnet_pocket"]
-    # Die spätere Materialzuordnung in v15 ist eine eigene Maßänderung.
+    assert changed_since_library("12", unchanged) == tuple(unchanged), (
+        "die Materialzuordnung ist eine Maßänderung und wird gemeldet"
+    )
+    assert changed_since_library(MATERIAL_OF_TARGET.version, unchanged) == ()
     assert all(
         not any(11 < int(change.version) < 15 for change in PARTS.get(name).changes)
         for name in unchanged
-    )
+    ), "zwischen 12 und 15 gibt es für diese beiden keinen Eintrag"
     assert changed_since_library("11", ["screw_hole"]) == ("screw_hole",)
 
 

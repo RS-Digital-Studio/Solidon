@@ -37,7 +37,7 @@ from app.core.knowledge.parts.registry import (
 from app.core.registry import op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import EPS_GEOM
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 CABLE_CLIP_OPENING_CORRECTED = PartChange(
     version="15",
@@ -536,6 +536,24 @@ class CableClipParams(BaseParams):
     play: float = play_param(maximum=2.0)
 
 
+CLIP_CLOSED = _(
+    "Die Verengung schließt die Öffnung. Eine Verengung kleiner als der halbe "
+    "Kabeldurchmesser wählen."
+)
+
+
+def _clip_closed(params: CableClipParams) -> TranslatableText | None:
+    """Die erklärte Bedingung des Clips: zwei Verengungen müssen dem Kabel Platz lassen.
+
+    Eine Einzelgrenze kann das nicht sagen — ``grip`` darf bis 5 mm gehen,
+    aber nicht an einem 4-mm-Schlauch. Der Bereichstest kennt den Satz als
+    Ausschluss, der Baustein wirft ihn als ``ValidationError``.
+    """
+    diameter = params.diameter or standards.tube(params.size).outer
+    grip = params.grip or diameter / 5.0
+    return CLIP_CLOSED if diameter - 2.0 * grip <= EPS_GEOM else None
+
+
 @register_part(
     name="cable_clip",
     grip_from_profile=False,
@@ -553,6 +571,7 @@ class CableClipParams(BaseParams):
         "mit Zugentlastung da. Ein Clip führt, er hält nicht fest."
     ),
     changes=[CABLE_CLIP_ADDED, CABLE_CLIP_FACET_WALL_FIXED, CABLE_CLIP_OPENING_CORRECTED],
+    feasible=lambda raw: _clip_closed(cast(CableClipParams, raw)),
 )
 def cable_clip(raw: BaseParams) -> PartResult:
     """Ein liegender C-Bügel auf einem Sockel.
@@ -582,14 +601,10 @@ def cable_clip(raw: BaseParams) -> PartResult:
 
     grip = params.grip or diameter / 5.0
     gap = diameter - 2.0 * grip
-    if gap <= EPS_GEOM:
+    closed = _clip_closed(params)
+    if closed is not None:
         raise ValidationError(
-            "grip",
-            _(
-                "Die Verengung schließt die Öffnung. Eine Verengung kleiner als der halbe "
-                "Kabeldurchmesser wählen."
-            ),
-            values={"diameter": diameter, "grip": grip},
+            "grip", closed, constraint="feasible", values={"diameter": diameter, "grip": grip}
         )
 
     def lying(diameter: float, length: float) -> MeshData:

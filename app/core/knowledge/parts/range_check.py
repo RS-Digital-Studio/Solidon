@@ -16,9 +16,11 @@ from __future__ import annotations
 
 import gc
 import itertools
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Final, SupportsInt, cast
 
+from app.core.errors import ValidationError
 from app.core.knowledge.parts.ops import PLAY_FIELD
 from app.core.knowledge.parts.registry import FeatureRequirement, PartSpec, WallRequirement
 from app.core.types import BaseParams, CancelToken, PartResult, Profile, ProgressFn
@@ -76,16 +78,30 @@ class RangeFailure:
 
 
 @dataclass(frozen=True, slots=True)
+class RangeExclusion:
+    """Eine Ecke, die der Baustein selbst als nicht baubar erklärt hat."""
+
+    values: dict[str, Any]
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class RangeReport:
     """Was der Bereichstest ergeben hat. Hängt am Baustein, nicht im Hash.
 
     Der Hash ist die Version des Rezepts (§24.4) — stünde der Bericht darin,
     machte das **Prüfen** aus dem Rezept ein anderes, und jedes Projekt
     meldete beim Öffnen eine Änderung, die keine ist.
+
+    ``excluded`` sind die Ecken, die :attr:`PartSpec.feasible` vorher als
+    nicht baubar erklärt hat und an denen der Baustein wie erklärt ablehnt.
+    Sie zählen nicht als Fehler — ein erklärter Ausschluss ist Teil des
+    Vertrags; ein **unerklärter** Abbruch bleibt einer.
     """
 
     checked: int = 0
     failures: tuple[RangeFailure, ...] = ()
+    excluded: tuple[RangeExclusion, ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -1161,8 +1177,15 @@ def check(
     bodies: int = 1,
     wall: WallRequirement = DEFAULT_WALL_REQUIREMENT,
     features: tuple[FeatureRequirement, ...] = (),
+    feasible: Callable[[BaseParams], Any] | None = None,
 ) -> RangeReport:
     """Fährt die Ecken und sagt je Ecke, was nicht hielt.
+
+    ``feasible`` ist die erklärte Bedingung des Bausteins zwischen seinen
+    Parametern (:attr:`PartSpec.feasible`): Nennt sie für eine Ecke einen
+    Grund, muss der Bau dort mit ``ValidationError`` ablehnen — dann ist die
+    Ecke ein erklärter Ausschluss. Baut er trotzdem, ist die Erklärung falsch
+    und die Ecke ein Fehler; bricht er anders ab, ebenso.
 
     ``joined_by_host`` nimmt die Prüfung auf **eine** Komponente heraus — für
     Bausteine, deren Teile erst der Träger verbindet. Der Lochwand-Einhänger
@@ -1202,6 +1225,7 @@ def check(
     token = cancelled or _Silent()
     plan = corners(params)
     failures: list[RangeFailure] = []
+    excluded: list[RangeExclusion] = []
     checked = 0
 
     def announce(index: int, phase: int) -> None:
@@ -1229,8 +1253,19 @@ def check(
         entered = dict(values)
         if PLAY_FIELD in entered and not entered[PLAY_FIELD]:
             entered[PLAY_FIELD] = profile.material.clearance
+        declared = str(feasible(params(**entered)) or "") if feasible is not None else ""
         try:
             result: PartResult = build(params(**entered))
+        except ValidationError as problem:
+            if declared:
+                excluded.append(RangeExclusion(dict(entered), declared[:200]))
+            else:
+                add(entered, str(problem))
+            checked += 1
+            announce(index, 4)
+            if checked % 16 == 0:
+                gc.collect()
+            continue
         except Exception as problem:  # eine brechende Ecke ist das Ergebnis, kein Absturz
             add(entered, str(problem))
             checked += 1
@@ -1238,6 +1273,11 @@ def check(
             if checked % 16 == 0:
                 gc.collect()
             continue
+        if declared:
+            add(
+                entered,
+                str(_("als nicht baubar erklärt, baut aber: {reason}")).format(reason=declared),
+            )
         announce(index, 1)
         if _is_cancelled(token):
             break
@@ -1367,7 +1407,7 @@ def check(
         add({}, str(_("Wird abgebrochen …")))
     if progress is not None and checked == len(plan):
         progress(1.0, str(_("Bereichstest abgeschlossen")))
-    report = RangeReport(checked=checked, failures=tuple(failures))
+    report = RangeReport(checked=checked, failures=tuple(failures), excluded=tuple(excluded))
     gc.collect()
     return report
 
@@ -1390,4 +1430,5 @@ def check_part(
         bodies=spec.bodies,
         wall=spec.wall,
         features=spec.feature_requirements,
+        feasible=spec.feasible,
     )
