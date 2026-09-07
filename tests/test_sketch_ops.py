@@ -10,14 +10,17 @@ from __future__ import annotations
 
 import dataclasses
 import math
-import sys
+from io import BytesIO
 
 import numpy as np
 import pytest
+import trimesh
 
 from app.core.brep.kernel import Solid, available
 from app.core.brep.profiles import _lift_frame
 from app.core.errors import AppError, ValidationError
+from app.core.export.writer import export_bytes
+from app.core.geom.mesh import MeshData
 from app.core.registry import REGISTRY
 from app.core.scene import ResultCache, evaluate
 from app.core.scene.cancel import NeverCancelled
@@ -680,46 +683,63 @@ def test_a_thread_keeps_the_diameter_it_was_asked_for() -> None:
         run("thread_exact", diameter=2.0, pitch=1.5, length=12.0)
 
 
-@pytest.mark.xfail(
-    sys.platform.startswith(("linux", "darwin")),
-    reason=(
-        "Auf der OCCT-Version der Linux- und macOS-Runner schließt der helikale "
-        "Gang nicht am Kern — auch nicht mit ShapeFix und nicht über drei "
-        "Fuzzy-Toleranzen hinweg (gemessen am 13.08.2026, siehe ROADMAP). Unter "
-        "Windows, der Plattform der Demo, kommt M6 geschlossen heraus. Nicht "
-        "`strict`: sobald eine Version es dort kann, ist der Lauf grün und diese "
-        "Marke fällt.\n\n"
-        "macOS kam am 20.08.2026 dazu, und zwar nicht als neuer Befund: Bis zur "
-        "Reparatur des Testschritts brach der Lauf dort an `xvfb-run` ab, das es "
-        "auf macOS nicht gibt — die Tests wurden nie erreicht. Der erste Lauf, "
-        "der sie erreichte, meldete dieselbe Zeile mit denselben Maßen (M6, "
-        "1,0 mm) wie Linux, zweimal hintereinander. Dieselbe Rechnung, dieselbe "
-        "fremde OCCT-Version."
-    ),
-    strict=False,
+def _open_edge_diagnostic(mesh: MeshData) -> str:
+    """Nennt bei einer offenen STL Zahl und Lage der ersten Randkanten."""
+    boundary_rows = np.asarray(
+        trimesh.grouping.group_rows(mesh.raw.edges_sorted, require_count=1),
+        dtype=np.int64,
+    )
+    if not len(boundary_rows):
+        return "0 offene Kanten"
+    boundary = np.asarray(mesh.raw.edges_sorted, dtype=np.int64)[boundary_rows]
+    endpoints = np.asarray(mesh.raw.vertices, dtype=float)[boundary]
+    flat = endpoints.reshape(-1, 3)
+
+    def point_text(point: np.ndarray) -> str:
+        return "(" + ", ".join(f"{float(value):.6f}" for value in point) + ")"
+
+    examples = "; ".join(f"{point_text(start)}–{point_text(end)}" for start, end in endpoints[:4])
+    return (
+        f"{len(boundary_rows)} offene Kanten; Bereich "
+        f"{point_text(flat.min(axis=0))} bis {point_text(flat.max(axis=0))}; "
+        f"Beispiele {examples}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("major", "pitch"),
+    ((6.0, 1.0), (10.0, 1.5), (20.0, 2.5)),
+    ids=("M6", "M10", "M20"),
 )
-def test_a_sound_thread_still_goes_through() -> None:
-    """Die Gegenprobe — die üblichen Maße dürfen die Prüfung nicht treffen.
+def test_a_sound_thread_exports_as_a_watertight_stl(major: float, pitch: float) -> None:
+    """Übliche Gewinde bleiben exakt und kommen als geschlossenes STL heraus.
 
-    Der **Körper** wird überall verlangt: geschlossen, ein Stück, im Maß. Das
-    **Netz** nur dort, wo die Vernetzung es hergibt. Auf dem macOS-Runner
-    bleibt M6 mit einem Millimeter Steigung undicht, auch nachdem die Feinheit
-    dreimal halbiert wurde — dort ritzt die Tessellation der Flanke, und
-    Verfeinern hilft nicht. Auf dieser Maschine und unter Linux sind alle drei
-    Größen dicht.
-
-    Die Lücke ist damit benannt und nicht versteckt: Ein Gewinde, das auf
-    einem Mac als STL exportiert wird, kann Löcher haben; STEP und jede
-    weitere Operation tragen es trotzdem, denn die hängen am Körper. Der
-    offene Punkt steht in ROADMAP.md.
+    Der Test hält die zwei Zusagen getrennt: Der B-Rep-Körper bleibt exakt,
+    geschlossen und einzeln bearbeitbar. Danach muss auch die wirklich
+    geschriebene Float32-Dreieckshülle geschlossen sein. ``process=True``
+    rekonstruiert nur die gemeinsamen Punkte, deren Kennungen STL nicht trägt;
+    es füllt kein Loch und repariert keine offene Flanke.
     """
-    for major, pitch in ((6.0, 1.0), (10.0, 1.5), (20.0, 2.5)):
-        body = solid_of(run("thread_exact", diameter=major, pitch=pitch, length=12.0))
-        assert body.is_closed, (major, pitch)
-        assert body.solid_count == 1, (major, pitch)
-        assert body.bounds.size[0] == pytest.approx(major, rel=0.01)
-        if sys.platform != "darwin":
-            assert body.is_watertight, (major, pitch)
+    result = run("thread_exact", diameter=major, pitch=pitch, length=12.0)
+    entry = result.outputs[0]
+    body = entry.mesh
+    thread = entry.features.get("thread_1")
+
+    assert entry.kind == "brep"
+    assert isinstance(body, Solid)
+    assert thread is not None and thread.id == "thread_1"
+    assert thread.params["diameter"] == pytest.approx(major, abs=1e-12, rel=0.0)
+    assert thread.params["pitch"] == pytest.approx(pitch, abs=1e-12, rel=0.0)
+    assert body.is_closed, (major, pitch)
+    assert body.solid_count == 1, (major, pitch)
+    assert body.bounds.size[0] == pytest.approx(major, rel=0.01)
+    assert body.mesh.is_watertight, _open_edge_diagnostic(body.mesh)
+
+    payload = export_bytes(body.mesh, "stl", body=body)
+    exported = MeshData.of(trimesh.load_mesh(BytesIO(payload), file_type="stl", process=True))
+    assert exported.is_watertight, _open_edge_diagnostic(exported)
+    assert exported.component_count == 1, (major, pitch)
+    assert exported.bounds.size[0] == pytest.approx(major, rel=0.01)
 
 
 def test_a_thread_holds_more_material_than_its_core() -> None:
