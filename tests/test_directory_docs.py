@@ -69,12 +69,23 @@ def documented_folders() -> list[Path]:
 
 
 def maps() -> list[Path]:
-    """Alle Karten des Repositories — die Arbeitsbäume fremder Sitzungen nicht."""
+    """Alle Karten des Repositories — die Arbeitsbäume fremder Sitzungen nicht.
+
+    **Gefiltert wird über den Pfad *unterhalb* von** ``ROOT``, nicht über den
+    ganzen. Absolut geprüft übersah der Filter sich selbst: In einem
+    Arbeitsbaum unter ``.claude/worktrees/<name>/`` trägt **jeder** Pfad das
+    Segment ``worktrees``, und der Suchlauf fand null Karten. Der Test war dort
+    nicht grün zu bekommen — ausgerechnet in der Lage, die `/pruefen` für
+    Arbeit neben fremden Sitzungen ausdrücklich empfiehlt (gemeldet von
+    solidon-74, 07.09.2026, behoben am selben Tag). Er blieb dabei nicht still:
+    Die Zusicherung über die Zahl der Karten sprang an.
+    """
     skip = {".venv", "build", "dist", "worktrees", "node_modules"}
     return sorted(
         path
         for path in ROOT.rglob("CLAUDE.md")
-        if not skip & set(path.parts) and "3D Drucker" not in path.parts
+        if not skip & set(path.relative_to(ROOT).parts)
+        and "3D Drucker" not in path.relative_to(ROOT).parts
     )
 
 
