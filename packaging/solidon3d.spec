@@ -131,9 +131,13 @@ datas += copy_metadata("trimesh")
 # aus dem Verzeichnis der Kataloge, wie überall sonst (§4.1). **Deutsch steht
 # dazu**, denn es ist die Quellsprache und hat dort keine Datei — ausgerechnet
 # die Vorgabe hätte englische Knöpfe getragen.
-import PySide6  # noqa: E402
+from PySide6.QtCore import QLibraryInfo  # noqa: E402
 
-_QT_TRANSLATIONS = Path(PySide6.__file__).parent / "translations"
+# Gesucht wird dort, wo die Anwendung sie zur Laufzeit lädt, und nicht neben
+# dem Python-Paket: Auf macOS ist das nicht derselbe Ort, und die Spec nahm
+# dort für **keine** Sprache etwas mit — der Hinweis darüber lief sechsmal
+# durch das Bauprotokoll, und im Paket stand auf jedem Knopf „Cancel".
+_QT_TRANSLATIONS = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath))
 _LANGUAGES = {"de"} | {path.stem for path in (ROOT / "app" / "i18n" / "locales").glob("*.json")}
 for _code in sorted(_LANGUAGES):
     # Mit Varianten gesucht: Portugiesisch liegt bei Qt nur als ``pt_BR`` vor,

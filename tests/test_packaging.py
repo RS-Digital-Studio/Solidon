@@ -98,6 +98,29 @@ def _fake_bin(folder: Path, python_body: str) -> str:
     return str(folder)
 
 
+def _workflow_shell() -> str | None:
+    """Die Shell, mit der die CI ihre ``run:``-Blöcke fährt — bash.
+
+    Jeder hier geprüfte Block deklariert ``shell: bash``, und er verlässt sich
+    darauf: ``set -o pipefail`` kennt POSIX-``sh`` nicht, ``dash`` weist es mit
+    ``Illegal option`` ab. Wer den Block zum Messen mit ``sh`` fährt, misst eine
+    Umgebung, in der er nie läuft — unter Windows fällt das nicht auf, weil die
+    ``sh`` aus Git für Windows eine bash ist.
+
+    Für das Linux-Installationsskript gilt das Gegenteil: Es ist bewusst
+    POSIX-``sh`` und wird mit :func:`_posix_shell` gefahren.
+    """
+    found = shutil.which("bash")
+    if found is not None:
+        return found
+
+    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+    git_bash = program_files / "Git" / "usr" / "bin" / "bash.exe"
+    if git_bash.is_file():
+        return str(git_bash)
+    return None
+
+
 def _posix_shell() -> str | None:
     """Liefert eine POSIX-Shell, auch wenn Git sie unter Windows nicht einträgt.
 
@@ -442,9 +465,9 @@ def test_each_ci_window_file_is_executed_exactly_once(tmp_path: Path, job: str) 
     if job == "suite":
         steps.append(section.split("      - name: Fensterdateien\n", 1)[1])
     script = "\n".join(textwrap.dedent(step.split("        run: |\n", 1)[1]) for step in steps)
-    shell = _posix_shell()
+    shell = _workflow_shell()
     if shell is None:
-        pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     fake_python = """
 if [ "$1" = "tools/list_windowed_tests.py" ]; then
   printf 'tests/test_print_settings_ui.py\r\ntests/test_fake.py\r\n'
@@ -528,9 +551,9 @@ def test_window_failures_block_the_package_on_every_platform(
     assert "if: runner.os" not in step, "Windows und macOS dürfen die Fenster nicht auslassen"
     assert "shell: bash" in step
     script = textwrap.dedent(step.split("        run: |\n", 1)[1])
-    shell = _posix_shell()
+    shell = _workflow_shell()
     if shell is None:
-        pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     # Beide Programme werden als Attrappen im PATH vertreten. Der Block
     # selbst, einschließlich pipefail und abschließendem Exit, bleibt echt.
     fake_python = """
@@ -579,9 +602,9 @@ def test_ci_preserves_the_first_failed_process_exit(
     section = workflow.split(f"\n  {job}:\n", 1)[1]
     step = section.split("      - name: Tests\n", 1)[1].split("\n      - name:", 1)[0]
     script = textwrap.dedent(step.split("        run: |\n", 1)[1])
-    shell = _posix_shell()
+    shell = _workflow_shell()
     if shell is None:
-        pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
+        pytest.skip("ohne bash lässt sich der CI-Block nicht ausführen")
     fake_python = """
 if [ "$1" = "tools/list_windowed_tests.py" ]; then
   printf 'tests/test_fake.py\r\n'
@@ -718,6 +741,9 @@ def test_the_package_carries_qts_own_catalogues() -> None:
 
     assert "qtbase_" in source, "die Spec nimmt Qts Sprachkataloge nicht ausdrücklich mit"
     assert "PySide6/translations" in source, "sie müssen dort landen, wo Qt sie sucht"
+    # Und sie müssen von dort kommen, wo die Anwendung sie sucht. Neben dem
+    # Python-Paket zu raten traf auf macOS keine einzige Datei.
+    assert "QLibraryInfo" in source, "die Quelle ist Qts eigene Auskunft, kein geratener Pfad"
     # Die Liste darf nicht von Hand gepflegt sein — sie driftet sonst gegen
     # app/i18n/locales, wie schon die hiddenimports gegen den Bootstrap.
     assert 'glob("*.json")' in source, "die Sprachen kommen aus dem Katalogverzeichnis"
@@ -737,11 +763,13 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
     import pytest
 
     pytest.importorskip("PySide6")
-    import PySide6
+    from PySide6.QtCore import QLibraryInfo
 
     from app.i18n.catalog import available_languages
 
-    catalogues = Path(PySide6.__file__).parent / "translations"
+    # Derselbe Ort, den ``install_qt_translations`` zur Laufzeit fragt. Neben
+    # dem Python-Paket zu suchen ging auf macOS ins Leere.
+    catalogues = Path(QLibraryInfo.path(QLibraryInfo.LibraryPath.TranslationsPath))
     missing = []
     for code in ("de", *available_languages()):
         if not sorted(catalogues.glob(f"qtbase_{code}*.qm")):

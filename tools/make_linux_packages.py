@@ -429,7 +429,13 @@ cat > "$BIN_DIR/$NAME" <<LAUNCHER
 exec '$TARGET_QUOTED' "\$@"
 LAUNCHER
 chmod 755 "$BIN_DIR/$NAME"
-ln -sf "$NAME" "$BIN_DIR/$SHORT"
+# Der Kurzname als Symlink daneben — aber nur, wo er ein eigener Eintrag ist.
+# Auf einem Dateisystem ohne Groß-/Kleinschreibung meint "$SHORT" dieselbe
+# Datei wie "$NAME"; das ln ersetzte dann den eben geschriebenen Starter durch
+# einen Symlink auf sich selbst, und jeder Aufruf endete in ELOOP.
+if [ -L "$BIN_DIR/$SHORT" ] || [ ! -e "$BIN_DIR/$SHORT" ]; then
+  ln -sf "$NAME" "$BIN_DIR/$SHORT"
+fi
 
 # Der Menüeintrag nennt den Starter mit vollem Pfad: $HOME/.local/bin liegt
 # nicht in jedem PATH einer Arbeitsumgebung, und ein Exec= ohne Pfad wird genau

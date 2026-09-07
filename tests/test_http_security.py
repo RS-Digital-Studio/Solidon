@@ -788,6 +788,31 @@ def test_chunk_metadata_cannot_restart_the_network_deadline(part: str) -> None:
     assert not writer.is_alive()
 
 
+def _loopback_pair() -> tuple[socket.socket, socket.socket]:
+    """Ein verbundenes TCP-Paar über die Loopback-Schnittstelle.
+
+    ``socket.socketpair()`` wäre kürzer, liefert auf Linux und macOS aber ein
+    Paar aus AF_UNIX — und ``http.client.connect`` setzt auf der Verbindung, die
+    es bekommt, ``TCP_NODELAY``. Ein Unix-Socket weist das ab, Linux mit
+    ``Errno 95`` und macOS mit ``Errno 102``, und der Test scheiterte an seiner
+    eigenen Nachstellung statt an der Frist, die er messen will.
+
+    Auf dieser Maschine konnte das nie auffallen: Python kennt unter Windows
+    kein AF_UNIX und bildet ``socketpair`` selbst über TCP nach. Der Fall, den
+    der Test meint, ist ohnehin TCP — also stellt er ihn auch so her.
+    """
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        near = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        near.connect(listener.getsockname())
+        far, _peer = listener.accept()
+    finally:
+        listener.close()
+    return near, far
+
+
 @pytest.mark.parametrize("part", ["status", "headers"])
 def test_initial_http_lines_share_the_absolute_deadline(
     monkeypatch: pytest.MonkeyPatch, part: str
@@ -795,7 +820,7 @@ def test_initial_http_lines_share_the_absolute_deadline(
     """Die Frist beginnt vor dem ersten Antwortbyte, nicht erst am Inhalt."""
     from app.core import http
 
-    left, right = socket.socketpair()
+    left, right = _loopback_pair()
     stop = threading.Event()
     monkeypatch.setattr(http, "resolve_public_addresses", lambda *_args, **_kwargs: ("8.8.8.8",))
     monkeypatch.setattr(http, "verify_public_peer", lambda *_args: None)
