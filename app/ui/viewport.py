@@ -203,6 +203,91 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
     "iso": ((1.0, -1.0, 0.8), (0.0, 0.0, 1.0)),
 }
 
+
+def upright_for(
+    direction: tuple[float, float, float],
+    fallback: tuple[float, float, float],
+    previous_direction: tuple[float, float, float] | None = None,
+    previous_up: tuple[float, float, float] | None = None,
+) -> tuple[float, float, float]:
+    """Das Oben, das die Drehung der Ansicht mitnimmt.
+
+    **Eine Achsansicht soll kippen, nicht rollen.** Die Tabelle
+    :data:`VIEW_DIRECTIONS` führt je Richtung ein festes Oben — Z für die
+    Seitenansichten, Y für oben und unten. Wer von vorn nach oben wechselte,
+    bekam damit ein um 90 Grad gedrehtes Bild, und wer sich vorher eine eigene
+    Lage zurechtgedreht hatte, verlor sie ganz.
+
+    Übertragen wird deshalb die **kürzeste Drehung**: die, die die alte
+    Blickrichtung auf die neue bringt, ohne zusätzlich um die Blickachse zu
+    drehen (Rodrigues, mit der gemeinsamen Senkrechten als Achse). Auf das alte
+    Oben angewandt hält sie die Bildlage exakt — in jedem Winkel, nicht nur in
+    Vielfachen von neunzig Grad.
+
+    Ein Einrasten auf die nächste Achse wäre die kleinere Lösung und war der
+    erste Anlauf; sie war messbar besser als die Tabelle und trotzdem ein
+    Sprung, sobald jemand frei gedreht hatte.
+
+    Ohne Vorgeschichte — der erste Blick auf eine Szene — bleibt es beim Wert
+    aus der Tabelle. Bei entgegengesetzten Richtungen ist die Drehung nicht
+    eindeutig (jede Achse senkrecht dazu leistet sie); dann wird um die
+    Senkrechte auf dem alten Oben gedreht, was den Roll ebenfalls erhält.
+    """
+    import numpy as np
+
+    if previous_direction is None or previous_up is None:
+        return fallback
+
+    def unit(value: tuple[float, float, float]) -> np.ndarray | None:
+        vector = np.asarray(value, dtype=float)
+        length = float(np.linalg.norm(vector))
+        return None if length <= EPS_GEOM else vector / length
+
+    to = unit(direction)
+    was = unit(previous_direction)
+    up = unit(previous_up)
+    if to is None or was is None or up is None:
+        return fallback
+
+    cosine = float(np.clip(np.dot(was, to), -1.0, 1.0))
+    if cosine > 1.0 - 1e-12:
+        # Dieselbe Richtung: Es gibt nichts zu drehen.
+        turned = up
+    else:
+        axis = np.cross(was, to)
+        span = float(np.linalg.norm(axis))
+        if span <= EPS_GEOM:
+            # Genau entgegengesetzt. Jede Achse senkrecht zur Blickrichtung
+            # leistet die Drehung; die Senkrechte auf dem Oben hält den Roll.
+            axis = np.cross(was, up)
+            span = float(np.linalg.norm(axis))
+            if span <= EPS_GEOM:
+                return fallback
+            axis = axis / span
+            angle = np.pi
+        else:
+            axis = axis / span
+            angle = float(np.arctan2(span, cosine))
+        # Formel von Rodrigues, mit k als Drehachse und v als gedrehtem Vektor.
+        turned = (
+            up * np.cos(angle)
+            + np.cross(axis, up) * np.sin(angle)
+            + axis * float(np.dot(axis, up)) * (1.0 - np.cos(angle))
+        )
+
+    # Gegen die neue Blickrichtung senkrecht stellen — die Drehung ist exakt,
+    # das Ergebnis nach Fließkomma nicht ganz.
+    turned = turned - to * float(np.dot(turned, to))
+    length = float(np.linalg.norm(turned))
+    if length <= EPS_GEOM:
+        return fallback
+    return (
+        float(turned[0] / length),
+        float(turned[1] / length),
+        float(turned[2] / length),
+    )
+
+
 #: Reichweite der Umgebungsverdeckung in Weltmaß, also Millimetern.
 #:
 #: An einer gebohrten Platte mit einer Tasche nachgemessen, gegen dasselbe Bild
@@ -4112,7 +4197,24 @@ class Viewport(QWidget):
         table = SKETCH_VIEW_DIRECTIONS if sketching else AXIS_VIEW_DIRECTIONS
         found = sketch_view_near(position, focus) if sketching else axis_view_near(position, focus)
         if found is not None:
-            self._turn_camera_to(*table[found])
+            axis, fallback = table[found]
+            # **Einrasten heißt kippen, nicht rollen.** Hier stand der feste
+            # Oben-Wert der Tabelle, und damit sprang das Bild in dem Moment um,
+            # in dem die Kamera nahe genug an einer Achse war: Wer sich eine
+            # Lage zurechtgedreht hatte, verlor sie beim letzten Grad
+            # (Befund Robert, 07.09.2026 — „das einrasten wenn man in der nähe
+            # ist passt ja, das drehen nicht").
+            was = (
+                float(position[0] - focus[0]),
+                float(position[1] - focus[1]),
+                float(position[2] - focus[2]),
+            )
+            previous_up = (
+                float(pose.view_up[0]),
+                float(pose.view_up[1]),
+                float(pose.view_up[2]),
+            )
+            self._turn_camera_to(axis, upright_for(axis, fallback, was, previous_up))
             if draw:
                 self._draw()
         if not sketching:
@@ -10463,6 +10565,12 @@ class Viewport(QWidget):
         if self.renderer is None or direction not in VIEW_DIRECTIONS:
             return
         self._remove_sketch_occlusion()
+        # **Der Knopf gibt die kanonische Lage, das Einrasten behält die eigene.**
+        # Ein Klick auf „Oben" ist eine Ansage und keine Hilfe: Wer ihn drückt,
+        # will die Draufsicht, wie sie im Lehrbuch steht. Deshalb steht hier der
+        # feste Wert der Tabelle, während _settle_sketch_view beim freien
+        # Kippen die vorhandene Drehung mitnimmt (Robert, 07.09.2026: „die
+        # viewbarknöpfe haben gepasst").
         self._turn_camera_to(*VIEW_DIRECTIONS[direction])
         if self._sketch_frame is not None:
             self._apply_sketch_occlusion()
