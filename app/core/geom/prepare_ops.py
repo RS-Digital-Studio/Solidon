@@ -3183,6 +3183,103 @@ class SplitPinnedParams(BaseParams):
     play: float = play_param()
 
 
+@op_params
+class SplitBodiesParams(BaseParams):
+    keep_tiny: bool = param(
+        title=_("Splitter behalten"),
+        default=False,
+        doc=_(
+            "Auch Bruchstücke unter einem Prozent des größten Teils behalten. "
+            "Aus Scans kommen oft einzelne lose Dreiecke — die will man selten "
+            "als eigenes Modell."
+        ),
+    )
+
+
+@register_op(
+    name="split_bodies",
+    title=_("In Einzelteile zerlegen"),
+    category="prepare",
+    params=SplitBodiesParams,
+    consumes=1,
+    produces=VARIABLE,
+    doc=_(
+        "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen "
+        "besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht "
+        "ein Teil — eine STL weiß das nicht, die Geometrie schon."
+    ),
+    caveat=_(
+        "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer "
+        "Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft "
+        "Teilen an einer Ebene."
+    ),
+)
+def split_bodies(ctx: OpContext) -> OpResult:
+    """Je Zusammenhangskomponente ein Objekt.
+
+    **Der Ausgang bleibt, was er war.** Material, Filamentzuweisung und die
+    erkannten Merkmale gehen mit; getrennt wird die Geometrie, nicht die
+    Beschreibung. Die Merkmale wandern zu dem Teil, dessen Dreiecke sie
+    tragen — ein Merkmal, dessen Flächen auf zwei Teile fielen, gäbe es nicht,
+    denn dann hingen die Teile zusammen.
+    """
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+    parts = mesh.raw.split(only_watertight=False)
+
+    if len(parts) <= 1:
+        # Kein Fehler, sondern eine Auskunft: Der Körper ist schon einer.
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="split_bodies.single",
+                    severity="info",
+                    message=_("Der Körper besteht aus einem Stück."),
+                    object_id=source.id,
+                )
+            ],
+        )
+
+    params = cast(SplitBodiesParams, ctx.params)
+    volumes = [abs(float(part.volume)) for part in parts]
+    largest = max(volumes) or 1.0
+    kept = [
+        (part, volume)
+        for part, volume in zip(parts, volumes, strict=True)
+        if params.keep_tiny or volume >= largest * 0.01
+    ]
+    dropped = len(parts) - len(kept)
+
+    outputs = []
+    for number, (part, _volume) in enumerate(sorted(kept, key=lambda entry: -entry[1]), start=1):
+        outputs.append(
+            dataclasses.replace(
+                source,
+                mesh=mesh.replacing(part),
+                name=f"{source.name} {number}",
+                # Die Merkmale des Ausgangs zeigen auf dessen Dreiecke; nach
+                # der Trennung zählt jedes Teil eigene. Sie neu zu erkennen ist
+                # Sache der Erkennung, nicht dieser Operation — sie mitzugeben
+                # wäre eine Behauptung über Flächen, die es so nicht mehr gibt.
+                features={},
+            )
+        )
+
+    findings = []
+    if dropped:
+        findings.append(
+            Finding(
+                code="split_bodies.tiny",
+                severity="info",
+                message=_("{count} Splitter unter einem Prozent wurden verworfen."),
+                values={"count": str(dropped)},
+                object_id=source.id,
+            )
+        )
+    return OpResult(outputs=outputs, findings=findings)
+
+
 @register_op(
     name="split_pinned",
     # Nicht mehr „Teilen und verstiften": Seit *An Ebene teilen* in dieser

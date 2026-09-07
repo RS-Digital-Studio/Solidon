@@ -888,6 +888,7 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "neunundneunzig": 99,
     "hundert": 100,
     "hundertzwei": 102,
+    "hundertdrei": 103,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
 }

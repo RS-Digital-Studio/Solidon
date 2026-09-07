@@ -4545,5 +4545,12 @@
   "🔒": "🔒",
   "und {count} weitere": "et {count} de plus",
   "zum Ändern anklicken": "cliquez pour changer",
-  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cherche pour chaque corps sélectionné la position au moindre support. Chacun reçoit la sienne — la meilleure position découle de la géométrie de la pièce elle-même."
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cherche pour chaque corps sélectionné la position au moindre support. Chacun reçoit la sienne — la meilleure position découle de la géométrie de la pièce elle-même.",
+  "In Einzelteile zerlegen": "Séparer en pièces distinctes",
+  "Splitter behalten": "Garder les éclats",
+  "Der Körper besteht aus einem Stück.": "Le corps est d'un seul tenant.",
+  "{count} Splitter unter einem Prozent wurden verworfen.": "{count} éclats sous un pour cent ont été écartés.",
+  "Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.": "Garder aussi les fragments sous un pour cent de la plus grande pièce. Les scans livrent souvent des triangles isolés — on les veut rarement comme modèle à part.",
+  "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht ein Teil — eine STL weiß das nicht, die Geometrie schon.": "Fait d'un corps composé de plusieurs parties non reliées un objet chacune. Ce qui ne tient pas ensemble n'est pas une pièce — un STL l'ignore, la géométrie non.",
+  "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.": "Seul ce qui ne se touche pas est séparé. Deux pièces jointes par une face n'en font qu'une pour la géométrie — là, c'est Diviser par un plan."
 }

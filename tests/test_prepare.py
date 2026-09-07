@@ -2968,3 +2968,50 @@ def test_resizing_a_bore_says_that_its_countersink_stayed(profile: Profile) -> N
     # Der Satz trägt die Zahlen und nicht die Platzhalter — sonst liest der
     # Kunde „{outer:.2f} mm".
     assert "{" not in str(warning.message), str(warning.message)
+
+
+def test_split_bodies_makes_one_object_per_loose_part(profile: Profile) -> None:
+    """Was nicht zusammenhängt, wird je ein eigenes Objekt.
+
+    Robert stand am 07.09.2026 vor einer STL mit vier Körpern in einem Netz
+    und wollte sie einzeln fassen. Eine STL weiß nichts von Objekten — die
+    Geometrie schon: Zwei Würfel, die sich nicht berühren, sind zwei Teile.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    left = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    right.apply_translation((50.0, 0.0, 0.0))
+    both = MeshData.of(trimesh.util.concatenate([left, right]))
+    assert both.component_count == 2, "die Vorbedingung selbst, nicht nur ihr Name"
+    entry = SceneObject(id="obj_1", name="Platte", mesh=both)
+
+    result = _run_op("split_bodies", entry, profile)
+
+    assert len(result.outputs) == 2
+    for entry in result.outputs:
+        mesh = as_mesh_data(entry.mesh)
+        assert mesh.component_count == 1, "jedes Ergebnis ist ein Stück"
+        assert mesh.is_watertight
+        assert mesh.bounds.size[0] == pytest.approx(10.0)
+
+
+def test_split_bodies_says_so_when_there_is_nothing_to_split(profile: Profile) -> None:
+    """Ein Körper aus einem Stück kommt unverändert zurück — mit einem Satz.
+
+    Nicht als Fehler: Wer die Operation an einem einteiligen Körper ruft, hat
+    nichts falsch gemacht, er hat nur nichts zu trennen. Ein Befund sagt es;
+    eine Ausnahme wäre die falsche Antwort auf eine berechtigte Frage.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    single = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=single)
+    result = _run_op("split_bodies", entry, profile)
+
+    assert len(result.outputs) == 1
+    assert "split_bodies.single" in {finding.code for finding in result.findings}

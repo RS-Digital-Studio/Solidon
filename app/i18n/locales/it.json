@@ -4545,5 +4545,12 @@
   "🔒": "🔒",
   "und {count} weitere": "e altri {count}",
   "zum Ändern anklicken": "fai clic per cambiare",
-  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cerca per ogni corpo selezionato la posizione con il minor sostegno. Ognuno riceve la propria — la posizione migliore discende dalla geometria del singolo pezzo."
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cerca per ogni corpo selezionato la posizione con il minor sostegno. Ognuno riceve la propria — la posizione migliore discende dalla geometria del singolo pezzo.",
+  "In Einzelteile zerlegen": "Separa in pezzi distinti",
+  "Splitter behalten": "Tieni le schegge",
+  "Der Körper besteht aus einem Stück.": "Il corpo è di un pezzo solo.",
+  "{count} Splitter unter einem Prozent wurden verworfen.": "{count} schegge sotto l'uno per cento sono state scartate.",
+  "Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.": "Tieni anche i frammenti sotto l'uno per cento del pezzo più grande. Dalle scansioni arrivano spesso triangoli sciolti, e raramente li si vuole come modello a sé.",
+  "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht ein Teil — eine STL weiß das nicht, die Geometrie schon.": "Da un corpo fatto di più parti non collegate ricava un oggetto ciascuna. Ciò che non sta insieme non è un pezzo: un STL non lo sa, la geometria sì.",
+  "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.": "Si separa solo ciò che non si tocca. Due pezzi che combaciano su una faccia per la geometria sono uno solo: lì serve Dividi su un piano."
 }

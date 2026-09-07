@@ -4545,5 +4545,12 @@
   "🔒": "🔒",
   "und {count} weitere": "y {count} más",
   "zum Ändern anklicken": "haga clic para cambiar",
-  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Busca para cada cuerpo seleccionado la posición con menos soporte. Cada uno recibe la suya — la mejor posición se desprende de la geometría de la pieza concreta."
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Busca para cada cuerpo seleccionado la posición con menos soporte. Cada uno recibe la suya — la mejor posición se desprende de la geometría de la pieza concreta.",
+  "In Einzelteile zerlegen": "Separar en piezas sueltas",
+  "Splitter behalten": "Conservar las astillas",
+  "Der Körper besteht aus einem Stück.": "El cuerpo es una sola pieza.",
+  "{count} Splitter unter einem Prozent wurden verworfen.": "Se descartaron {count} astillas por debajo del uno por ciento.",
+  "Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.": "Conservar también los fragmentos por debajo del uno por ciento de la pieza mayor. De los escaneos salen a menudo triángulos sueltos, y rara vez se quieren como modelo propio.",
+  "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht ein Teil — eine STL weiß das nicht, die Geometrie schon.": "Convierte un cuerpo formado por varias partes no conectadas en un objeto cada una. Lo que no está unido no es una pieza: un STL no lo sabe, la geometría sí.",
+  "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.": "Solo se separa lo que no se toca. Dos piezas que se juntan en una cara son una sola para la geometría; ahí sirve Dividir por un plano."
 }

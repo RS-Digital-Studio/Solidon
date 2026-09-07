@@ -4545,5 +4545,12 @@
   "🔒": "🔒",
   "und {count} weitere": "e mais {count}",
   "zum Ändern anklicken": "clique para alterar",
-  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Procura para cada corpo selecionado a posição com menos suportes. Cada um recebe a sua — a melhor posição decorre da geometria da peça individual."
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Procura para cada corpo selecionado a posição com menos suportes. Cada um recebe a sua — a melhor posição decorre da geometria da peça individual.",
+  "In Einzelteile zerlegen": "Separar em peças distintas",
+  "Splitter behalten": "Manter as lascas",
+  "Der Körper besteht aus einem Stück.": "O corpo é de uma só peça.",
+  "{count} Splitter unter einem Prozent wurden verworfen.": "Foram descartadas {count} lascas abaixo de um por cento.",
+  "Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.": "Manter também os fragmentos abaixo de um por cento da maior peça. Das digitalizações vêm muitas vezes triângulos soltos — raramente se querem como modelo próprio.",
+  "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht ein Teil — eine STL weiß das nicht, die Geometrie schon.": "Transforma um corpo feito de várias partes não ligadas num objeto cada uma. O que não está ligado não é uma peça: um STL não o sabe, a geometria sim.",
+  "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.": "Só se separa o que não se toca. Duas peças encostadas numa face são uma só para a geometria — aí serve Dividir por um plano."
 }

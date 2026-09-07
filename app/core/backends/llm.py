@@ -1809,17 +1809,19 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: der eine neue Operation den Chat kostet: knapp zwei Zehntel Prozent des
 #: Fensters und eine halbe Minute Wartezeit auf dem Prozessorweg.
 #:
-#: **Seit dem 06.09.2026 sind es 113 Werkzeuge** (Gesamtdurchsicht: Kegel und
-#: Ring als Grundkörper), und die Zahl darunter ist seitdem **nicht neu
-#: gemessen** — beim Landen war kein Ollama erreichbar. Sie ist damit eine
-#: untere Grenze; nach der Rate von 165 Token je Operation wären es rund
-#: 23 190. Die Nachmessung steht im Register der ROADMAP.
+#: **Seit dem 07.09.2026 sind es 114 Werkzeuge** (*In Einzelteile zerlegen*;
+#: davor 113 seit dem 06.09., Kegel und Ring als Grundkörper), und die Zahl
+#: darunter ist seit dem 03.09. **nicht neu gemessen** — an beiden Tagen war
+#: kein Ollama erreichbar. Sie ist damit eine untere Grenze; nach der Rate von
+#: 165 Token je Operation wären es rund 23 355. Die Nachmessung steht im
+#: Register der ROADMAP, und sie wird mit jeder Operation fälliger: Der Abstand
+#: zwischen gemessener und wirklicher Zahl wächst still.
 PROMPT_TOKENS: Final = 22856
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen.
-PROMPT_TOOL_COUNT: Final = 113
+PROMPT_TOOL_COUNT: Final = 114
 
 
 @dataclass(frozen=True, slots=True)
