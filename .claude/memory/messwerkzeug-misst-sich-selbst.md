@@ -23,6 +23,7 @@ Mal sah die Zahl aus wie ein Ergebnis:
 | vier `assert x not in text` | wirkungslos | prüften auf dem gestrippten Text, wo die verbotenen Tags längst weg waren |
 | `QFont(name, 10)` gegen `font-size="10"` | falsche Einheit | zehn **Punkt** statt zehn Pixel — bei 96 dpi ein Drittel breiter |
 | `QFontMetrics` unter `offscreen` | keine Schrift | Qt meldet dort **null** Familien; die Ersatzschrift misst glatte 10 px je Zeichen |
+| eigenes `rglob`-Skript mit Bash-Pfad (`/c/Users/…`) | gar nicht | unter Windows null Dateien: „keine Zwillinge" über einem Baum, den es nie gelesen hat (07.09.2026) |
 
 **Drei Arten, und alle drei sehen aus wie ein Ergebnis: zu weit, zu eng, gar
 nicht.** Am 23.08.2026 an einem Abend alle drei — ein Regex, der jede Zeile traf
