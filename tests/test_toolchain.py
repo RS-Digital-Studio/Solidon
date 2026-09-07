@@ -1873,6 +1873,25 @@ def test_the_environment_report_names_the_command_that_fixes_the_hooks(
     assert any("githooks" in zeile for zeile in findings), findings
 
 
+def test_the_worktree_detection_reads_the_shape_of_dot_git(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Ein Arbeitsbaum trägt eine Datei statt eines Verzeichnisses als `.git`.
+
+    Genau dieses Merkmal nutzt `in_a_worktree()`, ohne Git selbst aufzurufen.
+    """
+    hauptklon = tmp_path / "hauptklon"
+    (hauptklon / ".git").mkdir(parents=True)
+    monkeypatch.setattr(check_env, "ROOT", hauptklon)
+    assert check_env.in_a_worktree() is False, "ein `.git`-Verzeichnis ist kein Arbeitsbaum"
+
+    arbeitsbaum = tmp_path / "arbeitsbaum"
+    arbeitsbaum.mkdir()
+    (arbeitsbaum / ".git").write_text("gitdir: irgendwo", encoding="utf-8")
+    monkeypatch.setattr(check_env, "ROOT", arbeitsbaum)
+    assert check_env.in_a_worktree() is True, "eine `.git`-Datei ist der Arbeitsbaum"
+
+
 def test_the_memory_check_notices_when_the_shared_memory_is_out_of_reach(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1894,8 +1913,14 @@ def test_the_memory_check_notices_when_the_shared_memory_is_out_of_reach(
     echt = tmp_path / "im_repo"
     echt.mkdir()
     verknuepfung = tmp_path / "verknuepft"
+    fremd = tmp_path / "fremdes_ziel"
+    fremd.mkdir()
     fehlt = tmp_path / "eigenes"
     fehlt.mkdir()
+
+    # Diese Läufe fragen nicht nach einem Arbeitsbaum — das ist die vierte
+    # Fallunterscheidung weiter unten.
+    monkeypatch.setattr(check_env, "in_a_worktree", lambda: False)
 
     monkeypatch.setattr(check_env, "MEMORY_DIR", echt)
     monkeypatch.setattr("tools.link_memory.harness_dir", lambda _root: fehlt)
@@ -1908,8 +1933,23 @@ def test_the_memory_check_notices_when_the_shared_memory_is_out_of_reach(
     monkeypatch.setattr("tools.link_memory.harness_dir", lambda _root: verknuepfung)
     assert check_env.memory_is_wired() is True, "eine Verknüpfung wird erkannt"
 
+    fremde_verknuepfung = tmp_path / "verknuepft_falsch"
+    fremde_verknuepfung.symlink_to(fremd, target_is_directory=True)
+    monkeypatch.setattr("tools.link_memory.harness_dir", lambda _root: fremde_verknuepfung)
+    assert check_env.memory_is_wired() is False, (
+        "eine Verknüpfung auf ein fremdes Verzeichnis ist nicht eingerichtet"
+    )
+    monkeypatch.setattr("tools.link_memory.harness_dir", lambda _root: verknuepfung)
+
     monkeypatch.setattr(check_env, "MEMORY_DIR", tmp_path / "gibt-es-nicht")
     assert check_env.memory_is_wired() is None, "ohne Gedächtnis stellt sich die Frage nicht"
+
+    monkeypatch.setattr(check_env, "MEMORY_DIR", echt)
+    monkeypatch.setattr(check_env, "in_a_worktree", lambda: True)
+    assert check_env.memory_is_wired() is None, (
+        "im Arbeitsbaum stellt sich die Frage nicht — dort existiert der Ort nicht,"
+        " an den `link_memory.py` verwiese"
+    )
 
 
 def test_the_environment_report_names_the_command_that_wires_the_memory(

@@ -908,19 +908,37 @@ def has_filament_profiles(flavour: SlicerFlavour) -> bool:
 
 
 def takes_a_machine_profile(flavour: SlicerFlavour) -> bool:
-    """Lädt dieser Slicer seine Maschine als eigenes Profil aus seinem Bestand?
+    """Trifft für diese Familie beides zu: eigenes Maschinenprofil, zwei Dateien?
 
-    Nur die Orca-Familie, und aus demselben Grund wie bei
-    :func:`has_filament_profiles`: Dort ist die Maschine eine Datei, die
-    Startcode, Schichtwechselcode und Maschinengrenzen trägt — Angaben, die nur
-    der Hersteller kennt und die Solidon nicht erfindet.
+    Zwei Fragen fallen hier zusammen, und nur, weil bislang eine einzige
+    Familie beide bejaht:
+
+    1. **Lädt der Slicer seine Maschine als eigenes Profil aus seinem
+       Bestand?** Nur die Orca-Familie, und aus demselben Grund wie bei
+       :func:`has_filament_profiles`: Dort ist die Maschine eine Datei, die
+       Startcode, Schichtwechselcode und Maschinengrenzen trägt — Angaben, die
+       nur der Hersteller kennt und die Solidon nicht erfindet.
+    2. **Kommt die Konfiguration als Maschinen- plus Prozessdatei, statt als
+       eine einzige?** So fragt ``handover.py`` an den Aufrufstellen in
+       :func:`write_config` und :func:`_command`: Dort entsteht neben der
+       Prozessdatei eine zweite — ``solidon_machine.json``, geschrieben aus
+       :func:`_orca_machine` mit **Solidons eigenen** Werten, ausgeschrieben
+       statt geerbt, nicht das Profil des Herstellers —, und die Kommandozeile
+       reicht beide zusammen mit einem Semikolon getrennt weiter.
 
     Cura und PrusaSlicer bekommen ihre Maschinenseite dagegen von Solidon
     selbst (:func:`_machine_keys`): Bauraum, Düse und Bettform aus dem eigenen
     Druckerprofil, und für PrusaSlicer ist eine ``.ini`` damit eigenständig
-    lauffähig. Dass dort kein fremdes Profil steht, ist die Bauart und kein
-    Mangel — wer es als Mangel meldet, warnt bei jedem Export ohne Anlass
-    (:func:`machine_missing`).
+    lauffähig — eine Datei, keine zwei. Dass dort kein fremdes Profil steht,
+    ist die Bauart und kein Mangel — wer es als Mangel meldet, warnt bei jedem
+    Export ohne Anlass (:func:`machine_missing`).
+
+    **Beide Fragen fallen heute zusammen, aber nicht aus Notwendigkeit:** Eine
+    künftige Familie mit eigenem Maschinenbestand, aber einer einzigen
+    Konfigurationsdatei (etwa Maschine und Prozess in einem Dokument
+    zusammengefasst), bejahte die erste und verneinte die zweite. Käme sie
+    hinzu, trennte sich dieses Prädikat in zwei — eines für den Bestand,
+    eines für die Dateizahl.
     """
     return flavour == "orca"
 

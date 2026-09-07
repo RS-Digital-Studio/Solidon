@@ -380,11 +380,23 @@ def hooks_are_wired() -> bool | None:
     return (ROOT / gesetzt).resolve() == HOOKS_DIR.resolve()
 
 
+def in_a_worktree() -> bool:
+    """Ob ``ROOT`` ein zusätzlicher Arbeitsbaum ist, nicht der Hauptklon.
+
+    Ein Arbeitsbaum trägt kein eigenes ``.git``-Verzeichnis, sondern eine Datei,
+    die auf den ``worktrees``-Ordner im Hauptklon verweist — das reicht als
+    Unterscheidung, ohne Git selbst aufzurufen.
+    """
+    git = ROOT / ".git"
+    return git.is_file()
+
+
 def memory_is_wired() -> bool | None:
     """Ob das eingecheckte Gedächtnis diese Maschine überhaupt erreicht.
 
     ``None``, wenn die Frage sich nicht stellt — ``.claude/memory/`` gibt es
-    nicht, oder das Werkzeug lässt sich nicht laden.
+    nicht, das Werkzeug lässt sich nicht laden, oder ``ROOT`` ist ein
+    zusätzlicher Arbeitsbaum.
 
     **Dieselbe Bauart wie bei den Hooks darüber, und aus demselben Grund.**
     ``.claude/memory/`` trägt die Projekterfahrungen, und ``AGENTS.md`` verlangt,
@@ -404,9 +416,22 @@ def memory_is_wired() -> bool | None:
     **Ein Gedächtnis, das nur die halbe Maschine erreicht, ist gefährlicher als
     keines:** Man verlässt sich darauf, dass Erfahrungen gesammelt werden, und
     sammelt sie zum zweiten Mal. Deshalb wird hier nicht geprüft, ob Einträge da
-    sind, sondern **dass der Ort, an dem gelesen wird, derselbe ist**.
+    sind, sondern **dass der Ort, an dem gelesen wird, derselbe ist** —
+    ``linked()`` allein stellte nur fest, *dass* eine Verknüpfung vorliegt,
+    nicht *wohin* sie zeigt; eine Junction auf ein fremdes Verzeichnis galt
+    damit als eingerichtet (Befund solidon-e8, 07.09.2026).
+
+    **Und in einem Arbeitsbaum stellt sich die Frage gar nicht.**
+    ``harness_dir()`` liest das Kürzel aus dem Pfad des Hauptklons — in einem
+    Arbeitsbaum unter ``.claude/worktrees/`` existiert dieser Ort nicht, und
+    ``link_memory.py`` scheitert dort mit „Diesen Ort gibt es nicht". Ein
+    Befund, der einen Vorschlag nennt, der die Lage nicht behebt, verletzt
+    AGENTS.md Regel 17 im Sinn, nicht nur im Buchstaben — und ausgerechnet der
+    Arbeitsbaum ist der empfohlene Ort für Arbeit neben fremden Sitzungen.
     """
     if not MEMORY_DIR.is_dir():
+        return None
+    if in_a_worktree():
         return None
     sys.path.insert(0, str(ROOT))
     try:
@@ -416,7 +441,8 @@ def memory_is_wired() -> bool | None:
     finally:
         if sys.path and sys.path[0] == str(ROOT):
             sys.path.pop(0)
-    return linked(harness_dir(ROOT))
+    target = harness_dir(ROOT)
+    return linked(target) and target.resolve() == MEMORY_DIR.resolve()
 
 
 def check() -> tuple[list[str], list[str]]:

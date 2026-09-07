@@ -209,12 +209,13 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Testhilfen stehen zweimal | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | **eine Entscheidung von Robert** (Konzept §2 H): 21 wortgleiche Gruppen in `tests/`, darunter `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und `test_torus_fit_quality.py`; Empfehlung einmal für die fünf großen, danach nur beim Anfassen |
 | Die Zwillingsregel steht dreimal in zwei Fassungen | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | eine Funktion im Kern, die eine Menge auf ihre sichtbaren Vertreter reduziert und die Menge selbst als Bezug nimmt — `panels.py:1665` fragt bedingt (`MENU_TWINS.get(spec.name) not in names`), `panels.py:1626` und `selection_operations.py:55` fragen unbedingt (`spec.name not in MENU_TWINS`); heute halten alle drei, weil bei allen vier Paaren beide Seiten dieselbe `consumes`-Klasse haben (gemessen 78 gegen 78) |
 | Die vierte Konstante der Oberfläche wartet auf einen fremden Commit | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | den Commit der Sitzung, die `app/ui/panels.py` hält — sie nimmt meine eine Zeile dort mit (Anordnung Robert, 07.09.2026), und zwar zusammen mit `app/ui/theme.py` und `app/ui/chat.py`, weil `UNDONE_COLOUR` bei HEAD in `theme.py` fehlt und ein Solo-Commit von `panels.py` einen `ImportError` gibt |
-| P1 — der Höhendeckel trifft die Karte statt ihres Inhalts | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung; `_fit_right_column` deckelt `self.right`, deshalb bleibt der Rahmen hoch und der Inhalt rutscht nach unten |
+| P1 — der Höhendeckel trifft den Inhalt statt der Karte | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung; `_fit_right_column` deckelt `self.right`, deshalb bleibt der Rahmen hoch und der Inhalt rutscht nach unten |
 | P2 — Shift und Strg nehmen im Bild dazu | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept G, Robert 07.09.2026); heute trägt `objectPicked` keine Modifiertaste, und die Meldung nennt nur Strg |
 | P3 — die Gruppenbegründung steht einmal | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept F); `_feature_group_note` hängt denselben Absatz an jede Handlung, an einer Senkung viermal |
 | P4 — die linke Spalte teilt ihre Höhe | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept H) über den Raumvertrag aus `overlay.py`; heute dehnt sich allein der Objektbaum, und Filamente ist kaum zu sehen |
 | P5 — das Panel kennt die Auswahltiefe | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept B und C); heute bekommt `set_context` nur die Körperzahl, und 38 Körperhandlungen stehen auch an einer gewählten Fläche |
 | P6 — jede Bündelung des Baums ist wählbar, und die Panels werden eines | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept A, D und E) nach P5; der eigentliche Schnitt, und er braucht die Tiefe aus P5 |
+| Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | Die Durchsicht des 07.09.2026 | einen Bilderlauf: `app/images/manual/*/main-window.png` ist von 06:13, die rechte Spalte hat sich um 11:05 geändert (`975bd6bf`), und `d2040474` hat Handbuch und PDFs mit dem neuen Absatz zur rechten Spalte darüber geschrieben. Text und Bild widersprechen sich auf derselben Seite, in sechs Sprachen, in `Releases/*.pdf` und in `website/handbuch.html`. Dazu die **gezeichnete** Abbildung (`app/core/figures.py::_window`): sie kennt Projektkopfzeile und Operationsfläche nicht, und ihr `caption` sagt weiter „vier Bereiche". Reihenfolge: erst `figures.py`, dann der Bilderschritt aus `/erzeugen`, dann Handbuch und PDFs. **Vor dem Paketbau von 0.3.5** |
 
 ---
 
@@ -16479,6 +16480,15 @@ Zwillinge; die Zeile „Funktionen: 5 956" ist deshalb Teil des Ergebnisses.
   die Bauart — wer in `app/core/geom` wieder `recess` liest, bekommt einen
   roten Lauf. Gegenprobe gefahren: mit der alten Zeile ist er rot.
 
+  **Nachgetragen am 07.09.2026, aus der Durchsicht desselben Tages:** Der Ort
+  war noch nicht der richtige. `is_a_cavity` liest ausschließlich `kind` und
+  `params["recess"]` — keine Geometrie, keine Wahrnehmung. Sie steht jetzt in
+  `app/core/types.py` neben `Feature`, wo `types.py:295` die Regel dafür schon
+  formuliert („sie wohnt bei dem Ding, über das sie eine Aussage macht", Robert,
+  27.08.2026). Von den sieben trägen Importen in `prepare_ops` sind vier ganz
+  weg und drei geschrumpft; die Kante `geom → perceive` bleibt, weil elf andere
+  Stellen sie ohnehin brauchen.
+
 - [x] **Zwei Zeitstempelprüfungen, verschieden streng** — behoben am
   07.09.2026.
   `ui/ai_disclosure._is_utc_timestamp` (Z. 284) verlangt ein `T` im Wert und
@@ -16799,7 +16809,7 @@ Begründung, Ist-Belegen und Abnahme je Paket in
 mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
 **Shift und Strg tun im Bild dasselbe wie im Baum**.
 
-- [ ] **P1 — der Höhendeckel trifft die Karte statt ihres Inhalts.**
+- [ ] **P1 — der Höhendeckel trifft den Inhalt statt der Karte.**
       `MainWindow._fit_right_column` setzt das Maximum auf `self.right`, den
       Inhalt der Karte. Der Rahmen behält seine gestreckte Höhe, der Inhalt
       schrumpft und rutscht nach unten: Prüfbericht, Chat und Tour stehen dann
@@ -16846,3 +16856,28 @@ mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
       Quelle. Im selben Paket ziehen die Auswahlhandlungen ins Panel rechts;
       der Knopf *Merkmale* entfällt damit, und der Merker fürs Zumachen gilt
       nur noch der laufenden Auswahl statt der Sitzung.
+
+## Die Durchsicht des 07.09.2026
+
+Vier Prüfer über die einundzwanzig Commits des Tages. Fünfundzwanzig Befunde,
+alle behoben ausser einem — und der steht hier, weil er nur zusammen mit einem
+Erzeugerlauf zu haben ist.
+
+- [ ] **Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern.**
+      `d2040474` hat Handbuch, PDFs und Website mit dem neuen Absatz zur
+      rechten Spalte geschrieben; die Bildschirmfotos unter
+      `app/images/manual/*/` sind vom Erzeugerlauf um 06:13, und die rechte
+      Spalte hat sich um 11:05 geändert (`975bd6bf`). Text und Bild
+      widersprechen sich damit auf derselben Seite, in sechs Sprachen, in
+      `Releases/*.pdf` und in `website/handbuch.html`.
+
+      Dazu die **gezeichnete** Abbildung (`app/core/figures.py::_window`): Sie
+      kennt Projektkopfzeile und Operationsfläche nicht, ihr `caption` sagt
+      weiter „vier Bereiche, keine Betriebsarten", und dasselbe steht im
+      `alt`-Text, also in dem, was ein Bildschirmleser vorliest. Die Datei
+      warnt an ihrem eigenen Kopf davor: „Ein Bild altert stumm."
+
+      Reihenfolge, und sie ist der Grund für das Kästchen: erst `figures.py`
+      um die zwei Bereiche ergänzen samt `alt` und `caption` (zwei neue Texte,
+      also sechs Kataloge), dann der Bilderschritt aus `/erzeugen`, dann
+      Handbuch und PDFs. **Vor dem Paketbau von 0.3.5.**

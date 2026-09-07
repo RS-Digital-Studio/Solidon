@@ -176,6 +176,11 @@ printing, mesh editing, CAD alternative, modify STL`
 
 ## Deutsche Fassungen
 
+**Die Termine dieser Tabelle sind historisch** — sie stammen aus der
+ursprünglichen Planung dieser Datei. Verbindlich ist allein der
+[Veröffentlichungsplan](publication-plan-2026-09.md#shorts), der die Reihe
+zwei Tage früher führt (6./8./10./12./14. statt 7./9./11./13./15. September).
+
 | Termin | Thema | Titel |
 |---|---|---|
 | 7. September 2026, 18:00 | Bohrung vergrößern | M5-Bohrung direkt im STL vergrößern – ohne CAD-Datei |
