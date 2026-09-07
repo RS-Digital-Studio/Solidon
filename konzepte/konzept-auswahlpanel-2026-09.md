@@ -2,10 +2,10 @@
 
 **Status:** entschieden in den Punkten A bis H (Robert, 07.09.2026), Umsetzung
 als Serie P1 bis P6 im Register von `ROADMAP.md`. Der Ist-Stand unten ist am
-Code gemessen, nicht aus der Doku übernommen. **Gebaut sind P1 bis P5 sowie D
-und E aus P6 (07.09.2026); offen ist A — der Schnitt, mit dem die zwei Panels
-eines werden.** Den Stand je Paket nennt die Tabelle in §4, nicht dieser
-Absatz.
+Code gemessen, nicht aus der Doku übernommen. **Die ganze Serie P1 bis P6 ist
+am 07.09.2026 gebaut**; was aussteht, sind die Bildschirmfotos — sie stehen im
+Register unter dem Punkt, der ohnehin einen Erzeugerlauf braucht. Den Stand je
+Paket nennt die Tabelle in §4, nicht dieser Absatz.
 
 **Gemessen gegen den Arbeitsbaum vom 07.09.2026 nach `975bd6bf`** („Die rechte
 Spalte trennt sich, und ihre Aktionen folgen der Auswahl"). Dieser Commit ist
@@ -295,7 +295,7 @@ eigentliche Schnitt in P6.
 | P3 | Die Gruppenbegründung steht einmal | F | S | **fertig** (07.09.) |
 | P4 | Die linke Spalte teilt ihre Höhe über den Raumvertrag | H | M | **fertig** (07.09.) |
 | P5 | Das Panel kennt die Auswahltiefe: Zeile, Sichtbarkeit, Freigabe | B, C | M | **fertig** (07.09.) |
-| P6 | Jede Bündelung des Baums ist wählbar, und die Panels werden eines | A, D, E | L | **teils** — D und E fertig (07.09.), A offen |
+| P6 | Jede Bündelung des Baums ist wählbar, und die Panels werden eines | A, D, E | L | **fertig** (07.09.) |
 
 **Was P1 an sich selbst gefunden hat.** Die Umsetzung stand schon (`a6217f8`),
 der Nachweis nicht — und beim Bau des Abnahmetests fiel der Rest des Fehlers
@@ -321,6 +321,16 @@ Beiwerk der Spalte sonst von 110 auf 376.
 Filamentkarte fordert 144 Bildpunkte und setzt 126 um. Ihr
 `_around_the_list` rechnet das Beiwerk zu hoch; sie fordert damit Platz, den
 sie niemandem zeigt.
+
+**Was P6 mitgenommen hat, weil A es überflüssig machte.** Mit dem Umzug
+verschwinden nicht nur die zweite Karte, sondern auch die Zahlen, die es nur
+für ihre Teilung gab: `_fit_right_column`, `_reflow_right_column`,
+`REPORT_RESERVE`, `_card_padding` und `PANEL_MOST_HEIGHT`. `REPORT_RESERVE`
+und `PANEL_LEAST_HEIGHT` waren dabei ausdrücklich aneinander gebunden — zwei
+Untergrenzen, die gegeneinander stehen mussten, weil sich zwei Karten eine
+Spalte teilten. Es blieb eine. Ebenso `feature_chosen`: Es beantwortete
+dieselbe Frage wie `feature_kind`, und der einzige Abnehmer war der Knopf
+*Merkmale*, den C ohnehin abschafft.
 
 **P1 vor allem anderen**, obwohl A den Fehler von selbst auflöst: Bis P6 steht,
 sieht die Berichtskarte bei jeder Auswahl kaputt aus, und ein sichtbarer Fehler

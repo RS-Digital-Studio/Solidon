@@ -1657,7 +1657,7 @@ def test_a_tree_context_click_selects_the_feature_it_opens_for(
     assert window.object_tree.selected_feature() == hole
 
 
-def test_the_feature_window_starts_closed_and_opens_on_a_feature(
+def test_the_selection_window_starts_closed_and_opens_on_a_selection(
     window: MainWindow,
 ) -> None:
     """Ein Bereich, der beim Start nichts zeigt, ist Fläche ohne Auskunft.
@@ -1665,8 +1665,14 @@ def test_the_feature_window_starts_closed_and_opens_on_a_feature(
     Gemessen an vier Videoaufnahmen (03.09.2026): Das Fenster stand offen und
     leer am rechten Rand und nahm der Ansicht 165 von 1280 Punkten für einen
     einzigen Satz ab. Wer eine Datei öffnet, hat noch nichts gewählt — es geht
-    beim **ersten** gewählten Merkmal auf, wo es eine gerade gestellte Frage
+    bei der **ersten** Auswahl auf, wo es eine gerade gestellte Frage
     beantwortet.
+
+    **Seit dem 07.09.2026 zählt dazu auch ein gewählter Körper** (Konzept „Ein
+    Ort für die Auswahl", A). Bis dahin galt „ein Körper ist kein Merkmal", und
+    das stimmte: Das Fenster zeigte nur Maße. Jetzt trägt es die Handlungen zur
+    Auswahl, und ein Kunde mit einem gewählten Halter stünde sonst vor einem
+    Fenster, das seine Handlungen hat und sie nicht zeigt.
     """
     assert window.feature_dock.isHidden(), "beim Start zu"
 
@@ -1676,14 +1682,14 @@ def test_the_feature_window_starts_closed_and_opens_on_a_feature(
     object_id, entry = next(iter(result.scene.objects.items()))
     window.object_tree.select_object(object_id)
     QApplication.processEvents()
-    assert window.feature_dock.isHidden(), "ein Körper ist kein Merkmal"
+    assert not window.feature_dock.isHidden(), "beim gewählten Körper geht es auf"
 
     hole = next(
         identifier for identifier, feature in entry.features.items() if feature.kind == "hole"
     )
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
-    assert not window.feature_dock.isHidden(), "beim Merkmal geht es auf"
+    assert not window.feature_dock.isHidden(), "und beim Merkmal darin bleibt es"
 
 
 def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWindow) -> None:
@@ -4285,26 +4291,29 @@ def test_operations_are_greyed_out_until_they_could_run(window: MainWindow) -> N
     assert joining.isEnabled()
 
 
-def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
+def test_selected_bodies_reveal_their_operations_in_the_window_on_the_right(
     window: MainWindow,
 ) -> None:
-    """Der neue kurze Weg folgt Auswahl und Menüfreigabe gemeinsam.
+    """Der kurze Weg zur Auswahl folgt Auswahl und Menüfreigabe gemeinsam.
 
-    Und er steht in einer **eigenen Karte** unter der von Bericht und Chat
-    (Entscheidung Robert, 07.09.2026): gleiche Bauart, eigener Rand, eine
-    Lücke dazwischen, durch die das Modell zu sehen ist — die Maske der
-    Spalte nimmt die Lücke aus.
+    **Und er steht im Fenster rechts, bei den Maßen des Gewählten** (Konzept
+    „Ein Ort für die Auswahl", A, 07.09.2026). Bis dahin lag er in einer
+    eigenen Karte unter Bericht und Chat und beantwortete dieselbe Frage ein
+    zweites Mal — an einer gewählten Senkung standen dieselben drei Handlungen
+    dort als Knöpfe und hier als Felder.
+
+    Was der Umzug nebenbei erledigt: Die Spalte teilt ihre Höhe mit nichts
+    mehr, und die zweite Rechnung, die den Formatverlust der Berichtskarte
+    verursachte, gibt es nicht mehr.
     """
-    from PySide6.QtCore import QPoint
-
-    from app.ui.overlay import CARD, MARGIN
+    from app.ui.overlay import CARD
 
     panel = window.selection_operations
     assert panel.isHidden()
-    assert panel.parentWidget() is window.selection_card
-    assert window.selection_card.isHidden(), "ohne Auswahl gibt es die zweite Karte nicht"
+    assert window.feature_dock.isAncestorOf(panel), "die Handlungen wohnen im Fenster rechts"
+    assert window.feature_dock.isAncestorOf(window.feature_panel), "und die Maße darüber"
     assert window.right.parentWidget() is window.right_card
-    assert window.right_card.objectName() == CARD == window.selection_card.objectName()
+    assert window.right_card.objectName() == CARD
     assert window.right_column.objectName() != CARD, "die Spalte selbst ist keine Karte"
 
     _with_two_objects(window)
@@ -4312,7 +4321,7 @@ def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
     second = window.object_tree.tree.topLevelItem(1)
     first.setSelected(True)
     assert not panel.isHidden()
-    assert not window.selection_card.isHidden(), "die Karte folgt ihrem Inhalt"
+    assert not window.feature_dock.isHidden(), "das Fenster folgt der Auswahl"
     assert not panel._buttons["union_objects"].isEnabled()
 
     second.setSelected(True)
@@ -4326,27 +4335,19 @@ def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
     window.resize(1024, 720)
     window.show()
     QApplication.processEvents()
-    panel_bottom = panel.mapTo(window.right_column, panel.rect().bottomLeft()).y()
-    assert panel_bottom <= window.right_column.rect().bottom()
     assert window.right.height() >= 260, (
         "Bericht und Filter dürfen nicht übereinanderliegen: "
-        f"Spalte={window.right_column.height()}, Bericht={window.right.height()}, "
-        f"Operationen={panel.height()}, Maximum={window.right.maximumHeight()}"
+        f"Spalte={window.right_column.height()}, Bericht={window.right.height()}"
     )
     assert window.report.search.height() >= 32
     assert window.report.severity.height() >= 32
     assert window.report.to_slicer.height() >= 32
-    assert panel.catalog_button.isVisibleTo(window.right_column)
+    assert panel.catalog_button.isVisibleTo(window.feature_dock)
 
-    upper, lower = window.right_card.geometry(), window.selection_card.geometry()
-    assert lower.top() - upper.bottom() - 1 == MARGIN, "derselbe Abstand wie zum Fensterrand"
-    mask = window.right_column.mask()
-    middle = upper.center().x()
-    assert mask.contains(QPoint(middle, upper.center().y()))
-    assert mask.contains(QPoint(middle, lower.center().y()))
-    assert not mask.contains(QPoint(middle, (upper.bottom() + lower.top()) // 2)), (
-        "in der Lücke zwischen den Karten steht das Modell, nicht die Spalte"
-    )
+    # **Eine Karte, und die Maske lässt nichts daneben stehen.** Mit zwei
+    # Karten nahm sie die Lücke dazwischen aus, damit dort das Modell zu sehen
+    # war; jetzt gibt es keine Lücke mehr.
+    assert len(window.right_column.card_rects()) == 1
 
 
 def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> None:
@@ -4431,34 +4432,34 @@ def test_the_report_tabs_stay_at_the_top_of_their_card(window: MainWindow) -> No
     Höhenzahl allein sieht das nicht: ``self.right.height() >= 260`` galt
     dabei die ganze Zeit.
 
-    Gemessen wird deshalb der **Abstand**: Inhalt oben am Kartenrand, und die
-    Karte nicht höher als ihr Inhalt samt Rand. Bei sichtbarer und bei
-    verborgener Auswahlkarte, weil nur der erste Fall den Deckel überhaupt
-    setzt, und über drei Fensterhöhen, weil der alte Fehler an einer
-    Untergrenze von 120 hing und auf kleinen Fenstern verschwand.
+    **Der Deckel ist mit dem Umzug ganz weggefallen** (Konzept A): Die Spalte
+    trägt nur noch eine Karte und teilt ihre Höhe mit nichts mehr. Der Test
+    bleibt trotzdem stehen, und zwar als Zusage statt als Fehlerprobe — er
+    hält fest, dass es bei einer Karte bleibt und die Reiter oben stehen. Ein
+    zweiter Bewohner der Spalte brächte die zweite Rechnung zurück, die den
+    Fehler gemacht hat.
     """
     from PySide6.QtTest import QTest
 
     from app.ui.overlay import CARD_PADDING
+
+    assert not hasattr(window, "selection_card"), "die Spalte trägt nur noch Bericht, Chat und Tour"
 
     _with_two_objects(window)
     window.show()
 
     for height in (600, 900, 1400):
         window.resize(1024, height)
-        # **Gewartet, nicht nur Ereignisse verarbeitet.** ``resizeEvent``
-        # teilt zweimal: einmal sofort und einmal über ein ``singleShot(0)``,
-        # weil die freie Overlay-Geometrie erst nach Qts Layout-Ereignis
-        # endgültig ist. ``processEvents`` allein lässt diesen Timer aus —
-        # gemessen blieb die Spalte dann über sechs Runden auf 22
-        # Bildpunkten, und der Test hätte Qts Zeitpunkt geprüft statt der
-        # Verteilung.
+        # **Gewartet, nicht nur Ereignisse verarbeitet.** Die frei gesetzte
+        # Overlay-Geometrie steht erst nach Qts Layout-Ereignis endgültig;
+        # ``processEvents`` allein ließ die Spalte über sechs Runden auf 22
+        # Bildpunkten stehen, und der Test hätte Qts Zeitpunkt geprüft statt
+        # der Höhe.
         QTest.qWait(10)
         for chosen in (False, True):
             window.object_tree.tree.topLevelItem(0).setSelected(chosen)
             QTest.qWait(10)
             lage = f"Fensterhöhe {height}, Auswahl {chosen}"
-            assert window.selection_card.isHidden() != chosen, lage
             top = window.right.mapTo(window.right_card, window.right.rect().topLeft()).y()
             assert top == CARD_PADDING, f"die Reiter stehen nicht oben — {lage}, Abstand {top}"
             rest = window.right_card.height() - window.right.height() - 2 * CARD_PADDING
@@ -4467,11 +4468,10 @@ def test_the_report_tabs_stay_at_the_top_of_their_card(window: MainWindow) -> No
                 f"Karte={window.right_card.height()}, Inhalt={window.right.height()}, "
                 f"übrig={rest}"
             )
-            if chosen:
-                unten = window.selection_card.geometry().bottom()
-                assert unten <= window.right_column.rect().bottom(), (
-                    f"die Auswahlkarte steht über die Spalte hinaus — {lage}"
-                )
+            unten = window.right_card.geometry().bottom()
+            assert unten <= window.right_column.rect().bottom(), (
+                f"die Karte steht über die Spalte hinaus — {lage}"
+            )
 
 
 def test_a_modifier_click_in_the_view_adds_a_body(window: MainWindow) -> None:

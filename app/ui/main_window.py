@@ -1168,34 +1168,6 @@ def _sketch_param(op_name: str) -> str:
 #: ``sketch_extrude`` tut. Dieselbe Vorwahl, die auch der Dialog bei „Fertig"
 #: trifft (``op_dialog.DEFAULT_SKETCH_USE``) — der Griff ist die kurze Hand
 #: für den häufigsten der fünf Wege, nicht ein sechster.
-def _card_padding(card: QWidget) -> int:
-    """Was der Rand einer Karte von ihrer Höhe für sich nimmt.
-
-    Einmal gerechnet, weil :meth:`MainWindow._fit_right_column` es dreimal
-    braucht: für die Spaltenhöhe und für jeden der zwei Deckel. Eine Karte
-    ohne Layout hat keinen Rand.
-    """
-    frame = card.layout()
-    if frame is None:
-        return 0
-    margins = frame.contentsMargins()
-    return margins.top() + margins.bottom()
-
-
-REPORT_RESERVE = 260
-"""Was dem Prüfbericht in der rechten Spalte bleibt, in Bildpunkten.
-
-Reiter, Zusammenfassung, Slicerweg und Filter brauchen so viel, um
-auseinanderzustehen. Erst darüber wächst die Operationsliste.
-
-**Benannt, weil eine zweite Datei damit rechnet:**
-:data:`app.ui.selection_operations.PANEL_LEAST_HEIGHT` ist die Untergrenze der
-Liste, und :meth:`MainWindow._fit_right_column` stellt beide Zahlen gegen
-dieselbe Spaltenhöhe. Als Literale in zwei Modulen war die Kopplung nicht zu
-sehen, und der Konstanten-Wächter aus ``tests/test_shared_constants.py`` sieht
-nur benannte Konstanten.
-"""
-
 PULL_OP = "sketch_extrude"
 
 #: Wie der Höhenparameter dieser Operation heißt.
@@ -2161,40 +2133,27 @@ class MainWindow(QMainWindow):
         self.right.addTab(self._constraints_room, tr("Bedingungen"))
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
 
-        # Die häufigsten Handlungen an einer Körperauswahl stehen direkt unter
-        # Bericht und Chat. Die Liste wird einmal aus dem Register gebaut und
-        # bei Auswahlwechseln nur nachgeführt; Merkmale und Bausteine behalten
-        # ihre eigenen, rechts liegenden Wege.
+        # Die Handlungen zur Auswahl — **im Fenster rechts, bei den Maßen des
+        # Gewählten** (Konzept „Ein Ort für die Auswahl", A). Bis zum
+        # 07.09.2026 standen sie in einer eigenen Karte über der Ansicht und
+        # beantworteten damit dieselbe Frage wie das Merkmalfenster daneben:
+        # An einer gewählten Senkung zeigte das Fenster *Merkmal ändern*,
+        # *verschieben*, *entfernen* als Felder und das Panel dieselben drei
+        # als Knöpfe. Ein Ort, eine Antwort.
         self.selection_operations = SelectionOperationsPanel(REGISTRY.all(), self)
-        self._selection_unbounded_height = self.selection_operations.maximumHeight()
         self.selection_operations.operationRequested.connect(self.launch_operation)
         self.selection_operations.catalogRequested.connect(self.action_catalog)
-        self.selection_operations.featurePanelRequested.connect(self._show_feature_panel)
 
-        # Zwei Karten übereinander, nicht eine (Entscheidung Robert,
-        # 07.09.2026): Bericht und Chat schließen mit ihrem eigenen Rand ab,
-        # und die Auswahlhandlungen stehen darunter in einer zweiten Karte
-        # gleicher Bauart. Für Zone, F9 und Höhenverteilung bleibt es eine
-        # Spalte — die ``CardColumn`` hält die Lücke dazwischen frei.
+        # Eine Karte, nicht zwei: Die Spalte trägt jetzt allein Bericht, Chat
+        # und Tour und teilt ihre Höhe mit nichts mehr. Der Formatverlust,
+        # den P1 behoben hat, kann damit nicht wiederkommen — die zweite
+        # Rechnung, die ihn verursachte, gibt es nicht mehr.
         self.right_card = QWidget(self)
         right_layout = QVBoxLayout(self.right_card)
         right_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
         right_layout.addWidget(self.right)
-        self.selection_card = QWidget(self)
-        selection_layout = QVBoxLayout(self.selection_card)
-        selection_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
-        selection_layout.addWidget(self.selection_operations)
         self.right_column = CardColumn(self)
         self.right_column.add_card(self.right_card, 1)
-        self.right_column.add_card(self.selection_card)
-        self._card_unbounded_height = self.selection_card.maximumHeight()
-        """Der Höchstwert einer Karte, bevor :meth:`_fit_right_column` teilt.
-
-        Gedeckelt wird die Karte und nicht ihr Inhalt (der Grund steht dort),
-        also muss auch der Weg zurück die Karte lösen."""
-        # Die Karte folgt ihrem Inhalt: ohne Auswahl gibt es sie nicht, und
-        # ``_reflow_right_column`` zieht sie bei jedem Auswahlwechsel nach.
-        self.selection_card.setVisible(False)
 
         # §2.5 nennt drei Zonen und sagt nicht, dass die äußeren der mittleren
         # ihre Fläche nehmen. Sie liegen jetzt darüber: die Ansicht füllt das
@@ -3767,83 +3726,13 @@ class MainWindow(QMainWindow):
         self.selection_operations.set_context(
             chosen,
             lambda name: self._palette_availability(name, locked=locked, gesturing=gesturing),
-            feature_chosen=bool(self.object_tree.selected_features()),
             # Dieselbe Auskunft, aus der die Befehlspalette ihre Reihenfolge
             # nimmt: Wer eine Bohrung angeklickt hat, sucht Senken und
             # Verschließen und nicht das Vereinigen zweier Körper.
             feature_kind=self.selected_feature_kind() or "",
             label=self.selection_label(),
         )
-        self._reflow_right_column()
         self._hide_dead_menus()
-
-    def _reflow_right_column(self) -> None:
-        """Die volle Höhe ermitteln und erst danach zwischen den Bereichen teilen."""
-        # Eine vorige Teilung darf den Größenhinweis der ganzen Karte nicht
-        # deckeln. Sonst blieb der Bericht nach einem frühen Auswahlereignis
-        # auf seiner Untergrenze, obwohl das danach gezeigte Fenster Platz bot.
-        # Das gilt für beide Karten: Die Höhe, die gleich verteilt wird, ist
-        # die der ungedeckelten Spalte.
-        self.selection_card.setMaximumHeight(self._card_unbounded_height)
-        self.right_card.setMaximumHeight(self._card_unbounded_height)
-        self.selection_card.setVisible(not self.selection_operations.isHidden())
-        self.overlay.reflow()
-        self._fit_right_column()
-
-    def _fit_right_column(self) -> None:
-        """Bericht und Auswahlhandlungen ohne Überstand auf die Spalte teilen.
-
-        **Gedeckelt wird die Karte, nicht ihr Inhalt.** Hier stand ein Deckel
-        auf ``self.right``, und dessen senkrechte Größenpolitik ist
-        ``Ignored``: Sobald die Berichtskarte über ihren Streckfaktor mehr Höhe
-        bekam, als der Deckel dem Inhalt erlaubte, zentrierte ihr
-        ``QVBoxLayout`` das einzige nicht wachsende Kind — die Reiter rutschten
-        in die Mitte, und die Karte sah bei jeder Auswahl kaputt aus (Konzept
-        „Ein Ort für die Auswahl", P1). Gedeckelt wird deshalb die
-        **Auswahlkarte**; was übrig bleibt, verteilt der Streckfaktor der
-        ``CardColumn`` an die Berichtskarte, und ihr Inhalt füllt sie.
-        """
-        if self.selection_operations.isHidden():
-            # **Beide Karten wieder lösen, nicht nur die verschwindende.** Ohne
-            # Auswahl gibt es nichts zu teilen, und der Deckel der
-            # Berichtskarte stammt dann aus einer Lage, die vorbei ist. Er
-            # blieb bisher stehen: Nach dem Aufbau stand er auf 122, und ein
-            # Fenster, das danach auf 1400 wuchs, ließ die Karte auf 22
-            # Bildpunkten — der Bericht wuchs erst wieder, wenn jemand etwas
-            # auswählte. Es ist derselbe Fall, den
-            # :meth:`_reflow_right_column` für die Auswahlkarte beschreibt,
-            # nur an der anderen Karte.
-            self.selection_card.setMaximumHeight(self._card_unbounded_height)
-            self.right_card.setMaximumHeight(self._card_unbounded_height)
-            return
-        layout = self.right_column.layout()
-        assert layout is not None
-        # Was den beiden Inhalten bleibt: die Spalte ohne die Lücke zwischen
-        # den Karten und ohne die Randpixel jeder Karte.
-        frames = _card_padding(self.right_card) + _card_padding(self.selection_card)
-        total = self.right_column.height() - layout.spacing() - frames
-        # :data:`REPORT_RESERVE` hält Reiter, Zusammenfassung, Slicerweg und
-        # Filter des Berichts auseinander. Auf höheren Fenstern darf die
-        # Operationsliste bis zu ihrem eigenen Maximum wachsen; auf
-        # Laptop-Höhe gibt sie den nötigen Raum zuerst an den Bericht zurück.
-        panel_height = min(
-            self._selection_unbounded_height,
-            max(self.selection_operations.minimumHeight(), total - REPORT_RESERVE),
-        )
-        # **Beide Karten bekommen ihren Deckel, nicht nur eine.** Die
-        # Berichtskarte trägt den Streckfaktor: ungedeckelt nimmt sie den
-        # ganzen Rest, und die Auswahlkarte rutscht unten aus der Spalte —
-        # gemessen 567 gegen 560 Bildpunkte, `test_ui.py` fängt es. Die zwei
-        # Deckel zusammen sind genau die Spalte.
-        #
-        # Auf die Karte und nicht auf ihren Inhalt: Der Rand der Karte gehört
-        # zu ihrer Höhe. Und ein Deckel auf dem Inhalt war der Bildfehler, den
-        # diese Änderung behebt.
-        report_height = max(self.right.minimumHeight(), total - panel_height)
-        self.selection_card.setMaximumHeight(panel_height + _card_padding(self.selection_card))
-        self.right_card.setMaximumHeight(report_height + _card_padding(self.right_card))
-        layout.invalidate()
-        layout.activate()
 
     def _hide_dead_menus(self) -> None:
         """Ein Menü, in dem **kein** Eintrag geht, tritt beiseite.
@@ -8478,7 +8367,7 @@ class MainWindow(QMainWindow):
         return False, tr("Dafür braucht es eine passende Auswahl.")
 
     def _build_feature_dock(self) -> None:
-        """Das Merkmalspanel als **eigenes, frei platzierbares Fenster**.
+        """Der **eine Ort für die Auswahl**: ihre Maße und ihre Handlungen.
 
         Robert am 03.09.2026, nachdem es zuerst ein Abschnitt der linken Spalte
         war: „bei dem Panel mit den merkmalen hab ich gedacht ein extra panel
@@ -8487,21 +8376,46 @@ class MainWindow(QMainWindow):
         offen und hat seine eigene Breite. Die linke Spalte bleibt, wie sie
         war.
 
+        **Seit dem 07.09.2026 trägt es beides** (Konzept „Ein Ort für die
+        Auswahl", A): oben die Maße des Gewählten als änderbare Felder,
+        darunter die Handlungen dazu. Vorher lagen die Handlungen in einer
+        eigenen Karte über der Ansicht und beantworteten dieselbe Frage ein
+        zweites Mal — an einer gewählten Senkung standen *Merkmal ändern*,
+        *verschieben* und *entfernen* dort als Knöpfe und hier als Felder. Aus
+        derselben Doppelung kamen drei weitere Befunde: der Formatverlust der
+        Berichtskarte, weil zwei Karten sich eine Spalte teilen mussten; die
+        Zeile „1 Objekt gewählt" über Merkmalshandlungen; und ein Knopf
+        *Merkmale*, der nichts tat, als vom einen Ort zum anderen zu führen.
+
+        *Warum rechts und nicht in der Spalte:* Die Felder mit Zahlen brauchen
+        Breite und Ruhe, und die Overlay-Karten liegen über der Ansicht und
+        verdecken sie.
+
         **Mit Rollbereich**, und das ist keine Vorsorge: An einer Bohrung sind
-        es vier Handlungen mit zusammen sechs Feldern und vier Knöpfen. Ohne
-        Rollbereich schneidet ein niedriges Fenster die letzte Handlung ab —
-        dieselbe Sorte Fehler, die Robert am abgeschnittenen Text gemeldet hat,
-        nur senkrecht (Robert: „auch auf die größen achten war viel
-        abgeschnitten").
+        es vier Handlungen mit zusammen sechs Feldern und vier Knöpfen, und
+        darunter steht jetzt die Handlungsliste. Ohne Rollbereich schneidet
+        ein niedriges Fenster die letzte Handlung ab — dieselbe Sorte Fehler,
+        die Robert am abgeschnittenen Text gemeldet hat, nur senkrecht
+        (Robert: „auch auf die größen achten war viel abgeschnitten").
         """
+        inside = QWidget(self)
+        stacked = QVBoxLayout(inside)
+        stacked.setContentsMargins(0, 0, 0, 0)
+        stacked.setSpacing(0)
+        stacked.addWidget(self.feature_panel)
+        stacked.addWidget(self.selection_operations, 1)
+
         scroller = QScrollArea(self)
-        scroller.setWidget(self.feature_panel)
+        scroller.setWidget(inside)
         # Ohne dies bleibt das Panel auf seiner Wunschbreite stehen und wird
         # waagerecht gerollt statt umgebrochen.
         scroller.setWidgetResizable(True)
         scroller.setFrameShape(QScrollArea.Shape.NoFrame)
 
-        self.feature_dock = _FeatureDock(tr("Merkmal"), self)
+        # „Auswahl", nicht „Merkmal": Das Fenster steht auch an einem
+        # gewählten Körper, seit es dessen Handlungen trägt. Ein Titel, der
+        # ein Merkmal verspricht, wäre dort die falsche Auskunft.
+        self.feature_dock = _FeatureDock(tr("Auswahl"), self)
         self.feature_dock.setObjectName("featureDock")
         self.feature_dock.setWidget(scroller)
         self.feature_dock.setAllowedAreas(
@@ -8514,11 +8428,18 @@ class MainWindow(QMainWindow):
         # Datei öffnet, hat noch nichts gewählt; ein Bereich, der beim Start
         # nichts zeigt, ist Fläche ohne Auskunft.
         #
-        # Es geht beim **ersten** gewählten Merkmal von selbst auf — dort
-        # beantwortet es eine Frage, die gerade gestellt wurde. Wer es danach
-        # zumacht, hat entschieden: ``_feature_dock_dismissed`` merkt es sich,
-        # und von da an öffnet nur noch der Schalter unter *Ansicht*. Ein
-        # Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe.
+        # Es geht bei der **ersten** Auswahl von selbst auf — dort beantwortet
+        # es eine Frage, die gerade gestellt wurde. Seit es die Handlungen
+        # trägt (Konzept A), gilt das auch für einen gewählten Körper und
+        # nicht mehr nur für ein Merkmal: Sonst stünde ein Kunde mit einem
+        # gewählten Halter vor einem Fenster, das seine Handlungen hat und
+        # sie nicht zeigt.
+        #
+        # Wer es zumacht, hat für **diese Auswahl** entschieden (Konzept D);
+        # die nächste bringt es zurück. Ein Fenster, das nach jedem Klick
+        # wieder aufspringt, ist keine Hilfe — eines, das nach einem Klick
+        # aufs Kreuz alle Handlungen bis zum Neustart wegnimmt, aber auch
+        # nicht.
         self.feature_dock.hide()
         self.feature_dock.start_watching()
         self._feature_shown: str | None = None
@@ -8527,6 +8448,9 @@ class MainWindow(QMainWindow):
         Nur dafür da, einen **Wechsel** der Auswahl zu erkennen: Er hebt ein
         früheres Zumachen auf (:meth:`_FeatureDock.forget_dismissal`). Ein
         zweiter Klick auf dasselbe Merkmal ist keiner."""
+        self._bodies_shown: tuple[str, ...] = ()
+        """Und dasselbe für die Körperauswahl — sie öffnet das Fenster ebenso,
+        seit es die Handlungen trägt."""
         # Wer das Fenster zumacht, während eine Vorschau darauf wartet, hätte
         # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
@@ -8536,22 +8460,10 @@ class MainWindow(QMainWindow):
         # das Fenster; wer es zugemacht hat, findet es hier wieder.
         entry = self.feature_dock.toggleViewAction()
         entry.setStatusTip(
-            tr("Zeigt die Maße des gewählten Merkmals — als eigenes Fenster, frei platzierbar.")
+            tr("Zeigt Maße und Handlungen der Auswahl — als eigenes Fenster, frei platzierbar.")
         )
         self._view_menu.addSeparator()
         self._view_menu.addAction(entry)
-
-    def _show_feature_panel(self) -> None:
-        """Das Merkmalfenster über seinen ausdrücklich gewählten Weg öffnen."""
-        if not self.object_tree.selected_features():
-            self.announce(
-                tr("Wählen Sie zuerst eine Fläche, Bohrung oder ein anderes Merkmal im Bild.")
-            )
-            return
-        self.feature_dock.show()
-        self.feature_dock.raise_()
-        if self.feature_dock.isFloating():
-            self.feature_dock.activateWindow()
 
     def _on_feature_moved(self, feature_id: str, centre: Any) -> None:
         """Ein Zug am Griff hat ein Merkmal versetzt (§18.11, Regel 2).
@@ -12640,6 +12552,23 @@ class MainWindow(QMainWindow):
         # einen Bezugspunkt braucht; die weiteren tragen nur die Farbe.
         chosen = self.object_tree.selected_objects()
         self.viewport.select(chosen[0] if chosen else object_id, more=chosen[1:])
+        # **Das Fenster rechts zeigt die Handlungen zur Auswahl** (Konzept „Ein
+        # Ort für die Auswahl", A) — also gehört es hierher und nicht mehr nur
+        # an den Merkmalspfad. Ein Kunde mit einem gewählten Halter stünde
+        # sonst vor einem Fenster, das seine Handlungen hat und sie nicht
+        # zeigt. Ein Wechsel des Körpers hebt dabei ein früheres Zumachen auf,
+        # wie beim Merkmal (Konzept D).
+        #
+        # **Eine leere Auswahl zählt dabei nicht als Wechsel**, genau wie beim
+        # Merkmal: ``select_feature`` leert die Baumauswahl, bevor es die neue
+        # setzt, und meldet dazwischen „nichts gewählt". Wer das als Wechsel
+        # zählt, hebt das Zumachen schon beim Weg zurück zu **derselben**
+        # Auswahl auf — gemessen sprang das Fenster dann sofort wieder auf.
+        if chosen:
+            if chosen != self._bodies_shown:
+                self.feature_dock.forget_dismissal()
+            self._bodies_shown = chosen
+            self.feature_dock.reveal()
         # Karte und Schichtanalyse gehören zu einem Körper; ein anderer Körper
         # braucht seine eigenen, also folgen sie der Auswahl, statt zu
         # verweilen.
@@ -13574,12 +13503,6 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt name
         super().resizeEvent(event)
         self._fit_toolbar()
-        if hasattr(self, "selection_operations"):
-            self._reflow_right_column()
-            # Die frei gesetzte Overlay-Geometrie steht erst nach Qts
-            # Layout-Ereignis endgültig. Danach einmal mit der wirklichen
-            # Kartenhöhe teilen, nicht mit dem Maß vor dem Resize.
-            QTimer.singleShot(0, self._reflow_right_column)
 
     def _fit_toolbar(self) -> None:
         """Kürzt die Werkzeugleiste, statt sie überlaufen zu lassen (D6).

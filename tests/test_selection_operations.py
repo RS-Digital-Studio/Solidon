@@ -107,9 +107,7 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
     }
     for (bodies, kind), wanted in lagen.items():
         assert quick_names(bodies, kind) == wanted
-        panel.set_context(
-            bodies, _availability(bodies), feature_chosen=bool(kind), feature_kind=kind
-        )
+        panel.set_context(bodies, _availability(bodies), feature_kind=kind)
         shown = tuple(
             name for name, button in panel._quick_buttons.items() if not button.isHidden()
         )
@@ -130,27 +128,28 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
     panel.show()
     identities = {name: id(button) for name, button in panel._buttons.items()}
 
-    panel.set_context(2, _availability(1), feature_chosen=False)
+    panel.set_context(2, _availability(1))
     joining = panel._buttons["union_objects"]
-    panel.set_context(1, _availability(1), feature_chosen=False)
+    panel.set_context(1, _availability(1))
     assert not panel.isHidden()
     assert panel.summary.text() == "1 Objekt gewählt"
     assert not joining.isEnabled()
     assert "2 Körper" in joining.toolTip()
-    assert not panel.feature_button.isEnabled()
 
-    panel.set_context(2, _availability(2), feature_chosen=True)
+    panel.set_context(2, _availability(2))
     QApplication.processEvents()
     assert identities == {name: id(button) for name, button in panel._buttons.items()}
     assert joining.isEnabled()
-    assert panel.feature_button.isEnabled()
     assert panel.summary.text() == "2 Objekte gewählt"
+    # Der Knopf *Merkmale* ist am 07.09.2026 entfallen (Konzept A): Seit die
+    # Maße des Gewählten über diesen Handlungen stehen, führt er nirgendwohin.
+    assert not hasattr(panel, "feature_button")
     for name in QUICK_BODIES:
         button = panel._buttons[name]
         assert button.width() >= button.sizeHint().width(), f"{button.text()} ist abgeschnitten"
         assert button.focusPolicy() != Qt.FocusPolicy.NoFocus
 
-    panel.set_context(0, _availability(0), feature_chosen=False)
+    panel.set_context(0, _availability(0))
     assert panel.isHidden()
 
 
@@ -191,13 +190,13 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
             if not button.isHidden() and name not in panel._quick_buttons
         }
 
-    panel.set_context(1, _availability(1), feature_chosen=False)
+    panel.set_context(1, _availability(1))
     am_koerper_sichtbar = sichtbar()
     assert not am_koerper_sichtbar & am_merkmal, (
         "an einem Körper hat eine Merkmalshandlung nichts zu suchen"
     )
 
-    panel.set_context(1, _availability(1), feature_chosen=True, feature_kind="face")
+    panel.set_context(1, _availability(1), feature_kind="face")
     an_der_flaeche = sichtbar()
     assert "arrange_bed" not in an_der_flaeche, (
         "eine Fläche wird nie auf dem Bett angeordnet — der Knopf verschwindet"
@@ -206,7 +205,7 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
 
     # Und der Weg zurück: die Stufe wechselt, die Knöpfe kommen wieder. Sie
     # verschwinden beim Wechsel der Stufe, nicht beim zufälligen Klick.
-    panel.set_context(1, _availability(1), feature_chosen=False)
+    panel.set_context(1, _availability(1))
     assert sichtbar() == am_koerper_sichtbar
 
     # **Die fehlende Vorbedingung bleibt dagegen stehen.** Eine Handlung, die
@@ -234,19 +233,17 @@ def test_the_summary_says_what_is_chosen_not_how_many(qt_app: QApplication) -> N
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
 
-    panel.set_context(1, _availability(1), feature_chosen=False, label="Halter")
+    panel.set_context(1, _availability(1), label="Halter")
     assert panel.summary.text() == "Halter"
 
-    panel.set_context(
-        1, _availability(1), feature_chosen=True, feature_kind="face", label="Halter · Oberseite"
-    )
+    panel.set_context(1, _availability(1), feature_kind="face", label="Halter · Oberseite")
     assert panel.summary.text() == "Halter · Oberseite"
 
-    panel.set_context(2, _availability(2), feature_chosen=False, label="Halter")
+    panel.set_context(2, _availability(2), label="Halter")
     assert panel.summary.text() == "2 Objekte gewählt", "bei zweien gibt es keinen einen Namen"
 
     # Ohne Namen bleibt es bei der Menge — das Panel erfindet keinen.
-    panel.set_context(1, _availability(1), feature_chosen=False)
+    panel.set_context(1, _availability(1))
     assert panel.summary.text() == "1 Objekt gewählt"
 
 
@@ -256,7 +253,7 @@ def test_search_filters_existing_buttons_and_a_click_carries_the_register_entry(
     """Suche und Klick bleiben am vorhandenen Registereintrag."""
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
-    panel.set_context(2, _availability(2), feature_chosen=False)
+    panel.set_context(2, _availability(2))
     # **Aus den sichtbaren**, seit die Sichtbarkeit der Auswahlstufe folgt
     # (Konzept C): Ohne diese Bedingung fiel die Wahl auf eine
     # Merkmalshandlung, die an zwei gewählten Körpern gar nicht dasteht — und
@@ -287,7 +284,7 @@ def test_every_action_row_keeps_a_keyboard_sized_height(qt_app: QApplication) ->
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.resize(320, panel.minimumHeight())
-    panel.set_context(2, _availability(2), feature_chosen=True)
+    panel.set_context(2, _availability(2))
     panel.show()
     qt_app.processEvents()
 

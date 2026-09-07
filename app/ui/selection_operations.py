@@ -78,20 +78,17 @@ QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature")
 PANEL_LEAST_HEIGHT = 280
 """Was das Panel mindestens braucht, in Bildpunkten.
 
-Drei Hauptaktionen, Suche, Trefferliste und die beiden getrennten Wege dürfen
+Drei Hauptaktionen, Suche, Trefferliste und der Weg zum Bausteinkatalog dürfen
 sich auch in einem 720-Pixel-Fenster nicht überlagern. Mit der früheren
 190-Pixel-Untergrenze drückte Qt jede Hauptaktion auf rund 15 Pixel und legte
 das Suchfeld über „Schnittmenge".
 
-**Benannt, weil eine zweite Datei damit rechnet:** ``MainWindow._fit_right_column``
-teilt die Spalte und lässt dem Bericht ``REPORT_RESERVE`` Bildpunkte. Wer eine
-der beiden Zahlen ändert, ohne die andere anzusehen, bricht die Annahme der
-anderen still — als Literale in zwei Modulen war das nicht zu sehen, und der
-Konstanten-Wächter sieht nur benannte Konstanten.
+**Die zweite Zahl daneben ist mit dem Umzug weggefallen** (07.09.2026): Solange
+das Panel in der Overlay-Spalte lag, teilte ``MainWindow._fit_right_column``
+diese Spalte zwischen ihm und dem Prüfbericht, und beide Untergrenzen mussten
+gegeneinander stehen. Jetzt liegt es im Fenster rechts, das rollt — eine
+Untergrenze genügt, und eine Obergrenze braucht es gar nicht mehr.
 """
-
-PANEL_MOST_HEIGHT = 420
-"""Und was es höchstens nimmt. Darüber wächst der Bericht, nicht die Liste."""
 
 
 def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
@@ -202,7 +199,6 @@ class SelectionOperationsPanel(QWidget):
 
     operationRequested = Signal(object)
     catalogRequested = Signal()
-    featurePanelRequested = Signal()
 
     def __init__(self, specs: Iterable[OperationSpec], parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -210,7 +206,6 @@ class SelectionOperationsPanel(QWidget):
         self.setAccessibleName(tr("Operationen für die Auswahl"))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setMinimumHeight(PANEL_LEAST_HEIGHT)
-        self.setMaximumHeight(PANEL_MOST_HEIGHT)
 
         # **Einmal aufgezählt, nicht zweimal durchlaufen.** Die Signatur nimmt
         # ein ``Iterable``, und ein Generator wäre beim zweiten Filter leer.
@@ -305,14 +300,10 @@ class SelectionOperationsPanel(QWidget):
         self.scroller.setMinimumHeight(TARGET_SIZE)
         self.scroller.setAccessibleName(tr("Passende Operationen"))
 
-        self.feature_button = QToolButton(self)
-        self.feature_button.setText(tr("Merkmale"))
-        self.feature_button.setIcon(icon("category.holes", self.feature_button))
-        self.feature_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
-        self.feature_button.setMinimumHeight(TARGET_SIZE)
-        self.feature_button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.feature_button.clicked.connect(self.featurePanelRequested)
-
+        # **Der Knopf *Merkmale* ist mit dem Umzug entfallen** (Konzept „Ein
+        # Ort für die Auswahl", A und C). Er tat nichts, als vom einen Ort zum
+        # anderen zu führen — und seit die Maße des Gewählten über diesen
+        # Handlungen stehen, führt er nirgendwohin.
         self.catalog_button = QToolButton(self)
         self.catalog_button.setText(tr("Bausteine"))
         self.catalog_button.setIcon(icon("category.parts", self.catalog_button))
@@ -329,7 +320,6 @@ class SelectionOperationsPanel(QWidget):
         separate = QHBoxLayout()
         separate.setContentsMargins(0, 0, 0, 0)
         separate.setSpacing(TIGHT)
-        separate.addWidget(self.feature_button)
         separate.addWidget(self.catalog_button)
 
         layout = QVBoxLayout(self)
@@ -398,7 +388,6 @@ class SelectionOperationsPanel(QWidget):
         selected: int,
         availability: Callable[[str], tuple[bool, str]],
         *,
-        feature_chosen: bool,
         feature_kind: str = "",
         label: str = "",
     ) -> None:
@@ -409,6 +398,11 @@ class SelectionOperationsPanel(QWidget):
         entscheidet zusammen mit ``selected``, welche Hauptaktionen oben
         stehen (:func:`quick_names`) und **welche Handlungen überhaupt
         dastehen** (:meth:`_fits_the_level`).
+
+        **``feature_chosen`` ist mit dem Knopf *Merkmale* weggefallen**
+        (07.09.2026). Es beantwortete dieselbe Frage wie ``feature_kind`` — ob
+        ein Merkmal gewählt ist —, und zwei Antworten auf eine Frage laufen
+        beim nächsten Nachbessern auseinander.
 
         ``label`` ist der Name der Auswahl, wie ihn das Fenster kennt —
         ``Halter`` oder ``Halter · Oberseite`` (Konzept B). Er kommt von dort
@@ -451,16 +445,6 @@ class SelectionOperationsPanel(QWidget):
             button.setToolTip(tip)
             button.setStatusTip(tip)
             button.setAccessibleDescription(tip)
-
-        self.feature_button.setEnabled(feature_chosen)
-        feature_tip = (
-            tr("Öffnet rechts die Maße und Handlungen des gewählten Merkmals.")
-            if feature_chosen
-            else tr("Wählen Sie zuerst eine Fläche, Bohrung oder ein anderes Merkmal im Bild.")
-        )
-        self.feature_button.setToolTip(feature_tip)
-        self.feature_button.setStatusTip(feature_tip)
-        self.feature_button.setAccessibleDescription(feature_tip)
 
     def _filter(self, query: str | None = None) -> None:
         """Nur die Darstellung filtern; Registereinträge und Knöpfe bleiben bestehen.

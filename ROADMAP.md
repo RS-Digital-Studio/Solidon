@@ -208,7 +208,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Drei ungemessene Laufzeitkosten des Reparaturstands | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine Messung je Stelle: `hollow` rechnet für `cavity` eine zweite Boolesche bei jedem Aushöhlen; `Solid.__post_init__` kopiert jede Form, dazu sechs ausdrückliche `working = Solid(...)`; `cavity_chains` läuft im Qt-Hauptthread bei jedem Szenenaufbau ohne Grenze (an `build_tray_v3.step` mit 234 Merkmalen messen) |
 | Testhilfen stehen zweimal | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | **eine Entscheidung von Robert** (Konzept §2 H): 21 wortgleiche Gruppen in `tests/`, darunter `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und `test_torus_fit_quality.py`; Empfehlung einmal für die fünf großen, danach nur beim Anfassen |
 | Die Filamentkarte fordert mehr, als sie zeigt | Ein Ort für die Auswahl (07.09.2026) | eine Zeile in `filament_picker._around_the_list`: Sie fordert 144 Bildpunkte und setzt 126 um, gemessen beim Bau des P4-Nachweises. Die 18 Punkte bekommt niemand — die Verteilung gibt sie ihr, und sie zeigt sie nicht |
-| P6 — die Panels werden eines | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung von Konzept A; D und E sind am 07.09.2026 gebaut (jede Bündelung des Baums wählt ihre Glieder, der Merker fürs Zumachen gilt der Auswahl). Offen ist der Umzug der Auswahlhandlungen ins rechte Panel samt Wegfall des Knopfes *Merkmale* — er zieht Handbuch und Bildschirmfotos mit |
 | Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | Die Durchsicht des 07.09.2026 | einen Bilderlauf: `app/images/manual/*/main-window.png` ist von 06:13, die rechte Spalte hat sich um 11:05 geändert (`975bd6bf`), und `d2040474` hat Handbuch und PDFs mit dem neuen Absatz zur rechten Spalte darüber geschrieben. Text und Bild widersprechen sich auf derselben Seite, in sechs Sprachen, in `Releases/*.pdf` und in `website/handbuch.html`. Dazu die **gezeichnete** Abbildung (`app/core/figures.py::_window`): sie kennt Projektkopfzeile und Operationsfläche nicht, und ihr `caption` sagt weiter „vier Bereiche". Reihenfolge: erst `figures.py`, dann der Bilderschritt aus `/erzeugen`, dann Handbuch und PDFs. **Vor dem Paketbau von 0.3.5** |
 
 ---
@@ -16843,21 +16842,27 @@ mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
       `filament_picker._around_the_list` zu hoch — sie fordert damit Platz,
       den sie niemandem zeigt, während die Nachbarkarten ihn brauchen. Kein
       Befund über die Verteilung: Die Zuteilung stimmt, die Umsetzung nicht.
-- [~] **P6 — jede Bündelung des Baums ist wählbar, und die Panels werden
-      eines** — E und D gebaut am 07.09.2026, A offen.** Robert am 07.09.2026: „nicht nur bei Schraubenloch mit Senkung
-      ist es so, bei allen Dach einträgen." Beide Dachsorten tragen die
-      Merkmalskennung leer — das Gleichart-Dach „Hohlkehle (17)"
-      (`panels.py:1282`) und das Baustein-Schritt-Dach „Schraubenloch mit
-      Senkung" (`panels.py:1303`) —, und bei einer Bohrung mit Senkung als
-      Kind wählt der Klick nur die Bohrung. Künftig wählt jede dieser Zeilen,
-      was sie bündelt: `selected_features` löst eine Dachzeile in ihre Kinder
-      auf, statt eine leere Kennung zu liefern. Die Handlungen gelten allen
-      Gliedern in einer Transaktion, hervorgehoben wird die ganze Menge in Baum
-      und Bild. Am Baustein-Dach steht zusätzlich „Diesen Schritt ändern"
-      zuerst: Wer den Baustein ändert, ändert Bohrung und Senkung an ihrer
-      Quelle. Im selben Paket ziehen die Auswahlhandlungen ins Panel rechts;
-      der Knopf *Merkmale* entfällt damit, und der Merker fürs Zumachen gilt
-      nur noch der laufenden Auswahl statt der Sitzung.
+- [x] **P6 — jede Bündelung des Baums ist wählbar, und die Panels werden
+      eines** — gebaut am 07.09.2026, alle drei Entscheidungen (A, D, E).
+      Robert dazu: „nicht nur bei Schraubenloch mit Senkung ist es so, bei
+      allen Dach einträgen." Beide Dachsorten trugen die Merkmalskennung leer
+      — das Gleichart-Dach „Hohlkehle (17)" und das Baustein-Schritt-Dach
+      „Schraubenloch mit Senkung" —, und bei einer Bohrung mit Senkung als
+      Kind wählte der Klick nur die Bohrung. Jetzt löst `selected_features`
+      jede markierte Zeile in das auf, was unter ihr hängt; **Körperzeilen
+      bleiben außen vor**, denn unter ihnen hängt jedes Merkmal des Körpers.
+
+      **Und die zwei Panels sind eines.** Die Auswahlhandlungen stehen im
+      Fenster rechts unter den Maßen des Gewählten; die Overlay-Spalte trägt
+      nur noch Bericht, Chat und Tour und teilt ihre Höhe mit nichts mehr —
+      damit ist auch die zweite Rechnung weg, die den Formatverlust aus P1
+      verursacht hat, samt `_fit_right_column`, `REPORT_RESERVE` und
+      `PANEL_MOST_HEIGHT`. Der Knopf *Merkmale* ist entfallen, `feature_chosen`
+      mit ihm (es beantwortete dieselbe Frage wie `feature_kind`), und das
+      Fenster heißt *Auswahl*, weil es auch an einem gewählten Körper steht.
+      Handbuch und Kataloge sind in sechs Sprachen nachgezogen; **was
+      aussteht, sind die Bildschirmfotos** — sie stehen im Punkt darunter, der
+      ohnehin einen Erzeugerlauf braucht.
 
 ## Die Durchsicht des 07.09.2026
 
@@ -16883,3 +16888,10 @@ Erzeugerlauf zu haben ist.
       um die zwei Bereiche ergänzen samt `alt` und `caption` (zwei neue Texte,
       also sechs Kataloge), dann der Bilderschritt aus `/erzeugen`, dann
       Handbuch und PDFs. **Vor dem Paketbau von 0.3.5.**
+
+      **Dazugekommen am 07.09.2026 mit dem Umzug der Auswahlhandlungen**
+      (Konzept A): Die Karte über der Ansicht gibt es nicht mehr, das Fenster
+      rechts heißt *Auswahl* und trägt Maße und Handlungen übereinander. Der
+      geschriebene Text steht in sechs Sprachen richtig da; jedes
+      Bildschirmfoto der rechten Seite zeigt den alten Aufbau. Es ist
+      derselbe Erzeugerlauf, nur mit einem zweiten Anlass.
