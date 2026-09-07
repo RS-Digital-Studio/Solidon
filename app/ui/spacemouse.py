@@ -603,9 +603,11 @@ class DriverState(ctypes.Structure):
     ``time`` liegt damit bei Byte 12 und nicht bei 16, die sechs Achsen bei
     30, die Tasten bei 44 — 48 Byte insgesamt. Ein Test hält die Zahlen fest,
     denn ein falsches Packen gibt keine Fehlermeldung, sondern Rauschen als
-    Bewegung.
+    Bewegung. Das gepackte ctypes-Layout steht ausdrücklich fest, damit es
+    auch auf macOS und Linux ohne veraltete implizite Vorgabe importiert.
     """
 
+    _layout_ = "ms"
     _pack_ = 2
     _fields_ = (
         ("version", ctypes.c_uint16),
