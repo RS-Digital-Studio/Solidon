@@ -9,7 +9,7 @@ Der Viewport kennt nur diese Datei; was hier nicht steht, gibt es für ihn
 nicht — und was ein Renderer nicht kann, ist ein Loch in ihm, kein Sonderweg
 im Viewport (Entscheidung Robert, 05.09.2026: beide bauen, beide messen).
 
-Drei Festlegungen, die beide Renderer teilen:
+Drei Festlegungen des Renderervertrags:
 
 * **Bildpunkte zählen wie Qt**: Ursprung oben links, y nach unten, in den
   Gerätepixeln des Widgets. pygfx zählt in logischen Bildpunkten; das
@@ -263,7 +263,7 @@ class LabelsItem(Item):
 
 
 class Renderer(ABC):
-    """Der Vertrag, den beide Renderer einlösen.
+    """Der Vertrag des Renderers.
 
     ``widget`` ist das Qt-Widget, das in den Viewport kommt — ``None`` bei
     einem Renderer ohne Fenster (Bildaufnahmen für den Agenten, Tests).

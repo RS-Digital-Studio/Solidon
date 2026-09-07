@@ -215,7 +215,7 @@ def test_the_choice_lands_in_the_environment_and_remembers_what_stood_there(
 def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Auf Wayland stirbt VTK nativ; die Wache greift davor, und die Ansicht
+    """Auf Wayland fehlt rendercanvas die native Qt-Anbindung; die Ansicht
     nennt den Weg heraus (§2.7) statt nur zu fehlen."""
     from app.ui import viewport
 
@@ -239,17 +239,13 @@ def test_a_wayland_session_keeps_the_view_out_and_says_what_to_do(
     assert viewport.unavailable_hint() == "", "wo es nichts zu tun gibt, steht auch nichts"
 
 
-def test_a_machine_without_a_graphics_adapter_is_told_what_to_install(
+def test_a_machine_without_a_graphics_adapter_gets_driver_and_loader_checks(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ohne wgpu-Adapter fehlte der Weg heraus — der häufigste Fall auf Linux.
+    """Ein fehlender Adapter beweist weder einen fehlenden Loader noch Mesa-Bedarf.
 
-    Bis zum Ausbau des VTK-Renderers (06.09.2026) hieß „keine 3D-Ansicht" fast
-    immer Wayland, und dafür stand ein Hinweis. Seither zeichnet die Ansicht
-    über Direct3D 12, Vulkan oder Metal, und auf einem Linux ohne
-    Vulkan-Treiber sagt ``factory.available`` nein — nicht weil der Rechner zu
-    alt wäre, sondern weil zwei Pakete fehlen. Der Kunde las dazu einen Satz
-    ohne Ausweg (Regel 17).
+    Die Prüfung nennt den passenden Treiber und Paketbeispiele für Loader,
+    einschließlich der Arch-/Manjaro-Plattform aus dem Kundenbericht.
 
     Gemessen wird der Hinweis, nicht der Adapter: Welche Antwort ``factory``
     gibt, hängt an der Maschine, die diesen Test fährt.
@@ -258,14 +254,15 @@ def test_a_machine_without_a_graphics_adapter_is_told_what_to_install(
 
     monkeypatch.setattr(viewport, "_effective_platform", lambda: "xcb")
 
-    monkeypatch.setattr(viewport.sys, "platform", "linux")
-    hint = viewport.unavailable_hint()
-    assert "mesa-vulkan-drivers" in hint and "libvulkan1" in hint, hint
-    assert "vulkan-loader" in hint, "Fedora und openSUSE nennen die Pakete anders"
+    hint = viewport.unavailable_hint("linux")
+    assert "libvulkan1" in hint and "Debian/Ubuntu" in hint, hint
+    assert "vulkan-icd-loader" in hint and "Arch/Manjaro" in hint, hint
+    assert "Nvidia" in hint and "Hersteller- oder Distributionspaket" in hint, hint
+    assert "fehlt hier Vulkan" not in hint, "kein Adapter ist keine Paketdiagnose"
+    assert "mesa-vulkan-drivers" not in hint, "Nvidia braucht seinen passenden Treiber"
 
     for system in ("win32", "darwin"):
-        monkeypatch.setattr(viewport.sys, "platform", system)
-        hint = viewport.unavailable_hint()
+        hint = viewport.unavailable_hint(system)
         assert "Direct3D 12" in hint and "Metal" in hint, (system, hint)
         assert "mesa-vulkan-drivers" not in hint, "Paketnamen gehören nur auf Linux"
 
@@ -333,10 +330,28 @@ def test_imported_colours_reach_the_viewport_as_rgb_cells(qt_app: QApplication) 
 
 
 @pytest.mark.parametrize("theme", list(THEMES))
+def test_a_single_material_slot_keeps_its_explicit_colour(theme: str, qt_app: QApplication) -> None:
+    """Auch ein einfarbiger Druck zeigt das gewählte Filament in jedem Thema."""
+    from app.core.types import MaterialSlot
+    from app.ui.viewport import Viewport
+
+    mesh = MeshData.of(trimesh.creation.box(), slots=(0,) * 12)
+    viewport = Viewport()
+    viewport.set_theme(theme)
+    entry = SimpleNamespace(
+        material_slots=[MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))]
+    )
+    colours = viewport._slot_colours(mesh, entry, mesh.triangle_count)
+    assert colours is not None, "die ausdrücklich gewählte Filamentfarbe verschwand"
+    assert colours.colormap == ("#ff0000",)
+    assert np.all(colours.values == 0)
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
 def test_the_theme_reaches_the_viewport(theme: str, qt_app: QApplication) -> None:
     """Der Viewport übernimmt die vier Farben seines Themas.
 
-    Sie stehen in ``set_theme`` vor dem Plotter-Zweig, und das ist richtig so:
+    Sie stehen in ``set_theme`` vor dem Renderer-Zweig, und das ist richtig so:
     welche Farbe gilt, ist eine Aussage über die Ansicht und nicht über VTK.
     Geprüft wurde sie trotzdem nie — ``tests/test_theme_and_palette.py`` prüft
     die *Palette*, also dass ``viewport_colours`` zueinander passende Werte
@@ -392,7 +407,7 @@ def test_switching_back_and_forth_lands_where_it_started(qt_app: QApplication) -
 def test_an_empty_scene_forgets_what_was_selected(qt_app: QApplication) -> None:
     """Was eine leere Szene nicht mehr hat: Auswahl, Merkmal, Maße.
 
-    Die drei Zeilen stehen in ``show_scene`` vor dem Plotter-Zweig, und der
+    Die drei Zeilen stehen in ``show_scene`` vor dem Renderer-Zweig, und der
     Kommentar daneben sagt auch, warum: Das sind Aussagen über die Szene und
     nicht über VTK. Geprüft war davon nichts — der eine Test, der
     ``show_scene(None)`` aufruft, sieht auf die Kamera (``_fitted_to``).
@@ -598,7 +613,7 @@ def test_viewport_cleanup_cancels_a_running_preparation(
 def test_viewport_cleanup_rejects_a_result_already_waiting_in_qt(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Ein vor dem Schließen eingereihtes Ergebnis darf den Plotter nicht mehr anfassen."""
+    """Ein vor dem Schließen eingereihtes Ergebnis darf den Renderer nicht mehr anfassen."""
     from app.ui import viewport as viewport_module
     from app.ui.viewport import Viewport
 
@@ -1565,10 +1580,10 @@ def test_sketching_on_xy_gives_the_same_camera_as_the_top_view() -> None:
     assert up == pytest.approx(up_top), "und sie hält den Kopf genauso"
 
 
-def test_a_sketch_plane_without_a_plotter_changes_nothing(qt_app: QApplication) -> None:
+def test_a_sketch_plane_without_a_renderer_changes_nothing(qt_app: QApplication) -> None:
     """Offscreen gibt es keine Kamera, und das darf nicht wehtun.
 
-    Die halbe Suite läuft ohne Plotter (``_available`` steigt bei
+    Die halbe Suite läuft ohne Renderer (``_available`` steigt bei
     ``QT_QPA_PLATFORM=offscreen`` aus). Ein Skizzenmodus, der dort mit einer
     Ausnahme endet, nähme jeden Fenstertest mit.
     """
@@ -1576,7 +1591,7 @@ def test_a_sketch_plane_without_a_plotter_changes_nothing(qt_app: QApplication) 
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    assert viewport.renderer is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
+    assert viewport.renderer is None, "diese Probe ergibt nur ohne Renderer einen Sinn"
     viewport.view_on_plane(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
 
 
@@ -1769,7 +1784,7 @@ def test_on_the_flat_plane_the_grid_runs_along_the_axes() -> None:
         assert start[2] == pytest.approx(7.0) and end[2] == pytest.approx(7.0)
 
 
-def test_showing_a_sketch_without_a_plotter_changes_nothing(qt_app: QApplication) -> None:
+def test_showing_a_sketch_without_a_renderer_changes_nothing(qt_app: QApplication) -> None:
     """Offscreen gibt es keine Szene, und das darf nicht wehtun.
 
     ``show_sketch`` und ``clear_sketch`` laufen in jedem Fenstertest mit,
@@ -1781,7 +1796,7 @@ def test_showing_a_sketch_without_a_plotter_changes_nothing(qt_app: QApplication
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    assert viewport.renderer is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
+    assert viewport.renderer is None, "diese Probe ergibt nur ohne Renderer einen Sinn"
 
     frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
     viewport.show_sketch(
@@ -1789,7 +1804,7 @@ def test_showing_a_sketch_without_a_plotter_changes_nothing(qt_app: QApplication
     )
     viewport.clear_sketch()
 
-    assert viewport._sketch_actors == [], "ohne Plotter entsteht kein Actor"
+    assert viewport._sketch_actors == [], "ohne Renderer entsteht kein Actor"
 
 
 def test_the_camera_stands_in_front_of_the_front_view_not_behind_it() -> None:
@@ -1893,7 +1908,7 @@ def test_the_camera_keeps_its_distance_from_an_empty_scene(qt_app: QApplication)
     assert LEAST_PLANE_DISTANCE > 100.0, "unter hundert Millimetern sieht man kein Druckteil"
 
 
-def test_without_a_plotter_the_scale_falls_back_instead_of_dividing_by_zero(
+def test_without_a_renderer_the_scale_falls_back_instead_of_dividing_by_zero(
     qt_app: QApplication,
 ) -> None:
     """Ohne Bild gibt es nichts zu messen, und null wäre die falsche Antwort."""
@@ -2549,7 +2564,7 @@ def gripping(viewport: Any, *, height: float | None = 10.0) -> None:
     der jede Frage übergeht, bestanden (gefunden von der Review-Sitzung,
     27.08.2026).
 
-    Ersetzt werden genau die drei Methoden, die einen Plotter brauchen — die
+    Ersetzt werden genau die drei Methoden, die einen Renderer brauchen — die
     Reichweite im Bild, der Ort auf der Ebene und das Maß entlang der Achse.
     Alles davor und danach ist echt: die Reihenfolge der Bedingungen, die Frage
     an das Fenster und das Signal. ``height=None`` stellt den Fall, dass sich
@@ -3544,7 +3559,7 @@ def test_switching_the_theme_actually_touches_the_headlight() -> None:
     durchgereicht ist nicht gerufen, und eine Kette endet am letzten Glied.
 
     Eine Attrappe hilft hier nicht: ``set_theme`` fasst ein Dutzend Kinder an,
-    bevor es zum Plotter kommt, und was man dafür alles nachbauen müsste, wäre
+    bevor es zum Renderer kommt, und was man dafür alles nachbauen müsste, wäre
     selbst die Fehlerquelle. Gelesen wird deshalb der Quelltext der Methode —
     dieselbe Bauart wie die Setzstellen-Prüfung in ``test_cursors.py``.
     """
@@ -3705,7 +3720,7 @@ def test_a_scene_rebuild_restores_only_a_visible_finding_mark(
 
     Der Fehler entstand nicht in den Zeichenhelfern allein: ``show_scene``
     räumt die nativen Aktoren beim Kartenaufbau ab. Deshalb fährt dieser Test
-    den vollständigen Anschluss mit einer schreibenden Plotter-Attrappe. Er
+    den vollständigen Anschluss mit einer schreibenden Renderer-Attrappe. Er
     prüft zugleich den Filterfall — ein ausgeblendeter Körper bekommt keinen
     körperlosen Ring im Raum.
     """
@@ -3981,7 +3996,7 @@ def test_the_hatch_stays_within_its_limit() -> None:
 def test_a_protected_face_is_remembered_and_released(qt_app: QApplication) -> None:
     """Sperren, freigeben, und die Auskunft dazu (T8, §22.3).
 
-    ``set_protected`` läuft vor der Plotter-Wache zu Ende: Die Markierung ist
+    ``set_protected`` läuft vor der Renderer-Wache zu Ende: Die Markierung ist
     eine Aussage über das Werkstück, das Zeichnen ist die Folge davon. Deshalb
     ist sie offscreen prüfbar, und deshalb steht sie hier.
     """
@@ -4535,7 +4550,7 @@ def test_the_bed_lets_a_sunken_body_show_through(qt_app: QApplication) -> None:
 
     Geprüft wird die Regel, die Anwendung und die Rücknahme. Die Bettfläche
     ist eine Attrappe mit genau der einen Eigenschaft, die angefasst wird —
-    offscreen gibt es keinen Plotter.
+    offscreen gibt es keinen Renderer.
     """
     import dataclasses
 
@@ -5388,7 +5403,7 @@ def test_the_handle_of_a_hole_sits_at_its_mouth(qt_app: QApplication) -> None:
         },
     )
 
-    # Ohne Plotter gilt die Achsrichtung — offscreen gibt es keine Kamera.
+    # Ohne Renderer gilt die Achsrichtung — offscreen gibt es keine Kamera.
     sitz = viewport._handle_seat(loch, (0.0, 0.0, 17.5))
     assert tuple(float(v) for v in sitz) == pytest.approx((0.0, 0.0, 35.0)), (
         "die Öffnung liegt eine halbe Tiefe über der Mitte"
@@ -5536,7 +5551,7 @@ def test_a_view_setter_that_changes_nothing_rebuilds_nothing(qt_app: QApplicatio
     # **``set_theme`` wird an seiner Wirkung geprüft, nicht am Aufbau.** Er
     # steigt offscreen vor ``show_scene`` aus (``if self.renderer is None``),
     # und ein Test über den Zähler wäre hier grün, ohne etwas zu sagen — die
-    # Prüfung sitzt aber davor und gilt auch ohne Plotter.
+    # Prüfung sitzt aber davor und gilt auch ohne Renderer.
     viewport.set_theme("light")
     gemerkt = viewport._object_colour
     viewport._object_colour = "#000000"
@@ -5619,7 +5634,7 @@ def test_the_turn_arc_spans_from_nothing_to_the_angle() -> None:
 
     Geprüft wird die Rechnung, nicht das Bild — sie ist eine freie Funktion
     ohne Qt, aus demselben Grund wie `shadow_points`: Was hinter der
-    Plotter-Wache steht, prüft offscreen niemand mehr.
+    Renderer-Wache steht, prüft offscreen niemand mehr.
     """
     import numpy as np
 
@@ -5942,7 +5957,7 @@ def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
         def __call__(self, *args: Any, **kwargs: Any) -> Any:
             return _Nachgiebig()
 
-    class _Plotter(_Nachgiebig):
+    class _TestRenderer(_Nachgiebig):
         camera = SimpleNamespace(
             position=(100.0, 100.0, 100.0),
             focal_point=(0.0, 0.0, 0.0),
@@ -5954,7 +5969,7 @@ def test_nothing_from_the_drag_outlives_the_gizmo(qt_app: QApplication) -> None:
         )
 
     viewport = Viewport()
-    viewport.renderer = _Plotter()  # type: ignore[assignment]
+    viewport.renderer = _TestRenderer()  # type: ignore[assignment]
     viewport._arc_actor = SimpleNamespace(name="turn-arc")
     viewport._ghost_actor = SimpleNamespace(name="feature-ghost")
     viewport._shape_actor = SimpleNamespace(name="feature-preview")
@@ -6101,10 +6116,10 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
 
     # **Und die Farbe folgt der Menge, nicht dem führenden allein.**
     #
-    # Die Färbung steigt ohne Plotter sofort aus, und offscreen gibt es keinen:
+    # Die Färbung steigt ohne Renderer sofort aus, und offscreen gibt es keinen:
     # ``_shown_colours`` bliebe leer, und jede Prüfung darauf wäre grün, weil
     # ``None != SELECTED_COLOUR`` gilt — ein Test, der aus dem falschen Grund
-    # besteht. Die Lage wird deshalb hergestellt; Plotter und Aktorkennungen
+    # besteht. Die Lage wird deshalb hergestellt; Renderer und Aktorkennungen
     # sind alles, was die *Entscheidung* braucht. Das Überblenden bekommt eine
     # Ablage statt echter Actors: Es beantwortet eine andere Frage und hat
     # seinen eigenen Test.
@@ -6119,7 +6134,7 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     )
 
     # Und zurück auf einen — der zweite muss seine Farbe wieder hergeben.
-    # Die Auswahl wieder ohne Plotter, weil ``select`` sonst den ganzen
+    # Die Auswahl wieder ohne Renderer, weil ``select`` sonst den ganzen
     # Zeichenweg mitnimmt und die Attrappe dort auf VTK trifft; gefärbt wird
     # danach, in derselben Lage wie oben.
     viewport.renderer = None
@@ -6131,6 +6146,55 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     assert viewport._shown_colours.get("obj_2") != SELECTED_COLOUR, (
         "die alte Mehrfachauswahl färbt weiter"
     )
+
+
+@pytest.mark.parametrize("elapsed_share", [0.0, 0.5])
+def test_extending_selection_finishes_every_running_colour_transition(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, elapsed_share: float
+) -> None:
+    """Eine weitere Auswahl nimmt die noch nicht erreichten Farbziele mit.
+
+    Der Objektbaum kann zwei Auswahlmeldungen im selben Ereignis senden.
+    Die erste Blende hat dann noch gar kein Bild geschrieben; bei einem
+    schnellen Strg-Klick ist sie erst halb fertig. Eine neue Blende nur für
+    den zweiten Körper ließ den ersten dauerhaft grau oder halb ausgewählt.
+    Hier läuft die echte Qt-Animation mit gesteuerter Uhr statt Wartezeit.
+    """
+    from app.ui import motion
+    from app.ui import viewport as viewport_module
+    from app.ui.viewport import ACCENT_MS, SELECTED_COLOUR, Viewport
+
+    monkeypatch.setattr(motion, "animations_enabled", lambda: True)
+    monkeypatch.setattr(viewport_module, "animations_enabled", lambda: True)
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    viewport.show_scene(_scene_with_two_bodies())
+
+    viewport.select("obj_1")
+    first = viewport._selection_fade
+    assert first is not None
+    first.setCurrentTime(round(ACCENT_MS * elapsed_share))
+    viewport.select("obj_1")
+    assert viewport._selection_fade is first, "dieselbe Auswahl startet keine neue Blende"
+
+    viewport.select("obj_1", more=("obj_2",))
+    second = viewport._selection_fade
+    assert second is not None and second is not first
+    second.setCurrentTime(ACCENT_MS)
+    assert [viewport._actors[key].colour() for key in ("obj_1", "obj_2")] == [
+        SELECTED_COLOUR,
+        SELECTED_COLOUR,
+    ], "beide ausgewählten Körper müssen ihre sichtbare Zielfarbe erreichen"
+
+    # Auch eine abgelöste Abwahl muss für beide Körper zu Ende laufen.
+    viewport.select("obj_2")
+    viewport._selection_fade.setCurrentTime(round(ACCENT_MS * elapsed_share))
+    viewport.select(None)
+    viewport._selection_fade.setCurrentTime(ACCENT_MS)
+    assert [viewport._actors[key].colour() for key in ("obj_1", "obj_2")] == [
+        viewport._object_colour,
+        viewport._object_colour,
+    ]
 
 
 def test_a_second_evaluation_keeps_every_selected_body(qt_app: QApplication) -> None:
@@ -6146,7 +6210,7 @@ def test_a_second_evaluation_keeps_every_selected_body(qt_app: QApplication) -> 
     die Auswahlfarbe, und ``_selected_bounds`` rahmte wieder einen einzigen.
 
     **Die Attrappe steht vor ``show_scene`` und nicht dahinter**, und darin
-    liegt der Grund, warum der Fehler so lange stand: Ohne Plotter kehrt
+    liegt der Grund, warum der Fehler so lange stand: Ohne Renderer kehrt
     ``show_scene`` in seinem eigenen ``renderer is None``-Zweig zurück, lange
     bevor der Aufruf kommt, um den es hier geht. Jeder Test dieser Datei, der
     die Attrappe **danach** setzt, läuft an dieser Stelle vorbei — und offscreen

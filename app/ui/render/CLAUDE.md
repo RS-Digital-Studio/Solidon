@@ -137,12 +137,22 @@ und hat mit diesem Verzeichnis nichts mehr zu tun.
 
 ## Was gemessen ist
 
+Beim Fensterende und Sprachwechsel wird der bisherige Renderer ausdrücklich
+geschlossen, bevor Qt sein Fenster abbaut. Die Qt-Widgetklasse hält ihren
+Renderer nur über eine schwache Referenz; Qt kann die Klasse länger behalten
+als das Fenster. Der Abbau eines Renderers darf weitere Renderer im selben
+Prozess nicht beeinträchtigen. `tests/test_window_memory.py` prüft beide
+Besitzgrenzen, `tools/window_memory.py` stellt beim Messen auch
+`DeferredDelete` zu und wechselt die Sprache über die Fenstereinstellungen.
+
 `tests/test_render_contract.py` liest Bildpunkte und Picks vom Renderer ohne
 Fenster — Farbe, Deckkraft, Sichtbarkeit, Zellfarben, Beschriftungen,
 Linien vor dem Material, Koordinatenrichtung, Kamera; `test_render_gizmo.py`
 die Griffe darauf. Fehlt ein wgpu-Adapter, fallen beide als Skip mit Grund
-aus, und `tests/test_render_factory.py` hält fest, dass `factory.available()`
-das vorher sagt.
+aus. `tests/test_render_factory.py` hält fest, dass `factory.available()`
+das vorher sagt; in der CI ist ein fehlender Adapter ein Fehler. Ein eigener
+Prozess prüft dort zusätzlich den nativen Qt-Fensterweg und die vollständige
+Freigabe seines Renderers.
 
 `tests/test_render_gfx_regressions.py` ergänzt die Fehlerpfade aus dem
 Vergleich echter Importmodelle: unpickbare Vorderflächen, laufende Linien-

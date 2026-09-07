@@ -551,11 +551,11 @@ def test_the_filament_card_shares_the_height_instead_of_taking_it(
     gegen die, die man einmal am Anfang fragt.
     """
     from app.ui.filament_picker import FilamentPanel
-    from app.ui.overlay import RoomTaker
+    from app.ui.overlay import is_room_taker
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     panel = FilamentPanel()
-    assert isinstance(panel, RoomTaker), (
+    assert is_room_taker(panel), (
         "ohne wanted_height, least_height und set_room bleibt die Karte außerhalb der Zuteilung"
     )
 

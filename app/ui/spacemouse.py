@@ -685,23 +685,25 @@ class DriverReader:
         try:
             if self._driver.SetConnexionHandlers(*handlers, False) != 0:
                 return False
-            client = int(
+            # Sobald der Treiber die Rückrufe hält, halten wir die Python-
+            # Trampoline. Auch ein später Fehler muss sie erst abmelden.
+            self._handlers = handlers
+            self._client = int(
                 self._driver.RegisterConnexionClient(
                     DRIVER_CLIENT_WILDCARD, None, DRIVER_MODE_TAKE_OVER, DRIVER_MASK_ALL
                 )
             )
-            if client == 0:
-                self._driver.CleanupConnexionHandlers()
+            if self._client == 0:
+                self.close()
                 return False
-            self._driver.SetConnexionClientButtonMask(client, DRIVER_MASK_ALL_BUTTONS)
+            self._driver.SetConnexionClientButtonMask(self._client, DRIVER_MASK_ALL_BUTTONS)
         except (OSError, ValueError, ctypes.ArgumentError) as problem:
             _log.debug("3D mouse driver refused the client: %s", problem)
+            self.close()
             return False
         # Die Rückruffunktionen leben so lange wie die Anmeldung: Ein vom
         # Aufräumer eingesammeltes ctypes-Objekt wäre für den Treiber ein
         # Sprung ins Leere.
-        self._handlers = handlers
-        self._client = client
         return True
 
     def _on_message(self, _product: int, kind: int, argument: int | None) -> None:
@@ -743,11 +745,12 @@ class DriverReader:
         client, self._client = self._client, 0
         self._devices = 0
         self._pending = []
-        if client and self._driver is not None:
+        if self._driver is not None and (client or self._handlers):
             # Zwei Blöcke, nicht einer: Scheitert das Abmelden, müssen die
             # Rückrufe trotzdem abgehängt werden, bevor ihre Objekte fallen.
-            with contextlib.suppress(OSError, ValueError, ctypes.ArgumentError):
-                self._driver.UnregisterConnexionClient(client)
+            if client:
+                with contextlib.suppress(OSError, ValueError, ctypes.ArgumentError):
+                    self._driver.UnregisterConnexionClient(client)
             with contextlib.suppress(OSError, ValueError, ctypes.ArgumentError):
                 self._driver.CleanupConnexionHandlers()
         self._handlers = ()

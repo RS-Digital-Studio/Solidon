@@ -45,7 +45,7 @@ den Text; Geometrie und Kennzahlen behalten ihre ungerundeten Werte.
 
 `paths.py` (wo Nutzerdaten liegen, §38) · `discover.py` (installierte Programme
 finden, die nicht im PATH stehen) · `install.py` (Fehlendes aus der Anwendung
-heraus nachinstallieren, §36) · `network.py` (CA-Satz im macOS-Paket) ·
+heraus nachinstallieren, §36) · `network.py` (CA-Satz für macOS und Pakete ohne nutzbaren Vertrauensspeicher, etwa Flatpak) ·
 `tools.py` (externe Programme) · `log.py`
 (lokales Protokoll, §33.2)
 

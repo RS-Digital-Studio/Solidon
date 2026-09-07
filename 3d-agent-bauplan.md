@@ -2371,7 +2371,8 @@ soll?**
 | vhacdx (V-HACD) | BSD-3 | konvexe Zerlegung fürs Auto Split |
 | fast-simplification | MIT | dezimieren — der Ersatz für pymeshlab |
 | svg.path | MIT | Zeichnungsimport; DXF liest trimesh selbst |
-| PyVista / VTK | MIT / BSD | unkritisch |
+| pygfx, wgpu, rendercanvas | BSD-2-Clause; wgpu-native Apache-2.0 oder MIT | einziger Renderer der 3D-Ansicht; native Grafikbibliotheken werden mitgeliefert |
+| VTK | BSD-3-Clause | ausschließlich kopflose Geometrie der Baustein-Bereichsprüfung, kein Renderer |
 | PySide6 | LGPL | geschlossene Weitergabe möglich, wenn dynamisch gebunden. **PyQt wäre GPL — nicht verwenden.** |
 | keyring | MIT | der Schlüssel des Nutzers im System-Schlüsselbund (§27) |
 | cadquery-ocp (OpenCascade) | Anbindung Apache-2.0, Kern LGPL-2.1 mit Linking-Ausnahme | wie PySide6 dynamisch gebunden |

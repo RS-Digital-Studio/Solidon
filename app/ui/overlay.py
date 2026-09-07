@@ -24,7 +24,7 @@ schwebenden Karten hätte nichts zu teilen: sie nehmen einander nichts weg.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeGuard
 
 from PySide6.QtCore import (
     QAbstractItemModel,
@@ -35,6 +35,7 @@ from PySide6.QtCore import (
     QPropertyAnimation,
     QRect,
     QRectF,
+    QSize,
     Qt,
 )
 from PySide6.QtGui import QPainterPath, QRegion
@@ -46,7 +47,6 @@ from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
 
 
-@runtime_checkable
 class RoomTaker(Protocol):
     """Eine Karte, der die Überlagerung Höhe zuteilen kann.
 
@@ -57,6 +57,10 @@ class RoomTaker(Protocol):
     """
 
     def height(self) -> int: ...
+
+    def isVisibleTo(self, ancestor: QWidget) -> bool: ...  # noqa: N802 — Qt-Name
+
+    def sizeHint(self) -> QSize: ...  # noqa: N802 — Qt-Name
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der alles zu sehen wäre."""
@@ -75,6 +79,21 @@ class RoomTaker(Protocol):
     def set_room(self, pixels: int) -> None:
         """Die Höhe, die zur Verfügung steht."""
         ...
+
+
+def is_room_taker(value: object) -> TypeGuard[RoomTaker]:
+    """Qt-Widgets mit dem Raumvertrag ohne Laufzeitprüfung von ``Protocol``.
+
+    ``typing`` ermittelt bei ``isinstance(widget, RoomTaker)`` die MRO des
+    Shiboken-Typs. Während echter Sprachwechsel lieferte Qt dort vorübergehend
+    eine Liste statt eines Iterators; der Resize brach sichtbar ab. Vier
+    benannte, aufrufbare Methoden beantworten dieselbe strukturelle Frage ohne
+    Introspektion in Qt-internen Typdaten.
+    """
+    return all(
+        callable(getattr(value, name, None))
+        for name in ("height", "wanted_height", "least_height", "set_room")
+    )
 
 
 #: Wie lange eine Karte für ihren Weg braucht.
@@ -433,7 +452,7 @@ def extra_height(zone: QWidget) -> int:
             # zuschlagen — er läuft in dem Thread, dessen Allokation gerade die
             # Schwelle reißt, nicht zwangsläufig in diesem. Die Prüfung gehört
             # deshalb an den Zugriff und nicht nur an die Liste.
-            if isinstance(child, RoomTaker) and isValid(child) and child.isVisibleTo(zone)
+            if is_room_taker(child) and isValid(child) and child.isVisibleTo(zone)
         ]
         if not takers:
             total += widget.sizeHint().height()
@@ -775,7 +794,7 @@ class OverlayHost(QWidget):
         takers: list[RoomTaker] = [
             child
             for child in living(zone, QWidget)
-            if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
+            if is_room_taker(child) and child.isVisibleTo(zone)
         ]
         if not takers:
             return

@@ -3,15 +3,26 @@
 import numpy as np
 import pytest
 import trimesh
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication
 
 from app.core.geom.mesh import MeshData
 from app.core.geom.section import SectionPlane
 from app.core.scene import EvaluationResult
 from app.core.types import Feature, Scene, SceneObject
+from app.ui.leash import Worker
 from app.ui.render.api import Pick
 from app.ui.viewport import Viewport
 from tests.render_fakes import RecordingRenderer
+
+
+def _release_unstarted_scene_worker(view: Viewport, worker: Worker) -> None:
+    """Eine abgeklemmte Szenen-Attrappe vor dem Viewport abbauen."""
+    if view._scene_worker is worker:
+        view._scene_worker = None
+    worker.release_finished_references()
+    worker.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def two_bodies(*, plates: bool = False) -> EvaluationResult:
@@ -41,6 +52,7 @@ def two_bodies(*, plates: bool = False) -> EvaluationResult:
 def test_a_pending_explosion_uses_the_still_visible_offset(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     view = Viewport()
     renderer = RecordingRenderer()
@@ -51,7 +63,10 @@ def test_a_pending_explosion_uses_the_still_visible_offset(
     monkeypatch.setattr(view._scene_leash, "start", lambda worker: None)
     view._section = SectionPlane.along("z", 3.0)
     view.set_explosion(1.0)
-    assert view._scene_worker is not None and view._actors["right"] is actor
+    worker = view._scene_worker
+    assert worker is not None
+    request.addfinalizer(lambda: _release_unstarted_scene_worker(view, worker))
+    assert view._actors["right"] is actor
     assert np.linalg.norm(view._view_offset(result.scene.objects["right"], result)) > 1.0
     renderer.picks[(30, 40)] = Pick((20.0, 0.0, 2.0), actor, 0)
     point = view._world_at(30, 40)
@@ -66,6 +81,7 @@ def test_a_pending_explosion_uses_the_still_visible_offset(
 def test_a_failed_plate_rebuild_keeps_the_visible_actor_pickable(
     qt_app: QApplication,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     view = Viewport()
     renderer = RecordingRenderer()
@@ -79,6 +95,7 @@ def test_a_failed_plate_rebuild_keeps_the_visible_actor_pickable(
     view.set_plate(1)
     worker = view._scene_worker
     assert worker is not None
+    request.addfinalizer(lambda: _release_unstarted_scene_worker(view, worker))
     view._scene_crashed(view._scene_generation, "Der Prüf-Arbeiter beendet sich ohne neues Bild.")
     view._scene_worker_done(worker)
     assert view._scene_worker is None and view._actors["left"] is actor

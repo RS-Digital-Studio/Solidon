@@ -19,9 +19,9 @@
 # Certum-Cloud-Zertifikat (Signierung/README.md). Der Installer aus der CI
 # bleibt unsigniert und trägt eine sichtbare Warnung.
 #
-# Der tägliche Push läuft nur auf Ubuntu; die volle Drei-Plattform-Matrix und
-# die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch), also
-# genau dann, wenn veröffentlicht wird.
+# Der tägliche Push läuft nur auf Ubuntu; die volle Matrix mit beiden Macs und
+# die Paketierung laufen bei Tags und beim Handstart (workflow_dispatch).
+# Mit tests_only prüft der Handstart alle vier Paketplattformen ohne Paketbau.
 #
 # Die Begründung dafür hat sich am 14.08.2026 geändert. Hier stand, das
 # Repository sei privat und private Minuten seien gezählt — macOS zehnfach,
@@ -44,6 +44,12 @@ on:
     # sie jemandem im Weg steht.
     - cron: "0 5 * * 1"
   workflow_dispatch:
+    inputs:
+      tests_only:
+        description: "Nur prüfen: Windows, Linux und beide Mac-Architekturen, ohne Paketbau oder Signierung"
+        type: boolean
+        required: false
+        default: false
 
 # **Ein Stand je Zweig, nicht ein Lauf je Push.** Am 02.09.2026 pushten drei
 # Sitzungen innerhalb einer Viertelstunde, und jeder Push startete seinen
@@ -72,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-26-intel", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -98,7 +104,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libegl1 libgl1 libdbus-1-3 xvfb \
+            libegl1 libgl1 libdbus-1-3 xvfb xauth \
             libgl1-mesa-dri libvulkan1 mesa-vulkan-drivers \
             libxkbcommon0 libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
@@ -107,7 +113,9 @@ jobs:
 
       - name: PHP für die Endpunkttests (Linux)
         # Die Tests gegen `website/api` starten PHPs eingebauten Server und
-        # brauchen `pdo_sqlite` für den Aktivierungsdienst. Bis zum 02.09.2026
+        # brauchen `pdo_sqlite` für den Aktivierungsdienst und `mbstring` für
+        # die Support-Längenprüfung. Sodium gehört zu Ubuntus PHP-CLI.
+        # Bis zum 02.09.2026
         # richtete dieser Lauf PHP nie ein — der Ubuntu-Runner brachte es
         # zufällig mit, und ohne es hätten sich 88 Testfälle still
         # übersprungen. Ausdrücklich eingerichtet, und unter `CI` ist fehlendes
@@ -115,7 +123,9 @@ jobs:
         # macOS richten keines ein und überspringen weiter. Die Paketlisten
         # hat der Schritt davor schon geholt.
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y --no-install-recommends php-cli php-sqlite3
+        run: |
+          sudo apt-get install -y --no-install-recommends php-cli php-sqlite3 php-mbstring
+          php -r 'foreach (["sodium", "pdo_sqlite", "mbstring"] as $extension) { if (!extension_loaded($extension)) { throw new RuntimeException("PHP-Erweiterung fehlt: " . $extension); } }'
 
       - name: Abhängigkeiten
         # Mit `brep`, sonst liefe der zweite Kern nie: seine Tests überspringen
@@ -126,8 +136,8 @@ jobs:
       - name: Konturverkettung übersetzen
         # Zur Laufzeit optional, hier aber Pflicht: ohne sie überspringt sich
         # `tests/test_slice_core.py`, und dann prüft niemand mehr, ob der
-        # übersetzte Weg noch dasselbe rechnet wie der über GEOS. Einen
-        # Compiler haben alle drei Runner.
+        # übersetzte Weg noch dasselbe rechnet wie der über GEOS.
+        # Compiler sind auf allen Zielplattformen vorhanden.
         run: python tools/build_slice_core.py
 
       - name: Stil und Typen
@@ -137,82 +147,24 @@ jobs:
           python -m mypy
 
       - name: Tests
-        # Offscreen: die Runner haben keinen Bildschirm, und der Viewport sagt
-        # das, statt den Prozess mitzunehmen. Ohne die Leistungstests: §31
-        # misst eine Referenzmaschine, geteilte Runner streuen zu stark —
-        # das Budget prüft der lokale Lauf.
-        #
-        # **Unter Xvfb, nicht offscreen** — und das ist die Antwort auf eine
-        # Woche Abstürze. Vom 06. bis zum 12.08.2026 starb jeder Lauf hier mit
-        # einem Segmentierungsfehler: erst in `HistoryPanel.show_document`,
-        # nach der Reparatur dieser Stelle beim Aufbau des nächsten Fensters,
-        # in `render_window_interactor.initialize`. Der Absturz wanderte, hing
-        # also an keinem Test.
-        #
-        # Was reparierbar war, ist repariert (`tests/conftest.py`: die Sitzung
-        # ruft nicht mehr in weggeräumte Widgets). Der Rest war VTK: es wollte
-        # einen GL-Kontext, und Qts Offscreen-Plattform gab ihm keinen — auf
-        # einem Runner ohne Anzeige rechnete es sich einen aus Software
-        # zurecht, bis eine Grenze riss. Seit dem 06.09.2026 zeichnet pygfx,
-        # und offscreen entsteht gar kein Renderer; Xvfb bleibt, weil Qt auf
-        # Linux unter xcb einen X-Server braucht.
-        #
-        # `QT_QPA_PLATFORM` bleibt ungesetzt: unter Xvfb läuft Qt normal, und
-        # `tests/conftest.py` setzt offscreen nur, wenn nichts anderes dasteht.
-        #
-        # **Und je Fensterdatei ein eigener Prozess.** Xvfb allein hat den
-        # Absturz nur nach vorn geholt: er hing an der Zahl der Renderfenster,
-        # die ein Prozess nacheinander aufbaut, und die Suite baut siebenhundert.
-        # Die Liste wird nicht gepflegt, sondern gesucht — wer eine neue
-        # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
-        # etwas zu ändern.
-        #
-        # **Gefragt wird der Fixture-Graph, nicht der Text.** Bis zum
-        # 05.09.2026 suchte diese Stelle nach `MainWindow`, `Viewport(` und
-        # `pyvista` im Quelltext, und beide Fehler dieser Sorte sind
-        # aufgetreten: Nach `MainWindow` allein fehlten zwei Dateien, die eine
-        # Ansicht bauen, ohne das Fenster zu nennen (`test_cursors.py` mit acht
-        # Aufbauten, `test_plates.py` mit einem) — neun Fenster mehr im großen
-        # Stapel, bei einem Absturz, der genau an dieser Zahl hängt. Und in die
-        # Gegenrichtung geriet `tests/test_performance.py` wegen zweier
-        # Docstrings in die Fenstergruppe, sammelte dort nichts und endete mit
-        # Exit 5. `tools/list_windowed_tests.py` fragt stattdessen, welche
-        # Datei das `qt_app`-Fixture wirklich anzieht, auch mittelbar.
-        #
-        # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
-        # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
-        # `window`-Fixture von `test_analysis_ui.py` (`QThread.__init__`,
-        # Exit 139). Dieselbe Datei allein: dreimal grün, 103 Tests. Je
-        # Fensterdatei ein Prozess: 4021 Tests grün, kein Absturz. Es ist die
-        # Zahl der Fenster und nichts an einem einzelnen Test.
-        #
-        # **`shell: bash` ist keine Formalie.** Ohne die Zeile führt Windows
-        # dieses Skript in PowerShell aus, und die zerbricht an der ersten
-        # Ersetzung: „$(subexpression) is missing the closing ')'". Der Schritt
-        # endete dort nach zwei Minuten mit einem ParserError — auf Windows lief
-        # seit der Umstellung auf Xvfb **kein einziger Test**, und weil
-        # `package` an dieser Suite hängt, wurde auch nie etwas paketiert. Auf
-        # macOS scheiterte derselbe Aufruf an `xvfb-run`, das es dort nicht
-        # gibt. Beides fiel nicht auf, weil die Matrix nur bei Tags und beim
-        # Handstart über eine Plattform hinausgeht.
+        # Die Kern- und Fensterverträge laufen getrennt; jedes Nichtnull-Ergebnis
+        # sperrt das Paket. Fensterdateien werden über den Fixture-Graphen gefunden
+        # und im Folgeschritt je Prozess geprüft. Linux bekommt Xvfb für den
+        # nativen Renderer-Smoke; allgemeine Qt-Verträge bleiben offscreen.
+        # Leistungsbudgets gelten auf der lokalen Referenzmaschine (§31).
         shell: bash
         env:
-          # Unter Xvfb läuft Qt normal; wo es keinen X-Server gibt, muss
-          # offscreen stehen. Hier stand „xcb" für alle drei — eine Plattform,
-          # die es außerhalb von Linux nicht gibt.
-          QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'xcb' || 'offscreen' }}
-          # Kein Runner hat eine Grafikkarte. Mit VTK brauchte das ein
-          # ausdrückliches Software-GL (Mesa); seit pygfx zeichnet
-          # (06.09.2026), fragt die Ansicht vor dem Aufbau nach einem
-          # wgpu-Adapter und bleibt ohne ihn leer — die Tests laufen dann
-          # ohne Renderer, wie lokal offscreen.
+          # Die Fensterverträge setzen offscreen voraus. test_render_factory
+          # prüft daneben verbindlich einen nativen Qt+pygfx-Prozess;
+          # unter Linux erbt dieser DISPLAY aus dem Xvfb-Aufruf.
+          QT_QPA_PLATFORM: offscreen
         run: |
-          set -e
+          set -euo pipefail
           # Wie lokal in suite-getrennt.sh: die Fenstergruppe aus Pytests
           # aufgelöstem Fixture-Graphen, nicht aus einer Textsuche — die
           # erwischte Dateien, die über eine Ansicht schreiben, statt eine zu
           # bauen, und übersah mittelbare qt_app-Abhängigkeiten.
-          windowed=$(python tools/list_windowed_tests.py | tr '\n' ' ')
+          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
           # Xvfb nur, wo es eines gibt.
@@ -221,147 +173,73 @@ jobs:
           else
             run() { python -m pytest -q "$@"; }
           fi
-          # **Kein Fork, sondern Worker.** `--forked` stand hier als Variable,
-          # die nie in einen Aufruf kam — und auf macOS zerlegte es den Lauf
-          # ohnehin (20.08.2026: 80 von 110 in zehn Sekunden tot, weil
-          # `fork()` ohne `exec()` in einem Prozess mit CoreFoundation nicht
-          # vorgesehen ist). Der große Zug läuft stattdessen mit `-n auto`,
-          # wie lokal seit Wochen mit `-n 8`: Jeder Worker baut nur einen Teil
-          # der Fenster und Dialoge, und die Familie, die im seriellen Prozess
-          # nach zwanzig Tests von `test_print_settings_ui.py` mit Segfault
-          # riss (02.09.2026, zweimal hintereinander, nach 11:46 grüner
-          # Laufzeit), findet die Menge nicht mehr, an der sie reißt.
+          # -n auto verteilt nur die Kernfälle auf eigene Workerprozesse.
+          # $ignores nimmt alle Fensterdateien aus dem aufgelösten
+          # Fixture-Graphen heraus; Fenster werden hier nicht mitverteilt.
 
-          # **Ein Absturz wird einmal wiederholt.** Nicht jeder Fehlschlag: nur
-          # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK starb auf
-          # den Runnern gelegentlich mit SIGSEGV — am 20.08.2026 einmal in
-          # `test_header.py` unter Linux (fünf andere Tests derselben Datei
-          # grün, lokal dreimal grün) und einmal im Dateilauf unter Windows.
-          # Der Absturz wandert, hängt an keinem Test und ist seit Wochen als
-          # offener Punkt notiert.
-          #
-          # Was er anrichtet, ist unverhältnismäßig: Der Paketier-Job hängt an
-          # dieser Suite, also verhindert ein zufälliger Absturz die
-          # Auslieferung aller vier Plattformen. Ein zweiter Anlauf trennt den
-          # Zufall vom Befund — was zweimal an derselben Stelle stirbt, ist
-          # keiner, und der Lauf wird rot wie vorher.
-          attempt() {
-            run "$@" || {
-              echo "::warning::Zweiter Anlauf für: $*"
-              run "$@"
-            }
-          }
-          # **`tests/test_parts.py` läuft hier nicht** — Entscheidung Robert,
-          # 02.09.2026: Die CI fährt das Nötigste, die Bausteinbereichstests
-          # fährt das lokale Tor. Die 27 Bereichstests bauen jeden Baustein an
-          # allen 2114 Ecken seines Parameterraums und prüfen Wand und
-          # Selbstdurchdringung — rund eine Minute je Baustein auf einem Kern.
-          # Lokal verteilt `suite-getrennt.sh` das auf acht Worker und sieht
-          # es nie; hier lief es seriell, und drei Läufe an diesem Tag standen
-          # je vier Stunden bei 49 Prozent, bevor sie mit Segfault endeten.
-          # Die Deckung dafür liegt damit allein beim lokalen Lauf vor dem
-          # Commit (`/pruefen`), nicht mehr im Bautor.
-          # **Und keine Fünferportionen mehr.** Vom 02.09.2026 bis zum selben
-          # Abend fuhr dieser Schritt `test_print_settings_ui.py` und
-          # `test_install.py` in Fünferportionen, weil sie im Zug nativ rissen.
-          # Die Mine war nicht die Zahl der Dialoge, sondern der Zeitpunkt
-          # ihres Todes: Der Speicherbereiniger zerstörte einen verwaisten
-          # Dialog mitten im Bau des nächsten. Seit `tests/conftest.py`
-          # (`_orphaned_widgets_die_between_tests`) sie zwischen den Tests
-          # abbaut, laufen beide Dateien am Stück — gemessen 114 und 65 grün.
-          #
-          # **`test_print_settings_ui.py` läuft trotzdem für sich, als ganze
-          # Datei in einem Prozess.** Die Fixture räumt nur in ihren zwei
-          # Dateien auf; `-n auto` verteilt aber nach Tests und nicht nach
-          # Dateien, und dann liegt auf demselben Worker ein verwaister Dialog
-          # aus einer Datei, die sie nicht deckt. Genau das riss in Tag-Lauf 5
-          # (03.09.2026) zweimal von zwei: „worker 'gw3' crashed" in
-          # `test_the_save_button_says_what_it_is_waiting_for`, sonst 7207
-          # grün. Ein eigener Prozess ist die Grenze, hinter der die Fixture
-          # vollständig gilt — keine Portionierung mehr, die ganze Datei.
-          attempt -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
-          attempt -m "not performance and not rendered" tests/test_print_settings_ui.py
+          # Jeder Nichtnull-Exit bleibt ein Fehllauf (tests/CLAUDE.md).
+          # Eine Wiederholung darf einen nativen Abbruch genauso wenig
+          # verschwinden lassen wie eine fehlgeschlagene Assertion.
+          # Die früheren Vollbereichsläufe der Bausteine sind aus der Suite
+          # entfernt. Ihre verbleibenden Geometrie- und Vertragsprüfungen
+          # gehören wie die anderen Kernfälle in dieses Tor.
+          # Die Druckdialogdatei läuft vorgezogen vollständig in einem
+          # eigenen Prozess; die übrigen Fensterdateien folgen im nächsten
+          # Schritt. conftest baut die Qt-Objekte nach jedem Test geordnet ab.
+          # Die zusätzliche Prozessgrenze gilt für jede Fensterdatei.
+          run -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_print_settings_ui.py
+          run -m "not performance and not rendered" tests/test_print_settings_ui.py
 
-          # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
-          # Entscheidung mit Datum: 20.08.2026.
-          #
-          # Kein Runner hat eine Grafikkarte. VTK suchte trotzdem einen echten
-          # GL-Kontext, bekam einen emulierten und starb darin mit SIGSEGV —
-          # auf Linux im geforkten Test, auf Windows ohne Fork, mit und ohne
-          # LIBGL_ALWAYS_SOFTWARE, mal in `test_header`, mal in `test_chat_ui`,
-          # mal in `pyvistaqt/plotting.py` selbst. Der Absturz wanderte, hing an
-          # keinem Test und war lokal nicht zu sehen: dieselben Dateien laufen
-          # auf einer Maschine mit GL in Sekunden grün durch, 4021 Tests.
-          #
-          # **Seit dem 06.09.2026 zeichnet pygfx, und VTK ist als Renderer
-          # ausgebaut.** Offscreen baut die Ansicht keinen Renderer mehr; der
-          # Grund für die Auslassung ist damit weg, die Auslassung selbst
-          # bleibt, bis ein Probelauf in der CI sie aufhebt (Registerpunkt).
-          #
-          # Was das anrichtete, war unverhältnismäßig: Der Paketier-Job hängt an
-          # dieser Suite, also verhinderte ein Fremdcode-Absturz in einer
-          # Umgebung, die niemand benutzt, die Auslieferung aller vier
-          # Plattformen. Wochenlang.
-          #
-          # Also prüft die CI, was sie prüfen kann — Kern, Geometrie, Agent,
-          # Website, Paketierung —, und die Fenster prüft, wer einen Bildschirm
-          # hat. **Das ist eine Lücke und keine Lösung**: Wer eine Ansicht
-          # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
-          # Sie schließt sich mit einem Probelauf ohne diese Auslassung; bis
-          # dahin steht sie in ROADMAP.md.
-          echo "::warning::Fensterdateien laufen im Probelauf daneben, nicht hier: $windowed"
+          # Die Fenstergruppe läuft anschließend verbindlich je Datei in
+          # einem eigenen Prozess, auch auf Windows und macOS.
 
-      - name: Probelauf der Fensterdateien (Linux, blockiert nicht)
-        # **Der Probelauf, den das Register seit dem VTK-Ausbau verlangt.**
-        #
-        # Er steht bewusst neben dem Tor und nicht darin: Die Auslassung
-        # entstand am 20.08.2026, weil ein Fremdcode-Absturz in einer
-        # Umgebung, die niemand benutzt, wochenlang die Auslieferung aller
-        # vier Plattformen verhinderte. Diesen Fehler ein zweites Mal zu
-        # machen, wäre schlimmer als die Lücke. ``continue-on-error``
-        # heißt deshalb: Das Ergebnis steht in der Zusammenfassung, der
-        # Paketier-Job hängt nicht daran.
-        #
-        # Je Datei ein eigener Prozess, wie lokal in
-        # ``suite-getrennt.sh``: Die Suite baut sonst hunderte Fenster in
-        # einem Prozess auf, und irgendwann reißt eine Grenze.
-        #
-        # ``tr -d '\r'`` ist nicht Zierde: Das Werkzeug schreibt unter
-        # Windows CRLF, und ein Dateiname mit Wagenrücklauf ist ein Pfad,
-        # den es nicht gibt — pytest sammelt dann nichts und meldet es
-        # nicht (06.09.2026).
-        if: runner.os == 'Linux'
-        continue-on-error: true
+      - name: Fensterdateien
+        # Ein Prozess je Datei schützt die Lebensdauergrenze. Ein roter
+        # Prozess oder eine fehlende Sammlung sperrt die Paketierung.
+        shell: bash
         env:
-          QT_QPA_PLATFORM: xcb
+          QT_QPA_PLATFORM: offscreen
         run: |
+          set -euo pipefail
           windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+          if [ -z "${windowed// /}" ]; then
+            echo "::error::Die Fenstergruppe enthält keine Testdateien."
+            exit 1
+          fi
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          else
+            run() { python -m pytest -q "$@"; }
+          fi
           echo "Fensterdateien: $(echo $windowed | wc -w)"
           gruen=0
+          geprueft=0
           rot=""
           for file in $windowed; do
-            if xvfb-run -a --server-args="-screen 0 1920x1080x24" \
-                 python -m pytest -q -m "not performance and not rendered" "$file"; then
+            if [ "$file" = "tests/test_print_settings_ui.py" ]; then continue; fi
+            geprueft=$((geprueft + 1))
+            if run -m "not performance and not rendered" "$file"; then
               gruen=$((gruen + 1))
             else
               rot="$rot $file($?)"
             fi
           done
-          echo "### Probelauf der Fensterdateien" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Fensterdateien ($RUNNER_OS)" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Grün: $gruen von $(echo $windowed | wc -w)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Grün: $gruen von $geprueft (Druckdialog im vorherigen Schritt)" >> "$GITHUB_STEP_SUMMARY"
           if [ -n "$rot" ]; then
             echo "" >> "$GITHUB_STEP_SUMMARY"
             echo "Nicht grün (Datei mit Exit-Code):$rot" >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning::Fensterdateien im Probelauf nicht grün:$rot"
+            echo "::error::Fensterdateien nicht grün:$rot"
+            exit 1
           else
-            echo "::notice::Alle Fensterdateien liefen grün — die Auslassung im Tor kann fallen."
+            echo "::notice::Alle Fensterdateien liefen grün."
           fi
 
   package:
     name: Paket (${{ matrix.os }})
     needs: suite
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -684,7 +562,7 @@ jobs:
   linux-release-check:
     name: Linux-Releaseakte prüfen
     needs: package
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -767,7 +645,7 @@ jobs:
     # der Übergabe, die tools/sign_release.py lokal signiert. Der Job hat
     # keine Geheimnisse und braucht keine.
     needs: package
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: inputs.tests_only != true && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: windows-latest
     permissions:
       contents: read
@@ -867,6 +745,7 @@ jobs:
   windows-release-check:
     name: Windows-Releaseakte prüfen
     needs: windows-installer
+    if: inputs.tests_only != true && (success())
     runs-on: windows-latest
     permissions:
       contents: read
@@ -935,8 +814,9 @@ jobs:
     name: macOS-Anwendung signieren (${{ matrix.machine_arch }})
     needs: package
     if: >-
-      (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
-      (vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized')
+      inputs.tests_only != true && (
+        (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') &&
+        (vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized'))
     runs-on: ${{ matrix.os }}
     environment: production-signing
     permissions:
@@ -1052,9 +932,10 @@ jobs:
     name: macOS-Installer ohne Signierrechte bauen (${{ matrix.machine_arch }})
     needs: [package, macos-app-sign]
     if: >-
+      inputs.tests_only != true && (
       always() && needs.package.result == 'success' &&
       (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-app-sign.result == 'skipped') ||
-       ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-app-sign.result == 'success'))
+       ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-app-sign.result == 'success')))
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -1145,7 +1026,7 @@ jobs:
   macos-installer-sign:
     name: macOS-Installer signieren (${{ matrix.machine_arch }})
     needs: macos-package
-    if: vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized'
+    if: inputs.tests_only != true && (vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized')
     runs-on: ${{ matrix.os }}
     environment: production-signing
     permissions:
@@ -1235,9 +1116,10 @@ jobs:
     name: macOS-Releaseakte prüfen (${{ matrix.machine_arch }})
     needs: [macos-package, macos-installer-sign]
     if: >-
+      inputs.tests_only != true && (
       always() && needs.macos-package.result == 'success' &&
       (((vars.MACOS_SIGNING_MODE == '' || vars.MACOS_SIGNING_MODE == 'unsigned') && needs.macos-installer-sign.result == 'skipped') ||
-       ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-installer-sign.result == 'success'))
+       ((vars.MACOS_SIGNING_MODE == 'signed' || vars.MACOS_SIGNING_MODE == 'notarized') && needs.macos-installer-sign.result == 'success')))
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -1338,12 +1220,30 @@ jobs:
           cache: pip
 
       - name: Qt-Systembibliotheken
+        # Dieselbe native xcb-Canvas wie in suite: Xvfb benötigt auch xauth,
+        # Qt seine X11-Bibliotheken. Runner-Vorinstallationen sind kein Vertrag.
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libdbus-1-3
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libdbus-1-3 xvfb xauth \
+            libgl1-mesa-dri libvulkan1 mesa-vulkan-drivers \
+            libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
+            libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
+            libxcb-xinerama0 libxcb-xkb1 libxcb-sync1 libxcb-glx0
+
+      - name: PHP für die Endpunkttests (Linux)
+        # Dieselben Endpunktverträge wie in suite, unabhängig vom Runner-Abbild.
+        run: |
+          sudo apt-get install -y --no-install-recommends php-cli php-sqlite3 php-mbstring
+          php -r 'foreach (["sodium", "pdo_sqlite", "mbstring"] as $extension) { if (!extension_loaded($extension)) { throw new RuntimeException("PHP-Erweiterung fehlt: " . $extension); } }'
 
       - name: Abhängigkeiten ohne Constraints
         run: python -m pip install -e ".[dev,geom,ui,agent,brep]"
+
+      - name: Schichtkern mit den neuesten Bauabhängigkeiten
+        # Auch dieser Lauf prüft den übersetzten Kundenweg und den GEOS-Vergleich.
+        run: python tools/build_slice_core.py
 
       - name: Installierte Versionen
         # Gehört ins Protokoll: nach einem roten Lauf sieht man hier, was sich
@@ -1359,28 +1259,27 @@ jobs:
       - name: Tests
         env:
           QT_QPA_PLATFORM: offscreen
-        # **Dieselbe Auslassung wie in der Suite**, und aus demselben Grund:
-        # VTK starb auf einem Runner ohne Grafikkarte mit SIGSEGV. Ohne sie
-        # war dieser Job am 20.08.2026 rot, obwohl er nichts gefunden hatte —
-        # der `union-attr`-Fund davor war echt und ist behoben, dahinter kam
-        # der Absturz zum Vorschein.
-        #
-        # Ein Wächter, der immer schreit, warnt vor nichts mehr: Dieser Job
-        # existiert, um zu melden, wenn eine neue Paketversion etwas bricht.
-        # Steht er dauerhaft auf rot, sieht niemand mehr hin, und die Meldung
-        # geht unter — er prüft deshalb, was er hier prüfen kann.
+        # Auch neue Abhängigkeitsversionen müssen die Fensterverträge halten.
+        # Jede Fensterdatei erhält denselben eigenen Prozess wie im Bautor.
         run: |
+          set -euo pipefail
           # Wie lokal in suite-getrennt.sh: die Fenstergruppe aus Pytests
           # aufgelöstem Fixture-Graphen, nicht aus einer Textsuche — die
           # erwischte Dateien, die über eine Ansicht schreiben, statt eine zu
           # bauen, und übersah mittelbare qt_app-Abhängigkeiten.
-          windowed=$(python tools/list_windowed_tests.py | tr '\n' ' ')
+          windowed=$(python tools/list_windowed_tests.py | tr -d '\r' | tr '\n' ' ')
+          if [ -z "$(echo "$windowed" | tr -d '[:space:]')" ]; then
+            echo "::error::Die Fenstergruppe ist leer."
+            exit 1
+          fi
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
-          echo "::warning::Fensterdateien übersprungen (Probelauf nach dem VTK-Ausbau steht aus): $windowed"
-          # Wie in der Suite oben: ohne die Bausteinbereichstests, sonst steht
-          # auch dieser Lauf Stunden bei 49 Prozent.
-          # Dieselbe Trennung wie im Suite-Job darüber: die Dialogdatei in
-          # einem eigenen Prozess, weil `-n auto` nach Tests verteilt.
-          python -m pytest -q -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_parts.py --ignore=tests/test_print_settings_ui.py
-          python -m pytest -q -m "not performance and not rendered" tests/test_print_settings_ui.py
+          run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }
+          # Dieselbe Trennung wie im Suite-Job: Die Druckdialogdatei läuft
+          # vorgezogen für sich; die Fenstergruppe unten lässt sie aus.
+          run -n auto -m "not performance and not rendered" $ignores --ignore=tests/test_print_settings_ui.py
+          run -m "not performance and not rendered" tests/test_print_settings_ui.py
+          for file in $windowed; do
+            if [ "$file" = "tests/test_print_settings_ui.py" ]; then continue; fi
+            run -m "not performance and not rendered" "$file"
+          done

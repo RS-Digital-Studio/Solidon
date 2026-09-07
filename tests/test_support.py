@@ -266,6 +266,17 @@ def test_the_mail_link_needs_no_server() -> None:
     assert "subject=" in link and "body=" in link
 
 
+def test_mail_link_keeps_unicode_and_reserved_characters() -> None:
+    """Native Mailprogramme erhalten genau einmal kodierte Felder."""
+    from urllib.parse import parse_qs, urlsplit
+
+    ticket = Ticket(message="Größe: 100% & Frage?\n12,5 mm + 2; %3A bleibt so.")
+    fields = parse_qs(urlsplit(support.mail_link(ticket)).query)
+
+    assert fields["subject"] == [ticket.subject]
+    assert fields["body"][0].splitlines()[2:] == ticket.as_text().splitlines()[2:]
+
+
 # --- die Grenze zur Telemetrie --------------------------------------------------------
 
 

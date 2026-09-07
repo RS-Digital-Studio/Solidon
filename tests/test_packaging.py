@@ -166,6 +166,11 @@ def test_every_data_directory_travels_with_the_package() -> None:
         )
 
 
+def test_the_flatpak_email_portal_transport_travels_with_the_package() -> None:
+    """Der Support-Entwurf braucht im Linux-Paket QtDBus samt dessen Qt-Hook."""
+    assert "PySide6.QtDBus" in _literal_hidden_imports()
+
+
 def test_every_optional_dependency_the_package_needs_is_a_hidden_import() -> None:
     """Dynamische optionale Kerne stehen ausdrücklich im Paketvertrag.
 
@@ -330,6 +335,255 @@ def test_the_workflow_packages_every_delivered_platform() -> None:
     for runner in ("windows-latest", "ubuntu-latest", "macos-latest"):
         assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
     assert "-intel" in matrix, f"kein Intel-Mac in der Paket-Matrix: {matrix.strip()}"
+
+
+def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> None:
+    """Alle Paketplattformen müssen ohne Installer, Releaseakten und Signiergeheimnisse laufen."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    dispatch = workflow.split("  workflow_dispatch:\n", 1)[1].split("\n#", 1)[0]
+    assert "tests_only:" in dispatch
+    assert "type: boolean" in dispatch
+    assert "default: false" in dispatch, "bestehende Handstarts sollen ihren Bauweg behalten"
+
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    sections = re.split(r"^  ([a-z][a-z0-9-]*):\n", jobs, flags=re.MULTILINE)
+    covered = set()
+    for name, section in zip(sections[1::2], sections[2::2], strict=True):
+        if name in {"suite", "latest"}:
+            assert "inputs.tests_only" not in section
+            continue
+        covered.add(name)
+        condition = re.search(r"^    if: (.+)(?:\n      .+)*", section, flags=re.MULTILINE)
+        assert condition is not None, f"{name} hat keine ausdrückliche Nur-Prüfen-Grenze"
+        expression = condition.group(0).removeprefix("    if: ").removeprefix(">-\n").strip()
+        guard = "inputs.tests_only != true && ("
+        assert expression.startswith(guard), f"{name}: {expression}"
+        # Die ganze bisherige Bedingung muss hinter der linken Sperre liegen;
+        # ein freies '||' dahinter würde Signierjobs trotzdem freigeben.
+        level = 1
+        for position, character in enumerate(expression[len(guard) :]):
+            if character == "(":
+                level += 1
+            elif character == ")":
+                level -= 1
+            if level == 0:
+                assert not expression[len(guard) + position + 1 :].strip(), name
+        assert level == 0, name
+    assert "package" in covered and "macos-installer-sign" in covered
+    suite = jobs.split("  suite:\n", 1)[1].split("\n  package:", 1)[0]
+    matrix = next(line for line in suite.splitlines() if "os: ${{" in line)
+    assert "github.event_name == 'workflow_dispatch'" in matrix
+    for runner in ("windows-latest", "ubuntu-latest", "macos-latest"):
+        assert runner in matrix
+    tested = json.loads(re.search(r"fromJSON\('([^']+)'\)", matrix).group(1))
+    package_matrix = next(line for line in workflow.splitlines() if "os: [windows-latest" in line)
+    packaged = package_matrix.split("[", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
+    assert len(tested) == len(set(tested)), "ein Prüfsystem steht doppelt in der Matrix"
+    assert set(tested) == set(packaged), "jede angebotene Architektur braucht ihren echten Testlauf"
+
+
+@pytest.mark.parametrize("job", ["suite", "latest"])
+def test_linux_endpoint_jobs_install_and_check_the_required_php_extensions(job: str) -> None:
+    """Endpunkttests verlangen SQLite, Sodium und die Support-Längenprüfung mit mbstring."""
+    section = WORKFLOW.read_text(encoding="utf-8").split(f"\n  {job}:\n", 1)[1]
+    section = re.split(r"^  [a-z][a-z0-9-]*:\n", section, maxsplit=1, flags=re.MULTILINE)[0]
+    step = section.split("      - name: PHP für die Endpunkttests (Linux)\n", 1)[1]
+    step = step.split("\n      - name:", 1)[0]
+    script = step.split("        run: |\n", 1)[1]
+    install = next(line for line in script.splitlines() if "apt-get install" in line)
+    for package in ("php-cli", "php-sqlite3", "php-mbstring"):
+        assert package in install.split(), f"{job} installiert {package} nicht"
+    for extension in ("sodium", "pdo_sqlite", "mbstring"):
+        assert f'"{extension}"' in script, f"{job} prüft {extension} nicht"
+    assert "extension_loaded" in script and "throw new" in script
+
+
+@pytest.mark.parametrize("job", ["suite", "latest"])
+def test_each_ci_window_file_is_executed_exactly_once(tmp_path: Path, job: str) -> None:
+    """Der vorgezogene Druckdialog darf in der anschließenden Fenstergruppe nicht doppelt laufen."""
+    import textwrap
+
+    section = WORKFLOW.read_text(encoding="utf-8").split(f"\n  {job}:\n", 1)[1]
+    section = re.split(r"^  [a-z][a-z0-9-]*:\n", section, maxsplit=1, flags=re.MULTILINE)[0]
+    steps = [section.split("      - name: Tests\n", 1)[1].split("\n      - name:", 1)[0]]
+    if job == "suite":
+        steps.append(section.split("      - name: Fensterdateien\n", 1)[1])
+    script = "\n".join(textwrap.dedent(step.split("        run: |\n", 1)[1]) for step in steps)
+    shell = _posix_shell()
+    if shell is None:
+        pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
+    harness = """
+python() {
+  if [ "$1" = "tools/list_windowed_tests.py" ]; then
+    printf 'tests/test_print_settings_ui.py\r\ntests/test_fake.py\r\n'
+    return 0
+  fi
+  for argument in "$@"; do
+    case "$argument" in
+      tests/test_print_settings_ui.py|tests/test_fake.py) printf '%s\n' "$argument" >> "$CALLS" ;;
+    esac
+  done
+}
+xvfb-run() {
+  shift 2
+  "$@"
+}
+"""
+    calls = tmp_path / "calls.txt"
+    result = subprocess.run(
+        [shell, "-c", harness + script],
+        env=dict(
+            os.environ,
+            PATH=str(Path(shell).parent) + os.pathsep + os.environ.get("PATH", ""),
+            RUNNER_OS="Linux",
+            CALLS=calls.as_posix(),
+            GITHUB_STEP_SUMMARY=(tmp_path / "summary.md").as_posix(),
+        ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(calls.read_text(encoding="utf-8").splitlines()) == [
+        "tests/test_fake.py",
+        "tests/test_print_settings_ui.py",
+    ]
+
+
+def test_every_linux_ci_path_that_uses_pygfx_has_a_vulkan_adapter() -> None:
+    """Suite, Paketbau und Versionswächter dürfen pygfx nicht still überspringen.
+
+    wgpu findet auf dem Linux-Runner ohne ``libvulkan1`` keinen Backend-Loader;
+    ohne ``mesa-vulkan-drivers`` fehlt ihm der Software-Adapter. Die Bildtests
+    überspringen sich dann mit einem sichtbaren Grund, aber der Lauf bleibt grün
+    und prüft weder den festgeschriebenen noch den neuesten Renderer-Satz.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    suite = workflow.split("\n  suite:", 1)[1].split("\n  package:", 1)[0]
+    package = workflow.split("\n  package:", 1)[1].split("\n  linux-release-check:", 1)[0]
+    latest = workflow.split("\n  latest:", 1)[1]
+
+    for job, block in (("suite", suite), ("package", package), ("latest", latest)):
+        assert "libvulkan1" in block, f"{job} hat keinen Vulkan-Loader für wgpu"
+        assert "mesa-vulkan-drivers" in block, f"{job} hat keinen Software-Adapter für wgpu"
+    for job, block in (("suite", suite), ("latest", latest)):
+        for dependency in (
+            "xvfb",
+            "xauth",
+            "libxkbcommon-x11-0",
+            "libxcb-cursor0",
+            "libxcb-icccm4",
+            "libxcb-image0",
+            "libxcb-keysyms1",
+            "libxcb-render-util0",
+            "libxcb-xkb1",
+        ):
+            assert dependency in block, f"{job} fehlt {dependency} für die native xcb-Canvas"
+
+
+@pytest.mark.parametrize("platform", ["Linux", "Windows", "macOS"])
+@pytest.mark.parametrize("case", ["green", "failed", "empty", "collection_failed"])
+def test_window_failures_block_the_package_on_every_platform(
+    tmp_path: Path, platform: str, case: str
+) -> None:
+    """Der echte CI-Shellblock muss rote und leere Fensterläufe ablehnen."""
+    import textwrap
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    step = workflow.split("      - name: Fensterdateien\n", 1)[1].split("\n  package:", 1)[0]
+    assert "continue-on-error" not in step
+    assert "if: runner.os" not in step, "Windows und macOS dürfen die Fenster nicht auslassen"
+    assert "shell: bash" in step
+    script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+    shell = _posix_shell()
+    if shell is None:
+        pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
+    # Beide Programme werden im selben Shellprozess vertreten. Der Block
+    # selbst, einschließlich pipefail und abschließendem Exit, bleibt echt.
+    harness = """
+python() {
+  if [ "$1" = "tools/list_windowed_tests.py" ]; then
+    if [ "$CASE" = "collection_failed" ]; then return 2; fi
+    if [ "$CASE" != "empty" ]; then printf 'tests/test_fake.py\r\n'; fi
+    return 0
+  fi
+  printf 'called\n' >> "$CALLS"
+  if [ "$CASE" = "failed" ]; then return 1; fi
+}
+xvfb-run() {
+  shift 2
+  "$@"
+}
+"""
+    environment = dict(
+        os.environ,
+        PATH=str(Path(shell).parent) + os.pathsep + os.environ.get("PATH", ""),
+        RUNNER_OS=platform,
+        CASE=case,
+        GITHUB_STEP_SUMMARY=(tmp_path / "summary.md").as_posix(),
+        CALLS=(tmp_path / "calls.txt").as_posix(),
+    )
+    done = subprocess.run(
+        [shell, "-c", harness + script],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert (done.returncode == 0) == (case == "green"), done.stdout + done.stderr
+    assert (tmp_path / "calls.txt").exists() == (case in {"green", "failed"})
+
+
+@pytest.mark.parametrize("job", ["suite", "latest"])
+@pytest.mark.parametrize("exit_code", [0, 1, 5, 134, 139])
+def test_ci_preserves_the_first_failed_process_exit(
+    tmp_path: Path, job: str, exit_code: int
+) -> None:
+    """Ein später grüner Versuch darf weder Assertions noch native Abbrüche verdecken."""
+    import textwrap
+
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    section = workflow.split(f"\n  {job}:\n", 1)[1]
+    step = section.split("      - name: Tests\n", 1)[1].split("\n      - name:", 1)[0]
+    script = textwrap.dedent(step.split("        run: |\n", 1)[1])
+    shell = _posix_shell()
+    if shell is None:
+        pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
+    harness = """
+python() {
+  if [ "$1" = "tools/list_windowed_tests.py" ]; then
+    printf 'tests/test_fake.py\r\n'
+    return 0
+  fi
+  if [ ! -f "$CALLS" ]; then
+    printf 'called\n' >> "$CALLS"
+    return "$FIRST_EXIT"
+  fi
+  printf 'called\n' >> "$CALLS"
+  return 0
+}
+xvfb-run() {
+  shift 2
+  "$@"
+}
+"""
+    calls = tmp_path / "calls.txt"
+    done = subprocess.run(
+        [shell, "-c", harness + script],
+        env=dict(
+            os.environ,
+            PATH=str(Path(shell).parent) + os.pathsep + os.environ.get("PATH", ""),
+            RUNNER_OS="Linux",
+            FIRST_EXIT=str(exit_code),
+            CALLS=calls.as_posix(),
+        ),
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert done.returncode == exit_code, done.stdout + done.stderr
+    expected = (3 if job == "latest" else 2) if exit_code == 0 else 1
+    assert len(calls.read_text(encoding="utf-8").splitlines()) == expected
 
 
 def test_the_customer_package_builds_the_fast_slice_core() -> None:

@@ -55,9 +55,10 @@ _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
 _SHIPPED_TRIAL_FROM = activation_store.TRIAL_FROM
 
 
-#: Fenster und eigenständig gebaute Viewports, die die Suite absichtlich bis
-#: zum Prozessende hält. Beide tragen Renderer-Zustand; nur das Hauptfenster zu
-#: halten schützt Dateien nicht, die den Viewport als eigene Prüfeinheit bauen.
+#: Fenster und eigenständig gebaute Viewports, die bis zu ihrem geordneten
+#: Testabbau gehalten werden. Der Pin verhindert, dass die letzte Referenz
+#: schon während eines Fixture-Teardowns fällt; nach ``release`` wird er noch
+#: im selben Test wieder gelöst.
 _PINNED_UI: list[object] = []
 
 #: Steht auf True, solange ein Test Zerstörung **messen** will (Fixture
@@ -65,12 +66,22 @@ _PINNED_UI: list[object] = []
 _PIN_PAUSED = False
 
 
+def _pin_ui_object(value: object) -> None:
+    """Eine Oberfläche genau einmal bis zum Abbau ihres Tests halten."""
+    if not _PIN_PAUSED and not any(held is value for held in _PINNED_UI):
+        _PINNED_UI.append(value)
+
+
 def _pin_ui_widgets(module: object) -> None:
-    """Hängt den Pin an ``MainWindow`` und ``Viewport`` — je Typ einmal.
+    """Hängt den Pin an Fenster, Viewport und Leinenbesitzer — je Typ einmal.
 
     Ein Hauptfenster hält seinen Viewport ohnehin. Einige Ansichtsprüfungen
     bauen den Viewport aber absichtlich allein; dessen Renderer-Zustand braucht
-    denselben Lebenszeitvertrag wie das ganze Fenster.
+    denselben Lebenszeitvertrag wie das ganze Fenster. Elternlose Dialoge mit
+    Arbeitern brauchen ihn ebenfalls: Ohne den früheren Rückverweis ihrer
+    ``WorkerLeash`` kann ihre letzte Testreferenz vor der zentralen
+    ``release``-Fixture fallen. Die Leine hält den Besitzer im Produkt bewusst
+    nicht; die Suite hält nur das Qt-Widget bis zu genau diesem Teardown.
     """
     for type_name in ("MainWindow", "Viewport"):
         widget_type = getattr(module, type_name, None)
@@ -85,11 +96,34 @@ def _pin_ui_widgets(module: object) -> None:
             **kwargs: object,
         ) -> None:
             _original(self, *args, **kwargs)  # type: ignore[operator]
-            if not _PIN_PAUSED:
-                _PINNED_UI.append(self)
+            _pin_ui_object(self)
 
         widget_type.__init__ = pinning
         widget_type._suite_pinned = True
+
+    leash_type = getattr(module, "WorkerLeash", None)
+    if leash_type is None or getattr(leash_type, "_suite_owner_pinned", False):
+        return
+    original_leash_init = leash_type.__init__
+
+    def pinning_leash_owner(
+        self: object,
+        context: object,
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        original_leash_init(self, context, *args, **kwargs)
+        from PySide6.QtWidgets import QWidget
+
+        # MainWindow und Viewport werden erst nach ihrem vollständigen Aufbau
+        # über den Klassenhaken oben gehalten. Alle anderen QWidget-Besitzer
+        # der Leine sind Dialoge, deren Konstruktor den Arbeiter bereits
+        # startet und die deshalb bis zur release-Fixture leben müssen.
+        if isinstance(context, QWidget) and not getattr(type(context), "_suite_pinned", False):
+            _pin_ui_object(context)
+
+    leash_type.__init__ = pinning_leash_owner
+    leash_type._suite_owner_pinned = True
 
 
 class _PinningLoader:
@@ -107,19 +141,21 @@ class _PinningLoader:
 
 
 class _PinOnImport:
-    """Pinnt beim Import des Fenstermoduls, nicht erst beim nächsten Test.
+    """Pinnt beim Import der Lebensdauermodule, nicht erst beim nächsten Test.
 
-    Die Fixture ``_windows_live_to_the_end`` sieht das Modul nur, wenn es beim
+    Die Fixture ``_windows_live_until_their_test_ends`` sieht das Modul nur, wenn es beim
     Teststart schon geladen ist. ``tests/test_sketch_editor.py`` importiert es
     erst im Testrumpf: Das erste Fenster jenes Prozesses entstand ungepinnt,
     starb mit seiner letzten Referenz mitten im Lauf und riss ihn mit dem
     bekannten 0xc0000374. Der Haken fängt den Import selbst ab und kostet
-    sonst nichts — insbesondere keinen eifrigen Import von Qt und VTK in
-    Läufe, die beides nie anfassen.
+    sonst nichts — insbesondere keinen eifrigen Import von Qt und pygfx in
+    Läufe, die beides nie anfassen. ``app.ui.leash`` kommt hinzu, damit ein
+    elternloser Dialog bis zu seiner zentralen ``release``-Phase lebt, ohne
+    dass der Produktcode dafür seinen Besitzer zyklisch halten muss.
     """
 
     def find_spec(self, fullname: str, path: object = None, target: object = None) -> object:
-        if fullname not in {"app.ui.main_window", "app.ui.viewport"}:
+        if fullname not in {"app.ui.leash", "app.ui.main_window", "app.ui.viewport"}:
             return None
         import importlib.util
 
@@ -175,12 +211,11 @@ def _orphaned_widgets_die_between_tests(request: pytest.FixtureRequest) -> Itera
 
     **Nur dort, wo die Suite keine Fenster hält.** Ein ``gc.collect()`` nach
     jedem Test ist am 23.08.2026 gefallen (die Messreihe steht in
-    ``_no_worker_outlives_its_window``): In einer Fensterdatei zerstört es
-    auch, was Renderer-Zustand trägt, und das reißt für sich. Der Pin
-    (``_windows_live_to_the_end``) hält seither jedes Fenster bis zum
-    Prozessende — und solange eines gepinnt ist, bleibt der Sammler hier
-    unangetastet, deren Vertrag gilt. Wo keines ist, räumt er nach jedem
-    Test auf, und nur, wenn noch ein Top-Level-Widget lebt.
+    ``_no_worker_outlives_its_window``): In einer Fensterdatei zerstörte es
+    auch Renderer-Zustand zu einem beliebigen Zeitpunkt. Der Pin
+    (``_windows_live_until_their_test_ends``) schützt heute bis zum geordneten
+    Fensterabbau. Erst danach darf diese Fixture verwaiste Dialoge sammeln,
+    und nur, wenn noch ein Top-Level-Widget lebt.
 
     **Über den Sammler, nicht über ``deleteLater``.** Beides gemessen:
     ``deleteLater`` plus ``sendPostedEvents`` zwischen den Tests ließ
@@ -209,45 +244,127 @@ def _orphaned_widgets_die_between_tests(request: pytest.FixtureRequest) -> Itera
 
 
 @pytest.fixture(autouse=True)
-def _windows_live_to_the_end() -> Iterator[None]:
-    """Jedes MainWindow der Suite lebt absichtlich bis zum Prozessende.
+def _windows_live_until_their_test_ends() -> Iterator[None]:
+    """Hält neue Fenster bis zu ihrem geordneten Abbau in diesem Test.
 
-    **Warum, mit Messreihe vom 25.08.2026.** Die Mine darunter steht in
-    ``_no_worker_outlives_its_window``: Die Zerstörung eines Fensters mit
-    Renderer-Zustand mitten im Prozess reißt den Lauf — gleich, ob der
-    Speicherbereiniger sie auslöst oder die Referenzzählung, gleich in
-    welchem Thread. Seit dem Ring-Umbau sterben die Fenster über die
-    Referenzzählung, sobald ihr Fixture die letzte Referenz fallen lässt;
-    mit dem Testbestand vom 25.08. riss ``test_ui.py`` damit deterministisch
-    (3/3, 0xc0000374, Position wandert mit der Zusammensetzung, nicht mit
-    einem Test). Zwischen 16:58 und dem Abend desselben Tages hielt
-    versehentlich ein Lambda-Ring in ``_add_action`` jedes Fenster fest —
-    und genau in dieser Zeit lief die Gruppe nachweislich stabil, bei rund
-    1700 angesammelten Widgets. Der Pin stellt diesen Zustand **absichtlich**
-    her, statt ihn einem Fehler zu verdanken: Der Tod der Fenster verschiebt
-    sich ans Prozessende, wo der bekannte Abbau-Riss **nach** der
-    Zusammenfassung liegt (``suite-getrennt.sh`` kennt die Behandlung),
-    statt mitten in den Daten.
+    Der Pin muss beim Erzeugen greifen: Ein Fenster-Fixture verliert seine
+    letzte normale Referenz vor dem Teardown der autouse-Fixtures. Bis 0.3.4
+    blieb der Pin danach bis zum Prozessende stehen, weil VTKs Renderer keinen
+    unabhängigen Abbau trug. Mit pygfx ist das Gegenteil nötig und möglich:
+    ``release`` kappt Rückrufe und wartet auf Arbeiter, der Renderer wird an
+    seiner noch lebenden Fläche geschlossen, danach stellt Qt die Löschung im
+    Hauptthread zu.
 
-    Kein Zudecken: Die Mine selbst bleibt offen und steht im Register der
-    ROADMAP. Der Kunde stellt den Suite-Zustand nie her — er hat ein
-    Fenster, und das stirbt beim Prozessende.
-
-    Drei Zusagen: Gepinnte Fenster bekommen weiter ihr ``release()`` (die
-    Fixture unten läuft über ``topLevelWidgets``, Threads sammeln sich
-    nicht an). Tests, die Zerstörung **messen**, nehmen sich über
-    ``unpinned_windows`` aus — der 41-Lambda-Fund vom 25.08. muss auch
-    künftig rot werden können. Und gepinnt wird beim **Erzeugen**, nicht am
-    Testende: Die letzte Referenz eines Fenster-Fixtures fällt vor dem
-    Teardown der autouse-Fixtures, dort wäre es längst tot.
+    Gemessen an den ersten 60 Analyse-UI-Tests sammelte der alte Vertrag 34
+    gültige ``MainWindow``-Wurzeln und 1073 Qt-Fenster samt Kind-Popups an;
+    derselbe Lauf riss im Release-Tor wandernd in einer Zustellung an ein neu
+    gebautes Fenster. Wer Zerstörung selbst misst, pausiert den Pin weiterhin
+    über ``unpinned_windows``.
     """
+    # Pytest hält die Funktionsargumente eines gerade beendeten Tests noch bis
+    # hinter dessen Fixture-Abbau. Dadurch kann ein kompletter, bereits nativ
+    # gelöschter Fensterbaum erst hier zyklisch frei werden. Er wird im
+    # Hauptthread eingesammelt, bevor ein neuer Arbeiter starten kann.
+    _collect_released_ui()
     # Der Regelfall läuft über den Import-Haken oben; dieser Griff bleibt als
     # zweiter für ein Modul, das schon vor dem Haken geladen war.
     for module_name in ("app.ui.viewport", "app.ui.main_window"):
         module = sys.modules.get(module_name)
         if module is not None:
             _pin_ui_widgets(module)
-    yield
+    first = len(_PINNED_UI)
+    try:
+        yield
+    finally:
+        held = _PINNED_UI[first:]
+        del _PINNED_UI[first:]
+        _release_pinned_ui(held)
+
+
+def _release_pinned_ui(held: list[object]) -> None:
+    """Gepinnte Qt-Wurzeln in derselben Reihenfolge wie die Suite abbauen."""
+    if "PySide6.QtWidgets" not in sys.modules:
+        held.clear()
+        return
+
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication, QWidget
+    from shiboken6 import isValid
+
+    def roots_of(values: list[object]) -> list[QWidget]:
+        """Qt-Wurzeln bestimmen, ohne eine letzte Hülle im Außenrahmen zu halten."""
+        found: list[QWidget] = []
+        for value in values:
+            if not isinstance(value, QWidget) or not isValid(value):
+                continue
+            root = value
+            while True:
+                parent = root.parent()
+                if not isinstance(parent, QWidget):
+                    break
+                root = parent
+            if not any(known is root for known in found):
+                found.append(root)
+        return found
+
+    def release_renderers(values: tuple[object, ...]) -> None:
+        """Renderer schließen, solange ihre Python-Wurzeln sicher leben."""
+        for value in values:
+            if not isinstance(value, QWidget) or not isValid(value):
+                continue
+            release_renderer = getattr(type(value), "release_renderer", None)
+            if callable(release_renderer):
+                release_renderer(value)
+
+    def schedule_deletion(values: list[QWidget]) -> None:
+        """Wurzeln vormerken, ohne die letzte Hülle im Außenrahmen zu halten."""
+        for value in values:
+            if isValid(value):
+                value.hide()
+                value.deleteLater()
+
+    roots = roots_of(held)
+
+    # ``_no_worker_outlives_its_window`` lief wegen der Fixture-Abhängigkeit
+    # davor. Hier bleibt nur der native Abbau des Renderers und der Qt-Wurzel;
+    # beides geschieht, solange der Pin seine Python-Hülle hält.
+    release_renderers((*held, *roots))
+
+    schedule_deletion(roots)
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    application = QApplication.instance()
+    if application is not None:
+        application.processEvents()
+    # Die Python-Hüllen bleiben bis hinter Qts rekursiven C++-Abbau stark
+    # gehalten. Würde der Pin vorher fallen, könnte eine Elternhülle mitten in
+    # der Zerstörung ihres Kinddialogs verschwinden; der nächste native
+    # Widget- oder Workeraufbau trifft dann auf beschädigten Speicher.
+    held.clear()
+    roots.clear()
+    # ``DeferredDelete`` hat die C++-Hierarchie jetzt vollständig im
+    # Hauptthread zerstört. Python-Ringe um ihre Shiboken-Hüllen müssen an
+    # derselben sicheren Grenze folgen: In 30 UI-Tests blieben sonst nach
+    # jedem Abbau 300 bis 970 ungültige QWidget-Hüllen zurück. Ein späterer
+    # zyklischer Sammlerlauf verschob ihren Abbau damit an eine spätere
+    # Allokationsstelle. Die nativen Abbrüche traten dort wandernd auf; einen
+    # bestimmten auslösenden Faden belegt diese Messung nicht.
+    #
+    # Das ist nicht der alte, unwirksame Sammelversuch aus
+    # ``_no_worker_outlives_its_window``: Er lief vor einem geordneten nativen
+    # Abbau. Hier sind Renderer geschlossen, Worker zugestellt und C++-Wurzeln
+    # bereits gelöscht; gesammelt werden nur noch deren Python-Ringe.
+    _collect_released_ui()
+
+
+def _collect_released_ui() -> None:
+    """Bereits nativ gelöschte Python-Widgetringe im Hauptthread sammeln."""
+    if "PySide6.QtWidgets" not in sys.modules:
+        return
+    from PySide6.QtWidgets import QApplication
+
+    if QApplication.instance() is None:
+        return
+    gc.collect()
 
 
 @pytest.fixture
@@ -548,43 +665,17 @@ def _wartet_auf_arbeiter(klasse: type) -> tuple[str, ...]:
 
 
 @pytest.fixture(autouse=True)
-def _no_worker_outlives_its_window() -> Iterator[None]:
-    """Nach jedem Test warten die Fenster auf ihre Arbeiter.
+def _no_worker_outlives_its_window(
+    _windows_live_until_their_test_ends: None,
+) -> Iterator[None]:
+    """Nach jedem Test alle UI-Arbeiter geordnet fertigstellen.
 
-    ``MainWindow.wait_for_workers`` sagt selbst, warum es das gibt: **ein
-    Thread, der sein Fenster überlebt, nimmt den Prozess mit.** Im Programm
-    ruft der ``closeEvent`` es. In der Suite gibt es diesen Weg nicht — dort
-    wird ein Fenster weggeräumt, nicht geschlossen, und wann der
-    Speicherbereiniger das tut, entscheidet er.
-
-    Das war der Absturz, der etwa jeden vierten Lauf mit einer
-    Zugriffsverletzung statt eines Ergebnisses beendete: kein Testfehler, kein
-    Name im Protokoll, jedes Mal an einer anderen Stelle — mal in
-    ``test_analysis_ui``, mal in ``test_ui``, dazwischen grüne Läufe.
-
-    Zentral und nicht in jedem ``window``-Fixture: es gibt neun davon, und das
-    zehnte vergisst es.
-
-    **Warten allein genügte nicht.** Der Ubuntu-Runner starb ab dem 06.08.2026
-    in jedem Lauf mit einem Segmentierungsfehler, immer an derselben Zeile —
-    ``HistoryPanel.show_document``, erste Anweisung, ``self.list.clear()`` —,
-    aber jedes Mal in einem anderen Test. Eine Messung mit zerlegter Suite hat
-    gezeigt, dass der Absturz *wandert*: es liegt an keinem Test, sondern an
-    dem, was sich über den Lauf ansammelt.
-
-    Angesammelt haben sich die Fenster. Ein ``window``-Fixture gibt sein
-    ``MainWindow`` zurück und überlässt es danach dem Speicherbereiniger; die
-    ``Session`` daneben lebt in ihrem eigenen Fixture weiter. Sammelt Python
-    das Fenster ein, während eine Zustellung läuft, ruft ``sceneChanged`` in
-    ein ``_on_scene``, dessen Widgets auf der C++-Seite schon weg sind — und
-    ``clear()`` schreibt in freigegebenen Speicher. Unter Windows fällt das
-    selten auf, weil der Allokator die Seite behält; unter Linux gibt er sie
-    zurück, und der nächste ``wait_for_idle`` mit seinem ``processEvents``
-    stellt genau dann zu.
-
-    Deshalb kappt ``MainWindow.release`` hier die Verbindung — und **nur** sie.
-    Das Fenster zu zerstören wäre der naheliegende Schluss und war der falsche:
-    siehe die Begründung unten am Ende dieser Fixture.
+    Der Produktweg wartet beim Schließen eines Fensters selbst. Tests schließen
+    ihre Widgets häufig nicht ausdrücklich; deshalb ruft diese zentrale
+    Fixture zunächst deren vorhandene ``release``- oder ``wait_for_*``-Wege
+    auf und wartet anschließend auch auf fensterlose Leinen. Die abhängige
+    Fixture ``_windows_live_until_their_test_ends`` hält die Python-Hüllen
+    dabei bis zur zugestellten Qt-Löschung und sammelt erst danach ihre Ringe.
     """
     yield
     from PySide6.QtWidgets import QApplication
@@ -642,6 +733,15 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
                 waiter = getattr(type(widget), name, None)
                 if callable(waiter):
                     waiter(widget)
+    # Fensterlose Dialoge können schon aus ``topLevelWidgets`` verschwunden
+    # sein, während ihre Leine den Arbeiter noch hält. Die modulweite Menge ist
+    # die einzige vollständige Auskunft; erst nach dem Warten dürfen Qts
+    # eingereihte ``finished``-Signale und Löschungen laufen.
+    from app.ui import leash
+
+    leash.wait_for_all()
+    for _ in range(5):
+        application.processEvents()
     # **Die Zählung, mit der sich das Anhäufen messen lässt.**
     #
     # Am 23.08.2026 ließ sich der wandernde Absturz in test_ui.py nicht
@@ -679,8 +779,6 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         from pathlib import Path
 
         from PySide6.QtWidgets import QWidget
-
-        from app.ui import leash
 
         oben = application.topLevelWidgets()
         lebende = [widget for widget in oben if isValid(widget)]
@@ -729,181 +827,9 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
                 file=datei,
             )
 
-    # Zerstört wird hier **nichts**. Zwei Anläufe haben das versucht —
-    # ``deleteLater`` allein änderte nichts (``processEvents`` führt
-    # ``DeferredDelete`` nicht aus), und mit ``sendPostedEvents`` dazu
-    # verschob sich der Absturz nur: ein zerstörtes Fenster nimmt den
-    # Renderer-Zustand mit, und der **nächste** Aufbau stirbt in
-    # ``render_window_interactor.initialize``. Beides gemessen, in Fenstern
-    # nacheinander, nicht erlitten in einem zwanzigminütigen Lauf.
-    #
-    # **Woran der Hänger wirklich liegt — aufgeklärt am 23.08.2026 mit
-    # ``py-spy dump --native`` an einem laufenden ``test_ui.py``.** Er steht
-    # hier, weil hier gesucht wird, wenn er das nächste Mal zuschlägt:
-    #
-    #     Hauptthread   hält den GIL, wartet auf den Qt-Mutex
-    #                   QComboBox::setCurrentIndex → QAbstractItemView::setModel
-    #                   → QObject::connectImpl → QBasicMutex::lockInternal
-    #
-    #     Nebenthread   hält den Qt-Mutex, wartet auf den GIL
-    #                   QWidget::~QWidget → QMenuBar::~QMenuBar → QMenu::~QMenu
-    #                   → QObject::~QObject → Sbk_GetPyOverride (shiboken6)
-    #                   → PyGILState_Ensure
-    #
-    # **Ein ``QMenuBar`` wird in einem Nebenthread zerstört.** Sein Destruktor
-    # nimmt den Qt-Mutex und braucht dann den GIL für die shiboken-Hülle; der
-    # Hauptthread hält den GIL und wartet auf genau diesen Mutex. Niemand tut
-    # das absichtlich: Pythons Speicherbereiniger läuft in dem Thread, dessen
-    # Allokation gerade die Schwelle reißt, und findet dort ein Fenster ohne
-    # letzte Python-Referenz. Gefunden von 3d-druck-b8.
-    #
-    # **Ein zweiter Stapelabzug, unabhängig und mit anderen Widgets** — am
-    # 23.08.2026 an einem eigenen hängenden Torlauf gezogen, ebenfalls mit
-    # ``py-spy dump --native``:
-    #
-    #     MainThread    hält den GIL, wartet auf den Qt-Mutex
-    #                   QScrollArea::QScrollArea → QObject::connect
-    #                   → QBasicMutex::lockInternal
-    #
-    #     Thread 52656  hält den Qt-Mutex, wartet auf den GIL
-    #                   SbkDeallocWrapper → QWidget::~QWidget
-    #                   → QObjectPrivate::deleteChildren → QObject::~QObject
-    #                   → Sbk_GetPyOverride → PyGILState_Ensure
-    #
-    # Zwei Dinge macht er klarer als der erste. **Erstens: Es liegt nicht an
-    # ``QMenuBar``.** Dort war es ein Menü beim Aufbau einer ``QComboBox``,
-    # hier ein beliebiges ``QWidget`` beim Aufbau einer ``QScrollArea`` — die
-    # Paarung ist zufällig, das Muster ist es nicht. Jedes Widget, dessen
-    # letzte Python-Referenz in einem Nebenthread fällt, kann es auslösen.
-    #
-    # **Zweitens: ``SbkDeallocWrapper`` ganz unten benennt den Auslöser.** Das
-    # ist shibokens Deallocator — die *Python*-Hülle wird freigegeben, und das
-    # zieht die C++-Zerstörung nach sich. Nicht Qt räumt hier auf, sondern
-    # Pythons Speicherbereiniger, und er tut es in dem Thread, in dem er
-    # gerade läuft.
-    #
-    # Das erklärt vier Beobachtungen, die einzeln keinen Sinn ergaben:
-    #
-    # * Warum die Läufe **stehen** statt zu stürzen — ein Deadlock rechnet nicht.
-    # * Warum ``gc.collect()`` hier nichts brachte — der Lauf im Hauptthread ist
-    #   der harmlose; gefährlich ist der im Nebenthread, und den löst kein
-    #   ``collect()`` aus, sondern eine Allokation.
-    # * Warum ``undisturbed()`` nicht wirkte — es hält den Sammler an, während
-    #   *diese* Zeile läuft; der Nebenthread alloziert weiter, wann er will.
-    # * Warum es das erst seit dem 22.08.2026 gibt: Solange Lambda-Ringe die
-    #   Fenster hielten, sammelte sie **niemand** ein. Seit sie sterben können,
-    #   können sie im falschen Thread sterben. Der Ring-Umbau war richtig und
-    #   hat den Speicher flach gemacht — und er hat diesen Deadlock erst
-    #   möglich gemacht. Wer ihn für unbeteiligt hält, sucht falsch.
-    #
-    # **Für den nächsten Anlauf, und er hat zwei Baustellen statt einer:**
-    # Zerstörung gehört in den Hauptthread (``deleteLater``), aber die zwei
-    # gescheiterten Anläufe oben zeigen die zweite Klippe — ``processEvents``
-    # führt ``DeferredDelete`` nicht aus, und mit ``sendPostedEvents`` dazu
-    # nimmt ein zerstörtes Fenster den Renderer-Zustand mit. Wer nur die erste löst,
-    # trifft die zweite.
-    #
-    # **Hier stand ein ``gc.collect()``, und es ist am 23.08.2026 gefallen.**
-    # Der Gedanke war richtig: Wann Python die losgelassenen Fenster einsammelt,
-    # entscheidet sonst der Zufall, und der trifft auch die Zeit, in der Qt
-    # denselben Widgets Ereignisse zustellt. Gemessen hat es trotzdem nichts
-    # gebracht — zehn Läufe je Seite in einem eigenen Arbeitsbaum, unter dem
-    # Schloss auf ruhiger Maschine: **1/10 Abstürze ohne, 1/10 mit**, beide mit
-    # derselben Zugriffsverletzung.
-    #
-    # Der Grund steht in zwei Stapeln von zwei Sitzungen desselben Abends: Der
-    # abstürzende Faden steht in ``QObject::~QObject`` unter ``QThread::start``.
-    # **Ein Aufräumen im Hauptthread nach dem Test fängt nicht, was ein
-    # Arbeiter-Thread während des Tests zerstört.** Wer die Zeile wieder
-    # einbauen will, misst vorher zehn Läufe je Seite; sie sieht überzeugend aus
-    # und ist es nicht.
-    # **Hier stand ein ``leash.wait_for_all(2000)``, und es ist am 23.08.2026
-    # gefallen — nach zwanzig Läufen, die alle dasselbe sagten.**
-    #
-    # Der Gedanke war belegt: Die Schleife oben geht über
-    # ``topLevelWidgets()``, und ein Arbeiter, der an einem längst weggeräumten
-    # **Dialog** hing, steht dort nicht. Ein Stapelabzug zeigte genau ihn —
-    # ``install.py`` beim ``__import__`` in einem Arbeiter, während der
-    # Hauptthread hier ``processEvents()`` rief. ``__import__`` nimmt den
-    # Import-Lock, und deshalb **standen** diese Läufe still, statt zu stürzen.
-    #
-    # Das Warten hat den Hänger nicht behoben, sondern einen **zweiten,
-    # sicheren Absturz** erzeugt. Gemessen, jedes Mal an ``test_ui.py``:
-    #
-    #     vor der Änderung                        0 von 3 gerissen
-    #     mit ``wait_for_all``                   10 von 10, Stapel jedes Mal
-    #                                            „Garbage-collecting" über dieser Zeile
-    #     ohne ``wait_for_all`` (Gegenprobe)      2 von 3, und an anderer Stelle
-    #     mit ``wait_for_all`` + ``undisturbed``  5 von 5
-    #
-    # Der Mechanismus: Das Warten macht die Arbeiter **hier** fertig statt
-    # irgendwann später. Damit liegt an dieser Stelle mehr Totes herum, der
-    # gc-Lauf in ``processEvents`` findet mehr zum Abräumen, und was er abräumt,
-    # während Qt an dieselben Widgets zustellt, wird zweimal zerstört. Auch
-    # ``undisturbed()``, das genau dagegen gebaut ist, hält es nicht auf.
-    #
-    # Die Rechnung, die den Ausschlag gab: **ein sicherer Absturz gegen einen
-    # seltenen Deadlock.** Der Hänger kam sechsmal in einer Nacht; dieser
-    # Absturz traf jeden Lauf jeder Sitzung. Der Hänger bleibt damit offen —
-    # **Nachtrag vom selben Tag: Der Import-Lock hat genau eine Quelle.**
-    # 3d-druck-b8 hat alle dynamischen Importe in ``app/core`` und ``app/ui``
-    # gesucht — ``__import__``, ``import_module``, ``find_spec``. Sieben
-    # Treffer, und von einem ``Worker.work()`` aus erreichbar ist **einer**:
-    #
-    #     app/core/install.py:341   present()   __import__(requirement.module)
-    #     Weg dorthin: _Survey.work() -> install.statuses() -> present()
-    #
-    # Die fünf in ``bootstrap`` laufen beim Start, ``manual.messages_text``
-    # gehört zur Handbucherzeugung; keiner davon steht in einem Arbeiter.
-    #
-    # **Damit ist die Warnung oben ein Zeiger geworden.** Sie sagt nicht mehr
-    # „geh da nicht hin", sondern „dort ist es, und sonst nirgends" — und das
-    # ist der Unterschied zwischen einem Punkt, den niemand anfasst, und einem,
-    # den jemand löst. Ein Kandidat für den Ersatz steht auch schon:
-    # ``importlib.util.find_spec(name)`` beantwortet dieselbe Frage, ohne das
-    # Modul zu laden, und nimmt den Lock nicht. **Es ist aber eine
-    # Verhaltensänderung und keine Umformulierung** — ``find_spec`` sagt
-    # „liegt da", ``__import__`` sagt „lädt", und ein Paket mit kaputter
-    # kompilierter Erweiterung meldet sich damit als vorhanden. Der Kommentar
-    # an jener Stelle weiß das und nennt genau diesen Fall als Grund.
-    #
-    # **Entschieden am 23.08.2026: ``__import__`` bleibt.** Der Grund sind die
-    # drei Pakete, die dort geprüft werden — ``OCP.BRepPrimAPI``
-    # (OpenCASCADE), ``vhacdx`` und ``keyring``. Die ersten beiden sind
-    # kompilierte Erweiterungen, und bei einer großen C++-Bibliothek mit
-    # DLL-Abhängigkeiten ist „liegt da, lädt aber nicht" kein Randfall, sondern
-    # der wahrscheinlichste Defekt:
-    #
-    #     find_spec    OCP liegt da   -> der Dialog bietet keine Installation an,
-    #                                    der Kunde hat einen Kern, der nicht geht,
-    #                                    und keinen Weg, das zu ändern
-    #     __import__   OCP lädt nicht -> der Dialog bietet sie an, der Kunde
-    #                                    repariert es
-    #
-    # **Der Erstlauf-Dialog fragt nicht „liegen Dateien da", sondern „kann ich
-    # damit arbeiten".** Und der Lock-Effekt ist ein Testproblem, kein
-    # Kundenproblem: Beim Kunden läuft ``statuses()`` genau einmal, und niemand
-    # ruft daneben ``processEvents()`` in einer Schleife über zwanzig Läufe.
-    #
-    # ``leash.wait_for_all`` steht bereit und ist geprüft, es gehört nur nicht
-    # **hierhin**, unmittelbar vor eine Zustellung.
-    # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
-    # die Verbindung. ``release`` kappt sie oben.
-    #
-    # **Der vierte und der fünfte Anlauf sind am 25.08.2026 gemessen und am
-    # selben Abend wieder ausgebaut worden.** Beide setzten am Sammler an:
-    # (4) ``gc.disable()`` für die Suite plus gezieltes ``gc.collect()`` an
-    # dieser Stelle — der Lauf riss dann **in dieser Zeile**, im Hauptthread,
-    # „Garbage-collecting" im Stapel, Zugriffsverletzung: Nicht der Thread
-    # ist das Problem, sondern das Zerstören selbst. (5) ``gc.disable()``
-    # ohne jedes Sammeln — riss ebenfalls, an einer Allokation weiter hinten
-    # und **ohne** gc im Stapel: Die Fenster sterben seit dem Ring-Umbau über
-    # die Referenzzählung, der Sammler ist an ihrem Tod meist unbeteiligt.
-    # Wer hier weitersucht: Die Mine ist die Zerstörung eines Fensters mit
-    # Renderer-Zustand mitten in der Suite, gleich durch wen und in welchem
-    # Thread. Messwerte vom 25.08.2026: test_ui.py mit vollem Testbestand
-    # riss 3/3 deterministisch an fester Position (0xc0000374); die Position
-    # wandert mit der Zusammensetzung, nicht mit einem Test.
+    # Erst die abhängige Fixture löscht Renderer und Qt-Wurzeln. Hier muss nur
+    # noch die letzte von ``finished`` eingereihte Zustellung ankommen, solange
+    # alle Fensterhüllen gepinnt und gültig sind.
     application.processEvents()
 
 

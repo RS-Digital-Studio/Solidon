@@ -11,7 +11,7 @@ gesetzte ``SSL_CERT_FILE``-Variable bleibt unangetastet — Firmen mit eigener
 CA dürfen ihren Vertrauensspeicher weiter vorgeben.
 
 **Und dasselbe trifft das Linux-Paket, nur hat es dort niemand vermutet.**
-Im Protokoll des ersten Flatpak-Kunden (Manjaro, 06.09.2026) steht sechsmal
+Im Protokoll des ersten Flatpak-Kunden (Manjaro, 06.09.2026) steht wiederholt
 ``CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`` — bei
 jeder Update-Prüfung und bei beiden Versuchen, eine Rückmeldung zu senden.
 Der Grund ist derselbe wie auf dem Mac: Das mitgelieferte OpenSSL kennt die

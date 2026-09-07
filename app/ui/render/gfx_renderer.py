@@ -1,6 +1,6 @@
 """Der pygfx-Renderer — dieselbe Schnittstelle, gezeichnet über wgpu (§18).
 
-Der zweite Renderer hinter dem Vertrag aus :mod:`app.ui.render.api`: Netze,
+Der Renderer hinter dem Vertrag aus :mod:`app.ui.render.api`: Netze,
 Linien, Punkte und Beschriftungen werden pygfx-Objekte in einer Szene, die
 Kamera ist eine ``PerspectiveCamera`` (mit ``fov = 0`` orthografisch), das
 Bild entsteht über ``WgpuRenderer`` — auf einer Qt-Leinwand
@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import logging
 import math
+import weakref
 from collections import defaultdict, deque
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -57,12 +58,12 @@ from app.ui.render.api import (
 _log = logging.getLogger(__name__)
 
 #: Wie weit neben einem Objekt der Zeiger es noch trifft, in Bildpunkten —
-#: dieselbe Zahl wie beim VTK-Renderer, damit ein Griff auf beiden gleich
-#: greifbar ist.
+#: übernommen vom früheren VTK-Renderer, damit die Griffe gleich gut
+#: greifbar bleiben.
 PICK_SLACK_PIXELS = 4.0
 
 #: Der senkrechte Öffnungswinkel, mit dem die Kamera beginnt — VTKs Vorgabe,
-#: damit ``reset_camera`` auf beiden Renderern denselben Abstand wählt.
+#: damit ``reset_camera`` den gewohnten Abstand wählt.
 DEFAULT_VIEW_ANGLE = 30.0
 
 #: Wie stark ein Licht in pygfx-Einheiten leuchtet, wenn der Viewport ``1.0``
@@ -712,33 +713,44 @@ class GfxRenderer(Renderer):
         from PySide6.QtCore import Qt
         from rendercanvas.qt import QRenderWidget
 
-        renderer = self
+        # Qt kann die dynamische Widgetklasse nach dem Fenster behalten.
+        # Ihre Methoden dürfen dadurch keinen vollständigen Renderer halten.
+        renderer_ref = weakref.ref(self)
 
         class _Widget(QRenderWidget):  # type: ignore[misc]
             """Die pygfx-Leinwand als Qt-Widget; Zeigergesten kommen hier an."""
 
+            def _pointer(
+                self, kind: str, event: Any, button: MouseButton | None, delta: int = 0
+            ) -> None:
+                if renderer := renderer_ref():
+                    renderer._pointer(kind, event, button, delta)
+                else:
+                    event.ignore()
+
             def mousePressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
                 super().mousePressEvent(event)
-                renderer._pointer("press", event, _button_of(event.button()))
+                self._pointer("press", event, _button_of(event.button()))
 
             def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
                 super().mouseReleaseEvent(event)
-                renderer._pointer("release", event, _button_of(event.button()))
+                self._pointer("release", event, _button_of(event.button()))
 
             def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
                 super().mouseMoveEvent(event)
-                renderer._pointer("move", event, None)
+                self._pointer("move", event, None)
 
             def mouseDoubleClickEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-                renderer._pointer("press", event, _button_of(event.button()))
+                self._pointer("press", event, _button_of(event.button()))
 
             def wheelEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
                 steps = round(event.angleDelta().y() / 120.0) if event.angleDelta().y() else 0
-                renderer._pointer("wheel", event, None, delta=steps)
+                self._pointer("wheel", event, None, delta=steps)
 
             def leaveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
                 super().leaveEvent(event)
-                renderer._emit(PointerEvent("leave", 0, 0))
+                if renderer := renderer_ref():
+                    renderer._emit(PointerEvent("leave", 0, 0))
 
             def keyPressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
                 event.ignore()

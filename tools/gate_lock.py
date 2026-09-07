@@ -41,12 +41,16 @@ abstürzt, sieht der nächste an der Nummer, dass niemand mehr da ist.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
+import math
 import os
 import subprocess
 import sys
 import time
+from functools import cache
 from pathlib import Path
+from typing import Any, TypedDict
 
 if str(Path(__file__).resolve().parent.parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -115,7 +119,7 @@ def _alive(pid: int) -> bool:
         #: Reicht, um nach der Existenz zu fragen; verlangt keine Rechte am
         #: fremden Prozess.
         query_limited_information = 0x1000
-        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        kernel = ctypes.windll.kernel32
         handle = kernel.OpenProcess(query_limited_information, False, pid)
         if handle:
             # **Ein Handle heißt nicht „läuft".** Windows gibt den
@@ -140,13 +144,14 @@ def _alive(pid: int) -> bool:
         # nur jemand anderem. 87 heißt „ungültiger Parameter", und das ist die
         # Antwort für eine Nummer, die niemand mehr trägt.
         return int(kernel.GetLastError()) != 87
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except OSError:
+    else:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except OSError:
+            return True
         return True
-    return True
 
 
 #: Wie lange gemessen wird, um „steht" von „rechnet" zu trennen. Kürzer wird
@@ -160,6 +165,175 @@ IDLE_SAMPLE_SECONDS = 2.0
 IDLE_REPORT_SECONDS = 120.0
 
 
+class ProcessQueryError(RuntimeError):
+    """Die Prozessabfrage lieferte keine belastbare Auskunft."""
+
+
+class _WindowsProcessEntry(ctypes.Structure):
+    """PROCESSENTRY32W mit zeigerbreitem Heap-Feld, auch auf 64-Bit-Windows."""
+
+    _fields_ = [
+        ("size", ctypes.c_uint32),
+        ("usage", ctypes.c_uint32),
+        ("pid", ctypes.c_uint32),
+        ("heap", ctypes.c_size_t),
+        ("module", ctypes.c_uint32),
+        ("threads", ctypes.c_uint32),
+        ("parent", ctypes.c_uint32),
+        ("priority", ctypes.c_int32),
+        ("flags", ctypes.c_uint32),
+        ("name", ctypes.c_wchar * 260),
+    ]
+
+
+class _WindowsUnicodeString(ctypes.Structure):
+    """UNICODE_STRING trägt Bytezahlen und einen Zeiger, keinen Python-Text."""
+
+    _fields_ = [
+        ("length", ctypes.c_uint16),
+        ("maximum", ctypes.c_uint16),
+        ("buffer", ctypes.c_void_p),
+    ]
+
+
+@cache
+def _windows_process_api() -> tuple[Any, Any]:
+    """Lädt die vorhandenen System-APIs dynamisch und bindet ihre echten Zeigertypen."""
+    if sys.platform == "win32":
+        try:
+            kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+            native = ctypes.WinDLL("ntdll", use_last_error=True)
+            signatures = {
+                "CreateToolhelp32Snapshot": ([ctypes.c_uint32, ctypes.c_uint32], ctypes.c_void_p),
+                "Process32FirstW": (
+                    [ctypes.c_void_p, ctypes.POINTER(_WindowsProcessEntry)],
+                    ctypes.c_int,
+                ),
+                "Process32NextW": (
+                    [ctypes.c_void_p, ctypes.POINTER(_WindowsProcessEntry)],
+                    ctypes.c_int,
+                ),
+                "OpenProcess": ([ctypes.c_uint32, ctypes.c_int, ctypes.c_uint32], ctypes.c_void_p),
+                "CloseHandle": ([ctypes.c_void_p], ctypes.c_int),
+            }
+            for name, (arguments, result) in signatures.items():
+                function = getattr(kernel, name)
+                function.argtypes = arguments
+                function.restype = result
+            native.NtQueryInformationProcess.argtypes = [
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.c_void_p,
+                ctypes.c_uint32,
+                ctypes.POINTER(ctypes.c_uint32),
+            ]
+            native.NtQueryInformationProcess.restype = ctypes.c_int32
+        except (OSError, AttributeError) as exc:
+            raise ProcessQueryError(
+                f"Windows-Prozessabfrage nicht verfügbar: {type(exc).__name__}."
+            ) from None
+        return kernel, native
+    else:
+        raise ProcessQueryError("Windows-Prozessabfrage nicht verfügbar: andere Plattform.")
+
+
+def _windows_last_error() -> int:
+    """Liest den Threadfehler ausschließlich auf der Plattform, die diesen Vertrag anbietet."""
+    if sys.platform == "win32":
+        return ctypes.get_last_error()
+    else:
+        raise ProcessQueryError("Windows-Prozessabfrage nicht verfügbar: andere Plattform.")
+
+
+def _windows_processes() -> dict[int, tuple[int, str]]:
+    """Liest den Prozessbestand einmal; nur ERROR_NO_MORE_FILES beendet ihn erfolgreich."""
+    kernel, _ = _windows_process_api()
+    snapshot = kernel.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+    if snapshot in (None, 0, ctypes.c_void_p(-1).value):
+        raise ProcessQueryError(f"Windows-Prozessbestand: Fehler {_windows_last_error()}.")
+    try:
+        entry = _WindowsProcessEntry(size=ctypes.sizeof(_WindowsProcessEntry))
+        found = kernel.Process32FirstW(snapshot, ctypes.byref(entry))
+        processes = {}
+        while found:
+            processes[int(entry.pid)] = (int(entry.parent), entry.name)
+            found = kernel.Process32NextW(snapshot, ctypes.byref(entry))
+        error = _windows_last_error()
+        if error != 18:  # ERROR_NO_MORE_FILES
+            raise ProcessQueryError(f"Windows-Prozessbestand unvollständig: Fehler {error}.")
+        return processes
+    finally:
+        kernel.CloseHandle(snapshot)
+
+
+def _windows_command_line(pid: int) -> str | None:
+    """Liest eine Befehlszeile ohne PowerShell-Start und ohne fremden PEB-Speicher.
+
+    ProcessCommandLineInformation (60) gibt seit Windows 8.1 den Text direkt
+    mit QUERY_LIMITED_INFORMATION zurück. Die interne NT-API wird dynamisch
+    geladen; fehlt sie oder ändert sich ihr Vertrag, bleibt die Auskunft
+    ausdrücklich unbekannt. Quelle: Microsoft NtQueryInformationProcess;
+    der eingeschränkte Zugriff ist auch in psutil, Issue 1384, belegt.
+    """
+    kernel, native = _windows_process_api()
+    handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        error = _windows_last_error()
+        if error == 87:  # ERROR_INVALID_PARAMETER: seit dem Snapshot verschwunden
+            return None
+        raise ProcessQueryError(f"Windows-Prozess {pid} nicht lesbar: Fehler {error}.")
+    try:
+        required = ctypes.c_uint32()
+        status = native.NtQueryInformationProcess(handle, 60, None, 0, ctypes.byref(required))
+        status &= 0xFFFFFFFF
+        if status == 0xC000010A:  # STATUS_PROCESS_IS_TERMINATING
+            return None
+        if status not in (0xC0000004, 0xC0000023):  # INFO_LENGTH_MISMATCH, BUFFER_TOO_SMALL
+            raise ProcessQueryError(
+                f"Windows-Prozess {pid}: NTSTATUS 0x{status:08X} beim Abmessen."
+            )
+        # UNICODE_STRING verwendet USHORT-Bytezahlen. Größer kann sein Text
+        # nicht sein; ein kaputter Größenwert darf keine Allokation auslösen.
+        header_size = ctypes.sizeof(_WindowsUnicodeString)
+        if not header_size <= required.value <= header_size + 0xFFFF:
+            raise ProcessQueryError(
+                f"Windows-Prozess {pid}: ungültige Puffergröße {required.value}."
+            )
+        buffer = ctypes.create_string_buffer(required.value)
+        returned = ctypes.c_uint32()
+        status = (
+            native.NtQueryInformationProcess(
+                handle, 60, buffer, len(buffer), ctypes.byref(returned)
+            )
+            & 0xFFFFFFFF
+        )
+        if status == 0xC000010A:
+            return None
+        if status != 0:
+            raise ProcessQueryError(f"Windows-Prozess {pid}: NTSTATUS 0x{status:08X} beim Lesen.")
+        if not header_size <= returned.value <= len(buffer):
+            raise ProcessQueryError(
+                f"Windows-Prozess {pid}: ungültige Antwortlänge {returned.value}."
+            )
+        text = _WindowsUnicodeString.from_buffer(buffer)
+        if text.length > text.maximum or text.length % 2 or text.maximum % 2:
+            raise ProcessQueryError(f"Windows-Prozess {pid}: ungültige Textlänge.")
+        if text.length == 0 and not text.buffer:
+            return ""
+        start = ctypes.addressof(buffer)
+        pointer = text.buffer or 0
+        if (
+            pointer % 2
+            or not start + header_size <= pointer <= start + returned.value - text.maximum
+        ):
+            raise ProcessQueryError(
+                f"Windows-Prozess {pid}: Textzeiger außerhalb des Antwortpuffers."
+            )
+        return ctypes.string_at(pointer, text.length).decode("utf-16-le", errors="surrogatepass")
+    finally:
+        kernel.CloseHandle(handle)
+
+
 def _descendants(root: int) -> set[int]:
     """Der ganze Prozessbaum unter ``root``, einschließlich ``root`` selbst.
 
@@ -171,36 +345,7 @@ def _descendants(root: int) -> set[int]:
     """
     parents: dict[int, int] = {}
     if sys.platform == "win32":
-        import ctypes
-        import ctypes.wintypes as wt
-
-        class _Entry(ctypes.Structure):
-            _fields_ = [
-                ("dwSize", wt.DWORD),
-                ("cntUsage", wt.DWORD),
-                ("th32ProcessID", wt.DWORD),
-                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
-                ("th32ModuleID", wt.DWORD),
-                ("cntThreads", wt.DWORD),
-                ("th32ParentProcessID", wt.DWORD),
-                ("pcPriClassBase", ctypes.c_long),
-                ("dwFlags", wt.DWORD),
-                ("szExeFile", ctypes.c_char * 260),
-            ]
-
-        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        snapshot = kernel.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
-        if snapshot in (0, -1):
-            return {root}
-        try:
-            entry = _Entry()
-            entry.dwSize = ctypes.sizeof(_Entry)
-            weiter = kernel.Process32First(snapshot, ctypes.byref(entry))
-            while weiter:
-                parents[int(entry.th32ProcessID)] = int(entry.th32ParentProcessID)
-                weiter = kernel.Process32Next(snapshot, ctypes.byref(entry))
-        finally:
-            kernel.CloseHandle(snapshot)
+        parents = {pid: parent for pid, (parent, _) in _windows_processes().items()}
     else:
         for entry in Path("/proc").glob("[0-9]*"):
             try:
@@ -237,59 +382,31 @@ def _test_processes() -> set[int]:
     am Kommando: Ein Prozess, der ``pytest`` fährt, gehört zum Lauf, ganz
     gleich, wer gerade sein Elternteil ist.
 
-    Findet die Abfrage nichts oder scheitert sie, ist das keine Aussage — der
-    Aufrufer behandelt eine leere Menge wie eine fehlende Auskunft.
+    Eine erfolgreiche leere Abfrage bedeutet keine gefundenen Tests. Eine
+    gescheiterte Systemabfrage wirft ``ProcessQueryError`` mit Fehlerart,
+    aber ohne fremde Kommandozeilen. Der Aufrufer darf diese
+    fehlende Auskunft nicht als leeren Prozessbestand lesen.
     """
     found: set[int] = set()
     if sys.platform == "win32":
-        # Über CIM, weil ``Toolhelp32`` nur den Dateinamen liefert und nicht
-        # die Kommandozeile. Der Aufruf kostet eine halbe Sekunde und läuft
-        # nur bei ``status`` und an einem belegten Tor, nie in der Warteschleife.
-        query = (
-            "Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" | "
-            "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
-        )
-        try:
-            raw = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", query],
-                capture_output=True,
-                text=True,
-                # **Mit Kodierung, sonst stirbt der Lesefaden.** ``text=True``
-                # nimmt auf Windows cp1252, und in einer fremden Kommandozeile
-                # steht irgendwann ein Umlaut oder ein Pfad, den cp1252 nicht
-                # kennt: ``UnicodeDecodeError`` in einem Thread, den niemand
-                # sieht, und die Auskunft kommt halb zurück. Gemessen am
-                # 23.08.2026 an einer Zeile mit 0x81.
-                encoding="utf-8",
-                errors="replace",
-                timeout=20,
-                check=False,
-            )
-            data = json.loads(raw.stdout or "[]")
-        except OSError, ValueError, subprocess.SubprocessError:
-            return found
-        if isinstance(data, dict):
-            data = [data]
-        for entry in data:
-            # **``-m pytest`` und nicht ``pytest``, und ohne dieses Werkzeug
-            # selbst.** Die Kommandozeile eines ``gate_lock``-Aufrufs enthält
-            # den ganzen geschützten Befehl — also auch das Wort ``pytest``,
-            # obwohl der Prozess nur wartet. Am 23.08.2026 hat dieselbe Falle
-            # zwölf wartende Hüllen als „hängende Testläufe" erscheinen lassen:
-            # keine Rechenzeit, Protokoll steht, die perfekte Hänger-Signatur —
-            # und vollständig falsch. Gefunden von 3d-druck-64 an ihrer eigenen
-            # Messung.
-            line = str(entry.get("CommandLine") or "")
+        for pid, (_, name) in _windows_processes().items():
+            if "python" not in name.casefold():
+                continue
+            line = _windows_command_line(pid) or ""
+            # Wartende gate_lock-Hüllen tragen den geschützten pytest-Befehl
+            # ebenfalls in ihren Argumenten, sind aber selbst keine Testläufe.
             if "-m pytest" in line and "gate_lock" not in line:
-                found.add(int(entry.get("ProcessId") or 0))
-        return {pid for pid in found if pid > 0}
-    for entry in Path("/proc").glob("[0-9]*"):
-        try:
-            line = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
-        except OSError:
-            continue
-        if "-m pytest" in line and "gate_lock" not in line:
-            found.add(int(entry.name))
+                found.add(pid)
+    else:
+        for entry in Path("/proc").glob("[0-9]*"):
+            try:
+                line = (
+                    (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+                )
+            except OSError:
+                continue
+            if "-m pytest" in line and "gate_lock" not in line:
+                found.add(int(entry.name))
     return found
 
 
@@ -304,7 +421,7 @@ def _cpu_seconds(pid: int) -> float | None:
         import ctypes
         import ctypes.wintypes as wt
 
-        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        kernel = ctypes.windll.kernel32
         handle = kernel.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
         if not handle:
             return None
@@ -327,12 +444,15 @@ def _cpu_seconds(pid: int) -> float | None:
             return _as_seconds(kernel_time) + _as_seconds(user_time)
         finally:
             kernel.CloseHandle(handle)
-    try:
-        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
-        ticks = float(fields[11]) + float(fields[12])
-        return ticks / os.sysconf("SC_CLK_TCK")
-    except OSError, ValueError, IndexError:
-        return None
+    else:
+        try:
+            fields = (
+                Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+            )
+            ticks = float(fields[11]) + float(fields[12])
+            return ticks / os.sysconf("SC_CLK_TCK")
+        except OSError, ValueError, IndexError:
+            return None
 
 
 def _started_at(pid: int) -> float | None:
@@ -349,7 +469,7 @@ def _started_at(pid: int) -> float | None:
         import ctypes
         import ctypes.wintypes as wt
 
-        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        kernel = ctypes.windll.kernel32
         handle = kernel.OpenProcess(0x1000, False, pid)
         if not handle:
             return None
@@ -370,14 +490,17 @@ def _started_at(pid: int) -> float | None:
             return hundert_ns / 1e7 - 11644473600.0
         finally:
             kernel.CloseHandle(handle)
-    try:
-        # Feld 22 ist die Startzeit in Ticks seit dem Systemstart.
-        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
-        ticks = float(fields[19]) / os.sysconf("SC_CLK_TCK")
-        uptime = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
-        return time.time() - (uptime - ticks)
-    except OSError, ValueError, IndexError:
-        return None
+    else:
+        try:
+            # Feld 22 ist die Startzeit in Ticks seit dem Systemstart.
+            fields = (
+                Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+            )
+            ticks = float(fields[19]) / os.sysconf("SC_CLK_TCK")
+            uptime = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
+            return time.time() - (uptime - ticks)
+        except OSError, ValueError, IndexError:
+            return None
 
 
 def _sum_cpu(pids: set[int]) -> float | None:
@@ -417,7 +540,15 @@ def standing_still(
     return (after - before) < 0.1
 
 
-def _idle_note(entry: dict[str, object]) -> str:
+class _LockEntry(TypedDict, total=False):
+    """Geprüfte Schlossfelder; Zahlenzeichenketten bleiben für vorhandene Dateien lesbar."""
+
+    wer: str
+    pid: int | float | str | None
+    seit: int | float | str | None
+
+
+def _idle_note(entry: _LockEntry) -> str:
     """Ein Satz über den Halter, wenn er steht — sonst nichts.
 
     Er tötet nichts und schlägt es auch nicht vor. Am 22.08.2026 standen zwei
@@ -449,21 +580,30 @@ def _idle_note(entry: dict[str, object]) -> str:
     # Halters ruht, und wie viele Testprozesse sich ihm nicht zuordnen lassen.
     # Die verlässliche Antwort gibt nur eine Handmessung, und die steht in
     # ``.claude/rules/tests.md``.
-    ruht = standing_still(pid)
-    if ruht is not True:
-        return ""
-    began = float(entry.get("seit") or 0.0)
-    fremde = [
-        candidate
-        for candidate in _test_processes()
-        if candidate not in _descendants(pid)
-        and ((started := _started_at(candidate)) is None or started >= began - 5.0)
-    ]
+    try:
+        ruht = standing_still(pid)
+        if ruht is not True:
+            return ""
+        began = float(entry.get("seit") or 0.0)
+        test_processes = _test_processes()
+        descendants = _descendants(pid)
+        fremde = [
+            candidate
+            for candidate in test_processes
+            if candidate not in descendants
+            and ((started := _started_at(candidate)) is None or started >= began - 5.0)
+        ]
+    except ProcessQueryError as exc:
+        return (
+            f"Achtung: {exc} Ob der Lauf des Halters steht, lässt sich ohne diese "
+            "Prozessauskunft nicht beurteilen. Sieh in sein Protokoll und prüfe den "
+            "Status später erneut."
+        )
     if fremde:
         return (
             f"Achtung: Der Prozessbaum des Halters hat in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
             "keine Rechenzeit verbraucht. Ob sein Lauf steht, lässt sich von hier aus nicht "
-            f"sagen: Es laufen {len(fremde)} more Testprozesse, die sich ihm nicht sicher "
+            f"sagen: Es laufen {len(fremde)} weitere Testprozesse, die sich ihm nicht sicher "
             "zuordnen lassen (auf Windows reißt die Elternkette, wenn ein Zwischenprozess "
             "endet). Von Hand messen — das Verfahren steht in .claude/rules/tests.md unter "
             "Steht er oder rechnet er?"
@@ -513,7 +653,7 @@ def _head_commit() -> str:
 
 
 def _source_stamps() -> dict[str, float]:
-    """Zeitstempel aller Quelldateien — die Grundlage für „hat sich etwas moved".
+    """Zeitstempel aller Quelldateien — die Grundlage für „hat sich etwas geändert".
 
     **Zeitstempel und nicht Inhalt**, weil es um Sekundenbruchteile geht: Ein
     Hash über tausend Dateien kostet bei jedem Lauf Zeit, und die Frage lautet
@@ -538,14 +678,32 @@ def _moved_sources(before: dict[str, float]) -> set[str]:
     return {name for name, zeit in now.items() if before.get(name) != zeit}
 
 
-def _read(path: Path) -> dict[str, object] | None:
+def _read(path: Path) -> _LockEntry | None:
+    """Prüft die JSON-Grenze, bevor Status und Besitzprüfung mit Zahlen rechnen."""
     try:
-        return dict(json.loads(path.read_text(encoding="utf-8")))
-    except OSError, ValueError, TypeError:
+        raw: object = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            return None
+        pid: object = raw.get("pid")
+        began: object = raw.get("seit")
+        who: object = raw.get("wer")
+        if not isinstance(pid, (int, float, str, type(None))):
+            return None
+        if not isinstance(began, (int, float, str, type(None))):
+            return None
+        if who is not None and not isinstance(who, str):
+            return None
+        # Derselbe Zahlenvertrag wie beim Lesen des Alters und der Prozess-ID.
+        # Ursprungswerte erhalten: Der Besitzvergleich nutzt auch ihre Identität.
+        int(pid or 0)
+        if not math.isfinite(float(began or 0.0)):
+            return None
+        return {"wer": who or "", "pid": pid, "seit": began}
+    except OSError, ValueError, TypeError, OverflowError:
         return None
 
 
-def _stale(entry: dict[str, object]) -> str:
+def _stale(entry: _LockEntry) -> str:
     """Warum das vorhandene Schloss nicht mehr gilt — oder eine leere Zeichenkette."""
     pid = int(entry.get("pid") or 0)
     if pid > 0 and not _alive(pid):
@@ -556,7 +714,7 @@ def _stale(entry: dict[str, object]) -> str:
     return ""
 
 
-def _describe(entry: dict[str, object]) -> str:
+def _describe(entry: _LockEntry) -> str:
     age = time.time() - float(entry.get("seit") or 0.0)
     return (
         f"{entry.get('wer') or 'unbenannt'} (Prozess {entry.get('pid')}), seit {age / 60:.0f} min"
@@ -590,7 +748,7 @@ def _runnable(command: list[str]) -> list[str]:
 UNREADABLE_GRACE_SECONDS = 5.0
 
 
-def _acquire(path: Path, who: str, wait: float) -> dict[str, object] | None:
+def _acquire(path: Path, who: str, wait: float) -> _LockEntry | None:
     """Legt das Schloss an. Gibt den fremden Eintrag zurück, wenn es nicht geht."""
     deadline = time.monotonic() + wait
     while True:
@@ -614,7 +772,7 @@ def _acquire(path: Path, who: str, wait: float) -> dict[str, object] | None:
         time.sleep(min(POLL_SECONDS, remaining))
 
 
-def _unwritten() -> dict[str, object]:
+def _unwritten() -> _LockEntry:
     """Ein noch nicht lesbarer Eintrag belegt das Tor, statt es freizugeben."""
     return {"wer": "Sperrdatei wird gerade geschrieben", "pid": 0, "seit": time.time()}
 
@@ -628,7 +786,7 @@ def _signature(path: Path) -> tuple[int, int, int, int, int] | None:
     return stamp.st_dev, stamp.st_ino, stamp.st_size, stamp.st_mtime_ns, stamp.st_ctime_ns
 
 
-def _try_acquire(path: Path, who: str) -> dict[str, object] | None:
+def _try_acquire(path: Path, who: str) -> _LockEntry | None:
     """Ein Versuch unter der gemeinsamen Schreibsperre; gewartet wird außerhalb."""
     before = _signature(path)
     present = _read(path) if before is not None else None
@@ -712,7 +870,7 @@ def run(who: str, wait: float, command: list[str]) -> int:
     before = _source_stamps()
     commit_before = _head_commit()
 
-    mine = _read(path) or {}
+    mine: _LockEntry = _read(path) or {}
     held = mine.get("pid") == os.getpid()
     try:
         try:
@@ -763,7 +921,7 @@ def run(who: str, wait: float, command: list[str]) -> int:
             )
 
 
-def _discard(path: Path, present: dict[str, object]) -> bool:
+def _discard(path: Path, present: _LockEntry) -> bool:
     """Prüfen und Entfernen benutzen dieselbe Schreibsperre wie das Anlegen."""
     try:
         with archive_lock(path, timeout=0.0):
@@ -772,7 +930,7 @@ def _discard(path: Path, present: dict[str, object]) -> bool:
         return False
 
 
-def _discard_unlocked(path: Path, present: dict[str, object]) -> bool:
+def _discard_unlocked(path: Path, present: _LockEntry) -> bool:
     """Ein verwaistes Schloss wegräumen — aber nur genau dieses.
 
     **Zwischen Lesen und Löschen kann ein neuer Halter angelegt haben.** Dann

@@ -238,8 +238,8 @@ class UpdateDialog(QDialog):
     def _show_offer(self) -> None:
         """Was zu Beginn dasteht — und was nicht.
 
-        Ohne startbares Paket gibt es hier nichts zu holen: unter Linux, weil
-        sich Flatpak und AppImage nicht von innen ersetzen lassen, und aus den
+        Ohne startbares Paket gibt es hier nichts zu holen: im AppImage und
+        im ausgepackten Linux-Archiv, die sich nicht selbst ersetzen, und aus den
         Quellen, weil es dann gar keine Installation gibt, die ein Installer
         anfassen könnte. Dann trägt der Weg zur Seite den Hauptknopf, statt
         einen zweiten anzubieten, der nichts kann.

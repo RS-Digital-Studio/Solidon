@@ -1,6 +1,6 @@
 """Der Bewegungsgriff am echten Renderer ohne Fenster (§18.11).
 
-Keine Attrappe: Der Griff steht an einem Würfel im VTK-Renderer, die Gesten
+Keine Attrappe: Der Griff steht an einem Würfel im pygfx-Renderer, die Gesten
 kommen als Zeigerereignisse an den Bildpunkten, auf die der Renderer die
 Pfeilspitzen und Ringe wirklich projiziert. Was der Zug bewegt, steht danach
 in der Matrix des Körpers — und die ist gemessen, nicht behauptet.

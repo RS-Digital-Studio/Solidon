@@ -1,8 +1,7 @@
 """Wo der Renderer der 3D-Ansicht gebaut wird — und ob er hier kann (§18).
 
 Gezeichnet wird mit pygfx über wgpu (Vulkan, DX12, Metal; in einer virtuellen
-Maschine WARP beziehungsweise lavapipe). Entscheidung Robert, 06.09.2026,
-nach der Modellabnahme mit beiden Renderern; der VTK-Renderer ist ausgebaut,
+Maschine WARP beziehungsweise lavapipe, soweit vom System bereitgestellt).
 ``vtk`` bleibt als kopflose Geometriebibliothek der Bereichsprüfung
 (``app/core/knowledge/parts/range_check.py``).
 

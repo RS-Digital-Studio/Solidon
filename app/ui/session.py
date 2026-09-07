@@ -216,6 +216,18 @@ class _EvaluationWorker(Worker):
         else:
             self.finishedWith.emit(result)
 
+    def release_finished_references(self) -> None:
+        """Den nur für diesen Lauf gehaltenen Sitzungsbezug lösen.
+
+        Der Arbeiter besitzt während der Rechnung die Sitzung. Seine
+        Ergebnissignale tragen zusätzlich Partials zurück zu ihr und zu ihm
+        selbst. Nach der von :class:`WorkerLeash` bestätigten letzten
+        Ereignisrunde werden genau diese eigenen Verbindungen gelöst; Qts
+        ``destroyed``-Vertrag bleibt unangetastet.
+        """
+        del self._session
+        super().release_finished_references()
+
 
 class _PlanWorker(Worker):
     """Der Einleseplan einer Datei. Besitzt nichts, meldet alles.
@@ -271,6 +283,11 @@ class _PlanWorker(Worker):
         else:
             self.readyWith.emit(plan, self._source_id)
 
+    def release_finished_references(self) -> None:
+        """Eingabedaten und Fortschrittsziel nach ihrer Zustellung lösen."""
+        del self._payload, self._progress
+        super().release_finished_references()
+
 
 @dataclass(slots=True)
 class ProposalPreview:
@@ -313,6 +330,11 @@ class _AgentWorker(Worker):
         else:
             self.finishedWith.emit(preview)
 
+    def release_finished_references(self) -> None:
+        """Sitzung und Anfrage nach dem zugestellten Agentenzug lösen."""
+        del self._session, self._request, self._backend
+        super().release_finished_references()
+
 
 class _PreviewWorker(Worker):
     """Eine Dialog-Vorschau, abseits des GUI-Threads (§18.7, §2.8).
@@ -344,6 +366,11 @@ class _PreviewWorker(Worker):
             self.done.emit(self._generation, None)
         else:
             self.done.emit(self._generation, difference)
+
+    def release_finished_references(self) -> None:
+        """Vorschaukontext nach Ergebnis und Fertigsignal lösen."""
+        del self._session, self._compute
+        super().release_finished_references()
 
 
 class _SplitWorker(Worker):
@@ -392,6 +419,11 @@ class _SplitWorker(Worker):
             self.failedWith.emit(error)
         else:
             self.done.emit(plan)
+
+    def release_finished_references(self) -> None:
+        """Große Suchdaten nach der vollständig zugestellten Antwort lösen."""
+        del self._mesh, self._profile, self._features
+        super().release_finished_references()
 
 
 def _no_questions(question: str, choices: list[str]) -> str:
@@ -2083,10 +2115,14 @@ class Session(QObject):
         self.agent_cancel.reset()
         self.agentBusyChanged.emit(True)
         worker = _AgentWorker(self, request, backend)
-        worker.finishedWith.connect(self._on_proposal)
-        worker.failedWith.connect(self._on_failed)
-        worker.crashed.connect(lambda detail: self._on_failed(InternalError(detail=detail)))
-        worker.finished.connect(self._on_agent_done)
+        worker.finishedWith.connect(partial(self._on_agent_proposal, finished=worker))
+        worker.failedWith.connect(partial(self._on_agent_failed, finished=worker))
+        worker.crashed.connect(
+            lambda detail, done=worker: self._on_agent_failed(
+                InternalError(detail=detail), finished=done
+            )
+        )
+        worker.finished.connect(partial(self._on_agent_done, worker))
         self._agent = worker
         self._leash.start(worker)
 
@@ -2320,11 +2356,29 @@ class Session(QObject):
     def _on_proposal(self, preview: Any) -> None:
         self.proposalReady.emit(preview)
 
-    def _on_agent_done(self) -> None:
-        self.agentBusyChanged.emit(False)
+    def _on_agent_proposal(self, preview: Any, finished: _AgentWorker) -> None:
+        """Nur der aktuelle Agentenzug darf seinen Vorschlag zeigen."""
+        if finished is not self._agent:
+            return
+        self._on_proposal(preview)
+
+    def _on_agent_failed(self, error: Any, finished: _AgentWorker) -> None:
+        """Nur der aktuelle Agentenzug darf einen Fehler melden."""
+        if finished is not self._agent:
+            return
+        self._on_failed(error)
+
+    def _on_agent_done(self, finished: _AgentWorker | None = None) -> None:
+        if finished is not None and finished is not self._agent:
+            self._leash.hold_until_done(finished)
+            return
         # Nicht einfach loslassen — siehe ``_leash``.
         worker, self._agent = self._agent, None
         self._leash.hold_until_done(worker)
+        # Erst nachdem das alte Feld leer und sein Wrapper gesichert ist: Ein
+        # direkter Empfänger darf auf BusyFalse sofort den nächsten Zug
+        # starten, ohne dass dieser Slot ihn danach wieder austrägt.
+        self.agentBusyChanged.emit(False)
 
     def _on_split_done(self, worker: Any) -> None:
         """Die Teilungssuche ist ausgelaufen — ihr Arbeiter bleibt am Leben.

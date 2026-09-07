@@ -97,8 +97,9 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
 - **Eine neue Abhängigkeit** kann in der `.spec` fehlen und erst im gebauten
   Paket auffallen — dort, wo kein `pip` mehr hilft.
   Die Ansicht zeichnet mit pygfx über wgpu; ohne Adapter für Direct3D 12,
-  Vulkan oder Metal fällt sie aus, und wgpu bringt für diesen Fall WARP
-  beziehungsweise lavapipe mit. VTK reist nur noch als kopflose
+  Vulkan oder Metal fällt sie aus. Auf Windows kann der Systemadapter WARP
+  einspringen; Linux benötigt einen installierten Vulkan-Softwareadapter wie
+  lavapipe aus Mesa. wgpu liefert diese Systemtreiber nicht mit. VTK reist nur noch als kopflose
   Geometriebibliothek der Bereichsprüfung mit; PyVista, PyVistaQt und QtPy
   gehören nicht zum Laufzeitbaum. Die Entwicklungsvorschau
   der Lizenzbeilage wird nach einer Änderung mit dem Interpreter des neuen
@@ -168,6 +169,20 @@ nicht mehr heraus. Der Weg je Plattform steht in `Signierung/README.md`.
   Bausteins. Die allgemeine Endung `.json` wird nie Solidon zugeordnet.
 
 `tests/test_packaging.py` prüft, was sich prüfen lässt, ohne zu bauen.
+
+Die CI fährt Fensterdateien je Prozess als verbindliches Tor auf allen
+Plattformen der Suite. Fehlende oder leere Sammlung und jeder rote Prozess
+sperren die Paketierung. Ein fehlender wgpu-Adapter ist in der CI ein Fehler;
+lokal dürfen Bildtests ihn mit einem konkreten Grund überspringen. Linux
+installiert Vulkan-Loader und lavapipe auch im Versionswächter, damit beide
+Abhängigkeitssätze tatsächlich zeichnen.
+
+Der Handstart mit `tests_only=true` fährt die Drei-Plattform-Suite und den
+Versionswächter. Sämtliche Paket-, Signier- und Releaseaktenjobs sind dann
+ausdrücklich gesperrt; der Standardwert `false` behält den vollständigen
+Bauweg. Die allgemeinen Qt-Tests laufen offscreen. Ein eigener Prozess in
+`test_render_factory.py` prüft zusätzlich den nativen Qt+pygfx-Weg samt Abbau
+auf `windows`, `cocoa` beziehungsweise `xcb` unter Xvfb.
 
 ## Der eigene Arbeitsbaum
 

@@ -8,7 +8,7 @@ Stil mehr — sie braucht Zeigergesten (:class:`PointerEvent`) und einen
 Renderer, der Kamerapose, Bildpunkte und Weltpunkte kennt. Genau das ist
 der :class:`Navigator`: dieselbe Zustandsmaschine, dieselben Rückrufe an die
 Ansicht, dieselben Zahlen — nur auf dem Vertrag statt auf VTK, und damit
-für beide Renderer gleich und ohne Fenster prüfbar (§35).
+unabhängig vom Zeichenweg und ohne Fenster prüfbar (§35).
 
 Die Tabelle :data:`_NAVIGATION` sagt, welche Taste in welchem Schema was
 tut; :func:`turntable_camera` rechnet den Drehteller; :func:`is_click`

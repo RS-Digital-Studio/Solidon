@@ -1054,6 +1054,237 @@ def test_a_report_write_error_keeps_both_recovery_ways(
     assert not opened, "ohne abgelegte Anhänge darf keine Mail aufgehen"
 
 
+@pytest.fixture
+def mail_portal_bus(monkeypatch: pytest.MonkeyPatch) -> Any:
+    """Ein Portal mit echten Qt-Nachrichten und getrenntem Request-Ergebnis."""
+    from PySide6.QtCore import Q_ARG, QMetaObject, Qt
+    from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusObjectPath, QDBusPendingCall
+
+    from app.ui import support_dialog as module
+
+    class PortalBus:
+        def __init__(self) -> None:
+            self.calls: list[QDBusMessage] = []
+            self.sent: list[QDBusMessage] = []
+            self.subscriptions: dict[str, tuple[object, str]] = {}
+            self.disconnected: list[str] = []
+            self.error = False
+            self.connects = True
+            self.early_response: int | None = None
+            self.returned_path = ""
+            self.sender = ":1.42"
+
+        def baseService(self) -> str:  # noqa: N802 — Name der Qt-DBus-Schnittstelle
+            return self.sender
+
+        def connect(self, service, path, interface, name, receiver, slot) -> bool:
+            assert service == "org.freedesktop.portal.Desktop"
+            assert interface == "org.freedesktop.portal.Request" and name == "Response"
+            if self.connects:
+                self.subscriptions[path] = (receiver, slot)
+            return self.connects
+
+        def disconnect(self, service, path, interface, name, receiver, slot) -> bool:
+            assert self.subscriptions.pop(path) == (receiver, slot)
+            self.disconnected.append(path)
+            return True
+
+        def asyncCall(self, request: QDBusMessage, timeout: int) -> QDBusPendingCall:  # noqa: N802
+            self.calls.append(request)
+            assert 0 < timeout <= 5000
+            options = request.arguments()[1]
+            token = options.get("handle_token", "")
+            path = f"/org/freedesktop/portal/desktop/request/1_42/{token}"
+            assert token and path in self.subscriptions, "vor dem Methodenaufruf abonnieren"
+            if self.early_response is not None:
+                self.respond(self.early_response, path)
+            reply = request.createReply()
+            reply.setArguments([QDBusObjectPath(self.returned_path or path)])
+            if self.error:
+                reply = request.createErrorReply(
+                    "org.freedesktop.DBus.Error.ServiceUnknown", "kein Portal"
+                )
+            return QDBusPendingCall.fromCompletedCall(reply)
+
+        def send(self, request: QDBusMessage) -> bool:
+            self.sent.append(request)
+            return True
+
+        def respond(self, code: int, path: str = "") -> None:
+            path = path or next(iter(self.subscriptions))
+            receiver, slot = self.subscriptions[path]
+            message = QDBusMessage.createSignal(path, "org.freedesktop.portal.Request", "Response")
+            message.setArguments([code, {}])
+            method = slot.removeprefix("1").partition("(")[0]
+            assert QMetaObject.invokeMethod(
+                receiver, method, Qt.ConnectionType.DirectConnection, Q_ARG("QDBusMessage", message)
+            ), "die echte Qt-Slot-Signatur muss zur Nachricht passen"
+
+    bus = PortalBus()
+    monkeypatch.setattr(QDBusConnection, "sessionBus", staticmethod(lambda: bus))
+    monkeypatch.setattr(module.discover, "in_flatpak", lambda: True)
+    return bus
+
+
+@pytest.mark.parametrize("portal_error", [False, True])
+def test_flatpak_mail_composer_receives_plain_text(
+    qt_app: QApplication,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mail_portal_bus: Any,
+    portal_error: bool,
+) -> None:
+    """Der Mailentwurf erhält Satzzeichen und Zeilenwechsel ohne Prozentkodierung."""
+    from PySide6.QtTest import QTest
+
+    from app.core.support import Ticket
+    from app.ui import support_dialog as module
+
+    bus = mail_portal_bus
+    bus.error = portal_error
+    opened: list[object] = []
+    monkeypatch.setattr(module.QDesktopServices, "openUrl", lambda url: opened.append(url))
+    ticket = Ticket(message="Frage: Größe & 100%\nÄnderung: 12,5 mm; %3A bleibt Text.")
+    dialog = SupportDialog(message=ticket.message)
+    dialog.written = tmp_path
+    monkeypatch.setattr(dialog, "ticket", lambda: ticket)
+
+    dialog._open_mail()
+    QTest.qWait(10)
+
+    assert len(bus.calls) == 1
+    assert bus.calls[0].interface() == "org.freedesktop.portal.Email"
+    assert bus.calls[0].member() == "ComposeEmail"
+    options = bus.calls[0].arguments()[1]
+    assert options["subject"] == ticket.subject
+    assert options["body"].splitlines()[2:] == ticket.as_text().splitlines()[2:]
+    assert options["address"] == module.SUPPORT_ADDRESS
+    assert not opened, "der fehlerhafte Qt-mailto-Portalweg bleibt unbenutzt"
+    if portal_error:
+        assert dialog.by_mail.isEnabled()
+        assert "bericht.txt" in dialog.state.text()
+    else:
+        assert not dialog.by_mail.isEnabled(), "der Methodenreply ist noch kein Öffnungserfolg"
+        assert dialog.state.text()
+        bus.respond(0)
+        assert dialog.by_mail.isEnabled()
+        assert not dialog.state.text()
+    assert not bus.subscriptions
+    dialog.close()
+
+
+@pytest.mark.parametrize("code", [0, 1, 2])
+@pytest.mark.parametrize("early", [False, True])
+def test_flatpak_mail_portal_waits_for_the_actual_response(
+    qt_app: QApplication, tmp_path: Path, mail_portal_bus: Any, code: int, early: bool
+) -> None:
+    """Auch ein frühes Ergebnis oder ein fehlender Mail-Handler wird ausgewertet."""
+    from PySide6.QtTest import QTest
+
+    bus = mail_portal_bus
+    bus.early_response = code if early else None
+    dialog = SupportDialog(message="Frage")
+    dialog.written = tmp_path
+    dialog._open_mail()
+    QTest.qWait(10)
+    if not early:
+        assert not dialog.by_mail.isEnabled()
+        bus.respond(code)
+    assert dialog.by_mail.isEnabled()
+    assert ("bericht.txt" in dialog.state.text()) == (code == 2)
+    assert not bus.subscriptions and not bus.sent
+    dialog.close()
+
+
+@pytest.mark.parametrize("finish", ["close", "release"])
+def test_closing_the_dialog_closes_its_pending_mail_request(
+    qt_app: QApplication, tmp_path: Path, mail_portal_bus: Any, finish: str
+) -> None:
+    """Ein verlassener Dialog hält kein Portal und keine Signalverbindung fest."""
+    from PySide6.QtTest import QTest
+
+    bus = mail_portal_bus
+    dialog = SupportDialog(message="Frage")
+    dialog.written = tmp_path
+    dialog.show()
+    dialog._open_mail()
+    path = next(iter(bus.subscriptions))
+    getattr(dialog, finish)()
+    QTest.qWait(10)
+    assert not bus.subscriptions
+    assert [(call.path(), call.interface(), call.member()) for call in bus.sent] == [
+        (path, "org.freedesktop.portal.Request", "Close")
+    ]
+    assert not dialog.state.text(), "ein später Methodenreply darf den Dialog nicht reaktivieren"
+    dialog.close()
+
+
+def test_an_older_portals_returned_mail_handle_is_followed(
+    qt_app: QApplication, tmp_path: Path, mail_portal_bus: Any
+) -> None:
+    """Der zurückgegebene Request-Pfad gilt auch ohne Unterstützung des Tokens."""
+    from PySide6.QtTest import QTest
+
+    bus = mail_portal_bus
+    bus.returned_path = "/org/freedesktop/portal/desktop/request/legacy_mail"
+    dialog = SupportDialog(message="Frage")
+    dialog.written = tmp_path
+    dialog._open_mail()
+    QTest.qWait(10)
+    assert set(bus.subscriptions) == {bus.returned_path}
+    assert len(bus.disconnected) == 1
+    bus.respond(2)
+    assert "bericht.txt" in dialog.state.text()
+    assert not bus.subscriptions
+    dialog.close()
+
+
+@pytest.mark.parametrize("missing", ["bus", "signal"])
+def test_an_unavailable_mail_portal_keeps_the_saved_report_reachable(
+    qt_app: QApplication, tmp_path: Path, mail_portal_bus: Any, missing: str
+) -> None:
+    """Ohne Bus oder Ergebnisabonnement beginnt kein unbeobachteter Mailaufruf."""
+    bus = mail_portal_bus
+    if missing == "bus":
+        bus.sender = ""
+    else:
+        bus.connects = False
+    dialog = SupportDialog(message="Frage")
+    dialog.written = tmp_path
+    dialog._open_mail()
+    assert not bus.calls and not bus.subscriptions
+    assert dialog.by_mail.isEnabled() and "bericht.txt" in dialog.state.text()
+    dialog.close()
+
+
+def test_a_previous_mail_response_cannot_finish_a_new_request(
+    qt_app: QApplication, tmp_path: Path, mail_portal_bus: Any
+) -> None:
+    """Ein bereits wartendes altes Signal trifft nicht den nächsten Mailentwurf."""
+    from PySide6.QtDBus import QDBusMessage
+    from PySide6.QtTest import QTest
+
+    bus = mail_portal_bus
+    dialog = SupportDialog(message="Frage")
+    dialog.written = tmp_path
+    dialog._open_mail()
+    QTest.qWait(10)
+    previous = next(iter(bus.subscriptions))
+    bus.respond(2)
+    dialog._open_mail()
+    QTest.qWait(10)
+    current = next(iter(bus.subscriptions))
+    assert current != previous
+    stale = QDBusMessage.createSignal(previous, "org.freedesktop.portal.Request", "Response")
+    stale.setArguments([0, {}])
+    dialog._mail_portal_response(stale)
+    assert not dialog.by_mail.isEnabled() and dialog.state.text()
+    assert set(bus.subscriptions) == {current}
+    bus.respond(0)
+    assert dialog.by_mail.isEnabled() and not bus.subscriptions
+    dialog.close()
+
+
 # --- die Rückmeldung, die wirklich hinausgeht (§37.2) ---------------------------------
 
 

@@ -1134,7 +1134,7 @@ def test_the_process_tree_is_read_along_the_chain_not_the_first_level() -> None:
 
 
 @braucht_prozessbaum
-def test_standing_still_tells_a_sleeper_from_a_worker() -> None:
+def test_standing_still_tells_a_sleeper_from_a_worker(tmp_path: Path) -> None:
     """Ob etwas rechnet, sagt die Rechenzeit über ein **Intervall**.
 
     Die Gesamtzeit eines wartenden Wrappers ist immer klein, egal was sein Kind
@@ -1144,12 +1144,15 @@ def test_standing_still_tells_a_sleeper_from_a_worker() -> None:
     kann, meldet entweder immer Stillstand oder nie.
     """
     import subprocess
-    import time
 
+    ready = tmp_path / "ready"
+    worker = (
+        f"from pathlib import Path; Path({str(ready)!r}).touch(); x = 0\nwhile True:\n    x += 1"
+    )
     schlaefer = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
-    rechner = subprocess.Popen([sys.executable, "-c", "x = 0\nwhile True:\n    x += 1"])
+    rechner = subprocess.Popen([sys.executable, "-c", worker])
     try:
-        time.sleep(0.5)
+        _wait_until_worker_started(rechner, ready)
         assert gate_lock.standing_still(schlaefer.pid, sample=1.0) is True, (
             "ein Schläfer rechnet nicht"
         )
@@ -1158,6 +1161,17 @@ def test_standing_still_tells_a_sleeper_from_a_worker() -> None:
         for prozess in (schlaefer, rechner):
             prozess.kill()
             prozess.wait(timeout=5)
+
+
+def _wait_until_worker_started(process: subprocess.Popen, ready: Path) -> None:
+    """Der CPU-Vergleich beginnt am Schleifenstart, unabhängig vom Interpreterstart."""
+    import time
+
+    deadline = time.monotonic() + 20.0
+    while not ready.exists() and time.monotonic() < deadline:
+        assert process.poll() is None, "der Testarbeiter endete vor seinem Schleifenstart"
+        time.sleep(0.01)
+    assert ready.exists(), "der Testarbeiter erreichte seine Schleife nicht"
 
 
 def test_an_unknown_process_says_nothing_instead_of_standing_still() -> None:
@@ -1208,8 +1222,255 @@ def test_a_test_process_is_found_by_its_command_not_its_ancestry() -> None:
     )
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="direkte Windows-Prozessabfrage")
+def test_windows_discovers_pytest_without_starting_a_query_process(monkeypatch) -> None:
+    """Die Auskunft braucht auch unter Testlast weder PowerShell noch einen CIM-Dienst."""
+    import os
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("die Prozessauskunft startet einen zusätzlichen Abfrageprozess")
+
+    monkeypatch.setattr(gate_lock.subprocess, "run", forbidden)
+    watched = set()
+    for pid in gate_lock._test_processes():
+        watched |= gate_lock._descendants(pid)
+    assert os.getpid() in watched
+
+
+@pytest.fixture
+def native_process_api(monkeypatch):
+    """Native Antwortpuffer und 64-Bit-Handles ohne echte fremde Prozessdaten."""
+    import ctypes
+    from types import SimpleNamespace
+
+    state = SimpleNamespace(
+        error=18,
+        snapshot=(1 << 40) + 7,
+        handle=(1 << 40) + 9,
+        closed=[],
+        rows=[(42, 7, "python.exe")],
+        measured_status=0xC0000004,
+        read_status=0,
+        mutation="",
+        text='python -m pytest "C:/Größe/漢字"',
+    )
+
+    def fill(pointer):
+        if not state.rows:
+            return 0
+        pid, parent, name = state.rows.pop(0)
+        pointer._obj.pid, pointer._obj.parent, pointer._obj.name = pid, parent, name
+        return 1
+
+    def open_process(access, inherit, pid):
+        assert access == 0x1000 and not inherit and pid == 42
+        return state.handle
+
+    def query(handle, information, buffer, capacity, returned):
+        assert handle == state.handle and information == 60
+        encoded = state.text.encode("utf-16-le", errors="surrogatepass")
+        header = ctypes.sizeof(gate_lock._WindowsUnicodeString)
+        size = header + len(encoded) + 2
+        if buffer is None:
+            assert capacity == 0
+            returned._obj.value = 2**31 if state.mutation == "allocation" else size
+            return state.measured_status
+        assert capacity == size
+        returned._obj.value = size
+        value = gate_lock._WindowsUnicodeString.from_buffer(buffer)
+        value.length, value.maximum = len(encoded), len(encoded) + 2
+        value.buffer = ctypes.addressof(buffer) + header
+        ctypes.memmove(value.buffer, encoded, len(encoded))
+        if state.mutation == "short-header":
+            returned._obj.value = header - 1
+        elif state.mutation == "long-answer":
+            returned._obj.value = capacity + 1
+        elif state.mutation == "odd-length":
+            value.length = 1
+        elif state.mutation == "odd-maximum":
+            value.maximum = 1
+        elif state.mutation == "short-maximum":
+            value.maximum = 0
+        elif state.mutation == "null-pointer":
+            value.buffer = None
+        elif state.mutation == "header-pointer":
+            value.buffer = ctypes.addressof(buffer)
+        elif state.mutation == "past-buffer":
+            value.buffer += 2
+        elif state.mutation == "unaligned":
+            value.buffer += 1
+        elif state.mutation == "empty":
+            value.length = value.maximum = 0
+            value.buffer = None
+        return state.read_status
+
+    kernel = SimpleNamespace(
+        CreateToolhelp32Snapshot=lambda *args: state.snapshot,
+        Process32FirstW=lambda handle, pointer: fill(pointer),
+        Process32NextW=lambda handle, pointer: fill(pointer),
+        OpenProcess=open_process,
+        CloseHandle=lambda handle: state.closed.append(handle),
+    )
+    native = SimpleNamespace(NtQueryInformationProcess=query)
+    monkeypatch.setattr(gate_lock, "_windows_process_api", lambda: (kernel, native))
+    monkeypatch.setattr(gate_lock, "_windows_last_error", lambda: state.error)
+    return state
+
+
+@pytest.mark.parametrize("failure", ["snapshot", "enumeration", "open", "measure", "read"])
+def test_a_failed_native_query_is_not_an_empty_process_list(native_process_api, failure):
+    """Systemfehler bleiben sichtbar und alle bereits erworbenen Handles werden geschlossen."""
+    import ctypes
+
+    state = native_process_api
+    call = gate_lock._windows_processes
+    expected_closed = []
+    if failure == "snapshot":
+        state.snapshot = ctypes.c_void_p(-1).value
+        state.error = 5
+    elif failure == "enumeration":
+        state.error = 5
+        expected_closed = [state.snapshot]
+    else:
+
+        def call():
+            return gate_lock._windows_command_line(42)
+
+        expected_closed = [state.handle]
+        if failure == "open":
+            state.handle = None
+            state.error = 5
+            expected_closed = []
+        elif failure == "measure":
+            state.measured_status = 0xC0000003  # unbekannte Informationsklasse
+        elif failure == "read":
+            state.read_status = 0xC0000022  # Zugriff verweigert
+    with pytest.raises(gate_lock.ProcessQueryError, match="Windows-Prozess") as error:
+        call()
+    assert state.text not in str(error.value)
+    assert state.closed == expected_closed
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "allocation",
+        "short-header",
+        "long-answer",
+        "odd-length",
+        "odd-maximum",
+        "short-maximum",
+        "null-pointer",
+        "header-pointer",
+        "past-buffer",
+        "unaligned",
+    ],
+)
+def test_native_command_lines_reject_invalid_buffers_before_reading(native_process_api, mutation):
+    """Weder Größenwerte noch fremde Zeiger dürfen unkontrolliert Speicher adressieren."""
+    state = native_process_api
+    state.mutation = mutation
+    with pytest.raises(gate_lock.ProcessQueryError):
+        gate_lock._windows_command_line(42)
+    assert state.closed == [state.handle]
+
+
+@pytest.mark.parametrize("stage", ["open", "measure", "read"])
+def test_a_process_gone_since_the_snapshot_is_not_a_query_failure(native_process_api, stage):
+    """Ein nachweislich beendeter Prozess ist eine normale Lücke zwischen den Systemaufrufen."""
+    state = native_process_api
+    expected_closed = [state.handle]
+    if stage == "open":
+        state.handle = None
+        state.error = 87
+        expected_closed = []
+    elif stage == "measure":
+        state.measured_status = 0xC000010A
+    else:
+        state.read_status = 0xC000010A
+    assert gate_lock._windows_command_line(42) is None
+    assert state.closed == expected_closed
+
+
+@pytest.mark.parametrize(
+    "text", ['python -m pytest "C:/Größe/漢字"', "x" * 32760, ""], ids=["unicode", "long", "empty"]
+)
+def test_native_command_lines_preserve_unicode_and_long_paths(native_process_api, text):
+    state = native_process_api
+    state.text = text
+    assert gate_lock._windows_command_line(42) == text
+    assert state.closed == [state.handle]
+
+
+def test_a_successful_native_snapshot_keeps_empty_and_matching_results(native_process_api):
+    state = native_process_api
+    assert gate_lock._windows_processes() == {42: (7, "python.exe")}
+    assert gate_lock._windows_processes() == {}
+    state.mutation = "empty"
+    assert gate_lock._windows_command_line(42) == ""
+    assert state.closed == [state.snapshot, state.snapshot, state.handle]
+
+
+def test_native_discovery_ignores_non_python_and_waiting_gate_wrappers(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(gate_lock, "sys", SimpleNamespace(platform="win32"))
+    monkeypatch.setattr(
+        gate_lock,
+        "_windows_processes",
+        lambda: {
+            1: (0, "PYTHON.EXE"),
+            2: (0, "pythonw.exe"),
+            3: (0, "notepad.exe"),
+            4: (0, "python.exe"),
+            5: (0, "python.exe"),
+        },
+    )
+    commands = {
+        1: "python -m pytest",
+        2: "python tools/gate_lock.py run -- python -m pytest",
+        4: None,
+        5: "python -c ordinary_work",
+    }
+    monkeypatch.setattr(gate_lock, "_windows_command_line", commands.__getitem__)
+    assert gate_lock._test_processes() == {1}
+
+
+def test_missing_native_process_api_is_an_explicit_query_failure(monkeypatch):
+    """Eine fehlende oder geänderte Windows-API darf keinen leeren Bestand vortäuschen."""
+    import ctypes
+
+    def unavailable(*args, **kwargs):
+        raise OSError("private loader detail")
+
+    monkeypatch.setattr(ctypes, "WinDLL", unavailable, raising=False)
+    with pytest.raises(gate_lock.ProcessQueryError, match="nicht verfügbar") as error:
+        gate_lock._windows_process_api.__wrapped__()
+    assert "private loader detail" not in str(error.value)
+
+
+@pytest.mark.parametrize("stage", ["tree", "commands"])
+def test_an_idle_note_reports_a_failed_process_query_as_unknown(monkeypatch, stage):
+    """Die fehlende Auskunft darf keinen vermeintlich sicheren Stillstandshinweis erzeugen."""
+    monkeypatch.setattr(gate_lock, "standing_still", lambda *args: True)
+
+    def query(*args):
+        raise gate_lock.ProcessQueryError("Windows-Prozessbestand: Fehler 5.")
+
+    monkeypatch.setattr(
+        gate_lock, "standing_still" if stage == "tree" else "_test_processes", query
+    )
+    note = gate_lock._idle_note({"pid": 123, "seit": 0})
+    assert "Fehler 5" in note
+    assert "nicht beurteilen" in note
+    assert "Der Halter rechnet gerade nicht" not in note
+
+
 @braucht_prozessbaum
-def test_a_named_process_is_measured_with_its_children() -> None:
+@pytest.mark.parametrize("startup_delay", [0, 2.5])
+def test_a_named_process_is_measured_with_its_children(
+    tmp_path: Path, startup_delay: float
+) -> None:
     """Wer über das Kommando gefunden wird, wird mit seinem Unterbaum gemessen.
 
     ``subprocess.Popen`` startet auf Windows einen Wrapper, der den echten
@@ -1222,12 +1483,16 @@ def test_a_named_process_is_measured_with_its_children() -> None:
     stehend gelten, ein schlafender muss es.
     """
     import subprocess
-    import time
 
-    rechner = subprocess.Popen([sys.executable, "-c", "x = 0\nwhile True:\n    x += 1"])
+    ready = tmp_path / "ready"
+    worker = (
+        f"import pathlib, time; time.sleep({startup_delay!r}); "
+        f"pathlib.Path({str(ready)!r}).touch(); x = 0\nwhile True:\n    x += 1"
+    )
+    rechner = subprocess.Popen([sys.executable, "-c", worker])
     schlaefer = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(25)"])
     try:
-        time.sleep(1.0)
+        _wait_until_worker_started(rechner, ready)
         # Als ``extra`` übergeben und mit einer Wurzel gemessen, die selbst
         # nichts tut — nur der Unterbaum des Genannten kann den Ausschlag geben.
         assert gate_lock.standing_still(4, sample=1.0, extra=frozenset({rechner.pid})) is False, (
@@ -2310,6 +2575,50 @@ def test_no_generated_comparison_runs_in_the_ci() -> None:
         f"markiert, nicht eingetragen: {sorted(marked - set(RENDERED_TESTS))}; "
         f"eingetragen, nicht markiert: {sorted(set(RENDERED_TESTS) - marked)}"
     )
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("pid", []),
+        ("pid", "ungültig"),
+        ("pid", float("inf")),
+        ("seit", {}),
+        ("seit", "ungültig"),
+        ("seit", float("nan")),
+        ("seit", float("inf")),
+        ("wer", []),
+    ],
+)
+def test_invalid_lock_fields_keep_a_fresh_file_occupied(tmp_path, monkeypatch, field, value):
+    """Kaputte Zahlen werden an der JSON-Grenze erkannt und geben kein junges Schloss frei."""
+    import time
+
+    lock = tmp_path / "tor.json"
+    record = {"wer": "laufendes Tor", "pid": os.getpid(), "seit": time.time()}
+    record[field] = value
+    lock.write_text(json.dumps(record), encoding="utf-8")
+    before = lock.read_bytes()
+    assert gate_lock._read(lock) is None
+    assert gate_lock._acquire(lock, "zweiter Lauf", wait=0.0) is not None
+    assert lock.read_bytes() == before
+
+
+@pytest.mark.parametrize("as_text", [False, True])
+def test_lock_number_validation_preserves_the_existing_owner_values(tmp_path, as_text):
+    """Zahlen und bisher lesbare Zahlenzeichenketten behalten ihre Besitzidentität."""
+    import time
+
+    lock = tmp_path / "tor.json"
+    pid, began = os.getpid(), time.time()
+    record = {
+        "wer": "laufendes Tor",
+        "pid": str(pid) if as_text else pid,
+        "seit": str(began) if as_text else began,
+    }
+    lock.write_text(json.dumps(record), encoding="utf-8")
+    assert gate_lock._read(lock) == record
+    assert gate_lock._stale(gate_lock._read(lock)) == ""
 
 
 def test_a_stale_lock_is_cleared_and_not_only_reported(tmp_path, monkeypatch) -> None:

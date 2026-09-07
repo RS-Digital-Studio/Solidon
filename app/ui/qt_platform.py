@@ -4,9 +4,9 @@ Die 3D-Ansicht ist eine eigene Grafikfläche (rendercanvas, wgpu) in einem
 Qt-Fenster, und dieser Fensterweg ist nur unter X11 und Xwayland geprüft.
 Mit dem früheren VTK-Renderer war Wayland tödlich: Seine Qt-Anbindung kannte
 nur X11 und riss den Prozess mit (``std::bad_array_new_length``; Martin
-Donecker, CachyOS, 28.08.2026). Der wgpu-Weg kennt Wayland zwar, ist dort
-aber von niemandem gefahren — bis das jemand tut, bleibt X11 die geprüfte
-Plattform (Registerpunkt in ``ROADMAP.md``).
+Donecker, CachyOS, 28.08.2026). Auch rendercanvas verwendet für Qt unter Linux
+ausschließlich X11: Sein Wayland-Zweig in ``_get_surface_ids`` ist deaktiviert.
+Deshalb braucht dieser Renderer X11 beziehungsweise Xwayland.
 
 Qt 6 wählt ohne ``QT_QPA_PLATFORM`` aber genau so: Sobald ``WAYLAND_DISPLAY``
 gesetzt ist **oder** ``XDG_SESSION_TYPE`` auf ``wayland`` steht, versucht es

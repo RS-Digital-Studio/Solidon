@@ -329,7 +329,7 @@ def test_a_hidden_zone_gives_its_room_back(window: MainWindow) -> None:
     assert window.right is not None
     width = window.overlay.width()
 
-    window.right.setVisible(False)
+    window.right_column.setVisible(False)
 
     assert window.overlay.view.geometry().width() == width, "die Ansicht bleibt ganz"
 
@@ -850,7 +850,7 @@ def test_no_card_is_pushed_outside_its_section(window: MainWindow) -> None:
     """
     from PySide6.QtWidgets import QTreeWidgetItem
 
-    from app.ui.overlay import RoomTaker, extra_height
+    from app.ui.overlay import extra_height, is_room_taker
 
     tree = window.object_tree.tree
     for number in range(20):
@@ -874,7 +874,7 @@ def test_no_card_is_pushed_outside_its_section(window: MainWindow) -> None:
         if section is None:
             continue
         for taker in section.findChildren(QWidget):
-            if not isinstance(taker, RoomTaker) or not taker.isVisibleTo(zone):
+            if not is_room_taker(taker) or not taker.isVisibleTo(zone):
                 continue
             checked += 1
             assert taker.height() <= section.height(), (

@@ -843,6 +843,35 @@ def test_a_downloaded_package_is_kept_when_the_checksum_matches() -> None:
     assert file.read_bytes() == payload
 
 
+@pytest.mark.parametrize("failure", ["lock", "temporary"])
+def test_a_download_response_closes_when_the_cache_cannot_be_opened(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Auch vor der ersten Paketdatei darf ein Fehler keinen Netzgriff behalten."""
+    from app.core.errors import FileWriteError
+
+    payload = b"ein Installationspaket"
+
+    class WatchedAnswer(FakeAnswer):
+        closed = False
+
+        def __exit__(self, *_args: object) -> None:
+            self.closed = True
+
+    answer = WatchedAnswer(payload)
+
+    def reject(*_args: object, **_kwargs: object) -> None:
+        raise FileWriteError(detail="Kein Platz im Zwischenspeicher")
+
+    if failure == "lock":
+        monkeypatch.setattr(updates, "_cache_lock", reject)
+    else:
+        monkeypatch.setattr(updates.tempfile, "mkstemp", reject)
+    with pytest.raises(FileWriteError):
+        updates.download(package_for(payload), opener=lambda *_args, **_kwargs: answer)
+    assert answer.closed, "die schon geöffnete HTTP-Antwort blieb nach dem Cachefehler offen"
+
+
 def test_the_progress_counts_up_to_the_whole() -> None:
     payload = b"x" * (updates.CHUNK_BYTES * 2 + 17)
     gesehen: list[float] = []

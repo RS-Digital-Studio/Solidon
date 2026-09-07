@@ -1609,10 +1609,8 @@ def _available() -> bool:
     platform = _effective_platform().casefold()
     if platform in ("offscreen", "minimal", "vnc"):
         return False
-    # Wayland: Der Fensterweg des Renderers ist nur unter X11 und Xwayland
-    # geprüft (mit VTK starb Wayland nativ — Martin Donecker, 28.08.2026;
-    # den nativen Wayland-Weg von rendercanvas hat noch niemand gefahren,
-    # Registerpunkt in ``ROADMAP.md``). Bis hierher kommt Wayland nur, wenn
+    # rendercanvas deaktiviert seinen nativen Wayland-Zweig ausdrücklich;
+    # der Qt-Fensterweg braucht daher X11 oder Xwayland. Hierher kommt Wayland, wenn
     # Xwayland fehlt oder jemand es mit ``-platform`` erzwungen hat; sonst
     # hat ``app.ui.qt_platform`` vor dem Anwendungsaufbau X11 gewählt.
     # :func:`unavailable_hint` sagt, was fehlt.
@@ -1629,7 +1627,7 @@ def _effective_platform() -> str:
     return QGuiApplication.platformName() or os.environ.get("QT_QPA_PLATFORM", "")
 
 
-def unavailable_hint() -> str:
+def unavailable_hint(system: str = "") -> str:
     """Was der Nutzer tun kann, wenn es hier keine 3D-Ansicht gibt — leer, wo
     es nichts zu tun gibt (§2.7: kein Fehler ohne Handlungsvorschlag).
 
@@ -1643,12 +1641,11 @@ def unavailable_hint() -> str:
     Linux-Paket nicht mitbringt, allen voran ``libxcb-cursor0`` (Qt warnt seit
     6.5 ausdrücklich davor). Ohne ``DISPLAY`` fehlt Xwayland selbst.
 
-    Bleibt der **wgpu-Adapter**, und der ist seit dem Ausbau des VTK-Renderers
-    (06.09.2026) der wahrscheinlichere Fall: Die Ansicht zeichnet über
-    Direct3D 12, Vulkan oder Metal, und auf einem Linux ohne Vulkan-Treiber
-    findet ``factory.available`` nichts. Das ist kein alter Rechner, sondern
-    ein fehlendes Paket — und stand bis dahin als „steht nicht zur Verfügung"
-    ohne einen Weg dahinter.
+    Bleibt der **wgpu-Adapter**. Die Ansicht zeichnet über Direct3D 12,
+    Vulkan oder Metal. Ein nicht nutzbarer Adapter beweist keine bestimmte
+    Ursache. Auf Linux nennt der Hinweis deshalb den zur Grafikkarte
+    passenden Treiber und Beispiele für den separaten Vulkan-Loader, ohne
+    allen Grafikkarten denselben Mesa-Treiber vorzuschreiben.
 
     Die dritte Lage — Offscreen oder ``SOLIDON3D_NO_VIEWPORT`` — ist gewollt
     und bekommt keinen Rat.
@@ -1671,12 +1668,14 @@ def unavailable_hint() -> str:
         )
     if os.environ.get(HEADLESS_VARIABLE) or platform in ("offscreen", "minimal", "vnc"):
         return ""
-    if sys.platform.startswith("linux"):
+    if (system or sys.platform).startswith("linux"):
         return tr(
-            "Die 3D-Ansicht zeichnet über die Grafikkarte, und dafür fehlt hier Vulkan. "
-            "Installieren Sie die Pakete „mesa-vulkan-drivers“ und „libvulkan1“ — unter "
-            "Fedora und openSUSE heißen sie „mesa-vulkan-drivers“ und „vulkan-loader“ — "
-            "und starten Sie das Programm neu."
+            "Die 3D-Ansicht konnte keinen Grafikadapter verwenden. Prüfen oder "
+            "aktualisieren Sie den Vulkan-fähigen Grafiktreiber passend zu Ihrer "
+            "Grafikkarte. Für Nvidia verwenden Sie das passende Hersteller- oder "
+            "Distributionspaket. Prüfen Sie außerdem den Vulkan-Loader: zum Beispiel "
+            "„libvulkan1“ unter Debian/Ubuntu oder „vulkan-icd-loader“ unter Arch/Manjaro. "
+            "Starten Sie das Programm danach neu."
         )
     return tr(
         "Die 3D-Ansicht zeichnet über die Grafikkarte und braucht Direct3D 12, Vulkan "
@@ -3959,13 +3958,12 @@ class Viewport(QWidget):
     def release_renderer(self) -> None:
         """Den Renderer schließen, solange sein Grafikkontext noch lebt.
 
-        Gerufen aus dem ``closeEvent`` des Fensters: Qts später Prozessabriss
+        Gerufen beim Fensterende und Sprachwechsel: Qts später Prozessabriss
         käme für den Abbau der Grafikfläche zu spät (unter VTK, bis 06.09.2026,
         meldete er je nach Treiber unvollständige Framebuffer oder
         ``wglMakeCurrent``).
-        ``release()`` darf das ausdrücklich nicht tun — es bedient auch den
-        Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
-        lebt. Ein zweiter Aufruf tut nichts mehr.
+        Das neue Sprachfenster besitzt seinen eigenen Renderer und bleibt
+        davon unabhängig. Ein zweiter Aufruf tut nichts mehr.
         """
         renderer = self.renderer
         if renderer is None:
@@ -5186,7 +5184,8 @@ class Viewport(QWidget):
         (``theme.slot_colour``): Der Pinsel legt Slots mit ``colour=None`` an,
         und mit der Körperfarbe an dieser Stelle war das Bemalen im Bild
         folgenlos — zwei Striche in zwei Slots sahen aus wie keiner. Ein
-        einziger Slot ist kein Mehrfarbdruck, sondern die Vorgabe.
+        einziger unbenannter Slot ohne Farbe bleibt die Vorgabe. Eine
+        ausdrücklich gesetzte Farbe gilt auch bei nur einem Slot.
         """
         slots = getattr(entry, "material_slots", None)
         indices = getattr(mesh, "slots", ())
@@ -5208,7 +5207,7 @@ class Viewport(QWidget):
                 table.append(_hex(colour))
                 continue
             table.append(slot_colour(index) or self._object_colour)
-        if len(table) < 2:
+        if len(table) < 2 and slots[0].colour is None:
             return None
         return CellColours(
             np.asarray(indices, dtype=np.int32),
@@ -5704,6 +5703,14 @@ class Viewport(QWidget):
         self._shown_colours = wanted
         if not changed:
             return
+        # Die neue Blende löst die ganze laufende Animation ab. Deren noch
+        # offene Farbziele gehören deshalb dazu, auch wenn ein weiterer Klick
+        # nur einen zweiten Körper ergänzt oder aus der Auswahl nimmt.
+        if self._selection_fade is not None:
+            for identifier, colour in wanted.items():
+                live = self._live_colours.get(identifier)
+                if live is None or hex_of(live) != colour:
+                    changed[identifier] = colour
         self._fade_selection(changed)
 
     def _fade_selection(self, changed: dict[ObjectId, str]) -> None:

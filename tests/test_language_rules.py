@@ -195,6 +195,7 @@ GERMAN_STEMS = (
     "schuld",
     "sicht",
     "skizze",
+    "sprach",
     "staerke",
     "stelle",
     "stueck",
@@ -204,6 +205,7 @@ GERMAN_STEMS = (
     "waehl",
     "werkzeug",
     "zeile",
+    "ziel",
     "zweig",
 )
 

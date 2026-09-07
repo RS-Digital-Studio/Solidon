@@ -4,9 +4,9 @@
 # sich bei jedem Start selbst aus, und mit VTK und Qt darin sind das Sekunden,
 # in denen der Nutzer auf nichts wartet.
 #
-# Was absichtlich **nicht** mitreist (§36, §38): OpenSCAD und die Slicer sind
-# GPL und werden nur aufgerufen; Ollama und ComfyUI werden angegeben. Die
-# Anwendung prüft alle vier beim Start und sagt, was fehlt.
+# Was absichtlich **nicht** mitreist (§36, §38): Slicer werden nur extern
+# aufgerufen; Ollama und ComfyUI werden angegeben. OpenSCAD wird nicht mehr
+# ausgeführt.
 #
 #     pyinstaller packaging/solidon3d.spec
 
@@ -87,7 +87,7 @@ datas = [
 datas += collect_data_files("trimesh")
 # OpenSSLs Vorgabepfad zeigt im gebauten Paket auf den Bauserver — auf dem Mac
 # ausnahmslos, unter Linux im Flatpak-Sandkasten (gemessen am Protokoll des
-# ersten Manjaro-Kunden, 06.09.2026: sechsmal CERTIFICATE_VERIFY_FAILED).
+# Manjaro-Kunden, 06.09.2026: wiederholt CERTIFICATE_VERIFY_FAILED).
 # ``app.core.network`` setzt dann ``SSL_CERT_FILE`` auf certifis CA-Satz; ohne
 # dessen Datendatei wäre der richtige Pfad im Quellcode eine Lücke im Paket.
 # Die Zeile gilt für **jede** Plattform, nicht nur für macOS.
@@ -166,6 +166,9 @@ hiddenimports = [
     "rendercanvas.qt",
     "wgpu.backends.wgpu_native",
     "pygfx.renderers.wgpu",
+    # Der Flatpak-Mailweg lädt QtDBus erst beim Öffnen des Entwurfs. Sein
+    # PyInstaller-Hook sammelt auch die native Qt-DBus-Bibliothek ein.
+    "PySide6.QtDBus",
 
     # Die Operationen registrieren sich beim Import selbst (§10); PyInstaller
     # sieht keinen Import, der nur über eine Zeichenkette im Bootstrap

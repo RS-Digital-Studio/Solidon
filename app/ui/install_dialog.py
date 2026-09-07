@@ -75,6 +75,9 @@ PENDING = "?"
 #: ist die Zeit, und die sagt genau das, was jemand wissen will.
 TICK_MS = 1000
 
+#: Das vorgemerkte Schließen prüft ohne blockierendes Warten nach.
+CLOSE_RETRY_MS: Final = 50
+
 #: Ab wann ein Start lange genug dauert, um die Erwartung mitzusagen.
 #: `wartezeit.md` nennt zehn Sekunden als Grenze, ab der eine Schätzung
 #: dazugehört — darunter ist die laufende Zahl selbst die Auskunft.
@@ -456,6 +459,10 @@ class InstallDialog(QDialog):
         """Wie lange der laufende Start haben darf — bestimmt, ob die
         Erwartung im Satz steht."""
         self._survey: _Survey | None = None
+        self._close_requested = False
+        self._close_retry = QTimer(self)
+        self._close_retry.setInterval(CLOSE_RETRY_MS)
+        self._close_retry.timeout.connect(self.reject)
         self._queue: list[install.Requirement] = []
         """Was „Alles Fehlende installieren" noch vor sich hat."""
         self._running_title = ""
@@ -543,6 +550,16 @@ class InstallDialog(QDialog):
         self.stop_waiting.setVisible(False)
         self.stop_waiting.clicked.connect(self._stop_waiting)
 
+        self._closing_hint = QLabel(
+            tr(
+                "Dieses Fenster schließt nach der laufenden Aufgabe. "
+                "Eine begonnene Installation wird nicht abgebrochen."
+            ),
+            self,
+        )
+        self._closing_hint.setWordWrap(True)
+        self._closing_hint.hide()
+
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, self)
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self.accept)
@@ -553,6 +570,7 @@ class InstallDialog(QDialog):
             layout.addWidget(row)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
+        layout.addWidget(self._closing_hint)
         layout.addWidget(self.stop_waiting, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.all_button, alignment=Qt.AlignmentFlag.AlignLeft)
         layout.addWidget(self.details_button, alignment=Qt.AlignmentFlag.AlignLeft)
@@ -569,7 +587,7 @@ class InstallDialog(QDialog):
         Im Arbeiter, weil die Suche Sekunden kostet: Registry, zwei Ebenen
         Installationsordner, und für jeden Dienst eine Socket-Probe.
         """
-        if self._survey is not None and self._survey.isRunning():
+        if self._close_requested or (self._survey is not None and self._survey.isRunning()):
             return
         self._broke = False
         survey = _Survey()
@@ -595,8 +613,34 @@ class InstallDialog(QDialog):
 
         Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
         """
+        self.wait_for_workers(0)
         self.wait_for_survey()
         self._leash.wait_all(timeout_ms)
+        self._close_retry.stop()
+        self._tick.stop()
+
+    def wait_for_workers(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> bool:
+        """Den Dialog geordnet beenden; auch beim Schließen seines Hauptfensters.
+
+        Ein gestarteter Installer läuft zu Ende. Bei einem externen Dienst
+        endet nur das Warten auf seine Antwort. Mit Frist null bleibt der
+        Aufruf unmittelbar und der Schließweg kann später erneut prüfen.
+        """
+        self._close_requested = True
+        self._queue.clear()
+        if self._launcher is not None:
+            self._launcher.stop_waiting()
+        deadline = time.monotonic() + max(0, timeout_ms) / 1000
+        pending = self._leash.pending()
+        for worker in pending:
+            if worker.isRunning():
+                remaining = max(0, int((deadline - time.monotonic()) * 1000))
+                worker.wait(remaining)
+        idle = not any(worker.isRunning() for worker in pending)
+        self._closing_hint.setVisible(not idle)
+        if not idle:
+            self._busy(True)
+        return idle
 
     def _surveyed(self, found: object) -> None:
         assert isinstance(found, tuple)
@@ -800,8 +844,10 @@ class InstallDialog(QDialog):
         return self._worker is not None and self._worker.isRunning()
 
     def _busy_working(self) -> bool:
-        return self._busy_installing() or (
-            self._launcher is not None and self._launcher.isRunning()
+        return (
+            self._close_requested
+            or self._busy_installing()
+            or (self._launcher is not None and self._launcher.isRunning())
         )
 
     def _browsable(self, address: str) -> str:
@@ -989,17 +1035,9 @@ class InstallDialog(QDialog):
             row.set_busy(running)
 
     def reject(self) -> None:
-        self._queue.clear()
-        worker = self._worker
-        if worker is not None and worker.isRunning():
-            # Eine laufende Installation läuft weiter; eine Paketverwaltung auf
-            # halbem Weg abzuwürgen lässt eine Maschine in einem Zustand zurück,
-            # den niemand lesen kann.
-            worker.wait(50)
-        launcher = self._launcher
-        if launcher is not None and launcher.isRunning():
-            launcher.wait(50)
-        # Die Suche dagegen ist in Millisekunden bis Sekunden durch, und sie
-        # schreibt nichts — auf sie wird gewartet, statt sie zu verwaisen.
-        self.wait_for_survey()
+        if not self.wait_for_workers(0):
+            self._close_retry.start()
+            return
+        self._close_retry.stop()
+        self._tick.stop()
         super().reject()

@@ -939,6 +939,26 @@ def test_a_driver_that_refuses_the_client_hands_over_to_hid() -> None:
     assert not fallback.is_open and not reader.is_open
 
 
+@pytest.mark.parametrize("entry_point", ["RegisterConnexionClient", "SetConnexionClientButtonMask"])
+def test_an_incomplete_driver_registration_releases_its_callbacks(
+    monkeypatch: pytest.MonkeyPatch, entry_point: str
+) -> None:
+    """Ein später Anmeldefehler darf keine C-Rückrufe auf freigegebene Objekte lassen."""
+    driver = _Driver()
+
+    def reject(*_args: object) -> None:
+        raise OSError("Die Anmeldung wurde abgebrochen")
+
+    monkeypatch.setattr(driver, entry_point, reject)
+    reader = DriverReader(driver)
+    assert not reader.open()
+    assert driver.calls[-1] == ("cleanup",)
+    if entry_point == "SetConnexionClientButtonMask":
+        assert driver.calls[-2] == ("unregister", driver.client)
+    assert not reader.is_open
+    assert reader._handlers == ()
+
+
 def test_without_the_framework_the_driver_reader_is_silent() -> None:
     reader = DriverReader(loader=lambda: None)
     assert not reader.open()

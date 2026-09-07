@@ -294,6 +294,10 @@ def rebuild_for_language(
     # ``deleteLater`` überrollt. Den Fernsteuerdienst stoppt sonst nur der
     # ``closeEvent``; er ist oben schon gestoppt, vor dem Start des neuen.
     window.release()
+    # Der bisherige pygfx-Renderer gehört nur diesem Fenster. Sein expliziter
+    # Abbau löst auch die Zeichenfunktion und den nativen Grafikkontext, die
+    # Qt beim bloßen deleteLater nicht freigibt.
+    window.viewport.release_renderer()
     window.hide()
     window.deleteLater()
     return fresh

@@ -2,7 +2,7 @@
 
 Was PyVista als ``pv.Disc``, ``pv.Cylinder``, ``pv.Arrow``, ``pv.Cube`` und
 ``pv.Plane`` lieferte, entsteht hier als NumPy-Felder — Ecken ``(n, 3)`` und
-Dreiecke ``(m, 3)`` —, damit beide Renderer dasselbe zeichnen und ein Test
+Dreiecke ``(m, 3)`` —, damit der Renderer sie zeichnen und ein Test
 die Geometrie ohne Fenster nachmessen kann. Alles in Millimetern, alle
 Normalen nach außen.
 """

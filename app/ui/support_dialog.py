@@ -20,9 +20,10 @@ from __future__ import annotations
 
 import traceback
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
+from uuid import uuid4
 
-from PySide6.QtCore import QBuffer, QIODevice, QRect, Qt, QUrl, Signal
+from PySide6.QtCore import SLOT, QBuffer, QIODevice, QRect, Qt, QUrl, Signal, Slot
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -41,7 +42,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import SUPPORT_ADDRESS
-from app.core import feedback, support
+from app.core import discover, feedback, support
 from app.core import report as reports
 from app.core.errors import CANCEL, AppError, FileWriteError
 from app.core.log import get_logger, log_path
@@ -62,6 +63,9 @@ from app.ui.panels import collapsible
 from app.ui.style import make_primary
 from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
+if TYPE_CHECKING:
+    from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusPendingCallWatcher
+
 _log = get_logger(__name__)
 
 #: Kantenmaß, auf das ein Bildschirmfoto vor dem Senden geht. Ein 4K-Fenster
@@ -75,6 +79,12 @@ LOG_LINES: Final = reports.LOG_LINES
 
 #: Wie lange das Schließen auf den Arbeiter wartet, bevor es loslässt.
 WAIT_MILLISECONDS: Final = 50
+
+#: Die Portaladresse und der Ergebnisvertrag gelten für jeden Mailentwurf.
+MAIL_PORTAL_SERVICE: Final = "org.freedesktop.portal.Desktop"
+MAIL_PORTAL_REQUEST: Final = "org.freedesktop.portal.Request"
+MAIL_PORTAL_SLOT: Final = "_mail_portal_response(QDBusMessage)"
+MAIL_PORTAL_TIMEOUT_MS: Final = 5000
 
 #: Die Reihenfolge im Auswahlfeld. Programmfehler und Bogen stehen nicht dabei
 #: — den einen setzt der Fehlerdialog, den anderen der Bogen selbst; ein Nutzer
@@ -284,6 +294,9 @@ class SupportDialog(QDialog):
         self.receipt: Receipt | None = None
         self.written: Path | None = None
         """Wohin der Bericht abgelegt wurde, falls jemand diesen Weg nahm."""
+        self._mail_portal_bus: QDBusConnection | None = None
+        self._mail_portal_path = ""
+        self._mail_portal_watcher: QDBusPendingCallWatcher | None = None
 
         self.detail = detail or ("".join(traceback.format_exception(error)) if error else "")
 
@@ -791,7 +804,159 @@ class SupportDialog(QDialog):
         """
         if self.written is None and not self._write_folder():
             return
-        QDesktopServices.openUrl(QUrl(support.mail_link(self.ticket())))
+        ticket = self.ticket()
+        if discover.in_flatpak():
+            self._open_mail_portal(ticket)
+        else:
+            QDesktopServices.openUrl(QUrl(support.mail_link(ticket)))
+
+    def _open_mail_portal(self, ticket: Ticket) -> None:
+        """Übergibt Originaltext an das Flatpak-Mailportal, ohne URL-Zwischenschritt.
+
+        Qt 6.11 liest subject/body mit QUrlQuerys PrettyDecoded aus. Das
+        Portal erhält dadurch Prozentfolgen für Satzzeichen und Zeilenwechsel.
+        ComposeEmail erwartet dort Klartext. Der asynchrone Aufruf öffnet nur
+        den Mailentwurf und blockiert den Dialog auch bei fehlendem Portal nicht.
+        """
+        from PySide6.QtDBus import QDBusConnection, QDBusMessage, QDBusPendingCallWatcher
+        from PySide6.QtWidgets import QApplication
+
+        if self._mail_portal_bus is not None:
+            return
+        bus = QDBusConnection.sessionBus()
+        self._mail_portal_bus = bus
+        sender = bus.baseService().removeprefix(":").replace(".", "_")
+        token = f"solidon_mail_{uuid4().hex}"
+        path = f"/org/freedesktop/portal/desktop/request/{sender}/{token}"
+        # Vor ComposeEmail abonnieren: Ein schnelles Portal kann Response
+        # bereits senden, bevor der Methodenreply mit dem Handle ankommt.
+        if not sender or not self._watch_mail_portal(path):
+            self._finish_mail_portal(error=True)
+            return
+        self.by_mail.setEnabled(False)
+        self.state.setText(tr("E-Mail-Programm öffnen …"))
+        parent = f"x11:{int(self.winId()):x}" if QApplication.platformName() == "xcb" else ""
+        request = QDBusMessage.createMethodCall(
+            MAIL_PORTAL_SERVICE,
+            "/org/freedesktop/portal/desktop",
+            "org.freedesktop.portal.Email",
+            "ComposeEmail",
+        )
+        request.setArguments(
+            [
+                parent,
+                {
+                    "handle_token": token,
+                    "address": SUPPORT_ADDRESS,
+                    "subject": ticket.subject,
+                    "body": ticket.as_text(),
+                },
+            ]
+        )
+        pending = bus.asyncCall(request, MAIL_PORTAL_TIMEOUT_MS)
+        watcher = QDBusPendingCallWatcher(pending, self)
+        if not self._mail_portal_path:
+            watcher.deleteLater()
+            return
+        self._mail_portal_watcher = watcher
+        watcher.finished.connect(self._mail_portal_ready)
+
+    def _watch_mail_portal(self, path: str) -> bool:
+        """Wechselt das Ergebnisabonnement auf den bestätigten Request-Pfad."""
+        bus = self._mail_portal_bus
+        assert bus is not None
+        if self._mail_portal_path:
+            bus.disconnect(  # type: ignore[call-overload]
+                MAIL_PORTAL_SERVICE,
+                self._mail_portal_path,
+                MAIL_PORTAL_REQUEST,
+                "Response",
+                self,
+                SLOT(MAIL_PORTAL_SLOT),
+            )
+        self._mail_portal_path = ""
+        # PySide erwartet zur Laufzeit str, obwohl der Stub bytes behauptet.
+        connected = bus.connect(  # type: ignore[call-overload]
+            MAIL_PORTAL_SERVICE,
+            path,
+            MAIL_PORTAL_REQUEST,
+            "Response",
+            self,
+            SLOT(MAIL_PORTAL_SLOT),
+        )
+        if connected:
+            self._mail_portal_path = path
+        return bool(connected)
+
+    def _mail_portal_ready(self, watcher: QDBusPendingCallWatcher) -> None:
+        """Der Methodenreply bestätigt den Request, noch nicht das Mailprogramm."""
+        from PySide6.QtDBus import QDBusObjectPath
+
+        if watcher is not self._mail_portal_watcher:
+            watcher.deleteLater()
+            return
+        self._mail_portal_watcher = None
+        if watcher.isError():
+            _log.warning("email portal could not open composer: %s", watcher.error().name())
+            self._finish_mail_portal(error=True)
+        else:
+            arguments = watcher.reply().arguments()
+            handle = arguments[0] if arguments else None
+            path = handle.path() if isinstance(handle, QDBusObjectPath) else ""
+            if not path or (path != self._mail_portal_path and not self._watch_mail_portal(path)):
+                self._finish_mail_portal(error=True)
+        watcher.deleteLater()
+
+    @Slot("QDBusMessage")
+    def _mail_portal_response(self, message: QDBusMessage) -> None:
+        """Nur das Ergebnis des aktuellen Entwurfs beendet die Warteanzeige."""
+        if not self._mail_portal_path or message.path() != self._mail_portal_path:
+            return
+        arguments = message.arguments()
+        code = arguments[0] if arguments else 2
+        failed = code not in (0, 1)
+        if failed:
+            _log.warning("email portal could not open composer: response %s", code)
+        self._finish_mail_portal(error=failed)
+
+    def _finish_mail_portal(self, *, error: bool = False, close: bool = False) -> None:
+        """Löst das Abonnement; ein Fehler lässt den abgelegten Bericht erreichbar."""
+        bus = self._mail_portal_bus
+        if bus is None:
+            return
+        self._mail_portal_bus = None
+        path, self._mail_portal_path = self._mail_portal_path, ""
+        watcher, self._mail_portal_watcher = self._mail_portal_watcher, None
+        if watcher is not None:
+            watcher.finished.disconnect(self._mail_portal_ready)
+            watcher.deleteLater()
+        if path:
+            bus.disconnect(  # type: ignore[call-overload]
+                MAIL_PORTAL_SERVICE,
+                path,
+                MAIL_PORTAL_REQUEST,
+                "Response",
+                self,
+                SLOT(MAIL_PORTAL_SLOT),
+            )
+            if close:
+                from PySide6.QtDBus import QDBusMessage
+
+                bus.send(
+                    QDBusMessage.createMethodCall(
+                        MAIL_PORTAL_SERVICE, path, MAIL_PORTAL_REQUEST, "Close"
+                    )
+                )
+        self.by_mail.setEnabled(True)
+        if error:
+            self.state.setText(
+                tr(
+                    "Das E-Mail-Programm ließ sich nicht öffnen. Öffnen Sie Ihr Mailprogramm "
+                    "und übernehmen Sie den Text aus „bericht.txt“ sowie die abgelegten Anhänge."
+                )
+            )
+        else:
+            self.state.clear()
 
     def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Alles loslassen, was dieser Dialog außerhalb von Qt hält.
@@ -801,6 +966,7 @@ class SupportDialog(QDialog):
 
         Warum der Name, warum die eigene Frist: :mod:`app.ui.leash`.
         """
+        self._finish_mail_portal(close=True)
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.wait(timeout_ms)
@@ -808,6 +974,7 @@ class SupportDialog(QDialog):
 
     def reject(self) -> None:
         """Abbrechen wartet auf den Arbeiter, statt ihn laufen zu lassen."""
+        self._finish_mail_portal(close=True)
         worker = self._worker
         if worker is not None and worker.isRunning():
             worker.wait(WAIT_MILLISECONDS)

@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from app.ui.render.api import AxesMarkerStyle, CameraPose, LabelStyle, SurfaceStyle
+from app.ui.render.api import AxesMarkerStyle, CameraPose, CellColours, LabelStyle, SurfaceStyle
 from app.ui.render.gfx_renderer import GfxLabels, GfxRenderer
 from tests.test_render_contract import GFX_MISSING, cube, look_down, plate
 
@@ -26,6 +26,42 @@ def renderer() -> Iterator[GfxRenderer]:
         yield view
     finally:
         view.close()
+
+
+def test_closing_a_renderer_twice_keeps_another_renderer_drawable(renderer: GfxRenderer) -> None:
+    """Ein Sprachfenster gibt nur seine eigenen Grafikressourcen frei."""
+    other = GfxRenderer(offscreen=True, size=(160, 120))
+    try:
+        item = other.add_surface(*cube(), name="body", style=SurfaceStyle(lighting=False))
+        look_down(other, item.bounds())
+        before = other.screenshot()
+        assert before.max() > 0
+        renderer.close()
+        renderer.close()
+        assert np.array_equal(other.screenshot(), before)
+    finally:
+        other.close()
+
+
+def test_selection_and_background_changes_keep_filament_face_colours(renderer: GfxRenderer) -> None:
+    """Die Auswahlfarbe und ein helles Thema dürfen gespeicherte Flächenfarben nicht ersetzen."""
+    item = renderer.add_surface(
+        *plate(0),
+        name="coloured",
+        style=SurfaceStyle(lighting=False),
+        cell_colours=CellColours(
+            np.array([0, 1]), colormap=("#ff0000", "#0000ff"), limits=(0, 1), categorical=True
+        ),
+    )
+    look_down(renderer, item.bounds())
+    before = renderer.screenshot()
+    red = (before[:, :, 0] > 240) & (before[:, :, 1] < 10) & (before[:, :, 2] < 10)
+    blue = (before[:, :, 2] > 240) & (before[:, :, 0] < 10) & (before[:, :, 1] < 10)
+    assert red.sum() > 100 and blue.sum() > 100
+    item.set_colour("#ffff00")
+    renderer.set_background("#eeeeee")
+    after = renderer.screenshot()
+    assert np.array_equal(after[red | blue], before[red | blue])
 
 
 def test_initial_style_is_readable_and_nonpickable_surface_does_not_cover(

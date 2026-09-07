@@ -17,7 +17,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QObject, QThread
+from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import QApplication
 
 from app.ui.leash import Worker, WorkerLeash
@@ -28,6 +28,15 @@ class _Schlaefer(QThread):
 
     def run(self) -> None:
         self.msleep(120)
+
+
+class _Meldet(Worker):
+    """Ein Arbeiter mit einem eigenen Ergebnissignal wie die UI-Arbeiter."""
+
+    done = Signal()
+
+    def work(self) -> None:
+        self.done.emit()
 
 
 def test_a_worker_that_is_none_goes_through_quietly(qt_app: QApplication) -> None:
@@ -121,6 +130,38 @@ def test_a_started_worker_is_let_go_after_it_stopped(qt_app: QApplication) -> No
         arbeiter.msleep(10)
 
     assert arbeiter not in leash_module.alive()
+    assert arbeiter not in leine.pending(), "der globale Weg räumt auch die eigene Leine auf"
+
+
+def test_a_finished_worker_releases_callbacks_on_its_own_signals(
+    qt_app: QApplication,
+) -> None:
+    """Auch ein unterklasseneigenes Ergebnissignal gibt seinen Kontext frei."""
+    owner = QObject()
+    owner_ref = weakref.ref(owner)
+    worker = _Meldet()
+    worker.done.connect(lambda kept=owner: None)
+    leash = WorkerLeash(QObject())
+
+    leash.start(worker)
+    worker.wait(2000)
+    for _ in range(10):
+        qt_app.processEvents()
+    del owner
+
+    assert owner_ref() is None, "das Ergebnissignal hält seinen alten Kontext zurück"
+
+
+def test_wait_all_also_waits_for_a_worker_that_has_not_finished(qt_app: QApplication) -> None:
+    """Der aktive Arbeiter gehört zur Leine, bevor sein Fertigsignal kommt."""
+    leash = WorkerLeash(QObject())
+    worker = _Schlaefer()
+    leash.start(worker)
+    try:
+        leash.wait_all()
+        assert not worker.isRunning(), "wait_all muss auch gestartete Arbeiter abwarten"
+    finally:
+        worker.wait(2000)
 
 
 def test_no_worker_is_started_past_the_leash(qt_app: QApplication) -> None:
@@ -192,6 +233,22 @@ def test_waiting_for_all_catches_a_worker_without_a_window(qt_app: QApplication)
     assert arbeiter not in steht_noch, steht_noch
 
 
+def test_the_global_release_also_clears_the_owning_leash(qt_app: QApplication) -> None:
+    """Der fensterlose Warteweg darf keinen fertigen Arbeiter lokal halten."""
+    import app.ui.leash as leash_module
+
+    leine = WorkerLeash(QObject())
+    arbeiter = _Schlaefer()
+    leine.start(arbeiter)
+    arbeiter.wait(2000)
+
+    leash_module._release_global(arbeiter)
+    for _ in range(5):
+        qt_app.processEvents()
+
+    assert arbeiter not in leine.pending(), "global gelöst, aber weiter in der Leine gehalten"
+
+
 def test_waiting_for_all_reports_who_did_not_stop(qt_app: QApplication) -> None:
     """Und wer die Frist reißt, wird genannt statt verschwiegen.
 
@@ -255,6 +312,125 @@ def test_a_finished_worker_does_not_keep_its_owner_alive(qt_app: QApplication) -
     gc.collect()
 
     assert beobachter() is None, "der Rückruf des Arbeiters hält sein Fenster fest"
+
+
+def test_the_leash_itself_does_not_keep_its_owner_alive(qt_app: QApplication) -> None:
+    """Die Leine darf ihren Besitzer nicht bis zum zyklischen Sammler halten.
+
+    Der Besitzer hält die Leine. Hält die Leine ihn zurück, entsteht bei jedem
+    Fenster ein Ring aus Qt-Objekt und Python-Hülle. Dessen verspäteter Abbau
+    kann dann in einem Arbeiter-Thread oder mitten im Aufbau des nächsten
+    Fensters laufen. Deshalb wird hier bewusst **nicht** ``gc.collect``
+    gerufen: Die letzte normale Referenz muss den Besitzer sofort freigeben.
+    """
+    besitzer = QObject()
+    beobachter = weakref.ref(besitzer)
+    leine = WorkerLeash(besitzer)
+
+    del besitzer
+
+    assert beobachter() is None, "die Leine hält ihren Fensterbesitzer zurück"
+    assert leine.pending() == ()
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_a_finished_evaluation_releases_its_session(
+    qt_app: QApplication,
+    cancelled: bool,
+) -> None:
+    """Ergebnis und Abbruch hinterlassen keinen Ring um die Sitzung.
+
+    Der Auswertungsarbeiter hält die Sitzung für seinen Lauf. Seine Signale
+    tragen außerdem gebundene Sitzungsslots und den Arbeiter selbst. Sobald der
+    Thread vollständig beendet und jede Antwort zugestellt ist, müssen diese
+    Verbindungen fallen; sonst sammelt ein späterer Workeraufbau den alten
+    QObject-Ring ein.
+    """
+    import time
+
+    from app.core.errors import OperationCancelled
+    from app.ui.session import Session
+
+    session = Session()
+    finished: list[object] = []
+    aborted: list[bool] = []
+    session.sceneChanged.connect(finished.append)
+    session.evaluationCancelled.connect(lambda: aborted.append(True))
+    if cancelled:
+        token = session.cancel_signal
+
+        def wait_for_cancel(*_args: object, **_kwargs: object) -> object:
+            while not token.is_cancelled:
+                time.sleep(0.001)
+            raise OperationCancelled
+
+        session.run_evaluation = wait_for_cancel  # type: ignore[method-assign]
+    session.evaluate_async()
+    if cancelled:
+        session.cancel_evaluation()
+    assert session.wait_for_idle()
+    for _ in range(10):
+        qt_app.processEvents()
+
+    assert bool(aborted) is cancelled
+    assert bool(finished) is not cancelled
+
+    observer = weakref.ref(session)
+    del session
+
+    assert observer() is None, "der fertige Auswertungsarbeiter hält die Sitzung zurück"
+
+
+def test_a_late_agent_end_does_not_clear_its_successor(qt_app: QApplication) -> None:
+    """Keine verspätete Antwort eines alten Zugs trifft den Nachfolger."""
+    from app.core.errors import AppError
+    from app.ui.session import Session
+
+    session = Session()
+    old = _Schlaefer()
+    successor = _Schlaefer()
+    proposals: list[object] = []
+    errors: list[object] = []
+    busy: list[bool] = []
+    session.proposalReady.connect(proposals.append)
+    session.failed.connect(errors.append)
+    session.agentBusyChanged.connect(busy.append)
+    session._agent = successor  # type: ignore[assignment]
+
+    session._on_agent_proposal("alt", old)  # type: ignore[arg-type]
+    session._on_agent_failed(AppError("alt"), old)  # type: ignore[arg-type]
+    session._on_agent_done(old)  # type: ignore[arg-type]
+
+    assert session._agent is successor, "der alte Agentenzug hat seinen Nachfolger ausgetragen"
+    assert proposals == [], "der alte Agentenzug hat seinen Vorschlag gezeigt"
+    assert errors == [], "der alte Agentenzug hat seinen Fehler gemeldet"
+    assert busy == [], "der alte Agentenzug hat den Nachfolger als fertig gemeldet"
+    assert old in session._leash.pending(), "der alte Wrapper muss die Zustellung überleben"
+    for worker in (old, successor):
+        worker.deleteLater()
+
+
+def test_agent_done_clears_its_field_before_announcing_idle(qt_app: QApplication) -> None:
+    """Ein synchroner Busy-Empfänger darf sofort den nächsten Zug starten."""
+    from app.ui.session import Session
+
+    session = Session()
+    finished = _Schlaefer()
+    successor = _Schlaefer()
+    session._agent = finished  # type: ignore[assignment]
+
+    def start_successor(busy: bool) -> None:
+        if not busy:
+            session._agent = successor  # type: ignore[assignment]
+
+    session.agentBusyChanged.connect(start_successor)
+
+    session._on_agent_done(finished)  # type: ignore[arg-type]
+
+    assert session._agent is successor, "BusyFalse hat den neuen Agentenzug wieder ausgetragen"
+    assert finished in session._leash.pending()
+    for worker in (finished, successor):
+        worker.deleteLater()
 
 
 # --- ein Arbeiter, der auch mit dem Unerwarteten zurückkommt ---------------------

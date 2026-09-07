@@ -43,6 +43,7 @@ die Ursache steht drei Dateien weiter.
 from __future__ import annotations
 
 import gc
+import warnings
 import weakref
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -86,6 +87,13 @@ _alive: set[Any] = set()
 #: genau dann muss noch jemand nachsehen, ob der Thread ausgelaufen ist.
 _keeper: QObject | None = None
 
+#: Die zwei internen Marker liegen am Worker selbst, ohne ihn zu halten. Sie
+#: verbinden den fensterlosen Warteweg mit genau der Leine, die den Arbeiter
+#: lokal führt, und unterscheiden das Threadende von der zugestellten
+#: ``finished``-Antwort.
+_OWNER_REF: Final = "_solidon_leash_ref"
+_FINISHED_DELIVERED: Final = "_solidon_finished_delivered"
+
 
 def _keeper_object() -> QObject:
     """Das langlebige Gegenstück zu den Widgets. Beim ersten Bedarf angelegt."""
@@ -108,12 +116,22 @@ def _release_global(worker: Any) -> None:
     unter dem eingereihten Signal freigeben. Der langlebige Empfänger hält den
     Arbeiter bis zur nächsten Runde der Ereignisschleife sicher fest.
     """
+    if worker not in _alive:
+        return
     if worker is None or not isValid(worker):
         _alive.discard(worker)
         return
-    if worker.isRunning():
+    owner_ref = getattr(worker, _OWNER_REF, None)
+    owner = owner_ref() if callable(owner_ref) else None
+    if owner is not None:
+        owner._release(worker)
+        return
+    if worker.isRunning() or not worker.wait(0) or not getattr(worker, _FINISHED_DELIVERED, True):
         QTimer.singleShot(RELEASE_RETRY_MS, _keeper_object(), lambda: _release_global(worker))
         return
+    release_references = getattr(worker, "release_finished_references", None)
+    if callable(release_references):
+        release_references()
     _alive.discard(worker)
 
 
@@ -208,17 +226,70 @@ class Worker(QThread):
         """Was der Arbeiter tut. Unterklassen setzen das."""
         raise NotImplementedError
 
+    def release_finished_references(self) -> None:
+        """Direkte Arbeitskontexte nach dem vollständig zugestellten Ende lösen.
+
+        Die Leine ruft diesen Haken erst auf, wenn der Thread nicht mehr läuft,
+        ``wait(0)`` seinen vollständigen Abschluss bestätigt und die nächste
+        Ereignisrunde erreicht ist. Unterklassen lösen hier ausschließlich
+        Rückverweise, die sie nur während ihres Laufs brauchen. Signale werden
+        nicht pauschal getrennt: Ergebnis, Fehler und ``finished`` müssen vor
+        diesem Punkt vollständig beim Besitzer angekommen sein.
+        """
+        names: list[str] = []
+        for worker_type in type(self).__mro__:
+            for name, declaration in vars(worker_type).items():
+                if isinstance(declaration, Signal) and name not in names:
+                    names.append(name)
+            if worker_type is Worker:
+                break
+        # Nur Signale, die die Workerklassen selbst als Ausgänge deklarieren,
+        # plus QThreads Abschluss. QObject.destroyed, started und fremde
+        # Infrastruktur bleiben ausdrücklich unangetastet.
+        self._disconnect_finished_signals(
+            *(getattr(self, name) for name in names),
+            self.finished,
+        )
+
+    @staticmethod
+    def _disconnect_finished_signals(*signals: Any) -> None:
+        """Vorhandene eigene Verbindungen ohne Warnung lösen.
+
+        Ein Signal darf bei einem kleinen eigenständigen Test ohne Empfänger
+        bleiben. PySide 6.11.2 gibt dann ``False`` zurück und meldet genau die
+        Warnung ``Failed to disconnect (None)``. Nur dieser belegte Leerfall
+        bleibt still; jeder andere Binding- oder Besitzfehler bricht durch.
+        """
+        for signal in signals:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always", RuntimeWarning)
+                disconnected = signal.disconnect()
+            empty = (
+                disconnected is False
+                and len(caught) == 1
+                and str(caught[0].message).startswith(
+                    "libpyside: Failed to disconnect (None) from signal"
+                )
+            )
+            if caught and not empty:
+                raise RuntimeError(str(caught[0].message))
+
 
 class WorkerLeash:
     """Hält fertige und ersetzte Arbeiter, bis Qt wirklich mit ihnen durch ist.
 
-    ``context`` ist das Widget, dem die Zeitgeber gehören: ein Lambda ohne
-    Empfänger läuft weiter, wenn das Fenster längst weg ist, und greift dann
-    in ein zerstörtes C++-Objekt.
+    Der Besitzer wird beim Aufbau übergeben, aber nicht gehalten. Er besitzt
+    die Leine bereits selbst; ein Rückverweis schlösse deshalb bei jedem
+    Fenster einen Ring. Die Zeitgeber gehören dem langlebigen
+    :func:`_keeper_object` und die Fertigrückrufe halten Besitzer und Leine
+    schwach. So stirbt ein freigegebenes Qt-Fenster im Hauptthread an seiner
+    letzten normalen Referenz statt später in einem beliebigen GC-Lauf.
     """
 
     def __init__(self, context: QObject) -> None:
-        self._context = context
+        # Die einheitliche Aufrufstelle benennt den Besitzer, doch ein Feld
+        # daraus wäre genau der oben ausgeschlossene Rückverweis.
+        del context
         self._held: list[Any] = []
 
     def start(self, worker: Any) -> None:
@@ -240,6 +311,12 @@ class WorkerLeash:
         """
         if worker is None:
             return
+        # Auch das eigene Aufräumen muss den aktiven Arbeiter kennen:
+        # ``wait_all`` liest diese Liste, während das Fertigsignal noch fehlt.
+        if worker not in self._held:
+            self._held.append(worker)
+        setattr(worker, _OWNER_REF, weakref.ref(self))
+        setattr(worker, _FINISHED_DELIVERED, False)
         _alive.add(worker)
         worker.finished.connect(self._finished_callback(worker))
         worker.start()
@@ -260,6 +337,7 @@ class WorkerLeash:
             found_worker = worker_ref()
             if found_worker is None:
                 return
+            setattr(found_worker, _FINISHED_DELIVERED, True)
             found_leash = leash_ref()
             if found_leash is None:
                 QTimer.singleShot(
@@ -304,6 +382,7 @@ class WorkerLeash:
             return
         if worker not in self._held:
             self._held.append(worker)
+        setattr(worker, _OWNER_REF, weakref.ref(self))
         _alive.add(worker)
         # Der Empfänger überlebt das Widget (siehe :data:`_keeper`): Stirbt der
         # Dialog zuerst, muss trotzdem noch jemand nachsehen, ob der Thread
@@ -334,6 +413,8 @@ class WorkerLeash:
             # die dasselbe noch einmal tut.
             return
         self._held.append(worker)
+        setattr(worker, _OWNER_REF, weakref.ref(self))
+        setattr(worker, _FINISHED_DELIVERED, False)
         _alive.add(worker)
         # Nicht beim Signal selbst loslassen — dieselbe Begründung wie in
         # ``hold_until_done``, und derselbe Weg hinaus, damit es nur einen
@@ -343,10 +424,24 @@ class WorkerLeash:
     def _release(self, worker: Any) -> None:
         """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""
         if worker not in _alive:
+            if worker in self._held:
+                self._held.remove(worker)
             return
-        if worker.isRunning():
+        if not isValid(worker):
+            _alive.discard(worker)
+            if worker in self._held:
+                self._held.remove(worker)
+            return
+        if (
+            worker.isRunning()
+            or not worker.wait(0)
+            or not getattr(worker, _FINISHED_DELIVERED, True)
+        ):
             QTimer.singleShot(RELEASE_RETRY_MS, _keeper_object(), lambda: self._release(worker))
             return
+        release_references = getattr(worker, "release_finished_references", None)
+        if callable(release_references):
+            release_references()
         _alive.discard(worker)
         if worker in self._held:
             self._held.remove(worker)

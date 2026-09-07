@@ -250,25 +250,26 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
 
 
 @pytest.mark.parametrize("name,build", _builders())
-def test_a_released_widget_is_actually_released(
+def test_a_closed_widget_is_actually_released(
     name: str,
     build: Callable[[], QWidget],
     qt_app: QApplication,
     unpinned_windows: None,
 ) -> None:
-    """Zehn bauen, zehn loslassen, zählen, wie viele bleiben.
+    """Zehn Widgets über den echten Schließweg vollständig freigeben.
 
-    Bleibt auch nur eines, hält es etwas fest, das es nicht sollte — und der
-    Weg dorthin ist immer derselbe: ``gc.get_referrers`` auf das überlebende
-    Objekt, und unter den Haltern die Zellen ansehen. So ist der erste Ring
-    gefunden worden (ein Lambda am eigenen Schichtzeitgeber des Viewports),
-    und so wird der nächste gefunden.
+    Der Vertrag umfasst ``release``, den geordneten Workerabschluss,
+    ``DeferredDelete`` der Qt-Wurzel und danach die Python-Hülle. Er prüft
+    damit den Kunden-Schließweg. Ein äußerer Python-Besitzer bleibt absichtlich
+    sichtbar; das sichert die getrennte Gegenprobe weiter unten.
     """
     from PySide6.QtWidgets import QApplication
 
+    import conftest as suite_setup
     from app.ui import leash
 
     watchers = []
+    held: list[object] = []
     for _ in range(HOW_MANY):
         widget = build()
         # **Derselbe Weg, den ein Fenster beim Schließen geht.** Wer eine
@@ -285,6 +286,7 @@ def test_a_released_widget_is_actually_released(
         if callable(release):
             release(widget)
         watchers.append(weakref.ref(widget))
+        held.append(widget)
         del widget
 
     # Und der Schritt, der lange gefehlt hat: ``release`` wartet, aber
@@ -294,10 +296,10 @@ def test_a_released_widget_is_actually_released(
     if application is not None:
         for _ in range(EVENT_ROUNDS):
             application.processEvents()
-    gc.collect()
+    suite_setup._release_pinned_ui(held)
 
     alive = [watch for watch in watchers if watch() is not None]
-    assert not alive, f"{len(alive)} von {HOW_MANY} {name} überlebten ihr Loslassen"
+    assert not alive, f"{len(alive)} von {HOW_MANY} {name} überlebten ihr Schließen"
 
 
 def test_everything_that_holds_a_leash_can_be_told_to_let_go() -> None:
@@ -535,6 +537,101 @@ def test_every_filter_on_a_mortal_widget_unwatches_it() -> None:
 # --- Dialoge, die das Fenster als sein Kind baut und verdrahtet -----------------
 
 
+def test_pinned_parents_live_through_recursive_qt_deletion(qt_app: QApplication) -> None:
+    """Der gemeinsame Teardown hält Eltern bis nach der Qt-Löschung.
+
+    Ein ``deleteLater`` löscht die ganze Kindhierarchie. Fällt dabei zuerst die
+    letzte Python-Referenz auf das Elternfenster, kann seine Hülle mitten im
+    C++-Destruktor verschwinden. Der nächste Worker- oder Widgetaufbau schreibt
+    dann in beschädigten Speicher. Der Test ruft deshalb genau den gemeinsamen
+    Suite-Abbau auf und beobachtet das Elternobjekt beim Zerstören seines
+    Kinddialogs.
+    """
+    from PySide6.QtWidgets import QDialog, QWidget
+
+    import conftest as suite_setup
+
+    held: list[object] = []
+    parents: list[weakref.ReferenceType[QWidget]] = []
+    children: list[weakref.ReferenceType[QDialog]] = []
+    parent_alive_during_child_delete: list[bool] = []
+
+    for _ in range(3):
+        parent = QWidget()
+        child = QDialog(parent)
+        parent_ref = weakref.ref(parent)
+        child.destroyed.connect(
+            lambda _object=None, ref=parent_ref: parent_alive_during_child_delete.append(
+                ref() is not None
+            )
+        )
+        held.append(parent)
+        parents.append(parent_ref)
+        children.append(weakref.ref(child))
+        del parent, child
+
+    suite_setup._release_pinned_ui(held)
+
+    assert parent_alive_during_child_delete == [True, True, True]
+    assert all(ref() is None for ref in parents)
+    assert all(ref() is None for ref in children)
+
+
+def test_pinned_qt_cycles_are_collected_after_native_deletion(qt_app: QApplication) -> None:
+    """Gelöschte Qt-Hüllen bleiben nicht für einen fremden Faden liegen.
+
+    Qt trennt seine Elternhierarchie beim ``DeferredDelete``. Python-Felder
+    können daneben einen eigenen Ring bilden, wie ihn Oberflächenrückrufe und
+    Modelle ebenfalls tragen. Der gemeinsame Abbau muss diesen Ring im
+    Hauptthread einsammeln; sonst kann eine spätere Allokation den Abbau der
+    ungültigen Shiboken-Hüllen an eine beliebige Stelle verschieben.
+    """
+    from PySide6.QtWidgets import QDialog, QWidget
+
+    import conftest as suite_setup
+
+    parent = QWidget()
+    child = QDialog(parent)
+    parent.peer = child  # type: ignore[attr-defined]
+    child.peer = parent  # type: ignore[attr-defined]
+    parent_ref = weakref.ref(parent)
+    child_ref = weakref.ref(child)
+    held = [parent]
+    del parent, child
+
+    suite_setup._release_pinned_ui(held)
+
+    assert parent_ref() is None
+    assert child_ref() is None
+
+
+def test_a_qt_cycle_released_after_teardown_is_collected_before_the_next_test(
+    qt_app: QApplication,
+) -> None:
+    """Spät fallende Pytest-Argumente sterben vor dem nächsten Workerstart."""
+    from PySide6.QtWidgets import QDialog, QWidget
+
+    import conftest as suite_setup
+
+    parent = QWidget()
+    child = QDialog(parent)
+    parent.peer = child  # type: ignore[attr-defined]
+    child.peer = parent  # type: ignore[attr-defined]
+    parent_ref = weakref.ref(parent)
+    child_ref = weakref.ref(child)
+    pytest_arguments = [parent]
+
+    suite_setup._release_pinned_ui([parent])
+    del parent, child
+    assert parent_ref() is not None, "die gehaltene Testreferenz wurde nicht nachgestellt"
+
+    pytest_arguments.clear()
+    suite_setup._collect_released_ui()
+
+    assert parent_ref() is None
+    assert child_ref() is None
+
+
 def _openers() -> list[tuple[str, str, Callable[[object], None]]]:
     """Fensterwege, die einen Dialog als eigenes Kind bauen und verdrahten.
 
@@ -585,11 +682,22 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
     )
 
     watchers = []
+    windows = []
     for _ in range(HOW_MANY):
         window = MainWindow(Session(), UiSettings())
         open_it(window)
         window.release()
         watchers.append(weakref.ref(window))
+        # Das echte Anwendungsfenster hat während der Löschung seines
+        # geschlossenen Kinddialogs weiterhin einen Besitzer. Ohne diese
+        # äußere Referenz ist der Rückruf des vorgemerkten Kindes die letzte
+        # Halterung: ``DeferredDelete`` löst sie mitten im Kinddestruktor und
+        # zerstört darin zugleich das Elternfenster. Das ist ein ungültiger
+        # Prüfaufbau und riss mit 0xc0000409 schon bei einem einzelnen Fall.
+        # Der Ringwächter bleibt scharf: Erst nach der Kindlöschung fällt die
+        # äußere Liste; eine verbliebene Signalverbindung hält die schwache
+        # Fensterreferenz darunter weiterhin sichtbar.
+        windows.append(window)
         del window
 
     leash.wait_for_all()
@@ -602,6 +710,7 @@ def test_a_window_that_opened_a_dialog_still_lets_go(
         # endet, die sie eingereiht hat — im Betrieb ist das die des Fensters,
         # hier gibt es keine. Ohne diese Zeile misst der Test den Fix nicht.
         application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    windows.clear()
     gc.collect()
 
     alive = [watch for watch in watchers if watch() is not None]

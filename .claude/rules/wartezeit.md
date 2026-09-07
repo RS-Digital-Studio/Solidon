@@ -166,6 +166,13 @@ Zwei Pflichten hängen daran, und `tests/test_leash.py` prüft beide:
   keiner existiert, löst der Slot mindestens den Wartezustand: Balken weg,
   Knöpfe frei, ein Satz, der sagt, dass etwas schiefging.
 
+**Die Leine hält ihren Besitzer nicht.** Das Fenster besitzt seine
+`WorkerLeash` bereits. Ein starker Rückverweis von der Leine zum Fenster baut
+einen Python-Zyklus um ein Qt-Objekt; dessen verspäteter Sammlerlauf kann die
+C++-Hülle in einem Arbeiter-Thread oder mitten im Aufbau des nächsten Fensters
+zerstören. Die modulweite Arbeitermenge hält nur die Arbeiter. Zeitgeber hängen
+am langlebigen Keeper, und Rückrufe auf Besitzer und Leine bleiben schwach.
+
 **Und nach einem Absturz wird nicht neu erhoben.** Der Installationsdialog tat
 das und überschrieb seine eigene Meldung eine Sekunde später mit der
 Zusammenfassung der Erhebung — der Kunde hatte den Satz gesehen und nicht
@@ -432,6 +439,20 @@ die eine überall gleich heißen. `tests/test_widget_lifetime.py` liest per
 `ast`, wer eine Leine anlegt, und verlangt von jedem dasselbe Wort; ein
 sechster Name kann nicht mehr unbemerkt entstehen.
 
+`WorkerLeash.start()` nimmt den Arbeiter sofort in den eigenen gehaltenen
+Bestand auf. Die globale Menge schützt seine Lebenszeit; `pending()` und
+`wait_all()` müssen ihn ebenfalls schon vor dem Fertigsignal kennen, damit
+das Aufräumen keinen aktiven Arbeiter übersieht.
+
+Ein vollständig beendeter Arbeiter darf seinen alten Arbeitskontext ebenfalls
+nicht bis zu einem späteren Sammlerlauf festhalten. Die Leine löst solche
+direkten Rückverweise über `Worker.release_finished_references()` erst nach
+der zugestellten eigenen `finished`-Antwort und dem zusätzlichen Nachweis
+`wait(0)`. Das fachliche Ergebnis, ein Abbruch oder ein Fehler ist dann bereits
+zugestellt. Der Haken trennt nur die von der Workerklasse selbst deklarierten
+Ausgangssignale und ihre reinen Arbeitsfelder; `destroyed`, `started` und
+fremde Verbindungen werden nie pauschal gelöst.
+
 **Der Parameter gilt der Leine, nicht der Sache.** `release()` reichte seine
 2000 ms an `wait_for_look` weiter, wo 30 000 stehen — damit bekam eine
 Erhebung, die eine halbe Minute haben darf, zwei Sekunden. Gemessen an
@@ -447,15 +468,34 @@ Test dasselbe misst:
 release(widget)  # von der Klasse geholt, siehe oben
 leash.wait_for_all()
 application.processEvents()  # mehrfach: ein finished reiht selbst wieder ein
-gc.collect()
+widget.deleteLater()
+QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+application.processEvents()
+gc.collect()  # erst nach der zugestellten nativen Löschung
 ```
+
+Ein Test-Pin fällt erst **nach** `sendPostedEvents(DeferredDelete)` und dem
+anschließenden Ereignislauf. Qt löscht ein Elternfenster samt Kinddialogen
+rekursiv; währenddessen müssen deren Python-Hüllen stark gehalten bleiben.
+Erst wenn die C++-Löschung vollständig zugestellt ist, wird die Pin-Liste
+geleert. Danach sammelt der Testabbau die jetzt ungültigen Python-Hüllen im
+Hauptthread ein. Ohne diesen letzten Schritt blieben je UI-Test hunderte
+zyklisch gehaltene Hüllen zurück, bis eine spätere Allokation ihren Abbau
+auslöste. Die nativen Abbrüche wanderten zwischen Allokationsstellen; einen
+bestimmten auslösenden Faden belegt diese Messung nicht. Direkte
+Lebensdauertests beobachten die
+Eltern-Weakref im `destroyed`-Signal des Kindes und einen Python-Ring zwischen
+gelöschtem Eltern- und Kindwidget; nach dem gemeinsamen Abbau verschwinden
+beide.
 
 **Der `processEvents`-Schritt ist der, den man vergisst**, und ohne ihn liest
 man ein Leck, wo keines ist: `leash._alive` hält einen Arbeiter modulweit, der
 hält über sein `finished`-Lambda die Leine und damit den Dialog; abgeräumt
 wird erst, wenn das Signal ankommt.
 
-| | überleben |
+Historischer Messstand vor dem geordneten Qt-Abbau:
+
+| damaliger Weg | überlebende Widgets |
 |---|---|
 | nur loslassen | 10 von 10 |
 | `release()` | 10 von 10 |

@@ -36,7 +36,18 @@ auf sein Datum wartet.
 
 `gate_lock.py` schützt Lesen, Erzeugen und Entfernen der Besitzerdatei durch
 die Betriebssystemsperre aus `licence_archive.py`. Eine junge unlesbare Datei
-bleibt auch ohne Wartebudget belegt. `link_memory.py` reserviert bei Konflikten
+bleibt auch ohne Wartebudget belegt. Unter Windows liest es Prozessbestand
+und Befehlszeilen direkt über typisierte Toolhelp-/NT-Systemaufrufe, ohne
+PowerShell-Prozess oder CIM-Dienst. Die interne NT-API wird dynamisch geladen;
+ihr Vorhandensein und Antwortvertrag sind eine ausdrückliche Kompatibilitätsgrenze.
+Verschwundene Prozesse werden ausgelassen;
+Zugriffsfehler, unbekannte NT-Verträge und ungültige Antwortpuffer bleiben
+ausdrücklich fehlende Auskunft. Meldungen enthalten API-Fehlercodes, niemals
+fremde Kommandozeilen. Jeder geöffnete Snapshot und Prozesshandle wird geschlossen.
+Die JSON-Grenze prüft Schlossfelder vor jeder Zahlenrechnung und erhält ihre
+ursprünglichen Werte für den Besitzvergleich; ungültige junge Einträge bleiben
+belegt. Plattformzweige werden getrennt für Windows, Linux und macOS typgeprüft.
+`link_memory.py` reserviert bei Konflikten
 freie Sicherungsnamen exklusiv; vor dem Entfernen des lokalen Bestands wird
 jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.
 
@@ -107,6 +118,16 @@ den ganzen Seiten- und PDF-Rahmen. Eine neue Sprache darf dort keine neue
 Tabellenzeile verlangen; ihr Katalog und das Pfadschema müssen genügen.
 
 **Bauen und Ausliefern**
+
+Nach einem Python-Wechsel wird `build_slice_core.py` mit dem aktuellen
+Interpreter erneut ausgeführt. Eine Erweiterung für eine andere Python-ABI
+ist kein Leistungsnachweis; der Vergleich gegen GEOS bleibt in
+`tests/test_slice_core.py`. Die Paket-Spec verlangt den passenden nativen Kern.
+
+Die Paketmetadaten führen die bestehende proprietäre Lizenz als
+`LicenseRef-Proprietary` und ihre Datei getrennt unter `license-files`.
+Dieses Format benötigt mindestens setuptools 77.0.3; der Lizenztext selbst
+bleibt die Quelle der Nutzungsbedingungen.
 
 Der Linux-Installer serialisiert gespeicherte Shellwerte mit einfachen
 Anführungszeichen und gesonderter Apostrophmaskierung. Sein Desktop-Entry

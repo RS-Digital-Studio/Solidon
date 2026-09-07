@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "solidon3d"
 version = "0.3.4"
 description = "Desktop application for building, generating and editing printable models"
 requires-python = ">=3.14"
-license = { file = "LICENSE" }
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
 authors = [{ name = "RS Digital" }]
 dependencies = [
   # CA-Satz für HTTPS im gebauten macOS-Paket. OpenSSLs dortige Vorgabepfade

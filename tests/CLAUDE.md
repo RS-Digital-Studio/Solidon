@@ -127,3 +127,10 @@ sie einbringt. Assert-Meldungen bleiben ebenfalls beim Bestand der Datei.
 - Es biegt **die Nutzerverzeichnisse in einen Temp-Ordner** um (§38), `HOME`
   eingeschlossen. Läuft ein Test außerhalb der Suite, fehlt ihm das, und er
   liest in Roberts echtem Profil.
+
+Wer `WorkerLeash.start` durch eine Testfunktion ersetzt, übernimmt den Abbau
+der echten, absichtlich nicht gestarteten Worker. Ein lokaler Finalizer löst
+deren `release_finished_references()`, merkt `deleteLater()` vor und stellt
+`DeferredDelete` zu. Nur ein Fensterfeld zu leeren reicht nicht: Die Leine hat
+diese Worker nie registriert. Der vollständige Qt-Abbauvertrag steht in
+`.claude/rules/wartezeit.md` unter „Loslassen allein räumt nicht auf“.

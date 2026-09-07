@@ -8,7 +8,7 @@ Beide teilen dieselben Bausteine (Messprofil, Arbeitssatz, die sichere
 Abbaureihenfolge), deshalb liegen sie nebeneinander statt ineinander.
 
     python tools/window_memory.py                     # 5 Fenster, dann 5 Sprachwechsel
-    python tools/window_memory.py --windows 8         # nur die Fensterrunden
+    python tools/window_memory.py --windows 8 --languages 0  # nur Fensterrunden
     python tools/window_memory.py --languages 0       # ohne Sprachwechsel
 
 **Was gemessen wird, ist die Steigung, nicht der Betrag.** Das erste Fenster
@@ -58,11 +58,18 @@ from tools.window_bench import (  # noqa: E402  (der Pfad muss zuerst stehen)
 
 def drain(application: Any) -> None:
     """Ereignisse abarbeiten und aufräumen, damit die nächste Messung zählt."""
+    from PySide6.QtCore import QEvent
+
     for _ in range(EVENT_DRAIN_ROUNDS):
         application.processEvents()
+    # processEvents arbeitet deleteLater nicht ab. Der Sprachwechsel gibt
+    # alte Fenster darüber frei; ohne diese Zustellung misst man deren
+    # aufgeschobene Zerstörung als lineares Speicherleck.
+    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     gc.collect()
     for _ in range(EVENT_DRAIN_ROUNDS):
         application.processEvents()
+    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def slope(values: list[float]) -> float:
@@ -132,12 +139,12 @@ def main() -> int:
         print(f"Steigung über die zweite Hälfte: {slope(after):+.1f} MiB je Fenster")
 
     if arguments.languages:
-        from app.i18n import get_language, set_language
+        from app.i18n import get_language
         from app.i18n.catalog import available_languages
         from app.ui.app import rebuild_for_language
 
-        sprachen = list(available_languages())
-        print(f"\n--- {arguments.languages} Sprachwechsel ({', '.join(sprachen)})")
+        languages = list(available_languages())
+        print(f"\n--- {arguments.languages} Sprachwechsel ({', '.join(languages)})")
         session = Session()
         settings = UiSettings()
         window = MainWindow(session, settings)
@@ -146,8 +153,10 @@ def main() -> int:
         print(f"Fenster steht: {working_set_mb():.0f} MiB", flush=True)
         after = []
         for round_number in range(1, arguments.languages + 1):
-            ziel = sprachen[round_number % len(sprachen)]
-            set_language(ziel)
+            # Der echte Fensterwechsel lädt die Sprache aus den Einstellungen.
+            # Eine globale Vorgabe allein wird dabei wieder überschrieben.
+            next_language = (languages.index(settings.language) + 1) % len(languages)
+            settings.language = languages[next_language]
             window = rebuild_for_language(application, window, settings)
             window.show()
             drain(application)

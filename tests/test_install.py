@@ -1450,3 +1450,115 @@ def test_inside_a_flatpak_the_package_manager_of_the_host_counts(
 
     monkeypatch.setattr(install.discover, "in_flatpak", lambda: False)
     assert install.manager() is None, "außerhalb des Sandkastens zählt nur der PATH"
+
+
+@pytest.mark.parametrize("action", ["install", "start"])
+def test_releasing_the_dialog_waits_for_its_active_worker(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    """Auch ein Arbeiter ohne Fertigsignal gehört zum Aufräumweg des Dialogs."""
+    import threading
+
+    entered = threading.Event()
+    finish = threading.Event()
+    requirement = by_id("comfyui")
+
+    def install_later(*_args, **_kwargs):
+        entered.set()
+        finish.wait(5)
+        return install.InstallResult(requirement=requirement, installed=True)
+
+    def start_later(*_args, **_kwargs):
+        entered.set()
+        finish.wait(5)
+        return tools.StartResult(launched=True, running=True)
+
+    monkeypatch.setattr(install, "install", install_later)
+    monkeypatch.setattr(tools, "start_detailed", start_later)
+    monkeypatch.setattr(tools.ExternalTool, "start_command", lambda _tool: ["Testdienst"])
+    dialog = settled(InstallDialog(), qt_app)
+    if action == "install":
+        dialog._start(requirement)
+        worker = dialog._worker
+    else:
+        dialog._start_tool(requirement)
+        worker = dialog._launcher
+    assert worker is not None
+    timer = threading.Timer(0.1, finish.set)
+    try:
+        assert entered.wait(2), "der echte QThread muss bereits in seiner Arbeit stehen"
+        timer.start()
+        dialog.release()
+        assert not worker.isRunning(), "release kehrte vor dem aktiven Arbeiter zurück"
+    finally:
+        finish.set()
+        worker.wait(2000)
+        timer.cancel()
+        qt_app.processEvents()
+        dialog.release()
+
+
+@pytest.mark.parametrize("action", ["install", "start"])
+def test_closing_waits_asynchronously_for_the_active_task(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, action: str
+) -> None:
+    """Schließen lässt den Installer auslaufen und beendet nur das Dienst-Warten."""
+    import threading
+    import time
+
+    from PySide6.QtCore import QTimer
+
+    entered = threading.Event()
+    finish = threading.Event()
+    cancelled = []
+    requirement = by_id("comfyui")
+
+    def install_later(*_args, **_kwargs):
+        entered.set()
+        finish.wait(5)
+        return install.InstallResult(requirement=requirement, installed=True)
+
+    def start_later(_tool, *, cancelled):
+        entered.set()
+        finish.wait(5)
+        return tools.StartResult(launched=True, stopped=cancelled())
+
+    monkeypatch.setattr(install, "install", install_later)
+    monkeypatch.setattr(tools, "start_detailed", start_later)
+    monkeypatch.setattr(tools.ExternalTool, "start_command", lambda _tool: ["Testdienst"])
+    dialog = settled(InstallDialog(), qt_app)
+    dialog.show()
+    dialog.rejected.connect(lambda: cancelled.append(True))
+    if action == "install":
+        dialog._start(requirement)
+        worker = dialog._worker
+    else:
+        dialog._start_tool(requirement)
+        worker = dialog._launcher
+    assert worker is not None
+    try:
+        assert entered.wait(2)
+        dialog.reject()
+        assert dialog.isVisible(), "solange gearbeitet wird, bleibt der Fortschritt sichtbar"
+        assert not cancelled, "noch kein abgeschlossenes Schließen"
+        assert worker.isRunning(), "der Installer darf nicht abgewürgt werden"
+        if action == "start":
+            assert worker._stopped, "nur das Warten auf den Dienst wird beendet"
+        responsive = []
+        QTimer.singleShot(0, lambda: responsive.append(True))
+        qt_app.processEvents()
+        assert responsive, "die Oberfläche muss während des Wartens weiter reagieren"
+        finish.set()
+        deadline = time.monotonic() + 2
+        while not cancelled and time.monotonic() < deadline:
+            qt_app.processEvents()
+            worker.wait(10)
+        assert cancelled == [True]
+        assert not dialog.isVisible()
+        assert not worker.isRunning()
+        assert dialog._survey is None, "nach dem Schließen keine neue Erhebung"
+    finally:
+        finish.set()
+        worker.wait(2000)
+        qt_app.processEvents()
+        dialog.release()

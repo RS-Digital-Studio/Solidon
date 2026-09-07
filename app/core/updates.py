@@ -12,13 +12,14 @@ von Hand zu machen hieß: Seite finden, das richtige von fünf Paketen
 erkennen, die Prüfsumme irgendwo abgleichen. Der letzte Schritt fiel dabei
 immer aus.
 
-**Woran die Sicherheit hängt.** Die Prüfsumme steht in derselben Datei wie
-die Adresse — gegen einen Server, der beides fälscht, hilft sie nicht. Was
-hilft, ist HTTPS und die Auflage, dass das Paket von *demselben Rechnernamen*
-kommt wie die Versionsdatei: Wer die Antwort umbiegen will, braucht ein
-Zertifikat für diesen Namen. Die Prüfsumme fängt, was danach kommt — den
-abgebrochenen Download, den halb geschriebenen Puffer, die Datei aus einem
-Zwischenspeicher.
+**Woran die Sicherheit hängt.** Eine Ed25519-Signatur schützt die gesamte
+Versionsdatei einschließlich Paketadressen und Prüfsummen. Der private
+Schlüssel liegt nicht auf dem Webserver; dessen Kontrolle allein genügt
+deshalb nicht, um ein anderes Paket als unseres auszugeben. HTTPS und die
+Auflage, dass das Paket von *demselben Rechnernamen* wie die Versionsdatei
+kommt, begrenzen zusätzlich den Transportweg. Die signierte Prüfsumme fängt
+den abgebrochenen Download, den halb geschriebenen Puffer und eine veränderte
+Datei aus einem Zwischenspeicher.
 
 Die Prüfung beim Start ist an — seit dem 23.08.2026, und die
 Datenschutzerklärung auf der Website sagt es so. Sie bleibt eine Anfrage, die
@@ -1123,7 +1124,9 @@ def download(
             values={"url": redact_url(address), "reason": redact_external(error)},
         ) from error
 
-    with _cache_lock(folder):
+    # Die Antwort gehört bereits ab dem Öffnen diesem Aufruf — auch wenn
+    # die Sperre oder das Anlegen der ersten temporären Datei scheitert.
+    with answer, _cache_lock(folder):
         return _store_download(
             answer,
             package,
@@ -1162,7 +1165,7 @@ def _store_download(
     digest = hashlib.sha256()
     read = 0
     try:
-        with os.fdopen(descriptor, "wb") as sink, answer:
+        with os.fdopen(descriptor, "wb") as sink:
             opened_temporary = _descriptor_path(sink.fileno())
             if opened_temporary is not None and opened_temporary != temporary.resolve(strict=True):
                 raise FileWriteError(

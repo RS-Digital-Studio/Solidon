@@ -146,9 +146,26 @@ def test_limited_process_gets_explicit_cwd_without_application_secrets(
     assert lines[1] == "fehlt"
 
 
-def test_limited_process_stops_at_the_combined_output_limit(tmp_path: Path) -> None:
-    script = "import os, time; os.write(1, b'x' * 700); os.write(2, b'y' * 700); time.sleep(5)"
-    begun = time.monotonic()
+def test_limited_process_stops_at_the_combined_output_limit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ready = tmp_path / "output-ready"
+    finished = tmp_path / "normal-finish"
+    script = (
+        "import os, time; from pathlib import Path; "
+        f"Path({str(ready)!r}).write_text(str(time.monotonic())); "
+        "os.write(1, b'x' * 700); os.write(2, b'y' * 700); time.sleep(5); "
+        f"Path({str(finished)!r}).touch()"
+    )
+    children: list[subprocess.Popen[bytes]] = []
+    real_popen = subprocess.Popen
+
+    def record_child(*args, **kwargs):
+        child = real_popen(*args, **kwargs)
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(process.subprocess, "Popen", record_child)
 
     with pytest.raises(process.ProcessOutputLimitExceeded):
         process.run_limited(
@@ -158,7 +175,12 @@ def test_limited_process_stops_at_the_combined_output_limit(tmp_path: Path) -> N
             output_limit=1024,
         )
 
-    assert time.monotonic() - begun < 3.0
+    # Der Windows-Prozessstart liegt vor der ersten Ausgabe.
+    # Begrenzt wird weiterhin die unveränderte Reaktionsfrist, ab dem Moment,
+    # in dem das Kind tatsächlich seine beiden Ausgabeströme füllt.
+    assert time.monotonic() - float(ready.read_text()) < 3.0
+    assert children[0].poll() is not None, "das Kind muss bereits beendet sein"
+    assert not finished.exists(), "normal fertig werden und erst dann melden wäre zu spät"
 
 
 def test_exact_output_limit_is_still_accepted(tmp_path: Path) -> None:

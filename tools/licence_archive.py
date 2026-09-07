@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextlib
 import importlib
 import os
+import sys
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -32,27 +33,25 @@ def _prepare_lock(stream: BinaryIO) -> None:
 def _try_lock(stream: BinaryIO) -> None:
     """Belegt genau ein Byte ohne Warten; die Zeitschleife liegt außen."""
     stream.seek(0)
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
 
         msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-        return
-    fcntl = importlib.import_module("fcntl")
-
-    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    else:
+        fcntl = importlib.import_module("fcntl")
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
 
 def _unlock(stream: BinaryIO) -> None:
     """Gibt die plattformspezifische Sperre wieder frei."""
     stream.seek(0)
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
 
         msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-        return
-    fcntl = importlib.import_module("fcntl")
-
-    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+    else:
+        fcntl = importlib.import_module("fcntl")
+        fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 @contextlib.contextmanager

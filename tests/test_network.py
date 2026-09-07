@@ -65,7 +65,7 @@ def test_a_package_without_any_trust_anchor_gets_the_shipped_bundle(
 ) -> None:
     """Der Fall des ersten Flatpak-Kunden (Manjaro, 06.09.2026).
 
-    Sein Protokoll trägt sechsmal ``CERTIFICATE_VERIFY_FAILED: unable to get
+    Sein Protokoll trägt wiederholt ``CERTIFICATE_VERIFY_FAILED: unable to get
     local issuer certificate`` — bei jeder Update-Prüfung und bei beiden
     Versuchen, eine Rückmeldung zu senden. Dieselbe Kette trägt die
     Geräteaktivierung; ohne diesen Satz hätte er kaufen und nicht
@@ -151,3 +151,29 @@ def test_a_missing_directory_is_no_store(monkeypatch: pytest.MonkeyPatch, tmp_pa
 def test_the_running_process_reports_its_own_anchors() -> None:
     """Die Zahl kommt aus dem Prozess und nicht aus einer Annahme."""
     assert network.trusted_anchors() >= 0
+
+
+def test_an_empty_linux_store_is_replaced_with_real_trusted_certificates(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der Flatpak-Fehlerfall führt bis zu einem SSL-Kontext mit echten CA-Ankern."""
+    folder = tmp_path / "certs"
+    folder.mkdir()
+    (folder / "ca-certificates.crt").write_text("kein Hash-Verweis", encoding="utf-8")
+    monkeypatch.delenv(network.CERTIFICATE_VARIABLE, raising=False)
+    monkeypatch.setattr(
+        network.ssl,
+        "get_default_verify_paths",
+        lambda: network.ssl.DefaultVerifyPaths(
+            None, str(folder), "SSL_CERT_FILE", "/build/cert.pem", "SSL_CERT_DIR", str(folder)
+        ),
+    )
+
+    assert network.configure_certificates(platform="linux", frozen=True, anchors=0)
+    assert network.os.environ[network.CERTIFICATE_VARIABLE] == network.certifi.where()
+    # Der echte PEM-Satz wird geladen; ein bloß gesetzter Pfad wäre keine
+    # Aussage darüber, ob Update, Support und Aktivierung HTTPS prüfen können.
+    context = network.ssl.create_default_context()
+    assert context.cert_store_stats()["x509_ca"] > 0
+    assert context.verify_mode == network.ssl.CERT_REQUIRED
+    assert context.check_hostname
