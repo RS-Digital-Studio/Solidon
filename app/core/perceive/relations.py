@@ -182,10 +182,20 @@ def centre_of(feature: Feature) -> Any | None:
 def is_a_cavity(feature: Feature) -> bool:
     """Ist dieses Merkmal ein Hohlraum oder Materie?
 
-    Wortgleich mit ``prepare_ops._feature_is_a_cavity``, und das bleibt
-    absichtlich so: Der Kern der Wahrnehmung darf die Geometrieschicht nicht
-    importieren. Ändert sich die Regel, ändert sie sich an beiden Stellen —
-    ``tests/test_features.py`` hält sie zusammen.
+    ``hole`` ist immer ein Hohlraum, ``pin`` immer Materie. ``cone`` und
+    ``sphere`` können beides sein, und die Erkennung sagt es in ``recess`` —
+    eine angesenkte Bohrung ist ein Kegel nach innen, eine Kuppe einer nach
+    außen.
+
+    **Die einzige Stelle, an der diese Frage beantwortet wird** — seit dem
+    07.09.2026. Bis dahin stand sie wortgleich als
+    ``geom.prepare_ops._feature_is_a_cavity`` daneben, mit zwei Begründungen,
+    die beide nicht trugen: Die Wahrnehmung dürfe die Geometrie nicht
+    importieren (sie tut es, gleich oben in dieser Datei), und
+    ``tests/test_features.py`` halte beide zusammen (kein Test nannte je eine
+    der beiden Funktionen). Die sieben Aufrufer in ``prepare_ops`` holen den
+    Namen jetzt träge — dieselbe Kante wie bei ``cavity_chain_state_at``
+    daneben, und ``tests/test_core_package_direction.py`` führt sie.
     """
     if feature.kind == "hole":
         return True
@@ -346,7 +356,7 @@ def widening_at_the_mouth(
       steckt im Zapfen Ø 40,80, beide auf derselben Achse, und die Mitte des
       Zapfens liegt in ihrer Strecke. Ein Zapfen ist aber Materie und keine
       Aufweitung einer Öffnung — er umgibt die Bohrung, er mündet nicht in
-      sie. Gefragt wird wie in ``prepare_ops._feature_is_a_cavity``: ``hole``
+      sie. Gefragt wird über :func:`is_a_cavity`: ``hole``
       immer, ``pin`` nie, und bei Kegel und Kugel entscheidet ``recess``.
 
     Gemessen an ``broomholdervcd_d35mm.stl`` (Robert, 04.09.2026):

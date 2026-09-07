@@ -19,6 +19,7 @@ from app.core.perceive.relations import (
     SLEEVE_OVERLAP,
     Sleeve,
     bore_and_widening_at,
+    is_a_cavity,
     sleeve_at,
 )
 from app.core.types import Feature
@@ -293,3 +294,59 @@ def test_each_condition_of_the_sleeve_rule_separates_something() -> None:
         von_außen = sleeve_at(abgewandelt, geändert)
         assert von_innen is None, f"{was}: von der Bohrung aus gilt es weiter als Rohr"
         assert von_außen is None, f"{was}: vom Zapfen aus gilt es weiter als Rohr"
+
+
+def _merkmal(kind: str, **params: object) -> Feature:
+    """Ein Merkmal ohne Netz — für die Fragen, die nur Art und Werte lesen."""
+    return Feature(id=f"{kind}_1", kind=kind, provenance="detected", params=params)
+
+
+def test_hole_and_pin_answer_without_recess_and_cone_and_sphere_with_it() -> None:
+    """Hohlraum oder Materie — vier Arten, eine Antwortquelle.
+
+    ``hole`` ist immer ein Hohlraum, ``pin`` immer Materie, und beide fragen
+    ``recess`` gar nicht: Eine Bohrung mit ``recess=False`` bleibt ein
+    Hohlraum. Bei Kegel und Kugel entscheidet ``recess`` allein — eine
+    Senkung ist ein Kegel nach innen, eine Kuppe einer nach außen.
+    """
+    assert is_a_cavity(_merkmal("hole")) is True
+    assert is_a_cavity(_merkmal("hole", recess=False)) is True
+    assert is_a_cavity(_merkmal("pin")) is False
+    assert is_a_cavity(_merkmal("pin", recess=True)) is False
+    for art in ("cone", "sphere", "torus"):
+        assert is_a_cavity(_merkmal(art, recess=True)) is True, art
+        assert is_a_cavity(_merkmal(art, recess=False)) is False, art
+        assert is_a_cavity(_merkmal(art)) is False, f"{art} ohne Angabe ist Materie"
+
+
+def test_the_geometry_layer_asks_this_question_instead_of_answering_it() -> None:
+    """Die Frage wird an **einer** Stelle beantwortet, nicht an zwei.
+
+    **Der Anlass ist ein Zwilling, der einen Wächter behauptete, den es nicht
+    gab** (07.09.2026). ``geom.prepare_ops._feature_is_a_cavity`` stand
+    wortgleich neben :func:`is_a_cavity`, und der Docstring dort sagte,
+    ``tests/test_features.py`` halte beide zusammen — kein Test nannte je eine
+    der beiden Funktionen. Seine zweite Begründung, die Wahrnehmung dürfe die
+    Geometrie nicht importieren, war am Code widerlegt: Diese Datei importiert
+    ``geom.mesh`` in ihrer dritten Importzeile.
+
+    Dieser Wächter prüft deshalb den Quelltext und nicht das Verhalten: Wer in
+    ``app/core/geom`` ``recess`` liest, beantwortet die Frage neu — und zwar
+    an einer Stelle, an der die nächste Änderung sie nicht findet. Sieben
+    Aufrufer holen ``is_a_cavity`` stattdessen träge; die Kante ``geom →
+    perceive`` führt ``tests/test_core_package_direction.py``.
+    """
+    geometrie = Path(__file__).resolve().parents[1] / "app" / "core" / "geom"
+    dateien = sorted(geometrie.rglob("*.py"))
+    assert len(dateien) > 20, f"nur {len(dateien)} Dateien gefunden — sucht der Test noch etwas?"
+
+    stellen = [
+        f"{datei.name}:{nummer}"
+        for datei in dateien
+        for nummer, zeile in enumerate(datei.read_text(encoding="utf-8").splitlines(), 1)
+        if '"recess"' in zeile and not zeile.lstrip().startswith(("#", "*", '"""'))
+    ]
+    assert not stellen, (
+        "die Hohlraumfrage wird in der Geometrieschicht beantwortet statt über "
+        f"perceive.relations.is_a_cavity gestellt: {', '.join(stellen)}"
+    )
