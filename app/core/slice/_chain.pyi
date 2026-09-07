@@ -5,6 +5,8 @@ Datei wüsste mypy nichts von ihr und meldete den Import als Fehler — auf jede
 Maschine, auf der gerade nichts gebaut wurde, also auch in der CI.
 """
 
+from collections.abc import Callable
+
 import numpy as np
 import numpy.typing as npt
 
@@ -13,6 +15,7 @@ def plane_segments(
     faces: npt.NDArray[np.int64],
     heights: npt.NDArray[np.float64],
     epsilon: float,
+    check_cancelled: Callable[[], None] | None = None,
 ) -> tuple[
     npt.NDArray[np.float64],
     npt.NDArray[np.int64],

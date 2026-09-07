@@ -82,9 +82,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Dezimieren kann die Dichtheit kosten | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Messung, ob wirklich die kleinen Komponenten kollabieren; belegt ist bisher nur das Ergebnis an einem Modell von dreien |
 | Ein reiner Import macht das Projekt geändert | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | eine Entscheidung, ob die Antwort ein anderer Zustand oder ein anderer Text ist — Regel 19 spricht für die Nachfrage, Robert hat sie am 04.09.2026 als Fund benannt |
 | Siebzehn Teile kosten siebzehn Vorgänge | Neunzehn Kundendateien, durch die Oberfläche gefahren (04.09.2026) | die Freigabe, den Mehrfachimport überhaupt zu bauen — zurückgestellt von Robert am 04.09.2026 zugunsten der Einzelmodelle |
-| Das Leistungsbudget der Erkennung misst eine Kugel | Was die Erkennung wirklich kostet (04.09.2026) | einen zweiten Messfall mit einem merkmalsreichen Netz — die 0,80 s aus §31 gelten für ein Modell ohne gekrümmte Flecken, ein Kundenmodell derselben Größe brauchte das Zehnfache |
-| Die Stützkarte braucht eine Schranke an ihrer eigenen Größe | Was die Erkennung wirklich kostet (04.09.2026) | eine Absage, die vorher weiß, was die Schichtanalyse kostet — die Dreiecksgrenze fängt den teuren Fall nicht und sperrt billige aus |
-| Sechzehntausend Merkmale an einem Schiffsrumpf | Was die Erkennung wirklich kostet (04.09.2026) | die Schranke gehört zur Merkmalserkennung und damit in dasselbe Gebiet wie die Gewinde-Phantome; nicht zweimal ziehen (Absprache mit 3d-druck-f9, 04.09.2026) |
+| Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel | Was die Erkennung wirklich kostet (04.09.2026) | weitere profilgestützte Beschleunigung; der neue mechanische 204k-Korpus liegt bei 0,79 s, ein organischer 197k-Körper bei 1,52 s |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -16219,7 +16217,7 @@ die falsche Größe.
   Der Einwand, **alle sieben** zu messen statt zwei, kam von 3d-druck-4d. Ohne
   ihn wäre die Stützkarte mitgestiegen und liefe beim Spiderman 45 Sekunden.
 
-- [ ] **Das Leistungsbudget der Erkennung misst eine Kugel.** §31 sagt
+- [ ] **Freiformerkennung liegt noch über dem Ein-Sekunden-Ziel.** §31 sagt
   „Feature-Erkennung, 200 000 Dreiecke: unter 1 s" und führt 0,80 s als
   Messwert. Der Test dazu
   (`test_feature_detection_on_two_hundred_thousand_triangles`) baut eine
@@ -16233,7 +16231,18 @@ die falsche Größe.
   merkmalsreichen Netz derselben Größe — dann misst das Budget den Fall, für
   den es da ist.
 
-- [ ] **Die Stützkarte braucht eine Schranke an ihrer eigenen Größe.** Sie
+  Die Lücke im Messkorpus ist geschlossen: Neben der bisherigen Kugel prüfen
+  zwei zusätzliche Leistungstests eine mechanische Lochplatte mit 203.776
+  Dreiecken und eine organische Freiform mit 200.000 Dreiecken. Die Lochplatte
+  behält alle vier Bohrungen, sechs Flächen und ihre IDs und benötigt auf der
+  Referenzmaschine 0,79 s. Die bisherige Regressionsmarke bleibt erhalten.
+  Vektorisierte Radienminima und vermiedene Einzelgruppierungen verkürzen den
+  realen 197k-Freiformfall von 1,89 auf 1,52 s, den 277k-Segelfall von 3,29 auf
+  2,76 s. Die erkannte Ausgabe bleibt gleich. Das allgemeine Ein-Sekunden-Ziel
+  ist für diese Freiformen weiterhin offen; der großzügigere automatische
+  Größenordnungswächter darf nicht als Zielerfüllung ausgegeben werden.
+
+- [x] **Die Stützkarte braucht eine Schranke an ihrer eigenen Größe.** Sie
   hängt an Bauhöhe und Konturkomplexität, nicht an der Dreieckszahl: 8,33 s
   bei 59 740, 1,84 s bei 277 460, 45,44 s bei 885 570. Ihre heutige Grenze von
   120 000 Dreiecken fängt den teuren Fall nicht (er liegt darunter und lief
@@ -16276,13 +16285,29 @@ die falsche Größe.
   selbst: Die Karte läuft im Arbeiter und `cancelled` ist bis in die teuerste
   Schleife durchgereicht, es fehlt der Wecker, der sie zieht.
 
-- [ ] **Sechzehntausend Merkmale an einem Schiffsrumpf sind keine Auskunft.**
+  Die laufende Karte trägt jetzt ein monotones Drei-Sekunden-Interaktionsbudget
+  statt der pauschalen 120.000-Dreiecksgrenze. Der native Schneider, sein
+  NumPy-Rückfallweg und die Schichtmessung prüfen Abbruch zwischen begrenzten
+  Arbeitsstücken; der vollständige Schichtanalyseweg behält seinen bisherigen
+  Umfang. Am Besenhalter endet der Kartenweg nach 3,007 s statt nach 9,88 s
+  und bietet direkt **Dreiecke verringern** an. Ein Nutzerabbruch bleibt still.
+  Das Budget ist aus dem direkten Kartenablauf abgeleitet, keine neue
+  Vorhersage der Rechenkosten und kein zusätzlicher verbindlicher §31-Zielwert.
+
+- [x] **Sechzehntausend Merkmale an einem Schiffsrumpf sind keine Auskunft.**
   Auch in 153 Sekunden nicht. Ein Segel meldet 2252, ein Rumpf 16 508 — beides
   Rauschen aus einem feinen, organischen Netz, und beides landet im
   Objektbaum. Die Zeit hängt daran (nicht an den Dreiecken), und der Nutzen
   fällt mit jedem weiteren Eintrag. Die Schranke gehört zur Merkmalserkennung
   und damit in dasselbe Gebiet wie die Gewinde-Phantome; sie soll nicht
   zweimal gezogen werden (Absprache mit 3d-druck-f9, 04.09.2026).
+
+  Die sichtbare Merkmalsflut ist durch den Freiformfilter aus `82d34278`
+  behoben; echte Bohrungen, Zapfen und Flächen bleiben erhalten. Die zusätzliche
+  Grenze von 1.000 Merkmalen verhindert die teure Zuordnung übergroßer Listen.
+  Der vollständige Torlauf vom 07.09.2026 bestätigt den aktuellen Stand.
+  Die Erkennungszeit vor dem Filter bleibt beim eigenen offenen Leistungsbudget
+  und wird nicht mit diesem erledigten Ausgabeproblem gleichgesetzt.
 
 ## Was die Erkennung erklärt — und was nicht (04.09.2026)
 

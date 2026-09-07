@@ -10,6 +10,7 @@ import threading
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -397,19 +398,24 @@ def test_website_content_comparison_rejects_a_body_larger_than_announced(
 
 
 @pytest.mark.parametrize(
-    "problem",
+    "problem_factory",
     [
-        urllib.error.URLError("nicht erreichbar"),
-        urllib.error.HTTPError("https://solidon3d.de/index.html", 403, "Forbidden", {}, None),
+        lambda: urllib.error.URLError("nicht erreichbar"),
+        lambda: urllib.error.HTTPError(
+            "https://solidon3d.de/index.html", 403, "Forbidden", {}, None
+        ),
     ],
 )
 def test_website_content_comparison_fails_closed_on_transport_errors(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
-    problem: BaseException,
+    problem_factory: Callable[[], BaseException],
 ) -> None:
     local = tmp_path / "index.html"
     local.write_bytes(b"a")
+    # HTTPError besitzt einen Antwortstrom. Erst im Test erzeugen, damit
+    # schon eine abgebrochene Sammlung keinen ungeschlossenen Strom hält.
+    problem = problem_factory()
     monkeypatch.setattr(upload_website, "LOCAL_ROOT", tmp_path)
     monkeypatch.setattr(
         upload_website,
@@ -418,6 +424,8 @@ def test_website_content_comparison_fails_closed_on_transport_errors(
     )
 
     assert upload_website.differs("solidon3d.de/httpdocs", local, 1)
+    if isinstance(problem, urllib.error.HTTPError):
+        assert problem.closed
 
 
 def test_website_upload_refuses_an_ip_before_sending_credentials(

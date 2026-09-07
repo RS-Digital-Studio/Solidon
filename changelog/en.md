@@ -35,6 +35,7 @@ it into `website/version.json`.
 - Which actions come first depends on the selection: with several bodies Unite, Subtract and Intersection, with a single one Drill a bore, Hollow out and Split.
 - On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.
 - A selected body shows its filaments right there and lets you change them.
+- A search field in the same card finds the remaining operations; features and parts stay in their own areas.
 
 ### Building and editing
 
@@ -49,6 +50,10 @@ it into `website/version.json`.
 - Switches of an operation that are on by default can now be turned off from the command line as well.
 - An error inside an operation names its cause: in the log, in the line that stopped it and in the error report.
 - Rejected input in placement, mesh storage and recipes now comes with a suggested action instead of a bare error message.
+- Parts explain which parameter combinations they will not build, instead of quietly clipping dimensions.
+- An unsuitable number of selected bodies is reported before the calculation, instead of dropping an input unnoticed.
+- Placing on a surface changes the document only when you accept it; a discarded preview leaves nothing behind.
+- Letters and digits stay in the input field — navigation keys take effect only when you are not typing there.
 
 ### Features
 
@@ -57,6 +62,7 @@ it into `website/version.json`.
 - Sphere, torus and cone report their curvature, cylinder centres match their end rings, and thread turns follow the axis.
 - The feature panel offers fits only when a second body is selected, and it knows every group the core uses.
 - Automatic cut fits no longer hand out the same name twice.
+- Feature detection reaches the same result faster on complex meshes.
 
 ### Printing and preparing
 
@@ -65,6 +71,11 @@ it into `website/version.json`.
 - The slicer receives the world of the printer instead of the one from Solidon, and a custom profile keeps its vendor base.
 - Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory.
 - The clean-up after import keeps the filament assignments.
+- The printer belongs to the project and can be changed in the header as well as in the print dialog; assigned filaments, colours and your own print values are kept.
+- The header names the filaments actually in use; several spools of the same material type stay distinguishable by name and colour.
+- The slicer handover resolves every spool against its own material type; your own print values keep priority.
+- If the support map takes too long, the calculation ends with an explanation and offers to reduce the triangles.
+- The print dialog stays fully usable in narrow windows as well.
 
 ### Files and projects
 
@@ -77,6 +88,8 @@ it into `website/version.json`.
 - An incomplete set of variants is no longer exported silently.
 - The discarded sketch can be brought back with Undo, and a second history object no longer leaves a stale Redo behind.
 - Two error reports from the same second no longer overwrite each other.
+- Inputs you chose explicitly survive saving and reopening, instead of being replaced by a default.
+- Cancelling also ends the calculation still running behind a variant.
 
 ### Chat and AI
 
@@ -85,6 +98,7 @@ it into `website/version.json`.
 - In image generation the weights arrive whole or not at all, and a single value in the structure field no longer triggers an unordered generation.
 - A local model is measured even when it answers over HTTPS on a port of its own.
 - The note about AI involvement applies only with written evidence, and a change of language no longer ends the remote control.
+- The ComfyUI setup adopts model weights that are already complete, instead of downloading them again.
 
 ### Update, installation and system
 
@@ -100,6 +114,7 @@ it into `website/version.json`.
 - The start screen recognises the system before the first picture, and the requirements table is no longer cut off.
 - A rejected attachment no longer counts as a missing one for the feedback.
 - The filament picker stays on the right spool after a cancellation and shows the eighth one too.
+- A support mail opened by hand carries a readable subject and body inside Flatpak as well; cancelling leaves the report in place.
 
 ### Manual and website
 

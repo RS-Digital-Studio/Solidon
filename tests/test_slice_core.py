@@ -35,6 +35,7 @@ import numpy as np
 import pytest
 import trimesh
 
+from app.core.errors import OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.slice import analysis
 from app.core.slice.analysis import cross_section, cross_sections, slice_body
@@ -144,6 +145,95 @@ def test_the_compiled_way_is_the_one_that_ran() -> None:
     points, _layers, nodes = analysis._plane_segments(mesh, np.array([0.0]))
     assert len(points), "the plane must cut this box"
     assert analysis._rings_from(points, nodes) is not None, "the compiled way declined a clean cut"
+
+
+class _CancelOnCall:
+    """Bricht deterministisch bei einer bestimmten Abbruchprüfung ab."""
+
+    def __init__(self, call: int) -> None:
+        self.call = call
+        self.asked = 0
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self.asked >= self.call
+
+    def raise_if_cancelled(self) -> None:
+        self.asked += 1
+        if self.asked >= self.call:
+            raise OperationCancelled
+
+
+class _NeverCancel:
+    """Zählt Fragen, ohne den Lauf zu verändern."""
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    @property
+    def is_cancelled(self) -> bool:
+        return False
+
+    def raise_if_cancelled(self) -> None:
+        self.asked += 1
+
+
+def test_the_compiled_face_work_can_be_cancelled_from_inside() -> None:
+    """Die Abbruchprüfung liegt im nativen Flächenlauf, nicht nur davor."""
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=6, radius=20.0))
+    token = _CancelOnCall(4)
+
+    with pytest.raises(OperationCancelled):
+        slice_body(mesh, 0.2, detail="support", cancelled=token)
+
+    assert token.asked == 4, "the fourth check is inside the compiled face loop"
+
+
+def test_the_numpy_face_work_can_be_cancelled_between_chunks(
+    without_compiled_core: None,
+) -> None:
+    """Auch die optionale Rückfallkette hält nicht bis zum Gesamtschnitt fest."""
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=6, radius=20.0))
+    token = _CancelOnCall(4)
+
+    with pytest.raises(OperationCancelled):
+        slice_body(mesh, 0.2, detail="support", cancelled=token)
+
+    assert token.asked == 4, "the fourth check follows the first NumPy face chunk"
+
+
+def test_a_cancellable_cut_keeps_the_same_segments_on_both_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Aufteilen für Abbruchfähigkeit ändert weder Reihenfolge noch Punkte."""
+    mesh = MeshData.of(trimesh.creation.icosphere(subdivisions=5, radius=20.0))
+    heights = np.linspace(-19.8, 19.8, 41)
+    compiled_token = _NeverCancel()
+    compiled = analysis._plane_segments(mesh, heights, cancelled=compiled_token)
+
+    monkeypatch.setattr(analysis, "_chain", None)
+    fallback_token = _NeverCancel()
+    fallback = analysis._plane_segments(mesh, heights, cancelled=fallback_token)
+
+    assert compiled_token.asked > 1, "the compiled loop itself asks"
+    assert fallback_token.asked > 1, "the fallback chunks ask"
+    np.testing.assert_array_equal(compiled[1], fallback[1], err_msg="layers")
+    np.testing.assert_array_equal(compiled[2], fallback[2], err_msg="edges")
+    np.testing.assert_array_equal(
+        np.round(compiled[0], 6), np.round(fallback[0], 6), err_msg="points"
+    )
+
+
+def test_a_token_that_never_cancels_changes_no_analysis_number() -> None:
+    """Der neue Vertrag ist wirkungslos, solange niemand abbricht."""
+    mesh = MeshData.of(trimesh.creation.cone(radius=15.0, height=30.0, sections=48))
+    expected = slice_body(mesh, 0.5)
+    token = _NeverCancel()
+
+    actual = slice_body(mesh, 0.5, cancelled=token)
+
+    assert token.asked > len(actual.layers), "the expensive phases ask too"
+    assert actual == expected
 
 
 @pytest.mark.parametrize(

@@ -121,6 +121,15 @@ Krümmung nutzt eine monotone Asinh-Skala mit `EPS_DISPLAY` als linearem Bereich
 Null bleibt endlich, große nahezu ebene Radien verdrängen kleine Verrundungen
 nicht aus der Farbrampe, und kein Wert wird gekappt oder verschwiegen.
 
+Die Stützkarte wird nach drei Sekunden beendet und bietet **Dreiecke
+verringern** an. Das ist ein begründetes Interaktionsbudget für den direkten
+Kartenklick, keine Vorhersage aus der Dreieckszahl: §2.8 verlangt bei langen
+Rechnungen Abbruch und Bedienbarkeit, und §31 setzt für die andere aufwendige
+Analysekarte Wandstärke drei Sekunden. Dreieckszahl und Schichtzahl sind dafür
+keine Vorabschranke; die laufende Rechnung prüft ihr Budget zwischen
+begrenzten Arbeitsstücken. Der vollständige Schichtanalyseweg bleibt davon
+unberührt; das Budget gilt nur der Karte.
+
 ## Die Karte
 
 | Datei | Rolle |

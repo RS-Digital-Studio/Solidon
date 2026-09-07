@@ -35,7 +35,7 @@ from app.core.geom.section import SectionPlane, cut
 from app.core.ingest.loader import normalise
 from app.core.ingest.threemf import read_objects
 from app.core.knowledge.parts.range_check import has_self_intersections
-from app.core.perceive.features import detect
+from app.core.perceive.features import detect, forget_cache, freeform_dropped
 from app.core.perceive.maps import wall_thickness_map
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
 from app.core.scene.project import ProjectSources, new_project
@@ -448,6 +448,52 @@ def medium_mesh() -> MeshData:
     return MeshData.of(trimesh.creation.icosphere(subdivisions=7, radius=40.0))
 
 
+def mechanical_feature_mesh() -> MeshData:
+    """203 776 Dreiecke mit vier Bohrungen und sechs Flächen.
+
+    Die glatte Kugel des früheren Tests lieferte nur eine Fläche und ließ die
+    Einpassungen aus, die der Kunde benutzt. Vier reine Unterteilungen der
+    analytisch geprüften Lochplatte verändern keine Form und bringen sie ohne
+    fremde Korpusdatei an die §31-Größe.
+    """
+    import trimesh
+
+    mesh = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    raw = mesh.raw
+    for _step in range(4):
+        vertices, faces = trimesh.remesh.subdivide(raw.vertices, raw.faces)
+        raw = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
+    mesh = MeshData.of(raw)
+    assert mesh.triangle_count == 203_776, "the feature fixture does not have its named size"
+    assert mesh.is_watertight, "subdivision opened the feature fixture"
+    return mesh
+
+
+def freeform_feature_mesh() -> MeshData:
+    """Exakt 200 000 Dreiecke mit vielen nur scheinbaren Rundformen."""
+    import numpy as np
+    import trimesh
+
+    rng = np.random.default_rng(7)
+    ball = trimesh.creation.icosphere(subdivisions=7, radius=20.0)
+    vertices = np.asarray(ball.vertices, dtype=float).copy()
+    unit = vertices / np.linalg.norm(vertices, axis=1)[:, None]
+    centres = rng.normal(size=(40, 3))
+    centres /= np.linalg.norm(centres, axis=1)[:, None]
+    widths = rng.uniform(0.15, 0.5, size=40)
+    heights = rng.uniform(-0.25, 0.25, size=40)
+    scale = np.ones(len(vertices))
+    for centre, width, height in zip(centres, widths, heights, strict=True):
+        distance = np.arccos(np.clip(unit @ centre, -1.0, 1.0))
+        scale += height * np.exp(-((distance / width) ** 2))
+    scale += rng.normal(scale=0.01, size=len(vertices))
+    rough = trimesh.Trimesh(vertices=vertices * scale[:, None], faces=ball.faces, process=False)
+    mesh = MeshData.of(rough.simplify_quadric_decimation(face_count=200_000))
+    assert mesh.triangle_count == 200_000
+    assert mesh.is_watertight
+    return mesh
+
+
 def slice_target_mesh() -> MeshData:
     """Exakt 200 000 Dreiecke — die ausdrücklich genannte §31-Größe.
 
@@ -465,13 +511,63 @@ def slice_target_mesh() -> MeshData:
     return result
 
 
-def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
-    """§31: unter einer Sekunde. Eine Kugel hat keine Bohrungen, und das
-    herauszufinden ist die Arbeit.
-    """
+def test_smooth_feature_detection_keeps_its_existing_regression_mark() -> None:
+    """Der gewachsene 327-680-Dreieck-Korpus bleibt neben dem neuen bestehen."""
     mesh = medium_mesh()
     taken = measure("detect_medium", lambda: detect(mesh))
     assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
+
+
+def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
+    """§31: unter einer Sekunde an einem mechanischen Merkmalskörper.
+
+    Gemessen nach der Vektorisierung auf Roberts Maschine: 0,82 bis 0,85 s.
+    Die Zehn-Sekunden-Absage ist wie bei den übrigen §31-Zeilen nur der
+    plattformübergreifende Größenordnungswächter; sie ist kein Ersatz für das
+    hier ausgewiesene Ein-Sekunden-Ziel und den 25-Prozent-Vergleich.
+    """
+    original = normalise(read_mesh((MESHES / "plate_holes.stl").read_bytes(), ".stl"), "mm").mesh
+    expected_ids = sorted(detect(original))
+    assert expected_ids == [
+        "face_1",
+        "face_2",
+        "face_3",
+        "face_4",
+        "face_5",
+        "face_6",
+        "hole_1",
+        "hole_2",
+        "hole_3",
+        "hole_4",
+    ]
+    mesh = mechanical_feature_mesh()
+    forget_cache()
+    found: list[dict[Any, Any]] = []
+    taken = measure("detect_feature_rich_204k", lambda: found.append(detect(mesh)))
+
+    assert sorted(found[0]) == expected_ids, "Unterteilung verschiebt keine Merkmal-ID"
+    assert {feature.kind for feature in found[0].values()} == {"face", "hole"}
+    assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
+
+
+def test_feature_detection_on_a_freeform_tracks_the_real_customer_path() -> None:
+    """Die Freiform prüft tausende Fits, bevor sie erfundene Formen weglässt.
+
+    Gemessen auf Roberts Maschine: 1,41 s synthetisch, 1,52 s am organischen
+    197k-Kundenmodell und 2,76 s am 277k-Segel. Das liegt oberhalb des
+    allgemeinen Ein-Sekunden-Ziels und wird deshalb getrennt geführt; der
+    Zehn-Sekunden-Wächter behauptet keine Zielerfüllung, sondern fängt wie die
+    übrigen plattformübergreifenden Schwellen nur eine Größenordnung.
+    """
+    mesh = freeform_feature_mesh()
+    forget_cache()
+    found: list[dict[Any, Any]] = []
+
+    taken = measure("detect_freeform_200k", lambda: found.append(detect(mesh)))
+
+    assert found == [{}], "eine Freiform veröffentlicht keine erfundenen Rundformen"
+    assert freeform_dropped(mesh) >= 12, "der Korpus muss echte Fit-Arbeit auslösen"
+    assert taken < 10.0, "the freeform path must not regress by an order of magnitude"
 
 
 def test_the_sketch_solver_meets_its_budget() -> None:

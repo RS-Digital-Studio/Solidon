@@ -614,10 +614,14 @@ class DriverState(ctypes.Structure):
     ``main_window`` hierher kommt. ``"gcc-sysv"`` ist keine Wahl: ctypes lehnt
     es zusammen mit ``_pack_`` ab. Die Zahlen oben bleiben unberührt, und der
     Test darunter ist die Gegenprobe.
+
+    **Zwei Sitzungen haben das am 07.09.2026 unabhängig behoben**, und beide
+    Fassungen setzten dieselbe Zeile. Beim Zusammenführen blieb die
+    ausführlichere Begründung, weil sie die Messung nennt.
     """
 
-    _pack_ = 2
     _layout_ = "ms"
+    _pack_ = 2
     _fields_ = (
         ("version", ctypes.c_uint16),
         ("client", ctypes.c_uint16),

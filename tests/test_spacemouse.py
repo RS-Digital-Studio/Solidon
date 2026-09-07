@@ -16,8 +16,11 @@ import ctypes
 import json
 import math
 import struct
+import sys
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -914,6 +917,25 @@ def test_the_driver_state_has_the_two_byte_packing_of_the_sdk_header() -> None:
     assert DriverState.time.offset == 12
     assert DriverState.axis.offset == 30
     assert DriverState.buttons.offset == 44
+
+
+@pytest.mark.parametrize("platform", ["win32", "linux", "darwin"])
+def test_the_driver_layout_is_explicit_on_every_platform(
+    monkeypatch: pytest.MonkeyPatch, platform: str
+) -> None:
+    """Auch auf Windows die echte ctypes-Regel der beiden anderen Systeme prüfen."""
+    from ctypes import _layout
+
+    # Nur die Plattformabfrage der Layoutberechnung ersetzen. sys.platform
+    # des Prozesses und damit Qt und alle anderen Module bleiben unverändert.
+    monkeypatch.setattr(_layout, "sys", SimpleNamespace(platform=platform, byteorder=sys.byteorder))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        layout = _layout.get_layout(DriverState, DriverState._fields_, True, None)
+    assert layout.size == 48
+    assert layout.align == 2
+    offsets = {field.name: field.offset for field in layout.fields}
+    assert (offsets["time"], offsets["axis"], offsets["buttons"]) == (12, 30, 44)
 
 
 def test_the_driver_reader_rewrites_axis_and_button_states_as_device_reports() -> None:

@@ -2619,6 +2619,24 @@ def test_batched_curvature_splitting_matches_the_previous_result() -> None:
     assert actual == expected
 
 
+def test_vectorised_face_radii_match_the_pair_by_pair_result() -> None:
+    """Das schnelle Minimum behält jeden Radius der früheren Schleife."""
+    body = _curvature_patch_family(5, noisy=True).raw
+    pairs = np.asarray(body.face_adjacency)
+    radii = features_module.pair_radii(body)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    expected = np.full(len(body.faces), np.inf, dtype=float)
+    for (first, second), radius, angle in zip(pairs, radii, angles, strict=True):
+        if angle >= features_module.CURVATURE_LIMIT or not np.isfinite(radius):
+            continue
+        expected[int(first)] = min(expected[int(first)], float(radius))
+        expected[int(second)] = min(expected[int(second)], float(radius))
+
+    actual = features_module._face_radii(body, pairs, radii)
+
+    np.testing.assert_array_equal(actual, expected)
+
+
 def test_batched_curvature_splitting_checks_for_cancellation_inside_the_work() -> None:
     """Ein Abbruch wartet nicht bis hinter alle Flecken und Fits."""
 

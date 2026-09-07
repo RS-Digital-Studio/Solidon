@@ -187,7 +187,7 @@ from app.core.types import (
     Stroke,
     Vec3,
 )
-from app.i18n import _, tr
+from app.i18n import _, format_decimal, tr
 from app.ui import first_run
 from app.ui.ai_disclosure import (
     DisclosureResult,
@@ -544,9 +544,9 @@ class _MapWorker(Worker):
 
     done = Signal(object)
     tooLarge = Signal(int)
-    """Die Grenze, an der es lag — seit die Stützkarte eine eigene führt,
-    gibt es zwei, und eine Absage mit der falschen Zahl schickt den Kunden
-    auf ein Ziel, das er gar nicht treffen muss."""
+    """Die Dreiecksgrenze der sechs direkt netzgebundenen Karten."""
+    timedOut = Signal(float)
+    """Das Arbeitsbudget der Stützkarte, das tatsächlich verbraucht wurde."""
 
     def __init__(self, kind: Any, entry: Any, profile: Any, scene: Any) -> None:
         super().__init__()
@@ -576,6 +576,8 @@ class _MapWorker(Worker):
         except maps.MapTooLarge as zu_gross:
             # §31: eine Karte, die Minuten bräuchte, sagt Nein, statt einzufrieren.
             self.tooLarge.emit(zu_gross.limit)
+        except maps.MapBudgetExceeded as timed_out:
+            self.timedOut.emit(timed_out.seconds)
         except OperationCancelled:
             # Kein Fehler und nie als einer gezeigt (§15.6): Eine andere Karte
             # ist schon unterwegs, und ihr Ergebnis ist das, auf das jemand
@@ -8841,6 +8843,11 @@ class MainWindow(QMainWindow):
                 else None
             )
         )
+        worker.timedOut.connect(
+            lambda seconds: (
+                self._map_timed_out(seconds) if self._map_is_current(request, result, key) else None
+            )
+        )
         # **Nicht** auf ``None`` setzen, wenn der Arbeiter fertig ist.
         #
         # ``finished`` kommt, während Qt den Thread noch abräumt. Wer die
@@ -8943,6 +8950,21 @@ class MainWindow(QMainWindow):
             REGISTRY.get("decimate_mesh"),
             given={"triangles": limit},
         )
+
+    def _map_timed_out(self, seconds: float) -> None:
+        """Ein echtes Arbeitsbudget erklärt den Abbruch und öffnet den Ausweg."""
+        self.viewport.set_analysis_map(None, None)
+        self.analysis_bar.show_problem(
+            tr("Die Stützkarte wurde nach {seconds} Sekunden beendet.").format(
+                seconds=format_decimal(seconds, digits=1)
+            ),
+            tr("Dreiecke verringern"),
+            weak_slot(self, MainWindow._decimate_slow_map),
+        )
+
+    def _decimate_slow_map(self) -> None:
+        """Öffnet den üblichen Dialog, weil die Laufzeit kein Zielmaß vorhersagt."""
+        self.run_operation(REGISTRY.get("decimate_mesh"))
 
     def _map_crashed(self, detail: str) -> None:
         self.viewport.set_analysis_map(None, None)

@@ -35,6 +35,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Quais ações ficam à frente depende da seleção: com vários corpos Unir, Subtrair e Interseção; com um só Abrir furo, Esvaziar e Separar.
 - Num furo selecionado aparecem Escarear e Fechar furo; numa face, Abrir furo, Cortar bolsa e Deslocar a face.
 - Um corpo selecionado mostra ali os seus filamentos e permite alterá-los.
+- Um campo de pesquisa no mesmo cartão encontra as restantes operações; características e peças ficam nas suas próprias áreas.
 
 ### Construir e alterar
 
@@ -49,6 +50,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os interruptores de uma operação ativos por predefinição podem agora também ser desligados na linha de comandos.
 - Um erro numa operação indica a sua causa: no registo, na linha que o parou e no relatório de erro.
 - As entradas recusadas na colocação, no depósito de malhas e nas receitas chegam com uma proposta de ação em vez de um erro nu.
+- As peças explicam que combinações de parâmetros não constroem, em vez de cortar medidas em silêncio.
+- Um número inadequado de corpos selecionados é comunicado antes do cálculo, em vez de deixar uma entrada de fora sem se notar.
+- Colocar sobre uma superfície só altera o documento ao confirmar; uma pré-visualização descartada não deixa nada para trás.
+- As letras e os algarismos ficam no campo de entrada — as teclas de navegação só atuam quando não está a escrever ali.
 
 ### Características
 
@@ -57,6 +62,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Esfera, toro e cone declaram a sua curvatura, os centros dos cilindros coincidem com os anéis das extremidades e os passos de rosca seguem o eixo.
 - O painel de características só oferece ajustes quando há um segundo corpo selecionado e conhece cada grupo do núcleo.
 - Os ajustes de corte automáticos já não atribuem duas vezes o mesmo nome.
+- A deteção de características chega ao mesmo resultado mais depressa em malhas complexas.
 
 ### Impressão e preparação
 
@@ -65,6 +71,11 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O laminador recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.
 - Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário.
 - A limpeza depois da importação conserva as atribuições de filamento.
+- A impressora pertence ao projeto e muda-se tanto no cabeçalho como na janela de impressão; filamentos atribuídos, cores e os seus próprios valores de impressão mantêm-se.
+- O cabeçalho nomeia os filamentos realmente em uso; várias bobinas do mesmo tipo de material continuam distinguíveis pelo nome e pela cor.
+- A entrega ao slicer resolve cada bobina segundo o seu próprio tipo de material; os seus próprios valores de impressão mantêm a prioridade.
+- Se o mapa de suportes demorar demasiado, o cálculo termina com uma explicação e propõe reduzir os triângulos.
+- A janela de impressão continua totalmente utilizável mesmo em janelas estreitas.
 
 ### Ficheiros e projetos
 
@@ -77,6 +88,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um conjunto de variantes incompleto já não é exportado em silêncio.
 - O esboço descartado volta com Desfazer, e um segundo objeto do histórico já não deixa um Refazer desatualizado.
 - Dois relatórios de erro do mesmo segundo já não se sobrepõem.
+- As entradas escolhidas expressamente sobrevivem a guardar e voltar a abrir, em vez de serem substituídas por uma predefinição.
+- Cancelar termina também o cálculo que ainda corre por trás de uma variante.
 
 ### Chat e IA
 
@@ -85,6 +98,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Na geração de imagens os pesos chegam inteiros ou não chegam, e um único valor no campo de estrutura já não desencadeia uma geração não pedida.
 - Um modelo local é medido também quando responde por HTTPS numa porta própria.
 - O aviso sobre a participação da IA só vale com prova escrita, e uma mudança de idioma já não termina o comando à distância.
+- A configuração do ComfyUI assume os pesos de modelo já completos, em vez de os descarregar de novo.
 
 ### Atualização, instalação e sistema
 
@@ -100,6 +114,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O ecrã inicial reconhece o sistema antes da primeira imagem, e a tabela de requisitos já não é cortada.
 - Um anexo recusado já não conta como ausente para a resposta.
 - O seletor de filamentos permanece na bobina certa depois de um cancelamento e mostra também a oitava.
+- Um e-mail de apoio aberto à mão leva assunto e texto legíveis também dentro do Flatpak; um cancelamento deixa o relatório onde está.
 
 ### Manual e site
 

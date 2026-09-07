@@ -277,6 +277,57 @@ def test_every_map_of_the_table_is_offered(qt_app: QApplication) -> None:
     assert tuple(offered[1:]) == MAP_ORDER
 
 
+def test_a_timed_out_support_map_offers_the_regular_decimation_dialog(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Laufzeitbudget endet mit einer bedienbaren Handlung, nicht leer."""
+    called: list[tuple[str, object]] = []
+    monkeypatch.setattr(
+        type(window),
+        "run_operation",
+        lambda self, spec, given=None: called.append((spec.name, given)),
+    )
+
+    window._map_timed_out(3.0)
+
+    assert "3" in window.analysis_bar.legend.note.text()
+    button = window.analysis_bar.legend.action
+    assert button is not None
+    assert button.text() == tr("Dreiecke verringern")
+    button.click()
+    assert called == [("decimate_mesh", None)], (
+        "a runtime cannot justify a guessed target triangle count"
+    )
+
+
+def test_the_map_worker_reports_a_used_budget_as_an_expected_result(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Zeitbudget ist weder Absturz noch stiller Nutzerabbruch."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+    from app.ui.main_window import _MapWorker
+
+    entry = SceneObject(
+        id="obj_1", name="Probe", mesh=MeshData.of(trimesh.creation.box()), features={}
+    )
+    worker = _MapWorker("support", entry, None, None)
+    timed_out: list[float] = []
+    crashed: list[str] = []
+    worker.timedOut.connect(timed_out.append)
+    worker.crashed.connect(crashed.append)
+    monkeypatch.setattr(
+        maps, "build", lambda *_args, **_kwargs: (_ for _ in ()).throw(maps.MapBudgetExceeded())
+    )
+
+    worker.work()
+
+    assert timed_out == [maps.SUPPORT_MAP_BUDGET_SECONDS]
+    assert crashed == []
+
+
 def test_every_map_says_what_it_shows(qt_app: QApplication) -> None:
     """Sieben Fachwörter ohne Erklärung waren ein Ratespiel (Review 02.09.2026).
 
