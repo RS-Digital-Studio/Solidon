@@ -132,11 +132,11 @@ LEFT_WIDTH = 300
 #: als eine klassische Seitenleiste, aber deutlich breiter als links, weil hier
 #: vollständige Handlungssätze, die Auswahlhandlungen und der Chat stehen.
 #:
-#: Von 320 heraufgesetzt (Robert, 07.09.2026): Seit die Auswahlhandlungen in
-#: derselben Spalte stehen, teilen sich zwei Karten die Breite, und ein
-#: Handlungssatz wie „Bohrung verschließen" bricht in 320 Punkten um, wo er
-#: als eine Zeile gemeint ist.
-RIGHT_WIDTH = 360
+#: Zweimal heraufgesetzt am 07.09.2026, beide Male von Robert: erst 320 auf
+#: 360, weil sich seit den Auswahlhandlungen zwei Karten die Breite teilen und
+#: ein Satz wie „Bohrung verschließen" darin umbrach — dann 360 auf 510, weil
+#: auch das noch zu eng war („mindestens 150 px breiter").
+RIGHT_WIDTH = 510
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -149,7 +149,7 @@ RIGHT_WIDTH = 360
 #: bei 5000 Pixeln eine Wand.
 GROWTH_SHARE = 0.13
 LEFT_MAX = 420
-RIGHT_MAX = 500
+RIGHT_MAX = 650
 
 #: In einem schmalen Fenster dürfen die beiden Karten einander nicht
 #: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als

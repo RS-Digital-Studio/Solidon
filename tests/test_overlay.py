@@ -28,6 +28,7 @@ from app.ui.overlay import (
     LEFT_MAX,
     LEFT_WIDTH,
     MARGIN,
+    NARROW_CARD_SHARE,
     RIGHT_MAX,
     RIGHT_WIDTH,
     OverlayHost,
@@ -263,7 +264,12 @@ def test_the_zones_sit_on_top_and_take_nothing_away(window: MainWindow) -> None:
 
     assert right.geometry().right() == width - MARGIN - 1
     assert right.geometry().top() == MARGIN
-    assert right.geometry().width() == RIGHT_WIDTH
+    # **Die Enge-Schranke gilt auch für die Wunschbreite.** Seit die rechte
+    # Karte 510 Punkte will, überschreitet sie auf einem 1200 breiten Fenster
+    # die 42 Prozent aus :data: — und die sind es, die die
+    # Mitte als Griff auf die Ansicht freihalten. Geprüft wird deshalb der
+    # Wunsch **oder** die Schranke, je nachdem, welche zuerst greift.
+    assert right.geometry().width() == min(RIGHT_WIDTH, int(width * NARROW_CARD_SHARE))
 
     # Die Werkzeugzeile ist so breit, wie sie sein muss, und liegt mittig.
     assert bottom.geometry().bottom() <= height - MARGIN
@@ -285,7 +291,7 @@ def test_the_work_cards_use_full_hd_and_grow_with_large_screens() -> None:
     right = [card_width(RIGHT_WIDTH, RIGHT_MAX, width) for width in widths]
 
     assert 295 <= left[3] <= 310, f"Full HD links: {left[3]} statt etwa 300"
-    assert 355 <= right[3] <= 370, f"Full HD rechts: {right[3]} statt etwa 360"
+    assert 505 <= right[3] <= 520, f"Full HD rechts: {right[3]} statt etwa 510"
     assert left == sorted(left) and right == sorted(right), "breiter darf keine Karte schrumpfen"
     assert left[-1] <= LEFT_MAX and right[-1] <= RIGHT_MAX
 
