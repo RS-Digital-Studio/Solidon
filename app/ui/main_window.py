@@ -2269,6 +2269,7 @@ class MainWindow(QMainWindow):
         self.object_tree.stepRequested.connect(self.edit_operation)
         self.object_tree.sketchOnFaceRequested.connect(self._on_sketch_on_face)
         self.object_tree.catalogRequested.connect(self.action_catalog)
+        self.object_tree.filamentRequested.connect(self._on_filament_requested)
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
@@ -9861,6 +9862,29 @@ class MainWindow(QMainWindow):
         """
         ratio = float(self.viewport.devicePixelRatioF()) or 1.0
         return QPoint(int(x / ratio), int(y / ratio))
+
+    def _on_filament_requested(self, object_id: object, feature_id: object) -> None:
+        """Ein Klick auf das Farbfeld im Objektbaum wählt das Filament.
+
+        Der Baum sagt, **worauf** gezeigt wurde; welche Operation das ist,
+        entscheidet sich hier: ``assign_slot`` nimmt den ganzen Körper,
+        ``paint_slot`` genau eine Fläche. Beide gehen durch
+        :meth:`launch_operation` — der Dialog, der Verlaufsschritt und das Undo
+        sind dieselben wie über das Menü (Regel 2). Ein zweiter Weg, der die
+        Geometrie unmittelbar anfasst, wäre genau der, den es nicht geben darf.
+        """
+        from app.core.registry import REGISTRY
+
+        # ``get`` wirft bei einem unbekannten Namen; beide stehen fest im
+        # Register, und ein fehlender wäre ein Fehler und kein leerer Klick.
+        spec = REGISTRY.get("paint_slot" if feature_id else "assign_slot")
+        # Die Auswahl folgt dem Klick: Der Dialog liest sie, und wer auf eine
+        # andere Zeile zeigt als die gewählte, meint die, auf die er zeigt.
+        if feature_id:
+            self.object_tree.select_feature(str(object_id), str(feature_id))
+        else:
+            self.object_tree.select_object(str(object_id))
+        self.launch_operation(spec)
 
     def _on_sketch_on_face(self, feature_id: str) -> None:
         """Ein Klick auf eine Fläche beginnt dort eine Skizze (§30.1).

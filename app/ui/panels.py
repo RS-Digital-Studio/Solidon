@@ -17,14 +17,26 @@ from typing import Any, Final, cast
 from PySide6.QtCore import (
     QByteArray,
     QItemSelectionModel,
+    QModelIndex,
     QPoint,
+    QRectF,
     QSignalBlocker,
     QSize,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QKeySequence, QPainter, QPixmap
+from PySide6.QtGui import (
+    QAction,
+    QColor,
+    QFont,
+    QIcon,
+    QImage,
+    QKeySequence,
+    QPainter,
+    QPen,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -85,7 +97,7 @@ from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
 from app.core.scene.history import repair_is_available
-from app.core.types import Document, Feature, Finding, ObjectId, OpId
+from app.core.types import Document, Feature, Finding, ObjectId, OpId, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import TranslatableText, sort_key, tr
 from app.ui.dialogs import handlers_of
@@ -945,6 +957,47 @@ def _empty_history_text() -> str:
     )
 
 
+#: Die Spalte, in der das Filament einer Zeile steht.
+FILAMENT_COLUMN = 2
+
+#: Ihre Breite in Bildpunkten — Farbfeld plus Rand, kein Text.
+FILAMENT_WIDTH = 34
+
+#: Kantenlänge des Farbfelds.
+FILAMENT_CHIP = 14
+
+
+def filament_chip(colour: str, assigned: bool, widget: QWidget) -> QIcon:
+    """Ein Farbfeld für die Filamentspalte.
+
+    **Zwei Kodierungen, nicht eine** (Regel 18): Ein zugewiesenes Filament
+    steht als gefülltes Feld, ein Körper ohne eigenes als leeres mit Rand.
+    Wer Farben nicht unterscheidet, sieht am Gefülltsein trotzdem, ob hier
+    etwas entschieden wurde.
+    """
+    scale = widget.devicePixelRatioF() or 1.0
+    side = int(FILAMENT_CHIP * scale)
+    image = QPixmap(side, side)
+    image.setDevicePixelRatio(scale)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    try:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        pen = QPen(QColor(colour) if assigned else QColor(colour).darker(140))
+        pen.setWidthF(1.5 * scale)
+        painter.setPen(pen)
+        painter.setBrush(QColor(colour) if assigned else Qt.BrushStyle.NoBrush)
+        inset = 1.5 * scale
+        painter.drawRoundedRect(
+            QRectF(inset, inset, side - 2 * inset, side - 2 * inset),
+            2.0 * scale,
+            2.0 * scale,
+        )
+    finally:
+        painter.end()
+    return QIcon(image)
+
+
 class ObjectTree(QWidget):
     """Objekte der Szene mit ihren Merkmalen, Herkunft und Größe (§18.8,
     §18.5).
@@ -970,6 +1023,16 @@ class ObjectTree(QWidget):
 
     Der Empfänger baut daraus die Ebene ``feature:<id>``; der Baum kennt den
     Skizzenmodus nicht und soll ihn nicht kennen."""
+    filamentRequested = Signal(object, object)
+    """Das Filament dieser Zeile wählen — trägt Körperkennung und Merkmal.
+
+    Der Baum weiß, **worauf** gezeigt wurde, nicht **wie** man es zuweist: Für
+    einen Körper ist das ``assign_slot``, für eine Fläche ``paint_slot``. Beide
+    gehen durch ``MainWindow.launch_operation``, damit Verlauf und Undo
+    erhalten bleiben (Regel 2) — der Baum ruft keine Operation selbst auf.
+
+    Das Merkmal ist ``None``, wenn die Zeile einen ganzen Körper meint."""
+
     catalogRequested = Signal()
     """Den Bausteinkatalog öffnen — der kurze Weg vom gewählten Teil (§2.6).
 
@@ -980,8 +1043,8 @@ class ObjectTree(QWidget):
         super().__init__(parent)
         self.tree = QTreeWidget(self)
         self.tree.setAccessibleName(tr("Objekte"))
-        self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels([tr("Objekt"), tr("Maße")])
+        self.tree.setColumnCount(3)
+        self.tree.setHeaderLabels([tr("Objekt"), tr("Maße"), tr("Filament")])
         # Die Maßspalte nimmt, was sie braucht; der Rest gehört den Namen.
         # Vorher standen beide auf derselben festen Breite, und auf dreifache
         # Fensterbreite gezogen blieb die Maßspalte schmal, während links
@@ -1006,6 +1069,14 @@ class ObjectTree(QWidget):
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        # Die Filamentspalte trägt ein Farbfeld und sonst nichts. Sie ist
+        # deshalb fest und schmal — nähme sie sich Platz nach Inhalt, ginge er
+        # dem Namen ab, und der ist die Spalte, die man liest.
+        header.setSectionResizeMode(FILAMENT_COLUMN, QHeaderView.ResizeMode.Fixed)
+        header.resizeSection(FILAMENT_COLUMN, FILAMENT_WIDTH)
+        # Ein Klick auf das Feld ist die Zuweisung — nicht erst ein Doppelklick
+        # und kein Umweg über das Kontextmenü.
+        self.tree.clicked.connect(self._on_cell_clicked)
         # §25: Vereinigen, Abziehen und Schnittmenge nehmen zwei Körper. Mit
         # Einfachauswahl war keine davon über das Menü ausführbar — die
         # Operation bekam einen Eingang, wo sie zwei erwartet, und lehnte ab.
@@ -1198,6 +1269,7 @@ class ObjectTree(QWidget):
             if origin:
                 tip += f" · {origin}"
             item.setToolTip(0, tip)
+            self._show_filament(item, entry)
             if entry.kind == "brep":
                 # Die ausführliche Folge steht im Tooltip; im schmalen Baum
                 # muss die zweite Kodierung vollständig lesbar bleiben.
@@ -1281,6 +1353,11 @@ class ObjectTree(QWidget):
                 child.setToolTip(1, tip)
                 child.setStatusTip(0, tip.replace("\n", " · "))
                 child.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, tip)
+                # Nur Flächen tragen ein eigenes Filament — `paint_slot` gilt
+                # für `face` und für nichts sonst. Eine Bohrung bekommt deshalb
+                # kein Feld, das nichts täte.
+                if getattr(feature, "kind", "") == "face":
+                    self._show_filament(child, entry, feature_id)
 
                 made[feature_id] = child
                 if feature_id in under:
@@ -1391,6 +1468,55 @@ class ObjectTree(QWidget):
         self._room = pixels
         self._fit()
 
+    def _show_filament(
+        self,
+        item: QTreeWidgetItem,
+        entry: SceneObject,
+        feature_id: str | None = None,
+    ) -> None:
+        """Das Farbfeld einer Zeile setzen, samt Namen für Tooltip und Leser.
+
+        Gelesen wird derselbe Zustand wie im Filamentbereich: die tatsächlich
+        belegten Slots des Körpers. Ein Körper ohne eigenen Slot trägt die
+        Farbe des Teils — das ist der Normalfall nach jedem Import und keine
+        fehlende Angabe.
+        """
+        from app.ui.filament_picker import shown_colour, unpainted_colour
+
+        slots = tuple(getattr(entry, "material_slots", ()) or ())
+        if slots:
+            slot = slots[0]
+            colour = shown_colour(int(slot.index), slot.colour)
+            name = str(slot.name).strip() or str(slot.material_type or "")
+            assigned = True
+        else:
+            colour = unpainted_colour()
+            name = str(tr("Ohne Filament — Farbe des Teils"))
+            assigned = False
+        if len(slots) > 1:
+            name = f"{name} · {tr('und {count} weitere').replace('{count}', str(len(slots) - 1))}"
+
+        item.setIcon(FILAMENT_COLUMN, filament_chip(colour, assigned, self.tree))
+        hint = f"{name} — {tr('zum Ändern anklicken')}"
+        item.setToolTip(FILAMENT_COLUMN, hint)
+        item.setStatusTip(FILAMENT_COLUMN, hint)
+        # Regel 18: Der Bildschirmleser bekommt den Namen, nicht die Farbe.
+        item.setData(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleDescriptionRole, hint)
+        item.setData(FILAMENT_COLUMN, Qt.ItemDataRole.UserRole, feature_id)
+
+    def _on_cell_clicked(self, index: QModelIndex) -> None:
+        """Ein Klick in die Filamentspalte fragt nach dem Filament."""
+        if index.column() != FILAMENT_COLUMN:
+            return
+        item = self.tree.itemFromIndex(index)
+        if item is None or item.icon(FILAMENT_COLUMN).isNull():
+            return
+        object_id = item.data(0, Qt.ItemDataRole.UserRole)
+        if object_id is None:
+            return
+        feature_id = item.data(FILAMENT_COLUMN, Qt.ItemDataRole.UserRole)
+        self.filamentRequested.emit(object_id, feature_id)
+
     def _size_columns(self) -> None:
         """Die Maßspalte so breit wie ihr Inhalt, höchstens ein Teil des Ganzen.
 
@@ -1401,8 +1527,13 @@ class ObjectTree(QWidget):
         width = self.tree.viewport().width()
         if width <= 0:
             return
+        # **Die Filamentspalte wird abgezogen, bevor geteilt wird.** Sie ist
+        # fest breit; bliebe sie in der Rechnung, nähme die Maßspalte ihren
+        # Anteil vom Ganzen und der Name bekäme, was danach übrig ist — bei
+        # schmaler Karte waren das 25 Punkte gegen 39 für das Maß.
+        free = max(0, width - FILAMENT_WIDTH)
         needed = self.tree.sizeHintForColumn(1)
-        self.tree.header().resizeSection(1, max(0, min(needed, int(width * MEASURE_SHARE))))
+        self.tree.header().resizeSection(1, max(0, min(needed, int(free * MEASURE_SHARE))))
 
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Beim Breiterwerden neu teilen."""

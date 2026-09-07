@@ -14285,3 +14285,44 @@ def test_a_relief_for_a_vanished_body_is_announced_instead_of_started(
     window._dropped_image_ready("obj_1", ("src_1", "image"))
     assert calls and calls[0]["on_bodies"] == ("obj_1",)
     assert len(announcements) == 1
+
+
+def test_the_object_tree_offers_the_filament_where_the_body_stands(
+    window: MainWindow,
+) -> None:
+    """Das Filament steht im Baum und ist dort ein Klick — kein Menüweg.
+
+    Der Weg dorthin führte über *Vorbereiten → Filament zuweisen*, also über
+    ein Menü, in dem niemand ein Material sucht: Robert hat ihn am 07.09.2026
+    nicht gefunden, auch nachdem die Operationen ihren richtigen Namen trugen.
+    Gemessen wird deshalb nicht, dass es die Operation gibt, sondern dass die
+    Zeile sie anbietet — Feld, Text und der Klick, der sie auslöst.
+    """
+    from app.ui.panels import FILAMENT_COLUMN
+
+    assert window.session.apply("Ein Körper", [OperationDraft(op="create_box")])
+    assert window.session.wait_for_idle(30000)
+    window.object_tree.show_scene(window.session.last_result, window.session.project.document)
+    tree = window.object_tree.tree
+
+    assert tree.columnCount() == 3
+    assert tree.headerItem().text(FILAMENT_COLUMN) == str(tr("Filament"))
+    assert tree.columnWidth(FILAMENT_COLUMN) > 0, "eine Spalte ohne Breite zeigt nichts"
+
+    row = tree.topLevelItem(0)
+    assert row is not None
+    assert not row.icon(FILAMENT_COLUMN).isNull(), "jede Körperzeile trägt ihr Farbfeld"
+    # Regel 18: Die Farbe allein trägt die Bedeutung nicht — der Name steht
+    # für Tooltip und Bildschirmleser daneben.
+    hint = row.toolTip(FILAMENT_COLUMN)
+    assert hint
+    assert row.data(FILAMENT_COLUMN, Qt.ItemDataRole.AccessibleDescriptionRole) == hint
+
+    asked: list[tuple[object, object]] = []
+    window.object_tree.filamentRequested.connect(lambda obj, feat: asked.append((obj, feat)))
+    window.object_tree._on_cell_clicked(tree.indexFromItem(row, FILAMENT_COLUMN))
+    assert asked == [("obj_1", None)], "der Klick fragt nach dem Filament des Körpers"
+
+    asked.clear()
+    window.object_tree._on_cell_clicked(tree.indexFromItem(row, 0))
+    assert asked == [], "ein Klick auf den Namen wählt aus und weist nichts zu"

@@ -4543,5 +4543,7 @@
   "„{licence}“ ist keine der erlaubten Lizenzen.": "«{licence}» não é nenhuma das licenças permitidas.",
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "«{name}» não é um nome de bloco válido: são permitidas minúsculas, algarismos e sublinhados, começando por uma letra.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes.",
-  "🔒": "🔒"
+  "🔒": "🔒",
+  "und {count} weitere": "e mais {count}",
+  "zum Ändern anklicken": "clique para alterar"
 }

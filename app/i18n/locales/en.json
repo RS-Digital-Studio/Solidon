@@ -4543,5 +4543,7 @@
   "„{licence}“ ist keine der erlaubten Lizenzen.": "“{licence}” is not one of the permitted licences.",
   "„{name}“ ist kein gültiger Bausteinname — erlaubt sind Kleinbuchstaben, Ziffern und Unterstriche, beginnend mit einem Buchstaben.": "“{name}” is not a valid part name — allowed are lowercase letters, digits and underscores, beginning with a letter.",
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest.",
-  "🔒": "🔒"
+  "🔒": "🔒",
+  "und {count} weitere": "and {count} more",
+  "zum Ändern anklicken": "click to change"
 }
