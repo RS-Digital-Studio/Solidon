@@ -68,7 +68,8 @@ cdef bint _after(double ax, double ay, double az,
 def plane_segments(double[:, ::1] vertices,
                    long long[:, ::1] faces,
                    double[::1] heights,
-                   double epsilon):
+                   double epsilon,
+                   check_cancelled=None):
     """Schneidet alle Dreiecke mit allen erreichten Ebenen.
 
     Die Ausgabe ist nach Schicht gruppiert, innerhalb jeder Schicht in
@@ -85,6 +86,9 @@ def plane_segments(double[:, ::1] vertices,
     cdef double z0, z1, z2, low_z, high_z, z
     cdef double sx, sy, sz, ex, ey, ez, swap_value
     cdef double start_height, end_height, span, fraction
+    cdef bint cancellable = check_cancelled is not None
+    cdef Py_ssize_t faces_until_check = 8192
+    cdef Py_ssize_t layers_until_check = 32768
 
     if face_count == 0 or height_count == 0:
         return (
@@ -92,6 +96,8 @@ def plane_segments(double[:, ::1] vertices,
             np.empty(0, dtype=np.int64),
             np.empty((0, 2), dtype=np.int64),
         )
+    if cancellable:
+        check_cancelled()
 
     layer_counts_array = np.zeros(height_count, dtype=np.int64)
     cdef long long[::1] layer_counts = layer_counts_array
@@ -100,6 +106,12 @@ def plane_segments(double[:, ::1] vertices,
     # Ausgabefelder statt der großen Zwischenfelder des NumPy-Wegs.
     with nogil:
         for face in range(face_count):
+            if cancellable:
+                faces_until_check -= 1
+                if faces_until_check == 0:
+                    with gil:
+                        check_cancelled()
+                    faces_until_check = 8192
             a, b, c = faces[face, 0], faces[face, 1], faces[face, 2]
             z0, z1, z2 = vertices[a, 2], vertices[b, 2], vertices[c, 2]
             low_z = z0
@@ -121,6 +133,12 @@ def plane_segments(double[:, ::1] vertices,
             if last >= height_count:
                 last = height_count - 1
             for layer in range(first, last + 1):
+                if cancellable:
+                    layers_until_check -= 1
+                    if layers_until_check == 0:
+                        with gil:
+                            check_cancelled()
+                        layers_until_check = 32768
                 z = heights[layer]
                 crossings = 0
                 if (z0 - z > 0.0) != (z1 - z > 0.0):
@@ -132,6 +150,9 @@ def plane_segments(double[:, ::1] vertices,
                 if crossings == 2:
                     total += 1
                     layer_counts[layer] += 1
+
+    if cancellable:
+        check_cancelled()
 
     points_array = np.empty((total, 2, 2), dtype=np.float64)
     layers_array = np.empty(total, dtype=np.int64)
@@ -151,6 +172,12 @@ def plane_segments(double[:, ::1] vertices,
 
     with nogil:
         for face in range(face_count):
+            if cancellable:
+                faces_until_check -= 1
+                if faces_until_check == 0:
+                    with gil:
+                        check_cancelled()
+                    faces_until_check = 8192
             a, b, c = faces[face, 0], faces[face, 1], faces[face, 2]
             z0, z1, z2 = vertices[a, 2], vertices[b, 2], vertices[c, 2]
             low_z = z0
@@ -172,6 +199,12 @@ def plane_segments(double[:, ::1] vertices,
             if last >= height_count:
                 last = height_count - 1
             for layer in range(first, last + 1):
+                if cancellable:
+                    layers_until_check -= 1
+                    if layers_until_check == 0:
+                        with gil:
+                            check_cancelled()
+                        layers_until_check = 32768
                 z = heights[layer]
                 crossings = 0
                 if (z0 - z > 0.0) != (z1 - z > 0.0):
@@ -229,6 +262,8 @@ def plane_segments(double[:, ::1] vertices,
 
                 layers[written] = layer
 
+    if cancellable:
+        check_cancelled()
     return points_array, layers_array, nodes_array
 
 

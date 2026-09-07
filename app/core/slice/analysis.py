@@ -30,7 +30,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR
 from app.core.log import get_logger
-from app.core.types import LayerInfo, Polygon, SliceResult
+from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -138,6 +138,7 @@ def slice_body(
     detail: Detail = "full",
     *,
     footing_height: float | None = None,
+    cancelled: CancelToken | None = None,
 ) -> SliceResult:
     """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
 
@@ -157,6 +158,8 @@ def slice_body(
     ihre Hälfte hier herein und bekommt eine Zahl, die nur noch am Körper
     hängt.
     """
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     if layer_height <= EPS_GEOM:
         # Kein nackter ``ValueError``: Die Schichthöhe kommt aus dem
         # Druckerprofil, und ein eigenes ``printers.toml`` bringt diesen Fall
@@ -189,13 +192,17 @@ def slice_body(
         # oberhalb von EPS_GEOM ist genau eine gedruckte Lage; ihr Schnitt liegt
         # in der Mitte, wo er sicher Material trifft.
         heights = np.array([(low + high) / 2.0], dtype=float)
-    sections, section_contours = _cross_sections(mesh, heights, capture_contours=True)
-    measured = _measure_all(sections, layer_height, detail)
-    support = _support_volume(sections, measured, layer_height)
+    sections, section_contours = _cross_sections(
+        mesh, heights, capture_contours=True, cancelled=cancelled
+    )
+    measured = _measure_all(sections, layer_height, detail, cancelled=cancelled)
+    support = _support_volume(sections, measured, layer_height, cancelled=cancelled)
 
     for z, shape, metrics, contours in zip(
         heights, sections, measured, section_contours, strict=True
     ):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if shape is None or shape.is_empty or metrics is None:
             continue
 
@@ -225,13 +232,18 @@ def slice_body(
     return SliceResult(
         layers=tuple(layers),
         support_volume=float(support),
-        first_layer_area=_footing_area(mesh, low, footing_height, layers),
+        first_layer_area=_footing_area(mesh, low, footing_height, layers, cancelled=cancelled),
         source="internal",
     )
 
 
 def _footing_area(
-    mesh: MeshData, low: float, footing_height: float | None, layers: list[LayerInfo]
+    mesh: MeshData,
+    low: float,
+    footing_height: float | None,
+    layers: list[LayerInfo],
+    *,
+    cancelled: CancelToken | None = None,
 ) -> float:
     """Die Fläche, auf der das Teil steht.
 
@@ -246,7 +258,10 @@ def _footing_area(
     if footing_height is None:
         return layers[0].area
     sections, _ = _cross_sections(
-        mesh, np.array([low + footing_height], dtype=float), capture_contours=False
+        mesh,
+        np.array([low + footing_height], dtype=float),
+        capture_contours=False,
+        cancelled=cancelled,
     )
     shape = sections[0]
     return 0.0 if shape is None or shape.is_empty else float(shape.area)
@@ -256,6 +271,8 @@ def _support_volume(
     sections: list[ShapelyPolygon | None],
     measured: list[LayerMetrics | None],
     layer_height: float,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> float:
     """Das Volumen der **Stützsäulen** unter allen Überhängen, in mm³ (§22.2).
 
@@ -298,6 +315,8 @@ def _support_volume(
     pending: list[ShapelyPolygon] = []
     volume = 0.0
     for index in range(len(sections) - 1, -1, -1):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         metrics = measured[index]
         region = None if metrics is None else metrics.overhang
         if region is not None and not region.is_empty:
@@ -306,7 +325,7 @@ def _support_volume(
             continue
         below = sections[index - 1] if index else None
         if below is not None and not below.is_empty:
-            pending = _above_material(pending, below)
+            pending = _above_material(pending, below, cancelled=cancelled)
             if not pending:
                 continue
         volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * (
@@ -325,7 +344,12 @@ def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
     return [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
 
 
-def _above_material(pending: list[ShapelyPolygon], below: ShapelyPolygon) -> list[ShapelyPolygon]:
+def _above_material(
+    pending: list[ShapelyPolygon],
+    below: ShapelyPolygon,
+    *,
+    cancelled: CancelToken | None = None,
+) -> list[ShapelyPolygon]:
     """Was von den Säulen übrig bleibt, wenn die Schicht darunter trägt.
 
     Geschnitten wird nur, was sich überhaupt berührt, und gefragt wird in
@@ -344,12 +368,18 @@ def _above_material(pending: list[ShapelyPolygon], below: ShapelyPolygon) -> lis
     hit = set(touching)
     kept = [part for number, part in enumerate(pending) if number not in hit]
     for number in touching:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         kept += _areas_of(pending[number].difference(below))
     return kept
 
 
 def _measure_all(
-    sections: list[ShapelyPolygon | None], layer_height: float, detail: Detail
+    sections: list[ShapelyPolygon | None],
+    layer_height: float,
+    detail: Detail,
+    *,
+    cancelled: CancelToken | None = None,
 ) -> list[LayerMetrics | None]:
     """Misst jede Schicht, auf so vielen Threads wie die Maschine hat.
 
@@ -389,17 +419,30 @@ def _measure_all(
         return results
     if len(jobs) < PARALLEL_FROM:
         for index, shape, below, plate in jobs:
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
             results[index] = _measure(shape, below, plate, layer_height, detail)
         return results
 
     def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]) -> None:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         index, shape, below, plate = job
         results[index] = _measure(shape, below, plate, layer_height, detail)
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
 
-    with ThreadPoolExecutor(
-        max_workers=_workers(FULL_WORKERS if detail == "full" else MAX_WORKERS)
-    ) as pool:
-        list(pool.map(one, jobs))
+    workers = _workers(FULL_WORKERS if detail == "full" else MAX_WORKERS)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        if cancelled is None:
+            list(pool.map(one, jobs))
+        else:
+            # Höchstens ein Auftrag je Arbeiter liegt zwischen zwei Fragen.
+            # Der Kontextmanager wartet beim Abbruch nur auf diesen begrenzten
+            # Satz laufender GEOS-Aufrufe, nicht auf alle übrigen Schichten.
+            for start in range(0, len(jobs), workers):
+                cancelled.raise_if_cancelled()
+                list(pool.map(one, jobs[start : start + workers]))
     return results
 
 
@@ -437,7 +480,11 @@ def cross_sections(mesh: MeshData, heights: Any) -> list[ShapelyPolygon | None]:
 
 
 def _cross_sections(
-    mesh: MeshData, heights: Any, *, capture_contours: bool
+    mesh: MeshData,
+    heights: Any,
+    *,
+    capture_contours: bool,
+    cancelled: CancelToken | None = None,
 ) -> tuple[list[ShapelyPolygon | None], list[tuple[Polygon, ...] | None]]:
     """Schnitte und optional ihre bereits vorhandenen Kernkonturen.
 
@@ -452,7 +499,9 @@ def _cross_sections(
     if not len(heights) or not len(mesh.raw.faces):
         return empty, no_contours
 
-    points, layers, nodes = _plane_segments(mesh, heights)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    points, layers, nodes = _plane_segments(mesh, heights, cancelled=cancelled)
     if not len(points):
         return empty, no_contours
 
@@ -477,6 +526,8 @@ def _cross_sections(
     result: list[ShapelyPolygon | None] = []
     contours: list[tuple[Polygon, ...] | None] = []
     for start, end in zip(starts, ends, strict=True):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         if end <= start:
             result.append(None)
             contours.append(None)
@@ -489,7 +540,9 @@ def _cross_sections(
     return result, contours
 
 
-def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
+def _plane_segments(
+    mesh: MeshData, heights: Any, *, cancelled: CancelToken | None = None
+) -> tuple[Any, Any, Any]:
     """Wo jedes Dreieck jede Ebene kreuzt, die es erreicht.
 
     Liefert die Segmente als ``(n, 2, 2)`` Punkte in XY, die Schicht, zu der
@@ -508,17 +561,52 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
     # Quellklon bleibt dann funktionsfähig und sagt über die übersprungenen
     # Vergleichstests klar, dass ``build_slice_core.py`` erneut laufen muss.
     if _chain is not None and hasattr(_chain, "plane_segments"):
+        args = (
+            np.ascontiguousarray(mesh.raw.vertices, dtype=np.float64),
+            np.ascontiguousarray(mesh.raw.faces, dtype=np.int64),
+            np.ascontiguousarray(heights, dtype=np.float64),
+            EPS_GEOM,
+        )
+        if cancelled is None:
+            return cast(tuple[Any, Any, Any], _chain.plane_segments(*args))
         return cast(
             tuple[Any, Any, Any],
-            _chain.plane_segments(
-                np.ascontiguousarray(mesh.raw.vertices, dtype=np.float64),
-                np.ascontiguousarray(mesh.raw.faces, dtype=np.int64),
-                np.ascontiguousarray(heights, dtype=np.float64),
-                EPS_GEOM,
-            ),
+            _chain.plane_segments(*args, cancelled.raise_if_cancelled),
         )
 
-    triangles = np.asarray(mesh.raw.triangles, dtype=float)
+    if cancelled is not None:
+        return _plane_segments_in_chunks(mesh, heights, cancelled)
+
+    return _plane_segments_numpy(mesh, heights)
+
+
+def _plane_segments_in_chunks(
+    mesh: MeshData, heights: Any, cancelled: CancelToken
+) -> tuple[Any, Any, Any]:
+    """NumPy-Rückfallweg in begrenzten, abbrechbaren Flächenblöcken."""
+    faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    parts: list[tuple[Any, Any, Any]] = []
+    for start in range(0, len(faces), 16_384):
+        cancelled.raise_if_cancelled()
+        parts.append(_plane_segments_numpy(mesh, heights, face_slice=slice(start, start + 16_384)))
+    cancelled.raise_if_cancelled()
+    nonempty = [part for part in parts if len(part[0])]
+    if not nonempty:
+        return _no_segments()
+    points = np.concatenate([part[0] for part in nonempty])
+    layers = np.concatenate([part[1] for part in nonempty])
+    nodes = np.concatenate([part[2] for part in nonempty])
+    order = np.argsort(layers, kind="stable")
+    return points[order], layers[order], nodes[order]
+
+
+def _plane_segments_numpy(
+    mesh: MeshData, heights: Any, *, face_slice: slice | None = None
+) -> tuple[Any, Any, Any]:
+    """Vektorisierter Schnittweg, vollständig oder für einen Flächenblock."""
+    all_faces = np.asarray(mesh.raw.faces, dtype=np.int64)
+    selected_faces = all_faces if face_slice is None else all_faces[face_slice]
+    triangles = np.asarray(mesh.raw.vertices, dtype=float)[selected_faces]
 
     vertical = triangles[:, :, 2]
     # Welche Ebenen ein Dreieck erreicht, nachgeschlagen statt aus einem
@@ -612,7 +700,7 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
     # Gerechnet wird nur für die zwei kreuzenden Kanten, nicht für alle drei:
     # ein Drittel weniger Arbeit, und das Zwischenfeld über alle Ecken
     # entsteht gar nicht erst.
-    corner_ids = np.asarray(mesh.raw.faces, dtype=np.int64)[faces[keep]]
+    corner_ids = selected_faces[faces[keep]]
     corner_from = corner_ids[rows, edges]
     corner_to = corner_ids[rows, (edges + 1) % 3]
     nodes = np.minimum(corner_from, corner_to) * len(mesh.raw.vertices) + np.maximum(
