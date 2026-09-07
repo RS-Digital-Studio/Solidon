@@ -604,9 +604,20 @@ class DriverState(ctypes.Structure):
     30, die Tasten bei 44 — 48 Byte insgesamt. Ein Test hält die Zahlen fest,
     denn ein falsches Packen gibt keine Fehlermeldung, sondern Rauschen als
     Bewegung.
+
+    **``_layout_`` schreibt fest, was ``_pack_`` immer schon bedeutet hat.**
+    Ein gepacktes ``Structure`` rechnet in ctypes seit jeher nach MSVC-Regeln;
+    Python 3.14 verlangt nur, dass das dasteht, statt still zu gelten, und
+    macht die stille Fassung zur ``DeprecationWarning``. Die Suite liest
+    Warnungen als Fehler, und damit riss der Import dieses Moduls auf Linux
+    und macOS zwanzig Testdateien schon beim Einsammeln ab — jede, die über
+    ``main_window`` hierher kommt. ``"gcc-sysv"`` ist keine Wahl: ctypes lehnt
+    es zusammen mit ``_pack_`` ab. Die Zahlen oben bleiben unberührt, und der
+    Test darunter ist die Gegenprobe.
     """
 
     _pack_ = 2
+    _layout_ = "ms"
     _fields_ = (
         ("version", ctypes.c_uint16),
         ("client", ctypes.c_uint16),
