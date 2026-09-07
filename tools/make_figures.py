@@ -350,10 +350,9 @@ def prepared(
     ``size=None`` heißt bildschirmfüllend (:func:`work_area`), und das ist der
     Normalfall für alles, was in der Anwendung ein Fenster ist.
 
-    ``hidden=False`` braucht das Hauptfenster: sein Viewport rendert über
-    OpenGL, und OpenGL zeichnet nichts in ein Fenster, das nie auf dem
-    Bildschirm war. Ohne das ist die Bildmitte auf dem Bild schwarz — also
-    ausgerechnet das Modell, um das es geht. Ein sichtbares Fenster wird
+    ``hidden=False`` braucht das Hauptfenster: Der native pygfx-Canvas muss
+    für die Aufnahme sichtbar eingebettet sein, damit das gezeichnete Modell
+    in der Bildschirmaufnahme erscheint. Ein sichtbares Fenster wird
     außerdem **auf den Zielschirm gesetzt und maximiert** statt auf ein Maß
     gezogen: Ein von Hand auf die Arbeitsfläche vergrößertes Fenster ist nicht
     dasselbe wie ein maximiertes — Windows legt bei maximierten Fenstern einen
