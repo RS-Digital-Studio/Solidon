@@ -1,5 +1,9 @@
 # YouTube Shorts — Pressebelege zur STL-Merkmalbearbeitung
 
+Diese Datei bewahrt die ursprünglichen Texte und Terminplanung der Reihe.
+Die später in Studio gespeicherten Sprachpaare und Termine stehen im
+[Veröffentlichungsplan](publication-plan-2026-09.md#shorts).
+
 Die Reihe beantwortet jeweils genau eine prüfbare Aussage aus der
 Pressemitteilung zu Solidon3D 0.3.3. Veröffentlichung täglich um 18:00 Uhr
 Europe/Berlin, abwechselnd Englisch und Deutsch. Dadurch erscheint je Sprache

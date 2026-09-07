@@ -74,6 +74,10 @@ ersetzt; der bekannte Befund bleibt sichtbar. Es wurde kein Abspann ergänzt.
 
 ## Shorts
 
+Die ursprünglichen Texte, Quelldateien und Rechtebelege stehen in
+[Pressebelege zur STL-Merkmalbearbeitung](press-series.md). Die dort noch
+alternierenden Sprachtermine wurden durch die folgende Planung ersetzt.
+
 Nur die fünf geplanten deutschen Veröffentlichungstage wurden um einen Tag
 vorgezogen; EN-Termine, Titel, Beschreibungen, Links und öffentliche Shorts
 blieben unverändert. Jeder geänderte Termin wurde nach dem Speichern erneut im
