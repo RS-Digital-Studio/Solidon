@@ -940,6 +940,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "previous": _("Bisher"),
     "recipe": _("Rezept"),
     "second": _("Zweite Bedingung"),
+    "sliced": _("Mit Schichtanalyse geprüft"),
     "solver": _("Rechenstufe"),
     "stopped_at": _("Angehalten bei Schritt"),
     "taken": _("Vergeben"),

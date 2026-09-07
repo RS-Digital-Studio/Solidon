@@ -3098,7 +3098,9 @@ def test_a_manual_slot_type_wins_over_the_projects_base_filament(tmp_path: Path)
     Herstellerprofil. Das globale PETG-Profil darf seinen Typ beim Auffüllen
     der übrigen Werte nicht wieder über die ausdrückliche Wahl schreiben.
     """
-    petg = _filament_profile(tmp_path, "Haus PETG", filament_type=["PETG"])
+    petg = _filament_profile(
+        tmp_path, "Haus PETG", filament_type=["PETG"], filament_start_gcode=["M104 S240"]
+    )
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     setup = handover.SlicerSetup(
@@ -3112,6 +3114,57 @@ def test_a_manual_slot_type_wins_over_the_projects_base_filament(tmp_path: Path)
 
     written = json.loads(config.filaments[0].read_text(encoding="utf-8"))
     assert written["filament_type"] == ["PLA"]
+    expected = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    assert written["nozzle_temperature"] == [str(expected.temperature.nozzle)]
+    assert written["hot_plate_temp"] == [str(expected.temperature.bed)]
+    assert "filament_start_gcode" not in written
+    embedded = handover.project_settings(settings, profile, setup, slots=(slot,))
+    assert embedded["nozzle_temperature"] == written["nozzle_temperature"]
+
+
+def test_local_spool_defaults_keep_process_and_explicit_spool_values() -> None:
+    """Materialwechsel bewahrt den Prozess und ausdrücklich gewählte Gruppen."""
+    from app.core.types import SlotOverride
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    slot = MaterialSlot(index=1, name="PLA Weiß", material_type="PLA", colour=(1.0, 1.0, 1.0))
+    settings = replace(settings, shell=replace(settings.shell, wall_count=7))
+    override = SlotOverride(
+        name=slot.name,
+        colour=slot.colour,
+        material_type=slot.material_type,
+        temperature=replace(settings.temperature, nozzle=219),
+    )
+    settings = handover.with_slot_override(settings, slot, override)
+
+    effective = handover.settings_for_slot(settings, profile, slot)
+
+    expected = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    assert effective.shell is settings.shell
+    assert effective.temperature is override.temperature
+    assert effective.cooling == expected.cooling
+    assert effective.retraction == expected.retraction
+    assert effective.filament == expected.filament
+
+
+@pytest.mark.parametrize("flavour", ["prusa", "cura"])
+def test_a_local_spool_sets_the_material_values_of_a_shared_slicer(
+    tmp_path: Path, flavour: handover.SlicerFlavour
+) -> None:
+    """Eine PLA-Spule fährt auch ohne Mehrfachprofile mit PLA-Werten."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(executable=Path("slicer"), flavour=flavour)
+    slot = MaterialSlot(index=0, name="PLA Lokal", material_type="PLA")
+
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+
+    written = config.process.read_text(encoding="utf-8")
+    expected = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "pla"))
+    key = "temperature" if flavour == "prusa" else "material_print_temperature"
+    separator = " = " if flavour == "prusa" else "="
+    assert f"{key}{separator}{expected.temperature.nozzle}\n" in written
 
 
 def test_a_slot_override_wins_over_its_selected_filament_profile(tmp_path: Path) -> None:

@@ -50,6 +50,7 @@ from app.core.types import (
 )
 from app.i18n import tr
 from app.ui import main_window as main_window_module
+from app.ui.leash import Worker
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.palette import DIFF_PALETTES
@@ -57,6 +58,15 @@ from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+
+def _release_unstarted_worker(owner: object, field: str, worker: Worker) -> None:
+    """Eine vom Test bewusst nicht gestartete QThread-Attrappe abbauen."""
+    if getattr(owner, field, None) is worker:
+        setattr(owner, field, None)
+    worker.release_finished_references()
+    worker.deleteLater()
+    QApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 def test_rebuilding_the_object_tree_preserves_click_order(window: MainWindow) -> None:
@@ -1065,13 +1075,13 @@ def test_an_empty_scene_leaves_nothing_of_the_last_one(window: MainWindow) -> No
 
 
 def test_the_right_panel_folds_away(window: MainWindow) -> None:
-    assert not window.right.isHidden()
+    assert not window.right_column.isHidden()
     window.action_toggle_right()
     assert not window.settings.right_panel_visible
-    assert window.right.isHidden()
+    assert window.right_column.isHidden()
     window.action_toggle_right()
     assert window.settings.right_panel_visible
-    assert not window.right.isHidden()
+    assert not window.right_column.isHidden()
 
 
 def test_view_menu_and_settings_share_theme_and_navigation_names(window: MainWindow) -> None:
@@ -3615,7 +3625,9 @@ def test_a_running_export_keeps_the_bar_when_the_evaluation_ends(window: MainWin
 
 
 def test_a_pure_download_offers_its_cancel_button(
-    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+    window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Der Abbruch eines Downloads braucht einen sichtbaren Knopf (§2.8).
 
@@ -3625,12 +3637,14 @@ def test_a_pure_download_offers_its_cancel_button(
     Fund 30). Der Arbeiter wird nicht gestartet: geprüft wird die Anzeige,
     nicht das Netz.
     """
-    started: list[object] = []
+    started: list[Worker] = []
     monkeypatch.setattr(window._leash, "start", started.append)
 
     window.download_model("https://beispiel.invalid/halter.stl")
-
     assert started, "ohne angenommenen Arbeiter prüft der Test nur check_url"
+    worker = started[-1]
+    request.addfinalizer(lambda: _release_unstarted_worker(window, "_download_worker", worker))
+
     assert window._downloading
     assert window.cancel_button.isVisibleTo(window), "der Weg zum Abbruch ist sichtbar"
 
@@ -4252,6 +4266,51 @@ def test_operations_are_greyed_out_until_they_could_run(window: MainWindow) -> N
 
     window.object_tree.tree.topLevelItem(1).setSelected(True)
     assert joining.isEnabled()
+
+
+def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
+    window: MainWindow,
+) -> None:
+    """Der neue kurze Weg folgt Auswahl und Menüfreigabe gemeinsam."""
+    panel = window.selection_operations
+    assert panel.isHidden()
+
+    _with_two_objects(window)
+    first = window.object_tree.tree.topLevelItem(0)
+    second = window.object_tree.tree.topLevelItem(1)
+    first.setSelected(True)
+    assert not panel.isHidden()
+    assert not panel._buttons["union_objects"].isEnabled()
+
+    second.setSelected(True)
+    assert panel._buttons["union_objects"].isEnabled()
+    assert (
+        panel._buttons["union_objects"].isEnabled()
+        == window._op_actions["union_objects"].isEnabled()
+    )
+    assert window.overlay.right is window.right_column
+
+    window.resize(1024, 720)
+    window.show()
+    QApplication.processEvents()
+    panel_bottom = panel.mapTo(window.right_column, panel.rect().bottomLeft()).y()
+    assert panel_bottom <= window.right_column.rect().bottom()
+    assert window.right.height() >= 260, (
+        "Bericht und Filter dürfen nicht übereinanderliegen: "
+        f"Spalte={window.right_column.height()}, Bericht={window.right.height()}, "
+        f"Operationen={panel.height()}, Maximum={window.right.maximumHeight()}"
+    )
+    assert window.report.search.height() >= 32
+    assert window.report.severity.height() >= 32
+    assert window.report.to_slicer.height() >= 32
+    assert panel.catalog_button.isVisibleTo(window.right_column)
+
+
+def test_the_selection_panel_uses_the_shared_launch_path() -> None:
+    """Gestenoperationen dürfen vom neuen Weg nicht am Editor vorbei starten."""
+    source = (Path(__file__).parent.parent / "app" / "ui" / "main_window.py").read_text("utf-8")
+    build = source.split("def _build_central(", 1)[1].split("def ", 1)[0]
+    assert "operationRequested.connect(self.launch_operation)" in build
 
 
 def test_undo_and_redo_follow_the_stack(window: MainWindow) -> None:
@@ -5516,6 +5575,42 @@ def test_closing_keeps_the_window_alive_while_a_worker_is_running(
     window._close_requested = False
     window._export_worker = None
     window.setEnabled(True)
+
+
+def test_closing_waits_for_an_installation_dialog_owned_by_the_window(
+    window: MainWindow,
+) -> None:
+    """Eine laufende Installation überlebt weder Fenster noch Hauptprozess."""
+    from app.ui.install_dialog import InstallDialog
+
+    class _PendingInstallDialog(InstallDialog):
+        def __init__(self, parent: MainWindow) -> None:
+            QDialog.__init__(self, parent)
+            self.idle = False
+            self.waits: list[int] = []
+
+        def wait_for_workers(self, timeout_ms: int = 2000) -> bool:
+            self.waits.append(timeout_ms)
+            return self.idle
+
+        def release(self, _timeout_ms: int = 2000) -> None:
+            """Die Attrappe hält keine eigenen Arbeiter."""
+
+    dialog = _PendingInstallDialog(window)
+    first = QCloseEvent()
+
+    window.closeEvent(first)
+
+    assert not first.isAccepted()
+    assert window._close_retry.isActive()
+    assert dialog.waits == [0]
+
+    dialog.idle = True
+    second = QCloseEvent()
+    window.closeEvent(second)
+
+    assert second.isAccepted()
+    assert dialog.waits == [0, 0]
 
 
 def test_a_settings_write_error_is_visible_without_breaking_cleanup(
@@ -7391,7 +7486,9 @@ def test_split_restores_the_complete_agent_progress(window: MainWindow) -> None:
 
 
 def test_split_restores_the_complete_download_progress(
-    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+    window: MainWindow,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Nach Split stehen Downloadtext, Anteil, Hilfetext und Abbruch wieder da."""
 
@@ -7401,6 +7498,7 @@ def test_split_restores_the_complete_download_progress(
     window.download_model("https://beispiel.invalid/halter.stl")
     worker = window._download_worker
     assert worker is not None
+    request.addfinalizer(lambda: _release_unstarted_worker(window, "_download_worker", worker))
     window._on_download_progress(0.42, tr("Modell herunterladen …"))
     expected = _progress_snapshot(window)
 
@@ -7428,7 +7526,10 @@ def test_split_restores_the_complete_download_progress(
 
 
 def test_split_restores_the_complete_export_progress(
-    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    window: MainWindow,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     """Der nicht abbrechbare Export kehrt nach Split ohne fremden Knopf zurück."""
 
@@ -7436,7 +7537,9 @@ def test_split_restores_the_complete_export_progress(
     window.session.import_model(MESHES / "cube_clean.stl")
     window.session.wait_for_idle()
     window._start_export(tmp_path / "halter.stl", "stl")
-    assert window._export_worker is not None
+    worker = window._export_worker
+    assert worker is not None
+    request.addfinalizer(lambda: _release_unstarted_worker(window, "_export_worker", worker))
     expected = _progress_snapshot(window)
     try:
         _show_split_progress(window)
@@ -11017,7 +11120,7 @@ def test_a_warning_still_reaches_someone_with_the_right_column_hidden(
     # Ohne das liegt der Startbildschirm oben, und die rechte Spalte ist auch
     # dann unsichtbar, wenn niemand sie ausgeblendet hat.
     window._show_start_screen(False)
-    window.right.setVisible(True)
+    window.right_column.setVisible(True)
     window._mark_status_alerts(3)
     # ``isHidden`` und nicht ``isVisible``: Das Fenster selbst wird hier nie
     # gezeigt, und dann ist jedes Kind unsichtbar — die Frage ist, ob der Knopf
@@ -11026,13 +11129,13 @@ def test_a_warning_still_reaches_someone_with_the_right_column_hidden(
         "Bei offener Spalte trägt der Reiter die Zahl — zwei Zähler sind einer zu viel."
     )
 
-    window.right.setVisible(False)
+    window.right_column.setVisible(False)
     window._mark_status_alerts(3)
     assert not window.alert_button.isHidden(), "die Warnung erreicht niemanden mehr"
     assert "3" in window.alert_button.text()
 
     window._show_alerts()
-    assert window.right.isVisibleTo(window), "der Klick holt die Spalte nicht zurück"
+    assert window.right_column.isVisibleTo(window), "der Klick holt die Spalte nicht zurück"
     assert window.right.currentWidget() is window.report
     assert window.alert_button.isHidden(), "er bleibt stehen, obwohl die Spalte offen ist"
 
@@ -11041,7 +11144,7 @@ def test_the_status_counter_stays_away_when_nothing_is_wrong(window: MainWindow)
     """Ein Zähler, der immer dasteht, wird Tapete — dieselbe Begründung wie am
     Reiter."""
     window._show_start_screen(False)
-    window.right.setVisible(False)
+    window.right_column.setVisible(False)
     window._mark_status_alerts(0)
 
     assert window.alert_button.isHidden()
@@ -12226,7 +12329,7 @@ def test_the_picture_for_the_support_asks_the_viewport_for_its_own(
     """Das Bild einer Fehlermeldung muss das Modell zeigen, nicht ein Loch.
 
     **Warum das ein eigener Test ist und kein Bildvergleich.** ``QWidget.grab``
-    malt Qts Puffer ab; der Viewport zeichnet in ein natives OpenGL-Fenster und
+    malt Qts Puffer ab; der Viewport zeichnet in eine native pygfx-Renderfläche und
     steht dort nicht drin. Am 24.08.2026 kam so ein Bogen bei Robert an: alles
     darauf zu sehen — Menüs, Objektbaum, Parameter, Prüfbericht — nur in der
     Mitte, wo das Teil liegt, war es schwarz. Gemessen war der Viewport-Bereich
@@ -12234,7 +12337,7 @@ def test_the_picture_for_the_support_asks_the_viewport_for_its_own(
     es 530.
 
     Prüfen lässt sich das hier nicht am Bild: ``tests/conftest.py`` setzt
-    ``QT_QPA_PLATFORM=offscreen``, dort gibt es keinen Plotter, und
+    ``QT_QPA_PLATFORM=offscreen``, dort gibt es keine Renderfläche, und
     :meth:`Viewport.snapshot` gibt folgerichtig ``None`` zurück. Ein Test über
     Bildpunkte wäre grün über einer leeren Menge — dieselbe Falle, die im
     Register unter „Offscreen prüft nichts, was am Aktor hängt" steht.
@@ -12245,7 +12348,7 @@ def test_the_picture_for_the_support_asks_the_viewport_for_its_own(
 
     **Ohne Fenster-Fixture, und das ist gemessen.** Ein zweiter Test daneben
     hat über ``window`` ein ganzes ``MainWindow`` gebaut, nur um zu sehen, dass
-    ``snapshot`` ohne Plotter ``None`` gibt. Er hob die Abrissquote dieser Datei
+    ``snapshot`` ohne Renderer ``None`` gibt. Er hob die Abrissquote dieser Datei
     von 1 aus 3 auf 2 aus 3 — die Suite baut in einem Prozess hunderte
     Fenster mit Ansicht, und zwei weitere kippten sie. Ein nacktes ``QWidget`` genügt
     hier, denn die Frage ist der Aufruf und nicht das Bild.
@@ -12385,7 +12488,7 @@ def test_the_snap_marker_follows_the_canvas_not_a_second_calculation(
     Punkt schlägt Raster" — im Viewport nachgerechnet wäre es die zweite Zahl
     für dieselbe Sache (d6335c1).
 
-    Offscreen gibt es keinen Plotter und damit keine Marke zum Ansehen;
+    Offscreen gibt es keine Renderfläche und damit keine Marke zum Ansehen;
     geprüft wird die **Verbindung** — dieselbe Haltung wie beim Bild des
     Fehlerbogens: Wer den Draht kappt, bekommt einen roten Lauf, keinen
     Zeiger, der wieder lügt.

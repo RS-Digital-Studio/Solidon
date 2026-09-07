@@ -21,20 +21,24 @@ from typing import Any
 from PySide6.QtCore import QSignalBlocker, QSize, Qt, Signal
 from PySide6.QtWidgets import (
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QStyle,
     QStyleOptionComboBox,
+    QToolButton,
     QWidget,
 )
 
 from app.branding import PROJECT_SUFFIX
+from app.core.knowledge import profiles
 from app.core.scene import EvaluationResult
-from app.core.types import Profile
+from app.core.types import Profile, SceneObject
 from app.core.units import LengthUnit
 from app.i18n import tr
+from app.ui.icons import icon
 from app.ui.labels import length
-from app.ui.style import TIGHT, divider, set_level
+from app.ui.style import TARGET_SIZE, TIGHT, divider, set_level
 from app.ui.tool_strip import BarComboBox
 
 
@@ -70,6 +74,87 @@ def bounds_text(result: EvaluationResult | None, unit: LengthUnit) -> str:
     return f"{measures} {unit}"
 
 
+def filament_names(profile: Profile, bodies: list[SceneObject]) -> tuple[str, ...]:
+    """Die tatsächlich verwendeten Filamente samt unterscheidendem Namen.
+
+    Der Projektwert ist nur die Vorgabe für Körper ohne eigenen Slot. Ein
+    farbiger Schriftzug oder ein Körper aus anderem Material kommt zusätzlich
+    dazu; gleiche Namen werden in ihrer ersten Reihenfolge behalten. Welche
+    Slots zählen, bestimmt das Netz: eine leere Zuordnung bedeutet überall
+    Slot 0, unbenutzte Slotdefinitionen sind keine verwendeten Filamente.
+    """
+    names: list[str] = []
+    for body in bodies:
+        slots = {slot.index: slot for slot in body.material_slots}
+        used_indices = set(body.mesh.slot_indices)
+        if not used_indices:
+            used_indices.add(0)
+        for index in sorted(used_indices):
+            slot = slots.get(index)
+            if slot is None:
+                names.append(str(profiles.for_object(profile, body).material.title))
+                continue
+            name = str(slot.name).strip()
+            material_id = profiles.material_id_for_type(slot.material_type or "")
+            if material_id:
+                material = str(profiles.material(material_id).title)
+            elif slot.material_type:
+                material = slot.material_type
+            elif slot.material:
+                material = slot.material
+            else:
+                # Ein importierter Slot kann nur einen Namen oder eine Farbe
+                # tragen. Ohne eigene Materialangabe gilt dafür dieselbe
+                # Projekt- oder Körpervorgabe wie für den Basisslot; eine
+                # unbekannte ausdrücklich genannte Art bleibt oben erhalten.
+                material = str(profiles.for_object(profile, body).material.title)
+            colour = ""
+            if slot.colour is not None:
+                red, green, blue = (
+                    max(0, min(255, round(channel * 255))) for channel in slot.colour
+                )
+                colour = f"#{red:02X}{green:02X}{blue:02X}"
+            if name:
+                # „Gehäuse“ allein sagt nicht, welche Spule einzulegen ist.
+                # Die Materialart bleibt daneben, solange der Name sie nicht
+                # ohnehin schon trägt.
+                shown = (
+                    name
+                    if not material or material.casefold() in name.casefold()
+                    else f"{name} ({material})"
+                )
+            else:
+                shown = material or (
+                    tr("Farbe {colour}").replace("{colour}", colour) if colour else ""
+                )
+            if shown and colour and colour.casefold() not in shown.casefold():
+                shown = f"{shown} · {colour}"
+            if shown:
+                names.append(shown)
+    return tuple(dict.fromkeys(name for name in names if name))
+
+
+def _filament_text(names: tuple[str, ...]) -> str:
+    """Eine bereits erhobene Filamentliste für die Kopfzeile schreiben."""
+    if not names:
+        return ""
+    if len(names) == 1:
+        return names[0]
+    return (
+        tr("{count} Filamente: {names}")
+        .replace("{count}", str(len(names)))
+        .replace("{names}", " + ".join(names))
+    )
+
+
+def filament_text(profile: Profile, result: EvaluationResult | None) -> str:
+    """Kurze Kopfzeilen-Auskunft über alle Filamente des offenen Projekts."""
+    if result is None or not result.scene.objects:
+        return ""
+    names = filament_names(profile, list(result.scene.objects.values()))
+    return _filament_text(names)
+
+
 #: Wie der Wähler „kein Filter" nennt. Derselbe Wert wie in
 #: ``explode_bar``, wo der Wähler herkommt — der Viewport kennt ihn.
 ALL_PLATES = -1
@@ -78,6 +163,12 @@ ALL_PLATES = -1
 #: Sein unterscheidendes Ende bleibt zugänglich, darf aber nicht erneut die
 #: ganze Werkzeugleiste auf sein Vollmaß zwingen.
 MAXIMUM_TAIL_CHARACTERS = 10
+
+#: Leseraum der Projektangaben, sobald ein Projekt offen ist. Auf dem echten
+#: Windows-Pfad reichen 660 Pixel für Name, Außenmaß, Druckerknopf und eine
+#: klare Filamentanzahl; wird es enger, kürzt die Hauptwerkzeugleiste ihre
+#: Wörter und lässt der Projektauskunft den Raum.
+READABLE_HEADER_WIDTH = 660
 
 
 class _EphemeralLabel(QLabel):
@@ -112,6 +203,7 @@ class _EphemeralLabel(QLabel):
     ) -> None:
         super().__init__("", parent)
         self._full = ""
+        self._display = ""
         self._tail_words = tail_words
         self._protected_end = protected_end
         self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -122,13 +214,31 @@ class _EphemeralLabel(QLabel):
     def setText(self, text: str) -> None:  # noqa: N802 — Qt-Name
         """Merkt sich den ganzen Text und zeigt, was hineinpasst."""
         self._full = text
-        self.setToolTip(text)
-        self.setAccessibleName(text)
+        self._display = text
+        self._set_accessible_text(text)
+
+    def setSummary(self, summary: str, full: str) -> None:  # noqa: N802 — Qt-Name
+        """Eine kurze Auskunft zeigen und den vollen Inhalt zugänglich halten."""
+        self._full = full
+        self._display = summary
+        self._set_accessible_text(full)
+        # Die Zahl ist der Zweck einer echten Kurzfassung. Sie darf nicht
+        # noch einmal zu „… Filamente“ gekürzt werden; für die Namen gibt es
+        # den Tooltip. Ein einzelner, beliebig langer Profilname bleibt wie
+        # bisher kürzbar und darf die Kopfzeile nicht verdrängen.
+        if summary != full:
+            self.setMinimumWidth(self.fontMetrics().horizontalAdvance(summary))
+        self._fit()
+
+    def _set_accessible_text(self, full: str) -> None:
+        """Tooltip, Mindestmaß und sichtbare Fassung gemeinsam nachführen."""
+        self.setToolTip(full)
+        self.setAccessibleName(full)
         raw_tail, visible_tail = self._bounded_tail()
         if raw_tail:
             metrics = self.fontMetrics()
-            full_width = metrics.horizontalAdvance(text)
-            body = text[: -len(raw_tail)]
+            full_width = metrics.horizontalAdvance(self._display)
+            body = self._display[: -len(raw_tail)]
             tail_width = metrics.horizontalAdvance(f"{'…' if body else ''}{visible_tail}")
             # Ein echtes Minimum, kein ``minimumSizeHint`` unter ``Ignored``:
             # Stern, Einheit oder ein begrenztes Modellende passen damit
@@ -149,11 +259,11 @@ class _EphemeralLabel(QLabel):
 
     def _tail(self) -> str:
         """Das rohe Ende, dessen Bedeutung eine Kürzung nicht verschlucken darf."""
-        if self._protected_end and self._full.endswith(self._protected_end):
+        if self._protected_end and self._display.endswith(self._protected_end):
             return self._protected_end
         if not self._tail_words:
             return ""
-        words = self._full.split()
+        words = self._display.split()
         return " ".join(words[-self._tail_words :])
 
     def _bounded_tail(self, room: int | None = None) -> tuple[str, str]:
@@ -173,18 +283,18 @@ class _EphemeralLabel(QLabel):
 
     def _fit(self) -> None:
         """Kürzt sichtbar und hält das semantische Ende vollständig fest."""
-        room = self.width()
+        room = max(self.width(), self.minimumWidth())
         metrics = self.fontMetrics()
-        if metrics.horizontalAdvance(self._full) <= room:
-            super().setText(self._full)
+        if metrics.horizontalAdvance(self._display) <= room:
+            super().setText(self._display)
             return
         raw_tail, visible_tail = self._bounded_tail(room)
         if not raw_tail:
-            super().setText(metrics.elidedText(self._full, Qt.TextElideMode.ElideMiddle, room))
+            super().setText(metrics.elidedText(self._display, Qt.TextElideMode.ElideMiddle, room))
             return
-        body = self._full[: -len(raw_tail)]
+        body = self._display[: -len(raw_tail)]
         if not body:
-            super().setText(metrics.elidedText(self._full, Qt.TextElideMode.ElideMiddle, room))
+            super().setText(metrics.elidedText(self._display, Qt.TextElideMode.ElideMiddle, room))
             return
         body_room = max(0, room - metrics.horizontalAdvance(visible_tail))
         visible = metrics.elidedText(body, Qt.TextElideMode.ElideMiddle, body_room) + visible_tail
@@ -196,6 +306,13 @@ class _EphemeralLabel(QLabel):
                 metrics.elidedText(body, Qt.TextElideMode.ElideMiddle, body_room) + visible_tail
             )
         super().setText(visible)
+
+
+class _PrinterControl(QWidget):
+    """Druckername und direkter Wechselweg als eine responsive Einheit."""
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        return QSize(TARGET_SIZE, super().minimumSizeHint().height())
 
 
 class HeaderBar(QWidget):
@@ -210,6 +327,7 @@ class HeaderBar(QWidget):
     """
 
     plateChanged = Signal(int)
+    printerRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -233,6 +351,23 @@ class HeaderBar(QWidget):
 
         self.printer = _EphemeralLabel("", self, tail_words=2)
         set_level(self.printer, "caption")
+        self.printer_button = QToolButton(self)
+        self.printer_button.setText(tr("Drucker …"))
+        self.printer_button.setIcon(icon("print_settings", self.printer_button))
+        self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.printer_button.setAutoRaise(True)
+        printer_hint = tr("Öffnet die Druckeinstellungen; der Drucker steht dort ganz oben.")
+        self.printer_button.setToolTip(printer_hint)
+        self.printer_button.setStatusTip(printer_hint)
+        self.printer_button.setAccessibleDescription(printer_hint)
+        self.printer_button.clicked.connect(self.printerRequested)
+        self.printer_control = _PrinterControl(self)
+        printer_layout = QHBoxLayout(self.printer_control)
+        printer_layout.setContentsMargins(0, 0, 0, 0)
+        printer_layout.setSpacing(TIGHT)
+        printer_layout.addWidget(self.printer, 1)
+        printer_layout.addWidget(self.printer_button)
+        self.printer_control.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         # Das Material steht zusätzlich im Filamentbereich. In der engsten
         # Kopfzeile darf diese Wiederholung deshalb vor dem Plattenwähler
         # kürzen; der vollständige Wert bleibt wie bei den übrigen Auskünften
@@ -264,7 +399,11 @@ class HeaderBar(QWidget):
         der Header bei mehr Platz weiter und bleibt dann einzeilig.
         """
         preferred = super().sizeHint()
-        return QSize(self._compact_width(), preferred.height())
+        has_project = any(
+            label.full_text() for label in (self.title, self.bounds, self.printer, self.material)
+        )
+        width = max(self._compact_width(), READABLE_HEADER_WIDTH) if has_project else 0
+        return QSize(width, preferred.height())
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
         """Das kleinste responsive Maß statt der Summe einer einzigen Zeile."""
@@ -277,7 +416,7 @@ class HeaderBar(QWidget):
 
     def _compact_width(self) -> int:
         """Breite der zweizeiligen Anordnung: Angaben oben, Filter unten."""
-        top = (self.title, self.bounds, self.printer, self.material)
+        top = (self.title, self.bounds, self.printer_control, self.material)
         top_width = sum(widget.minimumWidth() for widget in top) + TIGHT * (len(top) - 1)
         plate_width = self.plates.minimumWidth() if not self.plates.isHidden() else 0
         return max(top_width, plate_width) + TIGHT * 2
@@ -287,9 +426,11 @@ class HeaderBar(QWidget):
         widgets: list[QWidget] = [self.title, self.bounds]
         if not self.plates.isHidden():
             widgets.extend((self.plates, self._divider))
-        widgets.extend((self.printer, self.material))
+        widgets.extend((self.printer_control, self.material))
+        printer_action_width = self.printer.minimumWidth() + TARGET_SIZE
         return (
             sum(widget.minimumWidth() for widget in widgets)
+            + printer_action_width
             + TIGHT * max(0, len(widgets) - 1)
             + TIGHT * 2
         )
@@ -303,31 +444,42 @@ class HeaderBar(QWidget):
             self.bounds,
             self.plates,
             self._divider,
-            self.printer,
+            self.printer_control,
             self.material,
         )
         for widget in widgets:
             self._layout.removeWidget(widget)
-        for column in range(7):
+        for column in range(8):
             self._layout.setColumnStretch(column, 0)
         if compact:
+            self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            self.printer_button.setAccessibleName(tr("Drucker wechseln"))
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)
-            self._layout.addWidget(self.printer, 0, 2)
+            self._layout.addWidget(self.printer_control, 0, 2)
             self._layout.addWidget(self.material, 0, 3)
             self._layout.addWidget(self.plates, 1, 0, 1, 4)
             for column, stretch in enumerate((2, 3, 3, 1)):
                 self._layout.setColumnStretch(column, stretch)
             self._divider.hide()
         else:
+            self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+            self.printer_button.setAccessibleName(tr("Drucker wechseln"))
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)
             self._layout.addWidget(self.plates, 0, 3)
             self._layout.addWidget(self._divider, 0, 4)
-            self._layout.addWidget(self.printer, 0, 5)
+            self._layout.addWidget(self.printer_control, 0, 5)
             self._layout.addWidget(self.material, 0, 6)
-            for column, stretch in ((0, 2), (1, 3), (2, 1), (3, 1), (5, 3), (6, 1)):
+            for column, stretch in (
+                (0, 2),
+                (1, 3),
+                (5, 3),
+                (6, 1),
+            ):
                 self._layout.setColumnStretch(column, stretch)
+            if not self.plates.isHidden():
+                self._layout.setColumnStretch(3, 1)
             self._divider.show()
         self._compact = compact
         self._layout.invalidate()
@@ -411,10 +563,17 @@ class HeaderBar(QWidget):
         self.bounds.setText(bounds_text(result, unit))
         self._reflow()
 
-    def show_profile(self, profile: Profile) -> None:
-        """Worauf gedruckt wird. Beides, denn beides ändert das Ergebnis."""
+    def show_profile(self, profile: Profile, result: EvaluationResult | None = None) -> None:
+        """Drucker und die tatsächlich im Projekt verwendeten Filamente zeigen."""
         self.printer.setText(str(profile.printer.title))
-        self.material.setText(str(profile.material.title))
+        names = filament_names(profile, list(result.scene.objects.values())) if result else ()
+        detail = _filament_text(names)
+        summary = (
+            tr("{count} Filamente").replace("{count}", str(len(names)))
+            if len(names) > 1
+            else detail
+        )
+        self.material.setSummary(summary, detail)
         self._reflow()
 
     def state(self) -> tuple[str, str, str, str]:

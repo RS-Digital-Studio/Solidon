@@ -688,6 +688,28 @@ QLabel#chatModelHint {{
     padding: {TIGHT // 2}px {TIGHT}px;
 }}
 
+/* Die Auswahlhandlungen bilden den unteren Teil derselben rechten Karte.
+   Eine sichtbare Kante trennt sie von Bericht und Chat; die Beschriftungen
+   bleiben in schmalen Fenstern linksbündig und nutzen die ganze Breite. */
+QWidget#selectionOperations {{
+    border-top: 1px solid {line};
+}}
+QWidget#selectionOperations QToolButton {{
+    text-align: left;
+}}
+QWidget#selectionOperations QToolButton#quickOperation {{
+    background: {base};
+    border: 1px solid {line};
+    border-radius: {SPACE}px;
+    padding: {TIGHT}px {NORMAL}px;
+}}
+QWidget#selectionOperations QToolButton#quickOperation:hover {{
+    background: {hover};
+}}
+QWidget#selectionOperations QToolButton#quickOperation:focus {{
+    border: 2px dashed {focus};
+}}
+
 /* Die Tour ist eine Folge kleiner Karten statt einer grauen Textwand. Der
    aktuelle Auftrag trägt eine Akzentkante und einen Hintergrund; Pfeil,
    Haken oder Strich bleiben die zweite Kodierung des Zustands (Regel 18). */

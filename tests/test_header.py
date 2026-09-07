@@ -18,9 +18,12 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge import profiles
+from app.core.scene import EvaluationResult
+from app.core.types import MaterialSlot, Scene
 from app.ui.header import HeaderBar, bounds_text, project_name
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
@@ -41,8 +44,6 @@ def test_the_title_drops_the_suffix_but_keeps_the_star() -> None:
 
 def test_the_measurements_name_their_unit_once() -> None:
     """„80,00 mm × 50,00 mm × 8,00 mm" sagt dreimal dasselbe."""
-    from app.core.scene import EvaluationResult
-
     assert bounds_text(None, "mm") == "", "ohne Ergebnis behauptet die Zeile nichts"
     empty: EvaluationResult | None = None
     assert bounds_text(empty, "mm") == ""
@@ -58,11 +59,14 @@ def test_an_empty_header_says_nothing(qt_app: QApplication) -> None:
     assert (title, bounds, printer, material) == ("", "", "", "")
 
 
-def test_the_header_names_printer_and_material(qt_app: QApplication) -> None:
-    """Beide, denn beide ändern das Ergebnis."""
+def test_the_header_names_printer_and_the_filament_in_the_scene(qt_app: QApplication) -> None:
+    """Die Projektvorgabe gilt genau für einen Körper ohne eigenen Slot."""
+    from conftest import make_object
+
     header = HeaderBar()
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
-    header.show_profile(profile)
+    result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
+    header.show_profile(profile, result)
 
     _title, _bounds, printer, material = header.state()
     assert printer == str(profile.printer.title)
@@ -83,7 +87,10 @@ def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
         material=replace(profile.material, title=material_title),
     )
 
-    window.header.show_profile(profile)
+    from conftest import make_object
+
+    result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
+    window.header.show_profile(profile, result)
     window.header.title.setText("Ein langes eigenes Projekt*")
     window.header.bounds.setText("220,0 × 220,0 × 250,0 mm")
     window.header.show_plates(3)
@@ -203,7 +210,160 @@ def test_the_window_wires_the_header_to_the_session(window: MainWindow) -> None:
     title, _bounds, printer, material = window.header.state()
     assert title == project_name(window.session.title)
     assert printer == str(window.session.profile.printer.title)
-    assert material == str(window.session.profile.material.title)
+    assert material == "", "ohne Körper ist noch kein Filament im Projekt in Gebrauch"
+
+
+def test_the_header_lists_multiple_project_filaments_instead_of_one_global_material(
+    qt_app: QApplication,
+) -> None:
+    """Slotname, Materialart und Farbe bleiben projektbezogen unterscheidbar."""
+    from conftest import make_object
+
+    profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
+    body = make_object(slots=(0, 1) * 6)
+    body.material_slots = [
+        MaterialSlot(index=0, name="Gehäuse", material_type="PETG"),
+        MaterialSlot(
+            index=1,
+            name="Schrift Weiß",
+            material_type="PLA",
+            colour=(1.0, 1.0, 1.0),
+        ),
+    ]
+    header = HeaderBar()
+    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
+
+    text = header.material.full_text()
+    assert text.startswith("2 Filamente:")
+    assert "Gehäuse (PETG)" in text
+    assert "Schrift Weiß (PLA)" in text
+    assert "#FFFFFF" in text
+    assert header.material.text() == "2 Filamente"
+    assert header.material.toolTip() == text
+
+
+def test_the_header_ignores_unused_filament_metadata_after_a_complete_repaint(
+    qt_app: QApplication,
+) -> None:
+    """Vollständig übermalte Flächen nennen weder Basis noch frühere Farben."""
+    from conftest import make_object
+
+    profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
+    body = make_object(slots=(1,) * 12)
+    body.material_slots = [
+        MaterialSlot(index=0, name="Altes PETG", material_type="PETG"),
+        MaterialSlot(
+            index=1,
+            name="PLA Weiß",
+            material_type="PLA",
+            colour=(1.0, 1.0, 1.0),
+        ),
+        MaterialSlot(
+            index=2,
+            name="Altes Rot",
+            material_type="PLA",
+            colour=(1.0, 0.0, 0.0),
+        ),
+    ]
+    header = HeaderBar()
+
+    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
+
+    text = header.material.full_text()
+    assert text == "PLA Weiß · #FFFFFF"
+    assert "PETG" not in text
+    assert "Rot" not in text
+
+
+def test_slot_metadata_without_a_material_uses_only_the_known_project_fallback(
+    qt_app: QApplication,
+) -> None:
+    """Leere Importfelder bleiben sichtbar, eine fremde Art bleibt fremd."""
+    from conftest import make_object
+
+    profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
+    body = make_object(slots=(0,) * 12)
+    header = HeaderBar()
+
+    body.material_slots = [MaterialSlot(index=0, name="")]
+    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
+    assert header.material.full_text() == str(profile.material.title)
+
+    body.material_slots = [MaterialSlot(index=0, name="Import Grau", colour=(0.5, 0.5, 0.5))]
+    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
+    assert header.material.full_text() == "Import Grau (PETG) · #808080"
+
+    body.material_slots = [MaterialSlot(index=0, name="Holzoptik", material_type="Wood")]
+    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
+    assert header.material.full_text() == "Holzoptik (Wood)"
+    assert "PETG" not in header.material.full_text()
+
+
+def test_showing_the_header_reads_large_face_slot_assignments_once(
+    qt_app: QApplication,
+) -> None:
+    """Kurztext und Tooltip teilen eine Erhebung über die Dreieckszuordnung."""
+    from conftest import make_object
+
+    class CountingSlots(list[int]):
+        def __init__(self, values: list[int]) -> None:
+            super().__init__(values)
+            self.iterations = 0
+
+        def __iter__(self) -> Iterator[int]:
+            self.iterations += 1
+            return super().__iter__()
+
+    assignments = CountingSlots([0, 1] * 6)
+    body = make_object(slots=assignments)
+    body.material_slots = [
+        MaterialSlot(index=0, name="PETG Schwarz", material_type="PETG"),
+        MaterialSlot(index=1, name="PLA Weiß", material_type="PLA"),
+    ]
+
+    HeaderBar().show_profile(
+        profiles.make_profile(profiles.DEFAULT_PRINTER, "petg"),
+        EvaluationResult(scene=Scene(objects={"obj_1": body})),
+    )
+
+    assert assignments.iterations == 1
+
+
+def test_the_printer_button_is_a_direct_keyboard_path(qt_app: QApplication) -> None:
+    """Der Projektdrucker ist aus der Kopfzeile mit einer Handlung erreichbar."""
+    header = HeaderBar()
+    requested = []
+    header.printerRequested.connect(lambda: requested.append(True))
+
+    header.printer_button.click()
+
+    assert requested == [True]
+    assert header.printer_button.focusPolicy() != Qt.FocusPolicy.NoFocus
+    assert header.printer_button.toolTip()
+
+
+def test_an_open_project_gives_the_header_readable_room_before_toolbar_words(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Auf Laptopbreite bleiben Projekt, Drucker und Filamentanzahl lesbar."""
+    from conftest import make_object
+
+    body = make_object(slots=(0, 1) * 6)
+    body.material_slots = [
+        MaterialSlot(index=0, name="PETG Schwarz", material_type="PETG"),
+        MaterialSlot(index=1, name="PLA Weiß", material_type="PLA"),
+    ]
+    result = EvaluationResult(scene=Scene(objects={"obj_1": body}))
+    window.resize(1024, 720)
+    window.header.show_project("Halter.p3d*", result, "mm")
+    window.header.show_profile(window.session.profile, result)
+    window._fit_toolbar()
+    qt_app.processEvents()
+
+    assert not window._toolbar_wide
+    assert window.header.width() >= 600
+    assert window.header.title.text() == "Halter*"
+    assert window.header.material.text() == "2 Filamente"
 
 
 def test_the_header_is_updated_where_the_state_changes() -> None:

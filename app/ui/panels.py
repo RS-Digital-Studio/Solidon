@@ -111,7 +111,7 @@ from app.ui.labels import (
 from app.ui.leash import weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.style import NORMAL, TIGHT, make_primary, set_level
+from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_primary, set_level
 
 _log = get_logger(__name__)
 
@@ -3161,6 +3161,7 @@ class ReportPanel(QWidget):
         self.list.setWordWrap(True)
         self.list.setTextElideMode(Qt.TextElideMode.ElideNone)
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.list.setMinimumHeight(TARGET_SIZE)
         # §18.4 sagt „Klick auf eine Warnung fährt die Kamera hin" —
         # ``itemActivated`` allein hieß aber Doppelklick oder Eingabetaste,
         # und wer einmal klickte, bekam nichts. Beide Wege führen zum Ort;
@@ -3175,6 +3176,7 @@ class ReportPanel(QWidget):
         # Der letzte Meter: Ist nichts zu beanstanden und liegt ein Körper da,
         # steht der nächste Klick genau hier — nicht drei Menüs weiter.
         self.to_slicer = QPushButton(tr("An den Slicer übergeben …"), self)
+        self.to_slicer.setMinimumHeight(TARGET_SIZE)
         self.to_slicer.setToolTip(
             tr("Druckeinstellungen prüfen und das Teil an den eingerichteten Slicer geben.")
         )
@@ -3195,10 +3197,12 @@ class ReportPanel(QWidget):
         # zusammen, weil „Wandstärke" und „nur die Fehler" verschiedene Fragen
         # sind (§17.3).
         self.search = QLineEdit(self)
+        self.search.setMinimumHeight(TARGET_SIZE)
         self.search.setPlaceholderText(tr("Befunde durchsuchen …"))
         self.search.setAccessibleName(tr("Befunde durchsuchen"))
         self.search.textChanged.connect(self._refilter)
         self.severity = QComboBox(self)
+        self.severity.setMinimumHeight(TARGET_SIZE)
         self.severity.setAccessibleName(tr("Nach Schweregrad filtern"))
         self.severity.addItem(tr("Alle"), "")
         for name in ("error", "warning", "info"):

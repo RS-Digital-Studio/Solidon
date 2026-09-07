@@ -52,6 +52,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStackedWidget,
     QTabWidget,
     QToolBar,
@@ -268,6 +269,7 @@ from app.ui.recipe_dialog import RecipeDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
+from app.ui.selection_operations import SelectionOperationsPanel
 from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import NAVIGATION, THEMES, SettingsDialog
@@ -2082,6 +2084,14 @@ class MainWindow(QMainWindow):
         self.tour.followRequested.connect(self._open_example)
 
         self.right = QTabWidget(self)
+        # Bei gewählten Körpern teilt sich die Karte ihre Höhe mit den
+        # Auswahlhandlungen. Der Bericht hat eine eigene rollbare Liste und
+        # darf deshalb auf Laptop-Höhe nachgeben; sein Größenhinweis von rund
+        # 260 Pixeln drückte sonst die Operationskarte unten
+        # aus dem Fenster und verbarg Merkmale/Bausteine vollständig.
+        self.right.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
+        self.right.setMinimumHeight(120)
+        self._right_unbounded_height = self.right.maximumHeight()
         self.right.addTab(self.report, tr("Prüfbericht"))
         self.right.addTab(self.chat, tr("Chat"))
         # Der Reiter trägt, wie viele Fehler und Warnungen hinter ihm stehen.
@@ -2108,13 +2118,31 @@ class MainWindow(QMainWindow):
         self.right.addTab(self._constraints_room, tr("Bedingungen"))
         self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
 
+        # Die häufigsten Handlungen an einer Körperauswahl stehen direkt unter
+        # Bericht und Chat. Die Liste wird einmal aus dem Register gebaut und
+        # bei Auswahlwechseln nur nachgeführt; Merkmale und Bausteine behalten
+        # ihre eigenen, rechts liegenden Wege.
+        self.selection_operations = SelectionOperationsPanel(REGISTRY.all(), self)
+        self._selection_unbounded_height = self.selection_operations.maximumHeight()
+        self.selection_operations.operationRequested.connect(self.launch_operation)
+        self.selection_operations.catalogRequested.connect(self.action_catalog)
+        self.selection_operations.featurePanelRequested.connect(self._show_feature_panel)
+
+        self.right_column = QWidget(self)
+        self.right_column.setObjectName("overlayCard")
+        right_layout = QVBoxLayout(self.right_column)
+        right_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
+        right_layout.setSpacing(TIGHT)
+        right_layout.addWidget(self.right, 1)
+        right_layout.addWidget(self.selection_operations)
+
         # §2.5 nennt drei Zonen und sagt nicht, dass die äußeren der mittleren
         # ihre Fläche nehmen. Sie liegen jetzt darüber: die Ansicht füllt das
         # Fenster, und wo keine Karte steht, sieht man das Modell.
         left.setObjectName("overlayCard")
-        self.right.setObjectName("overlayCard")
+        self.right.setObjectName("rightTabs")
         self.overlay = OverlayHost(self.middle_stack, self)
-        self.overlay.set_zones(left, self.right, bottom)
+        self.overlay.set_zones(left, self.right_column, bottom)
         # Parameterzeilen entstehen nach dem Öffnen eines Projekts neu. Ihre
         # endgültige Höhe kennt Qt einen Ereignisschritt später; dann muss die
         # frei gesetzte linke Karte ausdrücklich neu verteilt werden. Ohne
@@ -2226,7 +2254,7 @@ class MainWindow(QMainWindow):
         self.parameters.parameterUnitEdited.connect(self._on_parameter_unit_edited)
         self.parameters.addRequested.connect(self.action_add_parameter)
         self.parameters.limitsRequested.connect(self.action_edit_parameter)
-        self.right.setVisible(self.settings.right_panel_visible)
+        self.right_column.setVisible(self.settings.right_panel_visible)
 
     def _build_status_bar(self) -> None:
         self.measurements = MeasurementLabel(self)
@@ -3310,6 +3338,7 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         self.header = HeaderBar(toolbar)
         self.header.plateChanged.connect(self.viewport.set_plate)
+        self.header.printerRequested.connect(self.action_print_settings)
         toolbar.addWidget(self.header)
 
     def _menu(self, title: str) -> QMenu:
@@ -3672,7 +3701,49 @@ class MainWindow(QMainWindow):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
             self._pick_hint(action, ready, locked)
+        # Derselbe Registervertrag wie Menü und Palette, ohne eine dritte
+        # Freigabelogik. Das Panel hält seine Knöpfe über Auswahlwechsel hinweg
+        # und ändert hier nur Zustand und Hinweise.
+        self.selection_operations.set_context(
+            chosen,
+            lambda name: self._palette_availability(name, locked=locked, gesturing=gesturing),
+            feature_chosen=bool(self.object_tree.selected_features()),
+        )
+        self._reflow_right_column()
         self._hide_dead_menus()
+
+    def _reflow_right_column(self) -> None:
+        """Die volle Höhe ermitteln und erst danach zwischen den Bereichen teilen."""
+        # Eine vorige Teilung darf den Größenhinweis der ganzen Karte nicht
+        # deckeln. Sonst blieb der Bericht nach einem frühen Auswahlereignis
+        # auf 120 Pixeln, obwohl das danach gezeigte Fenster Platz bot.
+        self.right.setMaximumHeight(self._right_unbounded_height)
+        self.selection_operations.setMaximumHeight(self._selection_unbounded_height)
+        self.overlay.reflow()
+        self._fit_right_column()
+
+    def _fit_right_column(self) -> None:
+        """Bericht und Auswahlhandlungen ohne Überstand in die Karte teilen."""
+        if self.selection_operations.isHidden():
+            self.right.setMaximumHeight(self._right_unbounded_height)
+            self.selection_operations.setMaximumHeight(self._selection_unbounded_height)
+            return
+        layout = self.right_column.layout()
+        assert layout is not None
+        margins = layout.contentsMargins()
+        total = self.right_column.height() - margins.top() - margins.bottom() - layout.spacing()
+        # 260 Pixel halten Reiter, Zusammenfassung, Slicerweg und Filter des
+        # Berichts auseinander. Auf höheren Fenstern darf die Operationsliste
+        # bis zu ihrem eigenen Maximum wachsen; auf Laptop-Höhe gibt sie den
+        # nötigen Raum zuerst an den Bericht zurück.
+        panel_height = min(
+            self._selection_unbounded_height,
+            max(self.selection_operations.minimumHeight(), total - 260),
+        )
+        self.selection_operations.setMaximumHeight(panel_height)
+        self.right.setMaximumHeight(max(120, total - panel_height))
+        layout.invalidate()
+        layout.activate()
 
     def _hide_dead_menus(self) -> None:
         """Ein Menü, in dem **kein** Eintrag geht, tritt beiseite.
@@ -4777,7 +4848,7 @@ class MainWindow(QMainWindow):
 
     def action_toggle_right(self) -> None:
         visible = not self.settings.right_panel_visible
-        self.right.setVisible(visible)
+        self.right_column.setVisible(visible)
         self.settings.right_panel_visible = visible
         self._store_settings()
         self._mark_status_alerts()
@@ -8215,7 +8286,13 @@ class MainWindow(QMainWindow):
             return
         self.launch_operation(REGISTRY.get(name))
 
-    def _palette_availability(self, name: str) -> tuple[bool, str]:
+    def _palette_availability(
+        self,
+        name: str,
+        *,
+        locked: bool | None = None,
+        gesturing: bool | None = None,
+    ) -> tuple[bool, str]:
         """Ob eine Operation jetzt ausführbar ist, und warum nicht.
 
         Aus den Menü-Actions gelesen statt neu gerechnet: zwei Quellen für
@@ -8236,6 +8313,21 @@ class MainWindow(QMainWindow):
         Zwillingshaken fragt sie, und hier antwortet sie eben direkt statt über
         den Umweg einer Action, die es nicht gibt.
         """
+        # Auch Registereinträge ohne eigene Menü-Action müssen die globale
+        # Schreib- und Gestensperre einhalten. Das betrifft insbesondere
+        # Bausteine in der Palette und Varianten im Auswahlpanel; bislang
+        # prüfte der Ersatzweg darunter nur Körperzahl und Bauart.
+        locked = not activation.state().unlocked if locked is None else locked
+        gesturing = (
+            self._sketch_panel is not None or self.sculpting() or self.setting_armature()
+            if gesturing is None
+            else gesturing
+        )
+        if locked:
+            return False, licence_lock_line()
+        if gesturing:
+            return False, tr("Solange gezeichnet oder geformt wird, gilt die Taste dem Werkzeug.")
+
         spec = REGISTRY.get(name)
         action = self._op_actions.get(name)
         if action is None:
@@ -8312,6 +8404,18 @@ class MainWindow(QMainWindow):
         )
         self._view_menu.addSeparator()
         self._view_menu.addAction(entry)
+
+    def _show_feature_panel(self) -> None:
+        """Das Merkmalfenster über seinen ausdrücklich gewählten Weg öffnen."""
+        if not self.object_tree.selected_features():
+            self.announce(
+                tr("Wählen Sie zuerst eine Fläche, Bohrung oder ein anderes Merkmal im Bild.")
+            )
+            return
+        self.feature_dock.show()
+        self.feature_dock.raise_()
+        if self.feature_dock.isFloating():
+            self.feature_dock.activateWindow()
 
     def _on_feature_moved(self, feature_id: str, centre: Any) -> None:
         """Ein Zug am Griff hat ein Merkmal versetzt (§18.11, Regel 2).
@@ -9410,7 +9514,7 @@ class MainWindow(QMainWindow):
         self.chat.show_document(self.session.project.document)
 
     def _focus_chat(self) -> None:
-        if self.right.isVisible():
+        if self.right_column.isVisible():
             switch(self.right, self.chat)
 
     # --- Trennen entlang einer gezeichneten Linie (§25) --------------------------
@@ -9715,6 +9819,10 @@ class MainWindow(QMainWindow):
         # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
         # ist.
         self._drop_feature_preview()
+        # Merkmalsabhängige Operationen und der getrennte Merkmalsknopf müssen
+        # denselben Auswahlstand sehen wie das Dock. Vorher wurde die
+        # Menüfreigabe erst beim nächsten Körperklick nachgeführt.
+        self._update_actions()
         if feature_id is None:
             self.feature_panel.clear()
             return
@@ -11457,7 +11565,12 @@ class MainWindow(QMainWindow):
             self.session.last_result,
             display_unit(),
         )
-        self.header.show_profile(self.session.profile)
+        self.header.show_profile(self.session.profile, self.session.last_result)
+        # Die Projektangaben wachsen erst mit dem ersten Ergebnis. Dann muss
+        # die Werkzeugleiste ihren Text/Icon-Umschalter erneut bewerten;
+        # andernfalls behielten sieben ausgeschriebene Knöpfe den Platz und
+        # ließen vom Projektnamen auf 1024 Pixeln nur „c…)“ stehen.
+        self._fit_toolbar()
         self._update_facts()
 
     def effective_print_settings(self) -> Any:
@@ -12907,7 +13020,7 @@ class MainWindow(QMainWindow):
         # das Fenster selbst noch nicht gezeigt wird — beim Aufbau und in jedem
         # Test, und der Zähler stünde dort fälschlich neben einem offenen
         # Bericht.
-        show = count > 0 and not self.right.isVisibleTo(self)
+        show = count > 0 and not self.right_column.isVisibleTo(self)
         self.alert_button.setVisible(show)
         if not show:
             return
@@ -12920,7 +13033,7 @@ class MainWindow(QMainWindow):
 
     def _show_alerts(self) -> None:
         """Die rechte Spalte zurückholen und den Bericht nach vorn."""
-        self.right.setVisible(True)
+        self.right_column.setVisible(True)
         self.settings.right_panel_visible = True
         self._store_settings()
         self._focus_report(force=True)
@@ -12935,7 +13048,7 @@ class MainWindow(QMainWindow):
         Anwendung selbst zuhält, ist keiner. Für eine Warnung im normalen
         Ablauf bleibt es beim Vorrang der Anleitung.
         """
-        if not self.right.isVisible():
+        if not self.right_column.isVisible():
             return
         if not force and self.right.currentWidget() is self.tour and self.tour.active:
             # Die Tour zeigt selbst auf den Prüfbericht, wenn er dran ist —
@@ -12957,13 +13070,13 @@ class MainWindow(QMainWindow):
             return
         self.right.setTabVisible(self.right.indexOf(self.tour), True)
         self.tour.start(example, tour)
-        if not self.right.isVisible():
+        if not self.right_column.isVisible():
             # Wer die rechte Spalte ausgeblendet hatte, bekäme eine
             # unsichtbare Tour — und das Beispiel wurde gerade absichtlich
             # geöffnet. Einblenden wie über F9, samt Einstellung.
             self.settings.right_panel_visible = True
             self._store_settings()
-            self.right.setVisible(True)
+            self.right_column.setVisible(True)
         self.right.setCurrentWidget(self.tour)
 
     def _open_example(self, example_id: str) -> None:
@@ -13225,10 +13338,15 @@ class MainWindow(QMainWindow):
             if worker.isRunning():
                 remaining = max(0, int((deadline - time.monotonic()) * 1000))
                 worker.wait(remaining)
+        install_dialogs_idle = True
+        for dialog in self.findChildren(InstallDialog):
+            remaining = max(0, int((deadline - time.monotonic()) * 1000))
+            install_dialogs_idle = dialog.wait_for_workers(remaining) and install_dialogs_idle
         remaining = max(0, int((deadline - time.monotonic()) * 1000))
         viewport_idle = self.viewport.wait_for_workers(remaining)
         return (
             bool(session_idle)
+            and install_dialogs_idle
             and viewport_idle
             and not any(worker.isRunning() for worker in unique.values())
         )
@@ -13244,17 +13362,14 @@ class MainWindow(QMainWindow):
         """Alles loslassen, was dieses Fenster außerhalb von Qt hält: seine
         Arbeiter und seine Verbindungen zur Sitzung.
 
-        **Was hier ausdrücklich nicht steht, ist der Viewport.** Ihn zu
-        schließen war der zweite Anlauf gegen den Absturz auf dem Ubuntu-Runner,
-        und er hat ihn nur verschoben: Mit geschlossenem Renderer starb der
-        **nächste** Fensteraufbau in VTKs ``render_window_interactor.initialize``,
-        weil dessen Zustand dem Prozess gehörte und nicht dem Widget. Beides
-        gemessen, in Fenstern nacheinander.
+        Der Renderer bleibt eine eigene, sichtflächengebundene Lebensdauer:
+        ``closeEvent`` und ``app.rebuild_for_language`` schließen ihn, solange
+        seine Canvas noch lebt. Die Tests tun dasselbe beim geordneten Abbau
+        eines gehaltenen Fensters. So kann ``release`` weiterhin unabhängig
+        vom Vorhandensein eines Grafikadapters aufgerufen werden.
 
-        Die Ursache war nie die Lebenszeit des Fensters, sondern die
-        Verbindung: die Sitzung überlebt es und rief ihr Ergebnis in Widgets,
-        die der Speicherbereiniger schon abgeräumt hatte. Wer die Verbindung
-        kappt, braucht das Fenster nicht zu zerstören.
+        Die Sitzung überlebt das Fenster. Ihre Verbindung wird deshalb hier
+        ausdrücklich gekappt, bevor Qt die Widgets zerstört.
         """
         self.wait_for_workers(timeout_ms)
         self.spacemouse.stop()
@@ -13286,6 +13401,12 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt name
         super().resizeEvent(event)
         self._fit_toolbar()
+        if hasattr(self, "selection_operations"):
+            self._reflow_right_column()
+            # Die frei gesetzte Overlay-Geometrie steht erst nach Qts
+            # Layout-Ereignis endgültig. Danach einmal mit der wirklichen
+            # Kartenhöhe teilen, nicht mit dem Maß vor dem Resize.
+            QTimer.singleShot(0, self._reflow_right_column)
 
     def _fit_toolbar(self) -> None:
         """Kürzt die Werkzeugleiste, statt sie überlaufen zu lassen (D6).
@@ -13364,12 +13485,11 @@ class MainWindow(QMainWindow):
         self._store_settings()
         self._usage.stop()
         # Erst hier steht fest, dass das echte Anwendungsfenster wirklich
-        # endet. Der Renderer braucht seinen noch lebenden Qt-OpenGL-Kontext
-        # zum Abbau; Qts später Prozessabriss kommt dafür zu spät und meldet
-        # je nach Treiber unvollständige Framebuffer oder ``wglMakeCurrent``.
-        # ``release()`` darf das ausdrücklich nicht tun: Es bedient auch den
-        # Sprachwechsel, bei dem im selben Prozess schon das nächste Fenster
-        # lebt.
+        # endet. Der pygfx-Renderer braucht seine noch lebende Renderfläche
+        # zum geordneten Abbau; Qts später Prozessabriss kommt dafür zu spät.
+        # Beim Sprachwechsel schließt ``app.rebuild_for_language`` den alten
+        # Renderer ausdrücklich vor dem Fenster. Der danach gebaute Renderer
+        # ist davon unabhängig.
         self.viewport.release_renderer()
         self.session.release_recovery()
         event.accept()

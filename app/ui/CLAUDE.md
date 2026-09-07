@@ -81,7 +81,8 @@ Qt 6 nähme in einer Wayland-Sitzung sonst Wayland, und der wgpu-Fensterweg ist
 nur unter X11 und Xwayland geprüft — nativer Wayland-Betrieb von rendercanvas
 ist ein offener Punkt) · `main_window.py` (**rund 8 900 Zeilen** — das
 Hauptfenster, §2.5) · `splash.py` · `first_run.py` (der erste Start) ·
-`start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py`
+`start_screen.py` (die ersten fünf Minuten, §2.3) · `header.py` (Projektname,
+Druckerwechsel und die tatsächlich in der Szene verwendeten Filamente)
 
 **Brücke zum Kern**
 
@@ -122,7 +123,7 @@ verschobene Felder ihren Maßpfeilen zugeordnet.
 Die Maßfläche belegt über eine `QRegion`-Maske nur Linien, Pfeilspitzen und
 Zuordnungsmarken. Dort zeichnet sie deckend neu; der übrige Bereich bleibt dem
 nativen Renderer. Ein vollflächiges `WA_NoSystemBackground`-Widget ist über
-beiden Renderern ausgeschlossen.
+der pygfx-Renderfläche ausgeschlossen.
 Die Maske nimmt die tatsächlichen Rechtecke aller Zahlenfelder und
 Beschriftungen aus; die native Stapelreihenfolge allein schützt deren
 Lesbarkeit nicht. Die gefüllte Werkzeugvorschau zeigt ihre Oberfläche ohne
@@ -217,6 +218,8 @@ den gewählten Ausschnitt im Körpermodus nicht.
 **Panels und Leisten**
 
 `panels.py` (die drei Panels links, Prüfbericht rechts, §2.5) ·
+`selection_operations.py` (Körperoperationen unter Bericht und Chat; einmal
+aus dem Register aufgebaut, bei Auswahlwechseln nur nachgeführt) ·
 `tool_strip.py` · `analysis_bar.py` · `section_bar.py` · `split_bar.py` ·
 `transform_bar.py` · `explode_bar.py` · `sculpt_bar.py` · `pose_bar.py` ·
 `scale_widget.py` · `facts.py` (was das Teil kostet, während man daran baut)
@@ -227,7 +230,7 @@ Stufen. Jeder Beispielname behält exakt die Farbe seiner ursprünglichen Stufe.
 Bei kontinuierlichen Karten stammen Farbraum und inverse Skalenwerte aus
 `AnalysisMap`: Die Krümmung verwendet eine logarithmisch abgestufte Farbrampe,
 deren Legende weiterhin physische Millimeterwerte nennt und die Abstufung
-ausweist. Der Viewport reicht die transformierten Werte an beide Renderer;
+ausweist. Der Viewport reicht die transformierten Werte an den Renderer;
 Messwerte, Schwellwerte und Hervorhebungen bleiben unverändert.
 
 **Dialoge**
@@ -312,6 +315,32 @@ misst deshalb am Anfangszustand und nicht an einer Liste von Knöpfen.
 `catalog.py` (Bausteinkatalog, §24.3) · `filament_picker.py` (Farbe und Name
 statt einer Zahl von 0 bis 7)
 
+Ein `InstallDialog` lässt eine begonnene Installation beim Schließen
+geordnet auslaufen und zeigt diesen Zustand. Er beendet nur das Warten auf
+einen gestarteten Fremddienst; den Dienst selbst besitzt Solidon nicht.
+`MainWindow.wait_for_workers` bezieht alle eigenen Installationsdialoge ein,
+damit auch das Schließen der ganzen Anwendung denselben Vertrag einhält.
+
+Merkmale und Bausteine bleiben getrennte Wege an der rechten Seite. Das
+Auswahlfeld führt zum vorhandenen Merkmal-Dock und zum vollständigen
+Bausteinkatalog; es baut dafür weder Merkmalsanalyse noch Katalog nach. Seine
+Körperoperationen stammen aus dem Operationsregister, verwenden dieselbe
+Freigabe wie Menü und Palette und gehen ausnahmslos durch
+`MainWindow.launch_operation`, damit Gesten-Editoren und Undo erhalten bleiben.
+
+Die Kopfzeile nennt keine globale Materialzusage. Sie liest Körpermaterialien
+und die über `mesh.slot_indices` tatsächlich belegten Materialslots der
+aktuellen Auswertung, unterscheidet Slotname, Materialart und Farbcode und
+zählt mehrere Filamente. Eine leere Zuordnung bedeutet vollständig Slot 0;
+ungenutzte Definitionen zählen nach einem Übermalen nicht weiter. Kurztext und
+Tooltip teilen dieselbe Erhebung, damit große Netze ihre Flächenzuordnung nur
+einmal je Aktualisierung durchlaufen. Bei mehreren steht die
+klare Anzahl in der knappen Leiste, die vollständige Liste im Tooltip und im
+zugänglichen Namen. Der Druckerknopf öffnet die Druckeinstellungen des offenen
+Projekts. Ein Wechsel
+dort behält Projektmaterial, Slotprofile, Farben und SlotOverrides; Vorgaben
+für neue Projekte sind ein eigener Weg in den Einstellungen.
+
 **Erscheinung**
 
 `style.py` (Stylesheet, Typografie-Skala, Abstandsraster, §19.3) · `theme.py`
@@ -321,6 +350,22 @@ ein Wächter am Ereignisstrom, damit kein Dialog vergessen wird) ·
 `palette.py` (**Farbe trägt nie allein Bedeutung**,
 §19.1) · `icons.py` · `motion.py` (Bewegung an einer Stelle, nicht an
 zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
+
+Beim Ablösen einer Auswahlblende übernimmt der Renderer alle noch offenen
+Farbziele der vorigen Blende. Sonst bleibt bei einer schnellen
+Mehrfachauswahl der zuerst gewählte Körper auf seiner Zwischenfarbe stehen.
+Eine unveränderte Auswahl startet keine neue Animation.
+
+`MainWindow.release` wartet auf Arbeiter und trennt die Sitzung. Der
+pygfx-Renderer hat eine eigene Lebensdauer: Anwendung und Tests schließen ihn
+ausdrücklich, solange seine Canvas lebt, und stellen erst danach Qts
+aufgeschobene Fensterlöschung im Hauptthread zu. Ein Test-Pin schützt ein neu
+gebautes Hauptfenster oder einen einzelnen Viewport nur bis zu genau diesem
+geordneten Teardown; Fenster werden nicht über mehrere Tests angesammelt.
+Eine `WorkerLeash` hält ihren Fensterbesitzer nicht zurück: Der Besitzer hält
+die Leine bereits, alle Zeitgeber gehören dem langlebigen Keeper und die
+Fertigrückrufe verwenden schwache Verweise. Damit entsteht um Qt-Fenster kein
+Python-Zyklus, dessen Abbau in einen späteren Worker- oder Widgetaufbau fällt.
 
 **Hilfe und Bedienung**
 
@@ -332,6 +377,21 @@ zwanzig) · `labels.py` (kurze Texte, auf die sich mehrere Teile einigen)
 Bäumen, Text- und Zahlenfeldern sowie Reglern (`QAbstractSlider`). Beim
 Fokuswechsel zur Ansicht gelten wieder die Fensterbefehle; Ziffern der
 Darstellungsarten bleiben auch im Inhalt Fensterbefehle.
+
+Der Objektbaum wertet `customContextMenuRequested` in den bereits gelieferten
+Viewport-Koordinaten aus. Eine zweite Umrechnung verschiebt den Treffer um die
+Kopfzeilenhöhe. Text- und Zahlenfelder behalten normale Zeicheneingaben vor
+fensterweiten Einzeltasten-Kürzeln; die Linux-Auslieferung verwendet dafür den
+geprüften X11-/Xwayland-Pfad.
+
+Der Selbstversand des Supportberichts verwendet im Flatpak asynchron
+`Email.ComposeEmail` über QtDBus und übergibt Betreff und Inhalt unkodiert als
+Portalwerte. Außerhalb des Flatpaks bleibt `QDesktopServices` mit `mailto:`.
+Der Qt-6.11-Pfad über eine vorab kodierte `mailto:`-Adresse ist ausgeschlossen,
+weil `PrettyDecoded` Prozentfolgen erneut auswertet.
+Vor dem Methodenaufruf abonniert der Dialog `Request.Response` über seinen
+`handle_token`. Erfolg, Abbruch und Fehler beenden den Ablauf; beim Schließen
+trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 
 **Einstellungen** `settings.py` · `survey.py`
 
@@ -400,6 +460,10 @@ Darstellungsarten bleiben auch im Inhalt Fensterbefehle.
   vorn** — `tests/test_interface_limits.py` zählt nach.
 - **Nichts rechnet im Qt-Hauptthread**, was länger dauert als ein Lidschlag
   (§2.8).
+- **Der Raumvertrag schaltet keine Laufzeit-Introspektion über Qt-Typen.**
+  `overlay.is_room_taker` prüft die vier aufrufbaren Methoden ausdrücklich;
+  `isinstance` gegen ein `runtime_checkable Protocol` kann während eines
+  Shiboken-Resize unvollständige Typdaten sehen und den Layoutlauf abbrechen.
 
 ## Zustandsbindung in asynchronen Bedienwegen
 
@@ -430,6 +494,11 @@ Darstellungsarten bleiben auch im Inhalt Fensterbefehle.
   Spulen werden über Name, Farbe, Materialprofil und Materialart unterschieden.
   Alte Werte ohne Materialbindung werden erst nach ausdrücklicher Übernahme
   und Bestätigung einer Spule zugeordnet.
+- Die Kopfzeile der Druckeinstellungen bleibt auch bei 520 bis 620 Pixeln
+  breit lesbar: Qualität und Mitgabe stehen zusammen, der Drucker erhält eine
+  eigene volle Zeile, Filamentliste und Wechselknopf die dritte. Nur die
+  Filamentliste darf umbrechen; Auswahlfelder und Handlungen werden nicht
+  gekürzt oder aus dem Dialog geschoben.
 - Session hält die Eigentumssperre ihrer namenlosen Wiederherstellung bis zum
   Projektwechsel oder echten Fensterschluss. Ein Oberflächen-Neuaufbau bei
   Sprachwechsel beendet dieses Eigentum nicht.

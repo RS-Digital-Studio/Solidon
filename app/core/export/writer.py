@@ -1055,7 +1055,7 @@ def _plate_config(
         return {}
     from app.core.export import handover
 
-    effective = handover.settings_for_handover(settings, flavour, slots)
+    effective = handover.settings_for_handover(settings, profile, flavour, slots)
     return handover.values_for(effective, profile, flavour)
 
 

@@ -96,7 +96,7 @@ def test_dimension_ink_leaves_the_actual_value_and_caption_rectangles_clear(
 def test_placement_ghost_uses_a_filled_surface_without_tessellation_edges(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der echte Werkzeug-Rückruf reicht beiden Renderern dieselbe ungestörte Ghost-Fläche."""
+    """Der echte Werkzeug-Rückruf reicht dem Renderer dieselbe ungestörte Ghost-Fläche."""
     flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
     styles = []
 

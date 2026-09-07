@@ -911,6 +911,38 @@ def test_the_navigation_keys_belong_to_the_list_with_the_focus(window: MainWindo
     )
 
 
+def test_single_letter_shortcuts_do_not_swallow_typed_text_or_numbers(
+    window: MainWindow, qt_app: QApplication
+) -> None:
+    """Der alte native-Wayland-Fehler wird am wirklichen Qt-Kürzelweg geprüft.
+
+    Einfügen funktionierte, Tippen nicht: Fensterkürzel nahmen Buchstaben und
+    Ziffern vor dem fokussierten Feld. Der Test sendet echte Tasten an ein Feld
+    im Hauptfenster, während gleichlautende Fensteraktionen bereitstehen.
+    """
+    from PySide6.QtGui import QAction
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QLineEdit
+
+    field = QLineEdit(window)
+    window.statusBar().addWidget(field)
+    calls = []
+    for key in ("E", "1"):
+        action = QAction(window)
+        action.setShortcut(key)
+        action.triggered.connect(lambda _checked=False, value=key: calls.append(value))
+        window.addAction(action)
+    window.show()
+    window.activateWindow()
+    field.setFocus()
+    qt_app.processEvents()
+
+    QTest.keyClicks(field, "E1 Schrittweite")
+
+    assert field.text() == "E1 Schrittweite"
+    assert calls == []
+
+
 @pytest.mark.parametrize(
     ("key_name", "expected"),
     [("Home", 0), ("End", 860), ("PgUp", 440), ("PgDown", 420)],

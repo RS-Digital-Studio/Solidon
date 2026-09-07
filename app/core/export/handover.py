@@ -59,7 +59,7 @@ from app.core.export.slicer_keys import (
     takes_a_machine_profile,
     wants_bed_coordinates,
 )
-from app.core.knowledge import profiles
+from app.core.knowledge import print_settings, profiles
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.process import (
@@ -867,7 +867,9 @@ class SlicerConfig:
         return self.filaments[0] if self.filaments else None
 
 
-def settings_for_slot(settings: PrintSettings, override: SlotOverride | None) -> PrintSettings:
+def settings_for_slot(
+    settings: PrintSettings, profile: Profile, slot: MaterialSlot
+) -> PrintSettings:
     """Die Einstellungen, mit denen dieser eine Slot fährt (§20, §29).
 
     Vier Spulen sind nicht vier Farben desselben Materials: Ein Schriftzug in
@@ -875,11 +877,23 @@ def settings_for_slot(settings: PrintSettings, override: SlotOverride | None) ->
     Auflösung bekamen alle Slots die Werte des Projektmaterials, und die
     zweite Spule fuhr mit den Temperaturen der ersten.
 
-    Übersteuert wird **gruppenweise**: Was der Slot nicht setzt, kommt aus dem
-    Projekt. Ein leerer Übersteuerer gibt die Einstellungen unverändert
-    zurück — dasselbe Objekt, nicht eine gleiche Kopie, damit der häufige Fall
-    nichts kostet.
+    Die eindeutige Materialart der Spule liefert die Materialgruppen, wenn
+    sie vom Projektmaterial abweicht. Prozesswerte bleiben erhalten.
+    Ausdrückliche Spulenwerte gewinnen anschließend gruppenweise.
     """
+    material_id = profiles.material_id_for_type(slot.material_type or "")
+    if material_id and material_id != profile.material.id:
+        defaults = print_settings.resolve(
+            replace(profile, material=profiles.material(material_id)), settings.quality
+        )
+        settings = replace(
+            settings,
+            temperature=defaults.temperature,
+            cooling=defaults.cooling,
+            retraction=defaults.retraction,
+            filament=defaults.filament,
+        )
+    override = override_for(settings, slot)
     if override is None or override.empty:
         return settings
     return replace(
@@ -1033,7 +1047,7 @@ def with_slot_override(
 
 
 def settings_for_shared_slicer(
-    settings: PrintSettings, slots: Sequence[MaterialSlot]
+    settings: PrintSettings, profile: Profile, slots: Sequence[MaterialSlot]
 ) -> PrintSettings:
     """Der eine Filamentwertsatz für einen Slicer ohne Mehrfachprofile.
 
@@ -1043,11 +1057,12 @@ def settings_for_shared_slicer(
     """
     if not slots:
         return settings
-    return settings_for_slot(settings, override_for(settings, slots[0]))
+    return settings_for_slot(settings, profile, slots[0])
 
 
 def settings_for_handover(
     settings: PrintSettings,
+    profile: Profile,
     flavour: SlicerFlavour,
     slots: Sequence[MaterialSlot] = (),
 ) -> PrintSettings:
@@ -1061,7 +1076,7 @@ def settings_for_handover(
     """
     if has_filament_profiles(flavour):
         return settings
-    return settings_for_shared_slicer(settings, slots)
+    return settings_for_shared_slicer(settings, profile, slots)
 
 
 def with_slot_profiles(
@@ -1183,7 +1198,7 @@ def write_config(
     def flat_values() -> dict[str, str]:
         """Alles, was ein Slicer als einen Satz Schlüssel bekommt."""
         return values_for(
-            settings_for_handover(settings, setup.flavour, slots), profile, setup.flavour
+            settings_for_handover(settings, profile, setup.flavour, slots), profile, setup.flavour
         )
 
     if setup.flavour == "prusa":
@@ -1237,7 +1252,7 @@ def write_config(
             # denn sie hängen an der Spule. Was der Slot nicht setzt,
             # kommt aus dem Projekt — deshalb wird die Aufteilung hier
             # noch einmal gerechnet und nicht die von oben genommen.
-            mine = settings_for_slot(settings, override_for(settings, slot))
+            mine = settings_for_slot(settings, profile, slot)
             part = split if mine is settings else by_section(mine, setup.flavour)
             path = directory / f"solidon_filament_{index}.json"
             path.write_text(
@@ -1340,9 +1355,7 @@ def project_settings(
     ordered_slots: tuple[MaterialSlot | None, ...] = tuple(placed) + (None,) * (count - len(placed))
     filament_documents: list[dict[str, object]] = []
     for slot in ordered_slots:
-        mine = (
-            settings if slot is None else settings_for_slot(settings, override_for(settings, slot))
-        )
+        mine = settings if slot is None else settings_for_slot(settings, profile, slot)
         own = (
             replace(setup, base_filament=slot.material)
             if slot is not None and slot.material
@@ -1596,7 +1609,18 @@ def _orca_filament(
     # später liest oder sie jemandem gibt, sieht nur „PETG" und legt die
     # falsche Rolle ein. Das „Solidon" davor bleibt, denn die Werte sind
     # Solidons und nicht die des Herstellers.
-    marke = _profile_name(setup.base_filament) if setup.base_filament else ""
+    chosen = setup.base_filament
+    if (
+        slot is not None
+        and slot.material_type
+        and not slot.material
+        and slot.material_type.strip().casefold()
+        != slicer_keys.filament_type(profile.material.id).casefold()
+    ):
+        # Eine lokale Spule anderen Typs erbt keine fremden Materialwerte
+        # oder Startsequenzen aus der allgemeinen Herstellerunterlage.
+        chosen = ""
+    marke = _profile_name(chosen) if chosen else ""
     document: dict[str, object] = {
         "type": "filament",
         "name": f"Solidon {marke or settings.title}",
@@ -1619,7 +1643,7 @@ def _orca_filament(
     # fehlten die Temperaturen aller Druckplatten außer der einen, die Solidon
     # selbst setzt. Der Slicer wählte „Cool Plate", fand dort die 35 Grad
     # seiner eigenen Vorgabe, und ein PETG-Druck ging mit kaltem Bett hinaus.
-    base = profile_file(setup.base_filament, setup, "filament")
+    base = profile_file(chosen, setup, "filament")
     inherited: dict[str, object] = {}
     if base is not None:
         inherited = slicer_profiles.resolve_values(base, roots=_profile_roots(setup))
@@ -1644,9 +1668,8 @@ def _orca_filament(
         eigene = {key: value for key, value in eigene.items() if key not in vom_material}
     document.update(eigene)
     # Die ausdrücklich gewählte Spule gewinnt zuletzt. Eine lokale PLA-Spule
-    # hat einen Typ, aber kein eigenes Herstellerprofil; in diesem Fall dient
-    # das allgemeine PETG-Profil nur als Unterlage für fehlende Werte. Sein
-    # ``filament_type`` darf die sichtbare PLA-Wahl nicht überschreiben.
+    # hat einen Typ, aber kein eigenes Herstellerprofil. Ein geerbter
+    # ``filament_type`` darf die sichtbare Wahl nicht überschreiben.
     if slot is not None and slot.material_type:
         document["filament_type"] = [slot.material_type]
     # Die Farbe gehört dem Slot, nicht der Einstellung: sie ist der Grund,
@@ -2299,7 +2322,7 @@ def slice_model(
         )
 
     started = time.perf_counter()
-    written_settings = settings_for_handover(settings, setup.flavour, slots)
+    written_settings = settings_for_handover(settings, profile, setup.flavour, slots)
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:

@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -48,6 +49,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QTabWidget,
     QToolButton,
@@ -85,6 +87,7 @@ from app.i18n import TranslatableText, _, tr
 from app.ui.dialogs import handlers_of, licence_lock_line, show_error
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
+from app.ui.header import filament_names
 from app.ui.labels import (
     NumberSpin,
     by_title,
@@ -1935,8 +1938,10 @@ class PrintSettingsDialog(QDialog):
         known = print_settings.quality_presets()
         return stored if stored in known else print_settings.DEFAULT_QUALITY
 
-    def _build_head(self) -> QHBoxLayout:
-        row = QHBoxLayout()
+    def _build_head(self) -> QGridLayout:
+        head = QGridLayout()
+        head.setHorizontalSpacing(TIGHT)
+        head.setVerticalSpacing(TIGHT)
         self.quality = QComboBox(self)
         for key, title in print_settings.quality_presets().items():
             self.quality.addItem(title, key)
@@ -1963,6 +1968,8 @@ class PrintSettingsDialog(QDialog):
         # Projektvorgabe, und das gehört dazugesagt.
         self.material_state = QLabel(self)
         self.material_state.setTextFormat(Qt.TextFormat.PlainText)
+        self.material_state.setWordWrap(True)
+        self.material_state.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         # Kein totes Label: Gewählt wird im Filamentwähler, und von hier führt
         # ein Weg dorthin (Regel 17 in ihrer freundlichen Gestalt — sagen, was
         # jetzt möglich ist, statt nur zu berichten).
@@ -1992,15 +1999,29 @@ class PrintSettingsDialog(QDialog):
         self.share_settings.setAccessibleDescription(self.share_settings.toolTip())
         self.share_settings.toggled.connect(self._share_toggled)
 
-        row.addWidget(QLabel(tr("Qualität"), self))
-        row.addWidget(self.quality, 1)
-        row.addWidget(QLabel(tr("Drucker"), self))
-        row.addWidget(self.printer_choice, 1)
-        row.addWidget(QLabel(tr("Material"), self))
-        row.addWidget(self.material_state, 1)
-        row.addWidget(self.material_link)
-        row.addWidget(self.share_settings)
-        return row
+        quality_label = QLabel(tr("Qualität"), self)
+        quality_label.setBuddy(self.quality)
+        printer_label = QLabel(tr("Drucker"), self)
+        printer_label.setBuddy(self.printer_choice)
+        filament_label = QLabel(tr("Filamente"), self)
+        filament_label.setBuddy(self.material_link)
+
+        # Drei kurze, vollständige Zeilen statt einer überbreiten Kopfzeile:
+        # Der Dialog ist in Handbuch und Laptopansicht nur 520 bis 620 px breit.
+        # In einer HBox verschwanden dort Drucker, Filamentknopf und die
+        # Mitgabe-Wahl hinter dem rechten Rand. Die Materialliste darf als
+        # einzige Angabe umbrechen; Bedienelemente und ihre Texte bleiben ganz.
+        head.addWidget(quality_label, 0, 0)
+        head.addWidget(self.quality, 0, 1)
+        head.addWidget(self.share_settings, 0, 2, 1, 2)
+        head.addWidget(printer_label, 1, 0)
+        head.addWidget(self.printer_choice, 1, 1, 1, 3)
+        head.addWidget(filament_label, 2, 0)
+        head.addWidget(self.material_state, 2, 1, 1, 2)
+        head.addWidget(self.material_link, 2, 3)
+        head.setColumnStretch(1, 1)
+        head.setColumnStretch(3, 2)
+        return head
 
     def _share_toggled(self, on: bool) -> None:
         """Die Wahl gilt für die Anwendung, nicht für dieses Projekt (§29).
@@ -2049,39 +2070,21 @@ class PrintSettingsDialog(QDialog):
         self.show_materials(self._materials_of(self._plate_bodies()))
 
     def _materials_of(self, bodies: Sequence[SceneObject]) -> list[str]:
-        """In welchen Materialien diese Körper wirklich gedruckt werden.
+        """Die wirklichen Filamentnamen und Farben der gewählten Körper.
 
-        **Gefragt wird dasselbe wie bei der Toleranz** (:func:`profiles.for_object`)
-        — eigenes Material des Körpers, sonst seine Spule, sonst die Vorgabe des
-        Projekts. Zwei Wege zu derselben Auskunft wären einer zu viel, und der
-        erste Anlauf hier war genau das: Er las nur die Spulen und schrieb
-        daneben „PLA — Projektvorgabe", während ein Körper aus TPU auf dem Bett
-        lag (Robert, 30.08.2026: „warum aber noch material pla falls einer
-        unterschiedliche materialien hat").
-
-        Die **weiteren** Spulen eines Körpers kommen dazu: Für die Toleranz
-        entscheidet Slot 0, gedruckt wird trotzdem auch der Schriftzug daneben,
-        und wer wissen will, was er einlegen muss, will beide sehen. Leer heißt:
-        Es gibt nichts anzuzeigen — dann nennt :meth:`show_materials` die
-        Vorgabe und sagt dazu, dass sie eine ist.
+        Dieselbe Erhebung wie in der Projektkopfzeile: Slotnamen unterscheiden
+        auch zwei Rollen derselben Materialart, etwa „PLA Weiß“ und „PLA Rot“.
         """
         project = self.session.profile
-        names: list[str] = []
-        for body in bodies:
-            # ``for_object`` gibt das **übergebene** Profil unverändert zurück,
-            # wo der Körper nichts Eigenes hat — daran hängt hier die
-            # Unterscheidung: hergeleitet wird genannt, Vorgabe nennt sich
-            # unten selbst als solche. Ein Körper, der ausdrücklich das
-            # Projektmaterial trägt, zählt zur Vorgabe, und das ist wahr.
-            chosen = profiles.for_object(project, body)
-            if chosen is not project:
-                names.append(str(chosen.material.title))
-            for slot in body.material_slots:
-                if slot.index == 0 or not slot.material_type:
-                    continue
-                known = profiles.material_id_for_type(slot.material_type)
-                names.append(str(profiles.material(known).title) if known else slot.material_type)
-        return names
+        if bodies and all(
+            not body.material_slots and profiles.for_object(project, body) is project
+            for body in bodies
+        ):
+            # Ohne eigene Angabe ist PLA/PETG nur eine Vorgabe. Der Dialog
+            # nennt diese Herkunft ausdrücklich; die Kopfzeile braucht dort
+            # nur den knappen tatsächlichen Namen.
+            return []
+        return list(filament_names(project, list(bodies)))
 
     def _plate_bodies(self) -> list[SceneObject]:
         """Die Körper der gewählten Platten — dieselbe Auswahl wie

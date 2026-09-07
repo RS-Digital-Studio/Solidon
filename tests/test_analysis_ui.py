@@ -18,7 +18,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt, QThread
+from PySide6.QtCore import QCoreApplication, QEvent, Qt, QThread
 from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
@@ -195,7 +195,10 @@ def wait_for_map(window: MainWindow) -> None:
 
 @pytest.mark.parametrize("late", ["too_large", "crashed", "done", "none", "scene"])
 def test_a_map_request_discards_old_colours_and_late_replies(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, late: str
+    qt_app: QApplication,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    late: str,
 ) -> None:
     """Der echte Signalanschluss hält Karte, Absage und Fehler an ihrer Anfrage."""
     import trimesh
@@ -214,6 +217,15 @@ def test_a_map_request_discards_old_colours_and_late_replies(
     host.object_tree.select_object("obj_1")
     workers: list[Any] = []
     errors: list[Any] = []
+
+    def release_test_workers() -> None:
+        """Die absichtlich nicht gestarteten Attrappen geordnet freigeben."""
+        for worker in workers:
+            worker.release_finished_references()
+            worker.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    request.addfinalizer(release_test_workers)
     monkeypatch.setattr(host._leash, "start", workers.append)
     monkeypatch.setattr(host, "_on_error", errors.append)
     old_map = maps.AnalysisMap(
@@ -1653,10 +1665,10 @@ def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
 def test_fitting_measures_the_bodies_not_the_build_volume(window: MainWindow) -> None:
     """§18.1: „Alles einpassen" meint die Körper.
 
-    ``plotter.reset_camera()`` nimmt alle Aktoren, und dazu gehört der Rahmen
-    des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte damit die
-    Kulisse das Bild — der Befehl tat sichtbar nichts, weil schon eingepasst
-    war.
+    Ein Kamera-Reset ohne übergebene Grenzen nimmt alle Szenenelemente, auch
+    den Rahmen des Bauraums. Bei einem 80-mm-Teil in einem 256er Bauraum füllte
+    damit die Kulisse das Bild — der Befehl tat sichtbar nichts, weil schon
+    eingepasst war.
     """
     window.viewport.show_scene(window.session.last_result)
     entry = window.session.last_result.scene.objects["obj_1"]
@@ -1750,7 +1762,7 @@ def test_a_problem_note_stays_inside_the_legend_layout(qt_app: QApplication) -> 
 def test_an_axis_view_fits_on_the_bodies_not_the_backdrop(window: MainWindow) -> None:
     """Strg+0 bis Strg+6 rahmten die Kulisse statt des Teils.
 
-    ``view_from`` rief ``plotter.reset_camera()`` über alle Aktoren — exakt
+    ``view_from`` rief den Kamera-Reset ohne Körpergrenzen auf — exakt
     der Fehler, den ``reset_camera`` daneben in eigenen Worten beschreibt und
     behebt: Ein 80-mm-Teil im 256er Bauraum wurde ein Fleck. Und ohne
     ``camera_set`` passte der nächste Kamera-Zugriff gleich noch einmal ein
@@ -1776,7 +1788,7 @@ def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
     es zu sehen gibt.
 
     **Gerechnet wird er hier selbst**, statt ``reset_camera()`` ohne Grenzen zu
-    rufen und pyvista alle Aktoren suchen zu lassen. Zwei Gründe: nur so bekommt
+    rufen und den Renderer alle Szenenelemente suchen zu lassen. Zwei Gründe: nur so bekommt
     auch die leere Szene ihre Luft, und nur so hängt das Ergebnis nicht daran,
     welche Kulisse gerade zusätzlich im Bild steht. Ohne Grenzen rutschte die
     Platte ins untere Drittel und teilweise hinter die Werkzeugzeile.
@@ -1825,7 +1837,7 @@ def test_a_new_project_puts_the_build_volume_in_the_picture(window: MainWindow) 
     assert renderer.reset_bounds == [with_margin(volume)], (
         "die leere Szene passt auf den Bauraum ein"
     )
-    assert viewport._bed_extent is not None, "der Bauraum gilt auch ohne Plotter"
+    assert viewport._bed_extent is not None, "der Bauraum gilt auch ohne Renderfläche"
     assert viewport._fitted_to == "bed"
 
     renderer.reset_bounds.clear()

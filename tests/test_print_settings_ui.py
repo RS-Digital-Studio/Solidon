@@ -2383,6 +2383,36 @@ def test_the_slot_assignment_outlives_a_printer_change(
         session.wait_for_idle()
 
 
+def test_changing_only_the_project_printer_keeps_every_filament_choice(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Der Kopfzeilenweg darf weder Projektmaterial noch Slotwerte umstellen."""
+    session.change_scene_profile("generic-220", "petg")
+    assert session.wait_for_idle()
+    dialog = PrintSettingsDialog(session, UiSettings())
+    own_temperature = replace(dialog.settings.temperature, nozzle=210, bed=60)
+    override = SlotOverride(
+        name="PLA Weiß",
+        colour=(1.0, 1.0, 1.0),
+        temperature=own_temperature,
+    )
+    dialog.settings = replace(
+        dialog.settings,
+        slot_profiles=("PETG Schwarz", "PLA Weiß"),
+        slot_overrides=(override,),
+    )
+    try:
+        _select_printer(dialog, "prusa-mini")
+
+        assert session.project.document.printer == "prusa-mini"
+        assert session.project.document.material == "petg"
+        assert session.profile.material.id == "petg"
+        assert dialog.settings.slot_profiles == ("PETG Schwarz", "PLA Weiß")
+        assert dialog.settings.slot_overrides == (override,)
+    finally:
+        session.wait_for_idle()
+
+
 def _select_quality(dialog: PrintSettingsDialog, quality: str) -> None:
     """Die Stufe über die Auswahl wechseln, wie ein Kunde es tut."""
     index = dialog.quality.findData(quality)
@@ -2966,7 +2996,10 @@ def test_the_header_names_every_material_the_spools_bring(
                 "obj_1": SceneObject(
                     id="obj_1",
                     name="Zweifarbig",
-                    mesh=MeshData(trimesh.creation.box()),
+                    mesh=MeshData(
+                        raw=trimesh.creation.box(),
+                        slots=tuple(0 if index < 6 else 1 for index in range(12)),
+                    ),
                     material_slots=[
                         MaterialSlot(
                             index=0, name="Gehäuse", colour=(0.0, 0.0, 0.0), material_type="PETG"
@@ -3006,6 +3039,47 @@ def test_the_material_line_leads_to_where_the_choice_is(
 
     assert seen == [True], "der Weg zum Filamentwähler geht vom Dialog aus"
     assert dialog.material_link.toolTip(), "und er sagt vorher, wohin er führt"
+
+
+def test_the_portuguese_header_keeps_every_control_visible_at_manual_width(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Die 520-Pixel-Aufnahme darf Kopfwerte und Handlungen nicht abschneiden."""
+    from app.i18n import set_language
+
+    set_language("pt")
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.show_materials(("PLA Branco · #FFFFFF", "TPU 95A Preto · #000000"))
+    dialog.resize(560, 720)
+    dialog.show()
+    qt_app.processEvents()
+
+    controls = (
+        dialog.quality,
+        dialog.printer_choice,
+        dialog.material_state,
+        dialog.material_link,
+        dialog.share_settings,
+    )
+    right = dialog.contentsRect().right()
+    assert all(control.geometry().right() <= right for control in controls)
+    assert dialog.quality.fontMetrics().horizontalAdvance(dialog.quality.currentText()) + 40 <= (
+        dialog.quality.width()
+    )
+    assert (
+        dialog.printer_choice.fontMetrics().horizontalAdvance(dialog.printer_choice.currentText())
+        + 40
+        <= dialog.printer_choice.width()
+    )
+    assert dialog.material_link.sizeHint().width() <= dialog.material_link.width()
+    assert dialog.share_settings.sizeHint().width() <= dialog.share_settings.width()
+    assert dialog.material_state.wordWrap(), "nur die lange Filamentliste darf umbrechen"
+    assert (
+        abs(dialog.quality.geometry().center().y() - dialog.share_settings.geometry().center().y())
+        <= 2
+    )
+    assert dialog.quality.geometry().bottom() < dialog.printer_choice.geometry().top()
+    assert dialog.printer_choice.geometry().bottom() < dialog.material_state.geometry().top()
 
 
 def test_the_header_names_the_material_a_body_really_prints_in(
@@ -3049,8 +3123,13 @@ def test_the_header_names_the_material_a_body_really_prints_in(
     # was er einlegen muss, will beide sehen.
     from app.core.types import MaterialSlot
 
+    painted_source = body("obj_1", "")
     painted = replace(
-        body("obj_1", ""),
+        painted_source,
+        mesh=MeshData(
+            raw=painted_source.mesh.raw,
+            slots=tuple(0 if index < 6 else 1 for index in range(12)),
+        ),
         material=None,
         material_slots=[
             MaterialSlot(index=0, name="Gehäuse", material_type="PETG"),

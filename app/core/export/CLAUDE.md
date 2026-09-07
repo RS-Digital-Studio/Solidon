@@ -21,6 +21,12 @@ aufgelöst: Nutzerprofile können von installierten Profilen erben. Diese
 Wurzeln gehören auch in Filamenterkennung, Materialvergleich und Auslesen
 der Werte im Druckdialog; der Ordner der Blattdatei allein reicht nicht.
 
+`settings_for_slot` löst jede Spule gegen ihre eigene Materialart auf und
+legt ausdrückliche Spulenwerte darüber. Gemeinsame Prozesswerte bleiben
+erhalten. Schreiben, eingebettete 3MF-Einstellungen und Gegenprobe benutzen
+dieselbe Auflösung. Eine lokale Spule anderen Typs erbt keine Startsequenzen
+aus dem allgemeinen Filamentprofil des Projekts.
+
 ## Warum `slicer_keys.py` existiert
 
 Weil dieselbe Einstellung in Cura, PrusaSlicer, OrcaSlicer und ElegooSlicer
