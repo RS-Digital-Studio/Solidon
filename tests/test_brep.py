@@ -1537,6 +1537,7 @@ def test_fillet_stops_if_the_wall_map_cannot_prove_a_safe_radius(
 
     assert raised.value.suggestions
     assert "Wandstärke" in str(raised.value.detail)
+    _the_advice_is_one_the_window_wires(raised.value)
 
 
 @pytest.mark.parametrize("values", [(), (math.nan, 0.0), (math.inf,)])
@@ -1560,6 +1561,28 @@ def test_fillet_stops_if_the_wall_map_has_no_finite_measurement(
 
     assert raised.value.suggestions
     assert "Wandstärke" in str(raised.value.detail)
+    _the_advice_is_one_the_window_wires(raised.value)
+
+
+def _the_advice_is_one_the_window_wires(error: GeometryError) -> None:
+    """Die unbelegte Wandmessung riet *Erneut versuchen* — ins Leere.
+
+    ``main_window.error_handlers`` verdrahtet ``retry`` nur, solange ein
+    gescheitertes Schreiben ansteht (Zweig ``_write_failure``); außerhalb
+    dieses Falls führt ``tests/test_ui.py`` die Kennung ausdrücklich in
+    ``postponed``, und ``dialogs.unhandled_advice`` macht daraus einen Satz.
+    Zu wiederholen gibt es hier ohnehin nichts: Dieselbe Wandkarte über
+    demselben Netz scheitert beim zweiten Anlauf identisch (07.09.2026).
+
+    Geprüft werden die Kennungen und nicht die Zahl der Vorschläge — ein
+    zweiter Rat wäre in Ordnung, ein unerreichbarer nicht. Nachgesehen wird im
+    Fenster hier nicht: ``app/core`` darf Qt nicht importieren (Regel 1), und
+    die Handlerliste steht in ``tests/test_ui.py`` unter ihrem eigenen
+    Wächter.
+    """
+    assert {action.id for action in error.suggestions} == {"correct_input", "cancel"}, (
+        f"unerreichbarer Rat: {[action.id for action in error.suggestions]}"
+    )
 
 
 def test_fillet_rejects_a_valid_shape_that_contains_two_solids() -> None:

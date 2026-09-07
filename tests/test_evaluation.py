@@ -364,23 +364,24 @@ def test_a_loaded_variable_operation_stops_before_running_with_too_few_inputs(
     assert "obj_1" in result.scene.objects
 
 
-@pytest.mark.parametrize("op_name, expected", [("make_object", 0), ("resize_object", 1)])
 def test_a_loaded_fixed_operation_cannot_silently_consume_an_extra_object(
     history: History,
     document: Document,
     profile: Profile,
     registry: Registry,
-    op_name: str,
-    expected: int,
 ) -> None:
-    """Ein fehlerhafter Dateischritt darf den zweiten Körper nicht verschwinden lassen."""
+    """Ein fehlerhafter Dateischritt darf den zweiten Körper nicht verschwinden lassen.
+
+    Bei fester Stelligkeit über null hält die Kette an, und das bleibt so:
+    Welcher der beiden genannten Körper der gemeinte ist, entscheidet der Kern
+    nicht (Regel 21). Der Erzeuger daneben ist ein anderer Fall — er hat keine
+    Wahl zu treffen, und der Test darunter hält ihn fest.
+    """
     history.apply(
         _("Anlegen"), [OperationDraft(op="make_object"), OperationDraft(op="make_object")]
     )
-    history.apply(_("Ändern"), [OperationDraft(op=op_name, inputs=("obj_1",)[:expected])])
-    document.ops[-1] = dataclasses.replace(
-        document.ops[-1], inputs=("obj_1", "obj_2")[: expected + 1]
-    )
+    history.apply(_("Ändern"), [OperationDraft(op="resize_object", inputs=("obj_1",))])
+    document.ops[-1] = dataclasses.replace(document.ops[-1], inputs=("obj_1", "obj_2"))
 
     result = evaluate(document, profile, registry=registry)
 
@@ -391,9 +392,51 @@ def test_a_loaded_fixed_operation_cannot_silently_consume_an_extra_object(
     finding = next(
         entry for entry in result.scene.report.findings if entry.code == "evaluate.too_many_inputs"
     )
-    assert finding.values["expected"] == expected
-    assert finding.values["given"] == expected + 1
+    assert finding.values["expected"] == 1
+    assert finding.values["given"] == 2
     assert finding.suggestions
+
+
+def test_a_loaded_creator_drops_its_stray_inputs_instead_of_stopping(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Ein Erzeuger mit Eingängen aus einer alten Datei hält die Kette nicht an.
+
+    **Die verschärfte Obergrenze wirkte rückwärts.** ``History.apply`` nahm
+    Eingänge an einem Erzeuger bis zum 07.09.2026 an, und die Auswertung
+    prüfte den Fall nicht — sie las ``consumes > 0``. Solche Schritte stehen
+    also in bestehenden Projektdateien. Seit der Verschärfung hielten sie mit
+    ``evaluate.too_many_inputs`` an, ohne Migration und ohne Rückweg: Der
+    einzige Vorschlag des Befunds ist *Andere Objekte wählen*, und der landet
+    über ``History.change_inputs`` auf derselben Absage.
+
+    Erwartet wird deshalb: Die überzähligen Eingänge fallen weg, der Schritt
+    läuft, der genannte Körper bleibt in der Szene — und ein Befund sagt es.
+    """
+    history.apply(
+        _("Anlegen"), [OperationDraft(op="make_object"), OperationDraft(op="make_object")]
+    )
+    history.apply(_("Noch einer"), [OperationDraft(op="make_object")])
+    document.ops[-1] = dataclasses.replace(document.ops[-1], inputs=("obj_1", "obj_2"))
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert result.stopped_at is None, "die Kette läuft durch"
+    assert set(result.scene.objects) == {"obj_1", "obj_2", "obj_3"}
+    assert RUNS["make_object"] == 3, "der Erzeuger läuft, statt übergangen zu werden"
+    finding = next(
+        entry
+        for entry in result.scene.report.findings
+        if entry.code == "evaluate.creator_inputs_dropped"
+    )
+    assert finding.severity == "warning", "die Datei ist schief, die Rechnung nicht"
+    assert finding.op_id == document.ops[-1].id
+    assert finding.values["given"] == 2
+    assert finding.values["ignored"] == "obj_1, obj_2"
+    assert not finding.suggestions, "hier gibt es nichts zu wählen"
+    assert not [
+        entry for entry in result.scene.report.findings if entry.code == "evaluate.too_many_inputs"
+    ], "der Erzeuger geht nicht mehr über die Absage"
 
 
 def test_a_failing_operation_stops_the_chain_with_its_error(

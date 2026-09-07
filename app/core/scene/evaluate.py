@@ -317,6 +317,10 @@ def evaluate(
         spec = source.get(operation.op)
         progress(position / total, str(spec.title))
 
+        operation, stray = _without_stray_inputs(operation, spec)
+        if stray is not None:
+            findings.append(stray)
+
         problem = _missing_inputs(operation, objects, spec)
         if problem is not None:
             findings.append(problem)
@@ -1841,6 +1845,67 @@ def _evaluated_parameters(
         name: dataclasses.replace(parameter, value=values[name])
         for name, parameter in declared.items()
     }
+
+
+def _without_stray_inputs(
+    operation: Operation, spec: OperationSpec
+) -> tuple[Operation, Finding | None]:
+    """Ein Erzeuger mit Eingängen verliert sie, statt die Kette anzuhalten.
+
+    **Der Fall ist eine Datei und keine Geste.** ``inputs_for`` gibt einem
+    Erzeuger nie ein Objekt, und ``History.apply`` weist es seit dem
+    07.09.2026 ab. Bestehende Projektdateien tragen es trotzdem: Vorher nahm
+    ``apply`` es an, und die Auswertung prüfte den Fall gar nicht — sie las
+    ``consumes > 0`` und ging an einem Erzeuger vorbei. Gerechnet wurde
+    weiter, und das genannte Objekt verschwand dabei stillschweigend aus der
+    Szene: Jeder Eingang, der nicht auch Ausgang ist, gilt als verbraucht.
+
+    Beides war falsch, und die Verschärfung hat nur die Richtung getauscht:
+    Seitdem hält so eine Datei mit ``evaluate.too_many_inputs`` an, und ihr
+    einziger Vorschlag — *Andere Objekte wählen* — führt über
+    ``History.change_inputs`` auf dieselbe Absage zurück. Eine Sackgasse ohne
+    Migration.
+
+    **Verworfen und nicht geraten** (Regel 21): Bei einem Erzeuger ist die
+    erwartete Zahl null, es gibt also keine Wahl zwischen mehreren Eingängen,
+    sondern nur eine Menge, die keine Bedeutung hat. Bei fester Stelligkeit
+    über null bleibt es beim Anhalten — dort wäre „welcher darf bleiben" eine
+    Entscheidung, die der Kern nicht trifft.
+
+    Gemeldet wird es trotzdem: Der Schritt in der Datei bleibt, wie er ist,
+    und beim nächsten Öffnen steht der Befund wieder da. Wer ihn loswerden
+    will, leert die Eingänge des Schritts — das nimmt ``change_inputs`` an.
+
+    **Derselbe Satz wie beim Anhalten, ein anderer Rang.** Es ist dieselbe
+    Aussage über dieselbe Datei; verschieden ist nur, ob der Kern daraus eine
+    Entscheidung ableiten muss. Der Rang trägt den Unterschied — ``warning``
+    statt ``error`` —, und ``values`` nennt die übergangenen Kennungen.
+    ``suggestions`` bleibt leer: *Andere Objekte wählen* ist hier genau die
+    Sackgasse, aus der dieser Befund herausführt, und ein Erzeuger hat für den
+    Nutzer nichts zu wählen.
+    """
+    if spec.consumes != 0 or spec.takes_whole_scene or not operation.inputs:
+        return operation, None
+    return dataclasses.replace(operation, inputs=()), Finding(
+        code="evaluate.creator_inputs_dropped",
+        severity="warning",
+        # **Ein eigener Satz und nicht der geliehene von ``too_many_inputs``.**
+        # „Die Operation erwartet eine andere Anzahl an Objekten" beschreibt
+        # eine Absage; hier ist nichts abgesagt, sondern etwas übergangen und
+        # die Kette läuft weiter. Ein Befund, der das Falsche sagt, ist
+        # schlechter als einer mit dürftigem Satz.
+        message=_(
+            "Diese Operation erzeugt und nimmt keine Objekte. "
+            "Die eingetragenen wurden übergangen; sie bleiben erhalten."
+        ),
+        op_id=operation.id,
+        values={
+            "op": operation.op,
+            "expected": 0,
+            "given": len(operation.inputs),
+            "ignored": ", ".join(operation.inputs),
+        },
+    )
 
 
 def _missing_inputs(

@@ -19,10 +19,9 @@ from app.core.perceive.relations import (
     SLEEVE_OVERLAP,
     Sleeve,
     bore_and_widening_at,
-    is_a_cavity,
     sleeve_at,
 )
-from app.core.types import Feature
+from app.core.types import Feature, is_a_cavity
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -324,17 +323,20 @@ def test_the_geometry_layer_asks_this_question_instead_of_answering_it() -> None
 
     **Der Anlass ist ein Zwilling, der einen Wächter behauptete, den es nicht
     gab** (07.09.2026). ``geom.prepare_ops._feature_is_a_cavity`` stand
-    wortgleich neben :func:`is_a_cavity`, und der Docstring dort sagte,
-    ``tests/test_features.py`` halte beide zusammen — kein Test nannte je eine
-    der beiden Funktionen. Seine zweite Begründung, die Wahrnehmung dürfe die
-    Geometrie nicht importieren, war am Code widerlegt: Diese Datei importiert
-    ``geom.mesh`` in ihrer dritten Importzeile.
+    wortgleich neben :func:`app.core.types.is_a_cavity`, und der Docstring
+    dort sagte, ``tests/test_features.py`` halte beide zusammen — kein Test
+    nannte je eine der beiden Funktionen. Seine zweite Begründung, die
+    Wahrnehmung dürfe die Geometrie nicht importieren, war am Code widerlegt:
+    ``perceive/relations.py`` importiert ``geom.mesh`` in seiner dritten
+    Importzeile.
 
     Dieser Wächter prüft deshalb den Quelltext und nicht das Verhalten: Wer in
     ``app/core/geom`` ``recess`` liest, beantwortet die Frage neu — und zwar
-    an einer Stelle, an der die nächste Änderung sie nicht findet. Sieben
-    Aufrufer holen ``is_a_cavity`` stattdessen träge; die Kante ``geom →
-    perceive`` führt ``tests/test_core_package_direction.py``.
+    an einer Stelle, an der die nächste Änderung sie nicht findet. Die Antwort
+    steht seit dem 07.09.2026 in ``app/core/types.py``, bei dem Ding, über das
+    sie etwas sagt: Sie liest nur ``kind`` und ``params["recess"]``, und damit
+    kosteten die sieben Aufrufer in ``prepare_ops`` je einen trägen Import
+    gegen die Paketrichtung, den niemand brauchte.
     """
     geometrie = Path(__file__).resolve().parents[1] / "app" / "core" / "geom"
     dateien = sorted(geometrie.rglob("*.py"))

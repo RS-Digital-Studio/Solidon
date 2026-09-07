@@ -283,6 +283,37 @@ class Feature:
     ins Leere führt, ist schlechter als keiner (§21.2)."""
 
 
+def is_a_cavity(feature: Feature) -> bool:
+    """Ist dieses Merkmal ein Hohlraum oder Materie?
+
+    ``hole`` ist immer ein Hohlraum, ``pin`` immer Materie. ``cone`` und
+    ``sphere`` können beides sein, und die Erkennung sagt es in ``recess`` —
+    eine angesenkte Bohrung ist ein Kegel nach innen, eine Kuppe einer nach
+    außen.
+
+    **Die einzige Stelle, an der diese Frage beantwortet wird** — seit dem
+    07.09.2026. Bis dahin stand sie wortgleich als
+    ``geom.prepare_ops._feature_is_a_cavity`` daneben, mit zwei Begründungen,
+    die beide nicht trugen: Die Wahrnehmung dürfe die Geometrie nicht
+    importieren (``perceive.relations`` importiert ``geom.mesh`` in seiner
+    dritten Importzeile), und ``tests/test_features.py`` halte beide zusammen
+    (kein Test nannte je eine der beiden Funktionen).
+
+    **Und sie wohnt hier, nicht in ``perceive.relations``.** Gelesen werden
+    ausschließlich :attr:`Feature.kind` und ``params["recess"]`` — keine
+    Geometrie, kein Netz, keine Erkennung. Eine Aussage wohnt bei dem Ding,
+    über das sie etwas sagt (Robert, 27.08.2026), und das Ding ist
+    :class:`Feature`. In der Wahrnehmung kostete sie jeden Aufrufer aus
+    ``geom`` einen trägen Import gegen die Paketrichtung — sieben waren es,
+    und keiner davon brauchte mehr als diese vier Zeilen.
+    """
+    if feature.kind == "hole":
+        return True
+    if feature.kind == "pin":
+        return False
+    return bool(feature.params.get("recess", False))
+
+
 #: Wie viele Filamente die Operationen benennen lassen (§20).
 #:
 #: Mehr als acht ist keine Maschine, die jemand besitzt, und jedes einzelne

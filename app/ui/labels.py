@@ -1025,6 +1025,11 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "grid": _("Raster"),
     "groups": _("Gruppen"),
     "height": _("Höhe"),
+    # Die Kennungen, die ein Erzeuger mit Eingängen aus einer Altdatei nicht
+    # verbraucht (``evaluate.creator_inputs_dropped``). „Übersprungen" statt
+    # eines neuen Wortes: Es steht schon in allen sechs Katalogen und sagt
+    # dasselbe.
+    "ignored": _("Übersprungen"),
     "key_major": _("Schlüsselversion"),
     "kept": _("Beibehalten"),
     "kind": _("Art"),

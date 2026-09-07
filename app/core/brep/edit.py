@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.core.brep.kernel import Solid, boolean_builder, require
-from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, RETRY, GeometryError
+from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
 from app.core.types import Transform, Vec3
 from app.core.units import EPS_GEOM, is_close
@@ -172,10 +172,27 @@ def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
 
 
 def _wall_not_proven() -> GeometryError:
-    """Erzeugt die sichere Absage für eine unbelegte Wandmessung."""
+    """Erzeugt die sichere Absage für eine unbelegte Wandmessung.
+
+    **Nicht ``RETRY``, und aus demselben Grund, den ``_built`` unten
+    aufschreibt.** *Erneut versuchen* ist im Fenster genau dann verdrahtet,
+    solange ein gescheitertes Schreiben ansteht (``main_window.error_handlers``,
+    Zweig ``_write_failure``; ``tests/test_ui.py`` führt ``retry`` deshalb in
+    ``postponed``). Hier steht kein solches Schreiben an, der Rat käme also nur
+    als Satz an — und er wäre auch dann falsch: Dieselbe Wandkarte über
+    demselben Netz scheitert beim zweiten Anlauf genauso. Regel 17 wäre
+    optisch erfüllt und in der Sache verletzt.
+
+    Was bleibt, ist der Weg zurück in den Schritt: An einem Körper, dessen
+    Wand sich nicht belegen lässt, gibt es keine Größe, die durchkommt — die
+    Antwort ist ein anderer Schritt oder keiner, und *Eingabe korrigieren*
+    öffnet genau ihn (``main_window._correct_after_error``). Damit gibt jede
+    Absage dieser Datei denselben Rat, und der Kunde bekommt für „die
+    Verrundung ist nicht entstanden" einen Knopf statt zwei verschiedene.
+    """
     return GeometryError(
         detail=_("Die Wandstärke konnte für diese Kanten nicht sicher geprüft werden."),
-        suggestions=(RETRY, CANCEL),
+        suggestions=(CORRECT_INPUT, CANCEL),
     )
 
 

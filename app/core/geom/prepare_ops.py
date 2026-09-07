@@ -86,6 +86,7 @@ from app.core.types import (
     Quality,
     SceneObject,
     Vec3,
+    is_a_cavity,
 )
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, format_length, is_close, is_zero
 from app.i18n import TranslatableText, _
@@ -929,11 +930,7 @@ def _feature_mount(
     """
     from shapely.geometry import Point, Polygon
 
-    from app.core.perceive.relations import (
-        _boundary_rings,
-        cavity_surface_indices,
-        is_a_cavity,
-    )
+    from app.core.perceive.relations import _boundary_rings, cavity_surface_indices
     from app.core.sketch.planes import frame_of
 
     # Innere Ringschultern gehören zur Hohlraumhaut. Ohne sie würde ihr
@@ -1052,7 +1049,7 @@ def feature_placement_geometry(
     source: SceneObject, feature: Feature, operation: str
 ) -> FeaturePlacementGeometry:
     """Eine einzelne belegte Form oder ihre vollständige zusammenhängende Bohrkette."""
-    from app.core.perceive.relations import cavity_chain_state_at, is_a_cavity
+    from app.core.perceive.relations import cavity_chain_state_at
 
     feature = _movable_feature(source, feature.id, operation)
     body = as_mesh_data(source.mesh)
@@ -1378,7 +1375,7 @@ def move_feature(ctx: OpContext) -> OpResult:
         return _place_oriented_feature(ctx, duplicate=False)
     source = ctx.inputs[0]
     feature = _movable_feature(source, params.at_feature, "move_feature")
-    from app.core.perceive.relations import cavity_chain_state_at, is_a_cavity
+    from app.core.perceive.relations import cavity_chain_state_at
 
     # **Erst in eine Liste, dann drei Werte einzeln.** Ein Generatorausdruck über
     # die Achsen hat für mypy keine feste Länge; ``Vec3`` verlangt genau drei.
@@ -1659,8 +1656,6 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
         )
 
     body = as_mesh_data(source.mesh)
-    from app.core.perceive.relations import is_a_cavity
-
     cavity = is_a_cavity(feature)
     ctx.progress(0.2, str(_("Das Merkmal wird an der neuen Stelle angelegt …")))
     change: BooleanKind = "difference" if cavity else "union"
@@ -1766,8 +1761,6 @@ def remove_feature(ctx: OpContext) -> OpResult:
     feature = _movable_feature(source, params.at_feature, "remove_feature")
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
-
-    from app.core.perceive.relations import is_a_cavity
 
     cavity = is_a_cavity(feature)
     ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
@@ -1890,8 +1883,6 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         )
 
     turned_axis = _turned(feature, params.axis, params.angle)
-    from app.core.perceive.relations import is_a_cavity
-
     cavity = is_a_cavity(feature)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
@@ -2060,8 +2051,6 @@ def resize_feature(ctx: OpContext) -> OpResult:
         )
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
-    from app.core.perceive.relations import is_a_cavity
-
     cavity = is_a_cavity(feature)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(

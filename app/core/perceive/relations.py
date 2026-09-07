@@ -38,7 +38,7 @@ from app.core.log import get_logger
 from app.core.perceive.actions import ACTION_ORDER, feature_value_source
 from app.core.perceive.features import EPS_ANGLE, SINK_AXIS_LIMIT, SINK_FIT_LIMIT, _one_body
 from app.core.registry import REGISTRY
-from app.core.types import Feature, FeatureId
+from app.core.types import Feature, FeatureId, is_a_cavity
 from app.core.units import EPS_DISPLAY, EPS_GEOM
 
 _log = get_logger(__name__)
@@ -177,31 +177,6 @@ def centre_of(feature: Feature) -> Any | None:
         return None
     centre = np.asarray(raw, dtype=float)
     return centre if centre.shape == (3,) else None
-
-
-def is_a_cavity(feature: Feature) -> bool:
-    """Ist dieses Merkmal ein Hohlraum oder Materie?
-
-    ``hole`` ist immer ein Hohlraum, ``pin`` immer Materie. ``cone`` und
-    ``sphere`` können beides sein, und die Erkennung sagt es in ``recess`` —
-    eine angesenkte Bohrung ist ein Kegel nach innen, eine Kuppe einer nach
-    außen.
-
-    **Die einzige Stelle, an der diese Frage beantwortet wird** — seit dem
-    07.09.2026. Bis dahin stand sie wortgleich als
-    ``geom.prepare_ops._feature_is_a_cavity`` daneben, mit zwei Begründungen,
-    die beide nicht trugen: Die Wahrnehmung dürfe die Geometrie nicht
-    importieren (sie tut es, gleich oben in dieser Datei), und
-    ``tests/test_features.py`` halte beide zusammen (kein Test nannte je eine
-    der beiden Funktionen). Die sieben Aufrufer in ``prepare_ops`` holen den
-    Namen jetzt träge — dieselbe Kante wie bei ``cavity_chain_state_at``
-    daneben, und ``tests/test_core_package_direction.py`` führt sie.
-    """
-    if feature.kind == "hole":
-        return True
-    if feature.kind == "pin":
-        return False
-    return bool(feature.params.get("recess", False))
 
 
 def sleeve_at(feature: Feature, features: Mapping[FeatureId, Feature]) -> Sleeve | None:

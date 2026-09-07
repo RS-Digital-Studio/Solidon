@@ -1418,6 +1418,7 @@
   "Diese Operation arbeitet nur auf Netzen.": "Esta operación solo trabaja sobre mallas.",
   "Diese Operation braucht mindestens zwei Objekte.": "Esta operación necesita al menos dos objetos.",
   "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Esta operación necesita dos objetos. Añadir el segundo con Ctrl y clic.",
+  "Diese Operation erzeugt und nimmt keine Objekte. Die eingetragenen wurden übergangen; sie bleiben erhalten.": "Esta operación crea y no toma objetos. Los indicados se han ignorado; se conservan.",
   "Diese Operation gibt es im Verlauf nicht.": "Esta operación no está en el historial.",
   "Diese Operation gibt es nicht": "Esta operación no existe",
   "Diese Operation gibt es nicht.": "Esta operación no existe.",
