@@ -420,6 +420,43 @@ daran hängen und eine Zahl an zwei Stellen driftet. Bei den Griffen von §18.11
 bleibt das Feld oben mittig: Dort zieht man an einem Gizmo, den man ansieht,
 und ein Feld unter dem Zeiger verdeckte gerade ihn.
 
+**Und sie ist tippbar, nicht bloß lesbar.** Das stand hier als Zusage und
+`continue_sketch_pull` hat die Leiste trotzdem nie gezeigt: `eventFilter`
+schrieb die Ziffer in `drag_bar.value` und holte den Fokus dorthin, aber ein
+unsichtbares Feld nimmt keinen Fokus, und die Eingabetaste lief ins Leere.
+Gemeldet von Robert am 07.09.2026 („beim hochziehen … ich kann auch keinen wert
+eingeben"); am gebauten Fenster war `drag_bar.isVisible()` während des ganzen
+Zugs falsch.
+
+Der Grund, warum das Feld hier schwerer wiegt als beim Zeichnen, ist der
+**Bildraum**: Gemessen am 07.09.2026 lag der Griff 237 Bildpunkte unter dem
+oberen Rand, bei 6,87 Bildpunkten je Millimeter — durch Ziehen sind das 40 mm,
+und das Schema erlaubt 1000. Eine Höhe von 200 mm bräuchte rund 1370
+Bildpunkte, das Bild ist 736 hoch. **Was über den sichtbaren Ausschnitt
+hinausgeht, ist nur tippbar**, und ohne Feld gar nicht erreichbar.
+
+**Gezeigt wird die Zahl mit Vorzeichen**, nicht ihr Betrag. `_apply_typed` nimmt
+den Feldwert unverändert als Höhe; ein Betrag machte aus einer Tasche
+kommentarlos einen Aufbau, sobald jemand die Eingabetaste drückt, ohne etwas zu
+tippen. Die Richtung steht zusätzlich im Namen (*Höhe* gegen *Tiefe*), weil eine
+Zahl mit Minus sie schlecht allein erklärt.
+
+**Beide Felder müssen sich beim Erscheinen anheben.** Alle Kinder der Ansicht
+sind native Fenster, und Windows stapelt sie in der Kindfolge; die Karten heben
+sich in ihrem `place()` selbst an (`SketchPlanePicker` steht beim freien
+Einstieg mitten im Bild), das verliehene Maßfeld und die Wertleiste nie. Die
+Leiste entsteht sogar im Konstruktor der Ansicht und lag damit **vor** der
+Grafikfläche des Renderers, also dahinter. Gemessen am 07.09.2026: `isVisible()`
+des Maßfeldes war wahr, `childAt` an seiner Mitte gab die Karte zurück, und auf
+der Bildschirmaufnahme war vom Feld nichts zu sehen — Roberts „wir sehen zwar
+die Werte, können aber nichts eingeben" war genau das.
+
+Angehoben wird **beim Erscheinen und nicht bei jeder Zeigerbewegung**:
+`_place_measure_field` läuft an jedem `measuringChanged`, und ein `raise_()` je
+Mausereignis wäre eine Fensterumsortierung sechzigmal in der Sekunde. Die
+Schlösser werden nach ihren Feldern angehoben, weil sie an deren rechtem Rand
+sitzen und sie überlappen.
+
 **Der Umriss trägt seine Nummern auch im Konflikt.** Der Hinweis an einem
 Eintrag der Bedingungsliste nennt Art, Maß, Ort, Wirkung — und darunter die
 rohen Punktnummern, weil danach sucht, wer eine Bedingung aus einer Meldung des

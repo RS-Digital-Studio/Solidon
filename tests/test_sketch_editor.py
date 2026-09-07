@@ -3074,6 +3074,61 @@ def test_the_measure_field_moves_to_the_viewport_and_back(qt_app: QApplication) 
         host.deleteLater()
 
 
+def test_the_measure_field_appears_in_front_of_a_card_over_the_view(
+    qt_app: QApplication,
+) -> None:
+    """Verliehen lag das Feld unter den Karten der Ansicht.
+
+    Die Karten heben sich in ihrem ``place()`` selbst an — ``SketchPlanePicker``
+    steht beim freien Einstieg mitten im Bild —, und Qt stapelt nach Kindfolge.
+    Gemessen am 07.09.2026 am gebauten Fenster: ``isVisible()`` des Feldes war
+    wahr, ``childAt`` an seiner Mitte gab die Karte zurück, und auf der
+    Bildschirmaufnahme war vom Feld nichts zu sehen. Genau das meldet Robert als
+    „wir sehen zwar die werte, können aber nichts eingeben" — zu sehen war die
+    Zeigerlage in der Leiste, das Feld war verdeckt.
+
+    Geprüft wird die **Kindfolge** und nicht das Bild: Sie ist die Ursache, und
+    sie ist offscreen ablesbar. Ob darüber am Ende Pixel liegen, entscheidet der
+    Fensterverbund, den die Suite nicht hat.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QWidget
+
+    host = QWidget()
+    canvas = SketchCanvas()
+    try:
+        host.resize(800, 600)
+        canvas.resize(600, 600)
+        canvas.set_tool("line")
+        canvas.lend_measure_field(host, lambda _point: QPoint(50, 40))
+
+        # Eine Karte, die nach dem Verleihen dazukommt und sich anhebt — genau
+        # das tut die Ebenenkarte bei jedem ``place()``.
+        card = QWidget(host)
+        card.setGeometry(0, 0, 400, 300)
+        card.raise_()
+
+        # **Die Gegenprobe zuerst**, sonst prüft der Test einen Zustand, der
+        # ohnehin gilt: Vor dem Erscheinen liegt die Karte über dem Feld.
+        order = host.children()
+        assert order.index(card) > order.index(canvas.measure_field), (
+            "die Karte muss zuerst obenauf liegen"
+        )
+
+        canvas.place(canvas._to_screen(0.0, 0.0))
+        canvas.note_pointer(canvas._to_screen(30.0, 0.0))
+        assert canvas.pending_measure() > 0.0, "eine angefangene Linie misst"
+
+        order = host.children()
+        assert order.index(canvas.measure_field) > order.index(card), (
+            "beim Erscheinen kommt das Feld über die Karte"
+        )
+    finally:
+        canvas.reclaim_measure_field()
+        canvas.deleteLater()
+        host.deleteLater()
+
+
 def test_a_digit_beats_the_plane_shortcut_while_measuring(qt_app: QApplication) -> None:
     """Die Ebenen-Kürzel liegen auf 1, 2 und 3 — und ein Kürzel gewinnt vor
     jedem keyPressEvent: Die erste Ziffer von „12,5" schaltete die Ebene um,

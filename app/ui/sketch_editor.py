@@ -2315,12 +2315,34 @@ class SketchCanvas(QWidget):
             tip = QPointF(spot)
         else:
             tip = self._to_screen(*self._pointer)
+        # **Erscheint es gerade, kommt es zugleich nach oben.** Die Karten über
+        # der Ansicht holen sich in ihrem ``place()`` selbst nach oben
+        # (``SketchPlanePicker``, ``SketchSelectionBadge``,
+        # ``SketchActionBadge``), und Qt stapelt nach Kindfolge: Das verliehene
+        # Feld lag danach **unter** der Ebenenkarte, die beim freien Einstieg
+        # mitten im Bild steht. Gemessen am 07.09.2026 am gebauten Fenster —
+        # ``isVisible()`` war wahr, ``childAt`` an der Feldmitte gab die Karte
+        # zurück, und auf der Bildschirmaufnahme war vom Feld nichts zu sehen.
+        # Genau das meldet Robert als „wir sehen zwar die Werte, können aber
+        # nichts eingeben": Zu sehen war die Zeigerlage in der Leiste, das Feld
+        # war verdeckt.
+        #
+        # **Nur beim Erscheinen, nicht bei jeder Zeigerbewegung.** Diese
+        # Methode läuft an jedem ``measuringChanged``, und alle Kinder der
+        # Ansicht sind native Fenster: Ein ``raise_()`` je Mausereignis wäre
+        # eine Fensterumsortierung sechzigmal in der Sekunde.
+        appearing = not self.measure_field.isVisible()
         self.measure_field.setVisible(True)
         self.second_measure_field.setVisible(rectangle)
         self.measure_lock.setVisible(rectangle and self._rectangle_measures[0] is not None)
         self.second_measure_lock.setVisible(rectangle and self._rectangle_measures[1] is not None)
         circle = self.tool == "circle"
         self.circle_measure_button.setVisible(circle)
+        if appearing:
+            # In dieser Reihenfolge, damit die Schlösser über ihren Feldern
+            # liegen: Sie sitzen am rechten Rand des Feldes und überlappen es.
+            for widget in self._measure_widgets():
+                widget.raise_()
         if circle:
             self._name_circle_button()
             self.circle_measure_button.adjustSize()
