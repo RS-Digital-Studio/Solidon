@@ -15,6 +15,100 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.3.5
+
+### Vista
+
+- La vista 3D disegna con un nuovo livello grafico. Si rivolge alla scheda grafica tramite Direct3D 12, Vulkan o Metal e resta fluida anche con diversi milioni di triangoli.
+- Incavi e spigoli risaltano di più: la vista scurisce gli angoli, traccia linee di profondità e coglie il punto che stai indicando.
+- Gli spigoli dei corpi stanno come reticolo fine sopra la superficie, e le etichette restano ferme invece di tremare durante la rotazione.
+- I nomi delle caratteristiche non si sovrappongono più e i loro segni restano visibili anche nella sezione.
+- L'indicatore degli assi in basso a sinistra riempie il suo campo in ogni direzione di vista e le sue lettere si vedono per intero.
+- Le viste fisse ruotano la telecamera attorno al punto che stai guardando. L'inquadratura resta invece di tornare all'intera scena; per inquadrare c'è sempre *Adatta alla vista*.
+- Puntare attraverso un'apertura sulla faccia dietro di essa seleziona quella faccia e non il bordo dell'apertura.
+- I modelli grandi si costruiscono più rapidamente, perché spigoli e normali vengono calcolati una sola volta per corpo.
+- Se al computer manca il supporto grafico che la vista richiede, l'applicazione indica i due pacchetti da installare.
+
+### Azioni per la selezione
+
+- Il rapporto di verifica e la chat si chiudono a destra con un bordo proprio. Le azioni per la selezione stanno sotto in una scheda propria e tra le due si vede il modello.
+- Quali azioni stiano davanti dipende dalla selezione: con più corpi Unisci, Sottrai e Intersezione, con uno solo Pratica un foro, Svuota e Dividere.
+- Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.
+- Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli.
+
+### Costruire e modificare
+
+- Unisci, Sottrai e Taglia prendono tutti i corpi selezionati in una volta, non esattamente due.
+- Raccorda non porta più giù l'applicazione quando il raggio supera la parete che deve arrotondare.
+- Un corpo del nucleo esatto resta esatto se lo si sposta o lo si ruota soltanto. Raccordi e smussi restano possibili in seguito.
+- L'utensile di foratura sporge solo alla bocca del foro e rifiuta diametri che superano il pezzo di parecchie volte.
+- Allineare a filo significa a filo entro un angolo, non entro una singola distanza tra punti.
+- Ridurre i triangoli si ferma a una risoluzione nominata, e il riempimento a reticolo non inventa più un interno che non c'è.
+- L'editor di schizzi coglie gli archi sul cerchio intero, trova i bordi dei cerchi, cancella con Canc l'elemento scelto e non lascia Ripeti in sospeso.
+- Il riscontro durante la modellazione non dichiara più senza effetto le piccole modifiche.
+- Gli interruttori di un'operazione attivi per impostazione predefinita ora si possono disattivare anche da riga di comando.
+- Un errore in un'operazione indica la sua causa: nel registro, nella riga che l'ha fermata e nel rapporto di errore.
+- Gli inserimenti rifiutati in posizionamento, deposito delle mesh e ricette arrivano con una proposta di azione invece di un errore nudo.
+
+### Caratteristiche
+
+- Una scansione importata non porta più cupole e coppe inventate; finora nascevano a centinaia da superfici arrotondate in modo uniforme.
+- Più filetti su una piastra vengono nominati singolarmente invece di essere riuniti in una sola caratteristica.
+- Sfera, toro e cono dichiarano la loro curvatura, i centri dei cilindri coincidono con gli anelli terminali e i passi di filetto seguono l'asse.
+- Il pannello delle caratteristiche propone accoppiamenti solo quando è selezionato un secondo corpo e conosce ogni gruppo del nucleo.
+- Gli accoppiamenti di taglio automatici non assegnano più due volte lo stesso nome.
+
+### Stampa e preparazione
+
+- La ricerca dell'orientamento giudica in due fasi: duecento posizioni dalle normali, nove delle quali nell'analisi a strati.
+- La sua barra di avanzamento arriva alla fine anche quando non c'era nulla da tagliare.
+- Lo slicer riceve il mondo della stampante e non quello di Solidon, e un profilo proprio mantiene la sua base del produttore.
+- I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte.
+- La pulizia dopo l'importazione conserva le assegnazioni dei filamenti.
+
+### File e progetti
+
+- Un 3MF con molti livelli di duplicazione viene rifiutato prima che da 432 byte nascano mille corpi.
+- Un piccolo file di progetto non richiede più gigabyte di memoria.
+- Un file GLB in millimetri arriva in millimetri e non come metri.
+- Un salvataggio fallito non porta più via l'ultima copia di sicurezza, e annullare annulla davvero l'importazione.
+- Un errore tardivo durante la lettura non svuota più la sorgente del progetto successivo.
+- Se la cartella della cache non si può creare, il risultato già calcolato resta comunque.
+- Un insieme di varianti incompleto non viene più esportato in silenzio.
+- Lo schizzo scartato si recupera con Annulla, e un secondo oggetto della cronologia non lascia più un Ripeti scaduto.
+- Due rapporti di errore dello stesso secondo non si sovrascrivono più.
+
+### Chat e IA
+
+- Uno strumento aggiuntivo con un campo di tipo errato non interrompe più l'intera serie dell'agente.
+- Per le varianti di schizzo l'agente indica solo percorsi di menu che esistono.
+- Nella generazione di immagini i pesi arrivano interi o non arrivano, e un singolo valore nel campo della struttura non avvia più una generazione non richiesta.
+- Un modello locale viene misurato anche quando risponde via HTTPS su una porta propria.
+- L'avviso sulla partecipazione dell'IA vale solo con una prova scritta, e un cambio di lingua non termina più il comando a distanza.
+
+### Aggiornamento, installazione e sistema
+
+- La versione minima è ora macOS 13, uguale nel pacchetto, nell'installer e sul sito.
+- Tredici librerie sono alle loro ultime versioni stabili, e il nucleo esatto parla OpenCASCADE 8.
+- Un pacchetto senza ancora di fiducia nel sistema porta con sé il proprio insieme, su qualunque piattaforma.
+- Un download non si interrompe più dopo un tempo totale fisso, e una risposta a goccia rispetta il termine promesso.
+- Nel Flatpak l'applicazione trova il gestore di pacchetti del computer.
+- Su Linux e macOS un'interruzione non finisce più solo al processo padre.
+- La voce di menu su Linux trova l'avviatore anche senza voce nel percorso di ricerca.
+- Sul Mac la finestra di aggiornamento dice che Solidon torna da sé dopo l'installer.
+- Sul Mac il mouse 3D legge attraverso il driver del produttore invece di attendere accanto a esso.
+- La schermata iniziale riconosce il sistema prima della prima immagine, e la tabella dei requisiti non viene più tagliata.
+- Un allegato rifiutato non conta più come mancante per il riscontro.
+- Il selettore dei filamenti resta sulla bobina giusta dopo un annullamento e mostra anche l'ottava.
+
+### Manuale e sito web
+
+- Manuale e schermate mostrano l'interfaccia rielaborata in tutte e sei le lingue.
+- I disegni del manuale mantengono il contrasto del testo anche nelle loro note a margine.
+- La finestra del manuale carica solo le proprie figure e nessuna immagine estranea.
+- Il sito web dice in un unico punto che cosa lascia il tuo computer.
+- L'introduzione non afferma più che un foro sia chiuso quando Annulla ripristina solo il diametro.
+
 ## 0.3.4
 
 ### Modificare le caratteristiche rilevate
