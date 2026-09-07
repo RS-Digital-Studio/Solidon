@@ -1215,7 +1215,7 @@ def write_config(
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return SlicerConfig(process=target)
 
-    if setup.flavour == "orca":
+    if takes_a_machine_profile(setup.flavour):
         split = by_section(settings, setup.flavour)
         # Das Maschinenprofil zuerst: Der Prozess daneben nennt es in
         # ``compatible_printers``, und beide Namen kommen aus
@@ -1891,7 +1891,7 @@ def _command(
             *files,
         ]
 
-    if setup.flavour == "orca":
+    if takes_a_machine_profile(setup.flavour):
         # Beide Profile, immer in dieser Reihenfolge: erst die Maschine, dann
         # der Prozess. Umgekehrt prüft der Slicer die Verträglichkeit gegen
         # einen Drucker, den er noch nicht kennt, und bricht ab.
@@ -2361,6 +2361,13 @@ def slice_model(
         expected = "" if names_its_own_output(setup.flavour) else OUTPUT_NAME
         produced = _find_gcode(target, expected)
         arranged_by_slicer = keep_arrangement and not wanted_arrangement
+        # **Der Familienname bleibt hier stehen, und das ist gemessen.** Die
+        # anderen Vergleiche dieser Datei sind am 07.09.2026 auf benannte
+        # Prädikate gestellt (`takes_a_machine_profile`); dieser meint eine
+        # eigene Eigenschaft — „bei dieser Familie lohnt ein zweiter Versuch
+        # ohne die Anordnungsvorgabe" —, und die wird sonst nirgends gefragt.
+        # Ein Prädikat für eine einzige Stelle ist Zierat; es entsteht, wenn
+        # die zweite dazukommt oder ein Fork hier abweicht.
         if produced is None and wanted_arrangement and setup.flavour == "orca":
             # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
             # Bauart wie bei den Booleschen Ops, und wie dort wird die
