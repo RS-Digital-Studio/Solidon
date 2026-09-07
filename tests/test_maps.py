@@ -635,8 +635,10 @@ def test_an_analysis_map_works_on_an_exact_body(profile: Profile) -> None:
         assert card.values is not None, f"die Karte {kind!r} rechnet auch am exakten Körper"
 
 
-def test_the_support_map_keeps_its_own_limit(profile: Profile) -> None:
-    """Sechs Karten steigen, eine bleibt — und das ist keine halbe Lösung.
+def test_the_support_map_is_not_refused_by_a_triangle_guess(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kosten der Stützkarte lassen sich nicht an Dreiecken vorhersagen.
 
     **Gemessen am 04.09.2026 über fünf Kundendateien.** Sechs der sieben
     Karten bleiben selbst bei 885 570 Dreiecken unter 2,1 Sekunden, das Budget
@@ -654,26 +656,66 @@ def test_the_support_map_keeps_its_own_limit(profile: Profile) -> None:
     dense = MeshData.of(trimesh.creation.icosphere(subdivisions=3))
     entry = SceneObject(id="obj_1", name="x", mesh=dense, features={})
 
-    assert maps.SUPPORT_LIMIT_TRIANGLES < maps.MAP_LIMIT_TRIANGLES, (
-        "die teuerste Karte darf nicht dieselbe Grenze haben wie die billigen"
+    called: list[object] = []
+    monkeypatch.setattr(
+        maps,
+        "support_map",
+        lambda _mesh, _height, cancelled: (
+            called.append(cancelled)
+            or maps.AnalysisMap(kind="support", title="x", values=(), unit="mm", low=0.0, high=0.0)
+        ),
+    )
+    monkeypatch.setattr(maps, "MAP_LIMIT_TRIANGLES", 10)
+
+    maps.build("support", entry, profile=profile)
+
+    assert called, "support begins and judges its actual work instead of triangle count"
+
+
+def test_the_support_budget_uses_an_injected_monotonic_clock() -> None:
+    """Das Zeitbudget ist reproduzierbar geprüft, ohne Schlaf oder Last."""
+    times = iter((100.0, 102.9, 103.0))
+    deadline = maps._MapDeadline(None, 3.0, clock=lambda: next(times))
+
+    deadline.raise_if_cancelled()
+    with pytest.raises(maps.MapBudgetExceeded) as exceeded:
+        deadline.raise_if_cancelled()
+
+    assert exceeded.value.seconds == 3.0
+    assert {suggestion.id for suggestion in exceeded.value.suggestions} >= {
+        "decimate_mesh",
+        "cancel",
+    }
+
+
+def test_support_checks_the_budget_after_an_atomic_stage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auch ohne Überhangregion darf ein überzogener Teilpfad nicht Erfolg melden."""
+    from app.core.types import SliceResult
+
+    now = [0.0]
+    deadline = maps._MapDeadline(None, 3.0, clock=lambda: now[0])
+    monkeypatch.setattr(
+        maps,
+        "slice_body",
+        lambda *_args, **_kwargs: SliceResult(
+            layers=(), support_volume=0.0, first_layer_area=0.0, source="internal"
+        ),
     )
 
-    karten, stuetze = maps.MAP_LIMIT_TRIANGLES, maps.SUPPORT_LIMIT_TRIANGLES
-    try:
-        # Über der Stützgrenze, unter der allgemeinen: Die Wandstärke läuft,
-        # die Stützkarte sagt Nein.
-        maps.SUPPORT_LIMIT_TRIANGLES = 10
-        maps.MAP_LIMIT_TRIANGLES = 10_000_000
-        maps.build("wall", entry, profile=profile)
-        with pytest.raises(maps.MapTooLarge) as abgelehnt:
-            maps.build("support", entry, profile=profile)
-        assert abgelehnt.value.limit == 10, (
-            "die Absage nennt die Grenze, die griff — sonst schickt sie auf ein "
-            f"Ziel, das gar nicht gilt: {abgelehnt.value.limit}"
-        )
-    finally:
-        maps.MAP_LIMIT_TRIANGLES = karten
-        maps.SUPPORT_LIMIT_TRIANGLES = stuetze
+    def slow_field(_mesh: MeshData) -> object:
+        now[0] = 4.25
+        return object()
+
+    monkeypatch.setattr(maps, "solid_field", slow_field)
+
+    with pytest.raises(maps.MapBudgetExceeded) as exceeded:
+        maps.support_map(cube(), cancelled=deadline)
+
+    assert exceeded.value.seconds == pytest.approx(4.25), (
+        "the message names the real wait including the indivisible stage"
+    )
 
 
 def test_the_support_map_marks_the_same_triangles_as_a_triangle_by_triangle_search(

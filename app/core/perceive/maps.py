@@ -16,6 +16,8 @@ Schichtanalyse ist kein gemessener Wert aus G-Code, und die Legende sagt das.
 from __future__ import annotations
 
 import math
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Final, Literal
 
@@ -46,7 +48,7 @@ from app.core.types import (
     Vec3,
 )
 from app.core.units import DEGREE_UNIT, EPS_DISPLAY
-from app.i18n import TranslatableText, _
+from app.i18n import TranslatableText, _, format_decimal
 
 _log = get_logger(__name__)
 
@@ -68,21 +70,21 @@ MapScale = Literal["linear", "asinh"]
 #: der Wandstärke mit 7,06 s. Wer höher will, misst dazwischen.
 MAP_LIMIT_TRIANGLES = 900_000
 
-#: Die Stützkarte hat ihre eigene Grenze, und sie bleibt, wo sie war.
+#: Wie lange eine Stützkarte rechnen darf, bevor sie einen kleineren
+#: Arbeitskörper vorschlägt (§2.8, §31).
 #:
-#: **Sie ist die einzige, die das Budget reißt, und sie hängt nicht an der
-#: Dreieckszahl.** Gemessen: 8,33 s am Besenhalter mit 59 740 Dreiecken gegen
-#: 1,84 s am Segel mit 277 460 — beim **kleineren** Modell viermal so teuer.
-#: Sie rechnet eine Schichtanalyse, ihre Kosten hängen also an Bauhöhe und
-#: Konturkomplexität; beim Spiderman (885 570) sind es 45,44 s.
+#: **Keine Dreiecksgrenze:** Gemessen am 07.09.2026 braucht der Besenhalter
+#: mit 59 740 Dreiecken 9,88 Sekunden, ein Segel mit 277 460 dagegen 1,84.
+#: Über 18 Kundenmodelle und dieselbe Form in drei Unterteilungen trennte keine
+#: vorab bekannte Zahl den schnellen vom langsamen Fall (ROADMAP §31). Die
+#: Rechnung selbst kennt ihre Arbeit als einzige zuverlässig und beendet sie
+#: deshalb am Interaktionsbudget.
 #:
-#: Eine Dreiecksgrenze ist für sie das falsche Werkzeug und war es immer — der
-#: teure Fall liegt darunter und läuft. Sie hier stehen zu lassen, während die
-#: übrigen sechs steigen, ist deshalb keine halbe Lösung, sondern die
-#: Trennung zweier Fragen, die nie dieselbe waren: Was sie wirklich braucht,
-#: ist eine Schranke an ihrer eigenen Größe, und die steht als offener Punkt
-#: in `ROADMAP.md`. Bis dahin ändert sich für sie nichts.
-SUPPORT_LIMIT_TRIANGLES = 120_000
+#: Drei Sekunden sind eine UX-Entscheidung aus den vorhandenen Verträgen: §2.8
+#: verlangt oberhalb zwei Sekunden Fortschritt und Abbruch, §31 gibt der
+#: anderen aufwendigen Karte, der Wandstärke, drei Sekunden. Der Lauf bleibt
+#: im Hintergrund; danach erhält der Nutzer einen konkreten Ausweg.
+SUPPORT_MAP_BUDGET_SECONDS = 3.0
 
 #: Nach so vielen Dreiecken wird gefragt, ob abgebrochen werden soll. Bei
 #: 512 liegt der Abstand zwischen zwei Fragen unter einer Millisekunde — fein
@@ -213,11 +215,9 @@ class MapTooLarge(UserError):
     def __init__(self, triangles: int = 0, limit: int = MAP_LIMIT_TRIANGLES) -> None:
         """``limit`` ist die Grenze, die wirklich gegriffen hat.
 
-        Seit die Stützkarte ihre eigene führt, gibt es zwei — und eine Absage,
-        die eine Zahl nennt, die auf den Fall nicht zutrifft, schickt den
-        Kunden auf ein Ziel, das er gar nicht treffen muss. Die Vorgabe bleibt
-        die allgemeine, damit ein Aufrufer ohne Kenntnis der Art sich nicht
-        ändert.
+        Die Grenze gilt den sechs dreieckgebundenen Karten. Die Stützkarte
+        beurteilt ihre tatsächliche Laufzeit, weil ihre Kosten vorab nicht an
+        der Dreieckszahl erkennbar sind.
         """
         super().__init__(
             detail=_("Die Karte läuft jedes Dreieck ab, und ihr Budget ist begrenzt (§31)."),
@@ -225,6 +225,58 @@ class MapTooLarge(UserError):
         )
         self.triangles = triangles
         self.limit = limit
+
+
+class MapBudgetExceeded(UserError):
+    """Eine laufende Karte hat ihr abgeleitetes Interaktionsbudget verbraucht."""
+
+    default_title = _("Die Stützkarte braucht für dieses Modell zu lange.")
+    default_suggestions = (DECIMATE_MESH, CANCEL)
+
+    def __init__(self, seconds: float = SUPPORT_MAP_BUDGET_SECONDS) -> None:
+        super().__init__(
+            detail=_(
+                "Die Berechnung wurde nach {seconds} Sekunden beendet. "
+                "Verringern Sie die Dreiecke und versuchen Sie es erneut.",
+                seconds=format_decimal(seconds, digits=1),
+            ),
+            values={"seconds": seconds},
+        )
+        self.seconds = seconds
+
+
+class _MapDeadline:
+    """Nutzerabbruch und monotones Kartenbudget als ein Abbruchvertrag."""
+
+    def __init__(
+        self,
+        cancelled: CancelToken | None,
+        seconds: float,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._cancelled = cancelled
+        self._clock = clock
+        self._started = clock()
+        self._deadline = self._started + seconds
+
+    @property
+    def is_cancelled(self) -> bool:
+        return bool(
+            (self._cancelled is not None and self._cancelled.is_cancelled)
+            or self._clock() >= self._deadline
+        )
+
+    def raise_if_cancelled(self) -> None:
+        """Nutzerabbruch bleibt still, das verbrauchte Budget wird erklärt."""
+        if self._cancelled is not None:
+            self._cancelled.raise_if_cancelled()
+        now = self._clock()
+        if now >= self._deadline:
+            # Ein nativer Aufruf kann erst an seiner nächsten Grenze
+            # zurückkehren. Genannt wird deshalb die echte Wartezeit, nicht
+            # die nominelle Schwelle.
+            raise MapBudgetExceeded(max(0.0, now - self._started))
 
 
 TITLES: dict[MapKind, TranslatableText] = {
@@ -253,22 +305,18 @@ def build(
     """Der eine Einstiegspunkt, den die Oberfläche benutzt; der Rest ist die
     Karte selbst.
 
-    ``cancelled`` bricht ab, wo es sich lohnt: am Eingang und in der teuersten
-    Schleife. Die Zusage steht in §18.4 — die Karten laufen im Hintergrund und
-    sind abbrechbar —, und eingelöst hat sie niemand: Wer bei 51 000 Dreiecken
-    (3,4 s gemessen) die Karte wechselte, wartete auf die erste, bevor die
-    zweite überhaupt anfing.
+    ``cancelled`` bricht in den begrenzten Arbeitsstücken des Schneiders und
+    der Kartenrechnung ab. Die Zusage steht in §18.4 — die Karten laufen im
+    Hintergrund und sind abbrechbar. Für die Stützkarte kommt dasselbe Signal
+    zusätzlich von ihrem Arbeitsbudget; ein Nutzerabbruch bleibt davon
+    unterscheidbar und still.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
+    budget = _MapDeadline(cancelled, SUPPORT_MAP_BUDGET_SECONDS) if kind == "support" else None
     mesh = _mesh_of(entry)
-    # Je Art gefragt und nicht pauschal: Die Stützkarte kostet ein Vielfaches
-    # der übrigen und misst dabei etwas anderes (siehe
-    # :data:`SUPPORT_LIMIT_TRIANGLES`). Eine Zahl für sieben Rechnungen ist
-    # entweder für sechs zu streng oder für eine zu großzügig.
-    limit = SUPPORT_LIMIT_TRIANGLES if kind == "support" else MAP_LIMIT_TRIANGLES
-    if mesh.triangle_count > limit:
-        raise MapTooLarge(mesh.triangle_count, limit)
+    if kind != "support" and mesh.triangle_count > MAP_LIMIT_TRIANGLES:
+        raise MapTooLarge(mesh.triangle_count, MAP_LIMIT_TRIANGLES)
 
     if kind == "wall":
         return wall_thickness_map(mesh, profile.minimum_wall_thickness if profile else None)
@@ -282,7 +330,7 @@ def build(
         return feature_map(mesh, entry.features)
     if kind == "fits":
         return fit_map(mesh, entry, scene)
-    return support_map(mesh, profile.printer.layer_height if profile else 0.2, cancelled)
+    return support_map(mesh, profile.printer.layer_height if profile else 0.2, budget)
 
 
 def _mesh_of(entry: SceneObject) -> MeshData:
@@ -862,14 +910,24 @@ def support_map(
     # → ``_eroded`` — der morphologischen Öffnung, mit der die kleinste
     # Struktur je Schicht gesucht wird. 916 Aufrufe für 136 Schichten, und
     # kein einziger für eine Zahl, die hier jemand liest.
-    result = slice_body(mesh, layer_height, detail="support")
+    result = slice_body(mesh, layer_height, detail="support", cancelled=cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     regions = _overhang_regions(result)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     centres = np.asarray(body.triangles_center, dtype=float)
     field = solid_field(mesh)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     drops = _drop_below(mesh, field, centres)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
 
     values = np.zeros(len(centres), dtype=float)
     marked = _marked_by_layer(regions, centres, layer_height, cancelled)
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
     values[marked] = drops[marked]
 
     return AnalysisMap(
