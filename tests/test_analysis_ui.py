@@ -1759,28 +1759,44 @@ def test_a_problem_note_stays_inside_the_legend_layout(qt_app: QApplication) -> 
         bar.deleteLater()
 
 
-def test_an_axis_view_fits_on_the_bodies_not_the_backdrop(window: MainWindow) -> None:
-    """Strg+0 bis Strg+6 rahmten die Kulisse statt des Teils.
+def test_an_axis_view_turns_around_the_current_focus(window: MainWindow) -> None:
+    """Strg+0 bis Strg+6 drehen die Kamera um den Blickpunkt, sie rahmen nicht.
 
-    ``view_from`` rief den Kamera-Reset ohne Körpergrenzen auf — exakt
-    der Fehler, den ``reset_camera`` daneben in eigenen Worten beschreibt und
-    behebt: Ein 80-mm-Teil im 256er Bauraum wurde ein Fleck. Und ohne
-    ``camera_set`` passte der nächste Kamera-Zugriff gleich noch einmal ein
-    (Gesamtreview 25.08.2026, J-8). Die Achsansicht geht jetzt durch dieselbe
-    Einpassung wie „Alles einpassen".
+    Wer in eine Bohrung hineingezoomt hat und „Oben" drückt, will diese
+    Bohrung von oben sehen. Bis zum 07.09.2026 stellte ``view_from`` die
+    Kamera auf den Ursprung und passte die ganze Szene neu ein — der Zoom war
+    weg, und das Einpassen gehört zu Pos1 (Entscheidung Robert, wie in
+    Assist). Geprüft: Fokus und Abstand bleiben, die Richtung ist die der
+    Vorgabe, und der Renderer wird nicht zum Einpassen gerufen — auch bei
+    der Iso, deren Richtungsvektor nicht auf Länge eins steht.
     """
-    from app.ui.viewport import with_margin
+    import math
+
+    from app.ui.render.api import CameraPose
 
     window.viewport.show_scene(window.session.last_result)
     renderer = RecordingRenderer()
+    focus = (10.0, 20.0, 5.0)
+    renderer.pose = CameraPose((40.0, -20.0, 5.0), focus, (0.0, 0.0, 1.0))
     window.viewport.renderer = renderer
     window.viewport._shadow_hulls.clear()
 
-    window.viewport.view_from("front")
+    window.viewport.view_from("top")
 
-    bounds = window.viewport._object_bounds()
-    assert bounds is not None
-    assert renderer.reset_bounds == [with_margin(bounds)], "auf die Körper, mit Luft darum"
+    assert renderer.reset_bounds == [], "eine Kameravorgabe passt nicht ein"
+    assert tuple(renderer.pose.focal_point) == pytest.approx(focus), "der Blickpunkt bleibt"
+    assert tuple(renderer.pose.position) == pytest.approx((10.0, 20.0, 55.0)), (
+        "fünfzig Millimeter über dem Blickpunkt — der alte Abstand, die neue Richtung"
+    )
+    assert tuple(renderer.pose.view_up) == pytest.approx((0.0, 1.0, 0.0))
+
+    window.viewport.view_from("iso")
+
+    assert renderer.reset_bounds == []
+    assert tuple(renderer.pose.focal_point) == pytest.approx(focus)
+    assert math.dist(tuple(renderer.pose.position), focus) == pytest.approx(50.0), (
+        "der Abstand wächst nicht mit der Länge des Iso-Vektors"
+    )
 
 
 def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:

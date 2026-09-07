@@ -4062,21 +4062,36 @@ class Viewport(QWidget):
         table = SKETCH_VIEW_DIRECTIONS if sketching else AXIS_VIEW_DIRECTIONS
         found = sketch_view_near(position, focus) if sketching else axis_view_near(position, focus)
         if found is not None:
-            direction, up = table[found]
-            distance = max(math.dist(tuple(position), tuple(focus)), EPS_GEOM)
-            snapped = (
-                float(focus[0]) + direction[0] * distance,
-                float(focus[1]) + direction[1] * distance,
-                float(focus[2]) + direction[2] * distance,
-            )
-            self.renderer.set_camera_pose(CameraPose(snapped, focus, up))
-            self.renderer.reset_clipping_range()
+            self._turn_camera_to(*table[found])
             if draw:
                 self._draw()
         if not sketching:
             return found
         self.sketchViewChanged.emit(found or "")
         return found
+
+    def _turn_camera_to(self, direction: Vec3, up: Vec3) -> None:
+        """Die Kamera um ihren Blickpunkt drehen: gleicher Fokus, gleicher
+        Abstand, neue Richtung.
+
+        Der gemeinsame Kern von :meth:`_settle_sketch_view` und
+        :meth:`view_from`. ``direction`` zeigt vom Blickpunkt zur Kamera und
+        darf ungenormt sein — die Iso-Vorgabe ist es —, sonst wüchse der
+        Abstand mit jedem Klick um ihre Länge.
+        """
+        assert self.renderer is not None
+        pose = self.renderer.camera_pose()
+        focus = (float(pose.focal_point[0]), float(pose.focal_point[1]), float(pose.focal_point[2]))
+        distance = max(math.dist(tuple(pose.position), focus), EPS_GEOM)
+        length = math.sqrt(sum(value * value for value in direction))
+        unit = tuple(value / length for value in direction)
+        position = (
+            focus[0] + unit[0] * distance,
+            focus[1] + unit[1] * distance,
+            focus[2] + unit[2] * distance,
+        )
+        self.renderer.set_camera_pose(CameraPose(position, focus, up))
+        self.renderer.reset_clipping_range()
 
     # --- Darstellungsqualität (§18.1) -------------------------------------------
 
@@ -10356,24 +10371,27 @@ class Viewport(QWidget):
         self.cameraMoved.emit()
 
     def view_from(self, direction: str) -> None:
-        """Eine der sieben Kameravorgaben (§18.1).
+        """Eine der sieben Kameravorgaben (§18.1) — gedreht um den Blickpunkt.
 
-        Eingepasst wird über :meth:`reset_camera` — auf die Körper, mit Luft,
-        und mit gesetztem ``camera_set``. Ein ``reset_camera()`` ohne Grenzen
-        stand hier und rahmte alle Elemente samt Bauraum-Kulisse: exakt der Fehler,
-        den :meth:`reset_camera` in eigenen Worten beschreibt, nur über die
-        Achsansichten (Strg+0 bis Strg+6, ViewBar) wieder offen.
+        Fokus und Abstand bleiben, wie sie sind; nur die Richtung wechselt
+        (Entscheidung Robert, 07.09.2026, wie in Assist: dort kippt die
+        Draufsicht die Kamera und lässt Ziel und Drehung stehen). Wer in eine
+        Bohrung hineingezoomt hat und „Oben" drückt, will diese Bohrung von
+        oben sehen — nicht die ganze Szene neu gerahmt. Bis dahin stand die
+        Kamera hier auf den Ursprung und passte über :meth:`_fit_camera` ein;
+        das Einpassen bleibt *Alles einpassen* (Pos1) vorbehalten. Dieselbe
+        Drehung macht :meth:`_settle_sketch_view`, wenn eine freie Kamera nahe
+        einer Achse zur Ruhe kommt.
+
+        Im Skizzenmodus steckt im Blickpunkt der Ausgleich für die verdeckte
+        Bildhöhe (§30.1). Er wird vor der Drehung herausgerechnet und danach
+        für die neue Richtung neu eingerechnet — sonst zöge die nächste Größen-
+        oder Zoomänderung einen Versatz ab, der so in dieser Kamera nie stand.
         """
         if self.renderer is None or direction not in VIEW_DIRECTIONS:
             return
-        position, up = VIEW_DIRECTIONS[direction]
-        self.renderer.set_camera_pose(CameraPose(position, (0.0, 0.0, 0.0), up))
-        # Eine absolute Kameravorgabe enthält den bisherigen Ausgleich nicht
-        # mehr. Der gespeicherte Weltvektor muss deshalb gleichzeitig fallen;
-        # sonst zieht die nächste Größen- oder Zoomänderung einen Versatz ab,
-        # der in dieser neuen Kamera gar nicht steckt.
-        self._sketch_occlusion_shift = (0.0, 0.0, 0.0)
-        self._fit_camera()
+        self._remove_sketch_occlusion()
+        self._turn_camera_to(*VIEW_DIRECTIONS[direction])
         if self._sketch_frame is not None:
             self._apply_sketch_occlusion()
             # Die sichtbare ViewBar bleibt auch im Skizzenmodus bedienbar. Ihr

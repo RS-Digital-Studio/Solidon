@@ -606,6 +606,16 @@ Aufbau erbt sie die Startstellung des Renderers, und die eigene Vorgabe aus
 `VIEW_DIRECTIONS` sieht nur, wer „Isometrisch" im Menü wählt — ein Sprung aus
 einer Ansicht in eine andere, die man zu sehen glaubte.
 
+**Eine Kameravorgabe dreht um den Blickpunkt, sie passt nicht ein**
+(Entscheidung Robert, 07.09.2026, wie in Assist). Strg+0 bis Strg+6 und die
+ViewBar lassen Fokus und Abstand stehen und wechseln allein die Richtung
+(`_turn_camera_to`, derselbe Kern wie das Einrasten einer frei gedrehten
+Kamera in `_settle_sketch_view`); der Iso-Vektor wird dabei genormt, sonst
+wüchse der Abstand mit jedem Klick. Bis dahin stellte `view_from` die Kamera
+auf den Ursprung und rahmte die Szene neu — wer in eine Bohrung gezoomt hatte
+und „Oben" drückte, verlor den Zoom. Einpassen ist die Sache von Pos1, und
+die erste Rahmung eines geöffneten Projekts die von `_fit_once_for`.
+
 **Ein Schatten fällt auf die Fläche, auf der sein Körper steht.** Nicht immer
 auf die Platte: `_shadow_catchers` sucht zu jedem Körper die Flächen unter ihm
 — die Druckplatte und jeden Körper, dessen Oberkante nicht höher liegt als
@@ -1038,10 +1048,12 @@ Bildhöhe. Das verändert weder Blickrichtung noch Maßstab und wird beim
 Verlassen zurückgenommen. `view_on_plane` und `show_span_on_plane` setzen die
 Verschiebung nach jeder neuen Kamerastellung erneut — deshalb bleiben Umriss,
 Pfeil, Kreuz und Live-Zahl auch in der Querschau oberhalb der Werkzeugkarte.
-Auch `view_from` verwirft den gespeicherten Weltvektor, bevor die ViewBar eine
-absolute Kamerastellung setzt, rechnet den heutigen Ausgleich neu ein und
-meldet die neue Hauptansicht an das Ebenenfeld. Ein gespeicherter Versatz darf
-nie von einer Kamera abgezogen werden, die ihn nicht mehr enthält.
+Auch `view_from` nimmt den gespeicherten Weltvektor zurück, bevor es die
+Kamera um den Blickpunkt dreht, rechnet den heutigen Ausgleich für die neue
+Richtung neu ein und meldet die neue Hauptansicht an das Ebenenfeld. Ein
+gespeicherter Versatz darf nie von einer Kamera abgezogen werden, die ihn
+nicht mehr enthält — und nie in einer Richtung stehen bleiben, die die Kamera
+gar nicht mehr hat.
 
 Fangmarke und unfertige Kurve besitzen eigene Actors. Ein voller
 `show_sketch`-Aufbau räumt sie nicht zwischen zwei Gesten weg; ein

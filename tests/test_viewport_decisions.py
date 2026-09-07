@@ -1717,7 +1717,6 @@ def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
     viewport._zone_margins = (0, 0, 400)
     viewport._sketch_occlusion_shift = (0.0, -40.0, 0.0)
     settled: list[bool] = []
-    viewport._fit_camera = lambda: None  # type: ignore[method-assign]
     viewport._settle_sketch_view = lambda **kwargs: settled.append(True)  # type: ignore[method-assign]
     viewport._redraw_shadows = lambda **kwargs: None  # type: ignore[method-assign]
 
@@ -1726,6 +1725,63 @@ def test_an_absolute_view_change_replaces_the_saved_sketch_shift(
     assert renderer.pose.focal_point == pytest.approx((0.0, 0.0, -40.0))
     assert viewport._sketch_occlusion_shift == pytest.approx((0.0, 0.0, -40.0))
     assert settled == [True], "die ViewBar meldet die neue Skizzenansicht ans Ebenenfeld"
+
+
+def test_the_view_bar_names_the_new_plane_and_keeps_the_view(qt_app: QApplication) -> None:
+    """Der Ansichtswechsel beim Zeichnen meldet die Ebene und rahmt nicht neu.
+
+    **Warum beides in einem Test steht:** An dieser Meldung hängt die Kette bis
+    zum Ziehgriff. ``sketchViewChanged`` geht ans Ebenenfeld
+    (``MainWindow._on_sketch_view_changed`` → ``reflect_camera_view``), und
+    sobald die Skizze Elemente hat, setzt sie dort die **Blickebene**. Erst
+    dadurch gehen Blick und Zeichenebene auseinander, und genau das ist die
+    Bedingung, unter der die Leiste das Aufziehen einer Höhe anbietet
+    (``_sketch_pull_offer``). Die ViewBar ist damit ein zweiter Weg in die
+    Querschau neben den Ziffern 1 bis 3 — das war am 07.09.2026 zwischen zwei
+    Sitzungen erst umstritten und dann am Code belegt.
+
+    Der Nachbartest darüber ersetzt ``_settle_sketch_view`` durch eine
+    Attrappe und kann die Meldung deshalb nicht sehen; hier läuft sie echt.
+
+    **Und kein Einpassen** (Entscheidung Robert, 07.09.2026): Bis dahin rief
+    ``view_from`` ``_fit_camera``, und das rahmte auch beim Zeichnen — auf die
+    Körper oder den Bauraum, nie auf den Umriss. Der Zoom des Nutzers ging
+    dabei verloren. Dass über dem Umriss dadurch manchmal Luft entstand, war
+    ein Nebeneffekt und kein Mechanismus; wer Zugraum braucht, rechnet ihn aus
+    den Grenzen des Umrisses (``show_span_on_plane``).
+    """
+    import math
+
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    renderer = RecordingRenderer()
+    renderer.parallel = True
+    renderer.pose = CameraPose((0.0, 0.0, 60.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    viewport = Viewport()
+    viewport.renderer = renderer
+    # Gezeichnet wird auf der xy-Ebene, geblickt nach dem Wechsel von vorn:
+    # damit ist die Querschau da, in der der Griff überhaupt gemeint ist.
+    viewport._sketch_frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    reported: list[str] = []
+    viewport.sketchViewChanged.connect(reported.append)
+
+    viewport.view_from("front")
+
+    assert reported == ["plane:xz"], "die Vorderansicht meldet ihre Ebene ans Feld"
+    assert renderer.reset_bounds == [], (
+        "eine Kameravorgabe passt nicht ein, auch nicht im Skizzenmodus"
+    )
+    assert tuple(renderer.pose.focal_point) == pytest.approx((0.0, 0.0, 0.0))
+    assert math.dist(tuple(renderer.pose.position), (0.0, 0.0, 0.0)) == pytest.approx(60.0), (
+        "der Abstand bleibt, der Zoom des Nutzers überlebt den Ansichtswechsel"
+    )
+
+    # **Gegenprobe, sonst wäre die leere Liste oben nur eine Behauptung.** Ein
+    # Einpassen ist in dieser Aufstellung sichtbar — die alte Fassung von
+    # ``view_from`` rief genau das, und dieser Test hätte sie gefangen.
+    viewport._fit_camera()
+    assert renderer.reset_bounds, "ein Einpassen wäre hier zu sehen"
 
 
 def test_the_sketch_cards_have_parseable_theme_styles(qt_app: QApplication) -> None:
