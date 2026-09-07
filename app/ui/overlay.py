@@ -134,9 +134,11 @@ LEFT_WIDTH = 300
 #:
 #: Zweimal heraufgesetzt am 07.09.2026, beide Male von Robert: erst 320 auf
 #: 360, weil sich seit den Auswahlhandlungen zwei Karten die Breite teilen und
-#: ein Satz wie „Bohrung verschließen" darin umbrach — dann 360 auf 510, weil
-#: auch das noch zu eng war („mindestens 150 px breiter").
-RIGHT_WIDTH = 510
+#: ein Satz wie „Bohrung verschließen" darin umbrach — dann auf 450, weil bei
+#: einem gewählten Körper „fast die Hälfte fehlte" (Robert). 510 waren ein
+#: Zwischenstand und sind zurückgenommen: Sie überschritten auf einem 1200
+#: breiten Fenster die Enge-Schranke, und die hält die Mitte als Griff frei.
+RIGHT_WIDTH = 450
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -149,7 +151,7 @@ RIGHT_WIDTH = 510
 #: bei 5000 Pixeln eine Wand.
 GROWTH_SHARE = 0.13
 LEFT_MAX = 420
-RIGHT_MAX = 650
+RIGHT_MAX = 580
 
 #: In einem schmalen Fenster dürfen die beiden Karten einander nicht
 #: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als

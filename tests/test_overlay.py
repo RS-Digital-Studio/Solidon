@@ -291,7 +291,7 @@ def test_the_work_cards_use_full_hd_and_grow_with_large_screens() -> None:
     right = [card_width(RIGHT_WIDTH, RIGHT_MAX, width) for width in widths]
 
     assert 295 <= left[3] <= 310, f"Full HD links: {left[3]} statt etwa 300"
-    assert 505 <= right[3] <= 520, f"Full HD rechts: {right[3]} statt etwa 510"
+    assert 445 <= right[3] <= 460, f"Full HD rechts: {right[3]} statt etwa 450"
     assert left == sorted(left) and right == sorted(right), "breiter darf keine Karte schrumpfen"
     assert left[-1] <= LEFT_MAX and right[-1] <= RIGHT_MAX
 
