@@ -88,11 +88,22 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
         (1, "face"): QUICK_FEATURES["face"],
         (1, "hole"): QUICK_FEATURES["hole"],
         (1, "edge_loop"): QUICK_FEATURES["edge_loop"],
+        # Eine Art ohne eigene Zeile bekommt die generischen
+        # Merkmalshandlungen — **solange das Register sie dort anbietet.**
+        # Gemessen am 07.09.2026 trägt `pin` sieben Operationen und `sphere`
+        # vier, die drei generischen sind darunter.
         (1, "pin"): QUICK_FEATURE,
         (1, "sphere"): QUICK_FEATURE,
-        # Eine Art, die keine eigene Zeile hat, bekommt die generischen
-        # Merkmalshandlungen statt einer leeren Zeile.
-        (1, "torus"): QUICK_FEATURE,
+        # **Und eine Art, die das Register gar nicht kennt, bekommt nichts.**
+        # `applies_to` nennt sechs Arten, die Erkennung liefert mehr: Torus,
+        # Verrundung und Gewinde haben null Operationen. Vorher standen dort
+        # drei Knöpfe, hinter denen keine einzige lag — und weil
+        # `feature_requirement` fragt, ob **der Körper** ein solches Merkmal
+        # hat, waren sie auf einem Körper mit Bohrung sogar bedienbar und
+        # hätten auf ein anderes Merkmal gewirkt.
+        (1, "torus"): (),
+        (1, "fillet"): (),
+        (1, "thread"): (),
     }
     for (bodies, kind), wanted in lagen.items():
         assert quick_names(bodies, kind) == wanted

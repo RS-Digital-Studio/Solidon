@@ -581,6 +581,12 @@ def test_the_group_evidence_stands_once_and_not_at_every_handling(
     **Die Auskunft geht dabei nicht verloren**, sie wiederholt sich nur nicht:
     Ab der zweiten Handlung trägt der Haken sie, denn er ist das Feld, über das
     sie entscheidet.
+
+    **Und sie verdrängt die Rücknahmezusage nicht.** Der Nachweis ersetzte die
+    Statuszeile des Hakens, und damit stand ab der zweiten Handlung nichts mehr
+    von Strg+Z dort — zwei gleich beschriftete Haken sagten im selben Panel
+    Verschiedenes. Genau diese Zusage erlaubt den Verzicht auf eine Rückfrage
+    (Regel 19), also wird sie hier für **jeden** Haken geprüft.
     """
     from app.core.perceive import relations
     from app.core.perceive.relations import (
@@ -640,6 +646,9 @@ def test_the_group_evidence_stands_once_and_not_at_every_handling(
         "jeder Haken ohne eigenen Absatz trägt die Auskunft, der erste braucht sie nicht"
     )
     assert all(said in box.accessibleDescription() for box in tragen)
+
+    ohne_zusage = [box for box in haken if "Strg+Z" not in box.statusTip()]
+    assert not ohne_zusage, f"{len(ohne_zusage)} von {len(haken)} Haken ohne Rücknahmezusage"
 
 
 def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:

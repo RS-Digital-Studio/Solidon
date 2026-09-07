@@ -623,8 +623,6 @@ def as_error(finding: Finding, document: Document | None = None) -> AppError:
     )
 
 
-#: Farbe der zurückgenommenen Schritte im Verlauf — dieselbe wie für einen
-#: verworfenen Chatbeitrag, und aus demselben Grund.
 def _severity_label(severity: str) -> str:
     """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18)."""
     return {
@@ -4645,15 +4643,17 @@ class FeaturePanel(QWidget):
         # anwenden" wäre eine Frage ohne Unterschied; ab dem zweiten
         # gleichartigen Merkmal spart er fünf Wege.
         every: QCheckBox | None = None
+        undo_promise = ""
         group = self._groups.get(str(action.op))
         if group is not None and len(group.members) > 1:
             every = QCheckBox(
                 tr("Auf alle {count} gleichartigen anwenden").format(count=len(group.members)),
                 box,
             )
-            every.setStatusTip(
+            undo_promise = str(
                 tr("Eine Handlung für alle — und ein Strg+Z nimmt sie zusammen zurück.")
             )
+            every.setStatusTip(undo_promise)
             layout.addWidget(every)
         if group is not None and (len(group.members) > 1 or group.uncertain):
             said = _feature_group_note(group)
@@ -4670,12 +4670,21 @@ class FeaturePanel(QWidget):
             # Der Haken trägt sie weiter, und zwar dort, wo sie gilt: Er ist
             # das Feld, über das sie entscheidet. Ohne das verlöre ein
             # Screenreader sie an jeder Handlung außer der ersten.
-            if said in self._said_notes:
-                if every is not None:
-                    spoken = f"{every.text()} — {said}"
-                    every.setToolTip(said)
-                    every.setStatusTip(said)
-                    every.setAccessibleDescription(spoken)
+            #
+            # **Und die Zusage bleibt dabei stehen.** Der Nachweis wird der
+            # Statuszeile angehängt statt sie zu ersetzen, und er steht
+            # hinten: Die Zeile ist eine Zeile, und was abgeschnitten wird,
+            # darf nicht das Strg+Z sein — gerade diese Zusage erlaubt es, auf
+            # eine Rückfrage zu verzichten (Regel 19). Ersetzt trugen zwei
+            # gleich beschriftete Haken im selben Panel Verschiedenes.
+            #
+            # **Ohne Haken bleibt der Absatz stehen.** Eine einelementige
+            # unsichere Gruppe hat kein Feld, das die Auskunft tragen könnte;
+            # dort ist eine Wiederholung besser als ein Verlust.
+            if said in self._said_notes and every is not None:
+                every.setToolTip(said)
+                every.setStatusTip(f"{undo_promise} {said}")
+                every.setAccessibleDescription(said)
             elif said:
                 self._said_notes.add(said)
                 note = QLabel(said, box)

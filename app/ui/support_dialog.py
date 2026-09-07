@@ -77,7 +77,6 @@ MAX_SHOT_WIDTH: Final = 1600
 #: sind dieselben Zeilen, nur auf einem anderen Weg.
 LOG_LINES: Final = reports.LOG_LINES
 
-#: Wie lange das Schließen auf den Arbeiter wartet, bevor es loslässt.
 #: Die Portaladresse und der Ergebnisvertrag gelten für jeden Mailentwurf.
 MAIL_PORTAL_SERVICE: Final = "org.freedesktop.portal.Desktop"
 MAIL_PORTAL_REQUEST: Final = "org.freedesktop.portal.Request"

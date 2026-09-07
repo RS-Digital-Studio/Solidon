@@ -2564,15 +2564,35 @@ class ViewBar(QFrame):
         )
 
     def place(self) -> None:
-        """Unten rechts, mit demselben Rand, den die Achsenanzeige links hält."""
+        """Unten rechts, mit demselben Rand, den die Achsenanzeige links hält.
+
+        **Und über dem Bild, nicht dahinter.** Die Grafikfläche des Renderers
+        ist ein natives Fenster (``present_method="screen"`` setzt
+        ``WA_PaintOnScreen``, und das zieht ``WA_NativeWindow`` nach); sie liegt
+        damit über jedem gemalten Geschwister, gleich was Qts Stapelung sagt
+        (`.claude/rules/wartezeit.md`). Diese Leiste entsteht im Konstruktor der
+        Ansicht, also **vor** der Fläche, und war dadurch unsichtbar — gemessen
+        am 07.09.2026 an `app/images/manual/de/main-window.png`: in ihrem Feld
+        neun Farben und eine Streuung von 4,8, also reiner Hintergrund, während
+        das Achsenkreuz daneben 266 Farben trägt. Die drei Karten des
+        Skizzenmodus taten es von Anfang an richtig; sie sind der Beweis, dass
+        eine Zeile genügt.
+        """
         parent = self.parentWidget()
         if parent is None:
             return
         self.adjustSize()
+        # Dieselbe Rechnung wie bei :class:`SketchSelectionBadge`: Die untere
+        # Werkzeugkarte des Skizzenmodus meldet ihre Höhe über
+        # ``_zone_margins``, und hinter ihr liest niemand eine Kameravorgabe.
+        # Ohne den Abzug rutschte die Leiste mit dem ``raise_`` darüber genau
+        # dorthin, wo sie vorher unsichtbar lag.
+        covered = getattr(parent, "_zone_margins", (0, 0, 0))[2]
         self.move(
             max(parent.width() - self.width() - ORIENTATION_MARGIN, 0),
-            max(parent.height() - self.height() - ORIENTATION_MARGIN, 0),
+            max(parent.height() - self.height() - covered - ORIENTATION_MARGIN, 0),
         )
+        self.raise_()
 
 
 class PreviewBanner(QFrame):
@@ -2655,11 +2675,18 @@ class PreviewBanner(QFrame):
         self.place()
 
     def place(self) -> None:
-        """Oben mittig — dort verdeckt es am wenigsten vom Körper."""
+        """Oben mittig — dort verdeckt es am wenigsten vom Körper.
+
+        Angehoben aus demselben Grund wie bei :meth:`ViewBar.place`: hinter der
+        nativen Renderfläche wäre das Band unsichtbar, und ein Band, das
+        niemand sieht, ist die schlechteste Art, eine unbestätigte Vorschau zu
+        melden.
+        """
         parent = self.parentWidget()
         if parent is None:
             return
         self.move(max((parent.width() - self.width()) // 2, 0), BANNER_TOP)
+        self.raise_()
 
 
 class DragValueBar(QFrame):
@@ -2782,10 +2809,19 @@ class DragValueBar(QFrame):
         darunter**: Ein Feld unter dem Zeiger fängt die Mausbewegungen ab, und
         der Zug bliebe stehen. An Rand und Ecke kippt es auf die andere Seite,
         wie das Maßfeld der Zeichenfläche — dieselbe Frage, dieselbe Antwort.
+
+        **Angehoben wird hier und nicht bei den Aufrufern**, aus demselben
+        Grund wie bei :meth:`ViewBar.place`: Hinter der nativen Renderfläche
+        nimmt das Feld keinen Fokus, und §18.11 („Zahleneingabe während des
+        Ziehens") wäre für **jeden** Zug unerreichbar, nicht nur für den
+        Ziehgriff der Skizze. Vor dem 07.09.2026 stand das Anheben in
+        ``continue_sketch_pull``, also an genau einem der fünf Wege hierher.
+        Vor der Verzweigung, weil der Ankerzweig früh zurückkehrt.
         """
         parent = self.parentWidget()
         if parent is None:
             return
+        self.raise_()
         if self.anchor is not None:
             left = self.anchor.x() + MEASURE_GAP
             top = self.anchor.y() + MEASURE_GAP
@@ -5222,7 +5258,16 @@ class Viewport(QWidget):
                 table.append(_hex(colour))
                 continue
             table.append(slot_colour(index) or self._object_colour)
-        if len(table) < 2 and slots[0].colour is None:
+        # **Gefragt wird der Slot mit dem Index null, nicht der zuerst
+        # deklarierte.** Die Tabelle ist über den Slot**index** aufgebaut;
+        # ``slots[0]`` stand hier und ist etwas anderes. Bei zweimal
+        # vergebenem Index gewinnt in ``known`` der letzte und in dieser
+        # Prüfung der erste — dann fiele eine gesetzte Farbe auf die
+        # Körperfarbe zurück. ``get`` und nicht ``[0]``, und ein fehlender
+        # Slot zählt als „keine Farbe": genau die Behandlung, die die Schleife
+        # darüber ihm gibt.
+        first = known.get(0)
+        if len(table) < 2 and (first is None or first.colour is None):
             return None
         return CellColours(
             np.asarray(indices, dtype=np.int32),
@@ -10163,7 +10208,11 @@ class Viewport(QWidget):
         # Körper der Zusammenhang; eine Achsansicht auf den zuletzt gewählten
         # Körper zu rahmen, während das Blatt daneben liegt, beantwortet die
         # Frage nicht, die gestellt wurde. Pos1 selbst gehört dort ohnehin dem
-        # Blatt (``SketchCanvas.fit_view``) — offen bleibt die ViewBar.
+        # Blatt (``SketchCanvas.fit_view``). Hier stand „offen bleibt die
+        # ViewBar" — das gilt seit dem 07.09.2026 nicht mehr: ``view_from``
+        # rahmt überhaupt nicht, es dreht um den Blickpunkt. Erreichbar ist
+        # diese Bedingung damit nur noch über Pos1; sie bleibt, weil Pos1 im
+        # Skizzenmodus dieselbe Frage hat.
         if follow_selection and self._sketch_frame is None:
             chosen = self._selected_bounds()
             if chosen is not None:
@@ -10411,12 +10460,18 @@ class Viewport(QWidget):
         Körpers liegen. Gerechnet wird die Stellung in
         :func:`camera_for_plane`; hier wird sie nur gesetzt.
 
-        **Ohne ``reset_camera``.** ``view_from`` ruft es, weil eine
-        Achsansicht das ganze Modell zeigen soll. Hier wäre es falsch: Wer den
+        **Ohne ``reset_camera``.** Der Grund dafür gilt unverändert: Wer den
         Skizzenmodus betritt, will auf *seine* Ebene sehen, und ein Zoom auf
         die Hüllbox aller Objekte schöbe eine Skizze auf einer kleinen
         Deckfläche an den Bildrand. Der Ausschnitt bleibt, wie er war — es
         dreht sich nur die Blickrichtung.
+
+        **Der Unterschied zu ``view_from`` ist seit dem 07.09.2026 ein
+        anderer.** Hier stand „``view_from`` ruft es, weil eine Achsansicht das
+        ganze Modell zeigen soll" — es ruft es nicht mehr. Was die beiden
+        trennt, ist die Kamerastellung: ``view_from`` dreht um den **Blickpunkt**
+        und lässt Fokus und Abstand stehen, diese Methode setzt eine
+        **absolute** Stellung aus :func:`camera_for_plane`.
         """
         if self.renderer is None:
             return
@@ -11903,15 +11958,10 @@ class Viewport(QWidget):
         # Tasche kommentarlos einen Aufbau. Die Richtung steht zusätzlich im
         # Namen, weil eine Zahl mit Minus allein sie schlecht erklärt.
         #
-        # **Und nach oben, sonst zeigt es sich vergebens.** Die Leiste entsteht
-        # im Konstruktor der Ansicht und steht damit in der Kindfolge **vor**
-        # der Grafikfläche des Renderers; alle Kinder sind native Fenster, und
-        # Windows stapelt sie in dieser Folge. Die Karten der Ansicht heben
-        # sich in ihrem ``place()`` selbst an, diese Leiste nie — gezeigt läge
-        # sie hinter dem Bild. Einmal je Zug, nicht je Mausereignis.
+        # Das Anheben über die native Renderfläche tut ``DragValueBar.place``
+        # selbst — dort gilt es für alle fünf Wege zur Leiste und nicht nur für
+        # diesen einen.
         ratio = self._device_ratio()
-        if not self.drag_bar.isVisible():
-            self.drag_bar.raise_()
         self.drag_bar.anchor = QPoint(int(x / ratio), int(y / ratio))
         self.drag_bar.follow_length(str(tr("Tiefe") if height < 0.0 else tr("Höhe")), height)
 

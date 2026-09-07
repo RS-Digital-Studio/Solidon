@@ -451,9 +451,14 @@ class HeaderBar(QWidget):
             self._layout.removeWidget(widget)
         for column in range(8):
             self._layout.setColumnStretch(column, 0)
+        # **Vor die Verzweigung, weil sie in beiden Zweigen dasselbe war.**
+        # Beide Hälften begannen mit genau diesen zwei Zeilen; wer das liest,
+        # sucht den Unterschied und findet keinen. Der Knopf zeigt in jeder
+        # Breite nur sein Symbol, und sein Name für den Bildschirmleser hängt
+        # nicht an der Breite.
+        self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.printer_button.setAccessibleName(tr("Drucker wechseln"))
         if compact:
-            self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            self.printer_button.setAccessibleName(tr("Drucker wechseln"))
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)
             self._layout.addWidget(self.printer_control, 0, 2)
@@ -463,8 +468,6 @@ class HeaderBar(QWidget):
                 self._layout.setColumnStretch(column, stretch)
             self._divider.hide()
         else:
-            self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-            self.printer_button.setAccessibleName(tr("Drucker wechseln"))
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)
             self._layout.addWidget(self.plates, 0, 3)

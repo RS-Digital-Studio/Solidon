@@ -218,8 +218,21 @@ gescheitert ist:
   meint sie und nicht den Körper darunter. Beides zugleich gibt es nicht: Der
   Baum gibt kein gewähltes Merkmal zurück, sobald mehrere Zeilen markiert sind.
 * **Eine Art ohne eigene Zeile bekommt die generischen Merkmalshandlungen**
-  (ändern, verschieben, entfernen) statt einer leeren Zeile. Kegel, Stift und
-  Kugel bieten am Register gemessen genau diese drei an.
+  (ändern, verschieben, entfernen) statt einer leeren Zeile — **solange das
+  Register sie an dieser Art anbietet.** Kegel, Stift und Kugel bieten die drei
+  **mit** an, nicht genau sie: gemessen am 07.09.2026 trägt `pin` sieben
+  Operationen, `cone` sechs und `sphere` vier.
+
+  **Und wo das Register nichts kennt, steht nichts.** `applies_to` nennt sechs
+  Arten (`face`, `hole`, `cone`, `pin`, `sphere`, `edge_loop`), die Erkennung
+  liefert mehr — Torus, Verrundung und Gewinde haben null Operationen. Für die
+  standen bis zum 07.09.2026 drei Knöpfe da, hinter denen keine einzige lag.
+  Schlimmer als graue Knöpfe: `feature_requirement` fragt, ob **der Körper**
+  ein solches Merkmal hat, nicht ob das **gewählte** eines ist — auf einem
+  Körper mit Bohrung waren sie bedienbar und hätten auf ein anderes Merkmal
+  gewirkt. `quick_names` schneidet den Rückfall deshalb gegen
+  `REGISTRY.for_feature(kind)`; für die sechs bekannten Arten ändert das
+  nichts.
 * **Aus dem Register herleiten lässt sich das nicht.** Gemessen am 07.09.2026:
   Nach Kategorie-Rang aus `MENU_GROUPS` sortiert stünden bei zwei gewählten
   Körpern *Auf dem Bett anordnen*, *Objekt duplizieren* und *Objekt entfernen*

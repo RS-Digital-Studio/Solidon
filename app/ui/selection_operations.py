@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 
 from app.core.registry import (
     MENU_TWINS,
+    REGISTRY,
     OperationSpec,
     catalogue_operations,
     caveat_line,
@@ -64,13 +65,33 @@ QUICK_FEATURES: dict[str, tuple[str, ...]] = {
 }
 """Je Merkmalsart die Handlungen, die dort zuerst gesucht werden.
 
-Nur wo die Art eine eigene Antwort hat. Kegel, Stift und Kugel bieten genau
-die generischen Merkmalshandlungen an (gemessen am Register, 07.09.2026), und
-die stehen in :data:`QUICK_FEATURE`.
+Nur wo die Art eine eigene Antwort hat. Kegel, Stift und Kugel bieten die drei
+generischen Merkmalshandlungen **mit** an — nicht genau sie: Am Register
+gemessen (07.09.2026) trägt `pin` sieben Operationen, `cone` sechs und
+`sphere` vier, die drei aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht
+in der Suchliste, im Menü und in der Befehlspalette.
 """
 
 QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature")
 """Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
+
+PANEL_LEAST_HEIGHT = 280
+"""Was das Panel mindestens braucht, in Bildpunkten.
+
+Drei Hauptaktionen, Suche, Trefferliste und die beiden getrennten Wege dürfen
+sich auch in einem 720-Pixel-Fenster nicht überlagern. Mit der früheren
+190-Pixel-Untergrenze drückte Qt jede Hauptaktion auf rund 15 Pixel und legte
+das Suchfeld über „Schnittmenge".
+
+**Benannt, weil eine zweite Datei damit rechnet:** ``MainWindow._fit_right_column``
+teilt die Spalte und lässt dem Bericht ``REPORT_RESERVE`` Bildpunkte. Wer eine
+der beiden Zahlen ändert, ohne die andere anzusehen, bricht die Annahme der
+anderen still — als Literale in zwei Modulen war das nicht zu sehen, und der
+Konstanten-Wächter sieht nur benannte Konstanten.
+"""
+
+PANEL_MOST_HEIGHT = 420
+"""Und was es höchstens nimmt. Darüber wächst der Bericht, nicht die Liste."""
 
 
 def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
@@ -85,9 +106,24 @@ def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
     Suchliste darunter, im Menü und in der Befehlspalette. Deshalb ist eine
     unvollständige Liste hier kein Fehler, anders als bei einer Angabe, die
     eine Fähigkeit ausspricht — dort gehört sie ins Register.
+
+    **Empfohlen wird nur, was es an dieser Art überhaupt gibt.** Das Register
+    kennt sechs Merkmalsarten in ``applies_to`` (gemessen 07.09.2026: `face`,
+    `hole`, `cone`, `pin`, `sphere`, `edge_loop`); die Erkennung liefert mehr,
+    unter anderem Torus, Verrundung und Gewinde. Für die bot der Rückfall
+    :data:`QUICK_FEATURE` drei Knöpfe an, hinter denen keine einzige Operation
+    steht — und schlimmer als graue Knöpfe: ``feature_requirement`` fragt, ob
+    **der Körper** ein solches Merkmal hat, nicht ob das **gewählte** eines
+    ist. Auf einem Körper mit Bohrung waren sie deshalb bedienbar und hätten
+    auf ein anderes Merkmal gewirkt. Eine leere Zeile ist ehrlicher.
+
+    Für die sechs bekannten Arten ändert die Schnittmenge nichts — gemessen
+    3→3, 3→3, 3→3, 3→3, 3→3 und 1→1.
     """
     if feature_kind:
-        return QUICK_FEATURES.get(feature_kind, QUICK_FEATURE)
+        wanted = QUICK_FEATURES.get(feature_kind, QUICK_FEATURE)
+        offered = {spec.name for spec in REGISTRY.for_feature(feature_kind)}
+        return tuple(name for name in wanted if name in offered)
     return QUICK_BODIES if bodies > 1 else QUICK_BODY
 
 
@@ -138,12 +174,20 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
     **Die Bausteine bleiben draußen.** Ein räumliches Teil als Textzeile ist
     die schlechtere Darstellung; sie sind durch den Katalogknopf vertreten —
     dieselbe Entscheidung, die auch die Menüleiste trifft.
+
+    **Und dieselbe Erzeuger-Schranke wie bei :func:`body_operations`.** Ein
+    Erzeuger ohne Eingang gehört an keine Auswahl, gleich ob sie einen Körper
+    oder ein Merkmal meint; er bleibt im Menü und in der Befehlspalette. Am
+    Register trifft die Bedingung heute keinen Eintrag mit ``applies_to`` —
+    sie steht hier, damit die beiden Filter dieselbe Regel tragen und nicht der
+    nächste Eintrag durch die Lücke fällt.
     """
     catalogue = catalogue_operations()
     return tuple(
         spec
         for spec in specs
         if spec.applies_to
+        and (spec.consumes != 0 or spec.takes_whole_scene)
         and spec.name not in MENU_TWINS
         and spec.name not in catalogue
         and spec.category not in _SEPARATE_CATEGORIES
@@ -162,12 +206,8 @@ class SelectionOperationsPanel(QWidget):
         self.setObjectName("selectionOperations")
         self.setAccessibleName(tr("Operationen für die Auswahl"))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        # Drei Hauptaktionen, Suche, Trefferliste und die beiden getrennten
-        # Wege dürfen sich auch in einem 720-Pixel-Fenster nicht überlagern.
-        # Mit der früheren 190-Pixel-Untergrenze drückte Qt jede Hauptaktion
-        # auf rund 15 Pixel und legte das Suchfeld über „Schnittmenge“.
-        self.setMinimumHeight(280)
-        self.setMaximumHeight(420)
+        self.setMinimumHeight(PANEL_LEAST_HEIGHT)
+        self.setMaximumHeight(PANEL_MOST_HEIGHT)
 
         # **Einmal aufgezählt, nicht zweimal durchlaufen.** Die Signatur nimmt
         # ein ``Iterable``, und ein Generator wäre beim zweiten Filter leer.

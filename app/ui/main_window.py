@@ -1155,6 +1155,34 @@ def _sketch_param(op_name: str) -> str:
 #: ``sketch_extrude`` tut. Dieselbe Vorwahl, die auch der Dialog bei „Fertig"
 #: trifft (``op_dialog.DEFAULT_SKETCH_USE``) — der Griff ist die kurze Hand
 #: für den häufigsten der fünf Wege, nicht ein sechster.
+def _card_padding(card: QWidget) -> int:
+    """Was der Rand einer Karte von ihrer Höhe für sich nimmt.
+
+    Einmal gerechnet, weil :meth:`MainWindow._fit_right_column` es dreimal
+    braucht: für die Spaltenhöhe und für jeden der zwei Deckel. Eine Karte
+    ohne Layout hat keinen Rand.
+    """
+    frame = card.layout()
+    if frame is None:
+        return 0
+    margins = frame.contentsMargins()
+    return margins.top() + margins.bottom()
+
+
+REPORT_RESERVE = 260
+"""Was dem Prüfbericht in der rechten Spalte bleibt, in Bildpunkten.
+
+Reiter, Zusammenfassung, Slicerweg und Filter brauchen so viel, um
+auseinanderzustehen. Erst darüber wächst die Operationsliste.
+
+**Benannt, weil eine zweite Datei damit rechnet:**
+:data:`app.ui.selection_operations.PANEL_LEAST_HEIGHT` ist die Untergrenze der
+Liste, und :meth:`MainWindow._fit_right_column` stellt beide Zahlen gegen
+dieselbe Spaltenhöhe. Als Literale in zwei Modulen war die Kopplung nicht zu
+sehen, und der Konstanten-Wächter aus ``tests/test_shared_constants.py`` sieht
+nur benannte Konstanten.
+"""
+
 PULL_OP = "sketch_extrude"
 
 #: Wie der Höhenparameter dieser Operation heißt.
@@ -2091,7 +2119,6 @@ class MainWindow(QMainWindow):
         # aus dem Fenster und verbarg Merkmale/Bausteine vollständig.
         self.right.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Ignored)
         self.right.setMinimumHeight(120)
-        self._right_unbounded_height = self.right.maximumHeight()
         self.right.addTab(self.report, tr("Prüfbericht"))
         self.right.addTab(self.chat, tr("Chat"))
         # Der Reiter trägt, wie viele Fehler und Warnungen hinter ihm stehen.
@@ -2144,6 +2171,11 @@ class MainWindow(QMainWindow):
         self.right_column = CardColumn(self)
         self.right_column.add_card(self.right_card, 1)
         self.right_column.add_card(self.selection_card)
+        self._card_unbounded_height = self.selection_card.maximumHeight()
+        """Der Höchstwert einer Karte, bevor :meth:`_fit_right_column` teilt.
+
+        Gedeckelt wird die Karte und nicht ihr Inhalt (der Grund steht dort),
+        also muss auch der Weg zurück die Karte lösen."""
         # Die Karte folgt ihrem Inhalt: ohne Auswahl gibt es sie nicht, und
         # ``_reflow_right_column`` zieht sie bei jedem Auswahlwechsel nach.
         self.selection_card.setVisible(False)
@@ -3732,39 +3764,54 @@ class MainWindow(QMainWindow):
         """Die volle Höhe ermitteln und erst danach zwischen den Bereichen teilen."""
         # Eine vorige Teilung darf den Größenhinweis der ganzen Karte nicht
         # deckeln. Sonst blieb der Bericht nach einem frühen Auswahlereignis
-        # auf 120 Pixeln, obwohl das danach gezeigte Fenster Platz bot.
-        self.right.setMaximumHeight(self._right_unbounded_height)
-        self.selection_operations.setMaximumHeight(self._selection_unbounded_height)
+        # auf seiner Untergrenze, obwohl das danach gezeigte Fenster Platz bot.
+        self.selection_card.setMaximumHeight(self._card_unbounded_height)
         self.selection_card.setVisible(not self.selection_operations.isHidden())
         self.overlay.reflow()
         self._fit_right_column()
 
     def _fit_right_column(self) -> None:
-        """Bericht und Auswahlhandlungen ohne Überstand auf die Spalte teilen."""
+        """Bericht und Auswahlhandlungen ohne Überstand auf die Spalte teilen.
+
+        **Gedeckelt wird die Karte, nicht ihr Inhalt.** Hier stand ein Deckel
+        auf ``self.right``, und dessen senkrechte Größenpolitik ist
+        ``Ignored``: Sobald die Berichtskarte über ihren Streckfaktor mehr Höhe
+        bekam, als der Deckel dem Inhalt erlaubte, zentrierte ihr
+        ``QVBoxLayout`` das einzige nicht wachsende Kind — die Reiter rutschten
+        in die Mitte, und die Karte sah bei jeder Auswahl kaputt aus (Konzept
+        „Ein Ort für die Auswahl", P1). Gedeckelt wird deshalb die
+        **Auswahlkarte**; was übrig bleibt, verteilt der Streckfaktor der
+        ``CardColumn`` an die Berichtskarte, und ihr Inhalt füllt sie.
+        """
         if self.selection_operations.isHidden():
-            self.right.setMaximumHeight(self._right_unbounded_height)
-            self.selection_operations.setMaximumHeight(self._selection_unbounded_height)
+            self.selection_card.setMaximumHeight(self._card_unbounded_height)
             return
         layout = self.right_column.layout()
         assert layout is not None
         # Was den beiden Inhalten bleibt: die Spalte ohne die Lücke zwischen
         # den Karten und ohne die Randpixel jeder Karte.
-        frames = sum(
-            frame.contentsMargins().top() + frame.contentsMargins().bottom()
-            for card in (self.right_card, self.selection_card)
-            if (frame := card.layout()) is not None
-        )
+        frames = _card_padding(self.right_card) + _card_padding(self.selection_card)
         total = self.right_column.height() - layout.spacing() - frames
-        # 260 Pixel halten Reiter, Zusammenfassung, Slicerweg und Filter des
-        # Berichts auseinander. Auf höheren Fenstern darf die Operationsliste
-        # bis zu ihrem eigenen Maximum wachsen; auf Laptop-Höhe gibt sie den
-        # nötigen Raum zuerst an den Bericht zurück.
+        # :data:`REPORT_RESERVE` hält Reiter, Zusammenfassung, Slicerweg und
+        # Filter des Berichts auseinander. Auf höheren Fenstern darf die
+        # Operationsliste bis zu ihrem eigenen Maximum wachsen; auf
+        # Laptop-Höhe gibt sie den nötigen Raum zuerst an den Bericht zurück.
         panel_height = min(
             self._selection_unbounded_height,
-            max(self.selection_operations.minimumHeight(), total - 260),
+            max(self.selection_operations.minimumHeight(), total - REPORT_RESERVE),
         )
-        self.selection_operations.setMaximumHeight(panel_height)
-        self.right.setMaximumHeight(max(120, total - panel_height))
+        # **Beide Karten bekommen ihren Deckel, nicht nur eine.** Die
+        # Berichtskarte trägt den Streckfaktor: ungedeckelt nimmt sie den
+        # ganzen Rest, und die Auswahlkarte rutscht unten aus der Spalte —
+        # gemessen 567 gegen 560 Bildpunkte, `test_ui.py` fängt es. Die zwei
+        # Deckel zusammen sind genau die Spalte.
+        #
+        # Auf die Karte und nicht auf ihren Inhalt: Der Rand der Karte gehört
+        # zu ihrer Höhe. Und ein Deckel auf dem Inhalt war der Bildfehler, den
+        # diese Änderung behebt.
+        report_height = max(self.right.minimumHeight(), total - panel_height)
+        self.selection_card.setMaximumHeight(panel_height + _card_padding(self.selection_card))
+        self.right_card.setMaximumHeight(report_height + _card_padding(self.right_card))
         layout.invalidate()
         layout.activate()
 

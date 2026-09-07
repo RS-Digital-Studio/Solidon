@@ -15,6 +15,11 @@ paths:
   - "app/ui/explode_bar.py"
   - "app/ui/scale_widget.py"
   - "app/ui/snapshots.py"
+  # Und die 3D-Maus, aus demselben Grund wie das Renderer-Paket: Der ganze
+  # Abschnitt über sie steht in dieser Datei — Achsenabbildung, Empfindlichkeit,
+  # der Übersprechfilter —, aber wer `spacemouse.py` anfasste, bekam nur
+  # `oberflaeche.md` zu sehen. Nachgetragen am 07.09.2026.
+  - "app/ui/spacemouse.py"
 ---
 
 # Regeln für die Ansicht
@@ -823,7 +828,7 @@ Drei Dinge hängen daran, und jedes hat seinen Grund:
   hielte `outgrown` jede Auswahl eines kleinen Teils für eine gewachsene
   Szene und rahmte beim nächsten Aufbau von selbst wieder alles.
 
-**Im Skizzenmodus gilt es nicht.** Dort ist die Skizze der Gegenstand und der Körper der Zusammenhang (siehe „Die Skizze ist Vordergrund, der Körper Zusammenhang“ weiter unten). Pos1 gehört dort ohnehin dem Blatt (`SketchCanvas.fit_view`); offen war nur die ViewBar, und die rahmt jetzt auch dort die ganze Szene.
+**Im Skizzenmodus gilt es nicht.** Dort ist die Skizze der Gegenstand und der Körper der Zusammenhang (siehe „Die Skizze ist Vordergrund, der Körper Zusammenhang“ weiter unten). Pos1 gehört dort ohnehin dem Blatt (`SketchCanvas.fit_view`). Die ViewBar rahmt seit dem 07.09.2026 **nirgends** mehr: `view_from` dreht die Kamera um den Blickpunkt und ruft `_fit_camera` nicht. Hier stand bis dahin das Gegenteil („offen war nur die ViewBar, und die rahmt jetzt auch dort die ganze Szene“) — der Satz war der Stand vor dieser Änderung und ist bei ihr stehen geblieben.
 
 **Und der automatische Weg folgt der Auswahl nicht**
 (`_fit_once_for` ruft `reset_camera(follow_selection=False)`). Dort wird

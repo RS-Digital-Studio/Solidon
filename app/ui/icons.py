@@ -39,8 +39,10 @@ from PySide6.QtGui import (
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication, QWidget
 
-#: Wie viel größer als die Zeilenhöhe ein Symbol gezeichnet wird, bevor es
-#: verkleinert wird — sonst franst es auf HiDPI aus.
+#: Wie viel feiner ein Symbol gerastert wird, als es angezeigt wird — sonst
+#: franst es auf HiDPI aus. Die Anzeigegröße kommt aus der Zeilenhöhe
+#: (hier und in ``panels``) oder aus dem SVG selbst — ``manual_window``
+#: rastert ``renderer.defaultSize()`` hoch.
 OVERSAMPLING: Final = 2
 
 _HEAD: Final = (
