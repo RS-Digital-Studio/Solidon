@@ -189,6 +189,45 @@ einklappbare Abschnitte; Mitte der Viewport; rechts **entweder** Chat **oder**
 Prüfbericht, umschaltbar und ganz ausblendbar. Die Umschaltung springt zum
 Bericht, wenn eine Warnung entsteht.
 
+**Die Handlungen an der Auswahl stehen in einer zweiten Karte darunter,
+nicht in derselben** (Entscheidung Robert, 07.09.2026): Bericht und Chat
+schließen mit ihrem eigenen Rand ab, die Auswahlkarte trägt denselben Stil,
+den Abstand dazwischen hält `MARGIN`, und durch die Lücke ist das Modell zu
+sehen — die Maske der Spalte (`overlay.CardColumn`) nimmt sie aus. Für F9,
+Warnungszähler und Höhenverteilung bleibt es **eine** Zone; die zweite Karte
+folgt ihrem Inhalt und gibt es ohne gewählten Körper nicht.
+
+**Und was in dieser Karte vorn steht, richtet sich nach der Auswahl — nach
+ihrer Art und nach ihrer Menge** (Robert, 07.09.2026: „es sollten immer je
+nach auswahl und menge der auswahl die sinnvollsten aktionen dastehen"). Fest
+verdrahtet waren es die drei Booleschen; an einem einzelnen Körper standen
+damit drei graue Knöpfe, denn eine Vereinigung braucht zwei.
+
+Vier Sätze dazu, und der letzte ist der, an dem ein mechanischer Entwurf
+gescheitert ist:
+
+* **Die Rangfolge steht in `selection_operations.py`**, nicht im Register:
+  `quick_names(bodies, feature_kind)` liest sie aus `QUICK_BODIES`,
+  `QUICK_BODY`, `QUICK_FEATURES` und `QUICK_FEATURE`. Sie ist eine
+  **Empfehlung, keine Aufzählung** — was dort fehlt, steht in der Suchliste,
+  im Menü und in der Palette. Deshalb ist Unvollständigkeit hier kein Fehler,
+  anders als bei einer Angabe, die eine Fähigkeit ausspricht (`requires_kind`,
+  `applies_to`): die gehört ins Register, weil eine Liste in der Oberfläche
+  beim nächsten Zuwachs schweigt.
+* **Das Merkmal hat Vorrang vor der Menge.** Wer eine Bohrung angeklickt hat,
+  meint sie und nicht den Körper darunter. Beides zugleich gibt es nicht: Der
+  Baum gibt kein gewähltes Merkmal zurück, sobald mehrere Zeilen markiert sind.
+* **Eine Art ohne eigene Zeile bekommt die generischen Merkmalshandlungen**
+  (ändern, verschieben, entfernen) statt einer leeren Zeile. Kegel, Stift und
+  Kugel bieten am Register gemessen genau diese drei an.
+* **Aus dem Register herleiten lässt sich das nicht.** Gemessen am 07.09.2026:
+  Nach Kategorie-Rang aus `MENU_GROUPS` sortiert stünden bei zwei gewählten
+  Körpern *Auf dem Bett anordnen*, *Objekt duplizieren* und *Objekt entfernen*
+  vorn — die Kategorie `scene` steht im Menü vor `boolean`, weil sie
+  Objektverwaltung ist, nicht weil sie die konstruktive Hauptsache wäre. Die
+  Booleschen, der Grund für diese Fläche, fielen heraus. Ein Kürzel als
+  Häufigkeitssignal hilft dort nicht: *Löschen* und *Umbenennen* tragen eines.
+
 Solange ein Beispielprojekt offen ist, hat die rechte Spalte einen dritten
 Reiter: die Tour (`app/ui/tour.py`, Schritte in `app/core/tour.py`). Sie
 erkennt getane Schritte über `projectChanged` am Dokument und Verlauf, „Weiter"

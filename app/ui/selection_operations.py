@@ -1,8 +1,17 @@
-"""Kontextsensitive Körperoperationen unter Prüfbericht und Chat.
+"""Kontextsensitive Operationen zur Auswahl, unter Prüfbericht und Chat.
 
 Die Liste entsteht einmal aus dem Operationsregister. Auswahlwechsel ändern
-nur Sichtbarkeit, Freigabe und Hinweise der vorhandenen Knöpfe; bei großen
-Registern wird weder ein Modell noch ein Qt-Baum neu gebaut.
+nur Sichtbarkeit, Freigabe, Hinweise und die Anordnung der vorhandenen
+Knöpfe; bei großen Registern wird weder ein Modell noch ein Qt-Baum neu
+gebaut.
+
+**Die Hauptaktionen oben richten sich nach der Auswahl** — nach ihrer Art und
+nach ihrer Menge (Robert, 07.09.2026: „es sollten immer je nach auswahl und
+menge der auswahl die sinnvollsten aktionen dastehen"). Fest verdrahtet waren
+es die drei Booleschen: An einem einzelnen Körper standen damit drei graue
+Knöpfe, denn eine Vereinigung braucht zwei, und an einer gewählten Fläche
+stand gar nichts — Operationen mit ``applies_to`` waren aus dem Panel
+gefiltert. Beides beantwortet :func:`quick_names`.
 """
 
 from __future__ import annotations
@@ -34,14 +43,73 @@ from app.ui.icons import icon, icon_name_for
 from app.ui.leash import weak_slot
 from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, set_level
 
-QUICK_OPERATIONS = ("union_objects", "subtract_objects", "intersect_objects")
-"""Die drei Handlungen, wegen derer die Auswahlfläche zuerst gebraucht wird."""
+QUICK_BODIES = ("union_objects", "subtract_objects", "intersect_objects")
+"""Bei zwei oder mehr Körpern: die Handlungen, wegen derer die Auswahlfläche
+zuerst gebraucht wurde."""
 
-_SEPARATE_CATEGORIES = frozenset({"holes", "parts"})
+QUICK_BODY = ("drill_hole", "hollow_object", "split_pinned")
+"""Bei genau einem Körper.
+
+Die drei häufigsten Handlungen an einem einzelnen Druckteil — und keine
+davon liegt schon auf einem Griff im Bild oder in der Werkzeugzeile:
+Verschieben, Drehen und Skalieren haben ihre Leiste, das Trennen entlang
+einer gezeichneten Linie seine. Bohren braucht eine Fläche und findet sie an
+jedem Körper; ohne eine erkannte sagt es das selbst (``feature_requirement``).
+"""
+
+QUICK_FEATURES: dict[str, tuple[str, ...]] = {
+    "face": ("drill_hole", "sketch_pocket", "push_face"),
+    "hole": ("resize_hole", "countersink_hole", "plug_hole"),
+    "edge_loop": ("repair",),
+}
+"""Je Merkmalsart die Handlungen, die dort zuerst gesucht werden.
+
+Nur wo die Art eine eigene Antwort hat. Kegel, Stift und Kugel bieten genau
+die generischen Merkmalshandlungen an (gemessen am Register, 07.09.2026), und
+die stehen in :data:`QUICK_FEATURE`.
+"""
+
+QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature")
+"""Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
+
+
+def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
+    """Die Hauptaktionen für diese Auswahl, in ihrer Rangfolge.
+
+    **Das Merkmal hat Vorrang vor der Menge.** Wer eine Bohrung angeklickt
+    hat, meint die Bohrung und nicht den Körper darunter — und mehr als ein
+    Körper *und* ein Merkmal gibt es nicht zugleich: Der Baum gibt kein
+    gewähltes Merkmal zurück, sobald mehrere Zeilen markiert sind.
+
+    Eine **Empfehlung, keine Aufzählung**: Was hier fehlt, steht in der
+    Suchliste darunter, im Menü und in der Befehlspalette. Deshalb ist eine
+    unvollständige Liste hier kein Fehler, anders als bei einer Angabe, die
+    eine Fähigkeit ausspricht — dort gehört sie ins Register.
+    """
+    if feature_kind:
+        return QUICK_FEATURES.get(feature_kind, QUICK_FEATURE)
+    return QUICK_BODIES if bodies > 1 else QUICK_BODY
+
+
+def all_quick_names() -> tuple[str, ...]:
+    """Jeder Name, der in irgendeiner Lage vorn stehen kann — ohne Wiederholung.
+
+    Der Aufbau braucht sie: Die Hauptaktionen bekommen ihre Knöpfe **einmal**
+    und werden bei Auswahlwechseln nur noch ein- und ausgeblendet. In der
+    Reihenfolge ihrer Tabellen, damit die Zeile oben von links nach rechts so
+    steht, wie :func:`quick_names` sie nennt.
+    """
+    found: list[str] = []
+    for group in (QUICK_BODIES, QUICK_BODY, *QUICK_FEATURES.values(), QUICK_FEATURE):
+        found.extend(name for name in group if name not in found)
+    return tuple(found)
+
+
+_SEPARATE_CATEGORIES = frozenset({"parts"})
 
 
 def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
-    """Körperoperationen, ohne die getrennten Merkmals- und Bausteinwege.
+    """Körperoperationen, ohne den getrennten Bausteinweg.
 
     Versteckte Rechenkern-Zwillinge sind keine zweite Handlung. Erzeuger ohne
     Eingang gehören ebenfalls nicht an eine Auswahl; sie bleiben im Menü und
@@ -59,8 +127,31 @@ def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]
     )
 
 
+def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
+    """Was an einem Merkmal gearbeitet wird — Bohren, Senken, Verschließen.
+
+    Dieselbe Zuordnung, aus der das Kontextmenü am Merkmal seine Zeilen baut
+    (``applies_to``, §18.5): eine dritte Oberfläche über einer Quelle, keine
+    zweite Rechnung. Sie standen bis zum 07.09.2026 nicht im Panel, und damit
+    bot eine gewählte Fläche dort nichts an.
+
+    **Die Bausteine bleiben draußen.** Ein räumliches Teil als Textzeile ist
+    die schlechtere Darstellung; sie sind durch den Katalogknopf vertreten —
+    dieselbe Entscheidung, die auch die Menüleiste trifft.
+    """
+    catalogue = catalogue_operations()
+    return tuple(
+        spec
+        for spec in specs
+        if spec.applies_to
+        and spec.name not in MENU_TWINS
+        and spec.name not in catalogue
+        and spec.category not in _SEPARATE_CATEGORIES
+    )
+
+
 class SelectionOperationsPanel(QWidget):
-    """Alle Handlungen für die aktuelle Körperauswahl, dauerhaft aufgebaut."""
+    """Alle Handlungen für die aktuelle Auswahl, dauerhaft aufgebaut."""
 
     operationRequested = Signal(object)
     catalogRequested = Signal()
@@ -78,41 +169,46 @@ class SelectionOperationsPanel(QWidget):
         self.setMinimumHeight(280)
         self.setMaximumHeight(420)
 
-        operations = body_operations(specs)
+        # **Einmal aufgezählt, nicht zweimal durchlaufen.** Die Signatur nimmt
+        # ein ``Iterable``, und ein Generator wäre beim zweiten Filter leer.
+        specs = tuple(specs)
+        operations = body_operations(specs) + feature_operations(specs)
         by_name = {spec.name: spec for spec in operations}
         self._buttons: dict[str, QToolButton] = {}
         self._groups: dict[str, tuple[QLabel, tuple[QToolButton, ...]]] = {}
         self._states: dict[str, tuple[bool, str]] = {}
+        self._quick_buttons: dict[str, QToolButton] = {}
+        self._quick_shown: list[str] = []
 
         self.summary = QLabel("", self)
         set_level(self.summary, "section")
         self.summary.setAccessibleName(tr("Aktuelle Auswahl"))
 
+        # Die Hauptaktionen jeder Lage bekommen ihren Knopf hier und behalten
+        # ihn: eingehängt wird bei jedem Auswahlwechsel, gebaut nie wieder.
+        # Verborgen, solange sie nicht in der Zeile stehen — ein Kind ohne
+        # Layoutplatz zeichnete Qt sonst in der linken obersten Ecke.
         quick = QGridLayout()
         quick.setContentsMargins(0, 0, 0, 0)
         quick.setHorizontalSpacing(TIGHT)
         quick.setVerticalSpacing(TIGHT)
-        for index, name in enumerate(QUICK_OPERATIONS):
+        quick.setColumnStretch(0, 1)
+        quick.setColumnStretch(1, 1)
+        self._quick = quick
+        for name in all_quick_names():
             spec = by_name.get(name)
             if spec is None:
                 continue
             button = self._operation_button(spec)
             button.setObjectName("quickOperation")
-            # Zwei kurze Hauptaktionen teilen die erste Zeile, die längere
-            # Schnittmenge bekommt die zweite allein. Das spart dem Bericht
-            # auf 720 Pixel Höhe eine volle Zeile, ohne einen Titel zu kürzen.
-            if index < 2:
-                quick.addWidget(button, 0, index)
-            else:
-                quick.addWidget(button, 1, 0, 1, 2)
-        quick.setColumnStretch(0, 1)
-        quick.setColumnStretch(1, 1)
+            button.hide()
+            self._quick_buttons[name] = button
 
         self.search = QLineEdit(self)
         self.search.setClearButtonEnabled(True)
         self.search.setMinimumHeight(TARGET_SIZE)
         self.search.setPlaceholderText(tr("Weitere Operationen durchsuchen"))
-        self.search.setAccessibleName(tr("Körperoperationen durchsuchen"))
+        self.search.setAccessibleName(tr("Operationen durchsuchen"))
         self.search.textChanged.connect(self._filter)
 
         content = QWidget(self)
@@ -122,7 +218,9 @@ class SelectionOperationsPanel(QWidget):
 
         grouped: dict[str, list[OperationSpec]] = {}
         for spec in operations:
-            if spec.name in QUICK_OPERATIONS:
+            # Was oben stehen kann, steht nicht auch darunter: zwei Knöpfe für
+            # dieselbe Handlung sind eine Frage ohne Antwort.
+            if spec.name in self._quick_buttons:
                 continue
             grouped.setdefault(str(group_title(spec.category)), []).append(spec)
         for title in sorted(grouped, key=str.casefold):
@@ -143,7 +241,7 @@ class SelectionOperationsPanel(QWidget):
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroller.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroller.setMinimumHeight(TARGET_SIZE)
-        self.scroller.setAccessibleName(tr("Passende Körperoperationen"))
+        self.scroller.setAccessibleName(tr("Passende Operationen"))
 
         self.feature_button = QToolButton(self)
         self.feature_button.setText(tr("Merkmale"))
@@ -204,17 +302,54 @@ class SelectionOperationsPanel(QWidget):
         """Den Registereintrag ohne dauerhafte Lambda-Rückbindung weiterreichen."""
         self.operationRequested.emit(spec)
 
+    def _lay_out_quick(self, names: Iterable[str]) -> None:
+        """Die Hauptaktionen dieser Lage in die Zeile oben hängen.
+
+        Zwei kurze teilen die erste Zeile, jede weitere bekommt ihre eigene
+        über die ganze Breite — bei einer einzigen ist das die erste. Das
+        spart dem Bericht auf 720 Pixel Höhe eine volle Zeile, ohne einen
+        Titel zu kürzen.
+
+        Steht schon das Richtige da, passiert nichts: Auswahlereignisse kommen
+        in Serie, und ein Layout, das bei jedem neu hängt, wirft bei jedem ein
+        ``LayoutRequest`` — dasselbe Ereignis, an dem die Überlagerung ihre
+        Karten neu verteilt.
+        """
+        wanted = [name for name in names if name in self._quick_buttons]
+        if wanted == self._quick_shown:
+            return
+        for name in self._quick_shown:
+            button = self._quick_buttons[name]
+            self._quick.removeWidget(button)
+            button.hide()
+        self._quick_shown = wanted
+        for index, name in enumerate(wanted):
+            button = self._quick_buttons[name]
+            if len(wanted) > 1 and index < 2:
+                self._quick.addWidget(button, 0, index)
+            else:
+                self._quick.addWidget(button, max(index - 1, 0), 0, 1, 2)
+            button.show()
+
     def set_context(
         self,
         selected: int,
         availability: Callable[[str], tuple[bool, str]],
         *,
         feature_chosen: bool,
+        feature_kind: str = "",
     ) -> None:
-        """Auswahlzahl und Freigaben nachführen, ohne die Liste neu zu bauen."""
+        """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
+
+        ``feature_kind`` ist die Art des gewählten Merkmals — ``face``,
+        ``hole`` und so fort — und leer, solange nur Körper gewählt sind. Sie
+        entscheidet zusammen mit ``selected``, welche Hauptaktionen oben
+        stehen (:func:`quick_names`).
+        """
         self.setVisible(selected > 0)
         if selected <= 0:
             return
+        self._lay_out_quick(quick_names(selected, feature_kind))
         self.summary.setText(
             tr("1 Objekt gewählt")
             if selected == 1

@@ -946,3 +946,46 @@ def test_a_view_whose_model_turned_into_a_stranger_still_answers(
         "eine Liste, deren Modell fremd geworden ist, muss eine Ersatzhöhe "
         f"bekommen statt null — sonst fällt die Karte zusammen (bekam {height})"
     )
+
+
+def test_a_card_column_masks_only_its_visible_cards(qt_app: QApplication) -> None:
+    """Zwei Karten in einer Zone, und die Lücke dazwischen gehört der Ansicht.
+
+    Die rechte Spalte trägt seit dem 07.09.2026 Bericht und Chat oben und die
+    Auswahlhandlungen in einer zweiten Karte darunter (Entscheidung Robert).
+    Für den Host bleibt sie eine Zone mit einer Maske — und die muss aus den
+    sichtbaren Karten gebaut sein, nicht aus dem Rechteck der Spalte: sonst
+    stünde zwischen den Karten der schwarze Elternhintergrund, den
+    ``_round_corners`` an den Ecken einer Karte beschreibt. Eine
+    ausgeblendete Karte verschwindet auch aus der Maske.
+    """
+    from PySide6.QtCore import QPoint
+
+    from app.ui.overlay import CARD, CardColumn
+
+    column = CardColumn()
+    upper, lower = QWidget(), QWidget()
+    upper.setMinimumHeight(100)
+    lower.setMinimumHeight(60)
+    column.add_card(upper, 1)
+    column.add_card(lower)
+    assert upper.objectName() == CARD == lower.objectName()
+    column.resize(200, 300)
+    column.show()
+    QApplication.processEvents()
+    try:
+        gap_top, gap_bottom = upper.geometry().bottom(), lower.geometry().top()
+        assert gap_bottom - gap_top - 1 == MARGIN
+        mask = column.mask()
+        assert mask.contains(QPoint(100, upper.geometry().center().y()))
+        assert mask.contains(QPoint(100, lower.geometry().center().y()))
+        assert not mask.contains(QPoint(100, (gap_top + gap_bottom) // 2)), "die Lücke ist frei"
+        assert not mask.contains(QPoint(0, 0)), "und die Ecken bleiben rund"
+
+        lower.hide()
+        QApplication.processEvents()
+        assert column.mask().boundingRect().bottom() <= upper.geometry().bottom(), (
+            "eine ausgeblendete Karte verschwindet aus der Maske"
+        )
+    finally:
+        column.deleteLater()

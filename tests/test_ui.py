@@ -4271,15 +4271,31 @@ def test_operations_are_greyed_out_until_they_could_run(window: MainWindow) -> N
 def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
     window: MainWindow,
 ) -> None:
-    """Der neue kurze Weg folgt Auswahl und Menüfreigabe gemeinsam."""
+    """Der neue kurze Weg folgt Auswahl und Menüfreigabe gemeinsam.
+
+    Und er steht in einer **eigenen Karte** unter der von Bericht und Chat
+    (Entscheidung Robert, 07.09.2026): gleiche Bauart, eigener Rand, eine
+    Lücke dazwischen, durch die das Modell zu sehen ist — die Maske der
+    Spalte nimmt die Lücke aus.
+    """
+    from PySide6.QtCore import QPoint
+
+    from app.ui.overlay import CARD, MARGIN
+
     panel = window.selection_operations
     assert panel.isHidden()
+    assert panel.parentWidget() is window.selection_card
+    assert window.selection_card.isHidden(), "ohne Auswahl gibt es die zweite Karte nicht"
+    assert window.right.parentWidget() is window.right_card
+    assert window.right_card.objectName() == CARD == window.selection_card.objectName()
+    assert window.right_column.objectName() != CARD, "die Spalte selbst ist keine Karte"
 
     _with_two_objects(window)
     first = window.object_tree.tree.topLevelItem(0)
     second = window.object_tree.tree.topLevelItem(1)
     first.setSelected(True)
     assert not panel.isHidden()
+    assert not window.selection_card.isHidden(), "die Karte folgt ihrem Inhalt"
     assert not panel._buttons["union_objects"].isEnabled()
 
     second.setSelected(True)
@@ -4304,6 +4320,54 @@ def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
     assert window.report.severity.height() >= 32
     assert window.report.to_slicer.height() >= 32
     assert panel.catalog_button.isVisibleTo(window.right_column)
+
+    upper, lower = window.right_card.geometry(), window.selection_card.geometry()
+    assert lower.top() - upper.bottom() - 1 == MARGIN, "derselbe Abstand wie zum Fensterrand"
+    mask = window.right_column.mask()
+    middle = upper.center().x()
+    assert mask.contains(QPoint(middle, upper.center().y()))
+    assert mask.contains(QPoint(middle, lower.center().y()))
+    assert not mask.contains(QPoint(middle, (upper.bottom() + lower.top()) // 2)), (
+        "in der Lücke zwischen den Karten steht das Modell, nicht die Spalte"
+    )
+
+
+def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None:
+    """Die Anwendung reicht die Merkmalsart wirklich durch (Testart „Anschluss").
+
+    Dass das Panel es kann, steht in ``test_selection_operations.py``. Ob das
+    Fenster es *tut*, hängt an zwei Stellen: ``selected_feature_kind()`` im
+    Aufruf von ``set_context`` und daran, dass die Merkmalsauswahl überhaupt
+    die Freigaben nachführt (``_on_feature_selected`` ruft
+    ``_update_actions``). Ohne diesen Test wäre die Zusage genau dort
+    eingelöst, wo sie niemand sieht.
+    """
+    from app.ui.selection_operations import QUICK_BODY, QUICK_FEATURES
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    panel = window.selection_operations
+
+    def vorn() -> set[str]:
+        return {name for name, button in panel._quick_buttons.items() if not button.isHidden()}
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    assert vorn() == set(QUICK_BODY), "ein Körper allein: bohren, aushöhlen, teilen"
+
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    assert vorn() == set(QUICK_FEATURES["hole"]), "die Bohrung bringt ihre eigenen mit"
+    assert all(panel._buttons[name].isEnabled() for name in QUICK_FEATURES["hole"]), (
+        "und sie sind ausführbar, nicht drei graue Knöpfe"
+    )
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    assert vorn() == set(QUICK_BODY), "ohne Merkmal zählt wieder die Menge"
 
 
 def test_the_selection_panel_uses_the_shared_launch_path() -> None:

@@ -243,7 +243,7 @@ from app.ui.loading import BAR_AFTER_MS, DELAY_MS, LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import DeferredSourcePicker, OperationDialog, SketchUseDialog
-from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
+from app.ui.overlay import CARD_PADDING, CardColumn, OverlayHost, card_stylesheet
 from app.ui.palette import text_colour
 from app.ui.panels import (
     SEVERITY_MARKER,
@@ -2128,13 +2128,25 @@ class MainWindow(QMainWindow):
         self.selection_operations.catalogRequested.connect(self.action_catalog)
         self.selection_operations.featurePanelRequested.connect(self._show_feature_panel)
 
-        self.right_column = QWidget(self)
-        self.right_column.setObjectName("overlayCard")
-        right_layout = QVBoxLayout(self.right_column)
+        # Zwei Karten übereinander, nicht eine (Entscheidung Robert,
+        # 07.09.2026): Bericht und Chat schließen mit ihrem eigenen Rand ab,
+        # und die Auswahlhandlungen stehen darunter in einer zweiten Karte
+        # gleicher Bauart. Für Zone, F9 und Höhenverteilung bleibt es eine
+        # Spalte — die ``CardColumn`` hält die Lücke dazwischen frei.
+        self.right_card = QWidget(self)
+        right_layout = QVBoxLayout(self.right_card)
         right_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
-        right_layout.setSpacing(TIGHT)
-        right_layout.addWidget(self.right, 1)
-        right_layout.addWidget(self.selection_operations)
+        right_layout.addWidget(self.right)
+        self.selection_card = QWidget(self)
+        selection_layout = QVBoxLayout(self.selection_card)
+        selection_layout.setContentsMargins(CARD_PADDING, CARD_PADDING, CARD_PADDING, CARD_PADDING)
+        selection_layout.addWidget(self.selection_operations)
+        self.right_column = CardColumn(self)
+        self.right_column.add_card(self.right_card, 1)
+        self.right_column.add_card(self.selection_card)
+        # Die Karte folgt ihrem Inhalt: ohne Auswahl gibt es sie nicht, und
+        # ``_reflow_right_column`` zieht sie bei jedem Auswahlwechsel nach.
+        self.selection_card.setVisible(False)
 
         # §2.5 nennt drei Zonen und sagt nicht, dass die äußeren der mittleren
         # ihre Fläche nehmen. Sie liegen jetzt darüber: die Ansicht füllt das
@@ -3708,6 +3720,10 @@ class MainWindow(QMainWindow):
             chosen,
             lambda name: self._palette_availability(name, locked=locked, gesturing=gesturing),
             feature_chosen=bool(self.object_tree.selected_features()),
+            # Dieselbe Auskunft, aus der die Befehlspalette ihre Reihenfolge
+            # nimmt: Wer eine Bohrung angeklickt hat, sucht Senken und
+            # Verschließen und nicht das Vereinigen zweier Körper.
+            feature_kind=self.selected_feature_kind() or "",
         )
         self._reflow_right_column()
         self._hide_dead_menus()
@@ -3719,19 +3735,26 @@ class MainWindow(QMainWindow):
         # auf 120 Pixeln, obwohl das danach gezeigte Fenster Platz bot.
         self.right.setMaximumHeight(self._right_unbounded_height)
         self.selection_operations.setMaximumHeight(self._selection_unbounded_height)
+        self.selection_card.setVisible(not self.selection_operations.isHidden())
         self.overlay.reflow()
         self._fit_right_column()
 
     def _fit_right_column(self) -> None:
-        """Bericht und Auswahlhandlungen ohne Überstand in die Karte teilen."""
+        """Bericht und Auswahlhandlungen ohne Überstand auf die Spalte teilen."""
         if self.selection_operations.isHidden():
             self.right.setMaximumHeight(self._right_unbounded_height)
             self.selection_operations.setMaximumHeight(self._selection_unbounded_height)
             return
         layout = self.right_column.layout()
         assert layout is not None
-        margins = layout.contentsMargins()
-        total = self.right_column.height() - margins.top() - margins.bottom() - layout.spacing()
+        # Was den beiden Inhalten bleibt: die Spalte ohne die Lücke zwischen
+        # den Karten und ohne die Randpixel jeder Karte.
+        frames = sum(
+            frame.contentsMargins().top() + frame.contentsMargins().bottom()
+            for card in (self.right_card, self.selection_card)
+            if (frame := card.layout()) is not None
+        )
+        total = self.right_column.height() - layout.spacing() - frames
         # 260 Pixel halten Reiter, Zusammenfassung, Slicerweg und Filter des
         # Berichts auseinander. Auf höheren Fenstern darf die Operationsliste
         # bis zu ihrem eigenen Maximum wachsen; auf Laptop-Höhe gibt sie den

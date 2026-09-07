@@ -218,8 +218,10 @@ den gewählten Ausschnitt im Körpermodus nicht.
 **Panels und Leisten**
 
 `panels.py` (die drei Panels links, Prüfbericht rechts, §2.5) ·
-`selection_operations.py` (Körperoperationen unter Bericht und Chat; einmal
-aus dem Register aufgebaut, bei Auswahlwechseln nur nachgeführt) ·
+`selection_operations.py` (Körperoperationen in einer eigenen Karte unter der
+von Bericht und Chat — beide Karten stapelt `overlay.CardColumn` als eine
+Zone; einmal aus dem Register aufgebaut, bei Auswahlwechseln nur
+nachgeführt) ·
 `tool_strip.py` · `analysis_bar.py` · `section_bar.py` · `split_bar.py` ·
 `transform_bar.py` · `explode_bar.py` · `sculpt_bar.py` · `pose_bar.py` ·
 `scale_widget.py` · `facts.py` (was das Teil kostet, während man daran baut)
@@ -321,12 +323,21 @@ einen gestarteten Fremddienst; den Dienst selbst besitzt Solidon nicht.
 `MainWindow.wait_for_workers` bezieht alle eigenen Installationsdialoge ein,
 damit auch das Schließen der ganzen Anwendung denselben Vertrag einhält.
 
-Merkmale und Bausteine bleiben getrennte Wege an der rechten Seite. Das
-Auswahlfeld führt zum vorhandenen Merkmal-Dock und zum vollständigen
-Bausteinkatalog; es baut dafür weder Merkmalsanalyse noch Katalog nach. Seine
-Körperoperationen stammen aus dem Operationsregister, verwenden dieselbe
-Freigabe wie Menü und Palette und gehen ausnahmslos durch
-`MainWindow.launch_operation`, damit Gesten-Editoren und Undo erhalten bleiben.
+Merkmalsanalyse und Bausteinkatalog bleiben getrennte Wege an der rechten
+Seite. Das Auswahlfeld führt zu beiden und baut keines von beiden nach. Seine
+Operationen stammen aus dem Operationsregister — Körperoperationen über
+`body_operations`, die Merkmalshandlungen über `feature_operations` aus
+demselben `applies_to`, aus dem das Kontextmenü am Merkmal seine Zeilen nimmt.
+Sie verwenden dieselbe Freigabe wie Menü und Palette und gehen ausnahmslos
+durch `MainWindow.launch_operation`, damit Gesten-Editoren und Undo erhalten
+bleiben.
+
+Welche Handlungen **vorn** stehen, beantwortet `quick_names(bodies,
+feature_kind)`: bei mehreren Körpern die Booleschen, bei einem einzelnen
+Bohren, Aushöhlen und Teilen, an einem gewählten Merkmal die seiner Art —
+das Merkmal hat Vorrang vor der Menge. Die Knöpfe dieser Lagen entstehen
+einmal (`all_quick_names`) und werden nur ein- und ausgehängt; was oben
+stehen kann, steht nicht auch in der Suchliste darunter.
 
 Die Kopfzeile nennt keine globale Materialzusage. Sie liest Körpermaterialien
 und die über `mesh.slot_indices` tatsächlich belegten Materialslots der

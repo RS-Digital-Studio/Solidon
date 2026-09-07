@@ -39,7 +39,7 @@ from PySide6.QtCore import (
     Qt,
 )
 from PySide6.QtGui import QPainterPath, QRegion
-from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QWidget
+from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QVBoxLayout, QWidget
 from shiboken6 import isValid
 
 from app.ui.leash import stop_watching_the_dying
@@ -155,6 +155,9 @@ NARROW_CARD_SHARE = 0.42
 #: Abstand der Karten zum Fensterrand und zueinander.
 MARGIN = ROOMY
 
+#: Der Objektname, an dem das Stilblatt eine schwebende Karte erkennt.
+CARD = "overlayCard"
+
 #: Das Polster zwischen der Randlinie einer Karte und ihrem Inhalt.
 #:
 #: Genau ein Pixel, denn genau einen ist die Linie breit. Ohne ihn malen die
@@ -248,13 +251,13 @@ def card_stylesheet(theme: Theme) -> str:
     """
     colours = THEMES[theme]
     return f"""
-QWidget#overlayCard {{
+QWidget#{CARD} {{
     background: {colours["window"]};
     border: 1px solid {colours["accent_line"]};
     border-radius: {ROOMY}px;
 }}
 
-QTabWidget#overlayCard::pane {{
+QTabWidget#{CARD}::pane {{
     border: none;
     background: transparent;
     margin: 0px {CARD_PADDING}px {CARD_PADDING}px {CARD_PADDING}px;
@@ -280,9 +283,69 @@ def _round_corners(zone: QWidget) -> None:
     """
     if zone.width() <= 0 or zone.height() <= 0:
         return
-    shape = QPainterPath()
-    shape.addRoundedRect(QRectF(zone.rect()), float(ROOMY), float(ROOMY))
-    zone.setMask(QRegion(shape.toFillPolygon().toPolygon()))
+    rects = zone.card_rects() if isinstance(zone, CardColumn) else [zone.rect()]
+    mask = QRegion()
+    for rect in rects:
+        shape = QPainterPath()
+        shape.addRoundedRect(QRectF(rect), float(ROOMY), float(ROOMY))
+        mask = mask.united(QRegion(shape.toFillPolygon().toPolygon()))
+    zone.setMask(mask)
+
+
+class CardColumn(QWidget):
+    """Eine Zone aus mehreren Karten übereinander, jede mit eigenem Abschluss.
+
+    Die rechte Spalte trägt seit dem 07.09.2026 zwei Karten (Entscheidung
+    Robert): oben Prüfbericht und Chat, darunter — mit demselben Abstand wie
+    zum Fensterrand — die Handlungen an der Auswahl. Für den ``OverlayHost``
+    bleibt sie **eine** Zone: eine Geometrie, ein Ein- und Ausblenden über F9,
+    eine Höhenverteilung; nur die Fläche zwischen den Karten gehört der
+    Ansicht dahinter.
+
+    Genau dafür ist die Klasse da. Die Maske einer Zone ist sonst ihr eigenes
+    gerundetes Rechteck, und eine Spalte, die zwei Karten hält, zeigte in der
+    Lücke dazwischen dann den schwarzen Elternhintergrund (siehe
+    :func:`_round_corners`). Hier wird die Maske aus den sichtbaren Karten
+    gebaut und immer dann erneuert, wenn eine von ihnen ihre Lage, Größe oder
+    Sichtbarkeit ändert — das Layout legt sie neu, sobald eine Karte kommt oder
+    geht, und der Host erfährt davon erst über sein eigenes ``LayoutRequest``.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("cardColumn")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(MARGIN)
+        self._cards: list[QWidget] = []
+
+    def add_card(self, card: QWidget, stretch: int = 0) -> None:
+        """Eine Karte unten anfügen; sie bekommt Stil und Deckfläche der Zonen."""
+        card.setObjectName(CARD)
+        card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        card.installEventFilter(self)
+        self._cards.append(card)
+        layout = self.layout()
+        assert isinstance(layout, QVBoxLayout)
+        layout.addWidget(card, stretch)
+
+    def card_rects(self) -> list[QRect]:
+        """Die Flächen der sichtbaren Karten, in den Koordinaten der Spalte."""
+        return [card.geometry() for card in self._cards if card.isVisibleTo(self)]
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
+        if event.type() in (
+            QEvent.Type.Move,
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.Hide,
+        ):
+            _round_corners(self)
+        return super().eventFilter(watched, event)
+
+    def resizeEvent(self, event: object) -> None:  # noqa: N802 — Qt-Name
+        super().resizeEvent(event)  # type: ignore[arg-type]
+        _round_corners(self)
 
 
 def rows_height(view: QAbstractItemView) -> int:
