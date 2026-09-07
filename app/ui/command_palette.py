@@ -145,7 +145,7 @@ def rank(entry: PaletteEntry, query: str) -> int:
     in_synonyms = all(part in synonyms_for(str(entry.name)) for part in parts)
     # **Titel *und* Synonym schlägt Titel allein.** Solange nur eine Operation
     # „Bemalen" hieß, war „färben" eindeutig. Seit beide das Wort im Titel
-    # tragen („Teil färben", „Fläche färben"), bekamen beide denselben Rang,
+    # tragen („Filament zuweisen", „Filament auf eine Fläche"), bekamen beide denselben Rang,
     # und bei Gleichstand entschied die Reihenfolge im Register — der Kunde
     # bekam die Fläche, wo er das Teil meinte. Das Synonym ist die bewusste
     # Zuordnung und bricht den Gleichstand; ohne diese Stufe bliebe es
@@ -236,7 +236,7 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     # und findet jetzt die Füllung.
     "assign_slot": ("faerben", "einfaerben", "farbe zuweisen", "ganzes teil"),
     # **Ohne jedes „faerben", auch nicht in einem längeren Wort.** Seit der
-    # Umbenennung tragen beide Titel das Wort („Teil färben", „Fläche
+    # Umbenennung tragen beide Titel das Wort („Filament zuweisen", „Filament auf eine
     # färben"), also entscheidet es nichts mehr — und als Synonym stand es
     # zusätzlich an beiden. Wer „färben" tippte, bekam die Fläche, weil bei
     # Gleichstand die Reihenfolge im Register zählt.

@@ -890,7 +890,7 @@ FIELDS: tuple[Field, ...] = (
         note=_(
             "Gilt nur, solange das Teil keine eingefärbte Spule hat — dann steht hier, womit "
             "der Slicer rechnet. Sobald Sie im Filamentwähler eine Farbe setzen oder über "
-            "*Fläche färben* arbeiten, gilt die Spule."
+            "*Filament auf eine Fläche* arbeiten, gilt die Spule."
         ),
     ),
     Field(

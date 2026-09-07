@@ -136,7 +136,7 @@ class PaintParams(BaseParams):
 
 @register_op(
     name="paint_slot",
-    title=_("Fläche färben"),
+    title=_("Filament auf eine Fläche"),
     category="colour",
     params=PaintParams,
     consumes=1,

@@ -228,7 +228,7 @@ def folded_groups(
     zum 27.08.2026 die ganze Antwort — bis das Färben in „Vorbereiten"
     landete, also ganz hinten. Am Flächenklick fehlt nach den Bausteinen
     genau **eine** Zeile, und die Rechnung nahm sie sich dort: Gemessen am
-    gebauten Fenster stand „Fläche färben" danach im Untermenü, unter einem
+    gebauten Fenster stand „Filament auf eine Fläche" danach im Untermenü, unter einem
     Wort, unter dem niemand Farbe sucht. Entscheidung Robert: Die häufige
     Geste bleibt oben, das Seltenere wandert. Wer die Gruppen bestimmt, ist
     :func:`groups_to_keep` — über die **Kategorie** und nicht über den

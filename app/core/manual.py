@@ -557,7 +557,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "pixelgenau, sondern nimmt *An Merkmal ausrichten*: Fläche auf "
             "Fläche, Bohrung auf Bohrung.\n\n"
             "**Färben** gibt es zweimal, und der Unterschied ist die Größe: "
-            "*Teil färben* nimmt den ganzen Körper, *Fläche färben* genau die "
+            "*Filament zuweisen* nimmt den ganzen Körper, *Filament auf eine Fläche* genau die "
             "Fläche, auf die man zeigt. Für eine Fläche ist der kürzeste Weg der "
             "Rechtsklick darauf — der Dialog kennt sie dann schon.\n\n"
             "Gewählt wird ein **Filament**, keine Nummer: mit Namen und Farbe, "

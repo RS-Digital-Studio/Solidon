@@ -63,7 +63,7 @@ CATEGORIES: Final[dict[str, TranslatableText]] = {
     "prepare": _("Teilen und Anpassen"),
     "import": _("Import"),
     "export": _("Export"),
-    "colour": _("Farbe"),
+    "colour": _("Filament"),
     "label": _("Beschriftung"),
     "surface": _("Oberfläche"),
     # „Netz" allein ist für den Kunden ohne CAD-Kenntnisse kein Wort; der

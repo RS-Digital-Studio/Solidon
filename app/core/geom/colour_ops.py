@@ -64,7 +64,7 @@ class AssignSlotParams(BaseParams):
 
 @register_op(
     name="assign_slot",
-    title=_("Teil färben"),
+    title=_("Filament zuweisen"),
     category="colour",
     params=AssignSlotParams,
     consumes=1,
