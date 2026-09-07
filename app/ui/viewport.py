@@ -11885,9 +11885,35 @@ class Viewport(QWidget):
         self._pull_height = height
         # Das Maß steht an der Drahtform selbst, wie beim Zeichnen einer Linie
         # (Robert, 02.09.2026: „ein Maß daneben, wie wenn wir eine Linie
-        # zeichnen") — kein Wertfeld am Zeiger, keines in der Leiste. Die
-        # genaue Zahl bekommt der Dialog beim Loslassen.
+        # zeichnen") — keines in der Leiste unten, die hatte Robert am selben
+        # Tag abgelehnt. Die genaue Zahl bekommt der Dialog beim Loslassen.
         self._show_pull_cage()
+        # **Und ein Feld am Zeiger, damit die Höhe auch getippt werden kann.**
+        # Es fehlte, und damit war die Tastatur am Ziehgriff nur halb
+        # verdrahtet: :meth:`eventFilter` schreibt die Ziffer in
+        # ``drag_bar.value`` und holt den Fokus dorthin, aber die Leiste wurde
+        # nie gezeigt — ein unsichtbares Feld nimmt keinen Fokus, und die
+        # Eingabetaste lief ins Leere. Gemeldet von Robert am 07.09.2026:
+        # „beim hochziehen … ich kann auch keinen wert eingeben"; gemessen war
+        # ``drag_bar.isVisible()`` während des ganzen Zugs falsch.
+        #
+        # **Gezeigt wird die Zahl mit Vorzeichen**, nicht ihr Betrag. Sonst
+        # bekäme die Eingabetaste eine falsche Richtung: ``_apply_typed`` nimmt
+        # den Feldwert unverändert als Höhe, und ein Betrag machte aus einer
+        # Tasche kommentarlos einen Aufbau. Die Richtung steht zusätzlich im
+        # Namen, weil eine Zahl mit Minus allein sie schlecht erklärt.
+        #
+        # **Und nach oben, sonst zeigt es sich vergebens.** Die Leiste entsteht
+        # im Konstruktor der Ansicht und steht damit in der Kindfolge **vor**
+        # der Grafikfläche des Renderers; alle Kinder sind native Fenster, und
+        # Windows stapelt sie in dieser Folge. Die Karten der Ansicht heben
+        # sich in ihrem ``place()`` selbst an, diese Leiste nie — gezeigt läge
+        # sie hinter dem Bild. Einmal je Zug, nicht je Mausereignis.
+        ratio = self._device_ratio()
+        if not self.drag_bar.isVisible():
+            self.drag_bar.raise_()
+        self.drag_bar.anchor = QPoint(int(x / ratio), int(y / ratio))
+        self.drag_bar.follow_length(str(tr("Tiefe") if height < 0.0 else tr("Höhe")), height)
 
     def _pull_frame(self) -> PlaneFrame:
         """Die Ebene, von der die Drahtform ausgeht.

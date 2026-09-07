@@ -2763,6 +2763,58 @@ def test_pulling_inward_requests_a_pocket_instead_of_making_a_sliver(
     assert viewport.pulling() is False
 
 
+def test_the_pull_offers_a_field_for_the_height_at_the_pointer(qt_app: QApplication) -> None:
+    """Ohne Feld ist die Tastatur am Ziehgriff nur halb verdrahtet.
+
+    ``eventFilter`` schreibt eine getippte Ziffer in ``drag_bar.value`` und holt
+    den Fokus dorthin — aber während eines Skizzenzugs wurde die Leiste nie
+    gezeigt. Ein unsichtbares Feld nimmt keinen Fokus, und die Eingabetaste lief
+    ins Leere. Gemeldet von Robert am 07.09.2026 („beim hochziehen … ich kann
+    auch keinen wert eingeben"); am gebauten Fenster war ``isVisible()`` der
+    Leiste während des ganzen Zugs falsch.
+
+    ``isHidden`` statt ``isVisible``: In einem nie gezeigten Fenster lügt das
+    zweite (siehe ``wartezeit.md``).
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+        viewport.set_sketching(frame)
+        viewport._sketch_curves = flat_curves()
+        viewport.set_sketch_pull(lambda: "ready", (0.1, 1000.0), (0.1, 1000.0))
+        viewport._pull_from = (0.0, 0.0)
+        viewport._drag_kind = "pull"
+
+        # **Die Gegenprobe zuerst.** Ohne sie beschriebe die Zusage unten nur
+        # einen Anfangszustand: Eine Leiste, die immer stünde, bestünde diesen
+        # Test, ohne etwas zu zeigen.
+        assert viewport.drag_bar.isHidden(), "vor dem Zug steht keine Leiste"
+
+        viewport.pull_height_at = lambda base, x, y: 20.0
+        viewport.continue_sketch_pull(120, 80)
+
+        bar = viewport.drag_bar
+        assert not bar.isHidden(), "während des Zugs steht das Feld im Bild"
+        assert bar.label.text() == "Höhe"
+        assert "20" in bar.value.text(), bar.value.text()
+        assert bar.anchor is not None, "und zwar am Zeiger, nicht oben mittig"
+        assert bar.typed_value() == pytest.approx(20.0)
+
+        # **Nach innen heißt Tiefe, und das Vorzeichen bleibt im Feld.** Sonst
+        # nähme die Eingabetaste den Betrag und machte aus einer Tasche
+        # kommentarlos einen Aufbau: ``_apply_typed`` liest den Feldwert
+        # unverändert als Höhe.
+        viewport.pull_height_at = lambda base, x, y: -12.0
+        viewport.continue_sketch_pull(120, 200)
+        assert bar.label.text() == "Tiefe"
+        assert bar.typed_value() == pytest.approx(-12.0)
+    finally:
+        viewport.deleteLater()
+
+
 def test_the_visible_arrow_and_cross_are_grabbable(qt_app: QApplication) -> None:
     """Was als Griff gezeichnet wird, greift bis an Pfeilspitze und Kreuz.
 
