@@ -3606,7 +3606,6 @@
   "Suchen — Befehl oder Taste": "Search — command or key",
   "Suchen — auch im Text der Seiten": "Search — inside the pages as well",
   "Suchen — zum Beispiel Mutter, Magnet, Kabel": "Search — for example nut, magnet, cable",
-  "Sucht die Lage mit dem geringsten Stützbedarf.": "Looks for the position that needs the least support.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Searches names and explanations. Enter jumps to the next hit.",
   "Sucht in der Bausteinbibliothek": "Searches the part library",
   "Support und Kontakt": "Support and contact",
@@ -4545,5 +4544,6 @@
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "‘{step}’ converted the individually editable faces and edges into fixed triangles. This tool must come before it in History. Undo the steps from there, apply the tool and then recreate the rest.",
   "🔒": "🔒",
   "und {count} weitere": "and {count} more",
-  "zum Ändern anklicken": "click to change"
+  "zum Ändern anklicken": "click to change",
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Finds the orientation with the least support for each selected body. Every one gets its own — the best lie follows from the geometry of the single part."
 }

@@ -3606,7 +3606,6 @@
   "Suchen — Befehl oder Taste": "Pesquisar — comando ou tecla",
   "Suchen — auch im Text der Seiten": "Pesquisar — também no texto das páginas",
   "Suchen — zum Beispiel Mutter, Magnet, Kabel": "Pesquisar — por exemplo porca, íman, cabo",
-  "Sucht die Lage mit dem geringsten Stützbedarf.": "Procura a posição com a menor necessidade de suportes.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Procura em nomes e explicações. Enter salta para o resultado seguinte.",
   "Sucht in der Bausteinbibliothek": "Pesquisa na biblioteca de blocos",
   "Support und Kontakt": "Apoio e contacto",
@@ -4545,5 +4544,6 @@
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» converteu as faces e arestas editáveis individualmente em triângulos fixos. Esta ferramenta tem de ficar antes dessa etapa no histórico. Desfaça as etapas a partir daí, aplique a ferramenta e volte a criar as etapas restantes.",
   "🔒": "🔒",
   "und {count} weitere": "e mais {count}",
-  "zum Ändern anklicken": "clique para alterar"
+  "zum Ändern anklicken": "clique para alterar",
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Procura para cada corpo selecionado a posição com menos suportes. Cada um recebe a sua — a melhor posição decorre da geometria da peça individual."
 }

@@ -83,6 +83,7 @@ from app.core.types import (
     OpContext,
     OpResult,
     PlaneFrame,
+    ProgressFn,
     Quality,
     SceneObject,
     Vec3,
@@ -3486,6 +3487,22 @@ def _length(vector: tuple[float, float, float]) -> float:
     return float(sum(entry * entry for entry in vector) ** 0.5)
 
 
+def _share_of(progress: ProgressFn | None, number: int, total: int) -> ProgressFn | None:
+    """Ein Fortschritt, der nur seinen Abschnitt des Ganzen meldet.
+
+    Bei mehreren Körpern liefe der Balken sonst je Körper von vorn — vier Teile
+    ergäben vier volle Läufe, und der Kunde sähe nicht, wie weit der Auftrag
+    wirklich ist.
+    """
+    if progress is None or total <= 1:
+        return progress
+
+    def share(fraction: float, text: str = "") -> None:
+        progress((number + max(0.0, min(1.0, fraction))) / total, text)
+
+    return share
+
+
 @op_params
 class OrientParams(BaseParams):
     thorough: bool = param(
@@ -3515,55 +3532,64 @@ class OrientParams(BaseParams):
     title=_("Druckoptimal ausrichten"),
     category="transform",
     params=OrientParams,
-    consumes=1,
-    produces=1,
+    # **So viele, wie gewählt sind** (Befund Robert, 07.09.2026). Mit
+    # ``consumes=1`` nahm die Operation den ersten Körper und ließ die übrigen
+    # liegen — wer vier Teile wählte und deren erstes schon richtig lag, sah
+    # überhaupt keine Wirkung und keine Meldung.
+    consumes=VARIABLE,
+    minimum_inputs=1,
+    produces=VARIABLE,
     deterministic=False,
-    doc=_("Sucht die Lage mit dem geringsten Stützbedarf."),
+    doc=_(
+        "Sucht für jeden gewählten Körper die Lage mit dem geringsten "
+        "Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus "
+        "der Geometrie des einzelnen Teils."
+    ),
 )
 def orient_for_print_op(ctx: OpContext) -> OpResult:
     """Gründlich heißt, die Schichtanalyse urteilt; sonst tut es die
     P2-Heuristik.
     """
     params = cast(OrientParams, ctx.params)
-    mesh = as_mesh_data(ctx.inputs[0].mesh)
 
-    if params.thorough:
-        found = search(
-            mesh,
-            count=params.candidates,
-            seed=ctx.seed,
-            profile=ctx.profile,
-            progress=ctx.progress,
-            cancelled=ctx.cancelled,
-        )
-        # **Gedreht wird der echte Körper, nicht das Urteil.** ``search``
-        # arbeitet auf Dreiecken; ein exakter Körper käme als Netz zurück, und
-        # danach ist kein Verrunden mehr möglich. Dieselbe Matrix legt
-        # ``moved_body`` exakt auf den Eingang.
-        return OpResult(
-            outputs=[
-                dataclasses.replace(
-                    ctx.inputs[0],
-                    mesh=moved_body(
-                        ctx.inputs[0].mesh, print_transform(mesh, found.best.direction)
-                    ),
-                )
-            ],
-            findings=found.findings,
-            # Dieselbe Bewegung, die die Suche gefahren ist — aus derselben
-            # Funktion, damit die zwei nicht auseinanderlaufen können.
-            transform=as_transform(print_transform(mesh, found.best.direction)),
-        )
-
-    result = orient_for_print(mesh)
-    return OpResult(
-        outputs=[
-            dataclasses.replace(
-                ctx.inputs[0], mesh=moved_body(ctx.inputs[0].mesh, result.transform)
+    outputs = []
+    findings = []
+    last_matrix = None
+    for number, entry in enumerate(ctx.inputs):
+        mesh = as_mesh_data(entry.mesh)
+        if params.thorough:
+            found = search(
+                mesh,
+                count=params.candidates,
+                seed=ctx.seed,
+                profile=ctx.profile,
+                # Der Fortschritt gehört dem ganzen Auftrag, nicht dem
+                # einzelnen Körper: Bei vier Teilen liefe der Balken sonst
+                # viermal von vorn.
+                progress=_share_of(ctx.progress, number, len(ctx.inputs)),
+                cancelled=ctx.cancelled,
             )
-        ],
-        findings=result.findings,
-        transform=as_transform(result.transform),
+            # **Gedreht wird der echte Körper, nicht das Urteil.** ``search``
+            # arbeitet auf Dreiecken; ein exakter Körper käme als Netz zurück,
+            # und danach ist kein Verrunden mehr möglich. Dieselbe Matrix legt
+            # ``moved_body`` exakt auf den Eingang.
+            matrix = print_transform(mesh, found.best.direction)
+            findings.extend(found.findings)
+        else:
+            result = orient_for_print(mesh)
+            matrix = result.transform
+            findings.extend(result.findings)
+        outputs.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, matrix)))
+        last_matrix = matrix
+
+    # **Die Bewegung wird nur bei einem einzigen Körper gemeldet.** Sie ist die
+    # Auskunft für Vorschau und Gizmo, und die kennt genau eine Matrix; bei
+    # mehreren hat jeder Körper seine eigene, und eine davon zu nennen wäre
+    # eine Angabe über die anderen, die nicht stimmt.
+    return OpResult(
+        outputs=outputs,
+        findings=findings,
+        transform=as_transform(last_matrix) if len(outputs) == 1 else None,
     )
 
 

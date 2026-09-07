@@ -13,7 +13,7 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.orient import candidates, evaluate_direction, orient_for_print
 from app.core.geom.transform import apply, rotation
 from app.core.ingest.loader import normalise
-from app.core.registry import REGISTRY
+from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Document, Profile, Source
@@ -136,6 +136,67 @@ def test_the_thorough_orientation_uses_the_layer_analysis(
 
 
 def test_the_orientation_operation_is_registered() -> None:
+    """Sie nimmt so viele Körper, wie gewählt sind — nicht genau einen.
+
+    Hier stand ``(1, 1)``, und das war die festgeschriebene Gestalt eines
+    Fehlers: Wer alle Teile einer Baugruppe wählte und *Druckoptimal
+    ausrichten* rief, bekam den ersten gedreht und die übrigen liegengelassen.
+    Lag der erste schon richtig, sah es aus, als täte die Operation gar nichts
+    (Befund Robert, 07.09.2026).
+    """
     spec = REGISTRY.get("orient_for_print")
     assert spec.category == "transform"
-    assert (spec.consumes, spec.produces) == (1, 1)
+    assert (spec.consumes, spec.produces) == (VARIABLE, VARIABLE)
+    assert spec.minimum_inputs == 1, "ein einzelner Körper bleibt zulässig"
+
+
+def test_every_chosen_body_gets_its_own_orientation(document: Document, profile: Profile) -> None:
+    """Zwei Körper, zwei verschiedene Fehllagen — beide kommen flach heraus.
+
+    Der Nachweis, den die Stelligkeit allein nicht führt: Es genügt nicht, dass
+    die Operation mehrere Eingänge *annimmt*; sie muss auch jeden davon
+    bewegen. Die beiden Körper werden deshalb um verschiedene Achsen gekippt —
+    eine gemeinsame Drehung könnte nicht beide aufrichten.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+
+    history = History(document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        _("Verdoppeln"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",))],
+    )
+    zweiter = "obj_2"
+    history.apply(
+        _("Beide kippen"),
+        [
+            OperationDraft(
+                op="rotate_object", inputs=("obj_1",), params={"axis": "y", "angle": 90.0}
+            ),
+            OperationDraft(
+                op="rotate_object", inputs=(zweiter,), params={"axis": "x", "angle": 90.0}
+            ),
+        ],
+    )
+    history.apply(
+        _("Ausrichten"),
+        [
+            OperationDraft(
+                op="orient_for_print",
+                inputs=("obj_1", zweiter),
+                params={"thorough": False},
+            )
+        ],
+    )
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    for kennung in ("obj_1", zweiter):
+        hoehe = result.scene.objects[kennung].mesh.bounds.size[2]
+        assert hoehe < 20.0, f"{kennung} steht noch hochkant ({hoehe:.1f} mm)"

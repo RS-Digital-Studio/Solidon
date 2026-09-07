@@ -3606,7 +3606,6 @@
   "Suchen — Befehl oder Taste": "Cerca — comando o tasto",
   "Suchen — auch im Text der Seiten": "Cerca — anche nel testo delle pagine",
   "Suchen — zum Beispiel Mutter, Magnet, Kabel": "Cerca — per esempio dado, magnete, cavo",
-  "Sucht die Lage mit dem geringsten Stützbedarf.": "Cerca la giacitura con il minor fabbisogno di supporti.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Cerca nei nomi e nelle spiegazioni. Invio passa al risultato successivo.",
   "Sucht in der Bausteinbibliothek": "Cerca nella libreria dei blocchi",
   "Support und Kontakt": "Assistenza e contatti",
@@ -4545,5 +4544,6 @@
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "«{step}» ha convertito le facce e gli spigoli modificabili singolarmente in triangoli fissi. Questo strumento deve trovarsi prima di quel passaggio nella cronologia. Annulla i passaggi da quel punto, applica lo strumento e ricrea i passaggi rimanenti.",
   "🔒": "🔒",
   "und {count} weitere": "e altri {count}",
-  "zum Ändern anklicken": "fai clic per cambiare"
+  "zum Ändern anklicken": "fai clic per cambiare",
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cerca per ogni corpo selezionato la posizione con il minor sostegno. Ognuno riceve la propria — la posizione migliore discende dalla geometria del singolo pezzo."
 }

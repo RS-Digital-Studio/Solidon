@@ -3606,7 +3606,6 @@
   "Suchen — Befehl oder Taste": "Rechercher — commande ou touche",
   "Suchen — auch im Text der Seiten": "Chercher — aussi dans le texte des pages",
   "Suchen — zum Beispiel Mutter, Magnet, Kabel": "Chercher — par exemple écrou, aimant, câble",
-  "Sucht die Lage mit dem geringsten Stützbedarf.": "Cherche l'orientation qui demande le moins de supports.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Cherche dans les noms et les explications. Entrée passe au résultat suivant.",
   "Sucht in der Bausteinbibliothek": "Cherche dans la bibliothèque de blocs",
   "Support und Kontakt": "Assistance et contact",
@@ -4545,5 +4544,6 @@
   "„{step}“ hat die einzeln bearbeitbaren Flächen und Kanten in feste Dreiecke umgewandelt. Dieses Werkzeug muss im Verlauf davor stehen. Nimm die Schritte ab dort zurück, wende das Werkzeug an und setze den Rest danach neu.": "« {step} » a converti les faces et arêtes modifiables séparément en triangles fixes. Cet outil doit se trouver avant cette étape dans l’historique. Annulez les étapes à partir de là, appliquez l’outil, puis recréez les étapes restantes.",
   "🔒": "🔒",
   "und {count} weitere": "et {count} de plus",
-  "zum Ändern anklicken": "cliquez pour changer"
+  "zum Ändern anklicken": "cliquez pour changer",
+  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cherche pour chaque corps sélectionné la position au moindre support. Chacun reçoit la sienne — la meilleure position découle de la géométrie de la pièce elle-même."
 }
