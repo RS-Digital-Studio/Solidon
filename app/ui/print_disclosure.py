@@ -21,7 +21,6 @@ Druckeinstellungs-Dialog.
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -37,7 +36,7 @@ from PySide6.QtWidgets import (
 
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.settings import UiSettings, save_settings
+from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import ROOMY, TIGHT, make_primary, set_level
 
 #: Fassung des Hinweistextes. Ändert sich der Text inhaltlich, steigt sie, und
@@ -93,28 +92,17 @@ class PrintDisclosureResult(Enum):
         return True
 
 
-def _is_utc_timestamp(value: str) -> bool:
-    """Ein ISO-8601-Zeitpunkt in UTC, wie ihn :func:`remember_disclosure` schreibt."""
-    if not value.endswith("Z"):
-        return False
-    try:
-        datetime.fromisoformat(value)
-    except ValueError:
-        return False
-    return True
-
-
 def disclosure_is_current(settings: Any) -> bool:
     """Ob der Hinweis in **dieser** Textfassung schon gesehen wurde."""
-    return settings.print_disclosure_version == PRINT_DISCLOSURE_VERSION and _is_utc_timestamp(
+    return settings.print_disclosure_version == PRINT_DISCLOSURE_VERSION and is_utc_timestamp(
         settings.print_disclosure_at_utc
     )
 
 
 def remember_disclosure(settings: Any, *, now: str | None = None) -> None:
     """Merkt Textfassung und UTC-Zeitpunkt."""
-    timestamp = now or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
-    if not _is_utc_timestamp(timestamp):
+    timestamp = now or utc_timestamp()
+    if not is_utc_timestamp(timestamp):
         raise ValueError("print disclosure timestamp must be an ISO-8601 UTC timestamp")
     settings.print_disclosure_version = PRINT_DISCLOSURE_VERSION
     settings.print_disclosure_at_utc = timestamp

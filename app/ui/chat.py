@@ -40,6 +40,7 @@ from app.i18n import TranslatableText, _, tr
 from app.ui.labels import volume
 from app.ui.leash import stop_watching_the_dying, weak_slot
 from app.ui.style import NORMAL, set_level
+from app.ui.theme import UNDONE_COLOUR
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
 #: auseinanderbleiben (§19.1).
@@ -49,8 +50,6 @@ ROLE_MARKER = {"user": ">", "agent": "*"}
 #: kein Beitrag ist: Sie steht nur, solange gerechnet wird, und verschwindet
 #: ohne Spur — im Dokument taucht sie nie auf.
 PROGRESS_MARKER = "\u00b7"
-
-DISCARDED_COLOUR = "#7a828c"
 
 #: Wie hoch der Gesprächsverlauf mindestens ist, auch wenn nichts darin steht.
 #:
@@ -429,7 +428,7 @@ class ChatPanel(QWidget):
         text = f"{PROGRESS_MARKER} {tr('Schritt')} {step}: {label}"
         if self._progress_item is None:
             self._progress_item = QListWidgetItem(text)
-            self._progress_item.setForeground(QColor(DISCARDED_COLOUR))
+            self._progress_item.setForeground(QColor(UNDONE_COLOUR))
             # Nicht auswählbar: Die Zeile ist eine Auskunft, kein Beitrag, und
             # ein Klick darauf hätte nichts, worauf er zeigen könnte.
             self._progress_item.setFlags(Qt.ItemFlag.NoItemFlags)
@@ -674,7 +673,7 @@ def _item(entry: ChatEntry, discarded: bool) -> QListWidgetItem:
     item = QListWidgetItem(f"{marker} {entry.text}")
     if discarded:
         # Nicht gelöscht: der Beitrag ist passiert. Er gilt nur nicht mehr (§26.3).
-        item.setForeground(QColor(DISCARDED_COLOUR))
+        item.setForeground(QColor(UNDONE_COLOUR))
         font = QFont(item.font())
         font.setStrikeOut(True)
         item.setFont(font)

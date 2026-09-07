@@ -11,6 +11,7 @@ import pytest
 from app.core.bootstrap import load_operations
 from app.core.knowledge.parts.shared import (
     MAX_DOC_CHARS,
+    MAX_DOCUMENT_PARAMETERS,
     MAX_EXPOSED,
     MAX_FILE_BYTES,
     MAX_OPERATIONS,
@@ -18,7 +19,6 @@ from app.core.knowledge.parts.shared import (
     MAX_PARAMS_PER_OPERATION,
     MAX_PART_FILE_JSON_DEPTH,
     MAX_PAYLOADS,
-    MAX_PROJECT_PARAMETERS,
     MAX_SOURCES,
     MAX_TITLE_CHARS,
     MAX_TOTAL_OPERATION_PARAMS,
@@ -220,7 +220,7 @@ def test_a_payload_that_is_not_base64_is_refused() -> None:
             {
                 "document": {
                     "ops": [],
-                    "parameters": {f"p{i}": {} for i in range(MAX_PROJECT_PARAMETERS + 1)},
+                    "parameters": {f"p{i}": {} for i in range(MAX_DOCUMENT_PARAMETERS + 1)},
                 }
             },
             "parameters",

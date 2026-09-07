@@ -566,6 +566,82 @@ def test_the_all_alike_box_appears_only_with_siblings(qt_app: QApplication) -> N
     assert all(str(count) in box.text() for count, box in zip(expected, haken, strict=True))
 
 
+def test_the_group_evidence_stands_once_and_not_at_every_handling(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vier Handlungen an derselben Kette tragen dieselben Nachweise — der
+    Absatz dazu steht einmal.
+
+    Befund Robert, 07.09.2026, an einer Senkung in ``weg2-halter-konstruieren``:
+    „im merkmalpanel ist zu viel text." Gezählt waren es vier Absätze
+    untereinander, wörtlich gleich, einer je Handlung. Die Nachweise gehören
+    der Gruppe und nicht der Handlung; dasselbe Muster wie ``_folded`` für den
+    Grund einer Absage.
+
+    **Die Auskunft geht dabei nicht verloren**, sie wiederholt sich nur nicht:
+    Ab der zweiten Handlung trägt der Haken sie, denn er ist das Feld, über das
+    sie entscheidet.
+    """
+    from app.core.perceive import relations
+    from app.core.perceive.relations import (
+        FeatureActionGroup,
+        FeatureGroupMember,
+    )
+
+    identifier, feature = a_hole()
+    mesh = plate()
+    available = features.detect(mesh)
+
+    def same_group_everywhere(
+        ops: object, selected: str, found: object, body: object
+    ) -> tuple[FeatureActionGroup, ...]:
+        """Je Handlung eine Gruppe, und alle mit denselben Nachweisen.
+
+        Genau die Lage des Befunds: Wer eine Bohrungskette versetzt, dreht,
+        ändert und verdoppelt, bekommt viermal dieselbe Begründung.
+        """
+        return tuple(
+            FeatureActionGroup(
+                id=f"g-{name}",
+                action=name,
+                selected=selected,
+                members=(
+                    FeatureGroupMember(target=selected, scope=(selected,)),
+                    FeatureGroupMember(target="hole_other", scope=("hole_other",)),
+                ),
+                evidence=("parallel_axes", "shared_boundary_role"),
+            )
+            for name in ops
+        )
+
+    monkeypatch.setattr(relations, "alike_for_actions", same_group_everywhere)
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature, features=available, mesh=mesh)
+
+    haken = [
+        widget
+        for row in panel._built
+        for widget in row.findChildren(QCheckBox)
+        if "alle" in widget.text()
+    ]
+    assert len(haken) > 1, "der Fall braucht mehrere Handlungen mit Gruppe, sonst prüft er nichts"
+
+    said = next(iter(panel._said_notes))
+    absaetze = [
+        widget.text()
+        for row in panel._built
+        for widget in row.findChildren(QLabel)
+        if widget.text() == said
+    ]
+    assert len(absaetze) == 1, f"der Absatz steht {len(absaetze)}-mal statt einmal"
+
+    tragen = [box for box in haken if said in box.toolTip()]
+    assert len(tragen) == len(haken) - 1, (
+        "jeder Haken ohne eigenen Absatz trägt die Auskunft, der erste braucht sie nicht"
+    )
+    assert all(said in box.accessibleDescription() for box in tragen)
+
+
 def test_the_all_alike_box_names_every_sibling(qt_app: QApplication) -> None:
     """Gesetzt gilt die Handlung allen — und das Panel nennt sie einzeln,
     damit das Fenster eine Transaktion daraus machen kann (Regel 16)."""

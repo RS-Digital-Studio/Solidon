@@ -40,6 +40,100 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.3.5
+
+### Ansicht
+
+- Die 3D-Ansicht zeichnet mit einer neuen Grafikschicht. Sie spricht die Grafikkarte über Direct3D 12, Vulkan oder Metal an und bleibt auch bei mehreren Millionen Dreiecken flüssig.
+- Vertiefungen und Kanten treten plastischer hervor: Die Ansicht dunkelt Ecken ab, zieht Tiefenlinien und trifft beim Anklicken den Punkt, auf den Sie zeigen.
+- Körperkanten stehen als feines Drahtgitter über der Fläche, und Beschriftungen bleiben ruhig stehen, statt beim Drehen zu zittern.
+- Merkmalsnamen überlagern sich nicht mehr, und ihre Marken bleiben auch im Schnitt sichtbar.
+- Die Achsenanzeige unten links füllt ihr Feld in jeder Blickrichtung, und ihre Buchstaben sind ganz zu sehen.
+- Die festen Ansichten drehen die Kamera um den Punkt, auf den Sie sehen. Ihr Ausschnitt bleibt erhalten, statt auf die ganze Szene zurückzuspringen; dafür ist weiter *Einpassen* da.
+- Wer durch eine Öffnung auf eine dahinterliegende Fläche zeigt, wählt diese Fläche und nicht den Rand der Öffnung.
+- Große Modelle bauen sich schneller auf, weil Kanten und Flächennormalen nur noch einmal je Körper gerechnet werden.
+- Fehlt dem Rechner die Grafikunterstützung für die Ansicht, nennt die Anwendung die beiden Pakete, die installiert werden müssen.
+
+### Handlungen zur Auswahl
+
+- Prüfbericht und Chat schließen rechts mit ihrem eigenen Rand ab. Die Handlungen zur Auswahl stehen darunter in einer eigenen Karte, und zwischen beiden ist das Modell zu sehen.
+- Welche Handlungen vorn stehen, richtet sich nach der Auswahl: bei mehreren Körpern Vereinigen, Abziehen und Schnittmenge, bei einem einzelnen Bohrung setzen, Aushöhlen und Teilen.
+- An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.
+- Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern.
+
+### Konstruieren und Ändern
+
+- Vereinigen, Abziehen und Schneiden nehmen alle gewählten Körper auf einmal, nicht nur genau zwei.
+- Verrunden bricht die Anwendung nicht mehr ab, wenn der Radius größer ist als die Wand, die er verrunden soll.
+- Ein Körper aus dem exakten Kern bleibt exakt, wenn Sie ihn nur verschieben oder drehen. Verrunden und Fasen bleiben danach möglich.
+- Das Bohrwerkzeug ragt nur noch an der Mündung über den Körper hinaus und lehnt Durchmesser ab, die das Teil um ein Vielfaches übersteigen.
+- Bündig ausrichten heißt bündig bis auf einen Winkel und nicht bis auf einen einzelnen Punktabstand.
+- Dreiecke verringern hört an einer benannten Auflösung auf, und die Gitterfüllung erfindet keinen Innenraum mehr, den es nicht gibt.
+- Der Skizzeneditor trifft Bögen auf dem Vollkreis, findet Kreisränder, löscht mit Entf das gewählte Element und lässt Wiederholen nicht offen stehen.
+- Die Rückmeldung beim Formen erklärt kleine Änderungen nicht mehr für wirkungslos.
+- Schalter einer Operation, die von sich aus an sind, lassen sich auf der Kommandozeile jetzt auch abschalten.
+- Ein Fehler in einer Operation nennt seine Ursache: im Protokoll, in der Abbruchzeile und im Fehlerbericht.
+- Abgelehnte Eingaben in Platzierung, Netzspeicher und Rezepten kommen mit Handlungsvorschlag statt als nackte Fehlermeldung.
+
+### Merkmale
+
+- Ein eingelesener Scan trägt keine erfundenen Kuppeln und Pfannen mehr; bisher entstanden sie zu Hunderten aus glatt gerundeten Flächen.
+- Mehrere Gewinde auf einer Platte werden einzeln benannt, nicht als ein Merkmal zusammengefasst.
+- Kugel, Torus und Kegel weisen ihre Krümmung aus, Zylindermitten stimmen mit den Endringen, und Gewindegänge folgen der Achse.
+- Das Merkmalsfeld bietet Passungen nur an, wenn ein zweiter Körper gewählt ist, und kennt jede Gruppe des Kerns.
+- Automatische Schnittpassungen vergeben keinen Namen zweimal.
+
+### Drucken und Vorbereiten
+
+- Die Ausrichtungssuche urteilt zweistufig: zweihundert Lagen aus den Flächennormalen, davon neun in der Schichtanalyse.
+- Ihr Fortschrittsbalken läuft bis zum Ende, auch wenn nichts zu schneiden war.
+- Der Slicer bekommt die Welt des Druckers und nicht die von Solidon, und ein eigenes Profil behält seine Herstellerbasis.
+- Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand.
+- Die Bereinigung nach dem Einlesen behält die Filamentzuweisungen.
+
+### Dateien und Projekte
+
+- Eine 3MF mit vielen Verdopplungsebenen wird abgelehnt, bevor aus 432 Byte tausend Körper werden.
+- Eine kleine Projektdatei fordert keine Gigabyte Speicher mehr an.
+- Eine GLB-Datei in Millimetern kommt in Millimetern an und nicht als Meter.
+- Ein gescheitertes Speichern nimmt die letzte Sicherung nicht mehr mit, und Abbrechen bricht den Import wirklich ab.
+- Ein verspäteter Fehler beim Einlesen räumt nicht die Quelle des nächsten Projekts weg.
+- Lässt sich der Cache-Ordner nicht anlegen, bleibt das fertig gerechnete Ergebnis trotzdem stehen.
+- Ein unvollständiger Variantensatz wird nicht mehr stillschweigend exportiert.
+- Die verworfene Zeichnung lässt sich mit Rückgängig zurückholen, und ein zweites Verlaufsobjekt lässt kein veraltetes Wiederholen stehen.
+- Zwei Fehlerberichte derselben Sekunde überschreiben sich nicht mehr.
+
+### Chat und KI
+
+- Ein Zusatzwerkzeug mit falschem Feldtyp reißt den Zug des Agenten nicht mehr ab.
+- Der Agent nennt zu Skizzenvarianten nur Menüwege, die es gibt.
+- Bei der Bildgenerierung kommen die Gewichte ganz oder gar nicht an, und ein einzelner Wert im Strukturfeld löst keine unbestellte Erzeugung aus.
+- Ein lokales Modell wird auch dann gemessen, wenn es über HTTPS auf einem eigenen Port antwortet.
+- Der Hinweis auf KI-Beteiligung gilt erst mit geschriebenem Nachweis, und ein Sprachwechsel beendet die Fernbedienung nicht.
+
+### Update, Installation und System
+
+- Als Mindestversion gilt macOS 13, gleich in Paket, Installer und auf der Website.
+- Dreizehn Bibliotheken stehen auf ihren neuesten stabilen Fassungen, und der exakte Kern spricht OpenCASCADE 8.
+- Ein Paket ohne Vertrauensanker im System bringt seinen eigenen Satz mit, gleich auf welcher Plattform.
+- Ein Download bricht nicht mehr nach einer festen Gesamtzeit ab, und eine tröpfelnde Antwort hält die zugesagte Frist ein.
+- Im Flatpak findet die Anwendung die Paketverwaltung des Rechners.
+- Unter Linux und macOS endet ein Abbruch nicht mehr nur am Elternprozess.
+- Der Linux-Menüeintrag findet den Starter auch ohne Eintrag im Suchpfad.
+- Auf dem Mac sagt der Update-Dialog, dass Solidon nach dem Installer von selbst zurückkommt.
+- Die 3D-Maus liest auf dem Mac durch den Treiber des Herstellers, statt neben ihm zu warten.
+- Die Startseite erkennt das System vor dem ersten Bild, und die Anforderungstabelle wird nicht abgeschnitten.
+- Ein abgelehnter Anhang gilt der Rückmeldung nicht mehr als fehlender.
+- Der Filamentwähler bleibt nach einem Abbruch auf der richtigen Spule und zeigt auch die achte.
+
+### Handbuch und Website
+
+- Handbuch und Bedienbelege zeigen die überarbeitete Oberfläche in allen sechs Sprachen.
+- Die Zeichnungen des Handbuchs halten den Textkontrast auch in ihren Nebenbemerkungen.
+- Das Handbuchfenster lädt nur seine eigenen Abbildungen und keine fremden Bilder.
+- Die Website sagt an einer Stelle, was den Rechner verlässt.
+- Die Einführung behauptet kein geschlossenes Loch mehr, wenn Rückgängig nur den Durchmesser zurückstellt.
+
 ## 0.3.4
 
 ### Erkannte Merkmale bearbeiten

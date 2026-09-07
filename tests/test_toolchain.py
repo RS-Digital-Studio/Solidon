@@ -1873,6 +1873,70 @@ def test_the_environment_report_names_the_command_that_fixes_the_hooks(
     assert any("githooks" in zeile for zeile in findings), findings
 
 
+def test_the_memory_check_notices_when_the_shared_memory_is_out_of_reach(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Verknüpft oder nicht — und „es gibt kein Gedächtnis" ist ein dritter Fall.
+
+    **Der Anlass, 07.09.2026.** ``.claude/memory/`` trägt die
+    Projekterfahrungen, und ``AGENTS.md`` verlangt, vor einer Änderung dort
+    nachzusehen. Gelesen wird aber im Nutzerprofil, und das gilt je Maschine;
+    ``tools/link_memory.py`` macht daraus eine Verknüpfung. Auf dieser Maschine
+    war sie nicht eingerichtet: 218 eingecheckte Einträge standen acht lokalen
+    gegenüber, und eine Sitzung brach drei Regeln, die im Repository standen —
+    das Verbot von ``git stash`` auf fremder Arbeit, die CRLF-Falle von
+    ``write_text`` und die Mindestzählung eines eigenen Prüfskripts.
+
+    **Niemand hat es gemerkt**, weil ein halb erreichbares Gedächtnis wie ein
+    volles aussieht: Es liefert Einträge, nur nicht alle. Dieselbe Klasse wie
+    bei den Hooks darüber — eine Automatik, die in Wahrheit Handarbeit ist.
+    """
+    echt = tmp_path / "im_repo"
+    echt.mkdir()
+    verknuepfung = tmp_path / "verknuepft"
+    fehlt = tmp_path / "eigenes"
+    fehlt.mkdir()
+
+    monkeypatch.setattr(check_env, "MEMORY_DIR", echt)
+    monkeypatch.setattr("tools.link_memory.harness_dir", lambda _root: fehlt)
+    assert check_env.memory_is_wired() is False, "ein eigener Ordner ist keine Verknüpfung"
+
+    try:
+        verknuepfung.symlink_to(echt, target_is_directory=True)
+    except OSError:  # pragma: no cover — ohne Rechte für Symlinks
+        pytest.skip("diese Maschine erlaubt keine Verzeichnisverknüpfung im Test")
+    monkeypatch.setattr("tools.link_memory.harness_dir", lambda _root: verknuepfung)
+    assert check_env.memory_is_wired() is True, "eine Verknüpfung wird erkannt"
+
+    monkeypatch.setattr(check_env, "MEMORY_DIR", tmp_path / "gibt-es-nicht")
+    assert check_env.memory_is_wired() is None, "ohne Gedächtnis stellt sich die Frage nicht"
+
+
+def test_the_environment_report_names_the_command_that_wires_the_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Befund ohne Handlungsvorschlag ist eine Klage (AGENTS.md, Regel 17).
+
+    Derselbe Anspruch wie beim Hook-Befund: Der Bericht sagt nicht, dass etwas
+    fehlt, sondern womit man es einrichtet.
+    """
+    monkeypatch.setattr(check_env, "venv_python", lambda: Path(sys.executable))
+    monkeypatch.setattr(
+        check_env, "interpreter_version", lambda _python: check_env.required_version()
+    )
+    monkeypatch.setattr(check_env, "installed", lambda _python: {})
+    monkeypatch.setattr(check_env, "pinned", dict)
+    monkeypatch.setattr(check_env, "age_in_days", lambda: None)
+    monkeypatch.setattr(check_env, "hooks_are_wired", lambda: True)
+    monkeypatch.setattr(check_env, "memory_is_wired", lambda: False)
+    findings, suggestions = check_env.check()
+
+    passende = [zeile for zeile in suggestions if "link_memory" in zeile]
+    assert passende, f"kein Vorschlag zum Gedächtnis: {suggestions}"
+    assert "python tools/link_memory.py" in passende[0], passende[0]
+    assert any("Gedächtnis" in zeile for zeile in findings), findings
+
+
 def test_the_cleanup_refuses_when_the_version_file_promises_nothing() -> None:
     """Eine leere Schonliste schont nichts — dann wird gar nicht gelöscht.
 

@@ -53,7 +53,12 @@ MAX_DOC_CHARS: Final = 2000
 MAX_OPERATIONS: Final = 64
 MAX_PARAMS_PER_OPERATION: Final = 32
 MAX_TOTAL_OPERATION_PARAMS: Final = 128
-MAX_PROJECT_PARAMETERS: Final = 128
+#: Wie viele Projektparameter das Dokument **einer Bausteindatei** mitbringen
+#: darf. Nicht zu verwechseln mit ``scene.project.MAX_PROJECT_PARAMETERS``,
+#: das dieselbe Frage für eine **Projektdatei** beantwortet und dort 10 000
+#: erlaubt — bis zum 07.09.2026 hießen beide gleich, und wer sie importierte,
+#: sah am Namen nicht, welche Grenze er bekam.
+MAX_DOCUMENT_PARAMETERS: Final = 128
 MAX_SOURCES: Final = 16
 MAX_PAYLOADS: Final = 16
 MAX_EXPOSED: Final = 32
@@ -132,7 +137,7 @@ def rules(registry: Registry | None = None) -> dict[str, Any]:
         "max_operations": MAX_OPERATIONS,
         "max_params_per_operation": MAX_PARAMS_PER_OPERATION,
         "max_total_operation_params": MAX_TOTAL_OPERATION_PARAMS,
-        "max_project_parameters": MAX_PROJECT_PARAMETERS,
+        "max_document_parameters": MAX_DOCUMENT_PARAMETERS,
         "max_sources": MAX_SOURCES,
         "max_payloads": MAX_PAYLOADS,
         "max_exposed": MAX_EXPOSED,
@@ -318,7 +323,7 @@ def _resource_findings(data: dict[str, Any], allowed: dict[str, Any]) -> list[Fi
     document = data.get("document")
     if isinstance(document, dict):
         for field, rule in (
-            ("parameters", "max_project_parameters"),
+            ("parameters", "max_document_parameters"),
             ("sources", "max_sources"),
         ):
             value = document.get(field, {})

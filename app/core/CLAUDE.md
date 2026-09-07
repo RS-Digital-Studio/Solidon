@@ -88,6 +88,17 @@ ein — `TYPE_CHECKING`-Block, `_EXPORTS`, `__all__`.
 `tests/test_lazy_exports.py` hält die drei zusammen und prüft, dass jeder
 Eintrag auf ein Untermodul und ein Attribut zeigt, das es gibt.
 
+**Und der Deadlock hat einen Grund, den die Karte lange nicht nannte: die
+Pakete hängen im Kreis.** Gemessen am 07.09.2026 stehen acht der dreizehn
+Unterpakete in **einem** Kreis über eifrige Importe — `brep`, `geom`,
+`ingest`, `knowledge`, `perceive`, `scene`, `sketch`, `slice`, mit `geom` als
+Nabe. Zwölf weitere Kanten sind bewusst träge, also in eine Funktion gelegt,
+damit sie den Kreis beim Import nicht schließen.
+`tests/test_core_package_direction.py` friert diesen Stand ein: 47 eifrige und
+12 träge Kanten, jede einzeln aufgeführt. Eine neue Kante ist damit eine
+Entscheidung und keine stille Zeile, eine abgebaute verschwindet auch aus der
+Liste, und ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
+
 **2. Der `OpContext` ist die einzige Tür nach außen.**
 
 | Feld | Bedeutung |

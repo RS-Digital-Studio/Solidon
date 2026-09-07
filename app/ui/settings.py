@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
@@ -223,6 +224,39 @@ class UiSettings:
         niemandem.
         """
         return [Path(entry) for entry in self.recent if Path(entry).is_file()]
+
+
+def utc_timestamp() -> str:
+    """Jetzt, als ISO-8601-Zeitpunkt in UTC mit ``Z`` — so wie die Merker es tragen.
+
+    Sekundengenau: Ein Merker beantwortet „wann gesehen", und Bruchteile einer
+    Sekunde sagen dazu nichts.
+    """
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+
+
+def is_utc_timestamp(value: object) -> bool:
+    """Ist das ein Zeitpunkt, wie :func:`utc_timestamp` ihn schreibt?
+
+    **Warum das hier steht und nicht zweimal daneben** (07.09.2026): Der
+    KI-Hinweis und der Druckeinstellungs-Hinweis merken beide Textfassung und
+    Zeitpunkt in dieser Datei, und beide brachten ihre eigene Prüfung mit —
+    der eine verlangte ein ``T`` im Wert und einen Zeitversatz von null, der
+    andere nur das ``Z`` am Ende. Zwei Module, zwei Wahrheiten darüber, was
+    ein UTC-Zeitpunkt ist, und das zweite war aus dem ersten kopiert. Die
+    strengere gilt, denn geschrieben wird nur die strenge Form.
+
+    Der Wert kommt aus einer JSON-Datei, die jemand von Hand geändert haben
+    kann — deshalb ``object`` und nicht ``str``: Eine Zahl oder ``null`` an
+    dieser Stelle ist kein Zeitpunkt, sondern ein ungültiger Merker.
+    """
+    if not isinstance(value, str) or not value.endswith("Z") or "T" not in value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(f"{value[:-1]}+00:00")
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
 
 
 def settings_path() -> Path:

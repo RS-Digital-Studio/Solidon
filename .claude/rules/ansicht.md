@@ -1081,6 +1081,19 @@ seither vergeben, die Zusage nicht.) Drei Regeln:
   Wirkung einer Achse ändert, macht genau einen Test rot. Objektmodus ist die
   Vorgabe (die Kappe ist das Teil, alle sechs Achsen — Robert, 02.09.2026),
   „Richtung umkehren" ist der Kameramodus.
+* **Die Kappe ist ein Kraftsensor, und Achsen sprechen über.** Wer dreht,
+  drückt auch; wer schiebt, kippt ein wenig. Die Totzone allein fängt das
+  nicht — sie misst gegen den Vollausschlag, das Übersprechen wächst mit der
+  Kraft. Am Korpus gemessen (07.09.2026): Beim Drehen um die Hochachse lag der
+  Zoom im Median bei einem Viertel der Drehung und in 71 von 71 Berichten über
+  der Totzone; das Teil kam beim Drehen näher, ohne dass jemand gezogen hätte.
+  `quiet_crosstalk` nullt deshalb jede Nebenachse unter `CROSSTALK_SHARE` der
+  stärksten; die stärkste bleibt immer, eine aktive Bewegung bleibt also
+  aktiv. **Der Preis steht daneben:** Eine bewusst kleine Nebenbewegung unter
+  einem Viertel der Hauptbewegung geht mit, und beim Kippen der Vorderkante
+  liest das Gerät einen guten Teil als Zug. Die Zahl ist an der Aufzeichnung
+  gewählt und **am Gerät noch nicht bestätigt** — wer sie ändert, misst am
+  Korpus und nicht am Gefühl.
 * **Der Viewport bekommt eine Stellung, keine Deltas.** `Viewport.set_camera_pose`
   setzt Standort, Blickpunkt und Oben und zeichnet einmal. Es ist die einzige
   Stelle, an der die 3D-Maus den Viewport anfasst; `sketch_active` sagt ihr,

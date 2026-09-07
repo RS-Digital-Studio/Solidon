@@ -10,7 +10,6 @@ from __future__ import annotations
 import ipaddress
 import urllib.parse
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -43,7 +42,7 @@ from PySide6.QtWidgets import (
 from app.core.backends import llm
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.settings import UiSettings, save_settings
+from app.ui.settings import UiSettings, is_utc_timestamp, save_settings, utc_timestamp
 from app.ui.style import ROOMY, TIGHT, WIDE, make_primary, set_level
 
 AI_DISCLOSURE_VERSION = "1.4"
@@ -196,7 +195,7 @@ def disclosure_is_current(settings: Any, target: AiDisclosureTarget) -> bool:
         and settings.ai_disclosure_version == AI_DISCLOSURE_VERSION
         and settings.ai_disclosure_backend == target.backend
         and settings.ai_disclosure_target == target.record_key
-        and _is_utc_timestamp(settings.ai_disclosure_at_utc)
+        and is_utc_timestamp(settings.ai_disclosure_at_utc)
     )
 
 
@@ -207,8 +206,8 @@ def remember_disclosure(
 
     if target.backend not in SUPPORTED_AI_BACKENDS or not target.record_key:
         raise ValueError(f"unsupported AI disclosure backend: {target.backend}")
-    timestamp = now or datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
-    if not _is_utc_timestamp(timestamp):
+    timestamp = now or utc_timestamp()
+    if not is_utc_timestamp(timestamp):
         raise ValueError("AI disclosure timestamp must be an ISO-8601 UTC timestamp")
     settings.ai_disclosure_version = AI_DISCLOSURE_VERSION
     settings.ai_disclosure_backend = target.backend
@@ -279,16 +278,6 @@ def ensure_ai_disclosure(
         clear_disclosure(settings)
         return DisclosureResult.FAILED
     return DisclosureResult.ACCEPTED
-
-
-def _is_utc_timestamp(value: Any) -> bool:
-    if not isinstance(value, str) or not value.endswith("Z") or "T" not in value:
-        return False
-    try:
-        parsed = datetime.fromisoformat(f"{value[:-1]}+00:00")
-    except ValueError:
-        return False
-    return parsed.tzinfo is not None and parsed.utcoffset() == timedelta(0)
 
 
 class AiDisclosureDialog(QDialog):

@@ -337,6 +337,9 @@ def mismatches(pinned_set: dict[str, tuple[str, str]], present: dict[str, str]) 
 
 HOOKS_DIR: Final = ROOT / ".githooks"
 
+#: Wo die Projekterfahrungen liegen — im Arbeitsbaum, nicht im Nutzerprofil.
+MEMORY_DIR: Final = ROOT / ".claude" / "memory"
+
 
 def hooks_are_wired() -> bool | None:
     """Ob Git die Hooks dieses Projekts überhaupt ansieht.
@@ -375,6 +378,45 @@ def hooks_are_wired() -> bool | None:
     if not gesetzt:
         return False
     return (ROOT / gesetzt).resolve() == HOOKS_DIR.resolve()
+
+
+def memory_is_wired() -> bool | None:
+    """Ob das eingecheckte Gedächtnis diese Maschine überhaupt erreicht.
+
+    ``None``, wenn die Frage sich nicht stellt — ``.claude/memory/`` gibt es
+    nicht, oder das Werkzeug lässt sich nicht laden.
+
+    **Dieselbe Bauart wie bei den Hooks darüber, und aus demselben Grund.**
+    ``.claude/memory/`` trägt die Projekterfahrungen, und ``AGENTS.md`` verlangt,
+    vor einer Änderung dort nachzusehen. Der Ort, an dem eine Sitzung sie
+    tatsächlich liest, liegt aber im Nutzerprofil und gilt je Maschine;
+    ``tools/link_memory.py`` macht daraus eine Verknüpfung
+    (:mod:`.claude/memory/erinnerungen-liegen-im-repository`).
+
+    **Am 07.09.2026 war sie auf dieser Maschine nicht eingerichtet**, und
+    niemand hat es gemerkt: 218 eingecheckte Einträge standen acht lokalen
+    gegenüber, und eine Sitzung las nur die acht. Sie brach dabei drei Regeln,
+    die im Repository standen — das Verbot von ``git stash`` auf fremder Arbeit
+    (zweimal notiert), die CRLF-Falle von Pythons ``write_text`` und die
+    Mindestzählung eines eigenen Prüfskripts. Alle drei kosteten Arbeit, keine
+    war neu.
+
+    **Ein Gedächtnis, das nur die halbe Maschine erreicht, ist gefährlicher als
+    keines:** Man verlässt sich darauf, dass Erfahrungen gesammelt werden, und
+    sammelt sie zum zweiten Mal. Deshalb wird hier nicht geprüft, ob Einträge da
+    sind, sondern **dass der Ort, an dem gelesen wird, derselbe ist**.
+    """
+    if not MEMORY_DIR.is_dir():
+        return None
+    sys.path.insert(0, str(ROOT))
+    try:
+        from tools.link_memory import harness_dir, linked
+    except ImportError:  # pragma: no cover — nur bei fehlendem Werkzeug
+        return None
+    finally:
+        if sys.path and sys.path[0] == str(ROOT):
+            sys.path.pop(0)
+    return linked(harness_dir(ROOT))
 
 
 def check() -> tuple[list[str], list[str]]:
@@ -435,6 +477,16 @@ def check() -> tuple[list[str], list[str]]:
             "damit nicht — und das fällt nicht auf, solange jemand von Hand pusht."
         )
         suggestions.append("Einmalig einrichten: git config core.hooksPath .githooks")
+
+    if memory_is_wired() is False:
+        findings.append(
+            "Das eingecheckte Gedächtnis erreicht diese Maschine nicht: "
+            "`~/.claude/projects/…/memory` ist keine Verknüpfung auf "
+            "`.claude/memory/`. Eine Sitzung liest damit nur, was auf dieser "
+            "Maschine gelernt wurde — und lernt zum zweiten Mal, was im "
+            "Repository längst steht."
+        )
+        suggestions.append("Einmalig einrichten: python tools/link_memory.py")
 
     return findings, suggestions
 

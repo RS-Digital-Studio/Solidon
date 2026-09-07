@@ -26,6 +26,7 @@ Regelwerks.
 | `test_agent_suite.py` | was die Agentenschicht ohne Modell garantiert |
 | `test_interface_limits.py` | Oberflächengrenzen §35: höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite |
 | `test_layer_direction.py` | die vier Schichten importieren nur nach unten (`app/CLAUDE.md`) — auch träge, auch für Typen |
+| `test_core_package_direction.py` | eine Ebene tiefer: welches Kernpaket welches importiert, eifrig oder träge, und dass der eingefrorene Kreis nicht wächst |
 | `test_lazy_exports.py` | die drei Listen jedes Lazy-Pakets stimmen überein, jeder Eintrag löst auf |
 | `test_hard_rules.py` | was auf jeder Plattform gilt, aber nur auf einer läuft: Puffergrenzen im Quelltext, Nutzerverzeichnisse je Plattform |
 
@@ -433,6 +434,25 @@ in einer Sekunde, ob jemand fährt.
 **Und zwar vor jeder Schreiboperation, nicht vor jeder Arbeitseinheit.** Das
 Schloss kann zwischen zwei Schreibvorgängen den Halter wechseln. Wer schreibt,
 sieht **jedes Mal** nach; die Sekunde kostet weniger als ein fremder Torlauf.
+
+**Eine Notiz ins Gedächtnis ist seit dem 07.09.2026 ein Schreibvorgang ins
+Repository.** Das ist die Nebenwirkung der Verknüpfung, die an diesem Tag auf
+dieser Maschine eingerichtet wurde (`tools/link_memory.py`,
+`.claude/memory/erinnerungen-liegen-im-repository.md`): Der Ort, an dem eine
+Sitzung ihre Erinnerungen ablegt, **ist** seither `.claude/memory/` im
+Arbeitsbaum. Der Eintrag dort nennt die eine Hälfte — sie taucht in
+`git status` auf und kann in einen fremden Commit geraten. Die andere gehört
+hierher: **`tests/test_directory_docs.py` liest `.claude/memory/` in beide
+Richtungen**, die Dateien und die Namen, auf die `MEMORY.md` zeigt. Eine Notiz
+mitten in einen fremden Torlauf geschrieben macht Bestand und Index für einen
+Moment inkonsistent.
+
+Der harmloseste Akt einer Sitzung — „ich lege das schnell ins Gedächtnis" —
+gehört damit unter dieselbe Regel wie jede andere Änderung: erst
+`gate_lock.py status`, dann schreiben. Vor der Verknüpfung war er wirklich
+harmlos, und genau deshalb weiß es niemand (Hinweis von solidon-e8,
+07.09.2026, deren drei Notizen zwanzig Minuten vor der Verknüpfung lagen — Glück
+und kein Verfahren).
 
 ### Der fremden Messung glaubt man so wenig wie der eigenen
 

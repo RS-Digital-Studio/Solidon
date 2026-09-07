@@ -112,6 +112,7 @@ from app.ui.leash import weak_slot
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
 from app.ui.style import NORMAL, TARGET_SIZE, TIGHT, make_primary, set_level
+from app.ui.theme import UNDONE_COLOUR
 
 _log = get_logger(__name__)
 
@@ -624,9 +625,6 @@ def as_error(finding: Finding, document: Document | None = None) -> AppError:
 
 #: Farbe der zurückgenommenen Schritte im Verlauf — dieselbe wie für einen
 #: verworfenen Chatbeitrag, und aus demselben Grund.
-UNDONE_COLOUR = "#7a828c"
-
-
 def _severity_label(severity: str) -> str:
     """Der Schweregrad als Wort — die Filterzeile zeigt beides (Regel 18)."""
     return {
@@ -4257,6 +4255,15 @@ class FeaturePanel(QWidget):
         self._built: list[QWidget] = []
         self._feature_id: str | None = None
         self._groups: dict[str, FeatureActionGroup] = {}
+        self._said_notes: set[str] = set()
+        """Welche Gruppenbegründungen in diesem Panel schon stehen.
+
+        Sie gehört der **Gruppe** und nicht der einzelnen Handlung: Vier
+        Handlungen an derselben Bohrungskette tragen dieselben Nachweise, und
+        damit stand derselbe Absatz an einer Senkung viermal untereinander
+        (Befund Robert, 07.09.2026). Geleert wird sie in :meth:`clear`, und
+        das genügt — ``show_feature`` beginnt damit.
+        """
         self._fit_button: QPushButton | None = None
         self._fit_choice: QComboBox | None = None
         self._fit_reason = ""
@@ -4275,6 +4282,7 @@ class FeaturePanel(QWidget):
         self._built.clear()
         self._feature_id = None
         self._groups = {}
+        self._said_notes.clear()
         self._fit_button = None
         self._fit_choice = None
         self._empty.setVisible(True)
@@ -4649,11 +4657,32 @@ class FeaturePanel(QWidget):
             layout.addWidget(every)
         if group is not None and (len(group.members) > 1 or group.uncertain):
             said = _feature_group_note(group)
-            note = QLabel(said, box)
-            note.setWordWrap(True)
-            note.setAccessibleDescription(said)
-            fit_wrapped(note)
-            layout.addWidget(note)
+            # **Derselbe Absatz steht einmal, nicht viermal.** Die Nachweise
+            # gehören der Gruppe, und vier Handlungen an derselben
+            # Bohrungskette haben dieselben: An einer Senkung standen
+            # „Die Achsen sind parallel ausgerichtet." und die drei Sätze
+            # daneben viermal untereinander, einmal je Handlung (Befund
+            # Robert, 07.09.2026). Dasselbe Muster wie :func:`_folded` eine
+            # Ebene höher — dort für den Grund einer Absage, hier für den
+            # Nachweis einer Gruppe.
+            #
+            # **Weggelassen wird die Auskunft nicht, nur ihre Wiederholung.**
+            # Der Haken trägt sie weiter, und zwar dort, wo sie gilt: Er ist
+            # das Feld, über das sie entscheidet. Ohne das verlöre ein
+            # Screenreader sie an jeder Handlung außer der ersten.
+            if said in self._said_notes:
+                if every is not None:
+                    spoken = f"{every.text()} — {said}"
+                    every.setToolTip(said)
+                    every.setStatusTip(said)
+                    every.setAccessibleDescription(spoken)
+            elif said:
+                self._said_notes.add(said)
+                note = QLabel(said, box)
+                note.setWordWrap(True)
+                note.setAccessibleDescription(said)
+                fit_wrapped(note)
+                layout.addWidget(note)
 
         button = QPushButton(str(action.title), box)
         button.setStatusTip(str(action.reason) or str(action.title))

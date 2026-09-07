@@ -206,6 +206,15 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url` | Die Abnahme des Gesamt-Reviews (06.09.2026) | denselben `DeadlineResponse` an den vier übrigen Aufrufern (`llm.post_json`, `pull_model`, `ollama_tags`, `mesh.py`); der Körper ist dort begrenzt, die Statuszeile nur je Lesezug |
 | Die Migration 19→20 rechnet mit lebendem Code | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine eingecheckte v19-Beispieldatei **mit** Deckel; der Satz im Modul, dass dieser Schritt beim nächsten Formatwechsel gegen sie nachzumessen ist, steht seit dem 06.09.2026. Alle älteren Migrationen sind reine Wörterbuchumformungen, dieser ruft `History`, `document_from_data` und `fit_for_lid` in ihrer heutigen Fassung |
 | Drei ungemessene Laufzeitkosten des Reparaturstands | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine Messung je Stelle: `hollow` rechnet für `cavity` eine zweite Boolesche bei jedem Aushöhlen; `Solid.__post_init__` kopiert jede Form, dazu sechs ausdrückliche `working = Solid(...)`; `cavity_chains` läuft im Qt-Hauptthread bei jedem Szenenaufbau ohne Grenze (an `build_tray_v3.step` mit 234 Merkmalen messen) |
+| Testhilfen stehen zweimal | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | **eine Entscheidung von Robert** (Konzept §2 H): 21 wortgleiche Gruppen in `tests/`, darunter `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und `test_torus_fit_quality.py`; Empfehlung einmal für die fünf großen, danach nur beim Anfassen |
+| Die Zwillingsregel steht dreimal in zwei Fassungen | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | eine Funktion im Kern, die eine Menge auf ihre sichtbaren Vertreter reduziert und die Menge selbst als Bezug nimmt — `panels.py:1665` fragt bedingt (`MENU_TWINS.get(spec.name) not in names`), `panels.py:1626` und `selection_operations.py:55` fragen unbedingt (`spec.name not in MENU_TWINS`); heute halten alle drei, weil bei allen vier Paaren beide Seiten dieselbe `consumes`-Klasse haben (gemessen 78 gegen 78) |
+| Die vierte Konstante der Oberfläche wartet auf einen fremden Commit | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | den Commit der Sitzung, die `app/ui/panels.py` hält — sie nimmt meine eine Zeile dort mit (Anordnung Robert, 07.09.2026), und zwar zusammen mit `app/ui/theme.py` und `app/ui/chat.py`, weil `UNDONE_COLOUR` bei HEAD in `theme.py` fehlt und ein Solo-Commit von `panels.py` einen `ImportError` gibt |
+| P1 — der Höhendeckel trifft die Karte statt ihres Inhalts | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung; `_fit_right_column` deckelt `self.right`, deshalb bleibt der Rahmen hoch und der Inhalt rutscht nach unten |
+| P2 — Shift und Strg nehmen im Bild dazu | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept G, Robert 07.09.2026); heute trägt `objectPicked` keine Modifiertaste, und die Meldung nennt nur Strg |
+| P3 — die Gruppenbegründung steht einmal | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept F); `_feature_group_note` hängt denselben Absatz an jede Handlung, an einer Senkung viermal |
+| P4 — die linke Spalte teilt ihre Höhe | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept H) über den Raumvertrag aus `overlay.py`; heute dehnt sich allein der Objektbaum, und Filamente ist kaum zu sehen |
+| P5 — das Panel kennt die Auswahltiefe | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept B und C); heute bekommt `set_context` nur die Körperzahl, und 38 Körperhandlungen stehen auch an einer gewählten Fläche |
+| P6 — jede Bündelung des Baums ist wählbar, und die Panels werden eines | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept A, D und E) nach P5; der eigentliche Schnitt, und er braucht die Tiefe aus P5 |
 
 ---
 
@@ -11336,6 +11345,31 @@ gemeinsam herein, die neue Importkante zwischen den beiden fügt dort kein Modul
 hinzu. Das ist keine Zuschreibung an die Familie, sondern die Gegenprobe: Die
 Signatur stand hier schon, bevor die Sitzung anfing.
 
+**Siebte und achte Beobachtung am 07.09.2026, zwei Torläufe nebeneinander.**
+Mein Lauf riss sechsmal in `tests/test_ui.py`: einmal Exit 139, fünfmal Exit
+127 an den Positionen 301 bis 303 — **und kein einziges `FAILED`**, also
+Prozessabbrüche und keine gerissenen Zusicherungen. Die 139 nennt wieder
+`panels.py` in `show_document`, diesmal mit der ganzen Kette:
+`main_window._show_scene` ← `_on_scene` ← `session._on_finished` ←
+`wait_for_idle`, ausgelöst aus `test_removing_an_object_and_taking_it_…` an
+Position 142 von 477. Dieselbe Datei danach dreimal ganz gefahren: dreimal
+Exit 0 mit 477 passed. **Eins von vier passt zu den 23 % oben.**
+
+Im Lauf von solidon-74 eine Stunde später traf es `tests/test_operation_ui.py`
+Teil 2, ebenfalls Exit 139, bei ihr einzeln mit 99 passed grün. **Das ist
+nicht neu, sondern die fünfte Beobachtung vom 27.08.2026 ein zweites Mal** —
+dieselbe Datei, derselbe Ausgang, andere Sitzung, elf Tage später. Sie hat es
+als neuen Belegort gemeldet, und dass es keiner ist, ist die brauchbarere
+Auskunft: Die Familie ist stabil und reproduziert sich über Sitzungen und
+Stände hinweg.
+
+**Was diese zwei Läufe zur Spur beitragen.** Die Positionen 301 bis 303
+(Exit 127, fünfmal beim Halbieren) hat solidon-74 auf reinem HEAD
+nachgestellt, also ohne die Änderungen des Tages. Der Satz oben — „was sich
+wiederholt, ist nicht die Zeile, sondern der Test" — trägt damit weiter: Es
+sind drei Skizzendialog-Tests, und sie reißen **nur im geteilten Lauf**, nicht
+einzeln und nicht als ganze Datei.
+
 - [ ] **Eine Entscheidung, ob die Suite die Reihenfolge für diese Datei
       festnagelt** (`-p no:randomly` je Datei) **oder die Ursache weiter
       verfolgt wird.** Das Festnageln verdeckt einen echten Fehler; ihn zu
@@ -16388,3 +16422,427 @@ entkräftet, prüft, ob seine Gegenprobe den Fall überhaupt erreicht. Zweitens:
 Die Antwort stand die ganze Zeit als Kommentar an der Konstante, die den
 Befund auslöst. Vor der Messung lohnt der Blick, ob jemand sie schon gemacht
 hat.
+
+
+## Doppelte Stellen und Zwillinge, gemessen (07.09.2026)
+
+Roberts Auftrag: „wir wollen doppelte Stellen und Zwillinge vermeiden,
+Kontrolle, Analyse und Konzept sauber und gründlich." Die Analyse, die Klassen
+und die Entscheidungen stehen in `konzepte/konzept-zwillinge-2026-09.md`; das
+Messskript und die Rohfunde liegen unter `.claude/.state/zwillinge-2026-09-07/`.
+Gemessen gegen `d9999d1b` über `app/` (260 Dateien, 190 223 Zeilen), `tools/`
+und `tests/`.
+
+**Vorweg das Negative, weil es das Ergebnis trägt:** In `app/` gibt es
+**keinen** wortgleichen Funktionskörper ab vier Anweisungen mehr. Die
+Durchgänge vom 24. und 27.08. haben den großen Funktionszwilling beseitigt.
+Was blieb, sind zwölf Kleinstfälle mit zwei oder drei Anweisungen (Dialogmuster,
+Einzeiler) — und **zwei Zwillinge, die bereits auseinandergelaufen sind** und
+die eine Suche nach Wortgleichheit deshalb nicht mehr findet. Der eine ist der
+Pfad eines offenen Handles, seit dem 02.09. im Register: `project.py` fragt
+`/proc/self/fd` **und** `/dev/fd`, `updates.py` nur das erste, und der
+Kommentar in `updates.py:991` nennt die andere Stelle „Zwillingsstelle", ohne
+den Unterschied zu sehen. Der andere steht unten als erster Punkt nach dem
+Wächter.
+
+Die gewollten Zwillinge halten: `MENU_TWINS` mit `is`-Test und Verhaltenstest,
+zehn Migrationen mit `return data` (§16.2), fünf Slicer-Prädikate mit
+demselben Körper und je einer Eigenschaft, Protokollmethoden. Plattformliterale
+(`'darwin'` 18×, `'win32'` 15×, `'nt'` 17×) bleiben, weil mypy sie je Plattform
+liest — `project.py:397` begründet es.
+
+**Zwei Messfallen dieses Laufs**, festgehalten, damit sie nicht ein zweites Mal
+zuschnappen: Das Zeilenmaß zählt Docstrings mit — `wants_bed_coordinates` und
+`may_continue` sind beide `return True` unter zehn Zeilen Erklärung. Und ein
+Lauf mit Git-Bash-Pfad fand unter Windows null Dateien und meldete null
+Zwillinge; die Zeile „Funktionen: 5 956" ist deshalb Teil des Ergebnisses.
+
+- [x] **Ein Zwilling beruft sich auf einen Wächter, den es nicht gibt** —
+  behoben am 07.09.2026.
+  `geom/prepare_ops._feature_is_a_cavity` (Z. 422) und
+  `perceive/relations.is_a_cavity` (Z. 182) sind wortgleich, und der Docstring
+  in `relations.py:187` sagt: „`tests/test_features.py` hält sie zusammen."
+  **Kein Test in `tests/` nennt eine der beiden Funktionen.** Die Begründung
+  der Kopie — die Wahrnehmung dürfe die Geometrie nicht importieren — stimmt
+  am Code nicht: `relations.py:36` importiert `geom.mesh`, und `prepare_ops`
+  importiert `relations` lokal an vier Stellen (649, 947, 1066, 1392). Sieben
+  Aufrufer; ein lokaler Import wie an den Nachbarstellen, und die Kopie fällt.
+
+  So gebaut: `is_a_cavity` steht einmal, die sieben Aufrufer in `prepare_ops`
+  holen sie träge — drei ihrer Funktionen taten das für ihre Nachbarn schon,
+  vier bekamen die Zeile dazu. Die Kante `geom → perceive` steht in
+  `tests/test_core_package_direction.py` bereits als träge; es ist also keine
+  neue Abhängigkeit, sondern eine fünfte Stelle an einer vorhandenen.
+  **Und der Test, den der Docstring behauptete, existiert jetzt:**
+  `tests/test_relations.py::test_hole_and_pin_answer_without_recess_and_cone_and_sphere_with_it`
+  hält die Antwort, `::test_the_geometry_layer_asks_this_question_instead_of_answering_it`
+  die Bauart — wer in `app/core/geom` wieder `recess` liest, bekommt einen
+  roten Lauf. Gegenprobe gefahren: mit der alten Zeile ist er rot.
+
+- [x] **Zwei Zeitstempelprüfungen, verschieden streng** — behoben am
+  07.09.2026.
+  `ui/ai_disclosure._is_utc_timestamp` (Z. 284) verlangt ein `T` im Wert und
+  einen Versatz von null; `ui/print_disclosure._is_utc_timestamp` (Z. 96)
+  verlangt nur das `Z` am Ende. Das zweite Modul ist aus dem ersten
+  entstanden und hat die Hilfsfunktion mitgenommen statt sie zu teilen —
+  Ursache 5 im Konzept. Eine Funktion, die strengere.
+
+  So gebaut: `is_utc_timestamp` und `utc_timestamp` stehen in
+  `app/ui/settings.py` — dort liegen die Felder, die beide Merker füllen, und
+  beide Module importieren die Datei ohnehin. Die zweite Hälfte des Zwillings
+  fiel dabei mit auf: Auch **geschrieben** wurde der Zeitpunkt zweimal, mit
+  wortgleicher Zeile.
+
+  **Was die Messung an der eigenen Annahme korrigiert hat:** Von den drei
+  Werten, die die laxe Prüfung durchgelassen haben sollte, ließ sie genau
+  einen durch — `2026-09-03 06:00:00Z`, weil `fromisoformat` das Leerzeichen
+  als Trenner annimmt. Ein blankes Datum mit `Z` und ein Zeitpunkt ohne `Z`
+  fielen bei beiden Fassungen durch. Der Testdocstring sagt jetzt das
+  Gemessene und nicht das Vermutete.
+  `tests/test_print_disclosure.py::test_both_notices_ask_the_same_source_what_a_utc_timestamp_is`
+  hält die Bauart; Gegenprobe mit einer gepflanzten zweiten Prüfung ist rot.
+
+- [~] **Vier Konstanten-Zwillinge in der Oberfläche, und der Wächter sah nur
+  den Kern** — drei zusammengelegt am 07.09.2026, die vierte liegt bei einer
+  anderen Sitzung. `test_shared_constants.py` liest `app/core`; in `app/ui` stehen
+  `EASING = 0.18` und `FRAME_MS = 16` in `loading.py` **und** `splash.py`
+  (der Docstring von `loading.py` sagt „Zwei Wartezeiten, eine Sprache"),
+  `OVERSAMPLING = 2` in `icons.py` und `manual_window.py` mit demselben
+  HiDPI-Grund, `WAIT_MILLISECONDS = 50` in `generate_dialog.py` und
+  `support_dialog.py` mit wortgleichem Kommentar, und `#7a828c` als
+  `DISCARDED_COLOUR` in `chat.py` und `UNDONE_COLOUR` in `panels.py` — der
+  Kommentar dort: „dieselbe wie … aus demselben Grund." Genau der Verweis,
+  den der Wächter im eigenen Docstring als „keine geteilte Sache" benennt.
+  Wächter auf `app/` und die vier zusammenlegen, in einem Commit.
+
+  So gebaut: `FRAME_MS` und `EASING` stehen in `ui/motion.py`, wo die
+  Bewegungsdauern schon stehen; `OVERSAMPLING` bleibt in `ui/icons.py` und
+  `manual_window` importiert es, wie `panels` es längst tat; die Wartefrist
+  heißt `DIALOG_WAIT_MS` und steht in `ui/leash.py` neben `WAIT_TIMEOUT_MS`,
+  **mit dem Unterschied im Kommentar** — 2 000 ms gelten am Fensterende für
+  einen Arbeiter mit Abbruch-Token, 50 ms für einen Dialog, den jemand
+  zumacht; die Farbe des Zurückgenommenen heißt `UNDONE_COLOUR` und steht in
+  `ui/theme.py`, bewusst außerhalb von `THEMES`, weil sie in beiden Themen
+  dieselbe ist. Der Wächter liest `app/`, `FLOOR` ist auf 700 gemessen (954
+  gefunden), und **kein Fall brauchte einen `DELIBERATE`-Eintrag.**
+  Gegenprobe: ein gepflanztes `FRAME_MS` in `splash.py` macht ihn rot.
+
+  **Die vierte ist gebaut und nicht committet, und das ist eine Anordnung und
+  kein Versehen** (Robert, 07.09.2026): `UNDONE_COLOUR` betrifft `theme.py`,
+  `panels.py` und `chat.py` — und in `panels.py` liegt meine eine Zeile neben
+  37 einer anderen Sitzung. Ein privater Index trennt Dateien, nicht Zeilen in
+  einer Datei; Robert hat entschieden, dass jene Sitzung meine Zeile
+  **mitcommittet**. Die drei Dateien gehören dabei in **einen** Commit:
+  `UNDONE_COLOUR` gibt es bei HEAD in `theme.py` nicht, ein Solo-Commit von
+  `panels.py` gibt also einen `ImportError`. Bis dahin steht die Farbe zweimal
+  im ausgelieferten Stand, unter zwei Namen — der Wächter prüft gleiche Namen
+  und bleibt deshalb grün. Der Auftrag liegt im Session-Board und als Nachricht
+  bei der Sitzung „Solidon repository clone“.
+
+- [x] **Gleicher Name, anderer Wert war für den Wächter unsichtbar** — behoben
+  am 07.09.2026. Der
+  Test prüft nur Namen, die zweimal **denselben** Wert tragen. Der Fall, der
+  ihn am 27.08. veranlasst hat — `BOOLEAN_OVERLAP` mit 0,05 und 0,01 —, wäre
+  bis heute nicht rot. Gemessen: 15 Namen in `app/` mit verschiedenen Werten,
+  darunter `MAX_PROJECT_PARAMETERS` mit 128 (`knowledge/parts/shared.py:56`)
+  und 10 000 (`scene/project.py:112`), beide öffentlich, beide `Final`.
+  Modulprivate wie `_FLAT_ENOUGH` (0,866 gegen 0,966, zwei Sachen) bleiben
+  erlaubt.
+
+  So gebaut: Die zweite Zusicherung steht als eigener Test, und der Fall, für
+  den sie gedacht war, ist gepflanzt gegengeprüft — `BOOLEAN_OVERLAP` mit 0,05
+  und 0,01 in zwei Modulen macht ihn rot. **Ein Name war wirklich
+  verwechselbar und ist umbenannt:** `MAX_PROJECT_PARAMETERS` in
+  `knowledge/parts/shared.py` heißt jetzt `MAX_DOCUMENT_PARAMETERS` — 128 für
+  die Parameter einer **Bausteindatei** gegen 10 000 für die einer
+  **Projektdatei**, und am Import war nicht zu sehen, welche man bekommt. Die
+  übrigen zwölf stehen mit Grund in `DIFFERENT_ON_PURPOSE`; „acht Module, acht
+  Fristen" ist bei `TIMEOUT_SECONDS` die Antwort, und ein gemeinsamer Name
+  wäre eine gemeinsame Zusage, die niemand geben will.
+
+- [x] **Fünf Namensvergleiche der Slicer-Serie standen noch** — drei gestellt,
+  zwei begründet stehen geblieben (07.09.2026). Der Punkt vom
+  27.08. („Der Slicer-Name stand da, wo eine Eigenschaft gemeint war") ist
+  abgehakt; `== "orca"` steht noch in `handover.py:1218, 1894, 2364` und
+  `print_settings_dialog.py:4343, 4354`, und alle fünf meinen dieselbe
+  Eigenschaft — Maschinen- und Prozessprofil —, für die
+  `slicer_keys.takes_a_machine_profile` (Z. 910) bereitsteht. `handover.py:564`
+  ist ein Verteiler-Wörterbuch und bleibt.
+
+  **Und genauer gelesen waren es drei Eigenschaften, nicht eine** — der Satz
+  darüber war zu grob, und das ist der Ertrag des Pakets. Auf das Prädikat
+  gestellt sind die drei, die wirklich das Maschinenprofil meinen
+  (`handover.py:1218`, `:1894`, `print_settings_dialog.py:4343`). Zwei bleiben
+  mit Begründung im Code: `handover.py:2371` meint „bei dieser Familie lohnt
+  ein zweiter Versuch ohne die Anordnungsvorgabe", und
+  `print_settings_dialog.py:4357` meint das **Prozess**profil. Beide
+  Eigenschaften werden nirgends sonst gefragt, und ein Prädikat für eine
+  einzige Stelle ist Zierat — es entsteht, wenn die zweite dazukommt.
+
+- [x] **Die Zwillingssuche wurde dreimal gebaut und nie eingecheckt** —
+  `tools/twin_scan.py` seit dem 07.09.2026. Am
+  24.08. ein Duplikat-Sucher, am 27.08. „zwanzig Zeilen `ast.walk`", am 07.09.
+  dieses Skript. Das Konzept schlägt `tools/twin_scan.py` vor, mit
+  Mindestzählung und einem Selbsttest über einen gepflanzten Fall
+  (`ROADMAP-ARCHIV.md`, 24.08.: „Ein Prüfer für Doppelungen, der den bekannten
+  Fall nicht findet, ist kaputt"). **Kein Tor-Wächter für Funktionskörper** —
+  er meldete heute zwölf Dreizeiler und übersähe die zwei echten Fälle. Ob das
+  Werkzeug nach `tools/` kommt, hat Robert am 07.09.2026 entschieden
+  („mach das beste"), und so steht es dort: `tools/twin_scan.py`, sieben
+  Fragen, `--frage N` einzeln, mit Mindestzählung und Selbsttest.
+
+  **Der Selbsttest hat sich am ersten Tag bezahlt.** Die Mindestgröße stand
+  auf vier Anweisungen, und der Zwilling, für den das Werkzeug gebaut wurde —
+  dieselbe Hohlraumfrage in `geom/prepare_ops` und `perceive/relations` —
+  besteht aus genau **drei**. Mit der Vier hätte es den Fall verpasst, für den
+  es seinen Beleg mitbringt; jetzt steht die Drei, und
+  `tests/test_twin_scan.py` hält die Begründung fest. Weiter geprüft: ein
+  gepflanztes Konstantenpaar, ein umbenannter Zwilling, `64 * 1024` als Wert,
+  zwei gleiche **Docstrings** über zwei `return True` als **kein** Paar, und
+  ein leerer Baum als Exit 1 statt als Ergebnis.
+
+  **Und der eigene Verstoß dazu, weil er zum Fund gehört:** Das Werkzeug kam
+  mit drei deutschen Bezeichnern (`stellen`) auf die Welt und machte damit
+  `test_language_rules` rot — in `tools/`, das unter die Bezeichnerregel fällt,
+  weil es das Paket baut. Gemeldet hat es der pre-commit-Hook einer
+  Nachbarsitzung, die er korrekt durchließ, weil keine ihrer Dateien betroffen
+  war. Behoben (`where`), 952 Fälle grün. Der Fall ist genau der, den
+  `AGENTS.md` beschreibt: **ein fehlender Katalogeintrag oder ein falscher
+  Bezeichner steht in Dateien, die man gerade nicht angefasst hat** — nur
+  diesmal in einer, die ich gerade angelegt hatte.
+
+- [ ] **Testhilfen stehen zweimal.** 21 wortgleiche Gruppen in `tests/`:
+  `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und
+  `test_torus_fit_quality.py`, `on_the_bore_wall` mit 20 Zeilen in
+  `test_analysis_ui.py` und `test_selection.py`, `run` viermal, `_opened_by`,
+  `_placed`, `with_a_body`. Geteilte Module gibt es (`render_fakes.py`,
+  `scripted_backend.py`). Ein Fix am Prüfstand erreicht eine Kopie — der Fall
+  `size_for_thread` vom 24.08. war genau das. Ob die Suite eine Durchsicht
+  bekommt, entscheidet Robert („Tests das Nötigste", 02.09.).
+
+- [ ] **Die Zwillingsregel steht dreimal in zwei Fassungen, und die schwächere
+  hält nur wegen der heutigen Registerbelegung.** Gemeldet von der Sitzung, die
+  `viewport.py` und `selection_operations.py` hält (07.09.2026), hier am Register
+  nachgemessen. Der Kern gibt die Rohmenge und verweist die Zusammenlegung
+  ausdrücklich an die Oberfläche — `registry/surfaces.context_menu` sagt es im
+  Docstring: „Was die Oberfläche daraus macht, entscheidet sie — sie legt
+  zusammengelegte Zwillinge zusammen.“ Die Oberfläche tut das an drei Stellen,
+  in zwei verschiedenen Regeln:
+
+      panels.py:1665   MENU_TWINS.get(spec.name) not in names   bedingt
+      panels.py:1626   spec.name not in MENU_TWINS              unbedingt
+      selection_operations.py:55                                unbedingt
+
+  Die bedingte Fassung trägt die Begründung, warum die andere falsch sein kann,
+  im eigenen Docstring: „Ein Zwilling, dessen Partner für diese Merkmalsart gar
+  nicht gilt, wäre sonst spurlos weg statt zusammengelegt.“ Zwei der drei
+  Stellen liegen in **derselben Datei**, neununddreißig Zeilen auseinander.
+
+  **Heute verschwindet keiner spurlos, und der Grund ist gemessen** (102
+  Operationen, vier Paare): Bei `create_brep_box` und `create_brep_cylinder`
+  fehlen *beide* Seiten in einer Auswahlmenge, weil Erzeuger `consumes = 0`
+  haben; bei `drill_brep_hole` und `shell_exact` ist der sichtbare Partner
+  (`drill_hole`, `hollow_object`) in derselben `consumes`-Klasse und damit dabei.
+  Über die Körpermenge gerechnet behalten beide Fassungen 78 von 80 Operationen —
+  kein Unterschied. Ein fünftes Paar mit Eingang, dessen sichtbarer Partner in der
+  jeweiligen Menge fehlt, fällt in den unbedingten Fassungen ohne Spur heraus.
+
+  **Der Fund ist für die Messung dieses Tages unsichtbar gewesen**, und das ist
+  sein zweiter Wert: Dieselbe Regel in zwei Formulierungen hat keine Wortgleichheit
+  und keine Strukturgleichheit — kein Abschnitt des Skripts zeigt darauf. Gefunden
+  hat sie jemand, der den Code geschrieben hat. Das gehört in die Klassenlehre des
+  Konzepts als eigene Grenze.
+
+- [x] **Das eingecheckte Gedächtnis erreicht diese Maschine nicht, und das hat
+  heute dreimal gekostet** — eingerichtet und abgesichert am 07.09.2026. `.claude/memory/erinnerungen-liegen-im-repository.md`
+  sagt seit dem 22.08.2026, dass `~/.claude/projects/<kürzel>/memory` eine
+  Verknüpfung auf `.claude/memory/` im Arbeitsbaum sein soll, und nennt den
+  einmaligen Lauf je Maschine. Auf dieser ist sie nicht eingerichtet:
+  `tools/link_memory.py --pruefen` meldet es, 218 eingecheckte Einträge stehen
+  acht lokalen gegenüber. **Niemand prüft es** — `check_env.py` nennt die
+  Verknüpfung nicht, und kein Test tut es; `test_delivery_tools.py` prüft nur das
+  Werkzeug selbst gegen Temp-Verzeichnisse.
+
+  Was es heute gekostet hat, in der Reihenfolge des Auffallens:
+
+  1. **`git stash` auf fremder, nie committeter Arbeit.** Das Verbot steht
+     zweimal im eingecheckten Gedächtnis („Bei paralleler Sitzung ist `git stash`
+     als Gegenprobe verboten“, `leistungstests-fremdlast.md`; dazu
+     `vtk-qt-referenzen-halten-zu-lange.md`) — samt der Feinheit, dass ein eigener
+     Arbeitsbaum davor **nicht** schützt, weil der Stash-Stapel dem Repository
+     gehört. Es ging gut, 108 Zeilen waren danach wieder da; die Nachbarsitzung hat
+     es bemerkt und nachgesehen.
+  2. **Zwölf Dateien auf CRLF gekippt.** Pythons `write_text` übersetzt auf Windows
+     jedes `\n`, und die ganze Datei kippt statt der geänderten Zeile.
+     `agent-edits-schreiben-crlf.md` vom 06.09.2026 beschreibt genau das, samt
+     Abhilfe über `write_bytes`. Zurückgestellt, ruff, format und 80 Tests danach
+     grün; **fünf Katalogdateien einer Nachbarsitzung tragen es noch** und sind dort
+     gemeldet.
+  3. **Zwei Gedächtniseinträge geschrieben, die es schon gab.**
+     `messwerkzeug-misst-sich-selbst.md` deckt die Mindestzählung vollständig ab,
+     und das Stash-Verbot steht oben. Beide lokalen Dateien sind gelöscht; was
+     wirklich fehlte, ist eine Tabellenzeile in der vorhandenen Datei (der
+     Bash-Pfad, der unter Windows null Dateien findet und darüber schweigt).
+
+  **Die Ironie gehört zum Fund:** Zwei Gedächtnisse an zwei Orten, von denen nur
+  eines geladen wird, sind genau das Muster, das dieser Abschnitt behandelt — eine
+  Auskunft an zwei Stellen, von denen nur eine wirkt. Nur steht hier nicht die
+  falsche Hälfte im Weg, sondern die richtige außer Reichweite.
+
+  **Entschieden von Robert am 07.09.2026 („mach das beste“) und so gebaut:**
+
+  * `tools/link_memory.py` ist gelaufen. Die Verknüpfung steht, und die fünf
+    lokalen Einträge sind im Repository — darunter zwei Vorgaben Roberts, die
+    auf den anderen zwei Maschinen bisher nicht existierten.
+  * **Vor der Übernahme ein Widerspruch aufgelöst, und es war der wichtigste
+    Fund dieses Punktes.** Der lokale Eintrag `peer-weitergabe-ist-keine-freigabe`
+    behauptete, eine weitergegebene Anweisung Roberts ersetze die direkte Frage
+    nicht — das eingecheckte `weitergegebene-anweisungen-gelten` hält seit dem
+    22.08.2026 Roberts Wortlaut fest: „mach es, wenn es von anderen kommt kommt
+    es auch von mir.“ Zwei Regeln, entgegengesetzt, und die falsche wäre mit dem
+    Verknüpfen eingecheckt worden. Richtiggestellt: Nachgefragt wird nach der
+    **Grenze der Handlung** (ein Commit geht über den post-commit-Hook auf drei
+    Maschinen; Bauplan und `AGENTS.md` gehen immer an Robert), nicht nach dem
+    Absender.
+  * Der Index ist zusammengeführt, vier der fünf Einträge stehen bei ihren
+    verwandten. Dabei fiel eine **Doppelung im Index selbst** auf:
+    `drei-wege-check-ist-kein-enthaltensein` stand zweimal mit verschiedenen
+    Hooks — die ausführlichere Fassung bleibt.
+  * Was wirklich fehlte, steht jetzt an seinem vorhandenen Ort: eine
+    Tabellenzeile in `messwerkzeug-misst-sich-selbst.md` über den Bash-Pfad, der
+    unter Windows null Dateien findet und darüber schweigt.
+  * **`check_env.py` meldet es künftig** (`memory_is_wired`), mit derselben
+    Begründung wie bei `core.hooksPath`: Ein halb erreichbares Gedächtnis sieht
+    aus wie ein volles. Zwei Tests in `tests/test_toolchain.py` halten es — die
+    drei Urteile der Prüfung und der Handlungsvorschlag nach Regel 17.
+    Gegenprobe gefahren: ohne den Befund ist der zweite rot.
+
+- [x] **Die Doku-Prüfung war in einem Arbeitsbaum nicht grün zu bekommen** —
+  gemeldet von solidon-74 aus deren Torlauf, hier nachgestellt und behoben
+  (07.09.2026). `tests/test_directory_docs.maps()` überspringt Pfade mit dem
+  Segment `worktrees`, damit fremde Arbeitsbäume nicht mitgeprüft werden — und
+  prüfte den **absoluten** Pfad. In einem Arbeitsbaum unter
+  `.claude/worktrees/<name>/` trägt jeder Pfad dieses Segment, und der Suchlauf
+  fand null Karten. Ausgerechnet in der Lage, die `/pruefen` für Arbeit neben
+  fremden Sitzungen empfiehlt.
+
+  Gefiltert wird jetzt über den Pfad **unterhalb** von `ROOT`. Nachgestellt in
+  einem Temp-Baum unter `.claude/worktrees/probe/` mit 32 kopierten Karten:
+  alte Fassung 0, neue 32. **Der Test war dabei nicht still** — seine
+  Zusicherung über die Zahl der Karten sprang an, und genau deshalb ist der
+  Fund überhaupt entstanden statt eines grünen Laufs über nichts.
+
+  Derselbe Fehler in der eigenen Familie: **ein Filter, der sich selbst
+  ausschließt.** Er gehört zu den drei Messfallen im Konzept.
+
+**Das Tor zu dieser Arbeit, gefahren am 07.09.2026 gegen `975bd6bf`:**
+Sammelgruppe 7924 grün bei 141 übersprungen, Leistungstests 32 grün,
+`ruff check .` und `ruff format --check .` grün über 956 Dateien, mypy grün
+außer `app/ui/spacemouse.py:308` — fremde Arbeit, nicht angefasst, und ohne
+sie über alle 259 Dateien grün. Rot waren nur die sechs Portionen aus dem
+Absturzpunkt oben. **Die Sammelgruppenzahl ist unabhängig bestätigt:**
+solidon-74 fuhr eine Stunde später denselben Baum und kam auf dieselben
+7924/141.
+
+**Und eine Zahl, die erst beim Nachzählen aufging.** Ihr Lauf davor hatte 7894
+in einem Baum ohne meine Dateien, und die Differenz von 30 sah nach „passt"
+aus. Aufgelöst sind es: 21 neue Fälle von mir (15 in `test_twin_scan.py`, wo
+eine Funktion acht Parameter trägt; je 2 in `test_relations` und
+`test_toolchain`, je 1 in `test_print_disclosure` und `test_shared_constants`),
+8 einer dritten Sitzung (`test_spacemouse.py` und die unverfolgte
+`test_core_package_direction.py`) und 1 eigener Fall von solidon-74. **Meine
+erste Zählung sagte 22** — eine der beiden neuen Funktionen in
+`test_shared_constants` ist eine **umbenannte**, und der Diff zeigt sie als
+neu. Die letzte offene Einheit war damit mein Zählfehler und nicht ihre
+Rechnung.
+
+**Eine Datei trägt fremde Arbeit neben meiner, und das entscheidet über den
+Commit.** In `app/ui/panels.py` steht meine eine Zeile (der Import von
+`UNDONE_COLOUR`) neben 37 Zeilen einer dritten Sitzung, die dort
+`_said_notes` und die Gruppenbegründungen baut (Befund Robert, 07.09.2026);
+`tests/test_feature_panel.py` mit 76 neuen Zeilen ist ganz ihre. **Ein
+privater Index hilft hier nicht** — er trennt Dateien, nicht Zeilen in einer
+Datei. Wer die Zwillingsarbeit committet, nimmt entweder fremde Arbeit mit
+oder lässt `panels.py` liegen; im zweiten Fall ist die Konstante dort noch
+definiert und `test_shared_constants` rot. Abzustimmen, nicht zu entscheiden.
+
+**Was kein Punkt wird, und warum:** `_literal` in `calibration.py` und
+`parts/scad.py` (wortgleich, fünf Zeilen), `ambient_occlusion` und
+`contact_shadows` (beide `return self._map is None`), `_new_keypair` in zwei
+Werkzeugen — klein, richtig, beim nächsten Anfassen der Datei mitzunehmen. Die
+Dialogmuster (`_survey_done`, `set_room` ×3, `enterEvent`/`leaveEvent` in zwei
+Kacheln) sind drei Zeilen, für die ein Mixin mehr kostet als es spart. Und
+`arc_through` in `sketch/edit.py` und `sketch/profile.py` ist ein fachlicher
+Zwilling — zweimal der Umkreis durch drei Punkte, so verschieden aufgeschrieben,
+dass keine Maschine ihn sieht (Ähnlichkeit 0,05) — und gehört dem, der die
+Skizze das nächste Mal anfasst.
+
+---
+
+## Ein Ort für die Auswahl (07.09.2026)
+
+Robert hat die laufende Anwendung mit `weg2-halter-konstruieren.p3d`
+durchgesehen und neun Befunde genannt. Sieben gehen auf zwei Ursachen zurück,
+und deshalb ist die Antwort eine Serie und keine Liste von Fixes:
+
+* **Zwei Panels beantworten dieselbe Frage.** Das Merkmalpanel im Dock rechts
+  und das Auswahl-Panel in der Overlay-Spalte zeigen an einer gewählten
+  Senkung dieselben drei Handlungen, in zwei Darstellungen.
+* **Die Auswahl hat eine Tiefe, das Panel kennt nur eine Zahl.**
+  `set_context` bekommt die Körperzahl; von 102 Operationen stehen 38 als
+  Körperhandlung auch dann in der Liste, wenn eine Fläche gewählt ist.
+
+Entscheidungen A bis H sind gefallen (Robert, 07.09.2026) und stehen mit
+Begründung, Ist-Belegen und Abnahme je Paket in
+`konzepte/konzept-auswahlpanel-2026-09.md`. Die zwei, die den Ausschlag geben:
+**Nichtverfügbarkeit hat zwei Sorten** — eine fehlende Vorbedingung bleibt grau
+mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
+**Shift und Strg tun im Bild dasselbe wie im Baum**.
+
+- [ ] **P1 — der Höhendeckel trifft die Karte statt ihres Inhalts.**
+      `MainWindow._fit_right_column` setzt das Maximum auf `self.right`, den
+      Inhalt der Karte. Der Rahmen behält seine gestreckte Höhe, der Inhalt
+      schrumpft und rutscht nach unten: Prüfbericht, Chat und Tour stehen dann
+      mit ihren Reitern in der Mitte einer leeren Karte. Zuerst, obwohl P6 den
+      Fehler von selbst auflöst — bis dahin sieht es bei jeder Auswahl kaputt
+      aus.
+- [ ] **P2 — Shift und Strg nehmen im Bild dazu.** `Viewport.objectPicked`
+      trägt nur eine Kennung, `_on_object_picked` ersetzt die Auswahl immer.
+      Im Objektbaum steht `ExtendedSelection`, dort geht beides; für Listen
+      steht die Regel schon im Code („damit Strg- und Umschalt-Klick überall
+      dasselbe tun"). Die gestufte Tiefe aus §18.5 bleibt: ohne Taste wandert
+      der Klick, mit Taste nimmt er auf der Stufe dazu. Die Meldung, die heute
+      nur Strg nennt, zieht nach.
+- [ ] **P3 — die Gruppenbegründung steht einmal.**
+      `panels._feature_group_note` baut aus bis zu fünf Nachweisen einen
+      Absatz, und die Handlungsschleife hängt ihn an jede Box. An einer Senkung
+      mit vier Handlungen steht derselbe Satz viermal untereinander.
+- [ ] **P4 — die linke Spalte teilt ihre Höhe.** Vier `collapsible` hängen
+      ohne Streckfaktor untereinander; der Objektbaum ist der einzige mit
+      dehnbarer Größenpolitik und nimmt den Rest. Roberts Vorgaben:
+      Filamente ist kaum zu sehen, der Verlauf wird unlesbar sobald er wächst,
+      Parameter bei vielen schwierig, und der Baum darf bei vielen Objekten
+      nicht zu klein werden. Das Muster liegt rechts bereit —
+      `OverlayHost._share_room` mit `wanted_height`, `least_height` und
+      `set_room`.
+- [ ] **P5 — das Panel kennt die Auswahltiefe.** Die Zusammenfassung nennt,
+      was gewählt ist (`Halter · Oberseite`), nicht wie viele Körper. Und die
+      Sichtbarkeit folgt der Stufe: *Auf dem Bett anordnen*, *Objekt
+      duplizieren* und *Objekt umbenennen* verschwinden an einer Fläche,
+      statt bedienbar dazustehen. Vor P6, sonst zieht der Umbau die falschen
+      Knöpfe in seinen neuen Ort mit.
+- [ ] **P6 — jede Bündelung des Baums ist wählbar, und die Panels werden
+      eines.** Robert am 07.09.2026: „nicht nur bei Schraubenloch mit Senkung
+      ist es so, bei allen Dach einträgen." Beide Dachsorten tragen die
+      Merkmalskennung leer — das Gleichart-Dach „Hohlkehle (17)"
+      (`panels.py:1282`) und das Baustein-Schritt-Dach „Schraubenloch mit
+      Senkung" (`panels.py:1303`) —, und bei einer Bohrung mit Senkung als
+      Kind wählt der Klick nur die Bohrung. Künftig wählt jede dieser Zeilen,
+      was sie bündelt: `selected_features` löst eine Dachzeile in ihre Kinder
+      auf, statt eine leere Kennung zu liefern. Die Handlungen gelten allen
+      Gliedern in einer Transaktion, hervorgehoben wird die ganze Menge in Baum
+      und Bild. Am Baustein-Dach steht zusätzlich „Diesen Schritt ändern"
+      zuerst: Wer den Baustein ändert, ändert Bohrung und Senkung an ihrer
+      Quelle. Im selben Paket ziehen die Auswahlhandlungen ins Panel rechts;
+      der Knopf *Merkmale* entfällt damit, und der Merker fürs Zumachen gilt
+      nur noch der laufenden Auswahl statt der Sitzung.

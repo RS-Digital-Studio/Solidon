@@ -15,6 +15,100 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.3.5
+
+### View
+
+- The 3D view now draws with a new graphics layer. It addresses the graphics card through Direct3D 12, Vulkan or Metal and stays fluid even at several million triangles.
+- Recesses and edges stand out more clearly: the view darkens corners, draws depth lines and hits the point you are pointing at.
+- Body edges sit as a fine wireframe above the surface, and labels hold still instead of jittering while you orbit.
+- Feature names no longer overlap, and their markers stay visible inside a section as well.
+- The axis indicator at the bottom left fills its field in every viewing direction, and its letters are shown in full.
+- The fixed views now turn the camera around the point you are looking at. Your framing stays instead of jumping back to the whole scene; *Fit to view* still does the framing.
+- Pointing through an opening at the face behind it selects that face and not the rim of the opening.
+- Large models build up faster because edges and surface normals are computed only once per body.
+- If the machine lacks the graphics support the view needs, the application names the two packages that have to be installed.
+
+### Actions for the selection
+
+- Report and chat now close with their own edge on the right. The actions for the selection sit below them in a card of their own, with the model visible between the two.
+- Which actions come first depends on the selection: with several bodies Unite, Subtract and Intersection, with a single one Drill a bore, Hollow out and Split.
+- On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.
+- A selected body shows its filaments right there and lets you change them.
+
+### Building and editing
+
+- Unite, Subtract and Cut now take every selected body at once instead of exactly two.
+- Fillet no longer takes the application down when the radius is larger than the wall it is meant to round.
+- A body from the exact kernel stays exact when you only move or rotate it. Fillet and chamfer remain available afterwards.
+- The drilling tool now protrudes only at the mouth of the bore and rejects diameters that exceed the part many times over.
+- Aligning flush means flush up to an angle, not up to a single point distance.
+- Reduce triangles stops at a named resolution, and lattice fill no longer invents an interior that is not there.
+- The sketch editor hits arcs on a full circle, finds circle rims, deletes the selected element with Del and does not leave Redo hanging.
+- The feedback while sculpting no longer declares small changes to be without effect.
+- Switches of an operation that are on by default can now be turned off from the command line as well.
+- An error inside an operation names its cause: in the log, in the line that stopped it and in the error report.
+- Rejected input in placement, mesh storage and recipes now comes with a suggested action instead of a bare error message.
+
+### Features
+
+- An imported scan no longer carries invented domes and sockets; until now they arose in their hundreds from smoothly rounded surfaces.
+- Several threads on one plate are named individually instead of being merged into a single feature.
+- Sphere, torus and cone report their curvature, cylinder centres match their end rings, and thread turns follow the axis.
+- The feature panel offers fits only when a second body is selected, and it knows every group the core uses.
+- Automatic cut fits no longer hand out the same name twice.
+
+### Printing and preparing
+
+- The orientation search now judges in two stages: two hundred poses from the surface normals, nine of them in the layer analysis.
+- Its progress bar runs to the end even when there was nothing to cut.
+- The slicer receives the world of the printer instead of the one from Solidon, and a custom profile keeps its vendor base.
+- Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory.
+- The clean-up after import keeps the filament assignments.
+
+### Files and projects
+
+- A 3MF with many levels of duplication is rejected before 432 bytes turn into a thousand bodies.
+- A small project file no longer asks for gigabytes of memory.
+- A GLB file in millimetres arrives in millimetres and not as metres.
+- A failed save no longer takes the last backup with it, and cancelling really does cancel the import.
+- A late error while reading no longer clears the source of the next project.
+- If the cache folder cannot be created, the finished result still stays.
+- An incomplete set of variants is no longer exported silently.
+- The discarded sketch can be brought back with Undo, and a second history object no longer leaves a stale Redo behind.
+- Two error reports from the same second no longer overwrite each other.
+
+### Chat and AI
+
+- An extra tool with a wrongly typed field no longer tears down the whole run of the agent.
+- For sketch variants the agent now names only menu paths that exist.
+- In image generation the weights arrive whole or not at all, and a single value in the structure field no longer triggers an unordered generation.
+- A local model is measured even when it answers over HTTPS on a port of its own.
+- The note about AI involvement applies only with written evidence, and a change of language no longer ends the remote control.
+
+### Update, installation and system
+
+- The minimum version is now macOS 13, alike in package, installer and on the website.
+- Thirteen libraries are on their latest stable releases, and the exact kernel speaks OpenCASCADE 8.
+- A package without a trust anchor in the system brings its own set along, on every platform.
+- A download no longer breaks off after a fixed total time, and a trickling answer keeps the promised deadline.
+- Inside the Flatpak the application finds the package manager of the machine.
+- On Linux and macOS an abort no longer ends at the parent process only.
+- The Linux menu entry finds the launcher even without an entry in the search path.
+- On the Mac the update dialog says that Solidon comes back by itself after the installer.
+- On the Mac the 3D mouse reads through the vendor driver instead of waiting beside it.
+- The start screen recognises the system before the first picture, and the requirements table is no longer cut off.
+- A rejected attachment no longer counts as a missing one for the feedback.
+- The filament picker stays on the right spool after a cancellation and shows the eighth one too.
+
+### Manual and website
+
+- Manual and screenshots show the reworked interface in all six languages.
+- The drawings in the manual keep the text contrast in their side notes as well.
+- The manual window loads only its own figures and no external images.
+- The website says in one place what leaves your machine.
+- The introduction no longer claims a closed hole when Undo only puts the diameter back.
+
 ## 0.3.4
 
 ### Editing detected features

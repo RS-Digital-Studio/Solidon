@@ -16,6 +16,100 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.3.5
+
+### Vue
+
+- La vue 3D dessine avec une nouvelle couche graphique. Elle adresse la carte graphique via Direct3D 12, Vulkan ou Metal et reste fluide même à plusieurs millions de triangles.
+- Les creux et les arêtes ressortent davantage : la vue assombrit les coins, trace des lignes de profondeur et atteint le point que vous désignez.
+- Les arêtes des corps forment un fin maillage au-dessus de la surface, et les étiquettes restent immobiles au lieu de trembler pendant la rotation.
+- Les noms des caractéristiques ne se chevauchent plus, et leurs marques restent visibles même dans la coupe.
+- L'indicateur d'axes en bas à gauche remplit son champ dans toutes les directions de vue, et ses lettres sont entièrement visibles.
+- Les vues fixes font tourner la caméra autour du point que vous regardez. Votre cadrage est conservé au lieu de revenir à la scène entière ; le cadrage reste l'affaire d'*Ajuster à la vue*.
+- Viser à travers une ouverture la face située derrière sélectionne cette face et non le bord de l'ouverture.
+- Les grands modèles se construisent plus vite, car arêtes et normales ne sont calculées qu'une fois par corps.
+- Si la machine n'a pas le support graphique dont la vue a besoin, l'application nomme les deux paquets à installer.
+
+### Actions pour la sélection
+
+- Le rapport de contrôle et le chat se terminent à droite par leur propre bord. Les actions pour la sélection se trouvent en dessous dans une carte distincte, et le modèle apparaît entre les deux.
+- Les actions mises en avant dépendent de la sélection : avec plusieurs corps Réunir, Soustraire et Intersection, avec un seul Percer un trou, Évidement et Séparer.
+- Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.
+- Un corps sélectionné affiche ses filaments sur place et permet de les changer.
+
+### Construire et modifier
+
+- Réunir, Soustraire et Couper prennent tous les corps sélectionnés à la fois, et non exactement deux.
+- Le congé n'emporte plus l'application quand le rayon dépasse la paroi qu'il doit arrondir.
+- Un corps du noyau exact reste exact si vous ne faites que le déplacer ou le tourner. Congés et chanfreins restent possibles ensuite.
+- L'outil de perçage ne dépasse plus qu'à l'entrée du trou et refuse les diamètres qui dépassent la pièce de plusieurs fois.
+- Aligner à fleur veut dire à fleur à un angle près, et non à une seule distance de point près.
+- Réduire les triangles s'arrête à une résolution nommée, et le remplissage en treillis n'invente plus un intérieur qui n'existe pas.
+- L'éditeur d'esquisse atteint les arcs sur le cercle entier, trouve les bords de cercle, supprime l'élément choisi avec Suppr et ne laisse pas Rétablir en attente.
+- Le retour pendant le sculptage ne déclare plus les petites modifications sans effet.
+- Les interrupteurs d'une opération actifs par défaut peuvent désormais aussi être désactivés en ligne de commande.
+- Une erreur dans une opération nomme sa cause : dans le journal, dans la ligne qui l'a arrêtée et dans le rapport d'erreur.
+- Les saisies refusées dans le placement, le stockage de maillages et les recettes arrivent avec une proposition d'action au lieu d'une erreur nue.
+
+### Caractéristiques
+
+- Un scan importé ne porte plus de dômes ni de cupules inventés ; jusqu'ici ils naissaient par centaines de surfaces arrondies en douceur.
+- Plusieurs filetages sur une plaque sont nommés séparément au lieu d'être réunis en une seule caractéristique.
+- Sphère, tore et cône déclarent leur courbure, les centres de cylindre correspondent à leurs anneaux d'extrémité, et les pas de filetage suivent l'axe.
+- Le panneau des caractéristiques ne propose des ajustements que lorsqu'un second corps est sélectionné, et il connaît chaque groupe du noyau.
+- Les ajustements de coupe automatiques ne distribuent plus deux fois le même nom.
+
+### Impression et préparation
+
+- La recherche d'orientation juge en deux étapes : deux cents poses issues des normales, dont neuf dans l'analyse par couches.
+- Sa barre de progression va jusqu'au bout, même quand il n'y avait rien à couper.
+- Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.
+- Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock.
+- Le nettoyage après l'import conserve les affectations de filament.
+
+### Fichiers et projets
+
+- Un 3MF comportant de nombreux niveaux de duplication est refusé avant que 432 octets ne deviennent mille corps.
+- Un petit fichier de projet ne réclame plus des gigaoctets de mémoire.
+- Un fichier GLB en millimètres arrive en millimètres et non en mètres.
+- Un enregistrement raté n'emporte plus la dernière sauvegarde, et annuler annule vraiment l'import.
+- Une erreur tardive à la lecture ne vide plus la source du projet suivant.
+- Si le dossier de cache ne peut pas être créé, le résultat déjà calculé reste en place.
+- Un jeu de variantes incomplet n'est plus exporté en silence.
+- L'esquisse abandonnée revient avec Annuler, et un second objet d'historique ne laisse plus un Rétablir périmé.
+- Deux rapports d'erreur de la même seconde ne s'écrasent plus.
+
+### Chat et IA
+
+- Un outil supplémentaire dont un champ est mal typé n'interrompt plus toute la série de l'agent.
+- Pour les variantes d'esquisse, l'agent ne nomme que des chemins de menu qui existent.
+- À la génération d'images, les poids arrivent entiers ou pas du tout, et une seule valeur dans le champ de structure ne déclenche plus de génération non demandée.
+- Un modèle local est mesuré même lorsqu'il répond en HTTPS sur un port qui lui est propre.
+- La mention de la participation de l'IA ne vaut qu'avec une trace écrite, et un changement de langue ne met plus fin à la télécommande.
+
+### Mise à jour, installation et système
+
+- La version minimale est désormais macOS 13, à l'identique dans le paquet, l'installateur et sur le site.
+- Treize bibliothèques sont dans leurs dernières versions stables, et le noyau exact parle OpenCASCADE 8.
+- Un paquet sans ancre de confiance dans le système apporte son propre jeu, sur toutes les plateformes.
+- Un téléchargement ne s'interrompt plus après une durée totale fixe, et une réponse au compte-gouttes respecte le délai promis.
+- Dans le Flatpak, l'application trouve le gestionnaire de paquets de la machine.
+- Sous Linux et macOS, une interruption ne s'arrête plus au seul processus parent.
+- L'entrée de menu Linux trouve le lanceur même sans entrée dans le chemin de recherche.
+- Sur le Mac, la boîte de mise à jour indique que Solidon revient de lui-même après l'installateur.
+- Sur le Mac, la souris 3D lit à travers le pilote du fabricant au lieu d'attendre à côté de lui.
+- L'écran de démarrage reconnaît le système avant la première image, et le tableau des exigences n'est plus coupé.
+- Une pièce jointe refusée ne compte plus comme manquante pour le retour d'information.
+- Le sélecteur de filaments reste sur la bonne bobine après une annulation et affiche aussi la huitième.
+
+### Manuel et site web
+
+- Le manuel et les captures montrent l'interface remaniée dans les six langues.
+- Les dessins du manuel conservent le contraste du texte jusque dans leurs remarques annexes.
+- La fenêtre du manuel ne charge que ses propres figures et aucune image étrangère.
+- Le site web dit en un seul endroit ce qui quitte votre machine.
+- L'introduction n'affirme plus qu'un trou est fermé quand Annuler ne rétablit que le diamètre.
+
 ## 0.3.4
 
 ### Modifier les caractéristiques détectées

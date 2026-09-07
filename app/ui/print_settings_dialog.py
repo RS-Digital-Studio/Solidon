@@ -62,7 +62,7 @@ from PySide6.QtWidgets import (
 from app.core import activation, discover, tools
 from app.core.errors import AppError, FileWriteError, InternalError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
-from app.core.export.slicer_keys import SlicerFlavour
+from app.core.export.slicer_keys import SlicerFlavour, takes_a_machine_profile
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import print_settings, profiles
@@ -4340,7 +4340,7 @@ class PrintSettingsDialog(QDialog):
         # ini, und CuraEngine bekommt die Maschine aus dem Kern selbst
         # (`_machine_keys`) — für Cura gibt es strukturell keine Profile zu
         # wählen, und die Forderung war eine Wahl aus einer leeren Liste.
-        if setup.flavour == "orca" and not setup.machine_profile:
+        if takes_a_machine_profile(setup.flavour) and not setup.machine_profile:
             self._open_slicer_section()
             self.state.setText(self._machine_missing_line())
             return
@@ -4351,6 +4351,9 @@ class PrintSettingsDialog(QDialog):
         # Lauf lief bis dahin los und endete in „Der Slicer hat keine
         # Druckdatei geschrieben" — ein Satz über das Ende, nicht über die
         # Ursache.
+        # Auch dieser Vergleich blieb am 07.09.2026 stehen: Er meint das
+        # **Prozess**profil, nicht das Maschinenprofil der Zeile darüber, und
+        # diese Eigenschaft wird an keiner zweiten Stelle gefragt.
         if setup.flavour == "orca" and not setup.base_process:
             self._open_slicer_section()
             self.state.setText(self._process_missing_line())

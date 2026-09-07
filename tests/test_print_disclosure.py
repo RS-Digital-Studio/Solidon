@@ -8,9 +8,14 @@ dabei wählen, ob es so sein soll.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from PySide6.QtWidgets import QApplication, QLabel
 
+import app.ui.ai_disclosure as ai_disclosure_module
+import app.ui.print_disclosure as print_disclosure_module
+import app.ui.settings
 from app.ui.print_disclosure import (
     PRINT_DISCLOSURE_VERSION,
     PrintDisclosureDialog,
@@ -20,7 +25,7 @@ from app.ui.print_disclosure import (
     ensure_print_disclosure,
     remember_disclosure,
 )
-from app.ui.settings import UiSettings
+from app.ui.settings import UiSettings, is_utc_timestamp
 
 
 @pytest.fixture(autouse=True)
@@ -58,12 +63,66 @@ def test_a_broken_timestamp_does_not_count_as_seen() -> None:
 
     Er entsteht, wenn jemand die Einstellungsdatei von Hand ändert — und ein
     halb gefüllter Merker darf den Hinweis nicht unterdrücken.
+
+    **Die letzten drei Werte kamen am 07.09.2026 dazu, und einer davon ist
+    der eigentliche Ertrag:** Dieses Modul brachte seine eigene Prüfung mit,
+    und die war laxer als die des KI-Hinweises daneben — sie sah nur das ``Z``
+    am Ende. ``"2026-09-03 06:00:00Z"`` ging damit als UTC-Zeitpunkt durch,
+    denn ``datetime.fromisoformat`` nimmt das Leerzeichen als Trenner an; der
+    KI-Hinweis verlangte daneben ein ``T``. Gemessen, nicht vermutet — und
+    die Messung hat zwei Drittel der Annahme widerlegt: Ein blankes Datum mit
+    ``Z`` und ein Zeitpunkt ohne ``Z`` fielen bei **beiden** Prüfungen durch.
+    Sie stehen als Absicherung dabei, nicht als Beleg. Beide Module fragen
+    jetzt :func:`app.ui.settings.is_utc_timestamp`.
     """
     settings = UiSettings()
     settings.print_disclosure_version = PRINT_DISCLOSURE_VERSION
-    for broken in ("", "gestern", "2026-09-03T06:00:00+02:00"):
+    broken_values = (
+        "",
+        "gestern",
+        "2026-09-03T06:00:00+02:00",
+        "2026-09-03Z",
+        "2026-09-03 06:00:00Z",
+        "2026-09-03T06:00:00",
+    )
+    for broken in broken_values:
         settings.print_disclosure_at_utc = broken
         assert not disclosure_is_current(settings), f"{broken!r} ist kein UTC-Zeitpunkt"
+
+
+def test_both_notices_ask_the_same_source_what_a_utc_timestamp_is() -> None:
+    """Die Frage „ist das ein UTC-Zeitpunkt" wird an **einer** Stelle beantwortet.
+
+    Beide Hinweise merken Textfassung und Zeitpunkt in denselben
+    Einstellungen, und beide brachten bis zum 07.09.2026 ihre eigene Prüfung
+    mit — kopiert und dabei abgeschwächt (siehe den Test darüber). Zwei
+    Wahrheiten darüber, was ein Merker ist, in zwei Modulen, die
+    nebeneinanderliegen.
+
+    Geprüft wird der Quelltext und nicht das Verhalten: Ein zweites Modul mit
+    eigener Prüfung verhält sich am Tag seiner Entstehung richtig, und der
+    Test wäre grün. Auffallen soll die **Bauart**.
+    """
+    ui = Path(app.ui.settings.__file__).parent
+    dateien = sorted(path for path in ui.rglob("*.py") if path.name != "settings.py")
+    assert len(dateien) > 30, f"nur {len(dateien)} Dateien gefunden — sucht der Test noch etwas?"
+
+    stellen = [
+        f"{path.name}:{nummer}"
+        for path in dateien
+        for nummer, zeile in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if ("utcoffset" in zeile or 'endswith("Z")' in zeile)
+        and not zeile.lstrip().startswith(("#", "*", '"""'))
+    ]
+    assert not stellen, (
+        "eine zweite Zeitstempelprüfung in der Oberfläche — sie gehört nach "
+        f"app.ui.settings.is_utc_timestamp: {', '.join(stellen)}"
+    )
+
+    for modul in (print_disclosure_module, ai_disclosure_module):
+        assert modul.is_utc_timestamp is is_utc_timestamp, (
+            f"{modul.__name__} prüft nicht mit der geteilten Funktion"
+        )
 
 
 def test_the_notice_says_what_leaves_the_programme(qt_app: QApplication) -> None:

@@ -16,6 +16,100 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.3.5
+
+### Vista
+
+- La vista 3D dibuja con una nueva capa gráfica. Se dirige a la tarjeta gráfica mediante Direct3D 12, Vulkan o Metal y sigue fluida incluso con varios millones de triángulos.
+- Los rebajes y las aristas destacan más: la vista oscurece los rincones, traza líneas de profundidad y acierta el punto al que apunta.
+- Las aristas de los cuerpos se muestran como una fina malla sobre la superficie, y los rótulos se mantienen quietos en lugar de temblar al girar.
+- Los nombres de las características ya no se superponen y sus marcas siguen visibles también en la sección.
+- El indicador de ejes de abajo a la izquierda llena su campo en cualquier dirección de vista y sus letras se ven completas.
+- Las vistas fijas giran la cámara alrededor del punto que está mirando. Su encuadre se mantiene en lugar de volver a toda la escena; para encuadrar sigue estando *Ajustar a la vista*.
+- Al apuntar a través de una abertura a la cara que hay detrás se selecciona esa cara y no el borde de la abertura.
+- Los modelos grandes se construyen más rápido, porque las aristas y las normales se calculan una sola vez por cuerpo.
+- Si el equipo carece del soporte gráfico que necesita la vista, la aplicación indica los dos paquetes que hay que instalar.
+
+### Acciones para la selección
+
+- El informe de comprobación y el chat cierran a la derecha con su propio borde. Las acciones para la selección quedan debajo en una tarjeta propia, y entre ambas se ve el modelo.
+- Qué acciones aparecen delante depende de la selección: con varios cuerpos Unir, Sustraer e Intersección; con uno solo Hacer un taladro, Vaciar y Separar.
+- En un taladro seleccionado aparecen Avellanar y Cerrar un taladro; en una cara, Hacer un taladro, Cortar una cavidad y Desplazar cara.
+- Un cuerpo seleccionado muestra allí mismo sus filamentos y permite cambiarlos.
+
+### Construir y modificar
+
+- Unir, Sustraer y Cortar toman todos los cuerpos seleccionados a la vez, no exactamente dos.
+- Redondear ya no tumba la aplicación cuando el radio es mayor que la pared que debe redondear.
+- Un cuerpo del núcleo exacto sigue siendo exacto si solo lo mueve o lo gira. Redondear y aplicar chaflanes siguen siendo posibles después.
+- La herramienta de taladrado sobresale solo en la boca del agujero y rechaza diámetros que superan la pieza muchas veces.
+- Alinear a ras significa a ras con un ángulo, no con una única distancia entre puntos.
+- Reducir triángulos se detiene en una resolución con nombre, y el relleno de celosía ya no inventa un interior que no existe.
+- El editor de bocetos acierta arcos en el círculo completo, encuentra bordes de círculo, borra con Supr el elemento elegido y no deja Rehacer pendiente.
+- La respuesta al modelar ya no declara sin efecto los cambios pequeños.
+- Los interruptores de una operación que están activos de origen ahora también se pueden desactivar desde la línea de órdenes.
+- Un error dentro de una operación indica su causa: en el registro, en la línea que la detuvo y en el informe de error.
+- Las entradas rechazadas en colocación, almacén de mallas y recetas llegan con una propuesta de acción en lugar de un error desnudo.
+
+### Características
+
+- Un escaneo importado ya no trae cúpulas ni casquillos inventados; hasta ahora surgían por centenares de superficies redondeadas suavemente.
+- Varias roscas en una placa se nombran por separado en lugar de reunirse en una sola característica.
+- Esfera, toro y cono declaran su curvatura, los centros de cilindro coinciden con sus anillos finales y los pasos de rosca siguen el eje.
+- El panel de características ofrece ajustes solo cuando hay un segundo cuerpo seleccionado y conoce cada grupo del núcleo.
+- Los ajustes automáticos de corte ya no reparten dos veces el mismo nombre.
+
+### Imprimir y preparar
+
+- La búsqueda de orientación juzga en dos etapas: doscientas posiciones a partir de las normales, nueve de ellas en el análisis por capas.
+- Su barra de progreso llega hasta el final aunque no hubiera nada que cortar.
+- El programa de laminado recibe el mundo de la impresora y no el de Solidon, y un perfil propio conserva su base del fabricante.
+- Los perfiles de laminado propios van delante del perfil del fabricante con el mismo nombre, y un AppImage encuentra su inventario.
+- La limpieza posterior a la importación conserva las asignaciones de filamento.
+
+### Archivos y proyectos
+
+- Un 3MF con muchos niveles de duplicación se rechaza antes de que 432 bytes se conviertan en mil cuerpos.
+- Un archivo de proyecto pequeño ya no reclama gigabytes de memoria.
+- Un archivo GLB en milímetros llega en milímetros y no como metros.
+- Un guardado fallido ya no se lleva la última copia de seguridad, y cancelar cancela de verdad la importación.
+- Un error tardío al leer ya no borra la fuente del siguiente proyecto.
+- Si no se puede crear la carpeta de caché, el resultado ya calculado se mantiene.
+- Un conjunto de variantes incompleto ya no se exporta en silencio.
+- El boceto descartado se recupera con Deshacer, y un segundo objeto del historial ya no deja un Rehacer caduco.
+- Dos informes de error del mismo segundo ya no se sobrescriben.
+
+### Chat e IA
+
+- Una herramienta adicional con un campo mal tipado ya no interrumpe toda la serie del agente.
+- Para las variantes de boceto el agente indica solo rutas de menú que existen.
+- En la generación de imágenes los pesos llegan completos o no llegan, y un solo valor en el campo de estructura ya no provoca una generación no pedida.
+- Un modelo local se mide también cuando responde por HTTPS en un puerto propio.
+- El aviso sobre la participación de la IA rige solo con constancia escrita, y un cambio de idioma ya no termina el mando a distancia.
+
+### Actualización, instalación y sistema
+
+- La versión mínima es ahora macOS 13, igual en paquete, instalador y sitio web.
+- Trece bibliotecas están en sus versiones estables más recientes, y el núcleo exacto habla OpenCASCADE 8.
+- Un paquete sin ancla de confianza en el sistema trae su propio juego, en cualquier plataforma.
+- Una descarga ya no se interrumpe tras un tiempo total fijo, y una respuesta a goteo respeta el plazo prometido.
+- Dentro del Flatpak la aplicación encuentra el gestor de paquetes del equipo.
+- En Linux y macOS una interrupción ya no termina solo en el proceso padre.
+- La entrada de menú de Linux encuentra el lanzador incluso sin entrada en la ruta de búsqueda.
+- En el Mac el diálogo de actualización dice que Solidon vuelve por sí mismo tras el instalador.
+- En el Mac el ratón 3D lee a través del controlador del fabricante en lugar de esperar a su lado.
+- La pantalla de inicio reconoce el sistema antes de la primera imagen, y la tabla de requisitos ya no se corta.
+- Un adjunto rechazado ya no cuenta como ausente para el mensaje de vuelta.
+- El selector de filamentos permanece en la bobina correcta tras una cancelación y muestra también la octava.
+
+### Manual y sitio web
+
+- El manual y las capturas muestran la interfaz renovada en los seis idiomas.
+- Los dibujos del manual mantienen el contraste del texto también en sus notas al margen.
+- La ventana del manual carga solo sus propias figuras y ninguna imagen externa.
+- El sitio web dice en un solo lugar qué sale de su equipo.
+- La introducción ya no afirma que un agujero esté cerrado cuando Deshacer solo devuelve el diámetro.
+
 ## 0.3.4
 
 ### Editar características detectadas
