@@ -782,6 +782,25 @@ wie „a" (DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" 
 Zwei Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
 
+## Ein Nachweis gehört der Gruppe, nicht jeder Handlung
+
+Das Merkmalpanel begründet, warum „Auf alle N gleichartigen anwenden"
+zulässig ist: parallele Achsen, gleiche Rolle in der Bohrungskette, gleich
+liegende Abschnitte. Die Nachweise kommen je Handlung aus dem Kern, und an
+einer Bohrungskette sind sie für alle Handlungen dieselben — der Absatz stand
+damit an einer Senkung **viermal** untereinander, wörtlich gleich (Befund
+Robert, 07.09.2026: „im merkmalpanel ist zu viel text").
+
+`FeaturePanel._said_notes` merkt, welcher Absatz schon steht; geleert wird die
+Menge in `clear()`, und `show_feature` beginnt damit. Dasselbe Muster wie
+`_folded` eine Ebene höher — dort für den Grund einer Absage, hier für den
+Nachweis einer Gruppe.
+
+**Weggelassen wird die Wiederholung, nicht die Auskunft.** Ab der zweiten
+Handlung trägt der Haken sie in Tooltip, Statuszeile und zugänglicher
+Beschreibung; er ist das Feld, über das sie entscheidet. Ohne das verlöre ein
+Screenreader sie an jeder Handlung außer der ersten.
+
 ## Wie die Karten ihre Höhe teilen
 
 `OverlayHost._share_room` verteilt die Höhe einer Zone auf ihre `RoomTaker`.

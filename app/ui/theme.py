@@ -99,6 +99,18 @@ _ACCENT_LINE: Final = {"dark": _SELECTION, "light": "#c37210"}
 #: (:meth:`SketchCanvas._paint_grid`). Eine geglättete Linie von einem Pixel
 #: liegt auf zwei Spalten, jede halb gemischt — aus 1,36 wurden gemessene 1,26,
 #: und die Zahlen hier wären wieder eine Schätzung.
+#: Die Farbe dessen, was passiert ist und nicht mehr gilt — ein
+#: zurückgenommener Verlaufsschritt, ein verworfener Chatbeitrag (§26.3).
+#:
+#: **Bewusst außerhalb von** :data:`THEMES`: Sie ist in beiden Themen dieselbe,
+#: und beide Stellen trugen bis zum 07.09.2026 denselben festen Wert — einmal
+#: als ``UNDONE_COLOUR`` im Verlauf, einmal als ``DISCARDED_COLOUR`` im Chat,
+#: mit dem Kommentar „dieselbe wie für einen verworfenen Chatbeitrag, und aus
+#: demselben Grund". Ein solcher Verweis ist keine geteilte Sache; er wandert
+#: beim nächsten Anfassen nicht mit. Ob die Farbe je Thema verschieden sein
+#: sollte, ist eine Frage der Gestaltung und wurde hier nicht entschieden.
+UNDONE_COLOUR: Final = "#7a828c"
+
 THEMES: dict[Theme, dict[str, str]] = {
     "dark": {
         "window": "#343a45",
