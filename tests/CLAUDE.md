@@ -96,11 +96,13 @@ mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
 | Die vier Hauptwege Ende zu Ende | `test_way_one.py` … `test_way_four.py` |
 | 39 Referenzanfragen an den Agenten | `test_agent_suite.py`, Fälle in `agent_cases.py`, das Modell mit vorgeschriebenen Antworten in `scripted_backend.py` |
 | Importiert jede Schicht nur nach unten — `core` nie `ui`/`cli`, `i18n` gar nichts? | `test_layer_direction.py` |
+| Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — 47 eifrige und 12 träge Kanten eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
 | Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
 | Blockieren die gemeinsamen Projekt-Hooks verwerfende Codex-Befehle mit dem unterstützten Protokoll? | `test_solidon3d_hooks.py` |
 | Zeichnet der Renderer, was der Vertrag verspricht — Bildpunkte, Picks, Kamera, Griffe? | `test_render_contract.py`, `test_render_gizmo.py` und `test_render_gfx_regressions.py` am pygfx-Renderer ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py` der Aufbau über `factory.py`; `test_render_shapes.py` und `test_navigator.py` ganz ohne Renderer |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` — fcntl-Puffergrenze über den Quelltext, die Nutzerverzeichnisse für darwin, win32 und linux |
+| Findet `tools/twin_scan.py` die Zwillinge, für die es gebaut wurde? | `test_twin_scan.py` — gepflanzte Fälle, und ein leerer Baum ist ein Fehler statt eines Ergebnisses |
 
 ## Der Korpus
 
