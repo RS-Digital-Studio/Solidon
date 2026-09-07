@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QApplication, QWidget
 
 from app.branding import APP_NAME, APP_VERSION
 from app.ui.icons import application_icon_source, paint_printed_mark
+from app.ui.motion import EASING, FRAME_MS
 
 #: Maße des Fensters in logischen Pixeln. Breit genug für den Namen, flach
 #: genug, dass es nicht wie ein Dialog wirkt.
@@ -31,14 +32,6 @@ HEIGHT = 300
 
 #: Kantenlänge des gezeichneten Symbols.
 MARK_SIZE = 116
-
-#: Wie schnell sich die gezeigte Höhe der gemessenen annähert, je Bild.
-#: Klein genug für eine weiche Bewegung, groß genug, dass der letzte Schritt
-#: nicht sichtbar nachhinkt.
-EASING = 0.18
-
-#: Bildabstand der Animation in Millisekunden.
-FRAME_MS = 16
 
 
 class SplashScreen(QWidget):

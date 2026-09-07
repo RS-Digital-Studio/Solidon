@@ -485,7 +485,7 @@ class PartFileIO:
             self._bounded_collection(
                 document.get("parameters"),
                 "parameters",
-                int(limits["max_project_parameters"]),
+                int(limits["max_document_parameters"]),
             )
             self._bounded_collection(
                 document.get("sources"),

@@ -16,8 +16,32 @@ an, wenn jemand **eine** davon ändert:
   Die Orientierungssuche hätte danach eine Lage empfohlen, die die
   Schichtanalyse am selben Teil als Überhang meldet.
 
-Der Test prüft die Bauform, nicht die Werte: Eine Konstante des Kerns wird an
-genau einer Stelle definiert. Wer sie anderswo braucht, importiert sie.
+Der Test prüft die Bauform, nicht die Werte: Eine Konstante wird an genau einer
+Stelle definiert. Wer sie anderswo braucht, importiert sie.
+
+**Zwei Erweiterungen vom 07.09.2026, und beide schließen eine Lücke, durch die
+schon etwas gekommen ist.**
+
+*Erstens liest der Test ``app/`` und nicht mehr nur ``app/core``.* In der
+Oberfläche standen vier Paare, die er nie gesehen hat: ``EASING`` und
+``FRAME_MS`` in ``loading`` und ``splash`` (deren Docstring selbst sagt
+„Zwei Wartezeiten, eine Sprache“), ``OVERSAMPLING`` in ``icons`` und
+``manual_window`` mit demselben HiDPI-Grund, ``WAIT_MILLISECONDS`` in zwei
+Dialogen mit wortgleichem Kommentar, und die Farbe des Zurückgenommenen als
+``UNDONE_COLOUR`` im Verlauf und ``DISCARDED_COLOUR`` im Chat — dort mit dem
+Kommentar „dieselbe wie für einen verworfenen Chatbeitrag, und aus demselben
+Grund“. Genau der Verweis, den dieser Docstring seit je als keine geteilte
+Sache benennt.
+
+*Zweitens fällt jetzt auch auf, wenn ein **öffentlicher** Name zweimal mit
+**verschiedenem** Wert steht.* Der Fall, der diesen Test veranlasst hat, wäre
+davor durchgegangen: ``BOOLEAN_OVERLAP`` stand am 27.08.2026 mit 0,05 in
+``geom/boolean`` und mit 0,01 in ``geom/prepare``, und welche Zugabe eine
+Operation bekam, hing am Importpfad. Wer den Namen liest, sieht den
+Unterschied nicht. Modulprivate Namen (``_X``) sind ausgenommen: Sie sind
+nicht importierbar, also nicht verwechselbar — ``_FLAT_ENOUGH`` ist 0,866 für
+ein Filmscharnier und 0,966 für die Wortwahl eines Hinweises, und beides ist
+richtig.
 """
 
 from __future__ import annotations
@@ -29,18 +53,53 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-CORE = Path(__file__).resolve().parent.parent / "app" / "core"
+#: Gelesen wird ``app/`` — Kern **und** Oberfläche. Bis zum 07.09.2026 stand
+#: hier ``app/core``, und die vier Paare in ``app/ui`` fielen dadurch aus jeder
+#: Prüfung.
+SOURCES = Path(__file__).resolve().parent.parent / "app"
 
-#: Am Bestand gemessen (27.08.2026): 412. Die Zahl darf wachsen und schrumpfen
-#: — sie steht hier, damit ein Test über eine **leere** Menge auffällt, statt
-#: grün zu melden, dass alles in Ordnung sei (siehe ``.claude/rules/tests.md``).
-FLOOR = 300
+#: Am Bestand gemessen: 412 über ``app/core`` (27.08.2026), 954 über ``app/``
+#: (07.09.2026). Die Zahl darf wachsen und schrumpfen — sie steht hier, damit
+#: ein Test über eine **leere** Menge auffällt, statt grün zu melden, dass alles
+#: in Ordnung sei (siehe ``.claude/rules/tests.md``).
+FLOOR = 700
 
-#: Namen, die absichtlich mehrfach vorkommen. Kuratiert wie ``GERMAN_STEMS`` in
-#: :mod:`tests.test_language_rules`: Wer einen Eintrag hinzufügt, schreibt den
-#: Grund daneben — und der Grund muss „zwei verschiedene Sachen, die zufällig
-#: gleich heißen" sein, nie „ist halt so".
+#: Namen, die absichtlich mehrfach **mit demselben Wert** vorkommen. Kuratiert
+#: wie ``GERMAN_STEMS`` in :mod:`tests.test_language_rules`: Wer einen Eintrag
+#: hinzufügt, schreibt den Grund daneben — und der Grund muss „zwei
+#: verschiedene Sachen, die zufällig gleich heißen" sein, nie „ist halt so".
 DELIBERATE: dict[str, str] = {}
+
+#: Öffentliche Namen, die absichtlich mehrfach mit **verschiedenem** Wert
+#: vorkommen — je Modul eine eigene Sache, die zufällig denselben Namen trägt.
+#:
+#: Am Bestand vom 07.09.2026 erhoben und einzeln beurteilt. Wer einen Eintrag
+#: hinzufügt, prüft vorher die andere Möglichkeit: **umbenennen**. Genau das war
+#: bei ``MAX_PROJECT_PARAMETERS`` die richtige Antwort — 128 für die Parameter
+#: einer Bausteindatei, 10 000 für die einer Projektdatei, und am Import war
+#: nicht zu sehen, welche man bekommt. Es heißt jetzt
+#: ``MAX_DOCUMENT_PARAMETERS`` und steht deshalb nicht in dieser Liste.
+DIFFERENT_ON_PURPOSE: dict[str, str] = {
+    "TIMEOUT_SECONDS": "acht Module, acht Fristen — was ein Modellaufruf, ein Slicer, "
+    "eine Installation oder ein Updatecheck warten darf, hat nichts miteinander zu tun",
+    "TICK_MS": "der Takt einer Anzeige: eine Sekunde für Fortschritt in Dialogen, "
+    "16 ms für die Abfrage eines Eingabegeräts",
+    "FORMAT_VERSION": "drei Formate mit je eigener Zählung — Kaufcode, Rezept, Projektdatei; "
+    "sie steigen unabhängig, und ein gemeinsamer Name wäre eine gemeinsame Zusage",
+    "FALLOFF": "wie eine Bindung mit dem Abstand abfällt: an einem Skelett härter, "
+    "am freien Formen weicher",
+    "MARK_SIZE": "die gedruckte Marke ist im Startfenster kleiner als in der Ladeanzeige "
+    "über der Ansicht — dasselbe Bild, zwei Fenstergrößen",
+    "MAX_FILE_BYTES": "was ein eingelesenes Netz wiegen darf, und was eine Bausteindatei — "
+    "zwei Dateiarten, zwei Größenordnungen",
+    "MAX_RESPONSE_BYTES": "eine Modellantwort gegen eine Antwort des Lizenzdienstes",
+    "MAX_SAMPLES": "Abtastpunkte einer Verrundung gegen die Zellen eines Gitters",
+    "MAX_STEPS": "die Zugbegrenzung des Agenten gegen die Rasterstufen der Explosionsleiste",
+    "MAX_WORKERS": "Rechenkerne für die Schichtanalyse gegen Verbindungen des lokalen Servers",
+    "SERVICE": "zwei Dienstnamen: der Aktivierungseintrag im Schlüsselbund und der "
+    "Schlüsselbundeintrag des Modellzugangs",
+    "STATE_FILE": "zwei Zustandsdateien in zwei Bereichen: Freischaltung und Rückmeldung",
+}
 
 
 #: Rechenzeichen, die zwischen zwei Zahlen noch einen festen Wert ergeben.
@@ -97,7 +156,7 @@ def _constants() -> dict[str, list[tuple[str, object]]]:
     ermitteln kann.
     """
     found: dict[str, list[tuple[str, object]]] = defaultdict(list)
-    for path in sorted(CORE.rglob("*.py")):
+    for path in sorted(SOURCES.rglob("*.py")):
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except SyntaxError:  # pragma: no cover — nur bei kaputtem Baum
@@ -118,8 +177,8 @@ def _constants() -> dict[str, list[tuple[str, object]]]:
     return found
 
 
-def test_the_core_defines_each_constant_in_one_place() -> None:
-    """Kein Name des Kerns trägt zweimal denselben Wert."""
+def test_the_application_defines_each_constant_in_one_place() -> None:
+    """Kein Name trägt zweimal denselben Wert — in Kern und Oberfläche."""
     found = _constants()
     total = sum(len(places) for places in found.values())
     assert total > FLOOR, f"nur {total} Konstanten gefunden — prüft der Test noch etwas?"
@@ -135,10 +194,40 @@ def test_the_core_defines_each_constant_in_one_place() -> None:
     )
 
 
+def test_no_public_name_stands_for_two_different_values() -> None:
+    """Ein öffentlicher Name, zwei Werte — dann sagt der Import nicht, was er holt.
+
+    Der Fall, gegen den dieses Modul gebaut wurde, war genau dieser und wäre
+    davor nicht rot geworden: ``BOOLEAN_OVERLAP`` mit 0,05 und 0,01 in zwei
+    Modulen der Geometrie. Modulprivate Namen bleiben erlaubt — sie sind nicht
+    importierbar. Was bewusst so steht, trägt seinen Grund in
+    :data:`DIFFERENT_ON_PURPOSE`; die erste Frage bleibt trotzdem, ob nicht
+    einer der beiden einen eigenen Namen verdient.
+    """
+    found = _constants()
+    total = sum(len(places) for places in found.values())
+    assert total > FLOOR, f"nur {total} Konstanten gefunden — prüft der Test noch etwas?"
+
+    ambiguous = {
+        name: places
+        for name, places in found.items()
+        if not name.startswith("_")
+        and name not in DIFFERENT_ON_PURPOSE
+        and len(places) > 1
+        and len({value for _, value in places}) > 1
+    }
+    assert not ambiguous, (
+        "ein öffentlicher Name für zwei verschiedene Werte — der Import sagt nicht, "
+        f"welchen er holt: {ancestry(ambiguous)}"
+    )
+
+
 def ancestry(twins: dict[str, list[tuple[str, object]]]) -> str:
     """Die Fundstellen in einer Zeile, damit die Meldung ohne Nachschlagen
     trägt."""
     return "; ".join(
         f"{name}={places[0][1]!r} in {sorted(file for file, _ in places)}"
+        if len({value for _, value in places}) == 1
+        else f"{name} in " + ", ".join(f"{file}={value!r}" for file, value in sorted(places))
         for name, places in sorted(twins.items())
     )

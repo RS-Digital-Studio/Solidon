@@ -39,7 +39,7 @@ from PySide6.QtWidgets import QPushButton, QWidget
 
 from app.i18n import tr
 from app.ui.icons import application_icon_source, paint_printed_mark
-from app.ui.motion import animations_enabled
+from app.ui.motion import EASING, FRAME_MS, animations_enabled
 from app.ui.style import ROOMY, WIDE
 from app.ui.theme import THEMES, Theme
 
@@ -68,14 +68,6 @@ ESTIMATE_AFTER_S = 10.0
 #: Wie weit ein Lauf sein muss, bevor aus ihm hochgerechnet wird. Bei drei
 #: Prozent ist der Hochrechnungsfehler größer als die Aussage.
 ESTIMATE_FROM = 0.08
-
-#: Bildabstand der Animation in Millisekunden.
-FRAME_MS = 16
-
-#: Wie schnell sich die gezeigte Höhe der gemessenen annähert, je Bild.
-#: Klein genug für eine weiche Bewegung, groß genug, dass der letzte Schritt
-#: nicht sichtbar nachhinkt.
-EASING = 0.18
 
 #: Kantenlänge des gezeichneten Symbols.
 #:

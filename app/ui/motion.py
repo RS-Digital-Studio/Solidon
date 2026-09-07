@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable, Sequence
+from typing import Final
 
 from PySide6.QtCore import QEasingCurve, QObject, QPropertyAnimation, QVariantAnimation
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QStackedWidget, QTabWidget, QWidget
@@ -44,6 +45,21 @@ ACCENT_MS = 110
 #: Die Kurve für alles: schnell los, weich aus. Eine Bewegung, die linear
 #: endet, wirkt abgeschnitten.
 CURVE = QEasingCurve.Type.OutCubic
+
+#: Bildabstand einer selbst getakteten Animation in Millisekunden.
+#:
+#: Die Dauern darüber gibt eine Bewegung an Qt weiter; diese Zahl gilt, wo ein
+#: Timer selbst zeichnet — die gedruckte Marke des Ladebildschirms und die der
+#: Ladeanzeige über der Ansicht. Beide zeigen dasselbe Bild, und bis zum
+#: 07.09.2026 trug jede ihre eigene Kopie dieser Zahl **und** der darunter,
+#: mit wortgleichem Kommentar. ``loading.py`` sagt es selbst: „Zwei
+#: Wartezeiten, eine Sprache."
+FRAME_MS: Final = 16
+
+#: Wie schnell sich die gezeigte Höhe der gemessenen annähert, je Bild.
+#: Klein genug für eine weiche Bewegung, groß genug, dass der letzte Schritt
+#: nicht sichtbar nachhinkt.
+EASING: Final = 0.18
 
 #: Womit sich Bewegung abschalten lässt, ohne den Quelltext anzufassen.
 ENVIRONMENT_SWITCH = "SOLIDON3D_MOTION"

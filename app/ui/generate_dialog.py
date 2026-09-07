@@ -43,7 +43,7 @@ from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.dialogs import spoken_values
 from app.ui.labels import UNEXPECTED_CRASH, volume
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.style import make_primary
 
@@ -68,9 +68,6 @@ def image_filter() -> str:
 #: dasselbe Ergebnis, soweit das Modell auf der anderen Seite es zulässt
 #: (§11.3).
 MAX_SEED = 2**31 - 1
-
-#: Wie lange das Schließen auf den Arbeiter wartet, bevor es loslässt.
-WAIT_MILLISECONDS = 50
 
 
 class _Worker(Worker):
@@ -888,7 +885,7 @@ class GenerateDialog(QDialog):
         self._stop_worker()
         self.wait_for_workers(timeout_ms)
 
-    def wait_for_workers(self, timeout_ms: int = WAIT_MILLISECONDS) -> None:
+    def wait_for_workers(self, timeout_ms: int = DIALOG_WAIT_MS) -> None:
         """Kein Arbeiter überlebt diesen Dialog.
 
         Derselbe Name wie am Hauptfenster, und aus demselben Grund: Es gibt

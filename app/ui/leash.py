@@ -67,6 +67,18 @@ RELEASE_RETRY_MS: Final = 50
 #: ist eingefroren und sagt es nicht.
 WAIT_TIMEOUT_MS: Final = 2000
 
+#: Wie lange das Schließen eines **Dialogs** auf seinen Arbeiter wartet, bevor
+#: es loslässt.
+#:
+#: **Nicht dieselbe Frist wie oben, und der Unterschied ist der Punkt.**
+#: :data:`WAIT_TIMEOUT_MS` gilt am Fensterende für einen Arbeiter, der ein
+#: Abbruch-Token gesehen hat und zurückkommen soll. Ein Dialog, den jemand
+#: zumacht, wartet dagegen nur einen Augenblick: Sein Arbeiter hängt an einer
+#: fremden Antwort — einem Modell, einem Mailportal —, und darauf hält kein
+#: Fenster den Kunden auf. Bis zum 07.09.2026 stand die Zahl zweimal, in
+#: ``generate_dialog`` und ``support_dialog``, mit wortgleichem Kommentar.
+DIALOG_WAIT_MS: Final = 50
+
 #: Jeder gehaltene Arbeiter, über alle Leinen hinweg.
 #:
 #: **Modulweit und nicht nur an der Leine**, und der Grund ist ein Absturz, den

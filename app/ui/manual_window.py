@@ -54,6 +54,7 @@ from app.branding import APP_NAME, WEBSITE_URL
 from app.core import drawing, figures, manual
 from app.core.log import get_logger
 from app.i18n import get_language, tr
+from app.ui.icons import OVERSAMPLING
 
 _log = get_logger(__name__)
 
@@ -426,10 +427,9 @@ class ManualWindow(QMainWindow):
                 return
 
 
-#: Um wie viel feiner gerastert wird, als die Abbildung am Ende groß ist. Ohne
-#: das steht auf einem HiDPI-Bildschirm genau dort Matsch, wo eine Zeichnung
-#: ihre Zahlen zeigt.
-OVERSAMPLING = 2
+# ``OVERSAMPLING`` stand hier bis zum 07.09.2026 als eigene Kopie, mit
+# demselben Wert und demselben Grund wie in ``icons.py`` — beide rastern SVG
+# feiner, als sie es zeigen. Eine Zahl, ein Ort.
 
 
 def _rendered(svg: str | None) -> QImage | None:

@@ -58,7 +58,7 @@ from app.core.support import (
 )
 from app.i18n import tr
 from app.ui.labels import localised
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import DIALOG_WAIT_MS, WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.style import make_primary
 from app.ui.survey import FIELD_HEIGHT, SurveyForm
@@ -78,8 +78,6 @@ MAX_SHOT_WIDTH: Final = 1600
 LOG_LINES: Final = reports.LOG_LINES
 
 #: Wie lange das Schließen auf den Arbeiter wartet, bevor es loslässt.
-WAIT_MILLISECONDS: Final = 50
-
 #: Die Portaladresse und der Ergebnisvertrag gelten für jeden Mailentwurf.
 MAIL_PORTAL_SERVICE: Final = "org.freedesktop.portal.Desktop"
 MAIL_PORTAL_REQUEST: Final = "org.freedesktop.portal.Request"
@@ -977,5 +975,5 @@ class SupportDialog(QDialog):
         self._finish_mail_portal(close=True)
         worker = self._worker
         if worker is not None and worker.isRunning():
-            worker.wait(WAIT_MILLISECONDS)
+            worker.wait(DIALOG_WAIT_MS)
         super().reject()
