@@ -89,6 +89,27 @@ AXIS_RANGE: Final = 350.0
 #: Hardware-Tatsache, keine Einstellung: Eine losgelassene Kappe meldet ein
 #: paar Rohschritte Rauschen, und die dürfen die Kamera nicht kriechen lassen.
 DEADZONE: Final = 0.03
+#: Unterhalb dieses Anteils der stärksten Achse schweigt eine Nebenachse.
+#:
+#: Die Kappe ist ein Kraftsensor ohne mechanische Achsentrennung: Wer dreht,
+#: drückt auch, und wer schiebt, kippt ein wenig. Die Totzone allein fängt das
+#: nicht — sie misst gegen den Vollausschlag, das Übersprechen wächst aber mit
+#: der Kraft. Gemessen an der Aufzeichnung im Korpus
+#: (``tests/data/spacemouse/compact-2026-09-02.jsonl``, 07.09.2026): Beim
+#: Drehen um die Hochachse lag der Zoom im Median bei einem Viertel der
+#: Drehung und in 71 von 71 Berichten über der Totzone — das Teil kam beim
+#: Drehen näher, ohne dass jemand gezogen hätte. Beim Schieben nach links
+#: dasselbe in 74 von 90 Berichten, beim Drücken nach unten in 70 von 88.
+#:
+#: Ein Viertel schneidet davon das meiste weg (2 von 90, 0 von 88, beim Drehen
+#: noch 36 von 71) und lässt bei acht der neun Gesten die gemeinte Achse in
+#: jedem Bericht stehen. Die neunte ist das Kippen der Vorderkante: Dort war
+#: in der Aufzeichnung das Ziehen die stärkere Achse, das Gerät liest dieses
+#: Kippen also zu einem guten Teil als Zug — und das Kippen selbst bleibt nur
+#: noch in 35 von 64 Berichten. Der Preis auf der anderen Seite ist bekannt:
+#: Eine bewusst kleine Nebenbewegung unter einem Viertel der Hauptbewegung
+#: geht mit. Am Gerät ist die Zahl noch nicht bestätigt (siehe ``ansicht.md``).
+CROSSTALK_SHARE: Final = 0.25
 #: Kommt so lange kein Bericht mehr, gilt die Kappe als losgelassen — das
 #: Gerät meldet Null beim Loslassen, aber ein abgezogenes Gerät meldet nichts.
 HOLD_SECONDS: Final = 0.25
@@ -154,6 +175,10 @@ DRIVER_MASK_ALL_BUTTONS: Final = 0xFFFFFFFF
 #: Die Hochachse des Bauraums — der Rückfall für ein „Oben", das mit der
 #: Blickrichtung zusammenfällt.
 WORLD_UP: Final[Vec3] = (0.0, 0.0, 1.0)
+
+
+#: Die sechs Achsen der Kappe, in der Reihenfolge der Felder von :class:`Motion`.
+AXES: Final = ("x", "y", "z", "rx", "ry", "rz")
 
 
 @dataclass(frozen=True, slots=True)
@@ -266,6 +291,40 @@ def _response(value: float) -> float:
     return math.copysign(scaled**1.5, value)
 
 
+def quiet_crosstalk(motion: Motion) -> Motion:
+    """Nebenachsen unter :data:`CROSSTALK_SHARE` der stärksten Achse werden null.
+
+    Die stärkste Achse bleibt immer — sie ist die Geste. Eine Nebenachse, die
+    mindestens den Anteil trägt, ist eine gemeinte Nebenbewegung und bleibt
+    ebenfalls; was darunter liegt, ist das Übersprechen des Kraftsensors. Die
+    Tasten sind keine Achse und reisen unverändert mit.
+    """
+    values = {name: float(getattr(motion, name)) for name in AXES}
+    strongest = max(abs(value) for value in values.values())
+    if strongest == 0.0:
+        return motion
+    floor = strongest * CROSSTALK_SHARE
+
+    def kept(name: str) -> float:
+        value = values[name]
+        return value if abs(value) >= floor else 0.0
+
+    # **Namentlich und nicht über ein ausgepacktes Wörterbuch.** ``Motion``
+    # trägt neben den sechs Achsen die Tasten, und die sind eine Ganzzahl:
+    # ``replace(motion, **quiet)`` hätte sie mit einer Fließkommazahl
+    # überschrieben, sobald jemand ``buttons`` in :data:`AXES` schreibt. mypy
+    # hat genau das gemeldet, bevor es jemand tun konnte.
+    return replace(
+        motion,
+        x=kept("x"),
+        y=kept("y"),
+        z=kept("z"),
+        rx=kept("rx"),
+        ry=kept("ry"),
+        rz=kept("rz"),
+    )
+
+
 def _sub(a: Vec3, b: Vec3) -> Vec3:
     return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
 
@@ -356,6 +415,10 @@ def camera_step(
     """
     if dt <= 0.0 or not motion.active():
         return pose
+    # Erst das Übersprechen weg, dann rechnen: Sonst zoomt jede Drehung mit
+    # (:data:`CROSSTALK_SHARE`). Die stärkste Achse überlebt den Filter immer,
+    # also bleibt eine aktive Bewegung aktiv.
+    motion = quiet_crosstalk(motion)
     sign = 1.0 if invert else -1.0
     gain = speed * dt
     position, focal, up = pose.position, pose.focal_point, pose.view_up

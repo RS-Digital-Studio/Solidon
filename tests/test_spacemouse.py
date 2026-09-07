@@ -25,6 +25,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.ui.spacemouse import (
     AXIS_RANGE,
+    CROSSTALK_SHARE,
     DEADZONE,
     DRIVER_CLIENT_WILDCARD,
     DRIVER_CMD_HANDLE_AXIS,
@@ -45,6 +46,7 @@ from app.ui.spacemouse import (
     decode_report,
     default_reader,
     load_driver,
+    quiet_crosstalk,
     speed_factor,
 )
 
@@ -189,6 +191,66 @@ def test_the_recording_names_both_buttons() -> None:
     assert any(m.buttons == 1 for m in phases["10"]), "linke Taste ist Bit 0"
     assert any(m.buttons == 2 for m in phases["11"]), "rechte Taste ist Bit 1"
     assert all(m.buttons in (0, 1) for m in phases["10"])
+
+
+# --- Übersprechen: eine schwache Nebenachse schweigt ---------------------------
+
+
+def test_a_side_axis_below_the_share_falls_silent() -> None:
+    """Wer dreht, drückt auch ein wenig — und das Teil kam beim Drehen näher.
+
+    Gemessen an der Aufzeichnung: Beim Drehen um die Hochachse lag der Zoom im
+    Median bei einem Viertel der Drehung und in jedem Bericht über der Totzone.
+    Unter :data:`CROSSTALK_SHARE` der stärksten Achse ist eine Nebenachse
+    Übersprechen und wird null; die stärkste bleibt immer.
+    """
+    quiet = quiet_crosstalk(Motion(rz=0.8, y=0.1))
+    assert quiet.rz == 0.8
+    assert quiet.y == 0.0
+    assert quiet_crosstalk(Motion(y=DEADZONE)).y == DEADZONE, "die stärkste Achse schweigt nie"
+    assert quiet_crosstalk(Motion()) == Motion(), "Ruhe bleibt Ruhe"
+
+
+def test_a_deliberate_side_motion_survives_the_share() -> None:
+    """Zwei Achsen, beide gemeint: Schieben mit Drehen bleibt Schieben mit Drehen."""
+    quiet = quiet_crosstalk(Motion(x=0.6, rz=0.6 * CROSSTALK_SHARE, buttons=3))
+    assert quiet.x == 0.6
+    assert quiet.rz == 0.6 * CROSSTALK_SHARE, "genau der Anteil zählt noch als gemeint"
+    assert quiet.buttons == 3, "Tasten sind keine Achse"
+
+
+def test_the_camera_does_not_zoom_when_the_cap_is_only_twisted() -> None:
+    """Die Abbildung nimmt den Filter mit: Eine Drehung mit Zoom-Leck ändert den Abstand nicht."""
+    after = camera_step(START, Motion(rz=0.8, y=0.1), DT)
+    assert distance(after) == pytest.approx(distance(START))
+    assert after.position != START.position, "gedreht wird trotzdem"
+
+
+def test_the_recording_keeps_every_named_axis_and_loses_most_zoom_leaks() -> None:
+    """Am Korpus gemessen, nicht angenommen: Der Anteil frisst keine gemeinte Achse.
+
+    In jeder der acht Gesten, deren stärkste Achse die genannte ist, bleibt
+    diese Achse in jedem Bericht mit klarer Geste aktiv. Die Zoom-Lecks beim
+    Schieben, Drücken, Drehen und Kippen nach rechts fallen zusammen auf
+    weniger als ein Viertel — beim Drehen bleiben sie zur Hälfte, weil dort
+    der Zoom bis zu einem Drittel der Drehung trägt. Die Kippgeste nach vorn
+    (Phase 8) steht nicht in dieser Liste: Dort liest das Gerät das Kippen zu
+    einem guten Teil als Zug, und der Zug ist die stärkere Achse.
+    """
+    phases = _corpus_phases()
+    named = {"1": "x", "2": "x", "3": "z", "4": "z", "5": "y", "6": "y", "7": "rz", "9": "ry"}
+    leaks_before = 0
+    leaks_after = 0
+    for phase, axis in named.items():
+        clear = [m for m in phases[phase] if abs(getattr(m, axis)) >= 0.2]
+        assert len(clear) >= 50, (phase, len(clear))
+        quiet = [quiet_crosstalk(m) for m in clear]
+        assert all(abs(getattr(m, axis)) >= DEADZONE for m in quiet), phase
+        if axis != "y":
+            leaks_before += sum(1 for m in clear if abs(m.y) >= DEADZONE)
+            leaks_after += sum(1 for m in quiet if abs(m.y) >= DEADZONE)
+    assert leaks_before > 200, leaks_before
+    assert leaks_after * 4 < leaks_before, (leaks_after, leaks_before)
 
 
 # --- Abbilden: je Achse ein Test ----------------------------------------------
