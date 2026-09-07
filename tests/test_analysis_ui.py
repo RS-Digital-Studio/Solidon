@@ -3253,8 +3253,8 @@ def test_a_click_on_a_feature_selects_its_body_too(window: MainWindow) -> None:
 
     picked: list[str] = []
     features: list[str] = []
-    window.viewport.objectPicked.connect(picked.append)
-    window.viewport.featurePicked.connect(features.append)
+    window.viewport.objectPicked.connect(lambda name, add: picked.append(name))
+    window.viewport.featurePicked.connect(lambda name, add: features.append(name))
 
     window.viewport._select_at(wall)  # zweite Stufe: das Merkmal darin
 
@@ -4368,6 +4368,27 @@ def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> No
     assert nodes[0].childCount(), "und seine Merkmale hängen darunter"
     assert nodes[0].data(1, Qt.ItemDataRole.UserRole) is None, (
         "der Knoten ist selbst kein Merkmal — er ist ihr Dach"
+    )
+
+    # **Und ein Klick darauf wählt, was er bündelt** (Konzept „Ein Ort für die
+    # Auswahl", E; Robert am 07.09.2026: „bei allen Dach einträgen"). Weil er
+    # selbst kein Merkmal ist, meldete er bis dahin gar keines — die Handlungen
+    # darunter galten dann nichts. Das Gleichart-Dach und die Bohrungskette
+    # stehen in ``test_ui.py``; dieser Fall braucht einen echten Bausteinlauf
+    # und gehört deshalb hierher.
+    koerper = str(nodes[0].data(0, Qt.ItemDataRole.UserRole))
+    darunter = {
+        (koerper, str(kind.data(1, Qt.ItemDataRole.UserRole)))
+        for index in range(nodes[0].childCount())
+        if (kind := nodes[0].child(index)) is not None
+    }
+    tree.clearSelection()
+    nodes[0].setSelected(True)
+    assert set(window.object_tree.selected_features()) == darunter, (
+        "das Baustein-Dach wählt die Merkmale seines Schritts"
+    )
+    assert window.object_tree.selected_feature() is None, (
+        "es selbst bleibt keines — die Dachzeile ist eine Zeile"
     )
 
 

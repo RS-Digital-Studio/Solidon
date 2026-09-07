@@ -307,3 +307,50 @@ def test_a_feature_parameter_is_declared_as_one() -> None:
         if spec.consumes < 1 and any(entry.kind == "feature" for entry in spec.params.spec())
     )
     assert not without_input, "a feature reference is resolved against the input object"
+
+
+def test_the_twin_rule_takes_the_set_itself_as_its_reference(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Zwilling ohne seinen Partner in der Menge bleibt darin stehen.
+
+    Die Regel stand am 07.09.2026 dreimal in zwei Fassungen — bedingt in
+    ``ObjectTree.operations_for_feature``, unbedingt (``spec.name not in
+    MENU_TWINS``) in ``operations_for_object`` und zweimal in
+    ``selection_operations``. Die bedingte trug die Begründung im eigenen
+    Docstring: „Ein Zwilling, dessen Partner für diese Merkmalsart gar nicht
+    gilt, wäre sonst spurlos weg statt zusammengelegt."
+
+    **Dass heute keine Handlung verschwindet, war gemessen und kein Beweis für
+    die Regel:** Bei allen vier Paaren ist der sichtbare Partner entweder
+    ebenfalls draußen (Erzeuger, ``consumes = 0``) oder in derselben Klasse
+    und damit dabei. Ein Test über den heutigen Registerstand könnte den
+    Unterschied deshalb nicht sehen. Gepflanzt wird er hier: ein fünftes Paar,
+    dessen sichtbarer Partner in der Menge fehlt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import MENU_TWINS, shown_of_twins
+
+    load_operations()
+    drill = REGISTRY.get("drill_hole")
+    hollow = REGISTRY.get("hollow_object")
+
+    # Ohne Zwillingseintrag bleiben beide.
+    assert {spec.name for spec in shown_of_twins((drill, hollow))} == {
+        "drill_hole",
+        "hollow_object",
+    }
+
+    # Mit Partner in der Menge fällt der versteckte heraus — das ist der Fall,
+    # für den es die Tabelle gibt.
+    monkeypatch.setitem(MENU_TWINS, "drill_hole", "hollow_object")
+    assert {spec.name for spec in shown_of_twins((drill, hollow))} == {"hollow_object"}
+
+    # **Und ohne Partner bleibt er stehen.** Die unbedingte Fassung hätte ihn
+    # hier weggelassen, und die Handlung wäre spurlos verschwunden statt
+    # zusammengelegt.
+    monkeypatch.setitem(MENU_TWINS, "drill_hole", "gibt_es_in_dieser_menge_nicht")
+    assert {spec.name for spec in shown_of_twins((drill, hollow))} == {
+        "drill_hole",
+        "hollow_object",
+    }

@@ -207,14 +207,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Migration 19→20 rechnet mit lebendem Code | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine eingecheckte v19-Beispieldatei **mit** Deckel; der Satz im Modul, dass dieser Schritt beim nächsten Formatwechsel gegen sie nachzumessen ist, steht seit dem 06.09.2026. Alle älteren Migrationen sind reine Wörterbuchumformungen, dieser ruft `History`, `document_from_data` und `fit_for_lid` in ihrer heutigen Fassung |
 | Drei ungemessene Laufzeitkosten des Reparaturstands | Die Abnahme des Gesamt-Reviews (06.09.2026) | eine Messung je Stelle: `hollow` rechnet für `cavity` eine zweite Boolesche bei jedem Aushöhlen; `Solid.__post_init__` kopiert jede Form, dazu sechs ausdrückliche `working = Solid(...)`; `cavity_chains` läuft im Qt-Hauptthread bei jedem Szenenaufbau ohne Grenze (an `build_tray_v3.step` mit 234 Merkmalen messen) |
 | Testhilfen stehen zweimal | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | **eine Entscheidung von Robert** (Konzept §2 H): 21 wortgleiche Gruppen in `tests/`, darunter `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und `test_torus_fit_quality.py`; Empfehlung einmal für die fünf großen, danach nur beim Anfassen |
-| Die Zwillingsregel steht dreimal in zwei Fassungen | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | eine Funktion im Kern, die eine Menge auf ihre sichtbaren Vertreter reduziert und die Menge selbst als Bezug nimmt — `panels.py:1665` fragt bedingt (`MENU_TWINS.get(spec.name) not in names`), `panels.py:1626` und `selection_operations.py:55` fragen unbedingt (`spec.name not in MENU_TWINS`); heute halten alle drei, weil bei allen vier Paaren beide Seiten dieselbe `consumes`-Klasse haben (gemessen 78 gegen 78) |
-| Die vierte Konstante der Oberfläche wartet auf einen fremden Commit | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | den Commit der Sitzung, die `app/ui/panels.py` hält — sie nimmt meine eine Zeile dort mit (Anordnung Robert, 07.09.2026), und zwar zusammen mit `app/ui/theme.py` und `app/ui/chat.py`, weil `UNDONE_COLOUR` bei HEAD in `theme.py` fehlt und ein Solo-Commit von `panels.py` einen `ImportError` gibt |
-| P1 — der Höhendeckel trifft den Inhalt statt der Karte | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung; `_fit_right_column` deckelt `self.right`, deshalb bleibt der Rahmen hoch und der Inhalt rutscht nach unten |
-| P2 — Shift und Strg nehmen im Bild dazu | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept G, Robert 07.09.2026); heute trägt `objectPicked` keine Modifiertaste, und die Meldung nennt nur Strg |
-| P3 — die Gruppenbegründung steht einmal | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept F); `_feature_group_note` hängt denselben Absatz an jede Handlung, an einer Senkung viermal |
-| P4 — die linke Spalte teilt ihre Höhe | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept H) über den Raumvertrag aus `overlay.py`; heute dehnt sich allein der Objektbaum, und Filamente ist kaum zu sehen |
-| P5 — das Panel kennt die Auswahltiefe | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept B und C); heute bekommt `set_context` nur die Körperzahl, und 38 Körperhandlungen stehen auch an einer gewählten Fläche |
-| P6 — jede Bündelung des Baums ist wählbar, und die Panels werden eines | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung (Konzept A, D und E) nach P5; der eigentliche Schnitt, und er braucht die Tiefe aus P5 |
+| Die Filamentkarte fordert mehr, als sie zeigt | Ein Ort für die Auswahl (07.09.2026) | eine Zeile in `filament_picker._around_the_list`: Sie fordert 144 Bildpunkte und setzt 126 um, gemessen beim Bau des P4-Nachweises. Die 18 Punkte bekommt niemand — die Verteilung gibt sie ihr, und sie zeigt sie nicht |
+| P6 — die Panels werden eines | Ein Ort für die Auswahl (07.09.2026) | die Umsetzung von Konzept A; D und E sind am 07.09.2026 gebaut (jede Bündelung des Baums wählt ihre Glieder, der Merker fürs Zumachen gilt der Auswahl). Offen ist der Umzug der Auswahlhandlungen ins rechte Panel samt Wegfall des Knopfes *Merkmale* — er zieht Handbuch und Bildschirmfotos mit |
 | Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | Die Durchsicht des 07.09.2026 | einen Bilderlauf: `app/images/manual/*/main-window.png` ist von 06:13, die rechte Spalte hat sich um 11:05 geändert (`975bd6bf`), und `d2040474` hat Handbuch und PDFs mit dem neuen Absatz zur rechten Spalte darüber geschrieben. Text und Bild widersprechen sich auf derselben Seite, in sechs Sprachen, in `Releases/*.pdf` und in `website/handbuch.html`. Dazu die **gezeichnete** Abbildung (`app/core/figures.py::_window`): sie kennt Projektkopfzeile und Operationsfläche nicht, und ihr `caption` sagt weiter „vier Bereiche". Reihenfolge: erst `figures.py`, dann der Bilderschritt aus `/erzeugen`, dann Handbuch und PDFs. **Vor dem Paketbau von 0.3.5** |
 
 ---
@@ -16512,9 +16506,9 @@ Zwillinge; die Zeile „Funktionen: 5 956" ist deshalb Teil des Ergebnisses.
   `tests/test_print_disclosure.py::test_both_notices_ask_the_same_source_what_a_utc_timestamp_is`
   hält die Bauart; Gegenprobe mit einer gepflanzten zweiten Prüfung ist rot.
 
-- [~] **Vier Konstanten-Zwillinge in der Oberfläche, und der Wächter sah nur
-  den Kern** — drei zusammengelegt am 07.09.2026, die vierte liegt bei einer
-  anderen Sitzung. `test_shared_constants.py` liest `app/core`; in `app/ui` stehen
+- [x] **Vier Konstanten-Zwillinge in der Oberfläche, und der Wächter sah nur
+  den Kern** — alle vier zusammengelegt am 07.09.2026; die vierte kam mit
+  `a290c36` aus der Nachbarsitzung, wie angeordnet. `test_shared_constants.py` liest `app/core`; in `app/ui` stehen
   `EASING = 0.18` und `FRAME_MS = 16` in `loading.py` **und** `splash.py`
   (der Docstring von `loading.py` sagt „Zwei Wartezeiten, eine Sprache"),
   `OVERSAMPLING = 2` in `icons.py` und `manual_window.py` mit demselben
@@ -16630,8 +16624,9 @@ Zwillinge; die Zeile „Funktionen: 5 956" ist deshalb Teil des Ergebnisses.
   `size_for_thread` vom 24.08. war genau das. Ob die Suite eine Durchsicht
   bekommt, entscheidet Robert („Tests das Nötigste", 02.09.).
 
-- [ ] **Die Zwillingsregel steht dreimal in zwei Fassungen, und die schwächere
-  hält nur wegen der heutigen Registerbelegung.** Gemeldet von der Sitzung, die
+- [x] **Die Zwillingsregel steht dreimal in zwei Fassungen, und die schwächere
+  hält nur wegen der heutigen Registerbelegung** — zusammengelegt am
+  07.09.2026. Gemeldet von der Sitzung, die
   `viewport.py` und `selection_operations.py` hält (07.09.2026), hier am Register
   nachgemessen. Der Kern gibt die Rohmenge und verweist die Zusammenlegung
   ausdrücklich an die Oberfläche — `registry/surfaces.context_menu` sagt es im
@@ -16809,25 +16804,26 @@ Begründung, Ist-Belegen und Abnahme je Paket in
 mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
 **Shift und Strg tun im Bild dasselbe wie im Baum**.
 
-- [ ] **P1 — der Höhendeckel trifft den Inhalt statt der Karte.**
+- [x] **P1 — der Höhendeckel trifft den Inhalt statt der Karte** — behoben am
+      07.09.2026.
       `MainWindow._fit_right_column` setzt das Maximum auf `self.right`, den
       Inhalt der Karte. Der Rahmen behält seine gestreckte Höhe, der Inhalt
       schrumpft und rutscht nach unten: Prüfbericht, Chat und Tour stehen dann
       mit ihren Reitern in der Mitte einer leeren Karte. Zuerst, obwohl P6 den
       Fehler von selbst auflöst — bis dahin sieht es bei jeder Auswahl kaputt
       aus.
-- [ ] **P2 — Shift und Strg nehmen im Bild dazu.** `Viewport.objectPicked`
+- [x] **P2 — Shift und Strg nehmen im Bild dazu** — gebaut am 07.09.2026. `Viewport.objectPicked`
       trägt nur eine Kennung, `_on_object_picked` ersetzt die Auswahl immer.
       Im Objektbaum steht `ExtendedSelection`, dort geht beides; für Listen
       steht die Regel schon im Code („damit Strg- und Umschalt-Klick überall
       dasselbe tun"). Die gestufte Tiefe aus §18.5 bleibt: ohne Taste wandert
       der Klick, mit Taste nimmt er auf der Stufe dazu. Die Meldung, die heute
       nur Strg nennt, zieht nach.
-- [ ] **P3 — die Gruppenbegründung steht einmal.**
+- [x] **P3 — die Gruppenbegründung steht einmal** — gebaut am 07.09.2026 (`a290c36`).
       `panels._feature_group_note` baut aus bis zu fünf Nachweisen einen
       Absatz, und die Handlungsschleife hängt ihn an jede Box. An einer Senkung
       mit vier Handlungen steht derselbe Satz viermal untereinander.
-- [ ] **P4 — die linke Spalte teilt ihre Höhe.** Vier `collapsible` hängen
+- [x] **P4 — die linke Spalte teilt ihre Höhe** — gebaut am 07.09.2026. Vier `collapsible` hängen
       ohne Streckfaktor untereinander; der Objektbaum ist der einzige mit
       dehnbarer Größenpolitik und nimmt den Rest. Roberts Vorgaben:
       Filamente ist kaum zu sehen, der Verlauf wird unlesbar sobald er wächst,
@@ -16835,14 +16831,20 @@ mit Grund, eine Handlung der falschen Auswahlstufe verschwindet. Und
       nicht zu klein werden. Das Muster liegt rechts bereit —
       `OverlayHost._share_room` mit `wanted_height`, `least_height` und
       `set_room`.
-- [ ] **P5 — das Panel kennt die Auswahltiefe.** Die Zusammenfassung nennt,
+- [x] **P5 — das Panel kennt die Auswahltiefe** — gebaut am 07.09.2026. Die Zusammenfassung nennt,
       was gewählt ist (`Halter · Oberseite`), nicht wie viele Körper. Und die
       Sichtbarkeit folgt der Stufe: *Auf dem Bett anordnen*, *Objekt
       duplizieren* und *Objekt umbenennen* verschwinden an einer Fläche,
       statt bedienbar dazustehen. Vor P6, sonst zieht der Umbau die falschen
       Knöpfe in seinen neuen Ort mit.
-- [ ] **P6 — jede Bündelung des Baums ist wählbar, und die Panels werden
-      eines.** Robert am 07.09.2026: „nicht nur bei Schraubenloch mit Senkung
+- [ ] **Die Filamentkarte fordert mehr, als sie zeigt.** Beim Bau des
+      P4-Nachweises gemessen: Sie meldet als Wunsch 144 Bildpunkte, bekommt
+      sie zugeteilt und setzt 126 um. Die Differenz rechnet
+      `filament_picker._around_the_list` zu hoch — sie fordert damit Platz,
+      den sie niemandem zeigt, während die Nachbarkarten ihn brauchen. Kein
+      Befund über die Verteilung: Die Zuteilung stimmt, die Umsetzung nicht.
+- [~] **P6 — jede Bündelung des Baums ist wählbar, und die Panels werden
+      eines** — E und D gebaut am 07.09.2026, A offen.** Robert am 07.09.2026: „nicht nur bei Schraubenloch mit Senkung
       ist es so, bei allen Dach einträgen." Beide Dachsorten tragen die
       Merkmalskennung leer — das Gleichart-Dach „Hohlkehle (17)"
       (`panels.py:1282`) und das Baustein-Schritt-Dach „Schraubenloch mit

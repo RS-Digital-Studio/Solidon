@@ -202,6 +202,42 @@ TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
 }
 
 
+def shown_of_twins(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]:
+    """Eine Menge auf ihre sichtbaren Vertreter — **die Menge ist der Bezug**.
+
+    Ein Zwillingspaar aus :data:`MENU_TWINS` ist dieselbe Handlung in zwei
+    Rechenkernen; sichtbar ist der eine, der andere steht über den Umschalter
+    in dessen Dialog. Wo eine Oberfläche eine Auswahl anbietet, gehört deshalb
+    nur der sichtbare hinein.
+
+    **Weggelassen wird nur, wenn der Partner tatsächlich dabei ist.** Ein
+    Zwilling, dessen Partner in *dieser* Menge gar nicht vorkommt, wäre sonst
+    spurlos weg statt zusammengelegt — die Handlung fehlte dann ganz, statt
+    unter einem Titel zu stehen.
+
+    **Warum es diese Funktion gibt.** Die Regel stand am 07.09.2026 dreimal in
+    zwei Fassungen: bedingt in ``ObjectTree.operations_for_feature``, unbedingt
+    (``spec.name not in MENU_TWINS``) in ``operations_for_object`` und in
+    ``selection_operations``. Zwei der drei Stellen lagen in derselben Datei,
+    neununddreißig Zeilen auseinander, und die bedingte trug die Begründung,
+    warum die andere falsch sein kann, im eigenen Docstring. Dass heute keine
+    Handlung verschwindet, ist gemessen und nicht gebaut: Bei
+    ``create_brep_box`` und ``create_brep_cylinder`` fehlen *beide* Seiten in
+    einer Auswahlmenge, weil Erzeuger ``consumes = 0`` haben; bei
+    ``drill_brep_hole`` und ``shell_exact`` ist der sichtbare Partner in
+    derselben Klasse und damit dabei. Ein fünftes Paar mit Eingang, dessen
+    sichtbarer Partner in der jeweiligen Menge fehlt, fiele in den unbedingten
+    Fassungen ohne Spur heraus.
+
+    Der Kern gibt weiterhin die Rohmenge und entscheidet nichts über die
+    Darstellung (``registry.surfaces.context_menu``); diese Funktion ist das
+    Werkzeug dafür und wohnt bei der Tabelle, über die sie eine Aussage macht.
+    """
+    offered = tuple(specs)
+    names = {spec.name for spec in offered}
+    return tuple(spec for spec in offered if MENU_TWINS.get(spec.name) not in names)
+
+
 @dataclass(frozen=True)
 class VariantGroup:
     """Ein Menüeintrag, der mehrere Operationen zu **einer Handlung**

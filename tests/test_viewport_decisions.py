@@ -1475,7 +1475,10 @@ def test_a_callback_after_the_view_is_gone_stays_quiet(
     gc.collect()
 
     calls.on_context(10, 20)
-    calls.on_pick(10, 20)
+    # Die Auswahltaste geht seit dem 07.09.2026 mit (Konzept „Ein Ort für die
+    # Auswahl", G); geprüft wird hier weiterhin nur, dass ein Rückruf auf eine
+    # abgeräumte Ansicht still bleibt.
+    calls.on_pick(10, 20, False)
     calls.on_cursor("rotate")
     calls.on_paint(10, 20, True)
 

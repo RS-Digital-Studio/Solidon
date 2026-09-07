@@ -3252,7 +3252,7 @@ def test_a_right_click_while_sketching_asks_the_sketch_not_the_scene(
     try:
         happened: list[object] = []
         viewport.sketchMenuAt.connect(lambda point, x, y: happened.append(("menu", point, x, y)))
-        viewport.objectPicked.connect(lambda oid: happened.append(("picked", oid)))
+        viewport.objectPicked.connect(lambda oid, add: happened.append(("picked", oid)))
         viewport._sketch_frame = object()
 
         viewport._sketch_hit = lambda x, y: (3.0, 4.0)  # type: ignore[method-assign]

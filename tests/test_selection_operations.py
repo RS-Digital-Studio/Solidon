@@ -154,6 +154,102 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
     assert panel.isHidden()
 
 
+def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplication) -> None:
+    """Der Abnahmenachweis zu P5: die Sichtbarkeit folgt der Auswahltiefe.
+
+    Konzept „Ein Ort für die Auswahl", C — zwei Sorten Nichtverfügbarkeit, und
+    nur eine verschwindet. *Auf dem Bett anordnen*, *Objekt duplizieren* und
+    *Objekt umbenennen* standen an einer gewählten Fläche bedienbar da, weil
+    ``_palette_availability`` die Körperauswahl fragt und ein gewähltes
+    Merkmal immer einen Körper unter sich hat. Von 102 Registereinträgen
+    betraf das 38.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(320, 340)
+    panel.show()
+
+    am_koerper = {spec.name for spec in body_operations(REGISTRY.all())} - set(panel._quick_buttons)
+    am_merkmal = {spec.name for spec in feature_operations(REGISTRY.all())} - set(
+        panel._quick_buttons
+    )
+    assert am_koerper and am_merkmal, "ohne beide Mengen prüft der Test nichts"
+
+    def sichtbar() -> set[str]:
+        """Die Knöpfe der **Liste**, ohne die Hauptaktionen oben.
+
+        Die Zeile oben ist eine Empfehlung mit eigener Regel
+        (:func:`quick_names`), und die darf von der Stufe abweichen: *Bohrung
+        setzen* steht dort auch an einem Körper, weil eine Bohrung ihre Fläche
+        an jedem Körper findet und ohne eine erkannte selbst Bescheid sagt.
+        Der Stufenfilter gilt der Liste darunter, und nur die zählt hier.
+        """
+        qt_app.processEvents()
+        return {
+            name
+            for name, button in panel._buttons.items()
+            if not button.isHidden() and name not in panel._quick_buttons
+        }
+
+    panel.set_context(1, _availability(1), feature_chosen=False)
+    am_koerper_sichtbar = sichtbar()
+    assert not am_koerper_sichtbar & am_merkmal, (
+        "an einem Körper hat eine Merkmalshandlung nichts zu suchen"
+    )
+
+    panel.set_context(1, _availability(1), feature_chosen=True, feature_kind="face")
+    an_der_flaeche = sichtbar()
+    assert "arrange_bed" not in an_der_flaeche, (
+        "eine Fläche wird nie auf dem Bett angeordnet — der Knopf verschwindet"
+    )
+    assert not an_der_flaeche & am_koerper, "an einer Fläche steht keine Körperhandlung"
+
+    # Und der Weg zurück: die Stufe wechselt, die Knöpfe kommen wieder. Sie
+    # verschwinden beim Wechsel der Stufe, nicht beim zufälligen Klick.
+    panel.set_context(1, _availability(1), feature_chosen=False)
+    assert sichtbar() == am_koerper_sichtbar
+
+    # **Die fehlende Vorbedingung bleibt dagegen stehen.** Eine Handlung, die
+    # zwei Körper braucht, ist bei einem grau und nennt den Grund — der Kunde
+    # kann ihn erfüllen, und der Grund führt ihn hin. Genommen wird sie aus
+    # der Liste und nicht aus den Hauptaktionen: Dort entscheidet
+    # ``quick_names``, welche Zeile überhaupt oben steht.
+    zweisam = [name for name in am_koerper_sichtbar if needed_inputs(REGISTRY.get(name)) > 1]
+    assert zweisam, "kein Fall für die erfüllbare Vorbedingung im Register gefunden"
+    for name in zweisam:
+        button = panel._buttons[name]
+        assert not button.isHidden(), f"{name}: eine erfüllbare Vorbedingung verschwindet nicht"
+        assert not button.isEnabled(), f"{name}: sie bleibt aber grau"
+        assert "Körper" in button.toolTip(), f"{name}: und sie nennt den Grund"
+
+
+def test_the_summary_says_what_is_chosen_not_how_many(qt_app: QApplication) -> None:
+    """Der zweite Nachweis zu P5: die Zeile nennt die Tiefe (Konzept B).
+
+    „1 Objekt gewählt" stand auch über Merkmalshandlungen — es nannte die
+    Körperzahl, während die Knöpfe darunter dem Merkmal galten. Bei mehreren
+    Körpern bleibt die Menge die richtige Antwort: einen Namen gibt es dort
+    nicht.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+
+    panel.set_context(1, _availability(1), feature_chosen=False, label="Halter")
+    assert panel.summary.text() == "Halter"
+
+    panel.set_context(
+        1, _availability(1), feature_chosen=True, feature_kind="face", label="Halter · Oberseite"
+    )
+    assert panel.summary.text() == "Halter · Oberseite"
+
+    panel.set_context(2, _availability(2), feature_chosen=False, label="Halter")
+    assert panel.summary.text() == "2 Objekte gewählt", "bei zweien gibt es keinen einen Namen"
+
+    # Ohne Namen bleibt es bei der Menge — das Panel erfindet keinen.
+    panel.set_context(1, _availability(1), feature_chosen=False)
+    assert panel.summary.text() == "1 Objekt gewählt"
+
+
 def test_search_filters_existing_buttons_and_a_click_carries_the_register_entry(
     qt_app: QApplication,
 ) -> None:
@@ -161,10 +257,14 @@ def test_search_filters_existing_buttons_and_a_click_carries_the_register_entry(
     load_operations()
     panel = SelectionOperationsPanel(REGISTRY.all())
     panel.set_context(2, _availability(2), feature_chosen=False)
+    # **Aus den sichtbaren**, seit die Sichtbarkeit der Auswahlstufe folgt
+    # (Konzept C): Ohne diese Bedingung fiel die Wahl auf eine
+    # Merkmalshandlung, die an zwei gewählten Körpern gar nicht dasteht — und
+    # der Test hätte einen Knopf gesucht, den die Suche nicht zeigen kann.
     extra = next(
         button
         for name, button in panel._buttons.items()
-        if name not in panel._quick_buttons and button.isEnabled()
+        if name not in panel._quick_buttons and button.isEnabled() and not button.isHidden()
     )
     received = []
     panel.operationRequested.connect(received.append)

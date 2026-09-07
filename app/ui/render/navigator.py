@@ -280,7 +280,11 @@ class NavigatorCallbacks(NamedTuple):
     """
 
     on_context: Callable[[int, int], None]
-    on_pick: Callable[[int, int], None]
+    #: Der Linksklick. Das dritte Argument sagt, ob eine der beiden
+    #: Auswahltasten dabei lag — Umschalt oder Strg, und beide dasselbe
+    #: (Konzept „Ein Ort für die Auswahl", G). Der Navigator entscheidet
+    #: nicht, was daraus wird; er reicht die Taste weiter.
+    on_pick: Callable[[int, int, bool], None]
     on_cursor: Callable[[str | None], None]
     on_paint: Callable[[int, int, bool], None]
     is_sculpting: Callable[[], bool]
@@ -457,7 +461,7 @@ class Navigator:
                 # Klickpfad malte denselben Punkt ein zweites Mal.
                 return
             if is_click(started, now):
-                self._calls.on_pick(event.x, event.y)
+                self._calls.on_pick(event.x, event.y, event.shift or event.ctrl)
         elif event.button == "middle":
             self._end()
         elif event.button == "right":

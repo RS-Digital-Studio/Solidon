@@ -37,6 +37,7 @@ if TYPE_CHECKING:
         group_title,
         needed_inputs,
         register_op,
+        shown_of_twins,
         variant_members,
     )
     from app.core.registry.surfaces import (
@@ -76,6 +77,7 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     "FEATURE_KINDS": ("registry", "FEATURE_KINDS"),
     "MENU_GROUPS": ("registry", "MENU_GROUPS"),
     "MENU_TWINS": ("registry", "MENU_TWINS"),
+    "shown_of_twins": ("registry", "shown_of_twins"),
     "REGISTRY": ("registry", "REGISTRY"),
     "TWIN_TOGGLES": ("registry", "TWIN_TOGGLES"),
     "VARIABLE": ("registry", "VARIABLE"),
@@ -147,6 +149,7 @@ __all__ = [
     "param",
     "play_param",
     "register_op",
+    "shown_of_twins",
     "tool_schemas",
     "validate",
     "variant_members",

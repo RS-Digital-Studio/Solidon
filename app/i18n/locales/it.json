@@ -1417,7 +1417,7 @@
   "Diese Objekte gibt es nicht": "Questi oggetti non esistono",
   "Diese Operation arbeitet nur auf Netzen.": "Questa operazione lavora solo su mesh.",
   "Diese Operation braucht mindestens zwei Objekte.": "Questa operazione richiede almeno due oggetti.",
-  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Questa operazione richiede due oggetti. Aggiungi il secondo con Ctrl e clic.",
+  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg und Klick — im Objektbaum oder im Bild.": "Questa operazione richiede due oggetti. Aggiungi il secondo con Maiusc o Ctrl e clic, nell'albero degli oggetti o nella vista.",
   "Diese Operation erzeugt und nimmt keine Objekte. Die eingetragenen wurden übergangen; sie bleiben erhalten.": "Questa operazione crea e non prende oggetti. Quelli indicati sono stati ignorati; vengono conservati.",
   "Diese Operation gibt es im Verlauf nicht.": "Questa operazione non è nella cronologia.",
   "Diese Operation gibt es nicht": "Questa operazione non esiste",

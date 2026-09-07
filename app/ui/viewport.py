@@ -3286,9 +3286,23 @@ class Viewport(QWidget):
     scaleDragged = Signal(float)
     """Ein Zug am Skalierwürfel — trägt den Faktor (§18.11). Das Fenster
     macht daraus die Operation; die Ansicht ändert nie selbst Geometrie."""
-    featurePicked = Signal(str)
+    featurePicked = Signal(str, bool)
+    """Ein Klick hat ein Merkmal getroffen.
+
+    Das zweite Feld ist dasselbe wie bei :attr:`objectPicked`: ob
+    dazugenommen werden soll. Es steht auch hier am Signal, weil die
+    Auswahlmenge im Objektbaum liegt und nicht in der Ansicht.
+    """
     """Ein in der Ansicht angeklicktes Merkmal — trägt seine ID (§18.5)."""
-    objectPicked = Signal(str)
+    objectPicked = Signal(str, bool)
+    """Ein Klick hat einen Körper getroffen — leer heißt: daneben.
+
+    Das zweite Feld sagt, ob dazugenommen werden soll (Umschalt oder Strg,
+    Konzept „Ein Ort für die Auswahl", G). Es steht am Signal und nicht in
+    einem Zustand der Ansicht, weil der Empfänger die Auswahl führt: Die
+    Ansicht weiß, welche Taste lag, der Objektbaum weiß, was schon gewählt
+    ist, und nur zusammen ergeben sie die neue Auswahl.
+    """
     """Ein angeklickter Körper — trägt seine Kennung. Leer heißt: daneben
     geklickt, die Auswahl fällt weg."""
     contextMenuAt = Signal(int, int)
@@ -6637,7 +6651,7 @@ class Viewport(QWidget):
         self._last_drag_stroke = point
         self._on_picked(point)
 
-    def _on_picked(self, point: Any) -> None:
+    def _on_picked(self, point: Any, add: bool = False) -> None:
         picked = self._from_view((float(point[0]), float(point[1]), float(point[2])))
         if self._splitting:
             self.splitPointRequested.emit(picked)
@@ -6652,7 +6666,7 @@ class Viewport(QWidget):
             # Nicht am Messen: die Auswahl, gestuft (:meth:`_click_target`).
             # Ein Klick daneben hebt sie auf — sonst gäbe es keinen Weg, sie
             # ohne den Baum wieder loszuwerden.
-            if not self._select_at(picked):
+            if not self._select_at(picked, add=add):
                 # Die Stelle selbst geht nur hinaus, wenn der Klick kein
                 # Merkmal getroffen hat: Ein offener Dialog, der nach einer
                 # Position fragt, trägt sie ein. Wer ein Merkmal anklickt,
@@ -8814,7 +8828,7 @@ class Viewport(QWidget):
         self._direct_picking = active
 
     def _click_target(
-        self, point: Vec3, *, direct: bool = False
+        self, point: Vec3, *, direct: bool = False, add: bool = False
     ) -> tuple[ObjectId | None, FeatureId | None]:
         """Was ein Klick an dieser Stelle auswählen würde — Körper und, wenn
         die Auswahl schon dort steht, das Merkmal darunter (§18.5).
@@ -8848,12 +8862,21 @@ class Viewport(QWidget):
         keine Navigation: ``direct`` für den Rechtsklick (siehe
         :meth:`_on_right_click`) und :meth:`set_direct_picking` für einen
         Dialog, der nach einem Merkmal fragt.
+
+        **Und ``add`` wandert überhaupt nicht.** Umschalt oder Strg nehmen auf
+        der Stufe dazu, auf der die Auswahl gerade steht (Konzept „Ein Ort für
+        die Auswahl", G): Wer Körper wählt, bekommt einen Körper dazu; wer bei
+        einem Merkmal steht, ein Merkmal. Ohne diese Trennung hätte die Taste
+        zwei Wirkungen auf einmal — dazunehmen **und** eine Stufe tiefer —,
+        und die zweite hat niemand gemeint.
         """
         object_id = self._object_at(point)
         if object_id is None:
             return None, None
         if direct or self._direct_picking:
             return object_id, self._feature_at(point)
+        if add:
+            return object_id, (self._feature_at(point) if self.selection_depth() >= 2 else None)
         if object_id != self._selected:
             # Erste Stufe: ein anderer Körper wird als Ganzes gewählt.
             return object_id, None
@@ -11369,7 +11392,7 @@ class Viewport(QWidget):
             return
         point = self._aim_at(x, y)
         if point is None:
-            self.objectPicked.emit("")
+            self.objectPicked.emit("", False)
             return
         # Zurück in die Szene, wie beim Linksklick (:meth:`_on_picked`, §25).
         # Hier fehlte es: Auf Platte 2 fragte der Rechtsklick eine Bettbreite
@@ -11378,7 +11401,7 @@ class Viewport(QWidget):
         self._select_at(self._from_view(point), direct=True)
         self.contextMenuAt.emit(x, y)
 
-    def _select_at(self, point: Vec3, *, direct: bool = False) -> bool:
+    def _select_at(self, point: Vec3, *, direct: bool = False, add: bool = False) -> bool:
         """Was ein Klick auswählt: der Körper, und eine Stufe tiefer sein
         Merkmal (§18.5). Gibt zurück, ob ein Merkmal dabei war.
 
@@ -11394,9 +11417,13 @@ class Viewport(QWidget):
         Linksklick und Rechtsklick nehmen denselben Weg, nur nicht dieselbe
         Stufe: ``direct`` überspringt sie (:meth:`_on_right_click`). Das Menü
         fragt danach nur noch, was zur Auswahl passt (§18.5).
+
+        ``add`` trägt die Auswahltaste weiter (Konzept G). Sie geht am Signal
+        mit hinaus, weil erst der Empfänger sie einlösen kann: Die Ansicht
+        weiß, welche Taste lag, der Objektbaum, was schon gewählt ist.
         """
-        object_id, feature_id = self._click_target(point, direct=direct)
-        self.objectPicked.emit(object_id or "")
+        object_id, feature_id = self._click_target(point, direct=direct, add=add)
+        self.objectPicked.emit(object_id or "", add)
         if feature_id is None:
             # **Zurück auf den Körper, und zwar hier.** Bis zum 23.08.2026
             # stand hier nur ein ``return``, und der Docstring verließ sich
@@ -11410,11 +11437,16 @@ class Viewport(QWidget):
             # weiterer Klick noch das Ziehen des Körpers kamen noch an. Der
             # Kommentar in ``_click_target`` sagte die Absicht bereits
             # („ein gewähltes Merkmal fällt weg"); eingelöst wurde sie nicht.
-            if self._selected_feature is not None:
+            #
+            # **Ein Dazunehmen-Klick nimmt nichts weg.** Trifft er auf der
+            # Merkmalsstufe kein Merkmal, ist auf dieser Stufe nichts
+            # dazugekommen — und die bestehende Auswahl zu leeren wäre das
+            # Gegenteil dessen, was die Taste verspricht.
+            if self._selected_feature is not None and not add:
                 self.select_feature(None)
             return False
         self.select_feature(feature_id)
-        self.featurePicked.emit(feature_id)
+        self.featurePicked.emit(feature_id, add)
         return True
 
     def _world_at(self, x: int, y: int) -> Vec3 | None:
@@ -11507,7 +11539,9 @@ class Viewport(QWidget):
             # auf die Körperstufe wechseln, sonst bewegt der Abschluss nur
             # das Merkmal. Eine Mehrfachauswahl bezeichnet bereits die ganze
             # Körpermenge und muss erhalten bleiben.
-            self.objectPicked.emit(self._selected or "")
+            # Ein Zug am Körper meint die Auswahl, die schon steht, und nimmt
+            # nichts dazu.
+            self.objectPicked.emit(self._selected or "", False)
         self._body_drag_from = point
         self._body_drag_offset = (0.0, 0.0)
         # "move", nicht "moving": Eine Rolle, die es nicht gibt, fällt still
@@ -12270,7 +12304,7 @@ class Viewport(QWidget):
         start, step = ray
         return ray_hit(self._sketch_frame, self._from_view(start), step)
 
-    def _on_left_click(self, x: int, y: int) -> None:
+    def _on_left_click(self, x: int, y: int, add: bool = False) -> None:
         """Ein Linksklick, der keiner Kamerabewegung galt (§18.5).
 
         Der Weg ist derselbe wie beim Rechtsklick, nur ohne Menü danach: erst
@@ -12300,9 +12334,14 @@ class Viewport(QWidget):
             return
         point = self._aim_at(x, y) if self._means_a_feature() else self._world_at(x, y)
         if point is None:
-            self.objectPicked.emit("")
+            # **Mit Taste hebt ein Klick ins Leere nichts auf.** Wer
+            # dazunehmen will und danebentrifft, hat nichts gewählt und nichts
+            # gemeint; ohne Taste bleibt der Klick daneben der einzige Weg,
+            # die Auswahl ohne den Baum wieder loszuwerden.
+            if not add:
+                self.objectPicked.emit("", False)
             return
-        self._on_picked(point)
+        self._on_picked(point, add)
 
     @property
     def navigation(self) -> NavigationScheme:
@@ -12362,10 +12401,10 @@ def _weak_callbacks(view: Viewport) -> NavigatorCallbacks:
         if found is not None:
             found._on_right_click(x, y)
 
-    def on_pick(x: int, y: int) -> None:
+    def on_pick(x: int, y: int, add: bool) -> None:
         found = weak()
         if found is not None:
-            found._on_left_click(x, y)
+            found._on_left_click(x, y, add)
 
     def on_cursor(role: str | None) -> None:
         found = weak()

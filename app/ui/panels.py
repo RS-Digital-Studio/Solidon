@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -41,6 +42,7 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QMenu,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStyle,
     QStyleOptionComboBox,
@@ -78,7 +80,7 @@ from app.core.errors import (
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.perceive.relations import FeatureActionGroup
-from app.core.registry import MENU_TWINS, REGISTRY
+from app.core.registry import REGISTRY, shown_of_twins
 from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.registry.surfaces import folded_groups
 from app.core.scene import EvaluationResult
@@ -880,6 +882,33 @@ def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | N
     return None
 
 
+def _feature_refs_under(item: QTreeWidgetItem) -> list[tuple[str, str]]:
+    """Diese Zeile und, was sie bündelt — als Paare aus Körper und Merkmal.
+
+    Der Nachbar von :func:`_feature_item` und aus demselben Grund rekursiv:
+    Der Baum ist unter einem Körper zwei Ebenen tief. Eine Dachzeile trägt
+    selbst keine Merkmalskennung und liefert deshalb nur ihre Kinder; eine
+    Bohrung mit ihrer Senkung darunter liefert beide (Konzept „Ein Ort für die
+    Auswahl", E).
+
+    Die Reihenfolge ist die des Baums, und das führende Glied steht vorn — bei
+    einer Kette die Bohrung, deren Maße die Felder zeigen.
+    """
+    found: list[tuple[str, str]] = []
+    object_id = item.data(0, Qt.ItemDataRole.UserRole)
+    feature_id = item.data(1, Qt.ItemDataRole.UserRole)
+    if object_id is not None and feature_id is not None:
+        found.append((str(object_id), str(feature_id)))
+    for index in range(item.childCount()):
+        child = item.child(index)
+        if child is None:
+            # Wie in ``_feature_item``: Der Index liegt durch ``childCount``
+            # im Bereich, der Qt-Stub lässt dennoch ``None`` zu.
+            continue
+        found.extend(_feature_refs_under(child))
+    return found
+
+
 def _visible_rows(item: QTreeWidgetItem | None) -> int:
     """Wie viele Zeilen dieser Ast zeigt: er selbst plus, was offen darunter steht.
 
@@ -1488,17 +1517,33 @@ class ObjectTree(QWidget):
         """Alle gewählten Merkmale als Paare aus Körper und Kennung.
 
         :meth:`selected_feature` gibt bewusst nichts zurück, sobald mehr als
-        eine Zeile markiert ist — „das gewählte Merkmal" hätte dann keine
+        eine **Zeile** markiert ist — „das gewählte Merkmal" hätte dann keine
         Antwort. Für die Frage „wie weit stehen diese beiden auseinander"
         braucht es aber genau **zwei**, und die stehen hier.
+
+        **Und was eine Zeile bündelt, wählt sie mit** (Konzept „Ein Ort für
+        die Auswahl", E; Robert am 07.09.2026: „nicht nur bei Schraubenloch
+        mit Senkung ist es so, bei allen Dach einträgen"). Der Baum bündelt an
+        drei Stellen, und keine davon wählte etwas: Das Gleichart-Dach
+        („Hohlkehle (17)") und das Baustein-Schritt-Dach („Schraubenloch mit
+        Senkung") tragen selbst keine Merkmalskennung, und bei einer Bohrung
+        mit ihrer Senkung als Kind wählte der Klick nur die Bohrung. Jetzt
+        zählt zu jeder markierten Zeile, was unter ihr hängt.
+
+        **Körperzeilen bleiben außen vor**, und das ist die eine Ausnahme, die
+        es braucht: Unter einer Körperzeile hängt *jedes* Merkmal des Körpers.
+        Wer einen Halter markiert, hat nicht seine achtzig Bohrungen gewählt,
+        sondern den Halter — die Auflösung gilt deshalb nur unterhalb der
+        obersten Ebene.
         """
         found: list[tuple[str, str]] = []
         for item in self.tree.selectedItems():
-            object_id = item.data(0, Qt.ItemDataRole.UserRole)
-            feature_id = item.data(1, Qt.ItemDataRole.UserRole)
-            if object_id is not None and feature_id is not None:
-                found.append((str(object_id), str(feature_id)))
-        return tuple(found)
+            if item.parent() is None:
+                continue
+            found.extend(_feature_refs_under(item))
+        # Ohne Wiederholung und in der Reihenfolge des Baums: Wer eine Bohrung
+        # **und** ihr Dach markiert, meint sie einmal.
+        return tuple(dict.fromkeys(found))
 
     def step_selection(self, forward: bool = True) -> None:
         """Zum nächsten Körper weiterschalten (§19.2).
@@ -1523,13 +1568,31 @@ class ObjectTree(QWidget):
             self.tree.setCurrentItem(target)
             self.tree.scrollToItem(target)
 
-    def select_object(self, object_id: ObjectId | None) -> None:
+    def select_object(self, object_id: ObjectId | None, *, add: bool = False) -> None:
         """Wählt einen Körper von außen aus — der Fehlerdialog tut das, wenn er
         zeigt, worum es ging, und ein Klick in der Ansicht ebenso.
 
         ``None`` hebt die Auswahl auf: wer neben das Modell klickt, will sie
         loswerden.
+
+        ``add`` nimmt ihn zur bestehenden Auswahl dazu, statt sie zu
+        ersetzen — Umschalt und Strg im Bild (Konzept „Ein Ort für die
+        Auswahl", G). Ein zweites Mal auf denselben Körper nimmt ihn wieder
+        heraus, wie im Baum: ``ExtendedSelection`` schaltet dort um, und die
+        Regel darüber sagt, dass beide Wege dasselbe tun sollen.
         """
+        if add and object_id is not None:
+            chosen = list(self.selected_objects())
+            if object_id in chosen:
+                chosen.remove(object_id)
+            else:
+                chosen.append(object_id)
+            self.tree.clearSelection()
+            if chosen:
+                self._restore(tuple(chosen), None)
+            else:
+                self._on_selection()
+            return
         self.tree.clearSelection()
         if object_id is not None:
             self._restore((object_id,), None)
@@ -1616,11 +1679,7 @@ class ObjectTree(QWidget):
         # hinter „z".
         return tuple(
             sorted(
-                (
-                    spec
-                    for spec in REGISTRY.all()
-                    if spec.consumes == 1 and spec.name not in MENU_TWINS
-                ),
+                shown_of_twins(spec for spec in REGISTRY.all() if spec.consumes == 1),
                 key=lambda spec: sort_key(spec.title),
             )
         )
@@ -1653,12 +1712,12 @@ class ObjectTree(QWidget):
 
         **Weggelassen wird nur, wenn der Partner tatsächlich dabei ist.**
         Ein Zwilling, dessen Partner für diese Merkmalsart gar nicht gilt,
-        wäre sonst spurlos weg statt zusammengelegt.
-
+        wäre sonst spurlos weg statt zusammengelegt. Genau diese Rechnung
+        steht seit dem 07.09.2026 einmal, im Kern bei der Tabelle, über die
+        sie eine Aussage macht (:func:`~app.core.registry.shown_of_twins`) —
+        vorher dreimal in zwei Fassungen, zwei davon in dieser Datei.
         """
-        offered = REGISTRY.for_feature(kind)
-        names = {spec.name for spec in offered}
-        return tuple(spec for spec in offered if MENU_TWINS.get(spec.name) not in names)
+        return shown_of_twins(REGISTRY.for_feature(kind))
 
     def _feature_kind(self) -> str | None:
         """Die Art des gewählten Merkmals — ``hole``, ``face``, ``edge``.
@@ -2250,7 +2309,25 @@ class ParameterPanel(QWidget):
         super().__init__(parent)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
-        self._form = QFormLayout()
+        self._room: int | None = None
+        """Was die Überlagerung dieser Karte zugeteilt hat, oder nichts.
+
+        ``None`` heißt „noch nicht zugeteilt"; dann gilt der Wunsch. Dieselbe
+        Bedeutung wie bei den drei Nachbarkarten der Spalte."""
+        # **Die Zeilen rollen, der Knopf nicht.** Ohne den Rollbereich hätte
+        # ein Deckel die untersten Zeilen nicht versteckt, sondern
+        # unerreichbar gemacht — genau der Fehler, den ``extra_height``
+        # beschreibt. Und *Parameter anlegen …* bleibt darunter stehen: Er ist
+        # der einzige Weg zu einem neuen Maß und darf nicht wegrollen, aus
+        # demselben Grund, aus dem die Filamentkarte ihre Knöpfe außerhalb
+        # ihrer Liste führt.
+        self._scroll = QScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._sheet = QWidget(self._scroll)
+        self._scroll.setWidget(self._sheet)
+        self._form = QFormLayout(self._sheet)
         self._form.setContentsMargins(0, 0, 0, 0)
         self._empty = QLabel(_empty_parameters_text(), self)
         self._empty.setWordWrap(True)
@@ -2273,9 +2350,53 @@ class ParameterPanel(QWidget):
         # ohne Sprachmodell arbeitet, brauchte einen Weg mit der Maus.
         self.add_button = QPushButton(tr("Parameter anlegen …"), self)
         self.add_button.clicked.connect(self.addRequested)
-        outer.addLayout(self._form)
+        outer.addWidget(self._scroll)
         outer.addWidget(self.add_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self._outer = outer
+        self._fit()
+
+    def _around_the_rows(self) -> int:
+        """Was fest um die Zeilen herum steht: Knopf, Ränder, Abstände.
+
+        Aus den Wunschhöhen gerechnet und nicht aus den gelegten — dieselbe
+        Bedingung, unter der die ganze Verteilung stillsteht
+        (``OverlayHost._share_room``). Wortgleich mit
+        ``FilamentPanel._around_the_list`` ist das nicht: Dort stehen ein
+        Hinweis und drei Knöpfe, hier einer.
+        """
+        margins = self._outer.contentsMargins()
+        gaps = max(self._outer.count() - 1, 0) * self._outer.spacing()
+        return margins.top() + margins.bottom() + gaps + self.add_button.sizeHint().height()
+
+    def wanted_height(self) -> int:
+        """Die Höhe, bei der jede Zeile zu sehen wäre.
+
+        **Ohne diese drei Methoden teilt die Überlagerung dieser Karte
+        nichts zu** — ``_share_room`` fragt nur Kinder mit dem Raumvertrag,
+        und wer ihn nicht hat, „behält seine eigene Höhe". Genau das tat sie:
+        Bei zehn Parametern stand sie auf 378 Bildpunkten und damit höher als
+        Baum, Verlauf und Filamente zusammen (148, 58, 126 — gemessen am
+        07.09.2026 im gebauten Fenster). Die Filamentkarte bekam 126 von 144
+        gewünschten, und die Spalte war überfüllt.
+        """
+        return self._around_the_rows() + self._sheet.sizeHint().height()
+
+    def least_height(self) -> int:
+        """Und die, unter die diese Karte nicht geht, was auch zugeteilt wird.
+
+        Drei Zeilen, wie bei den Nachbarn — aber **nie höher als der Wunsch**:
+        Eine Karte ohne Parameter zeigt einen umbrochenen Satz, und Platz für
+        drei Zeilen wäre Platz, den sie niemandem zeigen kann, während die
+        Nachbarn ihn brauchen (dieselbe Feinheit wie bei der Filamentkarte).
+        """
+        rows = LEAST_PARAMETER_ROWS * (self.add_button.sizeHint().height() + TIGHT)
+        return min(self._around_the_rows() + rows, self.wanted_height())
+
+    def set_room(self, pixels: int) -> None:
+        """Wie hoch diese Karte werden darf."""
+        if pixels == self._room:
+            return
+        self._room = pixels
         self._fit()
 
     def _fit(self) -> None:
@@ -2303,10 +2424,30 @@ class ParameterPanel(QWidget):
         QTimer.singleShot(0, self, self._apply_fitted_height)
 
     def _apply_fitted_height(self) -> None:
-        """Die inzwischen berechnete Inhaltshöhe an Karte und Wirt melden."""
+        """Die inzwischen berechnete Inhaltshöhe an Karte und Wirt melden.
+
+        **Höchstens so hoch wie zugeteilt.** Ohne den Deckel setzte diese
+        Karte ihre volle Inhaltshöhe als Mindesthöhe durch und nahm der
+        Spalte, was die Nachbarn brauchten. Über die Zuteilung hinaus rollen
+        die Zeilen jetzt (``self._scroll``); der Boden bleibt gewahrt, damit
+        nicht ein Deckel von wenigen Pixeln aus der Karte einen Schlitz
+        macht.
+        """
         self._form.activate()
         self._outer.activate()
-        height = self._outer.sizeHint().height()
+        height = self.wanted_height()
+        if self._room is not None:
+            height = max(self.least_height(), min(height, self._room))
+        # **Fest wird der Rollbereich, nicht die Karte.** Die drei Nachbarn
+        # tun dasselbe (``fit_to_rows`` setzt die Höhe der *Liste*), und das
+        # ist keine Geschmacksfrage: ``extra_height`` fragt jede Karte nach
+        # ihrem ``sizeHint``, um daraus den Kopf zu rechnen, und ein Deckel
+        # auf der Karte selbst geht dort mit ein. Gemessen wanderte das
+        # Beiwerk der Spalte dadurch von 120 auf 376 Bildpunkte, je nachdem,
+        # was zuletzt zugeteilt worden war — genau die Rückkopplung, gegen die
+        # der Docstring von ``extra_height`` „nie über die gesetzten Höhen"
+        # schreibt.
+        self._scroll.setFixedHeight(max(height - self._around_the_rows(), 0))
         if height == self.minimumHeight():
             return
         self.setMinimumHeight(height)
@@ -3968,6 +4109,15 @@ MIN_ROWS = 3
 #: Überlagerung — sie teilt ihn über ``set_room`` zu, und dann gilt ihre Zahl
 #: statt dieser.
 MAX_ROWS = 12
+
+LEAST_PARAMETER_ROWS = 3
+"""Wie viele Parameterzeilen sichtbar bleiben, was auch zugeteilt wird.
+
+Dieselbe Zahl wie der Boden der Listen (``least_height_of``), und aus
+demselben Grund: Eine Karte, die auf eine Zeile gedrückt wird, zeigt nicht
+weniger, sondern nichts — man sieht eine Zeile und weiß nicht, dass es
+zwanzig gibt. Drei zeigen, dass es eine Liste ist.
+"""
 
 
 def fit_wrapped(label: QLabel) -> None:

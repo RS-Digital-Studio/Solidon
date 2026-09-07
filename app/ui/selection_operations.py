@@ -32,12 +32,12 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.registry import (
-    MENU_TWINS,
     REGISTRY,
     OperationSpec,
     catalogue_operations,
     caveat_line,
     group_title,
+    shown_of_twins,
 )
 from app.i18n import tr
 from app.ui.icons import icon, icon_name_for
@@ -150,13 +150,17 @@ def body_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, ...]
     Versteckte Rechenkern-Zwillinge sind keine zweite Handlung. Erzeuger ohne
     Eingang gehören ebenfalls nicht an eine Auswahl; sie bleiben im Menü und
     in der Befehlspalette.
+
+    **Die Zwillingsregel kommt aus dem Kern** und steht nicht ein drittes Mal
+    hier (:func:`~app.core.registry.shown_of_twins`, 07.09.2026): Der Bezug
+    ist die Menge selbst, damit ein Zwilling, dessen sichtbarer Partner hier
+    gar nicht vorkommt, nicht spurlos herausfällt.
     """
     catalogue = catalogue_operations()
-    return tuple(
+    return shown_of_twins(
         spec
         for spec in specs
         if (spec.consumes != 0 or spec.takes_whole_scene)
-        and spec.name not in MENU_TWINS
         and spec.name not in catalogue
         and spec.category not in _SEPARATE_CATEGORIES
         and not spec.applies_to
@@ -183,12 +187,11 @@ def feature_operations(specs: Iterable[OperationSpec]) -> tuple[OperationSpec, .
     nächste Eintrag durch die Lücke fällt.
     """
     catalogue = catalogue_operations()
-    return tuple(
+    return shown_of_twins(
         spec
         for spec in specs
         if spec.applies_to
         and (spec.consumes != 0 or spec.takes_whole_scene)
-        and spec.name not in MENU_TWINS
         and spec.name not in catalogue
         and spec.category not in _SEPARATE_CATEGORIES
     )
@@ -214,11 +217,30 @@ class SelectionOperationsPanel(QWidget):
         specs = tuple(specs)
         operations = body_operations(specs) + feature_operations(specs)
         by_name = {spec.name: spec for spec in operations}
+        self._at_a_feature = frozenset(spec.name for spec in feature_operations(specs))
+        """Welche Handlungen einem **Merkmal** gelten.
+
+        Die Stufe steht schon im Register (``applies_to``), und genau daraus
+        entsteht diese Menge — ein eigenes Feld daneben wäre die zweite
+        Wahrheit. Gebraucht wird sie in :meth:`set_context`, das nach der
+        gewählten Stufe ein- und ausblendet (Konzept „Ein Ort für die
+        Auswahl", C)."""
         self._buttons: dict[str, QToolButton] = {}
         self._groups: dict[str, tuple[QLabel, tuple[QToolButton, ...]]] = {}
         self._states: dict[str, tuple[bool, str]] = {}
         self._quick_buttons: dict[str, QToolButton] = {}
         self._quick_shown: list[str] = []
+        self._query = ""
+        """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
+        vergessen."""
+        self._feature_kind: str | None = None
+        """Die Art des gewählten Merkmals, leer auf der Körperstufe.
+
+        ``None`` heißt „noch nie gesetzt" und ist von der Körperstufe (``""``)
+        zu unterscheiden: Beim Aufbau stehen alle Knöpfe sichtbar da, und der
+        erste :meth:`set_context` muss deshalb filtern, auch wenn er die
+        Körperstufe meldet. Mit ``""`` als Startwert tat er es nicht — und an
+        einem Körper standen die Merkmalshandlungen weiter in der Liste."""
 
         self.summary = QLabel("", self)
         set_level(self.summary, "section")
@@ -378,22 +400,41 @@ class SelectionOperationsPanel(QWidget):
         *,
         feature_chosen: bool,
         feature_kind: str = "",
+        label: str = "",
     ) -> None:
         """Auswahl, Lage und Freigaben nachführen, ohne die Liste neu zu bauen.
 
         ``feature_kind`` ist die Art des gewählten Merkmals — ``face``,
         ``hole`` und so fort — und leer, solange nur Körper gewählt sind. Sie
         entscheidet zusammen mit ``selected``, welche Hauptaktionen oben
-        stehen (:func:`quick_names`).
+        stehen (:func:`quick_names`) und **welche Handlungen überhaupt
+        dastehen** (:meth:`_fits_the_level`).
+
+        ``label`` ist der Name der Auswahl, wie ihn das Fenster kennt —
+        ``Halter`` oder ``Halter · Oberseite`` (Konzept B). Er kommt von dort
+        und wird hier nicht gebaut: Der Name eines Körpers und die
+        Beschriftung eines Merkmals stehen in der Szene, nicht im Panel, und
+        eine zweite Rechnung dafür wäre eine zweite Wahrheit. Fehlt er, bleibt
+        es bei der Menge.
         """
         self.setVisible(selected > 0)
         if selected <= 0:
             return
         self._lay_out_quick(quick_names(selected, feature_kind))
+        if self._feature_kind != feature_kind:
+            self._feature_kind = feature_kind
+            self._filter()
+        # **Was gewählt ist, nicht wie viel.** „1 Objekt gewählt" stand über
+        # Merkmalshandlungen und nannte dabei die Körperzahl, während die
+        # Knöpfe darunter dem Merkmal galten (Befund Robert, 07.09.2026). Die
+        # Menge bleibt die Antwort, wo es keinen einen Namen gibt: bei zwei
+        # Körpern.
         self.summary.setText(
-            tr("1 Objekt gewählt")
-            if selected == 1
+            label
+            if label and selected == 1
             else tr("{count} Objekte gewählt").replace("{count}", str(selected))
+            if selected != 1
+            else tr("1 Objekt gewählt")
         )
         for name, button in self._buttons.items():
             enabled, reason = availability(name)
@@ -421,13 +462,51 @@ class SelectionOperationsPanel(QWidget):
         self.feature_button.setStatusTip(feature_tip)
         self.feature_button.setAccessibleDescription(feature_tip)
 
-    def _filter(self, query: str) -> None:
-        """Nur die Darstellung filtern; Registereinträge und Knöpfe bleiben bestehen."""
-        wanted = query.strip().casefold()
+    def _filter(self, query: str | None = None) -> None:
+        """Nur die Darstellung filtern; Registereinträge und Knöpfe bleiben bestehen.
+
+        **Suchtext und Auswahlstufe entscheiden zusammen**, und deshalb an
+        einer Stelle: Zwei Stellen, die dieselbe Sichtbarkeit setzen, machen
+        sie abwechselnd — die eine blendet ein, was die andere gerade
+        ausgeblendet hat. Ohne Argument gilt der zuletzt eingegebene Suchtext;
+        so kann ein Stufenwechsel dieselbe Rechnung anstoßen wie eine
+        Eingabe.
+        """
+        if query is not None:
+            self._query = query
+        wanted = self._query.strip().casefold()
         for title, (heading, buttons) in self._groups.items():
             visible = False
             for button in buttons:
                 match = not wanted or wanted in f"{title} {button.text()}".casefold()
-                button.setVisible(match)
-                visible = visible or match
+                fits = self._fits_the_level(str(button.property("operationName")))
+                button.setVisible(match and fits)
+                visible = visible or (match and fits)
             heading.setVisible(visible)
+
+    def _fits_the_level(self, name: str) -> bool:
+        """Ob diese Handlung zur Stufe der aktuellen Auswahl gehört (Konzept C).
+
+        **Zwei Sorten Nichtverfügbarkeit, und nur eine verschwindet.** Eine
+        fehlende Vorbedingung — Vereinigen braucht zwei Körper, gewählt ist
+        einer — bleibt grau mit Grund: Der Kunde kann sie erfüllen, und der
+        Grund führt ihn hin. Eine Handlung der **falschen Stufe** dagegen hat
+        nichts zu erfüllen: Eine Fläche wird nie auf dem Bett angeordnet, und
+        *Auf dem Bett anordnen*, *Objekt duplizieren* und *Objekt umbenennen*
+        standen an einer gewählten Fläche bedienbar da (38 von 102
+        Operationen, gemessen am 07.09.2026).
+
+        Das bricht die Menüregel vom 23.08.2026 nicht, sondern setzt sie eine
+        Ebene tiefer fort: Dort bleibt eine graue Zeile stehen, weil die
+        Erklärung **neben einem Eintrag steht, der geht**. Hier kommt die
+        Handlung beim Wechsel der Stufe wieder — nicht beim zufälligen Klick.
+        """
+        return (name in self._at_a_feature) == bool(self._feature_kind)
+
+    def chosen_level(self) -> str:
+        """Die Stufe, auf die das Panel gerade eingestellt ist.
+
+        Für Tests und für das Fenster: ``""`` heißt Körperstufe, ein
+        Merkmalsname die Art des gewählten Merkmals, ``None`` noch gar nichts.
+        """
+        return self._feature_kind or ""

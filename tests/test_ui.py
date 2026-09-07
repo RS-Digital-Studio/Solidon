@@ -1686,12 +1686,21 @@ def test_the_feature_window_starts_closed_and_opens_on_a_feature(
     assert not window.feature_dock.isHidden(), "beim Merkmal geht es auf"
 
 
-def test_a_closed_feature_window_stays_closed(window: MainWindow) -> None:
-    """Wer es zumacht, hat entschieden.
+def test_a_closed_feature_window_stays_closed_for_this_selection(window: MainWindow) -> None:
+    """Wer es zumacht, hat für **diese** Auswahl entschieden.
 
     Ein Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe,
-    sondern eine Wiederholung derselben Frage. Danach öffnet nur noch der
-    Schalter unter *Ansicht*.
+    sondern eine Wiederholung derselben Frage. Bis zum 07.09.2026 galt das
+    Zumachen deshalb der ganzen Sitzung — danach öffnete nur noch der Schalter
+    unter *Ansicht*.
+
+    **Der Merker gehört jetzt der laufenden Auswahl** (Entscheidung Robert,
+    07.09.2026, Konzept „Ein Ort für die Auswahl", D). Der Grund ist, was das
+    Fenster künftig trägt: Mit den Handlungen zur Auswahl darin wäre ein
+    Zumachen auf Dauer der Verlust aller Handlungen — ein Klick auf ein Kreuz,
+    und der Kunde kommt bis zum Neustart nicht mehr an sie heran. Die Zusage
+    von oben bleibt für den Fall, für den sie geschrieben wurde: bei diesem
+    Merkmal springt nichts wieder auf. Die nächste Auswahl bringt es zurück.
     """
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -1708,9 +1717,17 @@ def test_a_closed_feature_window_stays_closed(window: MainWindow) -> None:
     QApplication.processEvents()
     assert window.feature_dock.dismissed, "das Zumachen ist gemerkt"
 
+    # Dasselbe Merkmal noch einmal ist keine neue Auswahl — hier gilt die
+    # Zusage, und das Fenster bleibt zu.
+    window.object_tree.select_feature(object_id, holes[0])
+    QApplication.processEvents()
+    assert window.feature_dock.isHidden(), "bei derselben Auswahl springt nichts auf"
+
     window.object_tree.select_feature(object_id, holes[1])
     QApplication.processEvents()
-    assert window.feature_dock.isHidden(), "es springt nicht wieder auf"
+    assert not window.feature_dock.isHidden(), (
+        "die nächste Auswahl bringt es zurück — sonst wären die Handlungen dauerhaft weg"
+    )
 
 
 def test_reopening_the_feature_window_takes_the_decision_back(window: MainWindow) -> None:
@@ -4332,6 +4349,161 @@ def test_selected_bodies_reveal_the_same_operations_below_report_and_chat(
     )
 
 
+def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> None:
+    """Der Abnahmenachweis zu P4: alle vier Abschnitte teilen, keiner nimmt.
+
+    Vorher teilten nur drei. ``ObjectTree``, ``HistoryPanel`` und
+    ``FilamentPanel`` beantworten den Raumvertrag aus ``overlay.py`` seit
+    Langem, ``ParameterPanel`` nicht — und ``_share_room`` fragt nur, wer ihn
+    hat; wer ihn nicht hat, „behält seine eigene Höhe". Genau das tat die
+    Parameterkarte: Bei zehn Maßen stand sie auf 378 Bildpunkten und damit
+    höher als Baum, Verlauf und Filamente zusammen (148, 58, 126 — gemessen am
+    gebauten Fenster).
+
+    Geprüft wird an Roberts vier Vorgaben vom 07.09.2026: Jeder bekommt
+    wenigstens seinen Boden, keiner mehr als seinen Wunsch, und über drei
+    Fensterhöhen wächst die Zuteilung mit dem Platz statt zu springen.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui.panels import open_section
+
+    _with_two_objects(window)
+    for nummer in range(10):
+        window.session.project.document.parameters[f"mass_{nummer}"] = Parameter(
+            name=f"mass_{nummer}", value=float(nummer + 1), unit="mm"
+        )
+    window.parameters.show_document(window.session.project.document)
+    # Der Filamentabschnitt steht zugeklappt in der Spalte; zugeklappt zählt er
+    # in der Verteilung nicht mit (``_share_room`` fragt ``isVisibleTo``), und
+    # Roberts Vorgabe „Filamente ist heute kaum zu sehen" gilt dem
+    # aufgeklappten.
+    open_section(window.filaments)
+    window.show()
+
+    karten = {
+        "Objekte": window.object_tree,
+        "Parameter": window.parameters,
+        "Verlauf": window.history_panel,
+        "Filamente": window.filaments,
+    }
+    zuteilung: dict[str, list[int]] = {name: [] for name in karten}
+    for height in (600, 900, 1400):
+        window.resize(1024, height)
+        QTest.qWait(20)
+        for name, karte in karten.items():
+            lage = f"{name} bei Fensterhöhe {height}"
+            # **Gemessen wird die Zuteilung, nicht die gelegte Höhe.** Sie ist
+            # der Gegenstand des Pakets: ``_share_room`` verteilt, und was eine
+            # Karte daraus macht, ist ihre eigene Rechnung. Die Filamentkarte
+            # etwa fordert 144 Bildpunkte und setzt 126 um — ein eigener Fehler
+            # in ihrem ``_around_the_list``, im Register vermerkt, und kein
+            # Befund über die Verteilung.
+            raum = karte._room
+            assert raum is not None, f"{lage}: keine Zuteilung, die Karte teilt nicht mit"
+            boden, wunsch = karte.least_height(), karte.wanted_height()
+            assert raum >= boden, f"{lage}: {raum} zugeteilt, Boden ist {boden}"
+            assert raum <= max(boden, wunsch), (
+                f"{lage}: {raum} zugeteilt, mehr als Boden {boden} und Wunsch {wunsch}"
+            )
+            zuteilung[name].append(raum)
+
+    # Und die Parameterkarte, die den Fall veranlasst hat, wächst mit dem
+    # Fenster, statt bei jeder Höhe dasselbe zu nehmen. Vor dem Paket nahm sie
+    # umgekehrt bei jeder Höhe dasselbe — ihre volle Inhaltshöhe.
+    klein, mittel, gross = zuteilung["Parameter"]
+    assert klein < mittel < gross, (
+        f"die Parameterkarte folgt dem Platz nicht: {zuteilung['Parameter']}"
+    )
+    assert gross == window.parameters.wanted_height(), (
+        "und bei genug Platz bekommt sie ihren vollen Wunsch"
+    )
+
+
+def test_the_report_tabs_stay_at_the_top_of_their_card(window: MainWindow) -> None:
+    """Der Abnahmenachweis zu P1: Inhalt und Karte sind gleich hoch.
+
+    Der Fehler, der das Paket veranlasst hat, war nicht zu wenig Platz,
+    sondern zu viel: Der Deckel lag auf ``self.right``, dessen senkrechte
+    Größenpolitik ``Ignored`` ist. Die Karte behielt ihre gestreckte Höhe, das
+    einzige Kind durfte sie nicht füllen, und ein ``QVBoxLayout`` zentriert
+    dann — die Reiter saßen mitten in einer hohen, leeren Karte. Eine
+    Höhenzahl allein sieht das nicht: ``self.right.height() >= 260`` galt
+    dabei die ganze Zeit.
+
+    Gemessen wird deshalb der **Abstand**: Inhalt oben am Kartenrand, und die
+    Karte nicht höher als ihr Inhalt samt Rand. Bei sichtbarer und bei
+    verborgener Auswahlkarte, weil nur der erste Fall den Deckel überhaupt
+    setzt, und über drei Fensterhöhen, weil der alte Fehler an einer
+    Untergrenze von 120 hing und auf kleinen Fenstern verschwand.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui.overlay import CARD_PADDING
+
+    _with_two_objects(window)
+    window.show()
+
+    for height in (600, 900, 1400):
+        window.resize(1024, height)
+        # **Gewartet, nicht nur Ereignisse verarbeitet.** ``resizeEvent``
+        # teilt zweimal: einmal sofort und einmal über ein ``singleShot(0)``,
+        # weil die freie Overlay-Geometrie erst nach Qts Layout-Ereignis
+        # endgültig ist. ``processEvents`` allein lässt diesen Timer aus —
+        # gemessen blieb die Spalte dann über sechs Runden auf 22
+        # Bildpunkten, und der Test hätte Qts Zeitpunkt geprüft statt der
+        # Verteilung.
+        QTest.qWait(10)
+        for chosen in (False, True):
+            window.object_tree.tree.topLevelItem(0).setSelected(chosen)
+            QTest.qWait(10)
+            lage = f"Fensterhöhe {height}, Auswahl {chosen}"
+            assert window.selection_card.isHidden() != chosen, lage
+            top = window.right.mapTo(window.right_card, window.right.rect().topLeft()).y()
+            assert top == CARD_PADDING, f"die Reiter stehen nicht oben — {lage}, Abstand {top}"
+            rest = window.right_card.height() - window.right.height() - 2 * CARD_PADDING
+            assert rest == 0, (
+                f"die Karte ist höher als ihr Inhalt — {lage}, "
+                f"Karte={window.right_card.height()}, Inhalt={window.right.height()}, "
+                f"übrig={rest}"
+            )
+            if chosen:
+                unten = window.selection_card.geometry().bottom()
+                assert unten <= window.right_column.rect().bottom(), (
+                    f"die Auswahlkarte steht über die Spalte hinaus — {lage}"
+                )
+
+
+def test_a_modifier_click_in_the_view_adds_a_body(window: MainWindow) -> None:
+    """Testart „Anschluss": Kann das Panel es, oder **tut** es das Fenster?
+
+    Dass die Ansicht die Taste meldet, steht in ``test_selection.py``, dass
+    der Navigator sie liefert, in ``test_navigator.py``. Ob am Ende zwei Körper
+    gewählt sind, hängt an einer dritten Stelle — ``_on_object_picked`` musste
+    dafür vom Ersetzen auf Dazunehmen umgestellt werden, und genau das prüft
+    dieser Test. Er ist der Grund, aus dem Roberts Befund entstand: Im Bild ging
+    Mehrfachauswahl nicht, im Baum längst.
+    """
+    _with_two_objects(window)
+
+    window._on_object_picked("obj_1")
+    assert window.object_tree.selected_objects() == ("obj_1",)
+
+    window._on_object_picked("obj_2", True)
+    assert window.object_tree.selected_objects() == ("obj_1", "obj_2"), (
+        "die Taste nimmt dazu, statt zu ersetzen"
+    )
+
+    # Und ein zweites Mal auf denselben nimmt ihn wieder heraus — wie im Baum,
+    # wo ``ExtendedSelection`` das seit jeher tut.
+    window._on_object_picked("obj_2", True)
+    assert window.object_tree.selected_objects() == ("obj_1",)
+
+    # Ohne Taste bleibt es beim Ersetzen.
+    window._on_object_picked("obj_2")
+    assert window.object_tree.selected_objects() == ("obj_2",)
+
+
 def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None:
     """Die Anwendung reicht die Merkmalsart wirklich durch (Testart „Anschluss").
 
@@ -4368,6 +4540,39 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     window.object_tree.select_object(object_id)
     QApplication.processEvents()
     assert vorn() == set(QUICK_BODY), "ohne Merkmal zählt wieder die Menge"
+
+
+def test_the_window_hands_the_panel_its_level_and_its_name(window: MainWindow) -> None:
+    """Testart „Anschluss" zu P5: Stufe und Name kommen wirklich an.
+
+    Dass das Panel nach der Stufe ein- und ausblendet, steht in
+    ``test_selection_operations.py``; dass es die Zeile setzt, ebenso. Ob das
+    **Fenster** beides liefert, hängt an ``selection_label()`` und daran, dass
+    ``_update_actions`` sie mitgibt — genau die Stelle, an der die Zusage
+    sonst unbemerkt ausbliebe.
+    """
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(name for name, feature in entry.features.items() if feature.kind == "hole")
+    panel = window.selection_operations
+
+    window.object_tree.select_object(object_id)
+    QApplication.processEvents()
+    assert panel.summary.text() == entry.name, "am Körper steht sein Name, nicht seine Zahl"
+    assert panel.chosen_level() == "", "und die Stufe ist die des Körpers"
+    assert not panel._buttons["arrange_bed"].isHidden()
+
+    window.object_tree.select_feature(object_id, hole)
+    QApplication.processEvents()
+    assert panel.chosen_level() == "hole", "die Merkmalsart kommt durch"
+    assert panel.summary.text().startswith(f"{entry.name} · "), (
+        f"an der Bohrung steht Körper und Merkmal: {panel.summary.text()!r}"
+    )
+    assert panel._buttons["arrange_bed"].isHidden(), (
+        "und *Auf dem Bett anordnen* verschwindet, statt bedienbar dazustehen"
+    )
 
 
 def test_the_selection_panel_uses_the_shared_launch_path() -> None:
@@ -13696,6 +13901,95 @@ def test_many_features_of_one_kind_stand_under_one_roof(window: MainWindow) -> N
 
     tree.select_feature(object_id, "fillet_3")
     assert dach.isExpanded(), "wer ein Merkmal darin wählt, sieht es"
+
+
+def test_every_bundle_in_the_tree_selects_what_it_bundles(window: MainWindow) -> None:
+    """Der Abnahmenachweis zu P6: jede der drei Bündelungen wählt ihre Glieder.
+
+    Robert am 07.09.2026, auf die Rückfrage: „nicht nur bei Schraubenloch mit
+    Senkung ist es so, bei allen Dach einträgen." Der Baum bündelt an drei
+    Stellen, und keine davon wählte etwas — die zwei Dächer tragen ihre
+    Merkmalskennung leer, und bei einer Bohrung mit Senkung als Kind wählte
+    der Klick nur die Bohrung.
+
+    Geprüft wird ``selected_features``, weil dort die Menge entsteht, aus der
+    Panel, Bild und Handlungen sie beziehen (``featuresSelected`` →
+    ``select_feature_refs``). Das Baustein-Dach steht in
+    ``test_analysis_ui.py``: Es braucht einen echten Bausteinlauf, und der hat
+    seinen Platz dort, wo ``_insert_a_thread`` schon steht.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    tree = window.object_tree
+
+    # --- Gleichart-Dach: sechs Hohlkehlen unter einer Zeile ------------------
+    fillets = {
+        f"fillet_{index}": Feature(
+            id=f"fillet_{index}",
+            kind="fillet",
+            params={"radius": 13.98, "recess": True},
+            provenance="detected",
+        )
+        for index in range(6)
+    }
+    einzeln = next(iter(entry.features.values()))
+    gefuellt = dataclasses.replace(entry, features={**fillets, einzeln.id: einzeln})
+    tree.show_scene(
+        dataclasses.replace(
+            result, scene=dataclasses.replace(result.scene, objects={object_id: gefuellt})
+        ),
+        window.session.project.document,
+    )
+    top = tree.tree.topLevelItem(0)
+    assert top is not None
+    top.setExpanded(True)
+    dach = next(
+        kind
+        for index in range(top.childCount())
+        if (kind := top.child(index)) is not None and "(6)" in kind.text(0)
+    )
+    tree.tree.clearSelection()
+    dach.setSelected(True)
+    assert set(tree.selected_features()) == {(object_id, name) for name in fillets}, (
+        "das Gleichart-Dach wählt alle sechs"
+    )
+    assert tree.selected_feature() is None, "es selbst ist keines — die Dachzeile bleibt eine"
+
+    # --- Bohrung mit ihrer Senkung als Kind ---------------------------------
+    # Von Hand zusammengehängt: Ob ``cavity_chains`` die Senkung unter ihre
+    # Bohrung stellt, ist anderswo geprüft; hier geht es um die Auswahl an
+    # einer Zeile, die ein Kind hat. ``plate_holes.stl`` hat keine solche —
+    # ein Test, der das stillschweigend überspringt, prüft nichts.
+    bohrung = next(
+        kind
+        for index in range(top.childCount())
+        if (kind := top.child(index)) is not None
+        and str(kind.data(1, Qt.ItemDataRole.UserRole) or "").startswith("hole_")
+    )
+    senkung = QTreeWidgetItem(["Senkung", ""])
+    senkung.setData(0, Qt.ItemDataRole.UserRole, object_id)
+    senkung.setData(1, Qt.ItemDataRole.UserRole, "recess_1")
+    bohrung.addChild(senkung)
+    fuehrend = (object_id, str(bohrung.data(1, Qt.ItemDataRole.UserRole)))
+    tree.tree.clearSelection()
+    bohrung.setSelected(True)
+    assert tree.selected_features() == (fuehrend, (object_id, "recess_1")), (
+        "die Kette wählt beide Glieder, das führende vorn"
+    )
+    assert tree.selected_feature() == fuehrend[1], (
+        "und die Felder zeigen die Maße des führenden Glieds"
+    )
+
+    # --- und eine Körperzeile bleibt eine Körperzeile ------------------------
+    tree.tree.clearSelection()
+    top.setSelected(True)
+    assert tree.selected_features() == (), (
+        "wer einen Halter markiert, hat nicht seine achtzig Bohrungen gewählt"
+    )
 
 
 def test_one_line_stands_for_many_bodies_and_asks_which(window: MainWindow) -> None:

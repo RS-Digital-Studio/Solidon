@@ -1417,7 +1417,7 @@
   "Diese Objekte gibt es nicht": "Ces objets n'existent pas",
   "Diese Operation arbeitet nur auf Netzen.": "Cette opération ne travaille que sur des maillages.",
   "Diese Operation braucht mindestens zwei Objekte.": "Cette opération nécessite au moins deux objets.",
-  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Cette opération demande deux objets. Ajouter le second avec Ctrl et un clic.",
+  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg und Klick — im Objektbaum oder im Bild.": "Cette opération demande deux objets. Ajouter le second avec Maj ou Ctrl et un clic, dans l'arborescence ou dans la vue.",
   "Diese Operation erzeugt und nimmt keine Objekte. Die eingetragenen wurden übergangen; sie bleiben erhalten.": "Cette opération crée et ne prend aucun objet. Ceux qui étaient indiqués ont été ignorés ; ils sont conservés.",
   "Diese Operation gibt es im Verlauf nicht.": "Cette opération ne figure pas dans l'historique.",
   "Diese Operation gibt es nicht": "Cette opération n'existe pas",

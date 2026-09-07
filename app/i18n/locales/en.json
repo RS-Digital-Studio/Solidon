@@ -1417,7 +1417,7 @@
   "Diese Objekte gibt es nicht": "There are no such objects",
   "Diese Operation arbeitet nur auf Netzen.": "This operation only works on meshes.",
   "Diese Operation braucht mindestens zwei Objekte.": "This operation needs at least two objects.",
-  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "This operation needs two objects. Ctrl-click to add the second one.",
+  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg und Klick — im Objektbaum oder im Bild.": "This operation needs two objects. Shift-click or Ctrl-click to add the second one, in the object tree or in the view.",
   "Diese Operation erzeugt und nimmt keine Objekte. Die eingetragenen wurden übergangen; sie bleiben erhalten.": "This operation creates and takes no objects. The ones entered were ignored; they are kept.",
   "Diese Operation gibt es im Verlauf nicht.": "This operation is not in the history.",
   "Diese Operation gibt es nicht": "There is no such operation",

@@ -2,7 +2,10 @@
 
 **Status:** entschieden in den Punkten A bis H (Robert, 07.09.2026), Umsetzung
 als Serie P1 bis P6 im Register von `ROADMAP.md`. Der Ist-Stand unten ist am
-Code gemessen, nicht aus der Doku übernommen.
+Code gemessen, nicht aus der Doku übernommen. **Gebaut sind P1 bis P5 sowie D
+und E aus P6 (07.09.2026); offen ist A — der Schnitt, mit dem die zwei Panels
+eines werden.** Den Stand je Paket nennt die Tabelle in §4, nicht dieser
+Absatz.
 
 **Gemessen gegen den Arbeitsbaum vom 07.09.2026 nach `975bd6bf`** („Die rechte
 Spalte trennt sich, und ihre Aktionen folgen der Auswahl"). Dieser Commit ist
@@ -285,14 +288,39 @@ Konsistenz vor Vollständigkeit.
 Jedes Paket endet mit grünem Tor und einem Commit. Additiv zuerst, der
 eigentliche Schnitt in P6.
 
-| Paket | Inhalt | Entscheidung | Umfang |
-|---|---|---|---|
-| P1 | Der Höhendeckel trifft die Karte statt ihres Inhalts | §2 | S |
-| P2 | Shift und Strg nehmen im Bild dazu, Meldung nachgezogen | G | S |
-| P3 | Die Gruppenbegründung steht einmal | F | S |
-| P4 | Die linke Spalte teilt ihre Höhe über den Raumvertrag | H | M |
-| P5 | Das Panel kennt die Auswahltiefe: Zeile, Sichtbarkeit, Freigabe | B, C | M |
-| P6 | Jede Bündelung des Baums ist wählbar, und die Panels werden eines | A, D, E | L |
+| Paket | Inhalt | Entscheidung | Umfang | Stand |
+|---|---|---|---|---|
+| P1 | Der Höhendeckel trifft die Karte statt ihres Inhalts | §2 | S | **fertig** (07.09.) |
+| P2 | Shift und Strg nehmen im Bild dazu, Meldung nachgezogen | G | S | **fertig** (07.09.) |
+| P3 | Die Gruppenbegründung steht einmal | F | S | **fertig** (07.09.) |
+| P4 | Die linke Spalte teilt ihre Höhe über den Raumvertrag | H | M | **fertig** (07.09.) |
+| P5 | Das Panel kennt die Auswahltiefe: Zeile, Sichtbarkeit, Freigabe | B, C | M | **fertig** (07.09.) |
+| P6 | Jede Bündelung des Baums ist wählbar, und die Panels werden eines | A, D, E | L | **teils** — D und E fertig (07.09.), A offen |
+
+**Was P1 an sich selbst gefunden hat.** Die Umsetzung stand schon (`a6217f8`),
+der Nachweis nicht — und beim Bau des Abnahmetests fiel der Rest des Fehlers
+auf: Der Deckel der **Berichts**karte wurde nie wieder gelöst. Nach dem Aufbau
+stand er auf 122, und ein Fenster, das danach auf 1400 wuchs, ließ die Karte
+auf 22 Bildpunkten; der Bericht wuchs erst wieder, wenn jemand etwas auswählte.
+Es ist derselbe Fall, den `_reflow_right_column` für die Auswahlkarte längst
+beschrieb — nur an der anderen Karte. Das ist der Ertrag des Nachweises: Ohne
+ihn wäre P1 als fertig gezählt worden.
+
+**Was P4 an der Messung korrigiert hat.** Der Befund oben nennt vier
+Abschnitte ohne Streckfaktor; am Code teilten **drei von vieren** längst.
+`ObjectTree`, `HistoryPanel` und `FilamentPanel` beantworten den Raumvertrag
+aus `overlay.py`, allein `ParameterPanel` nicht — und `_share_room` fragt nur,
+wer ihn hat. Bei zehn Maßen stand die Parameterkarte damit auf 378
+Bildpunkten, mehr als Baum, Verlauf und Filamente zusammen (148, 58, 126).
+Sie hat jetzt einen Rollbereich und den Vertrag; gedeckelt wird der Bereich und
+nicht die Karte, weil `extra_height` jede Karte nach ihrem `sizeHint` fragt und
+ein Deckel auf der Karte selbst dort mit eingeht — gemessen wanderte das
+Beiwerk der Spalte sonst von 110 auf 376.
+
+**Ein Nebenbefund aus derselben Messung, im Register vermerkt:** Die
+Filamentkarte fordert 144 Bildpunkte und setzt 126 um. Ihr
+`_around_the_list` rechnet das Beiwerk zu hoch; sie fordert damit Platz, den
+sie niemandem zeigt.
 
 **P1 vor allem anderen**, obwohl A den Fehler von selbst auflöst: Bis P6 steht,
 sieht die Berichtskarte bei jeder Auswahl kaputt aus, und ein sichtbarer Fehler

@@ -1417,7 +1417,7 @@
   "Diese Objekte gibt es nicht": "Estes objetos não existem",
   "Diese Operation arbeitet nur auf Netzen.": "Esta operação só trabalha sobre malhas.",
   "Diese Operation braucht mindestens zwei Objekte.": "Esta operação requer pelo menos dois objetos.",
-  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Esta operação precisa de dois objetos. O segundo junta-se com Ctrl e um clique.",
+  "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg und Klick — im Objektbaum oder im Bild.": "Esta operação precisa de dois objetos. O segundo junta-se com Shift ou Ctrl e um clique, na árvore de objetos ou na vista.",
   "Diese Operation erzeugt und nimmt keine Objekte. Die eingetragenen wurden übergangen; sie bleiben erhalten.": "Esta operação cria e não recebe objetos. Os indicados foram ignorados; são mantidos.",
   "Diese Operation gibt es im Verlauf nicht.": "Esta operação não está no histórico.",
   "Diese Operation gibt es nicht": "Esta operação não existe",

@@ -503,6 +503,19 @@ class _FeatureDock(QDockWidget):
             return
         self.show()
 
+    def forget_dismissal(self) -> None:
+        """Ein neues Merkmal ist gewählt — das Zumachen von vorhin gilt nicht mehr.
+
+        **Der Merker gehört der Auswahl, nicht der Sitzung** (Konzept „Ein Ort
+        für die Auswahl", D). Die Zusage darüber — „ein Fenster, das nach jedem
+        Klick wieder aufspringt, ist keine Hilfe" — bleibt für den Fall
+        bestehen, für den sie geschrieben wurde: Wer zumacht, sieht es bei
+        **dieser** Auswahl nicht wieder. Auf Dauer wäre sie etwas anderes,
+        nämlich der Verlust aller Handlungen an der Auswahl, sobald das
+        Fenster sie trägt.
+        """
+        self.dismissed = False
+
     def setVisible(self, visible: bool) -> None:  # noqa: N802 - Qt name
         """Der Trichter, durch den jedes Auf und Zu läuft.
 
@@ -1251,7 +1264,10 @@ def _needs_objects(count: int) -> str:
     """
     if count <= 1:
         return tr("Wählen Sie zuerst ein Objekt im Objektbaum.")
-    return tr("Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.")
+    return tr(
+        "Diese Operation braucht zwei Objekte. Das zweite dazu mit Umschalt oder Strg"
+        " und Klick — im Objektbaum oder im Bild."
+    )
 
 
 def _works_on(names: Sequence[str], chosen: int, takes: int) -> str:
@@ -3756,6 +3772,7 @@ class MainWindow(QMainWindow):
             # nimmt: Wer eine Bohrung angeklickt hat, sucht Senken und
             # Verschließen und nicht das Vereinigen zweier Körper.
             feature_kind=self.selected_feature_kind() or "",
+            label=self.selection_label(),
         )
         self._reflow_right_column()
         self._hide_dead_menus()
@@ -3765,7 +3782,10 @@ class MainWindow(QMainWindow):
         # Eine vorige Teilung darf den Größenhinweis der ganzen Karte nicht
         # deckeln. Sonst blieb der Bericht nach einem frühen Auswahlereignis
         # auf seiner Untergrenze, obwohl das danach gezeigte Fenster Platz bot.
+        # Das gilt für beide Karten: Die Höhe, die gleich verteilt wird, ist
+        # die der ungedeckelten Spalte.
         self.selection_card.setMaximumHeight(self._card_unbounded_height)
+        self.right_card.setMaximumHeight(self._card_unbounded_height)
         self.selection_card.setVisible(not self.selection_operations.isHidden())
         self.overlay.reflow()
         self._fit_right_column()
@@ -3784,7 +3804,17 @@ class MainWindow(QMainWindow):
         ``CardColumn`` an die Berichtskarte, und ihr Inhalt füllt sie.
         """
         if self.selection_operations.isHidden():
+            # **Beide Karten wieder lösen, nicht nur die verschwindende.** Ohne
+            # Auswahl gibt es nichts zu teilen, und der Deckel der
+            # Berichtskarte stammt dann aus einer Lage, die vorbei ist. Er
+            # blieb bisher stehen: Nach dem Aufbau stand er auf 122, und ein
+            # Fenster, das danach auf 1400 wuchs, ließ die Karte auf 22
+            # Bildpunkten — der Bericht wuchs erst wieder, wenn jemand etwas
+            # auswählte. Es ist derselbe Fall, den
+            # :meth:`_reflow_right_column` für die Auswahlkarte beschreibt,
+            # nur an der anderen Karte.
             self.selection_card.setMaximumHeight(self._card_unbounded_height)
+            self.right_card.setMaximumHeight(self._card_unbounded_height)
             return
         layout = self.right_column.layout()
         assert layout is not None
@@ -6632,6 +6662,36 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry else None
         return feature.kind if feature is not None else None
 
+    def selection_label(self) -> str:
+        """Wie die Auswahl heißt — ``Halter`` oder ``Halter · Oberseite``.
+
+        Konzept „Ein Ort für die Auswahl", B: Die Zeile über den Handlungen
+        nennt, **was** gewählt ist, und nicht **wie viele** Körper. „1 Objekt
+        gewählt" stand dort auch über Merkmalshandlungen; es nannte damit die
+        Körperzahl, während die Knöpfe darunter dem Merkmal galten.
+
+        Leer bei mehr als einem Körper — dort gibt es keinen einen Namen, und
+        die Menge ist die richtige Antwort. Leer auch, wenn die Szene den
+        Namen gerade nicht hergibt; das Panel bleibt dann bei der Menge.
+
+        Gebaut wird sie hier und nicht im Panel: Der Name eines Körpers und
+        die Beschriftung eines Merkmals stehen in der Szene, und dieselbe
+        Zusammensetzung führt die Statusleiste in
+        :meth:`_on_feature_selected`.
+        """
+        object_id = self.object_tree.selected()
+        result = self.session.last_result
+        if object_id is None or result is None:
+            return ""
+        entry = result.scene.objects.get(object_id)
+        if entry is None:
+            return ""
+        feature_id = self.object_tree.selected_feature()
+        feature = entry.features.get(feature_id) if feature_id else None
+        if feature is None:
+            return str(entry.name)
+        return f"{entry.name} · {feature_label(feature_id or '', feature)}"
+
     def _selected_face_plane(self) -> str:
         """Die gewählte Fläche als Zeichenebene — leer, wenn keine gewählt ist.
 
@@ -8461,6 +8521,12 @@ class MainWindow(QMainWindow):
         # Fenster, das nach jedem Klick wieder aufspringt, ist keine Hilfe.
         self.feature_dock.hide()
         self.feature_dock.start_watching()
+        self._feature_shown: str | None = None
+        """Welches Merkmal das Fenster zuletzt zeigte.
+
+        Nur dafür da, einen **Wechsel** der Auswahl zu erkennen: Er hebt ein
+        früheres Zumachen auf (:meth:`_FeatureDock.forget_dismissal`). Ein
+        zweiter Klick auf dasselbe Merkmal ist keiner."""
         # Wer das Fenster zumacht, während eine Vorschau darauf wartet, hätte
         # sonst eine Änderung im Bild und keinen Ort mehr, sie zu übernehmen
         # oder zurückzunehmen — samt dem Band und seinem anwendungsweiten
@@ -9730,14 +9796,26 @@ class MainWindow(QMainWindow):
         self.object_tree.set_hidden(hidden)
         self.announce(f"{len(hidden)} × {tr('ausgeblendet')}" if hidden else "")
 
-    def _on_feature_picked(self, feature_id: str) -> None:
+    def _on_feature_picked(self, feature_id: str, add: bool = False) -> None:
         """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5).
 
         Steht ein Dialog offen, der nach einem Merkmal fragt, bekommt er es —
         dann war der Klick eine Eingabe und keine Auswahl.
+
+        Mit Umschalt oder Strg kommt es zur bestehenden Merkmalsauswahl dazu
+        (Konzept G). Die Menge führt der Baum (``select_features``), damit auch
+        hier nicht zwei Stellen dieselbe Auswahl halten.
         """
         object_id = self.object_tree.selected()
-        if object_id is not None:
+        if object_id is not None and add:
+            chosen = list(self.object_tree.selected_features())
+            reference = (object_id, feature_id)
+            if reference in chosen:
+                chosen.remove(reference)
+            else:
+                chosen.append(reference)
+            self.object_tree.select_features(chosen)
+        elif object_id is not None:
             self.object_tree.select_feature(object_id, feature_id)
         dialog = self._op_dialog
         if dialog is not None:
@@ -9871,19 +9949,41 @@ class MainWindow(QMainWindow):
         )
         self.start_sketch("", plane=plane)
 
-    def _on_object_picked(self, object_id: str) -> None:
+    def _on_object_picked(self, object_id: str, add: bool = False) -> None:
         """Ein Klick auf einen Körper wählt ihn im Baum aus; einer daneben hebt
         die Auswahl auf.
 
         Damit gilt endlich, was das Navigationsschema verspricht und das
         Handbuch beschreibt: links wählt aus. Bis hierher ging Auswählen nur
         über den Baum — und wer die Bohrung meinte, musste ihren Namen kennen.
+
+        ``add`` kommt von Umschalt oder Strg im Bild (Konzept „Ein Ort für die
+        Auswahl", G). Eingelöst wird es hier und nicht in der Ansicht, weil
+        die Auswahl im Objektbaum liegt: Er weiß, was schon markiert ist, und
+        er ist die eine Stelle, an der beide Wege — Baum und Bild —
+        zusammenlaufen.
         """
-        self.object_tree.select_object(object_id or None)
+        self.object_tree.select_object(object_id or None, add=add)
 
     def _on_feature_selected(self, feature_id: str | None) -> None:
         """Das gewählte Merkmal — in der Ansicht, in der Statusleiste und im
         Panel, das seine Maße änderbar zeigt."""
+        if feature_id is not None:
+            # **Eine neue Auswahl hebt ein früheres Zumachen auf** (Konzept
+            # „Ein Ort für die Auswahl", D). Zugemacht heißt „bei diesem
+            # Merkmal nicht", nicht „in dieser Sitzung nie wieder" — sonst
+            # verlöre der Kunde mit einem Klick auf das Kreuz alle Handlungen
+            # zur Auswahl, sobald das Fenster sie trägt.
+            #
+            # **Ein leeres ``feature_id`` zählt dabei nicht als Wechsel**, und
+            # das ist keine Feinheit: ``ObjectTree.select_feature`` leert die
+            # Baumauswahl, bevor es die neue setzt, und meldet dazwischen
+            # „kein Merkmal". Wer das als Auswahlwechsel zählt, hebt das
+            # Zumachen schon beim Weg zurück zu **demselben** Merkmal auf —
+            # gemessen sprang das Fenster dann sofort wieder auf.
+            if feature_id != self._feature_shown:
+                self.feature_dock.forget_dismissal()
+            self._feature_shown = feature_id
         self.viewport.select_feature(feature_id)
         # Eine Vorschau, die zum vorigen Merkmal gehört, hat hier nichts mehr
         # zu suchen — sie zeigte eine Änderung an etwas, das nicht mehr gewählt
@@ -9901,7 +10001,10 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(object_id) if result and object_id else None
         feature = entry.features.get(feature_id) if entry is not None else None
         if entry is not None and feature is not None:
-            self.measurements.setText(f"{entry.name} · {feature_label(feature_id, feature)}")
+            # Dieselbe Zusammensetzung wie im Auswahlpanel, aus derselben
+            # Funktion (:meth:`selection_label`): „Halter · Oberseite" stand
+            # sonst an zwei Stellen mit je eigener Rechnung, und die driften.
+            self.measurements.setText(self.selection_label())
             self.feature_panel.show_feature(
                 feature_id,
                 feature,

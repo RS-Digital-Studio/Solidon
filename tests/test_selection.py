@@ -1095,6 +1095,52 @@ def test_another_body_starts_over_at_the_top(qt_app: QApplication) -> None:
     assert viewport._click_target(wall_in_the_other) == ("obj_2", None)
 
 
+def test_a_modifier_click_stays_on_its_level(qt_app: QApplication) -> None:
+    """Umschalt und Strg nehmen dazu — sie wandern nicht in die Tiefe (Konzept G).
+
+    Die gestufte Tiefe aus §18.5 bleibt: Ein Klick **ohne** Taste geht vom
+    Körper zum Merkmal darunter. Mit Taste ist die Frage eine andere — „auch
+    das noch" —, und eine Taste, die dazunimmt **und** eine Stufe tiefer geht,
+    täte zwei Dinge, von denen niemand das zweite gemeint hat.
+    """
+    viewport, _ = two_plates(qt_app)
+    viewport.select("obj_1")
+    # Dieselbe Stelle wie im Test darüber, nur an der ersten Platte: die Wand
+    # von ``hole_1``.
+    wall = (-25.0 + 2.595, -15.0, 2.0)
+
+    # Stufe 1: der Körper steht, ein Merkmal noch nicht.
+    assert viewport.selection_depth() == 1
+    assert viewport._click_target(wall, add=True) == ("obj_1", None), (
+        "auf der Körperstufe nimmt die Taste einen Körper dazu, kein Merkmal"
+    )
+    assert viewport._click_target(wall)[1] is not None, "ohne Taste geht es eine Stufe tiefer"
+
+    # Stufe 2: jetzt steht ein Merkmal, und dort nimmt die Taste Merkmale dazu.
+    viewport.select_feature("hole_1")
+    assert viewport.selection_depth() == 2
+    assert viewport._click_target(wall, add=True)[1] is not None
+
+
+def test_a_modifier_click_beside_the_model_keeps_the_selection(window: MainWindow) -> None:
+    """Danebengeklickt mit Taste heißt: nichts dazu — nicht: alles weg.
+
+    Ohne Taste ist der Klick daneben der einzige Weg aus der Auswahl heraus
+    (siehe den Test darunter). Mit Taste sagt derselbe Klick „auch das noch",
+    und dort war nichts; eine Auswahl zu leeren wäre das Gegenteil davon.
+    """
+    viewport = window.viewport
+    gemeldet: list[tuple[str, bool]] = []
+    viewport.objectPicked.connect(lambda name, add: gemeldet.append((name, add)))
+    viewport._select_at(on_the_bore_wall(window))
+    assert viewport.selection_depth() == 1
+    gemeldet.clear()
+
+    viewport._on_left_click(0, 0, True)
+    assert gemeldet == [], "ein Klick ins Leere mit Taste meldet gar nichts"
+    assert viewport.selection_depth() == 1, "und lässt die Auswahl stehen"
+
+
 def test_a_click_beside_the_model_clears_everything(window: MainWindow) -> None:
     """Neben das Modell geklickt heißt: Auswahl weg, und zwar ganz.
 
@@ -1124,8 +1170,8 @@ def test_the_body_is_announced_before_its_feature(window: MainWindow) -> None:
     zweiten ist dieselbe geblieben.
     """
     order: list[str] = []
-    window.viewport.objectPicked.connect(lambda name: order.append(f"object:{name}"))
-    window.viewport.featurePicked.connect(lambda name: order.append(f"feature:{name}"))
+    window.viewport.objectPicked.connect(lambda name, add: order.append(f"object:{name}"))
+    window.viewport.featurePicked.connect(lambda name, add: order.append(f"feature:{name}"))
 
     point = on_the_bore_wall(window)
     window.viewport._select_at(point)

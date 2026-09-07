@@ -235,7 +235,7 @@ class _Log:
     def callbacks(self) -> NavigatorCallbacks:
         return NavigatorCallbacks(
             on_context=lambda x, y: self.calls.append(("context", x, y)),
-            on_pick=lambda x, y: self.calls.append(("pick", x, y)),
+            on_pick=lambda x, y, add: self.calls.append(("pick", x, y, add)),
             on_cursor=lambda role: self.calls.append(("cursor", role)),
             on_paint=lambda x, y, fresh: self.calls.append(("paint", x, y, fresh)),
             is_sculpting=lambda: self.sculpting,
@@ -254,16 +254,20 @@ class _Log:
         return [str(call[0]) for call in self.calls]
 
 
-def press(x: int, y: int, button: str = "left", shift: bool = False) -> PointerEvent:
-    return PointerEvent("press", x, y, button, frozenset([button]), shift)  # type: ignore[arg-type]
+def press(
+    x: int, y: int, button: str = "left", shift: bool = False, ctrl: bool = False
+) -> PointerEvent:
+    return PointerEvent("press", x, y, button, frozenset([button]), shift, ctrl)  # type: ignore[arg-type]
 
 
 def move(x: int, y: int, button: str = "left", shift: bool = False) -> PointerEvent:
     return PointerEvent("move", x, y, None, frozenset([button]), shift)  # type: ignore[arg-type]
 
 
-def release(x: int, y: int, button: str = "left", shift: bool = False) -> PointerEvent:
-    return PointerEvent("release", x, y, button, frozenset(), shift)  # type: ignore[arg-type]
+def release(
+    x: int, y: int, button: str = "left", shift: bool = False, ctrl: bool = False
+) -> PointerEvent:
+    return PointerEvent("release", x, y, button, frozenset(), shift, ctrl)  # type: ignore[arg-type]
 
 
 def wheel(x: int, y: int, delta: int) -> PointerEvent:
@@ -288,13 +292,37 @@ def test_the_table_says_what_each_button_does() -> None:
     assert not is_click(None, (10, 10))
 
 
+def test_shift_and_ctrl_both_arrive_at_the_pick(scene: tuple[_FlatRenderer, _Log]) -> None:
+    """Beide Auswahltasten kommen als dieselbe Auskunft an (Konzept G).
+
+    Der Navigator entscheidet nicht, was daraus wird — er sagt nur, ob eine
+    der beiden lag. Zwei getrennte Felder wären zwei Fragen, und im Objektbaum
+    (``ExtendedSelection``) tun die Tasten längst dasselbe; die Regel dort
+    sagt es im Code: „damit Strg- und Umschalt-Klick überall dasselbe tun".
+    """
+    renderer, log = scene
+
+    for taste in ("shift", "ctrl"):
+        log.calls.clear()
+        navigator = Navigator(renderer, "slicer", log.callbacks())
+        navigator.handle(press(100, 100, **{taste: True}))
+        navigator.handle(release(100, 100, **{taste: True}))
+        assert ("pick", 100, 100, True) in log.calls, taste
+
+    log.calls.clear()
+    navigator = Navigator(renderer, "slicer", log.callbacks())
+    navigator.handle(press(100, 100))
+    navigator.handle(release(100, 100))
+    assert ("pick", 100, 100, False) in log.calls, "ohne Taste bleibt es beim Ersetzen"
+
+
 def test_a_click_picks_and_a_drag_does_not(scene: tuple[_FlatRenderer, _Log]) -> None:
     renderer, log = scene
     navigator = Navigator(renderer, "slicer", log.callbacks())
     navigator.handle(press(100, 100))
     navigator.handle(move(103, 102))
     navigator.handle(release(103, 102))
-    assert ("pick", 103, 102) in log.calls
+    assert ("pick", 103, 102, False) in log.calls
     log.calls.clear()
     navigator.handle(press(100, 100))
     navigator.handle(move(140, 100))
@@ -310,7 +338,7 @@ def test_left_pans_and_still_selects_in_the_solidon_scheme(
     navigator = Navigator(renderer, "solidon", log.callbacks())
     navigator.handle(press(200, 150))
     navigator.handle(release(200, 150))
-    assert ("pick", 200, 150) in log.calls
+    assert ("pick", 200, 150, False) in log.calls
     assert renderer.pose.focal_point == (0.0, 0.0, 0.0)
     log.calls.clear()
 
@@ -417,7 +445,7 @@ def test_a_click_on_the_chosen_body_still_picks(scene: tuple[_FlatRenderer, _Log
     navigator = Navigator(renderer, "solidon", log.callbacks())
     navigator.handle(press(200, 150))
     navigator.handle(release(202, 151))
-    assert ("pick", 202, 151) in log.calls
+    assert ("pick", 202, 151, False) in log.calls
     assert "start" not in [call[1] for call in log.calls if call[0] == "body"]
 
 
@@ -499,7 +527,7 @@ def test_a_wobbly_click_stays_a_click(scene: tuple[_FlatRenderer, _Log]) -> None
     navigator.handle(press(100, 200))
     navigator.handle(move(104, 203))
     navigator.handle(release(104, 203))
-    assert ("pick", 104, 203) in log.calls, "ein leicht wackliger Klick wählt weiterhin aus"
+    assert ("pick", 104, 203, False) in log.calls, "ein leicht wackliger Klick wählt weiterhin aus"
     phases = [call[1] for call in log.calls if call[0] == "body"]
     assert "start" not in phases, f"aus dem Wackeln wurde ein Zug: {log.calls}"
 
