@@ -65,6 +65,39 @@ PACKAGE_DATA_ROOTS: Final = (
 )
 
 
+def _fake_bin(folder: Path, python_body: str) -> str:
+    """Legt ``xvfb-run`` und ``python`` als ausführbare Attrappen an.
+
+    **Als Dateien und nicht als Shell-Funktionen.** Ein Funktionsname darf nach
+    POSIX keinen Bindestrich tragen; bash nimmt ``xvfb-run()`` an, die ``dash``
+    von Ubuntu und die ``sh`` von macOS weisen die Definition ab und brechen
+    damit das ganze Skript ab. Der CI-Lauf zum Tag ``v0.3.5`` endete daran auf
+    zwei von vier Systemen mit ``not a valid identifier``, und weil der
+    Paketjob an ``needs: suite`` hängt, entstand kein einziges Paket. Hier fiel
+    es nie auf: Der Test nimmt unter Windows die ``sh`` aus Git, und die ist
+    eine bash.
+
+    Beide gehören dabei auf **dieselbe Seite der Prozessgrenze**. ``xvfb-run``
+    führt den Rest seiner Zeile als eigenen Prozess aus, und der sieht keine
+    Shell-Funktion seines Aufrufers mehr — eine Attrappe als Datei und eine als
+    Funktion ergeben zusammen das echte Python der Maschine.
+
+    ``python_body`` ist der Rumpf der Python-Attrappe: derselbe Text, den die
+    Funktion trug, nur mit ``exit`` statt ``return``.
+    """
+    folder.mkdir(parents=True, exist_ok=True)
+    scripts = {
+        # Wirft die zwei Argumente von ``xvfb-run -a --server-args=…`` weg.
+        "xvfb-run": '#!/bin/sh\nshift 2\nexec "$@"\n',
+        "python": "#!/bin/sh\n" + python_body.strip() + "\n",
+    }
+    for name, text in scripts.items():
+        script = folder / name
+        script.write_text(text, encoding="utf-8", newline="\n")
+        script.chmod(0o755)
+    return str(folder)
+
+
 def _posix_shell() -> str | None:
     """Liefert eine POSIX-Shell, auch wenn Git sie unter Windows nicht einträgt.
 
@@ -412,29 +445,29 @@ def test_each_ci_window_file_is_executed_exactly_once(tmp_path: Path, job: str) 
     shell = _posix_shell()
     if shell is None:
         pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
-    harness = """
-python() {
-  if [ "$1" = "tools/list_windowed_tests.py" ]; then
-    printf 'tests/test_print_settings_ui.py\r\ntests/test_fake.py\r\n'
-    return 0
-  fi
-  for argument in "$@"; do
-    case "$argument" in
-      tests/test_print_settings_ui.py|tests/test_fake.py) printf '%s\n' "$argument" >> "$CALLS" ;;
-    esac
-  done
-}
-xvfb-run() {
-  shift 2
-  "$@"
-}
+    fake_python = """
+if [ "$1" = "tools/list_windowed_tests.py" ]; then
+  printf 'tests/test_print_settings_ui.py\r\ntests/test_fake.py\r\n'
+  exit 0
+fi
+for argument in "$@"; do
+  case "$argument" in
+    tests/test_print_settings_ui.py|tests/test_fake.py) printf '%s\n' "$argument" >> "$CALLS" ;;
+  esac
+done
 """
     calls = tmp_path / "calls.txt"
     result = subprocess.run(
-        [shell, "-c", harness + script],
+        [shell, "-c", script],
         env=dict(
             os.environ,
-            PATH=str(Path(shell).parent) + os.pathsep + os.environ.get("PATH", ""),
+            PATH=os.pathsep.join(
+                (
+                    _fake_bin(tmp_path / "bin", fake_python),
+                    str(Path(shell).parent),
+                    os.environ.get("PATH", ""),
+                )
+            ),
             RUNNER_OS="Linux",
             CALLS=calls.as_posix(),
             GITHUB_STEP_SUMMARY=(tmp_path / "summary.md").as_posix(),
@@ -498,33 +531,33 @@ def test_window_failures_block_the_package_on_every_platform(
     shell = _posix_shell()
     if shell is None:
         pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
-    # Beide Programme werden im selben Shellprozess vertreten. Der Block
+    # Beide Programme werden als Attrappen im PATH vertreten. Der Block
     # selbst, einschließlich pipefail und abschließendem Exit, bleibt echt.
-    harness = """
-python() {
-  if [ "$1" = "tools/list_windowed_tests.py" ]; then
-    if [ "$CASE" = "collection_failed" ]; then return 2; fi
-    if [ "$CASE" != "empty" ]; then printf 'tests/test_fake.py\r\n'; fi
-    return 0
-  fi
-  printf 'called\n' >> "$CALLS"
-  if [ "$CASE" = "failed" ]; then return 1; fi
-}
-xvfb-run() {
-  shift 2
-  "$@"
-}
+    fake_python = """
+if [ "$1" = "tools/list_windowed_tests.py" ]; then
+  if [ "$CASE" = "collection_failed" ]; then exit 2; fi
+  if [ "$CASE" != "empty" ]; then printf 'tests/test_fake.py\r\n'; fi
+  exit 0
+fi
+printf 'called\n' >> "$CALLS"
+if [ "$CASE" = "failed" ]; then exit 1; fi
 """
     environment = dict(
         os.environ,
-        PATH=str(Path(shell).parent) + os.pathsep + os.environ.get("PATH", ""),
+        PATH=os.pathsep.join(
+            (
+                _fake_bin(tmp_path / "bin", fake_python),
+                str(Path(shell).parent),
+                os.environ.get("PATH", ""),
+            )
+        ),
         RUNNER_OS=platform,
         CASE=case,
         GITHUB_STEP_SUMMARY=(tmp_path / "summary.md").as_posix(),
         CALLS=(tmp_path / "calls.txt").as_posix(),
     )
     done = subprocess.run(
-        [shell, "-c", harness + script],
+        [shell, "-c", script],
         env=environment,
         capture_output=True,
         text=True,
@@ -549,30 +582,30 @@ def test_ci_preserves_the_first_failed_process_exit(
     shell = _posix_shell()
     if shell is None:
         pytest.skip("ohne POSIX-Shell lässt sich der CI-Block nicht ausführen")
-    harness = """
-python() {
-  if [ "$1" = "tools/list_windowed_tests.py" ]; then
-    printf 'tests/test_fake.py\r\n'
-    return 0
-  fi
-  if [ ! -f "$CALLS" ]; then
-    printf 'called\n' >> "$CALLS"
-    return "$FIRST_EXIT"
-  fi
+    fake_python = """
+if [ "$1" = "tools/list_windowed_tests.py" ]; then
+  printf 'tests/test_fake.py\r\n'
+  exit 0
+fi
+if [ ! -f "$CALLS" ]; then
   printf 'called\n' >> "$CALLS"
-  return 0
-}
-xvfb-run() {
-  shift 2
-  "$@"
-}
+  exit "$FIRST_EXIT"
+fi
+printf 'called\n' >> "$CALLS"
+exit 0
 """
     calls = tmp_path / "calls.txt"
     done = subprocess.run(
-        [shell, "-c", harness + script],
+        [shell, "-c", script],
         env=dict(
             os.environ,
-            PATH=str(Path(shell).parent) + os.pathsep + os.environ.get("PATH", ""),
+            PATH=os.pathsep.join(
+                (
+                    _fake_bin(tmp_path / "bin", fake_python),
+                    str(Path(shell).parent),
+                    os.environ.get("PATH", ""),
+                )
+            ),
             RUNNER_OS="Linux",
             FIRST_EXIT=str(exit_code),
             CALLS=calls.as_posix(),
