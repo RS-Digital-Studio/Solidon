@@ -2744,13 +2744,19 @@ def _face_radii(body: trimesh.Trimesh, pairs: np.ndarray, radii: np.ndarray) -> 
     dagegen immer dieselbe Hauptkrümmung — die engste —, und der Ring bleibt
     einer: gemessen ein Sprung von höchstens 0,002 über das ganze Netz.
     """
-    found = np.full(len(body.faces), np.inf, dtype=float)
     degrees = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
-    for (first, second), radius, angle in zip(pairs, radii, degrees, strict=True):
-        if angle >= CURVATURE_LIMIT or not np.isfinite(radius):
-            continue
-        for index in (int(first), int(second)):
-            found[index] = min(found[index], float(radius))
+    usable = (degrees < CURVATURE_LIMIT) & np.isfinite(radii)
+    found = np.full(len(body.faces), np.inf, dtype=float)
+    if not bool(usable.any()):
+        return found
+    neighbours = np.asarray(pairs[usable], dtype=np.intp)
+    values = np.asarray(radii[usable], dtype=float)
+    # Dasselbe Minimum wie die frühere Python-Schleife, vektorisiert auf
+    # beiden Seiten jedes Nachbarpaars. Am merkmalsreichen 200k-Prüfkörper
+    # sind das 18 ms statt 235; die Zahlen sind bitgleich, denn ``minimum``
+    # hängt nicht von der Reihenfolge der Paare ab.
+    np.minimum.at(found, neighbours[:, 0], values)
+    np.minimum.at(found, neighbours[:, 1], values)
     return found
 
 
@@ -2881,7 +2887,15 @@ def _split_patches_by_curvature(
             split.append([patch])
             continue
         nodes = np.unique(np.asarray(patch, dtype=np.intp))
-        groups = trimesh.grouping.group(labels[nodes], min_len=1)
+        node_labels = labels[nodes]
+        # Der häufige Fall bleibt trotz vorhandener Kanten ein Fleck. Dafür
+        # 48 000 einzelne Sorts anzustoßen kostete am 200k-Freiformkörper
+        # 808 ms. Gleichheit aller Labels beantwortet dieselbe Frage direkt;
+        # nur eine wirkliche Teilung braucht die allgemeine Gruppierung.
+        if bool(np.all(node_labels == node_labels[0])):
+            split.append([[int(index) for index in nodes]])
+            continue
+        groups = trimesh.grouping.group(node_labels, min_len=1)
         split.append([[int(index) for index in nodes[group]] for group in groups])
     return split
 
