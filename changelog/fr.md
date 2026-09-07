@@ -36,6 +36,7 @@ dans `website/version.json`.
 - Les actions mises en avant dépendent de la sélection : avec plusieurs corps Réunir, Soustraire et Intersection, avec un seul Percer un trou, Évidement et Séparer.
 - Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.
 - Un corps sélectionné affiche ses filaments sur place et permet de les changer.
+- Un champ de recherche dans la même carte trouve les autres opérations ; les caractéristiques et les pièces restent dans leurs propres zones.
 
 ### Construire et modifier
 
@@ -50,6 +51,10 @@ dans `website/version.json`.
 - Les interrupteurs d'une opération actifs par défaut peuvent désormais aussi être désactivés en ligne de commande.
 - Une erreur dans une opération nomme sa cause : dans le journal, dans la ligne qui l'a arrêtée et dans le rapport d'erreur.
 - Les saisies refusées dans le placement, le stockage de maillages et les recettes arrivent avec une proposition d'action au lieu d'une erreur nue.
+- Les pièces expliquent quelles combinaisons de paramètres elles ne construisent pas, au lieu de rogner les cotes en silence.
+- Un nombre inadapté de corps sélectionnés est signalé avant le calcul, au lieu d'écarter une entrée sans que cela se voie.
+- Poser sur une surface ne modifie le document qu'à la validation ; un aperçu abandonné ne laisse rien derrière lui.
+- Les lettres et les chiffres restent dans le champ de saisie — les touches de navigation n'agissent que lorsque vous n'y tapez pas.
 
 ### Caractéristiques
 
@@ -58,6 +63,7 @@ dans `website/version.json`.
 - Sphère, tore et cône déclarent leur courbure, les centres de cylindre correspondent à leurs anneaux d'extrémité, et les pas de filetage suivent l'axe.
 - Le panneau des caractéristiques ne propose des ajustements que lorsqu'un second corps est sélectionné, et il connaît chaque groupe du noyau.
 - Les ajustements de coupe automatiques ne distribuent plus deux fois le même nom.
+- La détection des caractéristiques atteint le même résultat plus vite sur les maillages complexes.
 
 ### Impression et préparation
 
@@ -66,6 +72,11 @@ dans `website/version.json`.
 - Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.
 - Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock.
 - Le nettoyage après l'import conserve les affectations de filament.
+- L'imprimante appartient au projet et se change aussi bien dans l'en-tête que dans la boîte d'impression ; les filaments attribués, les couleurs et vos propres valeurs d'impression sont conservés.
+- L'en-tête nomme les filaments réellement utilisés ; plusieurs bobines du même type de matériau restent distinguables par leur nom et leur couleur.
+- La remise au trancheur résout chaque bobine selon son propre type de matériau ; vos propres valeurs d'impression gardent la priorité.
+- Si la carte des supports prend trop de temps, le calcul se termine avec une explication et propose de réduire les triangles.
+- La boîte d'impression reste entièrement utilisable même dans des fenêtres étroites.
 
 ### Fichiers et projets
 
@@ -78,6 +89,8 @@ dans `website/version.json`.
 - Un jeu de variantes incomplet n'est plus exporté en silence.
 - L'esquisse abandonnée revient avec Annuler, et un second objet d'historique ne laisse plus un Rétablir périmé.
 - Deux rapports d'erreur de la même seconde ne s'écrasent plus.
+- Les saisies choisies expressément survivent à l'enregistrement et à la réouverture, au lieu d'être remplacées par une valeur par défaut.
+- Annuler met aussi fin au calcul qui tourne encore derrière une variante.
 
 ### Chat et IA
 
@@ -86,6 +99,7 @@ dans `website/version.json`.
 - À la génération d'images, les poids arrivent entiers ou pas du tout, et une seule valeur dans le champ de structure ne déclenche plus de génération non demandée.
 - Un modèle local est mesuré même lorsqu'il répond en HTTPS sur un port qui lui est propre.
 - La mention de la participation de l'IA ne vaut qu'avec une trace écrite, et un changement de langue ne met plus fin à la télécommande.
+- L'installation de ComfyUI reprend les poids de modèle déjà complets, au lieu de les télécharger à nouveau.
 
 ### Mise à jour, installation et système
 
@@ -101,6 +115,7 @@ dans `website/version.json`.
 - L'écran de démarrage reconnaît le système avant la première image, et le tableau des exigences n'est plus coupé.
 - Une pièce jointe refusée ne compte plus comme manquante pour le retour d'information.
 - Le sélecteur de filaments reste sur la bonne bobine après une annulation et affiche aussi la huitième.
+- Un courriel d'assistance ouvert à la main porte un objet et un texte lisibles également dans Flatpak ; une annulation laisse le rapport en place.
 
 ### Manuel et site web
 

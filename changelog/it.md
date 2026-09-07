@@ -35,6 +35,7 @@ scrive in `website/version.json`.
 - Quali azioni stiano davanti dipende dalla selezione: con più corpi Unisci, Sottrai e Intersezione, con uno solo Pratica un foro, Svuota e Dividere.
 - Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.
 - Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli.
+- Un campo di ricerca nella stessa scheda trova le altre operazioni; caratteristiche e componenti restano nelle proprie aree.
 
 ### Costruire e modificare
 
@@ -49,6 +50,10 @@ scrive in `website/version.json`.
 - Gli interruttori di un'operazione attivi per impostazione predefinita ora si possono disattivare anche da riga di comando.
 - Un errore in un'operazione indica la sua causa: nel registro, nella riga che l'ha fermata e nel rapporto di errore.
 - Gli inserimenti rifiutati in posizionamento, deposito delle mesh e ricette arrivano con una proposta di azione invece di un errore nudo.
+- I componenti spiegano quali combinazioni di parametri non costruiscono, invece di tagliare le misure in silenzio.
+- Un numero inadatto di corpi selezionati viene segnalato prima del calcolo, invece di tralasciare un ingresso senza che si veda.
+- Posizionare su una superficie modifica il documento solo alla conferma; un'anteprima scartata non lascia nulla dietro di sé.
+- Lettere e cifre restano nel campo di immissione: i tasti di navigazione agiscono solo quando non stai scrivendo lì.
 
 ### Caratteristiche
 
@@ -57,6 +62,7 @@ scrive in `website/version.json`.
 - Sfera, toro e cono dichiarano la loro curvatura, i centri dei cilindri coincidono con gli anelli terminali e i passi di filetto seguono l'asse.
 - Il pannello delle caratteristiche propone accoppiamenti solo quando è selezionato un secondo corpo e conosce ogni gruppo del nucleo.
 - Gli accoppiamenti di taglio automatici non assegnano più due volte lo stesso nome.
+- Il riconoscimento delle caratteristiche raggiunge lo stesso risultato più in fretta su reticoli complessi.
 
 ### Stampa e preparazione
 
@@ -65,6 +71,11 @@ scrive in `website/version.json`.
 - Lo slicer riceve il mondo della stampante e non quello di Solidon, e un profilo proprio mantiene la sua base del produttore.
 - I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte.
 - La pulizia dopo l'importazione conserva le assegnazioni dei filamenti.
+- La stampante appartiene al progetto e si cambia sia nell'intestazione sia nella finestra di stampa; filamenti assegnati, colori e i tuoi valori di stampa restano.
+- L'intestazione nomina i filamenti realmente in uso; più bobine dello stesso tipo di materiale restano distinguibili per nome e colore.
+- La consegna allo slicer risolve ogni bobina secondo il proprio tipo di materiale; i tuoi valori di stampa mantengono la precedenza.
+- Se la mappa dei supporti impiega troppo tempo, il calcolo termina con una spiegazione e propone di ridurre i triangoli.
+- La finestra di stampa resta pienamente utilizzabile anche in finestre strette.
 
 ### File e progetti
 
@@ -77,6 +88,8 @@ scrive in `website/version.json`.
 - Un insieme di varianti incompleto non viene più esportato in silenzio.
 - Lo schizzo scartato si recupera con Annulla, e un secondo oggetto della cronologia non lascia più un Ripeti scaduto.
 - Due rapporti di errore dello stesso secondo non si sovrascrivono più.
+- Gli ingressi scelti espressamente sopravvivono al salvataggio e alla riapertura, invece di essere sostituiti da un valore predefinito.
+- Annullare termina anche il calcolo che gira ancora dietro una variante.
 
 ### Chat e IA
 
@@ -85,6 +98,7 @@ scrive in `website/version.json`.
 - Nella generazione di immagini i pesi arrivano interi o non arrivano, e un singolo valore nel campo della struttura non avvia più una generazione non richiesta.
 - Un modello locale viene misurato anche quando risponde via HTTPS su una porta propria.
 - L'avviso sulla partecipazione dell'IA vale solo con una prova scritta, e un cambio di lingua non termina più il comando a distanza.
+- La configurazione di ComfyUI riprende i pesi del modello già completi, invece di scaricarli di nuovo.
 
 ### Aggiornamento, installazione e sistema
 
@@ -100,6 +114,7 @@ scrive in `website/version.json`.
 - La schermata iniziale riconosce il sistema prima della prima immagine, e la tabella dei requisiti non viene più tagliata.
 - Un allegato rifiutato non conta più come mancante per il riscontro.
 - Il selettore dei filamenti resta sulla bobina giusta dopo un annullamento e mostra anche l'ottava.
+- Una mail di assistenza aperta a mano porta oggetto e testo leggibili anche dentro Flatpak; un annullamento lascia il rapporto al suo posto.
 
 ### Manuale e sito web
 

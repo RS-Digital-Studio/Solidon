@@ -60,6 +60,7 @@ Nutzen da und sonst nichts.
 - Welche Handlungen vorn stehen, richtet sich nach der Auswahl: bei mehreren Körpern Vereinigen, Abziehen und Schnittmenge, bei einem einzelnen Bohrung setzen, Aushöhlen und Teilen.
 - An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.
 - Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern.
+- Weitere Operationen findet ein Suchfeld in derselben Karte; Merkmale und Bausteine bleiben in ihren eigenen Bereichen.
 
 ### Konstruieren und Ändern
 
@@ -74,6 +75,10 @@ Nutzen da und sonst nichts.
 - Schalter einer Operation, die von sich aus an sind, lassen sich auf der Kommandozeile jetzt auch abschalten.
 - Ein Fehler in einer Operation nennt seine Ursache: im Protokoll, in der Abbruchzeile und im Fehlerbericht.
 - Abgelehnte Eingaben in Platzierung, Netzspeicher und Rezepten kommen mit Handlungsvorschlag statt als nackte Fehlermeldung.
+- Bausteine erklären, welche Parameterkombinationen sie nicht bauen, statt Maße still zu kappen.
+- Eine unpassende Zahl gewählter Körper wird vor der Berechnung gemeldet, statt eine Eingabe unbemerkt auszulassen.
+- Das Platzieren auf einer Oberfläche ändert das Dokument erst beim Übernehmen; eine verworfene Vorschau lässt nichts zurück.
+- Buchstaben und Zahlen bleiben im Eingabefeld — Navigationstasten greifen erst, wenn dort nicht getippt wird.
 
 ### Merkmale
 
@@ -82,6 +87,7 @@ Nutzen da und sonst nichts.
 - Kugel, Torus und Kegel weisen ihre Krümmung aus, Zylindermitten stimmen mit den Endringen, und Gewindegänge folgen der Achse.
 - Das Merkmalsfeld bietet Passungen nur an, wenn ein zweiter Körper gewählt ist, und kennt jede Gruppe des Kerns.
 - Automatische Schnittpassungen vergeben keinen Namen zweimal.
+- Die Merkmalserkennung kommt bei komplexen Netzen schneller zum selben Ergebnis.
 
 ### Drucken und Vorbereiten
 
@@ -90,6 +96,11 @@ Nutzen da und sonst nichts.
 - Der Slicer bekommt die Welt des Druckers und nicht die von Solidon, und ein eigenes Profil behält seine Herstellerbasis.
 - Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand.
 - Die Bereinigung nach dem Einlesen behält die Filamentzuweisungen.
+- Der Drucker gehört zum Projekt und lässt sich in der Kopfzeile wie im Druckdialog wechseln; zugewiesene Filamente, Farben und eigene Druckwerte bleiben erhalten.
+- Die Kopfzeile nennt die tatsächlich benutzten Filamente; mehrere Rollen derselben Materialart bleiben an Namen und Farbe unterscheidbar.
+- Die Slicer-Übergabe rechnet jede Spule gegen ihre eigene Materialart; eigene Druckwerte behalten Vorrang.
+- Dauert die Stützkarte zu lange, endet die Berechnung mit einer Erklärung und bietet das Verringern der Dreiecke an.
+- Der Druckdialog bleibt auch in schmalen Fenstern vollständig bedienbar.
 
 ### Dateien und Projekte
 
@@ -102,6 +113,8 @@ Nutzen da und sonst nichts.
 - Ein unvollständiger Variantensatz wird nicht mehr stillschweigend exportiert.
 - Die verworfene Zeichnung lässt sich mit Rückgängig zurückholen, und ein zweites Verlaufsobjekt lässt kein veraltetes Wiederholen stehen.
 - Zwei Fehlerberichte derselben Sekunde überschreiben sich nicht mehr.
+- Ausdrücklich gewählte Eingaben überstehen Speichern und erneutes Öffnen, statt von einer Vorgabe ersetzt zu werden.
+- Abbrechen beendet auch die Berechnung, die zu einer Variante noch läuft.
 
 ### Chat und KI
 
@@ -110,6 +123,7 @@ Nutzen da und sonst nichts.
 - Bei der Bildgenerierung kommen die Gewichte ganz oder gar nicht an, und ein einzelner Wert im Strukturfeld löst keine unbestellte Erzeugung aus.
 - Ein lokales Modell wird auch dann gemessen, wenn es über HTTPS auf einem eigenen Port antwortet.
 - Der Hinweis auf KI-Beteiligung gilt erst mit geschriebenem Nachweis, und ein Sprachwechsel beendet die Fernbedienung nicht.
+- Die ComfyUI-Einrichtung übernimmt vollständig vorhandene Modellgewichte, statt sie erneut zu laden.
 
 ### Update, Installation und System
 
@@ -125,6 +139,7 @@ Nutzen da und sonst nichts.
 - Die Startseite erkennt das System vor dem ersten Bild, und die Anforderungstabelle wird nicht abgeschnitten.
 - Ein abgelehnter Anhang gilt der Rückmeldung nicht mehr als fehlender.
 - Der Filamentwähler bleibt nach einem Abbruch auf der richtigen Spule und zeigt auch die achte.
+- Eine von Hand geöffnete Support-Mail trägt auch im Flatpak lesbaren Betreff und Text; ein Abbruch lässt den Bericht stehen.
 
 ### Handbuch und Website
 
