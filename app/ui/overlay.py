@@ -129,9 +129,14 @@ MOVE_MS = 160
 LEFT_WIDTH = 300
 
 #: Breite der rechten Zone. Ein Befund ist ein Satz, kein Absatz — schmaler
-#: als eine klassische Seitenleiste, aber etwas breiter als links, weil hier
-#: vollständige Handlungssätze und der Chat stehen.
-RIGHT_WIDTH = 320
+#: als eine klassische Seitenleiste, aber deutlich breiter als links, weil hier
+#: vollständige Handlungssätze, die Auswahlhandlungen und der Chat stehen.
+#:
+#: Von 320 heraufgesetzt (Robert, 07.09.2026): Seit die Auswahlhandlungen in
+#: derselben Spalte stehen, teilen sich zwei Karten die Breite, und ein
+#: Handlungssatz wie „Bohrung verschließen" bricht in 320 Punkten um, wo er
+#: als eine Zeile gemeint ist.
+RIGHT_WIDTH = 360
 
 #: Ab welcher Fensterbreite die Karten mitwachsen, und wie weit.
 #:
@@ -144,7 +149,7 @@ RIGHT_WIDTH = 320
 #: bei 5000 Pixeln eine Wand.
 GROWTH_SHARE = 0.13
 LEFT_MAX = 420
-RIGHT_MAX = 460
+RIGHT_MAX = 500
 
 #: In einem schmalen Fenster dürfen die beiden Karten einander nicht
 #: überdecken. Jede bekommt höchstens diesen Anteil; der Rest bleibt als

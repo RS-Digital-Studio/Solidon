@@ -13543,10 +13543,12 @@ def test_the_header_gives_its_information_room_in_every_supported_width(
         assert plate_field.width() >= window.header.plates.fontMetrics().horizontalAdvance(
             window.header.plates.currentText()
         ), "das sichtbare Feld muss Zweck und aktiven Plattenfilter vollständig zeigen"
-        material = window.header.material
-        assert material.isVisibleTo(window.toolbar) and material.width() > 0
-        assert material.full_text() and material.toolTip() == material.full_text()
-        assert material.accessibleName() == material.full_text()
+        # Kein Filament mehr in der Kopfzeile — es gilt dem Körper und nicht
+        # dem Projekt. An seiner Stelle muss der Druckerknopf lesbar sein:
+        # als Symbol allein hat ihn niemand gefunden.
+        button = window.header.printer_button
+        assert button.isVisibleTo(window.toolbar) and button.width() > 0
+        assert button.text(), "der Knopf trägt seine Beschriftung"
         for label, expected in zip(labels, full, strict=True):
             assert label.isVisibleTo(window.toolbar)
             assert label.width() > 0, f"{expected!r} bekommt bei {breite} px keinen Raum"

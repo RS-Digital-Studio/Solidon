@@ -19,12 +19,12 @@ import pytest
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from app.core.knowledge import profiles
 from app.core.scene import EvaluationResult
 from app.core.types import MaterialSlot, Scene
-from app.ui.header import HeaderBar, bounds_text, project_name
+from app.ui.header import HeaderBar, bounds_text, filament_names, project_name
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -55,12 +55,19 @@ def test_an_empty_header_says_nothing(qt_app: QApplication) -> None:
     Eine Zeile, die Platzhalter zeigt, behauptet, es gäbe etwas zu sehen.
     """
     header = HeaderBar()
-    title, bounds, printer, material = header.state()
-    assert (title, bounds, printer, material) == ("", "", "", "")
+    assert header.state() == ("", "", "")
 
 
-def test_the_header_names_printer_and_the_filament_in_the_scene(qt_app: QApplication) -> None:
-    """Die Projektvorgabe gilt genau für einen Körper ohne eigenen Slot."""
+def test_the_header_names_the_printer_and_no_filament(qt_app: QApplication) -> None:
+    """Der Drucker gilt dem ganzen Projekt, ein Filament tut das nicht.
+
+    Hier stand die Projektvorgabe als Materialzusage — und war schon dann
+    falsch, wenn ein Körper „Ohne Filament" trug: Die Kopfzeile sagte
+    „PETG" über ein Teil, dem nichts zugewiesen war. Bei mehreren Körpern
+    mit verschiedenen Spulen half auch die richtige Rechnung nicht mehr,
+    denn „2 Filamente" beantwortet keine Frage (Robert, 07.09.2026).
+    Welcher Körper welche Spule trägt, sagt der Filamentbereich links.
+    """
     from conftest import make_object
 
     header = HeaderBar()
@@ -68,9 +75,11 @@ def test_the_header_names_printer_and_the_filament_in_the_scene(qt_app: QApplica
     result = EvaluationResult(scene=Scene(objects={"obj_1": make_object()}))
     header.show_profile(profile, result)
 
-    _title, _bounds, printer, material = header.state()
+    _title, _bounds, printer = header.state()
     assert printer == str(profile.printer.title)
-    assert material == str(profile.material.title)
+    material = str(profile.material.title)
+    for label in header.findChildren(QLabel):
+        assert material not in label.text(), "die Kopfzeile nennt kein Filament"
 
 
 def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
@@ -80,12 +89,7 @@ def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
     """Eigene Profilnamen dürfen die ganze Kopfzeile nicht verdrängen."""
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
     printer_title = "Druckermodell" * 16
-    material_title = "Materialbezeichnung" * 12
-    profile = replace(
-        profile,
-        printer=replace(profile.printer, title=printer_title),
-        material=replace(profile.material, title=material_title),
-    )
+    profile = replace(profile, printer=replace(profile.printer, title=printer_title))
 
     from conftest import make_object
 
@@ -103,14 +107,10 @@ def test_long_single_word_profile_names_do_not_push_the_header_into_overflow(
         "die Kopfzeile liegt im Überlaufmenü: "
         f"header min={window.header.minimumSizeHint().width()}, "
         f"printer min={window.header.printer.minimumWidth()}, "
-        f"material min={window.header.material.minimumWidth()}, "
         f"toolbar={window.toolbar.width()}"
     )
     assert window.header.plates.isVisibleTo(window.toolbar)
-    for label, full_text in (
-        (window.header.printer, printer_title),
-        (window.header.material, material_title),
-    ):
+    for label, full_text in ((window.header.printer, printer_title),):
         assert label.isVisibleTo(window.toolbar) and label.width() > 0
         assert label.full_text() == full_text
         assert label.toolTip() == full_text
@@ -144,7 +144,6 @@ def test_the_plate_filter_shows_its_complete_state_in_every_language(
             header.title.setText("Ein sehr langes Beispielprojekt*")
             header.bounds.setText("6,5354 × 3,1496 × 2,0472 in")
             header.printer.setText("Allgemeiner FDM-Drucker 220 mm")
-            header.material.setText("PLA")
             header.show_plates(3)
             header.show()
             try:
@@ -161,7 +160,6 @@ def test_the_plate_filter_shows_its_complete_state_in_every_language(
                     assert header.title.width() > 0 and header.title.text().endswith("*")
                     assert header.bounds.width() > 0 and header.bounds.text().endswith("in")
                     assert header.printer.width() > 0 and header.printer.text().endswith("220 mm")
-                    assert header.material.width() > 0 and header.material.text() == "PLA"
                     for index in range(header.plates.count()):
                         header.plates.setCurrentIndex(index)
                         QApplication.processEvents()
@@ -207,10 +205,9 @@ def test_the_window_wires_the_header_to_the_session(window: MainWindow) -> None:
     """
     window._update_header()
 
-    title, _bounds, printer, material = window.header.state()
+    title, _bounds, printer = window.header.state()
     assert title == project_name(window.session.title)
     assert printer == str(window.session.profile.printer.title)
-    assert material == "", "ohne Körper ist noch kein Filament im Projekt in Gebrauch"
 
 
 def test_the_header_lists_multiple_project_filaments_instead_of_one_global_material(
@@ -230,16 +227,11 @@ def test_the_header_lists_multiple_project_filaments_instead_of_one_global_mater
             colour=(1.0, 1.0, 1.0),
         ),
     ]
-    header = HeaderBar()
-    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
+    names = filament_names(profile, [body])
 
-    text = header.material.full_text()
-    assert text.startswith("2 Filamente:")
-    assert "Gehäuse (PETG)" in text
-    assert "Schrift Weiß (PLA)" in text
-    assert "#FFFFFF" in text
-    assert header.material.text() == "2 Filamente"
-    assert header.material.toolTip() == text
+    assert len(names) == 2
+    assert "Gehäuse (PETG)" in names
+    assert any("Schrift Weiß (PLA)" in name and "#FFFFFF" in name for name in names)
 
 
 def test_the_header_ignores_unused_filament_metadata_after_a_complete_repaint(
@@ -265,14 +257,9 @@ def test_the_header_ignores_unused_filament_metadata_after_a_complete_repaint(
             colour=(1.0, 0.0, 0.0),
         ),
     ]
-    header = HeaderBar()
+    names = filament_names(profile, [body])
 
-    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
-
-    text = header.material.full_text()
-    assert text == "PLA Weiß · #FFFFFF"
-    assert "PETG" not in text
-    assert "Rot" not in text
+    assert names == ("PLA Weiß · #FFFFFF",)
 
 
 def test_slot_metadata_without_a_material_uses_only_the_known_project_fallback(
@@ -283,20 +270,15 @@ def test_slot_metadata_without_a_material_uses_only_the_known_project_fallback(
 
     profile = profiles.make_profile(profiles.DEFAULT_PRINTER, "petg")
     body = make_object(slots=(0,) * 12)
-    header = HeaderBar()
 
     body.material_slots = [MaterialSlot(index=0, name="")]
-    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
-    assert header.material.full_text() == str(profile.material.title)
+    assert filament_names(profile, [body]) == (str(profile.material.title),)
 
     body.material_slots = [MaterialSlot(index=0, name="Import Grau", colour=(0.5, 0.5, 0.5))]
-    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
-    assert header.material.full_text() == "Import Grau (PETG) · #808080"
+    assert filament_names(profile, [body]) == ("Import Grau (PETG) · #808080",)
 
     body.material_slots = [MaterialSlot(index=0, name="Holzoptik", material_type="Wood")]
-    header.show_profile(profile, EvaluationResult(scene=Scene(objects={"obj_1": body})))
-    assert header.material.full_text() == "Holzoptik (Wood)"
-    assert "PETG" not in header.material.full_text()
+    assert filament_names(profile, [body]) == ("Holzoptik (Wood)",)
 
 
 def test_showing_the_header_reads_large_face_slot_assignments_once(
@@ -321,10 +303,7 @@ def test_showing_the_header_reads_large_face_slot_assignments_once(
         MaterialSlot(index=1, name="PLA Weiß", material_type="PLA"),
     ]
 
-    HeaderBar().show_profile(
-        profiles.make_profile(profiles.DEFAULT_PRINTER, "petg"),
-        EvaluationResult(scene=Scene(objects={"obj_1": body})),
-    )
+    filament_names(profiles.make_profile(profiles.DEFAULT_PRINTER, "petg"), [body])
 
     assert assignments.iterations == 1
 
@@ -363,7 +342,12 @@ def test_an_open_project_gives_the_header_readable_room_before_toolbar_words(
     assert not window._toolbar_wide
     assert window.header.width() >= 600
     assert window.header.title.text() == "Halter*"
-    assert window.header.material.text() == "2 Filamente"
+    # Der Knopf trägt seine Beschriftung, nicht nur sein Symbol — das ist
+    # der Platz, den diese Breite außer Name und Maß noch hergeben muss.
+    assert window.header.printer_button.text()
+    assert window.header.printer_button.toolButtonStyle() is not (
+        Qt.ToolButtonStyle.ToolButtonIconOnly
+    )
 
 
 def test_the_header_is_updated_where_the_state_changes() -> None:

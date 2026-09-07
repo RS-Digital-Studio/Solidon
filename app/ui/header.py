@@ -134,27 +134,6 @@ def filament_names(profile: Profile, bodies: list[SceneObject]) -> tuple[str, ..
     return tuple(dict.fromkeys(name for name in names if name))
 
 
-def _filament_text(names: tuple[str, ...]) -> str:
-    """Eine bereits erhobene Filamentliste für die Kopfzeile schreiben."""
-    if not names:
-        return ""
-    if len(names) == 1:
-        return names[0]
-    return (
-        tr("{count} Filamente: {names}")
-        .replace("{count}", str(len(names)))
-        .replace("{names}", " + ".join(names))
-    )
-
-
-def filament_text(profile: Profile, result: EvaluationResult | None) -> str:
-    """Kurze Kopfzeilen-Auskunft über alle Filamente des offenen Projekts."""
-    if result is None or not result.scene.objects:
-        return ""
-    names = filament_names(profile, list(result.scene.objects.values()))
-    return _filament_text(names)
-
-
 #: Wie der Wähler „kein Filter" nennt. Derselbe Wert wie in
 #: ``explode_bar``, wo der Wähler herkommt — der Viewport kennt ihn.
 ALL_PLATES = -1
@@ -354,7 +333,13 @@ class HeaderBar(QWidget):
         self.printer_button = QToolButton(self)
         self.printer_button.setText(tr("Drucker …"))
         self.printer_button.setIcon(icon("print_settings", self.printer_button))
-        self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        # **Mit Beschriftung, nicht nur als Symbol.** Der Text stand hier schon,
+        # gezeigt wurde er nie — `ToolButtonIconOnly` warf ihn weg, und damit
+        # war der einzige Weg zu den Druckeinstellungen ein Symbol ohne Wort.
+        # Gefunden hat es der Nutzer nur, weil er zufällig mit der Maus
+        # darüberfuhr und den Tooltip sah (Robert, 07.09.2026). Ein Knopf, den
+        # man nur durch Schweben findet, ist keiner.
+        self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.printer_button.setAutoRaise(True)
         printer_hint = tr("Öffnet die Druckeinstellungen; der Drucker steht dort ganz oben.")
         self.printer_button.setToolTip(printer_hint)
@@ -368,13 +353,13 @@ class HeaderBar(QWidget):
         printer_layout.addWidget(self.printer, 1)
         printer_layout.addWidget(self.printer_button)
         self.printer_control.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
-        # Das Material steht zusätzlich im Filamentbereich. In der engsten
-        # Kopfzeile darf diese Wiederholung deshalb vor dem Plattenwähler
-        # kürzen; der vollständige Wert bleibt wie bei den übrigen Auskünften
-        # für Tooltip und Hilfstechnik erhalten.
-        self.material = _EphemeralLabel("", self, tail_words=1)
-        set_level(self.material, "caption")
-
+        # **Das Filament steht hier nicht mehr.** Es hing an der Projektvorgabe
+        # und nicht an dem, was die Körper tragen — bei einem Projekt, dessen
+        # einziger Körper „Ohne Filament" führte, sagte die Kopfzeile „PETG“.
+        # Und selbst richtig gerechnet ist eine einzelne Angabe hier falsch,
+        # sobald mehrere Körper verschiedene Filamente tragen: „2 Filamente"
+        # beantwortet keine Frage (Robert, 07.09.2026). Wo welches Filament
+        # sitzt, sagt der Filamentbereich links; er zählt die Körper dazu.
         self._divider = divider(self)
         self._layout = QGridLayout(self)
         self._layout.setContentsMargins(TIGHT, 0, TIGHT, 0)
@@ -399,9 +384,7 @@ class HeaderBar(QWidget):
         der Header bei mehr Platz weiter und bleibt dann einzeilig.
         """
         preferred = super().sizeHint()
-        has_project = any(
-            label.full_text() for label in (self.title, self.bounds, self.printer, self.material)
-        )
+        has_project = any(label.full_text() for label in (self.title, self.bounds, self.printer))
         width = max(self._compact_width(), READABLE_HEADER_WIDTH) if has_project else 0
         return QSize(width, preferred.height())
 
@@ -416,7 +399,7 @@ class HeaderBar(QWidget):
 
     def _compact_width(self) -> int:
         """Breite der zweizeiligen Anordnung: Angaben oben, Filter unten."""
-        top = (self.title, self.bounds, self.printer_control, self.material)
+        top = (self.title, self.bounds, self.printer_control)
         top_width = sum(widget.minimumWidth() for widget in top) + TIGHT * (len(top) - 1)
         plate_width = self.plates.minimumWidth() if not self.plates.isHidden() else 0
         return max(top_width, plate_width) + TIGHT * 2
@@ -426,7 +409,7 @@ class HeaderBar(QWidget):
         widgets: list[QWidget] = [self.title, self.bounds]
         if not self.plates.isHidden():
             widgets.extend((self.plates, self._divider))
-        widgets.extend((self.printer_control, self.material))
+        widgets.append(self.printer_control)
         printer_action_width = self.printer.minimumWidth() + TARGET_SIZE
         return (
             sum(widget.minimumWidth() for widget in widgets)
@@ -445,7 +428,6 @@ class HeaderBar(QWidget):
             self.plates,
             self._divider,
             self.printer_control,
-            self.material,
         )
         for widget in widgets:
             self._layout.removeWidget(widget)
@@ -453,18 +435,23 @@ class HeaderBar(QWidget):
             self._layout.setColumnStretch(column, 0)
         # **Vor die Verzweigung, weil sie in beiden Zweigen dasselbe war.**
         # Beide Hälften begannen mit genau diesen zwei Zeilen; wer das liest,
-        # sucht den Unterschied und findet keinen. Der Knopf zeigt in jeder
-        # Breite nur sein Symbol, und sein Name für den Bildschirmleser hängt
-        # nicht an der Breite.
-        self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        # sucht den Unterschied und findet keinen. Der Knopf trägt in jeder
+        # Breite seine Beschriftung, und sein Name für den Bildschirmleser
+        # hängt nicht an der Breite.
+        #
+        # **Beschriftet, nicht nur bebildert.** Hier stand `ToolButtonIconOnly`,
+        # und weil `_arrange` bei jeder Breitenänderung läuft, hätte ein
+        # gesetzter Stil im Aufbau allein nichts genützt — diese Zeile hat ihn
+        # jedes Mal wieder weggenommen. Der einzige Weg zu den
+        # Druckeinstellungen war damit ein Symbol ohne Wort.
+        self.printer_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
         self.printer_button.setAccessibleName(tr("Drucker wechseln"))
         if compact:
             self._layout.addWidget(self.title, 0, 0)
             self._layout.addWidget(self.bounds, 0, 1)
             self._layout.addWidget(self.printer_control, 0, 2)
-            self._layout.addWidget(self.material, 0, 3)
-            self._layout.addWidget(self.plates, 1, 0, 1, 4)
-            for column, stretch in enumerate((2, 3, 3, 1)):
+            self._layout.addWidget(self.plates, 1, 0, 1, 3)
+            for column, stretch in enumerate((2, 3, 3)):
                 self._layout.setColumnStretch(column, stretch)
             self._divider.hide()
         else:
@@ -473,12 +460,10 @@ class HeaderBar(QWidget):
             self._layout.addWidget(self.plates, 0, 3)
             self._layout.addWidget(self._divider, 0, 4)
             self._layout.addWidget(self.printer_control, 0, 5)
-            self._layout.addWidget(self.material, 0, 6)
             for column, stretch in (
                 (0, 2),
                 (1, 3),
                 (5, 3),
-                (6, 1),
             ):
                 self._layout.setColumnStretch(column, stretch)
             if not self.plates.isHidden():
@@ -567,25 +552,23 @@ class HeaderBar(QWidget):
         self._reflow()
 
     def show_profile(self, profile: Profile, result: EvaluationResult | None = None) -> None:
-        """Drucker und die tatsächlich im Projekt verwendeten Filamente zeigen."""
+        """Den Drucker des Projekts zeigen.
+
+        *result* bleibt in der Signatur, obwohl die Kopfzeile es nicht mehr
+        liest: Es sind zwei Aufrufer, und beide haben es zur Hand — den
+        Parameter zu streichen hieße, sie beide anzufassen, damit hier eine
+        Zeile weniger steht.
+        """
+        del result
         self.printer.setText(str(profile.printer.title))
-        names = filament_names(profile, list(result.scene.objects.values())) if result else ()
-        detail = _filament_text(names)
-        summary = (
-            tr("{count} Filamente").replace("{count}", str(len(names)))
-            if len(names) > 1
-            else detail
-        )
-        self.material.setSummary(summary, detail)
         self._reflow()
 
-    def state(self) -> tuple[str, str, str, str]:
+    def state(self) -> tuple[str, str, str]:
         """Die vollständige Auskunft — unabhängig von der sichtbaren Kürzung."""
         return (
             self.title.full_text(),
             self.bounds.full_text(),
             self.printer.full_text(),
-            self.material.full_text(),
         )
 
 
