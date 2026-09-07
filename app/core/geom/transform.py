@@ -92,9 +92,14 @@ def is_rigid(matrix: np.ndarray) -> bool:
     Geprüft wird die obere 3x3 auf Orthonormalität; die Spiegelung
     (Determinante -1) gehört dazu, ``mirror_object`` ist eine.
     """
-    linear = np.asarray(matrix, dtype=float)[:3, :3]
+    cells = np.asarray(matrix, dtype=float)
+    if cells.shape != (4, 4) or not np.all(np.isfinite(cells)):
+        return False
+    if not np.allclose(cells[3], (0.0, 0.0, 0.0, 1.0), atol=EPS_GEOM, rtol=0.0):
+        return False
+    linear = cells[:3, :3]
     product = linear @ linear.T
-    return bool(np.allclose(product, np.eye(3), atol=1e-9))
+    return bool(np.allclose(product, np.eye(3), atol=EPS_GEOM, rtol=0.0))
 
 
 def moved_body(mesh: Mesh, matrix: np.ndarray) -> Mesh:

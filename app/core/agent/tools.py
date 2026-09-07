@@ -19,7 +19,14 @@ from __future__ import annotations
 from typing import Any, Final
 
 from app.core.knowledge import standards
-from app.core.registry import REGISTRY, OperationSpec, Registry, caveat_line, menu_path
+from app.core.registry import (
+    REGISTRY,
+    OperationSpec,
+    Registry,
+    caveat_line,
+    menu_path,
+    needed_inputs,
+)
 from app.core.registry import tool_schemas as op_schemas
 from app.core.registry.params import condition_text
 from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
@@ -165,7 +172,10 @@ def operation_tools(
             properties[OBJECTS_FIELD] = {
                 "type": "array",
                 "items": {"type": "string"},
+                "minItems": needed_inputs(spec),
             }
+            if spec.consumes > 0:
+                properties[OBJECTS_FIELD]["maxItems"] = spec.consumes
             # **Der Satz dazu steht im kompakten Schema nicht mehr — er steht
             # im Systemprompt.** Wörtlich derselbe Text in 79 Werkzeugen war
             # der größte einzelne Posten der Grundlast, den kein Werkzeug
@@ -215,14 +225,14 @@ def operation_tools(
             continue
 
         # **Die Platzierung eines Bausteins steht im Systemprompt.** Die
-        # sechs Angaben aus ``PART_PLACEMENT_PARAMS`` tragen in allen 27
+        # Angaben aus ``PART_PLACEMENT_PARAMS`` tragen in allen 27
         # Bausteinen wörtlich denselben Text — gemessen 8 086 Zeichen, die
         # sechsundzwanzigmal dasselbe sagen. Sie sind eine Konvention der
         # Bausteinschicht und keine Eigenschaft der einzelnen Operation;
         # das Handbuch erklärt sie aus demselben Grund einmal am Kopf der
         # Kategorie statt in jeder Bausteintabelle.
         #
-        # Gestrichen wird nur, wo **alle sechs** beisammen sind: Ein
+        # Gestrichen wird nur, wo **alle Platzierungsfelder** beisammen sind: Ein
         # Werkzeug, das ``x`` aus eigenem Recht führt (verschieben, drehen),
         # meint damit etwas anderes und behält seinen Text.
         if compact and all(name in properties for name in PART_PLACEMENT_PARAMS):

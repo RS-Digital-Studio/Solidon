@@ -100,9 +100,9 @@ MENU_GROUPS: Final[tuple[tuple[TranslatableText, tuple[str, ...]], ...]] = (
 def needed_inputs(spec: OperationSpec) -> int:
     """Wie viele Objekte diese Operation mindestens braucht.
 
-    Eine Stelle, weil drei sie lesen: die Menüleiste, das Kontextmenü und der
-    Aufruf selbst. Bei fester Stelligkeit ist es ``consumes``; bei
-    ``VARIABLE`` die ausdrückliche Untergrenze.
+    Oberfläche, Agentenschema, Verlauf und Auswertung lesen denselben Vertrag.
+    Bei fester Stelligkeit ist es ``consumes``; bei ``VARIABLE`` die
+    ausdrückliche Untergrenze.
     """
     return spec.minimum_inputs if spec.consumes == VARIABLE else spec.consumes
 
@@ -330,6 +330,7 @@ class OperationSpec:
     fn: OpFn
     reversible: bool = True
     consumes: int = 1
+    """Feste Eingangszahl, null für Erzeuger, ``VARIABLE`` für variable Eingänge."""
     minimum_inputs: int = 0
     """Wie viele Objekte mindestens nötig sind, wenn ``consumes`` variabel ist.
 
@@ -339,7 +340,6 @@ class OperationSpec:
     Zahl wüsste das Menü nicht, wann es den Eintrag freigeben darf, und der
     Nutzer bekäme die Absage erst nach dem Klick (Regel 19).
     """
-    """Wie viele Objekte die Operation nimmt. Null heißt beliebig viele."""
     produces: int = 1
     """Wie viele sie zurückgibt. ``VARIABLE`` heißt so viele wie hineingegeben —
     für Operationen wie das Anordnen, die jedes Objekt ändern und keines
@@ -486,9 +486,14 @@ class Registry:
                 detail=f"{spec.name!r} applies to unknown feature kinds {unknown}",
                 values={"op": spec.name, "known": list(FEATURE_KINDS)},
             )
-        if spec.consumes < VARIABLE or spec.produces < VARIABLE:
+        if spec.consumes < VARIABLE or spec.produces < VARIABLE or spec.minimum_inputs < 0:
             raise InternalError(
                 detail=f"{spec.name!r} declares a negative object count",
+                values={"op": spec.name},
+            )
+        if spec.consumes != VARIABLE and spec.minimum_inputs:
+            raise InternalError(
+                detail=f"{spec.name!r} declares a minimum for a fixed input count",
                 values={"op": spec.name},
             )
         if spec.shortcut:

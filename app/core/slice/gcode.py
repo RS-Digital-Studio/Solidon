@@ -149,10 +149,10 @@ _SUPPORT_TOOL = re.compile(r";\s*TYPE:\s*(?P<type>.+)", re.IGNORECASE)
 #: **nur** aus ihnen besteht: Wer sie überliest, verliert genau die Ausmaße
 #: eines Zylinders.
 _COMMAND = re.compile(
-    r"^(?P<family>[GMT])\s*(?P<code>[0-9]+)(?P<fraction>\.[0-9]+)?\b", re.IGNORECASE
+    r"^(?P<family>[GMT])\s*(?P<code>[0-9]+)(?P<fraction>\.[0-9]+)?(?![0-9.])", re.IGNORECASE
 )
 _WORD = re.compile(
-    r"(?P<name>[A-Z])(?P<value>[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:E[-+]?[0-9]+)?)",
+    r"(?P<name>[A-Z])(?P<value>[-+]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+))",
     re.IGNORECASE,
 )
 

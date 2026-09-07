@@ -14,7 +14,7 @@ import pytest
 import trimesh
 
 from app.core.geom.mesh import MeshData
-from app.core.registry import REGISTRY
+from app.core.registry import REGISTRY, VARIABLE, needed_inputs
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project
 from app.core.types import Profile, Source
@@ -104,8 +104,9 @@ def test_the_window_hands_the_whole_scene_in() -> None:
     assert inputs_for(creating, objects, ("obj_2",)) == (), "creates, takes nothing"
 
 
-def test_an_operation_on_two_bodies_gets_two() -> None:
-    """§25: Vereinigen, Abziehen und Schnittmenge nehmen zwei Körper.
+@pytest.mark.parametrize("name", ["union_objects", "subtract_objects", "intersect_objects"])
+def test_a_boolean_operation_gets_all_selected_bodies(name: str) -> None:
+    """§25: Vereinigen, Abziehen und Schnittmenge nehmen mindestens zwei Körper.
 
     Solange die Auswahl immer genau eines lieferte, war keine der drei über
     das Menü ausführbar — der Stapel lehnte sie mit „erwartet eine andere
@@ -115,11 +116,12 @@ def test_an_operation_on_two_bodies_gets_two() -> None:
     from app.ui.main_window import inputs_for
 
     objects = ["obj_1", "obj_2", "obj_3"]
-    spec = REGISTRY.get("subtract_objects")
-    assert spec.consumes == 2
+    spec = REGISTRY.get(name)
+    assert spec.consumes == VARIABLE
+    assert needed_inputs(spec) == 2
 
     assert inputs_for(spec, objects, ("obj_2", "obj_1")) == ("obj_2", "obj_1")
-    assert inputs_for(spec, objects, ("obj_1", "obj_2", "obj_3")) == ("obj_1", "obj_2")
+    assert inputs_for(spec, objects, ("obj_3", "obj_2", "obj_1")) == ("obj_3", "obj_2", "obj_1")
     assert inputs_for(spec, objects, ("obj_1",)) == ("obj_1",), "zu wenige — das Fenster hält an"
 
 

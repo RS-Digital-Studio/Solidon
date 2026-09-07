@@ -589,6 +589,41 @@ def test_the_declared_object_count_is_enforced(history: History) -> None:
     assert caught.value.constraint == "consumes"
 
 
+@pytest.mark.parametrize("count", [0, 1])
+def test_variable_operations_enforce_the_minimum_on_apply_and_edit(
+    history: History, registry: Registry, count: int
+) -> None:
+    """Die Untergrenze gilt auch für Chat und nachträglich geänderte Eingänge."""
+    spec = registry.get("combine_objects")
+    registry.remove(spec.name)
+    registry.register(dataclasses.replace(spec, consumes=VARIABLE, minimum_inputs=2))
+    objects = tuple(create(history) for _ in range(3))
+    before = tuple(history.operations)
+
+    with pytest.raises(ValidationError) as caught:
+        history.apply(_("Falsch"), [OperationDraft(op=spec.name, inputs=objects[:count])])
+    assert caught.value.constraint == "consumes"
+    assert caught.value.values["expected"] == 2
+    assert tuple(history.operations) == before
+
+    history.apply(_("Verbinden"), [OperationDraft(op=spec.name, inputs=objects)])
+    combined = history.operations[-1]
+    with pytest.raises(ValidationError) as caught:
+        history.change_inputs(combined.id, objects[:count])
+    assert caught.value.constraint == "consumes"
+    assert history.operations[-1].inputs == objects
+
+    history.change_inputs(combined.id, objects[:2])
+    assert history.operations[-1].inputs == objects[:2]
+    history.undo()
+    assert history.operations[-1].inputs == objects
+
+    later = create(history)
+    with pytest.raises(ValidationError) as caught:
+        history.change_inputs(combined.id, (objects[0], later))
+    assert caught.value.constraint == "unknown_object"
+
+
 def test_a_random_operation_always_ends_up_with_a_stored_seed(history: History) -> None:
     """§11.3: entscheidend ist, dass der Startwert aufgehoben wird, nicht wer
     ihn sich ausgedacht hat.
@@ -1298,3 +1333,22 @@ def test_a_parameter_with_a_non_finite_number_is_refused_where_every_change_pass
 
     assert raised.value.constraint == "not_finite"
     assert raised.value.field == field_name
+
+
+@pytest.mark.parametrize("editing", [False, True])
+def test_an_object_creator_cannot_consume_an_existing_body(
+    document: Document, registry: Registry, editing: bool
+) -> None:
+    """Null Eingänge sind auch eine Obergrenze, beim Anlegen und beim Ändern."""
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    if editing:
+        history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    before = document_to_data(document)
+    with pytest.raises(ValidationError) as raised:
+        if editing:
+            history.change_inputs(document.ops[-1].id, ["obj_1"])
+        else:
+            history.apply(_("Anlegen"), [OperationDraft(op="make_object", inputs=("obj_1",))])
+    assert raised.value.constraint == "consumes"
+    assert document_to_data(document) == before

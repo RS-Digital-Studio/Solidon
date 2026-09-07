@@ -38,6 +38,15 @@ In der Oberfläche heißt es „Schichtanalyse", nicht „Vorschau".
 Ebenenschnitt und Konturverkettung haben einen übersetzten Teil —
 `tools/build_slice_core.py` baut ihn, das Budget dafür steht in §31.
 
+Eine geschlossene verkettete Kontur kann geometrisch trotzdem ungültig sein,
+etwa wenn eine Ebene genau durch die auslaufende Ecke eines Verbinders geht
+und der Rand auf derselben Linie vor- und zurückläuft. Dann bekommt
+`polygonize` die **ursprünglichen losen Segmente**. Ein schon daraus gebauter
+ungültiger `LinearRing` hat die nötigen Knoten verloren und darf nicht als
+Reparatureingang dienen. Der analytische Korpusfall dazu steht in
+`tests/data/meshes/dovetail_vertex_plane.ply`; `tests/test_slice_core.py`
+hält Schichtfolge, Querschnitt und Stützvolumen zwischen beiden Wegen gleich.
+
 ## Grenzen
 
 - **Kein eigener Slicer**, auch nicht „nur für den Anfang".
@@ -52,3 +61,7 @@ Druckers. Ein vorher auf das Düsenmaximum gedeckelter Sollwert kann eine
 unzureichende Temperatur nicht mehr nachweisen. G-Code-Verbrauchslisten
 werden über alle Slots summiert; eine ausdrücklich ausgewiesene Gesamtsumme
 hat Vorrang vor gerundeten Einzelwerten.
+
+G-Code-Wörter benötigen keinen Leerraum als Trenner. `E` bezeichnet die
+Extrusion auch unmittelbar hinter einer Koordinate; wissenschaftliche
+Zahlenschreibweise darf deshalb keine Extrusionswörter verschlucken.

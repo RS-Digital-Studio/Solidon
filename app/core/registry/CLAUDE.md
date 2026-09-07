@@ -78,6 +78,16 @@ Einträge.
 `tests/test_registry_consistency.py` prüft jede: Vollständigkeit, eindeutige
 Kürzel, Startwert wo nötig.
 
+`consumes` legt eine feste Eingangszahl fest; `VARIABLE` zusammen mit
+`minimum_inputs` erlaubt alle gewählten Körper ab der angegebenen Untergrenze.
+`needed_inputs()` liefert diese Grenze für Menü, Auswahlpanel, Agentenschema,
+Verlauf und Auswertung. Feste Eingangszahlen sind zugleich die Obergrenze;
+das Werkzeugschema bildet beides als `minItems` und `maxItems` ab, Erzeuger
+ohne Eingänge tragen kein Objektfeld. Ausdrücklich mit `whole_scene`
+deklarierte Operationen bekommen hingegen die vollständige Szene. Negative
+Mindestzahlen und eine Mindestzahl neben fester Stelligkeit werden bereits
+beim Registrieren abgewiesen.
+
 `replace_state()` ist ausschließlich der Commit-Schritt für einen bereits in
 einem isolierten Register vollständig geprüften Rezeptzustand. Er übernimmt die
 vorbereitete Abbildung ohne zweite Validierung; nach einer atomar

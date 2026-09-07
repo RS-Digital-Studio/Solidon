@@ -339,6 +339,63 @@ def test_an_operation_without_any_input_stops_instead_of_crashing(
     assert "obj_1" in result.scene.objects, "was gerechnet war, bleibt sichtbar"
 
 
+@pytest.mark.parametrize("count", [0, 1])
+def test_a_loaded_variable_operation_stops_before_running_with_too_few_inputs(
+    history: History, document: Document, profile: Profile, registry: Registry, count: int
+) -> None:
+    """Auch ein aus der Datei gelesener Schritt muss die Mindestzahl einhalten."""
+    from app.core.registry import VARIABLE
+
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Ändern"), [OperationDraft(op="resize_object", inputs=("obj_1",))])
+    document.ops[-1] = dataclasses.replace(document.ops[-1], inputs=("obj_1",)[:count])
+    spec = registry.get("resize_object")
+    registry.remove(spec.name)
+    registry.register(dataclasses.replace(spec, consumes=VARIABLE, minimum_inputs=2))
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert result.stopped_at == document.ops[-1].id
+    finding = next(
+        entry for entry in result.scene.report.findings if entry.code == "evaluate.too_few_inputs"
+    )
+    assert finding.values["expected"] == 2
+    assert finding.values["given"] == count
+    assert "obj_1" in result.scene.objects
+
+
+@pytest.mark.parametrize("op_name, expected", [("make_object", 0), ("resize_object", 1)])
+def test_a_loaded_fixed_operation_cannot_silently_consume_an_extra_object(
+    history: History,
+    document: Document,
+    profile: Profile,
+    registry: Registry,
+    op_name: str,
+    expected: int,
+) -> None:
+    """Ein fehlerhafter Dateischritt darf den zweiten Körper nicht verschwinden lassen."""
+    history.apply(
+        _("Anlegen"), [OperationDraft(op="make_object"), OperationDraft(op="make_object")]
+    )
+    history.apply(_("Ändern"), [OperationDraft(op=op_name, inputs=("obj_1",)[:expected])])
+    document.ops[-1] = dataclasses.replace(
+        document.ops[-1], inputs=("obj_1", "obj_2")[: expected + 1]
+    )
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert result.stopped_at == document.ops[-1].id
+    assert set(result.scene.objects) == {"obj_1", "obj_2"}
+    assert RUNS.get("resize_object", 0) == 0
+    assert RUNS["make_object"] == 2
+    finding = next(
+        entry for entry in result.scene.report.findings if entry.code == "evaluate.too_many_inputs"
+    )
+    assert finding.values["expected"] == expected
+    assert finding.values["given"] == expected + 1
+    assert finding.suggestions
+
+
 def test_a_failing_operation_stops_the_chain_with_its_error(
     history: History, document: Document, profile: Profile, registry: Registry
 ) -> None:

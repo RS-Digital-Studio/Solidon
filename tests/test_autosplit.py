@@ -591,39 +591,24 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     einen 22 × 22-mm-Querschnitt. Damit wählt T4 an allen guten Nähten echte
     Schwalbenschwänze.
 
-    **Nackt entscheidet die Lage der zwei Überhänge, fertig entscheiden die
-    Stifte mit.** Der stehende Überhang sitzt bei x 0,5…2,5, der liegende
-    bei x 5…7. Eine Naht bei −3,25 liegt **vor beiden**: Sie lässt sie
-    zusammen auf der rechten Hälfte, und die verlangt zwei widersprüchliche
-    Grundflächen. Eine Naht bei +3,25 **trennt** sie, und jede Hälfte darf
-    sich unabhängig legen — nackt ist rechts deshalb dreimal billiger.
-    Gemessen am 02.09.2026, Stützvolumen in mm³ je Hälfte, nackt → fertig:
+    Der stehende Überhang sitzt bei x 0,5…2,5, der liegende bei x 5…7. Eine
+    Naht bei −3,25 liegt vor beiden und lässt sie zusammen auf der rechten
+    Hälfte. Bei +3,25 werden sie getrennt und jede Hälfte darf sich selbst
+    legen. Gemessen am 06.09.2026, Stützvolumen in mm³ je Naht, nackt →
+    fertig: links 7004,8 → 7132,9, rechts 2137,5 → 3473,6.
 
-        links (−3,25)    erste 0,0 → 116,3      zweite 7004,8 → 7016,7
-        rechts (+3,25)   erste 657,0 → 6509,7   zweite 1480,5 → 1492,4
+    Die frühere Behauptung dieses Tests, die Schwalbenschwänze kehrten diese
+    Rangfolge um, trifft auf die tatsächlich gebauten Halbschalen nicht zu.
+    Rechts steht die erste fertige Hälfte auf 4471,5 mm² Bodenfläche und
+    braucht 1981,3 mm³ Stützraum; die zweite steht auf 455,7 mm² Nahtfläche
+    und braucht 1492,4 mm³. Alle vier geprüften Halbschalen sind wasserdichte
+    Einzelkörper mit konsistenten Normalen. Die Schwalbenschwänze verteuern
+    rechts stärker, aber nicht um die belegten 3659,3 mm³ Vorsprung.
 
-    Die Schwalbenschwänze wenden das Blatt, und zwar aus einem Grund, den
-    man anfassen kann: Die **erste** Hälfte trägt die Stifte, und sie stehen
-    von der Nahtfläche ab. Rechts ist das die Hälfte mit dem stehenden
-    Überhang; nackt lag sie auf der Naht (Lage +x, 657), mit Stiften darauf
-    kann sie das nicht mehr, kippt auf die Unterseite und zahlt dort 6510 für
-    den Überhang. Links trägt die Stifte der lange Balken ohne Überhänge, und
-    der liegt auf der Seite so gut wie zuvor (116). Fertig kostet rechts
-    8002, links 7133 — die Suche endet **links**.
-
-    Bis zum 02.09.2026 stand hier die umgekehrte Rangfolge (rechts 3485,
-    links 7144). Die Zahl war ein Artefakt: Die Bohrung saß versetzt und
-    falsch herum, mit der Mündung am Grund (``pins._along_normal``, gewendet
-    in 50b9f587), und die Orientierungssuche fand eine Lage, die es mit
-    richtig sitzenden Verbindern nicht gibt.
-
-    Was dieser Test belegt, ist deshalb zweierlei: dass T2 die **fertige**
-    Geometrie misst — ``evaluated_*`` trifft ``final_*`` auf die Stelle, und
-    rechnete ``_support_after_cut`` ohne ``connector_count``, stünde dort die
-    nackte Zahl — und dass die Suche der fertigen Zahl folgt, auch wenn die
-    nackte das Gegenteil sagt. Ob die Stifte besser auf die andere Hälfte
-    gehörten, damit die günstige Lage bleibt, ist eine eigene Frage und steht
-    im Register von ``ROADMAP.md``.
+    Was der Test festhält: T2 misst die fertige Geometrie. ``evaluated_*``
+    trifft ``final_*`` auf die Stelle und unterscheidet sich von ``bare_*``.
+    Ohne ``connector_count`` stünde dort die nackte Zahl. Die Suche folgt
+    anschließend der günstigeren fertigen Naht rechts.
 
     Die beiden Kandidaten sind nicht frei gewählt: Bei diesem Drucker legt
     ``_window`` das Fenster auf [−52, 52] und ``SAMPLES`` 33 Stellen hinein,
@@ -646,6 +631,9 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
         plan = pins.plan_pins(mesh, candidate.plane, count=pins.PIN_COUNT, shape=pins.AUTO)
         assert plan.shape == "dovetail"
         pair = pins.add_pins(first, second, plan, profile, quality="draft")
+        assert all(part.is_watertight for part in (pair.first, pair.second))
+        assert all(part.component_count == 1 for part in (pair.first, pair.second))
+        assert all(part.raw.is_winding_consistent for part in (pair.first, pair.second))
         return sum(
             best_face_candidate(part, count=3, profile=profile).support_volume
             for part in (pair.first, pair.second)
@@ -677,22 +665,21 @@ def test_auto_dovetails_take_part_in_the_support_choice(profile: Profile) -> Non
     )
 
     assert bare_right < bare_left * 0.5
-    assert left_final < right_final * (1.0 - autosplit.SUPPORT_TIE), (
+    assert right_final < left_final * (1.0 - autosplit.SUPPORT_TIE), (
         f"fertig links {left_final:.1f}, rechts {right_final:.1f}"
     )
+    assert left_final > bare_left
+    assert right_final > bare_right
     assert evaluated_left == pytest.approx(left_final)
     assert evaluated_right == pytest.approx(right_final)
 
     chosen = autosplit.find_plane(mesh, profile)
 
     assert chosen is not None
-    # Beide liegen auf dem Raster und haben dieselbe billige Punktzahl; bei
-    # Gleichstand nimmt ``_candidate_order`` die kleinere Position, die Suche
-    # startet also links. Dass sie dort **bleibt**, obwohl die nackte Zahl
-    # rechts dreimal kleiner ist, ist der Schritt über das fertige
-    # Stützvolumen — die Stifte kosten rechts die gute Lage.
-    assert chosen.position == pytest.approx(left.position), (
-        f"die Naht liegt bei {chosen.position} statt bei {left.position}"
+    # Beide liegen auf dem Raster und haben dieselbe billige Punktzahl. Die
+    # fertige Stützrechnung löst den Gleichstand zugunsten der rechten Naht.
+    assert chosen.position == pytest.approx(right.position), (
+        f"die Naht liegt bei {chosen.position} statt bei {right.position}"
     )
 
 

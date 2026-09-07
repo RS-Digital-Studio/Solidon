@@ -79,6 +79,31 @@ def test_declaration_lands_in_the_registry(registry: Registry) -> None:
     assert registry.get("scatter_pins").requires_seed is True
 
 
+@pytest.mark.parametrize("consumes, minimum", [(VARIABLE, -1), (0, 2), (1, 2)])
+def test_an_invalid_input_minimum_is_rejected(
+    registry: Registry, consumes: int, minimum: int
+) -> None:
+    """Eine Untergrenze darf den deklarativen Vertrag nicht widersprüchlich machen."""
+    from dataclasses import replace
+
+    original = registry.get("scatter_pins")
+    registry.remove(original.name)
+    with pytest.raises(InternalError):
+        registry.register(replace(original, consumes=consumes, minimum_inputs=minimum))
+
+
+def test_variable_counts_are_readable_in_the_reference(registry: Registry) -> None:
+    """Die interne Markierung -1 ist keine Körperzahl für den Nutzer."""
+    from dataclasses import replace
+
+    original = registry.get("scatter_pins")
+    registry.remove(original.name)
+    registry.register(replace(original, consumes=VARIABLE, minimum_inputs=2, produces=VARIABLE))
+    reference = documentation(registry)
+    assert "Objekte: ≥ 2 → …" in reference
+    assert "Objekte: -1" not in reference
+
+
 def test_every_operation_reaches_every_surface(registry: Registry) -> None:
     """Die Tabelle aus §10: eine Deklaration, sechs Ausgaben."""
     names = {spec.name for spec in registry.all()}

@@ -26,7 +26,14 @@ from functools import cache, partial
 from typing import Any, Final
 
 from app.core import expressions
-from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
+from app.core.errors import (
+    CANCEL,
+    CHANGE_SELECTION,
+    AmbiguityError,
+    AppError,
+    InternalError,
+    OperationCancelled,
+)
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.features import DETECTABLE_KINDS, detect, freeform_dropped
@@ -38,7 +45,7 @@ from app.core.perceive.matching import (
     question_for,
     resolve,
 )
-from app.core.registry import REGISTRY, OperationSpec, Registry, validate
+from app.core.registry import REGISTRY, OperationSpec, Registry, needed_inputs, validate
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import active_fits
@@ -1858,8 +1865,18 @@ def _missing_inputs(
             values={"missing": ", ".join(missing), "op": operation.op},
         )
 
-    # ``VARIABLE`` heißt „so viele wie da sind" und kann auch null sein.
-    if spec.consumes > 0 and len(operation.inputs) < spec.consumes:
+    # Variable Eingänge behalten die im Register festgelegte Untergrenze.
+    expected = needed_inputs(spec)
+    if spec.consumes >= 0 and not spec.takes_whole_scene and len(operation.inputs) > expected:
+        return Finding(
+            code="evaluate.too_many_inputs",
+            severity="error",
+            message=_("Die Operation erwartet eine andere Anzahl an Objekten."),
+            op_id=operation.id,
+            values={"op": operation.op, "expected": expected, "given": len(operation.inputs)},
+            suggestions=(CHANGE_SELECTION, CANCEL),
+        )
+    if len(operation.inputs) < expected:
         return Finding(
             code="evaluate.too_few_inputs",
             severity="error",
@@ -1868,7 +1885,7 @@ def _missing_inputs(
             values={
                 "op": operation.op,
                 # Englisch, wie jeder Schlüssel — hier standen zwei deutsche.
-                "expected": spec.consumes,
+                "expected": expected,
                 "given": len(operation.inputs),
             },
         )

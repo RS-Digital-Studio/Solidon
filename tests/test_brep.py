@@ -1519,3 +1519,68 @@ def test_a_radius_that_fits_the_wall_still_works(radius: float) -> None:
     assert turned.solid_count == 1, "ein Körper bleibt ein Körper"
     assert turned.volume < body.volume, "eine Verrundung an einer Außenkante nimmt Material weg"
     assert turned.volume > body.volume * 0.99, "aber nur wenig"
+
+
+def test_fillet_stops_if_the_wall_map_cannot_prove_a_safe_radius(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Messfehler darf den nativen Aufruf mit Absturzrisiko nicht freigeben."""
+    from app.core.perceive import maps
+
+    def unavailable(_mesh: Mesh) -> None:
+        raise RuntimeError("Messkern absichtlich nicht verfügbar")
+
+    monkeypatch.setattr(maps, "wall_thickness_map", unavailable)
+
+    with pytest.raises(GeometryError) as raised:
+        edit.fillet(block(), 1.0, "top")
+
+    assert raised.value.suggestions
+    assert "Wandstärke" in str(raised.value.detail)
+
+
+@pytest.mark.parametrize("values", [(), (math.nan, 0.0), (math.inf,)])
+def test_fillet_stops_if_the_wall_map_has_no_finite_measurement(
+    monkeypatch: pytest.MonkeyPatch,
+    values: tuple[float, ...],
+) -> None:
+    """Leere und unbrauchbare Karten dürfen keine unendliche Freigabe ergeben."""
+    from types import SimpleNamespace
+
+    from app.core.perceive import maps
+
+    monkeypatch.setattr(
+        maps,
+        "wall_thickness_map",
+        lambda _mesh: SimpleNamespace(values=values),
+    )
+
+    with pytest.raises(GeometryError) as raised:
+        edit.fillet(block(), 1.0, "top")
+
+    assert raised.value.suggestions
+    assert "Wandstärke" in str(raised.value.detail)
+
+
+def test_fillet_rejects_a_valid_shape_that_contains_two_solids() -> None:
+    """BRepCheck prüft Gültigkeit, aber nicht die zugesicherte Körperzahl."""
+    from types import SimpleNamespace
+
+    from OCP.BRepCheck import BRepCheck_Analyzer
+
+    source = block()
+    second = edit.moved(block(), (100.0, 0.0, 0.0))
+    compound = edit.boolean("union", [source, second])
+    assert compound.solid_count == 2
+    assert BRepCheck_Analyzer(compound.shape).IsValid(), "der Gegenbeweis muss gültig sein"
+
+    builder = SimpleNamespace(
+        Build=lambda: None,
+        IsDone=lambda: True,
+        Shape=lambda: compound.shape,
+    )
+
+    with pytest.raises(GeometryError) as raised:
+        edit._built(source, builder, "fillet", 1.0, 1)
+
+    assert raised.value.suggestions

@@ -11,6 +11,7 @@ from app.core.geom.transform import (
     anchor_point,
     apply,
     decompose_transform,
+    is_rigid,
     place_on_bed,
     rotation,
     scaling,
@@ -77,6 +78,21 @@ def test_scaling_multiplies_the_volume() -> None:
 def test_scaling_by_zero_is_refused() -> None:
     with pytest.raises(ValueError):
         scaling((1.0, 0.0, 1.0))
+
+
+def test_even_a_small_scale_is_not_classified_as_a_rigid_motion() -> None:
+    """Die relative Vorgabe von ``allclose`` ließ Maßstäbe bis 0,001 % durch.
+
+    Dann reichte ``moved_body`` sie an OpenCASCADE weiter und behauptete, der
+    Körper sei unter einer starren Bewegung exakt geblieben. Die Form hatte
+    sich aber geändert; nur echte Orthonormalität darf den B-Rep-Weg nehmen.
+    """
+    assert not is_rigid(scaling((1.000005, 1.0, 1.0)))
+
+
+def test_rotation_and_mirroring_are_rigid_motions() -> None:
+    assert is_rigid(rotation("z", 37.0))
+    assert is_rigid(scaling((-1.0, 1.0, 1.0)))
 
 
 def test_the_anchor_decides_what_stays_put() -> None:

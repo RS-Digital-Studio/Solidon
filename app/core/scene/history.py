@@ -35,7 +35,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.log import get_logger
-from app.core.registry import REGISTRY, VARIABLE, Registry
+from app.core.registry import REGISTRY, VARIABLE, Registry, needed_inputs
 from app.core.scene import bundling
 from app.core.types import (
     Document,
@@ -623,12 +623,14 @@ class History:
         # ``VARIABLE`` heißt: so viele, wie gewählt sind — die Booleschen
         # Operationen nehmen seit dem 06.09.2026 alle Körper auf einmal,
         # statt vier Laschen in vier Schritten anzuschweißen.
-        if spec.consumes > 0 and len(draft.inputs) != spec.consumes:
+        expected = needed_inputs(spec)
+        fixed = spec.consumes != VARIABLE and not spec.takes_whole_scene
+        if len(draft.inputs) < expected or (fixed and len(draft.inputs) != expected):
             raise ValidationError(
                 field="in",
                 detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),
                 constraint="consumes",
-                values={"op": draft.op, "expected": spec.consumes, "given": len(draft.inputs)},
+                values={"op": draft.op, "expected": expected, "given": len(draft.inputs)},
                 # Ohne eigene Vorschläge erbt die Ausnahme `(CORRECT_INPUT,
                 # CANCEL)` — und *Eingabe korrigieren* öffnete einen Dialog auf
                 # `field="in"`, also auf eine Zeile, die es nicht gibt.
@@ -878,9 +880,9 @@ class History:
         activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
         entry = self.operation(op_id)
         spec = self._spec_of(entry)
-        # Die Objekte am Ende des Stapels: genau das, was der Nutzer im
-        # Objektbaum vor sich hat, wenn er die Auswahl ändert.
-        known = self._known_objects()
+        # Entscheidend ist der Zustand vor diesem Schritt: Seine bisherigen
+        # Eingänge dürfen verbraucht sein, spätere Ausgänge existieren hier nicht.
+        known = self._known_objects(before=entry.id)
         missing = [name for name in inputs if name not in known]
         if missing:
             raise ValidationError(
@@ -891,12 +893,14 @@ class History:
                 values={"op": entry.op, "missing": missing},
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
-        if spec.consumes > 0 and len(inputs) != spec.consumes:
+        expected = needed_inputs(spec)
+        fixed = spec.consumes != VARIABLE and not spec.takes_whole_scene
+        if len(inputs) < expected or (fixed and len(inputs) != expected):
             raise ValidationError(
                 field="in",
                 detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),
                 constraint="consumes",
-                values={"op": entry.op, "expected": spec.consumes, "given": len(inputs)},
+                values={"op": entry.op, "expected": expected, "given": len(inputs)},
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
 
@@ -1296,8 +1300,8 @@ class History:
 
     # --- Bezeichner ------------------------------------------------------------
 
-    def _known_objects(self) -> set[ObjectId]:
-        """Die Objekte, die am Ende des Stapels noch leben.
+    def _known_objects(self, *, before: OpId | None = None) -> set[ObjectId]:
+        """Die Objekte am Stapelende oder unmittelbar vor einem Schritt.
 
         Nicht jede je vergebene Nummer: was eine Vereinigung oder ein
         Entfernen verbraucht und nicht wieder ausgibt, ist weg. Dieselbe
@@ -1308,6 +1312,8 @@ class History:
         """
         living: set[ObjectId] = set()
         for entry in self.operations:
+            if before is not None and entry.id >= before:
+                break
             living.difference_update(set(entry.inputs) - set(entry.outputs))
             living.update(entry.outputs)
         return living

@@ -29,11 +29,13 @@ statt ``approx``. Der übersetzte Weg ist der schnellere, nicht der genauere.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import trimesh
 
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.slice import analysis
 from app.core.slice.analysis import cross_section, cross_sections, slice_body
 
@@ -59,6 +61,8 @@ def without_compiled_core(monkeypatch: pytest.MonkeyPatch) -> None:
 #: 27,572151919908002. Ein Millionstel Toleranz wäre hier falsch — es hat
 #: genau den Fehler durchgelassen, für den es diese Datei gibt.
 _ULP = 1e-12
+
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 
 def _holes(shape: object) -> int:
@@ -193,6 +197,40 @@ def test_a_node_with_four_segments_is_not_split_into_two_false_nodes() -> None:
     points = np.zeros((len(nodes), 2, 2), dtype=np.float64)
 
     assert analysis._rings_from(points, nodes) is None
+
+
+def test_a_ring_through_a_vertex_uses_the_loose_segments() -> None:
+    """Eine Fläche mit einer auslaufenden Schwalbenschwanzkante bleibt erhalten.
+
+    Auf z = 9,5 trifft die Ebene die Spitze des angesetzten Keils. Dessen
+    Rand läuft auf derselben Linie vor und zurück; zusammen mit dem Quader
+    ist die topologisch verkettete Kontur deshalb selbstschneidend. Die losen
+    Segmente ergeben eindeutig den 40 × 20-mm-Querschnitt des Quaders.
+
+    Genau diese Schicht fehlte am ersten rechten Teil von CORE-31. Die nächste
+    sah dadurch wie eine Insel aus und machte aus 84,0 mm³ Stützraum 905,0.
+    """
+    mesh = read_mesh((MESHES / "dovetail_vertex_plane.ply").read_bytes(), ".ply")
+    assert mesh.is_watertight
+    assert mesh.component_count == 1
+
+    compiled_section = cross_section(mesh, 9.5)
+    compiled = slice_body(mesh, 1.0, detail="support")
+    saved = analysis._chain
+    try:
+        analysis._chain = None
+        geos_section = cross_section(mesh, 9.5)
+        geos = slice_body(mesh, 1.0, detail="support")
+    finally:
+        analysis._chain = saved
+
+    assert compiled_section is not None
+    assert geos_section is not None
+    assert geos_section.area == pytest.approx(800.0)
+    assert compiled_section.area == pytest.approx(geos_section.area)
+    assert [layer.z for layer in compiled.layers] == [layer.z for layer in geos.layers]
+    assert geos.support_volume == pytest.approx(84.0)
+    assert compiled.support_volume == pytest.approx(geos.support_volume)
 
 
 def test_the_cached_single_ring_is_the_public_contour_bit_for_bit() -> None:

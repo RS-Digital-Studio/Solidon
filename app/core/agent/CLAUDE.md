@@ -64,12 +64,19 @@ von **24 161 auf 19 641 Token**.
 
 **Die Bedingung dafür ist Wortgleichheit, nicht Namensgleichheit.** Ein
 Parameter, der in zwei Operationen dasselbe *heißt* und Verschiedenes
-*bedeutet*, verlöre seine Bedeutung — die sechs Platzierungsangaben werden
-deshalb nur dort gestrichen, wo **alle sechs beisammen** sind, und ein
+*bedeutet*, verlöre seine Bedeutung — die Platzierungsangaben werden
+deshalb nur dort gestrichen, wo **alle Felder aus `PART_PLACEMENT_PARAMS`
+beisammen** sind, und ein
 Werkzeug, das `x` aus eigenem Recht führt (verschieben, drehen), behält
 seinen Text. `tests/test_agent.py` prüft, dass jede dieser Angaben
 **irgendwo** erklärt wird, im Schema oder im Prompt — die Erklärung ist die
 Zusage, ihr Ort nicht.
+
+Zu den gemeinsamen Platzierungsfeldern gehören auch `nx`, `ny` und `nz`
+für die Oberflächennormale. Der Systemprompt erklärt ihre Bedeutung und
+den Rückfall auf `axis` bei drei Nullen. Jede Änderung dieses Texts erhöht
+`PROMPT_VERSION`, damit die gespeicherte Herkunft den tatsächlich benutzten
+Prompt benennt.
 
 ## Was der Prompt verspricht, müssen die Werkzeuge tragen
 

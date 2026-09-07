@@ -27,6 +27,7 @@ from app.core.registry.registry import (
     MENU_TWINS,
     REGISTRY,
     TWIN_TOGGLES,
+    VARIABLE,
     VARIANT_GROUPS,
     MenuSection,
     OperationSpec,
@@ -760,7 +761,9 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
                 lines.append(caveat_line(spec, markup=True))
                 lines.append("")
             facts = [
-                f"{_('Objekte')}: {spec.consumes} → {spec.produces}",
+                f"{_('Objekte')}: "
+                f"{f'≥ {spec.minimum_inputs}' if spec.consumes == VARIABLE else spec.consumes} → "
+                f"{'…' if spec.produces == VARIABLE else spec.produces}",
                 str(_("umkehrbar") if spec.reversible else _("nicht umkehrbar")),
                 str(_("deterministisch") if spec.deterministic else _("mit Startwert")),
             ]

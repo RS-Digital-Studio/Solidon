@@ -35,6 +35,11 @@ das Ergebnis beeinflusst, nur in der Sitzung leben; eine Rückfrage-Antwort
 kommt über `OpResult.answered` in den Stapel zurück, so wie es die
 Rückfallstufe tut.
 
+Auch beim nachträglichen Ändern von Operationseingängen gilt der Zustand
+unmittelbar vor diesem Schritt: bereits verbrauchte und erst später erzeugte
+Objekte sind keine zulässigen Eingänge. Verlauf und Auswertung prüfen dieselbe
+Eingangsanzahl aus dem Register, bevor Geometrie gerechnet wird.
+
 ## Die Karte
 
 **Das Dokument**

@@ -46,14 +46,29 @@ def run_op(
 ) -> OpResult:
     """Eine boolesche Operation über das Register fahren — mit Profil, damit
     ``without_effect`` an der Düse misst und nicht am Rechenepsilon."""
+    return run_many_op(op, ((first, first_slots), (second, second_slots)))
+
+
+def run_many_op(
+    op: str,
+    entries: tuple[tuple[MeshData, tuple[MaterialSlot, ...]], ...],
+) -> OpResult:
+    """Eine Boolesche mit ihrer wirklichen, variablen Eingangszahl fahren."""
     load_operations()
     spec = REGISTRY.get(op)
-    a = SceneObject(id="obj_1", name="A", mesh=first, material_slots=list(first_slots))
-    b = SceneObject(id="obj_2", name="B", mesh=second, material_slots=list(second_slots))
+    objects = [
+        SceneObject(
+            id=f"obj_{index}",
+            name=chr(ord("A") + index - 1),
+            mesh=mesh,
+            material_slots=list(slots),
+        )
+        for index, (mesh, slots) in enumerate(entries, start=1)
+    ]
     return spec.fn(
         OpContext(
-            scene=Scene(objects={"obj_1": a, "obj_2": b}, parameters={}),
-            inputs=[a, b],
+            scene=Scene(objects={entry.id: entry for entry in objects}, parameters={}),
+            inputs=objects,
             params=spec.params(),
             profile=profiles.make_profile(),
             quality="fine",
@@ -106,6 +121,32 @@ def test_union_keeps_the_filament_descriptions_of_both_bodies() -> None:
     output = result.outputs[0]
     assert used_slots(output.mesh) == (0, 1), "die Geometrie trägt beide Filamente"
     assert output.material_slots == [white, black], "Name und Farbe erklären beide Nummern"
+
+
+def test_union_keeps_the_filament_descriptions_of_every_selected_body() -> None:
+    """Variable Eingänge gelten auch für die Materialbeschreibung.
+
+    Die Geometrie trug den Slot des dritten Körpers bereits korrekt, aber die
+    Operation erklärte nur die ersten zwei Nummern. Ansicht und 3MF-Ausgabe
+    verloren dadurch Name, Farbe und Filamenttyp genau der Eingänge, für die
+    die Mehrfachauswahl neu eingeführt wurde.
+    """
+    red = MaterialSlot(index=0, name="PLA Rot", colour=(0.8, 0.05, 0.05))
+    green = MaterialSlot(index=1, name="PETG Grün", colour=(0.05, 0.7, 0.1))
+    blue = MaterialSlot(index=2, name="ASA Blau", colour=(0.05, 0.15, 0.8))
+
+    result = run_many_op(
+        "union_objects",
+        (
+            (with_slot(box(20.0, (0.0, 0.0, 0.0)), 0), (red,)),
+            (with_slot(box(20.0, (10.0, 0.0, 0.0)), 1), (green,)),
+            (with_slot(box(20.0, (-10.0, 0.0, 0.0)), 2), (blue,)),
+        ),
+    )
+
+    output = result.outputs[0]
+    assert used_slots(output.mesh) == (0, 1, 2), "die Geometrie trägt alle drei Filamente"
+    assert output.material_slots == [red, green, blue]
 
 
 def test_the_stage_that_worked_is_recorded() -> None:

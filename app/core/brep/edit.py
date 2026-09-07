@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.core.brep.kernel import Solid, boolean_builder, require
-from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
+from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, RETRY, GeometryError
 from app.core.log import get_logger
 from app.core.types import Transform, Vec3
 from app.core.units import EPS_GEOM, is_close
@@ -171,8 +171,16 @@ def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
     return _built(solid, builder, "chamfer", distance, len(chosen))
 
 
+def _wall_not_proven() -> GeometryError:
+    """Erzeugt die sichere Absage für eine unbelegte Wandmessung."""
+    return GeometryError(
+        detail=_("Die Wandstärke konnte für diese Kanten nicht sicher geprüft werden."),
+        suggestions=(RETRY, CANCEL),
+    )
+
+
 def _thinnest_wall(solid: Solid) -> float:
-    """Die dünnste Stelle des Körpers in Millimetern, oder ``inf``.
+    """Die dünnste belegte Stelle des Körpers in Millimetern.
 
     **Warum das vor einer Verrundung steht: ein Absturz.** An Roberts
     Filamenthalter, einem auf 3 mm ausgehöhlten Kasten, nahm ein Radius von
@@ -195,13 +203,17 @@ def _thinnest_wall(solid: Solid) -> float:
         values = [
             value
             for value in wall_thickness_map(as_mesh_data(solid)).values
-            if value == value and value > 0.0
+            if math.isfinite(value) and value > 0.0
         ]
+    except GeometryError:
+        raise
     except PROGRAMMING_ERRORS:
         raise
-    except Exception:  # eine Karte ist kein Versprechen
-        return math.inf
-    return min(values) if values else math.inf
+    except Exception as problem:  # ohne Messung ist der native Aufruf nicht sicher
+        raise _wall_not_proven() from problem
+    if not values:
+        raise _wall_not_proven()
+    return min(values)
 
 
 def _fits_the_wall(solid: Solid, size: float, edges: int, kind: str) -> None:
@@ -281,8 +293,19 @@ def _built(solid: Solid, builder: Any, kind: str, size: float, edges: int) -> So
             suggestions=(CORRECT_INPUT, CANCEL),
             values={"size_mm": round(size, 3), "edges": edges},
         )
+    outcome = solid.replacing(shape)
+    if (
+        outcome.solid_count != solid.solid_count
+        or not outcome.is_closed
+        or outcome.volume <= EPS_GEOM
+    ):
+        raise GeometryError(
+            detail=_too_large(kind),
+            suggestions=(CORRECT_INPUT, CANCEL),
+            values={"size_mm": round(size, 3), "edges": edges},
+        )
     _log.info("%s of %.2f mm on %d edge(s)", kind, size, edges)
-    return solid.replacing(shape)
+    return outcome
 
 
 def boolean(kind: Literal["union", "difference", "intersection"], parts: list[Solid]) -> Solid:

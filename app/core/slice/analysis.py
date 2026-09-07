@@ -752,8 +752,16 @@ def _polygon_with_contours(
                     closed = np.vstack((coordinates, coordinates[0]))
                     own = (Polygon(outline=tuple(map(tuple, closed.tolist())), holes=()),)
                 return shape, own
-        edges = shapely.linearrings(coordinates, indices=ring_of)
-    else:
+            # Eine Ebene genau durch eine Ecke kann einen Rand auf derselben
+            # Linie hinaus- und zurückführen. Nach Kantenidentität ist das ein
+            # geschlossener Ring, geometrisch aber eine Selbstberührung. Als
+            # schon verketteten ``LinearRing`` kann ``polygonize`` die Stelle
+            # nicht mehr auftrennen und liefert gar keine Fläche. Die losen
+            # Segmente sind dafür der ausdrücklich vorgesehene GEOS-Weg.
+            chained = None
+        if chained is not None:
+            edges = shapely.linearrings(coordinates, indices=ring_of)
+    if chained is None:
         rounded = np.round(points.reshape(-1, 2), 6)
         lengths = np.linalg.norm(rounded[1::2] - rounded[0::2], axis=1)
         usable = np.repeat(lengths > 0.0, 2)

@@ -628,11 +628,11 @@ def _material_slots_after_boolean(
 
     Die Flächennummern überträgt :func:`boolean`; Name, Farbe und Filamenttyp
     liegen jedoch am Szenenobjekt. Bei Vereinigung und Schnitt können Flächen
-    beider Eingaben übrig bleiben, bei der Differenz nur die des ersten
+    aller Eingaben übrig bleiben, bei der Differenz nur die des ersten
     Körpers. Treffen zwei Beschreibungen dieselbe Nummer, gewinnt deshalb der
     erste Körper — er ist auch der, dessen Name und Material fortbestehen.
     """
-    sources = ctx.inputs[:1] if kind == "difference" else ctx.inputs[:2]
+    sources = ctx.inputs[:1] if kind == "difference" else ctx.inputs
     known: dict[int, MaterialSlot] = {}
     for entry in sources:
         for slot in entry.material_slots:
@@ -642,14 +642,14 @@ def _material_slots_after_boolean(
 
 
 def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult:
-    """Zwei Körper hinein, einer heraus — mit der Rückfallkette dahinter (§17.2).
+    """Mindestens zwei Körper hinein, einer heraus — mit der Rückfallkette dahinter (§17.2).
 
     Zwei Auskünfte kommen dazu, die dem freien ``boolean`` fehlen, weil sie erst
     an der Operation Sinn ergeben (operationen.md, „Wer Boolesches rechnet,
     fragt danach"):
 
     - Eine **leere Schnittmenge** ist kein Kettenfehler, sondern eine Tatsache:
-      die zwei Körper treffen sich nicht. ``allow_empty`` hält die Kette davon
+      die gewählten Körper treffen sich nicht. ``allow_empty`` hält die Kette davon
       ab, das viermal bis zur Voxelstufe zu bestätigen, und der Grund wird
       genannt statt „das Werkzeug deckt ihn vollständig ab".
     - **Vereinigung und Differenz, die nichts bewirken**, sagen es über
@@ -686,7 +686,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
             raise GeometryError(
                 _("Die Körper haben keinen gemeinsamen Bereich."),
                 detail=_(
-                    "Die Schnittmenge ist leer — die beiden Körper überschneiden sich "
+                    "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich "
                     "nicht. Lage und Maße prüfen, damit sie sich treffen."
                 ),
                 suggestions=(CORRECT_INPUT, CANCEL),
@@ -757,8 +757,8 @@ def union_objects(ctx: OpContext) -> OpResult:
     # verkehrt herum 360 — und dazu kein Hinweis, nur ein Ergebnis, das den
     # Namen des Stifts trägt.
     doc=_(
-        "Zieht das zweite Objekt vom ersten ab. Zuerst das Teil anklicken, das "
-        "bleiben soll — dann das, was weggenommen wird."
+        "Zieht alle danach gewählten Objekte vom ersten ab. Zuerst das Teil "
+        "anklicken, das bleiben soll — dann alles, was weggenommen wird."
     ),
 )
 def subtract_objects(ctx: OpContext) -> OpResult:
@@ -779,8 +779,8 @@ def subtract_objects(ctx: OpContext) -> OpResult:
     # Schnitt selbst und in jedem Mengendiagramm dasselbe.
     shortcut="Ctrl+Shift+X",
     doc=_(
-        "Behält nur, was beide Objekte gemeinsam haben. Das zuerst angeklickte "
-        "bleibt mit seinem Namen und Material."
+        "Behält nur den Bereich, den alle gewählten Objekte gemeinsam haben. "
+        "Das zuerst angeklickte bleibt mit seinem Namen und Material."
     ),
 )
 def intersect_objects(ctx: OpContext) -> OpResult:

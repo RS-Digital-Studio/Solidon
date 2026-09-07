@@ -37,7 +37,9 @@ from app.core.knowledge import rules
 #: Gewohnheiten werden drei. Die Version steigt, obwohl der Prompt nur
 #: *kürzer* wird — eine Transaktion soll auch dann wissen, unter welchem Text
 #: sie entstand, wenn der Text etwas weniger sagt als vorher.
-PROMPT_VERSION = "4"
+#: Version 5 ergänzt die Oberflächennormale der Bausteinplatzierung. Auch
+#: diese Werkzeugkonvention gehört zur Herkunft eines Agentenvorschlags.
+PROMPT_VERSION = "5"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -83,7 +85,7 @@ Auf welche Objekte eine Operation wirkt, sagst du in ``objects`` — eine Liste
 von Kennungen aus dem Steckbrief, zum Beispiel ``obj_1``. Das gilt für jedes
 Werkzeug, das ein Objekt verbraucht, und wird dort nicht noch einmal erklärt.
 
-Jeder Baustein sitzt an einer Stelle, und die sechs Angaben dafür heißen
+Jeder Baustein sitzt an einer Stelle, und die Angaben dafür heißen
 überall gleich: ``x`` ist die Position im Koordinatensystem des Objekts, ``y``
 die zweite Achse dazu, ``z`` die Höhe über seiner Grundfläche. ``axis`` ist
 die Richtung, in die der Baustein zeigt — solange kein Merkmal gewählt ist.

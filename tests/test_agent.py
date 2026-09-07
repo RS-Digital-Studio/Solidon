@@ -246,6 +246,18 @@ def test_an_operation_tool_asks_which_objects() -> None:
     assert tools.OBJECTS_FIELD in schema["input_schema"]["required"]
 
 
+@pytest.mark.parametrize("compact", [False, True])
+def test_object_counts_reach_the_agent_schema(compact: bool) -> None:
+    """Variable und feste Eingänge tragen denselben Vertrag wie der Verlauf."""
+    schemas = {entry["name"]: entry for entry in tools.operation_tools(compact=compact)}
+    fixed = schemas["drill_hole"]["input_schema"]["properties"][tools.OBJECTS_FIELD]
+    assert fixed["minItems"] == fixed["maxItems"] == 1
+    for name in ("union_objects", "subtract_objects", "intersect_objects"):
+        variable = schemas[name]["input_schema"]["properties"][tools.OBJECTS_FIELD]
+        assert variable["minItems"] == 2
+        assert "maxItems" not in variable
+
+
 def test_a_tool_without_inputs_asks_for_none() -> None:
     schema = next(entry for entry in tools.operation_tools() if entry["name"] == "load")
 

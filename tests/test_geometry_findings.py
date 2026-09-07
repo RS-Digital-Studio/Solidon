@@ -22,7 +22,7 @@ import pytest
 import trimesh
 
 from app.core.bootstrap import load_operations
-from app.core.errors import ValidationError
+from app.core.errors import CHANGE_SELECTION, ValidationError
 from app.core.geom.boolean import _plausible
 from app.core.geom.hollow import hollow
 from app.core.geom.measure import angle_between
@@ -607,11 +607,16 @@ def test_a_union_of_one_body_says_what_is_missing() -> None:
         "Quader",
         [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
     )
-    history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1",))])
+    with pytest.raises(ValidationError) as caught:
+        history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1",))])
+
+    assert caught.value.values["expected"] == 2
+    assert caught.value.values["given"] == 1
+    assert CHANGE_SELECTION in caught.value.suggestions
+    assert len(history.operations) == 1, "die ungültige Vereinigung gelangt nicht in den Verlauf"
     result = evaluate(
         document, make_profile("centauri-carbon-2", "pla"), sources=ProjectSources(project)
     )
 
-    assert result.stopped_at is not None
-    blamed = [f for f in result.scene.report.findings if f.op_id == result.stopped_at]
-    assert blamed and "zwei Objekte" in str(blamed[-1].message) + str(blamed[-1].values)
+    assert result.complete
+    assert tuple(result.scene.objects) == ("obj_1",)
