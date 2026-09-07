@@ -381,6 +381,13 @@ mit CI-Lauf, nicht vor einem Paket (Entscheidung 02.09. bleibt).
 
 ## §5 Was Robert entscheidet
 
+**Wie viele es sind, sagt das Register und nicht dieser Abschnitt.** Hier
+standen vier Punkte, die Kopfzeile im Index sprach von drei, und das Register
+führte eine — drei Zahlen für dieselbe Sache, alle drei am 07.09.2026
+geschrieben. Das ist der Fehler dieses Konzepts in seiner eigenen Währung.
+Die Liste unten bleibt als **Inhalt** der Fragen; ob eine noch offen ist,
+steht im Register von `ROADMAP.md`.
+
 1. **E — das Werkzeug:** `tools/twin_scan.py` mit Selbsttest, oder Wegwerf-
    Skript unter `.claude/.state/` wie bisher. Empfehlung: `tools/`, weil drei
    Durchsichten es neu gebaut haben und die vierte es wieder täte.

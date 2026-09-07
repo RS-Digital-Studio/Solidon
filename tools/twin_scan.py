@@ -2,6 +2,7 @@
 
     .venv\\Scripts\\python.exe tools/twin_scan.py app
     .venv\\Scripts\\python.exe tools/twin_scan.py tests --frage 2 --frage 7
+    .venv\\Scripts\\python.exe tools/twin_scan.py app --similarity 0.7
     .venv\\Scripts\\python.exe tools/twin_scan.py app > funde.txt
 
 **Wofür das da ist.** Eine Auskunft, die an mehr als einer Stelle hergeleitet
@@ -436,8 +437,8 @@ def report_literals(trees: dict[Path, ast.Module], least: int) -> None:
     print(f"Literale: {len(multi)}")
     for literal, places in sorted(multi.items(), key=lambda pair: -len(pair[1])):
         counted = Counter(places)
-        wo = ", ".join(f"{file}({count})" for file, count in counted.most_common())
-        print(f"  {literal!r} x{len(places)} in {len(counted)} Dateien: {wo}")
+        where = ", ".join(f"{file}({count})" for file, count in counted.most_common())
+        print(f"  {literal!r} x{len(places)} in {len(counted)} Dateien: {where}")
 
 
 def report_confessions(files: list[Path]) -> None:
@@ -484,7 +485,7 @@ def main(argv: list[str] | None = None) -> int:
         help="nur diese Frage stellen (mehrfach möglich); ohne Angabe alle sieben",
     )
     parser.add_argument("--anweisungen", type=int, default=3, help="Mindestgröße für Frage 2")
-    parser.add_argument("--aehnlichkeit", type=float, default=0.55, help="Schwelle für Frage 4")
+    parser.add_argument("--similarity", type=float, default=0.55, help="Schwelle für Frage 4")
     arguments = parser.parse_args(argv)
 
     tree = arguments.tree if arguments.tree.is_absolute() else ROOT / arguments.tree
@@ -498,7 +499,17 @@ def main(argv: list[str] | None = None) -> int:
     entries = functions(trees)
     lines = sum(len(path.read_text(encoding="utf-8").splitlines()) for path in trees)
     print(f"# Zwillingsmessung über {relative(tree)}")
-    print(f"{len(trees)} Dateien, {lines} Zeilen, {len(entries)} Funktionen")
+    # **Gelesen gegen geparst, und nicht nur geparst.** Die Zahl unten hieß
+    # zuerst „50 Dateien", wo es „50 von 60" heißen musste: Eine Datei mit
+    # Syntaxfehler fällt aus ``parsed`` heraus, ihre Meldung steht auf stderr
+    # und geht in tausend Ausgabezeilen unter. Eine Grundmenge, die still
+    # schrumpft, ist genau der Fehler, gegen den die Mindestzählung steht
+    # (Befund solidon-e8, 07.09.2026).
+    fehlend = len(files) - len(trees)
+    gelesen = f"{len(trees)} von {len(files)} Dateien" if fehlend else f"{len(trees)} Dateien"
+    print(f"{gelesen}, {lines} Zeilen, {len(entries)} Funktionen")
+    if fehlend:
+        print(f"!! {fehlend} Datei(en) ließen sich nicht lesen — siehe stderr")
     if len(entries) < FLOOR:
         print(
             f"\nNur {len(entries)} Funktionen gelesen — das ist keine Messung. Stimmt der Pfad?",
@@ -514,7 +525,7 @@ def main(argv: list[str] | None = None) -> int:
     if 3 in wanted:
         report_structural(entries, arguments.anweisungen + 2)
     if 4 in wanted:
-        report_near(entries, arguments.anweisungen + 2, arguments.aehnlichkeit)
+        report_near(entries, arguments.anweisungen + 2, arguments.similarity)
     if 5 in wanted:
         report_literals(trees, 3)
     if 6 in wanted:
