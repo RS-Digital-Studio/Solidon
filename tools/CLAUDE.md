@@ -21,6 +21,13 @@ liest nach; `make_download.py` trägt die Paketgrößen ein, und
 gegen `version.json`. Eine getippte Zahl auf der Website ist ein Fehler, der
 auf sein Datum wartet.
 
+**Und was hier sucht, sucht zuerst einen Fall, dessen Ausgang bekannt ist.**
+`twin_scan.py` hat seinen Selbsttest (`tests/test_twin_scan.py`), und der hat
+sich am ersten Tag bezahlt: Die Mindestgröße stand auf vier Anweisungen, und
+der Zwilling, für den das Werkzeug gebaut wurde, besteht aus drei. Ein
+Suchwerkzeug, das zu wenig findet, **schweigt** — und Schweigen sieht aus wie
+ein sauberes Ergebnis.
+
 ## Die Familien
 
 **Umgebung und Sitzung**
@@ -64,6 +71,12 @@ Vorratsschlüssel zuordnen, Käufer im externen Schlüsselarchiv finden,
 Serverzustand lesen und Geräteplätze verwalten) ·
 `qt_trace.py` (pytest-Erweiterung für die Jagd auf den Abriss beim Aufräumen) ·
 `list_windowed_tests.py` (Fensterdateien aus Pytests aufgelöstem Fixture-Graphen) ·
+`twin_scan.py` (doppelte Stellen und Zwillinge in einem Baum: sieben Fragen von
+Konstanten über wortgleiche und strukturgleiche Körper bis zu Kommentaren, die
+eine Kopie zugeben — **welche Klasse ein Fund hat, entscheidet der Code**, die
+vier Klassen stehen in `konzepte/konzept-zwillinge-2026-09.md`; es steht
+ausdrücklich **nicht** im Tor, dort halten `tests/test_shared_constants.py` die
+Konstanten) ·
 `affected_tests.py` (welche Testdateien eine Änderung berührt — aus dem
 Importgraphen über `app/`, `tools/` und `tests/`, dazu die Baumleser und die
 Tests, die eine geänderte Textdatei beim Namen nennen; `--why`, `--split`,
