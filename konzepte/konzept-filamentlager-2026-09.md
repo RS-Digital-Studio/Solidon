@@ -8,6 +8,11 @@
 > anlegen und bearbeiten kann. Außerdem sollen diese Filamente dann in einer
 > Schnellauswahl in den Projekten immer vorhanden sein."
 >
+> **Nachtrag Robert am selben Tag:** „Die Menge an Material bei einem Druck
+> soll auch abgezogen werden bzw. nachgefragt werden, wenn wir auf slicen
+> klicken, im Slicer öffnen oder die 3MF-Datei erstellen." Das ändert §8 —
+> dort stand vorher, Solidon solle gar nicht buchen.
+>
 > Nichts davon ist gebaut. Die Hälfte davon liegt aber schon da, und das ist
 > der Grund, warum dieses Konzept mit dem Bestand anfängt und nicht mit dem
 > Entwurf.
@@ -92,6 +97,7 @@ alter Katalog unverändert öffnet.
 | `opened_on`, `bought_on` | Daten, für die Trockenfrage | leer |
 | `price` | Anschaffungspreis **der Spule**, nicht je Kilo — man kauft Spulen | leer |
 | `note` | alles, was sonst nirgends passt | leer |
+| `bookings` | Verlauf der Abzüge: Zeitpunkt, Menge, Projekt, Herkunft der Zahl, Projektstand | leer |
 
 **`density` kommt nicht dazu.** Sie steht in den Druckeinstellungen
 (`settings.filament.density`), und zwei Wahrheiten über dieselbe Zahl sind eine
@@ -204,25 +210,70 @@ sie ersetzen soll (Regel 17, Regel 21).
 
 ---
 
-## 8. Der Anschluss an den Verbrauch — und wo er ehrlich aufhört
+## 8. Der Abzug: wann gefragt wird, und mit welcher Zahl
 
-`Estimate.grams` liefert den Materialbedarf eines Drucks. Damit kann das Lager
-zwei Sätze sagen, die es sonst nicht gäbe:
+**Entschieden (Robert, 08.09.2026): Der Verbrauch wird abgezogen, und gefragt
+wird an dem Punkt, an dem das Material den Rechner verlässt.** Vier Stellen
+gibt es dafür, und sie sind im Code schon benannt:
 
-- vor der Übergabe an den Slicer: „Dieser Druck braucht 42 g PETG Rot. Auf der
-  angebrochenen Spule sind noch 240 g."
-- im Regal: „Für dieses Projekt reicht keine deiner PLA-Spulen einzeln."
+| Auslöser | Wo | Welche Zahl |
+|---|---|---|
+| *Slicen* | `print_settings_dialog.py` | **aus dem G-Code**, je Extruder |
+| *Im Slicer öffnen …* | `print_settings_dialog.py` | Schätzung |
+| *An den Slicer übergeben …* | `panels.py` | Schätzung |
+| *Exportieren …* als 3MF | `main_window.py`, Strg+E | Schätzung |
 
-**Was Solidon nicht darf: den Verbrauch selbst abbuchen.** Solidon druckt
-nicht. Es weiß nicht, ob der Druck lief, ob er abbrach, ob nachträglich
-zweimal gedruckt wurde. Ein Bestand, der sich stillschweigend selbst verstellt,
-ist nach zwei Wochen falsch — und ein falscher Bestand ist schlechter als
-keiner, weil man ihm glaubt.
+Die dritte Zeile stand nicht in Roberts Aufzählung und gehört dazu: Sie ist
+derselbe Vorgang wie *Im Slicer öffnen*, nur von der Auswahlkarte aus
+angestoßen. Zwei Wege in dieselbe Handlung, von denen einer bucht und der
+andere nicht, wären ein Fehler, den niemand erklären kann.
 
-**Also: ein Knopf.** Nach der Slicer-Übergabe erscheint in der Statuszeile
-„42 g von PETG Rot abziehen?" mit einer Handlung. Wer ihn nie drückt, hat ein
-Lager ohne Bestandsführung — und das ist ein gültiger Zustand, kein Defekt. Die
-Restmenge trägt in der Oberfläche immer das Wort „geschätzt".
+**Die Zahl trägt ihre Herkunft, und die beiden werden nie vermischt**
+(Regel 14, Bauplan §22.5). Nach dem Slicen liegt eine Druckdatei vor, und
+`slice/gcode.py` liest daraus `filament used [g]` — je Extruder einzeln. Das
+ist der wahre Wert und wird als solcher gebucht. Die drei anderen Wege haben
+nur `Estimate.grams`; dort steht „geschätzt" an der Buchung, im Regal und im
+Verlauf. Wer später sieht, dass 42 g geschätzt und 47 g gemessen waren, weiß
+warum.
+
+**Gefragt wird nach dem Vorgang, nicht davor** (Regel 19). Kein modaler Dialog
+schiebt sich vor den Export — die Handlung läuft, und danach steht in der
+Statuszeile eine Leiste: „47 g PETG Rot und 6 g PLA Weiß abziehen?" mit
+*Abziehen*, *Andere Spule …* und *Nicht buchen*. Sie verschwindet von selbst,
+wenn niemand sie beachtet; ein nicht gebuchter Druck ist ein gültiger Zustand,
+kein Defekt.
+
+**Drei Fälle, die dieses Feature falsch machen kann, und ihre Antworten:**
+
+*Doppelt buchen.* Wer erst *Im Slicer öffnen* klickt und dann *Slicen*, hat
+einmal gedruckt und würde zweimal abziehen. Deshalb hängt die Frage nicht am
+Klick, sondern am **Ergebnis**: Solidon vermerkt zur Buchung, für welchen
+Projektstand sie galt. Derselbe unveränderte Stand fragt nicht noch einmal,
+sondern sagt „am 8.9. um 14:12 schon gebucht" und bietet das erneute Buchen an
+— für den, der wirklich ein zweites Mal druckt. Nach der geschätzten Buchung
+korrigiert der echte G-Code-Wert die vorhandene Buchung, statt eine zweite
+anzulegen.
+
+*Die falsche Spule.* Liegen zwei Spulen derselben Sorte im Regal,
+schlägt die Leiste die **angebrochene mit dem kleinsten ausreichenden Rest**
+vor — sonst wandert der Verbrauch auf die volle und die Reste sterben nie.
+*Andere Spule …* öffnet die Wahl. Ist die Farbe im Lager gar nicht vorhanden,
+wird nicht gebucht, sondern angeboten, sie anzulegen.
+
+*Es reicht nicht.* Wenn der Rest kleiner ist als der Bedarf, sagt das die
+Leiste **vor** dem Buchen und im Druckeinstellungs-Dialog schon vorher — als
+Hinweis, nie als Sperre. Wer weiß, dass seine Spule mehr trägt, als das Lager
+glaubt, hat recht und nicht das Lager.
+
+**Jede Buchung ist rücknehmbar**, und dafür führt jede Spule einen kurzen
+Verlauf: Zeitpunkt, Menge, Projektname, Herkunft der Zahl. Er beantwortet die
+Frage, die sonst niemand beantworten kann — wo ist das Material geblieben —
+und macht einen Fehlabzug in einem Klick rückgängig.
+
+**Eine Einstellung mit drei Werten**, Vorgabe die mittlere: *nie buchen*,
+*fragen*, *ohne Rückfrage buchen*. Wer den dritten Wert wählt, hat den Abzug
+ausdrücklich verlangt — und nur dann verstellt sich der Bestand ohne
+Zutun.
 
 ---
 
@@ -253,8 +304,9 @@ Keine Anbindung an einen Shop, keine Preisabfrage im Netz, kein Konto, keine
 Synchronisierung zwischen Rechnern — Solidon bleibt ohne Netz vollständig
 nutzbar. Keine Fremdabhängigkeit an eine bestehende Lagerverwaltung. Kein
 Barcode- oder NFC-Zwang, keine Waagenanbindung, kein Trocknungstimer mit
-Sensorik. Kein automatischer Abzug (§8). Und keine zweite Formsprache: Das
-Regal sieht aus wie der Rest der Anwendung.
+Sensorik. **Kein Abzug ohne Zutun** — gebucht wird auf Antwort, und ohne
+Rückfrage nur, wer das ausdrücklich einstellt (§8). Und keine zweite
+Formsprache: Das Regal sieht aus wie der Rest der Anwendung.
 
 ---
 
@@ -266,10 +318,12 @@ Regal sieht aus wie der Rest der Anwendung.
 | 2 | Regalansicht mit Spulenzeichnung, Suche, Gruppierung; Einstieg von der Startseite und aus dem Menü | groß, aber ohne Kernrisiko |
 | 3 | Bestandsfelder im vorhandenen Dialog, „Noch eine davon", Mehrfachübernahme aus dem Slicer | klein |
 | 4 | Schnellauswahl in der Auswahl-Karte, Achtergrenze als Frage | mittel |
-| 5 | Verbrauchsanschluss: Vorschau vor der Übergabe, Abbuchen auf Knopfdruck | klein |
+| 5 | Der Abzug an allen vier Auslösern: Leiste nach dem Vorgang, Buchung mit Herkunft, Verlauf je Spule, Rücknahme, die drei Einstellungswerte | mittel |
 
 Die Schritte 1 bis 3 stehen für sich: Danach hat das Lager seinen Ort, sein
-Bild und seinen Inhalt, auch wenn 4 und 5 nie kämen.
+Bild und seinen Inhalt, auch wenn 4 und 5 nie kämen. Schritt 5 ist der, an dem
+die Sorgfalt sitzt — nicht in der Rechnung, sondern in der Frage, wann **nicht**
+gebucht wird.
 
 ---
 
@@ -289,6 +343,14 @@ Bild und seinen Inhalt, auch wenn 4 und 5 nie kämen.
    nennt seine Grenze und bietet den Tausch an.
 6. Alle Texte liegen in allen sechs Katalogen; `test_translations` ist grün.
 7. Das Lager öffnet auf einem Rechner ohne funktionierende 3D-Ansicht.
+8. Jeder der vier Auslöser aus §8 bietet den Abzug an, keiner bucht von selbst
+   (außer bei ausdrücklich gewählter Einstellung), und kein modaler Dialog
+   steht vor dem Export.
+9. *Im Slicer öffnen* und danach *Slicen* auf demselben Stand erzeugen **eine**
+   Buchung, und die zweite Zahl korrigiert die erste, statt sie zu addieren.
+10. An jeder Buchung steht, ob ihre Zahl gemessen oder geschätzt ist; beide
+    werden nirgends zu einer Summe vermischt (Regel 14).
+11. Eine Buchung lässt sich aus dem Verlauf der Spule zurücknehmen.
 
 ---
 
