@@ -18,6 +18,7 @@ Heuristik.
 
 from __future__ import annotations
 
+import configparser
 import json
 import os
 import re
@@ -26,6 +27,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal
+from xml.etree import ElementTree as ET
 
 from app.core import discover
 from app.core.export.slicer_keys import (
@@ -447,6 +449,211 @@ def _strings(value: Any) -> list[str]:
     return [str(value)] if isinstance(value, str) else []
 
 
+#: Curas Ordner und was darin liegt.
+#:
+#: **Der Bestand ist da, er liegt nur woanders und anders.** Die Orca-Familie
+#: legt alles als JSON unter ``machine``/``process``/``filament`` ab; Cura
+#: benennt seine Ordner anders und benutzt drei Formate — JSON für Drucker,
+#: INI für Qualität, XML für Material. Die gemeinsame Suche fand deshalb
+#: nichts: gemessen am 08.09.2026 an Cura 5.13 null Profile, während 615
+#: Drucker, 281 Materialien und 6010 Qualitätsprofile danebenlagen.
+_CURA_DIRS: Final[dict[str, tuple[ProfileKind, str]]] = {
+    "definitions": ("machine", "*.def.json"),
+    "quality": ("process", "*.inst.cfg"),
+    "materials": ("filament", "*.xml.fdm_material"),
+}
+
+#: Der Namensraum, in dem eine Materialdatei ihre Felder trägt.
+_CURA_MATERIAL_NS: Final = {"m": "http://www.ultimaker.com/material"}
+
+#: Ein Farbname, der keine Farbe meint. Cura schreibt ihn, wo die Spule keine
+#: eigene hat; im Namen sähe er aus wie eine Sorte („PLA Generic").
+_CURA_UNSPECIFIC_COLOUR: Final = "generic"
+
+#: Was im Qualitätsordner wirklich ein Prozessprofil ist. Daneben liegen dort
+#: ``intent``-Dateien — Absichten wie „technisch" oder „optisch", die auf einem
+#: Prozessprofil aufsetzen und ohne es nichts bedeuten.
+_CURA_PROCESS_TYPES: Final = frozenset({"quality", "quality_changes"})
+
+
+def _cura_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[SlicerProfile]:
+    """Curas Bestand, aus seinen eigenen Ordnern und Formaten.
+
+    Gelesen werden die mitgelieferten Profile der Installation. Was der Nutzer
+    sich in Curas Fenster selbst angelegt hat, liegt in seinem
+    Einstellungsordner und bleibt vorerst draußen — dafür müsste
+    :func:`user_roots` Cura kennen, und das ist eine eigene Entscheidung
+    (§29: eine falsche Vorauswahl sieht aus wie eine getroffene).
+    """
+    root = install_root(executable)
+    if root is None:
+        return []
+    base = _cura_resources(root)
+    found: list[SlicerProfile] = []
+    count = 0
+    for folder, (kind, pattern) in _CURA_DIRS.items():
+        if kind not in wanted:
+            continue
+        for path in sorted((base / folder).rglob(pattern)):
+            count += 1
+            if count > MAX_FILES:
+                _log.warning("stopped after %d Cura profile files below %s", MAX_FILES, root)
+                return found
+            profile = _read_cura(path, kind)
+            if profile is not None:
+                found.append(profile)
+    _log.info("found %d Cura profiles", len(found))
+    return found
+
+
+def _cura_resources(root: Path) -> Path:
+    """Wo Curas Bestand unter der Installationswurzel liegt.
+
+    :func:`install_root` endet bei Cura auf ``share/cura``, die Ordner selbst
+    liegen eine Ebene tiefer unter ``resources``. Beide Formen werden geprüft,
+    damit eine andere Ablage — Linux-Paket, AppImage — nicht am Zwischenstück
+    scheitert; gefragt wird über ``discover``, weil ``is_dir()`` aus einem
+    Flatpak heraus auf einen Host-Pfad zuverlässig nein sagt.
+    """
+    candidate = root / "resources"
+    return candidate if discover.is_dir_on_host(candidate) else root
+
+
+def _read_cura(path: Path, kind: ProfileKind) -> SlicerProfile | None:
+    """Ein Cura-Profil aus seiner Datei — je Art ein anderes Format.
+
+    Wie beim Orca-Leser gilt: Was sich nicht lesen lässt, fehlt einfach. Eine
+    beschädigte Datei im Bestand eines fremden Programms ist ein Eintrag
+    weniger und kein Grund, die Auswahl scheitern zu lassen.
+    """
+    if kind == "machine":
+        return _read_cura_machine(path)
+    if kind == "process":
+        return _read_cura_process(path)
+    return _read_cura_material(path)
+
+
+def _read_cura_machine(path: Path) -> SlicerProfile | None:
+    """Ein Drucker aus ``<name>.def.json``.
+
+    ``metadata.visible`` ist Curas Gegenstück zu ``instantiation``: Damit
+    trennt es die 615 wählbaren Drucker von den Zwischenstücken der Erbkette
+    (``fdmprinter``, ``ultimaker``). Fehlt die Angabe, erbt Cura sie — hier
+    zählt das als sichtbar, weil ein fälschlich angebotener Drucker
+    verschmerzbar ist und ein fehlender nicht.
+
+    **Die Düse steht meist nicht darin**, sondern eine Ebene höher in der
+    Erbkette. Sie wird gelesen, wo sie steht, und bleibt sonst null — die
+    Kette aufzulösen hieße, Cura nachzubauen.
+    """
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as problem:
+        _log.debug("skipping Cura definition %s: %s", path.name, problem)
+        return None
+    if not isinstance(loaded, dict):
+        return None
+    metadata = loaded.get("metadata")
+    if isinstance(metadata, Mapping) and metadata.get("visible") is False:
+        return None
+    overrides = loaded.get("overrides")
+    nozzle = 0.0
+    if isinstance(overrides, Mapping):
+        size = overrides.get("machine_nozzle_size")
+        if isinstance(size, Mapping):
+            nozzle = _first_number(size.get("default_value"))
+    return SlicerProfile(
+        path=path,
+        name=str(loaded.get("name", path.stem)),
+        kind="machine",
+        # Curas Kennung des Druckers, nicht sein Anzeigename: Genau darauf
+        # zeigt ``definition`` in jedem Qualitätsprofil, und darüber hängen
+        # die beiden zusammen.
+        printer_model=_cura_definition_id(path),
+        nozzle=nozzle,
+        inherits=str(loaded.get("inherits", "")),
+    )
+
+
+def _read_cura_process(path: Path) -> SlicerProfile | None:
+    """Ein Qualitätsprofil aus ``*.inst.cfg`` — eine INI-Datei.
+
+    Die Bindung an den Drucker steht in ``[general] definition`` und ist
+    Curas Gegenstück zu ``compatible_printers``: ein Wert statt einer Liste,
+    aber dieselbe Auskunft.
+    """
+    parsed = _read_cura_ini(path)
+    if parsed is None:
+        return None
+    general = parsed["general"] if parsed.has_section("general") else {}
+    metadata = parsed["metadata"] if parsed.has_section("metadata") else {}
+    if str(metadata.get("type", "")).strip() not in _CURA_PROCESS_TYPES:
+        return None
+    definition = str(general.get("definition", "")).strip()
+    return SlicerProfile(
+        path=path,
+        name=str(general.get("name", path.stem)),
+        kind="process",
+        compatible_printers=(definition,) if definition else (),
+    )
+
+
+def _read_cura_ini(path: Path) -> configparser.ConfigParser | None:
+    """Eine Cura-INI, ohne dass ein ``%`` darin zum Fehler wird.
+
+    ``interpolation=None``, weil Prozentzeichen in Werten stehen dürfen und
+    ConfigParser sie sonst als Platzhalter liest.
+    """
+    parsed = configparser.ConfigParser(interpolation=None)
+    try:
+        parsed.read(path, encoding="utf-8")
+    except (OSError, configparser.Error) as problem:
+        _log.debug("skipping Cura profile %s: %s", path.name, problem)
+        return None
+    return parsed
+
+
+def _read_cura_material(path: Path) -> SlicerProfile | None:
+    """Eine Spule aus ``*.xml.fdm_material``.
+
+    Diese Dateien tragen genau die Felder, die ein Filament in Solidon
+    ausmachen: Marke, Materialart, Farbname und Farbwert. Der Name wird daraus
+    zusammengesetzt, wie Cura ihn auch anzeigt — „Best Filament PETG Orange" —,
+    und ein Farbname, der keine Farbe meint, bleibt weg.
+    """
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError) as problem:
+        _log.debug("skipping Cura material %s: %s", path.name, problem)
+        return None
+    name = root.find("m:metadata/m:name", _CURA_MATERIAL_NS)
+    if name is None:
+        return None
+    brand = (name.findtext("m:brand", "", _CURA_MATERIAL_NS) or "").strip()
+    material = (name.findtext("m:material", "", _CURA_MATERIAL_NS) or "").strip()
+    colour = (name.findtext("m:color", "", _CURA_MATERIAL_NS) or "").strip()
+    if colour.casefold() == _CURA_UNSPECIFIC_COLOUR:
+        colour = ""
+    title = " ".join(part for part in (brand, material, colour) if part)
+    if not title:
+        return None
+    return SlicerProfile(
+        path=path,
+        name=title,
+        kind="filament",
+        filament_type=material,
+    )
+
+
+def _cura_definition_id(path: Path) -> str:
+    """Aus ``abax_pri3.def.json`` wird ``abax_pri3``.
+
+    ``Path.stem`` allein reicht nicht: Es bleibt ``abax_pri3.def`` stehen, und
+    unter diesem Namen findet kein Qualitätsprofil seinen Drucker.
+    """
+    return path.stem.removesuffix(".def")
+
+
 def _kind_of(path: Path, root: Path) -> ProfileKind | None:
     """Maschine oder Prozess — abgelesen am Ordner, in dem die Datei liegt.
 
@@ -486,6 +693,10 @@ def find_profiles(
     if not has_readable_profiles(flavour):
         return []
     wanted = frozenset(kinds)
+    if flavour == "cura":
+        # Eigene Ordnernamen, drei Formate: die Suche darunter findet dort
+        # nichts (:data:`_CURA_DIRS`).
+        return _cura_profiles(executable, wanted)
 
     found: list[SlicerProfile] = []
     seen: set[str] = set()

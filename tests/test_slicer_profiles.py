@@ -805,3 +805,151 @@ def test_a_versioned_appimage_still_finds_its_user_profiles(
 
     assert sp.user_roots("orca", executable) == [account]
     assert sp.user_roots("orca", tmp_path / "BambuStudio_ubuntu-24.04_v01.09.AppImage") == []
+
+
+# --- Cura: eigene Ordnernamen, drei Formate ----------------------------------------
+
+
+@pytest.fixture
+def cura_bestand(tmp_path: Path) -> Path:
+    """Ein Bestand, wie Cura ihn ausliefert.
+
+    Drei Formate nebeneinander — Drucker als JSON, Qualität als INI, Material
+    als XML — und die Ordner heissen anders als bei der Orca-Familie. Genau
+    daran fand die gemeinsame Suche bis zum 08.09.2026 nichts.
+    """
+    root = tmp_path / "share" / "cura" / "resources"
+
+    _write(
+        root / "definitions" / "abax_pri3.def.json",
+        {
+            "version": 2,
+            "name": "Abax PRi3",
+            "inherits": "fdmprinter",
+            "metadata": {"visible": True, "manufacturer": "Abax 3D Technologies"},
+            "overrides": {"machine_nozzle_size": {"default_value": 0.4}},
+        },
+    )
+    # Die Wurzel der Erbkette: im Slicer nicht wählbar, hier ebenso wenig.
+    _write(
+        root / "definitions" / "fdmprinter.def.json",
+        {"version": 2, "name": "FDM Drucker", "metadata": {"visible": False}},
+    )
+    # Ohne Angabe erbt Cura die Sichtbarkeit; ein fälschlich angebotener
+    # Drucker ist verschmerzbar, ein fehlender nicht.
+    _write(
+        root / "definitions" / "ohne_angabe.def.json",
+        {"version": 2, "name": "Gerät ohne Angabe", "metadata": {"manufacturer": "Wer auch immer"}},
+    )
+
+    quality = root / "quality" / "abax_pri3"
+    quality.mkdir(parents=True, exist_ok=True)
+    (quality / "apri3_pla_fast.inst.cfg").write_text(
+        "[general]\ndefinition = abax_pri3\nname = Fine\nversion = 4\n\n"
+        "[metadata]\nmaterial = generic_pla\nquality_type = normal\ntype = quality\n\n"
+        "[values]\nlayer_height = 0.1\nspeed_print = 60\n",
+        encoding="utf-8",
+    )
+    # Eine Absicht ist kein Prozessprofil: sie setzt auf einem auf.
+    (quality / "apri3_engineering.inst.cfg").write_text(
+        "[general]\ndefinition = abax_pri3\nname = Technisch\nversion = 4\n\n"
+        "[metadata]\nintent_category = engineering\ntype = intent\n\n"
+        "[values]\nwall_thickness = 1.2\n",
+        encoding="utf-8",
+    )
+
+    materials = root / "materials"
+    materials.mkdir(parents=True, exist_ok=True)
+    (materials / "bestfilament_petg_orange.xml.fdm_material").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<fdmmaterial xmlns="http://www.ultimaker.com/material" version="1.3">\n'
+        "  <metadata>\n"
+        "    <name><brand>Best Filament</brand><material>PETG</material>"
+        "<color>Orange</color></name>\n"
+        "    <color_code>#FFA500</color_code>\n"
+        "  </metadata>\n"
+        "  <properties><density>1.27</density><diameter>1.75</diameter></properties>\n"
+        "</fdmmaterial>\n",
+        encoding="utf-8",
+    )
+    (materials / "generic_pla.xml.fdm_material").write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<fdmmaterial xmlns="http://www.ultimaker.com/material" version="1.3">\n'
+        "  <metadata>\n"
+        "    <name><brand>Generic</brand><material>PLA</material>"
+        "<color>Generic</color></name>\n"
+        "    <color_code>#ffc924</color_code>\n"
+        "  </metadata>\n"
+        "  <properties><density>1.24</density><diameter>2.85</diameter></properties>\n"
+        "</fdmmaterial>\n",
+        encoding="utf-8",
+    )
+    (materials / "zerrissen.xml.fdm_material").write_text("<fdmmaterial", encoding="utf-8")
+    return root
+
+
+@pytest.fixture
+def cura(cura_bestand: Path) -> Path:
+    """Die Rechenmaschine über dem Bestand — ``CuraEngine``, nicht das Fenster."""
+    executable = cura_bestand.parent.parent.parent / "CuraEngine.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
+def test_cura_printers_are_found_and_base_classes_are_not(cura: Path) -> None:
+    """Vor dem 08.09.2026 fand Solidon bei Cura 5.13 null von 615 Druckern:
+    Gesucht wurde nach Orca-Ordnernamen, und Cura hat andere."""
+    found = sp.find_profiles(cura, "cura", kinds=("machine",))
+    namen = sorted(entry.name for entry in found)
+
+    assert namen == ["Abax PRi3", "Gerät ohne Angabe"], (
+        f"gefunden: {namen} — die Wurzel der Erbkette gehört nicht in die Auswahl"
+    )
+
+
+def test_a_cura_printer_carries_the_id_its_profiles_point_at(cura: Path) -> None:
+    """``abax_pri3.def.json`` heisst ``abax_pri3`` — genau darauf zeigt
+    ``definition`` in jedem Qualitätsprofil. ``Path.stem`` allein liesse
+    ``.def`` stehen, und dann fände kein Profil seinen Drucker."""
+    found = next(
+        entry
+        for entry in sp.find_profiles(cura, "cura", kinds=("machine",))
+        if entry.name == "Abax PRi3"
+    )
+
+    assert found.printer_model == "abax_pri3"
+    assert found.nozzle == pytest.approx(0.4), "die Düse steht in den overrides"
+
+
+def test_cura_quality_profiles_bind_to_their_printer_and_intents_stay_out(cura: Path) -> None:
+    """``[general] definition`` ist Curas ``compatible_printers``. Eine
+    Absicht (``type = intent``) ist kein Prozessprofil."""
+    found = sp.find_profiles(cura, "cura", kinds=("process",))
+
+    assert [entry.name for entry in found] == ["Fine"]
+    assert found[0].compatible_printers == ("abax_pri3",)
+
+
+def test_a_cura_material_becomes_a_readable_filament(cura: Path) -> None:
+    """Marke, Art und Farbe ergeben den Namen, den Cura selbst anzeigt — und
+    ein Farbname, der keine Farbe meint, bleibt weg."""
+    found = sp.find_profiles(cura, "cura", kinds=("filament",))
+    namen = sorted(entry.name for entry in found)
+
+    assert namen == ["Best Filament PETG Orange", "Generic PLA"], (
+        f"gefunden: {namen} — die zerrissene Datei fehlt einfach, sie reisst nichts ab"
+    )
+    petg = next(entry for entry in found if entry.name.startswith("Best"))
+    assert petg.filament_type == "PETG"
+
+
+def test_a_broken_cura_file_is_skipped_not_fatal(cura: Path, cura_bestand: Path) -> None:
+    """Dieselbe Haltung wie beim Orca-Leser: eine kaputte Datei im Bestand
+    eines fremden Programms ist ein Eintrag weniger."""
+    (cura_bestand / "definitions" / "zerrissen.def.json").write_text("{", encoding="utf-8")
+    (cura_bestand / "quality" / "abax_pri3" / "zerrissen.inst.cfg").write_text(
+        "[general", encoding="utf-8"
+    )
+
+    assert len(sp.find_profiles(cura, "cura", kinds=("machine",))) == 2
+    assert len(sp.find_profiles(cura, "cura", kinds=("process",))) == 1
