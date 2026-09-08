@@ -680,9 +680,13 @@ def test_the_chosen_filament_profile_follows_the_colour_not_the_position() -> No
     white = MaterialSlot(index=1, name="Weiß")
     red_again = MaterialSlot(index=2, name="Rot")
     job = [
-        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box()), name="A", slots=(red,)),
         threemf.AssemblyPart(
-            mesh=MeshData.of(trimesh.creation.box()), name="B", slots=(white, red_again)
+            mesh=MeshData(trimesh.creation.box(), slots=(1,) * 12), name="A", slots=(red,)
+        ),
+        threemf.AssemblyPart(
+            mesh=MeshData(trimesh.creation.box(), slots=(1,) * 6 + (2,) * 6),
+            name="B",
+            slots=(white, red_again),
         ),
     ]
     chosen = ["PETG-Rot", "PLA-Weiss"]
@@ -802,7 +806,7 @@ def test_a_direct_3mf_export_uses_each_chosen_filament_profile(
     monkeypatch.setattr(slicer_profiles, "find_profiles", lambda *_args, **_kwargs: available)
 
     black = MaterialSlot(index=0, name="PETG Schwarz", colour=(0.05, 0.05, 0.05))
-    white = MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
+    white = MaterialSlot(index=0, name="PLA Weiß", colour=(1.0, 1.0, 1.0))
     objects = [
         SceneObject(id="body", name="Gehäuse", mesh=body(), material_slots=[black]),
         SceneObject(id="label", name="Schrift", mesh=body(), material_slots=[white]),

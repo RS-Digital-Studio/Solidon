@@ -16,6 +16,11 @@ Die Regeln stehen in `.claude/rules/dateiformat.md`.
 
 STEP geht über `brep/step.py`, nicht von hier.
 
+`threemf.assembly_slots()` ergänzt tatsächlich verwendete, aber nicht
+deklarierte Materialplätze neutral. Export, globales Zusammenlegen und
+Verbrauchsplanung benutzen diese gemeinsame Liste. Fehlende Plätze dürfen
+keine bekannte Spule durch einen pauschalen Rückfall auf Werkzeug null erben.
+
 Profilvererbung wird mit sämtlichen Profilwurzeln des gewählten Slicers
 aufgelöst: Nutzerprofile können von installierten Profilen erben. Diese
 Wurzeln gehören auch in Filamenterkennung, Materialvergleich und Auslesen

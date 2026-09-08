@@ -117,6 +117,19 @@ def slot_identity(slot: MaterialSlot) -> SlotKey:
     return (slot.name, slot.colour, slot.material, slot.material_type)
 
 
+def assembly_slots(part: AssemblyPart) -> tuple[MaterialSlot, ...]:
+    """Erhält deklarierte Plätze und ergänzt verwendete fehlende Slots neutral.
+
+    Eine alte Slotliste kann Einträge ohne Flächen oder Flächen ohne Eintrag
+    tragen. Die ersten behalten ihre Werkzeugposition, die zweiten bekommen
+    dieselben neutralen Platzhalter wie beim Export eines einzelnen Körpers.
+    """
+    declared = part.slots or (MaterialSlot(index=0, name=""),)
+    known = {slot.index for slot in declared}
+    missing = (slot for slot in _slots_for(part.mesh, declared) if slot.index not in known)
+    return (*declared, *missing)
+
+
 def merge_slots(
     parts: Sequence[AssemblyPart], across: Sequence[AssemblyPart] | None = None
 ) -> list[MaterialSlot]:
@@ -148,7 +161,7 @@ def merge_slots(
     # hasht wie seine Message-ID, auch gegen eine schlichte Zeichenkette.
     seen: dict[SlotKey, int] = {}
     for part in across if across is not None else parts:
-        for slot in part.slots or (MaterialSlot(index=0, name=""),):
+        for slot in assembly_slots(part):
             key = slot_identity(slot)
             if key in seen:
                 continue
@@ -159,11 +172,7 @@ def merge_slots(
     # Die Belegung des Auftrags, beschränkt auf das, was diese Platte braucht —
     # mit den Nummern des Auftrags. Ein Slicer, der eine Platte allein bekommt,
     # soll nicht nach Filamenten fragen, die auf ihr nicht vorkommen.
-    here = {
-        slot_identity(slot)
-        for part in parts
-        for slot in part.slots or (MaterialSlot(index=0, name=""),)
-    }
+    here = {slot_identity(slot) for part in parts for slot in assembly_slots(part)}
     return [slot for slot in order if slot_identity(slot) in here]
 
 
@@ -317,7 +326,7 @@ def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
     )
 
 
-def _slots_for(mesh: MeshData, slots: list[MaterialSlot] | None) -> list[MaterialSlot]:
+def _slots_for(mesh: MeshData, slots: Sequence[MaterialSlot] | None) -> list[MaterialSlot]:
     """Jeder Slot, den das Mesh wirklich benutzt, mit Namen und Farbe."""
     from app.core.geom.attributes import used_slots
 
@@ -422,10 +431,7 @@ def _assembly_xml(
 
     build = ET.SubElement(root, "build")
     for number, part in enumerate(parts, start=2):
-        order = {
-            slot.index: positions.get(slot_identity(slot), 0)
-            for slot in part.slots or (MaterialSlot(index=0, name=""),)
-        }
+        order = {slot.index: positions.get(slot_identity(slot), 0) for slot in assembly_slots(part)}
         body = ET.SubElement(
             resources,
             "object",

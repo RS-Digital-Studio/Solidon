@@ -62,11 +62,133 @@ def test_all_filaments_contribute_to_the_print_metrics(total: str) -> None:
     )
     assert metrics.filament_mm == pytest.approx(3000.75)
     assert metrics.filament_grams == pytest.approx(9.25)
+    assert metrics.filament_mm_by_tool == pytest.approx((0.0, 1000.5, 2000.25))
+    assert metrics.filament_grams_by_tool == pytest.approx((0.0, 3.1, 6.15))
 
 
 def test_an_explicit_material_total_wins_over_rounded_slot_values() -> None:
     metrics = gcode.parse("; filament used [g] = 3, 6\n; total filament used [g] = 9.25\n")
     assert metrics.filament_grams == pytest.approx(9.25)
+
+
+@pytest.mark.parametrize("total_first", [False, True])
+def test_tool_amounts_and_totals_survive_in_either_header_order(total_first: bool) -> None:
+    """Die Gesamtsumme überschreibt weder Einzelwerte noch zählt sie doppelt."""
+    tools = "; filament used [g] = 47, 6\n; filament used [mm] = 15500, 2000\n"
+    totals = "; total filament used [g] = 53.1\n; total filament used [mm] = 17500.1\n"
+
+    metrics = gcode.parse(totals + tools if total_first else tools + totals)
+
+    assert metrics.filament_grams_by_tool == pytest.approx((47.0, 6.0))
+    assert metrics.filament_mm_by_tool == pytest.approx((15500.0, 2000.0))
+    assert metrics.filament_grams == pytest.approx(53.1)
+    assert metrics.filament_mm == pytest.approx(17500.1)
+    assert metrics.source == "gcode"
+
+
+@pytest.mark.parametrize("missing", ["", "unknown", "-1", "nan", "inf", "1e309", "6invalid"])
+def test_missing_tool_amounts_keep_their_position_and_never_become_a_total(missing: str) -> None:
+    """Ein unbekannter Werkzeugplatz wird weder entfernt noch als null gezählt."""
+    metrics = gcode.parse(
+        f"; filament used [g] = 0, {missing}, 6\n; filament used [mm] = 0, {missing}, 2000\n"
+    )
+
+    assert metrics.filament_grams_by_tool == (0.0, None, 6.0)
+    assert metrics.filament_mm_by_tool == (0.0, None, 2000.0)
+    assert metrics.filament_grams is None
+    assert metrics.filament_mm is None
+
+
+def test_a_total_does_not_fill_a_missing_tool_amount() -> None:
+    metrics = gcode.parse("; filament used [g] = 47, , 6\n; total filament used [g] = 60\n")
+
+    assert metrics.filament_grams == pytest.approx(60.0)
+    assert metrics.filament_grams_by_tool == (47.0, None, 6.0)
+
+
+def test_a_missing_last_tool_is_preserved_and_no_number_is_invented() -> None:
+    metrics = gcode.parse("; filament used [g] = 47, 6,\n")
+
+    assert metrics.filament_grams_by_tool == (47.0, 6.0, None)
+    assert metrics.filament_grams is None
+    assert metrics.grams_by_tool() == (47.0, 6.0, None)
+
+
+def test_an_empty_header_does_not_claim_a_tool_or_a_zero_amount() -> None:
+    metrics = gcode.parse("; filament used [g] = \n; filament used [mm] = \n")
+
+    assert metrics.filament_grams_by_tool == ()
+    assert metrics.filament_mm_by_tool == ()
+    assert metrics.filament_grams is None
+    assert metrics.filament_mm is None
+
+
+def test_two_finite_amounts_must_not_make_an_infinite_total() -> None:
+    metrics = gcode.parse("; filament used [g] = 1e308, 1e308\n")
+
+    assert metrics.filament_grams_by_tool == pytest.approx((1e308, 1e308))
+    assert metrics.filament_grams is None
+
+
+def test_a_total_alone_does_not_claim_tool_zero() -> None:
+    metrics = gcode.parse("; total filament used [g] = 53\n; total filament used [mm] = 17500\n")
+
+    assert metrics.filament_grams == pytest.approx(53.0)
+    assert metrics.filament_mm == pytest.approx(17500.0)
+    assert metrics.filament_grams_by_tool == ()
+    assert metrics.filament_mm_by_tool == ()
+    assert metrics.grams_by_tool(densities=(1.24,), diameters=(1.75,)) == ()
+
+
+def test_a_single_tool_header_keeps_tool_zero() -> None:
+    metrics = gcode.parse(PRUSA)
+
+    assert metrics.filament_grams_by_tool == pytest.approx((10.2,))
+    assert metrics.filament_mm_by_tool == pytest.approx((3420.5,))
+
+
+def test_cura_tool_lengths_keep_their_units_and_unused_tools() -> None:
+    metrics = gcode.parse("; Filament used: 0m, 0.047m, 0.006m\n")
+
+    assert metrics.filament_mm_by_tool == pytest.approx((0.0, 47.0, 6.0))
+    assert metrics.filament_mm == pytest.approx(53.0)
+
+
+@pytest.mark.parametrize("amount", ["nan", "inf", "1e309", "-1", "53invalid"])
+def test_invalid_explicit_totals_leave_valid_tool_values_usable(amount: str) -> None:
+    metrics = gcode.parse(f"; total filament used [g] = {amount}\n; filament used [g] = 47, 6\n")
+
+    assert metrics.filament_grams_by_tool == pytest.approx((47.0, 6.0))
+    assert metrics.filament_grams == pytest.approx(53.0)
+
+
+def test_tool_mass_conversion_needs_each_tools_density_and_diameter() -> None:
+    metrics = gcode.parse("; filament used [mm] = 1000, 1000, 1000\n")
+
+    assert metrics.grams_by_tool() == (None, None, None)
+    assert metrics.grams_by_tool(densities=(1.0, 2.0, 3.0)) == (None, None, None)
+    assert metrics.grams_by_tool(diameters=(2.0, 1.0, 1.75)) == (None, None, None)
+    amounts = metrics.grams_by_tool(densities=(1.0, 2.0, None), diameters=(2.0, 1.0, 1.75))
+    assert amounts[:2] == pytest.approx((3.141592653589793, 1.5707963267948966))
+    assert amounts[2] is None
+
+
+def test_explicit_tool_weights_including_zero_win_over_length_conversion() -> None:
+    metrics = gcode.parse("; filament used [g] = 0, , 6\n; filament used [mm] = 1000, 1000, 1000\n")
+
+    assert metrics.grams_by_tool(densities=(1.0, 1.0, 1.0), diameters=(2.0, 2.0, 2.0)) == (
+        0.0,
+        pytest.approx(3.141592653589793),
+        6.0,
+    )
+
+
+@pytest.mark.parametrize("invalid", [0.0, -1.0, float("nan"), float("inf")])
+def test_invalid_material_properties_do_not_turn_lengths_into_weights(invalid: float) -> None:
+    metrics = gcode.parse("; filament used [mm] = 1000\n")
+
+    assert metrics.grams_by_tool(densities=(invalid,), diameters=(1.75,)) == (None,)
+    assert metrics.grams_by_tool(densities=(1.24,), diameters=(invalid,)) == (None,)
 
 
 def test_a_prusa_file_gives_up_its_numbers() -> None:
@@ -395,6 +517,20 @@ def test_two_plates_add_up_to_one_job() -> None:
     assert total.filament_mm == 3000.0
     assert total.filament_grams == 30.0
     assert total.source == "gcode"
+
+
+def test_tool_numbers_from_different_plates_do_not_claim_the_same_spool() -> None:
+    first = gcode.parse("; filament used [g] = 47, 6\n; filament used [mm] = 1000, 200\n")
+    second = gcode.parse("; filament used [g] = 12, 3\n; filament used [mm] = 300, 100\n")
+
+    total = gcode.combine([first, second])
+
+    assert total.filament_grams == pytest.approx(68.0)
+    assert total.filament_mm == pytest.approx(1600.0)
+    assert total.filament_grams_by_tool == ()
+    assert total.filament_mm_by_tool == ()
+    assert first.filament_grams_by_tool == pytest.approx((47.0, 6.0))
+    assert second.filament_grams_by_tool == pytest.approx((12.0, 3.0))
 
 
 def test_a_missing_value_on_one_plate_leaves_the_sum_missing() -> None:

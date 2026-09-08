@@ -66,8 +66,18 @@ Segmentreihenfolge und dieselben Analysewerte.
 Warnungen vergleichen ungekürzte Materialvorgaben mit den Grenzen des
 Druckers. Ein vorher auf das Düsenmaximum gedeckelter Sollwert kann eine
 unzureichende Temperatur nicht mehr nachweisen. G-Code-Verbrauchslisten
-werden über alle Slots summiert; eine ausdrücklich ausgewiesene Gesamtsumme
-hat Vorrang vor gerundeten Einzelwerten.
+bleiben zusätzlich als `filament_mm_by_tool` und `filament_grams_by_tool`
+erhalten: Der Index ist die Werkzeugnummer der jeweiligen Platte,
+einschließlich Werkzeug 0, ungenutzter Nullen und unbekannter Einträge als
+`None`. Nur vollständige Listen ergeben eine Summe; eine ausdrücklich
+ausgewiesene Gesamtsumme hat Vorrang vor gerundeten Einzelwerten und füllt
+keine Lücken. `combine` verbindet Werkzeugnummern verschiedener Platten
+nicht, denn sie können unterschiedliche Spulen bezeichnen.
+
+`grams_by_tool` wandelt fehlende Grammmengen nur mit ausdrücklich übergebener
+Dichte und Durchmesser je Werkzeug um. Angegebene Grammmengen gelten auch
+bei null; die bestehende Gesamtmethode `grams` behält ihren Vertrag. Jede
+dieser Mengen ist aus G-Code geplanter Verbrauch, keine Messung am Werkstück.
 
 G-Code-Wörter benötigen keinen Leerraum als Trenner. `E` bezeichnet die
 Extrusion auch unmittelbar hinter einer Koordinate; wissenschaftliche

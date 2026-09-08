@@ -466,6 +466,39 @@ def test_a_body_in_two_colours_keeps_both_of_them() -> None:
     assert zurueck[0].mesh.slots == (0,) * 6 + (1,) * 6
 
 
+@pytest.mark.parametrize("assignment", [(), (0,) * 6 + (1,) * 6, (0,) * 6 + (7,) * 6])
+def test_missing_used_slots_get_neutral_tools_instead_of_another_filament(
+    assignment: tuple[int, ...],
+) -> None:
+    """Fehlende lokale Slots dürfen beim Schreiben nicht Werkzeug null erben."""
+    known = threemf.MaterialSlot(1, "PETG Rot", (1.0, 0.0, 0.0), "Maker PETG", "PETG")
+    part = threemf.AssemblyPart(MeshData(cube(10.0), assignment), slots=(known,))
+    merged = threemf.merge_slots([part])
+    assert merged[0].material_type == "PETG"
+    assert len(merged) == (3 if 7 in assignment else 2)
+    assert all(slot.material_type is None and slot.material is None for slot in merged[1:])
+    payload = threemf.write_assembly([part])
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        root = ET.fromstring(container.read(threemf.MODEL_PATH))
+    actual = [int(face.attrib["p1"]) for face in root.findall(f".//{{{CORE}}}triangle")]
+    expected = [1] * 12 if not assignment else [1] * 6 + ([0] * 6 if 1 in assignment else [2] * 6)
+    assert actual == expected
+    restored = threemf_reader.read_objects(payload)[0]
+    assert restored.mesh.volume == pytest.approx(part.mesh.volume)
+
+
+def test_missing_slots_keep_global_tool_numbers_when_exporting_one_plate() -> None:
+    first = _part((10, 10, 10), "A", threemf.MaterialSlot(0, "PLA Weiß", material_type="PLA"))
+    second = _part((10, 10, 10), "B", threemf.MaterialSlot(1, "PETG Rot", material_type="PETG"))
+    merged = threemf.merge_slots([second], across=[first, second])
+    assert [slot.index for slot in merged] == [1, 2]
+    assert merged[1].material_type is None
+    payload = threemf.write_assembly([second], across=[first, second])
+    with zipfile.ZipFile(BytesIO(payload)) as container:
+        root = ET.fromstring(container.read(threemf.MODEL_PATH))
+    assert {face.attrib["p1"] for face in root.findall(f".//{{{CORE}}}triangle")} == {"2"}
+
+
 def coloured_container(
     faces: list[str], bases: str, *, on_object: str = 'pid="1" pindex="0"'
 ) -> bytes:

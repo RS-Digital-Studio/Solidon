@@ -14,6 +14,8 @@ Jede Zahl, die hier herauskommt, trägt ``source="gcode"`` und wird nie mit
 einer internen Schätzung vermischt (§22.5). Wo die zwei um mehr als ein
 Sechstel auseinanderliegen, ist das ein Befund — und ein Hinweis, dass die
 Schichtanalyse Arbeit braucht, kein Grund, eine von beiden still vorzuziehen.
+Verbrauch aus dieser Datei ist für den Druck geplant, keine Messung an der
+physischen Spule oder am fertigen Werkstück.
 """
 
 from __future__ import annotations
@@ -58,6 +60,9 @@ class GcodeMetrics:
     layer_height: float | None = None
     warnings: tuple[str, ...] = ()
     source: MetricSource = "gcode"
+    #: Index ist die Werkzeugnummer dieser Platte, einschließlich 0 und Lücken.
+    filament_mm_by_tool: tuple[float | None, ...] = ()
+    filament_grams_by_tool: tuple[float | None, ...] = ()
 
     @property
     def print_minutes(self) -> float | None:
@@ -81,6 +86,51 @@ class GcodeMetrics:
             return self.filament_grams
         volume = self.material_cm3
         return None if volume is None else volume * density
+
+    def grams_by_tool(
+        self,
+        *,
+        densities: Sequence[float | None] = (),
+        diameters: Sequence[float | None] = (),
+    ) -> tuple[float | None, ...]:
+        """Geplante Masse je Werkzeug, mit ausdrücklich gewählter Umrechnung.
+
+        Ein direkt genannter Grammwert gilt einschließlich null. Nur fehlende
+        Grammwerte werden aus Länge, Dichte in g/cm³ und Durchmesser in mm
+        berechnet. Alle Listen verwenden dieselben Werkzeugnummern; fehlende
+        Materialangaben bleiben unbekannt, die Gesamtsumme füllt keine Lücke.
+        """
+        amounts: list[float | None] = []
+        count = max(len(self.filament_grams_by_tool), len(self.filament_mm_by_tool))
+        for tool in range(count):
+            stated = (
+                self.filament_grams_by_tool[tool]
+                if tool < len(self.filament_grams_by_tool)
+                else None
+            )
+            if stated is not None:
+                amounts.append(stated)
+                continue
+            amount = None
+            if tool < min(len(self.filament_mm_by_tool), len(densities), len(diameters)):
+                length = self.filament_mm_by_tool[tool]
+                density, diameter = densities[tool], diameters[tool]
+                if (
+                    length is not None
+                    and math.isfinite(length)
+                    and length >= 0.0
+                    and density is not None
+                    and math.isfinite(density)
+                    and density > 0.0
+                    and diameter is not None
+                    and math.isfinite(diameter)
+                    and diameter > 0.0
+                ):
+                    radius = diameter / 2.0
+                    converted = length * math.pi * radius * radius / 1000.0 * density
+                    amount = converted if math.isfinite(converted) else None
+            amounts.append(amount)
+        return tuple(amounts)
 
 
 @dataclass(slots=True)
@@ -130,11 +180,14 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     ("print_seconds", r";\s*estimated printing time.*?=\s*(?P<value>[0-9hmsd ]+)"),
     ("print_seconds", r";\s*TIME:\s*(?P<value>[0-9.]+)"),
     ("print_seconds", r";\s*total print time.*?:\s*(?P<value>[0-9hmsd ]+)"),
-    ("filament_mm", r";\s*total filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>[0-9.]+)"),
-    ("filament_grams", r";\s*total filament used \[g\]\s*=\s*(?P<value>[0-9.]+)"),
-    ("filament_mm", r";\s*filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>[0-9., ]+)"),
-    ("filament_mm", r";\s*Filament used:\s*(?P<value>[0-9.]+)\s*(?P<unit>m)\b"),
-    ("filament_grams", r";\s*filament used \[g\]\s*=\s*(?P<value>[0-9., ]+)"),
+    (
+        "filament_mm",
+        r";\s*(?P<total>total )filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>.*?)\s*$",
+    ),
+    ("filament_grams", r";\s*(?P<total>total )filament used \[g\]\s*=\s*(?P<value>.*?)\s*$"),
+    ("filament_mm", r";\s*filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>.*?)\s*$"),
+    ("filament_mm", r";\s*Filament used:\s*(?P<value>.*?)\s*(?P<unit>m)\s*$"),
+    ("filament_grams", r";\s*filament used \[g\]\s*=\s*(?P<value>.*?)\s*$"),
     ("layer_count", r";\s*(?:total )?layer count\s*[:=]\s*(?P<value>[0-9]+)"),
     ("layer_count", r";\s*LAYER_COUNT:\s*(?P<value>[0-9]+)"),
     ("layer_height", r";\s*layer_height\s*=\s*(?P<value>[0-9.]+)"),
@@ -201,7 +254,7 @@ def analyze_lines(lines: Iterable[str], *, cancelled: CancelToken | None = None)
     """Liest eine Druckdatei zeilenweise, speicherbegrenzt und abbrechbar."""
     metrics = GcodeMetrics()
     warnings: list[str] = []
-    pattern_values: dict[int, tuple[str, str]] = {}
+    pattern_values: dict[int, tuple[str, str, bool]] = {}
     settings: dict[str, str] = {}
     corners: list[tuple[float, float]] | None = None
     bed_invalid = False
@@ -245,6 +298,7 @@ def analyze_lines(lines: Iterable[str], *, cancelled: CancelToken | None = None)
                     pattern_values[index] = (
                         found.group("value").strip(),
                         found.groupdict().get("unit") or "",
+                        bool(found.groupdict().get("total")),
                     )
             found_warning = _WARNING.match(stripped)
             if found_warning is not None:
@@ -353,7 +407,11 @@ def analyze_lines(lines: Iterable[str], *, cancelled: CancelToken | None = None)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     for index, (name, _pattern) in enumerate(_PATTERNS):
-        if getattr(metrics, name) is not None and getattr(metrics, name) != "":
+        if (
+            name not in ("filament_mm", "filament_grams")
+            and getattr(metrics, name) is not None
+            and getattr(metrics, name) != ""
+        ):
             continue
         captured = pattern_values.get(index)
         if captured is not None:
@@ -564,7 +622,9 @@ def _bed_box(corners: list[tuple[float, float]] | None, height: float | None) ->
     )
 
 
-def _set(metrics: GcodeMetrics, name: str, value: str, unit: str = "") -> None:
+def _set(
+    metrics: GcodeMetrics, name: str, value: str, unit: str = "", is_total: bool = False
+) -> None:
     number: float | None
     if name == "slicer":
         metrics.slicer = value
@@ -575,22 +635,46 @@ def _set(metrics: GcodeMetrics, name: str, value: str, unit: str = "") -> None:
     if name in ("filament_mm", "filament_grams"):
         # Die Kommas trennen Extruder, keine Dezimalstellen. Eine explizite
         # Gesamtsumme steht im Musterregister vor den gerundeten Einzelwerten.
-        amounts = [_number(part.strip()) for part in value.split(",")]
-        if any(amount is None or not math.isfinite(amount) or amount < 0 for amount in amounts):
+        amounts = _filament_amounts(value, unit)
+        if not is_total and not getattr(metrics, f"{name}_by_tool"):
+            setattr(metrics, f"{name}_by_tool", amounts)
+        if (
+            getattr(metrics, name) is not None
+            or not amounts
+            or (is_total and len(amounts) != 1)
+            or any(amount is None for amount in amounts)
+        ):
             return
         number = sum(amount for amount in amounts if amount is not None)
+        if math.isfinite(number):
+            setattr(metrics, name, number)
+        return
     else:
         number = _number(value)
     if number is None:
         return
-    if name == "filament_mm":
-        metrics.filament_mm = _length_mm(number, unit)
-    elif name == "filament_grams":
-        metrics.filament_grams = number
-    elif name == "layer_count":
+    if name == "layer_count":
         metrics.layer_count = int(number)
     elif name == "layer_height":
         metrics.layer_height = number
+
+
+def _filament_amounts(value: str, unit: str) -> tuple[float | None, ...]:
+    """Liest vollständige Zahlenwerte; unbekannte Plätze bleiben erhalten."""
+    if not value.strip():
+        return ()
+    amounts: list[float | None] = []
+    for part in value.split(","):
+        token = part.strip()
+        if unit.casefold() == "m":
+            token = token.casefold().removesuffix("m").strip()
+        number = _number(token)
+        if number is not None and unit:
+            number = _length_mm(number, unit)
+        if number is not None and (not math.isfinite(number) or number < 0.0):
+            number = None
+        amounts.append(number)
+    return tuple(amounts)
 
 
 #: Was ein Slicer als Einheit einer Filamentlänge schreibt, in Millimetern.
@@ -728,7 +812,9 @@ def combine(parts: Sequence[GcodeMetrics]) -> GcodeMetrics:
 
     Die Schichtzahl wird **nicht** summiert. Sie beschreibt eine Platte; über
     zwei addiert ergäbe sie eine Zahl, die es nirgends gibt. Sie steht deshalb
-    nur da, wo es eine Platte ist.
+    nur da, wo es eine Platte ist. Ebenso bleiben Werkzeugmengen bei ihrer
+    Platte: Dieselbe Werkzeugnummer belegt keine gemeinsame Spule. Die
+    zusammengefasste Auskunft führt deshalb keine Werkzeugmengen.
     """
     if not parts:
         return GcodeMetrics()
