@@ -168,23 +168,32 @@ Im Entwicklerkonto unter „Certificates" zwei Zertifikate:
 | Developer ID Application | die `.app` | `Developer ID Application: Robert Schneider (TEAMID)` |
 | Developer ID Installer | das `.pkg` | `Developer ID Installer: Robert Schneider (TEAMID)` |
 
-Beide brauchen eine Zertifikatsanfrage (CSR). Auf einem Mac erzeugt sie die
-Schlüsselbundverwaltung; ohne Mac geht es mit `openssl`: Schlüssel und CSR
-erzeugen, CSR hochladen, das ausgestellte `.cer` herunterladen und mit dem
-Schlüssel zu einer `.p12` bündeln. Die `.p12` mit Passwort ist das, was die CI
+Bei der Zwischenstelle **G2 Sub-CA** wählen, nicht das vorausgewählte „Previous
+Sub-CA": Zertifikate der alten Zwischenstelle laufen am 01.02.2027 ab,
+unabhängig davon, wann sie ausgestellt wurden. Mit G2 sind es fünf Jahre.
+
+Jedes braucht eine **eigene** Zertifikatsanfrage (CSR) auf einem **eigenen
+Schlüssel**: Apple lehnt eine zweite Anfrage auf demselben Schlüssel ab („has
+already been used to generate another certificate"). Auf einem Mac erzeugt die
+Schlüsselbundverwaltung sie; ohne Mac geht es mit `openssl` — je Zertifikat
+Schlüssel und CSR erzeugen, CSR hochladen, das ausgestellte `.cer`
+herunterladen und mit seinem Schlüssel zu einer `.p12` bündeln, zusammen mit
+der Kette aus Developer ID G2 CA und Apple Root CA. Es entstehen zwei `.p12`,
+die sich ein Passwort teilen dürfen; beide mit Passwort sind das, was die CI
 bekommt. Dazu unter account.apple.com ein **app-spezifisches Passwort** für die
 Notarisierung anlegen.
 
 ### In der CI einschalten
 
 Die Variable `MACOS_SIGNING_MODE` auf `notarized` setzen (`signed` signiert nur,
-ohne Apples Prüfung, das reicht für Gatekeeper nicht). Dazu die sieben
+ohne Apples Prüfung, das reicht für Gatekeeper nicht). Dazu die acht
 Geheimnisse, die `build.yml` erwartet:
 
 | Geheimnis | Inhalt |
 |---|---|
-| `APPLE_CERTIFICATE` | die `.p12`, base64-kodiert (beide Developer-ID-Zertifikate in einer Datei) |
-| `APPLE_CERTIFICATE_PASSWORD` | ihr Passwort |
+| `APPLE_CERTIFICATE` | die `.p12` des Application-Zertifikats, base64-kodiert |
+| `APPLE_INSTALLER_CERTIFICATE` | die `.p12` des Installer-Zertifikats, base64-kodiert |
+| `APPLE_CERTIFICATE_PASSWORD` | das Passwort beider Dateien |
 | `APPLE_SIGN_IDENTITY` | `Developer ID Application: Robert Schneider (TEAMID)` |
 | `APPLE_INSTALLER_IDENTITY` | `Developer ID Installer: Robert Schneider (TEAMID)` |
 | `APPLE_NOTARY_ID` | die Apple-ID (E-Mail) |
@@ -196,10 +205,10 @@ Hardened Runtime und Zeitstempel, `notarytool submit --wait` (Apples Prüfung,
 meist Minuten), `stapler` heftet das Ticket an und prüft es, `spctl` prüft
 zuletzt den Installationsweg. Notarisierung kostet nichts.
 
-Der Schlüssel liegt hier zwangsläufig in den GitHub-Geheimnissen, einen
+Die Schlüssel liegen hier zwangsläufig in den GitHub-Geheimnissen, einen
 Cloud-HSM-Weg bietet Apple nicht. Das ist vertretbar: Ein Developer-ID-Zertifikat
 lässt sich im Konto jederzeit widerrufen, und Apple kann notarisierte Software
-nachträglich sperren. Die `.p12` liegt außerhalb der CI nur im
+nachträglich sperren. Die beiden `.p12` liegen außerhalb der CI nur im
 Passwortmanager, nirgends sonst.
 
 ---

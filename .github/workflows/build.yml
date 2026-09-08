@@ -1090,8 +1090,14 @@ jobs:
           printf 'ARTIFACT_PACKAGE=%s\n' "$PWD/$package" >> "$GITHUB_ENV"
       - name: Installer mit Developer-ID signieren und Schlüssel wieder sperren
         shell: bash
+        # Eigenes Zertifikat, nicht das der App: Apple lehnt eine zweite
+        # Zertifikatsanfrage auf demselben Schlüssel ab ("has already been used
+        # to generate another certificate"). Developer ID Application und
+        # Developer ID Installer tragen deshalb zwangsläufig getrennte
+        # Schlüssel und liegen in getrennten .p12-Dateien. Das Passwort teilen
+        # sie sich.
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_INSTALLER_CERTIFICATE: ${{ secrets.APPLE_INSTALLER_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_INSTALLER_IDENTITY: ${{ secrets.APPLE_INSTALLER_IDENTITY }}
         run: |
@@ -1105,7 +1111,7 @@ jobs:
             rm -f "$certificate" "$signed"
           }
           trap cleanup EXIT
-          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate"
+          printf '%s' "$APPLE_INSTALLER_CERTIFICATE" | base64 --decode > "$certificate"
           security create-keychain -p "$password" "$keychain"
           security set-keychain-settings -lut 300 "$keychain"
           security unlock-keychain -p "$password" "$keychain"
