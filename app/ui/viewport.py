@@ -5877,6 +5877,14 @@ class Viewport(QWidget):
             if self._shown_colours.get(identifier) != colour
         }
         self._shown_colours = wanted
+        # **Ein Körper mit Filament trägt Farben je Dreieck, und die schlagen
+        # jede Körperfarbe.** Ohne diese Umschaltung schriebe die Blende unten
+        # in eine Farbe, die pygfx gar nicht liest: Im Objektbaum markiert, im
+        # Bild grau wie alle anderen (Befund Robert, 08.09.2026). Für die
+        # Dauer der Auswahl gilt deshalb die eine Farbe, danach wieder der
+        # Werkstoff je Dreieck.
+        for identifier, actor in self._actors.items():
+            actor.set_face_colours_visible(identifier not in highlighted)
         if not changed:
             return
         # Die neue Blende löst die ganze laufende Animation ab. Deren noch

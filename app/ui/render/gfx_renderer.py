@@ -290,6 +290,21 @@ class GfxItem(Item):
     def colour(self) -> Colour:
         return self._colour
 
+    def set_face_colours_visible(self, visible: bool) -> None:
+        """Zwischen Dreiecksfarben und der einen Körperfarbe umschalten.
+
+        pygfx entscheidet das über ``material.color_mode``: ``"face"`` liest
+        ``geometry.colors``, ``"auto"`` nimmt ``material.color``. Nur Körper,
+        die beim Anlegen Zellfarben bekamen, tragen die Marke — bei allen
+        anderen tut der Aufruf nichts, und das ist auch richtig so: Sie hätten
+        keine Dreiecksfarben, zu denen sie zurückkehren könnten.
+        """
+        for obj in self._coloured():
+            if not getattr(obj, "_solidon_face_colours", False):
+                continue
+            obj.material.color_mode = "face" if visible else "auto"
+        self._changed()
+
     def set_position(self, position: Vec3) -> None:
         self._position = _vec(position)
         self._apply_transform()
@@ -913,6 +928,9 @@ class GfxRenderer(Renderer):
             material.color_mode = "face"
         mesh = gfx.Mesh(geometry, material)
         mesh._solidon_mesh = True
+        # Wer Dreiecksfarben hat, merkt es sich: Nur dann darf
+        # ``set_face_colours_visible`` den Modus überhaupt anfassen.
+        mesh._solidon_face_colours = cell_colours is not None
         mesh._solidon_positions = np.asarray(vertices, dtype=float).reshape(-1, 3)
         mesh._solidon_force_opaque = style.force_opaque
         if style.ambient is not None and style.lighting:

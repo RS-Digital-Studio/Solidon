@@ -219,6 +219,23 @@ class Item(ABC):
     def colour(self) -> Colour: ...
 
     @abstractmethod
+    def set_face_colours_visible(self, visible: bool) -> None:
+        """Ob die Farben je Dreieck gelten oder die eine Körperfarbe.
+
+        **Ohne das bleibt ein Körper mit Filament ungefärbt wählbar.** Wer
+        Slots hat, bekommt beim Anlegen ``cell_colours``, und damit steht der
+        Werkstoff je Dreieck fest; :meth:`set_colour` schreibt dann in eine
+        Farbe, die niemand mehr liest. Genau so verschwand die
+        Auswahlhervorhebung, sobald einem Teil ein Filament zugewiesen war
+        (Befund Robert, 08.09.2026) — im Objektbaum markiert, im Bild grau wie
+        alle anderen.
+
+        Ein Aufruf mit ``False`` schaltet auf die Körperfarbe um und macht
+        :meth:`set_colour` wieder wirksam; ``True`` gibt die Dreiecksfarben
+        zurück. Ein Körper ohne Zellfarben lässt beides unberührt.
+        """
+
+    @abstractmethod
     def set_position(self, position: Vec3) -> None:
         """Ein Versatz gegenüber der Geometrie — die Zugvorschau (§18.11)."""
 

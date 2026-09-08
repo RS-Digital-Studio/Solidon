@@ -46,6 +46,9 @@ class RecordingItem(Item):
         self._matrix = np.eye(4)
         self.pickable = True
         self.line_width: float | None = None
+        #: Ob die Dreiecksfarben gelten — der echte Renderer schaltet dafür
+        #: ``material.color_mode``, hier wird es nur gemerkt.
+        self.face_colours_visible = True
 
     def set_visible(self, visible: bool) -> None:
         self._visible = bool(visible)
@@ -64,6 +67,9 @@ class RecordingItem(Item):
 
     def colour(self) -> Colour:
         return self._colour
+
+    def set_face_colours_visible(self, visible: bool) -> None:
+        self.face_colours_visible = bool(visible)
 
     def set_position(self, position: Vec3) -> None:
         self._position = (float(position[0]), float(position[1]), float(position[2]))

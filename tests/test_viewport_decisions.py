@@ -6236,7 +6236,13 @@ def test_a_multiple_selection_colours_every_body_that_moves(qt_app: QApplication
     # seinen eigenen Test.
     faded: list[dict[str, str]] = []
     viewport.renderer = RecordingRenderer()
-    viewport._actors = {"obj_1": object(), "obj_2": object()}
+    # Aktoren mit dem vollen Protokoll, nicht ``object()``: Die Färbung legt
+    # inzwischen auch die Dreiecksfarben um (siehe
+    # ``test_a_body_with_filament_still_shows_that_it_is_selected``), und ein
+    # nackter Platzhalter kennt die Methode nicht.
+    viewport._actors = {
+        name: RecordingItem(name, np.zeros((1, 3)), "#888888") for name in ("obj_1", "obj_2")
+    }
     viewport._fade_selection = faded.append  # type: ignore[method-assign]
     viewport._apply_selection_colour()
     assert viewport._shown_colours.get("obj_1") == SELECTED_COLOUR
@@ -6465,4 +6471,52 @@ def test_the_display_cache_follows_the_geometry_not_only_the_id(
             "gleiche Geometrie, gleicher Eintrag"
         )
     finally:
+        viewport.deleteLater()
+
+
+def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplication) -> None:
+    """Auswahlfarbe schlägt Dreiecksfarben — sonst bleibt ein Teil mit Filament grau.
+
+    Wer einem Körper ein Filament zuweist, gibt ihm Farben je Dreieck; pygfx
+    liest sie über ``material.color_mode = "face"`` und sieht die Körperfarbe
+    gar nicht mehr an. Die Auswahl schrieb bis hierher genau dorthin: im
+    Objektbaum markiert, im Bild grau wie alle anderen (Befund Robert,
+    08.09.2026, an vier Teilen in „PLA Weiß").
+
+    Geprüft wird die Umschaltung selbst und nicht ihre Farbe — was pygfx aus
+    ``color_mode`` macht, ist Sache des Renderers; dass die Ansicht sie beim
+    Auswählen umlegt und beim Abwählen zurücknimmt, ist ihre eigene Aussage.
+    """
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import MaterialSlot, Scene, SceneObject
+    from app.ui.viewport import Viewport
+
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    mesh = MeshData.of(body, tuple([1] * len(body.faces)))
+    entry = SceneObject(
+        id="obj_1",
+        name="Naht-Adapter",
+        mesh=mesh,
+        material_slots=(MaterialSlot(index=1, name="PLA Weiß", colour=(1.0, 1.0, 1.0)),),
+    )
+    result = EvaluationResult(scene=Scene(objects={"obj_1": entry}), object_hashes={"obj_1": "h"})
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer()
+    try:
+        viewport.show_scene(result)
+        actor = viewport._actors.get("obj_1")
+        assert isinstance(actor, RecordingItem), "der Körper wurde gezeichnet"
+        assert actor.face_colours_visible, "ohne Auswahl gilt der Werkstoff je Dreieck"
+
+        viewport.select("obj_1")
+        assert not actor.face_colours_visible, (
+            "ausgewählt muss die eine Auswahlfarbe gelten, sonst sieht man die Auswahl nicht"
+        )
+
+        viewport.select(None)
+        assert actor.face_colours_visible, "abgewählt kommt der Werkstoff zurück"
+    finally:
+        viewport.renderer = None
         viewport.deleteLater()
