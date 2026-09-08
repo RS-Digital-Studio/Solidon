@@ -1,99 +1,249 @@
 {
-  "version": "0.3.4",
+  "version": "0.3.5",
   "url": "https://solidon3d.de/",
   "notes": "",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.3.4.exe",
-      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.4.exe",
-      "size": 218657493,
-      "sha256": "57078adb3082086f46f1b2cc8726120b1548cd0e929638a8d8449cf15c8df46d"
+      "file": "Solidon3D-Setup-0.3.5.exe",
+      "url": "https://solidon3d.de/dl/Solidon3D-Setup-0.3.5.exe",
+      "size": 167073228,
+      "sha256": "105426a3a1711c1afbe913a87e3c4a88d906409d471cc1d637a8644ad574e28b"
     },
     "linux": {
-      "file": "Solidon3D-0.3.4-x86_64.flatpak",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.4-x86_64.flatpak",
-      "size": 271467016,
-      "sha256": "c24c1548f152726303e8d588223003458fd4ce6de04c565f4698d816fd149946"
+      "file": "Solidon3D-0.3.5-x86_64.flatpak",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.5-x86_64.flatpak",
+      "size": 199139936,
+      "sha256": "3aec7461e1a426411fdd1b7fbb735157e54ffea9ad02987f6b2830e2e031acbd"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.3.4-macos-arm64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.4-macos-arm64.pkg",
-      "size": 295174401,
-      "sha256": "05823390b63bc38a5d59a043c15e2cd18f3ca2f6e7f6631974a94e20a87c93d8"
+      "file": "Solidon3D-0.3.5-macos-arm64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.5-macos-arm64.pkg",
+      "size": 209691564,
+      "sha256": "2e01a7cf39d3d446df4f5c04ebc92ecc7277984b0989f3905f8a28e22d7d163b"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.3.4-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/dl/Solidon3D-0.3.4-macos-x86_64.pkg",
-      "size": 328709853,
-      "sha256": "75db85fc16b1ea359e06a81c0d0de802fb97e2ec87aa46976829f1d1f479a938"
+      "file": "Solidon3D-0.3.5-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/dl/Solidon3D-0.3.5-macos-x86_64.pkg",
+      "size": 230790510,
+      "sha256": "af8e5d2c278ca20ad42efb983118d35db38cecbbf2978507ab985459dac1be57"
     }
   },
   "changes": {
     "de": [
-      "Eine Bohrung und ihre verknüpfte Senkung werden beim Verschieben gemeinsam versetzt — gleich, welche der beiden gewählt wurde. Der Merkmalbereich weist vor der Änderung auf die Kopplung hin.",
-      "Beim Ändern einer Bohrung bleibt ihre Senkung im Objektbaum zugeordnet und kann direkt mitangepasst werden.",
-      "Der Merkmalbereich fasst gleiche Ablehnungen zusammen und benennt die betroffenen Feldgruppen klar.",
-      "Gewinde in importierten Modellen werden zuverlässiger erkannt; falsche Kegel, Zapfen und Kugeln daran erscheinen nicht mehr als eigene Merkmale.",
-      "Schmale Nähte zwischen zusammengefügten Formen erzeugen nicht mehr zahlreiche falsche Merkmale.",
-      "Die Merkmalserkennung großer, detailreicher Modelle ist spürbar schneller.",
-      "Analysekarten stehen für mehr große Modelle zur Verfügung.",
-      "Ist eine Analysekarte für ein Modell zu groß, bietet die Meldung direkt *Dreiecke verringern* an.",
-      "Die Analyse des Stützbedarfs großer Modelle ist deutlich schneller."
+      "Die 3D-Ansicht zeichnet mit einer neuen Grafikschicht. Sie spricht die Grafikkarte über Direct3D 12, Vulkan oder Metal an und bleibt auch bei mehreren Millionen Dreiecken flüssig.",
+      "Vertiefungen und Kanten treten plastischer hervor: Die Ansicht dunkelt Ecken ab, zieht Tiefenlinien und trifft beim Anklicken den Punkt, auf den Sie zeigen.",
+      "Körperkanten stehen als feines Drahtgitter über der Fläche, und Beschriftungen bleiben ruhig stehen, statt beim Drehen zu zittern.",
+      "Merkmalsnamen überlagern sich nicht mehr, und ihre Marken bleiben auch im Schnitt sichtbar.",
+      "Prüfbericht und Chat schließen rechts mit ihrem eigenen Rand ab. Die Handlungen zur Auswahl stehen darunter in einer eigenen Karte, und zwischen beiden ist das Modell zu sehen.",
+      "Welche Handlungen vorn stehen, richtet sich nach der Auswahl: bei mehreren Körpern Vereinigen, Abziehen und Schnittmenge, bei einem einzelnen Bohrung setzen, Aushöhlen und Teilen.",
+      "An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.",
+      "Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern.",
+      "Vereinigen, Abziehen und Schneiden nehmen alle gewählten Körper auf einmal, nicht nur genau zwei.",
+      "Verrunden bricht die Anwendung nicht mehr ab, wenn der Radius größer ist als die Wand, die er verrunden soll.",
+      "Ein Körper aus dem exakten Kern bleibt exakt, wenn Sie ihn nur verschieben oder drehen. Verrunden und Fasen bleiben danach möglich.",
+      "Das Bohrwerkzeug ragt nur noch an der Mündung über den Körper hinaus und lehnt Durchmesser ab, die das Teil um ein Vielfaches übersteigen.",
+      "Ein eingelesener Scan trägt keine erfundenen Kuppeln und Pfannen mehr; bisher entstanden sie zu Hunderten aus glatt gerundeten Flächen.",
+      "Mehrere Gewinde auf einer Platte werden einzeln benannt, nicht als ein Merkmal zusammengefasst.",
+      "Kugel, Torus und Kegel weisen ihre Krümmung aus, Zylindermitten stimmen mit den Endringen, und Gewindegänge folgen der Achse.",
+      "Das Merkmalsfeld bietet Passungen nur an, wenn ein zweiter Körper gewählt ist, und kennt jede Gruppe des Kerns.",
+      "Die Ausrichtungssuche urteilt zweistufig: zweihundert Lagen aus den Flächennormalen, davon neun in der Schichtanalyse.",
+      "Ihr Fortschrittsbalken läuft bis zum Ende, auch wenn nichts zu schneiden war.",
+      "Der Slicer bekommt die Welt des Druckers und nicht die von Solidon, und ein eigenes Profil behält seine Herstellerbasis.",
+      "Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand.",
+      "Eine 3MF mit vielen Verdopplungsebenen wird abgelehnt, bevor aus 432 Byte tausend Körper werden.",
+      "Eine kleine Projektdatei fordert keine Gigabyte Speicher mehr an.",
+      "Eine GLB-Datei in Millimetern kommt in Millimetern an und nicht als Meter.",
+      "Ein gescheitertes Speichern nimmt die letzte Sicherung nicht mehr mit, und Abbrechen bricht den Import wirklich ab.",
+      "Ein Zusatzwerkzeug mit falschem Feldtyp reißt den Zug des Agenten nicht mehr ab.",
+      "Der Agent nennt zu Skizzenvarianten nur Menüwege, die es gibt.",
+      "Bei der Bildgenerierung kommen die Gewichte ganz oder gar nicht an, und ein einzelner Wert im Strukturfeld löst keine unbestellte Erzeugung aus.",
+      "Ein lokales Modell wird auch dann gemessen, wenn es über HTTPS auf einem eigenen Port antwortet.",
+      "Als Mindestversion gilt macOS 13, gleich in Paket, Installer und auf der Website.",
+      "Dreizehn Bibliotheken stehen auf ihren neuesten stabilen Fassungen, und der exakte Kern spricht OpenCASCADE 8.",
+      "Ein Paket ohne Vertrauensanker im System bringt seinen eigenen Satz mit, gleich auf welcher Plattform.",
+      "Handbuch und Bedienbelege zeigen die überarbeitete Oberfläche in allen sechs Sprachen.",
+      "Die Zeichnungen des Handbuchs halten den Textkontrast auch in ihren Nebenbemerkungen.",
+      "Das Handbuchfenster lädt nur seine eigenen Abbildungen und keine fremden Bilder."
     ],
     "en": [
-      "A bore and its linked countersink now move together, whichever of the two you select. The feature panel identifies the link before you make the change.",
-      "When you edit a bore, its countersink remains assigned beneath it in the object tree and can be adjusted directly as well.",
-      "The feature panel combines identical unavailable actions and clearly names the affected groups of fields.",
-      "Threads in imported models are recognised more reliably; incorrect cones, pins and spheres on them no longer appear as separate features.",
-      "Narrow seams between joined shapes no longer create large numbers of incorrect features.",
-      "Feature recognition is noticeably faster on large, detailed models.",
-      "Analysis maps are now available for more large models.",
-      "If an analysis map is too large for a model, the message directly offers *Reduce triangles*.",
-      "Support-need analysis is considerably faster on large models."
+      "The 3D view now draws with a new graphics layer. It addresses the graphics card through Direct3D 12, Vulkan or Metal and stays fluid even at several million triangles.",
+      "Recesses and edges stand out more clearly: the view darkens corners, draws depth lines and hits the point you are pointing at.",
+      "Body edges sit as a fine wireframe above the surface, and labels hold still instead of jittering while you orbit.",
+      "Feature names no longer overlap, and their markers stay visible inside a section as well.",
+      "Report and chat now close with their own edge on the right. The actions for the selection sit below them in a card of their own, with the model visible between the two.",
+      "Which actions come first depends on the selection: with several bodies Unite, Subtract and Intersection, with a single one Drill a bore, Hollow out and Split.",
+      "On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.",
+      "A selected body shows its filaments right there and lets you change them.",
+      "Unite, Subtract and Cut now take every selected body at once instead of exactly two.",
+      "Fillet no longer takes the application down when the radius is larger than the wall it is meant to round.",
+      "A body from the exact kernel stays exact when you only move or rotate it. Fillet and chamfer remain available afterwards.",
+      "The drilling tool now protrudes only at the mouth of the bore and rejects diameters that exceed the part many times over.",
+      "An imported scan no longer carries invented domes and sockets; until now they arose in their hundreds from smoothly rounded surfaces.",
+      "Several threads on one plate are named individually instead of being merged into a single feature.",
+      "Sphere, torus and cone report their curvature, cylinder centres match their end rings, and thread turns follow the axis.",
+      "The feature panel offers fits only when a second body is selected, and it knows every group the core uses.",
+      "The orientation search now judges in two stages: two hundred poses from the surface normals, nine of them in the layer analysis.",
+      "Its progress bar runs to the end even when there was nothing to cut.",
+      "The slicer receives the world of the printer instead of the one from Solidon, and a custom profile keeps its vendor base.",
+      "Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory.",
+      "A 3MF with many levels of duplication is rejected before 432 bytes turn into a thousand bodies.",
+      "A small project file no longer asks for gigabytes of memory.",
+      "A GLB file in millimetres arrives in millimetres and not as metres.",
+      "A failed save no longer takes the last backup with it, and cancelling really does cancel the import.",
+      "An extra tool with a wrongly typed field no longer tears down the whole run of the agent.",
+      "For sketch variants the agent now names only menu paths that exist.",
+      "In image generation the weights arrive whole or not at all, and a single value in the structure field no longer triggers an unordered generation.",
+      "A local model is measured even when it answers over HTTPS on a port of its own.",
+      "The minimum version is now macOS 13, alike in package, installer and on the website.",
+      "Thirteen libraries are on their latest stable releases, and the exact kernel speaks OpenCASCADE 8.",
+      "A package without a trust anchor in the system brings its own set along, on every platform.",
+      "Manual and screenshots show the reworked interface in all six languages.",
+      "The drawings in the manual keep the text contrast in their side notes as well.",
+      "The manual window loads only its own figures and no external images."
     ],
     "es": [
-      "Un taladro y su avellanado vinculado se desplazan ahora juntos, sin importar cuál de los dos se seleccione. El panel de características indica la vinculación antes del cambio.",
-      "Al modificar un taladro, su avellanado permanece asignado debajo de él en el árbol de objetos y también se puede ajustar directamente.",
-      "El panel de características agrupa las acciones no disponibles iguales e indica con claridad los grupos de campos afectados.",
-      "Las roscas de los modelos importados se reconocen con mayor fiabilidad; los conos, salientes y esferas incorrectos que aparecen en ellas ya no se muestran como características independientes.",
-      "Las uniones estrechas entre formas ensambladas ya no generan una gran cantidad de características incorrectas.",
-      "El reconocimiento de características es notablemente más rápido en modelos grandes y detallados.",
-      "Los mapas de análisis están disponibles para más modelos grandes.",
-      "Si un mapa de análisis es demasiado grande para un modelo, el aviso ofrece directamente *Reducir triángulos*.",
-      "El análisis de la necesidad de soportes es considerablemente más rápido en modelos grandes."
+      "La vista 3D dibuja con una nueva capa gráfica. Se dirige a la tarjeta gráfica mediante Direct3D 12, Vulkan o Metal y sigue fluida incluso con varios millones de triángulos.",
+      "Los rebajes y las aristas destacan más: la vista oscurece los rincones, traza líneas de profundidad y acierta el punto al que apunta.",
+      "Las aristas de los cuerpos se muestran como una fina malla sobre la superficie, y los rótulos se mantienen quietos en lugar de temblar al girar.",
+      "Los nombres de las características ya no se superponen y sus marcas siguen visibles también en la sección.",
+      "El informe de comprobación y el chat cierran a la derecha con su propio borde. Las acciones para la selección quedan debajo en una tarjeta propia, y entre ambas se ve el modelo.",
+      "Qué acciones aparecen delante depende de la selección: con varios cuerpos Unir, Sustraer e Intersección; con uno solo Hacer un taladro, Vaciar y Separar.",
+      "En un taladro seleccionado aparecen Avellanar y Cerrar un taladro; en una cara, Hacer un taladro, Cortar una cavidad y Desplazar cara.",
+      "Un cuerpo seleccionado muestra allí mismo sus filamentos y permite cambiarlos.",
+      "Unir, Sustraer y Cortar toman todos los cuerpos seleccionados a la vez, no exactamente dos.",
+      "Redondear ya no tumba la aplicación cuando el radio es mayor que la pared que debe redondear.",
+      "Un cuerpo del núcleo exacto sigue siendo exacto si solo lo mueve o lo gira. Redondear y aplicar chaflanes siguen siendo posibles después.",
+      "La herramienta de taladrado sobresale solo en la boca del agujero y rechaza diámetros que superan la pieza muchas veces.",
+      "Un escaneo importado ya no trae cúpulas ni casquillos inventados; hasta ahora surgían por centenares de superficies redondeadas suavemente.",
+      "Varias roscas en una placa se nombran por separado en lugar de reunirse en una sola característica.",
+      "Esfera, toro y cono declaran su curvatura, los centros de cilindro coinciden con sus anillos finales y los pasos de rosca siguen el eje.",
+      "El panel de características ofrece ajustes solo cuando hay un segundo cuerpo seleccionado y conoce cada grupo del núcleo.",
+      "La búsqueda de orientación juzga en dos etapas: doscientas posiciones a partir de las normales, nueve de ellas en el análisis por capas.",
+      "Su barra de progreso llega hasta el final aunque no hubiera nada que cortar.",
+      "El programa de laminado recibe el mundo de la impresora y no el de Solidon, y un perfil propio conserva su base del fabricante.",
+      "Los perfiles de laminado propios van delante del perfil del fabricante con el mismo nombre, y un AppImage encuentra su inventario.",
+      "Un 3MF con muchos niveles de duplicación se rechaza antes de que 432 bytes se conviertan en mil cuerpos.",
+      "Un archivo de proyecto pequeño ya no reclama gigabytes de memoria.",
+      "Un archivo GLB en milímetros llega en milímetros y no como metros.",
+      "Un guardado fallido ya no se lleva la última copia de seguridad, y cancelar cancela de verdad la importación.",
+      "Una herramienta adicional con un campo mal tipado ya no interrumpe toda la serie del agente.",
+      "Para las variantes de boceto el agente indica solo rutas de menú que existen.",
+      "En la generación de imágenes los pesos llegan completos o no llegan, y un solo valor en el campo de estructura ya no provoca una generación no pedida.",
+      "Un modelo local se mide también cuando responde por HTTPS en un puerto propio.",
+      "La versión mínima es ahora macOS 13, igual en paquete, instalador y sitio web.",
+      "Trece bibliotecas están en sus versiones estables más recientes, y el núcleo exacto habla OpenCASCADE 8.",
+      "Un paquete sin ancla de confianza en el sistema trae su propio juego, en cualquier plataforma.",
+      "El manual y las capturas muestran la interfaz renovada en los seis idiomas.",
+      "Los dibujos del manual mantienen el contraste del texto también en sus notas al margen.",
+      "La ventana del manual carga solo sus propias figuras y ninguna imagen externa."
     ],
     "fr": [
-      "Un perçage et sa fraisure liée se déplacent désormais ensemble, quel que soit celui des deux que vous sélectionnez. Le panneau Caractéristique indique ce lien avant la modification.",
-      "Lorsque vous modifiez un perçage, sa fraisure reste associée sous lui dans l’arborescence et peut elle aussi être ajustée directement.",
-      "Le panneau Caractéristique regroupe les actions identiques qui ne sont pas disponibles et nomme clairement les groupes de champs concernés.",
-      "Les filetages des modèles importés sont reconnus de manière plus fiable ; les cônes, tenons et sphères incorrects qui s’y trouvent n’apparaissent plus comme des caractéristiques distinctes.",
-      "Les jointures étroites entre des formes assemblées ne créent plus de nombreuses caractéristiques incorrectes.",
-      "La reconnaissance des caractéristiques est sensiblement plus rapide sur les grands modèles détaillés.",
-      "Les cartes d’analyse sont disponibles pour davantage de grands modèles.",
-      "Si une carte d’analyse est trop grande pour un modèle, le message propose directement *Réduire les triangles*.",
-      "L’analyse du besoin en supports est nettement plus rapide sur les grands modèles."
+      "La vue 3D dessine avec une nouvelle couche graphique. Elle adresse la carte graphique via Direct3D 12, Vulkan ou Metal et reste fluide même à plusieurs millions de triangles.",
+      "Les creux et les arêtes ressortent davantage : la vue assombrit les coins, trace des lignes de profondeur et atteint le point que vous désignez.",
+      "Les arêtes des corps forment un fin maillage au-dessus de la surface, et les étiquettes restent immobiles au lieu de trembler pendant la rotation.",
+      "Les noms des caractéristiques ne se chevauchent plus, et leurs marques restent visibles même dans la coupe.",
+      "Le rapport de contrôle et le chat se terminent à droite par leur propre bord. Les actions pour la sélection se trouvent en dessous dans une carte distincte, et le modèle apparaît entre les deux.",
+      "Les actions mises en avant dépendent de la sélection : avec plusieurs corps Réunir, Soustraire et Intersection, avec un seul Percer un trou, Évidement et Séparer.",
+      "Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.",
+      "Un corps sélectionné affiche ses filaments sur place et permet de les changer.",
+      "Réunir, Soustraire et Couper prennent tous les corps sélectionnés à la fois, et non exactement deux.",
+      "Le congé n'emporte plus l'application quand le rayon dépasse la paroi qu'il doit arrondir.",
+      "Un corps du noyau exact reste exact si vous ne faites que le déplacer ou le tourner. Congés et chanfreins restent possibles ensuite.",
+      "L'outil de perçage ne dépasse plus qu'à l'entrée du trou et refuse les diamètres qui dépassent la pièce de plusieurs fois.",
+      "Un scan importé ne porte plus de dômes ni de cupules inventés ; jusqu'ici ils naissaient par centaines de surfaces arrondies en douceur.",
+      "Plusieurs filetages sur une plaque sont nommés séparément au lieu d'être réunis en une seule caractéristique.",
+      "Sphère, tore et cône déclarent leur courbure, les centres de cylindre correspondent à leurs anneaux d'extrémité, et les pas de filetage suivent l'axe.",
+      "Le panneau des caractéristiques ne propose des ajustements que lorsqu'un second corps est sélectionné, et il connaît chaque groupe du noyau.",
+      "La recherche d'orientation juge en deux étapes : deux cents poses issues des normales, dont neuf dans l'analyse par couches.",
+      "Sa barre de progression va jusqu'au bout, même quand il n'y avait rien à couper.",
+      "Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.",
+      "Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock.",
+      "Un 3MF comportant de nombreux niveaux de duplication est refusé avant que 432 octets ne deviennent mille corps.",
+      "Un petit fichier de projet ne réclame plus des gigaoctets de mémoire.",
+      "Un fichier GLB en millimètres arrive en millimètres et non en mètres.",
+      "Un enregistrement raté n'emporte plus la dernière sauvegarde, et annuler annule vraiment l'import.",
+      "Un outil supplémentaire dont un champ est mal typé n'interrompt plus toute la série de l'agent.",
+      "Pour les variantes d'esquisse, l'agent ne nomme que des chemins de menu qui existent.",
+      "À la génération d'images, les poids arrivent entiers ou pas du tout, et une seule valeur dans le champ de structure ne déclenche plus de génération non demandée.",
+      "Un modèle local est mesuré même lorsqu'il répond en HTTPS sur un port qui lui est propre.",
+      "La version minimale est désormais macOS 13, à l'identique dans le paquet, l'installateur et sur le site.",
+      "Treize bibliothèques sont dans leurs dernières versions stables, et le noyau exact parle OpenCASCADE 8.",
+      "Un paquet sans ancre de confiance dans le système apporte son propre jeu, sur toutes les plateformes.",
+      "Le manuel et les captures montrent l'interface remaniée dans les six langues.",
+      "Les dessins du manuel conservent le contraste du texte jusque dans leurs remarques annexes.",
+      "La fenêtre du manuel ne charge que ses propres figures et aucune image étrangère."
     ],
     "it": [
-      "Un foro e la sua svasatura collegata vengono ora spostati insieme, indipendentemente da quale dei due sia selezionato. Il pannello delle caratteristiche indica il collegamento prima della modifica.",
-      "Quando si modifica un foro, la sua svasatura resta associata sotto di esso nell’albero degli oggetti e può essere adattata direttamente.",
-      "Il pannello delle caratteristiche raggruppa le azioni identiche non disponibili e indica con chiarezza i gruppi di campi interessati.",
-      "Le filettature dei modelli importati vengono riconosciute in modo più affidabile; coni, perni e sfere errati al loro interno non appaiono più come caratteristiche separate.",
-      "Le giunzioni strette tra forme unite non generano più numerose caratteristiche errate.",
-      "Il riconoscimento delle caratteristiche è sensibilmente più rapido sui modelli grandi e dettagliati.",
-      "Le mappe di analisi sono disponibili per un numero maggiore di modelli grandi.",
-      "Se una mappa di analisi è troppo grande per un modello, il messaggio propone direttamente *Riduci triangoli*.",
-      "L’analisi del fabbisogno di supporti è notevolmente più rapida sui modelli grandi."
+      "La vista 3D disegna con un nuovo livello grafico. Si rivolge alla scheda grafica tramite Direct3D 12, Vulkan o Metal e resta fluida anche con diversi milioni di triangoli.",
+      "Incavi e spigoli risaltano di più: la vista scurisce gli angoli, traccia linee di profondità e coglie il punto che stai indicando.",
+      "Gli spigoli dei corpi stanno come reticolo fine sopra la superficie, e le etichette restano ferme invece di tremare durante la rotazione.",
+      "I nomi delle caratteristiche non si sovrappongono più e i loro segni restano visibili anche nella sezione.",
+      "Il rapporto di verifica e la chat si chiudono a destra con un bordo proprio. Le azioni per la selezione stanno sotto in una scheda propria e tra le due si vede il modello.",
+      "Quali azioni stiano davanti dipende dalla selezione: con più corpi Unisci, Sottrai e Intersezione, con uno solo Pratica un foro, Svuota e Dividere.",
+      "Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.",
+      "Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli.",
+      "Unisci, Sottrai e Taglia prendono tutti i corpi selezionati in una volta, non esattamente due.",
+      "Raccorda non porta più giù l'applicazione quando il raggio supera la parete che deve arrotondare.",
+      "Un corpo del nucleo esatto resta esatto se lo si sposta o lo si ruota soltanto. Raccordi e smussi restano possibili in seguito.",
+      "L'utensile di foratura sporge solo alla bocca del foro e rifiuta diametri che superano il pezzo di parecchie volte.",
+      "Una scansione importata non porta più cupole e coppe inventate; finora nascevano a centinaia da superfici arrotondate in modo uniforme.",
+      "Più filetti su una piastra vengono nominati singolarmente invece di essere riuniti in una sola caratteristica.",
+      "Sfera, toro e cono dichiarano la loro curvatura, i centri dei cilindri coincidono con gli anelli terminali e i passi di filetto seguono l'asse.",
+      "Il pannello delle caratteristiche propone accoppiamenti solo quando è selezionato un secondo corpo e conosce ogni gruppo del nucleo.",
+      "La ricerca dell'orientamento giudica in due fasi: duecento posizioni dalle normali, nove delle quali nell'analisi a strati.",
+      "La sua barra di avanzamento arriva alla fine anche quando non c'era nulla da tagliare.",
+      "Lo slicer riceve il mondo della stampante e non quello di Solidon, e un profilo proprio mantiene la sua base del produttore.",
+      "I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte.",
+      "Un 3MF con molti livelli di duplicazione viene rifiutato prima che da 432 byte nascano mille corpi.",
+      "Un piccolo file di progetto non richiede più gigabyte di memoria.",
+      "Un file GLB in millimetri arriva in millimetri e non come metri.",
+      "Un salvataggio fallito non porta più via l'ultima copia di sicurezza, e annullare annulla davvero l'importazione.",
+      "Uno strumento aggiuntivo con un campo di tipo errato non interrompe più l'intera serie dell'agente.",
+      "Per le varianti di schizzo l'agente indica solo percorsi di menu che esistono.",
+      "Nella generazione di immagini i pesi arrivano interi o non arrivano, e un singolo valore nel campo della struttura non avvia più una generazione non richiesta.",
+      "Un modello locale viene misurato anche quando risponde via HTTPS su una porta propria.",
+      "La versione minima è ora macOS 13, uguale nel pacchetto, nell'installer e sul sito.",
+      "Tredici librerie sono alle loro ultime versioni stabili, e il nucleo esatto parla OpenCASCADE 8.",
+      "Un pacchetto senza ancora di fiducia nel sistema porta con sé il proprio insieme, su qualunque piattaforma.",
+      "Manuale e schermate mostrano l'interfaccia rielaborata in tutte e sei le lingue.",
+      "I disegni del manuale mantengono il contrasto del testo anche nelle loro note a margine.",
+      "La finestra del manuale carica solo le proprie figure e nessuna immagine estranea."
     ],
     "pt": [
-      "Um furo e o seu escareamento associado passam agora a ser deslocados em conjunto, independentemente de qual dos dois é selecionado. O painel de características indica a ligação antes da alteração.",
-      "Ao alterar um furo, o respetivo escareamento mantém-se associado por baixo dele na árvore de objetos e também pode ser ajustado diretamente.",
-      "O painel de características agrupa ações indisponíveis iguais e indica claramente os grupos de campos afetados.",
-      "As roscas dos modelos importados são reconhecidas com maior fiabilidade; cones, pinos e esferas incorretos nelas deixam de aparecer como características separadas.",
-      "As uniões estreitas entre formas reunidas deixam de criar numerosas características incorretas.",
-      "O reconhecimento de características é visivelmente mais rápido em modelos grandes e detalhados.",
-      "Os mapas de análise estão disponíveis para mais modelos grandes.",
-      "Se um mapa de análise for demasiado grande para um modelo, a mensagem oferece diretamente *Reduzir triângulos*.",
-      "A análise da necessidade de suportes é consideravelmente mais rápida em modelos grandes."
+      "A vista 3D desenha com uma nova camada gráfica. Dirige-se à placa gráfica através de Direct3D 12, Vulkan ou Metal e mantém-se fluida mesmo com vários milhões de triângulos.",
+      "Reentrâncias e arestas destacam-se mais: a vista escurece os cantos, traça linhas de profundidade e acerta o ponto para onde aponta.",
+      "As arestas dos corpos ficam como uma malha fina sobre a superfície, e as legendas mantêm-se quietas em vez de tremer ao rodar.",
+      "Os nomes das características já não se sobrepõem e as suas marcas continuam visíveis também no corte.",
+      "O relatório de verificação e o chat fecham à direita com a sua própria borda. As ações para a seleção ficam abaixo num cartão próprio, e entre os dois vê-se o modelo.",
+      "Quais ações ficam à frente depende da seleção: com vários corpos Unir, Subtrair e Interseção; com um só Abrir furo, Esvaziar e Separar.",
+      "Num furo selecionado aparecem Escarear e Fechar furo; numa face, Abrir furo, Cortar bolsa e Deslocar a face.",
+      "Um corpo selecionado mostra ali os seus filamentos e permite alterá-los.",
+      "Unir, Subtrair e Cortar levam todos os corpos selecionados de uma vez, e não exatamente dois.",
+      "Arredondar já não derruba a aplicação quando o raio é maior do que a parede que deve arredondar.",
+      "Um corpo do núcleo exato continua exato se apenas o mover ou rodar. Arredondar e chanfrar continuam possíveis depois.",
+      "A ferramenta de furação só sobressai à entrada do furo e recusa diâmetros que excedem a peça em várias vezes.",
+      "Uma digitalização importada já não traz cúpulas nem taças inventadas; até agora surgiam às centenas de superfícies arredondadas suavemente.",
+      "Várias roscas numa placa são nomeadas separadamente em vez de serem reunidas numa única característica.",
+      "Esfera, toro e cone declaram a sua curvatura, os centros dos cilindros coincidem com os anéis das extremidades e os passos de rosca seguem o eixo.",
+      "O painel de características só oferece ajustes quando há um segundo corpo selecionado e conhece cada grupo do núcleo.",
+      "A busca de orientação julga em duas etapas: duzentas posições a partir das normais, nove delas na análise por camadas.",
+      "A sua barra de progresso vai até ao fim, mesmo quando não havia nada a cortar.",
+      "O laminador recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.",
+      "Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário.",
+      "Um 3MF com muitos níveis de duplicação é recusado antes que 432 bytes se tornem mil corpos.",
+      "Um ficheiro de projeto pequeno já não pede gigabytes de memória.",
+      "Um ficheiro GLB em milímetros chega em milímetros e não como metros.",
+      "Uma gravação falhada já não leva consigo a última cópia de segurança, e cancelar cancela realmente a importação.",
+      "Uma ferramenta adicional com um campo de tipo errado já não interrompe toda a série do agente.",
+      "Para as variantes de esboço o agente indica apenas caminhos de menu que existem.",
+      "Na geração de imagens os pesos chegam inteiros ou não chegam, e um único valor no campo de estrutura já não desencadeia uma geração não pedida.",
+      "Um modelo local é medido também quando responde por HTTPS numa porta própria.",
+      "A versão mínima é agora macOS 13, igual no pacote, no instalador e no site.",
+      "Treze bibliotecas estão nas suas versões estáveis mais recentes, e o núcleo exato fala OpenCASCADE 8.",
+      "Um pacote sem âncora de confiança no sistema traz o seu próprio conjunto, em qualquer plataforma.",
+      "O manual e as capturas mostram a interface renovada nas seis línguas.",
+      "Os desenhos do manual mantêm o contraste do texto também nas suas notas laterais.",
+      "A janela do manual carrega apenas as suas próprias figuras e nenhuma imagem alheia."
     ]
   },
   "notes_by_language": {
@@ -107,161 +257,491 @@
   "groups": {
     "de": [
       {
-        "title": "Erkannte Merkmale bearbeiten",
+        "title": "Ansicht",
         "points": [
-          "Eine Bohrung und ihre verknüpfte Senkung werden beim Verschieben gemeinsam versetzt — gleich, welche der beiden gewählt wurde. Der Merkmalbereich weist vor der Änderung auf die Kopplung hin.",
-          "Beim Ändern einer Bohrung bleibt ihre Senkung im Objektbaum zugeordnet und kann direkt mitangepasst werden.",
-          "Der Merkmalbereich fasst gleiche Ablehnungen zusammen und benennt die betroffenen Feldgruppen klar."
+          "Die 3D-Ansicht zeichnet mit einer neuen Grafikschicht. Sie spricht die Grafikkarte über Direct3D 12, Vulkan oder Metal an und bleibt auch bei mehreren Millionen Dreiecken flüssig.",
+          "Vertiefungen und Kanten treten plastischer hervor: Die Ansicht dunkelt Ecken ab, zieht Tiefenlinien und trifft beim Anklicken den Punkt, auf den Sie zeigen.",
+          "Körperkanten stehen als feines Drahtgitter über der Fläche, und Beschriftungen bleiben ruhig stehen, statt beim Drehen zu zittern.",
+          "Merkmalsnamen überlagern sich nicht mehr, und ihre Marken bleiben auch im Schnitt sichtbar."
         ]
       },
       {
-        "title": "Merkmalserkennung",
+        "title": "Handlungen zur Auswahl",
         "points": [
-          "Gewinde in importierten Modellen werden zuverlässiger erkannt; falsche Kegel, Zapfen und Kugeln daran erscheinen nicht mehr als eigene Merkmale.",
-          "Schmale Nähte zwischen zusammengefügten Formen erzeugen nicht mehr zahlreiche falsche Merkmale.",
-          "Die Merkmalserkennung großer, detailreicher Modelle ist spürbar schneller."
+          "Prüfbericht und Chat schließen rechts mit ihrem eigenen Rand ab. Die Handlungen zur Auswahl stehen darunter in einer eigenen Karte, und zwischen beiden ist das Modell zu sehen.",
+          "Welche Handlungen vorn stehen, richtet sich nach der Auswahl: bei mehreren Körpern Vereinigen, Abziehen und Schnittmenge, bei einem einzelnen Bohrung setzen, Aushöhlen und Teilen.",
+          "An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.",
+          "Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern."
         ]
       },
       {
-        "title": "Analysekarten",
+        "title": "Konstruieren und Ändern",
         "points": [
-          "Analysekarten stehen für mehr große Modelle zur Verfügung.",
-          "Ist eine Analysekarte für ein Modell zu groß, bietet die Meldung direkt *Dreiecke verringern* an.",
-          "Die Analyse des Stützbedarfs großer Modelle ist deutlich schneller."
+          "Vereinigen, Abziehen und Schneiden nehmen alle gewählten Körper auf einmal, nicht nur genau zwei.",
+          "Verrunden bricht die Anwendung nicht mehr ab, wenn der Radius größer ist als die Wand, die er verrunden soll.",
+          "Ein Körper aus dem exakten Kern bleibt exakt, wenn Sie ihn nur verschieben oder drehen. Verrunden und Fasen bleiben danach möglich.",
+          "Das Bohrwerkzeug ragt nur noch an der Mündung über den Körper hinaus und lehnt Durchmesser ab, die das Teil um ein Vielfaches übersteigen."
+        ]
+      },
+      {
+        "title": "Merkmale",
+        "points": [
+          "Ein eingelesener Scan trägt keine erfundenen Kuppeln und Pfannen mehr; bisher entstanden sie zu Hunderten aus glatt gerundeten Flächen.",
+          "Mehrere Gewinde auf einer Platte werden einzeln benannt, nicht als ein Merkmal zusammengefasst.",
+          "Kugel, Torus und Kegel weisen ihre Krümmung aus, Zylindermitten stimmen mit den Endringen, und Gewindegänge folgen der Achse.",
+          "Das Merkmalsfeld bietet Passungen nur an, wenn ein zweiter Körper gewählt ist, und kennt jede Gruppe des Kerns."
+        ]
+      },
+      {
+        "title": "Drucken und Vorbereiten",
+        "points": [
+          "Die Ausrichtungssuche urteilt zweistufig: zweihundert Lagen aus den Flächennormalen, davon neun in der Schichtanalyse.",
+          "Ihr Fortschrittsbalken läuft bis zum Ende, auch wenn nichts zu schneiden war.",
+          "Der Slicer bekommt die Welt des Druckers und nicht die von Solidon, und ein eigenes Profil behält seine Herstellerbasis.",
+          "Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand."
+        ]
+      },
+      {
+        "title": "Dateien und Projekte",
+        "points": [
+          "Eine 3MF mit vielen Verdopplungsebenen wird abgelehnt, bevor aus 432 Byte tausend Körper werden.",
+          "Eine kleine Projektdatei fordert keine Gigabyte Speicher mehr an.",
+          "Eine GLB-Datei in Millimetern kommt in Millimetern an und nicht als Meter.",
+          "Ein gescheitertes Speichern nimmt die letzte Sicherung nicht mehr mit, und Abbrechen bricht den Import wirklich ab."
+        ]
+      },
+      {
+        "title": "Chat und KI",
+        "points": [
+          "Ein Zusatzwerkzeug mit falschem Feldtyp reißt den Zug des Agenten nicht mehr ab.",
+          "Der Agent nennt zu Skizzenvarianten nur Menüwege, die es gibt.",
+          "Bei der Bildgenerierung kommen die Gewichte ganz oder gar nicht an, und ein einzelner Wert im Strukturfeld löst keine unbestellte Erzeugung aus.",
+          "Ein lokales Modell wird auch dann gemessen, wenn es über HTTPS auf einem eigenen Port antwortet."
+        ]
+      },
+      {
+        "title": "Update, Installation und System",
+        "points": [
+          "Als Mindestversion gilt macOS 13, gleich in Paket, Installer und auf der Website.",
+          "Dreizehn Bibliotheken stehen auf ihren neuesten stabilen Fassungen, und der exakte Kern spricht OpenCASCADE 8.",
+          "Ein Paket ohne Vertrauensanker im System bringt seinen eigenen Satz mit, gleich auf welcher Plattform."
+        ]
+      },
+      {
+        "title": "Handbuch und Website",
+        "points": [
+          "Handbuch und Bedienbelege zeigen die überarbeitete Oberfläche in allen sechs Sprachen.",
+          "Die Zeichnungen des Handbuchs halten den Textkontrast auch in ihren Nebenbemerkungen.",
+          "Das Handbuchfenster lädt nur seine eigenen Abbildungen und keine fremden Bilder."
         ]
       }
     ],
     "en": [
       {
-        "title": "Editing detected features",
+        "title": "View",
         "points": [
-          "A bore and its linked countersink now move together, whichever of the two you select. The feature panel identifies the link before you make the change.",
-          "When you edit a bore, its countersink remains assigned beneath it in the object tree and can be adjusted directly as well.",
-          "The feature panel combines identical unavailable actions and clearly names the affected groups of fields."
+          "The 3D view now draws with a new graphics layer. It addresses the graphics card through Direct3D 12, Vulkan or Metal and stays fluid even at several million triangles.",
+          "Recesses and edges stand out more clearly: the view darkens corners, draws depth lines and hits the point you are pointing at.",
+          "Body edges sit as a fine wireframe above the surface, and labels hold still instead of jittering while you orbit.",
+          "Feature names no longer overlap, and their markers stay visible inside a section as well."
         ]
       },
       {
-        "title": "Feature recognition",
+        "title": "Actions for the selection",
         "points": [
-          "Threads in imported models are recognised more reliably; incorrect cones, pins and spheres on them no longer appear as separate features.",
-          "Narrow seams between joined shapes no longer create large numbers of incorrect features.",
-          "Feature recognition is noticeably faster on large, detailed models."
+          "Report and chat now close with their own edge on the right. The actions for the selection sit below them in a card of their own, with the model visible between the two.",
+          "Which actions come first depends on the selection: with several bodies Unite, Subtract and Intersection, with a single one Drill a bore, Hollow out and Split.",
+          "On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.",
+          "A selected body shows its filaments right there and lets you change them."
         ]
       },
       {
-        "title": "Analysis maps",
+        "title": "Building and editing",
         "points": [
-          "Analysis maps are now available for more large models.",
-          "If an analysis map is too large for a model, the message directly offers *Reduce triangles*.",
-          "Support-need analysis is considerably faster on large models."
+          "Unite, Subtract and Cut now take every selected body at once instead of exactly two.",
+          "Fillet no longer takes the application down when the radius is larger than the wall it is meant to round.",
+          "A body from the exact kernel stays exact when you only move or rotate it. Fillet and chamfer remain available afterwards.",
+          "The drilling tool now protrudes only at the mouth of the bore and rejects diameters that exceed the part many times over."
+        ]
+      },
+      {
+        "title": "Features",
+        "points": [
+          "An imported scan no longer carries invented domes and sockets; until now they arose in their hundreds from smoothly rounded surfaces.",
+          "Several threads on one plate are named individually instead of being merged into a single feature.",
+          "Sphere, torus and cone report their curvature, cylinder centres match their end rings, and thread turns follow the axis.",
+          "The feature panel offers fits only when a second body is selected, and it knows every group the core uses."
+        ]
+      },
+      {
+        "title": "Printing and preparing",
+        "points": [
+          "The orientation search now judges in two stages: two hundred poses from the surface normals, nine of them in the layer analysis.",
+          "Its progress bar runs to the end even when there was nothing to cut.",
+          "The slicer receives the world of the printer instead of the one from Solidon, and a custom profile keeps its vendor base.",
+          "Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory."
+        ]
+      },
+      {
+        "title": "Files and projects",
+        "points": [
+          "A 3MF with many levels of duplication is rejected before 432 bytes turn into a thousand bodies.",
+          "A small project file no longer asks for gigabytes of memory.",
+          "A GLB file in millimetres arrives in millimetres and not as metres.",
+          "A failed save no longer takes the last backup with it, and cancelling really does cancel the import."
+        ]
+      },
+      {
+        "title": "Chat and AI",
+        "points": [
+          "An extra tool with a wrongly typed field no longer tears down the whole run of the agent.",
+          "For sketch variants the agent now names only menu paths that exist.",
+          "In image generation the weights arrive whole or not at all, and a single value in the structure field no longer triggers an unordered generation.",
+          "A local model is measured even when it answers over HTTPS on a port of its own."
+        ]
+      },
+      {
+        "title": "Update, installation and system",
+        "points": [
+          "The minimum version is now macOS 13, alike in package, installer and on the website.",
+          "Thirteen libraries are on their latest stable releases, and the exact kernel speaks OpenCASCADE 8.",
+          "A package without a trust anchor in the system brings its own set along, on every platform."
+        ]
+      },
+      {
+        "title": "Manual and website",
+        "points": [
+          "Manual and screenshots show the reworked interface in all six languages.",
+          "The drawings in the manual keep the text contrast in their side notes as well.",
+          "The manual window loads only its own figures and no external images."
         ]
       }
     ],
     "es": [
       {
-        "title": "Editar características detectadas",
+        "title": "Vista",
         "points": [
-          "Un taladro y su avellanado vinculado se desplazan ahora juntos, sin importar cuál de los dos se seleccione. El panel de características indica la vinculación antes del cambio.",
-          "Al modificar un taladro, su avellanado permanece asignado debajo de él en el árbol de objetos y también se puede ajustar directamente.",
-          "El panel de características agrupa las acciones no disponibles iguales e indica con claridad los grupos de campos afectados."
+          "La vista 3D dibuja con una nueva capa gráfica. Se dirige a la tarjeta gráfica mediante Direct3D 12, Vulkan o Metal y sigue fluida incluso con varios millones de triángulos.",
+          "Los rebajes y las aristas destacan más: la vista oscurece los rincones, traza líneas de profundidad y acierta el punto al que apunta.",
+          "Las aristas de los cuerpos se muestran como una fina malla sobre la superficie, y los rótulos se mantienen quietos en lugar de temblar al girar.",
+          "Los nombres de las características ya no se superponen y sus marcas siguen visibles también en la sección."
         ]
       },
       {
-        "title": "Reconocimiento de características",
+        "title": "Acciones para la selección",
         "points": [
-          "Las roscas de los modelos importados se reconocen con mayor fiabilidad; los conos, salientes y esferas incorrectos que aparecen en ellas ya no se muestran como características independientes.",
-          "Las uniones estrechas entre formas ensambladas ya no generan una gran cantidad de características incorrectas.",
-          "El reconocimiento de características es notablemente más rápido en modelos grandes y detallados."
+          "El informe de comprobación y el chat cierran a la derecha con su propio borde. Las acciones para la selección quedan debajo en una tarjeta propia, y entre ambas se ve el modelo.",
+          "Qué acciones aparecen delante depende de la selección: con varios cuerpos Unir, Sustraer e Intersección; con uno solo Hacer un taladro, Vaciar y Separar.",
+          "En un taladro seleccionado aparecen Avellanar y Cerrar un taladro; en una cara, Hacer un taladro, Cortar una cavidad y Desplazar cara.",
+          "Un cuerpo seleccionado muestra allí mismo sus filamentos y permite cambiarlos."
         ]
       },
       {
-        "title": "Mapas de análisis",
+        "title": "Construir y modificar",
         "points": [
-          "Los mapas de análisis están disponibles para más modelos grandes.",
-          "Si un mapa de análisis es demasiado grande para un modelo, el aviso ofrece directamente *Reducir triángulos*.",
-          "El análisis de la necesidad de soportes es considerablemente más rápido en modelos grandes."
+          "Unir, Sustraer y Cortar toman todos los cuerpos seleccionados a la vez, no exactamente dos.",
+          "Redondear ya no tumba la aplicación cuando el radio es mayor que la pared que debe redondear.",
+          "Un cuerpo del núcleo exacto sigue siendo exacto si solo lo mueve o lo gira. Redondear y aplicar chaflanes siguen siendo posibles después.",
+          "La herramienta de taladrado sobresale solo en la boca del agujero y rechaza diámetros que superan la pieza muchas veces."
+        ]
+      },
+      {
+        "title": "Características",
+        "points": [
+          "Un escaneo importado ya no trae cúpulas ni casquillos inventados; hasta ahora surgían por centenares de superficies redondeadas suavemente.",
+          "Varias roscas en una placa se nombran por separado en lugar de reunirse en una sola característica.",
+          "Esfera, toro y cono declaran su curvatura, los centros de cilindro coinciden con sus anillos finales y los pasos de rosca siguen el eje.",
+          "El panel de características ofrece ajustes solo cuando hay un segundo cuerpo seleccionado y conoce cada grupo del núcleo."
+        ]
+      },
+      {
+        "title": "Imprimir y preparar",
+        "points": [
+          "La búsqueda de orientación juzga en dos etapas: doscientas posiciones a partir de las normales, nueve de ellas en el análisis por capas.",
+          "Su barra de progreso llega hasta el final aunque no hubiera nada que cortar.",
+          "El programa de laminado recibe el mundo de la impresora y no el de Solidon, y un perfil propio conserva su base del fabricante.",
+          "Los perfiles de laminado propios van delante del perfil del fabricante con el mismo nombre, y un AppImage encuentra su inventario."
+        ]
+      },
+      {
+        "title": "Archivos y proyectos",
+        "points": [
+          "Un 3MF con muchos niveles de duplicación se rechaza antes de que 432 bytes se conviertan en mil cuerpos.",
+          "Un archivo de proyecto pequeño ya no reclama gigabytes de memoria.",
+          "Un archivo GLB en milímetros llega en milímetros y no como metros.",
+          "Un guardado fallido ya no se lleva la última copia de seguridad, y cancelar cancela de verdad la importación."
+        ]
+      },
+      {
+        "title": "Chat e IA",
+        "points": [
+          "Una herramienta adicional con un campo mal tipado ya no interrumpe toda la serie del agente.",
+          "Para las variantes de boceto el agente indica solo rutas de menú que existen.",
+          "En la generación de imágenes los pesos llegan completos o no llegan, y un solo valor en el campo de estructura ya no provoca una generación no pedida.",
+          "Un modelo local se mide también cuando responde por HTTPS en un puerto propio."
+        ]
+      },
+      {
+        "title": "Actualización, instalación y sistema",
+        "points": [
+          "La versión mínima es ahora macOS 13, igual en paquete, instalador y sitio web.",
+          "Trece bibliotecas están en sus versiones estables más recientes, y el núcleo exacto habla OpenCASCADE 8.",
+          "Un paquete sin ancla de confianza en el sistema trae su propio juego, en cualquier plataforma."
+        ]
+      },
+      {
+        "title": "Manual y sitio web",
+        "points": [
+          "El manual y las capturas muestran la interfaz renovada en los seis idiomas.",
+          "Los dibujos del manual mantienen el contraste del texto también en sus notas al margen.",
+          "La ventana del manual carga solo sus propias figuras y ninguna imagen externa."
         ]
       }
     ],
     "fr": [
       {
-        "title": "Modifier les caractéristiques détectées",
+        "title": "Vue",
         "points": [
-          "Un perçage et sa fraisure liée se déplacent désormais ensemble, quel que soit celui des deux que vous sélectionnez. Le panneau Caractéristique indique ce lien avant la modification.",
-          "Lorsque vous modifiez un perçage, sa fraisure reste associée sous lui dans l’arborescence et peut elle aussi être ajustée directement.",
-          "Le panneau Caractéristique regroupe les actions identiques qui ne sont pas disponibles et nomme clairement les groupes de champs concernés."
+          "La vue 3D dessine avec une nouvelle couche graphique. Elle adresse la carte graphique via Direct3D 12, Vulkan ou Metal et reste fluide même à plusieurs millions de triangles.",
+          "Les creux et les arêtes ressortent davantage : la vue assombrit les coins, trace des lignes de profondeur et atteint le point que vous désignez.",
+          "Les arêtes des corps forment un fin maillage au-dessus de la surface, et les étiquettes restent immobiles au lieu de trembler pendant la rotation.",
+          "Les noms des caractéristiques ne se chevauchent plus, et leurs marques restent visibles même dans la coupe."
         ]
       },
       {
-        "title": "Reconnaissance des caractéristiques",
+        "title": "Actions pour la sélection",
         "points": [
-          "Les filetages des modèles importés sont reconnus de manière plus fiable ; les cônes, tenons et sphères incorrects qui s’y trouvent n’apparaissent plus comme des caractéristiques distinctes.",
-          "Les jointures étroites entre des formes assemblées ne créent plus de nombreuses caractéristiques incorrectes.",
-          "La reconnaissance des caractéristiques est sensiblement plus rapide sur les grands modèles détaillés."
+          "Le rapport de contrôle et le chat se terminent à droite par leur propre bord. Les actions pour la sélection se trouvent en dessous dans une carte distincte, et le modèle apparaît entre les deux.",
+          "Les actions mises en avant dépendent de la sélection : avec plusieurs corps Réunir, Soustraire et Intersection, avec un seul Percer un trou, Évidement et Séparer.",
+          "Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.",
+          "Un corps sélectionné affiche ses filaments sur place et permet de les changer."
         ]
       },
       {
-        "title": "Cartes d’analyse",
+        "title": "Construire et modifier",
         "points": [
-          "Les cartes d’analyse sont disponibles pour davantage de grands modèles.",
-          "Si une carte d’analyse est trop grande pour un modèle, le message propose directement *Réduire les triangles*.",
-          "L’analyse du besoin en supports est nettement plus rapide sur les grands modèles."
+          "Réunir, Soustraire et Couper prennent tous les corps sélectionnés à la fois, et non exactement deux.",
+          "Le congé n'emporte plus l'application quand le rayon dépasse la paroi qu'il doit arrondir.",
+          "Un corps du noyau exact reste exact si vous ne faites que le déplacer ou le tourner. Congés et chanfreins restent possibles ensuite.",
+          "L'outil de perçage ne dépasse plus qu'à l'entrée du trou et refuse les diamètres qui dépassent la pièce de plusieurs fois."
+        ]
+      },
+      {
+        "title": "Caractéristiques",
+        "points": [
+          "Un scan importé ne porte plus de dômes ni de cupules inventés ; jusqu'ici ils naissaient par centaines de surfaces arrondies en douceur.",
+          "Plusieurs filetages sur une plaque sont nommés séparément au lieu d'être réunis en une seule caractéristique.",
+          "Sphère, tore et cône déclarent leur courbure, les centres de cylindre correspondent à leurs anneaux d'extrémité, et les pas de filetage suivent l'axe.",
+          "Le panneau des caractéristiques ne propose des ajustements que lorsqu'un second corps est sélectionné, et il connaît chaque groupe du noyau."
+        ]
+      },
+      {
+        "title": "Impression et préparation",
+        "points": [
+          "La recherche d'orientation juge en deux étapes : deux cents poses issues des normales, dont neuf dans l'analyse par couches.",
+          "Sa barre de progression va jusqu'au bout, même quand il n'y avait rien à couper.",
+          "Le trancheur reçoit le monde de l'imprimante et non celui de Solidon, et un profil propre conserve sa base constructeur.",
+          "Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock."
+        ]
+      },
+      {
+        "title": "Fichiers et projets",
+        "points": [
+          "Un 3MF comportant de nombreux niveaux de duplication est refusé avant que 432 octets ne deviennent mille corps.",
+          "Un petit fichier de projet ne réclame plus des gigaoctets de mémoire.",
+          "Un fichier GLB en millimètres arrive en millimètres et non en mètres.",
+          "Un enregistrement raté n'emporte plus la dernière sauvegarde, et annuler annule vraiment l'import."
+        ]
+      },
+      {
+        "title": "Chat et IA",
+        "points": [
+          "Un outil supplémentaire dont un champ est mal typé n'interrompt plus toute la série de l'agent.",
+          "Pour les variantes d'esquisse, l'agent ne nomme que des chemins de menu qui existent.",
+          "À la génération d'images, les poids arrivent entiers ou pas du tout, et une seule valeur dans le champ de structure ne déclenche plus de génération non demandée.",
+          "Un modèle local est mesuré même lorsqu'il répond en HTTPS sur un port qui lui est propre."
+        ]
+      },
+      {
+        "title": "Mise à jour, installation et système",
+        "points": [
+          "La version minimale est désormais macOS 13, à l'identique dans le paquet, l'installateur et sur le site.",
+          "Treize bibliothèques sont dans leurs dernières versions stables, et le noyau exact parle OpenCASCADE 8.",
+          "Un paquet sans ancre de confiance dans le système apporte son propre jeu, sur toutes les plateformes."
+        ]
+      },
+      {
+        "title": "Manuel et site web",
+        "points": [
+          "Le manuel et les captures montrent l'interface remaniée dans les six langues.",
+          "Les dessins du manuel conservent le contraste du texte jusque dans leurs remarques annexes.",
+          "La fenêtre du manuel ne charge que ses propres figures et aucune image étrangère."
         ]
       }
     ],
     "it": [
       {
-        "title": "Modificare le caratteristiche rilevate",
+        "title": "Vista",
         "points": [
-          "Un foro e la sua svasatura collegata vengono ora spostati insieme, indipendentemente da quale dei due sia selezionato. Il pannello delle caratteristiche indica il collegamento prima della modifica.",
-          "Quando si modifica un foro, la sua svasatura resta associata sotto di esso nell’albero degli oggetti e può essere adattata direttamente.",
-          "Il pannello delle caratteristiche raggruppa le azioni identiche non disponibili e indica con chiarezza i gruppi di campi interessati."
+          "La vista 3D disegna con un nuovo livello grafico. Si rivolge alla scheda grafica tramite Direct3D 12, Vulkan o Metal e resta fluida anche con diversi milioni di triangoli.",
+          "Incavi e spigoli risaltano di più: la vista scurisce gli angoli, traccia linee di profondità e coglie il punto che stai indicando.",
+          "Gli spigoli dei corpi stanno come reticolo fine sopra la superficie, e le etichette restano ferme invece di tremare durante la rotazione.",
+          "I nomi delle caratteristiche non si sovrappongono più e i loro segni restano visibili anche nella sezione."
         ]
       },
       {
-        "title": "Riconoscimento delle caratteristiche",
+        "title": "Azioni per la selezione",
         "points": [
-          "Le filettature dei modelli importati vengono riconosciute in modo più affidabile; coni, perni e sfere errati al loro interno non appaiono più come caratteristiche separate.",
-          "Le giunzioni strette tra forme unite non generano più numerose caratteristiche errate.",
-          "Il riconoscimento delle caratteristiche è sensibilmente più rapido sui modelli grandi e dettagliati."
+          "Il rapporto di verifica e la chat si chiudono a destra con un bordo proprio. Le azioni per la selezione stanno sotto in una scheda propria e tra le due si vede il modello.",
+          "Quali azioni stiano davanti dipende dalla selezione: con più corpi Unisci, Sottrai e Intersezione, con uno solo Pratica un foro, Svuota e Dividere.",
+          "Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.",
+          "Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli."
         ]
       },
       {
-        "title": "Mappe di analisi",
+        "title": "Costruire e modificare",
         "points": [
-          "Le mappe di analisi sono disponibili per un numero maggiore di modelli grandi.",
-          "Se una mappa di analisi è troppo grande per un modello, il messaggio propone direttamente *Riduci triangoli*.",
-          "L’analisi del fabbisogno di supporti è notevolmente più rapida sui modelli grandi."
+          "Unisci, Sottrai e Taglia prendono tutti i corpi selezionati in una volta, non esattamente due.",
+          "Raccorda non porta più giù l'applicazione quando il raggio supera la parete che deve arrotondare.",
+          "Un corpo del nucleo esatto resta esatto se lo si sposta o lo si ruota soltanto. Raccordi e smussi restano possibili in seguito.",
+          "L'utensile di foratura sporge solo alla bocca del foro e rifiuta diametri che superano il pezzo di parecchie volte."
+        ]
+      },
+      {
+        "title": "Caratteristiche",
+        "points": [
+          "Una scansione importata non porta più cupole e coppe inventate; finora nascevano a centinaia da superfici arrotondate in modo uniforme.",
+          "Più filetti su una piastra vengono nominati singolarmente invece di essere riuniti in una sola caratteristica.",
+          "Sfera, toro e cono dichiarano la loro curvatura, i centri dei cilindri coincidono con gli anelli terminali e i passi di filetto seguono l'asse.",
+          "Il pannello delle caratteristiche propone accoppiamenti solo quando è selezionato un secondo corpo e conosce ogni gruppo del nucleo."
+        ]
+      },
+      {
+        "title": "Stampa e preparazione",
+        "points": [
+          "La ricerca dell'orientamento giudica in due fasi: duecento posizioni dalle normali, nove delle quali nell'analisi a strati.",
+          "La sua barra di avanzamento arriva alla fine anche quando non c'era nulla da tagliare.",
+          "Lo slicer riceve il mondo della stampante e non quello di Solidon, e un profilo proprio mantiene la sua base del produttore.",
+          "I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte."
+        ]
+      },
+      {
+        "title": "File e progetti",
+        "points": [
+          "Un 3MF con molti livelli di duplicazione viene rifiutato prima che da 432 byte nascano mille corpi.",
+          "Un piccolo file di progetto non richiede più gigabyte di memoria.",
+          "Un file GLB in millimetri arriva in millimetri e non come metri.",
+          "Un salvataggio fallito non porta più via l'ultima copia di sicurezza, e annullare annulla davvero l'importazione."
+        ]
+      },
+      {
+        "title": "Chat e IA",
+        "points": [
+          "Uno strumento aggiuntivo con un campo di tipo errato non interrompe più l'intera serie dell'agente.",
+          "Per le varianti di schizzo l'agente indica solo percorsi di menu che esistono.",
+          "Nella generazione di immagini i pesi arrivano interi o non arrivano, e un singolo valore nel campo della struttura non avvia più una generazione non richiesta.",
+          "Un modello locale viene misurato anche quando risponde via HTTPS su una porta propria."
+        ]
+      },
+      {
+        "title": "Aggiornamento, installazione e sistema",
+        "points": [
+          "La versione minima è ora macOS 13, uguale nel pacchetto, nell'installer e sul sito.",
+          "Tredici librerie sono alle loro ultime versioni stabili, e il nucleo esatto parla OpenCASCADE 8.",
+          "Un pacchetto senza ancora di fiducia nel sistema porta con sé il proprio insieme, su qualunque piattaforma."
+        ]
+      },
+      {
+        "title": "Manuale e sito web",
+        "points": [
+          "Manuale e schermate mostrano l'interfaccia rielaborata in tutte e sei le lingue.",
+          "I disegni del manuale mantengono il contrasto del testo anche nelle loro note a margine.",
+          "La finestra del manuale carica solo le proprie figure e nessuna immagine estranea."
         ]
       }
     ],
     "pt": [
       {
-        "title": "Editar características detetadas",
+        "title": "Vista",
         "points": [
-          "Um furo e o seu escareamento associado passam agora a ser deslocados em conjunto, independentemente de qual dos dois é selecionado. O painel de características indica a ligação antes da alteração.",
-          "Ao alterar um furo, o respetivo escareamento mantém-se associado por baixo dele na árvore de objetos e também pode ser ajustado diretamente.",
-          "O painel de características agrupa ações indisponíveis iguais e indica claramente os grupos de campos afetados."
+          "A vista 3D desenha com uma nova camada gráfica. Dirige-se à placa gráfica através de Direct3D 12, Vulkan ou Metal e mantém-se fluida mesmo com vários milhões de triângulos.",
+          "Reentrâncias e arestas destacam-se mais: a vista escurece os cantos, traça linhas de profundidade e acerta o ponto para onde aponta.",
+          "As arestas dos corpos ficam como uma malha fina sobre a superfície, e as legendas mantêm-se quietas em vez de tremer ao rodar.",
+          "Os nomes das características já não se sobrepõem e as suas marcas continuam visíveis também no corte."
         ]
       },
       {
-        "title": "Reconhecimento de características",
+        "title": "Ações para a seleção",
         "points": [
-          "As roscas dos modelos importados são reconhecidas com maior fiabilidade; cones, pinos e esferas incorretos nelas deixam de aparecer como características separadas.",
-          "As uniões estreitas entre formas reunidas deixam de criar numerosas características incorretas.",
-          "O reconhecimento de características é visivelmente mais rápido em modelos grandes e detalhados."
+          "O relatório de verificação e o chat fecham à direita com a sua própria borda. As ações para a seleção ficam abaixo num cartão próprio, e entre os dois vê-se o modelo.",
+          "Quais ações ficam à frente depende da seleção: com vários corpos Unir, Subtrair e Interseção; com um só Abrir furo, Esvaziar e Separar.",
+          "Num furo selecionado aparecem Escarear e Fechar furo; numa face, Abrir furo, Cortar bolsa e Deslocar a face.",
+          "Um corpo selecionado mostra ali os seus filamentos e permite alterá-los."
         ]
       },
       {
-        "title": "Mapas de análise",
+        "title": "Construir e alterar",
         "points": [
-          "Os mapas de análise estão disponíveis para mais modelos grandes.",
-          "Se um mapa de análise for demasiado grande para um modelo, a mensagem oferece diretamente *Reduzir triângulos*.",
-          "A análise da necessidade de suportes é consideravelmente mais rápida em modelos grandes."
+          "Unir, Subtrair e Cortar levam todos os corpos selecionados de uma vez, e não exatamente dois.",
+          "Arredondar já não derruba a aplicação quando o raio é maior do que a parede que deve arredondar.",
+          "Um corpo do núcleo exato continua exato se apenas o mover ou rodar. Arredondar e chanfrar continuam possíveis depois.",
+          "A ferramenta de furação só sobressai à entrada do furo e recusa diâmetros que excedem a peça em várias vezes."
+        ]
+      },
+      {
+        "title": "Características",
+        "points": [
+          "Uma digitalização importada já não traz cúpulas nem taças inventadas; até agora surgiam às centenas de superfícies arredondadas suavemente.",
+          "Várias roscas numa placa são nomeadas separadamente em vez de serem reunidas numa única característica.",
+          "Esfera, toro e cone declaram a sua curvatura, os centros dos cilindros coincidem com os anéis das extremidades e os passos de rosca seguem o eixo.",
+          "O painel de características só oferece ajustes quando há um segundo corpo selecionado e conhece cada grupo do núcleo."
+        ]
+      },
+      {
+        "title": "Impressão e preparação",
+        "points": [
+          "A busca de orientação julga em duas etapas: duzentas posições a partir das normais, nove delas na análise por camadas.",
+          "A sua barra de progresso vai até ao fim, mesmo quando não havia nada a cortar.",
+          "O laminador recebe o mundo da impressora e não o do Solidon, e um perfil próprio conserva a sua base do fabricante.",
+          "Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário."
+        ]
+      },
+      {
+        "title": "Ficheiros e projetos",
+        "points": [
+          "Um 3MF com muitos níveis de duplicação é recusado antes que 432 bytes se tornem mil corpos.",
+          "Um ficheiro de projeto pequeno já não pede gigabytes de memória.",
+          "Um ficheiro GLB em milímetros chega em milímetros e não como metros.",
+          "Uma gravação falhada já não leva consigo a última cópia de segurança, e cancelar cancela realmente a importação."
+        ]
+      },
+      {
+        "title": "Chat e IA",
+        "points": [
+          "Uma ferramenta adicional com um campo de tipo errado já não interrompe toda a série do agente.",
+          "Para as variantes de esboço o agente indica apenas caminhos de menu que existem.",
+          "Na geração de imagens os pesos chegam inteiros ou não chegam, e um único valor no campo de estrutura já não desencadeia uma geração não pedida.",
+          "Um modelo local é medido também quando responde por HTTPS numa porta própria."
+        ]
+      },
+      {
+        "title": "Atualização, instalação e sistema",
+        "points": [
+          "A versão mínima é agora macOS 13, igual no pacote, no instalador e no site.",
+          "Treze bibliotecas estão nas suas versões estáveis mais recentes, e o núcleo exato fala OpenCASCADE 8.",
+          "Um pacote sem âncora de confiança no sistema traz o seu próprio conjunto, em qualquer plataforma."
+        ]
+      },
+      {
+        "title": "Manual e site",
+        "points": [
+          "O manual e as capturas mostram a interface renovada nas seis línguas.",
+          "Os desenhos do manual mantêm o contraste do texto também nas suas notas laterais.",
+          "A janela do manual carrega apenas as suas próprias figuras e nenhuma imagem alheia."
         ]
       }
     ]
   },
-  "changes_total": 9,
-  "signature": "dde1d07ec53cc56b62ff365491c9c1ded825bcb8f7733ef37435f58c12e9e4f6615ded55e7d6cba3700f198757b8bf1efc29812d530a64010ffa8fce31f35a05"
+  "changes_total": 86,
+  "signature": "b797462214f4f2b6d1d74d913f4b58e4f9bd44beea89b6ae77d37434255d8e7a0956fb8e718c3c395550f274c44c3e4abbe7d378d52b70856309c947bd7f8708"
 }
