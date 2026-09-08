@@ -1063,3 +1063,88 @@ def test_prusa_without_a_configuration_stays_quiet(
 
     assert sp.prusa_config(executable) is None
     assert sp.configured_filaments("prusa", executable) == ()
+
+
+# --- Welcher Slicer kennt welchen Drucker ------------------------------------------
+
+
+@pytest.fixture
+def prusa_bestand(tmp_path: Path) -> Path:
+    """Ein Herstellerbündel, wie PrusaSlicer es ausliefert.
+
+    Die Modelle stehen als eigene Abschnitte darin, zwischen Zehntausenden
+    Filament- und Prozessabschnitten — deshalb wird zeilenweise gelesen.
+    """
+    root = tmp_path / "resources" / "profiles"
+    root.mkdir(parents=True)
+    (root / "PrusaResearch.ini").write_text(
+        "[vendor]\nname = Prusa Research\n\n"
+        "[printer_model:MK4S]\n"
+        "name = Original Prusa MK4S\n"
+        "variants = 0.4; 0.6\n"
+        "technology = FFF\n\n"
+        "[printer_model:MINIIS]\n"
+        "name = Original Prusa MINI IS\n"
+        "variants = 0.4\n\n"
+        "[filament:*common*]\ncooling = 1\n\n"
+        "[filament:Prusament PLA]\nfilament_type = PLA\n",
+        encoding="utf-8",
+    )
+    (root / "Anker.ini").write_text(
+        "[vendor]\nname = Anker\n\n[printer_model:M5]\nname = AnkerMake M5\n",
+        encoding="utf-8",
+    )
+    return root
+
+
+@pytest.fixture
+def prusa_installiert(prusa_bestand: Path) -> Path:
+    """Die Programmdatei über dem Bündelbestand."""
+    executable = prusa_bestand.parent.parent / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    return executable
+
+
+def test_prusa_names_the_printers_it_brings_along(prusa_installiert: Path) -> None:
+    """Die Frage „welcher Slicer kann meinen Drucker" beantwortet bei
+    PrusaSlicer niemand über Profile — es braucht keine. Die Modelle stehen
+    trotzdem da, in den Herstellerbündeln."""
+    found = sp.known_printers("prusa", prusa_installiert)
+
+    assert sorted(found) == ["AnkerMake M5", "Original Prusa MINI IS", "Original Prusa MK4S"]
+
+
+def test_a_slicer_knows_a_printer_by_the_start_of_its_name(prusa_installiert: Path) -> None:
+    """Der Slicer nennt Düse und Zusätze, Solidon nicht — verglichen wird am
+    Anfang, wie in ``printer_for``."""
+    assert sp.supports_printer("prusa", prusa_installiert, "Original Prusa MK4S")
+    assert not sp.supports_printer("prusa", prusa_installiert, "Elegoo Centauri Carbon 2")
+
+
+def test_an_empty_printer_title_matches_nothing(prusa_installiert: Path) -> None:
+    """Ein leerer Titel passte sonst auf jede Maschine — und damit hieße
+    „kennt deinen Drucker" bei einem unbenannten Profil immer ja."""
+    assert not sp.supports_printer("prusa", prusa_installiert, "")
+
+
+def test_the_orca_family_names_the_model_not_the_profile(slicer: Path) -> None:
+    """Ein Orca-Profil heißt „Elegoo Centauri Carbon 2 0.4 nozzle" und trägt
+    das Modell daneben. Gefragt ist der Drucker, nicht die Düse."""
+    assert "Elegoo Centauri Carbon 2" in sp.known_printers("orca", slicer)
+
+
+def test_cura_names_the_printer_as_it_shows_it(cura: Path) -> None:
+    """Cura kennt kein getrenntes Modellfeld; sein Anzeigename *ist* die
+    Auskunft.
+
+    Eigene Fixture und nicht die des Orca-Tests daneben: Beide legen ihren
+    Bestand sonst in dasselbe Verzeichnis, und ``install_root`` sieht nach
+    ``resources/profiles`` vor ``share/cura`` — CuraEngine fände dann den
+    Bestand des Nachbarn. Nebeneinander gibt es die beiden nur im Test.
+    """
+    assert "Abax PRi3" in sp.known_printers("cura", cura)
+
+
+def test_a_prusa_installation_without_bundles_is_no_crash(tmp_path: Path) -> None:
+    """Ohne Bestand keine Modelle — und kein Abbruch."""
+    assert sp.known_printers("prusa", tmp_path / "nirgends.exe") == ()

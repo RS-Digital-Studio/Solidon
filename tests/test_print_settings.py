@@ -2935,6 +2935,11 @@ def test_a_slicer_that_names_no_machine_at_all_is_its_own_message(monkeypatch) -
     from app.core.export import slicer_profiles
 
     monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
+    # Der Slicer **kennt** diesen Drucker, er steht nur auf keinem. Genau das
+    # unterscheidet diesen Fall von dem darunter, und ohne die Angabe fiele
+    # der Test in den anderen Zweig: eine leere Programmdatei hat keinen
+    # Bestand, in dem etwas zu finden wäre.
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: True)
 
     profile = profiles.make_profile("centauri-carbon-2", "pla")
     setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
@@ -2943,6 +2948,31 @@ def test_a_slicer_that_names_no_machine_at_all_is_its_own_message(monkeypatch) -
 
     assert [finding.code for finding in findings] == ["slicer.machine_unset"]
     assert findings[0].suggestions
+
+
+def test_a_slicer_that_does_not_know_this_printer_says_so_instead(monkeypatch) -> None:
+    """Ein Rat, der ins Leere zeigt, ist keiner — und genau das war er hier.
+
+    „Wählen Sie das Maschinenprofil in den Druckeinstellungen" setzt voraus,
+    dass es eines gibt. Bringt der Slicer für diesen Drucker gar keines mit,
+    sucht der Kunde in einer leeren Liste. Der Unterschied ist messbar
+    (08.09.2026): ElegooSlicer kennt 1001 Drucker und den Centauri Carbon 2
+    darunter, PrusaSlicer kennt 261 und ihn nicht.
+    """
+    from pathlib import Path
+
+    from app.core.export import slicer_profiles
+
+    monkeypatch.setattr(slicer_profiles, "chosen_machine", lambda *_: "")
+    monkeypatch.setattr(slicer_profiles, "supports_printer", lambda *_: False)
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    findings = handover.machine_missing(setup, profile)
+
+    assert [finding.code for finding in findings] == ["slicer.printer_unknown"]
+    assert findings[0].suggestions, "Regel 17: auch dieser Fall nennt den nächsten Schritt"
 
 
 def test_a_chosen_printer_is_never_second_guessed(monkeypatch) -> None:

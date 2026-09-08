@@ -4724,5 +4724,6 @@
   "Übernimmt die bekannte Nennfüllung als vorhandene Menge. Die Nennfüllung steht unter Weitere Angaben.": "Usa il contenuto nominale noto come quantità disponibile. Il contenuto nominale si trova in Altri dati.",
   "Übernimmt die gewählte Spule vollständig. Unbekannte Materialwerte bleiben unbekannt.": "Assegna tutti i dati della bobina scelta. I valori del materiale sconosciuti restano sconosciuti.",
   "%": "%",
-  "mm": "mm"
+  "mm": "mm",
+  "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein oder übergeben Sie an einen Slicer, der ihn kennt.": "{slicer} non conosce {printer}: lì non esiste alcun profilo macchina per questa stampante, né uno da scegliere. Perciò il file non porta dati macchina. Configuri la stampante nello slicer oppure consegni a uno slicer che la conosca."
 }

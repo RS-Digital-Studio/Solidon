@@ -507,6 +507,81 @@ def _named_profile(
     return None
 
 
+def _names_the_printer(machine: str, title: str) -> bool:
+    """Meint dieser Maschinenname diesen Drucker?
+
+    Der Name des Slicers trägt Düse und Zusätze („… 0.4 nozzle"), der von
+    Solidon nicht; verglichen wird deshalb am Anfang. Ein leerer Titel meint
+    nichts — sonst passte er auf jede Maschine.
+
+    Die eine Stelle für diesen Vergleich: :func:`printer_for` fragt „welcher
+    meiner Drucker ist das", :func:`supports_printer` fragt „kennt dieser
+    Slicer meinen Drucker". Zwei Formulierungen desselben Vergleichs würden
+    auseinanderlaufen, sobald einer von beiden verfeinert wird.
+    """
+    return bool(title) and machine.casefold().startswith(title.casefold())
+
+
+def known_printers(flavour: SlicerFlavour, executable: Path) -> tuple[str, ...]:
+    """Welche Drucker dieser Slicer überhaupt kennt (§29).
+
+    **Nicht dasselbe wie** :func:`find_profiles` **mit** ``machine``: Dort
+    geht es um die Auswahl eines Profils, und für PrusaSlicer gibt es die
+    nicht — es braucht keines, Solidon beschreibt die Maschine selbst. Hier
+    geht es um Wissen: Wer zwei Drucker und zwei Slicer hat, will sehen,
+    welcher davon den vor ihm stehenden überhaupt kennt.
+
+    PrusaSlicer führt seine Modelle in den Herstellerbündeln unter
+    ``[printer_model:…]``. Gelesen wird zeilenweise und nicht über
+    ConfigParser: 35 Bündel mit zusammen mehreren zehntausend Abschnitten
+    kosten so 0,13 Sekunden für 261 Modelle.
+    """
+    if flavour == "prusa":
+        return _prusa_printer_models(executable)
+    return tuple(
+        # Bei Cura ist der Anzeigename die Auskunft („Abax PRi3"); die
+        # Orca-Familie trägt das Modell getrennt vom Profilnamen, der die
+        # Düse mitnennt.
+        entry.name if flavour == "cura" else (entry.printer_model or entry.name)
+        for entry in find_profiles(executable, flavour, kinds=("machine",))
+    )
+
+
+def supports_printer(flavour: SlicerFlavour, executable: Path, title: str) -> bool:
+    """Kennt dieser Slicer den Drucker mit diesem Titel?
+
+    Die Umkehrung von :func:`printer_for` und über denselben Vergleich, damit
+    beide dieselbe Antwort geben.
+    """
+    return any(_names_the_printer(name, title) for name in known_printers(flavour, executable))
+
+
+def _prusa_printer_models(executable: Path) -> tuple[str, ...]:
+    """Die Modellnamen aus den Herstellerbündeln von PrusaSlicer."""
+    root = install_root(executable)
+    if root is None:
+        return ()
+    found: list[str] = []
+    for path in sorted(root.glob("*.ini")):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as problem:
+            _log.debug("skipping Prusa bundle %s: %s", path.name, problem)
+            continue
+        for index, line in enumerate(lines):
+            if not line.startswith("[printer_model:"):
+                continue
+            # Der Name steht in den ersten Zeilen des Abschnitts; danach
+            # folgen Varianten, Bettmodell und Vorschaubild.
+            for following in lines[index + 1 : index + 6]:
+                if following.startswith("name"):
+                    name = following.split("=", 1)[-1].strip()
+                    if name:
+                        found.append(name)
+                    break
+    return tuple(found)
+
+
 def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
     """Welches Druckerprofil dieser Maschinenname meint — oder nichts.
 
@@ -514,11 +589,10 @@ def printer_for(machine: str, known: Mapping[str, PrinterProfile]) -> str:
     Solidon nicht; verglichen wird deshalb am Anfang. Trifft nichts, bleibt es
     leer: geraten wird hier so wenig wie in :func:`match`.
     """
-    wanted = machine.casefold()
     hits = [
         identifier
         for identifier, profile in known.items()
-        if profile.title and wanted.startswith(profile.title.casefold())
+        if _names_the_printer(machine, profile.title)
     ]
     if not hits:
         return ""

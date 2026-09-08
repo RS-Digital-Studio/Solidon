@@ -369,6 +369,27 @@ def machine_missing(setup: SlicerSetup, profile: Profile) -> list[Finding]:
                 suggestions=(CHECK_SLICER_PROFILE, CHOOSE_PRINTER, EXPORT_ONLY),
             )
         ]
+    if not slicer_profiles.supports_printer(setup.flavour, setup.executable, profile.printer.title):
+        # **Der Rat darunter zeigte hier ins Leere.** „Wählen Sie das
+        # Maschinenprofil in den Druckeinstellungen" setzt voraus, dass es
+        # eines gibt; bringt der Slicer für diesen Drucker gar keines mit,
+        # sucht der Kunde in einer Liste, in der nichts steht. Der Unterschied
+        # ist messbar: ElegooSlicer kennt 1001 Drucker und den Centauri
+        # Carbon 2 darunter, PrusaSlicer kennt 261 und ihn nicht.
+        return [
+            Finding(
+                code="slicer.printer_unknown",
+                severity="warning",
+                message=_(
+                    "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein "
+                    "Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt "
+                    "deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein "
+                    "oder übergeben Sie an einen Slicer, der ihn kennt."
+                ),
+                values={"slicer": setup.name, "printer": profile.printer.title},
+                suggestions=(CHOOSE_SLICER, EXPORT_ONLY),
+            )
+        ]
     return [
         Finding(
             code="slicer.machine_unset",
