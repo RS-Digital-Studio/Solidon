@@ -265,7 +265,16 @@ class _Row(QWidget):
         self.action.setVisible(not here)
         self.action.setEnabled(not here and status.installable)
         if not here and not status.installable:
-            self.action.setToolTip(str(status.reason))
+            # **Alle drei Kanäle, nicht nur die Maus.** Der Grund stand hier im
+            # Tooltip; wer mit einem Bildschirmleser arbeitet oder in die
+            # Statuszeile sieht, bekam einen gesperrten Knopf ohne Auskunft
+            # (Regel 17 und 18). Auf Windows konnte das niemandem auffallen —
+            # dort ist der Knopf für jedes dieser Werkzeuge nutzbar, und dieser
+            # Zweig lief nie. Auf Linux sind es drei Knöpfe an einem Dialog.
+            reason = str(status.reason)
+            self.action.setToolTip(reason)
+            self.action.setStatusTip(reason)
+            self.action.setAccessibleDescription(reason)
         # Der zweite Schritt erscheint, sobald der erste getan ist — vorher
         # wäre er ein Angebot, etwas einzurichten, das es nicht gibt.
         self.follow.setVisible(here and bool(self.requirement.follow_up))

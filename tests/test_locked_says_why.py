@@ -319,6 +319,45 @@ def test_no_locked_button_stays_silent(name: str, session: Session, qt_app: QApp
         dialog.close()
 
 
+def test_a_row_that_cannot_install_says_why_on_all_three_channels(qt_app: QApplication) -> None:
+    """Und der Fall wird hergestellt, nicht der Plattform überlassen.
+
+    Auf dieser Maschine ist der Installieren-Knopf für jedes dieser Werkzeuge
+    nutzbar; der Zweig, der den Grund setzt, lief hier nie. Auf Linux lief er
+    an drei Knöpfen desselben Dialogs — und schrieb den Grund nur in den
+    Tooltip, wo ihn ein Bildschirmleser nicht findet. Gefunden hat das die CI
+    am 08.09.2026, beim ersten Lauf der Fenstergruppe überhaupt.
+
+    Der Test füttert deshalb eine Zeile direkt mit dem Zustand „vorhanden:
+    nein, installierbar: nein" statt darauf zu warten, dass eine Plattform ihn
+    herstellt.
+    """
+    from app.core import install
+    from app.ui.install_dialog import _Row
+
+    requirement = install.shown()[0]
+    row = _Row(requirement)
+    try:
+        row.show_status(
+            install.Status(
+                requirement=requirement,
+                present=False,
+                installable=False,
+                reason=install.why_not(requirement),
+            )
+        )
+        assert not row.action.isEnabled(), "ohne Weg ist der Knopf gesperrt"
+        channels = {
+            "Tooltip": row.action.toolTip(),
+            "Statuszeile": row.action.statusTip(),
+            "Bildschirmleser": row.action.accessibleDescription(),
+        }
+        stumm = [name for name, text in channels.items() if not text.strip()]
+        assert not stumm, f"gesperrt und stumm auf: {', '.join(stumm)}"
+    finally:
+        row.deleteLater()
+
+
 # --- dieselbe Zusage an den Menüs ---------------------------------------------------
 
 
