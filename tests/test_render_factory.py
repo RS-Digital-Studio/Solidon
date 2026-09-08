@@ -57,6 +57,7 @@ from app.ui.render.api import SurfaceStyle
 from tests.test_render_contract import cube, look_down
 
 application = QApplication([])
+print("qt-app", flush=True)
 window = QWidget()
 window.resize(320, 240)
 layout = QVBoxLayout(window)
@@ -65,16 +66,22 @@ number_field = QDoubleSpinBox(window)
 number_field.setLocale(QLocale(QLocale.Language.German))
 layout.addWidget(text_field)
 layout.addWidget(number_field)
+print("vor make_renderer", flush=True)
 view = make_renderer(window)
+print("renderer da", flush=True)
 layout.addWidget(view.widget)
 window.show()
+print("fenster gezeigt", flush=True)
 window.activateWindow()
 for _ in range(10):
     application.processEvents()
 body = view.add_surface(*cube(), name="body", style=SurfaceStyle(lighting=False))
+print("flaeche da", flush=True)
 look_down(view, body.bounds())
 view.render()
+print("gerendert", flush=True)
 assert view.screenshot().max() > 100
+print("bild geprueft", flush=True)
 text_field.setFocus()
 application.processEvents()
 assert application.focusWidget() is text_field
@@ -86,8 +93,10 @@ QTest.keyClicks(number_field, "12,5")
 QTest.keyClick(number_field, Qt.Key.Key_Return)
 assert abs(number_field.value() - 12.5) < 1e-9
 reference = weakref.ref(view)
+print("vor schliessen", flush=True)
 view.close()
 view.close()
+print("geschlossen", flush=True)
 window.close()
 window.deleteLater()
 del view, window, layout, body, text_field, number_field
@@ -96,14 +105,30 @@ gc.collect()
 assert reference() is None, "Der geschlossene native Renderer lebt weiter."
 print("native canvas drawn and released")
 """
-    done = subprocess.run(
-        [sys.executable, "-c", script],
-        cwd=Path(__file__).resolve().parents[1],
-        env={**os.environ, "QT_QPA_PLATFORM": platform},
-        capture_output=True,
-        text=True,
-        timeout=90,
-    )
+    try:
+        done = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=Path(__file__).resolve().parents[1],
+            env={**os.environ, "QT_QPA_PLATFORM": platform},
+            capture_output=True,
+            text=True,
+            timeout=90,
+        )
+    except subprocess.TimeoutExpired as hanging:
+        # **Die Spur retten.** Der Prozess wird gekillt, und mit ihm verschwand
+        # bisher jede Auskunft darüber, wo er stehenblieb: Die Meldung trug den
+        # ganzen Skripttext und kein einziges Zwischenergebnis. Auf dem
+        # Intel-Mac lief der Test am 08.09.2026 genau so ins Leere.
+        def spur(strom: object) -> str:
+            if strom is None:
+                return ""
+            return strom.decode("utf-8", "replace") if isinstance(strom, bytes) else str(strom)
+
+        gemeldet = spur(hanging.stdout).split() or ["nichts"]
+        pytest.fail(
+            f"nach 90 s nicht fertig — zuletzt gemeldet: {gemeldet[-1]} "
+            f"(alles: {' '.join(gemeldet)})\n{spur(hanging.stderr)}"
+        )
     assert done.returncode == 0, done.stdout + done.stderr
     assert "Traceback" not in done.stderr, done.stderr
     assert "native canvas drawn and released" in done.stdout
