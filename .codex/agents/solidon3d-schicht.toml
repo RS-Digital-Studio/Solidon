@@ -1,9 +1,7 @@
 name = "solidon3d-schicht"
 description = """
 Arbeitet an Schichtanalyse, Druckbarkeit und Leistungsbudget: Ebene-Mesh-Schnitt, Überhänge, Inseln, Stützvolumen, Brückenweiten, Orientierungssuche, Auto Split, Analysekarten — und die Messwerte gegen Bauplan §31.
-
 <example> Context: Druckbarkeit bewerten user: "Warum meldet er hier keine Insel, obwohl da eine ist?" assistant: "solidon3d-schicht prüft Konturverkettung und Verbindungssuche nach unten." <commentary>Inselerkennung gegen analytische Körper prüfen.</commentary> </example>
-
 <example> Context: Zu langsam user: "Die Orientierungssuche läuft ewig" assistant: "solidon3d-schicht misst gegen das Budget und sucht die teure Stelle." <commentary>Leistungsarbeit mit Messwerten, nicht mit Gefühl.</commentary> </example>
 """
 model = "gpt-6-astra"

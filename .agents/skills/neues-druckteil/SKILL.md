@@ -8,7 +8,7 @@ argument-hint: "[was gebraucht wird]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
-# Neues Druckteil: $ARGUMENTS
+# Neues Druckteil: Angaben aus der aktuellen Anfrage
 
 Ein Teil, das gedruckt und benutzt wird. Material und Zeit sind echt.
 

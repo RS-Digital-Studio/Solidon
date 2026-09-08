@@ -6,8 +6,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || P=python3; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsstart --codex'",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') sitzungsstart --codex }\"",
+            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || P=python3; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsstart --codex'",
+            "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" sitzungsstart --codex",
             "timeout": 25
           }
         ]
@@ -18,8 +18,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsende --codex'",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') sitzungsende --codex }\"",
+            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsende --codex'",
+            "commandWindows": "py -3 -S -c \"from pathlib import Path; import runpy,sys; p=Path.cwd(); r=next((r for r in (p,*p.parents) if (r/'.claude/hooks/solidon3d_hooks.py').is_file()),None); sys.argv=['solidon3d_hooks.py',*sys.argv[1:]]; r is not None and runpy.run_path(str(r/'.claude/hooks/solidon3d_hooks.py'),run_name='__main__')\" sitzungsende --codex",
             "timeout": 3
           }
         ]
@@ -31,8 +31,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" vor-bash --codex'",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') vor-bash --codex }\"",
+            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" vor-bash --codex'",
+            "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" vor-bash --codex",
             "timeout": 20
           }
         ]
@@ -44,8 +44,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" nach-aenderung --codex'",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') nach-aenderung --codex }\"",
+            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" nach-aenderung --codex'",
+            "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" nach-aenderung --codex",
             "timeout": 90,
             "statusMessage": "Formatiere und prüfe die Datei"
           }
@@ -56,8 +56,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" testlauf --codex'",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') testlauf --codex }\"",
+            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" testlauf --codex'",
+            "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" testlauf --codex",
             "timeout": 20
           }
         ]
@@ -68,8 +68,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" abschluss --codex'",
-            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') abschluss --codex }\"",
+            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" abschluss --codex'",
+            "commandWindows": "for /f \"delims=\" %R in ('git rev-parse --show-toplevel') do @\"%R\\.venv\\Scripts\\python.exe\" -S -X utf8 \"%R\\.claude\\hooks\\solidon3d_hooks.py\" abschluss --codex",
             "timeout": 30
           }
         ]

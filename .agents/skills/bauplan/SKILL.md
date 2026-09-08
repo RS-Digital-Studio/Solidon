@@ -8,7 +8,7 @@ argument-hint: "[§-Nummer oder Stichwort]"
 allowed-tools: Read, Grep, Bash
 ---
 
-# Bauplan nachschlagen: $ARGUMENTS
+# Bauplan nachschlagen: Angaben aus der aktuellen Anfrage
 
 Der Bauplan sagt, **was** gebaut wird. Bei Widerspruch gewinnt er. Eine
 Aussage über das Sollverhalten ohne §-Beleg ist eine Vermutung.

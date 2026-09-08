@@ -4,8 +4,9 @@ description: >
   Führt das vollständige Tor von Solidon aus — die geteilte Testsuite, die
   Leistungstests, ruff check, ruff format --check und mypy — unter einem
   Schloss, damit parallele Sitzungen sich nicht gegenseitig verfälschen, und
-  meldet das Ergebnis zusammengefasst. Benutzen, bevor etwas als fertig gilt,
-  vor jedem Commit und nach jedem Arbeitsschritt an app/ oder tests/.
+  meldet das Ergebnis zusammengefasst. Das vollständige Tor läuft vor dem
+  Commit. Nach einem Arbeitsschritt nur die betroffenen Tests über
+  tools/affected_tests.py; bei parallelen Sitzungen die eigenen Dateien nennen.
 argument-hint: "[optional: Testdatei oder -pfad]"
 allowed-tools: Bash, Read, Edit, Grep, Glob
 ---
@@ -31,16 +32,16 @@ gab anderthalb Stunden lang kein einziges Zeichen aus und stand dabei längst.
 Also: in eine Datei schreiben, den Rückgabewert **davon** lesen, danach die
 Datei ansehen.
 
-Vor den Befehlen den **geprüften Interpreter dieses Arbeitsbaums** im aufrufenden Prozess als
-Umgebungsvariable `SUITE_PYTHON` setzen, beispielsweise den absoluten Pfad zu
-`.venv314/Scripts/python.exe` in der privaten Python-3.14-Prüfumgebung.
-Eine reguläre Umgebung liegt unter `.venv/Scripts/python.exe`, auf Linux und
-macOS unter `.venv/bin/python`. Die Versionsprobe muss zu `constraints.txt`
-und der Prüfakte passen. Ein ausdrücklich gesetzter ungültiger Pfad stoppt;
-er darf nicht durch eine ältere Umgebung ersetzt werden.
+Vor den Befehlen den **geprüften Interpreter dieses Arbeitsbaums** im
+aufrufenden Prozess als Umgebungsvariable `SUITE_PYTHON` setzen. Die reguläre
+Umgebung liegt unter `.venv/Scripts/python.exe`, auf Linux und macOS unter
+`.venv/bin/python`. Die Versionsprobe muss zu `pyproject.toml` passen;
+`tools/check_env.py` prüft die Pakete gegen `constraints.txt`. Ein ausdrücklich
+gesetzter ungültiger Pfad stoppt; er darf nicht durch eine ältere Umgebung
+ersetzt werden.
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/ruff-$S.txt" 2>&1; echo "Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/ruff-$S.txt" 2>&1; echo "Exit=$?"
 ```
 
 Wer den Fortschritt sehen will, nimmt `"$SUITE_PYTHON" -u`.
@@ -60,20 +61,28 @@ Gefunden von solidon-b4 am 04.09.2026, und zwar als Beobachtung: Während ihr
 geteilter Lauf noch bei `tests/test_sculpt_session.py` stand, lag in `g5.txt`
 bereits ein vollständiges Ergebnis der Leistungstests. Sequenziell unmöglich.
 
-Die Kette hat drei Glieder: `CODEX_THREAD_ID` bezeichnet die Aufgabe,
-`CODEX_SESSION_ID` ist der kompatible Rückfall, `$$` der letzte Ausweg. Die
-Befehle sind Bash-Befehle. Codex übergibt auf diesem Windows-Rechner jeden
-Block als `-lc`-Argument an das vorhandene Git Bash; Bash-Code läuft nie direkt
-in PowerShell. Der Einstieg und zugleich die Probe für Interpreter und
-Slash-Pfad lautet:
+Der Marker nutzt die Kennung des Werkzeugs: `CODEX_THREAD_ID` oder
+`CODEX_SESSION_ID`, bei Claude Code `CLAUDE_SESSION_NAME` oder
+`CLAUDE_CODE_SESSION_ID`; `$$` ist der letzte Ausweg. Die Befehle unten sind
+Bash-Befehle. In PowerShell jeden Block als `-lc`-Argument an Git Bash
+übergeben; Bash-Code läuft nie direkt in PowerShell. Der Einstieg lautet:
 
 ```powershell
-$env:SUITE_PYTHON = (Resolve-Path '.venv314/Scripts/python.exe').Path
+$env:SUITE_PYTHON = (Resolve-Path '.venv/Scripts/python.exe').Path
 & 'C:\Program Files\Git\bin\bash.exe' -lc '"$SUITE_PYTHON" --version'
 ```
 
-Die Probe muss eine Python-Version und Exit 0 liefern. Danach denselben Einstieg
-mit dem jeweiligen Bash-Block anstelle der Probe verwenden.
+Die Probe muss eine Python-Version und Exit 0 liefern. Danach denselben
+Einstieg mit dem jeweiligen Bash-Block anstelle der Probe verwenden.
+
+Wer bereits in Bash arbeitet, setzt und prüft die Variable dort:
+
+```bash
+export SUITE_PYTHON="$(pwd)/.venv/Scripts/python.exe"
+"$SUITE_PYTHON" --version
+```
+
+Auf Linux und macOS lautet der Interpreterpfad `.venv/bin/python`.
 
 ## Zweitens: die Suite läuft geteilt, nicht am Stück
 
@@ -95,7 +104,7 @@ als eigener Lauf dazu. Der geteilte Lauf allein ist nicht das Tor.
 ## Drittens: unter dem Schloss
 
 An diesem Projekt arbeiten oft zwei bis vier Sitzungen. Die Dateien trennt
-Codex über Arbeitsbäume, die **Maschine** trennt niemand — und gegen
+man über Arbeitsbäume, die **Maschine** trennt niemand — und gegen
 Fremdlast zu messen erzeugt Regressionen, die es nicht gibt: 48 Prozent Last
 ergaben fünf rote Leistungstests, 16 Prozent bei identischem Stand neunzehn
 grüne.
@@ -113,20 +122,21 @@ gleichgültig und gegen einen fremden Schreiber nicht.
 
 ## Ablauf
 
-Mit Argument läuft nur `pytest` darauf, und zwar direkt — ein einzelner Lauf
-braucht weder Teilung noch Schloss:
+Mit Dateipfaden laufen die betroffenen Tests über `affected_tests.py --run`.
+Das Werkzeug trennt Fensterdateien auch dann, wenn mehrere angegeben sind.
+Die Datei im folgenden Beispiel durch die genannten Dateien ersetzen:
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m pytest -q $ARGUMENTS > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" tools/affected_tests.py tests/test_agent_mirror.py --run > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"
 ```
 
-Ohne Argument das ganze Tor. Die drei Werkzeuge zuerst, weil sie Sekunden
-dauern und die teuren Läufe erübrigen, wenn sie rot sind:
+Ohne Argument das ganze Tor. Die drei schnellen Werkzeuge zuerst, danach
+die beiden Testläufe; alle fünf Ergebnisse gehören zum Befund:
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/g1-$S.txt" 2>&1; echo "ruff check   Exit=$?"
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m ruff format --check . > "$TEMP/g2-$S.txt" 2>&1; echo "ruff format  Exit=$?"
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"; "$SUITE_PYTHON" -m mypy > "$TEMP/g3-$S.txt" 2>&1; echo "mypy         Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/g1-$S.txt" 2>&1; echo "ruff check   Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m ruff format --check . > "$TEMP/g2-$S.txt" 2>&1; echo "ruff format  Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m mypy > "$TEMP/g3-$S.txt" 2>&1; echo "mypy         Exit=$?"
 ```
 
 Die Zuweisung steht **vor** dem Lauf, nicht dahinter: `$?` gehört dem letzten
@@ -136,7 +146,7 @@ Dann die Suite und die Leistungstests, beide unter dem Schloss, beide in einem
 Aufruf, damit das Schloss nur einmal genommen wird:
 
 ```
-S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-$$}}"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"
 export S SUITE_PYTHON
 "$SUITE_PYTHON" tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '
   .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4-$S.txt" 2>&1
@@ -199,9 +209,10 @@ Eine Zeile je Lauf: bestanden oder nicht, bei Fehlschlag die Anzahl und die
 betroffenen Dateien. Danach die Fehler selbst, gruppiert nach Ursache — nicht
 die rohe Ausgabe durchgereicht.
 
-`ruff format --check` meldet nur, dass eine Datei anders aussehen würde. Das
-behebst du mit `ruff format .` ohne Rückfrage. Alles andere ist eine
-inhaltliche Änderung: erst verstehen, warum der Lauf rot ist, dann beheben —
+`ruff format --check` meldet nur, dass eine Datei anders aussehen würde.
+Die eigenen betroffenen Dateien mit `ruff format <dateipfade>` formatieren;
+fremde Änderungen im gemeinsamen Baum ihrem Besitzer melden. Alles andere ist
+eine inhaltliche Änderung: erst verstehen, warum der Lauf rot ist, dann beheben —
 nie einen Test anpassen, damit er grün wird, und nie eine Warnung
 unterdrücken, die `filterwarnings = ["error"]` absichtlich zum Fehler macht.
 
@@ -213,5 +224,5 @@ Schwankt die Menge der roten Tests, war es Last. Die Begründung steht in
 ## Danach
 
 War alles grün und es liegen ungestagte Änderungen vor, nenne den nächsten
-Schritt: committen (`/liefern`) oder weiterarbeiten. War etwas rot, ist der
+Schritt: committen (`.agents/skills/liefern/SKILL.md`) oder weiterarbeiten. War etwas rot, ist der
 nächste Schritt die Behebung — nicht der Commit.

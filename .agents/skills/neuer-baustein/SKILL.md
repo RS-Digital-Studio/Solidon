@@ -8,7 +8,7 @@ argument-hint: "[welcher Baustein]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
-# Neuer Baustein: $ARGUMENTS
+# Neuer Baustein: Angaben aus der aktuellen Anfrage
 
 Der Grundsatz aus §24: Der Agent setzt **geprüfte** Bausteine zusammen, statt
 Geometrie zu erfinden. Was hier entsteht, wird später blind benutzt — also
@@ -31,11 +31,12 @@ stimmt es oder es existiert nicht.
    Passungen ansetzen
 4. `to_scad()` ergänzen
 5. **Bereichstest von Hand** für den neuen Baustein — `check_part(spec,
-   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den
-   Grenzen, Features korrekt benannt. An den Rändern bricht Geometrie, nicht
-   in der Mitte. Der Lauf über *alle* Bausteine ist am 03.09.2026 gefallen, weil
-   er eine halbe Stunde je Torlauf kostete (`.claude/rules/bausteine.md`); für
-   den einen, den du gerade baust, dauert er eine Minute.
+   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an
+   den Grenzen, Features korrekt benannt. An den Rändern bricht Geometrie,
+   nicht in der Mitte. Der Lauf über *alle* Bausteine ist am 03.09.2026
+   gefallen, weil er eine halbe Stunde je Torlauf kostete
+   (`.claude/rules/bausteine.md`); für den einen, den du gerade baust,
+   dauert er eine Minute. **Der Testlauf unten prüft ihn nicht.**
 6. Normteilmaße aus der Tabelle, nie hart im Baustein
 7. Vorschaubild rendern lassen
 8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen,
@@ -54,6 +55,6 @@ volle Länge Luft lässt.
 .venv\Scripts\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q
 ```
 
-dann `/pruefen`. Melden: Name, Parameter, Features, was der Bereichstest
+dann `.agents/skills/pruefen/SKILL.md`. Melden: Name, Parameter, Features, was der Bereichstest
 abdeckt, ob `parts_version` steigen musste, und ob der Katalogeintrag mit
 Vorschaubild vorhanden ist.

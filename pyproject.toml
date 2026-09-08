@@ -276,6 +276,12 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN",
 "app/core/ingest/ops.py" = ["RUF001"]
 "tests/*" = ["RUF001", "RUF002"]
 
+[tool.pyright]
+# Der Editor indiziert Quelltext, keine Druckprojekte, Pakete oder Prüfartefakte.
+include = ["app", "tools", "tests", ".claude/hooks"]
+venvPath = "."
+venv = ".venv"
+
 [tool.mypy]
 python_version = "3.14"
 files = ["app"]

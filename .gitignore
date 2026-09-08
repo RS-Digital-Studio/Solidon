@@ -85,6 +85,9 @@ htmlcov/
 # Testlauf eine Änderung im Baum — und zwar auf jeder Maschine eine andere.
 /.claude/.state/letzter-testlauf
 /.claude/.state/letzte-erinnerung
+/.claude/.state/letzter-testlauf-*
+/.claude/.state/letzte-erinnerung-*
+/.claude/.state/sitzungsstart-*
 /.claude/settings.local.json
 # Arbeitsbäume paralleler Sitzungen. `claude --worktree <name>` legt sie hier
 # an; ohne diese Zeile stünde jeder von ihnen als Berg unversionierter Dateien

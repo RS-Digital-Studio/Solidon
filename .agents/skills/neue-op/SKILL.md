@@ -9,7 +9,7 @@ argument-hint: "[was die Operation tun soll]"
 allowed-tools: Read, Write, Edit, Bash, Grep, Glob
 ---
 
-# Neue Operation: $ARGUMENTS
+# Neue Operation: Angaben aus der aktuellen Anfrage
 
 ## Vorher klären
 
@@ -47,7 +47,7 @@ Zwei bestehende Ops im selben Gebiet lesen, bevor die erste Zeile entsteht.
 
 ## Abschluss
 
-`/pruefen`. Danach melden: Name, Kategorie, Parameter, welche Tests sie decken,
+`.agents/skills/pruefen/SKILL.md`. Danach melden: Name, Kategorie, Parameter, welche Tests sie decken,
 und ob die Oberfläche etwas braucht (Kontextmenü am Feature, Kürzel,
 Katalogeintrag). Ist die Op im Bauplan-Katalog noch nicht genannt, sag das —
 dann gehört sie dort ergänzt, bevor sie als fertig gilt.

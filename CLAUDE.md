@@ -48,6 +48,9 @@ Querschnitte kamen als nichts zurück", nicht „fix: section". Diesen Ton halte
 
 Alles läuft über die virtuelle Umgebung, nie über das System-Python:
 
+Beide Editoren setzen für ihre Unterprozesse `PYTHONUTF8=1`, damit auch unter
+Windows umgeleitete Ausgaben und Hook-Nachrichten echte Umlaute behalten.
+
 ```
 .venv\Scripts\python.exe -m pytest -q
 .venv\Scripts\python.exe -m ruff check .
@@ -273,14 +276,45 @@ Agents (`.claude/agents/`) — die globalen .NET-Agents passen hier nicht.
 Befehle liegen in `.claude/skills/`. Beide Listen stehen bereits in der
 Auflistung der Sitzung; hier stünden sie ein drittes Mal.
 
-**Die vierzehn Fachagenten gibt es zweimal, und nur eine Fassung wird
-bearbeitet:** `.claude/agents/*.md` ist die Quelle,
-`.codex/agents/*.toml` erzeugt `tools/sync_agents.py` daraus (Modell, Aufwand
-und Sandbox leitet es aus dem Frontmatter ab). Wer einen Agenten ändert, lässt
-das Werkzeug danach laufen — `tests/test_agent_mirror.py` fährt sein `--check`
-und wird sonst rot. Von Hand gepflegt waren beide Seiten bis zum 08.09.2026,
-und in neun plus drei Commits hat kein einziger beide angefasst; was daraus
-wurde, steht in `tools/CLAUDE.md`.
+**Agenten und Skills haben je eine Quelle:** `.claude/agents/*.md` und
+`.claude/skills/`. `tools/sync_agents.py` erzeugt daraus die Codex-Profile
+unter `.codex/agents/` und die Skills samt Referenzen unter `.agents/skills/`.
+Modell, Aufwand und Sandbox stammen aus dem Agenten-Frontmatter; Skillverweise
+und Aufrufregeln werden für Codex übersetzt. Nach Änderungen an einer Quelle
+das Werkzeug ausführen. `tests/test_agent_mirror.py` prüft mit `--check` auch
+fehlende, veraltete und verwaiste Spiegeldateien. Die erzeugten Dateien werden
+nicht von Hand bearbeitet.
+
+**Die Projekt-Hooks teilen sich `.claude/hooks/solidon3d_hooks.py`.** Die
+Einstiege stehen in `.claude/settings.json` und `.codex/hooks.json`.
+Codex verlangt zusätzlich zur Projektfreigabe die Prüfung und Freigabe jeder
+Hook-Definition über `/hooks`; nach Änderungen an der Definition erneut.
+Ein vorhandener oder als aktiviert gelisteter Hook ist noch kein ausgeführter
+Hook. Die Auflistung `hooks/list` unterscheidet `trusted`, `untrusted` und
+`modified`. Testmarken sind sitzungsbezogene Erinnerungen, kein Nachweis für
+ein bestandenes oder vollständiges Tor.
+Der Windows-Einstieg für `SessionEnd` benötigt den Python-Launcher `py` im
+`PATH`. Er verwendet `py -3 -S` ausschließlich als kleinen Standardbibliothek-
+Einstieg für die Brettfreigabe; alle Projektprüfungen laufen weiter in `.venv`.
+Das Sitzungsende startet weder Git noch die schweren Projektmodule, damit es
+innerhalb des Codex-Zeitlimits bleiben kann.
+
+**Python-Sprachhilfe für Claude:** `pyright-lsp` ist projektbezogen aktiviert;
+der eigentliche Sprachserver wird je Rechner separat installiert
+(`npm install --global pyright`). Das npm-Bin-Verzeichnis muss im `PATH` des
+gestarteten Editors liegen; nach einer PATH-Änderung den Editor neu starten.
+`[tool.pyright]` in `pyproject.toml` begrenzt die Suche auf den Quelltext und
+verweist auf `.venv`, damit Druckprojekte und Prüfartefakte nicht mitindiziert
+werden. Die verbindliche Typprüfung im Tor bleibt mypy. C#-Sprachhilfe und
+Unity-Server sind für Solidon projektlokal abgeschaltet.
+
+Bei einer Einrichtungsprüfung den tatsächlich laufenden Editor bestimmen:
+Claude Desktop kann eine andere gebündelte Claude-Code-Version verwenden als
+der Befehl `claude` im `PATH`. Dessen `auth status` prüft den aufgerufenen
+CLI-Kontext und belegt keine fehlende Desktop-Anmeldung. Gemeinsame
+Projektdateien und sichtbar ausgeführte Editorfunktionen getrennt prüfen;
+eine konfigurierte Terminal-Statuszeile ist noch kein Nachweis für ihre
+Darstellung in der Desktop-Oberfläche.
 
 Wie die Sitzung selbst bedienbar sein soll, steht in
 `.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und

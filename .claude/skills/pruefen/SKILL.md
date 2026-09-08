@@ -4,8 +4,9 @@ description: >
   Führt das vollständige Tor von Solidon aus — die geteilte Testsuite, die
   Leistungstests, ruff check, ruff format --check und mypy — unter einem
   Schloss, damit parallele Sitzungen sich nicht gegenseitig verfälschen, und
-  meldet das Ergebnis zusammengefasst. Benutzen, bevor etwas als fertig gilt,
-  vor jedem Commit und nach jedem Arbeitsschritt an app/ oder tests/.
+  meldet das Ergebnis zusammengefasst. Das vollständige Tor läuft vor dem
+  Commit. Nach einem Arbeitsschritt nur die betroffenen Tests über
+  tools/affected_tests.py; bei parallelen Sitzungen die eigenen Dateien nennen.
 argument-hint: "[optional: Testdatei oder -pfad]"
 allowed-tools: Bash, Read, Edit, Grep, Glob
 ---
@@ -31,11 +32,19 @@ gab anderthalb Stunden lang kein einziges Zeichen aus und stand dabei längst.
 Also: in eine Datei schreiben, den Rückgabewert **davon** lesen, danach die
 Datei ansehen.
 
+Vor den Befehlen den **geprüften Interpreter dieses Arbeitsbaums** im
+aufrufenden Prozess als Umgebungsvariable `SUITE_PYTHON` setzen. Die reguläre
+Umgebung liegt unter `.venv/Scripts/python.exe`, auf Linux und macOS unter
+`.venv/bin/python`. Die Versionsprobe muss zu `pyproject.toml` passen;
+`tools/check_env.py` prüft die Pakete gegen `constraints.txt`. Ein ausdrücklich
+gesetzter ungültiger Pfad stoppt; er darf nicht durch eine ältere Umgebung
+ersetzt werden.
+
 ```
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; .venv\Scripts\python.exe -m ruff check . > "$TEMP/ruff-$S.txt" 2>&1; echo "Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/ruff-$S.txt" 2>&1; echo "Exit=$?"
 ```
 
-Wer den Fortschritt sehen will, nimmt `python -u`.
+Wer den Fortschritt sehen will, nimmt `"$SUITE_PYTHON" -u`.
 
 **Der Sitzungsmarker im Dateinamen ist kein Schmuck.** `$TEMP` ist
 benutzerweit, und an diesem Projekt arbeiten zwei bis vier Sitzungen. Bis zum
@@ -52,11 +61,28 @@ Gefunden von solidon-b4 am 04.09.2026, und zwar als Beobachtung: Während ihr
 geteilter Lauf noch bei `tests/test_sculpt_session.py` stand, lag in `g5.txt`
 bereits ein vollständiges Ergebnis der Leistungstests. Sequenziell unmöglich.
 
-Die Kette hat drei Glieder, weil das erste nicht überall gesetzt ist:
-`CLAUDE_SESSION_NAME` trägt einen lesbaren Namen, wenn die Sitzung einen hat
-(`claude --worktree <name>`), sonst ist sie **leer** — gemessen am 04.09.2026;
-`CLAUDE_CODE_SESSION_ID` steht immer und ist über Aufrufe hinweg stabil, `$$`
-ist der letzte Ausweg.
+Der Marker nutzt die Kennung des Werkzeugs: `CODEX_THREAD_ID` oder
+`CODEX_SESSION_ID`, bei Claude Code `CLAUDE_SESSION_NAME` oder
+`CLAUDE_CODE_SESSION_ID`; `$$` ist der letzte Ausweg. Die Befehle unten sind
+Bash-Befehle. In PowerShell jeden Block als `-lc`-Argument an Git Bash
+übergeben; Bash-Code läuft nie direkt in PowerShell. Der Einstieg lautet:
+
+```powershell
+$env:SUITE_PYTHON = (Resolve-Path '.venv/Scripts/python.exe').Path
+& 'C:\Program Files\Git\bin\bash.exe' -lc '"$SUITE_PYTHON" --version'
+```
+
+Die Probe muss eine Python-Version und Exit 0 liefern. Danach denselben
+Einstieg mit dem jeweiligen Bash-Block anstelle der Probe verwenden.
+
+Wer bereits in Bash arbeitet, setzt und prüft die Variable dort:
+
+```bash
+export SUITE_PYTHON="$(pwd)/.venv/Scripts/python.exe"
+"$SUITE_PYTHON" --version
+```
+
+Auf Linux und macOS lautet der Interpreterpfad `.venv/bin/python`.
 
 ## Zweitens: die Suite läuft geteilt, nicht am Stück
 
@@ -67,8 +93,10 @@ hängengeblieben.
 
 Die CI löst das mit je einem Prozess pro Fensterdatei, und dafür gibt es ein
 Skript: `suite-getrennt.sh` unter `.claude/.state/oberflaechen-durchsicht-2026-08-19/`.
-Es sucht die Fensterdateien selbst (über den Fixture-Graphen,
-`tools/list_windowed_tests.py`) und zählt am Ende „Läufe mit Fehler: N".
+Es bestimmt die Fensterdateien aus Pytests aufgelöstem Fixture-Graphen,
+auch über mittelbare `qt_app`-Abhängigkeiten, und zählt am Ende „Läufe mit
+Fehler: N". Ein Sammlungsfehler hält an; eine Teilmenge wird nicht still zur
+vollständigen Liste erklärt.
 
 **Es lässt die Leistungstests aus** (`-m "not performance"`), also gehören sie
 als eigener Lauf dazu. Der geteilte Lauf allein ist nicht das Tor.
@@ -76,7 +104,7 @@ als eigener Lauf dazu. Der geteilte Lauf allein ist nicht das Tor.
 ## Drittens: unter dem Schloss
 
 An diesem Projekt arbeiten oft zwei bis vier Sitzungen. Die Dateien trennt
-Claude Code über Arbeitsbäume, die **Maschine** trennt niemand — und gegen
+man über Arbeitsbäume, die **Maschine** trennt niemand — und gegen
 Fremdlast zu messen erzeugt Regressionen, die es nicht gibt: 48 Prozent Last
 ergaben fünf rote Leistungstests, 16 Prozent bei identischem Stand neunzehn
 grüne.
@@ -94,20 +122,21 @@ gleichgültig und gegen einen fremden Schreiber nicht.
 
 ## Ablauf
 
-Mit Argument läuft nur `pytest` darauf, und zwar direkt — ein einzelner Lauf
-braucht weder Teilung noch Schloss:
+Mit Dateipfaden laufen die betroffenen Tests über `affected_tests.py --run`.
+Das Werkzeug trennt Fensterdateien auch dann, wenn mehrere angegeben sind.
+Die Datei im folgenden Beispiel durch die genannten Dateien ersetzen:
 
 ```
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; .venv\Scripts\python.exe -m pytest -q $ARGUMENTS > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" tools/affected_tests.py tests/test_agent_mirror.py --run > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"
 ```
 
-Ohne Argument das ganze Tor. Die drei Werkzeuge zuerst, weil sie Sekunden
-dauern und die teuren Läufe erübrigen, wenn sie rot sind:
+Ohne Argument das ganze Tor. Die drei schnellen Werkzeuge zuerst, danach
+die beiden Testläufe; alle fünf Ergebnisse gehören zum Befund:
 
 ```
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; .venv\Scripts\python.exe -m ruff check . > "$TEMP/g1-$S.txt" 2>&1; echo "ruff check   Exit=$?"
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; .venv\Scripts\python.exe -m ruff format --check . > "$TEMP/g2-$S.txt" 2>&1; echo "ruff format  Exit=$?"
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; .venv\Scripts\python.exe -m mypy > "$TEMP/g3-$S.txt" 2>&1; echo "mypy         Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m ruff check . > "$TEMP/g1-$S.txt" 2>&1; echo "ruff check   Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m ruff format --check . > "$TEMP/g2-$S.txt" 2>&1; echo "ruff format  Exit=$?"
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"; "$SUITE_PYTHON" -m mypy > "$TEMP/g3-$S.txt" 2>&1; echo "mypy         Exit=$?"
 ```
 
 Die Zuweisung steht **vor** dem Lauf, nicht dahinter: `$?` gehört dem letzten
@@ -117,12 +146,13 @@ Dann die Suite und die Leistungstests, beide unter dem Schloss, beide in einem
 Aufruf, damit das Schloss nur einmal genommen wird:
 
 ```
-S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; export S
-.venv\Scripts\python.exe tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '
+S="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}}}"
+export S SUITE_PYTHON
+"$SUITE_PYTHON" tools/gate_lock.py run --who "$S" --wait 1800 -- bash -c '
   .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh > "$TEMP/g4-$S.txt" 2>&1
   suite_status=$?
   echo "geteilt Exit=$suite_status"
-  .venv/Scripts/python.exe -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1
+  "$SUITE_PYTHON" -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1
   performance_status=$?
   echo "performance Exit=$performance_status"
   [ "$suite_status" -eq 0 ] && [ "$performance_status" -eq 0 ]
@@ -131,24 +161,21 @@ S="${CLAUDE_SESSION_NAME:-${CLAUDE_CODE_SESSION_ID:-$$}}"; export S
 
 `export S`, weil der innere `bash -c` eine eigene Shell ist — ohne das stünde
 dort ein leerer Marker, und beide Läufe schrieben wieder in dieselbe Datei.
-**Und die letzte Zeile des inneren Blocks ist die Prüfung der beiden Codes,
-kein `echo`:** `gate_lock.py` meldet den Status des inneren Befehls, und ein
-`echo` am Ende gelingt immer — so stand am 24.08.2026 „Exit 0" über einer
-roten Suite. Mit der Verknüpfung als letzter Zeile ist das Schloss genau dann
-grün, wenn beide Läufe es sind.
 
-**Und `--who` nimmt denselben Marker.** Dort stand `"$CLAUDE_SESSION_NAME"`
-allein; die Variable ist leer, wenn die Sitzung keinen Namen trägt, und das
-Schloss meldete dem Wartenden dann einen namenlosen Halter — eine Auskunft, mit
-der niemand jemanden ansprechen kann.
+**Und `--who` nimmt denselben Marker.** Nur `CODEX_THREAD_ID` oder nur
+`CODEX_SESSION_ID` zu verwenden wäre unnötig brüchig; dieselbe Rückfallkette
+benennt deshalb Schloss und Ausgabedateien.
 
 Alle fünf ausführen, auch wenn einer früh fehlschlägt — ein vollständiges Bild
-ist mehr wert als ein schneller Abbruch. Fehlt `.venv`, sag das mit dem
-Einrichtungsbefehl aus `CLAUDE.md`, statt auf das System-Python auszuweichen.
+ist mehr wert als ein schneller Abbruch. Der gemeinsame Schlossaufruf bewahrt
+beide Rückgabewerte und ist nur bei zwei erfolgreichen Prozessen erfolgreich.
+Fehlt die geprüfte Umgebung, den Einrichtungsbefehl aus `CLAUDE.md` nennen,
+statt auf ein ungeprüftes System-Python auszuweichen.
 
-**In einem Arbeitsbaum** (`.claude/worktrees/…`) gibt es kein `.venv`. Dann den
-Interpreter des Hauptbaums mit vollem Pfad rufen und `cwd` im Arbeitsbaum
-lassen; gemessen am 22.08.2026, die Suite läuft so.
+**In einem Arbeitsbaum ohne eigene Umgebung** einen ausdrücklich geprüften
+Interpreter mit vollem Pfad als `SUITE_PYTHON` setzen und `cwd` im Arbeitsbaum
+lassen. Der isolierte Python-Runner übernimmt selbst seinen aufrufenden
+Interpreter; er sucht keine zweite Umgebung.
 
 ## Zählen
 
@@ -163,22 +190,18 @@ Gezählt wird über die **Fortschrittszeichen** (`.` bestanden, `s`
 
 Die Zusicherung ist immer der **Exit-Code**, nie eine Zeile im Text.
 
-## Ein grün gemeldeter Lauf, der rot endet, ist kein roter Test
+## Ein Nichtnull-Prozessausgang bleibt rot
 
-Drei Fensterdateien enden nach „N passed" mit `0xC0000409` oder einer
-Zugriffsverletzung — ein Riss beim **Abbau**, nachdem jeder Test bestanden hat
-(`test_ui.py`, `test_chat_ui.py`, `test_first_run.py`). Zwei Fensterdateien
-enden inzwischen mit **127** statt mit dem bekannten Code, einzeln gefahren
-auch — ein eigener offener Punkt, nicht derselbe Absturz.
+Auch „N passed" oder vollständige Fortschrittszeichen machen einen nativen
+Abbruch beim Aufräumen nicht erfolgreich. Das geteilte Tor zählt jeden
+Nichtnull-Exit, einschließlich erfolgloser Sammlungen, und gibt insgesamt
+0 oder 1 zurück.
 
-`suite-getrennt.sh` unterscheidet das selbst: `zaehlt_als_fehler` vergleicht
-die Zahl der Fortschrittszeichen mit der Sollgröße aus `--collect-only`, und
-ein Lauf, der alle Tests durch hatte und erst beim Aufräumen riss, zählt als
-grün (`tests/test_suite_script.py`). **Ein Exit ungleich null des Skripts ist
-deshalb ein echter Befund** — ein roter Test, oder ein Riss, der Tests
-verschluckt hat. Wer ihn für den bekannten Abbau-Abriss hält, sucht an der
-falschen Stelle; das Protokoll sagt, wie viele Zeichen vor dem Abbruch
-standen. Der offene Punkt steht in `ROADMAP.md`.
+Portionen mit fehlenden Tests werden weiterhin zur Diagnose halbiert. Der
+ursprüngliche Abbruch wird vor der Wiederholung erfasst und bleibt im
+Ergebnis. Erfolgreiche kleinere Teilstücke ergänzen den Nachweis; sie löschen
+keinen Fehler desselben Laufs. Ein späterer vollständig sauberer Lauf ist
+als eigener Lauf mit seinem echten Prozessausgang auszuweisen.
 
 ## Melden
 
@@ -186,9 +209,10 @@ Eine Zeile je Lauf: bestanden oder nicht, bei Fehlschlag die Anzahl und die
 betroffenen Dateien. Danach die Fehler selbst, gruppiert nach Ursache — nicht
 die rohe Ausgabe durchgereicht.
 
-`ruff format --check` meldet nur, dass eine Datei anders aussehen würde. Das
-behebst du mit `ruff format .` ohne Rückfrage. Alles andere ist eine
-inhaltliche Änderung: erst verstehen, warum der Lauf rot ist, dann beheben —
+`ruff format --check` meldet nur, dass eine Datei anders aussehen würde.
+Die eigenen betroffenen Dateien mit `ruff format <dateipfade>` formatieren;
+fremde Änderungen im gemeinsamen Baum ihrem Besitzer melden. Alles andere ist
+eine inhaltliche Änderung: erst verstehen, warum der Lauf rot ist, dann beheben —
 nie einen Test anpassen, damit er grün wird, und nie eine Warnung
 unterdrücken, die `filterwarnings = ["error"]` absichtlich zum Fehler macht.
 

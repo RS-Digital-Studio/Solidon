@@ -208,9 +208,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Testhilfen stehen zweimal | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | **eine Entscheidung von Robert** (Konzept §2 H): 21 wortgleiche Gruppen in `tests/`, darunter `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und `test_torus_fit_quality.py`; Empfehlung einmal für die fünf großen, danach nur beim Anfassen |
 | Die Filamentkarte fordert mehr, als sie zeigt | Ein Ort für die Auswahl (07.09.2026) | eine Zeile in `filament_picker._around_the_list`: Sie fordert 144 Bildpunkte und setzt 126 um, gemessen beim Bau des P4-Nachweises. Die 18 Punkte bekommt niemand — die Verteilung gibt sie ihr, und sie zeigt sie nicht |
 | Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | Die Durchsicht des 07.09.2026 | einen Bilderlauf: `app/images/manual/*/main-window.png` ist von 06:13, die rechte Spalte hat sich um 11:05 geändert (`975bd6bf`), und `d2040474` hat Handbuch und PDFs mit dem neuen Absatz zur rechten Spalte darüber geschrieben. Text und Bild widersprechen sich auf derselben Seite, in sechs Sprachen, in `Releases/*.pdf` und in `website/handbuch.html`. Dazu die **gezeichnete** Abbildung (`app/core/figures.py::_window`): sie kennt Projektkopfzeile und Operationsfläche nicht, und ihr `caption` sagt weiter „vier Bereiche". Reihenfolge: erst `figures.py`, dann der Bilderschritt aus `/erzeugen`, dann Handbuch und PDFs. **Vor dem Paketbau von 0.3.5** |
-| Feuern `SessionEnd` und `statusLine` wirklich? | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | die nächste Sitzung: eine Statuszeile, die erscheint, und ein Sitzungsbrett, das nach dem Beenden leer ist. Beide Programme dahinter sind geprüft, jedes mit Gegenprobe (`tests/test_solidon3d_hooks.py`, `tests/test_session_board.py`) — ungeprüft ist allein, ob Claude Code sie in dieser Fassung auslöst. Erscheint die Zeile nicht, ist der erste Verdacht das Feld `shell`: Die Hooks tragen es, für `statusLine` ist es nicht belegt |
-| Kommt der Codex-`SessionEnd` in drei Sekunden durch? | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | einen Lauf auf der Maschine, auf der Codex steht — hier ist es nicht installiert. Drei Sekunden sind dort das Maximum (Vorgabe eine), und ein Python-Start mit Import liegt nahe daran. Reicht es nicht, muss der Hook ohne Import auskommen: die Eintragsdatei selbst zu löschen ist billiger, als `tools/` zu laden |
-| Ist `gpt-6-astra` für dieses Konto freigeschaltet? | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | einen Blick auf der Codex-Maschine. Bei Veröffentlichung lief das Modell über ein Trusted-Access-Programm; der Rückfall ist eine Zeile — `MODELS` in `tools/sync_agents.py` auf `gpt-5.6-sol` zurückstellen und das Werkzeug einmal laufen lassen |
+| Live-Abnahme des Sitzungsendes | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | die Brettfreigabe durch echte `SessionEnd`-Ereignisse beobachten. Modelle und Skills sind durch Codex selbst bestätigt, alle sechs Projekt-Hooks geprüft und freigegeben; der neue SessionEnd-Einstieg gibt ein isoliertes Brett in 2,07 s frei. Das ist ein Wrappertest, noch kein Editor-Ereignis. Pyright erkennt einen Typfehler und dessen Behebung und läuft inzwischen unter einer echten Claude-Desktop-Sitzung. Desktop verwendet Code 2.1.260 mit Benutzer-, Projekt- und lokalen Einstellungen. Die CLI im PATH ist 2.1.247; ihr `loggedIn=false` belegt keine fehlende Desktop-Anmeldung |
 
 ---
 
@@ -17093,25 +17091,52 @@ Zweig, Modell und die Zahl der anderen Sitzungen; und `pyright-lsp` ist
 installiert, während `csharp-lsp` — in einem reinen Python-Projekt — nur noch
 projektlokal abgeschaltet ist, damit Roberts .NET-Projekte es behalten.
 
-**Was offen ist, ist die Verdrahtung** — sie lässt sich hier nicht messen:
+**Nachprüfung auf Windows durch Codex am selben Tag:**
 
-- [ ] **Feuern `SessionEnd` und `statusLine` wirklich?** Beide sind in
-      `.claude/settings.json` eingetragen und die Programme dahinter geprüft
-      (`tests/test_solidon3d_hooks.py`, `tests/test_session_board.py`, beide
-      mit Gegenprobe). Ob Claude Code sie in dieser Fassung auch auslöst,
-      zeigt erst die nächste Sitzung: eine Statuszeile, die erscheint, und ein
-      Brett, das nach dem Beenden leer ist. Erscheint die Zeile nicht, ist der
-      erste Verdacht das Feld `shell` — die Hooks tragen es, für `statusLine`
-      ist es nicht belegt.
-- [ ] **Kommt der Codex-`SessionEnd` in drei Sekunden durch?** Das ist dort das
-      Maximum (Vorgabe eine Sekunde), und ein Python-Start mit Import liegt
-      nahe daran. Auf der Maschine, auf der Codex läuft, einmal beenden und
-      `session_board.py list` nachsehen. Reicht es nicht, muss der Hook ohne
-      Import auskommen — die Datei selbst zu löschen ist billiger, als
-      `tools/` zu laden.
-- [ ] **Ist `gpt-6-astra` für dieses Konto freigeschaltet?** Bei
-      Veröffentlichung lief es über ein Trusted-Access-Programm. Fehlt der
-      Zugang, ist der Rückfall eine Zeile: `MODELS` in `tools/sync_agents.py`
-      auf `gpt-5.6-sol` zurückstellen und das Werkzeug einmal laufen lassen.
-      Codex ist auf dieser Maschine nicht installiert, also ist hier nichts
-      davon prüfbar.
+- [x] **Modelle und Discovery direkt bestätigt.** Die installierte Codex-CLI
+      0.153.4 listet `gpt-6-astra` und `gpt-5.6-terra` samt Denkstufen. Alle
+      neun Projekt-Skills sind auffindbar; Konfiguration und Hookdefinitionen
+      werden ohne Ladefehler gelesen.
+- [x] **Die sechs Projekt-Hooks waren noch `untrusted`.** Aktiviert hieß hier
+      übersprungen. Nach Prüfung der Definitionen sind die konkreten Hashes
+      über die reguläre Codex-Konfiguration freigegeben; `hooks/list` bestätigt
+      anschließend sechsmal `trusted`. Die allgemeine Vertrauensprüfung bleibt
+      bestehen.
+- [x] **Der Windows-Einstieg war zu schwer.** Die alte PowerShell-Kette maß
+      17,57 s. SessionEnd benötigt nun weder Git-Unterprozess noch schwere
+      Projektimporte. Der exakte neue Einstieg gibt ein isoliertes Brett in
+      2,07 s bei Exit 0 frei; Unterordner, Worktree, UTF-8 und unveränderter
+      Fehlercode sind geprüft. Das belegt den Wrapper, kein Editorereignis.
+- [x] **Weitere Anschlussfehler behoben.** Die Umgebungsprüfung importierte
+      einen nicht mehr vorhandenen Namen und blieb dadurch still. Stop
+      verwendete ein nicht unterstütztes Ausgabefeld. Patch-Move-Ziele und
+      Arbeitsverzeichnisse, getrennte Sitzungsmarken und die tatsächlichen
+      Testbefehle aus dem Skill sind nun geprüft: 42 Hooktests bestanden.
+- [x] **Skills und Referenzen haben ebenfalls eine Quelle.** Beim Abgleich
+      wurden widersprüchliche Regeln zur Testhäufigkeit, zu nativen Abbrüchen
+      und zum Auto-Push zusammengeführt. `sync_agents.py` erzeugt jetzt auch
+      den Skillspiegel samt Codex-Aufrufregeln; 29 Spiegeltests bestanden.
+- [x] **Die Lieferanleitung schützt den gemeinsamen Index durchgehend.**
+      Widersprüchliche Reset-Anweisungen stehen nur noch als historische
+      Beispiele in einer Referenz. Der aktuelle Ablauf ist im Probe-Repository
+      gefahren: zwei eigene Änderungen und eine neue Datei committet,
+      gemeinsamer Index bytegleich und fremder vorgemerkter Blob erhalten.
+- [x] **Python-Sprachhilfe auf diesem Rechner eingerichtet.** Pyright
+      1.1.413 und das Claude-Plugin waren hier noch nicht installiert, der
+      npm-Benutzerpfad fehlte ebenfalls. Beides ist ergänzt. Die Suche ist
+      auf Quelltext begrenzt und verwendet `.venv`; der echte LSP-Test erkennt
+      einen absichtlichen Typfehler und meldet nach seiner Behebung keine
+      Diagnose mehr, Exit 0. Anschließend ist Pyright auch als Kindprozess
+      einer laufenden Claude-Desktop-Sitzung nachgewiesen. Beide Editoren
+      verwenden projektlokal UTF-8.
+- [x] **Desktop und Standalone-CLI auseinandergehalten.** Die laufenden
+      Desktop-Sitzungen verwenden Claude Code 2.1.260, Opus 5 mit Aufwand
+      `max` und `--setting-sources=user,project,local`. Die separate CLI im
+      PATH ist 2.1.247; ihre Meldung `loggedIn=false` beweist keine fehlende
+      Desktop-Anmeldung. Die frühere Schlussfolgerung ist korrigiert.
+- [ ] **Live-Abnahme des Sitzungsendes.** Tatsächliche SessionEnd-
+      Ereignisse müssen beim Ende einer echten Editor-Sitzung beobachtet werden.
+      Eine konfigurierte Terminal-Statuszeile ist kein Nachweis für ihre
+      Darstellung in Claude Desktop. Der ergänzte Benutzer-PATH gilt für
+      neu gestartete Editoren. Die lokalen Messungen ersetzen diese sichtbare
+      Abnahme nicht.

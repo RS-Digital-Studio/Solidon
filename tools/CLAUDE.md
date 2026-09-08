@@ -18,18 +18,16 @@ Vier Werkzeuge, drei Wächter, ein Thema: `stamp_assets.py` schreibt die
 Inhaltsstempel, `test_every_reference_carries_the_stamp_of_the_file_it_points_at`
 liest nach; `make_download.py` trägt die Paketgrößen ein, und
 `test_the_technical_requirements_name_the_sizes_the_packages_have` hält sie
-gegen `version.json`; `sync_agents.py` erzeugt die Codex-Agentenprofile aus den
-Claude-Agentendateien, und `test_agent_mirror.py` fährt sein `--check`. Eine
+gegen `version.json`; `sync_agents.py` erzeugt die Codex-Agentenprofile und
+Skills aus den Claude-Quelldateien, und `test_agent_mirror.py` fährt sein `--check`. Eine
 getippte Zahl auf der Website ist ein Fehler, der auf sein Datum wartet.
 
-**Das jüngste der vier sagt am deutlichsten, warum das Prinzip gilt.** Bis zum
-08.09.2026 wurden die vierzehn Fachagenten beidseits von Hand gepflegt: neun
-Commits nur auf der Claude-Seite, drei nur auf der Codex-Seite, **keiner auf
-beiden**. Am Ende wichen alle vierzehn Beschreibungen ab, drei Claude-Agenten
-schrieben `pytest -q` am Stück vor — den Lauf, der seit dem 16.08.2026 im
-Speicherabriss endet —, und keiner kannte `affected_tests.py`. Zwei Kopien
-derselben Anweisung sind keine Redundanz, sondern zwei Wahrheiten, von denen
-eine altert.
+`sync_agents.py` liest ausschließlich `.claude/agents/` und `.claude/skills/`
+als Quellen. Es prüft alle Eingaben vor dem Schreiben, übersetzt Skillaufrufe
+und erzeugt Codex-Aufrufregeln aus `disable-model-invocation`. Referenzen
+reisen mit; Zeilenenden von Git gelten nicht als Drift. Dateien ohne Quelle
+werden gemeldet und nicht gelöscht. Ein neues Agenten-Frontmatter-Feld braucht eine
+bewusste Übersetzung, damit eine Claude-Regel nicht unbemerkt bei Codex fehlt.
 
 **Und was hier sucht, sucht zuerst einen Fall, dessen Ausgang bekannt ist.**
 `twin_scan.py` hat seinen Selbsttest (`tests/test_twin_scan.py`), und der hat
@@ -46,7 +44,7 @@ ein sauberes Ergebnis.
 |---|---|
 | `check_env.py` | Prüft die Umgebung gegen den festgeschriebenen Stand — **und stellt ihn her** |
 | `session_board.py` | Wer arbeitet gerade woran (`list` / `claim` / `release` / `statusline`) |
-| `sync_agents.py` | Erzeugt `.codex/agents/*.toml` aus `.claude/agents/*.md` (`--check` im Tor) |
+| `sync_agents.py` | Erzeugt Codex-Agenten und Skills aus `.claude/agents/` und `.claude/skills/` (`--check` im Tor) |
 | `gate_lock.py` | Ein Schloss fürs Tor: nur ein Testlauf gleichzeitig auf dieser Maschine |
 | `link_memory.py` | Die Erinnerungen ins Repository hängen — einmal je Maschine |
 | `check_message.py` | Der `commit-msg`-Hook: Ersatzschreibung statt Umlaut in einer Commit-Meldung |

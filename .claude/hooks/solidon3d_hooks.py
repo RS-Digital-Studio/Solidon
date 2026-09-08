@@ -14,10 +14,10 @@ Ein Skript, sechs Aufgaben — welche, sagt das erste Argument:
                      Python-Datei und meldet Lint-Befunde sowie Verstöße gegen
                      die harten Regeln, die sich rein syntaktisch erkennen
                      lassen.
-    testlauf         PostToolUse (Bash): merkt sich, wann die Suite zuletzt
-                     lief.
+    testlauf         PostToolUse (Bash): merkt sich je Sitzung den letzten
+                     erkannten Testaufruf; Erfolg und Abdeckung prüft der Agent.
     abschluss        Stop: erinnert daran, wenn seit der letzten Änderung an
-                     app/ oder tests/ keine Suite gelaufen ist.
+                     app/, tests/ oder tools/ kein Testaufruf erfasst ist.
     vor-bash         PreToolUse (Bash): fragt nach, bevor ein Befehl Arbeit
                      verwirft (Regel „niemals reverten"). Codex blockiert den
                      ersten Versuch, weil es die Entscheidung „ask" noch
@@ -34,10 +34,11 @@ lieber ein ausgefallener Hinweis als eine blockierte Sitzung.
 from __future__ import annotations
 
 import contextlib
-import io
+import hashlib
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -49,6 +50,7 @@ if not VENV_PYTHON.exists():  # Linux und macOS, falls das Projekt dort läuft
     VENV_PYTHON = WURZEL / ".venv" / "bin" / "python"
 MARKE = WURZEL / ".claude" / ".state" / "letzter-testlauf"
 ERINNERT = WURZEL / ".claude" / ".state" / "letzte-erinnerung"
+SESSION_START = WURZEL / ".claude" / ".state" / "sitzungsstart"
 
 # Regeln, die sich am Text einer Datei erkennen lassen. Alles andere prüfen die
 # Tests — ein Hook, der raten muss, meldet lieber nichts.
@@ -119,17 +121,33 @@ def nachbarsitzungen() -> list[str]:
 
 
 def eingabe() -> dict:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")  # Umlaute überleben auch cp1252
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
 
     try:
-        return json.loads(sys.stdin.read() or "{}")
-    except (json.JSONDecodeError, OSError):
+        data = json.loads(sys.stdin.read() or "{}")
+    except (json.JSONDecodeError, UnicodeError, OSError):
         return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _session_path(path: Path, data: dict) -> Path:
+    """Teststand und Erinnerung einer Sitzung bleiben unabhängig von anderen."""
+    session_id = str(data.get("session_id") or "")
+    if not session_id:
+        return path
+    key = hashlib.sha256(session_id.encode("utf-8")).hexdigest()[:24]
+    return path.with_name(f"{path.name}-{key}")
 
 
 def melden(ereignis: str, text: str) -> None:
     """Gibt dem Agenten einen Hinweis mit, ohne die Handlung anzuhalten."""
+    if ereignis == "Stop":
+        # Stop kennt keinen additionalContext. Eine Warnung zeigt den Befund,
+        # ohne aus einem unvollständigen Zeitstempelvergleich Arbeit auszulösen.
+        json.dump({"systemMessage": text}, sys.stdout)
+        return
     json.dump(
         {"hookSpecificOutput": {"hookEventName": ereignis, "additionalContext": text}},
         sys.stdout,
@@ -179,17 +197,29 @@ def umgebungshinweis() -> str:
     um, ohne dass eine Zeile Code sich geändert hatte. Arbeiten mehrere am
     selben Repository, ist das kein Einzelfall.
 
-    Der Hinweis kostet zwei kurze Unterprozesse und kein Netz. Schlägt er
-    fehl, bleibt er still — ein Hook hält die Arbeit nie auf.
+    Der Prüfer läuft ohne Netz in einem begrenzten Unterprozess. Wird er nicht
+    rechtzeitig fertig, bleibt der Projekthinweis samt manuellem Prüfweg erhalten.
     """
     try:
-        if str(WURZEL) not in sys.path:
-            sys.path.insert(0, str(WURZEL))
-        from tools.check_env import pruefen
-
-        befunde, vorschlaege = pruefen()
-    except Exception:  # ein Hinweis darf nie die Sitzung kosten
-        return ""
+        lauf = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import json; from tools.check_env import check; print(json.dumps(check()))",
+            ],
+            cwd=WURZEL,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=15,
+            check=True,
+        )
+        befunde, vorschlaege = json.loads(lauf.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return (
+            " Die Umgebungsprüfung konnte beim Start nicht abgeschlossen werden. "
+            "Prüfe sie mit `python tools/check_env.py`."
+        )
     if not befunde:
         return ""
     schritte = " ".join(vorschlaege)
@@ -236,7 +266,11 @@ def _nachbarhinweis() -> str:
 
 
 def sitzungsstart() -> None:
-    eingabe()
+    data = eingabe()
+    start = _session_path(SESSION_START, data)
+    if not start.exists():
+        start.parent.mkdir(parents=True, exist_ok=True)
+        start.write_text(str(time.time()), encoding="utf-8")
     if is_codex():
         workflow_note = (
             "Nach jedem Schritt laufen die betroffenen Tests; vor dem Commit das "
@@ -268,6 +302,8 @@ def sitzungsstart() -> None:
 def _changed_files(data: dict) -> list[Path]:
     """Liest geänderte Pfade aus Claude- oder Codex-Werkzeugeingaben."""
     tool_input = data.get("tool_input") or {}
+    if not isinstance(tool_input, dict):
+        return []
     raw_paths: list[str] = []
     file_path = tool_input.get("file_path")
     if isinstance(file_path, str) and file_path:
@@ -277,17 +313,19 @@ def _changed_files(data: dict) -> list[Path]:
     if isinstance(patch, str):
         raw_paths.extend(
             match.group(1).strip()
-            for match in re.finditer(r"^\*\*\* (?:Add|Update) File: (.+)$", patch, re.MULTILINE)
+            for match in re.finditer(
+                r"^\*\*\* (?:(?:Add|Update) File|Move to): (.+)$", patch, re.MULTILINE
+            )
         )
 
     files: list[Path] = []
     for raw_path in dict.fromkeys(raw_paths):
         path = Path(raw_path)
         if not path.is_absolute():
-            path = WURZEL / path
+            path = Path(data.get("cwd") or WURZEL) / path
         try:
             path.resolve().relative_to(WURZEL)
-        except ValueError:
+        except (OSError, ValueError):
             continue
         if path.suffix == ".py" and path.exists():
             files.append(path)
@@ -332,6 +370,12 @@ def _check_changed_file(path: Path) -> list[str]:
 
 def nach_aenderung() -> None:
     daten = eingabe()
+    if daten.get("tool_name") == "apply_patch":
+        # PostToolUse sieht in Codex auch Fehlversuche. Nur die Erfolgsausgabe
+        # des Patchwerkzeugs erlaubt dem Hook, bestehende Dateien zu formatieren.
+        response = daten.get("tool_response")
+        if not isinstance(response, str) or not response.startswith("Success."):
+            return
     hinweise = [note for path in _changed_files(daten) for note in _check_changed_file(path)]
     if hinweise:
         melden("PostToolUse", "\n\n".join(hinweise))
@@ -340,10 +384,11 @@ def nach_aenderung() -> None:
 def testlauf() -> None:
     daten = eingabe()
     befehl = (daten.get("tool_input") or {}).get("command") or ""
-    if "pytest" in befehl:
+    if _test_command(befehl) and not _tool_failed(daten):
         try:
-            MARKE.parent.mkdir(parents=True, exist_ok=True)
-            MARKE.write_text(str(time.time()), encoding="utf-8")
+            marker = _session_path(MARKE, daten)
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(str(time.time()), encoding="utf-8")
         except OSError:
             pass
     # Gesammelt und **einmal** gemeldet: Zwei ``melden``-Aufrufe schreiben zwei
@@ -351,6 +396,101 @@ def testlauf() -> None:
     hinweise = [text for text in (_ruff_hinweis(befehl), _commit_hinweis(befehl)) if text]
     if hinweise:
         melden("PostToolUse", "\n\n".join(hinweise))
+
+
+def _test_command(command: str, *, depth: int = 0) -> bool:
+    """Erkennt Testaufrufe, keine Erwähnungen, Hilfetexte oder Sammlungen.
+
+    Die Marke belegt nur einen Aufruf. Codex liefert für Shellwerkzeuge nicht
+    durchgehend einen strukturierten Exit-Code; grün muss der Agent selbst lesen.
+    """
+    if depth > 8:
+        return False
+    try:
+        lexer = shlex.shlex(command.replace("\\", "/"), posix=True, punctuation_chars=";&|\n")
+        lexer.whitespace = " \t\r"
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return False
+    statement: list[str] = []
+    for token in [*tokens, ";"]:
+        if token and set(token) <= set(";&|\n"):
+            if _test_invocation(statement, depth):
+                return True
+            statement = []
+        else:
+            statement.append(token)
+    return False
+
+
+def _test_invocation(tokens: list[str], depth: int) -> bool:
+    """Entpackt ausschließlich die im Prüfablauf verwendeten Aufrufhüllen."""
+    while tokens and re.match(r"(?:\$env:)?[A-Za-z_][A-Za-z_0-9]*=", tokens[0]):
+        tokens = tokens[1:]
+    if not tokens:
+        return False
+    runner = tokens[0].rsplit("/", 1)[-1].lower()
+    arguments = tokens[1:]
+    if runner in {
+        "bash",
+        "bash.exe",
+        "sh",
+        "zsh",
+        "pwsh",
+        "pwsh.exe",
+        "powershell",
+        "powershell.exe",
+    }:
+        for index, argument in enumerate(arguments):
+            if argument.lower() in {"-c", "-lc", "-command"} and index + 1 < len(arguments):
+                return _test_command(arguments[index + 1], depth=depth + 1)
+        return bool(arguments and arguments[0].rsplit("/", 1)[-1] == "suite-getrennt.sh")
+    if runner == "suite-getrennt.sh":
+        return True
+    if any(token in {"--help", "-h", "--collect-only", "--co"} for token in arguments):
+        return False
+    if runner in {"pytest", "pytest.exe", "py.test"}:
+        return True
+    if runner not in {"$suite_python", "${suite_python}", "$env:suite_python"} and not re.fullmatch(
+        r"(?:python[\d.]*|py)(?:\.exe)?", runner
+    ):
+        return False
+    while arguments:
+        if arguments[0] in {"-u", "-B", "-I", "-S"} or re.fullmatch(r"-3(?:\.\d+)*", arguments[0]):
+            arguments = arguments[1:]
+        elif arguments[0] in {"-X", "-W"} and len(arguments) > 1:
+            arguments = arguments[2:]
+        else:
+            break
+    if arguments[:2] == ["-m", "pytest"]:
+        return True
+    if arguments and arguments[0].rsplit("/", 1)[-1] == "affected_tests.py":
+        return "--run" in arguments[1:]
+    if (
+        len(arguments) > 2
+        and arguments[0].rsplit("/", 1)[-1] == "gate_lock.py"
+        and arguments[1] == "run"
+        and "--" in arguments
+        and depth < 8
+    ):
+        return _test_invocation(arguments[arguments.index("--") + 1 :], depth + 1)
+    return False
+
+
+def _tool_failed(data: dict) -> bool:
+    """Explizite Fehler dürfen keinen Testaufruf quittieren."""
+    response = data.get("tool_response")
+    if isinstance(response, dict):
+        return bool(
+            response.get("isError")
+            or response.get("interrupted")
+            or response.get("exit_code") not in (None, 0)
+            or response.get("exitCode") not in (None, 0)
+        )
+    if isinstance(response, str):
+        return bool(re.search(r"(?:Process exited with code|Exit code:)\s*[1-9]\d*", response))
+    return False
 
 
 def _ruff_hinweis(befehl: str) -> str:
@@ -494,20 +634,33 @@ def _commit_hinweis(befehl: str) -> str:
 
 
 def abschluss() -> None:
-    eingabe()  # stdin leeren, damit der Aufrufer nicht blockiert
+    data = eingabe()
+    marker = _session_path(MARKE, data)
+    remembered = _session_path(ERINNERT, data)
+    started = _session_path(SESSION_START, data)
     try:
-        zuletzt = float(MARKE.read_text(encoding="utf-8")) if MARKE.exists() else 0.0
+        zuletzt = max(
+            (
+                float(path.read_text(encoding="utf-8"))
+                for path in (marker, started)
+                if path.exists()
+            ),
+            default=0.0,
+        )
     except (OSError, ValueError):
         zuletzt = 0.0
 
     juenger: list[str] = []
-    for gebiet in ("app", "tests"):
+    stamps: list[str] = []
+    for gebiet in ("app", "tests", "tools"):
         for datei in (WURZEL / gebiet).rglob("*.py"):
             if "__pycache__" in datei.parts:
                 continue
             try:
-                if datei.stat().st_mtime > zuletzt:
+                stat = datei.stat()
+                if stat.st_mtime > zuletzt:
                     juenger.append(str(datei.relative_to(WURZEL)))
+                    stamps.append(f"{juenger[-1]}:{stat.st_mtime_ns}")
             except OSError:
                 continue
             if len(juenger) > 3:
@@ -519,19 +672,20 @@ def abschluss() -> None:
         # Zweimal derselbe Hinweis ist keiner mehr: er wird überlesen und kostet
         # nur Kontext. Also nur melden, wenn sich etwas geändert hat — bei
         # fremder Arbeit im Baum feuert der Hook sonst bei jedem Zug erneut.
-        stand = "|".join(sorted(juenger))
+        stand = "|".join(sorted(stamps))
         try:
-            if ERINNERT.exists() and ERINNERT.read_text(encoding="utf-8") == stand:
+            if remembered.exists() and remembered.read_text(encoding="utf-8") == stand:
                 return
-            ERINNERT.parent.mkdir(parents=True, exist_ok=True)
-            ERINNERT.write_text(stand, encoding="utf-8")
+            remembered.parent.mkdir(parents=True, exist_ok=True)
+            remembered.write_text(stand, encoding="utf-8")
         except OSError:
             pass
 
         gezeigt = ", ".join(juenger[:3]) + (" und weitere" if len(juenger) > 3 else "")
         melden(
             "Stop",
-            f"Seit der letzten Änderung ({gezeigt}) liefen keine Tests. "
+            f"Seit der letzten Änderung ({gezeigt}) wurde für diese Sitzung kein "
+            "Testaufruf erfasst. Die Marke prüft weder Erfolg noch Testabdeckung. "
             "Die Arbeitsweise dieses Projekts verlangt nach jedem Schritt die "
             "betroffenen: .venv\\Scripts\\python.exe tools/affected_tests.py --run "
             f"— und vor dem Commit {'$pruefen' if is_codex() else '/pruefen'} für "
@@ -556,13 +710,44 @@ def sitzungsende() -> None:
     Anspruch, der eine Sitzung überlebt, wäre eine Absprache, die niemand
     gekündigt hat.
     """
-    eingabe()  # stdin leeren, damit der Aufrufer nicht blockiert
-    sys.path.insert(0, str(WURZEL))
-    from tools import session_board
+    data = eingabe()
+    # Codex lässt höchstens drei Sekunden zu. Weder einen Git-Prozess noch
+    # die Importkette des Torwerkzeugs starten; .git und commondir genügen.
+    cwd = Path(data.get("cwd") or Path.cwd()).resolve()
+    git_dir = next(
+        (path / ".git" for path in (cwd, *cwd.parents) if (path / ".git").exists()), None
+    )
+    if git_dir is None:
+        return
+    if git_dir.is_file():
+        pointer = git_dir.read_text(encoding="utf-8").strip()
+        if not pointer.startswith("gitdir: "):
+            return
+        git_dir = (git_dir.parent / pointer.removeprefix("gitdir: ")).resolve()
+    common = git_dir / "commondir"
+    if common.exists():
+        git_dir = (git_dir / common.read_text(encoding="utf-8").strip()).resolve()
 
-    # `release` berichtet dem Menschen, der es tippt; hier tippt es niemand.
-    with contextlib.redirect_stdout(io.StringIO()):
-        session_board.release()
+    if is_codex():
+        session_id = str(
+            data.get("session_id")
+            or os.environ.get("CODEX_THREAD_ID")
+            or os.environ.get("CODEX_SESSION_ID")
+            or ""
+        )
+        if not session_id:
+            return
+        key = f"codex-{session_id}"
+    else:
+        key = str(os.environ.get("CLAUDE_PID") or "")
+        if not key:
+            return
+        entry = Path.home() / ".claude" / "sessions" / f"{key}.json"
+        with contextlib.suppress(OSError, ValueError):
+            key = str(json.loads(entry.read_text(encoding="utf-8")).get("name") or key)
+    if Path(key).name != key or key in {".", ".."}:
+        return
+    (git_dir / "solidon-sitzungen" / f"{key}.json").unlink(missing_ok=True)
 
 
 def vor_bash() -> None:

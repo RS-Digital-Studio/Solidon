@@ -8,7 +8,7 @@ argument-hint: "[optional: Phase oder Thema]"
 allowed-tools: Read, Grep, Bash, Glob
 ---
 
-# Roadmap: $ARGUMENTS
+# Roadmap: Angaben aus der aktuellen Anfrage
 
 ## Lesen
 

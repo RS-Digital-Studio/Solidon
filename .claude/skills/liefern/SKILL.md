@@ -1,445 +1,167 @@
 ---
 name: liefern
 description: >
-  Schließt eine Arbeitseinheit ab: vollständiges Tor laufen lassen, Änderungen in
-  logische Einheiten aufteilen und mit aussagekräftigen deutschen Meldungen
-  committen. Nur auf ausdrückliche Anweisung.
+  Schließt eine geprüfte Arbeitseinheit ab: Änderungen abgrenzen, über einen
+  privaten Index mit deutschen Meldungen committen und Commit sowie Push
+  prüfen. Bewahrt fremde Dateien und den gemeinsamen Index unverändert.
+  Nur auf ausdrückliche Anweisung.
 disable-model-invocation: true
 allowed-tools: Bash, Read, Grep, Glob
 ---
 
 # Liefern
 
-## 1. Tor
+## Umfang und Nachweis
 
-Erst `/pruefen`. Ist etwas rot, wird nicht committet — dann ist die Behebung
-die Aufgabe, nicht der Commit. Melde den roten Lauf und halte an.
+Die aktuelle Anweisung von Robert bestimmt den Umfang. Das vollständige Tor
+über `/pruefen` gehört vor den Commit; ein passender bereits grüner Lauf muss
+nicht wiederholt werden. Liegt ein Fehllauf vor, seine Ursache und den
+betroffenen Stand benennen und zuerst beheben. Ein expliziter Auftrag wie
+„nur committen“ bezieht sich auf die bereits geprüften eigenen Änderungen.
 
-## 2. Aufteilen
+`tools/session_board.py list`, den Verlauf und `git diff HEAD -- <eigene Pfade>`
+lesen. Die Einheit umfasst genaue Dateien und, bei gemeinsam bearbeiteten
+Dateien, nur die eigenen Änderungen darin. Verzeichnisangaben, `git add .`
+und `git commit -a` gehören nicht in diesen Ablauf. Eine neue oder gelöschte
+Datei muss ausdrücklich zur Liste gehören. `3D Drucker/`, Umgebungen,
+Messdaten und Testartefakte bleiben draußen, soweit sie nicht beauftragt sind.
 
-`git status` und `git diff` lesen und die Änderungen in **logische Einheiten**
-schneiden: ein Thema, ein Commit. Mehrere Themen werden mehrere Commits, in
-einer Reihenfolge, in der jeder für sich Sinn ergibt. Keine Mega-Commits über
-alles, keine Mini-Commits je Datei.
+Der gemeinsame Index kann fremde vorgemerkte Änderungen tragen. **Er wird
+weder bestückt noch nachgezogen, auch nicht auf vermeintlich eigenen Pfaden.**
+`MM`, eine vorgemerkte Löschung oder eine vorhandene Arbeitsdatei beweisen
+keine Absicht. Unklare Zuordnung mit der zuständigen Sitzung klären.
 
-Nicht mitcommitten: `3D Drucker/` (steht in `.gitignore`), Messdaten,
-Testartefakte, `.venv`. Prüfe vor dem `git add`, was tatsächlich hineinläuft —
-ein `git add .` ohne Blick ist die häufigste Ursache für versehentliche
-Dateien im Repository.
+## Meldung und erwarteter Inhalt vorbereiten
 
-## 3. Meldung
+Ein Thema ergibt einen Commit. Die deutsche Meldung verwendet echte Umlaute
+und beschreibt das Ergebnis, etwa „Hohle Querschnitte kamen als nichts
+zurück“. Der Rumpf nennt den nötigen Grund. Der tatsächliche Mitautor bleibt
+angegeben: das verwendete Claude-Modell mit `noreply@anthropic.com` oder
+`Codex <noreply@openai.com>`.
 
-Deutsch, mit echten Umlauten, im Ton dieses Projekts: eine **Aussage**, keine
-Etikettierung. So klingen die bisherigen:
+Vor dem Commitblock zwei Dateien außerhalb des Arbeitsbaums vorbereiten:
+`message.txt` mit der vollständigen Meldung und `expected-numstat.txt` mit den
+**inhaltlich geprüften erwarteten** Einfügungen, Löschungen und Pfaden. Das
+Format entspricht `git -c core.quotepath=false diff --no-renames --numstat`:
+Tabulatoren, eine Datei je Zeile, LF-Zeilenenden, Git-Sortierung. Die Zahlen
+nicht erst aus dem später bestückten Index als Sollwert übernehmen. Bei
+Binärdateien stehen `-` und `-` statt Zahlen. Dateizahlen ersetzen keine
+Prüfung der eigenen Zeilen in gemeinsamen Dateien.
 
-> Hohle Querschnitte kamen als nichts zurück
-> Ein echtes Modell als Prüfstein — vier Funde
-> Angeklickte Fläche setzt die Operation an, und Operationen sind änderbar
+Die Ablage ist das von `git rev-parse --path-format=absolute --git-path
+"delivery/<feste Sitzungskennung>"` gelieferte Verzeichnis. Die Kennung muss
+über Aufrufe hinweg gleich bleiben; sie ist keine Shell-Prozessnummer. Der
+Commitblock unten ermittelt sie aus den Sitzungsvariablen. Sind diese leer,
+zuerst eine feste eigene Kennung für diese Arbeit wählen und im Block
+wörtlich einsetzen. Meldung, Sollwert und gegebenenfalls der eigene Patch
+liegen fertig vor, bevor der Block beginnt.
 
-Kein `feat:`, kein `fix:`, kein Präfix. Der Betreff sagt, was jetzt anders ist.
-Wenn es einen Grund gibt, den man später sucht, steht er im Rumpf — was war,
-warum es falsch war, was jetzt gilt. Am Ende:
+## Privaten Index aufbauen, prüfen und committen
 
-```
-Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
-```
+**Die Commitphasen im selben Arbeitsbaum laufen nacheinander.** Das mit den
+anderen Sitzungen vor Beginn koordinieren. Ein HEAD-Vergleich direkt vor
+`git commit` sperrt nicht das verbleibende Prozessstartfenster. Der folgende
+Block erkennt ein gewandertes HEAD und stoppt; er ersetzt diese Koordination
+nicht. Jeder neue Versuch beginnt mit dem dann aktuellen HEAD.
 
-## 4. Danach
-
-Nicht pushen, außer es wurde ausdrücklich verlangt. Melde am Ende: welche
-Commits entstanden sind, was bewusst uncommittet blieb und warum — und ob
-`ROADMAP.md` fortzuschreiben ist, weil ein Punkt erledigt oder ein neuer Fund
-aufgetaucht ist.
-
-## Ein gescheiterter Merge ist ein Eingriff, kein Nichts
-
-**Wer einen Merge abbricht, prüft danach `git status` und `git stash list` —
-beides, immer.** Git legt vor einem Merge im schmutzigen Baum einen Autostash
-an, bewegt HEAD, schreibt Dateien — und spielt den Stash bei einem Abbruch
-nicht zuverlässig zurück („Index was not unstashed"). Ein „Merge failed" heißt
-also nicht „nichts passiert": Am 23.08.2026 trug der geteilte Baum danach eine
-ältere Fassung zweier Dateien, als committet war, und kein Commit hatte das
-getan. Findet sich ein zurückgebliebener Autostash, gehört sein Inhalt
-verglichen und zurückgespielt, bevor irgendwer weiterarbeitet — im geteilten
-Baum trifft er fremde Arbeit.
-
-**Und die Urheber-Frage („wessen Änderung ist das?") beantwortet nie der
-Status, sondern `git log -S '<symbol>' -- <pfad>`** — das nennt Commit,
-Uhrzeit und Meldung, die Zuordnung wird ein Beleg statt einer Vermutung.
-Caveat: `-S` zählt Vorkommens-Änderungen — eine Zeichenkette, die in alter
-und neuer Fassung vorkommt, führt zum **Einführungs**-Commit statt zur
-Umbenennung; dann den neuen Namen mit Wortgrenze oder `-G` nehmen. Am
-31.08.2026 verneinten zwei Sitzungen eine Urheberschaft „mit Beleg" aus ihrem
-eigenen Diff — richtig gemessen, falsche Quelle: Der Diff gegen den alten
-Haupt-Index zeigt jedem etwas anderes, je nachdem, wie alt sein Index ist,
-und eine seit acht Stunden auf origin liegende Arbeit wäre fast als verwaist
-verbucht worden.
-
-**Und jeder Wächter, der Dateien zählt, fragt `git diff HEAD` — nie `git diff`
-ohne Ziel.** Ohne HEAD läuft der Vergleich gegen den Haupt-Index, und der ist
-in diesem Baum alt (siehe unten): Er kennt die privat committeten Stände nicht
-und meldet die eigene, längst gelandete Arbeit als offene fremde. Gemessen am
-31.08.2026 — 36 Fehlalarme beim ersten Lauf eines neuen Guards; gegen HEAD
-gefragt waren es null.
-
-## Wer mit privatem Index committet, zieht den Haupt-Index nach
-
-Im geteilten Arbeitsbaum committet jede Sitzung über `GIT_INDEX_FILE` und
-`git commit -o -- <pfade>`, damit sie keine fremde Arbeit mitnimmt. Der
-gemeinsame Index bleibt dabei stehen — **und niemand merkt es, weil niemand ihn
-benutzt.** Am 22.08.2026 trug er einen Stand von vor den Commits des Abends:
-27 Dateien, 87 Einfügungen, **1684 Löschungen**. Ein einziges `git commit` ohne
-`-o` hätte daraus einen Commit gemacht, der die Arbeit von vier Sitzungen
-löscht, und der `post-commit`-Hook hätte ihn sofort gepusht. Zweimal an einem
-Abend aufgetreten.
-
-**Und er wächst weiter, gemessen an drei Zeitpunkten:**
-
-| Wann | Löschungen im Index |
-|---|---|
-| 22.08.2026 abends | 1684 |
-| 23.08.2026 früh | 1424 |
-| 23.08.2026 abends | **1824** |
-
-Die mittlere Zahl ist die verräterische: Sie war kleiner, weil kurz zuvor
-jemand aufgeräumt hatte. **Aufräumen hält nicht** — solange alle privat
-committen, altert er ab dem nächsten Commit wieder, und zwar in die gefährliche
-Richtung. Also gehört das Nachziehen zum Commit und nicht zur Fehlersuche, als
-letzter Schritt jedes privaten Commits:
-
-```
-git reset            # ohne --hard: nur der Index, keine Datei
-```
-
-**Und danach wird nachgesehen, nicht angenommen.** Der Satz oben — „ab dem
-nächsten Commit wieder" — ist am 28.08.2026 schärfer geworden, als zwei
-Sitzungen ihn unabhängig voneinander erlebten: Er altert nicht erst durch die
-*fremden* Commits, sondern durch die **eigenen**, und zwar sofort. Eine Sitzung
-legte zwei private Commits hintereinander und fand hinterher 14 Dateien mit
-**548 Löschungen** gegenüber `HEAD` im gemeinsamen Index — eine Rücknahme genau
-der Arbeit, die eine Minute zuvor gelandet war. Die andere Sitzung hatte
-dieselbe Lage nach ihrem einen Commit und warnte; ohne diese Warnung hätte
-niemand hingesehen.
-
-Das sichtbare Zeichen ist `MM` in `git status --short`: Der Index unterscheidet
-sich von `HEAD` **und** der Arbeitsbaum vom Index. Die Kontrolle ist eine Zeile,
-und sie muss nichts ausgeben:
-
-```
-git diff --cached --stat
-```
-
-Bleibt sie leer, ist der Index auf `HEAD`. Kommt etwas, ist noch nicht
-aufgeräumt — dann `git reset` (oder `git add` auf die eigenen Pfade, wenn der
-Arbeitsbaum bereits dem Commit entspricht) und **erneut** nachsehen. Sich auf
-den Vollzug zu verlassen ist hier besonders teuer: Der `post-commit`-Hook pusht,
-und ein Revert von 548 Zeilen ist auf den anderen Maschinen in derselben Minute.
-
-**Und der private Index muss auf `HEAD` stehen, nicht auf einem gemerkten
-Stand.** Am 23.08.2026 schrieb ein Commit sechs fremde Dateien zurück — einen
-doc-Satz und fünf Sprachkataloge, die eine andere Sitzung zwanzig Minuten
-vorher committet hatte. Das Skript sah so aus:
-
-```
-STAND=$(git rev-parse HEAD)     # am Anfang gelesen
-… Minuten Arbeit …
-git read-tree "$STAND"          # hier war HEAD längst weiter
-git update-index --cacheinfo …
-git commit
-```
-
-`git commit` nimmt den **Index** als Baum und **HEAD** als Elternteil. Steht der
-Index auf einem älteren Stand, ist der Commit inhaltlich ein Revert von allem,
-was dazwischen kam — und der `post-commit`-Hook pusht ihn sofort. Also
-`git read-tree HEAD` **unmittelbar vor** dem Commit, nicht am Anfang des
-Skripts.
-
-**„Unmittelbar vor" heißt: im selben Shell-Aufruf, hinter einer maschinellen
-Erwartung.** Am 30.08.2026 haben sich zwei Sitzungen mit genau dieser Falle
-**gegenseitig** Arbeit gelöscht (`36812c6d` und `9c4ebe6e`, geheilt in
-`cd7a1dc1`): Beide hatten `read-tree HEAD` gefahren und die Sollprobe gelesen —
-aber in einem **anderen Aufruf** als den Commit, und in die Sekunden dazwischen
-fiel jeweils der Commit der anderen. Eine Sollprobe in einem eigenen Aufruf
-prüft einen Zustand, den der Commit nicht mehr vorfindet. Die tragende Form —
-alles in einem Aufruf, und committet wird nur, wenn die Probe die wörtliche
-Erwartung trifft:
-
-```
-ALT=$(git rev-parse HEAD) \
-  && git read-tree HEAD && git add <pfade> \
-  && IST=$(git diff --cached HEAD --numstat) \
-  && SOLL=$(printf '44\t0\tROADMAP.md')       # die angesagten Zahlen, wörtlich
-  && if [ "$IST" = "$SOLL" ] && [ "$(git rev-parse HEAD)" = "$ALT" ]; \
-     then git commit …; \
-     else echo "SOLLPROBE ABWEICHEND ODER HEAD GEWANDERT — KEIN COMMIT:"; echo "$IST"; fi
-```
-
-Der zweite Vergleich fängt das Restfenster: Wandert HEAD zwischen `read-tree`
-und Commit **innerhalb** des Aufrufs, stimmen Zahlen gegen einen Boden, der
-sich bewegt hat.
-
-**Und die ganze Kette läuft in EINEM Aufruf, mit vorher geschriebener
-Commit-Meldung.** Drei HEAD-Rennen in einer Nacht (31.08.2026) lagen alle
-daran, dass zwischen `read-tree` und `commit` noch etwas geschah — einmal das
-Schreiben der Meldung, zweimal eine Sollprobe. Ein zweimal frisch gebauter
-Index mit gefangenem erstem Wettlauf hat nicht gereicht. Die Meldung entsteht
-als Datei **vor** der Kette; Bau, Guard und Commit folgen ohne Unterbrechung.
-Und die dritte Stufe (15, nach dem Stempellauf-Fall): **Alles, was in der
-Meldung als Behauptung steht („24 von 24 rein Stempel"), wird im selben
-Aufruf gemessen wie der Commit** — eine Prüfung aus einem früheren Aufruf
-behauptet einen Zustand, der beim Commit schon vergangen sein kann, und eine
-falsche Behauptung in der History ist schlimmer als mitgenommener Inhalt,
-weil sie niemanden mehr misstrauisch macht.
-Die vierte Stufe löst den Zielkonflikt der dritten (die Meldung entsteht
-vorher, die Messung danach): **Die Erwartung wird vorher angesagt, und die
-Prüfung bricht bei Abweichung ab, statt zu berichten** — dann steht in der
-Meldung nie Unerwartetes, weil Unerwartetes nie committet wird. Eine
-Prüfung, die nur berichtet, ist eine Notiz; eine, die abbricht, ist eine
-Zusicherung (15, 31.08.2026 — ihr Lauf gab „6 mit Inhalt" aus und committete
-trotzdem; so gebaut hätte er angehalten).
-Bei einer **geteilten** Datei (Kataloge, `MEMORY.md`, `ROADMAP.md`,
-`3d-agent-bauplan.md`) zusätzlich vor dem Commit den **eigenen Block grepen**
-— die Dateizahl-Kontrolle fängt eine Datei zu viel, aber keine fremde Zeile
-in einer richtigen Datei (dreimal passiert in derselben Nacht). Und die Phantome, die ein privater Commit im **Haupt**-Index
-hinterlässt (frisch committete Dateien stehen dort als gelöscht), heilt man
-**je Pfad** mit `git restore --staged <pfad>` — nie mit einem `read-tree HEAD`
-ohne `GIT_INDEX_FILE`, denn der würfe weg, was andere Sitzungen dort gerade
-gestaged halten.
-
-**Legt der Commit eine *neue* Datei an, ist das Phantom scharf** (belegt am
-30.08.2026, fünf Presse-Entwürfe): Der Haupt-Index hat die Datei nie gesehen,
-in HEAD steht sie — für ihn ist das eine **vorgemerkte Löschung** (`D` +
-`??`), und der nächste pfadlose Commit irgendeiner Sitzung entfernt sie aus
-dem Repository. Deshalb hat das Muster ein **viertes Glied**: Ein Commit mit
-neuen Dateien schließt im selben Aufruf mit
-
-```
-unset GIT_INDEX_FILE                                 # beide Zeilen gelten dem Haupt-Index
-git diff --name-only --diff-filter=D --cached HEAD   # nennt die Minen
-git reset -- <die eigenen neuen Pfade>               # entschärft nur die eigenen
-```
-
-ab. Die erste Zeile nennt die Minen, die zweite entschärft nur die eigenen —
-und `git diff --quiet HEAD -- <pfad>` taugt als Kontrolle **nicht**, denn er
-antwortet für unversionierte wie für fehlende Dateien gleichlautend
-„kein Unterschied" (siehe `geteilter-index-haelt-alten-stand.md`).
-
-**Und das Glied wird real vergessen** — am Abend des 30.08.2026 lagen acht
-Phantome gleichzeitig im Haupt-Index, aus den Commits von mindestens drei
-Sitzungen, darunter `.githooks/pre-commit`: ein Hook, der still verschwindet,
-fällt niemandem auf, weil sein Ausbleiben aussieht wie ein Lauf ohne
-Beanstandung. Deshalb endet **jeder** Liefern-Lauf, nicht nur einer mit neuen
-Dateien, mit der Sekunden-Kontrolle `git status --short | grep "^D "` gegen
-den Haupt-Index — sie sieht auch die Minen der anderen. Und zwar **im selben
-Aufruf wie der Commit**, nicht erst vor dem nächsten: Die Phantome wachsen
-sofort nach (50, 30.08.2026 — d3 entschärfte auf null, ein einziger Commit
-mit zwei neuen Dateien erzeugte Minuten später zwei neue), und in der Lücke
-bis zur nächsten Prüfung genügt ein pfadloser Commit irgendeiner Sitzung.
-
-**Aber die Kontrolle läuft außerhalb der Index-Umgebung** — erst
-`unset GIT_INDEX_FILE` (oder `env -u GIT_INDEX_FILE git status --short`),
-dann prüfen. Wer sie unter noch gesetzter Variable ans Kettenende hängt,
-nachdem er seinen privaten Index gelöscht hat, bekommt **jede verfolgte
-Datei als gelöscht** gemeldet — ein fehlender Index ist ein leerer, dieselbe
-Familie wie `privater-index-fester-name`, nur beim Kontrollieren statt beim
-Schreiben (d3, 30.08.2026: Schreckzahl 1345 über einem sauberen Baum). Die
-Kontrolle ist die gefährlichere Hälfte, weil ihre Zahl geglaubt wird — wer
-auf 1345 hin „rettet", richtet die erste Katastrophe an. Wer dort eine Datei
-findet, die im Arbeitsbaum **und** in HEAD liegt, entschärft sie mit
-`git reset -- <pfad>`; eine Löschung, die jemand wollte, hätte die Datei
-nicht mehr im Baum.
-
-Wer die Abweichung erst im Rückblick liest, liest sie über einem Commit, der
-schon gepusht ist.
-
-**Die Kontrolle danach gehört gegen `HEAD`, und das ist der eigentliche Fund:**
-
-```
-git diff --cached HEAD --stat        # richtig
-git diff --cached "$STAND" --stat    # bestätigt die eigene Annahme
-```
-
-Die Kontrolle *war* eingebaut, und sie meldete brav „1 file changed“. Sie lief
-gegen denselben gemerkten Stand, auf dem schon der Index stand — sie konnte den
-Fehler nicht sehen, weil sie ihn teilte. **Eine Prüfung gegen die eigene Annahme
-bestätigt sie, statt sie zu prüfen**; dieselbe Denkfigur wie ein Gegenbeispiel,
-das dieselbe Bedingung trägt wie der Fall (siehe `oberflaeche.md`, „Was nur das
-Bild zeigt“).
-
-Gefunden hat es kein Test, sondern eine Sitzung, die vor dem Paketbau von Hand
-kontrollierte. Kein Test hätte es sehen können: Der Code war lauffähig, die
-Suite grün — es fehlte nur ein Satz, den fünf Sprachkataloge versprechen.
-
-Es kostet Millisekunden, fasst keine Datei an, und der einzige Verlust ist ein
-Staging — das in diesem Verfahren ohnehin niemand benutzt, weil `git commit -o`
-an ihm vorbeigeht.
-
-### `-o` nimmt den Dateistand, nicht deine Hunks
-
-**Der private Index schützt gemeinsame Dateien nicht.** Er hält fremde
-**Dateien** heraus — nicht den fremden Stand einer **gemeinsamen**. Das gehört
-ausdrücklich hierher, weil er sonst in falscher Sicherheit wiegt: `git commit
--o -- <pfad>` committet die Datei, wie sie im Baum liegt, samt allem, was eine
-andere Sitzung darin ungespeichert stehen hat. Genauer: `git
-commit -o -- <pfad>` committet die Datei, wie sie im Baum liegt, samt allem,
-was eine andere Sitzung darin ungespeichert stehen hat.
-
-Am 26.08.2026 in **beide** Richtungen zugeschnappt, innerhalb einer Stunde:
-
-| Commit | nahm mit |
-|---|---|
-| `bc92469a` (OpenSCAD-Ausbau) | 145 Zeilen `_CHOICE_NOTES` aus `labels.py`, die 43 gerade schrieb |
-| `2b48f288` (Ausdrucksfeld) | den `FINDING_ACTIONS`-Eintrag in `panels.py`, den ce gerade geschrieben hatte |
-
-Kein inhaltlicher Schaden — HEAD war beide Male in sich stimmig. Der Schaden
-ist die **Zurechnung**: Wer später fragt, warum eine Tabelle mit 67 Sätzen im
-OpenSCAD-Commit steht, findet keine Antwort. Und die Folge kann teurer sein als
-die Ursache: Mit den 67 neuen `tr()`-Quellen war `origin/main` rot, bis die
-Kataloge nachkamen — ein Fenster, das der Urheber der Kataloge nicht geöffnet
-hatte.
-
-#### Und die Rettung, die man dagegen baut, wirkt mit `-o` nicht
-
-Der naheliegende Ausweg ist, den Stand selbst zu bauen: die Datei aus `HEAD`
-holen, die eigene Zeile hineinsetzen, mit `git hash-object -w` einen Blob
-schreiben und ihn mit `git update-index --cacheinfo` in den privaten Index
-legen. Das ist richtig gedacht und **wirkungslos, solange `-o` dabeisteht**:
-`--only` heißt „nimm den aktuellen Stand genau dieser Pfade", und der aktuelle
-Stand ist die Datei auf der Platte. Der hineingelegte Blob wird überschrieben,
-bevor er etwas nützt.
-
-Am 27.08.2026 dreimal hintereinander so gemacht, jedes Mal mit gebautem Blob,
-jedes Mal ging die fremde Zeile mit:
-
-    git show b304f04a --numstat -- app/i18n/locales/it.json
-    1  1                    <- angesagt war 0/1
-    git show aaad3d94 --numstat -- .claude/memory/MEMORY.md
-    2  0                    <- angesagt war 1/0
-
-**Und die Kontrolle davor konnte es nicht sehen, weil sie das Falsche maß.**
-`git diff --cached HEAD --numstat` lief jedes Mal und nannte jedes Mal genau
-die angesagte Zahl. Sie stimmte auch — **für den Index.** Committet wurde der
-Baum. Dieselbe Denkfigur wie zwei Abschnitte weiter unten, nur eine Ebene
-tiefer: Eine Prüfung, die gegen die eigene Annahme läuft, bestätigt sie.
-
-Zwei Sätze, die daraus folgen:
-
-* **Blob und `-o` schließen sich aus.** Wer den Index gezielt bestückt,
-  committet **ohne** `-o` — nach `git read-tree HEAD` steht darin genau HEAD
-  plus die eigene Änderung, und `git commit` nimmt den Index als Baum. `-o`
-  ist die Krücke für den Fall, dass man *keinen* privaten Index hat.
-* **Die einzige Prüfung, die etwas taugt, ist die nach dem Commit:**
-  `git show <commit> --numstat`. Alles davor prüft eine Absicht, nicht ein
-  Ergebnis.
-
-#### Und ein Index, den es nicht gibt, löscht alles
-
-Der teuerste Fall dieser Familie, am 27.08.2026: Ein Commit auf `origin/main`
-löschte **1175 Dateien** — halbe Anwendung, `.claude/rules/`, Teile der Suite.
-Er stand zwei Minuten, dann war er repariert.
-
-Die Ursache ist eine Zeile, die richtig aussieht:
+Der folgende Bash-Block läuft vollständig in **einem Werkzeugaufruf**. In
+PowerShell über das vorhandene Git Bash ausführen. Die beiden Beispielpfade
+vorher durch die genaue geprüfte Dateiliste ersetzen. Die runden Klammern
+halten `GIT_INDEX_FILE` in diesem Aufruf; der gemeinsame Index bleibt außen.
 
 ```bash
-export GIT_INDEX_FILE="$PWD/.git/index-$$"   # NIE
+(
+  set -eu
+  cd "$(git rev-parse --show-toplevel)"
+  delivery_id="${CODEX_THREAD_ID:-${CODEX_SESSION_ID:-${CLAUDE_CODE_SESSION_ID:-${CLAUDE_SESSION_NAME:-}}}}"
+  test -n "$delivery_id" || { printf '%s\n' 'Feste Sitzungskennung fehlt.' >&2; exit 1; }
+  case "$delivery_id" in
+    *[!a-zA-Z0-9_-]*) printf '%s\n' 'Sitzungskennung enthält ungeeignete Pfadzeichen.' >&2; exit 1 ;;
+  esac
+  delivery_dir="$(git rev-parse --path-format=absolute --git-path "delivery/$delivery_id")"
+  test -s "$delivery_dir/message.txt"
+  test -s "$delivery_dir/expected-numstat.txt"
+  delivery_paths=('tools/sync_agents.py' 'tests/test_agent_mirror.py')
+  export GIT_INDEX_FILE="$delivery_dir/index"
+
+  delivery_base="$(git rev-parse --verify HEAD)"
+  git read-tree "$delivery_base"
+  git --literal-pathspecs add -- "${delivery_paths[@]}"
+  git -c core.quotepath=false diff --cached --no-renames --numstat "$delivery_base" > "$delivery_dir/actual-numstat.txt"
+  if ! cmp -s "$delivery_dir/expected-numstat.txt" "$delivery_dir/actual-numstat.txt"; then
+    printf '%s\n' 'Inhalt weicht von der geprüften Erwartung ab; kein Commit.' >&2
+    cat "$delivery_dir/actual-numstat.txt" >&2
+    exit 1
+  fi
+  if test "$(git rev-parse HEAD)" != "$delivery_base"; then
+    printf '%s\n' 'HEAD ist gewandert; neu abgleichen, kein Commit.' >&2
+    exit 1
+  fi
+  git commit -F "$delivery_dir/message.txt"
+  printf '%s\n' 'Commitkennung für die getrennte Ergebniskontrolle:'
+  git rev-parse HEAD
+)
 ```
 
-**Jeder Bash-Aufruf ist eine eigene Shell mit eigener Prozessnummer.** Aufbau
-und Prüfung liefen in einem Aufruf und stimmten — 32 Dateien, keine fremde.
-Der Commit lief im nächsten und zeigte auf einen Namen, den niemand angelegt
-hatte. **Ein nicht existierender Index ist ein leerer**, ein leerer heißt
-„nichts ist verfolgt", und das heißt beim Committen „alles ist gelöscht".
+Eine laufende Merge-, Rebase- oder Cherry-pick-Operation wird nicht durch
+diesen Ablauf abgeschlossen. Vorher den Zustand lesen und deren Behandlung
+mit dem Besitzer koordinieren. Einen Index-Lock nicht aufgrund seines Alters
+löschen; er kann zu einem laufenden Prozess gehören.
 
-Die Prüfung war echt und galt für einen anderen Index als der Commit — genau
-das Muster aus „Was habe ich gerade gemessen?", nur mit dem größten möglichen
-Preis.
+**Bei gemeinsamen Dateien ersetzt der eigene Patch das vollständige `git add`
+für diese Dateien.** Im selben Block nach `read-tree` den vorher geprüften
+Patch mit `git apply --cached --check <patchdatei>` prüfen und mit
+`git apply --cached <patchdatei>` ausschließlich auf den privaten Index
+anwenden. Vollständig eigene Dateien können daneben über genaue Pfade
+bestückt werden. Den Arbeitsbaum dafür nicht zurücksetzen.
 
-Zwei Regeln, und die zweite ist die, die trägt:
+Wer stattdessen gezielt Blobs mit `git update-index --cacheinfo` einsetzt,
+baut deren vollständigen Inhalt aus dem **in diesem Block frisch gelesenen**
+`delivery_base` plus der eigenen Änderung. Ein alter vorbereiteter Blob könnte
+inzwischen committierte fremde Zeilen verlieren. **Danach normales
+`git commit -F …`, niemals `-o`, `--only` oder Pfadargumente:** Diese würden
+wieder den Dateistand vom Arbeitsbaum statt der geprüften Hunks übernehmen.
 
-* **Fester Name, kein `$$`.** `index-27`, `index-d1` — irgendetwas, das über
-  Aufrufe hinweg dasselbe bedeutet.
-* **Aufbau, Prüfung und Commit in einem einzigen Aufruf.** Wer sie auf zwei
-  verteilt, hat zwischen ihnen eine Shell-Grenze, und über die reist keine
-  Umgebungsvariable. Muss es doch getrennt sein, ist die einzige gültige
-  Kontrolle `git show --stat HEAD` **danach**.
+## Ergebnis in einem neuen Aufruf kontrollieren
 
-**Der Schaden war klein, weil der Arbeitsbaum ihn nicht mitmacht.** Die
-Dateien lagen die ganze Zeit unversehrt auf der Platte; kaputt war allein
-HEAD. Wer in diesen zwei Minuten gepullt hätte, hätte sie verloren — für alle
-anderen war nichts zu tun. Das ist kein Trost, sondern der Grund, warum ein
-`git log --oneline -3` nach einer fremden Warnung genügt: Steht der
-Löschcommit ohne seine Reparatur darüber, fehlt die halbe Anwendung.
+Die vom Commit ausgegebene feste Kennung verwenden, nicht ein später
+weitergewandertes `HEAD`. Mit `git show <kennung> --name-status` und
+`git show <kennung> --numstat` die tatsächlich enthaltenen Dateien und Zahlen
+gegen die Erwartung halten; bei gemeinsamen Dateien auch den tatsächlichen
+Diff prüfen. Keine Behauptung über den Commit aus dem vorherigen Index ableiten.
 
-**Der Handgriff dagegen kostet fünf Sekunden, und er hat drei Glieder:**
+Der eingerichtete `.githooks/post-commit` pusht nach `origin`, wie in
+`CLAUDE.md` festgelegt. Seine Ausgabe und den Remote-Zweig getrennt prüfen:
+Ein erfolgreicher Commit beweist keinen erfolgreichen Push. Ein Remote-Tip,
+der genau die Commitkennung trägt, bestätigt die Veröffentlichung. Ist der
+Remote-Zweig weiter, nach dem Lesen beziehungsweise Fetch seine Abstammung
+prüfen; eine abweichende Spitze allein beweist weder Erfolg noch Verlust.
 
-1. **Die eigene Zahl ansagen, bevor man hinsieht** — „ich lösche zwei Zeilen,
-   füge keine ein". Dann `git diff HEAD --numstat -- <pfade>` dagegen halten.
-2. `git status --porcelain | grep "^ D"` — **gelöschte Dateien**.
-3. `git status --porcelain | grep "^??"` auf den eigenen Pfaden — **neue
-   Dateien**.
+Eine ausdrücklich gewünschte lokale Sammlung nutzt `SOLIDON_KEIN_PUSH=1` im
+Commitaufruf; eine vorhandene `solidon.noAutoPush`-Sperre bleibt bestehen. Bei
+einer weitergewanderten Gegenstelle koordiniert zusammenführen, ohne
+ungefragten Rebase oder Force-Push.
 
-Die Reihenfolge im ersten Glied ist der ganze Punkt. Wer erst die Zahlen liest
-und danach überlegt, ob sie passen, nickt den Istwert ab; das ist dieselbe
-Figur wie der Sollwert aus dem Prüfling. Bei zwei gelöschten Zeilen schreit
-„145 insertions" schon beim Ansagen — dafür braucht es den Diff nicht einmal.
+Den gemeinsamen Index danach **nur lesen**, außerhalb der privaten Umgebung:
 
-**Die Glieder 2 und 3 sind da, weil `--numstat` blind ist für alles, was nicht
-im Index steht.** `-o` nimmt den Stand **verfolgter** Dateien; eine gelöschte
-braucht `git add -u`, eine neue `git add`, und beide tauchen ohne das in
-keiner Zahl auf. Am 26.08.2026 beide Seiten an einem Tag:
+```bash
+env -u GIT_INDEX_FILE git --no-optional-locks status --short
+env -u GIT_INDEX_FILE git --no-optional-locks diff --cached HEAD --name-status
+```
 
-- Der OpenSCAD-Ausbau löschte `app/core/backends/openscad.py` und
-  `tests/test_openscad.py`. Die zweite stand in keiner Pfadliste — die Datei
-  blieb auf origin stehen, ihr Import griff nach dem entfernten Modul, und
-  **jeder CI-Lauf starb schon beim Einsammeln**. Der Paketbau hängt an der
-  Suite, also blockierte es den Release.
-- Auf der Neu-Seite dasselbe mit sechzig Handbuchbildern.
+Dessen Einträge bleiben unverändert. Keine automatische Reparatur mit
+`reset`, `restore --staged`, `read-tree` oder erneutem `add`, auch nicht bei
+neuen Dateien im eigenen Commit. Offene Zuordnung melden; fremde Stagingabsicht
+niemals aus dem Arbeitsbaum erraten. Die private Ablage bis zum abgeschlossenen
+Nachweis behalten. Zu keinem Zeitpunkt auf den gemeinsamen Index umschalten,
+um dort zu schreiben.
 
-**Und der Grund, warum kein lokaler Lauf dagegen sichert:** Der eigene
-Arbeitsbaum trägt die Löschung ja. Dort ist alles grün, und zwar zu Recht. Die
-einzige Stelle, an der es auffällt, ist ein Klon ohne diesen Baum — die CI.
-Deshalb sichert nur die Ansage, nicht das Fahren.
+Melden: Commitkennungen und Zweck, Prüfstand, Push-Ergebnis und welche eigenen
+Arbeiten noch offen sind. `ROADMAP.md` nur fortschreiben, wenn die Einheit
+das erfordert. Bei einem Fehler nach dem Commit den Besitzer informieren,
+fehlende zusammengehörige Änderungen zuerst prüfen und vorwärts korrigieren;
+keine History umschreiben.
 
-Und das ist der eigentliche Punkt: Die Zahl **stand da**. Der Diff-Stat vor dem
-Commit nannte `app/ui/labels.py | 149 ++++-`, und gelesen wurde die
-Dateiliste — welche Dateien mitgehen —, nicht die Spalte daneben. Dieselbe
-Figur wie überall in dieser Datei: Man misst, was leicht zu greifen ist, und
-nicht, was gemeint war.
-
-**Und wenn es doch passiert ist: Die History bleibt stehen.** Ein Rewrite
-kostet mehr, als er heilt. Drei Schritte, in dieser Reihenfolge:
-
-1. **Zuerst prüfen, ob eine *halbe* Einheit hinausgeritten ist** — das ist das
-   Dringende, nicht die Zurechnung. Am 26.08.2026 ging die `_CHOICE_NOTES`-
-   Tabelle mit 67 neuen `tr()`-Quellen hinaus, ihre Kataloge blieben liegen:
-   `origin/main` war rot, bis sie nachkamen, und der Urheber der Kataloge hatte
-   das Fenster nicht geöffnet. Bei einem früheren Fall (`e65f1539`) blieb
-   `loading.py` zurück und brach fremde Klone. **Die fehlende Hälfte schlägt
-   die falsche Zurechnung an Dringlichkeit.**
-2. **Den Besitzer sofort benachrichtigen** — er weiß am schnellsten, was zu
-   seiner Einheit noch fehlt.
-3. **Die Zurechnung im eigenen Folge-Commit geradeziehen**, im Meldungstext.
-   Wer später fragt, warum eine Tabelle mit 67 Sätzen im OpenSCAD-Commit steht,
-   findet die Antwort dann eine Stelle weiter.
-
-**Wo mehrere an derselben Datei schreiben, hilft nur Reihenfolge statt
-Gleichzeitigkeit** — sagen, wann man hineingeht, melden, wenn man heraus ist.
-Ein eigener Arbeitsbaum (`claude --worktree <name>`) ist die vollständige
-Antwort; er kostet aber jedes Mal einen Umzug.
-
-**Die zweite Spalte von `git status --short` lügt mit.** Das ist die Form, in
-der einem der veraltete Index zuerst begegnet, und sie führt in die falsche
-Richtung: Wer direkt nach einem privaten Commit `MM` an seinen eigenen Dateien
-sieht, liest „fremde Arbeit liegt darin" — dabei ist die zweite Spalte der
-Vergleich gegen den Index, und der ist alt. Am 23.08.2026 stand `MM` an
-Dateien, die gerade committet worden waren; `git diff HEAD --numstat` zeigte
-**keine einzige geänderte Zeile**. Die Frage, die trägt, ist immer die gegen
-HEAD.
-
-Und die Auskunft daneben: **`git diff` vergleicht gegen den Index, nicht gegen
-HEAD.** In einem geteilten Baum stehen darin die Zwischenstände der anderen —
-ein Katalog-Diff zeigte fünf fremde Zeilen, die längst committet waren, und für
-eine Datei, die der veraltete Index gar nicht kannte, meldete `git diff HEAD`
-sogar eine Löschung, obwohl die Datei unverändert dalag. Die Frage, die man
-stellen will, ist `git diff HEAD`; die Frage, die `git diff` beantwortet, ist
-eine andere.
+Historische Ursachen, Zahlen und überholte Reparaturversuche stehen getrennt
+in [references/git-fehlerfaelle.md](references/git-fehlerfaelle.md). Sie sind
+Diagnosematerial und **keine aktuelle Handlungsanweisung**.

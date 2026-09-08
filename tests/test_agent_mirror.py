@@ -20,6 +20,8 @@ darum prüft :func:`test_generated_profiles_are_valid_toml` jede Datei mit
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -177,3 +179,225 @@ def test_render_rejects_an_unknown_model(tmp_path: Path) -> None:
 
     with pytest.raises(sync_agents.SyncError, match="haiku"):
         sync_agents.render(source)
+
+
+def _prepare_mirror(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Legt einen frischen Klon ohne erzeugte Dateien für die Gegenproben an."""
+    for field, relative in (
+        ("SOURCE_DIR", ".claude/agents"),
+        ("TARGET_DIR", ".codex/agents"),
+        ("SOURCE_SKILL_DIR", ".claude/skills"),
+        ("SKILL_DIR", ".agents/skills"),
+    ):
+        monkeypatch.setattr(sync_agents, field, tmp_path / relative)
+    sync_agents.SOURCE_DIR.mkdir(parents=True)
+    (sync_agents.SOURCE_SKILL_DIR / "probe" / "references").mkdir(parents=True)
+    (sync_agents.SOURCE_DIR / "probe.md").write_text(
+        "---\nname: probe\ndescription: >\n  Kurz.\nmodel: opus\neffort: high\n"
+        "tools: Read, Write\n---\nLies `/probe`.\n",
+        encoding="utf-8",
+    )
+    (sync_agents.SOURCE_SKILL_DIR / "probe" / "SKILL.md").write_text(
+        "---\nname: probe\ndescription: >\n  Prüft den Aufruf.\n"
+        "disable-model-invocation: true\n---\n# Probe: $ARGUMENTS\n"
+        "Lies references/beleg.txt und `/probe`.\n",
+        encoding="utf-8",
+    )
+    (sync_agents.SOURCE_SKILL_DIR / "probe" / "references" / "beleg.txt").write_bytes(b"Beleg\n")
+
+
+def test_sync_populates_a_fresh_clone_from_source_skills(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Neue Skills brauchen keinen alten Zielbestand, um richtig verlinkt zu werden."""
+    _prepare_mirror(tmp_path, monkeypatch)
+
+    assert sync_agents.main([]) == 0
+
+    profile = tomllib.loads((sync_agents.TARGET_DIR / "probe.toml").read_text(encoding="utf-8"))
+    assert "`.agents/skills/probe/SKILL.md`" in profile["developer_instructions"]
+    skill = (sync_agents.SKILL_DIR / "probe" / "SKILL.md").read_text(encoding="utf-8")
+    assert "$ARGUMENTS" not in skill
+    assert "`.agents/skills/probe/SKILL.md`" in skill
+    assert (sync_agents.SKILL_DIR / "probe" / "references" / "beleg.txt").read_bytes() == b"Beleg\n"
+    assert (sync_agents.SKILL_DIR / "probe" / "agents" / "openai.yaml").read_text(
+        encoding="utf-8"
+    ) == "policy:\n  allow_implicit_invocation: false\n"
+    assert sync_agents.main(["--check"]) == 0
+
+
+@pytest.mark.parametrize("change", ["skill", "reference", "policy", "orphan", "removed"])
+def test_check_detects_skill_content_policy_and_removed_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """Auch zusätzliche oder gelöschte Skilldateien machen den Spiegel rot."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    assert sync_agents.main([]) == 0
+    if change == "removed":
+        (sync_agents.SOURCE_SKILL_DIR / "probe" / "SKILL.md").unlink()
+    else:
+        relative = {
+            "skill": "probe/SKILL.md",
+            "reference": "probe/references/beleg.txt",
+            "policy": "probe/agents/openai.yaml",
+            "orphan": "alt/SKILL.md",
+        }[change]
+        target = sync_agents.SKILL_DIR / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("Anderer Inhalt\n", encoding="utf-8")
+    before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+    assert sync_agents.main(["--check"]) == 1
+
+    assert before == {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
+
+
+def test_invalid_later_source_leaves_every_existing_target_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein später Quellfehler darf keine halbe neue Spiegelgeneration hinterlassen."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    assert sync_agents.main([]) == 0
+    before = {
+        path: path.read_bytes()
+        for directory in (sync_agents.TARGET_DIR, sync_agents.SKILL_DIR)
+        for path in directory.rglob("*")
+        if path.is_file()
+    }
+    source = sync_agents.SOURCE_DIR / "probe.md"
+    source.write_text(source.read_text(encoding="utf-8") + "Neue Vorgabe.\n", encoding="utf-8")
+    (sync_agents.SOURCE_DIR / "z-kaputt.md").write_text("ohne Frontmatter", encoding="utf-8")
+
+    assert sync_agents.main([]) == 1
+
+    assert all(path.read_bytes() == content for path, content in before.items())
+    assert not (sync_agents.TARGET_DIR / "z-kaputt.toml").exists()
+
+
+def test_invocation_metadata_has_exactly_one_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein zweites, widersprechendes Aufrufschema wird vor dem Schreiben abgelehnt."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    metadata = sync_agents.SOURCE_SKILL_DIR / "probe" / "agents" / "openai.yaml"
+    metadata.parent.mkdir()
+    metadata.write_text("policy:\n  allow_implicit_invocation: true\n", encoding="utf-8")
+
+    assert sync_agents.main([]) == 1
+    assert not sync_agents.SKILL_DIR.exists()
+    assert not sync_agents.TARGET_DIR.exists()
+
+
+def test_check_accepts_git_windows_line_endings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Windows-Checkout ist ohne Neuschreiben derselbe Textstand."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    assert sync_agents.main([]) == 0
+    for directory in (sync_agents.TARGET_DIR, sync_agents.SKILL_DIR):
+        for path in directory.rglob("*"):
+            if path.is_file() and path.suffix in {".md", ".toml", ".yaml"}:
+                path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+
+    assert sync_agents.main(["--check"]) == 0
+
+
+@pytest.mark.parametrize(
+    "body", ['Endet auf "', 'Docstring: """Text"""', "Steuerzeichen: \x1b", "Löschzeichen: \x7f"]
+)
+def test_toml_round_trip_preserves_quotes_and_control_characters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
+) -> None:
+    """Anweisungen dürfen Anführungszeichen enthalten, ohne das Profil zu zerstören."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    source = sync_agents.SOURCE_DIR / "probe.md"
+    text = source.read_text(encoding="utf-8").replace("Lies `/probe`.", body)
+    source.write_text(text, encoding="utf-8")
+
+    assert tomllib.loads(sync_agents.render(source))["developer_instructions"] == body + "\n"
+
+
+@pytest.mark.parametrize("tools", ['[Read, "Write"]', "\n  - Read\n  - Edit"])
+def test_yaml_tool_lists_keep_the_writing_capability(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tools: str
+) -> None:
+    """Die YAML-Listenform darf einem schreibenden Agenten keine Lesesperre geben."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    source = sync_agents.SOURCE_DIR / "probe.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace("tools: Read, Write", f"tools: {tools}"),
+        encoding="utf-8",
+    )
+
+    assert "sandbox_mode" not in tomllib.loads(sync_agents.render(source))
+
+
+@pytest.mark.parametrize("value", ["effort: ultra", "effort: high\neffort: low"])
+def test_invalid_or_duplicate_effort_is_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """Ungültige Modellparameter werden vor der Generierung gemeldet."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    source = sync_agents.SOURCE_DIR / "probe.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace("effort: high", value), encoding="utf-8"
+    )
+
+    with pytest.raises(sync_agents.SyncError):
+        sync_agents.render(source)
+
+
+def test_yaml_fold_keeps_the_number_of_paragraph_breaks() -> None:
+    """Eine Leerzeile im gefalteten YAML-Block wird genau ein Zeilenumbruch."""
+    assert sync_agents._fold("  Erste\n  Zeile.\n\n  Zweite.\n\n\n  Dritte.") == (
+        "Erste Zeile.\nZweite.\n\nDritte."
+    )
+
+
+def test_new_agent_policies_are_never_silently_ignored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine neue Claude-Berechtigung braucht eine bewusste Codex-Entsprechung."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    source = sync_agents.SOURCE_DIR / "probe.md"
+    source.write_text(
+        source.read_text(encoding="utf-8").replace(
+            "tools: Read", "disallowedTools: Write\ntools: Read"
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(sync_agents.SyncError, match="disallowedTools"):
+        sync_agents.render(source)
+
+
+def test_linked_skill_roots_are_rejected_before_the_source_can_be_overwritten(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein alter Junction-Spiegel darf keine Codex-Texte in die Quelle schreiben."""
+    _prepare_mirror(tmp_path, monkeypatch)
+    sync_agents.SKILL_DIR.parent.mkdir(parents=True)
+    if os.name == "nt":
+        subprocess.run(
+            [
+                "cmd",
+                "/c",
+                "mklink",
+                "/J",
+                str(sync_agents.SKILL_DIR),
+                str(sync_agents.SOURCE_SKILL_DIR),
+            ],
+            check=True,
+            capture_output=True,
+        )
+    else:
+        sync_agents.SKILL_DIR.symlink_to(sync_agents.SOURCE_SKILL_DIR, target_is_directory=True)
+    before = {
+        path: path.read_bytes()
+        for path in sync_agents.SOURCE_SKILL_DIR.rglob("*")
+        if path.is_file()
+    }
+
+    assert sync_agents.main([]) == 1
+    assert all(path.read_bytes() == content for path, content in before.items())
+    assert not sync_agents.TARGET_DIR.exists()
