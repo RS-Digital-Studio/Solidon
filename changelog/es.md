@@ -29,6 +29,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al apuntar a través de una abertura a la cara que hay detrás se selecciona esa cara y no el borde de la abertura.
 - Los modelos grandes se construyen más rápido, porque las aristas y las normales se calculan una sola vez por cuerpo.
 - Si el equipo carece del soporte gráfico que necesita la vista, la aplicación indica los dos paquetes que hay que instalar.
+- Si inclina la vista cerca de un eje, encaja ahí y conserva su giro, en vez de saltar a una posición fija.
 
 ### Acciones para la selección
 
@@ -37,6 +38,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - En un taladro seleccionado aparecen Avellanar y Cerrar un taladro; en una cara, Hacer un taladro, Cortar una cavidad y Desplazar cara.
 - Un cuerpo seleccionado muestra allí mismo sus filamentos y permite cambiarlos.
 - Un campo de búsqueda en la misma tarjeta encuentra el resto de operaciones; las características y las piezas siguen en sus propias áreas.
+- La columna derecha es más ancha: las acciones para la selección caben enteras, en vez de apretarse en media anchura.
 
 ### Construir y modificar
 
@@ -55,6 +57,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Un número inadecuado de cuerpos seleccionados se avisa antes del cálculo, en lugar de omitir una entrada sin que se note.
 - Colocar sobre una superficie solo modifica el documento al aceptarlo; una vista previa descartada no deja nada atrás.
 - Las letras y las cifras se quedan en el campo de entrada: las teclas de navegación actúan solo cuando no está escribiendo allí.
+- Separar en piezas sueltas convierte varios cuerpos sueltos de un archivo en un objeto cada uno: lo que no se toca no es una sola pieza.
 
 ### Características
 
@@ -73,10 +76,13 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los perfiles de laminado propios van delante del perfil del fabricante con el mismo nombre, y un AppImage encuentra su inventario.
 - La limpieza posterior a la importación conserva las asignaciones de filamento.
 - La impresora pertenece al proyecto y se cambia tanto en la cabecera como en el diálogo de impresión; los filamentos asignados, los colores y sus propios valores de impresión se conservan.
-- La cabecera nombra los filamentos realmente en uso; varias bobinas del mismo tipo de material siguen distinguiéndose por nombre y color.
+- Cada cuerpo lleva su filamento en el árbol de objetos: un campo de color delante del nombre y un clic para asignar otro.
+- Varias bobinas del mismo tipo de material siguen distinguiéndose por nombre y color.
+- Las operaciones correspondientes se llaman por lo que hacen: *Asignar filamento* y *Filamento en una cara* en vez de *Colorear pieza* y *Colorear cara*.
 - La entrega al slicer resuelve cada bobina según su propio tipo de material; sus propios valores de impresión mantienen la prioridad.
 - Si el mapa de soportes tarda demasiado, el cálculo termina con una explicación y ofrece reducir los triángulos.
 - El diálogo de impresión sigue siendo plenamente utilizable también en ventanas estrechas.
+- Orientar para imprimir alinea todos los cuerpos seleccionados, no solo el primero.
 
 ### Archivos y proyectos
 

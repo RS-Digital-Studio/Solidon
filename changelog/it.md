@@ -28,6 +28,7 @@ scrive in `website/version.json`.
 - Puntare attraverso un'apertura sulla faccia dietro di essa seleziona quella faccia e non il bordo dell'apertura.
 - I modelli grandi si costruiscono più rapidamente, perché spigoli e normali vengono calcolati una sola volta per corpo.
 - Se al computer manca il supporto grafico che la vista richiede, l'applicazione indica i due pacchetti da installare.
+- Se inclini la vista vicino a un asse, scatta lì mantenendo la tua rotazione, invece di saltare a una posa fissa.
 
 ### Azioni per la selezione
 
@@ -36,6 +37,7 @@ scrive in `website/version.json`.
 - Su un foro selezionato compaiono Svasa e Chiudi un foro; su una faccia, Pratica un foro, Ritaglia tasca e Scosta la faccia.
 - Un corpo selezionato mostra lì i suoi filamenti e permette di cambiarli.
 - Un campo di ricerca nella stessa scheda trova le altre operazioni; caratteristiche e componenti restano nelle proprie aree.
+- La colonna di destra è più larga: le azioni per la selezione ci stanno per intero, invece di stringersi in metà larghezza.
 
 ### Costruire e modificare
 
@@ -54,6 +56,7 @@ scrive in `website/version.json`.
 - Un numero inadatto di corpi selezionati viene segnalato prima del calcolo, invece di tralasciare un ingresso senza che si veda.
 - Posizionare su una superficie modifica il documento solo alla conferma; un'anteprima scartata non lascia nulla dietro di sé.
 - Lettere e cifre restano nel campo di immissione: i tasti di navigazione agiscono solo quando non stai scrivendo lì.
+- Separa in pezzi distinti trasforma più corpi staccati di un file in un oggetto ciascuno: ciò che non si tocca non è un pezzo solo.
 
 ### Caratteristiche
 
@@ -72,10 +75,13 @@ scrive in `website/version.json`.
 - I profili di slicing propri stanno davanti al profilo del produttore con lo stesso nome, e un AppImage ritrova le sue scorte.
 - La pulizia dopo l'importazione conserva le assegnazioni dei filamenti.
 - La stampante appartiene al progetto e si cambia sia nell'intestazione sia nella finestra di stampa; filamenti assegnati, colori e i tuoi valori di stampa restano.
-- L'intestazione nomina i filamenti realmente in uso; più bobine dello stesso tipo di materiale restano distinguibili per nome e colore.
+- Ogni corpo porta il suo filamento nell'albero degli oggetti: un campo colore davanti al nome, un clic per assegnarne un altro.
+- Più bobine dello stesso tipo di materiale restano distinguibili per nome e colore.
+- Le operazioni relative prendono il nome da ciò che fanno: *Assegna filamento* e *Filamento su una faccia* invece di *Colora il pezzo* e *Colora la faccia*.
 - La consegna allo slicer risolve ogni bobina secondo il proprio tipo di materiale; i tuoi valori di stampa mantengono la precedenza.
 - Se la mappa dei supporti impiega troppo tempo, il calcolo termina con una spiegazione e propone di ridurre i triangoli.
 - La finestra di stampa resta pienamente utilizzabile anche in finestre strette.
+- Orienta per la stampa allinea tutti i corpi selezionati, non solo il primo.
 
 ### File e progetti
 

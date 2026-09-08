@@ -28,6 +28,7 @@ it into `website/version.json`.
 - Pointing through an opening at the face behind it selects that face and not the rim of the opening.
 - Large models build up faster because edges and surface normals are computed only once per body.
 - If the machine lacks the graphics support the view needs, the application names the two packages that have to be installed.
+- Tilt the view close to an axis and it snaps there while keeping your rotation, instead of jumping to a fixed pose.
 
 ### Actions for the selection
 
@@ -36,6 +37,7 @@ it into `website/version.json`.
 - On a bore you clicked you now find Countersink and Fill a bore, on a face Drill a bore, Cut pocket and Offset face.
 - A selected body shows its filaments right there and lets you change them.
 - A search field in the same card finds the remaining operations; features and parts stay in their own areas.
+- The right-hand column is wider: the actions for the selection fit fully, instead of crowding into half the width.
 
 ### Building and editing
 
@@ -54,6 +56,7 @@ it into `website/version.json`.
 - An unsuitable number of selected bodies is reported before the calculation, instead of dropping an input unnoticed.
 - Placing on a surface changes the document only when you accept it; a discarded preview leaves nothing behind.
 - Letters and digits stay in the input field — navigation keys take effect only when you are not typing there.
+- Split into separate parts turns several loose bodies in one file into one object each — what does not touch is not one part.
 
 ### Features
 
@@ -72,10 +75,13 @@ it into `website/version.json`.
 - Custom slicer profiles come before a vendor profile of the same name, and an AppImage finds its inventory.
 - The clean-up after import keeps the filament assignments.
 - The printer belongs to the project and can be changed in the header as well as in the print dialog; assigned filaments, colours and your own print values are kept.
-- The header names the filaments actually in use; several spools of the same material type stay distinguishable by name and colour.
+- Every body carries its filament in the object tree: a colour field before the name, one click assigns another.
+- Several spools of the same material type stay distinguishable by name and colour.
+- The operations behind it are named after their purpose: *Assign filament* and *Filament on a face* instead of *Colour part* and *Colour face*.
 - The slicer handover resolves every spool against its own material type; your own print values keep priority.
 - If the support map takes too long, the calculation ends with an explanation and offers to reduce the triangles.
 - The print dialog stays fully usable in narrow windows as well.
+- Orient for printing aligns every selected body, not just the first.
 
 ### Files and projects
 

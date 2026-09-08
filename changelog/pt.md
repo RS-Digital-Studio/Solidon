@@ -28,6 +28,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Apontar através de uma abertura para a face que está atrás seleciona essa face e não o bordo da abertura.
 - Os modelos grandes constroem-se mais depressa, porque arestas e normais são calculadas apenas uma vez por corpo.
 - Se ao computador faltar o suporte gráfico de que a vista precisa, a aplicação indica os dois pacotes que têm de ser instalados.
+- Se inclinar a vista perto de um eixo, ela encaixa aí e mantém a sua rotação, em vez de saltar para uma posição fixa.
 
 ### Ações para a seleção
 
@@ -36,6 +37,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Num furo selecionado aparecem Escarear e Fechar furo; numa face, Abrir furo, Cortar bolsa e Deslocar a face.
 - Um corpo selecionado mostra ali os seus filamentos e permite alterá-los.
 - Um campo de pesquisa no mesmo cartão encontra as restantes operações; características e peças ficam nas suas próprias áreas.
+- A coluna da direita ficou mais larga: as ações para a seleção cabem por inteiro, em vez de se apertarem em metade da largura.
 
 ### Construir e alterar
 
@@ -54,6 +56,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Um número inadequado de corpos selecionados é comunicado antes do cálculo, em vez de deixar uma entrada de fora sem se notar.
 - Colocar sobre uma superfície só altera o documento ao confirmar; uma pré-visualização descartada não deixa nada para trás.
 - As letras e os algarismos ficam no campo de entrada — as teclas de navegação só atuam quando não está a escrever ali.
+- Separar em peças distintas transforma vários corpos soltos de um ficheiro num objeto cada um — o que não se toca não é uma só peça.
 
 ### Características
 
@@ -72,10 +75,13 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os perfis de laminação próprios ficam à frente do perfil do fabricante com o mesmo nome, e um AppImage encontra o seu inventário.
 - A limpeza depois da importação conserva as atribuições de filamento.
 - A impressora pertence ao projeto e muda-se tanto no cabeçalho como na janela de impressão; filamentos atribuídos, cores e os seus próprios valores de impressão mantêm-se.
-- O cabeçalho nomeia os filamentos realmente em uso; várias bobinas do mesmo tipo de material continuam distinguíveis pelo nome e pela cor.
+- Cada corpo leva o seu filamento na árvore de objetos: um campo de cor antes do nome e um clique para atribuir outro.
+- Várias bobinas do mesmo tipo de material continuam distinguíveis pelo nome e pela cor.
+- As operações correspondentes têm o nome daquilo que fazem: *Atribuir filamento* e *Filamento numa face* em vez de *Colorir peça* e *Colorir face*.
 - A entrega ao slicer resolve cada bobina segundo o seu próprio tipo de material; os seus próprios valores de impressão mantêm a prioridade.
 - Se o mapa de suportes demorar demasiado, o cálculo termina com uma explicação e propõe reduzir os triângulos.
 - A janela de impressão continua totalmente utilizável mesmo em janelas estreitas.
+- Orientar para impressão alinha todos os corpos selecionados, não apenas o primeiro.
 
 ### Ficheiros e projetos
 

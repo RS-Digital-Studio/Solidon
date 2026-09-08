@@ -29,6 +29,7 @@ dans `website/version.json`.
 - Viser à travers une ouverture la face située derrière sélectionne cette face et non le bord de l'ouverture.
 - Les grands modèles se construisent plus vite, car arêtes et normales ne sont calculées qu'une fois par corps.
 - Si la machine n'a pas le support graphique dont la vue a besoin, l'application nomme les deux paquets à installer.
+- Inclinez la vue près d'un axe : elle s'y aligne en conservant votre rotation, au lieu de sauter vers une position figée.
 
 ### Actions pour la sélection
 
@@ -37,6 +38,7 @@ dans `website/version.json`.
 - Sur un perçage sélectionné apparaissent Fraiser et Reboucher un perçage ; sur une face, Percer un trou, Découper une poche et Décaler la face.
 - Un corps sélectionné affiche ses filaments sur place et permet de les changer.
 - Un champ de recherche dans la même carte trouve les autres opérations ; les caractéristiques et les pièces restent dans leurs propres zones.
+- La colonne de droite est plus large : les actions pour la sélection tiennent entièrement, au lieu de se serrer sur une demi-largeur.
 
 ### Construire et modifier
 
@@ -55,6 +57,7 @@ dans `website/version.json`.
 - Un nombre inadapté de corps sélectionnés est signalé avant le calcul, au lieu d'écarter une entrée sans que cela se voie.
 - Poser sur une surface ne modifie le document qu'à la validation ; un aperçu abandonné ne laisse rien derrière lui.
 - Les lettres et les chiffres restent dans le champ de saisie — les touches de navigation n'agissent que lorsque vous n'y tapez pas.
+- Séparer en pièces distinctes fait de plusieurs corps détachés d'un fichier un objet chacun — ce qui ne se touche pas n'est pas une seule pièce.
 
 ### Caractéristiques
 
@@ -73,10 +76,13 @@ dans `website/version.json`.
 - Les profils de tranchage propres passent avant le profil constructeur du même nom, et un AppImage retrouve son stock.
 - Le nettoyage après l'import conserve les affectations de filament.
 - L'imprimante appartient au projet et se change aussi bien dans l'en-tête que dans la boîte d'impression ; les filaments attribués, les couleurs et vos propres valeurs d'impression sont conservés.
-- L'en-tête nomme les filaments réellement utilisés ; plusieurs bobines du même type de matériau restent distinguables par leur nom et leur couleur.
+- Chaque corps porte son filament dans l'arborescence : une pastille de couleur devant le nom, un clic pour en attribuer un autre.
+- Plusieurs bobines du même type de matériau restent distinguables par leur nom et leur couleur.
+- Les opérations correspondantes portent le nom de ce qu'elles font : *Attribuer un filament* et *Filament sur une face* au lieu de *Colorer la pièce* et *Colorer la face*.
 - La remise au trancheur résout chaque bobine selon son propre type de matériau ; vos propres valeurs d'impression gardent la priorité.
 - Si la carte des supports prend trop de temps, le calcul se termine avec une explication et propose de réduire les triangles.
 - La boîte d'impression reste entièrement utilisable même dans des fenêtres étroites.
+- Orienter pour l'impression aligne tous les corps sélectionnés, et pas seulement le premier.
 
 ### Fichiers et projets
 

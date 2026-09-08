@@ -53,6 +53,7 @@ Nutzen da und sonst nichts.
 - Wer durch eine Öffnung auf eine dahinterliegende Fläche zeigt, wählt diese Fläche und nicht den Rand der Öffnung.
 - Große Modelle bauen sich schneller auf, weil Kanten und Flächennormalen nur noch einmal je Körper gerechnet werden.
 - Fehlt dem Rechner die Grafikunterstützung für die Ansicht, nennt die Anwendung die beiden Pakete, die installiert werden müssen.
+- Kippen Sie die Ansicht nahe an eine Achse, rastet sie dort ein und behält dabei Ihre Drehung, statt in eine feste Lage zu springen.
 
 ### Handlungen zur Auswahl
 
@@ -61,6 +62,7 @@ Nutzen da und sonst nichts.
 - An einer angeklickten Bohrung stehen dort Senken und Bohrung verschließen, an einer Fläche Bohrung setzen, Tasche schneiden und Fläche versetzen.
 - Ein gewählter Körper zeigt seine Filamente unmittelbar an und lässt sie dort ändern.
 - Weitere Operationen findet ein Suchfeld in derselben Karte; Merkmale und Bausteine bleiben in ihren eigenen Bereichen.
+- Die rechte Spalte ist breiter geworden: Die Handlungen zur Auswahl stehen vollständig da, statt sich auf halber Breite zu drängen.
 
 ### Konstruieren und Ändern
 
@@ -79,6 +81,7 @@ Nutzen da und sonst nichts.
 - Eine unpassende Zahl gewählter Körper wird vor der Berechnung gemeldet, statt eine Eingabe unbemerkt auszulassen.
 - Das Platzieren auf einer Oberfläche ändert das Dokument erst beim Übernehmen; eine verworfene Vorschau lässt nichts zurück.
 - Buchstaben und Zahlen bleiben im Eingabefeld — Navigationstasten greifen erst, wenn dort nicht getippt wird.
+- In Einzelteile zerlegen macht aus mehreren losen Körpern in einer Datei je ein eigenes Objekt — was sich nicht berührt, ist nicht ein Teil.
 
 ### Merkmale
 
@@ -97,10 +100,13 @@ Nutzen da und sonst nichts.
 - Eigene Slicerprofile stehen vor dem gleichnamigen Herstellerprofil, und ein AppImage findet seinen Bestand.
 - Die Bereinigung nach dem Einlesen behält die Filamentzuweisungen.
 - Der Drucker gehört zum Projekt und lässt sich in der Kopfzeile wie im Druckdialog wechseln; zugewiesene Filamente, Farben und eigene Druckwerte bleiben erhalten.
-- Die Kopfzeile nennt die tatsächlich benutzten Filamente; mehrere Rollen derselben Materialart bleiben an Namen und Farbe unterscheidbar.
+- Jeder Körper trägt sein Filament im Objektbaum: ein Farbfeld vor dem Namen, ein Klick darauf weist ein anderes zu.
+- Mehrere Rollen derselben Materialart bleiben dabei an Namen und Farbe unterscheidbar.
+- Die Operationen dazu heißen nach ihrer Sache: *Filament zuweisen* und *Filament auf eine Fläche* statt *Teil färben* und *Fläche färben*.
 - Die Slicer-Übergabe rechnet jede Spule gegen ihre eigene Materialart; eigene Druckwerte behalten Vorrang.
 - Dauert die Stützkarte zu lange, endet die Berechnung mit einer Erklärung und bietet das Verringern der Dreiecke an.
 - Der Druckdialog bleibt auch in schmalen Fenstern vollständig bedienbar.
+- Druckoptimal ausrichten richtet alle gewählten Körper aus und nicht nur den ersten.
 
 ### Dateien und Projekte
 
