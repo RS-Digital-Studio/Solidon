@@ -14879,8 +14879,18 @@ Macs hier.
         und die Ladewarnung landete in `stdout`. **Behoben**: Startmeldungen
         gehen nach `stderr`, gemessen wird die Ausgabe des Skripts.
 
-      **ARM** (`macos-latest`), einer:
-      `test_print_settings_ui::test_the_dialog_grows_when_the_profile_section_opens_itself`.
+      **ARM** (`macos-latest`), einer — und **die einzige echte Regression
+      seit 0.3.4**: `test_print_settings_ui::test_the_dialog_grows_when_the_
+      profile_section_opens_itself`. Am 04.09.2026 war dieselbe Plattform im
+      Tag-Lauf grün (`33910464195`, drei Suiten — den Intel-Mac gab es in der
+      Matrix noch nicht). Der Dialog wächst beim Nachreichen der Profilzeilen
+      zwar, aber nicht genug: Das Feld darüber fällt von 26 auf 22 Punkte.
+      **Der Sollwert kommt dabei aus dem Prüfling selbst**
+      (`field.sizeHint().height()`), es ist also keine geratene Schwelle,
+      sondern gemessene Stauchung — genau das, was der Test seit dem
+      30.08.2026 verhindern soll. Wer es angeht, sucht die Stelle, an der der
+      obere Bereich nachgibt, statt den Dialog wachsen zu lassen; von hier aus
+      ist der Fall nicht auslösbar.
 
 ## Die CI kam zum ersten Mal bis zum Ende (02.09.2026)
 
