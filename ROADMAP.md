@@ -86,7 +86,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
-| VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | **einen Probelauf in der CI — seit dem VTK-Ausbau (06.09.2026) baut offscreen keine Fensterdatei mehr einen Renderer, der Grund für die Auslassung ist weg.** Bis dahin gilt die Entscheidung mit Datum (20.08.2026), kein offener Auftrag. Sie steht ausgeschrieben in `build.yml` und weiter unten in diesem Dokument: Kein Runner hat eine Grafikkarte, VTK stirbt im emulierten GL-Kontext mit SIGSEGV, und der Absturz wandert — er hängt an keinem Test und ist lokal nicht zu sehen (dieselben Dateien laufen mit GL grün durch, 4021 Tests). Weil der Paketier-Job an dieser Suite hängt, verhinderte ein Fremdcode-Absturz in einer Umgebung, die niemand benutzt, wochenlang die Auslieferung aller vier Plattformen. **Die Fenster prüft seither, wer einen Bildschirm hat** — also jede Sitzung vor dem Commit. Wieder aufmachen würde es ein Runner mit GL oder ein VTK, das ohne auskommt; bis dahin steht der Eintrag für die Lücke, nicht für Arbeit |
+| Die Fenstergruppe läuft wieder — und acht ihrer Tests messen auf Linux die Umgebung | Die Demo bis 30.10.2026 (12.08.2026) | **acht Umbauten, je einer für eine Messung, die auf Unix nicht trägt.** Der Probelauf ist am 08.09.2026 gefahren (`34176653717`): Windows grün, Ubuntu acht rot, alle in der Fenstergruppe. Fünf hängen an der Schriftmetrik — unter Windows-`offscreen` liefert Qt echte Breiten, unter Linux-`offscreen` die von fontconfig —, zwei zählen Bildpunkte gerenderten Textes, einer ist die bekannte Lebensdauerfamilie (`KeyDialog`). Die Vermutung fehlender Schriften ist gemessen und widerlegt: 53 laut `fc-list`, die acht blieben. Der VTK-Grund für die frühere Auslassung ist mit pygfx weg; zwei echte Fehler des Probelaufs sind behoben (stummer Installieren-Knopf, `.exe`-Suche auf Linux) |
+| Fünf Befunde auf den beiden Macs, die niemand je gesehen hat | Der erste Vier-Plattform-Lauf seit dem 06.09.2026 (08.09.2026) | je eine Untersuchung auf einem Mac. Die CI war vom 06.09. bis zum 08.09.2026 durchgehend rot, und bis zum xvfb-Fix kam kein Lauf bis zu diesen Tests. **Intel:** der Skizzenlöser antwortet zweimal verschieden (Regel 9, Abweichung in der 13. Stelle — `test_same_input_solves_to_the_same_output`); die neue Grafikschicht zeichnet ein schwarzes Bild (`test_native_qt_canvas_draws_and_releases_its_renderer`, `screenshot().max()` unter 100) — **das ist die dringendste der fünf**, denn zwei Kunden arbeiten auf Macs; ein Worker stirbt in `test_brep`. **ARM:** `test_the_dialog_grows_when_the_profile_section_opens_itself`. Der vierte Intel-Befund war die php.ini des Runners und ist behoben |
 | Ein Gewinde auf macOS kann als STL Löcher haben — **ein Weg ist gebaut, die Bestätigung fehlt** | Die Demo bis 30.10.2026 (12.08.2026) | einen Lauf auf einem Mac. Seit `d96308bb` wird ein offenes Netz aus geschlossener Form vernäht statt feiner vernetzt (T-Kreuzung, nicht Loch); ob der dortige Riss einer ist, lässt sich hier nicht erzeugen |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | den Nachweis, ob der Absturz ohne VTK noch auftritt (Renderer seit dem 06.09.2026 pygfx) — VTKs Zustand über mehrere Fenster hinweg war die Vermutung; `test_chat_ui.test_the_applied_bar_clears_when_something_newer_is_on_top` trägt seit dem 13.08.2026 ein `skipif` für Linux, und von Windows aus ist der Absturz nicht auslösbar |
@@ -2309,6 +2310,45 @@ den Webserver und die Paketierung. Fünf Funde:
       Protokoll. **Das ist eine Lücke, keine Lösung** — wer eine Ansicht
       ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht. Sie
       schließt sich, sobald die Runner GL bekommen oder VTK ohne auskommt.
+
+      **Der Probelauf ist gefahren (08.09.2026), und er sagt nein.** Mit dem
+      pygfx-Umbau ist der VTK-Grund weg, und `4f1e1596` hat die Fenstergruppe
+      am 07.09. wieder eingeschaltet. Sie ist dabei **nie gelaufen**: Derselbe
+      Commit brachte einen Testharness mit einem Shell-Funktionsnamen, den
+      `dash` ablehnt, und das Skript brach ab, bevor eine Zeile lief. Nach dem
+      Fix davon (`91fe2144`, `82c7d91a`) kam sie zum ersten Mal dran.
+
+      Ergebnis des Handstarts über alle vier Plattformen (`34176653717`,
+      Stand `a84a1ba9`):
+
+      | Plattform | Suite |
+      |---|---|
+      | Windows | grün |
+      | Ubuntu | 8 rot, alle in der Fenstergruppe |
+      | macOS ARM | 1 rot |
+      | macOS Intel | 4 rot, keiner davon in der Fenstergruppe |
+
+      **Kein Absturz mehr, sondern Messungen, die auf Unix anders ausfallen.**
+      Die acht auf Ubuntu sind Breiten, Einrückungen und gezählte Bildpunkte —
+      `test_header`, `test_ui::test_every_menu_indents_its_text_the_same`,
+      `test_chat_ui`, viermal `test_style` — dazu `test_widget_lifetime`
+      (`KeyDialog`, 1 von 10 überlebt sein Schließen). Fünf davon hängen an
+      der Schriftmetrik, und dazu steht in `.claude/memory` seit dem
+      30.08.2026 der Satz, der sie erklärt: *Farben lassen sich herstellen,
+      Breiten nicht.* Unter Windows-`offscreen` liefert Qt echte Metriken, unter
+      Linux-`offscreen` die von fontconfig — und dort sind es andere. Die
+      Vermutung, es fehlten schlicht die Schriften, ist **gemessen und
+      widerlegt**: `fonts-dejavu-core` und `fontconfig` sind seit `db66e280`
+      installiert, `fc-list` zählt 53, und die acht blieben.
+
+      Zwei Befunde waren echte Fehler und sind behoben: der gesperrte
+      Installieren-Knopf, der seinen Grund nur in den Tooltip schrieb
+      (`a84a1ba9`, drei Knöpfe auf Linux), und die Programmsuche nach einer
+      `.exe`, die es dort nicht gibt (`db66e280`).
+
+      **Was noch fehlt, steht als eigener Punkt weiter unten** — die vier auf
+      dem Intel-Mac und der eine auf ARM gehören nicht in diesen Eintrag: Sie
+      liegen außerhalb der Fenstergruppe und sind älter als sie.
 - [~] **Ein Gewinde auf macOS kann als STL Löcher haben** (20.08.2026). Der
       Körper ist dort in Ordnung — geschlossen, ein Stück, richtiges Volumen,
       und STEP wie jede weitere Operation tragen ihn. Nur seine Vernetzung
@@ -14791,6 +14831,56 @@ unter `core`, kein `eval`, kein `random` ohne Startwert.
 - [x] **`backends/scripted.py` reiste im Kundenpaket.** Erledigt 02.09.2026 auf Roberts Freigabe: Das Modell mit vorgeschriebenen Antworten liegt jetzt als `tests/scripted_backend.py` neben `agent_cases.py` und `php_probe.py`; sieben Testdateien importieren es von dort, keine Anwendungsdatei hat es je gebraucht. `backends/CLAUDE.md` sagt, wo es hin ist.
 - [ ] **Ein Datum steht in jeder Sprache auf Deutsch.** Wartet auf eine Zeile in `app/ui/main_window.py:11170`: `MainWindow._when()` gibt für eine Sicherung, die älter als 24 Stunden ist, `written.strftime("%d.%m.%Y %H:%M")` zurück — ein englischer Kunde liest im Wiederherstellungsdialog `02.09.2026 15:41` statt `9/2/2026 3:41 PM`. Der Rest derselben Funktion macht es richtig: „vor 4 Minuten" und „vor einer Stunde" gehen durch `tr()`, mit getrennten Formen für Einzahl und Mehrzahl. Der Fix ist `QLocale().toString(written, QLocale.FormatType.ShortFormat)` — dieselbe Quelle wie das Dezimaltrennzeichen in `labels.py`, und `QLocale()` ohne Argument folgt der App-Sprache. Einzige Stelle in `app/ui`, die ein Datum fest formatiert; gefunden am 02.09.2026 bei der Suche nach Locale-Abhängigkeiten, bewusst **nach** dem Release, weil der Dialog nur nach einem Absturz mit einer Sicherung von gestern erscheint (Entscheidung 3d-druck-7b und 3d-druck-85).
 - [ ] **21 Kernfunktionen über 150 Zeilen.** Wartet auf je einen eigenen Umbau mit Messung davor und danach. Erledigt 02.09.2026: `range_check.has_self_intersections` (806 Zeilen, acht innere Funktionen) ist die Klasse `_IntersectionCheck` mit Methoden — derselbe Algorithmus, gemessen alt gegen neu auf sieben Netzen (Quader, Icosphären mit 20 000 und 41 000 Flächen, zwei Bausteine): gleiche Befunde, gleiche Zeiten; dazu der Bereichstest `check_part(cable_gland)` (128 Ecken) im selben Prozess alt 58,9 s, neu 59,3 s, alt noch einmal 58,1 s — Befunde identisch, neu/alt 1,02 (3d-druck-a0 hatte den Verdacht, ihr Torlauf stehe wegen des Umbaus in `test_parts.py`; er stand vor dem Umbau genauso, eine Minute je Baustein ist der Bereichstest selbst). Die Restliste, absteigend: `evaluate._with_features` 520, `evaluate.evaluate` 472, `part_file._strict_shape` 332, `range_check.large_mesh_intersects` ist als Methode aufgegangen, `handover.slice_model` 231, `mounting.pegboard_hook` 229, `advise._from_geometry` 208, `range_check.check` 207, `loader.normalise` 196, `autosplit.split_to_fit` 193, `agent.tools.extra_tools` 193, `features.detect_edge_loops` 181, `project.save` 175, `advise.warnings_for` 169, `generate.into_project` 165, `project.load` 162, `manual.models_text` 159, `repair.repair` 158, `pins.plan_pins` 155. Keine davon ist falsch; die zwei aus `evaluate.py` sind das Herz der Auswertung und bekommen den Umbau zuerst, jeder mit `test_evaluation.py` und den vier Hauptwegen davor und danach.
+
+## Der erste Vier-Plattform-Lauf seit dem 06.09.2026 (08.09.2026)
+
+Die CI war zwei Tage durchgehend rot, und niemand hat gesehen, woran. Der
+Grund lag in einer Testdatei: `4f1e1596` brachte am 07.09. einen Prüfstand,
+der `xvfb-run` als Shell-Funktion bereitstellte — ein Funktionsname mit
+Bindestrich, den `dash` und die `sh` von macOS ablehnen. Das Skript brach ab,
+bevor eine Zeile lief, auf Ubuntu und auf beiden Macs. Weil der Paketjob an
+`needs: suite` hängt, entstand aus dem Tag `v0.3.5` **kein einziges Paket**.
+
+Hier konnte das niemandem auffallen: Der Test nimmt unter Windows die `sh` aus
+Git für Windows, und die ist eine bash. Vier Befunde dieser Art an einem Abend
+— dazu `set -o pipefail` in einem mit `sh` gefahrenen Block, `socketpair()`,
+das auf Unix ein AF_UNIX-Paar ist, und ein `ln -sf`, das auf einem Dateisystem
+ohne Groß- und Kleinschreibung den eben geschriebenen Starter überschreibt.
+Alle vier behoben, dazu ein fünfter mit Kundenwirkung: Die Spec suchte Qts
+Sprachkataloge neben dem Python-Paket statt über `QLibraryInfo`, und im
+Mac-Paket stand deshalb auf jedem Standardknopf „Cancel".
+
+Was der erste vollständige Lauf danach zeigte, steht in zwei Punkten: die acht
+Ubuntu-Befunde beim Eintrag zur Fenstergruppe weiter oben, die fünf auf den
+Macs hier.
+
+- [ ] **Fünf Befunde auf den beiden Macs, die niemand je gesehen hat**
+      (08.09.2026). Sie liegen außerhalb der Fenstergruppe, sind also älter
+      als sie — nur kam bis zum xvfb-Fix kein Lauf bis dorthin.
+
+      **Intel** (`macos-26-intel`), vier:
+
+      - `test_sketch::test_same_input_solves_to_the_same_output` — der
+        Skizzenlöser antwortet auf dieselbe Eingabe zweimal verschieden. Die
+        Abweichung steht in der dreizehnten Stelle (`20.050000000002402`
+        gegen `20.050000000002424`), und Regel 9 kennt keine Toleranz dafür.
+        Ob es die Gleitkommaeinheit ist oder eine Iteration ohne feste
+        Reihenfolge, ist offen; entschieden wird es auf einem Mac.
+      - `test_render_factory::test_native_qt_canvas_draws_and_releases_its_renderer`
+        — die neue Grafikschicht zeichnet ein schwarzes Bild
+        (`screenshot().max()` bleibt unter 100). **Das ist die dringendste
+        der fünf**: Zwei Kunden arbeiten auf Macs, und ein Runner ohne
+        Grafikkarte ist eine mögliche Erklärung, aber keine geprüfte.
+      - `test_brep::test_a_selection_that_matches_nothing_says_so` — der
+        Worker stirbt. Gehört zur bekannten Absturzfamilie und braucht
+        dieselbe Behandlung: einen eigenen Prozess oder eine Diagnose.
+      - `test_support::test_the_subject_never_exceeds_a_mime_word` — die
+        `php.ini` des Runners zeigt auf ein `mbstring`, das dort nicht liegt,
+        und die Ladewarnung landete in `stdout`. **Behoben**: Startmeldungen
+        gehen nach `stderr`, gemessen wird die Ausgabe des Skripts.
+
+      **ARM** (`macos-latest`), einer:
+      `test_print_settings_ui::test_the_dialog_grows_when_the_profile_section_opens_itself`.
 
 ## Die CI kam zum ersten Mal bis zum Ende (02.09.2026)
 

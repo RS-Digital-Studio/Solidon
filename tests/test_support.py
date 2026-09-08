@@ -382,7 +382,12 @@ def test_the_subject_never_exceeds_a_mime_word() -> None:
     # Standardpfad — bei einer entpackten Installation liegen sie neben der
     # ausführbaren Datei. Gibt es dort ein ``ext``, wird es gesagt; sonst hat
     # dieses PHP eine ini und weiß es selbst.
-    options = ["-d", "extension=mbstring"]
+    # **Startmeldungen nach stderr.** Gemessen wird die Ausgabe des Skripts,
+    # nicht die Meinung der php.ini über ihre Erweiterungen: Auf dem
+    # Intel-Mac-Runner zeigt sie auf ein mbstring, das dort nicht liegt, und
+    # die Ladewarnung landete mitten in stdout — der Test meldete dann einen
+    # Fehler, der über den Betreff nichts aussagte.
+    options = ["-d", "display_errors=stderr", "-d", "extension=mbstring"]
     extensions = Path(php).parent / "ext"
     if extensions.is_dir():
         options[:0] = ["-d", f"extension_dir={extensions}"]
