@@ -38,6 +38,7 @@ from app.core.knowledge import profiles
 from app.core.log import configure
 from app.core.paths import installed_language, user_config_dir
 from app.core.registry import REGISTRY, cli_commands, documentation
+from app.core.registry.params import NUMBER_KINDS, TEXT_KINDS
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
 from app.core.scene.project import (
     Project,
@@ -53,7 +54,22 @@ from app.core.units import format_length
 from app.i18n import _, set_language, tr
 from app.i18n.catalog import install_language
 
-_PARAM_TYPES: dict[str, Any] = {"float": float, "int": int, "str": str, "enum": str}
+#: Wie die Kommandozeile den Text eines Arguments in einen Wert wandelt.
+#:
+#: **Abgeleitet und nicht aufgezählt**, denn eine zweite Liste altert. Hier
+#: stand einmal ``{"float", "int", "str", "enum"}`` von Hand — und als
+#: ``slot`` die Art ``filament`` bekam, fiel sie durch das ``.get(..., str)``
+#: in den Textzweig: ``--slot 1`` kam als ``"1"`` an, und die Prüfung lehnte
+#: mit „Hier wird eine Zahl erwartet" ab. ``assign_slot`` war über die
+#: Kommandozeile damit gar nicht zu benutzen (Befund Robert, 08.09.2026).
+#:
+#: Es ist derselbe Fehler wie am 27.08.2026, eine Ebene weiter: Damals wurde
+#: ``NUMBER_KINDS`` in :mod:`app.core.registry.params` ergänzt, diese Tabelle
+#: aber nicht. Zwei Listen für eine Frage sind zwei Gelegenheiten,
+#: auseinanderzulaufen; jetzt gibt es nur noch die eine.
+_PARAM_TYPES: dict[str, Any] = {
+    kind: (float if kind == "float" else int) for kind in NUMBER_KINDS
+} | dict.fromkeys(TEXT_KINDS, str)
 
 
 # --- context implementations ----------------------------------------------------

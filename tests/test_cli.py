@@ -599,3 +599,54 @@ def test_a_default_true_switch_can_be_turned_off_from_the_command_line() -> None
     assert parser.parse_args(["run", "drill_hole", "x.p3d"]).compensate is None
     assert parser.parse_args(["run", "drill_hole", "x.p3d", "--compensate"]).compensate is True
     assert parser.parse_args(["run", "drill_hole", "x.p3d", "--no-compensate"]).compensate is False
+
+
+def test_the_command_line_knows_every_parameter_kind() -> None:
+    """Jede Art, die das Register kennt, wandelt die Kommandozeile auch.
+
+    **Der Fall** (Robert, 08.09.2026): ``assign_slot`` war über die
+    Kommandozeile gar nicht zu benutzen. ``--slot 1`` kam als Zeichenkette an,
+    und die Prüfung lehnte mit „Hier wird eine Zahl erwartet" ab.
+
+    Die Ursache war eine zweite Liste. ``_PARAM_TYPES`` zählte die Arten von
+    Hand auf, und als ``slot`` die Art ``filament`` bekam, fiel sie über das
+    ``.get(..., str)`` in den Textzweig. Es ist derselbe Fehler wie am
+    27.08.2026, eine Ebene weiter: Damals wurde ``NUMBER_KINDS`` ergänzt,
+    diese Tabelle nicht.
+
+    Geprüft wird deshalb nicht „filament ist eine Zahl" — das wäre wieder eine
+    Aufzählung, die altert —, sondern dass **keine** Art fehlt und dass die
+    Zahlenarten auch Zahlen liefern.
+    """
+    from app.cli.main import _PARAM_TYPES
+    from app.core.registry.params import NUMBER_KINDS, TEXT_KINDS
+
+    assert NUMBER_KINDS and TEXT_KINDS, "die Mengen kommen aus dem Register, nicht aus dem Nichts"
+
+    fehlend = (NUMBER_KINDS | TEXT_KINDS) - set(_PARAM_TYPES)
+    assert not fehlend, f"die Kommandozeile kennt diese Arten nicht: {sorted(fehlend)}"
+
+    for kind in NUMBER_KINDS:
+        wert = _PARAM_TYPES[kind]("1")
+        assert isinstance(wert, int | float) and not isinstance(wert, str), (
+            f"{kind} muss eine Zahl ergeben, ergab {wert!r}"
+        )
+    for kind in TEXT_KINDS:
+        assert _PARAM_TYPES[kind] is str, f"{kind} ist Text"
+
+
+def test_assigning_a_filament_works_from_the_command_line(tmp_path: Path) -> None:
+    """Und der Weg, an dem es aufgefallen ist, geht wieder.
+
+    Der Test darüber prüft die Tabelle, dieser den Kundenweg: Ein Projekt
+    anlegen, ein Modell laden, ein Filament zuweisen. Ohne den Fix hält die
+    Kette bei der Zuweisung an.
+    """
+    from app.cli.main import main
+
+    ziel = tmp_path / "probe.p3d"
+    assert main(["new", str(ziel), "--material", "pla"]) == 0
+    assert main(["import", str(ziel), str(MESHES / "cube_clean.stl"), "--unit", "mm"]) == 0
+    assert main(["run", "assign_slot", str(ziel), "--on", "obj_1", "--slot", "1"]) == 0, (
+        "eine Slotnummer ist eine Zahl, auch wenn sie über argparse kommt"
+    )
