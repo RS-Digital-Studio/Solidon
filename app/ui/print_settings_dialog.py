@@ -2597,17 +2597,42 @@ class PrintSettingsDialog(QDialog):
         # Der Slicen-Knopf fragt die Profilwahl vor dem Klick (Regel 19) —
         # also muss er jede Änderung daran erfahren, nicht nur die Maschine.
         self.process_choice.currentIndexChanged.connect(self._show_slicer_state)
-        self.filament_choice = QComboBox(self.slicer_inner)
-        self.filament_choice.setEnabled(False)
-        self.filament_choice.activated.connect(self._filament_chosen)
-        """``activated`` und nicht ``currentIndexChanged``: das eine meint die
-        Wahl eines Menschen, das andere jedes Befüllen der Liste. Der
-        Unterschied entscheidet, ob die Werte eines geladenen Projekts
-        überschrieben werden — sie dürfen es nicht."""
+        # **Keine zweite Auswahl für dieselbe Angabe** (Entscheidung Robert,
+        # 08.09.2026). Das Slicer-Profil gehört zur Spule und wird dort
+        # gewählt: Der Filamentwähler schreibt es in den Katalogeintrag, die
+        # Färbe-Operation von dort nach ``MaterialSlot.material``
+        # (``colour_ops``), und die Übergabe nimmt es je Slot — dort gewinnt
+        # das Filament des Slots ohnehin gegen alles, was hier stand
+        # (``handover``). Eine Liste an dieser Stelle konnte nur *ein*
+        # Filament meinen, während ein Projekt bis zu acht trägt; dieselbe
+        # Feststellung wie beim Materialwähler in der Kopfzeile (Konzept
+        # „Material aus dem Filament", 30.08.2026).
+        #
+        # Geblieben ist, was hier wirklich hergehört: die Auskunft, worauf
+        # Solidon seine Werte legt — und die Handlung, die Werte des
+        # Herstellers zu holen. Die gab es nur an dieser Zeile
+        # (``slicer_profiles.filament_values`` hat sonst keinen Aufrufer), und
+        # sie wäre mit der Auswahl wortlos verschwunden.
+        self.filament_shown = QLabel("", self.slicer_inner)
+        self.filament_shown.setWordWrap(True)
+        self.adopt_filament = QPushButton(tr("Werte übernehmen"), self.slicer_inner)
+        self.adopt_filament.setEnabled(False)
+        self.adopt_filament.clicked.connect(self._adopt_filament_values)
+        filament_row = QWidget(self.slicer_inner)
+        filament_side = QHBoxLayout(filament_row)
+        filament_side.setContentsMargins(0, 0, 0, 0)
+        filament_side.addWidget(self.filament_shown, 1)
+        filament_side.addWidget(self.adopt_filament)
+
+        self._filament_profile = ""
+        """Pfad des zugeordneten Filamentprofils — die eine Quelle für
+        Anzeige, Übergabe und Wertübernahme."""
+        self._filament_title = ""
+        """Wie dieses Profil heißt. Für die Anzeige und die Meldung danach."""
 
         form.addRow(tr("Drucker"), self.machine_choice)
         form.addRow(tr("Grundprofil"), self.process_choice)
-        form.addRow(tr("Filament"), self.filament_choice)
+        form.addRow(tr("Filament"), filament_row)
 
         # Je Materialslot eine Zeile — aber nur, wenn es mehr als einen gibt.
         # Ein einfarbiges Teil hat eine Farbe und braucht keine Liste darüber;
@@ -2763,7 +2788,7 @@ class PrintSettingsDialog(QDialog):
             self._slicer_path,
             self.machine_choice.currentData(),
             self.process_choice.currentData(),
-            self.filament_choice.currentData(),
+            self._filament_profile,
         )
 
     def _check_print_result(self) -> None:
@@ -2796,7 +2821,8 @@ class PrintSettingsDialog(QDialog):
         es auch für die Wege, die vorzeitig zurückkehren.
         """
         self._profiles = []
-        for combo in (self.machine_choice, self.process_choice, self.filament_choice):
+        self._forget_filament_profile()
+        for combo in (self.machine_choice, self.process_choice):
             with QSignalBlocker(combo):
                 combo.clear()
             combo.setEnabled(False)
@@ -2930,7 +2956,6 @@ class PrintSettingsDialog(QDialog):
                 self.machine_choice.addItem(already_shown, already)
         self.machine_choice.setEnabled(True)
         self.process_choice.setEnabled(True)
-        self.filament_choice.setEnabled(True)
 
         chosen, process = slicer_profiles.match(found, self.session.profile.printer)
         # **Eine getroffene Wahl bleibt stehen.** Die Profilsuche läuft in einem
@@ -3148,32 +3173,31 @@ class PrintSettingsDialog(QDialog):
         ]
 
     def _fill_filaments(self, machine: slicer_profiles.SlicerProfile | None) -> None:
-        """Die Filamentprofile zum gewählten Drucker, vorbelegt nach Material.
+        """Das Filamentprofil zum gewählten Drucker zuordnen und benennen.
 
         Die Vorgabe ist die Grundausführung des eingestellten Materials —
         „Elegoo PETG", nicht „Elegoo PETG Translucent". Von einem Material
         liegen mehrere Ausführungen im Bestand, und sie fahren verschieden:
         das transluzente will 255 Grad, das PRO 240 bei halbem Volumenstrom.
-        Wer eine besondere Spule hat, stellt sie hier ein.
+        **Wer eine besondere Spule hat, sagt es am Filament** — im
+        Filamentwähler unter *Slicer-Profil*; von dort trägt die
+        Färbe-Operation es in den Slot, und die Übergabe nimmt es je Slot.
+        Hier steht seit dem 08.09.2026 nur noch, welches es geworden ist.
         """
         fitting = self._filaments_worth_showing(machine)
-        self.filament_choice.clear()
-        for entry in fitting:
-            self.filament_choice.addItem(entry.title(tr("eigenes")), str(entry.path))
-
         if not fitting:
-            # Nichts zu wählen heißt nichts vorzuwählen. Die Suche darunter lief
-            # trotzdem und war zweimal falsch: wirkungslos, weil ``findData``
-            # danach eine leere Liste absucht, und teuer, weil sie ohne Drucker
-            # den ganzen Bestand aufschlägt statt der Handvoll passender. Beim
+            # Nichts gefunden heißt nichts zuzuordnen. Die Suche darunter lief
+            # früher trotzdem und war zweimal falsch: wirkungslos, weil sie
+            # eine leere Liste absucht, und teuer, weil sie ohne Drucker den
+            # ganzen Bestand aufschlägt statt der Handvoll passender. Beim
             # vorgegebenen „Allgemeinen FDM-Drucker" — also beim ersten Öffnen,
             # bevor jemand einen Drucker eingestellt hat — stand die Anwendung
             # damit minutenlang.
-            self.filament_choice.setCurrentIndex(-1)
-            # Ein leeres Feld ist eine Sackgasse; der Platzhalter nennt den
-            # nächsten Schritt (§2.1, Regel 17 in ihrer freundlichen Gestalt).
-            self.filament_choice.setPlaceholderText(
-                tr("Erst einen Drucker wählen — dann stehen die Filamente hier.")
+            self._forget_filament_profile()
+            # Eine leere Zeile ist eine Sackgasse; der Text nennt den nächsten
+            # Schritt (§2.1, Regel 17 in ihrer freundlichen Gestalt).
+            self.filament_shown.setText(
+                tr("Erst einen Drucker wählen — dann steht hier das Filament.")
             )
             for _label, box in self.slot_rows:
                 box.clear()
@@ -3185,17 +3209,22 @@ class PrintSettingsDialog(QDialog):
         wanted = self.ui_settings.slicer_filament_per_material.get(
             material, self.ui_settings.slicer_base_filament
         )
-        index = self.filament_choice.findData(wanted) if wanted else -1
-        if index < 0 and wanted:
-            index = self.filament_choice.findText(wanted)
-        if index < 0:
-            material = slicer_keys.filament_type(self.session.profile.material.id)
-            preferred = slicer_profiles.match_filament(
-                self._profiles, machine, material, self._profile_roots()
+        chosen = next((entry for entry in fitting if str(entry.path) == wanted), None)
+        if chosen is None and wanted:
+            # Ein Projekt kann den **Namen** tragen statt des Pfades (Regel 12);
+            # dann gilt er genauso.
+            chosen = next(
+                (entry for entry in fitting if entry.title(tr("eigenes")) == wanted), None
             )
-            if preferred is not None:
-                index = self.filament_choice.findData(str(preferred.path))
-        self.filament_choice.setCurrentIndex(max(index, 0))
+        if chosen is None:
+            preferred = slicer_profiles.match_filament(
+                self._profiles,
+                machine,
+                slicer_keys.filament_type(material),
+                self._profile_roots(),
+            )
+            chosen = preferred if preferred is not None else fitting[0]
+        self._remember_filament_profile(chosen)
 
         # Dieselbe Liste in jede Slot-Zeile. Vorbelegt mit dem, was das Projekt
         # dazu sagt; ohne Angabe mit dem Filament der Platte.
@@ -3207,7 +3236,36 @@ class PrintSettingsDialog(QDialog):
             remembered = self._profiles_for(self._plate_slots())
             name = remembered[position] if position < len(remembered) else ""
             found = self._filament_index(box, name)
-            box.setCurrentIndex(found if found >= 0 else self.filament_choice.currentIndex())
+            box.setCurrentIndex(found if found >= 0 else fitting.index(chosen))
+
+    def _remember_filament_profile(self, entry: slicer_profiles.SlicerProfile) -> None:
+        """Das zugeordnete Profil festhalten, anzeigen und übernehmbar machen."""
+        self._filament_profile = str(entry.path)
+        self._filament_title = entry.title(tr("eigenes"))
+        self.filament_shown.setText(self._filament_title)
+        self.adopt_filament.setEnabled(True)
+        # Der gesperrte Zustand hinterlässt seine Begründung an drei Stellen;
+        # sie muss wieder weg, sonst erklärt der Knopf, warum er nicht kann,
+        # während er kann.
+        what = str(tr("Die Werte dieses Profils in die Einstellungen holen."))
+        self.adopt_filament.setToolTip(what)
+        self.adopt_filament.setStatusTip(what)
+        self.adopt_filament.setAccessibleDescription(what)
+
+    def _forget_filament_profile(self) -> None:
+        """Kein Profil zugeordnet — dann ist die Handlung daneben auch keine.
+
+        Der Knopf wird gesperrt und nicht bloß wirkungslos: Alle drei Kanäle
+        (Regel 18), und der Grund steht am Zustand statt an der Handlung.
+        """
+        self._filament_profile = ""
+        self._filament_title = ""
+        self.filament_shown.setText("")
+        why = str(tr("Erst ein Filament, dann seine Werte."))
+        self.adopt_filament.setEnabled(False)
+        self.adopt_filament.setToolTip(why)
+        self.adopt_filament.setStatusTip(why)
+        self.adopt_filament.setAccessibleDescription(why)
 
     def _build_slot_rows(self, form: QFormLayout) -> None:
         """Eine Auswahl je Slot, sobald ein Teil mehrere Farben trägt (§20).
@@ -3477,8 +3535,8 @@ class PrintSettingsDialog(QDialog):
             .replace("{profile}", chosen)
         )
 
-    def _filament_chosen(self, _index: int) -> None:
-        """Die Werte der gewählten Spule übernehmen (§29).
+    def _adopt_filament_values(self) -> None:
+        """Die Werte des zugeordneten Filamentprofils übernehmen (§29).
 
         Solidon kennt „PETG" und bringt dafür einen Startbestand mit — 10 mm³/s
         bei 80 Grad Bett. Der Bestand des Slicers kennt sieben PETG, und das
@@ -3487,11 +3545,13 @@ class PrintSettingsDialog(QDialog):
         sie sah 10 mm³/s, wo 5 galten, fand nichts einzuwenden und ließ ein
         Tempo stehen, das die Düse nicht flüssig bekommt.
 
-        Nur auf ausdrückliche Wahl, nie beim Befüllen der Liste: was ein
-        Projekt mitbringt, gilt (eine Dichtung aus TPU bleibt eine Dichtung aus
-        TPU). Wer eine besondere Spule einlegt, sagt es hier einmal.
+        **Nur auf Klick, nie beim Zuordnen**: was ein Projekt mitbringt, gilt
+        (eine Dichtung aus TPU bleibt eine Dichtung aus TPU). Vor dem
+        08.09.2026 hing das an ``activated`` einer Auswahlliste und meinte
+        dasselbe — die Wahl eines Menschen, nicht jedes Befüllen; jetzt ist es
+        ein Knopf und sagt es damit selbst.
         """
-        chosen = self.filament_choice.currentData()
+        chosen = self._filament_profile
         if not chosen:
             return
         values = slicer_profiles.filament_values(Path(str(chosen)), self._profile_roots())
@@ -3504,9 +3564,7 @@ class PrintSettingsDialog(QDialog):
         self._load_into_editors()
         self._refresh_advice()
         self.state.setText(
-            tr("Werte aus {profile} übernommen.").replace(
-                "{profile}", self.filament_choice.currentText()
-            )
+            tr("Werte aus {profile} übernommen.").replace("{profile}", self._filament_title)
         )
         _log.info("adopted %d values from %s", len(values), chosen)
 
@@ -4203,9 +4261,9 @@ class PrintSettingsDialog(QDialog):
         Gefragt sind dabei die Auswahlfelder und nicht ``_profiles``: Leer ist,
         was der Nutzer leer sieht.
         """
-        if not any(
-            combo.count()
-            for combo in (self.machine_choice, self.process_choice, self.filament_choice)
+        if (
+            not any(combo.count() for combo in (self.machine_choice, self.process_choice))
+            and not self._filament_profile
         ):
             return
         machine = str(self.machine_choice.currentData() or "")
@@ -4213,7 +4271,7 @@ class PrintSettingsDialog(QDialog):
             return
         self.ui_settings.slicer_machine_profile = machine
         self.ui_settings.slicer_base_process = str(self.process_choice.currentData() or "")
-        filament = str(self.filament_choice.currentData() or "")
+        filament = self._filament_profile
         self.ui_settings.slicer_base_filament = filament
         # Zu welchem Drucker die drei gehören. Ohne den Vermerk trägt das
         # nächste Projekt auf einer anderen Maschine dieselben Profile.
@@ -4252,7 +4310,7 @@ class PrintSettingsDialog(QDialog):
             setup,
             machine_profile=str(self.machine_choice.currentData() or ""),
             base_process=str(self.process_choice.currentData() or ""),
-            base_filament=str(self.filament_choice.currentData() or ""),
+            base_filament=self._filament_profile,
         )
 
     def _remember_handover(self, kind: HandoverKind) -> None:

@@ -2001,7 +2001,6 @@
   "Erst aushöhlen": "Évider d'abord",
   "Erst das Gelenk anklicken, dann das Ende des Knochens.": "Cliquez d'abord l'articulation, puis l'extrémité de l'os.",
   "Erst ein geschlossener Umriss wird ein Körper.": "Seul un contour fermé devient un corps.",
-  "Erst einen Drucker wählen — dann stehen die Filamente hier.": "Choisissez d'abord une imprimante — les filaments apparaîtront alors ici.",
   "Erst einen Punkt setzen, dann das Maß eintippen.": "Poser d'abord un point, puis taper la cote.",
   "Erst einen geschlossenen Umriss zeichnen.": "Dessinez d’abord un contour fermé.",
   "Erst nach Ihrem Klick online": "En ligne seulement après votre clic",
@@ -4556,5 +4555,9 @@
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "Le corps est d'un seul tenant ; il n'y a rien à séparer.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "Le corps a moins de pièces que le nombre demandé.",
   "{count} weitere Teile blieben im letzten Objekt beieinander.": "{count} autres pièces sont restées ensemble dans le dernier objet.",
-  "Gefunden": "Trouvé"
+  "Gefunden": "Trouvé",
+  "Werte übernehmen": "Reprendre les valeurs",
+  "Erst einen Drucker wählen — dann steht hier das Filament.": "Choisissez d'abord une imprimante — le filament apparaîtra ici.",
+  "Erst ein Filament, dann seine Werte.": "D'abord un filament, ensuite ses valeurs.",
+  "Die Werte dieses Profils in die Einstellungen holen.": "Reprendre les valeurs de ce profil dans les réglages."
 }

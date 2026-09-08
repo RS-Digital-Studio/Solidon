@@ -2001,7 +2001,6 @@
   "Erst aushöhlen": "Esvaziar primeiro",
   "Erst das Gelenk anklicken, dann das Ende des Knochens.": "Clique primeiro na articulação, depois no fim do osso.",
   "Erst ein geschlossener Umriss wird ein Körper.": "Só um contorno fechado se torna um corpo.",
-  "Erst einen Drucker wählen — dann stehen die Filamente hier.": "Escolha primeiro uma impressora — depois os filamentos aparecem aqui.",
   "Erst einen Punkt setzen, dann das Maß eintippen.": "Colocar primeiro um ponto, depois escrever a medida.",
   "Erst einen geschlossenen Umriss zeichnen.": "Primeiro, desenhe um contorno fechado.",
   "Erst nach Ihrem Klick online": "Online só depois do seu clique",
@@ -4556,5 +4555,9 @@
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "O corpo é de uma só peça; não há nada para separar.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "O corpo tem menos peças do que a quantidade pede.",
   "{count} weitere Teile blieben im letzten Objekt beieinander.": "Outras {count} peças ficaram juntas no último objeto.",
-  "Gefunden": "Encontrado"
+  "Gefunden": "Encontrado",
+  "Werte übernehmen": "Aplicar valores",
+  "Erst einen Drucker wählen — dann steht hier das Filament.": "Escolha primeiro uma impressora — depois o filamento aparece aqui.",
+  "Erst ein Filament, dann seine Werte.": "Primeiro um filamento, depois os seus valores.",
+  "Die Werte dieses Profils in die Einstellungen holen.": "Trazer os valores deste perfil para as definições."
 }

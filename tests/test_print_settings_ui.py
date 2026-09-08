@@ -227,9 +227,9 @@ def test_adopting_an_own_filament_includes_its_installed_base(
     monkeypatch.setattr(sp, "install_root", lambda _executable: installed)
     monkeypatch.setattr(sp, "user_roots", lambda _flavour, _executable: [user])
     dialog._slicer_path = executable
-    dialog.filament_choice.addItem("Meine Spule", str(own))
-    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
-    dialog.filament_choice.activated.emit(dialog.filament_choice.currentIndex())
+    dialog._filament_profile = str(own)
+    dialog._filament_title = "Meine Spule"
+    dialog._adopt_filament_values()
     assert dialog.settings.temperature.nozzle == 250
     assert dialog.settings.temperature.bed == 80
     assert dialog.settings.filament.flow_ratio == pytest.approx(0.96)
@@ -436,10 +436,10 @@ def test_choosing_a_filament_adopts_its_values(dialog: PrintSettingsDialog, tmp_
         ),
         encoding="utf-8",
     )
-    dialog.filament_choice.addItem("Spule", str(datei))
-    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
+    dialog._filament_profile = str(datei)
+    dialog._filament_title = "Spule"
 
-    dialog._filament_chosen(dialog.filament_choice.currentIndex())
+    dialog._adopt_filament_values()
 
     assert dialog.settings.filament.max_flow == 5.0
     assert dialog.settings.temperature.nozzle == 255
@@ -1443,8 +1443,7 @@ def test_the_chosen_profiles_are_kept_without_a_slicer_run(qt_app: QApplication)
     dialog.machine_choice.setCurrentIndex(dialog.machine_choice.count() - 1)
     dialog.process_choice.addItem("0.20 fein", "C:/profile/process/fein.json")
     dialog.process_choice.setCurrentIndex(dialog.process_choice.count() - 1)
-    dialog.filament_choice.addItem("PETG PRO", "C:/profile/filament/petg-pro.json")
-    dialog.filament_choice.setCurrentIndex(dialog.filament_choice.count() - 1)
+    dialog._filament_profile = "C:/profile/filament/petg-pro.json"
 
     dialog.reject()
 
@@ -1893,8 +1892,8 @@ def test_an_unknown_printer_leaves_the_dialog_responsive(dialog: PrintSettingsDi
     dialog._fill_filaments(None)
 
     assert time.perf_counter() - begonnen < 0.5, "ohne Drucker wird nichts aufgeschlagen"
-    assert dialog.filament_choice.count() == 0
-    assert dialog.filament_choice.currentIndex() == -1, "und nichts steht da, was nicht da ist"
+    assert dialog._filament_profile == "", "und nichts steht da, was nicht da ist"
+    assert not dialog.adopt_filament.isEnabled(), "ohne Profil ist die Handlung keine"
 
 
 def test_a_connector_of_infill_reaches_the_advice_list(
@@ -2050,7 +2049,7 @@ def test_switching_the_slicer_empties_the_profile_choice(
     assert dialog.machine_choice.count() == 0, "kein Orca-Profil für CuraEngine"
     assert not dialog.machine_choice.isEnabled()
     assert dialog.process_choice.count() == 0
-    assert dialog.filament_choice.count() == 0
+    assert dialog._filament_profile == ""
     assert dialog._profiles == []
 
     # Und die zweite Zusicherung: was nicht gewählt werden kann, wird nicht

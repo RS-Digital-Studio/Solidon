@@ -2001,7 +2001,6 @@
   "Erst aushöhlen": "Hollow it first",
   "Erst das Gelenk anklicken, dann das Ende des Knochens.": "Click the joint first, then the end of the bone.",
   "Erst ein geschlossener Umriss wird ein Körper.": "Only a closed outline becomes a body.",
-  "Erst einen Drucker wählen — dann stehen die Filamente hier.": "Choose a printer first — then the filaments appear here.",
   "Erst einen Punkt setzen, dann das Maß eintippen.": "Set a point first, then type the measure.",
   "Erst einen geschlossenen Umriss zeichnen.": "First draw a closed outline.",
   "Erst nach Ihrem Klick online": "Online only after your click",
@@ -4556,5 +4555,9 @@
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "The body is a single piece; there is nothing to split.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "The body has fewer parts than the count asks for.",
   "{count} weitere Teile blieben im letzten Objekt beieinander.": "{count} further parts stayed together in the last object.",
-  "Gefunden": "Found"
+  "Gefunden": "Found",
+  "Werte übernehmen": "Adopt values",
+  "Erst einen Drucker wählen — dann steht hier das Filament.": "Choose a printer first — then the filament appears here.",
+  "Erst ein Filament, dann seine Werte.": "A filament first, then its values.",
+  "Die Werte dieses Profils in die Einstellungen holen.": "Bring this profile's values into the settings."
 }
