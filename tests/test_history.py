@@ -18,6 +18,7 @@ from app.core.types import (
     BaseParams,
     ChatEntry,
     Document,
+    DocumentState,
     FeatureRef,
     Fit,
     OpContext,
@@ -25,8 +26,10 @@ from app.core.types import (
     OpResult,
     Origin,
     Parameter,
+    PrintSettings,
     Profile,
     SolverInfo,
+    SpoolBinding,
 )
 from app.i18n import _
 
@@ -834,6 +837,58 @@ def test_operations_and_changes_travel_in_one_transaction(history: History) -> N
     history.undo()
     assert len(history.operations) == before
     assert "width" not in document.parameters, "beide Hälften oder keine"
+
+
+def test_spool_assignment_undo_restores_geometry_and_binding_but_keeps_print_values(history):
+    """Zwei gleich etikettierte Spulen bleiben auch nach einem einzigen Strg+Z verschieden."""
+    first = SpoolBinding("spool-a", "PETG Weiß", material_type="PETG")
+    second = dataclasses.replace(first, spool_identifier="spool-b")
+    document = history.document
+    document.print_settings = PrintSettings(spool_bindings=(first,), inventory_project_id="project")
+    create(history)
+    history.apply(
+        _("Filament zuweisen"),
+        [OperationDraft(op="make_object")],
+        changes=change_for(document, spool_bindings=(second,)),
+    )
+    assert len(history.operations) == 2
+    assert document.print_settings.spool_bindings == (second,)
+    document.print_settings = dataclasses.replace(document.print_settings, quality="fine")
+
+    history.undo()
+    assert len(history.operations) == 1
+    assert document.print_settings.spool_bindings == (first,)
+    assert document.print_settings.quality == "fine"
+    assert document.print_settings.inventory_project_id == "project"
+    history.redo()
+    assert len(history.operations) == 2
+    assert document.print_settings.spool_bindings == (second,)
+    assert document.print_settings.quality == "fine"
+    assert document.print_settings.inventory_project_id == "project"
+
+
+def test_empty_spool_binding_state_clears_and_undo_restores(history):
+    first = SpoolBinding("spool-a", "PETG Weiß", material_type="PETG")
+    document = history.document
+    document.print_settings = PrintSettings(spool_bindings=(first,))
+    history.apply(_("Zuordnung aufheben"), changes=change_for(document, spool_bindings=()))
+    assert document.print_settings.spool_bindings == ()
+    history.undo()
+    assert document.print_settings.spool_bindings == (first,)
+
+
+def test_old_document_state_leaves_current_spool_binding_untouched(history):
+    from app.core.scene.history import restore
+    from app.core.scene.serialise import state_from_data, state_to_data
+
+    first = SpoolBinding("spool-a", "PETG Weiß", material_type="PETG")
+    history.document.print_settings = PrintSettings(spool_bindings=(first,))
+    old = state_from_data({"material": "pla"})
+    assert old.spool_bindings is None
+    assert "spool_bindings" not in state_to_data(old)
+    assert state_to_data(DocumentState(spool_bindings=())) == {"spool_bindings": []}
+    restore(history.document, old)
+    assert history.document.print_settings.spool_bindings == (first,)
 
 
 def test_a_transaction_without_operations_and_without_changes_is_refused(

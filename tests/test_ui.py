@@ -7110,6 +7110,8 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Der neue Rückweg ist in der Anwendung angeschlossen, nicht nur am Dialog."""
+    from types import SimpleNamespace
+
     from PySide6.QtCore import QObject, Signal
 
     from app.core.knowledge import print_settings
@@ -7128,6 +7130,7 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
 
         sliced = Signal(object)
         reported = Signal(object)
+        usage_changed = Signal()
         setupRequested = Signal()  # noqa: N815 - bildet das echte Qt-Signal nach
         filamentsRequested = Signal()  # noqa: N815 - dasselbe für den Weg zu den Spulen
 
@@ -7142,6 +7145,7 @@ def test_a_failed_slicer_precheck_reaches_the_main_report(
             super().__init__(parent)
             self.slice_result = slice_result
             self.settings = print_settings.resolve(session.profile)
+            self.usage_notice = SimpleNamespace(changed=self.usage_changed, requests={})
 
         def exec(self) -> int:
             self.reported.emit([finding])

@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-08 | [Filamentlager — Review und vollständiger Anschluss (08.09.2026)](#filamentlager--review-und-vollständiger-anschluss-08092026) |
 | 2026-09-08 | [Bauplan v12 — vollständiger Abgleich (08.09.2026)](#bauplan-v12--vollständiger-abgleich-08092026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
 | ohne Datum | [Referenzkorpus und Passungen vervollständigt](#referenzkorpus-und-passungen-vervollständigt) |
@@ -26483,3 +26484,36 @@ Torlauf aus `output/setup-audit-2026-09-08/BERICHT.md` herangezogen: 11.791
 bestandene Tests, 19 übersprungene, 34 Leistungstests und übergeordneter Exit 0.
 Die eigenen Dokuprüfungen liefen danach auf dem endgültig korrigierten Stand.
 Das ist keine erneute vollständige App-Abnahme der parallel geänderten Dateien.
+
+## Filamentlager — Review und vollständiger Anschluss (08.09.2026)
+
+<a id="rm-146"></a>
+
+- [x] **RM-146 — Filamentlager und Verbrauch vollständig anschließen.** Zuerst wurde
+  [das Konzept geprüft und präzisiert](konzepte/konzept-filamentlager-2026-09.md#14-review-und-präzisierte-verträge),
+  anschließend vollständig umgesetzt. Spulenkennung, Druckfilament und Slicerprofil sind getrennt;
+  alte Kataloge verlieren keine Angaben, unbekannte Bestände bleiben unbekannt. Das Projektformat 21
+  ergänzt portable Bindungen; Zuweisung und Bindung werden gemeinsam zurückgenommen.
+- Regal, Suche, Gruppierung, bewusster Slicerimport, Spulenkopie, Archiv, Mengen und optionale
+  Zusatzangaben sind über Startseite und Projekt erreichbar. Die Schnellauswahl berücksichtigt
+  Körper und Flächen sowie die Achtergrenze. Bestand und Fokus sind ohne Farbwahrnehmung ablesbar.
+- Erfolgreiche 3MF- und Slicerwege bieten dieselbe Buchung an. Das atomare Journal hält
+  Mehrspulenbuchungen, G-Code-Korrekturen, ausdrückliche Wiederholungsdrucke und Rücknahmen fest;
+  neuere Bestandsfeststellungen bleiben geschützt. Unbelegte Einzelmengen werden nicht verteilt.
+- Druckvorprüfung, tatsächliche Werkzeugplätze je Platte, Erststart, Handbuchtexte,
+  HTML-Referenzen und alle fünf Übersetzungskataloge sind angeschlossen. Native Bilder belegen
+  Regal, Journal, Buchungsdialog und schmale Auswahl; die Startseite passt bei 1536 × 740 ohne Scrollen.
+
+**Nachweis:** vollständige geteilte Suite mit **12.049 bestandenen und 19 übersprungenen Tests**,
+**34 bestandene Leistungstests**, beide Testausgänge und der Schlossprozess jeweils **0**.
+Ruff, Formatprüfung und mypy sind für den Filamentstand grün. Die im ersten Tor gefundenen
+Anschlusslücken bei Fehlerklassifikation, Signalfreigabe, Lizenzmanifest, Referenz, Tastatur,
+Layout und Fensterabbau wurden behoben; die spätere vollständige Suite lief ohne fehlerhaften Prozess.
+
+Die Protokolle und Inhaltsabgleiche liegen lokal unter
+`.claude/.state/filament-inventory-integration-2026-09-08/verified/`.
+Verwendet wurde der gemeinsame Torlauf `1129` vom 08.09.2026 ab 20:28 Uhr.
+Parallel danach entstandene Mechanik- und Slicerergänzungen gehören zu anderen Arbeitseinheiten.
+Die Filamentänderungen wurden über gesicherte Inhalte abgegrenzt; gemeinsame Typen und Kataloge
+werden nur mit ihren eigenen Änderungen committet. Der zusätzliche Anschlusslauf für Lager,
+Verbrauch, Projekte und Materialprofile bestand mit **247 Tests, 1 übersprungen**.

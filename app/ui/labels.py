@@ -13,7 +13,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import date
 from typing import Any, Final, Literal
 
-from PySide6.QtCore import QDate, QLocale, QObject, QSize, Qt, Signal
+from PySide6.QtCore import QDate, QDateTime, QLocale, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QShowEvent, QValidator
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
 
@@ -1666,6 +1666,14 @@ def feature_label(feature_id: FeatureId, feature: Feature) -> str:
     measure = feature_measure(feature)
     name = feature_name(feature_id, feature)
     return f"{name} · {measure}" if measure else name
+
+
+def local_timestamp(value: str) -> str:
+    """Einen gespeicherten ISO-Zeitpunkt in lokaler Zeit und Anzeigesprache ausgeben."""
+    instant = QDateTime.fromString(value, Qt.DateFormat.ISODateWithMs)
+    if not instant.isValid():
+        return value
+    return QLocale(get_language()).toString(instant.toLocalTime(), QLocale.FormatType.ShortFormat)
 
 
 def calendar_date(value: date | None) -> str:

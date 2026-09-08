@@ -1,6 +1,6 @@
 """Der erste Start (Bauplan §38).
 
-Sprache, Drucker, die im Slicer eingelegten Filamente, ein Blick auf die
+Sprache, Drucker, die im Slicer gewählten Filamentprofile, ein Blick auf die
 externen Programme und der Zugang für den Chat. Alles überspringbar, alles
 später wieder erreichbar — ein Assistent, der zu Ende gebracht werden muss,
 bevor irgendetwas geht, ist eine Wand, kein Willkommen.
@@ -277,7 +277,8 @@ class FirstRunDialog(QDialog):
         optional_hint = QLabel(
             tr(
                 "Slicer, Bildgenerierung und Chat erweitern Solidon. Zum Konstruieren "
-                "und Bearbeiten brauchen Sie nichts davon."
+                "und Bearbeiten brauchen Sie nichts davon. Filamentprofile aus Ihrem "
+                "Slicer können Sie später im Filamentlager als eigene Spulen übernehmen."
             ),
             optional,
         )
@@ -459,15 +460,16 @@ class FirstRunDialog(QDialog):
         self._say_why_locked("")
         self.chat_state.setText(found.chat)
         if found.filaments:
-            filaments.synchronise(list(found.filaments))
+            # Gefundene Profile sind Vorschläge. Erst die bewusste Übernahme
+            # im Filamentlager legt eine physische Spule an.
             mapped_materials = tuple(
                 profiles.material_id_for_type(entry.material_type) for entry in found.filaments
             )
             material_ids = set(mapped_materials)
-            # Ein eindeutiger eingelegter Typ ist die bessere Vorgabe als eine
+            # Ein eindeutiger Profiltyp ist die bessere Vorgabe als eine
             # zweite Frage. Bei PLA und TPU nebeneinander wäre jede Wahl ein
             # Raten; dasselbe gilt für einen Typ, den Solidon nicht kennt.
-            # Darum müssen **alle** Spulen zugeordnet sein, nicht nur der
+            # Darum müssen **alle** Profile zugeordnet sein, nicht nur der
             # bekannte Rest nach dem Wegwerfen leerer Treffer.
             if mapped_materials and all(mapped_materials) and len(material_ids) == 1:
                 self.settings.material = material_ids.pop()
@@ -566,7 +568,7 @@ class FirstRunDialog(QDialog):
         settings.language = str(self.language.currentData())
         settings.printer = str(self.printer.currentData())
         # Keine Frage mehr, aber weiterhin ein vollständiger Projektvorgabensatz:
-        # Bis eine Spule ihren Typ liefert, gilt die dokumentierte Kernvorgabe.
+        # Bis ein Filamentprofil seinen Typ liefert, gilt die dokumentierte Kernvorgabe.
         settings.material = settings.material or profiles.DEFAULT_MATERIAL
         settings.first_run_done = True
         return settings
@@ -618,7 +620,7 @@ class FirstRunDialog(QDialog):
 
 
 def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...]]:
-    """Drucker und eingelegte Filamente des installierten Slicers (§2.3, §29).
+    """Drucker und gewählte Filamentprofile des installierten Slicers (§2.3, §29).
 
     Der Dialog meldet in derselben Zeile „Slicer gefunden" und schlug daneben
     den allgemeinen 220er vor, während der Bestand des Slicers den richtigen
@@ -628,6 +630,8 @@ def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...
     Findet sich nichts, bleibt es bei der Vorgabe: eine falsche Vorauswahl
     sähe aus wie eine Entscheidung.
     """
+    from app.ui.filament_picker import configured_spools
+
     slicer = tools.by_id("slicer")
     found = slicer.path() if slicer is not None else None
     if found is None:
@@ -638,22 +642,7 @@ def _defaults_from_slicer() -> tuple[str, tuple[filaments.CatalogueFilament, ...
             return "", ()
         machine = slicer_profiles.chosen_machine(flavour, found)
         printer = slicer_profiles.printer_for(machine, profiles.printer_profiles())
-        loaded = slicer_profiles.configured_filaments(flavour, found)
-        counts: dict[str, int] = {}
-        for entry in loaded:
-            counts[entry.profile] = counts.get(entry.profile, 0) + 1
-        catalogue = tuple(
-            filaments.CatalogueFilament(
-                name=entry.profile
-                if counts[entry.profile] == 1
-                else f"{entry.profile} ({entry.colour})",
-                colour=entry.colour,
-                material_type=entry.material_type,
-                slicer_profile=entry.profile,
-            )
-            for entry in loaded
-        )
-        return printer, catalogue
+        return printer, configured_spools()
     except OSError as problem:
         _log.debug("could not ask the slicer for its defaults: %s", problem)
         return "", ()

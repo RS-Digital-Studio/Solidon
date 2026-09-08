@@ -34,6 +34,11 @@ selbst. Hier steht, **was wo liegt**.
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1). Jede trägt mindestens eine `Action` — ein Fehler endet nie mit „fehlgeschlagen" |
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==` |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — es gibt kein `eval` |
+| `filament_usage.py` | Ausgabeumfang und Verbrauchsbedarf (§20, §29): stabile Vorbereitungsfingerabdrücke, explizite Spulenbindungen und werkzeugweise G-Code-Mengen; das Journal schreibt `knowledge/filaments.py` |
+
+Bei gebundenen externen Filamentprofilen gelten Dichte und Durchmesser ohne
+belegten Snapshot als unbekannt. Ein ausdrücklicher Filament-Override liefert
+beide Kennwerte; direkte G-Code-Grammwerte benötigen keine Umrechnung.
 
 Flächen- und Volumenanzeigen bewahren kleine Nichtnullwerte: Unter einem
 Quadrat- beziehungsweise Kubikmillimeter wächst die Zahl der Nachkommastellen,

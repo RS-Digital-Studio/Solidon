@@ -132,6 +132,14 @@ class PaintParams(BaseParams):
         placement="advanced",
         doc=_("Herstellerprofil, aus dem der Slicer die Druckwerte dieser Spule übernimmt."),
     )
+    replace_filament: bool = param(
+        title=_("Filament vollständig ersetzen"),
+        default=False,
+        placement="advanced",
+        doc=_(
+            "Übernimmt die gewählte Spule vollständig. Unbekannte Materialwerte bleiben unbekannt."
+        ),
+    )
 
 
 @register_op(
@@ -208,7 +216,11 @@ def paint_slot(ctx: OpContext) -> OpResult:
     #
     # ``assign_slot`` nebenan tat es die ganze Zeit richtig; die
     # Funktion ist von dort und wird jetzt geteilt statt verdoppelt.
-    existing = {entry.index: entry for entry in source.material_slots}.get(params.slot)
+    existing = (
+        None
+        if params.replace_filament
+        else {entry.index: entry for entry in source.material_slots}.get(params.slot)
+    )
     chosen = colour_from(params.colour)
     slots = merged_slots(
         list(source.material_slots),

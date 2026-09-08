@@ -90,7 +90,9 @@ def test_v19_keeps_values_without_inventing_missing_identity() -> None:
         "print_settings": {"slot_overrides": [{"name": "Weiß", "temperature": {"nozzle": 210}}]},
     }
     updated = migrate(data)
-    assert updated["format_version"] == 20
+    from app.core.scene.migrations import FORMAT_VERSION
+
+    assert updated["format_version"] == FORMAT_VERSION
     assert updated["chat"][0]["discarded"] is False
     slot = updated["print_settings"]["slot_overrides"][0]
     assert slot["material"] is None and slot["material_type"] is None

@@ -429,7 +429,9 @@ def test_v19_flat_lid_gains_a_dynamic_fit_with_parameter_undo_and_roundtrip(prof
     )
     project = _load_v19_lid(data, tmp_path / "v19-flat.p3d")
     document = project.document
-    assert document.format_version == 20
+    from app.core.scene.migrations import FORMAT_VERSION
+
+    assert document.format_version == FORMAT_VERSION
     assert len(document.fits) == 1 and document.fits[0].tolerance == "auto:petg"
     assert document.fits[0].when_positive == (3, "collar")
     assert active_fits(document) == []

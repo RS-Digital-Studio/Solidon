@@ -18,8 +18,17 @@ Drei Quellen speisen die Liste, in dieser Reihenfolge:
   Regal liegen. Wer eine davon wählt, bekommt den nächsten freien Slot; Name,
   Typ, Farbe und Herstellerprofil füllt der Wähler in die Nachbarfelder,
   sichtbar und weiter änderbar.
-* **Was übrig bleibt**: die freien Nummern, damit niemand eingesperrt ist,
-  der genau Slot 5 meint (§2.1 — keine Sackgassen).
+* **Die Abwesenheit**: Slot 0, das Teil in seiner eigenen Farbe — und der
+  vorgewählte Wert, damit die Vorgabe nicht ins Leere zeigt.
+
+Hier standen einmal **alle** freien Nummern, damit niemand eingesperrt ist,
+der genau Slot 5 meint. Der Preis war eine Liste voller Plätze, hinter denen
+nichts liegt: neun Einträge, von denen zwei etwas bedeuteten. Seit dem
+08.09.2026 zeigt die Liste Spulen (Robert: „im Projektbaum sollen nur
+Filamente erscheinen, die wir bei Filamenten schon hinzugefügt haben"). Wer
+eine Nummer braucht, die es noch nicht gibt, legt die Spule an — §2.1
+verspricht keine Sackgassen bei rücknehmbaren Handlungen, und eine
+Filamentzuweisung ist eine Op wie jede andere.
 
 Und ganz unten *Neues Filament …*: Name, Typ und Farbe einmal angelegt, stehen
 sie über :func:`app.core.knowledge.filaments.remember` in jedem Projekt zur
@@ -29,35 +38,44 @@ Wahl.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import replace
+from datetime import date
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QStandardItemModel
+from PySide6.QtCore import QPoint, QSignalBlocker, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QColorDialog,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMenu,
     QPushButton,
+    QScrollArea,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
 
 from app.core import discover, tools
+from app.core.errors import AppError
 from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.handover import detect
 from app.core.knowledge import filaments, profiles
 from app.core.types import MaterialSlot, PrintSettings
 from app.i18n import tr
+from app.ui.dialogs import show_error
+from app.ui.labels import NumberSpin, localised
 from app.ui.overlay import rows_height
-from app.ui.panels import MAX_ROWS, least_height_of, row_height_of, view_chrome
+from app.ui.panels import MAX_ROWS, collapsible, least_height_of, row_height_of, view_chrome
 from app.ui.style import TIGHT, make_primary, set_level
 from app.ui.theme import current_theme, slot_colour, viewport_colours
 
@@ -160,6 +178,40 @@ def known_material_types() -> tuple[str, ...]:
     """Die Materialarten, die Solidon führt, in der Schreibweise des Slicers."""
     return tuple(
         slicer_keys.filament_type(identifier) for identifier in profiles.material_profiles()
+    )
+
+
+def stock_label(entry: filaments.CatalogueFilament) -> str:
+    """Restmenge bleibt auch ohne Farbsehen und Prozentangabe ablesbar."""
+    if entry.remaining_grams is None:
+        return tr("Bestand unbekannt")
+    return tr("{grams} g übrig").format(grams=localised(f"{entry.remaining_grams:.1f}"))
+
+
+def spool_label(entry: filaments.CatalogueFilament) -> str:
+    """Gleiche Etiketten bleiben über Ort, Bestand und Kennung unterscheidbar."""
+    return " · ".join(
+        value
+        for value in (
+            entry.name,
+            entry.material_type or tr("Unbekannt"),
+            stock_label(entry),
+            entry.location,
+            entry.identifier[:8],
+        )
+        if value
+    )
+
+
+def spool_slot(entry: filaments.CatalogueFilament, index: int = 1) -> MaterialSlot:
+    """Die ausdrückliche Spulenwahl als Druckfilament für denselben Exportvertrag."""
+    colour = entry.colour.lstrip("#")
+    return MaterialSlot(
+        index=index,
+        name=entry.name,
+        colour=(int(colour[0:2], 16) / 255, int(colour[2:4], 16) / 255, int(colour[4:6], 16) / 255),
+        material=entry.slicer_profile or None,
+        material_type=entry.material_type or None,
     )
 
 
@@ -353,14 +405,32 @@ def slicer_filaments() -> tuple[slicer_profiles.SlicerProfile, ...]:
         return ()
 
 
-class NewFilamentDialog(QDialog):
-    """Name, Typ, Farbe und optionales Slicerprofil eines Filaments.
+def configured_spools() -> tuple[filaments.CatalogueFilament, ...]:
+    """Nur die im Slicer eingerichteten Filamente besitzen eine belegte Farbe."""
+    slicer = tools.by_id("slicer")
+    executable = slicer.path() if slicer is not None else None
+    if executable is None:
+        return ()
+    flavour = slicer_keys.flavour_of(executable.name)
+    if flavour is None:
+        return ()
+    loaded = slicer_profiles.configured_filaments(flavour, executable)
+    counts: dict[str, int] = {}
+    for entry in loaded:
+        counts[entry.profile] = counts.get(entry.profile, 0) + 1
+    return tuple(
+        filaments.CatalogueFilament(
+            entry.profile if counts[entry.profile] == 1 else f"{entry.profile} ({entry.colour})",
+            entry.colour,
+            entry.material_type,
+            entry.profile,
+        )
+        for entry in loaded
+    )
 
-    Mit ``name``/``colour`` derselbe Dialog fürs **Ändern**: Ein Filament ist
-    sein Name (:func:`filaments.remember` überschreibt die Farbe eines
-    vorhandenen), also ist „Farbe ändern" dasselbe Formular mit ausgefüllten
-    Feldern und nicht ein zweites daneben.
-    """
+
+class NewFilamentDialog(QDialog):
+    """Gemeinsame Eingabe einer Spule; unbekannte Mengen bleiben unbekannt."""
 
     def __init__(
         self,
@@ -369,11 +439,27 @@ class NewFilamentDialog(QDialog):
         colour: str = "",
         material_type: str = "",
         slicer_profile: str = "",
+        entry: filaments.CatalogueFilament | None = None,
     ) -> None:
         super().__init__(parent)
+        self._entry = entry
+        if entry is not None:
+            name, colour, material_type, slicer_profile = (
+                entry.name,
+                entry.colour,
+                entry.material_type,
+                entry.slicer_profile,
+            )
         self.setWindowTitle(tr("Filament ändern") if name else tr("Neues Filament"))
-        self.setMinimumWidth(380)
-        layout = QFormLayout(self)
+        self.resize(500, 570)
+        outer = QVBoxLayout(self)
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        content = QWidget(scroll)
+        layout = QFormLayout(content)
+        layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        scroll.setWidget(content)
+        outer.addWidget(scroll)
 
         self.name = QLineEdit(self)
         self.name.setPlaceholderText(tr("etwa „PETG Rot“"))
@@ -387,8 +473,10 @@ class NewFilamentDialog(QDialog):
         # erreichbar, und wer einen anderen Typ auf der Spule liest, darf ihn
         # weiterhin eintippen.
         self.material_type.addItem(tr("Unbekannt"), "")
-        for identifier, entry in profiles.material_profiles().items():
-            self.material_type.addItem(str(entry.title), slicer_keys.filament_type(identifier))
+        for identifier, material_profile in profiles.material_profiles().items():
+            self.material_type.addItem(
+                str(material_profile.title), slicer_keys.filament_type(identifier)
+            )
         if material_type:
             position = next(
                 (
@@ -415,6 +503,62 @@ class NewFilamentDialog(QDialog):
         self.colour.clicked.connect(self._pick_colour)
         layout.addRow(tr("Farbe"), self.colour)
 
+        stock = QWidget(self)
+        stock_layout = QVBoxLayout(stock)
+        stock_layout.setContentsMargins(0, 0, 0, 0)
+        self.stock_known = QCheckBox(tr("Restmenge bekannt"), stock)
+        self.remaining = NumberSpin(stock)
+        self.remaining.setRange(0, 1000000)
+        self.remaining.setDecimals(1)
+        self.remaining.setSuffix(f" {tr('g')}")
+        self.remaining.setAccessibleName(tr("Restmenge"))
+        self.stock_slider = QSlider(Qt.Orientation.Horizontal, stock)
+        self.stock_slider.setRange(0, 1000)
+        self.stock_slider.setAccessibleName(tr("Ungefähr noch"))
+        self.stock_hint = QLabel(stock)
+        self.stock_hint.setWordWrap(True)
+        for widget in (self.stock_known, self.remaining, self.stock_slider, self.stock_hint):
+            stock_layout.addWidget(widget)
+        self.full_spool_button = QPushButton(tr("Als volle Spule eintragen"), stock)
+        self.full_spool_button.clicked.connect(self._set_full_spool)
+        stock_layout.addWidget(self.full_spool_button)
+        layout.addRow(tr("Bestand"), stock)
+
+        self.more = QWidget(self)
+        details = QFormLayout(self.more)
+        details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        self.spool_weight = NumberSpin(self)
+        self.spool_weight.setRange(0, 1000000)
+        self.spool_weight.setSpecialValueText(tr("Unbekannt"))
+        self.spool_weight.setSuffix(f" {tr('g')}")
+        details.addRow(tr("Nennfüllung"), self.spool_weight)
+        self.diameter = NumberSpin(self)
+        self.diameter.setRange(0, 100)
+        self.diameter.setDecimals(2)
+        self.diameter.setSpecialValueText(tr("Unbekannt"))
+        self.diameter.setSuffix(f" {tr('mm')}")
+        details.addRow(tr("Durchmesser"), self.diameter)
+        self.location = QLineEdit(self)
+        details.addRow(tr("Lagerort"), self.location)
+        self.bought_on = QLineEdit(self)
+        self.opened_on = QLineEdit(self)
+        for date_input in (self.bought_on, self.opened_on):
+            date_input.setPlaceholderText(tr("JJJJ-MM-TT, freiwillig"))
+        details.addRow(tr("Gekauft am"), self.bought_on)
+        details.addRow(tr("Geöffnet am"), self.opened_on)
+        self.price_known = QCheckBox(tr("Spulenpreis eintragen"), self)
+        details.addRow(self.price_known)
+        self.price = NumberSpin(self)
+        self.price.setRange(0, 1000000)
+        self.price.setDecimals(2)
+        details.addRow(tr("Spulenpreis"), self.price)
+        self.currency = QLineEdit(self)
+        self.currency.setPlaceholderText(tr("Währung, etwa EUR oder USD"))
+        self.currency.setMaxLength(3)
+        details.addRow(tr("Währung"), self.currency)
+        self.note = QLineEdit(self)
+        details.addRow(tr("Notiz"), self.note)
+
         # **Wählbar, nicht nur anzeigbar.** Bis zum 03.09.2026 stand hier ein
         # schreibgeschütztes Feld mit dem Platzhalter „wird bei Übernahme aus
         # dem Slicer gesetzt" — und die Übernahme lief ausschließlich in der
@@ -436,7 +580,12 @@ class NewFilamentDialog(QDialog):
         profile_row.addWidget(self.choose_profile)
         profile_row.addWidget(self.clear_profile)
         self._slicer_profile_label = QLabel(tr("Slicer-Profil"), self)
-        layout.addRow(self._slicer_profile_label, profile_row)
+        details.addRow(self._slicer_profile_label, profile_row)
+        self.more_section = collapsible(tr("Weitere Angaben"), self.more, open_now=False)
+        layout.addRow(self.more_section)
+        self.validation = QLabel(self)
+        self.validation.setWordWrap(True)
+        outer.addWidget(self.validation)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -444,7 +593,7 @@ class NewFilamentDialog(QDialog):
         )
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
-        layout.addRow(buttons)
+        outer.addWidget(buttons)
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         assert self._ok_button is not None
         make_primary(self._ok_button)
@@ -452,10 +601,132 @@ class NewFilamentDialog(QDialog):
         # Gebundene Methode statt Lambda — dasselbe Ring-Muster wie in
         # ``install_dialog._Row``: Das Lambda fing ``self`` am eigenen Kind.
         self.name.textChanged.connect(self._name_changed)
+        if entry is not None:
+            self.remaining.setValue(entry.remaining_grams or 0)
+            self.spool_weight.setValue(entry.spool_grams or 0)
+            self.diameter.setValue(entry.diameter_mm or 0)
+            self.location.setText(entry.location)
+            self.bought_on.setText(entry.bought_on)
+            self.opened_on.setText(entry.opened_on)
+            self.price.setValue(entry.price or 0)
+            self.currency.setText(entry.currency)
+            self.note.setText(entry.note)
+            self.stock_known.setChecked(entry.remaining_grams is not None)
+            self.price_known.setChecked(entry.price is not None)
+        self.stock_known.toggled.connect(self._stock_changed)
+        self.remaining.valueChanged.connect(self._stock_changed)
+        self.spool_weight.valueChanged.connect(self._stock_changed)
+        self.stock_slider.valueChanged.connect(self._slider_changed)
+        self.price_known.toggled.connect(self._validate)
+        for date_editor in (self.bought_on, self.opened_on, self.currency):
+            date_editor.textChanged.connect(self._validate)
+        self._stock_changed()
+        self._validate()
+        for editor, help_text in (
+            (self.remaining, tr("Die vorhandene Filamentmenge ohne das Gewicht der leeren Spule.")),
+            (self.spool_weight, tr("Filamentgewicht der vollen Spule, ohne die leere Spule.")),
+            (self.diameter, tr("Durchmesser des Filamentfadens laut Spulenetikett.")),
+            (self.location, tr("Wo diese einzelne Spule liegt, etwa Schrank oder Kiste.")),
+            (self.bought_on, tr("Kaufdatum der Spule; eine fehlende Angabe bleibt unbekannt.")),
+            (self.opened_on, tr("Wann die Verpackung dieser Spule geöffnet wurde.")),
+            (self.price, tr("Preis dieser ganzen Spule in der daneben eingetragenen Währung.")),
+            (
+                self.currency,
+                tr("Währung des eingetragenen Preises; die Sprache rechnet nichts um."),
+            ),
+            (self.note, tr("Eigene Hinweise zu dieser Spule, etwa Trocknung oder Besonderheiten.")),
+        ):
+            editor.setToolTip(help_text)
+            editor.setStatusTip(help_text)
+            editor.setAccessibleDescription(help_text)
+            label = details.labelForField(editor)
+            if label is not None:
+                label.setToolTip(help_text)
+                label.setStatusTip(help_text)
+                label.setAccessibleDescription(help_text)
         self.name.setFocus()
 
     def _name_changed(self, text: str) -> None:
-        self._ok_button.setEnabled(bool(text.strip()))
+        self._validate()
+
+    def _validate(self, *_args: object) -> None:
+        """Ungültige freiwillige Angaben werden am Feld erklärt."""
+        error = ""
+        for editor in (self.bought_on, self.opened_on):
+            if editor.text().strip():
+                try:
+                    date.fromisoformat(editor.text().strip())
+                except ValueError:
+                    error = tr("Datum als JJJJ-MM-TT eintragen oder das Feld leeren.")
+        priced = self.price_known.isChecked()
+        self.price.setEnabled(priced)
+        self.currency.setEnabled(priced)
+        currency = self.currency.text().strip()
+        if priced and (len(currency) != 3 or not currency.isascii() or not currency.isalpha()):
+            error = tr("Zum Preis eine Währung mit drei Buchstaben eintragen, etwa EUR.")
+        self.validation.setText(error)
+        self._ok_button.setEnabled(bool(self.name.text().strip()) and not error)
+
+    def _stock_changed(self, *_args: object) -> None:
+        """Zahl und Schieber sind zwei Darstellungen desselben Bestands."""
+        known = self.stock_known.isChecked()
+        weight = self.spool_weight.value()
+        self.remaining.setEnabled(known)
+        self.stock_slider.setEnabled(known and weight > 0)
+        self.full_spool_button.setEnabled(weight > 0)
+        self.full_spool_button.setToolTip(
+            tr(
+                "Übernimmt die bekannte Nennfüllung als vorhandene Menge. "
+                "Die Nennfüllung steht unter Weitere Angaben."
+            )
+        )
+        self.full_spool_button.setStatusTip(self.full_spool_button.toolTip())
+        self.full_spool_button.setAccessibleDescription(self.full_spool_button.toolTip())
+        with QSignalBlocker(self.stock_slider):
+            self.stock_slider.setValue(
+                round(1000 * self.remaining.value() / weight) if weight > 0 else 0
+            )
+        if not known:
+            text = tr("Bestand unbekannt")
+        elif weight <= 0:
+            text = tr("Für Prozent und Schieber unter Weitere Angaben die Nennfüllung eintragen.")
+        else:
+            text = tr("{percent} % der Nennfüllung").format(
+                percent=localised(f"{100 * self.remaining.value() / weight:.1f}")
+            )
+        self.stock_hint.setText(text)
+
+    def _slider_changed(self, value: int) -> None:
+        """Eine bewusste Bewegung aktualisiert genau das Grammfeld."""
+        if self.stock_known.isChecked() and self.spool_weight.value() > 0:
+            self.remaining.setValue(self.spool_weight.value() * value / 1000)
+
+    def _set_full_spool(self) -> None:
+        """Erst dieser bewusste Klick macht die bekannte Nennfüllung zum Bestand."""
+        if self.spool_weight.value() > 0:
+            self.stock_known.setChecked(True)
+            self.remaining.setValue(self.spool_weight.value())
+
+    def entry(self) -> filaments.CatalogueFilament:
+        """Vollständige Spule, bei Bearbeitung mit unveränderter Kennung."""
+        name, colour, material_type, slicer_profile = self.filament()
+        base = self._entry or filaments.CatalogueFilament(name, colour)
+        return replace(
+            base,
+            name=name,
+            colour=colour,
+            material_type=material_type,
+            slicer_profile=slicer_profile,
+            remaining_grams=self.remaining.value() if self.stock_known.isChecked() else None,
+            spool_grams=self.spool_weight.value() or None,
+            diameter_mm=self.diameter.value() or None,
+            location=self.location.text().strip(),
+            bought_on=self.bought_on.text().strip(),
+            opened_on=self.opened_on.text().strip(),
+            price=self.price.value() if self.price_known.isChecked() else None,
+            currency=self.currency.text().strip().upper() if self.price_known.isChecked() else "",
+            note=self.note.text().strip(),
+        )
 
     def _choose_slicer_profile(self) -> None:
         """Den Bestand des Slicers aufschlagen und eines auswählen."""
@@ -543,6 +814,7 @@ class FilamentField(QComboBox):
     #: Nachbarfelder ein. Ein Signal und kein Griff in fremde Widgets: Wer
     #: die Felder besitzt, ist der Dialog, und er entscheidet, ob es sie gibt.
     filamentChosen = Signal(str, str, str, str)
+    spoolChosen = Signal(object)
 
     def __init__(
         self,
@@ -550,9 +822,11 @@ class FilamentField(QComboBox):
         slots: Sequence[MaterialSlot] = (),
         parent: QWidget | None = None,
         limit: int = 8,
+        whole_body: bool = False,
     ) -> None:
         super().__init__(parent)
         self._limit = limit
+        self._whole_body = whole_body
         self._slots = {int(entry.index): entry for entry in slots}
         #: Die zuletzt wirklich gewählte Zeile — der Rückweg, wenn „Neues
         #: Filament …" abgebrochen wird (UI-24).
@@ -599,39 +873,67 @@ class FilamentField(QComboBox):
         #    05.09.2026, UI-25).
         body_taken = set(taken)
         for filament in filaments.catalogue():
-            if any(entry.name == filament.name for entry in self._slots.values()):
-                continue
-            free = self._free_slot(taken)
+            identity = threemf.slot_identity(spool_slot(filament))
+            matching = next(
+                (
+                    entry.index
+                    for entry in self._slots.values()
+                    if entry.index < self._limit and threemf.slot_identity(entry) == identity
+                ),
+                None,
+            )
+            free = matching if matching is not None else self._free_slot(taken)
             if free is not None:
                 taken.add(free)
                 self.addItem(
                     swatch(filament.colour),
-                    self._label(free, filament.name, filament.material_type),
+                    self._label(free, spool_label(filament)),
                     free,
                 )
             else:
                 self.addItem(
                     swatch(filament.colour),
-                    self._unnumbered_label(filament.name, filament.material_type),
+                    spool_label(filament),
                     None,
                 )
-                model = self.model()
-                if self._free_slot(body_taken) is None and isinstance(model, QStandardItemModel):
-                    # Alle Nummern trägt der Körper selbst — dann gibt es für
-                    # eine weitere Spule wirklich keinen Platz.
-                    model.item(self.count() - 1).setEnabled(False)
+                if self._free_slot(body_taken) is None and not self._whole_body:
+                    self.setItemData(
+                        self.count() - 1,
+                        tr(
+                            "Alle Filamente dieses Körpers sind belegt. "
+                            "Beim Wählen ein vorhandenes Filament zum Ersetzen bestimmen."
+                        ),
+                        int(Qt.ItemDataRole.ToolTipRole),
+                    )
             self.setItemData(self.count() - 1, filament.colour, _COLOUR_ROLE)
             self.setItemData(self.count() - 1, filament.name, _NAME_ROLE)
             self.setItemData(self.count() - 1, filament.material_type, _MATERIAL_TYPE_ROLE)
             self.setItemData(self.count() - 1, filament.slicer_profile, _PROFILE_ROLE)
+            self.setItemData(self.count() - 1, filament.identifier, _ID_ROLE)
 
-        # 3. Was danach noch frei ist — für den, der genau eine Nummer meint.
-        for index in range(self._limit):
-            if index in taken:
+        # 3. Und die Abwesenheit: „Ohne Filament — Farbe des Teils".
+        #
+        # **Hier standen einmal alle freien Nummern**, von „Filament 1" bis
+        # zur Obergrenze — für den, der genau eine Nummer meint. Der Preis war
+        # eine Liste voller Plätze, hinter denen nichts liegt: Neun Einträge,
+        # von denen zwei etwas bedeuteten. „Im Projektbaum sollen nur
+        # Filamente erscheinen, die wir bei Filamenten schon hinzugefügt
+        # haben" (Robert, 08.09.2026).
+        #
+        # Slot 0 bleibt, denn er ist kein Platz, sondern eine Angabe: das Teil
+        # in seiner eigenen Farbe. Ohne ihn ließe sich ein einmal zugewiesenes
+        # Filament nicht mehr abwählen. Wer eine Spule braucht, die es noch
+        # nicht gibt, legt sie über „Neues Filament …" an — sie bekommt ihre
+        # Nummer beim Wählen (:meth:`_chosen`), wie jede aus dem Katalog.
+        #
+        # Und der **vorgewählte** Wert bleibt ebenfalls stehen, auch wenn dort
+        # noch nichts liegt: ``paint_slot`` beginnt bei Filament 1, und ein
+        # Feld, dessen Vorgabe nicht in der eigenen Liste steht, zeigt beim
+        # Öffnen etwas anderes an, als die Operation ausführen würde.
+        for index in (0, start):
+            if index in taken or index < 0 or index >= self._limit:
                 continue
-            # **Mit der Farbe, die es bekommen wird**, nicht mit einem leeren
-            # Kästchen: „Filament 1 — noch keines" ist per Vorgabe gewählt,
-            # sobald jemand eine Fläche färbt, und stand bis jetzt farblos da.
+            taken.add(index)
             self.addItem(swatch(shown_colour(index)), self._label(index, ""), index)
 
         self.addItem(tr("Neues Filament …"), NEW_FILAMENT)
@@ -676,7 +978,7 @@ class FilamentField(QComboBox):
         if self.itemData(position) == NEW_FILAMENT:
             self._make_one(position)
             return
-        self._last_position = position
+        before = self._last_position
         name = self.itemData(position, _NAME_ROLE)
         colour = self.itemData(position, _COLOUR_ROLE)
         if self.itemData(position) is None and name:
@@ -684,8 +986,16 @@ class FilamentField(QComboBox):
             # der Körper nicht trägt (UI-25).
             body_taken = {index for index in self._slots if index < self._limit}
             free = self._free_slot(body_taken)
+            if free is None and self._whole_body:
+                free = 0
+            if free is None:
+                free = self._replacement_slot()
+                if free is None:
+                    self.setCurrentIndex(before)
+                    return
             if free is not None:
                 self.setItemData(position, free)
+        self._last_position = position
         if name:
             self.filamentChosen.emit(
                 str(name),
@@ -693,6 +1003,31 @@ class FilamentField(QComboBox):
                 str(self.itemData(position, _MATERIAL_TYPE_ROLE) or ""),
                 str(self.itemData(position, _PROFILE_ROLE) or ""),
             )
+        identifier = self.itemData(position, _ID_ROLE)
+        if identifier:
+            entry = filaments.get(str(identifier))
+            if entry is not None and not entry.archived:
+                self.spoolChosen.emit(entry)
+
+    def _replacement_slot(self) -> int | None:
+        """Ein belegter Körper braucht eine ausdrückliche Wahl dessen, was ersetzt wird."""
+        slots = [slot for index, slot in sorted(self._slots.items()) if index < self._limit]
+        labels = [
+            self._label(slot.index, str(slot.name), str(slot.material_type or "")) for slot in slots
+        ]
+        chosen, accepted = QInputDialog.getItem(
+            self,
+            tr("Filament ersetzen"),
+            tr(
+                "Alle Filamente dieses Körpers sind belegt. Welches soll ersetzt werden? "
+                "Die bisherigen Flächen dieses Filaments bekommen die neue Spule. "
+                "Strg+Z nimmt die Zuweisung zurück."
+            ),
+            labels,
+            0,
+            False,
+        )
+        return slots[labels.index(chosen)].index if accepted and chosen in labels else None
 
     def _make_one(self, position: int) -> None:
         """*Neues Filament …* — anlegen, merken, auswählen.
@@ -712,18 +1047,23 @@ class FilamentField(QComboBox):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             self.setCurrentIndex(before)
             return
-        name, colour, material_type, slicer_profile = dialog.filament()
-        if not name:
+        entry = dialog.entry()
+        if not entry.name:
             self.setCurrentIndex(before)
             return
-        filaments.remember(name, colour, material_type, slicer_profile)
+        try:
+            entry = filaments.save(entry)
+        except AppError as problem:
+            self.setCurrentIndex(before)
+            show_error(problem, self)
+            return
         # Neu aufbauen statt einzufügen: Die Nummernvergabe hängt an der
         # ganzen Liste, und eine von Hand eingeschobene Zeile hätte sie
         # doppelt vergeben.
         chosen = self.currentData() if self.currentData() != NEW_FILAMENT else 0
         self.clear()
         self._fill(int(chosen) if isinstance(chosen, int) else 0)
-        place = self._position_of(name)
+        place = self.findData(entry.identifier, _ID_ROLE)
         if place >= 0:
             self.setCurrentIndex(place)
             self._chosen(place)
@@ -748,6 +1088,7 @@ _COLOUR_ROLE = int(Qt.ItemDataRole.UserRole) + 2
 _SLOT_ROLE = int(Qt.ItemDataRole.UserRole) + 3
 _MATERIAL_TYPE_ROLE = int(Qt.ItemDataRole.UserRole) + 4
 _PROFILE_ROLE = int(Qt.ItemDataRole.UserRole) + 5
+_ID_ROLE = int(Qt.ItemDataRole.UserRole) + 6
 
 
 class FilamentPanel(QWidget):
@@ -782,6 +1123,8 @@ class FilamentPanel(QWidget):
     #: öffnet den Dialog und schreibt das Ergebnis über die Sitzung zurück.
     overrideRequested = Signal(object)
     printSettingsRequested = Signal()
+    catalogueChanged = Signal()
+    inventoryRequested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -798,6 +1141,8 @@ class FilamentPanel(QWidget):
 
         self.add_button = QPushButton(tr("Filament anlegen …"), self)
         self.add_button.clicked.connect(self._add)
+        self.inventory_button = QPushButton(tr("Filamentlager öffnen"), self)
+        self.inventory_button.clicked.connect(self.inventoryRequested)
         self.settings_button = QPushButton(tr("Druckwerte …"), self)
         self.settings_button.setEnabled(False)
         self.settings_button.setToolTip(
@@ -810,6 +1155,7 @@ class FilamentPanel(QWidget):
         layout.setSpacing(TIGHT)
         layout.addWidget(self.list, 1)
         layout.addWidget(self.hint)
+        layout.addWidget(self.inventory_button)
         buttons = QHBoxLayout()
         buttons.setSpacing(TIGHT)
         buttons.addWidget(self.add_button)
@@ -848,7 +1194,13 @@ class FilamentPanel(QWidget):
             else self.return_to_print_button.sizeHint().height()
         )
         return (
-            margins.top() + margins.bottom() + gaps + self.hint.sizeHint().height() + buttons + back
+            margins.top()
+            + margins.bottom()
+            + gaps
+            + self.hint.sizeHint().height()
+            + buttons
+            + back
+            + self.inventory_button.sizeHint().height()
         )
 
     def wanted_height(self) -> int:
@@ -1018,17 +1370,13 @@ class FilamentPanel(QWidget):
         self._heading(tr("Im Regal"))
         entries = filaments.catalogue()
         for entry in entries:
-            label = (
-                f"{entry.name} · {entry.material_type}"
-                if entry.material_type
-                and entry.material_type.casefold() not in entry.name.casefold()
-                else str(entry.name)
-            )
+            label = spool_label(entry)
             item = QListWidgetItem(swatch(entry.colour), label)
             item.setData(_NAME_ROLE, entry.name)
             item.setData(_COLOUR_ROLE, entry.colour)
             item.setData(_MATERIAL_TYPE_ROLE, entry.material_type)
             item.setData(_PROFILE_ROLE, entry.slicer_profile)
+            item.setData(_ID_ROLE, entry.identifier)
             profile_hint = (
                 tr("Slicer-Profil: {profile}").replace("{profile}", entry.slicer_profile)
                 if entry.slicer_profile
@@ -1088,22 +1436,22 @@ class FilamentPanel(QWidget):
         name = item.data(_NAME_ROLE)
         if not name:
             return None
-        return filaments.CatalogueFilament(
-            name=str(name),
-            colour=str(item.data(_COLOUR_ROLE) or ""),
-            material_type=str(item.data(_MATERIAL_TYPE_ROLE) or ""),
-            slicer_profile=str(item.data(_PROFILE_ROLE) or ""),
-        )
+        return filaments.get(str(item.data(_ID_ROLE)))
 
     def _add(self) -> None:
         dialog = NewFilamentDialog(self)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        name, colour, material_type, slicer_profile = dialog.filament()
-        if not name:
+        entry = dialog.entry()
+        if not entry.name:
             return
-        filaments.remember(name, colour, material_type, slicer_profile)
+        try:
+            filaments.save(entry)
+        except AppError as problem:
+            self.hint.setText(str(problem))
+            return
         self._fill()
+        self.catalogueChanged.emit()
 
     def _on_activated(self, item: QListWidgetItem) -> None:
         if item.data(_SLOT_ROLE) is not None:
@@ -1131,39 +1479,33 @@ class FilamentPanel(QWidget):
         chosen = self._chosen()
         if chosen is None:
             return
-        dialog = NewFilamentDialog(
-            self,
-            name=chosen.name,
-            colour=chosen.colour,
-            material_type=chosen.material_type,
-            slicer_profile=chosen.slicer_profile,
-        )
+        dialog = NewFilamentDialog(self, entry=chosen)
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
-        renamed, fresh_colour, material_type, slicer_profile = dialog.filament()
-        if not renamed:
+        try:
+            filaments.save(dialog.entry())
+        except AppError as problem:
+            self.hint.setText(str(problem))
             return
-        # Ein Filament ist sein Name: Wer ihn ändert, legt kein zweites an —
-        # der alte Eintrag geht, der neue kommt.
-        if renamed != chosen.name:
-            filaments.forget(chosen.name)
-        filaments.remember(renamed, fresh_colour, material_type, slicer_profile)
         self._fill()
+        self.catalogueChanged.emit()
 
     def _remove(self) -> None:
         chosen = self._chosen()
         if chosen is None:
             return
-        # Keine Rückfrage (Regel 19): Das Regal ist eine Vorwahl, kein
-        # Dokument — was hier fehlt, legt man in zwei Klicks wieder an, und
-        # kein Projekt verliert dabei etwas.
-        filaments.forget(chosen.name)
+        try:
+            filaments.archive(chosen.identifier)
+        except AppError as problem:
+            self.hint.setText(str(problem))
+            return
         self._fill()
+        self.catalogueChanged.emit()
 
     def _on_context_menu(self, where: QPoint) -> None:
         if self._chosen() is None:
             return
         menu = QMenu(self)
         menu.addAction(tr("Ändern …"), self._edit)
-        menu.addAction(tr("Aus dem Regal nehmen"), self._remove)
+        menu.addAction(tr("Archivieren"), self._remove)
         menu.exec(self.list.viewport().mapToGlobal(where))

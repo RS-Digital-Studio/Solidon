@@ -28,6 +28,7 @@ import importlib
 import json
 import math
 import os
+import re
 import secrets
 import sys
 import tempfile
@@ -915,6 +916,35 @@ def _validate_operation_schema(
     return outputs
 
 
+def _validate_spool_bindings(value: object, location: str) -> None:
+    """Prüft dieselben Bindungen in Druckeinstellungen und beiden Undo-Seiten."""
+    bindings = _nested_records(value, location)
+    for index, binding in enumerate(bindings):
+        where = f"{location}[{index}]"
+        identifier = binding.get("spool_identifier")
+        if not isinstance(identifier, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", identifier):
+            raise ValueError(f"schema:{where}.spool_identifier")
+        name = binding.get("name", "")
+        if not isinstance(name, str) and (
+            not isinstance(name, dict)
+            or not isinstance(name.get("msgid"), str)
+            or (name.get("context") is not None and not isinstance(name["context"], str))
+            or (name.get("values") is not None and not isinstance(name["values"], dict))
+        ):
+            raise ValueError(f"schema:{where}.name")
+        for field_name in ("material", "material_type"):
+            if binding.get(field_name) is not None and not isinstance(binding[field_name], str):
+                raise ValueError(f"schema:{where}.{field_name}")
+        colour = binding.get("colour")
+        if colour is not None:
+            if not isinstance(colour, list) or len(colour) != 3:
+                raise ValueError(f"schema:{where}.colour")
+            for channel in colour:
+                _schema_number(channel, f"{where}.colour")
+                if not 0.0 <= channel <= 1.0:
+                    raise ValueError(f"schema:{where}.colour")
+
+
 def _validate_state_schema(value: object, where: str) -> None:
     """Prüft eine Undo-Seite samt Parameter-, Passungs- und Op-Fassungen."""
     state = _nested_mapping(value, where)
@@ -931,6 +961,8 @@ def _validate_state_schema(value: object, where: str) -> None:
     if fits is not None:
         for index, fit in enumerate(_nested_records(fits, f"{where}.fits")):
             _validate_fit_schema(fit, f"{where}.fits[{index}]")
+    if state.get("spool_bindings") is not None:
+        _validate_spool_bindings(state["spool_bindings"], f"{where}.spool_bindings")
     edited = _nested_mapping(state.get("edited_ops"), f"{where}.edited_ops", optional=True)
     if edited is not None:
         for op_id, operation in edited.items():
@@ -1020,6 +1052,12 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
         slot_profiles = stored.get("slot_profiles", [])
         if not isinstance(slot_profiles, list):
             raise ValueError("schema:print_settings.slot_profiles")
+        project_id = stored.get("inventory_project_id", "")
+        if not isinstance(project_id, str) or (
+            project_id and not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", project_id)
+        ):
+            raise ValueError("schema:print_settings.inventory_project_id")
+        _validate_spool_bindings(stored.get("spool_bindings", []), "print_settings.spool_bindings")
         slot_overrides = stored.get("slot_overrides", [])
         if not isinstance(slot_overrides, list):
             raise ValueError("schema:print_settings.slot_overrides")

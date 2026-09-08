@@ -28,6 +28,9 @@ korrigiert das Merkmal. Entfernte Kennungen bleiben in
 Materialslots werden nach einer Booleschen Operation anhand der erhaltenen
 Eingangsflächen übertragen; eine gleiche Dreieckszahl beweist keine gleiche
 Zuordnung. Rasterbudgets multiplizieren mit unbegrenzten Ganzzahlen.
+`paint_slot.replace_filament` übernimmt eine ausdrücklich gewählte Spule
+vollständig, auch unbekannte Materialwerte. Ohne dieses gespeicherte Flag
+behält die Operation das historische Ergänzungsverhalten leerer Felder.
 Die Differenzansicht überspringt ausschließlich identische Netzarrays,
 keine bloß gleichen Hüllquader und Volumina.
 

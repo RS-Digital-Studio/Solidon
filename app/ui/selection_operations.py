@@ -17,8 +17,10 @@ gefiltert. Beides beantwortet :func:`quick_names`.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from typing import override
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -225,6 +227,7 @@ class SelectionOperationsPanel(QWidget):
         self._states: dict[str, tuple[bool, str]] = {}
         self._quick_buttons: dict[str, QToolButton] = {}
         self._quick_shown: list[str] = []
+        self._quick_columns = 1
         self._query = ""
         """Der zuletzt eingegebene Suchtext — ein Stufenwechsel darf ihn nicht
         vergessen."""
@@ -238,6 +241,7 @@ class SelectionOperationsPanel(QWidget):
         einem Körper standen die Merkmalshandlungen weiter in der Liste."""
 
         self.summary = QLabel("", self)
+        self.summary.setWordWrap(True)
         set_level(self.summary, "section")
         self.summary.setAccessibleName(tr("Aktuelle Auswahl"))
 
@@ -257,6 +261,9 @@ class SelectionOperationsPanel(QWidget):
             if spec is None:
                 continue
             button = self._operation_button(spec)
+            # Die Zweierspalte darf nicht selbst die Mindestbreite des Docks
+            # erzwingen: Bei wenig Platz werden ihre Knöpfe untereinander gesetzt.
+            button.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             button.setObjectName("quickOperation")
             button.hide()
             self._quick_buttons[name] = button
@@ -357,10 +364,9 @@ class SelectionOperationsPanel(QWidget):
     def _lay_out_quick(self, names: Iterable[str]) -> None:
         """Die Hauptaktionen dieser Lage in die Zeile oben hängen.
 
-        Zwei kurze teilen die erste Zeile, jede weitere bekommt ihre eigene
-        über die ganze Breite — bei einer einzigen ist das die erste. Das
-        spart dem Bericht auf 720 Pixel Höhe eine volle Zeile, ohne einen
-        Titel zu kürzen.
+        Zwei kurze teilen die erste Zeile, wenn ihre vollständigen Titel
+        nebeneinander passen. In der schmalen Auswahlspalte stehen sie
+        untereinander; die Breite des Fensters folgt nicht der Zweierspalte.
 
         Steht schon das Richtige da, passiert nichts: Auswahlereignisse kommen
         in Serie, und ein Layout, das bei jedem neu hängt, wirft bei jedem ein
@@ -368,20 +374,38 @@ class SelectionOperationsPanel(QWidget):
         Karten neu verteilt.
         """
         wanted = [name for name in names if name in self._quick_buttons]
-        if wanted == self._quick_shown:
+        layout = self.layout()
+        margins = layout.contentsMargins() if layout is not None else self.contentsMargins()
+        available = self.width() - margins.left() - margins.right()
+        paired_width = (
+            sum(self._quick_buttons[name].sizeHint().width() for name in wanted[:2])
+            + self._quick.horizontalSpacing()
+        )
+        columns = 2 if len(wanted) > 1 and paired_width <= available else 1
+        if wanted == self._quick_shown and columns == self._quick_columns:
             return
         for name in self._quick_shown:
             button = self._quick_buttons[name]
             self._quick.removeWidget(button)
             button.hide()
         self._quick_shown = wanted
+        self._quick_columns = columns
+        self._quick.setColumnStretch(1, 1 if columns == 2 else 0)
         for index, name in enumerate(wanted):
             button = self._quick_buttons[name]
-            if len(wanted) > 1 and index < 2:
+            if columns == 1:
+                self._quick.addWidget(button, index, 0)
+            elif index < 2:
                 self._quick.addWidget(button, 0, index)
             else:
                 self._quick.addWidget(button, max(index - 1, 0), 0, 1, 2)
             button.show()
+
+    @override
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        """Die Hauptaktionen passen sich der tatsächlichen Spaltenbreite an."""
+        super().resizeEvent(event)
+        self._lay_out_quick(self._quick_shown)
 
     def set_context(
         self,

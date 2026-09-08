@@ -44,6 +44,7 @@ from app.core.types import (
     Source,
     SourceOrigin,
     SpeedSettings,
+    SpoolBinding,
     SupportSettings,
     TemperatureSettings,
     Transaction,
@@ -346,6 +347,11 @@ def state_to_data(state: DocumentState) -> dict[str, Any]:
             "fits": None if state.fits is None else [fit_to_data(entry) for entry in state.fits],
             "printer": state.printer,
             "material": state.material,
+            "spool_bindings": (
+                None
+                if state.spool_bindings is None
+                else [_spool_binding_to_data(binding) for binding in state.spool_bindings]
+            ),
             # Seit v12: die Fassung eines nachträglich geänderten Schritts —
             # beide Seiten reisen mit, sonst ist der alte Stand nach dem
             # Speichern unwiederbringlich (§15.4, §15.5).
@@ -385,6 +391,11 @@ def state_from_data(data: dict[str, Any]) -> DocumentState:
         fits=None if fits is None else tuple(fit_from_data(entry) for entry in fits),
         printer=data.get("printer"),
         material=data.get("material"),
+        spool_bindings=(
+            None
+            if data.get("spool_bindings") is None
+            else tuple(_spool_binding_from_data(binding) for binding in data["spool_bindings"])
+        ),
     )
 
 
@@ -772,6 +783,33 @@ def _override_from_data(data: Any) -> SlotOverride | None:
     )
 
 
+def _spool_binding_to_data(binding: SpoolBinding) -> dict[str, Any]:
+    """Eine örtliche Bindung in Druckeinstellungen und Undo verwendet dieselbe Struktur."""
+    from app.core.scene.cache import _name_to_data
+
+    return {
+        "spool_identifier": binding.spool_identifier,
+        "name": _name_to_data(binding.name),
+        "colour": list(binding.colour) if binding.colour is not None else None,
+        "material": binding.material,
+        "material_type": binding.material_type,
+    }
+
+
+def _spool_binding_from_data(data: dict[str, Any]) -> SpoolBinding:
+    """Liest die gemeinsame Bindungsstruktur mit übersetzbarer Filamentidentität."""
+    from app.core.scene.cache import _name_from_data
+
+    colour = data.get("colour")
+    return SpoolBinding(
+        spool_identifier=data["spool_identifier"],
+        name=_name_from_data(data.get("name", "")),
+        colour=tuple(colour) if colour is not None else None,
+        material=data.get("material"),
+        material_type=data.get("material_type"),
+    )
+
+
 def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
     """Die Druckeinstellungen als Schlüssel und Werte (§29)."""
     data: dict[str, Any] = {
@@ -791,6 +829,8 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         # ``null`` da und nicht als vier leere Objekte, die vortäuschen,
         # dass jemand etwas eingestellt hätte.
         "slot_overrides": [_override_to_data(one) for one in settings.slot_overrides],
+        "inventory_project_id": settings.inventory_project_id,
+        "spool_bindings": [_spool_binding_to_data(binding) for binding in settings.spool_bindings],
     }
     for group in _SETTING_GROUPS:
         section = getattr(settings, group)
@@ -820,6 +860,10 @@ def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
         handover="open" if data.get("handover") == "open" else "slice",
         slot_profiles=tuple(str(one) for one in data.get("slot_profiles", ())),
         slot_overrides=tuple(_override_from_data(one) for one in data.get("slot_overrides", ())),
+        spool_bindings=tuple(
+            _spool_binding_from_data(item) for item in data.get("spool_bindings", ())
+        ),
+        inventory_project_id=data.get("inventory_project_id", ""),
         **groups,
     )
 

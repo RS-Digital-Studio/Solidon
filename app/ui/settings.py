@@ -58,6 +58,9 @@ class UiSettings:
     material: str = ""
     print_quality: str = ""
     """Zuletzt gewählte Qualitätsstufe (§29). Leer heißt: die Vorgabe."""
+    inventory_booking_mode: str = "ask"
+    inventory_low_stock_percent: float = 10.0
+    """Verbrauch nie, nach Rückfrage oder bei eindeutigen Angaben automatisch buchen."""
     slicer_machine_profile: str = ""
     """Maschinenprofil aus dem Bestand des Slicers. Solidon kennt Bettform und
     Startcode nicht und schreibt sie deshalb nicht — es zeigt darauf (§29)."""

@@ -26,7 +26,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 20
+FORMAT_VERSION: Final = 21
 
 
 @dataclass(frozen=True, slots=True)
@@ -545,6 +545,15 @@ def _bind_old_lid_fits(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_spool_bindings(data: dict[str, Any]) -> dict[str, Any]:
+    """20 → 21: örtliche Spulen bleiben ohne ausdrückliche Wahl ungebunden."""
+    settings = data.get("print_settings")
+    if isinstance(settings, dict):
+        settings.setdefault("spool_bindings", [])
+        settings.setdefault("inventory_project_id", "")
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -566,6 +575,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=17, to_version=18, apply=_allow_a_named_pivot),
     Step(from_version=18, to_version=19, apply=_name_the_radius_a_radius),
     Step(from_version=19, to_version=20, apply=_keep_explicit_choices),
+    Step(from_version=20, to_version=21, apply=_add_spool_bindings),
 )
 
 

@@ -1639,6 +1639,51 @@ def test_print_settings_survive_the_round_trip(tmp_path: Path) -> None:
     assert reopened.document.print_settings == settings
 
 
+def test_spool_assignment_undo_survives_project_save_and_load(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    from app.core.scene.history import change_for
+    from app.core.types import PrintSettings, SpoolBinding
+
+    project = new_project()
+    first = SpoolBinding("spool-a", _("Filament {number}", number=1), (1.0, 0.0, 0.0), "PLA", "PLA")
+    second = replace(first, spool_identifier="spool-b")
+    project.document.print_settings = PrintSettings(
+        spool_bindings=(first,), inventory_project_id="project"
+    )
+    History(project.document).apply(
+        _("Filament zuweisen"), changes=change_for(project.document, spool_bindings=(second,))
+    )
+    opened = load(save(project, tmp_path / "spool-history.p3d"))
+    settings = opened.document.print_settings
+    assert settings is not None
+    assert settings.spool_bindings == (second,)
+    history = History(opened.document)
+    history.undo()
+    assert opened.document.print_settings.spool_bindings == (first,)
+    assert opened.document.print_settings.inventory_project_id == "project"
+    history.redo()
+    assert opened.document.print_settings.spool_bindings == (second,)
+
+
+@pytest.mark.parametrize("invalid", ["not-a-list", [{"spool_identifier": "../spool"}]])
+def test_invalid_spool_binding_in_undo_is_reported_as_damaged_file(tmp_path: Path, invalid) -> None:
+    from app.core.scene.history import change_for
+
+    project = new_project()
+    History(project.document).apply(
+        _("Zuordnung aufheben"), changes=change_for(project.document, spool_bindings=())
+    )
+    path = save(project, tmp_path / "invalid-spool-history.p3d")
+    data = project_data(path)
+    data["transactions"][0]["changes"]["before"]["spool_bindings"] = invalid
+    _rewrite_project_entry(path, data)
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
 def test_a_file_from_before_pillar_b_has_no_generated_sources() -> None:
     """2 → 3: damals wurde nichts erzeugt, also trägt nichts einen Prompt."""
     project = load(Path(__file__).parent / "data" / "projects" / "example_v2.p3d")

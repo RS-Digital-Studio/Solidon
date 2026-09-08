@@ -4578,7 +4578,7 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
         assert panel is not None
         window.object_tree.selected_objects = lambda: ("body",)
         window.session.last_result = SimpleNamespace(
-            scene=Scene(objects={"body": SimpleNamespace(kind="brep")})
+            scene=Scene(objects={"body": SimpleNamespace(kind="brep", material_slots=[])})
         )
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
@@ -4953,7 +4953,7 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
         panel.choose_plane("plane:xz")
         window.object_tree.selected_objects = lambda: ("body",)
         window.session.last_result = SimpleNamespace(
-            scene=Scene(objects={"body": SimpleNamespace(kind="brep")})
+            scene=Scene(objects={"body": SimpleNamespace(kind="brep", material_slots=[])})
         )
 
         window._apply_sketch_pull(-8.5)

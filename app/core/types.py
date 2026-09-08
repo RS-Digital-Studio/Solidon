@@ -802,6 +802,24 @@ class SlotOverride:
 
 
 @dataclass(frozen=True, slots=True)
+class SpoolBinding:
+    """Die örtliche Spule eines Druckfilaments, unabhängig vom Slicerprofil (§20)."""
+
+    spool_identifier: str
+    name: TranslatableText | str = ""
+    colour: tuple[float, float, float] | None = None
+    material: str | None = None
+    material_type: str | None = None
+
+    @property
+    def key(
+        self,
+    ) -> tuple[TranslatableText | str, tuple[float, float, float] | None, str | None, str | None]:
+        """Derselbe Schlüssel wie bei der Zusammenlegung für die Ausgabe."""
+        return (self.name, self.colour, self.material, self.material_type)
+
+
+@dataclass(frozen=True, slots=True)
 class PrintSettings:
     """Alle Druckeinstellungen an einer Stelle (§29).
 
@@ -856,6 +874,11 @@ class PrintSettings:
     steht, gilt das Filament der Platte. Ein Gehäuse in Schwarz mit weißer
     Schrift braucht genau einen Eintrag mehr als ein einfarbiges Teil.
     """
+
+    spool_bindings: tuple[SpoolBinding, ...] = ()
+    """Örtliche Spulen je Druckfilament; fehlende Kennungen bleiben ungelöst."""
+    inventory_project_id: str = ""
+    """Beständige Projektkennung für die Wiedererkennung einer Druckvorbereitung."""
 
     @property
     def wall_thickness(self) -> float:
@@ -1334,6 +1357,9 @@ class DocumentState:
     Seite gelöscht. Die andere Seite trägt seine vollständige Fassung, damit
     Undo ihn wieder an genau seiner alten Stelle einsetzen kann."""
 
+    spool_bindings: tuple[SpoolBinding, ...] | None = None
+    """Spulenzuordnung derselben Filamentgeste; leer ist beteiligt, None unbeteiligt."""
+
 
 @dataclass(frozen=True, slots=True)
 class DocumentChange:
@@ -1352,7 +1378,10 @@ class DocumentChange:
     Auswertung rechnet? Drucker und Material tun das über Bauraum und
     Toleranzverweise (§12), Parameter über die Ausdrücke (§13), Passungen über
     die Prüfung (§14). Die Druckeinstellungen tun es nicht — sie reisen zum
-    Slicer und stehen darum nicht im Verlauf.
+    Slicer und stehen darum nicht im Verlauf. Die örtliche Spulenbindung
+    gehört jedoch zur selben Filamentzuweisung wie die sichtbare Farbe und
+    wird mit dieser gemeinsam zurückgenommen. Andere Druckwerte und die
+    stabile Lager-Projektkennung bleiben dabei erhalten.
     """
 
     before: DocumentState = DocumentState()

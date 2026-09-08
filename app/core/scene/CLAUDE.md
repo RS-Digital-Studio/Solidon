@@ -5,6 +5,17 @@ Was gerade offen ist und wie daraus Geometrie wird (§12–§16).
 Regeln: `.claude/rules/operationen.md`, für die Projektdatei zusätzlich
 `.claude/rules/dateiformat.md`.
 
+Spulenbindungen in `PrintSettings` speichern die vollständige Druckfilament-
+Identität und eine lokale Kennung, niemals Pfade. `slot_profiles` bleibt eine
+Folge von Slicer-Profilnamen. Die Migration ergänzt leere Bindungen; sie rät
+keine physische Spule aus alten Namen. Das gemeinsame Namensformat erhält
+übersetzbare Vorlagen samt Werten und wird vor dem Deserialisieren geprüft.
+`DocumentState.spool_bindings` nimmt die physische Spulenwahl mit derselben
+Transaktion wie die Filamentzuweisung zurück: `None` heißt unbeteiligt,
+eine leere Folge entfernt die Bindungen. Andere Druckwerte und die stabile
+Projektkennung bleiben erhalten. Datei- und Undo-Seiten benutzen dieselben
+Serialisierungs- und Schemahelfer.
+
 ## Der Kreislauf
 
 Namenlose Wiederherstellungen besitzen eine Sitzungstoken-Kennung und eine

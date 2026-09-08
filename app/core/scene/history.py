@@ -48,6 +48,8 @@ from app.core.types import (
     Origin,
     Parameter,
     ParameterName,
+    PrintSettings,
+    SpoolBinding,
     Transaction,
     TransactionId,
 )
@@ -166,6 +168,10 @@ def restore(document: Document, state: DocumentState) -> None:
         document.printer = state.printer
     if state.material is not None:
         document.material = state.material
+    if state.spool_bindings is not None:
+        document.print_settings = dataclasses.replace(
+            document.print_settings or PrintSettings(), spool_bindings=state.spool_bindings
+        )
     if state.edited_ops is not None:
         # Eine Fassung ersetzt an Ort und Stelle. ``None`` entfernt; eine
         # Fassung zu einer fehlenden Kennung setzt wieder ein — genau diese
@@ -197,6 +203,7 @@ def change_for(
     fits: Sequence[Fit] | None = None,
     printer: str | None = None,
     material: str | None = None,
+    spool_bindings: Sequence[SpoolBinding] | None = None,
 ) -> DocumentChange:
     """Baut beide Seiten einer Dokumentänderung aus dem heutigen Stand.
 
@@ -233,12 +240,18 @@ def change_for(
             fits=tuple(document.fits) if fits is not None else None,
             printer=document.printer if printer is not None else None,
             material=document.material if material is not None else None,
+            spool_bindings=(
+                (document.print_settings.spool_bindings if document.print_settings else ())
+                if spool_bindings is not None
+                else None
+            ),
         ),
         after=DocumentState(
             parameters=dict(parameters) if parameters is not None else None,
             fits=tuple(fits) if fits is not None else None,
             printer=printer,
             material=material,
+            spool_bindings=tuple(spool_bindings) if spool_bindings is not None else None,
         ),
     )
 

@@ -131,6 +131,29 @@ def test_painting_runs_as_an_operation(profile: Profile) -> None:
     assert [finding.code for finding in result.findings] == ["colour.painted"]
 
 
+def test_explicit_unknown_spool_does_not_inherit_replaced_material(profile: Profile) -> None:
+    """Eine neue unbekannte Spule erbt kein PLA vom belegten Farbplatz."""
+    from app.core.types import MaterialSlot
+
+    entry = _with_top_face(
+        SceneObject(
+            id="obj_1",
+            name="Deckel",
+            mesh=plate(),
+            material_slots=[MaterialSlot(1, "Alt", (1.0, 0.0, 0.0), "PLA Profil", "PLA")],
+        ),
+        (0, 1),
+    )
+    params = {"slot": 1, "at_feature": "face_1", "name": "Unbekannte Rolle", "colour": "#123456"}
+    old = run("paint_slot", entry, profile, **params).outputs[0]
+    assert old.material_slots[0].material_type == "PLA", "bestehende Projekte rechnen unverändert"
+    new = run("paint_slot", entry, profile, **params, replace_filament=True).outputs[0]
+    assert new.material_slots[0].material_type is None
+    assert new.material_slots[0].material is None
+    assert counts(new.mesh) == {0: 10, 1: 2}
+    assert new.mesh.volume == pytest.approx(entry.mesh.volume)
+
+
 def test_painting_keeps_the_slicer_identity_with_the_colour(profile: Profile) -> None:
     entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1))
 

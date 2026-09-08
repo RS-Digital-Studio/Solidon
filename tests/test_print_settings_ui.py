@@ -125,7 +125,7 @@ def test_changing_plates_preserves_filament_profile_identity(session: Session) -
                     id=f"obj_{index + 1}",
                     name=slot.name,
                     plate=index,
-                    mesh=MeshData(trimesh.creation.box()),
+                    mesh=MeshData(trimesh.creation.box(), slots=(slot.index,) * 12),
                     material_slots=[slot],
                 )
                 for index, slot in enumerate(slots)
@@ -143,6 +143,143 @@ def test_changing_plates_preserves_filament_profile_identity(session: Session) -
         made.plate_choice.setCurrentIndex(index)
         made.plate_choice.activated.emit(index)
         assert made._profiles_for(made._plate_slots()) == expected
+
+
+@pytest.mark.parametrize("same_name", [False, True])
+def test_plate_job_preserves_global_profile_positions_and_full_material_identity(
+    session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_name: bool
+) -> None:
+    """Die sichtbare Profilwahl muss auch am ausgegebenen Slot des Laufs ankommen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Scene
+    from app.ui import print_settings_dialog as module
+
+    slots = [
+        MaterialSlot(0, "Schwarz" if same_name else "PLA", (0.0, 0.0, 0.0), None, "PLA"),
+        MaterialSlot(0, "Schwarz" if same_name else "PETG", (0.0, 0.0, 0.0), None, "PETG"),
+    ]
+    objects = [
+        SceneObject(
+            id=f"body-{index}",
+            name=slot.name,
+            mesh=MeshData(trimesh.creation.box()),
+            plate=0 if same_name else index,
+            material_slots=[slot],
+        )
+        for index, slot in enumerate(slots)
+    ]
+    session.last_result = EvaluationResult(scene=Scene(objects={body.id: body for body in objects}))
+    made = PrintSettingsDialog(session, UiSettings())
+    made.settings = replace(
+        made.settings, slot_profiles=("Profile PLA", "Profile PETG"), inventory_project_id="review"
+    )
+    if not same_name:
+        index = made.plate_choice.findData(1)
+        made.plate_choice.setCurrentIndex(index)
+        made.plate_choice.activated.emit(index)
+    monkeypatch.setattr(
+        module, "write_assembly", lambda *_args, **_kwargs: (tmp_path / "one.3mf", [])
+    )
+    setup = handover.SlicerSetup(Path("slicer"), "orca")
+    plate = 0 if same_name else 1
+    job = made._plate_job(objects, (plate,), tmp_path, "Projekt", setup)
+    run = module._prepare_plate(job, plate)
+    expected = (
+        {"PLA": "Profile PLA", "PETG": "Profile PETG"} if same_name else {"PETG": "Profile PETG"}
+    )
+    assert {slot.material_type: slot.material for slot in run.slots} == expected
+    if not same_name:
+        made.settings = replace(made.settings, slot_profiles=("Profile PLA", ""))
+        direct = made._plate_run(objects, plate, tmp_path, "Projekt", setup)
+        assert direct.slots[0].material is None, "keine Wahl auf Platte zwei erbt nicht Platte eins"
+
+
+def test_standalone_plate_file_cli_and_usage_share_the_same_local_tools(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine echte 3MF trägt dieselbe lokale Belegung und Profile wie der CLI-Lauf."""
+    import xml.etree.ElementTree as ET
+    import zipfile
+
+    import trimesh
+
+    from app.core.export import threemf
+    from app.core.filament_usage import from_gcode, prepare
+    from app.core.geom.mesh import MeshData
+    from app.ui import print_settings_dialog as module
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    slots = [
+        MaterialSlot(0, "Andere Platte", None, None, "ABS"),
+        MaterialSlot(0, "Schwarz", (0.0, 0.0, 0.0), None, "PLA"),
+        MaterialSlot(0, "Schwarz", (0.0, 0.0, 0.0), None, "PETG"),
+    ]
+    objects = tuple(
+        SceneObject(
+            id=f"body-{index}",
+            name=f"Teil {index}",
+            mesh=MeshData(trimesh.creation.box((10, 10, 10))),
+            plate=0 if index == 0 else 1,
+            material_slots=[slot],
+        )
+        for index, slot in enumerate(slots)
+    )
+    names = ("Profile ABS", "Profile PLA", "Profile PETG")
+    files = {}
+    for kind, name in zip(("ABS", "PLA", "PETG"), names, strict=True):
+        path = tmp_path / f"{kind}.json"
+        path.write_text(
+            json.dumps({"name": name, "filament_vendor": [f"Maker {kind}"]}), encoding="utf-8"
+        )
+        files[name] = path
+    monkeypatch.setattr(
+        handover,
+        "profile_file",
+        lambda name, _setup, kind: files.get(name) if kind == "filament" else None,
+    )
+    settings = replace(
+        print_settings.resolve(profile), slot_profiles=names, inventory_project_id="review"
+    )
+    setup = handover.SlicerSetup(Path("slicer"), "orca")
+    job = module._PlateJob(
+        objects,
+        (1,),
+        tmp_path,
+        "Projekt",
+        setup,
+        settings,
+        profile,
+        {threemf.slot_identity(slot): name for slot, name in zip(slots, names, strict=True)},
+    )
+    run = module._prepare_plate(job, 1)
+    with zipfile.ZipFile(run.model) as container:
+        root = ET.fromstring(container.read(threemf.MODEL_PATH))
+        embedded = json.loads(container.read(threemf.PROJECT_SETTINGS_PATH))
+    ns = threemf.CORE_NAMESPACE
+    mesh_objects = root.findall(f".//{{{ns}}}resources/{{{ns}}}object")
+    assignments = [
+        {int(face.attrib["p1"]) for face in body.findall(f".//{{{ns}}}triangle")}
+        for body in mesh_objects
+    ]
+    assert assignments == [{0}, {1}]
+    assert [slot.index for slot in run.slots] == [0, 1]
+    assert [slot.material for slot in run.slots] == ["Profile PLA", "Profile PETG"]
+    assert embedded["filament_vendor"] == ["Maker PLA", "Maker PETG"]
+    assert embedded["filament_type"] == ["PLA", "PETG"]
+    request = prepare(objects, settings, profile, "Projekt", slots_by_plate={1: run.slots})[1]
+    assert [line.slot for line in request.lines] == list(run.slots)
+    measured = from_gcode(request, gcode.GcodeMetrics(filament_grams_by_tool=(47.0, 6.0)))
+    assert [line.grams for line in measured.lines] == pytest.approx([47.0, 6.0])
+    assert request.fingerprint == prepare(objects, settings, profile, "Projekt")[1].fingerprint
+    cli_folder = tmp_path / "cli"
+    cli_folder.mkdir()
+    config = handover.write_config(settings, profile, setup, cli_folder, run.slots)
+    cli_profiles = [json.loads(path.read_text(encoding="utf-8")) for path in config.filaments]
+    assert [entry["name"] for entry in cli_profiles] == embedded["filament_settings_id"]
+    assert [entry["filament_type"][0] for entry in cli_profiles] == embedded["filament_type"]
 
 
 def test_a_new_printer_does_not_keep_a_known_foreign_machine_profile(session: Session) -> None:
@@ -1055,7 +1192,7 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     dialog._slicer_path = executable
     written = tmp_path / "platte.3mf"
     written.write_bytes(b"x")
-    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
     # ``last_result`` ist ein schlichtes Instanzattribut — direkt setzen,
     # wie es die Auswertung selbst tut.
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
@@ -1069,7 +1206,11 @@ def test_opening_hands_the_plates_to_the_window_and_remembers(
     def _run(job: object, plate: int) -> object:
         handed.append(job.with_settings)
         return module.PlateRun(
-            plate=plate, model=written, slots=(), keep_arrangement=False, findings=()
+            plate=plate,
+            model=written,
+            slots=(MaterialSlot(0, ""),),
+            keep_arrangement=False,
+            findings=(),
         )
 
     monkeypatch.setattr(module, "_prepare_plate", _run)
@@ -1112,7 +1253,7 @@ def test_plate_files_are_prepared_outside_the_qt_thread(
     executable = tmp_path / "prusa-slicer-console.exe"
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
-    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
@@ -1124,7 +1265,7 @@ def test_plate_files_are_prepared_outside_the_qt_thread(
 
     def prepare(_job: object, plate: int) -> object:
         threads.append(threading.get_ident())
-        return module.PlateRun(plate=plate, model=model)
+        return module.PlateRun(plate=plate, model=model, slots=(MaterialSlot(0, ""),))
 
     monkeypatch.setattr(module, "_prepare_plate", prepare)
     monkeypatch.setattr(
@@ -1159,7 +1300,7 @@ def test_closing_does_not_wait_in_the_qt_thread_for_plate_preparation(
     executable = tmp_path / "prusa-slicer-console.exe"
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
-    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
@@ -1173,7 +1314,7 @@ def test_closing_does_not_wait_in_the_qt_thread_for_plate_preparation(
         started.set()
         release.wait(1.0)
         model.write_bytes(b"")
-        return module.PlateRun(plate=plate, model=model)
+        return module.PlateRun(plate=plate, model=model, slots=(MaterialSlot(0, ""),))
 
     monkeypatch.setattr(module, "_prepare_plate", prepare)
     dialog._slice()
@@ -1236,7 +1377,7 @@ def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
     executable = tmp_path / "prusa-slicer-console.exe"
     executable.write_bytes(b"")
     setup = handover.SlicerSetup(executable=executable, flavour="prusa")
-    scene = types_module.SimpleNamespace(objects={"obj_1": object()})
+    scene = types_module.SimpleNamespace(objects={"obj_1": _cube_object()})
     monkeypatch.setattr(dialog.session, "last_result", types_module.SimpleNamespace(scene=scene))
     monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
     monkeypatch.setattr(dialog, "_chosen_plates", lambda: [0])
@@ -1248,7 +1389,7 @@ def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
     monkeypatch.setattr(
         module,
         "_prepare_plate",
-        lambda _job, plate: module.PlateRun(plate=plate, model=model),
+        lambda _job, plate: module.PlateRun(plate=plate, model=model, slots=(MaterialSlot(0, ""),)),
     )
     monkeypatch.setattr(
         module.handover,

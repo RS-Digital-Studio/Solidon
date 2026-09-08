@@ -25,6 +25,7 @@ from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from time import monotonic
 from typing import Any, Final, Literal, cast
+from uuid import uuid4
 
 from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
 from PySide6.QtGui import QColor
@@ -64,8 +65,10 @@ from app.core.errors import AppError, FileWriteError, InternalError, OperationCa
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour, takes_a_machine_profile
 from app.core.export.writer import arrangement_holds, write_assembly
+from app.core.filament_usage import UsageRequest, from_gcode
+from app.core.filament_usage import prepare as prepare_usage
 from app.core.geom.mesh import as_mesh_data
-from app.core.knowledge import print_settings, profiles
+from app.core.knowledge import filaments, print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.fits import active_fits
@@ -83,10 +86,11 @@ from app.core.types import (
     SlotOverride,
 )
 from app.core.units import DEGREE_UNIT, is_close
-from app.i18n import TranslatableText, _, tr
+from app.i18n import TranslatableText, _, format_decimal, tr
 from app.ui.dialogs import handlers_of, licence_lock_line, show_error
 from app.ui.facts import duration, mass
 from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
+from app.ui.filament_usage import UsageNotice
 from app.ui.header import filament_names
 from app.ui.labels import (
     NumberSpin,
@@ -1478,7 +1482,7 @@ class _PlateJob:
     setup: handover.SlicerSetup
     settings: PrintSettings
     profile: Profile
-    slot_profiles: Mapping[tuple[str, tuple[float, float, float] | None], str]
+    slot_profiles: Mapping[threemf.SlotKey, str]
     with_settings: bool = True
 
 
@@ -1486,25 +1490,29 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     """Eine Platte schreiben, ohne irgendein Qt-Objekt anzufassen."""
     objects = list(job.objects)
     on_plate = [entry for entry in objects if entry.plate == plate]
-    keep = arrangement_holds([as_mesh_data(entry.mesh) for entry in on_plate], job.profile)
-    written, findings = write_assembly(
-        objects,
-        job.folder,
-        project_name=job.name if len(objects) == len(on_plate) else f"{job.name}-{plate + 1}",
-        profile=job.profile,
-        plate=plate,
-        settings=job.settings if job.with_settings else None,
-        flavour=job.setup.flavour,
-        place_on_bed=keep,
-        setup=job.setup,
-    )
     slots = threemf.merge_slots(
         [
             threemf.AssemblyPart(mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots))
             for entry in on_plate
         ]
     )
-    chosen = tuple(job.slot_profiles.get((str(slot.name), slot.colour), "") for slot in slots)
+    chosen = tuple(job.slot_profiles.get(threemf.slot_identity(slot), "") for slot in slots)
+    # Ein CLI-Lauf ist ein eigener Auftrag: Datei und geladene Filamentprofile
+    # müssen dieselbe lokale Nummerierung tragen. Die projektweite Profilwahl
+    # wird vor dem Schreiben über ihre vollständige Materialidentität aufgelöst.
+    local_settings = replace(job.settings, slot_profiles=chosen)
+    keep = arrangement_holds([as_mesh_data(entry.mesh) for entry in on_plate], job.profile)
+    written, findings = write_assembly(
+        on_plate,
+        job.folder,
+        project_name=job.name if len(objects) == len(on_plate) else f"{job.name}-{plate + 1}",
+        profile=job.profile,
+        plate=plate,
+        settings=local_settings if job.with_settings else None,
+        flavour=job.setup.flavour,
+        place_on_bed=keep,
+        setup=job.setup,
+    )
     return PlateRun(
         plate=plate,
         model=written,
@@ -1515,6 +1523,67 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         ),
         findings=tuple(findings),
     )
+
+
+class _StockWorker(Worker):
+    """Ermittelt den Bestandsbedarf ohne Netzrechnung im Dialogthread."""
+
+    done = Signal(str)
+
+    def __init__(
+        self, objects: Sequence[SceneObject], settings: PrintSettings, profile: Profile
+    ) -> None:
+        super().__init__()
+        self._objects = tuple(objects)
+        self._settings = settings
+        self._profile = profile
+
+    def work(self) -> None:
+        try:
+            requests = prepare_usage(self._objects, self._settings, self._profile, "")
+            amounts: dict[str, float] = {}
+            notes: list[str] = []
+            for request in requests:
+                for line in request.lines:
+                    if line.grams is None:
+                        notes.append(
+                            tr("{name}: Einzelbedarf erst nach dem Slicen bekannt.").format(
+                                name=str(line.slot.name)
+                            )
+                        )
+                    elif line.spool_identifier:
+                        amounts[line.spool_identifier] = (
+                            amounts.get(line.spool_identifier, 0.0) + line.grams
+                        )
+            for identifier, grams in amounts.items():
+                entry = filaments.get(identifier)
+                if entry is None or entry.archived:
+                    notes.append(
+                        tr(
+                            "Eine zugewiesene Spule ist im lokalen Lager nicht verfügbar. "
+                            "Wählen Sie bei der Buchung eine andere Spule."
+                        )
+                    )
+                elif entry.remaining_grams is None:
+                    notes.append(
+                        tr(
+                            "{name}: Restmenge unbekannt. Im Lager lässt sie sich eintragen."
+                        ).format(name=entry.name)
+                    )
+                elif entry.remaining_grams < grams:
+                    notes.append(
+                        tr(
+                            "{name}: etwa {need} g benötigt, {stock} g im Lager. "
+                            "Prüfen Sie die Restmenge oder wählen Sie eine andere Spule."
+                        ).format(
+                            name=entry.name,
+                            need=format_decimal(grams, 1),
+                            stock=format_decimal(entry.remaining_grams, 1),
+                        )
+                    )
+            self.done.emit("\n".join(dict.fromkeys(notes)))
+        except AppError as problem:
+            self.done.emit(str(problem))
 
 
 class _SliceWorker(Worker):
@@ -1532,6 +1601,7 @@ class _SliceWorker(Worker):
     """
 
     done = Signal(object)
+    usageReady = Signal(object)
     failed = Signal(object, object)
     step = Signal(int, int)
     """Welche Platte gerade läuft und wie viele es sind — beide ab eins gezählt,
@@ -1549,6 +1619,7 @@ class _SliceWorker(Worker):
         self._settings = settings
         self._profile = profile
         self._setup = setup
+        self._usage: dict[int, UsageRequest] = {}
         self.cancelled = CancelSignal()
         """Der Schalter zum Abbrechen-Knopf (§2.8): Der Kern-Lauf fragt ihn ab
         und beendet den Kindprozess — vorher lief der Slicer, bis er fertig
@@ -1587,6 +1658,8 @@ class _SliceWorker(Worker):
                 return
             outcome.findings = [*entry.findings, *outcome.findings]
             results.append(outcome)
+            if entry.plate in self._usage:
+                self.usageReady.emit(from_gcode(self._usage[entry.plate], outcome.metrics))
         self.done.emit(results)
 
 
@@ -1608,6 +1681,16 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 self.failed.emit(problem, [])
                 return
         self._runs = runs
+        self._usage = {
+            request.plate: request
+            for request in prepare_usage(
+                [entry for entry in self._job.objects if entry.plate in self._job.plates],
+                self._job.settings,
+                self._job.profile,
+                self._job.name,
+                slots_by_plate={run.plate: run.slots for run in runs},
+            )
+        }
         super().work()
 
 
@@ -1615,6 +1698,7 @@ class _OpenInSlicerWorker(Worker):
     """Baugruppen schreiben und ihre Fenster öffnen, ohne Qt aufzuhalten."""
 
     done = Signal(object, int)
+    usageReady = Signal(object)
     failed = Signal(object)
 
     def __init__(self, job: _PlateJob) -> None:
@@ -1638,6 +1722,13 @@ class _OpenInSlicerWorker(Worker):
                 return
             try:
                 run = _prepare_plate(self._job, plate)
+                usage = prepare_usage(
+                    [entry for entry in self._job.objects if entry.plate == plate],
+                    self._job.settings,
+                    self._job.profile,
+                    self._job.name,
+                    slots_by_plate={plate: run.slots},
+                )
                 if self._was_cancelled():
                     return
                 handover.open_in_slicer(run.model, self._job.setup)
@@ -1646,6 +1737,8 @@ class _OpenInSlicerWorker(Worker):
                 return
             findings.extend(run.findings)
             opened += 1
+            for request in usage:
+                self.usageReady.emit(request)
         self.done.emit(findings, opened)
 
 
@@ -1806,6 +1899,12 @@ class PrintSettingsDialog(QDialog):
         self._loading = False
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
+        self._stock_worker: _StockWorker | None = None
+        self._stock_revision = 0
+        self._stock_timer = QTimer(self)
+        self._stock_timer.setSingleShot(True)
+        self._stock_timer.setInterval(200)
+        self._stock_timer.timeout.connect(self._refresh_stock)
         self._leash = WorkerLeash(self)
         """Hält ausgelaufene Arbeiter, bis Qt mit ihnen durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
@@ -1887,6 +1986,9 @@ class PrintSettingsDialog(QDialog):
         layout.addWidget(self._build_slicer())
         layout.addWidget(self._build_advice())
         layout.addWidget(self._build_state())
+        self.usage_notice = UsageNotice(ui_settings, self)
+        self.usage_notice.changed.connect(self._refresh_advice)
+        layout.addWidget(self.usage_notice)
         layout.addWidget(self._build_buttons())
 
         self._load_into_editors()
@@ -2209,6 +2311,8 @@ class PrintSettingsDialog(QDialog):
             print_settings.resolve(self.session.profile, quality),
             slot_profiles=self.settings.slot_profiles,
             slot_overrides=self.settings.slot_overrides,
+            spool_bindings=self.settings.spool_bindings,
+            inventory_project_id=self.settings.inventory_project_id,
         )
 
     def _build_front(self) -> QWidget:
@@ -3636,6 +3740,11 @@ class PrintSettingsDialog(QDialog):
         self.cancel_slice.setVisible(False)
         self.cancel_slice.clicked.connect(self._cancel_slice)
         row.addWidget(self.state)
+        self.stock_notice = QLabel("", holder)
+        self.stock_notice.setWordWrap(True)
+        self.stock_notice.setAccessibleName(tr("Filamentbestand für diesen Druck"))
+        self.stock_notice.hide()
+        row.addWidget(self.stock_notice)
         row.addWidget(self.progress)
         row.addWidget(self.cancel_slice)
         return holder
@@ -4169,7 +4278,35 @@ class PrintSettingsDialog(QDialog):
             return f"{float(value) * field.factor:g} {field.unit}".strip()
         return str(value)
 
+    def _refresh_stock(self) -> None:
+        """Die letzte Eingabe gewinnt; gleichzeitig rechnet höchstens ein Arbeiter."""
+        if self._settling:
+            return
+        if self._stock_worker is not None and self._stock_worker.isRunning():
+            self._stock_timer.start()
+            return
+        result = self.session.last_result
+        if result is None:
+            return
+        wanted = set(self._chosen_plates())
+        objects = [entry for entry in result.scene.objects.values() if entry.plate in wanted]
+        worker = _StockWorker(objects, self.settings, self.session.profile)
+        self._stock_worker = worker
+        revision = self._stock_revision
+
+        def show_note(text: str) -> None:
+            if revision != self._stock_revision or self._settling:
+                return
+            self.stock_notice.setText(text)
+            self.stock_notice.setVisible(bool(text))
+
+        worker.done.connect(show_note)
+        worker.crashed.connect(lambda detail: show_note(str(InternalError(detail=detail))))
+        self._leash.start(worker)
+
     def _refresh_advice(self) -> None:
+        self._stock_revision += 1
+        self._stock_timer.start()
         self._check_print_result()
         entries = self._current_advice()
         self.advice_view.clear()
@@ -4370,6 +4507,7 @@ class PrintSettingsDialog(QDialog):
             return
         self._show_handover_progress(len(plates), tr("Die Slicer-Dateien werden vorbereitet …"))
         worker = _OpenInSlicerWorker(job)
+        worker.usageReady.connect(self.usage_notice.offer)
         worker.done.connect(
             weak_slot(
                 self,
@@ -4430,6 +4568,7 @@ class PrintSettingsDialog(QDialog):
         job = self._plate_job(objects, plates, folder, name, setup)
         self._show_handover_progress(len(plates), tr("Die Slicer-Dateien werden vorbereitet …"))
         worker = _PrepareAndSliceWorker(job)
+        worker.usageReady.connect(self.usage_notice.offer)
         self._job_context = self._print_context()
         worker.done.connect(weak_slot(self, PrintSettingsDialog._slice_done, worker, forward=True))
         worker.failed.connect(self._slice_failed)
@@ -4464,11 +4603,15 @@ class PrintSettingsDialog(QDialog):
         with_settings: bool = True,
     ) -> _PlateJob:
         """Einen unveränderlichen Auftrag aus dem sichtbaren Dialog bauen."""
+        if not self.settings.inventory_project_id:
+            self.settings = replace(self.settings, inventory_project_id=uuid4().hex)
+            self.session.set_print_settings(self.settings)
         shown = self._plate_slots()
+        chosen_profiles = self._profiles_for(shown) if shown else ()
         slot_profiles = {
-            (str(slot.name), slot.colour): self.settings.slot_profiles[index]
-            for index, slot in enumerate(shown)
-            if index < len(self.settings.slot_profiles) and self.settings.slot_profiles[index]
+            threemf.slot_identity(slot): chosen
+            for slot, chosen in zip(shown, chosen_profiles, strict=False)
+            if chosen
         }
         return _PlateJob(
             objects=tuple(objects),
@@ -4516,10 +4659,9 @@ class PrintSettingsDialog(QDialog):
             job = replace(
                 job,
                 slot_profiles={
-                    (str(slot.name), slot.colour): self.settings.slot_profiles[index]
-                    for index, slot in enumerate(slots)
-                    if index < len(self.settings.slot_profiles)
-                    and self.settings.slot_profiles[index]
+                    threemf.slot_identity(slot): chosen
+                    for slot, chosen in zip(slots, self._profiles_for(slots), strict=False)
+                    if chosen
                 },
             )
         return _prepare_plate(job, plate)
@@ -4869,6 +5011,7 @@ class PrintSettingsDialog(QDialog):
             return True
         if not self._settling:
             self._settling = True
+            self._stock_timer.stop()
             # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
             # gleich nicht mehr gibt.
             self._remember_slicer_choice(require_machine=True)
@@ -4881,6 +5024,7 @@ class PrintSettingsDialog(QDialog):
         pending = (
             self._worker,
             self._profile_worker,
+            self._stock_worker,
             *self._leash.pending(),
         )
         workers = {id(worker): worker for worker in pending if worker is not None}
@@ -4895,7 +5039,9 @@ class PrintSettingsDialog(QDialog):
             if remaining <= 0:
                 break
             worker.wait(remaining)
-        if any(worker.isRunning() for worker in workers.values()):
+        if any(
+            worker.isRunning() for worker in workers.values()
+        ) or not self.usage_notice.wait_for_workers(0):
             return False
 
         self._settled = True

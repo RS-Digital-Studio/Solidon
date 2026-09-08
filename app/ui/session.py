@@ -79,6 +79,7 @@ from app.core.scene.project import (
 )
 from app.core.split import SplitApplied, apply_line_split, apply_planned, apply_split, plan_split
 from app.core.types import (
+    DocumentChange,
     Feature,
     FeatureId,
     Finding,
@@ -857,6 +858,7 @@ class Session(QObject):
         *,
         raise_on_error: bool = False,
         bundle: bool = False,
+        changes: DocumentChange | None = None,
     ) -> bool:
         """Eine Transaktion, dann eine frische Auswertung (§15.5).
 
@@ -871,7 +873,9 @@ class Session(QObject):
         denselben Eingängen mit demselben Anker verschmelzen.
         """
         try:
-            self.history.apply(title, drafts, origin or Origin(by="user"), bundle=bundle)
+            self.history.apply(
+                title, drafts, origin or Origin(by="user"), bundle=bundle, changes=changes
+            )
         except AppError as error:
             if raise_on_error:
                 raise

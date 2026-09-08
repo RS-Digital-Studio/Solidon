@@ -153,6 +153,28 @@ def test_selection_changes_update_in_place_and_explain_disabled_actions(
     assert panel.isHidden()
 
 
+def test_quick_actions_reflow_when_the_selection_column_narrows(qt_app: QApplication) -> None:
+    """Die Mindestbreite einer Zweierspalte darf die schmale Auswahl nicht aufweiten."""
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.set_context(1, _availability(1))
+    panel.resize(500, 500)
+    panel.show()
+    QApplication.processEvents()
+    first, second = (panel._quick_buttons[name] for name in QUICK_BODY[:2])
+    assert first.y() == second.y()
+    panel.resize(216, 500)
+    QApplication.processEvents()
+    assert first.y() < second.y()
+    assert panel.width() == 216
+    for name in QUICK_BODY:
+        control = panel._quick_buttons[name]
+        assert control.x() + control.width() <= panel.width()
+    panel.resize(500, 500)
+    QApplication.processEvents()
+    assert first.y() == second.y()
+
+
 def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplication) -> None:
     """Der Abnahmenachweis zu P5: die Sichtbarkeit folgt der Auswahltiefe.
 

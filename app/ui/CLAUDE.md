@@ -15,6 +15,30 @@ Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
 
 Hier steht die Karte, dort das Gesetz.
 
+## Filamente und lokales Lager
+
+`filament_inventory.py` zeigt und verwaltet Spulen ohne Renderer; `filament_picker.py`
+enthält den gemeinsamen Spulendialog und die Übernahme konfigurierter Slicerfilamente.
+`filament_assignment.py` zeigt die Schnellauswahl. Beide Auswahlwege melden
+`spoolChosen`, ohne lokale Kennungen in Geometrieparameter zu schreiben.
+`main_window.py` führt die Zuweisungsoperationen aus und speichert die Bindung
+getrennt in den Druckeinstellungen. Ein Katalogwechsel aktualisiert Wahlangebote,
+nicht die eingebetteten Filamente einer geöffneten Szene.
+Die Hauptaktionen der Auswahl wechseln bei schmaler Spalte in eine Spalte,
+statt die Karte horizontal aufzuweiten. Journalzeiten werden mit
+`labels.local_timestamp` im lokalen Gebietsschema dargestellt.
+
+`filament_usage.py` hält Angebote erfolgreicher Ausgaben ohne Zeitlimit bereit.
+Ein Dialogwechsel übernimmt sie mit `auto_book=False`, damit der Transfer keinen
+neuen Buchungsanlass schafft. Lagerzugriff und atomare Journaländerungen laufen
+über Arbeiter; Aufteilung, Wiederholungsdruck und manuelle Korrektur sind
+ausdrückliche Handlungen. Jede Menge nennt ihre Herkunft, jeder belegbare Preis
+die gespeicherte Währung. Druckvorbereitung und Bestandswarnung bleiben getrennt
+von der Buchung. Die Einstellung liegt lokal, die Vorbereitungskennung im Projekt.
+Die erste automatische Buchung benutzt eine aus dem Fingerabdruck abgeleitete
+Vorgangskennung, damit gleichzeitige Zustellungen denselben Abzug treffen.
+Beim Schließen zählen laufende und eingereihte Lagerhandlungen mit.
+
 ## Der Weg durch die Schicht
 
 ```

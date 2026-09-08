@@ -1,8 +1,12 @@
 # Konzept: Das Filamentlager
 
-> **Stand: ENTWURF mit getroffenen Entscheidungen, 08.09.2026.** Im Code ist
-> nichts davon gebaut; die vier Fragen, die der Entwurf offenließ, hat Robert
-> am selben Tag delegiert und stehen in §13 entschieden. Auftrag Robert: „Auf der Startseite einen
+> **Stand: geprüft, umgesetzt und abgenommen, 08.09.2026.**
+> Die Abschnitte 1–13 bewahren den ursprünglichen Entwurf samt Begründung.
+> **Die Korrekturen und präzisierten Verträge in §14 haben innerhalb dieses
+> Konzepts Vorrang.** Sie ersetzen ausdrücklich die dort benannten Aussagen;
+> der Bauplan bleibt übergeordnet. Der Umsetzungs- und Prüfnachweis steht unter
+> [RM-146 im Archiv](../ROADMAP-ARCHIV.md#rm-146).
+> Auftrag Robert: „Auf der Startseite einen
 > Button, wo man zu seinem Filamentlager kommt. Hier sollen Regale mit den
 > Filamenten sein (schön modern visualisiert), die der Nutzer hat und hier
 > anlegen und bearbeiten kann. Außerdem sollen diese Filamente dann in einer
@@ -13,9 +17,9 @@
 > klicken, im Slicer öffnen oder die 3MF-Datei erstellen." Das ändert §8 —
 > dort stand vorher, Solidon solle gar nicht buchen.
 >
-> Nichts davon ist gebaut. Die Hälfte davon liegt aber schon da, und das ist
-> der Grund, warum dieses Konzept mit dem Bestand anfängt und nicht mit dem
-> Entwurf.
+> Der vorhandene Katalog, die Zuweisungsoperationen und die Slicer-Übergabe
+> bilden den Ausgangspunkt. Das folgende Ist-Bild beschreibt den Stand vor
+> der Umsetzung und wird nicht als späterer Fertigstellungsnachweis gelesen.
 
 ---
 
@@ -387,3 +391,175 @@ soll zeigen, was **im Raum** liegt. Die Slicer-Liste ist eine Konfiguration und
 sagt darüber nichts; ein vorgefülltes Regal wäre auf den ersten Blick voll und
 auf den zweiten falsch, und ein falscher Bestand ist schlechter als ein leerer
 (dasselbe Argument wie gegen den automatischen Abzug in §8).
+
+---
+
+## 14. Review und präzisierte Verträge
+
+Review am 08.09.2026 auf Roberts Auftrag „mach erst ein review über das
+konzept“, anschließend „dann sauber abarbeiten“. Die vier Entscheidungen in
+§13 bleiben: Eintrag = Spule, Gramm als Bestand, freiwilliger Spulenpreis,
+kein automatisches Anlegen physischer Spulen aus Slicer-Profilen. Die folgende
+Tabelle korrigiert den Ausgangsentwurf vor der Umsetzung.
+
+| Befund | Beleg im Bestand | Korrektur |
+|---|---|---|
+| P1: Spule, Profil und Slot werden vermischt (§2, §9, §11) | `PrintSettings.slot_profiles` ist eine positionsgebundene Liste von Slicer-Profilnamen; `threemf.slot_identity` benutzt Name, Farbe, Profil und Typ | Die Spule erhält eine Kennung. Eine separate optionale Projektbindung ordnet einem Druckfilament eine Spule zu. Profilnamen werden nicht durch Spulenkennungen ersetzt. |
+| P1: Ein Projektstand ist noch kein Druck (§8) | Mehrfachausgabe, Auswahl und Platten sind eigenständige Eingaben | Ein Fingerabdruck erkennt dieselbe Druckvorbereitung. Jeder ausdrücklich wiederholte Druck bekommt eine eigene Vorgangskennung. |
+| P1: G-Code-Zahl wird zur physischen Messung erklärt (§8, §12) | Bauplan §22.5 und §28.1 unterscheiden geplanten Verbrauch und Messung am Werkstück | Herkunft heißt „Solidon-Schätzung“, „aus G-Code geplant“ oder „von Hand eingetragen“. Nur ein tatsächliches Wiegen heißt „gewogen“. |
+| P1: Einzelverbrauch wird als vorhanden behauptet (§8) | `gcode._set` summiert die Extruderwerte; `Estimate` liefert eine Körpermenge | G-Code-Einzelwerte müssen erhalten bleiben. Ein nicht aufteilbarer Gesamtwert wird nicht nach Oberfläche, Farbe oder Objektzahl verteilt. |
+| P1: Unbekannter Altbestand wird zur vollen Kilospule (§2 gegen §3) | Der Altkatalog speichert nur Name, Farbe, Typ und Profil | Rest, Nennfüllung und Durchmesser bleiben unbekannt, wenn ihre Angabe fehlt. Unbekannt ist weder null noch voll. |
+| P1: Eine Lageränderung verändert ungefragt das Projekt (§6) | `MaterialSlot` reist mit der Projektdatei; Auswertung ist reproduzierbar | Lageränderungen aktualisieren die Auswahl. Gespeicherte Projektwerte ändern sich nur durch eine ausdrückliche Zuweisung. |
+| P1: Mehrspulenbuchungen und Rücknahme haben keinen gemeinsamen Vertrag (§3, §8) | Der bisherige Katalog schreibt Einträge, kein Journal | Ein Vorgang mit mehreren Positionen wird vollständig atomar gebucht und zurückgenommen. Eine neuere Bestandsfeststellung darf dabei nicht überschrieben werden. |
+| P2: Erststart widerspricht dem leeren Lager (§13) | `FirstRunDialog._show` ruft automatisch `synchronise` auf; Bauplan §2.3 beschreibt Übernahme | Profile bleiben Vorschläge; nur eine ausdrückliche Übernahme legt eine physische Spule an. Bauplan §2.3 und §20 entsprechend präzisieren. |
+| P2: Preis ohne Währung ändert mit der Sprache seine Bedeutung (§13) | Gebietsschema formatiert, es rechnet keine Währungen um | Preis und Währung werden gemeinsam gespeichert. Die Sprache ändert nur die Darstellung. |
+| P2: Vergänglicher Hinweis verliert den Buchungsweg (§8) | Der Ausgangsentwurf lässt die Leiste automatisch verschwinden | Der aktuelle offene Vorgang bleibt am Ausgabeergebnis erreichbar. Ein übersehener Hinweis zieht nichts ab. |
+| P2: Die Achtergrenze wird dem 3MF-Format zugeschrieben (§7) | Bauplan §20 begrenzt Slots je Körper; `MAX_SLOTS` ist Solidons Vertrag | Acht verschiedene Zuweisungen je Körper; der Tausch wird als Vorschlag erklärt. Eine zweite identische physische Spule braucht keinen neuen Extruder. |
+
+### 14.1 Identität, Migration und Projektportabilität
+
+- Eine neue Spule bekommt eine neue Kennung unabhängig vom Etikett. Umbenennen
+  und Bearbeiten erhalten diese Kennung. „Noch eine davon“ kopiert weder die
+  Kennung noch den Rest oder das Buchungsjournal.
+- Das lokale Lagerformat wird versioniert. Alte Listenkataloge werden
+  verlustfrei übernommen; fehlende Mengen bleiben unbekannt. Kennungen sind
+  über wiederholtes Lesen und die Migration beständig. Eine beschädigte Datei
+  darf nicht beim nächsten Speichern durch ein leeres Lager ersetzt werden.
+- Eine optionale Bindung im Projekt nennt die Lager-Spule zum bestehenden
+  Druckfilament. Die Identität des Druckfilaments folgt der gemeinsamen
+  `threemf.slot_identity`, nicht einer zweiten Namensheuristik. Die gespeicherten
+  Druckwerte bleiben im Projekt. Die Bindung macht weder die Katalogdatei
+  noch lokale Profilpfade zum Bestandteil einer Projektdatei.
+- Das Projektformat erhält die nächste freie Version mit Migration und einer
+  alten Beispieldatei. Alte Projekte bekommen leere Spulenbindungen; aus Name
+  und Farbe wird kein physischer Besitz und keine Buchungsberechtigung geraten.
+- Eine auf einem anderen Rechner fehlende Kennung bleibt ungelöst. Das Projekt
+  öffnet und exportiert mit seinen gespeicherten Filamentwerten. „Andere Spule
+  wählen“ stellt erst auf ausdrückliche Wahl die örtliche Bindung her.
+- Zwei gleichnamige und gleichfarbige Spulen bleiben im Lager einzeln
+  bearbeitbar. Die Auswahl nennt Rest, Lagerort und eine kurze Kennung, damit
+  die Spulen auch ohne Farbwahrnehmung unterscheidbar sind.
+- Identische Druckfilamente werden wie bisher für die Ausgabe zusammengelegt.
+  Die physische Bindung gilt für diesen zusammengelegten Bedarf. Soll der
+  Verbrauch zwischen zwei Spulen aufgeteilt werden, trägt der Nutzer die
+  einzelnen Mengen ausdrücklich ein; eine Objektaufteilung beweist keinen
+  Spulenwechsel im Drucker.
+
+### 14.2 Mengen und Herkunft
+
+- Eine bekannte Restmenge ist endlich und nicht negativ. Leere Spule = 0 g;
+  unbekannte Spule = keine Zahl. Nennfüllung und Durchmesser sind positiv,
+  sofern angegeben. Eine volle neue Spule übernimmt ihr bekanntes Nenngewicht
+  erst bei bewusster Bestätigung der Neuanlage. Übernommene Profile kennen
+  keine physische Restmenge.
+- Grammfeld und Schieber bearbeiten denselben Wert. Ohne Nenngewicht gibt es
+  keinen Prozentwert. Ohne Restmenge zeigt die Zeichnung einen unbekannten
+  Zustand und den Text „Bestand unbekannt“. Der Schieber darf den Zustand
+  nicht bereits beim Öffnen durch seine voreingestellte Position verändern.
+- Die Dichte kommt aus der gemeinsamen Auflösung der Druckwerte für das
+  jeweilige Filament, nicht aus einer zweiten Lagerkonstante. Eine aus
+  G-Code-Länge berechnete Masse nennt zusätzlich diese Umrechnung und braucht
+  den passenden Durchmesser und die passende Dichte.
+- Die interne Schätzung ist bei eindeutig einfarbigen Körpern einem Filament
+  zuordenbar. Bei mehreren Materialien in einem Körper liefert dessen
+  Oberfläche keinen belastbaren Volumenanteil. Ohne belegte Einzelmenge steht
+  „Verbrauch je Filament unbekannt“ mit „Slicen“ oder „Mengen eintragen“.
+- G-Code-Einzelwerte bleiben ihren Werkzeugnummern und Platten zugeordnet,
+  einschließlich Nullen und fehlender Einträge. Die gleiche Extruderabbildung
+  wie beim Schreiben bestimmt die Spule; ein Gesamtwert ergänzt keine Lücken.
+- Eine Anzeige mit unterschiedlichen Quellen benennt sie je Position. Sie
+  behauptet keine einheitlich gemessene Gesamtmenge. Die Bestandsrechnung darf
+  bestätigte Mengen verschiedener Herkunft verrechnen; das Journal bewahrt
+  die Herkunft jedes Abzugs. Ein Lagerbestand ist keine G-Code-Kennzahl.
+
+### 14.3 Der Buchungsvorgang
+
+1. Vor dem Start wird die Druckvorbereitung eingefroren: ausgewählte Körper,
+   Geometrie, Stückzahlen, Lage, Platten, Slotzuordnung, aufgelöste Druckwerte
+   und die örtlichen Spulenbindungen. Ein Ergebnis arbeitet mit diesen Daten,
+   auch wenn der Nutzer inzwischen im Projekt weitergearbeitet hat.
+2. Erst ein erfolgreicher 3MF-Export oder Slicer-Aufruf erzeugt ein Angebot.
+   Abbrechen und Fehler buchen nichts. Bei mehreren Platten werden nur
+   erfolgreiche Ergebnisse angeboten; fehlgeschlagene Platten bleiben separat
+   als Fehler sichtbar.
+3. Der Fingerabdruck identifiziert eine Druckvorbereitung unabhängig von
+   Exportpfad, Fenstertitel und Auslöseknopf. Ein vorhandener Vorgang derselben
+   Vorbereitung wird gezeigt: „Bereits gebucht“, „Angabe aus G-Code übernehmen“
+   oder „Noch einmal gedruckt“. Wiederholungsdruck ist immer ausdrücklich und
+   besitzt eine neue Kennung. Ein zweiter Klick ist kein zweiter Druck.
+4. Die zugewiesene Spule gewinnt. Fehlt sie, werden passende Spulen angeboten;
+   unter passenden bekannten Resten wird die angebrochene mit dem kleinsten
+   ausreichenden Rest vorgeschlagen. Das ist ein sichtbarer Vorschlag, keine
+   ungefragte neue Bindung. Unbekannter Typ bleibt unbekannt.
+5. In der Vorgabe „fragen“ enthält das Angebot die Positionen mit Name,
+   Rest, Abzug und Herkunft sowie „Abziehen“, „Andere Spule“ und „Nicht
+   buchen“. Die Übergabe wartet nicht darauf. „Nie buchen“ legt keine Buchung
+   an. „Ohne Rückfrage buchen“ gilt nur bei vollständigen Mengen, eindeutigen
+   vorhandenen Bindungen und ausreichendem bekannten Bestand. Andernfalls
+   bleibt die erforderliche Entscheidung sichtbar offen.
+6. Unzureichender oder unbekannter Bestand sperrt keinen Export. Beim Buchen
+   lässt sich eine andere Spule wählen oder der Bestand korrigieren. Wird eine
+   ausdrücklich bestätigte Menge trotz unzureichendem Bestand abgezogen,
+   verfälscht kein stilles Abschneiden auf null das Journal: Rest wird als
+   unbekannt/klärungsbedürftig geführt und die volle Menge bleibt dokumentiert.
+7. Eine Buchung enthält alle Positionen und schreibt sie in einem Vorgang.
+   Wiederholte Zustellung derselben Vorgangskennung ist wirkungslos. Der
+   aktuelle Lagerstand wird innerhalb einer Schreibsperre gelesen, geprüft
+   und mit dem Journal atomar ersetzt; ein bloßes Neulesen ohne Sperre reicht
+   bei zwei laufenden Anwendungen nicht aus.
+8. Ein späterer G-Code-Wert ersetzt für denselben Vorgang die Schätzung durch
+   einen dokumentierten Korrekturschritt: 42 g → 47 g bedeutet weitere 5 g,
+   nicht weitere 47 g. Kleinere Werte schreiben die Differenz gut. Bei
+   mehreren möglichen Vorgängen wird zuerst zugeordnet. Eine spätere interne
+   Schätzung überschreibt keine bereits bestätigte G-Code-Angabe.
+9. Die Lager-Rücknahme ist unabhängig von Projekt-Strg+Z. Sie nimmt einen
+   gesamten Vorgang einschließlich seiner Korrekturen genau einmal zurück.
+   Wurde der Rest inzwischen von Hand neu festgestellt, verändert die
+   Rücknahme diesen jüngeren Stand nicht ungefragt; der Konflikt verlangt
+   eine Bestandskorrektur. Buchungen werden nicht aus dem Verlauf gelöscht.
+10. Archivieren entfernt eine Spule aus der aktiven Auswahl und erhält
+    Kennung und Verlauf. Wiederherstellen ist erreichbar. Ein gelöschter
+    Eintrag darf laufende Ergebnisse nicht auf eine gleichnamige Spule umlenken.
+
+### 14.4 Bedienung und Darstellung
+
+Der Einstieg auf der Startseite zeigt Text, Spulenzahl und Farbabbildung. Aus
+dem Projekt führt ein Eintrag im bestehenden Menü zum Lager; zurück führt
+ein beschrifteter Knopf zum unveränderten Projekt. Die Ansicht benutzt
+QPainter/SVG und lässt sich ohne funktionierenden 3D-Renderer bedienen.
+
+Die Regalansicht bietet Suche, Gruppierung nach Material oder Lagerort und
+„Spule anlegen“. Ein leeres Lager nennt die beiden Einstiege „Von Hand“ und
+„Aus dem Slicer“. Wenige Spulen haben großzügigen Raum, viele stehen in einem
+scrollbaren Regal. Karte und Detail verwenden denselben ausgewählten
+Datensatz. Tastaturfokus, aktivierte Handlung und geringer Bestand haben
+sichtbare Kennzeichnungen zusätzlich zur Farbe; zugängliche Namen nennen
+Typ, Rest und Lagerort. Große Schrift und schmale Fenster bleiben bedienbar.
+
+Der gemeinsame Dialog zeigt vorn Name, Typ, Farbe und Bestand. Weitere Angaben
+wie Lagerort, Durchmesser, Kauf-/Öffnungsdatum, Preis/Währung und Notiz liegen
+unter „Weitere Angaben“. Preisfrei bleibt preisfrei; ein unvollständiger
+Preis/Nenngewicht-Datensatz erzeugt keine erfundene Kostenzeile. Sprache und
+Datumsformat ändern gespeicherte Werte nicht.
+
+Die Auswahlkarte zeigt die verfügbaren Lagerfilamente bei gewähltem Körper.
+Ein Klick weist über die bestehende Op zu. Bei einer Fläche betrifft die
+Zuweisung ausschließlich dieses Merkmal. Auswahl und Wirkungsbereich sind
+sichtbar; ohne Auswahl bleibt der Lagerzugang erreichbar. Der vollständige
+Wähler steht zusätzlich zur Verfügung. Bei gleichen Etiketten zeigt bereits
+die Wahl Rest/Lagerort statt erst nach einem Fehlklick einen Unterschied.
+
+### 14.5 Umsetzung und Abnahme
+
+| Einheit | Verantwortung | Entscheidender Nachweis |
+|---|---|---|
+| Lagerkern | versionierter Katalog, IDs, Angaben, Sperre, Journal, Migration | Zwei gleiche Etiketten; unbekannter Altbestand; Schreibkonflikt; keine Teilbuchung; Korrektur und Rücknahme nach Bestandsänderung |
+| Lageroberfläche | gemeinsame Eingabe, Regal, Suche, Gruppierung, Kopie, Import, Verlauf | Anlage/Bearbeitung ohne Projekt; unbekannter Füllstand; Tastatur; große Schrift; kein 3D-Kontext nötig |
+| Projektbindung | portable Spulenreferenzen getrennt von Profilen, Migration, Schnellauswahl | Umbenennen, fremdes Lager, mehrere Materialien, unveränderte alte Projekte; Zuordnung über Export und Platten |
+| Ausgabe und Verbrauch | eingefrorener Vorgang, vier Auslöser, Einzelwerte, Herkunft, Buchungsangebot | Export → Slicen ergibt eine korrigierte Buchung; Wiederholungsdruck zwei; Abbruch keine; Teilerfolg nur erfolgreiche Platten |
+| Gesamtintegration | alle Kataloge, Bediengrenzen, Datensicherung, Dokumentation | Die elf ursprünglichen Abnahmen mit den hier korrigierten Begriffen plus sämtliche Fälle darüber; geteiltes Projekttor und sichtbarer Kundenweg |
+
+Alle Einheiten sind angeschlossen und geprüft. Der [Nachweis zu RM-146](../ROADMAP-ARCHIV.md#rm-146)
+nennt den vollständigen Torlauf, die nativen Bedienbelege und die getrennte
+Zuordnung parallel entstandener Änderungen. Die Kriterien bleiben für spätere
+Änderungen verbindlich.

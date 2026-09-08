@@ -480,29 +480,81 @@ def test_a_suggestion_arrives_while_nobody_has_chosen(qt_app: QApplication) -> N
     assert dialog.printer.currentData() == other
 
 
-def test_the_slicer_filament_lands_in_the_rack(
+def test_repeated_slicer_surveys_offer_profiles_without_filling_the_rack(
     qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Die Materialfrage fällt weg, weil die wirkliche Spule übernommen wird."""
+    """Ein gelesenes Profil schlägt Material vor und erzeugt keine physische Spule."""
     from app.core.knowledge import filaments
 
+    monkeypatch.setattr(filaments, "user_config_dir", lambda: tmp_path)
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
-    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
     imported = filaments.CatalogueFilament(
         name="Elegoo PETG PRO @ECC2",
         colour="#9AA0A6",
         material_type="PETG",
         slicer_profile="Elegoo PETG PRO @ECC2",
     )
+    monkeypatch.setattr(first_run, "_defaults_from_slicer", lambda: ("", (imported,)))
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+    try:
+        for _ in range(2):
+            dialog.look()
+            settled(dialog, qt_app)
 
-    dialog._show(first_run.Findings(tools=(), chat="x", printer="", filaments=(imported,)))
+        assert dialog.findings.filaments == (imported,)
+        assert filaments.catalogue() == (), "Profile werden erst im Lager bewusst übernommen"
+        assert dialog.settings.material == "petg", "der eindeutige Profiltyp ersetzt die Frage"
+    finally:
+        dialog.release()
 
-    stored = filaments.catalogue()[0]
-    assert stored.name == imported.name
-    assert stored.colour == "#9aa0a6"
-    assert stored.material_type == "PETG"
-    assert stored.slicer_profile == imported.slicer_profile
-    assert dialog.settings.material == "petg", "der eindeutige Spulentyp ersetzt die Frage"
+
+def test_slicer_surveys_leave_existing_spools_and_stock_unchanged(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auch ein gleichnamiges Slicerprofil besitzt die lokale Spule nicht."""
+    from app.core.knowledge import filaments
+
+    monkeypatch.setattr(filaments, "user_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    stored = filaments.save(
+        filaments.CatalogueFilament(
+            "PETG Rot", "#ff0000", "PETG", remaining_grams=250.0, spool_grams=1000.0
+        )
+    )
+    imported = filaments.CatalogueFilament("PETG Rot", "#112233", "PLA", "PLA Profil")
+    monkeypatch.setattr(first_run, "_defaults_from_slicer", lambda: ("", (imported,)))
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+    try:
+        dialog.look()
+        settled(dialog, qt_app)
+
+        assert filaments.catalogue() == (stored,)
+        assert filaments.catalogue()[0].remaining_grams == pytest.approx(250.0)
+        assert dialog.findings.filaments == (imported,)
+    finally:
+        dialog.release()
+
+
+def test_first_run_uses_the_shared_profile_mapping_without_guessing_a_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Erhebung und das Lager lesen dieselben belegten Profilangaben."""
+    from app.core.knowledge import filaments
+    from app.ui import filament_picker
+
+    imported = filaments.CatalogueFilament("Unbekanntes Profil", "#112233")
+    configured = mock.Mock(return_value=(imported,))
+    monkeypatch.setattr(filament_picker, "configured_spools", configured)
+    monkeypatch.setattr(tools.ExternalTool, "path", lambda _self: Path("OrcaSlicer.exe"))
+    monkeypatch.setattr(first_run.slicer_profiles, "chosen_machine", lambda *_args: None)
+    monkeypatch.setattr(first_run.slicer_profiles, "printer_for", lambda *_args: "prusa_mk4")
+
+    printer, found = first_run._defaults_from_slicer()
+
+    assert printer == "prusa_mk4"
+    assert found == (imported,)
+    assert found[0].material_type == ""
+    configured.assert_called_once_with()
 
 
 def test_different_loaded_filament_types_are_not_guessed(
@@ -705,11 +757,10 @@ def test_a_window_does_not_open_a_dialog_by_itself(qt_app: QApplication) -> None
 def test_first_steps_refreshes_the_existing_filament_rack_when_skipped(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Slicer-Spulen werden erhoben, bevor der Dialog geschlossen wird.
+    """Über Hilfe → Erste Schritte bleibt das vorhandene Filamentpanel aktuell.
 
-    Über Hilfe → Erste Schritte ist das Filamentpanel längst gebaut. Auch
-    „Später einstellen" muss das automatisch gelesene Regal deshalb sofort
-    sichtbar machen, ohne das bestehende Dokument neu auszuwerten.
+    Auch „Später einstellen“ aktualisiert seine Anzeige, ohne das Dokument
+    neu auszuwerten oder gelesene Slicerprofile in den Bestand zu übernehmen.
     """
     from app.ui import main_window
 

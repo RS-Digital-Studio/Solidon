@@ -249,6 +249,7 @@ def test_the_tab_chain_follows_the_visible_page_and_scrolls_each_target_into_vie
         screen.import_button,
         screen.open_button,
         screen.manual_button,
+        screen.inventory_button,
         screen.recent_list,
         *guided,
         screen.feedback_button,

@@ -1089,6 +1089,9 @@ class OperationDialog(QDialog):
     surfaceRequested = Signal()
     """Die Werte bleiben im Dialog, die Position wird auf dem Modell gewählt."""
 
+    spoolChosen = Signal(object)
+    """Eine örtliche Spulenwahl reist separat, niemals als Operationsparameter."""
+
     placement_flow: PlacementFlow | None = None
 
     def __init__(
@@ -1682,8 +1685,11 @@ class OperationDialog(QDialog):
             # Wähler füllt sie aus, er ersetzt sie nicht.
             from app.ui.filament_picker import FilamentField
 
-            picker = FilamentField(int(start or 0), self._slots, self)
+            picker = FilamentField(
+                int(start or 0), self._slots, self, whole_body=self.spec.name == "assign_slot"
+            )
             picker.filamentChosen.connect(self._fill_filament_fields)
+            picker.spoolChosen.connect(self._filament_spool_chosen)
             return picker
         if entry.kind == "int":
             spin = QSpinBox(self)
@@ -2026,6 +2032,13 @@ class OperationDialog(QDialog):
             # und der Slicer nähme deren Druckwerte.
             if isinstance(editor, QLineEdit):
                 editor.setText(value)
+
+    def _filament_spool_chosen(self, spool: object) -> None:
+        """Die ausdrückliche Wahl ersetzt auch leere Typ- und Profilangaben vollständig."""
+        editor = self._editors.get("replace_filament")
+        if isinstance(editor, QCheckBox):
+            editor.setChecked(True)
+        self.spoolChosen.emit(spool)
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""

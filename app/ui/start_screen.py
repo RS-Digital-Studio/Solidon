@@ -22,7 +22,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QByteArray, QEvent, QPoint, QSize, Qt, Signal
+from PySide6.QtCore import QByteArray, QEvent, QPoint, QRectF, QSize, Qt, Signal
 from PySide6.QtGui import (
     QColor,
     QDragEnterEvent,
@@ -56,7 +56,9 @@ from app.core import examples
 from app.core.examples import Example
 from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
 from app.core.ingest.plan import MODEL_SUFFIXES
+from app.core.knowledge import filaments
 from app.i18n import tr
+from app.ui.filament_inventory import paint_spool
 from app.ui.icons import icon
 from app.ui.leash import stop_watching_the_dying
 from app.ui.panels import collapsible
@@ -675,6 +677,51 @@ class StartActionCard(QPushButton):
             self._refresh_icon()
 
 
+class InventoryStartCard(QPushButton):
+    """Ein direkter Lagerzugang mit echter Spulenzahl und Farbabbildung."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setAutoDefault(False)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(44)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
+        self.colours = QLabel(self)
+        self.colours.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        layout.addWidget(self.colours)
+        self.caption = QLabel(self)
+        self.caption.setWordWrap(True)
+        self.caption.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        set_level(self.caption, "section")
+        layout.addWidget(self.caption, 1)
+        self.refresh()
+
+    def refresh(self) -> None:
+        """Nur die Kachel liest das Lager; das Projekt bleibt unverändert."""
+        entries = filaments.catalogue()
+        text = tr("Filamentlager · {count} Spulen").format(count=len(entries))
+        self.caption.setText(text)
+        self.setAccessibleName(text)
+        self.setAccessibleDescription(tr("Spulen ansehen, anlegen und Bestand pflegen."))
+        shown = entries[:3] or (filaments.CatalogueFilament("", "#808080"),)
+        image = QPixmap(32 * len(shown), 32)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        for index, entry in enumerate(shown):
+            paint_spool(
+                painter,
+                QRectF(index * 32, 0, 32, 32),
+                entry,
+                self.palette().buttonText().color(),
+                self.palette().button().color(),
+            )
+        painter.end()
+        self.colours.setPixmap(image)
+
+
 class StartScreen(QWidget):
     """Was gezeigt wird, bevor ein Projekt offen ist."""
 
@@ -702,6 +749,8 @@ class StartScreen(QWidget):
     """Die bestehende Rückmeldung soll vom ersten Bildschirm aus aufgehen."""
     supportRequested = Signal()
     """Der lokale Hinweis zur freiwilligen Unterstützung soll aufgehen."""
+    inventoryRequested = Signal()
+    """Das Filamentlager soll ohne Umweg über ein Projekt aufgehen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -826,6 +875,14 @@ class StartScreen(QWidget):
         buttons.addWidget(self.open_button)
         buttons.addWidget(self.manual_button)
         buttons.addStretch(1)
+        self.inventory_button = InventoryStartCard(self)
+        self.inventory_button.clicked.connect(self.inventoryRequested)
+        self._primary_actions = QGridLayout()
+        self._primary_actions.setContentsMargins(0, 0, 0, 0)
+        self._primary_actions.setSpacing(NORMAL)
+        self._primary_actions.addLayout(buttons, 0, 0)
+        self._primary_actions.addWidget(self.inventory_button, 0, 1)
+        self._inventory_below = False
 
         self.secondary_area = QWidget(self)
         self.secondary_grid = QGridLayout(self.secondary_area)
@@ -843,7 +900,7 @@ class StartScreen(QWidget):
         inner.setSpacing(NORMAL)
         inner.addWidget(title)
         inner.addWidget(drop)
-        inner.addLayout(buttons)
+        inner.addLayout(self._primary_actions)
         # Wer schon gearbeitet hat, sucht zuerst den Rückweg in sein Projekt.
         # Deshalb steht „Zuletzt geöffnet" vor den Touren; Neu, Öffnen und
         # Weiterarbeiten bilden gemeinsam den Einstieg, Vertiefung folgt.
@@ -970,6 +1027,14 @@ class StartScreen(QWidget):
             vertical_margin,
         )
         self.column.setMaximumWidth(WIDE_COLUMN_WIDTH if wide_enough else COLUMN_WIDTH)
+        # Auf dem Desktop teilt der Lagerzugang die vorhandene Knopfzeile.
+        # Schmal steht er darunter, damit Texte und Tabreihenfolge lesbar bleiben.
+        if self._inventory_below != narrow:
+            self._primary_actions.removeWidget(self.inventory_button)
+            self._primary_actions.addWidget(
+                self.inventory_button, 1 if narrow else 0, 0 if narrow else 1
+            )
+            self._inventory_below = narrow
         columns = 3 if wide_enough else NARROW_COLUMNS if narrow else TILE_COLUMNS
         self._layout_secondary_actions(1 if narrow else 2)
         if columns == self._columns:
@@ -1019,6 +1084,7 @@ class StartScreen(QWidget):
             self.import_button,
             self.open_button,
             self.manual_button,
+            self.inventory_button,
             self.recent_list,
             *guided,
             *self.secondary_actions,
@@ -1030,6 +1096,10 @@ class StartScreen(QWidget):
             target.installEventFilter(self)
         for first, second in pairwise(chain):
             QWidget.setTabOrder(first, second)
+
+    def refresh_inventory(self) -> None:
+        """Die Startkachel folgt Änderungen aus allen Lagerzugängen."""
+        self.inventory_button.refresh()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 - Qt gibt den Namen
         """Ein Tastaturziel bleibt beim Durchlaufen vollständig sichtbar.

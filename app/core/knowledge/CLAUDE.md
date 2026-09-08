@@ -20,7 +20,7 @@ Rechenwegs, nicht Beiwerk.
 | `print_settings.py` | Löst Stufe + Material + Drucker zu Einstellungen auf (§29) |
 | `rules.py` | Die Regelsammlung für den Agenten (§39) |
 | `calibration.py` | Selbstkalibrierung (§28.3) |
-| `filaments.py` | Benannte Filamente mit Farbe, als Vorwahl (§20) |
+| `filaments.py` | Örtliches Filamentlager: Spulen mit beständiger Kennung, optionale Mengen und Angaben, Journal ganzer Druckvorgänge (§20) |
 | `licences.py` | Lizenzprüfung der Abhängigkeiten (§36) |
 | `tables.py` | Der eine TOML-Leser für Dateien, die auch von Hand geschrieben sein können — ein Syntaxfehler wird ein Satz mit Dateinamen (Regel 17); Profile, Druckeinstellungen und Kalibrierung rufen ihn mit ihrem Titel |
 | `parts/` | Die Bausteinbibliothek — eigene `CLAUDE.md`, **eigene Lizenz** |
@@ -64,3 +64,37 @@ Der Suite-Lauf kostet Geld und rund anderthalb Stunden je Modell
 Kalibrierung schreibt TOML-Tabellen- und Feldkennungen als zitierte Literale.
 Materialkennungen mit Leerraum, Punkten oder Anführungszeichen bleiben so
 beim Aktualisieren eines anderen Profils unverändert lesbar.
+
+## Das Filamentlager ist örtlicher Bestand
+
+`filaments.save` speichert eine Spule nach Kennung; eine leere Kennung legt
+ein neues Exemplar an. Namen dürfen mehrfach vorkommen. Bearbeitungen behalten
+die gelesene `revision`, damit ein offener Dialog keinen jüngeren Verbrauch
+zurückschreibt. Archivieren erhält Kennung und Verlauf. Die alten Namenswege
+`remember`, `synchronise` und `forget` bearbeiten nur eindeutige Treffer;
+sie raten bei zwei gleichen Etiketten keine physische Spule.
+
+Spulen, letzte Bestandsfeststellungen und Buchungen stehen gemeinsam in der
+versionierten `filaments.json`. Lesen, Prüfen und atomarer Dateitausch liegen
+unter einer Betriebssystemsperre. Die Migration alter Listenkataloge speichert
+Lager- und Spulenkennungen im selben Vorgang; unbekannte Mengen bleiben leer.
+Die Vorwahl darf einen Lesefehler mit einer leeren Liste beantworten;
+`catalogue(strict=True)` meldet ihn in der Lageransicht. Jeder Schreibweg
+verweigert das Überschreiben einer beschädigten oder neueren Datei.
+
+`book` nimmt einen ganzen Vorgang an. Seine Kennung macht Zustellungen
+idempotent; ein gleicher Fingerabdruck mit neuer Vorgangskennung bedeutet
+einen ausdrücklich wiederholten Druck. Jede Position bewahrt ihre Herkunft
+und Druckfilamentidentität. G-Code ersetzt eine Schätzung mit dokumentierter
+Differenz; `reverse_booking` nimmt sämtliche Positionen und Korrekturen zurück.
+Der Bestand wird ab der letzten manuellen Feststellung gerechnet. Deren
+`stock_revision` schützt jüngere Kenntnis vor alten Korrekturen und Rücknahmen.
+Eine bestätigte Unterdeckung bleibt unbekannt, der volle Abzug im Journal.
+Nach einem Bestandskonflikt kann eine ausdrücklich bestätigte Rücknahme
+`preserve_newer_counts=True` setzen: jüngere Feststellungen bleiben erhalten,
+übrige Spulen erhalten ihre Gutschrift. `preserved_counts` dokumentiert im
+zurückgenommenen Vorgang, welche Bestände dabei unverändert geblieben sind.
+Eine manuell eingetragene Menge oder Spulenaufteilung wird ausschließlich mit
+`correct_manual_allocation=True` ausdrücklich ersetzt. Die Korrektur erhält
+die Druckfilamentidentitäten und die vollständigen vorherigen Positionen;
+automatische G-Code-Übernahmen dürfen diesen Schalter nicht setzen.

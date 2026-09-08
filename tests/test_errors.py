@@ -311,6 +311,9 @@ _NOT_A_RANGE = frozenset(
         # ist beschädigt — nichts, was der Kunde in einem Feld korrigiert.
         "mesh_storage_too_large", "duplicate_mesh_array", "unsupported_mesh_array",
         "invalid_mesh_array_size",
+        # Lagerbestand und Buchungsidentität: fehlende oder archivierte Spule,
+        # konkurrierende Änderung und unbestätigter Bestand sind keine Maßspanne.
+        "ambiguous", "archived", "conflict", "missing", "stock", "stock_conflict",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "expected_sha256",
         # Die Eingangsprüfung beim Einlesen (``loader.check_readable``):

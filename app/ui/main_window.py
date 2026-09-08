@@ -21,6 +21,7 @@ from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
 from typing import Any, Final, cast
+from uuid import uuid4
 
 from PySide6.QtCore import QObject, QPoint, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
@@ -110,6 +111,8 @@ from app.core.export.writer import (
     write_assembly,
     write_plan,
 )
+from app.core.filament_usage import prepare as prepare_usage
+from app.core.filament_usage import with_spool
 from app.core.geom.measure import bounding_box_of, volume_of
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.pose import armature_to_text
@@ -125,7 +128,7 @@ from app.core.geom.sculpt import (
 from app.core.geom.section import SectionPlane, plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
-from app.core.knowledge import calibration, print_settings, profiles
+from app.core.knowledge import calibration, filaments, print_settings, profiles
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -158,7 +161,7 @@ from app.core.scene import (
 )
 from app.core.scene import fits as fit_checks
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.history import repair_is_available
+from app.core.scene.history import change_for, repair_is_available
 from app.core.scene.project import clear_autosave, discard_recovery, find_recovery
 from app.core.sketch.planes import feature_plane, frame_for_plane, to_world
 from app.core.sketch.profile import SketchCurve, curves_of
@@ -170,6 +173,7 @@ from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
 from app.core.types import (
     Bone,
+    DocumentChange,
     Feature,
     FeatureRef,
     Finding,
@@ -180,6 +184,7 @@ from app.core.types import (
     Origin,
     Parameter,
     PlaneFrame,
+    PrintSettings,
     QualityPreset,
     SliceResult,
     SolvedSketch,
@@ -217,7 +222,8 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
-from app.ui.filament_picker import FilamentPanel
+from app.ui.filament_picker import FilamentPanel, spool_slot
+from app.ui.filament_usage import UsageNotice
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
@@ -731,6 +737,7 @@ class _ExportWorker(Worker):
 
     done = Signal(object, object)
     failed = Signal(object)
+    usageReady = Signal(object)
 
     def __init__(
         self,
@@ -743,6 +750,8 @@ class _ExportWorker(Worker):
         settings: Any,
         ui_settings: Any,
         material: str,
+        inventory_settings: Any = None,
+        project_name: str = "",
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -753,9 +762,18 @@ class _ExportWorker(Worker):
         self._settings = settings
         self._ui_settings = ui_settings
         self._material = material
+        self._inventory_settings = inventory_settings
+        self._project_name = project_name
 
     def work(self) -> None:
         try:
+            usage = (
+                prepare_usage(
+                    self._objects, self._inventory_settings, self._profile, self._project_name
+                )
+                if self._format == "3mf" and self._inventory_settings is not None
+                else ()
+            )
             if self._format == "3mf":
                 written, findings = self._assembly()
             else:
@@ -764,6 +782,9 @@ class _ExportWorker(Worker):
             self.failed.emit(error)
             return
         self.done.emit(written, findings)
+        if written:
+            for request in usage:
+                self.usageReady.emit(request)
 
     def _assembly(self) -> tuple[list[Path], list[Finding]]:
         """Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
@@ -1657,6 +1678,8 @@ class MainWindow(QMainWindow):
         self.filaments = FilamentPanel(self)
         self.filaments.overrideRequested.connect(self._edit_filament_settings)
         self.filaments.printSettingsRequested.connect(self.action_print_settings)
+        self.filaments.inventoryRequested.connect(self.action_inventory)
+        self.filaments.catalogueChanged.connect(self._refresh_inventory)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -2145,6 +2168,12 @@ class MainWindow(QMainWindow):
         self.selection_operations = SelectionOperationsPanel(REGISTRY.all(), self)
         self.selection_operations.operationRequested.connect(self.launch_operation)
         self.selection_operations.catalogRequested.connect(self.action_catalog)
+        from app.ui.filament_assignment import QuickFilamentPicker
+
+        self.quick_filament = QuickFilamentPicker(self)
+        self.quick_filament.spoolChosen.connect(self._assign_inventory_spool)
+        self.quick_filament.inventoryRequested.connect(self.action_inventory)
+        cast(QVBoxLayout, self.selection_operations.layout()).insertWidget(1, self.quick_filament)
 
         # Eine Karte, nicht zwei: Die Spalte trägt jetzt allein Bericht, Chat
         # und Tour und teilt ihre Höhe mit nichts mehr. Der Formatverlust,
@@ -2246,10 +2275,13 @@ class MainWindow(QMainWindow):
         )
         self.start_screen.feedbackRequested.connect(self._open_survey)
         self.start_screen.supportRequested.connect(self.action_donate)
+        self.start_screen.inventoryRequested.connect(self.action_inventory)
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)
         self.stack.addWidget(self.overlay)
+        self._inventory_view: QWidget | None = None
+        self._inventory_return: QWidget = self.start_screen
         self.setCentralWidget(self.stack)
 
         self.object_tree.selectionChanged.connect(self._on_selection)
@@ -2462,6 +2494,10 @@ class MainWindow(QMainWindow):
         self.trial_divider.setVisible(False)
         bar.addPermanentWidget(self.trial_divider)
         bar.addPermanentWidget(self.facts)
+        self.usage_notice = UsageNotice(self.settings, self)
+        self.usage_notice.choice.setMaximumWidth(180)
+        self.usage_notice.changed.connect(self._refresh_inventory)
+        bar.addPermanentWidget(self.usage_notice)
         bar.addPermanentWidget(self.status_message)
         bar.addPermanentWidget(self.progress)
         bar.addPermanentWidget(self.cancel_button)
@@ -2749,6 +2785,13 @@ class MainWindow(QMainWindow):
             "Ctrl+,",
             self.action_settings,
             tr("Sprache, Anzeigeeinheit, Thema, Navigation und die Vorgaben für neue Projekte."),
+        )
+        self._add_action(
+            edit_menu,
+            tr("Filamentlager …"),
+            None,
+            self.action_inventory,
+            tr("Spulen, Restmengen und Verbrauch verwalten."),
         )
         self._add_action(
             edit_menu,
@@ -3735,6 +3778,15 @@ class MainWindow(QMainWindow):
             feature_kind=self.selected_feature_kind() or "",
             label=self.selection_label(),
         )
+        selected_ids = self.object_tree.selected_objects()
+        result = self.session.last_result
+        self.quick_filament.set_context(
+            [result.scene.objects[key] for key in selected_ids if key in result.scene.objects]
+            if result is not None
+            else [],
+            has_feature=bool(self.object_tree.selected_features()),
+        )
+        self.quick_filament.setEnabled(not locked and not gesturing)
         self._hide_dead_menus()
 
     def _hide_dead_menus(self) -> None:
@@ -4954,6 +5006,147 @@ class MainWindow(QMainWindow):
     def action_donate(self) -> None:
         DonationDialog(self).exec()
 
+    def action_inventory(self) -> None:
+        """Öffnet das lokale Lager und behält das Projekt an seinem Platz."""
+        from app.ui.filament_inventory import InventoryView
+
+        if self._inventory_view is None:
+            view = InventoryView(self)
+            self._inventory_view = view
+            self.stack.addWidget(view)
+            view.backRequested.connect(lambda: self.stack.setCurrentWidget(self._inventory_return))
+            view.catalogueChanged.connect(self._refresh_inventory)
+            view.bookingModeChanged.connect(self._set_inventory_booking_mode)
+            view.lowStockThresholdChanged.connect(self._set_inventory_threshold)
+        if self.stack.currentWidget() is not self._inventory_view:
+            self._inventory_return = self.stack.currentWidget() or self.start_screen
+        view = cast(InventoryView, self._inventory_view)
+        view.set_booking_mode(self.settings.inventory_booking_mode)
+        view.set_low_stock_threshold(self.settings.inventory_low_stock_percent)
+        view.refresh()
+        self.stack.setCurrentWidget(view)
+
+    def _set_inventory_booking_mode(self, mode: str) -> None:
+        self.settings.inventory_booking_mode = mode
+        self._store_settings()
+
+    def _set_inventory_threshold(self, percent: float) -> None:
+        self.settings.inventory_low_stock_percent = percent
+        self._store_settings()
+
+    def _refresh_inventory(self) -> None:
+        """Lageranzeigen erneuern; eingebettete Projektfilamente bleiben Schnappschüsse."""
+        self.filaments.refresh_catalogue()
+        self.start_screen.refresh_inventory()
+        self.quick_filament.refresh()
+        if self._inventory_view is not None:
+            from app.ui.filament_inventory import InventoryView
+
+            cast(InventoryView, self._inventory_view).refresh()
+
+    def _inventory_settings(self) -> PrintSettings:
+        """Eine Projektkennung trennt gleiche Vorbereitungen verschiedener Projekte."""
+        settings = self.session.project.document.print_settings or print_settings.resolve(
+            self.session.profile
+        )
+        if not settings.inventory_project_id:
+            settings = replace(settings, inventory_project_id=uuid4().hex)
+            self.session.set_print_settings(settings)
+        return settings
+
+    def _spool_change(self, entry: filaments.CatalogueFilament) -> DocumentChange:
+        """Die physische Wahl gehört zum selben Undo wie ihre Filamentzuweisung."""
+        settings = self._inventory_settings()
+        return change_for(
+            self.session.project.document,
+            spool_bindings=with_spool(settings, spool_slot(entry), entry.identifier).spool_bindings,
+        )
+
+    def _assign_inventory_spool(self, entry: filaments.CatalogueFilament) -> None:
+        """Körper oder gewählte Flächen färben sich über eine einzige Transaktion."""
+        from app.core.export.threemf import slot_identity
+        from app.core.types import MAX_SLOTS
+
+        result = self.session.last_result
+        if result is None:
+            return
+        selected = self.object_tree.selected_objects()
+        features = self.object_tree.selected_features()
+        drafts: list[OperationDraft] = []
+        for identifier in selected:
+            body = result.scene.objects.get(identifier)
+            if body is None:
+                continue
+            targets = [feature for owner, feature in features if owner == identifier]
+            if targets and any(
+                feature not in body.features or not body.features[feature].face_indices
+                for feature in targets
+            ):
+                self.announce(
+                    tr("Wählen Sie eine Fläche oder weisen Sie das Filament dem Körper zu.")
+                )
+                return
+            slot_index = 0
+            if targets:
+                used = set(as_mesh_data(body.mesh).slots) or {0}
+                matching = next(
+                    (
+                        slot.index
+                        for slot in body.material_slots
+                        if slot_identity(slot) == slot_identity(spool_slot(entry))
+                    ),
+                    None,
+                )
+                free = next((index for index in range(MAX_SLOTS) if index not in used), None)
+                if matching is not None:
+                    slot_index = matching
+                elif free is not None:
+                    slot_index = free
+                else:
+                    mesh = as_mesh_data(body.mesh)
+                    choices = [
+                        f"{slot.index + 1}: "
+                        + tr("{name} · {count} Dreiecke").format(
+                            name=str(slot.name),
+                            count=sum(value == slot.index for value in mesh.slots),
+                        )
+                        for slot in body.material_slots
+                    ]
+                    chosen, accepted = QInputDialog.getItem(
+                        self,
+                        tr("Filament ersetzen"),
+                        tr(
+                            "Alle acht Filamente sind belegt. Welches soll auch auf seinen "
+                            "bisherigen Flächen ersetzt werden? Strg+Z nimmt die Zuweisung zurück."
+                        ),
+                        choices,
+                        0,
+                        False,
+                    )
+                    if not accepted:
+                        return
+                    slot_index = body.material_slots[choices.index(chosen)].index
+            params = {
+                "slot": slot_index,
+                "name": entry.name,
+                "colour": entry.colour,
+                "material_type": entry.material_type,
+                "slicer_profile": entry.slicer_profile,
+            }
+            for feature in targets or [""]:
+                drafts.append(
+                    OperationDraft(
+                        op="paint_slot" if feature else "assign_slot",
+                        inputs=(identifier,),
+                        params={**params, "at_feature": feature, "replace_filament": True}
+                        if feature
+                        else params,
+                    )
+                )
+        if not drafts:
+            return
+        self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(entry))
+
     def action_print_settings(self) -> None:
         """§29: die Einstellungen, mit denen gedruckt wird — hier, nicht im
         anderen Programm.
@@ -5003,7 +5196,10 @@ class MainWindow(QMainWindow):
         # Dasselbe Muster für das Material: Die Kopfzeile berichtet, woher es
         # kommt, und der Knopf daneben führt dorthin, wo es gewählt wird.
         dialog.filamentsRequested.connect(lambda: self._show_filaments(dialog))
+        dialog.usage_notice.changed.connect(self._refresh_inventory)
         dialog.exec()
+        for request in dialog.usage_notice.requests.values():
+            self.usage_notice.offer(request, auto_book=False)
         self._settings_dialog = None
 
         # Die Einstellungen gehören zum Projekt, die Stufe und die Slicer-Wahl
@@ -5417,6 +5613,7 @@ class MainWindow(QMainWindow):
         self._export_attempt = (target, export_format)
         self._write_failure = None
 
+        inventory_settings = self._inventory_settings() if export_format == "3mf" else None
         worker = _ExportWorker(
             objects,
             target,
@@ -5439,6 +5636,8 @@ class MainWindow(QMainWindow):
             ),
             ui_settings=self.settings,
             material=self.session.profile.material.id,
+            inventory_settings=inventory_settings,
+            project_name=self.session.document_name or target.stem,
         )
         self._export_worker = worker
         # Die Flagge, nicht nur das Worker-Feld: ``_anything_running`` fragt
@@ -5448,6 +5647,7 @@ class MainWindow(QMainWindow):
         self._exporting = True
         worker.done.connect(self._export_done)
         worker.failed.connect(self._export_failed)
+        worker.usageReady.connect(self.usage_notice.offer)
         # **Und das Unerwartete.** Der Menüeintrag ist gesperrt, solange
         # geschrieben wird; eine Ausnahme, die den Thread abriss, ließ ihn für
         # den Rest der Sitzung gesperrt — der Kunde konnte nicht mehr
@@ -10453,6 +10653,12 @@ class MainWindow(QMainWindow):
                     said = f"{said} {options}"
                 note = f"{note}\n{said}" if note else said
 
+        chosen_spool: filaments.CatalogueFilament | None = None
+
+        def remember_spool(entry: filaments.CatalogueFilament) -> None:
+            nonlocal chosen_spool
+            chosen_spool = entry
+
         def run(params: Mapping[str, Any]) -> None:
             if spec.name in LID_OPS and inputs:
                 # Der Deckel geht über seinen Ablauf, nicht über die nackte
@@ -10473,7 +10679,12 @@ class MainWindow(QMainWindow):
                 if on_bodies
                 else [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))]
             )
-            self.session.apply(spec.title, drafts, bundle=bool(on_bodies))
+            changes = (
+                self._spool_change(chosen_spool)
+                if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}
+                else None
+            )
+            self.session.apply(spec.title, drafts, bundle=bool(on_bodies), changes=changes)
             operations = self.session.project.document.ops
             if spec.name == "split_pinned" and len(operations) > count_before:
                 self._queue_split_reveal(operations[-1].outputs)
@@ -10594,6 +10805,7 @@ class MainWindow(QMainWindow):
                 slots=self._slots_of_selection(),
                 note=note,
             )
+            dialog.spoolChosen.connect(remember_spool)
             if variant is not None:
                 # Dieselbe Pflicht wie beim Kernwechsel: Was der Dialog zeigt
                 # und was die Vorschau rechnet, muss dieselbe Variante sein.
@@ -13492,10 +13704,20 @@ class MainWindow(QMainWindow):
             install_dialogs_idle = dialog.wait_for_workers(remaining) and install_dialogs_idle
         remaining = max(0, int((deadline - time.monotonic()) * 1000))
         viewport_idle = self.viewport.wait_for_workers(remaining)
+        inventory_idle = all(
+            notice.wait_for_workers(0) for notice in self.findChildren(UsageNotice)
+        )
+        if self._inventory_view is not None:
+            from app.ui.filament_inventory import InventoryView
+
+            inventory_idle = (
+                cast(InventoryView, self._inventory_view).wait_for_workers(0) and inventory_idle
+            )
         return (
             bool(session_idle)
             and install_dialogs_idle
             and viewport_idle
+            and inventory_idle
             and not any(worker.isRunning() for worker in unique.values())
         )
 

@@ -204,16 +204,47 @@ def test_an_imported_slicer_profile_is_visible_but_not_editable(
     assert dialog.slicer_profile.isReadOnly()
 
 
-def test_every_free_number_stays_reachable(qt_app: QApplication) -> None:
-    """Keine Sackgasse (§2.1): Wer genau Slot 5 meint, bekommt ihn.
+def test_only_filaments_that_exist_are_offered(qt_app: QApplication) -> None:
+    """Die Liste zeigt Spulen, keine leeren Plätze.
 
-    Der Wähler ist eine Hilfe und keine Bevormundung — die acht Nummern des
-    3MF-Farbwechsels bleiben alle erreichbar.
+    **Hier stand das Gegenteil.** „Keine Sackgasse (§2.1): Wer genau Slot 5
+    meint, bekommt ihn" — und dafür trug die Liste alle acht Nummern des
+    3MF-Farbwechsels, auch die sieben, hinter denen nichts lag. Gemessen an
+    einem Projekt mit einem einzigen zugewiesenen Filament waren das neun
+    Einträge, von denen zwei etwas bedeuteten.
+
+    Robert am 08.09.2026: „Im Projektbaum sollen nur Filamente erscheinen, die
+    wir bei Filamenten schon hinzugefügt haben." §2.1 verspricht keine
+    Sackgassen bei **rücknehmbaren** Handlungen, und eine Filamentzuweisung
+    ist eine Op wie jede andere — Strg+Z nimmt sie zurück. Wer eine Nummer
+    braucht, die es noch nicht gibt, legt die Spule an; sie bekommt ihre
+    Nummer beim Wählen.
+
+    Was stehen bleibt: was am Körper liegt, was im Katalog steht, Slot 0 als
+    Abwesenheit — und der vorgewählte Wert, damit die Vorgabe nicht ins Leere
+    zeigt.
     """
     field = FilamentField(0, slots=[MaterialSlot(index=1, name="PETG Rot")])
 
     offered = {field.itemData(row) for row in range(field.count())}
-    assert set(range(8)) <= offered, "eine Nummer fehlt in der Liste"
+    assert 1 in offered, "was am Körper liegt, steht zur Wahl"
+    assert 0 in offered, "und die Abwahl — sonst wird man ein Filament nicht mehr los"
+    leer = set(range(2, 8)) & offered
+    assert not leer, f"leere Plätze gehören nicht in die Liste, gefunden: {sorted(leer)}"
+
+
+def test_the_preselected_slot_is_in_the_list_even_when_empty(qt_app: QApplication) -> None:
+    """Was vorgewählt ist, muss man auch sehen können.
+
+    ``paint_slot`` beginnt bei Filament 1. Stünde die Vorgabe nicht in der
+    Liste, zeigte das Feld beim Öffnen etwas anderes an, als die Operation
+    ausführen würde — der Fehler, den das Aufräumen der leeren Plätze fast
+    eingebaut hätte.
+    """
+    field = FilamentField(1)
+
+    assert field.findData(1) >= 0, "die Vorwahl steht in der Liste"
+    assert field.currentData() == 1, "und sie ist auch gewählt"
 
 
 def test_a_cancelled_new_filament_leaves_a_usable_value(
@@ -283,7 +314,8 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
     assert "PLA Schwarz — 2 Körper" in zeilen, f"zwei Körper tragen es: {zeilen}"
     assert "PETG Rot — 1 Körper" in zeilen, f"einer trägt es: {zeilen}"
-    assert zeilen.count("PETG Rot") == 1, "das Regal nennt es einmal, ohne Zählung"
+    assert sum(line.startswith("PETG Rot ·") for line in zeilen) == 1
+    assert any("Bestand unbekannt" in line for line in zeilen), "Altbestand wird nicht geraten"
 
 
 def test_refreshing_the_rack_keeps_the_project_summary(
@@ -362,7 +394,7 @@ def test_a_used_filament_separates_colour_from_print_values(
     regal = next(
         panel.list.item(index)
         for index in range(panel.list.count())
-        if panel.list.item(index).text() == "PETG Rot"
+        if panel.list.item(index).text().startswith("PETG Rot ·")
     )
 
     assert benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "Druckwerte müssen erreichbar sein"
@@ -425,7 +457,9 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
     panel = FilamentPanel()
     panel.show_scene([])
     row = next(
-        index for index in range(panel.list.count()) if panel.list.item(index).text() == "PLA Weiß"
+        index
+        for index in range(panel.list.count())
+        if panel.list.item(index).text().startswith("PLA Weiß ·")
     )
     panel.list.setCurrentRow(row)
 
@@ -435,8 +469,10 @@ def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch
         "aus dem Katalog, nicht nur aus der Liste"
     )
     assert not any(
-        panel.list.item(index).text() == "PLA Weiß" for index in range(panel.list.count())
+        panel.list.item(index).text().startswith("PLA Weiß ·")
+        for index in range(panel.list.count())
     )
+    assert filaments.catalogue(include_archived=True)[0].archived
 
 
 def test_a_filament_without_a_colour_is_never_shown_blank(qt_app: QApplication) -> None:
@@ -728,7 +764,15 @@ def test_the_profile_of_a_spool_can_be_chosen_and_removed(qt_app: QApplication) 
         None, name="PLA Rot", colour="#ff0000", slicer_profile="Elegoo PLA @EC"
     )
 
-    assert dialog.slicer_profile.isVisibleTo(dialog), "das Feld ist immer erreichbar"
+    from PySide6.QtWidgets import QToolButton
+
+    heading = dialog.more_section.findChild(QToolButton, "sectionHeading")
+    assert heading is not None
+    heading.click()
+
+    assert dialog.slicer_profile.isVisibleTo(dialog), (
+        "das Profil bleibt unter Weitere Angaben erreichbar"
+    )
     assert dialog.choose_profile.isEnabled()
     assert dialog.clear_profile.isEnabled()
 
@@ -789,3 +833,71 @@ def test_every_spool_on_the_shelf_can_be_chosen_for_an_unpainted_body(
     field._chosen(eighth)
 
     assert field.itemData(eighth) == 1, "beim Wählen bekommt sie die erste freie Nummer"
+
+
+def test_same_print_filament_keeps_both_physical_spools_selectable(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Gleiche Druckwerte teilen den Slot, die Spulenauswahl bleibt ausdrücklich."""
+    from app.ui.filament_picker import _ID_ROLE, spool_slot
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    first = filaments.save(filaments.CatalogueFilament("PLA", "#abcdef", "PLA", location="A"))
+    second = filaments.save(filaments.CatalogueFilament("PLA", "#abcdef", "PLA", location="B"))
+    slot = spool_slot(first, 3)
+    field = FilamentField(3, slots=[slot])
+    seen = []
+    field.spoolChosen.connect(seen.append)
+    first_row = field.findData(first.identifier, _ID_ROLE)
+    second_row = field.findData(second.identifier, _ID_ROLE)
+    assert first_row != second_row
+    assert field.itemData(first_row) == field.itemData(second_row) == 3
+    field._chosen(second_row)
+    assert seen == [second]
+    assert slot == spool_slot(first, 3)
+
+
+def test_full_body_offers_named_replacement_and_cancel_keeps_selection(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Die achte Belegung sperrt den Kunden nicht aus und ersetzt nichts ungefragt."""
+    from PySide6.QtWidgets import QInputDialog
+
+    from app.ui.filament_picker import _ID_ROLE
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    entry = filaments.save(filaments.CatalogueFilament("Neue Spule", "#abcdef"))
+    field = FilamentField(
+        3, slots=[MaterialSlot(index=index, name=f"Alte Spule {index}") for index in range(8)]
+    )
+    row = field.findData(entry.identifier, _ID_ROLE)
+    seen = []
+    field.spoolChosen.connect(seen.append)
+    monkeypatch.setattr(QInputDialog, "getItem", lambda *_args: ("", False))
+    field._chosen(row)
+    assert not seen
+    assert field.currentData() == 3
+
+    def choose(_parent, _title, explanation, labels, _current, _editable):
+        assert "Strg+Z" in explanation
+        assert "bisherigen Flächen" in explanation
+        return labels[5], True
+
+    monkeypatch.setattr(QInputDialog, "getItem", choose)
+    field.setCurrentIndex(row)
+    field._chosen(row)
+    assert field.currentData() == 5
+    assert seen == [entry]
+
+    body_field = FilamentField(
+        3,
+        slots=[MaterialSlot(index=index, name=f"Alt {index}") for index in range(8)],
+        whole_body=True,
+    )
+    body_row = body_field.findData(entry.identifier, _ID_ROLE)
+    monkeypatch.setattr(
+        QInputDialog, "getItem", lambda *_args: pytest.fail("keine Tauschfrage für ganzen Körper")
+    )
+    body_field.setCurrentIndex(body_row)
+    body_field._chosen(body_row)
+    assert body_field.currentData() == 0

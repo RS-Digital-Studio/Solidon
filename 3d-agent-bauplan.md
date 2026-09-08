@@ -152,7 +152,7 @@ Abnahmeprüfung (§40).
 - **Ziehen und Ablegen funktioniert überall** — auf das Fenster, auf den
   Viewport, auf den Objektbaum.
 - **Die Erstinbetriebnahme fragt das Nötigste**: Sprache und Drucker.
-  Erkannte Slicer-Filamente werden mit ihren vorhandenen Angaben übernommen;
+  Erkannte Slicer-Filamente stehen im Filamentlager zur bewussten Übernahme bereit;
   ein nicht zugeordneter Typ bleibt ausdrücklich unbekannt. Keine zweite
   Materialfrage und keine stillschweigende PLA-Zuordnung. Zusatzprogramme
   und Chat-Zugang bleiben optional. Die Einrichtung ist überspringbar und
@@ -498,7 +498,7 @@ class SceneObject:
     id: ObjectId
     name: TranslatableText | str
     mesh: Mesh
-    kind: ObjectKind = 'mesh'
+    kind: ObjectKind = "mesh"
     features: dict[FeatureId, Feature] = field(default_factory=dict)
     material_slots: list[MaterialSlot] = field(default_factory=list)
     material: str | None = None
@@ -557,7 +557,7 @@ class SliceResult:
     layers: tuple[LayerInfo, ...]
     support_volume: float
     first_layer_area: float
-    source: MetricSource = 'internal'
+    source: MetricSource = "internal"
 
 
 @dataclass(frozen=True, slots=True)
@@ -571,7 +571,7 @@ class SketchElement:
 class SketchConstraint:
     kind: SketchConstraintKind
     targets: tuple[int, ...]
-    value: str = ''
+    value: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -584,9 +584,7 @@ class Sketch:
 OpFn = Callable[[OpContext], OpResult]
 
 
-def solve_sketch(
-    sketch: Sketch, params: Mapping[str, float] | None = None
-) -> SolvedSketch:
+def solve_sketch(sketch: Sketch, params: Mapping[str, float] | None = None) -> SolvedSketch:
     """Löst deterministisch; Freiheitsgrade und kollidierende Bedingungen
     werden als Befund beziehungsweise handlungsfähiger Fehler gemeldet."""
 ```
@@ -1249,8 +1247,48 @@ das Dateiformat; die Bedienung nennt **Filament mit Name, Typ und Farbe**, nie
 eine nackte Nummer. Der projektübergreifende Filamentkatalog darf beliebig
 viele Spulen führen, je Objekt gelten höchstens acht gleichzeitig benutzte
 Slots. Die aktuell im Slicer eingelegten Filamente werden samt Typ, Farbe und
-Herstellerprofil als Vorwahl übernommen; ein von Hand angelegtes Filament
+Herstellerprofil als Vorschlag zur bewussten Übernahme angeboten; ein von Hand angelegtes Filament
 lässt seinen Typ ausdrücklich wählen.
+
+**Physische Spulen** tragen eine stabile, lokal erzeugte Kennung. Gleiche Namen
+dürfen mehrfach vorkommen. Die Kennung ist weder Extruderplatz noch Profilname:
+`PrintSettings.slot_profiles` bleibt eine Folge portabler Slicer-Profilnamen,
+`spool_bindings` bindet dagegen die vollständige Druckfilament-Identität an eine
+lokale Spule. Das Projekt behält seine eingebetteten Werte; Lageränderungen
+werden erst durch eine neue Zuweisung übernommen. Fehlt die Spule auf einem
+anderen Rechner, bleiben Geometrie und Druckwerte unverändert benutzbar.
+
+**Das Lager** ist vom Startbildschirm und aus *Bearbeiten* erreichbar, ohne
+das Projekt zu schließen. Ein Regal zeigt Name, Farbe, Typ, Rest in Gramm und
+Füllstand, ergänzt um Suche, Gruppierung und Archiv. Rest, Anfangsgewicht,
+Lagerort, Kauf-/Öffnungsdatum, Preis mit gespeicherter Währung und Notiz sind
+freiwillig. Unbekannter Bestand wird nie als volle Rolle migriert oder als
+null angezeigt. Slicerprofile erzeugen weder beim Erststart noch durch eine
+erneute Erhebung automatisch physische Spulen.
+
+**Die Schnellauswahl** benutzt dieselben Zuweisungsoperationen wie die Dialoge.
+Eine Handlung auf mehreren Körpern oder Flächen bildet eine Transaktion.
+Bei acht belegten Plätzen fragt eine neue Flächenzuweisung nach dem zu
+ersetzenden Filament und benennt die betroffenen bisherigen Flächen. Eine
+Zuweisung an den ganzen Körper braucht keinen neunten Platz.
+
+**Verbrauch** wird nach erfolgreichem Slicen, Öffnen im Slicer oder 3MF-Export
+angeboten; der Bericht benutzt denselben Übergabeweg. Die Vorgabe ist *fragen*,
+daneben gibt es *nie* und ausdrücklich gewähltes *ohne Rückfrage buchen*.
+Offene Angebote bleiben erreichbar. Fehler und abgebrochene Platten buchen
+nichts; erfolgreich ausgegebene Teilmengen bleiben einzeln zuordenbar.
+Interne Schätzungen, im G-Code geplante Mengen und Handeingaben behalten ihre
+Herkunft. G-Code ist keine Wägung. Werkzeuglücken bleiben erhalten, Gesamtwerte
+werden nicht über Spulen verteilt, fehlende Materialdichten nicht geraten.
+
+Eine Vorbereitung trägt einen stabilen Fingerabdruck; jeder tatsächlich
+gewollte Druck einen eigenen Buchungsvorgang. Eine erneute Zustellung bucht
+nicht doppelt. G-Code korrigiert eine zugehörige Schätzung um die Differenz;
+ein weiterer Druck wird ausdrücklich gewählt. Mehrere Spulen eines Vorgangs
+werden atomar mit ihrem Journal gespeichert. Rücknahme betrifft den gesamten
+Vorgang. Eine jüngere manuelle Bestandsfeststellung wird weder durch eine
+Korrektur noch durch eine Rücknahme still überschrieben. Der ausführliche
+Vertrag steht im [geprüften Filamentlagerkonzept](konzepte/konzept-filamentlager-2026-09.md#14-review-und-präzisierte-verträge).
 
 **Import**: STL keine Farbe (alles Slot 0), 3MF Materialgruppen je Dreieck,
 OBJ+MTL Gruppen und optional Textur, GLB/glTF ein PBR-Material mit Textur,
@@ -1549,9 +1587,7 @@ Namen.
     params=HeatsetParams,
     subtractive=True,
     features=["bore", "chamfer"],
-    wall=WallRequirement.not_applicable(
-        "Der Baustein ist ein abtragender Werkzeugkörper."
-    ),
+    wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
     feature_requirements=(
         FeatureRequirement("bore"),
         FeatureRequirement("chamfer", when="lead_in"),

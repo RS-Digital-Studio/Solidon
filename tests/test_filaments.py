@@ -48,9 +48,12 @@ def test_an_old_catalogue_without_type_and_profile_still_opens(own_catalogue: Pa
         '[{"name": "PLA Weiß", "colour": "#f0f0f0"}]', encoding="utf-8"
     )
 
-    assert filaments.catalogue() == (
-        filaments.CatalogueFilament(name="PLA Weiß", colour="#f0f0f0"),
-    )
+    (entry,) = filaments.catalogue()
+    assert entry.name == "PLA Weiß"
+    assert entry.colour == "#f0f0f0"
+    assert entry.material_type == entry.slicer_profile == ""
+    assert entry.identifier
+    assert entry.remaining_grams is None
 
 
 def test_synchronising_the_slicer_keeps_the_rest_of_the_rack(own_catalogue: Path) -> None:
@@ -91,15 +94,16 @@ def test_forget_removes_and_says_whether_it_did(own_catalogue: Path) -> None:
     assert filaments.catalogue() == ()
 
 
-def test_a_broken_file_means_an_empty_catalogue_not_a_crash(own_catalogue: Path) -> None:
-    """Die freundliche Richtung: Eine kaputte Datei kostet die Vorwahl, nie
-    den Start der Anwendung."""
+def test_a_broken_file_never_gets_overwritten(own_catalogue: Path) -> None:
+    """Der Start bleibt möglich; kein Schreibweg darf einen beschädigten Bestand löschen."""
     filaments.catalogue_path().write_text("{kaputt", encoding="utf-8")
 
     assert filaments.catalogue() == ()
 
-    filaments.remember("PETG Rot", "#d02020")
-    assert [entry.name for entry in filaments.catalogue()] == ["PETG Rot"]
+    with pytest.raises(ValidationError) as raised:
+        filaments.remember("PETG Rot", "#d02020")
+    assert raised.value.suggestions
+    assert filaments.catalogue_path().read_text(encoding="utf-8") == "{kaputt"
 
 
 def test_an_empty_name_stops_with_advice(own_catalogue: Path) -> None:
@@ -139,9 +143,14 @@ def test_an_old_profile_path_costs_only_the_profile_binding(own_catalogue: Path)
         encoding="utf-8",
     )
 
-    assert filaments.catalogue() == (
-        filaments.CatalogueFilament("PETG Rot", "#d02020", "PETG", ""),
+    (entry,) = filaments.catalogue()
+    assert (entry.name, entry.colour, entry.material_type, entry.slicer_profile) == (
+        "PETG Rot",
+        "#d02020",
+        "PETG",
+        "",
     )
+    assert entry.identifier
 
 
 def test_a_repeated_slicer_reading_renames_instead_of_doubling(
@@ -167,9 +176,14 @@ def test_a_slicer_path_drops_the_binding_but_keeps_the_loaded_spool(
         [filaments.CatalogueFilament("PETG Grau", "#808080", "PETG", r"C:\Slicer\PETG.json")]
     )
 
-    assert filaments.catalogue() == (
-        filaments.CatalogueFilament("PETG Grau", "#808080", "PETG", ""),
+    (entry,) = filaments.catalogue()
+    assert (entry.name, entry.colour, entry.material_type, entry.slicer_profile) == (
+        "PETG Grau",
+        "#808080",
+        "PETG",
+        "",
     )
+    assert entry.identifier
 
 
 def test_the_catalogue_survives_a_new_reading(own_catalogue: Path) -> None:
