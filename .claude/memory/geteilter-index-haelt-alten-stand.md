@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 7fe92054-2daa-4d76-92ed-67a2464096bd
-  modified: 2026-08-27T18:21:14.263Z
+  modified: 2026-09-08T13:12:56.952Z
 ---
 
 `git status` zeigte am 27.08.2026 fünf Dateien als `MM` — ROADMAP.md,
@@ -293,3 +293,50 @@ gegen `git log --format=%H -20` vergleichen. Trifft er, heilen und es den
 anderen Sitzungen **sagen** — sie sehen den Index nicht als ihren, aber sie
 committen damit. Trifft er nicht, die abweichenden Pfade einzeln ansehen
 (`git diff --name-status --cached HEAD`) und nur die eigenen zurücksetzen.
+
+---
+
+## Der alte Index blockiert auch den Merge — und die Fehlerliste nennt Dateien, an denen niemand arbeitet
+
+Am 08.09.2026 eine neue Gestalt desselben Falls, und sie sieht nicht nach
+Index aus, sondern nach Kollision. Nach einem eigenen Commit lehnte
+`git push` ab (Gegenstelle weiter), und der fällige Merge scheiterte dreimal:
+
+    error: Your local changes to the following files would be overwritten by merge:
+      .claude/rules/oberflaeche.md ROADMAP.md Releases/*.pdf app/core/errors.py
+      … 133 Dateien … website/version.json
+    Already up to date.
+    Merge with strategy ort failed.
+
+Gelesen als „drei Nachbarsitzungen arbeiten an 133 Dateien, da kann ich nicht
+mergen". Falsch. Der Arbeitsbaum war deckungsgleich mit HEAD:
+
+| Messung | Antwort |
+|---|---|
+| `git diff --name-only HEAD` (Baum ↔ HEAD) | **1 Datei** — meine eigene, CRLF gegen LF |
+| `git diff --cached --name-only HEAD` (Index ↔ HEAD) | **133 Dateien** |
+
+Der Merge prüft gegen den **Index**, nicht gegen den Baum, und schreibt ihn
+vollständig neu — deshalb gilt ihm jeder veraltete Eintrag als gefährdete
+lokale Änderung. `git update-index --refresh` half nicht (es frischt nur den
+stat-Cache auf, nicht die Blobs); `read-tree HEAD` löste es in einer Sekunde,
+danach lief der Merge durch.
+
+**Warum das eine eigene Erwähnung wert ist:** Die Symptome oben sind alle
+*Commit*-Symptome — falsche Zahlen, vorgemerkte Löschungen, verwaiste
+Einträge. Dieses hier verhindert das Zusammenführen und sieht dabei nach dem
+Gegenteil aus: nach fremder Arbeit, die man schützen muss. Das
+`Already up to date` in derselben Ausgabe verstärkt die Verwirrung, es ist
+nur die Nachricht der abgebrochenen Strategie.
+
+**Und der eigene Fehler daneben, ohne Beschönigung:** Der Abschnitt darüber
+verlangt vor jedem Eingriff am Haupt-Index den Baumvergleich
+(`git write-tree` gegen `git rev-parse <commit>^{tree}`), der beweist, dass
+dort nur Veraltung liegt und keine fremde Vormerkung. Ich habe ihn
+übersprungen — weil „133 Dateien gegen HEAD, Baum sauber" so eindeutig nach
+Veraltung aussah, dass der Beweis wie eine Formalie wirkte. Verloren ging
+nichts (der Baum deckte sich mit HEAD, also hätte eine Vormerkung Inhalt
+tragen müssen, den weder HEAD noch Baum kennen), aber das war Glück und keine
+Messung. **Je eindeutiger die Lage aussieht, desto billiger ist der Beweis —
+das ist ein Grund, ihn zu führen, und keiner, ihn zu lassen.** Dieselbe
+Bewegung wie [[geprueft-fuehlt-sich-wie-vollstaendig-an]].
