@@ -4548,9 +4548,12 @@
   "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Procura para cada corpo selecionado a posição com menos suportes. Cada um recebe a sua — a melhor posição decorre da geometria da peça individual.",
   "In Einzelteile zerlegen": "Separar em peças distintas",
   "Splitter behalten": "Manter as lascas",
-  "Der Körper besteht aus einem Stück.": "O corpo é de uma só peça.",
   "{count} Splitter unter einem Prozent wurden verworfen.": "Foram descartadas {count} lascas abaixo de um por cento.",
   "Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.": "Manter também os fragmentos abaixo de um por cento da maior peça. Das digitalizações vêm muitas vezes triângulos soltos — raramente se querem como modelo próprio.",
   "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht ein Teil — eine STL weiß das nicht, die Geometrie schon.": "Transforma um corpo feito de várias partes não ligadas num objeto cada uma. O que não está ligado não é uma peça: um STL não o sabe, a geometria sim.",
-  "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.": "Só se separa o que não se toca. Duas peças encostadas numa face são uma só para a geometria — aí serve Dividir por um plano."
+  "Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.": "Só se separa o que não se toca. Duas peças encostadas numa face são uma só para a geometria — aí serve Dividir por um plano.",
+  "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge vergibt, bevor gerechnet wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht — und diese Operation nennt die Zahl, wenn sie nicht passt.": "Em quantos objetos se separa. O número fica aqui e não no resultado, porque a pilha atribui os identificadores das suas saídas antes de calcular. Quantas peças o corpo tem realmente diz o relatório — e esta operação nomeia o número quando não encaixa.",
+  "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "O corpo é de uma só peça; não há nada para separar.",
+  "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "O corpo tem menos peças do que a quantidade pede.",
+  "{count} weitere Teile blieben im letzten Objekt beieinander.": "Outras {count} peças ficaram juntas no último objeto."
 }

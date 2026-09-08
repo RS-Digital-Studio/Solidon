@@ -2999,19 +2999,62 @@ def test_split_bodies_makes_one_object_per_loose_part(profile: Profile) -> None:
 
 
 def test_split_bodies_says_so_when_there_is_nothing_to_split(profile: Profile) -> None:
-    """Ein Körper aus einem Stück kommt unverändert zurück — mit einem Satz.
+    """Ein Körper aus einem Stück wird abgelehnt — mit dem Satz, warum.
 
-    Nicht als Fehler: Wer die Operation an einem einteiligen Körper ruft, hat
-    nichts falsch gemacht, er hat nur nichts zu trennen. Ein Befund sagt es;
-    eine Ausnahme wäre die falsche Antwort auf eine berechtigte Frage.
+    Bis zum 08.09.2026 kam er unverändert zurück, mit einem freundlichen
+    Befund. Das ging nicht: Der Stapel vergibt die Kennungen der Ausgänge,
+    **bevor** gerechnet wird, und eine Operation, die danach eine andere Zahl
+    liefert, hält die ganze Kette an (§15.2). Wer hier landet, hat nichts
+    falsch gemacht — deshalb sagt der Satz, was los ist, statt eine
+    Beschränkung zu nennen.
+    """
+    import trimesh
+
+    from app.core.errors import ValidationError
+    from app.core.geom.mesh import MeshData
+
+    single = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    entry = SceneObject(id="obj_1", name="Klotz", mesh=single)
+
+    with pytest.raises(ValidationError) as fehler:
+        _run_op("split_bodies", entry, profile)
+
+    assert "einem Stück" in str(fehler.value.detail)
+    assert fehler.value.suggestions, "auch diese Absage trägt einen Vorschlag (Regel 17)"
+
+
+def test_split_bodies_keeps_the_surplus_together_and_says_how_many(profile: Profile) -> None:
+    """Vier Teile bei Stückzahl zwei: zwei Objekte, und der Befund nennt die vier.
+
+    Robert ist am 08.09.2026 an der Auffangrinne-Platte darüber gestolpert —
+    vier Segmente in einer STL, und die Operation lieferte vier Objekte, wo der
+    Stapel eines erwartete. Die Zahl steht jetzt vorher fest. Passt sie nicht,
+    bleiben die übrigen Teile beieinander statt zu verschwinden, und das wird
+    gesagt.
     """
     import trimesh
 
     from app.core.geom.mesh import MeshData
 
-    single = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
-    entry = SceneObject(id="obj_1", name="Klotz", mesh=single)
-    result = _run_op("split_bodies", entry, profile)
+    teile = []
+    for schritt in range(4):
+        wuerfel = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        wuerfel.apply_translation((schritt * 50.0, 0.0, 0.0))
+        teile.append(wuerfel)
+    vier = MeshData.of(trimesh.util.concatenate(teile))
+    assert vier.component_count == 4, "die Vorbedingung selbst, nicht nur ihr Name"
+    entry = SceneObject(id="obj_1", name="Platte", mesh=vier)
 
-    assert len(result.outputs) == 1
-    assert "split_bodies.single" in {finding.code for finding in result.findings}
+    result = _run_op("split_bodies", entry, profile, count=4)
+    assert len(result.outputs) == 4, "mit der passenden Stückzahl je Teil ein Objekt"
+    for ausgabe in result.outputs:
+        assert as_mesh_data(ausgabe.mesh).component_count == 1
+
+    knapp = _run_op("split_bodies", entry, profile, count=2)
+    assert len(knapp.outputs) == 2, "genau so viele, wie die Stückzahl sagt"
+    befunde = {finding.code: finding for finding in knapp.findings}
+    assert "split_bodies.surplus" in befunde
+    assert befunde["split_bodies.surplus"].values["found"] == "4"
+    assert as_mesh_data(knapp.outputs[-1].mesh).component_count == 3, (
+        "die übrigen bleiben beieinander, statt zu verschwinden"
+    )

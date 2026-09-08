@@ -11,7 +11,7 @@ import dataclasses
 import math
 from collections.abc import Sequence
 from functools import lru_cache
-from typing import Final, cast
+from typing import Any, Final, cast
 
 import numpy as np
 
@@ -3185,6 +3185,19 @@ class SplitPinnedParams(BaseParams):
 
 @op_params
 class SplitBodiesParams(BaseParams):
+    count: int = param(
+        title=_("Anzahl"),
+        default=2,
+        minimum=2,
+        maximum=64,
+        doc=_(
+            "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht "
+            "erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge "
+            "vergibt, bevor gerechnet wird. Wie viele Teile der Körper "
+            "tatsächlich hat, sagt der Prüfbericht — und diese Operation "
+            "nennt die Zahl, wenn sie nicht passt."
+        ),
+    )
     keep_tiny: bool = param(
         title=_("Splitter behalten"),
         default=False,
@@ -3203,6 +3216,7 @@ class SplitBodiesParams(BaseParams):
     params=SplitBodiesParams,
     consumes=1,
     produces=VARIABLE,
+    produces_from="count",
     doc=_(
         "Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen "
         "besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht "
@@ -3224,35 +3238,53 @@ def split_bodies(ctx: OpContext) -> OpResult:
     denn dann hingen die Teile zusammen.
     """
     source = ctx.inputs[0]
+    params = cast(SplitBodiesParams, ctx.params)
     mesh = as_mesh_data(source.mesh)
     parts = mesh.raw.split(only_watertight=False)
 
-    if len(parts) <= 1:
-        # Kein Fehler, sondern eine Auskunft: Der Körper ist schon einer.
-        return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    code="split_bodies.single",
-                    severity="info",
-                    message=_("Der Körper besteht aus einem Stück."),
-                    object_id=source.id,
-                )
-            ],
-        )
-
-    params = cast(SplitBodiesParams, ctx.params)
     volumes = [abs(float(part.volume)) for part in parts]
-    largest = max(volumes) or 1.0
+    largest = max(volumes, default=0.0) or 1.0
     kept = [
         (part, volume)
         for part, volume in zip(parts, volumes, strict=True)
         if params.keep_tiny or volume >= largest * 0.01
     ]
     dropped = len(parts) - len(kept)
+    kept.sort(key=lambda entry: -entry[1])
+
+    # **Genau so viele, wie die Stückzahl sagt.** Der Stapel vergibt die
+    # Kennungen der Ausgänge, bevor gerechnet wird (§15.2); eine Operation, die
+    # nachher eine andere Zahl liefert, hält die ganze Kette an. Ist zu wenig
+    # da, wird das gesagt statt geraten — mit der Zahl, die passen würde.
+    if len(kept) < params.count:
+        raise ValidationError(
+            field="count",
+            detail=(
+                _("Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.")
+                if len(kept) <= 1
+                # **Ohne Platzhalter.** Ein Fehlertext wird nirgends
+                # nachformatiert — `show_details` zeigt ihn, wie er ist, und
+                # hängt `values` als eigene Zeilen darunter. Ein `{found}`
+                # stünde beim Kunden mit geschweiften Klammern da.
+                else _("Der Körper hat weniger Teile, als die Stückzahl verlangt.")
+            ),
+            constraint="too_many_parts",
+            values={"count": str(params.count), "found": str(len(kept))},
+        )
+
+    # Mehr Teile als verlangt: Die größten stehen einzeln, der Rest bleibt
+    # beieinander — genau der Zustand, aus dem sie kommen. Ein Befund nennt es,
+    # damit niemand die übrigen für verschwunden hält.
+    surplus = len(kept) - params.count
+    if surplus:
+        head = kept[: params.count - 1]
+        rest = [part for part, _volume in kept[params.count - 1 :]]
+        merged = rest[0] if len(rest) == 1 else cast("Any", trimesh.util.concatenate(rest))
+        rest_volume = float(sum(volume for _part, volume in kept[params.count - 1 :]))
+        kept = [*head, (merged, rest_volume)]
 
     outputs = []
-    for number, (part, _volume) in enumerate(sorted(kept, key=lambda entry: -entry[1]), start=1):
+    for number, (part, _volume) in enumerate(kept, start=1):
         outputs.append(
             dataclasses.replace(
                 source,
@@ -3267,6 +3299,16 @@ def split_bodies(ctx: OpContext) -> OpResult:
         )
 
     findings = []
+    if surplus:
+        findings.append(
+            Finding(
+                code="split_bodies.surplus",
+                severity="info",
+                message=_("{count} weitere Teile blieben im letzten Objekt beieinander."),
+                values={"count": str(surplus + 1), "found": str(surplus + params.count)},
+                object_id=source.id,
+            )
+        )
     if dropped:
         findings.append(
             Finding(
