@@ -744,9 +744,15 @@ function visitors_per_day(array $rows): array
 {
     $marks = [];
     foreach ($rows as $row) {
-        if ($row['mark'] !== '') {
-            $marks[$row['day']][$row['mark']] = true;
+        // **Update-Prüfungen sind keine Besuche.** Sie kommen von einem
+        // laufenden Programm und nicht von jemandem, der die Website öffnet;
+        // mitgezählt hätten sie die Besucherzahl um jede Installation erhöht,
+        // die morgens startet. Seiten und Downloads bleiben drin — wer über
+        // einen Direktlink lädt, war da, auch ohne eine Seite zu öffnen.
+        if ($row['kind'] === 'u' || $row['mark'] === '') {
+            continue;
         }
+        $marks[$row['day']][$row['mark']] = true;
     }
     $counts = [];
     foreach ($marks as $day => $set) {
@@ -864,11 +870,25 @@ $downloads = array_filter($rows, static fn (array $row): bool => $row['kind'] ==
 // darunter kommt dem „wie viele Rechner" näher.
 $updates = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'u');
 $update_marks = [];
+// **Und dasselbe je Fassung.** Die Prüfungen allein sagen, wie oft gestartet
+// wurde; erst die Kennzeichen sagen, auf wie vielen Rechnern. Wer die
+// Anwendung dreimal am Tag öffnet, steht dreimal in der einen Zahl und einmal
+// in der anderen — und die Frage „wie viele hängen noch auf der alten
+// Fassung" beantwortet nur die zweite.
+$marks_per_version = [];
 foreach ($updates as $row) {
-    if ($row['mark'] !== '') {
-        $update_marks[$row['day'] . '/' . $row['mark']] = true;
+    if ($row['mark'] === '') {
+        continue;
     }
+    $key = $row['day'] . '/' . $row['mark'];
+    $update_marks[$key] = true;
+    $marks_per_version[$row['value']][$key] = true;
 }
+$installs_per_version = array_map(
+    static fn (array $marks): int => count($marks),
+    $marks_per_version
+);
+arsort($installs_per_version);
 
 $per_day = [];
 foreach ($rows as $row) {
@@ -1149,6 +1169,12 @@ Neues gibt, und nennt dabei ihre Fassung. Das ist die einzige Zahl hier, die
 von <em>benutzten</em> Installationen kommt — ein Download sagt nur, dass
 jemand die Datei geholt hat. Wer auf einer alten Fassung steht, steht hier
 also auch, und man sieht, ob ein Update ankommt.</p>
+<p class="hinweis"><b>Installationen</b> zählt Tageskennzeichen, <b>Prüfungen</b>
+zählt Abrufe: Wer die Anwendung dreimal am Tag öffnet, steht dreimal rechts und
+einmal links. Für „wie viele hängen noch auf der alten Fassung" ist die linke
+Spalte die richtige — über mehrere Tage summiert sie, weil das Kennzeichen
+jeden Tag neu entsteht; innerhalb eines Tages ist sie eine Zahl von
+Rechnern.</p>
 <?php
 $versions = tally($rows, 'value', 'u');
 ?>
@@ -1158,14 +1184,25 @@ $versions = tally($rows, 'value', 'u');
   niemand die Anwendung gestartet.</p>
 <?php else: ?>
 <table>
-  <tr><th>Fassung</th><th class="n">Prüfungen</th><th style="width:55%"></th></tr>
-  <?php $update_peak = max(1, max($versions)); ?>
-  <?php foreach ($versions as $name => $count): ?>
+  <tr><th>Fassung</th><th class="n">Installationen</th><th class="n">Prüfungen</th><th style="width:45%"></th></tr>
+  <?php $update_peak = max(1, max($installs_per_version ?: [1])); ?>
+  <?php foreach ($installs_per_version as $name => $installs): ?>
   <tr>
     <td><?= e((string) $name) ?></td>
-    <td class="n"><?= number_format((float) $count, 0, ',', '.') ?></td>
-    <td><i style="width:<?= (int) round($count / $update_peak * 100) ?>%"></i></td>
+    <td class="n"><?= number_format((float) $installs, 0, ',', '.') ?></td>
+    <td class="n"><?= number_format((float) ($versions[$name] ?? 0), 0, ',', '.') ?></td>
+    <td><i style="width:<?= (int) round($installs / $update_peak * 100) ?>%"></i></td>
   </tr>
+  <?php endforeach; ?>
+  <?php foreach ($versions as $name => $count): ?>
+    <?php if (!isset($installs_per_version[$name])): ?>
+    <tr>
+      <td><?= e((string) $name) ?></td>
+      <td class="n">—</td>
+      <td class="n"><?= number_format((float) $count, 0, ',', '.') ?></td>
+      <td></td>
+    </tr>
+    <?php endif; ?>
   <?php endforeach; ?>
 </table>
 <?php endif; ?>
