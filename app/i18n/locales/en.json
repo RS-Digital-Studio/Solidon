@@ -4555,5 +4555,6 @@
   "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge vergibt, bevor gerechnet wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht — und diese Operation nennt die Zahl, wenn sie nicht passt.": "How many objects it is split into. The number belongs here and not in the result, because the stack hands out the identifiers of its outputs before anything is computed. How many parts the body actually has is in the check report — and this operation names the number when it does not fit.",
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "The body is a single piece; there is nothing to split.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "The body has fewer parts than the count asks for.",
-  "{count} weitere Teile blieben im letzten Objekt beieinander.": "{count} further parts stayed together in the last object."
+  "{count} weitere Teile blieben im letzten Objekt beieinander.": "{count} further parts stayed together in the last object.",
+  "Gefunden": "Found"
 }

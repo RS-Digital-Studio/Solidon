@@ -4555,5 +4555,6 @@
   "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge vergibt, bevor gerechnet wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht — und diese Operation nennt die Zahl, wenn sie nicht passt.": "Em quantos objetos se separa. O número fica aqui e não no resultado, porque a pilha atribui os identificadores das suas saídas antes de calcular. Quantas peças o corpo tem realmente diz o relatório — e esta operação nomeia o número quando não encaixa.",
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "O corpo é de uma só peça; não há nada para separar.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "O corpo tem menos peças do que a quantidade pede.",
-  "{count} weitere Teile blieben im letzten Objekt beieinander.": "Outras {count} peças ficaram juntas no último objeto."
+  "{count} weitere Teile blieben im letzten Objekt beieinander.": "Outras {count} peças ficaram juntas no último objeto.",
+  "Gefunden": "Encontrado"
 }

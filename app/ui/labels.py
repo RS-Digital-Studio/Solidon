@@ -1035,6 +1035,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "expected_prefix": _("Erwarteter Anfang"),
     "faces": _("Flächen"),
     "factor": _("Maßstab"),
+    # Was tatsächlich da war, wo eine Zahl verlangt wurde — beim Zerlegen die
+    # Teile, die der Körper hat, gegen die Stückzahl im Feld.
+    "found": _("Gefunden"),
     # Ohne das ``_mm`` des Werteschlüssels: ``value_label`` streift die
     # Einheiten-Endung, bevor es hier nachschlägt — wie bei ``eroded``.
     "fair_wall": _("Verlässlich ab"),

@@ -14867,10 +14867,30 @@ Macs hier.
         Ob es die Gleitkommaeinheit ist oder eine Iteration ohne feste
         Reihenfolge, ist offen; entschieden wird es auf einem Mac.
       - `test_render_factory::test_native_qt_canvas_draws_and_releases_its_renderer`
-        — die neue Grafikschicht zeichnet ein schwarzes Bild
-        (`screenshot().max()` bleibt unter 100). **Das ist die dringendste
-        der fünf**: Zwei Kunden arbeiten auf Macs, und ein Runner ohne
-        Grafikkarte ist eine mögliche Erklärung, aber keine geprüfte.
+        — **der Renderer hängt**, er zeichnet nicht schwarz. Die erste
+        Zuschreibung („schwarzes Bild") war ein Lesefehler: Die Zeile
+        `assert view.screenshot().max() > 100` stand als *Text des Skripts* in
+        der Meldung, nicht als gescheiterte Zusicherung. Der Befund ist
+        `TimeoutExpired` nach 90 Sekunden.
+
+        **Wo, ist seit dem 08.09.2026 gemessen.** Das Skript ruft nach jedem
+        Schritt seinen Namen; der Timeout meldet den letzten. Zwei Läufe, zwei
+        Verfeinerungen:
+
+            zuletzt gemeldet: gezeigt    (Lauf 34186268181)
+            zuletzt gemeldet: aktiviert  (Lauf 34187684933)
+
+        Damit steht es fest: `make_renderer` kommt durch, das Widget entsteht,
+        `window.show()` und `activateWindow()` kommen durch — und der **erste
+        Ereignisdurchlauf danach** kehrt nicht zurück. Das ist der Moment, in
+        dem ein wgpu-Canvas seine Zeichenoberfläche anlegt und den ersten
+        Rahmen anfordert.
+
+        **Das ist die dringendste der fünf**: Zwei Kunden arbeiten auf Macs,
+        und ein Hänger beim ersten Zeichnen träfe sie beim Start. Ein Runner
+        ohne Grafikkarte bleibt die naheliegende Erklärung — geprüft ist sie
+        nicht, und der nächste Schritt ist eine Auskunft darüber, welchen
+        Adapter wgpu dort wählt.
       - `test_brep::test_a_selection_that_matches_nothing_says_so` — der
         Worker stirbt. Gehört zur bekannten Absturzfamilie und braucht
         dieselbe Behandlung: einen eigenen Prozess oder eine Diagnose.

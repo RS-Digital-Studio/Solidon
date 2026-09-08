@@ -4555,5 +4555,6 @@
   "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge vergibt, bevor gerechnet wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht — und diese Operation nennt die Zahl, wenn sie nicht passt.": "In quanti oggetti si separa. Il numero sta qui e non nel risultato, perché la pila assegna gli identificatori delle sue uscite prima di calcolare. Quanti pezzi ha davvero il corpo lo dice il rapporto, e questa operazione nomina il numero quando non torna.",
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "Il corpo è di un pezzo solo; non c'è nulla da separare.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "Il corpo ha meno pezzi di quanti ne chieda il numero.",
-  "{count} weitere Teile blieben im letzten Objekt beieinander.": "Altri {count} pezzi sono rimasti insieme nell'ultimo oggetto."
+  "{count} weitere Teile blieben im letzten Objekt beieinander.": "Altri {count} pezzi sono rimasti insieme nell'ultimo oggetto.",
+  "Gefunden": "Trovato"
 }

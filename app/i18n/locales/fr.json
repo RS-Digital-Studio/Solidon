@@ -4555,5 +4555,6 @@
   "In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge vergibt, bevor gerechnet wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht — und diese Operation nennt die Zahl, wenn sie nicht passt.": "En combien d'objets la séparation se fait. Le nombre est ici et non dans le résultat, car la pile attribue les identifiants de ses sorties avant tout calcul. Combien de pièces le corps a réellement, le rapport le dit — et cette opération nomme le nombre quand il ne convient pas.",
   "Der Körper besteht aus einem Stück; es gibt nichts zu zerlegen.": "Le corps est d'un seul tenant ; il n'y a rien à séparer.",
   "Der Körper hat weniger Teile, als die Stückzahl verlangt.": "Le corps a moins de pièces que le nombre demandé.",
-  "{count} weitere Teile blieben im letzten Objekt beieinander.": "{count} autres pièces sont restées ensemble dans le dernier objet."
+  "{count} weitere Teile blieben im letzten Objekt beieinander.": "{count} autres pièces sont restées ensemble dans le dernier objet.",
+  "Gefunden": "Trouvé"
 }
