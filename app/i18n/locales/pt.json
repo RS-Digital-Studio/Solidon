@@ -4725,5 +4725,18 @@
   "Übernimmt die gewählte Spule vollständig. Unbekannte Materialwerte bleiben unbekannt.": "Atribui todos os dados da bobina escolhida. Os valores de material desconhecidos permanecem desconhecidos.",
   "%": "%",
   "mm": "mm",
-  "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein oder übergeben Sie an einen Slicer, der ihn kennt.": "{slicer} não conhece {printer} — não existe ali qualquer perfil de máquina para esta impressora, nem nenhum para escolher. Por isso o ficheiro não leva dados de máquina. Configure a impressora no slicer ou entregue a um slicer que a conheça."
+  "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein oder übergeben Sie an einen Slicer, der ihn kennt.": "{slicer} não conhece {printer} — não existe ali qualquer perfil de máquina para esta impressora, nem nenhum para escolher. Por isso o ficheiro não leva dados de máquina. Configure a impressora no slicer ou entregue a um slicer que a conheça.",
+  "Fügeweg prüfen": "Verificar o percurso de montagem",
+  "Fügeweg": "Percurso de montagem",
+  "Entgegengesetzt": "Sentido oposto",
+  "Schritte": "Passos",
+  "Prüft, ob zwei Teile in ihre Lage gelangen — nicht nur, ob sie dort zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben.": "Verifica se duas peças conseguem chegar à sua posição — não apenas se encaixam quando lá estão. A primeira peça selecionada é empurrada para dentro da segunda.",
+  "Beide Teile stehen dabei in ihrer Endlage; geprüft wird der Weg davor. Ein offener Körper hat kein Innen und lässt sich so nicht messen.": "Ambas as peças estão na sua posição final; o que se verifica é o percurso até lá. Um corpo aberto não tem interior e assim não pode ser medido.",
+  "Die Achse, entlang der das erste Teil in das zweite geschoben wird.": "O eixo ao longo do qual a primeira peça é empurrada para dentro da segunda.",
+  "Schiebt entgegen der Achsrichtung, also von der anderen Seite her.": "Empurra no sentido contrário ao eixo, ou seja, a partir do outro lado.",
+  "Wie weit vor der Endlage geprüft wird. So lang wie die Stelle, an der die Teile ineinandergreifen, plus etwas Anlauf.": "Até que distância antes da posição final se verifica. Tão longo como a zona onde as peças encaixam, mais um pouco de avanço.",
+  "In wie viele Stellen der Weg geteilt wird. Mehr findet engere Stellen, kostet aber je Schritt einen Schnitt durch beide Körper.": "Em quantas posições o percurso é dividido. Mais encontra pontos mais apertados, mas custa uma interseção de ambos os corpos por passo.",
+  "Die Teile überschneiden sich in ihrer Endlage.": "As peças sobrepõem-se na sua posição final.",
+  "Auf dem Fügeweg müssen sich die Teile aneinander vorbeidrücken.": "Durante a montagem, as peças têm de forçar uma contra a outra.",
+  "Der Federarm biegt sich über das, was das Material aushält.": "O braço elástico dobra-se mais do que o material aguenta."
 }

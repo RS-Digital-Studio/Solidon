@@ -3058,3 +3058,106 @@ def test_split_bodies_keeps_the_surplus_together_and_says_how_many(profile: Prof
     assert as_mesh_data(knapp.outputs[-1].mesh).component_count == 3, (
         "die übrigen bleiben beieinander, statt zu verschwinden"
     )
+
+
+def _u_profile(
+    length: float, width: float, wall: float = 2.0, height: float = 25.0
+) -> trimesh.Trimesh:
+    """Ein Rinnenstück: Boden und zwei Seitenwände als ein Körper."""
+    floor = trimesh.creation.box(extents=(length, width, wall))
+    floor.apply_translation((length / 2, 0.0, wall / 2))
+    parts = [floor]
+    for side in (+1.0, -1.0):
+        side_wall = trimesh.creation.box(extents=(length, wall, height))
+        side_wall.apply_translation((length / 2, side * (width / 2 - wall / 2), wall + height / 2))
+        parts.append(side_wall)
+    return trimesh.boolean.union(parts)
+
+
+def test_two_parts_that_only_fit_in_the_end_are_not_the_same_as_two_that_get_there() -> None:
+    """Der Fügeweg ist eine eigene Frage — und die, an der ein Entwurf scheitert.
+
+    **Der Fall, an dem es auffiel** (Robert, 08.09.2026): Eine Rinne aus drei
+    Segmenten, die sich nicht zusammenstecken ließen. Der Zapfen war seitlich
+    schmaler gerechnet und passte; in der Höhe brachte er seinen eigenen Boden
+    mit, und der stieß stirnseitig gegen den Boden des nächsten Stücks. Am
+    gedruckten Teil war das in einer Minute zu sehen — am Bildschirm hatte es
+    niemand gefragt, weil `check_collisions` nach einem Zustand fragt und nicht
+    nach einem Weg.
+
+    Geprüft werden hier beide Ausgänge, denn nur zusammen sind sie eine
+    Aussage: Der Zapfen mit Boden muss anstoßen, derselbe Zapfen ohne Boden
+    muss durchgehen. Ein Test, der nur den ersten hätte, wäre auch grün, wenn
+    die Prüfung alles ablehnte.
+    """
+    from app.core.geom.prepare import check_join_path
+
+    empfaenger = MeshData.of(_u_profile(60.0, 44.0))
+
+    # Der Zapfen, wie die Rinne ihn hatte: schmaler, aber mit eigenem Boden
+    # auf derselben Höhe. Er steht vor der Mündung und soll hinein.
+    mit_boden = _u_profile(18.0, 39.6)
+    mit_boden.apply_translation((-18.0, 0.0, 0.0))
+    befunde = check_join_path(MeshData.of(mit_boden), empfaenger, (1.0, 0.0, 0.0), 25.0)
+    codes = {finding.code for finding in befunde}
+    assert not codes, "vor der Mündung stehend berührt er noch nichts"
+
+    # Und jetzt in Einbaulage: 18 mm hineingeschoben. Die Böden stoßen.
+    steckt = _u_profile(18.0, 39.6)
+    blockiert = check_join_path(MeshData.of(steckt), empfaenger, (1.0, 0.0, 0.0), 25.0)
+    assert {finding.code for finding in blockiert} == {"join.blocked"}, (
+        "zwei Böden auf derselben Höhe sind eine Sperre, keine Passung"
+    )
+
+    # Derselbe Zapfen ohne Boden geht durch — das ist die Gegenprobe, ohne die
+    # der Befund oben auch von einer Prüfung käme, die alles ablehnt.
+    ohne_boden = trimesh.boolean.union(
+        [
+            box
+            for side in (+1.0, -1.0)
+            for box in [
+                trimesh.creation.box(extents=(18.0, 2.0, 25.0)),
+            ]
+            for box in [
+                _moved(box, (9.0, side * (39.6 / 2 - 1.0), 2.0 + 25.0 / 2)),
+            ]
+        ]
+    )
+    frei = check_join_path(MeshData.of(ohne_boden), empfaenger, (1.0, 0.0, 0.0), 25.0)
+    assert "join.blocked" not in {finding.code for finding in frei}, (
+        "ohne eigenen Boden ist der Weg frei — sonst prüft der Test seine eigene Ablehnung"
+    )
+
+
+def _moved(body: trimesh.Trimesh, offset: tuple[float, float, float]) -> trimesh.Trimesh:
+    """Eine Kopie an ihrem Platz."""
+    moved = body.copy()
+    moved.apply_translation(offset)
+    return moved
+
+
+def test_a_snap_fit_says_how_far_something_has_to_give() -> None:
+    """Eine Rastung ist keine Sperre — und der Unterschied ist die Endlage.
+
+    Auf dem Weg muss eine Nase über eine Wand; in der Endlage sitzt sie im
+    Fenster. Wer nur den Weg misst, verbietet jede Schnappverbindung; wer nur
+    die Endlage misst, übersieht jede Sperre. Der Befund nennt deshalb, wie
+    viel Material sich unterwegs überschneidet — die Zahl, gegen die eine
+    Federrechnung gehalten wird.
+    """
+    from app.core.geom.prepare import check_join_path
+
+    wand = trimesh.creation.box(extents=(4.0, 30.0, 30.0))
+    fenster = trimesh.creation.box(extents=(6.0, 6.0, 6.0))
+    mit_fenster = MeshData.of(trimesh.boolean.difference([wand, fenster]))
+
+    arm = _moved(trimesh.creation.box(extents=(2.0, 30.0, 30.0)), (-3.0, 0.0, 0.0))
+    nase = _moved(trimesh.creation.box(extents=(3.0, 5.0, 5.0)), (-0.5, 0.0, 0.0))
+    schnapper = MeshData.of(trimesh.boolean.union([arm, nase]))
+
+    befunde = check_join_path(schnapper, mit_fenster, (0.0, 0.0, -1.0), 20.0)
+    codes = {finding.code for finding in befunde}
+    assert codes == {"join.interference"}, f"eine Rastung, keine Sperre — {codes}"
+    eintrag = next(finding for finding in befunde if finding.code == "join.interference")
+    assert eintrag.severity == "info", "ausweichen ist die Bauart, keine Warnung"
+    assert eintrag.values["at"] > 0.0, "und der Befund sagt, wo auf dem Weg es eng wird"

@@ -57,6 +57,7 @@ from app.core.geom.prepare import (
     bore_diameter,
     check_build_volume,
     check_collisions,
+    check_join_path,
     compensate_elephant_foot,
     compensation_findings,
     countersink,
@@ -3984,4 +3985,89 @@ def check_collisions_op(ctx: OpContext) -> OpResult:
     findings.extend(check_build_volume(meshes, ctx.profile))
     # Ändert nichts: die Objekte gehen unberührt hindurch, die Befunde sind das
     # Ergebnis.
+    return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))
+
+
+@op_params
+class JoinPathParams(BaseParams):
+    axis: str = param(
+        title=_("Richtung"),
+        default="x",
+        choices=("x", "y", "z"),
+        doc=_("Die Achse, entlang der das erste Teil in das zweite geschoben wird."),
+    )
+    reverse: bool = param(
+        title=_("Entgegengesetzt"),
+        default=False,
+        doc=_("Schiebt entgegen der Achsrichtung, also von der anderen Seite her."),
+    )
+    distance: float = param(
+        title=_("Fügeweg"),
+        default=25.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=500.0,
+        doc=_(
+            "Wie weit vor der Endlage geprüft wird. So lang wie die Stelle, an der "
+            "die Teile ineinandergreifen, plus etwas Anlauf."
+        ),
+    )
+    steps: int = param(
+        title=_("Schritte"),
+        default=24,
+        minimum=2,
+        maximum=200,
+        placement="advanced",
+        doc=_(
+            "In wie viele Stellen der Weg geteilt wird. Mehr findet engere Stellen, "
+            "kostet aber je Schritt einen Schnitt durch beide Körper."
+        ),
+    )
+
+
+@register_op(
+    name="check_join_path",
+    title=_("Fügeweg prüfen"),
+    category="scene",
+    params=JoinPathParams,
+    consumes=2,
+    produces=2,
+    reversible=True,
+    doc=_(
+        "Prüft, ob zwei Teile in ihre Lage gelangen — nicht nur, ob sie dort "
+        "zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben."
+    ),
+    caveat=_(
+        "Beide Teile stehen dabei in ihrer Endlage; geprüft wird der Weg davor. "
+        "Ein offener Körper hat kein Innen und lässt sich so nicht messen."
+    ),
+)
+def check_join_path_op(ctx: OpContext) -> OpResult:
+    """Der Weg in die Endlage, nicht die Endlage selbst.
+
+    **Warum das eine eigene Operation ist und keine Erweiterung von
+    „Überschneidungen prüfen":** Jene fragt nach einem Zustand und braucht
+    dafür nichts als die Szene. Diese fragt nach einer Bewegung und braucht
+    eine Richtung, eine Strecke und die Angabe, welches der beiden Teile sich
+    bewegt. Das sind vier Angaben mehr, und sie in die andere zu legen hieße,
+    sie jedem aufzudrängen, der nur wissen will, ob etwas ineinandersteckt.
+
+    Der Anlass steht in :func:`check_join_path`: eine Rinne, deren Segmente
+    seitlich passten und in der Höhe stirnseitig aufeinanderstießen.
+    """
+    params = cast(JoinPathParams, ctx.params)
+    moving = as_mesh_data(ctx.inputs[0].mesh)
+    fixed = as_mesh_data(ctx.inputs[1].mesh)
+    vector = list(AXIS_NORMALS[cast(Axis, params.axis)])
+    if params.reverse:
+        vector = [-value for value in vector]
+    findings = check_join_path(
+        moving,
+        fixed,
+        (vector[0], vector[1], vector[2]),
+        params.distance,
+        steps=params.steps,
+    )
+    # Wie „Überschneidungen prüfen": Die Körper gehen unberührt hindurch, die
+    # Befunde sind das Ergebnis.
     return OpResult(outputs=list(ctx.inputs), findings=named_for(findings, ctx.inputs))

@@ -4725,5 +4725,18 @@
   "Übernimmt die gewählte Spule vollständig. Unbekannte Materialwerte bleiben unbekannt.": "Assegna tutti i dati della bobina scelta. I valori del materiale sconosciuti restano sconosciuti.",
   "%": "%",
   "mm": "mm",
-  "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein oder übergeben Sie an einen Slicer, der ihn kennt.": "{slicer} non conosce {printer}: lì non esiste alcun profilo macchina per questa stampante, né uno da scegliere. Perciò il file non porta dati macchina. Configuri la stampante nello slicer oppure consegni a uno slicer che la conosca."
+  "{slicer} kennt {printer} nicht — für diesen Drucker liegt dort kein Maschinenprofil, und es ist auch keines auszuwählen. Die Datei trägt deshalb keine Maschinenangaben. Richten Sie den Drucker im Slicer ein oder übergeben Sie an einen Slicer, der ihn kennt.": "{slicer} non conosce {printer}: lì non esiste alcun profilo macchina per questa stampante, né uno da scegliere. Perciò il file non porta dati macchina. Configuri la stampante nello slicer oppure consegni a uno slicer che la conosca.",
+  "Fügeweg prüfen": "Verificare il percorso di montaggio",
+  "Fügeweg": "Percorso di montaggio",
+  "Entgegengesetzt": "Senso opposto",
+  "Schritte": "Passi",
+  "Prüft, ob zwei Teile in ihre Lage gelangen — nicht nur, ob sie dort zusammenpassen. Das erste gewählte Teil wird in das zweite geschoben.": "Verifica se due pezzi riescono a raggiungere la loro posizione, non solo se vi combaciano. Il primo pezzo selezionato viene inserito nel secondo.",
+  "Beide Teile stehen dabei in ihrer Endlage; geprüft wird der Weg davor. Ein offener Körper hat kein Innen und lässt sich so nicht messen.": "Entrambi i pezzi si trovano nella posizione finale; viene verificato il percorso che vi conduce. Un corpo aperto non ha un interno e così non è misurabile.",
+  "Die Achse, entlang der das erste Teil in das zweite geschoben wird.": "L'asse lungo il quale il primo pezzo viene inserito nel secondo.",
+  "Schiebt entgegen der Achsrichtung, also von der anderen Seite her.": "Spinge in senso contrario all'asse, cioè dall'altro lato.",
+  "Wie weit vor der Endlage geprüft wird. So lang wie die Stelle, an der die Teile ineinandergreifen, plus etwas Anlauf.": "Quanto prima della posizione finale viene verificato. Lungo quanto il tratto in cui i pezzi si innestano, più un po' di rincorsa.",
+  "In wie viele Stellen der Weg geteilt wird. Mehr findet engere Stellen, kostet aber je Schritt einen Schnitt durch beide Körper.": "In quante posizioni viene diviso il percorso. Un numero maggiore trova punti più stretti, ma costa un'intersezione di entrambi i corpi per passo.",
+  "Die Teile überschneiden sich in ihrer Endlage.": "I pezzi si sovrappongono nella loro posizione finale.",
+  "Auf dem Fügeweg müssen sich die Teile aneinander vorbeidrücken.": "Durante il montaggio i pezzi devono forzare l'uno contro l'altro.",
+  "Der Federarm biegt sich über das, was das Material aushält.": "Il braccio elastico si piega oltre quanto il materiale sopporta."
 }

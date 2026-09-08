@@ -1626,6 +1626,98 @@ def check_collisions(meshes: list[MeshData], clearance: float = 0.0) -> list[Fin
     return findings
 
 
+def check_join_path(
+    moving: MeshData,
+    fixed: MeshData,
+    direction: Vec3,
+    distance: float,
+    *,
+    steps: int = 24,
+) -> list[Finding]:
+    """Kommt das Teil dorthin, wo es hingehört — oder nur die Endlage stimmt?
+
+    :func:`check_collisions` beantwortet eine Frage über **einen Zustand**: Wo
+    stehen die Körper sich im Weg? Ein gefügtes Teil hat aber zwei Fragen, und
+    die zweite ist die, an der ein Entwurf scheitert, nachdem die erste grün
+    war: **Gelangt es überhaupt in diese Lage?**
+
+    Der Anlass ist eine Rinne, deren Segmente sich nicht zusammenstecken
+    ließen (08.09.2026). Gerechnet war die Passung in der Breite; in der Höhe
+    stießen zwei Böden stirnseitig aufeinander, und der Zapfen kam keinen
+    Millimeter hinein. Am gedruckten Teil hat es eine Minute gedauert, das zu
+    sehen — am Bildschirm hatte es niemand gefragt.
+
+    ``moving`` steht in seiner **Endlage**; von dort wird es um ``distance``
+    entgegen ``direction`` zurückgesetzt und in ``steps`` Schritten wieder
+    herangeführt. Gemessen wird an jeder Stelle das geteilte Volumen mit
+    ``fixed``.
+
+    Zwei Befunde, und die Unterscheidung zwischen ihnen ist der Kern:
+
+    * **Die Endlage ist besetzt** — die Teile passen dort nicht zusammen. Das
+      ist eine Sperre, gleich was auf dem Weg geschah.
+    * **Die Endlage ist frei, unterwegs war sie es nicht** — dann muss auf dem
+      Weg etwas ausweichen. Bei einer Schnappverbindung ist das ihre Bauart
+      und richtig; das Maß dazu sagt, wie weit sich etwas aufbiegen muss.
+
+    Was hier **nicht** entschieden wird, ist, ob dieses Ausweichen das
+    Material aushält — dafür fehlen dem Materialprofil die mechanischen
+    Kennwerte. Die Zahl steht im Befund, damit sie jemand gegen die
+    Federrechnung halten kann.
+
+    Offene Körper haben kein Innen: Wo :func:`shared_volume` nichts entscheiden
+    kann, bleibt die Prüfung stumm, statt eine Zahl zu erfinden.
+    """
+    if not (moving.is_watertight and fixed.is_watertight):
+        return []
+    if steps < 1 or distance <= EPS_GEOM:
+        return []
+
+    way = np.asarray(direction, dtype=float)
+    length = float(np.linalg.norm(way))
+    if length <= EPS_GEOM:
+        return []
+    way = way / length
+
+    findings: list[Finding] = []
+    end = shared_volume(moving.raw, fixed.raw)
+    if end > EPS_GEOM:
+        return [
+            Finding(
+                code="join.blocked",
+                severity="error",
+                message=_("Die Teile überschneiden sich in ihrer Endlage."),
+                values={"shared": format_volume(end)},
+            )
+        ]
+
+    # Rückwärts vom Ziel: Schritt ``steps`` ist die Endlage, Schritt 0 der
+    # Anfang. Der Anfang selbst wird nicht gemessen — dort stehen die Teile
+    # noch auseinander, und ein Treffer wäre eine Aussage über die Lage, aus
+    # der jemand startet, nicht über das Fügen.
+    worst = 0.0
+    worst_at = 0.0
+    for step in range(1, steps):
+        back = distance * (steps - step) / steps
+        probe = moving.raw.copy()
+        probe.apply_translation(-way * back)
+        shared = shared_volume(probe, fixed.raw)
+        if shared > worst:
+            worst = shared
+            worst_at = back
+
+    if worst > EPS_GEOM:
+        findings.append(
+            Finding(
+                code="join.interference",
+                severity="info",
+                message=_("Auf dem Fügeweg müssen sich die Teile aneinander vorbeidrücken."),
+                values={"shared": format_volume(worst), "at": round(worst_at, 2)},
+            )
+        )
+    return findings
+
+
 def _really_overlap(first: MeshData, second: MeshData, clearance: float) -> bool | None:
     """Teilen sich die Körper Volumen, oder kommen sie sich näher als
     ``clearance``?
