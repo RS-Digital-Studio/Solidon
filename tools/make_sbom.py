@@ -701,21 +701,54 @@ def _asked_library(family: str, path: Path) -> tuple[str, str] | None:
     """
     if family != "freetype":
         return None
-    try:
-        library = ctypes.CDLL(str(path))
-        handle = ctypes.c_void_p()
-        if library.FT_Init_FreeType(ctypes.byref(handle)) != 0:
-            return None
-        major, minor, patch = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
-        library.FT_Library_Version(
-            handle, ctypes.byref(major), ctypes.byref(minor), ctypes.byref(patch)
-        )
-        library.FT_Done_FreeType(handle)
-    except OSError, AttributeError:
-        return None
-    if not major.value:
-        return None
-    return f"{major.value}.{minor.value}.{patch.value}", "FT_Library_Version der gebündelten Datei"
+
+    # **Erst die Datei selbst, dann der Wrapper.** Die gebündelte Bibliothek ist
+    # die genauere Quelle — sie ist die, die mitreist. Ließe sie sich nicht
+    # laden (auf dem Intel-Mac lief genau das ins Leere), bleibt `freetype-py`:
+    # Es bringt seine eigene Bibliothek mit, auf macOS als `universal2`-Wheel,
+    # und **das** ist die Datei, die hier gefunden wurde. Seine `version()`
+    # ruft denselben `FT_Library_Version` auf, nur aus einer Bibliothek, die
+    # der Interpreter schon geladen hat.
+    #
+    # **Und ein Fehlschlag sagt, warum.** Der erste Anlauf gab stumm `None`
+    # zurück; der Paketjob scheiterte danach mit demselben Satz wie ohne ihn,
+    # und im Protokoll stand nichts, woran man es festmachen konnte.
+    attempts: list[tuple[str, Callable[[], tuple[int, int, int]]]] = [
+        (f"FT_Library_Version der gebündelten Datei ({path.name})", lambda: _ft_of_file(path)),
+        ("FT_Library_Version über freetype-py", _ft_of_wrapper),
+    ]
+    for source, ask in attempts:
+        try:
+            major, minor, patch = ask()
+        except (OSError, AttributeError, ImportError, ValueError) as problem:
+            print(f"Hinweis: {source} ging nicht — {type(problem).__name__}: {problem}")
+            continue
+        if major:
+            return f"{major}.{minor}.{patch}", source
+        print(f"Hinweis: {source} gab keine Fassung zurück.")
+    return None
+
+
+def _ft_of_file(path: Path) -> tuple[int, int, int]:
+    """``FT_Library_Version`` aus einer Bibliotheksdatei."""
+    library = ctypes.CDLL(str(path))
+    handle = ctypes.c_void_p()
+    if library.FT_Init_FreeType(ctypes.byref(handle)) != 0:
+        raise ValueError("FT_Init_FreeType hat abgelehnt")
+    major, minor, patch = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+    library.FT_Library_Version(
+        handle, ctypes.byref(major), ctypes.byref(minor), ctypes.byref(patch)
+    )
+    library.FT_Done_FreeType(handle)
+    return major.value, minor.value, patch.value
+
+
+def _ft_of_wrapper() -> tuple[int, int, int]:
+    """Dieselbe Zahl über ``freetype-py``, dessen Bibliothek hier mitreist."""
+    import freetype
+
+    major, minor, patch = freetype.version()
+    return int(major), int(minor), int(patch)
 
 
 def _dpkg_version(soname: str) -> tuple[str, str]:
