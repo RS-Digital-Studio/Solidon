@@ -268,6 +268,8 @@ _RANGE_CONSTRAINTS: Final = frozenset(
         # Anzahlen mit Unter- oder Obergrenze.
         "corner_count",
         "pattern_count",
+        # Die Stückzahl beim Zerlegen gegen die Zahl der Teile, die es gibt.
+        "too_many_parts",
         "pattern_size",
         "build_volume",
         # Längen und Dicken gegen eine gerechnete Grenze.

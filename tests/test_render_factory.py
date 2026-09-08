@@ -73,8 +73,10 @@ layout.addWidget(view.widget)
 window.show()
 print("fenster gezeigt", flush=True)
 window.activateWindow()
-for _ in range(10):
+print("aktiviert", flush=True)
+for runde in range(10):
     application.processEvents()
+    print(f"durchlauf-{runde}", flush=True)
 body = view.add_surface(*cube(), name="body", style=SurfaceStyle(lighting=False))
 print("flaeche da", flush=True)
 look_down(view, body.bounds())

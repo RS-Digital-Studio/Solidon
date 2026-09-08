@@ -41,7 +41,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-752 Parameter der 103 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+753 Parameter der 103 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
