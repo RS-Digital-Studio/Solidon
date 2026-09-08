@@ -16,6 +16,8 @@ Die Phasen zeigen den erreichten Umfang; die Aufgaben darunter nennen den
 heutigen Rest. Jede Aufgabe hat eine feste Kennung. Register und Punkt werden
 gemeinsam gepflegt; abgeschlossene Aufgaben wandern mit ihrem Nachweis ins
 Archiv. Fehlende Feldabnahmen bleiben offen, auch wenn der Code bereits steht.
+Der [vollständige Bauplan-Abgleich](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026)
+schließt RM-089 ab; seine acht neu zugeordneten Restverträge stehen bei RM-138 bis RM-145.
 
 Priorität: Kundenabstürze und blockierte Hauptwege, danach falsche Ergebnisse
 und Bedienfehler, danach Ausbau und interne Verbesserungen. Fristgebundene
@@ -64,6 +66,10 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-128 — Bearbeitbarkeit erkannter Flächen entscheiden](#rm-128) | Geometrie, Erkennung und Druckvorbereitung | Nutzbaren Bearbeitungsumfang reiner erkannter Flächen entscheiden |
 | [RM-132 — Freiformerkennung am Ein-Sekunden-Ziel messen](#rm-132) | Geometrie, Erkennung und Druckvorbereitung | Organische und mechanische 200.000-Dreiecke-Fälle gegen eine Sekunde messen |
 | [RM-133 — Rückmeldung zur Volumenänderung beim Merkmaldrehen entscheiden](#rm-133) | Geometrie, Erkennung und Druckvorbereitung | Kundennutzen eines Hinweises zur korrekten Volumenänderung entscheiden |
+| [RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten](#rm-138) | Geometrie, Erkennung und Druckvorbereitung | Wahl zwischen aktuellem und noch verfügbarem früherem Bausteinstand ermöglichen |
+| [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen deterministisch erzeugen und Finalisten gegen vollständige Suche prüfen |
+| [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
+| [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -79,6 +85,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
 | [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Zugewiesene und genutzte Filamentkartenhöhe auf Windows/macOS angleichen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
+| [RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken](#rm-141) | Bedienung und Darstellung | Exportformat, Zielordner und gewähltes Namensschema nach Wiederöffnen erhalten |
+| [RM-142 — Verbindliche Projektion beim Messen einlösen](#rm-142) | Bedienung und Darstellung | Orthografische Messansicht anschließen oder den Vertrag ausdrücklich neu entscheiden |
 | [RM-003 — Lizenzkette der gepinnten TripoSG-Bestandteile klären](#rm-003) | KI und Generatoren | Lizenzkette der eingesetzten Modellrevisionen klären |
 | [RM-004 — Echte Text- und Bildgenerierung über alle Zielplattformen abnehmen](#rm-004) | KI und Generatoren | Echte Text-/Bildläufe auf Windows, macOS und Linux dokumentieren |
 | [RM-014 — Zusätzliche Formenregel und zugehörige Suite-Abnahme entscheiden](#rm-014) | KI und Generatoren | Zusätzliche Formenregel entscheiden; bei Änderung Suite vorher/nachher |
@@ -86,11 +94,11 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-054 — Prompt-Grundlast mit dem aktuellen Werkzeugbestand messen](#rm-054) | KI und Generatoren | Prompt-Tokenzahl mit aktuellem Schema und festgehaltenem Modell nachmessen |
 | [RM-069 — Verhaltensabnahme der kompakten Werkzeugschemata nachholen](#rm-069) | KI und Generatoren | Vergleichbare Suitequoten vor und nach der Schema-Verdichtung nachweisen |
 | [RM-081 — Ollama-Laufzeit und verbleibende Optimierungen abnehmen](#rm-081) | KI und Generatoren | Warm-/Kaltstart, Antwortqualität und Schemakürzungen gemeinsam messen |
+| [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
 | [RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern](#rm-027) | Tests und Entwicklungswerkzeuge | Fehlcommit aus absichtlich altem Index verhindern; fremdes Staging erhalten |
 | [RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen](#rm-043) | Tests und Entwicklungswerkzeuge | Kopfzeilenfrist an die vier übrigen HTTP-Leser anschließen |
-| [RM-089 — Ausstehende Bauplan-Nachträge einzeln entscheiden](#rm-089) | Tests und Entwicklungswerkzeuge | Bauplan-Nachträge mit dem heutigen Produkt abgleichen und entscheiden |
 | [RM-098 — Restliche Regelwerk-Nachträge abgleichen](#rm-098) | Tests und Entwicklungswerkzeuge | Offene Regelbehauptungen mit tatsächlichen Prüfungen abgleichen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Konzeptindex und historische Verweise ohne Wissensverlust ordnen |
 | [RM-100 — Sichtbares Terminalfenster aus dem Prozesstest vermeiden](#rm-100) | Tests und Entwicklungswerkzeuge | Windows-Testenkel ohne sichtbares Terminal bei gleicher Prozessprüfung starten |
@@ -117,6 +125,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-096 — Eigenen Rate-Key für Aktivierungsanforderungen einführen](#rm-096) | Veröffentlichung, Betrieb und Vertrieb | Eigenen Rate-Key mit geprüftem Rollout-/Rotationsweg einführen |
 | [RM-115 — Releaseakte vor Veröffentlichung verbindlich durchsetzen](#rm-115) | Veröffentlichung, Betrieb und Vertrieb | Befunde der Releaseakte beheben und Prüfung anschließend verbindlich machen |
 | [RM-116 — Historische Statistikreste auf dem Server behandeln](#rm-116) | Veröffentlichung, Betrieb und Vertrieb | Öffentlichen Altbestand prüfen und Umgang mit alten Statistikzeilen entscheiden |
+| [RM-145 — CRA-Konformitätsakte zum gesetzlichen Anwendungszeitpunkt vorbereiten](#rm-145) | Veröffentlichung, Betrieb und Vertrieb | Produktklassifizierung, technische Akte und Konformitätsverfahren für 2027 vorbereiten |
 | [RM-038 — Mailrückfall ohne prozentkodierten Berichtstext prüfen](#rm-038) | Kundenrückmeldungen | Mailportal im Kundenpaket mit Umlauten, Zeilenumbrüchen und Rückfall prüfen |
 | [RM-040 — Kundenfehler mit Traceback und betroffener Datei zuordnen](#rm-040) | Kundenrückmeldungen | Aktuellen Kundenbericht mit Traceback und betroffener Datei reproduzieren |
 | [RM-062 — Eingabemethode im aktuellen Flatpak bestätigen](#rm-062) | Kundenrückmeldungen | Start, Fokus und IME am aktuellen Flatpak bestätigen |
@@ -155,7 +164,7 @@ Agentensteuerung über dieselben Operationen, Rückfragen und Vorschläge als Tr
 
 ## P5 — Bausteinbibliothek
 
-Bibliothek, Normteile, Versionierung, Vorschauen und Rezeptweg sind umgesetzt. Bereichsprüfungen werden bei Änderungen an Baustein oder Grenzen gezielt gefahren; der automatische Komplettlauf über sämtliche Bausteine ist gemäß AGENTS.md entfallen. `to_scad()` bleibt ein reiner Dateiexport.
+Bibliothek, Normteile, Versionierung, Vorschauen und Rezeptweg sind umgesetzt. Die noch fehlende Wahl eines alten Bausteinstands steht bei RM-138. Bereichsprüfungen werden bei Änderungen an Baustein oder Grenzen gezielt gefahren; der automatische Komplettlauf über sämtliche Bausteine ist gemäß AGENTS.md entfallen. `to_scad()` bleibt ein reiner Dateiexport.
 
 [Frühere Abnahme und Umsetzung](ROADMAP-ARCHIV.md#p5--bausteinbibliothek).
 
@@ -569,6 +578,51 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#was-die-erkennung-erklärt--und-was-nicht-04092026).
 
+<a id="rm-138"></a>
+
+- [ ] **RM-138 — Gespeicherten Bausteinstand beim Öffnen wählbar erhalten.** Bauplan §24.4 verspricht vor der Neuberechnung eine Wahl des Bausteinstands.
+  `part_check.check()` liefert derzeit Hinweise; `Session` startet danach die Auswertung mit dem
+  aktuellen Register. Inhaltsfingerabdrücke eigener Bausteine sind bereits umgesetzt. Abnahme:
+  geänderten mitgelieferten und eigenen Baustein öffnen, einen verfügbaren Altstand oder den
+  aktuellen Stand ausdrücklich wählen und reproduzierbare Maße erhalten. Ein nicht verfügbarer
+  Altstand wird als notwendige Migration erklärt; fremder Quelltext reist weiterhin nicht mit.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-139"></a>
+
+- [ ] **RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten.** Die Auswahl aus Hüllflächennormalen nach Bauplan §28.2 ist noch nicht eingelöst:
+  `geom/orient.py` und `slice/orientation.py` verwenden Flächen, Achsen und Zufallsrichtungen.
+  Hüllnormalen nach Fläche mit Achsen und großen Modellflächen deterministisch verbinden.
+  Abnahme: gleiche Eingaben ergeben gleiche Kandidaten und Lage; Vorfilter und Finalisten werden
+  an mechanischen und organischen Körpern gegen die vollständige Kandidatenliste geprüft.
+  Standfläche, Schwerpunkt und Haftung bleiben berücksichtigt; 200 betrachtete Kandidaten
+  erfüllen das 20-Sekunden- und Abbruchziel. RM-078 misst einen anderen, konkreten Ladefall.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-140"></a>
+
+- [ ] **RM-140 — Exportbefunde vor dem Schreiben sichtbar machen.** Bauplan §29 verlangt sichtbare Befunde vor dem Schreiben bei weiterhin möglichem
+  Export. `_ExportWorker` prüft und schreibt derzeit in einem Lauf; Befunde kommen erst danach.
+  `check_before_export()` enthält keine Passungs- oder Wandstärkenprüfung. Den Vorprüfungsweg im
+  Arbeiter ausführen, aktuelle Passungen und die Endwandstärken aus RM-127 anschließen und vor dem
+  Schreiben anzeigen. Abnahme: verletzte Passung und dünne Endwand sind vorher sichtbar, große
+  Projekte bleiben bedienbar, ein bewusst fortgesetzter Export schreibt das gewählte Ergebnis.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-143"></a>
+
+- [ ] **RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren.** Die Netzfehlerkarte aus Bauplan §18.4 verspricht Durchdringungen.
+  `perceive/maps.py:defect_map()` markiert aktuell offene und nicht-mannigfaltige Kanten, führt
+  aber keine Schnittprüfung aus. Anforderung an einem reproduzierbaren Körper anschließen;
+  eine generelle Fehlermeldung ersetzt die räumliche Markierung nicht. Abnahme: betroffene
+  Dreiecke sind sichtbar auffindbar, ein sauberer Gegenkörper bleibt unmarkiert und die
+  Bedeutung ist zusätzlich zur Farbe erkennbar.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
 ## Bedienung und Darstellung
 
 <a id="rm-070"></a>
@@ -710,6 +764,28 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-durchsicht-des-07092026).
 
+<a id="rm-141"></a>
+
+- [ ] **RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken.** Bauplan §29 sagt gespeicherte Exportvorgaben und ein wählbares Namensschema zu.
+  `PrintSettings.handover` merkt die Übergabeart; `action_export()` startet dagegen wieder mit
+  3MF und Projektstamm. Das Namensschema existiert im Kern, hat für mehrere Objekte aber keinen
+  entsprechenden Kundenweg. Abnahme: zwei Projekte mit unterschiedlichen Vorgaben wieder öffnen
+  und getrennt korrekt exportieren; ein selbst gewähltes Schema bleibt erhalten. Gerätepfade
+  bleiben lokal oder werden projektkonform relativ behandelt (Regel 12).
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-142"></a>
+
+- [ ] **RM-142 — Verbindliche Projektion beim Messen einlösen.** Bauplan §18.1 verlangt orthografische Darstellung beim Messen. Der Werkzeugweg
+  ruft `Viewport.set_measure_mode()` auf, setzt dabei aber keine Projektion; der vorhandene
+  orthografische Wechsel gehört zum Skizzenweg. Den Messablauf einschließlich Rückweg eindeutig
+  festlegen und anschließen. Falls lediglich eine Empfehlung beabsichtigt ist, diese
+  Produktentscheidung ausdrücklich treffen. Abnahme: Messen aus perspektivischer Ansicht folgt
+  dem festgelegten Vertrag, zeigt korrekte Maße und erhält einen verständlichen Kamera-Rückweg.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
 ## KI und Generatoren
 
 <a id="rm-003"></a>
@@ -786,6 +862,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#ollama-bis-zum-anschlag-31082026).
 
+<a id="rm-144"></a>
+
+- [ ] **RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen.** `read_analysis` bietet `orientation` im gemeinsamen Werkzeugschema an;
+  `MainWindow.run_remote()` lehnt diesen Aufruf bis zum Arbeiteranschluss ausdrücklich ab.
+  Die gemeinsame Fähigkeit nach Bauplan §26.6 über den begrenzten Fernaufruf verfügbar machen.
+  Abnahme: derselbe Auftrag über Chat und MCP liefert nachvollziehbar dieselbe Analyse, das
+  Fenster bleibt bedienbar und Abbruch sowie Zeitgrenze greifen. Die lesende Analyse erzeugt
+  keine Geometrieänderung und keine Scheintransaktion.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
 ## Tests und Entwicklungswerkzeuge
 
 <a id="rm-020"></a>
@@ -828,22 +915,14 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#die-abnahme-des-gesamt-reviews-06092026).
 
-<a id="rm-089"></a>
-
-- [ ] **RM-089 — Ausstehende Bauplan-Nachträge einzeln entscheiden.** Den Bauplan mit dem heutigen
-  Produkt und den offenen Phasen abgleichen: Zielgruppe und Hauptwege, aktuelle Fensterbereiche,
-  Kundennamen für Merkmale, Druckübergabe, Datenschutz und tatsächliche Grenzen. Abnahme:
-  widersprüchliche Ist-Aussagen entfernt, §-Verweise gültig und Produktentscheidungen ausdrücklich
-  geklärt; Beispielversionsnummern nicht pauschal löschen.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
-
 <a id="rm-098"></a>
 
 - [ ] **RM-098 — Restliche Regelwerk-Nachträge abgleichen.** Die noch offenen Regelwerk-Nachträge
   gezielt entscheiden beziehungsweise prüfen: testbare Reichweite harter Regeln, Abgrenzung von
   Arbeitsverfahren und Fallgeschichte, passende Regeln für Auslieferungsdateien sowie gültige
-  Regelnummern und paths-Muster. Abnahme: jede dokumentierte Prüfbehauptung hat einen passenden
+  Regelnummern und paths-Muster. Auch den Geltungsbereich der pauschalen 0,01-mm-Überlappung in
+  `rules.toml` gegen konkrete Boolesche Fälle prüfen; eine inhaltliche Änderung braucht Version
+  und vergleichbare Modell-Suiteläufe nach Bauplan §39. Abnahme: jede Prüfbehauptung hat einen passenden
   Wächter; keine doppelte Suite-Anleitung. Die zweistufige Testfahrweise ist bereits umgesetzt.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
@@ -1054,7 +1133,9 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 - [ ] **RM-093 — Noch fehlende Angaben und Prüfungen der Rechtstexte klären.** Die offenen Rechts-
   und Anbieterentscheidungen vor dem Verkauf fachlich abschließen: Kontakt-/Steuerangaben,
   tatsächlicher Zahlungsanbieter samt Bestellbestätigung und Widerruf, Datenschutzrollen sowie
-  Markenrecherche. Abnahme: dokumentierte Entscheidungen und geprüfte Verträge/Sprachfassungen;
+  Markenrecherche. Für Chat und Generatoren zusätzlich die eigene KI-Systemrolle sowie die
+  einschlägigen Transparenzpflichten aus Art. 50 Abs. 1 und 2 der KI-Verordnung fachlich einordnen
+  und am angebotenen Einstieg prüfen. Abnahme: dokumentierte Entscheidungen und geprüfte Verträge/Sprachfassungen;
   bereits berichtigte Widerrufszitate und EULA-Sanktionsklausel nicht erneut beauftragen.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#review-vor-der-demo-030-02092026).
@@ -1094,6 +1175,18 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aktuelle Zähler schreibt ausschließlich in den privaten Ort.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#030-ist-draußen-03092026).
+
+<a id="rm-145"></a>
+
+- [ ] **RM-145 — CRA-Konformitätsakte zum gesetzlichen Anwendungszeitpunkt vorbereiten.** Bauplan §37.3 führt die allgemeinen CRA-Pflichten ab dem 11.12.2027.
+  RM-091 behandelt Meldebereitschaft und RM-115 die Releaseakte; beide ersetzen keine vollständige
+  Konformitätsakte. Zum konkret rechtlich erforderlichen Zeitpunkt Produktklassifizierung,
+  Risikoanalyse, technische Dokumentation und nachgewiesene Anhang-I-Pflichten zusammenführen;
+  Konformitätsverfahren, EU-Konformitätserklärung, Kennzeichnung und Unterstützungsdauer fachlich
+  prüfen. Vorhandene SBOM- und Sicherheitsunterlagen nutzen; daraus keine vorzeitige
+  Konformitätsfreigabe ableiten.
+
+  [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
 
 ## Kundenrückmeldungen
 

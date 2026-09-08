@@ -16,7 +16,7 @@ Aussage über das Sollverhalten ohne §-Beleg ist eine Vermutung.
 ## Gliederung
 
 ```!
-grep -n "^## " "3d-agent-bauplan.md"
+rg -n "^## " "3d-agent-bauplan.md"
 ```
 
 ## Vorgehen
@@ -26,12 +26,26 @@ Ist ein Paragraph genannt (`§22`, `22`, `22.3`), lies ihn vollständig aus
 Stichwort genannt, suche zuerst in der Gliederung oben, dann im Volltext, und
 lies die Fundstelle im Zusammenhang statt einzelner Zeilen.
 
-Prüfe danach die beiden anderen Quellen:
+Prüfe danach die ergänzenden Quellen:
 
 - `AGENTS.md` — gibt es dazu eine harte Regel mit Test?
-- `ROADMAP.md` — steht der Punkt noch offen, oder wurde er umgesetzt, und was
-  wurde dabei gelernt? Die Abschnitte am Ende der Roadmap enthalten die Funde
-  aus den Durchsichten und weichen manchmal vom ursprünglichen Text ab.
+- `ROADMAP.md` — welcher konkrete Rest und welche Abnahme stehen bei der
+  zugehörigen RM-Kennung? Das Register führt ausschließlich aktuelle Arbeit.
+- `ROADMAP-ARCHIV.md` — welcher datierte Befund oder welche Entscheidung
+  erklärt den heutigen Vertrag? Historische Ist-Aussagen gelten für ihren
+  damaligen Stand, nicht automatisch für den heutigen Code.
+
+Wenn die Frage den tatsächlichen Stand betrifft, lies die im Bauplan
+genannte Umsetzung und ihre Prüfungen. Eine vorhandene Implementierung
+belegt noch keine Plattform- oder Feldabnahme. Eine Abweichung im Code hebt
+die Anforderung nicht auf: Entweder ersetzt eine belegte Produktentscheidung
+den alten Vertrag, oder die Lücke bleibt ausdrücklich in der Roadmap.
+
+Bei einem vollständigen Abgleich alle nummerierten Abschnitte erfassen,
+Kernverträge und Dateibeispiele gegen ihre ausführbaren Quellen prüfen und
+§-Nummern für bestehende Verweise erhalten. Historische Messungen und
+Begründungen gehören ins Archiv; aktive Anforderungen werden nicht als
+Aufräumarbeit gestrichen.
 
 ## Antwort
 
