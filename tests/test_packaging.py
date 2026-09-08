@@ -435,7 +435,20 @@ def test_a_tests_only_dispatch_excludes_every_packaging_and_signing_job() -> Non
     package_matrix = next(line for line in workflow.splitlines() if "os: [windows-latest" in line)
     packaged = package_matrix.split("[", 1)[1].split("]", 1)[0].replace(" ", "").split(",")
     assert len(tested) == len(set(tested)), "ein Prüfsystem steht doppelt in der Matrix"
-    assert set(tested) == set(packaged), "jede angebotene Architektur braucht ihren echten Testlauf"
+    # **Jede angebotene Architektur braucht ihren echten Testlauf** — mit einer
+    # benannten Ausnahme, und nur mit dieser. Der Intel-Mac ist am 07.09.2026
+    # in die Suite-Matrix gekommen und hat im ersten Lauf vier Befunde
+    # gemeldet, darunter eine Grafikschicht, die dort ein schwarzes Bild
+    # zeichnet. Bis das geklärt ist, wird er paketiert und nicht geprüft
+    # (Entscheidung Robert, 08.09.2026) — dieselbe Lage, in der 0.3.4 gebaut
+    # wurde. Die vier Befunde stehen in `ROADMAP.md`.
+    #
+    # Die Ausnahme steht hier als **Menge**, nicht als „irgendeine darf
+    # fehlen": Verschwindet eine weitere Plattform aus der Suite, ist der Lauf
+    # rot, und wer den Intel-Mac zurückholt, löscht diese Zeile.
+    untested = set(packaged) - set(tested)
+    assert untested <= {"macos-26-intel"}, f"paketiert, aber ungeprüft: {sorted(untested)}"
+    assert not set(tested) - set(packaged), "geprüft, aber nicht angeboten"
 
 
 @pytest.mark.parametrize("job", ["suite", "latest"])
@@ -548,7 +561,14 @@ def test_window_failures_block_the_package_on_every_platform(
     workflow = WORKFLOW.read_text(encoding="utf-8")
     step = workflow.split("      - name: Fensterdateien\n", 1)[1].split("\n  package:", 1)[0]
     assert "continue-on-error" not in step
-    assert "if: runner.os" not in step, "Windows und macOS dürfen die Fenster nicht auslassen"
+    # **Windows und macOS dürfen die Fenster nicht auslassen** — Linux ist seit
+    # dem 08.09.2026 ausgesetzt (Entscheidung Robert), weil dort acht Tests die
+    # Schriftmetrik der Umgebung mitmessen; die Begründung steht im Schritt
+    # selbst und die Befunde in `ROADMAP.md`. Geprüft wird deshalb nicht mehr
+    # „kein `if`", sondern **genau dieses eine**: Ein zweites, das eine weitere
+    # Plattform ausnimmt, macht den Lauf wieder rot.
+    conditions = [line.strip() for line in step.splitlines() if line.strip().startswith("if:")]
+    assert conditions in ([], ["if: runner.os != 'Linux'"]), conditions
     assert "shell: bash" in step
     script = textwrap.dedent(step.split("        run: |\n", 1)[1])
     shell = _workflow_shell()

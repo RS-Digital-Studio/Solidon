@@ -2892,6 +2892,36 @@ def test_the_dialog_grows_when_the_profile_section_opens_itself(
     assert field.height() >= tall_enough, "und die Felder darüber behalten ihre Höhe"
 
 
+def test_the_upper_fields_keep_their_height_when_the_dialog_cannot_grow(
+    qt_app: QApplication, session: Session, tmp_path: Path
+) -> None:
+    """Und wenn er nicht wachsen *kann*, geben die Felder trotzdem nicht nach.
+
+    Auf macOS ARM ist genau das eingetreten (08.09.2026): Der Dialog wuchs,
+    aber nicht genug, und das Feld darüber fiel von 26 auf 22 Punkte. Der Test
+    darüber sah es hier nie, weil dieser Bildschirm den Dialog wachsen lässt,
+    soweit er will — der Fall entsteht also, indem ihm die Höhe genommen wird,
+    wie sie ihm dort ein kleinerer Bildschirm nimmt.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog._slicer_path = tmp_path / "orca-slicer.exe"
+    dialog.slicer_box.setVisible(True)
+    dialog.resize(dialog.sizeHint())
+    dialog.show()
+    qt_app.processEvents()
+    field = dialog._editors["layers.layer_height"]
+    tall_enough = field.sizeHint().height()
+    dialog.setMaximumHeight(dialog.height())
+
+    dialog._open_slicer_section()
+    qt_app.processEvents()
+
+    assert field.height() >= tall_enough, (
+        f"gestaucht: {field.height()} statt {tall_enough} — der Fehlbetrag der "
+        "nachgereichten Klappe darf nicht aus dem oberen Bereich kommen"
+    )
+
+
 def test_every_group_of_the_depth_can_be_reached_at_the_default_width(
     qt_app: QApplication, session: Session
 ) -> None:

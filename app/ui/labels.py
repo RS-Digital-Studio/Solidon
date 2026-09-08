@@ -13,8 +13,8 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from datetime import date
 from typing import Any, Final, Literal
 
-from PySide6.QtCore import QDate, QLocale, QObject, Qt, Signal
-from PySide6.QtGui import QColor, QValidator
+from PySide6.QtCore import QDate, QLocale, QObject, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QShowEvent, QValidator
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSlider, QStyle, QWidget
 
 from app.core import figures
@@ -333,6 +333,38 @@ class NumberSpin(QDoubleSpinBox):
     ruft es selbst, und wer die Klasse benutzt, darf sich auf beide
     verlassen.
     """
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt-Name
+        """Nie niedriger als die Wunschhöhe.
+
+        Fehlt einem Layout die Höhe, presst es den Fehlbetrag in die Felder
+        darüber. Auf macOS ARM fiel dieses Feld dabei von 26 auf 22 Punkte
+        (08.09.2026), und derselbe Fall stand am 26.08.2026 schon einmal da —
+        Auswahlfelder mit 16 von 28. Eine Zahl, die man nicht mehr lesen kann,
+        ist kein gesparter Platz: Wo es eng wird, gehört gescrollt, und dafür
+        muss das Feld seine Untergrenze auch nennen.
+
+        Die Breite bleibt, wie Qt sie meldet — dort ist Schrumpfen erlaubt und
+        richtig, ein Zahlenfeld darf schmaler werden.
+        """
+        base = super().minimumSizeHint()
+        return QSize(base.width(), max(base.height(), self.sizeHint().height()))
+
+    def showEvent(self, event: QShowEvent) -> None:  # noqa: N802 - Qt-Name
+        """Die Untergrenze festschreiben, sobald die Höhe feststeht.
+
+        **Der Hinweis allein genügt nicht.** Gemessen am Druckdialog: Das Feld
+        meldete `minimumSizeHint` 23 und wurde trotzdem auf 18 gedrückt — hat
+        ein Elternteil eine feste Höhe, verteilt Qt den Platz hart und
+        unterschreitet den Hinweis. Ein ausdrücklich gesetztes Minimum kann es
+        nicht unterschreiten; dann geht der Fehlbetrag dorthin, wo er
+        hingehört, nämlich in den Rollbalken.
+
+        Erst beim Anzeigen, weil `sizeHint` vorher die Schrift des Fensters
+        noch nicht kennt.
+        """
+        super().showEvent(event)
+        self.setMinimumHeight(max(self.minimumHeight(), self.sizeHint().height()))
 
     def _as_shown(self, text: str) -> str:
         """Dasselbe Maß mit dem Trennzeichen der Anzeigesprache.
