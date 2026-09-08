@@ -199,7 +199,13 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
 
     Leer heißt: nicht herauszufinden. Dann bleibt es bei der Vorgabe — eine
     falsche Vorauswahl sieht aus wie eine Entscheidung (§29).
+
+    **PrusaSlicer sagt es ebenso**, nur in seiner ``PrusaSlicer.ini`` unter
+    ``[presets] printer``. Es gibt keinen Grund, den Kunden dort nach einem
+    Drucker zu fragen, den sein Slicer längst kennt.
     """
+    if flavour == "prusa":
+        return str(_prusa_presets(executable).get("printer", "")).strip()
     if not has_user_profile_tree(flavour):
         return ""
     for root in user_roots(flavour, executable):
@@ -225,6 +231,132 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
     return ""
 
 
+#: Wie PrusaSlicer seine Anwendungskonfiguration nennt.
+_PRUSA_CONFIG: Final = "PrusaSlicer.ini"
+
+#: Wie viele Spulen höchstens gelesen werden. PrusaSlicer nummeriert sie ab
+#: der zweiten — ``filament``, ``filament_1``, ``filament_2`` —, und acht ist
+#: dieselbe Grenze wie ``MAX_SLOTS`` im Kern.
+_PRUSA_EXTRUDERS: Final = 8
+
+
+def prusa_config(executable: Path) -> Path | None:
+    """Die Anwendungskonfiguration von PrusaSlicer, sofern sie dasteht.
+
+    PrusaSlicer legt keine Profile je Konto ab wie die Orca-Familie: Es gibt
+    einen Ordner unter der Konfiguration des Systems und darin eine
+    ``PrusaSlicer.ini``. In ihrem Abschnitt ``[presets]`` steht, was zuletzt
+    eingelegt und eingestellt war — dieselbe Auskunft, die bei Orca in
+    ``presets.machine`` steht, nur in einem anderen Format.
+    """
+    base = config_home(sys.platform)
+    if not base:
+        return None
+    stem = discover.program_mark(executable.name)
+    for folder in Path(base).iterdir() if Path(base).is_dir() else []:
+        if not folder.is_dir() or discover.plain_name(folder.name) != stem:
+            continue
+        config = folder / _PRUSA_CONFIG
+        if config.is_file():
+            return config
+    return None
+
+
+#: Der künstliche Abschnittsname für den kopflosen Anfang einer Prusa-INI.
+#:
+#: **Nicht ``DEFAULT``**, obwohl das naheläge: ConfigParser reicht dessen
+#: Werte an *jeden* Abschnitt weiter, und ``[presets]`` trüge dann die
+#: zweihundert Schlüssel des Kopfes mit.
+_PRUSA_HEAD: Final = "solidon:head"
+
+
+def _read_prusa_ini(path: Path) -> configparser.ConfigParser | None:
+    """Eine PrusaSlicer-INI — ihr Anfang hat keinen Abschnitt.
+
+    Die Anwendungskonfiguration beginnt mit Schlüsseln ohne Überschrift, und
+    ein Filamentprofil besteht sogar ausschließlich daraus. ConfigParser lehnt
+    beides mit ``MissingSectionHeaderError`` ab; ein künstlicher Kopf macht
+    daraus eine gültige Datei, ohne eine Zeile zu verändern.
+
+    Genau daran ist der erste Versuch am 08.09.2026 gescheitert — der Leser
+    fing den Fehler ab und gab eine leere Zuordnung zurück, und die sah aus
+    wie „nichts eingelegt".
+    """
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError as problem:
+        _log.debug("skipping Prusa file %s: %s", path.name, problem)
+        return None
+    parsed = configparser.ConfigParser(interpolation=None, strict=False)
+    try:
+        parsed.read_string(f"[{_PRUSA_HEAD}]\n{text}")
+    except configparser.Error as problem:
+        _log.debug("skipping Prusa file %s: %s", path.name, problem)
+        return None
+    return parsed
+
+
+def _prusa_presets(executable: Path) -> Mapping[str, str]:
+    """Der Abschnitt ``[presets]`` — leer, wo nichts zu lesen ist."""
+    config = prusa_config(executable)
+    if config is None:
+        return {}
+    parsed = _read_prusa_ini(config)
+    if parsed is None or not parsed.has_section("presets"):
+        return {}
+    return dict(parsed["presets"])
+
+
+def _prusa_configured(executable: Path) -> tuple[SlicerFilament, ...]:
+    """Die eingelegten Spulen von PrusaSlicer.
+
+    **Der Name ist die sichere Auskunft, alles andere kommt nur, wo es
+    dasteht.** Ein Herstellerpreset wohnt in einem Bündel mit Zehntausenden
+    Abschnitten und einer Erbkette; ein selbst angelegtes liegt als eigene
+    Datei unter ``filament/``, und die trägt Art und Farbe unmittelbar. Was
+    sich nicht ohne Raten sagen lässt, bleibt leer — eine erfundene
+    Materialart wäre schlechter als keine (Regel 21).
+    """
+    presets = _prusa_presets(executable)
+    if not presets:
+        return ()
+    config = prusa_config(executable)
+    folder = config.parent / "filament" if config is not None else None
+    keys = ["filament", *(f"filament_{index}" for index in range(1, _PRUSA_EXTRUDERS))]
+    found: list[SlicerFilament] = []
+    seen: set[str] = set()
+    for key in keys:
+        name = str(presets.get(key, "")).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        found.append(_prusa_filament(name, folder))
+    return tuple(found)
+
+
+def _prusa_filament(name: str, folder: Path | None) -> SlicerFilament:
+    """Eine eingelegte Spule; Art und Farbe, wo eine eigene Datei sie nennt."""
+    if folder is None:
+        return SlicerFilament(profile=name, colour="")
+    parsed = _read_prusa_ini(folder / f"{name}.ini")
+    # Eine Prusa-Profildatei trägt ihre Werte ohne Abschnittskopf; sie stehen
+    # deshalb vollständig im künstlichen ersten Abschnitt.
+    values: Mapping[str, str] = (
+        dict(parsed[_PRUSA_HEAD]) if parsed is not None and parsed.has_section(_PRUSA_HEAD) else {}
+    )
+    colour = str(values.get("filament_colour", "")).strip()
+    return SlicerFilament(
+        profile=name,
+        colour=colour if _COLOUR_LOOKS_RIGHT.match(colour) else "",
+        material_type=str(values.get("filament_type", "")).strip(),
+    )
+
+
+#: Der Farbvertrag der Anzeige: ``#RRGGBB``. Ein Profil darf etwas anderes
+#: hineinschreiben; dann gilt es als keine Angabe.
+_COLOUR_LOOKS_RIGHT: Final = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
 def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[SlicerFilament, ...]:
     """Die im Slicer eingelegten Filamente samt Farbe und Typ (§20, §29).
 
@@ -234,7 +366,15 @@ def configured_filaments(flavour: SlicerFlavour, executable: Path) -> tuple[Slic
     zusammengeführt. Es werden nur die Einträge der zuletzt gewählten Maschine
     gelesen — der ganze Profilbestand wäre ein Herstellerkatalog und kein
     Filamentregal.
+
+    **PrusaSlicer führt dieselbe Auskunft an einer anderen Stelle** und in
+    einem anderen Format: ``[presets]`` in seiner ``PrusaSlicer.ini``. Vor dem
+    08.09.2026 blieb es hier bei ``()``, und damit war die Zusage aus §20 —
+    die eingelegten Filamente werden als Vorwahl übernommen — nur für eine der
+    drei Familien eingelöst.
     """
+    if flavour == "prusa":
+        return _prusa_configured(executable)
     if not has_user_profile_tree(flavour):
         return ()
     roots = profile_roots(flavour, executable)
@@ -582,7 +722,7 @@ def _read_cura_process(path: Path) -> SlicerProfile | None:
     Curas Gegenstück zu ``compatible_printers``: ein Wert statt einer Liste,
     aber dieselbe Auskunft.
     """
-    parsed = _read_cura_ini(path)
+    parsed = _read_ini(path)
     if parsed is None:
         return None
     general = parsed["general"] if parsed.has_section("general") else {}
@@ -598,7 +738,7 @@ def _read_cura_process(path: Path) -> SlicerProfile | None:
     )
 
 
-def _read_cura_ini(path: Path) -> configparser.ConfigParser | None:
+def _read_ini(path: Path) -> configparser.ConfigParser | None:
     """Eine Cura-INI, ohne dass ein ``%`` darin zum Fehler wird.
 
     ``interpolation=None``, weil Prozentzeichen in Werten stehen dürfen und
