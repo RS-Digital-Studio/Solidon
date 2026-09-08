@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import json
 from pathlib import Path
 
 from tools import session_board
@@ -63,3 +65,44 @@ def test_two_codex_sessions_claim_list_and_release_isolated_entries(
     output = capsys.readouterr().out
     assert "Codex 04dddddd" in output
     assert "Codex 05eeeeee" in output
+
+
+def test_statusline_names_the_session_the_model_and_the_others(
+    monkeypatch, tmp_path: Path, capsys
+) -> None:
+    """Die Statuszeile beantwortet beide Fragen des geteilten Baums."""
+    monkeypatch.setattr(session_board, "_board", lambda: tmp_path)
+    monkeypatch.setattr(session_board, "_branch", lambda: "main")
+    monkeypatch.delenv("CLAUDE_PID", raising=False)
+    monkeypatch.delenv("CLAUDE_CODE_MESSAGING_SOCKET", raising=False)
+    monkeypatch.delenv("CODEX_SESSION_ID", raising=False)
+
+    monkeypatch.setenv("CODEX_THREAD_ID", "06ffffff-1111-2222-3333-444444444444")
+    assert session_board.claim("Kern", "app/core/**", "") == 0
+    monkeypatch.setenv("CODEX_THREAD_ID", "07aaaaaa-1111-2222-3333-444444444444")
+    assert session_board.claim("Oberfläche", "app/ui/**", "") == 0
+    capsys.readouterr()
+
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps({"model": {"display_name": "Opus 5"}})))
+    assert session_board.statusline() == 0
+
+    line = capsys.readouterr().out.strip()
+    assert line == "Codex 07aaaaaa · main · Opus 5 · +1 Sitzung"
+
+
+def test_statusline_survives_an_empty_or_broken_input(monkeypatch, tmp_path: Path, capsys) -> None:
+    """Ohne brauchbare Eingabe bleibt sie kurz — und bricht nicht ab.
+
+    Eine Statuszeile, die mit einer Ausnahme endet, nähme der Sitzung die
+    Anzeige für den Rest ihrer Laufzeit.
+    """
+    monkeypatch.setattr(session_board, "_board", lambda: tmp_path)
+    monkeypatch.setattr(session_board, "_branch", lambda: "")
+    monkeypatch.delenv("CLAUDE_PID", raising=False)
+    monkeypatch.delenv("CODEX_THREAD_ID", raising=False)
+    monkeypatch.delenv("CODEX_SESSION_ID", raising=False)
+
+    for payload in ("", "kein json", "[]", '{"model": "kein Objekt"}'):
+        monkeypatch.setattr("sys.stdin", io.StringIO(payload))
+        assert session_board.statusline() == 0
+        assert capsys.readouterr().out.strip() == "unbenannt"

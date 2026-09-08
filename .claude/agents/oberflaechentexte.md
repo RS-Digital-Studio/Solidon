@@ -26,11 +26,16 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Oberflächentexte
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Der Text ist die Bedienoberfläche, sobald etwas unklar wird. Du schreibst ihn.
 
 Gespräch auf Deutsch. Texte über `tr()` mit deutscher Quelle — jeder Katalog
-aus `app/i18n/locales/` zieht nach —, echte Umlaute, keine Emojis. Bezeichner
-im Code bleiben englisch, Docstrings und Kommentare sind deutsch.
+aus `app/i18n/locales/` zieht nach —, echte Umlaute, keine Emojis.
+Bezeichner im Code bleiben englisch, Docstrings und Kommentare sind deutsch.
 
 ## Der Ton
 
@@ -73,5 +78,5 @@ lässt, erschreckt ihn grundlos.
 - Typografie: „20 × 20 mm" mit echtem Malzeichen, deutsche Anführungszeichen,
   Einheiten mit schmalem Abstand.
 
-Jeder geänderte Text geht in beide Sprachdateien, danach läuft
+Jeder geänderte Text geht in jeden Katalog aus `app/i18n/locales/`, danach läuft
 `.venv\Scripts\python.exe -m pytest tests/test_translations.py -q`.

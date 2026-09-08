@@ -1,5 +1,10 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "statusLine": {
+    "type": "command",
+    "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/tools/session_board.py\" statusline",
+    "shell": "bash"
+  },
   "permissions": {
     "allow": [
       "Bash(.venv/Scripts/python.exe -m pytest:*)",
@@ -32,9 +37,21 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
             "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; if [ ! -x \"$P\" ]; then P=\"\"; for K in python3 python py; do C=\"$(command -v \"$K\" 2>/dev/null)\" || continue; case \"$C\" in *WindowsApps*) continue;; esac; P=\"$C\"; break; done; fi; [ -n \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsstart",
+            "shell": "bash",
             "timeout": 25
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsende",
+            "shell": "bash",
+            "timeout": 15
           }
         ]
       }
@@ -45,8 +62,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
             "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" vor-bash",
+            "shell": "bash",
             "timeout": 20
           }
         ]
@@ -58,8 +75,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
             "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" nach-aenderung",
+            "shell": "bash",
             "timeout": 90,
             "statusMessage": "Formatiere und prüfe die Datei"
           }
@@ -70,8 +87,8 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
             "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" testlauf",
+            "shell": "bash",
             "timeout": 20
           }
         ]
@@ -82,12 +99,15 @@
         "hooks": [
           {
             "type": "command",
-            "shell": "bash",
             "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || { echo \"Solidon-Hook übersprungen: keine .venv gefunden\" >&2; exit 0; }; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" abschluss",
+            "shell": "bash",
             "timeout": 30
           }
         ]
       }
     ]
+  },
+  "enabledPlugins": {
+    "csharp-lsp@claude-plugins-official": false
   }
 }

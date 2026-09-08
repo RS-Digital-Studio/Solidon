@@ -57,3 +57,43 @@ def test_every_codex_hook_command_sets_explicit_codex_argument() -> None:
 
     assert commands
     assert all(" --codex" in command for command in commands)
+
+
+def test_session_end_releases_the_area_on_the_board(tmp_path: Path) -> None:
+    """Endet die Sitzung, hält sie kein Gebiet mehr fest.
+
+    Der Lauf bekommt ein eigenes Git-Verzeichnis: Das Brett liegt im
+    gemeinsamen Git-Verzeichnis, und ein Test, der das echte anfasst, würde
+    den Eintrag einer gerade arbeitenden Nachbarsitzung löschen.
+    """
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, capture_output=True)
+    board = tmp_path / ".git" / "solidon-sitzungen"
+    environment = os.environ.copy()
+    environment["CLAUDE_PID"] = "424242"
+    environment.pop("CLAUDE_CODE_MESSAGING_SOCKET", None)
+    environment.pop("CODEX_THREAD_ID", None)
+    environment.pop("CODEX_SESSION_ID", None)
+
+    claimed = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "session_board.py"), "claim", "--area", "Probe"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=tmp_path,
+        env=environment,
+    )
+    assert claimed.returncode == 0, claimed.stderr
+    assert list(board.glob("*.json")), "the claim did not reach the temporary board"
+
+    ended = subprocess.run(
+        [sys.executable, str(HOOK), "sitzungsende"],
+        input='{"hook_event_name": "SessionEnd"}',
+        capture_output=True,
+        text=True,
+        timeout=30,
+        cwd=tmp_path,
+        env=environment,
+    )
+
+    assert ended.returncode == 0, ended.stderr
+    assert not list(board.glob("*.json")), "the area is still held after the session ended"

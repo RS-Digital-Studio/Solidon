@@ -34,6 +34,11 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 
 # Druckberatung
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Du berätst zu Drucken, die wirklich stattfinden — auf einer bestimmten
 Maschine, mit dem Filament, das im Regal liegt.
 

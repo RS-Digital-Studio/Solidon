@@ -1,12 +1,15 @@
 """Hooks für Claude Code und Codex in diesem Projekt.
 
-Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
+Ein Skript, sechs Aufgaben — welche, sagt das erste Argument:
 
     sitzungsstart    SessionStart: sagt, in welchem Projekt wir sind. Die
                      globale Konfiguration beschreibt ein Avalonia-Projekt;
                      dieses hier ist Python. Prüft dabei, ob die Umgebung dem
                      festgeschriebenen Stand entspricht — mehrere Leute am
                      selben Repository heißt sonst mehrere Versionssätze.
+    sitzungsende     SessionEnd: gibt das Gebiet dieser Sitzung auf dem
+                     Sitzungsbrett frei, damit die nächste es nicht für
+                     belegt hält.
     nach-aenderung   PostToolUse (Write|Edit): formatiert die geänderte
                      Python-Datei und meldet Lint-Befunde sowie Verstöße gegen
                      die harten Regeln, die sich rein syntaktisch erkennen
@@ -30,6 +33,8 @@ lieber ein ausgefallener Hinweis als eine blockierte Sitzung.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import os
 import re
@@ -526,14 +531,38 @@ def abschluss() -> None:
         gezeigt = ", ".join(juenger[:3]) + (" und weitere" if len(juenger) > 3 else "")
         melden(
             "Stop",
-            f"Seit der letzten Änderung ({gezeigt}) lief die Suite nicht. "
-            "Die Arbeitsweise dieses Projekts verlangt sie nach jedem Schritt: "
-            ".venv\\Scripts\\python.exe -m pytest -q — oder "
-            f"{'$pruefen' if is_codex() else '/pruefen'} für das vollständige Tor. "
+            f"Seit der letzten Änderung ({gezeigt}) liefen keine Tests. "
+            "Die Arbeitsweise dieses Projekts verlangt nach jedem Schritt die "
+            "betroffenen: .venv\\Scripts\\python.exe tools/affected_tests.py --run "
+            f"— und vor dem Commit {'$pruefen' if is_codex() else '/pruefen'} für "
+            "das vollständige Tor. (`pytest -q` am Stück kommt seit dem 16.08.2026 "
+            "nicht mehr durch: rund zwanzig Minuten, dann ein Speicherabriss.) "
             "Der Hook sieht nur den Zeitstempel, nicht den Urheber: stammt die Änderung "
             "aus einer parallel laufenden Sitzung, gehört sie nicht dir. Dann weder "
             "prüfen noch anfassen, sondern es beim Berichten erwähnen.",
         )
+
+
+def sitzungsende() -> None:
+    """SessionEnd: gibt das Gebiet dieser Sitzung auf dem Brett wieder frei.
+
+    Ohne das bleibt der Eintrag liegen. Das Brett räumt zwar selbst auf — es
+    prüft das Postfach der Sitzung —, aber erst, wenn das nächste Mal jemand
+    nachsieht, und bei einer Codex-Sitzung ohne Postfach erst nach zwölf
+    Stunden. Bis dahin liest die nächste Sitzung ein Gebiet als belegt, das
+    niemand mehr hält, und weicht ihm aus.
+
+    Wer das Gebiet noch braucht, trägt es in der nächsten Sitzung neu ein; ein
+    Anspruch, der eine Sitzung überlebt, wäre eine Absprache, die niemand
+    gekündigt hat.
+    """
+    eingabe()  # stdin leeren, damit der Aufrufer nicht blockiert
+    sys.path.insert(0, str(WURZEL))
+    from tools import session_board
+
+    # `release` berichtet dem Menschen, der es tippt; hier tippt es niemand.
+    with contextlib.redirect_stdout(io.StringIO()):
+        session_board.release()
 
 
 def vor_bash() -> None:
@@ -577,6 +606,7 @@ def vor_bash() -> None:
 
 AUFGABEN = {
     "sitzungsstart": sitzungsstart,
+    "sitzungsende": sitzungsende,
     "nach-aenderung": nach_aenderung,
     "testlauf": testlauf,
     "abschluss": abschluss,

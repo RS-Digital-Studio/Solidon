@@ -208,6 +208,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Testhilfen stehen zweimal | Doppelte Stellen und Zwillinge, gemessen (07.09.2026) | **eine Entscheidung von Robert** (Konzept §2 H): 21 wortgleiche Gruppen in `tests/`, darunter `_freeform_patch` mit 45 Zeilen in `test_cone_fit_quality.py` und `test_torus_fit_quality.py`; Empfehlung einmal für die fünf großen, danach nur beim Anfassen |
 | Die Filamentkarte fordert mehr, als sie zeigt | Ein Ort für die Auswahl (07.09.2026) | eine Zeile in `filament_picker._around_the_list`: Sie fordert 144 Bildpunkte und setzt 126 um, gemessen beim Bau des P4-Nachweises. Die 18 Punkte bekommt niemand — die Verteilung gibt sie ihr, und sie zeigt sie nicht |
 | Die Handbücher von 0.3.5 tragen neuen Text auf alten Bildern | Die Durchsicht des 07.09.2026 | einen Bilderlauf: `app/images/manual/*/main-window.png` ist von 06:13, die rechte Spalte hat sich um 11:05 geändert (`975bd6bf`), und `d2040474` hat Handbuch und PDFs mit dem neuen Absatz zur rechten Spalte darüber geschrieben. Text und Bild widersprechen sich auf derselben Seite, in sechs Sprachen, in `Releases/*.pdf` und in `website/handbuch.html`. Dazu die **gezeichnete** Abbildung (`app/core/figures.py::_window`): sie kennt Projektkopfzeile und Operationsfläche nicht, und ihr `caption` sagt weiter „vier Bereiche". Reihenfolge: erst `figures.py`, dann der Bilderschritt aus `/erzeugen`, dann Handbuch und PDFs. **Vor dem Paketbau von 0.3.5** |
+| Feuern `SessionEnd` und `statusLine` wirklich? | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | die nächste Sitzung: eine Statuszeile, die erscheint, und ein Sitzungsbrett, das nach dem Beenden leer ist. Beide Programme dahinter sind geprüft, jedes mit Gegenprobe (`tests/test_solidon3d_hooks.py`, `tests/test_session_board.py`) — ungeprüft ist allein, ob Claude Code sie in dieser Fassung auslöst. Erscheint die Zeile nicht, ist der erste Verdacht das Feld `shell`: Die Hooks tragen es, für `statusLine` ist es nicht belegt |
+| Kommt der Codex-`SessionEnd` in drei Sekunden durch? | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | einen Lauf auf der Maschine, auf der Codex steht — hier ist es nicht installiert. Drei Sekunden sind dort das Maximum (Vorgabe eine), und ein Python-Start mit Import liegt nahe daran. Reicht es nicht, muss der Hook ohne Import auskommen: die Eintragsdatei selbst zu löschen ist billiger, als `tools/` zu laden |
+| Ist `gpt-6-astra` für dieses Konto freigeschaltet? | Zwei Werkzeuge, zwei Wahrheiten (08.09.2026) | einen Blick auf der Codex-Maschine. Bei Veröffentlichung lief das Modell über ein Trusted-Access-Programm; der Rückfall ist eine Zeile — `MODELS` in `tools/sync_agents.py` auf `gpt-5.6-sol` zurückstellen und das Werkzeug einmal laufen lassen |
 
 ---
 
@@ -17040,3 +17043,75 @@ Erzeugerlauf zu haben ist.
       geschriebene Text steht in sechs Sprachen richtig da; jedes
       Bildschirmfoto der rechten Seite zeigt den alten Aufbau. Es ist
       derselbe Erzeugerlauf, nur mit einem zweiten Anlass.
+
+## Zwei Werkzeuge, zwei Wahrheiten (08.09.2026)
+
+Die vierzehn Fachagenten liegen zweimal im Repository — als Markdown für
+Claude Code, als TOML für Codex. Gepflegt wurden bis heute beide von Hand, und
+die Historie sagt, wie gut das ging: **neun Commits nur auf der Claude-Seite,
+drei nur auf der Codex-Seite, kein einziger auf beiden.**
+
+Was daraus geworden war, ist gemessen: Alle vierzehn Beschreibungen wichen ab,
+die Anweisungstexte zu 4 bis 29 Prozent. Und die Abweichung war nicht
+kosmetisch. Drei Claude-Agenten — `auslieferung`, `op`, `review` — schrieben
+`pytest -q` am Stück vor, den Lauf, der seit dem 16.08.2026 nach rund zwanzig
+Minuten im Speicherabriss endet; `auslieferung` nannte ihn als Vorbedingung
+fürs Paketieren. **Kein einziger der vierzehn kannte `affected_tests.py`**, also
+Roberts Entscheidung vom 02.09.2026. Die Codex-Seite kannte beides: Sie war die
+gepflegtere, weil sie jünger war.
+
+Weitere Abweichungen derselben Art: „die drei Hauptwege" gegen vier (Bauplan
+§2.2 nennt vier), „deutsche und englische Oberflächentexte" gegen sechs
+Kataloge, „die drei Beispielprojekte" gegen elf, ein Lizenzabsatz ohne den
+OpenSCAD-Ausbau vom 26.08.2026, und `core/knowledge/rules/` für eine Datei, die
+`app/core/knowledge/data/rules.toml` heißt.
+
+**Eine Abweichung ging in die andere Richtung, und sie ist die Lehre des
+Tages.** Die Codex-Fassung sagte „die vier Vorrangregeln"; `prompt.py` sagt
+seit Version 4 ausdrücklich „Aus vier Gewohnheiten werden drei", und `_HABITS`
+beginnt mit „Drei Gewohnheiten". Offenbar hat die Codex-Sitzung vom 06.09. beim
+Nachziehen der Hauptwege „drei→vier" zu breit ersetzt. **Wer zwei Fassungen
+zusammenführt, darf keine Seite pauschal zur Quelle erklären** — jede
+Abweichung wird einzeln am Code belegt, sonst tauscht man einen alten Fehler
+gegen einen neuen.
+
+Seither ist `.claude/agents/` die Quelle, `tools/sync_agents.py` erzeugt die
+Codex-Profile daraus, und `tests/test_agent_mirror.py` fährt sein `--check`.
+Der Generator leitet auch Modell, Aufwand und Sandbox aus dem Frontmatter ab;
+die Codex-Modelle stehen damit auf `gpt-6-astra` (seit Codex CLI 0.153.4 die
+gebündelte Vorgabe) statt auf `gpt-5.6-sol`.
+
+Derselbe veraltete Befehl stand noch an einer zweiten Stelle, und die trifft
+jede Sitzung statt nur die Agenten: Der `Stop`-Hook empfahl `pytest -q` bei
+jedem Zug, an dem seit der letzten Änderung keine Tests gelaufen waren. Er
+nennt jetzt `affected_tests.py --run` und `/pruefen`.
+
+Dazu drei kleinere Griffe am Werkzeug: Ein `SessionEnd`-Hook gibt das Gebiet
+auf dem Sitzungsbrett frei, statt es bis zum nächsten Nachsehen liegen zu
+lassen; eine Statuszeile (`session_board.py statusline`) nennt Sitzungsnamen,
+Zweig, Modell und die Zahl der anderen Sitzungen; und `pyright-lsp` ist
+installiert, während `csharp-lsp` — in einem reinen Python-Projekt — nur noch
+projektlokal abgeschaltet ist, damit Roberts .NET-Projekte es behalten.
+
+**Was offen ist, ist die Verdrahtung** — sie lässt sich hier nicht messen:
+
+- [ ] **Feuern `SessionEnd` und `statusLine` wirklich?** Beide sind in
+      `.claude/settings.json` eingetragen und die Programme dahinter geprüft
+      (`tests/test_solidon3d_hooks.py`, `tests/test_session_board.py`, beide
+      mit Gegenprobe). Ob Claude Code sie in dieser Fassung auch auslöst,
+      zeigt erst die nächste Sitzung: eine Statuszeile, die erscheint, und ein
+      Brett, das nach dem Beenden leer ist. Erscheint die Zeile nicht, ist der
+      erste Verdacht das Feld `shell` — die Hooks tragen es, für `statusLine`
+      ist es nicht belegt.
+- [ ] **Kommt der Codex-`SessionEnd` in drei Sekunden durch?** Das ist dort das
+      Maximum (Vorgabe eine Sekunde), und ein Python-Start mit Import liegt
+      nahe daran. Auf der Maschine, auf der Codex läuft, einmal beenden und
+      `session_board.py list` nachsehen. Reicht es nicht, muss der Hook ohne
+      Import auskommen — die Datei selbst zu löschen ist billiger, als
+      `tools/` zu laden.
+- [ ] **Ist `gpt-6-astra` für dieses Konto freigeschaltet?** Bei
+      Veröffentlichung lief es über ein Trusted-Access-Programm. Fehlt der
+      Zugang, ist der Rückfall eine Zeile: `MODELS` in `tools/sync_agents.py`
+      auf `gpt-5.6-sol` zurückstellen und das Werkzeug einmal laufen lassen.
+      Codex ist auf dieser Maschine nicht installiert, also ist hier nichts
+      davon prüfbar.

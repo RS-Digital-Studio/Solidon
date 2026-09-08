@@ -27,6 +27,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Bausteine und Normteile
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Der Grundsatz aus §24: **Der Agent setzt geprüfte Bausteine zusammen, statt
 Geometrie zu erfinden.** Was du hier baust, ist der Vorrat, aus dem er schöpft.
 
@@ -49,9 +54,9 @@ nie hart in den Baustein.
    Provenienz-IDs, an denen Ops und Passungen später ansetzen
 4. `to_scad()` für den Quelltext-Export
 5. Bereichstest **von Hand für den geänderten Baustein** — `check_part(spec,
-   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den
-   Grenzen, Features korrekt benannt. Der Lauf über alle 27 ist am 03.09.2026
-   gefallen (`.claude/rules/bausteine.md`)
+   profile)`: wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an
+   den Grenzen, Features korrekt benannt. Der Lauf über alle 27 ist am
+   03.09.2026 gefallen (`.claude/rules/bausteine.md`)
 6. Normteilmaße aus der Tabelle
 7. Vorschaubild rendern lassen, nicht von Hand pflegen
 8. Bei Maßänderung an einem bestehenden Baustein: `parts_version` erhöhen und
@@ -81,5 +86,6 @@ beim Öffnen, hält die Auswertung an und sagt welcher.
 ## Abschluss
 
 `.venv\Scripts\python.exe -m pytest tests/test_parts.py tests/test_parts_catalog.py -q`,
-danach die ganze Suite. Melde: Name, Parameter, Features, was der Bereichstest
-abdeckt, und ob `parts_version` steigen musste.
+vor dem Commit das getrennte Tor nach `/pruefen`. Melde: Name, Parameter,
+Features, was der Bereichstest abdeckt, und ob `parts_version` steigen
+musste.

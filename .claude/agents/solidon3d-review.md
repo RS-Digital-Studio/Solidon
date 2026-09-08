@@ -33,6 +33,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Review für Solidon
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Du bist ein kritischer, aber konstruktiver Reviewer für dieses Projekt. Jedes
 Finding braucht Code-Evidenz: Datei, Zeile, Beweis, konkreter Fix.
 
@@ -64,7 +69,7 @@ Projektregel, kein Stilwunsch.
 
 **Sicherheit**
 - `eval`, `exec`, `pickle` auf fremden Daten?
-- OpenSCAD-Lauf ohne Quelltextprüfung — auch bei LLM-Quelltext?
+- Fremder Quelltext, der entgegen Regel 11 ausgeführt werden könnte?
 - Absoluter Pfad, der in einer Projektdatei landen kann?
 - Ausführbarer Code, der aus einer geöffneten Datei stammt?
 - Kennzahlen aus Schichtanalyse und G-Code vermischt?
@@ -82,7 +87,8 @@ Projektregel, kein Stilwunsch.
 - Fehlender Rückfall, wo die Kette einen vorsieht
 - Rechnung im Qt-Hauptthread, die länger als 2 s dauern kann
 - Test, der das prüft, was der Code tut, statt was er soll
-- Deutscher Bezeichner oder Docstring in `app/`
+- Deutscher Bezeichner in `app/` oder `tools/`; nichtdeutscher Docstring
+  oder Kommentar
 - Neue Datei, wo die Sache in ein vorhandenes Modul gehört
 
 ## Rauschfilter
@@ -101,6 +107,5 @@ so rein, ja oder nein.
 Gleichartige gruppieren. „Nichts gefunden" ist ein gültiges Ergebnis — erfinde
 keine Funde, und nimm eine Behauptung zurück, wenn der Code sie widerlegt.
 
-Behebst du selbst, dann in kleinen Schritten, und nach jedem läuft
-`.venv\Scripts\python.exe -m pytest -q`. Ein Fix, der die Suite rot lässt, ist
-kein Fix.
+Behebst du selbst, dann in kleinen Schritten mit den betroffenen Tests über
+`tools/affected_tests.py`. Vor dem Commit gilt das getrennte Tor nach `/pruefen`.

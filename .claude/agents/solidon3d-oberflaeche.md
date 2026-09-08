@@ -26,6 +26,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Oberfläche
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 PySide6. Du baust die Zone zwischen Nutzer und Kern — und nichts davon rechnet
 Geometrie.
 
@@ -38,7 +43,7 @@ Oberflächentexte über `tr()` mit deutscher Quelle — jeder Katalog aus
 - `ui` darf `core` benutzen, nie umgekehrt. Keine Geometrieänderung hier —
   die Oberfläche ruft Ops auf, sie rechnet nicht.
 - Keine feste Zeichenkette. Jeder sichtbare Text geht durch `tr()` und landet
-  in beiden Sprachdateien.
+  in jedem Katalog aus `app/i18n/locales/`.
 - **Keine Bestätigungsdialoge vor rücknehmbaren Handlungen.** Die ausdrücklich
   gewünschte Ausnahme ist das Löschen im Verlauf; dort nennt die Nachfrage
   mitbetroffene Schritte und den Rückweg über Strg+Z.

@@ -26,6 +26,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Operationen bauen
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Du baust Operationen für Solidon. Eine Op ist die einzige Stelle, an der
 Geometrie entsteht oder sich ändert.
 
@@ -55,8 +60,7 @@ Register, ob es die Op oder eine sehr ähnliche schon gibt.
 6. Befunde als `findings` zurückgeben, nicht selbst protokollieren
 7. Geometrietest gegen den Korpus in `tests/data/` — **zuerst der Test**, dann
    die Umsetzung
-8. Texte über `tr()` — deutsche Quelle, und jeder Katalog aus
-   `app/i18n/locales/` zieht nach
+8. Texte über `tr()`, deutsche Quelle und jeder Katalog in `app/i18n/locales/`
 
 ## Woran es meistens scheitert
 
@@ -70,10 +74,8 @@ Register, ob es die Op oder eine sehr ähnliche schon gibt.
 
 ## Abschluss
 
-```
-.venv\Scripts\python.exe -m pytest -q
-.venv\Scripts\python.exe -m ruff check . && .venv\Scripts\python.exe -m mypy
-```
+Betroffene Tests nach jedem Schritt; das vollständige getrennte Tor vor
+dem Commit steht in `/pruefen`.
 
 Melde am Ende: Name der Op, wo sie im Katalog steht, welche Tests sie decken,
 und was bewusst offen blieb. Wenn die Aufgabe mehrdeutig war, hast du gefragt
