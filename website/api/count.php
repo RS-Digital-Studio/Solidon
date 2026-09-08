@@ -10,10 +10,12 @@
  * die kleinste Sache, die die Frage beantwortet: ein Zähler ohne Cookie,
  * ohne fremden Server und ohne gespeicherte IP-Adresse.
  *
- * Zwei Eingänge, ein Zweck:
+ * Drei Eingänge, ein Zweck:
  *
  *   POST /api/count.php   mit Feld `p` (Pfad)   → Seitenaufruf, Antwort 204
  *   GET  /api/count.php?f=<Datei>               → Download, Antwort 302 auf /dl/
+ *   GET  /api/count.php?u=1                     → Update-Prüfung, Antwort ist
+ *                                                 `version.json` selbst
  *
  * Der Download läuft deshalb über eine Weiterleitung und nicht über
  * ``readfile``: Die Setup-Datei wiegt 170 MB, und wer sie durch PHP schiebt,
@@ -53,6 +55,19 @@ if (PHP_VERSION_ID < 80100) {
 
 /** Wo die Downloads liegen, vom Dokumentenstamm aus gesehen. */
 const DOWNLOAD_URL = '/dl/';
+
+/** Die Versionsdatei, die die Anwendung abfragt.
+ *
+ *  Sie wird hier **ausgeliefert** und nicht weitergeleitet: `updates.check`
+ *  weist jede Umleitung ab, die die Herkunft verlässt. Mit 58 KB fällt der
+ *  Umweg über PHP nicht ins Gewicht — anders als bei den Paketen, für die
+ *  weiter oben ausdrücklich die Weiterleitung steht. */
+const VERSION_FILE = __DIR__ . '/../version.json';
+
+/** Wie viele Zeichen einer Fassungsangabe aufgezeichnet werden. Mehr als
+ *  „10.20.30" braucht niemand, und alles darüber ist ein Absender, der etwas
+ *  anderes vorhat. */
+const MAX_VERSION = 16;
 
 /** Und wo im Dateisystem — zum Nachsehen, ob es die Datei überhaupt gibt.
  *  Ohne diese Prüfung wäre die Weiterleitung ein offenes Tor: Wer `f`
@@ -581,6 +596,27 @@ function count_append(string $dir, string $path, string $line): bool
     }
 }
 
+/**
+ * Die Fassung aus dem Absender der Anwendung — „0.3.5" aus „Solidon/0.3.5".
+ *
+ * Nur Ziffern und Punkte, und nur so viele, wie eine Versionsnummer braucht.
+ * Was nicht danach aussieht, wird zu „unbekannt": Der Zähler soll die
+ * Verteilung der Fassungen zeigen und nicht das, was ein fremder Absender
+ * hineinschreibt.
+ */
+function client_version(): string
+{
+    $agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    if (!is_string($agent) || $agent === '') {
+        return 'unbekannt';
+    }
+    if (preg_match('#^Solidon/([0-9]+(?:\.[0-9]+){0,3})$#', $agent, $found) !== 1) {
+        return 'unbekannt';
+    }
+    $version = $found[1];
+    return strlen($version) <= MAX_VERSION ? $version : 'unbekannt';
+}
+
 function record(string $kind, string $value): bool
 {
     if (opted_out()) {
@@ -780,6 +816,38 @@ if ($method === 'POST') {
     }
 }
 
+// --- Update-Prüfung ---------------------------------------------------------
+//
+// Die Anwendung fragt `version.json`; die Regel in `.htaccess` schreibt das
+// intern hierher um. Gezählt wird die **Fassung** aus dem Absender, sonst
+// nichts: Der User-Agent selbst wird so wenig gespeichert wie bei den beiden
+// anderen Eingängen, und ohne Absender steht dort „unbekannt".
+$updateValue = $_GET['u'] ?? '';
+if ((is_string($updateValue) ? $updateValue : '') !== '') {
+    if ($method !== 'GET' && $method !== 'HEAD') {
+        header('Allow: GET, HEAD');
+        http_response_code(405);
+        exit;
+    }
+    if (!is_file(VERSION_FILE)) {
+        http_response_code(404);
+        exit;
+    }
+    if ($counts) {
+        record('u', client_version());
+    }
+    header('Content-Type: application/json; charset=utf-8');
+    header('Content-Length: ' . (string) filesize(VERSION_FILE));
+    // Dieselbe Zusage wie für die Seiten: cachen ja, aber vor jeder Nutzung
+    // nachfragen. Eine Versionsdatei, die im Browsercache altert, meldet dem
+    // Kunden tagelang das Update nicht, das längst da ist.
+    header('Cache-Control: no-cache');
+    if ($method !== 'HEAD') {
+        readfile(VERSION_FILE);
+    }
+    exit;
+}
+
 $fileValue = $_GET['f'] ?? '';
 $file = is_string($fileValue) ? $fileValue : '';
 if ($file !== '') {
@@ -823,4 +891,4 @@ if ($page !== '') {
 // Hand aufruft, hat nichts falsch gemacht.
 http_response_code(400);
 header('Content-Type: text/plain; charset=utf-8');
-echo "Zählpunkt von solidon3d.de. Erwartet ?f=<Datei> oder das Feld p.\n";
+echo "Zählpunkt von solidon3d.de. Erwartet ?f=<Datei>, ?u=1 oder das Feld p.\n";

@@ -30,6 +30,24 @@
   # Versionsnummer an dieser Stelle wäre beim nächsten Release still falsch.
   RewriteCond %{REQUEST_FILENAME} !-f
   RewriteRule ^dl/(Solidon3D-[A-Za-z0-9._-]+)$ /dl/veraltet.php?datei=$1 [L,QSA]
+
+  # **Die Update-Prüfung der Anwendung wird gezählt, ohne dass sie es merkt.**
+  # Sie fragt `version.json` direkt ab — eine statische Datei, von der PHP nie
+  # erfuhr. Damit fehlte die Zahl, die mehr sagt als jeder Download: Wie viele
+  # Installationen laufen, und auf welcher Fassung. Der Absender trägt sie mit
+  # (`User-Agent: Solidon/0.3.4`).
+  #
+  # **Intern und nicht als Weiterleitung.** `updates.check` weist jede
+  # Umleitung ab, die die Herkunft verlässt, und fragt ohne Parameter
+  # (`allow_query=False`); ein 302 hier bräche die Update-Prüfung bei jeder
+  # bestehenden Installation. Diese Regel schreibt nur intern um — für den
+  # Aufrufer bleibt es dieselbe Adresse mit derselben Antwort.
+  #
+  # Die Bedingung ist kein Beiwerk: Fehlt `count.php`, greift die Regel nicht,
+  # und der Webserver liefert `version.json` wie eh und je aus. Ein Zähler darf
+  # nie zwischen dem Kunden und seinem Update stehen.
+  RewriteCond %{DOCUMENT_ROOT}/api/count.php -f
+  RewriteRule ^version\.json$ /api/count.php?u=1 [L]
 </IfModule>
 
 <IfModule mod_headers.c>

@@ -1,6 +1,7 @@
 <?php
 /**
- * Zeigt, was website/api/count.php gezählt hat — Aufrufe, Besuche, Downloads.
+ * Zeigt, was website/api/count.php gezählt hat — Aufrufe, Besuche,
+ * Downloads und die Update-Prüfungen der laufenden Installationen.
  *
  * Eine Seite für einen Leser. Sie liegt hinter einer Anmeldung, weil die
  * Zahlen niemanden außer dem Betreiber etwas angehen, und sie zeigt nur, was
@@ -827,17 +828,21 @@ function month_totals(string $dir, string $month, ?bool &$complete = null): arra
     $rows = entries($dir, $month, $complete);
     $pages = 0;
     $downloads = 0;
+    $updates = 0;
     foreach ($rows as $row) {
         if ($row['kind'] === 'p') {
             $pages++;
         } elseif ($row['kind'] === 'd') {
             $downloads++;
+        } elseif ($row['kind'] === 'u') {
+            $updates++;
         }
     }
     return [
         'pages' => $pages,
         'visitors' => array_sum(visitors_per_day($rows)),
         'downloads' => $downloads,
+        'updates' => $updates,
         'complete' => $complete,
     ];
 }
@@ -854,6 +859,16 @@ if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
 $rows = entries($dir, $month, $month_complete);
 $pages = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'p');
 $downloads = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'd');
+// Die Update-Prüfungen der Anwendung. **Abrufe, nicht Installationen** — wer
+// dreimal am Tag startet, steht dreimal darin; die Zahl der Kennzeichen
+// darunter kommt dem „wie viele Rechner" näher.
+$updates = array_filter($rows, static fn (array $row): bool => $row['kind'] === 'u');
+$update_marks = [];
+foreach ($updates as $row) {
+    if ($row['mark'] !== '') {
+        $update_marks[$row['day'] . '/' . $row['mark']] = true;
+    }
+}
 
 $per_day = [];
 foreach ($rows as $row) {
@@ -866,6 +881,7 @@ $peak = max(1, max(array_map(static fn (array $d): int => ($d['p'] ?? 0) + ($d['
 $today = (new DateTimeImmutable('now', $zone))->format('Y-m-d');
 $today_pages = $per_day[$today]['p'] ?? 0;
 $today_downloads = $per_day[$today]['d'] ?? 0;
+$today_updates = $per_day[$today]['u'] ?? 0;
 
 // Seiten je Besuch — die eine Zahl, die „viele Aufrufe" von „viele Leute"
 // unterscheidet. Ohne Besuche bleibt sie leer statt durch null zu teilen.
@@ -1022,6 +1038,7 @@ function e(string|int $text): string
   td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .balken { display: block; height: .55rem; background: var(--bar); border-radius: 2px; min-width: 1px; }
   .leer { color: var(--dim); font-style: italic; }
+  .hinweis { color: var(--dim); max-width: 62ch; }
   nav { margin: 0 0 2rem; }
   nav a { margin-right: .75rem; }
   code { font-size: .9em; }
@@ -1063,7 +1080,9 @@ sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p
   <div class="zahl"><b><?= number_format((float) $visit_sum, 0, ',', '.') ?></b><span>Besuche (Summe der Tage)</span></div>
   <div class="zahl"><b><?= e($pages_per_visit) ?></b><span>Seiten je Besuch</span></div>
   <div class="zahl"><b><?= number_format((float) count($downloads), 0, ',', '.') ?></b><span>Downloads im Monat</span></div>
-  <div class="zahl"><b><?= $today_pages ?> · <?= $today_downloads ?></b><span>heute: Aufrufe · Downloads</span></div>
+  <div class="zahl"><b><?= number_format((float) count($updates), 0, ',', '.') ?></b><span>Update-Prüfungen im Monat</span></div>
+  <div class="zahl"><b><?= number_format((float) count($update_marks), 0, ',', '.') ?></b><span>Installationen (Tag mal Kennzeichen)</span></div>
+  <div class="zahl"><b><?= $today_pages ?> · <?= $today_downloads ?> · <?= $today_updates ?></b><span>heute: Aufrufe · Downloads · Updates</span></div>
 </div>
 
 <h2>Tag für Tag</h2>
@@ -1123,6 +1142,33 @@ sind nicht vollständig; bitte die Datei archivieren und den Zähler prüfen.</p
     </tr>
   <?php endforeach; ?>
 </table>
+
+<h2>Update-Prüfungen</h2>
+<p class="hinweis">Jede laufende Installation fragt beim Start, ob es etwas
+Neues gibt, und nennt dabei ihre Fassung. Das ist die einzige Zahl hier, die
+von <em>benutzten</em> Installationen kommt — ein Download sagt nur, dass
+jemand die Datei geholt hat. Wer auf einer alten Fassung steht, steht hier
+also auch, und man sieht, ob ein Update ankommt.</p>
+<?php
+$versions = tally($rows, 'value', 'u');
+?>
+<?php if (!$versions): ?>
+  <p class="leer">Noch keine Update-Prüfung gezählt. Entweder läuft die
+  Umschreibung in <code>.htaccess</code> nicht, oder es hat seit dem Einbau
+  niemand die Anwendung gestartet.</p>
+<?php else: ?>
+<table>
+  <tr><th>Fassung</th><th class="n">Prüfungen</th><th style="width:55%"></th></tr>
+  <?php $update_peak = max(1, max($versions)); ?>
+  <?php foreach ($versions as $name => $count): ?>
+  <tr>
+    <td><?= e((string) $name) ?></td>
+    <td class="n"><?= number_format((float) $count, 0, ',', '.') ?></td>
+    <td><i style="width:<?= (int) round($count / $update_peak * 100) ?>%"></i></td>
+  </tr>
+  <?php endforeach; ?>
+</table>
+<?php endif; ?>
 
 <h2>Downloads</h2>
 <?php
