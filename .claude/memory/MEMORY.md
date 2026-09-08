@@ -40,7 +40,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Download-Kasten](download-kasten-vier-pakete.md) · [Upload großer Dateien](website-upload-grosse-dateien.md) · [Datei ohne Manifest](datei-ohne-manifest-hat-keinen-pruefer.md) — vier Pakete; ~1,8 MB/s; AppImage ohne Prüfer.
 - [Cache-Fehler](entwickler-sieht-den-cache-fehler-nie.md) · [Paketfix ≠ Anwendungsfix](paketfix-ist-kein-anwendungsfix.md) · [Behoben, nie draußen](behobener-fehler-war-nie-draussen.md) — Paket sieht anderes; `git tag --contains`.
 - [Rechnung warnt](rechnung-warnt-sie-erlaubt-nicht.md) · [Prüfjob nur beim Tag](pruefjob-nur-beim-tag-hat-nie-gemessen.md) — was weg soll, wird benannt; einmal über ein echtes Paket fahren.
-- [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) · [Zusage über die Umgebung](zusage-ueber-die-umgebung.md) — Windows-Tor und Linux-CI sehen anderes.
+- [mypy prüft die Plattform](mypy-prueft-die-laufende-plattform.md) · [Zusage über die Umgebung](zusage-ueber-die-umgebung.md) · [Prüfstand nutzt Windows-Bordmittel](pruefstand-nutzt-windows-bordmittel.md) — Windows-Tor und Linux-CI sehen anderes; Git-bash ist keine sh, socketpair kein AF_UNIX.
 - [Datei zuerst, Register danach](datei-zuerst-register-danach.md) · [Erzeugte Datei](erzeugte-datei-fuehrt-ins-fremde-werkzeug.md) — atomar veröffentlichen; Antwort im fremden Werkzeug.
 
 ## Qt, VTK, Oberfläche
