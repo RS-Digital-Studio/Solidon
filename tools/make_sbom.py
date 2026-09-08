@@ -16,6 +16,7 @@ deklarierten Laufzeitmenge. Sie ist ausdrücklich kein Kundenartefakt.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import platform
 import re
@@ -680,6 +681,43 @@ def _msvc_runtime_version(entries: Iterable[ArtifactFile]) -> str:
     return ",".join(sorted({entry.binary_version for entry in selected}))
 
 
+def _asked_library(family: str, path: Path) -> tuple[str, str] | None:
+    """Fragt die gebündelte Bibliothek nach ihrer eigenen Fassung.
+
+    **Der Rückfall für alles ohne dpkg.** ``_dpkg_version`` liest die Fassung
+    aus dem Paket des Bauservers; auf Windows und macOS gibt es das nicht, und
+    die Familie bliebe ``unbekannt`` — was die Releaseakte zu Recht abweist.
+    Wo eine Bibliothek ihre Fassung selbst ausgibt, ist das die bessere
+    Quelle: Sie beschreibt die Datei, die mitreist, und nicht das Paket, aus
+    dem sie einmal kam.
+
+    Bisher kennt diese Funktion einen Weg — FreeType über
+    ``FT_Library_Version``. Andere Familien geben ``None`` zurück und behalten
+    ihre bisherige Angabe.
+
+    **Das ist kein fremder Quelltext im Sinne von Regel 11.** Geladen wird
+    genau die Bibliothek, die im eigenen Paket liegt und die die Anwendung
+    beim Start ohnehin lädt; gefragt wird eine Zahl.
+    """
+    if family != "freetype":
+        return None
+    try:
+        library = ctypes.CDLL(str(path))
+        handle = ctypes.c_void_p()
+        if library.FT_Init_FreeType(ctypes.byref(handle)) != 0:
+            return None
+        major, minor, patch = ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+        library.FT_Library_Version(
+            handle, ctypes.byref(major), ctypes.byref(minor), ctypes.byref(patch)
+        )
+        library.FT_Done_FreeType(handle)
+    except OSError, AttributeError:
+        return None
+    if not major.value:
+        return None
+    return f"{major.value}.{minor.value}.{patch.value}", "FT_Library_Version der gebündelten Datei"
+
+
 def _dpkg_version(soname: str) -> tuple[str, str]:
     """Belegt die Quellversion einer gebündelten Systembibliothek über das
     Paket des Bauservers — ``dpkg-query -S`` nennt das Paket, ``-W`` seine
@@ -846,6 +884,11 @@ def runtime_components(
             continue
         name, licence, website = LINUX_FAMILY_COMPONENTS[family]
         version, version_source = _dpkg_version(Path(members[0].path).name)
+        if version == "unbekannt":
+            # Ohne dpkg — Windows, macOS — bleibt nur die Datei selbst.
+            asked = _asked_library(family, Path(members[0].path))
+            if asked is not None:
+                version, version_source = asked
         components.append(
             _runtime_component(family, name, version, licence, website, version_source)
         )
