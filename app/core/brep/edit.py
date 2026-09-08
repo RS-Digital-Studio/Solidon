@@ -79,9 +79,26 @@ def cylinder(diameter: float, height: float) -> Solid:
 def edges_of(solid: Solid) -> list[EdgeInfo]:
     """Jede Kante mit den Zahlen, aus denen sich eine Auswahl treffen lässt."""
     require()
+    from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
+
+    # **Nahtkanten gehören nicht dazu.** Wo eine Fläche in sich geschlossen ist
+    # — der Mantel eines Zylinders, einer Kugel, eines Kegels —, trägt sie eine
+    # Naht: die Stelle, an der ihre Parametrisierung umläuft. Das sieht wie
+    # eine Kante aus und ist keine; zwischen zwei Flächen liegt sie nicht,
+    # sondern in einer.
+    #
+    # Verrunden lässt sie sich deshalb nicht, und OpenCASCADE sagt das je nach
+    # Plattform verschieden: Unter Windows und Linux meldet der Builder
+    # „nicht fertig", auf dem Intel-Mac **stürzt der Prozess ab** (gemessen am
+    # 08.09.2026, `test_a_selection_that_matches_nothing_says_so`, Stack in
+    # `_built`). Ein Kunde verlöre dabei seine Arbeit. Was gar nicht erst in
+    # die Auswahl kommt, kann auch nicht gebaut werden — und der vorhandene
+    # Satz „Zu dieser Auswahl gehört keine Kante." trifft die Lage genauer als
+    # „Der Radius ist zu groß".
+    faces = solid.faces()
 
     described: list[EdgeInfo] = []
     for edge in solid.edges():
@@ -89,6 +106,8 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
         BRepGProp.LinearProperties_s(edge, props)
         length = float(props.Mass())
         if length <= EPS_GEOM:
+            continue
+        if any(BRep_Tool.IsClosed_s(edge, face) for face in faces):
             continue
 
         curve = BRepAdaptor_Curve(edge)

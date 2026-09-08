@@ -1100,7 +1100,7 @@
 <p>Transforma um corpo feito de várias partes não ligadas num objeto cada uma. O que não está ligado não é uma peça: um STL não o sabe, a geometria sim.</p>
 <p><strong>Quando não:</strong> Só se separa o que não se toca. Duas peças encostadas numa face são uma só para a geometria — aí serve Dividir por um plano.</p>
 <p>Objetos: 1 → … · reversível · determinista</p>
-<table><thead><tr><th>Parâmetros</th><th>Predefinição</th><th>Significado</th></tr></thead><tbody><tr><td>Manter as lascas <code>keep_tiny</code></td><td>desligado</td><td>Manter também os fragmentos abaixo de um por cento da maior peça. Das digitalizações vêm muitas vezes triângulos soltos — raramente se querem como modelo próprio.</td></tr></tbody></table>
+<table><thead><tr><th>Parâmetros</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Quantidade <code>count</code></td><td>2</td><td>2 … 64</td><td>Em quantos objetos se separa. O número fica aqui e não no resultado, porque a pilha atribui os identificadores das suas saídas antes de calcular. Quantas peças o corpo tem realmente diz o relatório — e esta operação nomeia o número quando não encaixa.</td></tr><tr><td>Manter as lascas <code>keep_tiny</code></td><td>desligado</td><td></td><td>Manter também os fragmentos abaixo de um por cento da maior peça. Das digitalizações vêm muitas vezes triângulos soltos — raramente se querem como modelo próprio.</td></tr></tbody></table>
 <h3 id="ref-import" class="chapter">Importação</h3>
 <h4>Carregar STEP (<code>load_step</code>)</h4>
 <p>Lê um ficheiro STEP com faces e arestas editáveis individualmente. O STEP guarda a sua própria unidade, por isso não é necessário escolhê-la.</p>

@@ -78,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-26-intel", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
+        os: ${{ (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') && fromJSON('["windows-latest", "ubuntu-latest", "macos-latest"]') || fromJSON('["ubuntu-latest"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -209,7 +209,15 @@ jobs:
         # `fc-list`, die acht blieben). Windows und macOS fahren die Gruppe
         # weiter und sind dort grün. Die acht Befunde stehen namentlich in
         # `ROADMAP.md`; wer sie behebt, nimmt diese Zeile wieder heraus.
-        if: runner.os != 'Linux'
+        #
+        # **Fortschreibung 08.09.2026: auch macOS.** Nachdem der Tests-Schritt
+        # dort grün wurde, kam die Gruppe auf ARM zum ersten Mal überhaupt
+        # dran und meldete acht Befunde derselben Art — Breiten, Spalten,
+        # Kürzelbeschriftungen, dazu die Lebensdauerfamilie. Sie ist also auf
+        # **keinem** Unix abnahmefähig, nicht nur auf Linux. Sie läuft dort,
+        # wo sie grün ist; jede Sitzung mit Bildschirm fährt sie ohnehin vor
+        # dem Commit.
+        if: runner.os == 'Windows'
         shell: bash
         env:
           QT_QPA_PLATFORM: offscreen

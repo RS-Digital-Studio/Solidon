@@ -92,9 +92,36 @@ def test_fixed_corner_removes_the_last_freedom() -> None:
 
 
 def test_same_input_solves_to_the_same_output() -> None:
+    """Dieselbe Skizze löst zur selben Geometrie — Struktur genau, Zahlen eng.
+
+    **Nicht bitgleich, und das ist keine Aufweichung.** Der Löser ist ein
+    iteratives Verfahren auf Fließkomma und bricht bei ``xtol=1e-10`` ab; ob
+    zwei Läufe danach dieselben Bits tragen, entscheidet nicht der Code,
+    sondern die Ausrichtung der Speicherblöcke und die Reihenfolge, in der die
+    Vektoreinheit summiert. Auf dem Intel-Mac gemessen (08.09.2026):
+    ``20.050000000002402`` gegen ``20.050000000002424`` — vier Größenordnungen
+    **unter** der eigenen Abbruchschwelle des Lösers und zehn unter allem, was
+    ein Drucker auflöst. Regel 6 sagt genau das allgemein: Fließkomma nie
+    mit ``==``.
+
+    Geprüft wird deshalb, was die Zusage ist: gleich viele Elemente, gleiche
+    Art, gleiche Bauhilfen-Kennzeichnung, gleiche Freiheitsgrade — und die
+    Koordinaten auf ein Milliardstel Millimeter genau. Ein Löser, der zwei
+    verschiedene *Lösungen* fände, fiele hier weiterhin durch; ein Rechenwerk,
+    das anders rundet, nicht mehr.
+    """
     first = solve_sketch(rectangle(), PARAMS)
     second = solve_sketch(rectangle(), PARAMS)
-    assert first == second
+
+    assert first.free_dof == second.free_dof
+    assert first.max_residual == pytest.approx(second.max_residual, abs=1e-9)
+    assert len(first.elements) == len(second.elements)
+    for links, rechts in zip(first.elements, second.elements, strict=True):
+        assert links.kind == rechts.kind
+        assert links.construction == rechts.construction
+        assert len(links.points) == len(rechts.points)
+        for hier, dort in zip(links.points, rechts.points, strict=True):
+            assert hier == pytest.approx(dort, abs=1e-9)
 
 
 def test_a_dimension_takes_an_expression() -> None:

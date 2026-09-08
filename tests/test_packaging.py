@@ -568,7 +568,7 @@ def test_window_failures_block_the_package_on_every_platform(
     # „kein `if`", sondern **genau dieses eine**: Ein zweites, das eine weitere
     # Plattform ausnimmt, macht den Lauf wieder rot.
     conditions = [line.strip() for line in step.splitlines() if line.strip().startswith("if:")]
-    assert conditions in ([], ["if: runner.os != 'Linux'"]), conditions
+    assert conditions in ([], ["if: runner.os == 'Windows'"]), conditions
     assert "shell: bash" in step
     script = textwrap.dedent(step.split("        run: |\n", 1)[1])
     shell = _workflow_shell()

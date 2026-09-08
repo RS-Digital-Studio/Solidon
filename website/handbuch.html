@@ -1087,7 +1087,7 @@
 <p>Macht aus einem Körper, der aus mehreren nicht verbundenen Teilen besteht, je ein eigenes Objekt. Was nicht zusammenhängt, ist nicht ein Teil — eine STL weiß das nicht, die Geometrie schon.</p>
 <p><strong>Wann nicht:</strong> Nur was sich nicht berührt, wird getrennt. Zwei Teile, die an einer Fläche aneinanderliegen, sind für die Geometrie eines — dort hilft Teilen an einer Ebene.</p>
 <p>Objekte: 1 → … · umkehrbar · deterministisch</p>
-<table><thead><tr><th>Parameter</th><th>Vorgabe</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Splitter behalten <code>keep_tiny</code></td><td>aus</td><td>Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.</td></tr></tbody></table>
+<table><thead><tr><th>Parameter</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Anzahl <code>count</code></td><td>2</td><td>2 … 64</td><td>In wie viele Objekte zerlegt wird. Die Zahl steht hier und nicht erst im Ergebnis, weil der Stapel die Kennungen seiner Ausgänge vergibt, bevor gerechnet wird. Wie viele Teile der Körper tatsächlich hat, sagt der Prüfbericht — und diese Operation nennt die Zahl, wenn sie nicht passt.</td></tr><tr><td>Splitter behalten <code>keep_tiny</code></td><td>aus</td><td></td><td>Auch Bruchstücke unter einem Prozent des größten Teils behalten. Aus Scans kommen oft einzelne lose Dreiecke — die will man selten als eigenes Modell.</td></tr></tbody></table>
 <h4>Material festlegen (<code>set_material</code>)</h4>
 <p>Gibt diesem Körper ein eigenes Material. Toleranzen, Schwund und Elefantenfuß werden dann damit gerechnet und nicht mit dem des Projekts.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>

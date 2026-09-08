@@ -1100,7 +1100,7 @@
 <p>Turns a body made of several unconnected parts into one object each. What does not hang together is not one part — an STL does not know that, the geometry does.</p>
 <p><strong>When not to:</strong> Only what does not touch is separated. Two parts meeting at a face are one to the geometry — there Split along a plane is the way.</p>
 <p>Objects: 1 → … · reversible · deterministic</p>
-<table><thead><tr><th>Parameters</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Keep slivers <code>keep_tiny</code></td><td>off</td><td>Keep fragments below one per cent of the largest part as well. Scans often bring single loose triangles — rarely something you want as its own model.</td></tr></tbody></table>
+<table><thead><tr><th>Parameters</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Count <code>count</code></td><td>2</td><td>2 … 64</td><td>How many objects it is split into. The number belongs here and not in the result, because the stack hands out the identifiers of its outputs before anything is computed. How many parts the body actually has is in the check report — and this operation names the number when it does not fit.</td></tr><tr><td>Keep slivers <code>keep_tiny</code></td><td>off</td><td></td><td>Keep fragments below one per cent of the largest part as well. Scans often bring single loose triangles — rarely something you want as its own model.</td></tr></tbody></table>
 <h3 id="ref-import" class="chapter">Import</h3>
 <h4>Extrude a drawing (<code>load_outline</code>)</h4>
 <p>Reads an SVG or DXF drawing and gives it a height. Inner contours become holes.</p>
