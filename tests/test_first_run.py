@@ -217,10 +217,18 @@ def test_a_start_error_keeps_its_reason(monkeypatch: pytest.MonkeyPatch) -> None
 def test_the_official_comfy_desktop_name_is_found_in_a_program_folder(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Der Installer legt ``Comfy Desktop.exe`` ab, nicht ``ComfyUI.exe``."""
+    """Der Installer legt ``Comfy Desktop`` ab, nicht ``ComfyUI``.
+
+    Geprüft wird der **Name**. Die Endung kommt von der Plattform — unter
+    Windows ``.exe``, sonst keine (``discover.py``, ``_SUFFIXES``). Eine fest
+    eingetragene ``.exe`` fand die Suche auf Linux nie, und der Test maß dort
+    seine eigene Nachstellung statt der Namensauflösung.
+    """
+    import sys
+
     folder = tmp_path / "Programs" / "Comfy Desktop"
     folder.mkdir(parents=True)
-    executable = folder / "Comfy Desktop.exe"
+    executable = folder / ("Comfy Desktop.exe" if sys.platform == "win32" else "Comfy Desktop")
     executable.write_text("")
     monkeypatch.setattr(tools.discover, "_install_roots", lambda: (tmp_path / "Programs",))
     monkeypatch.setattr(tools.discover.shutil, "which", lambda _name: None)
