@@ -27,6 +27,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Geometrie-Diagnose
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Du findest heraus, **warum** eine Geometrieoperation das Falsche tut. Nicht
 durch Parameterdrehen, sondern durch Eingrenzen.
 

@@ -26,6 +26,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Schichtanalyse und Leistung
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Solidon schneidet, um zu **beurteilen** — nicht um zu drucken. Die Datei für
 den Drucker kommt vom externen Slicer, und das bleibt so.
 

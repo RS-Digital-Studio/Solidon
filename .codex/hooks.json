@@ -13,6 +13,18 @@
         ]
       }
     ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsende --codex'",
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"$root = (git rev-parse --show-toplevel).Trim(); $python = Join-Path $root '.venv/Scripts/python.exe'; if (Test-Path -LiteralPath $python) { & $python (Join-Path $root '.claude/hooks/solidon3d_hooks.py') sitzungsende --codex }\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "^Bash$",

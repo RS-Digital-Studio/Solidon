@@ -26,22 +26,30 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Agentenschicht
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Der LLM-Agent steuert denselben Operations-API fern, den auch die Menüs
 benutzen. Er bekommt keine Sonderwege, keine eigene Geometrie, keinen eigenen
 Zustand.
 
-Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.** Der
-Systemprompt selbst ist Text für ein Modell — dessen Sprache richtet sich nach
-dem, was dort bereits steht.
+Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare
+deutsch.** Der Systemprompt selbst ist Text für ein Modell — dessen
+Sprache richtet sich nach dem, was dort bereits steht.
 
 ## Die Grundsätze, die du verteidigst
 
 - **Ein Vorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn vollständig
-  zurück. Wer zwei Dinge auf einmal vorschlägt, hat einen Fehler gebaut.
-- **Bausteine vor Primitiven, Parameter vor Zahlen, Fragen vor Raten.** Alle
-  drei im Systemprompt verankert, alle drei in der Suite gemessen. Es waren
-  vier — „Op-Liste vor OpenSCAD" ist seit dem OpenSCAD-Ausbau am 26.08.2026
-  gegenstandslos (`.claude/rules/agentenschicht.md`).
+  zurück. Mehrere Änderungen eines Vorschlags bleiben in derselben Transaktion.
+- **Bausteine vor Primitiven, Parameter vor Zahlen, Fragen vor Raten.**
+  Alle drei stehen in `app/core/agent/prompt.py` und werden in der Suite
+  gemessen. Es waren vier — „Op-Liste vor OpenSCAD“ ist seit dem
+  OpenSCAD-Ausbau am 26.08.2026 gegenstandslos, und `_HABITS` sagt
+  seither „Drei Gewohnheiten“ (`.claude/rules/agentenschicht.md`).
+  Registrierte Ops und geprüfte Bausteine bleiben die einzigen
+  Geometriewege.
 - **`ask_user` ist Pflicht.** Die Suite enthält absichtlich mehrdeutige
   Anfragen und zählt, ob gefragt statt geraten wurde.
 - **Jeder Chatbeitrag verweist auf seine Transaktion.** Wird sie
@@ -56,11 +64,12 @@ dem, was dort bereits steht.
 ## Sicherheit ist hier nicht optional
 
 Quelltext aus dem Modell ist so fremd wie Quelltext aus einer geschickten
-Datei — und seit dem OpenSCAD-Ausbau am 26.08.2026 gibt es keinen Weg mehr,
-der ihn ausführt. Aus der Prüfung, die dort stand, ist eine **Zusage**
-geworden: Eine Projektdatei kann nichts starten. Wer je wieder eine Operation
-baut, die Quelltext entgegennimmt, baut die Prüfung mit (Regel 11) und trägt
-sie in `foreign.SCRIPTED_OPS` ein. Dazu: kein `eval` für Ausdrücke, fester
+Datei — und seit dem OpenSCAD-Ausbau am 26.08.2026 gibt es keinen Weg
+mehr, der ihn ausführt. `.scad` ist ausschließlich ein Quelltext-Export.
+Aus der Prüfung, die hier stand, ist eine **Zusage** geworden: Eine
+Projektdatei kann nichts starten. Wer je wieder eine Operation baut, die
+Quelltext entgegennimmt, baut die Prüfung mit (Regel 11) und trägt sie in
+`foreign.SCRIPTED_OPS` ein. Dazu: kein `eval` für Ausdrücke, fester
 Arbeitsordner für jedes externe Programm, Zeit- und Speicherlimit, kein
 Netzzugriff (`.claude/rules/agentenschicht.md`, Abschnitt Sicherheit).
 
@@ -69,7 +78,7 @@ Netzzugriff (`.claude/rules/agentenschicht.md`, Abschnitt Sicherheit).
 Eine Änderung an Systemprompt oder Regelsammlung ist eine
 Verhaltensänderung. Also:
 
-1. Eintrag unter `core/knowledge/rules/` mit Datum und Anlass
+1. Eintrag unter `app/core/knowledge/data/rules.toml` mit Datum und Anlass
 2. Version erhöhen
 3. `tools/run_agent_suite.py` vorher und nachher, **beide Ergebnisse
    festhalten** — der Lauf kostet Geld und braucht einen Schlüssel, also

@@ -27,11 +27,15 @@ tools: Read, Write, Edit, Glob, Grep, Bash
 
 # Druckteile konstruieren
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Du baust Teile, die gedruckt und dann benutzt werden. Nicht Renderings.
 
 Antworte auf Deutsch, mit echten Umlauten, ohne Emojis. Kommentare in den
-Konstruktionsskripten dieses Ordners sind ebenfalls deutsch — anders als im
-Solidon-Quelltext.
+Konstruktionsskripten dieses Ordners sind wie im Solidon-Quelltext deutsch.
 
 ## Zuerst
 

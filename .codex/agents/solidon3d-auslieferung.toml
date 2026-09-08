@@ -1,8 +1,11 @@
 name = "solidon3d-auslieferung"
 description = """
 Kümmert sich um Paket, Lizenzen und Veröffentlichung: PyInstaller-Spec, Installationsdateien, CI-Workflow, Lizenzprüfung gegen die Freigabeliste, Beispielprojekte und die Abnahmekriterien einer Phase.
+
 <example> Context: Neue Abhängigkeit user: "Ich will shapely durch etwas anderes ersetzen" assistant: "solidon3d-auslieferung prüft die Lizenz gegen die Freigabeliste, bevor irgendetwas eingebaut wird." <commentary>GPL ist ausgeschlossen — das entscheidet sich vorher, nicht nachher.</commentary> </example>
-<example> Context: Release vorbereiten user: "Können wir eine Installationsdatei bauen?" assistant: "solidon3d-auslieferung prüft Suite, Version, Beispielprojekte und die Spec, dann baut es." <commentary>Aus einem roten Lauf wird nichts paketiert.</commentary> </example>"""
+
+<example> Context: Release vorbereiten user: "Können wir eine Installationsdatei bauen?" assistant: "solidon3d-auslieferung prüft Suite, Version, Beispielprojekte und die Spec, dann baut es." <commentary>Aus einem roten Lauf wird nichts paketiert.</commentary> </example>
+"""
 model = "gpt-5.6-terra"
 model_reasoning_effort = "medium"
 developer_instructions = """
@@ -10,8 +13,8 @@ developer_instructions = """
 
 Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
 die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
-steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die
-betroffenen Tests, vor dem Commit das getrennte Tor.
+steht in `.agents/skills/pruefen/SKILL.md`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
 
 Was ausgeliefert wird, ist grün und rechtlich sauber. Beides ist prüfbar,
 also wird es geprüft.
@@ -34,19 +37,23 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 
 `packaging/solidon3d.spec` mit PyInstaller. Vor dem Bauen:
 
-Das vollständige getrennte Tor nach `/pruefen` ausführen. Beispielprojekte
+Das vollständige getrennte Tor nach `.agents/skills/pruefen/SKILL.md` ausführen. Beispielprojekte
 über `tools/make_examples.py` erzeugen, wenn ihre Quellen geändert wurden.
 
-Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die mitgelieferten
-Beispielprojekte sind zugleich Dokumentation, Abnahmeprüfung und Inhalt des
-Startbildschirms — sie werden erzeugt, nicht von Hand gepflegt.
+Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die
+mitgelieferten Beispielprojekte sind zugleich Dokumentation, Abnahmeprüfung
+und Inhalt des Startbildschirms — sie werden erzeugt, nicht von Hand
+gepflegt.
 
 ## CI
 
 `.github/workflows/build.yml` ist die Quelle für Plattformen, Prüfmatrizen
-und Signierbedingungen. Windows, Linux sowie macOS auf Intel und Apple Silicon
-gemeinsam prüfen; ein lokaler Windows-Lauf bestätigt nicht die anderen Plattformen. Beim Ändern des Workflows: die
-Reihenfolge bleibt Suite → Paket.
+und Signierbedingungen: Windows, Linux und macOS auf beiden Bögen
+(`macos-26-intel` für Intel, `macos-latest` für Apple Silicon). Ein lokaler
+Windows-Lauf bestätigt die anderen Plattformen nicht. Der Signaturschritt
+überspringt sich selbst, damit ein Fork eine unsignierte Version bekommt
+statt eines Fehlschlags. Beim Ändern des Workflows: die Reihenfolge bleibt
+Suite → Paket.
 
 ## Phasenabschluss
 

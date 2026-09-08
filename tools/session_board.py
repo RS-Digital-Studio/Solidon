@@ -32,6 +32,7 @@ Aufrufe::
     python tools/session_board.py claim --area "Oberfläche" --files "app/ui/**"
     python tools/session_board.py list
     python tools/session_board.py release
+    python tools/session_board.py statusline   # die Statusleiste ruft das selbst
 
 ``list`` endet mit 0, wenn niemand sonst da ist, und mit 1, wenn jemand da ist
 — damit ein Skript danach entscheiden kann.
@@ -42,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -188,6 +190,62 @@ def release() -> int:
     return 0
 
 
+def _branch() -> str:
+    """Der Zweig dieses Arbeitsbaums — leer, wenn er sich nicht ermitteln lässt.
+
+    Jede Sitzung kann in einem eigenen Baum stehen (``claude --worktree``), und
+    dann ist der Zweig das, was die Sitzungen am deutlichsten unterscheidet.
+    """
+    try:
+        done = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            cwd=Path(__file__).resolve().parent.parent,
+        )
+    except OSError, subprocess.SubprocessError:
+        return ""
+    return done.stdout.strip() if done.returncode == 0 else ""
+
+
+def statusline() -> int:
+    """Eine Zeile für die Statusleiste: wer ich bin, wo ich stehe, wer sonst da ist.
+
+    An diesem Projekt laufen oft zwei bis vier Sitzungen. Die erste Frage in
+    einem geteilten Baum ist „welche bin ich?" — der Name aus dem Register ist
+    die Antwort, denn unter ihm schreiben die anderen einen an. Die zweite ist
+    „arbeitet sonst noch jemand?", und die beantwortet das Brett.
+
+    Claude Code reicht der Statuszeile ein JSON-Objekt auf der Standardeingabe;
+    fehlt es oder ist es unbrauchbar, bleiben die übrigen Angaben stehen. Eine
+    Statuszeile, die mit einer Ausnahme endet, wäre schlimmer als eine kurze.
+    """
+    payload: dict[str, object] = {}
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+    except OSError, ValueError:
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+
+    parts = [_own_name() or "unbenannt"]
+    branch = _branch()
+    if branch:
+        parts.append(branch)
+
+    model = payload.get("model")
+    if isinstance(model, dict) and model.get("display_name"):
+        parts.append(str(model["display_name"]))
+
+    others = len([key for key, _ in _entries() if key.stem != _key()])
+    if others:
+        parts.append(f"+{others} Sitzung" + ("en" if others > 1 else ""))
+
+    print(" · ".join(parts))
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     sub = parser.add_subparsers(dest="task", required=True)
@@ -199,12 +257,15 @@ def main() -> int:
 
     sub.add_parser("list", help="wer arbeitet gerade woran")
     sub.add_parser("release", help="das eigene Gebiet wieder freigeben")
+    sub.add_parser("statusline", help="eine Zeile für die Statusleiste von Claude Code")
 
     args = parser.parse_args()
     if args.task == "claim":
         return claim(args.area, args.files, args.note)
     if args.task == "release":
         return release()
+    if args.task == "statusline":
+        return statusline()
     return show()
 
 

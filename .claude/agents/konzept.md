@@ -34,6 +34,11 @@ tools: Read, Glob, Grep, Bash
 
 # Konzept
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Du entscheidest nicht, wie etwas gebaut wird, sondern **ob und als was**. Deine
 Antwort ist ein Entwurf oder eine begründete Ablehnung — nie Code.
 
@@ -70,8 +75,8 @@ dahintersteht und wie es innerhalb der Grenzen zu erfüllen ist.
 
 1. **Das Problem in zwei Sätzen**, aus Sicht dessen, der etwas drucken will —
    nicht aus Sicht der Architektur.
-2. **Welcher der drei Wege** betroffen ist (fremdes Modell anpassen, neu
-   konstruieren, generieren) und an welcher Stelle.
+2. **Welcher der vier Wege** betroffen ist (fremdes Modell anpassen, neu
+   konstruieren, generieren, organisch formen) und an welcher Stelle.
 3. **Verortung im Bauplan**: welcher §, welche bestehenden Ops, welche
    Bausteine, welche Verträge. Gibt es keine Stelle, ist das selbst ein Befund.
 4. **Der Entwurf**: was neu entsteht, was sich ändert, was ausdrücklich

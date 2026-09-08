@@ -26,6 +26,11 @@ tools: Read, Write, Edit, Grep, Glob, Bash
 
 # Auslieferung
 
+Vor der Arbeit gelten `AGENTS.md`, die passenden `CLAUDE.md`-Karten und
+die zutreffenden Dateien unter `.claude/rules/`. Der vollständige Prüfweg
+steht in `/pruefen`; zwischen Änderungen laufen die betroffenen Tests,
+vor dem Commit das getrennte Tor.
+
 Was ausgeliefert wird, ist grün und rechtlich sauber. Beides ist prüfbar,
 also wird es geprüft.
 
@@ -33,8 +38,8 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 
 ## Lizenzen
 
-- **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Ein Slicer wird
-  extern aufgerufen, nie mitgeliefert.
+- **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Slicer werden nur
+  extern aufgerufen. OpenSCAD wird nicht ausgeführt; `.scad` bleibt Exportformat.
 - LGPL-Bibliotheken (PySide6, OCCT hinter `cadquery-ocp`) bleiben **dynamisch
   gebunden**.
 - Jede neue Abhängigkeit: Lizenz feststellen, in die Freigabeliste eintragen,
@@ -47,24 +52,23 @@ Gespräch auf Deutsch. **Bezeichner englisch, Docstrings und Kommentare deutsch.
 
 `packaging/solidon3d.spec` mit PyInstaller. Vor dem Bauen:
 
-```
-.venv\Scripts\python.exe -m pytest -q
-.venv\Scripts\python.exe -m ruff check . && .venv\Scripts\python.exe -m ruff format --check .
-.venv\Scripts\python.exe -m mypy
-.venv\Scripts\python.exe tools/make_examples.py
-```
+Das vollständige getrennte Tor nach `/pruefen` ausführen. Beispielprojekte
+über `tools/make_examples.py` erzeugen, wenn ihre Quellen geändert wurden.
 
-Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die drei
-Beispielprojekte sind zugleich Dokumentation, Abnahmeprüfung und Inhalt des
-Startbildschirms — sie werden erzeugt, nicht von Hand gepflegt.
+Eine Installationsdatei aus einer roten Suite ist schlimmer als keine. Die
+mitgelieferten Beispielprojekte sind zugleich Dokumentation, Abnahmeprüfung
+und Inhalt des Startbildschirms — sie werden erzeugt, nicht von Hand
+gepflegt.
 
 ## CI
 
-`.github/workflows/build.yml` prüft auf Windows, Linux und macOS, paketiert auf
-Windows und Linux, und signiert nur, wenn das Zertifikat als Secret vorliegt.
-Der Signaturschritt überspringt sich selbst, damit ein Fork eine unsignierte
-Version bekommt statt eines Fehlschlags. Beim Ändern des Workflows: die
-Reihenfolge bleibt Suite → Paket.
+`.github/workflows/build.yml` ist die Quelle für Plattformen, Prüfmatrizen
+und Signierbedingungen: Windows, Linux und macOS auf beiden Bögen
+(`macos-26-intel` für Intel, `macos-latest` für Apple Silicon). Ein lokaler
+Windows-Lauf bestätigt die anderen Plattformen nicht. Der Signaturschritt
+überspringt sich selbst, damit ein Fork eine unsignierte Version bekommt
+statt eines Fehlschlags. Beim Ändern des Workflows: die Reihenfolge bleibt
+Suite → Paket.
 
 ## Phasenabschluss
 

@@ -273,6 +273,15 @@ Agents (`.claude/agents/`) — die globalen .NET-Agents passen hier nicht.
 Befehle liegen in `.claude/skills/`. Beide Listen stehen bereits in der
 Auflistung der Sitzung; hier stünden sie ein drittes Mal.
 
+**Die vierzehn Fachagenten gibt es zweimal, und nur eine Fassung wird
+bearbeitet:** `.claude/agents/*.md` ist die Quelle,
+`.codex/agents/*.toml` erzeugt `tools/sync_agents.py` daraus (Modell, Aufwand
+und Sandbox leitet es aus dem Frontmatter ab). Wer einen Agenten ändert, lässt
+das Werkzeug danach laufen — `tests/test_agent_mirror.py` fährt sein `--check`
+und wird sonst rot. Von Hand gepflegt waren beide Seiten bis zum 08.09.2026,
+und in neun plus drei Commits hat kein einziger beide angefasst; was daraus
+wurde, steht in `tools/CLAUDE.md`.
+
 Wie die Sitzung selbst bedienbar sein soll, steht in
 `.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und
 `.claude/bedienkonzept-funktionen.md` (sechzehn Funktionen einzeln). **Entwurf,
