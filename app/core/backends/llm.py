@@ -996,15 +996,17 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: vollständig auf der Grafikkarte. Wer ein größeres Modell fährt, zahlt hier
 #: zuerst.
 #:
-#: Die Reihe fuhr 84 Schemata. Am 03.09.2026 sind es mit 111 Werkzeugen
-#: **22 856 Token** für den kompakten Satz, den dieser Weg fährt
-#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — 69,8 % des
-#: Fensters. Am 31.08.2026 waren es 19 641 bei 106 Werkzeugen, und davor am
-#: selben Tag 24 161; die Differenz zwischen diesen beiden sind die zwei
-#: Schritte, die wortgleiche Wiederholung aus dem Schema in den Systemprompt
-#: geholt haben (``objects`` und die sechs Platzierungsangaben eines
-#: Bausteins). Der Test gegen :data:`PROMPT_TOOL_COUNT` macht jede weitere
-#: Operation zum Anlass für eine neue Messung.
+#: Die Reihe fuhr 84 Schemata. Am 08.09.2026 sind es mit 115 Werkzeugen
+#: **25 670 Token** für den kompakten Satz, den dieser Weg fährt
+#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — **78,3 %** des
+#: Fensters. Am 03.09. waren es 22 856 bei 111, am 31.08. 19 641 bei 106, und
+#: davor am selben Tag 24 161; die Differenz zwischen den letzten beiden sind
+#: die zwei Schritte, die wortgleiche Wiederholung aus dem Schema in den
+#: Systemprompt geholt haben (``objects`` und die sechs Platzierungsangaben
+#: eines Bausteins). Der Test gegen :data:`PROMPT_TOOL_COUNT` macht jede
+#: weitere Operation zum Anlass für eine neue Messung — am 08.09. hat er dabei
+#: eine Fortschreibung widerlegt, die um mehr als das Vierfache zu optimistisch
+#: war (siehe dort).
 #:
 #: **Die Zeit daneben misst etwas anderes als die Zahl.** Beide Läufe brauchten
 #: über zehn Minuten, weil ``api/ps`` während der Messung ``0.0 GB im VRAM``
@@ -1809,19 +1811,34 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: der eine neue Operation den Chat kostet: knapp zwei Zehntel Prozent des
 #: Fensters und eine halbe Minute Wartezeit auf dem Prozessorweg.
 #:
-#: **Seit dem 07.09.2026 sind es 114 Werkzeuge** (*In Einzelteile zerlegen*;
-#: davor 113 seit dem 06.09., Kegel und Ring als Grundkörper), und die Zahl
-#: darunter ist seit dem 03.09. **nicht neu gemessen** — an beiden Tagen war
-#: kein Ollama erreichbar. Sie ist damit eine untere Grenze; nach der Rate von
-#: 165 Token je Operation wären es rund 23 355. Die Nachmessung steht im
-#: Register der ROADMAP, und sie wird mit jeder Operation fälliger: Der Abstand
-#: zwischen gemessener und wirklicher Zahl wächst still.
-PROMPT_TOKENS: Final = 22856
+#: **Am 08.09.2026 nachgemessen: 25 670 Token bei 115 Werkzeugen** (*Fügeweg
+#: prüfen*), qwen3:14b auf der RTX 4080, vollständig im VRAM — 52,2 s kalt,
+#: 11,6 s warm. Damit sind es **78,3 %** des Fensters von 32 768 statt der
+#: 69,8 %, die hier standen.
+#:
+#: **Die Fortschreibung hat den Zuwachs unterschätzt, und zwar erheblich.**
+#: Hier stand, nach der Rate von 165 Token je Operation wären es rund 23 355;
+#: gemessen sind es 25 670. Zwischen der letzten echten Messung (22 856 bei
+#: 111 Werkzeugen am 03.09.) und heute liegen vier Operationen und **2814
+#: Token** — 703 je Operation statt 165. Die Rate stammte von *Merkmal
+#: verdoppeln*, einer Operation mit wenigen Parametern; wer eine mit vollem
+#: Schema und einem ``caveat`` dazulegt, zahlt ein Vielfaches.
+#:
+#: Der Satz, der hier stand — „der Abstand zwischen gemessener und wirklicher
+#: Zahl wächst still" —, hat sich damit selbst belegt. Er stimmte, und er war
+#: um mehr als das Vierfache zu optimistisch.
+#:
+#: **Was daraus folgt, ist keine Zahl, sondern eine Grenze:** Bei 78 % des
+#: Fensters allein für Auftrag und Werkzeuge bleibt für Szenensteckbrief,
+#: Prüfbericht und Chatverlauf weniger als ein Viertel. Die nächsten
+#: Operationen kosten den Chat nicht mehr Wartezeit, sondern Platz.
+PROMPT_TOKENS: Final = 25670
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
-#: lassen.
-PROMPT_TOOL_COUNT: Final = 114
+#: lassen — am 08.09.2026 hat er genau das geleistet und dabei eine
+#: Fortschreibung widerlegt, die vier Tage lang plausibel aussah.
+PROMPT_TOOL_COUNT: Final = 115
 
 
 @dataclass(frozen=True, slots=True)
