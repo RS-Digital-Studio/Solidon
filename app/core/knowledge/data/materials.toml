@@ -10,6 +10,24 @@
 # hole_compensation kommt auf den Nenndurchmesser, FDM druckt Löcher zu eng
 # elephant_foot     Verbreiterung der ersten Schicht, die ausgeglichen wird
 # shrinkage         relativ, 0.004 = 0,4 %
+#
+# youngs_modulus    Elastizitätsmodul in MPa
+# yield_strength    Streckgrenze in MPa
+#
+# Die beiden letzten sind für alles, was federn soll: Schnapphaken,
+# Klemmzungen, Filmscharniere. Sie stehen hier als **Richtwerte gedruckter
+# Teile**, längs zur Schichtebene, wie sie Datenblätter für FDM-Filamente
+# nennen — nicht als Messung an unserem Drucker; `calibrated = false` gilt für
+# sie wie für die Toleranzen darüber.
+#
+# **Quer zur Schichtrichtung trägt ein gedrucktes Teil weniger**, nach
+# üblicher Annahme rund 60 Prozent. Dieser Abschlag steht nicht hier, sondern
+# in der Rechnung (`knowledge/strength.py`): Er hängt an der Lage des Teils
+# auf der Platte und nicht am Filament.
+#
+# Ein Profil ohne die beiden Werte bekommt 0, und 0 heißt **unbekannt**. Die
+# Rechnung sagt dann, dass sie nichts sagen kann, statt mit einer geratenen
+# Zahl zu antworten.
 
 [pla]
 title = "PLA"
@@ -19,6 +37,8 @@ hole_compensation = 0.15
 elephant_foot = 0.15
 shrinkage = 0.002
 calibrated = false
+youngs_modulus = 3500.0
+yield_strength = 50.0
 
 [petg]
 title = "PETG"
@@ -28,6 +48,8 @@ hole_compensation = 0.20
 elephant_foot = 0.20
 shrinkage = 0.004
 calibrated = false
+youngs_modulus = 2100.0
+yield_strength = 47.0
 
 [petg-cf]
 title = "PETG-CF"
@@ -37,6 +59,8 @@ hole_compensation = 0.20
 elephant_foot = 0.15
 shrinkage = 0.003
 calibrated = false
+youngs_modulus = 4200.0
+yield_strength = 55.0
 
 [asa]
 title = "ASA"
@@ -46,6 +70,8 @@ hole_compensation = 0.20
 elephant_foot = 0.15
 shrinkage = 0.006
 calibrated = false
+youngs_modulus = 2000.0
+yield_strength = 42.0
 
 [abs]
 title = "ABS"
@@ -55,6 +81,8 @@ hole_compensation = 0.20
 elephant_foot = 0.15
 shrinkage = 0.007
 calibrated = false
+youngs_modulus = 2000.0
+yield_strength = 40.0
 
 [tpu-95a]
 title = "TPU 95A"
@@ -64,3 +92,5 @@ hole_compensation = 0.30
 elephant_foot = 0.25
 shrinkage = 0.002
 calibrated = false
+youngs_modulus = 25.0
+yield_strength = 9.0

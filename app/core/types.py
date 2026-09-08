@@ -489,6 +489,20 @@ class MaterialProfile:
     """Relativer Schrumpf, 0.004 = 0,4 %."""
     calibrated: bool = False
     """False heißt: die Werte sind der mitgelieferte Startpunkt, nicht gemessen."""
+    youngs_modulus: float = 0.0
+    """Elastizitätsmodul in MPa; **0 heißt unbekannt**, nicht null.
+
+    Für alles, was federn soll — ein Schnapphaken, eine Klemmzunge, ein
+    Filmscharnier. Ohne diesen Wert lässt sich nicht sagen, ob ein Arm
+    zurückfedert oder bricht, und eine Rechnung mit einer geratenen Zahl wäre
+    schlechter als keine (Regel 21).
+    """
+    yield_strength: float = 0.0
+    """Streckgrenze in MPa; **0 heißt unbekannt**, nicht null.
+
+    Die Grenze, gegen die eine Biegespannung gehalten wird. Darüber verformt
+    sich ein Arm bleibend oder bricht, statt zurückzukommen.
+    """
 
 
 @dataclass(frozen=True, slots=True)

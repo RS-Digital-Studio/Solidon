@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from collections.abc import Container, Iterable, Mapping
-from typing import Any
+from typing import Any, Final, cast
 
 from app.core.errors import Action, AppError, ValidationError
 from app.core.geom.boolean import (
@@ -36,6 +36,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.knowledge.profiles import for_object
+from app.core.knowledge.strength import spring_load
 from app.core.log import get_logger
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.types import (
@@ -632,6 +633,8 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # nicht **am** Teil.
     loose = None if spec.separate_from_host else _hanging_loose(body, mesh, spec, subtractive)
 
+    spring = _spring_finding(spec.name, part_params, profile)
+
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, features=features)],
         solver=solver,
@@ -642,7 +645,80 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             *([loose] if loose else []),
             *([flat] if flat else []),
             *([on_edge] if on_edge else []),
+            *([spring] if spring else []),
         ],
+    )
+
+
+#: Welcher Parameter eines Bausteins die Armlänge, die Dicke und den Federweg
+#: nennt — je Baustein, weil nur er weiß, was seine Maße bedeuten.
+#:
+#: Eine Tabelle und keine Angabe am Registereintrag, und das ist eine
+#: Abwägung: Am Eintrag stünde sie näher bei der Sache, kostete aber ein
+#: weiteres Feld an ``register_part``, das siebenundzwanzig Bausteine tragen
+#: und fünfundzwanzig leer lassen. Wer einen federnden Baustein hinzufügt,
+#: trägt ihn hier ein; ``test_parts.py`` prüft, dass jeder Name existiert und
+#: seine drei Parameter auch.
+#:
+#: **``snap_connector`` steht bewusst nicht dabei**, obwohl er der zweite
+#: Federbaustein ist. Seine Armdicke ist kein Parameter, sondern abgeleitet:
+#: ``min(length / SNAP_RATIO, (room - play) / 3)``, und ``room`` kommt aus
+#: Durchmesser und Spiel. Diese Kette hier nachzubauen hieße, dieselbe Regel
+#: an zwei Stellen zu pflegen — sie liefe beim ersten Maßwechsel auseinander,
+#: und dann prüfte die Warnung einen Arm, den es nicht gibt.
+#:
+#: Der Weg dorthin ist ein anderer und größer als diese Tabelle: Ein Baustein
+#: müsste den Befund selbst zurückgeben können — ``PartResult.findings`` gibt
+#: es dafür bereits —, und dazu bräuchte ``PartFn`` das Materialprofil, das
+#: es heute nicht bekommt. Bis dahin ist ein geprüfter Baustein besser als
+#: zwei halb geprüfte.
+SPRING_ARMS: Final[dict[str, tuple[str, str, str]]] = {
+    # Baustein: (Armlänge, Armdicke, Federweg beim Einrasten)
+    "snap_fit": ("length", "thickness", "hook"),
+}
+
+
+def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> Finding | None:
+    """Trägt der Federarm, den dieser Baustein gerade gebaut hat?
+
+    Die Bausteine halten die Verhältnisregel ein — Armstärke ein Zehntel der
+    Länge —, und die ist gut, solange der Federweg im üblichen Rahmen bleibt.
+    Sie kennt aber weder den Weg noch das Material: Derselbe Arm aus TPU ist
+    etwas anderes als aus PETG-CF, und einer, der sich um zwei Millimeter
+    aufbiegen muss, etwas anderes als einer mit zwei Zehnteln.
+
+    **Gemeldet wird nur, was nicht trägt.** Ein Arm mit Reserve bekommt keinen
+    Befund: Ein Bericht, der jeden gelungenen Fall bestätigt, ist einer, den
+    man zu überblättern lernt.
+
+    Ohne Materialprofil oder ohne mechanische Kennwerte darin bleibt die
+    Prüfung stumm, statt mit einem geratenen E-Modul zu rechnen (Regel 21).
+    """
+    fields = SPRING_ARMS.get(name)
+    if fields is None or profile is None:
+        return None
+    arm_length, arm_thickness, travel = (getattr(params, field, None) for field in fields)
+    if not all(isinstance(value, int | float) for value in (arm_length, arm_thickness, travel)):
+        return None
+
+    load = spring_load(
+        profile.material,
+        length=float(cast(float, arm_length)),
+        thickness=float(cast(float, arm_thickness)),
+        deflection=float(cast(float, travel)),
+    )
+    if load is None or load.holds:
+        return None
+    return Finding(
+        code="part.spring_overloaded",
+        severity="warning",
+        message=_("Der Federarm biegt sich über das, was das Material aushält."),
+        values={
+            "stress": round(load.stress, 1),
+            "limit": round(load.limit, 1),
+            "safety": round(load.safety, 2),
+            "material": profile.material.title,
+        },
     )
 
 

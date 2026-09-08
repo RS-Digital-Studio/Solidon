@@ -86,6 +86,11 @@ def _material_from_table(
             elephant_foot=float(table["elephant_foot"]),
             shrinkage=float(table.get("shrinkage", 0.0)),
             calibrated=bool(table.get("calibrated", False)),
+            # Mechanik ohne Vorgabe: Ein fremdes Profil, das sie nicht führt,
+            # bekommt 0 und damit „unbekannt". Ein geratener E-Modul stünde
+            # sonst hinter jeder Federrechnung, ohne dass es jemand sähe.
+            youngs_modulus=float(table.get("youngs_modulus", 0.0)),
+            yield_strength=float(table.get("yield_strength", 0.0)),
         )
     except KeyError as missing:
         raise ValidationError(
