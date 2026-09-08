@@ -19,7 +19,7 @@ Die Unterlagen in ihrer Rangfolge:
 | `3d-agent-bauplan.md` | **Was** gebaut wird — die Spezifikation, §-Nummern sind verbindlich |
 | `AGENTS.md` | **Wie** gearbeitet wird — 22 harte Regeln, jede mit Test |
 | `ROADMAP.md` | **Was als Nächstes** — Arbeitsliste, oben das Register der offenen Punkte |
-| `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — die abgeschlossenen Abschnitte, datiert |
+| `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — historische Befunde und Nachweise, mit Verweis auf noch offene Arbeit |
 | `konzepte/README.md` | **Warum** — vollständiger Index der Konzepte und Durchsichten, mit dem Stand je Dokument |
 | `README.md` | Was der Nutzer sieht |
 | `<verzeichnis>/CLAUDE.md` | **Was wo liegt** — die Karte des Gebiets; lädt mit, sobald ich eine Datei darin anfasse |

@@ -14,32 +14,33 @@ allowed-tools: Read, Grep, Bash, Glob
 
 **Erst das Register.** Gleich unter der Legende steht der Abschnitt *Was offen
 ist*: jeder offene Punkt mit seinem Abschnitt und dem, worauf er wartet.
-`tests/test_roadmap.py` hält ihn am Bestand — was dort steht, stimmt. Damit ist
-„was ist offen" ein Blick und keine Suchrunde durch fünftausend Zeilen.
+`tests/test_roadmap.py` prüft, ob Register und offene Kästchen je Abschnitt
+zusammenpassen. Das belegt ihre Vollständigkeit, **nicht ihren fachlichen
+Stand**: Den prüfst du gegen aktuellen Code, Tests und Git-Verlauf.
 
 Das Register nennt aber nur *dass* etwas offen ist. **Die Begründung steht am
-Punkt selbst**, und dorthin gehst du, bevor du ihn vorschlägst — dort steht auch,
-was schon versucht wurde.
+Punkt selbst**, und dorthin gehst du, bevor du ihn vorschlägst. Von dort führt
+ein Verweis zu den bisherigen Messungen und Versuchen im Archiv.
 
-`ROADMAP.md` enthält seit dem 22.08.2026 nur noch die Arbeitsliste: den Kopf mit
-dem Register, die Phasen P0 bis P16 und jeden Abschnitt, der einen offenen Punkt
-trägt. Die Phasen stehen **zwischen** den übrigen Abschnitten verstreut, nicht
-gesammelt oben — such sie, statt sie an einer Position zu erwarten.
+`ROADMAP.md` enthält das Register, kurze Phasenstände P0 bis P16 und die offenen
+Aufgaben nach Themen. Jede Aufgabe hat eine feste `RM-`-Kennung und eine
+Sprungmarke. Phasenstand, Umsetzung und noch fehlende Abnahme sind getrennt:
+Ein gebauter Weg ist ohne den geforderten Feldnachweis noch nicht abgenommen.
 
-**Die Geschichte steht in `ROADMAP-ARCHIV.md`**: 78 abgeschlossene Abschnitte
-aus echten Durchsichten, mit Funden, zurückgenommenen Behauptungen und
-gemessenen Irrwegen, dazu ein datiertes Verzeichnis am Kopf. Kein offener Punkt
-steht dort, und das prüft ein Test. Es ist trotzdem das Teuerste, was das
-Projekt hat: Wer an einer Stelle arbeitet, an der schon jemand war, spart dort
+**Die Geschichte steht in `ROADMAP-ARCHIV.md`**: frühere Durchsichten, Funde,
+zurückgenommene Behauptungen und gemessene Irrwege, dazu ein datiertes
+Verzeichnis am Kopf. Dort stehen keine offenen Kästchen. Bei fortgeführten
+Themen verweist der historische Befund auf die aktuelle Aufgabe. Wer an einer
+Stelle arbeitet, an der schon jemand war, spart mit diesen Belegen
 Tage. **Sieh dort nach, bevor du etwas vorschlägst** — ein „das haben wir
 gemessen und es trug nicht" steht nur da.
 
 Zwei Fallen dabei:
 
-- **Wo im Archiv „offen" steht, ist es nicht mehr offen.** Einige Abschnitte
-  führen Prosalisten unter Überschriften wie „Bewusst offen"; die haben nie ein
-  Register gesehen. Der einzige Ort, dem du für den Rückstand glauben darfst,
-  ist das Register.
+- **„Offen" in historischer Prosa ist kein aktueller Arbeitsauftrag.** Der
+  Punkt kann inzwischen erledigt, überholt oder unter einer gemeinsamen
+  Aufgabe fortgeführt sein. Maßgeblich ist die verlinkte aktuelle Aufgabe;
+  der Abgleich im Archiv erklärt Zusammenführungen und Abschlüsse.
 - **Ein offener Punkt ohne Kästchen zählt nicht.** Am 22.08.2026 lagen vier
   Punkte als Prosa in kästchenlosen Abschnitten, einer davon 163 Zeilen tief.
   Wer einen Fund festhält, gibt ihm ein `- [ ]`.
@@ -67,9 +68,13 @@ Fund gehört dort ergänzt, mit dem, was er gekostet hat. **Beides an zwei
 Stellen**: am Punkt selbst und im Register oben. Vergisst du die zweite, wird
 `tests/test_roadmap.py` rot und sagt dir, welcher Abschnitt nicht mehr passt.
 
-Neues wird in `ROADMAP.md` geschrieben, nie ins Archiv. Ist ein Abschnitt
-vollständig abgehakt, darf er hinüberwandern — dann mit einer Zeile im
-Verzeichnis am Archivkopf, sonst wird der Test rot.
+Neues wird in `ROADMAP.md` geschrieben, nie ins Archiv. Neue Kennungen werden
+fortlaufend nach der höchsten bereits vergebenen Kennung in Roadmap **und**
+Archiv vergeben; entfernte Kennungen werden nicht wiederverwendet. Ist eine
+Aufgabe abgeschlossen, wandert sie mit dem konkreten Nachweis ins Archiv.
+Ein zusammengeführter Punkt verweist dort auf seine weiter offene Zielaufgabe;
+er wird nicht als behobener Fehler ausgegeben. Jeder neue Archivabschnitt
+bekommt eine Zeile im Verzeichnis am Archivkopf.
 
 `ROADMAP.md` und `ROADMAP-ARCHIV.md` sind zusammen die Stelle, an der die
 Geschichte dieses Projekts steht; `CLAUDE.md` und `AGENTS.md` sind es
