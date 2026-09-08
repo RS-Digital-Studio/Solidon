@@ -228,27 +228,29 @@ def showcase_findings(language: str) -> list:
     ]
 
 
-#: Wie groß die Fenster für die Website aufgenommen werden.
+#: Wie groß die Fenster für die Website aufgenommen werden: **so groß wie der
+#: Bildschirm**, genau wie fürs Handbuch.
 #:
-#: **Nicht bildschirmfüllend, und genau darin liegt der Zweck.** Fürs Handbuch
-#: steht das Fenster so da, wie es beim ersten Start aufgeht — 2560 Bildpunkte
-#: breit, auf einer Handbuchseite groß und scharf. Auf der Startseite steht
-#: dasselbe Bild in einer Spalte von 650 Punkten: ein Viertel der Größe, und
-#: die Menüleiste ist ein grauer Strich. Gemessen wurden 25 Prozent beim
-#: Hauptfenster und 19 beim Skizzenmodus.
+#: **Hier standen einmal 1400 auf 860, und die Begründung dafür war für sich
+#: richtig.** Ein Bild von 2560 Punkten steht auf der Startseite in einer
+#: Spalte von 650 und ist damit auf ein Viertel gestaucht; die Menüleiste wird
+#: ein grauer Strich, und Beschriftungen sind nicht mehr zu lesen. Kleiner
+#: aufgenommen bleibt davon mehr erkennbar.
 #:
-#: Diese Maße sind so gewählt, dass die Spalte etwa die Hälfte bis zwei Drittel
-#: zeigt — nah genug an eins zu eins, dass Leisten und Beschriftungen als das
-#: erkennbar bleiben, was sie sind, und weit genug darüber, dass ein Bildschirm
-#: mit doppelter Punktdichte nichts nachschärfen muss.
+#: **Nur zeigt das Bild dann die falsche Sache.** Nachgemessen am fertigen
+#: ``beleg-fenster.png`` (Robert, 08.09.2026): Die linke Spalte nimmt 315
+#: Punkte, die rechte 710 — zusammen 73 Prozent der Breite. Für das Modell
+#: blieb ein Streifen von 375 Punkten in der Mitte. Beide Spalten haben feste
+#: Breiten und skalieren nicht mit; je schmaler das Fenster aufgenommen wird,
+#: desto größer ihr Anteil. Auf 2560 Punkten sind dieselben 1025 nur noch 40
+#: Prozent.
 #:
-#: Die Höhe des Startbildschirms ist gemessen und nicht geschätzt: Bei 1400
-#: Punkten Breite brauchen seine neun Kacheln und die Zuletzt-Liste 984 Punkte
-#: (``verticalScrollBar().maximum()`` plus Fensterhöhe). Bei 840 endete das Bild
-#: mitten in der letzten Kachelreihe — ein Schnitt, den man für einen Fehler
-#: hält, weil er wie einer aussieht.
-WEB_WINDOW = (1400, 860)
-WEB_START = (1400, 1000)
+#: Wer auf einer Verkaufsseite ein Bildschirmfoto ansieht, liest keine
+#: Menütitel — er sieht das Erzeugnis. Also bekommt es den Raum, und die
+#: Lesbarkeit der Leisten wiegt weniger. ``None`` heißt: die Arbeitsfläche des
+#: Zielschirms, dieselbe Quelle wie in ``make_figures.work_area``.
+WEB_WINDOW: tuple[int, int] | None = None
+WEB_START: tuple[int, int] | None = None
 
 #: **Warum hier keine Dialoge stehen, obwohl die Verkaufsseite drei zeigt.**
 #:
@@ -437,7 +439,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
 
     written = []
 
-    start = figures.prepared(StartScreen(), WEB_START)
+    start = figures.prepared(StartScreen(), WEB_START or figures.work_area())
     figures.settle(app)
     target = named("beleg-start", language)
     start.grab().save(str(target)) or _explode(target)
@@ -446,7 +448,10 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
 
     session = Session()
     window = figures.prepared(
-        MainWindow(session, UiSettings()), WEB_WINDOW, hidden=False, maximize=False
+        MainWindow(session, UiSettings()),
+        WEB_WINDOW or figures.work_area(),
+        hidden=False,
+        maximize=False,
     )
     project = examples.directory() / WEB_EXAMPLE
     if not project.is_file():
