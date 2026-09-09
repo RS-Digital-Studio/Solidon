@@ -311,6 +311,9 @@ _NOT_A_RANGE = frozenset(
         # Ein Rezept, das einen mitgelieferten Baustein verdeckt: eine
         # Namensfrage, kein Maß.
         "recipe_dependencies",
+        # Die Bahn eines Sweeps (RM-147 E3): Sie liegt in der Ebene des
+        # Querschnitts statt senkrecht dazu, oder sie hat keinen Verlauf.
+        "path_plane", "no_path",
         # Die zwei Zeichnungen eines Übergangs (RM-147 E2): eine liegt auf der
         # falschen Ebene, oder beide tragen verschieden viele Umrisse. Beides
         # ist eine Frage der Zeichnung und keine Zahl in einem Feld — „Ein Wert

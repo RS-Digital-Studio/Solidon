@@ -141,6 +141,81 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     return _nested(bearing)
 
 
+def path_of(solved: SolvedSketch) -> Profile:
+    """Die gelöste Skizze als **offene** Kette — eine Bahn, kein Umriss (E3).
+
+    :func:`regions_of` sucht Ringe und meldet ein freies Ende als Fehler; eine
+    Bahn ist genau das Gegenteil: Sie hat zwei freie Enden und schließt nicht.
+    Zurück kommt trotzdem ein :class:`Profile` — der B-Rep-Kern baut aus seinen
+    Segmenten denselben Draht wie aus einem Umriss (``_wire``), und ein
+    zweiter Typ für dieselbe Kette wäre eine zweite Stelle, an der Bögen und
+    Splines richtig übersetzt werden müssten.
+
+    Drei Bedingungen, und jede ist ein Satz statt eines Programmfehlers:
+
+    * **Etwas zu führen muss da sein.** Eine leere Zeichnung oder eine aus
+      lauter Hilfslinien ergibt keine Bahn.
+    * **Genau zwei freie Enden.** Ein Ring hat keines — er wäre eine
+      geschlossene Bahn, und was daran Anfang ist, entschiede niemand. Drei
+      Enden heißt Verzweigung, und dann ist die Bahn nicht eine, sondern
+      mehrere.
+    * **Ein Kreis ist keine Bahn.** Er hat kein Ende, an dem der Querschnitt
+      säße; wer im Kreis führen will, dreht (``sketch_revolve``).
+
+    Gelaufen wird vom ersten freien Ende, das in der Reihenfolge der Elemente
+    auftaucht — bei zwei Enden ist die Richtung die einzige Wahl, die bleibt,
+    und der Docstring der Operation nennt sie.
+    """
+    shaping = [element for element in solved.elements if not element.construction]
+    if any(element.kind == "circle" for element in shaping):
+        raise _broken(
+            _("Ein Kreis ist keine Bahn — er hat kein Ende, an dem der Querschnitt beginnt.")
+        )
+    drawable = [element for element in shaping if element.kind in ("line", "arc", "spline")]
+    if not drawable:
+        raise _broken(_("Die Skizze enthält nichts, was eine Bahn ergeben könnte."))
+    segments = [_segment(element.kind, element.points) for element in drawable]
+
+    # Wie oft jeder Punkt vorkommt: einmal heißt freies Ende. Verglichen wird
+    # über ``_joins`` und nicht über Gleichheit — zwei gezeichnete Enden treffen
+    # sich auf die Toleranz genau, nicht auf das Bit (Regel 6).
+    ends: list[Point2] = []
+    for segment in segments:
+        ends.append(segment.start)
+        ends.append(segment.end)
+    free = [
+        point
+        for index, point in enumerate(ends)
+        if not any(_joins(point, other) for other in ends[:index] + ends[index + 1 :])
+    ]
+    if len(free) != 2:
+        raise _broken(
+            _("Eine Bahn hat genau zwei Enden — diese Zeichnung ist ein Ring oder verzweigt sich.")
+        )
+
+    start = free[0]
+    first = next(
+        index
+        for index, segment in enumerate(segments)
+        if _joins(segment.start, start) or _joins(segment.end, start)
+    )
+    head = segments.pop(first)
+    chain = [head if _joins(head.start, start) else _flipped(head)]
+    while segments:
+        tail = chain[-1].end
+        matches = [
+            (index, candidate)
+            for index, candidate in enumerate(segments)
+            if _joins(tail, candidate.start) or _joins(tail, candidate.end)
+        ]
+        if not matches:
+            raise _broken(_("Die Bahn zerfällt in mehrere Stücke — sie muss zusammenhängen."))
+        index, candidate = matches[0]
+        segments.pop(index)
+        chain.append(candidate if _joins(tail, candidate.start) else _flipped(candidate))
+    return Profile(segments=tuple(chain))
+
+
 def _one_loop(segments: list[ProfileSegment]) -> tuple[ProfileSegment, ...]:
     """Verkettet vom ersten Segment aus, bis der Ring schließt.
 

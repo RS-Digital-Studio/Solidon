@@ -60,6 +60,16 @@ trägt die wirklichen Manteldreiecke; planare Anschnitte bleiben getrennte
 Flächen. Es verwendet denselben Gewindevertrag wie die Bausteine, ohne die
 exakten Operationswerte für die Anzeige zu runden.
 
+## Eine Bahn ist kein Bogen
+
+`sweep_path` (RM-147 E3) führt einen Querschnitt entlang einer gezeichneten
+Bahn und benutzt dafür **`MakePipeShell`** mit `RightCorner`, nicht
+`MakePipe`: An einer scharfen Ecke hört `MakePipe` auf zu bauen — gemessen an
+einer Bahn aus 40 mm hoch und 30 mm quer ein Körper von 3141 mm³ statt 5497,
+also genau das erste Segment, und ohne ein Wort dazu. `MakeSolid()` schließt
+die Schale danach zu einem Körper; ohne diesen Schritt wäre das Ergebnis hohl,
+und das fiele erst beim Schneiden oder Exportieren auf.
+
 ## Was er einbringt
 
 Was ein Netz nicht geben kann: echte Kanten — und damit Fasen und

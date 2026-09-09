@@ -25,7 +25,13 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.sketch.planes import to_world
-from app.core.sketch.profile import Profile, arc_through, signed_area, spline_controls
+from app.core.sketch.profile import (
+    Profile,
+    arc_through,
+    shifted,
+    signed_area,
+    spline_controls,
+)
 from app.core.types import PlaneFrame, Point2
 from app.core.units import EPS_GEOM, is_zero
 from app.i18n import _
@@ -64,6 +70,12 @@ PLANES: dict[str, tuple[_Lift, tuple[float, float, float]]] = {
     "plane:xz": (_lift_xz, (0.0, 1.0, 0.0)),
     "plane:yz": (_lift_yz, (1.0, 0.0, 0.0)),
 }
+
+#: Auf welchen Ebenen eine **Bahn** liegen darf (:func:`sweep_path`, E3): auf
+#: den beiden, die senkrecht zum Querschnitt stehen. Eine Bahn in XY liefe in
+#: der Ebene des Querschnitts — der Körper hätte keine Länge, und OpenCASCADE
+#: meldete das als unerwarteten Fehler statt als Zeichnung, die nicht passt.
+PATH_PLANES: Final = frozenset({"plane:xz", "plane:yz"})
 
 
 def _wire(profile: Profile, lift: _Lift) -> Any:
@@ -326,6 +338,67 @@ def sweep_arc(profile: Profile, bend_radius: float, bend_deg: float) -> Solid:
     spine = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(curve).Edge()).Wire()
     builder = BRepOffsetAPI_MakePipe(spine, _face(profile, _lift_xy))
     return _finished(builder, _("Der Bogen ist für diesen Querschnitt zu eng."))
+
+
+def sweep_path(profile: Profile, path: Profile, plane: str = "plane:xz") -> Solid:
+    """Führt den Umriss entlang einer **gezeichneten** Bahn (E3, RM-147).
+
+    Der Gegenstück zu :func:`sweep_arc`, das nur einen Kreisbogen kennt: Ein
+    Kabelkanal um zwei Ecken, ein Griff mit einer Kehle, ein Rohr, das einem
+    Gehäuse folgt — alles, was keine gleichmäßige Krümmung hat.
+
+    **Der Querschnitt liegt in XY, die Bahn senkrecht dazu**, genau wie beim
+    Bogen. Die Bahn wird dafür so verschoben, dass ihr Anfang im Ursprung
+    liegt: Sie beschreibt einen Verlauf und keinen Ort, und ein Körper, der
+    davonläuft, weil jemand seine Zeichnung nicht am Nullpunkt begonnen hat,
+    wäre eine Überraschung ohne Gewinn. Die Verschiebung steht im ``doc``-Satz
+    der Operation.
+
+    ``plane`` ist die Ebene der **Bahn** — ``plane:xz`` oder ``plane:yz``. Die
+    Ebene des Querschnitts ist nicht wählbar, weil sie es beim Bogen auch nicht
+    ist; wer sie einführt, führt sie an beiden Stellen ein.
+    """
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_RightCorner
+    from OCP.BRepOffsetAPI import BRepOffsetAPI_MakePipeShell
+
+    if plane not in PATH_PLANES:
+        raise ValidationError(
+            "path_sketch",
+            _(
+                "Die Bahn muss senkrecht zum Querschnitt liegen — zeichnen Sie sie "
+                "auf der Vorder- oder der Seitenansicht."
+            ),
+            value=plane,
+            constraint="path_plane",
+        )
+    if not path.segments:
+        raise ValidationError(
+            "path_sketch", _("Diese Bahn hat keinen Verlauf."), constraint="no_path"
+        )
+    lift = PLANES[plane][0]
+    begin = path.segments[0].start
+    at_origin = shifted(Profile(segments=path.segments), -begin[0], -begin[1])
+    spine = _wire(at_origin, lift)
+    # **``MakePipeShell`` und nicht ``MakePipe``**, und das ist der ganze
+    # Unterschied zwischen einer Bahn und einem Bogen: An einer scharfen Ecke
+    # hört ``MakePipe`` auf zu bauen. Gemessen an einer Bahn aus 40 mm hoch und
+    # 30 mm quer: ein Körper von 3141 mm³ statt 5497 — also genau das erste
+    # Segment, ohne ein Wort dazu. Der Übergangsmodus entscheidet, was an der
+    # Ecke geschieht; ``RightCorner`` schneidet sie auf Gehrung, wie ein Rohr
+    # oder ein Kanal es hat, und trifft damit die Länge der Bahn exakt.
+    builder = BRepOffsetAPI_MakePipeShell(spine)
+    builder.SetTransitionMode(BRepBuilderAPI_RightCorner)
+    builder.Add(_wire(profile, _lift_xy), False, False)
+    solid = _finished(builder, _("Entlang dieser Bahn lässt sich der Querschnitt nicht führen."))
+    # ``MakePipeShell`` liefert eine Schale; erst ``MakeSolid`` schließt sie zu
+    # einem Körper. Ohne das wäre das Ergebnis hohl und ohne Volumen — und der
+    # Fehler zeigte sich erst beim Schneiden oder Exportieren.
+    if not builder.MakeSolid():
+        raise GeometryError(
+            detail=_("Diese Bahn ergibt keinen geschlossenen Körper — prüfen Sie ihren Verlauf.")
+        )
+    return solid.replacing(builder.Shape())
 
 
 def loft(

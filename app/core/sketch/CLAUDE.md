@@ -68,6 +68,12 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
   des Hüllquaders entscheidet keine Innen-/Außenrichtung, insbesondere an
   Innenböden und konkaven Körpern. Eine blinde Tasche endet in beiden Kernen
   genau an ihrer eingegebenen Oberkante und Tiefe.
+- **Der Sweep läuft auch an einer gezeichneten Bahn entlang** (`sketch_sweep`,
+  RM-147 E3). `along` entscheidet zwischen dem Bogen aus Radius und Winkel und
+  der Zeichnung in `path_sketch`. Die Bahn kommt aus `profile.path_of` — eine
+  **offene** Kette statt eines Rings, mit genau zwei freien Enden; ein Kreis
+  ist keine. Sie liegt auf XZ oder YZ (`brep.profiles.PATH_PLANES`), und ihr
+  Anfang wandert in den Ursprung: Sie beschreibt einen Verlauf, keinen Ort.
 - **Der Übergang nimmt zwei unabhängige Zeichnungen** (`sketch_loft`, RM-147
   E2). `top` entscheidet, woher der obere Umriss kommt: aus dem unteren
   gerechnet (`top_scale`) oder als eigene Zeichnung (`top_sketch`). Geprüft

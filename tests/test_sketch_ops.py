@@ -233,6 +233,119 @@ def test_a_loft_keeps_the_drawn_hole() -> None:
     )
 
 
+def _path(*points: tuple[float, float], plane: str = "plane:xz") -> str:
+    """Eine offene Bahn als Streckenzug durch die genannten Punkte."""
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import Sketch, SketchElement
+
+    return sketch_to_text(
+        Sketch(
+            plane=plane,
+            elements=tuple(
+                SketchElement("line", (points[index], points[index + 1]))
+                for index in range(len(points) - 1)
+            ),
+            constraints=(),
+        )
+    )
+
+
+def test_a_sweep_follows_a_drawn_path_around_its_corner() -> None:
+    """RM-147 E3: Der Sweep kannte genau eine Kurve — den Kreisbogen.
+
+    Alles, was zweimal abbiegt oder ungleichmäßig krümmt, war damit nicht zu
+    bauen: ein Kabelkanal um zwei Ecken, ein Griff mit einer Kehle, ein Rohr,
+    das einem Gehäuse folgt.
+
+    Gemessen an einer Bahn aus 40 mm hoch und 30 mm quer: Ein Kreisquerschnitt
+    Ø10 ergibt über 70 mm Bahnlänge ein Volumen von ``π·25·70``. Die Ecke ist
+    auf Gehrung geschnitten und nimmt deshalb nichts weg — genau das
+    unterscheidet ``MakePipeShell`` von ``MakePipe``, das an der Ecke aufhörte
+    und 3141 mm³ lieferte: die Länge des **ersten** Segments, ohne ein Wort.
+    """
+    body = solid_of(
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=10.0,
+            along="drawn",
+            path_sketch=_path((0.0, 0.0), (0.0, 40.0), (30.0, 40.0)),
+        )
+    )
+
+    assert body.volume == pytest.approx(math.pi * 25.0 * 70.0, rel=1e-6), (
+        "die ganze Bahn trägt den Querschnitt, nicht ihr erstes Stück"
+    )
+
+
+def test_a_sweep_puts_the_start_of_its_path_into_the_origin() -> None:
+    """Die Bahn beschreibt einen Verlauf und keinen Ort.
+
+    Dieselbe Bahn, hundert Millimeter neben dem Nullpunkt gezeichnet, ergibt
+    denselben Körper an derselben Stelle — sonst liefe das Teil davon, weil
+    jemand seine Zeichnung nicht am Ursprung begonnen hat.
+    """
+    from app.core.brep.profiles import bounds as brep_bounds
+
+    am_ursprung = solid_of(
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=10.0,
+            along="drawn",
+            path_sketch=_path((0.0, 0.0), (0.0, 40.0)),
+        )
+    )
+    daneben = solid_of(
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=10.0,
+            along="drawn",
+            path_sketch=_path((100.0, 60.0), (100.0, 100.0)),
+        )
+    )
+
+    assert brep_bounds(am_ursprung) == pytest.approx(brep_bounds(daneben), abs=1e-6)
+    # Und es ist wirklich die Bahn, die führt: 40 mm hoch, 10 mm dick. Ein
+    # Rückfall auf den Bogen (Radius 20, 90 Grad) hätte andere Maße.
+    xmin, _ymin, zmin, xmax, _ymax, zmax = brep_bounds(am_ursprung)
+    assert (zmax - zmin) == pytest.approx(40.0, abs=1e-6)
+    assert (xmax - xmin) == pytest.approx(10.0, abs=0.01)
+
+
+def test_a_sweep_along_a_drawn_path_says_what_it_cannot_use() -> None:
+    """Drei Fälle, drei Sätze statt eines unerwarteten Fehlers (Regel 17).
+
+    Ohne Zeichnung, eine Bahn in der Ebene des Querschnitts, und ein Ring, der
+    keinen Anfang hat, an dem der Querschnitt säße.
+    """
+    with pytest.raises(ValidationError) as ohne:
+        run("sketch_sweep", shape="circle", length=10.0, along="drawn")
+    assert ohne.value.constraint == "empty"
+    assert ohne.value.suggestions
+
+    with pytest.raises(ValidationError) as flach:
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=10.0,
+            along="drawn",
+            path_sketch=_path((0.0, 0.0), (0.0, 40.0), plane="plane:xy"),
+        )
+    assert flach.value.constraint == "path_plane"
+
+    with pytest.raises(AppError) as ring:
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=10.0,
+            along="drawn",
+            path_sketch=_path((0.0, 0.0), (0.0, 40.0), (30.0, 40.0), (0.0, 0.0)),
+        )
+    assert "Enden" in str(ring.value.detail)
+
+
 def test_a_loft_spans_between_two_independent_drawings() -> None:
     """RM-147 E2: rund unten, eckig oben — der Loft, den jedes CAD hat.
 

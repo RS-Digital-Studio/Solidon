@@ -29,6 +29,7 @@ from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_pl
 from app.core.sketch.profile import (
     Profile,
     bounds_of,
+    path_of,
     profile_of,
     regions_of,
     scaled,
@@ -830,6 +831,16 @@ class SketchSweepParams(BaseParams):
         doc=_WIDTH_DOC,
         depends_on=("shape", ("rectangle", "slot")),
     )
+    along: str = param(
+        title=_("Bahn"),
+        default="arc",
+        choices=("arc", "drawn"),
+        doc=_(
+            "Woran der Querschnitt entlangläuft: an einem Bogen aus zwei Zahlen "
+            "oder an einer gezeichneten Bahn. Ein Rohrbogen braucht keine "
+            "Zeichnung; ein Kanal um zwei Ecken schon."
+        ),
+    )
     bend_radius: float = param(
         title=_("Bogenradius"),
         default=20.0,
@@ -840,6 +851,7 @@ class SketchSweepParams(BaseParams):
             "Radius des Pfades, dem der Querschnitt folgt. Er muss größer sein "
             "als der halbe Querschnitt, sonst knickt die Innenseite."
         ),
+        depends_on=("along", ("arc",)),
     )
     bend_angle: float = param(
         title=_("Bogenwinkel"),
@@ -848,6 +860,19 @@ class SketchSweepParams(BaseParams):
         minimum=1.0,
         maximum=180.0,
         doc=_("Wie weit der Bogen führt — 90 Grad ist ein rechtwinkliger Rohrbogen."),
+        depends_on=("along", ("arc",)),
+    )
+    path_sketch: str = param(
+        title=_("Gezeichnete Bahn"),
+        default="",
+        kind="sketch",
+        placement="advanced",
+        doc=_(
+            "Der Verlauf, dem der Querschnitt folgt — offen gezeichnet, auf der "
+            "Vorder- oder Seitenansicht. Ihr Anfang kommt in den Ursprung: Die "
+            "Bahn beschreibt einen Verlauf, keinen Ort."
+        ),
+        depends_on=("along", ("drawn",)),
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     corners: int = param(
@@ -905,6 +930,24 @@ def sketch_sweep(ctx: OpContext) -> OpResult:
     profile = _profile_for(
         ctx, params.sketch, params.shape, params.length, params.width, params.corners, findings
     )
+    if params.along == "drawn":
+        # **Die gezeichnete Bahn** (E3, RM-147): Bis hierher kannte der Sweep
+        # genau eine Kurve — den Kreisbogen aus Radius und Winkel. Alles, was
+        # zweimal abbiegt oder ungleichmäßig krümmt (ein Kabelkanal um zwei
+        # Ecken, ein Griff mit einer Kehle), war damit nicht zu bauen.
+        if not params.path_sketch:
+            raise ValidationError(
+                "path_sketch",
+                _(
+                    "Für die Bahn fehlt die Zeichnung. Zeichnen Sie sie, oder "
+                    "führen Sie den Querschnitt an einem Bogen entlang."
+                ),
+                constraint="empty",
+                suggestions=(CORRECT_INPUT,),
+            )
+        path = path_of(_solved_drawing(ctx, params.path_sketch, findings))
+        solid = profiles.sweep_path(profile, path, _plane_of(params.path_sketch))
+        return OpResult(outputs=[_created(params.name, str(_("Bahn")), solid)], findings=findings)
     solid = profiles.sweep_arc(profile, params.bend_radius, params.bend_angle)
     return OpResult(outputs=[_created(params.name, str(_("Bogen")), solid)], findings=findings)
 

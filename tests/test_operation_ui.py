@@ -1422,6 +1422,36 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     assert str(spec.params.spec()[3].doc) == editor.toolTip(), "und der eigene Satz kommt zurück"
 
 
+def test_the_sweep_offers_a_drawn_path_and_greys_out_the_arc(window: MainWindow) -> None:
+    """RM-147 E3: Der Sweep läuft jetzt auch an einer gezeichneten Bahn entlang.
+
+    Der Umschalter entscheidet: Radius und Winkel beim Bogen, die Zeichnung bei
+    der Bahn. Was gerade nicht wirkt, steht grau und mit Grund da — nicht weg
+    (§2.6).
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    dialog = OperationDialog(REGISTRY.get("sketch_sweep"), {}, window)
+    try:
+        assert "path_sketch" in dialog._editors, "das Bahnfeld fehlt im Dialog"
+
+        bahn = dialog._editors["path_sketch"]
+        radius = dialog._editors["bend_radius"]
+        assert not bahn.isEnabled(), "am Bogen wirkt keine Zeichnung"
+        assert "Bahn" in bahn.toolTip(), f"ohne Grund: {bahn.toolTip()!r}"
+        assert radius.isEnabled()
+
+        umschalter = dialog._editors["along"]
+        assert isinstance(umschalter, QComboBox)
+        umschalter.setCurrentIndex(umschalter.findData("drawn"))
+
+        assert bahn.isEnabled()
+        assert not radius.isEnabled(), "eine gezeichnete Bahn hat keinen Bogenradius"
+        assert "Bahn" in radius.toolTip()
+    finally:
+        dialog.deleteLater()
+
+
 def test_the_loft_offers_two_drawings_and_greys_out_the_one_it_does_not_use(
     window: MainWindow,
 ) -> None:
