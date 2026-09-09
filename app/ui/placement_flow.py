@@ -472,6 +472,11 @@ class PlacementFlow(QObject):
         if self._disposed:
             return
         self._stop()
+        # **Der Griff der Vorschau gehört diesem Dialog.** Ohne diese Zeile
+        # blieb er im Bild stehen, und schlimmer: ``_preview_gizmo_wanted``
+        # blieb gesetzt, sodass ihn jede künftige Vorschau neu anhängte — auch
+        # an einer Bohrung, wo er nicht hingehört.
+        self.viewport.set_preview_gizmo(False)
         self._disposed = True
         for widget in self._widgets():
             widget.deleteLater()
@@ -666,9 +671,13 @@ class PlacementFlow(QObject):
             )
             before = np.asarray(placement_transform(spec.params(**entered)), dtype=float)
         except AppError, TypeError, ValueError:
-            # Ein halb getippter Ausdruck ist kein Grund, den Zug zu verlieren
-            # — er ist einer, ihn auf die zuletzt gültige Lage zu setzen.
-            before = np.eye(4)
+            # **Ein unlesbarer Wert verwirft den Zug, er verschiebt nichts.**
+            # Ohne die alte Lage gibt es keine neue: Der Griff meldet nur, was
+            # sich geändert hat. Hier stand eine Einheitsmatrix als Rückfall —
+            # sie hätte den Körper bei einem halb getippten Ausdruck in den
+            # Nullpunkt gesetzt, und der Kommentar daneben behauptete das
+            # Gegenteil. Der Zug geht verloren; der Körper bleibt, wo er ist.
+            return
         values = placement_values_of(np.asarray(matrix, dtype=float) @ before)
         self._updating = True
         try:

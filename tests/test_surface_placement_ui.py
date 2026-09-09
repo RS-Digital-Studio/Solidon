@@ -675,6 +675,20 @@ def test_a_drag_in_the_preview_becomes_numbers_in_the_dialog(qt_app: QApplicatio
         assert (values["x"], values["y"], values["z"]) == pytest.approx((12.0, 5.0, 0.0), abs=1e-9)
         apart = abs((float(values["angle"]) - 90.0 + 180.0) % 360.0 - 180.0)
         assert apart == pytest.approx(0.0, abs=1e-6), "die Drehung des ersten Zugs bleibt"
+        # **Ein unlesbarer Wert verwirft den Zug, er verschiebt nichts.** Ein
+        # Rückfall auf die Einheitsmatrix hätte den Körper in den Nullpunkt
+        # gesetzt — mitten im Tippen, ohne dass jemand etwas verlangt hätte.
+        dialog._editors["x"].start_expression("=@gibtsnicht")
+        viewport.previewDragged.emit(np.eye(4))
+        qt_app.processEvents()
+        stand = dialog.values()
+        assert stand["y"] == pytest.approx(5.0, abs=1e-9), "der Körper bleibt, wo er ist"
+
+        # **Und der Griff gehört dem Dialog.** Bleibt er beim Schließen
+        # stehen, hängt ihn die nächste Vorschau wieder an — auch dort, wo er
+        # nicht hingehört.
+        controller.dispose()
+        assert not viewport.preview_gizmo, "der Griff geht mit dem Dialog"
     finally:
         controller.dispose()
         dialog.deleteLater()
