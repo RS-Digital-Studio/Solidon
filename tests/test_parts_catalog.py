@@ -514,3 +514,54 @@ def test_scad_exports_the_required_host_addition():
     assert text.count("polyhedron(") == 2
     disabled = scad.to_scad(spec, spec.params(strain_relief=False))
     assert "module cable_gland_host_add()" not in disabled
+
+
+def test_a_test_body_takes_the_diameter_of_the_bore_it_was_opened_at() -> None:
+    """E5: Das Prüfstück misst die Verbindung, die es wirklich gibt (§28.3).
+
+    Der doc-Satz des Feldes sagte es seit je — „am besten der, den das Teil
+    später wirklich benutzt" — und niemand belegte ihn vor: Wer eine Bohrung
+    anklickte und den Toleranz-Testkörper öffnete, bekam die Vorgabe 6,0 und
+    schrieb den gemessenen Wert von Hand ab. Eine Leiter für 6 mm sagt über
+    eine Ø 4,2-Verbindung nichts; das Spiel, bei dem ein Zapfen gerade noch
+    gleitet, hängt am Durchmesser.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.placement import advises_on_bores, values_for
+    from app.core.types import Feature
+
+    load_operations()
+    bore = Feature(id="hole_1", kind="hole", provenance="detected", params={"diameter": 4.1873})
+
+    for name in ("create_fit_ladder", "insert_fit_ladder"):
+        spec = REGISTRY.get(name)
+        values = values_for(spec, bore)
+
+        assert values["diameter"] == 4.19, f"{name}: {values}"
+        assert advises_on_bores(spec), f"{name}: und der gemessene Wert steht daneben"
+
+    # **Gerundet wird der Vorschlag, nicht die Geometrie** (Regel 6). Eine
+    # Leiter, die 4,1873 als Nennmaß trüge, behauptete eine Genauigkeit, die
+    # kein Drucker einlöst — und der Wert steht danach in der eingravierten
+    # Beschriftung, die jemand liest.
+    assert values_for(REGISTRY.get("create_fit_ladder"), bore)["diameter"] != 4.1873
+
+
+def test_a_test_body_without_a_bore_keeps_its_default() -> None:
+    """Die Gegenprobe: Ohne angeklickte Bohrung bleibt die Vorgabe stehen.
+
+    Ein Vorschlag, der aus nichts entsteht, wäre eine Behauptung über eine
+    Absicht — dieselbe Grenze, die ``values_for_object`` beim Merkmalsnamen
+    zieht.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.scene.placement import values_for
+    from app.core.types import Feature
+
+    load_operations()
+    face = Feature(id="face_1", kind="face", provenance="detected", params={})
+
+    assert "diameter" not in values_for(REGISTRY.get("create_fit_ladder"), face)
+    assert REGISTRY.get("create_fit_ladder").params().diameter == 6.0

@@ -23,7 +23,7 @@ Abhängigkeit, und ein aufgesetztes Zeichen bräuchte Stützen, wo es übersteht
 from __future__ import annotations
 
 import math
-from typing import cast
+from typing import Any, cast
 
 import numpy as np
 
@@ -105,6 +105,30 @@ FIT_LADDER_CAN_BE_ASSEMBLED = PartChange(
 LABEL_DEPTH = 0.4
 
 
+def size_for_fit_ladder(diameter: float) -> dict[str, Any]:
+    """Die Leiter prüft den Durchmesser, den das Teil wirklich hat (§28.3).
+
+    **Der doc-Satz des Feldes sagte es seit je** — „am besten der, den das Teil
+    braucht" — und niemand belegte ihn vor: Wer eine Bohrung anklickte und den
+    Prüfkörper öffnete, bekam die Vorgabe 6,0 und musste den gemessenen Wert
+    von Hand abschreiben. Eine Leiter für 6 mm sagt über eine Ø 4,2-Verbindung
+    nichts: Das Spiel, bei dem ein Zapfen gerade noch gleitet, hängt am
+    Durchmesser.
+
+    **Gerundet auf ein Hundertstel, und das ist keine Toleranz, sondern eine
+    Anzeige.** Die Erkennung misst 5,1873…; eine Leiter, die das als Nennmaß
+    trägt, behauptet eine Genauigkeit, die kein Drucker einlöst — und der Wert
+    steht danach in der Beschriftung, die jemand liest. Der Kern rechnet
+    weiterhin mit dem ungerundeten Netz (Regel 6); gerundet wird der
+    **Vorschlag** an den Dialog.
+
+    Anders als bei Buchse, Mutternfalle oder Gewinde (:mod:`fasteners`) gibt es
+    hier keine Normreihe, aus der die passende Größe folgt: Ein Prüfkörper
+    misst, was da ist, statt es einer Tabelle zuzuordnen.
+    """
+    return {"diameter": round(float(diameter), 2)}
+
+
 @op_params
 class FitLadderParams(BaseParams):
     diameter: float = param(
@@ -159,6 +183,7 @@ class FitLadderParams(BaseParams):
     # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
     at_face=False,
     params=FitLadderParams,
+    at_hole_values=size_for_fit_ladder,
     bodies=2,
     features=["pin", "bore", "face"],
     wall=WallRequirement.not_applicable(
