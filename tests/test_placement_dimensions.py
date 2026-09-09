@@ -342,6 +342,62 @@ def test_dimension_fields_leave_the_placement_point_itself_visible(
         viewport.close()
 
 
+def test_the_mouth_outline_marks_the_spot_instead_of_the_whole_cylinder(
+    qt_app: QApplication,
+) -> None:
+    """Wo das Werkzeug die Fläche trifft, steht ein Umriss — und der Körper tritt zurück.
+
+    Der halbtransparente Werkzeugkörper zeigte den ganzen Zylinder, auch den
+    Teil außerhalb des Materials; beim Drehen der Ansicht war damit schwer zu
+    sehen, wo das Loch hinkommt (Befund Robert, 09.09.2026: „es reicht mir,
+    wenn ich den Kreis auf der Oberfläche in Orange sehe").
+
+    Geprüft wird beides zusammen, weil es eine Entscheidung ist: Der Umriss
+    erscheint **und** der Körper wird unsichtbar. Gebaut wird er weiter — an
+    ihm hängt, ob gesetzt werden kann.
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        # Ein Werkzeug mit Mündung in der Fläche: der Zylinder endet bei z = 0,
+        # so wie ``prepare_tool`` ihn legt.
+        bohrer = trimesh.creation.cylinder(radius=2.5, height=20.0)
+        bohrer.apply_translation((0.0, 0.0, -10.0))
+        flow._tool_context = PlacementTool(MeshData(bohrer))
+        flow._tool = _Item()
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 12,
+            300 + (point[1] - 10) * 12,
+            0.5,
+        )
+        flow.redraw()
+
+        umriss = flow._canvas.outline
+        assert len(umriss) >= 3, "ohne Umriss prüft der Test nichts"
+        breite = max(p.x() for p in umriss) - min(p.x() for p in umriss)
+        hoehe = max(p.y() for p in umriss) - min(p.y() for p in umriss)
+        # Ø5 mm bei zwölf Bildpunkten je Millimeter sind sechzig.
+        assert breite == pytest.approx(60.0, abs=2.0), breite
+        assert hoehe == pytest.approx(60.0, abs=2.0), hoehe
+        assert flow._canvas.outline_colour is not None, "der Umriss braucht seine Farbe"
+
+        assert flow._tool is not None, "der Körper wird weiter gebaut"
+        assert flow._tool.visible is False, "neben dem Umriss tritt er zurück"
+
+        # **Und ohne Mündung bleibt es beim Körper.** Ein Werkzeug, dessen
+        # Grundfläche nicht in der Ebene liegt, hat keinen Umriss — dort ist
+        # der Körper die einzige Auskunft.
+        wuerfel = trimesh.creation.box((6.0, 6.0, 6.0))
+        flow._tool_context = PlacementTool(MeshData(wuerfel))
+        flow.redraw()
+        assert not flow._canvas.outline, "ein Würfel um den Ursprung hat keine Mündung"
+        assert flow._tool.visible is True, "ohne Umriss zeigt der Körper die Stelle"
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
+
+
 def _layout(
     qt_app: QApplication, size: tuple[int, int], scale: float, corner: str, *, with_zones=False
 ):

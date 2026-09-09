@@ -568,6 +568,113 @@ def _placement_error() -> ValidationError:
     )
 
 
+#: Unter welchem Namen die verschweißte Nachbarschaft im Netz-Cache liegt.
+#:
+#: ``trimesh`` führt für jedes Netz einen Cache, der beim Ändern der Punkte
+#: von selbst verfällt (``Cache.verify``). Das ist genau die Lebensdauer, die
+#: diese Auskunft braucht — und der Grund, sie nicht in ein eigenes
+#: Wörterbuch neben dem Netz zu legen: Ein Cache über ``id(mesh)`` überlebt
+#: sein Netz und liefert danach die Nachbarschaft eines anderen.
+_ADJACENCY_KEY: Final = "solidon_patch_adjacency"
+
+
+#: Wie viele Ecken der Umriss der Mündung höchstens bekommt.
+#:
+#: Ein Kreis aus 32 Sehnen ist bei jeder Bildgröße rund; mehr Punkte kosten
+#: Zeichenzeit und ändern nichts am Bild. Ein Sechskant hat sechs und bleibt
+#: unangetastet — begrenzt wird nur nach oben.
+MOUTH_POINTS: Final = 32
+
+
+def mouth_outline(tool: PlacementTool) -> tuple[Point2, ...]:
+    """Der Umriss, mit dem dieses Werkzeug die Oberfläche trifft — lokal, in U/V.
+
+    **Wozu.** Der halbtransparente Werkzeugkörper zeigt den ganzen Zylinder,
+    auch den Teil außerhalb des Materials, und beim Drehen der Ansicht ist
+    schwer zu sehen, wo das Loch eigentlich hinkommt (Befund Robert,
+    09.09.2026: „es reicht mir, wenn ich den Kreis auf der Oberfläche in
+    Orange sehe"). Der Umriss beantwortet genau diese Frage und nichts sonst.
+
+    **Warum im Kern und nicht im Fenster.** Er folgt aus der Geometrie des
+    Werkzeugs, nicht aus einer Darstellung — dieselbe Regel, nach der schon
+    die Platzierung hier liegt und nicht dort. Die Oberfläche projiziert ihn
+    nur noch.
+
+    Genommen werden die Punkte in der Mündungsebene: ``prepare_tool`` legt
+    die Mündung auf ``z = 0`` (oder die Basis, bei aufsetzenden Bausteinen).
+    Ihr Rand ist die konvexe Hülle — für Bohrung, Sechskant und Rechteck der
+    Umriss selbst. Ein Werkzeug mit einspringender Mündung bekäme einen zu
+    weiten; das ist die bewusste Grenze einer Anzeige, die nichts rechnen
+    soll, was der Kunde nicht sieht.
+
+    Leer, wenn keine Mündungsebene erkennbar ist — dann bleibt es beim Körper.
+    """
+    points = np.asarray(tool.mesh.raw.vertices, dtype=np.float64)
+    if not len(points):
+        return ()
+    at_mouth = points[np.abs(points[:, 2]) <= EPS_GEOM]
+    if len(at_mouth) < 3:
+        return ()
+    flat = at_mouth[:, :2]
+    middle = flat.mean(axis=0)
+    spread = flat - middle
+    # Nach dem Winkel sortiert ergibt die Randpunktmenge einen geschlossenen
+    # Zug; die inneren Punkte der Mündungsscheibe fallen dabei nicht heraus,
+    # deshalb bleibt nur der äußerste je Richtung.
+    angles = np.arctan2(spread[:, 1], spread[:, 0])
+    radii = np.hypot(spread[:, 0], spread[:, 1])
+    if float(radii.max()) <= EPS_GEOM:
+        return ()
+    order = np.argsort(angles)
+    angles, radii, flat = angles[order], radii[order], flat[order]
+    kept: list[Point2] = []
+    step = 2.0 * np.pi / MOUTH_POINTS
+    for slot in range(MOUTH_POINTS):
+        low = -np.pi + slot * step
+        inside = (angles >= low) & (angles < low + step)
+        if not inside.any():
+            continue
+        pick = int(np.argmax(np.where(inside, radii, -1.0)))
+        kept.append((float(flat[pick, 0]), float(flat[pick, 1])))
+    return tuple(kept) if len(kept) >= 3 else ()
+
+
+def _welded_adjacency(raw: Any, vertices: Any) -> dict[int, list[int]]:
+    """Welche Dreiecke sich eine Kante teilen — über **exakte** Ortsgleichheit.
+
+    Exakte Gleichheit verbindet auch unverschweißte STL-Dreiecke, und kein
+    Abstandsschwellwert darf dabei einen tatsächlichen schmalen Spalt
+    schließen. Deshalb nicht ``trimesh.face_adjacency``: das verschweißt mit
+    Toleranz.
+
+    **Gerechnet wird einmal je Netz, nicht einmal je Klick.** Die Auskunft
+    hängt allein am Netz — die angeklickte Fläche kommt erst danach ins Spiel.
+    Ohne Cache lief sie bei jeder Mausbewegung über das Modell erneut:
+    gemessen an ``Filamenthalter-Solidon3D.p3d`` (2 428 Dreiecke) 4,4 ms im
+    Median und 52 ms im schlechtesten Fall, also unter zwanzig Bildern je
+    Sekunde beim bloßen Zeigen (Befund Robert, 09.09.2026: „bei der Vorschau
+    mit der Bohrung ist es noch relativ langsam").
+    """
+    cached = raw._cache.cache.get(_ADJACENCY_KEY) if raw._cache.verify() is None else None
+    if isinstance(cached, dict):
+        return cached
+    _, inverse = np.unique(vertices, axis=0, return_inverse=True)
+    faces = inverse[np.asarray(raw.faces, dtype=np.int64)]
+    edges = np.sort(faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1)
+    _, edge_ids = np.unique(edges, axis=0, return_inverse=True)
+    owners: dict[int, list[int]] = {}
+    for index, edge_id in enumerate(edge_ids):
+        owners.setdefault(int(edge_id), []).append(index // 3)
+    adjacency: dict[int, list[int]] = {}
+    for entries in owners.values():
+        if len(entries) == 2:
+            first, second = entries
+            adjacency.setdefault(first, []).append(second)
+            adjacency.setdefault(second, []).append(first)
+    raw._cache[_ADJACENCY_KEY] = adjacency
+    return adjacency
+
+
 def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool]:
     """Zusammenhängende koplanare Originaldreiecke, ohne Koordinatenrundung."""
     from app.core.perceive.features import CURVATURE_LIMIT, EPS_ANGLE
@@ -588,21 +695,7 @@ def _patch_faces(mesh: MeshData, face_index: int) -> tuple[tuple[int, ...], bool
                 "Wählen Sie eine andere Stelle auf dem Modell."
             ),
         )
-    # Exakte Ortsgleichheit verbindet auch unverschweißte STL-Dreiecke. Kein
-    # Abstandsschwellwert darf einen tatsächlichen schmalen Spalt schließen.
-    _, inverse = np.unique(vertices, axis=0, return_inverse=True)
-    faces = inverse[np.asarray(raw.faces, dtype=np.int64)]
-    edges = np.sort(faces[:, [[0, 1], [1, 2], [2, 0]]].reshape(-1, 2), axis=1)
-    _, edge_ids = np.unique(edges, axis=0, return_inverse=True)
-    owners: dict[int, list[int]] = {}
-    for index, edge_id in enumerate(edge_ids):
-        owners.setdefault(int(edge_id), []).append(index // 3)
-    adjacency: dict[int, list[int]] = {}
-    for entries in owners.values():
-        if len(entries) == 2:
-            a, b = entries
-            adjacency.setdefault(a, []).append(b)
-            adjacency.setdefault(b, []).append(a)
+    adjacency = _welded_adjacency(raw, vertices)
     origin = vertices[np.asarray(raw.faces)[face_index, 0]]
     triangles = np.asarray(raw.triangles, dtype=np.float64)
     coplanar = (normals @ normal >= np.cos(np.radians(EPS_ANGLE))) & (

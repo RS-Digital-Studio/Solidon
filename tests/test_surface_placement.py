@@ -996,3 +996,41 @@ def test_internal_shoulders_never_replace_the_outer_cavity_mouth():
     assert geometry.frame.normal == pytest.approx((0.0, 0.0, 1.0))
     assert geometry.mesh.is_watertight
     assert geometry.mesh.bounds.maximum[2] == pytest.approx(0.0, abs=1e-10)
+
+
+def test_the_welded_adjacency_is_built_once_per_mesh_and_not_once_per_click():
+    """Die Nachbarschaft haengt am Netz, nicht an der angeklickten Flaeche.
+
+    ``_patch_faces`` sucht die zusammenhaengenden koplanaren Dreiecke, und der
+    teure Teil davon — Punkte exakt verschweissen, Kanten bilden, Besitzer
+    zaehlen — kennt die Flaeche gar nicht. Er lief trotzdem bei jedem Aufruf,
+    also bei jeder Mausbewegung ueber das Modell: gemessen an
+    ``Filamenthalter-Solidon3D.p3d`` (2 428 Dreiecke) 4,4 ms im Median und
+    52 ms im schlechtesten Fall (Befund Robert, 09.09.2026).
+
+    Gezaehlt wird die Identitaet des Ergebnisses und nicht die Zeit: Eine
+    Zeitschranke waere auf einer schnellen Maschine gruen und sagte nichts
+    darueber, ob zweimal gerechnet wurde.
+    """
+    mesh = MeshData.of(trimesh.creation.box((40.0, 30.0, 8.0)))
+    raw = mesh.raw
+    vertices = np.asarray(raw.vertices, dtype=np.float64)
+
+    erste = placement._welded_adjacency(raw, vertices)
+    zweite = placement._welded_adjacency(raw, vertices)
+    assert erste, "ohne Nachbarschaft prueft der Test nichts"
+    assert zweite is erste, "die zweite Frage rechnete erneut"
+
+    # Ueber den echten Weg: zwei Klicks auf verschiedene Flaechen desselben
+    # Netzes teilen dieselbe Auskunft.
+    placement.prepare_surface(mesh, _top(mesh))
+    unten = int(np.argmin(np.asarray(raw.face_normals)[:, 2]))
+    placement.prepare_surface(mesh, unten)
+    assert placement._welded_adjacency(raw, vertices) is erste
+
+    # **Und sie verfaellt mit dem Netz.** Das ist der Grund, warum der Cache
+    # im Netz selbst liegt und nicht in einem Woerterbuch daneben: Ein
+    # verschobener Punkt macht jede Kantenzuordnung ungueltig.
+    raw.vertices[0][0] += 1.0
+    danach = placement._welded_adjacency(raw, np.asarray(raw.vertices, dtype=np.float64))
+    assert danach is not erste, "die alte Nachbarschaft ueberlebte eine Netzaenderung"

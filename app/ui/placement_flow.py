@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QSignalBlocker, Qt, QTimer
 from PySide6.QtGui import (
+    QColor,
     QKeyEvent,
     QPainter,
     QPainterPath,
@@ -26,10 +27,11 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QWidget
 from shiboken6 import isValid
 
 from app.core import expressions
-from app.core.errors import ValidationError
+from app.core.errors import AppError, ValidationError
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge.parts.ops import normal_fields, placement_fields
 from app.core.knowledge.profiles import for_object
+from app.core.registry import OperationSpec
 from app.core.scene import placement
 from app.core.types import Feature, SceneObject, Vec3
 from app.i18n import tr
@@ -41,6 +43,51 @@ from app.ui.render.api import Item, PointerEvent, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
 
 
+def starts_by_itself(spec: OperationSpec) -> bool:
+    """Ob dieser Dialog von selbst in die Platzierung geht.
+
+    **Wer eine Fläche braucht, bekommt sie sofort** — ein Baustein, eine
+    Beschriftung, eine Bohrung sitzen auf etwas, und der zweite Klick auf
+    „Im Modell platzieren" bot nur an, was die Operation ohnehin verlangt
+    (Robert, 09.09.2026: „man soll keinen extra Button klicken müssen").
+
+    **Ein Erzeuger braucht keine.** Quader, Zylinder, Kegel, Kugel und Ring
+    entstehen aus ihren eigenen Maßen an ihren eigenen Koordinaten; die
+    Platzierung ist dort ein Angebot und keine Bedingung. Startet sie von
+    selbst, verschwindet der Dialog — und mit ihm Breite, Tiefe und Höhe, die
+    nirgends sonst stehen. Wer die Maße ändern wollte, musste Escape drücken,
+    tippen und neu platzieren (Robert, 09.09.2026: „wer nur Maße tippen will,
+    ignoriert ihn").
+
+    Stattdessen zeigt dort die Live-Vorschau den Körper, sobald der Dialog
+    offen ist — sie rechnet ihn ohnehin (``Session.preview_async``), und
+    ``OperationDialog.request`` überspringt sie nur, solange die Platzierung
+    läuft. Der Knopf bleibt: Wer den Quader auf eine Fläche setzen will,
+    findet den Weg an derselben Stelle wie zuvor.
+
+    Gefragt wird nach ``consumes``, nicht nach einer Namensliste: Was nichts
+    verbraucht, hat nichts, worauf es sitzen könnte.
+    """
+    return spec.consumes != 0 or spec.takes_whole_scene
+
+
+def _grips_its_preview(spec: OperationSpec) -> bool:
+    """Ob die Vorschau dieser Operation einen Griff bekommt.
+
+    Genau dort, wo der Dialog offen bleibt und die Live-Vorschau den Körper
+    zeigt: an den Erzeugern. Wer in die Platzierung geht, zielt mit dem
+    Fadenkreuz — zwei Gesten für dieselbe Stelle wären eine zu viel.
+
+    Und nur, wo es Felder gibt, in die der Zug schreiben kann: ``x/y/z`` für
+    den Ort, ``nx/ny/nz`` für die Richtung, ``angle`` für die Drehung. Ein
+    Griff über einem Körper, dessen Lage nirgends steht, bewegte ein Bild.
+    """
+    if starts_by_itself(spec):
+        return False
+    names = {entry.name for entry in spec.params.spec()}
+    return {"x", "y", "z", "nx", "ny", "nz", "angle"} <= names
+
+
 class _Dimensions(QWidget):
     """Maßpfeile im Bildraum, mit getrennten erreichbaren Zahlenfeldern."""
 
@@ -48,6 +95,15 @@ class _Dimensions(QWidget):
         super().__init__(parent)
         self.lines: list[tuple[QPointF, QPointF]] = []
         self.leaders: list[tuple[QPointF, QPointF]] = []
+        #: Der Umriss, mit dem das Werkzeug die Oberfläche trifft — ein
+        #: geschlossener Zug in Bildkoordinaten. Bei einer Bohrung der Kreis
+        #: ihrer Mündung (Befund Robert, 09.09.2026: „es reicht mir, wenn ich
+        #: den Kreis auf der Oberfläche in Orange sehe").
+        self.outline: list[QPointF] = []
+        #: Seine Farbe. Sie kommt aus derselben Palette wie der abgetragene
+        #: Anteil der Vorschau — was hier verschwinden wird, ist dort schon
+        #: orange, und zwei Farben für dieselbe Aussage wären eine zu viel.
+        self.outline_colour: QColor | None = None
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent)
         self.hide()
@@ -88,6 +144,12 @@ class _Dimensions(QWidget):
             marker = QPainterPath()
             marker.addEllipse(end, 4.0, 4.0)
             ink = ink.united(marker)
+        if len(self.outline) >= 3:
+            ring = QPainterPath()
+            ring.addPolygon(QPolygonF(self.outline))
+            ring.closeSubpath()
+            stroker.setWidth(6.0)
+            ink = ink.united(stroker.createStroke(ring))
         for start, end in self.lines:
             for polygon in self._arrowheads(start, end):
                 head = QPainterPath()
@@ -118,6 +180,15 @@ class _Dimensions(QWidget):
         colour = self.palette().text().color()
         backdrop = self.palette().window().color()
         painter.fillRect(self.rect(), backdrop)
+        if len(self.outline) >= 3 and self.outline_colour is not None:
+            ring = QPolygonF(self.outline)
+            # Dieselbe Unterlage wie bei den Maßlinien: Der Umriss liegt auf
+            # dem Modell und muss auf hellem wie dunklem Material lesbar sein.
+            painter.setPen(QPen(backdrop, 4.0))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawPolygon(ring)
+            painter.setPen(QPen(self.outline_colour, 2.0))
+            painter.drawPolygon(ring)
         for start, end in self.leaders:
             # Zuordnungslinien haben keine Maßpfeile. Die Endmarke verbindet
             # ein verschobenes Feld eindeutig mit seiner wirklichen Maßlinie.
@@ -254,7 +325,26 @@ class PlacementFlow(QObject):
         self.session.sceneChanged.connect(self._scene_changed)
         self.session.projectChanged.connect(self._document_changed)
         self.viewport.sceneApplied.connect(self._scene_applied)
+        self.viewport.previewDragged.connect(self._dragged_in_preview)
+        self.viewport.set_preview_gizmo(_grips_its_preview(self.spec_of()))
         self.refresh_available()
+        # **Wer eine platzierbare Operation wählt, will platzieren.** Der Weg
+        # dorthin war ein zweiter Klick auf „Im Modell platzieren" — ein Knopf,
+        # der genau das anbietet, was die Operation ohnehin verlangt (Befund
+        # Robert, 09.09.2026: „man soll keinen extra Button klicken müssen").
+        # Der Dialog bleibt der andere Weg: Esc bringt ihn zurück, und der
+        # Knopf steht weiter da, für den Rückweg aus dem Rückweg.
+        #
+        # **Nicht beim Ändern eines Schritts.** Dort ist die Stelle längst
+        # gewählt, und wer den Durchmesser nachbessert, will kein Fadenkreuz.
+        # Und nicht sofort, sondern eine Runde später: Der Dialog ist hier
+        # noch nicht gezeigt, und ``start`` versteckt ihn.
+        if (
+            starts_by_itself(self.spec_of())
+            and self._change_op is None
+            and self.dialog.surface_button.isEnabled()
+        ):
+            QTimer.singleShot(0, self._start_if_still_possible)
 
     @property
     def target(self) -> str:
@@ -275,6 +365,20 @@ class PlacementFlow(QObject):
         self.dialog.surface_button.setEnabled(supported and available)
         if self.active and not supported:
             self.back()
+
+    def _start_if_still_possible(self) -> None:
+        """Der Selbststart eine Ereignisrunde später — falls er dann noch gilt.
+
+        Zwischen dem Aufbau und dieser Runde kann alles passiert sein: Der
+        Dialog wurde geschlossen, die Auswertung lief neu, jemand hat schon
+        selbst geklickt. Geprüft wird deshalb erneut, statt sich auf den
+        Zustand von vorhin zu verlassen.
+        """
+        if self._disposed or self.active or not isValid(self):
+            return
+        if not self.dialog.isVisible():
+            return
+        self.start()
 
     def start(self) -> None:
         self.refresh_available()
@@ -537,6 +641,41 @@ class PlacementFlow(QObject):
         ]
         return found[0] if len(found) == 1 else (None, None)
 
+    def _dragged_in_preview(self, matrix: Any) -> None:
+        """Ein Zug am Griff der Vorschau wird zu Zahlen im offenen Dialog.
+
+        Der Griff liefert die Matrix **des Zugs** — was sich gegenüber der
+        Lage beim Anhängen geändert hat. Die neue Lage ist deshalb der Zug
+        über der alten, und aus ihr rechnet der Kern wieder Ort, Richtung und
+        Winkel (:func:`~app.core.geom.primitive_ops.placement_values_of`, die
+        Umkehrung von ``placement_transform``).
+
+        **Beide Richtungen aus einer Quelle.** Der Hinweg legt die Querachse
+        über ``frame_of`` fest; wer sie hier anders wählte, verdrehte den
+        Körper bei jedem Zug ein Stück weiter. Der Test dazu ist eine
+        Rundreise, kein Vergleich mit ausgerechneten Zahlen.
+        """
+        from app.core.geom.primitive_ops import placement_transform, placement_values_of
+
+        spec = self.spec_of()
+        if self._disposed or not _grips_its_preview(spec):
+            return
+        try:
+            entered = expressions.resolve_params(
+                self.dialog.values(), expressions.resolve(self.session.project.document.parameters)
+            )
+            before = np.asarray(placement_transform(spec.params(**entered)), dtype=float)
+        except AppError, TypeError, ValueError:
+            # Ein halb getippter Ausdruck ist kein Grund, den Zug zu verlieren
+            # — er ist einer, ihn auf die zuletzt gültige Lage zu setzen.
+            before = np.eye(4)
+        values = placement_values_of(np.asarray(matrix, dtype=float) @ before)
+        self._updating = True
+        try:
+            self.dialog.take_placement(values)
+        finally:
+            self._updating = False
+
     def _values_changed(self) -> None:
         if not self._disposed and not self._updating:
             self.refresh_available()
@@ -583,6 +722,13 @@ class PlacementFlow(QObject):
                 renderer = self.viewport.renderer
                 if renderer is not None:
                     self._remove_tools()
+                    # **Wo ein Umriss die Stelle zeigt, tritt der Körper
+                    # zurück.** Er bleibt für alles, was keinen hat — ein
+                    # Baustein, dessen Mündung nicht in der Fläche liegt —,
+                    # und für die Tiefe: die sieht man nur an ihm, und
+                    # eingestellt wird sie im Dialog, nicht hier (Robert,
+                    # 09.09.2026: „höchstens dann, wenn man die Tiefe noch
+                    # einstellt, wäre die andere Ansicht interessant").
                     if context is not None:
                         mesh = context.mesh
                         addition = context.addition
@@ -805,17 +951,35 @@ class PlacementFlow(QObject):
             and self.viewport.is_scene_applied(self._result)
         )
         tool_valid = valid and self._tool_context is not None and not self._tool_busy
-        self._accept.setEnabled(tool_valid and self._distance_valid and self._tool is not None)
+        # **Gefragt wird das vorbereitete Werkzeug, nicht der gezeichnete
+        # Körper.** Ob gesetzt werden kann, hängt daran, dass die Geometrie
+        # steht — nicht daran, wie sie gerade angezeigt wird. Seit der Umriss
+        # den Körper an einer Bohrung ersetzt, ist ``_tool`` dort ``None``,
+        # und der Knopf blieb grau, obwohl alles bereit war. ``tool_valid``
+        # trägt die eigentliche Bedingung (``_tool_context is not None``)
+        # bereits.
+        self._accept.setEnabled(tool_valid and self._distance_valid)
         self._canvas.lines = []
         self._canvas.leaders = []
+        self._canvas.outline = []
         for index, field in enumerate(self._measures):
             field.setVisible(valid and index < len(surface.edges))
         self._centre.hide()
         for field in self._centre_measures:
             field.setVisible(valid and bool(self._centre_id))
+        # **Wo ein Umriss die Stelle zeigt, tritt der Körper zurück.** Der
+        # halbtransparente Zylinder steht auch außerhalb des Materials, und
+        # beim Drehen der Ansicht war schwer zu sehen, wo das Loch hinkommt
+        # (Befund Robert, 09.09.2026). Gebaut wird er weiter — er trägt die
+        # Geometrie, an der das Setzen hängt —, gezeigt nur, wo er die
+        # einzige Auskunft ist: bei einem Werkzeug ohne Mündung in der Fläche,
+        # und für die Tiefe, die man allein an ihm sieht.
+        has_outline = self._tool_context is not None and bool(
+            placement.mouth_outline(self._tool_context)
+        )
         for item in (self._tool, self._addition):
             if item is not None:
-                item.set_visible(tool_valid)
+                item.set_visible(tool_valid and not has_outline)
         if not valid:
             self._canvas.hide()
             self.viewport._draw()
@@ -836,6 +1000,27 @@ class PlacementFlow(QObject):
             shown = self.viewport.view_point_of(at, self._object_id)
             x, y, _depth = renderer.world_to_display(shown)
             return QPointF(x / ratio, y / ratio)
+
+        # **Der Umriss der Mündung, dort wo das Werkzeug die Fläche trifft.**
+        # Er beantwortet die Frage, die der halbtransparente Körper offenließ:
+        # wo genau das Loch hinkommt. Der Körper zeigte dazu den ganzen
+        # Zylinder, auch außerhalb des Materials, und beim Drehen der Ansicht
+        # war beides schwer auseinanderzuhalten (Befund Robert, 09.09.2026).
+        #
+        # Gerechnet wird nichts: Der Umriss steht im vorbereiteten Werkzeug,
+        # und hier wird er nur in die Ebene der Fläche gelegt und projiziert.
+        outline = (
+            placement.mouth_outline(self._tool_context) if self._tool_context is not None else ()
+        )
+        if outline:
+            axis_u = np.asarray(surface.frame.x_axis, dtype=np.float64)
+            axis_v = np.asarray(surface.frame.y_axis, dtype=np.float64)
+            self._canvas.outline = [
+                screen(tuple(point + axis_u * u + axis_v * v)) for u, v in outline
+            ]
+            self._canvas.outline_colour = QColor(
+                DIFF_PALETTES[getattr(self.viewport, "_diff_palette", "blue_orange")].removed.colour
+            )
 
         pending: list[tuple[QWidget, QPointF, tuple[QPointF, QPointF]]] = []
 
