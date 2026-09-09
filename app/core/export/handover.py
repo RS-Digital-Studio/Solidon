@@ -21,10 +21,11 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import subprocess
 import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Final
@@ -78,6 +79,7 @@ from app.core.types import (
     Profile,
     SettingAdvice,
     SlotOverride,
+    SlotProfileBinding,
 )
 from app.i18n import _
 
@@ -613,6 +615,9 @@ def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[s
     """
     # Erst rechnen, dann spiegeln: ``support_line_distance`` und
     # ``skin_preshrink`` sind selbst Quellen für weitere Schlüssel.
+    # Curas native Vorgabe ist ein Hochlauf zur zweiten Schicht. Die
+    # gemeinsame Abschaltphase wird ausdrücklich als nicht übertragbar gemeldet.
+    written.setdefault("cool_fan_full_layer", "2")
     _cura_computed(written, settings)
     for source, targets in slicer_keys.CURA_MIRRORED.items():
         copied = written.get(source)
@@ -810,6 +815,7 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             "machine_depth": f"{depth:g}",
             "machine_height": f"{height:g}",
             "machine_nozzle_size": f"{profile.printer.nozzle_diameter:g}",
+            "machine_heated_bed": "true" if profile.printer.bed_temperature_max > 0.0 else "false",
             # Die Maschine misst von der Ecke, und die Teile kommen in ihren
             # Koordinaten (``wants_bed_coordinates``). ``true`` stand hier
             # bis zum 05.09.2026 und erklärte dem Slicer eine Maschine, die
@@ -881,6 +887,8 @@ class SlicerConfig:
     process: Path
     filaments: tuple[Path, ...] = ()
     machine: Path | None = None
+    written: Mapping[str, str] = field(default_factory=dict)
+    """Die tatsächlich geschriebenen Sollwerte, einschließlich aller Filamentplätze."""
 
     @property
     def filament(self) -> Path | None:
@@ -889,7 +897,10 @@ class SlicerConfig:
 
 
 def settings_for_slot(
-    settings: PrintSettings, profile: Profile, slot: MaterialSlot
+    settings: PrintSettings,
+    profile: Profile,
+    slot: MaterialSlot,
+    setup: SlicerSetup | None = None,
 ) -> PrintSettings:
     """Die Einstellungen, mit denen dieser eine Slot fährt (§20, §29).
 
@@ -900,7 +911,9 @@ def settings_for_slot(
 
     Die eindeutige Materialart der Spule liefert die Materialgruppen, wenn
     sie vom Projektmaterial abweicht. Prozesswerte bleiben erhalten.
-    Ausdrückliche Spulenwerte gewinnen anschließend gruppenweise.
+    Mit bekanntem Slicer liefert das gebundene Herstellerprofil seine Werte
+    aus der ganzen Erbkette. Ausdrückliche Spulenwerte gewinnen anschließend
+    gruppenweise; Beratung und Ausgabe benutzen dieselbe Reihenfolge.
     """
     material_id = profiles.material_id_for_type(slot.material_type or "")
     if material_id and material_id != profile.material.id:
@@ -914,6 +927,13 @@ def settings_for_slot(
             retraction=defaults.retraction,
             filament=defaults.filament,
         )
+    if setup is not None and slot.material:
+        source = profile_file(slot.material, setup, "filament")
+        if source is not None:
+            for path, value in slicer_profiles.filament_values(
+                source, _profile_roots(setup)
+            ).items():
+                settings = with_path(settings, path, value)
     override = override_for(settings, slot)
     if override is None or override.empty:
         return settings
@@ -930,6 +950,8 @@ def unreachable_overrides(
     settings: PrintSettings,
     setup: SlicerSetup,
     slots: Sequence[MaterialSlot] = (),
+    *,
+    profile: Profile | None = None,
 ) -> list[Finding]:
     """Meldet Werte je Spule, die dieser Slicer nicht entgegennimmt (§20, §29).
 
@@ -972,14 +994,29 @@ def unreachable_overrides(
     if has_filament_profiles(setup.flavour):
         return findings
     reachable = threemf.slot_identity(slots[0]) if slots else None
-    affected = [
-        position
-        for position, entry in enumerate(settings.slot_overrides)
+    affected = {
+        entry.key
+        for entry in settings.slot_overrides
         if entry is not None
         and not entry.empty
         and (not present or entry.key in present)
         and (reachable is None or entry.key != reachable)
-    ]
+    }
+    if slots:
+        first = slots[0]
+        baseline = (
+            settings_for_slot(settings, profile, first, setup) if profile is not None else None
+        )
+        for slot in slots[1:]:
+            different = (slot.material, slot.material_type) != (first.material, first.material_type)
+            if profile is not None and baseline is not None:
+                own = settings_for_slot(settings, profile, slot, setup)
+                different = any(
+                    getattr(own, name) != getattr(baseline, name)
+                    for name in ("temperature", "cooling", "retraction", "filament")
+                )
+            if different:
+                affected.add(threemf.slot_identity(slot))
     if not affected:
         return findings
     return [
@@ -1068,7 +1105,10 @@ def with_slot_override(
 
 
 def settings_for_shared_slicer(
-    settings: PrintSettings, profile: Profile, slots: Sequence[MaterialSlot]
+    settings: PrintSettings,
+    profile: Profile,
+    slots: Sequence[MaterialSlot],
+    setup: SlicerSetup | None = None,
 ) -> PrintSettings:
     """Der eine Filamentwertsatz für einen Slicer ohne Mehrfachprofile.
 
@@ -1078,7 +1118,7 @@ def settings_for_shared_slicer(
     """
     if not slots:
         return settings
-    return settings_for_slot(settings, profile, slots[0])
+    return settings_for_slot(settings, profile, slots[0], setup)
 
 
 def settings_for_handover(
@@ -1086,6 +1126,7 @@ def settings_for_handover(
     profile: Profile,
     flavour: SlicerFlavour,
     slots: Sequence[MaterialSlot] = (),
+    setup: SlicerSetup | None = None,
 ) -> PrintSettings:
     """Der Satz, den dieser Slicer auf seinem Übergabeweg wirklich erhält.
 
@@ -1097,7 +1138,45 @@ def settings_for_handover(
     """
     if has_filament_profiles(flavour):
         return settings
-    return settings_for_shared_slicer(settings, profile, slots)
+    return settings_for_shared_slicer(settings, profile, slots, setup)
+
+
+def bind_slot_profiles(settings: PrintSettings, slots: Sequence[MaterialSlot]) -> PrintSettings:
+    """Überführt alte Profilplätze einmalig in beständige Filamentidentitäten.
+
+    Die übergebene Liste gehört zur ursprünglichen vollständigen Szene.
+    Nach dieser Übernahme dürfen entfernte Körper und neue Werkzeugnummern
+    kein Herstellerprofil an ein anderes Filament weiterreichen.
+    """
+    if settings.slot_profile_bindings is not None:
+        return settings
+    bindings = tuple(
+        SlotProfileBinding(
+            profile_name=settings.slot_profiles[slot.index],
+            name=slot.name,
+            colour=slot.colour,
+            material=slot.material,
+            material_type=slot.material_type,
+        )
+        for slot in slots
+        if 0 <= slot.index < len(settings.slot_profiles) and settings.slot_profiles[slot.index]
+    )
+    return replace(settings, slot_profile_bindings=bindings)
+
+
+def configured_slots(
+    slots: Sequence[MaterialSlot], settings: PrintSettings
+) -> tuple[MaterialSlot, ...]:
+    """Löst Herstellerprofile nach Identität auf; alte Daten behalten ihren Leseweg."""
+    if settings.slot_profile_bindings is None:
+        return with_slot_profiles(slots, settings.slot_profiles)
+    chosen = {binding.key: binding.profile_name for binding in settings.slot_profile_bindings}
+    return tuple(
+        replace(slot, material=chosen[threemf.slot_identity(slot)])
+        if chosen.get(threemf.slot_identity(slot))
+        else slot
+        for slot in slots
+    )
 
 
 def with_slot_profiles(
@@ -1219,7 +1298,9 @@ def write_config(
     def flat_values() -> dict[str, str]:
         """Alles, was ein Slicer als einen Satz Schlüssel bekommt."""
         return values_for(
-            settings_for_handover(settings, profile, setup.flavour, slots), profile, setup.flavour
+            settings_for_handover(settings, profile, setup.flavour, slots, setup),
+            profile,
+            setup.flavour,
         )
 
     if setup.flavour == "prusa":
@@ -1234,7 +1315,7 @@ def write_config(
         lines = [f"# {_one_line(settings.title)} — von Solidon geschrieben, nicht von Hand"]
         lines += [f"{key} = {value}" for key, value in sorted(flat.items())]
         target.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        return SlicerConfig(process=target)
+        return SlicerConfig(process=target, written=flat)
 
     if takes_a_machine_profile(setup.flavour):
         split = by_section(settings, setup.flavour)
@@ -1242,8 +1323,9 @@ def write_config(
         # ``compatible_printers``, und beide Namen kommen aus
         # ``_machine_name``.
         machine_target = directory / "solidon_machine.json"
+        machine_document = _orca_machine(setup)
         machine_target.write_text(
-            json.dumps(_orca_machine(setup), indent=2, ensure_ascii=False),
+            json.dumps(machine_document, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         target = directory / "solidon_process.json"
@@ -1266,6 +1348,7 @@ def write_config(
         # deshalb auf den anderen Weg — die 3MF und ihre Beilage
         # (:func:`project_settings`) tragen die Nummern des ganzen Auftrags.
         written: list[Path] = []
+        filament_documents: list[dict[str, object]] = []
         for index, slot in enumerate(slots or (MaterialSlot(index=0, name=""),)):
             own = replace(setup, base_filament=slot.material) if slot.material else setup
             # Je Slot seine eigenen Werte: Temperaturen, Kühlung,
@@ -1273,19 +1356,39 @@ def write_config(
             # denn sie hängen an der Spule. Was der Slot nicht setzt,
             # kommt aus dem Projekt — deshalb wird die Aufteilung hier
             # noch einmal gerechnet und nicht die von oben genommen.
-            mine = settings_for_slot(settings, profile, slot)
+            mine = settings_for_slot(settings, profile, slot, setup)
             part = split if mine is settings else by_section(mine, setup.flavour)
             path = directory / f"solidon_filament_{index}.json"
+            document = _orca_filament(part.get("filament", {}), mine, profile, own, slot)
             path.write_text(
                 json.dumps(
-                    _orca_filament(part.get("filament", {}), mine, profile, own, slot),
+                    document,
                     indent=2,
                     ensure_ascii=False,
                 ),
                 encoding="utf-8",
             )
             written.append(path)
-        return SlicerConfig(process=target, filaments=tuple(written), machine=machine_target)
+            filament_documents.append(document)
+        expected = dict(split.get("process", {}))
+        firmware = machine_document.get("gcode_flavor")
+        if isinstance(firmware, str):
+            expected["gcode_flavor"] = firmware
+        for entry in slicer_keys.TABLES[setup.flavour]:
+            if entry.section != "filament" or not all(
+                entry.key in document for document in filament_documents
+            ):
+                continue
+            slot_values: list[str] = []
+            for document in filament_documents:
+                value = document[entry.key]
+                slot_values.extend(
+                    str(item) for item in (value if isinstance(value, list) else [value])
+                )
+            expected[entry.key] = ",".join(slot_values)
+        return SlicerConfig(
+            process=target, filaments=tuple(written), machine=machine_target, written=expected
+        )
 
     target = directory / "solidon_cura.txt"
     # Hier wiegt der Umbruch schwerer als bei Prusa: ``_command`` liest diese
@@ -1298,7 +1401,7 @@ def write_config(
         "\n".join(f"{key}={value}" for key, value in sorted(flat.items())) + "\n",
         encoding="utf-8",
     )
-    return SlicerConfig(process=target)
+    return SlicerConfig(process=target, written=flat)
 
 
 def project_settings(
@@ -1376,7 +1479,7 @@ def project_settings(
     ordered_slots: tuple[MaterialSlot | None, ...] = tuple(placed) + (None,) * (count - len(placed))
     filament_documents: list[dict[str, object]] = []
     for slot in ordered_slots:
-        mine = settings if slot is None else settings_for_slot(settings, profile, slot)
+        mine = settings if slot is None else settings_for_slot(settings, profile, slot, setup)
         own = (
             replace(setup, base_filament=slot.material)
             if slot is not None and slot.material
@@ -1652,6 +1755,7 @@ def _orca_filament(
             if slot is not None and slot.material_type
             else slicer_keys.filament_type(profile.material.id)
         ],
+        "filament_is_support": ["0"],
     }
     # Über ``profile_file``, nicht über ``Path(...).is_file()``: hierher kommt
     # bevorzugt ein **Name** aus dem Bestand des Slicers, denn ein Pfad
@@ -1684,7 +1788,8 @@ def _orca_filament(
         vom_material = {
             orca
             for solidon, orca, _kind in slicer_profiles.FILAMENT_READBACK
-            if override is None or getattr(override, solidon.partition(".")[0]) is None
+            if orca in inherited
+            and (override is None or getattr(override, solidon.partition(".")[0]) is None)
         }
         eigene = {key: value for key, value in eigene.items() if key not in vom_material}
     document.update(eigene)
@@ -1752,6 +1857,21 @@ def _as_slots(value: object) -> object:
     """Filamentwerte stehen als Liste. Was aus einem Profil einzeln kommt,
     wird dazu gemacht — sonst mischt die Datei zwei Schreibweisen."""
     return value if isinstance(value, list) else [value]
+
+
+def setting_limitations(flavour: SlicerFlavour) -> list[Finding]:
+    """Benannte Übergabeverluste vor dem Öffnen und nach dem Slicen ausweisen."""
+    return [
+        Finding(
+            code="slicer.setting_not_transferred",
+            severity="warning",
+            message=message,
+            values={"path": path},
+            suggestions=(CHECK_SLICER_PROFILE,),
+        )
+        for path in sorted(slicer_keys.NOT_TAKEN_BY[flavour])
+        if (message := slicer_keys.limitation(flavour, path)) is not None
+    ]
 
 
 def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Finding]:
@@ -2159,7 +2279,12 @@ def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
 
 
 def off_the_bed(
-    payload: str | gcode.GcodeAnalysis, profile: Profile, flavour: SlicerFlavour
+    payload: str | gcode.GcodeAnalysis,
+    profile: Profile,
+    flavour: SlicerFlavour,
+    *,
+    replay: Callable[[], Iterable[str]] | None = None,
+    cancelled: CancelToken | None = None,
 ) -> Finding | None:
     """Druckt die geschriebene Datei über den Bauraum hinaus? (§29, Regel 14)
 
@@ -2183,9 +2308,10 @@ def off_the_bed(
 
     **Gegen das Bett der Datei, nicht gegen das eigene.** Die Orca-Familie und
     PrusaSlicer schreiben ihre Bettform in die Datei; dann gilt die
-    (:func:`gcode.stated_bed`). Sonst bleibt es bei
-    :func:`bed_box` — und das trifft genau CuraEngine, dem Solidon die Maße
-    selbst gegeben hat. Der erste Anlauf maß immer gegen den eigenen Bauraum,
+    (:func:`gcode.stated_bed`). Sonst gilt die wirksame Druckfläche des
+    Druckerprofils einschließlich seiner Sperrflächen. Das trifft insbesondere
+    CuraEngine, dem Solidon die Maße selbst gegeben hat. Der erste Anlauf maß
+    immer gegen den eigenen Bauraum,
     und der ElegooSlicer bekam damit bei einem Würfel in der Bettmitte einen
     Befund: sein Maschinenprofil kommt aus seinem eigenen Bestand, und
     „außerhalb" hieße dort entweder „daneben gedruckt" oder „zwei Profile
@@ -2194,12 +2320,41 @@ def off_the_bed(
     Unter einer Bahnbreite wird nichts gemeldet: eine Datei, die auf den
     Millimeter passt, ist in Ordnung, und die Bahn selbst liegt mit ihrer
     halben Breite ohnehin neben der Mitte, die hier gemessen wird.
+
+    Reicht die Hüllbox als Nachweis nicht aus, prüft ein zweiter Durchlauf
+    jede Materialbahn gegen die Kontur. Der erste Durchlauf hat dann auch
+    Bett und Firmware aus einem möglichen Schlussblock bereits aufgelöst.
+    Der Speicher wächst nicht mit der Zahl der Bahnen. Ohne ``replay`` kann
+    eine bereits gelesene Analyse allein keinen Durchtritt durch eine innere
+    Sperrfläche belegen.
     """
+    from io import StringIO
+
+    from shapely.affinity import translate
+    from shapely.geometry import Polygon, box
+
+    from app.core import build_area
+
     analysis = payload if isinstance(payload, gcode.GcodeAnalysis) else gcode.analyze(payload)
     extent = analysis.extent
     if extent is None:
         return None
-    bed = analysis.bed or bed_box(profile, flavour)
+    if analysis.bed_outline:
+        area = Polygon(analysis.bed_outline)
+    else:
+        area = build_area.printable_area(profile.printer)
+        if wants_bed_coordinates(flavour):
+            width, depth, _height = profile.printer.build_volume
+            area = translate(area, xoff=width / 2.0, yoff=depth / 2.0)
+    for contour in analysis.excluded_areas:
+        area = area.difference(Polygon(contour))
+    height = (
+        analysis.bed.maximum[2]
+        if analysis.bed is not None and math.isfinite(analysis.bed.maximum[2])
+        else build_area.printable_height(profile.printer)
+    )
+    left, front, right, back = area.bounds
+    bed = BoundingBox((left, front, 0.0), (right, back, height))
     worst, axis = 0.0, 0
     for index in range(3):
         over = max(
@@ -2209,7 +2364,40 @@ def off_the_bed(
         if over > worst:
             worst, axis = over, index
     if worst <= profile.printer.extrusion_width:
-        return None
+        allowed = area.buffer(profile.printer.extrusion_width, join_style="mitre")
+        if allowed.covers(box(*extent.minimum[:2], *extent.maximum[:2])):
+            return None
+        inside = analysis.paths_inside
+        if isinstance(payload, str):
+            text_payload = payload
+
+            def replay_text() -> Iterable[str]:
+                """Ein vorhandener Text bleibt auch beim zweiten Lesen derselbe."""
+                return StringIO(text_payload)
+
+            replay = replay_text
+        if replay is not None:
+            checked = gcode.analyze_lines(
+                replay(),
+                cancelled=cancelled,
+                firmware=analysis.firmware,
+                path_check=gcode.area_check(allowed),
+            )
+            inside = checked.paths_inside
+        if inside is not False:
+            # Eine Hüllbox über einer Sperrzone beweist keine Materialbahn
+            # darin. Ohne erneuten Zugriff auf die Bahnen fehlt der Nachweis.
+            return None
+        return Finding(
+            code="gcode.off_the_bed",
+            severity="error",
+            message=_(
+                "Die Druckdatei führt Materialbahnen außerhalb der Druckfläche oder durch eine "
+                "Sperrfläche. Prüfe das Druckerprofil und die Anordnung im Slicer."
+            ),
+            values={"axis": "XY", "reason": "printable_area"},
+            source="gcode",
+        )
     return Finding(
         code="gcode.off_the_bed",
         severity="error",
@@ -2226,13 +2414,8 @@ def off_the_bed(
     )
 
 
-#: Programme, die ``--arrange 0`` mit der Standardabsage quittieren
-#: (ElegooSlicer 1.5.3.4: Exit 127, „found error", sonst nichts — gemessen:
-#: ``--arrange 1`` läuft, die abgelehnte **Wertbelegung** ist die 0, also
-#: gerade das „nicht anordnen"). Je Sitzung gemerkt, nachdem der Rückfall es
-#: einmal gemessen hat — keine Liste von Hand, denn welche Fassung was
-#: annimmt, weiß nur das Programm selbst, und ``--help`` schweigt bei dieser
-#: Familie vollständig.
+#: Nur ausdrücklich unbekannte Schalter gelten programmweit. Ein Fehler der
+#: konkreten Platte darf keine späteren gültigen Anordnungen verwerfen.
 _REFUSES_THE_ARRANGE_FLAG: Final[set[Path]] = set()
 
 
@@ -2276,6 +2459,52 @@ def too_short(
             "height_mm": model_height,
         },
         source="gcode",
+    )
+
+
+def _readback_materials(
+    config: SlicerConfig,
+    settings: PrintSettings,
+    profile: Profile,
+    setup: SlicerSetup,
+    slots: Sequence[MaterialSlot],
+) -> tuple[tuple[float | None, ...], tuple[float | None, ...]]:
+    """Belegte Materialkennwerte dieses Laufs, wenn der G-Code selbst keine nennt.
+
+    Die geschriebenen Werte gewinnen auch gegenüber einem Herstellerprofil.
+    Cura überträgt keine Dichte; dort stammt sie aus genau dem einen wirksamen
+    Materialwertsatz. Eine Mehrwerkzeugliste bleibt vollständig erhalten.
+    """
+    effective = (
+        tuple(
+            settings_for_slot(settings, profile, slot, setup)
+            for slot in slots or (MaterialSlot(index=0, name=""),)
+        )
+        if has_filament_profiles(setup.flavour)
+        else (settings_for_handover(settings, profile, setup.flavour, slots, setup),)
+    )
+
+    def values(key: str, fallback: tuple[float, ...]) -> tuple[float | None, ...]:
+        """Ein fehlender Profilkommentar darf einen belegten Laufwert ergänzen."""
+        written = config.written.get(key)
+        if written is None:
+            return fallback
+        parsed: list[float | None] = []
+        for component in re.split(r"[,;]", written.strip().strip("[]")):
+            try:
+                number = float(component.strip().strip("\"'"))
+            except ValueError:
+                parsed.append(None)
+            else:
+                parsed.append(number if math.isfinite(number) and number > 0.0 else None)
+        return tuple(parsed)
+
+    return (
+        values("filament_density", tuple(item.filament.density for item in effective)),
+        values(
+            "material_diameter" if setup.flavour == "cura" else "filament_diameter",
+            tuple(item.filament.diameter for item in effective),
+        ),
     )
 
 
@@ -2343,11 +2572,11 @@ def slice_model(
         )
 
     started = time.perf_counter()
-    written_settings = settings_for_handover(settings, profile, setup.flavour, slots)
     # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
     # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
         config = write_config(settings, profile, setup, workspace, slots)
+        densities, diameters = _readback_materials(config, settings, profile, setup, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
         # wird — und ``_find_gcode`` sucht an der leeren Stelle.
@@ -2390,6 +2619,7 @@ def slice_model(
         # Ein Prädikat für eine einzige Stelle ist Zierat; es entsteht, wenn
         # die zweite dazukommt oder ein Fork hier abweicht.
         if produced is None and wanted_arrangement and setup.flavour == "orca":
+            refused_flag = _refuses_arrange_flag(_tail(completed.stdout, completed.stderr))
             # Die Rückfallstufe: einmal ohne die Anordnungsvorgabe — dieselbe
             # Bauart wie bei den Booleschen Ops, und wie dort wird die
             # benutzte Stufe ausgewiesen statt verschwiegen. Ein Slicer, der
@@ -2406,7 +2636,8 @@ def slice_model(
                 cancelled.raise_if_cancelled()
             produced = _find_gcode(target, expected)
             if produced is not None:
-                _REFUSES_THE_ARRANGE_FLAG.add(setup.executable)
+                if refused_flag:
+                    _REFUSES_THE_ARRANGE_FLAG.add(setup.executable)
                 arranged_by_slicer = True
         if produced is None:
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
@@ -2445,7 +2676,14 @@ def slice_model(
             )
 
         with produced.open("r", encoding="utf-8", errors="replace") as stream:
-            analysis = gcode.analyze_lines(stream, cancelled=cancelled)
+            analysis = gcode.analyze_lines(
+                stream,
+                cancelled=cancelled,
+                densities=densities,
+                diameters=diameters,
+                firmware=config.written.get("gcode_flavor")
+                or config.written.get("machine_gcode_flavor"),
+            )
         if not analysis.extrudes:
             # Eine große Datei ohne eine einzige Förderbewegung. Der Slicer ist
             # durchgelaufen und hat den Rückgabewert 0 gemeldet, aber das
@@ -2464,9 +2702,18 @@ def slice_model(
                 suggestions=(CHECK_SLICER_PROFILE, SHOW_SLICER_OUTPUT, CHOOSE_SLICER, EXPORT_ONLY),
             )
         metrics = analysis.metrics
+        produced_path = produced
+
         # Und die zweite Gegenprobe, an der Geometrie statt an den Werten:
         # steht in dieser Datei ein Druck, der auf das Bett passt?
-        beyond = off_the_bed(analysis, profile, setup.flavour)
+        def replay_gcode() -> Iterable[str]:
+            """Öffnet dieselbe Datei bei Bedarf für die genaue Konturprüfung erneut."""
+            with produced_path.open("r", encoding="utf-8", errors="replace") as stream:
+                yield from stream
+
+        beyond = off_the_bed(
+            analysis, profile, setup.flavour, replay=replay_gcode, cancelled=cancelled
+        )
         # Die dritte: Ist überhaupt das ganze Modell darin? ``None`` heißt
         # „der Aufrufer kennt die Höhe nicht" — dann entfällt der Vergleich,
         # er wird nie geraten.
@@ -2474,7 +2721,7 @@ def slice_model(
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Version gelten mag oder nicht.
-        ignored = verify_settings(analysis.settings, as_mapping(written_settings, setup.flavour))
+        ignored = verify_settings(analysis.settings, config.written)
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
@@ -2483,9 +2730,10 @@ def slice_model(
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     findings = [
+        *setting_limitations(setup.flavour),
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
-        *unreachable_overrides(settings, setup, slots),
+        *unreachable_overrides(settings, setup, slots, profile=profile),
         # **Auch hier und nicht nur beim Export.** Der Befund entstand für
         # ``write_assembly``; der Kunde, der auf *Slicen* klickt, geht aber gar
         # nicht dort vorbei. Sein Lauf gelingt dann mit den Vorgaben des
@@ -2683,7 +2931,7 @@ def verify_settings(found: Mapping[str, str], written: Mapping[str, str]) -> lis
     ]
 
 
-def _same(actual: str, wanted: str) -> str | bool:
+def _same(actual: str, wanted: str) -> bool:
     """Ob zwei Werte dasselbe meinen.
 
     Verglichen wird nachsichtig: ``0.2`` und ``0.20``, ``15%`` und ``15``,
@@ -2691,16 +2939,30 @@ def _same(actual: str, wanted: str) -> str | bool:
     Gegenprobe Unterschiede, die keine sind, und würde nach dem dritten Mal
     weggesehen.
     """
-    left, right = actual.strip().strip("%"), wanted.strip().strip("%")
-    if left == right:
+    if actual.strip() == wanted.strip():
         return True
-    left = left.strip("[]").split(",")[0].strip().strip("\"'")
-    if left == right:
-        return True
-    try:
-        return abs(float(left) - float(right)) < 1e-6
-    except ValueError:
+
+    # Kommentare führen Filamentplätze mit Komma oder Semikolon, die Profile
+    # als JSON-Liste. Kein Platz darf beim Gegenprüfen verschwinden.
+    def components(value: str) -> list[str]:
+        return [
+            part.strip().strip("\"'").rstrip("%")
+            for part in re.split(r"[,;]", value.strip().strip("[]"))
+        ]
+
+    left, right = components(actual), components(wanted)
+    if len(left) != len(right):
         return False
+    for found, expected in zip(left, right, strict=True):
+        if found == expected:
+            continue
+        try:
+            if abs(float(found) - float(expected)) < 1e-6:
+                continue
+        except ValueError:
+            pass
+        return False
+    return True
 
 
 #: Was ein Slicer sagt, wenn von der Platte nichts in seinem Bauraum liegt.
@@ -2725,6 +2987,24 @@ OUTSIDE_THE_VOLUME: Final[tuple[str, ...]] = ("outside of the print volume",)
 #: derselben leeren Schichtmenge —, deshalb zählt der Nutzersatz die drei
 #: Prüfungen auf, statt eine davon zu behaupten (Regel 21).
 NO_LAYERS: Final[tuple[str, ...]] = ("no layers were detected",)
+
+
+def _refuses_arrange_flag(output: str) -> bool:
+    """Erkennt eine ausdrückliche Ablehnung der CLI-Option, keinen Druckfehler."""
+    return any(
+        "arrange" in line
+        and any(
+            marker in line
+            for marker in (
+                "unknown option",
+                "unrecognized option",
+                "unrecognised option",
+                "unsupported option",
+                "invalid option",
+            )
+        )
+        for line in output.casefold().splitlines()
+    )
 
 
 def _says_outside_the_volume(output: str) -> bool:

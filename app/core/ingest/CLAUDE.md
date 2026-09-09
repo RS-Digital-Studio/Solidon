@@ -28,6 +28,12 @@ gegen eine geänderte Quelle neu rechnen.
 - **Einheiten**: STL trägt keine. Erkannt wird aus der Größe, und bei
   Mehrdeutigkeit **wird gefragt** (`ctx.ask`, Regel 21) — nicht geraten.
 - **3MF ist eine Baugruppe**, kein Körper. Sie kommt als mehrere Objekte an.
+- **Native 3MF-Farben**: Werkzeugpaletten aus Orca/Bambu-Projektmetadaten
+  oder Prusa-Konfiguration, Objektwerkzeuge, objektspezifische Part-Werkzeuge
+  und ganze bemalte Dreiecke werden als Materialslots übernommen. Prusa-Volumen
+  behalten ihre Dreiecksbereiche. Teilflächenbemalung und widersprüchliche
+  Metadaten brechen mit einem Vorschlag zum Aufteilen nach Filamenten ab;
+  sie werden nicht still als einfarbig geladen.
 - **GLTF darf Begleitdateien haben.** Beim lokalen Import werden Puffer und
   Bilder aus demselben Ordner eingebettet; Verweise aus dem Ordner heraus
   bleiben gesperrt.

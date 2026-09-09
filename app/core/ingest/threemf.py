@@ -23,6 +23,7 @@ das tut.
 from __future__ import annotations
 
 import dataclasses
+import json
 import zipfile
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -32,7 +33,7 @@ from xml.etree import ElementTree as ET
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.errors import CANCEL, Action, ValidationError
+from app.core.errors import CANCEL, SPLIT_BY_FILAMENT, Action, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot, ProgressFn
@@ -41,6 +42,10 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 CORE_NAMESPACE = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+PRUSA_NAMESPACE = "http://schemas.slic3r.org/3mf/2017/06"
+
+#: Belegter erweiterter Ganzflächenbereich in Orcas nativer Filamenttabelle.
+NATIVE_TOOL_LIMIT: Final = 32
 PRODUCTION_NAMESPACE = "http://schemas.microsoft.com/3dmanufacturing/production/2015/06"
 
 MODEL_PATH = "3D/3dmodel.model"
@@ -59,6 +64,151 @@ NAME_SUFFIXES = (".stl", ".3mf", ".obj", ".step", ".stp")
 #: Farbe, die ein Slot ohne eigene bekommt. Grau, damit niemand sie für eine
 #: Wahl hält.
 DEFAULT_COLOUR = (0.72, 0.72, 0.72)
+
+
+@dataclass(slots=True)
+class _NativeMaterials:
+    """Werkzeuge der Slicer; Part-IDs gelten jeweils nur in ihrem Objekt."""
+
+    palette: tuple[MaterialSlot, ...] = ()
+    objects: dict[str, int] = field(default_factory=dict)
+    parts: dict[tuple[str, str], int] = field(default_factory=dict)
+    volumes: dict[str, list[tuple[int, int, int]]] = field(default_factory=dict)
+
+
+def _unsupported_materials(reason: str) -> ValidationError:
+    """Keine Teilflächen oder mehrdeutigen Werkzeugangaben still verlieren."""
+    return ValidationError(
+        field="file",
+        detail=_(
+            "Die Werkzeug- oder Flächenfarben dieser 3MF lassen sich nicht eindeutig übernehmen."
+        ),
+        constraint="unsupported_material_semantics",
+        values={"reason": reason},
+        suggestions=(
+            SPLIT_BY_FILAMENT,
+            CANCEL,
+        ),
+    )
+
+
+def _native_materials(container: zipfile.ZipFile, model: ET.Element) -> _NativeMaterials:
+    """Native Paletten und Werkzeugnummern als Daten, ohne Slicer-Ausdrücke."""
+    result = _NativeMaterials()
+    names = set(container.namelist())
+    values: dict[str, object] = {}
+    if "Metadata/project_settings.config" in names:
+        try:
+            parsed = json.loads(container.read("Metadata/project_settings.config"))
+            if isinstance(parsed, dict):
+                values = parsed
+        except (ValueError, UnicodeError) as problem:
+            raise _unsupported_materials(str(problem)) from problem
+    elif "Metadata/Slic3r_PE.config" in names:
+        for line in container.read("Metadata/Slic3r_PE.config").decode("utf-8-sig").splitlines():
+            key, separator, value = line.lstrip("; ").partition(" = ")
+            if separator and key in {"filament_colour", "filament_type", "filament_settings_id"}:
+                values[key] = value.split(";")
+    standard = next(iter(_materials_in(model).values()), [])
+    colours = values.get("filament_colour", [])
+    kinds = values.get("filament_type", [])
+    titles = values.get("filament_settings_id", [])
+    if not isinstance(colours, list) or not all(isinstance(c, str) for c in colours):
+        raise _unsupported_materials("invalid filament_colour")
+    result.palette = tuple(
+        MaterialSlot(
+            index=index,
+            name=standard[index][0]
+            if index < len(standard)
+            else (
+                str(titles[index]).strip('"')
+                if isinstance(titles, list) and index < len(titles)
+                else str(_("Slot {number}", number=index))
+            ),
+            colour=_rgb(colours[index]) if index < len(colours) else standard[index][1],
+            material_type=str(kinds[index]).strip('"')
+            if isinstance(kinds, list) and index < len(kinds)
+            else None,
+        )
+        for index in range(max(len(colours), len(standard)))
+    )
+    for path in (SETTINGS_PATH, "Metadata/Slic3r_PE_model.config"):
+        if path not in names:
+            continue
+        try:
+            config = ET.fromstring(container.read(path))
+        except ET.ParseError as problem:
+            raise _unsupported_materials(str(problem)) from problem
+        for obj in config.findall("object"):
+            identifier = obj.get("id", "")
+            tool = _native_tool(obj)
+            if tool is not None:
+                if identifier in result.objects and result.objects[identifier] != tool:
+                    raise _unsupported_materials("conflicting object extruders")
+                result.objects[identifier] = tool
+            for part in obj.findall("part"):
+                if part.get("subtype", "normal_part") != "normal_part":
+                    raise _unsupported_materials("non-model part")
+                part_tool = _native_tool(part)
+                if part_tool is not None:
+                    result.parts[identifier, part.get("id", "")] = part_tool
+            for volume in obj.findall("volume"):
+                kind = volume.find("metadata[@key='volume_type']")
+                if kind is not None and kind.get("value") != "ModelPart":
+                    raise _unsupported_materials("non-model volume")
+                volume_tool = _native_tool(volume)
+                if volume_tool is not None:
+                    try:
+                        first = int(volume.get("firstid", ""))
+                        last = int(volume.get("lastid", ""))
+                    except ValueError as problem:
+                        raise _unsupported_materials("invalid volume range") from problem
+                    result.volumes.setdefault(identifier, []).append((first, last, volume_tool))
+    return result
+
+
+def _native_tool(node: ET.Element) -> int | None:
+    """Null erbt; positive native Nummern zählen ab eins."""
+    entries = node.findall("metadata[@key='extruder']")
+    found: set[int] = set()
+    for entry in entries:
+        try:
+            value = int(entry.get("value", ""))
+        except ValueError as problem:
+            raise _unsupported_materials("invalid extruder") from problem
+        if value < 0:
+            raise _unsupported_materials("negative extruder")
+        if value:
+            found.add(value - 1)
+    if len(found) > 1:
+        raise _unsupported_materials("conflicting extruders")
+    return next(iter(found), None)
+
+
+def _paint_tool(value: str) -> int | None:
+    """Ganzdreieck: C erweitert ab Zustand 3, FC ab Zustand 18.
+
+    Die rechte Hexziffer enthält die Teilungsbits. Die erweiterte Farbnummer
+    braucht höchstens drei Ziffern; echte Teilflächen werden hier nicht geraten.
+    """
+    if len(value) not in (1, 2, 3):
+        raise _unsupported_materials("split or unsupported face paint")
+    try:
+        digits = [int(char, 16) for char in value]
+    except ValueError as problem:
+        raise _unsupported_materials("invalid face paint") from problem
+    if len(digits) == 1 and digits[0] in (0, 4, 8):
+        state = digits[0] >> 2
+    elif len(digits) == 2 and digits[-1] == 12 and digits[0] < 15:
+        state = digits[0] + 3
+    elif len(digits) == 3 and digits[1:] == [15, 12]:
+        state = digits[0] + 18
+    else:
+        raise _unsupported_materials("split or unsupported face paint")
+    if state > NATIVE_TOOL_LIMIT:
+        raise _unsupported_materials("unsupported native filament number")
+    return state - 1 if state else None
+
 
 #: Wie tief eine Komponente andere Komponenten referenzieren darf. Das Format
 #: erlaubt einen Baum, und eine Datei, die so tief verschachtelt, ist kaputt
@@ -190,6 +340,11 @@ def read(payload: bytes, faces: int) -> Groups | None:
     Gruppe, nicht unsere Nummerierung — ein Körper, dessen einzige Farbe Slot 3
     war, kommt also als Slot 0 zurück, mit Namen und Farbe unversehrt.
     """
+    leaves = _leaves(payload)
+    if len(leaves) == 1:
+        native = _native_groups_of(leaves[0])
+        if native is not None:
+            return native if len(native.slots) == faces else None
     try:
         with zipfile.ZipFile(BytesIO(payload)) as container:
             model = ET.fromstring(container.read(MODEL_PATH))
@@ -260,7 +415,9 @@ def read_objects(payload: bytes) -> list[Part]:
         moved = body.raw.copy()
         moved.apply_transform(leaf.transform)
 
-        groups = _groups_of(leaf.node, leaf.palette, leaf.pid, leaf.pindex)
+        groups = _native_groups_of(leaf)
+        if groups is None:
+            groups = _groups_of(leaf.node, leaf.palette, leaf.pid, leaf.pindex)
         mesh = (
             MeshData(raw=moved, slots=groups.slots) if groups is not None else body.replacing(moved)
         )
@@ -574,6 +731,61 @@ class _Leaf:
     pindex: int = 0
     """Und die Stelle darin. Bei einem einfarbigen Körper steht die Farbe
     genau hier und an keinem einzigen Dreieck."""
+    native: _NativeMaterials | None = None
+    tool: int | None = None
+    volumes: tuple[tuple[int, int, int], ...] = ()
+
+
+def _native_groups_of(leaf: _Leaf) -> Groups | None:
+    """Werkzeug je ganzem Dreieck, lokale Slots mit der nativen Palette."""
+    if leaf.native is None:
+        return None
+    triangles = leaf.node.findall(f".//{{{CORE_NAMESPACE}}}triangle")
+    painted = any(
+        face.get("paint_color") or face.get(f"{{{PRUSA_NAMESPACE}}}mmu_segmentation")
+        for face in triangles
+    )
+    if not painted and leaf.tool is None and not leaf.volumes:
+        return None
+    tools = [leaf.tool] * len(triangles)
+    covered: set[int] = set()
+    for first, last, tool in leaf.volumes:
+        if first < 0 or last < first or last >= len(triangles):
+            raise _unsupported_materials("volume range outside mesh")
+        for index in range(first, last + 1):
+            if index in covered:
+                raise _unsupported_materials("overlapping volumes")
+            covered.add(index)
+            tools[index] = tool
+    for index, face in enumerate(triangles):
+        codes = {
+            code
+            for code in (
+                face.get("paint_color"),
+                face.get(f"{{{PRUSA_NAMESPACE}}}mmu_segmentation"),
+            )
+            if code
+        }
+        assigned = {_paint_tool(code) for code in codes}
+        if len(assigned) > 1:
+            raise _unsupported_materials("conflicting native face colours")
+        painted_tool = next(iter(assigned), None)
+        if painted_tool is not None:
+            tools[index] = painted_tool
+        if tools[index] is None:
+            # Native Slicer geben einem nicht zugewiesenen Objekt Werkzeug 1.
+            tools[index] = 0
+    palette = leaf.native.palette
+    if any(tool is None or tool < 0 or tool >= len(palette) for tool in tools):
+        raise _unsupported_materials("extruder outside filament palette")
+    used = sorted({int(tool) for tool in tools if tool is not None})
+    order = {tool: index for index, tool in enumerate(used)}
+    return Groups(
+        slots=tuple(order[int(tool)] for tool in tools if tool is not None),
+        materials=tuple(
+            dataclasses.replace(palette[tool], index=index) for index, tool in enumerate(used)
+        ),
+    )
 
 
 def _leaves(payload: bytes) -> list[_Leaf]:
@@ -590,6 +802,7 @@ def _leaves(payload: bytes) -> list[_Leaf]:
                 if entry.startswith("3D/Objects/") and entry.endswith(".model"):
                     models[entry] = ET.fromstring(container.read(entry))
             titles = _titles(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else {}
+            native = _native_materials(container, models[MODEL_PATH])
     except (KeyError, zipfile.BadZipFile, ET.ParseError) as problem:
         _log.info("3MF could not be read as an assembly: %s", problem)
         return []
@@ -619,6 +832,7 @@ def _leaves(payload: bytes) -> list[_Leaf]:
                 item.get("name") or titles.get(identifier, ""),
                 0,
                 budget,
+                native=native,
             )
         )
     return found
@@ -691,6 +905,9 @@ def _parts_of(
     depth: int,
     budget: _Budget,
     seen: frozenset[tuple[str, str]] = frozenset(),
+    native: _NativeMaterials | None = None,
+    owner: str = "",
+    tool: int | None = None,
 ) -> list[_Leaf]:
     """Die Meshes, die ein Objekt beiträgt, mit den Transformationen darüber
     angewandt.
@@ -720,6 +937,11 @@ def _parts_of(
         or inherited
         or str(_("Körper {number}", number=identifier))
     )
+    if native is not None:
+        if not owner:
+            owner = identifier
+            tool = native.objects.get(identifier, tool)
+        tool = native.parts.get((owner, identifier), tool)
     mesh_node = entry.find(f"{{{CORE_NAMESPACE}}}mesh")
     if mesh_node is not None:
         budget.take(mesh_node)
@@ -731,6 +953,9 @@ def _parts_of(
                 palette=materials.get(path, {}),
                 pid=entry.get("pid") or "",
                 pindex=_position(entry.get("pindex"), 0),
+                native=native,
+                tool=tool,
+                volumes=tuple(native.volumes.get(identifier, ())) if native else (),
             )
         ]
 
@@ -756,6 +981,9 @@ def _parts_of(
                 depth + 1,
                 budget,
                 seen | {(path, identifier)},
+                native,
+                owner,
+                tool,
             )
         )
     return found

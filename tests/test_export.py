@@ -1161,14 +1161,10 @@ def test_the_cura_handover_carries_every_part_of_the_plate(
     assert joined.bounds.size[0] > first.mesh.bounds.size[0], "beide Teile, nicht eines"
 
 
-def test_the_cura_handover_moves_the_points_onto_the_bed(tmp_path: Path, profile: Profile) -> None:
-    """Ein STL trägt keine Platzierungsmatrix — es hat nur seine Punkte.
-
-    Also werden die Punkte verschoben: ``CuraEngine`` bekommt eine Maschine,
-    die von der Ecke misst (``machine_center_is_zero=false``), und die Teile
-    in deren Koordinaten. Unverschoben lagen sie um den halben Bauraum neben
-    der Platte (Gesamtreview 05.09.2026, CORE-17).
-    """
+def test_cura_input_stays_centred_before_the_engine_moves_it(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """CuraEngine verschiebt das STL selbst vom Bettzentrum zum Maschinenursprung."""
     written, _findings = write_assembly(
         [scene_object()],
         tmp_path,
@@ -1178,26 +1174,14 @@ def test_the_cura_handover_moves_the_points_onto_the_bed(tmp_path: Path, profile
         place_on_bed=True,
     )
 
-    width, depth, _height = profile.printer.build_volume
     before = scene_object().mesh.bounds.centre
     centre = read_mesh(written.read_bytes(), ".stl").bounds.centre
-    assert centre[0] == pytest.approx(before[0] + width / 2.0, abs=0.01)
-    assert centre[1] == pytest.approx(before[1] + depth / 2.0, abs=0.01)
+    assert centre[0] == pytest.approx(before[0], abs=0.01)
+    assert centre[1] == pytest.approx(before[1], abs=0.01)
 
 
 def test_every_family_gets_the_parts_in_bed_coordinates(tmp_path: Path, profile: Profile) -> None:
-    """Der Drucker misst von der Ecke — jeder, den Solidon kennt.
-
-    Bis zum 05.09.2026 bekamen nur die Orca-Ableger die Teile ans Bett
-    geschoben; Cura und PrusaSlicer bekamen Solidons Welt um den Ursprung
-    erklärt und die Teile unverschoben. Der Slicer war damit mit sich im
-    Reinen und schrieb Bahnen bei ``-13,6`` — Koordinaten, die es auf einem
-    MK4S oder einem Centauri nicht gibt; ein mittiges Teil lag um den halben
-    Bauraum neben der Platte (Gesamtreview, CORE-17, mit PrusaSlicer 2.9.6
-    gemessen). Was die frühere Fassung dieses Tests als Verschiebung
-    beanstandete — ein Würfel bei -10…10 im G-Code bei 118…138 —, ist auf
-    einem Drucker mit Eckursprung die Bettmitte.
-    """
+    """Nur die Projektleser benötigen schon verschobene Eingabepunkte."""
     width, depth, _height = profile.printer.build_volume
     for flavour in ("cura", "prusa", "orca"):
         written, _findings = write_assembly(
@@ -1210,8 +1194,8 @@ def test_every_family_gets_the_parts_in_bed_coordinates(tmp_path: Path, profile:
         )
         if flavour == "cura":
             centre = read_mesh(written.read_bytes(), ".stl").bounds.centre
-            assert centre[0] == pytest.approx(width / 2.0, abs=0.01), flavour
-            assert centre[1] == pytest.approx(depth / 2.0, abs=0.01), flavour
+            assert centre[0] == pytest.approx(0.0, abs=0.01), flavour
+            assert centre[1] == pytest.approx(0.0, abs=0.01), flavour
         else:
             text = (
                 zipfile.ZipFile(BytesIO(written.read_bytes()))
@@ -1263,6 +1247,7 @@ def test_every_flavour_answers_every_property() -> None:
         # Seit dem 05.09.2026 jede: Der Drucker misst von der Ecke, gleich
         # welcher Slicer die Datei schreibt (CORE-17, siehe das Prädikat).
         "wants_bed_coordinates": {"prusa": True, "orca": True, "cura": True},
+        "needs_bed_translation": {"prusa": True, "orca": True, "cura": False},
         "has_user_profile_tree": {"prusa": False, "orca": True, "cura": False},
         "has_filament_profiles": {"prusa": False, "orca": True, "cura": False},
         "reads_settings_from_project_file": {"prusa": False, "orca": True, "cura": False},
@@ -1878,3 +1863,121 @@ def test_glb_is_written_in_metres(tmp_path: Path) -> None:
     extents = written.bounds[1] - written.bounds[0]
 
     assert sorted(extents) == pytest.approx([0.01, 0.02, 0.04], abs=1e-9)
+
+
+def test_prusa_gets_the_individual_brim_in_its_own_object_configuration(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Die zugesagte Objektabweichung muss in Prusas gelesener Beilage stehen."""
+    import xml.etree.ElementTree as ET
+
+    tower = trimesh.creation.box(extents=(4.0, 4.0, 20.0))
+    tower.apply_translation((0.0, 0.0, 10.0))
+    objects = [scene_object(mesh=MeshData.of(tower))]
+    path, findings = write_assembly(
+        objects,
+        tmp_path,
+        project_name="Turm",
+        profile=profile,
+        settings=print_settings.resolve(profile),
+        flavour="prusa",
+    )
+    assert "export.part_setting" in {entry.code for entry in findings}
+    with zipfile.ZipFile(path) as archive:
+        config = ET.fromstring(archive.read("Metadata/Slic3r_PE_model.config"))
+    obj = config.find("object")
+    assert obj is not None and obj.get("id") == "2"
+    assert obj.find("metadata[@type='object'][@key='brim_width']").get("value") == "5"
+    assert obj.find("volume").get("lastid") == str(len(tower.faces) - 1)
+
+
+def test_cura_export_reports_lost_second_material_values(tmp_path: Path, profile: Profile) -> None:
+    """Auch der früh zurückkehrende STL-Weg benennt den verlorenen Materialwertsatz."""
+    first = replace(
+        scene_object("obj_1"), material_slots=(MaterialSlot(0, "PLA", material_type="PLA"),)
+    )
+    second = replace(
+        scene_object("obj_2"), material_slots=(MaterialSlot(0, "PETG", material_type="PETG"),)
+    )
+    _, findings = write_assembly(
+        [first, second],
+        tmp_path,
+        project_name="Materialien",
+        profile=profile,
+        settings=print_settings.resolve(profile),
+        flavour="cura",
+    )
+    assert "slicer.overrides_unreachable" in {entry.code for entry in findings}
+
+
+def test_legacy_body_material_gets_its_own_slot_without_changing_declared_slots() -> None:
+    """Ein altes ABS-Körpermaterial darf nicht mit einem unbekannten PLA-Platz verschmelzen."""
+    legacy = replace(scene_object(), material="abs")
+    original = tuple(legacy.material_slots)
+    slots = threemf.slots_for_object(legacy)
+    assert len(slots) == 1
+    assert slots[0].index == 0 and slots[0].material_type == "ABS"
+    assert tuple(legacy.material_slots) == original
+    assert threemf.slots_for_object(scene_object()) == ()
+
+    declared = MaterialSlot(0, "Eigene Spule", material="Hersteller PLA", material_type="PLA")
+    supplied = replace(legacy, material_slots=[declared])
+    assert threemf.slots_for_object(supplied) == (declared,)
+    assert threemf.slots_for_object(supplied)[0] is declared
+
+    mesh = replace(legacy.mesh, slots=(0, 1) * (legacy.mesh.triangle_count // 2))
+    completed = threemf.assembly_slots(threemf.AssemblyPart(mesh, slots=slots))
+    assert [(slot.index, slot.material_type) for slot in completed] == [(0, "ABS"), (1, None)]
+
+
+def test_legacy_body_material_reaches_assembly_and_single_file_export(
+    tmp_path: Path,
+) -> None:
+    """PLA und altes ABS behalten getrennte Werkzeuge und die jeweils wirksame Temperatur."""
+    profile = profiles.make_profile(material_id="pla")
+    first = scene_object("obj_1")
+    second = replace(scene_object("obj_2"), material="abs")
+    target, _ = write_assembly(
+        [first, second],
+        tmp_path,
+        project_name="Alte Materialangaben",
+        profile=profile,
+        settings=print_settings.resolve(profile),
+        flavour="orca",
+    )
+    with zipfile.ZipFile(target) as archive:
+        project = json.loads(archive.read(threemf.PROJECT_SETTINGS_PATH))
+    assert project["filament_type"] == ["PLA", "ABS"]
+    assert project["nozzle_temperature"] == ["210", "250"]
+
+    plan = plan_export([second], profile=profile, export_format="3mf", project_name="ABS")
+    assert plan.entries[0].slots[0].material_type == "ABS"
+
+
+@pytest.mark.parametrize("flavour", ["prusa", "cura"])
+def test_shared_slicer_reports_legacy_material_loss_and_keeps_the_first_material(
+    tmp_path: Path, profile: Profile, flavour
+) -> None:
+    """Ein gemeinsam beschränkter Export rät nicht still das Material der Projektvorgabe."""
+    from app.core.export import handover
+
+    legacy = replace(scene_object("obj_1"), material="abs")
+    ordinary = scene_object("obj_2")
+    settings = print_settings.resolve(profile)
+    slots = threemf.merge_slots(
+        [
+            threemf.AssemblyPart(entry.mesh, slots=threemf.slots_for_object(entry))
+            for entry in (legacy, ordinary)
+        ]
+    )
+    effective = handover.settings_for_handover(settings, profile, flavour, slots)
+    assert effective.temperature.nozzle == 250
+    _, findings = write_assembly(
+        [legacy, ordinary],
+        tmp_path,
+        project_name="Alt und neu",
+        profile=profile,
+        settings=settings,
+        flavour=flavour,
+    )
+    assert "slicer.overrides_unreachable" in {entry.code for entry in findings}

@@ -22,6 +22,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Final, Literal, NamedTuple
 
+from app.i18n import TranslatableText, _
+
 SlicerFlavour = Literal["prusa", "orca", "cura"]
 
 #: In welches Profil des Slicers ein Wert gehört.
@@ -405,7 +407,6 @@ CURA: Final[tuple[Row, ...]] = (
     ("temperature.chamber", "build_volume_temperature", _integer),
     ("cooling.fan_speed", "cool_fan_speed", _percent),
     ("cooling.bridge_fan_speed", "bridge_fan_speed", _percent),
-    ("cooling.disable_first_layers", "cool_fan_full_layer", _integer),
     ("cooling.minimum_layer_time", "cool_min_layer_time", _integer),
     ("speed.outer_wall", "speed_wall_0", _number),
     ("speed.inner_wall", "speed_wall_x", _number),
@@ -797,6 +798,7 @@ NOT_TAKEN_BY: Final[dict[SlicerFlavour, frozenset[str]]] = {
     "orca": frozenset(),
     "cura": frozenset(
         {
+            "cooling.disable_first_layers",
             "shell.wall_generator",
             "shell.precise_outer_wall",
             "retraction.wipe",
@@ -821,35 +823,32 @@ def takes(flavour: SlicerFlavour, path: str) -> bool:
     return path not in NOT_TAKEN_BY[flavour]
 
 
+def limitation(flavour: SlicerFlavour, path: str) -> TranslatableText | None:
+    """Eine abweichende Bedeutung, die ein gleich benannter Wert verdecken würde."""
+    if flavour == "cura" and path == "cooling.disable_first_layers":
+        return _(
+            "Cura regelt den Lüfter über einen Hochlauf. Eine feste Anzahl Schichten "
+            "ohne Lüfter lässt sich hier nicht übertragen. Stelle den Hochlauf in Cura ein."
+        )
+    return None
+
+
 def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
-    """Bekommt dieser Slicer die Teile in den Koordinaten der Maschine — von
-    der Ecke der Platte gemessen?
+    """Schreibt diese Familie G-Code mit dem Ursprung an der Bettecke?
 
-    **Jeder.** Solidon rechnet um den Ursprung; der Drucker misst von der
-    Ecke — Prusa MK4S wie Centauri Carbon 2 legen den Nullpunkt vorn links
-    und die Platte auf 0…250 beziehungsweise 0…256 mm. Bis zum 05.09.2026
-    bekamen Cura und PrusaSlicer stattdessen Solidons Welt: eine Maschine
-    um den Ursprung (``machine_center_is_zero``, eine Bettform von ``-128``
-    bis ``128``) und die Teile unverschoben. Der Slicer war damit mit sich
-    im Reinen und schrieb Bahnen von ``-13,6`` bis ``13,6`` — Koordinaten,
-    die es auf der Maschine nicht gibt; ein mittiges Teil lag um den halben
-    Bauraum neben dem Bett, und die eigene Gegenprobe (``bed_box``) maß
-    gegen denselben erfundenen Ursprung und fand nichts (Gesamtreview,
-    CORE-17, mit echtem PrusaSlicer 2.9.6 gemessen).
-
-    Was die ältere Messung „um den halben Bauraum verschoben" nannte —
-    Solidons Würfel bei -10…10, im G-Code bei 118…138 —, ist auf einem
-    Drucker mit Eckursprung genau die Bettmitte. Die Ablehnung von
-    PrusaSlicer kam aus dem Widerspruch zwischen verschobenen Teilen und
-    zentriert erklärtem Bett, nicht aus der Verschiebung; erklärt wird das
-    Bett seither wie die Teile (:func:`app.core.export.handover._machine_keys`).
-
-    Die Frage bleibt eine Funktion, obwohl jede Familie dasselbe antwortet:
-    Sie ist der eine Ort, an dem die Übergabe, der Schreiber und die
-    Gegenprobe dieselbe Welt vereinbaren — ein Drucker mit Mittelursprung
-    (Delta) käme hier hinzu, nicht an drei Stellen.
+    Die Gegenprobe prüft Maschinenkoordinaten. Die Verschiebung der
+    Eingabegeometrie ist davon getrennt: CuraEngine führt sie selbst aus.
     """
     return True
+
+
+def needs_bed_translation(flavour: SlicerFlavour) -> bool:
+    """Muss Solidon die Eingabe vor der Übergabe zur Bettecke verschieben?
+
+    CuraEngine verschiebt ein zentriertes STL selbst um die halbe Bettgröße;
+    Prusa- und Orca-Projekte erhalten bereits Maschinenkoordinaten.
+    """
+    return flavour != "cura"
 
 
 # --- Was eine Familie kann, und was sie von uns braucht -------------------------

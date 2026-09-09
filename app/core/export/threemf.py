@@ -7,8 +7,8 @@ fünfzehn Zeilen davon.
 
 Die Zuordnung ist die aus §20: ein Materialslot des Objekts wird ein Eintrag
 in einer ``basematerials``-Gruppe, und jedes Dreieck trägt den Index seines
-Slots. Genau das liest ein Slicer, um zu wissen, zu welchem Filament eine
-Fläche gehört.
+Slots. Die Slicerfamilien benötigen zusätzlich native Objektwerkzeuge und
+Flächenfarben: Standardfarben allein wählen dort kein Filament.
 
 Das Zurücklesen stand bis zum 02.09.2026 ebenfalls hier und liegt jetzt in
 :mod:`app.core.ingest.threemf` — ``ingest`` liest, ``export`` schreibt, und
@@ -31,10 +31,20 @@ from io import BytesIO
 from xml.etree import ElementTree as ET
 
 from app.branding import APP_NAME, APP_VERSION
+from app.core.errors import CANCEL, SPLIT_FILAMENT_FILES, ValidationError
+from app.core.export import slicer_keys
 from app.core.geom.mesh import MeshData
-from app.core.ingest.threemf import CORE_NAMESPACE, DEFAULT_COLOUR, MODEL_PATH, SETTINGS_PATH
+from app.core.ingest.threemf import (
+    CORE_NAMESPACE,
+    DEFAULT_COLOUR,
+    MODEL_PATH,
+    NATIVE_TOOL_LIMIT,
+    PRUSA_NAMESPACE,
+    SETTINGS_PATH,
+)
+from app.core.knowledge import profiles
 from app.core.log import get_logger
-from app.core.types import MaterialSlot
+from app.core.types import MaterialSlot, SceneObject
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -59,6 +69,9 @@ PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
 #: bis in die Wandzahl und die Fülldichte hinein. Ohne sie war eine
 #: exportierte Datei für PrusaSlicer bloß Geometrie.
 PRUSA_CONFIG_PATH = "Metadata/Slic3r_PE.config"
+
+#: Prusas eigene Objektwerte; die Orca-Beilage wird dort nicht gelesen.
+PRUSA_MODEL_CONFIG_PATH = "Metadata/Slic3r_PE_model.config"
 
 #: Die erste Zeile jener Beilage. PrusaSlicer überspringt sie — bei ihm steht
 #: dort seine eigene Kennung —, und was ohne sie an erster Stelle stünde, wäre
@@ -115,6 +128,26 @@ def slot_identity(slot: MaterialSlot) -> SlotKey:
     Farbe dürfen zusammenfallen, wenn auch Profil und Materialart gleich sind.
     """
     return (slot.name, slot.colour, slot.material, slot.material_type)
+
+
+def slots_for_object(entry: SceneObject) -> tuple[MaterialSlot, ...]:
+    """Erhält Spulenidentitäten und nimmt ausdrückliche alte Körpermaterialien mit.
+
+    Vor den Materialslots stand die Wahl nur am Körper. Eine vollständig
+    fehlende Slotliste darf diese belegte Materialart beim Export nicht zur
+    Projektvorgabe machen. Deklarierte Plätze bleiben unverändert; fehlende
+    Plätze eines bemalten Körpers ergänzt erst :func:`assembly_slots` neutral.
+    Das Objekt selbst wird weder geändert noch mit einer Spule versehen.
+    """
+    if entry.material_slots or not entry.material:
+        return tuple(entry.material_slots)
+    return (
+        MaterialSlot(
+            index=0,
+            name=profiles.material(entry.material).title,
+            material_type=slicer_keys.filament_type(entry.material),
+        ),
+    )
 
 
 def assembly_slots(part: AssemblyPart) -> tuple[MaterialSlot, ...]:
@@ -251,7 +284,8 @@ def write_assembly(
         container.writestr("[Content_Types].xml", _content_types())
         container.writestr("_rels/.rels", _relationships())
         container.writestr(MODEL_PATH, model)
-        container.writestr(SETTINGS_PATH, _settings_xml(parts))
+        container.writestr(SETTINGS_PATH, _settings_xml(parts, materials))
+        container.writestr(PRUSA_MODEL_CONFIG_PATH, _prusa_settings_xml(parts, materials))
         if project_settings:
             container.writestr(
                 PROJECT_SETTINGS_PATH,
@@ -276,7 +310,29 @@ def write_assembly(
     return buffer.getvalue()
 
 
-def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
+def _prusa_settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlot]) -> bytes:
+    """Objektwerte mit Prusas Typkennung und Zuordnung der Dreiecke (§29)."""
+    config = ET.Element("config")
+    for number, part in enumerate(parts, start=2):
+        node = ET.SubElement(config, "object", {"id": str(number), "instances_count": "1"})
+        values = {"name": part.name, **part.settings}
+        if part.slots or part.mesh.slots:
+            values["extruder"] = str(_part_extruder(part, materials) + 1)
+        for key, value in values.items():
+            ET.SubElement(node, "metadata", {"type": "object", "key": key, "value": value})
+        if part.mesh.triangle_count:
+            volume = ET.SubElement(
+                node, "volume", {"firstid": "0", "lastid": str(part.mesh.triangle_count - 1)}
+            )
+            ET.SubElement(
+                volume, "metadata", {"type": "volume", "key": "volume_type", "value": "ModelPart"}
+            )
+    return b'<?xml version="1.0" encoding="UTF-8"?>\n' + bytes(
+        ET.tostring(config, encoding="utf-8")
+    )
+
+
+def _settings_xml(parts: Sequence[AssemblyPart], materials: Sequence[MaterialSlot]) -> bytes:
     """Die Beilage, in der die Orca-Familie Namen und Objektwerte führt.
 
     Zwei Dinge stehen hier, die sonst verloren gingen. Zum einen die **Namen**:
@@ -297,6 +353,15 @@ def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
         node = ET.SubElement(config, "object", {"id": str(number)})
         if part.name:
             ET.SubElement(node, "metadata", {"key": "name", "value": part.name})
+        if part.slots or part.mesh.slots:
+            ET.SubElement(
+                node,
+                "metadata",
+                {
+                    "key": "extruder",
+                    "value": str(_part_extruder(part, materials) + 1),
+                },
+            )
         for key, value in part.settings.items():
             ET.SubElement(node, "metadata", {"key": key, "value": value})
 
@@ -326,6 +391,30 @@ def _settings_xml(parts: Sequence[AssemblyPart]) -> bytes:
     )
 
 
+def _part_extruder(part: AssemblyPart, materials: Sequence[MaterialSlot]) -> int:
+    """Das Grundwerkzeug, in derselben globalen Reihenfolge wie die Flächenfarben."""
+    positions = {slot_identity(slot): slot.index for slot in materials}
+    used = set(part.mesh.slots or (0,))
+    return min(
+        positions[slot_identity(slot)] for slot in assembly_slots(part) if slot.index in used
+    )
+
+
+def _paint_code(extruder: int) -> str:
+    """Native Ganzflächenwerte bis zur belegten Grenze, einschließlich FC-Erweiterung."""
+    if not 0 <= extruder < NATIVE_TOOL_LIMIT:
+        raise ValidationError(
+            field="slots",
+            detail=_("Dieses native 3MF-Farbformat unterstützt höchstens 32 Filamente."),
+            constraint="native_filament_limit",
+            suggestions=(SPLIT_FILAMENT_FILES, CANCEL),
+        )
+    state = extruder + 1
+    if state < 3:
+        return f"{state << 2:X}"
+    return f"{state - 3:X}C" if state < 18 else f"{state - 18:X}FC"
+
+
 def _slots_for(mesh: MeshData, slots: Sequence[MaterialSlot] | None) -> list[MaterialSlot]:
     """Jeder Slot, den das Mesh wirklich benutzt, mit Namen und Farbe."""
     from app.core.geom.attributes import used_slots
@@ -342,6 +431,7 @@ def _write_geometry(
     mesh: MeshData,
     group_id: str,
     order: dict[int, int],
+    native: bool = False,
 ) -> None:
     """Ecken und Dreiecke eines Körpers, mit ihrer Materialzuordnung.
 
@@ -376,6 +466,14 @@ def _write_geometry(
                 "v3": str(int(face[2])),
                 "pid": group_id,
                 "p1": str(order.get(int(slot), 0)),
+                **(
+                    {
+                        "paint_color": _paint_code(order[int(slot)]),
+                        "slic3rpe:mmu_segmentation": _paint_code(order[int(slot)]),
+                    }
+                    if native
+                    else {}
+                ),
             },
         )
 
@@ -392,9 +490,15 @@ def _assembly_xml(
     """
     root = ET.Element(
         "model",
-        {"unit": "millimeter", "xml:lang": "de-DE", "xmlns": CORE_NAMESPACE},
+        {
+            "unit": "millimeter",
+            "xml:lang": "de-DE",
+            "xmlns": CORE_NAMESPACE,
+            "xmlns:slic3rpe": PRUSA_NAMESPACE,
+        },
     )
     ET.SubElement(root, "metadata", {"name": "Application"}).text = f"{APP_NAME} {APP_VERSION}"
+    ET.SubElement(root, "metadata", {"name": "slic3rpe:MmPaintingVersion"}).text = "1"
     if name:
         ET.SubElement(root, "metadata", {"name": "Title"}).text = name
 
@@ -443,7 +547,7 @@ def _assembly_xml(
                 **({"name": part.name} if part.name else {}),
             },
         )
-        _write_geometry(body, part.mesh, group_id, order)
+        _write_geometry(body, part.mesh, group_id, order, bool(part.slots or part.mesh.slots))
         item = {"objectid": str(number)}
         placement = _placement(bed, part.plate, stride)
         if placement is not None:

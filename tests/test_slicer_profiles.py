@@ -1148,3 +1148,19 @@ def test_cura_names_the_printer_as_it_shows_it(cura: Path) -> None:
 def test_a_prusa_installation_without_bundles_is_no_crash(tmp_path: Path) -> None:
     """Ohne Bestand keine Modelle — und kein Abbruch."""
     assert sp.known_printers("prusa", tmp_path / "nirgends.exe") == ()
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "1e999"])
+@pytest.mark.parametrize("key", ["nozzle_temperature", "filament_max_volumetric_speed"])
+def test_nonfinite_filament_values_are_rejected_with_a_profile_error(
+    tmp_path: Path, key: str, value: str
+) -> None:
+    """Weder ein roher Integerfehler noch NaN darf in die Beratung gelangen."""
+    from app.core.errors import ValidationError
+
+    path = tmp_path / "Filament.json"
+    _write(path, {"name": "Filament", key: [value]})
+    with pytest.raises(ValidationError) as caught:
+        sp.filament_values(path)
+    assert caught.value.suggestions
+    assert caught.value.values["file"] == path.name

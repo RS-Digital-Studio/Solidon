@@ -35,8 +35,8 @@ from app.core.errors import (
 from app.core.export import threemf
 from app.core.export.slicer_keys import (
     SlicerFlavour,
+    needs_bed_translation,
     reads_assembly_file,
-    wants_bed_coordinates,
 )
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.prepare import check_build_volume
@@ -278,7 +278,7 @@ def _entries_for(
             )
             + suffix,
             mesh=as_mesh_data(entry.mesh),
-            slots=tuple(entry.material_slots),
+            slots=threemf.slots_for_object(entry),
             # Steht als Objektname **in** der 3MF-Datei, ist also Dateiinhalt
             # und keine Anzeige — dieselbe Regel wie beim Dateinamen darüber.
             name=source_text(entry.name),
@@ -871,8 +871,12 @@ def write_assembly(
     flavour: SlicerFlavour = "orca",
     place_on_bed: bool = False,
     setup: SlicerSetup | None = None,
+    for_slicer: bool = True,
 ) -> tuple[Path, list[Finding]]:
-    """Alles auf einer Platte in *eine* 3MF-Datei (§20, §29).
+    """Alles auf einer Platte in eine Baugruppendatei (§20, §29).
+
+    Ein ausdrücklicher Dateiexport (`for_slicer=False`) bleibt 3MF.
+    Bei direkter Übergabe erhält CuraEngine sein unterstütztes STL-Format.
 
     Der Unterschied zu :func:`write_plan` ist nicht das Format, sondern die
     Zahl der Dateien: ein Slicer, der eine Baugruppe bekommt, ordnet sie als
@@ -915,12 +919,29 @@ def write_assembly(
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag.
         meshes = [as_mesh_data(entry.mesh) for entry in chosen]
+        from app.core.export import handover
+
+        findings += handover.setting_limitations(flavour)
         findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
         findings += check_filament_changes(chosen, settings, plate)
     width, depth, _height = profile.printer.build_volume
-    bed = (width, depth) if place_on_bed and wants_bed_coordinates(flavour) else None
+    bed = (width, depth) if place_on_bed and needs_bed_translation(flavour) else None
 
-    if not reads_assembly_file(flavour):
+    if for_slicer and not reads_assembly_file(flavour):
+        if settings is not None:
+            from app.core.export import handover
+
+            slots = threemf.merge_slots(
+                [
+                    threemf.AssemblyPart(
+                        as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+                    )
+                    for entry in chosen
+                ]
+            )
+            configured = handover.configured_slots(slots, settings)
+            known = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
+            findings += handover.unreachable_overrides(settings, known, configured, profile=profile)
         target = _written(
             directory / (given_name(project_name, "projekt") + ".stl"),
             _cura_assembly(chosen, bed),
@@ -941,7 +962,7 @@ def write_assembly(
         threemf.AssemblyPart(
             mesh=as_mesh_data(entry.mesh),
             name=source_text(entry.name),
-            slots=tuple(entry.material_slots),
+            slots=threemf.slots_for_object(entry),
             settings=part_advice[entry.id][0],
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in
             # dieselbe Datei — und dann muss dort stehen, welches Teil auf
@@ -959,7 +980,7 @@ def write_assembly(
         threemf.AssemblyPart(
             mesh=as_mesh_data(entry.mesh),
             name=source_text(entry.name),
-            slots=tuple(entry.material_slots),
+            slots=threemf.slots_for_object(entry),
         )
         for entry in objects
     ]
@@ -968,9 +989,11 @@ def write_assembly(
     if settings is not None:
         from app.core.export import handover
 
-        configured_slots = handover.with_slot_profiles(merged_slots, settings.slot_profiles)
+        configured_slots = handover.configured_slots(merged_slots, settings)
         known_setup = setup if setup is not None else handover.SlicerSetup(Path(flavour), flavour)
-        findings += handover.unreachable_overrides(settings, known_setup, configured_slots)
+        findings += handover.unreachable_overrides(
+            settings, known_setup, configured_slots, profile=profile
+        )
         if setup is not None:
             # **Nur mit echtem Slicer.** ``known_setup`` oben ist ein Platzhalter
             # aus dem Familiennamen; ihn nach seiner eingestellten Maschine zu
@@ -997,6 +1020,7 @@ def write_assembly(
                 profile,
                 flavour,
                 configured_slots,
+                setup,
             ),
             # Nur wo es mehrere Platten gibt. Ein Versatz auf einer einzelnen
             # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
@@ -1039,6 +1063,7 @@ def _plate_config(
     profile: Profile,
     flavour: SlicerFlavour,
     slots: Sequence[MaterialSlot] = (),
+    setup: SlicerSetup | None = None,
 ) -> dict[str, str]:
     """Dasselbe für PrusaSlicer, der es als Textzeilen führt (§29).
 
@@ -1055,7 +1080,7 @@ def _plate_config(
         return {}
     from app.core.export import handover
 
-    effective = handover.settings_for_handover(settings, profile, flavour, slots)
+    effective = handover.settings_for_handover(settings, profile, flavour, slots, setup)
     return handover.values_for(effective, profile, flavour)
 
 
@@ -1074,7 +1099,7 @@ def _cura_assembly(objects: Sequence[SceneObject], bed: tuple[float, float] | No
     Einstellungen kommen bei ihm über die Kommandozeile.
 
     ``bed`` sind die Bettmaße, wenn die Teile in Maschinenkoordinaten gehen
-    (:func:`wants_bed_coordinates`): Verschoben wird über die Punkte, denn ein
+    (:func:`needs_bed_translation`): Verschoben wird über die Punkte, denn ein
     STL hat keine Platzierungsmatrix.
     """
     bodies = []

@@ -20,17 +20,59 @@ STEP geht über `brep/step.py`, nicht von hier.
 deklarierte Materialplätze neutral. Export, globales Zusammenlegen und
 Verbrauchsplanung benutzen diese gemeinsame Liste. Fehlende Plätze dürfen
 keine bekannte Spule durch einen pauschalen Rückfall auf Werkzeug null erben.
+`slots_for_object` erhält deklarierte Slots unverändert und übernimmt nur bei
+vollständig fehlender Slotliste eine ausdrücklich gespeicherte alte
+Körpermaterialart. Beratung und Export benutzen dieselbe Sicht; eine
+vollständige Materialabwahl entfernt deshalb auch die alte Körperangabe.
+
+Baugruppen schreiben die globale Werkzeugnummer zugleich als native
+`extruder`-Objektmetadaten für Orca/Bambu und Prusa. Bemalte ganze Dreiecke
+tragen `paint_color` und `slic3rpe:mmu_segmentation`; Standard-`p1` allein
+wählt in diesen Slicern kein Filament. Alle drei Darstellungen benutzen
+dieselbe globale Reihenfolge einschließlich der Lücken einer Teilplatte.
+
+`bind_slot_profiles` übernimmt alte Profilpositionen an der ursprünglichen
+vollständigen Szene in `slot_profile_bindings`. `configured_slots` verwendet
+anschließend diese Identitäten; ein leeres gebundenes Tupel hat ausdrücklich
+keine Profilwahl. Nur `None` liest noch die alte Positionsfolge. Export und
+Verbrauchsplanung benutzen dieselbe Auflösung, auch nach Abwahl, Undo,
+Plattenwechsel oder Auswahl-Export.
 
 Profilvererbung wird mit sämtlichen Profilwurzeln des gewählten Slicers
 aufgelöst: Nutzerprofile können von installierten Profilen erben. Diese
 Wurzeln gehören auch in Filamenterkennung, Materialvergleich und Auslesen
 der Werte im Druckdialog; der Ordner der Blattdatei allein reicht nicht.
 
-`settings_for_slot` löst jede Spule gegen ihre eigene Materialart auf und
-legt ausdrückliche Spulenwerte darüber. Gemeinsame Prozesswerte bleiben
+Nach dem Übergang aus einem Nutzerprofil in den Herstellerbestand wird die
+Familie für jeden weiteren Vorfahren neu bestimmt. Orca-/Bambu-Profile werden
+in der Reihenfolge Erbbasis, `include`-Vorlagen, eigene Werte aufgelöst;
+fehlende oder zyklische Vorlagen verhindern das Ausschreiben. Die Auswahl
+liest Kompatibilitätsangaben auch aus unsichtbaren Erbbasen.
+
+`profile_by_name` liefert eine native Profilidentität; bei Prusa gehört
+`SlicerProfile.section` zum Pfad. `resolve_profile` löst Prusa-Bündel und
+eigene INIs einschließlich Mehrfachvererbung sowie Cura-Definitionen und
+Material-XML als Daten auf. Prusa-Werte bleiben INI-serialisiert, einschließlich
+der literalen `\n` in G-Code. `filament_values` akzeptiert diese Profilobjekte
+oder einzelne Dateien und liefert Solidon-Feldpfade. Prusa-Update-Caches
+sind kein aktiver Bestand. Cura-Formeln werden nicht ausgeführt; solche Werte
+bleiben unbekannt, Materialwerte ohne Maschinenkontext kommen ausschließlich
+aus den allgemeinen XML-Feldern.
+
+`settings_for_slot` löst jede Spule gegen ihre eigene Materialart auf,
+berücksichtigt mit `setup` das vollständige Herstellerprofil und legt
+ausdrückliche Spulenwerte darüber. Gemeinsame Prozesswerte bleiben
 erhalten. Schreiben, eingebettete 3MF-Einstellungen und Gegenprobe benutzen
 dieselbe Auflösung. Eine lokale Spule anderen Typs erbt keine Startsequenzen
 aus dem allgemeinen Filamentprofil des Projekts.
+
+`SlicerConfig.written` hält die tatsächlich ausgegebenen Sollwerte, auch
+Listen je Werkzeug. Die G-Code-Gegenprobe vergleicht diese Werte vollständig
+und meldet keine Abweichung gegen eine überholte Projektvorgabe.
+Teilbezogene Prusa-Einstellungen stehen in
+`Metadata/Slic3r_PE_model.config`, Orca-Einstellungen in dessen eigener
+Beilage. Ein nicht unterstützter Mehrmaterialumfang wird auch ohne manuelle
+Spulenüberschreibungen vor der Übergabe benannt.
 
 ## Warum `slicer_keys.py` existiert
 
@@ -46,6 +88,16 @@ mitgeliefertes Binärprogramm nicht. Deshalb sucht `slicer_profiles.py`, was
 installiert ist, statt etwas mitzubringen.
 
 ## Die Prüfung vor dem Export
+
+`wants_bed_coordinates` beschreibt die ausgegebenen Maschinenkoordinaten;
+`needs_bed_translation` beschreibt getrennt die Eingabe. CuraEngine versetzt
+ein zentriertes STL selbst, Prusa- und Orca-Projekte erhalten versetzte Punkte.
+Ein fehlgeschlagener Anordnungsversuch gilt nur für seinen Auftrag. Erst eine
+ausdrückliche Ablehnung der CLI-Option wird für weitere Aufträge gemerkt.
+
+Curas Lüfterhochlauf bildet keine feste Zahl ausgeschalteter Schichten ab.
+Der gemeinsame Exaktwert bleibt deshalb gesperrt; `setting_limitations`
+benennt die abweichende Bedeutung bei der Übergabe.
 
 Sie läuft **vorher**, nicht nachher: Wasserdichtheit, Bauraum, Wandstärken.
 Was sie findet, ist ein Befund mit Handlungsvorschlag (Regel 17) — kein

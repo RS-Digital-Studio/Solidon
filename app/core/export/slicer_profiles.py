@@ -19,17 +19,20 @@ Heuristik.
 from __future__ import annotations
 
 import configparser
+import csv
 import json
+import math
 import os
 import re
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Final, Literal
 from xml.etree import ElementTree as ET
 
 from app.core import discover
+from app.core.errors import CHECK_SLICER_PROFILE, ExternalToolError, ValidationError
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
@@ -37,6 +40,7 @@ from app.core.export.slicer_keys import (
 )
 from app.core.log import get_logger
 from app.core.types import PrinterProfile
+from app.i18n import _
 
 _log = get_logger(__name__)
 
@@ -78,6 +82,8 @@ class SlicerProfile:
     inherits: str = ""
     """Von welchem Systemprofil es abstammt. Selbst angelegte Profile tragen
     ihre Angaben nicht selbst; woher sie kommen, steht hier."""
+    section: str = ""
+    """Bei Prusa-Bündeln der Abschnitt; der Dateipfad allein ist nicht eindeutig."""
 
     def title(self, own: str = "eigenes") -> str:
         """Der Name für die Auswahl. Ein selbst angelegtes Profil wird
@@ -89,7 +95,7 @@ class SlicerProfile:
 
 @dataclass(frozen=True, slots=True)
 class SlicerFilament:
-    """Eine im Slicer eingelegte Spule, nicht bloß ein verfügbares Profil."""
+    """Ein gespeicherter Slicer-Platz als Vorschlag, kein Nachweis einer physischen Spule."""
 
     profile: str
     colour: str
@@ -164,10 +170,23 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     ab. Der Programmname ist der der ausführbaren Datei, ohne Bindestriche —
     ``elegoo-slicer.exe`` schreibt nach ``ElegooSlicer``.
     """
-    if not has_user_profile_tree(flavour):
-        return []
     base = config_home(sys.platform)
     if not base:
+        return []
+    if flavour == "cura":
+        return _cura_user_roots(executable, Path(base))
+    if flavour == "prusa":
+        stem = discover.program_mark(executable.name)
+        return (
+            [
+                folder
+                for folder in Path(base).iterdir()
+                if folder.is_dir() and discover.plain_name(folder.name) == stem
+            ]
+            if Path(base).is_dir()
+            else []
+        )
+    if not has_user_profile_tree(flavour):
         return []
 
     # Die Programmmarke, nicht der ganze Dateistamm: ``OrcaSlicer_Linux_V2.1.1``
@@ -320,36 +339,25 @@ def _prusa_configured(executable: Path) -> tuple[SlicerFilament, ...]:
     presets = _prusa_presets(executable)
     if not presets:
         return ()
-    config = prusa_config(executable)
-    folder = config.parent / "filament" if config is not None else None
+    profiles = {entry.name: entry for entry in find_profiles(executable, "prusa", ("filament",))}
+    roots = profile_roots("prusa", executable)
     keys = ["filament", *(f"filament_{index}" for index in range(1, _PRUSA_EXTRUDERS))]
     found: list[SlicerFilament] = []
-    seen: set[str] = set()
     for key in keys:
         name = str(presets.get(key, "")).strip()
-        if not name or name in seen:
+        if not name:
             continue
-        seen.add(name)
-        found.append(_prusa_filament(name, folder))
+        entry = profiles.get(name)
+        values = resolve_profile(entry, roots) if entry is not None else {}
+        colour = str(values.get("filament_colour", "")).strip()
+        found.append(
+            SlicerFilament(
+                profile=name,
+                colour=colour if _COLOUR_LOOKS_RIGHT.match(colour) else "",
+                material_type=str(values.get("filament_type", "")).strip(),
+            )
+        )
     return tuple(found)
-
-
-def _prusa_filament(name: str, folder: Path | None) -> SlicerFilament:
-    """Eine eingelegte Spule; Art und Farbe, wo eine eigene Datei sie nennt."""
-    if folder is None:
-        return SlicerFilament(profile=name, colour="")
-    parsed = _read_prusa_ini(folder / f"{name}.ini")
-    # Eine Prusa-Profildatei trägt ihre Werte ohne Abschnittskopf; sie stehen
-    # deshalb vollständig im künstlichen ersten Abschnitt.
-    values: Mapping[str, str] = (
-        dict(parsed[_PRUSA_HEAD]) if parsed is not None and parsed.has_section(_PRUSA_HEAD) else {}
-    )
-    colour = str(values.get("filament_colour", "")).strip()
-    return SlicerFilament(
-        profile=name,
-        colour=colour if _COLOUR_LOOKS_RIGHT.match(colour) else "",
-        material_type=str(values.get("filament_type", "")).strip(),
-    )
 
 
 #: Der Farbvertrag der Anzeige: ``#RRGGBB``. Ein Profil darf etwas anderes
@@ -495,7 +503,11 @@ def _named_profile(
     if installed is not None:
         roots.append(installed)
     for root in roots:
-        for path in root.rglob(f"{name}.json"):
+        # Profilnamen können Schrägstriche oder Globzeichen enthalten. Sie
+        # sind Identitäten und werden nie als Suchmuster interpretiert.
+        for path in root.rglob("*.json"):
+            if path.stem != name:
+                continue
             if _kind_of(path, root) != kind:
                 continue
             try:
@@ -504,6 +516,11 @@ def _named_profile(
                 continue
             if isinstance(loaded, dict) and str(loaded.get("name", path.stem)) == name:
                 return path
+        # Noch innerhalb derselben Quelle suchen: Ein umbenanntes eigenes
+        # Profil gewinnt auch gegen einen passend benannten Installationspfad.
+        found = _names_in(root, kind).get(name)
+        if found is not None:
+            return found
     return None
 
 
@@ -519,7 +536,12 @@ def _names_the_printer(machine: str, title: str) -> bool:
     Slicer meinen Drucker". Zwei Formulierungen desselben Vergleichs würden
     auseinanderlaufen, sobald einer von beiden verfeinert wird.
     """
-    return bool(title) and machine.casefold().startswith(title.casefold())
+
+    def normalized(value: str) -> str:
+        value = value.casefold().removeprefix("original ")
+        return re.sub(r"^prusa mini(?:\+| is)?(?=\s|$)", "prusa mini", value)
+
+    return bool(title) and normalized(machine).startswith(normalized(title))
 
 
 def known_printers(flavour: SlicerFlavour, executable: Path) -> tuple[str, ...]:
@@ -674,6 +696,7 @@ def _strings(value: Any) -> list[str]:
 _CURA_DIRS: Final[dict[str, tuple[ProfileKind, str]]] = {
     "definitions": ("machine", "*.def.json"),
     "quality": ("process", "*.inst.cfg"),
+    "quality_changes": ("process", "*.inst.cfg"),
     "materials": ("filament", "*.xml.fdm_material"),
 }
 
@@ -691,32 +714,63 @@ _CURA_PROCESS_TYPES: Final = frozenset({"quality", "quality_changes"})
 
 
 def _cura_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[SlicerProfile]:
-    """Curas Bestand, aus seinen eigenen Ordnern und Formaten.
-
-    Gelesen werden die mitgelieferten Profile der Installation. Was der Nutzer
-    sich in Curas Fenster selbst angelegt hat, liegt in seinem
-    Einstellungsordner und bleibt vorerst draußen — dafür müsste
-    :func:`user_roots` Cura kennen, und das ist eine eigene Entscheidung
-    (§29: eine falsche Vorauswahl sieht aus wie eine getroffene).
-    """
-    root = install_root(executable)
-    if root is None:
-        return []
-    base = _cura_resources(root)
-    found: list[SlicerProfile] = []
+    """Curas Installation und eigener Bestand, eigene Profile gewinnen bei gleichem Namen."""
+    found: dict[tuple[ProfileKind, str], SlicerProfile] = {}
     count = 0
-    for folder, (kind, pattern) in _CURA_DIRS.items():
-        if kind not in wanted:
-            continue
-        for path in sorted((base / folder).rglob(pattern)):
-            count += 1
-            if count > MAX_FILES:
-                _log.warning("stopped after %d Cura profile files below %s", MAX_FILES, root)
-                return found
-            profile = _read_cura(path, kind)
-            if profile is not None:
-                found.append(profile)
+    users = user_roots("cura", executable)
+    for root in profile_roots("cura", executable):
+        for folder, (kind, pattern) in _CURA_DIRS.items():
+            if kind not in wanted:
+                continue
+            for path in sorted((_cura_resources(root) / folder).rglob(pattern)):
+                count += 1
+                if count > MAX_FILES:
+                    _log.warning("stopped after %d Cura profile files below %s", MAX_FILES, root)
+                    return list(found.values())
+                profile = _read_cura(path, kind)
+                if profile is not None:
+                    # Gleicher Titel bei anderem Durchmesser ist eine andere
+                    # native Datei und darf nicht still ersetzt werden.
+                    found[(kind, path.name)] = replace(profile, from_user=root in users)
     _log.info("found %d Cura profiles", len(found))
+    return list(found.values())
+
+
+def _cura_user_roots(executable: Path, config: Path, *, platform: str | None = None) -> list[Path]:
+    """Cura speichert je Programmversion, nicht je Nutzerkonto."""
+    candidates = [config / "cura"]
+    if (platform or sys.platform).startswith("linux"):
+        named = os.environ.get("XDG_DATA_HOME", "")
+        data = (
+            Path(named) if named and not discover.in_flatpak() else Path.home() / ".local" / "share"
+        )
+        candidates.insert(0, data / "cura")
+    version = next(
+        (
+            match.group(1)
+            for parent in executable.parents
+            if (match := re.search(r"cura[^\d]*(\d+\.\d+)", parent.name, re.IGNORECASE))
+        ),
+        "",
+    )
+    found: list[Path] = []
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+        versions = sorted(
+            (
+                folder
+                for folder in candidate.iterdir()
+                if folder.is_dir() and re.fullmatch(r"\d+\.\d+", folder.name)
+            ),
+            key=lambda folder: tuple(int(part) for part in folder.name.split(".")),
+        )
+        selected = (
+            [folder for folder in versions if folder.name == version] if version else versions[-1:]
+        )
+        if not versions:
+            selected = [candidate]
+        found.extend(folder for folder in selected if folder not in found)
     return found
 
 
@@ -868,6 +922,98 @@ def _cura_definition_id(path: Path) -> str:
     return path.stem.removesuffix(".def")
 
 
+def _cura_definition_values(path: Path, roots: Sequence[Path]) -> dict[str, Any]:
+    """Definitionsvererbung als Daten; berechnete Eigenschaften bleiben unbekannt."""
+    index = {
+        _cura_definition_id(entry): entry
+        for root in roots
+        for entry in sorted((_cura_resources(root) / "definitions").glob("*.def.json"))
+    }
+    index.update(
+        {_cura_definition_id(entry): entry for entry in sorted(path.parent.glob("*.def.json"))}
+    )
+
+    def read(current: Path, active: frozenset[Path]) -> dict[str, dict[str, Any]]:
+        if current in active or len(active) >= MAX_INHERITANCE:
+            raise _incomplete_profile(path)
+        try:
+            loaded = json.loads(current.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as problem:
+            raise _incomplete_profile(path) from problem
+        if not isinstance(loaded, dict):
+            raise _incomplete_profile(path)
+        definitions: dict[str, dict[str, Any]] = {}
+        parent = loaded.get("inherits")
+        if parent:
+            inherited = index.get(str(parent))
+            if inherited is None:
+                raise _incomplete_profile(path)
+            definitions.update(read(inherited, active | {current}))
+
+        def collect(items: Any) -> None:
+            if not isinstance(items, dict):
+                return
+            for key, properties in items.items():
+                if not isinstance(properties, dict):
+                    continue
+                definitions.setdefault(key, {}).update(properties)
+                collect(properties.get("children"))
+
+        collect(loaded.get("settings"))
+        collect(loaded.get("overrides"))
+        return definitions
+
+    values: dict[str, Any] = {}
+    for key, properties in read(path, frozenset()).items():
+        # Eine Formel überlagert auch einen vorhandenen default_value. Der
+        # Default ist dann gerade nicht der Wert, den Cura berechnet.
+        if "value" in properties:
+            value = properties["value"]
+            if isinstance(value, str):
+                continue
+        else:
+            value = properties.get("default_value")
+        if value is not None:
+            values[key] = value
+    return values
+
+
+_CURA_MATERIAL_KEYS: Final = {
+    "print temperature": "material_print_temperature",
+    "heated bed temperature": "material_bed_temperature",
+    "build volume temperature": "build_volume_temperature",
+    "print cooling": "cool_fan_speed",
+    "retraction amount": "retraction_amount",
+    "retraction speed": "retraction_speed",
+}
+
+
+def _cura_material_values(path: Path) -> dict[str, Any]:
+    """Die allgemeinen XML-Materialwerte, ohne fremde Maschinenvarianten zu übernehmen."""
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError) as problem:
+        _log.debug("skipping Cura material %s: %s", path.name, problem)
+        return {}
+    values: dict[str, Any] = {}
+    for source, target in (
+        ("metadata/name/material", "filament_type"),
+        ("metadata/color_code", "filament_colour"),
+        ("properties/density", "material_density"),
+        ("properties/diameter", "material_diameter"),
+    ):
+        text = root.findtext(
+            "/".join(f"m:{part}" for part in source.split("/")), "", _CURA_MATERIAL_NS
+        )
+        if text and text.strip():
+            values[target] = text.strip()
+    for item in root.findall("m:settings/m:setting", _CURA_MATERIAL_NS):
+        key = _CURA_MATERIAL_KEYS.get(item.get("key", ""))
+        if key and item.text and item.text.strip():
+            values[key] = item.text.strip()
+    return values
+
+
 def _kind_of(path: Path, root: Path) -> ProfileKind | None:
     """Maschine oder Prozess — abgelesen am Ordner, in dem die Datei liegt.
 
@@ -900,13 +1046,14 @@ def find_profiles(
 ) -> list[SlicerProfile]:
     """Alle benutzbaren Profile dieses Slicers, mitgelieferte und eigene.
 
-    Für ``prusa`` bleibt die Liste leer, und das ist kein Mangel: eine
-    PrusaSlicer-``.ini`` läuft eigenständig, sobald Düse und Bettform darin
-    stehen, und die schreibt Solidon selbst (§29).
+    Prusa-Bündel behalten zusätzlich ihren Abschnittsnamen. Versteckte
+    Erbbasen sind auflösbar, werden aber nicht als eigene Auswahl angeboten.
     """
+    wanted = frozenset(kinds)
+    if flavour == "prusa":
+        return _prusa_profiles(executable, wanted)
     if not has_readable_profiles(flavour):
         return []
-    wanted = frozenset(kinds)
     if flavour == "cura":
         # Eigene Ordnernamen, drei Formate: die Suche darunter findet dort
         # nichts (:data:`_CURA_DIRS`).
@@ -962,6 +1109,26 @@ def find_profiles(
             seen.add(key)
             found.append(profile)
 
+    # Die Auswahl bleibt klein, ihr Wissen umfasst aber auch unsichtbare
+    # Erbbasen. Pro Hersteller wird der Namensindex nur einmal gelesen.
+    indexes: dict[tuple[Path, ProfileKind | None], dict[str, Path]] = {}
+    all_roots = profile_roots(flavour, executable)
+    incomplete: set[int] = set()
+    for index, profile in enumerate(found):
+        if profile.compatible_printers or not profile.inherits:
+            continue
+        try:
+            chain = _chain(profile.path, all_roots, indexes=indexes)
+        except ExternalToolError as problem:
+            _log.warning("skipping incomplete profile %s: %s", profile.name, problem)
+            incomplete.add(index)
+            continue
+        for loaded in chain:
+            compatibility = tuple(_strings(loaded.get("compatible_printers")))
+            if compatibility:
+                found[index] = replace(profile, compatible_printers=compatibility)
+                break
+    found = [profile for index, profile in enumerate(found) if index not in incomplete]
     _log.info("found %d slicer profiles", len(found))
     return found
 
@@ -977,6 +1144,7 @@ DESCRIBING_KEYS: Final = frozenset(
         "type",
         "name",
         "inherits",
+        "include",
         "from",
         "instantiation",
         "setting_id",
@@ -1037,10 +1205,215 @@ def profile_roots(flavour: SlicerFlavour, executable: Path) -> tuple[Path, ...]:
         roots.append(installed)
     for folder in user_roots(flavour, executable):
         roots.append(folder)
+        if flavour in {"prusa", "cura"}:
+            continue
         system = folder.parent.parent / "system"
         if system.is_dir() and system not in roots:
             roots.append(system)
     return tuple(roots)
+
+
+_PRUSA_KINDS: Final[dict[str, ProfileKind]] = {
+    "printer": "machine",
+    "print": "process",
+    "filament": "filament",
+}
+
+
+def _prusa_files(root: Path) -> list[Path]:
+    """Aktive Bündel und eigene Profile; Update-Downloads unter cache bleiben draußen."""
+    return sorted(
+        {
+            *root.glob("*.ini"),
+            *(
+                path
+                for directory in (*_PRUSA_KINDS, "vendor")
+                for path in (root / directory).glob("*.ini")
+            ),
+        }
+    )
+
+
+def _prusa_list(value: str) -> list[str]:
+    """Prusa trennt Erbbasen mit Semikolon und erlaubt zitierte Namen."""
+    try:
+        return [
+            item.strip()
+            for item in next(
+                csv.reader(
+                    [value], delimiter=";", quotechar='"', escapechar="\\", skipinitialspace=True
+                )
+            )
+            if item.strip()
+        ]
+    except csv.Error:
+        return []
+
+
+class _PrusaStore:
+    """Ein Lesedurchgang: Abschnitte und aufgelöste Werte bleiben im Speicher."""
+
+    def __init__(self, roots: Sequence[Path], *, eager: bool = True) -> None:
+        self.roots = roots
+        self.documents: dict[Path, configparser.ConfigParser] = {}
+        self.entries: list[SlicerProfile] = []
+        self.by_name: dict[tuple[ProfileKind, str], list[SlicerProfile]] = {}
+        self.resolved: dict[tuple[Path, str], dict[str, Any]] = {}
+        if not eager:
+            return
+        for root in roots:
+            for path in _prusa_files(root):
+                if len(self.documents) >= MAX_FILES:
+                    return
+                self.read(path)
+
+    def find_parent(self, name: str, kind: ProfileKind) -> None:
+        """Beim Einzelabruf nur die Bündel öffnen, die den Elternnamen tragen."""
+        prefix = next(key for key, value in _PRUSA_KINDS.items() if value == kind)
+        heading = f"[{prefix}:{name}]"
+        for root in self.roots:
+            for index, path in enumerate(_prusa_files(root)):
+                if index >= MAX_FILES:
+                    break
+                if path in self.documents:
+                    continue
+                if path.parent.name == prefix and path.stem == name:
+                    self.read(path)
+                    continue
+                try:
+                    text = path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    continue
+                if heading in text.splitlines():
+                    self.read(path)
+
+    def read(self, path: Path) -> None:
+        """Ein Bündel oder eine kopflose eigene Einzeldatei lesen."""
+        if path in self.documents:
+            return
+        document = _read_prusa_ini(path)
+        if document is None:
+            return
+        self.documents[path] = document
+        start = len(self.entries)
+        own_kind = _PRUSA_KINDS.get(path.parent.name)
+        if own_kind and document[_PRUSA_HEAD]:
+            self.entries.append(
+                SlicerProfile(
+                    path,
+                    path.stem,
+                    own_kind,
+                    from_user=True,
+                    section=_PRUSA_HEAD,
+                    inherits=document[_PRUSA_HEAD].get("inherits", ""),
+                )
+            )
+        for section in document.sections():
+            prefix, separator, name = section.partition(":")
+            kind = _PRUSA_KINDS.get(prefix)
+            if separator and kind:
+                self.entries.append(
+                    SlicerProfile(
+                        path,
+                        name,
+                        kind,
+                        section=section,
+                        inherits=document[section].get("inherits", ""),
+                    )
+                )
+        for entry in self.entries[start:]:
+            self.by_name.setdefault((entry.kind, entry.name), []).append(entry)
+
+    def resolve(
+        self, profile: SlicerProfile, active: frozenset[tuple[Path, str]] = frozenset()
+    ) -> dict[str, Any]:
+        """Innerhalb eines Bündels erben; eigene Dateien dürfen Herstellerbasen nutzen."""
+        key = (profile.path, profile.section)
+        if key in active or len(active) >= MAX_INHERITANCE:
+            raise _incomplete_profile(profile.path)
+        if key in self.resolved:
+            return self.resolved[key]
+        self.read(profile.path)
+        document = self.documents.get(profile.path)
+        section = profile.section or _PRUSA_HEAD
+        if document is None or not document.has_section(section):
+            return {}
+        raw = dict(document[section])
+        values: dict[str, Any] = {}
+        for name in _prusa_list(raw.get("inherits", "")):
+            if profile.from_user:
+                self.find_parent(name, profile.kind)
+            candidates = [
+                entry
+                for entry in self.by_name.get((profile.kind, name), ())
+                if (entry.path, entry.section) != key
+            ]
+            local = [entry for entry in candidates if entry.path == profile.path]
+            # Bündelbasen sind dateilokal; gleichnamige *common*-Abschnitte
+            # anderer Hersteller sind ausdrücklich keine Ersatzbasis.
+            choices = local or (candidates if profile.from_user else [])
+            if not choices:
+                raise _incomplete_profile(profile.path)
+            parent = max(enumerate(choices), key=lambda item: (item[1].from_user, item[0]))[1]
+            values.update(self.resolve(parent, active | {key}))
+        values.update({name: value for name, value in raw.items() if name != "inherits"})
+        self.resolved[key] = values
+        return values
+
+
+def _prusa_profiles(executable: Path, wanted: frozenset[ProfileKind]) -> list[SlicerProfile]:
+    """Native Profile, mit aufgelöster Maschinenidentität und unsichtbaren Erbbasen."""
+    store = _PrusaStore(profile_roots("prusa", executable))
+    found: dict[tuple[ProfileKind, str], SlicerProfile] = {}
+    for entry in store.entries:
+        if entry.kind not in wanted or (entry.name.startswith("*") and entry.name.endswith("*")):
+            continue
+        try:
+            values = store.resolve(entry)
+        except ExternalToolError as problem:
+            _log.warning("skipping incomplete Prusa profile %s: %s", entry.name, problem)
+            continue
+        if entry.kind == "machine" and values.get("printer_technology") == "SLA":
+            continue
+        model = str(values.get("printer_model", ""))
+        section = f"printer_model:{model}"
+        document = store.documents[entry.path]
+        if document.has_section(section):
+            model = document[section].get("name", model)
+        profile = replace(
+            entry,
+            printer_model=model,
+            nozzle=_first_number(str(values.get("nozzle_diameter", "")).split(",")[0]),
+            default_process=str(values.get("default_print_profile", "")),
+            filament_type=str(values.get("filament_type", "")),
+            compatible_printers=tuple(_prusa_list(str(values.get("compatible_printers", "")))),
+        )
+        key = (profile.kind, profile.name)
+        if key not in found or profile.from_user or not found[key].from_user:
+            found[key] = profile
+    return list(found.values())
+
+
+def profile_by_name(
+    executable: Path, flavour: SlicerFlavour, name: str, kind: ProfileKind
+) -> SlicerProfile | None:
+    """Portable Identität auflösen; Prusa behält den Abschnitt neben dem Pfad."""
+    matches = [entry for entry in find_profiles(executable, flavour, (kind,)) if entry.name == name]
+    choices = [entry for entry in matches if entry.from_user] or matches
+    return choices[0] if len(choices) == 1 else None
+
+
+def resolve_profile(profile: SlicerProfile, roots: Sequence[Path] = ()) -> dict[str, Any]:
+    """Native Werte ausschreiben, ohne Formeln oder G-Code auszuführen.
+
+    Prusa-Werte bleiben INI-serialisiert (auch ``\\n`` in G-Code), Cura und
+    Orca behalten die Werttypen ihrer Dateien. Eine Prusa-Bündeldatei braucht
+    zwingend die Abschnittsidentität aus :func:`profile_by_name`.
+    """
+    if profile.path.suffix == ".ini":
+        store = _PrusaStore(roots, eager=False)
+        return dict(store.resolve(profile))
+    return resolve_values(profile.path, roots)
 
 
 def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
@@ -1078,7 +1451,9 @@ def _names_in(root: Path, kind: ProfileKind | None) -> dict[str, Path]:
     aussieht.
     """
     index: dict[str, Path] = {}
-    for entry in root.rglob("*.json"):
+    for count, entry in enumerate(sorted(root.rglob("*.json"))):
+        if count >= MAX_FILES:
+            break
         if kind is not None and _kind_of(entry, root) != kind:
             continue
         try:
@@ -1103,6 +1478,26 @@ def resolve_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     :func:`find_profiles` nicht auf. Hier werden sie gebraucht, also werden sie
     hier gelesen.
     """
+    if path.name.endswith(".def.json"):
+        return _cura_definition_values(path, roots)
+    if path.name.endswith(".xml.fdm_material"):
+        return _cura_material_values(path)
+    if path.name.endswith(".inst.cfg"):
+        parsed = _read_ini(path)
+        if parsed is None or not parsed.has_section("values"):
+            return {}
+        return {
+            key: value
+            for key, value in parsed["values"].items()
+            if not value.lstrip().startswith("=")
+        }
+    if path.suffix == ".ini":
+        kind = _PRUSA_KINDS.get(path.parent.name)
+        if kind is None:
+            # Ein Bündel ist kein einzelnes Profil. Der Aufrufer braucht
+            # dessen Abschnitt, statt zufällig den ersten zu übernehmen.
+            raise _incomplete_profile(path)
+        return resolve_profile(SlicerProfile(path, path.stem, kind, from_user=True), roots)
     values: dict[str, Any] = {}
     for loaded in reversed(_chain(path, roots)):  # Wurzel zuerst, Spezielles gewinnt
         values.update({key: value for key, value in loaded.items() if key not in DESCRIBING_KEYS})
@@ -1137,7 +1532,12 @@ def binding(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     return found
 
 
-def _chain(path: Path, roots: Sequence[Path] = ()) -> list[dict[str, Any]]:
+def _chain(
+    path: Path,
+    roots: Sequence[Path] = (),
+    *,
+    indexes: dict[tuple[Path, ProfileKind | None], dict[str, Path]] | None = None,
+) -> list[dict[str, Any]]:
     """Die Profile der Erbkette, spezifisches zuerst.
 
     Roh, ohne Zusammenlegen und ohne Filter: Die beiden Auswertungen
@@ -1152,45 +1552,84 @@ def _chain(path: Path, roots: Sequence[Path] = ()) -> list[dict[str, Any]]:
     beim Delta, und wer das ausgeschriebene Profil liest, soll wissen, dass
     es unvollständig ist.
     """
-    index = _names_in(_family(path), None)
-    wider: dict[str, Path] | None = None
+    indexes = {} if indexes is None else indexes
 
-    chain: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    current: Path | None = path
-    for _step in range(MAX_INHERITANCE):
-        if current is None or not current.is_file():
-            break
+    def lookup(current: Path, name: str) -> Path | None:
+        family = _family(current)
+        family_key = (family, None)
+        if family_key not in indexes:
+            indexes[family_key] = _names_in(family, None)
+        local = indexes[family_key].get(name)
+        if local is not None and local != current:
+            return local
+        for root in _store_roots(current, roots):
+            key = (root, _kind_by_folder(current))
+            if key not in indexes:
+                indexes[key] = _names_in(root, key[1])
+            found = indexes[key].get(name)
+            if found is not None:
+                return found
+        return None
+
+    def visit(current: Path, active: frozenset[Path], template: bool) -> list[dict[str, Any]]:
+        if current in active or len(active) >= MAX_INHERITANCE:
+            if template:
+                raise _incomplete_profile(path)
+            return []
         try:
             loaded = json.loads(current.read_text(encoding="utf-8"))
         except (OSError, ValueError) as problem:
             _log.debug("stopping at %s: %s", current.name, problem)
-            break
+            if template:
+                raise _incomplete_profile(path) from problem
+            return []
         if not isinstance(loaded, dict):
-            break
-        chain.append(loaded)
+            if template:
+                raise _incomplete_profile(path)
+            return []
+        active = active | {current}
+        chain: list[dict[str, Any]] = []
         parent = str(loaded.get("inherits", ""))
-        if not parent or parent in seen:
-            break
-        seen.add(parent)
-        current = index.get(parent)
-        if current is None:
-            if wider is None:
-                wider = {}
-                kind = _kind_by_folder(path)
-                for root in _store_roots(path, roots):
-                    for name, entry in _names_in(root, kind).items():
-                        wider.setdefault(name, entry)
-            current = wider.get(parent)
-        if current is None:
-            _log.warning(
-                "profile %s inherits %r, which is nowhere in the store — "
-                "the resolved values stop at the child",
-                path.name,
-                parent,
-            )
+        if parent:
+            inherited = lookup(current, parent)
+            if inherited is not None:
+                chain.extend(visit(inherited, active, template))
+            elif template:
+                raise _incomplete_profile(path)
+            else:
+                _log.warning(
+                    "profile %s inherits %r, which is nowhere in the store — "
+                    "the resolved values stop at the child",
+                    current.name,
+                    parent,
+                )
+        includes = loaded.get("include", [])
+        if not isinstance(includes, (str, list)) or (
+            isinstance(includes, list) and any(not isinstance(item, str) for item in includes)
+        ):
+            raise _incomplete_profile(path)
+        for name in _strings(includes):
+            included = lookup(current, name)
+            if included is None:
+                raise _incomplete_profile(path)
+            chain.extend(visit(included, active, True))
+        chain.append(loaded)
+        return chain
 
-    return chain
+    # Bambu: Basis, Vorlagen in Listenreihenfolge, danach eigene Werte.
+    return list(reversed(visit(path, frozenset(), False)))
+
+
+def _incomplete_profile(path: Path) -> ExternalToolError:
+    """Eine nicht auflösbare Vorlage darf keinen generischen Ablauf liefern."""
+    return ExternalToolError(
+        tool=path.name,
+        detail=_(
+            "Das Slicer-Profil „{name}“ ist unvollständig. Prüfen Sie seine Vorlagen im Slicer.",
+            name=path.stem,
+        ),
+        suggestions=(CHECK_SLICER_PROFILE,),
+    )
 
 
 def machines(profiles: list[SlicerProfile]) -> list[SlicerProfile]:
@@ -1213,6 +1652,10 @@ def compatible_with(profile: SlicerProfile, known: dict[str, SlicerProfile]) -> 
     einen Drucker genau ein Prozessprofil und hält alle anderen für
     unverträglich.
     """
+    if profile.compatible_printers:
+        return profile.compatible_printers
+    if profile.path.is_file():
+        return tuple(_strings(binding(profile.path).get("compatible_printers")))
     seen: set[str] = set()
     current: SlicerProfile | None = profile
     for _step in range(MAX_INHERITANCE):
@@ -1313,7 +1756,7 @@ def type_of(profile: SlicerProfile, roots: Sequence[Path] = ()) -> str:
     """Welches Material dieses Filamentprofil meint — eigene Angabe oder geerbte."""
     if profile.filament_type:
         return profile.filament_type
-    return _first_string(resolve_values(profile.path, roots).get("filament_type"))
+    return _first_string(resolve_profile(profile, roots).get("filament_type"))
 
 
 def match(
@@ -1326,11 +1769,11 @@ def match(
     Vorauswahl wäre schlimmer als keine, weil sie wie eine Entscheidung
     aussieht.
     """
-    wanted = printer.title.casefold()
     candidates = [
         entry
         for entry in machines(profiles)
-        if entry.printer_model.casefold() == wanted or entry.name.casefold().startswith(wanted)
+        if _names_the_printer(entry.printer_model, printer.title)
+        or _names_the_printer(entry.name, printer.title)
     ]
     if not candidates:
         return None, None
@@ -1536,7 +1979,42 @@ def machine_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
 
 
-def filament_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, float | int]:
+_PRUSA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+    ("temperature.nozzle", "temperature", int),
+    ("temperature.nozzle_first_layer", "first_layer_temperature", int),
+    ("temperature.bed", "bed_temperature", int),
+    ("temperature.bed_first_layer", "first_layer_bed_temperature", int),
+    ("temperature.chamber", "chamber_temperature", int),
+    ("cooling.fan_speed", "max_fan_speed", float),
+    ("cooling.bridge_fan_speed", "bridge_fan_speed", float),
+    ("cooling.disable_first_layers", "disable_fan_first_layers", int),
+    ("cooling.minimum_layer_time", "slowdown_below_layer_time", float),
+    ("filament.density", "filament_density", float),
+    ("filament.diameter", "filament_diameter", float),
+    ("filament.flow_ratio", "extrusion_multiplier", float),
+    ("filament.max_flow", "filament_max_volumetric_speed", float),
+    ("retraction.length", "filament_retract_length", float),
+    ("retraction.speed", "filament_retract_speed", float),
+    ("retraction.z_hop", "filament_retract_lift", float),
+)
+
+_CURA_FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
+    ("temperature.nozzle", "material_print_temperature", int),
+    ("temperature.nozzle_first_layer", "material_print_temperature_layer_0", int),
+    ("temperature.bed", "material_bed_temperature", int),
+    ("temperature.bed_first_layer", "material_bed_temperature_layer_0", int),
+    ("temperature.chamber", "build_volume_temperature", int),
+    ("cooling.fan_speed", "cool_fan_speed", float),
+    ("filament.density", "material_density", float),
+    ("filament.diameter", "material_diameter", float),
+    ("retraction.length", "retraction_amount", float),
+    ("retraction.speed", "retraction_speed", float),
+)
+
+
+def filament_values(
+    path: Path | SlicerProfile, roots: Sequence[Path] = ()
+) -> dict[str, float | int]:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 
     Die Erbkette wird aufgelöst — ein Profil bei Elegoo setzt selbst drei Werte
@@ -1547,18 +2025,38 @@ def filament_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, float |
     hat, ist keine Angabe des Herstellers, und ihn zu erfinden wäre schlimmer
     als ihn wegzulassen.
     """
-    resolved = resolve_values(path, roots)
+    resolved = (
+        resolve_profile(path, roots)
+        if isinstance(path, SlicerProfile)
+        else resolve_values(path, roots)
+    )
+    source = path.path if isinstance(path, SlicerProfile) else path
+    readback = FILAMENT_READBACK
+    if source.suffix == ".ini":
+        readback = _PRUSA_FILAMENT_READBACK
+    elif source.name.endswith((".xml.fdm_material", ".inst.cfg")):
+        readback = _CURA_FILAMENT_READBACK
     values: dict[str, float | int] = {}
-    for solidon, orca, kind in FILAMENT_READBACK:
-        raw = resolved.get(orca)
+    for solidon, native, kind in readback:
+        raw = resolved.get(native)
         if isinstance(raw, list):
             raw = raw[0] if raw else None
         if raw is None or raw == "" or raw == "nil":
             continue
         text = str(raw).strip().rstrip("%")
+        if source.suffix == ".ini":
+            text = text.split(",")[0]
         try:
             number = float(text)
         except ValueError:
+            continue
+        if not math.isfinite(number):
+            raise ValidationError(
+                field=solidon,
+                detail=_("Dieser Profilwert muss eine endliche Zahl sein."),
+                values={"file": path.name, "value": text},
+            )
+        if solidon == "filament.max_flow" and number <= 0:
             continue
         if solidon in _AS_FRACTION:
             number /= 100.0

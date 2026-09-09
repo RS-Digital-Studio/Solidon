@@ -38,11 +38,39 @@ def many(count: int, size: float = 120.0) -> list[MeshData]:
 
 
 def test_what_fits_stays_on_one_plate(profile: Profile) -> None:
+    """Vier Platten passen auf die uneingeschränkte rechteckige Nennfläche."""
+    profile = dataclasses.replace(
+        profile, printer=dataclasses.replace(profile.printer, bed_exclusions=())
+    )
     result = arrange_on_bed(many(4), profile, spacing=5.0, plates=4)
 
     assert result.plates == [0, 0, 0, 0]
     assert result.plate_count == 1
     assert not result.findings
+
+
+def test_centauri_carbon_2_arrangement_keeps_its_actual_exclusion_clear(profile: Profile) -> None:
+    """Auf dem CC2 bleibt die gesperrte Ecke frei; das vierte Teil wechselt die Platte."""
+    from shapely.geometry import Polygon, box
+
+    assert profile.printer.id == "centauri-carbon-2"
+    assert profile.printer.bed_exclusions, "the real printer must retain its exclusion"
+    forbidden = [Polygon(points) for points in profile.printer.bed_exclusions]
+
+    result = arrange_on_bed(many(4), profile, spacing=5.0, plates=4)
+
+    assert len(result.meshes) == 4
+    assert result.plate_count == 2
+    assert not result.findings
+    for mesh in result.meshes:
+        bounds = mesh.bounds
+        rectangle = box(bounds.minimum[0], bounds.minimum[1], bounds.maximum[0], bounds.maximum[1])
+        assert all(rectangle.disjoint(area) for area in forbidden)
+    for plate in range(result.plate_count):
+        on_plate = [
+            mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
+        ]
+        assert not check_collisions(on_plate), f"plate {plate}"
 
 
 def test_what_does_not_fit_goes_on_the_next_plate(profile: Profile) -> None:
