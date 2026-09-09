@@ -12067,7 +12067,12 @@ class MainWindow(QMainWindow):
         if result is None or chosen is None or not available():
             return {}
         entry = result.scene.objects.get(chosen)
-        body = getattr(entry, "exact", None) if entry is not None else None
+        # **Der exakte Körper steht in ``mesh``**, und das ist keine Feinheit:
+        # ``SceneObject`` hat kein Feld ``exact``. Ein ``getattr`` darauf gab
+        # immer ``None``, die Kantenliste blieb immer leer, und der Dialog
+        # zeigte eine leere Auswahl — geprüft war sie an einer gestellten
+        # Liste, nie am Fenster. ``brep_input`` fragt an derselben Stelle.
+        body = entry.mesh if entry is not None else None
         if not isinstance(body, Solid):
             return {}
         return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}

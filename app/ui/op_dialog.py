@@ -1098,6 +1098,7 @@ class EdgeSetField(QWidget):
     """
 
     changed = Signal()
+    validityChanged = Signal()
 
     def __init__(
         self, choices: Mapping[str, str], selected: str, parent: QWidget | None = None
@@ -1138,8 +1139,25 @@ class EdgeSetField(QWidget):
             if self.list.item(row).checkState() == Qt.CheckState.Checked
         )
 
+    @property
+    def valid(self) -> bool:
+        """Ohne angekreuzte Kante trägt die Wahl nicht — solange sie gilt.
+
+        **Ein ausgegrautes Feld hat keine Meinung**: Steht der Umschalter auf
+        einer Gruppe, wirkt diese Liste nicht, und leer zu sein ist dann kein
+        Mangel. Ohne diese Hälfte sperrte das leere Feld den Knopf auch dort,
+        wo es gar nicht gefragt ist.
+        """
+        return not self.isEnabled() or bool(self.value())
+
+    def setEnabled(self, enabled: bool) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Ein- und Ausschalten ändert, ob die leere Wahl zählt."""
+        super().setEnabled(enabled)
+        self.validityChanged.emit()
+
     def _changed(self, *_args: object) -> None:
         self.changed.emit()
+        self.validityChanged.emit()
 
 
 class FeatureSetField(QWidget):
@@ -1562,11 +1580,21 @@ class OperationDialog(QDialog):
             isinstance(editor, FeatureSetField) and not editor.valid
             for editor in self._editors.values()
         )
+        # Und dieselbe Frage an die Kantenliste (E4): „Einzeln gewählt" ohne
+        # ein Kreuz ist ein Knopf, der sicher scheitert — der Kern sagt dann
+        # „für diese Auswahl ist noch keine Kante benannt", und das ist ein
+        # Satz zu spät.
+        no_edge = any(
+            isinstance(editor, EdgeSetField) and not editor.valid
+            for editor in self._editors.values()
+        )
         reason = (
             tr("Datei wird gelesen …")
             if pending
             else (tr("Flächen markieren oder den ganzen Körper wählen.") if incomplete else "")
+            or (tr("Kreuzen Sie mindestens eine Kante an.") if no_edge else "")
         )
+        incomplete = incomplete or no_edge
         button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
         button.setStatusTip(reason)
@@ -1863,7 +1891,7 @@ class OperationDialog(QDialog):
         """
         from app.ui.sketch_editor import SketchField
 
-        if isinstance(editor, FeatureSetField):
+        if isinstance(editor, FeatureSetField | EdgeSetField):
             editor.changed.connect(self.valuesChanged)
             editor.validityChanged.connect(self._follow_source_pending)
         elif isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):

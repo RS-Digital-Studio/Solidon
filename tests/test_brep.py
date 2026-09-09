@@ -461,6 +461,29 @@ def test_fillet_edges_runs_as_an_operation(profile: Profile) -> None:
     assert result.outputs[0].kind == "brep"
 
 
+def test_a_group_choice_ignores_an_older_single_pick(profile: Profile) -> None:
+    """Der Umschalter entscheidet, nicht ein Wert, der noch dasteht (E4).
+
+    Der Dialog graut die Kantenliste aus, wenn eine Gruppe gewählt ist — er
+    **löscht** sie aber nicht, und das ist richtig: eine Zeile, die
+    verschwindet, sucht man (§2.6). Damit blieb der Wert im Schritt stehen und
+    gewann über den Umschalter: Wer eine Kante ankreuzte, danach auf
+    *senkrechte* zurückging und anwendete, bekam weiter seine eine. Der Dialog
+    sagte das eine, gerechnet wurde das andere — und beides sah richtig aus.
+    """
+    entry = SceneObject(id="obj_1", name="Block", mesh=block(), kind="brep")
+    eine = edit.edge_key(next(info for info in edit.edges_of(block()) if info.upright))
+    corner = 9.0 - math.pi * 9.0 / 4.0
+
+    gruppe = run("fillet_edges", entry, profile, radius=3.0, edges="vertical", edge_keys=eine)
+    einzeln = run("fillet_edges", entry, profile, radius=3.0, edges="named", edge_keys=eine)
+
+    assert gruppe.outputs[0].mesh.volume == pytest.approx(24000.0 - 4 * corner * 20.0, rel=1e-9), (
+        "die Gruppe nimmt alle vier — der stehengebliebene Wert zählt nicht"
+    )
+    assert einzeln.outputs[0].mesh.volume == pytest.approx(24000.0 - corner * 20.0, rel=1e-9)
+
+
 def test_chamfer_edges_runs_as_an_operation(profile: Profile) -> None:
     entry = SceneObject(id="obj_1", name="Block", mesh=block(), kind="brep")
 

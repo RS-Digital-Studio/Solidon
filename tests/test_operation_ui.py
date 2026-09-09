@@ -1458,6 +1458,69 @@ def test_the_fillet_lets_a_single_edge_be_ticked(window: MainWindow) -> None:
         dialog.deleteLater()
 
 
+def test_the_edge_list_comes_from_the_body_in_the_window(window: MainWindow) -> None:
+    """Die Kantenliste muss am **Fenster** entstehen, nicht im Test (E4).
+
+    Der Dialogtest darüber stellt sie und prüft damit, was der Dialog mit einer
+    Liste macht — nicht, ob es je eine gibt. Genau dort saß der Fehler:
+    ``_edge_names`` fragte ein Feld ``exact``, das ``SceneObject`` nicht hat.
+    Der ``getattr`` gab immer ``None``, die Liste blieb immer leer, und im
+    Dialog stand eine leere Auswahl, ohne dass etwas rot wurde.
+    """
+    pytest.importorskip("OCP")
+
+    window.session.start_new("centauri-carbon-2", "petg")
+    window.session.history.apply(
+        "Exakter Quader",
+        [
+            OperationDraft(
+                op="create_brep_box", params={"width": 40.0, "depth": 30.0, "height": 20.0}
+            )
+        ],
+    )
+    window.session.evaluate_now()
+    result = window.session.last_result
+    assert result is not None
+    window.object_tree.select_object(next(iter(result.scene.objects)))
+
+    kanten = window._edge_names()
+
+    assert len(kanten) == 12, f"ein Quader hat zwölf Kanten, gefunden: {len(kanten)}"
+    assert all(key.startswith("e:") for key in kanten), "die Schlüssel kommen aus dem Kern"
+    assert any("Senkrecht" in text for text in kanten.values()), (
+        "in der Liste steht die Lage, nicht die Kennung"
+    )
+
+
+def test_an_empty_edge_choice_locks_the_button_instead_of_failing(window: MainWindow) -> None:
+    """„Einzeln gewählt" ohne Kreuz ist ein Knopf, der sicher scheitert (E4).
+
+    Der Kern sagt dann „für diese Auswahl ist noch keine Kante benannt" — ein
+    richtiger Satz, einen Klick zu spät. Der Dialog kennt den Weg, den Knopf zu
+    sperren und den Grund daneben zu schreiben; die Flächenwahl geht ihn seit
+    je, die Kantenwahl ging ihn nicht.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    kanten = {"e:-20.00,-15.00,10.00:0.000,0.000,1.000": "Senkrecht · 20 mm · x -20,0, y -15,0"}
+    dialog = OperationDialog(REGISTRY.get("fillet_edges"), {}, window, edges=kanten)
+    try:
+        knopf = dialog._accept_button
+        assert knopf.isEnabled(), "an einer Gruppe ist nichts unvollständig"
+
+        umschalter = dialog._editors["edges"]
+        assert isinstance(umschalter, QComboBox)
+        umschalter.setCurrentIndex(umschalter.findData("named"))
+
+        assert not knopf.isEnabled(), "ohne Kreuz kann der Knopf nichts ausrichten"
+        assert "Kante" in knopf.toolTip(), f"ohne Grund: {knopf.toolTip()!r}"
+
+        dialog._editors["edge_keys"].list.item(0).setCheckState(Qt.CheckState.Checked)
+        assert knopf.isEnabled(), "mit einem Kreuz geht es wieder"
+    finally:
+        dialog.deleteLater()
+
+
 def test_the_sweep_offers_a_drawn_path_and_greys_out_the_arc(window: MainWindow) -> None:
     """RM-147 E3: Der Sweep läuft jetzt auch an einer gezeichneten Bahn entlang.
 

@@ -278,6 +278,47 @@ def test_a_sweep_follows_a_drawn_path_around_its_corner() -> None:
     )
 
 
+def test_a_sweep_follows_a_path_with_a_rounded_corner() -> None:
+    """Der Hauptfall war ungeprüft: eine Bahn mit einem **Bogen** darin.
+
+    Ein Kabelkanal biegt mit Radius ab, ein Griff hat eine Kehle — reine
+    Streckenzüge sind die Ausnahme. Die Bahn ist hier 30 mm gerade und dann ein
+    Viertelkreis mit Radius 10; ihre Länge ist ``30 + π·10/2``, und über den
+    Kreisquerschnitt Ø8 ergibt das ein Volumen, das sich hinschreiben lässt.
+
+    **Ein Bogen-Element trägt (Mitte, Anfang, Ende)** — in der anderen
+    Reihenfolge entsteht der lange Weg herum, die Bahn kreuzt sich selbst, und
+    OpenCASCADE weist sie ab. Das ist richtig so und war beim Schreiben dieses
+    Tests der erste Anlauf.
+    """
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import Sketch, SketchElement
+
+    bahn = Sketch(
+        plane="plane:xz",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (0.0, 30.0))),
+            SketchElement("arc", ((10.0, 30.0), (10.0, 40.0), (0.0, 30.0))),
+        ),
+        constraints=(),
+    )
+
+    body = solid_of(
+        run(
+            "sketch_sweep",
+            shape="circle",
+            length=8.0,
+            along="drawn",
+            path_sketch=sketch_to_text(bahn),
+        )
+    )
+
+    laenge = 30.0 + math.pi * 10.0 / 2.0
+    assert body.volume == pytest.approx(math.pi * 16.0 * laenge, rel=1e-6), (
+        "der Bogen trägt den Querschnitt genauso wie die Gerade"
+    )
+
+
 def test_a_sweep_puts_the_start_of_its_path_into_the_origin() -> None:
     """Die Bahn beschreibt einen Verlauf und keinen Ort.
 

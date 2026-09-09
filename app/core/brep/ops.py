@@ -63,13 +63,24 @@ _CHOICE_DOC = _(
 )
 
 
-def _chosen_edges(value: str) -> tuple[str, ...]:
+def _chosen_edges(choice: str, value: str) -> tuple[str, ...]:
     """Die einzeln gewählten Kanten aus dem gespeicherten Wert (E4).
 
     Ein Text mit Leerzeichen dazwischen, wie ihn ``kind=\"edges\"`` ablegt.
     Der Editor im Dialog setzt ihn zusammen; hier steht der eine Weg zurück,
     damit Verrundung und Fase ihn nicht zweimal verschieden lesen.
+
+    **Und ``choice`` entscheidet, nicht der Inhalt.** Der Dialog graut das Feld
+    aus, wenn eine Gruppe gewählt ist — er **löscht** es aber nicht, und das ist
+    richtig (§2.6: eine Zeile, die verschwindet, sucht man). Ohne diese Frage
+    gewann damit eine alte Einzelwahl über den Umschalter: Wer eine Kante
+    ankreuzte, danach auf *senkrechte* zurückging und anwendete, bekam weiter
+    seine eine — der Dialog sagte das eine, gerechnet wurde das andere.
+    Gemessen an einem Quader: 23961 mm³ auf beiden Wegen, wo die Gruppe 23845
+    hätte ergeben müssen.
     """
+    if choice != "named":
+        return ()
     return tuple(part for part in value.split() if part)
 
 
@@ -283,7 +294,10 @@ def fillet_edges(ctx: OpContext) -> OpResult:
     params = cast(FilletParams, ctx.params)
     source, body = brep_input(ctx)
     solid = edit.fillet(
-        body, params.radius, cast(edit.EdgeChoice, params.edges), _chosen_edges(params.edge_keys)
+        body,
+        params.radius,
+        cast(edit.EdgeChoice, params.edges),
+        _chosen_edges(params.edges, params.edge_keys),
     )
     return OpResult(outputs=[_replaced(source, solid)])
 
@@ -332,7 +346,10 @@ def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
     source, body = brep_input(ctx)
     solid = edit.chamfer(
-        body, params.distance, cast(edit.EdgeChoice, params.edges), _chosen_edges(params.edge_keys)
+        body,
+        params.distance,
+        cast(edit.EdgeChoice, params.edges),
+        _chosen_edges(params.edges, params.edge_keys),
     )
     return OpResult(outputs=[_replaced(source, solid)])
 
