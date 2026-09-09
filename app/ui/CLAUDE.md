@@ -165,6 +165,29 @@ Kunden, die Abbildung als reine Funktion — Regel in `ansicht.md`).
 dem gedrückten Rad und die Flugtasten. Wer dort an einer Achse dreht, dreht
 an allen dreien
 
+**Wer eine Fläche braucht, kommt gleich hin — wer keine braucht, behält
+seinen Dialog.** `placement_flow.starts_by_itself(spec)` zieht die Grenze an
+`consumes`: Baustein, Beschriftung und Bohrung sitzen auf etwas und gehen
+sofort in die Platzierung; die fünf Grundkörper entstehen aus eigenen Maßen an
+eigenen Koordinaten und bleiben beim Dialog. Dort zeigt die Live-Vorschau den
+Körper, sobald der Dialog offen ist — `Session.preview_async` rechnet ihn
+ohnehin, und `request()` überspringt sie nur, solange die Platzierung läuft.
+`start()` versteckt den Dialog, und Breite, Tiefe und Höhe stehen nirgends
+sonst; wer die Maße ändern wollte, musste sonst Escape drücken, tippen und neu
+platzieren. Der Knopf bleibt für den, der doch auf eine Fläche will.
+
+**Und diese Vorschau lässt sich anfassen.** `Viewport.set_preview_gizmo`
+hängt denselben Bewegungsgriff an den `added:`-Aktor der Vorschau, den
+`set_gizmo` sonst an die Auswahl hängt — ohne Skalierwürfel, denn Breite,
+Tiefe und Höhe stehen im Dialog daneben. Der Zug meldet sich über
+`previewDragged` als **Matrix** und nicht als `TransformSteps`: Er wird keine
+Operation, sondern Zahlen, und `primitive_ops.placement_values_of` rechnet
+daraus Ort, Richtung und Winkel — die Umkehrung von `placement_transform`,
+gegen ihn geprüft. `_grips_its_preview` entscheidet, wer ihn bekommt: wer
+seinen Dialog behält und die Felder dafür hat. Der Griff wird nach jedem
+Neuzeichnen der Vorschau frisch angehängt; er rechnet gegen die Matrix seines
+Ziels beim Anhängen, und die Vorschau kommt bei jeder Wertänderung neu.
+
 **Platzieren bleibt eine Operation.** Der Operationsdialog übergibt Werte an
 `PlacementFlow`; der Controller zeigt nur einen temporären Werkzeugaktor und
 Maßpfeile. `Session.placement_async()` berechnet Originalfläche und

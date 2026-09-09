@@ -43,7 +43,7 @@ from app.core.types import (
     Transform,
     Vec3,
 )
-from app.core.units import EPS_DISPLAY, EPS_GEOM, is_greater, is_zero
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM, is_greater, is_zero
 from app.i18n import TranslatableText, _
 
 _ANCHORS = ("centre", "corner")
@@ -52,6 +52,10 @@ _POSITION_X_DOC = _("Verschiebt den bisherigen Bezugspunkt des Körpers entlang 
 _POSITION_MORE_DOC = _("Weitere Achse des Orts — siehe Position X.")
 _NORMAL_X_DOC = _("Richtung der lokalen Z-Achse. 0/0/0 behält die bisherige Ausrichtung nach oben.")
 _NORMAL_MORE_DOC = _("Weitere Achse der Richtung — siehe Normale X.")
+_ANGLE_DOC = _(
+    "Dreht den Körper um seine eigene Hochachse. Die Richtung sagt, wohin er "
+    "zeigt; dieser Winkel, wie er dabei herumsteht."
+)
 
 #: Ab wann eine Normale als senkrecht gilt (:func:`top_face_of`). Der Kosinus
 #: von einem Grad — enger wäre eine Frage an die Rechengenauigkeit, weiter
@@ -163,12 +167,19 @@ def primitive_local_tool(name: str, values: Mapping[str, Any], quality: Quality)
 
 @op_params
 class PositionedPrimitiveParams(BaseParams):
-    """Gemeinsamer freier Bezugspunkt und lokale Z-Richtung.
+    """Gemeinsamer freier Bezugspunkt, lokale Z-Richtung und Drehung.
 
-    Öffentlich, weil der exakte Kern dieselben sechs Felder trägt
+    Öffentlich, weil der exakte Kern dieselben sieben Felder trägt
     (``brep.ops``): Die Zwillingspaare aus ``MENU_TWINS`` sind dieselbe
     Handlung in zwei Rechenkernen, und ein Umschalten darf den Körper nicht
-    in den Ursprung zurückstellen.
+    in den Ursprung zurückstellen — und seit dem 09.09.2026 auch nicht
+    zurückdrehen.
+
+    **``angle`` heißt so wie überall.** Die Bausteine führen denselben Wert
+    unter diesem Namen (``knowledge/parts/ops.py``), und das Register zählt
+    ihn zu den Platzierungsfeldern (``PART_PLACEMENT_PARAMS``). Ein zweiter
+    Name — ``roll`` etwa — hätte den Grundkörpern einen eigenen Weg durch die
+    Oberflächenplatzierung gebaut, wo sie den vorhandenen mitbenutzen können.
     """
 
     x: float = param(
@@ -209,6 +220,15 @@ class PositionedPrimitiveParams(BaseParams):
         default=0.0,
         placement="advanced",
         doc=_NORMAL_MORE_DOC,
+    )
+    angle: float = param(
+        title=_("Drehung"),
+        default=0.0,
+        unit=DEGREE_UNIT,
+        minimum=-360.0,
+        maximum=360.0,
+        placement="advanced",
+        doc=_ANGLE_DOC,
     )
 
 
@@ -499,19 +519,113 @@ def placement_transform(params: PositionedPrimitiveParams) -> Transform:
             constraint="not_finite",
         )
 
+    # **Die Drehung um die eigene Hochachse steht vor dem Rahmen.** Die
+    # Richtung sagt, wohin +Z zeigt; welche Querachse dabei nach vorn kommt,
+    # legt ``frame_of`` deterministisch, aber nicht wählbar fest. Für einen
+    # Zylinder ist das gleichgültig, für einen Quader nicht — er soll sich um
+    # seine Hochachse drehen lassen, ohne dass jemand die Richtung verbiegt
+    # (Robert, 09.09.2026: „verschieben und drehen wie unter dem
+    # Bewegungsmenü").
+    turn = np.eye(4)
+    angle = math.radians(float(params.angle))
+    if not is_zero(angle):
+        cosine, sine = math.cos(angle), math.sin(angle)
+        turn[:3, :3] = ((cosine, -sine, 0.0), (sine, cosine, 0.0), (0.0, 0.0, 1.0))
+
     length = math.hypot(*direction)
     if not length:
-        matrix = translation(position)
+        matrix = np.eye(4)
+        matrix[:3, 3] = position
+        matrix = matrix @ turn
     else:
         normal = tuple(float(value / length) for value in direction)
         frame = frame_of(cast(Vec3, normal), position)
         matrix = np.eye(4)
         matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
         matrix[:3, 3] = position
+        matrix = matrix @ turn
 
     from app.core.geom.ops import as_transform
 
     return as_transform(matrix)
+
+
+def placement_values_of(matrix: Any) -> dict[str, float]:
+    """Die Umkehrung von :func:`placement_transform`: aus einer Lage die Werte.
+
+    Ein Griff im Bild liefert eine Matrix; das Dokument trägt Zahlen. Wer beide
+    Richtungen von Hand rechnet, bekommt zwei Rechnungen, die auseinanderlaufen
+    — deshalb steht die Umkehrung neben ihrem Hinweg und wird gegen ihn geprüft
+    (Rundreise in ``tests/test_primitive_placement.py``).
+
+    Zurück kommen ``x/y/z``, ``nx/ny/nz`` und ``angle``:
+
+    * Der **Ort** ist die vierte Spalte.
+    * Die **Richtung** ist die dritte — das lokale +Z im Raum.
+    * Der **Winkel** ist das, was zwischen der Querachse dieser Matrix und der
+      Querachse steht, die ``frame_of`` zu derselben Richtung gewählt hätte.
+      Genau um diesen Betrag hat jemand gedreht; ``frame_of`` selbst legt seine
+      Querachse deterministisch, aber nicht wählbar fest.
+
+    Eine Matrix mit Skalierung oder Scherung gehört hier nicht her: Die
+    Grundkörper tragen ihre Größe in eigenen Feldern, und eine Lage, die den
+    Körper streckt, wäre keine Lage mehr. Der Aufrufer gibt eine reine
+    Bewegung — was er nicht tut, fällt in der Rundreise auf.
+
+    **Umgekehrt wird die Lage, nicht die Schreibweise.** Der Nullvektor heißt
+    auf dem Hinweg „behält die aufrechte Lage", und die aufrechte Lage *ist*
+    +Z; beide Schreibweisen ergeben dieselbe Matrix, und aus ihr lässt sich
+    die eine nicht von der anderen unterscheiden. Zurück kommt deshalb
+    ``0/0/1``. Für das Ergebnis ist das gleichgültig — für einen Vergleich
+    Feld gegen Feld nicht.
+    """
+    from app.core.sketch.planes import frame_of
+
+    values = np.asarray(matrix, dtype=float)
+    if values.shape != (4, 4) or not np.isfinite(values).all():
+        raise ValidationError(
+            "x",
+            _("Diese Lage lässt sich nicht in Zahlen fassen. Setzen Sie den Körper neu."),
+            constraint="not_finite",
+        )
+    position = tuple(float(value) for value in values[:3, 3])
+    normal = values[:3, 2]
+    length = float(np.linalg.norm(normal))
+    if is_zero(length):
+        return {
+            "x": position[0],
+            "y": position[1],
+            "z": position[2],
+            "nx": 0.0,
+            "ny": 0.0,
+            "nz": 0.0,
+            "angle": 0.0,
+        }
+    unit = normal / length
+    frame = frame_of(cast(Vec3, tuple(float(value) for value in unit)), cast(Vec3, position))
+    reference = np.asarray(frame.x_axis, dtype=float)
+    across = values[:3, 0]
+    across_length = float(np.linalg.norm(across))
+    if is_zero(across_length):
+        angle = 0.0
+    else:
+        across = across / across_length
+        # Der Winkel zwischen beiden Querachsen, mit Vorzeichen um die
+        # gemeinsame Hochachse — ``arctan2`` beantwortet beides in einem.
+        angle = math.degrees(
+            math.atan2(
+                float(np.dot(np.cross(reference, across), unit)), float(np.dot(reference, across))
+            )
+        )
+    return {
+        "x": position[0],
+        "y": position[1],
+        "z": position[2],
+        "nx": float(unit[0]),
+        "ny": float(unit[1]),
+        "nz": float(unit[2]),
+        "angle": angle,
+    }
 
 
 def _object(

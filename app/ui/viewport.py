@@ -3319,6 +3319,15 @@ class Viewport(QWidget):
     """Der nächste nötige Klick oder der Grund, warum keiner gezählt hat."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    previewDragged = Signal(object)
+    """Ein beendeter Zug am Griff der **Vorschau** — trägt die Matrix des Zugs.
+
+    Nicht ``TransformSteps`` wie ``transformDragged``: Dort wird der Zug zu
+    Operationen, hier zu Zahlen im offenen Dialog. Die Matrix trägt beides —
+    Verschiebung und Drehung — in einer Größe, und ``primitive_ops``
+    (:func:`~app.core.geom.primitive_ops.placement_values_of`) rechnet daraus
+    Ort, Richtung und Winkel. Eine Zerlegung hier wäre die zweite Rechnung
+    neben der, die den Hinweg schon macht."""
     gizmoStatus = Signal(str)
     """Was der Griff bewegen wird — leer, solange keiner steht.
 
@@ -3723,6 +3732,8 @@ class Viewport(QWidget):
         """Was die Marke gerade zeigt. Auskunft für Tests und Schutz davor,
         dieselbe Stelle bei jeder Ruhepause neu zu zeichnen."""
         self._gizmo: Gizmo | None = None
+        self._preview_gizmo: Gizmo | None = None
+        self._preview_gizmo_wanted = False
         self._gizmo_wanted = False
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
@@ -9095,6 +9106,11 @@ class Viewport(QWidget):
     def _redraw_difference(self) -> None:
         if self.renderer is None:
             return
+        # **Der Griff hängt an einem dieser Aktoren und muss mit ihnen gehen.**
+        # Sonst rechnete er gegen eine Matrix, die es nicht mehr gibt — und die
+        # Vorschau wird bei jeder Wertänderung neu gezeichnet. Neu angehängt
+        # wird er am Ende, wenn die neuen Aktoren stehen.
+        self._detach_preview_gizmo()
         for actor in self._difference_actors:
             self.renderer.remove(actor)
         self._difference_actors.clear()
@@ -9123,6 +9139,7 @@ class Viewport(QWidget):
             self._add_body(
                 entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.45, shift
             )
+        self.set_preview_gizmo(self._preview_gizmo_wanted)
 
     def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
         if self.renderer is None or mesh is None or not len(mesh.raw.faces):
@@ -9440,6 +9457,80 @@ class Viewport(QWidget):
             return GIZMO_SCALE
         least = GIZMO_LEAST_PIXELS / scale
         return max(GIZMO_SCALE, least / length) if wanted < least else GIZMO_SCALE
+
+    def set_preview_gizmo(self, active: bool) -> None:
+        """Den Bewegungsgriff an die **Vorschau** hängen statt an die Auswahl.
+
+        Wer einen Quader anlegt, sieht ihn seit dem 09.09.2026 im Bild, während
+        der Dialog offen bleibt. Ihn dort auch anfassen zu können, ist der
+        nächste Schritt (Robert, 09.09.2026: „bei erzeugen, Kugel, Quader usw.
+        soll man in der Vorschau auch gleich verschieben und drehen können wie
+        unter dem Bewegungsmenü").
+
+        **Derselbe Griff wie am Körper, ein anderes Ziel.** ``set_gizmo`` hängt
+        ihn an einen Aktor der Szene; hier hängt er am ersten hinzugekommenen
+        Aktor der Vorschau. Was der Zug bedeutet, ist verschieden: Am Körper
+        wird er eine Operation, hier werden es Zahlen im offenen Dialog —
+        deshalb ein eigenes Signal (:attr:`previewDragged`) und kein zweiter
+        Empfänger an ``transformDragged``, der raten müsste, welcher Fall gilt.
+
+        **Ohne Skalierwürfel.** Die Größe eines Grundkörpers steht in seinen
+        eigenen Feldern — Breite, Tiefe, Höhe —, und die stehen im Dialog, der
+        offen daneben liegt. Ein Würfel, der dieselbe Zahl auf einem zweiten
+        Weg ändert, wäre eine Frage ohne Antwort.
+
+        Frisch gebaut bei jedem Aufruf, aus demselben Grund wie bei
+        ``set_gizmo``: Der Griff rechnet gegen die Matrix, die sein Ziel beim
+        Anhängen hatte, und die Vorschau wird bei jeder Wertänderung neu
+        gezeichnet.
+        """
+        self._preview_gizmo_wanted = active
+        self._detach_preview_gizmo()
+        if not active or self.renderer is None:
+            return
+        actor = self._first_added_actor()
+        if actor is None:
+            return
+        self._preview_gizmo = Gizmo(
+            self.renderer,
+            actor,
+            scale=self._gizmo_scale_for(actor),
+            line_radius=GIZMO_LINE_RADIUS,
+            release_callback=self._on_preview_released,
+            interact_callback=self._on_gizmo_interacted,
+        )
+
+    def _first_added_actor(self) -> Any:
+        """Der Aktor des hinzugekommenen Volumens — daran hängt der Griff.
+
+        Die Vorschau zeichnet je Objekt zwei Körper, „added" und „removed"
+        (:meth:`_redraw_difference`). Gegriffen wird das, was entsteht; das
+        Abgetragene gehört dem Körper darunter und bewegt sich nicht mit.
+        """
+        for actor in self._difference_actors:
+            if str(getattr(actor, "name", "")).startswith("added:"):
+                return actor
+        return None
+
+    def _detach_preview_gizmo(self) -> None:
+        """Den Vorschaugriff abnehmen, falls einer steht."""
+        gizmo = self._preview_gizmo
+        self._preview_gizmo = None
+        if gizmo is not None:
+            gizmo.remove()
+
+    def _on_preview_released(self, matrix: Any) -> None:
+        """Ein Zug an der Vorschau endet als Zahlen, nicht als Operation.
+
+        Der Griff wird danach immer neu angehängt: Er rechnet gegen die
+        Matrix, die sein Ziel beim Anhängen hatte, und die Vorschau kommt
+        gleich neu — ein stehen gelassener Griff wendete den nächsten Zug
+        doppelt an.
+        """
+        import numpy as np
+
+        self.previewDragged.emit(np.asarray(matrix, dtype=float))
+        self.set_preview_gizmo(self._preview_gizmo_wanted)
 
     def _detach_gizmo(self) -> None:
         """Nimmt Griff, Beschriftung und Flächenscheibe aus dem Bild.

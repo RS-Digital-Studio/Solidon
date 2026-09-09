@@ -48,6 +48,7 @@ class _Renderer:
 class _Viewport(QWidget):
     cameraMoved = Signal()  # noqa: N815 — Qt-Schnittstelle
     sceneApplied = Signal()  # noqa: N815 — Qt-Schnittstelle
+    previewDragged = Signal(object)  # noqa: N815 — Qt-Schnittstelle
 
     def __init__(self) -> None:
         super().__init__()
@@ -56,7 +57,13 @@ class _Viewport(QWidget):
         self.hit: Any = None
         self.result: Any = None
         self.pointer: Any = None
+        #: Ob am Vorschaukörper ein Griff hängen soll. Der echte Viewport baut
+        #: ihn an einem Aktor des Renderers; hier zählt nur die Entscheidung.
+        self.preview_gizmo = False
         self.resize(900, 600)
+
+    def set_preview_gizmo(self, active: bool) -> None:
+        self.preview_gizmo = bool(active)
 
     def set_placement_pointer(self, handler: Any) -> None:
         self.pointer = handler
@@ -361,6 +368,51 @@ def test_an_invalid_historical_step_can_be_placed_again(flow: Any) -> None:
     assert controller._accept.isEnabled()
 
 
+def test_only_what_needs_a_face_goes_into_placement_by_itself() -> None:
+    """Ein Erzeuger braucht keine Fläche — und darf seinen Dialog behalten.
+
+    Seit dem 09.09.2026 geht ein platzierbarer Dialog von selbst in die
+    Platzierung, statt einen zweiten Klick zu verlangen (Robert: „man soll
+    keinen extra Button klicken müssen"). Für alles, was auf etwas sitzt —
+    Baustein, Beschriftung, Bohrung —, ist das richtig.
+
+    **Für die fünf Grundkörper nicht.** ``start`` versteckt den Dialog, und
+    Breite, Tiefe und Höhe stehen nirgends sonst: Wer die Maße ändern wollte,
+    musste Escape drücken, tippen und neu platzieren (Robert, 09.09.2026:
+    „wer nur Maße tippen will, ignoriert ihn"). Dort zeigt stattdessen die
+    Live-Vorschau den Körper, sobald der Dialog offen ist — sie rechnet ihn
+    ohnehin und wird nur übersprungen, solange die Platzierung läuft.
+
+    Gefragt wird nach ``consumes`` und nicht nach einer Namensliste: Eine
+    Liste in der Oberfläche schweigt beim nächsten Erzeuger.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import placement
+    from app.ui.placement_flow import starts_by_itself
+
+    load_operations()
+
+    ohne_eingang = [
+        spec
+        for spec in REGISTRY.all()
+        if spec.consumes == 0
+        and not spec.takes_whole_scene
+        and placement.supports_surface_placement(spec)
+    ]
+    assert ohne_eingang, "ohne platzierbare Erzeuger prüft der Test nichts"
+    for spec in ohne_eingang:
+        assert not starts_by_itself(spec), f"{spec.name} behält seinen Dialog"
+
+    mit_eingang = [
+        spec
+        for spec in REGISTRY.all()
+        if spec.consumes != 0 and placement.supports_surface_placement(spec)
+    ]
+    assert mit_eingang, "und ohne die andere Hälfte auch nicht"
+    for spec in mit_eingang:
+        assert starts_by_itself(spec), f"{spec.name} sitzt auf einer Fläche und geht gleich hin"
+
+
 def test_feature_hover_reuses_the_body_prepared_outside_qt(
     flow: Any,
     qt_app: QApplication,
@@ -569,3 +621,91 @@ def test_tab_reaches_both_dimension_groups_and_returns_to_editable_values(
     assert controller.active and controller._accept.isEnabled()
     assert dialog.values()["diameter"] == pytest.approx(5.5)
     assert len(session.project.document.ops) == before
+
+
+def test_a_drag_in_the_preview_becomes_numbers_in_the_dialog(qt_app: QApplication) -> None:
+    """Der Griff bewegt ein Bild — ankommen muss er in den Feldern.
+
+    Robert am 09.09.2026: „bei erzeugen, Kugel, Quader usw. soll man in der
+    Vorschau auch gleich verschieben und drehen können wie unter dem
+    Bewegungsmenü." Der Griff liefert die Matrix des Zugs; das Dokument trägt
+    Zahlen, und dazwischen steht die Umkehrung des Hinwegs
+    (``placement_values_of``).
+
+    Geprüft wird die **Kette**, nicht ihre Mitte: Signal des Viewports, der
+    Empfänger im Ablauf, die Felder des Dialogs. Die Rechnung selbst hat ihren
+    eigenen Rundreise-Test in ``test_primitive_placement.py``; hier geht es
+    darum, dass sie überhaupt aufgerufen wird und ihr Ergebnis irgendwo
+    ankommt.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    session = Session()
+    viewport = _Viewport()
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, {})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(dialog, window, lambda: spec, lambda: ())
+    try:
+        assert viewport.preview_gizmo, "ein Erzeuger bekommt den Griff an seine Vorschau"
+
+        # Ein Zug: 12 mm in X, dann eine Vierteldrehung um die Hochachse.
+        drag = np.eye(4)
+        drag[:3, :3] = ((0.0, -1.0, 0.0), (1.0, 0.0, 0.0), (0.0, 0.0, 1.0))
+        drag[:3, 3] = (12.0, 0.0, 0.0)
+        viewport.previewDragged.emit(drag)
+        qt_app.processEvents()
+
+        values = dialog.values()
+        assert (values["x"], values["y"], values["z"]) == pytest.approx((12.0, 0.0, 0.0), abs=1e-9)
+        apart = abs((float(values["angle"]) - 90.0 + 180.0) % 360.0 - 180.0)
+        assert apart == pytest.approx(0.0, abs=1e-6), f"Drehung {values['angle']} statt 90"
+
+        # **Und ein zweiter Zug baut auf dem ersten auf.** Der Griff meldet
+        # immer nur, was sich seit dem Anhängen geändert hat; wer das als
+        # absolute Lage läse, verlöre die erste Bewegung.
+        again = np.eye(4)
+        again[:3, 3] = (0.0, 5.0, 0.0)
+        viewport.previewDragged.emit(again)
+        qt_app.processEvents()
+        values = dialog.values()
+        assert (values["x"], values["y"], values["z"]) == pytest.approx((12.0, 5.0, 0.0), abs=1e-9)
+        apart = abs((float(values["angle"]) - 90.0 + 180.0) % 360.0 - 180.0)
+        assert apart == pytest.approx(0.0, abs=1e-6), "die Drehung des ersten Zugs bleibt"
+    finally:
+        controller.dispose()
+        dialog.deleteLater()
+        session.release()
+
+
+def test_only_a_creator_grips_its_own_preview() -> None:
+    """Wer mit dem Fadenkreuz zielt, braucht keinen Griff daneben.
+
+    Zwei Gesten für dieselbe Stelle wären eine zu viel: Ein Baustein geht von
+    selbst in die Platzierung (``starts_by_itself``), und dort setzt der Klick
+    den Ort. Die Erzeuger behalten ihren Dialog — dort ist der Griff der
+    einzige Weg, der ohne Zahlen auskommt.
+
+    Und er braucht Felder, in die er schreiben kann: ohne ``angle`` bewegte er
+    ein Bild, das beim nächsten Neuzeichnen zurückspringt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.ui.placement_flow import _grips_its_preview, starts_by_itself
+
+    load_operations()
+
+    greifbar = [spec for spec in REGISTRY.all() if _grips_its_preview(spec)]
+    assert greifbar, "ohne greifbare Vorschau prüft der Test nichts"
+    for spec in greifbar:
+        assert not starts_by_itself(spec), f"{spec.name} zielt schon mit dem Fadenkreuz"
+        names = {entry.name for entry in spec.params.spec()}
+        assert {"x", "y", "z", "nx", "ny", "nz", "angle"} <= names, (
+            f"{spec.name}: der Zug hätte keine Felder, in die er schreiben kann"
+        )
+
+    # Die Gegenprobe: Was in die Platzierung geht, bekommt keinen.
+    for name in ("drill_hole", "insert_screw_hole", "move_feature"):
+        assert not _grips_its_preview(REGISTRY.get(name))

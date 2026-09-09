@@ -142,7 +142,12 @@ Die fünf analytischen Grundkörper entstehen lokal über
 damit denselben Körper auf denselben Ursprung. `x/y/z` verschieben diesen
 Bezugspunkt; eine gesetzte `nx/ny/nz`-Richtung legt sein lokales +Z über
 `sketch.planes.frame_of()` in den Raum. Der Nullvektor bewahrt die bisherige
-aufrechte Lage.
+aufrechte Lage. `angle` dreht ihn zusätzlich um seine eigene Hochachse —
+`frame_of` legt die Querachse deterministisch, aber nicht wählbar fest, und
+für einen Quader ist das der Unterschied. Der Name ist derselbe wie bei den
+Bausteinen; das Register zählt ihn zu den Platzierungsfeldern
+(`PART_PLACEMENT_PARAMS`), und damit gehen die Grundkörper denselben Weg durch
+die Oberflächenplatzierung.
 
 `sketch_solid.py` ist das Gegenstück zu `brep/profiles.extrude` für den Fall,
 dass kein exakter Körper vorliegt — und dieser Fall ist der häufigste: Wer ein
