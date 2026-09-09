@@ -5026,3 +5026,88 @@ def test_the_filament_picker_leaves_at_a_feature_that_carries_none(window: MainW
     QApplication.processEvents()
     assert window.object_tree.selected_faces() == (("obj_1", faces[0]),)
     assert not window.quick_filament.isHidden(), "an einer Fläche gibt es etwas zuzuweisen"
+
+
+def _scene_with_fillets(radii: list[float]) -> Any:
+    """Ein Körper mit lauter Hohlkehlen — ihre Radien sind das Unterscheidende.
+
+    Zurück kommt ein EvaluationResult; der Typ steht hier nicht in der
+    Signatur, weil er wie bei den Nachbarhelfern erst in der Funktion
+    importiert wird.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    features = {
+        f"fillet_{nummer + 1}": Feature(
+            id=f"fillet_{nummer + 1}",
+            kind="fillet",
+            provenance="test",
+            # recess macht daraus die **Hohlkehle** und nicht die
+            # Verrundung — der Fall aus der STEP-Datei ist die konkave
+            # Variante, und der Docstring nennt sie beim Namen.
+            params={"radius": radius, "recess": True},
+        )
+        for nummer, radius in enumerate(radii)
+    }
+    body = SceneObject(
+        "obj_1", "Platte", MeshData(trimesh.creation.box((40, 40, 10))), features=features
+    )
+    return EvaluationResult(Scene(objects={"obj_1": body}))
+
+
+def test_a_roof_bundles_the_same_measure_and_not_merely_the_same_word(
+    qt_app: QApplication,
+) -> None:
+    """Vier Hohlkehlen mit vier Radien sind nicht vier gleichartige Merkmale.
+
+    Das Dach über gleichartigen Zeilen löst einen echten Fall: Eine STEP-Datei
+    bringt Dutzende Hohlkehlen **desselben** Radius mit, und fünfzig gleiche
+    Zeilen begraben die linke Spalte. Gezählt wurde dafür nach dem Namen
+    allein — und damit verschwanden auch vier *verschiedene* Radien hinter
+    einer Zeile „Hohlkehle (4)", die Gleichartigkeit behauptet, wo keine ist
+    (Befund Robert, 09.09.2026: „Hohlkehle mit 4 Unterschritten").
+
+    Geprüft werden beide Richtungen an derselben Schwelle: Vier gleiche Maße
+    gehören unter ein Dach, vier verschiedene nicht. Ein Test nur für die eine
+    Richtung ließe die jeweils andere frei — und die Bündelung ist erwünscht,
+    sie soll nur das Richtige treffen.
+    """
+    from app.ui.panels import BUNDLE_FROM, ObjectTree
+
+    tree_widget = ObjectTree()
+    try:
+        gleich = [2.5] * BUNDLE_FROM
+        tree_widget.show_scene(_scene_with_fillets(gleich))
+        oberste = tree_widget.tree.topLevelItem(0)
+        assert oberste is not None, "ohne Körperzeile prüft der Test nichts"
+        assert oberste.childCount() == 1, (
+            f"{BUNDLE_FROM} gleiche Radien gehören unter ein Dach, "
+            f"gefunden {oberste.childCount()} Zeilen"
+        )
+        dach = oberste.child(0)
+        assert dach is not None and dach.childCount() == BUNDLE_FROM
+
+        verschieden = [2.0 + nummer for nummer in range(BUNDLE_FROM)]
+        tree_widget.show_scene(_scene_with_fillets(verschieden))
+        oberste = tree_widget.tree.topLevelItem(0)
+        assert oberste is not None
+        assert oberste.childCount() == BUNDLE_FROM, (
+            f"{BUNDLE_FROM} verschiedene Radien sind {BUNDLE_FROM} Zeilen, "
+            f"gefunden {oberste.childCount()} — sie stehen hinter einem Dach"
+        )
+        masse = {oberste.child(index).text(1) for index in range(oberste.childCount())}
+        assert len(masse) == BUNDLE_FROM, f"jede Zeile trägt ihr eigenes Maß: {masse}"
+
+        # Zuletzt die Anschrift: Seit alle Kinder eines Dachs dasselbe Maß
+        # tragen, ist es ihre gemeinsame Auskunft und keine Behauptung über
+        # die übrigen mehr.
+        tree_widget.show_scene(_scene_with_fillets(gleich))
+        oberste = tree_widget.tree.topLevelItem(0)
+        assert oberste is not None
+        assert oberste.child(0).text(1), "das Dach schreibt das gemeinsame Maß an"
+    finally:
+        tree_widget.deleteLater()

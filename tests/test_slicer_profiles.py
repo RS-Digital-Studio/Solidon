@@ -1164,3 +1164,59 @@ def test_nonfinite_filament_values_are_rejected_with_a_profile_error(
         sp.filament_values(path)
     assert caught.value.suggestions
     assert caught.value.values["file"] == path.name
+
+
+def test_one_name_index_serves_a_whole_kind_instead_of_one_per_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Namensindex wird geteilt, nicht je Profil neu gebaut (Befund Robert, 09.09.2026).
+
+    ``_of_kind`` fragt für jedes Profil ``compatible_with``. Trägt eines die
+    Verträglichkeit nicht selbst, löst das über ``binding`` seine Erbkette auf
+    — und jede Auflösung baute sich ihren **eigenen** Namensindex. Ein Index
+    kostet einen Durchgang durch jede JSON-Datei der Ablage; beim ElegooSlicer
+    sind das 16 795, und der Qt-Hauptthread stand damit 49 Sekunden.
+
+    **Angesetzt wird an ``_of_kind`` und nicht an ``find_profiles``**, und das
+    ist keine Abkürzung, sondern der Fall selbst: ``find_profiles`` löst die
+    Verträglichkeit für alles auf, was es gemeinsam lädt. Die Wiederholung
+    entsteht dort, wo ein Profil ohne eigene Angabe hereinkommt — bei einem
+    Nutzerprofil, das von einer Herstellerstufe außerhalb der Ladung erbt.
+    Genau so sieht der Eingang beim Kunden aus.
+
+    Gezählt wird die **Zahl der Indexläufe**, nicht die Zeit: Eine
+    Zeitschranke wäre auf einer schnellen Maschine grün und sagte nichts über
+    die Sache.
+    """
+    ablage = tmp_path / "profiles"
+    _write(
+        ablage / "basis.json",
+        {"type": "process", "name": "0.20mm Basis", "compatible_printers": ["Haus 0.4 nozzle"]},
+    )
+    maschine = sp.SlicerProfile(ablage / "maschine.json", "Haus 0.4 nozzle", "machine")
+    erben = []
+    for nummer in range(8):
+        pfad = ablage / f"kind{nummer}.json"
+        _write(pfad, {"type": "process", "name": f"0.1{nummer}mm Fein", "inherits": "0.20mm Basis"})
+        # Ohne ``compatible_printers``: genau der Eingang, der die Erbkette
+        # und damit den Namensindex überhaupt erst auslöst.
+        erben.append(
+            sp.SlicerProfile(pfad, f"0.1{nummer}mm Fein", "process", inherits="0.20mm Basis")
+        )
+
+    laeufe: list[tuple[Path, object]] = []
+    echtes = sp._names_in
+
+    def gezaehlt(wurzel: Path, art: object = None) -> dict[str, Path]:
+        laeufe.append((wurzel, art))
+        return echtes(wurzel, art)
+
+    monkeypatch.setattr(sp, "_names_in", gezaehlt)
+    passende = sp.processes([maschine, *erben], maschine)
+
+    assert len(passende) == len(erben), "alle acht erben dieselbe Verträglichkeit"
+    assert laeufe, "ohne einen einzigen Indexlauf prüft die Zusicherung darunter nichts"
+    assert len(laeufe) == len(set(laeufe)), (
+        f"{len(laeufe)} Indexläufe für {len(set(laeufe))} verschiedene Ablagen — "
+        "derselbe Index wird je Profil neu aufgestellt"
+    )

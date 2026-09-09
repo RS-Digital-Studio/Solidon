@@ -46,6 +46,21 @@ _log = get_logger(__name__)
 
 ProfileKind = Literal["machine", "process", "filament"]
 
+#: Der Namensindex einer Profilablage: je Wurzel und Art ein Name-auf-Pfad.
+#:
+#: **Er wird durchgereicht und nicht je Aufruf gebaut.** Ihn aufzustellen
+#: heißt, jede JSON-Datei unterhalb der Wurzel zu lesen — beim ElegooSlicer
+#: sind das 16 795 Dateien. Wer eine Erbkette je Filament auflöst und den
+#: Index dabei jedes Mal neu baut, liest denselben Bestand so oft, wie es
+#: Filamente gibt (Befund Robert, 09.09.2026: der Qt-Hauptthread stand 49 s).
+#:
+#: **Er gilt für einen Durchgang, nicht für die Lebensdauer eines Fensters.**
+#: Der Bestand gehört dem Slicer, und der Kunde legt dort Profile an, benennt
+#: sie um und löscht sie. Wer diesen Index an einem Dialog aufhebt, liefert
+#: danach Pfade aus, die es nicht mehr gibt — die Ersparnis wiegt das nicht
+#: auf. Wer ihn übergibt, hält ihn so kurz wie den Aufruf, in dem er entsteht.
+ProfileIndexes = dict[tuple[Path, ProfileKind | None], dict[str, Path]]
+
 #: Wie viele Dateien höchstens gelesen werden. Der ausgelieferte Bestand eines
 #: Slicers umfasst einige tausend Profile über alle Hersteller; eine Zahl weit
 #: darüber heißt, dass hier der falsche Ordner durchsucht wird.
@@ -1111,7 +1126,7 @@ def find_profiles(
 
     # Die Auswahl bleibt klein, ihr Wissen umfasst aber auch unsichtbare
     # Erbbasen. Pro Hersteller wird der Namensindex nur einmal gelesen.
-    indexes: dict[tuple[Path, ProfileKind | None], dict[str, Path]] = {}
+    indexes: ProfileIndexes = {}
     all_roots = profile_roots(flavour, executable)
     incomplete: set[int] = set()
     for index, profile in enumerate(found):
@@ -1403,7 +1418,12 @@ def profile_by_name(
     return choices[0] if len(choices) == 1 else None
 
 
-def resolve_profile(profile: SlicerProfile, roots: Sequence[Path] = ()) -> dict[str, Any]:
+def resolve_profile(
+    profile: SlicerProfile,
+    roots: Sequence[Path] = (),
+    *,
+    indexes: ProfileIndexes | None = None,
+) -> dict[str, Any]:
     """Native Werte ausschreiben, ohne Formeln oder G-Code auszuführen.
 
     Prusa-Werte bleiben INI-serialisiert (auch ``\\n`` in G-Code), Cura und
@@ -1413,7 +1433,7 @@ def resolve_profile(profile: SlicerProfile, roots: Sequence[Path] = ()) -> dict[
     if profile.path.suffix == ".ini":
         store = _PrusaStore(roots, eager=False)
         return dict(store.resolve(profile))
-    return resolve_values(profile.path, roots)
+    return resolve_values(profile.path, roots, indexes=indexes)
 
 
 def _store_roots(path: Path, roots: Sequence[Path]) -> list[Path]:
@@ -1465,7 +1485,12 @@ def _names_in(root: Path, kind: ProfileKind | None) -> dict[str, Path]:
     return index
 
 
-def resolve_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
+def resolve_values(
+    path: Path,
+    roots: Sequence[Path] = (),
+    *,
+    indexes: ProfileIndexes | None = None,
+) -> dict[str, Any]:
     """Die Werte, mit denen dieses Profil tatsächlich fährt (§29).
 
     Die Hersteller staffeln in mehreren Ebenen — bei Elegoo etwa
@@ -1497,14 +1522,22 @@ def resolve_values(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
             # Ein Bündel ist kein einzelnes Profil. Der Aufrufer braucht
             # dessen Abschnitt, statt zufällig den ersten zu übernehmen.
             raise _incomplete_profile(path)
-        return resolve_profile(SlicerProfile(path, path.stem, kind, from_user=True), roots)
+        return resolve_profile(
+            SlicerProfile(path, path.stem, kind, from_user=True), roots, indexes=indexes
+        )
     values: dict[str, Any] = {}
-    for loaded in reversed(_chain(path, roots)):  # Wurzel zuerst, Spezielles gewinnt
+    # Wurzel zuerst, Spezielles gewinnt
+    for loaded in reversed(_chain(path, roots, indexes=indexes)):
         values.update({key: value for key, value in loaded.items() if key not in DESCRIBING_KEYS})
     return values
 
 
-def binding(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
+def binding(
+    path: Path,
+    roots: Sequence[Path] = (),
+    *,
+    indexes: ProfileIndexes | None = None,
+) -> dict[str, Any]:
     """Woran ein Profil seine Verträglichkeit knüpft (§29).
 
     :func:`resolve_values` lässt die beschreibenden Schlüssel aus
@@ -1524,7 +1557,7 @@ def binding(path: Path, roots: Sequence[Path] = ()) -> dict[str, Any]:
     leerer Eintrag verträgt sich mit keinem Drucker.
     """
     found: dict[str, Any] = {}
-    for loaded in _chain(path, roots):  # spezifisch zuerst
+    for loaded in _chain(path, roots, indexes=indexes):  # spezifisch zuerst
         for key in _BINDING:
             value = loaded.get(key)
             if key not in found and value:
@@ -1536,7 +1569,7 @@ def _chain(
     path: Path,
     roots: Sequence[Path] = (),
     *,
-    indexes: dict[tuple[Path, ProfileKind | None], dict[str, Path]] | None = None,
+    indexes: ProfileIndexes | None = None,
 ) -> list[dict[str, Any]]:
     """Die Profile der Erbkette, spezifisches zuerst.
 
@@ -1643,7 +1676,12 @@ def machines(profiles: list[SlicerProfile]) -> list[SlicerProfile]:
 MAX_INHERITANCE: Final = 12
 
 
-def compatible_with(profile: SlicerProfile, known: dict[str, SlicerProfile]) -> tuple[str, ...]:
+def compatible_with(
+    profile: SlicerProfile,
+    known: dict[str, SlicerProfile],
+    *,
+    indexes: ProfileIndexes | None = None,
+) -> tuple[str, ...]:
     """Für welche Drucker dieses Profil gilt — die eigene Angabe oder die
     geerbte.
 
@@ -1655,7 +1693,7 @@ def compatible_with(profile: SlicerProfile, known: dict[str, SlicerProfile]) -> 
     if profile.compatible_printers:
         return profile.compatible_printers
     if profile.path.is_file():
-        return tuple(_strings(binding(profile.path).get("compatible_printers")))
+        return tuple(_strings(binding(profile.path, indexes=indexes).get("compatible_printers")))
     seen: set[str] = set()
     current: SlicerProfile | None = profile
     for _step in range(MAX_INHERITANCE):
@@ -1669,7 +1707,11 @@ def compatible_with(profile: SlicerProfile, known: dict[str, SlicerProfile]) -> 
 
 
 def _of_kind(
-    profiles: list[SlicerProfile], machine: SlicerProfile | None, kind: str
+    profiles: list[SlicerProfile],
+    machine: SlicerProfile | None,
+    kind: str,
+    *,
+    indexes: ProfileIndexes | None = None,
 ) -> list[SlicerProfile]:
     """Die Profile einer Art, die zu diesem Drucker passen.
 
@@ -1687,25 +1729,42 @@ def _of_kind(
         return sorted(entries, key=lambda entry: entry.name)
 
     known = {entry.name: entry for entry in entries}
-    fitting = [entry for entry in entries if machine.name in compatible_with(entry, known)]
+    # **Ein Index für alle Einträge dieser Art.** ``compatible_with`` löst je
+    # Profil eine Erbkette auf; ohne geteilten Index liest jede davon die ganze
+    # Ablage neu. Beim ElegooSlicer sind das 16 795 Dateien mal der Zahl der
+    # Prozesse — der Qt-Hauptthread stand damit 49 Sekunden, und die Zeile
+    # darunter zahlte es ein zweites Mal (Befund Robert, 09.09.2026).
+    if indexes is None:
+        indexes = {}
+    fitting = [
+        entry for entry in entries if machine.name in compatible_with(entry, known, indexes=indexes)
+    ]
     # Findet sich keine ausdrückliche Angabe, ist Zeigen besser als Verschweigen:
     # ein selbst angelegtes Profil ohne Verträglichkeitsliste soll wählbar sein.
-    chosen = fitting or [entry for entry in entries if not compatible_with(entry, known)]
+    chosen = fitting or [
+        entry for entry in entries if not compatible_with(entry, known, indexes=indexes)
+    ]
     return sorted(chosen, key=lambda entry: entry.name)
 
 
 def processes(
-    profiles: list[SlicerProfile], machine: SlicerProfile | None = None
+    profiles: list[SlicerProfile],
+    machine: SlicerProfile | None = None,
+    *,
+    indexes: ProfileIndexes | None = None,
 ) -> list[SlicerProfile]:
     """Die Prozessprofile, die zu diesem Drucker passen."""
-    return _of_kind(profiles, machine, "process")
+    return _of_kind(profiles, machine, "process", indexes=indexes)
 
 
 def filaments(
-    profiles: list[SlicerProfile], machine: SlicerProfile | None = None
+    profiles: list[SlicerProfile],
+    machine: SlicerProfile | None = None,
+    *,
+    indexes: ProfileIndexes | None = None,
 ) -> list[SlicerProfile]:
     """Die Filamentprofile, die zu diesem Drucker passen."""
-    return _of_kind(profiles, machine, "filament")
+    return _of_kind(profiles, machine, "filament", indexes=indexes)
 
 
 def match_filament(
@@ -1742,21 +1801,35 @@ def match_filament(
     # ihn sieben selbst. Aufgelöst wird deshalb über die Kette — und erst
     # nachdem die Verträglichkeit die Liste von tausenden auf Dutzende
     # gebracht hat, sonst kostete es Sekunden statt Zehntel.
+    # **Ein Index für den ganzen Durchgang.** Ohne ihn liest jedes Profil die
+    # Ablage neu — bei 16 795 Dateien und Dutzenden Filamenten stand der
+    # Hauptthread 49 Sekunden (Befund Robert, 09.09.2026).
+    indexes: ProfileIndexes = {}
     fitting = [
         entry
-        for entry in filaments(profiles, machine)
-        if type_of(entry, roots).casefold() == wanted
+        for entry in filaments(profiles, machine, indexes=indexes)
+        if type_of(entry, roots, indexes=indexes).casefold() == wanted
     ]
     if not fitting:
         return None
     return min(fitting, key=lambda entry: (not entry.from_user, len(entry.name), entry.name))
 
 
-def type_of(profile: SlicerProfile, roots: Sequence[Path] = ()) -> str:
-    """Welches Material dieses Filamentprofil meint — eigene Angabe oder geerbte."""
+def type_of(
+    profile: SlicerProfile,
+    roots: Sequence[Path] = (),
+    *,
+    indexes: ProfileIndexes | None = None,
+) -> str:
+    """Welches Material dieses Filamentprofil meint — eigene Angabe oder geerbte.
+
+    ``indexes`` gehört dem Aufrufer, der über mehrere Profile geht: Der
+    Namensindex kostet einen Durchlauf durch die ganze Ablage, und ohne ihn
+    zahlt jedes Profil ihn erneut (:data:`ProfileIndexes`).
+    """
     if profile.filament_type:
         return profile.filament_type
-    return _first_string(resolve_profile(profile, roots).get("filament_type"))
+    return _first_string(resolve_profile(profile, roots, indexes=indexes).get("filament_type"))
 
 
 def match(

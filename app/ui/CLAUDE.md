@@ -542,9 +542,14 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
   Der Klick zeigt beide, aber keine Merkmalskarte einer Stelle, die nicht mehr
   existiert. Der Kerntext bleibt kanalneutral; nur das Panel nennt den Klick.
 - **Und der Objektbaum bündelt nach derselben Regel wie der Prüfbericht.**
-  Gleichnamige *erkannte* Merkmale stehen ab `BUNDLE_FROM` unter einem
-  zugeklappten Dach („Hohlkehle (17)"), die Maßspalte bleibt dort leer — ein
-  Dach über siebzehn Radien hat kein Maß. Was aus einem Baustein kam, gruppiert
+  Erkannte Merkmale mit gleichem Namen **und gleichem Maß** stehen ab
+  `BUNDLE_FROM` unter einem zugeklappten Dach („Hohlkehle (17) · R13,98 mm").
+  Der Name allein reichte dafür nicht: Ein Schlüsselloch bringt zehn
+  Hohlkehlen mit *verschiedenen* Radien mit, und die verschwanden hinter einer
+  Zeile, die Gleichartigkeit behauptete, wo keine war (Befund Robert,
+  09.09.2026). Seit der Schlüssel das Maß enthält, tragen alle Kinder eines
+  Dachs dasselbe — deshalb steht es jetzt in der Maßspalte, statt leer zu
+  bleiben. Was aus einem Baustein kam, gruppiert
   weiter nach seinem Schritt; die zwei Dächer schließen einander nicht aus.
   Gemessen an `build_tray_v3.step`: 234 erkannte Merkmale, rund fünfzig
   sichtbare Zeilen „Hohlkehle R13,98 mm" untereinander, die die linke Spalte

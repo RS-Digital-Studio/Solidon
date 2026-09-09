@@ -6,9 +6,11 @@ Kein Renderer und keine Geometrieoperation werden für diese Anordnung benötigt
 
 from __future__ import annotations
 
+import math
 from itertools import combinations
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 import trimesh
 from PySide6.QtCore import QPoint, QPointF, QRect
@@ -273,6 +275,71 @@ def test_placement_controls_avoid_real_overlay_zones(
         session.release()
         dialog.close()
         host.close()
+
+
+def test_dimension_fields_leave_the_placement_point_itself_visible(
+    qt_app: QApplication,
+) -> None:
+    """Wo die Bohrung hinkommt, darf kein Eingabefeld liegen (Befund Robert, 09.09.2026).
+
+    Jedes Maßfeld will in die **Mitte seiner eigenen Maßlinie**, und die Linien
+    laufen von den Kanten auf den Setzpunkt zu. Ihre Mitten liegen damit auf
+    halbem Weg dorthin — und je kürzer der Abstand zur Kante, desto näher
+    rücken sie an den Punkt heran, bis das Feld ihn verdeckt. Die Platzsuche
+    kannte bis dahin nur die anderen Felder als Hindernis.
+
+    Geprüft wird der Punkt selbst und kein geratener Radius um ihn: Die Zusage
+    lautet, dass der Kunde sieht, wohin er setzt, während er das Maß eintippt.
+    """
+    flow, session, viewport, dialog = _layout(qt_app, (900, 600), 1.0, "bottom")
+    try:
+        # Der Setzpunkt in die Bildmitte, damit die Felder ihn überhaupt von
+        # allen Seiten umgeben können — am Rand weicht die Suche ohnehin aus.
+        viewport.renderer.world_to_display = lambda point: (
+            450 + (point[0] - 10) * 12,
+            300 + (point[1] - 10) * 12,
+            0.5,
+        )
+        flow.redraw()
+
+        ratio = viewport._device_ratio()
+        shown = viewport.view_point_of(flow._surface.point, flow._object_id)
+        x, y, _depth = viewport.renderer.world_to_display(shown)
+        target = QPoint(round(x / ratio), round(y / ratio))
+
+        # **Gemessen wird gegen die Vorschau, nicht gegen einen Punkt.** Was
+        # der Kunde sehen will, ist der Werkzeugkoerper an seiner Stelle; ein
+        # Feld neun Bildpunkte neben der Mitte deckt eine Bohrung von sechzig
+        # Bildpunkten weiterhin zu. Die Ausdehnung kommt aus demselben Netz,
+        # das der Fluss vorbereitet hat.
+        halb = float(np.max(flow._tool_context.mesh.bounds.size[:2])) / 2.0
+        rand = viewport.renderer.world_to_display(
+            viewport.view_point_of(
+                tuple(
+                    np.asarray(flow._surface.point) + np.asarray(flow._surface.frame.x_axis) * halb
+                ),
+                flow._object_id,
+            )
+        )
+        reach = max(
+            1, round(math.hypot(rand[0] / ratio - target.x(), rand[1] / ratio - target.y()))
+        )
+        preview = QRect(target.x() - reach, target.y() - reach, 2 * reach, 2 * reach)
+        assert reach > 1, "ohne ausgedehnte Vorschau prueft der Test nur einen Punkt"
+
+        covering = [
+            field.objectName() or type(field).__name__
+            for field in (flow._bar, *flow._measures, *flow._centre_measures, flow._centre)
+            if field.isVisible() and field.geometry().intersects(preview)
+        ]
+        assert not covering, (
+            f"diese Felder liegen ueber der Vorschau {preview} am Setzpunkt: {covering}"
+        )
+    finally:
+        flow.dispose()
+        session.release()
+        dialog.close()
+        viewport.close()
 
 
 def _layout(

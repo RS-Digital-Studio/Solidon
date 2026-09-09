@@ -1315,12 +1315,22 @@ class ObjectTree(QWidget):
             # Der Prüfbericht daneben bündelte dieselbe Menge längst zu einer
             # Zeile — dieselbe Schwelle (:data:`BUNDLE_FROM`) und derselbe
             # Grund: Jede Einzelzeile stimmt, die Menge begräbt.
-            alike: dict[str, int] = {}
+            #
+            # **Gezählt wird nach Name *und* Maß, nicht nach dem Namen
+            # allein.** Der Fall aus der STEP-Datei sind fünfzig Hohlkehlen
+            # desselben Radius — die gehören unter ein Dach. Ein
+            # Schlüsselloch bringt dagegen zehn mit **verschiedenen** Radien
+            # mit, und die kamen unter dasselbe Dach „Hohlkehle (10)": eine
+            # Zeile, die Gleichartigkeit behauptet, wo keine ist, und zehn
+            # unterschiedliche Maße hinter einem Klick versteckt (Befund
+            # Robert, 09.09.2026). Der Schlüssel entscheidet also, ob ein Dach
+            # zusammenfasst oder verdeckt.
+            alike: dict[tuple[str, str], int] = {}
             for other_id, other in entry.features.items():
                 if _part_step(other.created_by, document) is None:
-                    name = feature_name(other_id, other)
-                    alike[name] = alike.get(name, 0) + 1
-            by_kind: dict[str, QTreeWidgetItem] = {}
+                    schluessel = (feature_name(other_id, other), feature_measure(other))
+                    alike[schluessel] = alike.get(schluessel, 0) + 1
+            by_kind: dict[tuple[str, str], QTreeWidgetItem] = {}
             # **Und eine Senkung steht unter ihrer Bohrung.** Sie sind ein
             # Merkmal in zwei Flächen: Wer die Bohrung ändert, meint die
             # Senkung mit, und wer sie als Nachbarzeile sieht, sucht sie
@@ -1377,18 +1387,19 @@ class ObjectTree(QWidget):
 
                 part = _part_step(feature.created_by, document)
                 if part is None:
-                    label = child.text(0)
+                    label = (child.text(0), child.text(1))
                     if alike[label] < BUNDLE_FROM:
                         item.addChild(child)
                         continue
                     roof = by_kind.get(label)
                     if roof is None:
                         # Die Zahl steht im Text der Zeile selbst, wie bei der
-                        # Sammelzeile des Prüfberichts. Die Maßspalte bleibt
-                        # leer: Ein Dach über siebzehn Radien hat kein Maß, und
-                        # einen davon anzuschreiben wäre eine Behauptung über
-                        # die anderen sechzehn.
-                        roof = QTreeWidgetItem([f"{label} ({alike[label]})", ""])
+                        # Sammelzeile des Prüfberichts. **Und das Maß steht
+                        # jetzt daneben**: Seit nach Name und Maß gebündelt
+                        # wird, tragen alle Kinder dasselbe, und es
+                        # anzuschreiben ist keine Behauptung über die
+                        # übrigen mehr, sondern ihre gemeinsame Auskunft.
+                        roof = QTreeWidgetItem([f"{label[0]} ({alike[label]})", label[1]])
                         roof.setData(0, Qt.ItemDataRole.UserRole, object_id)
                         roof.setData(1, Qt.ItemDataRole.UserRole, None)
                         note = tr(

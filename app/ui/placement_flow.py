@@ -887,7 +887,36 @@ class PlacementFlow(QObject):
             max(room.width(), 1),
             max(room.bottom() - self._bar.geometry().bottom() - NORMAL + 1, 1),
         )
-        occupied: list[QRect] = []
+        # **Der Setzpunkt ist das erste Hindernis, noch vor jedem Feld.** Jedes
+        # Maßfeld will in die Mitte seiner eigenen Maßlinie, und die Linien
+        # laufen von den Kanten auf genau diesen Punkt zu — je kürzer der
+        # Abstand zur Kante, desto näher rückt die Mitte an ihn heran, bis das
+        # Feld verdeckt, wohin der Kunde gerade setzt (Befund Robert,
+        # 09.09.2026). Als belegtes Rechteck geführt, weicht die Suche ihm nicht
+        # nur aus, sondern erzeugt daneben auch die Ausweichplätze — dieselbe
+        # Mechanik, mit der die Felder einander schon aus dem Weg gehen.
+        # **Und gesperrt wird, was man sieht, nicht ein Punkt.** Ein fester
+        # Abstand ließe das Feld neun Bildpunkte neben der Mitte stehen und
+        # damit über der Werkzeugvorschau: Eine Bohrung Ø5 mm ist bei zwölf
+        # Bildpunkten je Millimeter sechzig breit. Die Sperrfläche kommt
+        # deshalb aus der **projizierten** Ausdehnung des Werkzeugs; ohne
+        # vorbereitetes Werkzeug bleibt es beim Mindestabstand.
+        spot = screen(surface.point)
+        reach = SPACE
+        if self._tool_context is not None:
+            half = float(np.max(self._tool_context.mesh.bounds.size[:2])) / 2.0
+            edge = screen(tuple(point + np.asarray(surface.frame.x_axis) * half))
+            reach = max(SPACE, round(math.hypot(edge.x() - spot.x(), edge.y() - spot.y())))
+        # Geklemmt, bevor daraus ein ``QRect`` wird: Eine Projektion aus einer
+        # sehr nahen Kamera liefert Werte jenseits von int32, und die Ausnahme
+        # führe aus einem Qt-Slot heraus.
+        blocked = QRect(
+            max(bounds.left() - reach, min(round(spot.x()), bounds.right() + reach)),
+            max(bounds.top() - reach, min(round(spot.y()), bounds.bottom() + reach)),
+            1,
+            1,
+        ).adjusted(-reach, -reach, reach, reach)
+        occupied: list[QRect] = [blocked]
         positions: dict[QWidget, QRect] = {}
         for widget, wanted, _line in sorted(pending, key=lambda entry: -entry[0].width()):
             width, height = widget.width(), widget.height()
@@ -920,9 +949,23 @@ class PlacementFlow(QObject):
                 for pending_widget, _wanted, _line in pending:
                     if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
                         x, y, row_height = bounds.left(), y + row_height + SPACE, 0
-                    positions[pending_widget] = QRect(
-                        x, y, pending_widget.width(), pending_widget.height()
-                    )
+                    platz = QRect(x, y, pending_widget.width(), pending_widget.height())
+                    # **Auch die Notlage weicht dem Setzpunkt aus — solange
+                    # danach noch Platz ist.** Sonst gälte die Zusage „man
+                    # sieht, wohin man setzt" genau dort nicht, wo es eng wird.
+                    # Die Grenze ist keine Feinheit: Bei starkem Zoom füllt die
+                    # Vorschau das ganze Bild, und ein Ausweichen darunter
+                    # schöbe die Felder aus der Ansicht heraus (gemessen an
+                    # ``test_dimension_fields_do_not_overlap_at_zoomed_view_edges``:
+                    # y = 20009 bei 600 px Höhe). Dann ist Überdecken das
+                    # kleinere Übel — ein Feld außerhalb des Bildes ist keines.
+                    unten = blocked.bottom() + SPACE + 1
+                    if platz.intersects(blocked) and (
+                        unten + pending_widget.height() - 1 <= bounds.bottom()
+                    ):
+                        x, y, row_height = bounds.left(), unten, 0
+                        platz = QRect(x, y, pending_widget.width(), pending_widget.height())
+                    positions[pending_widget] = platz
                     x += pending_widget.width() + SPACE
                     row_height = max(row_height, pending_widget.height())
                 break
