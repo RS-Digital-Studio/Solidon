@@ -16,6 +16,7 @@ läuft; was hier ankommt, ist immer ein nackter Wert.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields
 from typing import Any, Final
@@ -292,6 +293,25 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 detail=_("Hier wird eine Zahl erwartet."),
                 value=value,
                 constraint="type",
+            )
+        # **Vor jeder weiteren Frage: Ist es überhaupt eine Zahl?** Ein
+        # Grenzvergleich mit NaN ist immer falsch — `is_less` und `is_greater`
+        # antworten beide mit Nein, und der Wert läuft durch Mindest- und
+        # Höchstwert hindurch in die Geometrie. `inf` ohne gesetztes `maximum`
+        # ebenso, und `int(inf)` wirft einen rohen `OverflowError`, wo der
+        # Kunde einen Satz mit einem Weg nach vorn bekommen soll (Regel 17).
+        #
+        # Die Druckeinstellungen haben ihren eigenen Riegel bekommen
+        # (08.09.2026); die allgemeine Parameterannahme ist die Stelle, an der
+        # er für **jede** Zahlenart einmal steht. Vor der Ganzzahlfrage, weil
+        # `float("nan").is_integer()` falsch ist und die Meldung dann „hier
+        # wird eine ganze Zahl erwartet" hieße — wahr und irreführend.
+        if not math.isfinite(float(value)):
+            raise ValidationError(
+                field=spec.name,
+                detail=_("Der Wert ist keine endliche Zahl. Tragen Sie eine Zahl ein."),
+                value=value,
+                constraint="not_finite",
             )
         if spec.kind != "float" and not float(value).is_integer():
             raise ValidationError(

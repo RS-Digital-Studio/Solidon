@@ -113,3 +113,41 @@ def test_json_schema_carries_bounds_units_and_choices() -> None:
     assert "[mm]" in diameter["description"]
     assert schema["properties"]["mode"]["enum"] == ["subtract", "add"]
     assert schema["properties"]["count"]["type"] == ["integer", "string"]
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_a_number_is_finite_before_it_is_compared(value: float) -> None:
+    """Ein Grenzvergleich mit NaN ist immer falsch — der Wert liefe durch.
+
+    ``is_less`` und ``is_greater`` antworten bei NaN beide mit Nein; Mindest-
+    und Höchstwert lassen ihn also passieren, und ``inf`` ohne gesetztes
+    ``maximum`` ebenso. Die Druckeinstellungen haben dafür am 08.09.2026 einen
+    eigenen Riegel bekommen, die allgemeine Parameterannahme keinen.
+    """
+    with pytest.raises(ValidationError) as raised:
+        validate(SampleParams, {"diameter": value})
+
+    assert raised.value.constraint == "not_finite"
+    assert raised.value.field == "diameter"
+
+
+def test_the_bounds_alone_would_let_a_nan_through() -> None:
+    """Die Gegenprobe zum Riegel: ohne ihn prüft der Test nichts.
+
+    Ohne diese Zusicherung wäre der Test darüber auch dann grün, wenn die
+    Grenzen den Fall fingen — sie tun es nicht, und genau darin liegt der
+    Fehler.
+    """
+    from app.core.units import EPS_GEOM, is_greater, is_less
+
+    assert not is_less(float("nan"), 0.5, EPS_GEOM)
+    assert not is_greater(float("nan"), 50.0, EPS_GEOM)
+
+
+def test_an_infinite_count_does_not_become_an_overflow() -> None:
+    """``int(inf)`` wirft einen rohen ``OverflowError`` — der Kunde bekäme
+    keinen Satz mit einem Weg nach vorn (Regel 17)."""
+    with pytest.raises(ValidationError) as raised:
+        validate(SampleParams, {"count": float("inf")})
+
+    assert raised.value.constraint == "not_finite"
