@@ -5283,3 +5283,41 @@ def test_a_roof_bundles_the_same_measure_and_not_merely_the_same_word(
         assert oberste.child(0).text(1), "das Dach schreibt das gemeinsame Maß an"
     finally:
         tree_widget.deleteLater()
+
+
+def test_a_grabbable_preview_keeps_the_selection_gizmo_away(qt_app: QApplication) -> None:
+    """Solange eine Vorschau greifbar ist, steht kein zweiter Griff daneben.
+
+    Der Griff der Auswahl hängt am zuletzt gewählten Körper und trägt einen
+    Skalierwürfel; die Vorschau daneben zeigt den Körper, den der offene Dialog
+    gerade anlegt. Wer den Würfel anfasste, änderte die Maße eines fremden
+    Teils, während die des neuen im Dialog stehen (Robert, 09.09.2026: „den
+    Skalierwürfel brauchen wir nicht, der Dialog sollte ja noch offen sein zum
+    Setzen, wo man die Maße eingibt").
+
+    **Geprüft wird der Neubau, nicht das Abnehmen.** Ihn beim Einschalten der
+    Vorschau einmal wegzunehmen genügt nicht: Sieben Stellen rufen
+    ``set_gizmo(self._gizmo_wanted)`` — Auswahlwechsel, Merkmalswechsel,
+    Szenenaufbau, Themenwechsel —, und jede käme mitten durch den offenen
+    Dialog. Die Prüfung sitzt deshalb in ``set_gizmo`` selbst.
+    """
+    viewport, _renderer = _gizmo_viewport()
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        assert viewport._gizmo is not None, "ohne Vorschau bringt die Auswahl ihren Griff"
+
+        viewport.set_preview_gizmo(True)
+        assert viewport._gizmo is None, "die greifbare Vorschau nimmt ihn"
+        assert viewport._scale_handle is None, "und den Skalierwürfel mit"
+        assert viewport._gizmo_wanted, "die Entscheidung bleibt, nur der Griff geht"
+
+        # Der Fall, den das Abnehmen allein nicht deckt: ein Neubau mittendrin.
+        viewport.select("obj_2")
+        viewport.set_gizmo(True)
+        assert viewport._gizmo is None, "auch ein Auswahlwechsel baut ihn nicht neu"
+
+        viewport.set_preview_gizmo(False)
+        assert viewport._gizmo is not None, "mit der Vorschau kommt er zurück"
+    finally:
+        viewport.deleteLater()

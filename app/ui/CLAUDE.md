@@ -184,13 +184,62 @@ Tiefe und Höhe stehen im Dialog daneben. Der Zug meldet sich über
 Operation, sondern Zahlen, und `primitive_ops.placement_values_of` rechnet
 daraus Ort, Richtung und Winkel — die Umkehrung von `placement_transform`,
 gegen ihn geprüft. `_grips_its_preview` entscheidet, wer ihn bekommt: wer
-seinen Dialog behält und die Felder dafür hat. Der Griff wird nach jedem
+seinen Dialog behält und die Felder dafür hat — heute zwölf Operationen,
+die sieben Grundkörper samt dem Gewindebolzen und die vier freistehenden
+Bausteine.
+
+**Und er kommt nie neben den Griff der Auswahl.** Der hängt am zuletzt
+gewählten Körper und trägt einen Skalierwürfel; die Vorschau daneben zeigt
+den Körper, den der Dialog gerade anlegt. Wer den Würfel anfasste, änderte
+die Maße eines fremden Teils, während die des neuen im offenen Dialog
+stehen. `set_preview_gizmo(True)` nimmt ihn deshalb ab und
+`set_preview_gizmo(False)` baut ihn wieder auf — `_detach_gizmo` lässt den
+Schalterzustand in Ruhe, die Entscheidung bleibt also stehen.
+
+**Ein Griff, der nicht in `_on_pointer` steht, ist sichtbar und tot.** Er
+wird gezeichnet, nimmt aber kein Zeigerereignis an, und jede Geste fällt
+durch zur Kameraführung — wer den Quader in seiner Vorschau verschieben
+wollte, schwenkte die Ansicht. Die Vorfahrt dort ist die eine Stelle, an
+der ein neuer Griff eingetragen wird; `tests/test_viewport_decisions.py`
+liest sie im Quelltext gegen die Griff-Felder des Aufbaus. Der Griff wird nach jedem
 Neuzeichnen der Vorschau frisch angehängt; er rechnet gegen die Matrix seines
 Ziels beim Anhängen, und die Vorschau kommt bei jeder Wertänderung neu.
 
+**Platzieren geht in drei Stufen** (Robert, 09.09.2026). Zeigen und klicken
+legt die **Stelle** fest (`_settle`) — der Klick schließt nicht mehr ab, denn
+er nähme jede Vorgabe mit, die daran hängt, und bei einer Bohrung heißt
+`depth = 0` durch das ganze Teil. Dann stehen die **Maße** offen: die Abstände
+zu den Kanten als Zahlenfelder, eintippbar. Erst das Übernehmen führt in die
+**Tiefe** (`_begin_depth`), wo es eine gibt — sonst schließt Stufe 2 ab.
+
+Wer eine Tiefe hat, sagt `deepens()`: Das Werkzeug sitzt auf etwas
+(`consumes != 0`) **und** führt ein Längenfeld dafür (`parts.ops.depth_field`).
+Beides ist nötig — ein Quader trägt ein Feld namens `depth`, und das ist seine
+Bauteiltiefe, nicht die Eindringtiefe.
+
+In der Tiefenstufe kehrt sich um, was Stufe 1 zeigt: Der Werkzeugkörper tritt
+**vor** (der Umriss sagt nichts über die Tiefe), das Modell wird durchscheinend
+und die Kamera schwenkt quer zur Werkzeugachse — bei aufrechter Achse auf
+Augenhöhe der Mündung. Die Kantenmaße weichen den Bezugsmaßen der Tiefe:
+Maßlinie zur Spitze, Maßlinie zur Rückseite mit der Wand, die stehen bleibt,
+und eine Marke auf halber Materialstärke. Der Zug misst **absolut** — die
+Spitze liegt unter dem Zeiger, gerechnet aus der Bildrichtung der Achse und dem
+Maßstab an der Stelle (`_pixels_per_mm_at`) — und rastet über
+`transform.snap_to_marks` kurz an Mitte und Rückseite ein. Was die Platzierung
+dort **nicht** nimmt, gehört der Kamera: Drehen, Zoomen und Kippen bleiben frei.
+
+**Drei Fallen, alle drei einmal zugeschnappt:** Ein Feld, dessen Sichtbarkeit
+gesetzt wird, aber weiter eingesammelt wird, zeigt die Platzierungsschleife
+danach wieder (`place` sammelt in der Tiefenstufe nichts mehr). Die Leiste
+steht unten mittig über der Werkzeugzeile, und der Raum für die Maßfelder ist
+seither der **über** ihr. Und was nach der Leiste nicht selbst gehoben wird,
+liegt darunter und ist nicht anklickbar — Tiefenfeld und Wandzahl stehen
+deshalb in derselben Liste wie die Kantenmaße.
+
 **Platzieren bleibt eine Operation.** Der Operationsdialog übergibt Werte an
 `PlacementFlow`; der Controller zeigt nur einen temporären Werkzeugaktor und
-Maßpfeile. `Session.placement_async()` berechnet Originalfläche und
+Maßpfeile. Der Dialog **bleibt dabei stehen**: Er trägt die Maße, die man beim
+Platzieren braucht, und verschwand genau dann, wenn man sie sehen wollte. `Session.placement_async()` berechnet Originalfläche und
 `PlacementTool` außerhalb des Qt-Threads. Mausbewegungen und Maßänderungen
 verwenden diese Kontexte; der Merkmalskörper wird dabei nicht erneut gebaut.
 Der Kontext gehört zu Eingaben und Werten, verspätete Ergebnisse werden über
@@ -427,6 +476,36 @@ Projekt; die Herkunft steht als `Session.draft_origin` am Dokument und fällt
 mit ihm (`_reset_for`). Der Rezeptdialog belegt daraus Titel, Gruppe, Lizenz,
 Autor, die freigegebenen Maße und die benannten Stellen vor — dann heißt sein
 Knopf *Baustein ersetzen*, und ein anderer Titel legt einen zweiten an.
+
+**Ein Paar ist kein Baustein, sondern zwei** (RM-147 E1): *Gegenstücke setzen …*
+steht deshalb im Menü *Bausteine* neben dem Katalog und nicht darin.
+`counterpart_dialog.py` fragt genau zwei Dinge — welches Paar und wie groß —,
+denn das Wo steht schon fest, wenn er aufgeht: Es sind die beiden Stellen, die
+im Objektbaum markiert sind (`MainWindow._counterpart_targets`). Die Maßfelder
+baut er aus dem **Bausteinschema** (`PartSpec.params.spec()`); welche davon
+gemeinsam sind, sagt `Pair.shared` im Kern. Ein Paarwechsel tauscht sie
+vollständig — was stehenbliebe, verspräche eine Wirkung, die die andere Hälfte
+nicht kennt.
+
+**Der Menüeintrag beantwortet die Frage selbst**, statt sie nach dem Klick als
+Dialog zu stellen: Ohne zwei markierte Stellen an zwei Teilen ist er gesperrt
+und trägt den Grund. Beide Stellen — Riegel und Fehlerdialog für den Weg über
+Palette und Kürzel — lesen ihn aus `main_window.counterpart_needs_two()`; zwei
+Formulierungen derselben Auskunft laufen auseinander, und hier stünden sie
+nacheinander vor demselben Kunden. Zurückgestellt wird der eigene
+Erklärungssatz über `_pick_hint`, dieselbe Bauart wie bei *Formen* und
+*Skelett*: Wer den Hinweis beim Freigeben auf `""` setzt, macht aus einem
+bedienbaren Eintrag einen stummen.
+
+**Und die Vorschau geht denselben Weg wie beim Operationsdialog** (§18.7):
+`counterpart.drafts_for` sagt, was entstünde, `Session.preview_async` rechnet
+es im Arbeiter, `_show_preview` zeigt es. Der Dialog rechnet dabei nichts — er
+meldet über `valuesChanged`, dass Paar oder Maß sich bewegt haben, und der
+Zeitgeber im Fenster entprellt auf 300 ms. Ein Paar ist die Lage, in der eine
+Vorschau am meisten wert ist: Ob die zwei Hälften zueinander passen, sieht man
+ihnen an und den Zahlen nicht. `_clear_preview` steht im `finally` — die
+Vorschau gehört dem Dialog und geht mit ihm, gleich ob übernommen oder
+abgebrochen.
 
 Ein `InstallDialog` lässt eine begonnene Installation beim Schließen
 geordnet auslaufen und zeigt diesen Zustand. Er beendet nur das Warten auf

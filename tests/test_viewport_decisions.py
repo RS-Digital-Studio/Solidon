@@ -6520,3 +6520,138 @@ def test_a_body_with_filament_still_shows_that_it_is_selected(qt_app: QApplicati
     finally:
         viewport.renderer = None
         viewport.deleteLater()
+
+
+def test_the_grip_on_a_preview_is_asked_before_the_camera(qt_app: QApplication) -> None:
+    """Ein Griff, der in der Vorfahrt fehlt, steht im Bild und nimmt nichts an.
+
+    Genau das tat der Vorschaugriff: ``set_preview_gizmo`` baute ihn, der
+    Renderer zeichnete ihn, und ``_on_pointer`` fragte nur ``_gizmo`` und
+    ``_scale_handle``. Jede Geste fiel damit durch zur Kameraführung — wer den
+    Quader in seiner Vorschau verschieben wollte, schwenkte die Ansicht
+    (Befund Robert, 09.09.2026: „wenn ich verschieben will verschiebe ich nur
+    die Scene").
+
+    Offscreen bleibt ``Viewport.renderer`` auf ``None``, der echte Griff
+    entsteht also nie — geprüft wird deshalb die Vorfahrt selbst, mit einer
+    Attrappe an seinem Platz. Das ist die Stelle, an der der Fehler saß, und
+    die einzige, die ohne Fenster messbar ist.
+    """
+    from app.ui.render.api import PointerEvent
+    from app.ui.viewport import Viewport
+
+    class _Griff:
+        """Sagt mit ``True``, dass die Geste ihm gehört — und zählt mit."""
+
+        def __init__(self, nimmt: bool) -> None:
+            self.nimmt = nimmt
+            self.gefragt = 0
+
+        def handle(self, event: object) -> bool:
+            self.gefragt += 1
+            return self.nimmt
+
+    class _Kamera:
+        def __init__(self) -> None:
+            self.gefragt = 0
+
+        def handle(self, event: object) -> None:
+            self.gefragt += 1
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer(size=(800, 600))
+    kamera = _Kamera()
+    viewport._navigator = kamera  # type: ignore[assignment]
+
+    vorschau = _Griff(nimmt=True)
+    viewport._preview_gizmo = vorschau  # type: ignore[assignment]
+    viewport._on_pointer(PointerEvent("press", 120, 100, button="left"))
+    assert vorschau.gefragt == 1, "der Vorschaugriff wird gefragt"
+    assert kamera.gefragt == 0, "was ein Griff nimmt, dreht keine Kamera"
+
+    # Und wer die Geste nicht will, hält die Ansicht nicht auf: Neben dem
+    # Griff bleibt die Kamera bedienbar, sonst wäre der offene Dialog eine
+    # Sperre über dem ganzen Bild.
+    vorschau.nimmt = False
+    viewport._on_pointer(PointerEvent("press", 120, 100, button="left"))
+    assert vorschau.gefragt == 2
+    assert kamera.gefragt == 1, "ein Griff, der ablehnt, gibt die Geste weiter"
+
+
+def test_every_grip_the_viewport_holds_stands_in_the_right_of_way() -> None:
+    """Jeder Griff, den der Viewport führt, wird in ``_on_pointer`` gefragt.
+
+    Der Test daneben prüft den einen, der gefehlt hat; dieser prüft die Regel.
+    Ein vierter Griff entsteht als Feld im Aufbau, und wer ihn dort deklariert
+    und in der Vorfahrt vergisst, bekommt denselben Fehler noch einmal —
+    sichtbar und tot, mit einer Kamera, die stattdessen schwenkt. Gelesen wird
+    der Quelltext, weil das Verhalten es nicht zeigt: Ein vergessener Griff
+    läuft fehlerfrei, er tut nur nichts.
+    """
+    import pathlib
+    import re
+
+    from app.ui import viewport as modul
+
+    quelle = pathlib.Path(modul.__file__).read_text(encoding="utf-8")
+    griffe = set(re.findall(r"self\.(_[a-z_]+): *(?:Gizmo|ScaleHandle) *\| *None", quelle))
+    assert len(griffe) >= 3, f"ohne gefundene Griffe prüft der Test nichts: {griffe}"
+
+    block = re.search(r"\n    def _on_pointer\(.*?\n    def ", quelle, re.DOTALL)
+    assert block is not None, "_on_pointer ist nicht mehr auffindbar"
+    vorfahrt = re.search(r"for handle in \(([^)]*)\):", block.group(0))
+    assert vorfahrt is not None, "die Vorfahrt in _on_pointer ist nicht mehr auffindbar"
+
+    gefragt = {teil.strip().removeprefix("self.") for teil in vorfahrt.group(1).split(",")}
+    fehlen = griffe - gefragt
+    assert not fehlen, f"diese Griffe stehen im Bild und nehmen nichts an: {sorted(fehlen)}"
+
+
+def test_a_grabbable_preview_takes_the_grip_off_the_selection(qt_app: QApplication) -> None:
+    """Zwei Griffe im Bild wären zwei Maße an zwei verschiedenen Teilen.
+
+    Der Griff der Auswahl hängt am zuletzt gewählten Körper und trägt einen
+    Skalierwürfel; die Vorschau daneben zeigt den Körper, den der offene
+    Dialog gerade anlegt. Wer den Würfel anfasst, ändert damit die Maße eines
+    fremden Teils, während die Maße des neuen im Dialog stehen (Robert,
+    09.09.2026: „den Skalierwürfel brauchen wir nicht, der Dialog sollte ja
+    noch offen sein zum Setzen, wo man die Maße eingibt").
+
+    Und er kommt zurück: ``_detach_gizmo`` lässt den Schalterzustand in Ruhe,
+    ``set_preview_gizmo(False)`` baut ihn daraus wieder auf.
+    """
+    from app.ui.viewport import Viewport
+
+    class _Attrappe:
+        def __init__(self) -> None:
+            self.entfernt = 0
+
+        def remove(self) -> None:
+            self.entfernt += 1
+
+    viewport = Viewport()
+    viewport.renderer = RecordingRenderer(size=(800, 600))
+    griff, wuerfel = _Attrappe(), _Attrappe()
+    viewport._gizmo = griff  # type: ignore[assignment]
+    viewport._scale_handle = wuerfel  # type: ignore[assignment]
+    viewport._gizmo_wanted = True
+
+    zurueck: list[bool] = []
+    viewport.set_gizmo = lambda active: zurueck.append(active)  # type: ignore[assignment]
+
+    viewport.set_preview_gizmo(True)
+    assert viewport._gizmo is None and viewport._scale_handle is None, (
+        "solange die Vorschau greifbar ist, steht der Griff der Auswahl nicht daneben"
+    )
+    assert (griff.entfernt, wuerfel.entfernt) == (1, 1), "beide gehen aus dem Bild"
+    assert viewport._gizmo_wanted, "die Entscheidung bleibt, nur der Griff geht"
+    assert not zurueck, "und zurückgebaut wird er erst, wenn die Vorschau geht"
+
+    # Ein zweiter Aufruf mit demselben Wert kommt bei jedem Neuzeichnen der
+    # Vorschau vorbei — er darf den Auswahlgriff nicht wieder und wieder
+    # aufbauen.
+    viewport.set_preview_gizmo(True)
+    assert not zurueck, "derselbe Zustand ist kein Wechsel"
+
+    viewport.set_preview_gizmo(False)
+    assert zurueck == [True], "mit der Vorschau kommt der Griff der Auswahl zurück"

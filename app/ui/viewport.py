@@ -21,8 +21,8 @@ from dataclasses import replace
 from itertools import pairwise, product
 from typing import Any, Final, Literal, NamedTuple
 
-from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QFont, QFontMetricsF, QGuiApplication, QKeySequence
+from PySide6.QtCore import QElapsedTimer, QEvent, QPoint, QPointF, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QFontMetricsF, QGuiApplication, QKeySequence, QMouseEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -4127,14 +4127,113 @@ class Viewport(QWidget):
             # ab.
             _log.warning("the viewport renderer could not close: %s", problem)
 
+    def mousePressEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        """Was ein durchlässiges Kind hier ablädt, gehört der Renderfläche.
+
+        **Der Fund** (Robert, 09.09.2026: „hab bohrung setzen angeklickt und
+        3 mal auf den körper geklickt nichts passiert"): Die Maßfläche der
+        Platzierung liegt über der Renderfläche und trägt seit dem Umriss Tinte
+        genau dort, wo man zielt. Sie steht auf ``WA_TransparentForMouseEvents``
+        — und **das reicht den Klick an den Vorfahren weiter, nicht seitwärts
+        an ein Geschwister**. Die Renderfläche ist ein Geschwister und ein
+        natives Fenster dazu; in der Auslieferungskette des Klicks tauchte sie
+        gar nicht auf, gemessen über einen Ereignisfilter an der Anwendung:
+
+            MouseButtonPress an _Dimensions (durchlässig=True)
+            MouseButtonPress an Viewport
+            MouseButtonPress an QStackedWidget …
+
+        Hier endet der Klick also, und hier wird er weitergereicht. Vorher trug
+        die Maske nur schmale Maßlinien, meist neben der Klickstelle — daher
+        „einmal hat es geklappt von 20 klicks": Es ging, wenn man knapp neben
+        den Kreis traf.
+        """
+        if not self._hand_to_the_renderer("press", event):
+            super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        if not self._hand_to_the_renderer("release", event):
+            super().mouseReleaseEvent(event)
+
+    def mouseMoveEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
+        if not self._hand_to_the_renderer("move", event):
+            super().mouseMoveEvent(event)
+
+    def _hand_to_the_renderer(self, kind: str, event: Any) -> bool:
+        """Erzeugt aus einem Qt-Mausereignis dieselbe Geste wie die Renderfläche.
+
+        Die Koordinaten kommen relativ zu ihr, denn dorthin gehören sie: Der
+        Vertrag zählt Bildpunkte von der Ecke des Renderfensters, nicht von der
+        des Viewports (`ansicht.md`, „Der Vertrag zählt Bildpunkte wie Qt").
+        Liegt der Klick außerhalb, gehört er nicht dem Renderer.
+        """
+        renderer = self.renderer
+        widget = getattr(renderer, "widget", None)
+        if renderer is None or widget is None:
+            return False
+        at = widget.mapFrom(self, event.position().toPoint())
+        if not widget.rect().contains(at):
+            return False
+        # **Was einem bedienbaren Kind gehört, bleibt bei ihm.** Über der
+        # Renderfläche liegen die Zahlenfelder der Platzierung; ein Klick auf
+        # eines von ihnen liegt ebenfalls im Rechteck des Renderers, meint aber
+        # das Feld. Ohne diese Frage nähme das Weiterreichen jedem Feld seinen
+        # Klick, und man könnte kein Maß mehr eintippen (Robert, 09.09.2026:
+        # „bei den maßen kann man nichts eingeben").
+        #
+        # **Ein laufender Zug fragt das nicht mehr.** Wer die Taste hält, hat
+        # sich entschieden; unter dem Zeiger kann inzwischen alles liegen, und
+        # eine Bewegung, die dann ausfällt, reißt den Zug in der Mitte
+        # auseinander. Genau daran ging das Schieben der Kamera verloren,
+        # während Drehen und Kippen liefen (Robert, 09.09.2026: „verschieben
+        # geht immer noch nicht … drehen und kippen schon") — die beiden sind
+        # einzelne Gesten, das Schieben ist ein Zug.
+        if kind == "press" or not event.buttons():
+            here = self.childAt(event.position().toPoint())
+            while here is not None and here is not self:
+                if here is widget:
+                    break
+                if not here.testAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents):
+                    return False
+                here = here.parentWidget()
+        forward = getattr(renderer, "_pointer", None)
+        if not callable(forward):
+            return False
+        button = None
+        if kind in ("press", "release"):
+            from app.ui.render.gfx_renderer import _button_of
+
+            button = _button_of(event.button())
+        moved = QMouseEvent(
+            event.type(),
+            QPointF(at),
+            event.globalPosition(),
+            event.button(),
+            event.buttons(),
+            event.modifiers(),
+        )
+        forward(kind, moved, button)
+        return True
+
     def _on_pointer(self, event: PointerEvent) -> None:
         """Jede Zeigergeste des Renderers, in fester Vorfahrt.
 
         Zuerst der Zeiger selbst (Hover, Skizzenvorschau), dann die Griffe —
-        Bewegungsgriff und Skalierwürfel sagen mit ``True``, dass die Geste
-        ihnen gehört —, zuletzt die Kameraführung. Was ein Griff nimmt, dreht
-        keine Kamera; das ist die ganze Vorfahrt, und sie steht an einer
-        Stelle statt in drei Beobachtern am Interactor wie bis zum 05.09.2026.
+        Vorschaugriff, Bewegungsgriff und Skalierwürfel sagen mit ``True``,
+        dass die Geste ihnen gehört —, zuletzt die Kameraführung. Was ein
+        Griff nimmt, dreht keine Kamera; das ist die ganze Vorfahrt, und sie
+        steht an einer Stelle statt in drei Beobachtern am Interactor wie bis
+        zum 05.09.2026.
+
+        Unter den Griffen ist die Reihenfolge ohne Wirkung — sie schließen
+        einander aus, weil :meth:`set_preview_gizmo` den Griff der Auswahl
+        abnimmt, solange eine Vorschau greifbar ist. Was zählt, ist, dass alle
+        drei **vor** der Kamera stehen.
+
+        Wer hier einen Griff vergisst, baut ihn sichtbar und tot: Er steht im
+        Bild, nimmt aber nichts an, und jede Geste fällt durch zur Kamera.
+        Genau das tat der Vorschaugriff bis zum 09.09.2026 (Befund Robert:
+        „wenn ich verschieben will verschiebe ich nur die Scene").
         """
         if self._placement_pointer is not None and self._placement_pointer(event):
             return
@@ -4142,7 +4241,7 @@ class Viewport(QWidget):
             self._note_pointer(event.x, event.y)
         elif event.kind == "leave":
             self._forget_pointer()
-        for handle in (self._gizmo, self._scale_handle):
+        for handle in (self._preview_gizmo, self._gizmo, self._scale_handle):
             if handle is not None and handle.handle(event):
                 self._queue_feature_label_layout()
                 return
@@ -9359,13 +9458,21 @@ class Viewport(QWidget):
         gegen die Matrix der vorigen Auswahl, und nach einer Auswertung hinge
         er an einem Aktor, der nicht mehr im Bild ist. Die Griffe nehmen ihre
         Gesten in :meth:`_on_pointer` vor der Kamera.
+
+        **Eine greifbare Vorschau hat Vorrang, und die Prüfung steht hier.**
+        Sieben Stellen bauen den Griff neu — Auswahlwechsel, Merkmalswechsel,
+        Szenenaufbau, Themenwechsel —, und jede von ihnen käme sonst mitten
+        durch einen offenen Erzeuger-Dialog: Neben der Vorschau stünde wieder
+        der Griff des zuletzt gewählten Körpers samt Skalierwürfel, der die
+        Maße eines fremden Teils ändert. Ihn beim Einschalten der Vorschau
+        einmal abzunehmen genügt deshalb nicht; gefragt wird bei jedem Aufbau.
         """
         self._gizmo_wanted = active
         if self.renderer is None:
             self.gizmoStatus.emit("")
             return
         self._detach_gizmo()
-        if not active or self._selected is None:
+        if not active or self._selected is None or self._preview_gizmo_wanted:
             self.gizmoStatus.emit("")
             return
         # **Wo er sitzt und was er tut, sind zwei Fragen.** ``gizmo_feature``
@@ -9484,8 +9591,23 @@ class Viewport(QWidget):
         Anhängen hatte, und die Vorschau wird bei jeder Wertänderung neu
         gezeichnet.
         """
+        war = self._preview_gizmo_wanted
         self._preview_gizmo_wanted = active
         self._detach_preview_gizmo()
+        if active and not war:
+            # **Und der Griff der Auswahl geht, solange sie steht.** Er hängt
+            # am zuletzt gewählten Körper, und der ist nicht der, den der
+            # Dialog gerade anlegt: Es stünden zwei Griffe im Bild, und der
+            # Skalierwürfel am unteren änderte die Maße eines fremden Teils,
+            # während die Maße des neuen im offenen Dialog daneben stehen
+            # (Befund Robert, 09.09.2026: „den Skalierwürfel brauchen wir
+            # nicht, der Dialog sollte ja noch offen sein zum Setzen, wo man
+            # die Maße eingibt"). ``_detach_gizmo`` nimmt Griff und Würfel und
+            # lässt den Schalterzustand in Ruhe — deshalb kommt beides zurück,
+            # sobald die Vorschau geht.
+            self._detach_gizmo()
+        elif war and not active:
+            self.set_gizmo(self._gizmo_wanted)
         if not active or self.renderer is None:
             return
         actor = self._first_added_actor()
