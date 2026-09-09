@@ -395,6 +395,16 @@ misst deshalb am Anfangszustand und nicht an einer Liste von Knöpfen.
 `catalog.py` (Bausteinkatalog, §24.3) · `filament_picker.py` (Farbe und Name
 statt einer Zahl von 0 bis 7)
 
+**Ein eigener Baustein lässt sich wieder öffnen** (RM-147 E6): *Zum Bearbeiten
+öffnen …* steht neben *Aus Bibliothek entfernen* und gilt derselben Menge —
+eigene und eingelesene Rezepte, sonst ist der Knopf unsichtbar.
+`MainWindow._edit_part` fragt wie beim Öffnen einer Datei, ob das offene
+Projekt weg darf, und `Session.open_draft` macht daraus ein namenloses
+Projekt; die Herkunft steht als `Session.draft_origin` am Dokument und fällt
+mit ihm (`_reset_for`). Der Rezeptdialog belegt daraus Titel, Gruppe, Lizenz,
+Autor, die freigegebenen Maße und die benannten Stellen vor — dann heißt sein
+Knopf *Baustein ersetzen*, und ein anderer Titel legt einen zweiten an.
+
 Ein `InstallDialog` lässt eine begonnene Installation beim Schließen
 geordnet auslaufen und zeigt diesen Zustand. Er beendet nur das Warten auf
 einen gestarteten Fremddienst; den Dienst selbst besitzt Solidon nicht.
@@ -416,6 +426,24 @@ Bohren, Aushöhlen und Teilen, an einem gewählten Merkmal die seiner Art —
 das Merkmal hat Vorrang vor der Menge. Die Knöpfe dieser Lagen entstehen
 einmal (`all_quick_names`) und werden nur ein- und ausgehängt; was oben
 stehen kann, steht nicht auch in der Suchliste darunter.
+
+**Und was das Merkmalsfenster darüber schon als Feld zeigt, steht hier gar
+nicht.** `_shown_as_fields()` liest `perceive.actions.ACTION_ORDER` — dieselbe
+Liste, aus der `FeaturePanel` seine Zeilen baut —, und `quick_names` wie
+`_fits_the_level` schneiden sie heraus. An einer Bohrung standen sonst
+*Bohrung ändern*, *Merkmal drehen* und *Merkmal verdoppeln* zweimal im selben
+Fenster: oben mit dem gemessenen Wert und einem Knopf, darunter als Knopf, der
+denselben Weg noch einmal anbietet. Der Kegel hat deshalb eine eigene Zeile in
+`QUICK_FEATURES` — seine einzige verbleibende Handlung ist *Senken*, und ohne
+den Eintrag stünde sie an keiner der beiden Stellen.
+
+**Eine Beschriftung, die nicht in ihre Spalte passt, bricht um** — Qt schnitte
+sie sonst zu „Bohrung versch…", und ein abgeschnittener Titel nennt seine
+Handlung nicht mehr. `_wrap_label` misst gegen die Schrift, mit der wirklich
+gezeichnet wird, und holt das Beiwerk des Knopfes aus der Differenz zu seinem
+Wunschmaß; höchstens zwei Zeilen, darunter bleibt Qts Auslassung. Der
+ungebrochene Titel steht als `operationTitle` am Knopf, weil `text()` sich
+ändert und die Suche darunter den ganzen Titel braucht.
 
 Die Kopfzeile nennt keine globale Materialzusage. Sie liest Körpermaterialien
 und die über `mesh.slot_indices` tatsächlich belegten Materialslots der
@@ -524,6 +552,13 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
   dieselbe Menge längst als eine Zeile. `_restore` klappt das Dach auf, wenn
   das gewählte Merkmal darin liegt — sonst wäre ein Klick im Viewport auf eine
   Verrundung wieder ins Leere gegangen.
+- **Ein Bausteindach über einer einzigen Zeile entfällt.** „Schraubenloch mit
+  Senkung" trägt genau ein direktes Kind — die Bohrung, an der die Senkung
+  schon hängt —, und die Dachzeile wiederholte damit nur, was darunter steht;
+  angeklickt meinte sie den ganzen Körper, und im Auswahlfenster standen alle
+  Körperoperationen. Der Weg zum Schritt geht dabei nicht verloren: Er steht in
+  `Feature.created_by`, und Doppelklick wie „Diesen Schritt ändern" lesen ihn
+  von dort, wenn `_STEP_ROLE` fehlt.
 - **Ein zusammenhängender Bohrungshohlraum ist ein vollständiger Ast.**
   Bohrung, kegelige Übergänge und zylindrische Senkungen werden in der
   Reihenfolge von `perceive.relations.cavity_chains` ineinander gehängt; eine

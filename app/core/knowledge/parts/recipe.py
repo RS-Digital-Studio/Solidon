@@ -60,7 +60,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Final
+from typing import TYPE_CHECKING, Any, Final
 
 from app.core.errors import (
     CANCEL,
@@ -85,6 +85,9 @@ from app.core.types import (
     Quality,
 )
 from app.i18n import TranslatableText, _
+
+if TYPE_CHECKING:  # nur für den Typ — der Import selbst schlösse den Kreis
+    from app.core.scene.project import Project
 
 _log = get_logger(__name__)
 
@@ -1853,6 +1856,7 @@ def capture(
     doc: str = "",
     licence: str = "",
     author: str = "",
+    imported_origin: ImportedOrigin | None = None,
     profile: Profile,
 ) -> Recipe:
     """Aus einem echten Dokument den Ausschnitt herausschneiden.
@@ -1886,6 +1890,15 @@ def capture(
     Aufrufer benutzt, übernimmt diese Frage — hier weiß niemand, wen er fragen
     soll (Regel 21: nie stillschweigend raten, aber auch kein Dialog aus dem
     Kern heraus).
+
+    **``imported_origin`` reist mit, wenn ein Entwurf aus einem fremden Rezept
+    kommt** (E6). Die Quittung belegt die **Reise** und nicht den Inhalt (siehe
+    :class:`ImportedOrigin`): Wer ein importiertes Rezept öffnet, ein Maß
+    ändert und es ersetzt, hat weiter fremde Arbeit vor sich und nicht
+    plötzlich eigene. Ohne das Argument fiele sie weg, und
+    :func:`_catalog_source` machte beim nächsten Start aus einem fremden
+    Baustein still einen eigenen — §32 will das Gegenteil. Ein frisch
+    erfasster Ausschnitt lässt es leer, und das ist die Vorgabe.
     """
     if not features:
         # §24.1 verlangt es ohnehin beim Registrieren — aber dort hieße der
@@ -1934,10 +1947,65 @@ def capture(
         # leer — der Dialog könnte es setzen wollen und käme nicht an.
         license=licence,
         author=author,
+        imported_origin=imported_origin,
     )
     recipe = with_dependencies(recipe)
     build(recipe, profile=profile)  # die Probe — wirft mit Handlungsvorschlag
     return recipe
+
+
+def draft(recipe: Recipe, parts: PartRegistry | None = None) -> Project:
+    """Das Rezept zurück in ein bearbeitbares Projekt (E6, RM-147).
+
+    Der Gegenweg zu :func:`capture`. Bis hierher galt „Ändern heißt neu
+    speichern": Wer die Wandstärke seines Halters nachbessern wollte, brauchte
+    das Projekt, aus dem er ihn geschnitten hatte — und wer ein Rezept
+    eingelesen hatte, hatte dieses Projekt nie. Der Ausschnitt wird deshalb
+    wieder ein Dokument, die eingebetteten Quellen wieder Projektquellen.
+
+    **Beides ist eine Kopie.** Der Katalogeintrag hält sein Dokument als
+    lebendes Objekt; ein Entwurf, der darauf zeigte, änderte den Baustein
+    schon beim Bearbeiten — vor jedem Speichern und ohne einen Weg zurück.
+    Geschrieben und wieder gelesen ist der billigste vollständige Schnitt, und
+    er ist derselbe, den das Speichern ohnehin nimmt.
+
+    Der Entwurf trägt **keinen Dateipfad**: Er ist ein neues, ungespeichertes
+    Projekt. Was aus ihm wird, entscheidet der Rezeptdialog — ein zweiter
+    Baustein unter neuem Namen oder der Ersatz dieses einen.
+
+    **Beilagen müssen im Katalog stehen.** Ein Rezept, das andere Rezepte
+    mitbringt, löst sie beim Bauen über ein privates Register auf
+    (:func:`dependency_registry`); ein Dokument im Fenster hat dieses Register
+    nicht, und seine Schritte fänden ihre Operation nicht. Gesagt wird das
+    hier und nicht als Auswertungsfehler nach dem Öffnen — dort stünde der
+    Kunde vor einem Entwurf, der aus Gründen anhält, die nichts mit seiner
+    Arbeit zu tun haben.
+    """
+    from app.core.knowledge.parts.registry import PARTS
+
+    # Träge wie ``shared`` weiter oben, und aus demselben Grund: ``project.py``
+    # importiert dieses Modul für die Reise eines Rezepts in der Projektdatei.
+    # Auf Modulebene wäre der Kreis geschlossen.
+    from app.core.scene.project import Project
+
+    known = parts or PARTS
+    missing = sorted(name for name in recipe.dependencies if not known.has(name))
+    if missing:
+        raise ValidationError(
+            field="dependencies",
+            detail=_(
+                "Dieser Baustein benutzt weitere Rezepte, die nicht in Ihrer "
+                "Bibliothek stehen. Lesen Sie sie zuerst als Datei ein, dann "
+                "lässt sich dieser hier bearbeiten."
+            ),
+            values={"missing": ", ".join(missing)},
+            constraint="missing",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return Project(
+        document=document_from_data(document_to_data(recipe.document)),
+        sources=dict(recipe.payloads),
+    )
 
 
 def _mentions(ops: list[Any], source_id: str) -> bool:

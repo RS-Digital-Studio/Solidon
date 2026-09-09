@@ -5916,6 +5916,7 @@ class MainWindow(QMainWindow):
         catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
         catalog.removeRequested.connect(lambda name: self._remove_part(catalog, name))
         catalog.scadRequested.connect(lambda name: self._write_part_scad(catalog, name))
+        catalog.draftRequested.connect(lambda name: self._edit_part(catalog, name))
         catalog.undoFileRequested.connect(lambda: self._undo_part_file(catalog))
         catalog.showAffectedStepRequested.connect(lambda: self._show_part_affected_step(catalog))
         return catalog
@@ -6134,6 +6135,68 @@ class MainWindow(QMainWindow):
         catalog.show_file_result(
             tr("Geschrieben: {path}").format(path=Path(target).name), can_undo=False
         )
+
+    def _edit_part(self, catalog: PartCatalog, name: str) -> None:
+        """Öffnet einen eigenen Baustein als bearbeitbaren Entwurf (E6, RM-147).
+
+        Bis hierher stand im Handbuch „Ändern heißt neu speichern", und das
+        setzte voraus, dass der Kunde das Projekt noch hat, aus dem er den
+        Baustein geschnitten hat. Bei einem **eingelesenen** Rezept hatte er es
+        nie: Der Baustein stand im Katalog, sein Aufbau nirgends.
+
+        Der Weg ist deshalb der umgekehrte des Speicherns — die Schritte des
+        Rezepts werden wieder ein Verlauf, seine eingebetteten Quellen wieder
+        Projektquellen, und was der Kunde daran ändert, geht durch dieselben
+        Operationen wie jede andere Arbeit (Regel 2).
+
+        **Gefragt wird vorher**, denn ein Entwurf ersetzt das offene Projekt:
+        derselbe Weg wie beim Öffnen einer Datei. Der Katalog geht danach zu —
+        er steht sonst vor dem Modell, das er gerade aufgemacht hat.
+
+        Die Rezeptdaten kommen aus dem **Katalogeintrag** und nicht von der
+        Platte: Dort stehen sie ohnehin (``PartSpec.recipe_data``, für die
+        Reise in einer Projektdatei), ein zweiter Leseweg wäre eine zweite
+        Gelegenheit, etwas anderes zu lesen als der Katalog zeigt.
+        """
+        from app.core.knowledge.parts import recipe as recipes
+        from app.core.knowledge.parts.registry import PARTS
+
+        data = getattr(PARTS.get(name), "recipe_data", None)
+        if not data:
+            # Der Knopf steht nur an eigenen Bausteinen; hierher kommt, wer
+            # den Weg an ihm vorbei nimmt — ein Kürzel, ein Signal aus einem
+            # Test. Ein Satz ist billiger als ein Stapelabzug (Regel 17).
+            show_error(
+                ValidationError(
+                    field="part",
+                    detail=tr(
+                        "Dieser Baustein liegt als Programm vor und nicht als Rezept. "
+                        "Bearbeiten lassen sich eigene und eingelesene Rezepte."
+                    ),
+                    constraint="not_a_recipe",
+                    suggestions=(CANCEL,),
+                ),
+                self._catalog_or_self(catalog),
+            )
+            return
+        try:
+            recipe = recipes.from_data(dict(data))
+            project = recipes.draft(recipe)
+        except AppError as error:
+            show_error(error, self._catalog_or_self(catalog))
+            return
+        if not self._may_discard():
+            return
+        self.session.open_draft(project, recipe)
+        catalog.reject()
+        self.announce(
+            tr(
+                "{title} liegt als Entwurf vor. Ändern Sie ihn wie ein Projekt und "
+                "legen Sie ihn danach über „Auswahl als Baustein speichern …“ wieder "
+                "in die Bibliothek."
+            ).format(title=recipe.title)
+        )
+        _log.info("part opened as draft: %s", recipe.name)
 
     def _current_part_values(self, spec: Any) -> Any:
         """Die Werte, mit denen dieser Baustein im offenen Projekt steht.
@@ -6545,6 +6608,11 @@ class MainWindow(QMainWindow):
             self._result_features(),
             self.session.profile,
             parent=catalog,
+            # **Kam dieses Dokument aus einem Baustein, sagt es der Dialog**
+            # (E6): Er belegt Titel, Gruppe, Maße und Merkmale daraus vor, und
+            # sein Knopf heißt dann „Baustein ersetzen". Ein gewöhnliches
+            # Projekt trägt keine Herkunft, und dann ändert sich nichts.
+            origin=self.session.draft_origin,
         )
         # ``refresh``, nicht ``show_parts``: ``saved`` trägt den **Namen** des
         # Rezepts, und ``show_parts`` versteht sein Argument als Suchtext. So

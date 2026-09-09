@@ -1428,6 +1428,74 @@ def _box_recipe(name: str):
     )
 
 
+def test_opening_a_part_for_editing_puts_its_steps_into_the_window(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """RM-147 E6: „Ändern heißt neu speichern" setzte das Ursprungsprojekt voraus.
+
+    Bei einem eingelesenen Rezept gab es dieses Projekt nie — der Baustein
+    stand im Katalog, sein Aufbau nirgends. Der Knopf öffnet ihn als Entwurf:
+    seine Schritte werden ein Verlauf, und der Rezeptdialog weiß danach, aus
+    welchem Baustein das Dokument kommt.
+
+    Geprüft wird der ganze Weg vom Klick bis in die Sitzung, denn genau
+    dazwischen liegen die Fragen, die kein Einzeltest stellt: Steht der Knopf
+    nur an eigenen Bausteinen, geht der Katalog danach zu, und trägt der Dialog
+    die Herkunft?
+    """
+    from app.core.knowledge.parts import recipe as recipe_module
+    from app.core.knowledge.parts.recipe import register
+    from app.core.registry import REGISTRY
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    name = "entwurfsprobe"
+    monkeypatch.setattr(recipe_module, "user_parts_dir", lambda: tmp_path / "user-parts")
+    part = _box_recipe(name)
+    register(part)
+    catalogs: list[PartCatalog] = []
+
+    def instead_of_exec(dialog: PartCatalog) -> int:
+        catalogs.append(dialog)
+        return int(PartCatalog.DialogCode.Rejected)
+
+    monkeypatch.setattr(PartCatalog, "exec", instead_of_exec)
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.action_catalog()
+        catalog = catalogs[-1]
+        _choose(catalog, name)
+        catalog.show()
+        QApplication.processEvents()
+
+        assert catalog.edit_part.isVisibleTo(catalog)
+        builtin = next(spec for spec in PARTS.all() if spec.source not in ("recipe", "imported"))
+        _choose(catalog, builtin.name)
+        assert catalog.edit_part.isHidden(), (
+            "ein eingebauter Baustein hat kein Rezept, das sich bearbeiten ließe"
+        )
+        _choose(catalog, name)
+
+        catalog.edit_part.click()
+
+        assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
+        assert window.session.path is None, "ein Entwurf schreibt nicht in die Rezeptdatei"
+        assert window.session.draft_origin is not None
+        assert window.session.draft_origin.name == name
+        assert not catalog.isVisible(), "der Katalog stünde sonst vor dem geöffneten Entwurf"
+
+        # Und ein anderes Dokument räumt die Herkunft weg — sonst böte der
+        # Rezeptdialog dem nächsten Projekt an, diesen Baustein zu ersetzen.
+        window.session.start_new()
+        assert window.session.draft_origin is None
+        catalog.release()
+    finally:
+        PARTS.remove(name)
+        REGISTRY.remove(f"insert_{name}")
+        window.close()
+
+
 def test_an_own_python_part_is_told_apart_from_a_shipped_one(qt_app: QApplication) -> None:
     """§24.5 heißt „Eigene Bausteine" und meint die ``.py`` aus dem Nutzerordner.
 

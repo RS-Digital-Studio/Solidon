@@ -443,6 +443,210 @@ def test_the_button_stays_locked_until_the_project_can_carry_a_part(qt_app: QApp
         window.deleteLater()
 
 
+# --- RM-147 E6: den Baustein bearbeiten statt neu zu tippen -----------------------
+
+
+def _origin(**changes: Any) -> Any:
+    """Ein Rezept, wie es aus dem Katalogeintrag zurückkommt.
+
+    Eine Attrappe mit genau den Feldern, die der Dialog daraus liest — die
+    Frage hier ist, **was er damit macht**, und nicht, ob der Kern ein Rezept
+    bauen kann; das prüft ``tests/test_recipes.py``.
+    """
+    from app.core.knowledge.parts.recipe import ExposedParam
+
+    values: dict[str, Any] = {
+        "name": "werkbankhalter",
+        "title": "Werkbankhalter",
+        "group": "mounting",
+        "doc": "Hält das Kabel an der Kante.",
+        "license": "CC-BY-4.0",
+        "author": "Robert",
+        "exposed": (
+            ExposedParam(
+                name="breite",
+                title="Klemmbreite",
+                default=44.0,
+                unit="mm",
+                minimum=20.0,
+                maximum=80.0,
+                placement="advanced",
+                doc="Wie weit die Klemme aufgeht.",
+            ),
+        ),
+        "features": {"klemmstelle": "hole_1"},
+        "imported_origin": None,
+    }
+    values.update(changes)
+    return SimpleNamespace(**values)
+
+
+def test_editing_a_part_brings_back_what_the_customer_typed(qt_app: QApplication) -> None:
+    """Die Herkunft **ist** die Vorbelegung.
+
+    Ohne sie hieße „bearbeiten": Titel, Gruppe, Beschreibung, Lizenz, Autor und
+    je freigegebenem Maß sieben Felder noch einmal eintippen — und wer eines
+    anders tippt, ersetzt seinen Baustein durch einen anderen.
+    """
+    profile: Any = None
+    dialog = RecipeDialog(
+        _document(),
+        {},
+        (0,),
+        (_feature("hole_1"), _feature("hole_2")),
+        profile,  # type: ignore[arg-type]
+        origin=_origin(),
+    )
+    try:
+        assert dialog.title.text() == "Werkbankhalter"
+        assert dialog.group.currentData() == "mounting"
+        assert dialog.doc.text() == "Hält das Kabel an der Kante."
+        assert dialog.licence.currentData() == "CC-BY-4.0"
+        assert dialog.author.text() == "Robert"
+
+        rows = {row.name: row for row in dialog._params}
+        assert rows["breite"].take.isChecked()
+        assert rows["breite"].title.text() == "Klemmbreite"
+        assert rows["breite"].minimum.value() == pytest.approx(20.0)
+        assert rows["breite"].maximum.value() == pytest.approx(80.0)
+        assert rows["breite"].default.value() == pytest.approx(44.0)
+        assert rows["breite"].placement.currentData() == "advanced"
+        assert rows["breite"].doc.text() == "Wie weit die Klemme aufgeht."
+        # Was der Ursprung nicht kennt, bleibt bei den Vorschlägen des Dialogs.
+        assert rows["hoehe"].title.text() == "Höhe"
+
+        places = {row.feature_id: row for row in dialog._features}
+        assert places["hole_1"].take.isChecked()
+        assert places["hole_1"].name.text() == "klemmstelle"
+        assert not places["hole_2"].take.isChecked(), (
+            "ein Entwurf verspricht nicht mehr Stellen als der Baustein, den er ersetzt"
+        )
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_editing_a_part_offers_to_replace_it(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Knopf sagt, was er tut — und der Name entscheidet darüber.
+
+    „Neu speichern oder bewusst ersetzen": Wer den Titel stehen lässt, ersetzt
+    seinen Baustein; wer einen anderen tippt, legt einen zweiten an. Beides ist
+    eine Handlung des Kunden und keine des Dialogs.
+
+    ``taken_name`` fragt Register und Platte; hier steht der Baustein in
+    keinem von beiden, also sagt es der Test — sonst prüfte er, dass ein
+    Katalog ohne diesen Baustein ihn nicht kennt.
+    """
+    from app.ui import recipe_dialog as module
+
+    monkeypatch.setattr(module, "taken_name", lambda name: name == "werkbankhalter")
+    profile: Any = None
+    dialog = RecipeDialog(
+        _document(),
+        {},
+        (0,),
+        (_feature("hole_1"),),
+        profile,  # type: ignore[arg-type]
+        origin=_origin(),
+    )
+    try:
+        assert dialog.windowTitle() == "Baustein bearbeiten"
+        assert dialog._save.text() == "Baustein ersetzen"
+        assert "Ersetzt den vorhandenen Baustein" in dialog._save.toolTip()
+
+        dialog.title.setText("Ein zweiter Halter")
+        dialog._update_enabled()
+        assert dialog._save.text() == "Baustein anlegen"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_an_edited_import_says_that_it_stays_one(qt_app: QApplication) -> None:
+    """§32: Wer einen eingelesenen Baustein bearbeitet, behält ihn als fremden.
+
+    Das ist die richtige Antwort und zugleich die überraschende — sie gehört
+    dorthin, wo entschieden wird, und nicht in eine Fußnote im Handbuch.
+    """
+    from app.core.knowledge.parts.recipe import ImportedOrigin
+
+    quittung = ImportedOrigin(source_sha256="d" * 64, imported_at="2026-09-09T08:15:00Z")
+    profile: Any = None
+    dialog = RecipeDialog(
+        _document(),
+        {},
+        (0,),
+        (_feature("hole_1"),),
+        profile,  # type: ignore[arg-type]
+        origin=_origin(imported_origin=quittung),
+    )
+    plain = RecipeDialog(
+        _document(),
+        {},
+        (0,),
+        (_feature("hole_1"),),
+        profile,  # type: ignore[arg-type]
+        origin=_origin(),
+    )
+    try:
+        assert dialog.provenance.isVisibleTo(dialog)
+        assert "eingelesen" in dialog.provenance.text()
+        assert not plain.provenance.isVisibleTo(plain), (
+            "bei einem eigenen Baustein stünde hier eine Zeile, die nichts sagt"
+        )
+    finally:
+        for entry in (dialog, plain):
+            entry.release()
+            entry.deleteLater()
+
+
+def test_an_edited_import_hands_its_receipt_back_to_the_core(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Quittung reist mit — aber nur, solange derselbe Baustein gemeint ist.
+
+    Ohne sie machte ``_catalog_source`` beim nächsten Start still einen eigenen
+    Baustein aus einem fremden. Wer den Namen ändert, legt dagegen einen
+    **zweiten** an, und der ist seiner.
+    """
+    from app.core.knowledge.parts.recipe import ImportedOrigin
+    from app.ui import recipe_dialog as module
+
+    quittung = ImportedOrigin(source_sha256="e" * 64, imported_at="2026-09-09T08:15:00Z")
+    seen: list[Any] = []
+
+    def capture(*_args: Any, **kwargs: Any) -> Any:
+        seen.append(kwargs.get("imported_origin"))
+        raise RuntimeError("hier endet der Test — der Schnitt selbst gehört dem Kern")
+
+    monkeypatch.setattr(module.recipes, "capture", capture)
+    profile: Any = None
+    dialog = RecipeDialog(
+        _document(),
+        {},
+        (0,),
+        (_feature("hole_1"),),
+        profile,  # type: ignore[arg-type]
+        origin=_origin(imported_origin=quittung),
+    )
+    try:
+        dialog._store()
+        dialog._leash.wait_all()
+        assert seen == [quittung]
+
+        seen.clear()
+        dialog.title.setText("Mein eigener Halter")
+        dialog._update_enabled()
+        dialog._store()
+        dialog._leash.wait_all()
+        assert seen == [None], "ein anderer Name ist ein anderer Baustein"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 # --- die drei Funde aus Roberts Komplett-Review vom 25.08.2026 --------------------
 
 

@@ -48,6 +48,7 @@ from app.core.ingest.loader import read_bounded_payload, read_local_payload
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.knowledge.parts import check as part_check
+from app.core.knowledge.parts.recipe import Recipe
 from app.core.lid_flow import LidApplied, apply_lid
 from app.core.log import get_logger
 from app.core.scene import (
@@ -585,6 +586,18 @@ class Session(QObject):
         Verweise nach außen werden beim Öffnen einmal gemeldet. Bei jeder
         Auswertung wäre es eine Zeile, die immer dasteht und die deshalb
         niemand mehr liest."""
+        self.draft_origin: Recipe | None = None
+        """Aus welchem Baustein dieses Dokument als Entwurf geöffnet wurde (E6).
+
+        Ein Zustand des **Projekts** und keiner des Fensters: Er gilt genau so
+        lange wie das Dokument, und ``_reset_for`` ist die eine Stelle, an der
+        ein Dokument wechselt. Im Fenster gehalten müsste ihn jeder der vier
+        Wege dorthin (neu, öffnen, wiederherstellen, Entwurf) einzeln löschen,
+        und der fünfte vergäße es.
+
+        Der Rezeptdialog belegt seine Felder daraus vor — Titel, Gruppe,
+        Lizenz, die freigegebenen Maße, die benannten Stellen — und reicht die
+        Importquittung weiter, damit ein fremder Baustein fremd bleibt."""
         self._worker: _EvaluationWorker | None = None
         self._plan: _PlanWorker | None = None
         """Der laufende Einleseplan (§2.8) — siehe ``import_payload_async``."""
@@ -734,6 +747,35 @@ class Session(QObject):
         self.pending_foreign_check = True
         self._reset_for(path)
 
+    def open_draft(self, project: Project, origin: Recipe) -> None:
+        """Öffnet einen Baustein als bearbeitbares Projekt (E6, RM-147).
+
+        Der Entwurf ist ein **namenloses** Projekt: Er hat keine Datei, und ein
+        „Speichern" fragt deshalb nach einem Namen, statt in die Rezeptdatei zu
+        schreiben. Denselben Grund nennt :meth:`recover` für ihren Fall — was
+        der Kunde pflegt, ist die Projektdatei, und die Ablage des Bausteins
+        ist keine.
+
+        Als **geändert** gilt er nicht: Der Stand steht vollständig im Katalog,
+        es geht nichts verloren, wenn jemand ihn ansieht und wieder schließt.
+        Erst der erste eigene Zug macht ihn geändert, und dann fragt das
+        Fenster wie bei jedem anderen Projekt.
+
+        Die drei Prüfungen laufen wie beim Öffnen einer Datei: Ein Rezept kann
+        Schritte enthalten, die selbst Bausteine einsetzen (§24.4), es kann
+        Merkmale nennen, die der frische Lauf anders zuordnet (§21.3), und ein
+        eingelesenes kam von außen (§32). Sie sind hier nicht teurer als dort
+        — wo nichts zu melden ist, meldet keine.
+        """
+        self.project = project
+        self.pending_orphan_check = True
+        self.pending_part_check = True
+        self.pending_foreign_check = True
+        self._reset_for(None)
+        # **Nach** ``_reset_for`` — es räumt die Herkunft des vorigen Dokuments
+        # weg und träfe sonst die gerade gesetzte.
+        self.draft_origin = origin
+
     def recover(self, path: Path, into: Path | None = None) -> None:
         """Öffnet eine automatische Sicherung, ohne sie zum Projekt zu machen.
 
@@ -822,6 +864,9 @@ class Session(QObject):
 
     def _reset_for(self, path: Path | None) -> None:
         self.release_recovery()
+        # Ein anderes Dokument kommt aus keinem Baustein, bis jemand es sagt —
+        # ``open_draft`` setzt die Herkunft danach wieder (E6).
+        self.draft_origin = None
         self.history = History(self.project.document)
         self.cache.clear()
         self.path = path

@@ -133,6 +133,12 @@ class PartCatalog(QDialog):
     shareRequested = Signal()
     adoptRequested = Signal()
     removeRequested = Signal(str)
+    draftRequested = Signal(str)
+    """Den gewählten eigenen Baustein als bearbeitbaren Entwurf öffnen (E6).
+
+    Trägt den Namen, weil der Katalog kein Dokument hat: Was aus dem Rezept
+    ein Projekt macht, weiß das Fenster — und es fragt vorher, ob das offene
+    weg darf."""
     scadRequested = Signal(str)
     """Den gewählten Baustein als OpenSCAD-Quelltext schreiben (§24.1).
 
@@ -326,6 +332,28 @@ class PartCatalog(QDialog):
             tr("Baustein aus Datei hinzufügen …"), QDialogButtonBox.ButtonRole.ActionRole
         )
         self.adopt_part.clicked.connect(self.adoptRequested.emit)
+
+        # **Der Weg zurück in den Verlauf** (E6): Bis hierher hieß „ändern"
+        # neu speichern, und wer das Projekt nicht mehr hatte, aus dem sein
+        # Baustein geschnitten war, hatte gar keinen Weg — bei einem
+        # eingelesenen Rezept gab es dieses Projekt nie. Der Knopf steht neben
+        # dem Entfernen, weil beide dieselbe Voraussetzung haben: ein Baustein,
+        # der dem Kunden gehört. Beide sind deshalb unsichtbar, solange einer
+        # der eingebauten gewählt ist — ein grauer Knopf an
+        # siebenundzwanzig von dreißig Einträgen wäre kein Angebot.
+        self.edit_part = buttons.addButton(
+            tr("Zum Bearbeiten öffnen …"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.edit_part.setAccessibleName(tr("Baustein zum Bearbeiten öffnen"))
+        # Was der Klick bewirkt, steht am Knopf — er tauscht das offene
+        # Projekt, und das ist mehr, als „bearbeiten" vermuten lässt. An allen
+        # drei Kanälen, weil je nach Bedienung einer ausfällt (Regel 18).
+        opens = tr("Legt die Schritte dieses Bausteins als neues Projekt in das Fenster.")
+        self.edit_part.setToolTip(opens)
+        self.edit_part.setStatusTip(opens)
+        self.edit_part.setAccessibleDescription(opens)
+        self.edit_part.setVisible(False)
+        self.edit_part.clicked.connect(self._request_draft)
 
         self.remove_part = buttons.addButton(
             tr("Aus Bibliothek entfernen"), QDialogButtonBox.ButtonRole.ActionRole
@@ -823,9 +851,12 @@ class PartCatalog(QDialog):
         self.set_can_write_scad(
             spec is not None, tr("Wählen Sie zuerst einen Baustein aus der Bibliothek.")
         )
-        self.remove_part.setVisible(
-            spec is not None and getattr(spec, "source", "") in ("recipe", "imported")
-        )
+        own = spec is not None and getattr(spec, "source", "") in ("recipe", "imported")
+        self.remove_part.setVisible(own)
+        # Dieselbe Bedingung, und trotzdem eine eigene Zeile: Entfernen und
+        # Bearbeiten sind zwei Handlungen, und die nächste Voraussetzung, die
+        # eine von beiden bekommt, gehört dann an ihre Stelle.
+        self.edit_part.setVisible(own)
 
     # --- choosing ---------------------------------------------------------------
 
@@ -861,6 +892,13 @@ class PartCatalog(QDialog):
         name = self.chosen()
         if name:
             self.scadRequested.emit(name)
+
+    def _request_draft(self) -> None:
+        """Den gewählten eigenen Baustein zum Bearbeiten anfordern (E6)."""
+
+        name = self.chosen()
+        if name:
+            self.draftRequested.emit(name)
 
     def set_can_write_scad(self, can: bool, reason: str = "") -> None:
         """Ob der gewählte Baustein als OpenSCAD-Datei geschrieben werden kann.

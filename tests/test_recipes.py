@@ -26,7 +26,7 @@ from app.core.knowledge.parts.registry import PartRegistry
 from app.core.knowledge.parts.user import travelling_parts
 from app.core.registry.registry import Registry
 from app.core.scene import foreign
-from app.core.types import Document, Operation, Parameter, Profile
+from app.core.types import Document, Operation, Parameter, Profile, Source
 
 
 @pytest.fixture(scope="module")
@@ -950,6 +950,126 @@ def test_capture_always_creates_an_own_recipe(profile: Profile) -> None:
     made = _recipe(profile)
 
     assert made.imported_origin is None
+
+
+# --- RM-147 E6: das Rezept als bearbeitbarer Entwurf ------------------------------
+
+
+def test_a_recipe_opens_as_a_draft_with_its_steps_and_measurements(profile: Profile) -> None:
+    """Der Gegenweg zu ``capture``: Aus dem Ausschnitt wird wieder ein Projekt.
+
+    Bis dahin hieß „ändern" neu speichern, und das setzte das Projekt voraus,
+    aus dem der Baustein geschnitten war — bei einem eingelesenen Rezept gab es
+    dieses Projekt nie.
+    """
+    made = _recipe(profile)
+
+    project = recipe.draft(made)
+
+    assert [entry.op for entry in project.document.ops] == ["create_box"]
+    assert project.document.ops[0].params["width"] == "@w"
+    assert project.document.parameters["w"].value == 30.0
+
+
+def test_a_draft_is_a_copy_and_leaves_the_catalogue_entry_alone(profile: Profile) -> None:
+    """Der Katalogeintrag hält sein Dokument als lebendes Objekt.
+
+    Ein Entwurf, der darauf zeigte, änderte den Baustein schon beim Bearbeiten
+    — vor jedem Speichern und ohne einen Weg zurück.
+    """
+    made = _recipe(profile)
+
+    project = recipe.draft(made)
+    project.document.ops.append(
+        Operation(id=2, op="create_box", outputs=("obj_2",), params={"width": 5.0})
+    )
+    project.document.parameters["w"] = Parameter(name="w", value=99.0)
+
+    assert len(made.document.ops) == 1
+    assert made.document.parameters["w"].value == 30.0
+
+
+def test_a_draft_brings_the_embedded_sources_along(profile: Profile) -> None:
+    """Ein Rezept aus einem eingelesenen Modell trägt sein Netz mit.
+
+    Ohne die Quellen hielte der Entwurf beim ersten Schritt an, der sie liest —
+    und zwar aus einem Grund, den der Kunde nicht sieht.
+    """
+    document = _document()
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="modell.stl", sha256="0" * 64, embedded=True
+    )
+    made = dataclasses.replace(
+        _recipe(profile),
+        document=document,
+        payloads={"src_1": b"solid test\nendsolid test\n"},
+    )
+
+    project = recipe.draft(made)
+
+    assert project.sources["src_1"].startswith(b"solid test")
+    assert "src_1" in project.document.sources
+
+
+def test_a_draft_says_which_recipes_it_would_need(profile: Profile) -> None:
+    """Beilagen löst nur ein privates Register auf — ein Fenster hat keines.
+
+    Gesagt wird das vor dem Öffnen: Danach stünde der Kunde vor einem Entwurf,
+    der aus Gründen anhält, die nichts mit seiner Arbeit zu tun haben.
+    """
+    beilage = _recipe(profile, "probe_beilage")
+    made = dataclasses.replace(
+        _recipe(profile), dependencies={"probe_beilage": recipe.to_data(beilage)}
+    )
+
+    with pytest.raises(ValidationError) as refused:
+        recipe.draft(made, PartRegistry())
+
+    assert refused.value.constraint == "missing"
+    assert refused.value.values["missing"] == "probe_beilage"
+    assert refused.value.suggestions
+
+
+def test_a_draft_opens_when_its_dependencies_are_in_the_catalogue(profile: Profile) -> None:
+    """Steht die Beilage im Katalog, findet der Entwurf ihre Operation."""
+    parts, registry = PartRegistry(), Registry()
+    beilage = _recipe(profile, "probe_beilage")
+    recipe.register(beilage, parts, registry)
+    made = dataclasses.replace(
+        _recipe(profile), dependencies={"probe_beilage": recipe.to_data(beilage)}
+    )
+
+    project = recipe.draft(made, parts)
+
+    assert [entry.op for entry in project.document.ops] == ["create_box"]
+
+
+def test_an_edited_import_stays_an_import(profile: Profile) -> None:
+    """Die Quittung belegt die Reise, nicht den Inhalt (§32).
+
+    Wer ein eingelesenes Rezept öffnet, ein Maß ändert und es ersetzt, hat
+    weiter fremde Arbeit vor sich. Ohne das durchgereichte Feld machte
+    ``_catalog_source`` beim nächsten Start still einen eigenen daraus.
+    """
+    quittung = recipe.ImportedOrigin(source_sha256="c" * 64, imported_at="2026-09-09T08:15:00Z")
+
+    made = recipe.capture(
+        _document(),
+        {},
+        name="probe_halter",
+        title="Probehalter",
+        group="structure",
+        op_ids=(1,),
+        exposed=(
+            recipe.ExposedParam(name="w", title="Breite", default=30.0, minimum=10.0, maximum=90.0),
+        ),
+        features={"top": "face_top"},
+        imported_origin=quittung,
+        profile=profile,
+    )
+
+    assert made.imported_origin == quittung
+    assert recipe._catalog_source(made) == recipe.IMPORTED_SOURCE
 
 
 def test_a_broken_file_becomes_a_finding_not_a_crash(profile: Profile, tmp_path: Path) -> None:

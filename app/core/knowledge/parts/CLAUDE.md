@@ -51,6 +51,15 @@ nichts aus; das Format bleibt, der Lauf ist weg.
 | `user.py` | Eigene Bausteine aus dem Nutzerverzeichnis |
 | `check.py` | Was gesagt werden muss, wenn ein Projekt geöffnet wird (§24.4) |
 
+## Der Weg zurück: ein Rezept als Entwurf
+
+`recipe.draft(recipe)` ist der Gegenweg zu `capture`: Der Ausschnitt wird
+wieder ein `Project`, die eingebetteten Quellen wieder Projektquellen — als
+Kopie, damit ein Entwurf den Katalogeintrag nicht schon beim Bearbeiten
+ändert. Der Entwurf trägt keinen Dateipfad, `Session.open_draft` merkt sich
+die Herkunft am Dokument, und der Rezeptdialog belegt daraus seine Felder vor.
+Ein Rezept mit Beilagen lässt sich nur öffnen, wenn diese im Katalog stehen.
+
 ## Rezept gegen `.py` — der Unterschied ist die Sicherheit
 
 Ein Rezept ist eine Liste registrierter Operationen mit Werten. Es **führt

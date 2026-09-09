@@ -12881,8 +12881,9 @@ def test_saving_a_part_takes_the_whole_stack_by_id_not_by_position(window: MainW
     captured: dict[str, object] = {}
 
     class Attrappe:
-        def __init__(self, _doc, _payloads, op_ids, _features, _profile, parent=None):
+        def __init__(self, _doc, _payloads, op_ids, _features, _profile, parent=None, origin=None):
             captured["op_ids"] = tuple(op_ids)
+            captured["origin"] = origin
             captured["dialog"] = self
             self.saved = mock.Mock()
 
@@ -12901,6 +12902,9 @@ def test_saving_a_part_takes_the_whole_stack_by_id_not_by_position(window: MainW
 
     assert captured["op_ids"] == tuple(op.id for op in document.ops), (
         "jeder Schritt des Stapels muss das Rezept erreichen — auch der letzte"
+    )
+    assert captured["origin"] is None, (
+        "ein gewöhnliches Projekt kommt aus keinem Baustein — der Dialog legt nichts vor (E6)"
     )
     dialog = captured["dialog"]
     assert isinstance(dialog, Attrappe)

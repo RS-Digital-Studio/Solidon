@@ -168,6 +168,21 @@ Parameter, als Daten in `<Nutzerdaten>/parts/recipes/*.json`. Was dabei gilt:
   nur die `.py`-Gestalt meint, fragt `source == "user"`, nicht `own`.
 - **`to_scad()` gibt es für Rezepte nicht** — benannt, nicht umgangen
   (Konzept §18e).
+- **Der Weg zurück ist `recipe.draft`** (RM-147 E6, 09.09.2026): Aus dem
+  Ausschnitt wird wieder ein Projekt, aus den Payloads wieder Projektquellen,
+  und beides als **Kopie** — der Katalogeintrag hält sein Dokument als
+  lebendes Objekt, und ein Entwurf, der darauf zeigt, ändert den Baustein
+  schon beim Bearbeiten. Der Entwurf hat keinen Dateipfad; was aus ihm wird,
+  entscheidet der Rezeptdialog. **Beilagen müssen im Katalog stehen** — sie
+  werden sonst nur von einem privaten Register aufgelöst, das ein Dokument im
+  Fenster nicht hat, und der Entwurf hielte an einer Stelle an, die mit der
+  Arbeit des Kunden nichts zu tun hat.
+- **Ein eingelesenes Rezept bleibt eingelesen, auch bearbeitet.** Die Quittung
+  (`ImportedOrigin`) belegt die **Reise** und nicht den Inhalt; `capture` nimmt
+  sie deshalb entgegen und reicht sie durch. Ohne das machte `_catalog_source`
+  beim nächsten Start aus fremder Arbeit still eigene — §32 will das Gegenteil.
+  Wer beim Speichern einen anderen Namen wählt, legt einen **zweiten**
+  Baustein an, und der ist seiner: Dann bleibt die Quittung weg.
 
 ## Normteiltabelle
 

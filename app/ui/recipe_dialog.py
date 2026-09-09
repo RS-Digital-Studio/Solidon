@@ -284,6 +284,35 @@ class _ParamRow:
         self.doc.setPlaceholderText(tr("Ein Satz: was passiert, wenn man ihn ändert"))
         self.doc.setAccessibleName(tr("Beschreibung"))
 
+    def restore(self, entry: Any) -> None:
+        """Übernimmt die Angaben, die dieses Maß im bearbeiteten Baustein trug (E6).
+
+        Beschriftung, Einheit, Grenzen, Vorgabe, Platz und Satz — also genau
+        das, was der Kunde beim ersten Mal eingetippt hat. Ohne das wäre
+        „bearbeiten" für jedes freigegebene Maß sieben Felder neu, und der
+        Baustein käme mit anderen Grenzen zurück als er hatte.
+
+        **Und der Haken sitzt**, auch bei einem abgeleiteten Wert: Dass die
+        Formel weichen soll, hat der Kunde damals entschieden; ihn dieselbe
+        Frage noch einmal beantworten zu lassen, hieße, seine Antwort nicht zu
+        kennen.
+        """
+        self.take.setChecked(True)
+        self.title.setText(str(entry.title))
+        unit = str(entry.unit or "")
+        if self.unit.findData(unit) < 0:
+            self.unit.addItem(
+                str(tr("{unit} — wird nicht umgerechnet").format(unit=unit or "?")), unit
+            )
+        self.unit.setCurrentIndex(self.unit.findData(unit))
+        if entry.minimum is not None:
+            self.minimum.setValue(float(entry.minimum))
+        if entry.maximum is not None:
+            self.maximum.setValue(float(entry.maximum))
+        self.default.setValue(float(entry.default))
+        self.placement.setCurrentIndex(max(0, self.placement.findData(str(entry.placement))))
+        self.doc.setText(str(entry.doc or ""))
+
     def ordered(self) -> bool:
         """Ob kleinster, Vorgabe und größter Wert einen Bereich aufspannen.
 
@@ -341,6 +370,18 @@ class _FeatureRow:
         self.take.setAccessibleName(tr("Dieses Merkmal nach außen geben"))
         self.name = QLineEdit(self.feature_id, parent)
         self.name.setAccessibleName(tr("Öffentlicher Name"))
+
+    def restore(self, public_name: str | None) -> None:
+        """Übernimmt, was der bearbeitete Baustein an dieser Stelle versprach (E6).
+
+        ``None`` heißt: Der Ursprung gab dieses Merkmal **nicht** nach außen —
+        dann bleibt der Haken weg. Ein Entwurf, der stillschweigend mehr
+        Merkmale verspricht als der Baustein, den er ersetzt, wäre ein anderer
+        Baustein unter demselben Namen.
+        """
+        self.take.setChecked(public_name is not None)
+        if public_name is not None:
+            self.name.setText(public_name)
 
 
 #: Wie viele Schrittnummern der Umfangssatz aufzählt, bevor er abkürzt. Bei
@@ -404,13 +445,25 @@ class RecipeDialog(QDialog):
         features: tuple[Feature, ...],
         profile: Profile,
         parent: QWidget | None = None,
+        origin: Any = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Auswahl als Baustein speichern"))
+        self.setWindowTitle(
+            tr("Baustein bearbeiten")
+            if origin is not None
+            else tr("Auswahl als Baustein speichern")
+        )
         self._document = document
         self._payloads = payloads
         self._op_ids = op_ids
         self._profile = profile
+        self._origin = origin
+        """Der Baustein, aus dem dieses Dokument als Entwurf kam, oder ``None``.
+
+        Ein ``Recipe`` — als ``Any`` angenommen, damit dieser Dialog nichts aus
+        dem Kern importieren muss, was er nur weiterreicht. Er belegt daraus
+        seine Felder vor und gibt die Importquittung an ``capture`` zurück,
+        damit ein fremder Baustein fremd bleibt (§32)."""
         self._leash = WorkerLeash(self)
         self._worker: _CheckWorker | None = None
         self._abandoned = False
@@ -483,9 +536,28 @@ class RecipeDialog(QDialog):
         self.scope.setWordWrap(True)
         self.scope.setAccessibleName(tr("Umfang des Bausteins"))
 
+        # **Ein Satz, und nur bei fremder Herkunft** (§32, E6): Wer einen
+        # eingelesenen Baustein bearbeitet und ersetzt, behält ihn als fremden
+        # — die Quittung belegt die Reise und nicht den Inhalt. Das ist die
+        # richtige Antwort und zugleich die überraschende; sie gehört dorthin,
+        # wo entschieden wird. Bei einem eigenen Baustein stünde hier eine
+        # Zeile, die nichts sagt.
+        self.provenance = QLabel("", self)
+        self.provenance.setWordWrap(True)
+        self.provenance.setVisible(False)
+        if origin is not None and getattr(origin, "imported_origin", None) is not None:
+            self.provenance.setText(
+                tr(
+                    "Dieser Baustein kam als Datei zu Ihnen. Er bleibt auch nach dem "
+                    "Bearbeiten als eingelesen gekennzeichnet."
+                )
+            )
+            self.provenance.setVisible(True)
+
         layout = QVBoxLayout(self)
         layout.setSpacing(TIGHT)
         layout.addWidget(self.scope)
+        layout.addWidget(self.provenance)
         layout.addLayout(head)
         layout.addWidget(self._parameter_box())
         layout.addWidget(self._feature_box())
@@ -529,9 +601,45 @@ class RecipeDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+        # **Erst jetzt**, denn die Vorbelegung schreibt in Felder, die es
+        # vorher nicht gibt — und sie muss vor ``_update_enabled`` stehen, weil
+        # der Knopf aus dem Titel liest, ob er anlegt oder ersetzt.
+        self._restore_origin()
         self._update_enabled()
 
     # --- Aufbau ---------------------------------------------------------------
+
+    def _restore_origin(self) -> None:
+        """Legt die Angaben des bearbeiteten Bausteins zurück in den Dialog (E6).
+
+        Ohne das hieße „bearbeiten": Titel, Gruppe, Beschreibung, Lizenz, Autor
+        und je freigegebenem Maß sieben Felder noch einmal eintippen — und wer
+        eines anders tippt, bekommt beim Ersetzen einen anderen Baustein als
+        den, den er bearbeiten wollte. Die Herkunft **ist** die Vorbelegung.
+
+        Was der Ursprung nicht kennt, bleibt, wie es der Dialog aufgebaut hat:
+        Ein Maß, das der Kunde seit dem letzten Mal hinzugefügt hat, steht mit
+        den Vorschlägen aus dem Projektparameter da, und ein Merkmal, das das
+        Rezept nie nach außen gab, bleibt ohne Haken.
+        """
+        origin = self._origin
+        if origin is None:
+            return
+        self.title.setText(str(origin.title))
+        self.group.setCurrentIndex(max(0, self.group.findData(str(origin.group))))
+        self.doc.setText(str(origin.doc or ""))
+        self.licence.setCurrentIndex(max(0, self.licence.findData(str(origin.license or ""))))
+        self.author.setText(str(origin.author or ""))
+        exposed = {str(entry.name): entry for entry in origin.exposed}
+        for row in self._params:
+            entry = exposed.get(row.name)
+            if entry is not None:
+                row.restore(entry)
+        # Umgedreht: Das Rezept führt öffentlicher Name → Merkmals-ID, gesucht
+        # wird über die ID, die der Auswerter gerade geliefert hat.
+        public = {str(value): str(key) for key, value in dict(origin.features).items()}
+        for feature_row in self._features:
+            feature_row.restore(public.get(feature_row.feature_id))
 
     def _parameter_box(self) -> QWidget:
         box = QGroupBox(tr("Welche Maße soll man einstellen können?"), self)
@@ -762,6 +870,14 @@ class RecipeDialog(QDialog):
         doc = self.doc.text().strip()
         licence = str(self.licence.currentData() or "")
         author = self.author.text().strip()
+        # Nur, solange derselbe Baustein gemeint ist: Wer den Namen ändert,
+        # legt einen **zweiten** an, und der ist seiner. Die Quittung gehört
+        # dem Eintrag, aus dem der Entwurf kam, nicht dem Entwurf.
+        imported_origin = (
+            getattr(self._origin, "imported_origin", None)
+            if self._origin is not None and name == str(self._origin.name)
+            else None
+        )
 
         # **Erst nachsehen, ob der Name frei ist — vor dem Schneiden, vor dem
         # Schreiben und vor dem Warten.** ``recipes.save`` legt die Datei unter
@@ -785,6 +901,11 @@ class RecipeDialog(QDialog):
                 doc=doc,
                 licence=licence,
                 author=author,
+                # **Die Reise reist mit** (E6, §32): Ein eingelesener Baustein
+                # bleibt eingelesen, auch wenn der Kunde ein Maß geändert hat.
+                # Ohne diese Zeile machte ``_catalog_source`` beim nächsten
+                # Start still einen eigenen daraus.
+                imported_origin=imported_origin,
                 profile=self._profile,
             )
 
