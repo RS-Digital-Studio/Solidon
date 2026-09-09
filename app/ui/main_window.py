@@ -5915,6 +5915,7 @@ class MainWindow(QMainWindow):
         catalog.shareRequested.connect(lambda: self._share_part(catalog))
         catalog.adoptRequested.connect(lambda: self._adopt_part(catalog))
         catalog.removeRequested.connect(lambda name: self._remove_part(catalog, name))
+        catalog.scadRequested.connect(lambda name: self._write_part_scad(catalog, name))
         catalog.undoFileRequested.connect(lambda: self._undo_part_file(catalog))
         catalog.showAffectedStepRequested.connect(lambda: self._show_part_affected_step(catalog))
         return catalog
@@ -6089,6 +6090,73 @@ class MainWindow(QMainWindow):
         suggested = problem.values.get("suggested_name")
         if isinstance(suggested, str) and suggested:
             self._start_part_import(catalog, payload, name=suggested)
+
+    def _write_part_scad(self, catalog: PartCatalog, name: str) -> None:
+        """Schreibt den gewählten Baustein als OpenSCAD-Quelltext (§24.1).
+
+        **Geschrieben, nie ausgeführt** (Regel 11). ``to_scad`` erzeugt Text;
+        was damit geschieht, entscheidet der Kunde in seinem eigenen Werkzeug.
+
+        Die Werte sind die **aktuellen** des Bausteins, nicht seine Vorgaben:
+        Steht im Verlauf ein Schritt mit diesem Baustein, kommen dessen
+        Parameter hinein — sonst hätte der Kunde eine Datei, die etwas anderes
+        zeigt als sein Modell. Ohne einen solchen Schritt bleiben die Vorgaben,
+        und das ist die ehrliche Antwort auf „einen Baustein mitnehmen".
+        """
+        from app.core.knowledge.parts.registry import PARTS
+        from app.core.knowledge.parts.scad import to_scad
+
+        spec = PARTS.get(name)
+        target, _filter = QFileDialog.getSaveFileName(
+            catalog,
+            tr("Als OpenSCAD-Datei schreiben"),
+            f"{name}.scad",
+            f"{tr('OpenSCAD-Datei')} (*.scad)",
+        )
+        if not target:
+            return
+        try:
+            text = to_scad(spec, self._current_part_values(spec))
+            Path(target).write_text(text, encoding="utf-8")
+        except (AppError, OSError) as error:
+            show_error(
+                error
+                if isinstance(error, AppError)
+                else ValidationError(
+                    field="path",
+                    detail=tr("Die Datei ließ sich nicht schreiben. Wählen Sie einen anderen Ort."),
+                    constraint="scad_not_written",
+                    suggestions=(CANCEL,),
+                ),
+                catalog,
+            )
+            return
+        catalog.show_file_result(
+            tr("Geschrieben: {path}").format(path=Path(target).name), can_undo=False
+        )
+
+    def _current_part_values(self, spec: Any) -> Any:
+        """Die Werte, mit denen dieser Baustein im offenen Projekt steht.
+
+        Gesucht wird der **jüngste** Schritt, der ihn einsetzt oder erzeugt:
+        Wer den Baustein zweimal mit verschiedenen Maßen verwendet hat, meint
+        den, den er zuletzt gebaut hat. Findet sich keiner, gelten die Vorgaben
+        des Schemas — der Katalog steht auch ohne Projekt offen.
+        """
+        from app.core.registry import validate
+
+        wanted = {f"insert_{spec.name}", creation_name(spec.name)}
+        document = self.session.project.document
+        for operation in sorted(document.ops, key=lambda entry: entry.id, reverse=True):
+            if operation.op in wanted:
+                try:
+                    return validate(spec.params, dict(operation.params))
+                except AppError:
+                    # Ein Schritt, dessen Werte das heutige Schema nicht mehr
+                    # annimmt (geänderter Baustein, §24.4), ist keine Quelle —
+                    # dann sind die Vorgaben die ehrlichere Auskunft.
+                    break
+        return spec.params()
 
     def _share_part(self, catalog: PartCatalog) -> None:
         """Exportiert den gewählten Baustein als lokale Bausteindatei.
@@ -10342,16 +10410,48 @@ class MainWindow(QMainWindow):
             # Funktion (:meth:`selection_label`): „Halter · Oberseite" stand
             # sonst an zwei Stellen mit je eigener Rechnung, und die driften.
             self.measurements.setText(self.selection_label())
-            self.feature_panel.show_feature(
-                feature_id,
-                feature,
-                features=entry.features,
-                mesh=as_mesh_data(entry.mesh),
-                alone=result is not None and len(result.scene.objects) == 1,
-            )
-            self.feature_dock.reveal()
+            self._show_feature_fields(feature_id, entry, result)
         else:
             self.feature_panel.clear()
+
+    def _show_feature_fields(
+        self, feature_id: str, entry: Any, result: EvaluationResult | None
+    ) -> None:
+        """Die Felder dieses Merkmals ins Auswahlfenster, und es aufmachen.
+
+        Zwei Wege enden hier: die einzeln angeklickte Zeile und die Bohrung
+        mit ihrer Senkung, die als **zwei** Merkmale gemeldet wird und
+        trotzdem eine Wahl ist (:meth:`_on_features_selected`). Zweimal
+        dieselben fünf Zeilen zu schreiben hieße, dass die eine Stelle beim
+        nächsten Nachbessern die andere vergisst.
+        """
+        feature = entry.features.get(feature_id)
+        if feature is None:
+            self.feature_panel.clear()
+            return
+        self.feature_panel.show_feature(
+            feature_id,
+            feature,
+            features=entry.features,
+            mesh=as_mesh_data(entry.mesh),
+            alone=result is not None and len(result.scene.objects) == 1,
+        )
+        self.feature_dock.reveal()
+
+    def _one_cavity(self, entry: Any, first: Feature, second: Feature) -> bool:
+        """Ob diese zwei Merkmale derselbe Hohlraum sind — Bohrung und Senkung.
+
+        Gefragt wird von der Bohrung aus **und** von der Senkung: Welche der
+        beiden Zeilen angeklickt wurde, darf die Antwort nicht ändern.
+        """
+        from app.core.perceive.relations import cavity_chain_at
+
+        mesh = as_mesh_data(entry.mesh)
+        for one, other in ((first, second), (second, first)):
+            chain = cavity_chain_at(one, entry.features, mesh)
+            if chain is not None and any(link.id == other.id for link in chain):
+                return True
+        return False
 
     def _on_features_selected(self, chosen: list[Any]) -> None:
         """Abstand im selben Körper, manuelle Prüfbeziehung zwischen zwei Körpern."""
@@ -10384,6 +10484,23 @@ class MainWindow(QMainWindow):
         first = entry.features.get(first_id)
         second = other.features.get(second_id)
         if first is None or second is None:
+            return
+        # **Eine Bohrung mit ihrer Senkung ist keine Passung, sondern eine
+        # Wahl.** Der Baum stellt die Senkung unter ihre Bohrung, und eine
+        # Zeile mit Kind meldet beide Merkmale (07.09.2026, „bei allen
+        # Dacheinträgen"). Damit stand an einer angeklickten Bohrung der
+        # Abstand zu ihrer eigenen Senkung — 5,20 mm, gemessen an
+        # ``plate_countersunk.stl`` — statt ihres Durchmessers, und der Wert,
+        # den der Kunde ändern wollte, war gar nicht zu sehen (Befund Robert,
+        # 09.09.2026: „hier soll immer nur für das ausgewählte etwas stehen").
+        #
+        # Woran es hängt, entscheidet der Kern: Dieselbe Kette, nach der der
+        # Baum schachtelt (``cavity_chain_at``), und nicht eine zweite
+        # Rechnung über Achsen und Abstände.
+        if first_object == second_object and self._one_cavity(entry, first, second):
+            self._show_feature_fields(
+                self.object_tree.selected_feature() or first_id, entry, result
+            )
             return
         self.feature_panel.show_pair(first_id, first, second_id, second)
         self.feature_dock.reveal()
@@ -11894,7 +12011,21 @@ class MainWindow(QMainWindow):
         feature_sets = [
             parameter for parameter in spec.params.spec() if parameter.kind == "features"
         ]
-        if feature_sets:
+        # **Eine Liste schlägt das Einzelfeld erst, wenn sie führt oder wirklich
+        # mehrere Zeilen gewählt sind** (09.09.2026). Seit die Bausteine
+        # ``at_features`` als Erweiterung tragen (E7), hat fast jede Operation
+        # beide Felder — und der frühe Rücksprung nahm damit die ganze
+        # Ortsvorbelegung mit: Wer eine Bohrung anklickte und eine
+        # Einpressbuchse setzte, bekam weder ihren Namen noch die Größe, die zu
+        # ihrem gemessenen Durchmesser passt.
+        #
+        # Gefragt wird nach der **Zeile**, nicht nach der Zahl der Merkmale:
+        # ``selected_features`` bringt mit, was eine Zeile bündelt — eine
+        # Bohrung mit ihrer Senkung sind zwei Merkmale und eine Wahl.
+        # ``selected_feature`` gibt genau dann nichts zurück, wenn mehrere
+        # Zeilen markiert sind, und das ist die Frage, die hier zählt.
+        singles = [parameter for parameter in spec.params.spec() if parameter.kind == "feature"]
+        if feature_sets and (not singles or self.object_tree.selected_feature() is None):
             selected_features = [
                 feature
                 for owner, feature in self.object_tree.selected_features()

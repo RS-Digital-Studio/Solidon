@@ -95,6 +95,12 @@ gelten. ``at_feature`` nimmt den Namen eines erkannten Merkmals, zum Beispiel
 ``hole_1``; ist er gesetzt, gibt das Merkmal Ort und Richtung vor. Auch das
 steht bei den Bausteinen nicht noch einmal.
 
+``at_features`` ist die Mehrzahl davon: eine Liste erkannter Merkmale. Der
+Baustein wird an jedes davon gesetzt, und alles zusammen bleibt **ein**
+Schritt, den ein Undo vollständig zurücknimmt. Wer vier Bohrungen mit
+Einpressbuchsen versehen soll, nennt sie hier gemeinsam statt viermal
+denselben Aufruf zu schicken. Ist die Liste leer, gilt ``at_feature``.
+
 Antworte kurz und auf Deutsch. Beschreibe am Ende in einem Satz, was dein
 Vorschlag ändert.
 """

@@ -692,7 +692,18 @@ CATEGORY_FIGURES: dict[str, str] = {
 #: das Register die Bausteinbibliothek nicht importieren darf. Ein Test hält
 #: beide Listen deckungsgleich. Das Handbuch erklärt sie einmal am Kopf der
 #: Kategorie, statt sechs identische Zeilen in jede Bausteintabelle zu setzen.
-PART_PLACEMENT_PARAMS: Final = ("x", "y", "z", "nx", "ny", "nz", "axis", "angle", "at_feature")
+PART_PLACEMENT_PARAMS: Final = (
+    "x",
+    "y",
+    "z",
+    "nx",
+    "ny",
+    "nz",
+    "axis",
+    "angle",
+    "at_feature",
+    "at_features",
+)
 
 
 def normal_fields_of(spec: OperationSpec) -> tuple[str, str, str]:

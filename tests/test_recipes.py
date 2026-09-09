@@ -2318,3 +2318,103 @@ def test_part_placement_schema_fields_survive_another_recipe_registration():
     part_ops.build_params(PARTS.get("rib"))
     assert tuple(entry.name for entry in schema.fields()) == expected
     assert "placement_x" in schema().as_dict()
+
+
+def test_a_part_reaches_every_chosen_feature_in_one_step(profile) -> None:
+    """E7: ein Baustein auf mehrere Merkmale, ein Schritt, ein Undo (§24.3).
+
+    Wer vier Bohrungen markiert und eine Einpressbuchse setzt, meint eine
+    Handlung. Vier Zeilen im Verlauf wären vier Rücknahmen für etwas, das
+    zusammen gedacht war — und die vierte Rücknahme stünde vor einem Körper,
+    den die dritte schon verändert hat.
+    """
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Platte mit zwei Bohrungen",
+        [
+            OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 12.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 3.0, "x": -15.0, "y": 0.0, "z": 12.0, "depth": 12.0},
+            ),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 3.0, "x": 15.0, "y": 0.0, "z": 12.0, "depth": 12.0},
+            ),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    holes = tuple(
+        name
+        for name, feature in result.scene.objects["obj_1"].features.items()
+        if feature.kind == "hole"
+    )
+    assert len(holes) == 2, "ohne zwei Bohrungen prüft der Test nichts"
+    before = len(project.document.ops)
+    plain = result.scene.objects["obj_1"].mesh.volume
+
+    History(project.document).apply(
+        "Buchsen einsetzen",
+        [OperationDraft(op="insert_heatset_m4", inputs=("obj_1",), params={"at_features": holes})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    entry = result.scene.objects["obj_1"]
+
+    assert len(project.document.ops) == before + 1, "ein Schritt, nicht zwei"
+    seats = [name for name in entry.features if "heatset" in name]
+    assert len(seats) == 4, f"zwei Buchsen mit je zwei Merkmalen, gefunden: {seats}"
+    assert entry.mesh.volume < plain, "beide Sitze sind wirklich geschnitten"
+
+    # **Und die Gegenprobe zum Undo**: Ein Zug zurück nimmt beide Buchsen mit,
+    # nicht die zweite allein.
+    History(project.document).undo()
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    entry = result.scene.objects["obj_1"]
+    assert not [name for name in entry.features if "heatset" in name]
+    assert entry.mesh.volume == pytest.approx(plain, rel=1e-9)
+
+
+def test_a_single_feature_still_takes_the_way_it_always_took(profile) -> None:
+    """Die Gegenprobe zur Schleife: bei einem Ziel ändert sich nichts.
+
+    Ohne sie wäre der Test darüber auch dann grün, wenn der neue Weg den alten
+    ersetzt hätte — und ein Projekt von gestern trägt nur ``at_feature``.
+    """
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Platte mit einer Bohrung",
+        [
+            OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 12.0}),
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 12.0, "depth": 12.0},
+            ),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    hole = next(
+        name
+        for name, feature in result.scene.objects["obj_1"].features.items()
+        if feature.kind == "hole"
+    )
+    History(project.document).apply(
+        "Buchse einsetzen",
+        [OperationDraft(op="insert_heatset_m4", inputs=("obj_1",), params={"at_feature": hole})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    seats = [name for name in result.scene.objects["obj_1"].features if "heatset" in name]
+    assert len(seats) == 2, f"eine Buchse mit ihren zwei Merkmalen, gefunden: {seats}"

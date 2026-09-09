@@ -1242,8 +1242,17 @@ class OperationDialog(QDialog):
         beantwortet damit „welche Farbe hat Slot 1?", ohne dass jemand erst
         malen muss."""
         given = dict(values or {})
+        # **Umgeleitet wird nur dort, wo die Liste das führende Feld ist.**
+        # Erkennbar an ihrer Seite im Dialog: Bei ``clear_filament`` steht
+        # ``at_features`` vorn und ``at_feature`` ist der alte, nur noch
+        # lesbare Einzelwert — dort gehört er in die Liste. Seit die Bausteine
+        # ``at_features`` als Erweiterung tragen (E7, 09.09.2026), steht sie
+        # dort hinten, und das Einzelfeld ist der übliche Weg: Wer eine Bohrung
+        # anklickt, bekam sonst ein leeres *An Merkmal* und mit ihm die
+        # Größenberatung nicht, die daran hängt.
         if any(
-            entry.kind == "features" and entry.name == "at_features" for entry in spec.params.spec()
+            entry.kind == "features" and entry.name == "at_features" and entry.placement == "front"
+            for entry in spec.params.spec()
         ):
             selected = list(given.get("at_features") or ())
             if given.get("at_feature"):

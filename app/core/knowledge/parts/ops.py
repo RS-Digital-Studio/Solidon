@@ -190,6 +190,21 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             ),
         ),
     ),
+    (
+        "at_features",
+        "tuple[str, ...]",
+        param(
+            title=_("An mehreren Merkmalen"),
+            kind="features",
+            default=(),
+            placement="advanced",
+            doc=_(
+                "Mehrere erkannte Merkmale auf einmal. Der Baustein wird an jedes "
+                "davon gesetzt — ein Schritt im Verlauf, ein Strg+Z. Leer heißt: "
+                "es gilt das einzelne Merkmal darüber."
+            ),
+        ),
+    ),
 )
 
 
@@ -606,6 +621,73 @@ def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding 
 
 
 def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
+    """Setzt den Baustein an sein Ziel — oder an jedes von mehreren (§24.3).
+
+    **Ein Schritt, ein Undo, gleich wie viele Merkmale gewählt sind.** Wer vier
+    Bohrungen markiert und eine Einpressbuchse setzt, meint eine Handlung; vier
+    Zeilen im Verlauf wären vier Rücknahmen für etwas, das zusammen gedacht war
+    (Regel 16 in ihrer Haltung, auch wenn sie dem Agenten gilt).
+
+    Gerechnet wird der Reihe nach, und das Ergebnis jedes Durchgangs ist der
+    Eingang des nächsten: Der zweite Baustein sitzt auf dem Körper, der den
+    ersten schon trägt. Anders wäre es nicht dasselbe Teil — zwei Bausteine,
+    die sich überschneiden, müssen einander sehen.
+
+    Ohne ``at_features`` bleibt alles, wie es war: :func:`_insert_at` ist der
+    Weg, den es seit je gibt, und die Schleife darüber ist bei einem Ziel eine
+    Wiederholung mit einem Durchgang.
+    """
+    targets = _chosen_features(ctx.params)
+    if len(targets) < 2:
+        return _insert_at(ctx, spec)
+
+    source = ctx.inputs[0]
+    findings: list[Finding] = []
+    solver = None
+    for target in targets:
+        step = dataclasses.replace(
+            ctx,
+            inputs=[source],
+            params=_aimed_at(ctx.params, target),
+        )
+        outcome = _insert_at(step, spec)
+        if not outcome.outputs:
+            # Ein Durchgang ohne Ausgabe gibt es am Bausteinweg nicht; käme er,
+            # wäre der Körper der letzte gültige und nicht None.
+            return outcome
+        source = outcome.outputs[0]
+        findings.extend(outcome.findings)
+        solver = deepest((solver, outcome.solver))
+    return OpResult(outputs=[source], solver=solver, findings=findings)
+
+
+def _chosen_features(params: Any) -> tuple[str, ...]:
+    """Die gewählten Zielmerkmale — die Liste, sonst das einzelne Feld.
+
+    **Die Liste hat Vorrang, und das einzelne Feld bleibt lesbar.** Dieselbe
+    Regel wie bei ``clear_filament``: Ein Projekt, das vor dieser Erweiterung
+    gespeichert wurde, trägt nur ``at_feature``, und es soll weiter rechnen.
+    """
+    many = _placement_value(params, "at_features", ()) or ()
+    if many:
+        return tuple(str(entry) for entry in many if str(entry))
+    single = str(_placement_value(params, "at_feature", "") or "")
+    return (single,) if single else ()
+
+
+def _aimed_at(params: Any, target: str) -> Any:
+    """Denselben Parametersatz, auf genau ein Merkmal gerichtet.
+
+    Die Liste wird dabei geleert, sonst liefe der Durchgang wieder in die
+    Schleife. Geschrieben wird über die **Feldnamen dieses Schemas**
+    (:func:`placement_fields`) — ein Rezeptmaß darf „at_feature" heißen, und
+    dann steht der Ort woanders.
+    """
+    fields = placement_fields(type(params))
+    return dataclasses.replace(params, **{fields["at_feature"]: target, fields["at_features"]: ()})
+
+
+def _insert_at(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und verbindet oder schneidet."""
     source = ctx.inputs[0]
     profile = for_object(ctx.profile, source) if ctx.profile is not None else None
