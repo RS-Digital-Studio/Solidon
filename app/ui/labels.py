@@ -997,6 +997,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "last_angle": _("Letzter Winkel"),
     "outer": _("Senkung"),
     "overshoot": _("Überstand je Achse"),
+    "pair": _("Gegenstückpaar"),
     "plane": _("Ebene"),
     "play": _("Spiel"),
     "points": _("Punkte"),

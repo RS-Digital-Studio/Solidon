@@ -1,6 +1,7 @@
 ---
 paths:
   - "app/core/knowledge/**/*.py"
+  - "app/core/counterpart.py"
 ---
 
 # Regeln für Bausteine, Normteile und Regelsammlung
@@ -183,6 +184,32 @@ Parameter, als Daten in `<Nutzerdaten>/parts/recipes/*.json`. Was dabei gilt:
   beim nächsten Start aus fremder Arbeit still eigene — §32 will das Gegenteil.
   Wer beim Speichern einen anderen Namen wählt, legt einen **zweiten**
   Baustein an, und der ist seiner: Dann bleibt die Quittung weg.
+
+## Ein Paar ist zwei Bausteine und eine Passung
+
+`app/core/counterpart.py` setzt beide Hälften einer Verbindung als **einen**
+Schritt (RM-147 E1). Drei Dinge daran sind verbindlich:
+
+- **Es ist ein Ablauf und keine Operation**, aus demselben Grund wie bei
+  `lid_flow` und `split`: Eine Op bekommt ihre Szene nur lesend (Regel 3), und
+  die Auswertung ist eine reine Funktion (§15.1) — sie darf keine Passung ins
+  Dokument schreiben, sonst käme bei jedem Neurechnen eine dazu. Die Passung
+  reist als `DocumentChange` in derselben Transaktion (§15.5), und ein Undo
+  nimmt Geometrie und Passung zusammen.
+- **Die Merkmalskennung wird gelesen, nicht vorausgesagt.** Sie entsteht erst
+  bei der Auswertung (`evaluate._renamed`), und `_renamed` hängt an den ganzen
+  Namen an: Das zweite Paar am selben Körper heißt `dowel_pin_1_2` und nicht
+  `dowel_pin_2`. Deshalb sind es zwei Aufrufe — `apply_counterpart` legt die
+  Geometrie an, `attach_fit` liest die Namen aus der gerechneten Szene. Eine
+  vorher hingeschriebene Kennung ist eine Vermutung, und eine Passung darauf
+  geht still ins Leere.
+- **Wer ein viertes Paar dazunimmt, prüft dreierlei:** dass beide Bausteine die
+  genannten Merkmale wirklich führen (`PartSpec.features`), dass die
+  gemeinsamen Parameter in **beiden** Schemata gleich heißen (`params.spec()`),
+  und dass die Passungsart die Sache trifft. Die ersten beiden hält
+  `tests/test_counterpart.py` gegen die Bibliothek — die erste Fassung der
+  Tabelle war geraten, und `printed_screw` kennt kein `diameter`, sondern
+  `size` und `play`.
 
 ## Normteiltabelle
 

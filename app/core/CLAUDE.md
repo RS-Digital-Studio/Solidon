@@ -61,7 +61,22 @@ heraus nachinstallieren, §36) · `network.py` (CA-Satz für macOS und Pakete oh
 **Abläufe, die mehrere Operationen bündeln:**
 
 `lid_flow.py` (Deckel erzeugen) · `split.py` (Auto Split als eine Transaktion)
-· `generate.py` (Weg 3: Text oder Bild zu einem Körper)
+· `generate.py` (Weg 3: Text oder Bild zu einem Körper) · `counterpart.py`
+(beide Hälften einer Verbindung auf zwei Körpern)
+
+**Warum ein Ablauf und keine Operation**, bei allen vieren aus demselben
+Grund: Eine Op bekommt ihre Szene nur lesend (Regel 3), und die Auswertung ist
+eine reine Funktion (§15.1) — sie darf keine Passung und keinen Parameter ins
+Dokument schreiben, sonst käme bei jedem Neurechnen einer dazu. Der Ablauf legt
+seine Schritte in **eine** Transaktion, und was kein Schritt ist, reist als
+`DocumentChange` in derselben mit (§15.5). Bei `counterpart.py` sind das zwei
+Bausteinschritte und die Passung dazwischen; ein Undo nimmt alles drei.
+
+**Und die Kennung eines erzeugten Merkmals wird gelesen, nicht vorausgesagt.**
+Sie entsteht bei der Auswertung (`evaluate._renamed`), nicht beim Anlegen des
+Schritts. Deshalb sind es dort zwei Aufrufe: `apply_counterpart` legt die
+Geometrie an, `attach_fit` liest die Namen aus der gerechneten Szene und hängt
+die Passung an dieselbe Transaktion.
 
 **Dokumentation, ohne Qt gezeichnet:**
 

@@ -319,6 +319,11 @@ _NOT_A_RANGE = frozenset(
         # ist eine Frage der Zeichnung und keine Zahl in einem Feld — „Ein Wert
         # liegt außerhalb des zulässigen Bereichs" stünde darüber falsch.
         "other_plane", "region_count",
+        # Die beiden Hälften eines Gegenstücks (RM-147 E1): ein Paar, das es
+        # nicht gibt, und zwei Stellen an **einem** Körper. Das erste ist ein
+        # Name, das zweite eine Auswahl — in beiden Fällen gibt es kein Feld,
+        # in dem eine Zahl zu klein wäre.
+        "unknown_pair", "same_object",
         # Zu viele Komponenten in einem 3MF (85, 06.09.2026): eine Datei, die das
         # Programm nicht annimmt, kein Feld mit einer Zahl.
         "too_many_components",

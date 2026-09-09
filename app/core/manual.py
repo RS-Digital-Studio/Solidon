@@ -1028,7 +1028,18 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "![](figure:catalog)\n\n"
             "**Jeder Baustein bleibt änderbar wie jede andere Operation.** Er "
             "steht im Verlauf, seine Maße lassen sich später korrigieren, und "
-            "die Stellen, an denen er ansetzt, behalten ihren Namen."
+            "die Stellen, an denen er ansetzt, behalten ihren Namen.\n\n"
+            "**Zwei Teile, die zusammengehören, entstehen zusammen.** Ein "
+            "Passstift ohne seine Bohrung ist nichts — und wer beide einzeln "
+            "setzt, tippt dieselben Maße ein zweites Mal; ein Stift von 6 mm "
+            "in einer Bohrung von 5 mm entsteht genau dort. *Gegenstücke "
+            "setzen …* im Menü *Bausteine* macht daraus einen Schritt: an "
+            "jedem der beiden Teile die Stelle markieren, das Paar wählen, die "
+            "Maße einmal eingeben. Solidon setzt beide Hälften, trägt die "
+            "Passung dazwischen ein und legt alles in **einen** Schritt — ein "
+            "Strg+Z nimmt es zusammen zurück. Drei Paare kennt es: Passstift "
+            "und Passbohrung, gedruckte Schraube und Mutter, Einpressbuchse "
+            "und Durchgangsloch."
         ),
     ),
     Page(

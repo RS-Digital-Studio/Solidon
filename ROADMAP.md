@@ -70,7 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen deterministisch erzeugen und Finalisten gegen vollständige Suche prüfen |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
-| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Gegenstücke, Loft, Sweep und Kantenverrundung umsetzen — Prüfstücke, Rezeptentwurf, Mehrfachmerkmale und SCAD-Ausgabe stehen |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Alle acht gebaut — offen bleiben das Anklicken einer Kante im Bild und fünf zugesagte Kundenwege |
 | [RM-148 — Zahlenparameter gegen NaN und Unendlich sichern](#rm-148) | Geometrie, Erkennung und Druckvorbereitung | Endlichkeitsprüfung zentral in `registry.params._coerce` mit Regressionstest |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
@@ -633,7 +633,7 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-147"></a>
 
-- [ ] **RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen.** Robert hat sie am
+- [~] **RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen.** Robert hat sie am
   08.09.2026 zusammen mit den Korrekturen der Operations- und Bausteindurchsicht beauftragt;
   die Korrekturen sind hinaus, diese acht nicht. E1: Gegenstücke gemeinsam auf zwei Körpern
   platzieren, mit gemeinsamen Maßen, Passung, Vorschau und einem Undo. E2: Loft zwischen zwei
@@ -667,9 +667,19 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Richtung und überlebt damit eine zweite Auswertung, die Auswahl `named` sagt im Register,
   dass die genannten gelten, und der Dialog zeigt sie als Liste mit Lage und Länge.
 
-  **Offen bleibt E1** — Gegenstücke gemeinsam auf zwei Körpern. Dazu von E4 die Bedienung im
-  Bild: Eine Kante lässt sich noch nicht **anklicken**; der Renderer pickt Flächen und
-  Merkmale, keine Kanten, und das ist ein eigener Bau.
+  **Und E1 als achte** (09.09.2026): *Gegenstücke setzen …* im Menü *Bausteine* legt beide
+  Hälften einer Verbindung in **einen** Schritt. `app/core/counterpart.py` führt die drei Paare
+  — Passstift und Passbohrung, gedruckte Schraube und Mutter, Einpressbuchse und
+  Durchgangsloch —, die gemeinsamen Maße werden einmal eingegeben und in beide Schritte
+  geschrieben, und die Passung reist als `DocumentChange` in derselben Transaktion: Ein Undo
+  nimmt Geometrie und Passung zusammen. Die Merkmalskennungen werden dabei **gelesen und nicht
+  geraten** — sie entstehen erst bei der Auswertung (`evaluate._renamed`), und das zweite Paar
+  am selben Körper heißt `dowel_pin_1_2`. Der Menüeintrag nennt vor dem Klick, was ihm fehlt,
+  und gibt seinen eigenen Erklärungssatz zurück, sobald zwei Stellen markiert sind.
+
+  **Offen bleibt aus E4 die Bedienung im Bild:** Eine Kante lässt sich noch nicht
+  **anklicken**; der Renderer pickt Flächen und Merkmale, keine Kanten, und das ist ein
+  eigener Bau.
 
   Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
   Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische

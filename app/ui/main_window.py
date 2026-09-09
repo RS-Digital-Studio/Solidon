@@ -462,6 +462,17 @@ def gcode_filter() -> str:
     return _filter_for(tr("G-Code"), GCODE_SUFFIXES)
 
 
+def counterpart_needs_two() -> str:
+    """Was den Gegenstücken fehlt, in **einem** Satz (RM-147 E1).
+
+    Zwei Stellen: der Menüeintrag sagt es vor dem Klick, der Fehlerdialog dem,
+    der über Palette oder Kürzel daran vorbeigeht. Eine Funktion und keine
+    Konstante, weil ``tr()`` zur Aufrufzeit übersetzt — ein Sprachwechsel im
+    laufenden Fenster fände einen einmal gerechneten Wert sonst nicht mehr.
+    """
+    return tr("Markieren Sie an jedem der beiden Teile die Stelle für das Gegenstück.")
+
+
 #: Welche Merkmalsoperation zu welcher Körperoperation gehört.
 #:
 #: Roberts Regel vom 03.09.2026: „wenn man die Wulst wählt verschiebt man die
@@ -2916,6 +2927,20 @@ class MainWindow(QMainWindow):
                 # steht deshalb als erste Zeile darin — derselbe Befehl wie in
                 # *Datei*, nur an dem Ort, an dem danach gesucht wird.
                 group.addAction(self._catalog_action)
+                # **Und daneben die Gegenstücke** (RM-147 E1): Ein Paar ist
+                # kein Baustein im Katalog, sondern zwei — der Stift am einen
+                # Teil, die Bohrung am anderen. Wer sie sucht, sucht sie hier,
+                # und nicht unter *Bearbeiten*.
+                self.counterpart_action = self._add_action(
+                    group,
+                    tr("Gegenstücke setzen …"),
+                    None,
+                    self.action_counterpart,
+                    tr(
+                        "Beide Hälften einer Verbindung auf einmal: dieselben Maße, "
+                        "eine Passung, ein Schritt im Verlauf."
+                    ),
+                )
                 group.addSeparator()
             # **Je Kategorie, nicht je Gruppe** (§2.6). Vorher entschied
             # ``group_is_flat`` für die ganze Gruppe: alles flach oder
@@ -3711,6 +3736,17 @@ class MainWindow(QMainWindow):
         self.history_panel.remove_action.setEnabled(not locked and not gesturing)
         self.feature_panel.limit_fit(self._manual_fit_reason())
 
+        # **Gegenstücke brauchen zwei markierte Stellen an zwei Teilen** (E1).
+        # Der Grund steht am Eintrag, statt hinterher als Dialog zu kommen: Ein
+        # Menü, das die Frage selbst beantworten kann, soll sie beantworten
+        # (§2.6) — dieselbe Haltung wie bei jeder anderen gesperrten Handlung.
+        counterpart = getattr(self, "counterpart_action", None)
+        if counterpart is not None:
+            paired = self._counterpart_targets() is not None
+            counterpart.setEnabled(paired and not locked and not gesturing)
+            self._lock_hint(counterpart, locked)
+            self._pick_hint(counterpart, paired, locked, counterpart_needs_two())
+
         # Welcher Bauart die Auswahl ist — das Menü fragte bisher nur, wie
         # viele Objekte darin liegen. „Verrunden" war damit bei einem Netz
         # anklickbar, und der Satz „Der gewählte Körper ist ein Netz" kam erst
@@ -4152,13 +4188,22 @@ class MainWindow(QMainWindow):
         """
         return f"{action.text()}: {reason}" if action.property("wordless") else reason
 
-    def _pick_hint(self, action: QAction, ready: bool, locked: bool) -> None:
+    def _pick_hint(self, action: QAction, ready: bool, locked: bool, missing: str = "") -> None:
         """Sagt am ausgegrauten Knopf, dass ihm die Auswahl fehlt.
 
         Dasselbe Muster wie :meth:`_kind_hint`, nur mit der einfacheren Frage:
         Formen und Skelett brauchen einen gewählten Körper. Ausgegraut allein
         wäre die halbe Antwort — der Satz steht dort, wo er **vor** dem Klick
         gelesen wird.
+
+        ``missing`` nennt eine andere fehlende Auswahl als die übliche — die
+        Gegenstücke brauchen zwei markierte Stellen an zwei Teilen, und das ist
+        dieselbe Frage mit einer anderen Antwort. **Der eigene Satz kommt
+        zurück, wenn die Auswahl steht**, statt einem leeren Hinweis zu weichen:
+        Ein Eintrag, der bedienbar ist, erklärt wieder, was er tut. Genau daran
+        ist die erste Fassung dieses Riegels gescheitert — sie setzte den
+        Hinweistext auf ``""`` und nahm dem Menüeintrag damit seinen
+        Erklärungssatz aus :meth:`_add_action`.
 
         Bei gesperrter Anwendung schweigt er: dort gilt der Grund aus
         :meth:`_lock_hint`, und zwei Gründe an einem Knopf sind einer zu viel.
@@ -4169,12 +4214,15 @@ class MainWindow(QMainWindow):
         if not ready:
             if stored is None:
                 action.setProperty("tip_before_pick", action.statusTip())
-            reason = self._with_name(action, tr("Dafür braucht es einen ausgewählten Körper."))
+            reason = self._with_name(
+                action, missing or tr("Dafür braucht es einen ausgewählten Körper.")
+            )
             action.setStatusTip(reason)
             action.setToolTip(reason)
         elif stored is not None:
             action.setStatusTip(str(stored))
             action.setToolTip(str(stored))
+            action.setProperty("tip_before_pick", None)
 
     def _open_error_url(self, error: AppError) -> None:
         """Öffnet die Adresse, die im Fehler mitreist — nicht die Produktseite.
@@ -6669,6 +6717,130 @@ class MainWindow(QMainWindow):
                 )
             )
         _log.info("own part saved: %s (range passed: %s)", name, range_passed)
+
+    def action_counterpart(self) -> None:
+        """Beide Hälften einer Verbindung setzen — eine Handlung (RM-147 E1).
+
+        **Die zwei Stellen kommen aus der Auswahl**, nicht aus dem Dialog: Wer
+        an jedem Teil ein Merkmal markiert hat, hat damit gesagt, wo Stift und
+        Bohrung hingehören (§18.5). Ein Dialog, der die Orte noch einmal
+        abfragte, ließe den Kunden zweimal dasselbe sagen — und in Zahlen, wo
+        er eben geklickt hat.
+
+        Fehlt die Auswahl, sagt der Menüeintrag das vorher (``_update_actions``)
+        statt hinterher; hier steht der Riegel für den Weg an ihm vorbei — mit
+        **demselben** Satz. Zwei Formulierungen derselben Auskunft laufen am Tag
+        der nächsten Änderung auseinander, und der Kunde liest sie hier
+        nacheinander.
+        """
+        from app.core.counterpart import apply_counterpart, attach_fit, drafts_for
+        from app.ui.counterpart_dialog import CounterpartDialog
+
+        chosen = self._counterpart_targets()
+        if chosen is None:
+            show_error(
+                ValidationError(
+                    field="selection",
+                    detail=counterpart_needs_two(),
+                    constraint="needs_two_features",
+                    suggestions=(CANCEL,),
+                ),
+                self,
+            )
+            return
+        (first_object, first_feature), (second_object, second_feature) = chosen
+
+        dialog = CounterpartDialog(
+            feature_label(first_feature, self._feature_of(first_object, first_feature)),
+            feature_label(second_feature, self._feature_of(second_object, second_feature)),
+            self,
+        )
+        # **Die Vorschau geht denselben Weg wie beim Operationsdialog** (§18.7):
+        # `drafts_for` sagt, was entstünde, `preview_async` rechnet es im
+        # Arbeiter, und im Bild steht beides zugleich — Stift am einen Teil,
+        # Bohrung im anderen. Ein Paar ist die Lage, in der eine Vorschau am
+        # meisten wert ist: Ob die zwei Hälften zueinander passen, sieht man
+        # ihnen an und den Zahlen nicht.
+        preview = QTimer(dialog)
+        preview.setSingleShot(True)
+        preview.setInterval(300)
+
+        def show_pair() -> None:
+            self.session.preview_async(
+                self._show_preview,
+                drafts_for(
+                    dialog.pair(),
+                    first_object,
+                    second_object,
+                    dialog.shared(),
+                    {"at_feature": first_feature},
+                    {"at_feature": second_feature},
+                ),
+            )
+
+        preview.timeout.connect(show_pair)
+        # Entprellt wie dort: dreißig Klicks auf den Drehknopf sind eine
+        # Rechnung. Die erste läuft sofort — auch die Vorgaben sind eine
+        # Aussage darüber, was gleich passiert.
+        dialog.valuesChanged.connect(lambda: preview.start())
+        show_pair()
+        try:
+            if dialog.exec() != CounterpartDialog.DialogCode.Accepted:
+                return
+            pair = dialog.pair()
+            shared = dialog.shared()
+        finally:
+            # Die Vorschau gehört dem Dialog: Sie geht mit ihm, gleich ob
+            # übernommen oder abgebrochen. Was danach im Bild steht, ist das
+            # gerechnete Ergebnis und keine Ankündigung mehr.
+            self._clear_preview()
+            dialog.deleteLater()
+
+        try:
+            applied = apply_counterpart(
+                self.session.project.document,
+                pair,
+                first_object,
+                second_object,
+                shared,
+                {"at_feature": first_feature},
+                {"at_feature": second_feature},
+            )
+        except AppError as error:
+            show_error(error, self)
+            return
+
+        # **Erst rechnen, dann die Passung.** Die Kennung eines erzeugten
+        # Merkmals entsteht bei der Auswertung; vorher gäbe es nur eine
+        # Vermutung, auf die ein ``FeatureRef`` zeigt (siehe ``counterpart``).
+        result = self.session.evaluate_now()
+        if result is not None:
+            attach_fit(self.session.project.document, applied, pair, result.scene)
+        self.session.projectChanged.emit()
+        for finding in applied.findings:
+            self.announce(str(finding.message))
+
+    def _counterpart_targets(self) -> tuple[tuple[str, str], tuple[str, str]] | None:
+        """Die zwei markierten Stellen — je eine an zwei **verschiedenen** Teilen.
+
+        ``None`` heißt: Die Lage trägt kein Gegenstück. Zwei Stellen an
+        demselben Körper sind keine Verbindung, sondern ein Loch neben einem
+        Zapfen; der Kern weist das ohnehin ab, und hier ist es eine Auskunft
+        vor dem Klick statt einer Absage danach.
+        """
+        chosen = self.object_tree.selected_features()
+        if len(chosen) != 2:
+            return None
+        first, second = chosen
+        if first[0] == second[0]:
+            return None
+        return first, second
+
+    def _feature_of(self, object_id: str, feature_id: str) -> Any:
+        """Das Merkmal hinter einer Kennung — für die Beschriftung im Dialog."""
+        result = self.session.last_result
+        entry = result.scene.objects.get(object_id) if result is not None else None
+        return entry.features.get(feature_id) if entry is not None else None
 
     def action_calibrate(self) -> None:
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
