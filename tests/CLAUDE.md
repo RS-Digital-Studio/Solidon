@@ -14,6 +14,10 @@ Fensterdateien `test_filament_inventory_ui.py`, `test_filament_assignment.py`,
 `test_filament_usage_ui.py` und `test_filament_workflow.py` decken Regal,
 Zuweisung, Buchungsdialog und erfolgreiche beziehungsweise abgebrochene
 Ausgaben ab; sie benutzen isolierte Lagerdateien, nie den Nutzerbestand.
+Die Workflowfälle prüfen auch echte 3MF-Profilwerte, die wiederholte
+Spulenprüfung vor Bestätigung und Filamentabwahl mit Undo. Die Projektfälle
+unterscheiden bei Herstellerprofilbindungen alte Positionslisten (`None`)
+von ausdrücklich leeren Identitätsbindungen (`()`).
 
 `test_geometry_review_regressions.py` verbindet kleine analytische
 Geometriefälle mit den registrierten Kundenwegen: Skizzenringe und Splines,

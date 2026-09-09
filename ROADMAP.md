@@ -83,7 +83,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-124 — Zusätzlichen Render durch show_build_volume messen](#rm-124) | Bedienung und Darstellung | Bauraum-Aufwand messen; unnötigen Aufbau bei unverändertem Zustand vermeiden |
 | [RM-130 — Speicherhinweis nach reinem Import verständlich gestalten](#rm-130) | Bedienung und Darstellung | Speicherhinweis nach reinem Betrachten eines Imports entscheiden |
 | [RM-131 — Zurückgestellten Mehrfachimport entscheiden](#rm-131) | Bedienung und Darstellung | Zurückgestellt; bei Wiederaufnahme Mehrfachimport mit gemeinsamer Lage planen |
-| [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Zugewiesene und genutzte Filamentkartenhöhe auf Windows/macOS angleichen |
+| [RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen](#rm-135) | Bedienung und Darstellung | Korrigierten Höhenvertrag nach grüner Windows-Abnahme auf macOS bestätigen |
 | [RM-136 — Gezeichnetes Fensterschema und Bildbeschreibungen aktualisieren](#rm-136) | Bedienung und Darstellung | Fensterschema, Bildunterschriften und Alternativtexte aller Sprachen nachziehen |
 | [RM-141 — Exportvorgaben je Projekt und das Mehrdatei-Namensschema merken](#rm-141) | Bedienung und Darstellung | Exportformat, Zielordner und gewähltes Namensschema nach Wiederöffnen erhalten |
 | [RM-142 — Verbindliche Projektion beim Messen einlösen](#rm-142) | Bedienung und Darstellung | Orthografische Messansicht anschließen oder den Vertrag ausdrücklich neu entscheiden |
@@ -136,6 +136,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 
 Physische Spulen, Regal, bewusster Import, Schnellauswahl und rücknehmbare
 Verbrauchsbuchungen sind angeschlossen. [Review und Nachweis zu RM-146](ROADMAP-ARCHIV.md#rm-146).
+Das anschließende [Gestaltungs- und Gesamtreview](konzepte/review-filamente-2026-09.md)
+behandelt Abwahl, Herstellerprofile, Buchungskorrekturen und die weiteren Anschlüsse.
 
 ## P0 — Skelett
 
@@ -752,11 +754,11 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
 
 <a id="rm-135"></a>
 
-- [ ] **RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen.** Den Höhenvertrag der
-  Filamentkarte auf Windows und macOS berichtigen: angeforderte, zugeteilte und tatsächlich genutzte
-  Höhe müssen denselben sichtbaren Inhalt beschreiben. Abnahme: knapper/freier Platz, lange
-  Hinweise, große Schrift und volle Liste; Nachbarkarten behalten ihren Raum und der Mac-xfail
-  entfällt.
+- [~] **RM-135 — Zugewiesene Höhe der Filamentkarte vollständig nutzen.** Qt berechnet Hinweis,
+  sichtbare Knöpfe und Abstände bei der tatsächlichen Breite; leere Listen erzwingen keine
+  überzähligen Mindestzeilen. Acht Regressionen und die native Windows-Abnahme mit knappen/freien
+  Höhen, langen Hinweisen, großer Schrift und voller Liste sind grün. Nachbarkarten behalten ihren
+  Raum; der Mac-xfail ist entfernt. Offen bleibt der plattformübergreifende Prüflauf auf macOS.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#ein-ort-für-die-auswahl-07092026).
 

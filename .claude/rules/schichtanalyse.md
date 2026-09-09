@@ -127,10 +127,30 @@ Regeln gedreht haben können.
 
 **Der Volumenstrom ist die Grenze, die kein Feld zeigt.** Schichthöhe mal
 Bahnbreite mal Geschwindigkeit gegen `max_flow` des Materials — darüber
-fördert der Antrieb mehr, als das Hotend flüssig bekommt, die Bahn wird dünner
-als gerechnet, und an den Einstellungen sieht man nichts. Zwei Auswege, beide
-werden genannt und keiner erzwungen: heißer, solange die Maschine das kann,
-sonst langsamer.
+fördert der Antrieb mehr, als das Profil zulässt. Vorgeschlagen wird ein
+rechnerisch passendes Tempo für jede betroffene Bahnart; die erste Schicht
+verwendet ihre eigenen Maße. Eine Temperatur-Volumenstrom-Kurve ist nicht
+hinterlegt. Deshalb gibt es keine pauschale Temperaturanhebung. Auch eine
+kleine Standfläche überschreibt keine Filamenttemperaturen; sie begründet
+einen Haftungsvorschlag.
+Liegt schon das kleinste einstellbare Tempo über dem Volumenstrom, hält die
+Beratung mit einem Vorschlag zur Schichthöhe, Bahnbreite oder zum gemessenen
+Profilwert an. Eine leere Liste wäre in diesem Fall keine Entwarnung.
+
+**Mehrere Körper werden gemeinsam beurteilt.** `advise.combine` berücksichtigt
+auch Körper, deren Einstellungen bereits passen. Ein einzelner Würfel darf
+deshalb die Stützen eines anderen Körpers nicht abschalten. Filamentwerte
+werden je tatsächlichem Slot aufgelöst und nur innerhalb desselben Slots
+zusammengeführt; gemeinsame Prozesswerte müssen für alle gewählten Körper
+passen. Bereits abgewählte Vorschläge bleiben bei einer Neuberechnung
+abgewählt.
+
+**Die Druckanalyse benutzt das Druckraster.** `slice_body` erhält die normale
+und die erste Schichthöhe aus den effektiven Druckeinstellungen. Der Dialog
+misst genau den Ausgabeumfang im Hintergrund und verwirft Ergebnisse, deren
+Szene, Platte oder Raster nicht mehr aktuell ist. Fehlende, abgebrochene oder
+fehlgeschlagene Messung ist keine Entwarnung. Die Orientierungssuche behält
+ohne explizite Erstschichthöhe ihr gleichmäßiges Suchraster.
 
 **Was in Geometrie gerechnet ist, wird nicht so gedruckt.** Die Stiftplanung
 sucht auf der Schnittfläche Platz für einen Kreis; der Drucker legt dort einen
@@ -144,8 +164,10 @@ vollmassiv: Bis zum vollen Querschnitt wären es bei einem 8-mm-Zapfen zehn
 Wände auf dem ganzen Teil. Ein Vorschlag, den niemand annimmt, macht die
 daneben unglaubwürdig.
 
-Vorgeschlagen wird die **Wandzahl**, nicht die Füllung — Wände liegen
-deterministisch um den Zapfen, Füllung trifft ihn statistisch.
+Vorgeschlagen wird zunächst die **Wandzahl** — Wände liegen deterministisch
+um den Zapfen, lockere Füllung trifft ihn vom Muster abhängig. Bei vollständig
+gefülltem Kern entfällt dieser Vorschlag. Der Materialanteil beschreibt die
+rechnerische Querschnittsfüllung, keine nachgewiesene mechanische Festigkeit.
 
 **Und über einer bestimmten Dicke wird gar nichts vorgeschlagen.** Der Satz
 darüber galt bis zum 03.09.2026 nur für den kleinen Fall; der große lief
@@ -330,10 +352,17 @@ morphologische Öffnung (erodieren, wieder aufweiten) und die Frage, ab welcher
 Breite dabei Material verloren geht. Der größte einbeschriebene Kreis
 beantwortet das nicht — eine 0,3-mm-Rippe neben einer 20-mm-Platte hatte darin
 bis zum 02.09.2026 keine Spur. `spanning_width` ist die **weiteste freie
-Stelle** einer ungestützten Fläche, also der einbeschriebene Kreis; für eine
-Brücke ist das die richtige Zahl, weil ein 0,2-mm-Ausläufer eine 40-mm-Öffnung
-nicht leichter macht. Wer die eine für die andere nimmt, bekommt entweder
-Rippen, die niemand sieht, oder Brücken, die keine sind.
+Stelle** einer ungestützten Fläche, also der einbeschriebene Kreis. Als
+Brückenweite genügt sie bei umlaufender Auflage. Bei offenen Seiten werden
+Richtungen entlang der Konturkanten und ihrer Normalen geprüft; beide Enden
+jeder freien Bahn müssen aufliegen. Eine kurze, aber ungestützte Querrichtung
+verkürzt keinen Steg. Ohne beidseitig getragene Richtung bleibt das Ergebnis
+eine konservative geometrische Schätzung, keine Werkzeugbahnplanung.
+
+Eine einzelne variable Arachne-Bahn kann eine dünne Wand drucken. Die
+Zwei-Bahn-Betrachtung begründet daher keine allgemeine Aussage, dass eine
+Wand nicht druckbar sei. Unterhalb der angesetzten Mindestbahnbreite fordert
+der Befund eine Kontrolle der tatsächlichen Materialbahnen im Slicer.
 
 ## Stabile IDs
 

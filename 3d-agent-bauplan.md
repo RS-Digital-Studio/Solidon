@@ -1271,6 +1271,13 @@ Eine Handlung auf mehreren Körpern oder Flächen bildet eine Transaktion.
 Bei acht belegten Plätzen fragt eine neue Flächenzuweisung nach dem zu
 ersetzenden Filament und benennt die betroffenen bisherigen Flächen. Eine
 Zuweisung an den ganzen Körper braucht keinen neunten Platz.
+„Filament entfernen“ wirkt auf denselben ausgewiesenen Umfang und bleibt
+rücknehmbar. Bei einer einzelnen Fläche werden gemeinsame bisherige
+Zuweisungen der übrigen Flächen erhalten; reicht die Achtergrenze für den
+neutralen Platz nicht aus, nennt die Abweisung die mögliche größere Auswahl.
+Herstellerprofile folgen der vollständigen Filamentidentität. Alte
+positionsgebundene Profilwahlen werden an der ursprünglichen vollständigen
+Szene gebunden, bevor entfernte oder umsortierte Filamente ihre Position ändern.
 
 **Verbrauch** wird nach erfolgreichem Slicen, Öffnen im Slicer oder 3MF-Export
 angeboten; der Bericht benutzt denselben Übergabeweg. Die Vorgabe ist *fragen*,
@@ -1640,6 +1647,12 @@ dem Materialprofil — und dass die gebaute Teilezahl der Deklaration
 entspricht. Was **unerklärt** zerfällt, bleibt ein roter Lauf: Die Ausnahme
 gilt der Absicht, nicht dem Versehen.
 
+Auch eine Kalibrierprobe darf ausdrücklich mehrere zusammengehörige
+Messstücke deklarieren. Die Toleranzleiter besitzt zwei getrennte nummerierte
+Leisten, damit Zapfen und Bohrungen tatsächlich ineinandergesteckt werden
+können. Neben Teilezahl und Druckabstand prüft ihre Abnahme den vollständigen
+Montagegriff und erkennt eine absichtlich falsch ausgerichtete Verbindung.
+
 ### 24.4 Versionierung
 Die Bibliothek ist Teil des Rechenwegs — also wird sie wie eine Abhängigkeit
 behandelt. Ohne das rechnet eine spätere Korrektur an `heatset_m4` alte
@@ -1731,8 +1744,9 @@ Verstiftung setzen, Elefantenfuß kompensieren
 **Import** — STL, 3MF (einzeln und als ganze Bauplatte), OBJ, PLY, OFF,
 GLB/glTF, STEP/STP (§30); SVG und DXF mit Extrusion
 
-**Farbe** — ein Filament dem ganzen Teil zuweisen, aus einer Textur ableiten
-oder eine erkannte Fläche vollständig färben
+**Farbe** — ein Filament dem ganzen Teil zuweisen, aus einer Textur ableiten,
+eine erkannte Fläche vollständig färben oder die Zuweisung am Körper oder an
+einer Fläche entfernen (`clear_filament`)
 
 **Beschriftung** — Text oder Logo erhaben/vertieft auf eine gewählte Fläche
 
@@ -1956,6 +1970,14 @@ verbessert. Ein externer Wert überschreibt die interne Schätzung nicht.
 
 Weil Toleranzen im Stack Verweise sind (§12), rechnen alle bestehenden
 Projekte danach mit den kalibrierten Werten neu.
+
+Wandstärke und Überhangwinkel sind Prozessmessungen: Sie gelten für das
+gemessene Material am gewählten Drucker mit derselben Düse, Schichthöhe und
+Linienbreite. Der Überhangwinkel wird von der Senkrechten aus gemessen.
+Abweichende Druckbedingungen verwenden die Startregeln, bis eine passende
+Probe vorliegt. Die wirksamen Grenzen gehen in Geometrieprüfung, Analysekarten,
+Schichtanalyse und Orientierungssuche ein. Beim Speichern einer neuen Probe
+werden keine Messungen von anderen Druckbedingungen übernommen.
 
 Dazu der **Varianten-Generator**: dieselbe Op-Kette mit gestaffeltem Parameter
 in einem Durchlauf — vier Ausführungen mit 0,10 / 0,15 / 0,20 / 0,25 mm Spiel,
