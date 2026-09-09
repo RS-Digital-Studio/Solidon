@@ -295,7 +295,7 @@ def housing() -> Project:
             OperationDraft(
                 op="insert_cable_gland",
                 inputs=("obj_1",),
-                params={"size": "cable-5", "wall": "=@wand", "x": -25.0, "y": 15.0, "z": 4.0},
+                params={"size": "cable-5", "wall": "=@wand", "x": -25.0, "y": 15.0, "z": "=@wand"},
             )
         ],
     )

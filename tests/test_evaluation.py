@@ -30,6 +30,45 @@ from tests.conftest import FakeMesh
 RUNS: dict[str, int] = {}
 
 
+def test_failed_result_matching_keeps_every_input(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine angehaltene Zuordnung veröffentlicht keinen halben Vereinigungsschritt."""
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.errors import AmbiguityError
+
+    load_operations()
+    history = History(document)
+    history.apply(
+        "Zwei Körper",
+        [
+            OperationDraft(op="create_box", params={"width": 10.0}),
+            OperationDraft(op="create_box", params={"width": 8.0}),
+        ],
+    )
+    before = evaluate(document, profile)
+    assert before.complete
+    history.apply("Vereinigen", [OperationDraft(op="union_objects", inputs=("obj_1", "obj_2"))])
+    module = import_module("app.core.scene.evaluate")
+    original = module._with_features
+
+    def fail_at_union(placed, previous, operation, *args, **kwargs):
+        if operation.op == "union_objects":
+            raise AmbiguityError(question="Erzwungene mehrdeutige Merkmalszuordnung.")
+        return original(placed, previous, operation, *args, **kwargs)
+
+    monkeypatch.setattr(module, "_with_features", fail_at_union)
+    after = evaluate(document, profile)
+    assert after.stopped_at == document.ops[-1].id
+    assert set(after.scene.objects) == set(before.scene.objects)
+    assert after.object_hashes == before.object_hashes
+    assert after.object_names == before.object_names
+    for name, source in before.scene.objects.items():
+        assert after.scene.objects[name].mesh.volume == pytest.approx(source.mesh.volume)
+
+
 @op_params
 class MakeParams(BaseParams):
     name: str = param(title=_("Name"), default="Teil")

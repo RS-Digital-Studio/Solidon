@@ -38,7 +38,7 @@ from app.core.knowledge import profiles
 from app.core.log import configure
 from app.core.paths import installed_language, user_config_dir
 from app.core.registry import REGISTRY, cli_commands, documentation
-from app.core.registry.params import NUMBER_KINDS, TEXT_KINDS
+from app.core.registry.params import LIST_KINDS, NUMBER_KINDS, TEXT_KINDS
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
 from app.core.scene.project import (
     Project,
@@ -69,7 +69,7 @@ from app.i18n.catalog import install_language
 #: auseinanderzulaufen; jetzt gibt es nur noch die eine.
 _PARAM_TYPES: dict[str, Any] = {
     kind: (float if kind == "float" else int) for kind in NUMBER_KINDS
-} | dict.fromkeys(TEXT_KINDS, str)
+} | dict.fromkeys(TEXT_KINDS | LIST_KINDS, str)
 
 
 # --- context implementations ----------------------------------------------------
@@ -562,6 +562,7 @@ def build_parser() -> argparse.ArgumentParser:
                 argument.flag,
                 dest=argument.name,
                 type=_PARAM_TYPES.get(argument.kind, str),
+                nargs="+" if argument.kind in LIST_KINDS else None,
                 choices=list(argument.choices) or None,
                 help=argument.help,
                 default=None,

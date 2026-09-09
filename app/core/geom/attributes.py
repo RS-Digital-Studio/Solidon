@@ -144,7 +144,9 @@ def _nearest(mesh: MeshData, points: np.ndarray) -> tuple[np.ndarray, np.ndarray
 
 def with_slot(mesh: MeshData, slot: int) -> MeshData:
     """Ein Slot für den ganzen Körper — wo eine Farbe von Hand zugewiesen wird."""
-    return MeshData(raw=mesh.raw, slots=tuple([int(slot)] * len(mesh.raw.faces)))
+    return MeshData(
+        raw=mesh.raw, slots=tuple([int(slot)] * len(mesh.raw.faces)), cavity=mesh.cavity
+    )
 
 
 def counts(mesh: MeshData) -> dict[int, int]:

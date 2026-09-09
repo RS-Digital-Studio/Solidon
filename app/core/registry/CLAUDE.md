@@ -56,6 +56,10 @@ müssen dieselbe Antwort bekommen: die Menüleiste (`_build_menus` über `skip`)
 das Kontextmenü (`panels._add_operations`), `menu_path` und drei Wächter in
 `tests/`.
 
+Eine eigenständige Prüfkörperkachel umfasst sowohl ihren `create_`-Zugang als
+auch das kompatible `insert_`. Beide nennen denselben Katalogort und erzeugen
+keinen zusätzlichen Menüeintrag; die Kachel startet `creation_name()`.
+
 Die Frage lautete bis zum 29.08.2026 „steht die Kategorie in `WITHOUT_MENU`",
 und das war eine Näherung: Von den 29 Operationen der Kategorie `parts` haben
 27 eine Kachel, zwei nicht — `create_lid` und `screw_lid` bauen einen Deckel,
@@ -93,6 +97,14 @@ einem isolierten Register vollständig geprüften Rezeptzustand. Er übernimmt d
 vorbereitete Abbildung ohne zweite Validierung; nach einer atomar
 veröffentlichten Rezeptdatei darf kein erneut fehlbarer Aufbau den Speicherstand
 von der Platte trennen.
+
+## Mehrere benannte Merkmale
+
+`kind="features"` bezeichnet eine Liste benannter Merkmale. Validierung und
+JSON-Schema erhalten jedes Element als Zeichenkette; Dialog und CLI liefern
+dieselbe Liste. Ob eine leere Liste den ganzen Körper bezeichnet, legt die
+Operation fest. Die Verwaistenbehandlung darf fehlende Elemente deshalb nicht
+stillschweigend streichen und damit den Wirkungsbereich erweitern.
 
 ## Zwei Dinge, die beim Zählen schiefgehen
 

@@ -117,10 +117,11 @@ EAGER: Final[frozenset[tuple[str, str]]] = frozenset(
 )
 
 #: Träge Kanten: ``a`` importiert ``b`` nur innerhalb von Funktionen.
-#: Stand 07.09.2026, zwölf Kanten — jede davon ist die Rückrichtung einer
-#: eifrigen, träge gemacht, damit der Import nicht im Kreis läuft.
+#: Träge gehaltene Rückrichtungen sowie das Objektmaterial des exakten
+#: Bohrungswegs; keine davon erweitert den eifrigen Importkreis.
 LAZY: Final[frozenset[tuple[str, str]]] = frozenset(
     {
+        ("brep", "knowledge"),
         ("brep", "perceive"),
         ("export", "brep"),
         ("geom", "brep"),

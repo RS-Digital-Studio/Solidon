@@ -36,7 +36,15 @@ from app.core.sketch.profile import (
 )
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
-from app.core.types import BaseParams, OpContext, OpResult, PlaneFrame, SceneObject
+from app.core.types import (
+    BaseParams,
+    Finding,
+    OpContext,
+    OpResult,
+    PlaneFrame,
+    SceneObject,
+    SolvedSketch,
+)
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
@@ -73,13 +81,32 @@ def _sketch_profile(shape: str, length: float, width: float, corners: int) -> Pr
     return profile_of(solve_sketch(sketch))
 
 
-def _drawn_profile(ctx: OpContext, sketch_text: str) -> Profile:
+def _solved_drawing(ctx: OpContext, sketch_text: str, findings: list[Finding]) -> SolvedSketch:
+    """Löst eine Zeichnung einmal und nimmt ihre freien Maße in den Bericht mit."""
+    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
+    solved = solve_sketch(sketch_from_text(sketch_text), values)
+    if solved.free_dof > 0:
+        findings.append(
+            Finding(
+                code="sketch.underconstrained",
+                severity="info",
+                message=_(
+                    "Die Skizze hat noch freie Maße oder Bewegungen. "
+                    "Legen Sie im Skizzeneditor weitere Maße oder Beziehungen fest, "
+                    "wenn ihre Form vollständig bestimmt sein soll."
+                ),
+                values={"free_dof": solved.free_dof},
+            )
+        )
+    return solved
+
+
+def _drawn_profile(ctx: OpContext, sketch_text: str, findings: list[Finding]) -> Profile:
     """Der Umriss der gezeichneten Skizze, gelöst gegen die Projektparameter.
 
     Ein Maß wie ``=@breite/2`` rechnet hier mit denselben Werten wie überall
     (§13, §30.1)."""
-    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
-    return profile_of(solve_sketch(sketch_from_text(sketch_text), values))
+    return profile_of(_solved_drawing(ctx, sketch_text, findings))
 
 
 def _plane_of(sketch_text: str) -> str:
@@ -111,6 +138,7 @@ def _regions_for(
     width: float,
     corners: int,
     region: int,
+    findings: list[Finding],
 ) -> list[Profile]:
     """Die Umrisse, die extrudiert werden — einer, oder alle nebeneinander.
 
@@ -124,8 +152,7 @@ def _regions_for(
     """
     if not sketch_text:
         return [_sketch_profile(shape, length, width, corners)]
-    values = {name: entry.value for name, entry in ctx.scene.parameters.items()}
-    found = regions_of(solve_sketch(sketch_from_text(sketch_text), values))
+    found = regions_of(_solved_drawing(ctx, sketch_text, findings))
     if region == 0:
         return list(found)
     if region > len(found):
@@ -204,11 +231,17 @@ def _height_of(
 
 
 def _profile_for(
-    ctx: OpContext, sketch_text: str, shape: str, length: float, width: float, corners: int
+    ctx: OpContext,
+    sketch_text: str,
+    shape: str,
+    length: float,
+    width: float,
+    corners: int,
+    findings: list[Finding],
 ) -> Profile:
     """Gezeichnete Skizze, wenn eine da ist — sonst die Grundform."""
     if sketch_text:
-        return _drawn_profile(ctx, sketch_text)
+        return _drawn_profile(ctx, sketch_text, findings)
     return _sketch_profile(shape, length, width, corners)
 
 
@@ -312,16 +345,24 @@ class SketchExtrudeParams(BaseParams):
 )
 def sketch_extrude(ctx: OpContext) -> OpResult:
     params = cast(SketchExtrudeParams, ctx.params)
+    findings: list[Finding] = []
     require()
     plane = _plane_of(params.sketch)
     frame = _frame_of(ctx, plane)
     height = _height_of(ctx, params.height, plane, frame, params.up_to)
     chosen = _regions_for(
-        ctx, params.sketch, params.shape, params.length, params.width, params.corners, params.region
+        ctx,
+        params.sketch,
+        params.shape,
+        params.length,
+        params.width,
+        params.corners,
+        params.region,
+        findings,
     )
     bodies = [profiles.extrude(one, height, plane, frame) for one in chosen]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
-    return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)])
+    return OpResult(outputs=[_created(params.name, str(_("Grundform")), solid)], findings=findings)
 
 
 @op_params
@@ -545,6 +586,7 @@ def _pocket_in_mesh(
 )
 def sketch_pocket(ctx: OpContext) -> OpResult:
     params = cast(SketchPocketParams, ctx.params)
+    findings: list[Finding] = []
     source = ctx.inputs[0]
     # **Der Körper ist in beiden Fällen derselbe Wert.** ``_span_along`` fragt
     # ihn nach seinen Grenzen und weiß mit beiden Arten umzugehen; ihn hier
@@ -571,6 +613,7 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
             params.width,
             params.corners,
             params.region,
+            findings,
         )
     ]
     if frame is not None:
@@ -591,7 +634,7 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     if params.through:
         bottom, reach = low_s - 1.0, (high_s - low_s) + 2.0
     else:
-        bottom, reach = top - params.depth, params.depth + 1.0
+        bottom, reach = top - params.depth, params.depth
     # Die Prüfung steht hier und nicht oben als Wahrheitswert: So verengt sie
     # den Typ für alles, was darunter folgt — der exakte Zweig rechnet danach
     # mit einem ``Solid`` und muss es nicht behaupten.
@@ -610,7 +653,8 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
         # gibt. ``test_sketch_solid`` hält die beiden Listen deckungsgleich.
         on = frame if frame is not None else planes.frame_for_plane(plane)
         assert on is not None, f"{plane} steht in PLANES, aber nicht in frame_for_plane"
-        return _pocket_in_mesh(ctx, source, chosen, on, top, top - bottom, params.through)
+        result = _pocket_in_mesh(ctx, source, chosen, on, top, top - bottom, params.through)
+        return dataclasses.replace(result, findings=[*findings, *result.findings])
 
     lifted = bottom - plane_s
     tools = [
@@ -630,7 +674,7 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     nothing = without_effect(body, solid, "difference", ctx.profile)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))],
-        findings=[nothing] if nothing is not None else [],
+        findings=[*findings, *([nothing] if nothing is not None else [])],
     )
 
 
@@ -736,10 +780,11 @@ class SketchRevolveParams(BaseParams):
 )
 def sketch_revolve(ctx: OpContext) -> OpResult:
     params = cast(SketchRevolveParams, ctx.params)
+    findings: list[Finding] = []
     require()
     if params.sketch:
         # Wie gezeichnet: die Skizze kennt ihren Abstand zur Achse selbst.
-        placed = _drawn_profile(ctx, params.sketch)
+        placed = _drawn_profile(ctx, params.sketch, findings)
     else:
         profile = _sketch_profile(params.shape, params.length, params.width, params.corners)
         # **Der gemessene Bereich statt einer Formel je Grundform.** Hier stand
@@ -763,7 +808,9 @@ def sketch_revolve(ctx: OpContext) -> OpResult:
         low, _high = bounds_of(profile)
         placed = shifted(profile, params.offset - low[0], -low[1])
     solid = profiles.revolve(placed, params.angle)
-    return OpResult(outputs=[_created(params.name, str(_("Rotationskörper")), solid)])
+    return OpResult(
+        outputs=[_created(params.name, str(_("Rotationskörper")), solid)], findings=findings
+    )
 
 
 @op_params
@@ -831,6 +878,7 @@ class SketchSweepParams(BaseParams):
 )
 def sketch_sweep(ctx: OpContext) -> OpResult:
     params = cast(SketchSweepParams, ctx.params)
+    findings: list[Finding] = []
     # **Der Bogen läuft entlang X und Z — das ist seine Definition**, nicht
     # eine vergessene Ebene: Eine Skizze auf einer anderen Ebene wurde bisher
     # stillschweigend wie auf XY gerechnet (Gesamtreview D-2). Abgelehnt
@@ -855,10 +903,10 @@ def sketch_sweep(ctx: OpContext) -> OpResult:
         )
     require()
     profile = _profile_for(
-        ctx, params.sketch, params.shape, params.length, params.width, params.corners
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners, findings
     )
     solid = profiles.sweep_arc(profile, params.bend_radius, params.bend_angle)
-    return OpResult(outputs=[_created(params.name, str(_("Bogen")), solid)])
+    return OpResult(outputs=[_created(params.name, str(_("Bogen")), solid)], findings=findings)
 
 
 @op_params
@@ -925,6 +973,7 @@ class SketchLoftParams(BaseParams):
 )
 def sketch_loft(ctx: OpContext) -> OpResult:
     params = cast(SketchLoftParams, ctx.params)
+    findings: list[Finding] = []
     require()
     if not params.sketch:
         # Der Weg des Katalogs: zwei Grundformen, die zweite kleiner gerechnet.
@@ -954,7 +1003,7 @@ def sketch_loft(ctx: OpContext) -> OpResult:
     plane = _plane_of(params.sketch)
     frame = _frame_of(ctx, plane)
     chosen = _regions_for(
-        ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0, findings
     )
     bodies = []
     for one in chosen:
@@ -964,7 +1013,7 @@ def sketch_loft(ctx: OpContext) -> OpResult:
             profiles.loft(one, scaled(one, params.top_scale, centre), params.height, plane, frame)
         )
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
-    return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)])
+    return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)], findings=findings)
 
 
 # --- Fläche versetzen (Konzept P15 §7 Etappe 6, D10) ----------------------------

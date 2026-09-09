@@ -6,12 +6,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
 from app.core.geom.mesh import MeshData, read_mesh
-from app.core.geom.orient import candidates, evaluate_direction, orient_for_print
-from app.core.geom.transform import apply, rotation
+from app.core.geom.orient import (
+    candidates,
+    evaluate_direction,
+    orient_for_print,
+    ranked_orientations,
+    rotation_to_down,
+)
+from app.core.geom.transform import apply, rotation, translation
 from app.core.ingest.loader import normalise
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
@@ -50,6 +57,74 @@ def test_the_footprint_beats_the_alternatives() -> None:
 
     assert lying.footprint > on_edge.footprint
     assert lying.score > on_edge.score
+
+
+@pytest.mark.parametrize(
+    "direction", [(0.0, 0.0, -1.0), (1.0, 2.0, -3.0), (-2.0, 0.5, 4.0), (0.0, 0.0, 0.0)]
+)
+def test_direction_metrics_match_the_physically_rotated_body(direction) -> None:
+    """Die billige Vorauswahl misst dieselbe Geometrie wie eine echte Drehung."""
+    body = apply(plate(), translation((71.0, -43.0, 28.0)) @ rotation("y", 23.0))
+    physical = apply(body, rotation_to_down(direction))
+    expected = evaluate_direction(physical, (0.0, 0.0, -1.0))
+    actual = evaluate_direction(body, direction)
+    assert actual.footprint == pytest.approx(expected.footprint, abs=1e-7)
+    assert actual.overhang == pytest.approx(expected.overhang, abs=1e-7)
+    assert actual.height == pytest.approx(expected.height, abs=1e-7)
+
+
+def test_the_shortlist_only_places_as_many_ranked_candidates_as_needed(
+    monkeypatch, profile
+) -> None:
+    """Die drei Finalisten brauchen keine Druckflächenprüfung aller Hüllnormalen."""
+    import app.core.geom.orient as orient
+
+    body = plate()
+    ranked = ranked_orientations(body)
+    checked = []
+
+    def fit(mesh, direction, printer, *, margin=0.0):
+        checked.append(direction)
+        # Auch ein hoch bewerteter Kandidat darf außerhalb des Druckbereichs liegen.
+        return None if direction == ranked[0].direction else np.eye(4)
+
+    monkeypatch.setattr(orient, "fitting_transform", fit)
+    selected = ranked_orientations(body, limit=3, printer=profile.printer)
+    assert selected == ranked[1:4]
+    assert checked == [entry.direction for entry in ranked[:4]]
+
+
+def test_unused_vertices_do_not_change_orientation_metrics() -> None:
+    """Ein Importrest außerhalb der Dreiecke ist keine Fläche des Körpers."""
+    raw = trimesh.creation.box(extents=(20.0, 30.0, 40.0))
+    with_unused_point = trimesh.Trimesh(
+        vertices=np.vstack((raw.vertices, (500.0, 700.0, -900.0))),
+        faces=raw.faces,
+        process=False,
+    )
+    for direction in ((0.0, 0.0, -1.0), (1.0, 2.0, 3.0)):
+        actual = evaluate_direction(MeshData.of(with_unused_point), direction)
+        expected = evaluate_direction(MeshData.of(raw), direction)
+        assert actual == expected
+
+
+@pytest.mark.parametrize("limit", [-200, -1, 0, 1, 12, 200])
+def test_normal_group_order_preserves_area_ties_and_unrounded_directions(limit: int) -> None:
+    """Flächengruppen bleiben nach Fläche und dann lexikographisch geordnet."""
+    from app.core.geom.orient import _largest_normals
+
+    raw = apply(plate(), rotation("x", 27.0) @ rotation("y", 13.0)).raw
+    normals = np.asarray(raw.face_normals)
+    areas = np.asarray(raw.area_faces)
+    groups = {}
+    for normal, area in zip(normals, areas, strict=True):
+        key = tuple(np.round(normal, 6))
+        total, weighted = groups.get(key, (0.0, np.zeros(3)))
+        groups[key] = (total + area, weighted + normal * area)
+    keys = sorted(groups, key=lambda key: (-groups[key][0], key))[:limit]
+    expected = [groups[key][1] / np.linalg.norm(groups[key][1]) for key in keys]
+    actual = _largest_normals(normals, areas, limit)
+    np.testing.assert_allclose(actual, expected, rtol=0.0, atol=1e-12)
 
 
 def test_the_heuristic_says_that_it_is_one() -> None:
@@ -132,7 +207,7 @@ def test_the_thorough_orientation_uses_the_layer_analysis(
 
     assert result.complete
     assert "orient.searched" in {finding.code for finding in result.scene.report.findings}
-    assert history.operations[-1].seed is not None, "the sampling carries its seed (§11.3)"
+    assert history.operations[-1].seed is None, "geometry candidates need no random seed (§28.2)"
 
 
 def test_the_orientation_operation_is_registered() -> None:
@@ -200,3 +275,43 @@ def test_every_chosen_body_gets_its_own_orientation(document: Document, profile:
     for kennung in ("obj_1", zweiter):
         hoehe = result.scene.objects[kennung].mesh.bounds.size[2]
         assert hoehe < 20.0, f"{kennung} steht noch hochkant ({hoehe:.1f} mm)"
+
+
+@pytest.mark.parametrize("per_batch", [1, 3, 50])
+def test_batched_scores_match_physical_rotations_across_batch_boundaries(
+    monkeypatch: pytest.MonkeyPatch, per_batch: int
+) -> None:
+    """Die Speichergrenze verändert weder Reihenfolge noch geometrische Kennzahlen."""
+    import app.core.geom.orient as orient
+    from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
+    from app.core.units import EPS_GEOM
+
+    body = apply(plate(), translation((71.0, -43.0, 28.0)) @ rotation("y", 23.0))
+    raw = body.raw
+    body = MeshData.of(
+        trimesh.Trimesh(
+            vertices=np.vstack((raw.vertices, (500.0, 700.0, -900.0))),
+            faces=raw.faces,
+            process=False,
+        )
+    )
+    directions = [
+        (float(np.cos(angle)), float(np.sin(angle)), 0.25) for angle in np.linspace(0.2, 6.3, 14)
+    ]
+    directions.extend([(0.0, 0.0, 0.0), (EPS_GEOM / 2.0, 0.0, -1.0)])
+    monkeypatch.setattr(
+        orient, "MAX_PROJECTION_VALUES", per_batch * max(body.vertex_count, body.triangle_count)
+    )
+    scores = orient._evaluate_directions(body, directions)
+    assert [score.direction for score in scores] == directions
+    for direction, actual in zip(directions, scores, strict=True):
+        physical = apply(body, rotation_to_down(direction))
+        normals = np.asarray(physical.raw.face_normals)
+        areas = np.asarray(physical.raw.area_faces)
+        flat = (normals[:, 2] < -0.999) & (
+            physical.raw.triangles_center[:, 2] < physical.bounds.minimum[2] + 0.05
+        )
+        downward = normals[:, 2] < -np.cos(np.deg2rad(OVERHANG_LIMIT_DEGREES))
+        assert actual.footprint == pytest.approx(float(areas[flat].sum()), abs=1e-7)
+        assert actual.overhang == pytest.approx(float(areas[downward & ~flat].sum()), abs=1e-7)
+        assert actual.height == pytest.approx(physical.bounds.size[2], abs=1e-7)

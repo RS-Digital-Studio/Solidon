@@ -23,7 +23,7 @@ from typing import Any, Literal
 from app.core.brep.kernel import Solid, boolean_builder, require
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
-from app.core.types import Transform, Vec3
+from app.core.types import PlaneFrame, Point2, Transform, Vec3
 from app.core.units import EPS_GEOM, is_close
 from app.i18n import _
 
@@ -444,6 +444,44 @@ def bore(
     frame = gp_Ax2(gp_Pnt(*origin), gp_Dir(*direction))
     cutter = Solid(BRepPrimAPI_MakeCylinder(frame, diameter / 2.0, length).Shape())
     return boolean("difference", [solid, cutter])
+
+
+def bore_profile(solid: Solid, outline: list[Point2], frame: PlaneFrame) -> Solid:
+    """Schneidet das gemeinsame Bohrungsprofil als exakten Rotationskörper."""
+    require()
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakePolygon
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeRevol
+    from OCP.gp import gp_Ax1, gp_Dir, gp_Pnt
+
+    wire = BRepBuilderAPI_MakePolygon()
+    previous: Point2 | None = None
+    # Der erste Punkt schließt sich über Close; doppelte Punkte entstehen
+    # bei einer Aufweitung ohne geraden Abschnitt und bilden keine Kante.
+    for radius, height in outline[:-1]:
+        if (
+            previous is not None
+            and math.hypot(radius - previous[0], height - previous[1]) <= EPS_GEOM
+        ):
+            continue
+        wire.Add(
+            gp_Pnt(
+                *(
+                    frame.origin[i] + radius * frame.x_axis[i] + height * frame.normal[i]
+                    for i in range(3)
+                )
+            )
+        )
+        previous = (radius, height)
+    wire.Close()
+    face = BRepBuilderAPI_MakeFace(wire.Wire()).Face()
+    axis = gp_Ax1(gp_Pnt(*frame.origin), gp_Dir(*frame.normal))
+    tool = BRepPrimAPI_MakeRevol(face, axis, math.tau)
+    if not tool.IsDone():
+        raise GeometryError(
+            detail=_("Aus diesen Bohrungsmaßen entsteht kein geschlossener Schneidkörper."),
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
+    return boolean("difference", [solid, Solid(tool.Shape())])
 
 
 def resize_bore(

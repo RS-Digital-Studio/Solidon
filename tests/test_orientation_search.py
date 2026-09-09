@@ -41,6 +41,54 @@ def test_the_sampling_covers_the_sphere() -> None:
     assert max(d[2] for d in directions) > 0.9, "upwards too"
 
 
+def test_geometric_candidates_include_new_convex_hull_normals():
+    import numpy as np
+
+    from app.core.geom.orient import candidates
+
+    first = trimesh.creation.box(extents=(10, 10, 10))
+    second = first.copy()
+    second.apply_translation((20, 20, 20))
+    mesh = MeshData.of(trimesh.util.concatenate((first, second)))
+    found = candidates(mesh)
+    assert any(np.count_nonzero(np.abs(direction) > 0.1) == 2 for direction in found)
+    assert found == candidates(mesh)
+
+
+def test_a_large_footing_does_not_hide_a_centre_of_mass_outside_it(profile):
+    pillar = trimesh.creation.box(extents=(10, 10, 30))
+    pillar.apply_translation((0, 0, 15))
+    arm = trimesh.creation.box(extents=(80, 10, 5))
+    arm.apply_translation((35, 0, 32.5))
+    mesh = MeshData.of(trimesh.boolean.union((pillar, arm)))
+    result = judge(mesh, (0, 0, -1), 1.0, profile.printer.layer_height / 2.0)
+    assert result.first_layer_area > profile.smallest_first_layer
+    assert not result.stable
+
+
+@pytest.mark.parametrize("organic", [False, True])
+def test_shortlist_matches_the_fully_sliced_geometric_candidates(organic, profile):
+    from app.core.geom.orient import candidates
+    from app.core.slice.orientation import best_of
+
+    if organic:
+        raw = trimesh.creation.icosphere(subdivisions=1, radius=12)
+        raw.apply_scale((1.0, 0.7, 1.5))
+        mesh = MeshData.of(raw)
+    else:
+        mesh = corpus("plate_holes.stl")
+    result = search(mesh, profile=profile, count=80)
+    full = best_of(
+        [
+            judge(mesh, direction, 1.0, profile.printer.layer_height / 2.0)
+            for direction in dict.fromkeys(candidates(mesh, hull_limit=80))
+        ],
+        profile.smallest_first_layer,
+    )
+    assert result.best.support_volume <= full.support_volume * 1.05 + 1e-6
+    assert result.tried <= FINALISTS + 1
+
+
 def test_the_seed_decides_the_sampling() -> None:
     """§11.3: ohne den gespeicherten Startwert suchte dieselbe Datei nicht
     gleich.
@@ -64,6 +112,8 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
         direction: tuple[float, float, float],
         _height: float,
         _footing: float | None = None,
+        *,
+        overhang_angle: float | None = None,
     ):
         seen.append(direction)
         return orientation.Candidate(direction, float(len(seen)), 1.0, 1.0)
@@ -71,7 +121,7 @@ def test_the_search_slices_each_direction_only_once(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(
         orientation,
         "face_candidates",
-        lambda _mesh: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
+        lambda _mesh, **_kwargs: [(0.0, 0.0, -1.0), (1.0, 0.0, 0.0), (1.0, 0.0, 0.0)],
     )
     monkeypatch.setattr(
         orientation,
@@ -94,8 +144,8 @@ def test_a_tilted_plate_is_laid_down_again() -> None:
     # ``tried`` zählt seit dem 06.09.2026 die **geschnittenen** Lagen — die
     # Suche prüft alle Richtungen an den Flächennormalen und schneidet nur
     # die Finalisten. Die geprüfte Menge steht im Befund.
-    assert found.findings[0].values["candidates"] > 48, (
-        "the sampling plus the face normals plus the starting position"
+    assert found.findings[0].values["candidates"] >= 6, (
+        "geometric candidates include the axes without requiring random directions"
     )
     assert found.tried <= FINALISTS + 1, "geschnitten wird nur, was vorn liegt"
 
@@ -275,6 +325,8 @@ def test_the_face_shortlist_is_decided_by_real_support(
         direction: tuple[float, float, float],
         _height: float,
         _footing: float | None = None,
+        *,
+        overhang_angle: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         return orientation.Candidate(direction, support[direction], 100.0, 10.0)
@@ -348,6 +400,8 @@ def test_the_face_shortlist_stops_after_a_real_slice(
         direction: tuple[float, float, float],
         _height: float,
         _footing: float | None = None,
+        *,
+        overhang_angle: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         signal.cancel()
@@ -373,6 +427,8 @@ def test_the_full_search_stops_after_the_baseline_slice(
         direction: tuple[float, float, float],
         _height: float,
         _footing: float | None = None,
+        *,
+        overhang_angle: float | None = None,
     ) -> orientation.Candidate:
         seen.append(direction)
         signal.cancel()

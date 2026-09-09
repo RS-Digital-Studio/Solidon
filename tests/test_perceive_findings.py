@@ -143,17 +143,53 @@ def test_every_step_of_the_fit_ladder_carries_its_own_number() -> None:
     assert counts == list(range(1, 9)), counts
 
 
-def test_the_fit_ladder_still_prints_as_one_piece() -> None:
-    """Die Striche werden eingraviert — sie dürfen die Grundplatte nicht zerlegen.
+def test_the_fit_ladder_keeps_two_numbered_rails_that_really_assemble() -> None:
+    """Jede gravierte Messleiste bleibt ganz, eindeutig nummeriert und steckbar."""
+    import numpy as np
 
-    Gefahren wird die Leiter dabei mit der größten Stufenzahl, denn dort ist
-    die Beschriftung am breitesten.
-    """
+    from app.core.geom.boolean import boolean
+    from app.core.knowledge.parts.testbodies import LABEL_DEPTH
+    from app.core.units import EPS_GEOM
+
     spec = PARTS.get("fit_ladder")
     result = spec.fn(spec.params(diameter=6.0, steps=8, first=0.10, step=0.05))
 
     assert result.mesh.is_watertight
-    assert result.mesh.component_count == 1
+    assert result.mesh.component_count == spec.bodies == 2
+    rails = sorted(result.mesh.raw.split(), key=lambda body: body.bounds[0, 1])
+    assert all(body.is_watertight and body.volume > 0.0 for body in rails)
+    assert (
+        rails[1].bounds[0, 1] - rails[0].bounds[1, 1] >= profiles.make_profile().material.clearance
+    )
+    pins = [result.features[f"pin_{step}"].params for step in range(1, 9)]
+    bores = [result.features[f"bore_{step}"].params for step in range(1, 9)]
+    base_height = bores[0]["depth"]
+    largest_bore = max(feature["diameter"] for feature in bores)
+    for rail, features in zip(rails, (pins, bores), strict=True):
+        section = rail.section(
+            plane_origin=(0.0, 0.0, base_height - LABEL_DEPTH / 2.0), plane_normal=(0, 0, 1)
+        )
+        assert section is not None
+        counts = [0] * 8
+        # Oberhalb aller Rundungen liegen ausschließlich die gravierten Striche.
+        for curve in section.discrete:
+            if np.min(curve[:, 1]) <= features[0]["centre"][1] + largest_bore / 2.0:
+                continue
+            centre_x = (np.min(curve[:, 0]) + np.max(curve[:, 0])) / 2.0
+            nearest = min(range(8), key=lambda index: abs(features[index]["centre"][0] - centre_x))
+            counts[nearest] += 1
+        assert counts == list(range(1, 9))
+
+    male, female = rails
+    female.apply_translation((0.0, pins[0]["centre"][1] - bores[0]["centre"][1], base_height))
+    tolerance = EPS_GEOM * (male.area + female.area)
+    assembled = boolean("intersection", [MeshData.of(male), MeshData.of(female)], allow_empty=True)
+    assert assembled.solver.strategy == "direct"
+    assert assembled.mesh.volume <= tolerance
+    # Falsch angesetzt muss derselbe geometrische Nachweis eine Kollision finden.
+    female.apply_translation((pins[0]["diameter"] / 4.0, 0.0, 0.0))
+    collision = boolean("intersection", [MeshData.of(male), MeshData.of(female)], allow_empty=True)
+    assert collision.mesh.volume > tolerance * 100.0
 
 
 # --- Befund 4: gedeckelte Temperaturen werden gesagt ------------------------------

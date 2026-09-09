@@ -295,7 +295,9 @@ def _from_the_bore(spec: OperationSpec, feature: Feature, names: set[str]) -> di
     }
 
 
-def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
+def values_for(
+    spec: OperationSpec, feature: Feature, object_id: str | None = None
+) -> dict[str, Any]:
     """Die Parameter, die dieses Merkmal für diese Operation vorschlägt.
 
     Nur, was das Merkmal sicher sagt: wo es ist und wohin es schaut. Nicht
@@ -323,12 +325,15 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
     # fragten: ``scene/orphans.py`` geht nach ``kind == "feature"``, hier ging
     # es nach dem Namen. Zwei Raster, und eine Operation fiel durch beide.
     # Seit ``5f94f1d`` deklariert sie ihre Art; damit genügt eine Frage.
-    field = next(
-        (entry.name for entry in spec.params.spec() if entry.kind == "feature"),
+    feature_field = next(
+        (entry for entry in spec.params.spec() if entry.kind in {"feature", "features"}),
         None,
     )
-    if field is not None:
-        feature_values = {field: feature.id, **_from_the_bore(spec, feature, names)}
+    if feature_field is not None:
+        feature_values = {
+            feature_field.name: (feature.id,) if feature_field.kind == "features" else feature.id,
+            **_from_the_bore(spec, feature, names),
+        }
         if spec.name in MEASURED_DIAMETER_OPS and feature.kind == "hole":
             diameter = feature.params.get("diameter")
             if isinstance(diameter, int | float) and "diameter" in names:
@@ -345,7 +350,7 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         # „Bis zu dieser Fläche" — die Kennung reicht, den Rahmen rechnet die
         # Auswertung daraus (app.core.sketch.planes). Nur planare Flächen: bis
         # zu einer Bohrung zu extrudieren hat keine Bedeutung.
-        values[target] = feature.id
+        values[target] = f"{object_id}:{feature.id}" if object_id else feature.id
     if DIAMETER_FIELD in names and feature.kind == "hole":
         diameter = feature.params.get("diameter")
         if diameter is not None:
@@ -435,7 +440,12 @@ def values_for_object(spec: OperationSpec, features: Mapping[str, Feature]) -> d
     if face is None:
         return {}
     values = values_for(spec, face)
-    values.pop(FEATURE_FIELD, None)
+    from app.core.knowledge.parts.ops import placement_fields
+
+    values.pop(placement_fields(spec.params)[FEATURE_FIELD], None)
+    for entry in spec.params.spec():
+        if entry.kind in {"feature", "features"}:
+            values.pop(entry.name, None)
     target = _target_field(spec)
     if target:
         values.pop(target, None)
@@ -528,6 +538,7 @@ class PlacementTool:
     mesh: MeshData
     selected_offset: Vec3 | None = None
     feature_id: str = ""
+    addition: MeshData | None = None
 
 
 def _vec(values: Any) -> Vec3:
@@ -919,7 +930,7 @@ def surface_values(
     prepared_tool: PlacementTool | None = None,
 ) -> dict[str, Any]:
     """Reproduzierbare Op-Werte für einen echten Flächentreffer, ohne Feature zu erfinden."""
-    from app.core.knowledge.parts.ops import normal_fields
+    from app.core.knowledge.parts.ops import normal_fields, placement_fields
 
     if not supports_surface_placement(spec):
         raise _reject(
@@ -947,12 +958,15 @@ def surface_values(
             offset = prepared_tool.selected_offset
         matrix = np.column_stack((placement.frame.x_axis, placement.frame.y_axis, placement.normal))
         target = _vec(np.asarray(placement.point) + matrix @ offset)
-    values: dict[str, Any] = dict(zip(POSITION, target, strict=True))
+    placed_fields = placement_fields(spec.params)
+    values: dict[str, Any] = dict(
+        zip((placed_fields[name] for name in POSITION), target, strict=True)
+    )
     values.update(zip(normal_fields(spec.params), placement.normal, strict=True))
     if spec.name == "drill_hole":
         values["anchor"] = "mouth"
-    if any(field.name == FEATURE_FIELD for field in spec.params.spec()):
-        values[FEATURE_FIELD] = (
+    if any(field.name == placed_fields[FEATURE_FIELD] for field in spec.params.spec()):
+        values[placed_fields[FEATURE_FIELD]] = (
             feature.id
             if spec.name in {"move_feature", "duplicate_feature"} and feature is not None
             else ""
@@ -1024,6 +1038,15 @@ def prepare_tool(
 
         geometry = feature_placement_geometry(source, feature, spec.name)
         return PlacementTool(geometry.mesh, geometry.selected_offset, feature.id)
+    from app.core.knowledge.parts.ops import part_of, placement_tools
+    from app.core.knowledge.profiles import for_object
+
+    part = part_of(spec.name)
+    if part is not None:
+        primary, addition = placement_tools(
+            part, entered_values, for_object(profile, source), standalone=spec.consumes == 0
+        )
+        return PlacementTool(primary, addition=addition)
     return PlacementTool(_creation_tool(spec, entered_values, profile, source=source))
 
 

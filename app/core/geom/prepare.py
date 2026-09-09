@@ -22,7 +22,17 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
 import numpy as np
+from shapely import get_coordinates
+from shapely.affinity import translate as shift_polygon
+from shapely.geometry import box
 
+from app.core.build_area import (
+    fits_xy,
+    footprint,
+    placement_offset,
+    printable_area,
+    printable_height,
+)
 from app.core.deferred import trimesh
 from app.core.errors import CORRECT_INPUT, PROGRAMMING_ERRORS, ValidationError
 from app.core.geom.boolean import (
@@ -295,7 +305,7 @@ def resize_bore(
     )
 
 
-def drill_tool(
+def drill_outline(
     *,
     diameter: float,
     depth: float,
@@ -305,7 +315,7 @@ def drill_tool(
     widening_depth: float = 0.0,
     transition_angle: float = 90.0,
     mouth_overlap: float = 0.0,
-) -> MeshData:
+) -> list[tuple[float, float]]:
     """Gemeinsamer Schneidkörper zwischen Mündung null und exakt -depth.
 
     Der Boden liegt exakt bei ``-depth`` — eine Blindbohrung ist so tief, wie
@@ -374,7 +384,41 @@ def drill_tool(
             (0.0, mouth_overlap),
             (0.0, -depth),
         ]
+        return outline
+    return [
+        (0.0, -depth),
+        (radius, -depth),
+        (radius, mouth_overlap),
+        (0.0, mouth_overlap),
+        (0.0, -depth),
+    ]
+
+
+def drill_tool(
+    *,
+    diameter: float,
+    depth: float,
+    profile: Profile,
+    compensate: bool = True,
+    widening_diameter: float = 0.0,
+    widening_depth: float = 0.0,
+    transition_angle: float = 90.0,
+    mouth_overlap: float = 0.0,
+) -> MeshData:
+    """Vernetzt das gemeinsame analytische Bohrungsprofil für Vorschau und Mesh-Kern."""
+    outline = drill_outline(
+        diameter=diameter,
+        depth=depth,
+        profile=profile,
+        compensate=compensate,
+        widening_diameter=widening_diameter,
+        widening_depth=widening_depth,
+        transition_angle=transition_angle,
+        mouth_overlap=mouth_overlap,
+    )
+    if widening_diameter > EPS_GEOM:
         return MeshData.of(trimesh.creation.revolve(outline, sections=BORE_SECTIONS))
+    radius = outline[1][0]
     cylinder = trimesh.creation.cylinder(
         radius=radius,
         height=depth + mouth_overlap,
@@ -1135,6 +1179,8 @@ def arrange_on_bed(
     spacing: float = 5.0,
     plates: int = 1,
     object_ids: Sequence[ObjectId] | None = None,
+    *,
+    margin: float | None = None,
 ) -> Arrangement:
     """Legt jeden Körper an die hinterste, dann linkeste freie Stelle (§29).
 
@@ -1170,23 +1216,38 @@ def arrange_on_bed(
     die es geht — Dutzende Körper auf einer Platte — bleibt das weit unter dem
     Budget für eine Anordnung (§31).
     """
-    width, depth, _height = profile.printer.build_volume
+    # Ohne ausdrücklichen Auftragsrand bleibt der bisherige Anordnungsrand.
+    # Er ist eine Nutzereinstellung, keine vermutete Maschinensperre.
+    edge_margin = spacing if margin is None else margin
+    area = printable_area(profile.printer, margin=edge_margin)
+    allowed = area.buffer(EPS_GEOM, join_style="mitre")
     arranged: list[MeshData] = []
     assigned: list[int] = []
     findings: list[Finding] = []
 
-    left_edge = -width / 2.0 + spacing
-    back_edge = depth / 2.0 - spacing
-    right_edge = width / 2.0 - spacing
-    front_edge = -depth / 2.0 + spacing
+    left_edge, front_edge, right_edge, back_edge = (
+        area.bounds if not area.is_empty else printable_area(profile.printer).bounds
+    )
     corner = (left_edge, back_edge)
 
     plate = 0
     taken: list[_Slot] = []
 
-    def place(size: Vec3) -> _Slot | None:
+    def place(mesh: MeshData) -> _Slot | None:
         """Die hinterste, dann linkeste Stelle, an die dieser Körper passt."""
-        for corner_x, corner_y in _candidates(taken, corner, spacing):
+        size = mesh.bounds.size
+        if size[2] > printable_height(profile.printer) + EPS_GEOM:
+            return None
+        points = set(_candidates(taken, corner, spacing))
+        # Auch an einem Sperreck kann die erste freie Lage beginnen.
+        xs = {left_edge}
+        ys = {back_edge}
+        for x, y in get_coordinates(area):
+            xs.update((float(x), float(x - size[0])))
+            ys.update((float(y), float(y + size[1])))
+        points.update((x, y) for x in xs for y in ys)
+        projected = None
+        for corner_x, corner_y in sorted(points, key=lambda point: (-point[1], point[0])):
             spot = _Slot(corner_x, corner_y, size[0], size[1])
             fits = (
                 spot.left >= left_edge - _TOUCH
@@ -1194,13 +1255,25 @@ def arrange_on_bed(
                 and spot.back <= back_edge + _TOUCH
                 and spot.front >= front_edge - _TOUCH
             )
-            if fits and all(_apart(spot, other, spacing) for other in taken):
+            if not fits or not all(_apart(spot, other, spacing) for other in taken):
+                continue
+            rectangle = box(spot.left, spot.front, spot.right, spot.back)
+            if allowed.covers(rectangle):
+                return spot
+            if projected is None:
+                projected = footprint(mesh)
+            moved = shift_polygon(
+                projected,
+                xoff=spot.left - mesh.bounds.minimum[0],
+                yoff=spot.front - mesh.bounds.minimum[1],
+            )
+            if allowed.covers(moved):
                 return spot
         return None
 
     for mesh in meshes:
         size = mesh.bounds.size
-        spot = place(size)
+        spot = place(mesh)
         # **Nur weiterblättern, wenn auf dieser Platte schon etwas liegt.**
         #
         # Ein Körper, der tiefer ist als das Bett, passt auch auf eine leere
@@ -1214,7 +1287,7 @@ def arrange_on_bed(
         if spot is None and taken and plate + 1 < plates:
             plate += 1
             taken = []
-            spot = place(size)
+            spot = place(mesh)
         if spot is None:
             spot = _beyond_the_edge(taken, size, corner, spacing)
 
@@ -1230,8 +1303,8 @@ def arrange_on_bed(
         assigned.append(plate)
         taken.append(spot)
 
-    findings.extend(check_build_volume(arranged, profile, assigned, object_ids))
-    if plate + 1 >= plates and _overfull(arranged, assigned, profile, spacing):
+    findings.extend(check_build_volume(arranged, profile, assigned, object_ids, margin=edge_margin))
+    if plate + 1 >= plates and _overfull(arranged, assigned, profile, edge_margin):
         findings.append(
             Finding(
                 code="arrange.needs_more_plates",
@@ -1276,7 +1349,7 @@ def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spaci
     on_last = [mesh for mesh, plate in zip(meshes, plates, strict=True) if plate == last]
     if sum(_fits_alone(mesh, profile, spacing) for mesh in on_last) < 2:
         return False
-    return bool(check_build_volume(on_last, profile))
+    return bool(check_build_volume(on_last, profile, margin=spacing))
 
 
 def _fits_alone(mesh: MeshData, profile: Profile, spacing: float) -> bool:
@@ -1292,10 +1365,7 @@ def _fits_alone(mesh: MeshData, profile: Profile, spacing: float) -> bool:
     Rat wäre dann wieder einer, der nichts löst. In Z gibt es keinen Abstand;
     dort steht der Körper auf der Platte.
     """
-    size = mesh.bounds.size
-    room = tuple(profile.printer.build_volume)
-    needed = (size[0] + 2.0 * spacing, size[1] + 2.0 * spacing, size[2])
-    return all(needed[index] <= room[index] + EPS_GEOM for index in range(3))
+    return placement_offset(mesh, profile.printer, margin=spacing) is not None
 
 
 def check_build_volume(
@@ -1305,6 +1375,7 @@ def check_build_volume(
     object_ids: Sequence[ObjectId] | None = None,
     *,
     about_to_write: bool = False,
+    margin: float = 0.0,
 ) -> list[Finding]:
     """Was über den Bauraum hinaussteht, wird gemeldet, nie still skaliert.
 
@@ -1328,8 +1399,11 @@ def check_build_volume(
     Bauraum wie jeder andere, und eine zu enge Annotation hätte ihn
     stillschweigend übersprungen.
     """
-    width, depth, height = profile.printer.build_volume
-    allowed = BoundingBox((-width / 2.0, -depth / 2.0, 0.0), (width / 2.0, depth / 2.0, height))
+    area = printable_area(profile.printer, margin=margin)
+    left, front, right, back = (
+        area.bounds if not area.is_empty else printable_area(profile.printer).bounds
+    )
+    allowed = BoundingBox((left, front, 0.0), (right, back, printable_height(profile.printer)))
     findings: list[Finding] = []
 
     for index, mesh in enumerate(meshes):
@@ -1361,12 +1435,28 @@ def check_build_volume(
                 values["object"] = index
             if plates is not None and index < len(plates):
                 values["plate"] = plates[index] + 1
-            code, message = _verdict_for(bounds, allowed, outside, profile.printer.extrusion_width)
+            code, message = _verdict_for(bounds, allowed, outside)
             findings.append(
                 Finding(
                     code=code,
                     severity=_severity_for(bounds, allowed, about_to_write),
                     message=message,
+                    object_id=object_id,
+                    values=values,
+                )
+            )
+        elif not fits_xy(mesh, area):
+            movable = placement_offset(mesh, profile.printer, margin=margin) is not None
+            values = {"margin": margin}
+            if object_id is None:
+                values["object"] = index
+            if plates is not None and index < len(plates):
+                values["plate"] = plates[index] + 1
+            findings.append(
+                Finding(
+                    code="arrange.off_the_plate" if movable else "arrange.out_of_build_volume",
+                    severity="info" if movable and not about_to_write else "warning",
+                    message=_("Ein Objekt liegt außerhalb der freigegebenen Druckfläche."),
                     object_id=object_id,
                     values=values,
                 )

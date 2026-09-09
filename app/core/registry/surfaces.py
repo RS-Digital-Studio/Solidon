@@ -448,9 +448,11 @@ def catalogue_operations() -> frozenset[str]:
     Bausteine ihrerseits das Register laden.
     """
     from app.core.knowledge.parts import PARTS
-    from app.core.knowledge.parts.ops import op_name
+    from app.core.knowledge.parts.ops import creation_name, op_name
 
-    return frozenset(op_name(part.name) for part in PARTS.all())
+    return frozenset(
+        name for part in PARTS.all() for name in (op_name(part.name), creation_name(part.name))
+    )
 
 
 def _catalogue_path(spec: OperationSpec) -> str:
@@ -465,14 +467,12 @@ def _catalogue_path(spec: OperationSpec) -> str:
     Kennt der Katalog die Gruppe nicht, bleibt der kurze Satz: Eine erfundene
     Gruppe wäre schlechter als keine (Regel 21).
     """
-    from app.core.knowledge.parts import GROUPS, PARTS
-    from app.core.knowledge.parts.ops import op_name
+    from app.core.knowledge.parts import GROUPS
+    from app.core.knowledge.parts.ops import part_of
 
     where = f"{_('Datei')} → {_('Bausteinkatalog …')}"
-    part_group = next(
-        (part.group for part in PARTS.all() if op_name(part.name) == spec.name),
-        None,
-    )
+    part = part_of(spec.name)
+    part_group = part.group if part is not None else None
     if part_group is not None and part_group in GROUPS:
         return str(_("{path}, dort unter {group}: {title}")).format(
             path=where, group=GROUPS[part_group], title=spec.title
@@ -656,7 +656,10 @@ def tool_schemas(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
             # *Gitter füllen* für ein Teil vor, das dicht sein muss, und nichts
             # in seiner Werkzeugliste sagte, dass das die falsche Wahl ist.
             "description": _with_caveat(str(spec.doc) or str(spec.title), spec),
-            "input_schema": json_schema(spec.params),
+            "input_schema": json_schema(
+                spec.params,
+                literal_fields=(spec.produces_from,) if spec.produces_from is not None else (),
+            ),
         }
         for spec in (registry or REGISTRY).all()
     )
@@ -706,6 +709,9 @@ def normal_fields_of(spec: OperationSpec) -> tuple[str, str, str]:
 
 def part_placement_params(spec: OperationSpec) -> frozenset[str]:
     """Die Ortsfelder dieses Schemas, auch bei gleichnamigen Rezeptmaßen."""
+    declared = getattr(spec.params, "_placement_fields", None)
+    if declared is not None:
+        return frozenset(declared.values())
     return (
         frozenset(PART_PLACEMENT_PARAMS)
         .difference(("nx", "ny", "nz"))

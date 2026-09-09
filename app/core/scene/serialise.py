@@ -40,6 +40,7 @@ from app.core.types import (
     RetractionSettings,
     ShellSettings,
     SlotOverride,
+    SlotProfileBinding,
     SolverInfo,
     Source,
     SourceOrigin,
@@ -783,12 +784,11 @@ def _override_from_data(data: Any) -> SlotOverride | None:
     )
 
 
-def _spool_binding_to_data(binding: SpoolBinding) -> dict[str, Any]:
-    """Eine örtliche Bindung in Druckeinstellungen und Undo verwendet dieselbe Struktur."""
+def _binding_identity_to_data(binding: SpoolBinding | SlotProfileBinding) -> dict[str, Any]:
+    """Spule und Herstellerprofil verwenden dieselbe übersetzbare Filamentidentität."""
     from app.core.scene.cache import _name_to_data
 
     return {
-        "spool_identifier": binding.spool_identifier,
         "name": _name_to_data(binding.name),
         "colour": list(binding.colour) if binding.colour is not None else None,
         "material": binding.material,
@@ -796,17 +796,45 @@ def _spool_binding_to_data(binding: SpoolBinding) -> dict[str, Any]:
     }
 
 
-def _spool_binding_from_data(data: dict[str, Any]) -> SpoolBinding:
-    """Liest die gemeinsame Bindungsstruktur mit übersetzbarer Filamentidentität."""
+def _binding_identity_from_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Liest die gemeinsame Identität einer Spulen- oder Herstellerprofilbindung."""
     from app.core.scene.cache import _name_from_data
 
     colour = data.get("colour")
+    return {
+        "name": _name_from_data(data.get("name", "")),
+        "colour": tuple(colour) if colour is not None else None,
+        "material": data.get("material"),
+        "material_type": data.get("material_type"),
+    }
+
+
+def _spool_binding_to_data(binding: SpoolBinding) -> dict[str, Any]:
+    """Eine örtliche Bindung in Druckeinstellungen und Undo verwendet dieselbe Struktur."""
+    return {
+        "spool_identifier": binding.spool_identifier,
+        **_binding_identity_to_data(binding),
+    }
+
+
+def _spool_binding_from_data(data: dict[str, Any]) -> SpoolBinding:
+    """Liest die gemeinsame Bindungsstruktur mit übersetzbarer Filamentidentität."""
     return SpoolBinding(
         spool_identifier=data["spool_identifier"],
-        name=_name_from_data(data.get("name", "")),
-        colour=tuple(colour) if colour is not None else None,
-        material=data.get("material"),
-        material_type=data.get("material_type"),
+        **_binding_identity_from_data(data),
+    )
+
+
+def _slot_profile_binding_to_data(binding: SlotProfileBinding) -> dict[str, Any]:
+    """Das Herstellerprofil reist als portabler Name an seiner Filamentidentität mit."""
+    return {"profile_name": binding.profile_name, **_binding_identity_to_data(binding)}
+
+
+def _slot_profile_binding_from_data(data: dict[str, Any]) -> SlotProfileBinding:
+    """Liest den Profilnamen ohne eine örtliche Datei zu benötigen."""
+    return SlotProfileBinding(
+        profile_name=data["profile_name"],
+        **_binding_identity_from_data(data),
     )
 
 
@@ -824,6 +852,9 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         # Die Zuordnung Slot zu Filament (§20). Als Liste, weil JSON kein
         # Tupel kennt — beim Lesen wird wieder eines daraus.
         "slot_profiles": list(settings.slot_profiles),
+        "slot_profile_bindings": None
+        if settings.slot_profile_bindings is None
+        else [_slot_profile_binding_to_data(binding) for binding in settings.slot_profile_bindings],
         # Was je Slot anders gilt (§20). Geschrieben werden nur die
         # gesetzten Gruppen: Ein Slot ohne eigene Werte steht als
         # ``null`` da und nicht als vier leere Objekte, die vortäuschen,
@@ -859,6 +890,9 @@ def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
         # unbekannter Wert bis in die Knopfleiste zu reisen.
         handover="open" if data.get("handover") == "open" else "slice",
         slot_profiles=tuple(str(one) for one in data.get("slot_profiles", ())),
+        slot_profile_bindings=None
+        if data.get("slot_profile_bindings") is None
+        else tuple(_slot_profile_binding_from_data(one) for one in data["slot_profile_bindings"]),
         slot_overrides=tuple(_override_from_data(one) for one in data.get("slot_overrides", ())),
         spool_bindings=tuple(
             _spool_binding_from_data(item) for item in data.get("spool_bindings", ())

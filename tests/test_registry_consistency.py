@@ -813,19 +813,40 @@ def test_every_parameter_kind_is_sorted_into_a_check() -> None:
     known = set(get_args(ParamKind))
     assert len(known) > 10, "zu wenige Arten gefunden — die Aufzählung ist nicht die gemeinte"
 
-    sorted_out = params_module.NUMBER_KINDS | params_module.TEXT_KINDS | {"bool"}
+    groups = (params_module.NUMBER_KINDS, params_module.TEXT_KINDS, params_module.LIST_KINDS)
+    sorted_out = frozenset().union(*groups) | {"bool"}
     missing = known - sorted_out
-    assert not missing, (
-        "Diese Parameterarten kennt keine der beiden Mengen — trag sie in "
-        "``params.NUMBER_KINDS`` ein, wenn der Kern eine Zahl bekommt, sonst in "
-        f"``params.TEXT_KINDS``: {sorted(missing)}"
-    )
+    assert not missing, f"Diese Parameterarten kennt keine der Prüfgruppen: {sorted(missing)}"
 
     invented = sorted_out - known - {"bool"}
     assert not invented, f"Diese Arten gibt es in ``ParamKind`` nicht: {sorted(invented)}"
 
-    both = params_module.NUMBER_KINDS & params_module.TEXT_KINDS
-    assert not both, f"Zahl und Text zugleich geht nicht: {sorted(both)}"
+    assert sum(map(len, groups)) == len(sorted_out - {"bool"}), "Prüfgruppen müssen disjunkt sein"
+
+
+def test_feature_list_schema_and_validation_use_semantic_identifiers() -> None:
+    """Das Agentenwerkzeug erhält eine Liste von Kennungen statt kodiertem Text."""
+    from app.core.registry.params import json_schema, validate
+
+    params_class = REGISTRY.get("clear_filament").params
+    field = json_schema(params_class)["properties"]["at_features"]
+    assert field["type"] == "array"
+    assert field["items"] == {"type": "string", "minLength": 1}
+    assert field["default"] == []
+    assert validate(params_class, {"at_features": ["face_1", "face_2"]}).at_features == (
+        "face_1",
+        "face_2",
+    )
+
+
+@pytest.mark.parametrize("value", ["face_1", '["face_1"]', [1], [""], [" "]])
+def test_feature_list_validation_rejects_text_and_non_identifiers(value) -> None:
+    from app.core.errors import ValidationError
+    from app.core.registry.params import validate
+
+    with pytest.raises(ValidationError) as raised:
+        validate(REGISTRY.get("clear_filament").params, {"at_features": value})
+    assert raised.value.suggestions
 
 
 def test_a_filament_parameter_takes_a_number_and_keeps_its_bounds() -> None:
@@ -890,6 +911,8 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "hundertzwei": 102,
     "hundertdrei": 103,
     "hundertvier": 104,
+    "hundertfünf": 105,
+    "hundertacht": 108,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
 }

@@ -219,11 +219,20 @@ betroffenen Körper und erzeugenden Schritt; eine Karte bleibt aus. Andere
   der Achse ist der Mittelwert der beiden Vertexextrema des Flecks. Ein
   Dreiecksschwerpunkt würde dicht unterteilte Abschnitte stärker gewichten und
   verschöbe das Werkzeug beim Ändern einer Bohrung.
+- **Zylinderachsen behalten ihren gerichteten Bezug.** Beim ersten Fit ist
+  die erste größte Betragskomponente positiv; nahezu gleich große Komponenten
+  werden innerhalb der Rechengenauigkeit gleich behandelt. Nach einer
+  Zuordnung richtet sich ausschließlich das Vorzeichen der neuen Messachse
+  am Vorgänger aus. Dieser ist über `moved_features` bereits mit der
+  Operationsmatrix transformiert. Eine alte Weltachse wird nie unverändert
+  auf einen gedrehten Körper kopiert; Kegel und Flächennormalen bleiben
+  geometrisch gerichtet.
 - **Gewindegänge schreiten entlang der Achse fort.** Drei gleich dicke Fits
   zählen nur, wenn jeder weitere Abschnitt den lückenlosen Lauf um mehr als
-  die Schweißtoleranz verlängert. Vollständig überlagerte Fits verschiedener
-  Radien werden nur mit dem Flächenbeleg einer erkannten Wendel entfernt;
-  verschachtelte Restflecken einer geänderten Bohrung bleiben Merkmale.
+  die Schweißtoleranz verlängert. Eine geometrisch erkannte Wendel entfernt
+  ihre über die Flächenmehrheit belegten Fits bereits vorher, unabhängig von
+  deren Zahl. Verschachtelte Restflecken einer geänderten Bohrung ohne diesen
+  Wendelbeleg bleiben Merkmale.
 - **Der Merkmals-Cache hat zwei Schranken.** `CACHE_LIMIT` zählt
   Einträge, `CACHE_INDEX_LIMIT` ihr Gewicht in Flächenindizes —
   ein Eintrag für ein 400 000-Dreieck-Modell wiegt 3,9 MiB, und

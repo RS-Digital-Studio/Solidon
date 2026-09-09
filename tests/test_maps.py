@@ -660,7 +660,7 @@ def test_the_support_map_is_not_refused_by_a_triangle_guess(
     monkeypatch.setattr(
         maps,
         "support_map",
-        lambda _mesh, _height, cancelled: (
+        lambda _mesh, _height, cancelled, overhang_angle: (
             called.append(cancelled)
             or maps.AnalysisMap(kind="support", title="x", values=(), unit="mm", low=0.0, high=0.0)
         ),

@@ -128,12 +128,21 @@ def test_the_hash_covers_everything_a_result_depends_on(profile: Profile) -> Non
     assert base != operation_hash(operation, {"size": 5.0}, ["h2"], profile, "fine")
     assert base != operation_hash(operation, {"size": 5.0}, ["h1"], profile, "draft")
     assert base != operation_hash(
+        operation, {"size": 5.0}, ["h1"], profile, "fine", implementation_version="new-recipe"
+    )
+    assert base != operation_hash(
         Operation(id=1, op="resize_object", seed=1), {"size": 5.0}, ["h1"], profile, "fine"
     )
 
 
 def test_the_profile_enters_the_hash(profile: Profile) -> None:
     from app.core.knowledge import profiles as profile_table
+
+    for name in ("youngs_modulus", "yield_strength"):
+        different = dataclasses.replace(
+            profile, material=dataclasses.replace(profile.material, **{name: 123.456})
+        )
+        assert profile_key(profile) != profile_key(different)
 
     other = profile_table.make_profile("centauri-carbon-2", "asa")
     assert profile_key(profile) != profile_key(other)

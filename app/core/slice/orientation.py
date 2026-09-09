@@ -1,33 +1,28 @@
-"""Die Suche nach einer Druckorientierung (Bauplan §22.3, §28.2).
-
-Dafür gibt es den Analyse-Schneider eigentlich. Extern zu schneiden hieß, drei
-bis fünf Kandidaten beurteilen zu können; intern zu schneiden heißt hunderte —
-und das Urteil ist echtes Stützvolumen statt einer Faustregel über
-Flächennormalen.
-
-Die Abtastung ist über einen gespeicherten Startwert randomisiert (§11.3): eine
-rein regelmäßige Abtastung bevorzugte systematisch symmetrische Körper, und
-ohne den Startwert suchte dieselbe Datei nicht zweimal gleich.
-
-Die Suche ist unterbrechbar. Zweihundert Kandidaten brauchen Sekunden, keine
-Millisekunden, und §2.8 sagt, dass nichts das Fenster blockieren darf.
-"""
+"""Deterministische Geometriekandidaten, begrenzte echte Schichtanalysen (§28.2)."""
 
 from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
+from shapely.geometry import Point
 
 from app.core.geom.mesh import MeshData
 from app.core.geom.mesh_ops import decimate
+from app.core.geom.orient import (
+    NoFittingOrientationError,
+    evaluate_direction,
+    fitting_transform,
+    print_transform,
+    ranked_orientations,
+    rotation_to_down,
+)
 from app.core.geom.orient import candidates as face_candidates
-from app.core.geom.orient import evaluate_direction, ranked_orientations, rotation_to_down
 from app.core.geom.transform import apply, place_on_bed
 from app.core.log import get_logger
-from app.core.slice.analysis import slice_body
+from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -84,6 +79,8 @@ class Candidate:
     ebenfalls: Das ist die Definition und nicht ihre Verletzung."""
     first_layer_area: float
     height: float
+    stable: bool = True
+    """Die Schwerpunktprojektion liegt in der Hülle der tatsächlichen Auflage."""
 
 
 def stands(candidate: Candidate, floor: float) -> bool:
@@ -93,7 +90,7 @@ def stands(candidate: Candidate, floor: float) -> bool:
     :attr:`app.core.types.Profile.smallest_first_layer`. Null heißt: nicht
     gefragt, dann steht jede Lage.
     """
-    return candidate.first_layer_area >= floor
+    return candidate.stable and candidate.first_layer_area >= floor
 
 
 def best_of(candidates: Sequence[Candidate], floor: float = 0.0) -> Candidate:
@@ -143,13 +140,16 @@ class SearchResult:
     mesh: MeshData
     best: Candidate
     tried: int
-    baseline: Candidate
+    baseline: Candidate | None
     """Wie der Körper vorher stand — damit der Gewinn belegt und nicht behauptet wird."""
     findings: list[Finding]
+    transform: np.ndarray = field(default_factory=lambda: np.eye(4))
 
     @property
     def improvement(self) -> float:
         """Wie viel Stützvolumen gegenüber der Ausgangslage gespart wird, in mm³."""
+        if self.baseline is None:
+            return 0.0
         return max(0.0, self.baseline.support_volume - self.best.support_volume)
 
 
@@ -192,6 +192,8 @@ def judge(
     direction: Vec3,
     layer_height: float,
     footing_height: float | None = None,
+    *,
+    overhang_angle: float | None = None,
 ) -> Candidate:
     """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
     zählen.
@@ -206,12 +208,30 @@ def judge(
     # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
     # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
     # niemand ansieht.
-    result = slice_body(turned, layer_height, detail="support", footing_height=footing_height)
+    result = slice_body(
+        turned,
+        layer_height,
+        detail="support",
+        footing_height=footing_height,
+        overhang_angle=overhang_angle,
+    )
+    # Die Fläche allein trägt nicht: Bei einem Ausleger kann sein Schwerpunkt
+    # neben einer großen Auflage liegen. Getrennte Füße tragen gemeinsam über
+    # ihre konvexe Hülle; das Loch zwischen ihnen ist kein Grund zum Ablehnen.
+    height = min(footing_height or layer_height / 2.0, turned.bounds.size[2] / 2.0)
+    contact = cross_sections(turned, np.asarray([height], dtype=float))[0]
+    centre = np.asarray(turned.raw.center_mass, dtype=float)[:2]
+    stable = (
+        contact is not None
+        and bool(np.isfinite(centre).all())
+        and bool(contact.convex_hull.buffer(EPS_GEOM).covers(Point(centre)))
+    )
     return Candidate(
         direction=direction,
         support_volume=result.support_volume,
         first_layer_area=result.first_layer_area,
         height=turned.bounds.size[2],
+        stable=stable,
     )
 
 
@@ -258,13 +278,25 @@ def best_face_candidate(
     Eine Lage muss stehen können, dann gewinnt das echte interne
     Stützvolumen, bei höchstens fünf Prozent Abstand die Grundfläche.
     """
-    coarse = ranked_orientations(mesh, limit=count, cancelled=cancelled)[: max(1, count)]
+    coarse = ranked_orientations(mesh, limit=count, cancelled=cancelled, printer=profile.printer)[
+        : max(1, count)
+    ]
+    if not coarse:
+        raise NoFittingOrientationError()
     footing = profile.printer.layer_height / 2.0
     field: list[Candidate] = []
     for orientation in coarse:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        field.append(judge(mesh, orientation.direction, layer_height, footing))
+        field.append(
+            judge(
+                mesh,
+                orientation.direction,
+                layer_height,
+                footing,
+                overhang_angle=profile.overhang_limit_degrees,
+            )
+        )
         if cancelled is not None:
             cancelled.raise_if_cancelled()
     return best_of(field, profile.smallest_first_layer)
@@ -277,42 +309,66 @@ def search(
     seed: int | None = None,
     layer_height: float = SEARCH_LAYER_HEIGHT,
     profile: Profile | None = None,
+    overhang_angle: float | None = None,
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
+    margin: float = 0.0,
 ) -> SearchResult:
-    """Probiert viele Orientierungen und behält die, die am wenigsten Stützen
-    braucht — unter denen, die stehen können.
+    """Wählt unter zulässigen Geometrielagen nach echtem Stützvolumen.
 
-    Ohne ``profile`` wird nach dem Stand nicht gefragt: ein Aufrufer, der
-    keinen Drucker kennt, soll keinen erfinden (Regel 7).
+    ``count`` begrenzt die Hüllnormalen, ergänzt durch Achsen und große
+    Körperflächen. ``seed`` bleibt für gespeicherte Aufrufer kompatibel; die
+    Geometrieauswahl ist ohne Zufallsrichtungen vollständig deterministisch.
+    Unmögliche Lagen werden vor jeder Schichtanalyse ausgeschieden. Ein
+    fehlender Ausgangswert heißt ``baseline=None``, nicht null Stützbedarf.
     """
     floor = profile.smallest_first_layer if profile is not None else 0.0
     footing = profile.printer.layer_height / 2.0 if profile is not None else None
+    if overhang_angle is None and profile is not None:
+        overhang_angle = profile.overhang_limit_degrees
     baseline_direction: Vec3 = (0.0, 0.0, -1.0)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    # Beurteilt wird ein verkleinertes Netz; gedreht wird am Ende das echte.
     proxy = search_proxy(mesh)
-    baseline = judge(proxy, baseline_direction, layer_height, footing)
+
+    def matrix_for(direction: Vec3) -> np.ndarray | None:
+        if profile is None:
+            return print_transform(mesh, direction)
+        return fitting_transform(mesh, direction, profile.printer, margin=margin)
+
+    matrices: dict[Vec3, np.ndarray] = {}
+    baseline_matrix = matrix_for(baseline_direction)
+    baseline = None
+    field: list[Candidate] = []
+    if baseline_matrix is not None:
+        matrices[baseline_direction] = baseline_matrix
+        baseline = judge(
+            proxy,
+            baseline_direction,
+            layer_height,
+            footing,
+            overhang_angle=overhang_angle,
+        )
+        field.append(baseline)
     if cancelled is not None:
         cancelled.raise_if_cancelled()
-    field = [baseline]
-    # Die Flächennormalen kommen mit: die beste Orientierung hat meist eine
-    # ebene Fläche auf der Platte, und eine gleichmäßige Abtastung der Kugel
-    # trifft eine exakte Achse nur zufällig.
-    directions = _unique_directions(
-        [baseline_direction, *face_candidates(proxy), *sample_directions(count, seed)]
-    )[1:]
-    considered = 1 + len(directions)
-    # Stufe eins: Standfläche gegen Überhang aus den Flächennormalen, für jede
-    # Richtung, ohne eine einzige Schicht zu schneiden.
-    scored = [evaluate_direction(proxy, baseline_direction)]
-    for index, direction in enumerate(directions, start=1):
+
+    directions = _unique_directions([baseline_direction, *face_candidates(mesh, hull_limit=count)])
+    scored = []
+    for index, direction in enumerate(directions):
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         if progress is not None:
-            progress(0.5 * index / max(len(directions), 1), str(_("Ausrichtung suchen")))
+            progress(0.5 * (index + 1) / len(directions), str(_("Ausrichtung suchen")))
+        matrix = matrices.get(direction)
+        if matrix is None:
+            matrix = matrix_for(direction)
+        if matrix is None:
+            continue
+        matrices[direction] = matrix
         scored.append(evaluate_direction(proxy, direction))
+    if not scored:
+        raise NoFittingOrientationError()
     ranked = sorted(
         scored,
         key=lambda entry: (
@@ -323,55 +379,50 @@ def search(
             entry.direction,
         ),
     )
-    # **Steht die Ausgangslage schon ohne Stützen und auf der größten
-    # Standfläche, gibt es nichts zu suchen.** Ein offener Kasten meldete in
-    # jeder der 200 Lagen null Stützraum, und die Suche verglich trotzdem eine
-    # halbe Stunde lang Nullen miteinander. Die Standfläche gehört in die
-    # Bedingung: Eine dünne Platte steht auch hochkant stützfrei, und die
-    # Suche soll sie hinlegen.
-    if not settled(baseline, floor, scored[0].footprint, ranked[0].footprint):
-        # Stufe zwei: nur die Finalisten bekommen die Schichtanalyse.
+    initial = next((entry for entry in scored if entry.direction == baseline_direction), None)
+    complete = (
+        baseline is not None
+        and initial is not None
+        and settled(baseline, floor, initial.footprint, max(entry.footprint for entry in scored))
+    )
+    if not complete:
         finalists = [entry for entry in ranked if entry.direction != baseline_direction][:FINALISTS]
         for index, entry in enumerate(finalists, start=1):
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
             if progress is not None:
-                fraction = 0.5 + 0.5 * index / max(len(finalists), 1)
-                progress(fraction, str(_("Ausrichtung suchen")))
-            field.append(judge(proxy, entry.direction, layer_height, footing))
-
-    if progress is not None:
-        # **Bis zum Ende, auch wenn nichts zu schneiden war.** Die zwei Stufen
-        # teilen sich den Balken; steht das Teil schon stützfrei, endet Stufe
-        # eins bei der Hälfte, und ein Balken, der bei 50 % stehen bleibt,
-        # sieht aus wie ein Hänger.
-        progress(1.0, str(_("Ausrichtung suchen")))
-
-    # Erst wenn alle vermessen sind, wird entschieden: Die
-    # Fünf-Prozent-Toleranz macht den paarweisen Vergleich nicht transitiv,
-    # und dann hängt der Sieger an der Reihenfolge (:func:`best_of`).
-    tried = len(field)
+                progress(0.5 + 0.5 * index / max(len(finalists), 1), str(_("Ausrichtung suchen")))
+            field.append(
+                judge(
+                    proxy,
+                    entry.direction,
+                    layer_height,
+                    footing,
+                    overhang_angle=overhang_angle,
+                )
+            )
+            if cancelled is not None:
+                cancelled.raise_if_cancelled()
     best = best_of(field, floor)
-
-    turned = place_on_bed(apply(mesh, rotation_to_down(best.direction)))
+    matrix = matrices[best.direction]
+    turned = apply(mesh, matrix)
+    saved = baseline.support_volume - best.support_volume if baseline is not None else None
     findings = [
         Finding(
             code="orient.searched",
             severity="info",
             message=_("Ausrichtung über die Schichtanalyse gesucht."),
             values={
-                "candidates": considered,
-                "sliced": tried,
+                "candidates": len(directions),
+                "valid": len(scored),
+                "sliced": len(field),
                 "support": round(best.support_volume / 1000.0, 2),
-                "saved": round((baseline.support_volume - best.support_volume) / 1000.0, 2),
+                **({"saved": round(saved / 1000.0, 2)} if saved is not None else {}),
             },
             source="internal",
         )
     ]
-    if floor > 0.0 and not stands(best, floor):
-        # Keine geprüfte Lage trägt. Eine Kugel ist der ehrliche Fall dafür,
-        # und das Teil braucht dann eine Haftschicht — das zu sagen ist besser,
-        # als stillschweigend eine Ecke zu wählen (§2.7).
+    if floor > 0.0 and best.first_layer_area < floor:
         findings.append(
             Finding(
                 code="orient.no_footing",
@@ -386,10 +437,26 @@ def search(
                 source="internal",
             )
         )
-    _log.info(
-        "orientation search: %d candidates, support %.1f mm3 (was %.1f)",
-        tried,
-        best.support_volume,
-        baseline.support_volume,
+    if not best.stable:
+        findings.append(
+            Finding(
+                code="orient.unstable",
+                severity="warning",
+                message=_(
+                    "Der Schwerpunkt liegt außerhalb der Auflage. "
+                    "Prüfe Stützen oder eine größere Plattenhaftung."
+                ),
+                source="internal",
+            )
+        )
+    if progress is not None:
+        progress(1.0, str(_("Ausrichtung suchen")))
+    _log.info("orientation search: %d valid candidates, %d sliced", len(scored), len(field))
+    return SearchResult(
+        mesh=turned,
+        best=best,
+        tried=len(field),
+        baseline=baseline,
+        findings=findings,
+        transform=matrix,
     )
-    return SearchResult(mesh=turned, best=best, tried=tried, baseline=baseline, findings=findings)

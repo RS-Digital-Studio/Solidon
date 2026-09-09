@@ -88,27 +88,6 @@ def frame_of(normal: Vec3, origin: Vec3) -> PlaneFrame:
     return PlaneFrame(origin=origin, x_axis=x_axis, y_axis=y_axis, normal=unit)
 
 
-def _outward(normal: Vec3, centre: Vec3, inside: Vec3) -> Vec3:
-    """Die Normale so wenden, dass sie vom Körper wegzeigt.
-
-    Ohne das ist die Richtung Glückssache. OpenCASCADE führt die Normale einer
-    planaren Fläche als Achsenrichtung ihrer Ebene, und die hängt an der
-    Orientierung der Fläche im Körper, nicht an der Anschauung: der Quader in
-    der Suite meldet für die Wand bei x = -20 die Richtung +X. Wer darauf
-    extrudiert, baut nach innen.
-
-    ``inside`` ist die Mitte der Hüllbox — ein Punkt, der bei einem gedruckten
-    Teil im Material liegt oder wenigstens in seiner Mitte. Für eine stark
-    C-förmige Form kann er daneben liegen; dann zeigt die Richtung falsch
-    herum, und man dreht sie mit einer negativen Höhe um. Die aufwendigere
-    Prüfung (Strahl gegen den Körper) kostet mehr, als sie hier einbringt.
-    """
-    away = (centre[0] - inside[0], centre[1] - inside[1], centre[2] - inside[2])
-    if _dot(normal, away) < 0.0:
-        return (-normal[0], -normal[1], -normal[2])
-    return normal
-
-
 def is_feature_plane(plane: str) -> bool:
     """Ob diese Ebenenangabe an einer Fläche hängt statt an der Welt."""
     return plane.startswith("feature:")
@@ -170,15 +149,10 @@ def frame_for(
                 continue
             normal = tuple(float(value) for value in feature.params.get("normal", (0.0, 0.0, 1.0)))
             centre = tuple(float(value) for value in feature.params.get("centre", (0.0, 0.0, 0.0)))
-            box = entry.mesh.bounds
-            pairs = zip(box.minimum, box.maximum, strict=True)
-            inside = tuple((low + high) / 2.0 for low, high in pairs)
-            outward = _outward(
-                (normal[0], normal[1], normal[2]),
-                (centre[0], centre[1], centre[2]),
-                (inside[0], inside[1], inside[2]),
-            )
-            return frame_of(outward, (centre[0], centre[1], centre[2]))
+            # Das Merkmal trägt bereits die orientierte Flächennormale.
+            # Der Hüllquader liegt bei Hohlkörpern im Leerraum und kann
+            # deshalb keine Innen-/Außenrichtung begründen.
+            return frame_of((normal[0], normal[1], normal[2]), (centre[0], centre[1], centre[2]))
     raise ValidationError(
         field,
         _("Diese Fläche gibt es in der Szene nicht mehr."),
@@ -211,7 +185,7 @@ def frame_for(
 #: ``(0, -1, 0)``, die Normale aber ``(0, 1, 0)``. Das ist kein Fehler, sondern
 #: eine Doppelrolle — man zeichnet von vorn und extrudiert nach hinten, und die
 #: „Normale" ist hier die **Extrusionsrichtung**. Bei einer Fläche des Körpers
-#: fällt beides zusammen, weil :func:`_outward` sie nach außen dreht.
+#: fällt beides zusammen, weil das Merkmal die orientierte Normale trägt.
 BASE_FRAMES: dict[str, PlaneFrame] = {
     "plane:xy": PlaneFrame(
         origin=(0.0, 0.0, 0.0),

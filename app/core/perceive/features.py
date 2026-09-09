@@ -1458,11 +1458,17 @@ def _without_thread_turns(
     wirklich verlängert, wird gegen die Schweißtoleranz des Netzes geprüft;
     kleinere Abweichungen bezeichnen denselben Endring.
 
-    Nach einer robusteren Vereinigung können drei verschieden dicke Fits
-    dieselbe Achsspanne überlagern. Diese Form beweist allein nichts: Dass sie
-    ein Gewinde beschreibt, muss zusätzlich dieselbe erkannte Wendel durch
-    die Mehrheit der Flächen jedes Fits belegen.
+    Eine geometrisch erkannte Wendel belegt ihre Fitflecken unabhängig von
+    deren Anzahl. Die Vereinigung kann ihre Gänge auf einen oder zwei Fits
+    zusammenführen; der Flächenbeleg bleibt derselbe. Ohne Wendelbeleg gilt
+    weiterhin ausschließlich der fortschreitende Lauf aus mindestens drei
+    Abschnitten. Verschachtelte Reste einer Bohrungswand reichen nicht.
     """
+    for helix in helices:
+        faces = set(helix.face_indices)
+        found = [
+            entry for entry in found if sum(face in faces for face in entry[1]) * 2 <= len(entry[1])
+        ]
     if len(found) < THREAD_TURNS:
         return found
 
@@ -1474,7 +1480,6 @@ def _without_thread_turns(
         axis = np.asarray(fit.axis, dtype=float)
         centre = np.asarray(fit.centre, dtype=float)
         stack = [index]
-        coaxial = [index]
         for other_index, (other, _other_patch) in enumerate(found):
             if other_index == index or other_index in used:
                 continue
@@ -1486,7 +1491,6 @@ def _without_thread_turns(
             across = offset - float(offset @ axis) * axis
             if float(np.linalg.norm(across)) > fit.radius * SINK_FIT_LIMIT:
                 continue
-            coaxial.append(other_index)
             if abs(other.radius - fit.radius) <= fit.radius * CYLINDER_TOLERANCE:
                 stack.append(other_index)
 
@@ -1496,21 +1500,6 @@ def _without_thread_turns(
             advance_tolerance=advance_tolerance,
         ):
             thread_stack = stack
-        elif len(coaxial) >= THREAD_TURNS:
-            # Nach einer robusteren Vereinigung erscheinen die Windungen nicht
-            # mehr als viele gleich große Ringe, sondern als drei koaxiale
-            # Zylinder verschiedener Radien, die sich über denselben axialen
-            # Abschnitt überlagern. Drei gewöhnliche Stufen liegen dagegen
-            # hintereinander. Die gemeinsame Spanne reicht trotzdem nicht:
-            # Dieselbe Überlagerung blieb beim Ändern einer Bohrung aus altem
-            # und neuem Mantel zurück. Erst die erkannte Wendel durch die
-            # Flächen jedes Fits belegt hier ein Gewinde.
-            spans = [_axial_span(body, found[entry][1], fit.axis) for entry in coaxial]
-            if min(high for _low, high in spans) > max(
-                low for low, _high in spans
-            ) + EPS_GEOM and _fits_lie_on_one_helix(found, coaxial, helices):
-                thread_stack = coaxial
-
         if len(thread_stack) >= THREAD_TURNS:
             used.update(thread_stack)
             # **Und was zwischen den Windungen liegt, gehört dazu.** Der Kern
@@ -1570,22 +1559,6 @@ def _one_run(
             advancing += 1
         reach = max(reach, high)
     return advancing >= THREAD_TURNS
-
-
-def _fits_lie_on_one_helix(
-    found: Cylinders,
-    entries: Sequence[int],
-    helices: Sequence[Helix],
-) -> bool:
-    """Belegt eine Wendel jeden überlagerten Zylinderfit über seine Flächen?"""
-    for helix in helices:
-        faces = set(helix.face_indices)
-        if all(
-            patch and sum(face in faces for face in patch) * 2 > len(patch)
-            for _fit, patch in (found[entry] for entry in entries)
-        ):
-            return True
-    return False
 
 
 def _same_cylinder(
@@ -2137,6 +2110,15 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
     _values, vectors = np.linalg.eigh(normals.T @ normals)
     axis = vectors[:, 0]
     axis = axis / float(np.linalg.norm(axis))
+    # Ein Eigenvektor und sein Gegenvektor beschreiben dieselbe Achse. Der
+    # Erstbezug ist die erste größte Betragskomponente, positiv; nahezu
+    # gleiche Komponenten entscheiden nicht über Rundungsreste. Nach einer
+    # Bewegung richtet die Zuordnung diese Messachse am mitgedrehten
+    # Vorgänger aus, damit der Erstbezug keine Mündung zurückdreht.
+    magnitudes = np.abs(axis)
+    leading = int(np.flatnonzero(magnitudes >= float(magnitudes.max()) - EPS_GEOM)[0])
+    if axis[leading] < 0.0:
+        axis = -axis
 
     # In die Ebene senkrecht zur Achse projizieren und dort einen Kreis einpassen.
     basis_u, basis_v = _plane_basis(axis)

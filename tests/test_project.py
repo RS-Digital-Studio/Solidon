@@ -1639,6 +1639,111 @@ def test_print_settings_survive_the_round_trip(tmp_path: Path) -> None:
     assert reopened.document.print_settings == settings
 
 
+@pytest.mark.parametrize("explicit", [False, True])
+def test_profile_bindings_keep_legacy_and_explicit_empty_distinct(
+    tmp_path: Path, explicit: bool
+) -> None:
+    """Eine leere bewusste Zuordnung darf nicht auf alte Slotpositionen zurückfallen."""
+    from app.core.types import PrintSettings
+
+    project = new_project()
+    project.document.print_settings = PrintSettings(
+        slot_profiles=("Hersteller Rot", "Hersteller Blau"),
+        slot_profile_bindings=() if explicit else None,
+    )
+
+    opened = load(save(project, tmp_path / "profiles.p3d"))
+
+    assert opened.document.print_settings == project.document.print_settings
+    stored = project_data(tmp_path / "profiles.p3d")["print_settings"]
+    assert stored["slot_profile_bindings"] == ([] if explicit else None)
+
+
+def test_profile_binding_identity_and_profile_survive_project_round_trip(tmp_path: Path) -> None:
+    """Namen bleiben übersetzbar; Farbe, Material und Herstellerprofil bleiben getrennt."""
+    from app.core.types import PrintSettings, SlotProfileBinding
+
+    binding = SlotProfileBinding(
+        "Hersteller PETG · Rot",
+        _("Filament {number}", number=2),
+        (0.9, 0.1, 0.2),
+        "Generic PETG",
+        "PETG",
+    )
+    project = new_project()
+    project.document.print_settings = PrintSettings(
+        slot_profiles=("Alte Position",), slot_profile_bindings=(binding,)
+    )
+
+    opened = load(save(project, tmp_path / "profile-identity.p3d"))
+
+    assert opened.document.print_settings == project.document.print_settings
+    restored = opened.document.print_settings.slot_profile_bindings
+    assert restored is not None
+    assert restored[0].key == (binding.name, binding.colour, "Generic PETG", "PETG")
+
+
+def test_v21_profile_positions_wait_for_evaluated_scene_before_binding(tmp_path: Path) -> None:
+    """Die Migration kennt keine Slotidentitäten und erfindet deshalb keine Zuordnung."""
+    from app.core.types import PrintSettings
+
+    project = load(Path(__file__).parent / "data" / "projects" / "example_v21.p3d")
+    project.document.print_settings = PrintSettings(slot_profiles=("Hersteller Rot", ""))
+    path = save(project, tmp_path / "legacy-profiles.p3d")
+    data = project_data(path)
+    data["format_version"] = 21
+    del data["print_settings"]["slot_profile_bindings"]
+    _rewrite_project_entry(path, data)
+
+    opened = load(path)
+
+    assert opened.document.format_version == FORMAT_VERSION
+    settings = opened.document.print_settings
+    assert settings is not None
+    assert settings.slot_profiles == ("Hersteller Rot", "")
+    assert settings.slot_profile_bindings is None
+    assert [operation.op for operation in opened.document.ops] == [
+        "rename_object",
+        "duplicate_object",
+    ]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        "not-a-list",
+        [{}],
+        [{"profile_name": 12}],
+        [{"profile_name": "C:\\Users\\Profile.json"}],
+        [{"profile_name": "/profiles/PLA.json"}],
+        [{"profile_name": "../PLA.json"}],
+        [{"profile_name": "PLA", "name": {"msgid": False}}],
+        [{"profile_name": "PLA", "material": 12}],
+        [{"profile_name": "PLA", "material_type": False}],
+        [{"profile_name": "PLA", "colour": [1.0, 0.0]}],
+        [{"profile_name": "PLA", "colour": [1.0, 0.0, 2.0]}],
+        [{"profile_name": "PLA Rot"}, {"profile_name": "PETG Blau"}],
+        [{"profile_name": "PLA Rot"}, {"profile_name": "PLA Rot"}],
+    ],
+)
+def test_invalid_profile_binding_is_reported_as_damaged_file(tmp_path: Path, invalid) -> None:
+    """Unklare Identitäten und Dateipfade werden vor dem Aufbau des Dokuments abgewiesen."""
+    from app.core.types import PrintSettings
+
+    project = new_project()
+    project.document.print_settings = PrintSettings()
+    path = save(project, tmp_path / "invalid-profile-binding.p3d")
+    data = project_data(path)
+    data["print_settings"]["slot_profile_bindings"] = invalid
+    _rewrite_project_entry(path, data)
+
+    with pytest.raises(ValidationError) as caught:
+        load(path)
+
+    assert caught.value.constraint == "damaged"
+    assert caught.value.suggestions
+
+
 def test_spool_assignment_undo_survives_project_save_and_load(tmp_path: Path) -> None:
     from dataclasses import replace
 

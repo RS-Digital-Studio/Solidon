@@ -33,6 +33,12 @@ Planare Merkmalsnormalen folgen der Orientierung der B-Rep-Fläche:
 `TopAbs_REVERSED` kehrt die Trägerebenennormale um. Damit verwenden
 Auswahlrahmen, Taschen und Ziehen dieselbe nach außen gerichtete Normale.
 
+Die exakte Bohrung verwendet das Material des Zielkörpers über einen trägen
+`knowledge.profiles.for_object`-Import. Freie Normalen, Aufweitungen und
+Übergänge übernehmen das validierte Profil aus `geom.prepare.drill_outline`;
+`edit.bore_profile` rotiert es analytisch. Mesh und B-Rep teilen damit Maße
+und Mündungsbezug, ohne exakte Kreise zu tessellieren.
+
 Der Mittelpunkt einer Bohrung oder eines Zapfens liegt **auf der Achse, in
 der Mitte der V-Spanne** des Mantels — nicht im Flächenschwerpunkt, der bei
 einem schräg beschnittenen Mantel radial und axial daneben liegt und den

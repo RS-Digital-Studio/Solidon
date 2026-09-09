@@ -106,6 +106,17 @@ EXPORT_ONLY = Action("export_only", _("Nur exportieren und selbst slicen"))
 #: Satz über dem einzigen Knopf „Nur exportieren und selbst slicen."
 SHOW_SLICER_OUTPUT = Action("show_output", _("Ausgabe des Slicers ansehen"))
 CHECK_SLICER_PROFILE = Action("check_profile", _("Maschinenprofil prüfen"))
+#: Diese Schritte erfolgen im externen Slicer; der Fehlerdialog zeigt sie als Rat.
+SPLIT_BY_FILAMENT = Action(
+    "split_by_filament",
+    _("Das Modell im Slicer nach Filamenten in einzelne Körper aufteilen und erneut exportieren"),
+    primary=True,
+)
+SPLIT_FILAMENT_FILES = Action(
+    "split_filament_files",
+    _("Die Filamente auf mehrere 3MF-Dateien aufteilen"),
+    primary=True,
+)
 #: Vorne, weil er der häufigste richtige nächste Schritt ist: Scheitert der
 #: eingestellte Slicer, stehen auf vielen Rechnern zwei weitere daneben —
 #: und die Absage bot bisher keinen Weg zu ihnen an (§29, §2.1).

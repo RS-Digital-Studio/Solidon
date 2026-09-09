@@ -42,3 +42,8 @@ weil sie über dem Dokument stehen statt in ihm.
 
 Die Kommandozeile ist der schnellste Weg, eine Operation ohne Fenster
 auszuprobieren — und der einzige, der in einem Testlauf ohne Fenster durchkommt.
+
+`kind="features"` wird als Liste übergeben, etwa
+`--at-features face_1 face_2`. Der Parser reicht echte Kennungen als Liste an
+das Parameterschema weiter. Bei `clear_filament` bleibt das alte einzelne
+`--at-feature` gültig; ohne beide Angaben betrifft die Abwahl den ganzen Körper.

@@ -62,4 +62,10 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
 
 - **Der Löser rät nicht.** Ein unterbestimmtes System bleibt unterbestimmt;
   ein widersprüchliches meldet `SketchConflictError` mit Handlungsvorschlag.
+  Gezeichnete Skizzen geben verbleibende Freiheitsgrade mit dem Ergebnis der
+  Operation zurück. Vorgegebene Grundformen erzeugen diesen Hinweis nicht.
+- **Flächenrahmen übernehmen die orientierte Merkmalsnormale.** Die Mitte
+  des Hüllquaders entscheidet keine Innen-/Außenrichtung, insbesondere an
+  Innenböden und konkaven Körpern. Eine blinde Tasche endet in beiden Kernen
+  genau an ihrer eingegebenen Oberkante und Tiefe.
 - **Kein Qt.** Der Editor ruft hier herein, nie umgekehrt.

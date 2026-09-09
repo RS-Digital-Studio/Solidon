@@ -442,6 +442,8 @@ class OperationSpec:
     „neu erkannt" kein Beleg dafür, dass etwas entstanden ist.
     """
     deterministic: bool = True
+    cache_version: str = ""
+    """Identität der geladenen Umsetzung, insbesondere des verwendeten Bausteinrezepts."""
     shortcut: str | None = None
     icon: str = ""
     """Name des Symbols, unter dem die Oberfläche es findet (``app/ui/icons.py``).
@@ -630,6 +632,7 @@ def register_op(
     keeps_inputs: int = 0,
     touches_features: bool = False,
     deterministic: bool = True,
+    cache_version: str = "",
     shortcut: str | None = None,
     icon: str = "",
     doc: TranslatableText | str = "",
@@ -659,6 +662,7 @@ def register_op(
                 keeps_inputs=keeps_inputs,
                 touches_features=touches_features,
                 deterministic=deterministic,
+                cache_version=cache_version,
                 shortcut=shortcut,
                 icon=icon,
                 doc=doc,

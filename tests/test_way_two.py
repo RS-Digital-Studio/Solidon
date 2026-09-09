@@ -53,7 +53,11 @@ BRACKET = [
     ),
     Reply(
         text="Grundkörper und zwei Schraubenlöcher.",
-        tool_calls=(call(4, "create_box", width=60.0, depth=40.0, height=6.0, name="Halter"),),
+        tool_calls=(
+            call(
+                4, "create_box", width="@breite", depth="@tiefe", height="@staerke", name="Halter"
+            ),
+        ),
     ),
     Reply(
         tool_calls=(
@@ -132,7 +136,6 @@ def test_way_two_runs_from_a_sentence_to_a_file(
     # 5. an einer Zahl zu drehen baut das Modell neu
     parameters = project.document.parameters
     parameters["breite"] = dataclasses.replace(parameters["breite"], value=80.0)
-    _bind_width(project)
     wider = evaluate(project.document, profile, sources=sources)
 
     assert wider.complete
@@ -147,21 +150,6 @@ def test_way_two_runs_from_a_sentence_to_a_file(
     )
     written = write_plan(plan, tmp_path / "export", "3mf")
     assert written and written[0].is_file()
-
-
-def _bind_width(project: Project) -> None:
-    """Bindet die Box an den Parameter — §13: das Modell folgt der Zahl.
-
-    Ein Modell, das gerade einen Parameter angelegt hat, sollte ``=@breite``
-    selbst in die Operation schreiben. Das geskriptete tut das nicht, also tut
-    es der Test: geprüft wird hier, dass die Bindung funktioniert, nicht dass
-    ein Skript sich erinnert hat.
-    """
-    for index, operation in enumerate(project.document.ops):
-        if operation.op == "create_box":
-            project.document.ops[index] = dataclasses.replace(
-                operation, params={**operation.params, "width": "=@breite"}
-            )
 
 
 def test_the_agent_prefers_a_part_over_own_geometry(project: Project, profile: Profile) -> None:

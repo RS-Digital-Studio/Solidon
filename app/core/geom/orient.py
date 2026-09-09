@@ -1,13 +1,4 @@
-"""Eine Druckorientierung wählen (Bauplan §25, P2).
-
-Eine Heuristik über Flächennormalen, und offen als solche benannt: sie sucht
-eine ebene Fläche zum Aufstehen und zählt, wie viel überhinge. In P3 ersetzt
-die Schichtanalyse (§22) sie — dann werden hunderte Drehungen an echtem
-Stützvolumen gemessen statt an einer Faustregel.
-
-Bis dahin ist die Faustregel ehrlich darüber, was sie ist: der Befund sagt,
-welcher Kandidat gewann und mit welchem Abstand.
-"""
+"""Geometrische Druckorientierungen und ihre günstige Vorauswahl (§28.2)."""
 
 from __future__ import annotations
 
@@ -16,17 +7,32 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from app.core.build_area import placement_offset
 from app.core.deferred import trimesh
+from app.core.errors import CANCEL, CHOOSE_PRINTER, SPLIT_MODEL, GeometryError
 from app.core.geom.mesh import MeshData
-from app.core.geom.transform import apply, translation
+from app.core.geom.transform import apply, rotation, translation
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
-from app.core.types import CancelToken, Finding, Vec3
+from app.core.types import CancelToken, Finding, PrinterProfile, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
 #: Wie viele Kandidatenrichtungen über die sechs Achsrichtungen hinaus
 #: angesehen werden.
 MAX_FACE_CANDIDATES = 12
+
+#: Zielgrenze je Projektionsmatrix; eine einzelne größere Lage bleibt einzeln.
+MAX_PROJECTION_VALUES = 1_000_000
+
+
+class NoFittingOrientationError(GeometryError):
+    """Keine der geprüften Lagen passt; Teilung kann diesen Kandidaten verwerfen."""
+
+    default_title = _(
+        "Keine geprüfte Lage passt in den Druckbereich. "
+        "Wähle einen anderen Drucker oder teile das Modell."
+    )
+    default_suggestions = (SPLIT_MODEL, CHOOSE_PRINTER, CANCEL)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,8 +70,36 @@ class OrientResult:
     """
 
 
-def candidates(mesh: MeshData) -> list[Vec3]:
-    """Sechs Achsrichtungen plus die Normalen der größten ebenen Flächen."""
+def _largest_normals(normals: np.ndarray, areas: np.ndarray, limit: int) -> list[Vec3]:
+    """Gruppiert ebene Flächen, bewahrt aber ihre ungerundete Richtung."""
+    unique, inverse = np.unique(np.round(normals, 6), axis=0, return_inverse=True)
+    grouped = np.bincount(inverse, weights=areas, minlength=len(unique))
+    weighted = np.column_stack(
+        [
+            np.bincount(inverse, weights=normals[:, axis] * areas, minlength=len(unique))
+            for axis in range(3)
+        ]
+    )
+    # unique ist bereits lexikographisch geordnet. Die stabile Flächensortierung
+    # erhält diese Reihenfolge bei gleichen Flächensummen.
+    order = np.argsort(-grouped, kind="stable")
+    found: list[Vec3] = []
+    for index in order[:limit]:
+        normal = weighted[index]
+        length = float(np.linalg.norm(normal))
+        if length > EPS_GEOM:
+            unit = normal / length
+            found.append((float(unit[0]), float(unit[1]), float(unit[2])))
+    return found
+
+
+def candidates(mesh: MeshData, *, hull_limit: int = 200) -> list[Vec3]:
+    """Achsen, tragende Körperflächen und flächengeordnete konvexe Hüllnormalen.
+
+    Die Hülle verwendet sortierte eindeutige Punkte ohne Zufallsstörung.
+    Ihre Normalen sind auch bei konkaven oder organischen Körpern geometrisch
+    begründet; die tatsächliche Auflage beurteilt erst die Schichtanalyse.
+    """
     found: list[Vec3] = [
         (0.0, 0.0, 1.0),
         (0.0, 0.0, -1.0),
@@ -80,37 +114,77 @@ def candidates(mesh: MeshData) -> list[Vec3]:
 
     normals = np.asarray(body.face_normals, dtype=float)
     areas = np.asarray(body.area_faces, dtype=float)
-    rounded = np.round(normals, 3)
-    unique, inverse = np.unique(rounded, axis=0, return_inverse=True)
-    grouped = np.zeros(len(unique))
-    np.add.at(grouped, inverse, areas)
+    found.extend(_largest_normals(normals, areas, MAX_FACE_CANDIDATES))
+    vertices = np.unique(np.asarray(body.vertices, dtype=float), axis=0)
+    if len(vertices) < 4:
+        return found
+    from scipy.spatial import ConvexHull, QhullError
 
-    for index in np.argsort(grouped)[::-1][:MAX_FACE_CANDIDATES]:
-        normal = unique[index]
-        length = float(np.linalg.norm(normal))
-        if length > EPS_GEOM:
-            unit = normal / length
-            found.append((float(unit[0]), float(unit[1]), float(unit[2])))
+    try:
+        hull = ConvexHull(vertices)
+    except QhullError:
+        # Ein flaches oder entartetes Netz hat keine dreidimensionale Hülle.
+        # Seine eigenen Flächen und Achsen bleiben trotzdem prüfbar.
+        return found
+    triangles = vertices[hull.simplices]
+    hull_areas = (
+        np.linalg.norm(
+            np.cross(triangles[:, 1] - triangles[:, 0], triangles[:, 2] - triangles[:, 0]), axis=1
+        )
+        / 2.0
+    )
+    found.extend(_largest_normals(hull.equations[:, :3], hull_areas, max(1, hull_limit)))
     return found
 
 
 def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
     """Wie der Körper aussähe, stünde er auf dieser Fläche."""
-    turned = apply(mesh, rotation_to_down(direction))
-    body = turned.raw
+    return _evaluate_directions(mesh, [direction])[0]
+
+
+def _evaluate_directions(
+    mesh: MeshData, directions: list[Vec3], cancelled: CancelToken | None = None
+) -> list[Orientation]:
+    """Bewertet dieselben Lagen in speicherbegrenzten gemeinsamen Projektionen."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    body = mesh.raw
     normals = np.asarray(body.face_normals, dtype=float)
     areas = np.asarray(body.area_faces, dtype=float)
-
-    downward = normals[:, 2] < -math.cos(math.radians(OVERHANG_LIMIT_DEGREES))
-    flat_bottom = (normals[:, 2] < -0.999) & (
-        np.asarray(body.triangles_center)[:, 2] < body.bounds[0][2] + 0.05
+    vertices = np.asarray(body.vertices)
+    referenced = body.referenced_vertices
+    if not referenced.all():
+        vertices = vertices[referenced]
+    centres = np.asarray(body.triangles_center)
+    # Mehrere Lagen nur bis zur Grenze gemeinsam projizieren. Ist schon eine
+    # Lage größer, bleibt sie einzeln. Einzelabfragen nutzen denselben Weg.
+    batch_size = max(
+        1, min(len(directions), MAX_PROJECTION_VALUES // max(len(vertices), len(normals), 1))
     )
-    return Orientation(
-        direction=direction,
-        footprint=float(areas[flat_bottom].sum()),
-        overhang=float(areas[downward & ~flat_bottom].sum()),
-        height=float(turned.bounds.size[2]),
-    )
+    threshold = -math.cos(math.radians(OVERHANG_LIMIT_DEGREES))
+    scored: list[Orientation] = []
+    for start in range(0, len(directions), batch_size):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        batch = directions[start : start + batch_size]
+        verticals = np.asarray([rotation_to_down(direction)[2, :3] for direction in batch])
+        vertex_heights = verticals @ vertices.T
+        normal_heights = verticals @ normals.T
+        centre_heights = verticals @ centres.T
+        bottom = vertex_heights.min(axis=1)
+        height = vertex_heights.max(axis=1) - bottom
+        flat_bottom = (normal_heights < -0.999) & (centre_heights < bottom[:, None] + 0.05)
+        downward = normal_heights < threshold
+        for index, direction in enumerate(batch):
+            scored.append(
+                Orientation(
+                    direction=direction,
+                    footprint=float(areas[flat_bottom[index]].sum()),
+                    overhang=float(areas[downward[index] & ~flat_bottom[index]].sum()),
+                    height=float(height[index]),
+                )
+            )
+    return scored
 
 
 def ranked_orientations(
@@ -118,6 +192,8 @@ def ranked_orientations(
     *,
     limit: int | None = None,
     cancelled: CancelToken | None = None,
+    printer: PrinterProfile | None = None,
+    margin: float = 0.0,
 ) -> list[Orientation]:
     """Grundflächen nach der billigen Heuristik, beste zuerst.
 
@@ -138,11 +214,7 @@ def ranked_orientations(
             continue
         directions.append(direction)
 
-    scored: list[Orientation] = []
-    for direction in directions:
-        if cancelled is not None:
-            cancelled.raise_if_cancelled()
-        scored.append(evaluate_direction(mesh, direction))
+    scored = _evaluate_directions(mesh, directions, cancelled)
 
     ranked = sorted(
         scored,
@@ -154,9 +226,21 @@ def ranked_orientations(
             entry.direction,
         ),
     )
-    if limit is None:
-        return ranked
-    return ranked[: max(1, limit)]
+    selected: list[Orientation] = []
+    for entry in ranked:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        if (
+            printer is not None
+            and fitting_transform(mesh, entry.direction, printer, margin=margin) is None
+        ):
+            continue
+        selected.append(entry)
+        # Erst die günstige Reihenfolge bestimmen: Für eine begrenzte
+        # Vorauswahl müssen schlechtere Lagen nicht mehr platziert werden.
+        if limit is not None and len(selected) >= max(1, limit):
+            break
+    return selected
 
 
 def rotation_to_down(direction: Vec3) -> np.ndarray:
@@ -198,14 +282,56 @@ def print_transform(mesh: MeshData, direction: Vec3) -> np.ndarray:
     """
     turn = rotation_to_down(direction)
     lifted = apply(mesh, turn)
-    return np.asarray(translation((0.0, 0.0, -lifted.bounds.minimum[2])) @ turn, dtype=float)
+    offset = (
+        mesh.bounds.centre[0] - lifted.bounds.centre[0],
+        mesh.bounds.centre[1] - lifted.bounds.centre[1],
+        -lifted.bounds.minimum[2],
+    )
+    return np.asarray(translation(offset) @ turn, dtype=float)
 
 
-def orient_for_print(mesh: MeshData, *, cancelled: CancelToken | None = None) -> OrientResult:
+def fitting_transform(
+    mesh: MeshData, direction: Vec3, printer: PrinterProfile, *, margin: float = 0.0
+) -> np.ndarray | None:
+    """Eine passende Lage dieser Grundfläche, auch um 90° auf dem Bett gedreht."""
+    initial = print_transform(mesh, direction)
+    for yaw in (0.0, 90.0):
+        turn = rotation("z", yaw) @ initial
+        turned = apply(mesh, turn)
+        # Eine Drehung in der Platte bewahrt denselben sinnvollen Mittelpunkt.
+        centre = translation(
+            (
+                mesh.bounds.centre[0] - turned.bounds.centre[0],
+                mesh.bounds.centre[1] - turned.bounds.centre[1],
+                0.0,
+            )
+        )
+        turn = centre @ turn
+        moved = apply(mesh, turn)
+        offset = placement_offset(moved, printer, margin=margin)
+        if offset is not None:
+            return np.asarray(translation(offset) @ turn, dtype=float)
+    return None
+
+
+def orient_for_print(
+    mesh: MeshData,
+    *,
+    cancelled: CancelToken | None = None,
+    printer: PrinterProfile | None = None,
+    margin: float = 0.0,
+) -> OrientResult:
     """Dreht den Körper in die Lage, die der Heuristik am besten gefällt."""
-    scored = ranked_orientations(mesh, cancelled=cancelled)
+    scored = ranked_orientations(mesh, cancelled=cancelled, printer=printer, margin=margin)
+    if not scored:
+        raise NoFittingOrientationError()
     best = scored[0]
-    matrix = print_transform(mesh, best.direction)
+    matrix = (
+        fitting_transform(mesh, best.direction, printer, margin=margin)
+        if printer is not None
+        else print_transform(mesh, best.direction)
+    )
+    assert matrix is not None
     turned = apply(mesh, matrix)
 
     findings = [

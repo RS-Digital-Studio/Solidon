@@ -7,6 +7,8 @@ aufgibt.
 
 from __future__ import annotations
 
+import math
+import warnings
 from pathlib import Path
 
 import pytest
@@ -34,6 +36,159 @@ def box(size: float, offset: tuple[float, float, float]) -> MeshData:
     body = trimesh.creation.box(extents=(size, size, size))
     body.apply_translation(offset)
     return MeshData.of(body)
+
+
+@pytest.mark.parametrize("offset", [0.0, 1000.0])
+@pytest.mark.parametrize("angle", [0.0, 37.0])
+def test_a_thin_positive_intersection_is_not_rounded_into_contact(
+    offset: float, angle: float
+) -> None:
+    """Auch fern vom Ursprung bleibt ein echter Schnitt von einer Kontaktfläche verschieden."""
+    overlap = 0.00001
+    matrix = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))
+    matrix[:3, 3] = (offset, 0.0, 0.0)
+    bodies = [box(20.0, (0.0, 0.0, 0.0)), box(20.0, (20.0 - overlap, 0.0, 0.0))]
+    for body in bodies:
+        body.raw.apply_transform(matrix)
+    outcome = boolean(
+        "intersection",
+        bodies,
+        allow_empty=True,
+    )
+    assert outcome.mesh.volume == pytest.approx(400.0 * overlap, rel=1e-7)
+    assert outcome.solver.attempted == ("direct",)
+
+
+@pytest.mark.parametrize(
+    "diameter,steps,first,step", [(6.0, 4, 0.1, 0.05), (2.0, 8, 0.0, 0.01), (30.0, 8, 1.0, 0.5)]
+)
+@pytest.mark.parametrize("angle", [0.0, 37.0])
+@pytest.mark.parametrize("offset", [0.0, 1000.0])
+def test_real_fit_ladder_contacts_remain_empty_after_a_rigid_transform(
+    diameter: float, steps: int, first: float, step: float, angle: float, offset: float
+) -> None:
+    """Kontakt an Sockel und Lochmantel bleibt nach Drehen und Verschieben volumenlos."""
+    from app.core.knowledge.parts.testbodies import FitLadderParams, fit_ladder
+
+    built = fit_ladder(FitLadderParams(diameter=diameter, steps=steps, first=first, step=step))
+    male, female = sorted(built.mesh.raw.split(), key=lambda body: body.bounds[0, 1])
+    pin, bore = (built.features[name].params["centre"] for name in ("pin_1", "bore_1"))
+    female.apply_translation((pin[0] - bore[0], pin[1] - bore[1], 3.0))
+    matrix = trimesh.transformations.rotation_matrix(math.radians(angle), (1.0, 2.0, 3.0))
+    matrix[:3, 3] = (offset, 0.0, 0.0)
+    for body in (male, female):
+        body.apply_transform(matrix)
+
+    outcome = boolean(
+        "intersection",
+        [MeshData.of(male), MeshData.of(female)],
+        allow_empty=True,
+        stages=("direct",),
+    )
+
+    assert outcome.mesh.triangle_count == 0
+    assert outcome.mesh.volume == 0.0
+    assert outcome.solver.attempted == ("direct",)
+
+
+@pytest.mark.parametrize("kind", ["flat", "open", "inverted", "thin"])
+def test_degenerate_results_do_not_raise_during_plausibility(kind: str) -> None:
+    """Kein Schwerpunkt wird aus Nullvolumen dividiert; ungültige Körper bleiben abgelehnt."""
+    from app.core.geom.boolean import _plausible
+
+    body = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    if kind == "flat":
+        body.vertices[:, 2] = 0.0
+    elif kind == "open":
+        body.update_faces(list(range(len(body.faces) - 1)))
+    elif kind == "inverted":
+        body.invert()
+    else:
+        body.apply_scale((1.0, 1.0, 0.000001))
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        assert _plausible(MeshData.of(body), allow_empty=True) is (kind == "thin")
+
+
+def test_kernel_contact_is_empty_without_geometrical_fallback() -> None:
+    """Zwei nur an der Außenfläche anliegende Würfel erzeugen kein Druckvolumen."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        outcome = boolean(
+            "intersection",
+            [box(20.0, (0.0, 0.0, 0.0)), box(20.0, (20.0, 0.0, 0.0))],
+            allow_empty=True,
+        )
+    assert outcome.mesh.triangle_count == 0
+    assert outcome.mesh.volume == 0.0
+    assert outcome.solver.attempted == ("direct",)
+
+
+@pytest.mark.parametrize("residual", [-1e-13, 1e-13])
+def test_a_planar_native_contact_is_empty_despite_volume_roundoff(
+    monkeypatch: pytest.MonkeyPatch, residual: float
+) -> None:
+    """Ein flacher Kontakt bleibt leer, wenn das native Integral Rundungsreste trägt."""
+    import manifold3d
+
+    monkeypatch.setattr(manifold3d.Manifold, "volume", lambda self: residual)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        outcome = boolean(
+            "intersection",
+            [box(20.0, (0.0, 0.0, 0.0)), box(20.0, (20.0, 0.0, 0.0))],
+            allow_empty=True,
+            stages=("direct",),
+        )
+    assert outcome.mesh.triangle_count == 0
+    assert outcome.solver.attempted == ("direct",)
+
+
+def test_a_native_boolean_result_can_be_used_by_the_next_operation() -> None:
+    """Native Ausgabepuffer sind gültige Eingaben der nächsten Operation."""
+    joined = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))]).mesh
+    joined.raw.vertices.flags.writeable = False
+    joined.raw.faces.flags.writeable = False
+
+    outcome = boolean("difference", [joined, box(20.0, (10.0, 0.0, 0.0))])
+
+    assert outcome.mesh.volume == pytest.approx(4000.0, rel=1e-7)
+    assert outcome.solver.attempted == ("direct",)
+
+
+@pytest.mark.parametrize("following", ["remesh", "subdivided", "surface_gap"])
+def test_a_boolean_result_satisfies_the_existing_mesh_consumers(following: str) -> None:
+    """Die natürliche Ausgabe bleibt für Netzverfeinerung und Abstandsmessung verwendbar."""
+    from app.core.geom.measure import surface_gap
+    from app.core.geom.mesh_ops import remesh, subdivided
+
+    joined = boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))]).mesh
+    if following == "surface_gap":
+        assert surface_gap(joined, box(20.0, (50.0, 0.0, 0.0)), 25.0) == pytest.approx(20.0)
+    else:
+        refined = remesh(joined, 8.0) if following == "remesh" else subdivided(joined, 8.0, 30.0)
+        assert refined.is_watertight
+        assert refined.volume == pytest.approx(12000.0, rel=1e-7)
+        assert refined.triangle_count > joined.triangle_count
+    assert joined.raw.vertices.flags.writeable
+    assert joined.raw.vertices.flags.c_contiguous
+    assert joined.raw.faces.flags.writeable
+    assert joined.raw.faces.flags.c_contiguous
+
+
+@pytest.mark.parametrize("offset", [0.0, 1000.0])
+@pytest.mark.parametrize("overlap", [0.0, 0.00001])
+def test_shared_volume_distinguishes_contact_from_a_thin_overlap(
+    offset: float, overlap: float
+) -> None:
+    """Die Montagemessung verwendet dieselbe Genauigkeit wie der schneidende Kern."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        volume = shared_volume(
+            box(20.0, (offset, 0.0, 0.0)).raw,
+            box(20.0, (offset + 20.0 - overlap, 0.0, 0.0)).raw,
+        )
+    assert volume == pytest.approx(400.0 * overlap, rel=1e-7, abs=1e-12)
 
 
 def run_op(
@@ -376,10 +531,12 @@ def test_a_wrong_call_into_the_kernel_is_not_swallowed(monkeypatch: pytest.Monke
     einer grünen Suite.
     """
 
+    import manifold3d
+
     def wrong(*_args: object, **_kwargs: object) -> None:
         raise TypeError("intersection(): incompatible function arguments")
 
-    monkeypatch.setattr(trimesh.boolean, "intersection", wrong)
+    monkeypatch.setattr(manifold3d, "Manifold", wrong)
 
     with pytest.raises(TypeError):
         shared_volume(solid().raw, solid().raw)
@@ -400,10 +557,12 @@ def test_the_fallback_chain_does_not_swallow_a_wrong_call(
     die Vorsichtsmaßnahme, die ``errors.PROGRAMMING_ERRORS`` beschreibt.
     """
 
+    import manifold3d
+
     def wrong(*_args: object, **_kwargs: object) -> None:
         raise TypeError("union(): incompatible function arguments")
 
-    monkeypatch.setattr(trimesh.boolean, "union", wrong)
+    monkeypatch.setattr(manifold3d, "Manifold", wrong)
 
     with pytest.raises(TypeError):
         boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))])
@@ -414,10 +573,12 @@ def test_a_kernel_that_gives_up_is_still_an_answer(monkeypatch: pytest.MonkeyPat
     gefangen.
     """
 
+    import manifold3d
+
     def gave_up(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("manifold: could not solve")
 
-    monkeypatch.setattr(trimesh.boolean, "intersection", gave_up)
+    monkeypatch.setattr(manifold3d, "Manifold", gave_up)
 
     assert shared_volume(solid().raw, solid().raw) == 0.0
 

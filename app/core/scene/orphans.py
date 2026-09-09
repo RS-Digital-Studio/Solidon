@@ -38,6 +38,10 @@ class Reference:
     """``fit:stift_1:a`` oder ``op:7:at_feature`` — genug, um die Antwort
     zurückzuschreiben."""
     ref: FeatureRef
+    index: int | None = None
+    """Bei einer Merkmalliste die Position, die eine Antwort gezielt ersetzt."""
+    removable: bool = True
+    """Eine leere Flächenauswahl darf niemals versehentlich den ganzen Körper betreffen."""
 
     @property
     def kind(self) -> str:
@@ -108,8 +112,26 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
                 continue
             # Das Merkmal gehört zu dem Objekt, auf dem die Operation arbeitet.
             found.append(
-                Reference(f"op:{operation.id}:{field_name}", FeatureRef(operation.inputs[0], named))
+                Reference(
+                    f"op:{operation.id}:{field_name}",
+                    FeatureRef(operation.inputs[0], named),
+                    removable=operation.op != "clear_filament",
+                )
             )
+        for field_name in _feature_fields(source, operation.op, multiple=True):
+            names = operation.params.get(field_name, ())
+            if not isinstance(names, list | tuple) or not operation.inputs:
+                continue
+            for index, named in enumerate(names):
+                if isinstance(named, str) and named:
+                    found.append(
+                        Reference(
+                            f"op:{operation.id}:{field_name}:{index}",
+                            FeatureRef(operation.inputs[0], named),
+                            index=index,
+                            removable=False,
+                        )
+                    )
         for field_name in _sketch_fields(source, operation.op):
             plane_reference = feature_ref_of_sketch(str(operation.params.get(field_name) or ""))
             if plane_reference is None:
@@ -184,7 +206,7 @@ def feature_ref_of_sketch(text: str) -> FeatureRef | None:
     return FeatureRef(object_id, feature_id)
 
 
-def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
+def _feature_fields(registry: Registry, op_name: str, *, multiple: bool = False) -> tuple[str, ...]:
     """Parameter dieser Operation, die ein Merkmal benennen — aus der
     Deklaration.
 
@@ -196,7 +218,9 @@ def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
     if not registry.has(op_name):
         return ()
     return tuple(
-        entry.name for entry in registry.get(op_name).params.spec() if entry.kind == "feature"
+        entry.name
+        for entry in registry.get(op_name).params.spec()
+        if entry.kind == ("features" if multiple else "feature")
     )
 
 
@@ -256,10 +280,10 @@ def check(
             _rewrite(document, reference, answer)
             result.rewritten += 1
             result.findings.append(_rewritten_finding(reference, answer))
-        elif reference.kind == "plane":
-            # Keine Antwort streicht keine Ebene: Das Dokument bleibt, wie es
-            # ist, und die Auswertung hält an der Operation mit ``frame_fors``
-            # eigenem Satz an (§15.2). Der Befund sagt trotzdem, wo es hakt.
+        elif reference.kind == "plane" or not reference.removable:
+            # Keine Antwort streicht keine Ebene oder bewusste Merkmalsauswahl:
+            # Eine geleerte Flächenmenge könnte den ganzen Körper betreffen.
+            # Der erhaltene Verweis hält die Operation gezielt an (§15.2).
             result.findings.append(_lost(reference, None))
         else:
             _remove(document, reference)
@@ -359,15 +383,15 @@ def question_for(reference: Reference, candidates: Sequence[str]) -> tuple[str, 
     """Die Frage und ihre Antworten; die Passung zu streichen ist der letzte
     Ausweg.
 
-    **Eine Skizzenebene bietet kein Streichen an**: Ohne Ebene gibt es die
-    Skizze nicht — wer nicht antwortet, verliert nichts, die Operation hält
-    später mit dem eigenen Satz von ``frame_for`` an (§15.2).
+    Eine Skizzenebene und eine fest gewählte Merkmalsmenge bieten kein
+    Streichen an: Eine leere Auswahl kann den Wirkungsbereich erweitern.
+    Wer nicht antwortet, verliert nichts; der Verweis hält die Operation an.
     """
     question = (
         f"{tr('Dieser Verweis zeigt ins Leere:')} {reference.ref}. "
         f"{tr('Welches Merkmal ist gemeint?')}"
     )
-    if reference.kind == "plane":
+    if reference.kind == "plane" or not reference.removable:
         return question, [*candidates]
     return question, [*candidates, REMOVE_CHOICE]
 
@@ -430,7 +454,12 @@ def _set_param(document: Document, reference: Reference, value: str) -> None:
     for index, operation in enumerate(document.ops):
         if operation.id == reference.op_id:
             params = dict(operation.params)
-            params[reference.field] = value
+            if reference.index is None:
+                params[reference.field] = value
+            else:
+                names = list(params[reference.field])
+                names[reference.index] = value
+                params[reference.field] = tuple(names)
             document.ops[index] = dataclasses.replace(operation, params=params)
             return
 

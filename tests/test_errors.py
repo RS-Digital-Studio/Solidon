@@ -295,6 +295,13 @@ _NOT_A_RANGE = frozenset(
         "changed", "colour",
         # Unendlich und NaN sind keine Grenzverletzung, sondern keine Zahl.
         "not_finite",
+        # Art und Belegung einer Auswahl sind keine Zahlenspanne.
+        "feature_kind", "empty_feature", "slots_full",
+        # Fremde Materialcodierung beziehungsweise fehlender Messkontext.
+        "unsupported_material_semantics", "calibration_process",
+        # Die Ausgabe überschreitet eine Formatkapazität; kein Zahlenfeld
+        # lässt sich korrigieren. Der Rückweg teilt die Ausgabe auf.
+        "native_filament_limit",
         # Ein Klick neben die Fläche, eine Kante, die es nicht gibt: kein
         # Maß außerhalb einer Spanne, sondern ein Ort ohne Fläche.
         "surface_placement",

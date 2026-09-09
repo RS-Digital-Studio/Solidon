@@ -27,7 +27,7 @@ from dataclasses import dataclass, field, replace
 from math import isfinite
 from typing import Any, Final, cast
 
-from app.core import activation
+from app.core import activation, expressions
 from app.core.agent import checks
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.context import build_messages
@@ -793,7 +793,8 @@ class AgentSession:
             return _gathered_refusal(gathered.kind), scene
         try:
             # Abnahme P4: schemagültig, bevor überhaupt gerechnet wird.
-            validate(spec.params, arguments)
+            values = expressions.resolve(working.parameters)
+            validate(spec.params, expressions.resolve_params(arguments, values))
         except AppError as error:
             proposal.invalid_calls += 1
             return f"{tr('Ungültige Werte')}: {_error_text(error)}", scene

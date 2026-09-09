@@ -37,7 +37,7 @@ from app.core.geom.boolean import (
 from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.ops import as_transform
-from app.core.geom.orient import orient_for_print, print_transform
+from app.core.geom.orient import orient_for_print
 from app.core.geom.pins import (
     PIN_COUNT,
     PIN_MAX,
@@ -71,7 +71,7 @@ from app.core.geom.prepare import (
 )
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.geom.transform import Axis, moved_body, place_on_bed, translation
-from app.core.knowledge.profiles import for_object, material
+from app.core.knowledge.profiles import analysis_limits, for_object, material
 from app.core.registry import VARIABLE, op_params, param, play_param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import (
@@ -3649,7 +3649,7 @@ class OrientParams(BaseParams):
         title=_("Gründlich suchen"),
         default=True,
         doc=_(
-            "Rechnet hunderte Lagen mit der Schichtanalyse durch. "
+            "Prüft geometrisch begründete Lagen und vergleicht die besten mit der Schichtanalyse. "
             "Aus heißt: schnelle Heuristik über die Flächen."
         ),
     )
@@ -3660,8 +3660,8 @@ class OrientParams(BaseParams):
         maximum=2000,
         placement="advanced",
         doc=_(
-            "Wie viele Lagen durchgerechnet werden. Mehr findet feinere "
-            "Verbesserungen und dauert entsprechend länger."
+            "Wie viele Hüllflächen als Grundfläche geprüft werden. "
+            "Die besten Lagen werden anschließend mit der Schichtanalyse verglichen."
         ),
         depends_on=("thorough", (True,)),
     )
@@ -3679,7 +3679,7 @@ class OrientParams(BaseParams):
     consumes=VARIABLE,
     minimum_inputs=1,
     produces=VARIABLE,
-    deterministic=False,
+    deterministic=True,
     doc=_(
         "Sucht für jeden gewählten Körper die Lage mit dem geringsten "
         "Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus "
@@ -3703,6 +3703,7 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
                 count=params.candidates,
                 seed=ctx.seed,
                 profile=ctx.profile,
+                overhang_angle=analysis_limits(ctx.profile, entry)[1],
                 # Der Fortschritt gehört dem ganzen Auftrag, nicht dem
                 # einzelnen Körper: Bei vier Teilen liefe der Balken sonst
                 # viermal von vorn.
@@ -3713,10 +3714,10 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
             # arbeitet auf Dreiecken; ein exakter Körper käme als Netz zurück,
             # und danach ist kein Verrunden mehr möglich. Dieselbe Matrix legt
             # ``moved_body`` exakt auf den Eingang.
-            matrix = print_transform(mesh, found.best.direction)
+            matrix = found.transform
             findings.extend(found.findings)
         else:
-            result = orient_for_print(mesh)
+            result = orient_for_print(mesh, printer=ctx.profile.printer, cancelled=ctx.cancelled)
             matrix = result.transform
             findings.extend(result.findings)
         outputs.append(dataclasses.replace(entry, mesh=moved_body(entry.mesh, matrix)))

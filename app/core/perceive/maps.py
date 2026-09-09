@@ -29,6 +29,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from app.core.deferred import trimesh
 from app.core.errors import CANCEL, DECIMATE_MESH, UserError
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.knowledge.profiles import analysis_limits
 from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
 from app.core.perceive.features import CURVATURE_LIMIT, pair_radii
@@ -315,13 +316,14 @@ def build(
         cancelled.raise_if_cancelled()
     budget = _MapDeadline(cancelled, SUPPORT_MAP_BUDGET_SECONDS) if kind == "support" else None
     mesh = _mesh_of(entry)
+    wall, angle = analysis_limits(profile, entry) if profile else (None, OVERHANG_LIMIT_DEGREES)
     if kind != "support" and mesh.triangle_count > MAP_LIMIT_TRIANGLES:
         raise MapTooLarge(mesh.triangle_count, MAP_LIMIT_TRIANGLES)
 
     if kind == "wall":
-        return wall_thickness_map(mesh, profile.minimum_wall_thickness if profile else None)
+        return wall_thickness_map(mesh, wall)
     if kind == "overhang":
-        return overhang_map(mesh)
+        return overhang_map(mesh, angle)
     if kind == "defects":
         return defect_map(mesh)
     if kind == "curvature":
@@ -330,7 +332,9 @@ def build(
         return feature_map(mesh, entry.features)
     if kind == "fits":
         return fit_map(mesh, entry, scene)
-    return support_map(mesh, profile.printer.layer_height if profile else 0.2, budget)
+    return support_map(
+        mesh, profile.printer.layer_height if profile else 0.2, budget, overhang_angle=angle
+    )
 
 
 def _mesh_of(entry: SceneObject) -> MeshData:
@@ -883,7 +887,11 @@ def fits_of(scene: Scene, object_id: ObjectId) -> tuple[Fit, ...]:
 
 
 def support_map(
-    mesh: MeshData, layer_height: float = 0.2, cancelled: CancelToken | None = None
+    mesh: MeshData,
+    layer_height: float = 0.2,
+    cancelled: CancelToken | None = None,
+    *,
+    overhang_angle: float | None = None,
 ) -> AnalysisMap:
     """Wie hoch die Stützsäule unter jedem Dreieck wüchse.
 
@@ -910,7 +918,9 @@ def support_map(
     # → ``_eroded`` — der morphologischen Öffnung, mit der die kleinste
     # Struktur je Schicht gesucht wird. 916 Aufrufe für 136 Schichten, und
     # kein einziger für eine Zahl, die hier jemand liest.
-    result = slice_body(mesh, layer_height, detail="support", cancelled=cancelled)
+    result = slice_body(
+        mesh, layer_height, detail="support", cancelled=cancelled, overhang_angle=overhang_angle
+    )
     if cancelled is not None:
         cancelled.raise_if_cancelled()
     regions = _overhang_regions(result)

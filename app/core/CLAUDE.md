@@ -31,6 +31,7 @@ selbst. Hier steht, **was wo liegt**.
 | Datei | Rolle |
 |---|---|
 | `types.py` | Die Verträge (§9): `Mesh`, `Scene`, `SceneObject`, `OpContext`, `OpResult`, `Feature`, `Profile`. Signaturen stehen fest, bevor ein Modul entsteht |
+| `build_area.py` | Tatsächliche Druckkontur, Sperrzonen, Druckhöhe und Auftragsrand für Anordnung, Orientierung und Ausgabe (§29) |
 | `errors.py` | Die Ausnahmen-Hierarchie (§33.1). Jede trägt mindestens eine `Action` — ein Fehler endet nie mit „fehlgeschlagen" |
 | `units.py` | Millimeter, doppelte Genauigkeit, die drei benannten Toleranzen (§11). Fließkommavergleich über `is_close`/`is_zero`, nie mit `==` |
 | `expressions.py` | Parameterausdrücke über den **eigenen** Auswerter (§13, §32) — es gibt kein `eval` |
@@ -39,6 +40,9 @@ selbst. Hier steht, **was wo liegt**.
 Bei gebundenen externen Filamentprofilen gelten Dichte und Durchmesser ohne
 belegten Snapshot als unbekannt. Ein ausdrücklicher Filament-Override liefert
 beide Kennwerte; direkte G-Code-Grammwerte benötigen keine Umrechnung.
+Zusätzliche Werkzeuge des Slicers erhalten eigene ungebundene Bedarfzeilen.
+Eine Werkzeugnummer beweist weder eine Materialart noch eine lokale Spule;
+fehlende Einzelmengen bleiben auch bei bekannter Gesamtsumme unbekannt.
 
 Flächen- und Volumenanzeigen bewahren kleine Nichtnullwerte: Unter einem
 Quadrat- beziehungsweise Kubikmillimeter wächst die Zahl der Nachkommastellen,
@@ -97,10 +101,10 @@ Eintrag auf ein Untermodul und ein Attribut zeigt, das es gibt.
 Pakete hängen im Kreis.** Gemessen am 07.09.2026 stehen acht der dreizehn
 Unterpakete in **einem** Kreis über eifrige Importe — `brep`, `geom`,
 `ingest`, `knowledge`, `perceive`, `scene`, `sketch`, `slice`, mit `geom` als
-Nabe. Zwölf weitere Kanten sind bewusst träge, also in eine Funktion gelegt,
+Nabe. Dreizehn weitere Kanten sind bewusst träge, also in eine Funktion gelegt,
 damit sie den Kreis beim Import nicht schließen.
 `tests/test_core_package_direction.py` friert diesen Stand ein: 47 eifrige und
-12 träge Kanten, jede einzeln aufgeführt. Eine neue Kante ist damit eine
+13 träge Kanten, jede einzeln aufgeführt. Eine neue Kante ist damit eine
 Entscheidung und keine stille Zeile, eine abgebaute verschwindet auch aus der
 Liste, und ein Paket, das neu in den Kreis gerät, macht den Lauf rot.
 

@@ -279,7 +279,9 @@ def test_the_body_never_claims_a_feature_was_picked() -> None:
 
     for spec in REGISTRY.all():
         values = values_for_object(spec, features)
-        assert "at_feature" not in values, spec.name
+        for entry in spec.params.spec():
+            if entry.kind in {"feature", "features"}:
+                assert entry.name not in values, f"{spec.name}: {entry.name}"
         assert "up_to" not in values, spec.name
 
 
@@ -421,15 +423,18 @@ def test_every_operation_with_a_feature_field_gets_it_filled_in() -> None:
     with_field = [
         spec
         for spec in REGISTRY.all()
-        if any(entry.kind == "feature" for entry in spec.params.spec())
+        if any(entry.kind in {"feature", "features"} for entry in spec.params.spec())
     ]
     assert with_field, "ohne Operationen mit Merkmalsfeld prüft dieser Test nichts"
 
     empty = []
     for spec in with_field:
         values = values_for(spec, clicked)
-        fields = [entry.name for entry in spec.params.spec() if entry.kind == "feature"]
-        if not any(values.get(name) == "hole_1" for name in fields):
-            empty.append(f"{spec.name} ({', '.join(fields)})")
+        fields = [entry for entry in spec.params.spec() if entry.kind in {"feature", "features"}]
+        if not any(
+            values.get(entry.name) == (("hole_1",) if entry.kind == "features" else "hole_1")
+            for entry in fields
+        ):
+            empty.append(f"{spec.name} ({', '.join(entry.name for entry in fields)})")
 
     assert not empty, "diese Operationen lassen den Nutzer die Kennung tippen:\n" + "\n".join(empty)

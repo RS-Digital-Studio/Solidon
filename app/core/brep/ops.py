@@ -14,6 +14,7 @@ weil sie dort endet.
 from __future__ import annotations
 
 import dataclasses
+import math
 from pathlib import Path
 from typing import Literal, cast
 
@@ -30,12 +31,27 @@ from app.core.errors import (
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
 from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
-from app.core.geom.prepare import bore_diameter, compensation_findings, over_the_edge
+from app.core.geom.prepare import (
+    bore_diameter,
+    compensation_findings,
+    drill_outline,
+    over_the_edge,
+    over_the_edge_along,
+)
 from app.core.geom.prepare_ops import DrillParams
 from app.core.geom.primitive_ops import PositionedPrimitiveParams, placement_transform
 from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
+from app.core.types import (
+    BaseParams,
+    Feature,
+    Finding,
+    OpContext,
+    OpResult,
+    Profile,
+    SceneObject,
+    Vec3,
+)
 from app.core.units import DEGREE_UNIT, EPS_GEOM, is_close
 from app.i18n import _
 
@@ -508,17 +524,26 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     innen ist, und wo der Schnitt scheitert, ist die Antwort ein Fehler statt
     eines gröberen Versuchs.
     """
+    from app.core.knowledge.profiles import for_object
+
     params = cast(DrillParams, ctx.params)
     source, body = brep_input(ctx)
-    cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
-    solid = edit.bore(
-        body,
-        position=(params.x, params.y, params.z),
-        axis=cast(Literal["x", "y", "z"], params.axis),
-        diameter=cut,
-        depth=params.depth,
-        anchor=cast(Literal["mouth", "centre"], params.anchor),
-    )
+    profile = for_object(ctx.profile, source)
+    cut = bore_diameter(params.diameter, profile, params.compensate)
+    normal = (params.nx, params.ny, params.nz)
+    if not all(math.isfinite(value) for value in normal):
+        raise ValidationError("nx", _("Wählen Sie eine endliche Richtung für die Bohrung."))
+    if math.hypot(*normal) > EPS_GEOM or abs(params.widening_diameter) > EPS_GEOM:
+        solid, normal = _profiled_bore(body, params, profile)
+    else:
+        solid = edit.bore(
+            body,
+            position=(params.x, params.y, params.z),
+            axis=cast(Literal["x", "y", "z"], params.axis),
+            diameter=cut,
+            depth=params.depth,
+            anchor=cast(Literal["mouth", "centre"], params.anchor),
+        )
     # **Und zuerst: ist überhaupt noch ein Körper da?** Ein Werkzeug, das den
     # Körper vollständig deckt, lässt OCCT sauber durchrechnen und nichts
     # übrig — null Volumen, null Flächen, nicht wasserdicht. Bis zum
@@ -544,7 +569,7 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # Quader mit einer Bohrung weit daneben: Volumen vorher wie nachher, keine
     # Zeile im Bericht. ``Solid`` trägt sein ``volume``, also braucht es dafür
     # keine Vernetzung.
-    nothing = without_effect(body, solid, "difference", ctx.profile)
+    nothing = without_effect(body, solid, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
     # **Und der Fall dazwischen**, der laut Docstring von ``over_the_edge`` der
@@ -554,16 +579,62 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     # Ergebnis — nicht weil der Kern ihn nicht könnte, sondern weil die
     # Signatur ein ``MeshData`` verlangte. Sie fragt jetzt nach dem, was sie
     # wirklich braucht, und ``Solid`` trägt seinen Hüllquader.
-    findings.extend(
-        over_the_edge(
-            body,
-            (params.x, params.y, params.z),
-            cast(Axis, params.axis),
-            cut,
+    if math.hypot(*normal) > EPS_GEOM:
+        findings.extend(over_the_edge_along(body, (params.x, params.y, params.z), normal, cut))
+    else:
+        findings.extend(
+            over_the_edge(
+                body,
+                (params.x, params.y, params.z),
+                cast(Axis, params.axis),
+                cut,
+            )
         )
-    )
     findings.extend(compensation_findings(params.diameter, cut, params.compensate))
     return OpResult(outputs=[_replaced(source, solid)], findings=findings)
+
+
+def _profiled_bore(body: Solid, params: DrillParams, profile: Profile) -> tuple[Solid, Vec3]:
+    """Legt das gemeinsame Profil mit seiner Mündung auf die gewählte Fläche."""
+    from itertools import product
+
+    from app.core.sketch.planes import frame_of
+
+    position = (params.x, params.y, params.z)
+    normal = (params.nx, params.ny, params.nz)
+    if math.hypot(*normal) <= EPS_GEOM:
+        index = "xyz".index(params.axis)
+        values = [0.0, 0.0, 0.0]
+        values[index] = 1.0 if position[index] >= body.bounds.centre[index] else -1.0
+        normal = (values[0], values[1], values[2])
+    frame = frame_of(normal, position)
+    if params.depth <= EPS_GEOM:
+        box = body.bounds
+        corners = product(*zip(box.minimum, box.maximum, strict=True))
+        projected = [
+            sum((point[i] - position[i]) * frame.normal[i] for i in range(3)) for point in corners
+        ]
+        low, high = min(projected), max(projected)
+        if params.widening_diameter > EPS_GEOM and params.anchor == "mouth":
+            height, mouth = -low, 0.0
+        else:
+            height, mouth = high - low, high
+    else:
+        height = params.depth
+        mouth = height / 2.0 if params.anchor == "centre" else 0.0
+    outline = drill_outline(
+        diameter=params.diameter,
+        depth=height,
+        profile=profile,
+        compensate=params.compensate,
+        widening_diameter=params.widening_diameter,
+        widening_depth=params.widening_depth,
+        transition_angle=params.transition_angle,
+    )
+    frame = dataclasses.replace(
+        frame, origin=cast(Vec3, tuple(position[i] + mouth * frame.normal[i] for i in range(3)))
+    )
+    return edit.bore_profile(body, outline, frame), frame.normal
 
 
 @op_params

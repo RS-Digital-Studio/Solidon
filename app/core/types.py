@@ -468,6 +468,19 @@ class PrinterProfile:
     bed_temperature_max: int = 100
     nozzle_temperature_max: int = 260
     vendor: str = ""
+    printable_area: tuple[tuple[float, float], ...] = ()
+    """Äußere Druckkontur in mm, XY relativ zur nominellen Bettmitte.
+
+    Leer heißt: das Rechteck aus ``build_volume``. Die nominellen Maße bleiben
+    unabhängig vom tatsächlich gewählten Maschinenprofil erhalten.
+    """
+    bed_exclusions: tuple[tuple[tuple[float, float], ...], ...] = ()
+    """Feste Sperrkonturen in denselben zentrierten XY-Koordinaten.
+
+    Brim, Skirt und andere auftragsabhängige Abstände stehen nicht hier.
+    """
+    printable_height: float | None = None
+    """Z-Obergrenze ab Bett; ohne Angabe gilt die nominelle Bauraumhöhe."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -503,6 +516,15 @@ class MaterialProfile:
     Die Grenze, gegen die eine Biegespannung gehalten wird. Darüber verformt
     sich ein Arm bleibend oder bricht, statt zurückzukommen.
     """
+    minimum_wall: float | None = None
+    """Gemessene druckbare Mindestwand in mm, ausschließlich für den gespeicherten Prozess."""
+    overhang_angle: float | None = None
+    """Gemessener größter freier Überhangwinkel gegen die Senkrechte in Grad."""
+    calibration_printer: str = ""
+    calibration_nozzle_diameter: float = 0.0
+    calibration_layer_height: float = 0.0
+    calibration_extrusion_width: float = 0.0
+    """Druckprozess der Wand- und Überhangprobe; fehlende Angaben übernehmen keine Messung."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -513,10 +535,38 @@ class Profile:
     material: MaterialProfile
 
     @property
+    def has_process_calibration(self) -> bool:
+        """Ob die gespeicherte Druckprobe unter denselben Profilbedingungen entstand."""
+        material, printer = self.material, self.printer
+        return material.calibration_printer == printer.id and all(
+            measured > 0.0 and math.isclose(measured, current, rel_tol=1e-9, abs_tol=1e-12)
+            for measured, current in (
+                (material.calibration_nozzle_diameter, printer.nozzle_diameter),
+                (material.calibration_layer_height, printer.layer_height),
+                (material.calibration_extrusion_width, printer.extrusion_width),
+            )
+        )
+
+    @property
     def minimum_wall_thickness(self) -> float:
-        """Zwei Extrusionsbreiten, nie weniger — die erste Regel der
-        Regelsammlung (§39)."""
+        """Die gemessene Mindestwand; ohne passende Probe zwei Extrusionsbreiten."""
+        measured = self.material.minimum_wall
+        if (
+            self.has_process_calibration
+            and measured is not None
+            and math.isfinite(measured)
+            and measured > 0.0
+        ):
+            return measured
         return 2.0 * self.printer.extrusion_width
+
+    @property
+    def overhang_limit_degrees(self) -> float:
+        """Die Überhanggrenze gegen die Senkrechte, gemessen oder als Startregel."""
+        measured = self.material.overhang_angle
+        if self.has_process_calibration and measured is not None and 0.0 < measured < 90.0:
+            return measured
+        return OVERHANG_LIMIT_DEGREES
 
     @property
     def smallest_printable_volume(self) -> float:
@@ -834,6 +884,24 @@ class SpoolBinding:
 
 
 @dataclass(frozen=True, slots=True)
+class SlotProfileBinding:
+    """Ein Herstellerprofil bleibt an der vollständigen Druckfilamentidentität."""
+
+    profile_name: str
+    name: TranslatableText | str = ""
+    colour: tuple[float, float, float] | None = None
+    material: str | None = None
+    material_type: str | None = None
+
+    @property
+    def key(
+        self,
+    ) -> tuple[TranslatableText | str, tuple[float, float, float] | None, str | None, str | None]:
+        """Derselbe Schlüssel wie bei der Zusammenlegung für die Ausgabe."""
+        return (self.name, self.colour, self.material, self.material_type)
+
+
+@dataclass(frozen=True, slots=True)
 class PrintSettings:
     """Alle Druckeinstellungen an einer Stelle (§29).
 
@@ -893,6 +961,8 @@ class PrintSettings:
     """Örtliche Spulen je Druckfilament; fehlende Kennungen bleiben ungelöst."""
     inventory_project_id: str = ""
     """Beständige Projektkennung für die Wiedererkennung einer Druckvorbereitung."""
+    slot_profile_bindings: tuple[SlotProfileBinding, ...] | None = None
+    """None liest alte Slotpositionen; eine leere Folge bindet nur nach Identität."""
 
     @property
     def wall_thickness(self) -> float:
@@ -1071,6 +1141,7 @@ ParamKind = Literal[
     "enum",
     "object",
     "feature",
+    "features",
     "part",
     "filament",
     "material",

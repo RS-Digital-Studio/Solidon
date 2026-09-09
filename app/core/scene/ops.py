@@ -261,7 +261,7 @@ def pattern(ctx: OpContext) -> OpResult:
     Millimeter, und das zu sagen ist billiger als dreißig Körper, die niemand
     drucken kann.
     """
-    from app.core.geom.transform import Axis, apply, rotation, translation
+    from app.core.geom.transform import Axis, moved_body, rotation, translation
 
     params = cast(PatternParams, ctx.params)
     source = ctx.inputs[0]
@@ -320,7 +320,7 @@ def pattern(ctx: OpContext) -> OpResult:
         dataclasses.replace(
             source,
             name=_copy_name(source.name, "", index + 1, params.count) if index else source.name,
-            mesh=apply(as_mesh_data(source.mesh), step) if index else source.mesh,
+            mesh=moved_body(source.mesh, step) if index else source.mesh,
             features={} if index else dict(source.features),
             material_slots=list(source.material_slots),
         )

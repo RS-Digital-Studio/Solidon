@@ -31,12 +31,29 @@ Zuordnung. Rasterbudgets multiplizieren mit unbegrenzten Ganzzahlen.
 `paint_slot.replace_filament` übernimmt eine ausdrücklich gewählte Spule
 vollständig, auch unbekannte Materialwerte. Ohne dieses gespeicherte Flag
 behält die Operation das historische Ergänzungsverhalten leerer Felder.
+`clear_filament` entfernt eine Zuweisung am Körper oder an `at_features`;
+das frühere einzelne `at_feature` bleibt lesbar. Die Dreiecke aller gewählten
+Merkmale werden gemeinsam vor der Platzsuche betrachtet. Bei einer Teilmenge werden andere bisherige
+Slot-0-Flächen mit ihrer unveränderten Definition auf einen freien Platz
+verschoben. Ohne Platz bleibt der Körper unverändert und der Fehler nennt
+die nötige größere Auswahl. Geometrie, Merkmale und exakte Hohlrauminformation
+bleiben erhalten; ein neutrales Slot 0 besitzt keine Filamentdefinition.
+Ein altes allein am Körper gespeichertes Material wird vor dem teilweisen
+Färben oder Entfernen über `slots_for_object` in explizite Definitionen
+übernommen. Vollständige Abwahl leert auch dieses alte Materialfeld.
 Die Differenzansicht überspringt ausschließlich identische Netzarrays,
 keine bloß gleichen Hüllquader und Volumina.
 
 Eine mitgeführte exakte `MeshData.cavity` folgt in `transform.apply` derselben
 Matrix wie der Körper. Änderungen der Topologie verwerfen die Auskunft,
 solange ihre Gültigkeit nicht eigens hergestellt wird.
+Reine Slotzuweisungen in `attributes.with_slot` und `paint.fill_feature`
+erhalten den Innenraum unverändert; sie ändern keine Geometrie.
+
+Die allgemeinen Booleschen Nutzerbefehle verwenden bei ausschließlich
+exakten Eingängen `brep.edit.boolean` und erhalten deren Körperart. Sobald
+ein Mesh beteiligt ist, gilt die Netz-Rückfallkette. Beide Wege prüfen leere
+Ergebnisse und wirkungslose Änderungen, bevor sie einen Körper zurückgeben.
 
 ## Die Boolesche Rückfallkette (§17.2)
 
@@ -58,6 +75,20 @@ stillschweigend**. In Entwurfsqualität endet die Kette nach Stufe 2, damit das
 Iterieren schnell bleibt (§31).
 
 `tests/test_boolean.py` erzwingt jede Stufe einzeln.
+
+Die drei nativen Netzstufen übergeben `Mesh64` an Manifold und lesen dessen
+Status und Volumen vor der Rückvernetzung. Nullvolumen bei flächigem Kontakt
+wird als leeres Netz weitergegeben; erst `allow_empty` entscheidet, ob das
+eine zulässige Antwort ist. Für gedrehte und gekrümmte Kontaktflächen begrenzt
+`gamma(8) * max|Koordinate| * Oberfläche` die native Float64-Rundung.
+Dieses datenabhängige Band ist keine Drucktoleranz; echte dünne Schnitte
+oberhalb der Rechenunsicherheit bleiben erhalten. Die Plausibilität verwendet
+das orientierte Volumenintegral ohne
+Schwerpunktdivision und lehnt offene oder umgestülpte Ergebnisse weiterhin ab.
+Die native Eingangsgrenze fordert schreibbare C-Puffer; die Rückvernetzung
+erzeugt eigene schreibbare Arrays, damit weitere Netzoperationen und
+Abstandsmessungen dieselbe Ausgabe übernehmen können. `shared_volume`
+verwendet denselben Kern und unterscheidet Kontakt von dünnem Schnittvolumen.
 
 ## Die Karte
 
@@ -118,6 +149,32 @@ verstifteten Hälften, §22.3) ·
 `pins.py` (Passstifte; Auto Split wählt die Form aus Fügefläche und
 Materialtiefe und hält den Kleberhinweis als Operationsparameter fest) ·
 `orient.py`
+
+Die geometrische Vorauswahl projiziert dieselben Normalenrichtungen in
+begrenzten Gruppen auf Z. Vollständige Netzkopien entstehen erst für die
+Platzierungsprüfung; eine begrenzte Bestenliste prüft sie in der vollständigen
+Bewertungsreihenfolge, bis genügend passende Lagen vorliegen. Ungenutzte
+Vertices zählen wie bei den Netzbounds nicht zur Höhe. Gleiche Flächensummen
+behalten die lexikographische Reihenfolge ihrer Normalengruppen.
+
+`core/build_area.py` ist der gemeinsame Druckbereichsvertrag: `printable_area`
+liefert eine polygonale Fläche ohne feste Sperrzonen, `printable_height` die
+freigegebene Höhe. Beide lesen `PrinterProfile`; ohne optionale Kontur gilt
+das nominelle Rechteck aus `build_volume`. Alle Konturen verwenden XY relativ
+zur nominellen Bettmitte, Z beginnt auf dem Bett. Ein `margin` gehört zum
+Auftrag und verändert das Maschinenprofil nicht. `fits_on_bed` prüft die
+aktuelle Lage; `placement_offset` sucht eine passende Verschiebung aufs Bett.
+Bei Sperrzonen zählt die tatsächliche XY-Projektion statt nur der Hüllbox.
+
+Anordnung, Bauraumprüfung und Orientierung verwenden diesen Vertrag. Die
+Orientierung prüft auch eine Vierteldrehung in der Platte und erhält die
+XY-Mitte, solange sie passt. `SearchResult.transform` trägt die vollständige
+Bewegung zum Originalkörper, einschließlich B-Rep; die Grundrichtung allein
+beschreibt die Platzierung nicht. Auto Split prüft jedes Endstück samt
+Verbinderreserve gegen dieselbe Kontur. `oversize` liefert nur dimensionale
+Überstände; `fits` entscheidet zusätzlich über die polygonale Fläche.
+Eine Zwischenhälfte ohne passende Lage hat unbekannten Stützbedarf (`inf`),
+kann aber weitere Schnitte benötigen. Andere Geometriefehler bleiben Fehler.
 
 **Messen und Schneiden**
 

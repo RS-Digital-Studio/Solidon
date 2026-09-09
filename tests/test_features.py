@@ -90,6 +90,32 @@ def test_the_bore_diameter_is_measured_correctly() -> None:
         assert hole.params["residual"] < 0.02, "a drilled hole fits a cylinder closely"
 
 
+@pytest.mark.parametrize("angle", [0.0, 45.0])
+def test_a_cylinder_axis_does_not_depend_on_the_eigenvector_sign(
+    monkeypatch: pytest.MonkeyPatch, angle: float
+) -> None:
+    """Dasselbe Bohrungsnetz behält seine Richtung bei beiden gültigen Eigenbasen."""
+    mesh = plate()
+    hole = detect_holes(mesh)[0]
+    body = mesh.raw.copy()
+    body.apply_transform(trimesh.transformations.rotation_matrix(math.radians(angle), (1, 0, 0)))
+    first = fit_cylinder(body, list(hole.face_indices))
+    original = np.linalg.eigh
+
+    def opposite_basis(values):
+        """Die zweite mathematisch gleichwertige Eigenbasis derselben Matrix."""
+        eigenvalues, vectors = original(values)
+        return eigenvalues, -vectors
+
+    monkeypatch.setattr(np.linalg, "eigh", opposite_basis)
+    second = fit_cylinder(body, list(hole.face_indices))
+
+    assert first is not None and second is not None
+    np.testing.assert_allclose(second.axis, first.axis, atol=1e-12)
+    np.testing.assert_allclose(second.centre, first.centre, atol=1e-10)
+    assert second.radius == pytest.approx(first.radius)
+
+
 def test_the_bores_stand_upright_and_go_through() -> None:
     for hole in detect_holes(plate()):
         axis = hole.params["axis"]

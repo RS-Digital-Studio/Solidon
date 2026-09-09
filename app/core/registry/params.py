@@ -216,6 +216,9 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
 #: Farbfeld und Namen ist eine Sache der Oberfläche (:data:`ParamKind`).
 NUMBER_KINDS: Final[frozenset[str]] = frozenset({"float", "int", "filament"})
 
+#: Echte Folgen semantischer Kennungen, ohne JSON-Text oder Geometriekoordinaten.
+LIST_KINDS: Final[frozenset[str]] = frozenset({"features"})
+
 #: Arten, deren Wert eine **Zeichenkette** ist — Namen, Kennungen, und die
 #: Sammelparameter, die ihren Inhalt als JSON-Text tragen (§30.1).
 TEXT_KINDS: Final[frozenset[str]] = frozenset(
@@ -251,9 +254,9 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
     Meldung: Ein Feld im Textzweig hat keine Grenzen mehr, also wäre auch Slot
     99 durchgegangen.
 
-    Wer eine neue Art einführt, trägt sie in :data:`NUMBER_KINDS` oder
-    :data:`TEXT_KINDS` ein; ``test_every_parameter_kind_is_sorted_into_a_check``
-    hält beide Mengen vollständig.
+    Wer eine neue Art einführt, trägt sie in :data:`NUMBER_KINDS`,
+    :data:`TEXT_KINDS` oder :data:`LIST_KINDS` ein;
+    ``test_every_parameter_kind_is_sorted_into_a_check`` hält sie vollständig.
     """
     if spec.kind == "bool":
         if not isinstance(value, bool):
@@ -264,6 +267,23 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 constraint="type",
             )
         return value
+
+    if spec.kind in LIST_KINDS:
+        if not isinstance(value, list | tuple) or any(
+            not isinstance(one, str) or not one.strip() for one in value
+        ):
+            raise ValidationError(
+                field=spec.name,
+                detail=_("Wählen Sie die gewünschten Merkmale aus der Liste."),
+                constraint="type",
+            )
+        if spec.required and not value:
+            raise ValidationError(
+                field=spec.name,
+                detail=_("Wählen Sie mindestens ein Merkmal aus der Liste."),
+                constraint="required",
+            )
+        return tuple(value)
 
     if spec.kind in NUMBER_KINDS:
         if isinstance(value, bool) or not isinstance(value, int | float):
@@ -383,6 +403,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "enum": "string",
     "object": "string",
     "feature": "string",
+    "features": "array",
     "part": "string",
     # Ein Filament ist für den Agenten die Slotnummer, die es immer war — der
     # Wähler mit Farbe und Namen ist Bedienung und keine andere Angabe.
@@ -503,7 +524,9 @@ def condition_text(entry: ParamSpec, schema: tuple[ParamSpec, ...], keys: bool =
     )
 
 
-def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
+def json_schema(
+    params_class: type[BaseParams], *, literal_fields: tuple[str, ...] = ()
+) -> dict[str, Any]:
     """JSON-Schema für die Werkzeugbeschreibung des Agenten (§10, §26.2)."""
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -515,6 +538,17 @@ def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
             # gilt dasselbe schärfer: ein Strich *ist* eine Koordinate.
             continue
         entry: dict[str, Any] = {"type": _JSON_TYPE[spec.kind]}
+        if spec.kind in LIST_KINDS:
+            entry["items"] = {"type": "string", "minLength": 1}
+            if spec.required:
+                entry["minItems"] = 1
+        bindable = spec.kind in {"float", "int"} and spec.name not in literal_fields
+        if bindable:
+            # Grenzen prüfen den Zahlenzweig. Zeichenketten sind ausschließlich
+            # Parameterverweise oder Ausdrücke; deren Grammatik und aufgelöste
+            # Grenzen prüft vor dem Anlegen derselbe Kern wie beim Neurechnen.
+            entry["type"] = [_JSON_TYPE[spec.kind], "string"]
+            entry["pattern"] = r"^(?:@[A-Za-z_][A-Za-z0-9_]*|=.+)$"
         description = str(spec.doc) if spec.doc is not None else str(spec.title)
         if spec.unit:
             description = f"{description} [{spec.unit}]"
@@ -531,9 +565,15 @@ def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
         if spec.maximum is not None:
             entry["maximum"] = spec.maximum
         if spec.choices:
-            entry["enum"] = list(spec.choices)
+            if bindable:
+                entry["anyOf"] = [
+                    {"type": _JSON_TYPE[spec.kind], "enum": list(spec.choices)},
+                    {"type": "string", "pattern": entry["pattern"]},
+                ]
+            else:
+                entry["enum"] = list(spec.choices)
         if not spec.required:
-            entry["default"] = spec.default
+            entry["default"] = list(spec.default) if spec.kind in LIST_KINDS else spec.default
         properties[spec.name] = entry
         if spec.required:
             required.append(spec.name)

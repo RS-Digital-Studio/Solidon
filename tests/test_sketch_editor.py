@@ -4559,8 +4559,11 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
     """Abtragen ist die klare kurze Hand zur Tasche auf einem exakten Körper."""
     from types import SimpleNamespace
 
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
     from app.core.registry import OperationSpec
-    from app.core.types import Scene
+    from app.core.types import Scene, SceneObject
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -4578,7 +4581,16 @@ def test_the_visible_cut_button_goes_directly_to_the_selected_body(
         assert panel is not None
         window.object_tree.selected_objects = lambda: ("body",)
         window.session.last_result = SimpleNamespace(
-            scene=Scene(objects={"body": SimpleNamespace(kind="brep", material_slots=[])})
+            scene=Scene(
+                objects={
+                    "body": SceneObject(
+                        id="body",
+                        name="Körper",
+                        mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
+                        kind="brep",
+                    )
+                }
+            )
         )
         panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
 
@@ -4932,8 +4944,11 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
     """Das Kreuz trägt zur Tasche; die Tiefe kommt positiv im Operationsschema an."""
     from types import SimpleNamespace
 
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
     from app.core.registry import OperationSpec
-    from app.core.types import Scene
+    from app.core.types import Scene, SceneObject
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
@@ -4953,7 +4968,16 @@ def test_an_inward_pull_becomes_a_visible_pocket_operation(qt_app: QApplication)
         panel.choose_plane("plane:xz")
         window.object_tree.selected_objects = lambda: ("body",)
         window.session.last_result = SimpleNamespace(
-            scene=Scene(objects={"body": SimpleNamespace(kind="brep", material_slots=[])})
+            scene=Scene(
+                objects={
+                    "body": SceneObject(
+                        id="body",
+                        name="Körper",
+                        mesh=MeshData.of(trimesh.creation.box(extents=(30.0, 20.0, 10.0))),
+                        kind="brep",
+                    )
+                }
+            )
         )
 
         window._apply_sketch_pull(-8.5)

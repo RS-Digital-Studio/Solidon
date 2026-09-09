@@ -29,9 +29,11 @@ from typing import Any, Final
 
 import numpy as np
 
+from app.core.build_area import placement_offset, printable_area, printable_height
 from app.core.deferred import trimesh
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.mesh import MeshData
+from app.core.geom.orient import NoFittingOrientationError
 from app.core.geom.section import AXIS_NORMALS, Axis, SectionPlane
 from app.core.log import get_logger
 from app.core.slice.analysis import cross_sections
@@ -199,11 +201,20 @@ def oversize(
     ein Teil zurück, das nackt passt und mit Stift über die Kante steht. Ohne
     Zugabe (der Regelfall dieser Funktion) misst sie das blanke Netz wie zuvor.
     """
-    limits = [value - 2.0 * margin for value in profile.printer.build_volume]
+    limits = _limits(profile, margin)
     size = mesh.bounds.size
     return tuple(  # type: ignore[return-value]
         max(0.0, float(size[index]) + float(allowance[index]) - limits[index]) for index in range(3)
     )
+
+
+def _limits(profile: Profile, margin: float = MARGIN) -> Vec3:
+    """Die Ausdehnung der echten Druckkontur; der Rand gilt nur in XY."""
+    area = printable_area(profile.printer, margin=margin)
+    if area.is_empty:
+        return (0.0, 0.0, printable_height(profile.printer))
+    left, front, right, back = area.bounds
+    return (right - left, back - front, printable_height(profile.printer))
 
 
 #: Wie viele Kandidatenebenen ein Block der Abtastung umfasst.
@@ -226,7 +237,18 @@ def fits(
 
     ``allowance`` rechnet den Stiftüberstand mit, siehe :func:`oversize`.
     """
-    return max(oversize(mesh, profile, margin, allowance=allowance)) <= EPS_GEOM
+    if max(oversize(mesh, profile, margin, allowance=allowance)) > EPS_GEOM:
+        return False
+    probe = mesh
+    if any(extra > EPS_GEOM for extra in allowance):
+        # Vor dem endgültigen Verbinderbau ist nur seine achsweise Reserve
+        # bekannt. Ihr Hüllraum muss mitpassen; er ist keine neue Geometrie im
+        # Dokument. Ohne Reserve wird die tatsächliche Projektion geprüft.
+        extent = tuple(
+            size + extra for size, extra in zip(mesh.bounds.size, allowance, strict=True)
+        )
+        probe = MeshData.of(trimesh.creation.box(extents=extent))
+    return placement_offset(probe, profile.printer, margin=margin) is not None
 
 
 def split_to_fit(
@@ -442,14 +464,16 @@ def _worst(parts: list[MeshData], profile: Profile, reserves: list[Vec3]) -> int
     Gemessen mit der Stiftzugabe je Stück (:func:`oversize`): Ein Teil, das
     nackt aufs Bett passt, aber mit Stift übersteht, ist noch nicht fertig.
     """
-    overshoot = [
-        max(oversize(part, profile, allowance=reserve))
-        for part, reserve in zip(parts, reserves, strict=True)
+    unfitted = [
+        index
+        for index, (part, reserve) in enumerate(zip(parts, reserves, strict=True))
+        if not fits(part, profile, allowance=reserve)
     ]
-    largest = max(overshoot, default=0.0)
-    if largest <= EPS_GEOM:
+    if not unfitted:
         return None
-    return overshoot.index(largest)
+    return max(
+        unfitted, key=lambda index: max(oversize(parts[index], profile, allowance=reserves[index]))
+    )
 
 
 def _add_on_axis(reserve: Vec3, axis: Axis, extra: float) -> Vec3:
@@ -737,12 +761,17 @@ def _support_after_cut(
     for part in parts:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        orientation = best_face_candidate(
-            part,
-            count=orientation_candidates,
-            profile=profile,
-            cancelled=cancelled,
-        )
+        try:
+            orientation = best_face_candidate(
+                part,
+                count=orientation_candidates,
+                profile=profile,
+                cancelled=cancelled,
+            )
+        except NoFittingOrientationError:
+            # Ein zu großes Zwischenstück kann weitere Schnitte brauchen;
+            # sein unbekannter Stützbedarf ist niemals null.
+            return float("inf")
         total += orientation.support_volume
     return total
 
@@ -756,7 +785,11 @@ def _axis_to_cut(mesh: MeshData, profile: Profile, reserve: Vec3 = (0.0, 0.0, 0.
     """
     over = oversize(mesh, profile, allowance=reserve)
     if max(over) <= EPS_GEOM:
-        return None
+        if fits(mesh, profile, allowance=reserve):
+            return None
+        # Hüllmaße passen, aber die echte Kontur oder eine Sperrzone nicht.
+        # Ein XY-Schnitt verkleinert die Projektion; Z zu teilen täte das nicht.
+        return "x" if mesh.bounds.size[0] >= mesh.bounds.size[1] else "y"
     return ("x", "y", "z")[int(np.argmax(over))]
 
 
@@ -776,7 +809,7 @@ def _window(
     werden wie die Platte weniger dieser Zugabe (§25).
     """
     index = "xyz".index(axis)
-    limit = profile.printer.build_volume[index] - 2.0 * MARGIN - allowance
+    limit = _limits(profile)[index] - allowance
     low = float(mesh.bounds.minimum[index])
     high = float(mesh.bounds.maximum[index])
 

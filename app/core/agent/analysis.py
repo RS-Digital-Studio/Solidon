@@ -24,6 +24,7 @@ from collections.abc import Collection
 from typing import Final
 
 from app.core.geom.mesh import as_mesh_data
+from app.core.knowledge import profiles
 from app.core.knowledge.print_settings import resolve
 from app.core.slice import advise as advise_module
 from app.core.slice.analysis import (
@@ -76,6 +77,7 @@ def analysis_text(
     ``objects`` schränkt auf genannte Objekte ein; ohne Angabe rechnet die
     Analyse über die ganze Szene.
     """
+    profile = profiles.for_process(profile, document.print_settings)
     chosen = {
         object_id: entry
         for object_id, entry in scene.objects.items()
@@ -133,7 +135,11 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
         if _too_large(entry):
             lines.append(_skipped(object_id))
             continue
-        result = slice_body(as_mesh_data(entry.mesh), layer_height=profile.printer.layer_height)
+        result = slice_body(
+            as_mesh_data(entry.mesh),
+            layer_height=profile.printer.layer_height,
+            overhang_angle=profiles.analysis_limits(profile, entry)[1],
+        )
         islands = island_layers(result)
         thinnest = narrowest_measured(result)
         spans = max((layer.bridge_width for layer in result.layers), default=0.0)
@@ -191,7 +197,11 @@ def _advice(
         lines.append(_skipped(first_id))
         result = None
     else:
-        result = slice_body(as_mesh_data(first.mesh), layer_height=profile.printer.layer_height)
+        result = slice_body(
+            as_mesh_data(first.mesh),
+            layer_height=profile.printer.layer_height,
+            overhang_angle=profiles.analysis_limits(profile, first)[1],
+        )
     advice = advise_module.advise(
         settings,
         profile,
@@ -227,14 +237,27 @@ def _orientation(
             count=ORIENTATION_CANDIDATES,
             seed=ORIENTATION_SEED,
             profile=profile,
+            overhang_angle=profiles.analysis_limits(profile, entry)[1],
             cancelled=cancelled,
         )
         best = found.best
         current = found.baseline
-        if best.support_volume >= current.support_volume * (1.0 - ORIENTATION_GAIN):
+        if current is not None and best.support_volume >= current.support_volume * (
+            1.0 - ORIENTATION_GAIN
+        ):
             lines.append(f"{object_id}: " + tr("die aktuelle Lage ist schon gut."))
             continue
         direction = ", ".join(f"{value:.2f}" for value in best.direction)
+        if current is None:
+            lines.append(
+                f"{object_id}: "
+                + tr(
+                    "Die aktuelle Lage passt nicht in den Druckbereich. "
+                    "Eine passende Lage wurde gefunden."
+                )
+                + f" ({tr('Richtung')} ({direction}), {found.tried} {tr('Kandidaten')})."
+            )
+            continue
         lines.append(
             f"{object_id}: {tr('bessere Lage gefunden')} — {tr('Stützvolumen')} "
             f"{best.support_volume / 1000.0:.1f} cm³ {tr('statt')} "

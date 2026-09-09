@@ -35,6 +35,7 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.geom.mesh import MeshData
+from app.core.knowledge.profiles import for_process
 from app.core.log import get_logger
 from app.core.perceive.features import DETECTABLE_KINDS, detect, freeform_dropped
 from app.core.perceive.matching import (
@@ -189,6 +190,7 @@ def evaluate(
     sources: SourceAccess | None = None,
 ) -> EvaluationResult:
     """Rechnet die Szene, die das Dokument beschreibt."""
+    profile = for_process(profile, document.print_settings)
     source = registry or REGISTRY
     token = cancelled or NeverCancelled()
     operations = sorted(document.ops, key=lambda entry: entry.id)
@@ -372,6 +374,7 @@ def evaluate(
                 [hashes[entry] for entry in operation.inputs],
                 profile,
                 quality,
+                implementation_version=spec.cache_version,
             )
         except AppError as error:
             findings.append(_finding_from(error, operation))
@@ -488,9 +491,13 @@ def evaluate(
         # darunter wird gefragt, ob aus einem exakten Körper ein Netz wurde.
         kind_before = {entry: objects[entry].kind for entry in operation.inputs if entry in objects}
 
-        for entry in operation.inputs:
-            if entry not in operation.outputs:
-                objects.pop(entry, None)
+        # Die gesamte Ausgabe wird vorbereitet. Eine noch offene Zuordnung
+        # darf weder einen Eingang verbrauchen noch einen Teil der Ergebnisse
+        # in den letzten vollständigen Szenenzustand übernehmen (§15.3/15.6).
+        prepared_objects: dict[ObjectId, SceneObject] = {}
+        prepared_hashes: dict[ObjectId, str] = {}
+        prepared_names: dict[ObjectId, str] = {}
+        output_findings_start = len(findings)
 
         # Welche Kennung zu welchem Namen gehört — für Befunde einer
         # Baugruppe (siehe unten). ``None`` heißt „mehrdeutig": Zwei
@@ -543,7 +550,7 @@ def evaluate(
             )
             recorded: dict[str, dict[str, Any]] = {}
             try:
-                objects[object_id] = _with_features(
+                prepared_objects[object_id] = _with_features(
                     placed,
                     previous_features.get(object_id, {}),
                     operation,
@@ -570,6 +577,7 @@ def evaluate(
                 # heraus, und wer keinen Frage-Dialog hat (Kommandozeile,
                 # Fernsteuerung, Agent) bekam einen leeren Prüfbericht statt
                 # der beiden Bohrungen, zwischen denen zu wählen war.
+                del findings[output_findings_start:]
                 findings.append(_finding_from(error, operation))
                 stopped_at = operation.id
                 break
@@ -579,24 +587,31 @@ def evaluate(
                 # Ausgaben derselben Operation hinweg.
                 if recorded:
                     matches.setdefault(operation.id, {}).update(recorded)
-            objects[object_id] = _with_feature_reservations(
-                objects[object_id], inherited_feature_ids, active_feature_ids
+            prepared_objects[object_id] = _with_feature_reservations(
+                prepared_objects[object_id], inherited_feature_ids, active_feature_ids
             )
-            hashes[object_id] = object_hash(
+            prepared_hashes[object_id] = object_hash(
                 key,
                 index,
-                objects[object_id].reserved_feature_ids,
-                getattr(objects[object_id].mesh, "cavity", None),
+                prepared_objects[object_id].reserved_feature_ids,
+                getattr(prepared_objects[object_id].mesh, "cavity", None),
             )
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
             # Wörtlich festgehalten, nicht als Verweis: Der Name, den ein
             # Körper trug, ist die Antwort auf „welcher denn" — und er soll
             # die Sprache tragen, in der der Befund entstand.
-            names[object_id] = str(objects[object_id].name)
+            prepared_names[object_id] = str(prepared_objects[object_id].name)
 
         if stopped_at is not None:
             break
+
+        for entry in operation.inputs:
+            if entry not in operation.outputs:
+                objects.pop(entry, None)
+        objects.update(prepared_objects)
+        hashes.update(prepared_hashes)
+        names.update(prepared_names)
 
         # **Ein Befund gehört zu einem Körper, und er weiß es meist nicht.**
         # ``ingest.not_watertight`` entsteht im Loader, der auf einem Netz
@@ -1590,7 +1605,7 @@ def _with_features(
             for name, feature in detected.items()
         }
 
-    mapped = apply_mapping(detected, matched)
+    mapped = apply_mapping(detected, matched, previous=previous)
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
     # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im
     # Merkmal, das gerade erkannt wurde — und das ist per Definition
@@ -1719,6 +1734,19 @@ def _with_nested_context(
             source_id = resolved.get(spec.name)
             if isinstance(source_id, str) and source_id:
                 context[f"#{spec.name}"] = sources.identity(source_id)
+            continue
+        if spec.kind == "features":
+            named_features = resolved.get(spec.name)
+            if (
+                isinstance(named_features, list | tuple)
+                and objects is not None
+                and hashes is not None
+            ):
+                for named_feature in named_features:
+                    if isinstance(named_feature, str) and named_feature:
+                        carriers = _carrier_hashes(named_feature, objects, hashes)
+                        if carriers:
+                            context[f"#{spec.name}:{named_feature}"] = carriers
             continue
         if spec.kind == "feature" or spec.targets_feature:
             named = resolved.get(spec.name)

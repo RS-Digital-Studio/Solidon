@@ -13,7 +13,13 @@ from typing import Any, cast
 from app.core.errors import CANCEL, CHOOSE, CORRECT_INPUT, Action, AppError, GeometryError
 from app.core.geom.align import align_matrix
 from app.core.geom.attributes import used_slots
-from app.core.geom.boolean import BooleanKind, boolean, without_effect
+from app.core.geom.boolean import (
+    NOTHING_LEFT_DETAIL,
+    NOTHING_LEFT_TITLE,
+    BooleanKind,
+    boolean,
+    without_effect,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.repair import repair
 from app.core.geom.transform import (
@@ -35,6 +41,7 @@ from app.core.types import (
     MaterialSlot,
     OpContext,
     OpResult,
+    SolverInfo,
     Transform,
     Vec3,
 )
@@ -665,13 +672,55 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     # (``_kernel`` reicht sie an manifold3d durch); begrenzt hat sie nur das
     # Register. Beim Abziehen gilt dieselbe Lesart wie bei zweien: Der erste
     # Körper bleibt, alle weiteren gehen von ihm ab.
-    bodies = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
-    if len(bodies) < 2:
+    if len(ctx.inputs) < 2:
         raise GeometryError(
             _("Diese Operation braucht mindestens zwei Objekte."),
             detail=_("Wähle im Objektbaum oder im Bild einen zweiten Körper dazu."),
             suggestions=(CHOOSE, CANCEL),
         )
+    from app.core.brep import edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import Solid
+
+    exact = [entry.mesh for entry in ctx.inputs if isinstance(entry.mesh, Solid)]
+    if len(exact) == len(ctx.inputs):
+        # Exakte Eingänge bleiben exakt. Gemischte Eingänge verwenden unten
+        # weiterhin die Netz-Kette; eine Rückwandlung wird nicht behauptet.
+        ctx.cancelled.raise_if_cancelled()
+        solid = edit.boolean(kind, exact)
+        ctx.cancelled.raise_if_cancelled()
+        if solid.face_count == 0 or solid.volume <= EPS_GEOM:
+            if kind == "intersection":
+                raise GeometryError(
+                    _("Die Körper haben keinen gemeinsamen Bereich."),
+                    detail=_(
+                        "Die Schnittmenge ist leer — die gewählten Körper überschneiden sich "
+                        "nicht. Lage und Maße prüfen, damit sie sich treffen."
+                    ),
+                    suggestions=(CORRECT_INPUT, CANCEL),
+                )
+            raise GeometryError(
+                title=NOTHING_LEFT_TITLE,
+                detail=NOTHING_LEFT_DETAIL,
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+        nothing = (
+            without_effect(exact[0], solid, kind, ctx.profile) if kind != "intersection" else None
+        )
+        return OpResult(
+            outputs=[
+                dataclasses.replace(
+                    ctx.inputs[0],
+                    mesh=solid,
+                    kind="brep",
+                    features=features_of(solid),
+                    material_slots=_material_slots_after_boolean(ctx, kind, as_mesh_data(solid)),
+                )
+            ],
+            solver=SolverInfo(strategy="direct", attempted=("direct",)),
+            findings=[nothing] if nothing is not None else [],
+        )
+    bodies = [as_mesh_data(entry.mesh) for entry in ctx.inputs]
     outcome = boolean(
         kind,
         bodies,

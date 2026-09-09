@@ -298,18 +298,70 @@ def _run_stage(
 
 
 def _kernel(kind: BooleanKind, bodies: list[trimesh.Trimesh], like: MeshData) -> MeshData | None:
+    """Rechnet in Float64 und übernimmt die native Leerauskunft vor der Vernetzung."""
+    import manifold3d
+
+    if not all(
+        body.is_watertight and body.is_winding_consistent and _signed_volume(body) > 0.0
+        for body in bodies
+    ):
+        raise ValueError("Not all meshes are positive closed volumes")
+    manifolds = [
+        manifold3d.Manifold(
+            manifold3d.Mesh64(
+                # Die native Schnittstelle braucht schreibbare C-Puffer;
+                # ein vorheriges Mesh64-Ergebnis kann schreibgeschützt sein.
+                np.require(body.vertices, dtype=np.float64, requirements=("C", "W")),
+                np.require(body.faces, dtype=np.uint64, requirements=("C", "W")),
+            )
+        )
+        for body in bodies
+    ]
+    if any(body.status() != manifold3d.Error.NoError for body in manifolds):
+        raise ValueError("Manifold could not take over an input mesh")
     operation = {
-        "union": trimesh.boolean.union,
-        "difference": trimesh.boolean.difference,
-        "intersection": trimesh.boolean.intersection,
+        "union": manifold3d.OpType.Add,
+        "difference": manifold3d.OpType.Subtract,
+        "intersection": manifold3d.OpType.Intersect,
     }[kind]
-    result = operation(bodies)
-    if result is None:
+    result = manifold3d.Manifold.batch_boolean(manifolds, operation)
+    if result.status() != manifold3d.Error.NoError:
         return None
-    # Ein leerer Körper wird weitergereicht statt hier verschluckt: ob Nichts
-    # eine Antwort oder ein Scheitern ist, entscheidet _plausible — die
-    # einzige Stelle, die weiß, was der Aufrufer wollte.
-    return like.replacing(result)
+    bounds = result.bounding_box()
+    # Ein exakt flacher Hüllquader beweist Nullvolumen. Das native Integral
+    # kann für solche Kontaktflächen trotzdem positive oder negative
+    # Rundungsreste liefern; sie rechtfertigen keinen geometrischen Rückfall.
+    if any(bounds[index + 3] <= bounds[index] for index in range(3)):
+        return like.replacing(trimesh.Trimesh())
+    volume = result.volume()
+    if not math.isfinite(volume):
+        return None
+    # Gedrehte oder gekrümmte Nullhüllen besitzen einen räumlichen Hüllquader.
+    # Die Fehlerfortpflanzung über Differenzen, Kreuz- und Skalarprodukt hat
+    # die Form gamma(8) * Koordinatengröße * Oberfläche: Positionsunsicherheit
+    # mal Fläche ergibt Volumenunsicherheit. Das Band folgt Float64, nicht
+    # einer Drucktoleranz, EPS_GEOM oder einer absoluten Volumenschranke.
+    relative_error = 8.0 * np.finfo(np.float64).eps
+    roundoff = (
+        relative_error
+        / (1.0 - relative_error)
+        * max(abs(value) for value in bounds)
+        * result.surface_area()
+    )
+    if math.isfinite(roundoff) and abs(volume) <= roundoff:
+        return like.replacing(trimesh.Trimesh())
+    if volume < 0.0:
+        return None
+    built = result.to_mesh64()
+    return like.replacing(
+        trimesh.Trimesh(
+            # Die Ausgabe besitzt ihre Puffer: Nachfolgende Netzoperationen
+            # dürfen nicht am schreibgeschützten Speicher des Kerns hängen.
+            vertices=np.array(built.vert_properties[:, :3], dtype=np.float64, order="C", copy=True),
+            faces=np.array(built.tri_verts, dtype=np.int64, order="C", copy=True),
+            process=False,
+        )
+    )
 
 
 def _jitter(mesh: MeshData, seed: int | None, index: int) -> MeshData:
@@ -417,26 +469,29 @@ def shared_volume(first: trimesh.Trimesh, second: trimesh.Trimesh) -> float:
     """Wie viel Volumen zwei Körper gemeinsam haben — Berührung zählt als
     keines.
 
-    Körper, die sich nur an einer Fläche treffen — ein Deckel auf seinem Rand,
-    ein Teil auf der Platte, zwei Hälften einer Teilung — verschneiden sich zu
-    einer flachen Schale. Die ist geschlossen, nennt sich also wasserdicht,
-    hat aber in einer Richtung keine Ausdehnung. trimesh nach ihrem Volumen zu
-    fragen rechnet null und teilt dann den Schwerpunkt dadurch — eine Warnung
-    über eine Zahl, die niemand wollte: Berühren ist kein geteiltes Volumen,
-    und der Hüllquader sagt das, bevor irgendein Integral läuft.
+    Die Messung verwendet denselben Float64-Kern wie die Rückfallkette.
+    Dessen Leerauskunft trennt Kontakt von dünnem positivem Schnittvolumen,
+    ohne aus einer flachen Schale einen Schwerpunkt berechnen zu lassen.
     """
     try:
-        shared = trimesh.boolean.intersection([first, second])
+        shared = _kernel("intersection", [first, second], MeshData.of(first))
     except PROGRAMMING_ERRORS:
         raise
     except Exception:  # Kerne scheitern auf kerneigene Arten
         return 0.0
-    if shared is None or not len(shared.faces):
+    if shared is None or shared.triangle_count == 0:
         return 0.0
-    extent = shared.bounds[1] - shared.bounds[0]
-    if float(np.min(extent)) <= EPS_GEOM:
+    return _signed_volume(shared.raw)
+
+
+def _signed_volume(body: trimesh.Trimesh) -> float:
+    """Volumenintegral ohne Schwerpunktdivision, nahe am Körper ausgewertet."""
+    triangles = np.asarray(body.triangles, dtype=np.float64)
+    if not len(triangles):
         return 0.0
-    return abs(float(shared.volume))
+    local = triangles - triangles[0, 0]
+    products = np.einsum("ij,ij->i", local[:, 0], np.cross(local[:, 1], local[:, 2]))
+    return math.fsum(products) / 6.0
 
 
 def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
@@ -460,7 +515,7 @@ def _plausible(mesh: MeshData, allow_empty: bool = False) -> bool:
     """
     if mesh.triangle_count == 0:
         return allow_empty
-    return mesh.volume > EPS_GEOM and bool(mesh.raw.is_watertight)
+    return bool(mesh.raw.is_watertight) and _signed_volume(mesh.raw) > EPS_GEOM
 
 
 def _findings_for(stage: SolverStage) -> list[Finding]:

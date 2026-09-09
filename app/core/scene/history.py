@@ -403,6 +403,7 @@ class History:
         planned: list[Operation] = []
         for draft in drafts:
             planned.append(self._plan(draft, known))
+            known.difference_update(set(planned[-1].inputs) - set(planned[-1].outputs))
             known.update(planned[-1].outputs)
 
         # Jetzt stehen die Ausgabekennungen fest, und erst jetzt lässt sich

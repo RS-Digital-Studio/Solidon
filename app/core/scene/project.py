@@ -916,6 +916,29 @@ def _validate_operation_schema(
     return outputs
 
 
+def _validate_binding_identity(binding: dict[str, Any], where: str) -> None:
+    """Spulen und Herstellerprofile tragen dieselbe vollständige Filamentidentität."""
+    name = binding.get("name", "")
+    if not isinstance(name, str) and (
+        not isinstance(name, dict)
+        or not isinstance(name.get("msgid"), str)
+        or (name.get("context") is not None and not isinstance(name["context"], str))
+        or (name.get("values") is not None and not isinstance(name["values"], dict))
+    ):
+        raise ValueError(f"schema:{where}.name")
+    for field_name in ("material", "material_type"):
+        if binding.get(field_name) is not None and not isinstance(binding[field_name], str):
+            raise ValueError(f"schema:{where}.{field_name}")
+    colour = binding.get("colour")
+    if colour is not None:
+        if not isinstance(colour, list) or len(colour) != 3:
+            raise ValueError(f"schema:{where}.colour")
+        for channel in colour:
+            _schema_number(channel, f"{where}.colour")
+            if not 0.0 <= channel <= 1.0:
+                raise ValueError(f"schema:{where}.colour")
+
+
 def _validate_spool_bindings(value: object, location: str) -> None:
     """Prüft dieselben Bindungen in Druckeinstellungen und beiden Undo-Seiten."""
     bindings = _nested_records(value, location)
@@ -924,25 +947,29 @@ def _validate_spool_bindings(value: object, location: str) -> None:
         identifier = binding.get("spool_identifier")
         if not isinstance(identifier, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", identifier):
             raise ValueError(f"schema:{where}.spool_identifier")
-        name = binding.get("name", "")
-        if not isinstance(name, str) and (
-            not isinstance(name, dict)
-            or not isinstance(name.get("msgid"), str)
-            or (name.get("context") is not None and not isinstance(name["context"], str))
-            or (name.get("values") is not None and not isinstance(name["values"], dict))
-        ):
-            raise ValueError(f"schema:{where}.name")
-        for field_name in ("material", "material_type"):
-            if binding.get(field_name) is not None and not isinstance(binding[field_name], str):
-                raise ValueError(f"schema:{where}.{field_name}")
-        colour = binding.get("colour")
-        if colour is not None:
-            if not isinstance(colour, list) or len(colour) != 3:
-                raise ValueError(f"schema:{where}.colour")
-            for channel in colour:
-                _schema_number(channel, f"{where}.colour")
-                if not 0.0 <= channel <= 1.0:
-                    raise ValueError(f"schema:{where}.colour")
+        _validate_binding_identity(binding, where)
+
+
+def _validate_slot_profile_bindings(value: object, location: str) -> None:
+    """Profilbindungen erlauben portable Namen und keine örtlichen Dateipfade."""
+    from app.core.knowledge.filaments import profile_name
+    from app.core.scene.serialise import _slot_profile_binding_from_data
+
+    identities: set[object] = set()
+    for index, binding in enumerate(_nested_records(value, location)):
+        where = f"{location}[{index}]"
+        name = binding.get("profile_name")
+        if not isinstance(name, str):
+            raise ValueError(f"schema:{where}.profile_name")
+        try:
+            profile_name(name)
+        except ValidationError as problem:
+            raise ValueError(f"schema:{where}.profile_name") from problem
+        _validate_binding_identity(binding, where)
+        key = _slot_profile_binding_from_data(binding).key
+        if key in identities:
+            raise ValueError(f"schema:{where}.duplicate_identity")
+        identities.add(key)
 
 
 def _validate_state_schema(value: object, where: str) -> None:
@@ -1052,6 +1079,10 @@ def _validate_current_project_schema(data: dict[str, Any]) -> None:
         slot_profiles = stored.get("slot_profiles", [])
         if not isinstance(slot_profiles, list):
             raise ValueError("schema:print_settings.slot_profiles")
+        if stored.get("slot_profile_bindings") is not None:
+            _validate_slot_profile_bindings(
+                stored["slot_profile_bindings"], "print_settings.slot_profile_bindings"
+            )
         project_id = stored.get("inventory_project_id", "")
         if not isinstance(project_id, str) or (
             project_id and not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", project_id)
@@ -1451,6 +1482,8 @@ def load(path: Path) -> Project:
                         entry_name,
                     )
                 )
+
+            part_check.normalise_legacy_placement(document)
 
             payloads: dict[SourceId, bytes] = {}
             # Ein Eintrag wird **einmal** gelesen, egal wie viele Quellen ihn

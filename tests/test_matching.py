@@ -368,6 +368,30 @@ def test_a_bore_axis_has_no_sign() -> None:
     assert same < 1.0, "dieselbe Bohrung, nur mit umgekehrt gelesener Achse"
 
 
+def test_matching_keeps_the_new_axis_measurement_with_the_previous_direction() -> None:
+    """Die Orientierung reist mit, eine tatsächliche Änderung der Achslage bleibt messbar."""
+    old = Feature(
+        id="hole_old",
+        kind="hole",
+        provenance="detected",
+        params={"centre": (0.0, 0.0, 0.0), "axis": (0.0, 0.0, 1.0), "diameter": 5.0},
+    )
+    measured = (0.01, 0.0, -float(np.sqrt(1.0 - 0.01**2)))
+    new = Feature(
+        id="hole_new",
+        kind="hole",
+        provenance="detected",
+        params={**old.params, "axis": measured},
+    )
+    result = match({old.id: old}, {new.id: new}, (0.0, 0.0, 0.0), 20.0)
+
+    mapped = apply_mapping({new.id: new}, result, previous={old.id: old})
+
+    np.testing.assert_allclose(mapped[old.id].params["axis"], -np.asarray(measured))
+    assert old.params["axis"] == (0.0, 0.0, 1.0)
+    assert new.params["axis"] == measured
+
+
 def test_a_face_normal_keeps_its_sign() -> None:
     """Die Gegenprobe: eine Flächennormale trägt Bedeutung — innen ist nicht
     außen, und zwei entgegengesetzte Flächen sind zwei Flächen.
@@ -494,6 +518,55 @@ def test_features_travel_with_the_motion_the_operation_reports() -> None:
 
     assert result.settled, "carried along first, every bore finds itself again"
     assert not result.orphaned
+
+
+@pytest.mark.parametrize("angle", [180.0, 127.0])
+def test_the_evaluated_bore_direction_travels_through_a_rigid_rotation(
+    document, profile, angle: float
+) -> None:
+    """Eine gedrehte Mündung folgt dem Körper auch jenseits einer halben Vierteldrehung."""
+    from app.core.geom.transform import rotation
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document = document
+    document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "plate_holes.stl").read_bytes()
+    history = History(document)
+    history.apply("Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    sources = ProjectSources(project)
+    before = evaluate(document, profile, sources=sources)
+    assert before.complete
+    old_axes = {
+        name: tuple(feature.params["axis"])
+        for name, feature in before.scene.objects["obj_1"].features.items()
+        if feature.kind == "hole"
+    }
+    assert len(old_axes) == 4
+    history.apply(
+        "Drehen",
+        [
+            OperationDraft(
+                op="rotate_object", inputs=("obj_1",), params={"axis": "x", "angle": angle}
+            )
+        ],
+    )
+
+    after = evaluate(document, profile, sources=sources)
+
+    assert after.complete
+    turn = rotation("x", angle)[:3, :3]
+    for name, axis in old_axes.items():
+        np.testing.assert_allclose(
+            after.scene.objects["obj_1"].features[name].params["axis"],
+            turn @ np.asarray(axis),
+            atol=1e-8,
+        )
+        assert before.scene.objects["obj_1"].features[name].params["axis"] == axis
 
 
 def test_a_rigid_motion_keeps_a_feature_when_detection_misses_it(

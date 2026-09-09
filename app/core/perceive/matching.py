@@ -298,7 +298,12 @@ def match(
     return result
 
 
-def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[FeatureId, Feature]:
+def apply_mapping(
+    new: dict[FeatureId, Feature],
+    result: MatchResult,
+    *,
+    previous: Mapping[FeatureId, Feature] | None = None,
+) -> dict[FeatureId, Feature]:
     """Benennt die neuen Merkmale auf die alten Bezeichner um, die überlebt
     haben.
 
@@ -310,6 +315,11 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
     ein Loch, das nie ein Merkmal wurde. Verwaiste Namen bleiben ebenfalls
     gesperrt — eine ID, die eben noch etwas anderes hieß, sofort neu zu
     vergeben, ließe Passungen und Ops auf das falsche Merkmal zeigen.
+
+    ``previous`` liegt bereits im neuen Bezugsrahmen. Bei Zylindermerkmalen
+    gibt seine Achse das Vorzeichen der neuen Messachse vor; die gemessene
+    Achslage bleibt erhalten. Kegel und Flächennormalen sind geometrisch
+    gerichtet und übernehmen dieses Vorzeichen nicht.
     """
     renamed: dict[FeatureId, Feature] = {}
     reverse = {value: key for key, value in result.mapping.items()}
@@ -321,6 +331,19 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
     taken: set[FeatureId] = set(result.mapping) | set(result.orphaned) | set(result.ambiguous)
     for identifier, feature in new.items():
         target = reverse.get(identifier)
+        if (
+            target is not None
+            and previous is not None
+            and feature.kind in {"hole", "pin", "fillet"}
+        ):
+            reference = previous.get(target)
+            if reference is not None and "axis" in reference.params and "axis" in feature.params:
+                axis = np.asarray(feature.params["axis"], dtype=float)
+                if float(axis @ np.asarray(reference.params["axis"], dtype=float)) < 0.0:
+                    feature = replace(
+                        feature,
+                        params={**feature.params, "axis": tuple(float(value) for value in -axis)},
+                    )
         if target is None:
             target = identifier if identifier not in taken else _fresh_id(identifier, taken)
         taken.add(target)

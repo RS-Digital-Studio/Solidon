@@ -250,7 +250,7 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
         # bisherigen Richtung; eine Änderung erfolgt über die eigene Drehzeile.
         # Gefragt wird das Schema nach seinen Richtungsfeldern — ein Rezept
         # mit eigenem Maß ``nx`` nennt sie anders, und die blieben sonst stehen.
-        if entry.kind != "feature" and entry.name not in normal_fields_of(spec)
+        if entry.kind not in {"feature", "features"} and entry.name not in normal_fields_of(spec)
     )
 
 

@@ -16,6 +16,22 @@ eine leere Folge entfernt die Bindungen. Andere Druckwerte und die stabile
 Projektkennung bleiben erhalten. Datei- und Undo-Seiten benutzen dieselben
 Serialisierungs- und Schemahelfer.
 
+Herstellerprofile stehen in `PrintSettings.slot_profile_bindings` an derselben
+vollständigen Filamentidentität. `None` erhält den alten Positionsvertrag,
+eine leere Folge enthält ausdrücklich keine Zuordnung. Die Migration
+ergänzt keine geratenen Identitäten; die Sitzung bindet alte Profilpositionen
+an der ursprünglichen vollständigen Szene. Doppelte Identitäten und örtliche
+Dateipfade werden vor dem Laden abgewiesen. Profilnamen dürfen Materialzusätze
+wie `PLA/PETG` enthalten; daraus entsteht kein Dateizugriff.
+
+Parameter mit `kind="features"` speichern eine Liste stabiler Merkmalkennungen.
+Jeder fehlende Verweis wird einzeln aufgelöst, auch nach einem Cachetreffer.
+Wenn eine leere Auswahl den ganzen Körper bedeutet, darf „Verweis streichen“
+den Wirkungsbereich nicht vergrößern. Abbrechen erhält den fehlenden Verweis.
+Eine Körpervorbelegung entfernt nur ihre selbst geometrisch abgeleiteten
+Einzel- und Mehrfachverweise. Ausdrücklich gewählte Merkmale und nachträglich
+übergebene Werte behalten Vorrang; aus einer Körperwahl wird keine Flächenwahl.
+
 ## Der Kreislauf
 
 Namenlose Wiederherstellungen besitzen eine Sitzungstoken-Kennung und eine
@@ -86,6 +102,24 @@ Eingangsanzahl aus dem Register, bevor Geometrie gerechnet wird.
 
 `ops.py` (Umbenennen, Löschen, Duplizieren, Muster) · `variants.py` (der
 Variantengenerator, §28.3)
+
+`History.apply` führt während der Planung die lebenden Objektkennungen nach
+jedem Schritt fort. Ein im selben Bündel verbrauchter Eingang ist für den
+nächsten Schritt ungültig; die Ablehnung lässt das Dokument unverändert.
+Die Auswertung bereitet alle Ausgabeobjekte einschließlich Merkmalszuordnung,
+Hashes und Namen vor, bevor sie Eingänge verbraucht. Eine angehaltene
+Zuordnung liefert dadurch den letzten vollständig gerechneten Szenenzustand.
+
+`OperationSpec.cache_version` bezeichnet den implementierten Bausteinstand.
+Der Operationshash enthält diesen Wert zusätzlich zu Parametern und
+Eingängen. Ein ersetztes Rezept entwertet dadurch auch bereits vorhandene
+Ergebnisse im Speicher- und Dateicache. Die Version beschreibt den geladenen
+Code beziehungsweise die registrierten Rezeptdaten, nicht eine inzwischen
+anderweitig geänderte Datei.
+
+Lineare und kreisförmige Muster bewegen Kopien über `moved_body`. Eine starre
+Bewegung erhält einen exakten Körper; die Kopie bleibt anschließend im
+B-Rep-Kern bearbeitbar.
 
 ## Grenzen
 

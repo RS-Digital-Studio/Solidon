@@ -107,9 +107,9 @@ def test_json_schema_carries_bounds_units_and_choices() -> None:
     assert schema["additionalProperties"] is False
     assert schema["required"] == ["target"]
     diameter = schema["properties"]["diameter"]
-    assert diameter["type"] == "number"
+    assert diameter["type"] == ["number", "string"]
     assert diameter["minimum"] == pytest.approx(0.5)
     assert diameter["maximum"] == pytest.approx(50.0)
     assert "[mm]" in diameter["description"]
     assert schema["properties"]["mode"]["enum"] == ["subtract", "add"]
-    assert schema["properties"]["count"]["type"] == "integer"
+    assert schema["properties"]["count"]["type"] == ["integer", "string"]

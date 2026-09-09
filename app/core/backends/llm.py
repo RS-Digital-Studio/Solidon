@@ -996,9 +996,9 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 #: vollständig auf der Grafikkarte. Wer ein größeres Modell fährt, zahlt hier
 #: zuerst.
 #:
-#: Die Reihe fuhr 84 Schemata. Am 08.09.2026 sind es mit 115 Werkzeugen
-#: **25 670 Token** für den kompakten Satz, den dieser Weg fährt
-#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — **78,3 %** des
+#: Die Reihe fuhr 84 Schemata. Am 08.09.2026 sind es mit 119 Werkzeugen
+#: **28 281 Token** für den kompakten Satz, den dieser Weg fährt
+#: (:func:`~app.core.agent.tools.tool_schemas` mit ``compact``) — **86,3 %** des
 #: Fensters. Am 03.09. waren es 22 856 bei 111, am 31.08. 19 641 bei 106, und
 #: davor am selben Tag 24 161; die Differenz zwischen den letzten beiden sind
 #: die zwei Schritte, die wortgleiche Wiederholung aus dem Schema in den
@@ -1828,17 +1828,23 @@ GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
 #: Zahl wächst still" —, hat sich damit selbst belegt. Er stimmte, und er war
 #: um mehr als das Vierfache zu optimistisch.
 #:
-#: **Was daraus folgt, ist keine Zahl, sondern eine Grenze:** Bei 78 % des
+#: Die nachfolgende Operations-/Bausteineinheit mit Parameterbindungen,
+#: Featurelisten und drei direkt erzeugbaren Kalibrierkörpern wurde mit
+#: 119 Werkzeugen erneut gemessen: **28 281 Token**, 18,9 s kalt und 2,3 s
+#: warm (je ein Lauf, qwen3:14b, vollständig im VRAM). Der warme Wert nutzt
+#: den Promptcache und ist keine ungepufferte Einleserate.
+#:
+#: **Was daraus folgt, ist keine Zahl, sondern eine Grenze:** Bei 86,3 % des
 #: Fensters allein für Auftrag und Werkzeuge bleibt für Szenensteckbrief,
 #: Prüfbericht und Chatverlauf weniger als ein Viertel. Die nächsten
 #: Operationen kosten den Chat nicht mehr Wartezeit, sondern Platz.
-PROMPT_TOKENS: Final = 25670
+PROMPT_TOKENS: Final = 28281
 
 #: Werkzeugzahl derselben Messung. Der Test macht eine neue Operation zum
 #: bewussten Anlass für eine neue Messung, statt die Zeitangabe still altern zu
 #: lassen — am 08.09.2026 hat er genau das geleistet und dabei eine
 #: Fortschreibung widerlegt, die vier Tage lang plausibel aussah.
-PROMPT_TOOL_COUNT: Final = 115
+PROMPT_TOOL_COUNT: Final = 119
 
 
 @dataclass(frozen=True, slots=True)

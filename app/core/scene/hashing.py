@@ -56,12 +56,19 @@ def profile_key(profile: Profile) -> str:
         printer.layer_height,
         printer.extrusion_width,
         printer.build_volume,
+        printer.printable_area,
+        printer.bed_exclusions,
+        printer.printable_height,
         material.id,
         material.clearance,
         material.press,
         material.hole_compensation,
         material.elephant_foot,
         material.shrinkage,
+        material.youngs_modulus,
+        material.yield_strength,
+        profile.minimum_wall_thickness,
+        profile.overhang_limit_degrees,
     )
 
 
@@ -71,6 +78,8 @@ def operation_hash(
     input_hashes: Sequence[str],
     profile: Profile,
     quality: Quality,
+    *,
+    implementation_version: str = "",
 ) -> str:
     """Die Identität eines gerechneten Ergebnisses."""
     return digest(
@@ -80,6 +89,7 @@ def operation_hash(
         profile_key(profile),
         quality,
         operation.seed,
+        implementation_version,
     )
 
 

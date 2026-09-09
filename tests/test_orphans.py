@@ -208,6 +208,72 @@ def test_an_empty_reference_is_not_a_reference() -> None:
     assert orphans.references(document_with_op("")) == []
 
 
+def test_feature_lists_reference_and_rewrite_each_selected_feature(scene: Scene) -> None:
+    """Eine Antwort ersetzt nur die verlorene Kennung, nicht die übrige Auswahl."""
+    document = document_with_op("", op="clear_filament")
+    faces = [
+        key for key, feature in scene.objects["obj_1"].features.items() if feature.kind == "face"
+    ]
+    kept = faces[0]
+    document.ops[0] = replace(document.ops[0], params={"at_features": [kept, "face_missing"]})
+    found = orphans.references(document)
+    assert [reference.where for reference in found] == [
+        "op:1:at_features:0",
+        "op:1:at_features:1",
+    ]
+    assert [reference.ref.feature_id for reference in found] == [kept, "face_missing"]
+    assert all(not reference.removable for reference in found)
+    replacement = faces[-1]
+
+    result = orphans.check(document, scene, lambda question, choices: replacement)
+
+    assert result.rewritten == 1
+    assert document.ops[0].params["at_features"] == (kept, replacement)
+    assert not orphans.check(document, scene, refuse).changed
+
+
+@pytest.mark.parametrize("multiple", [False, True])
+def test_missing_clear_feature_cannot_expand_removal_to_whole_body(scene: Scene, multiple) -> None:
+    """Eine verweigerte Zuordnung lässt den Verweis stehen, auch bei alten Einzelwerten."""
+    document = document_with_op("face_missing", op="clear_filament")
+    if multiple:
+        document.ops[0] = replace(document.ops[0], params={"at_features": ["face_missing"]})
+    before = document.ops[0].params
+    offered = []
+
+    def answer(question, choices):
+        offered.extend(choices)
+        return orphans.REMOVE_CHOICE
+
+    result = orphans.check(document, scene, answer)
+
+    assert orphans.REMOVE_CHOICE not in offered
+    assert not result.changed
+    assert document.ops[0].params == before
+    assert result.findings[0].severity == "error"
+
+
+def test_feature_list_cache_depends_on_each_named_carrier(scene: Scene) -> None:
+    """Alle benannten Merkmale zählen für den Cache, nicht nur der erste Listeneintrag."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+    from app.core.types import Feature
+
+    face = Feature("face_a", "face", "detected", {})
+    first = replace(scene.objects["obj_1"], features={"face_a": face})
+    second = replace(first, id="obj_2", features={"face_b": replace(face, id="face_b")})
+    objects = {first.id: first, second.id: second}
+    params = {"at_features": ("face_a", "face_b")}
+    spec = REGISTRY.get("clear_filament")
+    before = _with_nested_context(
+        spec.params, params, {}, None, objects, {"obj_1": "a", "obj_2": "b"}
+    )
+    after = _with_nested_context(
+        spec.params, params, {}, None, objects, {"obj_1": "a", "obj_2": "c"}
+    )
+    assert before != after
+
+
 def test_a_lost_reference_of_an_operation_is_put_to_the_user(scene: Scene) -> None:
     document = document_with_op("hole_9")
     answers: list[str] = []

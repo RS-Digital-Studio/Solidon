@@ -619,11 +619,11 @@ def test_the_command_line_knows_every_parameter_kind() -> None:
     Zahlenarten auch Zahlen liefern.
     """
     from app.cli.main import _PARAM_TYPES
-    from app.core.registry.params import NUMBER_KINDS, TEXT_KINDS
+    from app.core.registry.params import LIST_KINDS, NUMBER_KINDS, TEXT_KINDS
 
     assert NUMBER_KINDS and TEXT_KINDS, "die Mengen kommen aus dem Register, nicht aus dem Nichts"
 
-    fehlend = (NUMBER_KINDS | TEXT_KINDS) - set(_PARAM_TYPES)
+    fehlend = (NUMBER_KINDS | TEXT_KINDS | LIST_KINDS) - set(_PARAM_TYPES)
     assert not fehlend, f"die Kommandozeile kennt diese Arten nicht: {sorted(fehlend)}"
 
     for kind in NUMBER_KINDS:
@@ -633,6 +633,27 @@ def test_the_command_line_knows_every_parameter_kind() -> None:
         )
     for kind in TEXT_KINDS:
         assert _PARAM_TYPES[kind] is str, f"{kind} ist Text"
+
+
+def test_feature_selection_from_cli_is_a_real_list_and_preserves_legacy_single_mode() -> None:
+    """Mehrfachwerte werden einzeln angegeben; alte Einzelwerte und Ganzkörper bleiben möglich."""
+    from app.cli.main import build_parser
+    from app.core.registry import REGISTRY
+    from app.core.registry.params import validate
+
+    parser = build_parser()
+    many = parser.parse_args(
+        ["run", "clear_filament", "x.p3d", "--at-features", "face_1", "face_2"]
+    )
+    single = parser.parse_args(["run", "clear_filament", "x.p3d", "--at-feature", "face_1"])
+    whole = parser.parse_args(["run", "clear_filament", "x.p3d"])
+    assert many.at_features == ["face_1", "face_2"]
+    assert many.at_feature is None
+    assert single.at_feature == "face_1"
+    assert single.at_features is None
+    assert whole.at_features is None and whole.at_feature is None
+    validated = validate(REGISTRY.get("clear_filament").params, {"at_features": many.at_features})
+    assert validated.at_features == ("face_1", "face_2")
 
 
 def test_assigning_a_filament_works_from_the_command_line(tmp_path: Path) -> None:

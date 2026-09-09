@@ -1,6 +1,7 @@
 """Kleine Gegenproben für die geometrischen Kundenwege des Gesamtreviews."""
 
 import importlib
+import math
 from dataclasses import replace
 
 import numpy as np
@@ -17,6 +18,182 @@ from app.core.sketch.planes import feature_plane
 from app.core.sketch.serialize import sketch_to_text
 from app.core.sketch.shapes import rectangle
 from app.core.types import Sketch, SketchConstraint, SketchElement
+
+
+@pytest.fixture
+def review_run(profile):
+    """Ruft die echte Operation mit dem isolierten Druckprofil auf."""
+    from tests.test_brep import run
+
+    def execute(op, entry=None, **params):
+        return run(op, entry, profile, **params)
+
+    return execute
+
+
+@pytest.mark.parametrize(
+    "params,expected",
+    [
+        ({"x": 10.0, "z": 10.0, "nx": 1.0, "depth": 5.0}, math.pi * 20.0),
+        (
+            {
+                "z": 20.0,
+                "depth": 10.0,
+                "widening_diameter": 8.0,
+                "widening_depth": 3.0,
+                "transition_angle": 180.0,
+            },
+            math.pi * 76.0,
+        ),
+    ],
+)
+def test_exact_drill_keeps_normal_and_widening(params, expected, review_run) -> None:
+    """Die exakte Bohrung schneidet die gespeicherte Richtung und Aufweitung."""
+    run = review_run
+
+    load_operations()
+    source = run("create_brep_box", width=20.0, depth=20.0, height=20.0).outputs[0]
+    result = run("drill_brep_hole", source, diameter=4.0, compensate=False, **params)
+    assert source.mesh.volume - result.outputs[0].mesh.volume == pytest.approx(expected)
+
+
+def test_exact_drill_uses_object_material(profile) -> None:
+    """Das Material des Zielkörpers bestimmt die Lochkompensation."""
+    from app.core.knowledge.profiles import for_object
+    from tests.test_brep import run
+
+    load_operations()
+    source = run("create_brep_box", None, profile, width=20.0, depth=20.0, height=20.0).outputs[0]
+    source = replace(source, material="pla")
+    result = run("drill_brep_hole", source, profile, diameter=4.0, z=20.0, compensate=True)
+    diameter = 4.0 + for_object(profile, source).material.hole_compensation
+    assert source.mesh.volume - result.outputs[0].mesh.volume == pytest.approx(
+        math.pi * diameter**2 * 5.0
+    )
+
+
+def test_pocket_upper_edge_is_identical_for_mesh_and_exact(review_run) -> None:
+    """Eine innen liegende Oberkante bekommt keine zusätzliche Schnitttiefe."""
+    run = review_run
+
+    load_operations()
+    for op in ("create_box", "create_brep_box"):
+        source = run(op, width=20.0, depth=20.0, height=20.0).outputs[0]
+        result = run("sketch_pocket", source, length=4.0, width=4.0, depth=2.0, z=10.0)
+        assert source.mesh.volume - result.outputs[0].mesh.volume == pytest.approx(32.0)
+
+
+@pytest.mark.parametrize("op", ["union_objects", "subtract_objects", "intersect_objects"])
+def test_user_boolean_preserves_exact_bodies(document, profile, op) -> None:
+    """Nach dem Nutzerbefehl bleibt eine exakte Kante weiter verrundbar."""
+    from app.core.scene import History, OperationDraft, evaluate
+
+    load_operations()
+    history = History(document)
+    for x in (0.0, 5.0):
+        history.apply(
+            "Quader",
+            [
+                OperationDraft(
+                    op="create_brep_box",
+                    params={"width": 20.0, "depth": 20.0, "height": 20.0, "x": x},
+                )
+            ],
+        )
+    history.apply("Boolesch", [OperationDraft(op=op, inputs=("obj_1", "obj_2"))])
+    result = evaluate(document, profile)
+    assert result.stopped_at is None
+    assert result.scene.objects["obj_1"].kind == "brep"
+    expected = {"union_objects": 10000.0, "subtract_objects": 2000.0, "intersect_objects": 6000.0}
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(expected[op])
+    history.apply(
+        "Rundung", [OperationDraft(op="fillet_edges", inputs=("obj_1",), params={"radius": 0.5})]
+    )
+    assert evaluate(document, profile).stopped_at is None
+
+
+@pytest.mark.parametrize("mode", ["linear", "circular"])
+def test_pattern_copies_remain_exact(document, profile, mode) -> None:
+    """Reihe und Kranz erhalten für jede Kopie die exakte Körperart."""
+    from app.core.scene import History, OperationDraft, evaluate
+
+    load_operations()
+    history = History(document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_brep_box", params={"width": 10.0, "depth": 10.0, "height": 10.0}
+            )
+        ],
+    )
+    history.apply(
+        "Muster",
+        [
+            OperationDraft(
+                op="pattern", inputs=("obj_1",), params={"kind": mode, "count": 2, "spacing": 20.0}
+            )
+        ],
+    )
+    result = evaluate(document, profile)
+    assert result.stopped_at is None
+    assert [obj.kind for obj in result.scene.objects.values()] == ["brep", "brep"]
+    history.apply(
+        "Rundung", [OperationDraft(op="fillet_edges", inputs=("obj_2",), params={"radius": 1.0})]
+    )
+    assert evaluate(document, profile).stopped_at is None
+
+
+def test_colouring_preserves_the_hollow_space(review_run) -> None:
+    """Ganze Farbe und einzelne Flächen lassen die Innenraumgeometrie bestehen."""
+    from app.core.geom.paint import fill_feature
+
+    run = review_run
+
+    load_operations()
+    source = run("create_box", width=12.0, depth=12.0, height=12.0).outputs[0]
+    hollow = run("hollow_object", source, wall=2.0, open_top=True, vents=False).outputs[0]
+    assert hollow.mesh.cavity is not None
+    painted = run("assign_slot", hollow, slot=0, colour="#ff0000").outputs[0]
+    assert painted.mesh.cavity is hollow.mesh.cavity
+    filled = fill_feature(hollow.mesh, (0, 1), 1).mesh
+    assert filled.cavity is hollow.mesh.cavity
+    assert run("lattice_fill", painted, structure="cubic", cell=5.0, wall=1.0).outputs
+
+
+def test_inner_floor_sketch_grows_into_the_cavity(review_run) -> None:
+    """Die nach außen gerichtete Innenbodennormale zeigt in den Hohlraum."""
+    run = review_run
+
+    load_operations()
+    source = replace(
+        run("create_brep_box", width=20.0, depth=20.0, height=20.0).outputs[0], id="obj_1"
+    )
+    hollow = run("shell_exact", source, wall=2.0).outputs[0]
+    floor = next(
+        f
+        for f in hollow.features.values()
+        if f.kind == "face"
+        and abs(float(f.params["centre"][2]) - 2.0) < 1e-5
+        and float(f.params["normal"][2]) > 0.9
+    )
+    text = sketch_to_text(replace(rectangle(4.0, 4.0), plane=feature_plane(hollow.id, floor.id)))
+    raised = run("sketch_extrude", hollow, sketch=text, height=3.0).outputs[0]
+    assert raised.mesh.bounds.minimum[2] == pytest.approx(2.0)
+    assert raised.mesh.bounds.maximum[2] == pytest.approx(5.0)
+    pocket = run("sketch_pocket", hollow, sketch=text, depth=1.0).outputs[0]
+    assert hollow.mesh.volume - pocket.mesh.volume == pytest.approx(16.0)
+
+
+def test_drawn_free_dof_reaches_the_operation_report(review_run) -> None:
+    """Freie Maße bleiben nach dem Schließen des Editors als Befund sichtbar."""
+    run = review_run
+
+    load_operations()
+    sketch = Sketch(plane="plane:xy", elements=(SketchElement("circle", ((0.0, 0.0), (2.0, 0.0))),))
+    result = run("sketch_extrude", sketch=sketch_to_text(sketch), height=3.0)
+    finding = next(f for f in result.findings if f.code == "sketch.underconstrained")
+    assert finding.values["free_dof"] == solver.solve_sketch(sketch).free_dof
 
 
 def test_g05_mesh_pocket_on_an_offset_face() -> None:

@@ -39,6 +39,25 @@ def _parameter(name: str, value: float) -> Parameter:
     return Parameter(name=name, value=value, unit="mm")
 
 
+def test_a_batch_cannot_reuse_an_input_consumed_inside_it(
+    document: Document, registry: Registry
+) -> None:
+    """Die Planung eines Bündels folgt nach jedem Schritt den noch lebenden Körpern."""
+    history = History(document, registry)
+    history.apply("Erzeugen", [OperationDraft(op="make_object")])
+    before = document_to_data(document)
+    with pytest.raises(ValidationError) as caught:
+        history.apply(
+            "Teilen und alten Körper ändern",
+            [
+                OperationDraft(op="split_object", inputs=("obj_1",)),
+                OperationDraft(op="rename_object", inputs=("obj_1",)),
+            ],
+        )
+    assert caught.value.constraint == "unknown_object"
+    assert document_to_data(document) == before
+
+
 @op_params
 class SeedParams(BaseParams):
     count: int = param(title=_("Anzahl"), default=2, minimum=1)
