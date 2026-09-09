@@ -70,6 +70,8 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen deterministisch erzeugen und Finalisten gegen vollständige Suche prüfen |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Gegenstücke, Loft, Sweep, Kantenverrundung, Prüfstücke, Rezeptentwurf, Mehrfachmerkmale und SCAD-Ausgabe umsetzen |
+| [RM-148 — Zahlenparameter gegen NaN und Unendlich sichern](#rm-148) | Geometrie, Erkennung und Druckvorbereitung | Endlichkeitsprüfung zentral in `registry.params._coerce` mit Regressionstest |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -629,6 +631,37 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Bedeutung ist zusätzlich zur Farbe erkennbar.
 
   [Bauplan-Abgleich und Nachweis](ROADMAP-ARCHIV.md#bauplan-v12--vollständiger-abgleich-08092026).
+
+<a id="rm-147"></a>
+
+- [ ] **RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen.** Robert hat sie am
+  08.09.2026 zusammen mit den Korrekturen der Operations- und Bausteindurchsicht beauftragt;
+  die Korrekturen sind hinaus, diese acht nicht. E1: Gegenstücke gemeinsam auf zwei Körpern
+  platzieren, mit gemeinsamen Maßen, Passung, Vorschau und einem Undo. E2: Loft zwischen zwei
+  unabhängigen Skizzen mit geprüfter Topologie. E3: Sweep entlang einer gespeicherten
+  gezeichneten Bahn. E4: einzelne exakte Kanten verrunden und fasen, mit stabilen Verweisen.
+  E5: kleine Prüfstücke aus der tatsächlichen Verbindung, mit Stufen, Kennzeichnung und
+  Wertübernahme. E6: ein Rezept als bearbeitbaren Entwurf öffnen, Herkunft erhalten, neu
+  speichern oder bewusst ersetzen. E7: einen Baustein auf mehrere gewählte Merkmale setzen,
+  mit gemeinsamer Vorschau und einem Undo. E8: SCAD-Ausgabe mit den aktuellen Werten in
+  Katalog und Kommandozeile, ohne Ausführung (Regel 11). Abnahme je Erweiterung nach der
+  achtteiligen Checkliste aus `AGENTS.md`; E4 verlangt zusätzlich den exakten Kern.
+
+  Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
+  Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische
+  Kennzeichnung der Varianten, RM-138, RM-087 und RM-127/RM-140.
+
+<a id="rm-148"></a>
+
+- [ ] **RM-148 — Zahlenparameter gegen NaN und Unendlich sichern.** `registry.params._coerce`
+  prüft einen Fließkommawert heute nur gegen seine Grenzen, und ein Grenzvergleich mit NaN ist
+  immer falsch — der Wert läuft durch. Die Druckeinstellungen haben ihren eigenen Riegel
+  bekommen (08.09.2026: „NaN, Unendlich und numerischer Überlauf gelangen weder in
+  Einstellungen noch als rohe Konvertierungsfehler zum Nutzer"), die allgemeine
+  Parameterannahme nicht. Die Korrektur war im Codex-Fenster vorbereitet und ist mit dessen
+  Limit liegengeblieben. Abnahme: eine zentrale Endlichkeitsprüfung über `NUMBER_KINDS`, ein
+  Regressionstest mit `nan`, `inf` und `-inf` je Zahlenart, und die Ablehnung trägt einen
+  Handlungsvorschlag (Regel 17).
 
 ## Bedienung und Darstellung
 
