@@ -2002,17 +2002,9 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     baut: Zwei Aufrufe derselben Funktion sind auch dann einig, wenn beide falsch
     sind.
 
-    **Zugeordnet wird über den Titel.** Die erste Fassung las ``action.data()``
-    und war damit wertlos: Von 158 Menüeinträgen tragen **sechs** ein ``data``,
-    und keiner davon ist eine Operation — es sind die zwei Themen und die vier
-    Navigationsarten. Der Test sammelte diese sechs, verglich null Operationen
-    und blieb in der Mutationsprobe grün, während ``menu_path`` auf die alte,
-    gröbere Frage zurückgesetzt war.
-
-    Sein eigener Wächter hat das nicht gefangen, und das ist die Lehre daneben:
-    ``assert gebaut`` fragte, ob das Wörterbuch **voll** ist, nicht, ob darin
-    Operationen stehen. Ein Wächter muss die Größe messen, an der der Test
-    scheitert — deshalb steht unten eine Zahl.
+    Zugeordnet wird über die wirkliche Aktion aus ``_op_actions``. Titel
+    können gleich sein, etwa beim Einsetzen und Erzeugen eines Prüfkörpers;
+    ``action.data()`` enthält dagegen keine Operationskennung.
     """
     from app.core.registry import MENU_TWINS, REGISTRY
     from app.core.registry.surfaces import menu_path
@@ -2020,7 +2012,7 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     def blank(text: str) -> str:
         return text.replace("&", "")
 
-    gebaut: dict[str, str] = {}
+    gebaut: dict[object, str] = {}
     for action in window.menuBar().actions():
         menu = action.menu()
         if menu is None:
@@ -2030,21 +2022,20 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
             if unter is not None:
                 for tief in unter.actions():
                     if not tief.isSeparator():
-                        gebaut[blank(tief.text())] = (
+                        gebaut[tief] = (
                             f"{blank(action.text())} → {blank(entry.text())} → {blank(tief.text())}"
                         )
             elif not entry.isSeparator():
-                gebaut[blank(entry.text())] = f"{blank(action.text())} → {blank(entry.text())}"
+                gebaut[entry] = f"{blank(action.text())} → {blank(entry.text())}"
 
     verglichen = 0
-    for spec in REGISTRY.all():
-        titel = str(spec.title)
-        if spec.name in MENU_TWINS or titel not in gebaut:
-            continue
+    for name, action in window._op_actions.items():
+        spec = REGISTRY.get(name)
+        assert action in gebaut, f"{name}: die Menüaktion hat keinen sichtbaren Weg"
         genannt = blank(menu_path(spec))
-        assert gebaut[titel] == genannt, (
+        assert gebaut[action] == genannt, (
             f"{spec.name}: Handbuch und Agent nennen „{genannt}“, "
-            f"im Fenster liegt sie unter „{gebaut[titel]}“"
+            f"im Fenster liegt sie unter „{gebaut[action]}“"
         )
         verglichen += 1
 
@@ -2073,13 +2064,13 @@ def test_the_named_path_is_the_path_the_menu_builds(window: MainWindow) -> None:
     ohne_ort = sorted(
         spec.name
         for spec in REGISTRY.all()
-        if str(spec.title) not in gebaut
+        if spec.name not in window._op_actions
         and spec.name not in MENU_TWINS
         and spec.name not in variant_members()
         and spec.name not in catalogue_operations()
     )
     assert not ohne_ort, f"ohne Menüort und ohne Ausnahme: {ohne_ort}"
-    assert verglichen, "kein Weg verglichen — die Zuordnung über die Titel bricht"
+    assert verglichen, "kein Weg verglichen — die Aktionszuordnung bricht"
 
 
 def test_a_heading_names_only_what_belongs_to_it(window: MainWindow) -> None:

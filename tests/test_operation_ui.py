@@ -45,6 +45,235 @@ from app.ui.settings import UiSettings
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize(
+    "name, field, reference",
+    [("insert_wall_mount", "holes", "@holes"), ("insert_pegboard_hook", "count", "@hooks")],
+)
+def test_integer_part_bindings_reopen_and_keep_the_reference(
+    qt_app: QApplication, name: str, field: str, reference: str
+) -> None:
+    """Ganze Bausteinanzahlen bleiben auch nach Wiederöffnen gebunden."""
+    from app.core import expressions
+    from app.core.registry.params import validate
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get(name)
+    dialog = OperationDialog(
+        spec,
+        {"obj_1": "Gehäuse"},
+        values={field: reference},
+        parameter_values={"holes": 2.0, "hooks": 2.0},
+    )
+    try:
+        editor = dialog._editors[field]
+        assert isinstance(editor, ValueField)
+        assert editor.spin.decimals() == 0
+        assert dialog.values()[field] == reference
+        assert (
+            getattr(
+                validate(
+                    spec.params,
+                    expressions.resolve_params(dialog.values(), {"holes": 3.0, "hooks": 3.0}),
+                ),
+                field,
+            )
+            == 3
+        )
+        editor.text.setText("=1.5")
+        assert "ganze Zahl" in editor.hint.text()
+        assert dialog.values()[field] == "=1.5"
+    finally:
+        dialog.deleteLater()
+
+
+def test_variable_output_count_keeps_a_fixed_integer_editor(qt_app: QApplication) -> None:
+    """Ergebniskennungen benötigen weiterhin eine beim Planen feste Anzahl."""
+    from PySide6.QtWidgets import QSpinBox
+
+    dialog = OperationDialog(REGISTRY.get("pattern"), {"obj_1": "Körper"})
+    try:
+        assert isinstance(dialog._editors["count"], QSpinBox)
+    finally:
+        dialog.deleteLater()
+
+
+@pytest.mark.parametrize("name", ["sketch_revolve", "sketch_sweep", "sketch_loft", "sketch_pocket"])
+def test_sketch_variant_rebuilds_its_complete_schema(qt_app: QApplication, name: str) -> None:
+    """Die gewählte Art bietet wirklich ihre eigenen Werte und Grenzen an."""
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {"obj_1": "Grundkörper"})
+    try:
+        selected = REGISTRY.get(name)
+        dialog.switch_variant(selected)
+        assert dialog.spec is selected
+        assert set(dialog._editors) == {entry.name for entry in selected.params.spec()}
+        assert set(dialog.values()) == set(dialog._editors)
+        for entry in selected.params.spec():
+            editor = dialog._editors[entry.name]
+            label = dialog._rows[entry.name].labelForField(editor)
+            assert label is not None
+            assert label.text() == str(entry.title) or "Radius" in label.text()
+    finally:
+        dialog.deleteLater()
+
+
+def test_variant_changes_keep_shared_and_variant_specific_values(qt_app: QApplication) -> None:
+    """Eine Zeichnung wechselt die Bauart, ohne ihre Maße zu verlieren."""
+    from app.ui.op_dialog import ValueField
+
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {})
+    try:
+        dialog.switch_variant(REGISTRY.get("sketch_revolve"))
+        angle = dialog._editors["angle"]
+        assert isinstance(angle, ValueField)
+        angle.set_value(135.0)
+        dialog.switch_variant(REGISTRY.get("sketch_extrude"))
+        length = dialog._editors["length"]
+        assert isinstance(length, ValueField)
+        length.set_value(47.0)
+        dialog.switch_variant(REGISTRY.get("sketch_revolve"))
+        assert dialog.values()["angle"] == pytest.approx(135.0)
+        assert dialog.values()["length"] == pytest.approx(47.0)
+    finally:
+        dialog.deleteLater()
+
+
+def test_target_click_keeps_source_and_carries_both_identifiers(qt_app: QApplication) -> None:
+    """Der Klick beantwortet das fokussierte Ziel, nicht das Quellmerkmal."""
+    dialog = OperationDialog(
+        REGISTRY.get("align_to_feature"),
+        {"obj_1": "Stift", "obj_2": "Buchse"},
+        values={"feature": "pin_1"},
+        features={"pin_1": "Passstift"},
+        source_objects=("obj_1",),
+    )
+    try:
+        assert dialog.focus_field("target")
+        assert dialog.take_feature("hole_1", "Bohrung", "obj_2")
+        assert dialog.values()["target"] == "obj_2:hole_1"
+        assert dialog.values()["feature"] == "pin_1"
+        assert dialog._editors["target"].currentText() == "Buchse · Bohrung"
+        dialog.focus_field("feature")
+        assert not dialog.take_feature("hole_1", "Bohrung", "obj_2")
+        assert dialog.values()["feature"] == "pin_1"
+    finally:
+        dialog.deleteLater()
+
+
+def test_up_to_click_and_reopened_target_have_readable_body_names(qt_app: QApplication) -> None:
+    """Flächen werden gezeigt und gespeichert, ohne interne Kennungen abzutippen."""
+    dialog = OperationDialog(
+        REGISTRY.get("sketch_extrude"),
+        {"obj_2": "Deckel"},
+        values={"up_to": "obj_2:face_top"},
+        target_features={"obj_2:face_top": "Deckel · Oberseite"},
+    )
+    try:
+        assert dialog._editors["up_to"].currentText() == "Deckel · Oberseite"
+        dialog.focus_field("up_to")
+        assert dialog.take_feature("face_bottom", "Unterseite", "obj_2")
+        assert dialog.values()["up_to"] == "obj_2:face_bottom"
+    finally:
+        dialog.deleteLater()
+
+
+def test_up_to_preselection_preserves_the_selected_body(qt_app: QApplication) -> None:
+    """Gleichnamige Flächen auf verschiedenen Körpern bleiben getrennte Ziele."""
+    from types import SimpleNamespace
+
+    from app.core.sketch.planes import frame_for
+    from app.core.types import Feature, SceneObject
+    from tests.conftest import FakeMesh
+
+    objects = {}
+    for object_id, height in (("obj_1", 20.0), ("obj_2", 50.0)):
+        feature = Feature(
+            id="face_top",
+            kind="face",
+            provenance="detected",
+            params={"normal": (0.0, 0.0, 1.0), "centre": (5.0, 5.0, height), "area": 100.0},
+        )
+        objects[object_id] = SceneObject(
+            id=object_id,
+            name=object_id,
+            mesh=FakeMesh(size=(10.0, 10.0, height)),
+            features={feature.id: feature},
+        )
+    caller = SimpleNamespace(
+        session=SimpleNamespace(
+            last_result=SimpleNamespace(scene=SimpleNamespace(objects=objects))
+        ),
+        object_tree=SimpleNamespace(selected_feature=lambda: "face_top"),
+    )
+    values = MainWindow._from_selection(caller, REGISTRY.get("sketch_extrude"), "obj_2")
+    assert frame_for("feature:" + values["up_to"], objects.values()).origin[2] == pytest.approx(
+        50.0
+    )
+
+
+@pytest.mark.parametrize("name", ["sketch_revolve", "sketch_sweep", "sketch_loft"])
+def test_requested_variant_is_selected_and_applied(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """Befehlspalette und Menü behalten die ausdrücklich gewählte Bauart."""
+    drafts = []
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, proposed, **kwargs: drafts.extend(proposed)
+    )
+    window.run_operation(REGISTRY.get(name))
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.spec.name == name
+    dialog.accept()
+    assert drafts[-1].op == name
+
+
+def test_pocket_variant_uses_selected_input_in_preview_and_commit(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Wechsel von Erzeugen zu Schneiden bindet denselben vorhandenen Körper."""
+    from PySide6.QtWidgets import QComboBox
+
+    selected = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(selected)
+    captured = {}
+    drafts = []
+    monkeypatch.setattr(window, "_wire_preview", lambda dialog, make: captured.update(make=make))
+    monkeypatch.setattr(
+        window.session, "apply", lambda title, proposed, **kwargs: drafts.extend(proposed)
+    )
+    window.run_operation(REGISTRY.get("sketch_extrude"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    choice = next(
+        box for box in dialog.findChildren(QComboBox) if box.findData("sketch_pocket") >= 0
+    )
+    choice.setCurrentIndex(choice.findData("sketch_pocket"))
+    assert captured["make"](dialog.values())[0].inputs == (selected,)
+    dialog.accept()
+    assert drafts[-1].inputs == (selected,)
+
+
+def test_old_operation_dialog_closes_on_project_change(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein alter Werkzeugdialog darf keine gleichnamige Kennung im neuen Projekt treffen."""
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    monkeypatch.setattr(window, "_may_discard", lambda: True)
+    selected = next(iter(window.session.last_result.scene.objects))
+    window.object_tree.select_object(selected)
+    window.run_operation(REGISTRY.get("rename_object"), {"name": "Altes Projekt"})
+    assert window._op_dialog is not None
+    window.new_action.trigger()
+    window.start_empty()
+    assert window.session.wait_for_idle()
+    assert window._op_dialog is None
+    window.session.apply("Neuer Körper", [OperationDraft(op="create_box", params={"name": "Neu"})])
+    assert window.session.wait_for_idle()
+    assert len(window.session.project.document.ops) == 1
+    assert next(iter(window.session.last_result.scene.objects.values())).name == "Neu"
+
+
 @pytest.fixture
 def window(qt_app: QApplication) -> MainWindow:
     """Die Platte mit vier Bohrungen — jede Merkmalsart, die das hier braucht,
@@ -1855,37 +2084,51 @@ def test_a_nested_condition_follows_the_whole_chain(window: MainWindow) -> None:
     assert "Senkkopf" in play.toolTip()
 
 
-def test_both_ways_into_a_dialog_carry_the_feature_names(window: MainWindow) -> None:
-    """Auf dem Menüweg zeigte das Feld „An Fläche" die rohe Kennung.
+def test_both_ways_into_a_dialog_carry_the_feature_names(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Anlegen und Bearbeiten bieten die wirklich erkannten Merkmalsnamen an."""
+    from PySide6.QtWidgets import QComboBox
 
-    ``launch_operation`` — der Weg des Kontextmenüs am Merkmal (Weg 1) und der
-    Menüs *Erzeugen* und *Ändern* — baute den Dialog ohne ``features``. Ohne
-    Liste macht der Dialog seine Auswahl aus dem *Wert*: Aus „hole_1" wurde ein
-    Eintrag „hole_1", und die übrigen Flächen des Körpers kannte er nicht.
-    Gemessen: ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    selected = select(window)
+    expected = window._feature_names(REGISTRY.get("resize_hole"))
+    assert expected
+    window.run_operation(REGISTRY.get("resize_hole"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    field = dialog._editors["at_feature"]
+    assert isinstance(field, QComboBox)
+    assert {
+        field.itemData(index): field.itemText(index)
+        for index in range(field.count())
+        if field.itemData(index)
+    } == expected
+    dialog.reject()
 
-    Nur ``edit_operation`` übergab sie. Geprüft wird deshalb nicht der Dialog —
-    den halten die Tests daneben längst fest —, sondern **beide Aufrufer**: Wer
-    einen dritten baut, soll hier auffallen.
-
-    **Gezählt wird der Aufruf, nicht seine Schreibweise.** Hier stand
-    ``"features=self._feature_names(),"`` mitsamt schließender Klammer, und
-    damit hing der Test an einem Aufruf *ohne Argument*: Als beide Wege ihre
-    Liste auf ``applies_to`` verengten (``_feature_names(spec)``), wurde er rot,
-    obwohl beide die Merkmale weiter übergeben. Ein Wächter, der die Sache
-    meint, darf nicht die Zeichenkette zählen.
-    """
-    import inspect
-
-    from app.ui import main_window as module
-
-    source = inspect.getsource(module.MainWindow)
-    calls = source.count("dialog = OperationDialog(")
-    assert calls >= 2, "es gibt nicht mehr zwei Wege in den Dialog — dieser Test ist veraltet"
-    passed_on = source.count("features=self._feature_names(")
-    assert passed_on == calls, (
-        f"{calls} Aufrufe von OperationDialog, aber {passed_on} übergeben die Merkmale"
+    window.session.apply(
+        "Bohrung ändern",
+        [
+            OperationDraft(
+                op="resize_hole",
+                inputs=(selected,),
+                params={"at_feature": next(iter(expected)), "diameter": 6.0},
+            )
+        ],
     )
+    assert window.session.wait_for_idle()
+    expected = window._feature_names(REGISTRY.get("resize_hole"))
+    window.edit_operation(window.session.project.document.ops[-1].id)
+    dialog = window._op_dialog
+    assert dialog is not None
+    field = dialog._editors["at_feature"]
+    assert isinstance(field, QComboBox)
+    assert {
+        field.itemData(index): field.itemText(index)
+        for index in range(field.count())
+        if field.itemData(index)
+    } == expected
+    dialog.reject()
 
 
 def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
@@ -1903,7 +2146,7 @@ def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
     darauf schnitte ab. Deshalb kein ``FieldsStayAtSizeHint`` für das ganze
     Formular — und deshalb prüft dieser Test beides.
     """
-    from PySide6.QtWidgets import QComboBox, QSpinBox
+    from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QSpinBox
 
     from app.core.registry import REGISTRY
     from app.ui.op_dialog import NUMBER_AIR, OperationDialog, ValueField
@@ -1914,7 +2157,7 @@ def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
             dialog.show()
             dialog.resize(dialog.sizeHint())
             QApplication.processEvents()
-            boxes = dialog.findChildren(QSpinBox)
+            boxes = [*dialog.findChildren(QSpinBox), *dialog.findChildren(QDoubleSpinBox)]
             assert boxes, f"{name} hat kein Zahlenfeld — dieser Test prüft nichts"
             for box in boxes:
                 assert box.width() <= box.sizeHint().width() + NUMBER_AIR, (
@@ -2516,19 +2759,25 @@ def test_the_settings_dialog_leads_to_the_filament_section(window: MainWindow) -
     dialog.deleteLater()
 
 
-def test_the_window_wires_the_filament_shortcut_itself() -> None:
-    """Die Hälfte, die der Test darüber nicht prüfen kann.
+def test_the_window_wires_the_filament_shortcut_itself(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Hauptfenster verbindet den echten Materialknopf mit Hin- und Rückweg."""
+    from app.ui import main_window as module
 
-    Er verbindet das Signal selbst, um den modalen ``exec``-Lauf zu umgehen —
-    und bleibt damit grün, wenn das Fenster es gar nicht verbindet (die
-    „am Weg vorbei"-Falle, gemessen an genau dieser Mutation). Geprüft wird
-    deshalb am Quelltext, dass ``action_print_settings`` die Verbindung
-    herstellt; zusammen sichern beide den ganzen Weg.
-    """
-    source = inspect.getsource(MainWindow.action_print_settings)
+    followed = []
 
-    assert "filamentsRequested" in source, "der Dialog meldet, das Fenster muss zuhören"
-    assert "_show_filaments" in source
+    def follow_material(dialog: Any) -> int:
+        """Der echte Dialogknopf wird nach dem echten Anschluss gedrückt."""
+        dialog.material_link.click()
+        followed.append(not window.filaments.return_to_print_button.isHidden())
+        return int(dialog.result())
+
+    monkeypatch.setattr(module, "ensure_print_disclosure", lambda *args: None)
+    monkeypatch.setattr(module.PrintSettingsDialog, "exec", follow_material)
+    window.action_print_settings()
+    assert followed == [True]
+    assert not window.filaments.isHidden()
 
 
 def test_an_open_ended_field_is_not_treated_as_a_fine_one() -> None:
@@ -3130,3 +3379,127 @@ def test_a_preview_from_the_dialog_is_dropped_at_a_document_change(window: MainW
         assert window.viewport.difference is None, "der Differenzkörper blieb im Bild"
     finally:
         type(window.viewport).mark_preview = echt
+
+
+@pytest.mark.parametrize("name", ["fit_ladder", "wall_ladder", "overhang_fan"])
+@pytest.mark.parametrize("double_click", [False, True])
+def test_standalone_part_can_be_chosen_without_a_host(
+    qt_app: QApplication, name: str, double_click: bool
+) -> None:
+    """Prüfkörper sind über beide Katalogwege auch im leeren Projekt erreichbar."""
+    from app.ui.catalog import PartCatalog
+
+    catalog = PartCatalog()
+    catalog.release()
+    catalog.set_can_insert(False, "Ein Körper fehlt")
+    chosen = []
+    catalog.partChosen.connect(chosen.append)
+    try:
+        item = next(
+            catalog.list.item(index)
+            for index in range(catalog.list.count())
+            if catalog.list.item(index).data(Qt.ItemDataRole.UserRole) == name
+        )
+        catalog.list.setCurrentItem(item)
+        assert catalog._insert.isEnabled()
+        assert not catalog.insert_hint.text()
+        if double_click:
+            catalog._chosen(item)
+        else:
+            catalog._insert.click()
+        assert chosen == [name]
+        assert catalog.result() == PartCatalog.DialogCode.Accepted
+    finally:
+        catalog.deleteLater()
+
+
+def test_catalog_standalone_choice_creates_one_undoable_object(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der reale Kataloganschluss verwendet den Erzeuger ohne Hilfsquader."""
+    window.session.start_new()
+    assert window.session.wait_for_idle()
+    monkeypatch.setattr(window, "_wire_preview", lambda *args, **kwargs: None)
+    catalog = window._make_catalog()
+    catalog.release()
+    item = next(
+        catalog.list.item(index)
+        for index in range(catalog.list.count())
+        if catalog.list.item(index).data(Qt.ItemDataRole.UserRole) == "fit_ladder"
+    )
+    catalog.list.setCurrentItem(item)
+    catalog._insert.click()
+    monkeypatch.setattr(catalog, "exec", lambda: catalog.result())
+    window._exec_catalog(catalog)
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog.spec.name == "create_fit_ladder"
+    dialog.accept()
+    assert window.session.wait_for_idle()
+    assert window.session.last_result.complete
+    assert len(window.session.last_result.scene.objects) == 1
+    assert window.session.project.document.ops[-1].inputs == ()
+    window.session.undo()
+    assert window.session.wait_for_idle()
+    assert not window.session.last_result.scene.objects
+
+
+@pytest.mark.parametrize("field_name", ["top_sketch", "path"])
+def test_space_editor_returns_the_named_sketch_parameter(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, field_name: str
+) -> None:
+    """Der Editor übergibt den Parameter seines Aufrufers, auch bei mehreren Skizzen."""
+    from dataclasses import replace
+
+    sketch = replace(shapes.rectangle(12, 8), plane="plane:xz")
+    text = sketch_to_text(sketch)
+    returned = []
+    monkeypatch.setattr(
+        window, "edit_operation", lambda step, **kwargs: returned.append((step, kwargs))
+    )
+    monkeypatch.setattr(window, "_selected_face_plane", lambda: "plane:xy")
+    window.start_sketch("sketch_loft", text=text, step=42, field_name=field_name)
+    assert window._sketch_panel is not None
+    assert window._sketch_panel.sketch_text() == text
+    window.finish_sketch()
+    assert len(returned) == 1
+    assert returned[0][0] == 42
+    assert set(returned[0][1]["given"]) == {field_name}
+    assert returned[0][1]["given"][field_name] == text
+
+
+def test_variant_rebuild_retires_focused_fields_after_the_new_schema_is_ready(
+    qt_app: QApplication,
+) -> None:
+    """Wiederholte Schemawechsel lösen Komplettierer und alte Zeilen geordnet ab."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from shiboken6 import isValid
+
+    from app.ui.op_dialog import ValueField
+
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), {}, parameter_values={"size": 47.0})
+    dialog.show()
+    try:
+        for name in ("sketch_revolve", "sketch_extrude") * 6:
+            field = dialog._editors["length"]
+            assert isinstance(field, ValueField)
+            field.set_value("@size")
+            field.text.setFocus()
+            field._completer.setCompletionPrefix("@s")
+            old = tuple(dialog._editors.values())
+            labels = tuple(
+                dialog._rows[key].labelForField(editor) for key, editor in dialog._editors.items()
+            )
+            dialog.switch_variant(REGISTRY.get(name))
+            assert all(isValid(editor) and not editor.isVisibleTo(dialog) for editor in old)
+            assert field._completer.widget() is None
+            assert dialog.values()["length"] == "@size"
+            assert set(dialog.values()) == {entry.name for entry in dialog.spec.params.spec()}
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+            qt_app.processEvents()
+            assert all(not isValid(editor) for editor in old)
+            assert all(label is not None and not isValid(label) for label in labels)
+            assert all(isValid(editor) for editor in dialog._editors.values())
+    finally:
+        dialog.reject()
+        dialog.deleteLater()

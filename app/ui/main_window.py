@@ -64,7 +64,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PART_FILE_SUFFIX, PROJECT_SUFFIX
-from app.core import activation, bootstrap, examples, manual, updates
+from app.core import activation, bootstrap, discover, examples, manual, tools, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.session import (
@@ -101,6 +101,7 @@ from app.core.errors import (
     UserError,
     ValidationError,
 )
+from app.core.export import handover
 from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
@@ -129,6 +130,7 @@ from app.core.geom.section import SectionPlane, plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.ingest.plan import MODEL_SUFFIXES as _CORE_MODEL_SUFFIXES
 from app.core.knowledge import calibration, filaments, print_settings, profiles
+from app.core.knowledge.parts.ops import creation_name
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -268,6 +270,7 @@ from app.ui.print_disclosure import ensure_print_disclosure
 from app.ui.print_settings_dialog import (
     FilamentOverrideDialog,
     PrintSettingsDialog,
+    SliceComparison,
     remembered_setup,
     settings_for_export,
 )
@@ -330,6 +333,17 @@ _NEEDS_BODY = _("Dafür braucht es einen Körper in der Szene.")
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
 FLASH_MS = 1200
+
+
+def _target_feature_names(result: EvaluationResult | None) -> dict[str, str]:
+    """Objektübergreifende Ziele tragen lesbare Namen und eindeutige Kennungen."""
+    if result is None:
+        return {}
+    return {
+        f"{object_id}:{feature_id}": f"{entry.name} · {feature_label(feature_id, feature)}"
+        for object_id, entry in result.scene.objects.items()
+        for feature_id, feature in entry.features.items()
+    }
 
 
 def _flash_colour(widget: QWidget) -> str:
@@ -752,6 +766,7 @@ class _ExportWorker(Worker):
         material: str,
         inventory_settings: Any = None,
         project_name: str = "",
+        all_objects: Sequence[Any] | None = None,
     ) -> None:
         super().__init__()
         self._objects = objects
@@ -764,9 +779,13 @@ class _ExportWorker(Worker):
         self._material = material
         self._inventory_settings = inventory_settings
         self._project_name = project_name
+        self._all_objects = tuple(all_objects) if all_objects is not None else tuple(objects)
 
     def work(self) -> None:
         try:
+            if self._format == "3mf":
+                self._settings = self._profiles_for_selection(self._settings)
+                self._inventory_settings = self._profiles_for_selection(self._inventory_settings)
             usage = (
                 prepare_usage(
                     self._objects, self._inventory_settings, self._profile, self._project_name
@@ -786,6 +805,38 @@ class _ExportWorker(Worker):
             for request in usage:
                 self.usageReady.emit(request)
 
+    def _profiles_for_selection(self, settings: PrintSettings | None) -> PrintSettings | None:
+        """Projektweite Profilplätze folgen der Identität in den kleineren Exportauftrag."""
+        if (
+            settings is None
+            or settings.slot_profile_bindings is not None
+            or not settings.slot_profiles
+        ):
+            return settings
+        from app.core.export import threemf
+
+        def slots(objects: Sequence[Any]) -> list[MaterialSlot]:
+            return threemf.merge_slots(
+                [
+                    threemf.AssemblyPart(
+                        as_mesh_data(body.mesh), slots=threemf.slots_for_object(body)
+                    )
+                    for body in objects
+                ]
+            )
+
+        chosen = {
+            threemf.slot_identity(slot): settings.slot_profiles[slot.index]
+            for slot in slots(self._all_objects)
+            if slot.index < len(settings.slot_profiles)
+        }
+        return replace(
+            settings,
+            slot_profiles=tuple(
+                chosen.get(threemf.slot_identity(slot), "") for slot in slots(self._objects)
+            ),
+        )
+
     def _assembly(self) -> tuple[list[Path], list[Finding]]:
         """Eine Baugruppe bleibt eine Datei: der Slicer bekommt einen
         Druckauftrag, keine Handvoll Teile (§20). Auch bei **einem** Körper —
@@ -795,6 +846,11 @@ class _ExportWorker(Worker):
         eine knappe halbe Sekunde und hatte im Hauptthread einen Wartezeiger
         über sich. Hier braucht sie keinen.
         """
+        setup = remembered_setup(self._ui_settings, self._material, self._profile.printer.id)
+        if setup is None:
+            found = discover.find_program("slicer", tools.SLICERS)
+            if found is not None:
+                setup = handover.detect(found)
         written_path, findings = write_assembly(
             self._objects,
             self._target.parent,
@@ -802,7 +858,9 @@ class _ExportWorker(Worker):
             profile=self._profile,
             sources=self._sources,
             settings=self._settings,
-            setup=remembered_setup(self._ui_settings, self._material, self._profile.printer.id),
+            setup=setup,
+            flavour=setup.flavour if setup is not None else "orca",
+            for_slicer=False,
         )
         return [written_path], list(findings)
 
@@ -982,13 +1040,22 @@ class _SliceWorker(Worker):
 
     done = Signal(object)
 
-    def __init__(self, entry: Any, layer_height: float) -> None:
+    def __init__(
+        self, entry: Any, layer_height: float, *, overhang_angle: float | None = None
+    ) -> None:
         super().__init__()
         self._entry = entry
         self._layer_height = layer_height
+        self._overhang_angle = overhang_angle
 
     def work(self) -> None:
-        self.done.emit(slice_body(as_mesh_data(self._entry.mesh), self._layer_height))
+        self.done.emit(
+            slice_body(
+                as_mesh_data(self._entry.mesh),
+                self._layer_height,
+                overhang_angle=self._overhang_angle,
+            )
+        )
 
 
 class _GcodeWorker(Worker):
@@ -1354,7 +1421,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
         self.setWindowTitle(APP_NAME)
         self.resize(1280, 820)
-        self._map_cache: dict[tuple[str, str, int], Any] = {}
+        self._map_cache: dict[tuple[Any, ...], Any] = {}
         self._finding_awaiting_map: Finding | None = None
         """Der angeklickte Befund, dessen Analysekarte noch gerechnet wird.
 
@@ -1371,9 +1438,9 @@ class MainWindow(QMainWindow):
         """Nur die letzte Karte wird gehalten: neu zu rechnen ist billig, sie zu
     halten teuer."""
         self._slice_cache: SliceResult | None = None
-        self._slice_key: tuple[str, int] | None = None
+        self._slice_key: tuple[Any, ...] | None = None
         self._slice_worker: Any = None
-        self._slice_pending: tuple[str, int] | None = None
+        self._slice_pending: tuple[Any, ...] | None = None
         """Der Schlüssel, an dem der laufende Schnitt-Arbeiter rechnet — damit
         derselbe Körper nicht je Schieberschritt einen weiteren bekommt."""
         self._slice_waiters: list[Any] = []
@@ -2012,6 +2079,8 @@ class MainWindow(QMainWindow):
         #: derselbe Weg, den der Skeletteditor geht.
         self._sketch_step: int | None = None
         """Der Schritt, den dieser Editor ändert — ``None`` heißt: ein neuer."""
+        self._sketch_parameter = ""
+        """Welches der Skizzenfelder der Editor an diesen Schritt zurückgibt."""
         self._armature_bones: list[Bone] = []
         self._armature_head: tuple[float, float, float] | None = None
         """Das Gelenk eines angefangenen Knochens — zwei Klicks machen einen."""
@@ -2172,6 +2241,7 @@ class MainWindow(QMainWindow):
 
         self.quick_filament = QuickFilamentPicker(self)
         self.quick_filament.spoolChosen.connect(self._assign_inventory_spool)
+        self.quick_filament.clearRequested.connect(self._clear_selected_filament)
         self.quick_filament.inventoryRequested.connect(self.action_inventory)
         cast(QVBoxLayout, self.selection_operations.layout()).insertWidget(1, self.quick_filament)
 
@@ -3784,7 +3854,7 @@ class MainWindow(QMainWindow):
             [result.scene.objects[key] for key in selected_ids if key in result.scene.objects]
             if result is not None
             else [],
-            has_feature=bool(self.object_tree.selected_features()),
+            selected_features=self.object_tree.selected_features(),
         )
         self.quick_filament.setEnabled(not locked and not gesturing)
         self._hide_dead_menus()
@@ -5046,9 +5116,7 @@ class MainWindow(QMainWindow):
 
     def _inventory_settings(self) -> PrintSettings:
         """Eine Projektkennung trennt gleiche Vorbereitungen verschiedener Projekte."""
-        settings = self.session.project.document.print_settings or print_settings.resolve(
-            self.session.profile
-        )
+        settings = self.effective_print_settings()
         if not settings.inventory_project_id:
             settings = replace(settings, inventory_project_id=uuid4().hex)
             self.session.set_print_settings(settings)
@@ -5061,6 +5129,58 @@ class MainWindow(QMainWindow):
             self.session.project.document,
             spool_bindings=with_spool(settings, spool_slot(entry), entry.identifier).spool_bindings,
         )
+
+    def _current_inventory_spool(
+        self, entry: filaments.CatalogueFilament
+    ) -> filaments.CatalogueFilament | None:
+        """Die Bestätigung darf keinen inzwischen geänderten Spuleninhalt zuweisen."""
+        from app.core.export.threemf import slot_identity
+
+        try:
+            current = filaments.get(entry.identifier)
+        except AppError as problem:
+            self.announce(str(problem))
+            return None
+        if (
+            current is None
+            or current.archived
+            or slot_identity(spool_slot(current)) != slot_identity(spool_slot(entry))
+        ):
+            self.announce(
+                tr("Die Spule wurde inzwischen geändert. Wählen Sie sie erneut aus dem Lager.")
+            )
+            return None
+        return current
+
+    def _clear_selected_filament(self) -> None:
+        """Ganze Körper und einzelne Flächen verlieren ihre Zuweisung in einem Undo-Schritt."""
+        result = self.session.last_result
+        if result is None:
+            return
+        features = self.object_tree.selected_features()
+        drafts: list[OperationDraft] = []
+        for identifier in self.object_tree.selected_objects():
+            body = result.scene.objects.get(identifier)
+            if body is None:
+                continue
+            targets = [feature for owner, feature in features if owner == identifier]
+            if any(
+                feature not in body.features or not body.features[feature].face_indices
+                for feature in targets
+            ):
+                self.announce(
+                    tr("Wählen Sie eine Fläche oder entfernen Sie das Filament am Körper.")
+                )
+                return
+            drafts.append(
+                OperationDraft(
+                    op="clear_filament",
+                    inputs=(identifier,),
+                    params={"at_features": targets} if targets else {},
+                )
+            )
+        if drafts:
+            self.session.apply(_("Filament entfernen"), drafts)
 
     def _assign_inventory_spool(self, entry: filaments.CatalogueFilament) -> None:
         """Körper oder gewählte Flächen färben sich über eine einzige Transaktion."""
@@ -5145,25 +5265,17 @@ class MainWindow(QMainWindow):
                 )
         if not drafts:
             return
-        self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(entry))
+        current = self._current_inventory_spool(entry)
+        if current is None:
+            return
+        self.session.apply(_("Filament zuweisen"), drafts, changes=self._spool_change(current))
 
     def action_print_settings(self) -> None:
-        """§29: die Einstellungen, mit denen gedruckt wird — hier, nicht im
-        anderen Programm.
+        """Der Dialog prüft seinen vollständigen Druckauftrag selbst im Arbeiter (§29).
 
-        Der Dialog bekommt die Schichtanalyse, und wo keine vorliegt, wird sie
-        **nachgereicht**: die Vorschläge über Stützen, Haftung und
-        Mindestschichtzeit hängen an der Geometrie und nicht am Material
-        allein. Ohne sie ging der Dialog mit null Vorschlägen auf — bei einem
-        Teil, dem Solidon 845 mm² Überhang auf einer Schicht ansieht.
-
-        Gewartet wird darauf nicht mehr. Der Weg hierher stand bis zu zwei
-        Sekunden still (``worker.wait``), und das war die schlechtere Hälfte
-        beider Möglichkeiten: lange genug, um sich wie ein Hänger zu lesen,
-        und trotzdem ohne Zusage — wer den Zeitraum riss, bekam den Dialog
-        eben doch ohne Analyse. Er geht jetzt sofort auf, und
-        :meth:`PrintSettingsDialog.take_slice_result` trägt sie nach, sobald
-        sie da ist (§2.8).
+        Die Schichtansicht des ausgewählten Körpers beschreibt weder weitere
+        Körper noch die im Dialog geänderte Schichthöhe. Ihre Analyse gehört
+        deshalb nicht in die gemeinsamen Druckempfehlungen.
         """
         # §29: Was Solidon hier rechnet, reist mit einer gespeicherten 3MF und
         # mit der Übergabe an den Slicer. Der Hinweis sagt das einmal je
@@ -5176,18 +5288,10 @@ class MainWindow(QMainWindow):
         # Konstruktor kostet eine knappe halbe Sekunde — unter der Grenze aus
         # §2.8, aber nicht unter der, ab der ein Zeiger dazugehört.
         with waiting():
-            dialog = PrintSettingsDialog(
-                self.session, self.settings, self, slice_result=self._current_slice()
-            )
-        object_id = self.object_tree.selected()
-        if dialog.slice_result is None and object_id is not None:
-            # Läuft schon eine für diesen Körper, stellt sich der Dialog an;
-            # sonst startet hier ein Arbeiter. Beide Wege enden in
-            # ``_slice_for_settings`` — und der ruft nur, solange der Dialog
-            # offen ist.
-            self._settings_dialog = dialog
-            self._slice_of(object_id, self._slice_for_settings)
-        dialog.sliced.connect(self._gcode_returned)
+            dialog = PrintSettingsDialog(self.session, self.settings, self)
+        dialog.sliced.connect(
+            lambda outcomes: self._gcode_returned(outcomes, dialog.slice_comparison)
+        )
         dialog.reported.connect(self._slicer_findings)
         # Regel 17: „Kein Slicer eingerichtet" sagte, was fehlt, und bot nichts
         # an — an der Stelle, an der jemand gerade slicen wollte. Von hier
@@ -5289,14 +5393,15 @@ class MainWindow(QMainWindow):
         if dialog is not None:
             dialog.take_slice_result(result)
 
-    def _gcode_returned(self, outcomes: list[SliceOutcome]) -> None:
+    def _gcode_returned(
+        self, outcomes: list[SliceOutcome], comparison: SliceComparison | None = None
+    ) -> None:
         """Was der Slicer gemessen hat, geht in den Prüfbericht — als gemessen
         markiert, neben der Schätzung, nie an ihrer Stelle (Regel 14).
 
         Eine Liste, weil ein Auftrag mehrere Platten haben kann (§25). Die
-        Gegenprobe läuft gegen die **Summe**: die Schätzung gilt dem Projekt,
-        und sie je Platte dagegenzuhalten hieße, dreimal denselben Vergleich mit
-        einem Drittel der Messung zu führen.
+        Gegenprobe läuft gegen die Summe genau dieses eingefrorenen Auftrags,
+        mit seiner Plattenauswahl und seinen wirksamen Druckwerten.
         """
         # Der erste Nachtrag räumt die G-Code-Befunde des vorigen Laufs ab —
         # sie beschreiben eine Druckdatei, die es nicht mehr gibt (Regel 14
@@ -5306,7 +5411,8 @@ class MainWindow(QMainWindow):
             self.report.add_findings(
                 outcome.findings, replacing_source="gcode" if index == 0 else None
             )
-        self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]))
+        if comparison is not None:
+            self._compare_totals(gcode.combine([entry.metrics for entry in outcomes]), comparison)
         self._focus_report()
         self.announce(
             f"{tr('Geslicet')}: {outcomes[0].gcode_path.name}"
@@ -5493,7 +5599,9 @@ class MainWindow(QMainWindow):
         expected = support_material(estimate.support_volume, settings)
         self.report.add_findings(gcode.compare(expected, measured, "support").findings)
 
-    def _compare_totals(self, metrics: gcode.GcodeMetrics) -> None:
+    def _compare_totals(
+        self, metrics: gcode.GcodeMetrics, comparison: SliceComparison | None = None
+    ) -> None:
         """Geschätzte gegen gemessene Druckzeit und Materialmenge (§28.2).
 
         Das Stützvolumen wurde schon immer gegengeprüft, Zeit und Material
@@ -5507,22 +5615,33 @@ class MainWindow(QMainWindow):
         Der Bericht sagt bloß, dass sie sich widersprechen — und genau das ist
         das Signal, dass die Schichtanalyse Arbeit braucht.
         """
-        result = self.session.last_result
-        if result is None or not result.scene.objects:
-            return
-        settings = self.session.project.document.print_settings or print_settings.resolve(
-            self.session.profile
-        )
-        bodies = [(entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()]
-        estimate = estimate_total(bodies, settings)
+        if comparison is None:
+            # Nur eine manuell zurückgelesene Datei hat keinen eigenen Auftrag.
+            result = self.session.last_result
+            if result is None or not result.scene.objects:
+                return
+            settings = self.session.project.document.print_settings or print_settings.resolve(
+                self.session.profile
+            )
+            bodies = [
+                (entry.mesh.volume, entry.mesh.area) for entry in result.scene.objects.values()
+            ]
+            estimate = estimate_total(bodies, settings)
+            comparison = SliceComparison(grams=estimate.grams, seconds=estimate.seconds)
+            grams = metrics.grams(settings.filament.density, settings.filament.diameter)
+        else:
+            grams = metrics.grams(None, None)
 
         findings: list[Finding] = []
-        grams = metrics.grams(settings.filament.density)
-        if grams is not None and estimate.grams > 0.0:
-            findings += gcode.compare(estimate.grams, grams, "material").findings
-        if metrics.print_minutes is not None and estimate.seconds > 0.0:
+        if grams is not None and comparison.grams is not None and comparison.grams > 0.0:
+            findings += gcode.compare(comparison.grams, grams, "material").findings
+        if (
+            metrics.print_minutes is not None
+            and comparison.seconds is not None
+            and comparison.seconds > 0.0
+        ):
             findings += gcode.compare(
-                estimate.seconds / 60.0, metrics.print_minutes, "time"
+                comparison.seconds / 60.0, metrics.print_minutes, "time"
             ).findings
         self.report.add_findings(findings)
 
@@ -5638,6 +5757,7 @@ class MainWindow(QMainWindow):
             material=self.session.profile.material.id,
             inventory_settings=inventory_settings,
             project_name=self.session.document_name or target.stem,
+            all_objects=tuple(result.scene.objects.values()),
         )
         self._export_worker = worker
         # Die Flagge, nicht nur das Worker-Feld: ``_anything_running`` fragt
@@ -5797,7 +5917,7 @@ class MainWindow(QMainWindow):
                 return
             name = catalog.chosen()
             if name:
-                self.run_operation(REGISTRY.get(part_op_name(name)))
+                self.run_operation(REGISTRY.get(creation_name(name)))
         finally:
             # Die sechs Lambdas aus :meth:`_make_catalog` fangen das Fenster,
             # und der Katalog ist sein Kind: Ohne Freigeben hält jede Öffnung
@@ -6407,11 +6527,11 @@ class MainWindow(QMainWindow):
     def action_calibrate(self) -> None:
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
         material = self.session.project.document.material or self.session.profile.material.id
-        dialog = CalibrationDialog(material, self)
+        dialog = CalibrationDialog(material, self, process=self.session.profile)
         if dialog.exec() != CalibrationDialog.DialogCode.Accepted:
             return
         try:
-            calibrated = calibration.apply(dialog.measured())
+            calibrated = calibration.apply(dialog.measured(), process=dialog.process)
         except AppError as error:
             show_error(error, self)
             return
@@ -6949,7 +7069,13 @@ class MainWindow(QMainWindow):
         return frame_for_plane(plane, objects)
 
     def start_sketch(
-        self, op_name: str, text: str = "", plane: str = "", *, step: int | None = None
+        self,
+        op_name: str,
+        text: str = "",
+        plane: str = "",
+        *,
+        step: int | None = None,
+        field_name: str = "",
     ) -> None:
         """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
 
@@ -6983,7 +7109,7 @@ class MainWindow(QMainWindow):
         """
         if self._sketch_panel is not None:
             return
-        plane = plane or self._selected_face_plane()
+        plane = plane or (self._selected_face_plane() if not text.strip() else "")
         show_plane_picker = not text.strip() and not plane
         panel = SketchPanel(text, self._parameter_values(), self, self._sketch_surroundings())
         if plane and not panel.choose_plane(plane):
@@ -6993,6 +7119,7 @@ class MainWindow(QMainWindow):
         # Beim Korrigieren aus dem Verlauf trägt der Modus die Kennung des
         # Schritts, den er ändert (Z9). Beim Anlegen bleibt sie leer.
         self._sketch_step = step
+        self._sketch_parameter = field_name
         """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
         Erzeugungsart kommt dann bei „Fertig" (§2.2, Weg 2)."""
         # **Der Schnitt (§30.1, P4): Die Ansicht bleibt stehen.** Früher stand
@@ -7769,6 +7896,7 @@ class MainWindow(QMainWindow):
         panel = self._sketch_panel
         target = self._sketch_target
         step = self._sketch_step
+        parameter = self._sketch_parameter
         if panel is None:
             return
         text = panel.sketch_text()
@@ -7794,6 +7922,7 @@ class MainWindow(QMainWindow):
         self._sketch_panel = None
         self._sketch_target = None
         self._sketch_step = None
+        self._sketch_parameter = ""
         self.viewport.set_sketching(None)
         # Die Maßeingabe abklemmen und das Feld heimholen, **bevor** das Panel
         # stirbt: Die Ansicht hielte sonst Rückrufe auf einen toten Canvas,
@@ -7844,7 +7973,7 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if keep and text:
             if target:
-                values: dict[str, Any] = {_sketch_param(target): text}
+                values: dict[str, Any] = {parameter or _sketch_param(target): text}
                 values.update(given or {})
                 if step is not None:
                     # **Derselbe Schritt, andere Zeichnung** (Z9). Wer aus dem
@@ -8976,6 +9105,19 @@ class MainWindow(QMainWindow):
 
     # --- Analysekarten und Schichten (§18.4, §18.10) ----------------------------
 
+    def _analysis_cache_key(self, entry: Any, kind: str = "") -> tuple[Any, ...]:
+        """Karten und Schichten gehören zur Geometrie und ihren wirksamen Druckgrenzen."""
+        from app.core.scene.hashing import profile_key
+
+        profile = self.session.profile
+        return (
+            entry.id,
+            kind,
+            entry.mesh.triangle_count,
+            profile_key(profile),
+            profiles.analysis_limits(profile, entry),
+        )
+
     def _on_map_changed(self, kind: Any) -> None:
         """Baut die gewählte Karte für das gewählte Objekt und gibt sie der
         Ansicht.
@@ -9008,7 +9150,7 @@ class MainWindow(QMainWindow):
             self.viewport.set_analysis_map(None, None)
             self.analysis_bar.show_legend(None)
             return
-        key = (object_id, kind, entry.mesh.triangle_count)
+        key = self._analysis_cache_key(entry, kind)
         if key in self._map_cache:
             # **Eine gecachte Karte ersetzt die alte in einem Zug.** Erst zu
             # leeren und dann zu setzen baute die Szene zweimal — jeder Wechsel
@@ -9078,7 +9220,7 @@ class MainWindow(QMainWindow):
             worker.cancel()
 
     def _map_is_current(
-        self, request: object, result: EvaluationResult | None, key: tuple[str, str, int]
+        self, request: object, result: EvaluationResult | None, key: tuple[Any, ...]
     ) -> bool:
         """Auch Absagen und Fehler gehören ihrer Anfrage und ausgewerteten Szene."""
         return (
@@ -9086,6 +9228,9 @@ class MainWindow(QMainWindow):
             and self.session.last_result is result
             and self.analysis_bar.chosen() == key[1]
             and self.object_tree.selected() == key[0]
+            and result is not None
+            and (entry := result.scene.objects.get(key[0])) is not None
+            and self._analysis_cache_key(entry, key[1]) == key
         )
 
     def _map_worker_done(self, worker: Any) -> None:
@@ -9272,7 +9417,7 @@ class MainWindow(QMainWindow):
         if entry is None:
             return None
 
-        key = (object_id, entry.mesh.triangle_count)
+        key = self._analysis_cache_key(entry)
         if key == self._slice_key:
             if then is not None:
                 then(self._slice_cache)
@@ -9291,11 +9436,19 @@ class MainWindow(QMainWindow):
             return None
 
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
-        worker = _SliceWorker(entry, self.session.profile.printer.layer_height)
+        worker = _SliceWorker(
+            entry,
+            self.session.profile.printer.layer_height,
+            overhang_angle=profiles.analysis_limits(self.session.profile, entry)[1],
+        )
         # Ohne Empfänger blieb „Die Schichtanalyse läuft …" für immer stehen,
         # und die Warteschlange der Druckeinstellungen leerte sich nie
         # (Gesamtreview I-2).
-        worker.crashed.connect(self._slice_crashed)
+        worker.crashed.connect(
+            lambda detail: (
+                self._slice_crashed(detail) if self._slice_is_current(key, worker) else None
+            )
+        )
         self._slice_pending = key
         self._slice_waiters = [] if then is None else [then]
         worker.done.connect(
@@ -9312,6 +9465,16 @@ class MainWindow(QMainWindow):
         worker.finished.connect(lambda done=worker: self._slice_worker_done(done))
         self._leash.start(worker)
         return None
+
+    def _slice_is_current(self, key: tuple[Any, ...], worker: Any) -> bool:
+        """Ein verspäteter Schnitt darf weder neue Messwerte noch neue Anfragen ersetzen."""
+        result = self.session.last_result
+        entry = result.scene.objects.get(key[0]) if result is not None else None
+        return (
+            worker is self._slice_worker
+            and entry is not None
+            and key == self._analysis_cache_key(entry)
+        )
 
     def _slice_crashed(self, detail: str) -> None:
         """Wartezustand lösen: Zeile leeren, Anstehende verabschieden, Grund
@@ -9333,6 +9496,11 @@ class MainWindow(QMainWindow):
             # anderen Körper. Sein Ergebnis jetzt zu übernehmen zeigte die
             # Schichten des falschen Körpers und riefe Rückrufe, die auf den
             # neuen warten.
+            return
+        if not self._slice_is_current(key, worker):
+            self._slice_pending = None
+            self._slice_waiters = []
+            self.status_message.setText(self._announcement)
             return
         self._slice_cache = outcome
         self._slice_key = key
@@ -9405,7 +9573,7 @@ class MainWindow(QMainWindow):
             # dafür aufgehalten.
             target = maps.location_of(entry, finding)
             if target is None:
-                cached = self._map_cache.get((entry.id, kind, entry.mesh.triangle_count))
+                cached = self._map_cache.get(self._analysis_cache_key(entry, kind))
                 target = maps.focus_point(entry, cached) if cached is not None else None
         else:
             target = maps.location_of(entry, finding)
@@ -9954,7 +10122,9 @@ class MainWindow(QMainWindow):
             self.object_tree.select_feature(object_id, feature_id)
         dialog = self._op_dialog
         if dialog is not None:
-            dialog.take_feature(feature_id, self._feature_names().get(feature_id, feature_id))
+            dialog.take_feature(
+                feature_id, self._feature_names().get(feature_id, feature_id), object_id
+            )
         # **Auch hier**, und nicht nur bei der Objektauswahl: Ein Klick auf ein
         # Merkmal ändert, was die Leiste anbieten darf, und `_on_selection`
         # läuft dabei nicht — der gewählte Körper bleibt ja derselbe.
@@ -10655,7 +10825,7 @@ class MainWindow(QMainWindow):
 
         chosen_spool: filaments.CatalogueFilament | None = None
 
-        def remember_spool(entry: filaments.CatalogueFilament) -> None:
+        def remember_spool(entry: filaments.CatalogueFilament | None) -> None:
             nonlocal chosen_spool
             chosen_spool = entry
 
@@ -10679,11 +10849,29 @@ class MainWindow(QMainWindow):
                 if on_bodies
                 else [OperationDraft(op=spec.name, inputs=inputs, params=dict(params))]
             )
-            changes = (
-                self._spool_change(chosen_spool)
-                if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}
-                else None
-            )
+            changes = None
+            if chosen_spool is not None and spec.name in {"assign_slot", "paint_slot"}:
+                matches = (
+                    all(
+                        str(params.get(key, "")).strip() == value
+                        for key, value in (
+                            ("name", chosen_spool.name),
+                            ("material_type", chosen_spool.material_type),
+                            ("slicer_profile", chosen_spool.slicer_profile),
+                        )
+                    )
+                    and str(params.get("colour", "")).strip().casefold()
+                    == chosen_spool.colour.casefold()
+                )
+                if matches:
+                    current = self._current_inventory_spool(chosen_spool)
+                    if current is None:
+                        return
+                    changes = self._spool_change(current)
+                else:
+                    self.announce(
+                        tr("Die geänderten Filamentangaben werden ohne Lagerbindung übernommen.")
+                    )
             self.session.apply(spec.title, drafts, bundle=bool(on_bodies), changes=changes)
             operations = self.session.project.document.ops
             if spec.name == "split_pinned" and len(operations) > count_before:
@@ -10764,6 +10952,7 @@ class MainWindow(QMainWindow):
                         # Regel 18: der Grund steht nicht nur am Zeigerbild.
                         item.setData(locked, Qt.ItemDataRole.AccessibleDescriptionRole)
                 variant.setToolTip(str(group.doc))
+                variant.setCurrentIndex(variant.findData(spec.name))
 
             def chosen_spec() -> OperationSpec:
                 if variant is not None:
@@ -10775,6 +10964,10 @@ class MainWindow(QMainWindow):
             def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
                 allowed = {entry.name for entry in chosen_spec().params.spec()}
                 return {key: value for key, value in entered.items() if key in allowed}
+
+            def chosen_inputs() -> tuple[str, ...]:
+                """Jede Variante erhält ihre eigenen, ursprünglich gewählten Eingänge."""
+                return inputs_for(chosen_spec(), objects, chosen)
 
             dialog = OperationDialog(
                 spec,
@@ -10796,6 +10989,8 @@ class MainWindow(QMainWindow):
                 # Verengt auf die Arten, die diese Operation nimmt: eine
                 # Auswahl, in der nichts passt, ist keine (§18.5).
                 features=self._feature_names(spec),
+                target_features=_target_feature_names(result),
+                source_objects=inputs,
                 extra=exact if exact is not None else variant,
                 extra_label=str(group.choice) if group is not None else "",
                 surroundings=self._sketch_surroundings(),
@@ -10809,7 +11004,12 @@ class MainWindow(QMainWindow):
             if variant is not None:
                 # Dieselbe Pflicht wie beim Kernwechsel: Was der Dialog zeigt
                 # und was die Vorschau rechnet, muss dieselbe Variante sein.
-                variant.currentIndexChanged.connect(lambda: dialog.switch_variant(chosen_spec()))
+                def switch_variant() -> None:
+                    """Operation und ursprünglicher Zielkörper wechseln gemeinsam."""
+                    dialog.source_objects = chosen_inputs()
+                    dialog.switch_variant(chosen_spec())
+
+                variant.currentIndexChanged.connect(switch_variant)
                 variant.currentIndexChanged.connect(dialog.valuesChanged)
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
@@ -10834,7 +11034,9 @@ class MainWindow(QMainWindow):
                     ]
                     if on_bodies
                     else [
-                        OperationDraft(op=chosen_spec().name, inputs=inputs, params=fitted(entered))
+                        OperationDraft(
+                            op=chosen_spec().name, inputs=chosen_inputs(), params=fitted(entered)
+                        )
                     ]
                 ),
             )
@@ -10860,7 +11062,11 @@ class MainWindow(QMainWindow):
                     return
                 self.session.apply(
                     picked.title,
-                    [OperationDraft(op=picked.name, inputs=inputs, params=fitted(dialog.values()))],
+                    [
+                        OperationDraft(
+                            op=picked.name, inputs=chosen_inputs(), params=fitted(dialog.values())
+                        )
+                    ],
                 )
 
             self._open_operation_dialog(dialog, run_chosen)
@@ -11067,7 +11273,9 @@ class MainWindow(QMainWindow):
             return tr("Der Wert ist schon so eingestellt.")
         return f"{tr('Parameter gesetzt')}: {name} = {number}"
 
-    def _draw_sketch_in_space(self, op_id: int, op_name: str, dialog: QDialog, text: str) -> None:
+    def _draw_sketch_in_space(
+        self, op_id: int, op_name: str, dialog: QDialog, text: str, *, field_name: str = ""
+    ) -> None:
         """Vom Dialog in den Zeichenmodus, für einen vorhandenen Schritt (Z9).
 
         **Der Dialog geht endgültig zu**, statt zu warten und später
@@ -11081,7 +11289,7 @@ class MainWindow(QMainWindow):
         und was er kostet.
         """
         dialog.reject()
-        self.start_sketch(op_name, text=text, step=op_id)
+        self.start_sketch(op_name, text=text, step=op_id, field_name=field_name)
 
     def edit_operation(
         self, op_id: int, field: str = "", given: Mapping[str, Any] | None = None
@@ -11143,13 +11351,9 @@ class MainWindow(QMainWindow):
             return {key: value for key, value in entered.items() if key in allowed}
 
         dialog = OperationDialog(
-            # Gebaut wird immer aus dem **sichtbaren** Zwilling, gleich welcher
-            # von beiden gerade im Verlauf steht: Sein Schema trägt die Felder,
-            # die der andere auch hat, und dazu die des Netzkerns. Aus dem
-            # exakten heraus gäbe es kein ``anchor``, und wer den Haken
-            # abwählte, bekäme einen Dialog ohne die Felder, die er gerade
-            # freigeschaltet hat.
-            REGISTRY.get(shown),
+            # Der gespeicherte Schritt bestimmt das Anfangsschema. Beim
+            # Kernwechsel baut der Dialog das andere Schema vollständig auf.
+            spec,
             self._object_names(),
             self,
             values={**entry.params, **(given or {})},
@@ -11158,7 +11362,9 @@ class MainWindow(QMainWindow):
             # Dieselbe Verengung wie beim Anlegen: Wer einen Schritt im Verlauf
             # korrigiert, soll dort dieselbe Auswahl vorfinden wie beim ersten
             # Mal — sonst hinge die Liste daran, wie man den Dialog geöffnet hat.
-            features=self._feature_names(REGISTRY.get(shown)),
+            features=self._feature_names(spec),
+            target_features=_target_feature_names(self.session.last_result),
+            source_objects=entry.inputs,
             extra=exact,
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
@@ -11167,6 +11373,7 @@ class MainWindow(QMainWindow):
             slots=self._slots_of_selection(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
+
         # **Der Weg in den Raum, und nur von hier aus** (Z9): Wer eine Skizze
         # aus dem Verlauf korrigiert, saß bisher vor einem weißen Blatt ohne
         # Ziehgriff, ohne Maßeingabe im Bild und ohne den Körper darunter —
@@ -11180,8 +11387,18 @@ class MainWindow(QMainWindow):
         # zwei Zeilen weiter bekam es statt einer Zeichenkette. Getroffen
         # hätte es genau die fünf Skizzen-Operationen, denn nur bei ihnen ist
         # die Schleife nicht leer.
-        for sketch_field in dialog.findChildren(SketchField):
-            sketch_field.offer_space(partial(self._draw_sketch_in_space, op_id, entry.op, dialog))
+        def connect_sketch_editors() -> None:
+            """Neu erzeugte Variantenfelder behalten den Weg in den Raum."""
+            for name, sketch_field in dialog._editors.items():
+                if isinstance(sketch_field, SketchField):
+                    sketch_field.offer_space(
+                        partial(
+                            self._draw_sketch_in_space, op_id, entry.op, dialog, field_name=name
+                        )
+                    )
+
+        connect_sketch_editors()
+        dialog.schemaChanged.connect(connect_sketch_editors)
         if exact is not None:
             exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
             exact.toggled.connect(dialog.valuesChanged)
@@ -11233,15 +11450,24 @@ class MainWindow(QMainWindow):
         if previous is not None:
             previous.reject()
 
+        project = self.session.project
+
+        def project_changed() -> None:
+            """Ein altes Werkzeug gehört beim Projektwechsel geschlossen."""
+            if self.session.project is not project:
+                dialog.reject()
+
         def finished(code: int) -> None:
+            self.session.projectChanged.disconnect(project_changed)
             self._op_dialog = None
             # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
             # eine Navigation und keine Antwort (§18.5).
             self.viewport.set_direct_picking(False)
             self._clear_preview()
-            if code == QDialog.DialogCode.Accepted:
+            if code == QDialog.DialogCode.Accepted and self.session.project is project:
                 on_accept()
 
+        self.session.projectChanged.connect(project_changed)
         dialog.finished.connect(finished)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._op_dialog = dialog
@@ -11561,12 +11787,14 @@ class MainWindow(QMainWindow):
         Ohne Auswahl bleibt die Liste leer: Dann zeigt der Wähler die Vorwahl
         und die freien Nummern, und das ist die ehrliche Auskunft.
         """
+        from app.core.export.threemf import slots_for_object
+
         result = self.session.last_result
         chosen = self.object_tree.selected()
         if result is None or chosen is None:
             return ()
         entry = result.scene.objects.get(chosen)
-        return tuple(entry.material_slots) if entry is not None else ()
+        return slots_for_object(entry) if entry is not None else ()
 
     def _feature_names(self, spec: OperationSpec | None = None) -> dict[str, str]:
         """Die Merkmale des gewählten Körpers, Kennung auf Beschriftung (§18.5).
@@ -11654,10 +11882,20 @@ class MainWindow(QMainWindow):
         entry = result.scene.objects.get(selected)
         if entry is None:
             return {}
+        feature_sets = [
+            parameter for parameter in spec.params.spec() if parameter.kind == "features"
+        ]
+        if feature_sets:
+            selected_features = [
+                feature
+                for owner, feature in self.object_tree.selected_features()
+                if owner == selected
+            ]
+            return {parameter.name: selected_features for parameter in feature_sets}
         feature_id = self.object_tree.selected_feature()
         feature = entry.features.get(feature_id) if feature_id else None
         if feature is not None:
-            return dict(values_for(spec, feature))
+            return dict(values_for(spec, feature, selected))
         return dict(values_for_object(spec, entry.features))
 
     # --- session replies --------------------------------------------------------
@@ -11916,7 +12154,7 @@ class MainWindow(QMainWindow):
         self._fit_toolbar()
         self._update_facts()
 
-    def effective_print_settings(self) -> Any:
+    def effective_print_settings(self) -> PrintSettings:
         """Die Druckeinstellungen, die für dieses Projekt wirklich gelten.
 
         **Zuerst die des Dokuments**, denn wer sie im Dialog gesetzt hat, meint

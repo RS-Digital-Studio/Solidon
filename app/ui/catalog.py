@@ -426,6 +426,8 @@ class PartCatalog(QDialog):
         Szene oder ohne gewählten Körper geht gar nichts. Die zweite ist ein
         Hinweis, weil der Weg über eine eingetragene Position offen bleibt.
         """
+        if spec is not None and spec.standalone:
+            return True, ""
         if not self._insert_allowed:
             return False, self._insert_reason
         if spec is None:
@@ -809,15 +811,17 @@ class PartCatalog(QDialog):
 
     def _chosen(self, item: QListWidgetItem) -> None:
         name = item.data(Qt.ItemDataRole.UserRole)
-        if name and self._insert_allowed:
+        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        if name and self._insert_state(spec)[0]:
             self.partChosen.emit(name)
             self.accept()
 
     def _accept(self) -> None:
         name = self.chosen()
-        if name and self._insert_allowed:
+        spec = next((entry for entry in PARTS.all() if entry.name == name), None)
+        if name and self._insert_state(spec)[0]:
             self.partChosen.emit(name)
-        self.accept()
+            self.accept()
 
     def _request_removal(self) -> None:
         """Die sichtbare lokale Auswahl ohne Rückfrage weiterreichen."""

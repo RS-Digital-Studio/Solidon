@@ -24,9 +24,33 @@ enthält den gemeinsamen Spulendialog und die Übernahme konfigurierter Slicerfi
 `main_window.py` führt die Zuweisungsoperationen aus und speichert die Bindung
 getrennt in den Druckeinstellungen. Ein Katalogwechsel aktualisiert Wahlangebote,
 nicht die eingebetteten Filamente einer geöffneten Szene.
+Die Bestätigung prüft die angezeigte Druckidentität erneut gegen das Lager;
+eine reine Bestandsänderung bleibt zulässig. Bei geänderten oder archivierten
+Spulen zeigt die Auswahl einen bleibenden Hinweis und lädt ihre Angebote neu.
+`spoolChosen(None)` verwirft eine vorgemerkte Lagerbindung. Von Hand veränderte
+Filamentangaben werden nur als ausdrücklich ungebundene Projektwerte übernommen.
+Schnellauswahl und Projektübersicht lesen tatsächlich verwendete Mesh-Slots;
+verwaiste Definitionen werden nicht als belegte Filamente dargestellt.
+Eine gemischte Auswahl benennt ganze Körper und einzelne Flächen getrennt.
+„Filament entfernen“ benutzt denselben Umfang. Die ausgewählten Körper und
+Flächen werden als `clear_filament`-Operationen in einer Transaktion abgelegt;
+Strg+Z nimmt den gesamten Zug zurück. Neutrale Flächen bieten keine Abwahl an.
+Der gemeinsame Editor für `kind="features"` zeigt eine Checkliste und eine
+ausdrückliche Ganzkörperwahl. Alte Einzelwerte werden übernommen; ein leerer
+Zwischenzustand sperrt Anwenden und vergrößert keine laufende Vorschau.
 Die Hauptaktionen der Auswahl wechseln bei schmaler Spalte in eine Spalte,
 statt die Karte horizontal aufzuweiten. Journalzeiten werden mit
 `labels.local_timestamp` im lokalen Gebietsschema dargestellt.
+Die Filamentübersicht lässt Qt das Beiwerk ihrer Liste bei der tatsächlichen
+Breite messen (`totalHeightForWidth`). Wunsch, Mindesthöhe und Zuteilung
+enthalten denselben umbrochenen Hinweis und nur sichtbare Bedienelemente.
+Breite, Schrift, Stil und Sichtbarkeit erneuern diesen Höhenvertrag.
+
+Spulenkarten zeichnen die Restmenge zusätzlich zur Farbe als Zahl und
+Füllstand; unbekannter und archivierter Bestand tragen sichtbare Texte.
+Nennfüllung, Restmenge und Lagerort stehen im Spulendialog vorn. Kurze
+Kennungen unterscheiden gleiche Etiketten; Details und zugängliche
+Beschreibungen bewahren die Kennung unabhängig von dieser Verkürzung.
 
 `filament_usage.py` hält Angebote erfolgreicher Ausgaben ohne Zeitlimit bereit.
 Ein Dialogwechsel übernimmt sie mit `auto_book=False`, damit der Transfer keinen
@@ -38,6 +62,19 @@ von der Buchung. Die Einstellung liegt lokal, die Vorbereitungskennung im Projek
 Die erste automatische Buchung benutzt eine aus dem Fingerabdruck abgeleitete
 Vorgangskennung, damit gleichzeitige Zustellungen denselben Abzug treffen.
 Beim Schließen zählen laufende und eingereihte Lagerhandlungen mit.
+Der Buchungsstatus folgt dem ausgewählten Ausgabe-Fingerabdruck. Manuelle
+Korrekturen übergeben den gelesenen Vorgangsstand, damit ein älterer Dialog
+keine jüngere Aufteilung überschreibt. Der Auswahl-Export ordnet gespeicherte
+Herstellerprofile anhand der Druckfilamentidentität seiner tatsächlichen
+Teilmenge zu; deren neue Werkzeugnummern sind kein Index in die Gesamtszene.
+Die Sitzung bindet alte positionsgebundene Herstellerprofile an der letzten
+vollständigen Szene. Der Druckdialog schreibt neue Wahlen nach dieser
+Identität und erhält sie beim Qualitätswechsel. Die Umstellung der Darstellung
+ändert keine Druckwerte; Undo und Redo finden weiterhin dieselben Filamente.
+Ein nicht verfügbares gebundenes Profil bleibt mit Originalnamen als ungelöst
+sichtbar. Befüllen der Liste wählt kein anderes Profil. Ein ausdrücklich
+geändertes Herstellerprofil erhält die gewählte physische Spule; automatische
+Buchung prüft deren Eignung weiterhin gesondert.
 
 ## Der Weg durch die Schicht
 
@@ -261,11 +298,28 @@ Messwerte, Schwellwerte und Hervorhebungen bleiben unverändert.
 
 **Dialoge**
 
+Operationsdialoge gehören dem Projekt, in dem sie geöffnet wurden. Ein
+Projektwechsel schließt sie und verwirft ihre Vorschau. Varianten wechseln
+Schema, Felder und Eingänge gemeinsam; gemeinsame Werte gehen mit,
+varianteneigene Werte bleiben beim Zurückwechseln erhalten.
+Die alten Formularzeilen werden dabei herausgenommen und verborgen, bleiben
+bis zum vollständigen Neuaufbau lebend und werden anschließend über
+`deleteLater()` freigegeben. Komplettierer werden vorher von ihren Feldern gelöst.
+Ganze Zahlen benutzen denselben Verweis-/Formelweg wie Maße, außer wenn die Anzahl schon
+beim Planen die Ergebniskennungen bestimmt. Quellenmerkmale bleiben an ihren
+Eingangskörper gebunden, Klickziele tragen Körper und Merkmal gemeinsam.
+`schemaChanged` bindet neu erzeugte Skizzenfelder wieder an den Raumeditor.
+Der Feldname reist durch den Raumeditor zurück; mehrere Skizzen derselben
+Operation ersetzen einander nicht. Bestehende Zeichnungen behalten ihre Ebene.
+Freistehende Prüfkörper benutzen im Katalog `creation_name()` und brauchen
+keinen Träger. Gemischte Bausteine zeigen `PlacementTool.addition` zusätzlich
+zum Schnittkörper, mit gemeinsamer Platzierung und gemeinsamem Abbau.
+
 | Datei | Besonderheit |
 |---|---|
 | `op_dialog.py` | **Wird aus dem Parameterschema erzeugt** (§10, §2.4). Kein Dialog wird von Hand gebaut — wer einen tippt, hat das Register umgangen |
 | `dialogs.py` | Fragen und Fehler (§2.7), Freischaltung mit Online- und Dateiweg sowie freiwillige Förderung |
-| `print_settings_dialog.py` | Druckeinstellungen und Slicer-Übergabe (§29) |
+| `print_settings_dialog.py` | Druckeinstellungen, Analyse des Ausgabeumfangs im tatsächlichen Schichtraster, slotbezogene Empfehlungen und Slicer-Übergabe (§29) |
 | `print_disclosure.py` | Der Hinweis davor: dass diese Werte Erfahrungswerte sind und mit einer 3MF mitreisen — und die Wahl, ob sie das sollen (§29) |
 | weitere | `settings_dialog` · `generate_dialog` (Weg 3) · `recipe_dialog` · `variants_dialog` · `comfy_dialog` · `install_dialog` · `support_dialog` · `update_dialog` · `changes_dialog` |
 
@@ -520,6 +574,23 @@ trennt der Dialog die Signalverbindung und schließt den Portal-Request.
 - Druckergebnisse und laufende Druckaufträge tragen den Kontext aus Szene,
   Platte, Druckeinstellungen und Slicerprofilen. Änderungen entwerten die
   Ausgabe auch dann, wenn das fertige Arbeitersignal bereits eingereiht ist.
+- Druckempfehlungen analysieren genau die gewählten Platten im tatsächlichen
+  Schichtraster. Der kurzlebige Auftragsschnappschuss bewahrt keine Messung
+  über Änderungen an Szene oder Raster hinweg. Angenommene Filamentwerte
+  werden als identitätsgebundene Slotüberschreibung aus dem effektiven Profil
+  aufgebaut; unberührte Herstellerwerte und ausdrückliche Abwahlen bleiben
+  erhalten. Fehlende Messwerte werden nicht als passende Einstellungen gezeigt.
+  Nicht übertragbare Filamentvorschläge bleiben mit Grund sichtbar, ohne
+  Übernahmemöglichkeit. Fortschritt, Fehler und Abbruch prüfen dieselbe
+  Anfragekennung wie der erfolgreiche Abschluss.
+  Eine passende Überhangkalibrierung wird über `profiles.for_process` auf
+  die tatsächlichen Druckwerte bezogen. Bei mehreren Materialien zählt für
+  die gemeinsame Körperanalyse der strengste Winkel. Der Messwertspeicher
+  enthält diesen Winkel und verwirft Ergebnisse bei geändertem Grenzwert.
+- Die automatische G-Code-Gegenprobe vergleicht mit dem im Arbeiter
+  eingefrorenen `SliceComparison` des ausgegebenen Auftrags. Sie liest dafür
+  weder eine spätere Szene noch spätere Druckwerte. Ohne belegbare
+  Materialaufteilung bleibt die betroffene Schätzung unbekannt.
 - Analysekarten tragen eine Anfragekennung und ihre ausgewertete Szene bis
   zu Ergebnis, Größenabsage und Fehler. Ein Kartenwechsel entfernt die alten
   Farben sofort; auch ein Treffer im Cache oder „keine Karte“ entwertet

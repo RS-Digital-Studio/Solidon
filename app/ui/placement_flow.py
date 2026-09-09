@@ -28,7 +28,7 @@ from shiboken6 import isValid
 from app.core import expressions
 from app.core.errors import ValidationError
 from app.core.geom.mesh import as_mesh_data
-from app.core.knowledge.parts.ops import normal_fields
+from app.core.knowledge.parts.ops import normal_fields, placement_fields
 from app.core.knowledge.profiles import for_object
 from app.core.scene import placement
 from app.core.types import Feature, SceneObject, Vec3
@@ -36,6 +36,7 @@ from app.i18n import tr
 from app.ui.labels import LengthSpin, feature_name, length
 from app.ui.leash import stop_watching_the_dying
 from app.ui.op_dialog import OperationDialog
+from app.ui.palette import DIFF_PALETTES
 from app.ui.render.api import Item, PointerEvent, SurfaceStyle
 from app.ui.style import NORMAL, ROOMY, SPACE
 
@@ -179,6 +180,7 @@ class PlacementFlow(QObject):
         self._tool_busy = False
         self._tool_again = False
         self._tool: Item | None = None
+        self._addition: Item | None = None
         self._tool_context: placement.PlacementTool | None = None
         self._tool_key = ""
         self._prepared: Any = None
@@ -203,6 +205,9 @@ class PlacementFlow(QObject):
         self._note = QLabel(tr("Auf eine Oberfläche zeigen."), self._bar)
         self._note.setWordWrap(True)
         layout.addWidget(self._note, 1)
+        self._tool_legend = QLabel(self._bar)
+        self._tool_legend.hide()
+        layout.addWidget(self._tool_legend)
         self._back = QPushButton(tr("Werte bearbeiten"), self._bar)
         self._back.clicked.connect(self.back)
         layout.addWidget(self._back)
@@ -339,9 +344,7 @@ class PlacementFlow(QObject):
         self.viewport.set_placement_pointer(None)
         for widget in self._widgets():
             widget.hide()
-        if self._tool is not None and self.viewport.renderer is not None:
-            self.viewport.renderer.remove(self._tool)
-        self._tool = None
+        self._remove_tools()
         self._tool_context = None
         self._tool_key = ""
         if self._showing_input:
@@ -349,6 +352,17 @@ class PlacementFlow(QObject):
             self.viewport.show_scene(self.session.last_result)
         self._result = None
         self.viewport._draw()
+
+    def _remove_tools(self) -> None:
+        """Schnitt und Anbau gehören demselben vorübergehenden Werkzeug."""
+        renderer = self.viewport.renderer
+        if renderer is not None:
+            for item in (self._tool, self._addition):
+                if item is not None:
+                    renderer.remove(item)
+        self._tool = None
+        self._addition = None
+        self._tool_legend.hide()
 
     def dispose(self, _code: int = 0) -> None:
         if self._disposed:
@@ -538,13 +552,14 @@ class PlacementFlow(QObject):
         spec = self.spec_of()
         source, feature = self._source_feature()
         values = self.dialog.values()
-        for name in ("x", "y", "z", *normal_fields(spec.params)):
+        placed = placement_fields(spec.params)
+        for name in (*(placed[axis] for axis in ("x", "y", "z")), *normal_fields(spec.params)):
             if name in values:
                 values[name] = 0.0
-        if "at_feature" in values and feature is None:
-            values["at_feature"] = ""
-        if "axis" in values:
-            values["axis"] = "z"
+        if placed["at_feature"] in values and feature is None:
+            values[placed["at_feature"]] = ""
+        if placed["axis"] in values:
+            values[placed["axis"]] = "z"
         profile = for_object(self.session.profile, source)
         key = repr((spec.name, values, profile, id(source.mesh) if source is not None else None))
         if key == self._tool_key and self._tool_context is not None:
@@ -567,23 +582,42 @@ class PlacementFlow(QObject):
             if self.active and epoch == self._epoch and not self._tool_again:
                 renderer = self.viewport.renderer
                 if renderer is not None:
-                    if self._tool is not None:
-                        renderer.remove(self._tool)
-                    self._tool = None
+                    self._remove_tools()
                     if context is not None:
                         mesh = context.mesh
+                        addition = context.addition
+                        colours = DIFF_PALETTES[
+                            getattr(self.viewport, "_diff_palette", "blue_orange")
+                        ]
                         self._tool = renderer.add_surface(
                             np.asarray(mesh.raw.vertices, dtype=np.float64),
                             np.asarray(mesh.raw.faces, dtype=np.int64),
                             name="surface_placement_tool",
                             style=SurfaceStyle(
-                                colour=self.viewport._object_colour,
+                                colour=colours.removed.colour
+                                if addition is not None
+                                else self.viewport._object_colour,
                                 opacity=0.45,
                                 show_edges=False,
                                 pickable=False,
                                 keep_in_front=True,
                             ),
                         )
+                        if addition is not None:
+                            self._addition = renderer.add_surface(
+                                np.asarray(addition.raw.vertices, dtype=np.float64),
+                                np.asarray(addition.raw.faces, dtype=np.int64),
+                                name="surface_placement_addition",
+                                style=SurfaceStyle(
+                                    colour=colours.added.colour,
+                                    opacity=0.85,
+                                    show_edges=False,
+                                    pickable=False,
+                                    keep_in_front=True,
+                                ),
+                            )
+                            self._tool_legend.setText(f"+ {tr('Hinzugefügt')} · - {tr('Entfernt')}")
+                            self._tool_legend.show()
                         self._tool_context = context
                         self._tool_key = key
                         self._set_values()
@@ -779,8 +813,9 @@ class PlacementFlow(QObject):
         self._centre.hide()
         for field in self._centre_measures:
             field.setVisible(valid and bool(self._centre_id))
-        if self._tool is not None:
-            self._tool.set_visible(tool_valid)
+        for item in (self._tool, self._addition):
+            if item is not None:
+                item.set_visible(tool_valid)
         if not valid:
             self._canvas.hide()
             self.viewport._draw()
@@ -793,6 +828,8 @@ class PlacementFlow(QObject):
             ).T
             matrix[:3, 3] = self.viewport.view_point_of(surface.point, self._object_id)
             self._tool.set_matrix(matrix)
+            if self._addition is not None:
+                self._addition.set_matrix(matrix)
         ratio = self.viewport._device_ratio()
 
         def screen(at: Vec3) -> QPointF:
@@ -880,12 +917,14 @@ class PlacementFlow(QObject):
                 # Platz, statt ein weiteres Feld am unteren Rand zu stapeln.
                 positions.clear()
                 x, y, row_height = bounds.left(), bounds.top(), 0
-                for item, _wanted, _line in pending:
-                    if x > bounds.left() and x + item.width() > bounds.right() + 1:
+                for pending_widget, _wanted, _line in pending:
+                    if x > bounds.left() and x + pending_widget.width() > bounds.right() + 1:
                         x, y, row_height = bounds.left(), y + row_height + SPACE, 0
-                    positions[item] = QRect(x, y, item.width(), item.height())
-                    x += item.width() + SPACE
-                    row_height = max(row_height, item.height())
+                    positions[pending_widget] = QRect(
+                        x, y, pending_widget.width(), pending_widget.height()
+                    )
+                    x += pending_widget.width() + SPACE
+                    row_height = max(row_height, pending_widget.height())
                 break
             chosen = min(
                 candidates,

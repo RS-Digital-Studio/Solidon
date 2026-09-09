@@ -34,6 +34,87 @@ from tests.render_fakes import RecordingItem, RecordingRenderer
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+def test_calibration_invalidates_analysis_caches_and_late_workers(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Neue Messwerte gelten auch ohne neue Dreiecke; alte Arbeiter bleiben zurück."""
+    from app.core.knowledge import calibration, profiles
+    from app.core.types import SliceResult
+
+    workers = []
+    with monkeypatch.context() as local:
+        local.setattr(profiles, "user_profiles_dir", lambda: tmp_path)
+        local.setattr(window._leash, "start", workers.append)
+        profiles.reload()
+        try:
+            result = window.session.last_result
+            entry = next(iter(result.scene.objects.values()))
+            window.object_tree.select_object(entry.id)
+            window.analysis_bar.show_map("overhang")
+            window._analysis_map("overhang", entry.id)
+            previous = workers[-1]
+            previous_map_key = window._analysis_cache_key(entry, "overhang")
+            previous_slice_key = window._analysis_cache_key(entry)
+            profile = window.session.profile
+            old_limits = profiles.analysis_limits(profile, entry)
+            calibration.apply(
+                calibration.from_measurements(
+                    profile.material.id,
+                    minimum_wall=old_limits[0] + 0.3,
+                    overhang_angle=old_limits[1] - 7.0,
+                ),
+                directory=tmp_path,
+                process=profile,
+            )
+            assert window.session.last_result is result
+            assert window._analysis_cache_key(entry, "overhang") != previous_map_key
+            assert window._analysis_cache_key(entry) != previous_slice_key
+            old_map = maps.AnalysisMap(
+                kind="overhang",
+                title="Überhang",
+                values=(0.0,) * entry.mesh.triangle_count,
+                unit="°",
+                low=0.0,
+                high=90.0,
+            )
+            previous.done.emit(old_map)
+            assert previous_map_key not in window._map_cache
+            assert window.viewport.analysis_map is not old_map
+            window._map_cache[previous_map_key] = old_map
+            before = len(workers)
+            window._analysis_map("overhang", entry.id)
+            assert len(workers) == before + 1
+            assert window.viewport.analysis_map is not old_map
+
+            outcome = SliceResult(
+                layers=(), support_volume=0.0, first_layer_area=0.0, source="internal"
+            )
+            old_worker = object()
+            served = []
+            window._slice_worker = old_worker
+            window._slice_pending = previous_slice_key
+            window._slice_cache = None
+            window._slice_waiters = [served.append]
+            window._slice_ready(outcome, previous_slice_key, old_worker)
+            assert window._slice_cache is None
+            assert not served
+            assert window._slice_pending is None
+            window._slice_worker = None
+            window._slice_cache = outcome
+            window._slice_key = previous_slice_key
+            before = len(workers)
+            assert window._slice_of(entry.id) is None
+            assert len(workers) == before + 1
+        finally:
+            window._map_worker = None
+            window._slice_worker = None
+            for worker in workers:
+                worker.release_finished_references()
+                worker.deleteLater()
+            QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    profiles.reload()
+
+
 @pytest.mark.parametrize("chosen", [("obj_2", "obj_4"), ()])
 def test_a_bundle_context_menu_uses_the_same_body_choice_as_its_button(
     qt_app: QApplication,
@@ -243,7 +324,7 @@ def test_a_map_request_discards_old_colours_and_late_replies(
     newest = maps.AnalysisMap(
         kind="overhang", title="Überhang", values=(0.0,) * 12, unit="°", low=0.0, high=90.0
     )
-    host._map_cache[("obj_1", "overhang", 12)] = newest
+    host._map_cache[host._analysis_cache_key(result.scene.objects["obj_1"], "overhang")] = newest
     host.analysis_bar.show_map("overhang")
     host._analysis_map("overhang", "obj_1")
     if late == "none":
@@ -262,7 +343,7 @@ def test_a_map_request_discards_old_colours_and_late_replies(
     assert host.analysis_bar.legend.note.text() == before
     assert not errors, "obsolete worker errors must not interrupt a new choice"
     assert host.viewport.analysis_map is (None if late == "none" else newest)
-    assert ("obj_1", "support", 12) not in host._map_cache
+    assert host._analysis_cache_key(result.scene.objects["obj_1"], "support") not in host._map_cache
     host.release()
 
 
@@ -2637,7 +2718,7 @@ def test_scrubbing_starts_one_worker_per_body_not_one_per_step(window: MainWindo
     einmal in der Reihe, egal wie oft geschoben wird.
     """
     entry = window.session.last_result.scene.objects["obj_1"]
-    key = ("obj_1", entry.mesh.triangle_count)
+    key = window._analysis_cache_key(entry)
     sentinel = object()
     window._slice_key = None
     window._slice_worker = sentinel
@@ -2673,7 +2754,11 @@ def test_a_superseded_workers_result_is_dropped(window: MainWindow) -> None:
     window._slice_key = None
     window._slice_worker = None
 
-    window._slice_ready(outcome, ("obj_1", 12), object())
+    window._slice_ready(
+        outcome,
+        window._analysis_cache_key(window.session.last_result.scene.objects["obj_1"]),
+        object(),
+    )
 
     assert window._slice_cache is None, "ein abgelöster Arbeiter schreibt keinen Cache"
     assert window._slice_key is None
@@ -2687,10 +2772,11 @@ def test_when_the_slice_arrives_every_waiter_is_served_once(window: MainWindow) 
     served: list[object] = []
     current = object()
     window._slice_worker = current
-    window._slice_pending = ("obj_1", 12)
+    key = window._analysis_cache_key(window.session.last_result.scene.objects["obj_1"])
+    window._slice_pending = key
     window._slice_waiters = [served.append]
     try:
-        window._slice_ready(outcome, ("obj_1", 12), current)
+        window._slice_ready(outcome, key, current)
 
         assert served == [outcome]
         assert window._slice_cache is outcome
@@ -4893,8 +4979,8 @@ def test_a_cached_map_replaces_the_shown_one_in_a_single_pass(
     second = maps.AnalysisMap(
         kind="overhang", title="Überhang", values=(0.0,) * 12, unit="°", low=0.0, high=90.0
     )
-    host._map_cache[("obj_1", "support", 12)] = first
-    host._map_cache[("obj_1", "overhang", 12)] = second
+    host._map_cache[host._analysis_cache_key(body, "support")] = first
+    host._map_cache[host._analysis_cache_key(body, "overhang")] = second
     host.analysis_bar.show_map("support")
     host._analysis_map("support", "obj_1")
     assert host.viewport.analysis_map is first

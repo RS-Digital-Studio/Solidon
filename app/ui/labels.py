@@ -951,6 +951,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "anchor": _("Bezugspunkt"),
     "announced": _("Angekündigt"),
     "answer": _("Antwortanfang"),
+    "at": _("Position auf dem Fügeweg"),
     "attempted": _("Versuchte Stufen"),
     "bodies": _("Körper"),
     "centre": _("Mittelpunkt"),
@@ -1033,6 +1034,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "expected": _("Erwartet"),
     "got": _("Bekommen"),
     "expected_prefix": _("Erwarteter Anfang"),
+    "extruder": _("Extruder"),
     "faces": _("Flächen"),
     "factor": _("Maßstab"),
     # Was tatsächlich da war, wo eine Zahl verlangt wurde — beim Zerlegen die
@@ -1049,10 +1051,12 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "findings": _("Befunde"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    "flow_limit": _("Höchster Volumenstrom"),
     "format": _("Format"),
     "excess": _("Überstand"),
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
+    "free_dof": _("Freie Freiheitsgrade"),
     "from": _("Von"),
     "gap": _("Spalt"),
     "given": _("Vorhanden"),
@@ -1080,6 +1084,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "lost": _("Verloren"),
     "major": _("Hauptversion"),
     "machine": _("Maschine"),
+    "margin": _("Randabstand"),
     "material": _("Material"),
     "maximum": _("Höchstwert"),
     "measured": _("Gemessen"),
@@ -1132,6 +1137,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "requested": _("Angefragt"),
     "residual": _("Rest"),
     "role": _("Rolle"),
+    "safety": _("Sicherheitsfaktor"),
     "samples": _("Stichproben"),
     "saved": _("Gespart"),
     "scale": _("Maßstab"),
@@ -1155,8 +1161,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "provider": _("Anbieter"),
     "sources": _("Quellen"),
     "span": _("Spannweite"),
+    "speed_field": _("Geschwindigkeitsfeld"),
     "stages": _("Stufen"),
     "status": _("Zustand"),
+    "stress": _("Biegespannung"),
     "strokes": _("Striche"),
     "suffix": _("Endung"),
     "suggested_name": _("Freier Name"),
@@ -1175,6 +1183,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "unpacked": _("Entpackt"),
     "url": _("Adresse"),
     "used_by": _("Benutzt von"),
+    "valid": _("Gültige Kandidaten"),
     "value": _("Wert"),
     "vents": _("Entlüftungen"),
     "vertices": _("Ecken"),
@@ -1242,6 +1251,15 @@ def value_label(key: str) -> str:
 
 def value_text(key: str, value: object) -> str:
     """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
+    # Diese bestehenden Befundschlüssel tragen keine Einheiten-Endung.
+    # Längen folgen trotzdem der Anzeigeeinheit; Materialkennwerte behalten
+    # die Einheit des Filamentprofils und der Festigkeitsrechnung.
+    if key in ("at", "margin"):
+        key += "_mm"
+    elif key == "flow_limit":
+        return f"{localised_value(value)} mm³/s"
+    elif key == "stress":
+        return f"{localised_value(value)} MPa"
     for suffix, unit, show in _VALUE_UNITS:
         if not key.endswith(suffix):
             continue

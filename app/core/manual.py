@@ -574,7 +574,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Projektfarben oder Druckwerte.\n\n"
             "Beides sieht der Verlauf genauso wie einen Menüeintrag: dieselben "
             "Operationen, dasselbe Undo, dieselbe Möglichkeit, es sich anders zu "
-            "überlegen."
+            "überlegen.\n\n"
+            "**Filament entfernen** nimmt die Zuweisung für die gewählten Körper oder "
+            "Flächen zurück. Die übrigen Flächen behalten ihr Filament. Mit `Strg+Z` "
+            "stellen Sie die gesamte Zuweisung wieder her."
         ),
     ),
     Page(
@@ -1181,8 +1184,9 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Statuszeile, welches.\n\n"
             "**Slicen** schreibt die Platte, lässt den Slicer rechnen und "
             "liest die Druckdatei zurück: Druckzeit, Material und Schichten "
-            "stehen danach im Dialog, die Messwerte im Prüfbericht — als "
-            "gemessen ausgewiesen, nie mit der Schätzung vermischt. "
+            "stehen danach im Dialog und im Prüfbericht — mit der Herkunft G-Code. "
+            "Der geplante Materialverbrauch bleibt von der Solidon-Schätzung "
+            "und einer gewogenen Restmenge getrennt. "
             "*Druckdatei speichern* legt den G-Code dorthin, wo man ihn haben "
             "will; bei mehreren Platten je Platte eine Datei.\n\n"
             "**Im Slicer öffnen** ist der zweite Weg: Die Platte geht als "

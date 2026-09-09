@@ -727,7 +727,7 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             # ``create_lid`` und ``screw_lid`` verschwanden aus der Leiste,
             # ohne im Katalog aufzutauchen. Eine Ausnahme, die zu weit gefasst
             # ist, macht einen Wächter genau dort blind, wo er greifen soll.
-            assert str(spec.title) not in labels, (
+            assert spec.name not in window._op_actions, (
                 f"{spec.name} gehört in den Katalog, nicht ins Menü"
             )
             assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
@@ -4396,10 +4396,9 @@ def test_the_left_column_shares_its_height_with_all_four(window: MainWindow) -> 
             lage = f"{name} bei Fensterhöhe {height}"
             # **Gemessen wird die Zuteilung, nicht die gelegte Höhe.** Sie ist
             # der Gegenstand des Pakets: ``_share_room`` verteilt, und was eine
-            # Karte daraus macht, ist ihre eigene Rechnung. Die Filamentkarte
-            # etwa fordert 144 Bildpunkte und setzt 126 um — ein eigener Fehler
-            # in ihrem ``_around_the_list``, im Register vermerkt, und kein
-            # Befund über die Verteilung.
+            # Karte daraus macht, ist ihre eigene Rechnung. Den Höhenvertrag
+            # der Filamentkarte einschließlich Hinweis und Nachbarkarten
+            # prüft ``test_filament_picker`` bei knappen und freien Höhen.
             raum = karte._room
             assert raum is not None, f"{lage}: keine Zuteilung, die Karte teilt nicht mit"
             boden, wunsch = karte.least_height(), karte.wanted_height()
@@ -4753,6 +4752,11 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         # Nur ein Importfehler mit den gelesenen Dateibytes kann diesen Namen
         # anwenden; der Katalog verdrahtet ihn deshalb am konkreten Fehler.
         "use_suggested_name",
+        # Der externe Slicer muss Teilflächen auflösen bzw. sein natives
+        # 32-Filament-Format auf mehrere Dateien verteilen. Solidon hat dafür
+        # keine Operation; unhandled_advice zeigt beide Schritte als Text.
+        "split_by_filament",
+        "split_filament_files",
     }
 
     for name, value in vars(errors).items():
@@ -6504,6 +6508,8 @@ def test_a_gcode_check_keeps_the_body_selected_when_it_started(
 
     path = tmp_path / "stuetzen.gcode"
     path.write_text(
+        "; filament_diameter = 1.75\n"
+        "G21\nG90\nM82\nG92 E0\nG1 X0 Y0 Z0.2 F1800\n"
         ";LAYER:0\n;TYPE:Support material\nG1 X10 Y10 E1 F1800\n",
         encoding="utf-8",
     )
@@ -8989,7 +8995,9 @@ def test_the_exact_twin_hides_what_it_cannot_do(
     oben wechselt mit: die des Netz-Quaders nennt eine Wahl, die es im
     exakten Kern nicht gibt.
     """
-    from PySide6.QtWidgets import QCheckBox
+    from PySide6.QtWidgets import QCheckBox, QComboBox
+
+    from app.ui.op_dialog import ValueField
 
     window.run_operation(REGISTRY.get(shown))
     dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
@@ -8999,14 +9007,27 @@ def test_the_exact_twin_hides_what_it_cannot_do(
     )
 
     assert dialog._editors[gone].isVisibleTo(dialog), "im Netzkern hat das Feld seine Wirkung"
+    editor = dialog._editors[gone]
+    if isinstance(editor, QComboBox):
+        editor.setCurrentIndex(editor.count() - 1)
+    else:
+        assert isinstance(editor, ValueField)
+        editor.set_value(36)
+    saved = dialog.values()[gone]
     exact.setChecked(True)
-    assert not dialog._editors[gone].isVisibleTo(dialog), f"{gone} wirkt in {hidden} nicht"
+    unused = dialog._editors.get(gone)
+    assert unused is None or not unused.isVisibleTo(dialog), f"{gone} wirkt in {hidden} nicht"
+    assert gone not in dialog.values(), "ein unwirksames Feld wird auch nicht angewendet"
     assert dialog._description is not None
     assert dialog._description.text() == str(REGISTRY.get(hidden).doc)
 
     # Und zurück: der Umschalter ist keine Einbahnstraße.
     exact.setChecked(False)
+    assert dialog._rows[gone] is dialog._front, "der geänderte Wert steht auf der Vorderseite"
+    # Neu eingefügte Widgets erhalten ihr Show-Ereignis in der Ereignisschleife.
+    QApplication.processEvents()
     assert dialog._editors[gone].isVisibleTo(dialog)
+    assert dialog.values()[gone] == saved
     assert dialog._description.text() == str(REGISTRY.get(shown).doc)
     dialog.reject()
 
@@ -12070,10 +12091,8 @@ def test_a_step_can_be_made_exact_afterwards(window: MainWindow) -> None:
 def test_the_edit_dialog_shows_the_toggle_on_an_exact_step_too(window: MainWindow) -> None:
     """Auch am anderen Ende des Paars: der Haken steht dann gesetzt da.
 
-    Gebaut wird der Dialog aus dem sichtbaren Zwilling, gleich welcher von
-    beiden im Verlauf steht — aus dem exakten heraus gäbe es kein ``anchor``,
-    und wer den Haken abwählte, bekäme einen Dialog ohne die Felder, die er
-    gerade freigeschaltet hat.
+    Der Dialog startet mit dem gespeicherten Schema. Der Rückwechsel baut
+    die Felder des Netzkerns vollständig auf und erhält die gemeinsamen Maße.
     """
     from PySide6.QtWidgets import QCheckBox
 
@@ -12091,7 +12110,17 @@ def test_the_edit_dialog_shows_the_toggle_on_an_exact_step_too(window: MainWindo
             box for box in dialog.findChildren(QCheckBox) if "Flächen und Kanten" in box.text()
         )
         assert exact.isChecked(), "der Schritt ist der exakte — der Haken sagt es"
-        assert "anchor" in dialog._editors, "der Dialog kennt die Felder des Netzkerns"
+        unused = dialog._editors.get("anchor")
+        assert unused is None or not unused.isVisibleTo(dialog)
+        assert "anchor" not in dialog.values()
+        exact.setChecked(False)
+        dialog.advanced.setChecked(True)
+        assert dialog._editors["anchor"].isVisibleTo(dialog)
+        assert "anchor" in dialog.values()
+        assert dialog.values()["width"] == pytest.approx(30.0)
+        exact.setChecked(True)
+        assert "anchor" not in dialog.values()
+        assert dialog.values()["width"] == pytest.approx(30.0)
     finally:
         dialog.reject()
 

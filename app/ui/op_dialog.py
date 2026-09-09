@@ -181,7 +181,7 @@ class ValueField(QWidget):
         Maß um den Rundungsfehler seiner Anzeige."""
 
         self.spin = NumberSpin(self)
-        self.spin.setDecimals(_decimals_for(entry, self._shown))
+        self.spin.setDecimals(0 if entry.kind == "int" else _decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
         )
@@ -399,7 +399,7 @@ class ValueField(QWidget):
                 self.toggle.setChecked(True)
                 self._switch(True)
 
-    def value(self) -> float | str:
+    def value(self) -> float | int | str:
         """Die Zahl, oder der Ausdruck wörtlich.
 
         Ein leer geräumtes Ausdrucksfeld gibt die Zahl zurück, die daneben
@@ -411,7 +411,8 @@ class ValueField(QWidget):
             # in eine Zahl zu verwandeln — die Bindung wäre weg, und §13 rechnet
             # ohnehin in Millimetern.
             return entered
-        return self._number()
+        number = self._number()
+        return int(number) if self._entry.kind == "int" and number.is_integer() else number
 
     def _number(self) -> float:
         """Die Zahl des Feldes in Millimetern, gleich was gerade sichtbar ist.
@@ -646,6 +647,9 @@ class ValueField(QWidget):
             value = expressions.evaluate(entered, self._parameter_values)
         except AppError as problem:
             self.hint.setText(str(problem.detail or problem.title))
+            return
+        if self._entry.kind == "int" and not float(value).is_integer():
+            self.hint.setText(tr("Der Ausdruck muss eine ganze Zahl ergeben. Passen Sie ihn an."))
             return
         unit = f" {self._entry.unit}" if self._entry.unit else ""
         self.hint.setText(f"= {value:g}{unit}")
@@ -1080,11 +1084,95 @@ def _kept_narrow(editor: QWidget) -> QWidget:
     return editor
 
 
+class FeatureSetField(QWidget):
+    """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag."""
+
+    changed = Signal()
+    validityChanged = Signal()
+
+    def __init__(
+        self, choices: Mapping[str, str], selected: Sequence[str], parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        self._last_value = tuple(dict.fromkeys(selected))
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        self.whole = QCheckBox(tr("Ganzer Körper"), self)
+        self.whole.setChecked(not selected)
+        layout.addWidget(self.whole)
+        self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Flächen auswählen"))
+        self.list.setMinimumHeight(96)
+        self.list.setMaximumHeight(210)
+        for identifier in dict.fromkeys((*choices, *selected)):
+            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
+            item.setData(Qt.ItemDataRole.UserRole, identifier)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if identifier in selected else Qt.CheckState.Unchecked
+            )
+        layout.addWidget(self.list)
+        self.hint = QLabel(tr("Flächen markieren oder den ganzen Körper wählen."), self)
+        self.hint.setWordWrap(True)
+        set_level(self.hint, "caption")
+        layout.addWidget(self.hint)
+        self.list.setEnabled(not self.whole.isChecked())
+        self.setFocusProxy(self.list)
+        self.whole.toggled.connect(self._changed)
+        self.list.itemChanged.connect(self._changed)
+
+    def _selected(self) -> tuple[str, ...]:
+        return tuple(
+            str(self.list.item(row).data(Qt.ItemDataRole.UserRole))
+            for row in range(self.list.count())
+            if self.list.item(row).checkState() == Qt.CheckState.Checked
+        )
+
+    @property
+    def valid(self) -> bool:
+        """Keine markierte Fläche bedeutet nur mit ausdrücklichem Haken den ganzen Körper."""
+        return self.whole.isChecked() or bool(self._selected())
+
+    def value(self) -> list[str]:
+        """Während einer unvollständigen Wahl bleibt die letzte gültige Vorschau erhalten."""
+        return list(self._last_value)
+
+    def _changed(self, *_args: object) -> None:
+        self.list.setEnabled(not self.whole.isChecked())
+        self.validityChanged.emit()
+        if self.valid:
+            self._last_value = () if self.whole.isChecked() else self._selected()
+            self.changed.emit()
+
+    def add_feature(self, identifier: str, label: str) -> None:
+        """Ein Klick im Modell ergänzt die Auswahl statt die vorige Fläche zu ersetzen."""
+        with QSignalBlocker(self.list), QSignalBlocker(self.whole):
+            item = next(
+                (
+                    self.list.item(row)
+                    for row in range(self.list.count())
+                    if self.list.item(row).data(Qt.ItemDataRole.UserRole) == identifier
+                ),
+                None,
+            )
+            if item is None:
+                item = QListWidgetItem(label or identifier, self.list)
+                item.setData(Qt.ItemDataRole.UserRole, identifier)
+                item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            self.whole.setChecked(False)
+            item.setCheckState(Qt.CheckState.Checked)
+        self._changed()
+
+
 class OperationDialog(QDialog):
     """Ein Dialog für eine Operation, gebaut aus ihrem Schema."""
 
     valuesChanged = Signal()
     """Ein Wert hat sich geändert — die Live-Vorschau (§18.7) hört zu."""
+
+    schemaChanged = Signal()
+    """Ein Variantenwechsel hat auch die Skizzen- und Quelleneditoren erneuert."""
 
     surfaceRequested = Signal()
     """Die Werte bleiben im Dialog, die Position wird auf dem Modell gewählt."""
@@ -1111,6 +1199,8 @@ class OperationDialog(QDialog):
         pick_source: Callable[[], tuple[str, str] | None] | DeferredSourcePicker | None = None,
         note: str = "",
         slots: Sequence[Any] = (),
+        target_features: Mapping[str, str] | None = None,
+        source_objects: Sequence[str] = (),
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1136,6 +1226,11 @@ class OperationDialog(QDialog):
         self.setWindowTitle(str(spec.title))
         self.setMinimumWidth(380)
         self._editors: dict[str, QWidget] = {}
+        self._feature_focus = ""
+        self.source_objects = tuple(source_objects)
+        self._target_features = dict(target_features or {})
+        self._couplings: list[Callable[[], None]] = []
+        self._variant_values: dict[str, dict[str, Any]] = {}
         self._parameter_values = dict(parameter_values or {})
         """Aufgelöste Projektparameter — der Skizzeneditor rechnet
         Maßausdrücke damit (§13, §30.1)."""
@@ -1147,9 +1242,18 @@ class OperationDialog(QDialog):
         beantwortet damit „welche Farbe hat Slot 1?", ohne dass jemand erst
         malen muss."""
         given = dict(values or {})
+        if any(
+            entry.kind == "features" and entry.name == "at_features" for entry in spec.params.spec()
+        ):
+            selected = list(given.get("at_features") or ())
+            if given.get("at_feature"):
+                selected.append(given["at_feature"])
+            given["at_features"] = list(dict.fromkeys(selected))
+            given["at_feature"] = ""
         # Der Dialog spricht in Namen, das Dokument in Kennungen. Wer nur eine
         # Liste übergibt, bekommt die Kennungen zu sehen.
         names = dict(objects) if isinstance(objects, Mapping) else {key: key for key in objects}
+        self._object_names = names
         # Quellen sind keine Objekte. Sie standen hier trotzdem in derselben
         # Liste — wer „Modell laden" im Verlauf wieder öffnete, bekam eine
         # Auswahl aus Körpern angeboten, wo eine Datei gemeint war.
@@ -1174,13 +1278,16 @@ class OperationDialog(QDialog):
 
         front = QFormLayout()
         advanced = QFormLayout()
+        self._front = front
+        self._advanced_form = advanced
         self._rows: dict[str, QFormLayout] = {}
-        """In welchem der beiden Formulare ein Feld steht — ``switch_variant``
-        blendet Zeilen darüber aus."""
+        """Welches Formular das Feld trägt; ein Variantenwechsel ersetzt sein Schema."""
         for entry in spec.params.spec():
             editor = self._editor_for(entry, names, given.get(entry.name))
             self._editors[entry.name] = editor
             self._watch(editor)
+            if entry.kind in ("feature", "features") or entry.targets_feature:
+                editor.installEventFilter(self)
             # **Ohne Einheit in der Klammer** (B12): Sie steht am Wert, wo sie
             # mit der Umschaltung geht — ``ValueField`` setzt sie als Suffix.
             label = f"{entry.title}"
@@ -1281,6 +1388,11 @@ class OperationDialog(QDialog):
         applies.setVisible(bool(note))
         self._note = applies
         layout.addWidget(applies)
+        self._filament_notice = QLabel(self)
+        self._filament_notice.setWordWrap(True)
+        self._filament_notice.setTextFormat(Qt.TextFormat.PlainText)
+        self._filament_notice.hide()
+        layout.addWidget(self._filament_notice)
         layout.addLayout(front)
         # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
         # nicht mehr verteilt über alles.
@@ -1301,7 +1413,7 @@ class OperationDialog(QDialog):
             # man mit dem Ergebnis noch tun kann, ist keins von beidem — sie
             # gehört dorthin, wo sie getroffen wird.
             front.addRow(extra_label, extra)
-        if advanced.rowCount():
+        if advanced.rowCount() or extra is not None:
             # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
             # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und
             # nicht gebaut: die hinteren Werte standen weiter da, nur grau, und
@@ -1342,6 +1454,7 @@ class OperationDialog(QDialog):
         self._accept_button = ok
         if ok is not None:
             ok.setText(str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title))
+            make_primary(ok)
         self._source_fields = tuple(
             editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
         )
@@ -1360,6 +1473,8 @@ class OperationDialog(QDialog):
         layout.addWidget(buttons)
 
         self._couple_dependent_fields()
+        self._hide_legacy_feature_field()
+        self._follow_source_pending()
         # Vorderseite und „Weitere Einstellungen" sind zwei Formulare, und
         # jedes rechnete seine Beschriftungsspalte für sich: Im Bohrdialog
         # begannen die Felder bei 0 und bei 150 Punkten, untereinander im
@@ -1371,8 +1486,16 @@ class OperationDialog(QDialog):
 
         pending = any(field.pending for field in self._source_fields)
         button = self._accept_button
-        reason = tr("Datei wird gelesen …") if pending else ""
-        button.setEnabled(not pending)
+        incomplete = any(
+            isinstance(editor, FeatureSetField) and not editor.valid
+            for editor in self._editors.values()
+        )
+        reason = (
+            tr("Datei wird gelesen …")
+            if pending
+            else (tr("Flächen markieren oder den ganzen Körper wählen.") if incomplete else "")
+        )
+        button.setEnabled(not pending and not incomplete)
         button.setToolTip(reason)
         button.setStatusTip(reason)
         button.setAccessibleDescription(reason)
@@ -1382,7 +1505,19 @@ class OperationDialog(QDialog):
 
         if any(field.pending for field in self._source_fields):
             return
+        if any(
+            isinstance(editor, FeatureSetField) and not editor.valid
+            for editor in self._editors.values()
+        ):
+            return
         super().accept()
+
+    def _hide_legacy_feature_field(self) -> None:
+        """Alte Einzelwerte reisen über denselben sichtbaren Mehrfachwähler weiter."""
+        if isinstance(self._editors.get("at_features"), FeatureSetField):
+            legacy = self._editors.get("at_feature")
+            if legacy is not None:
+                self._rows["at_feature"].setRowVisible(legacy, False)
 
     def reject(self) -> None:
         """Eine verworfene Operation verwirft auch ihre laufende Dateiaufnahme."""
@@ -1442,6 +1577,7 @@ class OperationDialog(QDialog):
                 _explain(editor, label, explanation)
 
         self.valuesChanged.connect(follow)
+        self._couplings.append(follow)
         follow()
         self._couple_sketch_measures()
 
@@ -1643,6 +1779,7 @@ class OperationDialog(QDialog):
                 _explain(editor, label, reason)
 
         self.valuesChanged.connect(follow_sketch)
+        self._couplings.append(follow_sketch)
         follow_sketch()
         primed["done"] = True
 
@@ -1654,7 +1791,10 @@ class OperationDialog(QDialog):
         """
         from app.ui.sketch_editor import SketchField
 
-        if isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
+        if isinstance(editor, FeatureSetField):
+            editor.changed.connect(self.valuesChanged)
+            editor.validityChanged.connect(self._follow_source_pending)
+        elif isinstance(editor, ValueField | SketchField | ImageSourceField | ArmatureField):
             editor.changed.connect(self.valuesChanged)
         elif isinstance(editor, QCheckBox):
             editor.toggled.connect(self.valuesChanged)
@@ -1672,6 +1812,8 @@ class OperationDialog(QDialog):
         ist.
         """
         start = entry.default if given is None else given
+        if entry.kind == "features":
+            return FeatureSetField(self._features, tuple(start or ()), self)
         if entry.kind == "bool":
             editor = QCheckBox(self)
             editor.setChecked(bool(start))
@@ -1690,15 +1832,16 @@ class OperationDialog(QDialog):
             )
             picker.filamentChosen.connect(self._fill_filament_fields)
             picker.spoolChosen.connect(self._filament_spool_chosen)
+            picker.choiceNotice.connect(self._filament_choice_notice)
             return picker
-        if entry.kind == "int":
+        if entry.kind == "int" and entry.name == self.spec.produces_from:
             spin = QSpinBox(self)
             spin.setMinimum(int(entry.minimum) if entry.minimum is not None else -1_000_000)
             spin.setMaximum(int(entry.maximum) if entry.maximum is not None else 1_000_000)
             if start is not None:
                 spin.setValue(int(start))
             return _kept_narrow(spin)
-        if entry.kind == "float":
+        if entry.kind in ("float", "int"):
             # Kein nacktes ``QDoubleSpinBox`` mehr: ein Maß darf an einem
             # Projektparameter hängen (§13), und ``float("=@breite")`` war der
             # Grund, warum sich eine gebundene Operation nicht öffnen ließ.
@@ -1729,7 +1872,7 @@ class OperationDialog(QDialog):
             from app.ui.sketch_editor import SketchField
 
             return SketchField(str(start or ""), self._parameter_values, self, self._surroundings)
-        if entry.kind == "feature":
+        if entry.kind == "feature" or entry.targets_feature:
             # Aus demselben Grund wie unten eine Liste, nur mit dem schärferen
             # Fall: „face_2" tippt niemand, der es nicht vorher irgendwo
             # abgelesen hat — und abzulesen war es nur im Objektbaum, wo die
@@ -1747,7 +1890,8 @@ class OperationDialog(QDialog):
             # behalten den Eintrag.
             if not entry.required:
                 combo.addItem(tr("— keines —"), "")
-            for identifier, label in self._features.items():
+            choices = self._target_features if entry.targets_feature else self._features
+            for identifier, label in choices.items():
                 combo.addItem(label, identifier)
             if start:
                 index = combo.findData(str(start))
@@ -1789,9 +1933,9 @@ class OperationDialog(QDialog):
             # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
             # Feld war hier ein Weg, „obj_12" falsch zu tippen — und der Baum
             # nebenan zeigt ohnehin Namen, keine Nummern.
-            choices = self._sources if entry.kind == "source" else objects
+            object_choices: Mapping[str, str] = self._sources if entry.kind == "source" else objects
             combo = QComboBox(self)
-            for identifier, name in choices.items():
+            for identifier, name in object_choices.items():
                 combo.addItem(name, identifier)
             if start:
                 index = combo.findData(str(start))
@@ -1809,7 +1953,17 @@ class OperationDialog(QDialog):
             line.setText(str(start))
         return line
 
-    def take_feature(self, feature_id: str, label: str) -> bool:
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Das zuletzt gewählte Zielfeld bleibt beim Klick ins Modell die Frage."""
+        if stop_watching_the_dying(self, watched, event):
+            return False
+        if event.type() == QEvent.Type.FocusIn:
+            self._feature_focus = next(
+                (name for name, editor in self._editors.items() if editor is watched), ""
+            )
+        return super().eventFilter(watched, event)
+
+    def take_feature(self, feature_id: str, label: str, object_id: str | None = None) -> bool:
         """Trägt ein angeklicktes Merkmal ein, wenn der Dialog eines erwartet.
 
         Der ``doc``-Satz dieses Parameters versprach das seit je — „wird beim
@@ -1821,20 +1975,45 @@ class OperationDialog(QDialog):
         Gibt zurück, ob etwas gesetzt wurde — der Aufrufer weiß sonst nicht, ob
         sein Klick angekommen ist.
         """
-        taken = False
-        for entry in self.spec.params.spec():
-            if entry.kind != "feature":
-                continue
-            editor = self._editors.get(entry.name)
-            if not isinstance(editor, QComboBox):
-                continue
-            index = editor.findData(feature_id)
-            if index < 0:
-                editor.addItem(label or feature_id, feature_id)
-                index = editor.count() - 1
-            editor.setCurrentIndex(index)
-            taken = True
-        return taken
+        fields = [
+            entry
+            for entry in self.spec.params.spec()
+            if entry.kind in ("feature", "features") or entry.targets_feature
+            if not (
+                entry.name == "at_feature"
+                and isinstance(self._editors.get("at_features"), FeatureSetField)
+            )
+        ]
+        entry = next((item for item in fields if item.name == self._feature_focus), None)
+        if entry is None:
+            entry = next((item for item in fields if not item.targets_feature), None)
+        if entry is None:
+            return False
+        editor = self._editors.get(entry.name)
+        if not isinstance(editor, (QComboBox, FeatureSetField)):
+            return False
+        if entry.targets_feature:
+            if object_id is None:
+                return False
+            reference = f"{object_id}:{feature_id}"
+            label = f"{self._object_names.get(object_id, object_id)} · {label or feature_id}"
+        else:
+            if (
+                object_id is not None
+                and self.source_objects
+                and object_id not in self.source_objects
+            ):
+                return False
+            reference = feature_id
+        if isinstance(editor, FeatureSetField):
+            editor.add_feature(reference, label)
+            return True
+        index = editor.findData(reference)
+        if index < 0:
+            editor.addItem(label or feature_id, reference)
+            index = editor.count() - 1
+        editor.setCurrentIndex(index)
+        return True
 
     def focus_field(self, name: str) -> bool:
         """Den Cursor in ein bestimmtes Feld setzen — und es aufklappen, wenn es
@@ -1854,6 +2033,8 @@ class OperationDialog(QDialog):
         if editor is None:
             return False
         entry = next((item for item in self.spec.params.spec() if item.name == name), None)
+        if entry is not None and (entry.kind in ("feature", "features") or entry.targets_feature):
+            self._feature_focus = name
         klappe = getattr(self, "advanced", None)
         if entry is not None and entry.placement != "front" and klappe is not None:
             klappe.setChecked(True)
@@ -1878,10 +2059,14 @@ class OperationDialog(QDialog):
         bequeme Eingabe. Was der Klick einträgt, steht danach lesbar da und
         lässt sich ändern.
         """
+        from app.core.knowledge.parts.ops import placement_fields
+
         fields = {entry.name for entry in self.spec.params.spec()}
-        if not {"x", "y", "z"} <= fields:
+        placed = placement_fields(self.spec.params)
+        axes = tuple(placed.get(name, name) for name in ("x", "y", "z"))
+        if not set(axes) <= fields:
             return False
-        for name, value in zip(("x", "y", "z"), point, strict=True):
+        for name, value in zip(axes, point, strict=True):
             editor = self._editors.get(name)
             if isinstance(editor, ValueField):
                 editor.set_value(float(value))
@@ -1918,13 +2103,73 @@ class OperationDialog(QDialog):
         („mittig auf Z = 0 oder auf einer Ecke"), die es im exakten Kern nicht
         gibt.
         """
-        allowed = {entry.name for entry in spec.params.spec()}
-        for name, form in self._rows.items():
-            editor = self._editors.get(name)
-            if editor is not None:
-                form.setRowVisible(editor, name in allowed)
-        if self._description is not None and spec.doc:
-            self._description.setText(str(spec.doc))
+        if spec.name == self.spec.name:
+            return
+        entered = self.values()
+        self._variant_values[self.spec.name] = entered
+        given = {**self._variant_values.get(spec.name, {}), **entered}
+        retired: list[QWidget] = []
+        with QSignalBlocker(self):
+            for callback in self._couplings:
+                self.valuesChanged.disconnect(callback)
+            self._couplings.clear()
+            for field in self._source_fields:
+                field.cancel_pending()
+            for name, editor in self._editors.items():
+                editor.removeEventFilter(self)
+                if isinstance(editor, ValueField):
+                    # Qt löst das Feld mit nullptr; der PySide-Stub erlaubt nur QWidget.
+                    editor._completer.setWidget(None)  # type: ignore[arg-type]
+                row = self._rows[name].takeRow(editor)
+                for item in (row.labelItem, row.fieldItem):
+                    widget = item.widget() if item is not None else None
+                    if widget is not None:
+                        widget.blockSignals(True)
+                        widget.hide()
+                        retired.append(widget)
+            self._editors.clear()
+            self._rows.clear()
+            self.spec = spec
+            self._feature_focus = ""
+            for entry in spec.params.spec():
+                editor = self._editor_for(entry, self._object_names, given.get(entry.name))
+                self._editors[entry.name] = editor
+                self._watch(editor)
+                if entry.kind in ("feature", "features") or entry.targets_feature:
+                    editor.installEventFilter(self)
+                decided = entry.name in given and given[entry.name] != entry.default
+                form = self._front if entry.placement == "front" or decided else self._advanced_form
+                # Der Artwähler bleibt nach den Feldern, nicht zwischen ihnen.
+                if form is self._front:
+                    form.insertRow(
+                        len([f for f in self._rows.values() if f is form]), str(entry.title), editor
+                    )
+                else:
+                    form.addRow(str(entry.title), editor)
+                self._rows[entry.name] = form
+                _explain(editor, form.labelForField(editor), str(entry.doc or ""))
+                if isinstance(editor, ValueField) and editor.circle_toggle is not None:
+                    caption = form.labelForField(editor)
+                    if isinstance(caption, QLabel):
+                        caption.setText(editor.caption())
+                        editor.captionChanged.connect(caption.setText)
+            self._source_fields = tuple(
+                editor for editor in self._editors.values() if isinstance(editor, ImageSourceField)
+            )
+            for field in self._source_fields:
+                field.pendingChanged.connect(self._follow_source_pending)
+            self._couple_dependent_fields()
+        # Alte Komplettierer und ihre Felder leben bis nach dem Neuaufbau.
+        # removeRow zerstörte sie synchron mitten im Variantenwechsel.
+        for widget in retired:
+            widget.deleteLater()
+        self.setWindowTitle(str(spec.title))
+        self._accept_button.setText(
+            str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title)
+        )
+        if self._description is not None:
+            self._description.setText(str(spec.doc or ""))
+            self._description.setVisible(bool(spec.doc))
         if self._caveat is not None:
             # Ein Zwilling hat seine eigene Grenze — oder keine. Stehen bleibt
             # sonst die des anderen Rechenkerns, und das ist schlechter als
@@ -1932,7 +2177,11 @@ class OperationDialog(QDialog):
             warning = caveat_line(spec)
             self._caveat.setText(warning)
             self._caveat.setVisible(bool(warning))
+        self._follow_source_pending()
+        self._hide_legacy_feature_field()
+        align_forms(self)
         self.adjustSize()
+        self.schemaChanged.emit()
 
     def place_beside(self, anchor: QWidget | None) -> None:
         """Setzt den Dialog an den Rand statt in die Bildmitte.
@@ -2037,8 +2286,13 @@ class OperationDialog(QDialog):
         """Die ausdrückliche Wahl ersetzt auch leere Typ- und Profilangaben vollständig."""
         editor = self._editors.get("replace_filament")
         if isinstance(editor, QCheckBox):
-            editor.setChecked(True)
+            editor.setChecked(spool is not None)
         self.spoolChosen.emit(spool)
+
+    def _filament_choice_notice(self, message: str) -> None:
+        """Eine überholte Lagerwahl wird im offenen Dialog erklärt und neu angeboten."""
+        self._filament_notice.setText(message)
+        self._filament_notice.setVisible(bool(message))
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
@@ -2048,7 +2302,9 @@ class OperationDialog(QDialog):
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, MaterialField):
+            if isinstance(editor, FeatureSetField):
+                collected[entry.name] = editor.value()
+            elif isinstance(editor, MaterialField):
                 # Vor dem Combo-Zweig: Der macht ``str(currentData())``
                 # aus allem. Bei einer Kennung ginge das zufällig gut,
                 # und genau solche Zufälle brechen beim nächsten Feld.

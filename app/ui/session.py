@@ -648,9 +648,12 @@ class Session(QObject):
     @property
     def profile(self) -> Profile:
         document = self.project.document
-        return profiles.make_profile(
-            document.printer or profiles.DEFAULT_PRINTER,
-            document.material or profiles.DEFAULT_MATERIAL,
+        return profiles.for_process(
+            profiles.make_profile(
+                document.printer or profiles.DEFAULT_PRINTER,
+                document.material or profiles.DEFAULT_MATERIAL,
+            ),
+            document.print_settings,
         )
 
     @property
@@ -845,6 +848,7 @@ class Session(QObject):
         eine Sicherung, eine Kennzahl —, musste zwanzig Stellen finden und
         durfte keine übersehen.
         """
+        self._bind_filament_profiles()
         self._dirty = True
         self.result_current = False
         self.projectChanged.emit()
@@ -1250,6 +1254,29 @@ class Session(QObject):
         self.project.sources[source_id] = payload
         return source_id
 
+    def _bind_filament_profiles(self) -> None:
+        """Alte Profilplätze behalten die Identität der letzten vollständigen Szene."""
+        from app.core.export import handover, threemf
+
+        settings = self.project.document.print_settings
+        result = self.last_result
+        if (
+            settings is None
+            or settings.slot_profile_bindings is not None
+            or not settings.slot_profiles
+            or result is None
+            or result.stopped_at is not None
+            or not result.scene.objects
+        ):
+            return
+        slots = threemf.merge_slots(
+            [
+                threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
+                for body in result.scene.objects.values()
+            ]
+        )
+        self.project.document.print_settings = handover.bind_slot_profiles(settings, slots)
+
     def set_print_settings(self, settings: PrintSettings) -> None:
         """Womit dieses Projekt gedruckt wird (§29).
 
@@ -1261,6 +1288,7 @@ class Session(QObject):
         if self.project.document.print_settings == settings:
             return
         self.project.document.print_settings = settings
+        self._bind_filament_profiles()
         self._dirty = True
         self.projectChanged.emit()
 
@@ -2035,6 +2063,7 @@ class Session(QObject):
         self.cancel_signal.reset()
         result = self.run_evaluation("fine")
         self.last_result = result
+        self._bind_filament_profiles()
         self.result_generation += 1
         self.result_current = True
         self.sceneChanged.emit(result)
@@ -2291,6 +2320,7 @@ class Session(QObject):
             # Projekts über das Modell zu legen, das gerade geladen wird.
             return
         self.last_result = result
+        self._bind_filament_profiles()
         self.result_generation += 1
         self.result_current = not self._rerun_pending
         # §17.2: die Rückfallstufe behalten, die jede Operation getragen hat —

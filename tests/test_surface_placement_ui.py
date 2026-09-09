@@ -84,6 +84,54 @@ class _Viewport(QWidget):
         pass
 
 
+def test_mixed_part_preview_shows_and_removes_both_bodies(flow: Any, monkeypatch: Any) -> None:
+    """Die Kabeldurchführung zeigt Schnitt und Anbau am selben gewählten Ort."""
+    original, session, viewport, _original_dialog = flow
+    original.dispose()
+    object_id = original.inputs_of()[0]
+    spec = REGISTRY.get("insert_cable_gland")
+    dialog = OperationDialog(spec, {object_id: "Würfel"})
+    window = SimpleNamespace(
+        viewport=viewport, session=session, _clear_preview=session.cancel_preview
+    )
+    controller = PlacementFlow(dialog, window, lambda: spec, lambda: (object_id,))
+    created = []
+    removed = []
+
+    def add_surface(*_args: Any, **kwargs: Any) -> _Item:
+        item = _Item()
+        created.append((item, kwargs))
+        return item
+
+    monkeypatch.setattr(viewport.renderer, "add_surface", add_surface)
+    monkeypatch.setattr(viewport.renderer, "remove", removed.append)
+    try:
+        controller.start()
+        assert session.wait_for_idle(30_000)
+        _point(controller, session)
+        assert controller._addition is not None
+        assert controller._tool is not None
+        assert controller._tool_context.addition is not None
+        assert controller._tool.visible and controller._addition.visible
+        assert np.allclose(controller._tool.matrix, controller._addition.matrix)
+        assert "Hinzugefügt" in controller._tool_legend.text()
+        assert "Entfernt" in controller._tool_legend.text()
+        by_name = {data["name"]: data["style"] for _item, data in created}
+        cut = by_name["surface_placement_tool"]
+        addition = by_name["surface_placement_addition"]
+        assert cut.colour != addition.colour
+        assert cut.opacity < addition.opacity
+        actors = (controller._tool, controller._addition)
+        controller.back()
+        assert all(actor in removed for actor in actors)
+        assert controller._tool is None and controller._addition is None
+        assert controller._tool_legend.isHidden()
+    finally:
+        controller.dispose()
+        assert session.wait_for_idle(30_000)
+        dialog.close()
+
+
 @pytest.fixture
 def flow(qt_app: QApplication) -> Any:
     session = Session()

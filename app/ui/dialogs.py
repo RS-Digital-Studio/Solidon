@@ -17,6 +17,7 @@ from PySide6.QtCore import QLocale, Qt, QTimer, QUrl, QUrlQuery, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -65,6 +66,7 @@ from app.core.errors import (
 )
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
+from app.core.types import Profile
 from app.core.units import UNIT_NAMES
 from app.i18n import format_decimal, get_language, tr
 from app.ui.ai_disclosure import (
@@ -165,9 +167,12 @@ class CalibrationDialog(QDialog):
     überrascht.
     """
 
-    def __init__(self, material: str, parent: QWidget | None = None) -> None:
+    def __init__(
+        self, material: str, parent: QWidget | None = None, *, process: Profile | None = None
+    ) -> None:
         super().__init__(parent)
         self.material = material
+        self.process = process
         self.setWindowTitle(tr("Material kalibrieren"))
         self.setMinimumWidth(420)
 
@@ -180,13 +185,16 @@ class CalibrationDialog(QDialog):
                 "Alle bestehenden Projekte rechnen danach mit den neuen Werten.\n\n"
                 "Gemessen wird an einem gedruckten Prüfkörper: der Toleranz-Testkörper "
                 "aus dem Bausteinkatalog bringt Zapfen und Bohrungen mit gestaffeltem "
-                "Spiel auf eine Platte."
+                "Spiel auf zwei steckbare Messleisten."
             ),
             self,
         )
         explanation.setWordWrap(True)
 
         self.editors: dict[str, QDoubleSpinBox] = {}
+        self.measured_fields: dict[str, QCheckBox] = {}
+        self._original_values: dict[str, float] = {}
+        self._edited_fields: set[str] = set()
         form = QFormLayout()
         for name, title in (
             ("clearance", tr("Spiel für Schiebesitz")),
@@ -206,9 +214,75 @@ class CalibrationDialog(QDialog):
             editor.setSingleStep(0.1 if percent else 0.01)
             editor.setSuffix(" %" if percent else " mm")
             value = float(getattr(current, name))
+            self._original_values[name] = value
             editor.setValue(value * 100.0 if percent else value)
             self.editors[name] = editor
             form.addRow(title, editor)
+
+        for name, title, suffix, maximum in (
+            ("minimum_wall", tr("Mindestwand übernehmen"), " mm", 50.0),
+            ("overhang_angle", tr("Überhangwinkel übernehmen"), " °", 89.9),
+        ):
+            checkbox = QCheckBox(title, self)
+            checkbox.setEnabled(process is not None)
+            editor = NumberSpin(self)
+            editor.setDecimals(2)
+            editor.setRange(0.01, maximum)
+            editor.setSuffix(suffix)
+            editor.setAccessibleName(title)
+            value = getattr(current, name)
+            applies = process is not None and process.has_process_calibration and value is not None
+            default = (
+                process.minimum_wall_thickness
+                if name == "minimum_wall" and process is not None
+                else process.overhang_limit_degrees
+                if process is not None
+                else 1.0
+            )
+            self._original_values[name] = float(value) if applies else default
+            editor.setValue(self._original_values[name])
+            editor.setEnabled(applies)
+            checkbox.setChecked(applies)
+            checkbox.toggled.connect(editor.setEnabled)
+            explanation_text = tr(
+                "Nur aktivieren, wenn Sie die Probe gedruckt und geprüft haben. "
+                "Der Überhangwinkel wird von der Senkrechten aus gemessen. "
+                "Ohne Auswahl bleiben gespeicherte Messwerte unverändert."
+            )
+            for widget in (checkbox, editor):
+                widget.setToolTip(explanation_text)
+                widget.setAccessibleDescription(explanation_text)
+            self.editors[name] = editor
+            self.measured_fields[name] = checkbox
+            form.addRow(checkbox, editor)
+
+        # Erst nach der Vorbelegung beobachten: Qt rundet schon bei setValue.
+        # Auch bewusstes Neueintippen derselben sichtbaren Zahl ist eine Änderung.
+        for name, observed_editor in self.editors.items():
+            observed_editor.valueChanged.connect(
+                lambda _value, field=name: self._edited_fields.add(field)
+            )
+            line = observed_editor.lineEdit()
+            if line is not None:
+                line.textEdited.connect(lambda _text, field=name: self._edited_fields.add(field))
+
+        process_note = QLabel(self)
+        process_note.setWordWrap(True)
+        if process is not None:
+            printer = process.printer
+            process_note.setText(
+                tr("Wand und Überhang gelten nur für diese Druckbedingungen:")
+                + "\n"
+                + f"{printer.title} · {current.title}\n"
+                + tr("Düse")
+                + f" {format_decimal(printer.nozzle_diameter)} mm · "
+                + tr("Schichthöhe")
+                + f" {format_decimal(printer.layer_height)} mm · "
+                + tr("Linienbreite")
+                + f" {format_decimal(printer.extrusion_width)} mm"
+            )
+        else:
+            process_note.setText(tr("Wählen Sie zuerst den Drucker der Probe im Projekt aus."))
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel, self
@@ -226,6 +300,7 @@ class CalibrationDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(explanation)
         layout.addLayout(form)
+        layout.addWidget(process_note)
         layout.addWidget(buttons)
 
     def measured(self) -> calibration.Calibration:
@@ -237,8 +312,13 @@ class CalibrationDialog(QDialog):
         return calibration.from_measurements(
             self.material,
             **{
-                name: editor.value() / 100.0 if name == "shrinkage" else editor.value()
+                name: self._original_values[name]
+                if name not in self._edited_fields
+                else editor.value() / 100.0
+                if name == "shrinkage"
+                else editor.value()
                 for name, editor in self.editors.items()
+                if name not in self.measured_fields or self.measured_fields[name].isChecked()
             },
         )
 
