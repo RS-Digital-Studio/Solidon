@@ -655,7 +655,21 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   aus der echten Verbindung. E6 holt ein Rezept über *Zum Bearbeiten öffnen …* als Entwurf
   ins Fenster zurück (`recipe.draft`, `Session.open_draft`): Schritte im Verlauf, Angaben im
   Rezeptdialog, ein eingelesener Baustein bleibt eingelesen, und der Knopf sagt, ob er anlegt
-  oder ersetzt. **Offen bleiben E1 bis E4** — die vier, die neue Geometrie verlangen.
+  oder ersetzt.
+
+  **Und drei weitere am selben Tag**: E2 spannt den Übergang zwischen zwei unabhängigen
+  Zeichnungen auf statt zwischen einer und ihrer verkleinerten Kopie — rund unten, eckig oben,
+  mit geprüfter Ebene, gleicher Umrisszahl und gleicher Lochzahl je Paar. E3 führt den
+  Querschnitt entlang einer gezeichneten Bahn statt nur am Kreisbogen (`profile.path_of` für
+  die offene Kette, `MakePipeShell` mit Gehrung an der Ecke; `MakePipe` hörte dort auf zu
+  bauen und lieferte stillschweigend das erste Segment). E4 verrundet und fast **einzelne**
+  Kanten: `brep.edit.edge_key` beschreibt eine Kante über Mittelpunkt und vorzeichenfreie
+  Richtung und überlebt damit eine zweite Auswertung, die Auswahl `named` sagt im Register,
+  dass die genannten gelten, und der Dialog zeigt sie als Liste mit Lage und Länge.
+
+  **Offen bleibt E1** — Gegenstücke gemeinsam auf zwei Körpern. Dazu von E4 die Bedienung im
+  Bild: Eine Kante lässt sich noch nicht **anklicken**; der Renderer pickt Flächen und
+  Merkmale, keine Kanten, und das ist ein eigener Bau.
 
   Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
   Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische
