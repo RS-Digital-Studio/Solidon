@@ -912,6 +912,40 @@ def test_two_parts_may_be_apart_and_their_brims_still_collide() -> None:
     assert check_adhesion_clearance(weit, settings) == []
 
 
+def test_the_support_structure_needs_its_own_room_beside_the_part() -> None:
+    """Nicht nur der Brim steht über — die Stütze auch (Robert, 09.09.2026).
+
+    Sie steht unter dem Überhang und damit überwiegend in der Aufsicht des
+    Körpers, an einer senkrechten Wand aber ``xy_gap`` außerhalb. Zwischen zwei
+    Nachbarn zählt dieser Rand zweimal, genau wie der Brim. Gemessen ohne
+    Haftung, damit allein die Stütze die Aussage trägt: 2 mm ``xy_gap`` je
+    Seite brauchen 4 mm, und 3 mm Luft sind zu wenig.
+
+    **Und ohne Stützstil bleibt der Rand aus.** Wo keine Struktur entsteht,
+    verschenkte ein Rand für sie Bettfläche.
+    """
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = print_settings.with_path(settings, "adhesion.kind", "none")
+    settings = print_settings.with_path(settings, "support.xy_gap", 2.0)
+    meshes = [
+        (_boxed("links", (10.0, 10.0, 5.0), (0.0, 0.0)).mesh),
+        (_boxed("rechts", (10.0, 10.0, 5.0), (13.0, 0.0)).mesh),
+    ]
+
+    ohne = print_settings.with_path(settings, "support.style", "none")
+    assert check_adhesion_clearance(meshes, ohne) == [], "ohne Stützen kein Rand"
+
+    mit = print_settings.with_path(settings, "support.style", "grid")
+    assert [entry.code for entry in check_adhesion_clearance(meshes, mit)] == [
+        "arrange.adhesion_too_close"
+    ]
+    weit = [
+        meshes[0],
+        (_boxed("weit", (10.0, 10.0, 5.0), (16.0, 0.0)).mesh),
+    ]
+    assert check_adhesion_clearance(weit, mit) == [], "5 mm Luft reichen für 2 + 2"
+
+
 def test_parts_on_different_plates_never_crowd_each_other() -> None:
     settings = print_settings.resolve(profiles.make_profile())
     settings = print_settings.with_path(settings, "adhesion.kind", "brim")

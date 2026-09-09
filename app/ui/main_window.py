@@ -106,7 +106,7 @@ from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome, override_for, with_slot_override
 from app.core.export.writer import (
     ExportFormat,
-    adhesion_margin,
+    clearance_margin,
     plan_export,
     safe_name,
     write_assembly,

@@ -358,20 +358,50 @@ def adhesion_margin(settings: PrintSettings) -> float:
     return 0.0
 
 
+def support_margin(settings: PrintSettings) -> float:
+    """Wie weit die Stützstruktur über den Körper hinausreicht.
+
+    Sie steht unter dem Überhang, also überwiegend in der Aufsicht des Körpers
+    selbst — aber an einer senkrechten Wand hält sie ``xy_gap`` Abstand und
+    liegt damit außerhalb. Zwischen zwei Nachbarn zählt dieser Rand zweimal,
+    genau wie der Brim (Robert, 09.09.2026: „abstände und nötige stützen
+    beachten").
+
+    **Nötig heißt eingeschaltet.** Wo kein Stützstil gewählt ist, entsteht auch
+    keine Struktur, und ein Rand für etwas, das es nicht gibt, verschenkte
+    Bettfläche. Ob die Geometrie welche *braucht*, ist eine andere Frage — sie
+    beantwortet die Schichtanalyse und nicht die Anordnung.
+    """
+    if settings.support.style == "none":
+        return 0.0
+    return max(0.0, settings.support.xy_gap)
+
+
+def clearance_margin(settings: PrintSettings) -> float:
+    """Der Rand, den ein Teil um sich herum braucht — Haftung und Stützen.
+
+    Die eine Auskunft für alle, die den Abstand zwischen zwei Teilen brauchen:
+    die Vorbelegung im Anordnungsdialog (``MainWindow._spacing_for``) und die
+    Prüfung vor dem Export. Zwei Rechnungen für dieselbe Frage liefen
+    auseinander, sobald eine davon einen Anteil dazubekam.
+    """
+    return adhesion_margin(settings) + support_margin(settings)
+
+
 def check_adhesion_clearance(
     meshes: Sequence[MeshData],
     settings: PrintSettings,
     plates: Sequence[int] | None = None,
 ) -> list[Finding]:
-    """Passen die Haftungsränder zwischen zwei Teilen noch nebeneinander?
+    """Passen die Ränder zwischen zwei Teilen noch nebeneinander?
 
     Die Körper selbst können reichlich Luft haben und der Druck trotzdem
-    scheitern: Brim und Skirt stehen über den Körper hinaus, und zwischen zwei
-    Nachbarn zählt der Rand zweimal. Gemessen wird in der Aufsicht, denn dort
-    liegt die Haftung — was sich in der Höhe überlappt, ist eine andere Frage
-    (:func:`app.core.geom.prepare.check_collisions`).
+    scheitern: Brim, Skirt und Stützstruktur stehen über den Körper hinaus, und
+    zwischen zwei Nachbarn zählt der Rand zweimal. Gemessen wird in der
+    Aufsicht, denn dort liegen sie — was sich in der Höhe überlappt, ist eine
+    andere Frage (:func:`app.core.geom.prepare.check_collisions`).
     """
-    margin = adhesion_margin(settings)
+    margin = clearance_margin(settings)
     if margin <= 0.0:
         return []
 
@@ -388,9 +418,7 @@ def check_adhesion_clearance(
                 Finding(
                     code="arrange.adhesion_too_close",
                     severity="warning",
-                    message=_(
-                        "Zwei Teile stehen so dicht, dass ihre Druckbetthaftung ineinanderläuft."
-                    ),
+                    message=_("Zwei Teile stehen so dicht, dass ihre Ränder ineinanderlaufen."),
                     values={
                         "a": first,
                         "b": second,
