@@ -1084,6 +1084,64 @@ def _kept_narrow(editor: QWidget) -> QWidget:
     return editor
 
 
+class EdgeSetField(QWidget):
+    """Einzelne Kanten wählen — die Antwort auf „diese eine Ecke" (E4, RM-147).
+
+    Bis hierher gab es nur Gruppen: alle senkrechten, alle waagerechten, oben,
+    unten, alle. Wer **eine** Kante brechen wollte, bekam vier.
+
+    Der Wert ist ein Text aus Schlüsseln mit Leerzeichen dazwischen — was der
+    Kern als ``kind="edges"`` ablegt. Was der Kunde sieht, ist etwas anderes:
+    die Lage der Kante und ihre Länge, denn ein Schlüssel wie
+    ``e:-20.00,-15.00,10.00:0.000,0.000,1.000`` ist eine Kennung und keine
+    Beschriftung (§2.4, „ein Sammelparameter bekommt seinen Editor").
+    """
+
+    changed = Signal()
+
+    def __init__(
+        self, choices: Mapping[str, str], selected: str, parent: QWidget | None = None
+    ) -> None:
+        super().__init__(parent)
+        chosen = tuple(part for part in str(selected or "").split() if part)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(TIGHT)
+        self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Kanten auswählen"))
+        self.list.setMinimumHeight(96)
+        self.list.setMaximumHeight(210)
+        # Auch eine Kante, die es nicht mehr gibt, steht in der Liste: Sonst
+        # verschwände die Wahl eines gespeicherten Schritts beim Öffnen, ohne
+        # dass jemand sie zurückgenommen hätte (§15.4).
+        for identifier in dict.fromkeys((*choices, *chosen)):
+            item = QListWidgetItem(choices.get(identifier, identifier), self.list)
+            item.setData(Qt.ItemDataRole.UserRole, identifier)
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(
+                Qt.CheckState.Checked if identifier in chosen else Qt.CheckState.Unchecked
+            )
+        layout.addWidget(self.list)
+        self.hint = QLabel(
+            tr("Die Kanten stehen in der Reihenfolge, in der sie am Körper liegen."), self
+        )
+        self.hint.setWordWrap(True)
+        set_level(self.hint, "caption")
+        layout.addWidget(self.hint)
+        self.setFocusProxy(self.list)
+        self.list.itemChanged.connect(self._changed)
+
+    def value(self) -> str:
+        return " ".join(
+            str(self.list.item(row).data(Qt.ItemDataRole.UserRole))
+            for row in range(self.list.count())
+            if self.list.item(row).checkState() == Qt.CheckState.Checked
+        )
+
+    def _changed(self, *_args: object) -> None:
+        self.changed.emit()
+
+
 class FeatureSetField(QWidget):
     """Benannte Flächen wählen; eine leere Zwischenwahl erweitert niemals den Auftrag."""
 
@@ -1201,6 +1259,7 @@ class OperationDialog(QDialog):
         slots: Sequence[Any] = (),
         target_features: Mapping[str, str] | None = None,
         source_objects: Sequence[str] = (),
+        edges: Mapping[str, str] | None = None,
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -1270,6 +1329,10 @@ class OperationDialog(QDialog):
         self._features = dict(features or {})
         """Die erkannten Merkmale des gewählten Körpers, Kennung auf
         Beschriftung — dieselbe, die im Objektbaum und über dem Modell steht."""
+        self._edges = dict(edges or {})
+        """Die einzeln wählbaren Kanten eines exakten Körpers (E4): Schlüssel
+        auf Beschriftung. Leer bei einem Netz — dort gibt es keine Kanten, die
+        eine zweite Auswertung überlebten."""
         self._images = dict(images or {})
         """Nur die Bildquellen des Projekts — das Feld „Bild" listet keine
         Netze (§25, ``displace_image``)."""
@@ -1823,6 +1886,8 @@ class OperationDialog(QDialog):
         start = entry.default if given is None else given
         if entry.kind == "features":
             return FeatureSetField(self._features, tuple(start or ()), self)
+        if entry.kind == "edges":
+            return EdgeSetField(self._edges, str(start or ""), self)
         if entry.kind == "bool":
             editor = QCheckBox(self)
             editor.setChecked(bool(start))
@@ -2311,7 +2376,7 @@ class OperationDialog(QDialog):
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, FeatureSetField):
+            if isinstance(editor, FeatureSetField | EdgeSetField):
                 collected[entry.name] = editor.value()
             elif isinstance(editor, MaterialField):
                 # Vor dem Combo-Zweig: Der macht ``str(currentData())``

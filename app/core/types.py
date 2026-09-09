@@ -1150,6 +1150,7 @@ ParamKind = Literal[
     "sketch",
     "strokes",
     "armature",
+    "edges",
 ]
 """``image`` ist eine Quelle, die ein Bild sein muss: Der Dialog listet nur
 Bildquellen und bietet daneben an, eine von der Platte zu holen — ein

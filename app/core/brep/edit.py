@@ -17,6 +17,7 @@ zugeordnet werden).
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -29,11 +30,20 @@ from app.i18n import _
 
 _log = get_logger(__name__)
 
-EdgeChoice = Literal["all", "vertical", "horizontal", "top", "bottom"]
+EdgeChoice = Literal["all", "vertical", "horizontal", "top", "bottom", "named"]
 
 #: Welche Kanten eine Auswahl meint. „Senkrecht" ist, was jemand mit „runde
 #: die Ecken dieser Box" meint: die vier Stehenden, nicht die Plattenkanten.
-EDGE_CHOICES: tuple[EdgeChoice, ...] = ("all", "vertical", "horizontal", "top", "bottom")
+#: ``named`` ist die sechste und die einzige, die nicht nach der Lage geht:
+#: einzelne Kanten, jede über ihren eigenen Schlüssel (:func:`edge_key`, E4).
+EDGE_CHOICES: tuple[EdgeChoice, ...] = (
+    "all",
+    "vertical",
+    "horizontal",
+    "top",
+    "bottom",
+    "named",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,9 +137,91 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
     return described
 
 
+def edge_key(entry: EdgeInfo) -> str:
+    """Der stabile Verweis auf **eine** Kante (E4, RM-147, §21).
+
+    Eine Kante hat keine Kennung, die eine zweite Auswertung überlebt: Ihr
+    nativer Handle gehört dem Lauf, der ihn erzeugt hat, und ihr Platz in
+    ``solid.edges()`` verschiebt sich, sobald eine Operation davor etwas
+    ändert. Beides in eine Projektdatei zu schreiben hieße, beim nächsten
+    Öffnen eine andere Kante zu verrunden — still.
+
+    Der Schlüssel kommt deshalb aus der **Geometrie**: Mittelpunkt und
+    Richtung, auf hundertstel Millimeter beziehungsweise drei Stellen
+    gerundet. Zwei verschiedene Kanten teilen beides nicht — sie lägen
+    aufeinander.
+
+    **Die Richtung ohne Vorzeichen**, denn dieselbe Kante kann in beide
+    Richtungen laufen, je nachdem, welche Fläche sie beschreibt: Die erste
+    Komponente ungleich null wird positiv gemacht. Ohne das trüge dieselbe
+    Kante nach einer Booleschen Operation einen anderen Schlüssel, und die
+    Verrundung fiele aus, statt zu greifen.
+
+    Gerundet wird auf ein Hundertstel, weil das die Größenordnung ist, in der
+    dieser Drucker arbeitet (§11) — feiner hieße, dass ein Kern mit anderer
+    Toleranz denselben Punkt anders schreibt.
+    """
+    direction = entry.direction
+    lead = next((value for value in direction if abs(value) > 1e-6), 1.0)
+    sign = -1.0 if lead < 0.0 else 1.0
+    return "e:{:.2f},{:.2f},{:.2f}:{:.3f},{:.3f},{:.3f}".format(
+        *entry.middle, *(value * sign for value in direction)
+    )
+
+
+def named_edges(solid: Solid, keys: Sequence[str]) -> list[EdgeInfo]:
+    """Die Kanten zu diesen Schlüsseln — in der Reihenfolge der Schlüssel.
+
+    Was nicht mehr da ist, fehlt in der Antwort; **wer daraus einen Fehler
+    macht, entscheidet der Aufrufer.** Eine Kante kann verschwunden sein, weil
+    ein Schritt davor sie weggenommen hat, und dann ist das eine Auskunft an
+    den Kunden und kein Programmfehler (Regel 17).
+    """
+    described = {edge_key(entry): entry for entry in edges_of(solid)}
+    return [described[key] for key in keys if key in described]
+
+
+def _wanted(solid: Solid, choice: EdgeChoice, keys: Sequence[str]) -> list[EdgeInfo]:
+    """Die Kanten, die dieser Aufruf behandelt — genannte vor Gruppe (E4).
+
+    Eine leere Auswahl ist an beiden Wegen ein Satz und kein leerer Körper,
+    aber sie hat **verschiedene Gründe**: Bei einer Gruppe gibt es die Sorte
+    Kante nicht, bei genannten sind sie verschwunden — ein Schritt davor hat
+    sie weggenommen. Wer denselben Satz für beides schriebe, schickte den
+    Kunden in die falsche Richtung (Regel 17).
+    """
+    if choice == "named" and not keys:
+        raise GeometryError(
+            detail=_("Für diese Auswahl ist noch keine Kante benannt — wählen Sie eine aus."),
+            values={"choice": choice},
+        )
+    if keys:
+        chosen = named_edges(solid, keys)
+        if not chosen:
+            raise GeometryError(
+                detail=_(
+                    "Die gewählten Kanten gibt es an diesem Körper nicht mehr — "
+                    "ein Schritt davor hat sie verändert. Wählen Sie sie neu."
+                ),
+                values={"edges": len(keys)},
+            )
+        return chosen
+    chosen = choose(solid, choice)
+    if not chosen:
+        raise GeometryError(
+            detail=_("Zu dieser Auswahl gehört keine Kante."),
+            values={"choice": choice},
+        )
+    return chosen
+
+
 def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
     """Die Kanten, die eine benannte Auswahl meint."""
     described = edges_of(solid)
+    # ``named`` geht nicht nach der Lage, sondern nach Schlüsseln — die kennt
+    # nur ``_wanted``. Hier wäre jede Antwort eine falsche.
+    if choice == "named":
+        return []
     if choice == "all":
         return described
     if choice == "vertical":
@@ -148,20 +240,24 @@ def choose(solid: Solid, choice: EdgeChoice) -> list[EdgeInfo]:
     ]
 
 
-def fillet(solid: Solid, radius: float, choice: EdgeChoice = "all") -> Solid:
+def fillet(
+    solid: Solid,
+    radius: float,
+    choice: EdgeChoice = "all",
+    keys: Sequence[str] = (),
+) -> Solid:
     """Rundet die gewählten Kanten. Exakt, weil die Kante eine Kurve
     ist (§30).
+
+    ``keys`` sind einzelne Kanten (:func:`edge_key`, E4). Sind welche genannt,
+    gelten sie und nicht die Gruppe: Wer eine bestimmte Kante angibt, meint
+    sie — nicht alle senkrechten dazu.
     """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeFillet
 
     working = Solid(solid.shape, deflection=solid.deflection)
-    chosen = choose(working, choice)
-    if not chosen:
-        raise GeometryError(
-            detail=_("Zu dieser Auswahl gehört keine Kante."),
-            values={"choice": choice},
-        )
+    chosen = _wanted(working, choice, keys)
 
     _fits_the_wall(working, radius, len(chosen), "fillet")
     builder = BRepFilletAPI_MakeFillet(working.shape)
@@ -170,18 +266,22 @@ def fillet(solid: Solid, radius: float, choice: EdgeChoice = "all") -> Solid:
     return _built(solid, builder, "fillet", radius, len(chosen))
 
 
-def chamfer(solid: Solid, distance: float, choice: EdgeChoice = "all") -> Solid:
-    """Bricht die gewählten Kanten im 45-Grad-Winkel."""
+def chamfer(
+    solid: Solid,
+    distance: float,
+    choice: EdgeChoice = "all",
+    keys: Sequence[str] = (),
+) -> Solid:
+    """Bricht die gewählten Kanten im 45-Grad-Winkel.
+
+    ``keys`` wie bei :func:`fillet`: einzelne Kanten haben Vorrang vor der
+    Gruppe.
+    """
     require()
     from OCP.BRepFilletAPI import BRepFilletAPI_MakeChamfer
 
     working = Solid(solid.shape, deflection=solid.deflection)
-    chosen = choose(working, choice)
-    if not chosen:
-        raise GeometryError(
-            detail=_("Zu dieser Auswahl gehört keine Kante."),
-            values={"choice": choice},
-        )
+    chosen = _wanted(working, choice, keys)
 
     _fits_the_wall(working, distance, len(chosen), "chamfer")
     builder = BRepFilletAPI_MakeChamfer(working.shape)

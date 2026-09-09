@@ -60,6 +60,20 @@ trägt die wirklichen Manteldreiecke; planare Anschnitte bleiben getrennte
 Flächen. Es verwendet denselben Gewindevertrag wie die Bausteine, ohne die
 exakten Operationswerte für die Anzeige zu runden.
 
+## Eine Kante hat einen Schlüssel, keine Nummer
+
+`edge_key` (RM-147 E4) beschreibt eine Kante über **Mittelpunkt und
+Richtung**, gerundet auf ein Hundertstel beziehungsweise drei Stellen — die
+Richtung ohne Vorzeichen, denn dieselbe Kante läuft je nach beschreibender
+Fläche in beide Richtungen. Ein nativer Handle gehört dem Lauf, der ihn
+erzeugt hat, und ein Index in `solid.edges()` verschiebt sich, sobald davor
+etwas anderes passiert; beides in einer Projektdatei hieße, beim nächsten
+Öffnen eine andere Kante zu verrunden. `named_edges` löst die Schlüssel wieder
+auf, `fillet` und `chamfer` nehmen sie als `keys`, und die Auswahl `named`
+sagt im Register, dass sie gelten. Eine Kante, die es nicht mehr gibt, ist ein
+Satz an den Kunden — und ein anderer als „zu dieser Auswahl gehört keine
+Kante".
+
 ## Eine Bahn ist kein Bogen
 
 `sweep_path` (RM-147 E3) führt einen Querschnitt entlang einer gezeichneten

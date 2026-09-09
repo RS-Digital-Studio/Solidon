@@ -58,7 +58,19 @@ from app.i18n import _
 _CHOICES = edit.EDGE_CHOICES
 
 #: Dieselbe Auswahl bei Verrundung und Fase — deshalb steht der Satz einmal hier.
-_CHOICE_DOC = _("Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten oder alle.")
+_CHOICE_DOC = _(
+    "Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten, alle oder einzeln gewählte."
+)
+
+
+def _chosen_edges(value: str) -> tuple[str, ...]:
+    """Die einzeln gewählten Kanten aus dem gespeicherten Wert (E4).
+
+    Ein Text mit Leerzeichen dazwischen, wie ihn ``kind=\"edges\"`` ablegt.
+    Der Editor im Dialog setzt ihn zusammen; hier steht der eine Weg zurück,
+    damit Verrundung und Fase ihn nicht zweimal verschieden lesen.
+    """
+    return tuple(part for part in value.split() if part)
 
 
 @op_params
@@ -241,7 +253,19 @@ class FilletParams(BaseParams):
         title=_("Kanten"),
         default="vertical",
         choices=_CHOICES,
-        doc=_("Welche Kanten gemeint sind — senkrechte, waagerechte, oben, unten oder alle."),
+        doc=_CHOICE_DOC,
+    )
+    edge_keys: str = param(
+        title=_("Einzelne Kanten"),
+        default="",
+        kind="edges",
+        placement="advanced",
+        doc=_(
+            "Die einzeln gewählten Kanten. Sie hängen an ihrer Lage am Körper, "
+            "nicht an ihrer Nummer — ein Schritt davor darf etwas anderes "
+            "ändern, ohne dass die Verrundung wandert."
+        ),
+        depends_on=("edges", ("named",)),
     )
 
 
@@ -258,7 +282,9 @@ class FilletParams(BaseParams):
 def fillet_edges(ctx: OpContext) -> OpResult:
     params = cast(FilletParams, ctx.params)
     source, body = brep_input(ctx)
-    solid = edit.fillet(body, params.radius, cast(edit.EdgeChoice, params.edges))
+    solid = edit.fillet(
+        body, params.radius, cast(edit.EdgeChoice, params.edges), _chosen_edges(params.edge_keys)
+    )
     return OpResult(outputs=[_replaced(source, solid)])
 
 
@@ -278,6 +304,18 @@ class ChamferParams(BaseParams):
         choices=_CHOICES,
         doc=_CHOICE_DOC,
     )
+    edge_keys: str = param(
+        title=_("Einzelne Kanten"),
+        default="",
+        kind="edges",
+        placement="advanced",
+        doc=_(
+            "Die einzeln gewählten Kanten. Sie hängen an ihrer Lage am Körper, "
+            "nicht an ihrer Nummer — ein Schritt davor darf etwas anderes "
+            "ändern, ohne dass die Verrundung wandert."
+        ),
+        depends_on=("edges", ("named",)),
+    )
 
 
 @register_op(
@@ -293,7 +331,9 @@ class ChamferParams(BaseParams):
 def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
     source, body = brep_input(ctx)
-    solid = edit.chamfer(body, params.distance, cast(edit.EdgeChoice, params.edges))
+    solid = edit.chamfer(
+        body, params.distance, cast(edit.EdgeChoice, params.edges), _chosen_edges(params.edge_keys)
+    )
     return OpResult(outputs=[_replaced(source, solid)])
 
 

@@ -1422,6 +1422,42 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     assert str(spec.params.spec()[3].doc) == editor.toolTip(), "und der eigene Satz kommt zurück"
 
 
+def test_the_fillet_lets_a_single_edge_be_ticked(window: MainWindow) -> None:
+    """RM-147 E4: Wer eine Kante brechen wollte, bekam bisher ihre ganze Gruppe.
+
+    Der Dialog zeigt die Kanten als Liste zum Ankreuzen — mit Lage und Länge,
+    nicht mit ihrem Schlüssel: Der ist eine Kennung aus sechs Zahlen und keine
+    Beschriftung (§2.4). Was der Kern bekommt, sind die Schlüssel.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from app.ui.op_dialog import EdgeSetField
+
+    kanten = {
+        "e:-20.00,-15.00,10.00:0.000,0.000,1.000": "Senkrecht · 20 mm · x -20,0, y -15,0",
+        "e:20.00,-15.00,10.00:0.000,0.000,1.000": "Senkrecht · 20 mm · x 20,0, y -15,0",
+    }
+    dialog = OperationDialog(REGISTRY.get("fillet_edges"), {}, window, edges=kanten)
+    try:
+        feld = dialog._editors["edge_keys"]
+        assert isinstance(feld, EdgeSetField), "eine Kantenliste ist kein Textfeld"
+        assert not feld.isEnabled(), "an einer Gruppe wirkt die Einzelwahl nicht"
+
+        umschalter = dialog._editors["edges"]
+        assert isinstance(umschalter, QComboBox)
+        umschalter.setCurrentIndex(umschalter.findData("named"))
+        assert feld.isEnabled()
+
+        # Angekreuzt wird die zweite Kante — und genau ihr Schlüssel geht hinaus.
+        item = feld.list.item(1)
+        assert "Senkrecht" in item.text(), "in der Liste steht die Lage, nicht die Kennung"
+        item.setCheckState(Qt.CheckState.Checked)
+
+        assert dialog.values()["edge_keys"] == "e:20.00,-15.00,10.00:0.000,0.000,1.000"
+    finally:
+        dialog.deleteLater()
+
+
 def test_the_sweep_offers_a_drawn_path_and_greys_out_the_arc(window: MainWindow) -> None:
     """RM-147 E3: Der Sweep läuft jetzt auch an einer gezeichneten Bahn entlang.
 

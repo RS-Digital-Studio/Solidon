@@ -755,6 +755,9 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "scaled": _("Aus dem unteren gerechnet"),
     "drawn": _("Eigene Zeichnung"),
     "arc": _("Gleichmäßiger Bogen"),
+    # Die sechste Kantenauswahl (RM-147 E4): nicht nach der Lage, sondern
+    # einzeln — die Antwort auf „diese eine Ecke".
+    "named": _("Einzeln gewählt"),
     "pin": _("Stift"),
     "bore": _("Bohrung"),
     # Der Standfuß kann beides, und beide Werte sind englische Schlüssel: Was
@@ -878,6 +881,7 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
         "Eine eigene Zeichnung statt der gerechneten Form — für alles, was aus Zahlen nicht folgt."
     ),
     "arc": _("Ein gleichmäßiger Bogen aus Radius und Winkel — der Rohrbogen ohne Zeichnung."),
+    "named": _("Genau die Kanten, die Sie darunter ankreuzen — nicht ihre ganze Gruppe."),
     "planar": _("Projiziert das Bild flach von oben — für Deckel und ebene Platten."),
     "cylindrical": _("Wickelt das Bild um die Achse — für Becher, Rohre und runde Gehäuse."),
     "spherical": _("Legt das Bild über eine Kugelform — für gewölbte Flächen."),
@@ -1714,6 +1718,32 @@ def feature_label(feature_id: FeatureId, feature: Feature) -> str:
     measure = feature_measure(feature)
     name = feature_name(feature_id, feature)
     return f"{name} · {measure}" if measure else name
+
+
+def edge_label(entry: Any) -> str:
+    """``Senkrecht · 20 mm · x -20, y -15`` — eine Kante in einer Zeile (E4).
+
+    Was der Kunde in der Kantenliste liest. Der Schlüssel dahinter beschreibt
+    dieselbe Kante für den Kern (``brep.edit.edge_key``) und taugt als
+    Beschriftung nicht: Er ist eine Kennung aus sechs Zahlen.
+
+    Drei Angaben, und jede beantwortet eine eigene Frage: **wie** sie liegt
+    (senkrecht, waagerecht oder schräg), **wie lang** sie ist, und **wo** sie
+    steht. Die Länge geht durch :func:`length` und folgt damit der
+    Anzeigeeinheit; der Ort ebenso.
+
+    ``entry`` ist ein ``brep.edit.EdgeInfo`` — als ``Any`` angenommen, weil
+    ``labels`` ohne den optionalen B-Rep-Kern importierbar bleiben muss (§30).
+    """
+    if entry.upright:
+        lie = tr("Senkrecht")
+    elif entry.flat:
+        lie = tr("Waagerecht")
+    else:
+        lie = tr("Schräg")
+    x, y, _z = entry.middle
+    place = f"x {length(x, with_unit=False)}, y {length(y, with_unit=False)}"
+    return f"{lie} · {length(float(entry.length))} · {place}"
 
 
 def local_timestamp(value: str) -> str:

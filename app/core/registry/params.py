@@ -238,6 +238,11 @@ TEXT_KINDS: Final[frozenset[str]] = frozenset(
         "sketch",
         "strokes",
         "armature",
+        # Die einzeln gewählten Kanten (E4): ihre Schlüssel, durch Leerzeichen
+        # getrennt. Ein Text und keine Liste semantischer Kennungen — ein
+        # Kantenschlüssel beschreibt eine Lage und benennt kein Merkmal des
+        # Dokuments, das jemand anderswo wiederfände.
+        "edges",
     }
 )
 
@@ -436,6 +441,7 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "sketch": "string",
     "strokes": "string",
     "armature": "string",
+    "edges": "string",
 }
 
 #: Parameterarten, die eine unbegrenzte Zahl von Nutzergesten sammeln (Regel 2,
@@ -444,7 +450,17 @@ _JSON_TYPE: dict[ParamKind, str] = {
 #: weist ein trotzdem mitgeschicktes Argument auch ab, wenn ein Modell es rät.
 #: Beide Stellen lesen diese Menge, ebenso ``tests/test_gesture_ops.py`` — eine
 #: zweite Liste wäre am Tag nach der nächsten Geste falsch.
-GATHERED_KINDS: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
+GATHERED_KINDS: Final[frozenset[str]] = frozenset(
+    {
+        "sketch",
+        "strokes",
+        "armature",
+        # Und die einzeln gewählten Kanten (E4): Ihr Schlüssel *ist* eine
+        # Koordinate. Der Agent wählt Gruppen — „alle senkrechten" —, und was
+        # er dort nicht findet, rät er nicht in Zahlen zusammen.
+        "edges",
+    }
+)
 
 
 def dependency_conditions(

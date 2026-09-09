@@ -236,6 +236,7 @@ from app.ui.labels import (
     circle_measure,
     demo_line,
     display_unit,
+    edge_label,
     feature_label,
     feature_requirement,
     kind_requirement,
@@ -11201,6 +11202,9 @@ class MainWindow(QMainWindow):
                 pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
                 pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
                 slots=self._slots_of_selection(),
+                # Die einzeln wählbaren Kanten des gewählten exakten Körpers
+                # (E4). Leer an einem Netz — dort gibt es keine.
+                edges=self._edge_names(),
                 note=note,
             )
             dialog.spoolChosen.connect(remember_spool)
@@ -11574,6 +11578,7 @@ class MainWindow(QMainWindow):
             pick_image=DeferredSourcePicker(self._pick_image_source, self._cancel_source_read),
             pick_source=DeferredSourcePicker(self._pick_model_source, self._cancel_source_read),
             slots=self._slots_of_selection(),
+            edges=self._edge_names(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
 
@@ -12039,25 +12044,63 @@ class MainWindow(QMainWindow):
             if not wanted or feature.kind in wanted
         }
 
-    def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
-        """Der Abstand beim Anordnen kennt die Druckbetthaftung (§25, §29).
+    def _edge_names(self) -> dict[str, str]:
+        """Die einzeln wählbaren Kanten des gewählten Körpers (E4, RM-147).
 
-        Die Operation kann das nicht wissen: sie gehört dem Dokument, die
-        Haftung ist eine Druckeinstellung, und beides bleibt getrennt. Das
-        Fenster kennt beide Seiten — also belegt es hier vor.
+        Schlüssel auf Beschriftung, wie :meth:`_feature_names` es für Merkmale
+        tut. Der Schlüssel kommt aus der Geometrie (``edit.edge_key``) und
+        überlebt damit eine zweite Auswertung; was im Dialog steht, ist etwas
+        anderes — Lage und Länge, denn eine Kennung ist keine Beschriftung.
+
+        **Nur an einem exakten Körper**, und das ist keine Verkürzung, sondern
+        die Sache: Ein Netz hat die Kanten verloren, aus denen es gebaut wurde
+        (`app/core/brep/CLAUDE.md`, „Die Einbahnstraße"). Ohne exakten Körper
+        bleibt die Liste leer, und der Dialog zeigt eine leere Auswahl — die
+        Operation selbst ist an einem Netz ohnehin gesperrt
+        (``requires_kind="brep"``), und dort steht der Grund.
+        """
+        from app.core.brep import edit as brep_edit
+        from app.core.brep.kernel import Solid, available
+
+        result = self.session.last_result
+        chosen = self.object_tree.selected()
+        if result is None or chosen is None or not available():
+            return {}
+        entry = result.scene.objects.get(chosen)
+        body = getattr(entry, "exact", None) if entry is not None else None
+        if not isinstance(body, Solid):
+            return {}
+        return {brep_edit.edge_key(edge): edge_label(edge) for edge in brep_edit.edges_of(body)}
+
+    def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
+        """Der Abstand beim Anordnen kennt Druckbetthaftung und Stützen
+        (§25, §29).
+
+        Die Operation kann das nicht wissen: sie gehört dem Dokument, beides
+        sind Druckeinstellungen, und das bleibt getrennt. Das Fenster kennt
+        beide Seiten — also belegt es hier vor.
 
         Zwei Körper mit fünf Millimetern Luft und je fünf Millimetern Brim
         stehen einander im Weg, und zwar erst auf der Platte: der Rand zählt
         zwischen Nachbarn zweimal. Beim Gewürzset war genau das die erste
-        Deckelplatte. Vorbelegt, nicht erzwungen — im Dialog steht die Zahl und
-        lässt sich ändern.
+        Deckelplatte. Dasselbe gilt für die Stützstruktur, die an einer
+        senkrechten Wand ``xy_gap`` außerhalb des Körpers steht (Robert,
+        09.09.2026: „abstände und nötige stützen beachten") — gerechnet wird
+        beides in ``writer.clearance_margin``, damit die Vorbelegung hier und
+        die Prüfung vor dem Export dieselbe Zahl meinen.
+
+        **Und es gilt für jede Operation mit einem Abstand**, nicht nur für
+        *Auf dem Bett anordnen*: Seit *Druckoptimal ausrichten* hinlegt, was es
+        umgeworfen hat, führt auch sie einen (Befund Robert, 09.09.2026).
+        Vorbelegt, nicht erzwungen — im Dialog steht die Zahl und lässt sich
+        ändern.
         """
         if "spacing" not in {entry.name for entry in spec.params.spec()}:
             return {}
         settings = self.session.project.document.print_settings
         if settings is None:
             settings = print_settings.resolve(self.session.profile)
-        needed = 2.0 * adhesion_margin(settings)
+        needed = 2.0 * clearance_margin(settings)
         if needed <= 0.0:
             return {}
         default = next(

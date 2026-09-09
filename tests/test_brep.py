@@ -81,6 +81,61 @@ def test_a_fillet_on_a_reference_edge_is_geometrically_exact() -> None:
     assert rounded.volume == pytest.approx(expected, rel=1e-9)
 
 
+def test_a_single_named_edge_is_the_only_one_that_changes() -> None:
+    """RM-147 E4: Wer **eine** Kante brechen wollte, bekam vier.
+
+    Die Auswahl kannte nur Gruppen — alle senkrechten, alle waagerechten, oben,
+    unten, alle. Genannt wird eine Kante jetzt über ihren eigenen Schlüssel,
+    und die Rechnung ist geschlossen: Was eine Kante wegnimmt, ist genau ein
+    Viertel dessen, was die vier senkrechten wegnehmen.
+    """
+    radius = 3.0
+    solid = block()
+    upright = [entry for entry in edit.edges_of(solid) if entry.upright]
+    assert len(upright) == 4, "ein Quader hat vier stehende Kanten — sonst prüft der Test nichts"
+
+    one = edit.fillet(solid, radius, "named", [edit.edge_key(upright[0])])
+
+    corner = radius**2 - math.pi * radius**2 / 4.0
+    assert one.volume == pytest.approx(WIDTH * DEPTH * HEIGHT - corner * HEIGHT, rel=1e-9)
+
+
+def test_an_edge_key_survives_a_second_run_and_names_only_its_own_edge() -> None:
+    """Der Schlüssel muss eine zweite Auswertung überleben (§21, E4).
+
+    Ein nativer Handle gehört dem Lauf, der ihn erzeugt hat, und ein Index in
+    die Topologie verschiebt sich, sobald davor etwas anderes passiert. Beides
+    in einer Projektdatei hieße, beim nächsten Öffnen eine andere Kante zu
+    verrunden — still. Der Schlüssel kommt deshalb aus der Geometrie.
+    """
+    keys = [edit.edge_key(entry) for entry in edit.edges_of(block())]
+    again = [edit.edge_key(entry) for entry in edit.edges_of(block())]
+
+    assert len(set(keys)) == len(keys), "zwei Kanten teilen keinen Schlüssel"
+    assert sorted(keys) == sorted(again), "derselbe Körper, dieselben Schlüssel"
+    # Und er trifft wirklich seine eigene Kante: Was zurückkommt, liegt dort,
+    # wo der Schlüssel es sagt.
+    found = edit.named_edges(block(), [keys[3]])
+    assert len(found) == 1
+    assert edit.edge_key(found[0]) == keys[3]
+
+
+def test_a_named_edge_that_is_gone_says_so_instead_of_doing_nothing() -> None:
+    """Eine Kante kann verschwinden, weil ein Schritt davor sie weggenommen hat.
+
+    Das ist eine Auskunft an den Kunden und kein Programmfehler — und es ist
+    ein **anderer** Satz als „zu dieser Auswahl gehört keine Kante": Dort gibt
+    es die Sorte nicht, hier gab es sie und gibt es nicht mehr.
+    """
+    with pytest.raises(GeometryError) as weg:
+        edit.fillet(block(), 2.0, "named", ["e:99.00,99.00,99.00:0.000,0.000,1.000"])
+    assert "nicht mehr" in str(weg.value.detail)
+
+    with pytest.raises(GeometryError) as leer:
+        edit.fillet(block(), 2.0, "named", [])
+    assert "keine Kante benannt" in str(leer.value.detail)
+
+
 def test_a_chamfer_takes_off_exactly_its_triangle() -> None:
     distance = 2.0
 
