@@ -934,6 +934,16 @@ class SketchLoftParams(BaseParams):
         maximum=1000.0,
         doc=_("Abstand zwischen unterem und oberem Umriss."),
     )
+    top: str = param(
+        title=_("Oberer Umriss"),
+        default="scaled",
+        choices=("scaled", "drawn"),
+        doc=_(
+            "Woher der obere Umriss kommt: aus dem unteren gerechnet oder als "
+            "eigene Zeichnung. Ein Kegelstumpf braucht nur eine Zahl; ein "
+            "Übergang von rund auf eckig braucht zwei Umrisse."
+        ),
+    )
     top_scale: float = param(
         title=_("Verjüngung"),
         default=0.5,
@@ -943,6 +953,18 @@ class SketchLoftParams(BaseParams):
             "Größe des oberen Umrisses im Verhältnis zum unteren. 0,5 halbiert "
             "ihn — ein Pyramiden- oder Kegelstumpf; über 1 wird es oben weiter."
         ),
+        depends_on=("top", ("scaled",)),
+    )
+    top_sketch: str = param(
+        title=_("Obere Zeichnung"),
+        default="",
+        kind="sketch",
+        placement="advanced",
+        doc=_(
+            "Der zweite Umriss, frei gezeichnet — auf derselben Ebene wie der "
+            "untere, und um die Höhe darüber aufgespannt."
+        ),
+        depends_on=("top", ("drawn",)),
     )
     name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     corners: int = param(
@@ -975,6 +997,8 @@ def sketch_loft(ctx: OpContext) -> OpResult:
     params = cast(SketchLoftParams, ctx.params)
     findings: list[Finding] = []
     require()
+    if params.top == "drawn":
+        return _loft_between_drawings(ctx, params, findings)
     if not params.sketch:
         # Der Weg des Katalogs: zwei Grundformen, die zweite kleiner gerechnet.
         # Er bleibt, weil die Grundformen um den Ursprung zentriert liegen und
@@ -1012,6 +1036,92 @@ def sketch_loft(ctx: OpContext) -> OpResult:
         bodies.append(
             profiles.loft(one, scaled(one, params.top_scale, centre), params.height, plane, frame)
         )
+    solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
+    return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)], findings=findings)
+
+
+def _loft_between_drawings(
+    ctx: OpContext, params: SketchLoftParams, findings: list[Finding]
+) -> OpResult:
+    """Der Übergang zwischen **zwei gezeichneten** Umrissen (E2, RM-147).
+
+    Bis hierher konnte diese Operation nur eine Zeichnung und ihre verkleinerte
+    Kopie: ein Kegel- oder Pyramidenstumpf. Der Fall, für den es einen Loft in
+    jedem CAD gibt, ging nicht — rund unten, eckig oben; ein Adapter von einem
+    Rohr auf einen Kanal.
+
+    Der Kern konnte es die ganze Zeit: :func:`brep.profiles.loft` nimmt zwei
+    unabhängige Profile. Was fehlte, war der Weg dorthin.
+
+    **Die Topologie wird vorher geprüft**, und zwar an drei Stellen, weil jede
+    für sich einen anderen Fehler ergäbe:
+
+    * Beide Zeichnungen liegen auf **derselben Ebene**. Die obere wird um die
+      Höhe entlang der Ebenennormalen gehoben; läge sie auf einer anderen
+      Ebene, hätte diese Hebung keine Bedeutung, und der Körper stünde
+      irgendwo — stillschweigend verdreht (Regel 21).
+    * Beide tragen **gleich viele getrennte Umrisse**. Sonst wäre nicht
+      entschieden, was mit was verbunden wird; ``zip`` nähme still die ersten
+      und ließe den Rest fallen.
+    * Und dieselbe Frage eine Ebene tiefer beantwortet der Kern selbst: gleich
+      viele **Löcher** je Umrisspaar.
+
+    Verbunden wird in der Reihenfolge, in der :func:`regions_of` die Umrisse
+    liefert — dieselbe für beide Zeichnungen. Bei einem Paar ist das die
+    einzige Möglichkeit; bei mehreren ist es eine Zusage, die der Satz im
+    Dialog nennt.
+    """
+    if not params.top_sketch:
+        raise ValidationError(
+            "top_sketch",
+            _(
+                "Für den oberen Umriss fehlt die Zeichnung. Zeichnen Sie sie, oder "
+                "rechnen Sie den Umriss aus dem unteren."
+            ),
+            constraint="empty",
+            suggestions=(CORRECT_INPUT,),
+        )
+    plane = _plane_of(params.sketch)
+    if _plane_of(params.top_sketch) != plane:
+        raise ValidationError(
+            "top_sketch",
+            _(
+                "Die beiden Zeichnungen liegen auf verschiedenen Ebenen. Der obere "
+                "Umriss wird um die Höhe angehoben; dafür müssen beide auf derselben "
+                "Ebene liegen."
+            ),
+            constraint="other_plane",
+            suggestions=(CORRECT_INPUT,),
+        )
+    frame = _frame_of(ctx, plane)
+    lower = _regions_for(
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0, findings
+    )
+    upper = _regions_for(
+        ctx,
+        params.top_sketch,
+        params.shape,
+        params.length,
+        params.width,
+        params.corners,
+        0,
+        findings,
+    )
+    if len(lower) != len(upper):
+        raise ValidationError(
+            "top_sketch",
+            _(
+                "Die beiden Zeichnungen tragen verschieden viele getrennte Umrisse — "
+                "dann steht nicht fest, was womit verbunden wird."
+            ),
+            constraint="region_count",
+            values={"lower_outlines": len(lower), "upper_outlines": len(upper)},
+            suggestions=(CORRECT_INPUT,),
+        )
+    bodies = [
+        profiles.loft(below, above, params.height, plane, frame)
+        for below, above in zip(lower, upper, strict=True)
+    ]
     solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)], findings=findings)
 

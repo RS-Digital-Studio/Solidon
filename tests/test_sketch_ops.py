@@ -233,6 +233,97 @@ def test_a_loft_keeps_the_drawn_hole() -> None:
     )
 
 
+def test_a_loft_spans_between_two_independent_drawings() -> None:
+    """RM-147 E2: rund unten, eckig oben — der Loft, den jedes CAD hat.
+
+    Bis hierher konnte die Operation nur eine Zeichnung und ihre **verkleinerte
+    Kopie**: Kegel- oder Pyramidenstumpf. Ein Adapter von einem Rohr auf einen
+    Kanal ging nicht, obwohl ``brep.profiles.loft`` seit je zwei unabhängige
+    Umrisse nimmt — es fehlte der Weg dorthin.
+
+    Der obere Umriss ist deshalb ein **Flachrechteck 60×5**, und das ist kein
+    Zufall: Aus dem Kreis Ø40 lässt es sich durch keine Verjüngung rechnen. Der
+    Körper wird damit oben **breiter** als unten, und genau daran misst der
+    Test — eine Kegelstumpf-Attrappe könnte 60 mm Breite nie erreichen.
+    """
+    from app.core.brep.profiles import bounds as brep_bounds
+    from app.core.sketch.serialize import sketch_to_text
+
+    unten = shapes.circle(40.0)
+    oben = shapes.rectangle(60.0, 5.0)
+
+    body = solid_of(
+        run(
+            "sketch_loft",
+            sketch=sketch_to_text(unten),
+            top="drawn",
+            top_sketch=sketch_to_text(oben),
+            height=10.0,
+        )
+    )
+
+    xmin, ymin, zmin, xmax, ymax, zmax = brep_bounds(body)
+    assert (xmax - xmin) == pytest.approx(60.0, abs=0.1), (
+        "die obere Zeichnung führt — aus dem Kreis allein käme nie eine Breite von 60"
+    )
+    assert (ymax - ymin) == pytest.approx(40.0, abs=0.1), "quer bleibt der Kreis das Maß"
+    assert (zmax - zmin) == pytest.approx(10.0, abs=1e-6)
+    # Und das Volumen liegt zwischen den Prismen der beiden Umrisse: mehr als
+    # das flache Rechteck oben, weniger als der volle Kreis unten.
+    assert 300.0 * 10.0 < body.volume < math.pi * 20.0**2 * 10.0
+
+
+def test_a_loft_between_two_drawings_says_what_does_not_match() -> None:
+    """Drei Prüfungen vor dem Aufspannen, jede mit eigenem Grund (Regel 17).
+
+    Ohne sie ginge jede der drei still schief: eine fehlende Zeichnung als
+    interner Fehler, eine andere Ebene als stillschweigend verdrehter Körper,
+    und verschieden viele Umrisse als ``zip``, das den Rest fallen lässt.
+    """
+    from app.core.sketch.serialize import sketch_to_text
+
+    unten = shapes.circle(40.0)
+
+    with pytest.raises(ValidationError) as ohne:
+        run("sketch_loft", sketch=sketch_to_text(unten), top="drawn", height=10.0)
+    assert ohne.value.constraint == "empty"
+    assert ohne.value.suggestions
+
+    stehend = dataclasses.replace(shapes.rectangle(20.0, 20.0), plane="plane:xz")
+    with pytest.raises(ValidationError) as quer:
+        run(
+            "sketch_loft",
+            sketch=sketch_to_text(unten),
+            top="drawn",
+            top_sketch=sketch_to_text(stehend),
+            height=10.0,
+        )
+    assert quer.value.constraint == "other_plane"
+
+    # Zwei getrennte Umrisse: dasselbe Rechteck, das zweite weit daneben.
+    # ``rectangle`` legt um den Ursprung, also werden seine Punkte verschoben.
+    zwei = shapes.rectangle(20.0, 20.0)
+    daneben = dataclasses.replace(
+        shapes.rectangle(10.0, 10.0),
+        elements=tuple(
+            dataclasses.replace(element, points=tuple((x + 60.0, y) for x, y in element.points))
+            for element in shapes.rectangle(10.0, 10.0).elements
+        ),
+    )
+    weit = dataclasses.replace(zwei, elements=zwei.elements + daneben.elements)
+    with pytest.raises(ValidationError) as ungleich:
+        run(
+            "sketch_loft",
+            sketch=sketch_to_text(unten),
+            top="drawn",
+            top_sketch=sketch_to_text(weit),
+            height=10.0,
+        )
+    assert ungleich.value.constraint == "region_count"
+    assert ungleich.value.values["lower_outlines"] == 1
+    assert ungleich.value.values["upper_outlines"] == 2
+
+
 def test_a_pocket_keeps_the_drawn_island() -> None:
     """``sketch_pocket`` fräste die Insel eines gezeichneten Lochs weg.
 

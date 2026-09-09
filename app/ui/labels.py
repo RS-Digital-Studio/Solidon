@@ -749,6 +749,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # den Tooltip — dieselbe Sorte Fund wie bei den Texturmustern.
     "exact": _("Genau"),
     "box": _("Über den Hüllquader"),
+    # Woher der obere Umriss eines Übergangs kommt (RM-147 E2). „scaled" und
+    # „drawn" sind Schlüssel des Registers; im Dialog steht, was der Kunde
+    # bekommt — eine gerechnete Kopie oder seine zweite Zeichnung.
+    "scaled": _("Aus dem unteren gerechnet"),
+    "drawn": _("Eigene Zeichnung"),
     "pin": _("Stift"),
     "bore": _("Bohrung"),
     # Der Standfuß kann beides, und beide Werte sind englische Schlüssel: Was
@@ -857,6 +862,10 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "xz": _("Jeder Zug wirkt gespiegelt auch jenseits der X- und der Z-Ebene."),
     "yz": _("Jeder Zug wirkt gespiegelt auch jenseits der Y- und der Z-Ebene."),
     "xyz": _("Jeder Zug wirkt gespiegelt zu allen drei Ebenen zugleich."),
+    # Der obere Umriss eines Übergangs (RM-147 E2). Der Satz sagt, was die
+    # Wahl kostet: eine Zahl gegen eine zweite Zeichnung.
+    "scaled": _("Der untere Umriss, verkleinert — Kegel- oder Pyramidenstumpf, mit einer Zahl."),
+    "drawn": _("Ein zweiter gezeichneter Umriss — für den Übergang von rund auf eckig."),
     "planar": _("Projiziert das Bild flach von oben — für Deckel und ebene Platten."),
     "cylindrical": _("Wickelt das Bild um die Achse — für Becher, Rohre und runde Gehäuse."),
     "spherical": _("Legt das Bild über eine Kugelform — für gewölbte Flächen."),
@@ -1133,6 +1142,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "room": _("Platz daneben"),
     "reference": _("Bezug"),
     "regions": _("Bereiche"),
+    # Die getrennten Umrisse der beiden Zeichnungen eines Übergangs
+    # (RM-147 E2) — die Zahlen, an denen der Kunde sieht, was nicht passt.
+    "lower_outlines": _("Umrisse unten"),
+    "upper_outlines": _("Umrisse oben"),
     "removed": _("Entfernt"),
     "requested": _("Angefragt"),
     "residual": _("Rest"),

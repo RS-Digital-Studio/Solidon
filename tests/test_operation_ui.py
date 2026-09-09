@@ -1422,6 +1422,39 @@ def test_a_field_without_effect_says_why(window: MainWindow) -> None:
     assert str(spec.params.spec()[3].doc) == editor.toolTip(), "und der eigene Satz kommt zurück"
 
 
+def test_the_loft_offers_two_drawings_and_greys_out_the_one_it_does_not_use(
+    window: MainWindow,
+) -> None:
+    """RM-147 E2: Der Übergang nimmt jetzt zwei unabhängige Zeichnungen.
+
+    Beide Felder stehen im Dialog, und der Umschalter entscheidet, welches
+    wirkt: *Verjüngung* bei der gerechneten Kopie, *Obere Zeichnung* bei der
+    eigenen. Das ausgegraute Feld nennt seinen Grund, statt zu verschwinden —
+    eine Zeile, die weg ist, sucht man (§2.6).
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    dialog = OperationDialog(REGISTRY.get("sketch_loft"), {}, window)
+    try:
+        assert "top_sketch" in dialog._editors, "das zweite Skizzenfeld fehlt im Dialog"
+
+        oben = dialog._editors["top_sketch"]
+        verjuengung = dialog._editors["top_scale"]
+        assert not oben.isEnabled(), "ohne die eigene Zeichnung wirkt sie nicht"
+        assert "Oberer Umriss" in oben.toolTip(), f"ohne Grund: {oben.toolTip()!r}"
+        assert verjuengung.isEnabled()
+
+        umschalter = dialog._editors["top"]
+        assert isinstance(umschalter, QComboBox)
+        umschalter.setCurrentIndex(umschalter.findData("drawn"))
+
+        assert oben.isEnabled()
+        assert not verjuengung.isEnabled(), "aus zwei Zeichnungen wird nichts skaliert"
+        assert "Oberer Umriss" in verjuengung.toolTip()
+    finally:
+        dialog.deleteLater()
+
+
 # --- Die Stellung eines Skeletts (§25, Konzept P16 §7.5) -------------------------
 
 

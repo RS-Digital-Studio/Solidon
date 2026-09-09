@@ -311,6 +311,11 @@ _NOT_A_RANGE = frozenset(
         # Ein Rezept, das einen mitgelieferten Baustein verdeckt: eine
         # Namensfrage, kein Maß.
         "recipe_dependencies",
+        # Die zwei Zeichnungen eines Übergangs (RM-147 E2): eine liegt auf der
+        # falschen Ebene, oder beide tragen verschieden viele Umrisse. Beides
+        # ist eine Frage der Zeichnung und keine Zahl in einem Feld — „Ein Wert
+        # liegt außerhalb des zulässigen Bereichs" stünde darüber falsch.
+        "other_plane", "region_count",
         # Zu viele Komponenten in einem 3MF (85, 06.09.2026): eine Datei, die das
         # Programm nicht annimmt, kein Feld mit einer Zahl.
         "too_many_components",

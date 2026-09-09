@@ -68,4 +68,10 @@ bricht, bricht die Reproduzierbarkeit der Auswertung.
   des Hüllquaders entscheidet keine Innen-/Außenrichtung, insbesondere an
   Innenböden und konkaven Körpern. Eine blinde Tasche endet in beiden Kernen
   genau an ihrer eingegebenen Oberkante und Tiefe.
+- **Der Übergang nimmt zwei unabhängige Zeichnungen** (`sketch_loft`, RM-147
+  E2). `top` entscheidet, woher der obere Umriss kommt: aus dem unteren
+  gerechnet (`top_scale`) oder als eigene Zeichnung (`top_sketch`). Geprüft
+  wird vorher — dieselbe Ebene, gleich viele getrennte Umrisse; die gleiche
+  Zahl der Löcher je Paar prüft `brep.profiles.loft` selbst. Verbunden wird in
+  der Reihenfolge von `regions_of`, und der `doc`-Satz sagt das.
 - **Kein Qt.** Der Editor ruft hier herein, nie umgekehrt.
