@@ -1,0 +1,554 @@
+diff --git a/app/core/geom/attributes.py b/app/core/geom/attributes.py
+index eaa5dbbb..3aa00bd0 100644
+--- a/app/core/geom/attributes.py
++++ b/app/core/geom/attributes.py
+@@ -24,6 +24,7 @@ zufällig die richtige Länge hat.
+ from __future__ import annotations
+ 
+ import numpy as np
++import trimesh
+ 
+ from app.core.geom.mesh import MeshData
+ from app.core.log import get_logger
+@@ -39,6 +40,29 @@ NEAR_LIMIT = 0.002
+ #: gehört.
+ DEFAULT_CUT_SLOT = 0
+ 
++#: Für wie viele Dreiecke die Herkunft höchstens gesucht wird.
++#:
++#: Die Suche nach der nächsten Oberfläche kostet gemessen rund ein Viertel
++#: einer Millisekunde je Dreieck (09.09.2026, Dosenbeispiel: 41 434 offene
++#: Zeilen gegen zwei Quellen, 9,8 Sekunden). Über dieser Grenze zahlt sie das
++#: Leistungsbudget von §31, und zwar für einen Fall, in dem die Antwort ohnehin
++#: schwach ist: Wer *jedes* Dreieck neu vernetzt hat, hat das Netz neu gebaut.
++#: Dann ist „dieser Schritt war es" nicht bloß billiger, sondern wörtlich
++#: richtig.
++#:
++#: Ein Bausteineingriff bleibt weit darunter — er berührt den Saum um sich
++#: herum, nicht das ganze Teil. Genau für ihn ist die Zuordnung gedacht.
++_SEARCH_LIMIT_ROWS = 4000
++
++#: Nachkommastellen, auf die zwei Dreiecke als „dasselbe" gelten.
++#:
++#: Ein Nanometer in Millimetern. Der Kern rechnet in doppelter Genauigkeit
++#: (Regel 6), und eine Boolesche Operation gibt ein unberührtes Dreieck bitweise
++#: gleich zurück — gerundet wird gegen die letzten Bits einer Umrechnung, nicht
++#: gegen echte Bewegung. Wer hier gröber rundet, hält zwei benachbarte Dreiecke
++#: eines feinen Netzes für eines.
++_EXACT_DIGITS = 6
++
+ 
+ def transfer(
+     result: MeshData,
+@@ -160,3 +184,125 @@ def counts(mesh: MeshData) -> dict[int, int]:
+ 
+ def used_slots(mesh: MeshData) -> tuple[int, ...]:
+     return tuple(sorted(counts(mesh)))
++
++
++def carry_origins(result: MeshData, sources: list[MeshData], *, made_by: int) -> MeshData:
++    """Jedem Dreieck den Schritt geben, aus dessen Oberfläche es stammt (§21.2).
++
++    Dieselbe Frage wie bei den Slots, eine Ebene höher: Ein Dreieck, das auf
++    der Oberfläche eines Eingangs sitzt, gehört zu dessen Herkunft; jedes
++    andere ist in **dieser** Operation entstanden und bekommt ``made_by``.
++
++    **Warum nicht einfach „was neu ist, gehört der Operation".** Gemessen an
++    einer Rippe auf einer Platte (09.09.2026): Von 28 Dreiecken der Vereinigung
++    waren nur zwölf Ecke für Ecke unverändert. Unter den sechzehn übrigen ist
++    die Rippe — aber eben auch die Plattenoberseite, die um sie herum neu
++    vernetzt wurde. Sie der Rippe zuzuschlagen hieße, die Oberseite des Halters
++    unter „Versteifungsrippe" zu hängen.
++
++    **Und warum die exakte Runde trotzdem zuerst läuft.** Sie ist ein
++    Wörterbuchzugriff und beantwortet den größten Teil: Je kleiner der Eingriff
++    im Verhältnis zum Körper, desto mehr Dreiecke bleiben, wie sie waren. Die
++    teure Suche nach der nächsten Oberfläche bleibt damit auf den Saum des
++    Eingriffs beschränkt statt auf das ganze Netz — bei einem gescannten Teil
++    mit vierzigtausend Dreiecken ist das der Unterschied zwischen Sekunden und
++    Millisekunden.
++
++    Ohne Eingänge — ein Erzeuger ohne Vorgänger — trägt alles ``made_by``.
++    """
++    body = result.raw
++    count = len(body.faces)
++    if not count:
++        return result
++
++    origins = np.full(count, int(made_by), dtype=np.int32)
++    known = [mesh for mesh in sources if mesh.origins and len(mesh.origins) == len(mesh.raw.faces)]
++    if known:
++        open_rows = _exact_origins(body, known, origins)
++        if 0 < open_rows.size <= _SEARCH_LIMIT_ROWS:
++            _near_origins(result, known, origins, open_rows)
++
++    return MeshData(
++        raw=body,
++        slots=result.slots,
++        cavity=result.cavity,
++        # ``tolist`` und nicht ``int`` je Element: Der Umweg über einen
++        # Generator kostete am Dosenbeispiel mit seinen 41 434 Dreiecken
++        # mehr als die Zuordnung selbst.
++        origins=tuple(origins.tolist()),
++    )
++
++
++def _exact_origins(
++    body: trimesh.Trimesh, sources: list[MeshData], origins: np.ndarray
++) -> np.ndarray:
++    """Die Dreiecke, die Ecke für Ecke aus einem Eingang stammen, direkt zuordnen.
++
++    Gibt zurück, welche Zeilen dabei offen geblieben sind. Verglichen wird das
++    gerundete Eckentripel ohne Reihenfolge: Eine Boolesche Operation darf
++    dasselbe Dreieck anders herum ausgeben, und es ist trotzdem dasselbe.
++    """
++    keys = [_triangle_keys(mesh.raw) for mesh in sources]
++    if not any(entry.size for entry in keys):
++        return np.arange(len(body.faces), dtype=np.intp)
++    known = np.concatenate(keys)
++    from_where = np.concatenate([np.asarray(mesh.origins, dtype=np.int32) for mesh in sources])
++    # Sortiert nachschlagen statt Zeile für Zeile fragen. Die Python-Fassung
++    # davon hat das mehrfarbige Beispiel von 1,2 auf 13,4 Sekunden gebracht
++    # (gemessen 09.09.2026) — bei vierzigtausend Dreiecken ist eine Schleife
++    # über Tupel kein Vorfilter mehr, sondern die Rechnung selbst.
++    order = np.argsort(known, kind="stable")
++    sorted_keys = known[order]
++
++    wanted = _triangle_keys(body)
++    place = np.searchsorted(sorted_keys, wanted)
++    place = np.clip(place, 0, len(sorted_keys) - 1)
++    hit = sorted_keys[place] == wanted
++    origins[hit] = from_where[order[place[hit]]]
++    return np.flatnonzero(~hit).astype(np.intp)
++
++
++def _triangle_keys(mesh: trimesh.Trimesh) -> np.ndarray:
++    """Jedes Dreieck als **ein** vergleichbarer Wert, unabhängig von der Eckenfolge.
++
++    Gerundet auf :data:`_EXACT_DIGITS`, in ganze Zahlen gelegt und je Dreieck
++    lexikographisch sortiert: Eine Boolesche Operation darf dasselbe Dreieck
++    anders herum ausgeben, und es bleibt dasselbe. Die neun Zahlen werden als
++    ein roher Speicherblock angesehen — darauf sortiert und sucht numpy in
++    einem Zug, statt neun Spalten einzeln zu vergleichen.
++    """
++    faces = np.asarray(mesh.faces, dtype=np.int64)
++    if not len(faces):
++        return np.empty(0, dtype=np.dtype((np.void, 72)))
++    corners = np.asarray(mesh.vertices, dtype=float)[faces]
++    scaled = np.rint(corners * (10.0**_EXACT_DIGITS)).astype(np.int64)
++    order = np.lexsort((scaled[:, :, 2], scaled[:, :, 1], scaled[:, :, 0]), axis=1)
++    ordered = np.take_along_axis(scaled, order[:, :, None], axis=1)
++    flat = np.ascontiguousarray(ordered.reshape(len(faces), 9))
++    return flat.view(np.dtype((np.void, flat.dtype.itemsize * 9))).ravel()
++
++
++def _near_origins(
++    result: MeshData, sources: list[MeshData], origins: np.ndarray, rows: np.ndarray
++) -> None:
++    """Für den Saum: die Herkunft der nächsten Oberfläche, wenn sie nah genug liegt.
++
++    Dieselbe Grenze wie bei den Slots (:data:`NEAR_LIMIT`) und dieselbe
++    Begründung: Gemessen wird zur *Oberfläche*, nicht zum nächsten
++    Dreiecksmittelpunkt — eine Boolesche Operation teilt eine große Fläche in
++    viele kleine, deren Mittelpunkte weit von dem der Fläche liegen, aus der
++    sie kamen.
++    """
++    from app.core.geom.mesh import on_surface
++
++    points = np.asarray(result.raw.triangles_center, dtype=float)[rows]
++    limit = max(result.bounds.diagonal, 1.0) * NEAR_LIMIT
++    best = np.full(len(rows), np.inf)
++    for mesh in sources:
++        _closest, distance, triangle = on_surface(mesh.raw, points)
++        closer = distance < best
++        found = np.asarray(mesh.origins, dtype=np.int32)[triangle]
++        origins[rows[closer]] = np.where(
++            distance[closer] <= limit, found[closer], origins[rows[closer]]
++        )
++        best[closer] = distance[closer]
+diff --git a/app/core/geom/mesh.py b/app/core/geom/mesh.py
+index f972da3f..846dbd44 100644
+--- a/app/core/geom/mesh.py
++++ b/app/core/geom/mesh.py
+@@ -42,6 +42,21 @@ class MeshData:
+     raw: trimesh.Trimesh
+     slots: tuple[int, ...] = field(default_factory=tuple)
+     cavity: MeshData | None = None
++    origins: tuple[int, ...] = field(default_factory=tuple)
++    """Welcher Schritt jedes Dreieck erzeugt hat — die Op-Kennung, je Dreieck.
++
++    Leer heißt „unbekannt", und das ist der Normalfall für alles, was nicht
++    durch die Auswertung gegangen ist: ein frisch gebauter Baustein, ein
++    eingelesenes Netz, ein Testkörper. Gestempelt wird in
++    :mod:`app.core.scene.evaluate`, mitgeführt wie die Slots (§20) — dieselbe
++    Länge wie ``raw.faces`` oder gar nichts.
++
++    **Wozu.** Die Erkennung findet Flächen, die keine Operation gemeldet hat,
++    und ohne Erzeuger hängt der Objektbaum sie an den Körper. Robert am
++    09.09.2026: „Versteifungsrippe hat auch nur eine Seite, die anderen sind
++    beim Modell gelandet." Der Baustein meldet ``rib_1`` und sonst nichts;
++    seine übrigen sieben Flächen kommen aus der Erkennung. Mit der Herkunft je
++    Dreieck findet jede von ihnen den Schritt, aus dem sie stammt (§21.2)."""
+ 
+     def __post_init__(self) -> None:
+         """Die belegte Innengeometrie trägt selbst keine weitere Innengeometrie."""
+@@ -107,8 +122,10 @@ class MeshData:
+     def replacing(self, mesh: trimesh.Trimesh) -> MeshData:
+         """Eine neue Hülle um einen geänderten Körper; die Slots bleiben, wo
+         sie passen."""
+-        slots = self.slots if len(self.slots) == len(mesh.faces) else ()
+-        return MeshData(raw=mesh, slots=slots)
++        keeps = len(mesh.faces)
++        slots = self.slots if len(self.slots) == keeps else ()
++        origins = self.origins if len(self.origins) == keeps else ()
++        return MeshData(raw=mesh, slots=slots, origins=origins)
+ 
+     # --- Serialisierung ---------------------------------------------------------
+ 
+@@ -134,6 +151,10 @@ class MeshData:
+             vertices=np.asarray(self.raw.vertices, dtype=np.float64),
+             faces=np.asarray(self.raw.faces, dtype=np.int64),
+             slots=np.asarray(self.slots, dtype=np.int32),
++            # Ohne sie käme ein Körper aus dem Plattencache ohne Herkunft
++            # zurück, und dieselbe Fläche hinge je nach Cachetreffer einmal
++            # unter ihrem Baustein und einmal am Körper.
++            origins=np.asarray(self.origins, dtype=np.int32),
+             face_colours=stored_colours,
+             cavity_vertices=(
+                 np.asarray(self.cavity.raw.vertices, dtype=np.float64)
+@@ -155,6 +176,11 @@ class MeshData:
+         with np.load(io.BytesIO(payload)) as data:
+             mesh = trimesh.Trimesh(vertices=data["vertices"], faces=data["faces"], process=False)
+             slots = tuple(int(entry) for entry in data["slots"])
++            # Ein Stand aus der Zeit vor der Herkunft trägt den Schlüssel
++            # nicht. Er bleibt lesbar und meldet „unbekannt".
++            origins = (
++                tuple(int(entry) for entry in data["origins"]) if "origins" in data.files else ()
++            )
+             colours = data["face_colours"] if "face_colours" in data.files else ()
+             if len(colours) == len(mesh.faces):
+                 alpha = np.full((len(colours), 1), 255, dtype=np.uint8)
+@@ -171,7 +197,7 @@ class MeshData:
+                         process=False,
+                     )
+                 )
+-        return cls(raw=mesh, slots=slots, cavity=cavity)
++        return cls(raw=mesh, slots=slots, cavity=cavity, origins=origins)
+ 
+     def to_stl(self) -> bytes:
+         """Binäres STL, für den Export und die Übergabe an einen Slicer (§29)."""
+diff --git a/app/core/scene/cache.py b/app/core/scene/cache.py
+index 56baf270..e6e9ddc3 100644
+--- a/app/core/scene/cache.py
++++ b/app/core/scene/cache.py
+@@ -266,6 +266,11 @@ def _feature_to_data(feature: Feature) -> dict[str, Any]:
+         "params": dict(feature.params),
+         "face_indices": list(feature.face_indices),
+         "created_by": feature.created_by,
++        # Und daneben die Geometrieherkunft: Sie kommt aus den Dreiecken
++        # und nicht aus dem Op-Stapel, ist also aus dem Hash allein nicht
++        # wiederherzustellen. Ohne sie hinge die Fläche eines Bausteins je
++        # nach Cachetreffer einmal unter ihm und einmal am Körper.
++        "shaped_by": feature.shaped_by,
+         # Ohne dies fiel ein Merkmal aus dem warmen Cache auf die Vorgabe
+         # ``True`` zurück: Ein Baustein benennt seine Bohrungen beim Bauen,
+         # ``detect`` findet sie an ihrer Stelle nicht, und ``recognised=False``
+@@ -291,6 +296,7 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
+         # ohne Handlungsvorschlag an einer Stelle, an der es nichts zu
+         # entscheiden gibt.
+         created_by=data.get("created_by"),
++        shaped_by=data.get("shaped_by"),
+         # ``get`` mit der Vorgabe wie oben: Ein Eintrag von vor diesem Feld
+         # kennt ``recognised`` nicht, und der Cache ist wegwerfbar, nicht
+         # versioniert.
+diff --git a/app/core/scene/evaluate.py b/app/core/scene/evaluate.py
+index 264c7e30..754f350e 100644
+--- a/app/core/scene/evaluate.py
++++ b/app/core/scene/evaluate.py
+@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
+ from functools import cache, partial
+ from typing import Any, Final
+ 
++import numpy as np
++
+ from app.core import expressions
+ from app.core.errors import (
+     CANCEL,
+@@ -543,6 +545,13 @@ def evaluate(
+                 id=object_id,
+                 created_by=operation.id,
+                 kind=kind_after,
++                # **Und jedes Dreieck merkt sich, aus welchem Schritt es kommt**
++                # (§21.2). Was auf der Oberfläche eines Eingangs sitzt, behält
++                # dessen Herkunft; alles übrige ist hier entstanden. Ohne das
++                # findet die Erkennung später Flächen ohne Erzeuger, und der
++                # Objektbaum hängt sie an den Körper statt unter den Baustein,
++                # der sie gemacht hat.
++                mesh=_stamped(produced_object.mesh, inputs, operation.id),
+             )
+             produced_name = str(placed.name)
+             produced_by_name[produced_name] = (
+@@ -1040,6 +1049,56 @@ def _with_feature_reservations(
+     return dataclasses.replace(entry, features=features, reserved_feature_ids=tuple(sorted(taken)))
+ 
+ 
++def _from_the_mesh(features: dict[str, Any], mesh: Any) -> dict[str, Any]:
++    """Jedem Merkmal den Schritt eintragen, aus dem seine Dreiecke stammen.
++
++    Das ist ``shaped_by`` und ausdrücklich **nicht** ``created_by``. Die beiden
++    beantworten verschiedene Fragen, und die Unterscheidung ist hier teuer
++    erkauft: Drei Tests halten fest, dass ein erkanntes Merkmal keinen
++    *Erzeuger* bekommt — die Innenfläche eines Aushöhl-Schritts nicht, ein
++    umstrittener Zuordnungskandidat nicht, eine Fläche nach dem Laden nicht.
++    Diese Riegel bleiben, wo sie sind. Wer die Dreiecke gebaut hat, ist eine
++    Auskunft über die Geometrie und keine über die Verantwortung.
++
++    **Die Mehrheit muss klar sein.** Eine Fläche am Saum eines Eingriffs trägt
++    Dreiecke aus zwei Schritten; wo keiner mehr als die Hälfte hält, bleibt es
++    bei ``None``. Lieber keine Auskunft als eine geratene (Regel 21).
++    """
++    origins = getattr(mesh, "origins", ())
++    if not origins:
++        return features
++    known = np.asarray(origins, dtype=np.int64)
++    result = dict(features)
++    for name, feature in features.items():
++        if not feature.face_indices:
++            continue
++        rows = np.asarray(feature.face_indices, dtype=np.intp)
++        rows = rows[rows < len(known)]
++        if not rows.size:
++            continue
++        values, amounts = np.unique(known[rows], return_counts=True)
++        best = int(np.argmax(amounts))
++        if amounts[best] * 2 > rows.size:
++            result[name] = dataclasses.replace(feature, shaped_by=int(values[best]))
++    return result
++
++
++def _stamped(mesh: Any, inputs: list[SceneObject], made_by: OpId) -> Any:
++    """Die Herkunft je Dreieck nachtragen, wo es Dreiecke gibt.
++
++    Ein exakter Körper (§30) trägt keine — er hat Flächen, keine Dreiecke, und
++    seine Zuordnung läuft über den B-Rep-Kern. Ebenso alles, was gar kein Netz
++    ist: Die Auswertung reicht hier durch, was die Operation ausgegeben hat.
++    """
++    from app.core.geom.attributes import carry_origins
++    from app.core.geom.mesh import MeshData
++
++    if not isinstance(mesh, MeshData):
++        return mesh
++    sources = [entry.mesh for entry in inputs if isinstance(entry.mesh, MeshData)]
++    return carry_origins(mesh, sources, made_by=int(made_by))
++
++
+ def _with_features(
+     entry: SceneObject,
+     previous: dict[str, Any],
+@@ -1395,7 +1454,9 @@ def _with_features(
+         }
+ 
+     if not previous:
+-        return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
++        return dataclasses.replace(
++            entry, features=_from_the_mesh({**detected, **unchecked, **declared}, mesh)
++        )
+ 
+     centre = mesh.bounds.centre
+     # In welchem Bezugspunkt die alten Merkmale gelesen werden, hängt daran, was
+@@ -1618,7 +1679,7 @@ def _with_features(
+             mapped[name] = dataclasses.replace(found, provenance="generated")
+     return dataclasses.replace(
+         entry,
+-        features={**mapped, **rigid_orphans, **unchecked, **declared},
++        features=_from_the_mesh({**mapped, **rigid_orphans, **unchecked, **declared}, mesh),
+     )
+ 
+ 
+diff --git a/app/core/types.py b/app/core/types.py
+index 917cb3a4..874d4a9d 100644
+--- a/app/core/types.py
++++ b/app/core/types.py
+@@ -280,7 +280,30 @@ class Feature:
+     wieder — sonst hätte es denselben Fehler wie das Feld am Objekt. Ein
+     erkanntes Merkmal behält ``None``, und der Eintrag „diesen Schritt ändern"
+     entfällt dort ersatzlos: Es hat keinen Erzeuger, und ein Menüeintrag, der
+-    ins Leere führt, ist schlechter als keiner (§21.2)."""
++    ins Leere führt, ist schlechter als keiner (§21.2).
++
++    **Nicht zu verwechseln mit :attr:`shaped_by`** — das beantwortet die
++    andere Frage: nicht wer das Merkmal *eingeführt*, sondern wer die Dreiecke
++    darunter *gemacht* hat."""
++    shaped_by: OpId | None = None
++    """Aus welchem Schritt die Dreiecke unter dieser Fläche stammen.
++
++    **Eine andere Frage als :attr:`created_by`, und sie hat eine andere
++    Quelle.** ``created_by`` kommt aus der Deklaration: Drei Stellen führen
++    Merkmale ein, und nur sie tragen sich ein — deshalb bekommt die
++    Innenfläche eines Aushöhl-Schritts dort ausdrücklich *keinen* Eintrag,
++    und ein umstrittener Zuordnungskandidat auch nicht. Dieses Feld kommt aus
++    der Geometrie (:attr:`MeshData.origins`) und sagt schlicht, welcher
++    Schritt diese Dreiecke gebaut hat.
++
++    **Wofür.** Der Objektbaum hängt eine Fläche unter den Bausteinschritt, aus
++    dem sie stammt. Ein Baustein meldet aber nur seine benannten Merkmale —
++    die Versteifungsrippe genau eines —, und alle übrigen Flächen fand die
++    Erkennung ohne jeden Bezug. Robert am 09.09.2026: „Versteifungsrippe hat
++    auch nur eine Seite, die anderen sind beim Modell gelandet."
++
++    Es ersetzt ``created_by`` nirgends: „Diesen Schritt ändern" bleibt an der
++    Provenienz hängen, denn dort ist gemeint, wer das Merkmal *verantwortet*."""
+ 
+ 
+ def is_a_cavity(feature: Feature) -> bool:
+diff --git a/app/ui/panels.py b/app/ui/panels.py
+index e06aa985..963d6061 100644
+--- a/app/ui/panels.py
++++ b/app/ui/panels.py
+@@ -1375,7 +1375,13 @@ class ObjectTree(QWidget):
+                     waiting.append((under[feature_id], child))
+                     continue
+ 
+-                part = _part_step(feature.created_by, document)
++                # **Erst der Erzeuger, dann die Geometrie.** Ein Baustein
++                # meldet seine benannten Merkmale selbst; alles übrige an ihm
++                # findet die Erkennung, und die kennt keinen Erzeuger. Ohne
++                # ``shaped_by`` stand die Versteifungsrippe mit **einer**
++                # Fläche da, während ihre anderen beim Körper hingen (Robert,
++                # 09.09.2026).
++                part = _part_step(feature.created_by or feature.shaped_by, document)
+                 if part is None:
+                     label = child.text(0)
+                     if alike[label] < BUNDLE_FROM:
+diff --git a/tests/test_evaluation.py b/tests/test_evaluation.py
+index d6f8739a..200b6091 100644
+--- a/tests/test_evaluation.py
++++ b/tests/test_evaluation.py
+@@ -2484,3 +2484,45 @@ def test_a_model_that_is_no_freeform_gets_no_such_finding(
+     )
+ 
+     assert [item.code for item in findings if item.code == "perceive.freeform"] == []
++
++
++def test_a_detected_face_finds_the_step_that_made_it(profile) -> None:
++    """Die Flächen eines Bausteins hängen an ihm, nicht am Körper (§21.2).
++
++    Robert am 09.09.2026: „Versteifungsrippe hat auch nur eine Seite, die
++    anderen sind beim Modell gelandet." Der Baustein meldet genau ein Merkmal
++    (``rib_1``); seine übrigen Flächen findet die Erkennung, und die kannte
++    keinen Erzeuger. Der Objektbaum hängt eine Fläche über ``created_by`` unter
++    ihren Bausteinschritt — ohne ihn landet sie beim Körper.
++    """
++    from app.core.bootstrap import load_operations
++    from app.core.scene.project import new_project
++
++    load_operations()
++    project = new_project("centauri-carbon-2", "petg")
++    History(project.document).apply(
++        "Platte mit Rippe",
++        [
++            OperationDraft(op="create_box", params={"width": 60.0, "depth": 40.0, "height": 6.0}),
++            OperationDraft(
++                op="insert_rib",
++                inputs=("obj_1",),
++                params={"length": 30.0, "height": 8.0, "wall": 4.0, "x": 0.0, "y": 0.0, "z": 6.0},
++            ),
++        ],
++    )
++    result = evaluate(project.document, profile)
++    entry = result.scene.objects["obj_1"]
++
++    # Der Stempel selbst: beide Schritte kommen im Netz vor.
++    assert set(entry.mesh.origins) == {1, 2}, "jedes Dreieck nennt seinen Schritt"
++
++    detected = [feature for feature in entry.features.values() if feature.provenance == "detected"]
++    assert detected, "ohne erkannte Flächen prüft der Test nichts"
++    from_the_rib = [feature for feature in detected if feature.shaped_by == 2]
++    from_the_plate = [feature for feature in detected if feature.shaped_by == 1]
++    assert from_the_rib, "eine erkannte Fläche der Rippe stammt aus dem Rippenschritt"
++    assert from_the_plate, "und die der Platte weiter aus dem ersten"
++    assert all(feature.created_by is None for feature in from_the_rib), (
++        "der Erzeuger bleibt frei — die drei Riegel gelten weiter"
++    )
+diff --git a/tests/test_slots.py b/tests/test_slots.py
+index 8657fd70..e74ea775 100644
+--- a/tests/test_slots.py
++++ b/tests/test_slots.py
+@@ -20,7 +20,7 @@ import trimesh
+ 
+ from app.core.export import threemf
+ from app.core.export.writer import export_bytes, plan_export
+-from app.core.geom.attributes import counts, transfer, used_slots, with_slot
++from app.core.geom.attributes import carry_origins, counts, transfer, used_slots, with_slot
+ from app.core.geom.boolean import boolean
+ from app.core.geom.mesh import MeshData
+ from app.core.geom.mesh_ops import decimate
+@@ -744,3 +744,68 @@ def test_the_geometry_paths_never_load_rtree() -> None:
+     )
+     assert done.returncode == 0, done.stderr
+     assert "ohne rtree" in done.stdout
++
++
++def with_origin(mesh: MeshData, made_by: int) -> MeshData:
++    """Ein ganzer Körper aus einem Schritt — der Ausgangszustand jeder Probe."""
++    return MeshData(
++        raw=mesh.raw,
++        slots=mesh.slots,
++        cavity=mesh.cavity,
++        origins=tuple([int(made_by)] * mesh.triangle_count),
++    )
++
++
++def test_the_origin_of_a_new_body_is_the_step_that_made_it() -> None:
++    """Ohne Eingänge trägt jedes Dreieck den Schritt, der es erzeugt hat."""
++    stamped = carry_origins(cube(), [], made_by=7)
++
++    assert stamped.origins == (7,) * stamped.triangle_count
++
++
++def test_an_untouched_surface_keeps_the_step_it_came_from() -> None:
++    """Der Fall, um den es geht: eine Rippe auf einer Platte (Robert, 09.09.2026).
++
++    Die Vereinigung vernetzt den Saum neu, und dabei entstehen Dreiecke, die es
++    vorher nicht gab — auf der Rippe **und** auf der Plattenoberseite um sie
++    herum. Wer alles Neue der Rippe zuschlägt, hängt die Oberseite des Halters
++    unter „Versteifungsrippe". Gemessen wird deshalb, dass die Fläche
++    entscheidet und nicht die Neuheit.
++    """
++    plate = with_origin(cube(size=40.0), 1)
++    rib = trimesh.creation.box(extents=(2.0, 30.0, 8.0))
++    rib.apply_translation((0.0, 0.0, 20.0))
++
++    joined = boolean("union", [plate, MeshData.of(rib)])
++    stamped = carry_origins(joined.mesh, [plate], made_by=2)
++
++    assert len(stamped.origins) == stamped.triangle_count
++    assert set(stamped.origins) == {1, 2}, "beide Schritte kommen im Ergebnis vor"
++
++    # Die Unterseite der Platte hat die Vereinigung nicht angefasst — sie
++    # gehört weiter dem Schritt, der die Platte gemacht hat.
++    centres = np.asarray(stamped.raw.triangles_center, dtype=float)
++    bottom = centres[:, 2] < -19.0
++    assert bottom.any(), "ohne Unterseite prüft der Test nichts"
++    assert set(np.asarray(stamped.origins)[bottom]) == {1}
++
++    # Und die Rippe steht oben heraus, wo vorher nichts war.
++    above = centres[:, 2] > 21.0
++    assert above.any(), "ohne Rippe prüft der Test nichts"
++    assert set(np.asarray(stamped.origins)[above]) == {2}
++
++
++def test_the_origin_survives_the_plate_cache() -> None:
++    """Sonst hinge dieselbe Fläche je nach Cachetreffer woanders."""
++    stamped = carry_origins(cube(), [], made_by=4)
++
++    again = MeshData.from_bytes(stamped.to_bytes())
++
++    assert again.origins == stamped.origins
++
++
++def test_a_stand_without_origins_stays_readable() -> None:
++    """Ein Cachestand aus der Zeit davor trägt den Schlüssel nicht."""
++    plain = MeshData.from_bytes(cube().to_bytes())
++
++    assert plain.origins == ()
