@@ -29,6 +29,7 @@ from app.core.geom.boolean import (
     BOOLEAN_OVERLAP,
     BooleanKind,
     boolean,
+    deepest,
     fell_apart,
     without_effect,
 )
@@ -204,6 +205,12 @@ def op_name(part: str) -> str:
     return f"{_PREFIX}{part}"
 
 
+def creation_name(part: str) -> str:
+    """Der Katalog erzeugt eigenständige Prüfkörper und setzt alle übrigen Bausteine ein."""
+    spec = PARTS.get(part)
+    return f"create_{part}" if spec.standalone else op_name(part)
+
+
 def part_of(operation: str) -> PartSpec | None:
     """Der Baustein hinter einem Operationsnamen — die Umkehrung von
     :func:`op_name`.
@@ -212,13 +219,17 @@ def part_of(operation: str) -> PartSpec | None:
     Beweis, und eine Operation, die zufällig so heißt, darf hier nicht in einen
     Fehler laufen.
     """
-    if not operation.startswith(_PREFIX):
-        return None
-    name = operation[len(_PREFIX) :]
-    return PARTS.get(name) if PARTS.has(name) else None
+    for prefix in (_PREFIX, "create_"):
+        if operation.startswith(prefix):
+            name = operation[len(prefix) :]
+            if PARTS.has(name):
+                spec = PARTS.get(name)
+                if prefix == _PREFIX or spec.standalone:
+                    return spec
+    return None
 
 
-def build_params(spec: PartSpec) -> type[BaseParams]:
+def build_params(spec: PartSpec, *, standalone: bool = False) -> type[BaseParams]:
     """Die Parameter des Bausteins plus den Ort, an den er gehört, als ein
     Schema (§10).
     """
@@ -227,7 +238,20 @@ def build_params(spec: PartSpec) -> type[BaseParams]:
     while owned.intersection(normal):
         normal = (f"surface_{normal[0]}", f"surface_{normal[1]}", f"surface_{normal[2]}")
     names = dict(zip(("nx", "ny", "nz"), normal, strict=True))
-    namespace: dict[str, Any] = {"__annotations__": {}, "_surface_normal_fields": normal}
+    occupied = owned | set(normal)
+    for field, _annotation, _declaration in _PLACEMENT:
+        if field in names:
+            continue
+        public = field
+        while public in occupied:
+            public = f"placement_{public}"
+        names[field] = public
+        occupied.add(public)
+    namespace: dict[str, Any] = {
+        "__annotations__": {},
+        "_surface_normal_fields": normal,
+        "_placement_fields": names,
+    }
     for entry in spec.params.fields():
         namespace["__annotations__"][entry.name] = entry.type
         namespace[entry.name] = (
@@ -236,12 +260,31 @@ def build_params(spec: PartSpec) -> type[BaseParams]:
             else dataclasses.field(metadata=entry.metadata)
         )
     for name, annotation, declaration in _PLACEMENT:
+        if standalone and name == "at_feature":
+            continue
         name = names.get(name, name)
         namespace["__annotations__"][name] = annotation
-        namespace[name] = declaration
+        # Dataclass setzt Field.name beim Aufbau. Geteilte Deklarationen
+        # würden dadurch nachträglich frühere Schemas umbenennen.
+        namespace[name] = dataclasses.field(
+            default=declaration.default, metadata=declaration.metadata
+        )
 
     made = type(f"{_camel(spec.name)}OpParams", (BaseParams,), namespace)
     return op_params(made)
+
+
+def placement_fields(params: type[BaseParams]) -> dict[str, str]:
+    """Ordnet fachliche Platzierungsnamen kollisionsfrei den gespeicherten Feldern zu."""
+    declared = getattr(params, "_placement_fields", None)
+    if declared is not None:
+        return dict(declared)
+    return {name: name for name, _annotation, _declaration in _PLACEMENT}
+
+
+def _placement_value(params: Any, name: str, default: Any = None) -> Any:
+    """Liest eine Ortsangabe, ohne ein gleichnamiges Bausteinmaß zu verwenden."""
+    return getattr(params, placement_fields(type(params))[name], default)
 
 
 def normal_fields(params: type[BaseParams]) -> tuple[str, str, str]:
@@ -262,11 +305,13 @@ def register_all(
     made: list[str] = []
     for spec in source.all():
         name = op_name(spec.name)
-        target = registry or None
-        if (target or _default_registry()).has(name):
-            continue
-        _register_one(spec, build_params(spec), registry)
-        made.append(name)
+        target = registry or _default_registry()
+        if not target.has(name):
+            _register_one(spec, build_params(spec), registry)
+            made.append(name)
+        if spec.standalone and not target.has(f"create_{spec.name}"):
+            _register_creator(spec, registry)
+            made.append(f"create_{spec.name}")
     _log.info("registered %d part operations", len(made))
     return tuple(made)
 
@@ -340,6 +385,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         name=op_name(spec.name),
         title=title,
         category="parts",
+        cache_version=spec.version,
         params=params,
         consumes=1,
         produces=1,
@@ -351,6 +397,40 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
     )
     def run(ctx: OpContext, _spec: PartSpec = spec) -> OpResult:
         return insert(ctx, _spec)
+
+
+def _register_creator(spec: PartSpec, registry: Registry | None) -> None:
+    """Erzeugt einen erklärten Prüfkörper ohne einen künstlichen Träger im Projekt."""
+    schema = build_params(spec, standalone=True)
+
+    @register_op(
+        name=f"create_{spec.name}",
+        title=spec.title,
+        category="parts",
+        params=schema,
+        consumes=0,
+        produces=1,
+        touches_features=True,
+        doc=spec.doc or spec.title,
+        cache_version=spec.version,
+        caveat=spec.caveat,
+        registry=registry,
+    )
+    def run(ctx: OpContext) -> OpResult:
+        _params, produced = _built_part(spec, ctx.params, ctx.profile, ctx.quality)
+        direction = _free_direction(ctx.params)
+        placed = _place(as_mesh_data(produced.mesh), ctx.params, direction=direction)
+        features = _placed_features(
+            produced, spec, ctx.params, (0.0, 0.0, 0.0), 0.0, direction, spec.keeps_up, False
+        )
+        from app.i18n import source_text
+
+        return OpResult(
+            outputs=[
+                SceneObject(id="", name=source_text(spec.title), mesh=placed, features=features)
+            ],
+            findings=list(produced.findings),
+        )
 
 
 def _title_for(spec: PartSpec) -> TranslatableText | str:
@@ -381,7 +461,7 @@ def _hanging_loose(
     return fell_apart(
         before,
         after,
-        applies=not subtractive,
+        applies=not subtractive or spec.host_add is not None,
         code="parts.hanging_loose",
         message=_loose_advice(spec),
         values={"part": spec.name},
@@ -455,7 +535,7 @@ def _standing_on_edge(spec: PartSpec, params: Any, direction: Vec3 | None) -> Fi
     if not spec.lies_flat:
         return None
     if direction is None:
-        if str(getattr(params, "axis", "z") or "z") == "z":
+        if str(_placement_value(params, "axis", "z") or "z") == "z":
             return None
     else:
         # Waagerecht heißt: Die Normale zeigt nach oben oder unten. Alles
@@ -508,7 +588,7 @@ def _lying_flat(spec: PartSpec, params: Any, direction: Vec3 | None) -> Finding 
     """
     if not spec.keeps_up or direction is not None:
         return None
-    if str(getattr(params, "axis", "z") or "z") != "z":
+    if str(_placement_value(params, "axis", "z") or "z") != "z":
         return None
     return Finding(
         code="parts.up_points_nowhere",
@@ -549,6 +629,22 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     flip = subtractive and _builds_upward_on_a_face(source, ctx.params, built)
     placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
+    original_body = body
+    addition = spec.host_add(part_params) if spec.host_add is not None else None
+    added_features: dict[str, Feature] = {}
+    added_findings: list[Finding] = []
+    addition_solver = None
+    if addition is not None:
+        placed_addition = _place(
+            as_mesh_data(addition.mesh), ctx.params, anchor, 0.0, direction, spec.keeps_up, False
+        )
+        joined = boolean("union", [body, placed_addition], quality=ctx.quality)
+        addition_solver = joined.solver
+        body = as_mesh_data(joined.mesh)
+        added_findings = [*addition.findings, *joined.findings]
+        added_features = _placed_features(
+            addition, spec, ctx.params, anchor, 0.0, direction, spec.keeps_up, False
+        )
     if spec.separate_from_host:
         prepared = body
         host_features: dict[str, Feature] = {}
@@ -622,6 +718,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
             taken=features,
         ),
         host_features,
+        added_features,
     ):
         for name, feature in extra.items():
             public = _free_name(name, features)
@@ -631,15 +728,18 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
 
     # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
     # nicht **am** Teil.
-    loose = None if spec.separate_from_host else _hanging_loose(body, mesh, spec, subtractive)
+    loose = (
+        None if spec.separate_from_host else _hanging_loose(original_body, mesh, spec, subtractive)
+    )
 
     spring = _spring_finding(spec.name, part_params, profile)
 
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=mesh, features=features)],
-        solver=solver,
+        solver=deepest((addition_solver, solver)),
         findings=[
             *findings,
+            *added_findings,
             *produced.findings,
             *([nothing] if nothing else []),
             *([loose] if loose else []),
@@ -701,6 +801,10 @@ def _spring_finding(name: str, params: BaseParams, profile: Profile | None) -> F
     if not all(isinstance(value, int | float) for value in (arm_length, arm_thickness, travel)):
         return None
 
+    if name == "snap_fit":
+        from app.core.knowledge.parts.mechanics import SnapFitParams, snap_arm_length
+
+        arm_length = snap_arm_length(cast(SnapFitParams, params))
     load = spring_load(
         profile.material,
         length=float(cast(float, arm_length)),
@@ -756,6 +860,13 @@ def _built_part(
 
 
 def placement_tool(spec: PartSpec, values: Mapping[str, Any], profile: Profile) -> MeshData:
+    """Der Hauptkörper der Platzierung; Begleitgeometrie liefert placement_tools."""
+    return placement_tools(spec, values, profile)[0]
+
+
+def placement_tools(
+    spec: PartSpec, values: Mapping[str, Any], profile: Profile, *, standalone: bool = False
+) -> tuple[MeshData, MeshData | None]:
     """Der wirkliche Baustein lokal an einer Oberfläche, vor deren Rahmenmatrix.
 
     Drehung, Einsenken und Schnittspiegelung sind enthalten. Der Aufrufer legt
@@ -767,17 +878,31 @@ def placement_tool(spec: PartSpec, values: Mapping[str, Any], profile: Profile) 
     schema = build_params(spec)
     known = {entry.name for entry in schema.fields()}
     local = {name: value for name, value in values.items() if name in known}
-    local.update(x=0.0, y=0.0, z=0.0, at_feature="")
+    local.update(
+        {
+            placement_fields(schema)[name]: value
+            for name, value in {"x": 0.0, "y": 0.0, "z": 0.0, "at_feature": ""}.items()
+        }
+    )
     local.update(zip(normal_fields(schema), (0.0, 0.0, 1.0), strict=True))
     params = validate(schema, local)
-    _part_params, produced = _built_part(spec, params, profile, "fine")
+    part_params, produced = _built_part(spec, params, profile, "fine")
     mesh = as_mesh_data(produced.mesh)
     subtractive = cuts(spec, params)
-    sink = 0.0 if subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
+    sink = 0.0 if standalone or subtractive or spec.separate_from_host else BOOLEAN_OVERLAP
     flip = subtractive and _extends_above_mouth(mesh)
-    return _place(
+    primary = _place(
         mesh, params, sink=sink, direction=(0.0, 0.0, 1.0), keeps_up=spec.keeps_up, flip=flip
     )
+    extra = spec.host_add(part_params) if spec.host_add is not None else None
+    addition = (
+        None
+        if extra is None
+        else _place(
+            as_mesh_data(extra.mesh), params, direction=(0.0, 0.0, 1.0), keeps_up=spec.keeps_up
+        )
+    )
+    return primary, addition
 
 
 def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[str, Any]:
@@ -819,7 +944,10 @@ def _placed_by_hand(params: Any) -> bool:
     Ein Parameterausdruck (``=@wand``) zählt als eingetragen, auch wenn er sich
     zu null auswertet: Wer ihn hinschreibt, hat eine Absicht.
     """
-    for field in ("x", "y", "z", *normal_fields(type(params))):
+    for field in (
+        *(placement_fields(type(params))[name] for name in ("x", "y", "z")),
+        *normal_fields(type(params)),
+    ):
         value = getattr(params, field, 0.0)
         if isinstance(value, str):
             return True
@@ -861,7 +989,7 @@ def _anchor(
     **Und eine Bohrung wird an ihrer Mündung angesetzt, nicht in ihrer
     Mitte** — dafür ist ``built`` da (:func:`_at_the_mouth`).
     """
-    name = str(getattr(params, "at_feature", "") or "")
+    name = str(_placement_value(params, "at_feature", "") or "")
     if not name:
         if spec is not None and (spec.at_face or spec.at_hole) and not _placed_by_hand(params):
             # **Nie stillschweigend raten** (Regel 21). Hier stand ein
@@ -994,7 +1122,7 @@ def _builds_upward_on_a_face(source: SceneObject, params: Any, built: MeshData) 
     — genau wie bei jedem anderen abtragenden Baustein. An einer Bohrung
     geschieht nichts: Dort hält ``_at_the_mouth`` die Tasche schon in der Mitte.
     """
-    name = str(getattr(params, "at_feature", "") or "")
+    name = str(_placement_value(params, "at_feature", "") or "")
     feature = source.features.get(name) if name else None
     if not name and _free_direction(params) is not None:
         return _extends_above_mouth(built)
@@ -1253,8 +1381,8 @@ def _matrix(
 
     from app.core.geom.ops import as_transform
 
-    axis = getattr(params, "axis", "z")
-    angle = float(getattr(params, "angle", 0.0))
+    axis = _placement_value(params, "axis", "z")
+    angle = float(_placement_value(params, "angle", 0.0))
     matrix = np.eye(4)
     if flip:
         mirror = np.eye(4)
@@ -1271,7 +1399,7 @@ def _matrix(
     if direction is not None:
         from app.core.geom.align import rotation_between
 
-        if not getattr(params, "at_feature", "") and _free_direction(params) is not None:
+        if not _placement_value(params, "at_feature", "") and _free_direction(params) is not None:
             from app.core.sketch.planes import frame_of
 
             frame = frame_of(direction, (0.0, 0.0, 0.0))
@@ -1292,13 +1420,13 @@ def _matrix(
             # gewählten Achse zeigt.
             matrix = (rotation("y", 90.0) if axis == "x" else rotation("x", -90.0)) @ matrix
         if angle:
-            matrix = rotation(axis, angle) @ matrix  # type: ignore[arg-type]
+            matrix = rotation(axis, angle) @ matrix
     matrix = (
         translation(
             (
-                float(getattr(params, "x", 0.0)) + anchor[0],
-                float(getattr(params, "y", 0.0)) + anchor[1],
-                float(getattr(params, "z", 0.0)) + anchor[2],
+                float(_placement_value(params, "x", 0.0)) + anchor[0],
+                float(_placement_value(params, "y", 0.0)) + anchor[1],
+                float(_placement_value(params, "z", 0.0)) + anchor[2],
             )
         )
         @ matrix

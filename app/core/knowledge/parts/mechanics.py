@@ -15,6 +15,7 @@ from __future__ import annotations
 import math
 from typing import Final, cast
 
+from app.core.errors import ValidationError
 from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
@@ -31,7 +32,7 @@ from app.core.knowledge.parts.registry import (
 from app.core.registry import GRIP_TITLE, op_params, param, play_param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 SNAP_ARM_ANCHOR_ON_SURFACE = PartChange(
     version="15",
@@ -233,7 +234,7 @@ def snap_fit(raw: BaseParams) -> PartResult:
     # Wie die Federstärke darf auch der Anlaufkeil die wirksame Armlänge
     # erhöhen. Sonst wächst ein großer Haken mit flachem Winkel unter Z = 0
     # durch die Ansatzfläche, statt vollständig auf dem Arm zu liegen.
-    length = max(params.length, params.thickness * SNAP_RATIO, hook_height)
+    length = snap_arm_length(params)
     body = _snap_fit_body(params.width, length, params.thickness, params.hook, hook_height)
     return result(
         body,
@@ -250,6 +251,12 @@ def snap_fit(raw: BaseParams) -> PartResult:
             (0.0, 0.0, -1.0),
         ),
     )
+
+
+def snap_arm_length(params: SnapFitParams) -> float:
+    """Wirksame Armlänge aus denselben Grenzen wie der gebaute Federkörper."""
+    hook_height = params.hook / math.tan(math.radians(params.lead_angle))
+    return max(params.length, params.thickness * SNAP_RATIO, hook_height)
 
 
 def _snap_fit_body(
@@ -412,11 +419,24 @@ class HingeParams(BaseParams):
     )
 
 
+HINGE_FILM_TOO_THICK = _(
+    "Die Scharnierstärke muss kleiner als die Materialstärke der Flügel sein. "
+    "Verringern Sie die Scharnierstärke oder verstärken Sie die Flügel."
+)
+
+
+def _hinge_feasible(raw: BaseParams) -> TranslatableText | None:
+    """Eine Scharnierzone muss gegenüber beiden Flügeln tatsächlich dünner sein."""
+    params = cast(HingeParams, raw)
+    return HINGE_FILM_TOO_THICK if params.film >= params.thickness else None
+
+
 @register_part(
     name="living_hinge",
     title=_("Filmscharnier"),
     group="mechanics",
     params=HingeParams,
+    feasible=_hinge_feasible,
     features=["hinge"],
     wall=WallRequirement.not_applicable(
         "Folie und Flügel dürfen laut Parameterschema bewusst unter der Profilgrenze "
@@ -432,10 +452,22 @@ class HingeParams(BaseParams):
         "solange die Schichten quer zur Biegung laufen. Steht das Scharnier "
         "senkrecht auf der Platte, bricht es beim ersten Öffnen."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[
+        FIRST_RELEASE,
+        FACE_GIVES_DIRECTION,
+        PartChange(
+            version="16",
+            date="2026-09-08",
+            reason="Scharnierfolie mindestens so dick wie der Flügel ergab eine massive Platte.",
+            effect="Diese unbrauchbaren Kombinationen werden mit Änderungsvorschlag abgewiesen; "
+            "alle tatsächlich dünneren Scharnierfolien behalten ihre Maße.",
+        ),
+    ],
 )
 def living_hinge(raw: BaseParams) -> PartResult:
     params = cast(HingeParams, raw)
+    if _hinge_feasible(params) is not None:
+        raise ValidationError("film", HINGE_FILM_TOO_THICK, constraint="feasible")
     length = 2.0 * params.leaf + params.gap
 
     plate = shapes.box(params.width, length, params.thickness)

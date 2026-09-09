@@ -14,6 +14,7 @@ zweite hält die Auswertung an (§15.2).
 from __future__ import annotations
 
 from collections.abc import Iterable
+from dataclasses import replace
 
 from app.core.knowledge.parts.registry import (
     LIBRARY_VERSION,
@@ -24,10 +25,81 @@ from app.core.knowledge.parts.registry import (
 )
 from app.core.knowledge.parts.user import FINGERPRINT_KEY, fingerprint, travelling_parts
 from app.core.log import get_logger
-from app.core.types import Document, Finding
+from app.core.registry import Registry
+from app.core.types import Document, DocumentState, Finding, Operation
 from app.i18n import _
 
 _log = get_logger(__name__)
+
+
+def normalise_legacy_placement(
+    document: Document,
+    registry: PartRegistry | None = None,
+    *,
+    operations: Registry | None = None,
+) -> None:
+    """Erhält beim Laden die doppelte Bedeutung alter kollidierender Ortswerte.
+
+    Erst nach Aufnahme der mitgereisten Rezepte aufrufen. Die Bibliotheksgrenze
+    ist ausdrücklich: Frische Dokumente und normale Auswertungen raten keine
+    alte Bedeutung. Beide Verlaufsseiten müssen denselben Namensraum tragen.
+    """
+    from app.core.knowledge.parts.ops import build_params, placement_fields
+
+    if not document.parts_version.isdecimal() or int(document.parts_version) >= 16:
+        return
+    source = registry or PARTS
+
+    def migrated(operation: Operation) -> Operation:
+        if not operation.op.startswith("insert_"):
+            return operation
+        name = operation.op.removeprefix("insert_")
+        if operations is not None:
+            if not operations.has(operation.op):
+                return operation
+            schema = operations.get(operation.op).params
+        else:
+            if not source.has(name):
+                return operation
+            schema = build_params(source.get(name))
+        fields = placement_fields(schema)
+        defaults = {entry.name: entry.default for entry in schema.fields()}
+        values = dict(operation.params)
+        # Normalen hatten schon zuvor ihren kompatiblen surface_-Namensraum.
+        for field in ("x", "y", "z", "axis", "angle", "at_feature"):
+            public = fields[field]
+            if public != field and public not in values:
+                # Früher überschrieb der Ort auch die eigene Maßvorgabe.
+                # Fehlende gespeicherte Werte bedeuteten deshalb z.B. x=0.
+                values.setdefault(field, defaults[public])
+                values[public] = values[field]
+        return replace(operation, params=values) if values != operation.params else operation
+
+    def state(current: DocumentState) -> DocumentState:
+        if current.edited_ops is None:
+            return current
+        return replace(
+            current,
+            edited_ops={
+                key: migrated(operation) if operation is not None else None
+                for key, operation in current.edited_ops.items()
+            },
+        )
+
+    document.ops = [migrated(operation) for operation in document.ops]
+    document.transactions = [
+        replace(
+            transaction,
+            changes=replace(
+                transaction.changes,
+                before=state(transaction.changes.before),
+                after=state(transaction.changes.after),
+            ),
+        )
+        if transaction.changes is not None
+        else transaction
+        for transaction in document.transactions
+    ]
 
 
 def check(document: Document, registry: PartRegistry | None = None) -> list[Finding]:

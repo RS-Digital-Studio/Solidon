@@ -92,6 +92,14 @@ FIT_LADDER_NUMBERS_ITS_STEPS = PartChange(
     ),
 )
 
+FIT_LADDER_CAN_BE_ASSEMBLED = PartChange(
+    version="16",
+    date="2026-09-08",
+    reason="Zapfen und Bohrungen waren auf derselben starren Platte und nicht ineinander steckbar.",
+    effect="Zwei getrennte, nummerierte Leisten lassen sich zum Messen zusammenstecken. "
+    "Zapfendurchmesser und Spielstufen bleiben erhalten; die Grundplatte wird geteilt.",
+)
+
 #: Höhe der eingravierten Beschriftungen. Zwei Schichten zu 0,2 mm — lesbar,
 #: billig.
 LABEL_DEPTH = 0.4
@@ -147,9 +155,11 @@ class FitLadderParams(BaseParams):
     name="fit_ladder",
     title=_("Toleranz-Testkörper"),
     group="calibration",
+    standalone=True,
     # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
     at_face=False,
     params=FitLadderParams,
+    bodies=2,
     features=["pin", "bore", "face"],
     wall=WallRequirement.not_applicable(
         "Der Kalibrierkörper vermisst diese Druckgrenze und darf sie deshalb unterschreiten."
@@ -163,18 +173,29 @@ class FitLadderParams(BaseParams):
         FACE_GIVES_DIRECTION,
         FIT_LADDER_KEEPS_EACH_PAIR_SEPARATE,
         FIT_LADDER_NUMBERS_ITS_STEPS,
+        FIT_LADDER_CAN_BE_ASSEMBLED,
     ],
 )
 def fit_ladder(raw: BaseParams) -> PartResult:
     params = cast(FitLadderParams, raw)
     largest_bore = params.diameter + params.first + params.step * (params.steps - 1)
-    spacing = max(params.diameter * 2.2, largest_bore * 1.5)
+    spacing = max(params.diameter * 2.2, largest_bore * 1.5, params.steps * 1.4 + 2.8)
     base_height = 3.0
     width = spacing * params.steps + spacing
-    base = shapes.box(width, spacing * 2.4, base_height)
-
-    bodies = [base]
-    features = [face("face_1", width * spacing * 2.4, (0.0, 0.0, base_height))]
+    # Beide Leisten bleiben beim Druck getrennt und passen beim Fügen exakt
+    # übereinander. Der breite freie Zwischenraum gehört zum Prüfkörperlayout.
+    rail_depth = max(spacing, largest_bore + 8.0)
+    rail_offset = (rail_depth + spacing * 0.2) / 2.0
+    pin_y, bore_y = -rail_offset, rail_offset
+    bodies = [
+        shapes.moved(shapes.box(width, rail_depth, base_height), (0.0, y, 0.0))
+        for y in (pin_y, bore_y)
+    ]
+    features = [
+        face(
+            "face_1", width * rail_depth, (0.0, pin_y - rail_depth / 2.0 + LABEL_DEPTH, base_height)
+        )
+    ]
     cutters = []
 
     for index in range(params.steps):
@@ -182,28 +203,31 @@ def fit_ladder(raw: BaseParams) -> PartResult:
         x = -width / 2.0 + spacing * (index + 1)
 
         stud = shapes.cylinder(params.diameter, params.height)
-        bodies.append(shapes.moved(stud, (x, -spacing * 0.6, base_height)))
+        bodies.append(shapes.moved(stud, (x, pin_y, base_height)))
         features.append(
             pin(
                 f"pin_{index + 1}",
                 params.diameter,
-                (x, -spacing * 0.6, base_height + params.height / 2.0),
+                (x, pin_y, base_height + params.height / 2.0),
                 length=params.height,
             )
         )
 
         hole = shapes.cylinder(params.diameter + play, base_height + 2.0 * BOOLEAN_OVERLAP)
-        cutters.append(shapes.moved(hole, (x, spacing * 0.6, -BOOLEAN_OVERLAP)))
+        cutters.append(shapes.moved(hole, (x, bore_y, -BOOLEAN_OVERLAP)))
         features.append(
             bore(
                 f"bore_{index + 1}",
                 params.diameter + play,
-                (x, spacing * 0.6, base_height / 2.0),
+                (x, bore_y, base_height / 2.0),
                 depth=base_height,
                 through=True,
             )
         )
-        cutters.append(_label(index + 1, (x, 0.0, base_height - LABEL_DEPTH)))
+        for y in (pin_y, bore_y):
+            cutters.append(
+                _label(index + 1, (x, y + largest_bore / 2.0 + 2.0, base_height - LABEL_DEPTH))
+            )
 
     body = subtract(union(*bodies), *cutters)
     return result(body, *features)
@@ -251,6 +275,7 @@ class WallLadderParams(BaseParams):
     name="wall_ladder",
     title=_("Wandstärkenleiter"),
     group="calibration",
+    standalone=True,
     # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
     at_face=False,
     params=WallLadderParams,
@@ -346,6 +371,7 @@ def _fan_over_the_top(params: OverhangFanParams) -> TranslatableText | None:
     name="overhang_fan",
     title=_("Überhangfächer"),
     group="calibration",
+    standalone=True,
     # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
     at_face=False,
     params=OverhangFanParams,

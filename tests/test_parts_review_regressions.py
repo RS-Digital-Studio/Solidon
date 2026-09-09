@@ -438,3 +438,254 @@ def test_a_following_part_uses_the_snap_arm_surface():
     assert result.outputs[0].mesh.component_count == 1
     assert result.outputs[0].mesh.volume > source.mesh.volume
     assert not any(f.code == "parts.hanging_loose" for f in result.findings)
+
+
+def test_spring_warning_checks_the_effective_arm_length(profile):
+    """Eine konstruktiv verlängerte Feder wird gegen ihre wirkliche Länge geprüft."""
+    from app.core.knowledge.strength import spring_load
+
+    spec = PARTS.get("snap_fit")
+    params = spec.params(length=4.0, thickness=1.6, hook=0.2)
+    built = spec.fn(params)
+    actual = spring_load(
+        profile.material,
+        length=built.mesh.bounds.size[2],
+        thickness=params.thickness,
+        deflection=params.hook,
+    )
+    assert actual is not None and actual.holds
+    assert ops._spring_finding(spec.name, params, profile) is None
+
+
+@pytest.mark.parametrize("film", [0.8, 1.2])
+def test_living_hinge_requires_a_thinner_film(film):
+    """Die erklärte Parameterecke liefert einen Änderungsvorschlag statt einer Vollplatte."""
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("living_hinge")
+    params = spec.params(thickness=0.8, film=film)
+    assert spec.feasible(params) is not None
+    with pytest.raises(ValidationError) as failure:
+        spec.fn(params)
+    assert failure.value.suggestions
+
+
+@pytest.mark.parametrize("name", ["fit_ladder", "wall_ladder", "overhang_fan"])
+def test_calibration_creator_needs_no_host_and_preserves_legacy_insert(name, profile):
+    """Prüfkörper beginnen ein leeres Projekt; alte Einsetzschritte bleiben auswertbar."""
+    from app.core.knowledge.parts.registry import used_parts
+    from app.core.registry import REGISTRY
+
+    spec = REGISTRY.get(ops.creation_name(name))
+    assert spec.consumes == 0
+    assert REGISTRY.get(ops.op_name(name)).consumes == 1
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply("Prüfkörper", [OperationDraft(op=spec.name, params={})])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert len(result.scene.objects) == 1
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.is_watertight
+    assert body.mesh.component_count == PARTS.get(name).bodies
+    assert used_parts(project.document.ops) == (name,)
+    history.undo()
+    assert not project.document.ops
+
+
+@pytest.mark.parametrize(
+    "diameter,steps,first,step", [(6, 4, 0.1, 0.05), (2, 8, 0, 0.01), (30, 8, 1, 0.5)]
+)
+def test_fit_ladder_rails_really_assemble(diameter, steps, first, step):
+    """Beide nummerierten Messleisten fügen alle Zapfen gleichzeitig ohne Überschneidung."""
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.units import EPS_GEOM
+
+    spec = PARTS.get("fit_ladder")
+    params = spec.params(diameter=diameter, steps=steps, first=first, step=step)
+    built = spec.fn(params)
+    assert built.mesh.component_count == spec.bodies == 2
+    rails = sorted(built.mesh.raw.split(), key=lambda body: body.bounds[0, 1])
+    male, female = rails
+    pin = built.features["pin_1"].params["centre"]
+    bore = built.features["bore_1"].params["centre"]
+    female.apply_translation((pin[0] - bore[0], pin[1] - bore[1], 3.0))
+    # Sockeloberseite und Lochmantel dürfen berühren. Die Volumenschranke
+    # ist eine Geometrie-Epsilon-dicke Schale um beide Netze.
+    tolerance = EPS_GEOM * (male.area + female.area)
+    overlap = boolean("intersection", [MeshData.of(male), MeshData.of(female)], allow_empty=True)
+    assert overlap.solver.strategy == "direct"
+    assert overlap.mesh.volume <= tolerance
+    # Eine wirklich verfehlte Fluchtung muss denselben Nachweis klar verletzen.
+    misaligned = female.copy()
+    misaligned.apply_translation((diameter / 4.0, 0.0, 0.0))
+    collision = boolean(
+        "intersection", [MeshData.of(male), MeshData.of(misaligned)], allow_empty=True
+    )
+    assert collision.mesh.volume > tolerance * 100.0
+    assert built.mesh.is_watertight
+
+
+def test_cable_relief_builds_two_rails_behind_the_real_wall(profile):
+    """Das Kabel steckt hinter der Wand zwischen tragenden Stegen statt in einem Luftschnitt."""
+    from app.core.registry import REGISTRY
+
+    outcomes = []
+    for relief in (False, True):
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply(
+            "Durchführung",
+            [
+                OperationDraft(op="create_box", params={"width": 40, "depth": 40, "height": 3}),
+                OperationDraft(
+                    op="insert_cable_gland",
+                    inputs=("obj_1",),
+                    params={"z": 3, "nz": 1, "diameter": 5, "wall": 3, "strain_relief": relief},
+                ),
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete
+        outcomes.append(result.scene.objects["obj_1"].mesh)
+        if relief:
+            feature = result.scene.objects["obj_1"].features["cable_gland_relief_1"]
+            assert feature.recognised
+            assert feature.face_indices
+            assert feature.params["area"] == pytest.approx(
+                2.5 * (5.0 + profile.material.clearance) ** 2
+            )
+    bare, held = outcomes
+    assert held.volume > bare.volume
+    assert held.bounds.minimum[2] < -5
+    assert held.component_count == 1
+    assert held.is_watertight
+    # Mittig liegt der Klemmkanal, unmittelbar daneben wirklich Material.
+    from app.core.geom.boolean import boolean
+    from app.core.knowledge.parts import shapes
+    from app.core.units import EPS_GEOM
+
+    for x, material in ((0.0, False), (2.5, True)):
+        probe = shapes.moved(shapes.box(0.2, 0.2, 0.2), (x, 0.0, -2.6))
+        intersection = boolean("intersection", [held, probe], allow_empty=True).mesh
+        if material:
+            assert intersection.volume == pytest.approx(probe.volume, abs=EPS_GEOM * probe.raw.area)
+        else:
+            assert intersection.triangle_count == 0
+    assert REGISTRY.get("insert_cable_gland").cache_version == PARTS.get("cable_gland").version
+
+
+def test_cable_relief_rejects_a_gap_that_cannot_grip():
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("cable_gland")
+    params = spec.params(diameter=5, relief_gap=5)
+    assert spec.feasible(params) is not None
+    with pytest.raises(ValidationError):
+        spec.fn(params)
+    with pytest.raises(ValidationError):
+        spec.host_add(params)
+
+
+def test_standalone_registration_completes_an_existing_legacy_operation():
+    """Ein vorhandener Einsetzpfad verhindert den zusätzlich erklärten Erzeuger nicht."""
+    from app.core.knowledge.parts.registry import PartRegistry
+    from app.core.registry import Registry
+
+    parts, registry = PartRegistry(), Registry()
+    spec = PARTS.get("fit_ladder")
+    parts.register(spec)
+    ops.register_one(spec, registry)
+    assert ops.register_all(parts, registry) == ("create_fit_ladder",)
+    assert registry.get("create_fit_ladder").consumes == 0
+    assert ops.register_all(parts, registry) == ()
+
+
+@pytest.mark.parametrize("angle", [0.0, 37.0])
+def test_cable_placement_preview_shows_the_profiled_rotated_addition(profile, angle):
+    """Beide Vorschaukörper haben identische Materialmaße und denselben lokalen Drehrahmen."""
+    from app.core.registry import REGISTRY
+    from app.core.scene.placement import prepare_tool
+
+    spec = REGISTRY.get("insert_cable_gland")
+    values = {"diameter": 5.0, "wall": 3.0, "angle": angle, "strain_relief": True}
+    prepared = prepare_tool(spec, values, profile)
+    assert prepared.addition is not None
+    diameter = 5.0 + profile.material.clearance
+    width, depth = diameter + 6.0, diameter * 2.5 + 6.0
+    radians = math.radians(angle)
+    assert prepared.addition.bounds.size[:2] == pytest.approx(
+        (
+            width * math.cos(radians) + depth * math.sin(radians),
+            width * math.sin(radians) + depth * math.cos(radians),
+        ),
+        abs=1e-5,
+    )
+    assert prepared.addition.bounds.minimum[2] == pytest.approx(-3.0 - diameter)
+    assert prepared.mesh.bounds.minimum[2] == pytest.approx(-3.0 - diameter)
+    disabled = prepare_tool(spec, {**values, "strain_relief": False}, profile)
+    assert disabled.addition is None
+
+
+@pytest.mark.parametrize("normal,angle", [((1.0, 0.0, 0.0), 0.0), ((0.3, 0.4, 0.5), 29.0)])
+def test_calibration_creator_accepts_the_preview_surface_direction(profile, normal, angle):
+    """Die Übernahme behält den frei gedrehten Werkzeugkörper und seine Merkmalsrichtung."""
+    from app.core.geom.transform import apply
+    from app.core.registry import REGISTRY
+    from app.core.scene.placement import prepare_tool
+    from app.core.sketch.planes import frame_of
+
+    spec = REGISTRY.get("create_wall_ladder")
+    position = (12.0, 9.0, 7.0)
+    values = dict(zip(("x", "y", "z"), position, strict=True))
+    values.update(zip(("nx", "ny", "nz"), normal, strict=True))
+    values["angle"] = angle
+    prepared = prepare_tool(spec, values, profile)
+    frame = frame_of(normal, position)
+    matrix = np.eye(4)
+    matrix[:3, :3] = np.column_stack((frame.x_axis, frame.y_axis, frame.normal))
+    matrix[:3, 3] = position
+    preview = apply(prepared.mesh, matrix)
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Prüfkörper", [OperationDraft(op=spec.name, params=values)])
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    output = result.scene.objects["obj_1"]
+    assert output.mesh.bounds.minimum == pytest.approx(preview.bounds.minimum, abs=1e-5)
+    assert output.mesh.bounds.maximum == pytest.approx(preview.bounds.maximum, abs=1e-5)
+    assert output.features["wall_ladder_face_1"].params["normal"] == pytest.approx(frame.normal)
+
+
+@pytest.mark.parametrize("stage", ["welded", "jittered"])
+def test_cable_addition_keeps_the_deepest_solver(profile, monkeypatch, stage):
+    """Ein späterer direkter Schnitt verschweigt keinen früheren Rückfall beim Aufbau."""
+    import dataclasses
+
+    from app.core.types import SolverInfo
+
+    original = ops.boolean
+    calls = []
+
+    def controlled(kind, meshes, **kwargs):
+        result = original(kind, meshes, **kwargs)
+        calls.append(kind)
+        solver = SolverInfo(stage, ("direct", stage)) if len(calls) == 1 else SolverInfo("direct")
+        return dataclasses.replace(result, solver=solver)
+
+    monkeypatch.setattr(ops, "boolean", controlled)
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Durchführung",
+        [
+            OperationDraft(op="create_box", params={"width": 40, "depth": 40, "height": 3}),
+            OperationDraft(
+                op="insert_cable_gland",
+                inputs=("obj_1",),
+                params={"z": 3, "nz": 1, "diameter": 5, "wall": 3, "strain_relief": True},
+            ),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete
+    assert calls == ["union", "difference"]
+    assert result.solvers[project.document.ops[-1].id].strategy == stage

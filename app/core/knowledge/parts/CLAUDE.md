@@ -176,3 +176,61 @@ Der Senkkegel behält `countersink_1` mit Art `cone`, Öffnungswinkel und
 Innenraumkennzeichnung; `head_room_1` nennt die zylindrische Kopfzone.
 Kopfzylinder und Kegel teilen ihren vollständigen Stirnrand. Ein Überstand
 unter diesen Rand würde einen Ringsims erzeugen und die Hohlraumkette trennen.
+
+
+## Vollständiger Ort und eigenständige Prüfkörper
+
+`placement_fields(schema)` ordnet alle Ortsfelder dem gespeicherten Namen zu.
+
+Jedes erzeugte Schema besitzt eigene Dataclass-Felder. Eine weitergereichte
+`Field`-Instanz würde beim nächsten Klassenaufbau ihren Namen ändern und
+damit frühere, insbesondere private Rezeptschemas beschädigen.
+
+Beim Laden werden alte kollidierende Ortsparameter einschließlich damaliger
+Vorgaben in den heutigen Namensraum überführt. Rezeptauswertungen führen
+diesen Schritt auf ihrer Dokumentkopie mit dem privaten Kindregister aus;
+gespeicherte Vorlagen und Inhaltsabdrücke bleiben unverändert.
+Kollisionen mit Rezeptmaßen erhalten wiederholte `placement_`-Präfixe;
+Normalen behalten den bestehenden `surface_`-Namensraum. Auswertung, Vorschau,
+Vorbelegung und Dokumentation lesen diese Zuordnung. Die Maße eines Rezepts
+werden dabei nicht umbenannt.
+Jedes erzeugte Schema erhält eigene Dataclass-Felder: `Field.name` wird beim
+Klassenaufbau gesetzt und darf nicht zwischen mehreren Schemas geteilt werden.
+Beim Laden eines Bibliotheksstands vor 16 übernimmt
+`normalise_legacy_placement()` vorhandene kollidierende Werte ausdrücklich in
+den neuen Namensraum, einschließlich beider Undo-/Redo-Seiten. Der Aufruf liegt
+nach der Rezeptaufnahme; frische Dokumente werden nicht heuristisch umgedeutet.
+Fehlende kollidierende Werte erhalten dabei auch ihre frühere Ortsvorgabe als
+Maßwert. Verschachtelte Altbeilagen werden erst auf der Rechenkopie gegen ihr
+privates Operationsregister normalisiert. Rezeptdaten und Inhaltsabdruck bleiben
+erhalten; eine frische Vorlage ohne erklärten alten Bibliotheksstand bleibt gleich.
+
+`standalone` deklariert einen unabhängig erzeugbaren Baustein. Dafür entsteht
+zusätzlich `create_<name>` ohne Eingangsobjekt; `creation_name()` ist der Weg
+aus dem Katalog. Bisherige `insert_<name>`-Schritte bleiben lesbar und behalten
+ihren Eingangsvertrag. Die Toleranzleiter erklärt zwei getrennte, nummerierte
+Messleisten: ihre Zapfen und Bohrungen werden nach dem Druck zusammengesteckt.
+Der Bereichstest prüft die erklärte Teilezahl und den Druckabstand weiterhin.
+Erzeuger übernehmen die gespeicherte freie Normale für Körper und Merkmale.
+Ihre Platzierungsvorschau sinkt ohne Träger nicht ein.
+
+`host_add` ergänzt bei Bedarf tragendes Material vor dem Bausteinschnitt.
+Aufbau und Werkzeug benutzen denselben Parametersatz und denselben Ortsrahmen;
+beide gehören zu einer Operation. Die Kabeldurchführung baut so ihre Klemmstege
+hinter der Wand. Neben der Werkzeugprüfung muss der Fertigungstest den realen
+Trägeraufbau einschließlich Durchgang, Klemmspalt und Verbindung nachweisen.
+Der Operationssolver nennt die tiefste Stufe aus Aufbau und anschließendem Schnitt.
+
+Rezeptversionen einschließlich importierter Rezepte bilden ihren Inhaltsabdruck.
+Lokale Python-Bausteine erhalten den Abdruck beim Laden. Die generierten
+Operationen tragen diesen Stand als `cache_version`; das Auswerten liest keine
+neu geschriebene, aber noch nicht geladene Python-Fassung von der Platte.
+Die Federwarnung verwendet `snap_arm_length`, dieselbe wirksame Länge wie der
+Geometrieaufbau. Eine Filmscharnierfolie muss dünner als ihre Flügel sein;
+diese gemeinsame Parameterbedingung steht in `feasible` und im Bauweg.
+
+
+Die Katalogvorschau eines Trägeraufbaus zeigt dessen ausgeschnittene Geometrie.
+SCAD exportiert Zusatzformen als eigene `<name>_host_add()`- beziehungsweise
+`<name>_host_cut()`-Module samt Reihenfolge; das ursprüngliche Bausteinmodul
+bleibt das eigentliche Werkzeug oder lösbare Teil.

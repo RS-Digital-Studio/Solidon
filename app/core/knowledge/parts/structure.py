@@ -312,11 +312,49 @@ class CableGlandParams(BaseParams):
     )
 
 
+CABLE_RELIEF_HAS_SUPPORT = PartChange(
+    version="16",
+    date="2026-09-08",
+    reason="Der Klemmkanal lag hinter der Wand in Luft und konnte keine Zugentlastung bilden.",
+    effect="Bei aktiver Zugentlastung wächst hinter der Wand ein tragender Klemmblock; "
+    "der Klemmspalt bleibt enger als das Kabel. Ohne Zugentlastung bleibt die Bohrung gleich.",
+)
+
+CABLE_RELIEF_TOO_WIDE = _(
+    "Der Klemmspalt muss kleiner als der Kabeldurchmesser sein. "
+    "Verringern Sie den Klemmspalt oder schalten Sie die Zugentlastung aus."
+)
+
+
+def _cable_relief_feasible(raw: BaseParams) -> TranslatableText | None:
+    """Ein Klemmkanal darf das Kabel nicht mit Spiel umschließen."""
+    params = cast(CableGlandParams, raw)
+    cable = params.diameter or standards.tube(params.size).outer
+    return CABLE_RELIEF_TOO_WIDE if params.strain_relief and params.relief_gap >= cable else None
+
+
+def cable_relief_support(raw: BaseParams) -> PartResult | None:
+    """Tragender Aufbau hinter der Wand; der Werkzeugkanal wird erst danach herausgeschnitten."""
+    params = cast(CableGlandParams, raw)
+    if not params.strain_relief:
+        return None
+    problem = _cable_relief_feasible(params)
+    if problem is not None:
+        raise ValidationError("relief_gap", problem, constraint="feasible")
+    diameter = (params.diameter or standards.tube(params.size).outer) + params.play
+    support = shapes.box(
+        diameter + 2.0 * params.wall, diameter * 2.5 + 2.0 * params.wall, diameter + BOOLEAN_OVERLAP
+    )
+    return result(shapes.moved(support, (0.0, 0.0, -params.wall - diameter)))
+
+
 @register_part(
     name="cable_gland",
     title=_("Kabeldurchführung mit Zugentlastung"),
     group="routing",
     params=CableGlandParams,
+    host_add=cable_relief_support,
+    feasible=_cable_relief_feasible,
     subtractive=True,
     features=["bore", "relief"],
     wall=WallRequirement.not_applicable("Der Baustein ist ein abtragender Werkzeugkörper."),
@@ -328,10 +366,19 @@ class CableGlandParams(BaseParams):
         "Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die "
         "zieht jeder Ruck am Kabel direkt an der Lötstelle."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION, MATERIAL_OF_TARGET],
+    changes=[
+        FIRST_RELEASE,
+        MOUTH_AT_ORIGIN,
+        FACE_GIVES_DIRECTION,
+        MATERIAL_OF_TARGET,
+        CABLE_RELIEF_HAS_SUPPORT,
+    ],
 )
 def cable_gland(raw: BaseParams) -> PartResult:
     params = cast(CableGlandParams, raw)
+    problem = _cable_relief_feasible(params)
+    if problem is not None:
+        raise ValidationError("relief_gap", problem, constraint="feasible")
     entry = standards.tube(params.size)
     diameter = (params.diameter or entry.outer) + params.play
 
@@ -346,7 +393,7 @@ def cable_gland(raw: BaseParams) -> PartResult:
     ]
 
     if params.strain_relief:
-        gap = params.relief_gap or diameter * 0.8
+        gap = params.relief_gap or (params.diameter or entry.outer) * 0.8
         # Der Kanal hinter der Wand, auf den Klemmspalt verengt: das Kabel geht
         # durch das runde Loch hinein und wird im Schlitz dahinter gehalten.
         channel = shapes.box(gap, diameter * 2.5, diameter)
@@ -354,9 +401,9 @@ def cable_gland(raw: BaseParams) -> PartResult:
         features.append(
             face(
                 "relief_1",
-                gap * diameter,
-                (0.0, 0.0, -params.wall - diameter / 2.0),
-                (1.0, 0.0, 0.0),
+                2.5 * diameter**2,
+                (gap / 2.0, 0.0, -params.wall - diameter / 2.0),
+                (-1.0, 0.0, 0.0),
             )
         )
 

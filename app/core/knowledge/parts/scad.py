@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 
-from app.core.geom.mesh import as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.knowledge.parts.registry import PartSpec
 from app.core.types import BaseParams
 
@@ -40,22 +40,30 @@ def to_scad(spec: PartSpec, params: BaseParams | None = None) -> str:
     for entry in values.spec():
         lines.append(f"{entry.name} = {_literal(getattr(values, entry.name))};")
     lines.append("")
-    lines.append(f"module {spec.name}() {{")
-    lines.append("  polyhedron(")
-    lines.append("    points = [")
+    lines.extend(_module(spec.name, mesh))
+    for suffix, build, advice in (
+        ("host_add", spec.host_add, "Vor dem Bausteinschnitt mit dem Träger vereinigen."),
+        ("host_cut", spec.host_cut, "Vor dem Anfügen des Bausteins vom Träger abziehen."),
+    ):
+        extra = build(values) if build is not None else None
+        if extra is not None:
+            lines.extend(
+                ["", f"// {advice}", *_module(f"{spec.name}_{suffix}", as_mesh_data(extra.mesh))]
+            )
+    lines.extend(["", f"{spec.name}();"])
+    return "\n".join(lines)
+
+
+def _module(name: str, mesh: MeshData) -> list[str]:
+    """Ein Netzmodul, gemeinsam für Baustein, Trägeraufbau und vorbereitenden Schnitt."""
+    lines = [f"module {name}() {{", "  polyhedron(", "    points = ["]
     for point in mesh.raw.vertices:
         lines.append(f"      [{point[0]:.4f}, {point[1]:.4f}, {point[2]:.4f}],")
-    lines.append("    ],")
-    lines.append("    faces = [")
+    lines.extend(["    ],", "    faces = ["])
     for triangle in mesh.raw.faces:
         lines.append(f"      [{triangle[0]}, {triangle[1]}, {triangle[2]}],")
-    lines.append("    ],")
-    lines.append("    convexity = 8")
-    lines.append("  );")
-    lines.append("}")
-    lines.append("")
-    lines.append(f"{spec.name}();")
-    return "\n".join(lines)
+    lines.extend(["    ],", "    convexity = 8", "  );", "}"])
+    return lines
 
 
 def _literal(value: object) -> str:

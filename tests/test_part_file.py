@@ -1297,13 +1297,13 @@ def test_source_kind_and_suffix_must_match_the_registered_consumer(
 def test_randomized_operation_requires_a_stored_seed(part: recipe.Recipe) -> None:
     """Ein Rezept mit Zufallsoperation muss beim zweiten Lauf dasselbe ergeben."""
 
-    def oriented(seed: int | None) -> recipe.Recipe:
+    def coloured(seed: int | None) -> recipe.Recipe:
         operation = Operation(
             id=2,
-            op="orient_for_print",
+            op="slots_from_texture",
             inputs=("obj_1",),
             outputs=("obj_2",),
-            params={"thorough": False, "candidates": 24},
+            params={"filaments": 4},
             seed=seed,
         )
         return dataclasses.replace(
@@ -1315,14 +1315,33 @@ def test_randomized_operation_requires_a_stored_seed(part: recipe.Recipe) -> Non
         )
 
     with pytest.raises(ValidationError) as raised:
-        PartFileIO().export_file(oriented(None))
+        PartFileIO().export_file(coloured(None))
 
     assert raised.value.suggestions
     assert raised.value.constraint == "recipe_format"
     assert (
-        PartFileIO().validate(PartFileIO().export_file(oriented(987_654))).document.ops[-1].seed
+        PartFileIO().validate(PartFileIO().export_file(coloured(987_654))).document.ops[-1].seed
         == 987_654
     )
+
+
+def test_deterministic_orientation_can_be_saved_without_a_seed(part: recipe.Recipe) -> None:
+    """Die feste Kandidatenfolge benötigt beim portablen Rezept keinen Zufallswert."""
+    operation = Operation(
+        id=2,
+        op="orient_for_print",
+        inputs=("obj_1",),
+        outputs=("obj_2",),
+        params={"thorough": False, "candidates": 24},
+        seed=None,
+    )
+    oriented = dataclasses.replace(
+        part,
+        document=dataclasses.replace(part.document, ops=[*part.document.ops, operation]),
+    )
+    loaded = PartFileIO().validate(PartFileIO().export_file(oriented))
+    assert loaded.document.ops[-1].op == "orient_for_print"
+    assert loaded.document.ops[-1].seed is None
 
 
 @pytest.mark.parametrize(

@@ -784,7 +784,23 @@ def test_a_saved_recipe_loads_into_catalog_and_register(profile: Profile, tmp_pa
     assert spec.build_with_profile is not None, "das Profil des Kunden erreicht die Auswertung"
 
 
-@pytest.mark.parametrize("parameter", ["nx", "ny", "nz", "surface_nx"])
+@pytest.mark.parametrize(
+    "parameter",
+    [
+        "nx",
+        "ny",
+        "nz",
+        "surface_nx",
+        "x",
+        "y",
+        "z",
+        "axis",
+        "angle",
+        "at_feature",
+        "placement_x",
+        "placement_placement_x",
+    ],
+)
 def test_recipe_dimensions_do_not_collide_with_surface_normals(
     profile, tmp_path, parameter, monkeypatch
 ):
@@ -1092,8 +1108,9 @@ def test_a_cancelled_check_never_looks_passed(profile: Profile) -> None:
 # --- §24.4: ein geändertes Rezept meldet sich beim Öffnen -------------------------
 
 
+@pytest.mark.parametrize("imported", [False, True])
 def test_a_recipe_gets_stamped_and_a_changed_one_is_noticed(
-    profile: Profile, tmp_path: Path
+    profile: Profile, tmp_path: Path, imported: bool
 ) -> None:
     """Der Abdruck eines Rezepts ist seine Version — und ein geändertes
     Rezept trägt beim nächsten Speichern einen anderen (§24.4, §24.5).
@@ -1106,14 +1123,22 @@ def test_a_recipe_gets_stamped_and_a_changed_one_is_noticed(
 
     from app.core.knowledge.parts.user import fingerprint as part_fingerprint
 
-    recipe.save(_recipe(profile), tmp_path)
+    made = _recipe(profile)
+    if imported:
+        made = dataclasses.replace(
+            made,
+            imported_origin=recipe.ImportedOrigin(
+                source_sha256="a" * 64, imported_at="2026-09-08T10:00:00Z"
+            ),
+        )
+    recipe.save(made, tmp_path)
     parts, registry = PartRegistry(), Registry()
     recipe.load_all(tmp_path, parts, registry)
 
     first = part_fingerprint("probe_halter", parts)
     assert first, "ein Rezept muss einen Abdruck haben — sonst schweigt §24.4"
 
-    changed = dataclasses.replace(_recipe(profile), doc="ein anderer Satz")
+    changed = dataclasses.replace(made, doc="ein anderer Satz")
     recipe.save(changed, tmp_path, overwrite=True)
     parts2, registry2 = PartRegistry(), Registry()
     recipe.load_all(tmp_path, parts2, registry2)
@@ -2005,3 +2030,291 @@ def test_inserting_a_recipe_uses_the_material_of_the_target(profile):
         )
     finally:
         _clean_globals(name)
+
+
+@pytest.mark.parametrize("backend", ["memory", "existing_disk", "reopened_disk"])
+def test_replacing_recipe_invalidates_warm_geometry_cache(profile, tmp_path, backend):
+    """Der neue Rezeptstand erreicht laufende Sitzungen und bereits vorhandene Plattencaches."""
+    from app.core.geom.mesh import MeshCodec
+    from app.core.registry import REGISTRY
+    from app.core.scene.cache import DiskCache, ResultCache
+    from app.core.scene.evaluate import evaluate
+
+    parts, operations = PartRegistry(), Registry()
+    for operation in REGISTRY.all():
+        operations.register(operation)
+    made = _recipe(profile)
+    recipe.register(made, parts, operations)
+    document = _document()
+    document.ops.append(
+        Operation(
+            id=2, op="insert_probe_halter", inputs=("obj_1",), outputs=("obj_1",), params={"z": 8.0}
+        )
+    )
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path / "cache")
+    cache = ResultCache(disk=None if backend == "memory" else disk)
+    first = evaluate(document, profile, registry=operations, cache=cache)
+    assert first.complete
+    changed_document = dataclasses.replace(
+        made.document,
+        ops=[
+            dataclasses.replace(
+                made.document.ops[0], params={**made.document.ops[0].params, "height": 16.0}
+            )
+        ],
+    )
+    changed = dataclasses.replace(made, document=changed_document)
+    recipe.replace(changed, parts, operations, tmp_path / "recipes")
+    if backend == "existing_disk":
+        cache = ResultCache(disk=disk)
+    elif backend == "reopened_disk":
+        cache = ResultCache(disk=DiskCache(codec=MeshCodec(), directory=tmp_path / "cache"))
+    warm = evaluate(document, profile, registry=operations, cache=cache)
+    fresh = evaluate(document, profile, registry=operations)
+    assert warm.complete and fresh.complete
+    assert warm.scene.objects["obj_1"].mesh.volume == pytest.approx(
+        fresh.scene.objects["obj_1"].mesh.volume
+    )
+    assert warm.scene.objects["obj_1"].mesh.volume > first.scene.objects["obj_1"].mesh.volume
+    if backend != "memory":
+        assert cache.statistics.disk_hits > 0
+
+
+@pytest.mark.parametrize("library_version", ["15", "16"])
+def test_loaded_legacy_recipe_placement_preserves_bound_dimensions_and_undo(
+    profile, tmp_path, library_version
+):
+    """Altcontainer erhalten beide Bedeutungen ausdrücklich; neue Dateien bleiben gleich."""
+    import zipfile
+
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+    from app.core.scene import History, evaluate
+    from app.core.scene.project import load, save
+    from app.core.scene.serialise import document_to_data
+    from app.core.types import DocumentChange, DocumentState, Transaction
+
+    name = "legacy_placement_recipe"
+    recipe_document = _document()
+    recipe_document.format_version = 21
+    recipe_document.parameters = {
+        "x": Parameter(name="x", value=12.0),
+        "angle": Parameter(name="angle", value=30.0),
+    }
+    recipe_document.ops[0] = dataclasses.replace(
+        recipe_document.ops[0],
+        params={"width": "@x", "depth": "@angle", "height": 4.0, "anchor": "corner"},
+    )
+    part = recipe.Recipe(
+        name=name,
+        title="Altbaustein",
+        group="structure",
+        document=recipe_document,
+        features={"top": "face_top"},
+        exposed=(
+            recipe.ExposedParam(name="x", title="Breite", default=12.0, minimum=1.0, maximum=100.0),
+            recipe.ExposedParam(
+                name="angle", title="Tiefe", default=30.0, minimum=1.0, maximum=100.0
+            ),
+        ),
+    )
+    document = _document()
+    document.format_version = 21
+    document.parts_version = library_version
+    document.printer, document.material = "centauri-carbon-2", "petg"
+    document.parameters = {
+        "span": Parameter(name="span", value=12.0),
+        "turn": Parameter(name="turn", value=30.0),
+        "earlier": Parameter(name="earlier", value=20.0),
+    }
+    document.ops[0] = dataclasses.replace(
+        document.ops[0], params={"width": 100.0, "depth": 100.0, "height": 3.0, "anchor": "corner"}
+    )
+    inserted = Operation(
+        id=2,
+        op=f"insert_{name}",
+        inputs=("obj_1",),
+        outputs=("obj_1",),
+        params={"x": "@span", "angle": "@turn", "z": 3.0},
+    )
+    old = dataclasses.replace(inserted, params={**inserted.params, "angle": "@earlier"})
+    document.ops.append(inserted)
+    document.transactions = [
+        Transaction(id="tx_1", title="Aufbau", ops=(1, 2)),
+        Transaction(
+            id="tx_2",
+            title="Drehung",
+            ops=(),
+            changes=DocumentChange(
+                before=DocumentState(edited_ops={2: old}),
+                after=DocumentState(edited_ops={2: inserted}),
+            ),
+        ),
+    ]
+    target = tmp_path / "legacy.p3d"
+    with zipfile.ZipFile(target, "w") as archive:
+        archive.writestr("project.json", json.dumps(document_to_data(document)))
+        archive.writestr(f"recipes/{name}.json", json.dumps(recipe.to_data(part)))
+    try:
+        loaded = load(target)
+        assert PARTS.has(name) and REGISTRY.has(f"insert_{name}")
+        values = loaded.document.ops[1].params
+        if library_version == "16":
+            assert "placement_x" not in values and "placement_angle" not in values
+            return
+        assert values["x"] == values["placement_x"] == "@span"
+        assert values["angle"] == values["placement_angle"] == "@turn"
+        expected = dataclasses.replace(
+            document,
+            ops=[
+                document.ops[0],
+                dataclasses.replace(
+                    inserted,
+                    params={**inserted.params, "placement_x": "@span", "placement_angle": "@turn"},
+                ),
+            ],
+        )
+        actual, wanted = evaluate(loaded.document, profile), evaluate(expected, profile)
+        assert actual.complete and wanted.complete
+        actual_mesh = actual.scene.objects["obj_1"].mesh
+        expected_mesh = wanted.scene.objects["obj_1"].mesh
+        assert actual_mesh.bounds.minimum == pytest.approx(expected_mesh.bounds.minimum)
+        assert actual_mesh.bounds.maximum == pytest.approx(expected_mesh.bounds.maximum)
+        assert actual_mesh.volume == pytest.approx(expected_mesh.volume)
+        history = History(loaded.document)
+        history.undo()
+        assert loaded.document.ops[1].params["placement_angle"] == "@earlier"
+        history.redo()
+        assert loaded.document.ops[1].params["placement_angle"] == "@turn"
+        saved = tmp_path / "migrated.p3d"
+        save(loaded, saved)
+        reopened = load(saved)
+        assert reopened.document.ops[1].params == loaded.document.ops[1].params
+        assert target.read_bytes() != saved.read_bytes()
+    finally:
+        _clean_globals(name, name + "_travelled")
+
+
+@pytest.mark.parametrize("library_version", ["0", "15", "16"])
+@pytest.mark.parametrize("omitted", [False, True])
+def test_nested_legacy_recipe_placement_uses_private_children_without_mutating_templates(
+    profile, tmp_path, library_version, omitted
+):
+    """Private Altbeilagen behalten gebundene Werte und frühere fehlende Ortsvorgaben."""
+    import copy
+
+    from app.core.knowledge.parts.registry import PARTS
+
+    leaf_document = _document()
+    leaf_document.parts_version = "15"
+    leaf_document.parameters = {
+        "x": Parameter(name="x", value=12.0),
+        "angle": Parameter(name="angle", value=30.0),
+    }
+    leaf_document.ops[0] = dataclasses.replace(
+        leaf_document.ops[0],
+        params={"width": "@x+10", "depth": "@angle+10", "height": 4.0, "anchor": "corner"},
+    )
+    leaf = recipe.Recipe(
+        name="private_legacy_leaf",
+        title="Privates Blatt",
+        group="structure",
+        document=leaf_document,
+        exposed=(
+            recipe.ExposedParam("x", "Breite", 12.0, minimum=0.0),
+            recipe.ExposedParam("angle", "Tiefe", 30.0, minimum=0.0),
+        ),
+        features={"top": "face_top"},
+    )
+    middle_document = _document(100)
+    middle_document.parts_version = library_version
+    middle_document.parameters.update(
+        span=Parameter(name="span", value=12.0), turn=Parameter(name="turn", value=30.0)
+    )
+    entered = {"z": 8.0}
+    if not omitted:
+        entered.update(x="@span", angle="@turn")
+    middle_document.ops.append(
+        Operation(
+            id=2,
+            op="insert_private_legacy_leaf",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params=entered,
+        )
+    )
+    middle = recipe.Recipe(
+        name="private_legacy_middle",
+        title="Privater Aufbau",
+        group="structure",
+        document=middle_document,
+        features={"top": "private_legacy_leaf_top"},
+    )
+    outer_document = _document(150)
+    outer_document.parts_version = "16"
+    outer_document.ops.append(
+        Operation(
+            id=2,
+            op="insert_private_legacy_middle",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={"z": 8.0},
+        )
+    )
+    outer = recipe.Recipe(
+        name="legacy_nested_assembly",
+        title="Verschachtelte Montage",
+        group="structure",
+        document=outer_document,
+        dependencies={leaf.name: recipe.to_data(leaf), middle.name: recipe.to_data(middle)},
+        features={"top": "private_legacy_middle_top"},
+    )
+    assert not PARTS.has(leaf.name) and not PARTS.has(middle.name)
+    saved = recipe.save(outer, tmp_path)
+    loaded = recipe.from_data(json.loads(saved.read_text(encoding="utf-8")))
+    before = recipe.to_data(loaded)
+    fingerprint = recipe.fingerprint(loaded)
+    expected_data = copy.deepcopy(before)
+    expected_middle = expected_data["dependencies"][middle.name]["document"]
+    if library_version == "15":
+        expected_values = expected_middle["ops"][1]["params"]
+        for field in ("x", "angle"):
+            expected_values.setdefault(field, 0.0)
+            expected_values[f"placement_{field}"] = expected_values[field]
+    expected_middle["parts_version"] = "16"
+    expected = recipe.build(recipe.from_data(expected_data), profile=profile)
+    actual = recipe.build(loaded, profile=profile)
+    assert actual.mesh.volume == pytest.approx(expected.mesh.volume)
+    assert actual.features["top"].params["centre"] == pytest.approx(
+        expected.features["top"].params["centre"]
+    )
+    assert recipe.to_data(loaded) == before
+    assert recipe.fingerprint(loaded) == fingerprint
+    assert "placement_x" not in middle_document.ops[1].params
+    reopened = recipe.from_data(recipe.to_data(loaded))
+    assert recipe.build(reopened, profile=profile).mesh.volume == pytest.approx(actual.mesh.volume)
+
+
+def test_part_placement_schema_fields_survive_another_recipe_registration():
+    """Ein späteres Schema darf die Dataclass-Feldnamen eines früheren nicht umbenennen."""
+    from app.core.knowledge.parts.registry import PARTS
+
+    load_operations()
+    document = _document()
+    document.parameters["x"] = Parameter(name="x", value=12.0)
+    part = recipe.Recipe(
+        name="placement_field_owner",
+        title="Eigene X-Breite",
+        group="structure",
+        document=document,
+        exposed=(recipe.ExposedParam("x", "Breite", 12.0),),
+        features={"top": "face_top"},
+    )
+    parts, operations = PartRegistry(), Registry()
+    recipe.register(part, parts, operations)
+    schema = operations.get("insert_placement_field_owner").params
+    expected = tuple(entry.name for entry in schema.spec())
+    assert "placement_x" in expected
+    part_ops.build_params(PARTS.get("rib"))
+    assert tuple(entry.name for entry in schema.fields()) == expected
+    assert "placement_x" in schema().as_dict()

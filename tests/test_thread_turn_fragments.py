@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from app.core.deferred import trimesh
 from app.core.geom.mesh import as_mesh_data
@@ -82,3 +83,22 @@ def test_an_overlapping_m3_thread_keeps_its_geometric_helix_proof() -> None:
     )
 
     assert _fitted(mesh).cylinders == []
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_a_geometrically_proven_thread_filters_even_one_or_two_fits(
+    monkeypatch: pytest.MonkeyPatch, count: int
+) -> None:
+    """Eine gemessene Wendel belegt ihre Flächen unabhängig von der Zahl der Fitflecken."""
+    from app.core.perceive import features
+
+    mesh = as_mesh_data(
+        printed_thread(ThreadParams(size="M3", length=8.0, internal=False, play=0.0)).mesh
+    )
+    monkeypatch.setattr(features, "_without_thread_turns", lambda _body, found, **_kwargs: found)
+    fitted = _fitted(mesh)
+    assert len(fitted.cylinders) >= count
+    assert len(fitted.helices) == 1
+    assert fitted.helices[0].pitch == pytest.approx(0.5, abs=0.02)
+
+    assert _without_thread_turns(mesh.raw, fitted.cylinders[:count], helices=fitted.helices) == []

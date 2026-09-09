@@ -56,9 +56,16 @@ def render(
     ``around`` und ``down`` drehen die Kamera, falls die Vorgabe gerade das
     Merkmal verdeckt, auf das es bei diesem Teil ankommt.
     """
-    mesh = as_mesh_data(spec.fn(params or spec.params()).mesh)
+    values = params or spec.params()
+    mesh = as_mesh_data(spec.fn(values).mesh)
+    addition = spec.host_add(values) if spec.host_add is not None else None
+    if addition is not None:
+        from app.core.knowledge.parts.build import subtract, union
+
+        support = as_mesh_data(addition.mesh)
+        mesh = subtract(support, mesh) if spec.subtractive else union(support, mesh)
     colours = drawing.palette(theme)
-    tone = colours.subtractive if spec.subtractive else colours.solid
+    tone = colours.subtractive if spec.subtractive and addition is None else colours.solid
     return Preview(
         svg=drawing.project(
             mesh.raw, size, tone, theme=theme, edges=edges, around=around, down=down

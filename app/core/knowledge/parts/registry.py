@@ -190,6 +190,10 @@ class PartSpec:
     fn: PartFn
     host_cut: HostCut | None = None
     """Werkzeug zur Vorbereitung des Trägers vor einem lösbaren Teil."""
+    host_add: HostCut | None = None
+    """Zusätzlicher Trägeraufbau, der vor dem Schnitt mit dem Ziel vereinigt wird."""
+    standalone: bool = False
+    """Bietet zusätzlich eine Erzeugeroperation ohne Trägerobjekt an."""
     version: str = "1"
     subtractive: bool = False
     """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
@@ -555,13 +559,14 @@ class PartRegistry:
         """
         return {spec.name: spec.version for spec in self.all()}
 
-    def mark_source(self, name: str, source: str) -> PartSpec:
+    def mark_source(self, name: str, source: str, *, version: str | None = None) -> PartSpec:
         """Hält fest, woher ein Baustein kam — der Katalog kennzeichnet die
         eigenen (§24.5).
         """
         import dataclasses
 
-        spec = dataclasses.replace(self.get(name), source=source)
+        current = self.get(name)
+        spec = dataclasses.replace(current, source=source, version=version or current.version)
         self._parts[name] = spec
         return spec
 
@@ -585,6 +590,8 @@ def register_part(
     at_hole_mouth: bool = False,
     separate_from_host: bool = False,
     host_cut: HostCut | None = None,
+    host_add: HostCut | None = None,
+    standalone: bool = False,
     at_hole_values: HoleValues | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
@@ -632,6 +639,8 @@ def register_part(
                 at_hole_mouth=at_hole_mouth,
                 separate_from_host=separate_from_host,
                 host_cut=host_cut,
+                host_add=host_add,
+                standalone=standalone,
                 at_hole_values=at_hole_values,
                 bodies=bodies,
                 at_face=at_face,
@@ -685,7 +694,7 @@ def register_part(
 #: Automatische Passungswerte lesen das Material des Zielkörpers statt des
 #: Projekts (``MATERIAL_OF_TARGET``), und der Kabelclip misst seine Verengung
 #: am Kabel statt am aufgeweiteten Sitz (``structure.py``, 06.09.2026).
-LIBRARY_VERSION: Final = "15"
+LIBRARY_VERSION: Final = "16"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
@@ -763,7 +772,9 @@ def used_parts(operations: Iterable[Any]) -> tuple[str, ...]:
     """Welche Bausteine ein Stapel benutzt, abgelesen an den
     Operationsnamen (§24.4).
     """
+    operations = tuple(operations)
     prefix = "insert_"
+    creators = {f"create_{spec.name}": spec.name for spec in PARTS.all() if spec.standalone}
     return tuple(
         sorted(
             {
@@ -771,6 +782,7 @@ def used_parts(operations: Iterable[Any]) -> tuple[str, ...]:
                 for entry in operations
                 if str(entry.op).startswith(prefix)
             }
+            | {creators[str(entry.op)] for entry in operations if str(entry.op) in creators}
         )
     )
 

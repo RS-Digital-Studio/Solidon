@@ -105,7 +105,11 @@ def _mark_as_own(name: str, registry: PartRegistry | None) -> None:
     """Der Katalog kennzeichnet eigene Bausteine (§24.5) — die Herkunft muss
     also festgehalten werden.
     """
-    (registry or PARTS).mark_source(name, "user")
+    target = registry or PARTS
+    target.mark_source(name, "user")
+    loaded_fingerprint = fingerprint(name, target)
+    if loaded_fingerprint:
+        target.mark_source(name, "user", version=loaded_fingerprint)
 
 
 def fingerprint(name: str, registry: PartRegistry | None = None) -> str:
@@ -133,7 +137,7 @@ def fingerprint(name: str, registry: PartRegistry | None = None) -> str:
     if not source.has(name):
         return ""
     spec = source.get(name)
-    if spec.source in ("recipe", "travelled"):
+    if spec.source in ("recipe", "travelled", "imported"):
         # Ein Rezept trägt seinen Abdruck schon: Seine Version **ist** der
         # Hash über die Daten (§24.4, ``recipe.fingerprint``). Die Datei noch
         # einmal zu lesen wäre dieselbe Auskunft, teurer und über einen Pfad,

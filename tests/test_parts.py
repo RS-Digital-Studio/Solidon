@@ -1058,8 +1058,8 @@ def wall_requirement(spec: PartSpec) -> WallRequirement:
         ),
         (
             "living_hinge",
-            {"width": 5.0, "leaf": 3.0, "thickness": 0.8, "film": 1.2, "gap": 0.5},
-            0.8,
+            {"width": 5.0, "leaf": 3.0, "thickness": 0.8, "film": 0.4, "gap": 0.5},
+            0.4,
         ),
         (
             "snap_connector",
@@ -4562,6 +4562,7 @@ def test_additional_size_fields_do_not_claim_that_old_geometry_changed() -> None
     Sondermaßen (Version 12) und der Materialzuordnung (Version 15) meldet sie
     für Kabelverschraubung und Magnettasche nichts; die 15 meldet sie — das
     ist die eigene, ausdrückliche Maßänderung (``MATERIAL_OF_TARGET``).
+    Danach ändert Version 16 ausdrücklich den Klemmaufbau der Kabeldurchführung.
     """
     from app.core.knowledge.parts.registry import MATERIAL_OF_TARGET, changed_since_library
 
@@ -4569,7 +4570,8 @@ def test_additional_size_fields_do_not_claim_that_old_geometry_changed() -> None
     assert changed_since_library("12", unchanged) == tuple(unchanged), (
         "die Materialzuordnung ist eine Maßänderung und wird gemeldet"
     )
-    assert changed_since_library(MATERIAL_OF_TARGET.version, unchanged) == ()
+    assert changed_since_library(MATERIAL_OF_TARGET.version, unchanged) == ("cable_gland",)
+    assert changed_since_library("16", unchanged) == ()
     assert all(
         not any(11 < int(change.version) < 15 for change in PARTS.get(name).changes)
         for name in unchanged

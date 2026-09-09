@@ -636,6 +636,13 @@ def build(
     if recipe.dependencies:
         registry = dependency_registry(recipe, registry)
     document = _with_values(recipe.document, recipe, values or {})
+    if document.parts_version.isdecimal() and 0 < int(document.parts_version) < 16:
+        from app.core.knowledge.parts.check import normalise_legacy_placement
+        from app.core.registry import REGISTRY
+
+        # Nur die Rechenkopie ändern, niemals Rezeptdaten oder Inhaltsabdruck.
+        # Das private Register enthält genau die mitgereisten Kindfassungen.
+        normalise_legacy_placement(document, operations=registry or REGISTRY)
     project = Project(document=document, sources=dict(recipe.payloads))
     result = evaluate(
         document,

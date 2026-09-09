@@ -16,6 +16,25 @@ from app.core.types import Document, Operation, Source
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
+@pytest.mark.parametrize("name", ["fit_ladder", "wall_ladder", "overhang_fan"])
+def test_calibration_creators_and_legacy_inserts_share_the_catalogue_path(name: str) -> None:
+    """Eine Kachel besitzt beide Zugänge, ohne einen zweiten Menüeintrag anzulegen."""
+    from app.core.knowledge.parts.ops import creation_name, op_name
+    from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import catalogue_operations, menu_path, menu_tree
+
+    creator = creation_name(name)
+    inserted = op_name(name)
+    catalogued = catalogue_operations()
+    assert {creator, inserted} <= catalogued
+    assert REGISTRY.get(creator).consumes == 0
+    assert REGISTRY.get(inserted).consumes == 1
+    assert menu_path(REGISTRY.get(creator)) == menu_path(REGISTRY.get(inserted))
+    assert "Kalibrierung" in menu_path(REGISTRY.get(creator))
+    visible = {spec.name for section in menu_tree(skip=catalogued) for spec in section.entries}
+    assert not {creator, inserted}.intersection(visible)
+
+
 # --- previews (§24.3) --------------------------------------------------------------
 
 
@@ -465,3 +484,33 @@ def test_a_project_without_own_parts_says_nothing_on_the_way_out() -> None:
     document = _document_using("magnet_pocket")
 
     assert part_check.check_outgoing(document) == []
+
+
+def test_cable_preview_shows_the_cut_support_instead_of_a_tool_in_air(monkeypatch):
+    from app.core import drawing
+    from app.core.geom.mesh import as_mesh_data
+    from app.core.knowledge.parts.build import subtract
+
+    spec = PARTS.get("cable_gland")
+    params = spec.params()
+    support = spec.host_add(params)
+    expected = subtract(as_mesh_data(support.mesh), as_mesh_data(spec.fn(params).mesh))
+    measured = []
+    project = drawing.project
+
+    def capture(mesh, *args, **kwargs):
+        measured.append(mesh.volume)
+        return project(mesh, *args, **kwargs)
+
+    monkeypatch.setattr(drawing, "project", capture)
+    preview.render(spec, params)
+    assert measured == pytest.approx([expected.volume])
+
+
+def test_scad_exports_the_required_host_addition():
+    spec = PARTS.get("cable_gland")
+    text = scad.to_scad(spec)
+    assert "module cable_gland_host_add()" in text
+    assert text.count("polyhedron(") == 2
+    disabled = scad.to_scad(spec, spec.params(strain_relief=False))
+    assert "module cable_gland_host_add()" not in disabled

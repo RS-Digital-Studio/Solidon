@@ -65,6 +65,21 @@ Kalibrierung schreibt TOML-Tabellen- und Feldkennungen als zitierte Literale.
 Materialkennungen mit Leerraum, Punkten oder Anführungszeichen bleiben so
 beim Aktualisieren eines anderen Profils unverändert lesbar.
 
+## Druckproben gelten für ihren Prozess
+
+`calibration.apply(..., process=...)` speichert gemessene Mindestwand und
+Überhanggrenze zusammen mit Druckerkennung, Düse, Schichthöhe und Linienbreite.
+`profiles.for_process` übernimmt dafür das tatsächliche Druckraster aus den
+Projekteinstellungen. `Profile` verwendet die Messwerte nur bei passendem
+Prozess; andernfalls gelten zwei Linienbreiten und die Überhang-Startregel.
+Ein Wechsel des Messprozesses nimmt keine Messung des anderen Felds mit.
+Nicht ausgewählte Messfelder bleiben beim Speichern unverändert.
+
+`analysis_limits` verbindet die Anforderungen der zugeordneten Materialien:
+größte Mindestwand, kleinster Überhangwinkel. Unbekannte Materialarten
+übernehmen keine Kalibrierung eines anderen Materials. Analyse und ihre
+Zwischenspeicher müssen die wirksamen Grenzen berücksichtigen.
+
 ## Das Filamentlager ist örtlicher Bestand
 
 `filaments.save` speichert eine Spule nach Kennung; eine leere Kennung legt
@@ -98,3 +113,12 @@ Eine manuell eingetragene Menge oder Spulenaufteilung wird ausschließlich mit
 `correct_manual_allocation=True` ausdrücklich ersetzt. Die Korrektur erhält
 die Druckfilamentidentitäten und die vollständigen vorherigen Positionen;
 automatische G-Code-Übernahmen dürfen diesen Schalter nicht setzen.
+
+Eine manuelle Korrektur übergibt mit `expected_booking_updated_at` den
+gelesenen Vorgangsstand. Eine inzwischen neuere Aufteilung wird abgewiesen;
+die wiederholte Zustellung derselben unveränderten Positionen bleibt wirkungslos.
+Zusätzliche G-Code-Werkzeuge dürfen Positionen ergänzen, ohne bestehende
+Druckfilamentidentitäten zu entfernen. Auch frühere Positionen, Revisionen,
+Zeitangaben und Rücknahmebelege werden beim Lesen vollständig geprüft.
+Ein negativer Rest innerhalb der Maschinenrundung der verrechneten Werte
+gilt als null; eine tatsächliche Unterdeckung bleibt unbekannt.
