@@ -28,7 +28,7 @@ from shapely.ops import unary_union
 
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
-from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR
+from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR, OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
 from app.core.types import CancelToken, LayerInfo, Polygon, SliceResult
 from app.core.units import EPS_GEOM
@@ -138,6 +138,8 @@ def slice_body(
     detail: Detail = "full",
     *,
     footing_height: float | None = None,
+    first_layer_height: float | None = None,
+    overhang_angle: float | None = None,
     cancelled: CancelToken | None = None,
 ) -> SliceResult:
     """Schneidet den Körper in Schichten und misst jede (§22.1, §22.2).
@@ -157,6 +159,12 @@ def slice_body(
     einmal anders aus (§22.3). Wer die Schichthöhe des Druckers kennt, gibt
     ihre Hälfte hier herein und bekommt eine Zahl, die nur noch am Körper
     hängt.
+
+    ``first_layer_height`` setzt zusätzlich das tatsächliche Druckraster:
+    Die erste Schnittmitte liegt auf seiner halben Höhe, die zweite eine
+    halbe normale Schicht über seiner Oberkante. Ohne Angabe bleibt das gleichmäßige Raster
+    der Orientierungssuche unverändert. Eine explizite ``footing_height``
+    darf die reine Standflächenmessung weiterhin unabhängig davon wählen.
     """
     if cancelled is not None:
         cancelled.raise_if_cancelled()
@@ -171,7 +179,24 @@ def slice_body(
             value=layer_height,
             constraint="layer_height",
         )
+    if first_layer_height is not None and (
+        not math.isfinite(first_layer_height) or first_layer_height <= EPS_GEOM
+    ):
+        raise ValidationError(
+            "first_layer_height",
+            _("Die Schichthöhe muss größer als null sein."),
+            value=first_layer_height,
+            constraint="layer_height",
+        )
 
+    angle = OVERHANG_LIMIT_DEGREES if overhang_angle is None else overhang_angle
+    if not math.isfinite(angle) or not 0.0 < angle < 90.0:
+        raise ValidationError(
+            "overhang_angle",
+            _("Wählen Sie für die Überhanggrenze einen Winkel zwischen 0 und 90 Grad."),
+            constraint="range",
+        )
+    overhang_factor = math.tan(math.radians(angle))
     bounds = mesh.bounds
     low, high = bounds.minimum[2], bounds.maximum[2]
     if high - low <= EPS_GEOM:
@@ -180,7 +205,16 @@ def slice_body(
     layers: list[LayerInfo] = []
 
     # Eine halbe Schicht über dem Boden: der erste Schnitt muss Material treffen.
-    heights = np.arange(low + layer_height / 2.0, high, layer_height)
+    if first_layer_height is None:
+        heights = np.arange(low + layer_height / 2.0, high, layer_height)
+    else:
+        first = low + first_layer_height / 2.0
+        heights = np.concatenate(
+            (
+                np.array([first] if first < high else [], dtype=float),
+                np.arange(low + first_layer_height + layer_height / 2.0, high, layer_height),
+            )
+        )
     if not len(heights):
         # Ist das Teil dünner als eine halbe Schichthöhe, liegt ``low +
         # layer_height/2`` schon über ``high``, und ``arange`` bleibt leer.
@@ -195,8 +229,17 @@ def slice_body(
     sections, section_contours = _cross_sections(
         mesh, heights, capture_contours=True, cancelled=cancelled
     )
-    measured = _measure_all(sections, layer_height, detail, cancelled=cancelled)
-    support = _support_volume(sections, measured, layer_height, cancelled=cancelled)
+    measured = _measure_all(
+        sections,
+        layer_height,
+        detail,
+        first_layer_height=first_layer_height,
+        overhang_factor=overhang_factor,
+        cancelled=cancelled,
+    )
+    support = _support_volume(
+        sections, measured, layer_height, first_layer_height=first_layer_height, cancelled=cancelled
+    )
 
     for z, shape, metrics, contours in zip(
         heights, sections, measured, section_contours, strict=True
@@ -272,6 +315,7 @@ def _support_volume(
     measured: list[LayerMetrics | None],
     layer_height: float,
     *,
+    first_layer_height: float | None = None,
     cancelled: CancelToken | None = None,
 ) -> float:
     """Das Volumen der **Stützsäulen** unter allen Überhängen, in mm³ (§22.2).
@@ -328,10 +372,20 @@ def _support_volume(
             pending = _above_material(pending, below, cancelled=cancelled)
             if not pending:
                 continue
-        volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * (
-            layer_height if index else layer_height / 2.0
+        volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * _layer_step(
+            index, layer_height, first_layer_height
         )
     return volume
+
+
+def _layer_step(index: int, layer_height: float, first_layer_height: float | None) -> float:
+    """Abstand zur vorigen Schnittmitte, ganz unten zum Bett."""
+    first_height = layer_height if first_layer_height is None else first_layer_height
+    if index == 0:
+        return first_height / 2.0
+    if index == 1:
+        return (first_height + layer_height) / 2.0
+    return layer_height
 
 
 def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
@@ -379,6 +433,8 @@ def _measure_all(
     layer_height: float,
     detail: Detail,
     *,
+    first_layer_height: float | None = None,
+    overhang_factor: float = OVERHANG_ANGLE_FACTOR,
     cancelled: CancelToken | None = None,
 ) -> list[LayerMetrics | None]:
     """Misst jede Schicht, auf so vielen Threads wie die Maschine hat.
@@ -421,14 +477,16 @@ def _measure_all(
         for index, shape, below, plate in jobs:
             if cancelled is not None:
                 cancelled.raise_if_cancelled()
-            results[index] = _measure(shape, below, plate, layer_height, detail)
+            step = _layer_step(index, layer_height, first_layer_height)
+            results[index] = _measure(shape, below, plate, step, detail, overhang_factor)
         return results
 
     def one(job: tuple[int, ShapelyPolygon, ShapelyPolygon | None, bool]) -> None:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         index, shape, below, plate = job
-        results[index] = _measure(shape, below, plate, layer_height, detail)
+        step = _layer_step(index, layer_height, first_layer_height)
+        results[index] = _measure(shape, below, plate, step, detail, overhang_factor)
         if cancelled is not None:
             cancelled.raise_if_cancelled()
 
@@ -930,9 +988,10 @@ def _measure(
     on_plate: bool = False,
     layer_height: float = 0.2,
     detail: Detail = "full",
+    overhang_factor: float = OVERHANG_ANGLE_FACTOR,
 ) -> LayerMetrics:
     area = float(shape.area)
-    reach = max(layer_height * OVERHANG_ANGLE_FACTOR, OVERHANG_MARGIN)
+    reach = max(layer_height * overhang_factor, OVERHANG_MARGIN)
     region: ShapelyPolygon | None = None
     island_region: ShapelyPolygon | None = None
     if on_plate:
@@ -1235,6 +1294,71 @@ def spanning_width(shape: ShapelyPolygon) -> float:
     return float(low * 2.0)
 
 
+def _supported_span(shape: ShapelyPolygon, supported: ShapelyPolygon) -> float:
+    """Die kürzeste geprüfte Bahnenrichtung mit Halt an beiden Enden.
+
+    Der Inkreis genügt nur bei umlaufender Auflage. Ein Steg von 30 auf 3 mm
+    über zwei Pfeilern muss die 30 mm überbrücken: Quer zur schmalen Seite
+    liegen beide Bahnenden in der Luft. Kandidaten folgen den Konturkanten
+    und ihren Normalen. Zwischen projizierten Ecken bleibt die Topologie der
+    Schnittbahnen gleich; geprüft werden Mitte und beide Ränder jedes Bands.
+
+    Es bleibt eine geometrische Schätzung, keine Slicer-Bahnplanung. Ohne
+    eine beidseitig getragene Richtung gilt die Diagonale als konservatives
+    Maß des freien Bereichs, niemals seine möglicherweise winzige Breite.
+    """
+    anchored = supported.buffer(EPS_GEOM)
+    if anchored.covers(shape.boundary):
+        return spanning_width(shape)
+
+    corners = np.asarray(shape.exterior.coords, dtype=float)
+    directions: list[Any] = []
+    for edge in np.diff(corners, axis=0):
+        length = float(np.linalg.norm(edge))
+        if length <= EPS_GEOM:
+            continue
+        unit = edge / length
+        for direction in (unit, np.array([-unit[1], unit[0]])):
+            if not any(
+                abs(float(np.dot(direction, prior))) >= 1.0 - EPS_GEOM for prior in directions
+            ):
+                directions.append(direction)
+
+    best = _across(shape)
+    for direction in directions:
+        normal = np.array([-direction[1], direction[0]])
+        levels = np.unique(corners @ normal)
+        lower, upper = levels[:-1], levels[1:]
+        keep = upper - lower > EPS_GEOM
+        lower, upper = lower[keep], upper[keep]
+        if not len(lower):
+            continue
+        inset = np.minimum(EPS_GEOM, (upper - lower) / 4.0)
+        positions = np.concatenate((lower + inset, (lower + upper) / 2.0, upper - inset))
+        along = corners @ direction
+        # Die zentrale Bandmitte gehört ohnehin zum vollständigen Satz.
+        # Trägt bereits diese Bahn nicht, kann die Richtung nichts gewinnen.
+        # An einer offenen Halbscheibe entfallen so hunderttausende Schnitte,
+        # ohne eine Richtung zusätzlich anzunehmen oder auszuschließen.
+        middle = len(lower) + len(lower) // 2
+        for samples in (positions[middle : middle + 1], positions):
+            starts = samples[:, None] * normal + (along.min() - best) * direction
+            ends = samples[:, None] * normal + (along.max() + best) * direction
+            cuts = shapely.get_parts(
+                shapely.intersection(shape, shapely.linestrings(np.stack((starts, ends), axis=1)))
+            )
+            cuts = cuts[(shapely.get_type_id(cuts) == 1) & (shapely.length(cuts) > EPS_GEOM)]
+            if not len(cuts):
+                break
+            if not np.all(shapely.covers(anchored, shapely.get_point(cuts, 0))) or not np.all(
+                shapely.covers(anchored, shapely.get_point(cuts, -1))
+            ):
+                break
+        else:
+            best = min(best, float(shapely.length(cuts).max()))
+    return best
+
+
 def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> float:
     """Die längste freie Spannweite dieser Schicht — was überbrückt werden
     muss (§22.2).
@@ -1261,9 +1385,9 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
     **Und es ist auch nicht die längere Seite des Hüllrechtecks.** Gemessen
     wurde die größere Ausdehnung der Öffnung, und damit stand über einem
     Kabelkanal von 30 auf 8 mm eine Brücke von 30 mm im Bericht. Der Slicer
-    legt seine Bahnen quer über die **schmale** Seite — acht Millimeter, die
-    jede Düse überspannt. Gefragt ist die freie Weite, und die misst
-    :func:`spanning_width`.
+    legt seine Bahnen quer über die **schmale** Seite, wenn beide Enden dort
+    Halt haben. Bei einem Steg nur auf zwei Pfeilern ist gerade die lange
+    Seite die einzige getragene Richtung (:func:`_supported_span`).
     """
     if previous is None or previous.is_empty:
         return 0.0
@@ -1290,7 +1414,10 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
         spans = [hole.difference(supported) for hole in holes] if holes else [part]
         for span in spans:
             if not span.is_empty:
-                widest = max(widest, spanning_width(span))
+                widest = max(
+                    widest,
+                    spanning_width(span) if holes else _supported_span(span, supported),
+                )
     return float(widest)
 
 

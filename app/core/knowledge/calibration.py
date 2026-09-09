@@ -20,7 +20,8 @@ offensichtlich, aus welcher der beiden eine Zahl kam.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+import math
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +30,7 @@ from app.core.knowledge import profiles
 from app.core.knowledge.tables import read_table
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_profiles_dir
-from app.core.types import MaterialProfile
+from app.core.types import MaterialProfile, Profile
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -45,7 +46,11 @@ FIELDS: tuple[str, ...] = (
     "hole_compensation",
     "elephant_foot",
     "shrinkage",
+    "minimum_wall",
+    "overhang_angle",
 )
+
+PROCESS_FIELDS = frozenset({"minimum_wall", "overhang_angle"})
 
 
 @dataclass(slots=True)
@@ -92,6 +97,23 @@ def check(calibration: Calibration) -> None:
                 detail=_("Dieser Wert gehört nicht ins Materialprofil."),
                 values={"field": entry.field, "known": ", ".join(FIELDS)},
             )
+        if not math.isfinite(entry.value):
+            raise ValidationError(
+                field=entry.field,
+                detail=_("Tragen Sie einen endlichen Messwert ein."),
+                constraint="not_finite",
+            )
+        if entry.field in PROCESS_FIELDS and (
+            entry.value <= 0.0 or (entry.field == "overhang_angle" and entry.value >= 90.0)
+        ):
+            raise ValidationError(
+                field=entry.field,
+                detail=_(
+                    "Die Mindestwand muss größer als null sein; der Überhangwinkel "
+                    "muss zwischen 0 und 90 Grad liegen. Prüfen Sie den abgelesenen Wert."
+                ),
+                constraint="range",
+            )
         if entry.field != "press" and entry.value < 0.0:
             raise ValidationError(
                 field=entry.field,
@@ -101,13 +123,27 @@ def check(calibration: Calibration) -> None:
             )
 
 
-def apply(calibration: Calibration, directory: Path | None = None) -> MaterialProfile:
+def apply(
+    calibration: Calibration,
+    directory: Path | None = None,
+    *,
+    process: Profile | None = None,
+) -> MaterialProfile:
     """Schreibt die gemessenen Werte in das Materialprofil des Nutzers (§28.3).
 
     Die mitgelieferte Datei wird nie angefasst. Zurück kommt das Profil, wie es
     sich danach liest — kalibriert, und das sagt es auch.
     """
     check(calibration)
+    measured_process = bool(PROCESS_FIELDS.intersection(calibration.as_table()))
+    if measured_process and (process is None or process.material.id != calibration.material):
+        raise ValidationError(
+            field="process",
+            detail=_(
+                "Wählen Sie den Drucker und das Material, mit denen die Probe gedruckt wurde."
+            ),
+            constraint="calibration_process",
+        )
     target = (directory or user_profiles_dir()) / USER_MATERIALS
     ensure_dir(target.parent)
 
@@ -116,15 +152,24 @@ def apply(calibration: Calibration, directory: Path | None = None) -> MaterialPr
     # gemessenen Werte.
     shipped = profiles.material(calibration.material)
     entry: dict[str, Any] = {
-        "title": shipped.title,
-        "clearance": shipped.clearance,
-        "press": shipped.press,
-        "hole_compensation": shipped.hole_compensation,
-        "elephant_foot": shipped.elephant_foot,
-        "shrinkage": shipped.shrinkage,
+        name: value for name, value in asdict(shipped).items() if name != "id" and value is not None
     }
     table = _read(target)
     entry.update(table.get(calibration.material, {}))
+    if measured_process and process is not None:
+        printer = process.printer
+        previous_process = Profile(printer, shipped)
+        if not previous_process.has_process_calibration:
+            # Eine neue Wandprobe am anderen Prozess übernimmt keine alte
+            # Überhangmessung dieses Materials und umgekehrt.
+            for name in PROCESS_FIELDS:
+                entry.pop(name, None)
+        entry.update(
+            calibration_printer=printer.id,
+            calibration_nozzle_diameter=printer.nozzle_diameter,
+            calibration_layer_height=printer.layer_height,
+            calibration_extrusion_width=printer.extrusion_width,
+        )
     entry.update(calibration.as_table())
     entry["calibrated"] = True
     table[calibration.material] = entry

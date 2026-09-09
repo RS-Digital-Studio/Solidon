@@ -345,7 +345,7 @@ def test_flexible_material_caps_the_speed() -> None:
     assert all(float(entry.value) <= advise.FLEXIBLE_MAX_SPEED for entry in speeds)  # type: ignore[arg-type]
 
 
-def test_too_much_flow_asks_for_a_hotter_nozzle() -> None:
+def test_too_much_flow_limits_speed_within_the_measured_profile() -> None:
     """Die Grenze, die kein Feld zeigt: Schichthöhe mal Bahnbreite mal Tempo
     ist der Volumenstrom, und darüber wird die Bahn dünner als gerechnet —
     ohne dass an den Einstellungen etwas falsch aussähe."""
@@ -355,8 +355,9 @@ def test_too_much_flow_asks_for_a_hotter_nozzle() -> None:
 
     entries = advise.advise(settings, profile)
 
-    hotter = next(entry for entry in entries if entry.path == "temperature.nozzle")
-    assert int(hotter.value) > settings.temperature.nozzle  # type: ignore[call-overload]
+    changed = advise.apply(settings, entries)
+    assert changed.temperature == settings.temperature
+    assert advise.flow_of(changed, changed.speed.infill) <= changed.filament.max_flow
 
 
 def test_a_calm_setting_needs_no_flow_advice() -> None:
@@ -519,6 +520,9 @@ UNREACHABLE: dict[str, dict[str, str]] = {
         "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
     },
     "cura": {
+        "cooling.disable_first_layers": (
+            "Cura hat einen Lüfterhochlauf statt einer festen Abschaltphase."
+        ),
         "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
         "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
         "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
@@ -1952,11 +1956,7 @@ def test_open_in_slicer_starts_the_window_with_the_file(
 def test_an_unknown_arrange_flag_falls_back_and_reports(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """ElegooSlicer 1.5.3.4 bricht auf ``--arrange`` mit „found error" ab —
-    Exit 127, kein Wort über den Grund (gemessen 30.08.2026). Der Rückfall
-    läuft einmal ohne den Schalter, weist die verworfene Anordnung als Befund
-    aus und merkt sich das Programm, damit die nächste Platte sofort richtig
-    läuft."""
+    """Nur eine ausdrückliche Schalterabsage gilt für spätere Aufträge."""
     profile = profiles.make_profile()
     model = tmp_path / "model.stl"
     model.write_bytes(b"solid x\nendsolid x\n")
@@ -1968,7 +1968,7 @@ def test_an_unknown_arrange_flag_falls_back_and_reports(
     def fake_run(command: list[str], *args: object, **kwargs: object) -> _Finished:
         commands.append(list(command))
         if "--arrange" in command:
-            failed = _Finished(b"Slic3r::CLI::run found error, exit\n")
+            failed = _Finished(b"Unknown option --arrange\n")
             failed.returncode = 127
             return failed
         target = Path(command[command.index("--outputdir") + 1])
@@ -2002,7 +2002,7 @@ def test_a_print_file_shorter_than_the_model_is_an_error() -> None:
     profile = profiles.make_profile()
     settings = print_settings.resolve(profile)
     half = "G90\nM82\n" + "".join(
-        f"G1 Z{z / 10.0:g}\nG1 X10 Y0 E{z / 10.0:g}\n" for z in range(2, 102, 2)
+        f"G1 Z{z / 10.0:g}\nG1 X{10 if z % 4 else 20} Y0 E{z / 10.0:g}\n" for z in range(2, 102, 2)
     )
 
     short = handover.too_short(half, 20.0, settings)
@@ -3671,10 +3671,10 @@ def test_the_slicer_run_passes_cancellation_into_readback(
     signal = CancelSignal()
     original = handover.gcode.analyze_lines
 
-    def cancelling_readback(lines: object, *, cancelled: object = None) -> object:
+    def cancelling_readback(lines: object, *, cancelled: object = None, **kwargs: object) -> object:
         assert cancelled is signal
         signal.cancel()
-        return original(lines, cancelled=cancelled)  # type: ignore[arg-type]
+        return original(lines, cancelled=cancelled, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(handover.gcode, "analyze_lines", cancelling_readback)
 
@@ -3846,7 +3846,7 @@ def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path:
     erste = SceneObject(id="A", name="A", mesh=box, material_slots=[rot], plate=0)
     zweite = SceneObject(id="B", name="B", mesh=box, material_slots=[weiss, rot], plate=1)
     dialog.session.last_result = SimpleNamespace(
-        scene=SimpleNamespace(objects={"A": erste, "B": zweite})
+        scene=SimpleNamespace(objects={"A": erste, "B": zweite}), stopped_at=None
     )
     # Was der Kunde bei „Alle Platten" sieht und zuordnet: Rot, dann Weiß.
     assert [str(slot.name) for slot in dialog._plate_slots()] == ["Rot", "Weiß"]
@@ -3933,8 +3933,8 @@ def test_a_wall_the_nozzle_can_print_is_not_that_finding() -> None:
     profile = profiles.make_profile("centauri-carbon-2", "petg")
     settings = print_settings.resolve(profile)
     least = advise.NARROW_LINE_SHARE * profile.printer.nozzle_diameter
-    # Zwei schmalste Bahnen passen hinein — erst darunter ist es der Befund.
-    result = _layers(500.0, 500.0, 500.0, min_width=least * 2.5)
+    # Eine einzelne variable Bahn ist druckbar; Festigkeit wird separat geprüft.
+    result = _layers(500.0, 500.0, 500.0, min_width=least * 1.5)
 
     codes = {entry.code for entry in advise.warnings_for(settings, profile, result)}
     assert "settings.wall_below_nozzle" not in codes
@@ -3977,6 +3977,9 @@ def test_what_can_be_opened_can_also_be_found() -> None:
 #: nicht, und das ist in Ordnung.* Wer einen hinzufügt, schreibt den Grund
 #: dazu — eine Ausnahmeliste ohne Gründe wird zur Halde.
 UNREACHED: Final[dict[tuple[str, str], str]] = {
+    ("cooling.disable_first_layers", "cura"): (
+        "Curas Hochlauf ist keine feste Abschaltphase; der Verlust wird sichtbar erklärt."
+    ),
     ("shell.wall_generator", "cura"): (
         "CuraEngine wählt den Wandgenerator nicht über einen Schalter: Arachne "
         "ist seit 5.0 der einzige Weg, und die Klassik gibt es dort nicht mehr."
@@ -4396,3 +4399,227 @@ def test_prusa_and_cura_get_the_bed_of_the_machine_not_of_the_document(tmp_path:
         box = handover.bed_box(profile, flavour)
         assert box.minimum == (0.0, 0.0, 0.0), flavour
         assert box.maximum == (width, depth, height), flavour
+
+
+def test_slot_advice_uses_inherited_values_and_the_adopted_group_reaches_both_outputs(
+    tmp_path: Path,
+) -> None:
+    """Herstellerwerte beraten; die ausdrücklich angenommene Gruppe gewinnt danach."""
+    from app.core.types import SlotOverride
+
+    parent = _filament_profile(
+        tmp_path, "Grundlage", slow_down_layer_time=["8"], filament_max_volumetric_speed=["3"]
+    )
+    own = _filament_profile(tmp_path, "Meine Spule", inherits=parent.stem)
+    slot = MaterialSlot(0, "Meine Spule", material=str(own), material_type="PLA")
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca")
+
+    effective = handover.settings_for_slot(settings, profile, slot, setup)
+    assert effective.filament.max_flow == pytest.approx(3.0)
+    recommendation = next(
+        item
+        for item in advise.advise(effective, profile, _layers(1.0, 1.0))
+        if item.path == "cooling.minimum_layer_time"
+    )
+    adopted = advise.apply(effective, [recommendation])
+    settings = handover.with_slot_override(settings, slot, SlotOverride(cooling=adopted.cooling))
+    config = handover.write_config(settings, profile, setup, tmp_path, (slot,))
+    emitted = json.loads(config.filaments[0].read_text(encoding="utf-8"))
+    embedded = handover.project_settings(settings, profile, setup, slots=(slot,))
+    assert emitted["slow_down_layer_time"] == ["15"]
+    assert embedded["slow_down_layer_time"] == ["15"]
+    assert emitted["filament_max_volumetric_speed"] == ["3"]
+
+
+def test_written_slicer_values_include_the_resolved_temperature_of_every_tool(
+    tmp_path: Path,
+) -> None:
+    """Der Sollwert ist die ausgegebene Datei; auch der zweite Extruder zählt."""
+    from app.core.types import SlotOverride
+
+    inherited = _filament_profile(tmp_path, "PLA", nozzle_temperature=["205"])
+    first = MaterialSlot(0, "Erste", material=str(inherited), material_type="PLA")
+    second = MaterialSlot(1, "Zweite", material_type="PLA")
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile)
+    settings = handover.with_slot_override(
+        settings, second, SlotOverride(temperature=replace(settings.temperature, nozzle=230))
+    )
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca")
+    config = handover.write_config(settings, profile, setup, tmp_path, (first, second))
+
+    assert handover.verify_settings({"nozzle_temperature": "205,230"}, config.written) == []
+    findings = handover.verify_settings({"nozzle_temperature": "205,210"}, config.written)
+    assert [item.code for item in findings] == ["slicer.setting_ignored"]
+    assert "230" in str(findings[0].values["settings"])
+
+
+@pytest.mark.parametrize("flavour", ["prusa", "cura"])
+def test_unreachable_material_defaults_are_reported_without_manual_overrides(flavour: str) -> None:
+    """PLA und PETG unterscheiden sich bereits ohne eine bearbeitete Temperaturgruppe."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile)
+    slots = (
+        MaterialSlot(0, "PLA", material_type="PLA"),
+        MaterialSlot(1, "PETG", material_type="PETG"),
+    )
+    setup = handover.SlicerSetup(Path("slicer"), flavour)
+    findings = handover.unreachable_overrides(settings, setup, slots, profile=profile)
+    assert "slicer.overrides_unreachable" in {entry.code for entry in findings}
+    same = (slots[0], replace(slots[1], material_type="PLA"))
+    assert handover.unreachable_overrides(settings, setup, same, profile=profile) == []
+
+
+@pytest.mark.parametrize("actual", ["205,230", "[205,230]", '["205";"230"]'])
+def test_the_gcode_comparison_preserves_all_filament_values(actual: str) -> None:
+    """Die beiden Kommentarformate sind gleichwertig; ein fehlender Wert nicht."""
+    assert (
+        handover.verify_settings({"nozzle_temperature": actual}, {"nozzle_temperature": "205,230"})
+        == []
+    )
+    assert handover.verify_settings(
+        {"nozzle_temperature": "205"}, {"nozzle_temperature": "205,230"}
+    )
+
+
+@pytest.mark.parametrize("initial_error", [b"outside printable area", b"found error, exit"])
+def test_arrangement_fallback_does_not_disable_later_valid_layouts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, initial_error: bytes
+) -> None:
+    """Eine unzulässige erste Platte sagt nichts über die nächste Platte aus."""
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", "orca")
+    setup.executable.write_bytes(b"")
+    commands: list[list[str]] = []
+
+    def run(command: list[str], *args: object, **kwargs: object) -> _Finished:
+        commands.append(command)
+        if len(commands) == 1:
+            result = _Finished(initial_error)
+            result.returncode = -64
+            return result
+        folder = Path(command[command.index("--outputdir") + 1])
+        (folder / "plate_1.gcode").write_text(_gcode_printing_at(1, 5), encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", run)
+    settings = print_settings.resolve(profile)
+    handover.slice_model(model, settings, profile, setup, keep_arrangement=True)
+    handover.slice_model(model, settings, profile, setup, keep_arrangement=True)
+    assert len(commands) == 3
+    assert "--arrange" in commands[-1]
+
+
+def test_cura_machine_enables_the_available_heated_bed() -> None:
+    """Eine Bettzieltemperatur muss im Engine-Auftrag tatsächlich heizen können."""
+    profile = profiles.make_profile()
+    assert handover._machine_keys(profile, "cura")["machine_heated_bed"] == "true"
+    cold = replace(profile, printer=replace(profile.printer, bed_temperature_max=0.0))
+    assert handover._machine_keys(cold, "cura")["machine_heated_bed"] == "false"
+
+
+def test_each_manual_orca_filament_declares_its_support_role(tmp_path: Path) -> None:
+    """Mehrere manuelle Rollen brauchen gleich lange Pflichtfelder im Slicer."""
+    profile = profiles.make_profile()
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", "orca")
+    for index, material in enumerate(("PLA", "PETG")):
+        document = handover._orca_filament(
+            {},
+            print_settings.resolve(profile),
+            profile,
+            setup,
+            MaterialSlot(index, material, material_type=material),
+        )
+        assert document["filament_is_support"] == ["0"]
+
+
+@pytest.mark.parametrize("flavour", ["cura", "prusa"])
+@pytest.mark.parametrize("with_header", [False, True])
+def test_slicer_readback_uses_the_effective_filament_and_respects_file_headers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, flavour, with_header
+) -> None:
+    """Fehlende Dateikennwerte werden vom wirklichen Filament ergänzt; Dateiangaben gewinnen."""
+    import math
+
+    from app.core.types import SlotOverride
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    slot = MaterialSlot(0, "Eigene Rolle", material_type="PLA")
+    settings = handover.with_slot_override(
+        settings,
+        slot,
+        SlotOverride(filament=replace(settings.filament, diameter=2.85, density=1.37)),
+    )
+    payload = _gcode_printing_at(10.0, 20.0)
+    if with_header:
+        payload += "; filament_diameter = 1.9\n; filament_density = 1.05\n"
+    model, setup = _slicer_writing(monkeypatch, tmp_path, payload, flavour=flavour)
+    outcome = handover.slice_model(
+        model,
+        settings,
+        profile,
+        setup,
+        output_dir=tmp_path,
+        slots=(slot,),
+    )
+    diameter, density = (1.9, 1.05) if with_header else (2.85, 1.37)
+    assert outcome.metrics.filament_diameters == pytest.approx((diameter,))
+    assert outcome.metrics.filament_densities == pytest.approx((density,))
+    expected = outcome.metrics.filament_mm * math.pi * (diameter / 2) ** 2 * density / 1000
+    assert outcome.metrics.grams(None, None) == pytest.approx(expected)
+
+
+def test_orca_readback_keeps_every_tools_values_and_the_written_firmware(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Werkzeugwechsel werden mit geschriebenem Dialekt und individuellen Kennwerten gelesen."""
+    from app.core.types import SlotOverride
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    slots = (
+        MaterialSlot(0, "Erste", material_type="PLA"),
+        MaterialSlot(1, "Zweite", material_type="PLA"),
+    )
+    for slot, diameter, density in zip(slots, (1.75, 2.85), (1.1, 1.4), strict=True):
+        settings = handover.with_slot_override(
+            settings,
+            slot,
+            SlotOverride(filament=replace(settings.filament, diameter=diameter, density=density)),
+        )
+    payload = "G90\nM82\nG1 X0 Y0 Z0.2\nG1 X5 E1\nT1\nG1 X10 E2\n"
+    model, setup = _slicer_writing(monkeypatch, tmp_path, payload, flavour="orca")
+    machine = tmp_path / "machine.json"
+    machine.write_text(
+        json.dumps({"type": "machine", "name": "Testmaschine", "gcode_flavor": "marlin"}),
+        encoding="utf-8",
+    )
+    setup = replace(setup, machine_profile=str(machine))
+    outcome = handover.slice_model(
+        model,
+        settings,
+        profile,
+        setup,
+        output_dir=tmp_path,
+        slots=slots,
+    )
+    assert outcome.metrics.filament_diameters == pytest.approx((1.75, 2.85))
+    assert outcome.metrics.filament_densities == pytest.approx((1.1, 1.4))
+    assert outcome.metrics.filament_mm_by_tool == pytest.approx((1.0, 1.0))
+
+
+def test_cura_reports_its_fan_ramp_instead_of_claiming_an_off_phase() -> None:
+    """Kein Exaktwert darf als native Rampe verkauft werden."""
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    for count in (0, 1, 3):
+        changed = print_settings.with_path(settings, "cooling.disable_first_layers", count)
+        values = handover.values_for(changed, profile, "cura")
+        assert values["cool_fan_full_layer"] == "2"
+    assert not slicer_keys.takes("cura", "cooling.disable_first_layers")
+    assert handover.setting_limitations("cura")[0].suggestions

@@ -33,14 +33,20 @@ def own_profiles(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 # --- die Prüfkörper (§28.3) -----------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", ["fit_ladder", "wall_ladder", "overhang_fan"])
-def test_a_test_body_prints_as_one_piece(name: str) -> None:
-    """Ein Kalibrierkörper, der auf der Platte auseinanderfällt, misst nichts."""
+@pytest.mark.parametrize(
+    "name,bodies", [("fit_ladder", 2), ("wall_ladder", 1), ("overhang_fan", 1)]
+)
+def test_a_test_body_prints_its_declared_measuring_pieces(name: str, bodies: int) -> None:
+    """Die Steckleiter hat zwei Messleisten, Wand und Überhang je einen verbundenen Körper.
+
+    Den realen Steckgriff prüft test_fit_ladder_rails_really_assemble über
+    Vorgabe und Parametergrenzen; hier bleibt unerklärtes Zerfallen verboten.
+    """
     spec = PARTS.get(name)
     result = spec.fn(spec.params())
 
     assert result.mesh.is_watertight
-    assert result.mesh.component_count == 1
+    assert result.mesh.component_count == spec.bodies == bodies
     assert result.mesh.volume > 0.0
 
 
@@ -137,6 +143,182 @@ def test_a_measurement_lands_in_the_material_profile(own_profiles: Path) -> None
     assert after.clearance == pytest.approx(0.18)
     assert after.hole_compensation == pytest.approx(0.15)
     assert (own_profiles / "materials.toml").is_file()
+
+
+def test_process_measurements_reach_only_the_measured_print_process(own_profiles: Path) -> None:
+    """Die Wand- und Überhangprobe gilt für Material, Maschine und Druckraster gemeinsam."""
+    before = profiles.make_profile("centauri-carbon-2", "petg")
+    after = calibration.apply(
+        calibration.from_measurements("petg", minimum_wall=0.55, overhang_angle=60.0),
+        process=before,
+    )
+    measured = dataclasses.replace(before, material=after)
+    assert measured.has_process_calibration
+    assert measured.minimum_wall_thickness == pytest.approx(0.55)
+    assert measured.overhang_limit_degrees == pytest.approx(60.0)
+    assert after.youngs_modulus == pytest.approx(before.material.youngs_modulus)
+    assert after.yield_strength == pytest.approx(before.material.yield_strength)
+    for changes in (
+        {"id": "other-printer"},
+        {"nozzle_diameter": before.printer.nozzle_diameter * 2},
+        {"layer_height": before.printer.layer_height * 2},
+        {"extrusion_width": before.printer.extrusion_width * 2},
+    ):
+        other = dataclasses.replace(
+            measured, printer=dataclasses.replace(before.printer, **changes)
+        )
+        assert not other.has_process_calibration
+        assert other.minimum_wall_thickness == pytest.approx(2 * other.printer.extrusion_width)
+        assert other.overhang_limit_degrees == pytest.approx(before.overhang_limit_degrees)
+
+
+def test_a_new_process_does_not_relabel_the_previous_other_measurement(own_profiles: Path) -> None:
+    """Eine neue Wandprobe macht keine alte Überhangprobe zur Messung an der neuen Düse."""
+    original = profiles.make_profile("centauri-carbon-2", "petg")
+    calibration.apply(
+        calibration.from_measurements("petg", minimum_wall=0.55, overhang_angle=60.0),
+        process=original,
+    )
+    other = dataclasses.replace(
+        original, printer=dataclasses.replace(original.printer, nozzle_diameter=0.8)
+    )
+    after = calibration.apply(
+        calibration.from_measurements("petg", minimum_wall=1.0), process=other
+    )
+    assert after.overhang_angle is None
+    assert dataclasses.replace(other, material=after).minimum_wall_thickness == pytest.approx(1.0)
+
+
+def test_process_measurements_require_their_print_process() -> None:
+    with pytest.raises(ValidationError, match="Drucker"):
+        calibration.apply(calibration.from_measurements("petg", minimum_wall=0.55))
+
+
+def test_orientation_operation_and_agent_use_the_body_material(
+    own_profiles: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Projektprobe verbessert nicht die Druckbarkeit eines anderen Körpermaterials."""
+    from app.core.agent import analysis
+    from app.core.geom import prepare_ops
+    from app.core.slice.orientation import search
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    after = calibration.apply(
+        calibration.from_measurements("pla", overhang_angle=60.0), process=profile
+    )
+    measured = dataclasses.replace(profile, material=after)
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply("Körper", [OperationDraft(op="create_box", params={"height": 8.0})])
+    first = evaluate(project.document, measured, sources=ProjectSources(project))
+    body = first.scene.objects["obj_1"]
+    body.material = "petg"
+    seen: list[float] = []
+
+    def actual_search(mesh, **kwargs):
+        seen.append(kwargs["overhang_angle"])
+        return search(mesh, **kwargs)
+
+    monkeypatch.setattr(analysis, "search", actual_search)
+    monkeypatch.setattr(prepare_ops, "search", actual_search)
+    analysis.analysis_text("orientation", first.scene, project.document, measured)
+    # Die Op erhält denselben tatsächlichen Körper über ihren normalen Kontext.
+    from tests.test_brep import run
+
+    result = run("orient_for_print", body, measured, thorough=True)
+    assert result.outputs
+    assert seen == pytest.approx([45.0, 45.0])
+
+
+def test_calibration_changes_the_real_overhang_map_and_slice(own_profiles: Path) -> None:
+    """Eine gedruckte 60-Grad-Probe ändert die Auskunft am echten 55-Grad-Körper."""
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import print_settings
+    from app.core.perceive import maps
+    from app.core.slice.analysis import slice_body
+    from app.core.types import SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    process = profiles.for_process(profile, settings)
+    calibration.apply(
+        calibration.from_measurements("petg", minimum_wall=0.55, overhang_angle=60.0),
+        process=process,
+    )
+    calibrated = profiles.for_process(profiles.make_profile("centauri-carbon-2", "petg"), settings)
+    raw = trimesh.creation.box((8, 8, 8))
+    raw.apply_translation((0, 0, 4))
+    raw.vertices[:, 0] += raw.vertices[:, 2] * math.tan(math.radians(55))
+    body = SceneObject(id="slope", name="Schräges Teil", mesh=MeshData.of(raw))
+
+    def support(current: Profile) -> float:
+        wall, angle = profiles.analysis_limits(current, body)
+        assert maps.build("wall", body, profile=current).threshold == pytest.approx(wall)
+        assert maps.build("overhang", body, profile=current).threshold == pytest.approx(angle)
+        return slice_body(
+            body.mesh,
+            layer_height=current.printer.layer_height,
+            overhang_angle=angle,
+        ).support_volume
+
+    assert support(process) > 0.0
+    assert support(calibrated) == pytest.approx(0.0, abs=1e-6)
+    changed = dataclasses.replace(
+        settings,
+        layers=dataclasses.replace(settings.layers, line_width=settings.layers.line_width * 1.5),
+    )
+    assert support(profiles.for_process(calibrated, changed)) > 0.0
+
+
+def test_analysis_keeps_the_stricter_material_and_unknown_slots(own_profiles: Path) -> None:
+    """Bemalung mit einem anderen Material erbt keine günstigere Druckprobe."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    after = calibration.apply(
+        calibration.from_measurements("petg", minimum_wall=0.55, overhang_angle=60.0),
+        process=profile,
+    )
+    measured = dataclasses.replace(profile, material=after)
+    body = SceneObject(
+        id="mixed", name="Mehrere Materialien", mesh=MeshData.of(trimesh.creation.box())
+    )
+    assert profiles.analysis_limits(measured, body) == pytest.approx((0.55, 60.0))
+    for material_type in ("PLA", ""):
+        body.material_slots = [
+            MaterialSlot(0, "Gehäuse", material_type="PETG"),
+            MaterialSlot(1, "Schrift", material_type=material_type),
+        ]
+        assert profiles.analysis_limits(measured, body) == pytest.approx((0.55, 60.0))
+        body.mesh = MeshData.of(trimesh.creation.box(), slots=(0,) * 6 + (1,) * 6)
+        assert profiles.analysis_limits(measured, body) == pytest.approx(
+            (profile.minimum_wall_thickness, profile.overhang_limit_degrees)
+        )
+        body.mesh = MeshData.of(trimesh.creation.box())
+    body.material_slots = [MaterialSlot(0, "Gehäuse", material_type="PETG")]
+    body.mesh = MeshData.of(trimesh.creation.box(), slots=(0,) * 6 + (2,) * 6)
+    assert profiles.analysis_limits(measured, body) == pytest.approx(
+        (profile.minimum_wall_thickness, profile.overhang_limit_degrees)
+    )
+
+
+@pytest.mark.parametrize(
+    "values", [{"minimum_wall": 0}, {"overhang_angle": 90}, {"clearance": float("nan")}]
+)
+def test_unusable_measurements_are_rejected_before_writing(own_profiles: Path, values) -> None:
+    with pytest.raises(ValidationError):
+        calibration.apply(
+            calibration.from_measurements("petg", **values),
+            process=profiles.make_profile("centauri-carbon-2", "petg"),
+        )
+    assert not (own_profiles / calibration.USER_MATERIALS).exists()
 
 
 def test_the_shipped_profile_stays_untouched(own_profiles: Path) -> None:
@@ -374,6 +556,106 @@ def test_the_dialog_starts_from_the_current_values(own_profiles: Path) -> None:
     dialog = CalibrationDialog("petg")
 
     assert dialog.editors["clearance"].value() == pytest.approx(current.clearance)
+
+
+def test_the_dialog_saves_only_explicitly_selected_process_measurements(
+    own_profiles: Path, qt_app: object
+) -> None:
+    """Vorgabewerte werden erst nach ausdrücklicher Auswahl zu einer Messung."""
+    pytest.importorskip("PySide6")
+    from app.ui.dialogs import CalibrationDialog
+
+    process = profiles.make_profile("centauri-carbon-2", "petg")
+    dialog = CalibrationDialog("petg", process=process)
+    assert qt_app is not None
+    assert not calibration.PROCESS_FIELDS.intersection(dialog.measured().as_table())
+    dialog.measured_fields["minimum_wall"].setChecked(True)
+    dialog.editors["minimum_wall"].setValue(0.55)
+    after = calibration.apply(dialog.measured(), process=dialog.process)
+    assert after.minimum_wall == pytest.approx(0.55)
+    assert after.overhang_angle is None
+    dialog.close()
+
+    again = CalibrationDialog("petg", process=dataclasses.replace(process, material=after))
+    assert again.measured_fields["minimum_wall"].isChecked()
+    assert again.editors["minimum_wall"].value() == pytest.approx(0.55)
+    again.measured_fields["minimum_wall"].setChecked(False)
+    unchanged = calibration.apply(again.measured(), process=again.process)
+    assert unchanged.minimum_wall == pytest.approx(0.55)
+    again.close()
+
+
+@pytest.mark.parametrize(
+    "edited,value",
+    [
+        (None, None),
+        ("clearance", 0.3),
+        ("press", -0.08),
+        ("hole_compensation", 0.2),
+        ("elephant_foot", 0.1),
+        ("shrinkage", 0.75),
+        ("minimum_wall", 0.65),
+        ("overhang_angle", 61.25),
+    ],
+)
+def test_calibration_keeps_unedited_precision_when_saving(
+    own_profiles: Path, qt_app: object, edited: str | None, value: float | None
+) -> None:
+    """Anzeigepräzision darf beim Speichern keine anderen Messwerte verändern."""
+    pytest.importorskip("PySide6")
+    from app.ui.dialogs import CalibrationDialog
+
+    original = {
+        "clearance": 0.23456,
+        "press": -0.05678,
+        "hole_compensation": 0.12345,
+        "elephant_foot": 0.15678,
+        "shrinkage": 0.0045678,
+        "minimum_wall": 0.5553,
+        "overhang_angle": 60.1234,
+    }
+    process = profiles.make_profile("centauri-carbon-2", "petg")
+    material = calibration.apply(calibration.from_measurements("petg", **original), process=process)
+    dialog = CalibrationDialog("petg", process=dataclasses.replace(process, material=material))
+    assert qt_app is not None
+    try:
+        assert dialog.editors["minimum_wall"].value() == pytest.approx(0.56)
+        assert dialog.editors["overhang_angle"].value() == pytest.approx(60.12)
+        assert dialog.editors["shrinkage"].value() == pytest.approx(0.46)
+        expected = dict(original)
+        if edited is not None:
+            assert value is not None
+            dialog.editors[edited].setValue(value)
+            expected[edited] = value / 100.0 if edited == "shrinkage" else value
+        after = calibration.apply(dialog.measured(), process=dialog.process)
+        for name, precise in expected.items():
+            assert getattr(after, name) == pytest.approx(precise, abs=1e-12, rel=0)
+    finally:
+        dialog.close()
+
+
+def test_calibration_accepts_retyping_the_rounded_percentage(
+    own_profiles: Path, qt_app: object
+) -> None:
+    """Das bewusste Eintippen des Anzeigewerts ersetzt den exakteren Altwert."""
+    pytest.importorskip("PySide6")
+    from PySide6.QtTest import QTest
+
+    from app.ui.dialogs import CalibrationDialog
+
+    calibration.apply(calibration.from_measurements("petg", shrinkage=0.0045678))
+    dialog = CalibrationDialog("petg")
+    assert qt_app is not None
+    try:
+        editor = dialog.editors["shrinkage"]
+        line = editor.lineEdit()
+        assert line is not None
+        editor.selectAll()
+        QTest.keyClicks(line, "0.46")
+        editor.interpretText()
+        assert dialog.measured().as_table()["shrinkage"] == pytest.approx(0.0046)
+    finally:
+        dialog.close()
 
 
 def test_a_broken_user_toml_is_a_sentence_not_a_crash(own_profiles: Path) -> None:

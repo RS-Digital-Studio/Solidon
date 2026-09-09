@@ -242,15 +242,25 @@ def test_a_place_between_one_and_two_nozzle_lines_gets_no_empty_advice() -> None
     assert "layers.line_width" not in paths(entries)
 
 
-def test_that_same_place_is_said_out_loud() -> None:
-    """Und die andere Hälfte: Wo kein Wert hilft, steht ein Befund."""
+def test_one_variable_nozzle_line_is_not_reported_as_missing() -> None:
+    """Eine einzelne Arachne-Bahn ist druckbar; zwei sind keine Druckbarkeitsgrenze."""
     settings, profile, least = barely_narrow()
     thin = 1.5 * least
 
     findings = advise.warnings_for(settings, profile, result_with([0.0] * 20, min_width=thin))
 
+    assert "settings.wall_below_nozzle" not in {entry.code for entry in findings}
+
+
+def test_below_one_nozzle_line_the_slicer_check_is_still_required() -> None:
+    """Unterhalb der angesetzten Mindestbahnbreite bleibt die konkrete Gegenprüfung nötig."""
+    settings, profile, least = barely_narrow()
+    thin = 0.75 * least
+
+    findings = advise.warnings_for(settings, profile, result_with([0.0] * 20, min_width=thin))
+
     hits = [entry for entry in findings if entry.code == "settings.wall_below_nozzle"]
-    assert hits, "zwischen einer und zwei Bahnen schwieg vorher alles"
+    assert hits, "below the assumed minimum line width a warning must remain"
     assert hits[0].values["width_mm"] == thin
 
 

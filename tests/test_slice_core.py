@@ -135,6 +135,22 @@ def test_both_ways_agree_on_every_layer(
         assert _holes(first) == _holes(second), f"{name}: layer {index} differs in holes"
 
 
+@pytest.mark.parametrize("first_layer_height", [None, 0.32])
+def test_a_bridge_keeps_its_supported_span_on_both_paths(
+    monkeypatch: pytest.MonkeyPatch, first_layer_height: float | None
+) -> None:
+    """Die Auflager des schmalen Stegs bleiben auch ohne übersetzten Kern bekannt."""
+    mesh = read_mesh((MESHES / "bridge_two_end_supports.ply").read_bytes(), ".ply")
+    compiled = slice_body(mesh, 0.2, first_layer_height=first_layer_height)
+    monkeypatch.setattr(analysis, "_chain", None)
+    geos = slice_body(mesh, 0.2, first_layer_height=first_layer_height)
+
+    assert max(layer.bridge_width for layer in compiled.layers) == pytest.approx(30.0, abs=0.2)
+    assert [layer.bridge_width for layer in compiled.layers] == pytest.approx(
+        [layer.bridge_width for layer in geos.layers], abs=_ULP
+    )
+
+
 def test_the_compiled_way_is_the_one_that_ran() -> None:
     """Ein Wächter für die Prüfung selbst.
 

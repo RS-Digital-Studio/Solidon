@@ -59,8 +59,9 @@ def test_the_filament_panel_keeps_material_identity_and_marks_the_right_override
     qt_app: QApplication,
 ) -> None:
     """Gleich benanntes PLA und PETG bleiben zwei Spulen mit getrennten Druckwerten."""
-    from types import SimpleNamespace
+    import trimesh
 
+    from app.core.geom.mesh import MeshData
     from app.ui.filament_picker import FilamentPanel
 
     first = MaterialSlot(index=1, name="Schwarz", colour=(0.0, 0.0, 0.0), material_type="PLA")
@@ -76,7 +77,11 @@ def test_the_filament_panel_keeps_material_identity_and_marks_the_right_override
         ),
     )
     panel = FilamentPanel()
-    panel.show_scene([SimpleNamespace(material_slots=(first, second))], settings)
+    mesh = MeshData.of(trimesh.creation.box((10, 10, 10)))
+    mesh = replace(mesh, slots=(1, 2) * (mesh.triangle_count // 2))
+    panel.show_scene(
+        [SceneObject(id="obj_1", name="Teil", mesh=mesh, material_slots=[first, second])], settings
+    )
     assert len(panel._used) == 2
     assert {entry[0].material_type: entry[4] for entry in panel._used} == {
         "PLA": False,
@@ -1415,6 +1420,7 @@ def test_cancelling_rejects_a_slice_result_already_waiting_in_qt(
 
     assert dialog._gcode == []
     assert delivered == []
+    assert dialog.slice_comparison is None
     if not changed:
         assert tr("Abgebrochen.") in dialog.state.text()
 
@@ -1948,6 +1954,70 @@ def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_p
     assert "2" in dialog.state.text()
 
 
+@pytest.mark.parametrize(
+    "properties, lengths, expected",
+    [
+        (((1.2, 2.85),), (1000.0,), 7.655276),
+        (((1.2, 2.85), (1.24, 1.75)), (1000.0, 2000.0), 13.620375),
+        (((1.2, 2.85), (None, None)), (1000.0, 2000.0), None),
+    ],
+)
+def test_slicer_result_and_inventory_use_the_same_frozen_material_quantities(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch, properties, lengths, expected
+) -> None:
+    """2,85-mm-Filament und Mischmaterial lesen nach dem Lauf keine neuen Dialogwerte."""
+    from app.core.filament_usage import UsageLine, UsageRequest
+    from app.ui import print_settings_dialog as module
+    from app.ui.facts import mass
+
+    request = UsageRequest(
+        "material-snapshot",
+        "Probe",
+        0,
+        tuple(
+            UsageLine(
+                MaterialSlot(index, f"Filament {index}"),
+                None,
+                density=density,
+                diameter=diameter,
+            )
+            for index, (density, diameter) in enumerate(properties)
+        ),
+    )
+    produced = tmp_path / "material.gcode"
+    produced.write_text("G1 X10 E1\n", encoding="utf-8")
+    raw = gcode.GcodeMetrics(filament_mm=sum(lengths), filament_mm_by_tool=lengths)
+    outcome = handover.SliceOutcome(produced, raw, findings=gcode.findings_for(raw))
+    monkeypatch.setattr(handover, "slice_model", lambda *_args, **_kwargs: outcome)
+    worker = module._SliceWorker(
+        [module.PlateRun(0, produced, ())],
+        dialog.settings,
+        dialog.session.profile,
+        handover.SlicerSetup(tmp_path / "slicer", "orca"),
+    )
+    worker._usage = {0: request}
+    offered = []
+    finished = []
+    worker.usageReady.connect(offered.append)
+    worker.done.connect(finished.append)
+    worker.work()
+    dialog.settings = replace(
+        dialog.settings, filament=replace(dialog.settings.filament, density=9.0, diameter=0.5)
+    )
+    dialog._sliced(finished[0])
+    grams = outcome.metrics.grams(9.0, 0.5)
+    if expected is None:
+        assert grams is None
+        assert tr("Unbekannt") in dialog.state.text()
+        assert not any(finding.code == "gcode.material" for finding in outcome.findings)
+    else:
+        assert grams == pytest.approx(expected)
+        assert sum(line.grams for line in offered[0].lines) == pytest.approx(expected)
+        assert mass(expected) in dialog.state.text()
+        material = next(finding for finding in outcome.findings if finding.code == "gcode.material")
+        assert material.values["grams"] == pytest.approx(round(expected, 1))
+
+
 def test_every_plate_becomes_its_own_run(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
     """Die Übergabe nimmt alle Platten, nicht die erste.
 
@@ -2062,6 +2132,7 @@ def test_a_connector_of_infill_reaches_the_advice_list(
 
     dialog = PrintSettingsDialog(session, UiSettings())
     assert dialog._connector_diameters() == (5.04,)
+    _wait_for_print_advice(dialog, qt_app)
 
     dialog._editors["shell.wall_count"].setValue(3)
     titel = {
@@ -2071,6 +2142,7 @@ def test_a_connector_of_infill_reaches_the_advice_list(
     assert not any("Wände" in eintrag for eintrag in titel), "bei drei Wänden trägt der Zapfen"
 
     dialog._editors["shell.wall_count"].setValue(2)
+    _wait_for_print_advice(dialog, qt_app)
     zeilen = [
         (
             dialog.advice_view.topLevelItem(row).text(0),
@@ -2308,6 +2380,7 @@ def test_a_built_fit_counts_like_an_entered_one(session: Session, qt_app) -> Non
             "Deckel",
             [OperationDraft(op="create_lid", inputs=("obj_1",), params={"thickness": 2.4})],
         )
+        session.evaluate_now()
         assert dialog._fits_in_play(), "ein Deckel legt zwei Flächen mit Spiel aufeinander"
     finally:
         dialog.deleteLater()
@@ -2330,6 +2403,14 @@ def test_a_declared_lid_condition_also_controls_print_advice(
             when_positive=("op_1", "collar"),
         )
     )
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    body = SceneObject(id="obj_1", name="Teil", mesh=MeshData.of(trimesh.creation.box()))
+    session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={body.id: body}))
     dialog = PrintSettingsDialog(session, UiSettings())
     try:
         assert dialog._fits_in_play() == expected
@@ -2392,6 +2473,41 @@ def test_a_second_slot_gets_its_own_choice(
     gemerkt = dialog.settings.slot_profiles
     assert len(gemerkt) == 2, "ein Eintrag je Slot"
     assert gemerkt[1] == "Haus PLA weiß", "der Name reist mit, nicht der Pfad"
+
+
+@pytest.mark.parametrize("availability", ["missing", "incompatible", "no_profiles"])
+def test_unavailable_slot_profile_stays_visible_without_changing_the_binding(
+    qt_app: QApplication, session: Session, monkeypatch, availability: str
+) -> None:
+    """Ein fehlendes Profil darf weder ein anderes vortäuschen noch seine Bindung verlieren."""
+    slots = _two_slots()
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self, **_kwargs: slots)
+    dialog = PrintSettingsDialog(session, UiSettings())
+    wanted = _profile("Mein PETG Spezial", "filament", filament_type="PETG")
+    fallback = _profile("Anderes PETG", "filament", filament_type="PETG")
+    fitting = [] if availability == "no_profiles" else [fallback]
+    dialog._profiles = [fallback, wanted] if availability == "incompatible" else fitting
+    monkeypatch.setattr(dialog, "_filaments_worth_showing", lambda _machine: fitting)
+    dialog.ui_settings.slicer_base_filament = str(fallback.path)
+    dialog.settings = handover.bind_slot_profiles(
+        replace(dialog.settings, slot_profiles=(wanted.name,), slot_profile_bindings=None), slots
+    )
+    before = dialog.settings
+
+    dialog._fill_filaments(None)
+
+    box = dialog.slot_rows[0][1]
+    assert wanted.name in box.currentText()
+    assert box.currentText() == tr("Nicht verfügbar: {profile}").replace("{profile}", wanted.name)
+    assert not box.model().item(box.currentIndex()).isEnabled()
+    assert dialog.settings == before
+    assert handover.configured_slots(slots, dialog.settings)[0].material == wanted.name
+    if fitting:
+        monkeypatch.setattr(dialog, "_refresh_advice", lambda: None)
+        box.setCurrentIndex(box.findData(str(fallback.path)))
+        box.activated.emit(box.currentIndex())
+        assert handover.configured_slots(slots, dialog.settings)[0].material == fallback.name
+    dialog.reject()
 
 
 def test_a_slot_stores_the_profile_name_and_not_its_caption(
@@ -3704,6 +3820,190 @@ def _cube_object() -> SceneObject:
     )
 
 
+@pytest.mark.parametrize("flavour", ["orca", "prusa"])
+def test_slice_comparison_uses_selected_plate_quality_and_effective_materials(
+    tmp_path: Path, flavour: str
+) -> None:
+    """Die Gegenprobe enthält weder die übrige Platte noch alte Projektvorgaben."""
+    from app.core.export import threemf
+    from app.core.slice.estimate import estimate
+    from app.ui import print_settings_dialog as module
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile, "fine")
+    first = MaterialSlot(index=0, name="Gehäuse", material_type="PLA")
+    second = MaterialSlot(index=0, name="Dichtung", material_type="TPU")
+    settings = handover.with_slot_override(
+        settings,
+        second,
+        SlotOverride(filament=replace(settings.filament, density=2.4, max_flow=2.0)),
+    )
+    selected = [
+        replace(_cube_object(), id=f"selected_{index}", plate=1, material_slots=[slot])
+        for index, slot in enumerate((first, second))
+    ]
+    objects = (_cube_object(), *selected)
+    setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour=flavour)
+    job = module._PlateJob(objects, (1,), tmp_path, "Teil", setup, settings, profile, {})
+    merged = tuple(
+        threemf.merge_slots(
+            [
+                threemf.AssemblyPart(entry.mesh, slots=tuple(entry.material_slots))
+                for entry in selected
+            ]
+        )
+    )
+    run = module.PlateRun(1, tmp_path / "plate.3mf", slots=merged)
+
+    actual = module._comparison_for_job(job, [run])
+
+    choices = [
+        handover.settings_for_slot(settings, profile, slot, setup)
+        for slot in (merged if flavour == "orca" else (merged[0], merged[0]))
+    ]
+    expected = [
+        estimate(entry.mesh.volume, entry.mesh.area, own)
+        for entry, own in zip(selected, choices, strict=True)
+    ]
+    assert actual.grams == pytest.approx(sum(item.grams for item in expected))
+    assert actual.seconds == pytest.approx(sum(item.seconds for item in expected))
+    old = estimate(objects[0].mesh.volume, objects[0].mesh.area, print_settings.resolve(profile))
+    assert actual.seconds != pytest.approx(old.seconds * len(objects))
+
+
+def test_slice_comparison_keeps_unknown_material_distribution_unknown(tmp_path: Path) -> None:
+    """Oberflächenanteile beweisen keine Volumenanteile verschiedener Filamente."""
+    from app.ui import print_settings_dialog as module
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    first = MaterialSlot(0, "Erste", material_type="PLA")
+    second = MaterialSlot(1, "Zweite", material_type="PLA")
+    settings = handover.with_slot_override(
+        settings,
+        second,
+        SlotOverride(filament=replace(settings.filament, density=2.4)),
+    )
+    body = _cube_object()
+    body = replace(body, mesh=replace(body.mesh, slots=(0, 1) * 6), material_slots=[first, second])
+    setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
+    job = module._PlateJob((body,), (0,), tmp_path, "Teil", setup, settings, profile, {})
+    run = module.PlateRun(0, tmp_path / "plate.3mf", slots=(first, second))
+
+    actual = module._comparison_for_job(job, [run])
+
+    assert actual.grams is None
+    assert actual.seconds is not None, "gleicher Volumenstrom erlaubt weiterhin die Zeitschätzung"
+
+
+def test_slice_comparison_resolves_the_profile_bound_to_the_plate(tmp_path: Path) -> None:
+    """Die Profilauswahl ist Teil des Jobs und liefert die wirksame Dichte."""
+    from app.core.slice.estimate import estimate
+    from app.ui import print_settings_dialog as module
+
+    source = tmp_path / "filament.json"
+    source.write_text(
+        json.dumps({"filament_density": ["2.4"], "filament_max_volumetric_speed": ["2"]}),
+        encoding="utf-8",
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    slot = MaterialSlot(0, "Spule", material_type="PLA")
+    body = replace(_cube_object(), material_slots=[slot])
+    setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="orca")
+    job = module._PlateJob((body,), (0,), tmp_path, "Teil", setup, settings, profile, {})
+    run = module.PlateRun(0, tmp_path / "plate.3mf", slots=(replace(slot, material=str(source)),))
+
+    actual = module._comparison_for_job(job, [run])
+
+    expected = estimate(
+        body.mesh.volume,
+        body.mesh.area,
+        replace(settings, filament=replace(settings.filament, density=2.4, max_flow=2.0)),
+    )
+    assert actual.grams == pytest.approx(expected.grams)
+    assert actual.seconds == pytest.approx(expected.seconds)
+
+
+def test_successful_slice_compares_the_job_snapshot_without_reading_the_current_scene(
+    dialog: PrintSettingsDialog, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Arbeiter, Ergebnisannahme und Prüfbericht reichen denselben Vergleichskontext weiter."""
+    from types import SimpleNamespace
+
+    from app.core.slice.estimate import estimate
+    from app.ui import print_settings_dialog as module
+    from app.ui.main_window import MainWindow
+
+    settings = replace(
+        print_settings.resolve(dialog.session.profile, "fine"),
+        filament=replace(dialog.settings.filament, density=2.4, max_flow=2.0),
+    )
+    dialog.settings = settings
+    selected = replace(_cube_object(), id="selected", plate=1)
+    scene = SimpleNamespace(objects={"excluded": _cube_object(), "selected": selected})
+    monkeypatch.setattr(dialog.session, "last_result", SimpleNamespace(scene=scene))
+    setup = handover.SlicerSetup(executable=tmp_path / "slicer.exe", flavour="prusa")
+    monkeypatch.setattr(dialog, "_current_setup", lambda: setup)
+    monkeypatch.setattr(dialog, "_chosen_plates", lambda: [1])
+    monkeypatch.setattr(dialog, "_plate_slots", list)
+    monkeypatch.setattr(
+        module,
+        "_prepare_plate",
+        lambda _job, plate: module.PlateRun(
+            plate, tmp_path / "plate.3mf", slots=(MaterialSlot(0, ""),)
+        ),
+    )
+    expected = estimate(selected.mesh.volume, selected.mesh.area, settings)
+    monkeypatch.setattr(
+        module.handover,
+        "slice_model",
+        lambda *_args, **_kwargs: handover.SliceOutcome(
+            gcode_path=tmp_path / "plate.gcode",
+            metrics=gcode.GcodeMetrics(
+                filament_grams=expected.grams, print_seconds=expected.seconds
+            ),
+        ),
+    )
+    findings: list[object] = []
+    # Absichtlich ohne session: Der automatische Rückweg darf keinen späteren
+    # Szenen- oder Projektzustand für die Gegenprobe heranziehen.
+    window = SimpleNamespace(
+        report=SimpleNamespace(add_findings=lambda entries, **_kwargs: findings.extend(entries)),
+        _focus_report=lambda: None,
+        announce=lambda _text: None,
+    )
+    window._compare_totals = lambda metrics, comparison: MainWindow._compare_totals(
+        window, metrics, comparison
+    )
+    delivered = []
+
+    def returned(outcomes: list[handover.SliceOutcome]) -> None:
+        delivered.append(dialog.slice_comparison)
+        MainWindow._gcode_returned(window, outcomes, dialog.slice_comparison)
+
+    dialog.sliced.connect(returned)
+    dialog._slice()
+    worker = dialog._worker
+    assert worker is not None and worker.wait(2_000)
+    QApplication.processEvents()
+
+    assert len(delivered) == 1 and delivered[0] is not None
+    assert delivered[0].grams == pytest.approx(expected.grams)
+    assert delivered[0].seconds == pytest.approx(expected.seconds)
+    assert not [entry for entry in findings if entry.code == "gcode.deviation"]
+    MainWindow._compare_totals(
+        window,
+        gcode.GcodeMetrics(
+            filament_grams=expected.grams * 0.5, print_seconds=expected.seconds * 0.5
+        ),
+        dialog.slice_comparison,
+    )
+    assert len([entry for entry in findings if entry.code == "gcode.deviation"]) == 2
+    dialog._forget_result()
+    assert dialog.slice_comparison is None
+
+
 def _settings_in(path: Path) -> bool:
     """Trägt die 3MF Solidons Druckeinstellungen?"""
     import zipfile
@@ -4269,3 +4569,537 @@ def test_the_printer_list_can_be_searched_by_typing(dialog: PrintSettingsDialog)
     assert completer.completionCount() == 1, "mitten im Namen wird nicht gesucht"
     completer.setCurrentRow(0)
     assert "Ender-3" in completer.currentCompletion()
+
+
+def _wait_for_print_advice(dialog: PrintSettingsDialog, application: QApplication) -> None:
+    """Die aktive asynchrone Empfehlung einschließlich nachgereichter Signale abholen."""
+    deadline = time.monotonic() + 10
+    while dialog._advice_pending and time.monotonic() < deadline:
+        application.processEvents()
+        time.sleep(0.005)
+    application.processEvents()
+    assert not dialog._advice_pending, "die Druckprüfung kam nicht zurück"
+    assert not dialog._advice_problem, dialog._advice_problem
+
+
+def _print_advice_dialog(qt_app, objects, *, settings=None):
+    """Ein echter Druckauftrag ohne Hauptfenster und Renderer."""
+    from types import SimpleNamespace
+
+    session = Session()
+    session.project.document.print_settings = settings
+    session.last_result = SimpleNamespace(
+        scene=SimpleNamespace(objects={obj.id: obj for obj in objects})
+    )
+    return PrintSettingsDialog(session, UiSettings())
+
+
+def _print_advice_cube(name="Würfel", *, plate=0, slots=()):
+    """Kleine vollständige Testgeometrie für den Druckdialog."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    mesh = trimesh.creation.box((10, 10, 10))
+    mesh.apply_translation((0, 0, 5))
+    return SceneObject(
+        id=name, name=name, mesh=MeshData.of(mesh), plate=plate, material_slots=list(slots)
+    )
+
+
+@pytest.mark.parametrize("from_spool", [False, True])
+def test_print_advice_uses_the_actual_body_material(qt_app, from_spool):
+    """Die PLA-Projektvorgabe darf eine TPU-Dichtung nicht ohne Geschwindigkeitsrat lassen."""
+    body = _print_advice_cube(
+        slots=(MaterialSlot(0, "TPU Schwarz", material_type="TPU"),) if from_spool else ()
+    )
+    if not from_spool:
+        body.material = "tpu-95a"
+    dialog = _print_advice_dialog(qt_app, [body])
+    assert not dialog.apply_button.isEnabled(), "ohne Messung gibt es keine Entwarnung"
+    assert dialog.advice_state.text()
+    _wait_for_print_advice(dialog, qt_app)
+    assert any(
+        entry.path == "speed.outer_wall" and entry.value == 30 for entry in dialog._current_advice()
+    )
+
+
+def test_print_advice_cannot_disable_support_needed_by_another_body(qt_app):
+    """Der Würfel braucht keine Stützen; der Kegel auf derselben Platte behält sie."""
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.transform import place_on_bed
+
+    cube = _print_advice_cube()
+    mesh = trimesh.creation.cone(radius=20, height=10, sections=32)
+    mesh.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1, 0, 0]))
+    cone = SceneObject(id="Kegel", name="Kegel", mesh=place_on_bed(MeshData.of(mesh)))
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "grid"
+    )
+    dialog = _print_advice_dialog(qt_app, [cube, cone], settings=settings)
+    _wait_for_print_advice(dialog, qt_app)
+    assert set(dialog._body_analyses) == {cube.id, cone.id}
+    dialog._apply_advice()
+    assert dialog.settings.support.style == "grid"
+
+
+def test_print_advice_ignores_other_plates_and_keeps_a_rejected_choice(qt_app):
+    """Ein ausgeschlossener Zapfen erhöht keine Wandzahl; Abwahl überlebt neue Werte."""
+    cube = _print_advice_cube(slots=(MaterialSlot(0, "TPU", material_type="TPU"),))
+    pin = _print_advice_cube("Zapfen", plate=1)
+    pin.features["pin"] = Feature(
+        id="pin", kind="pin", provenance="generated", params={"diameter": 20.0}
+    )
+    dialog = _print_advice_dialog(qt_app, [cube, pin])
+    index = dialog.plate_choice.findData(0)
+    dialog.plate_choice.setCurrentIndex(index)
+    dialog._plate_chosen(index)
+    _wait_for_print_advice(dialog, qt_app)
+    assert dialog._connector_diameters() == ()
+    assert set(dialog._body_analyses) == {cube.id}
+    assert not any(entry.path == "shell.wall_count" for entry in dialog._current_advice())
+    for row in range(dialog.advice_view.topLevelItemCount()):
+        item = dialog.advice_view.topLevelItem(row)
+        if item.data(0, Qt.ItemDataRole.UserRole) == "speed.outer_wall":
+            item.setCheckState(0, Qt.CheckState.Unchecked)
+    before = dialog.settings.speed.outer_wall
+    dialog._editors["infill.density"].setValue(27)
+    _wait_for_print_advice(dialog, qt_app)
+    dialog._apply_advice()
+    assert dialog.settings.speed.outer_wall == before
+
+
+def test_print_advice_restarts_for_actual_layers_and_rejects_cancelled_results(qt_app, monkeypatch):
+    """Ein neuer Schichtwert löst den alten Auftrag ab, auch wenn dessen Ergebnis schon wartet."""
+    from app.core.types import SliceResult
+    from app.ui import print_settings_dialog as module
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def measure(mesh, height, *, first_layer_height, overhang_angle, cancelled):
+        calls.append((height, first_layer_height, threading.get_ident()))
+        if len(calls) == 1:
+            entered.set()
+            assert release.wait(5)
+        return SliceResult(layers=(), support_volume=0, first_layer_area=100)
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    initial = (dialog.settings.layers.layer_height, dialog.settings.layers.first_layer_height)
+    dialog._start_advice()
+    assert entered.wait(3)
+    qt_app.processEvents()
+    assert "Würfel" in dialog.advice_state.text()
+    assert not dialog.advice_progress.isHidden()
+    assert dialog.advice_progress.maximum() == 0
+    dialog._editors["layers.layer_height"].setValue(0.12)
+    dialog._editors["layers.first_layer_height"].setValue(0.32)
+    release.set()
+    _wait_for_print_advice(dialog, qt_app)
+    assert [(height, first) for height, first, _ in calls] == [initial, (0.12, 0.32)]
+    assert all(thread_id != threading.get_ident() for _, _, thread_id in calls)
+    assert dialog._analysed_context == dialog._analysis_context()
+    dialog._editors["infill.density"].setValue(28)
+    _wait_for_print_advice(dialog, qt_app)
+    assert len(calls) == 2, "eine Fülldichteänderung verlangt keine neue Schichtgeometrie"
+
+
+def test_accepted_material_advice_preserves_the_effective_filament_group(qt_app):
+    """Die angenommene Kühlzeit schreibt einen SlotOverride und behält dessen übrige Kühlung."""
+    slot = MaterialSlot(0, "PLA Schwarz", material_type="PLA")
+    settings = print_settings.resolve(profiles.make_profile())
+    settings = handover.with_slot_override(
+        settings,
+        slot,
+        SlotOverride(
+            cooling=replace(settings.cooling, minimum_layer_time=1, fan_speed=0.43),
+        ),
+    )
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=(slot,))], settings=settings)
+    _wait_for_print_advice(dialog, qt_app)
+    assert any(entry.path == "cooling.minimum_layer_time" for entry in dialog._current_advice())
+    dialog._apply_advice()
+    effective = handover.settings_for_slot(dialog.settings, dialog.session.profile, slot)
+    assert effective.cooling.minimum_layer_time > 1
+    assert effective.cooling.fan_speed == pytest.approx(0.43)
+    assert handover.override_for(dialog.settings, slot).cooling == effective.cooling
+
+
+def test_print_advice_uses_manufacturer_flow_and_keeps_other_manufacturer_values(
+    qt_app,
+    monkeypatch,
+    tmp_path,
+):
+    """Herstellerwerte begrenzen den Rat; eine angenommene Kühlzeit erhält deren Nachbarwerte."""
+    profile = tmp_path / "maker.json"
+    profile.write_text(
+        json.dumps(
+            {
+                "type": "filament",
+                "name": "Maker PLA",
+                "filament_type": ["PLA"],
+                "nozzle_temperature": ["215"],
+                "fan_min_speed": ["43"],
+                "fan_max_speed": ["43"],
+                "slow_down_layer_time": ["1"],
+                "filament_max_volumetric_speed": ["0.6"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(handover, "profile_file", lambda *_args: profile)
+    monkeypatch.setattr(handover, "_profile_roots", lambda *_args: (tmp_path,))
+    slot = MaterialSlot(0, "Maker PLA", material="Maker PLA", material_type="PLA")
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=(slot,))])
+    dialog._slicer_path = Path("orca-slicer.exe")
+    dialog._refresh_advice()
+    _wait_for_print_advice(dialog, qt_app)
+    dialog._apply_advice()
+    setup = handover.SlicerSetup(Path("orca-slicer.exe"), "orca")
+    effective = handover.settings_for_slot(dialog.settings, dialog.session.profile, slot, setup)
+    assert dialog.settings.speed.outer_wall <= 7
+    assert effective.filament.max_flow == pytest.approx(0.6)
+    assert effective.temperature.nozzle == 215
+    assert effective.cooling.fan_speed == pytest.approx(0.43)
+    assert effective.cooling.minimum_layer_time > 1
+    assert handover.override_for(dialog.settings, slot).cooling == effective.cooling
+
+
+@pytest.mark.parametrize("known_problem", [False, True])
+def test_print_advice_failure_has_a_retry_and_never_claims_the_part_is_ready(
+    qt_app,
+    monkeypatch,
+    known_problem,
+):
+    """Eine fehlende Analyse bleibt sichtbar unvollständig und kann neu angefordert werden."""
+    from app.core.errors import ValidationError
+    from app.core.types import SliceResult
+    from app.ui import print_settings_dialog as module
+
+    attempts = []
+
+    def measure(*_args, **_kwargs):
+        attempts.append(True)
+        if len(attempts) == 1:
+            if known_problem:
+                raise ValidationError(field="temperature.nozzle", detail="Ungültiges Profil <NaN>.")
+            raise ValueError("review analysis failure")
+        return SliceResult(layers=(), support_volume=0, first_layer_area=100)
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    deadline = time.monotonic() + 5
+    while dialog._advice_pending and time.monotonic() < deadline:
+        qt_app.processEvents()
+        time.sleep(0.005)
+    assert dialog._advice_problem
+    assert ("<NaN>" if known_problem else "review analysis failure") in dialog.advice_state.text()
+    assert dialog.advice_state.textFormat() == Qt.TextFormat.PlainText
+    assert not dialog.apply_button.isEnabled()
+    assert dialog.advice_control.text() == tr("Erneut prüfen")
+    assert dialog.advice_view.topLevelItemCount() == 0
+    dialog.advice_control.click()
+    _wait_for_print_advice(dialog, qt_app)
+    assert len(attempts) == 2
+
+
+def test_cancelled_print_advice_keeps_its_state_when_a_late_error_arrives(qt_app, monkeypatch):
+    """Ein überholter Fehler ersetzt weder den Abbruch noch den ausdrücklichen Neuversuch."""
+    from app.core.errors import ValidationError
+    from app.ui import print_settings_dialog as module
+
+    entered = threading.Event()
+    release = threading.Event()
+
+    def measure(*_args, **_kwargs):
+        entered.set()
+        assert release.wait(5)
+        raise ValidationError(field="temperature.nozzle", detail="Überholter Profilfehler")
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    dialog._start_advice()
+    assert entered.wait(3)
+    dialog.advice_control.click()
+    cancelled_message = dialog.advice_state.text()
+    release.set()
+    deadline = time.monotonic() + 5
+    while dialog._advice_worker is not None and time.monotonic() < deadline:
+        qt_app.processEvents()
+        time.sleep(0.005)
+    assert dialog._advice_worker is None
+    assert dialog.advice_state.text() == cancelled_message
+    assert not dialog._advice_pending
+    assert not dialog.apply_button.isEnabled()
+
+
+def test_closing_cancels_the_print_advice_worker_without_waiting_in_qt(qt_app, monkeypatch):
+    """Der Schließweg lässt keine Geometriearbeit hinter einem verschwundenen Dialog zurück."""
+    from app.core.types import SliceResult
+    from app.ui import print_settings_dialog as module
+
+    entered = threading.Event()
+    release = threading.Event()
+    tokens = []
+
+    def measure(*_args, cancelled, **_kwargs):
+        tokens.append(cancelled)
+        entered.set()
+        assert release.wait(5)
+        return SliceResult(layers=(), support_volume=0, first_layer_area=100)
+
+    monkeypatch.setattr(module, "slice_body", measure)
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube()])
+    dialog._start_advice()
+    assert entered.wait(3)
+    started = time.monotonic()
+    dialog.reject()
+    elapsed = time.monotonic() - started
+    release.set()
+    dialog.wait_for_workers(2000)
+    qt_app.processEvents()
+    assert elapsed < 0.25
+    assert tokens[0].is_cancelled
+    assert dialog._settled
+
+
+def test_a_slot_profile_choice_invalidates_visible_print_advice_immediately(qt_app):
+    """Die Herkunft eines Filaments ändert den Rat schon vor dem nächsten Übernahmeklick."""
+    slots = (
+        MaterialSlot(0, "Rot", material_type="PLA"),
+        MaterialSlot(1, "Weiß", material_type="PLA"),
+    )
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=slots)])
+    _wait_for_print_advice(dialog, qt_app)
+    previous = dialog._advice_request
+    box = dialog.slot_rows[0][1]
+    box.addItem("Neues PLA", "Neues PLA")
+    box.setCurrentIndex(0)
+    dialog._slot_filament_chosen(0)
+    assert dialog._advice_pending
+    assert not dialog.apply_button.isEnabled()
+    assert dialog._advice_request != previous
+    assert dialog._advice_request == dialog._advice_context()
+
+
+def test_a_changed_scene_replaces_slot_rows_on_the_same_plate(qt_app):
+    """Eine andere Körperbelegung auf derselben Platte behält keine verwaisten Filamentzeilen."""
+    from types import SimpleNamespace
+
+    slots = (
+        MaterialSlot(0, "Rot", material_type="PLA"),
+        MaterialSlot(1, "Weiß", material_type="PLA"),
+    )
+    dialog = _print_advice_dialog(qt_app, [_print_advice_cube(slots=slots)])
+    assert len(dialog.slot_rows) == 2
+    green = _print_advice_cube(slots=(MaterialSlot(0, "Grün", material_type="PLA"),))
+    dialog.session.last_result = SimpleNamespace(scene=SimpleNamespace(objects={green.id: green}))
+    dialog.session.sceneChanged.emit(dialog.session.last_result)
+    assert not dialog.slot_rows
+    assert not dialog._slot_names
+    assert "Grün" in dialog.material_state.text()
+    assert all(
+        "Rot" not in str(key) and "Weiß" not in str(key) for key in dialog._slot_rows_context
+    )
+
+
+def test_secondary_filament_advice_is_visible_but_not_applicable_in_prusa(qt_app):
+    """Eine Empfehlung an den zweiten Extruder darf nicht als übertragbar erscheinen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    red = MaterialSlot(0, "Rot", material_type="PLA")
+    white = MaterialSlot(0, "Weiß", material_type="PLA")
+    large = _print_advice_cube("Groß", slots=(red,))
+    large.mesh = MeshData.of(trimesh.creation.box((40, 40, 10)))
+    small = _print_advice_cube("Klein", slots=(white,))
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "adhesion.kind", "brim"
+    )
+    dialog = _print_advice_dialog(qt_app, [large, small], settings=settings)
+    dialog._slicer_path = Path("PrusaSlicer.exe")
+    dialog._refresh_advice()
+    _wait_for_print_advice(dialog, qt_app)
+    white_advice = next(
+        entry
+        for entry in dialog._current_advice()
+        if entry.path == "cooling.minimum_layer_time" and entry.slot.name == "Weiß"
+    )
+    assert white_advice.unavailable
+    assert not dialog.apply_button.isEnabled()
+    assert "erste Filament" in dialog.apply_button.toolTip()
+    dialog._apply_advice()
+    assert handover.override_for(dialog.settings, white) is None
+    assert any(
+        "erste Filament" in dialog.advice_view.topLevelItem(row).text(2)
+        and not dialog.advice_view.topLevelItem(row).flags() & Qt.ItemFlag.ItemIsUserCheckable
+        for row in range(dialog.advice_view.topLevelItemCount())
+    )
+
+
+def test_direct_export_uses_the_remembered_quality(session: Session) -> None:
+    """Ein ungeöffneter Druckdialog darf die gewählte Feinheit nicht verlieren."""
+    settings = settings_for_export(
+        session.project.document, session.profile, UiSettings(print_quality="fine")
+    )
+    assert settings is not None and settings.quality == "fine"
+    assert settings.layers == print_settings.resolve(session.profile, "fine").layers
+
+
+def test_late_profile_signals_cannot_replace_a_newer_slicer(dialog: PrintSettingsDialog) -> None:
+    """Ein verspäteter Fund und sein finished gehören weiter zum alten Slicer."""
+    from app.ui.print_settings_dialog import _ProfileWorker
+
+    old = _ProfileWorker(Path("old.exe"), "orca")
+    current = _ProfileWorker(Path("new.exe"), "orca")
+    old.done.connect(dialog._profiles_found)
+    old.finished.connect(dialog._profile_search_finished)
+    dialog._profile_worker = current
+    dialog._profiles_pending = True
+    old.done.emit([_profile("Alter Drucker", "machine")])
+    old.finished.emit()
+    assert dialog._profiles == []
+    assert dialog._profiles_pending
+    assert dialog._profile_worker is current
+    dialog._profile_worker = None
+
+
+def _calibrated_advice_case(monkeypatch):
+    """Ein 55-Grad-Überhang mit einer passenden 60-Grad-PLA-Probe."""
+    import math
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    original = profiles.material
+    calibrated = replace(
+        original("pla"),
+        overhang_angle=60.0,
+        calibration_printer=profile.printer.id,
+        calibration_nozzle_diameter=profile.printer.nozzle_diameter,
+        calibration_layer_height=settings.layers.layer_height,
+        calibration_extrusion_width=settings.layers.line_width,
+    )
+    monkeypatch.setattr(
+        profiles,
+        "material",
+        lambda identifier: calibrated if identifier == "pla" else original(identifier),
+    )
+    mesh = trimesh.creation.box((8, 8, 8))
+    mesh.apply_translation((0, 0, 4))
+    mesh.vertices[:, 0] += mesh.vertices[:, 2] * math.tan(math.radians(55))
+    body = SceneObject(
+        id="slope",
+        name="Schräges Teil",
+        mesh=MeshData.of(mesh),
+        material_slots=[MaterialSlot(0, "PLA", material_type="PLA")],
+    )
+    return profile, settings, body
+
+
+def test_print_advice_reanalyses_when_line_width_invalidates_the_overhang_calibration(
+    qt_app, monkeypatch
+):
+    """Die Schichtgeometrie folgt der Probe, bis eine andere Bahnbreite sie ungültig macht."""
+    from app.ui import print_settings_dialog as module
+
+    _profile, settings, body = _calibrated_advice_case(monkeypatch)
+    measure = module.slice_body
+    calls = []
+
+    def recorded(*args, **kwargs):
+        calls.append((kwargs["overhang_angle"], threading.get_ident()))
+        return measure(*args, **kwargs)
+
+    monkeypatch.setattr(module, "slice_body", recorded)
+    dialog = _print_advice_dialog(qt_app, [body], settings=settings)
+    _wait_for_print_advice(dialog, qt_app)
+    calibrated = dialog.slice_result
+    assert calibrated is not None
+    assert calibrated.support_volume == pytest.approx(0.0, abs=1e-6)
+    assert calls[0][0] == pytest.approx(60.0)
+    dialog._editors["infill.density"].setValue(28)
+    _wait_for_print_advice(dialog, qt_app)
+    assert len(calls) == 1
+    dialog._editors["layers.line_width"].setValue(settings.layers.line_width + 0.05)
+    _wait_for_print_advice(dialog, qt_app)
+    assert [angle for angle, _thread in calls] == pytest.approx([60.0, 45.0])
+    assert all(worker_thread != threading.get_ident() for _angle, worker_thread in calls)
+    assert dialog.slice_result.support_volume > calibrated.support_volume
+
+
+@pytest.mark.parametrize("change", ["material", "printer", "mixed_materials"])
+def test_print_advice_rechecks_the_strictest_slot_calibration_when_reusing_geometry(
+    qt_app, monkeypatch, change
+):
+    """Ein früherer großzügiger Winkel gilt weder für PETG noch für einen anderen Drucker."""
+    from app.ui.print_settings_dialog import _AdviceWorker
+
+    profile, settings, body = _calibrated_advice_case(monkeypatch)
+    results = []
+
+    def calculate(previous):
+        worker = _AdviceWorker((body,), settings, profile, None, {}, (), (), previous)
+        worker.done.connect(lambda _entries, measured: results.append(measured))
+        worker.work()
+        assert results
+        return results[-1]
+
+    measured = calculate({})
+    assert measured[body.id][0] == pytest.approx(60.0)
+    initial = measured[body.id][1]
+    if change == "material":
+        body.material_slots = [MaterialSlot(0, "PETG", material_type="PETG")]
+    elif change == "printer":
+        profile = replace(profile, printer=replace(profile.printer, id="different-printer"))
+    else:
+        body.material_slots.append(MaterialSlot(1, "PETG", material_type="PETG"))
+        body.mesh = replace(body.mesh, slots=(0, 1) * (body.mesh.triangle_count // 2))
+    repeated = calculate(measured)
+    assert len(results) == 2
+    assert repeated[body.id][0] == pytest.approx(45.0)
+    assert repeated[body.id][1] is not initial
+    assert repeated[body.id][1].support_volume > initial.support_volume
+
+
+@pytest.mark.parametrize("flavour", ["cura", "prusa"])
+def test_direct_3mf_export_preserves_format_and_native_settings(
+    qt_app: QApplication,
+    session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    flavour: str,
+) -> None:
+    """Die Dateiwahl gilt auch bei einem Slicer mit anderem Eingabeformat."""
+    import zipfile
+
+    from app.ui import main_window
+
+    setup = handover.SlicerSetup(tmp_path / "slicer.exe", flavour)
+    monkeypatch.setattr(main_window, "remembered_setup", lambda *args: setup)
+    worker = main_window._ExportWorker(
+        [_cube_object()],
+        tmp_path / "chosen.3mf",
+        "3mf",
+        profile=session.profile,
+        sources={},
+        settings=print_settings.resolve(session.profile),
+        ui_settings=UiSettings(),
+        material=session.profile.material.id,
+    )
+    paths, _findings = worker._assembly()
+    assert paths == [tmp_path / "chosen.3mf"]
+    with zipfile.ZipFile(paths[0]) as archive:
+        assert "3D/3dmodel.model" in archive.namelist()
+        if flavour == "prusa":
+            assert "Metadata/Slic3r_PE.config" in archive.namelist()

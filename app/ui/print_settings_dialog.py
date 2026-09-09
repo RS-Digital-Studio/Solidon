@@ -28,7 +28,7 @@ from typing import Any, Final, Literal, cast
 from uuid import uuid4
 
 from PySide6.QtCore import QSignalBlocker, Qt, QTimer, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QStandardItemModel
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QCheckBox,
@@ -67,12 +67,15 @@ from app.core.export.slicer_keys import SlicerFlavour, takes_a_machine_profile
 from app.core.export.writer import arrangement_holds, write_assembly
 from app.core.filament_usage import UsageRequest, from_gcode
 from app.core.filament_usage import prepare as prepare_usage
+from app.core.geom.attributes import used_slots
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, print_settings, profiles
 from app.core.log import get_logger
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.fits import active_fits
 from app.core.slice import advise, gcode
+from app.core.slice.analysis import slice_body
+from app.core.slice.estimate import estimate
 from app.core.types import (
     BoundingBox,
     Finding,
@@ -80,10 +83,12 @@ from app.core.types import (
     MaterialSlot,
     PrintSettings,
     Profile,
+    QualityPreset,
     SceneObject,
     SettingAdvice,
     SliceResult,
     SlotOverride,
+    SlotProfileBinding,
 )
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, format_decimal, tr
@@ -1012,7 +1017,14 @@ def settings_for_export(
     if not ui_settings.print_settings_in_files:
         return None
     stored = document.print_settings
-    return stored if stored is not None else print_settings.resolve(profile)
+    quality = ui_settings.print_quality
+    if quality not in print_settings.quality_presets():
+        quality = print_settings.DEFAULT_QUALITY
+    return (
+        stored
+        if stored is not None
+        else print_settings.resolve(profile, cast(QualityPreset, quality))
+    )
 
 
 def remembered_setup(
@@ -1486,13 +1498,86 @@ class _PlateJob:
     with_settings: bool = True
 
 
+@dataclass(frozen=True, slots=True)
+class SliceComparison:
+    """Die Schätzung genau des übergebenen Auftrags, unabhängig von späteren Änderungen.
+
+    Flächenfarben verraten keine Materialvolumen. Bei mehreren wirksamen
+    Materialien bleibt eine davon abhängige Kennzahl deshalb unbekannt.
+    """
+
+    grams: float | None
+    seconds: float | None
+
+
+def _comparison_for_job(job: _PlateJob, runs: Sequence[PlateRun]) -> SliceComparison:
+    """Nur geslicete Körper und die tatsächlich übergebenen Filamentwerte schätzen."""
+    grams: float | None = 0.0
+    seconds: float | None = 0.0
+    for run in runs:
+        objects = [entry for entry in job.objects if entry.plate == run.plate]
+        parts = [
+            threemf.AssemblyPart(
+                mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+            )
+            for entry in objects
+        ]
+        original = threemf.merge_slots(parts)
+        configured = {slot.index: slot for slot in run.slots}
+        # Die lokale Werkzeugnummer verbindet die ursprüngliche Identität mit
+        # der gewählten Profildatei. Das Profil kann die Identität verändern.
+        effective = {
+            threemf.slot_identity(slot): handover.settings_for_slot(
+                job.settings, job.profile, configured[slot.index], job.setup
+            )
+            for slot in original
+            if slot.index in configured
+        }
+        shared = handover.settings_for_handover(
+            job.settings, job.profile, job.setup.flavour, run.slots, job.setup
+        )
+        for entry, part in zip(objects, parts, strict=True):
+            if slicer_keys.has_filament_profiles(job.setup.flavour):
+                active = set(used_slots(part.mesh))
+                choices = [
+                    effective.get(threemf.slot_identity(slot))
+                    for slot in threemf.assembly_slots(part)
+                    if slot.index in active
+                ]
+            else:
+                # Prusa und Cura bekommen genau einen Satz für die ganze Platte.
+                choices = [shared]
+            if not choices or any(choice is None for choice in choices):
+                return SliceComparison(grams=None, seconds=None)
+            values = [
+                estimate(entry.mesh.volume, entry.mesh.area, choice)
+                for choice in choices
+                if choice is not None
+            ]
+            first = values[0]
+            grams = (
+                grams + first.grams
+                if grams is not None and all(is_close(value.grams, first.grams) for value in values)
+                else None
+            )
+            seconds = (
+                seconds + first.seconds
+                if seconds is not None
+                and all(is_close(value.seconds, first.seconds) for value in values)
+                else None
+            )
+    return SliceComparison(grams=grams, seconds=seconds)
+
+
 def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
     """Eine Platte schreiben, ohne irgendein Qt-Objekt anzufassen."""
     objects = list(job.objects)
     on_plate = [entry for entry in objects if entry.plate == plate]
     slots = threemf.merge_slots(
         [
-            threemf.AssemblyPart(mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots))
+            threemf.AssemblyPart(
+                mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
+            )
             for entry in on_plate
         ]
     )
@@ -1523,6 +1608,199 @@ def _prepare_plate(job: _PlateJob, plate: int) -> PlateRun:
         ),
         findings=tuple(findings),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _TargetedAdvice(SettingAdvice):
+    """Ein Rat behält die Spule und deren wirklich aufgelöste Ausgangswerte."""
+
+    slot: MaterialSlot | None = None
+    effective: PrintSettings | None = None
+    unavailable: TranslatableText | str = ""
+
+
+def _advice_identity(entry: SettingAdvice) -> object:
+    """Einzelne Entscheidungen gehören zum Feld und gegebenenfalls zur Spule."""
+    if isinstance(entry, _TargetedAdvice) and entry.slot is not None:
+        return (threemf.slot_identity(entry.slot), entry.path)
+    return entry.path
+
+
+class _AdviceWorker(Worker):
+    """Analysiert genau den Druckauftrag und seine Filamente außerhalb von Qt."""
+
+    done = Signal(object, object)
+    failed = Signal(object)
+    progressed = Signal(int, int, str)
+
+    def __init__(
+        self,
+        objects: tuple[SceneObject, ...],
+        settings: PrintSettings,
+        profile: Profile,
+        setup: handover.SlicerSetup | None,
+        slot_profiles: Mapping[threemf.SlotKey, str],
+        fit_kinds: tuple[str, ...],
+        connectors: tuple[float, ...],
+        previous: Mapping[str, tuple[float, SliceResult]],
+    ) -> None:
+        super().__init__()
+        self.objects = objects
+        self.settings = settings
+        self.profile = profile
+        self.setup = setup
+        self.slot_profiles = slot_profiles
+        self.fit_kinds = fit_kinds
+        self.connectors = connectors
+        self.previous = previous
+        self.cancelled = CancelSignal()
+
+    def cancel(self) -> None:
+        """Auch innerhalb eines großen Körpers kann die Schichtanalyse aufhören."""
+        self.cancelled.cancel()
+
+    def work(self) -> None:
+        """Ein ausdrücklicher Abbruch ist kein unerwarteter Arbeiterfehler."""
+        try:
+            self._calculate()
+        except OperationCancelled:
+            return
+        except AppError as problem:
+            self.failed.emit(problem)
+
+    def _calculate(self) -> None:
+        """Erst messen, dann die Regeln je Körper und tatsächlicher Spule anwenden."""
+        results: dict[str, tuple[float, SliceResult]] = {}
+        common: list[tuple[PrintSettings, Sequence[SettingAdvice]]] = []
+        materials: dict[
+            threemf.SlotKey,
+            tuple[MaterialSlot, list[tuple[PrintSettings, Sequence[SettingAdvice]]]],
+        ] = {}
+        for index, body in enumerate(self.objects):
+            self.cancelled.raise_if_cancelled()
+            self.progressed.emit(index + 1, len(self.objects), str(body.name))
+            mesh = as_mesh_data(body.mesh)
+            own_profile = profiles.for_object(self.profile, body)
+            slots = threemf.assembly_slots(
+                threemf.AssemblyPart(mesh=mesh, slots=threemf.slots_for_object(body))
+            )
+            present = set(used_slots(mesh))
+            processes: list[tuple[MaterialSlot, Profile, PrintSettings]] = []
+            for original in slots:
+                if original.index not in present:
+                    continue
+                chosen = self.slot_profiles.get(threemf.slot_identity(original), "")
+                slot = replace(original, material=chosen) if chosen else original
+                material = profiles.material_id_for_type(slot.material_type or "")
+                material_profile = (
+                    replace(own_profile, material=profiles.material(material))
+                    if material
+                    else own_profile
+                )
+                effective = handover.settings_for_slot(
+                    self.settings, self.profile, slot, self.setup
+                )
+                processes.append(
+                    (slot, profiles.for_process(material_profile, effective), effective)
+                )
+            angle = min(
+                (process.overhang_limit_degrees for _slot, process, _effective in processes),
+                default=profiles.for_process(own_profile, self.settings).overhang_limit_degrees,
+            )
+            previous = self.previous.get(body.id)
+            result = previous[1] if previous is not None and is_close(previous[0], angle) else None
+            if result is None:
+                result = slice_body(
+                    mesh,
+                    self.settings.layers.layer_height,
+                    first_layer_height=self.settings.layers.first_layer_height,
+                    overhang_angle=angle,
+                    cancelled=self.cancelled,
+                )
+            results[body.id] = (angle, result)
+            for slot, material_profile, effective in processes:
+                entries = advise.advise(
+                    effective,
+                    material_profile,
+                    result,
+                    bounds=mesh.bounds,
+                    fit_kinds=self.fit_kinds,
+                    connectors=self.connectors,
+                )
+                common.append(
+                    (
+                        effective,
+                        [
+                            entry
+                            for entry in entries
+                            if entry.path.partition(".")[0] not in FILAMENT_GROUPS
+                        ],
+                    )
+                )
+                key = threemf.slot_identity(slot)
+                if key not in materials:
+                    materials[key] = (slot, [])
+                materials[key][1].append(
+                    (
+                        effective,
+                        [
+                            entry
+                            for entry in entries
+                            if entry.path.partition(".")[0] in FILAMENT_GROUPS
+                        ],
+                    )
+                )
+        entries = advise.combine(self.settings, common)
+        for slot, groups in materials.values():
+            for entry in advise.combine(groups[0][0], groups):
+                entries.append(
+                    _TargetedAdvice(
+                        path=entry.path,
+                        value=entry.value,
+                        was=entry.was,
+                        reason=entry.reason,
+                        severity=entry.severity,
+                        slot=slot,
+                        effective=groups[0][0],
+                    )
+                )
+        if self.setup is not None and not slicer_keys.has_filament_profiles(self.setup.flavour):
+            unreachable: set[threemf.SlotKey] = set()
+            for plate in sorted({body.plate for body in self.objects}):
+                merged = threemf.merge_slots(
+                    [
+                        threemf.AssemblyPart(
+                            mesh=as_mesh_data(body.mesh),
+                            slots=threemf.slots_for_object(body),
+                        )
+                        for body in self.objects
+                        if body.plate == plate
+                    ]
+                )
+                configured = handover.with_slot_profiles(
+                    merged,
+                    tuple(
+                        self.slot_profiles.get(threemf.slot_identity(slot), "") for slot in merged
+                    ),
+                )
+                unreachable.update(threemf.slot_identity(slot) for slot in configured[1:])
+            entries = [
+                replace(
+                    entry,
+                    unavailable=_(
+                        "Dieser Slicer übernimmt Filamentwerte nur für das erste Filament "
+                        "der Platte. "
+                        "Wählen Sie für diese Empfehlung einen Slicer mit Filamentprofilen je Slot."
+                    ),
+                )
+                if isinstance(entry, _TargetedAdvice)
+                and entry.slot is not None
+                and threemf.slot_identity(entry.slot) in unreachable
+                else entry
+                for entry in entries
+            ]
+        self.cancelled.raise_if_cancelled()
+        self.done.emit(entries, results)
 
 
 class _StockWorker(Worker):
@@ -1659,7 +1937,21 @@ class _SliceWorker(Worker):
             outcome.findings = [*entry.findings, *outcome.findings]
             results.append(outcome)
             if entry.plate in self._usage:
-                self.usageReady.emit(from_gcode(self._usage[entry.plate], outcome.metrics))
+                usage = from_gcode(self._usage[entry.plate], outcome.metrics)
+                outcome.metrics = replace(
+                    outcome.metrics,
+                    resolved_filament_grams=tuple(line.grams for line in usage.lines),
+                )
+                # Der Materialbefund und das Lager lesen dieselbe Auflösung;
+                # der ursprüngliche Befund kannte die Filamentdurchmesser nicht.
+                outcome.findings = [
+                    finding for finding in outcome.findings if finding.code != "gcode.material"
+                ] + [
+                    finding
+                    for finding in gcode.findings_for(outcome.metrics)
+                    if finding.code == "gcode.material"
+                ]
+                self.usageReady.emit(usage)
         self.done.emit(results)
 
 
@@ -1669,6 +1961,7 @@ class _PrepareAndSliceWorker(_SliceWorker):
     def __init__(self, job: _PlateJob) -> None:
         super().__init__((), job.settings, job.profile, job.setup)
         self._job = job
+        self.comparison: SliceComparison | None = None
 
     def work(self) -> None:
         runs: list[PlateRun] = []
@@ -1681,6 +1974,11 @@ class _PrepareAndSliceWorker(_SliceWorker):
                 self.failed.emit(problem, [])
                 return
         self._runs = runs
+        try:
+            self.comparison = _comparison_for_job(self._job, runs)
+        except AppError as problem:
+            self.failed.emit(problem, [])
+            return
         self._usage = {
             request.plate: request
             for request in prepare_usage(
@@ -1897,6 +2195,18 @@ class PrintSettingsDialog(QDialog):
         self._lifted = ""
         self._fields: dict[str, Field] = {}
         self._loading = False
+        self._advice_worker: _AdviceWorker | None = None
+        self._advice_request: tuple[Any, ...] | None = None
+        self._advice_entries: list[SettingAdvice] = []
+        self._advice_choices: dict[object, bool] = {}
+        self._advice_pending = False
+        self._advice_problem = ""
+        self._analysed_context: tuple[Any, ...] | None = None
+        self._body_analyses: dict[str, tuple[float, SliceResult]] = {}
+        self._advice_timer = QTimer(self)
+        self._advice_timer.setSingleShot(True)
+        self._advice_timer.setInterval(200)
+        self._advice_timer.timeout.connect(self._start_advice)
         self._worker: _SliceWorker | _OpenInSlicerWorker | _GcodeSaveWorker | None = None
         self._profile_worker: _ProfileWorker | None = None
         self._stock_worker: _StockWorker | None = None
@@ -1918,6 +2228,7 @@ class PrintSettingsDialog(QDialog):
         self._gcode: list[Path] = []
         """Die Druckdateien des letzten Laufs — eine je Platte."""
         self._result_context: tuple[Any, ...] | None = None
+        self.slice_comparison: SliceComparison | None = None
         self._job_context: tuple[Any, ...] | None = None
         self._save_copies: tuple[tuple[Path, Path], ...] = ()
         """Der letzte Speicherauftrag für „Erneut versuchen"."""
@@ -1994,6 +2305,11 @@ class PrintSettingsDialog(QDialog):
         self._load_into_editors()
         self._refresh_advice()
         self._start_profile_search()
+        session.sceneChanged.connect(self._advice_scene_changed)
+        session.projectChanged.connect(self._advice_scene_changed)
+        session.busyChanged.connect(self._advice_scene_changed)
+        self.machine_choice.currentIndexChanged.connect(self._advice_scene_changed)
+        self.process_choice.currentIndexChanged.connect(self._advice_scene_changed)
         # Zuletzt, wenn jede Zeile steht: eine Beschriftungsspalte für den
         # ganzen Dialog. Zehn Formulare rechneten sie bis hierhin einzeln, und
         # die Felder begannen an zehn Stellen (B8/B11).
@@ -2029,6 +2345,9 @@ class PrintSettingsDialog(QDialog):
         bei dem, was aus Material und Maschine folgt.
         """
         if result is None:
+            return
+        if self._settling or self._plate_bodies():
+            # Eine fremde Einzelanalyse darf den vollständigen Auftrag nicht ersetzen.
             return
         self.slice_result = result
         self._refresh_advice()
@@ -2310,6 +2629,7 @@ class PrintSettingsDialog(QDialog):
         return replace(
             print_settings.resolve(self.session.profile, quality),
             slot_profiles=self.settings.slot_profiles,
+            slot_profile_bindings=self.settings.slot_profile_bindings,
             slot_overrides=self.settings.slot_overrides,
             spool_bindings=self.settings.spool_bindings,
             inventory_project_id=self.settings.inventory_project_id,
@@ -2879,6 +3199,7 @@ class PrintSettingsDialog(QDialog):
         """
         self._gcode = []
         self._result_context = None
+        self.slice_comparison = None
         self._hold_the_save()
         self.state.setText("")
 
@@ -2936,6 +3257,9 @@ class PrintSettingsDialog(QDialog):
         self.profile_note.setText(tr("Der Profilbestand wird durchgesehen …"))
 
     def _start_profile_search(self) -> None:
+        # Die Halteleine hält ältere Arbeiter bis zum Ende. Ihre Signale
+        # gehören ab jetzt nicht mehr zur aktuellen Slicerwahl.
+        self._profile_worker = None
         self._clear_profile_choices()
         self._needs_profiles = False
         self._profiles_pending = False
@@ -2998,6 +3322,8 @@ class PrintSettingsDialog(QDialog):
         if self._settling:
             return
         _log.warning("profile search crashed: %s", detail)
+        if isinstance(self.sender(), _ProfileWorker) and self.sender() is not self._profile_worker:
+            return
         self._profiles_pending = False
         self.profile_note.setText(
             tr(
@@ -3010,6 +3336,8 @@ class PrintSettingsDialog(QDialog):
         self._show_slicer_state()
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
+        if isinstance(self.sender(), _ProfileWorker) and self.sender() is not self._profile_worker:
+            return
         if self._settling:
             return
         # **Zuerst lesen, was schon gewählt ist.** Nach dem ersten ``addItem``
@@ -3289,6 +3617,27 @@ class PrintSettingsDialog(QDialog):
         Hier steht seit dem 08.09.2026 nur noch, welches es geworden ist.
         """
         fitting = self._filaments_worth_showing(machine)
+
+        def fill_slot_choices(default_index: int) -> None:
+            """Eine fehlende gemerkte Wahl bleibt sichtbar, bis der Nutzer sie ersetzt."""
+            remembered = self._profiles_for(self._plate_slots())
+            for position, (_label, box) in enumerate(self.slot_rows):
+                box.clear()
+                for entry in fitting:
+                    box.addItem(entry.title(tr("eigenes")), str(entry.path))
+                name = remembered[position] if position < len(remembered) else ""
+                found = self._filament_index(box, name)
+                if name and found < 0:
+                    caption = tr("Nicht verfügbar: {profile}").replace("{profile}", name)
+                    box.addItem(caption)
+                    found = box.count() - 1
+                    box.setItemData(found, caption, Qt.ItemDataRole.ToolTipRole)
+                    model = box.model()
+                    if isinstance(model, QStandardItemModel):
+                        model.item(found).setEnabled(False)
+                box.setCurrentIndex(found if found >= 0 else default_index)
+                box.setEnabled(bool(fitting))
+
         if not fitting:
             # Nichts gefunden heißt nichts zuzuordnen. Die Suche darunter lief
             # früher trotzdem und war zweimal falsch: wirkungslos, weil sie
@@ -3303,8 +3652,7 @@ class PrintSettingsDialog(QDialog):
             self.filament_shown.setText(
                 tr("Erst einen Drucker wählen — dann steht hier das Filament.")
             )
-            for _label, box in self.slot_rows:
-                box.clear()
+            fill_slot_choices(-1)
             return
 
         # Erst was für *dieses* Material zuletzt galt, dann der allgemeine
@@ -3332,15 +3680,7 @@ class PrintSettingsDialog(QDialog):
 
         # Dieselbe Liste in jede Slot-Zeile. Vorbelegt mit dem, was das Projekt
         # dazu sagt; ohne Angabe mit dem Filament der Platte.
-        for position, (_label, box) in enumerate(self.slot_rows):
-            box.clear()
-            for entry in fitting:
-                box.addItem(entry.title(tr("eigenes")), str(entry.path))
-            box.setEnabled(True)
-            remembered = self._profiles_for(self._plate_slots())
-            name = remembered[position] if position < len(remembered) else ""
-            found = self._filament_index(box, name)
-            box.setCurrentIndex(found if found >= 0 else fitting.index(chosen))
+        fill_slot_choices(fitting.index(chosen))
 
     def _remember_filament_profile(self, entry: slicer_profiles.SlicerProfile) -> None:
         """Das zugeordnete Profil festhalten, anzeigen und übernehmbar machen."""
@@ -3384,10 +3724,11 @@ class PrintSettingsDialog(QDialog):
         self.slot_rows.clear()
 
         slots = self._plate_slots()
+        self._slot_rows_context = tuple(threemf.slot_identity(slot) for slot in slots)
+        self._slot_names = []
         if len(slots) < 2:
             return
         stored = self._profiles_for(slots)
-        self._slot_names = []
         for index, slot in enumerate(slots):
             box = QComboBox(self.slicer_inner)
             box.setEnabled(bool(self._profiles))
@@ -3543,11 +3884,14 @@ class PrintSettingsDialog(QDialog):
         Fehler wäre erst am fertigen Druck zu sehen.
         """
         self._build_slot_rows(self.slot_form)
+        if self._profiles:
+            self._fill_filaments(self._current_machine())
         # Und die Kopfzeile mit: Eine andere Platte kann andere Spulen tragen,
         # also auch ein anderes Material — genau der Fehler, den der Docstring
         # oben für die Filamentzeilen beschreibt, eine Zeile höher.
         self.refresh_materials()
         self._show_slicer_state()
+        self._refresh_advice()
 
     def _plate_slots(self, *, all_plates: bool = False) -> list[MaterialSlot]:
         """Die Materialslots der gewählten Platten, zusammengelegt wie beim Export.
@@ -3567,7 +3911,7 @@ class PrintSettingsDialog(QDialog):
         return threemf.merge_slots(
             [
                 threemf.AssemblyPart(
-                    mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
+                    mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                 )
                 for entry in objects
             ]
@@ -3583,6 +3927,11 @@ class PrintSettingsDialog(QDialog):
         """
         stored = self.settings.slot_profiles
         shown = self._plate_slots(all_plates=True)
+        if self.settings.slot_profile_bindings is not None:
+            chosen = {
+                binding.key: binding.profile_name for binding in self.settings.slot_profile_bindings
+            }
+            return tuple(chosen.get(threemf.slot_identity(slot), "") for slot in slots)
         if not shown:
             # Ohne Anzeigeliste gibt es nichts zu übersetzen — dann gilt die
             # Position, wie bisher. Ein leeres Ergebnis wäre schlechter als
@@ -3627,7 +3976,21 @@ class PrintSettingsDialog(QDialog):
         names = list(self.settings.slot_profiles)
         names += [""] * (max(len(all_slots), stored_position + 1) - len(names))
         names[stored_position] = chosen
-        self.settings = replace(self.settings, slot_profiles=tuple(names))
+        bound = handover.bind_slot_profiles(self.settings, all_slots)
+        bindings = tuple(one for one in (bound.slot_profile_bindings or ()) if one.key != key)
+        if key is not None and chosen:
+            slot = shown[position]
+            bindings = (
+                *bindings,
+                SlotProfileBinding(
+                    profile_name=chosen,
+                    name=slot.name,
+                    colour=slot.colour,
+                    material=slot.material,
+                    material_type=slot.material_type,
+                ),
+            )
+        self.settings = replace(bound, slot_profiles=tuple(names), slot_profile_bindings=bindings)
         self._check_print_result()
         self.state.setText(
             tr("{slot} druckt mit {profile}.")
@@ -3638,6 +4001,7 @@ class PrintSettingsDialog(QDialog):
             .replace("{slot}", self._slot_names[position])
             .replace("{profile}", chosen)
         )
+        self._refresh_advice()
 
     def _adopt_filament_values(self) -> None:
         """Die Werte des zugeordneten Filamentprofils übernehmen (§29).
@@ -3673,6 +4037,8 @@ class PrintSettingsDialog(QDialog):
         _log.info("adopted %d values from %s", len(values), chosen)
 
     def _profile_search_finished(self) -> None:
+        if isinstance(self.sender(), _ProfileWorker) and self.sender() is not self._profile_worker:
+            return
         # `finished` heißt „`run` ist zurück", nicht „das Objekt darf weg" —
         # das Loslassen übernimmt die Halteleine.
         worker = self._profile_worker
@@ -3702,7 +4068,20 @@ class PrintSettingsDialog(QDialog):
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.advice_view.setWordWrap(True)
+        self.advice_view.itemChanged.connect(self._advice_checked)
         inner.addWidget(self.advice_view)
+
+        self.advice_state = QLabel(holder)
+        self.advice_state.setTextFormat(Qt.TextFormat.PlainText)
+        self.advice_state.setWordWrap(True)
+        inner.addWidget(self.advice_state)
+        self.advice_progress = QProgressBar(holder)
+        self.advice_progress.setRange(0, 0)
+        self.advice_progress.setTextVisible(False)
+        inner.addWidget(self.advice_progress)
+        self.advice_control = QPushButton(tr("Abbrechen"), holder)
+        self.advice_control.clicked.connect(self._control_advice)
+        inner.addWidget(self.advice_control, 0, Qt.AlignmentFlag.AlignRight)
 
         self.apply_button = QPushButton(tr("Vorschläge übernehmen"), holder)
         self.apply_button.clicked.connect(self._apply_advice)
@@ -3848,6 +4227,9 @@ class PrintSettingsDialog(QDialog):
                 if ignored
                 else ""
             )
+            specific = slicer_keys.limitation(flavour, path) if flavour is not None else None
+            if specific is not None:
+                reason = str(specific)
             editor.setEnabled(not ignored)
             for widget in (editor, self._labels.get(path)):
                 if widget is None:
@@ -4030,6 +4412,7 @@ class PrintSettingsDialog(QDialog):
         self._clear_profile_choices()
         self._show_slicer_state()
         self._start_profile_search()
+        self._refresh_advice()
 
     def recheck_slicer(self) -> None:
         """Noch einmal nachsehen, ob jetzt ein Slicer da ist.
@@ -4046,6 +4429,7 @@ class PrintSettingsDialog(QDialog):
         if self._slicer_path is not None:
             self.state.setText("")
             self._start_profile_search()
+        self._refresh_advice()
 
     def _label(self, field: Field) -> QLabel:
         """Die Beschriftung der Zeile — mit demselben Satz wie das Feld daneben.
@@ -4169,13 +4553,10 @@ class PrintSettingsDialog(QDialog):
         noch nicht fest, was ankommt, und eine leere Liste wäre die schlechtere
         Auskunft.
         """
-        entries = advise.advise(
-            self.settings,
-            self.session.profile,
-            self.slice_result,
-            bounds=self._bounds(),
-            fit_kinds=self._fits_in_play(),
-            connectors=self._connector_diameters(),
+        entries = (
+            self._advice_entries
+            if self._plate_bodies()
+            else advise.advise(self.settings, self.session.profile, self.slice_result)
         )
         flavour = self._current_flavour()
         if flavour is None:
@@ -4220,7 +4601,7 @@ class PrintSettingsDialog(QDialog):
             return ()
         return tuple(
             float(feature.params["diameter"])
-            for entry in result.scene.objects.values()
+            for entry in self._plate_bodies()
             for feature in entry.features.values()
             if feature.kind == "pin"
             and feature.provenance == "generated"
@@ -4244,12 +4625,25 @@ class PrintSettingsDialog(QDialog):
         als keine.
         """
         document = self.session.project.document
-        kinds = [entry.kind for entry in active_fits(document)]
+        wanted = {body.id for body in self._plate_bodies()}
+        relevant_operations: set[int] = set()
+        for operation in reversed(document.ops):
+            if wanted.intersection(operation.outputs):
+                relevant_operations.add(operation.id)
+                wanted.update(operation.inputs)
+        kinds = [
+            entry.kind
+            for entry in active_fits(document)
+            if entry.a.object_id in wanted or entry.b.object_id in wanted
+        ]
         bound_operations = {
             entry.when_positive[0] for entry in document.fits if entry.when_positive is not None
         }
         if any(
-            entry.op in FITTING_OPS and entry.id not in bound_operations for entry in document.ops
+            entry.op in FITTING_OPS
+            and entry.id in relevant_operations
+            and entry.id not in bound_operations
+            for entry in document.ops
         ):
             kinds.append("clearance")
         return tuple(dict.fromkeys(kinds))
@@ -4260,7 +4654,7 @@ class PrintSettingsDialog(QDialog):
         result = self.session.last_result
         if result is None or not result.scene.objects:
             return None
-        boxes = [entry.mesh.bounds for entry in result.scene.objects.values() if entry.mesh]
+        boxes = [entry.mesh.bounds for entry in self._plate_bodies() if entry.mesh]
         if not boxes:
             return None
         return BoundingBox(
@@ -4305,31 +4699,294 @@ class PrintSettingsDialog(QDialog):
         self._leash.start(worker)
 
     def _refresh_advice(self) -> None:
+        """Änderungen entwerten den alten Rat sofort; die neue Messung folgt gesammelt."""
+        if self._settling:
+            return
         self._stock_revision += 1
         self._stock_timer.start()
         self._check_print_result()
+        if self._plate_bodies():
+            context = self._advice_context()
+            if context != self._advice_request:
+                self._advice_request = context
+                self._advice_entries = []
+                self._advice_problem = ""
+                self._advice_pending = True
+                if self._advice_worker is not None:
+                    self._advice_worker.cancel()
+                self._advice_timer.start()
+        else:
+            if self._advice_request is not None:
+                self.slice_result = None
+                self._body_analyses = {}
+                self._analysed_context = None
+            self._advice_request = None
+            self._advice_pending = False
+            self._advice_problem = ""
+            self._advice_timer.stop()
+            if self._advice_worker is not None:
+                self._advice_worker.cancel()
+        self._show_advice()
+
+    def _analysis_context(self) -> tuple[Any, ...]:
+        """Nur unveränderte Geometrie und unveränderte Schichten dürfen Messwerte behalten."""
+        return (
+            id(self.session.project.document),
+            self.session.result_generation,
+            tuple((body.id, id(body.mesh)) for body in self._plate_bodies()),
+            self.settings.layers.layer_height,
+            self.settings.layers.first_layer_height,
+        )
+
+    def _advice_context(self) -> tuple[Any, ...]:
+        """Alle Eingaben, die einen angezeigten und übernehmbaren Rat bestimmen."""
+        return (
+            self._analysis_context(),
+            self.settings,
+            self.session.profile,
+            self._fits_in_play(),
+            self._connector_diameters(),
+            self.session.busy,
+            self._slicer_path,
+            self.machine_choice.currentData(),
+            self.process_choice.currentData(),
+            self._filament_profile,
+        )
+
+    def _advice_scene_changed(self, *_args: object) -> None:
+        """Nach einer Auswertung zählt der heutige Auftrag, auch im offenen Dialog."""
+        if self._settling:
+            return
+        before = self.plate_choice.currentData()
+        listed = [
+            self.plate_choice.itemData(index) for index in range(1, self.plate_choice.count())
+        ]
+        actual = self._all_plates()
+        if listed != (actual if len(actual) > 1 else []):
+            self._refresh_plates()
+            if before in actual:
+                self.plate_choice.setCurrentIndex(self.plate_choice.findData(before))
+        slots = tuple(threemf.slot_identity(slot) for slot in self._plate_slots())
+        if slots != self._slot_rows_context:
+            self._build_slot_rows(self.slot_form)
+            if self._profiles:
+                self._fill_filaments(self._current_machine())
+        self.refresh_materials()
+        self._refresh_advice()
+
+    def _start_advice(self) -> None:
+        """Höchstens ein Arbeiter rechnet; ersetzte Aufträge laufen erst aus."""
+        if self._settling or not self._advice_pending or not self._plate_bodies():
+            return
+        if self.session.busy or (
+            self._advice_worker is not None and self._advice_worker.isRunning()
+        ):
+            self._advice_timer.start()
+            return
+        if self._advice_context() != self._advice_request:
+            self._refresh_advice()
+            return
+        flavour = self._current_flavour()
+        setup = (
+            handover.SlicerSetup(
+                self._slicer_path,
+                flavour,
+                machine_profile=str(self.machine_choice.currentData() or ""),
+                base_process=str(self.process_choice.currentData() or ""),
+                base_filament=self._filament_profile,
+            )
+            if self._slicer_path is not None and flavour is not None
+            else None
+        )
+        slots = self._plate_slots()
+        slot_profiles = {
+            threemf.slot_identity(slot): chosen
+            for slot, chosen in zip(slots, self._profiles_for(slots), strict=False)
+            if chosen
+        }
+        analysis_context = self._analysis_context()
+        previous = self._body_analyses if analysis_context == self._analysed_context else {}
+        worker = _AdviceWorker(
+            tuple(self._plate_bodies()),
+            self.settings,
+            self.session.profile,
+            setup,
+            slot_profiles,
+            self._fits_in_play(),
+            self._connector_diameters(),
+            previous,
+        )
+        context = self._advice_request
+        worker.done.connect(
+            lambda entries, results, worker=worker: self._advice_ready(
+                worker, context, analysis_context, entries, results
+            )
+        )
+        worker.crashed.connect(
+            lambda detail, worker=worker: self._advice_failed(worker, context, detail)
+        )
+        worker.failed.connect(
+            lambda problem, worker=worker: self._advice_failed(worker, context, problem)
+        )
+        worker.progressed.connect(
+            lambda index, count, name, worker=worker: self._advice_progressed(
+                worker, context, index, count, name
+            )
+        )
+        worker.finished.connect(lambda worker=worker: self._advice_finished(worker))
+        self._advice_worker = worker
+        self._leash.start(worker)
+
+    def _advice_ready(
+        self,
+        worker: _AdviceWorker,
+        context: tuple[Any, ...] | None,
+        analysis_context: tuple[Any, ...],
+        entries: list[SettingAdvice],
+        results: dict[str, tuple[float, SliceResult]],
+    ) -> None:
+        """Ein verspätetes Ergebnis kann weder eine Wahl noch eine neue Analyse ersetzen."""
+        if (
+            self._settling
+            or worker is not self._advice_worker
+            or worker.cancelled.is_cancelled
+            or context != self._advice_request
+            or context != self._advice_context()
+        ):
+            return
+        self._body_analyses = results
+        self.slice_result = next(iter(results.values()))[1] if len(results) == 1 else None
+        self._analysed_context = analysis_context
+        self._advice_entries = entries
+        self._advice_pending = False
+        self._advice_problem = ""
+        self._show_advice()
+
+    def _advice_failed(
+        self,
+        worker: _AdviceWorker,
+        context: tuple[Any, ...] | None,
+        detail: AppError | str,
+    ) -> None:
+        """Fehlende Messwerte sind keine Entwarnung; der Kunde kann neu prüfen."""
+        if (
+            self._settling
+            or worker is not self._advice_worker
+            or worker.cancelled.is_cancelled
+            or context != self._advice_request
+            or context != self._advice_context()
+        ):
+            return
+        self._advice_entries = []
+        self._advice_pending = False
+        problem = detail if isinstance(detail, AppError) else InternalError(detail=detail)
+        suggestions = " · ".join(
+            str(action.label) for action in problem.suggestions if action.id != "cancel"
+        )
+        self._advice_problem = "\n".join(
+            part for part in (str(problem.detail or problem.title), suggestions) if part
+        )
+        if not isinstance(detail, AppError):
+            _log.warning("print advice failed: %s", detail)
+        if any(action.id in {"check_profile", "choose_slicer"} for action in problem.suggestions):
+            self._open_slicer_section()
+        field = problem.values.get("field")
+        if isinstance(field, str) and field in self._fields:
+            self._lift(field)
+        self._show_advice()
+
+    def _advice_progressed(
+        self,
+        worker: _AdviceWorker,
+        context: tuple[Any, ...] | None,
+        index: int,
+        count: int,
+        name: str,
+    ) -> None:
+        """Innerhalb eines Körpers bleibt der Balken unbestimmt; die Körperzahl ist gemessen."""
+        if (
+            self._settling
+            or not self._advice_pending
+            or worker is not self._advice_worker
+            or context != self._advice_request
+            or worker.cancelled.is_cancelled
+        ):
+            return
+        self.advice_state.setText(
+            tr("Druckempfehlungen: Teil {number} von {count} — {name}")
+            .replace("{number}", str(index))
+            .replace("{count}", str(count))
+            .replace("{name}", name)
+        )
+
+    def _advice_finished(self, worker: _AdviceWorker) -> None:
+        """Der eigene Abschluss gibt nur seinen Arbeiter frei."""
+        if self._advice_worker is worker:
+            self._advice_worker = None
+        self._leash.hold_until_done(worker)
+        if self._advice_pending and not self._settling:
+            self._advice_timer.start()
+
+    def _control_advice(self) -> None:
+        """Abbrechen und ausdrücklich erneut Prüfen teilen sich einen sichtbaren Knopf."""
+        if self._advice_pending:
+            self._advice_timer.stop()
+            if self._advice_worker is not None:
+                self._advice_worker.cancel()
+            self._advice_pending = False
+            self._advice_problem = tr(
+                "Prüfung abgebrochen. Prüfen Sie die Druckempfehlungen erneut."
+            )
+            self._show_advice()
+        else:
+            self._advice_request = None
+            self._refresh_advice()
+
+    def _advice_checked(self, item: QTreeWidgetItem, _column: int) -> None:
+        """Die ausdrückliche Abwahl bleibt beim nächsten Mess- oder Profilstand erhalten."""
+        key = item.data(0, Qt.ItemDataRole.UserRole)
+        if key is not None:
+            self._advice_choices[key] = item.checkState(0) == Qt.CheckState.Checked
+
+    def _show_advice(self) -> None:
+        """Die aktuelle Messung anzeigen, ohne dabei eine neue anzufordern."""
         entries = self._current_advice()
+        blocker = QSignalBlocker(self.advice_view)
         self.advice_view.clear()
         for entry in entries:
             field = self._fields.get(entry.path)
+            unavailable = entry.unavailable if isinstance(entry, _TargetedAdvice) else ""
             # Regel 18: das Ausrufezeichen ist die zweite Kodierung neben der
             # Einstufung — eine Warnung darf sich nicht allein an Farbe zeigen.
-            marker = "! " if entry.severity == "warning" else ""
+            marker = "! " if entry.severity == "warning" or unavailable else ""
             was = self._shown(entry.path, entry.was)
             becomes = self._shown(entry.path, entry.value)
+            title = str(field.title) if field else entry.path
+            if isinstance(entry, _TargetedAdvice) and entry.slot is not None and entry.slot.name:
+                title = f"{title} · {entry.slot.name}"
+            reason = "\n".join(part for part in (str(entry.reason), str(unavailable)) if part)
             item = QTreeWidgetItem(
                 [
-                    f"{marker}{str(field.title) if field else entry.path}",
+                    f"{marker}{title}",
                     f"{was} → {becomes}",
-                    str(entry.reason),
+                    reason,
                 ]
             )
             # Angehakt heißt „wird übernommen". Vorbelegt ja, denn die
             # Vorschläge sind begründet — aber einzeln abwählbar, weil sonst
             # die Wahl zwischen allen und keinem bestünde und der Nutzer für
             # einen unpassenden Vorschlag die übrigen mit aufgäbe.
-            item.setCheckState(0, Qt.CheckState.Checked)
-            item.setData(0, Qt.ItemDataRole.UserRole, entry.path)
+            key = _advice_identity(entry)
+            if unavailable:
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsUserCheckable)
+            else:
+                item.setCheckState(
+                    0,
+                    Qt.CheckState.Checked
+                    if self._advice_choices.get(key, True)
+                    else Qt.CheckState.Unchecked,
+                )
+            item.setData(0, Qt.ItemDataRole.UserRole, key)
             # Der Grund ist der Satz, der den Vorschlag rechtfertigt, und er
             # ist länger als jede Spalte, die neben zwei anderen Platz hat.
             # In der Zeile stand deshalb „Das Projekt hat Passungen. …" — der
@@ -4337,11 +4994,29 @@ class PrintSettingsDialog(QDialog):
             # eigenen Teil passt, war genau der abgeschnittene. Er steht jetzt
             # zusätzlich am ganzen Eintrag.
             for column in range(3):
-                item.setToolTip(column, str(entry.reason))
+                item.setToolTip(column, reason)
             self.advice_view.addTopLevelItem(item)
-        if not entries:
+        del blocker
+        waiting = self._advice_pending or bool(self._advice_problem)
+        if not entries and not waiting:
             self.advice_view.addTopLevelItem(QTreeWidgetItem([tr("Nichts einzuwenden."), "", ""]))
-        self.apply_button.setEnabled(bool(entries))
+        self.advice_state.setText(
+            tr("Die Druckempfehlungen werden für die gewählten Platten geprüft …")
+            if self._advice_pending
+            else self._advice_problem
+        )
+        self.advice_state.setVisible(waiting)
+        self.advice_progress.setVisible(self._advice_pending)
+        self.advice_control.setText(
+            tr("Abbrechen") if self._advice_pending else tr("Erneut prüfen")
+        )
+        self.advice_control.setVisible(waiting)
+        applicable = [
+            entry
+            for entry in entries
+            if not isinstance(entry, _TargetedAdvice) or not entry.unavailable
+        ]
+        self.apply_button.setEnabled(bool(applicable) and not waiting)
         # **Ein gesperrter Knopf nennt seinen Grund** — dieselbe Zusage, die
         # „Slicen" und „Druckdatei speichern …" darunter einlösen, und die
         # einzige Stelle im Dialog, an der sie fehlte (gemessen am 03.09.2026
@@ -4351,7 +5026,15 @@ class PrintSettingsDialog(QDialog):
         # Kanälen, weil ein Grund, den nur die Maus findet, für den
         # Bildschirmleser keiner ist (Regel 18).
         why = (
-            "" if entries else tr("Es gibt nichts zu übernehmen — die Werte passen zu diesem Teil.")
+            self.advice_state.text()
+            if waiting
+            else (
+                ""
+                if applicable
+                else str(entries[0].unavailable)
+                if entries and isinstance(entries[0], _TargetedAdvice)
+                else tr("Es gibt nichts zu übernehmen — die Werte passen zu diesem Teil.")
+            )
         )
         self.apply_button.setToolTip(why)
         self.apply_button.setStatusTip(why)
@@ -4367,10 +5050,49 @@ class PrintSettingsDialog(QDialog):
             if (item := self.advice_view.topLevelItem(index)) is not None
             and item.checkState(0) == Qt.CheckState.Checked
         }
-        return [entry for entry in self._current_advice() if entry.path in wanted]
+        return [
+            entry
+            for entry in self._current_advice()
+            if _advice_identity(entry) in wanted
+            and (not isinstance(entry, _TargetedAdvice) or not entry.unavailable)
+        ]
 
     def _apply_advice(self) -> None:
-        self.settings = advise.apply(self.settings, self._chosen_advice())
+        """Prozesswerte gelten gemeinsam; Filamentwerte bleiben an ihrer Spule gebunden."""
+        if self._plate_bodies() and (
+            self._advice_pending
+            or self._advice_problem
+            or self._advice_context() != self._advice_request
+        ):
+            self._refresh_advice()
+            return
+        selected = self._chosen_advice()
+        self.settings = advise.apply(
+            self.settings,
+            [
+                entry
+                for entry in selected
+                if not isinstance(entry, _TargetedAdvice) or entry.slot is None
+            ],
+        )
+        for entry in selected:
+            if (
+                not isinstance(entry, _TargetedAdvice)
+                or entry.slot is None
+                or entry.effective is None
+            ):
+                continue
+            group = entry.path.partition(".")[0]
+            previous = handover.override_for(self.settings, entry.slot) or SlotOverride()
+            effective = replace(
+                entry.effective,
+                **{
+                    group: getattr(previous, group) or getattr(entry.effective, group),
+                },
+            )
+            updated = print_settings.with_path(effective, entry.path, entry.value)
+            override = replace(previous, **{group: getattr(updated, group)})
+            self.settings = handover.with_slot_override(self.settings, entry.slot, override)
         self._load_into_editors()
         self._refresh_advice()
 
@@ -4646,11 +5368,13 @@ class PrintSettingsDialog(QDialog):
         legten ihren G-Code an dieselbe Stelle daneben.
         """
         job = self._plate_job(objects, (plate,), folder, name, setup, with_settings=with_settings)
-        if not job.slot_profiles and self.settings.slot_profiles:
+        if not job.slot_profiles and (
+            self.settings.slot_profiles or self.settings.slot_profile_bindings
+        ):
             slots = threemf.merge_slots(
                 [
                     threemf.AssemblyPart(
-                        mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
+                        mesh=as_mesh_data(entry.mesh), slots=threemf.slots_for_object(entry)
                     )
                     for entry in objects
                     if entry.plate == plate
@@ -4724,9 +5448,11 @@ class PrintSettingsDialog(QDialog):
             return
         if self._job_context != self._print_context():
             return
-        self._sliced(outcomes)
+        self._sliced(outcomes, comparison=worker.comparison)
 
-    def _sliced(self, outcomes: list[handover.SliceOutcome]) -> None:
+    def _sliced(
+        self, outcomes: list[handover.SliceOutcome], comparison: SliceComparison | None = None
+    ) -> None:
         """Was der Lauf gebracht hat — über alle Platten zusammen.
 
         Zeit und Material sind Summen, weil zwei Platten zweimal gedruckt
@@ -4747,9 +5473,11 @@ class PrintSettingsDialog(QDialog):
         # ausdrücklich durch `tr()` schickt.
         if metrics.print_minutes is not None:
             parts.append(f"{tr('Druckzeit')}: {duration(metrics.print_minutes * 60.0)}")
-        grams = metrics.grams(self.settings.filament.density)
+        grams = metrics.grams(None, None)
         if grams is not None:
             parts.append(f"{tr('Material')}: {mass(grams)}")
+        else:
+            parts.append(f"{tr('Material')}: {tr('Unbekannt')}")
         if metrics.layer_count is not None:
             parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
         if len(outcomes) > 1:
@@ -4764,6 +5492,7 @@ class PrintSettingsDialog(QDialog):
         self._release_the_save()
         outcomes[0].findings = [*self._pending_findings, *outcomes[0].findings]
         self._pending_findings = []
+        self.slice_comparison = comparison
         self.sliced.emit(outcomes)
         _log.info(
             "sliced %d plate(s) with %s in %.1f s",
@@ -5012,6 +5741,9 @@ class PrintSettingsDialog(QDialog):
         if not self._settling:
             self._settling = True
             self._stock_timer.stop()
+            self._advice_timer.stop()
+            if self._advice_worker is not None:
+                self._advice_worker.cancel()
             # Erst merken, dann abräumen: Die Auswahl steht in Widgets, die es
             # gleich nicht mehr gibt.
             self._remember_slicer_choice(require_machine=True)
@@ -5025,6 +5757,7 @@ class PrintSettingsDialog(QDialog):
             self._worker,
             self._profile_worker,
             self._stock_worker,
+            self._advice_worker,
             *self._leash.pending(),
         )
         workers = {id(worker): worker for worker in pending if worker is not None}

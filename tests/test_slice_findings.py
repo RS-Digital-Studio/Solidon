@@ -9,6 +9,7 @@ Modell endet und als „erreicht das Bett" gemeldet wurde.
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 
 import pytest
 import trimesh
@@ -86,9 +87,7 @@ def test_the_same_plate_without_the_rib_stays_thick() -> None:
 
 
 def test_the_rib_reaches_the_report() -> None:
-    """Und die Zahl kommt an: Unter zwei Bahnen dieser Düse behebt sie kein
-    Wert mehr, also steht der Befund da (§22.2).
-    """
+    """Unter der angesetzten Mindestbahnbreite steht ein Hinweis zur Prüfung."""
     profile = petg()
     settings = print_settings.resolve(profile)
     result = slice_body(ribbed_plate(), 0.5)
@@ -274,3 +273,137 @@ def test_without_the_printer_height_nothing_changes() -> None:
     result: SliceResult = slice_body(ball, 1.0)
 
     assert result.first_layer_area == pytest.approx(result.layers[0].area)
+
+
+@pytest.mark.parametrize("style", ["none", "grid"])
+def test_supports_above_a_base_plate_must_be_allowed_on_the_model(style: str) -> None:
+    """Eingeschaltete Stützen allein erreichen den Tischdeckel noch nicht."""
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", style)
+    settings = print_settings.with_path(settings, "support.placement", "build_plate")
+    entries = advise.advise(settings, petg(), slice_body(table(), 0.5))
+    changed = advise.apply(settings, entries)
+    assert changed.support.style != "none"
+    assert changed.support.placement == "everywhere"
+
+
+def test_first_layer_flow_is_corrected_without_heating_other_layers() -> None:
+    """Nur die erste Schicht überschreitet den Volumenstrom: ihr Tempo zählt."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.with_path(print_settings.resolve(profile), "speed.first_layer", 200.0)
+    entries = advise.advise(settings, profile)
+    changed = advise.apply(settings, entries)
+    assert changed.temperature == settings.temperature
+    assert (
+        advise.flow_of(changed, changed.speed.first_layer, first_layer=True)
+        <= settings.filament.max_flow
+    )
+    assert not advise.advise(changed, profile)
+
+
+def test_draft_flow_advice_reaches_a_stable_setting_in_one_step() -> None:
+    """Mehrfaches Übernehmen darf die Düse nicht bis zur Maschinengrenze heizen."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.resolve(profile, "draft")
+    changed = advise.apply(settings, advise.advise(settings, profile))
+    assert changed.temperature == settings.temperature
+    assert advise.flow_of(changed, changed.speed.infill) <= changed.filament.max_flow
+    assert not advise.advise(changed, profile)
+
+
+def test_a_flow_below_the_smallest_print_speed_requires_a_correction() -> None:
+    """Eine leere Vorschlagsliste darf keinen unerfüllbaren Volumenstrom verschweigen."""
+    from app.core.errors import ValidationError
+
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    profile = replace(profile, printer=replace(profile.printer, nozzle_diameter=1.0))
+    settings = print_settings.resolve(profile)
+    settings = replace(
+        settings,
+        layers=replace(
+            settings.layers,
+            layer_height=0.8,
+            first_layer_height=0.8,
+            line_width=1.2,
+            first_layer_line_width=1.2,
+        ),
+        filament=replace(settings.filament, max_flow=0.5),
+    )
+    with pytest.raises(ValidationError) as error:
+        advise.advise(settings, profile)
+    assert error.value.field == "filament.max_flow"
+    assert error.value.suggestions
+
+
+def test_the_first_line_obeys_the_same_nozzle_limit() -> None:
+    """Die Nachbareinstellung ist im Dialog ebenfalls frei editierbar."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "layers.first_layer_line_width", 0.1
+    )
+    changed = advise.apply(settings, advise.advise(settings, profile))
+    assert changed.layers.first_layer_line_width == pytest.approx(0.34)
+
+
+def test_a_single_arachne_line_is_not_reported_as_impossible() -> None:
+    """PrusaSlicer erzeugt für diese 0,5-mm-Wand fünfzig Materiallagen."""
+    profile = profiles.make_profile("prusa-mk4s", "pla")
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "shell.wall_generator", "arachne"
+    )
+    body = on_bed(brick(20.0, 0.5, 10.0, (0.0, 0.0, 5.0)))
+    result = slice_body(body, settings.layers.layer_height)
+    assert "settings.wall_below_nozzle" not in {
+        entry.code for entry in advise.warnings_for(settings, profile, result)
+    }
+
+
+def test_a_fully_filled_connector_does_not_ask_for_more_material() -> None:
+    """Bei hundert Prozent Füllung ist der Kern bereits aus Material."""
+    settings = print_settings.with_path(print_settings.resolve(petg()), "infill.density", 1.0)
+    entries = advise.advise(settings, petg(), connectors=(8.0,))
+    assert not {"shell.wall_count", "infill.density"}.intersection(entry.path for entry in entries)
+
+
+@pytest.mark.parametrize("bed", [85, 100])
+def test_small_footprint_advice_keeps_the_filament_bed_temperature(bed: int) -> None:
+    """Eine kleine Standfläche liefert keine neue Temperaturgrenze für die Spule."""
+    profile = profiles.make_profile("bambu-x1c", "abs")
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "temperature.bed_first_layer", bed
+    )
+    body = on_bed(brick(5.0, 5.0, 10.0, (0.0, 0.0, 5.0)))
+    result = slice_body(body, settings.layers.layer_height)
+    changed = advise.apply(settings, advise.advise(settings, profile, result))
+    assert changed.temperature.bed_first_layer == bed
+    again = advise.advise(changed, profile, result)
+    assert "temperature.bed_first_layer" not in {entry.path for entry in again}
+
+
+def test_combined_advice_preserves_support_needed_by_another_body() -> None:
+    """Ein Würfel darf die schon nötigen Stützen seines Nachbarn nicht abschalten."""
+    settings = print_settings.with_path(print_settings.resolve(petg()), "support.style", "grid")
+    cube = slice_body(on_bed(brick(20.0, 20.0, 20.0, (0.0, 0.0, 10.0))), 0.5)
+    top = slice_body(table(), 0.5)
+    groups = [(settings, advise.advise(settings, petg(), result)) for result in (cube, top)]
+    entries = advise.combine(settings, groups)
+    assert "support.style" not in {entry.path for entry in entries}
+
+
+def test_combined_advice_limits_speed_for_the_slowest_material() -> None:
+    """Das gemeinsame Tempo bleibt für jeden beteiligten Materialslot tragbar."""
+    profile = profiles.make_profile("prusa-mk4s", "tpu-95a")
+    settings = print_settings.resolve(profile)
+    slow = replace(settings, speed=replace(settings.speed, outer_wall=20.0))
+    groups = [(settings, advise.advise(settings, profile)), (slow, advise.advise(slow, profile))]
+    changed = advise.apply(settings, advise.combine(settings, groups))
+    assert changed.speed.outer_wall == pytest.approx(20.0)
+
+
+def test_suggested_connector_infill_meets_the_announced_material_share() -> None:
+    """Runden darf den versprochenen Materialanteil nicht wieder unterschreiten."""
+    settings = print_settings.resolve(petg())
+    changed = advise.apply(settings, advise.advise(settings, petg(), connectors=(60.0,)))
+    diameter = 60.0
+    core = diameter - 2.0 * changed.shell.wall_count * changed.layers.line_width
+    solid_area = (diameter**2 - core**2) + changed.infill.density * core**2
+    assert solid_area / diameter**2 >= 0.75

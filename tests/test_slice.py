@@ -447,6 +447,46 @@ def test_a_normal_part_keeps_its_first_cut_half_a_layer_up() -> None:
     assert result.layers[0].z == pytest.approx(0.5, abs=0.01), "erster Schnitt bei layer_height/2"
 
 
+def test_the_actual_first_layer_sets_the_following_cut_heights() -> None:
+    """Eine dünne Schulter liegt im tatsächlichen Raster, aber zwischen den Vorgabeschichten."""
+    stem = trimesh.creation.box(extents=(4.0, 4.0, 2.0))
+    stem.apply_translation((0.0, 0.0, 1.0))
+    flange = trimesh.creation.box(extents=(30.0, 30.0, 0.12))
+    flange.apply_translation((0.0, 0.0, 0.42))
+    body = MeshData.of(trimesh.boolean.union([stem, flange]))
+
+    result = slice_body(body, 0.2, first_layer_height=0.32)
+
+    assert [layer.z for layer in result.layers[:3]] == pytest.approx([0.16, 0.42, 0.62])
+    assert result.first_layer_area == pytest.approx(16.0)
+    shoulder = max(result.layers, key=lambda layer: layer.overhang_area)
+    # 0,26 mm zwischen den Schnittmitten: Der Stiel trägt seine Fläche,
+    # vier Randstreifen und die gerundeten Ecken der 45-Grad-Zugabe.
+    supported_area = 16.0 + 16.0 * 0.26 + math.pi * 0.26**2
+    assert shoulder.overhang_area == pytest.approx(900.0 - supported_area, abs=0.001)
+    # Die Stützsäule reicht vom gemessenen Überhang bis zum Bett; das erste
+    # Höhenintervall und der Abstand zur zweiten Schnittmitte sind verschieden.
+    assert result.support_volume == pytest.approx(shoulder.overhang_area * shoulder.z)
+
+
+def test_default_first_layer_keeps_the_existing_analysis_contract() -> None:
+    """Ohne explizite Erstschicht gelten unverändert die gleichmäßigen Schnittmitten."""
+    body = place_on_bed(mushroom())
+    expected = slice_body(body, 0.2)
+
+    assert slice_body(body, 0.2, first_layer_height=None) == expected
+
+
+@pytest.mark.parametrize("height", [0.0, -0.1, math.nan, math.inf])
+def test_an_invalid_first_layer_height_is_refused(height: float) -> None:
+    """Der neue Profileingang lehnt auch nichtendliche Höhen mit Handlungsvorschlag ab."""
+    from app.core.errors import ValidationError
+
+    body = on_bed(trimesh.creation.box(extents=(2.0, 2.0, 2.0)))
+    with pytest.raises(ValidationError):
+        slice_body(body, first_layer_height=height)
+
+
 def test_the_search_lays_a_flat_plate_down_instead_of_standing_it_up() -> None:
     """Der Fund Ende zu Ende (§22.3): Mit ``first_layer_area == 0`` gewann die
     einzige Lage mit nicht-leerer Schichtliste — die hochkante. Jetzt trägt die
@@ -768,6 +808,40 @@ def test_a_cable_duct_spans_its_narrow_side_not_its_long_one() -> None:
     worst = max(spans, key=lambda layer: layer.bridge_width)
     assert worst.z == pytest.approx(10.0, abs=0.3)
     assert worst.bridge_width == pytest.approx(8.0, rel=0.15)
+
+
+@pytest.mark.parametrize("angle", [0.0, 37.0, 90.0])
+def test_a_narrow_bridge_is_measured_between_its_supported_ends(angle: float) -> None:
+    """Ein drei Millimeter breiter Steg hat nur an seinen Stirnseiten Halt.
+
+    Die freie Länge beträgt 30 mm. Quer über die Breite trägt keine Seite;
+    der Inkreis von 3 mm ist deshalb keine mögliche Brückenweite.
+    """
+    body = read_mesh((MESHES / "bridge_two_end_supports.ply").read_bytes(), ".ply")
+    body.raw.apply_transform(
+        trimesh.transformations.rotation_matrix(math.radians(angle), (0.0, 0.0, 1.0))
+    )
+    body.raw.apply_translation((71.0, -43.0, 0.0))
+
+    result = slice_body(body, 0.2)
+
+    assert max(layer.bridge_width for layer in result.layers) == pytest.approx(30.0, abs=0.2)
+
+
+def test_an_open_side_does_not_shorten_a_bridge() -> None:
+    """Eine zusätzliche Rückwand trägt keinen Faden zum offenen Vorderrand.
+
+    Der U-förmige Unterbau verkürzt die Spannweite zwischen den Stirnseiten
+    nicht auf die Tiefe des Stegs.
+    """
+    body = read_mesh((MESHES / "bridge_two_end_supports.ply").read_bytes(), ".ply")
+    back = trimesh.creation.box(extents=(36.0, 1.0, 10.0))
+    back.apply_translation((0.0, 1.0, 5.0))
+    mesh = MeshData.of(trimesh.boolean.union([body.raw, back]))
+
+    result = slice_body(mesh, 0.2)
+
+    assert max(layer.bridge_width for layer in result.layers) == pytest.approx(30.0, abs=0.2)
 
 
 def test_a_forty_five_degree_transition_spans_nothing() -> None:

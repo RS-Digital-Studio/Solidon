@@ -6,6 +6,8 @@
 # abgeleitet.
 #
 # Alle Längen in Millimetern. extrusion_width ist ohne Angabe Düse * 1,05.
+# Konturen: XY relativ zur nominellen Bettmitte; Z ab Bett. Ohne Kontur gilt
+# das nominale Rechteck. Brim-/Skirt-Ränder gehören zum Auftrag, nicht hierher.
 
 [generic-220]
 title = "Allgemeiner FDM-Drucker 220 mm"
@@ -22,6 +24,8 @@ nozzle_temperature_max = 260
 title = "Elegoo Centauri Carbon 2"
 vendor = "Elegoo"
 build_volume = [256.0, 256.0, 256.0]
+# Elegoo-/Orca-Maschinenprofil ECC2: Maschinen-X 246..256, Y 0..20.
+bed_exclusions = [[[118.0, -128.0], [128.0, -128.0], [128.0, -108.0], [118.0, -108.0]]]
 nozzle_diameter = 0.4
 layer_height = 0.2
 extrusion_width = 0.42
@@ -77,6 +81,9 @@ nozzle_temperature_max = 300
 title = "Bambu Lab P1S"
 vendor = "Bambu Lab"
 build_volume = [256.0, 256.0, 256.0]
+# Bambu-/Orca-/Elegoo-Maschinenprofile: Z bis 250, Sperre X 0..18, Y 0..28.
+printable_height = 250.0
+bed_exclusions = [[[-128.0, -128.0], [-110.0, -128.0], [-110.0, -100.0], [-128.0, -100.0]]]
 nozzle_diameter = 0.4
 layer_height = 0.2
 extrusion_width = 0.42
@@ -88,6 +95,8 @@ nozzle_temperature_max = 300
 title = "Bambu Lab X1 Carbon"
 vendor = "Bambu Lab"
 build_volume = [256.0, 256.0, 256.0]
+printable_height = 250.0
+bed_exclusions = [[[-128.0, -128.0], [-110.0, -128.0], [-110.0, -100.0], [-128.0, -100.0]]]
 nozzle_diameter = 0.4
 layer_height = 0.2
 extrusion_width = 0.42

@@ -13,6 +13,7 @@ das lässt die Kalibrierung (§28.3) bestehende Projekte erreichen.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
@@ -25,6 +26,7 @@ from app.core.types import (
     FitKind,
     MaterialProfile,
     PrinterProfile,
+    PrintSettings,
     Profile,
     SceneObject,
     Tolerance,
@@ -51,6 +53,8 @@ def _read_table(path: Path) -> dict[str, dict[str, Any]]:
 
 
 def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path) -> PrinterProfile:
+    from app.core.build_area import printable_area, printable_height
+
     volume = table.get("build_volume")
     if not isinstance(volume, list) or len(volume) != 3:
         raise ValidationError(
@@ -58,8 +62,19 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
             detail=_("Der Bauraum muss aus drei Maßen bestehen."),
             values={"file": str(source)},
         )
+    try:
+        contour = _printer_contour(table.get("printable_area", ()))
+        exclusions = tuple(_printer_contour(points) for points in table.get("bed_exclusions", ()))
+        height = table.get("printable_height")
+        height_limit = float(height) if height is not None else None
+    except (TypeError, ValueError, IndexError) as exc:
+        raise ValidationError(
+            field=f"{identifier}.printable_area",
+            detail=_("Die Druckkontur ist ungültig. Prüfe das Druckerprofil."),
+            values={"file": str(source)},
+        ) from exc
     nozzle = float(table.get("nozzle_diameter", 0.4))
-    return PrinterProfile(
+    result = PrinterProfile(
         id=identifier,
         title=str(table.get("title", identifier)),
         build_volume=(float(volume[0]), float(volume[1]), float(volume[2])),
@@ -70,7 +85,20 @@ def _printer_from_table(identifier: str, table: Mapping[str, Any], source: Path)
         bed_temperature_max=int(table.get("bed_temperature_max", 100)),
         nozzle_temperature_max=int(table.get("nozzle_temperature_max", 260)),
         vendor=str(table.get("vendor", "")),
+        printable_area=contour,
+        bed_exclusions=exclusions,
+        printable_height=height_limit,
     )
+    printable_area(result)
+    printable_height(result)
+    return result
+
+
+def _printer_contour(points: Any) -> tuple[tuple[float, float], ...]:
+    """Liest exakt zweidimensionale Profilpunkte; keine dritte Achse unterschlagen."""
+    if any(len(point) != 2 for point in points):
+        raise ValueError("expected two coordinates")
+    return tuple((float(point[0]), float(point[1])) for point in points)
 
 
 def _material_from_table(
@@ -91,6 +119,12 @@ def _material_from_table(
             # sonst hinter jeder Federrechnung, ohne dass es jemand sähe.
             youngs_modulus=float(table.get("youngs_modulus", 0.0)),
             yield_strength=float(table.get("yield_strength", 0.0)),
+            minimum_wall=(float(table["minimum_wall"]) if "minimum_wall" in table else None),
+            overhang_angle=(float(table["overhang_angle"]) if "overhang_angle" in table else None),
+            calibration_printer=str(table.get("calibration_printer", "")),
+            calibration_nozzle_diameter=float(table.get("calibration_nozzle_diameter", 0.0)),
+            calibration_layer_height=float(table.get("calibration_layer_height", 0.0)),
+            calibration_extrusion_width=float(table.get("calibration_extrusion_width", 0.0)),
         )
     except KeyError as missing:
         raise ValidationError(
@@ -206,6 +240,20 @@ def make_profile(printer_id: str = DEFAULT_PRINTER, material_id: str = DEFAULT_M
     return Profile(printer=printer(printer_id), material=material(material_id))
 
 
+def for_process(profile: Profile, settings: PrintSettings | None) -> Profile:
+    """Bezieht Prozessmessungen auf das tatsächliche Druckraster des Projekts."""
+    if settings is None:
+        return profile
+    return replace(
+        profile,
+        printer=replace(
+            profile.printer,
+            layer_height=settings.layers.layer_height,
+            extrusion_width=settings.layers.line_width,
+        ),
+    )
+
+
 def for_object(profile: Profile, entry: SceneObject | None) -> Profile:
     """Das Profil, mit dem dieser eine Körper gedruckt wird (§12).
 
@@ -248,6 +296,47 @@ def _material_of_spool(entry: SceneObject) -> str | None:
     if slot is None or not slot.material_type:
         return None
     return material_id_for_type(slot.material_type) or None
+
+
+def analysis_limits(profile: Profile, entry: SceneObject) -> tuple[float, float]:
+    """Mindestwand und Überhanggrenze für die tatsächlich verwendeten Materialien.
+
+    Eine gemeinsame Geometrieprüfung nimmt die größte Mindestwand und den
+    kleinsten Überhangwinkel. Eine unbekannte Materialart bleibt bei den
+    unkalibrierten Startregeln, statt eine fremde Messung zu übernehmen.
+    """
+    from app.core.export.threemf import AssemblyPart, assembly_slots, slots_for_object
+    from app.core.geom.attributes import used_slots
+    from app.core.geom.mesh import as_mesh_data
+
+    mesh = as_mesh_data(entry.mesh)
+    if not entry.material_slots and not mesh.slots:
+        own = for_object(profile, entry)
+        return own.minimum_wall_thickness, own.overhang_limit_degrees
+    present = set(used_slots(mesh))
+    used = []
+    unknown = False
+    for slot in assembly_slots(AssemblyPart(mesh=mesh, slots=slots_for_object(entry))):
+        if slot.index not in present:
+            continue
+        identifier = material_id_for_type(slot.material_type or "")
+        if identifier:
+            used.append(Profile(profile.printer, material(identifier)))
+        else:
+            unknown = True
+    walls = [item.minimum_wall_thickness for item in used]
+    angles = [item.overhang_limit_degrees for item in used]
+    if unknown:
+        walls.append(2.0 * profile.printer.extrusion_width)
+        angles.append(
+            Profile(
+                profile.printer, replace(profile.material, calibration_printer="")
+            ).overhang_limit_degrees
+        )
+    return (
+        max(walls, default=profile.minimum_wall_thickness),
+        min(angles, default=profile.overhang_limit_degrees),
+    )
 
 
 #: Welche Materialgröße eine Passungsart liest (§14). Hier dokumentiert,
