@@ -55,7 +55,13 @@ Volumenintegrale auch an den inneren Kurvenknoten stimmen.
 
 `thread_exact` benennt sein Außengewinde als erzeugtes `thread_1` mit den
 unveränderten Werten für Durchmesser, Steigung und bewendelte Länge. Der
-Mittelpunkt liegt bei halber Länge, die Achse zeigt nach +Z. Das Merkmal
+Mittelpunkt liegt bei halber Länge, die Achse zeigt in der Vorgabelage
+nach +Z. Sie muss es nicht: Der Bolzen erbt seit dem 09.09.2026 dieselben
+sieben Lagefelder wie Quader und Zylinder
+(`geom.primitive_ops.PositionedPrimitiveParams`), und `placement_transform`
+wirkt vor der Merkmalserkennung — das Gewinde wandert also mit. Ohne die
+Felder bekäme er als einziger Erzeuger des Menüs *Erzeugen* keinen Griff
+an seiner Vorschau. Das Merkmal
 trägt die wirklichen Manteldreiecke; planare Anschnitte bleiben getrennte
 Flächen. Es verwendet denselben Gewindevertrag wie die Bausteine, ohne die
 exakten Operationswerte für die Anzeige zu runden.

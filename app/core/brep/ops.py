@@ -18,6 +18,8 @@ import math
 from pathlib import Path
 from typing import Literal, cast
 
+import numpy as np
+
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require, tessellate
@@ -460,7 +462,18 @@ def draft_faces(ctx: OpContext) -> OpResult:
 
 
 @op_params
-class ThreadParams(BaseParams):
+class ThreadParams(PositionedPrimitiveParams):
+    """Der Bolzen trägt dieselben sieben Lagefelder wie die Grundkörper.
+
+    Er verbraucht nichts und erzeugt einen Körper — dasselbe wie der exakte
+    Quader und der exakte Zylinder daneben —, stand aber als einziger Erzeuger
+    des Menüs *Erzeugen* ohne Ort, Richtung und Drehung da. Der Griff an der
+    Vorschau hängt genau daran (``placement_flow._grips_its_preview``): Ohne
+    Felder, in die ein Zug schreiben kann, bewegte er ein Bild, das beim
+    nächsten Neuzeichnen zurückspränge (Robert, 09.09.2026: „alle Körper, die
+    man über Erzeugen setzen kann").
+    """
+
     diameter: float = param(
         title=_("Nenndurchmesser"),
         default=10.0,
@@ -517,7 +530,14 @@ class ThreadParams(BaseParams):
 def thread_exact(ctx: OpContext) -> OpResult:
     params = cast(ThreadParams, ctx.params)
     require()
-    solid = profiles.threaded_rod(params.diameter, params.pitch, params.length)
+    # Dieselbe Lage wie bei Quader und Zylinder daneben: Der Bolzen wächst
+    # vom Ursprung nach oben, und die Platzierung setzt ihn dorthin, wo der
+    # Dialog oder der Griff an der Vorschau ihn hinstellt.
+    placement = placement_transform(params)
+    matrix = np.asarray(placement, dtype=float)
+    solid = edit.transformed(
+        profiles.threaded_rod(params.diameter, params.pitch, params.length), placement
+    )
     entry = _object(params.name or str(_("Gewindebolzen")), solid)
     # Der Erzeuger kennt den Gang genau; die analytischen Einzelflächen allein
     # beschreiben seine Steigung nicht. Planare Anschnitte bleiben separat
@@ -528,6 +548,15 @@ def thread_exact(ctx: OpContext) -> OpResult:
         if feature.kind == "face"
         for index in feature.face_indices
     }
+    # **Das Merkmal beschreibt dieselbe Lage wie der Körper.** Mitte und Achse
+    # gingen als feste Zahlen ein — richtig, solange der Bolzen immer im
+    # Ursprung stand und nach +Z zeigte. Seit er eine Lage hat, müssen sie
+    # durch dieselbe Matrix wie seine Dreiecke: Sonst benennt das Gewinde eine
+    # Achse, an der nichts liegt, und eine Passung dagegen zielt ins Leere.
+    middle = matrix @ (0.0, 0.0, params.length / 2.0, 1.0)
+    centre = (float(middle[0]), float(middle[1]), float(middle[2]))
+    pointing = matrix[:3, :3] @ (0.0, 0.0, 1.0)
+    axis = (float(pointing[0]), float(pointing[1]), float(pointing[2]))
     entry.features["thread_1"] = Feature(
         id="thread_1",
         kind="thread",
@@ -536,8 +565,8 @@ def thread_exact(ctx: OpContext) -> OpResult:
             "diameter": params.diameter,
             "pitch": params.pitch,
             "length": params.length,
-            "centre": (0.0, 0.0, params.length / 2.0),
-            "axis": (0.0, 0.0, 1.0),
+            "centre": centre,
+            "axis": axis,
             "internal": False,
         },
         face_indices=tuple(index for index in range(solid.triangle_count) if index not in ends),

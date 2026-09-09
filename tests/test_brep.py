@@ -1685,3 +1685,78 @@ def test_fillet_rejects_a_valid_shape_that_contains_two_solids() -> None:
         edit._built(source, builder, "fillet", 1.0, 1)
 
     assert raised.value.suggestions
+
+
+def test_the_bolt_stands_where_it_is_put(profile: Profile) -> None:
+    """Der Bolzen ist ein Erzeuger wie Quader und Zylinder — mit einer Lage.
+
+    Er verbraucht nichts und erzeugt einen Körper, stand aber als einziger
+    Erzeuger des Menüs *Erzeugen* ohne Ort, Richtung und Drehung da; der Griff
+    an der Vorschau hängt genau an diesen Feldern und hätte ihn deshalb nicht
+    bekommen (Robert, 09.09.2026: „alle Körper, die man über Erzeugen setzen
+    kann").
+
+    Drei Lagen, und die erste ist die Gegenprobe: **Ohne Werte steht er, wo er
+    vorher stand** — vom Ursprung nach oben, wie es sein ``doc``-Satz sagt.
+    Eine Platzierung, die bei Vorgabewerten etwas verschiebt, änderte
+    stillschweigend jedes bestehende Projekt.
+    """
+    ruhend = run("thread_exact", None, profile, diameter=10.0, pitch=1.5, length=12.0)
+    ruhe = ruhend.outputs[0].mesh.bounds
+
+    assert ruhe.minimum[2] == pytest.approx(0.0, abs=1e-6), "er wächst vom Bett nach oben"
+    mitte_x = (ruhe.minimum[0] + ruhe.maximum[0]) / 2.0
+    mitte_y = (ruhe.minimum[1] + ruhe.maximum[1]) / 2.0
+    assert (mitte_x, mitte_y) == pytest.approx((0.0, 0.0), abs=1e-6), "und über dem Ursprung"
+
+    # Ein Ort verschiebt ihn und lässt ihn, was er ist.
+    versetzt = run(
+        "thread_exact", None, profile, diameter=10.0, pitch=1.5, length=12.0, x=20.0, y=5.0
+    )
+    weit = versetzt.outputs[0].mesh.bounds
+    assert (weit.minimum[0] - ruhe.minimum[0]) == pytest.approx(20.0, abs=1e-6)
+    assert (weit.minimum[1] - ruhe.minimum[1]) == pytest.approx(5.0, abs=1e-6)
+    assert versetzt.outputs[0].mesh.volume == pytest.approx(
+        ruhend.outputs[0].mesh.volume, rel=1e-9
+    ), "verschoben ist derselbe Bolzen"
+
+    # Und eine Richtung legt ihn hin: Was hoch war, ist jetzt lang.
+    gelegt = run(
+        "thread_exact", None, profile, diameter=10.0, pitch=1.5, length=12.0, nx=1.0, nz=0.0
+    )
+    liegend = gelegt.outputs[0].mesh.bounds
+    hoch = ruhe.maximum[2] - ruhe.minimum[2]
+    lang = liegend.maximum[0] - liegend.minimum[0]
+    assert lang == pytest.approx(hoch, abs=1e-6), f"liegend {lang} statt stehend {hoch}"
+    assert (liegend.maximum[2] - liegend.minimum[2]) == pytest.approx(
+        ruhe.maximum[0] - ruhe.minimum[0], abs=1e-6
+    ), "und was lang war, ist jetzt hoch"
+
+
+def test_the_thread_feature_moves_with_the_bolt(profile: Profile) -> None:
+    """Das benannte Gewinde beschreibt dieselbe Lage wie sein Körper.
+
+    Mitte und Achse gingen als **feste Zahlen** ins Merkmal — ``(0, 0,
+    length/2)`` und ``(0, 0, 1)``. Das war richtig, solange der Bolzen immer im
+    Ursprung stand und nach oben zeigte, und wurde mit der Platzierung
+    (09.09.2026) still falsch: Seine Dreiecke wanderten, die beiden Zahlen
+    nicht. Das Gewinde benannte damit eine Achse, an der nichts liegt, und eine
+    Passung oder eine Mutter dagegen zielte ins Leere.
+
+    Der Test daneben (``test_the_bolt_stands_where_it_is_put``) hätte das nie
+    gefangen: Er misst den Hüllquader, und der wandert ja.
+    """
+    versetzt = run(
+        "thread_exact", None, profile, diameter=10.0, pitch=1.5, length=12.0, x=20.0, y=5.0
+    )
+    gewinde = versetzt.outputs[0].features["thread_1"]
+    assert gewinde.params["centre"] == pytest.approx((20.0, 5.0, 6.0), abs=1e-6)
+    assert gewinde.params["axis"] == pytest.approx((0.0, 0.0, 1.0), abs=1e-6)
+
+    # Und eine Richtung dreht die Achse mit, nicht nur die Dreiecke.
+    gelegt = run(
+        "thread_exact", None, profile, diameter=10.0, pitch=1.5, length=12.0, nx=1.0, nz=0.0
+    )
+    liegend = gelegt.outputs[0].features["thread_1"]
+    assert liegend.params["axis"] == pytest.approx((1.0, 0.0, 0.0), abs=1e-6)
+    assert liegend.params["centre"] == pytest.approx((6.0, 0.0, 0.0), abs=1e-6)
