@@ -384,7 +384,7 @@ inputs = ["eigenes Solidon-Drehbuch", "app/examples/gehaeuse-mit-bausteinen.p3d"
 derivative_status = "generated_from_own_sources"
 evidence = ["tools/make_showpiece.py", "tools/make_video.py", "website/CLAUDE.md"]
 content_sha256 = {"website/bilder/weg2-konstruieren.mp4" = "90d3bd902828d3e4f177e7ad6b80fc9d7811a391b712e60ed680d13569c0a3d8", "website/bilder/weg2-konstruieren.png" = "0bcd8fd8a83fd1a8bb120e879960660fb8a69d3596d69baf23a43a55c888a8d3", "website/bilder/weg2-konstruieren.webm" = "a96cb061114d523717363c1c1c90ef7bf17a8d8097a672671e0cd81e72dad501"}
-input_sha256 = {"app/examples/gehaeuse-mit-bausteinen.p3d" = "4b36966ed1599cf88fbd5348baba72673a1715ae9446e531ab33956a9c0ac130"}
+input_sha256 = {"app/examples/gehaeuse-mit-bausteinen.p3d" = "bf210cf9da2c778e9a0ef11f4c4c205f9cef160c082d9ad70c088d0903e5c2f5"}
 redistribution_right = "confirmed_on_website"
 platforms = ["web"]
 status = "cleared"
