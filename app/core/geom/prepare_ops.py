@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from functools import lru_cache
 from typing import Any, Final, cast
 
@@ -505,7 +505,7 @@ def _feature_solid(
 FLAT_RIM: Final = 0.05
 
 
-def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
+def _feature_body(mesh: MeshData, feature: Feature, *, alone: bool = False) -> MeshData | None:
     """Der Körper, den dieses Merkmal wirklich einnimmt — aus seinen Flächen.
 
     **Warum nicht aus den Kennzahlen.** Für Bohrung und Zapfen beschreiben
@@ -541,8 +541,43 @@ def _feature_body(mesh: MeshData, feature: Feature) -> MeshData | None:
     sein Hohlraum gehört nicht ihm allein. Allein bleibt die Absage richtig;
     :func:`_paired_cavity_body` nimmt die erkannte Nachbarschaft dazu und baut
     erst daraus den gemeinsamen Körper.
+
+    **Und ``alone`` ist der Fall, in dem derselbe zweite Ring das Gegenteil
+    bedeutet** (09.09.2026). Die Zahl der Ringe ändert sich nicht, wenn die
+    Bohrung unter der Senkung verschlossen wird — die Kegelfläche endet dann
+    an einer Kreisscheibe aus Material statt an einer Bohrungswand. Gemessen an
+    ``plate_countersunk.stl``: vorher zwei Ringe zu 48 Ecken, nach dem
+    Entfernen der Bohrung zwei zu 65 und 48. Wer die Ringe zählt, liest beide
+    Male dasselbe; die Absage galt danach einem Nachbarn, den es nicht mehr
+    gab, und die Senkung war nicht mehr zu löschen (Befund Robert,
+    09.09.2026: „wenn wir die Bohrung löschen, können wir die Senkung nicht
+    mehr löschen").
+
+    Wer ``alone`` setzt, hat die Frage anderswo beantwortet — an derselben
+    Kette, aus der auch der gemeinsame Körper entsteht
+    (:func:`_stands_alone`). Dieselbe Unterscheidung trifft
+    :func:`feature_placement_geometry` seit je; sie fehlte allein hier.
     """
-    return _body_from_faces(mesh, feature.face_indices, allowed_rings=(0, 1))
+    rings = (0, 1, 2) if alone else (0, 1)
+    return _body_from_faces(mesh, feature.face_indices, allowed_rings=rings)
+
+
+def _stands_alone(mesh: MeshData, feature: Feature, features: Mapping[str, Feature]) -> bool:
+    """Ob dieser Hohlraum keinem Nachbarn gehört — die Frage hinter ``alone``.
+
+    Zwei Auskünfte aus einer Quelle (``cavity_chain_state_at``): eine Kette
+    heißt, das Merkmal ist ein Abschnitt von mehreren; ein berührter fremder
+    Rand heißt, die Nachbarschaft ist da und nur nicht eindeutig. Erst wenn
+    **beides** verneint ist, gehört der Hohlraum dem Merkmal allein.
+
+    Gemessen an ``plate_countersunk.stl``: mit der Bohrung Kette
+    ``[hole_1, cone_1]`` und berührter Rand, nach ihrem Entfernen keine Kette
+    und kein berührter Rand.
+    """
+    from app.core.perceive.relations import cavity_chain_state_at
+
+    chain, touches_other = cavity_chain_state_at(feature, features, mesh)
+    return chain is None and not touches_other
 
 
 def _body_from_faces(
@@ -813,6 +848,7 @@ def _closed_at(
     quality: Quality,
     seed: int | None,
     cancelled: CancelToken | None,
+    alone: bool = False,
 ) -> BooleanOutcome:
     """Das Merkmal an dieser Stelle schließen: gefüllt, wenn es ein Hohlraum
     ist, abgetragen, wenn es Material ist.
@@ -842,7 +878,7 @@ def _closed_at(
     **ist** das Teil an dieser Stelle, und ein zu großes Messer schneidet nur
     Luft.
     """
-    tool = _tool_for(mesh, feature, centre)
+    tool = _tool_for(mesh, feature, centre, alone=alone)
     if cavity:
         # **Erst an den Mündungen, sonst an der Hülle.** Die Merkmalsfläche
         # kennt die Tiefe des Hohlraums genau; die konvexe Hülle kennt nur den
@@ -862,7 +898,13 @@ def _closed_at(
 
 
 def _tool_for(
-    mesh: MeshData, feature: Feature, centre: Vec3, scale: float = 1.0, axis: Vec3 | None = None
+    mesh: MeshData,
+    feature: Feature,
+    centre: Vec3,
+    scale: float = 1.0,
+    axis: Vec3 | None = None,
+    *,
+    alone: bool = False,
 ) -> MeshData:
     """Der Werkzeugkörper dieses Merkmals, an ``centre`` gesetzt.
 
@@ -881,7 +923,7 @@ def _tool_for(
     if feature.kind in PARAMETRIC_KINDS:
         return _feature_solid(feature, centre, scale=scale, axis=axis)
 
-    built = _feature_body(mesh, feature)
+    built = _feature_body(mesh, feature, alone=alone)
     if built is None:
         raise ValidationError(
             field="at_feature",
@@ -1717,6 +1759,56 @@ def duplicate_feature(ctx: OpContext) -> OpResult:
     )
 
 
+def _cavity_chain_of(
+    mesh: MeshData, feature: Feature, features: Mapping[str, Feature]
+) -> tuple[Feature, ...] | None:
+    """Die übrigen Abschnitte desselben Hohlraums — oder ``None``, wenn er allein steht.
+
+    Dieselbe Kette, aus der :func:`move_feature` seinen gemeinsamen Körper
+    baut und der Objektbaum seine Schachtelung nimmt. Eine Kette von einem
+    Glied ist keine: Es gibt dann nichts mitzunehmen und nichts zu fragen.
+    """
+    from app.core.perceive.relations import cavity_chain_at
+
+    chain = cavity_chain_at(feature, features, mesh)
+    return chain if chain is not None and len(chain) > 1 else None
+
+
+#: Die zwei Antworten auf die Frage nach den übrigen Abschnitten.
+#:
+#: Sie stehen als Registerwerte fest, damit die Antwort in den Schritt
+#: geschrieben werden kann (``OpResult.answered``) und die nächste Auswertung
+#: nicht erneut fragt — derselbe Weg, den ``load`` mit der Einheit geht.
+SECTIONS_TOGETHER: Final = "chain"
+SECTIONS_ALONE: Final = "single"
+
+
+def _asked_about_sections(ctx: OpContext, chain: Sequence[Feature]) -> str:
+    """Fragen, ob die übrigen Abschnitte mitgehen (Regel 21).
+
+    **Eine Mehrdeutigkeit und keine Bestätigung.** Regel 19 verbietet die
+    Rückfrage vor einer rücknehmbaren Handlung; hier gibt es aber zwei
+    sinnvolle Ergebnisse, und keines davon ist das offensichtliche: Wer eine
+    Bohrung mit Senkung löscht, meint meistens beides — und manchmal will er
+    die Senkung behalten und nur die Bohrung schließen (Robert, 09.09.2026:
+    „bei der Bohrung auch eine Frage, ob man die Senkung mit löschen will,
+    wäre sinnvoll").
+
+    Gefragt wird **nur**, wenn es etwas zu fragen gibt: Steht das Merkmal
+    allein, kommt diese Funktion nicht vor.
+    """
+    question = str(
+        _(
+            "Dieses Merkmal ist ein Abschnitt eines größeren Hohlraums — einer Bohrung "
+            "mit ihrer Senkung etwa. Sollen alle {count} Abschnitte zusammen entfernt "
+            "werden?"
+        )
+    ).format(count=len(chain))
+    choices = [str(_("Den ganzen Hohlraum entfernen")), str(_("Nur das gewählte Merkmal"))]
+    answer = ctx.ask(question, choices)
+    return SECTIONS_TOGETHER if answer == choices[0] else SECTIONS_ALONE
+
+
 @op_params
 class RemoveFeatureParams(BaseParams):
     at_feature: str = param(
@@ -1726,6 +1818,17 @@ class RemoveFeatureParams(BaseParams):
         required=True,
         placement="front",
         doc=_("Das erkannte Merkmal, das entfernt wird."),
+    )
+    sections: str = param(
+        title=_("Zusammenhängende Abschnitte"),
+        default="ask",
+        choices=("ask", "chain", "single"),
+        placement="advanced",
+        doc=_(
+            "Was mit den übrigen Abschnitten eines Hohlraums geschieht — einer Senkung "
+            "über der gewählten Bohrung etwa. „Nachfragen“ entscheidet der Nutzer, "
+            "sobald der Fall auftritt."
+        ),
     )
 
 
@@ -1764,30 +1867,73 @@ def remove_feature(ctx: OpContext) -> OpResult:
     measured = [float(value) for value in feature.params["centre"]]
     centre: Vec3 = (measured[0], measured[1], measured[2])
 
+    body = as_mesh_data(source.mesh)
     cavity = is_a_cavity(feature)
-    ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
-    closed = _closed_at(
-        as_mesh_data(source.mesh),
-        feature,
-        centre,
-        cavity,
-        quality=ctx.quality,
-        seed=ctx.seed,
-        cancelled=ctx.cancelled,
-    )
+    chain = _cavity_chain_of(body, feature, source.features)
+    answered: dict[str, Any] = {}
+    together = False
+    if chain is not None:
+        choice = params.sections
+        if choice == "ask":
+            choice = _asked_about_sections(ctx, chain)
+            answered["sections"] = choice
+        together = choice == "chain"
 
-    remaining = {name: entry for name, entry in source.features.items() if name != feature.id}
+    if together and chain is not None:
+        ctx.progress(0.2, str(_("Der ganze Hohlraum wird geschlossen …")))
+        filled = _paired_cavity_body(body, *chain)
+        if filled is None:
+            raise ValidationError(
+                field="at_feature",
+                detail=_NO_OWN_BODY,
+                values={"feature": feature.id},
+                constraint="not_movable",
+            )
+        closed = boolean(
+            "union",
+            [body, filled],
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+        )
+        gone = tuple(section.id for section in chain)
+    else:
+        # **Steht der Hohlraum allein, ist sein zweiter Randring sein Boden.** Nach
+        # dem Verschließen der Bohrung darunter ist die Senkung ein Kegelstumpf mit
+        # Material unter sich; die Ringzahl allein sagt das nicht (:func:`_stands_alone`).
+        allein = _stands_alone(body, feature, source.features)
+        ctx.progress(0.2, str(_("Das Merkmal wird geschlossen …")))
+        closed = _closed_at(
+            body,
+            feature,
+            centre,
+            cavity,
+            quality=ctx.quality,
+            seed=ctx.seed,
+            cancelled=ctx.cancelled,
+            alone=allein,
+        )
+        gone = (feature.id,)
+
+    remaining = {name: entry for name, entry in source.features.items() if name not in gone}
     findings = [
         *closed.findings,
         Finding(
             code="remove_feature.gone",
             severity="info",
-            message=_(
-                "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es "
-                "verweisen, finden es nicht mehr."
+            message=(
+                _(
+                    "Der Hohlraum ist mit allen seinen Abschnitten entfernt. Spätere "
+                    "Schritte und Passungen, die auf sie verweisen, finden sie nicht mehr."
+                )
+                if len(gone) > 1
+                else _(
+                    "Das Merkmal ist entfernt. Spätere Schritte und Passungen, die auf es "
+                    "verweisen, finden es nicht mehr."
+                )
             ),
-            feature_ids=(feature.id,),
-            values={"feature": feature.id, "kind": feature.kind},
+            feature_ids=gone,
+            values={"feature": feature.id, "kind": feature.kind, "removed": len(gone)},
         ),
     ]
     return OpResult(
@@ -1803,6 +1949,7 @@ def remove_feature(ctx: OpContext) -> OpResult:
         ],
         findings=findings,
         solver=closed.solver,
+        answered=answered,
     )
 
 
@@ -1886,6 +2033,7 @@ def rotate_feature(ctx: OpContext) -> OpResult:
 
     turned_axis = _turned(feature, params.axis, params.angle)
     cavity = is_a_cavity(feature)
+    allein = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         as_mesh_data(source.mesh),
@@ -1895,11 +2043,15 @@ def rotate_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        alone=allein,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird gedreht gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _tool_for(as_mesh_data(source.mesh), feature, centre, axis=turned_axis)],
+        [
+            closed.mesh,
+            _tool_for(as_mesh_data(source.mesh), feature, centre, axis=turned_axis, alone=allein),
+        ],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
@@ -2054,6 +2206,7 @@ def resize_feature(ctx: OpContext) -> OpResult:
 
     scale = params.diameter / previous if previous > EPS_GEOM else 1.0
     cavity = is_a_cavity(feature)
+    allein = _stands_alone(as_mesh_data(source.mesh), feature, source.features)
     ctx.progress(0.1, str(_("Das Merkmal wird an seiner alten Stelle geschlossen …")))
     closed = _closed_at(
         as_mesh_data(source.mesh),
@@ -2063,11 +2216,15 @@ def resize_feature(ctx: OpContext) -> OpResult:
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,
+        alone=allein,
     )
     ctx.progress(0.6, str(_("Das Merkmal wird mit dem neuen Maß gesetzt …")))
     placed = boolean(
         "difference" if cavity else "union",
-        [closed.mesh, _tool_for(as_mesh_data(source.mesh), feature, centre, scale=scale)],
+        [
+            closed.mesh,
+            _tool_for(as_mesh_data(source.mesh), feature, centre, scale=scale, alone=allein),
+        ],
         quality=ctx.quality,
         seed=ctx.seed,
         cancelled=ctx.cancelled,

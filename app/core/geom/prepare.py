@@ -19,7 +19,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol
+from typing import Any, Final, Literal, Protocol
 
 import numpy as np
 from shapely import get_coordinates
@@ -128,7 +128,14 @@ class HasBounds(Protocol):
     def bounds(self) -> BoundingBox: ...
 
 
-def over_the_edge(mesh: HasBounds, position: Vec3, axis: Axis, diameter: float) -> list[Finding]:
+def over_the_edge(
+    mesh: HasBounds,
+    position: Vec3,
+    axis: Axis,
+    diameter: float,
+    *,
+    body: MeshData | None = None,
+) -> list[Finding]:
     """Ragt die Bohrung seitlich über den Körper hinaus?
 
     „Nichts abgetragen" gibt es seit je (:func:`without_effect`); dies ist der
@@ -147,7 +154,65 @@ def over_the_edge(mesh: HasBounds, position: Vec3, axis: Axis, diameter: float) 
     direction = [0.0, 0.0, 0.0]
     direction[AXIS_INDEX[axis]] = 1.0
     vector: Vec3 = (direction[0], direction[1], direction[2])
-    return over_the_edge_along(mesh, position, vector, diameter)
+    return over_the_edge_along(mesh, position, vector, diameter, body=body)
+
+
+#: Wie fein die Mündung abgetastet wird, wenn der Hüllquader Verdacht meldet.
+#:
+#: Zwölf Punkte auf dem Kreis und Schritte von einem halben Radius in die Tiefe:
+#: Weniger übersieht eine Kante, die zwischen zwei Punkten hindurchläuft, mehr
+#: kostet nur Zeit an einer Frage, die im Regelfall gar nicht gestellt wird.
+_RIM_POINTS: Final = 12
+_RIM_STEPS: Final = 16
+
+
+def _flank_is_open(body: MeshData, position: Vec3, unit: Any, radius: float) -> bool:
+    """Ob die Bohrung wirklich eine offene Flanke hinterlässt.
+
+    Gefragt wird an der Sache und nicht am Hüllquader: Eine Bohrung, die
+    irgendwo auf ihrer Länge **ringsum** Material hat, reißt dort nicht auf.
+    Abgetastet wird ein Kranz von Punkten auf dem Bohrungsumfang, entlang der
+    Achse in beide Richtungen — liegt er an einer einzigen Tiefe vollständig
+    im Material, ist die Flanke geschlossen.
+
+    **Warum in beide Richtungen.** Die Aufrufer geben verschiedene Vektoren:
+    die Flächennormale (die vom Material weg zeigt), die Achse eines erkannten
+    Merkmals, eine Hauptachse. Welche Seite „hinein" ist, weiß diese Funktion
+    nicht — und sie muss es nicht, denn die Frage gilt der ganzen Länge.
+
+    **Innen und außen entscheidet** :func:`~app.core.geom.mesh.on_surface`,
+    nicht ``trimesh.contains``: Das führt durch ``rtree``, und das Paket darf
+    diesen Prozess nicht betreten (der Grund steht an ``on_surface``). Der
+    nächste Oberflächenpunkt und die Normale seines Dreiecks tragen dieselbe
+    Auskunft — zeigt der Weg vom Netz zum Punkt in die Normale, liegt er
+    draußen. Über ``ray_hit_distances`` ginge es **nicht**: Ein Treffer auf
+    einer geteilten Kante zählt dort mehrfach, und damit trägt die Parität
+    nicht.
+    """
+    from app.core.geom.mesh import on_surface
+
+    reach = float(np.linalg.norm(np.asarray(body.bounds.maximum) - np.asarray(body.bounds.minimum)))
+    if reach <= EPS_GEOM or radius <= EPS_GEOM:
+        return True
+    axis = np.asarray(unit, dtype=float)
+    # Zwei Vektoren quer zur Achse — der Kranz liegt in ihrer Ebene.
+    helper = np.array([0.0, 0.0, 1.0]) if abs(float(axis[2])) < 0.9 else np.array([1.0, 0.0, 0.0])
+    first = np.cross(axis, helper)
+    first /= float(np.linalg.norm(first))
+    second = np.cross(axis, first)
+    angles = np.linspace(0.0, 2.0 * math.pi, _RIM_POINTS, endpoint=False)
+    rim = radius * (np.cos(angles)[:, None] * first + np.sin(angles)[:, None] * second)
+    step = reach / _RIM_STEPS
+    depths = np.concatenate(
+        (np.arange(1, _RIM_STEPS + 1) * step, np.arange(1, _RIM_STEPS + 1) * -step)
+    )
+    samples = np.asarray(position, dtype=float) + rim[None, :, :] + depths[:, None, None] * axis
+    flat = samples.reshape(-1, 3)
+    closest, _distance, triangle = on_surface(body.raw, flat)
+    normals = np.asarray(body.raw.face_normals)[triangle]
+    outward = np.einsum("ij,ij->i", flat - closest, normals)
+    inside = (outward <= EPS_GEOM).reshape(len(depths), _RIM_POINTS)
+    return not bool(inside.all(axis=1).any())
 
 
 def over_the_edge_along(
@@ -155,6 +220,8 @@ def over_the_edge_along(
     position: Vec3,
     direction: Vec3,
     diameter: float,
+    *,
+    body: MeshData | None = None,
 ) -> list[Finding]:
     """Die Kantenprüfung für eine freie Bohrungsrichtung.
 
@@ -162,6 +229,23 @@ def over_the_edge_along(
     dann in allen drei Koordinaten, jeweils als Projektion der Kreisscheibe.
     Eine Rundung auf die nächste Hauptachse wäre genau die CAD-Arbeit, die der
     Klick auf ein erkanntes Merkmal vermeiden soll.
+
+    **Der Hüllquader ist die Vorauswahl, nicht das Urteil** (09.09.2026).
+    Allein gemessen meldete er jede Bohrung auf eine gekrümmte Außenfläche:
+    Wer auf den Scheitel eines Zylinders, einer Kugel oder eines Rings zeigt,
+    setzt die Mündung genau auf den Rand der Hülle, und die Kreisscheibe ragt
+    rechnerisch darüber hinaus — obwohl sie ringsum im Material sitzt.
+    Gemessen an drei Körpern: Zylinder Ø 30 (239,76 mm³ abgetragen), Kugel
+    Ø 40 (319,75 mm³) und Torus R20/r6 (177,07 mm³), alle drei danach
+    wasserdicht und einteilig, alle drei mit dieser Warnung (Befund Robert,
+    09.09.2026: „das Bohrung setzen über den Viewport ist noch ziemlich
+    buggy").
+
+    Eine Warnung, die bei jedem runden Teil kommt, ist der Lärm, nach dem
+    niemand mehr in den Prüfbericht sieht. Wo ein Netz vorliegt, entscheidet
+    deshalb :func:`_flank_is_open`; ohne eines — der exakte Kern reicht einen
+    ``Solid`` herein — bleibt es beim Hüllquader, und der ist dort zu streng
+    und nie zu milde.
     """
     vector = np.asarray(direction, dtype=float)
     length = float(np.linalg.norm(vector))
@@ -182,6 +266,8 @@ def over_the_edge_along(
         if outside:
             over.append(name)
     if not over:
+        return []
+    if body is not None and not _flank_is_open(body, position, unit, radius):
         return []
     return [
         Finding(
@@ -295,7 +381,7 @@ def resize_bore(
     if nothing is not None:
         findings.append(nothing)
     unit_vector: Vec3 = (float(unit[0]), float(unit[1]), float(unit[2]))
-    findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter))
+    findings.extend(over_the_edge_along(mesh, position, unit_vector, cut_diameter, body=mesh))
     findings.extend(compensation_findings(diameter, cut_diameter, compensate))
     return BoreResult(
         mesh=resized,
@@ -547,7 +633,7 @@ def drill(
         nothing = without_effect(mesh, result, "difference", profile)
         if nothing is not None:
             findings.append(nothing)
-        findings.extend(over_the_edge_along(mesh, position, frame.normal, cut_diameter))
+        findings.extend(over_the_edge_along(mesh, position, frame.normal, cut_diameter, body=mesh))
         findings.extend(compensation_findings(diameter, cut_diameter, compensate))
         return BoreResult(result, outcome.solver, cut_diameter, findings)
     height = _through_length(mesh, axis) * 2.0 if through else depth
@@ -601,7 +687,7 @@ def drill(
     nothing = without_effect(mesh, outcome.mesh, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
-    findings.extend(over_the_edge(mesh, position, axis, cut_diameter))
+    findings.extend(over_the_edge(mesh, position, axis, cut_diameter, body=mesh))
     if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
         findings.append(
             Finding(

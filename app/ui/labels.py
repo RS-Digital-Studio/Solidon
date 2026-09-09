@@ -754,6 +754,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # bekommt — eine gerechnete Kopie oder seine zweite Zeichnung.
     "scaled": _("Aus dem unteren gerechnet"),
     "drawn": _("Eigene Zeichnung"),
+    "arc": _("Gleichmäßiger Bogen"),
     "pin": _("Stift"),
     "bore": _("Bohrung"),
     # Der Standfuß kann beides, und beide Werte sind englische Schlüssel: Was
@@ -775,6 +776,12 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "honeycomb": _("Wabe"),
     "cubic": _("Würfelgitter"),
     "auto": _("Automatisch"),
+    # Die drei Antworten auf die Frage, was mit den übrigen Abschnitten eines
+    # Hohlraums geschieht (``remove_feature.sections``). „Nachfragen“ ist die
+    # Vorgabe: Der Kern entscheidet die Mehrdeutigkeit nicht selbst (Regel 21).
+    "ask": _("Nachfragen"),
+    "chain": _("Ganzer Hohlraum"),
+    "single": _("Nur das gewählte Merkmal"),
     # **Die Druckeinstellungen waren die zweite Feldquelle, und sie stand hier
     # nicht drin.** ``tests/test_translations.py`` prüft Regel 20 für
     # Auswahlwerte am Operationsregister; die sechsundfünfzig Felder des
@@ -865,7 +872,12 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     # Der obere Umriss eines Übergangs (RM-147 E2). Der Satz sagt, was die
     # Wahl kostet: eine Zahl gegen eine zweite Zeichnung.
     "scaled": _("Der untere Umriss, verkleinert — Kegel- oder Pyramidenstumpf, mit einer Zahl."),
-    "drawn": _("Ein zweiter gezeichneter Umriss — für den Übergang von rund auf eckig."),
+    # drawn gilt am Übergang und am Sweep (flache Tabelle): Der Satz muss
+    # für beide wahr sein und nennt deshalb die Zeichnung, nicht das Teil.
+    "drawn": _(
+        "Eine eigene Zeichnung statt der gerechneten Form — für alles, was aus Zahlen nicht folgt."
+    ),
+    "arc": _("Ein gleichmäßiger Bogen aus Radius und Winkel — der Rohrbogen ohne Zeichnung."),
     "planar": _("Projiziert das Bild flach von oben — für Deckel und ebene Platten."),
     "cylindrical": _("Wickelt das Bild um die Achse — für Becher, Rohre und runde Gehäuse."),
     "spherical": _("Legt das Bild über eine Kugelform — für gewölbte Flächen."),
@@ -908,6 +920,11 @@ _CHOICE_NOTES: dict[str, TranslatableText] = {
     "honeycomb": _("Sechseckige Füllung — steif bei wenig Material, langsamer gedruckt."),
     "cubic": _("Gekippte Würfel — in allen Richtungen gleichmäßig fest, ein guter Standard."),
     "auto": _("Der passende Wert wird aus dem Zusammenhang bestimmt und zieht von selbst mit."),
+    "ask": _(
+        "Hat der Hohlraum mehrere Abschnitte, wird vor dem Entfernen gefragt, ob alle mitgehen."
+    ),
+    "chain": _("Bohrung und Senkung gehen zusammen weg — der ganze zusammenhängende Hohlraum."),
+    "single": _("Nur der gewählte Abschnitt wird geschlossen; die übrigen bleiben stehen."),
     "aligned": _("Die Naht liegt übereinander an einer Kante — dort fällt sie am wenigsten auf."),
     "nearest": _("Die Naht liegt am jeweils nächsten Punkt — schnell, aber verstreut sichtbar."),
     "random": _(

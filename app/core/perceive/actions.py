@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Final
 
 from app.core.registry import REGISTRY
-from app.core.registry.surfaces import normal_fields_of
+from app.core.registry.surfaces import asked_fields, normal_fields_of
 from app.core.types import Feature, FeatureId
 from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
@@ -250,7 +250,14 @@ def _fields_of(spec: Any, feature: Feature) -> tuple[ActionField, ...]:
         # bisherigen Richtung; eine Änderung erfolgt über die eigene Drehzeile.
         # Gefragt wird das Schema nach seinen Richtungsfeldern — ein Rezept
         # mit eigenem Maß ``nx`` nennt sie anders, und die blieben sonst stehen.
-        if entry.kind not in {"feature", "features"} and entry.name not in normal_fields_of(spec)
+        if entry.kind not in {"feature", "features"}
+        and entry.name not in normal_fields_of(spec)
+        # Was die Operation selbst erfragt, ist hier kein Feld: Die Antwort
+        # entsteht beim Ausführen und gilt nur, wo die Frage einen Gegenstand
+        # hat (:func:`~app.core.registry.surfaces.asked_fields`). *Merkmal
+        # entfernen* wäre sonst an jeder Bohrung ein Knopf mit einem
+        # Auswahlfeld darüber, das an den meisten nichts tut.
+        and entry.name not in asked_fields(spec)
     )
 
 

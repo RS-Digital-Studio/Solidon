@@ -718,6 +718,29 @@ def normal_fields_of(spec: OperationSpec) -> tuple[str, str, str]:
     return str(names[0]), str(names[1]), str(names[2])
 
 
+#: Parameter, deren Wert die Operation beim Ausführen **erfragt** (Regel 21).
+#:
+#: Sie stehen im Schema, weil die Antwort dort festgehalten wird
+#: (``OpResult.answered``, §15.7) und die nächste Auswertung sonst dieselbe
+#: Frage noch einmal stellte. Sie sind aber **keine Einstellung**, die man
+#: vorab trifft: ``remove_feature.sections`` entscheidet, was mit den übrigen
+#: Abschnitten eines Hohlraums geschieht — eine Frage, die es nur an einer
+#: Bohrung mit Senkung gibt und die an jedem anderen Merkmal ohne Gegenstand
+#: wäre.
+#:
+#: Der Operationsdialog zeigt sie hinter der Klappe wie jeden anderen
+#: Feinstellwert; die **Schnellbearbeitung am Merkmal** lässt sie weg — dort
+#: soll nur stehen, was das gewählte Merkmal betrifft (Robert, 09.09.2026).
+_ASKED_FIELDS: Final[dict[str, frozenset[str]]] = {
+    "remove_feature": frozenset({"sections"}),
+}
+
+
+def asked_fields(spec: OperationSpec) -> frozenset[str]:
+    """Welche Felder dieser Operation beim Ausführen erfragt werden."""
+    return _ASKED_FIELDS.get(spec.name, frozenset())
+
+
 def part_placement_params(spec: OperationSpec) -> frozenset[str]:
     """Die Ortsfelder dieses Schemas, auch bei gleichnamigen Rezeptmaßen."""
     declared = getattr(spec.params, "_placement_fields", None)

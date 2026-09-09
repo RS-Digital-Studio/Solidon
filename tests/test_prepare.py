@@ -33,7 +33,7 @@ from app.core.perceive.relations import bore_and_widening_at
 from app.core.registry import REGISTRY, VARIABLE
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
-from app.core.types import Document, Profile, SceneObject, Source
+from app.core.types import Document, Profile, SceneObject, Source, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -249,6 +249,77 @@ def test_a_bore_hanging_over_the_edge_says_so(profile: Profile) -> None:
     result = drill(body, position=(edge, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
 
     assert "bore.over_the_edge" in {finding.code for finding in result.findings}
+
+
+def test_a_bore_into_a_round_body_is_not_hanging_over_the_edge(profile: Profile) -> None:
+    """Der Hüllquader allein hielt jede Bohrung in ein rundes Teil für einen Randfall.
+
+    Wer im Bild auf den Scheitel eines Zylinders, einer Kugel oder eines Rings
+    zeigt, setzt die Mündung genau auf den Rand der Hülle — und weil die
+    getroffene **Facette** eines tesselierten Körpers schräg steht, ragt die
+    Kreisscheibe rechnerisch darüber hinaus, obwohl sie ringsum im Material
+    sitzt. Gemessen am Zylinder Ø 30: Normale (0,9988 | 0,0491 | 0), daraus
+    0,0785 mm seitlicher Überstand an einem Trefferpunkt, der exakt auf der
+    Hülle liegt. Die Warnung kam bei allen drei Körpern, während jeder danach
+    wasserdicht und einteilig war (Befund Robert, 09.09.2026: „das Bohrung
+    setzen über den Viewport ist noch ziemlich buggy").
+
+    Eine Warnung, die bei jedem runden Teil kommt, ist der Lärm, nach dem
+    niemand mehr in den Prüfbericht sieht — §2.7 verspricht Befunde, die
+    weiterhelfen, und dieser schickte den Kunden an einen Rand, wo nichts war.
+
+    **Gefahren wird der Weg des Fensters**, nicht eine von Hand gesetzte
+    Achse: Mit einer ideal achsparallelen Normale entsteht der Fall gar nicht
+    (extent = 0), und ein Test, der sie selbst einträgt, bleibt auch ohne den
+    Fix grün — gemessen, bevor er hier stand.
+    """
+    from app.core.scene import placement
+
+    runde: list[tuple[str, MeshData, Vec3, Vec3]] = [
+        (
+            "Zylindermantel",
+            MeshData.of(trimesh.creation.cylinder(radius=15.0, height=40.0, sections=64)),
+            (60.0, 0.0, 0.0),
+            (-1.0, 0.0, 0.0),
+        ),
+        (
+            "Kugel",
+            MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=20.0)),
+            (0.0, 0.0, 60.0),
+            (0.0, 0.0, -1.0),
+        ),
+        (
+            "Ring",
+            MeshData.of(
+                trimesh.creation.torus(
+                    major_radius=20.0, minor_radius=6.0, major_sections=96, minor_sections=48
+                )
+            ),
+            (80.0, 0.0, 0.0),
+            (-1.0, 0.0, 0.0),
+        ),
+    ]
+    for name, body, auge, blick in runde:
+        treffer = placement.original_surface_hit(body, auge, blick)
+        assert treffer is not None, f"{name}: der Strahl muss den Körper treffen"
+        face_index, punkt = treffer
+        normale = tuple(float(value) for value in body.raw.face_normals[face_index])
+        result = drill(
+            body, position=punkt, axis="z", normal=normale, diameter=3.0, profile=profile
+        )
+        codes = {finding.code for finding in result.findings}
+        assert "bore.over_the_edge" not in codes, f"{name}: die Bohrung sitzt ringsum im Material"
+        # Und die Gegenprobe zur Gegenprobe: Es wurde wirklich gebohrt, der
+        # Test lobt also keine Operation, die gar nichts getan hat.
+        assert body.volume - result.mesh.volume > 1.0, f"{name}: nichts abgetragen"
+        assert result.mesh.raw.is_watertight, f"{name}: der Körper bleibt geschlossen"
+
+    # Der Fall, für den die Warnung gebaut wurde: halb neben dem Material.
+    body = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)))
+    over = drill(body, position=(30.0, 0.0, 5.0), axis="z", diameter=6.0, profile=profile)
+    assert "bore.over_the_edge" in {finding.code for finding in over.findings}, (
+        "eine Bohrung halb über der Kante lässt weiter eine offene Flanke zurück"
+    )
 
 
 def frame() -> MeshData:
@@ -1664,8 +1735,14 @@ def test_fitting_to_a_size_below_the_nozzle_says_so(document: Document, profile:
 # --- Erkannte Merkmale versetzen (Kundenumfrage S-20260903-74133c) ------------------
 
 
-def _run_op(op: str, entry: SceneObject, profile: Profile, **params: object):
-    """Eine Operation fahren, wie der Verlauf sie fährt."""
+def _run_op(op: str, entry: SceneObject, profile: Profile, *, ask=None, **params: object):
+    """Eine Operation fahren, wie der Verlauf sie fährt.
+
+    ``ask`` tritt an die Stelle der Vorgabe, die immer die erste Antwort
+    nimmt — für die Operationen, die eine Mehrdeutigkeit wirklich fragen
+    (Regel 21). Ohne Angabe bleibt es bei der ersten Antwort, damit die
+    bestehenden Aufrufer nichts davon merken.
+    """
     from app.core.scene.cancel import NeverCancelled
     from app.core.types import OpContext, Scene
 
@@ -1679,7 +1756,7 @@ def _run_op(op: str, entry: SceneObject, profile: Profile, **params: object):
             quality="fine",
             seed=7,
             progress=lambda fraction, text: None,
-            ask=lambda question, choices: choices[0],
+            ask=ask or (lambda question, choices: choices[0]),
             cancelled=NeverCancelled(),
         )
     )
@@ -1928,7 +2005,14 @@ def test_removing_a_feature_is_registered_completely() -> None:
     fields = {entry.name: entry for entry in spec.params.spec()}
     assert fields["at_feature"].kind == "feature" and fields["at_feature"].required
     assert fields["at_feature"].placement == "front"
-    assert len(fields) == 1, "mehr braucht es nicht — das Merkmal sagt alles"
+    # **Das zweite Feld ist die Antwort auf eine Frage, keine Einstellung.**
+    # Ein Hohlraum aus mehreren Abschnitten hat zwei sinnvolle Ergebnisse, und
+    # der Kern entscheidet Mehrdeutigkeit nicht selbst (Regel 21); die Antwort
+    # landet über ``OpResult.answered`` hier und wird beim nächsten Lauf nicht
+    # noch einmal erfragt. Deshalb steht es hinten und nicht vorn.
+    assert set(fields) == {"at_feature", "sections"}, sorted(fields)
+    assert fields["sections"].placement == "advanced"
+    assert fields["sections"].default == "ask", "gefragt wird, solange niemand entschieden hat"
 
 
 def test_a_recognised_bore_can_be_turned(profile: Profile) -> None:
@@ -2245,14 +2329,28 @@ def test_the_way_out_of_a_countersink_is_the_one_the_message_names(profile: Prof
     cone = next(name for name, found in entry.features.items() if found.kind == "cone")
 
     # Die übrigen Handlungen brauchen weiter ihren eigenen Beziehungsweg.
+    #
+    # **``remove_feature`` steht seit dem 09.09.2026 nicht mehr dabei**, und
+    # das ist kein Aufweichen der Absage, sondern ihr Wegfall an dieser einen
+    # Stelle: Wer den Hohlraum *entfernt*, kann alle seine Abschnitte
+    # zusammen nehmen — das Versetzen und das Drehen können es nicht, weil
+    # dabei jeder Abschnitt seine eigene neue Lage bräuchte. Gefragt wird, was
+    # gemeint ist (Robert: „bei der Bohrung auch eine Frage, ob man die
+    # Senkung mit löschen will").
     for op in (
         "rotate_feature",
-        "remove_feature",
         "duplicate_feature",
         "plug_hole",
     ):
         with pytest.raises(UserError):
             _run_op(op, entry, profile, at_feature=cone)
+
+    entfernt = _run_op("remove_feature", entry, profile, at_feature=cone, sections="chain")
+    assert not [
+        name
+        for name, found in entfernt.outputs[0].features.items()
+        if found.kind in ("hole", "cone")
+    ], "beide Abschnitte gehen zusammen weg"
 
     # Und der eine Weg, den der Satz nennt, schließt beides in einem Zug.
     closed = _run_op(
@@ -3161,3 +3259,127 @@ def test_a_snap_fit_says_how_far_something_has_to_give() -> None:
     eintrag = next(finding for finding in befunde if finding.code == "join.interference")
     assert eintrag.severity == "info", "ausweichen ist die Bauart, keine Warnung"
     assert eintrag.values["at"] > 0.0, "und der Befund sagt, wo auf dem Weg es eng wird"
+
+
+def _plate_with_a_countersunk_bore(profile: Profile) -> tuple[SceneObject, str, str]:
+    """Die gesenkte Platte aus dem Korpus, wie die Erkennung sie sieht.
+
+    Aus der Datei und nicht selbst gebohrt: Die Kette aus Bohrung und Senkung
+    entsteht erst durch die gemeinsame Randringbildung im Netz, und ein
+    analytisch zusammengesetzter Körper hat sie nicht zwangsläufig.
+    """
+    from app.core.ingest.loader import normalise
+    from app.core.perceive.features import detect
+
+    mesh = normalise(read_mesh((MESHES / "plate_countersunk.stl").read_bytes(), ".stl"), "mm").mesh
+    features = detect(mesh)
+    bore = next(name for name, found in features.items() if found.kind == "hole")
+    countersink = next(name for name, found in features.items() if found.kind == "cone")
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh, features=features)
+    assert entry.mesh is not None and profile is not None
+    return entry, bore, countersink
+
+
+def test_removing_a_bore_asks_about_its_countersink(profile: Profile) -> None:
+    """Zwei sinnvolle Ergebnisse, also wird gefragt (Regel 21).
+
+    Robert am 09.09.2026: „bei der Bohrung auch eine Frage, ob man die Senkung
+    mit löschen will, wäre sinnvoll." Vorher ging still nur die Bohrung weg und
+    die Senkung blieb als Ring im Material stehen — ein Ergebnis, das niemand
+    verlangt hatte und das der Verlauf nicht erklärt.
+
+    Das ist keine Bestätigung vor einer rücknehmbaren Handlung (Regel 19): Es
+    wird nicht gefragt, **ob** entfernt wird, sondern **was**.
+    """
+    entry, bore, countersink = _plate_with_a_countersunk_bore(profile)
+
+    gefragt: list[tuple[str, list[str]]] = []
+
+    def antwortet(auswahl: int):
+        def ask(question: str, choices: list[str]) -> str:
+            gefragt.append((question, list(choices)))
+            return choices[auswahl]
+
+        return ask
+
+    # --- „den ganzen Hohlraum" ------------------------------------------------
+    beides = _run_op("remove_feature", entry, profile, ask=antwortet(0), at_feature=bore)
+    assert gefragt, "an einer Bohrung mit Senkung wird gefragt"
+    frage, wahl = gefragt[0]
+    assert "Abschnitt" in frage, frage
+    assert len(wahl) == 2, wahl
+    danach = beides.outputs[0]
+    assert bore not in danach.features and countersink not in danach.features, (
+        f"beide Abschnitte sind fort: {sorted(danach.features)}"
+    )
+    koerper = as_mesh_data(danach.mesh)
+    quader = float(np.prod(koerper.raw.bounds[1] - koerper.raw.bounds[0]))
+    assert koerper.volume == pytest.approx(quader, rel=1e-4), (
+        "der ganze Hohlraum ist gefüllt — die Platte ist wieder voll"
+    )
+    assert koerper.raw.is_watertight
+
+    # **Und die Antwort wird festgehalten**, sonst fragt die nächste Auswertung
+    # dieselbe Frage noch einmal (§15.7, derselbe Weg wie bei der Einheit).
+    assert beides.answered.get("sections") == "chain", beides.answered
+
+    # --- „nur das gewählte Merkmal" ------------------------------------------
+    gefragt.clear()
+    einzeln = _run_op("remove_feature", entry, profile, ask=antwortet(1), at_feature=bore)
+    assert gefragt, "auch dieser Weg fragt"
+    allein = einzeln.outputs[0]
+    assert bore not in allein.features, "die Bohrung ist fort"
+    assert countersink in allein.features, "die Senkung bleibt stehen"
+    assert einzeln.answered.get("sections") == "single", einzeln.answered
+
+    # --- und ohne Kette wird gar nicht gefragt --------------------------------
+    gefragt.clear()
+    ohne, hole = _block_with_a_bore(profile)
+    _run_op("remove_feature", ohne, profile, ask=antwortet(0), at_feature=hole)
+    assert not gefragt, f"eine Bohrung ohne Senkung hat nichts zu fragen: {gefragt}"
+
+
+def test_a_countersink_can_be_removed_after_its_bore(profile: Profile) -> None:
+    """Was allein steht, lässt sich allein entfernen.
+
+    Robert am 09.09.2026: „wenn wir die Bohrung löschen, können wir die Senkung
+    nicht mehr löschen." Die Kegelfläche hat zwei Randringe, und daraus schloss
+    der Kern „dieses Merkmal geht in ein anderes über" — auch dann noch, wenn
+    die Bohrung darunter längst verschlossen war. Gemessen an
+    ``plate_countersunk.stl``: vorher zwei Ringe zu 48 Ecken, danach zwei zu 65
+    und 48. Die Zahl bleibt gleich, ihre Bedeutung nicht.
+
+    Entschieden wird jetzt an der Kette (:func:`_stands_alone`), die vorher
+    ``[hole_1, cone_1]`` samt berührtem fremden Rand meldet und danach nichts
+    von beidem.
+    """
+    entry, bore, countersink = _plate_with_a_countersunk_bore(profile)
+
+    import dataclasses
+
+    from app.core.perceive.features import detect
+
+    ohne_bohrung = _run_op(
+        "remove_feature", entry, profile, at_feature=bore, sections="single"
+    ).outputs[0]
+    assert countersink in ohne_bohrung.features, "die Senkung steht noch da"
+
+    # **Dazwischen wird neu erkannt, wie es die Auswertung tut** (``_matched``
+    # in ``scene/evaluate.py``). Ohne diesen Schritt trügen die Merkmale die
+    # Flächenkennungen des **alten** Netzes, und der Test misste seine eigene
+    # Nachstellung statt des Kundenwegs: Gemessen zeigten die 96 Dreiecke der
+    # Senkung danach auf Radien von 1,72 bis 30,73 mm statt 3,39 bis 4,19.
+    frisch = detect(as_mesh_data(ohne_bohrung.mesh))
+    allein = next(name for name, found in frisch.items() if found.kind == "cone")
+    ohne_bohrung = dataclasses.replace(ohne_bohrung, features=frisch)
+
+    weg = _run_op("remove_feature", ohne_bohrung, profile, at_feature=allein).outputs[0]
+    assert allein not in weg.features, "und sie lässt sich entfernen"
+
+    koerper = as_mesh_data(weg.mesh)
+    quader = float(np.prod(koerper.raw.bounds[1] - koerper.raw.bounds[0]))
+    assert koerper.volume == pytest.approx(quader, rel=1e-4), (
+        "die Platte ist voll — nicht zu wenig und nicht zu viel gefüllt"
+    )
+    assert koerper.raw.is_watertight
+    assert koerper.raw.body_count == 1

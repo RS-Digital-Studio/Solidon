@@ -192,6 +192,55 @@ geschlossen" steht im Präsens und beschreibt einen Zustand, den es nicht mehr
 gibt; als Hinweis wäre der Satz nicht milder, sondern falsch. Übrig bleibt der
 Satz des Schritts, der es behoben hat, und der erzählt die ganze Geschichte.
 
+## Eine grobe Vorauswahl darf nicht das Urteil sein
+
+`over_the_edge_along` fragte den Hüllquader: Ragt die Mündungsscheibe hinaus,
+hat die Bohrung eine offene Flanke. Der Docstring nannte die Näherung
+ausdrücklich („gemessen am Hüllquader und nicht an der wirklichen Form") — und
+genau deshalb hat zwei Monate niemand nachgesehen, was sie kostet: **jede**
+Bohrung auf einen Zylinder, eine Kugel oder einen Ring bekam die Warnung, weil
+der Scheitel einer gekrümmten Fläche auf der Hülle liegt und die getroffene
+Facette schräg steht (gemessen 09.09.2026: Normale (0,9988 | 0,0491 | 0),
+0,0785 mm Überstand). Der Körper war danach jedes Mal wasserdicht, einteilig
+und richtig gebohrt.
+
+**Eine Warnung, die im Normalfall kommt, ist keine Warnung mehr.** Sie ist der
+Lärm, nach dem niemand mehr in den Prüfbericht sieht — und sie schickt den
+Kunden an einen Rand, an dem nichts ist. Wo die grobe Frage anschlägt, wird
+deshalb an der Sache nachgemessen; wo kein Netz vorliegt, bleibt es bei der
+Näherung, und die ist dort zu streng und nie zu milde.
+
+Die Frage davor, für jede Näherung im Haus: **Wie oft schlägt sie im Normalfall
+an?** Eine Näherung, die nur Fehlalarme in einem seltenen Fall erzeugt, ist
+richtig; eine, die den häufigsten Fall trifft, ist ein Fehler mit Docstring.
+
+**Und der Test dazu muss den Weg des Kunden gehen.** Der erste Anlauf setzte
+die Bohrachse von Hand auf (1, 0, 0) — ideal achsparallel, damit `extent = 0`,
+und der Fall entsteht gar nicht. Er blieb ohne den Fix grün. Was ihn trägt,
+ist die Normale aus dem echten Treffer (`original_surface_hit`), denn erst die
+tesselierte Facette erzeugt den Überstand.
+
+## Eine Zahl beschreibt die Regel, nicht die Lage
+
+`_feature_body` lehnte einen Flächenausschnitt mit zwei Randringen ab, weil
+zwei Ringe hießen: „dieses Merkmal geht in ein anderes über". Der Schluss war
+richtig gemessen und galt für **eine** Lage. Nach dem Verschließen der Bohrung
+unter einer Senkung bleiben es zwei Ringe — unten liegt jetzt aber Material
+statt eines weiteren Hohlraums, und die Senkung war damit nicht mehr zu
+löschen (Befund Robert, 09.09.2026; gemessen an `plate_countersunk.stl`:
+zwei Ringe zu 48 Ecken vorher, zwei zu 65 und 48 danach).
+
+**Gefragt wird an der Sache, nicht an ihrer Kennzahl.**
+`perceive.relations.cavity_chain_state_at` beantwortet beides — ob das Merkmal
+Abschnitt einer Kette ist und ob es einen fremden Rand berührt —, und erst
+wenn beides verneint ist, gehört der Hohlraum ihm allein (`_stands_alone`).
+`feature_placement_geometry` traf diese Unterscheidung seit je; sie fehlte
+allein im Werkzeugbau.
+
+Die allgemeine Form, weil sie über diesen Fall hinausgeht: **Wer aus einer
+Zahl auf einen Sachverhalt schließt, schreibt dazu, unter welcher Bedingung
+der Schluss gilt — und prüft die Bedingung, nicht die Zahl.**
+
 ## Toleranzen sind Durchmessermaße
 
 `clearance` und `press` aus dem Materialprofil gelten **im Durchmesser**, wie

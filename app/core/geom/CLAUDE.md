@@ -7,7 +7,16 @@ Gerechnet wird gegen `manifold3d` und `trimesh`.
 als ganzen Hohlraum: alle Abschnitte aus `perceive.relations.cavity_chain_at`
 begrenzen gemeinsam den Werkzeugkörper, alle Kennungen und Mittelpunkte
 reisen mit. Zwei äußere Randringe werden geschlossen; eine unvollständige
-oder mehrdeutige Fläche bleibt abgelehnt. Größenänderungen bleiben einzelne
+oder mehrdeutige Fläche bleibt abgelehnt.
+
+`remove_feature` fragt bei einer solchen Kette über `ctx.ask`, ob alle
+Abschnitte mitgehen, und hält die Antwort im Parameter `sections`
+(`OpResult.answered`) fest — derselbe Weg, den `load` mit der Einheit geht.
+Bei „ganzer Hohlraum" füllt es `_paired_cavity_body`, bei „nur das gewählte"
+den einen Abschnitt. Ob dessen zweiter Randring ein Übergang oder sein Boden
+ist, beantwortet `_stands_alone` an derselben Kette und nicht die Ringzahl:
+Nach dem Verschließen der Bohrung bleiben es zwei Ringe, und die Senkung
+gehört sich dann selbst. Größenänderungen bleiben einzelne
 Abschnitte und melden die übrigen; bei mehrteiligen Ketten wird keine
 unvollständige automatische Änderung einer einzelnen Senkung vorgeschlagen.
 
@@ -18,6 +27,18 @@ geschlossener Eingang danach geschlossen bleibt. Andernfalls bleiben das
 Netz und seine Materialzuweisungen erhalten; ein Befund nennt den ausgelassenen
 Schritt. Die Zusicherung entspricht `ingest.loader.normalise`. Die einzelnen
 Reparaturhilfen bleiben für ausdrücklich gesteuerte Reparaturketten verfügbar.
+
+**Die Kantenwarnung misst am Hüllquader nur vor.** `over_the_edge_along`
+meldet eine offene Flanke, wenn die Mündungsscheibe über die Hülle ragt — das
+ist billig und für einen `Solid` der einzige Weg. Auf einer gekrümmten Fläche
+trifft es aber immer zu: Der Scheitel liegt auf der Hülle, und die getroffene
+Facette steht schräg. Wo ein Netz vorliegt, entscheidet deshalb
+`_flank_is_open` nach: ein Kranz von Punkten auf dem Bohrungsumfang, an
+mehreren Tiefen in beide Achsrichtungen; liegt er an einer davon vollständig
+im Material, reißt dort nichts auf. Innen und außen trennt `mesh.on_surface`
+über die Normale des nächsten Dreiecks — nicht `trimesh.contains` (führt durch
+`rtree`) und nicht `ray_hit_distances` (Kantentreffer zählen mehrfach, die
+Parität trägt nicht).
 
 Merkmalswerkzeuge verwenden die gemessene Tiefe unabhängig vom Durchmesser.
 Nach einem Versatz entscheidet die Zielgeometrie über den Durchgang, auch bei
