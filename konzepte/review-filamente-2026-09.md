@@ -68,10 +68,8 @@ Eine Umsetzung braucht einen eigenen abgegrenzten Produktvertrag in der Roadmap.
 ## Prüfbelege
 
 Die gezielten Regressionen liegen in den bestehenden Filament-, Paint-, G-Code-,
-Druckeinstellungs- und Projekttests. Native Bedienbilder liegen lokal unter
-`.claude/.state/filament-design-inventory-2026-09-08/` und
-`.claude/.state/filament-inventory-ui-2026-09-08/`; sie sind keine neuen
-Veröffentlichungsbilder. Endgültige Torwerte werden nach dem abschließenden
+Druckeinstellungs- und Projekttests. Die nativen Bedienbilder der Durchsicht waren lokale
+Prüfbilder und keine neuen Veröffentlichungsbilder. Endgültige Torwerte werden nach dem abschließenden
 Lauf im Roadmap-Archiv festgehalten.
 
 Das unabhängige Gegenreview hat die behobenen Befunde und anschließend die

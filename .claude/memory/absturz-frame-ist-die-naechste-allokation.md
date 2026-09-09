@@ -41,5 +41,4 @@ Was den **Ort** zeigt, ist der Page Heap (`gflags /p /enable python.exe /full`,
 danach `/disable`) — er lässt jede Allokation an einer Seitengrenze enden, und
 ein Überschreiber bricht dort ab, wo er stattfindet. Verwandt:
 [[gemessene-frage-ist-nicht-die-gestellte]] und
-[[bekannte-familie-erklaert-nicht-den-ausloeser]]. Der Messaufbau liegt in
-`.claude/.state/mengen-riss-2026-08-30/`.
+[[bekannte-familie-erklaert-nicht-den-ausloeser]].

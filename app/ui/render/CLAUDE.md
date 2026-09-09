@@ -165,9 +165,9 @@ bis zum ruhigen Bild, Zug je Kamerastellung, Bild im Stand, Arbeitsspeicher).
 Die Zahlen, an denen die Entscheidung fiel — VTK gegen pygfx am 05.09.2026,
 `weg4-figur-formen` maximiert auf einer RTX 4080: Zug 6,9 gegen 4,9 ms, Bild
 im Stand 7,2 gegen 3,8 ms, Speicher gleich —, stehen im Gedächtnis
-`viewport-zwei-renderer-messen` und in der Modellabnahme
-(`.claude/.state/renderer-audit-2026-09-05-01a07353/ABNAHME.md`, 23
-Kundendateien, Leistungsreihe bis 3,15 Millionen Dreiecke, Aufbauprofil).
+`viewport-zwei-renderer-messen`. Die Abnahme dahinter ging über 23
+Kundendateien, eine Leistungsreihe bis 3,15 Millionen Dreiecke und ein
+Aufbauprofil.
 
 Drei Dinge daran haben je einen Lauf gekostet, bevor die Zahlen stimmten, und
 gelten weiter: rendercanvas zeigt ein Qt-Widget von sich aus über eine

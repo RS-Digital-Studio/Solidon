@@ -8364,7 +8364,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-028 — Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | überholt oder begründet entfallen | CLAUDE.md und .claude/rules/tests.md tragen heutige Prüfregeln; tools/to_main.py vorhanden. Body sammelt gelöste Fälle und doppelt den Indexpunkt; keine weitere klar begrenzte Umsetzung. |
 | RM-029 — Der Entwurfsvermerk muss von den Rechtstexten herunter | erledigt | tools/make_legal.py:265-294: DRAFT_NOTE und draft_banner; keine Treffer für Sorgfältiger Entwurf/keine Rechtsberatung in website/agb.html, eula.html, widerruf.html oder Generator. Keine Rechtsfreigabe daraus abgeleitet. |
 | RM-030 — Impressum ohne USt-IdNr. oder Steuernummer | weiter offen → [RM-030](ROADMAP.md#rm-030) | Amtlicher § 5 Abs. 1 Nr. 6 DDG am 08.09.2026 geprüft; frühere Referenz auf TMG und allgemeine Steuernummer korrigiert. |
-| RM-031 — Offscreen prüft nichts, was am Aktor hängt | zusammengeführt → [RM-051](ROADMAP.md#rm-051) | app/ui/render/factory.py; .claude/.state/release-review-01a0787b/native-qt-navigation-windows-run3/results.json: 40/40 erfolgreich einschließlich sichtbarem Renderer, Auswahl, Kamera, Screenshots und Abbau. Alter body betrifft entfernte VTK-Aktoren. |
+| RM-031 — Offscreen prüft nichts, was am Aktor hängt | zusammengeführt → [RM-051](ROADMAP.md#rm-051) | app/ui/render/factory.py; Windows-Navigationsabnahme am echten Fenster, 07.09.2026: 40/40 erfolgreich einschließlich sichtbarem Renderer, Auswahl, Kamera, Screenshots und Abbau. Alter body betrifft entfernte VTK-Aktoren. |
 | RM-032 — Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | erledigt | tools/window_bench.py:254 load_operations,184 Zeitgrenze,295-308 Modalsweeper; tools/run_ui_audit.py:156 close_stray_dialogs,382-424 Fehlererfassung und Zeitgrenze,516 load_operations; tests/test_ui_audit_outcomes.py. |
 | RM-033 — Wirkt die Typprüfung an `overlay.py:294`? | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | app/ui/overlay.py:370 isinstance(model,QAbstractItemModel); tests/test_overlay.py:908 test_a_view_whose_model_turned_into_a_stranger_still_answers; heutige vollständige Torabnahme separat offen. |
 | RM-034 — Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | weiter offen → [RM-034](ROADMAP.md#rm-034) | Kein Versicherungsangebot im Repository nachgewiesen. Historische Aussage Verkaufsstart liege nach 09.12.2026 widerspricht beschlossenem 01.11.2026; rechtliche Detailbehauptungen nicht als aktuelle Feststellung übernehmen. |
@@ -8375,7 +8375,7 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-039 — Ein offenes Netz lässt sich teilen, ohne dass jemand widerspricht | weiter offen → [RM-039](ROADMAP.md#rm-039) | app/core/geom/prepare.py:944-957: split.uncapped ohne suggestions und ohne Ursache; app/core/geom/autosplit.py:1028 referenziert denselben Vertrag. |
 | RM-040 — Der erste Kundenbericht aus 0.3.4 nennt keine Ursache | weiter offen → [RM-040](ROADMAP.md#rm-040) | 96da8fd0, app/core/scene/evaluate.py; vorhandener Bericht aus 0.3.4 nennt die Ursache noch nicht. Kein neuer Ursachenbeleg gefunden. |
 | RM-041 — Die Gitterfüllung kennt bei einem eingelesenen, entlüfteten Hohlkörper keinen Innenraum mehr | weiter offen → [RM-041](ROADMAP.md#rm-041) | app/core/geom/lattice.py:338-347,408: _cavity_mesh und no_cavity; Abnahmebericht G5 hält die Absage bewusst fest. |
-| RM-042 — Die Merkmalserkennung läuft bis eine Million Dreiecke | weiter offen → [RM-042](ROADMAP.md#rm-042) | app/core/scene/evaluate.py:94,1079; output/review/abnahme-2026-09-06/befunde-agenten.md K5. Neuere Teilmessung .claude/.state/release-review-01a0787b/performance-features-support-2026-09-07.md: mechanisch203.776 Dreiecke0,791s; Freiform200k1,483s; keine1M-Messung. Die §31-Grenze ist weiterhin200k. |
+| RM-042 — Die Merkmalserkennung läuft bis eine Million Dreiecke | weiter offen → [RM-042](ROADMAP.md#rm-042) | app/core/scene/evaluate.py:94,1079; output/review/abnahme-2026-09-06/befunde-agenten.md K5. Neuere Teilmessung vom 07.09.2026: mechanisch203.776 Dreiecke0,791s; Freiform200k1,483s; keine1M-Messung. Die §31-Grenze ist weiterhin200k. |
 | RM-043 — Die Kopfzeilenfrist der HTTP-Antworten gilt nur für `open_public_url` | weiter offen → [RM-043](ROADMAP.md#rm-043) | app/core/http.py:327-370; tests/test_http_security.py:817 prüft initiale Zeilen über open_public_url; Abnahmebericht K15 bleibt offen. |
 | RM-044 — Die Migration 19→20 rechnet mit lebendem Code | erledigt | tests/data/projects/flat_lid_v19.json; tests/test_lid_flow.py:428; app/core/scene/migrations.py Dokumentation. |
 | RM-045 — Drei ungemessene Laufzeitkosten des Reparaturstands | weiter offen → [RM-045](ROADMAP.md#rm-045) | output/review/abnahme-2026-09-06/befunde-agenten.md G9a/G9b/U11; aktuelle implementierte Wege unverändert vorhanden. |
@@ -8383,14 +8383,14 @@ Arbeit gilt ausschließlich `ROADMAP.md`.
 | RM-047 — Die Geometriebefunde G-03 bis G-38 | erledigt | output/review/abnahme-2026-09-06/befunde-agenten.md:94; tests/test_geometry_review_regressions.py; tests/test_parts_review_regressions.py. |
 | RM-048 — Werkzeuge und Website: R25, R26, R31, R35, R37, R38 | erledigt | output/review/abnahme-2026-09-06/befunde-agenten.md:94; tests/test_tool_review_regressions.py; tools/window_bench.py; tools/run_ui_audit.py. |
 | RM-049 — Sprachbefunde CAT-FR-01, CAT-IT-01, UI-35, UI-36, UI-38 | erledigt | output/review/abnahme-2026-09-06/befunde-agenten.md:94; aktuelle Sprachkataloge und benannte Oberflächenregressionen. |
-| RM-050 — Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | weiter offen → [RM-050](ROADMAP.md#rm-050) | app/ui/render/factory.py; tests/test_render_gfx_regressions.py:745 einmalige Normalen; .claude/.state/release-review-01a0787b/abschlussbericht.md:82-86 belegt 13→1→0 Renderer über zwölf Sprachwechsel; app/core/knowledge/parts/range_check.py:157/197 nutzt weiterhin VTK. |
+| RM-050 — Der Viewport bekommt einen eigenen Renderer-Adapter, dahinter VTK direkt und pygfx/wgpu | weiter offen → [RM-050](ROADMAP.md#rm-050) | app/ui/render/factory.py; tests/test_render_gfx_regressions.py:745 einmalige Normalen; die Release-Durchsicht vom 07.09.2026 belegt 13→1→0 Renderer über zwölf Sprachwechsel; app/core/knowledge/parts/range_check.py:157/197 nutzt weiterhin VTK. |
 | RM-051 — Der Renderer ist nur auf Windows gemessen | weiter offen → [RM-051](ROADMAP.md#rm-051) | dist/ci enthält aktuelle 0.3.5 Linux- und Mac-Artefakte vom 08.09.; .github/workflows/build.yml:205-224 beschreibt Unix-Befunde und if runner.os==Windows; aktuelle Vulkan-Pakete und Renderer-Spec vorhanden. Windows-Navigationsabnahme im run3/results.json belegt. |
 | RM-052 — Nativer Wayland ist nicht ungefahren, sondern nicht gebaut | überholt oder begründet entfallen | Lokal verifiziert rendercanvas 2.7.2; .venv/Lib/site-packages/rendercanvas/qt.py:313 if False vor Wayland; app/ui/qt_platform.py hält X11-Startweg. Keine automatische Überwachung eingerichtet. |
-| RM-053 — Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista | erledigt | Messung 07.09.2026: .claude/.state/release-review-01a0787b/native-qt-navigation-windows-run3/results.json, Windows11/Python3.14.7/GfxRenderer; passed=true, 40 Ergebnisse ohne Fehlschlag, vier Screenshots, window.close und Qt-Abbau erfolgreich. Kein Ersatz für volle Torabnahme und keine Mac/Linux-Abnahme. |
+| RM-053 — Die zwei Prüfstände am echten Fenster sprechen noch VTK und PyVista | erledigt | Messung 07.09.2026 am echten Fenster: Windows11/Python3.14.7/GfxRenderer; passed=true, 40 Ergebnisse ohne Fehlschlag, vier Screenshots, window.close und Qt-Abbau erfolgreich. Kein Ersatz für volle Torabnahme und keine Mac/Linux-Abnahme. |
 | RM-054 — Die Prompt-Tokenzahl des lokalen Modells ist seit 113 Werkzeugen nicht gemessen | weiter offen → [RM-054](ROADMAP.md#rm-054) | app/core/backends/llm.py PROMPT_TOOL_COUNT=114, PROMPT_TOKENS=22856; Vorgänger verifiziert. Doppelung mit späterem Prompt-Budget-Punkt im Review vor der Demo 0.3.0 zusammenführen. |
 | RM-055 — Flatpak-Laufzeit 26.08 und Inno Setup 7 sind eingetragen, aber nicht gefahren | weiter offen → [RM-055](ROADMAP.md#rm-055) | tools/make_linux_packages.py:657 runtime-version26.08; .github/workflows/build.yml:499; dist/ci/solidon3d-linux-release-input/Solidon3D-0.3.5-x86_64.flatpak; tools/make_installer.py:53-65 bevorzugt7 mit6-Rückfall, daher Existenz des Setups allein kein Beweis für Compiler7. |
 | RM-056 — CORE-02 und CORE-26 | erledigt | output/review/abnahme-2026-09-06/befunde-agenten.md:94 bestätigt CORE-02/26; v19-Deckeltest separat RM-044. |
-| RM-057 — Die orient_200-Marke fällt auf jeder Maschine einmal | überholt oder begründet entfallen | tests/test_performance.py:686-694 misst orient_200 und verlangt <20s; tests/.performance.json maschinen-/laufbezogene Historie. .claude/.state/release-review-01a0787b/abschlussbericht.md:69-72 dokumentiert behobenen Python-ABI-Bruch ohne Rücksetzen der Marke. |
+| RM-057 — Die orient_200-Marke fällt auf jeder Maschine einmal | überholt oder begründet entfallen | tests/test_performance.py:686-694 misst orient_200 und verlangt <20s; tests/.performance.json maschinen-/laufbezogene Historie. die Release-Durchsicht vom 07.09.2026 dokumentiert einen behobenen Python-ABI-Bruch ohne Rücksetzen der Marke. |
 | RM-058 — Das Schemabild des Skizzeneditors zeigt weniger, als der Editor kann — und die Frage ist, ob es das soll | erledigt | app/core/figures.py:668-701 erklärt die Entscheidung und zeichnet Auswahlpfeil; Kommentar beantwortet explizit die seit27.08.offene Frage. Kein Renderlauf erforderlich. |
 | RM-059 — Rezepte rechnen ihren Hash bei jedem Start neu | überholt oder begründet entfallen | app/core/knowledge/parts/recipe.py berechnet inhaltlichen Hash; body selbst nennt den Aufwand bei wenigen Rezepten unmessbar. Kein belegter Leistungsbefund oder notwendiger Funktionsrest. |
 | RM-060 — Eine Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt | zusammengeführt → [RM-021](ROADMAP.md#rm-021) | ROADMAP-Register zur Datei: Nachmessung27.08. widerlegt feste Reihenfolge als Lösung (1/3 gerissen); aktuelle conftest.py-Lebensdauerkorrekturen und RM-021 statt neuer doppelter Entscheidungsaufgabe. |
@@ -12373,8 +12373,7 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
 
 Auftrag: die Beispielprojekte durchsehen, Text aufbringen und ein Stück aus
 einer Fläche ausschneiden — alles über die Oberfläche, mit Blick auf
-Einfachheit für den Kunden. Die Skripte und Messungen liegen in
-`.claude/.state/durchsicht-2026-08-20b/`.
+Einfachheit für den Kunden.
 
 **Alle neun Beispiele öffnen und rechnen** (1,5–3,8 s). Die zwei, die mit
 Warnungen begrüßten, tun es nicht mehr — dahinter standen zwei echte Fehler,
@@ -19181,9 +19180,8 @@ Zwischen zwei Schlitzen sind es dagegen 40 mm — reichlich für einen Arm.
 
 ## Was das Update-Review liegen ließ (26.08.2026)
 
-Aus den elf Durchgängen über die Commits seit 0.1.5 (Befundliste in
-`.claude/.state/update-review-0.1.5-2026-08-25/BEFUNDE.md`) ist alles
-Zugeteilte behoben; ein Fund entstand erst beim Schließen der Testlücken
+Aus den elf Durchgängen über die Commits seit 0.1.5 ist alles Zugeteilte
+behoben; ein Fund entstand erst beim Schließen der Testlücken
 und braucht einen Umbau statt eines Tests.
 
 - [x] **Regel 17 endet an der Auswertungsgrenze — gemessen am 27.08.2026,
@@ -25025,8 +25023,8 @@ hat.
 
 Roberts Auftrag: „wir wollen doppelte Stellen und Zwillinge vermeiden,
 Kontrolle, Analyse und Konzept sauber und gründlich." Die Analyse, die Klassen
-und die Entscheidungen stehen in `konzepte/konzept-zwillinge-2026-09.md`; das
-Messskript und die Rohfunde liegen unter `.claude/.state/zwillinge-2026-09-07/`.
+und die Entscheidungen stehen in `konzepte/konzept-zwillinge-2026-09.md`, das
+Messwerkzeug ist `tools/twin_scan.py`.
 Gemessen gegen `d9999d1b` über `app/` (260 Dateien, 190 223 Zeilen), `tools/`
 und `tests/`.
 
@@ -26511,8 +26509,6 @@ Ruff, Formatprüfung und mypy sind für den Filamentstand grün. Die im ersten T
 Anschlusslücken bei Fehlerklassifikation, Signalfreigabe, Lizenzmanifest, Referenz, Tastatur,
 Layout und Fensterabbau wurden behoben; die spätere vollständige Suite lief ohne fehlerhaften Prozess.
 
-Die Protokolle und Inhaltsabgleiche liegen lokal unter
-`.claude/.state/filament-inventory-integration-2026-09-08/verified/`.
 Verwendet wurde der gemeinsame Torlauf `1129` vom 08.09.2026 ab 20:28 Uhr.
 Parallel danach entstandene Mechanik- und Slicerergänzungen gehören zu anderen Arbeitseinheiten.
 Die Filamentänderungen wurden über gesicherte Inhalte abgegrenzt; gemeinsame Typen und Kataloge

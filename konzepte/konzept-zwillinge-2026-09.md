@@ -4,10 +4,8 @@ Stand 07.09.2026. **Konzept und Umsetzung: P1.1, P1.2, P2.1, P2.2, P3.1 und
 Entscheidung E sind am selben Tag gebaut** (Robert: „mach das beste“). Offen
 bleiben die Testhilfen (P3.3, Entscheidung H), der Satz in `AGENTS.md`
 (Entscheidung I, geht an Robert) und der Fund der Nachbarsitzung über die
-Zwillingsregel der Oberfläche. Gemessen gegen den Arbeitsstand `d9999d1b`; die
-Rohfunde und das erste Messskript liegen unter
-`.claude/.state/zwillinge-2026-09-07/`, das eingecheckte Werkzeug ist
-`tools/twin_scan.py`.
+Zwillingsregel der Oberfläche. Gemessen gegen den Arbeitsstand `d9999d1b`; das
+eingecheckte Werkzeug dazu ist `tools/twin_scan.py`.
 
 Anlass: Robert, 07.09.2026 — „wir wollen doppelte Stellen und Zwillinge
 vermeiden, Kontrolle, Analyse und Konzept sauber und gründlich."
@@ -56,7 +54,7 @@ Beide Bedeutungen behalten das Wort; §1 trennt sie in Klassen.
 | 27.08.2026 | Konstanten-Zwillinge (`57200cb9`), Oberflächen-Zwillinge, 26 Slicer-Namensvergleiche | `tests/test_shared_constants.py`; sieben Auskünfte zusammengelegt; ein Prädikat statt Namensvergleich | 20-Zeilen-AST-Skript, nicht eingecheckt |
 | 02.09.2026 | Pfad eines offenen Handles zweimal (`_opened_file_path`, `_descriptor_path`) | im Register offen: „nicht in die Nacht vor ein Paket" | — |
 | 03.09.2026 | `_too_small_to_make` nur bei drei von sechs Erkennern | Quelltext-Wächter `test_every_fitted_kind_asks_the_same_question` | — |
-| 07.09.2026 | diese Messung über `app/`, `tools/`, `tests/` | siehe §0.3 | `twin_scan.py`, abgelegt unter `.claude/.state/` |
+| 07.09.2026 | diese Messung über `app/`, `tools/`, `tests/` | siehe §0.3 | `tools/twin_scan.py` |
 
 Drei Durchgänge, drei Werkzeuge, keines im Repository — die ROADMAP vom 27.08.
 sagt es selbst: „Das Messskript steht in der Sitzung … und ist in zwanzig
@@ -277,9 +275,8 @@ Prüfen"), mit den beiden Zusicherungen aus `ROADMAP-ARCHIV.md` (24.08.):
 zu wenig ist* — und *gib dem Werkzeug einen Fall, dessen Ausgang du kennst*.
 Der Selbsttest (`tests/test_twin_scan.py`) fährt es über einen kleinen
 Baum mit einem gepflanzten Zwilling und einer gepflanzten Konstante und
-verlangt beide Funde. Bis Robert entschieden hat, liegt das Skript unter
-`.claude/.state/zwillinge-2026-09-07/` — wie die Messskripte der anderen
-Durchsichten, und mit derselben Warnung: Es belegt seine Zahl nur unverändert.
+verlangt beide Funde. Das Skript ist inzwischen `tools/twin_scan.py` — mit
+derselben Warnung wie jedes Messskript: Es belegt seine Zahl nur unverändert.
 
 **F — Der Name weicht dem Prädikat, wo eine Eigenschaft gemeint ist.**
 `== "orca"` wird `takes_a_machine_profile(flavour)`, wie am 27.08. begonnen.

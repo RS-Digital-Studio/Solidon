@@ -28,8 +28,7 @@ Bausteine.
 brauchte einen GL-Kontext (CI ohne Grafikkarte starb daran) und kannte unter
 Qt nur X11 (Wayland-Absturz beim Kunden). pygfx läuft über wgpu auf Vulkan,
 DX12 und Metal, in VMs mit WARP/lavapipe; Hardware älter als 2012/2013 ist
-für Robert kein Kriterium. Gemessen (Abnahme in
-`.claude/.state/renderer-audit-2026-09-05-01a07353/ABNAHME.md`): GFX 6,5 bis
+für Robert kein Kriterium. Gemessen: GFX 6,5 bis
 7,2 ms je Bild bis 3,15 Millionen Dreiecke, VTK 2,2 bis 2,6 ms — beides weit
 unter einem Bildwechsel; VTK-SSAO zeigte Bettkorn und Streifen
 (RGBA16F-Positionspuffer), GFX zeichnete glatter.
