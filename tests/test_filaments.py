@@ -122,7 +122,15 @@ def test_a_colour_that_is_no_colour_stops_with_advice(own_catalogue: Path) -> No
 
 @pytest.mark.parametrize(
     "profile",
-    (r"C:\Slicer\profiles\PETG.json", "/opt/slicer/PETG.json", "profiles/PETG"),
+    (
+        r"C:\Slicer\profiles\PETG.json",
+        "/opt/slicer/PETG.json",
+        "./profiles/PETG",
+        "../PETG",
+        "profiles/../PETG",
+        r"profiles\PETG",
+        r"\\server\share\PETG",
+    ),
 )
 def test_a_profile_path_never_enters_the_catalogue(own_catalogue: Path, profile: str) -> None:
     """Ein Profil reist als Name zwischen Rechnern, nie als lokaler Pfad."""
@@ -133,6 +141,15 @@ def test_a_profile_path_never_enters_the_catalogue(own_catalogue: Path, profile:
     assert raised.value.constraint == "format"
     assert raised.value.suggestions, "Regel 17: der Eingabefehler zeigt einen Ausweg"
     assert filaments.catalogue() == ()
+
+
+def test_a_material_separator_in_a_manufacturer_profile_is_preserved(own_catalogue: Path) -> None:
+    """Ein Herstellername mit PLA/PETG bleibt ein Name und wird nicht als Pfad geöffnet."""
+    name = "Generic Support for PLA/PETG @System"
+    assert filaments.profile_name(name) == name
+    entry = filaments.remember("Stützfilament", "#eeeeee", slicer_profile=name)
+    assert entry.slicer_profile == name
+    assert filaments.catalogue()[0].slicer_profile == name
 
 
 def test_an_old_profile_path_costs_only_the_profile_binding(own_catalogue: Path) -> None:

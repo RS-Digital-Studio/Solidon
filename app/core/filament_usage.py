@@ -13,7 +13,7 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from app.core.export import threemf
-from app.core.export.handover import override_for, settings_for_slot, with_slot_profiles
+from app.core.export.handover import configured_slots, override_for, settings_for_slot
 from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import profiles
 from app.core.scene.hashing import digest, profile_key
@@ -21,7 +21,7 @@ from app.core.scene.serialise import print_settings_to_data
 from app.core.slice.estimate import estimate
 from app.core.slice.gcode import GcodeMetrics
 from app.core.types import MaterialSlot, PrintSettings, Profile, SceneObject, SpoolBinding
-from app.i18n import source_text
+from app.i18n import _, source_text
 
 UsageSource = Literal["internal", "gcode", "manual"]
 
@@ -106,21 +106,19 @@ def prepare(
     Slots entfallen erst bei den Bedarfzeilen, nie bei dieser Zuordnung.
     """
     whole_job = [
-        threemf.AssemblyPart(as_mesh_data(body.mesh), slots=tuple(body.material_slots))
+        threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
         for body in objects
     ]
     requests = []
     for plate in sorted({entry.plate for entry in objects}):
         bodies = [entry for entry in objects if entry.plate == plate]
         parts = [
-            threemf.AssemblyPart(as_mesh_data(body.mesh), slots=tuple(body.material_slots))
+            threemf.AssemblyPart(as_mesh_data(body.mesh), slots=threemf.slots_for_object(body))
             for body in bodies
         ]
         supplied = slots_by_plate.get(plate) if slots_by_plate is not None else None
         slots = threemf.merge_slots(parts, across=whole_job if supplied is None else None)
-        configured = (
-            with_slot_profiles(slots, settings.slot_profiles) if supplied is None else supplied
-        )
+        configured = configured_slots(slots, settings) if supplied is None else supplied
         effective_slots = {
             threemf.slot_identity(original): actual
             for original, actual in zip(slots, configured, strict=True)
@@ -140,7 +138,7 @@ def prepare(
             checksum.update(mesh.raw.faces.tobytes())
             used = set(mesh.slots) if mesh.slots else {0}
             body_slots = threemf.assembly_slots(
-                threemf.AssemblyPart(mesh, slots=tuple(body.material_slots))
+                threemf.AssemblyPart(mesh, slots=threemf.slots_for_object(body))
             )
             active = [slot for slot in body_slots if slot.index in used]
             # Die Materialliste allein erkennt keinen Tausch zwischen Körpern.
@@ -188,6 +186,7 @@ def prepare(
                 "spool_bindings",
                 "inventory_project_id",
                 "slot_profiles",
+                "slot_profile_bindings",
                 "slot_overrides",
             ):
                 values.pop(field, None)
@@ -196,7 +195,7 @@ def prepare(
                 UsageLine(
                     slot=slot,
                     grams=amounts.get(key),
-                    spool_identifier=spool_for(settings, slot),
+                    spool_identifier=spool_for(settings, original),
                     density=density,
                     diameter=diameter,
                 )
@@ -219,6 +218,8 @@ def _only_tool(metrics: GcodeMetrics, index: int) -> bool:
     aus. Deshalb darf die Gesamtsumme keinen fremden oder fehlenden Einzelwert
     übernehmen; ein direkt genannter Grammwert gewinnt dabei vor der Länge.
     """
+    if any(tool != index for tool in metrics.used_tools):
+        return False
     weights, lengths = metrics.filament_grams_by_tool, metrics.filament_mm_by_tool
     for tool in range(max(len(weights), len(lengths))):
         if tool == index:
@@ -233,12 +234,13 @@ def _only_tool(metrics: GcodeMetrics, index: int) -> bool:
 
 def from_gcode(request: UsageRequest, metrics: GcodeMetrics) -> UsageRequest:
     """Erhält Werkzeugnummern; ein Gesamtwert wird niemals aufgeteilt."""
-    count = max((line.slot.index + 1 for line in request.lines), default=0)
+    count = max(len(metrics.filament_grams_by_tool), len(metrics.filament_mm_by_tool))
     densities: list[float | None] = [None] * count
     diameters: list[float | None] = [None] * count
     for line in request.lines:
-        densities[line.slot.index] = line.density
-        diameters[line.slot.index] = line.diameter
+        if 0 <= line.slot.index < count:
+            densities[line.slot.index] = line.density
+            diameters[line.slot.index] = line.diameter
     weights = metrics.grams_by_tool(densities=densities, diameters=diameters)
     lines = []
     for line in request.lines:
@@ -259,4 +261,37 @@ def from_gcode(request: UsageRequest, metrics: GcodeMetrics) -> UsageRequest:
             grams = None
             converted = False
         lines.append(replace(line, grams=grams, source="gcode", converted_from_length=converted))
+    represented = {line.slot.index for line in request.lines}
+    for index in sorted(set(range(len(weights))) | set(metrics.used_tools)):
+        if index in represented:
+            continue
+        grams = weights[index] if index < len(weights) else None
+        stated = (
+            metrics.filament_grams_by_tool[index]
+            if index < len(metrics.filament_grams_by_tool)
+            else None
+        )
+        length = (
+            metrics.filament_mm_by_tool[index] if index < len(metrics.filament_mm_by_tool) else None
+        )
+        evidence = stated if stated is not None else length
+        if evidence is None and index not in metrics.used_tools:
+            continue
+        if evidence is not None and (not math.isfinite(evidence) or evidence <= 0.0):
+            continue
+        # Ein Slicer kann ein zusätzliches Stützfilament verwenden. Seine
+        # Werkzeugnummer belegt keine Materialart und keine lokale Spule.
+        # Auch eine belegte Länge erhält ohne Materialdaten keine Grammzahl.
+        lines.append(
+            UsageLine(
+                slot=MaterialSlot(
+                    index=index,
+                    name=_("Zusätzliches Filament · Werkzeug {number}", number=index + 1),
+                ),
+                grams=grams
+                if grams is not None and math.isfinite(grams) and grams >= 0.0
+                else None,
+                source="gcode",
+            )
+        )
     return replace(request, lines=tuple(lines))

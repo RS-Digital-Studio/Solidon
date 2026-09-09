@@ -68,7 +68,9 @@ def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushRe
     for index in reached:
         slots[index] = int(slot)
     _log.info("filled %d of %d faces into slot %d", len(reached), faces, slot)
-    return BrushResult(mesh=MeshData(raw=body, slots=tuple(slots)), painted=len(reached))
+    return BrushResult(
+        mesh=MeshData(raw=body, slots=tuple(slots), cavity=mesh.cavity), painted=len(reached)
+    )
 
 
 @op_params
@@ -156,6 +158,8 @@ class PaintParams(BaseParams):
     ),
 )
 def paint_slot(ctx: OpContext) -> OpResult:
+    from app.core.export.threemf import slots_for_object
+
     params = cast(PaintParams, ctx.params)
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
@@ -216,14 +220,15 @@ def paint_slot(ctx: OpContext) -> OpResult:
     #
     # ``assign_slot`` nebenan tat es die ganze Zeit richtig; die
     # Funktion ist von dort und wird jetzt geteilt statt verdoppelt.
+    previous_slots = slots_for_object(source)
     existing = (
         None
         if params.replace_filament
-        else {entry.index: entry for entry in source.material_slots}.get(params.slot)
+        else {entry.index: entry for entry in previous_slots}.get(params.slot)
     )
     chosen = colour_from(params.colour)
     slots = merged_slots(
-        list(source.material_slots),
+        list(previous_slots),
         [
             MaterialSlot(
                 index=params.slot,

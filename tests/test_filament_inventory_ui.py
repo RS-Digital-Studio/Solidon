@@ -190,9 +190,34 @@ def test_archive_and_restore_preserve_the_spool(inventory: InventoryView) -> Non
     assert not inventory.cards
     inventory.archived.setChecked(True)
     assert inventory.cards[0].entry.identifier == entry.identifier
+    assert "Archiviert" in inventory.cards[0].accessibleName()
     filaments.restore(entry.identifier)
     inventory.refresh()
     assert inventory.cards[0].entry.remaining_grams == pytest.approx(125)
+
+
+def test_duplicate_labels_show_identity_before_opening(inventory: InventoryView) -> None:
+    """Eine kurze Kennung steht genau bei den sonst gleichen Etiketten im Regal."""
+    filaments.save(filaments.CatalogueFilament("Gleich", "#ffffff"))
+    filaments.save(filaments.CatalogueFilament("Gleich", "#ffffff"))
+    filaments.save(filaments.CatalogueFilament("Andere", "#334455"))
+    inventory.refresh()
+    assert all(card.show_identifier for card in inventory.cards if card.entry.name == "Gleich")
+    assert not next(card for card in inventory.cards if card.entry.name == "Andere").show_identifier
+
+
+def test_detail_displays_note_as_plain_text(inventory: InventoryView) -> None:
+    """Eine Spulennotiz ist vor dem Bearbeiten lesbar und führt keine HTML-Darstellung ein."""
+    from PySide6.QtWidgets import QLabel
+
+    entry = filaments.save(
+        filaments.CatalogueFilament("Spule", "#123456", note="<b>Trocken lagern</b>")
+    )
+    inventory.show_spool(entry.identifier)
+    note = next(
+        label for label in inventory.detail.findChildren(QLabel) if label.text() == entry.note
+    )
+    assert note.textFormat() == Qt.TextFormat.PlainText
 
 
 def test_multi_import_only_takes_checked_spools(qt_app: QApplication) -> None:

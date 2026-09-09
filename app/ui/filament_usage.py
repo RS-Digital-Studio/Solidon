@@ -9,18 +9,20 @@ from functools import partial
 from typing import cast, override
 from uuid import uuid4
 
-from PySide6.QtCore import QObject, QSignalBlocker, Signal
+from PySide6.QtCore import QObject, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
-    QFormLayout,
+    QFrame,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -35,7 +37,7 @@ from app.ui.filament_picker import NewFilamentDialog, hex_of, spool_label, swatc
 from app.ui.labels import NumberSpin, local_timestamp, localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.settings import UiSettings
-from app.ui.style import NORMAL, TARGET_SIZE, TIGHT
+from app.ui.style import NORMAL, ROOMY, TARGET_SIZE, TIGHT, WIDE, make_primary, set_level
 
 
 def _line_key(line: UsageLine) -> str:
@@ -190,13 +192,29 @@ class UsageDialog(QDialog):
         self._tasks.rejected.connect(self._rejected)
         self._tasks.busyChanged.connect(self._validate)
         self.setWindowTitle(tr("Filamentverbrauch buchen"))
-        self.resize(680, 560)
+        self.resize(680, 520)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        layout.setSpacing(NORMAL)
+        self.title = QLabel(tr("Filamentverbrauch buchen"), self)
+        set_level(self.title, "title")
+        self.title.setWordWrap(True)
+        layout.addWidget(self.title)
+        self.project_label = QLabel(
+            tr("{project} · Platte {plate}").format(
+                project=request.project_name, plate=request.plate + 1
+            ),
+            self,
+        )
+        self.project_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.project_label.setWordWrap(True)
+        set_level(self.project_label, "section")
+        layout.addWidget(self.project_label)
         intro = QLabel(
             tr(
-                "{project} · Platte {plate}\nDie Datei wurde ausgegeben. Buchen Sie den "
+                "Die Datei wurde ausgegeben. Buchen Sie den "
                 "vorgesehenen Druck oder lassen Sie den Bestand unverändert."
-            ).format(project=request.project_name, plate=request.plate + 1),
+            ),
             self,
         )
         intro.setWordWrap(True)
@@ -205,8 +223,10 @@ class UsageDialog(QDialog):
         self.operation.setAccessibleName(tr("Druckvorgang"))
         layout.addWidget(self.operation)
         self.content = QWidget(self)
-        form = QFormLayout(self.content)
-        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form = QVBoxLayout(self.content)
+        form.setContentsMargins(0, 0, NORMAL, 0)
+        form.setSpacing(NORMAL)
+        self.cards: list[QGroupBox] = []
         self.choices: list[QComboBox] = []
         self.amounts: list[NumberSpin] = []
         self.sources: list[QLabel] = []
@@ -216,11 +236,33 @@ class UsageDialog(QDialog):
         self.split_panels: list[QWidget] = []
         self.allocations: list[list[tuple[QComboBox, NumberSpin, QWidget]]] = []
         for index, line in enumerate(request.lines):
+            card = QGroupBox(self.content)
+            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+            row = QVBoxLayout(card)
+            row.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
+            row.setSpacing(NORMAL)
+            heading = QHBoxLayout()
+            marker = QLabel(card)
+            marker.setPixmap(swatch(hex_of(line.slot.colour)).pixmap(NORMAL * 3, NORMAL * 3))
+            name = QLabel(str(line.slot.name) or tr("Ohne Filamentzuweisung"), card)
+            name.setTextFormat(Qt.TextFormat.PlainText)
+            name.setWordWrap(True)
+            set_level(name, "section")
+            heading.addWidget(marker)
+            heading.addWidget(name, 1)
             choice = QComboBox(self.content)
+            choice.setSizeAdjustPolicy(
+                QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            )
+            choice.setMinimumContentsLength(12)
+            choice.currentTextChanged.connect(choice.setToolTip)
             choice.setAccessibleName(tr("Spule für {name}").format(name=str(line.slot.name)))
             choice.setMinimumHeight(TARGET_SIZE)
             amount = self._amount_widget(line.grams, self.content)
             amount.setAccessibleName(tr("Verbrauch für {name}").format(name=str(line.slot.name)))
+            set_level(amount, "section")
+            heading.addWidget(amount)
+            row.addLayout(heading)
             source = QLabel(_source(line), self.content)
             source.setWordWrap(True)
             suggestion = QLabel("", self.content)
@@ -238,10 +280,11 @@ class UsageDialog(QDialog):
             add.clicked.connect(lambda _checked=False, row=index: self._add_allocation(row))
             split_layout.addWidget(add)
             panel.hide()
-            row = QVBoxLayout()
-            for widget in (amount, source, choice, suggestion, split, panel, cost):
+            for widget in (source, choice, suggestion, split, panel, cost):
                 row.addWidget(widget)
-            form.addRow(str(line.slot.name) or tr("Ohne Filamentzuweisung"), row)
+            set_level(cost, "section")
+            form.addWidget(card)
+            self.cards.append(card)
             self.choices.append(choice)
             self.amounts.append(amount)
             self.sources.append(source)
@@ -251,15 +294,16 @@ class UsageDialog(QDialog):
             self.split_panels.append(panel)
             self.allocations.append([])
             amount.valueChanged.connect(lambda _value, row=index: self._amount_changed(row))
-            choice.currentIndexChanged.connect(self._validate)
+            choice.currentIndexChanged.connect(lambda _value, row=index: self._choice_changed(row))
             split.toggled.connect(lambda checked, row=index: self._toggle_split(row, checked))
         scroll = QScrollArea(self)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
+        form.addStretch()
         scroll.setWidget(self.content)
         layout.addWidget(scroll, 1)
         self.add_button = QPushButton(tr("Spule anlegen …"), self)
         self.add_button.clicked.connect(self._create_spool)
-        layout.addWidget(self.add_button)
         self.allow_unverified = QCheckBox(
             tr("Trotz unklarem Bestand buchen; die Restmenge danach bleibt unbekannt."), self
         )
@@ -270,17 +314,21 @@ class UsageDialog(QDialog):
         layout.addWidget(self.state)
         self.reload_button = QPushButton(tr("Lager neu laden"), self)
         self.reload_button.clicked.connect(self._load)
-        layout.addWidget(self.reload_button)
+        utilities = QHBoxLayout()
+        utilities.addWidget(self.add_button)
+        utilities.addWidget(self.reload_button)
+        utilities.addStretch()
+        self.repeat_button = QPushButton(tr("Noch einmal gedruckt"), self)
+        utilities.addWidget(self.repeat_button)
+        layout.addLayout(utilities)
         buttons = QDialogButtonBox(self)
         self.book_button = buttons.addButton(tr("Abziehen"), QDialogButtonBox.ButtonRole.AcceptRole)
         self.correct_button = buttons.addButton(
             tr("Mengenaufteilung korrigieren"), QDialogButtonBox.ButtonRole.ActionRole
         )
-        self.repeat_button = buttons.addButton(
-            tr("Noch einmal gedruckt"), QDialogButtonBox.ButtonRole.ActionRole
-        )
         buttons.addButton(tr("Nicht buchen"), QDialogButtonBox.ButtonRole.RejectRole)
         self.book_button.clicked.connect(self._book)
+        make_primary(self.book_button)
         self.correct_button.clicked.connect(lambda: self._book(correct_manual=True))
         self.repeat_button.clicked.connect(self._repeat)
         buttons.rejected.connect(self.reject)
@@ -354,6 +402,7 @@ class UsageDialog(QDialog):
     def _rejected(self, problem: object) -> None:
         self._validate()
         self.state.setText(str(problem))
+        self.state.show()
         self.reload_button.show()
 
     def _fill_choice(
@@ -378,6 +427,9 @@ class UsageDialog(QDialog):
             )
             for entry in ordered:
                 choice.addItem(swatch(entry.colour), spool_label(entry), entry.identifier)
+                choice.setItemData(
+                    choice.count() - 1, spool_label(entry), Qt.ItemDataRole.ToolTipRole
+                )
             suggested = False
             found = choice.findData(selected)
             if found >= 0:
@@ -387,6 +439,7 @@ class UsageDialog(QDialog):
                 if candidate is not None:
                     choice.setCurrentIndex(choice.findData(candidate.identifier))
                     suggested = True
+        choice.setToolTip(choice.currentText())
         if suggest:
             index = self.choices.index(choice)
             self.suggestions[index].setText(
@@ -400,6 +453,7 @@ class UsageDialog(QDialog):
                     else ""
                 )
             )
+            self.suggestions[index].setVisible(bool(self.suggestions[index].text()))
         return suggested
 
     def _operation_changed(self) -> None:
@@ -466,6 +520,9 @@ class UsageDialog(QDialog):
         row = QHBoxLayout(widget)
         row.setContentsMargins(0, 0, 0, 0)
         choice = QComboBox(widget)
+        choice.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
+        choice.setMinimumContentsLength(8)
+        choice.currentTextChanged.connect(choice.setToolTip)
         choice.setAccessibleName(
             tr("Spule für {name}").format(name=str(self._lines[index].slot.name))
         )
@@ -495,6 +552,12 @@ class UsageDialog(QDialog):
     def _amount_changed(self, index: int) -> None:
         self._manual.add(index)
         self.sources[index].setText(tr("Von Hand eingetragen"))
+        self._validate()
+
+    def _choice_changed(self, index: int) -> None:
+        """Eine ausdrückliche Wahl ersetzt den vorherigen automatischen Vorschlag."""
+        self.suggestions[index].clear()
+        self.suggestions[index].hide()
         self._validate()
 
     def _repeat(self) -> None:
@@ -602,6 +665,7 @@ class UsageDialog(QDialog):
         self.correct_button.setVisible(manual_correction)
         self.correct_button.setEnabled(not reason)
         self.book_button.setVisible(not manual_correction)
+        make_primary(self.correct_button if manual_correction else self.book_button)
         self.book_button.setText(tr("G-Code-Angabe übernehmen") if existing else tr("Abziehen"))
         self.book_button.setEnabled(not reason)
         self.repeat_button.setVisible(bool(self._bookings))
@@ -615,6 +679,7 @@ class UsageDialog(QDialog):
             )
         )
         self.state.setText(reason)
+        self.state.setVisible(bool(reason))
         self.reload_button.setVisible(not self._loaded or bool(reason))
 
     @staticmethod
@@ -657,6 +722,7 @@ class UsageDialog(QDialog):
                 if totals
                 else ""
             )
+            label.setVisible(bool(label.text()))
 
     def _create_spool(self) -> None:
         dialog = NewFilamentDialog(self)
@@ -672,6 +738,7 @@ class UsageDialog(QDialog):
         if not button.isEnabled():
             return
         self._pending = "book"
+        existing = self._bookings.get(self.operation.currentData())
         self._tasks.run(
             partial(
                 filaments.book,
@@ -681,6 +748,7 @@ class UsageDialog(QDialog):
                 project_name=self.request.project_name,
                 allow_unverified_stock=self.allow_unverified.isChecked(),
                 correct_manual_allocation=correct_manual,
+                expected_booking_updated_at=existing.updated_at if existing else None,
             )
         )
 
@@ -705,6 +773,16 @@ def _preferred_request(previous: UsageRequest | None, current: UsageRequest) -> 
     if previous is None:
         return current
     old = {_line_key(line): line for line in previous.lines}
+    current_keys = {_line_key(line) for line in current.lines}
+    extra = (
+        tuple(
+            line
+            for line in previous.lines
+            if line.source == "gcode" and _line_key(line) not in current_keys
+        )
+        if all(line.source == "internal" for line in current.lines)
+        else ()
+    )
     return replace(
         current,
         lines=tuple(
@@ -717,7 +795,8 @@ def _preferred_request(previous: UsageRequest | None, current: UsageRequest) -> 
             )
             else line
             for line in current.lines
-        ),
+        )
+        + extra,
     )
 
 
@@ -776,13 +855,20 @@ class UsageNotice(QWidget):
         self.settings = settings
         self.requests: dict[str, UsageRequest] = {}
         self._pending: dict[str, UsageRequest] = {}
+        self._booked: set[str] = set()
         self._tasks = _UsageTasks(self)
         self._tasks.completed.connect(self._completed)
         self._tasks.rejected.connect(self._rejected)
         self.choice = QComboBox(self)
         self.choice.setAccessibleName(tr("Offene Filamentbuchung"))
+        self.choice.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.choice.setMinimumContentsLength(10)
+        self.choice.currentTextChanged.connect(self.choice.setToolTip)
         self.review = QPushButton(tr("Filament abziehen …"), self)
         self.review.clicked.connect(self._review)
+        self.choice.currentIndexChanged.connect(self._sync_review)
         row = QHBoxLayout(self)
         row.setContentsMargins(0, TIGHT, 0, TIGHT)
         row.setSpacing(NORMAL)
@@ -803,6 +889,10 @@ class UsageNotice(QWidget):
         if existing < 0:
             self.choice.addItem(label, request.fingerprint)
             existing = self.choice.count() - 1
+        else:
+            self.choice.setItemText(existing, label)
+        if request.lines:
+            self.choice.setItemIcon(existing, swatch(hex_of(request.lines[0].slot.colour)))
         self.choice.setCurrentIndex(existing)
         self.show()
         if auto_book and self.settings.inventory_booking_mode == "auto":
@@ -819,13 +909,25 @@ class UsageNotice(QWidget):
         self._tasks.run(partial(_auto_book, request))
 
     def _completed(self, result: object) -> None:
-        self.review.setEnabled(True)
-        self.review.setText(
-            tr("Buchung ansehen …") if result is not None else tr("Filament abziehen …")
-        )
         if result is not None:
+            self._booked.add(cast(filaments.InventoryBooking, result).fingerprint)
             self.changed.emit()
+        self._sync_review()
         self._start_pending()
+
+    def _sync_review(self, _index: int = -1) -> None:
+        """Die Handlung gehört zur ausgewählten Ausgabe, nicht zum letzten Arbeiterergebnis."""
+        busy = self._tasks.worker is not None
+        self.review.setEnabled(not busy)
+        self.review.setText(
+            tr("Bestand wird geprüft …")
+            if busy
+            else (
+                tr("Buchung ansehen …")
+                if self.choice.currentData() in self._booked
+                else tr("Filament abziehen …")
+            )
+        )
 
     def _rejected(self, problem: object) -> None:
         self.review.setToolTip(str(problem))
@@ -838,7 +940,8 @@ class UsageNotice(QWidget):
             return
         dialog = UsageDialog(request, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.review.setText(tr("Buchung ansehen …"))
+            self._booked.add(request.fingerprint)
+            self._sync_review()
             self.changed.emit()
 
     def release(self, timeout_ms: int = 2000) -> None:

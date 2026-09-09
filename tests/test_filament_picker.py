@@ -8,8 +8,6 @@ weiterrechnet.
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 pytest.importorskip("PySide6")
@@ -22,11 +20,40 @@ from app.core.types import MaterialSlot
 from app.ui.filament_picker import NEW_FILAMENT, FilamentField, NewFilamentDialog, hex_of
 
 
+def _assigned_body(slots: list[MaterialSlot], used: tuple[int, ...]):
+    """Ein echter kleiner Körper trennt seine benutzten Flächen von alten Slotdefinitionen."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import SceneObject
+
+    mesh = MeshData.of(
+        trimesh.creation.box(), slots=tuple(used[index % len(used)] for index in range(12))
+    )
+    return SceneObject(id="part", name="Teil", mesh=mesh, material_slots=slots)
+
+
 def test_a_colour_from_the_document_becomes_a_hex_value() -> None:
     """Das Dokument führt Anteile, die Oberfläche zeigt Hexwerte."""
     assert hex_of((1.0, 0.0, 0.0)) == "#ff0000"
     assert hex_of((0.0, 0.5, 1.0)) == "#0080ff"
     assert hex_of(None) == "", "keine Farbe ist keine Farbe, nicht Schwarz"
+
+
+def test_full_spool_can_be_entered_without_opening_optional_details(qt_app: QApplication) -> None:
+    """Die Voraussetzung des Vollspulenknopfs liegt auf derselben sichtbaren Seite."""
+    dialog = NewFilamentDialog()
+    dialog.show()
+    qt_app.processEvents()
+    assert not dialog.more.isVisibleTo(dialog)
+    assert dialog.spool_weight.isVisibleTo(dialog)
+    assert dialog.location.isVisibleTo(dialog)
+    dialog.spool_weight.setValue(750)
+    assert dialog.entry().remaining_grams is None
+    dialog.full_spool_button.click()
+    assert dialog.entry().remaining_grams == pytest.approx(750)
+    assert dialog.stock_known.isChecked()
+    dialog.close()
 
 
 def test_the_picker_answers_what_colour_slot_one_has(qt_app: QApplication) -> None:
@@ -306,7 +333,7 @@ def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
     panel = FilamentPanel()
     panel.show_scene(
         [
-            SceneObject(id="A", name="A", mesh=box, material_slots=[schwarz, rot]),
+            _assigned_body([schwarz, rot], (0, 1)),
             SceneObject(id="B", name="B", mesh=box, material_slots=[schwarz]),
         ]
     )
@@ -327,8 +354,6 @@ def test_refreshing_the_rack_keeps_the_project_summary(
     Filamentimport sollen die neuen Spulen sofort erscheinen, ohne die gerade
     gezeigten Projektfilamente oder ihre Druckwertmarken zu verlieren.
     """
-    from types import SimpleNamespace
-
     from app.core.knowledge import filaments
     from app.core.types import MaterialSlot
     from app.ui.filament_picker import FilamentPanel
@@ -337,11 +362,7 @@ def test_refreshing_the_rack_keeps_the_project_summary(
     filaments.remember("PLA Weiß", "#ffffff", material_type="PLA")
     panel = FilamentPanel()
     panel.show_scene(
-        [
-            SimpleNamespace(
-                material_slots=[MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))]
-            )
-        ]
+        [_assigned_body([MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))], (1,))]
     )
     project_state = panel._used
 
@@ -352,6 +373,34 @@ def test_refreshing_the_rack_keeps_the_project_summary(
     lines = [panel.list.item(index).text() for index in range(panel.list.count())]
     assert "PETG Grau — 1 Körper" in lines
     assert any(line.startswith("TPU Schwarz") for line in lines), "die neue Regalspule erscheint"
+
+
+def test_project_summary_counts_used_surfaces_and_keeps_unassigned_faces(
+    qt_app: QApplication,
+) -> None:
+    """Eine Altdefinition zählt nicht als Bedarf; ein unbenutzter Slot ersetzt keine Fläche."""
+    from app.ui.filament_picker import FilamentPanel
+
+    active = MaterialSlot(index=1, name="Aktiv", colour=(1, 0, 0))
+    stale = MaterialSlot(index=2, name="Früher", colour=(0, 0, 1))
+    panel = FilamentPanel()
+    panel.show_scene([_assigned_body([active, stale], (0, 1))])
+    used = {
+        (str(slot.name) if slot else None): count
+        for slot, _name, _colour, count, _own in panel._used
+    }
+    assert used == {"Aktiv": 1, None: 1}
+
+
+def test_same_print_filament_counts_each_body_only_once(qt_app: QApplication) -> None:
+    """Zwei belegte Plätze mit derselben Druckidentität sind kein zweiter Körper."""
+    from app.ui.filament_picker import FilamentPanel
+
+    slots = [MaterialSlot(index=index, name="Gleich", colour=(1, 0, 0)) for index in (1, 2)]
+    panel = FilamentPanel()
+    panel.show_scene([_assigned_body(slots, (1, 2))])
+    assert len(panel._used) == 1
+    assert panel._used[0][3] == 1
 
 
 def test_a_used_filament_separates_colour_from_print_values(
@@ -373,7 +422,7 @@ def test_a_used_filament_separates_colour_from_print_values(
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
     filaments.remember("PETG Rot", "#c0392b")
-    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)), slots=(1,) * 12)
     panel = FilamentPanel()
     panel.show_scene(
         [
@@ -423,7 +472,7 @@ def test_the_print_values_button_names_the_exact_filament(
             SceneObject(
                 id="A",
                 name="A",
-                mesh=MeshData.of(trimesh.creation.box()),
+                mesh=MeshData.of(trimesh.creation.box(), slots=(4,) * 12),
                 material_slots=[slot],
             )
         ]
@@ -567,11 +616,6 @@ def test_the_unpainted_swatch_follows_the_theme() -> None:
         theme._ACTIVE = was
 
 
-@pytest.mark.xfail(
-    sys.platform == "darwin",
-    reason="auf dem Mac rechnet _around_the_list das Beiwerk zu klein — ungemessen, siehe Register",
-    strict=False,
-)
 def test_the_filament_card_shares_the_height_instead_of_taking_it(
     qt_app: QApplication, tmp_path, monkeypatch
 ) -> None:
@@ -636,8 +680,6 @@ def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
     Zeilen: 172 Bildpunkte gebraucht, 156 gesetzt, vier von fünf Zeilen zu
     sehen — auch dann, wenn die Spalte ihre volle Wunschhöhe bekam.
     """
-    from types import SimpleNamespace
-
     from app.ui.filament_picker import FilamentPanel
 
     monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
@@ -646,11 +688,7 @@ def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
 
     panel = FilamentPanel()
     panel.show_scene(
-        [
-            SimpleNamespace(
-                material_slots=[MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))]
-            )
-        ]
+        [_assigned_body([MaterialSlot(index=1, name="PETG Grau", colour=(0.5, 0.5, 0.5))], (1,))]
     )
     panel.resize(300, 400)
     panel.set_room(panel.wanted_height())
@@ -667,6 +705,58 @@ def test_every_row_fits_when_the_card_gets_the_height_it_asked_for(
         f"{liste.count()} Zeilen brauchen {sum(hoehen)} Punkte, die Liste bietet "
         f"{platz} — die letzten passen nicht hinein"
     )
+
+
+@pytest.mark.parametrize("font_points", [10, 16])
+@pytest.mark.parametrize("width", [260, 420])
+@pytest.mark.parametrize("row_count", [0, 25])
+def test_filament_card_room_includes_wrapped_hint_and_visible_controls(
+    qt_app: QApplication, tmp_path, monkeypatch, font_points, width, row_count
+) -> None:
+    """Knapper und freier Raum enthalten den Hinweis und lassen der Nachbarkarte Platz."""
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QPushButton, QVBoxLayout, QWidget
+
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    for index in range(row_count):
+        filaments.remember(f"Spule {index:02d}", "#2980b9")
+    host = QWidget()
+    host.setFixedWidth(width)
+    layout = QVBoxLayout(host)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    panel = FilamentPanel()
+    panel.setFont(QFont(qt_app.font().family(), font_points))
+    panel.hint.setText("Der lange Hinweis erklärt die Auswahl und die Druckwerte. " * 5)
+    layout.addWidget(panel)
+    neighbour = QPushButton("Nachbarkarte")
+    neighbour.setFixedHeight(neighbour.sizeHint().height())
+    layout.addWidget(neighbour)
+    host.resize(width, 700)
+    host.show()
+    qt_app.processEvents()
+    try:
+        for back_visible in (False, True):
+            panel.return_to_print_button.setVisible(back_visible)
+            qt_app.processEvents()
+            for full_room in (False, True):
+                room = panel.wanted_height() if full_room else panel.least_height()
+                panel.set_room(room)
+                layout.activate()
+                host.resize(width, room + neighbour.height())
+                qt_app.processEvents()
+                assert panel.height() == room
+                assert panel.minimumHeight() <= room
+                assert panel.hint.height() >= panel.hint.heightForWidth(panel.hint.width())
+                assert neighbour.geometry().top() >= panel.geometry().bottom()
+                assert neighbour.geometry().bottom() < host.height()
+                assert panel.wanted_height() >= panel.least_height()
+                if full_room:
+                    assert panel.list.verticalScrollBar().maximum() == 0
+    finally:
+        host.close()
 
 
 def test_the_filter_dialog_narrows_by_vendor_material_and_text(qt_app: QApplication) -> None:
@@ -855,6 +945,59 @@ def test_same_print_filament_keeps_both_physical_spools_selectable(
     field._chosen(second_row)
     assert seen == [second]
     assert slot == spool_slot(first, 3)
+
+
+def test_default_slot_does_not_pretend_a_catalogue_spool_was_chosen(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Die Slotvorgabe ist keine Zustimmung zur zufällig ersten Spule im Lager."""
+    from app.ui.filament_picker import _ID_ROLE
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    entry = filaments.save(filaments.CatalogueFilament("PLA Rot", "#ff0000", "PLA"))
+    field = FilamentField(1)
+    assert field.currentData() == 1
+    assert field.currentData(_ID_ROLE) is None
+    assert entry.name not in field.currentText()
+    assert "noch keines" in field.currentText()
+    assert field.findData(entry.identifier, _ID_ROLE) >= 0
+
+
+@pytest.mark.parametrize("change", ["rename", "archive", "remove"])
+def test_stale_catalogue_choice_requires_a_new_explicit_choice(
+    qt_app: QApplication, tmp_path, monkeypatch, change
+) -> None:
+    """Überholte Etiketten dürfen weder alte Druckwerte noch eine neue Bindung melden."""
+    from dataclasses import replace
+
+    from app.ui.filament_picker import _ID_ROLE
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    entry = filaments.save(filaments.CatalogueFilament("Alt", "#112233", "PLA"))
+    field = FilamentField(0)
+    row = field.findData(entry.identifier, _ID_ROLE)
+    values, spools, notices = [], [], []
+    field.filamentChosen.connect(lambda *args: values.append(args))
+    field.spoolChosen.connect(spools.append)
+    field.choiceNotice.connect(notices.append)
+    if change == "rename":
+        fresh = filaments.save(replace(entry, name="Neu", colour="#445566", material_type="PETG"))
+    elif change == "archive":
+        filaments.archive(entry.identifier)
+    else:
+        monkeypatch.setattr(filaments, "get", lambda _identifier: None)
+    field.setCurrentIndex(row)
+    field._chosen(row)
+    assert not values
+    assert not spools
+    assert "erneut" in notices[-1]
+    if change == "rename":
+        row = field.findData(entry.identifier, _ID_ROLE)
+        field.setCurrentIndex(row)
+        field._chosen(row)
+        assert values == [("Neu", "#445566", "PETG", "")]
+        assert spools == [fresh]
+        assert notices[-1] == ""
 
 
 def test_full_body_offers_named_replacement_and_cancel_keeps_selection(

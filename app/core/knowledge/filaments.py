@@ -136,7 +136,7 @@ def catalogue_path() -> Path:
 
 
 def profile_name(value: str) -> str:
-    """Ein portabler Slicer-Profilname — niemals ein Dateipfad (Regel 12)."""
+    """Ein portabler Profilname; Materialzusätze wie PLA/PETG sind keine Pfade."""
     cleaned = value.strip()
     if not cleaned:
         return ""
@@ -144,8 +144,8 @@ def profile_name(value: str) -> str:
     if (
         candidate.drive
         or candidate.is_absolute()
-        or len(candidate.parts) != 1
-        or cleaned == ".."
+        or "\\" in cleaned
+        or any(part in {".", ".."} for part in cleaned.split("/"))
         or cleaned.startswith(("/", "\\"))
     ):
         raise ValidationError(
@@ -170,13 +170,17 @@ def _catalogue_profile_name(value: str) -> str:
 
 def _amount(value: float | None, name: str, *, positive: bool = False) -> None:
     """Unbekannt bleibt erlaubt, bekannte Mengen müssen endlich und gültig sein."""
-    if value is not None and (
-        isinstance(value, bool)
-        or not isinstance(value, int | float)
-        or not math.isfinite(value)
-        or value < 0.0
-        or (positive and value <= 0.0)
-    ):
+    try:
+        invalid = value is not None and (
+            isinstance(value, bool)
+            or not isinstance(value, int | float)
+            or not math.isfinite(value)
+            or value < 0.0
+            or (positive and value <= 0.0)
+        )
+    except OverflowError:
+        invalid = True
+    if invalid:
         raise ValidationError(
             field=name,
             value=value,
@@ -348,6 +352,49 @@ def _parse_booking(data: Any) -> InventoryBooking:
     return booking
 
 
+def _validate_booking_history(state: _Inventory, booking: InventoryBooking) -> None:
+    """Prüft auch historische Spulenbezüge und die ununterbrochene Korrekturkette."""
+    timestamps = [booking.created_at, booking.updated_at]
+    if booking.reversed_at:
+        timestamps.append(booking.reversed_at)
+    groups = [booking.positions]
+    latest = booking.positions
+    for correction in reversed(booking.corrections):
+        timestamps.append(correction.created_at)
+        groups.extend((correction.previous_positions, correction.positions))
+        revisions = {position.key: position.stock_revision for position in latest}
+        if not _same_positions(correction.positions, latest) or any(
+            revisions[position.key] != position.stock_revision for position in correction.positions
+        ):
+            raise ValueError("correction chain")
+        latest = correction.previous_positions
+    for timestamp in timestamps:
+        if not isinstance(timestamp, str) or datetime.fromisoformat(timestamp).tzinfo is None:
+            raise ValueError("booking timestamp")
+    for positions in groups:
+        for position in positions:
+            spool = state.spools.get(position.spool_identifier)
+            if spool is None or position.stock_revision > spool.stock_revision:
+                raise ValueError("stock_revision")
+    stock_revisions = {
+        position.spool_identifier: position.stock_revision for position in booking.positions
+    }
+    preserved: set[str] = set()
+    for count in booking.preserved_counts:
+        spool = state.spools.get(count.spool_identifier)
+        if (
+            not booking.reversed_at
+            or spool is None
+            or count.spool_identifier not in stock_revisions
+            or count.spool_identifier in preserved
+            or not stock_revisions[count.spool_identifier]
+            < count.stock_revision
+            <= spool.stock_revision
+        ):
+            raise ValueError("preserved_counts")
+        preserved.add(count.spool_identifier)
+
+
 def _migrate_list(data: list[Any]) -> _Inventory:
     """Listenkatalog → Version 1: eigene Kennungen, alle fehlenden Mengen unbekannt."""
     state = _Inventory(identifier=uuid4().hex, dirty=True)
@@ -405,13 +452,22 @@ def _read() -> _Inventory:
             booking = _parse_booking(value)
             if booking.operation_id in state.journal:
                 raise ValueError("operation_id")
-            for position in booking.positions:
-                spool = state.spools.get(position.spool_identifier)
-                if spool is None or position.stock_revision > spool.stock_revision:
-                    raise ValueError("stock_revision")
+            _validate_booking_history(state, booking)
             state.journal[booking.operation_id] = booking
         for entry in state.spools.values():
-            if not _same_amount(entry.remaining_grams, _remaining(state, entry)):
+            remaining = _remaining(state, entry)
+            if (
+                entry.remaining_grams is None
+                and remaining is not None
+                and _remaining(state, entry, normalize_roundoff=False) is None
+            ):
+                # Frühere Fassungen speicherten einen negativen Binärrest als
+                # unbekannt. Das unveränderte Journal belegt den leeren Bestand.
+                state.spools[entry.identifier] = replace(
+                    entry, remaining_grams=remaining, revision=entry.revision + 1
+                )
+                state.dirty = True
+            elif not _same_amount(entry.remaining_grams, remaining):
                 raise ValueError("remaining_grams")
         return state
     except (ValueError, TypeError, KeyError, AttributeError, ValidationError) as problem:
@@ -726,20 +782,37 @@ def bookings(spool_identifier: str | None = None) -> tuple[InventoryBooking, ...
         )
 
 
-def _remaining(state: _Inventory, entry: CatalogueFilament) -> float | None:
+def _remaining(
+    state: _Inventory, entry: CatalogueFilament, *, normalize_roundoff: bool = True
+) -> float | None:
     """Rechnet ab der jüngsten Feststellung; Unterdeckung bleibt klärungsbedürftig."""
     counted = state.counts[entry.identifier]
     if counted is None:
         return None
-    consumed = math.fsum(
-        position.grams
-        for booking in state.journal.values()
-        if not booking.reversed_at
-        for position in booking.positions
-        if position.spool_identifier == entry.identifier
-        and position.stock_revision == entry.stock_revision
-    )
+    try:
+        consumed = math.fsum(
+            position.grams
+            for booking in state.journal.values()
+            if not booking.reversed_at
+            for position in booking.positions
+            if position.spool_identifier == entry.identifier
+            and position.stock_revision == entry.stock_revision
+        )
+    except OverflowError as problem:
+        raise ValidationError(
+            field="grams",
+            constraint="range",
+            detail=_("Tragen Sie eine gültige Menge ein oder lassen Sie die Angabe leer."),
+        ) from problem
     remaining = counted - consumed
+    # Ein letztes Binärbit nach etwa 3,3 - 1,1 - 2,2 ist keine Unterdeckung.
+    # Die Grenze folgt ausschließlich der Maschinengenauigkeit dieser Werte.
+    if (
+        normalize_roundoff
+        and remaining < 0.0
+        and -remaining <= max(math.ulp(counted), math.ulp(consumed))
+    ):
+        return 0.0
     return remaining if remaining >= 0.0 else None
 
 
@@ -813,12 +886,17 @@ def book(
     allow_unverified_stock: bool = False,
     project_name: str = "",
     correct_manual_allocation: bool = False,
+    expected_booking_updated_at: str | None = None,
 ) -> InventoryBooking:
     """Bucht einen ganzen Druck genau einmal oder ersetzt seine Schätzung durch G-Code.
 
     Ein neuer Vorgang mit demselben Fingerabdruck bedeutet einen ausdrücklich
     wiederholten Druck. Die Ausgabeoberfläche ordnet die Vorbereitung vorher zu.
     Unzureichender Bestand wird nur mit ausdrücklicher Bestätigung unbekannt.
+    Eine Korrektur kann den gelesenen Änderungszeitpunkt mitgeben, damit ein
+    älteres Fenster keinen jüngeren Stand überschreibt. Im G-Code zusätzlich
+    belegte Werkzeuge ergänzen eigene Filamentidentitäten; vorhandene Zeilen
+    bleiben erhalten. Eine reine Wiederzustellung verändert auch dann nichts.
     """
     _validate_positions(positions)
     if (
@@ -830,6 +908,8 @@ def book(
         raise ValidationError(field="operation_id", constraint="empty")
     if not isinstance(project_name, str):
         raise ValidationError(field="project_name", constraint="format")
+    if expected_booking_updated_at is not None and not isinstance(expected_booking_updated_at, str):
+        raise ValidationError(field="expected_booking_updated_at", constraint="format")
     with _transaction() as state:
         previous = state.journal.get(operation_id)
         if previous is not None:
@@ -839,32 +919,53 @@ def book(
                 return previous
             if previous.reversed_at:
                 raise _booking_conflict()
-            old = {position.key: position for position in previous.positions}
-            manual_correction = correct_manual_allocation and (
-                any(position.source == "manual" for position in (*previous.positions, *positions))
-                and all(position.source in ("manual", "gcode") for position in positions)
-                and {position.filament_key for position in previous.positions}
-                == {position.filament_key for position in positions}
-            )
-            if not manual_correction and (
-                set(old) != {position.key for position in positions}
-                or any(
-                    old[position.key].spool_identifier != position.spool_identifier
-                    or old[position.key].filament_key != position.filament_key
-                    for position in positions
-                )
-            ):
-                raise _booking_conflict()
-            # Verspätete Zustellung der ursprünglichen Schätzung bucht nichts.
-            if not manual_correction and any(
+            # Eine verspätete ursprüngliche Ausgabe bleibt auch dann wirkungslos,
+            # wenn der G-Code inzwischen weitere Werkzeuge ergänzt hat.
+            if not correct_manual_allocation and any(
                 _same_positions(correction.previous_positions, positions)
                 for correction in previous.corrections
             ):
                 return previous
+            if (
+                expected_booking_updated_at is not None
+                and expected_booking_updated_at != previous.updated_at
+            ):
+                raise _booking_conflict()
+            old = {position.key: position for position in previous.positions}
+            incoming = {position.key: position for position in positions}
+            old_filaments = {position.filament_key for position in previous.positions}
+            manual_correction = correct_manual_allocation and (
+                any(position.source == "manual" for position in (*previous.positions, *positions))
+                and all(position.source in ("manual", "gcode") for position in positions)
+                and old_filaments <= {position.filament_key for position in positions}
+                and all(
+                    position.filament_key
+                    for position in positions
+                    if position.filament_key not in old_filaments
+                )
+            )
+            if not manual_correction and (
+                not set(old) <= set(incoming)
+                or any(
+                    not position.filament_key
+                    or position.filament_key in old_filaments
+                    or position.source not in ("gcode", "manual")
+                    for key, position in incoming.items()
+                    if key not in old
+                )
+                or any(
+                    old[key].spool_identifier != position.spool_identifier
+                    or old[key].filament_key != position.filament_key
+                    for key, position in incoming.items()
+                    if key in old
+                )
+            ):
+                raise _booking_conflict()
             if not manual_correction and any(
                 not _same_positions((old[position.key],), (position,))
                 and (old[position.key].source, position.source) != ("internal", "gcode")
                 for position in positions
+                if position.key in old
             ):
                 raise _booking_conflict()
             _check_counts(state, previous)

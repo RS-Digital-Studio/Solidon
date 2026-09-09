@@ -268,6 +268,72 @@ def test_exact_empty_and_zero_consumption_remain_known() -> None:
     assert current(first).remaining_grams == pytest.approx(0)
 
 
+def test_decimal_consumptions_can_empty_a_spool_without_false_underflow() -> None:
+    first = spool(3.3)
+    filaments.book("first", "one", [position(first, 1.1)])
+    filaments.book("second", "two", [position(first, 2.2)])
+    assert current(first).remaining_grams == pytest.approx(0)
+
+
+def test_previously_saved_roundoff_underflow_is_recovered_from_the_full_journal() -> None:
+    first = spool(3.3)
+    filaments.book("first", "one", [position(first, 1.1)])
+    filaments.book("second", "two", [position(first, 2.2)])
+    data = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
+    # Genau diesen Cachewert schrieb die ältere Fassung bei bestätigtem Abzug.
+    data["spools"][0]["remaining_grams"] = None
+    revision = data["spools"][0]["revision"]
+    filaments.catalogue_path().write_text(json.dumps(data), encoding="utf-8")
+    recovered = current(first)
+    assert recovered.remaining_grams == pytest.approx(0)
+    assert recovered.revision == revision + 1
+    saved = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
+    assert saved["bookings"] == data["bookings"]
+    assert saved["stock_counts"] == data["stock_counts"]
+
+
+def test_a_real_decimal_underflow_is_not_rounded_to_empty() -> None:
+    first = spool(3.3)
+    with pytest.raises(ValidationError) as raised:
+        filaments.book("print", "geometry", [position(first, 3.3001)])
+    assert raised.value.constraint == "stock"
+    assert current(first).remaining_grams == pytest.approx(3.3)
+
+
+def test_overflowing_consumption_total_is_an_actionable_atomic_rejection() -> None:
+    first = spool(1e308)
+    before = filaments.catalogue_path().read_bytes()
+    with pytest.raises(ValidationError) as raised:
+        filaments.book(
+            "print",
+            "geometry",
+            [position(first, 1e308, filament_key="a"), position(first, 1e308, filament_key="b")],
+            allow_unverified_stock=True,
+        )
+    assert raised.value.suggestions
+    assert filaments.catalogue_path().read_bytes() == before
+
+
+def test_an_integer_outside_float_range_is_an_actionable_input_error() -> None:
+    with pytest.raises(ValidationError) as raised:
+        spool(10**400)
+    assert raised.value.suggestions
+    assert not filaments.catalogue_path().exists()
+
+
+def test_out_of_range_number_in_file_is_rejected_without_overwriting() -> None:
+    first = spool()
+    data = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
+    data["stock_counts"][first.identifier] = 10**400
+    broken = json.dumps(data)
+    filaments.catalogue_path().write_text(broken, encoding="utf-8")
+    assert filaments.catalogue() == ()
+    with pytest.raises(ValidationError) as raised:
+        filaments.catalogue(strict=True)
+    assert raised.value.constraint == "unreadable"
+    assert filaments.catalogue_path().read_text(encoding="utf-8") == broken
+
+
 def test_repeated_delivery_is_idempotent_even_with_reordered_positions() -> None:
     first, second = spool(), spool()
     rows = [position(first), position(second, 3)]
@@ -331,6 +397,116 @@ def test_manual_reallocation_requires_explicit_correction_and_keeps_history() ->
     filaments.reverse_booking("print")
     assert current(first).remaining_grams == pytest.approx(500)
     assert current(second).remaining_grams == pytest.approx(500)
+
+
+def test_stale_manual_correction_cannot_rewind_a_newer_allocation() -> None:
+    first, second = spool(), spool()
+    original = filaments.book("print", "geometry", [position(first, filament_key="model")])
+    allocation = [
+        position(first, 20, "manual", filament_key="model"),
+        position(second, 22, "manual", filament_key="model"),
+    ]
+    corrected = filaments.book(
+        "print",
+        "geometry",
+        allocation,
+        correct_manual_allocation=True,
+        expected_booking_updated_at=original.updated_at,
+    )
+    assert (
+        filaments.book(
+            "print",
+            "geometry",
+            allocation,
+            correct_manual_allocation=True,
+            expected_booking_updated_at=original.updated_at,
+        )
+        == corrected
+    )
+    filaments.book(
+        "print",
+        "geometry",
+        [position(second, 42, "manual", filament_key="model")],
+        correct_manual_allocation=True,
+        expected_booking_updated_at=corrected.updated_at,
+    )
+    before = filaments.catalogue_path().read_bytes()
+    with pytest.raises(ValidationError) as raised:
+        filaments.book(
+            "print",
+            "geometry",
+            allocation,
+            correct_manual_allocation=True,
+            expected_booking_updated_at=original.updated_at,
+        )
+    assert raised.value.constraint == "conflict"
+    assert filaments.catalogue_path().read_bytes() == before
+    assert current(first).remaining_grams == pytest.approx(500)
+    assert current(second).remaining_grams == pytest.approx(458)
+
+
+@pytest.mark.parametrize("support_source", ["gcode", "manual"])
+def test_gcode_can_add_a_previously_unknown_support_tool(support_source) -> None:
+    first, second = spool(), spool()
+    original_rows = [position(first, filament_key="model")]
+    original = filaments.book("print", "geometry", original_rows)
+    rows = [
+        position(first, 47, "gcode", filament_key="model"),
+        position(second, 6, support_source, filament_key="support"),
+    ]
+    corrected = filaments.book(
+        "print", "geometry", rows, expected_booking_updated_at=original.updated_at
+    )
+    assert current(first).remaining_grams == pytest.approx(453)
+    assert current(second).remaining_grams == pytest.approx(494)
+    assert filaments.book("print", "geometry", original_rows) == corrected
+    assert (
+        filaments.book("print", "geometry", rows, expected_booking_updated_at=original.updated_at)
+        == corrected
+    )
+    filaments.reverse_booking("print")
+    assert current(first).remaining_grams == pytest.approx(500)
+    assert current(second).remaining_grams == pytest.approx(500)
+
+
+def test_additional_gcode_tool_requires_the_current_booking_revision() -> None:
+    first, second = spool(), spool()
+    original = filaments.book("print", "geometry", [position(first, filament_key="model")])
+    changed = [position(first, 47, "gcode", filament_key="model")]
+    filaments.book("print", "geometry", changed)
+    before = filaments.catalogue_path().read_bytes()
+    with pytest.raises(ValidationError) as raised:
+        filaments.book(
+            "print",
+            "geometry",
+            [*changed, position(second, 6, "gcode", filament_key="support")],
+            expected_booking_updated_at=original.updated_at,
+        )
+    assert raised.value.constraint == "conflict"
+    assert filaments.catalogue_path().read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "replacement", ["omit_model", "change_model_spool", "internal_support", "same_filament"]
+)
+def test_additional_tool_does_not_allow_replacing_existing_identities(replacement) -> None:
+    first, second = spool(), spool()
+    original = filaments.book("print", "geometry", [position(first, filament_key="model")])
+    model = position(first, 47, "gcode", filament_key="model")
+    support = position(second, 6, "gcode", filament_key="support")
+    rows = [model, support]
+    if replacement == "omit_model":
+        rows = [support]
+    elif replacement == "change_model_spool":
+        rows[0] = replace(model, spool_identifier=second.identifier)
+    elif replacement == "internal_support":
+        rows[1] = replace(support, source="internal")
+    else:
+        rows[1] = replace(support, filament_key="model")
+    before = filaments.catalogue_path().read_bytes()
+    with pytest.raises(ValidationError):
+        filaments.book("print", "geometry", rows, expected_booking_updated_at=original.updated_at)
+    assert filaments.catalogue_path().read_bytes() == before
 
 
 def test_manual_value_to_gcode_is_never_an_automatic_correction() -> None:
@@ -428,6 +604,37 @@ def test_a_damaged_journal_cannot_be_overwritten_by_metadata() -> None:
     filaments.catalogue_path().write_text(broken, encoding="utf-8")
     with pytest.raises(ValidationError):
         filaments.save(replace(first, name="Anderer Name"))
+    assert filaments.catalogue_path().read_text(encoding="utf-8") == broken
+
+
+@pytest.mark.parametrize(
+    "damage", ["history_spool", "history_revision", "history_chain", "timestamp", "preserved_count"]
+)
+def test_damaged_correction_history_blocks_metadata_writes(damage: str) -> None:
+    first = spool()
+    filaments.book("print", "geometry", [position(first)])
+    filaments.book("print", "geometry", [position(first, 47, "gcode")])
+    filaments.set_remaining(first.identifier, 200)
+    filaments.reverse_booking("print", preserve_newer_counts=True)
+    metadata = current(first)
+    data = json.loads(filaments.catalogue_path().read_text(encoding="utf-8"))
+    booking = data["bookings"][0]
+    correction = booking["corrections"][0]
+    if damage == "history_spool":
+        correction["previous_positions"][0]["spool_identifier"] = "missing-spool"
+    elif damage == "history_revision":
+        correction["previous_positions"][0]["stock_revision"] = 1000
+    elif damage == "history_chain":
+        correction["positions"][0]["grams"] = 999
+    elif damage == "timestamp":
+        correction["created_at"] = {"not": "a timestamp"}
+    else:
+        booking["preserved_counts"][0]["spool_identifier"] = "missing-spool"
+    broken = json.dumps(data)
+    filaments.catalogue_path().write_text(broken, encoding="utf-8")
+    with pytest.raises(ValidationError) as raised:
+        filaments.save(replace(metadata, note="Neue Notiz"))
+    assert raised.value.constraint == "unreadable"
     assert filaments.catalogue_path().read_text(encoding="utf-8") == broken
 
 

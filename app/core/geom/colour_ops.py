@@ -1,8 +1,7 @@
 """Farb-Operationen (Bauplan §25, Kategorie „Farbe").
 
-Zwei Operationen, und zwischen ihnen alles von §20, was ein Nutzer heute
-erreichen kann: dem ganzen Teil ein Filament zuweisen oder eine Textur auf die
-eingelegten Filamente vereinfachen. Eine erkannte Fläche färbt die Operation
+Ein Filament zuweisen, sicher abwählen oder eine Textur auf die eingelegten
+Filamente vereinfachen. Eine erkannte Fläche färbt die Operation
 ``paint_slot`` in :mod:`app.core.geom.prepare_ops`; einen punktfesten Pinsel
 gibt es seit Formatversion 14 nicht mehr.
 """
@@ -94,6 +93,136 @@ def assign_slot(ctx: OpContext) -> OpResult:
         outputs=[
             dataclasses.replace(
                 source, mesh=painted, material_slots=merged_slots(source.material_slots, [slot])
+            )
+        ]
+    )
+
+
+@op_params
+class ClearFilamentParams(BaseParams):
+    at_features: tuple[str, ...] = param(
+        title=_("Flächen"),
+        default=(),
+        kind="features",
+        doc=_("Die Flächen, deren Filament entfernt wird. Leer entfernt es am ganzen Körper."),
+    )
+    at_feature: str = param(
+        title=_("Fläche"),
+        default="",
+        kind="feature",
+        doc=_("Die Fläche, deren Filament abgewählt wird. Leer wählt es am ganzen Körper ab."),
+    )
+
+
+@register_op(
+    name="clear_filament",
+    title=_("Filament entfernen"),
+    category="colour",
+    params=ClearFilamentParams,
+    consumes=1,
+    produces=1,
+    applies_to=["face"],
+    doc=_(
+        "Entfernt die Filamentzuweisung am Körper oder an einer Fläche. "
+        "Die übrigen Flächen behalten ihr Filament; die Geometrie bleibt unverändert."
+    ),
+)
+def clear_filament(ctx: OpContext) -> OpResult:
+    """Slot null wird neutral, ohne seine weiter benutzte Definition zu verlieren."""
+    from app.core.export.threemf import slots_for_object
+    from app.core.geom.paint import fill_feature
+    from app.core.perceive.actions import reason_against
+
+    params = cast(ClearFilamentParams, ctx.params)
+    source = ctx.inputs[0]
+    mesh = as_mesh_data(source.mesh)
+    feature_ids = tuple(
+        dict.fromkeys((*params.at_features, *((params.at_feature,) if params.at_feature else ())))
+    )
+    if not feature_ids:
+        return OpResult(
+            outputs=[
+                dataclasses.replace(
+                    source,
+                    mesh=dataclasses.replace(mesh, slots=()),
+                    material_slots=[],
+                    material=None,
+                )
+            ]
+        )
+    field_name = "at_features" if params.at_features else "at_feature"
+    selected: set[int] = set()
+    for feature_id in feature_ids:
+        feature = source.features.get(feature_id)
+        if feature is None:
+            raise ValidationError(
+                title=_("Dieses Merkmal gibt es am Körper nicht."),
+                field=field_name,
+                constraint="unknown_feature",
+                detail=_(
+                    "Wählen Sie eine vorhandene Fläche oder wählen Sie das Filament "
+                    "am ganzen Körper ab."
+                ),
+            )
+        reason = reason_against("clear_filament", feature.kind)
+        if reason is not None:
+            raise ValidationError(field=field_name, constraint="feature_kind", detail=reason)
+        indices = {index for index in feature.face_indices if 0 <= index < mesh.triangle_count}
+        if not indices:
+            raise ValidationError(
+                field=field_name,
+                constraint="empty_feature",
+                detail=_(
+                    "Wählen Sie eine vorhandene Fläche oder wählen Sie das Filament "
+                    "am ganzen Körper ab."
+                ),
+            )
+        selected.update(indices)
+    stroke = fill_feature(mesh, tuple(sorted(selected)), 0)
+    before = mesh.slots or (0,) * mesh.triangle_count
+    outside = {slot for index, slot in enumerate(before) if index not in selected}
+    definitions = {slot.index: slot for slot in slots_for_object(source)}
+    after = list(stroke.mesh.slots)
+    zero = definitions.pop(0, None)
+    if zero is not None and 0 in outside:
+        # Eine bereits benutzte identische Definition braucht keinen weiteren
+        # Platz. Sonst zählen nur nach der Abwahl noch belegte Dreiecke.
+        replacement = next(
+            (
+                slot.index
+                for slot in definitions.values()
+                if slot.index in outside and dataclasses.replace(zero, index=slot.index) == slot
+            ),
+            None,
+        )
+        if replacement is None:
+            replacement = next(
+                (index for index in range(1, MAX_SLOTS) if index not in outside), None
+            )
+        if replacement is None:
+            raise ValidationError(
+                field=field_name,
+                constraint="slots_full",
+                detail=_(
+                    "Alle acht Filamentplätze bleiben belegt. Wählen Sie sämtliche Flächen eines "
+                    "Filaments oder den ganzen Körper ab, damit die übrigen Flächen "
+                    "ihr Filament behalten."
+                ),
+            )
+        definitions[replacement] = dataclasses.replace(zero, index=replacement)
+        for index, slot in enumerate(before):
+            if slot == 0 and index not in selected:
+                after[index] = replacement
+    used = set(after)
+    return OpResult(
+        outputs=[
+            dataclasses.replace(
+                source,
+                mesh=dataclasses.replace(mesh, slots=tuple(after)),
+                material=None,
+                material_slots=[
+                    definitions[index] for index in sorted(definitions) if index in used
+                ],
             )
         ]
     )

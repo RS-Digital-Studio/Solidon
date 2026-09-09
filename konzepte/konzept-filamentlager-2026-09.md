@@ -536,8 +536,8 @@ Datensatz. Tastaturfokus, aktivierte Handlung und geringer Bestand haben
 sichtbare Kennzeichnungen zusätzlich zur Farbe; zugängliche Namen nennen
 Typ, Rest und Lagerort. Große Schrift und schmale Fenster bleiben bedienbar.
 
-Der gemeinsame Dialog zeigt vorn Name, Typ, Farbe und Bestand. Weitere Angaben
-wie Lagerort, Durchmesser, Kauf-/Öffnungsdatum, Preis/Währung und Notiz liegen
+Der gemeinsame Dialog zeigt vorn Name, Typ, Farbe, Lagerort, Nennfüllung und
+Bestand. Weitere Angaben wie Durchmesser, Kauf-/Öffnungsdatum, Preis/Währung und Notiz liegen
 unter „Weitere Angaben“. Preisfrei bleibt preisfrei; ein unvollständiger
 Preis/Nenngewicht-Datensatz erzeugt keine erfundene Kostenzeile. Sprache und
 Datumsformat ändern gespeicherte Werte nicht.
@@ -548,6 +548,10 @@ Zuweisung ausschließlich dieses Merkmal. Auswahl und Wirkungsbereich sind
 sichtbar; ohne Auswahl bleibt der Lagerzugang erreichbar. Der vollständige
 Wähler steht zusätzlich zur Verfügung. Bei gleichen Etiketten zeigt bereits
 die Wahl Rest/Lagerort statt erst nach einem Fehlklick einen Unterschied.
+„Filament entfernen“ nimmt die Zuweisung im angezeigten Umfang zurück, ohne
+die übrigen Flächen desselben Körpers mit zu verändern. Strg+Z stellt die
+Zuweisung wieder her. Gemeinsame Slotdefinitionen werden dabei sicher umgelegt;
+Herstellerprofile bleiben an die vollständige Filamentidentität gebunden.
 
 ### 14.5 Umsetzung und Abnahme
 

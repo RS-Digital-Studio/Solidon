@@ -12,8 +12,9 @@ import pytest
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog
 
-from app.core.filament_usage import UsageLine, UsageRequest
+from app.core.filament_usage import UsageLine, UsageRequest, from_gcode
 from app.core.knowledge import filaments
+from app.core.slice.gcode import GcodeMetrics
 from app.core.types import MaterialSlot
 from app.i18n import set_language
 from app.ui import filament_usage as usage_ui
@@ -211,6 +212,49 @@ def test_unbound_suggestion_is_visible_and_prefers_the_smallest_sufficient_stock
     assert filaments.bookings() == ()
 
 
+def test_explicit_spool_choice_clears_the_previous_suggestion() -> None:
+    """Nach dem Wechsel darf der Hinweis nicht weiter die verworfene Spule empfehlen."""
+    alternative = _spool(500)
+    _spool(60)
+    dialog = _dialog(_request(None))
+    assert dialog.suggestions[0].text()
+    dialog.choices[0].setCurrentIndex(dialog.choices[0].findData(alternative.identifier))
+    assert dialog.suggestions[0].text() == ""
+    assert dialog.suggestions[0].isHidden()
+    assert dialog.book_button.isEnabled()
+    assert filaments.bookings() == ()
+
+
+def test_updated_offer_refreshes_the_project_name_without_duplicating_it() -> None:
+    entry = _spool()
+    notice = UsageNotice(UiSettings())
+    request = _request(entry)
+    notice.offer(request)
+    notice.offer(replace(request, project_name="Halter überarbeitet"))
+    assert notice.choice.count() == 1
+    assert "Halter überarbeitet" in notice.choice.currentText()
+    assert filaments.bookings() == ()
+
+
+def test_notice_action_follows_the_selected_outputs_booking_state() -> None:
+    """Eine offene zweite Ausgabe darf nicht den Erfolg der ersten anzeigen."""
+    entry = _spool()
+    notice = UsageNotice(UiSettings(inventory_booking_mode="auto"))
+    booked = _request(entry)
+    notice.offer(booked)
+    _wait(notice)
+    assert notice.review.text() == "Buchung ansehen …"
+    pending = replace(_request(None), fingerprint="unbound-output", project_name="Deckel")
+    notice.offer(pending)
+    _wait(notice)
+    assert notice.review.text() == "Filament abziehen …"
+    notice.choice.setCurrentIndex(notice.choice.findData(booked.fingerprint))
+    assert notice.review.text() == "Buchung ansehen …"
+    notice.choice.setCurrentIndex(notice.choice.findData(pending.fingerprint))
+    assert notice.review.text() == "Filament abziehen …"
+    assert len(filaments.bookings()) == 1
+
+
 def test_unknown_material_is_not_a_matching_spool_suggestion() -> None:
     filaments.save(filaments.CatalogueFilament("Unbekannt", "#ffffff"))
     line = replace(_request(None).lines[0], slot=MaterialSlot(0, "Unbekannt", (1.0, 1.0, 1.0)))
@@ -352,6 +396,17 @@ def test_later_estimate_cannot_replace_a_gcode_offer_or_booking() -> None:
     assert not dialog.book_button.isEnabled()
 
 
+def test_later_estimate_keeps_additional_support_tools_from_the_gcode_offer() -> None:
+    entry = _spool()
+    request = _request(entry)
+    notice = UsageNotice(UiSettings())
+    notice.offer(from_gcode(request, GcodeMetrics(filament_grams_by_tool=(47.0, 6.0))))
+    notice.offer(request)
+    assert [line.grams for line in notice.requests[request.fingerprint].lines] == [47.0, 6.0]
+    assert notice.requests[request.fingerprint].lines[1].spool_identifier == ""
+    assert filaments.bookings() == ()
+
+
 def test_explicit_split_requires_each_share_and_books_every_spool_atomically() -> None:
     first, second = _spool(), _spool()
     dialog = _dialog(_request(first, 47, "gcode"))
@@ -425,6 +480,7 @@ def test_concurrent_stock_change_reports_error_without_partial_booking() -> None
     _wait(dialog)
     assert dialog.result() != QDialog.DialogCode.Accepted
     assert "Bestand" in dialog.state.text()
+    assert not dialog.state.isHidden()
     assert filaments.bookings() == ()
     assert _remaining(entry) == pytest.approx(1)
 
@@ -449,3 +505,57 @@ def test_file_wait_runs_outside_the_qt_thread(monkeypatch: pytest.MonkeyPatch) -
     finally:
         released.set()
         _wait(dialog)
+
+
+def test_gcode_correction_can_add_an_explicitly_chosen_support_spool() -> None:
+    first, support = _spool(), _spool()
+    request = _request(first)
+    filaments.book(
+        "print",
+        request.fingerprint,
+        [
+            filaments.BookingPosition(
+                first.identifier, 42, "internal", filament_key=_line_key(request.lines[0])
+            )
+        ],
+    )
+    updated = from_gcode(request, GcodeMetrics(filament_grams_by_tool=(47.0, 6.0)))
+    dialog = _dialog(updated)
+    assert len(dialog.choices) == 2
+    assert dialog.choices[1].currentData() == ""
+    assert not dialog.book_button.isEnabled()
+    dialog.choices[1].setCurrentIndex(dialog.choices[1].findData(support.identifier))
+    assert dialog.book_button.isEnabled()
+    dialog.book_button.click()
+    _wait(dialog)
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    assert _remaining(first) == pytest.approx(453)
+    assert _remaining(support) == pytest.approx(494)
+    assert len(filaments.bookings()) == 1
+    assert len(filaments.bookings()[0].positions) == 2
+
+
+def test_stale_manual_correction_reports_a_conflict_and_preserves_newer_quantities() -> None:
+    entry = _spool()
+    request = _request(entry)
+    filaments.book(
+        "print",
+        request.fingerprint,
+        [
+            filaments.BookingPosition(
+                entry.identifier, 40, "manual", filament_key=_line_key(request.lines[0])
+            )
+        ],
+    )
+    first, stale = _dialog(request), _dialog(request)
+    first.amounts[0].setValue(41)
+    stale.amounts[0].setValue(42)
+    first.correct_button.click()
+    _wait(first)
+    assert first.result() == QDialog.DialogCode.Accepted
+    stale.correct_button.click()
+    _wait(stale)
+    assert stale.result() != QDialog.DialogCode.Accepted
+    assert stale.state.text() and not stale.state.isHidden()
+    assert _remaining(entry) == pytest.approx(459)
+    assert filaments.bookings()[0].positions[0].grams == pytest.approx(41)

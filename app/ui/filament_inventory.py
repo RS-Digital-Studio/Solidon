@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable
 from functools import partial
 from typing import Any
 
-from PySide6.QtCore import QEvent, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFontMetrics, QKeyEvent, QPainter, QPen
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSignalBlocker, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFontMetrics, QKeyEvent, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -15,6 +16,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFrame,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
@@ -78,11 +80,22 @@ def paint_spool(
     """Der Wickelradius zeigt den Bestand; unbekannt trägt eine Schraffur."""
     painter.save()
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    side = min(rect.width(), rect.height()) * 0.9
+    side = min(rect.width(), rect.height()) * 0.84
     centre = rect.center()
     radius = side / 2
-    painter.setPen(QPen(foreground, 2))
-    painter.setBrush(background)
+    rim = QColor(foreground)
+    rim.setAlpha(70)
+    shadow = QColor(foreground)
+    shadow.setAlpha(20)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(shadow)
+    painter.drawEllipse(centre + QPointF(0, radius * 0.14), radius, radius)
+    flange = QLinearGradient(centre - QPointF(radius, radius), centre + QPointF(radius, radius))
+    flange.setColorAt(0, background.lighter(135))
+    flange.setColorAt(0.5, background)
+    flange.setColorAt(1, background.darker(135))
+    painter.setPen(QPen(rim, 1))
+    painter.setBrush(flange)
     painter.drawEllipse(centre, radius, radius)
     remaining, nominal = entry.remaining_grams, entry.spool_grams
     known = remaining is not None and (remaining <= 0 or (nominal is not None and nominal > 0))
@@ -93,21 +106,30 @@ def paint_spool(
     )
     coil = radius * (0.3 + 0.56 * ratio**0.5)
     colour = QColor(entry.colour)
-    painter.setBrush(colour)
-    painter.setPen(QPen(foreground, 1))
+    winding = QLinearGradient(centre - QPointF(coil, coil), centre + QPointF(coil, coil))
+    winding.setColorAt(0, colour.lighter(135))
+    winding.setColorAt(0.45, colour)
+    winding.setColorAt(1, colour.darker(140))
+    painter.setBrush(winding)
+    painter.setPen(QPen(colour.darker(125), 1))
     painter.drawEllipse(centre, coil, coil)
     if not known:
+        painter.setPen(QPen(rim, 1))
         painter.setBrush(Qt.BrushStyle.BDiagPattern)
         painter.drawEllipse(centre, coil, coil)
     else:
         painter.setBrush(Qt.BrushStyle.NoBrush)
+        strand = QColor(colour.darker(155))
+        strand.setAlpha(100)
+        painter.setPen(QPen(strand, 0.65))
         ring = radius * 0.34
         while ring < coil:
             painter.drawEllipse(centre, ring, ring)
-            ring += max(3, radius * 0.06)
-    painter.setBrush(background)
-    painter.setPen(QPen(foreground, 2))
+            ring += max(1.5, radius * 0.035)
+    painter.setBrush(flange)
+    painter.setPen(QPen(rim, 1))
     painter.drawEllipse(centre, radius * 0.26, radius * 0.26)
+    painter.setBrush(background.darker(140))
     painter.drawEllipse(centre, radius * 0.12, radius * 0.12)
     painter.restore()
 
@@ -120,10 +142,12 @@ class SpoolCard(QPushButton):
         entry: filaments.CatalogueFilament,
         parent: QWidget | None = None,
         low_stock_percent: float = 10,
+        show_identifier: bool = False,
     ) -> None:
         super().__init__(parent)
         self.entry = entry
         self.low_stock_percent = low_stock_percent
+        self.show_identifier = show_identifier
         self.setCheckable(True)
         self.setAutoDefault(False)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -131,9 +155,11 @@ class SpoolCard(QPushButton):
         self.setAccessibleName(spool_label(entry))
         if self._low_stock():
             self.setAccessibleName(f"{spool_label(entry)} · {tr('Wenig Filament')}")
+        if entry.archived:
+            self.setAccessibleName(f"{self.accessibleName()} · {tr('Archiviert')}")
         self.setToolTip(spool_label(entry))
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.setMinimumWidth(160)
+        self.setMinimumWidth(180)
         self.setMinimumHeight(self.sizeHint().height())
 
     def event(self, event: QEvent) -> bool:
@@ -146,11 +172,11 @@ class SpoolCard(QPushButton):
     def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
         font = self.font()
         font.setBold(True)
-        return QSize(220, max(260, 128 + (QFontMetrics(font).height() + 3) * 6 + 12))
+        return QSize(236, max(282, 144 + (QFontMetrics(font).height() + 5) * 6 + 16))
 
     def minimumSizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
         """Das globale Knopf-Stylesheet darf die Spulenbeschriftung nicht abschneiden."""
-        return QSize(160, self.sizeHint().height())
+        return QSize(180, self.sizeHint().height())
 
     def _low_stock(self) -> bool:
         remaining, nominal = self.entry.remaining_grams, self.entry.spool_grams
@@ -160,46 +186,70 @@ class SpoolCard(QPushButton):
         )
 
     def paintEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
-        super().paintEvent(event)
         painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         foreground = self.palette().buttonText().color()
+        # Das globale Knopf-Stylesheet färbt auch dessen Base-Rolle; die Karte
+        # nimmt ihre Fläche deshalb aus dem umgebenden Regal.
+        parent = self.parentWidget()
+        background = (parent.palette() if parent is not None else self.palette()).base().color()
+        border = QColor(foreground)
+        border.setAlpha(45 if self.underMouse() else 24)
+        panel = QRectF(self.rect()).adjusted(2, 2, -2, -4)
+        shadow = QColor(foreground)
+        shadow.setAlpha(12)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(shadow)
+        painter.drawRoundedRect(panel.translated(0, 2), 12, 12)
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(background.lighter(105) if self.underMouse() else background)
+        painter.drawRoundedRect(panel, 12, 12)
         paint_spool(
             painter,
-            QRectF(12, 12, self.width() - 24, 108),
+            QRectF(16, 12, self.width() - 32, 124),
             self.entry,
             foreground,
-            self.palette().button().color(),
+            background,
         )
         painter.setPen(foreground)
         font = self.font()
         font.setBold(True)
         painter.setFont(font)
-        y = 128
+        y = 144
         height = painter.fontMetrics().height()
-        for text in (
-            self.entry.name,
-            self.entry.material_type or tr("Unbekannt"),
-            stock_label(self.entry),
-            self.entry.location or tr("Ohne Lagerort"),
-            self.entry.identifier[:8],
+        for index, text in enumerate(
+            (
+                self.entry.name,
+                self.entry.material_type or tr("Unbekannt"),
+                stock_label(self.entry),
+                self.entry.location or tr("Ohne Lagerort"),
+                self.entry.identifier[:8] if self.show_identifier else "",
+            )
         ):
+            if not text:
+                continue
+            font.setBold(index in (0, 2))
+            painter.setFont(font)
             painter.drawText(
-                QRectF(12, y, self.width() - 24, height + 3),
+                QRectF(16, y, self.width() - 32, height + 5),
                 Qt.AlignmentFlag.AlignHCenter,
                 painter.fontMetrics().elidedText(
-                    text, Qt.TextElideMode.ElideRight, self.width() - 24
+                    text, Qt.TextElideMode.ElideRight, self.width() - 32
                 ),
             )
-            y += height + 3
-            font.setBold(False)
-            painter.setFont(font)
-        if self._low_stock():
+            y += height + 5
+        status = (
+            tr("Archiviert")
+            if self.entry.archived
+            else (tr("Wenig Filament") if self._low_stock() else "")
+        )
+        if status:
             font.setBold(True)
             painter.setFont(font)
             painter.drawText(
                 QRectF(12, y, self.width() - 24, height + 3),
                 Qt.AlignmentFlag.AlignHCenter,
-                tr("Wenig Filament"),
+                status,
             )
         if self.hasFocus() or self.isChecked():
             painter.setPen(QPen(foreground, 2, Qt.PenStyle.DashLine))
@@ -289,35 +339,47 @@ class InventoryView(QWidget):
         self.cards: list[SpoolCard] = []
         outer = QVBoxLayout(self)
         outer.setContentsMargins(WIDE, NORMAL, WIDE, NORMAL)
+        outer.setSpacing(NORMAL)
+        header = QGridLayout()
         self.back_button = QPushButton(tr("Zurück"), self)
         self.back_button.clicked.connect(self.backRequested)
-        outer.addWidget(self.back_button, alignment=Qt.AlignmentFlag.AlignLeft)
+        header.addWidget(self.back_button, 0, 0, alignment=Qt.AlignmentFlag.AlignLeft)
         title = QLabel(tr("Filamentlager"), self)
         set_level(title, "title")
-        outer.addWidget(title)
+        header.addWidget(title, 0, 1)
+        header.setColumnStretch(1, 1)
         self.summary = QLabel(self)
         self.summary.setWordWrap(True)
-        outer.addWidget(self.summary)
+        set_level(self.summary, "caption")
+        header.addWidget(self.summary, 1, 1)
+        self.add_button = QPushButton(tr("Spule von Hand anlegen"), self)
+        self.add_button.clicked.connect(self._add)
+        make_primary(self.add_button)
+        header.addWidget(self.add_button, 0, 2)
+        outer.addLayout(header)
         self.pages = QStackedWidget(self)
         outer.addWidget(self.pages, 1)
         shelf = QWidget(self)
         layout = QVBoxLayout(shelf)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(NORMAL)
+        filters = QHBoxLayout()
         self.search = QLineEdit(shelf)
         self.search.setPlaceholderText(tr("Spulen nach Name, Typ oder Lagerort suchen"))
         self.search.setAccessibleName(tr("Spulen suchen"))
         self.search.setClearButtonEnabled(True)
         self.search.textChanged.connect(self._refill)
-        layout.addWidget(self.search)
+        filters.addWidget(self.search, 1)
         self.grouping = QComboBox(shelf)
         self.grouping.addItem(tr("Nach Material gruppieren"), userData="material_type")
         self.grouping.addItem(tr("Nach Lagerort gruppieren"), userData="location")
         self.grouping.setAccessibleName(tr("Spulen gruppieren"))
         self.grouping.currentIndexChanged.connect(self._refill)
-        layout.addWidget(self.grouping)
+        filters.addWidget(self.grouping)
         self.archived = QCheckBox(tr("Archivierte Spulen anzeigen"), shelf)
         self.archived.toggled.connect(self.refresh)
-        layout.addWidget(self.archived)
+        filters.addWidget(self.archived)
+        layout.addLayout(filters)
         settings_area = QWidget(shelf)
         settings_layout = QVBoxLayout(settings_area)
         self.booking_mode = QComboBox(settings_area)
@@ -347,15 +409,9 @@ class InventoryView(QWidget):
         threshold_label.setBuddy(self.low_stock_threshold)
         settings_layout.addWidget(threshold_label)
         settings_layout.addWidget(self.low_stock_threshold)
-        layout.addWidget(collapsible(tr("Lager-Einstellungen"), settings_area, open_now=False))
-        self.add_button = QPushButton(tr("Spule von Hand anlegen"), shelf)
-        self.add_button.clicked.connect(self._add)
+        settings_panel = collapsible(tr("Lager-Einstellungen"), settings_area, open_now=False)
         self.import_button = QPushButton(tr("Aus dem Slicer übernehmen"), shelf)
         self.import_button.clicked.connect(self._import)
-        actions = QVBoxLayout()
-        actions.addWidget(self.add_button)
-        actions.addWidget(self.import_button)
-        layout.addLayout(actions)
         self.empty = QLabel(
             tr(
                 "Ihr Regal ist noch leer. Eine Spule von Hand anlegen "
@@ -364,6 +420,8 @@ class InventoryView(QWidget):
             shelf,
         )
         self.empty.setWordWrap(True)
+        self.empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty.setContentsMargins(WIDE, WIDE * 2, WIDE, WIDE * 2)
         layout.addWidget(self.empty)
         self.page_scroll = QScrollArea(shelf)
         self.page_scroll.setWidgetResizable(True)
@@ -371,15 +429,24 @@ class InventoryView(QWidget):
         self.shelves = QWidget(self.page_scroll)
         self.grid = QGridLayout(self.shelves)
         self.grid.setSpacing(NORMAL)
+        self.grid.setContentsMargins(0, 0, NORMAL, NORMAL)
         self.page_scroll.setWidget(self.shelves)
         self.page_scroll.viewport().installEventFilter(self)
         layout.addWidget(self.page_scroll, 1)
+        actions = QHBoxLayout()
+        actions.addWidget(self.import_button)
+        actions.addStretch(1)
+        layout.addLayout(actions)
+        layout.addWidget(settings_panel)
         self.pages.addWidget(shelf)
         self.detail = QWidget(self)
         detail_scroll = QScrollArea(self)
         detail_scroll.setWidgetResizable(True)
+        detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
         detail_scroll.setWidget(self.detail)
         self.detail_layout = QVBoxLayout(self.detail)
+        self.detail_layout.setContentsMargins(0, 0, NORMAL, NORMAL)
+        self.detail_layout.setSpacing(NORMAL)
         self.pages.addWidget(detail_scroll)
         self.message = QLabel(self)
         self.message.setWordWrap(True)
@@ -466,8 +533,11 @@ class InventoryView(QWidget):
                 tr("Unbekannt") if field == "material_type" else tr("Ohne Lagerort")
             )
             groups.setdefault(key, []).append(entry)
-        columns = max(1, self.page_scroll.viewport().width() // 230)
+        columns = self._shelf_columns()
+        for column in range(max(columns, self._columns)):
+            self.grid.setColumnStretch(column, 1 if column < columns else 0)
         self._columns = columns
+        labels = Counter((entry.name, entry.colour) for entry in entries)
         row = 0
         for group, group_entries in sorted(groups.items()):
             heading = QLabel(group, self.shelves)
@@ -475,17 +545,18 @@ class InventoryView(QWidget):
             self.grid.addWidget(heading, row, 0, 1, columns)
             row += 1
             for index, entry in enumerate(group_entries):
-                card = SpoolCard(entry, self.shelves, self._low_stock_percent)
+                card = SpoolCard(
+                    entry,
+                    self.shelves,
+                    self._low_stock_percent,
+                    show_identifier=labels[entry.name, entry.colour] > 1,
+                )
                 card.clicked.connect(partial(self._open_card, entry.identifier))
                 self.grid.addWidget(card, row + index // columns, index % columns)
                 self.cards.append(card)
                 if entry.identifier == focused:
                     card.setFocus(Qt.FocusReason.OtherFocusReason)
             row += (len(group_entries) + columns - 1) // columns
-            rail = QFrame(self.shelves)
-            rail.setFrameShape(QFrame.Shape.HLine)
-            self.grid.addWidget(rail, row, 0, 1, columns)
-            row += 1
         self.grid.setRowStretch(row, 1)
         self.empty.setVisible(not entries)
         self.empty.setText(
@@ -497,9 +568,14 @@ class InventoryView(QWidget):
             )
         )
 
+    def _shelf_columns(self) -> int:
+        """Auch unbesetzte Plätze halten wenige Spulen in einer ruhigen Kartenbreite."""
+        card_width = max(236, self.fontMetrics().height() * 12)
+        return max(1, (self.page_scroll.viewport().width() - NORMAL) // (card_width + NORMAL))
+
     def resizeEvent(self, event: Any) -> None:  # noqa: N802 — Qt-Name
         super().resizeEvent(event)
-        if max(1, self.page_scroll.viewport().width() // 230) != self._columns:
+        if self._shelf_columns() != self._columns:
             self._refill()
 
     def eventFilter(self, watched: Any, event: Any) -> bool:  # noqa: N802 — Qt-Name
@@ -509,7 +585,7 @@ class InventoryView(QWidget):
         if (
             event.type() == QEvent.Type.Resize
             and hasattr(self, "page_scroll")
-            and max(1, self.page_scroll.viewport().width() // 230) != self._columns
+            and self._shelf_columns() != self._columns
         ):
             self._refill()
         return super().eventFilter(watched, event)
@@ -531,30 +607,83 @@ class InventoryView(QWidget):
                 widget.deleteLater()
         back = QPushButton(tr("Zurück zum Regal"), self.detail)
         back.clicked.connect(self.show_shelf)
-        self.detail_layout.addWidget(back)
-        card = SpoolCard(entry, self.detail, self._low_stock_percent)
-        card.setMaximumWidth(400)
-        self.detail_layout.addWidget(card)
-        description = QLabel(spool_label(entry), self.detail)
+        self.detail_layout.addWidget(back, alignment=Qt.AlignmentFlag.AlignLeft)
+        overview = QWidget(self.detail)
+        overview_layout = QHBoxLayout(overview)
+        overview_layout.setContentsMargins(0, 0, 0, 0)
+        overview_layout.setSpacing(WIDE)
+        card = SpoolCard(entry, overview, self._low_stock_percent, show_identifier=True)
+        card.setMaximumWidth(300)
+        card.setCheckable(False)
+        card.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        card.setCursor(Qt.CursorShape.ArrowCursor)
+        overview_layout.addWidget(card)
+        information = QVBoxLayout()
+        name = QLabel(entry.name, overview)
+        name.setTextFormat(Qt.TextFormat.PlainText)
+        name.setWordWrap(True)
+        set_level(name, "title")
+        information.addWidget(name)
+        description = QLabel(entry.slicer_profile or tr("Ohne Slicer-Profil"), overview)
+        description.setTextFormat(Qt.TextFormat.PlainText)
         description.setWordWrap(True)
-        self.detail_layout.addWidget(description)
+        set_level(description, "caption")
+        information.addWidget(description)
+        facts = QGridLayout()
+        for row, (label, value) in enumerate(
+            (
+                (tr("Lagerort"), entry.location or tr("Ohne Lagerort")),
+                (
+                    tr("Nennfüllung"),
+                    f"{localised(f'{entry.spool_grams:g}')} {tr('g')}"
+                    if entry.spool_grams
+                    else tr("Unbekannt"),
+                ),
+                (
+                    tr("Durchmesser"),
+                    f"{localised(f'{entry.diameter_mm:g}')} {tr('mm')}"
+                    if entry.diameter_mm
+                    else tr("Unbekannt"),
+                ),
+            )
+        ):
+            key = QLabel(label, overview)
+            set_level(key, "caption")
+            value_label = QLabel(value, overview)
+            value_label.setTextFormat(Qt.TextFormat.PlainText)
+            value_label.setWordWrap(True)
+            facts.addWidget(key, row, 0)
+            facts.addWidget(value_label, row, 1)
+        facts.setColumnStretch(1, 1)
+        information.addLayout(facts)
+        if entry.note:
+            note = QLabel(entry.note, overview)
+            note.setTextFormat(Qt.TextFormat.PlainText)
+            note.setWordWrap(True)
+            information.addWidget(note)
+        information.addStretch(1)
         for text, action in (
             (tr("Angaben ändern"), self._edit),
             (tr("Noch eine davon"), self._duplicate),
             (tr("Wiederherstellen") if entry.archived else tr("Archivieren"), self._archive),
         ):
-            button = QPushButton(text, self.detail)
+            button = QPushButton(text, overview)
             button.clicked.connect(action)
-            self.detail_layout.addWidget(button)
+            information.addWidget(button, alignment=Qt.AlignmentFlag.AlignLeft)
+        overview_layout.addLayout(information, 1)
+        self.detail_layout.addWidget(overview)
         heading = QLabel(tr("Buchungsverlauf"), self.detail)
         set_level(heading, "section")
         self.detail_layout.addWidget(heading)
         self.history = QListWidget(self.detail)
         self.history.setAccessibleName(tr("Buchungsverlauf dieser Spule"))
-        self.detail_layout.addWidget(self.history)
+        self.history.setWordWrap(True)
+        self.history.setSpacing(4)
+        self.history.setMinimumHeight(160)
+        self.detail_layout.addWidget(self.history, 1)
         self.reverse_button = QPushButton(tr("Gewählten Vorgang zurücknehmen"), self.detail)
         self.reverse_button.clicked.connect(self._reverse)
-        self.detail_layout.addWidget(self.reverse_button)
+        self.detail_layout.addWidget(self.reverse_button, alignment=Qt.AlignmentFlag.AlignLeft)
         self._fill_history(entry)
         self.pages.setCurrentIndex(1)
 
@@ -600,7 +729,7 @@ class InventoryView(QWidget):
                 count.spool_identifier == entry.identifier for count in booking.preserved_counts
             ):
                 lines.append(tr("Jüngere Bestandsfeststellung beibehalten"))
-            item = QListWidgetItem(" · ".join(lines), self.history)
+            item = QListWidgetItem("\n".join((lines[0], " · ".join(lines[1:]))), self.history)
             item.setData(Qt.ItemDataRole.UserRole, booking.operation_id)
             item.setData(int(Qt.ItemDataRole.UserRole) + 1, bool(booking.reversed_at))
             item.setToolTip(

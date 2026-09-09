@@ -1,6 +1,7 @@
 """Spulenbindung, Ausgabeumfang und Herkunft bleiben unabhängig (§20, §29)."""
 
 import json
+import math
 import zipfile
 from dataclasses import replace
 from pathlib import Path
@@ -16,9 +17,34 @@ from app.core.knowledge import profiles
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.project import PROJECT_ENTRY, load, save
 from app.core.scene.serialise import print_settings_from_data, print_settings_to_data
-from app.core.slice.gcode import GcodeMetrics
+from app.core.slice.gcode import GcodeMetrics, parse
 from app.core.types import FilamentSettings, MaterialSlot, PrintSettings, SceneObject, SlotOverride
 from app.i18n import TranslatableText
+
+
+def test_bound_profiles_follow_identity_after_removal_and_do_not_fill_new_slots():
+    """Ein neuer neutraler Platz darf kein altes Herstellerprofil erben."""
+    red = MaterialSlot(0, "Rot", (1.0, 0.0, 0.0), None, "PETG")
+    blue = MaterialSlot(1, "Blau", (0.0, 0.0, 1.0), None, "PETG")
+    original = PrintSettings(slot_profiles=("Rot Standard", "Blau Schnell"))
+    bound = handover.bind_slot_profiles(original, (red, blue))
+    actual = handover.configured_slots((replace(blue, index=0), MaterialSlot(1, "")), bound)
+    assert [slot.material for slot in actual] == ["Blau Schnell", None]
+    assert handover.bind_slot_profiles(bound, (blue,)) is bound
+    assert handover.configured_slots((red, blue), bound)[0].material == "Rot Standard"
+
+
+def test_explicitly_empty_profile_bindings_do_not_fall_back_to_old_positions():
+    """Leer ist eine bewusste Abwahl; nur None bezeichnet positionsgebundene Altdaten."""
+    slot = MaterialSlot(0, "Rot", material_type="PETG")
+    settings = PrintSettings(slot_profiles=("Alt",), slot_profile_bindings=())
+    assert handover.configured_slots((slot,), settings) == (slot,)
+    assert (
+        handover.configured_slots((slot,), replace(settings, slot_profile_bindings=None))[
+            0
+        ].material
+        == "Alt"
+    )
 
 
 def body(identifier: str = "body", *, plate: int = 0) -> SceneObject:
@@ -30,6 +56,20 @@ def body(identifier: str = "body", *, plate: int = 0) -> SceneObject:
         plate=plate,
         material_slots=[MaterialSlot(0, "PETG Rot", (1.0, 0.0, 0.0), None, "PETG")],
     )
+
+
+def test_manufacturer_profile_change_keeps_the_explicit_physical_spool():
+    """Andere Druckwerte ändern den Fingerabdruck, nicht die ausdrücklich gewählte Spule."""
+    original = body()
+    slot = replace(original.material_slots[0], material="Profil A")
+    original.material_slots = [slot]
+    settings = with_spool(PrintSettings(), slot, "known-spool")
+    before = prepare([original], settings, profiles.make_profile(), "Probe")[0]
+    settings = handover.bind_slot_profiles(replace(settings, slot_profiles=("Profil B",)), (slot,))
+    after = prepare([original], settings, profiles.make_profile(), "Probe")[0]
+    assert after.lines[0].slot.material == "Profil B"
+    assert after.lines[0].spool_identifier == "known-spool"
+    assert before.fingerprint != after.fingerprint
 
 
 def test_spool_binding_is_portable_and_does_not_replace_the_profile() -> None:
@@ -175,6 +215,66 @@ def test_single_model_material_does_not_absorb_other_gcode_tools(metrics: GcodeM
     assert from_gcode(request, metrics).lines[0].grams is None
 
 
+@pytest.mark.parametrize("weight", [6.0, None])
+def test_additional_gcode_tool_is_offered_without_guessing_its_spool_or_material(weight) -> None:
+    """Stützfilament aus dem Slicer verschwindet nicht hinter dem Modellfilament."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
+    metrics = GcodeMetrics(
+        filament_grams_by_tool=(47.0, weight), filament_mm_by_tool=(1000.0, 2000.0)
+    )
+    result = from_gcode(request, metrics)
+    assert result.fingerprint == request.fingerprint
+    assert len(result.lines) == 2
+    model, support = result.lines
+    assert model.grams == pytest.approx(47.0)
+    assert support.slot.index == 1
+    assert support.grams == weight
+    assert support.source == "gcode"
+    assert support.spool_identifier == ""
+    assert support.slot.material_type is None and support.slot.material is None
+    assert support.slot.colour is None
+    assert support.density is None and support.diameter is None
+    assert not support.converted_from_length
+    assert len(from_gcode(result, metrics).lines) == 2
+
+
+def test_additional_tools_preserve_gaps_and_explicit_zero_without_inventing_usage() -> None:
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
+    metrics = GcodeMetrics(
+        filament_grams_by_tool=(47.0, None, 0.0, 6.0),
+        filament_mm_by_tool=(1000.0, None, 2000.0, 3000.0),
+    )
+    result = from_gcode(request, metrics)
+    assert [line.slot.index for line in result.lines] == [0, 3]
+    assert [line.grams for line in result.lines] == pytest.approx([47.0, 6.0])
+
+
+def test_tool_changes_without_comments_never_charge_the_total_to_the_model_spool() -> None:
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
+    metrics = parse("M83\nT0\nG1 X10 E100\nT2\nG1 X20 E200\n")
+    result = from_gcode(request, metrics)
+    assert [line.slot.index for line in result.lines] == [0, 2]
+    # Relative Extrusion belegt 100 mm für T0; die fremden 200 mm von T2
+    # dürfen nicht mitgerechnet werden. Ohne dessen Materialwerte fehlt Masse.
+    expected = 100.0 * math.pi * (request.lines[0].diameter / 2) ** 2
+    expected *= request.lines[0].density / 1000.0
+    assert result.lines[0].grams == pytest.approx(expected)
+    assert result.lines[1].grams is None
+    assert result.lines[1].spool_identifier == ""
+
+
+def test_large_tool_number_does_not_allocate_a_list_for_every_missing_tool() -> None:
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    request = prepare([body()], PrintSettings(), profile, "Projekt")[0]
+    metrics = GcodeMetrics(used_tools=(0, 1_000_000_000))
+    result = from_gcode(from_gcode(request, metrics), metrics)
+    assert [line.slot.index for line in result.lines] == [0, 1_000_000_000]
+    assert [line.grams for line in result.lines] == [None, None]
+
+
 def test_different_tools_convert_with_their_own_properties_without_compressing_gaps() -> None:
     first = body()
     first.material_slots.insert(0, MaterialSlot(7, "Alt", None, None, "ABS"))
@@ -284,26 +384,25 @@ def test_global_export_and_local_slicer_keep_identity_with_effective_profile_cho
     settings = PrintSettings(
         inventory_project_id="project-one", slot_profiles=("Maker PLA", "Maker PETG")
     )
-    stale_binding = with_spool(settings, second.material_slots[0], "old-spool")
-    export = prepare([first, second], stale_binding, profile, "Projekt")[1]
+    bound = with_spool(settings, second.material_slots[0], "chosen-spool")
+    export = prepare([first, second], bound, profile, "Projekt")[1]
     assert export.lines[0].slot.index == 1
     assert export.lines[0].slot.material == "Maker PETG"
-    assert export.lines[0].spool_identifier == ""
+    assert export.lines[0].spool_identifier == "chosen-spool"
     local = threemf.merge_slots(
         [threemf.AssemblyPart(second.mesh, slots=tuple(second.material_slots))]
     )
     chosen = handover.with_slot_profiles(local, ("Maker PETG",))
-    sliced = prepare(
-        [first, second], stale_binding, profile, "Projekt", slots_by_plate={1: chosen}
-    )[1]
+    sliced = prepare([first, second], bound, profile, "Projekt", slots_by_plate={1: chosen})[1]
     assert sliced.lines[0].slot.index == 0
+    assert sliced.lines[0].spool_identifier == "chosen-spool"
     assert sliced.fingerprint == export.fingerprint
     assert from_gcode(sliced, GcodeMetrics(filament_grams_by_tool=(6.0,))).lines[
         0
     ].grams == pytest.approx(6.0)
     changed = prepare(
         [first, second],
-        stale_binding,
+        bound,
         profile,
         "Projekt",
         slots_by_plate={1: handover.with_slot_profiles(local, ("Other PETG",))},

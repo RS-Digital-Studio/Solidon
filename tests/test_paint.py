@@ -10,16 +10,19 @@ aussieht.
 
 from __future__ import annotations
 
+import dataclasses
+from pathlib import Path
+
 import pytest
 import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.attributes import counts, used_slots
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.paint import fill_feature
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
-from app.core.types import OpContext, Profile, Scene, SceneObject
+from app.core.types import MaterialSlot, OpContext, Profile, Scene, SceneObject
 
 
 def plate() -> MeshData:
@@ -63,6 +66,207 @@ def _with_top_face(entry: SceneObject, indices: tuple[int, ...]) -> SceneObject:
         face_indices=indices,
     )
     return dataclasses.replace(entry, features={"face_1": face})
+
+
+def _filament_cube(slots: tuple[int, ...], definitions: tuple[int, ...]) -> SceneObject:
+    """Der geschlossene 20-mm-Korpuswürfel mit bewusst vorgegebenen Filamentflächen."""
+    payload = (Path(__file__).parent / "data" / "meshes" / "cube_clean.stl").read_bytes()
+    mesh = read_mesh(payload, ".stl")
+    mesh.raw.merge_vertices()
+    mesh = dataclasses.replace(mesh, slots=slots)
+    return SceneObject(
+        id="obj_1",
+        name="Würfel",
+        mesh=mesh,
+        material_slots=[
+            MaterialSlot(
+                index, f"Filament {index}", material=f"Profil {index}", material_type="PLA"
+            )
+            for index in definitions
+        ],
+    )
+
+
+def test_clear_filament_neutralises_whole_body_without_geometry_changes(profile: Profile) -> None:
+    entry = _filament_cube((0, 1) * 6, (0, 1, 7))
+    before = entry.mesh
+    output = run("clear_filament", entry, profile).outputs[0]
+    assert output.mesh.raw is before.raw
+    assert output.mesh.volume == pytest.approx(8000)
+    assert output.mesh.is_watertight
+    assert used_slots(output.mesh) == (0,)
+    assert output.material_slots == []
+    assert entry.material_slots and entry.mesh.slots == (0, 1) * 6
+
+
+def test_clearing_legacy_body_material_does_not_reintroduce_a_slot_on_export(
+    profile: Profile,
+) -> None:
+    from app.core.export.threemf import slots_for_object
+
+    entry = dataclasses.replace(_filament_cube((), ()), material="abs")
+    output = run("clear_filament", entry, profile).outputs[0]
+    assert output.material is None
+    assert slots_for_object(output) == ()
+
+
+def test_clearing_legacy_material_on_one_face_keeps_other_faces_assigned(profile: Profile) -> None:
+    from app.core.export.threemf import slots_for_object
+
+    entry = dataclasses.replace(_with_top_face(_filament_cube((), ()), (0, 1)), material="abs")
+    previous = slots_for_object(entry)[0]
+    output = run("clear_filament", entry, profile, at_features=("face_1",)).outputs[0]
+    assert output.material is None
+    assert counts(output.mesh) == {0: 2, 1: 10}
+    assert slots_for_object(output) == (dataclasses.replace(previous, index=1),)
+
+
+def test_feature_group_preselection_uses_semantic_ids(profile: Profile) -> None:
+    from app.core.scene.placement import values_for
+
+    entry = _with_top_face(_filament_cube((), ()), (0, 1))
+    assert values_for(REGISTRY.get("clear_filament"), entry.features["face_1"]) == {
+        "at_features": ("face_1",)
+    }
+
+
+def test_clear_face_preserves_other_faces_sharing_assigned_slot_zero(profile: Profile) -> None:
+    entry = _with_top_face(_filament_cube((), (0,)), (0, 1))
+    output = run("clear_filament", entry, profile, at_feature="face_1").outputs[0]
+    assert output.mesh.slots[:2] == (0, 0)
+    assert output.mesh.slots[2:] == (1,) * 10
+    assert output.material_slots == [dataclasses.replace(entry.material_slots[0], index=1)]
+    assert output.features == entry.features
+    assert output.mesh.raw is entry.mesh.raw
+    assert output.mesh.volume == pytest.approx(8000)
+
+
+def test_clear_face_reuses_a_slot_freed_by_the_same_removal(profile: Profile) -> None:
+    slots = (0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3)
+    entry = _with_top_face(_filament_cube(slots, tuple(range(8))), (3, 11))
+    output = run("clear_filament", entry, profile, at_feature="face_1").outputs[0]
+    assert output.mesh.slots == (3, 1, 2, 0, 4, 5, 6, 7, 3, 1, 2, 0)
+    definitions = {slot.index: slot for slot in output.material_slots}
+    assert 0 not in definitions
+    assert definitions[3] == dataclasses.replace(entry.material_slots[0], index=3)
+    for index in (1, 2, 4, 5, 6, 7):
+        assert definitions[index] == entry.material_slots[index]
+
+
+def test_clear_face_at_full_eight_slot_limit_never_changes_other_filaments(
+    profile: Profile,
+) -> None:
+    slots = (0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3)
+    entry = _with_top_face(_filament_cube(slots, tuple(range(8))), (0,))
+    with pytest.raises(ValidationError) as raised:
+        run("clear_filament", entry, profile, at_feature="face_1")
+    assert raised.value.constraint == "slots_full"
+    assert raised.value.suggestions
+    assert entry.mesh.slots == slots
+    assert len(entry.material_slots) == 8
+
+
+def test_clearing_two_features_together_frees_zero_at_full_eight_slot_limit(
+    profile: Profile,
+) -> None:
+    """Beide Hälften desselben Filaments geben seinen Platz gemeinsam frei."""
+    slots = (0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3)
+    entry = _with_top_face(_filament_cube(slots, tuple(range(8))), (0,))
+    entry.features["face_2"] = dataclasses.replace(
+        entry.features["face_1"], id="face_2", face_indices=(8,)
+    )
+    output = run("clear_filament", entry, profile, at_features=("face_1", "face_2")).outputs[0]
+    assert output.mesh.slots == slots
+    assert output.material_slots == entry.material_slots[1:]
+    assert output.mesh.raw is entry.mesh.raw
+    assert output.mesh.volume == pytest.approx(8000)
+
+
+def test_clearing_feature_group_preserves_unselected_faces_of_the_same_filament(
+    profile: Profile,
+) -> None:
+    """Merkmale bestimmen die Auswahl, nicht alle Dreiecke ihres bisherigen Filaments."""
+    entry = _with_top_face(_filament_cube((), (0,)), (0,))
+    entry.features["face_2"] = dataclasses.replace(
+        entry.features["face_1"], id="face_2", face_indices=(8,)
+    )
+    output = run("clear_filament", entry, profile, at_features=("face_1", "face_2")).outputs[0]
+    assert {index for index, slot in enumerate(output.mesh.slots) if slot == 0} == {0, 8}
+    assert counts(output.mesh) == {0: 2, 1: 10}
+    assert output.material_slots == [dataclasses.replace(entry.material_slots[0], index=1)]
+
+
+def test_clearing_feature_group_rejects_one_missing_feature_without_partial_result(
+    profile: Profile,
+) -> None:
+    entry = _with_top_face(_filament_cube((), (0,)), (0,))
+    with pytest.raises(ValidationError) as caught:
+        run("clear_filament", entry, profile, at_features=("face_1", "face_missing"))
+    assert caught.value.constraint == "unknown_feature"
+    assert entry.mesh.slots == ()
+    assert entry.material_slots[0].index == 0
+
+
+def test_clear_face_ignores_orphaned_slot_definitions_when_finding_space(profile: Profile) -> None:
+    entry = _with_top_face(_filament_cube((), tuple(range(8))), (0, 1))
+    output = run("clear_filament", entry, profile, at_feature="face_1").outputs[0]
+    assert counts(output.mesh) == {0: 2, 1: 10}
+    assert output.material_slots == [dataclasses.replace(entry.material_slots[0], index=1)]
+
+
+def test_clear_face_can_reuse_an_identical_filament_when_all_slots_are_occupied(
+    profile: Profile,
+) -> None:
+    entry = _with_top_face(
+        _filament_cube((0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3), tuple(range(8))), (0,)
+    )
+    entry.material_slots[1] = dataclasses.replace(entry.material_slots[0], index=1)
+    output = run("clear_filament", entry, profile, at_feature="face_1").outputs[0]
+    assert output.mesh.slots == (0, 1, 2, 3, 4, 5, 6, 7, 1, 1, 2, 3)
+    assert output.material_slots == entry.material_slots[1:]
+
+
+def test_clear_feature_preserves_cavity_and_ignores_stale_face_indices(profile: Profile) -> None:
+    entry = _with_top_face(_filament_cube((), (0,)), (0, 1, 999))
+    entry.mesh = dataclasses.replace(entry.mesh, cavity=plate())
+    output = run("clear_filament", entry, profile, at_feature="face_1").outputs[0]
+    assert counts(output.mesh) == {0: 2, 1: 10}
+    assert output.mesh.cavity is entry.mesh.cavity
+
+
+def test_clear_filament_rejects_a_non_face_feature(profile: Profile) -> None:
+    entry = _with_top_face(_filament_cube((), (0,)), (0, 1))
+    entry.features["face_1"] = dataclasses.replace(entry.features["face_1"], kind="hole")
+    with pytest.raises(ValidationError) as raised:
+        run("clear_filament", entry, profile, at_feature="face_1")
+    assert raised.value.constraint == "feature_kind"
+
+
+def test_clearing_an_already_neutral_face_does_not_create_a_filament(profile: Profile) -> None:
+    entry = _with_top_face(_filament_cube((), ()), (0, 1))
+    output = run("clear_filament", entry, profile, at_feature="face_1").outputs[0]
+    assert output.material_slots == []
+    assert used_slots(output.mesh) == (0,)
+    assert output.mesh.raw is entry.mesh.raw
+
+
+@pytest.mark.parametrize("indices", [(), (999,), (-1,)])
+def test_clear_missing_feature_geometry_is_an_actionable_rejection(
+    profile: Profile, indices
+) -> None:
+    entry = _with_top_face(_filament_cube((), (0,)), indices)
+    with pytest.raises(ValidationError) as raised:
+        run("clear_filament", entry, profile, at_feature="face_1")
+    assert raised.value.suggestions
+    assert entry.mesh.slots == ()
+
+
+def test_clear_unknown_feature_is_an_actionable_rejection(profile: Profile) -> None:
+    entry = _filament_cube((), (0,))
+    with pytest.raises(ValidationError) as raised:
+        run("clear_filament", entry, profile, at_feature="missing")
+    assert raised.value.constraint == "unknown_feature"
+    assert raised.value.suggestions
 
 
 # --- Die Füllung: was sie färbt -------------------------------------------------
@@ -131,6 +335,26 @@ def test_painting_runs_as_an_operation(profile: Profile) -> None:
     assert [finding.code for finding in result.findings] == ["colour.painted"]
 
 
+def test_painting_one_legacy_abs_face_keeps_abs_on_the_unselected_faces(profile: Profile) -> None:
+    from app.core.export.threemf import slots_for_object
+
+    entry = dataclasses.replace(_with_top_face(_filament_cube((), ()), (0, 1)), material="abs")
+    legacy = slots_for_object(entry)[0]
+    output = run(
+        "paint_slot",
+        entry,
+        profile,
+        at_feature="face_1",
+        slot=1,
+        material_type="PETG",
+        replace_filament=True,
+    ).outputs[0]
+    exported = {slot.index: slot for slot in slots_for_object(output)}
+    assert exported[0] == legacy
+    assert exported[1].material_type == "PETG"
+    assert counts(output.mesh) == {0: 10, 1: 2}
+
+
 def test_explicit_unknown_spool_does_not_inherit_replaced_material(profile: Profile) -> None:
     """Eine neue unbekannte Spule erbt kein PLA vom belegten Farbplatz."""
     from app.core.types import MaterialSlot
@@ -174,7 +398,11 @@ def test_painting_keeps_the_slicer_identity_with_the_colour(profile: Profile) ->
     assert slot.material == "Elegoo PETG PRO @ECC2"
 
 
-def test_painting_rejects_a_slicer_profile_path(profile: Profile) -> None:
+@pytest.mark.parametrize(
+    "profile_path",
+    [r"C:\Slicer\PETG.json", "/profiles/PETG.json", "../PETG.json", "profiles/../PETG.json"],
+)
+def test_painting_rejects_a_slicer_profile_path(profile: Profile, profile_path: str) -> None:
     """Auch die Flächenoperation speichert keinen rechnergebundenen Pfad."""
     entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1))
 
@@ -185,7 +413,7 @@ def test_painting_rejects_a_slicer_profile_path(profile: Profile) -> None:
             profile,
             slot=1,
             at_feature="face_1",
-            slicer_profile="profiles/PETG.json",
+            slicer_profile=profile_path,
         )
 
     assert raised.value.field == "slicer_profile"

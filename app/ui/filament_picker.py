@@ -41,7 +41,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
 
-from PySide6.QtCore import QPoint, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QSignalBlocker, QSize, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -69,14 +70,16 @@ from app.core import discover, tools
 from app.core.errors import AppError
 from app.core.export import slicer_keys, slicer_profiles, threemf
 from app.core.export.handover import detect
+from app.core.geom.attributes import used_slots
+from app.core.geom.mesh import as_mesh_data
 from app.core.knowledge import filaments, profiles
-from app.core.types import MaterialSlot, PrintSettings
+from app.core.types import MaterialSlot, PrintSettings, SceneObject
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin, localised
 from app.ui.overlay import rows_height
 from app.ui.panels import MAX_ROWS, collapsible, least_height_of, row_height_of, view_chrome
-from app.ui.style import TIGHT, make_primary, set_level
+from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 from app.ui.theme import current_theme, slot_colour, viewport_colours
 
 #: Kantenlänge des Farbfelds vor einem Eintrag, in Bildpunkten.
@@ -451,12 +454,25 @@ class NewFilamentDialog(QDialog):
                 entry.slicer_profile,
             )
         self.setWindowTitle(tr("Filament ändern") if name else tr("Neues Filament"))
-        self.resize(500, 570)
+        self.resize(560, 580)
         outer = QVBoxLayout(self)
+        outer.setContentsMargins(WIDE, WIDE, WIDE, WIDE)
+        outer.setSpacing(NORMAL)
+        title = QLabel(self.windowTitle(), self)
+        set_level(title, "title")
+        outer.addWidget(title)
+        hint = QLabel(tr("Eine Spule im Lager. In jedem Projekt zur Auswahl."), self)
+        hint.setWordWrap(True)
+        set_level(hint, "caption")
+        outer.addWidget(hint)
         scroll = QScrollArea(self)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidgetResizable(True)
         content = QWidget(scroll)
         layout = QFormLayout(content)
+        layout.setContentsMargins(0, ROOMY, NORMAL, NORMAL)
+        layout.setVerticalSpacing(NORMAL)
+        layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
         scroll.setWidget(content)
         outer.addWidget(scroll)
@@ -503,6 +519,20 @@ class NewFilamentDialog(QDialog):
         self.colour.clicked.connect(self._pick_colour)
         layout.addRow(tr("Farbe"), self.colour)
 
+        self.location = QLineEdit(self)
+        self.location.setPlaceholderText(tr("etwa Trockenbox oder Regalfach"))
+        layout.addRow(tr("Lagerort"), self.location)
+
+        stock_title = QLabel(tr("Bestand"), self)
+        set_level(stock_title, "section")
+        stock_title.setContentsMargins(0, NORMAL, 0, 0)
+        layout.addRow(stock_title)
+        self.spool_weight = NumberSpin(self)
+        self.spool_weight.setRange(0, 1000000)
+        self.spool_weight.setSpecialValueText(tr("Unbekannt"))
+        self.spool_weight.setSuffix(f" {tr('g')}")
+        layout.addRow(tr("Nennfüllung"), self.spool_weight)
+
         stock = QWidget(self)
         stock_layout = QVBoxLayout(stock)
         stock_layout.setContentsMargins(0, 0, 0, 0)
@@ -517,29 +547,23 @@ class NewFilamentDialog(QDialog):
         self.stock_slider.setAccessibleName(tr("Ungefähr noch"))
         self.stock_hint = QLabel(stock)
         self.stock_hint.setWordWrap(True)
+        set_level(self.stock_hint, "caption")
         for widget in (self.stock_known, self.remaining, self.stock_slider, self.stock_hint):
             stock_layout.addWidget(widget)
         self.full_spool_button = QPushButton(tr("Als volle Spule eintragen"), stock)
         self.full_spool_button.clicked.connect(self._set_full_spool)
-        stock_layout.addWidget(self.full_spool_button)
-        layout.addRow(tr("Bestand"), stock)
+        stock_layout.addWidget(self.full_spool_button, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addRow(tr("Restmenge"), stock)
 
         self.more = QWidget(self)
         details = QFormLayout(self.more)
         details.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
-        self.spool_weight = NumberSpin(self)
-        self.spool_weight.setRange(0, 1000000)
-        self.spool_weight.setSpecialValueText(tr("Unbekannt"))
-        self.spool_weight.setSuffix(f" {tr('g')}")
-        details.addRow(tr("Nennfüllung"), self.spool_weight)
         self.diameter = NumberSpin(self)
         self.diameter.setRange(0, 100)
         self.diameter.setDecimals(2)
         self.diameter.setSpecialValueText(tr("Unbekannt"))
         self.diameter.setSuffix(f" {tr('mm')}")
         details.addRow(tr("Durchmesser"), self.diameter)
-        self.location = QLineEdit(self)
-        details.addRow(tr("Lagerort"), self.location)
         self.bought_on = QLineEdit(self)
         self.opened_on = QLineEdit(self)
         for date_input in (self.bought_on, self.opened_on):
@@ -596,6 +620,7 @@ class NewFilamentDialog(QDialog):
         outer.addWidget(buttons)
         self._ok_button = buttons.button(QDialogButtonBox.StandardButton.Ok)
         assert self._ok_button is not None
+        self._ok_button.setText(tr("Spule speichern") if entry is not None else tr("Spule anlegen"))
         make_primary(self._ok_button)
         self._ok_button.setEnabled(bool(name.strip()))
         # Gebundene Methode statt Lambda — dasselbe Ring-Muster wie in
@@ -639,7 +664,9 @@ class NewFilamentDialog(QDialog):
             editor.setToolTip(help_text)
             editor.setStatusTip(help_text)
             editor.setAccessibleDescription(help_text)
-            label = details.labelForField(editor)
+            label = (
+                layout if editor in (self.remaining, self.spool_weight, self.location) else details
+            ).labelForField(stock if editor is self.remaining else editor)
             if label is not None:
                 label.setToolTip(help_text)
                 label.setStatusTip(help_text)
@@ -675,10 +702,7 @@ class NewFilamentDialog(QDialog):
         self.stock_slider.setEnabled(known and weight > 0)
         self.full_spool_button.setEnabled(weight > 0)
         self.full_spool_button.setToolTip(
-            tr(
-                "Übernimmt die bekannte Nennfüllung als vorhandene Menge. "
-                "Die Nennfüllung steht unter Weitere Angaben."
-            )
+            tr("Übernimmt die Nennfüllung als Restmenge. Tragen Sie zuerst die Nennfüllung ein.")
         )
         self.full_spool_button.setStatusTip(self.full_spool_button.toolTip())
         self.full_spool_button.setAccessibleDescription(self.full_spool_button.toolTip())
@@ -689,7 +713,7 @@ class NewFilamentDialog(QDialog):
         if not known:
             text = tr("Bestand unbekannt")
         elif weight <= 0:
-            text = tr("Für Prozent und Schieber unter Weitere Angaben die Nennfüllung eintragen.")
+            text = tr("Für Prozent und Schieber die Nennfüllung eintragen.")
         else:
             text = tr("{percent} % der Nennfüllung").format(
                 percent=localised(f"{100 * self.remaining.value() / weight:.1f}")
@@ -815,6 +839,7 @@ class FilamentField(QComboBox):
     #: die Felder besitzt, ist der Dialog, und er entscheidet, ob es sie gibt.
     filamentChosen = Signal(str, str, str, str)
     spoolChosen = Signal(object)
+    choiceNotice = Signal(str)
 
     def __init__(
         self,
@@ -930,15 +955,18 @@ class FilamentField(QComboBox):
         # noch nichts liegt: ``paint_slot`` beginnt bei Filament 1, und ein
         # Feld, dessen Vorgabe nicht in der eigenen Liste steht, zeigt beim
         # Öffnen etwas anderes an, als die Operation ausführen würde.
-        for index in (0, start):
-            if index in taken or index < 0 or index >= self._limit:
+        default_position = self.findData(start) if start in self._slots else -1
+        for index in dict.fromkeys((0, start)):
+            if index in self._slots or index < 0 or index >= self._limit:
                 continue
             taken.add(index)
             self.addItem(swatch(shown_colour(index)), self._label(index, ""), index)
+            if index == start:
+                default_position = self.count() - 1
 
         self.addItem(tr("Neues Filament …"), NEW_FILAMENT)
 
-        position = self.findData(start)
+        position = default_position
         if position >= 0:
             self.setCurrentIndex(position)
         self._last_position = self.currentIndex()
@@ -979,6 +1007,30 @@ class FilamentField(QComboBox):
             self._make_one(position)
             return
         before = self._last_position
+        identifier = self.itemData(position, _ID_ROLE)
+        entry = filaments.get(str(identifier)) if identifier else None
+        if identifier:
+            cached = tuple(
+                str(self.itemData(position, role) or "")
+                for role in (_NAME_ROLE, _COLOUR_ROLE, _MATERIAL_TYPE_ROLE, _PROFILE_ROLE)
+            )
+            current = (
+                (entry.name, entry.colour, entry.material_type, entry.slicer_profile)
+                if entry is not None
+                else None
+            )
+            if entry is None or entry.archived or cached != current:
+                previous = self.itemData(before)
+                with QSignalBlocker(self):
+                    self.clear()
+                    self._fill(previous if isinstance(previous, int) else 0)
+                self.choiceNotice.emit(
+                    tr(
+                        "Die Spule wurde im Lager geändert oder archiviert. "
+                        "Wählen Sie das Filament erneut aus der aktualisierten Liste."
+                    )
+                )
+                return
         name = self.itemData(position, _NAME_ROLE)
         colour = self.itemData(position, _COLOUR_ROLE)
         if self.itemData(position) is None and name:
@@ -996,18 +1048,14 @@ class FilamentField(QComboBox):
             if free is not None:
                 self.setItemData(position, free)
         self._last_position = position
-        if name:
-            self.filamentChosen.emit(
-                str(name),
-                str(colour or ""),
-                str(self.itemData(position, _MATERIAL_TYPE_ROLE) or ""),
-                str(self.itemData(position, _PROFILE_ROLE) or ""),
-            )
-        identifier = self.itemData(position, _ID_ROLE)
-        if identifier:
-            entry = filaments.get(str(identifier))
-            if entry is not None and not entry.archived:
-                self.spoolChosen.emit(entry)
+        self.choiceNotice.emit("")
+        self.filamentChosen.emit(
+            str(name or ""),
+            str(colour or ""),
+            str(self.itemData(position, _MATERIAL_TYPE_ROLE) or ""),
+            str(self.itemData(position, _PROFILE_ROLE) or ""),
+        )
+        self.spoolChosen.emit(entry)
 
     def _replacement_slot(self) -> int | None:
         """Ein belegter Körper braucht eine ausdrückliche Wahl dessen, was ersetzt wird."""
@@ -1175,33 +1223,37 @@ class FilamentPanel(QWidget):
     # -- Höhe: was die Überlagerung fragt --------------------------------
 
     def _around_the_list(self) -> int:
-        """Was fest um die Liste herum steht: Hinweis, Knöpfe, Ränder, Abstände.
-
-        Gerechnet aus den Wunschhöhen und nicht aus den gelegten — dieselbe
-        Bedingung, unter der die ganze Verteilung stillsteht (``_share_room``):
-        Wer die Höhen liest, die er gerade selbst gesetzt hat, bekommt beim
-        nächsten Durchlauf andere Zahlen und die Spalte läuft auf und ab.
-        """
+        """Qt misst sichtbare Knöpfe, Abstände und Hinweis bei der tatsächlichen Breite."""
         layout = self.layout()
         if layout is None:
             return 0
-        margins = layout.contentsMargins()
-        gaps = max(layout.count() - 1, 0) * layout.spacing()
-        buttons = max(self.add_button.sizeHint().height(), self.settings_button.sizeHint().height())
-        back = (
-            0
-            if self.return_to_print_button.isHidden()
-            else self.return_to_print_button.sizeHint().height()
-        )
-        return (
-            margins.top()
-            + margins.bottom()
-            + gaps
-            + self.hint.sizeHint().height()
-            + buttons
-            + back
-            + self.inventory_button.sizeHint().height()
-        )
+        measured = layout.totalHeightForWidth(self.width())
+        if measured < 0:
+            measured = layout.totalSizeHint().height()
+        # Der feste Listenbeitrag wird vollständig abgezogen. Der Rest hängt
+        # damit nur an Inhalt, Breite und Stil, niemals an der Höhenzuteilung.
+        list_item = layout.itemAt(0)
+        assert list_item is not None
+        return measured - list_item.sizeHint().height()
+
+    def sizeHint(self) -> QSize:  # noqa: N802 — Qt-Name
+        """Auch der äußere Layoutwunsch enthält den tatsächlich umbrochenen Hinweis."""
+        hint = super().sizeHint()
+        if hasattr(self, "_room"):
+            hint.setHeight(self._around_the_list() + self.list.height())
+        return hint
+
+    def event(self, event: QEvent) -> bool:
+        """Breite, Schrift und sichtbare Knöpfe erneuern denselben Höhenvertrag."""
+        result = super().event(event)
+        if hasattr(self, "_room") and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.LayoutRequest,
+            QEvent.Type.FontChange,
+            QEvent.Type.StyleChange,
+        ):
+            self._fit()
+        return result
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jede Spule zu sehen wäre.
@@ -1267,15 +1319,16 @@ class FilamentPanel(QWidget):
             ceiling = view_chrome(self.list) + MAX_ROWS * row_height_of(self.list)
         else:
             ceiling = max(self._room - self._around_the_list(), 0)
-        self.list.setFixedHeight(max(least_height_of(self.list), min(wanted, ceiling)))
+        floor = min(wanted, least_height_of(self.list))
+        self.list.setFixedHeight(max(floor, min(wanted, ceiling)))
         # Dieselbe Stelle wie im Verlauf: die Liste ist bemessen, die Karte um
         # sie herum meldete weiter ihre Mindesthöhe und wurde zusammengedrückt.
-        self.setMinimumHeight(self.sizeHint().height())
+        self.setMinimumHeight(self._around_the_list() + self.list.height())
         self.updateGeometry()
 
     def show_scene(
         self,
-        objects: Sequence[object],
+        objects: Sequence[SceneObject],
         settings: PrintSettings | None = None,
     ) -> None:
         """Trägt ein, welche Filamente die Körper der Szene benutzen.
@@ -1291,13 +1344,14 @@ class FilamentPanel(QWidget):
         """
         used: dict[threemf.SlotKey | None, tuple[MaterialSlot | None, int]] = {}
         for entry in objects:
-            slots = getattr(entry, "material_slots", ()) or ()
-            if not slots:
-                previous = used.get(None, (None, 0))
-                used[None] = (None, previous[1] + 1)
-                continue
-            for slot in slots:
-                key = threemf.slot_identity(slot)
+            declared = {slot.index: slot for slot in threemf.slots_for_object(entry)}
+            counted: set[threemf.SlotKey | None] = set()
+            for index in used_slots(as_mesh_data(entry.mesh)):
+                slot = declared.get(index)
+                key = threemf.slot_identity(slot) if slot is not None else None
+                if key in counted:
+                    continue
+                counted.add(key)
                 previous = used.get(key, (slot, 0))
                 used[key] = (slot, previous[1] + 1)
         overrides = {
