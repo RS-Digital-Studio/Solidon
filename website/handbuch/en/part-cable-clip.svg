@@ -9,7 +9,7 @@
 <polygon points="71.7,133.2 75.1,135.9 135.6,57.6" fill="#b0bcc8" stroke="#b0bcc8" stroke-width="0.6" />
 <line x1="71.7" y1="133.2" x2="75.1" y2="135.9" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="173.9,80.9 165.6,75.6 105.1,153.9" fill="#afbbc7" stroke="#afbbc7" stroke-width="0.6" />
-<polygon points="68.3,130.7 128.8,52.4 64.8,128.3" fill="#b0bcc8" stroke="#b0bcc8" stroke-width="0.6" />
+<polygon points="64.8,128.3 68.3,130.7 128.8,52.4" fill="#b0bcc8" stroke="#b0bcc8" stroke-width="0.6" />
 <line x1="64.8" y1="128.3" x2="68.3" y2="130.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="75.1,135.9 78.3,138.7 138.7,60.4" fill="#aebac7" stroke="#aebac7" stroke-width="0.6" />
 <line x1="75.1" y1="135.9" x2="78.3" y2="138.7" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
@@ -46,7 +46,7 @@
 <polygon points="71.7,133.2 135.6,57.6 132.2,54.9" fill="#b0bcc8" stroke="#b0bcc8" stroke-width="0.6" />
 <polygon points="68.3,130.7 132.2,54.9 128.8,52.4" fill="#b0bdc9" stroke="#b0bdc9" stroke-width="0.6" />
 <polygon points="75.1,135.9 138.7,60.4 135.6,57.6" fill="#aebac7" stroke="#aebac7" stroke-width="0.6" />
-<polygon points="128.8,52.4 125.2,50.0 64.8,128.3" fill="#b0bcc8" stroke="#b0bcc8" stroke-width="0.6" />
+<polygon points="64.8,128.3 128.8,52.4 125.2,50.0" fill="#b0bcc8" stroke="#b0bcc8" stroke-width="0.6" />
 <polygon points="45.7,120.3 48.3,120.8 108.8,42.5" fill="#97a2ac" stroke="#97a2ac" stroke-width="0.6" />
 <line x1="45.7" y1="120.3" x2="48.3" y2="120.8" stroke="#1c2026" stroke-width="0.9" stroke-linecap="round" />
 <polygon points="76.6,8.0 165.6,75.6 173.9,80.9" fill="#7c858e" stroke="#7c858e" stroke-width="0.6" />
