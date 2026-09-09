@@ -15,6 +15,95 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.4.0
+
+### Costruire e modificare
+
+- Le controparti, come una spina e il suo foro, si posano su entrambi i pezzi in un solo passo. Le misure comuni si indicano una volta e un solo annulla ritira la coppia.
+- Il loft fra due contorni accetta ora due disegni distinti: tondo sotto, squadrato sopra. Nasce così l'adattatore da un tubo a un canale.
+- Lo sweep lungo un percorso segue un tracciato disegnato con più spigoli e archi, non più un solo arco uniforme. Sugli spigoli vivi Solidon taglia a quartabuono.
+- Il raccordo e lo smusso agiscono anche su un singolo spigolo. Lo scegliete in un elenco che indica ogni spigolo con la sua posizione e la sua lunghezza.
+- Un blocco raggiunge più punti in un solo passo: quattro fori ricevono insieme le loro boccole e un solo annulla ritira tutti e quattro.
+- Novità: *Verificare il percorso di accoppiamento* porta un pezzo nella posizione finale e segnala dove urta per strada, anche quando i due combaciano all'arrivo.
+- Ogni blocco può essere scritto come sorgente OpenSCAD, dal catalogo o dalla riga di comando.
+- Il nucleo esatto fora anche una faccia inclinata, con svasatura e allargamento; le serie e i montaggi a innesto restano intatti.
+
+### Forare e posizionare
+
+- Quando posate un foro, l'anteprima mostra il contorno dell'imbocco invece di un cilindro semitrasparente. Il punto che conta resta libero.
+- L'anteprima segue il mouse in modo fluido, anche su modelli grandi.
+- I campi delle misure si scostano dal punto in cui nasce il foro, invece di restarci sopra.
+- Chi sceglie un'operazione che si posiziona nel modello inizia subito a posizionare; il pulsante precedente sparisce.
+- Dopo il clic regolate la profondità con il mouse. Il modello diventa traslucido e la vista ruota di lato perché possiate guardare dentro al foro.
+- Mentre trascinate, la profondità scatta brevemente nei punti che significano qualcosa: la metà del materiale e la sua faccia posteriore.
+- Il parallelepipedo, la sfera e gli altri corpi di base si spostano e si ruotano già nell'anteprima, con la stessa maniglia di un corpo finito.
+- I corpi di base hanno un angolo di rotazione: la direzione dice dove punta il corpo, l'angolo dice come è ruotato attorno a essa.
+- Forare in un cilindro, una sfera o un toro non produce più a ogni foro l'avviso che sporge oltre il bordo.
+- Un foro con svasatura viene rimosso per intero dopo la conferma, invece di lasciare la svasatura senza via di ritorno.
+
+### Caratteristiche e selezione
+
+- Un foro su cui fate clic offre solo le azioni che lì servono a qualcosa; prima comparivano anche la scritta e l'assegnazione del filamento.
+- Ogni azione su una caratteristica compare una volta e non due, e sparisce l'intestazione di blocco sopra una sola riga.
+- Su una svasatura esistente *Svasare* è di nuovo raggiungibile.
+- Nell'albero degli oggetti le caratteristiche dello stesso tipo vengono raggruppate solo se coincide anche la misura. Dieci raccordi di raggio diverso compaiono di nuovo singolarmente.
+- Un corpo con filamento assegnato mostra di nuovo la sua selezione nell'immagine, invece di restare grigio come gli altri.
+- I campi di una caratteristica portano il loro nome: uno screen reader dice a che cosa appartiene un campo, invece di ripetere sei volte casella numerica, 0,00.
+
+### Blocchi e accoppiamenti
+
+- I vostri blocchi si aprono di nuovo dal catalogo per essere modificati, anche se il progetto da cui provengono non c'è più.
+- La scala di tolleranze adotta la misura rilevata del foro su cui la aprite, invece di un valore fisso di 6 mm.
+- Ganci e linguette elastiche calcolano con il materiale e la corsa della molla, non con una regola pratica. Solidon segnala un braccio che si rompe al primo scatto.
+- I tre corpi di taratura nascono senza corpo ausiliario, e la scala di tolleranze si stampa come due listelli numerati che si innestano fra loro.
+- L'avviso della molla misura il braccio reale, la cerniera a film si muove e il pressacavo arriva fino all'anteprima e all'uscita.
+- Un blocco depone materiale portante prima di tagliare dove serve; i blocchi che creano un corpo non affondano più senza supporto.
+- Un blocco spiega quale combinazione di misure non è in grado di costruire, invece di tagliarle in silenzio.
+
+### Filamenti e magazzino
+
+- La vostra scorta di filamento ha un posto suo: una tessera nella pagina iniziale e uno scaffale invece di un elenco, con il livello disegnato come avvolgimento sulla bobina.
+- Due bobine con lo stesso nome restano distinte. Ognuna porta il proprio residuo, e quella iniziata è quella che interessa.
+- Al taglio e alla consegna Solidon chiede se deve scaricare il consumo. Dopo il taglio è la quantità rilevata nel file di stampa, altrimenti una stima.
+- Ogni movimento è annullabile, ogni bobina tiene la sua cronologia, e scarica senza chiedere soltanto chi lo imposta espressamente.
+- Un filamento assegnato si può togliere di nuovo senza che le facce vicine perdano il loro.
+- Una faccia dipinta arriva in Orca e in PrusaSlicer con il suo filamento, non più senza.
+- Dopo la rimozione, il profilo del produttore non finisce più sul filamento sbagliato.
+- Nello scaffale la ricerca e le azioni principali stanno insieme, e il luogo di deposito e la carica nominale figurano nella finestra della bobina.
+
+### Stampa e preparazione
+
+- Solidon trova quello che ha Cura: 642 stampanti, 6010 profili di processo e 281 filamenti che prima restavano invisibili.
+- Da PrusaSlicer Solidon riprende i filamenti caricati e l'ultima stampante impostata.
+- Se il vostro slicer non conosce affatto la stampante, Solidon lo dice, invece di mandarvi a un elenco in cui non c'è nulla.
+- Cambiare livello di qualità richiede secondi e non quasi un minuto, e la finestra resta utilizzabile nel frattempo.
+- La consulenza sulle impostazioni di stampa guarda tutti i corpi del piano e non solo la selezione. Ciò che serve a un corpo resta, anche se quello accanto ne fa a meno.
+- Calcola in secondo piano, nomina il corpo, mostra il suo avanzamento e si può interrompere.
+- Un ponte lungo viene valutato sui suoi appoggi reali, e l'angolo di sporgenza vale per stampante, ugello, altezza di strato e larghezza di linea con cui è stato rilevato.
+- Una velocità troppo alta viene limitata sul tipo di percorso interessato, invece di scaldare sempre di più ugello e piano.
+- Le proposte deselezionate restano deselezionate, e un cambio di filamento, scena, piano o qualità invalida subito un risultato superato.
+- La distanza nella disposizione conta il bordo di adesione e la struttura di supporto: fra due vicini entrambi contano doppio.
+- I pezzi vengono disposti al centro del piano, come fanno gli slicer accanto, e non nell'angolo posteriore sinistro.
+- Orientare per la stampa ridispone poi i pezzi ruotati. Un corpo che si corica occupa più superficie e prima finiva dentro al vicino.
+- Disporre solo una parte della scena non travolge più il resto: ciò che rimane conserva il suo posto.
+
+### Vista e utilizzo
+
+- Il puntatore del mouse di Solidon vale per l'intera finestra e per ogni finestra di dialogo, non più solo per la vista 3D.
+- Cambiare variante in una finestra di operazione non chiude più l'applicazione.
+- Una finestra di operazione aperta non sopravvive più in silenzio a un cambio di progetto.
+- Le note lunghe non vengono più tagliate mentre accanto resta spazio libero.
+- Dalla riga di comando non era possibile richiamare *Assegnare filamento*; ora sì.
+
+### Aggiornamento, installazione e sistema
+
+- In *Novità* compaiono le ultime tre versioni. La cronologia completa di tutte le versioni sta su solidon3d.de e resta consultabile lì.
+
+### Manuale e sito web
+
+- Le immagini delle pagine mostrano il modello per tutta la larghezza, non come una striscia fra i pannelli.
+- Manuale e sito web nominano ogni operazione esistente, compresi i nuovi editor delle caratteristiche.
+
 ## 0.3.5
 
 ### Vista

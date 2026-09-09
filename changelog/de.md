@@ -40,6 +40,95 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.4.0
+
+### Konstruieren und Ändern
+
+- Gegenstücke wie Passstift und Bohrung setzen Sie in einem Schritt auf beide Teile. Die gemeinsamen Maße geben Sie einmal ein, und eine Rücknahme nimmt das Paar zurück.
+- Zwischen zwei Umrissen aufspannen nimmt zwei eigene Zeichnungen: rund unten, eckig oben. So entsteht der Adapter von einem Rohr auf einen Kanal.
+- Entlang einer Bahn führen folgt einer gezeichneten Bahn mit mehreren Ecken und Bögen statt nur einem gleichmäßigen Bogen. An scharfen Ecken schneidet Solidon auf Gehrung.
+- Verrunden und Fasen greifen jetzt auch an einer einzelnen Kante. Sie wählen sie in einer Liste, die jede Kante mit ihrer Lage und ihrer Länge nennt.
+- Ein Baustein geht in einem Schritt an mehrere Stellen: Vier Bohrungen bekommen ihre Einpressbuchsen gemeinsam, und eine Rücknahme nimmt alle vier zurück.
+- Neu ist *Fügeweg prüfen*: Es führt ein Teil in seine Endlage und meldet, wo es unterwegs anstößt — auch wenn beide Teile in der Endlage zusammenpassen.
+- Jeden Baustein können Sie als OpenSCAD-Quelltext ausgeben, aus dem Katalog heraus oder über die Kommandozeile.
+- Am exakten Kern lässt sich auch auf eine schräge Fläche bohren, mit Senkung und Aufweitung; Muster und Steckmontagen bleiben dabei erhalten.
+
+### Bohren und Platzieren
+
+- Beim Setzen einer Bohrung zeigt die Vorschau den Umriss der Mündung statt eines halbdurchsichtigen Zylinders. Die Stelle, auf die es ankommt, bleibt frei.
+- Die Vorschau folgt der Maus flüssig, auch an größeren Modellen.
+- Die Maßfelder weichen der Stelle aus, an der die Bohrung entsteht, statt über ihr zu stehen.
+- Wer eine Operation wählt, die im Modell platziert wird, platziert sofort; der Knopf davor entfällt.
+- Nach dem Klick stellen Sie die Tiefe mit der Maus ein. Das Modell wird durchscheinend, und die Ansicht schwenkt zur Seite, damit Sie in das Loch hineinsehen.
+- Beim Ziehen rastet die Tiefe kurz an den Stellen ein, die etwas bedeuten: an der Mitte des Materials und an seiner Rückseite.
+- Quader, Kugel und die anderen Grundkörper verschieben und drehen Sie schon in der Vorschau, mit demselben Griff wie am fertigen Körper.
+- Die Grundkörper haben einen Drehwinkel bekommen: Die Richtung sagt, wohin der Körper zeigt, der Winkel, wie er dabei herumsteht.
+- Wer in einen Zylinder, eine Kugel oder einen Ring bohrt, bekommt nicht mehr bei jeder Bohrung die Warnung, sie rage über den Rand hinaus.
+- Eine Bohrung mit Senkung wird auf Nachfrage ganz entfernt, statt die Senkung ohne Weg zurück stehen zu lassen.
+
+### Merkmale und Auswahl
+
+- An einer angeklickten Bohrung stehen nur noch die Handlungen, die dort etwas bewirken — vorher standen dort auch Text aufbringen und Filament zuweisen.
+- Jede Handlung an einem Merkmal steht einmal statt zweimal, und ein Bausteindach über einer einzigen Zeile entfällt.
+- An einer vorhandenen Senkung ist *Senken* wieder erreichbar.
+- Im Objektbaum bündeln sich gleichartige Merkmale nur noch, wenn auch ihr Maß gleich ist. Zehn Hohlkehlen mit verschiedenen Radien stehen wieder einzeln da.
+- Ein Körper mit zugewiesenem Filament zeigt seine Auswahl wieder im Bild, statt grau zu bleiben wie alle anderen.
+- Die Felder am Merkmal tragen ihren Namen: Ein Bildschirmleser sagt jetzt, wozu ein Feld gehört, statt sechsmal Drehfeld, 0,00.
+
+### Bausteine und Passungen
+
+- Ihre eigenen Bausteine öffnen Sie aus dem Katalog wieder zum Bearbeiten, auch wenn das Projekt, aus dem sie stammen, nicht mehr da ist.
+- Die Toleranzleiter übernimmt das gemessene Maß der Bohrung, an der Sie sie öffnen, statt einer festen Vorgabe von 6 mm.
+- Schnapphaken und Klemmzungen rechnen mit Material und Federweg statt mit einer Faustregel. Solidon meldet einen Arm, der beim ersten Einrasten bricht.
+- Die drei Kalibrierkörper entstehen ohne Hilfskörper, und die Toleranzleiter wird als zwei nummerierte Leisten gedruckt, die ineinandergesteckt werden.
+- Die Federwarnung misst den tatsächlichen Arm, das Filmscharnier bewegt sich, und die Kabelzugentlastung trägt bis in Vorschau und Ausgabe.
+- Ein Baustein legt bei Bedarf tragendes Material vor, bevor er schneidet; erzeugte Bausteine sinken ohne Träger nicht mehr ein.
+- Ein Baustein erklärt, welche Kombination von Maßen er nicht bauen kann, statt sie still zu kappen.
+
+### Filamente und Lager
+
+- Ihr Filamentbestand hat einen eigenen Ort: eine Kachel auf der Startseite und ein Regal statt einer Liste, mit dem Füllstand als Wicklung auf der gezeichneten Spule.
+- Zwei Spulen mit demselben Namen bleiben auseinandergehalten. Jede führt ihren eigenen Rest, und die angebrochene ist die interessante.
+- Beim Slicen und beim Übergeben fragt Solidon, ob es den Verbrauch abbuchen soll. Nach dem Slicen ist es die gemessene Menge aus der Druckdatei, sonst eine Schätzung.
+- Jede Buchung ist rücknehmbar, jede Spule führt ihren Verlauf, und ohne Rückfrage bucht nur, wer das ausdrücklich einstellt.
+- Ein zugewiesenes Filament lässt sich wieder entfernen, ohne dass die Nachbarflächen ihres dabei verlieren.
+- Eine bemalte Fläche kommt in Orca und PrusaSlicer mit ihrem Filament an, nicht mehr ohne.
+- Nach einer Abwahl landet das Herstellerprofil nicht mehr beim falschen Filament.
+- Im Regal sind Suche und Hauptaktionen beieinander, und Lagerort und Nennfüllung stehen im Spulendialog.
+
+### Drucken und Vorbereiten
+
+- Solidon findet den Bestand von Cura: 642 Drucker, 6010 Prozessprofile und 281 Filamente, die vorher unsichtbar blieben.
+- Von PrusaSlicer übernimmt Solidon die eingelegten Filamente und den zuletzt eingestellten Drucker.
+- Kennt Ihr Slicer den eingestellten Drucker gar nicht, sagt Solidon das — statt Sie in eine Liste zu schicken, in der nichts steht.
+- Die Qualitätsstufe zu wechseln dauert Sekunden statt einer knappen Minute, und das Fenster bleibt dabei bedienbar.
+- Die Beratung zu den Druckeinstellungen sieht alle Körper der Platte statt nur der Auswahl. Was ein Körper braucht, bleibt erhalten, auch wenn der daneben ohne auskommt.
+- Sie rechnet im Hintergrund, nennt den Körper, zeigt ihren Fortschritt und lässt sich abbrechen.
+- Eine lange Brücke wird an ihren tatsächlichen Auflagern bewertet, und der Überhangwinkel gilt für Drucker, Düse, Schichthöhe und Linienbreite, unter denen er gemessen wurde.
+- Zu hohes Tempo wird an der betroffenen Bahnart begrenzt, statt Düse und Bett immer weiter aufzuheizen.
+- Abgewählte Vorschläge bleiben abgewählt, und ein Wechsel von Filament, Szene, Platte oder Qualität entwertet ein veraltetes Ergebnis sofort.
+- Der Abstand beim Anordnen rechnet Druckbettrand und Stützstruktur mit: Beide zählen zwischen zwei Nachbarn doppelt.
+- Angeordnet wird in der Mitte des Betts, wie in den Slicern daneben, statt in der hinteren linken Ecke.
+- Druckoptimal ausrichten legt die gedrehten Teile danach neu hin. Ein Körper, der sich hinlegt, braucht mehr Fläche und steckte vorher im Nachbarn.
+- Wer nur einen Teil der Szene anordnet, überfährt die anderen nicht mehr: Was liegen bleibt, behält seinen Platz.
+
+### Ansicht und Bedienung
+
+- Der Mauszeiger von Solidon steht im ganzen Fenster und in jedem Dialog, nicht mehr nur in der 3D-Ansicht.
+- Ein Wechsel der Variante im Operationsdialog beendet die Anwendung nicht mehr.
+- Ein offener Operationsdialog übersteht keinen Projektwechsel mehr unbemerkt.
+- Lange Hinweise werden nicht mehr abgeschnitten, während daneben Platz frei bleibt.
+- Über die Kommandozeile ließ sich *Filament zuweisen* nicht aufrufen; jetzt schon.
+
+### Update, Installation und System
+
+- Unter *Neuerungen* stehen die letzten drei Versionen. Der vollständige Verlauf aller Fassungen steht auf solidon3d.de und bleibt dort nachlesbar.
+
+### Handbuch und Website
+
+- Die Bilder auf den Seiten zeigen das Modell in ganzer Breite statt als Streifen zwischen den Panelen.
+- Handbuch und Website nennen jede Operation, die es gibt, samt der neuen Merkmalseditoren.
+
 ## 0.3.5
 
 ### Ansicht

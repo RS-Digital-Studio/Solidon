@@ -15,6 +15,95 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.4.0
+
+### Building and editing
+
+- Counterparts such as a dowel pin and its hole go onto both parts in a single step. You enter the shared dimensions once, and one undo takes the pair back.
+- Lofting between two outlines now takes two separate sketches: round at the bottom, square at the top. That is how you build an adapter from a pipe to a duct.
+- Sweeping along a path now follows a drawn path with several corners and arcs instead of a single even arc. At sharp corners Solidon mitres the joint.
+- Fillets and chamfers now work on a single edge as well. You pick it from a list that names every edge with its position and its length.
+- A building block goes to several places in one step: four holes get their press-fit inserts together, and one undo takes all four back.
+- New is *Check the join path*: it moves a part into its final position and reports where it hits something on the way — even when both parts fit in the final position.
+- Every building block can be written out as OpenSCAD source, from the catalogue or from the command line.
+- The exact core can now drill into a slanted face as well, with countersink and counterbore; patterns and plug-in assemblies survive it.
+
+### Drilling and placing
+
+- When you place a hole, the preview shows the outline of its mouth instead of a half-transparent cylinder. The spot that matters stays clear.
+- The preview follows the mouse smoothly, on larger models too.
+- The dimension fields move out of the way of the spot where the hole appears, instead of standing on top of it.
+- Choosing an operation that is placed in the model starts placing right away; the button in front of it is gone.
+- After the click you set the depth with the mouse. The model turns translucent and the view swings to the side so you can look into the hole.
+- While you drag, the depth snaps briefly to the places that mean something: the middle of the material and its back face.
+- Box, sphere and the other primitives can be moved and turned in the preview already, with the same handle as on a finished body.
+- The primitives have gained a rotation angle: the direction says where the body points, the angle says how it stands around that direction.
+- Drilling into a cylinder, a sphere or a torus no longer raises the warning that the hole reaches past the edge on every single hole.
+- A hole with a countersink is removed completely when you confirm, instead of leaving the countersink behind with no way back.
+
+### Features and selection
+
+- A hole you click on now only offers the actions that do something there — labels and filament assignment used to sit there too.
+- Every action on a feature appears once instead of twice, and a block heading above a single row is gone.
+- On an existing countersink, *Countersink* can be reached again.
+- In the object tree, features of the same kind are only bundled when their size matches too. Ten fillets with different radii are listed separately again.
+- A body with an assigned filament shows its selection in the view again, instead of staying grey like all the others.
+- The fields on a feature carry their name: a screen reader now says what a field belongs to, instead of six times spin box, 0.00.
+
+### Building blocks and fits
+
+- Your own building blocks can be opened from the catalogue for editing again, even when the project they came from is gone.
+- The tolerance ladder picks up the measured size of the hole you open it on, instead of a fixed default of 6 mm.
+- Snap hooks and clamping tongues now calculate with material and spring travel instead of a rule of thumb. Solidon reports an arm that breaks the first time it snaps in.
+- The three calibration bodies come without a helper body, and the tolerance ladder prints as two numbered strips that plug into each other.
+- The spring warning measures the actual arm, the living hinge moves, and the strain relief carries through into preview and output.
+- A building block lays down supporting material before it cuts where that is needed; blocks that create a body no longer sink in without a host.
+- A building block explains which combination of dimensions it cannot build, instead of quietly capping them.
+
+### Filaments and stock
+
+- Your filament stock has a place of its own: a tile on the start page and a shelf instead of a list, with the fill level drawn as winding on the spool.
+- Two spools with the same name are kept apart. Each carries its own remainder, and the opened one is the interesting one.
+- When slicing and when handing over, Solidon asks whether it should book the consumption. After slicing that is the measured amount from the print file, otherwise an estimate.
+- Every booking can be taken back, every spool carries its history, and only those who explicitly set it up book without being asked.
+- An assigned filament can be removed again without the neighbouring faces losing theirs in the process.
+- A painted face arrives in Orca and PrusaSlicer with its filament, no longer without.
+- After a filament is cleared, the vendor profile no longer ends up on the wrong filament.
+- On the shelf, search and main actions sit together, and storage place and nominal fill are in the spool dialog.
+
+### Printing and preparing
+
+- Solidon finds what Cura has: 642 printers, 6010 process profiles and 281 filaments that stayed invisible before.
+- From PrusaSlicer, Solidon picks up the loaded filaments and the printer you last set.
+- If your slicer does not know the printer at all, Solidon says so — instead of sending you to a list with nothing in it.
+- Switching the quality level takes seconds instead of the better part of a minute, and the window stays usable while it does.
+- The advice on print settings looks at every body on the plate instead of just the selection. What one body needs is kept, even when the one next to it does without.
+- It calculates in the background, names the body, shows its progress and can be cancelled.
+- A long bridge is judged by its actual supports, and the overhang angle holds for the printer, nozzle, layer height and line width it was measured under.
+- Excessive speed is now capped on the affected kind of path, instead of heating nozzle and bed further and further.
+- Suggestions you deselected stay deselected, and a change of filament, scene, plate or quality invalidates an outdated result at once.
+- The spacing when arranging now counts the bed adhesion skirt and the support structure: both count twice between two neighbours.
+- Parts are arranged in the middle of the bed, the way the slicers next door do it, instead of in the back left corner.
+- Orienting for printing now lays the turned parts out again afterwards. A body that lies down needs more area, and used to end up inside its neighbour.
+- Arranging only part of the scene no longer runs over the rest: whatever stays put keeps its place.
+
+### View and operation
+
+- The Solidon mouse pointer is now used across the whole window and in every dialog, not just in the 3D view.
+- Switching the variant in an operation dialog no longer ends the application.
+- An open operation dialog no longer survives a change of project unnoticed.
+- Long notes are no longer cut off while space next to them stays free.
+- From the command line, *Assign filament* could not be called; now it can.
+
+### Update, installation and system
+
+- Under *What is new* you find the last three versions. The full history of every release is on solidon3d.de and stays available there.
+
+### Manual and website
+
+- The images on the pages show the model at full width instead of a strip between the panels.
+- Manual and website name every operation there is, including the new feature editors.
+
 ## 0.3.5
 
 ### View

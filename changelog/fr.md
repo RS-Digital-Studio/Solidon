@@ -16,6 +16,95 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.4.0
+
+### Construire et modifier
+
+- Les contreparties, comme un goujon et son perçage, se posent sur les deux pièces en une seule étape. Les cotes communes se saisissent une fois et une seule annulation retire la paire.
+- Le lissage entre deux contours accepte désormais deux dessins distincts : rond en bas, anguleux en haut. C'est ainsi que naît l'adaptateur d'un tube vers une goulotte.
+- Le balayage le long d'un chemin suit un tracé dessiné à plusieurs coins et arcs, et non plus un seul arc régulier. Aux angles vifs, Solidon coupe en onglet.
+- Le congé et le chanfrein s'appliquent aussi à une seule arête. Vous la choisissez dans une liste qui donne chaque arête avec sa position et sa longueur.
+- Un bloc va à plusieurs endroits en une étape : quatre perçages reçoivent ensemble leurs inserts, et une seule annulation retire les quatre.
+- Nouveau : *Vérifier le chemin d'assemblage* amène une pièce à sa position finale et signale où elle bute en route, même si les deux s'emboîtent à l'arrivée.
+- Chaque bloc peut être écrit en source OpenSCAD, depuis le catalogue ou depuis la ligne de commande.
+- Le noyau exact perce aussi une face inclinée, avec fraisage et lamage ; les motifs et les assemblages emboîtés sont conservés.
+
+### Percer et placer
+
+- Lors de la pose d'un perçage, l'aperçu montre le contour de l'entrée au lieu d'un cylindre semi-transparent. L'endroit qui compte reste dégagé.
+- L'aperçu suit la souris avec fluidité, y compris sur de grands modèles.
+- Les champs de cote s'écartent de l'endroit où naît le perçage, au lieu de se poser dessus.
+- Choisir une opération qui se place dans le modèle lance le placement aussitôt ; le bouton d'avant disparaît.
+- Après le clic, vous réglez la profondeur à la souris. Le modèle devient translucide et la vue pivote de côté pour que vous puissiez regarder dans le trou.
+- Pendant le glissement, la profondeur s'accroche brièvement aux endroits qui veulent dire quelque chose : le milieu de la matière et sa face arrière.
+- Le pavé, la sphère et les autres corps de base se déplacent et tournent déjà dans l'aperçu, avec la même poignée que sur un corps terminé.
+- Les corps de base ont reçu un angle de rotation : la direction dit où pointe le corps, l'angle dit comment il est tourné autour d'elle.
+- Percer dans un cylindre, une sphère ou un tore ne déclenche plus à chaque perçage l'avertissement qu'il déborde du bord.
+- Un perçage avec fraisage est retiré en entier après confirmation, au lieu de laisser le fraisage sans retour possible.
+
+### Caractéristiques et sélection
+
+- Un perçage sur lequel vous cliquez ne propose plus que les actions qui y font quelque chose ; le texte et l'affectation de filament s'y trouvaient aussi.
+- Chaque action sur une caractéristique apparaît une fois et non deux, et l'en-tête de bloc au-dessus d'une seule ligne disparaît.
+- Sur un fraisage existant, *Fraiser* est de nouveau accessible.
+- Dans l'arbre des objets, les caractéristiques de même nature ne sont regroupées que si leur cote concorde aussi. Dix congés de rayons différents figurent de nouveau séparément.
+- Un corps avec filament affecté montre de nouveau sa sélection à l'image, au lieu de rester gris comme les autres.
+- Les champs d'une caractéristique portent leur nom : un lecteur d'écran dit à quoi appartient un champ, au lieu de répéter six fois champ rotatif, 0,00.
+
+### Blocs et ajustements
+
+- Vos propres blocs s'ouvrent de nouveau depuis le catalogue pour être modifiés, même si le projet dont ils viennent n'existe plus.
+- L'échelle de tolérances reprend la cote mesurée du perçage sur lequel vous l'ouvrez, au lieu d'une valeur fixe de 6 mm.
+- Les crochets et les languettes élastiques calculent avec la matière et la course du ressort, non avec une règle empirique. Solidon signale un bras qui casse au premier encliquetage.
+- Les trois corps d'étalonnage naissent sans corps auxiliaire, et l'échelle de tolérances s'imprime en deux réglettes numérotées qui s'emboîtent.
+- L'avertissement du ressort mesure le bras réel, la charnière souple bouge, et le serre-câble va jusque dans l'aperçu et la sortie.
+- Un bloc dépose de la matière porteuse avant de couper là où c'est nécessaire ; les blocs qui créent un corps ne s'enfoncent plus sans support.
+- Un bloc explique quelle combinaison de cotes il ne peut pas construire, au lieu de les rogner en silence.
+
+### Filaments et stock
+
+- Votre stock de filament a sa propre place : une tuile sur la page d'accueil et une étagère au lieu d'une liste, avec le niveau dessiné comme un enroulement sur la bobine.
+- Deux bobines de même nom restent distinctes. Chacune porte son propre reste, et c'est celle qui est entamée qui compte.
+- Au tranchage et à la remise, Solidon demande s'il doit décompter la consommation. Après le tranchage, c'est la quantité mesurée dans le fichier d'impression, sinon une estimation.
+- Chaque écriture est annulable, chaque bobine tient son historique, et seul celui qui le règle expressément décompte sans qu'on lui demande.
+- Un filament affecté peut être retiré sans que les faces voisines y perdent le leur.
+- Une face peinte arrive dans Orca et PrusaSlicer avec son filament, et non plus sans.
+- Après un retrait, le profil du fabricant n'atterrit plus sur le mauvais filament.
+- Sur l'étagère, la recherche et les actions principales sont réunies, et le lieu de rangement et la charge nominale figurent dans la boîte de dialogue de la bobine.
+
+### Impression et préparation
+
+- Solidon trouve ce que possède Cura : 642 imprimantes, 6010 profils de processus et 281 filaments qui restaient invisibles.
+- De PrusaSlicer, Solidon reprend les filaments chargés et la dernière imprimante réglée.
+- Si votre trancheur ne connaît pas du tout l'imprimante, Solidon le dit, au lieu de vous envoyer vers une liste où il n'y a rien.
+- Changer de niveau de qualité prend des secondes et non près d'une minute, et la fenêtre reste utilisable pendant ce temps.
+- Le conseil sur les réglages d'impression regarde tous les corps du plateau et non la seule sélection. Ce dont un corps a besoin est conservé, même si le voisin s'en passe.
+- Il calcule en arrière-plan, nomme le corps, montre sa progression et peut être interrompu.
+- Un long pont est jugé sur ses appuis réels, et l'angle de surplomb vaut pour l'imprimante, la buse, la hauteur de couche et la largeur de ligne sous lesquelles il a été mesuré.
+- Une vitesse trop élevée est limitée sur le type de trajet concerné, au lieu de chauffer toujours plus la buse et le plateau.
+- Les propositions décochées restent décochées, et un changement de filament, de scène, de plateau ou de qualité invalide aussitôt un résultat périmé.
+- L'écart lors de la disposition compte la bordure d'adhérence et la structure de support : entre deux voisins, les deux comptent double.
+- Les pièces sont disposées au milieu du plateau, comme le font les trancheurs d'à côté, et non dans le coin arrière gauche.
+- Orienter pour l'impression redispose ensuite les pièces tournées. Un corps qui se couche prend plus de surface et finissait avant dans son voisin.
+- Ne disposer qu'une partie de la scène n'écrase plus le reste : ce qui demeure garde sa place.
+
+### Vue et utilisation
+
+- Le pointeur de souris de Solidon vaut pour toute la fenêtre et pour chaque boîte de dialogue, et non plus seulement pour la vue 3D.
+- Changer de variante dans une boîte de dialogue d'opération ne quitte plus l'application.
+- Une boîte de dialogue d'opération ouverte ne survit plus sans bruit à un changement de projet.
+- Les notes longues ne sont plus coupées alors que la place reste libre à côté.
+- Depuis la ligne de commande, *Affecter un filament* ne pouvait pas être appelé ; c'est possible maintenant.
+
+### Mise à jour, installation et système
+
+- Sous *Nouveautés* figurent les trois dernières versions. L'historique complet de toutes les versions se trouve sur solidon3d.de et y reste consultable.
+
+### Manuel et site web
+
+- Les images des pages montrent le modèle sur toute la largeur, et non comme une bande entre les panneaux.
+- Le manuel et le site web nomment toutes les opérations existantes, y compris les nouveaux éditeurs de caractéristiques.
+
 ## 0.3.5
 
 ### Vue

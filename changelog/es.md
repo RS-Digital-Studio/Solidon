@@ -16,6 +16,95 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.4.0
+
+### Construir y modificar
+
+- Las contrapiezas, como un pasador y su taladro, se colocan en las dos piezas en un solo paso. Las medidas comunes se indican una vez y una sola deshacer retira la pareja.
+- Unir dos contornos admite ahora dos dibujos propios: redondo abajo, angular arriba. Así se construye el adaptador de un tubo a un canal.
+- Barrer a lo largo de una trayectoria sigue un recorrido dibujado con varias esquinas y arcos, y no solo un arco uniforme. En las esquinas vivas Solidon corta a inglete.
+- El redondeo y el chaflán funcionan también en una sola arista. La elige en una lista que indica cada arista con su posición y su longitud.
+- Un bloque llega a varios sitios en un solo paso: cuatro taladros reciben juntos sus casquillos y una sola deshacer retira los cuatro.
+- Novedad: *Comprobar la trayectoria de montaje* lleva una pieza a su posición final e indica dónde choca por el camino, aunque las dos encajen al final.
+- Cada bloque puede exportarse como código OpenSCAD, desde el catálogo o desde la línea de órdenes.
+- El núcleo exacto taladra también en una cara inclinada, con avellanado y ensanche; los patrones y los montajes encajados se conservan.
+
+### Taladrar y colocar
+
+- Al colocar un taladro, la vista previa muestra el contorno de la boca en lugar de un cilindro semitransparente. El punto que importa queda despejado.
+- La vista previa sigue al ratón con fluidez, también en modelos grandes.
+- Los campos de medida se apartan del punto donde nace el taladro, en lugar de quedar encima.
+- Quien elige una operación que se coloca en el modelo empieza a colocar de inmediato; el botón previo desaparece.
+- Tras el clic, la profundidad se ajusta con el ratón. El modelo se vuelve translúcido y la vista gira de lado para que pueda mirar dentro del agujero.
+- Al arrastrar, la profundidad encaja brevemente en los puntos con significado: la mitad del material y su cara posterior.
+- El prisma, la esfera y los demás cuerpos básicos se mueven y giran ya en la vista previa, con el mismo tirador que un cuerpo terminado.
+- Los cuerpos básicos tienen ángulo de giro: la dirección dice hacia dónde apunta el cuerpo y el ángulo, cómo queda girado alrededor de ella.
+- Taladrar en un cilindro, una esfera o un toro ya no provoca en cada taladro el aviso de que sobresale del borde.
+- Un taladro con avellanado se elimina por completo tras la confirmación, en lugar de dejar el avellanado sin vuelta atrás.
+
+### Características y selección
+
+- Un taladro seleccionado ofrece solo las acciones que hacen algo allí; antes aparecían también rotular y asignar filamento.
+- Cada acción sobre una característica aparece una vez y no dos, y desaparece el encabezado de bloque sobre una única fila.
+- En un avellanado existente vuelve a estar disponible *Avellanar*.
+- En el árbol de objetos, las características del mismo tipo solo se agrupan si coincide también su medida. Diez redondeos con radios distintos vuelven a aparecer por separado.
+- Un cuerpo con filamento asignado vuelve a mostrar su selección en la imagen, en vez de quedarse gris como los demás.
+- Los campos de una característica llevan su nombre: el lector de pantalla dice a qué pertenece cada campo, en lugar de repetir seis veces campo giratorio, 0,00.
+
+### Bloques y ajustes
+
+- Sus propios bloques se abren de nuevo desde el catálogo para editarlos, aunque el proyecto del que salieron ya no exista.
+- La escalera de tolerancias adopta la medida real del taladro sobre el que la abre, en lugar de un valor fijo de 6 mm.
+- Los ganchos y las lengüetas elásticas calculan con el material y el recorrido del muelle, no con una regla aproximada. Solidon avisa del brazo que rompe al primer encaje.
+- Los tres cuerpos de calibración nacen sin cuerpo auxiliar, y la escalera de tolerancias se imprime como dos listones numerados que se encajan entre sí.
+- El aviso del muelle mide el brazo real, la bisagra de película se mueve y el sujetacables llega hasta la vista previa y la salida.
+- Un bloque añade material de apoyo antes de cortar cuando hace falta; los bloques que crean un cuerpo ya no se hunden sin soporte.
+- Un bloque explica qué combinación de medidas no puede construir, en lugar de recortarlas en silencio.
+
+### Filamentos y almacén
+
+- Su existencia de filamento tiene sitio propio: un mosaico en la página de inicio y una estantería en lugar de una lista, con el nivel dibujado como bobinado en el carrete.
+- Dos bobinas con el mismo nombre se distinguen. Cada una lleva su propio resto, y la empezada es la interesante.
+- Al laminar y al entregar, Solidon pregunta si debe descontar el consumo. Tras laminar es la cantidad medida en el archivo de impresión; si no, una estimación.
+- Cada apunte se puede deshacer, cada bobina lleva su historial y solo descuenta sin preguntar quien lo configura expresamente.
+- Un filamento asignado se puede quitar de nuevo sin que las caras vecinas pierdan el suyo.
+- Una cara pintada llega a Orca y a PrusaSlicer con su filamento, ya no sin él.
+- Tras retirar un filamento, el perfil del fabricante ya no acaba en el filamento equivocado.
+- En la estantería, la búsqueda y las acciones principales están juntas, y el lugar de almacenaje y la carga nominal figuran en el diálogo de la bobina.
+
+### Imprimir y preparar
+
+- Solidon encuentra lo que tiene Cura: 642 impresoras, 6010 perfiles de proceso y 281 filamentos que antes quedaban invisibles.
+- De PrusaSlicer, Solidon adopta los filamentos cargados y la impresora configurada por última vez.
+- Si su laminador no conoce siquiera la impresora, Solidon lo dice, en lugar de enviarle a una lista en la que no hay nada.
+- Cambiar el nivel de calidad tarda segundos y no casi un minuto, y la ventana sigue utilizable mientras tanto.
+- El asesoramiento sobre los ajustes de impresión mira todos los cuerpos de la placa y no solo la selección. Lo que un cuerpo necesita se conserva aunque el vecino no lo necesite.
+- Calcula en segundo plano, nombra el cuerpo, muestra su avance y se puede cancelar.
+- Un puente largo se valora por sus apoyos reales, y el ángulo de voladizo vale para la impresora, la boquilla, la altura de capa y el ancho de línea con los que se midió.
+- La velocidad excesiva se limita en el tipo de trayectoria afectado, en lugar de calentar cada vez más la boquilla y la cama.
+- Las propuestas descartadas siguen descartadas, y un cambio de filamento, escena, placa o calidad invalida de inmediato un resultado obsoleto.
+- La separación al distribuir cuenta el borde de adherencia y la estructura de soporte: entre dos vecinos ambos cuentan dos veces.
+- Las piezas se distribuyen en el centro de la cama, como hacen los laminadores de al lado, y no en la esquina posterior izquierda.
+- Orientar para imprimir vuelve a distribuir después las piezas giradas. Un cuerpo que se tumba ocupa más superficie y antes acababa dentro del vecino.
+- Distribuir solo una parte de la escena ya no atropella al resto: lo que se queda conserva su sitio.
+
+### Vista y manejo
+
+- El puntero de ratón de Solidon se usa en toda la ventana y en cada diálogo, no solo en la vista 3D.
+- Cambiar la variante en un diálogo de operación ya no cierra la aplicación.
+- Un diálogo de operación abierto ya no sobrevive sin más a un cambio de proyecto.
+- Los avisos largos ya no se cortan mientras queda sitio libre al lado.
+- Desde la línea de órdenes no se podía llamar a *Asignar filamento*; ahora sí.
+
+### Actualización, instalación y sistema
+
+- En *Novedades* figuran las tres últimas versiones. El historial completo de todas las versiones está en solidon3d.de y sigue disponible allí.
+
+### Manual y sitio web
+
+- Las imágenes de las páginas muestran el modelo a todo lo ancho, no como una franja entre los paneles.
+- El manual y el sitio web nombran todas las operaciones que existen, incluidos los nuevos editores de características.
+
 ## 0.3.5
 
 ### Vista

@@ -15,6 +15,95 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.4.0
+
+### Construir e alterar
+
+- As contrapeças, como um pino e o seu furo, assentam nas duas peças num único passo. As medidas comuns indicam-se uma vez e um só desfazer retira o par.
+- Unir dois contornos aceita agora dois desenhos próprios: redondo em baixo, angular em cima. É assim que nasce o adaptador de um tubo para uma calha.
+- Varrer ao longo de um percurso segue um traçado desenhado com vários cantos e arcos, e não apenas um arco uniforme. Nos cantos vivos, o Solidon corta em meia-esquadria.
+- A concordância e o chanfro atuam também numa única aresta. Escolhe-a numa lista que indica cada aresta com a sua posição e o seu comprimento.
+- Um bloco chega a vários sítios num só passo: quatro furos recebem juntos os seus casquilhos e um só desfazer retira os quatro.
+- Novidade: *Verificar o percurso de encaixe* leva uma peça à sua posição final e indica onde embate pelo caminho, mesmo quando as duas encaixam no fim.
+- Cada bloco pode ser escrito como código OpenSCAD, a partir do catálogo ou da linha de comandos.
+- O núcleo exato fura também numa face inclinada, com escareado e alargamento; os padrões e as montagens de encaixe mantêm-se.
+
+### Furar e colocar
+
+- Ao colocar um furo, a pré-visualização mostra o contorno da boca em vez de um cilindro semitransparente. O ponto que interessa fica desimpedido.
+- A pré-visualização acompanha o rato com fluidez, também em modelos grandes.
+- Os campos de medida afastam-se do ponto onde nasce o furo, em vez de ficarem por cima dele.
+- Quem escolhe uma operação que se coloca no modelo começa logo a colocar; o botão anterior desaparece.
+- Depois do clique, a profundidade regula-se com o rato. O modelo fica translúcido e a vista roda de lado para que possa olhar para dentro do furo.
+- Ao arrastar, a profundidade encaixa por instantes nos pontos com significado: o meio do material e a sua face posterior.
+- O paralelepípedo, a esfera e os restantes corpos base movem-se e rodam já na pré-visualização, com a mesma pega de um corpo terminado.
+- Os corpos base ganharam um ângulo de rotação: a direção diz para onde aponta o corpo, o ângulo diz como fica virado em torno dela.
+- Furar num cilindro, numa esfera ou num toro deixou de produzir em cada furo o aviso de que ultrapassa a borda.
+- Um furo com escareado é removido por inteiro após confirmação, em vez de deixar o escareado sem volta atrás.
+
+### Características e seleção
+
+- Um furo em que clica passa a oferecer apenas as ações que ali fazem alguma coisa; antes apareciam também o letreiro e a atribuição de filamento.
+- Cada ação sobre uma característica aparece uma vez e não duas, e desaparece o cabeçalho de bloco por cima de uma única linha.
+- Num escareado existente, *Escarear* volta a estar acessível.
+- Na árvore de objetos, as características do mesmo tipo só se agrupam se a medida também coincidir. Dez concordâncias de raios diferentes voltam a figurar em separado.
+- Um corpo com filamento atribuído volta a mostrar a sua seleção na imagem, em vez de ficar cinzento como os restantes.
+- Os campos de uma característica levam o seu nome: um leitor de ecrã diz a que pertence cada campo, em vez de repetir seis vezes caixa numérica, 0,00.
+
+### Blocos e ajustes
+
+- Os seus próprios blocos abrem-se de novo a partir do catálogo para serem editados, mesmo que o projeto de onde vieram já não exista.
+- A escala de tolerâncias adota a medida real do furo em que a abre, em vez de um valor fixo de 6 mm.
+- Os ganchos e as linguetas elásticas calculam com o material e o curso da mola, e não com uma regra prática. O Solidon assinala um braço que parte ao primeiro encaixe.
+- Os três corpos de calibração nascem sem corpo auxiliar, e a escala de tolerâncias imprime-se como duas réguas numeradas que encaixam uma na outra.
+- O aviso da mola mede o braço real, a dobradiça de película mexe-se, e o prende-cabos chega até à pré-visualização e à saída.
+- Um bloco deposita material de apoio antes de cortar onde é preciso; os blocos que criam um corpo já não afundam sem suporte.
+- Um bloco explica que combinação de medidas não consegue construir, em vez de as cortar em silêncio.
+
+### Filamentos e armazém
+
+- O seu stock de filamento tem lugar próprio: um mosaico na página inicial e uma estante em vez de uma lista, com o nível desenhado como enrolamento no carrinho.
+- Duas bobinas com o mesmo nome mantêm-se distintas. Cada uma leva o seu próprio resto, e a começada é a que interessa.
+- Ao fatiar e ao entregar, o Solidon pergunta se deve descontar o consumo. Depois de fatiar é a quantidade medida no ficheiro de impressão, caso contrário uma estimativa.
+- Cada lançamento é reversível, cada bobina leva o seu histórico, e só desconta sem perguntar quem o configura expressamente.
+- Um filamento atribuído pode ser retirado outra vez sem que as faces vizinhas percam o seu.
+- Uma face pintada chega ao Orca e ao PrusaSlicer com o seu filamento, e já não sem ele.
+- Depois de retirado, o perfil do fabricante deixa de ir parar ao filamento errado.
+- Na estante, a pesquisa e as ações principais ficam juntas, e o local de arrumação e a carga nominal constam da janela da bobina.
+
+### Impressão e preparação
+
+- O Solidon encontra o que o Cura tem: 642 impressoras, 6010 perfis de processo e 281 filamentos que antes ficavam invisíveis.
+- Do PrusaSlicer, o Solidon retoma os filamentos carregados e a impressora definida por último.
+- Se o seu fatiador não conhece sequer a impressora, o Solidon di-lo, em vez de o mandar para uma lista onde não está nada.
+- Mudar o nível de qualidade demora segundos e não quase um minuto, e a janela mantém-se utilizável entretanto.
+- O aconselhamento sobre as definições de impressão olha para todos os corpos da placa e não só para a seleção. O que um corpo precisa mantém-se, mesmo que o vizinho dispense.
+- Calcula em segundo plano, nomeia o corpo, mostra o seu avanço e pode ser cancelado.
+- Uma ponte longa é avaliada pelos seus apoios reais, e o ângulo de saliência vale para a impressora, o bico, a altura de camada e a largura de linha com que foi medido.
+- A velocidade excessiva é limitada no tipo de percurso afetado, em vez de aquecer cada vez mais o bico e a base.
+- As propostas desmarcadas continuam desmarcadas, e uma mudança de filamento, cena, placa ou qualidade invalida de imediato um resultado ultrapassado.
+- O afastamento ao dispor conta a borda de aderência e a estrutura de suporte: entre dois vizinhos ambas contam a dobrar.
+- As peças são dispostas no meio da base, como fazem os fatiadores ao lado, e não no canto traseiro esquerdo.
+- Orientar para impressão volta a dispor depois as peças rodadas. Um corpo que se deita ocupa mais superfície e antes acabava dentro do vizinho.
+- Dispor apenas parte da cena já não atropela o resto: o que fica mantém o seu lugar.
+
+### Vista e utilização
+
+- O ponteiro do rato do Solidon vale para toda a janela e para cada caixa de diálogo, e não apenas para a vista 3D.
+- Mudar de variante numa caixa de diálogo de operação já não encerra a aplicação.
+- Uma caixa de diálogo de operação aberta já não sobrevive em silêncio a uma mudança de projeto.
+- As notas longas já não são cortadas enquanto ao lado sobra espaço livre.
+- A partir da linha de comandos não era possível chamar *Atribuir filamento*; agora é.
+
+### Atualização, instalação e sistema
+
+- Em *Novidades* constam as três últimas versões. O histórico completo de todas as versões está em solidon3d.de e continua lá disponível.
+
+### Manual e site
+
+- As imagens das páginas mostram o modelo a toda a largura, e não como uma faixa entre os painéis.
+- O manual e o site nomeiam todas as operações que existem, incluindo os novos editores de características.
+
 ## 0.3.5
 
 ### Vista
