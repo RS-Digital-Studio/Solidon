@@ -31,7 +31,7 @@ from app.core.perceive.actions import actions_for
 from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
 from app.core.units import LengthUnit
-from app.ui.labels import LengthSpin
+from app.ui.labels import LengthSpin, NumberSpin
 from app.ui.panels import FeaturePanel
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -181,6 +181,42 @@ def test_without_a_selection_the_panel_says_what_brings_you_here(qt_app: QApplic
     assert panel._empty.isVisibleTo(panel)
     assert panel._empty.text().strip(), "der leere Zustand trägt einen Satz"
     assert not panel._built, "und keine Zeilen"
+
+
+def test_every_field_of_a_handling_says_what_it_is(qt_app: QApplication) -> None:
+    """Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen.
+
+    Gemessen am 09.09.2026 an einer gewählten Bohrung: zehn Bedienelemente,
+    alle mit leerem ``accessibleName`` — darunter zweimal X, Y und Z, einmal
+    für *Merkmal verschieben* und einmal für *verdoppeln*. Vorgelesen wurde
+    „Drehfeld, 0,00", sechsmal hintereinander; auseinanderhalten ließ sich das
+    nur, wer die Beschriftungen daneben **sieht**.
+
+    Die Zusage steht in §19.1 und in der Regel „jedes Feld sagt, was es tut" —
+    sie galt bisher dem Operationsdialog und den Druckeinstellungen, und die
+    Schnellbearbeitung am Merkmal war die dritte Stelle, an der Felder stehen.
+
+    **Der Name trägt die Handlung mit**, weil „Durchmesser" allein nicht sagt,
+    welcher: An einer Bohrung stehen vier Handlungen mit je eigenen Feldern.
+    """
+    identifier, feature = a_hole()
+    panel = FeaturePanel()
+    panel.show_feature(identifier, feature)
+
+    felder = [
+        widget
+        for widget in panel.findChildren(QWidget)
+        if isinstance(widget, QCheckBox | QComboBox | LengthSpin | NumberSpin)
+        and widget.isVisibleTo(panel)
+    ]
+    assert felder, "ohne Felder prüft der Test nichts"
+    ohne = [type(widget).__name__ for widget in felder if not widget.accessibleName()]
+    assert not ohne, f"{len(ohne)} von {len(felder)} Feldern ohne Namen: {ohne}"
+
+    # **Und der Name unterscheidet die Handlungen.** Ohne sie stünde „X"
+    # dreimal doppelt da — der Fall, an dem der Befund aufgefallen ist.
+    namen = [widget.accessibleName() for widget in felder]
+    assert len(set(namen)) == len(namen), f"zwei Felder heißen gleich: {namen}"
 
 
 def test_the_panel_offers_what_the_core_says_and_nothing_else(qt_app: QApplication) -> None:

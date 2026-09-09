@@ -4513,7 +4513,7 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
     ``_update_actions``). Ohne diesen Test wäre die Zusage genau dort
     eingelöst, wo sie niemand sieht.
     """
-    from app.ui.selection_operations import QUICK_BODY, QUICK_FEATURES
+    from app.ui.selection_operations import QUICK_BODY
 
     window.open_path(MESHES / "plate_holes.stl")
     window.session.wait_for_idle()
@@ -4531,9 +4531,15 @@ def test_a_chosen_hole_puts_its_own_actions_in_front(window: MainWindow) -> None
 
     window.object_tree.select_feature(object_id, hole)
     QApplication.processEvents()
-    assert vorn() == set(QUICK_FEATURES["hole"]), "die Bohrung bringt ihre eigenen mit"
-    assert all(panel._buttons[name].isEnabled() for name in QUICK_FEATURES["hole"]), (
-        "und sie sind ausführbar, nicht drei graue Knöpfe"
+    # **Ausgeschrieben, nicht aus der Tabelle gelesen.** ``QUICK_FEATURES["hole"]``
+    # nennt auch *Bohrung ändern*; die steht seit dem 09.09.2026 im
+    # Merkmalsfenster darüber als Feld mit ihrem gemessenen Wert und bekommt
+    # hier keinen zweiten Knopf. Eine Erwartung aus derselben Tabelle ginge mit
+    # jeder künftigen Änderung mit und prüfte nichts mehr.
+    an_der_bohrung = {"countersink_hole", "plug_hole"}
+    assert vorn() == an_der_bohrung, "die Bohrung bringt ihre eigenen mit"
+    assert all(panel._buttons[name].isEnabled() for name in an_der_bohrung), (
+        "und sie sind ausführbar, nicht zwei graue Knöpfe"
     )
 
     window.object_tree.select_object(object_id)

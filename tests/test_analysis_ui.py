@@ -4475,6 +4475,145 @@ def test_loading_a_model_gives_no_detected_feature_an_originator(
     }
 
 
+def test_a_part_with_one_feature_gets_no_roof(window: MainWindow) -> None:
+    """Ein Dach über einer einzigen Zeile ist keins.
+
+    ``insert_printed_thread`` verspricht genau ein Merkmal (``features=[
+    "thread"]``), und „Schraubenloch mit Senkung" trägt seine Senkung unter der
+    Bohrung — beide Bausteine hatten damit ein Dach über einem einzigen
+    direkten Kind, das nur wiederholte, was darunter steht. Angeklickt meinte
+    diese Zeile den ganzen Körper, und das Auswahlpanel zeigte alle
+    Körperoperationen statt der Bohrung (Befund Robert, 09.09.2026).
+
+    **Der Weg zum Schritt bleibt.** Er steht in ``feature.created_by``, und
+    beide Wege dorthin — Doppelklick und „Diesen Schritt ändern" — lesen ihn
+    von dort, wenn die Rolle fehlt.
+    """
+    from app.ui.panels import _STEP_ROLE
+
+    feature_id = _insert_a_thread(window)
+    tree = window.object_tree.tree
+    step = next(
+        entry.id
+        for entry in window.session.project.document.ops
+        if entry.op == "insert_printed_thread"
+    )
+
+    daecher = []
+    zeilen = []
+    for index in range(tree.topLevelItemCount()):
+        item = tree.topLevelItem(index)
+        for child_index in range(item.childCount()):
+            child = item.child(child_index)
+            if child.data(0, _STEP_ROLE) == step:
+                daecher.append(child)
+            if child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
+                zeilen.append(child)
+
+    assert not daecher, f"ein Merkmal braucht kein Dach, gefunden: {len(daecher)}"
+    assert len(zeilen) == 1, "das Merkmal des Bausteins steht direkt unter seinem Körper"
+
+    result = window.session.last_result
+    assert result is not None
+    feature = next(
+        merkmal
+        for entry in result.scene.objects.values()
+        for kennung, merkmal in entry.features.items()
+        if kennung == feature_id
+    )
+    assert feature.created_by == step, "und der Weg zu seinem Schritt hängt an ihm selbst"
+
+
+def test_a_bore_with_its_countersink_shows_its_own_fields(window: MainWindow) -> None:
+    """Eine Bohrung mit ihrer Senkung ist eine Wahl, keine Passung.
+
+    Der Baum stellt die Senkung unter ihre Bohrung, und eine Zeile mit Kind
+    meldet seit dem 07.09.2026 **beide** Merkmale („bei allen Dacheinträgen").
+    Zwei gemeldete Merkmale las das Fenster als Passung: An der angeklickten
+    Bohrung stand der Abstand zu ihrer eigenen Senkung — gemessen 5,20 mm an
+    ``plate_countersunk.stl`` — statt ihres Durchmessers, und der Wert, den der
+    Kunde ändern wollte, war nirgends zu sehen (Befund Robert, 09.09.2026:
+    „hier soll immer nur für das ausgewählte etwas stehen").
+
+    Geprüft wird am **Klick auf die Baumzeile** und nicht an ``show_feature``:
+    Die falsche Auskunft entstand ja gerade auf dem Weg dorthin, und wer die
+    Methode ruft, geht an ihm vorbei.
+    """
+    from PySide6.QtWidgets import QLabel
+
+    # Die Fixture hat ``plate_holes.stl`` offen; die gesenkte Platte kommt
+    # daneben. Gegriffen wird deshalb am Merkmal und nicht am ersten Eintrag
+    # der Szene — beide Körper werden gebraucht, der zweite für die Gegenprobe.
+    window.open_path(MESHES / "plate_countersunk.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(
+        (kennung, eintrag)
+        for kennung, eintrag in result.scene.objects.items()
+        if any(merkmal.kind == "cone" for merkmal in eintrag.features.values())
+    )
+    bohrung = next(kennung for kennung, merkmal in entry.features.items() if merkmal.kind == "hole")
+    senkung = next(kennung for kennung, merkmal in entry.features.items() if merkmal.kind == "cone")
+
+    tree = window.object_tree
+    zeile = None
+    for oben in range(tree.tree.topLevelItemCount()):
+        top = tree.tree.topLevelItem(oben)
+        assert top is not None
+        top.setExpanded(True)
+        for index in range(top.childCount()):
+            kind = top.child(index)
+            if kind is not None and kind.data(1, Qt.ItemDataRole.UserRole) == bohrung:
+                zeile = kind
+    assert zeile is not None, "die Bohrung steht im Baum"
+    tree.tree.clearSelection()
+    zeile.setSelected(True)
+    QCoreApplication.processEvents()
+
+    # Die Voraussetzung des Falls, ausdrücklich hergestellt: Ohne die zwei
+    # gemeldeten Merkmale prüft der Test die Passungsweiche gar nicht.
+    assert set(tree.selected_features()) == {(object_id, bohrung), (object_id, senkung)}, (
+        "die Zeile bündelt Bohrung und Senkung — sonst gibt es den Fall nicht"
+    )
+    assert window.feature_panel.feature_id == bohrung, (
+        "das Fenster zeigt die angeklickte Bohrung und nicht den Abstand zu ihrer Senkung"
+    )
+    texte = [
+        beschriftung.text()
+        for beschriftung in window.feature_panel.findChildren(QLabel)
+        if beschriftung.text().strip()
+    ]
+    assert any("Durchmesser" in text for text in texte), f"kein Maßfeld: {texte}"
+    assert not any("Abstand" in text for text in texte), (
+        f"die Passungsauskunft steht noch da: {texte}"
+    )
+
+    # **Und die Gegenprobe:** Zwei Bohrungen, die keine Kette bilden, bleiben
+    # eine Passung — sonst hätte die Weiche die Auskunft ganz abgeschafft,
+    # statt sie an der einen Stelle zu unterdrücken, an der sie falsch war.
+    anderes_id, getrennt = next(
+        (kennung, eintrag)
+        for kennung, eintrag in result.scene.objects.items()
+        if kennung != object_id
+        and sum(merkmal.kind == "hole" for merkmal in eintrag.features.values()) >= 2
+    )
+    loecher = [
+        (anderes_id, kennung)
+        for kennung, merkmal in getrennt.features.items()
+        if merkmal.kind == "hole"
+    ][:2]
+    tree.select_features(loecher)
+    QCoreApplication.processEvents()
+    weiter = [
+        beschriftung.text()
+        for beschriftung in window.feature_panel.findChildren(QLabel)
+        if beschriftung.text().strip()
+    ]
+    assert any("Abstand" in text for text in weiter), (
+        f"zwei getrennte Bohrungen bleiben eine Passung: {weiter}"
+    )
+
+
 def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> None:
     """Was aus einem Baustein kam, steht im Baum unter ihm.
 
@@ -4482,6 +4621,12 @@ def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> No
     Der Knoten trägt den Namen des Bausteins und seinen Schritt — und ist damit
     die Zeile, auf die man zeigt, wenn man *ihn* ändern will und nicht eine
     seiner Flächen.
+
+    **Zwei Merkmale, damit es ein Dach gibt.** Ein Baustein mit nur einem
+    bekommt seit dem 09.09.2026 keines mehr (siehe der Test darüber); der
+    einzige, der hier von Hand läuft, verspricht genau eines. Die zweite Zeile
+    kommt deshalb aus einer gestellten Szene — die Bündelung liest allein
+    ``created_by``, und der Wert stammt aus dem echten Lauf darüber.
     """
     from app.ui.panels import _STEP_ROLE
 
@@ -4493,6 +4638,33 @@ def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> No
         if entry.op == "insert_printed_thread"
     )
 
+    result = window.session.last_result
+    assert result is not None
+    object_id, entry = next(
+        (kennung, eintrag)
+        for kennung, eintrag in result.scene.objects.items()
+        if any(merkmal.created_by == step for merkmal in eintrag.features.values())
+    )
+    aus_dem_schritt = next(
+        merkmal for merkmal in entry.features.values() if merkmal.created_by == step
+    )
+    zweites = dataclasses.replace(aus_dem_schritt, id="thread_zweit")
+    window.object_tree.show_scene(
+        dataclasses.replace(
+            result,
+            scene=dataclasses.replace(
+                result.scene,
+                objects={
+                    **result.scene.objects,
+                    object_id: dataclasses.replace(
+                        entry, features={**entry.features, "thread_zweit": zweites}
+                    ),
+                },
+            ),
+        ),
+        window.session.project.document,
+    )
+
     nodes = []
     for index in range(tree.topLevelItemCount()):
         item = tree.topLevelItem(index)
@@ -4502,7 +4674,7 @@ def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> No
                 nodes.append(child)
 
     assert len(nodes) == 1, f"genau ein Knoten je Baustein, gefunden: {len(nodes)}"
-    assert nodes[0].childCount(), "und seine Merkmale hängen darunter"
+    assert nodes[0].childCount() == 2, "und seine Merkmale hängen darunter"
     assert nodes[0].data(1, Qt.ItemDataRole.UserRole) is None, (
         "der Knoten ist selbst kein Merkmal — er ist ihr Dach"
     )

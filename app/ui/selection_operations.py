@@ -63,19 +63,51 @@ jedem Körper; ohne eine erkannte sagt es das selbst (``feature_requirement``).
 QUICK_FEATURES: dict[str, tuple[str, ...]] = {
     "face": ("drill_hole", "sketch_pocket", "push_face"),
     "hole": ("resize_hole", "countersink_hole", "plug_hole"),
+    "cone": ("countersink_hole",),
     "edge_loop": ("repair",),
 }
 """Je Merkmalsart die Handlungen, die dort zuerst gesucht werden.
 
-Nur wo die Art eine eigene Antwort hat. Kegel, Stift und Kugel bieten die drei
+Nur wo die Art eine eigene Antwort hat. Stift und Kugel bieten die drei
 generischen Merkmalshandlungen **mit** an — nicht genau sie: Am Register
-gemessen (07.09.2026) trägt `pin` sieben Operationen, `cone` sechs und
-`sphere` vier, die drei aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht
-in der Suchliste, im Menü und in der Befehlspalette.
+gemessen (07.09.2026) trägt `pin` sieben Operationen und `sphere` vier, die
+drei aus :data:`QUICK_FEATURE` sind darunter. Der Rest steht in der Suchliste,
+im Menü und in der Befehlspalette.
+
+**Der Kegel hat seit dem 09.09.2026 eine eigene Zeile**, und der Grund ist ein
+Loch, das vorher niemandem auffiel: Er trägt sechs Operationen, fünf davon
+stehen im Merkmalsfenster darüber als Felder (:func:`_shown_as_fields`), und
+die sechste — *Senken* — war ein Knopf der Schnellzeile für ``hole``. Was oben
+stehen **kann**, steht nicht auch in der Liste darunter; an einer Senkung stand
+es aber auch nicht oben, weil der Rückfall :data:`QUICK_FEATURE` sie nicht
+nennt. Damit war die einzige Handlung an einer Senkung an keiner der beiden
+Stellen zu finden.
 """
 
 QUICK_FEATURE = ("resize_feature", "move_feature", "remove_feature")
 """Für jede Merkmalsart ohne eigene Zeile in :data:`QUICK_FEATURES`."""
+
+
+def _shown_as_fields() -> frozenset[str]:
+    """Welche Handlungen das Merkmalsfenster darüber schon als Felder zeigt.
+
+    Die Liste steht im Kern (:data:`~app.core.perceive.actions.ACTION_ORDER`)
+    und wird hier nur gelesen — dasselbe Register, aus dem
+    :class:`~app.ui.panels.FeaturePanel` seine Zeilen baut.
+
+    **Was dort ein Feld hat, bekommt hier keinen Knopf.** Beide Panels liegen
+    im selben Fenster übereinander, und an einer gewählten Bohrung standen
+    *Bohrung ändern*, *Merkmal drehen* und *Merkmal verdoppeln* damit zweimal:
+    oben mit dem gemessenen Wert und einem Knopf, darunter als Knopf, der
+    denselben Weg nochmal anbietet (Befund Robert, 09.09.2026: „hier soll
+    immer nur für das ausgewählte etwas stehen"). Zwei Wege zu einer Handlung
+    sind eine Frage ohne Antwort — dieselbe Regel, nach der eine Hauptaktion
+    nicht auch in der Liste darunter steht.
+    """
+    from app.core.perceive.actions import ACTION_ORDER
+
+    return frozenset(name for row in ACTION_ORDER for name in row)
+
 
 PANEL_LEAST_HEIGHT = 280
 """Was das Panel mindestens braucht, in Bildpunkten.
@@ -122,7 +154,8 @@ def quick_names(bodies: int, feature_kind: str = "") -> tuple[str, ...]:
     if feature_kind:
         wanted = QUICK_FEATURES.get(feature_kind, QUICK_FEATURE)
         offered = {spec.name for spec in REGISTRY.for_feature(feature_kind)}
-        return tuple(name for name in wanted if name in offered)
+        fields = _shown_as_fields()
+        return tuple(name for name in wanted if name in offered and name not in fields)
     return QUICK_BODIES if bodies > 1 else QUICK_BODY
 
 
@@ -367,6 +400,12 @@ class SelectionOperationsPanel(QWidget):
         button.setAccessibleDescription(tip)
         button.clicked.connect(weak_slot(self, SelectionOperationsPanel._request_operation, spec))
         button.setProperty("operationName", spec.name)
+        # Der ungebrochene Titel bleibt am Knopf: :meth:`_wrap_label` schreibt
+        # ``text()`` um, und ein zweiter Lauf darf nicht auf seinem eigenen
+        # Ergebnis weiterrechnen. Die Suche liest ebenfalls von hier — mit
+        # einem Umbruch mitten im Titel fände „bohrung verschließen" sich
+        # selbst nicht mehr.
+        button.setProperty("operationTitle", str(spec.title))
         self._buttons[spec.name] = button
         return button
 
@@ -390,9 +429,18 @@ class SelectionOperationsPanel(QWidget):
         layout = self.layout()
         margins = layout.contentsMargins() if layout is not None else self.contentsMargins()
         available = self.width() - margins.left() - margins.right()
+        # **Der breitere von beiden entscheidet, nicht ihre Summe.** Die zwei
+        # Spalten stehen auf gleicher Dehnung, teilen den Platz also hälftig:
+        # Ein Knopf von 120 und einer von 60 Punkten passen zusammen in 190,
+        # aber der breitere bekommt nur 95 davon. Genau so stand „Bohrung
+        # ändern" neben „Senken" und las sich „Bohru…ndern" (Befund Robert,
+        # 09.09.2026). Gefragt ist deshalb, ob **jeder** von beiden in seine
+        # Hälfte passt.
         paired_width = (
-            sum(self._quick_buttons[name].sizeHint().width() for name in wanted[:2])
+            2 * max(self._quick_buttons[name].sizeHint().width() for name in wanted[:2])
             + self._quick.horizontalSpacing()
+            if wanted
+            else 0
         )
         columns = 2 if len(wanted) > 1 and paired_width <= available else 1
         if wanted == self._quick_shown and columns == self._quick_columns:
@@ -414,11 +462,75 @@ class SelectionOperationsPanel(QWidget):
                 self._quick.addWidget(button, max(index - 1, 0), 0, 1, 2)
             button.show()
 
+    def _wrap_label(self, button: QToolButton, room: int) -> None:
+        """Die Beschriftung auf die verfügbare Breite umbrechen, nicht abschneiden.
+
+        „Bohrung verschließen" will 292 Bildpunkte; das Auswahlfenster ist am
+        rechten Rand rund 180 breit, und Qt schnitt den Titel dann zu
+        „Bohrung versch…" (Befund Robert, 09.09.2026). Ein abgeschnittener
+        Titel ist keine Auskunft — er nennt die Handlung nicht mehr, und
+        anders als bei einem Hinweis gibt es hier keinen zweiten Ort, an dem
+        sie stünde.
+
+        Gemessen wird gegen die Schrift, mit der wirklich gezeichnet wird, und
+        das Beiwerk des Knopfes — Symbol, Rand, Innenabstand — kommt aus der
+        Differenz zu seinem Wunschmaß, nicht aus einer Zahl im Stylesheet: Die
+        Suite fährt ohne Stylesheet, und eine geratene Konstante wäre dort
+        eine andere als beim Kunden.
+
+        **Höchstens zwei Zeilen.** Ein Knopf, der drei Zeilen hoch wird, ist
+        keine Handlung mehr, sondern ein Absatz; wo zwei nicht reichen, bleibt
+        Qts Auslassung der ehrlichere Rest.
+        """
+        title = str(button.property("operationTitle") or button.text())
+        words = title.split()
+        metrics = button.fontMetrics()
+        chrome = button.sizeHint().width() - metrics.horizontalAdvance(title.replace(chr(10), " "))
+        space = room - chrome
+        if len(words) < 2 or space <= 0 or metrics.horizontalAdvance(title) <= space:
+            if button.text() != title:
+                button.setText(title)
+            return
+        # Gierig füllen, aber nur eine Umbruchstelle suchen: Die zweite Zeile
+        # nimmt den Rest, und ob der passt, entscheidet Qt wie bisher.
+        first = words[0]
+        cut = 1
+        for index in range(1, len(words)):
+            wider = f"{first} {words[index]}"
+            if metrics.horizontalAdvance(wider) > space:
+                break
+            first = wider
+            cut = index + 1
+        rest = " ".join(words[cut:])
+        broken = f"{first}\n{rest}" if cut < len(words) else title
+        if button.text() != broken:
+            button.setText(broken)
+
+    def _wrap_labels(self) -> None:
+        """Jede sichtbare Beschriftung an die heutige Breite anpassen.
+
+        Die Hauptaktionen teilen sich ihre Zeile, die Liste darunter läuft über
+        die ganze Breite des Rollbereichs — beide Male ist die Frage dieselbe,
+        und beide Male ändert sie sich nur, wenn das Fenster sich ändert.
+        """
+        layout = self.layout()
+        margins = layout.contentsMargins() if layout is not None else self.contentsMargins()
+        inner = self.width() - margins.left() - margins.right()
+        share = (
+            (inner - self._quick.horizontalSpacing()) // 2 if self._quick_columns == 2 else inner
+        )
+        for name in self._quick_shown:
+            self._wrap_label(self._quick_buttons[name], share)
+        for _heading, buttons in self._groups.values():
+            for button in buttons:
+                self._wrap_label(button, self.scroller.viewport().width())
+
     @override
     def resizeEvent(self, event: QResizeEvent) -> None:
         """Die Hauptaktionen passen sich der tatsächlichen Spaltenbreite an."""
         super().resizeEvent(event)
         self._lay_out_quick(self._quick_shown)
+        self._wrap_labels()
 
     def set_context(
         self,
@@ -452,6 +564,7 @@ class SelectionOperationsPanel(QWidget):
         if selected <= 0:
             return
         self._lay_out_quick(quick_names(selected, feature_kind))
+        self._wrap_labels()
         if self._feature_kind != feature_kind:
             self._feature_kind = feature_kind
             self._filter()
@@ -499,11 +612,15 @@ class SelectionOperationsPanel(QWidget):
         for title, (heading, buttons) in self._groups.items():
             visible = False
             for button in buttons:
-                match = not wanted or wanted in f"{title} {button.text()}".casefold()
+                label = str(button.property("operationTitle") or button.text())
+                match = not wanted or wanted in f"{title} {label}".casefold()
                 fits = self._fits_the_level(str(button.property("operationName")))
                 button.setVisible(match and fits)
                 visible = visible or (match and fits)
             heading.setVisible(visible)
+        # Welche Knöpfe dastehen, hat sich gerade geändert — und ob ihre
+        # Beschriftung in die Spalte passt, ist eine Frage je Knopf.
+        self._wrap_labels()
 
     def _fits_the_level(self, name: str) -> bool:
         """Ob diese Handlung zur Stufe der aktuellen Auswahl gehört (Konzept C).
@@ -531,6 +648,8 @@ class SelectionOperationsPanel(QWidget):
         aus dem Register.
         """
         if self._feature_kind:
+            if name in _shown_as_fields():
+                return False
             return self._feature_kind in self._at_which_kind.get(name, frozenset())
         return name not in self._at_a_feature
 

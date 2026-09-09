@@ -1436,7 +1436,27 @@ class ObjectTree(QWidget):
                 # Fehlt sie ganz, bleibt die Senkung dort, wo sie war: eine
                 # Zeile zu verlieren wäre schlimmer als eine ohne Zusammenhang.
                 (made.get(bore) or item).addChild(child)
-            for group in groups.values():
+            for group in list(groups.values()):
+                # **Ein Dach über einer einzigen Zeile ist keins.** „Schraubenloch
+                # mit Senkung" trägt genau ein direktes Kind — die Bohrung, an der
+                # die Senkung schon hängt —, und die Dachzeile wiederholte damit
+                # nur, was darunter steht. Angeklickt meinte sie den ganzen
+                # Körper, und im Auswahlpanel standen alle Körperoperationen statt
+                # der Bohrung (Befund Robert, 09.09.2026: „nur das Bohrung und
+                # darunter Senkung machen").
+                #
+                # Verloren geht dabei nichts: Der Schritt steht in
+                # ``feature.created_by``, und beide Wege zu ihm — Doppelklick und
+                # „Diesen Schritt ändern" — lesen ihn von dort, wenn die Rolle
+                # fehlt. Auch der Bausteinname bleibt: ``_feature_tip`` nennt die
+                # Herkunft jeder Zeile.
+                only = group.takeChild(0) if group.childCount() == 1 else None
+                if only is not None:
+                    where = item.indexOfChild(group)
+                    item.removeChild(group)
+                    item.insertChild(where, only)
+                    only.setExpanded(True)
+                    continue
                 group.setExpanded(True)
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
@@ -4949,6 +4969,23 @@ class FeaturePanel(QWidget):
                 self._watch(editor, str(action.op), tuple(action.fields), widgets)
                 label = QLabel(str(field.label), box)
                 label.setWordWrap(True)
+                # **Die Beschriftung gehört an das Feld, nicht nur daneben.**
+                # Ein Bildschirmleser liest den Namen des Bedienelements, und
+                # der war leer: elf Felder mit „Drehfeld, 0,00" und
+                # „Kontrollkästchen, nicht angehakt", darunter zweimal X, Y, Z
+                # — einmal für *Merkmal verschieben*, einmal für *verdoppeln*.
+                # Wer sie nicht sieht, konnte sie nicht auseinanderhalten
+                # (gemessen 09.09.2026 an einer gewählten Bohrung; §19.1).
+                #
+                # ``setBuddy`` allein genügt nicht: Es hängt den Text an die
+                # Beschriftung, damit ihr Kürzel den Fokus setzt, und wird von
+                # den Vorlesern unterschiedlich ausgewertet. Der Name am Feld
+                # ist die Zusage, die überall trägt; die Überschrift der
+                # Handlung kommt davor, weil „Durchmesser" allein nicht sagt,
+                # welcher — an einer Bohrung stehen vier Handlungen mit je
+                # eigenen Feldern.
+                label.setBuddy(editor)
+                editor.setAccessibleName(f"{action.title} — {field.label}")
                 form.addRow(label, editor)
             layout.addLayout(form)
 

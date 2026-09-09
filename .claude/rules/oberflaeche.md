@@ -41,7 +41,7 @@ ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
 **Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
 sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
-831 Parameter der 108 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+833 Parameter der 108 Operationen ihren `doc`-Satz aus dem Register. Beide Male
 hängt er an **beiden** Hälften der Zeile — wer eine Zeile nicht versteht, zeigt
 auf das unverständliche Wort und nicht auf den Kasten daneben. In den
 Druckeinstellungen setzt `_editor` ihn am Eingabefeld und `_label` an der
@@ -240,6 +240,42 @@ gescheitert ist:
   Objektverwaltung ist, nicht weil sie die konstruktive Hauptsache wäre. Die
   Booleschen, der Grund für diese Fläche, fielen heraus. Ein Kürzel als
   Häufigkeitssignal hilft dort nicht: *Löschen* und *Umbenennen* tragen eines.
+
+**Was das Merkmalsfenster darüber als Feld zeigt, bekommt in der Karte keinen
+zweiten Knopf.** Beide liegen im selben Fenster übereinander, und an einer
+gewählten Bohrung standen *Bohrung ändern*, *Merkmal drehen* und *Merkmal
+verdoppeln* damit zweimal: oben mit dem gemessenen Wert und einem Knopf,
+darunter als Knopf, der denselben Weg noch einmal anbietet (Robert,
+09.09.2026: „hier soll immer nur für das ausgewählte etwas stehen"; „statt
+nochmal über einen Button und Dialog zu gehen, eher den Wert eingeben und dann
+bestätigen"). Es ist dieselbe Regel, nach der eine Hauptaktion nicht auch in
+der Suchliste steht, nur eine Karte höher.
+
+Die Liste dazu steht im **Kern** (`perceive.actions.ACTION_ORDER`) und wird
+über `_shown_as_fields()` nur gelesen — eine zweite Aufzählung in der
+Oberfläche wüsste bei der nächsten Feldhandlung die Hälfte. Zwei Folgen, beide
+gemessen:
+
+* **Eine Art, deren Handlungen vollständig Felder sind, hat eine leere Karte**,
+  und das ist die richtige Antwort — Stift und Kugel. Ein Test, der dort „die
+  Liste ist nicht leer" verlangt, prüft die Gewohnheit.
+* **Und eine Art, deren letzte verbliebene Handlung ein Schnellknopf einer
+  *anderen* Art war, verliert sie ganz.** Der Kegel trägt sechs Operationen,
+  fünf davon als Feld; die sechste — *Senken* — war ein Knopf der Zeile für
+  `hole` und stand an einer Senkung an keiner der beiden Stellen. Er hat
+  seitdem eine eigene Zeile in `QUICK_FEATURES`. Wer eine Handlung aus der
+  Karte nimmt, zählt je Merkmalsart nach, was übrig bleibt.
+
+**Und eine Beschriftung, die nicht in ihre Spalte passt, bricht um.** Zwei
+Fehler steckten in demselben Bild („Bohru…ndern", Robert, 09.09.2026): Die
+Zweierspalte maß die **Summe** beider Wunschbreiten, teilt den Platz aber
+hälftig — gefragt ist, ob **jeder** von beiden in seine Hälfte passt. Und auch
+einspaltig blieb der Titel zu breit; `_wrap_label` bricht ihn deshalb an einer
+Wortgrenze auf höchstens zwei Zeilen, gemessen gegen die Schrift, mit der
+wirklich gezeichnet wird — das Beiwerk des Knopfes kommt aus der Differenz zu
+seinem Wunschmaß und nicht aus einer Zahl im Stylesheet, denn die Suite fährt
+ohne. Der ungebrochene Titel bleibt als `operationTitle` am Knopf: `text()`
+ändert sich, und die Suche darunter braucht den ganzen.
 
 Solange ein Beispielprojekt offen ist, hat die rechte Spalte einen dritten
 Reiter: die Tour (`app/ui/tour.py`, Schritte in `app/core/tour.py`). Sie
@@ -794,6 +830,31 @@ dort wird „ä" zu „ae", weil jemand „aushoehlen" tippt; beim Sortieren zä
 wie „a" (DIN 5007-1), damit „Ändern" zwischen „Analyse" und „Anordnen" steht.
 Zwei Aufgaben, zwei Tabellen, und der Kommentar an jeder sagt, welche.
 (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026)
+
+## Ein Feld ohne Namen ist für einen Bildschirmleser ein leeres Kästchen
+
+Die Regel „jedes Feld sagt, was es tut" nannte zwei Orte — die
+sechsundfünfzig Felder der Druckeinstellungen und die Parameter des
+Operationsdialogs. Es gibt einen **dritten**: die Schnellbearbeitung am
+Merkmal. Dort standen zehn Bedienelemente mit leerem ``accessibleName``,
+darunter zweimal X, Y und Z — einmal für *Merkmal verschieben*, einmal für
+*verdoppeln*. Vorgelesen wurde „Drehfeld, 0,00", sechsmal hintereinander
+(gemessen 09.09.2026 an einer gewählten Bohrung).
+
+Ein `QFormLayout` legt die Beschriftung **neben** das Feld und verbindet die
+beiden nicht; wer sie nicht sieht, hat kein Feld, sondern ein Kästchen. Also:
+`label.setBuddy(editor)` **und** ein Name am Feld selbst — `setBuddy` allein
+hängt nur das Tastenkürzel an die Beschriftung und wird von den Vorlesern
+verschieden ausgewertet.
+
+**Der Name trägt die Handlung mit**, nicht nur die Beschriftung:
+„Durchmesser" allein sagt nicht, welcher, denn an einer Bohrung stehen vier
+Handlungen mit je eigenen Feldern. `tests/test_feature_panel.py` prüft
+beides — keinen leeren Namen, und keine zwei gleichen.
+
+Die allgemeine Frage dahinter, weil dieselbe Lücke an jedem neuen Ort mit
+Feldern entsteht: **Wo Felder stehen, tragen sie ihren Namen — und „wo" heißt
+jede Stelle, nicht die zwei, die man gerade im Kopf hat.**
 
 ## Ein Nachweis gehört der Gruppe, nicht jeder Handlung
 

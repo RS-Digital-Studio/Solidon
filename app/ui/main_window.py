@@ -10932,14 +10932,23 @@ class MainWindow(QMainWindow):
         # die Frage hier steht und nicht an jeder Taste neu.
         #
         # **Ohne Dialog, wenn nichts zu fragen bleibt.** *Merkmal entfernen*
-        # kennt nur ``at_feature``, und das steht in der Auswahl; ein Dialog
-        # dafür wäre eine Frage, deren Antwort schon dasteht — und vor einer
-        # rücknehmbaren Handlung verbietet Regel 19 sie ohnehin.
+        # kennt vorn nur ``at_feature``, und das steht in der Auswahl; ein
+        # Dialog dafür wäre eine Frage, deren Antwort schon dasteht — und vor
+        # einer rücknehmbaren Handlung verbietet Regel 19 sie ohnehin.
+        #
+        # **Gefragt wird nach der Vorderseite** (09.09.2026). Ein Wert hinter
+        # der Klappe ist keine offene Frage: Er hat eine Vorgabe, und wer ihn
+        # ändern will, geht über das Menü. Über *alle* Parameter gezählt hätte
+        # der erste Feinstellwert einer dieser Operationen den kurzen Weg
+        # zugemacht — *Merkmal entfernen* bekam mit ``sections`` genau einen
+        # und öffnete daraufhin einen Dialog, wo vorher ein Klick genügte.
         instead = self.feature_instead_of(spec.name)
         if instead is not None:
             feature_id = self.object_tree.selected_feature()
             unanswered = [
-                entry.name for entry in instead.params.spec() if entry.name != "at_feature"
+                entry.name
+                for entry in instead.params.spec()
+                if entry.name != "at_feature" and entry.placement == "front"
             ]
             if feature_id is not None and not unanswered:
                 self._feature_step(str(instead.name), feature_id, {})

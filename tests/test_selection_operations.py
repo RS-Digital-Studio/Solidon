@@ -6,11 +6,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
+from app.core.perceive.actions import ACTION_ORDER
 from app.core.registry import REGISTRY, catalogue_operations, needed_inputs
 from app.ui.selection_operations import (
     QUICK_BODIES,
     QUICK_BODY,
-    QUICK_FEATURE,
     QUICK_FEATURES,
     SelectionOperationsPanel,
     all_quick_names,
@@ -18,7 +18,7 @@ from app.ui.selection_operations import (
     feature_operations,
     quick_names,
 )
-from app.ui.style import TARGET_SIZE
+from app.ui.style import NORMAL, TARGET_SIZE
 
 
 def _availability(selected: int):
@@ -81,19 +81,29 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
         assert name in panel._quick_buttons, f"{name} steht in keiner Lage als Knopf da"
         assert name not in in_the_list, f"{name} stünde oben und in der Liste"
 
+    # **Ausgeschrieben, nicht aus der Tabelle gelesen.** Für die Merkmalsarten
+    # ist die Erwartung seit dem 09.09.2026 nicht mehr die Tabelle selbst: Was
+    # das Merkmalsfenster darüber als Feld zeigt, bekommt hier keinen zweiten
+    # Knopf, und *Bohrung ändern* fällt damit aus der Zeile. Eine Erwartung,
+    # die weiter `QUICK_FEATURES["hole"]` läse, ginge mit jeder künftigen
+    # Änderung mit und prüfte nichts mehr.
     lagen = {
         (1, ""): QUICK_BODY,
         (2, ""): QUICK_BODIES,
         (5, ""): QUICK_BODIES,
         (1, "face"): QUICK_FEATURES["face"],
-        (1, "hole"): QUICK_FEATURES["hole"],
+        (1, "hole"): ("countersink_hole", "plug_hole"),
+        (1, "cone"): ("countersink_hole",),
         (1, "edge_loop"): QUICK_FEATURES["edge_loop"],
         # Eine Art ohne eigene Zeile bekommt die generischen
-        # Merkmalshandlungen — **solange das Register sie dort anbietet.**
-        # Gemessen am 07.09.2026 trägt `pin` sieben Operationen und `sphere`
-        # vier, die drei generischen sind darunter.
-        (1, "pin"): QUICK_FEATURE,
-        (1, "sphere"): QUICK_FEATURE,
+        # Merkmalshandlungen — **solange das Register sie dort anbietet und
+        # das Merkmalsfenster sie nicht schon als Feld zeigt.** Alle drei aus
+        # :data:`QUICK_FEATURE` stehen in ``ACTION_ORDER`` und damit oben mit
+        # ihrem gemessenen Wert; die Zeile bleibt an Stift und Kugel deshalb
+        # leer. Gemessen am 09.09.2026: `pin` trägt sieben Operationen, davon
+        # fünf als Feld, und die zwei übrigen stehen in der Liste darunter.
+        (1, "pin"): (),
+        (1, "sphere"): (),
         # **Und eine Art, die das Register gar nicht kennt, bekommt nichts.**
         # `applies_to` nennt sechs Arten, die Erkennung liefert mehr: Torus,
         # Verrundung und Gewinde haben null Operationen. Vorher standen dort
@@ -115,7 +125,7 @@ def test_the_front_row_follows_the_kind_and_the_count_of_the_selection(
 
     # **Das Merkmal hat Vorrang vor der Menge.** Wer eine Bohrung angeklickt
     # hat, meint sie und nicht den Körper darunter.
-    assert quick_names(2, "hole") == QUICK_FEATURES["hole"]
+    assert quick_names(2, "hole") == quick_names(1, "hole")
 
 
 def test_selection_changes_update_in_place_and_explain_disabled_actions(
@@ -266,7 +276,13 @@ def test_only_the_actions_of_that_kind_of_feature_stay(qt_app: QApplication) -> 
             if not button.isHidden() and name not in panel._quick_buttons
         }
 
-    for kind in ("hole", "cone", "face"):
+    # **Der Kegel steht nicht mehr dabei**, und das ist kein Rückschritt: Seine
+    # sechs Operationen sind seit dem 09.09.2026 vollständig eingelöst — fünf
+    # als Felder im Merkmalsfenster darüber, *Senken* als Knopf der
+    # Schnellzeile. Was übrig bleibt, ist nichts, und eine leere Liste ist
+    # dort die richtige Antwort (gemessen am Register, siehe
+    # ``test_no_action_stands_twice_in_the_selection_window``).
+    for kind in ("hole", "face"):
         panel.set_context(1, _availability(1), feature_kind=kind)
         gezeigt = sichtbar()
         assert gezeigt, f"{kind}: eine leere Liste prüft nichts"
@@ -354,3 +370,88 @@ def test_every_action_row_keeps_a_keyboard_sized_height(qt_app: QApplication) ->
         assert panel._buttons[name].height() >= TARGET_SIZE
     assert panel.search.height() >= TARGET_SIZE
     assert panel.catalog_button.height() >= TARGET_SIZE
+
+
+def test_no_action_stands_twice_in_the_selection_window(qt_app: QApplication) -> None:
+    """Was oben ein Feld hat, bekommt hier keinen zweiten Knopf.
+
+    Merkmalsfenster und Auswahlkarte liegen im selben Fenster übereinander
+    (``MainWindow._build_feature_dock``). Das obere zeigt die Handlungen aus
+    ``ACTION_ORDER`` als Felder samt gemessenem Wert und einem Knopf; die Karte
+    darunter bot dieselben Handlungen ein zweites Mal an — an einer gewählten
+    Bohrung standen *Bohrung ändern*, *Merkmal drehen* und *Merkmal verdoppeln*
+    zweimal (Befund Robert, 09.09.2026: „hier soll immer nur für das ausgewählte
+    etwas stehen").
+
+    Dieselbe Regel, nach der eine Hauptaktion nicht auch in der Suchliste steht,
+    nur eine Karte höher.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(320, 340)
+    panel.show()
+    als_feld = {name for row in ACTION_ORDER for name in row}
+    assert als_feld, "ohne die Kernliste prüft der Test nichts"
+
+    for kind in ("hole", "cone", "pin", "sphere", "face"):
+        panel.set_context(1, _availability(1), feature_kind=kind)
+        qt_app.processEvents()
+        gezeigt = {name for name, button in panel._buttons.items() if not button.isHidden()} | set(
+            panel._quick_shown
+        )
+        doppelt = gezeigt & als_feld
+        assert not doppelt, f"{kind}: {sorted(doppelt)} stehen oben als Feld und hier als Knopf"
+
+    # **Und die Gegenprobe, damit der Test nicht bloß eine leere Karte lobt:**
+    # An einer Fläche gilt keine der fünf Feldhandlungen, und dort steht die
+    # Karte weiterhin voll.
+    panel.set_context(1, _availability(1), feature_kind="face")
+    qt_app.processEvents()
+    an_der_flaeche = set(panel._quick_shown) | {
+        name for name, button in panel._buttons.items() if not button.isHidden()
+    }
+    assert len(an_der_flaeche) >= 5, f"an einer Fläche bleibt die Karte gefüllt: {an_der_flaeche}"
+
+
+def test_a_button_wraps_its_label_instead_of_cutting_it(qt_app: QApplication) -> None:
+    """Eine Beschriftung, die nicht passt, bricht um — sie wird nicht beschnitten.
+
+    „Bohrung verschließen" will mehr Platz, als das Auswahlfenster am rechten
+    Rand hat, und Qt schnitt den Titel dann zu „Bohrung versch…" (Befund
+    Robert, 09.09.2026, an „Bohru…ndern"). Ein abgeschnittener Titel nennt die
+    Handlung nicht mehr, und anders als bei einem Hinweis gibt es hier keinen
+    zweiten Ort, an dem sie stünde.
+
+    **Gemessen wird relativ, nicht absolut.** Offscreen gibt es keine echte
+    Schrift; welche Zahl „passt" bedeutet, sagt deshalb dieselbe
+    ``fontMetrics``, mit der auch gezeichnet wird — der Test rechnet die
+    Prüfbreiten daraus aus, statt eine Bildpunktzahl zu behaupten.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.show()
+    knopf = panel._quick_buttons["plug_hole"]
+    titel = str(knopf.property("operationTitle"))
+    assert " " in titel, f"der Titel muss mehrteilig sein, sonst gibt es nichts zu brechen: {titel}"
+
+    metrics = knopf.fontMetrics()
+    beiwerk = knopf.sizeHint().width() - metrics.horizontalAdvance(titel)
+    laengstes = max(metrics.horizontalAdvance(wort) for wort in titel.split())
+
+    # Breit genug für den ganzen Titel: eine Zeile.
+    panel.resize(metrics.horizontalAdvance(titel) + beiwerk + 4 * NORMAL, 600)
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    qt_app.processEvents()
+    assert "\n" not in knopf.text(), f"wo der Platz reicht, bleibt es eine Zeile: {knopf.text()!r}"
+
+    # Zu schmal für den Titel, breit genug für sein längstes Wort: zwei Zeilen,
+    # und keine davon breiter als der Platz.
+    panel.resize(laengstes + beiwerk + 4 * NORMAL, 600)
+    qt_app.processEvents()
+    gebrochen = knopf.text()
+    assert "\n" in gebrochen, f"hier muss umgebrochen werden: {gebrochen!r}"
+    assert gebrochen.replace("\n", " ") == titel, f"der Titel bleibt vollständig: {gebrochen!r}"
+    for zeile in gebrochen.split("\n"):
+        assert metrics.horizontalAdvance(zeile) <= laengstes, (
+            f"die Zeile {zeile!r} ist breiter als das längste Wort — dann wird sie beschnitten"
+        )
