@@ -18,7 +18,7 @@ Der Fehler hat zwei Hälften. Erstens: Auf dieser Maschine laufen zwei bis
 vier Sitzungen, und ihre Testprozesse sind an der Kommandozeile **nicht**
 unterscheidbar — dieselbe `.venv`, dieselben Argumente, dieselben Arbeiter.
 Zweitens: Ich hatte die Elternkette vorher gemessen (`Get-Tree` unter meinem
-`gate_lock`-Prozess) und sie ergab drei Prozesse — die pytest-Kinder hingen
+Hüllprozess) und sie ergab drei Prozesse — die pytest-Kinder hingen
 nach dem Beenden der Bash verwaist daneben. Statt die Waisen über ihre
 **tote** Elternnummer zu erkennen, habe ich zum Muster gegriffen.
 
@@ -27,8 +27,8 @@ steht in der Elternkette, und die bleibt auf Windows auch dann lesbar, wenn
 der Elternprozess schon tot ist (`ParentProcessId` wird nicht umgesetzt).
 
 **How to apply:** Vor dem Beenden den eigenen Baum unter dem eigenen
-`gate_lock`-Prozess einsammeln und **zuerst die Blätter** beenden (pytest,
-Arbeiter), dann die Bash, dann `gate_lock` — so entstehen keine Waisen. Bleiben
+Hüllprozess einsammeln und **zuerst die Blätter** beenden (pytest,
+Arbeiter), dann die Bash, dann die Hülle — so entstehen keine Waisen. Bleiben
 doch welche, gehören nur die dazu, deren `ParentProcessId` auf eine Nummer
 aus dem eigenen Baum zeigt. Ein pytest-Prozess mit lebendem fremdem
 Elternteil ist fremd, egal wie seine Kommandozeile aussieht. Und: Wer nicht

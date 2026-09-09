@@ -38,5 +38,3 @@ Reparse-Point-Bit ist dort nicht gesetzt. Gefragt wird mit `lstat()`. Das
 Werkzeug meldete zuerst „noch nicht verknüpft" über einer Verknüpfung, die es
 selbst angelegt hatte.
 
-Siehe [[parallele-sitzung-im-arbeitsbaum]] und
-[[weitergegebene-anweisungen-gelten]].

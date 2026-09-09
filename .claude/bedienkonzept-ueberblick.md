@@ -170,14 +170,10 @@ Sitzung · Übersetzungsrunde · läuft seit 4 h 12 min
   Änderungen    289 Dateien, +16 269 / −4 820
   Tests         1926 grün · 1 rot
   Rot seit      Sitzungsbeginn (Leistungsmessung, fremde Last)
-
-  Fremde Hand   app/core/drawing.py, app/ui/manual_window.py
-                (parallele Sitzung — nicht angefasst)
 ```
 
-Der Block **Fremde Hand** ist neu und in dieser Sitzung dreimal relevant
-gewesen: eine zweite Sitzung hat Dateien unter mir geändert. Ich habe es
-bemerkt und umgangen, aber der Nutzer hatte keinen Blick darauf.
+Der Block **Fremde Hand** stand hier bis zum 09.09.2026 und ist mit dem
+Mehrsitzungs-Setup entfallen.
 
 ---
 
@@ -364,10 +360,10 @@ sie laufen, und diese Behauptungen sind einzeln geprüft worden:
   Eingabezeile mit Fortschritt und Abbrechen — so existiert sie nicht. Für
   Hintergrundläufe gibt es inzwischen eine eigene Ansicht (`claude agents`),
   die mehr kann als die hier skizzierte Leiste, aber an anderer Stelle sitzt.
-- **Worktrees isolieren heute je Sitzung.** Der Satz „zwei parallele Sitzungen
-  auf einem Arbeitsbaum sind der Normalfall" beschreibt weiterhin die Praxis
-  in diesem Projekt — der Stop-Hook dieser Sitzung hat genau davor gewarnt —,
-  aber das Werkzeug bietet inzwischen den isolierten Weg an.
+- **Der Satz „zwei parallele Sitzungen auf einem Arbeitsbaum sind der
+  Normalfall" beschreibt die Praxis nicht mehr.** Auf Roberts Anweisung vom
+  09.09.2026 ist das Mehrsitzungs-Setup ausgebaut; was dieses Dokument dazu
+  entwirft, ist damit gegenstandslos.
 
 Eine Recherche zu diesen Punkten hatte zunächst behauptet, `argument-hint`,
 `run_in_background` und die Kapitelmarken gebe es nicht, weil sie in der

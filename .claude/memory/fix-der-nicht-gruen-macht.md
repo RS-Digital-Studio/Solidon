@@ -32,4 +32,4 @@ Der billigste Gegentest kostete eine Sekunde — `git show HEAD:<datei> | grep`
 jetzt grün?* Wenn nein, ist die Diagnose zu verwerfen und nicht nachzubessern.
 Und vor jeder Behauptung „X ist veraltet" der direkte Blick in den committeten
 Stand, nicht in die Erzählung darüber. Siehe [[gemessene-frage-ist-nicht-die-gestellte]],
-[[messwerkzeug-misst-sich-selbst]] und [[probe-worktree-altert]].
+[[messwerkzeug-misst-sich-selbst]].

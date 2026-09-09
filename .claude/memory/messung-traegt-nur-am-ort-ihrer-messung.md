@@ -82,4 +82,4 @@ gilt, ist die eine Frage; **wann** sie galt, die andere.
 Verwandt: [[messwerkzeug-misst-sich-selbst]],
 [[gemessene-frage-ist-nicht-die-gestellte]],
 [[bekannte-familie-erklaert-nicht-den-ausloeser]],
-[[vier-torlaeufe-ein-stand]], [[privater-index-fester-name]].
+[[vier-torlaeufe-ein-stand]].

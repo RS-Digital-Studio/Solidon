@@ -48,5 +48,4 @@ Formatter-Hook, der Abriss-beim-Abbau — jede stimmt in vielen Fällen,
 und genau deshalb hört das Nachdenken dort auf. Der Prüfreflex gehört
 an die Stelle, an der eine Erklärung **einen selbst freispricht**.
 
-Verwandt mit [[messwerkzeug-misst-sich-selbst]],
-[[leistungstests-fremdlast]] und [[commit-o-nimmt-den-dateistand]].
+Verwandt mit [[messwerkzeug-misst-sich-selbst]] und [[leistungstests-fremdlast]].

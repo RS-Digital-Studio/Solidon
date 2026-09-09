@@ -53,7 +53,6 @@ entscheiden.
 * Frage nach Kontrollfluss („läuft die Zeile?", „in welchem Zweig?",
   „mit welcher Bedingung?") → den Block **zusammenhängend** lesen, also
   `sed -n 'a,bp'` ohne Pipe, und die Grenzen weit genug setzen.
-* Und bei fremder Arbeit im Baum gegen **HEAD** lesen
-  (`git show HEAD:pfad`), sonst prüft man den Stand einer anderen Sitzung —
-  siehe [[kein-stash-auf-fremder-arbeit]] und
-  [[ort-statt-zusage-bei-paralleler-arbeit]].
+* Und bei ungestagten Änderungen im Baum gegen **HEAD** lesen
+  (`git show HEAD:pfad`), sonst prüft man einen Zwischenstand —
+  siehe [[kein-stash-auf-fremder-arbeit]].

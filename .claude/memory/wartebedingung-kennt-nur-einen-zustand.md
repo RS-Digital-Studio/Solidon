@@ -5,10 +5,9 @@ metadata:
   type: feedback
 ---
 
-`gate_lock.py status` hat drei Antworten: „Das Tor ist frei.", „Das Tor läuft:
-<wer>" und „Ein verwaistes Schloss liegt da". Eine Wartebedingung von
-3d-druck-7b prüfte am 03.09.2026 auf die erste. Die Maschine war neun Minuten
-frei — als verwaistes Schloss —, und die Schleife hätte ewig gewartet.
+Ein Statusbefehl mit drei möglichen Antworten — frei, belegt, oder ein Rest
+ohne Halter. Eine Wartebedingung prüfte am 03.09.2026 auf die erste. Neun
+Minuten lang traf die dritte zu, und die Schleife hätte ewig gewartet.
 
 **Why:** Ein Test, der falsch prüft, wird rot. Eine Wartebedingung, die falsch
 prüft, wartet — und Warten sieht aus wie Arbeiten. Der Fehler meldet sich nie
@@ -16,9 +15,8 @@ selbst; er kostet, bis jemand von außen fragt. Dieselbe Familie wie
 [[gemessene-frage-ist-nicht-die-gestellte]], aber mit dem stilleren Ausgang.
 
 **Und zwanzig Minuten später dieselbe Falle bei mir, mit anderer Ursache.**
-Meine Schleife auf 7bs Tor griff `"Das Tor läuft: 3d-druck-7b"`. Sie meldete
-sofort „durch", während dieselbe Ausgabe `Das Tor l?uft: 3d-druck-7b … seit 6
-min` zeigte: Die Konsolen-Codepage trägt das `ä` nicht, das Muster traf nie,
+Die zweite Schleife griff auf `"Das Tor läuft"`. Sie meldete sofort „durch",
+während dieselbe Ausgabe `Das Tor l?uft … seit 6 min` zeigte: Die Konsolen-Codepage trägt das `ä` nicht, das Muster traf nie,
 und ein `until !` auf ein Muster, das nie trifft, ist sofort fertig. Zwei
 verschiedene Ursachen, ein Ausgang — **eine falsche Entwarnung ohne
 Fehlermeldung.**

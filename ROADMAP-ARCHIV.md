@@ -25,6 +25,7 @@ für den Rückstand glauben darf, ist das Register in `ROADMAP.md`.
 
 | Datum | Abschnitt |
 |---|---|
+| 2026-09-09 | [RM-027 entfällt mit dem privaten Index (09.09.2026)](#rm-027-entfällt-mit-dem-privaten-index-09092026) |
 | 2026-09-08 | [Filamentlager — Review und vollständiger Anschluss (08.09.2026)](#filamentlager--review-und-vollständiger-anschluss-08092026) |
 | 2026-09-08 | [Bauplan v12 — vollständiger Abgleich (08.09.2026)](#bauplan-v12--vollständiger-abgleich-08092026) |
 | ohne Datum | [Gegen echte Modelle geprüft](#gegen-echte-modelle-geprüft) |
@@ -26517,3 +26518,21 @@ Parallel danach entstandene Mechanik- und Slicerergänzungen gehören zu anderen
 Die Filamentänderungen wurden über gesicherte Inhalte abgegrenzt; gemeinsame Typen und Kataloge
 werden nur mit ihren eigenen Änderungen committet. Der zusätzliche Anschlusslauf für Lager,
 Verbrauch, Projekte und Materialprofile bestand mit **247 Tests, 1 übersprungen**.
+
+## RM-027 entfällt mit dem privaten Index (09.09.2026)
+
+**RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern**
+ist gegenstandslos geworden. Der Punkt beschrieb eine Gefahr, die es nur im
+geteilten Arbeitsbaum gab: Weil jede Sitzung über `GIT_INDEX_FILE` committete,
+zog niemand den gemeinsamen Index nach, und ein gewöhnliches `git commit` hätte
+daraus eine Rücknahme bereits gelandeter Arbeit gemacht.
+
+Auf Roberts Anweisung vom 09.09.2026 ist das Mehrsitzungs-Setup ausgebaut —
+Sitzungsbrett, Torschloss, `to_main.py`, der private Index im `liefern`-Skill
+und die zugehörige Doku. Der Lieferweg ist seitdem ein gewöhnlicher Commit mit
+genannten Pfaden gegen den einen Index dieses Baums. Damit gibt es den alten
+Indexstand nicht mehr, gegen den der Punkt schützen wollte.
+
+Was von der Sache bleibt, steht im `liefern`-Skill und braucht keine eigene
+Aufgabe: gegen **HEAD** vergleichen statt gegen den Index, genaue Pfade statt
+`git add .`, und den `--stat` vor dem Commit gegen die Erwartung halten.

@@ -181,8 +181,8 @@ Dialoge.
   (`tools/affected_tests.py` leitet sie aus dem Importgraphen ab); die
   vollständige Suite mit ruff, format und mypy ist das Tor **vor dem Commit**,
   nicht der Takt der Arbeit (Entscheidung Robert, 02.09.2026 — an dem Tag
-  verbrachten drei Sitzungen Stunden mit Läufen, die nichts über ihre
-  Änderung sagten). Ein Schritt, der seine Tests rot lässt, wird nicht auf den
+  gingen Stunden für Läufe drauf, die nichts über die Änderung sagten). Ein
+  Schritt, der seine Tests rot lässt, wird nicht auf den
   nächsten gestapelt.
 - **Bilder und Handbuch nur beim Release — und nur, was sich geändert hat.**
   Bildschirmfotos, Website-Bilder, Handbuch und PDFs werden vor einem Release
@@ -231,9 +231,8 @@ Dialoge.
    `knowledge/parts/range_check.py` und läuft über den Rezeptdialog; der Test,
    der sie bei jedem Lauf über alle 27 Bausteine fuhr, ist am 03.09.2026
    gefallen (Entscheidung Robert). Er kostete rund eine Minute je Baustein und
-   machte aus einem Torlauf von Minuten einen von einer halben Stunde — auf
-   einer Maschine, an der bis zu vier Sitzungen arbeiten, blockierte er alle
-   mit, und in dieser Zeit schreibt pytest kein Zeichen. **Was bleibt, ist die
+   machte aus einem Torlauf von Minuten einen von einer halben Stunde, und in
+   dieser Zeit schreibt pytest kein Zeichen. **Was bleibt, ist die
    Prüflogik selbst**: Eckenberechnung, die 2114 kartesischen Grenzen,
    Wandmessung und Selbstdurchdringung stehen weiter in `test_parts.py`
 6. Normteilmaße aus der Tabelle, nie im Baustein hart eintragen

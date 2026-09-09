@@ -1,22 +1,21 @@
-"""Die Werkzeuge, die etwas wegräumen oder hinausschicken: ``link_memory``,
-``to_main``, ``upload_website``.
+"""Die Werkzeuge, die etwas wegräumen oder hinausschicken: ``link_memory``
+und ``upload_website``.
 
-Alle drei gegen temporäre Bestände, keines gegen das Repository, das
-Nutzerprofil oder einen Server — die Proben des Gesamtreviews vom 05.09.2026
-(R19, R20, R21), als Zusicherung festgehalten.
+Beide gegen temporäre Bestände, keines gegen das Repository, das Nutzerprofil
+oder einen Server — die Proben des Gesamtreviews vom 05.09.2026 (R19, R21),
+als Zusicherung festgehalten.
 """
 
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from tools import link_memory, to_main
+from tools import link_memory
 from tools import upload_website as upload
 
 # --- link_memory -----------------------------------------------------------------
@@ -79,58 +78,6 @@ def test_the_memory_move_stops_before_deleting_what_it_could_not_keep(
     assert (local / "topic.md").read_text(encoding="utf-8") == "wertvoll", "nichts ist weg"
 
 
-# --- to_main ---------------------------------------------------------------------
-
-
-def _git(*args: str, cwd: Path) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, check=True, encoding="utf-8"
-    ).stdout.strip()
-
-
-def test_a_main_that_cannot_be_fast_forwarded_is_not_pushed(tmp_path: Path) -> None:
-    """R20: Der Rückgabewert von ``git merge --ff-only`` wurde ignoriert. Trug
-    das lokale ``main`` einen eigenen Commit, scheiterte das Vorspulen, der
-    Push danach gelang trotzdem — draußen war ein ungeprüftes ``main``, und
-    das Werkzeug meldete Erfolg für den geprüften Branch."""
-    remote, working = tmp_path / "origin.git", tmp_path / "working"
-    _git("init", "--bare", str(remote), cwd=tmp_path)
-    _git("init", "-b", "main", str(working), cwd=tmp_path)
-    _git("config", "user.name", "Prüfstand", cwd=working)
-    _git("config", "user.email", "pruefstand@example.invalid", cwd=working)
-    _git("config", "core.hooksPath", str(tmp_path / "keine-hooks"), cwd=working)
-    _git("remote", "add", "origin", str(remote), cwd=working)
-    (working / "base.txt").write_text("base", encoding="utf-8")
-    _git("add", "base.txt", cwd=working)
-    _git("commit", "-m", "Basis", cwd=working)
-    _git("push", "-u", "origin", "main", cwd=working)
-    base = _git("rev-parse", "HEAD", cwd=working)
-    _git("switch", "-c", "feature", cwd=working)
-    (working / "feature.txt").write_text("feature", encoding="utf-8")
-    _git("add", "feature.txt", cwd=working)
-    _git("commit", "-m", "Geprüfte Arbeit", cwd=working)
-    _git("switch", "main", cwd=working)
-    (working / "other.txt").write_text("other", encoding="utf-8")
-    _git("add", "other.txt", cwd=working)
-    _git("commit", "-m", "Ungeprüfter Stand auf main", cwd=working)
-    _git("switch", "feature", cwd=working)
-
-    def local_git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["git", *args], cwd=working, capture_output=True, text=True, encoding="utf-8"
-        )
-
-    with (
-        patch.object(to_main, "git", side_effect=local_git),
-        patch.object(to_main, "gate_passes", return_value=True),
-    ):
-        status = to_main.deliver("pruefstand", False)
-
-    assert status != 0, "ein nicht vorspulbares main ist kein Erfolg"
-    assert _git("rev-parse", "refs/heads/main", cwd=remote) == base, "draußen steht die Basis"
-    assert _git("rev-parse", "--abbrev-ref", "HEAD", cwd=working) == "feature", "zurück am Branch"
-
-
 # --- upload_website --------------------------------------------------------------
 
 
@@ -178,31 +125,6 @@ def test_the_missing_files_mode_does_not_pass_an_unsigned_manifest(
     assert not [name for name, _body in ftp.sent if "version.json" in name], (
         "die unsignierte Datei ging nicht hinaus"
     )
-
-
-# --- gate_lock -------------------------------------------------------------------
-
-
-def test_an_unreadable_old_lock_file_does_not_block_the_gate_forever(tmp_path: Path) -> None:
-    """R17: Eine leere Sperrdatei ließ ``_read`` ``None`` liefern, das
-    ``open("x")`` darunter scheiterte an ihr in jeder Runde, und das Tor
-    stand für jeden weiteren Lauf endlos. Alt und unlesbar heißt: ein Rest
-    ohne Halter, und der wird geräumt."""
-    import json
-    import os
-    import time
-
-    from tools import gate_lock
-
-    lock = tmp_path / "tor.lock"
-    lock.write_bytes(b"")
-    old = time.time() - 60.0
-    os.utime(lock, (old, old))
-
-    foreign = gate_lock._acquire(lock, "pruefstand", wait=0.0)
-
-    assert foreign is None, "das Schloss wurde genommen"
-    assert json.loads(lock.read_text(encoding="utf-8"))["wer"] == "pruefstand"
 
 
 # --- make_download ---------------------------------------------------------------

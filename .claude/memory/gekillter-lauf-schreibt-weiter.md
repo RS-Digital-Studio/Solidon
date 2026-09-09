@@ -24,6 +24,4 @@ Meldung der Hülle: Lebt noch ein Prozess mit dem Skriptnamen, ist der Lauf
 nicht vorbei. Jeder Lauf schreibt in einen eigenen Ordner mit Zeitstempel im
 Namen (`tor2.sh`, `fenster.sh`); eine feste Datei wie `tor_suite.txt` wird
 nie wiederverwendet. Und wer eine Zusammenfassung liest, prüft, ob sie zu
-dem Lauf passt, den er meint — die Laufzeit in der Zeile verrät es. Siehe
-[[fremde-zwischenstaende-verfaelschen-messungen]] und
-[[temp-dateien-sind-maschinenweit]].
+dem Lauf passt, den er meint — die Laufzeit in der Zeile verrät es.

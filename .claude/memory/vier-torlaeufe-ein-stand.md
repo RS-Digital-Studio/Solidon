@@ -34,5 +34,4 @@ Zwei Sätze:
   das Ergebnis nicht mehr.
 
 Verwandt: [[messung-traegt-nur-am-ort-ihrer-messung]] (dort der Ort, hier der
-Zeitpunkt), [[geteilter-baum-misst-zeitpunkt]] (dort ändert ein anderer den
-Stand, hier man selbst), [[mypy-prueft-die-laufende-plattform]].
+Zeitpunkt), [[mypy-prueft-die-laufende-plattform]].

@@ -70,8 +70,7 @@ die Tests der berührten Dateien (Entscheidung Robert, 02.09.2026):
 
 `--why` nennt je Testdatei den Grund, `--split` zeigt die Aufrufe
 (Fensterdateien einzeln). **Ohne Argumente nimmt es alle ungestageten
-Änderungen im Baum — bei mehreren Sitzungen also auch fremde**; wer nur seine
-Dateien meint, nennt sie. Bei Änderungen an `i18n`, `types.py`, `errors.py`
+Änderungen im Baum**; wer nur bestimmte meint, nennt sie. Bei Änderungen an `i18n`, `types.py`, `errors.py`
 oder `log.py` meldet es „das ist die Suite" — dann direkt `/pruefen`.
 
 **`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
@@ -112,8 +111,8 @@ Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in 
   nicht, *welche* vier Läufe es waren.
 
   **Und nicht nur die Pipeline verdeckt den Code: alles, was danach kommt,
-  auch.** Am 24.08.2026 meldete eine Sitzung „exit code 0", während in ihrer
-  Ausgabedatei `Läufe mit Fehler: 4` stand — kein `tail` diesmal, sondern ein
+  auch.** Am 24.08.2026 stand „exit code 0" über einer Ausgabedatei mit
+  `Läufe mit Fehler: 4` — kein `tail` diesmal, sondern ein
   eigenes `echo` als letzter Befehl der Kette. Der Shell-Status ist immer der
   des **letzten** Befehls, und `echo` gelingt so zuverlässig wie `tail`. Wer
   den Code braucht, liest ihn unmittelbar (`befehl > datei; echo "Exit: $?"`),
@@ -293,12 +292,6 @@ Ein vorhandener oder als aktiviert gelisteter Hook ist noch kein ausgeführter
 Hook. Die Auflistung `hooks/list` unterscheidet `trusted`, `untrusted` und
 `modified`. Testmarken sind sitzungsbezogene Erinnerungen, kein Nachweis für
 ein bestandenes oder vollständiges Tor.
-Der Windows-Einstieg für `SessionEnd` benötigt den Python-Launcher `py` im
-`PATH`. Er verwendet `py -3 -S` ausschließlich als kleinen Standardbibliothek-
-Einstieg für die Brettfreigabe; alle Projektprüfungen laufen weiter in `.venv`.
-Das Sitzungsende startet weder Git noch die schweren Projektmodule, damit es
-innerhalb des Codex-Zeitlimits bleiben kann.
-
 **Python-Sprachhilfe für Claude:** `pyright-lsp` ist projektbezogen aktiviert;
 der eigentliche Sprachserver wird je Rechner separat installiert
 (`npm install --global pyright`). Das npm-Bin-Verzeichnis muss im `PATH` des
@@ -348,15 +341,9 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
   **aus diesem Commit** darin genannt ist. Der Anlass: Am 30.08.2026 ging
   dreimal derselbe Fehler nach origin, weil er im eigenen Diff unsichtbar ist
   — ein fehlender Katalogeintrag steht in fünf Dateien, die man gerade *nicht*
-  angefasst hat. Liegt der Befund in **fremder** Arbeit im geteilten Baum,
-  lässt er durch und sagt es; `SOLIDON_KEIN_TOR=1` schaltet ihn ganz ab.
+  angefasst hat. `SOLIDON_KEIN_TOR=1` schaltet ihn ganz ab.
   Beides läuft nur, wenn `core.hooksPath` auf `.githooks` zeigt — `check_env`
   meldet es beim Sitzungsstart, und `tests/test_toolchain.py` prüft zusätzlich,
   dass jeder Hook im Repository ausführbar ist.
-- **Bei zwei Sitzungen im selben Arbeitsbaum**: vorher sagen, welche Dateien
-  man anfasst, und mit privatem Index committen (`GIT_INDEX_FILE`,
-  `git commit -o -- <pfade>`). Sonst nimmt der eigene Commit fremde Arbeit
-  mit — dreimal passiert am 19./20.08.2026. Die Fallen dabei — der alternde
-  Haupt-Index, `-o` und der Dateistand — stehen im `liefern`-Skill.
 - **Nach Pattern-Änderungen**: die betroffene Regel in `.claude/rules/`
   nachziehen, `ROADMAP.md` fortschreiben, Bauplan nur mit Ansage ändern.

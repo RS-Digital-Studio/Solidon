@@ -14,8 +14,8 @@ gesamte Ordner `%TEMP%\claude\F--3D-Druck\<sitzung>\scratchpad` weg — die
 Pfade, die ich zwei Sitzungen per Nachricht gegeben hatte, zeigten ins Leere.
 
 **Why:** `%TEMP%` ist benutzerweit und liegt auf C:, der knappsten Platte
-dieser Maschine ([[temp-dateien-sind-maschinenweit]]). Wer dort aufräumt,
-räumt fremde Scratchpads mit auf, und ein Neustart der Sitzung legt den
+dieser Maschine. Wer dort aufräumt,
+räumt Scratchpads mit auf, und ein Neustart der Sitzung legt den
 Ordner nicht wieder an. Das Scratchpad ist für Zwischenergebnisse einer
 einzigen Sitzung gedacht, nicht für Übergaben.
 

@@ -33,7 +33,6 @@ bei einem Abbruch „1 error … errors prevented further checking" und hat dabe
 3.11 und 3.9 liegen alle auf der Maschine, und `python -m venv` nimmt sonst
 die falsche. Ein Worktree mit alter `.venv` (3.13) macht den
 pre-commit-Hook nutzlos und langsam: Die Sprachprüfung parst den 3.14-Code
-nicht und winkt nach vier Minuten als „fremde Arbeit" durch — siehe
-[[worktree-venv-verstellt-den-hook]]. Meldet mypy „errors prevented further
+nicht. Meldet mypy „errors prevented further
 checking", ist die Zahl der geprüften Dateien die Auskunft, nicht der
 Exit-Code.

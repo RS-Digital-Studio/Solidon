@@ -292,10 +292,9 @@ def _write_stubbornly(path: Path, payload: str | bytes) -> None:
     **Warum es sie gibt.** Derselbe Lauf riss an drei verschiedenen Stellen
     mit ``OSError 22`` beim Öffnen zum Schreiben — beim englischen PDF, beim
     spanischen, bei einer SVG-Datei. Jedes Mal war die Datei unmittelbar
-    danach wieder frei und ihr Ordner beschreibbar. Auf dieser Maschine
-    arbeiten mehrere Sitzungen im selben Baum, und der Lauf legt über
+    danach wieder frei und ihr Ordner beschreibbar. Der Lauf legt über
     zweihundert Dateien in schneller Folge an; wer dabei einmal auf einen
-    fremden Handle oder einen Scanner trifft, verliert sonst zwanzig Minuten
+    fremden Handle oder einen Virenscanner trifft, verliert sonst zwanzig Minuten
     Arbeit für einen Zustand, der eine halbe Sekunde später nicht mehr
     besteht.
 

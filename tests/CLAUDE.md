@@ -53,8 +53,7 @@ ausdrücklich aus, also zusätzlich:
 ```
 
 Am einfachsten: **`/pruefen`** — der Skill fährt beides plus ruff, `ruff
-format --check` und mypy unter einem Schloss, damit parallele Sitzungen sich
-nicht verfälschen.
+format --check` und mypy.
 
 **Und zwar in zwei Stufen** (Robert, 02.09.2026: „Tests das Nötigste"):
 
@@ -66,8 +65,8 @@ nicht verfälschen.
 `affected_tests.py` liest den Importgraphen rückwärts — mittelbare
 Importeure, Baumleser wie `test_language_rules`, Tests, die eine geänderte
 Textdatei beim Namen nennen — und teilt Fensterdateien in eigene Prozesse.
-Ohne Argumente nimmt es alle ungestageten Änderungen im Baum, also bei
-mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
+Ohne Argumente nimmt es alle ungestageten Änderungen im Baum; wer nur
+bestimmte meint, nennt sie. Meldet es
 „das ist die Suite" (eine Änderung an `i18n`, `types.py`, `errors.py` oder
 `log.py`), ist das Tor das Nötigste.
 
@@ -111,7 +110,7 @@ mehreren Sitzungen auch fremde; wer nur seine meint, nennt sie. Meldet es
 | Und eine Ebene tiefer: welches Kernpaket importiert welches, eifrig oder träge? | `test_core_package_direction.py` — 47 eifrige und 12 träge Kanten eingefroren, dazu der Kreis aus acht Paketen; eine neue Kante ist eine Entscheidung, eine abgebaute verschwindet aus der Liste |
 | Stimmen `_EXPORTS`, `__all__` und `TYPE_CHECKING` der Lazy-Pakete überein, und löst jeder Eintrag auf? | `test_lazy_exports.py` |
 | Wählt `tools/affected_tests.py` die richtigen Tests aus dem Importgraphen? | `test_affected_tests.py` |
-| Verwenden die gemeinsamen Hooks das unterstützte Protokoll, getrennte Sitzungsmarken und richtige Patchpfade; gibt der Windows-Einstieg nur das eigene Gebiet frei? | `test_solidon3d_hooks.py`; echte Event-Auslösung und Freigabe im Editor sind zusätzlich zu prüfen |
+| Verwenden die gemeinsamen Hooks das unterstützte Protokoll und richtige Patchpfade? | `test_solidon3d_hooks.py`; echte Event-Auslösung im Editor ist zusätzlich zu prüfen |
 | Stehen Codex-Agenten, Skills, Referenzen und Aufrufregeln auf dem Stand ihrer Claude-Quelle — auch im frischen Klon? | `test_agent_mirror.py`; prüft Generator, Drift und Quellenfehler sowie die erzeugten TOML-Dateien mit `tomllib` |
 | Zeichnet der Renderer, was der Vertrag verspricht — Bildpunkte, Picks, Kamera, Griffe? | `test_render_contract.py`, `test_render_gizmo.py` und `test_render_gfx_regressions.py` am pygfx-Renderer ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py` der Aufbau über `factory.py`; `test_render_shapes.py` und `test_navigator.py` ganz ohne Renderer |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` — fcntl-Puffergrenze über den Quelltext, die Nutzerverzeichnisse für darwin, win32 und linux |

@@ -45,8 +45,8 @@ angelegt hat, liest sich wie ein Fehler der Datei oder des Pfades. Er ist
 keiner. Er ist eine Aussage über **Zeitpunkte** — und das Erkennungszeichen ist
 genau das: Der Fehler wechselt die Stelle. Wandert er zwischen Läufen, ist
 keine Datei die Ursache (siehe [[absturz-frame-ist-die-naechste-allokation]]).
-Auf dieser Maschine arbeiten bis zu vier Sitzungen an denselben Dateien
-([[parallele-sitzungen-solidon3d]]), deshalb ist die zweite Ursache hier der
+Ein Lauf, der über zweihundert Dateien in schneller Folge anlegt, trifft
+regelmäßig auf einen Virenscanner — deshalb ist die zweite Ursache hier der
 Normalfall und nicht die Ausnahme.
 
 **How to apply:** Wer eine Datei liest und gleich darauf beschreibt, **schließt

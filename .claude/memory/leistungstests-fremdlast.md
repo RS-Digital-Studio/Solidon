@@ -88,7 +88,7 @@ Daraus zwei Dinge:
 
 Nicht jeder solche Abriss ist Fremdlast: eine Referenzschleife zwischen Python
 und VTK erzeugt dasselbe Bild und ist echt. Siehe
-[[vtk-qt-referenzen-halten-zu-lange]] und [[parallele-sitzungen-solidon3d]].
+[[vtk-qt-referenzen-halten-zu-lange]].
 
 **Die Unterscheidung liefert ein eigener Arbeitsbaum, nicht `git stash`** —
 hier stand zwei Absätze über dem Verbot noch der Rat, denselben `git stash` zu

@@ -380,38 +380,26 @@ def hooks_are_wired() -> bool | None:
     return (ROOT / gesetzt).resolve() == HOOKS_DIR.resolve()
 
 
-def in_a_worktree() -> bool:
-    """Ob ``ROOT`` ein zusätzlicher Arbeitsbaum ist, nicht der Hauptklon.
-
-    Ein Arbeitsbaum trägt kein eigenes ``.git``-Verzeichnis, sondern eine Datei,
-    die auf den ``worktrees``-Ordner im Hauptklon verweist — das reicht als
-    Unterscheidung, ohne Git selbst aufzurufen.
-    """
-    git = ROOT / ".git"
-    return git.is_file()
-
-
 def memory_is_wired() -> bool | None:
     """Ob das eingecheckte Gedächtnis diese Maschine überhaupt erreicht.
 
     ``None``, wenn die Frage sich nicht stellt — ``.claude/memory/`` gibt es
-    nicht, das Werkzeug lässt sich nicht laden, oder ``ROOT`` ist ein
-    zusätzlicher Arbeitsbaum.
+    nicht oder das Werkzeug lässt sich nicht laden.
 
     **Dieselbe Bauart wie bei den Hooks darüber, und aus demselben Grund.**
     ``.claude/memory/`` trägt die Projekterfahrungen, und ``AGENTS.md`` verlangt,
-    vor einer Änderung dort nachzusehen. Der Ort, an dem eine Sitzung sie
-    tatsächlich liest, liegt aber im Nutzerprofil und gilt je Maschine;
+    vor einer Änderung dort nachzusehen. Der Ort, an dem sie tatsächlich
+    gelesen werden, liegt aber im Nutzerprofil und gilt je Maschine;
     ``tools/link_memory.py`` macht daraus eine Verknüpfung
     (:mod:`.claude/memory/erinnerungen-liegen-im-repository`).
 
     **Am 07.09.2026 war sie auf dieser Maschine nicht eingerichtet**, und
     niemand hat es gemerkt: 218 eingecheckte Einträge standen acht lokalen
-    gegenüber, und eine Sitzung las nur die acht. Sie brach dabei drei Regeln,
-    die im Repository standen — das Verbot von ``git stash`` auf fremder Arbeit
-    (zweimal notiert), die CRLF-Falle von Pythons ``write_text`` und die
-    Mindestzählung eines eigenen Prüfskripts. Alle drei kosteten Arbeit, keine
-    war neu.
+    gegenüber, und gelesen wurden nur die acht. Dabei fielen drei Regeln unter
+    den Tisch, die im Repository standen — das Verbot von ``git stash`` auf
+    fremder Arbeit (zweimal notiert), die CRLF-Falle von Pythons
+    ``write_text`` und die Mindestzählung eines eigenen Prüfskripts. Alle drei
+    kosteten Arbeit, keine war neu.
 
     **Ein Gedächtnis, das nur die halbe Maschine erreicht, ist gefährlicher als
     keines:** Man verlässt sich darauf, dass Erfahrungen gesammelt werden, und
@@ -420,18 +408,8 @@ def memory_is_wired() -> bool | None:
     ``linked()`` allein stellte nur fest, *dass* eine Verknüpfung vorliegt,
     nicht *wohin* sie zeigt; eine Junction auf ein fremdes Verzeichnis galt
     damit als eingerichtet (Befund solidon-e8, 07.09.2026).
-
-    **Und in einem Arbeitsbaum stellt sich die Frage gar nicht.**
-    ``harness_dir()`` liest das Kürzel aus dem Pfad des Hauptklons — in einem
-    Arbeitsbaum unter ``.claude/worktrees/`` existiert dieser Ort nicht, und
-    ``link_memory.py`` scheitert dort mit „Diesen Ort gibt es nicht". Ein
-    Befund, der einen Vorschlag nennt, der die Lage nicht behebt, verletzt
-    AGENTS.md Regel 17 im Sinn, nicht nur im Buchstaben — und ausgerechnet der
-    Arbeitsbaum ist der empfohlene Ort für Arbeit neben fremden Sitzungen.
     """
     if not MEMORY_DIR.is_dir():
-        return None
-    if in_a_worktree():
         return None
     sys.path.insert(0, str(ROOT))
     try:
@@ -508,8 +486,8 @@ def check() -> tuple[list[str], list[str]]:
         findings.append(
             "Das eingecheckte Gedächtnis erreicht diese Maschine nicht: "
             "`~/.claude/projects/…/memory` ist keine Verknüpfung auf "
-            "`.claude/memory/`. Eine Sitzung liest damit nur, was auf dieser "
-            "Maschine gelernt wurde — und lernt zum zweiten Mal, was im "
+            "`.claude/memory/`. Gelesen wird damit nur, was auf dieser "
+            "Maschine gelernt wurde — und gelernt wird zum zweiten Mal, was im "
             "Repository längst steht."
         )
         suggestions.append("Einmalig einrichten: python tools/link_memory.py")

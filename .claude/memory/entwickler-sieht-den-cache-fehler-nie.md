@@ -50,7 +50,6 @@ nachher ist der Beleg, dass der Fix heilt und nicht bloß leert. Hier: 10 → 10
 und der Name stimmte trotzdem, weil er jetzt ein `TranslatableText` ist statt
 eines `str`.
 
-Verwandt: [[zeuge-wird-beim-messen-ueberschrieben]] (dort war der Prüfling
-beweglich, hier ist es der Zustand daneben) und
+Verwandt:
 [[pruefstand-geht-den-weg-der-oberflaeche]] — der Kundenweg ist auch ein
 Zeitverlauf, nicht nur eine Klickfolge.

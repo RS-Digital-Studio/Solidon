@@ -134,8 +134,7 @@ Hypothese widerlegt, und zwar vollständig.
 
 Zwei Sondenläufe rissen ohne Schloss nach 81 bzw. 94 Zeichen — kein Ergebnis,
 und beide Male sah es nach einem Fund aus. Was eine Sonde misst, ist erst dann
-eine Aussage, wenn der Lauf sie zu Ende bringen konnte
-(`tools/gate_lock.py run`).
+eine Aussage, wenn der Lauf sie zu Ende bringen konnte.
 
 ## Der Kontrollfall gehört in jede Sonde, und er verdient sich vierfach
 

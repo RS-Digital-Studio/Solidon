@@ -56,8 +56,7 @@ Schreibens denkt niemand an diese Notiz. Was hilft, ist ein anderes
   `git log -1 --format=%B | grep -cE "ä|ö|ü|ß"` — eine Null unter einem
   deutschen Absatz heißt, es ist passiert.
 
-Verwandt: [[patchskript-schneidet-fremdes-weg]] (dort löscht das Skript
-fremde Arbeit, hier die eigene Struktur), [[messwerkzeug-misst-sich-selbst]]
+Verwandt: [[messwerkzeug-misst-sich-selbst]]
 (ein Werkzeug an einem Fall mit bekanntem Ausgang messen, statt vorsorglich
 auszuweichen).
 

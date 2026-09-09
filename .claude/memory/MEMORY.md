@@ -9,9 +9,9 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) · [PHP lokal](php-lokal-fuer-die-gegenstelle.md) · [Website im Browser](website-im-browser-pruefen.md) — netcup-Stamm je Domain; support.php lokal; QtWebEngine.
 - [Fusion ist da](zeichnen-an-fusion-orientieren.md) · [Slicer sind da](slicer-lokal-zum-gegenmessen.md) · [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) — Vergleichswerkzeuge lokal.
 - [ComfyUI](comfyui-installation-d-ai.md) · [Eine Grafikkarte](lokale-ki-teilt-eine-grafikkarte.md) · [Ollama-Werkzeuge](ollama-werkzeugaufrufe-modellwahl.md) · [Agenten-Suite](agenten-suite-lauf-praxis.md) — D:\AI; VRAM serialisieren; num_ctx; ~1,5 h.
-- [Config-Dir ohne Schalter](config-dir-hat-keinen-schalter.md) · [$TEMP maschinenweit](temp-dateien-sind-maschinenweit.md) · [Scratchpad nicht dauerhaft](scratchpad-ist-nicht-dauerhaft.md) · [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — Sonden treffen Roberts echte Daten.
-- [.venv auf 3.14.7](lokale-umgebung-python-version.md) · [Worktree-venv verstellt den Hook](worktree-venv-verstellt-den-hook.md) · [.venv verliert Dateien](venv-dateien-verschwinden.md) — seit 06.09.2026 3.14; eine alte Worktree-venv winkt den pre-commit nach vier Minuten durch; RECORD nennt die fehlende.
-- [Abgebrochener Lauf: Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) · [Fremde Prozesskette](fremde-prozesskette-nach-abbruch.md) · [Wartebedingung](wartebedingung-kennt-nur-einen-zustand.md) — Prozesse ohne Eltern; die Elternkette lügt nach einem Tod, nur die eigene Ausgabedatei beweist, was meins ist; `until !` mit Umlaut meldet sofort.
+- [Config-Dir ohne Schalter](config-dir-hat-keinen-schalter.md) · [Scratchpad nicht dauerhaft](scratchpad-ist-nicht-dauerhaft.md) · [Sandbox ohne Eingabegeräte](sandbox-sieht-keine-eingabegeraete.md) — Sonden treffen Roberts echte Daten.
+- [.venv auf 3.14.7](lokale-umgebung-python-version.md) · [.venv verliert Dateien](venv-dateien-verschwinden.md) — seit 06.09.2026 3.14; RECORD nennt die fehlende Datei.
+- [Abgebrochener Lauf: Waisen](abgebrochener-lauf-hinterlaesst-waisen.md) · [Wartebedingung](wartebedingung-kennt-nur-einen-zustand.md) — Prozesse ohne Eltern; die Elternkette lügt nach einem Tod, nur die eigene Ausgabedatei beweist etwas; `until !` mit Umlaut meldet sofort.
 - [make_manual ohne --help](make-manual-kennt-kein-help.md) · [commit-msg verlangt Umlaute](commit-msg-hook-verlangt-echte-umlaute.md) — jedes Argument erzeugt alles; ASCII bricht den Commit.
 
 ## Roberts Vorgaben
@@ -21,9 +21,10 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Beheben statt notieren](beheben-statt-notieren.md) · [Durchsicht je Version](durchsicht-je-version.md) · [Härtung trifft Altes](haertung-trifft-alten-zustand.md) — Fund → Messung → Fix → Test; „offen" am Code nachmessen.
 - [Befund aus dem laufenden Fenster altert](befund-aus-dem-laufenden-fenster-altert.md) — sein Fenster trägt den Stand seines Starts; den Fall erst am HEAD nachstellen, dann bauen.
 - [Nur das Nötigste](tests-und-rendern-nur-das-noetigste.md) · [Zwei Läufe](zwei-laeufe-nach-jeder-code-aenderung.md) · [Review vollständig](review-immer-vollstaendig.md) — affected_tests je Schritt, Tor vor dem Commit, jeden Diff lesen.
-- [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Worktrees enden auf main](worktrees-enden-auf-main.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — Merge, kein Rebase; bump_version.py.
-- [Weitergegebene Anweisungen](weitergegebene-anweisungen-gelten.md) · [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung entscheidet](weitergabe-die-handlung-entscheidet.md) — weitergegeben zählt; unbesetzt heißt machen; nachgefragt wird nach der Grenze der Handlung, nicht nach dem Absender.
+- [Push und Pull selbst](git-push-pull-selbststaendig.md) · [Version vor jedem Bau](version-vor-jedem-bau-erhoehen.md) — Merge, kein Rebase; bump_version.py.
+- [Freies Gebiet](freies-gebiet-einfach-machen.md) · [Weitergabe: die Handlung entscheidet](weitergabe-die-handlung-entscheidet.md) — was frei ist, wird gemacht; nachgefragt wird nach der Grenze der Handlung, nicht nach dem Absender.
 - [Übersetzung neu](uebersetzung-neu-statt-flicken.md) · [Weg nie bis zum Ende](weg-nie-bis-zum-ende-gemessen.md) — anhängen nur, wenn es für sich steht; zwölf Tag-Läufe, keine Ursache zweimal.
+- [Mehrsitzungs-Setup ist ausgebaut](mehrsitzungs-setup-ist-ausgebaut.md) — Brett, Schloss, Worktree-Weg und privater Index sind am 09.09.2026 gefallen; nicht erneut vorschlagen.
 - [Rechtemodus bleibt bypass](rechtemodus-bleibt-bypass.md) — die Umstellung auf `auto` ist am 04.09.2026 abgelehnt; nicht erneut vorschlagen.
 
 ## Produkt und Entscheidungen
@@ -60,7 +61,7 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 ## Messen und Prüfen
 
 - [Saubere Messung, falsche Frage](saubere-messung-falsche-frage.md) · [Gemessene Frage](gemessene-frage-ist-nicht-die-gestellte.md) · [Bestätigung verstärkt](bestaetigung-verstaerkt-die-fehlannahme.md) · [Am Eingang drehen](am-eingang-drehen.md) — jede Messung antwortet auf ihre eigene Frage.
-- [Was die Suite nicht findet](was-die-suite-nicht-findet.md) · [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) · [Benannte Falle](benannte-falle-schuetzt-nicht.md) · [Fremde Erklärung altert](fremde-erklaerung-altert-mit.md) · [Geprüft fühlt sich wie vollständig an](geprueft-fuehlt-sich-wie-vollstaendig-an.md) — ansehen, mutieren; Notiz gekannt, Fehler gemacht; die geprüfte Hälfte deckt die andere.
+- [Was die Suite nicht findet](was-die-suite-nicht-findet.md) · [Lehre schützt ihre Gestalt](lehre-schuetzt-nur-ihre-eigene-gestalt.md) · [Benannte Falle](benannte-falle-schuetzt-nicht.md) · [Geprüft fühlt sich wie vollständig an](geprueft-fuehlt-sich-wie-vollstaendig-an.md) — ansehen, mutieren; Notiz gekannt, Fehler gemacht; die geprüfte Hälfte deckt die andere.
 - [Begrenzt am falschen Maß](begrenzt-am-falschen-mass.md) · [Schranke aus einem Messwert](schranke-aus-einem-messwert-ist-geraten.md) · [Zwei Schwellen](zwei-schwellen-eine-frage.md) · [Schwelle, falsche Achse](schwelle-misst-die-falsche-achse.md) — Grenzen.
 - [Roh gegen gerendert](roh-gegen-gerendert-vergleichen.md) · [Zahl beschreibt die Regel](zahl-beschreibt-die-regel-nicht-das-bild.md) · [Eingestellt ≠ Ergebnis](eingestellter-wert-ist-nicht-das-ergebnis.md) — das Bild misst, nicht der Wert.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) · [Verweis ins Leere](verweis-auf-nichtexistierendes.md) · [Docstring, ungefahrener Weg](docstring-nennt-den-weg-den-der-test-nicht-faehrt.md) · [Zwei Dinge, eines geprüft](zwei-dinge-nur-eines-geprueft.md) — Texte.
@@ -77,22 +78,14 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
  im --ignore ignoriert nichts.
 - [Messung nur am Ort](messung-traegt-nur-am-ort-ihrer-messung.md) · [Abgelesene Zahl altert](abgelesene-zahl-altert-still.md) · [Stand davor](messung-galt-fuer-den-stand-davor.md) · [Zahl im Fließtext](zahl-im-fliesstext-hat-begleiter.md) — Zahlen altern.
 - [Prognose ohne Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) · [Fehlalarm zu mehreren](fehlalarm-den-mehrere-fuer-einen-halten.md) · [Zusicherung wird stumpf](zusicherung-wird-stumpf-ohne-rot-zu-werden.md) · [Zusage nur in der Oberfläche](zusage-die-nur-die-oberflaeche-einloest.md) — Zusagen.
-- [Vorgabelage bricht Tests](vorgabelage-bricht-fremde-tests.md) · [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) · [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) · [Speicherzusage zu dritt](speicherzusage-zu-dritt.md) · [Erzeugtes nicht in der CI](erzeugtes-laeuft-nicht-in-der-ci.md) — Lage; die Suite auch aus einem Worktree nur unter gate_lock, sonst reißt die Speicherzusage.
+- [Vorgabelage bricht Tests](vorgabelage-bricht-fremde-tests.md) · [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) · [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) · [Erzeugtes nicht in der CI](erzeugtes-laeuft-nicht-in-der-ci.md) — die Lage, in der gemessen wird, gehört zum Messwert.
 - [Rückbau kann scheitern](rueckbau-kann-scheitern.md) · [Schutz verliert Geschwister](schutz-verliert-ein-geschwister.md) · [Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) · [Anker nach dem Formatierer](anker-nach-dem-formatierer.md) — nach dem Fix.
 - [Halbe Regel sieht ganz aus](die-halbe-regel-sieht-aus-wie-eine-ganze.md) · [Der Nachbar findet den Fehler](der-nachbar-findet-den-fehler.md) — der eigene Blick folgt der Absicht.
 - [Gekillter Lauf schreibt weiter](gekillter-lauf-schreibt-weiter.md) · [Schreibfehler auf Datei](schreibfehler-auf-eine-vorhandene-datei.md) · [Eigenen Lauf beenden](eigenen-lauf-ueber-die-elternkette-beenden.md) · [Hintergrundlauf stirbt mit der Sitzung](hintergrundlauf-stirbt-mit-der-sitzung.md) — je Lauf ein Ordner; OSError 22/13; Blätter zuerst; lange Läufe abkoppeln.
 
-## Geteilter Baum und Shell
+## Shell und Git
 
-- [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) · [Parallele Sitzung im Baum](parallele-sitzung-im-arbeitsbaum.md) · [Fremder Zwischenstand](fremder-zwischenstand-statt-repository.md) — Fremdes aussortieren; auf HEAD messen.
-- [Werkzeug las mitten im Schreiben](werkzeug-las-mitten-im-schreiben.md) · [Zeuge überschrieben](zeuge-wird-beim-messen-ueberschrieben.md) · [Fremde Zwischenstände](fremde-zwischenstaende-verfaelschen-messungen.md) · [Ein Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — Diff vorher.
-- [Sitzung sendet ins Leere](sitzung-sendet-ohne-erreichbar-zu-sein.md) · [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — Kanal einseitig; Exit 128; link_memory.py.
-- [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) · [Index schützt Kataloge nicht](privater-index-schuetzt-die-kataloge-nicht.md) — `git diff HEAD --numstat` vor dem Commit.
-- [Geteilter Index hält Altes](geteilter-index-haelt-alten-stand.md) · [Index altert](index-altert-zwischen-lesen-und-commit.md) · [Sollprobe](sollprobe-liest-den-fremden-commit.md) · [Commit-Meldung geteilt](commit-meldung-ist-eine-geteilte-datei.md) — Index und Commit.
-- [Privater Index: fester Name](privater-index-fester-name.md) · [Spuren](privater-index-hinterlaesst-spuren.md) · [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) · [Blob-Commit verliert](blob-commit-verliert-den-wettlauf.md) — privater Index.
-- [Patchskript schneidet Fremdes](patchskript-schneidet-fremdes-weg.md) · [Sicherung ist Zeitmaschine](sicherung-ist-eine-zeitmaschine.md) — Patch und Sicherung nehmen Fremdes mit.
-- [Probe-Worktree altert](probe-worktree-altert.md) · [Sonde im geteilten Baum](sonde-im-geteilten-baum.md) · [Probe mit Commits](probe-die-commits-erzeugt-schaltet-push-ab.md) — eigener Worktree, gegen HEAD; post-commit läuft überall.
-- [Drei-Wege-Check ist kein Enthaltensein](drei-wege-check-ist-kein-enthaltensein.md) — fremde Patches gegen Namen, Marker und Testfunktionen im Baum messen, nicht gegen `apply --check`; ungetrackte Dateien fehlen in jedem Diff.
 - [Deutscher Text nicht durch die Shell](deutscher-text-geht-nicht-durch-die-shell.md) — Write-Datei, `-F`; `!r`; newline beidseits.
 - [Kette mit ; läuft nach dem Kill weiter](kette-mit-semikolon-laeuft-nach-dem-kill-weiter.md) · [Agent-Edits schreiben CRLF](agent-edits-schreiben-crlf.md) — erst den Wrapper beenden, `&&` statt `;`; nach jedem Prosa-Durchgang `git diff --stat` auf CRLF-Warnungen lesen, AST-Vergleich sagt „nur Prosa“.
-- [Geteilte Umgebung fragt das Schloss](geteilte-umgebung-fragt-das-schloss.md) · [Ort statt Zusage](ort-statt-zusage-bei-paralleler-arbeit.md) — vor Tausch oder pip in .venv erst gate_lock.py status und das „fertig“ der anderen; eine Zusage altert, ein abfragbarer Ort nicht.
+- [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — Exit 128 ohne Autor; link_memory.py hängt das Gedächtnis ins Repository.
+- [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) — `git diff HEAD --numstat` vor dem Commit; jede Zahl in der zweiten Spalte ist ein überschriebener Eintrag.

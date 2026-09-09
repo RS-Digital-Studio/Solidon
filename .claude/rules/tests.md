@@ -277,8 +277,8 @@ geworden wäre (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
   Last und kein Code. Das kostet eine Minute statt eines Arbeitsbaums.
 * **Auch die Reihenfolge zählt.** `sketch_solve_200` misst 114 ms allein und
   162 ms hinter `test_slice.py` — 38 % Unterschied bei einer Schwelle von 25.
-* **Die Fremdlast ist meistens die eigene Arbeit.** Ein zweiter Testlauf, eine
-  parallele Sitzung, ein offenes Fenster. „Auf einer ruhigen Maschine messen"
+* **Die Fremdlast ist meistens die eigene Arbeit.** Ein zweiter Testlauf, ein
+  offenes Fenster, ein Bau im Hintergrund. „Auf einer ruhigen Maschine messen"
   hilft niemandem, weil eine Maschine immer ruhig aussieht; nachsehen, was
   sonst rechnet, hilft.
 
@@ -341,19 +341,20 @@ neue nichts.
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
 Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
-Leistungstests. Er ist zu eng gefasst: Ein Lauf **ohne Schloss** mitten in
-einem fremden Tor endete mit **Exit 139** und Zugriffsverletzung; dieselben
-Tests einzeln liefen in einer Sekunde grün durch (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+Leistungstests. Er ist zu eng gefasst: Ein Lauf mitten in einem zweiten
+Testlauf auf derselben Maschine endete mit **Exit 139** und
+Zugriffsverletzung; dieselben Tests einzeln liefen in einer Sekunde grün
+durch (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Bei einer Messung äußert sich Last als *langsamer*, und dagegen hilft die Regel
 „zweimal fahren". Bei einem funktionalen Test äußert sie sich als **rot** — und
 dann sucht man den Fehler im eigenen Code, wo keiner ist. Die Reihenfolge kehrt
 sich damit um:
 
-* **Unter dem Schloss fahren, bevor überhaupt geurteilt wird**
-  (`tools/gate_lock.py run --who <name> --wait 1800 -- …`), nicht erst, wenn ein
-  Ergebnis merkwürdig aussieht. Das Schloss kostet Wartezeit; ein falsch
-  zugeordneter Absturz kostet eine halbe Stunde Suche im richtigen Code.
+* **Nachsehen, was sonst rechnet, bevor überhaupt geurteilt wird**, nicht
+  erst, wenn ein Ergebnis merkwürdig aussieht. Ein zweiter Torlauf oder ein
+  Paketbau daneben ist in zehn Sekunden gefunden; ein falsch zugeordneter
+  Absturz kostet eine halbe Stunde Suche im richtigen Code.
 * **Der billigste Gegenbeweis ist der einzelne Test.** Läuft er allein in einer
   Sekunde durch, war es die Maschine.
 * **Steht er oder rechnet er?** Drei Fragen, und erst zusammen tragen sie eine
@@ -361,15 +362,13 @@ sich damit um:
 
   1. **Welche Prozesse gehören überhaupt zum Lauf?** Nicht die aus dem
      Prozessbaum: Windows setzt die Elternnummer nicht um, wenn ein
-     Zwischenprozess endet, und der `pytest` fällt dann heraus. Und nicht alle
-     mit `pytest` in der Kommandozeile: Die Hülle von `gate_lock` trägt den
-     ganzen geschützten Befehl, wartet aber nur — wartende Hüllen sehen aus
-     wie hängende Läufe.
+     Zwischenprozess endet, und der `pytest` fällt dann heraus. Gesucht wird
+     deshalb an der Kommandozeile — und eine Hülle, die den geschützten Befehl
+     nur weiterreicht, sieht dabei aus wie ein hängender Lauf.
 
      ```
      Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
-       Where-Object { $_.CommandLine -match '-m pytest' -and
-                      $_.CommandLine -notmatch 'gate_lock' }
+       Where-Object { $_.CommandLine -match '-m pytest' }
      ```
 
   2. **Wächst die Rechenzeit?** `Get-Process -Id N | Select CPU`, zweimal im
@@ -387,25 +386,13 @@ sich damit um:
   woran er steht — und die Zahl der Fortschrittszeichen im Protokoll sagt
   zusammen mit `pytest --collect-only -q`, **welcher Test** es ist.
 
-**Und die Grenze des Schlosses, weil sie nicht offensichtlich ist:** Es
-serialisiert die *Rechenzeit*, nicht den *Arbeitsbaum*. Wer im geteilten Baum
-misst, liest die ungestageten Dateien aller Sitzungen mit. Gefährlich ist dabei
-nicht der falsche Fehler — der fällt auf —, sondern der **falsche Erfolg**: Ein
-fremder Zwischenstand kann einen Lauf auch grün machen, und dann hält jemand
-seine Arbeit für abgesichert. Ein eigener Arbeitsbaum ist die einzige
-vollständige Antwort (`claude --worktree <name>`).
-
-**Und die Beschleunigung des Tors macht das Schloss wichtiger, nicht
-überflüssiger.** Es auf die Leistungstests zu schrumpfen ist gemessen
-widerlegt, und zwar aus der Gegenrichtung: Mit `-n 8` lastet die Sammelgruppe
-die Maschine so aus, dass der **fremde** Lauf kippt — nicht wegen Parallelität
-oder Reihenfolge, sondern wegen **Speicher**: Acht Prozesse, die je eine
-speicherhungrige Geometrie rechnen, sind etwas anderes als einer. Parallelität
-macht Speicherhunger sichtbar — als Korrektheitsfehler. Vorher belegte ein
-serieller Torlauf einen Kern und störte niemanden. Also: **Je paralleler das
-Tor, desto strenger das Schloss.** Der Gewinn kommt trotzdem, nur an anderer
-Stelle: nicht dadurch, dass das Schloss fällt, sondern dadurch, dass das, was
-es umschließt, kleiner wird (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+**Und die Parallelität im Tor selbst ist dieselbe Falle eine Ebene tiefer.**
+Mit `-n 8` lastet die Sammelgruppe die Maschine so aus, dass Läufe kippen —
+nicht wegen Parallelität oder Reihenfolge, sondern wegen **Speicher**: Acht
+Prozesse, die je eine speicherhungrige Geometrie rechnen, sind etwas anderes
+als einer. Parallelität macht Speicherhunger sichtbar, und zwar als
+Korrektheitsfehler; ein serieller Torlauf belegte einen Kern und fiel
+niemandem auf (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 **Eine feste Zahl statt `-n auto`.** Auf 32 logischen Kernen startet xdist 32
 Worker und stirbt beim Verteilen (`INTERNALERROR KeyError <WorkerController
@@ -419,50 +406,16 @@ von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er 
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
 einer.
 
-### Wer das Schloss belegt sieht, schreibt nicht
-
-Das Schloss schützt den Halter vor **Rechenlast**. Es schützt ihn nicht vor
-**dir**. Wer bei belegtem Schloss eine Datei ändert, verfälscht nicht den
-eigenen Lauf — der kommt ja erst noch —, sondern den fremden, der gerade läuft:
-ein neuer `tr()`-Text, den die laufende fremde Suite ohne Katalog sieht, oder
-eine Zeile in `suite-getrennt.sh`, die Bash in den laufenden Lauf nachliest
-(Vorfall: ROADMAP-ARCHIV.md, 04.09.2026). Der zweite Fall ist behoben — das Skript kopiert sich beim
-Start. Der erste nicht: Eine Datei, die der laufende Test importiert, lässt
-sich nicht wegkopieren. Dafür bleibt nur die Regel. `gate_lock.py status` sagt
-in einer Sekunde, ob jemand fährt.
-
-**Und zwar vor jeder Schreiboperation, nicht vor jeder Arbeitseinheit.** Das
-Schloss kann zwischen zwei Schreibvorgängen den Halter wechseln. Wer schreibt,
-sieht **jedes Mal** nach; die Sekunde kostet weniger als ein fremder Torlauf.
-
-**Eine Notiz ins Gedächtnis ist seit dem 07.09.2026 ein Schreibvorgang ins
-Repository.** Das ist die Nebenwirkung der Verknüpfung, die an diesem Tag auf
-dieser Maschine eingerichtet wurde (`tools/link_memory.py`,
-`.claude/memory/erinnerungen-liegen-im-repository.md`): Der Ort, an dem eine
-Sitzung ihre Erinnerungen ablegt, **ist** seither `.claude/memory/` im
-Arbeitsbaum. Der Eintrag dort nennt die eine Hälfte — sie taucht in
-`git status` auf und kann in einen fremden Commit geraten. Die andere gehört
-hierher: **`tests/test_directory_docs.py` liest `.claude/memory/` in beide
-Richtungen**, die Dateien und die Namen, auf die `MEMORY.md` zeigt. Eine Notiz
-mitten in einen fremden Torlauf geschrieben macht Bestand und Index für einen
-Moment inkonsistent.
-
-Der harmloseste Akt einer Sitzung — „ich lege das schnell ins Gedächtnis" —
-gehört damit unter dieselbe Regel wie jede andere Änderung: erst
-`gate_lock.py status`, dann schreiben. Vor der Verknüpfung war er wirklich
-harmlos, und genau deshalb weiß es niemand (Hinweis von solidon-e8,
-07.09.2026, deren drei Notizen zwanzig Minuten vor der Verknüpfung lagen — Glück
-und kein Verfahren).
-
 ### Der fremden Messung glaubt man so wenig wie der eigenen
 
-Eine Zahl, die eine Sitzung weiterreicht, wird auf dem Weg **fester**, nicht
-lockerer: Jede Weitergabe streift eine Unsicherheit ab, bis am Ende eine Zahl
-steht, die niemand mehr hinterfragt. Und der häufigste Grund für eine falsche
-Zahl ist immer derselbe: **Eine Mustersuche misst, was das Muster kennt — und
-schweigt über den Rest, ohne es zu sagen** — ohne Wortgrenze zu viel, mit einem
-Muster für einen Fall zu wenig, mit `"pytest" in CommandLine` wartende
-`gate_lock`-Hüllen als laufende Tests (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+Eine Zahl, die weitergereicht wird — von einem Bericht in den nächsten, aus
+einer Notiz in eine Zusage —, wird auf dem Weg **fester**, nicht lockerer:
+Jede Weitergabe streift eine Unsicherheit ab, bis am Ende eine Zahl steht, die
+niemand mehr hinterfragt. Und der häufigste Grund für eine falsche Zahl ist
+immer derselbe: **Eine Mustersuche misst, was das Muster kennt — und schweigt
+über den Rest, ohne es zu sagen** — ohne Wortgrenze zu viel, mit einem Muster
+für einen Fall zu wenig, mit `"pytest" in CommandLine` auch wartende Hüllen
+als laufende Tests (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
 
 Wer eine Zahl weitergibt, gibt deshalb das **Muster** mit, nicht nur das
 Ergebnis. Und wer eine bekommt, prüft sie an einem Fall, von dem er weiß, wie
@@ -519,37 +472,29 @@ Lizenzprüfung und den nächsten Klon berührt, ohne dass die Anwendung es je
 importiert.
 
 **Die Prozessnummer findet man nicht über die Elternkette.** Auf Windows setzt
-niemand die Elternnummer um, wenn der Elternprozess endet — der `pytest` unter
-einem Schloss hängt dann sichtbar an einer ganz anderen Kette oder an keiner.
-Gesucht wird deshalb am Kommando:
+niemand die Elternnummer um, wenn der Elternprozess endet — der `pytest` hängt
+dann sichtbar an einer ganz anderen Kette oder an keiner. Gesucht wird deshalb
+am Kommando:
 
 ```
 Get-CimInstance Win32_Process -Filter "Name like '%python%'" |
   Select-Object ProcessId, CommandLine
 ```
 
-Dasselbe tut `tools/gate_lock.py` in `_test_processes()`, und aus demselben
-Grund. Wer nur die direkten Kinder des Schlosshalters zählt, findet den
-stehenden Lauf nicht.
-
-## Wer mit privatem Index committet, zieht den Haupt-Index nach
-
-Das stand hier und gehörte nicht hierher: Es ist Commit-Betrieb, nicht
-Testwissen — beim Ändern einer Testdatei lud es mit, beim Committen ohne
-Testdatei gar nicht. Es steht jetzt in `.claude/skills/liefern/SKILL.md`.
+Wer nur die direkten Kinder zählt, findet den stehenden Lauf nicht.
 
 ## Was habe ich gerade gemessen?
 
-Vier Sitzungen haben an einem Abend **sieben** Messfehler gemacht, und alle
-sieben hatten dieselbe Form:
+An einem Abend sind **sieben** Messfehler zusammengekommen, und alle sieben
+hatten dieselbe Form:
 
 | Werkzeug | maß | gemeint war |
 |---|---|---|
 | Pipe um `pytest` | den Rückgabewert von `tail` | den von pytest |
 | Hintergrundlauf | den Status der Hülle | den des Programms darin |
 | Prozessbaum | die direkten Kinder | die ganze Kette |
-| `_alive()` | ob `OpenProcess` ein Handle gibt | ob der Prozess läuft |
-| der Wächter | irgendeinen `pytest` | den Lauf **dieses** Halters |
+| eine Lebendprüfung | ob `OpenProcess` ein Handle gibt | ob der Prozess läuft |
+| ein Wächter | irgendeinen `pytest` | den Lauf, um den es ging |
 | sein Selbsttest | `os.getpid()` | ob der Lauf sichtbar ist |
 | `git diff` | den Index | HEAD |
 | ein Sprachprüfstand | sechsmal denselben deutschen Dialog | sechs Sprachen |
@@ -1066,11 +1011,11 @@ Zwei Handgriffe dagegen, beide billig:
 
 ### Die Abfrage muss den Befehl noch ändern können
 
-Die Regel „wer das Schloss belegt sieht, schreibt nicht" ist zweimal erfüllt
+Eine Bedingung der Form „erst nachsehen, dann schreiben" ist zweimal erfüllt
 worden und hat trotzdem nichts verhindert. Beide Male so:
 
 ```bash
-gate_lock.py status && python - <<'PY'   # der Editor hängt schon dran
+irgendeine_abfrage && python - <<'PY'   # der Schreibbefehl hängt schon dran
 ```
 
 Die Abfrage stand davor, ihre Antwort stand in derselben Ausgabe wie die
@@ -1085,7 +1030,7 @@ Notiz. Praktisch heißt das: **Ein Aufruf fragt, ein zweiter schreibt** — und
 zwischen beiden liest jemand das Ergebnis. Das kostet einen Tastendruck und ist
 der einzige Unterschied zwischen einer Zusicherung und einer Verzierung.
 
-Dieselbe Form gibt es ohne Schloss: Eine Messung, die **nach** dem Testlauf
-läuft, während dazwischen jemand geschrieben hat, misst einen anderen Baum.
-**In einem Baum, in dem vier Sitzungen schreiben, misst man nicht den Baum,
-sondern einen Zeitpunkt** — und der steht nicht im Ergebnis (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).
+Dieselbe Form gibt es auch ohne zweiten Aufruf: Eine Messung, die **nach** dem
+Testlauf läuft, während dazwischen eine Datei geschrieben wurde, misst einen
+anderen Baum. **Gemessen wird nie ein Baum, sondern ein Zeitpunkt** — und der
+steht nicht im Ergebnis (Vorfall: ROADMAP-ARCHIV.md, 04.09.2026).

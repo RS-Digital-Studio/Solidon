@@ -322,8 +322,7 @@ tut, misst niemand richtig.** Ein Fenster ohne Modell ist kein Zustand der
 Anwendung, sondern ihr Startbildschirm; wer dort ein Werkzeug abfragt, fragt
 ein Möbel im Nebenzimmer. Siehe [[pruefstand-geht-den-weg-der-oberflaeche]].
 
-Siehe auch [[parallele-sitzungen-solidon3d]] und
-[[native-bibliotheken-speicher]].
+Siehe auch [[native-bibliotheken-speicher]].
 
 ## Betriebslage ist zweierlei, und man kann eine Hälfte herstellen
 

@@ -23,8 +23,7 @@ ein Wächter zwei Schritte später stolpert darüber.
 **How to apply:** Den Text, den man ersetzen will, **unmittelbar vor dem
 Patch** aus der Datei lesen — nicht aus dem Gedächtnis, nicht aus einer
 früheren Ausgabe, und nie über einen Formatierer hinweg. Jede Ersetzung zählt
-ihre Treffer und bricht ab, wenn es nicht genau einer ist
-([[patchskript-schneidet-fremdes-weg]] ist die Schwester dieses Punktes). Wo
+ihre Treffer und bricht ab, wenn es nicht genau einer ist. Wo
 ein Anker aus mehreren Zeilen besteht, ist er nach jedem `ruff format`
 verdächtig.
 

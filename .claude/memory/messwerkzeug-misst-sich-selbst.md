@@ -118,6 +118,4 @@ ihn danach zurückgezogen.
    suchen, an der die Geschichte aufgeht.
 
 Die Gegenprobe kostet zwei Minuten und hat in dieser Nacht viermal eine falsche
-Meldung verhindert und zweimal nicht, weil ich sie nicht gemacht hatte. Siehe
-auch [[fremde-zwischenstaende-verfaelschen-messungen]] und
-[[leistungstests-fremdlast]].
+Meldung verhindert und zweimal nicht, weil ich sie nicht gemacht hatte. Siehe auch [[leistungstests-fremdlast]].

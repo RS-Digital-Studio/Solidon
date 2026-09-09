@@ -55,5 +55,4 @@ Die allgemeine Form: **Ein Hilfsmodul, das man importiert, kann den Suchpfad
 verstellt haben, bevor die eigene erste Zeile läuft.** Das ist die Schwester
 von [[pruefstand-geht-den-weg-der-oberflaeche]] — dort fehlt ein Schritt, den
 die Anwendung geht; hier läuft ein Schritt, den man nicht angeordnet hat.
-Siehe auch [[messwerkzeug-misst-sich-selbst]] und
-[[sonde-im-geteilten-baum]].
+Siehe auch [[messwerkzeug-misst-sich-selbst]].

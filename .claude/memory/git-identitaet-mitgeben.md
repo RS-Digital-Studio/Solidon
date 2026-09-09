@@ -34,4 +34,4 @@ neues `commit-tree` auf denselben Baum. Prüfen lässt es sich mit
 `git log -1 --format=%s | python -c "import sys; print(repr(sys.stdin.read()))"`.
 
 Nicht selbst konfigurieren — dass die Identität je Aufruf kommt, ist offenbar
-Absicht der Umgebung. Siehe [[parallele-sitzung-im-arbeitsbaum]].
+Absicht der Umgebung.

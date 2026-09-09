@@ -39,8 +39,7 @@ liefert die Messung. Und beim Zuschreiben an eine **Sitzung** gilt dasselbe
 eine Ebene höher: Ein Commit gehört dem, der ihn geschrieben hat, und das steht
 in seinem Inhalt, nicht in seiner Position im Verlauf.
 
-Verwandt: [[commit-o-nimmt-den-dateistand]] (dort geht es um die Zurechnung
-*eigener* Commits), [[messwerkzeug-misst-sich-selbst]] und
+Verwandt: [[messwerkzeug-misst-sich-selbst]] und
 [[bekannte-familie-erklaert-nicht-den-ausloeser]].
 
 **Nachtrag vom 30.08.2026 — dieselbe Lehre für Reproduktion statt Attribution.**

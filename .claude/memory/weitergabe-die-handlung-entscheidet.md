@@ -67,6 +67,4 @@ Sitzung eine Anweisung weiterreicht — dann frage ich, ohne die Arbeit
 anzuhalten, und bereite den Commit vollständig vor, damit die Antwort nur noch
 ein Wort kosten muss.
 
-Verwandt: [[weitergegebene-anweisungen-gelten]] (die Regel, gegen die dies
-richtiggestellt ist), [[geprueft-fuehlt-sich-wie-vollstaendig-an]] und
-[[ort-statt-zusage-bei-paralleler-arbeit]].
+Verwandt: [[geprueft-fuehlt-sich-wie-vollstaendig-an]].

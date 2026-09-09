@@ -89,10 +89,6 @@ htmlcov/
 /.claude/.state/letzte-erinnerung-*
 /.claude/.state/sitzungsstart-*
 /.claude/settings.local.json
-# Arbeitsbäume paralleler Sitzungen. `claude --worktree <name>` legt sie hier
-# an; ohne diese Zeile stünde jeder von ihnen als Berg unversionierter Dateien
-# im Hauptbaum. Die Doku empfiehlt es ausdrücklich.
-/.claude/worktrees/
 
 # Die Installationspakete für die Website. Sie entstehen im Bau, werden von
 # tools/make_download.py hierher kopiert und von dort hochgeladen — im

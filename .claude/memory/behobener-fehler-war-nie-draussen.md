@@ -107,5 +107,4 @@ Erklärung einer Nicht-Differenz.
 
 Verwandt: [[aus-kundensicht-perfekt]] (derselbe Maßstab, hier auf einen
 Text angewandt), [[gemessene-frage-ist-nicht-die-gestellte]] (mein „liegen
-darin" war die engere Frage), [[commit-o-nimmt-den-dateistand]] (so entstand
-der Zwischenstand überhaupt).
+darin" war die engere Frage).

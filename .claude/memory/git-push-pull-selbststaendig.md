@@ -11,9 +11,8 @@ metadata:
 `git pull` und `git push` mache ich in diesem Repository **selbstständig**,
 ohne Rückfrage (gesagt am 18.08.2026).
 
-**Warum:** Robert arbeitet oft in mehreren Sitzungen am selben Repository
-([[parallele-sitzungen-solidon3d]]); ein Stand, der nur lokal liegt, ist für
-die anderen Sitzungen nicht da. Nachfragen kostet einen Zug und bringt keine
+**Warum:** An Solidon wird auf drei Maschinen gearbeitet; ein Stand, der nur
+lokal liegt, existiert auf den anderen zweien nicht. Nachfragen kostet einen Zug und bringt keine
 Entscheidung — die Antwort ist immer dieselbe.
 
 **How to apply:**

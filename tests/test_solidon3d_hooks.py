@@ -5,7 +5,6 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -76,46 +75,6 @@ def test_every_codex_hook_command_sets_explicit_codex_argument() -> None:
 
     assert commands
     assert all(" --codex" in command for command in commands)
-
-
-def test_session_end_releases_the_area_on_the_board(tmp_path: Path) -> None:
-    """Endet die Sitzung, hält sie kein Gebiet mehr fest.
-
-    Der Lauf bekommt ein eigenes Git-Verzeichnis: Das Brett liegt im
-    gemeinsamen Git-Verzeichnis, und ein Test, der das echte anfasst, würde
-    den Eintrag einer gerade arbeitenden Nachbarsitzung löschen.
-    """
-    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True, capture_output=True)
-    board = tmp_path / ".git" / "solidon-sitzungen"
-    environment = os.environ.copy()
-    environment["CLAUDE_PID"] = "424242"
-    environment.pop("CLAUDE_CODE_MESSAGING_SOCKET", None)
-    environment.pop("CODEX_THREAD_ID", None)
-    environment.pop("CODEX_SESSION_ID", None)
-
-    claimed = subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "session_board.py"), "claim", "--area", "Probe"],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        cwd=tmp_path,
-        env=environment,
-    )
-    assert claimed.returncode == 0, claimed.stderr
-    assert list(board.glob("*.json")), "the claim did not reach the temporary board"
-
-    ended = subprocess.run(
-        [sys.executable, str(HOOK), "sitzungsende"],
-        input='{"hook_event_name": "SessionEnd"}',
-        capture_output=True,
-        text=True,
-        timeout=30,
-        cwd=tmp_path,
-        env=environment,
-    )
-
-    assert ended.returncode == 0, ended.stderr
-    assert not list(board.glob("*.json")), "the area is still held after the session ended"
 
 
 def test_session_start_calls_current_environment_checker(hook: ModuleType, tmp_path: Path) -> None:
@@ -220,16 +179,7 @@ def test_failed_patch_does_not_format_existing_files(
         ('bash -lc "python -m pytest -q"', True),
         (r"""& 'C:\Program Files\Git\bin\bash.exe' -lc '"$SUITE_PYTHON" -m pytest -q' """, True),
         ("""powershell.exe -NoProfile -Command '& "$env:SUITE_PYTHON" -m pytest -q' """, True),
-        (
-            """S="session"\nexport S SUITE_PYTHON\n"$SUITE_PYTHON" tools/gate_lock.py run """
-            """--who "$S" --wait 1800 -- bash -c '\n"""
-            """  .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh """
-            """> "$TEMP/g4-$S.txt" 2>&1\n"""
-            """  suite_status=$?\n  echo "geteilt Exit=$suite_status"\n"""
-            """  "$SUITE_PYTHON" -m pytest -q -m performance > "$TEMP/g5-$S.txt" 2>&1\n' """,
-            True,
-        ),
-        ('S=test; "$SUITE_PYTHON" -m pytest -q > "$TEMP/t-$S.txt" 2>&1; echo "Exit=$?"', True),
+        ('"$SUITE_PYTHON" -m pytest -q > "$TEMP/t.txt" 2>&1; echo "Exit=$?"', True),
         ('S=test; echo "python -m pytest -q"', False),
         ('bash -lc "echo pytest"', False),
         ("""bash -lc 'echo "python -m pytest -q"' """, False),
@@ -262,7 +212,6 @@ def test_test_markers_belong_to_one_session(
     }
     monkeypatch.setattr(hook, "eingabe", lambda: data)
     monkeypatch.setattr(hook, "_ruff_hinweis", lambda command: "")
-    monkeypatch.setattr(hook, "_commit_hinweis", lambda command: "")
     hook.testlauf()
     assert not hook._session_path(hook.MARKE, data).exists()
     data["tool_response"] = {"exit_code": 0}
@@ -290,74 +239,3 @@ def test_stop_warns_again_after_the_same_file_changes(
     os.utime(path, (path.stat().st_atime, path.stat().st_mtime + 1))
     hook.abschluss()
     assert "systemMessage" in json.loads(capsys.readouterr().out)
-
-
-def test_codex_session_end_uses_payload_identity_in_a_worktree(
-    hook: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Das dokumentierte session_id-Feld gibt nur das eigene gemeinsame Brett frei."""
-    common = tmp_path / "main" / ".git"
-    internal = common / "worktrees" / "test"
-    internal.mkdir(parents=True)
-    (internal / "commondir").write_text("../..", encoding="utf-8")
-    worktree = tmp_path / "worktree"
-    worktree.mkdir()
-    (worktree / ".git").write_text(f"gitdir: {internal}", encoding="utf-8")
-    board = common / "solidon-sitzungen"
-    board.mkdir()
-    mine = board / "codex-payload-session.json"
-    other = board / "codex-inherited-session.json"
-    mine.write_text("{}", encoding="utf-8")
-    other.write_text("{}", encoding="utf-8")
-    monkeypatch.setenv("CODEX_THREAD_ID", "inherited-session")
-    monkeypatch.setattr(hook, "is_codex", lambda: True)
-    monkeypatch.setattr(
-        hook, "eingabe", lambda: {"cwd": str(worktree), "session_id": "payload-session"}
-    )
-    monkeypatch.setattr(
-        hook.subprocess, "run", lambda *args, **kwargs: pytest.fail("SessionEnd starts Git")
-    )
-
-    hook.sitzungsende()
-
-    assert not mine.exists()
-    assert other.exists()
-
-
-@pytest.mark.skipif(sys.platform != "win32", reason="Windows-Einstieg über cmd und py")
-def test_windows_session_end_wrapper_preserves_payload_and_exit_code(tmp_path: Path) -> None:
-    """Der konfigurierte Einstieg läuft aus einem Unterordner und übergibt UTF-8."""
-    configuration = json.loads(CODEX_HOOKS.read_text(encoding="utf-8"))
-    command = configuration["hooks"]["SessionEnd"][0]["hooks"][0]["commandWindows"]
-    copied_hook = tmp_path / ".claude" / "hooks" / HOOK.name
-    copied_hook.parent.mkdir(parents=True)
-    shutil.copyfile(HOOK, copied_hook)
-    board = tmp_path / ".git" / "solidon-sitzungen"
-    board.mkdir(parents=True)
-    claim = board / "codex-session-ä.json"
-    claim.write_text("{}", encoding="utf-8")
-    subfolder = tmp_path / "unterordner"
-    subfolder.mkdir()
-    payload = {"session_id": "session-ä", "cwd": str(subfolder), "hook_event_name": "SessionEnd"}
-
-    result = subprocess.run(
-        'cmd.exe /d /s /c "' + command + '"',
-        input=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        capture_output=True,
-        cwd=subfolder,
-        timeout=20,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert not claim.exists()
-    assert not result.stdout
-    # Ein Fehler des gestarteten Skripts muss den Wrapper unverändert verlassen.
-    copied_hook.write_text("raise SystemExit(7)\n", encoding="utf-8")
-    failed = subprocess.run(
-        'cmd.exe /d /s /c "' + command + '"',
-        input=b"{}",
-        capture_output=True,
-        cwd=subfolder,
-        timeout=20,
-    )
-    assert failed.returncode == 7

@@ -307,8 +307,8 @@ def test_the_check_would_catch_a_violation() -> None:
     assert offences_in("hoehe")
     assert not offences_in("detail_view")
     assert not offences_in("part_registry")
-    # Der Nachtrag vom 25.08.2026: ``tools/to_main.py`` sprach durchgehend
-    # deutsch, und keiner dieser Stämme stand auf der Liste.
+    # Der Nachtrag vom 25.08.2026: Ein Werkzeug unter ``tools/`` sprach
+    # durchgehend deutsch, und keiner dieser Stämme stand auf der Liste.
     assert offences_in("zweig")
     assert offences_in("sauber")
     assert offences_in("liefere")

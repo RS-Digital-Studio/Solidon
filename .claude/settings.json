@@ -42,18 +42,6 @@
         ]
       }
     ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/solidon3d_hooks.py\" sitzungsende",
-            "shell": "bash",
-            "timeout": 15
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell",
@@ -104,10 +92,6 @@
         ]
       }
     ]
-  },
-  "statusLine": {
-    "type": "command",
-    "command": "P=\"${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe\"; [ -x \"$P\" ] || P=\"${CLAUDE_PROJECT_DIR}/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"${CLAUDE_PROJECT_DIR}/tools/session_board.py\" statusline"
   },
   "enabledPlugins": {
     "csharp-lsp@claude-plugins-official": false,

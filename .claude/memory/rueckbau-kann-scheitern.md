@@ -31,12 +31,7 @@ gegen HEAD verglichen — dieselbe Prüfung, nur am Ergebnis statt an der Absich
   und sie nimmt die Sorge ganz weg.
 * Nach jeder Probenserie einmal `git diff HEAD -- <die mutierten Dateien>` —
   am Ergebnis prüfen, nicht am Skript.
-* Im geteilten Baum gilt zusätzlich: Eine Probe, die eine Datei verändert, an
-  der jemand anderes arbeitet, gehört eigentlich in einen eigenen Worktree
-  ([[sonde-im-geteilten-baum]]). Die Wiederholung ist der billige Ersatz, wenn
-  die Probe klein und kurz ist.
 
 Dieselbe Familie wie [[text-gesetzt-heisst-nicht-gezeigt]] und
 [[messwerkzeug-misst-sich-selbst]], eine Ebene tiefer: **geschrieben heißt
-nicht angekommen.** Verwandt: [[index-altert-zwischen-lesen-und-commit]] — auch
-dort war der Prüfschritt richtig und der Zeitpunkt falsch.
+nicht angekommen.**

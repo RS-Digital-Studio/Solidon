@@ -5,10 +5,9 @@
     .venv\\Scripts\\python.exe tools/affected_tests.py --run           # und gleich fahren
 
 **Wofür das da ist.** Nach jeder Änderung die betroffenen Tests fahren, nicht
-die ganze Suite — die dauert im geteilten Lauf fünf Minuten und braucht das
-Schloss. Welche Tests „betroffen" sind, hat bisher jede Sitzung selbst
-geschätzt, und die Schätzung war das Gebiet der Änderung: die Tests des
-Moduls, das man angefasst hat. Genau so kamen viermal an einem Tag deutsche
+die ganze Suite — die dauert im geteilten Lauf fünf Minuten. Welche Tests
+„betroffen" sind, wurde bisher geschätzt, und die Schätzung war das Gebiet der
+Änderung: die Tests des Moduls, das man angefasst hat. Genau so kamen viermal an einem Tag deutsche
 Bezeichner ins Tor (``tests.md``): Die Prüfung, die *jede* Datei liest, lag
 außerhalb des Gebiets.
 

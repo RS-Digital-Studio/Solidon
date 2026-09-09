@@ -36,4 +36,4 @@ der Wert. Ein Test, der eine überholte Bedingung festschreibt, hält den Tag
 fest, an dem er geschrieben wurde.
 
 Verwandt: [[zusicherung-wird-stumpf-ohne-rot-zu-werden]] (dort verliert eine
-Zusage still ihre Schärfe, hier meldet sie sich), [[fremde-erklaerung-altert-mit]].
+Zusage still ihre Schärfe, hier meldet sie sich).

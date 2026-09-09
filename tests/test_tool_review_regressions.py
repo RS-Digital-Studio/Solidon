@@ -2,18 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
-import time
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from threading import Barrier
 
 import pytest
 
-from tools import affected_tests, gate_lock, link_memory, make_linux_packages
+from tools import affected_tests, link_memory, make_linux_packages
 
 
 def test_b14_deleted_module_keeps_relative_and_indirect_importers(tmp_path: Path) -> None:
@@ -37,52 +33,6 @@ def test_b14_deleted_module_keeps_relative_and_indirect_importers(tmp_path: Path
     after, _ = affected_tests.affected([victim], affected_tests.ImportGraph(tmp_path))
     assert {path.name for path in before} == {"test_direct.py", "test_indirect.py"}
     assert after == before
-
-
-def test_r17_a_young_unwritten_lock_is_busy_even_without_waiting(tmp_path: Path) -> None:
-    """wait=0 beendet das Warten, nicht die Schonfrist eines fremden Schreibers."""
-    path = tmp_path / "gate.lock"
-    path.write_bytes(b"")
-    foreign = gate_lock._acquire(path, "second", wait=0.0)
-    assert foreign is not None
-    assert path.read_bytes() == b""
-
-
-def test_r17_a_lock_completed_between_read_and_stat_is_preserved(tmp_path, monkeypatch) -> None:
-    """Ein zulässiges Interleaving darf den inzwischen gültigen Halter nicht ersetzen."""
-    path = tmp_path / "gate.lock"
-    path.write_bytes(b"")
-    old = time.time() - 60.0
-    os.utime(path, (old, old))
-    owner = {"wer": "first", "pid": os.getpid(), "seit": time.time()}
-    read = gate_lock._read
-
-    def completed(target):
-        result = read(target)
-        if result is None:
-            target.write_text(json.dumps(owner), encoding="utf-8")
-        return result
-
-    monkeypatch.setattr(gate_lock, "_read", completed)
-    foreign = gate_lock._acquire(path, "second", wait=0.0)
-    assert foreign == owner
-    assert json.loads(path.read_text(encoding="utf-8")) == owner
-
-
-def test_r17_two_concurrent_claims_have_exactly_one_owner(tmp_path) -> None:
-    """Die Betriebssystemsperre schützt auch zwei gleichzeitig beginnende Schreiber."""
-    path = tmp_path / "gate.lock"
-    barrier = Barrier(2)
-
-    def claim(name):
-        barrier.wait(timeout=5)
-        return name, gate_lock._acquire(path, name, wait=0.0)
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        claims = list(executor.map(claim, ("first", "second")))
-    owners = [name for name, foreign in claims if foreign is None]
-    assert len(owners) == 1
-    assert json.loads(path.read_text(encoding="utf-8"))["wer"] == owners[0]
 
 
 def test_r19_existing_machine_backups_are_not_overwritten(tmp_path, monkeypatch) -> None:

@@ -2,10 +2,10 @@
 
 **Der Fall, für den es das gibt.** Der ``pre-commit``-Hook hält an, wenn die
 Übersetzungsprüfung rot ist und der Commit ``tr()``-Texte anlegt. Das ist zu
-grob: Er hält damit auch jeden auf, der einen ganz anderen Text hinzufügt,
-während irgendwo im geteilten Baum ein fremder Text unübersetzt liegt. In der
-Nacht auf den 31.08.2026 ist genau das fünfmal passiert — drei Sitzungen
-warteten auf eine vierte, und zweimal war der eigene Text längst vollständig.
+grob: Er hält damit auch einen Commit auf, der einen ganz anderen Text
+hinzufügt, während irgendwo im Baum ein älterer Text unübersetzt liegt. In der
+Nacht auf den 31.08.2026 ist genau das fünfmal passiert, und zweimal war der
+Text des Commits längst vollständig.
 
 Gefragt wird deshalb: **Steht einer der fehlenden Texte in diesem Commit?**
 

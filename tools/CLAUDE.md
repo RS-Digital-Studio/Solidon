@@ -38,31 +38,15 @@ ein sauberes Ergebnis.
 
 ## Die Familien
 
-**Umgebung und Sitzung**
+**Umgebung und Git**
 
 | Werkzeug | Tut |
 |---|---|
 | `check_env.py` | Prüft die Umgebung gegen den festgeschriebenen Stand — **und stellt ihn her** |
-| `session_board.py` | Wer arbeitet gerade woran (`list` / `claim` / `release` / `statusline`) |
 | `sync_agents.py` | Erzeugt Codex-Agenten und Skills aus `.claude/agents/` und `.claude/skills/` (`--check` im Tor) |
-| `gate_lock.py` | Ein Schloss fürs Tor: nur ein Testlauf gleichzeitig auf dieser Maschine |
 | `link_memory.py` | Die Erinnerungen ins Repository hängen — einmal je Maschine |
 | `check_message.py` | Der `commit-msg`-Hook: Ersatzschreibung statt Umlaut in einer Commit-Meldung |
-| `to_main.py` | Der Weg nach `main`: prüfen, was wirklich committet wird |
 
-`gate_lock.py` schützt Lesen, Erzeugen und Entfernen der Besitzerdatei durch
-die Betriebssystemsperre aus `licence_archive.py`. Eine junge unlesbare Datei
-bleibt auch ohne Wartebudget belegt. Unter Windows liest es Prozessbestand
-und Befehlszeilen direkt über typisierte Toolhelp-/NT-Systemaufrufe, ohne
-PowerShell-Prozess oder CIM-Dienst. Die interne NT-API wird dynamisch geladen;
-ihr Vorhandensein und Antwortvertrag sind eine ausdrückliche Kompatibilitätsgrenze.
-Verschwundene Prozesse werden ausgelassen;
-Zugriffsfehler, unbekannte NT-Verträge und ungültige Antwortpuffer bleiben
-ausdrücklich fehlende Auskunft. Meldungen enthalten API-Fehlercodes, niemals
-fremde Kommandozeilen. Jeder geöffnete Snapshot und Prozesshandle wird geschlossen.
-Die JSON-Grenze prüft Schlossfelder vor jeder Zahlenrechnung und erhält ihre
-ursprünglichen Werte für den Besitzvergleich; ungültige junge Einträge bleiben
-belegt. Plattformzweige werden getrennt für Windows, Linux und macOS typgeprüft.
 `link_memory.py` reserviert bei Konflikten
 freie Sicherungsnamen exklusiv; vor dem Entfernen des lokalen Bestands wird
 jede Datei am tatsächlich gewählten Ziel bytegenau geprüft.

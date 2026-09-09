@@ -70,7 +70,7 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen deterministisch erzeugen und Finalisten gegen vollständige Suche prüfen |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
-| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Gegenstücke, Loft, Sweep, Kantenverrundung, Prüfstücke, Rezeptentwurf, Mehrfachmerkmale und SCAD-Ausgabe umsetzen |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Gegenstücke, Loft, Sweep und Kantenverrundung umsetzen — Prüfstücke, Rezeptentwurf, Mehrfachmerkmale und SCAD-Ausgabe stehen |
 | [RM-148 — Zahlenparameter gegen NaN und Unendlich sichern](#rm-148) | Geometrie, Erkennung und Druckvorbereitung | Endlichkeitsprüfung zentral in `registry.params._coerce` mit Regressionstest |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
@@ -99,7 +99,6 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-144 — Orientierungsanalyse über MCP ohne blockiertes Hauptfenster ermöglichen](#rm-144) | KI und Generatoren | Gemeinsame Orientierungsanalyse an den fernbedienten Arbeiterweg anschließen |
 | [RM-020 — Sicherung der eigenständigen Druckprojekte belegen](#rm-020) | Tests und Entwicklungswerkzeuge | Sicherungsweg entscheiden und Wiederherstellung belegen |
 | [RM-025 — Unabhängige Sollwerte für geometrische Prüfungen absichern](#rm-025) | Tests und Entwicklungswerkzeuge | Geometrische Sollwerte aus unabhängiger Rechnung oder analytischen Größen belegen |
-| [RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern](#rm-027) | Tests und Entwicklungswerkzeuge | Fehlcommit aus absichtlich altem Index verhindern; fremdes Staging erhalten |
 | [RM-043 — Gemeinsame Kopfzeilenfrist an alle HTTP-Leser anschließen](#rm-043) | Tests und Entwicklungswerkzeuge | Kopfzeilenfrist an die vier übrigen HTTP-Leser anschließen |
 | [RM-098 — Restliche Regelwerk-Nachträge abgleichen](#rm-098) | Tests und Entwicklungswerkzeuge | Offene Regelbehauptungen mit tatsächlichen Prüfungen abgleichen |
 | [RM-099 — Konzeptbestand und veraltete Verweise ordnen](#rm-099) | Tests und Entwicklungswerkzeuge | Konzeptindex und historische Verweise ohne Wissensverlust ordnen |
@@ -647,6 +646,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Katalog und Kommandozeile, ohne Ausführung (Regel 11). Abnahme je Erweiterung nach der
   achtteiligen Checkliste aus `AGENTS.md`; E4 verlangt zusätzlich den exakten Kern.
 
+  **Vier sind gebaut** (09.09.2026): E8 schreibt den gewählten Baustein aus Katalog und
+  Kommandozeile als OpenSCAD-Datei, mit den Werten des Verlaufs statt der Vorgaben. E7 setzt
+  einen Baustein über `at_features` auf beliebig viele gewählte Merkmale, der Reihe nach auf
+  demselben Körper und mit einem Undo. E5 übernimmt bei der Toleranzleiter den gemessenen
+  Durchmesser der Bohrung, an der sie geöffnet wurde (`at_hole_values`) — Stufen und
+  Kennzeichnung hatte sie, die Wertübernahme leistet der Kalibrierdialog, es fehlte das Maß
+  aus der echten Verbindung. E6 holt ein Rezept über *Zum Bearbeiten öffnen …* als Entwurf
+  ins Fenster zurück (`recipe.draft`, `Session.open_draft`): Schritte im Verlauf, Angaben im
+  Rezeptdialog, ein eingelesener Baustein bleibt eingelesen, und der Knopf sagt, ob er anlegt
+  oder ersetzt. **Offen bleiben E1 bis E4** — die vier, die neue Geometrie verlangen.
+
   Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
   Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische
   Kennzeichnung der Varianten, RM-138, RM-087 und RM-127/RM-140.
@@ -931,19 +941,6 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Durchmesser, Volumen und Achsen gezielt gegen analytische Größen oder unabhängige Rechnungen
   prüfen. Abnahme: Für jede geprüfte Kennzahl ist die Herkunft des Sollwerts dokumentiert; reine
   Wiederholungsprüfungen gelten nur als Determinismusnachweis.
-
-  [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
-
-<a id="rm-027"></a>
-
-- [ ] **RM-027 — Gewöhnlichen Commit aus veraltetem gemeinsamem Index absichern.** Der aktuelle
-  Lieferweg ist mit privatem Index geprüft und bewahrt fremde vorgemerkte Änderungen bytegleich.
-  Automatisches Nachziehen des gemeinsamen Index ist dort ausdrücklich ausgeschlossen; die alte
-  Forderung danach entfällt. Offen bleibt die Absicherung außerhalb dieses Ablaufs: Ein gewöhnlicher
-  Commit darf alte Indexstände nicht unbemerkt als Rücknahme bereits gelandeter Arbeit übernehmen.
-  Den Umgang damit festlegen und im Probe-Repository abnehmen: zwei private Commits, fremdes Staging
-  unverändert, anschließender versehentlicher gewöhnlicher Commit erkannt oder verhindert. Keine
-  automatische Umschreibung des gemeinsamen Index.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#das-fundament-der-wahrnehmung-22082026).
 

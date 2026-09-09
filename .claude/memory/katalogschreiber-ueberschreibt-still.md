@@ -53,7 +53,7 @@ gelöscht". Jede Zahl in der zweiten Spalte ist ein überschriebener Eintrag.
 Der `--numstat`-Griff kommt von 3d-druck-11, die ihn nach meinem Hinweis
 sofort an ihren eigenen Läufen gefahren hat; die `HEAD`-Ergänzung ist die
 Antwort darauf, dass er in diesem Baum ohne sie lügt. Verwandt:
-[[uebersetzung-neu-statt-flicken]], [[geteilter-index-haelt-alten-stand]].
+[[uebersetzung-neu-statt-flicken]].
 
 **Und dieselbe Falle hat eine zweite Gestalt:** Wer die Datei über
 `json.dumps(..., sort_keys=True)` neu schreibt, macht aus einem Einzeiler eine

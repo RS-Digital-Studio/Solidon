@@ -36,9 +36,7 @@ nicht in einen Nebensatz.
 Für den konkreten Fall heißt es: **Eine eigene Memory-Datei und ihre Zeile in
 `MEMORY.md` gehören in dieselbe Runde.** Findet sich dort eine fremde Zeile, ist
 der Sammel-Nachzug mit ausgewiesener Herkunft je Zeile der Weg (`f3cca83f`
-taugt als Vorlage), nicht das Auslassen. Siehe auch
-[[commit-o-nimmt-den-dateistand]] für den Grund, aus dem die Datei nicht
-zerlegbar ist, und [[bekannte-familie-erklaert-nicht-den-ausloeser]] sowie
+taugt als Vorlage), nicht das Auslassen. Siehe auch [[bekannte-familie-erklaert-nicht-den-ausloeser]] sowie
 [[gemessene-frage-ist-nicht-die-gestellte]] für dieselbe Familie ungeprüfter
 Zwischenbehauptungen.
 

@@ -29,8 +29,8 @@ Dateien samt Werkzeug in einer Tabelle — sie beantwortet „darf ich das
 
 **How to apply:** Vor jedem Schreiben in einer Werkzeugdatei `git status` auf
 sie ansehen — die Prüfung muss den Schreibbefehl noch ändern können, steht
-also in einem **eigenen** Aufruf davor, nicht in derselben Kette (siehe
-[[parallele-sitzung-im-arbeitsbaum]]). Liegt dort fremde Arbeit: melden, die
+also in einem **eigenen** Aufruf davor, nicht in derselben Kette. Liegt dort
+unerwartete Arbeit: melden, die
 Wahl lassen (zusammen committen, nacheinander, oder zurücknehmen), und bis zur
 Antwort nichts anfassen. Und beim Melden dazusagen, ob das fremde Vorhaben den
 Erzeugerlauf ohnehin auslöst — dann reist die eigene Änderung im selben Zug

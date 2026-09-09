@@ -25,4 +25,4 @@ lesen und jede CRLF-Warnung ernst nehmen; zurückstellen mit einem kleinen
 Skript, das nur Dateien anfasst, deren HEAD-Stand kein CR trägt
 (`data.replace(b"\r\n", b"\n")`). Die Prosa selbst prüft ein AST-Vergleich
 (Docstrings entfernt) gegen HEAD: „nur Prosa“ oder „Code geändert“ je Datei.
-Siehe [[der-nachbar-findet-den-fehler]], [[parallele-sitzung-im-arbeitsbaum]].
+Siehe [[der-nachbar-findet-den-fehler]].

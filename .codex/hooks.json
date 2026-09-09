@@ -13,18 +13,6 @@
         ]
       }
     ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash -c 'ROOT=\"$(git rev-parse --show-toplevel)\"; P=\"$ROOT/.venv/bin/python\"; [ -x \"$P\" ] || exit 0; \"$P\" \"$ROOT/.claude/hooks/solidon3d_hooks.py\" sitzungsende --codex'",
-            "commandWindows": "py -3 -S -c \"from pathlib import Path; import runpy,sys; p=Path.cwd(); r=next((r for r in (p,*p.parents) if (r/'.claude/hooks/solidon3d_hooks.py').is_file()),None); sys.argv=['solidon3d_hooks.py',*sys.argv[1:]]; r is not None and runpy.run_path(str(r/'.claude/hooks/solidon3d_hooks.py'),run_name='__main__')\" sitzungsende --codex",
-            "timeout": 3
-          }
-        ]
-      }
-    ],
     "PreToolUse": [
       {
         "matcher": "^Bash$",

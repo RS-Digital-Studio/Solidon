@@ -69,5 +69,4 @@ git worktree remove --force <pfad>
 Dort fehlt alles, was nicht im Repository steht — `dist/`, `website/dl/`,
 `packaging/build/` —, also genau das, was eine lokale Voraussetzung
 ausmacht. Über vier Testdateien gefahren: 178 grün, 13 übersprungen, alle
-Skips plattformbedingt und in der Linux-CI aktiv. Der Baum wird nur gelesen;
-committet wird dort nie ([[probe-die-commits-erzeugt-schaltet-push-ab]]).
+Skips plattformbedingt und in der Linux-CI aktiv. Der Baum wird nur gelesen; committet wird dort nie.

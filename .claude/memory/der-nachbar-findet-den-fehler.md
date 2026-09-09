@@ -33,11 +33,11 @@ hinzusehen schon, **und das kann man sich nicht selbst verordnen** (50,
   System trägt.
 - Für die Freigabe: Bei einem plausiblen Eigenverdacht („das ist sicher die
   bekannte Familie") zuerst die naheliegendere Fremderklärung anbieten —
-  zweimal an diesem Tag war der laufende Nachbar die Ursache, nicht die
-  Familie ([[geteilter-baum-misst-zeitpunkt]]).
+  zweimal an diesem Tag war die Last auf der Maschine die Ursache, nicht die
+  Familie.
 
 Verwandt: [[schutz-verliert-ein-geschwister]] (die Geschwisterfrage nach dem
-eigenen Fix), [[parallele-sitzungen-solidon3d]].
+eigenen Fix).
 
 
 ## 03.09.2026: neun Sitzungen, fünf Fälle, keiner vom Urheber gefunden

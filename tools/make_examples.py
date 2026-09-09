@@ -1011,8 +1011,7 @@ def main() -> int:
         # ``write_bytes`` und nicht ``write_text``: Letzteres schreibt auf
         # Windows CRLF, und `.gitattributes` verlangt LF (`* text=auto
         # eol=lf`). Die neun Vorschaubilder standen dadurch dauerhaft als
-        # geändert im Baum — in einer Sitzung, die vier Arbeitsstände teilt,
-        # sieht das aus wie fremde Arbeit, und man lässt es in Ruhe.
+        # geändert im Baum, ohne dass sich an ihnen etwas geändert hätte.
         picture.write_bytes(preview.encode("utf-8"))
 
         objects = ", ".join(

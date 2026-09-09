@@ -27,8 +27,7 @@ Frage.
 **How to apply:** Bevor ein roter Prüfstand ein Befund wird, die
 **Reihenfolge** messen, nicht annehmen — hier: steht der Plotter schon nach
 dem Konstruktor, und läuft `_apply_settings` davor oder danach? Drei Zeilen
-Ausgabe entschieden es. Wo möglich die alte Bauart **holen** statt sie
-nachzubauen (eigener Worktree auf dem Commit davor, [[sonde-im-geteilten-baum]]).
+Ausgabe entschieden es. Wo möglich die alte Bauart **holen** statt sie nachzubauen.
 Und: Ein Prüfstand, der den Weg des Kunden gehen soll, muss den ganzen Weg
 gehen — hier fehlte `window._apply_settings()`, das `app.py` gleich nach dem
 Fensterbau ruft. Ohne diese eine Zeile misst er einen Weg, den niemand geht

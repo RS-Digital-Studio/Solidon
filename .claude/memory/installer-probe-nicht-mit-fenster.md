@@ -25,5 +25,4 @@ Registrierung des jeweiligen Rechtekontexts hergibt.
 eigenen Ordner: `/VERYSILENT /CURRENTUSER /DIR=<scratch> /NOICONS
 /SUPPRESSMSGBOXES /LOG=<datei>`, danach `unins000.exe /VERYSILENT` — und
 vorher den HKCU-Schlüssel `de.rsdigital.solidon3d_is1` lesen, der entscheidet,
-wohin es geht. Siehe [[sonde-im-geteilten-baum]] und
-[[messung-traegt-nur-am-ort-ihrer-messung]].
+wohin es geht. Siehe [[messung-traegt-nur-am-ort-ihrer-messung]].
