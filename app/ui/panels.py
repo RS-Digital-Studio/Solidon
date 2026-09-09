@@ -1110,6 +1110,13 @@ class ObjectTree(QWidget):
         """Was noch gezeichnet werden muss. Erst nach dem Aufbau, sonst steht
         der Baum still, während das erste Bild entsteht — und bei einem
         gescannten Teil sind das achtzig Millisekunden je Zeile."""
+        self._faces: set[tuple[str, str]] = set()
+        """Welche Merkmale Flächen sind — die einzigen, die ein Filament tragen.
+
+        Beim Aufbau nebenbei gefüllt, wo ``kind == "face"`` ohnehin über die
+        Filamentspalte entscheidet. :meth:`selected_faces` beantwortet damit
+        die Frage, die der Schnellwähler stellt, ohne die Zeile nach ihrem
+        Aussehen zu befragen: Ein Icon ist Darstellung und keine Auskunft."""
         self.tree.itemSelectionChanged.connect(self._on_selection)
         # **Doppelklick öffnet, was die Zeile ändert** (Robert, 03.09.2026:
         # „bei Doppelklick würde ich auch gerne die Größen usw. ändern können
@@ -1233,6 +1240,7 @@ class ObjectTree(QWidget):
         # Was noch nicht gezeichnet war, gehört zu Zeilen, die es nicht mehr
         # gibt. Der Vorrat bleibt: dieselben Körper kommen meist wieder.
         self._pending.clear()
+        self._faces.clear()
         if result is None:
             return
         for object_id, entry in result.scene.objects.items():
@@ -1357,6 +1365,7 @@ class ObjectTree(QWidget):
                 # für `face` und für nichts sonst. Eine Bohrung bekommt deshalb
                 # kein Feld, das nichts täte.
                 if getattr(feature, "kind", "") == "face":
+                    self._faces.add((object_id, feature_id))
                     self._show_filament(child, entry, feature_id)
 
                 made[feature_id] = child
@@ -1675,6 +1684,18 @@ class ObjectTree(QWidget):
         # Ohne Wiederholung und in der Reihenfolge des Baums: Wer eine Bohrung
         # **und** ihr Dach markiert, meint sie einmal.
         return tuple(dict.fromkeys(found))
+
+    def selected_faces(self) -> tuple[tuple[str, str], ...]:
+        """Davon die Flächen — die einzigen, denen ein Filament gehören kann.
+
+        ``paint_slot`` gilt für ``face`` und für nichts sonst; deshalb bekommt
+        eine Bohrung in diesem Baum keine Filamentspalte. Der Schnellwähler
+        rechts fragte bis zum 09.09.2026 :meth:`selected_features` und bot an
+        einer gewählten Bohrung eine Zuweisung an, die es dort nicht gibt
+        (Robert: „im Baum bei Bohrungen fehlt das Feld, also auch rechts in der
+        Auswahl bei Bohrungen entfernen"). Beide lesen jetzt dieselbe Antwort.
+        """
+        return tuple(ref for ref in self.selected_features() if ref in self._faces)
 
     def step_selection(self, forward: bool = True) -> None:
         """Zum nächsten Körper weiterschalten (§19.2).

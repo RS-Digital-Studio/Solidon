@@ -244,6 +244,46 @@ def test_actions_of_the_wrong_level_leave_instead_of_greying_out(qt_app: QApplic
         assert "Körper" in button.toolTip(), f"{name}: und sie nennt den Grund"
 
 
+def test_only_the_actions_of_that_kind_of_feature_stay(qt_app: QApplication) -> None:
+    """An einer Bohrung steht nichts, was nur an einer Fläche etwas tut.
+
+    Robert am 09.09.2026: „bei einer Bohrung oder Senkung brauchen wir Filament
+    und die Körperliste gar nicht". Die Stufe reichte bis dahin nur bis
+    „Merkmalshandlung ja oder nein" — und damit standen an einer Bohrung auch
+    *Text aufbringen* (`label_text`) und *Filament auf eine Fläche*
+    (`paint_slot`), beide ``applies_to=("face",)``.
+    """
+    load_operations()
+    panel = SelectionOperationsPanel(REGISTRY.all())
+    panel.resize(320, 340)
+    panel.show()
+
+    def sichtbar() -> set[str]:
+        qt_app.processEvents()
+        return {
+            name
+            for name, button in panel._buttons.items()
+            if not button.isHidden() and name not in panel._quick_buttons
+        }
+
+    for kind in ("hole", "cone", "face"):
+        panel.set_context(1, _availability(1), feature_kind=kind)
+        gezeigt = sichtbar()
+        assert gezeigt, f"{kind}: eine leere Liste prüft nichts"
+        for name in gezeigt:
+            applies = REGISTRY.get(name).applies_to
+            assert kind in applies, f"{name} gilt für {applies}, gezeigt wurde es an {kind}"
+
+    # Und die Gegenprobe, damit der Test nicht bloß eine leere Menge lobt: Was
+    # nur an der Fläche geht, war an der Bohrung wirklich zu sehen.
+    panel.set_context(1, _availability(1), feature_kind="face")
+    nur_flaeche = sichtbar()
+    panel.set_context(1, _availability(1), feature_kind="hole")
+    assert nur_flaeche - sichtbar(), "ohne Unterschied zwischen den Arten misst der Test nichts"
+    assert "label_text" not in sichtbar(), "eine Bohrung wird nicht beschriftet"
+    assert "paint_slot" not in sichtbar(), "eine Bohrung trägt kein eigenes Filament"
+
+
 def test_the_summary_says_what_is_chosen_not_how_many(qt_app: QApplication) -> None:
     """Der zweite Nachweis zu P5: die Zeile nennt die Tiefe (Konzept B).
 

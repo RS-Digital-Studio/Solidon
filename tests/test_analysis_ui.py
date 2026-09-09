@@ -4998,3 +4998,31 @@ def test_a_cached_map_replaces_the_shown_one_in_a_single_pass(
     assert shown == [second], "eine gecachte Karte ersetzt die alte in einem Zug"
     assert host.viewport.analysis_map is second
     host.release()
+
+
+def test_the_filament_picker_leaves_at_a_feature_that_carries_none(window: MainWindow) -> None:
+    """An einer Bohrung tritt der Filamentwähler beiseite, an einer Fläche bleibt er.
+
+    Robert am 09.09.2026 am laufenden Fenster: „hier steht auch
+    Filamentzuweisung, im Baum bei Bohrungen fehlt das Feld, also auch rechts
+    in der Auswahl bei Bohrungen entfernen". Der Baum hält sich seit je daran
+    — ``paint_slot`` gilt für ``face`` und für nichts sonst, und eine Bohrung
+    bekommt deshalb keine Filamentspalte. Der Wähler rechts fragte dagegen
+    ``selected_features`` und bot vier Zeilen an, die dort nichts tun.
+    """
+    result = window.session.last_result
+    assert result is not None
+    features = result.scene.objects["obj_1"].features
+    faces = [key for key, feature in features.items() if getattr(feature, "kind", "") == "face"]
+    holes = [key for key, feature in features.items() if getattr(feature, "kind", "") == "hole"]
+    assert faces and holes, "ohne beide Arten prüft der Test nichts"
+
+    window.object_tree.select_feature("obj_1", holes[0])
+    QApplication.processEvents()
+    assert window.object_tree.selected_faces() == ()
+    assert window.quick_filament.isHidden(), "eine Bohrung trägt kein eigenes Filament"
+
+    window.object_tree.select_feature("obj_1", faces[0])
+    QApplication.processEvents()
+    assert window.object_tree.selected_faces() == (("obj_1", faces[0]),)
+    assert not window.quick_filament.isHidden(), "an einer Fläche gibt es etwas zuzuweisen"

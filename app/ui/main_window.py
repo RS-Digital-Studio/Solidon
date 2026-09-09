@@ -3850,12 +3850,21 @@ class MainWindow(QMainWindow):
         )
         selected_ids = self.object_tree.selected_objects()
         result = self.session.last_result
+        chosen_features = self.object_tree.selected_features()
+        chosen_faces = self.object_tree.selected_faces()
         self.quick_filament.set_context(
             [result.scene.objects[key] for key in selected_ids if key in result.scene.objects]
             if result is not None
             else [],
-            selected_features=self.object_tree.selected_features(),
+            selected_features=chosen_faces,
         )
+        # **Ein Merkmal ohne Fläche trägt kein Filament** (Robert, 09.09.2026).
+        # An einer gewählten Bohrung bot der Wähler eine Zuweisung an, die es
+        # dort nicht gibt: `paint_slot` gilt für `face`, und der Baum gibt einer
+        # Bohrung deshalb schon keine Filamentspalte. Er tritt jetzt ganz
+        # beiseite, statt vier Zeilen zu füllen, die nichts tun — sichtbar
+        # bleibt er auf der Körperstufe und an jeder gewählten Fläche.
+        self.quick_filament.setVisible(not chosen_features or bool(chosen_faces))
         self.quick_filament.setEnabled(not locked and not gesturing)
         self._hide_dead_menus()
 

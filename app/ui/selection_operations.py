@@ -222,6 +222,19 @@ class SelectionOperationsPanel(QWidget):
         Wahrheit. Gebraucht wird sie in :meth:`set_context`, das nach der
         gewählten Stufe ein- und ausblendet (Konzept „Ein Ort für die
         Auswahl", C)."""
+        self._at_which_kind = {
+            spec.name: frozenset(spec.applies_to) for spec in feature_operations(specs)
+        }
+        """Und an **welcher Art** von Merkmal jede von ihnen etwas tut.
+
+        Dieselbe Quelle, einen Schritt genauer: ``applies_to`` nennt nicht nur
+        *dass* eine Handlung einem Merkmal gilt, sondern welchem. Ohne diesen
+        Schritt beantwortete :meth:`_fits_the_level` nur die gröbere Frage, und
+        an einer gewählten Bohrung standen alle 18 Merkmalshandlungen — auch
+        *Text aufbringen* und *Filament auf eine Fläche*, die beide nur an
+        ``face`` etwas tun. Zuständig sind an einer Bohrung neun, an einer
+        Senkung sechs (gemessen 09.09.2026; Robert: „bei einer Bohrung oder
+        Senkung brauchen wir Filament und die Körperliste gar nicht")."""
         self._buttons: dict[str, QToolButton] = {}
         self._groups: dict[str, tuple[QLabel, tuple[QToolButton, ...]]] = {}
         self._states: dict[str, tuple[bool, str]] = {}
@@ -508,8 +521,18 @@ class SelectionOperationsPanel(QWidget):
         Ebene tiefer fort: Dort bleibt eine graue Zeile stehen, weil die
         Erklärung **neben einem Eintrag steht, der geht**. Hier kommt die
         Handlung beim Wechsel der Stufe wieder — nicht beim zufälligen Klick.
+
+        **Die Stufe ist die Art, nicht nur die Ebene** (09.09.2026). Bis dahin
+        genügte „Merkmalshandlung ja oder nein", und damit stand an einer
+        Bohrung auch, was nur an einer Fläche etwas tut. Eine Bohrung wird
+        nicht beschriftet und trägt kein eigenes Filament — der Baum weiß das
+        längst und gibt ihr keine Filamentspalte (``paint_slot`` gilt für
+        ``face`` und für nichts sonst). Beide Orte lesen jetzt dieselbe Auskunft
+        aus dem Register.
         """
-        return (name in self._at_a_feature) == bool(self._feature_kind)
+        if self._feature_kind:
+            return self._feature_kind in self._at_which_kind.get(name, frozenset())
+        return name not in self._at_a_feature
 
     def chosen_level(self) -> str:
         """Die Stufe, auf die das Panel gerade eingestellt ist.
