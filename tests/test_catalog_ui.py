@@ -1569,3 +1569,60 @@ def test_a_file_result_after_the_catalog_closed_still_reaches_the_window(
         assert shown[-1] is window
     finally:
         window.close()
+
+
+def test_a_chosen_part_offers_the_way_to_openscad(qt_app: QApplication) -> None:
+    """E8: Der Katalog ist der zweite Zugang zur SCAD-Ausgabe (§24.1).
+
+    `to_scad` gab es seit je und keinen Weg dorthin. Der Knopf steht neben der
+    Weitergabe, weil er dieselbe Frage beantwortet — wie kommt dieses Teil hier
+    heraus —, gilt aber für **jeden** Baustein: Weitergeben kann nur ein
+    Rezept, schreiben lässt sich alles.
+    """
+    from app.ui.catalog import PartCatalog
+
+    catalog = PartCatalog()
+    catalog.show_parts()
+
+    assert not catalog.export_scad.isEnabled(), "ohne Auswahl gibt es nichts zu schreiben"
+    assert catalog.export_scad.toolTip(), "und der Grund steht am Knopf"
+    assert catalog.export_scad.accessibleDescription() == catalog.export_scad.toolTip()
+
+    gemeldet: list[str] = []
+    catalog.scadRequested.connect(gemeldet.append)
+    item = catalog._item_named("rib")
+    assert item is not None, "die Versteifungsrippe steht im Katalog"
+    catalog.list.setCurrentItem(item)
+    qt_app.processEvents()
+
+    assert catalog.export_scad.isEnabled(), "mit einer Auswahl geht es"
+    assert not catalog.export_scad.toolTip(), "und dann steht dort kein Grund mehr"
+    catalog.export_scad.click()
+
+    assert gemeldet == ["rib"], "der Katalog schreibt nicht selbst, er fragt danach"
+    catalog.deleteLater()
+
+
+def test_a_shipped_part_can_be_written_even_though_it_cannot_be_shared(
+    qt_app: QApplication,
+) -> None:
+    """Die Gegenprobe zur Bedingung: zwei Knöpfe, zwei Fragen.
+
+    Ohne sie liefe der Test darüber auch dann grün, wenn beide Knöpfe dieselbe
+    Freigabe teilten — und ein mitgelieferter Baustein könnte nicht als
+    OpenSCAD heraus.
+    """
+    from app.ui.catalog import PartCatalog
+
+    catalog = PartCatalog()
+    catalog.show_parts()
+    item = catalog._item_named("rib")
+    assert item is not None
+    catalog.list.setCurrentItem(item)
+    qt_app.processEvents()
+
+    assert not catalog.share_part.isEnabled(), (
+        "ein mitgelieferter Baustein wird nicht weitergegeben"
+    )
+    assert catalog.export_scad.isEnabled(), "als OpenSCAD geht er trotzdem heraus"
+    catalog.deleteLater()

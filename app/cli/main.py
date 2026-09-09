@@ -232,6 +232,73 @@ def command_profiles(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_scad(args: argparse.Namespace) -> int:
+    """Einen Baustein als OpenSCAD-Quelltext ausgeben (§24.1).
+
+    **Geschrieben, nicht ausgeführt.** ``to_scad`` erzeugt eine Datei und ruft
+    nichts auf; seit dem Ausbau von OpenSCAD (26.08.2026) gibt es dorthin auch
+    keinen Weg mehr, und Regel 11 steht als Sperre. Wer einen baut, baut die
+    Prüfung mit.
+
+    Ohne ``--set`` stehen die Vorgaben des Bausteins darin, mit ``--set`` die
+    genannten Werte — dieselbe Prüfung wie im Dialog, also mit Grenzen und
+    Meldung statt einer stillen Übernahme.
+    """
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.scad import to_scad
+    from app.core.registry import validate
+
+    load_user_parts()
+    known = set(PARTS.versions())
+    if args.part not in known:
+        raise UserError(
+            detail=tr("Diesen Baustein gibt es nicht: {name}").format(name=args.part),
+            suggestions=(CANCEL,),
+            values={"known": ", ".join(sorted(known))},
+        )
+    spec = PARTS.get(args.part)
+    given: dict[str, Any] = {}
+    for entry in args.set or ():
+        name, _, raw = entry.partition("=")
+        if not name or not raw:
+            raise UserError(
+                detail=tr("Schreiben Sie die Werte als Name=Wert, zum Beispiel length=30."),
+                suggestions=(CANCEL,),
+                values={"given": entry},
+            )
+        given[name.strip()] = _as_value(raw.strip())
+    values = validate(spec.params, given) if given else spec.params()
+    text = to_scad(spec, values)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(tr("Geschrieben: {path}").format(path=args.out))
+    else:
+        print(text, end="")
+    return 0
+
+
+def _as_value(raw: str) -> Any:
+    """Zahl, Wahrheitswert oder Text — geraten wird nur die **Schreibweise**.
+
+    Ob der Wert zum Parameter passt, entscheidet danach ``validate`` gegen das
+    Schema; hier steht nur, dass „30" die Zahl 30 meint und nicht die
+    Zeichenkette. Ein Wert, den das Schema als Text erwartet, kommt als Text
+    an, weil er sich nicht als Zahl lesen lässt.
+    """
+    if raw.lower() in {"ja", "true", "wahr"}:
+        return True
+    if raw.lower() in {"nein", "false", "falsch"}:
+        return False
+    try:
+        return int(raw)
+    except ValueError:
+        pass
+    try:
+        return float(raw)
+    except ValueError:
+        return raw
+
+
 def command_new(args: argparse.Namespace) -> int:
     # Geprüft wird hier, nicht erst beim Rechnen. Ohne das nimmt „new" jeden
     # Namen an und legt eine Datei an, die beim nächsten Befehl mit „Dieses
@@ -493,6 +560,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     profile_list = commands.add_parser("profiles", help=tr("Drucker- und Materialprofile"))
     profile_list.set_defaults(handler=command_profiles)
+
+    scad = commands.add_parser("scad", help=tr("Baustein als OpenSCAD-Quelltext schreiben"))
+    scad.add_argument("part", metavar="<baustein>", help=tr("Name des Bausteins"))
+    scad.add_argument(
+        "--set",
+        action="append",
+        metavar="NAME=WERT",
+        help=tr("Einen Parameterwert setzen, mehrfach möglich"),
+    )
+    scad.add_argument("--out", help=tr("Zieldatei statt der Ausgabe"))
+    scad.set_defaults(handler=command_scad)
 
     create = commands.add_parser("new", help=tr("Neues Projekt anlegen"))
     create.add_argument("path", help=f"{tr('Zieldatei')} ({PROJECT_SUFFIX})")

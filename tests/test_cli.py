@@ -671,3 +671,46 @@ def test_assigning_a_filament_works_from_the_command_line(tmp_path: Path) -> Non
     assert main(["run", "assign_slot", str(ziel), "--on", "obj_1", "--slot", "1"]) == 0, (
         "eine Slotnummer ist eine Zahl, auch wenn sie über argparse kommt"
     )
+
+
+def test_a_part_leaves_as_openscad_with_the_values_it_was_given(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """E8: SCAD-Ausgabe mit den aktuellen Werten, ohne Ausführung (§24.1).
+
+    `to_scad` gab es seit je, einen Weg dorthin nicht — weder Katalog noch
+    Kommandozeile. Geschrieben wird eine Datei; ausgeführt wird nichts, und
+    seit dem Ausbau von OpenSCAD (26.08.2026) gibt es dorthin auch keinen Weg
+    mehr (Regel 11).
+    """
+    target = tmp_path / "rippe.scad"
+
+    assert (
+        main(["scad", "rib", "--set", "length=30", "--set", "height=8", "--out", str(target)]) == 0
+    )
+
+    text = target.read_text(encoding="utf-8")
+    assert "length = 30.0;" in text, "der gesetzte Wert steht als lesbare Variable darin"
+    assert "height = 8.0;" in text
+    assert "module rib()" in text and "polyhedron(" in text
+    assert "rib();" in text.splitlines()[-1], "die Datei ruft ihr eigenes Modul auf"
+    assert str(target) in capsys.readouterr().out
+
+
+def test_the_scad_command_says_which_parts_there_are(capsys: pytest.CaptureFixture[str]) -> None:
+    """Ein Tippfehler endet in einem Satz mit einer Liste, nicht in einem Abzug."""
+    assert main(["scad", "gibtsnicht"]) != 0
+
+    printed = capsys.readouterr()
+    assert "gibtsnicht" in printed.out + printed.err
+    assert "rib" in printed.out + printed.err, "und die bekannten Namen stehen daneben"
+
+
+def test_a_scad_value_goes_through_the_same_check_as_the_dialog(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Kein zweiter Weg an den Grenzen vorbei: dieselbe `validate`-Prüfung."""
+    assert main(["scad", "rib", "--set", "length=99999"]) != 0
+
+    printed = capsys.readouterr()
+    assert "300" in printed.out + printed.err, "der Höchstwert des Schemas steht in der Absage"

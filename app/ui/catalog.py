@@ -133,6 +133,12 @@ class PartCatalog(QDialog):
     shareRequested = Signal()
     adoptRequested = Signal()
     removeRequested = Signal(str)
+    scadRequested = Signal(str)
+    """Den gewählten Baustein als OpenSCAD-Quelltext schreiben (§24.1).
+
+    Trägt den Namen, weil der Katalog das Schreiben nicht selbst tut: Wohin die
+    Datei geht, fragt das Fenster, und dort liegt auch der Weg zu den aktuellen
+    Werten des Bausteins."""
     undoFileRequested = Signal()
     showAffectedStepRequested = Signal()
     """Eine lokale Bausteindatei soll dauerhaft in den Katalog.
@@ -302,6 +308,18 @@ class PartCatalog(QDialog):
         )
         self.share_part.clicked.connect(self.shareRequested.emit)
         self.set_can_share(False, "")
+
+        # **Dasselbe Regal, dritter Weg hinaus** (§24.1): Wer einen
+        # OpenSCAD-Ablauf hat, nimmt den Baustein dorthin mit — als Datei, die
+        # geschrieben und nie ausgeführt wird (Regel 11). Der Knopf steht neben
+        # der Weitergabe, weil er dieselbe Frage beantwortet: „wie kommt dieses
+        # Teil hier heraus".
+        self.export_scad = buttons.addButton(
+            tr("Als OpenSCAD-Datei schreiben …"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.export_scad.setAccessibleName(tr("Als OpenSCAD-Datei schreiben"))
+        self.export_scad.clicked.connect(self._request_scad)
+        self.set_can_write_scad(False, "")
 
         # Immer bedienbar: Zum Einlesen braucht es keinen gewählten Baustein.
         self.adopt_part = buttons.addButton(
@@ -798,6 +816,13 @@ class PartCatalog(QDialog):
         # derselben Auswahl, und zwei Stellen, die dieselbe Frage
         # beantworten, laufen auseinander.
         self.set_can_share(*self._share_state(spec))
+        # **Und der dritte, mit einer weiteren Bedingung als die Weitergabe.**
+        # Weitergeben kann nur, wer ein Rezept ist; als OpenSCAD schreiben kann
+        # jeder Baustein, denn `to_scad` rechnet die Geometrie aus derselben
+        # Funktion wie die Anwendung. Gebraucht wird allein eine Auswahl.
+        self.set_can_write_scad(
+            spec is not None, tr("Wählen Sie zuerst einen Baustein aus der Bibliothek.")
+        )
         self.remove_part.setVisible(
             spec is not None and getattr(spec, "source", "") in ("recipe", "imported")
         )
@@ -829,6 +854,29 @@ class PartCatalog(QDialog):
         name = self.chosen()
         if name:
             self.removeRequested.emit(name)
+
+    def _request_scad(self) -> None:
+        """Den gewählten Baustein als OpenSCAD-Quelltext anfordern."""
+
+        name = self.chosen()
+        if name:
+            self.scadRequested.emit(name)
+
+    def set_can_write_scad(self, can: bool, reason: str = "") -> None:
+        """Ob der gewählte Baustein als OpenSCAD-Datei geschrieben werden kann.
+
+        Dieselbe Bauart wie :meth:`set_can_share` — der Grund steht am Knopf,
+        in der Statuszeile und in der zugänglichen Beschreibung, weil je nach
+        Bedienung eine der drei ausfällt (Regel 18). Ein eigener Hinweistext
+        daneben steht hier nicht: Der Fall ist derselbe wie bei der Weitergabe
+        („kein Baustein gewählt"), und zwei Zeilen mit demselben Satz
+        untereinander sind eine zu viel.
+        """
+        hint = "" if can else reason
+        self.export_scad.setEnabled(can)
+        self.export_scad.setToolTip(hint)
+        self.export_scad.setStatusTip(hint)
+        self.export_scad.setAccessibleDescription(hint)
 
 
 def _range_warning(spec: PartSpec) -> str:
