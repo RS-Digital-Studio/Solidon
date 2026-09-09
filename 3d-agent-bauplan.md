@@ -2460,12 +2460,16 @@ die zentrale Konstante ersetzt diese externen Schritte nicht.
   beschlossenen Certum-Weg. Quelle:
   [Microsoft Artifact Signing](https://learn.microsoft.com/en-us/azure/artifact-signing/quickstart).
 - **Automatische Bauläufe** über eine CI für alle Zielplattformen.
-- **Ein Changelog, zwei Oberflächen.** Die Anwendung führt den mitgelieferten
-  Versionsverlauf unter *Hilfe → Neuerungen* und lässt jede Fassung über ein
-  Auswahlfeld einzeln lesen. Die Website zeigt denselben Verlauf in derselben
-  Sprache und mit derselben Versionsauswahl. Gepflegt wird dafür nur
-  `changelog/<sprache>.md`; der Auslieferungslauf erzeugt die Webfassungen
-  automatisch daraus. Eine zweite Liste von Neuerungen gibt es nicht.
+- **Ein Changelog, zwei Oberflächen — und zwei Längen.** Die Anwendung führt
+  den mitgelieferten Versionsverlauf unter *Hilfe → Neuerungen* und lässt die
+  **letzten drei Fassungen** über ein Auswahlfeld einzeln lesen; was sie
+  weglässt, nennt sie mit einem Verweis auf die Website (Entscheidung Robert,
+  09.09.2026 — der Verlauf wird nie kürzer, und ein Auswahlfeld mit zehn
+  Einträgen beantwortet keine Frage, die jemand vor dem Programm hat). Die
+  Website zeigt **jede** Fassung in derselben Sprache und mit derselben
+  Versionsauswahl. Gepflegt wird dafür nur `changelog/<sprache>.md`; der
+  Auslieferungslauf erzeugt die Webfassungen automatisch daraus. Eine zweite
+  Liste von Neuerungen gibt es nicht.
 - **Update in der Anwendung, aber nur auf Knopfdruck.** Die Versionsdatei
   nennt neben der Version je Plattform Paketname, Adresse, Größe und
   SHA-256. Ist eine neuere da, sagt es ein sichtbarer Hinweis — keine Zeile,

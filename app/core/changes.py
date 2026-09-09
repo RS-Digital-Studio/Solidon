@@ -41,6 +41,11 @@ GROUP: Final = re.compile(r"^###\s+(.*\S)\s*$")
 #: gilt mit, weil Markdown es zulässt und der Bestand beides kennt.
 BULLET: Final = re.compile(r"^[-*]\s+(.*\S)\s*$")
 
+#: Wie viele Fassungen die Anwendung selbst zeigt (:func:`recent`). Der Rest
+#: steht auf der Website — dort wächst eine Seite mit, in einem Auswahlfeld
+#: wächst eine Liste.
+SHOWN_IN_APP: Final = 3
+
 
 @dataclass(frozen=True, slots=True)
 class Group:
@@ -164,6 +169,25 @@ def history(language: str = "") -> tuple[Entry, ...]:
     """
     chosen = language or get_language()
     return _read(chosen) or _read(SOURCE_LANGUAGE)
+
+
+def recent(language: str = "") -> tuple[Entry, ...]:
+    """Die jüngsten Fassungen — so viele, wie die Anwendung selbst zeigt.
+
+    Der Verlauf wächst mit jeder Fassung und wird nie kürzer: Zum Stand 0.4.0
+    sind es zehn Abschnitte mit zusammen über vierhundert Punkten, und ein
+    Auswahlfeld mit zehn Einträgen beantwortet keine Frage, die jemand vor dem
+    Programm wirklich hat. Gefragt wird „was ist in **meiner** Fassung neu" und
+    „was habe ich verpasst" — beides steht in den letzten dreien (Entscheidung
+    Robert, 09.09.2026).
+
+    **Der ganze Verlauf verschwindet dabei nicht, er zieht um.** Die Website
+    führt jede Fassung, die es je gab; der Dialog nennt die Adresse. Die
+    Dateien in ``changelog/`` bleiben deshalb vollständig — von hier liest die
+    Anwendung, und ``tools/make_changelog.py`` liest dieselben Dateien für die
+    Seiten.
+    """
+    return history(language)[:SHOWN_IN_APP]
 
 
 def points_for(version: str, language: str = "") -> tuple[str, ...]:

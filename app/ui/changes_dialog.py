@@ -31,9 +31,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION
+from app.branding import APP_NAME, APP_VERSION, website_page_url
 from app.core import changes
-from app.i18n import tr
+from app.i18n import get_language, tr
 from app.ui.style import NORMAL, no_primary, set_level
 
 #: Womit der Dialog aufgeht. Eine **Anfangsgröße**, kein Deckel: Der Deckel
@@ -104,7 +104,12 @@ class ChangesDialog(QDialog):
         self.setWindowTitle(tr("Neuerungen"))
         self.setMinimumWidth(560)
 
-        self.entries = changes.history()
+        # **Die letzten drei und nicht alle** (Entscheidung Robert,
+        # 09.09.2026). Die Begründung steht bei :func:`changes.recent`; hier
+        # zählt die Folge: Was der Dialog weglässt, muss er nennen — sonst
+        # sähen die drei Einträge aus wie der ganze Verlauf, und wer eine
+        # Fassung übersprungen hat, suchte sie vergeblich.
+        self.entries = changes.recent()
 
         self.headline = QLabel(self)
         self.headline.setWordWrap(True)
@@ -142,6 +147,25 @@ class ChangesDialog(QDialog):
         self.summary.setWordWrap(True)
         set_level(self.summary, "caption")
         self.summary.setVisible(bool(self.entries))
+
+        # **Hier darf ein Verweis wirken**, anders als in der Liste darunter:
+        # Der Satz ist unser eigener und die Adresse baut die Anwendung aus
+        # ihrer Sprache — es kommt nichts von außen hinein. Dieselbe Abwägung
+        # trifft das Update-Fenster für seinen gekürzten Auszug.
+        self.older = QLabel(self)
+        self.older.setWordWrap(True)
+        self.older.setTextFormat(Qt.TextFormat.RichText)
+        self.older.setOpenExternalLinks(True)
+        set_level(self.older, "caption")
+        self.older.setText(
+            tr("Gezeigt sind die letzten {count} Versionen.").format(count=len(self.entries))
+            + ' <a href="'
+            + website_page_url("changelog.html", get_language())
+            + f'">{tr("Vollständiger Verlauf auf der Website")}</a>'
+        )
+        # Sichtbar nur, wenn wirklich etwas fehlt: In einem Paket mit drei
+        # Fassungen oder weniger wäre der Satz eine Auskunft über nichts.
+        self.older.setVisible(len(changes.history()) > len(self.entries))
 
         self.body = QLabel(self)
         self.body.setWordWrap(True)
@@ -184,6 +208,10 @@ class ChangesDialog(QDialog):
         # Überschrift und Knöpfe brauchen nicht mehr, als sie haben, und ein
         # größeres Fenster soll mehr Verlauf zeigen, nicht mehr Leere.
         layout.addWidget(self.scroller, 1)
+        # Unter der Liste und nicht über ihr: Der Hinweis gilt dem, was der
+        # Leser **nicht** findet, und danach sucht er erst, wenn er die drei
+        # gelesen hat.
+        layout.addWidget(self.older)
         layout.addWidget(buttons)
         # **„Schließen" ist nie ein Hauptknopf**, und genau der stand hier im
         # Akzent: Qt macht beim ersten ``show()`` den ersten autoDefault-Knopf

@@ -16,8 +16,9 @@ from pathlib import Path
 
 import pytest
 
-from app.branding import APP_VERSION
+from app.branding import APP_VERSION, website_page_url
 from app.core import changes
+from app.i18n import get_language
 from app.i18n.catalog import available_languages
 
 # --- der Kern -------------------------------------------------------------------------
@@ -62,10 +63,23 @@ def test_a_missing_folder_is_no_crash(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_the_newest_version_comes_first() -> None:
-    """Gelesen wird von oben; wer den Dialog öffnet, sieht das Neueste zuerst."""
-    entries = changes.history("de")
+    """Gelesen wird von oben; wer den Dialog öffnet, sieht das Neueste zuerst.
 
-    assert entries[0].version == APP_VERSION
+    **Geprüft wird die Reihenfolge und nicht die Gleichheit mit der laufenden
+    Fassung.** Hier stand ``entries[0].version == APP_VERSION``, und das galt
+    nur, solange der Abschnitt einer Fassung erst mit ihrer Versionsnummer
+    entstand. Der Abschnitt wird jetzt **vorher** geschrieben — der Quellbaum
+    trägt dann den der nächsten Fassung, während die Anwendung noch die
+    laufende nennt. Denselben Fall kennt ``make_changelog.published_version``
+    seit je.
+    """
+    entries = changes.history("de")
+    zahlen = [tuple(int(teil) for teil in entry.version.split(".")) for entry in entries]
+
+    assert zahlen == sorted(zahlen, reverse=True), "the file is read top down"
+    assert APP_VERSION in {entry.version for entry in changes.recent("de")}, (
+        "the running version belongs among the ones the application shows"
+    )
 
 
 # --- das Fenster ----------------------------------------------------------------------
@@ -138,22 +152,41 @@ def test_the_dialog_opens_without_a_network(qt_app: object) -> None:
     assert dialog.empty.isHidden(), "the empty notice belongs to a package without a history"
 
 
-def test_the_dialog_offers_every_version_in_a_picker(qt_app: object) -> None:
-    """Der lange Verlauf bleibt erreichbar, ohne als eine Wand aufzugehen."""
-    entries = changes.history("de")
+def test_the_dialog_offers_the_last_three_versions(qt_app: object) -> None:
+    """Die letzten drei und keine vierte (Entscheidung Robert, 09.09.2026).
+
+    Vorher stand hier „jede Version", und das war so lange richtig, wie der
+    Verlauf kurz war. Er wird nie kürzer: Ein Auswahlfeld mit zehn Einträgen
+    beantwortet keine Frage, die jemand vor dem Programm wirklich hat.
+    """
+    entries = changes.recent("de")
     dialog = ChangesDialog()
 
     offered = tuple(
         dialog.version_choice.itemData(index) for index in range(dialog.version_choice.count())
     )
 
+    assert len(offered) <= changes.SHOWN_IN_APP
     assert offered == tuple(entry.version for entry in entries)
-    assert dialog.version_choice.currentData() == APP_VERSION
+
+
+def test_the_dialog_says_where_the_older_versions_are(qt_app: object) -> None:
+    """Was der Dialog weglässt, nennt er — sonst sähe es aus wie alles.
+
+    Der Verweis führt auf die Seite **dieser** Sprache: Wer auf Italienisch
+    arbeitet, landet nicht auf der deutschen. Und er steht nur da, wenn
+    wirklich etwas fehlt.
+    """
+    dialog = ChangesDialog()
+
+    assert dialog.older.isVisibleTo(dialog) == (len(changes.history()) > len(changes.recent()))
+    assert website_page_url("changelog.html", get_language()) in dialog.older.text()
+    assert str(len(changes.recent())) in dialog.older.text()
 
 
 def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
     """Die Auswahl ist ein Filter und kein Sprung in einer langen Textwand."""
-    entries = changes.history("de")
+    entries = changes.recent("de")
     dialog = ChangesDialog()
     last = len(entries) - 1
 
@@ -161,6 +194,11 @@ def test_choosing_a_version_replaces_the_visible_entry(qt_app: object) -> None:
 
     assert f">{entries[last].version}</h3>" in dialog.body.text()
     assert f">{entries[0].version}" not in dialog.body.text()
+    # Ein- und Mehrzahl hier ausgeschrieben und nicht aus dem Dialog geholt:
+    # Ein Sollwert, den der Prüfling liefert, prüft nichts. Der Bestand hatte
+    # „Thema" fest eingetragen und war grün, solange die letzte gezeigte
+    # Fassung zufällig genau eine Gruppe trug.
+    themen = "Thema" if len(entries[last].groups) == 1 else "Themen"
     assert dialog.summary.text() == (
-        f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} Thema"
+        f"{len(entries[last].points)} Neuerungen · {len(entries[last].groups)} {themen}"
     )
