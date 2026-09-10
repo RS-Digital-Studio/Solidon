@@ -994,7 +994,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "first_layer": _("Erste Schicht"),
     "grip": _("Verengung"),
     "head_room": _("Kopftiefe"),
+    "angle": _("Winkel"),
     "last_angle": _("Letzter Winkel"),
+    "length": _("Länge"),
     "outer": _("Senkung"),
     "overshoot": _("Überstand je Achse"),
     "pair": _("Gegenstückpaar"),
@@ -1606,6 +1608,11 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return tr("Schrägfläche innen") if inner else tr("Schrägfläche")
     if feature.kind == "hole":
         return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
+    # **Mit Nummer, wie die Bohrung.** Ein Teil trägt selten eine Bohrung und
+    # oft vier; dasselbe gilt für Langlöcher, und ohne die Nummer stünden im
+    # Objektbaum vier Zeilen „Langloch" untereinander.
+    if feature.kind == "slot":
+        return f"{tr('Langloch')} {feature_id.rsplit('_', 1)[-1]}"
     if feature.kind == "cone":
         return tr("Senkung") if feature.params.get("recess") else tr("Verjüngung")
     # Dieselbe Trennung wie beim Kegel, und deshalb dieselbe Frage: hinein oder
@@ -1637,7 +1644,16 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return tr("Innengewinde") if feature.params.get("internal") else tr("Außengewinde")
     if feature.kind == "pin":
         return tr("Zapfen")
-    # Seit alle neun Arten einen Namen haben, hält mypy diese Zeile für
+    # **Ein Name, der sagt, dass hier nichts ist — und nicht, dass es falsch
+    # ist.** „Lufteinschluss" beschreibt, was der Kunde beim Drucken bekommt,
+    # ohne ihm zu unterstellen, er habe sich geirrt: Die Aussparung für einen
+    # eingegossenen Magneten sieht genauso aus wie ein vergessener
+    # Negativkörper. Was der Name leisten muss, ist die Unterscheidung von der
+    # **Bohrung**, als die es bis zum 10.09.2026 dastand (Robert: „Bohrungen,
+    # die im Inneren des Materials sind, was nicht sein kann").
+    if feature.kind == "void":
+        return f"{tr('Lufteinschluss')} {feature_id.rsplit('_', 1)[-1]}"
+    # Seit alle zehn Arten einen Namen haben, hält mypy diese Zeile für
     # unerreichbar — und hat für den deklarierten Typ recht. Sie bleibt
     # trotzdem: ``kind`` kommt aus einer Projektdatei, und eine ältere
     # oder neuere Fassung kann eine Art tragen, die dieser Bestand nicht
@@ -1656,6 +1672,13 @@ def feature_measure(feature: Feature) -> str:
     params = feature.params
     if feature.kind == "hole":
         return f"Ø{length(float(params.get('diameter', 0.0)))}"
+    # **Beide Maße, und die Breite zuerst.** Ein Langloch bestellt man wie ein
+    # Blech: „8 auf 20". Die Breite entscheidet über die Schraube, die Länge
+    # über ihr Spiel — eine Zahl allein sagt keines von beidem. Das ``Ø`` steht
+    # vorn, weil die Breite wirklich ein Durchmesser ist: die zwei runden Enden.
+    if feature.kind == "slot":
+        width = length(float(params.get("diameter", 0.0)))
+        return f"Ø{width} × {length(float(params.get('length', 0.0)))}"
     # **R und nicht Ø**, weil eine Verrundung über ihren Radius benannt wird:
     # Der Kunde sagt „R3", der Slicer sagt „R3", Fusion sagt „R3". Ohne diese
     # Zeile blieb die Maßspalte des Objektbaums bei jeder Verrundung leer,
@@ -1700,7 +1723,13 @@ def feature_measure(feature: Feature) -> str:
         pitch = float(params.get("pitch", 0.0))
         diameter = length(float(params.get("diameter", 0.0)))
         return f"Ø{diameter} × {length(pitch)}" if pitch else f"Ø{diameter}"
-    # Wie bei ``feature_name`` oben: Seit alle neun Arten ein Maß haben,
+    # **Das Volumen und kein Durchmesser.** Ein Einschluss hat keine Form, die
+    # eine Länge beschriebe — er ist, was ein Negativkörper hinterlassen hat,
+    # und das kann ein Zylinder sein oder sonst etwas. Was der Kunde wissen
+    # will, ist, wie viel Luft im Teil steckt.
+    if feature.kind == "void":
+        return volume(float(params.get("volume", 0.0)))
+    # Wie bei ``feature_name`` oben: Seit alle zehn Arten ein Maß haben,
     # hält mypy diese Zeile für unerreichbar — und **das ist die
     # Bestätigung, dass die Verzweigung vollständig ist**. Sie bleibt
     # trotzdem, weil ``kind`` aus einer Projektdatei kommt und eine

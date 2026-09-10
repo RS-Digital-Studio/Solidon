@@ -16,6 +16,22 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.4.1
+
+### Taladrar y colocar
+
+- Al colocar un taladro, una casilla lo convierte en ranura: usted indica la longitud y la dirección, y la vista previa muestra ambas.
+- Un taladro que ya está en el modelo se alarga después hasta convertirlo en ranura; el diámetro se mantiene tal como se midió.
+- La ranura se amplía en toda su longitud según la tolerancia del material. El recorrido que tiene un tornillo dentro sigue siendo el que usted indicó.
+- Si una ranura sobresale del borde por un extremo, Solidon lo advierte, aunque su centro esté bien dentro del material.
+- Una ranura figura en el árbol de objetos como ranura, con su anchura y su longitud, también en un modelo que usted haya abierto y que haya dibujado otra persona.
+- Una ranura existente se puede alargar después, y su dirección se mantiene donde estaba.
+
+### Reconocimiento
+
+- Un avellanado sobre un taladro se conserva también en una pieza con superficies redondeadas y curvas: antes se perdía ahí, y el taladro y su avellanado ya no podían desplazarse juntos.
+- Una cavidad por completo dentro del material, sin salida, aparece en el árbol de objetos como bolsa de aire, con su volumen. Antes aparecía como un taladro que no existía.
+
 ## 0.4.0
 
 ### Construir y modificar

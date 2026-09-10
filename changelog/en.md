@@ -15,6 +15,22 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.4.1
+
+### Drilling and placing
+
+- When you place a hole, one tick turns it into a slot: you enter length and direction, and the preview shows both.
+- A hole that is already in the model can be pulled out into a slot afterwards — the diameter stays as it was measured.
+- The slot is widened by the material tolerance over its whole length. The travel a screw has inside stays the one you entered.
+- If a slot hangs over the edge at one end, Solidon says so — even when its centre sits deep in the material.
+- A slot stands in the object tree as a slot, with its width and its length — also in a model you opened that somebody else drew.
+- An existing slot can be pulled longer afterwards, and its direction stays where it was.
+
+### Recognition
+
+- A countersink above a hole is now kept even on a part with round, sweeping surfaces — previously it was dropped there, and the hole and its countersink could no longer be moved together.
+- A cavity entirely inside the material, with no way out, appears in the object tree as an air pocket — with its volume. Previously it appeared as a hole that was not there.
+
 ## 0.4.0
 
 ### Building and editing

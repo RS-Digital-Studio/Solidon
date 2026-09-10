@@ -62,7 +62,16 @@ jedem Körper; ohne eine erkannte sagt es das selbst (``feature_requirement``).
 
 QUICK_FEATURES: dict[str, tuple[str, ...]] = {
     "face": ("drill_hole", "sketch_pocket", "push_face"),
-    "hole": ("resize_hole", "countersink_hole", "plug_hole"),
+    # ``resize_hole`` steht vorn und wird gleich wieder herausgefiltert — es
+    # hat oben ein Feld (:func:`_shown_as_fields`). Sichtbar bleiben drei:
+    # senken, zum Langloch ziehen, zumachen.
+    "hole": ("resize_hole", "countersink_hole", "slot_hole", "plug_hole"),
+    # **Ein Langloch trägt genau eine Handlung, und ohne diese Zeile keine.**
+    # Der Rückfall :data:`QUICK_FEATURE` bietet die drei generischen an; keine
+    # davon gilt an einem Langloch, und `quick_names` schneidet sie gegen das
+    # Register — die Karte bliebe leer, während im Register eine Operation
+    # steht, die genau dorthin gehört.
+    "slot": ("slot_hole",),
     "cone": ("countersink_hole",),
     "edge_loop": ("repair",),
 }

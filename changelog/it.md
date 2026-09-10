@@ -15,6 +15,22 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.4.1
+
+### Forare e posizionare
+
+- Quando posizioni un foro, una casella lo trasforma in asola: indichi lunghezza e direzione, e l'anteprima le mostra entrambe.
+- Un foro già presente nel modello si allunga in seguito fino a diventare un'asola: il diametro resta quello misurato.
+- L'asola viene allargata della tolleranza del materiale su tutta la sua lunghezza. La corsa che una vite ha al suo interno resta quella indicata.
+- Se un'asola sporge dal bordo a un'estremità, Solidon lo dice, anche quando il suo centro sta in pieno materiale.
+- Un'asola compare nell'albero degli oggetti come asola, con la sua larghezza e la sua lunghezza, anche in un modello che hai aperto e che ha disegnato qualcun altro.
+- Un'asola esistente si allunga in seguito, e la sua direzione resta dov'era.
+
+### Riconoscimento
+
+- Una svasatura sopra un foro viene mantenuta anche su un pezzo con superfici tonde e sinuose: prima andava persa, e foro e svasatura non potevano più essere spostati insieme.
+- Una cavità interamente nel materiale, senza via d'uscita, compare nell'albero degli oggetti come sacca d'aria, con il suo volume. Prima compariva come un foro inesistente.
+
 ## 0.4.0
 
 ### Costruire e modificare

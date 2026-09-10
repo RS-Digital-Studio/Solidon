@@ -16,6 +16,22 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.4.1
+
+### Percer et placer
+
+- Au moment de placer un perçage, une case en fait un trou oblong : vous saisissez la longueur et la direction, et l'aperçu montre les deux.
+- Un perçage déjà présent dans le modèle s'étire après coup en trou oblong — le diamètre reste tel qu'il a été mesuré.
+- Le trou oblong est élargi de la tolérance du matériau sur toute sa longueur. La course dont dispose une vis reste celle que vous avez saisie.
+- Si un trou oblong dépasse le bord à une extrémité, Solidon le signale, même quand son centre se trouve au cœur de la matière.
+- Un trou oblong figure dans l'arbre des objets en tant que tel, avec sa largeur et sa longueur — y compris dans un modèle que vous avez ouvert et que quelqu'un d'autre a dessiné.
+- Un trou oblong existant s'étire ensuite en longueur, et sa direction reste là où elle était.
+
+### Reconnaissance
+
+- Un fraisage au-dessus d'un perçage est conservé même sur une pièce aux surfaces rondes et galbées. Auparavant il disparaissait, avec lui le déplacement commun des deux.
+- Une cavité entièrement dans la matière, sans issue, figure dans l'arborescence comme poche d'air, avec son volume. Auparavant, elle y figurait comme un perçage qui n'existait pas.
+
 ## 0.4.0
 
 ### Construire et modifier

@@ -40,6 +40,22 @@ wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
 Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
+## 0.4.1
+
+### Bohren und Platzieren
+
+- Beim Setzen einer Bohrung machen Sie daraus mit einem Haken ein Langloch: Sie geben Länge und Richtung ein, die Vorschau zeigt beides mit.
+- Eine Bohrung, die schon im Modell steckt, ziehen Sie nachträglich zu einem Langloch — der Durchmesser bleibt, wie er gemessen wurde.
+- Das Langloch wird über die ganze Länge um die Materialtoleranz geweitet. Der Weg, den eine Schraube darin hat, bleibt der, den Sie eingegeben haben.
+- Ragt ein Langloch an einem Ende über die Kante, sagt Solidon es — auch wenn seine Mitte tief im Material sitzt.
+- Ein Langloch steht im Objektbaum als Langloch, mit Breite und Länge — auch in einem Modell, das Sie geöffnet haben und das jemand anders gezeichnet hat.
+- Ein vorhandenes Langloch ziehen Sie nachträglich länger; seine Richtung bleibt dabei, wo sie war.
+
+### Erkennen
+
+- Eine Senkung über einer Bohrung bleibt auch an einem Teil erhalten, das runde, geschwungene Flächen hat — vorher fiel sie dort weg, und Bohrung und Senkung ließen sich nicht mehr gemeinsam versetzen.
+- Ein Hohlraum ganz im Material, ohne Verbindung nach außen, steht als Lufteinschluss im Objektbaum — mit seinem Volumen. Vorher stand dort eine Bohrung, die es nicht gab.
+
 ## 0.4.0
 
 ### Konstruieren und Ändern

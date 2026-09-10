@@ -15,6 +15,22 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.4.1
+
+### Furar e posicionar
+
+- Ao colocar um furo, uma caixa transforma-o num rasgo: indica o comprimento e a direção, e a pré-visualização mostra ambos.
+- Um furo que já está no modelo pode ser esticado depois até formar um rasgo — o diâmetro mantém-se como foi medido.
+- O rasgo é alargado pela tolerância do material em todo o seu comprimento. O curso que um parafuso tem lá dentro continua a ser o que indicou.
+- Se um rasgo ultrapassar a aresta numa das pontas, o Solidon avisa, mesmo quando o seu centro está bem dentro do material.
+- Um rasgo consta na árvore de objetos como rasgo, com a sua largura e o seu comprimento — também num modelo que abriu e que outra pessoa desenhou.
+- Um rasgo existente pode ser esticado depois, e a sua direção mantém-se onde estava.
+
+### Reconhecimento
+
+- Um escareado sobre um furo passa a manter-se também numa peça com superfícies redondas e curvas — antes perdia-se aí, e o furo e o seu escareado já não podiam ser deslocados em conjunto.
+- Uma cavidade inteiramente dentro do material, sem saída, aparece na árvore de objetos como bolsa de ar, com o seu volume. Antes aparecia como um furo que não existia.
+
 ## 0.4.0
 
 ### Construir e alterar
