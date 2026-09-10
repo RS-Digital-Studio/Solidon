@@ -284,11 +284,17 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   diesem Filter nicht auftaucht. Der Vertrauensraum bleibt unangetastet: derselbe feste
   Schritt, kein Checkout, kein Python.
 
-  **Entscheidung Robert, 10.09.2026: nicht mehr für 0.4.0.** Die Reparatur kommt mit der
-  nächsten Fassung, und bis dahin wartet die Veröffentlichung vollständig — ein
-  Download-Kasten mit drei von fünf Dateien verspräche Mac-Kunden ein Paket, das es nicht
-  gibt. `website/version.json` steht deshalb weiter auf 0.3.5, und die öffentliche
-  Changelog-Seite zeigt 0.4.0 nicht (`make_changelog.released_only`).
+  **Entscheidung Robert, 10.09.2026: 0.4.0 geht unsigniert hinaus, signiert wird ab
+  0.4.1.** Die Repository-Variable `MACOS_SIGNING_MODE` steht dafür auf `unsigned`; der
+  Workflow überspringt dann beide Signierjobs und baut die Paketdatei über *macOS-Installer
+  ohne Signierrechte*. Das entspricht dem Stand von 0.3.5, und die Website erklärt ihn
+  bereits an drei Stellen — FAQ, Prüfhinweis im Download-Kasten und Systemanforderungen
+  nennen die fehlende Notarisierung samt dem Weg über *Datenschutz & Sicherheit* →
+  *Trotzdem öffnen*.
+
+  **Vor dem Bau von 0.4.1 gehört die Variable zurück auf `notarized`** — zusammen mit der
+  Reparatur oben. Sie steht in keinem Repository-Text, nur in den Einstellungen; wer sie
+  vergisst, liefert eine zweite unsignierte Fassung aus, ohne dass ein Lauf rot wird.
 
   [Bisheriger Befund](ROADMAP-ARCHIV.md#p8--erste-veröffentlichung).
 
