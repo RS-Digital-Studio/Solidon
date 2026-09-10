@@ -18,10 +18,10 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
-from typing import Any, Literal
+from dataclasses import dataclass, replace
+from typing import Any, Literal, cast
 
-from app.core.brep.kernel import Solid, boolean_builder, require
+from app.core.brep.kernel import DEFLECTION, Solid, boolean_builder, require
 from app.core.errors import CANCEL, CORRECT_INPUT, PROGRAMMING_ERRORS, GeometryError
 from app.core.log import get_logger
 from app.core.types import PlaneFrame, Point2, Transform, Vec3
@@ -86,10 +86,36 @@ def cylinder(diameter: float, height: float) -> Solid:
     return Solid(BRepPrimAPI_MakeCylinder(diameter / 2.0, height).Shape())
 
 
+def _seam_edges(solid: Solid) -> Any:
+    """Die Nahtkanten des Körpers — als OCCT-Menge, einmal je Körper.
+
+    Eine Naht gehört **einer** Fläche: der Stelle, an der deren
+    Parametrisierung umläuft. Gefragt wird deshalb je Fläche nach ihren
+    eigenen Kanten und nicht je Kante nach allen Flächen — das erste ist
+    linear in den Kantenvorkommen, das zweite ihr Produkt.
+    """
+    from OCP.BRep import BRep_Tool
+    from OCP.collections import (
+        IndexedMap_TopoDS_Shape_TopTools_ShapeMapHasher as ShapeMap,
+    )
+    from OCP.TopAbs import TopAbs_EDGE
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    seams = ShapeMap()
+    for face in solid.faces():
+        explorer = TopExp_Explorer(face, TopAbs_EDGE)
+        while explorer.More():
+            edge = explorer.Current()
+            if BRep_Tool.IsClosed_s(TopoDS.Edge(edge), TopoDS.Face(face)):
+                seams.Add(edge)
+            explorer.Next()
+    return seams
+
+
 def edges_of(solid: Solid) -> list[EdgeInfo]:
     """Jede Kante mit den Zahlen, aus denen sich eine Auswahl treffen lässt."""
     require()
-    from OCP.BRep import BRep_Tool
     from OCP.BRepAdaptor import BRepAdaptor_Curve
     from OCP.BRepGProp import BRepGProp
     from OCP.GProp import GProp_GProps
@@ -108,7 +134,14 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
     # die Auswahl kommt, kann auch nicht gebaut werden — und der vorhandene
     # Satz „Zu dieser Auswahl gehört keine Kante." trifft die Lage genauer als
     # „Der Radius ist zu groß".
-    faces = solid.faces()
+    #
+    # **Einmal eingesammelt, nicht je Kante gesucht.** Der erste Anlauf fragte
+    # ``any(IsClosed_s(edge, face) for face in faces)`` — Kanten mal Flächen,
+    # und an einem Teil mit ein paar hundert von jedem ist das der teuerste
+    # Posten der ganzen Auswahl. Eine Naht gehört ohnehin **einer** Fläche;
+    # gefragt wird deshalb je Fläche nach ihren eigenen Kanten, und das ist
+    # linear in der Zahl der Kantenvorkommen.
+    seams = _seam_edges(solid)
 
     described: list[EdgeInfo] = []
     for edge in solid.edges():
@@ -117,7 +150,7 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
         length = float(props.Mass())
         if length <= EPS_GEOM:
             continue
-        if any(BRep_Tool.IsClosed_s(edge, face) for face in faces):
+        if seams.Contains(edge):
             continue
 
         curve = BRepAdaptor_Curve(edge)
@@ -135,6 +168,39 @@ def edges_of(solid: Solid) -> list[EdgeInfo]:
             )
         )
     return described
+
+
+def edge_points(entry: EdgeInfo, deflection: float = DEFLECTION) -> tuple[Vec3, ...]:
+    """Die Kante als Punktfolge — was die Ansicht braucht, um sie zu treffen.
+
+    :class:`EdgeInfo` beschreibt eine Kante über Mitte, Richtung und Länge,
+    und für die Auswahl nach Lage reicht das. Für einen Klick reicht es
+    nicht: Ein Bogen liegt nirgends dort, wo Mitte und Richtung ihn
+    vermuten lassen — der Viertelkreis einer Verrundung hat seinen
+    Schwerpunkt neben sich selbst, und ein Zeiger, der auf die Sehne
+    zielt, trifft die Kante nie.
+
+    Abgetastet wird nach **Abweichung**, nicht nach fester Punktzahl: Eine
+    Strecke kommt mit zwei Punkten zurück, ein Kreis mit so vielen, wie
+    ``deflection`` verlangt. Dieselbe Zahl, mit der der Kern tesselliert
+    — was im Bild rund aussieht, soll sich auch rund anklicken lassen.
+
+    Scheitert die Abtastung, stehen wenigstens Anfang und Ende da: Eine
+    Kante ohne Punkte wäre für den Zeiger nicht vorhanden, und das ist
+    schlechter als eine, die nur an ihren Enden getroffen wird.
+    """
+    require()
+    from OCP.BRepAdaptor import BRepAdaptor_Curve
+    from OCP.GCPnts import GCPnts_QuasiUniformDeflection
+
+    curve = BRepAdaptor_Curve(entry.edge)
+    sampler = GCPnts_QuasiUniformDeflection(curve, max(deflection, EPS_GEOM))
+    if not sampler.IsDone() or sampler.NbPoints() < 2:
+        first = curve.Value(curve.FirstParameter())
+        last = curve.Value(curve.LastParameter())
+        return ((first.X(), first.Y(), first.Z()), (last.X(), last.Y(), last.Z()))
+    points = (sampler.Value(index) for index in range(1, sampler.NbPoints() + 1))
+    return tuple((point.X(), point.Y(), point.Z()) for point in points)
 
 
 def edge_key(entry: EdgeInfo) -> str:
@@ -582,6 +648,61 @@ def bore_profile(solid: Solid, outline: list[Point2], frame: PlaneFrame) -> Soli
             suggestions=(CORRECT_INPUT, CANCEL),
         )
     return boolean("difference", [solid, Solid(tool.Shape())])
+
+
+def slot_bore(
+    solid: Solid,
+    *,
+    position: Vec3,
+    direction: Vec3,
+    diameter: float,
+    depth: float,
+    length: float,
+    angle_deg: float,
+    overlap: float,
+) -> Solid:
+    """Zieht eine erkannte Bohrung zu einem Langloch — exakt, mit echten Bögen.
+
+    Das Gegenstück zu :func:`app.core.geom.prepare.slot_bore`. Der Umriss ist
+    derselbe, aufgezogen wird er als Prisma statt als abgetastetes Netz: Die
+    beiden Enden bleiben Zylinderflächen, und der STEP-Export trägt sie mit.
+
+    ``overlap`` ist die Zugabe auf den Durchmesser; sie hält die alte
+    Bohrungswand von der neuen fern (§39) und kommt vom Aufrufer, damit beide
+    Kerne dieselbe Zahl verwenden.
+    """
+    from app.core.brep.profiles import extrude
+    from app.core.geom.prepare import slot_profile, slot_travel
+    from app.core.sketch.planes import frame_of
+
+    if depth <= EPS_GEOM:
+        raise ValueError("a detected bore must have a positive depth")
+    span = math.sqrt(sum(float(value) ** 2 for value in direction))
+    if span <= EPS_GEOM:
+        raise ValueError("a bore direction must not be zero")
+    unit: Vec3 = (
+        float(direction[0]) / span,
+        float(direction[1]) / span,
+        float(direction[2]) / span,
+    )
+    frame = frame_of(unit, position)
+    floor = replace(
+        frame,
+        origin=cast(
+            Vec3,
+            tuple(float(position[i]) - frame.normal[i] * depth / 2.0 for i in range(3)),
+        ),
+    )
+    tool = extrude(
+        slot_profile(
+            radius=(diameter + overlap) / 2.0,
+            travel=slot_travel(diameter=diameter, length=length),
+            angle_deg=angle_deg,
+        ),
+        depth,
+        frame=floor,
+    )
+    return boolean("difference", [solid, tool])
 
 
 def resize_bore(

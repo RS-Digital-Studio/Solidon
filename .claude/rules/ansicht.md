@@ -315,6 +315,73 @@ einer Bohrung zeigt, während der Klick den Körper wählt, verspricht etwas, da
 nicht eintritt. So wird die Stufe zugleich sichtbar, ohne dass ein Satz darüber
 irgendwo stehen muss.
 
+### Und eine Kante gehört auf dieselbe Stufe (10.09.2026)
+
+Bis dahin pickte der Renderer Flächen und Merkmale, keine Kanten; die
+Kantenwahl der Verrundung lag als Liste im Dialog („Senkrecht · 20 mm ·
+x -20,0, y -15,0", zum Ankreuzen). Wer **diese eine Ecke** brechen wollte,
+musste sie in einer Aufzählung wiedererkennen.
+
+Sie ist jetzt eine dritte Sache, die ein Klick treffen kann — und sie geht
+denselben Weg wie das Merkmal, das ist der ganze Entwurf (Robert, 10.09.2026:
+„man wählt auch erst den körper, dann das untergeordnete wie bei allem anderen
+auch"). `_goes_deeper` beantwortet die Stufenfrage für **beide**; zwei
+Rechnungen dafür liefen auseinander, und dann wählte ein Klick eine Kante an
+einem Körper, den derselbe Klick gerade erst als Ganzes gewählt hätte.
+
+Vier Festlegungen:
+
+* **Gemessen wird im Bild, nicht in der Szene.** Eine Kante ist dort eine
+  Linie ohne Breite; in Millimetern wäre der Fangbereich herangezoomt quer
+  über die Fläche und herausgezoomt kleiner als der Zeiger
+  (`EDGE_REACH_PIXELS`, zehn Bildpunkte — enger als die Reichweite eines
+  Merkmals, denn wer die Kante meint, zielt genauer).
+* **Der Abstand entscheidet, bei Gleichstand die Tiefe**
+  (`render.edges.nearest_polyline`). Ohne die zweite Hälfte bekäme ein Klick
+  auf die Silhouette eines Quaders zufällig die Kante auf der Rückseite —
+  dieselbe Stelle im Bild, dreißig Millimeter weiter weg.
+* **Gegen die Strecken, nicht die Punkte.** Eine lange gerade Kante hat zwei
+  Punkte und tausend Bildpunkte dazwischen, und einen davon meint der Zeiger.
+  Bögen kommen als Punktfolge aus dem Kern (`brep.edit.edge_points`): Der
+  Schwerpunkt eines Viertelkreises liegt neben ihm.
+* **Der Körper gibt die Auswahlfarbe ab**, wie an ein Merkmal.
+  `highlighted_object()` gibt `None` zurück, solange eine Kante gewählt ist.
+  Das ist der Fund, den nur das gerenderte Fenster zeigen konnte: Die Linie
+  liegt auf dem Körper, und in derselben Farbe ist sie unsichtbar — die Suite
+  war grün, jede Auskunft daneben stimmte, und im Bild leuchtete der ganze
+  Quader.
+
+**Und drei Dinge, die eine neue Auswahlart mitbringt** — alle drei standen
+beim ersten Anlauf offen und kamen aus dem Review, keines aus der Suite:
+
+* **Sie muss überall fallen, wo eine andere Auswahl entsteht.** Die Kante hing
+  an genau einem Weg — ihrem eigenen Klick — und überlebte Escape, den
+  Objektbaum und jede Merkmalsauswahl. Weil sie die Auswahlfarbe an sich zieht,
+  bekam der **neue** Körper dabei keine: Ein Klick in den Baum wählte sichtbar
+  nichts. `_drop_edge()` ist deshalb eine Stelle, gerufen aus `select`,
+  `select_feature` und `_refresh_feature_selection`.
+* **Sie muss in `selection_depth` mitzählen.** Sonst ist der Weg zurück nicht
+  eingelöst: Escape sprang von der Kante aus dem Körper heraus statt eine
+  Stufe auf ihn zurück.
+* **Und sie darf keinen fremden Klick verschlucken.** Der Kantenklick stand
+  vor `_on_picked` und damit vor dem Abzweig für Messen, Trennen, Skelett und
+  Formen — der Messklick verschwand **stumm**, obwohl der Messweg für genau
+  diesen Fall einen Satz führt. Gefragt wird `_means_a_feature()`, also
+  dieselbe Rangfolge wie beim Zeiger. Dasselbe gilt für Umschalt und Strg: Wer
+  dazunimmt, meint den Körper; eine Kante wird einzeln gewählt.
+
+**Ein Vorfilter misst gegen die Strecke, nicht gegen die Stützpunkte** — und
+das ist derselbe Satz, der drei Absätze weiter oben schon steht. Der erste
+Anlauf des Weltfilters warf trotzdem zwölf von zwölf Kanten weg: Eine gerade
+Kante hat genau zwei Punkte, und bei dreißig Millimetern Länge liegt ihre
+Mitte fünfzehn davon entfernt. **Eine Regel, die man selbst aufgeschrieben
+hat, schützt nicht davor, sie zwei Funktionen weiter zu brechen.**
+
+**Was daran offen ist:** der Zeiger. Er fragt heute nur nach dem Merkmal
+(`_would_pick_feature`), nicht nach der Kante — über einer Kante verspricht er
+damit die Fläche. Das ist genau die Sorte Lücke, vor der der Absatz darüber
+warnt, und sie steht im Register.
+
 ### Ein Merkmal hat eine Reichweite
 
 `_feature_at` hatte keine, und das war der gemeldete Fehler: Es nahm das

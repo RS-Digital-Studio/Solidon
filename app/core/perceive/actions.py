@@ -102,24 +102,75 @@ NOT_APPLICABLE_HERE: Final[dict[tuple[str, str], TranslatableText]] = {
 #: tragen alle vier Handlungen, und die Sätze waren damit doppelt tot: nicht
 #: mehr erreichbar und nicht mehr wahr. Was von der Kugel bleibt, ist ihre eine
 #: fehlende Handlung, und die steht in :data:`NOT_APPLICABLE_HERE`.
+#: **Ein Satz steht unter allen Handlungen, die er ablehnt.** ``_folded`` legt
+#: sie im Panel zu einer Zeile zusammen — „Verschieben, Ändern, Drehen,
+#: Verdoppeln und Entfernen — <Satz>" —, und deshalb darf der Satz kein
+#: einzelnes Verb tragen. Bei ``face`` und ``torus`` tat er das bis zum
+#: 10.09.2026: Unter fünf Titeln stand „lässt sich nicht einzeln **versetzen**"
+#: beziehungsweise „nicht direkt **ändern**", also eine Begründung für eines
+#: von fünfen (Durchsicht auf Roberts Bitte, „auch alle anderen mal gründlich
+#: kontrollieren").
 NOT_APPLICABLE: Final[dict[str, TranslatableText]] = {
     "face": _(
-        "Eine Fläche gehört zur Oberfläche des Körpers und lässt sich nicht "
-        "einzeln versetzen. Mit „Fläche versetzen“ wird sie hinein- oder "
-        "herausgezogen."
+        "Eine Fläche gehört zur Oberfläche des Körpers; einzeln lässt sich an ihr "
+        "nichts ändern. Was an ihr ansetzt, setzt am Körper an: „Fläche versetzen“ "
+        "zieht sie hinein oder heraus, und Bohren, Beschriften und jeder Baustein "
+        "brauchen sie als Unterlage."
     ),
     "fillet": _(
-        "Eine Verrundung gehört zu ihrer Kante. Versetzt man sie allein, bliebe "
-        "die Kante scharf und die Rundung läge daneben."
+        "Eine Verrundung gehört zu ihrer Kante und hat ohne sie keine Lage. "
+        "Bewegt oder kopiert man sie allein, bliebe die Kante scharf und die "
+        "Rundung läge daneben."
     ),
     "edge_loop": _(
-        "Eine offene Kantenschleife ist ein Loch im Netz und kein Körper. Sie "
-        "lässt sich reparieren, aber nicht versetzen."
+        "Eine offene Kantenschleife ist ein Loch im Netz und kein Körper — sie "
+        "hat nichts, was sich bewegen, messen oder herausnehmen ließe. Mit "
+        "„Reparieren“ wird sie geschlossen."
     ),
     "torus": _(
-        "Eine einzelne Ringfläche lässt sich nicht direkt ändern. "
-        "Für eine andere Lage bewegen Sie den ganzen Körper. "
-        "Für eine neue Rille oder einen Wulst können Sie einen Ring als Werkzeug verwenden."
+        "Eine einzelne Ringfläche hat nichts, woran sich einzeln etwas ändern "
+        "ließe — sie gehört zu der Rille oder dem Wulst, aus dem sie entstanden "
+        "ist. Für eine andere Lage bewegen Sie den ganzen Körper; für eine neue "
+        "Rille oder einen Wulst nehmen Sie einen Ring als Werkzeug."
+    ),
+    # **Kein „nie", sondern ein „woanders".** Die vier Handlungen hier bauen
+    # ihren Werkzeugkörper aus einem Durchmesser (``_feature_solid``); an einem
+    # Langloch käme dabei ein Zylinder heraus, und der träfe seine Flanken
+    # nicht. Was der Kunde daran wirklich ändern will — Länge und Richtung —,
+    # kann *Zum Langloch ziehen*, und darauf zeigt der Satz.
+    "slot": _(
+        "Ein Langloch hat zwei Maße und eine Richtung; die Handlungen hier "
+        "rechnen mit einem Durchmesser und träfen seine Flanken nicht. Länge "
+        "und Richtung ändern Sie über „Zum Langloch ziehen“."
+    ),
+    # **Der Fallback stand hier bis zum 10.09.2026**, und er sagte nichts:
+    # „Für diese Art von Merkmal gibt es noch keine Handlung." Ein Ende ohne
+    # Weg nach vorn ist genau das, was Regel 17 verbietet — und einen Weg gibt
+    # es: Ein Gewinde entsteht in einem Baustein (§24.1), und dessen Schritt
+    # steht in ``Feature.created_by``. Nur ein **erkanntes** Gewinde, das aus
+    # einer fremden Datei kommt, hat keinen; für das nennt der Satz den
+    # zweiten Weg.
+    "thread": _(
+        "Ein Gewinde ist eine Wendelfläche und trägt kein einzelnes Maß, das "
+        "sich ändern ließe. Stammt es aus einem Baustein, ändern Sie es über "
+        "„Diesen Schritt ändern“. In einem eingelesenen Modell hilft „Bohrung "
+        "verschließen“ ohne gewähltes Merkmal, mit Lage und Durchmesser von "
+        "Hand — danach setzen Sie ein neues Gewinde."
+    ),
+    # **Der erste Entwurf sperrte hier alles, und das war messbar falsch.** Er
+    # begründete es damit, an einen eingeschlossenen Hohlraum komme kein
+    # Werkzeug heran — dabei versetzt
+    # ``test_a_cavity_inside_the_body_moves_without_losing_material`` seit dem
+    # 03.09.2026 eine Kugelhöhle in einem Würfel, und an Roberts Bauart
+    # nachgemessen (Zylinder Ø 2 auf 9 mm) bleibt das Volumen des Ganzen auf
+    # 0,000000 mm³ genau gleich. Was fehlt, ist nicht die Erreichbarkeit,
+    # sondern das **Maß**: Ein Einschluss ist, was ein Negativkörper
+    # hinterlassen hat, und seine Form steht allein in seinen Flächen.
+    "void": _(
+        "Ein Lufteinschluss trägt kein Maß, an dem sich Größe oder Drehung "
+        "ändern ließen — seine Form steht allein in seinen Flächen; und einen "
+        "zweiten Hohlraum im Material legt man nicht an. Was geht: verschieben, "
+        "und „Merkmal entfernen“ füllt ihn mit Material auf."
     ),
 }
 
@@ -144,6 +195,13 @@ _FROM_FEATURE: Final[dict[str, FeatureValueSource]] = {
     "z": ("centre", 2),
     "diameter": ("diameter", None),
     "depth": ("depth", None),
+    # Die Länge eines Langlochs hat kein gemessenes Gegenstück — die Bohrung
+    # hat noch keines. Genommen wird ihr Durchmesser, und
+    # :data:`_SHIFTED_BY` legt denselben noch einmal darauf: Vorbelegt steht
+    # damit ein Langloch, in dem sich eine Schraube um einen Durchmesser
+    # verschieben lässt. Das ist ein gültiger Wert — ein Feld, das mit einer
+    # Absage begrüßt, ist keine Vorgabe (Regel 17).
+    "slot_length": ("diameter", None),
 }
 
 
@@ -191,6 +249,18 @@ class FeatureAction:
     Schritt, der das Merkmal erzeugt hat (:func:`part_actions`). Bei allen
     anderen Handlungen bleibt es ``None``, und ``op`` sagt, was zu starten
     ist."""
+    fixed: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
+    """Werte, die die Handlung mitbringt und die niemand eingibt.
+
+    Der Fall dafür ist die **Kante** (:func:`edge_actions`): *Verrunden* an
+    einer angeklickten Kante setzt ``edges="named"`` und den Schlüssel dieser
+    einen Kante; einzugeben bleibt der Radius. Als Feld stünden beide im
+    Fenster — eine Auswahl, die schon beantwortet ist, und eine Kennung aus
+    sechs Zahlen, die keine Beschriftung ist (§2.4).
+
+    Sie stehen hier und nicht in der Oberfläche, weil das Panel die
+    Merkmalsarten nicht kennt und nicht kennen soll: Wer ``edges="named"``
+    dort hineinschriebe, führte die Tabelle des Registers ein zweites Mal."""
 
 
 def _kind_of(spec: Any) -> str:
@@ -212,7 +282,10 @@ def _kind_of(spec: Any) -> str:
 #: Merkmal schon liegt: eine Boolesche auf sich selbst, ein Schritt im Verlauf
 #: und dasselbe Teil im Bild. Um einen Durchmesser versetzt liegt die Kopie
 #: neben dem Original und ist zu sehen (Vorschlag 3d-druck-d4, 03.09.2026).
-_SHIFTED_BY: Final[dict[tuple[str, str], str]] = {("duplicate_feature", "x"): "diameter"}
+_SHIFTED_BY: Final[dict[tuple[str, str], str]] = {
+    ("duplicate_feature", "x"): "diameter",
+    ("slot_hole", "slot_length"): "diameter",
+}
 
 
 def _value_of(spec: Any, feature: Feature, op: str = "") -> float | bool | str:
@@ -488,4 +561,70 @@ def part_actions(operation: Any, spec: Any) -> list[FeatureAction]:
             note=_("Nimmt den Schritt aus dem Verlauf. Strg+Z holt ihn zurück."),
         )
     )
+    return actions
+
+
+#: Die Operationen, die an **einer angeklickten Kante** ansetzen.
+#:
+#: Beide leben im exakten Kern und tragen dieselbe Auswahl: Fünf Gruppen und
+#: ``named`` für einzeln gewählte Kanten (``brep.edit.EDGE_CHOICES``). Wer
+#: eine Kante anklickt, hat ``named`` bereits beantwortet — einzugeben bleibt
+#: das eine Maß, das die Zeile führt.
+#:
+#: Eine Liste und keine Ableitung aus ``applies_to``: Eine Kante ist **kein
+#: Merkmal**. Sie trägt keine Kennung, die die Erkennung vergibt, und steht
+#: darum in keinem ``applies_to`` — die Frage „welche Operation gilt hier"
+#: hat an ihr eine andere Antwort als an einer Bohrung.
+EDGE_OPERATIONS: Final[tuple[tuple[str, str], ...]] = (
+    ("fillet_edges", "radius"),
+    ("chamfer_edges", "distance"),
+)
+
+
+def edge_actions(key: str) -> list[FeatureAction]:
+    """Was sich an dieser einen Kante tun lässt — verrunden und fasen.
+
+    Bis zum Anklicken einer Kante gab es beides nur über den Dialog und eine
+    Liste darin: „Senkrecht · 20 mm · x -20,0, y -15,0", zum Ankreuzen. Wer
+    **diese eine Ecke** brechen wollte, musste sie in einer Aufzählung
+    wiedererkennen.
+
+    Jede Zeile trägt genau ein Feld — den Radius beziehungsweise die Breite
+    —, und die übrigen Werte bringt sie als :attr:`FeatureAction.fixed` mit:
+    ``edges="named"`` und den Schlüssel. Die Vorgabe ist die des Registers und
+    nicht ein Maß der Kante: Anders als bei einer Bohrung gibt es hier keinen
+    **gemessenen** Wert, den man übernehmen könnte — eine scharfe Kante hat
+    keinen Radius, und der gewünschte ist der einzige, der zählt.
+
+    Ohne den exakten Kern steht keine der beiden im Register, und dann ist die
+    leere Liste die richtige Antwort: Die Anwendung läuft weiter, es sind die
+    Operationen, die verschwinden (§36).
+    """
+    actions: list[FeatureAction] = []
+    for name, measure in EDGE_OPERATIONS:
+        if not REGISTRY.has(name):
+            continue
+        spec = REGISTRY.get(name)
+        entry = next((item for item in spec.params.spec() if item.name == measure), None)
+        if entry is None:
+            continue
+        actions.append(
+            FeatureAction(
+                title=spec.title,
+                op=name,
+                note=spec.doc,
+                fields=(
+                    ActionField(
+                        name=entry.name,
+                        label=entry.title,
+                        unit=entry.unit or "",
+                        value=entry.default,
+                        kind=_kind_of(entry),
+                        minimum=entry.minimum,
+                        maximum=entry.maximum,
+                    ),
+                ),
+                fixed=(("edges", "named"), ("edge_keys", key)),
+            )
+        )
     return actions

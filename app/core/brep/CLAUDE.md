@@ -39,6 +39,17 @@ Die exakte Bohrung verwendet das Material des Zielkörpers über einen trägen
 `edit.bore_profile` rotiert es analytisch. Mesh und B-Rep teilen damit Maße
 und Mündungsbezug, ohne exakte Kreise zu tessellieren.
 
+**Ein Langloch wird nicht rotiert, sondern aufgezogen.** Der Umriss aus
+`geom.prepare.slot_profile` wird über `profiles.extrude` zum Prisma, und zwar
+**vom Boden zur Mündung**: `extrude` verlangt eine positive Höhe, und ein
+Rahmen mit umgekehrter Normale wäre linkshändig — derselbe `slot_angle` drehte
+darin in die andere Richtung als im Netz-Kern. Dieselbe Ebene, dieselbe Höhe,
+nur ein anderer Ursprung. `_bore_span` in `ops.py` beantwortet Rahmen,
+Werkzeuglänge und Mündungslage für beide Bauarten; `edit.slot_bore` zieht eine
+bereits erkannte Bohrung nachträglich auseinander. Die Enden bleiben in beiden
+Fällen echte Zylinderflächen — gemessen trifft der exakte Kern das analytische
+Volumen auf die sechste Stelle, wo der Netz-Kern seine Bögen abtastet.
+
 Der Mittelpunkt einer Bohrung oder eines Zapfens liegt **auf der Achse, in
 der Mitte der V-Spanne** des Mantels — nicht im Flächenschwerpunkt, der bei
 einem schräg beschnittenen Mantel radial und axial daneben liegt und den
@@ -79,6 +90,14 @@ auf, `fillet` und `chamfer` nehmen sie als `keys`, und die Auswahl `named`
 sagt im Register, dass sie gelten. Eine Kante, die es nicht mehr gibt, ist ein
 Satz an den Kunden — und ein anderer als „zu dieser Auswahl gehört keine
 Kante".
+
+`edge_points` gibt dieselbe Kante als **Punktfolge**, abgetastet nach
+Abweichung (`DEFLECTION`, dieselbe Zahl wie die Tessellation). Mitte und
+Richtung genügen für eine Auswahl nach Lage und nicht für einen Zeiger: Der
+Schwerpunkt eines Bogens liegt neben ihm, beim Kreis einer Zylinderkante sogar
+auf der Achse — also im Material. Eine Strecke kommt mit zwei Punkten zurück,
+ein Kreis mit so vielen, wie die Abweichung verlangt. Die Ansicht projiziert
+sie und misst im Bild (`ui/render/edges.nearest_polyline`).
 
 ## Eine Bahn ist kein Bogen
 

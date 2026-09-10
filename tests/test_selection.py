@@ -1823,3 +1823,217 @@ def test_nothing_on_the_gizmo_leaves_ascii() -> None:
                 f"am Griff steht {text!r} — übersetzte Texte gehören in die Statusleiste, "
                 "nicht an den Griff"
             )
+
+
+class _DepthRenderer(RecordingRenderer):
+    """Die Attrappe, aber mit einer Tiefe, die von der Höhe abhängt.
+
+    ``RecordingRenderer`` projiziert von oben und nennt jede Tiefe 0,5. An
+    einem Quader liegen damit die untere und die obere Kante derselben Wand
+    auf **demselben** Bildpunkt und in derselben Tiefe — welche von beiden
+    sichtbar ist, wäre nicht entscheidbar, und der Test prüfte den Zufall
+    statt der Regel. Hier ist die höhere Kante die nähere, wie beim Blick
+    von oben auf ein Teil.
+    """
+
+    def world_to_display(self, point: Any) -> tuple[float, float, float]:
+        x, y, _depth = super().world_to_display(point)
+        return (x, y, 1.0 - float(point[2]) / 100.0)
+
+
+def _exact_block(view: Viewport) -> tuple[Any, str]:
+    """Ein exakter Quader in der Szene — und der Schlüssel seiner oberen
+    Kante bei x = -20."""
+    from app.core.brep import edit as brep_edit
+    from app.core.brep.features import features_of
+
+    solid = brep_edit.box(40.0, 30.0, 20.0)
+    entry = SceneObject(
+        id="block", name="Block", mesh=solid, kind="brep", features=features_of(solid)
+    )
+    view.show_scene(EvaluationResult(scene=Scene(objects={"block": entry})))
+    obere = next(
+        info
+        for info in brep_edit.edges_of(solid)
+        if info.flat and abs(info.middle[0] + 20.0) < 0.01 and info.middle[2] > 10.0
+    )
+    return solid, brep_edit.edge_key(obere)
+
+
+@pytest.mark.skipif(
+    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
+    reason="OpenCASCADE is an optional dependency",
+)
+def test_a_click_beside_an_edge_chooses_the_edge_and_not_the_face(qt_app: QApplication) -> None:
+    """Eine Kante lässt sich anklicken — die zweite Hälfte von RM-147 E4.
+
+    Bis hierher gab es die Kantenauswahl nur als Liste im Dialog: Der Renderer
+    pickte Flächen und Merkmale, keine Kanten. Wer „diese eine Ecke" verrunden
+    wollte, musste sie an ihrer Lage in einer Aufzählung wiedererkennen.
+
+    Drei Zusagen, und jede prüft eine andere Hälfte der Regel:
+
+    * Ein Klick auf die Kante wählt **sie** und nicht die Fläche daneben —
+      und zwar die **obere** der beiden, die im Bild übereinanderliegen.
+    * Ein Klick auf die nackte Fläche wählt keine Kante.
+    * Der **erste** Klick auf einen Körper meint den Körper. Die gestufte
+      Tiefe gilt für die Kante wie für das Merkmal (§18.5) — sonst hätte
+      ein Teil mit tausend Kanten überhaupt keinen Weg mehr, als Ganzes
+      gewählt zu werden.
+    """
+    view = Viewport()
+    renderer = _DepthRenderer()
+    view.renderer = renderer
+    _solid, oben = _exact_block(view)
+    # Die Wand bei x = -20 projiziert auf x_bild = 360; ihre Mitte in y auf 300.
+    an_der_kante = (-20.0, 0.0, 20.0)
+    auf_der_flaeche = (0.0, 0.0, 20.0)
+    renderer.picks[(360, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    renderer.picks[(400, 300)] = Pick(auf_der_flaeche, view._actors["block"], 0)
+
+    gemeldet: list[tuple[str, str]] = []
+    view.edgePicked.connect(lambda body, key: gemeldet.append((body, key)))
+
+    # Erste Stufe: der Körper, obwohl der Klick genau auf der Kante liegt.
+    view._on_left_click(360, 300)
+    assert view.highlighted_edge() is None, "der erste Klick meint den Körper"
+    assert not gemeldet
+
+    view._selected = "block"
+    assert view.highlighted_object() == "block", "ohne Kante leuchtet der Körper"
+    view._on_left_click(360, 300)
+
+    assert view.highlighted_edge() == ("block", oben)
+    assert gemeldet == [("block", oben)]
+    # **Und der Körper gibt die Auswahlfarbe ab.** Die Kante liegt auf ihm;
+    # leuchtet er weiter, liegt die hervorgehobene Linie in derselben Farbe
+    # darauf und ist unsichtbar. Gefunden wurde das nicht in der Suite,
+    # sondern im gerenderten Fenster (10.09.2026) — offscreen sieht niemand
+    # hin, und jede Auskunft daneben stimmte.
+    assert view.highlighted_object() is None, "die Farbe gehört der Kante, nicht dem Körper"
+
+    # Und die nackte Fläche nimmt sie wieder weg. Dass der Körper danach
+    # **nicht** leuchtet, ist kein Widerspruch: Die Deckfläche ist selbst ein
+    # Merkmal, und die Farbe gehört weiter dem Genaueren.
+    view._on_left_click(400, 300)
+    assert view.highlighted_edge() is None
+    assert gemeldet == [("block", oben)], "die Fläche meldet keine Kante"
+
+    # **Und jetzt das „neben", das der Name verspricht.** Die drei Klicks
+    # darüber liegen alle mit Abstand **null** auf der Kante beziehungsweise
+    # vierzig Bildpunkte weg — damit wäre `EDGE_REACH_PIXELS` an keiner
+    # Stelle gefahren, und die Konstante könnte 0,1 sein. Hier steht sie:
+    # fünf Bildpunkte daneben trifft, fünfzehn nicht mehr.
+    view.select_edge(None, None)
+    renderer.picks[(365, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    renderer.picks[(375, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+
+    view._on_left_click(365, 300)
+    assert view.highlighted_edge() == ("block", oben), "fünf Bildpunkte daneben ist noch gemeint"
+
+    view.select_edge(None, None)
+    view._on_left_click(375, 300)
+    assert view.highlighted_edge() is None, "fünfzehn Bildpunkte daneben ist die Fläche"
+
+
+@pytest.mark.skipif(
+    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
+    reason="OpenCASCADE is an optional dependency",
+)
+def test_a_chosen_edge_gives_way_to_every_other_selection(qt_app: QApplication) -> None:
+    """Die Kante hängt an einem Weg — und fällt auf allen anderen.
+
+    Sie räumte sich bis hierher nur selbst weg. Auf jedem anderen Auswahlweg
+    blieb sie stehen, und weil sie die Auswahlfarbe an sich zieht
+    (:meth:`Viewport.highlighted_object`), bekam der **neue** Körper gar
+    keine: Escape ließ eine leuchtende Linie in der leeren Ansicht zurück,
+    und ein Klick in den Objektbaum wählte sichtbar nichts.
+
+    Geprüft werden alle vier Wege einzeln. Ein Test, der nur einen fährt,
+    ist grün gegen drei stehengebliebene.
+    """
+    view = Viewport()
+    view.renderer = _DepthRenderer()
+    _solid, oben = _exact_block(view)
+    schluessel = oben
+
+    def gewaehlt() -> Viewport:
+        view._selected = "block"
+        view.select_edge("block", schluessel)
+        assert view.highlighted_edge() == ("block", schluessel)
+        return view
+
+    gewaehlt()
+    assert view.selection_depth() == 2, (
+        "eine Kante ist die zweite Stufe — sonst springt Escape zu weit"
+    )
+
+    gewaehlt()
+    view.select(None)
+    assert view.highlighted_edge() is None, "Escape räumt die Kante"
+
+    gewaehlt()
+    view.select_feature(None)
+    assert view.highlighted_edge() is None, "eine geänderte Merkmalsauswahl räumt sie"
+
+    gewaehlt()
+    view.select_features(["face_1"])
+    assert view.highlighted_edge() is None, "zwei hervorgehobene Stellen wären zwei Antworten"
+
+    gewaehlt()
+    view.select_feature_refs([("block", "face_1")])
+    assert view.highlighted_edge() is None
+
+
+@pytest.mark.skipif(
+    not __import__("app.core.brep.kernel", fromlist=["available"]).available(),
+    reason="OpenCASCADE is an optional dependency",
+)
+def test_a_clicked_edge_never_eats_a_measuring_or_adding_click(qt_app: QApplication) -> None:
+    """Was die Kante **nicht** verschlucken darf.
+
+    Zwei Wege liefen bis hierher in sie hinein, und beide stumm:
+
+    * **Messen** (und ebenso Trennen, Skelett, Formen) setzt eine *Stelle*.
+      Der Kantenklick stand davor; der Messklick verschwand ohne einen Satz,
+      obwohl der Messweg genau dafür einen führt („Kein stiller Ausgang").
+    * **Umschalt und Strg** nehmen zur Auswahl dazu. Wer dabei neben eine
+      Kante trifft, bekam sie — und der Objektbaum erfuhr vom Dazunehmen
+      nichts, denn ``objectPicked`` blieb aus.
+    """
+    from PySide6.QtWidgets import QWidget
+
+    view = Viewport()
+    renderer = _DepthRenderer()
+    # **Der Messmodus setzt einen Mauszeiger**, und der braucht ein Widget.
+    # Die Attrappe hat keines; ohne dieses hier prüfte der Test nicht das
+    # Messen, sondern stürbe an seiner eigenen Nachstellung.
+    renderer.widget = QWidget()
+    view.renderer = renderer
+    _solid, _oben = _exact_block(view)
+    an_der_kante = (-20.0, 0.0, 20.0)
+    renderer.picks[(360, 300)] = Pick(an_der_kante, view._actors["block"], 0)
+    view._selected = "block"
+
+    # Messen: der Klick gehört dem Messwerkzeug, nicht der Kante.
+    saetze: list[str] = []
+    view.measurementStatus.connect(saetze.append)
+    view.set_measure_mode("distance")
+    view._on_left_click(360, 300)
+    assert view.highlighted_edge() is None, "beim Messen wählt ein Klick keine Kante"
+    view.set_measure_mode("off")
+
+    # Dazunehmen: der Klick gehört dem Körper.
+    #
+    # **Und zwar auf der zweiten Stufe**, sonst prüft der Fall nichts: Steht
+    # die Auswahl auf dem Körper, fängt ihn schon die Stufenregel ab
+    # (`_goes_deeper` verlangt bei `add` eine Tiefe von 2). Gemessen mit der
+    # Gegenprobe — ohne ein gewähltes Merkmal blieb der Test grün, auch als
+    # die Sperre ausgebaut war.
+    view.select_feature("face_1")
+    assert view.selection_depth() == 2, "erst hier greift die Frage überhaupt"
+    dazu: list[tuple[str, bool]] = []
+    view.objectPicked.connect(lambda body, add: dazu.append((body, add)))
+    view._on_left_click(360, 300, add=True)
+    assert view.highlighted_edge() is None, "Umschalt meint den Körper, nicht die Kante"
+    assert dazu and dazu[-1][1] is True, "und der Baum erfährt vom Dazunehmen"

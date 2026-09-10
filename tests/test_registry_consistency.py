@@ -913,6 +913,7 @@ _ZAHLWORT: Final[dict[str, int]] = {
     "hundertvier": 104,
     "hundertfünf": 105,
     "hundertacht": 108,
+    "hundertneun": 109,
     "sechsundneunzig": 96,
     "siebenundneunzig": 97,
 }
@@ -1044,3 +1045,38 @@ def test_a_variant_member_is_reached_through_its_group_not_through_an_entry_of_i
             assert f"→ {spec.title}" not in path, (
                 f"{member}: der Weg nennt den Mitgliedstitel als Eintrag — den gibt es nicht"
             )
+
+
+def test_every_operation_with_an_edge_parameter_is_offered_at_a_clicked_edge() -> None:
+    """Wer eine Kante anklickt, bekommt **jede** Operation, die eine meint.
+
+    ``perceive.actions.EDGE_OPERATIONS`` zählt sie von Hand auf, und der
+    Docstring dort begründet, warum es keine Ableitung aus ``applies_to``
+    ist: Eine Kante ist kein Merkmal und steht in keinem. Eine Aufzählung
+    von Hand weiß aber beim nächsten Registereintrag die Hälfte — genau die
+    Bauart, vor der `.claude/rules/oberflaeche.md` warnt.
+
+    Erkannt wird eine solche Operation an ihrem Parameter ``edge_keys``: Er
+    nimmt die Schlüssel einzeln gewählter Kanten entgegen und hat sonst
+    keinen Zweck. Geprüft wird in **beide** Richtungen — eine dritte
+    Operation fällt sonst still heraus, und ein Eintrag ohne Register wäre
+    ein Knopf, hinter dem nichts liegt.
+    """
+    from app.core.perceive.actions import EDGE_OPERATIONS
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    alle = REGISTRY.all()
+    assert alle, "leeres Register — dann prüft dieser Test nichts"
+    mit_kanten = {
+        spec.name for spec in alle if any(entry.name == "edge_keys" for entry in spec.params.spec())
+    }
+    genannt = {name for name, _measure in EDGE_OPERATIONS}
+    assert mit_kanten, "keine Operation mit edge_keys — der exakte Kern fehlt?"
+    assert genannt == mit_kanten, (
+        f"EDGE_OPERATIONS nennt {sorted(genannt)}, das Register hat {sorted(mit_kanten)}"
+    )
+    # Und das Maß, das jede Zeile führt, gibt es auch wirklich.
+    for name, measure in EDGE_OPERATIONS:
+        namen = {entry.name for entry in REGISTRY.get(name).params.spec()}
+        assert measure in namen, f"{name}: kein Parameter {measure!r}"

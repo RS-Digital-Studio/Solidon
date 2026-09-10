@@ -120,6 +120,38 @@ def test_an_edge_key_survives_a_second_run_and_names_only_its_own_edge() -> None
     assert edit.edge_key(found[0]) == keys[3]
 
 
+def test_edge_points_follow_the_curve_and_not_the_chord() -> None:
+    """Eine Kante anzuklicken heißt, sie dort zu treffen, wo sie liegt.
+
+    Mitte und Richtung beschreiben eine Kante gut genug, um sie nach Lage
+    auszuwählen — für einen Zeiger reichen sie nicht. Der Kreis am Zylinder
+    ist der Beweis: Seine Mitte liegt auf der Achse, also **im Material**
+    und nicht auf der Kante, und Anfang und Ende fallen zusammen. Wer die
+    Kante über diese drei Zahlen suchte, zielte auf einen Punkt, an dem
+    nichts ist.
+
+    Die gerade Kante daneben bleibt zwei Punkte lang. Eine Strecke feiner
+    abzutasten kostet nur Rechenzeit — die Abweichung ist dort null.
+    """
+    gerade = next(entry for entry in edit.edges_of(block()) if entry.upright)
+    ecken = edit.edge_points(gerade)
+
+    assert len(ecken) == 2, "eine Strecke braucht keine Zwischenpunkte"
+    assert ecken[0][2] == pytest.approx(0.0) and ecken[1][2] == pytest.approx(HEIGHT)
+
+    radius = 10.0
+    kreis = edit.edges_of(edit.cylinder(2.0 * radius, HEIGHT))[0]
+    bogen = edit.edge_points(kreis)
+
+    assert len(bogen) > 8, "ein Kreis besteht nicht aus zwei Punkten"
+    for punkt in bogen:
+        assert math.hypot(punkt[0], punkt[1]) == pytest.approx(radius, abs=1e-6)
+    # Und die Mitte, über die die Auswahl nach Lage geht, liegt eben nicht auf
+    # ihm: Sie sitzt auf der Achse, zehn Millimeter von jedem Punkt entfernt.
+    achse = math.hypot(kreis.middle[0], kreis.middle[1])
+    assert achse == pytest.approx(0.0, abs=1e-6)
+
+
 def test_a_named_edge_that_is_gone_says_so_instead_of_doing_nothing() -> None:
     """Eine Kante kann verschwinden, weil ein Schritt davor sie weggenommen hat.
 

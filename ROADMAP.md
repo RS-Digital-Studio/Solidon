@@ -70,8 +70,9 @@ Jede Zeile führt zu genau einem offenen Punkt. Die letzte Spalte nennt den näc
 | [RM-139 — Geometrische Orientierungskandidaten aus der konvexen Hülle ableiten](#rm-139) | Geometrie, Erkennung und Druckvorbereitung | Hüllnormalen deterministisch erzeugen und Finalisten gegen vollständige Suche prüfen |
 | [RM-140 — Exportbefunde vor dem Schreiben sichtbar machen](#rm-140) | Geometrie, Erkennung und Druckvorbereitung | Vorprüfung mit Passungen und endgültigen Wandstärken vor dem Dateischreiben anschließen |
 | [RM-143 — Selbstdurchdringungen in der Netzfehlerkarte sichtbar markieren](#rm-143) | Geometrie, Erkennung und Druckvorbereitung | Markierung an einem reproduzierbaren durchdrungenen Körper anschließen |
-| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Alle acht gebaut — offen bleiben das Anklicken einer Kante im Bild und fünf zugesagte Kundenwege |
+| [RM-147 — Die acht beauftragten Konstruktionserweiterungen bauen](#rm-147) | Geometrie, Erkennung und Druckvorbereitung | Alle acht gebaut, die Kante im Bild anklickbar — offen bleiben Zeiger und Rechtsklick an ihr sowie fünf zugesagte Kundenwege |
 | [RM-148 — Zahlenparameter gegen NaN und Unendlich sichern](#rm-148) | Geometrie, Erkennung und Druckvorbereitung | Endlichkeitsprüfung zentral in `registry.params._coerce` mit Regressionstest |
+| [RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan](#rm-151) | Geometrie, Erkennung und Druckvorbereitung | Befundtext trennen von der Entscheidung, welche Formen wegfallen |
 | [RM-070 — SpaceMouse auf macOS und Linux am echten Gerät abnehmen](#rm-070) | Bedienung und Darstellung | Mac-/Linux-Gerätelauf, Treiberwechselwirkung und große Szene abnehmen |
 | [RM-074 — Verbleibenden Bildnachweis der Viewport-Serie abschließen](#rm-074) | Bedienung und Darstellung | Befundsprung und sichtbare Marke an einem echten Warnprojekt zeigen |
 | [RM-079 — Zeilenlängen der Website über alle Sprachen prüfen](#rm-079) | Bedienung und Darstellung | Textbreiten in sechs Sprachen auf schmalen und breiten Fenstern prüfen |
@@ -712,9 +713,29 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   am selben Körper heißt `dowel_pin_1_2`. Der Menüeintrag nennt vor dem Klick, was ihm fehlt,
   und gibt seinen eigenen Erklärungssatz zurück, sobald zwei Stellen markiert sind.
 
-  **Offen bleibt aus E4 die Bedienung im Bild:** Eine Kante lässt sich noch nicht
-  **anklicken**; der Renderer pickt Flächen und Merkmale, keine Kanten, und das ist ein
-  eigener Bau.
+  **Die Bedienung im Bild steht seit dem 10.09.2026.** Eine Kante lässt sich anklicken, und
+  zwar auf derselben Stufe wie ein Merkmal (Robert: „man wählt auch erst den körper, dann
+  das untergeordnete"). Der Renderer musste dafür nichts lernen: `brep.edit.edge_points`
+  gibt die Kante als Punktfolge, `ui.render.edges.nearest_polyline` misst im Bild gegen die
+  Strecken und entscheidet bei gleichem Abstand nach der Tiefe, und `_goes_deeper` beantwortet
+  die Stufenfrage für Merkmal und Kante gemeinsam. Die gewählte Kante steht danach im
+  Auswahlfenster mit ihren Maßen und den zwei Handlungen, die an ihr ansetzen — *Verrunden*
+  mit Radius, *Fase anbringen* mit Breite, je ein Feld und ein Knopf
+  (`perceive.actions.edge_actions`, `FeaturePanel.show_edge`). `edges="named"` und der
+  Schlüssel reisen als `FeatureAction.fixed` mit; der Kunde sieht keine Kennung aus sechs
+  Zahlen.
+
+  Am echten Fenster gemessen: Der Klick trifft die Kante, unter der er liegt, vierzig
+  Bildpunkte daneben keine mehr. Dabei ist ein Fehler aufgefallen, den die grüne Suite nicht
+  zeigen konnte — der Körper behielt die Auswahlfarbe, und die hervorgehobene Linie lag in
+  derselben Farbe darauf. `highlighted_object()` gibt jetzt `None`, solange eine Kante gewählt
+  ist, und der Fall steht als Zusicherung in `tests/test_selection.py`.
+
+  **Offen bleibt der Zeiger:** Über einer Kante zeigt er weiter die Merkmalsform, weil
+  `_would_pick_feature` nur nach dem Merkmal fragt. Ein Zeiger, der etwas anderes verspricht
+  als der Klick tut, ist genau die Lücke, die `.claude/rules/ansicht.md` an dieser Stelle
+  benennt. Ebenso offen: der **Rechtsklick** auf eine Kante — das Kontextmenü meint dort
+  weiter das Merkmal darunter.
 
   Daneben stehen aus derselben Liste noch fünf zugesagte Kundenwege offen: der parametrische
   Lochkreis mit gleichem Vertrag in Dialog, Kommandozeile und Agent, die physische
@@ -731,6 +752,40 @@ Formen, Posing, Weg 4, Beispiel und Handbuch sind umgesetzt. Der verbleibende Vo
   Limit liegengeblieben. Abnahme: eine zentrale Endlichkeitsprüfung über `NUMBER_KINDS`, ein
   Regressionstest mit `nan`, `inf` und `-inf` je Zahlenart, und die Ablehnung trägt einen
   Handlungsvorschlag (Regel 17).
+
+<a id="rm-150"></a>
+
+- [x] **RM-150 — Langlöcher als Merkmal erkennen.** Am 10.09.2026 gebaut: `app/core/perceive/slots.py`
+  setzt ein Langloch aus den zwei Zylinderausschnitten zusammen, die die Einpassung als Verrundungen
+  ausweist. Entschieden wurde **gegen** die Provenienz und für die Geometrie — der häufigste Fall
+  ist ein eingelesenes Netz, in das jemand anders eine Nut geschnitten hat, und dort gibt es keinen
+  erzeugenden Schritt. Getragen wird die Unterscheidung topologisch: Beide Bögen hängen über einen
+  Mantel quer zur Achse zusammen, und alles darin ist entweder einer der Bögen oder eine ebene
+  Flanke im Abstand eines Radius von der Mittellinie. Die Merkmalsart `slot` trägt Breite, Länge,
+  Mittellinienweg, Achse, Richtung, Tiefe und Durchgang; Objektbaum, Steckbrief und
+  Merkmalspanel lesen sie, und `slot_hole` gilt jetzt auch an ihr (Titel dafür auf *Zum Langloch
+  ziehen* geändert — „Bohrung zum Langloch" stimmte an einem Langloch nicht mehr).
+  Nachweis: `tests/test_slots.py`, 17 Fälle, davon zwölf ohne die Erkennung rot. Die tragende
+  Gegenprobe ist eine Tasche mit vier verrundeten Ecken — gleiche Radien, parallele Achsen,
+  verbundener Mantel und trotzdem kein Langloch. Ein eingelesenes Modell wird an einer Nut aus
+  Quader und zwei Zylindern geprüft, nicht am eigenen Erzeuger.
+
+<a id="rm-151"></a>
+
+- [ ] **RM-151 — Das Freiform-Urteil nennt konstruierte Teile einen Scan.** Aufgefallen am
+  10.09.2026 an Roberts `garden-hose-holder.3mf`: ein konstruierter Halter mit einem organisch
+  geschwungenen Bogen, dessen 194 nicht veröffentlichte Kugel- und Ringkandidaten ihn auf einen
+  Rundformanteil von 0,701 gegen die Schwelle 0,700 bringen — ein Tausendstel. Die Entscheidung,
+  seine 252 erfundenen Rundformen wegzulassen, ist **richtig** und bleibt; falsch ist der Satz
+  daneben. `perceive.freeform` schreibt „Dieses Modell ist eine Freiform, etwa ein Scan", und das
+  liest ein Kunde als Aussage über sein Teil, nicht über eine Zählung. Der Fund selbst
+  (vier verlorene Senkungen) ist am selben Tag behoben — `features.sits_at_the_mouth_of` rettet,
+  was an einer Bohrung hängt —, der Text nicht.
+  Abnahme: Der Befund sagt, was gemessen wurde und was daraus folgt, ohne dem Modell eine Herkunft
+  zuzuschreiben, die niemand geprüft hat; die Zahl bleibt darin (Regel 17). Vorher entscheiden, ob
+  daneben ein zweiter Zustand gebraucht wird — „überwiegend rund" gegen „Freiform" —, oder ob ein
+  Satz für beide Fälle reicht. Ein zweiter Zustand kostet eine Schwelle mehr, und die Lücke
+  zwischen Nozzle-Box (59 Prozent) und Retro-Maus (77 Prozent) ist schmal.
 
 ## Bedienung und Darstellung
 

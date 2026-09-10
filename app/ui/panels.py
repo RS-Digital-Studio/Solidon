@@ -4833,6 +4833,39 @@ class FeaturePanel(QWidget):
             self._rows.insertWidget(self._rows.count() - 1, row)
             self._built.append(row)
 
+    def show_edge(self, key: str, title: str) -> None:
+        """Was sich an dieser **Kante** tun lässt — verrunden und fasen.
+
+        Eine Kante ist kein Merkmal: Sie trägt keine Kennung, die die
+        Erkennung vergibt, und steht in keinem ``applies_to``. Ihre zwei
+        Handlungen kommen deshalb aus einer eigenen Auskunft des Kerns
+        (:func:`~app.core.perceive.actions.edge_actions`) — und aus dem Kern
+        und nicht von hier, aus demselben Grund wie bei den Merkmalen: Welche
+        Operation an einer Kante ansetzt, ist eine Aussage über Geometrie.
+
+        ``title`` ist die Zeile, die der Kunde schon aus der Kantenliste des
+        Dialogs kennt („Senkrecht · 20 mm · x -20,0, y -15,0"). Der Schlüssel
+        dahinter steht nirgends im Fenster: Er ist eine Kennung aus sechs
+        Zahlen und keine Beschriftung (§2.4).
+        """
+        from app.core.perceive.actions import edge_actions
+
+        self.clear()
+        self._feature_id = None
+        self._empty.setVisible(False)
+
+        heading = QLabel(title, self)
+        heading.setWordWrap(True)
+        fit_wrapped(heading)
+        set_level(heading, "section")
+        self._rows.insertWidget(self._rows.count() - 1, heading)
+        self._built.append(heading)
+
+        for action in edge_actions(key):
+            row = self._build_action(action)
+            self._rows.insertWidget(self._rows.count() - 1, row)
+            self._built.append(row)
+
     def shown_part_step(self) -> int | None:
         """Der Schritt, dessen Baustein gerade dasteht — sonst ``None``.
 
@@ -5049,7 +5082,13 @@ class FeaturePanel(QWidget):
             for field in action.fields:
                 editor = self._build_field(field, box)
                 widgets[str(field.name)] = editor
-                self._watch(editor, str(action.op), tuple(action.fields), widgets)
+                self._watch(
+                    editor,
+                    str(action.op),
+                    tuple(action.fields),
+                    widgets,
+                    tuple(getattr(action, "fixed", ())),
+                )
                 label = QLabel(str(field.label), box)
                 label.setWordWrap(True)
                 # **Die Beschriftung gehört an das Feld, nicht nur daneben.**
@@ -5133,6 +5172,7 @@ class FeaturePanel(QWidget):
         button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         op_name = str(action.op)
         entries = tuple(action.fields)
+        fixed = tuple(getattr(action, "fixed", ()))
 
         def run(_checked: bool = False) -> None:
             # **Ein Baustein ändert seinen Schritt, er legt keinen zweiten an.**
@@ -5142,16 +5182,21 @@ class FeaturePanel(QWidget):
                 if action.op is None:
                     self.stepRemoveRequested.emit(step)
                 else:
-                    self.stepChangeRequested.emit(step, self._values(entries, widgets))
+                    self.stepChangeRequested.emit(step, self._values(entries, widgets, fixed))
                 return
-            self._emit(op_name, entries, widgets, every)
+            self._emit(op_name, entries, widgets, every, fixed)
 
         button.clicked.connect(run)
         layout.addWidget(button)
         return box
 
     def _watch(
-        self, editor: QWidget, op: str, fields: Sequence[Any], widgets: Mapping[str, QWidget]
+        self,
+        editor: QWidget,
+        op: str,
+        fields: Sequence[Any],
+        widgets: Mapping[str, QWidget],
+        fixed: Sequence[tuple[str, Any]] = (),
     ) -> None:
         """Meldet jede Änderung an einem Feld — für die Vorschau, nicht zum Tun.
 
@@ -5161,7 +5206,7 @@ class FeaturePanel(QWidget):
         """
 
         def report(*_ignored: object) -> None:
-            self.valuesChanged.emit(op, self._values(fields, widgets))
+            self.valuesChanged.emit(op, self._values(fields, widgets, fixed))
 
         if isinstance(editor, LengthSpin):
             editor.valueChangedMm.connect(report)
@@ -5204,13 +5249,26 @@ class FeaturePanel(QWidget):
         angle.setValue(float(field.value))
         return angle
 
-    def _values(self, fields: Sequence[Any], widgets: Mapping[str, QWidget]) -> dict[str, Any]:
-        """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns."""
+    def _values(
+        self,
+        fields: Sequence[Any],
+        widgets: Mapping[str, QWidget],
+        fixed: Sequence[tuple[str, Any]] = (),
+    ) -> dict[str, Any]:
+        """Was in den Feldern dieser Handlung steht, in der Einheit des Kerns.
+
+        ``fixed`` sind die Werte, die die Handlung mitbringt und die niemand
+        eingibt — an einer angeklickten Kante die Auswahl ``named`` und ihr
+        Schlüssel (:attr:`~app.core.perceive.actions.FeatureAction.fixed`).
+        Sie stehen **vor** den Feldern, damit ein Feld gleichen Namens gewinnt:
+        Was der Kunde sieht, gilt.
+        """
         params: dict[str, Any] = {}
         if self._feature_id is not None:
             # ``at_feature`` ist kein Feld: Welches Merkmal gemeint ist, steht
             # in der Auswahl, und eine Frage danach hätte ihre Antwort schon.
             params["at_feature"] = self._feature_id
+        params.update(dict(fixed))
         for field in fields:
             widget = widgets.get(str(field.name))
             if isinstance(widget, LengthSpin):
@@ -5229,13 +5287,14 @@ class FeaturePanel(QWidget):
         fields: Sequence[Any],
         widgets: Mapping[str, QWidget],
         every: QCheckBox | None = None,
+        fixed: Sequence[tuple[str, Any]] = (),
     ) -> None:
         """Die Werte einsammeln und die Operation nennen — gerechnet wird im Kern.
 
         Ist der Haken gesetzt, gilt sie allen gleichartigen Merkmalen des
         Körpers, und das Fenster macht daraus **eine** Transaktion.
         """
-        params = self._values(fields, widgets)
+        params = self._values(fields, widgets, fixed)
         if every is not None and every.isChecked() and self._feature_id is not None:
             group = self._groups.get(op)
             if group is None:

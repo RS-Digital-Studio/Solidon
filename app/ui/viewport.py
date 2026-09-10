@@ -91,6 +91,7 @@ from app.ui import cursors
 from app.ui.icons import icon
 from app.ui.labels import (
     display_unit,
+    edge_label,
     feature_label,
     feature_name,
     length,
@@ -1367,6 +1368,37 @@ FEATURE_EDGE_ANGLE = CURVATURE_LIMIT
 #: Körper gerechnet — dieselbe Schwelle, die WCAG für lesbaren Text nennt, und
 #: aus demselben Grund: eine Linie, die man suchen muss, hilft niemandem.
 FEATURE_EDGE_WIDTH = 1.5
+
+#: Wie weit der Zeiger von einer bearbeitbaren Kante entfernt sein darf, um
+#: sie noch zu meinen — in Bildpunkten, nicht in Millimetern.
+#:
+#: Bildpunkte, weil eine Kante im Bild eine Linie ohne Breite ist: In
+#: Millimetern gemessen wäre der Fangbereich herangezoomt quer über die Fläche
+#: und herausgezoomt kleiner als der Zeiger selbst. Zehn ist etwas mehr als
+#: die Zugschwelle des Systems und weniger als die Reichweite eines Merkmals
+#: (:data:`FEATURE_REACH_SHARE`): Wer die Kante meint, zielt genauer als wer
+#: die Fläche meint.
+EDGE_REACH_PIXELS = 10.0
+
+#: Strichstärke der gewählten Kante. Dick genug, dass sie neben der
+#: Körperkante darunter als eigene Linie zu sehen ist — Farbe allein trüge die
+#: Aussage sonst (Regel 18), und die zweite Kodierung ist hier die Breite.
+SELECTED_EDGE_WIDTH = 5.0
+
+#: Wie weit eine Kante vom getroffenen Oberflächenpunkt entfernt liegen darf,
+#: als Anteil der Körperdiagonale.
+#:
+#: **Das ist die Antwort auf die Rückseite**, nicht auf die Genauigkeit: Der
+#: Bildabstand entscheidet weiter, wer gewinnt (:data:`EDGE_REACH_PIXELS`).
+#: Ohne diese Schranke gewann aber eine **verdeckte** Kante, sobald sie im
+#: Bild ein paar Punkte näher lag als die sichtbare davor — und weil die
+#: Hervorhebung vor dem Material gezeichnet wird, lag die Linie sichtbar
+#: mitten auf der Fläche.
+#:
+#: Der Anteil ist großzügig gewählt: Er soll die andere Seite des Körpers
+#: ausschließen und nicht die Kante, die zwei Zentimeter neben dem Zeiger
+#: beginnt. Genauer trennt der Bildabstand danach ohnehin.
+EDGE_REACH_WORLD_SHARE = 0.1
 
 #: Wie weit ein Klick danebengehen darf, als Anteil der Bilddiagonale.
 #:
@@ -3388,6 +3420,18 @@ class Viewport(QWidget):
     Auswahlmenge im Objektbaum liegt und nicht in der Ansicht.
     """
     """Ein in der Ansicht angeklicktes Merkmal — trägt seine ID (§18.5)."""
+    edgePicked = Signal(str, str)
+    """Ein Klick hat eine bearbeitbare Kante getroffen — Körper und Schlüssel.
+
+    Zwei Felder und kein `add`, anders als bei :attr:`featurePicked`: Eine
+    Kante wird einzeln gewählt. Wer mehrere verrunden will, nimmt die Gruppen
+    der Operation — „alle senkrechten" ist eine Auswahl und keine Sammlung
+    von Klicks.
+
+    Der Schlüssel kommt aus der Geometrie (``brep.edit.edge_key``) und
+    überlebt damit eine zweite Auswertung; er ist genau das, was die
+    Operationen *Verrunden* und *Fase anbringen* als ``edge_keys`` erwarten.
+    """
     objectPicked = Signal(str, bool)
     """Ein Klick hat einen Körper getroffen — leer heißt: daneben.
 
@@ -3881,6 +3925,31 @@ class Viewport(QWidget):
         # (:meth:`_through_aim`). Wie die Merkmalsdreiecke gehört sie einer
         # Auswertung und wird mit ihnen geleert.
         self._object_hulls: dict[ObjectId, Any] = {}
+        # Die bearbeitbaren Kanten je exaktem Körper — Schlüssel und Punkte
+        # (:meth:`_prepared_edges`). Dieselbe Bauart und derselbe Grund wie
+        # oben: Ein Körper aus einer STEP-Datei hat tausende Kanten, sie
+        # abzutasten kostet, und die Frage stellt jeder Klick neu.
+        self._edge_geometry: dict[ObjectId, tuple[tuple[str, Any], ...]] = {}
+        self._edges_checked: EvaluationResult | None = None
+        """Für welche Auswertung zuletzt geprüft wurde, ob die gewählte Kante
+        sie überlebt hat. Ohne dieses Feld lief die Prüfung bei jedem
+        Szenenaufbau — und die tastet alle Kanten des Körpers ab."""
+        self._edge_info: dict[tuple[ObjectId, str], Any] = {}
+        """Die ``EdgeInfo`` je Kante — was ihre Beschriftung braucht.
+
+        Sie entsteht ohnehin beim Abtasten; ohne sie rechnete das Fenster
+        ``edges_of`` für denselben Klick ein zweites Mal
+        (:meth:`edge_title`)."""
+        self._selected_edge: tuple[ObjectId, str] | None = None
+        """Die gewählte Kante — Körper und ihr Schlüssel (``edit.edge_key``).
+
+        Ein Schlüssel und keine Nummer, aus demselben Grund, aus dem die
+        Operation ihn führt: Ein Index in die Topologie verschiebt sich,
+        sobald ein Schritt davor etwas ändert (`app/core/brep/CLAUDE.md`).
+        Er steht neben der Merkmalsauswahl und nicht in ihr — eine Kante ist
+        kein Merkmal, sie hat keine Kennung, die die Erkennung vergibt.
+        """
+        self._edge_patch: Item | None = None
         """Je Körper die Dreiecke jedes Merkmals mit ihrem Hüllquader —
         vorbereitet, weil die Trefferfrage bei jeder Ruhepause des Zeigers neu
         gestellt wird (90 ms, :data:`HOVER_DELAY_MS`).
@@ -5131,6 +5200,24 @@ class Viewport(QWidget):
         self._feature_cells.clear()
         self._feature_bores.clear()
         self._object_hulls.clear()
+        # Die abgetasteten Kanten gehören der vorigen Auswertung, genau wie
+        # die Merkmalsdreiecke darüber: Eine Verrundung ändert sie, und ein
+        # Klick träfe danach, wo die Kante war. Und die **Auswahl** fällt mit,
+        # wenn ihre Kante den Schritt nicht überlebt hat — sonst zeigte die
+        # Hervorhebung auf einen Schlüssel, den es nicht mehr gibt.
+        self._edge_geometry.clear()
+        self._edge_info.clear()
+        # **Nachgesehen wird nur bei einer neuen Auswertung.** ``show_scene``
+        # läuft auch bei jedem Themenwechsel, jeder Auswahl und jedem Schritt
+        # der Schieber für Explosion, Schnitt und Schicht — dort ändert sich
+        # an den Kanten nichts, und das Nachsehen tastet sie alle neu ab.
+        # Dieselbe Bauart wie ``_shadow_splits`` und ``_edge_meshes``: Was
+        # sich merkt, wofür es gerechnet hat, rechnet nicht zweimal.
+        if self._selected_edge is not None and result is not self._edges_checked:
+            owner, key = self._selected_edge
+            if key not in {name for name, _points in self._prepared_edges(owner)}:
+                self._selected_edge = None
+        self._edges_checked = result
         # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
         # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
         # Stelle, an der die Zahl bekannt wird. Nur bei Änderung, sonst baute
@@ -6013,6 +6100,14 @@ class Viewport(QWidget):
         )
         if dropped_refs:
             self._remember_feature_refs(())
+        # **Eine gewählte Kante gehört ihrem Körper.** Wer einen anderen wählt
+        # — oder gar keinen —, meint sie nicht mehr. Ohne diese Zeile blieb
+        # die Linie am alten Körper stehen, und weil sie die Auswahlfarbe an
+        # sich zieht (:meth:`highlighted_object`), bekam der **neue** Körper
+        # gar keine: Escape ließ eine leuchtende Kante in der leeren Ansicht
+        # zurück, und ein Klick in den Objektbaum wählte sichtbar nichts.
+        if self._selected_edge is not None and self._selected_edge[0] != object_id:
+            self._drop_edge()
         self._selected = object_id
         # Der führende Körper steht nicht zweimal in der Auswahl: Sonst zählt
         # ``highlighted_objects`` ihn doppelt, und ein Vergleich auf Gleichheit
@@ -7523,8 +7618,82 @@ class Viewport(QWidget):
         self._redraw_features()
         self._draw()
 
+    def select_edge(self, object_id: ObjectId | None, key: str | None) -> None:
+        """Eine bearbeitbare Kante hervorheben — oder keine.
+
+        Die Kante steht **neben** der Merkmalsauswahl und ersetzt sie: Wer
+        eine Kante anklickt, meint sie und nicht die Fläche, an der sie liegt.
+        Umgekehrt räumt jede Merkmalsauswahl sie weg, denn zwei hervorgehobene
+        Stellen an einem Körper behaupten zwei Antworten auf eine Frage.
+        """
+        chosen = (object_id, key) if object_id is not None and key else None
+        if chosen == self._selected_edge:
+            return
+        # **Erst das Merkmal räumen, dann die Kante setzen.** Andersherum
+        # entstünde ein Ring: :meth:`select_feature` lässt seinerseits die
+        # Kante fallen und nähme die gerade gewählte gleich wieder mit.
+        if chosen is not None and self._selected_feature is not None:
+            self.select_feature(None)
+        self._selected_edge = chosen
+        self._redraw_edge_patch()
+        # Der Körper gibt die Auswahlfarbe an die Kante ab und holt sie
+        # zurück, sobald keine mehr gewählt ist — dieselbe Zeile wie bei
+        # :meth:`select_feature`, und aus demselben Grund.
+        self._apply_selection_colour()
+        if self.renderer is not None:
+            self._draw()
+
+    def _drop_edge(self) -> None:
+        """Die gewählte Kante fallen lassen — die eine Stelle dafür.
+
+        Sie hängt an mehreren Wegen, und jeder einzeln geschriebene wäre
+        einer, den der nächste vergisst: Ein anderer Körper im Baum, ein
+        gewähltes Merkmal, Escape. Bis hierher räumte nur der Kantenklick
+        selbst auf, und die Linie überlebte alles andere — samt der
+        Auswahlfarbe, die sie dem neuen Körper wegnahm.
+        """
+        if self._selected_edge is None:
+            return
+        self._selected_edge = None
+        self._redraw_edge_patch()
+        self._apply_selection_colour()
+
+    def edge_title(self, object_id: ObjectId, key: str) -> str:
+        """Wie diese Kante heißt — „Waagerecht · 30,00 mm · x -20,00, y 0,00".
+
+        Leer, wenn es sie an diesem Körper nicht mehr gibt.
+
+        **Die Auskunft steht hier, weil hier die Kanten schon liegen.** Das
+        Fenster rechnete ``edges_of`` für denselben Klick ein zweites Mal —
+        an einer Lochplatte mit 404 Kanten ist das keine Kleinigkeit, denn
+        die Nahtprüfung darin lief über jede Kante mal jede Fläche.
+
+        **Und sie rechnet nach, wenn nichts vorliegt.** Sonst hinge sie
+        daran, dass vorher jemand gepickt hat: Ein Aufrufer, der den
+        Schlüssel anderswoher hat, bekäme „gibt es nicht mehr" für eine
+        Kante, die es gibt. Vorbereitet wird ohnehin nur einmal je
+        Auswertung (:meth:`_prepared_edges`).
+        """
+        if (object_id, key) not in self._edge_info:
+            self._prepared_edges(object_id)
+        info = self._edge_info.get((object_id, key))
+        return edge_label(info) if info is not None else ""
+
+    def highlighted_edge(self) -> tuple[ObjectId, str] | None:
+        """Welche Kante gerade gewählt ist — Körper und Schlüssel.
+
+        Als eigene Auskunft, weil es offscreen keinen Renderer gibt: Ein Test
+        über die gezeichnete Linie prüfte dort nichts.
+        """
+        return self._selected_edge
+
     def select_feature(self, feature_id: FeatureId | None) -> None:
         self._selected_feature_refs = ()
+        # Umgekehrte Richtung derselben Regel wie in :meth:`select_edge` — und
+        # sie gilt auch für ``None``: Wer die Merkmalsauswahl ändert, hat die
+        # Kante nicht mehr gemeint, gleich ob ein Merkmal an ihre Stelle tritt
+        # oder keines.
+        self._drop_edge()
         self._selected_feature = feature_id
         self._selected_features = (feature_id,) if feature_id is not None else ()
         self._redraw_features()
@@ -7582,7 +7751,15 @@ class Viewport(QWidget):
         self._refresh_feature_selection()
 
     def _refresh_feature_selection(self) -> None:
-        """Die vollständig gesetzte Auswahl einmal an Markierung und Griff weitergeben."""
+        """Die vollständig gesetzte Auswahl einmal an Markierung und Griff weitergeben.
+
+        **Und die Kante fällt dabei.** Die beiden Sammelwege
+        (:meth:`select_features`, :meth:`select_feature_refs`) laufen hier
+        zusammen; ohne diese Zeile leuchteten Merkmal und Kante gleichzeitig
+        — zwei hervorgehobene Stellen an einem Körper, die zwei Antworten auf
+        eine Frage behaupten (:meth:`select_edge`).
+        """
+        self._drop_edge()
         self._redraw_features()
         # Der Körper gibt die Auswahlfarbe an das Merkmal ab und holt sie
         # zurück, sobald keines mehr gewählt ist.
@@ -7617,13 +7794,24 @@ class Viewport(QWidget):
 
     def highlighted_object(self) -> ObjectId | None:
         """Welcher Körper die Auswahlfarbe trägt — keiner, solange ein Merkmal
-        gewählt ist (§19.1).
+        **oder eine Kante** gewählt ist (§19.1).
 
         Als eigene Auskunft und nicht als Zustand des Renderers, aus demselben
         Grund wie bei :meth:`gizmo_target`: offscreen gibt es keinen, und ein
         Test, der sich dort überspringt, prüft nie etwas.
+
+        **Die Kante steht hier aus demselben Grund wie das Merkmal, und der
+        Fall war im Bild sofort zu sehen:** Ein Klick auf eine Kante wählt
+        zweierlei, den Körper und die Stelle darauf; leuchtet der Körper
+        weiter, liegt die hervorgehobene Linie in derselben Farbe darauf und
+        ist unsichtbar (gemessen am echten Fenster, 10.09.2026 — die Suite
+        konnte es nicht zeigen, weil offscreen niemand hinsieht).
         """
-        if self._selection_marking_hidden() or self.highlighted_feature_refs():
+        if (
+            self._selection_marking_hidden()
+            or self.highlighted_feature_refs()
+            or self._selected_edge is not None
+        ):
             return None
         return self._selected
 
@@ -7748,6 +7936,7 @@ class Viewport(QWidget):
         if self.renderer is None:
             return
         self._redraw_feature_patch()
+        self._redraw_edge_patch()
         self._redraw_protected_patch()
         self._redraw_hover_patch()
         for actor in self._feature_actors:
@@ -8346,6 +8535,50 @@ class Viewport(QWidget):
     def candidates(self) -> tuple[tuple[str, str], ...]:
         """Welche Kandidaten gerade leuchten — Auskunft für Tests und Dialog."""
         return self._candidates
+
+    def _redraw_edge_patch(self) -> None:
+        """Die gewählte Kante als eigene Linie über dem Körper.
+
+        Sie liegt genau auf der Körperkante darunter, und deshalb trägt die
+        Aussage nicht die Farbe allein: Die Linie ist mehr als dreimal so
+        breit wie die Kantendarstellung (:data:`SELECTED_EDGE_WIDTH` gegen
+        :data:`FEATURE_EDGE_WIDTH`), und sie wird vor dem Material gezeichnet
+        (``keep_in_front``) — eine Marke, die im Material verschwindet, sagt
+        nichts über die Stelle, die sie meint (Regel 18, ``api.py``).
+        """
+        if self.renderer is None:
+            return
+        if self._edge_patch is not None:
+            self.renderer.remove(self._edge_patch)
+            self._edge_patch = None
+        if self._selected_edge is None or self._result is None:
+            return
+        if self._selection_marking_hidden():
+            return
+
+        import numpy as np
+
+        object_id, key = self._selected_edge
+        entry = self._result.scene.objects.get(object_id)
+        points = next((pts for name, pts in self._prepared_edges(object_id) if name == key), None)
+        if entry is None or points is None or len(points) < 2:
+            return
+        # **Nur an einem sichtbaren Körper**, wie die Merkmalsfläche daneben
+        # (`_redraw_feature_patch` über `_face_indices`). Ohne diese Frage
+        # schwebte die bernsteinfarbene Linie allein in der leeren Ansicht,
+        # sobald der Körper ausgeblendet war oder auf einer Platte lag, die
+        # gerade nicht gezeigt wird (§18.8, §25).
+        if not self._in_pick_view(object_id, entry):
+            return
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        self._edge_patch = self.renderer.add_lines(
+            np.asarray(points, dtype=float) + offset,
+            name=f"edge:{object_id}",
+            colour=SELECTED_COLOUR,
+            width=SELECTED_EDGE_WIDTH,
+            connected=True,
+            keep_in_front=True,
+        )
 
     def _redraw_feature_patch(self) -> None:
         """Die Dreiecke des gewählten Merkmals in der Auswahlfarbe über dem Körper.
@@ -9110,6 +9343,158 @@ class Viewport(QWidget):
         self._feature_geometry[object_id] = prepared
         return prepared
 
+    def _prepared_edges(self, object_id: ObjectId | None) -> tuple[tuple[str, Any], ...]:
+        """Die bearbeitbaren Kanten eines Körpers — Schlüssel und Punkte.
+
+        **Nur an einem exakten Körper**, und das ist keine Einschränkung,
+        sondern die Sache: Ein Netz hat die Kanten verloren, aus denen es
+        gebaut wurde (`app/core/brep/CLAUDE.md`, „Die Einbahnstraße"). Was ein
+        Dreiecksnetz als Kante zeigt, ist eine Facettengrenze — sie zu
+        verrunden rundete die Facette.
+
+        Gerechnet wird je Auswertung einmal (:attr:`_edge_geometry`), aus
+        demselben Grund wie bei den Merkmalsdreiecken: Ein Körper aus einer
+        STEP-Datei bringt tausende Kanten mit, jede will abgetastet werden,
+        und die Frage stellt jeder Klick neu.
+
+        Ohne OpenCASCADE gibt es keine — der Kern meldet sich dann ab (§36),
+        und eine leere Antwort ist hier die richtige: Die Operationen dazu
+        sind ohne ihn ohnehin gesperrt.
+        """
+        if object_id is None or self._result is None:
+            return ()
+        cached = self._edge_geometry.get(object_id)
+        if cached is not None:
+            return cached
+
+        import numpy as np
+
+        from app.core.brep import edit as brep_edit
+        from app.core.brep.kernel import Solid, available
+
+        entry = self._result.scene.objects.get(object_id)
+        body = entry.mesh if entry is not None else None
+        if not available() or not isinstance(body, Solid):
+            self._edge_geometry[object_id] = ()
+            return ()
+        # **Mit der Abweichung dieses Körpers**, nicht der Modulvorgabe:
+        # ``edge_points`` verspricht „dieselbe Zahl, mit der der Kern
+        # tesselliert — was im Bild rund aussieht, soll sich auch rund
+        # anklicken lassen", und ``Solid.deflection`` weicht ab, wo ein
+        # Baustein oder ein Profil sie gesetzt hat.
+        prepared: list[tuple[str, Any]] = []
+        for info in brep_edit.edges_of(body):
+            key = brep_edit.edge_key(info)
+            prepared.append((key, np.asarray(brep_edit.edge_points(info, body.deflection), float)))
+            self._edge_info[(object_id, key)] = info
+        self._edge_geometry[object_id] = tuple(prepared)
+        return self._edge_geometry[object_id]
+
+    def _edge_at(
+        self, x: int, y: int, object_id: ObjectId | None, behind: Vec3 | None = None
+    ) -> str | None:
+        """Die bearbeitbare Kante unter einem Bildpunkt — ihr Schlüssel.
+
+        Gemessen wird **im Bild** und nicht in der Szene: Eine Kante ist dort
+        eine Linie ohne Breite, und wer sie meint, zeigt ein paar Bildpunkte
+        daneben. Die Rechnung dazu steht als reine Funktion in
+        ``render.edges.nearest_polyline`` — sie entscheidet nach Abstand und
+        bei Gleichstand nach Tiefe, damit ein Klick auf die Silhouette die
+        vordere Kante trifft und nicht die dahinter.
+
+        **``behind`` ist der getroffene Oberflächenpunkt, und er entscheidet
+        über die Rückseite.** Die Tiefe allein tut das nicht: Sie greift erst
+        bei praktisch gleichem Bildabstand, und eine verdeckte Kante, die zwei
+        Bildpunkte näher liegt als die sichtbare davor, gewann — im Bild eine
+        bernsteinfarbene Linie mitten auf einer Fläche, denn sie wird vor dem
+        Material gezeichnet. Wer weiter als :data:`EDGE_REACH_WORLD_SHARE` der
+        Körperdiagonale vom Treffer entfernt liegt, nimmt deshalb gar nicht
+        erst teil.
+
+        **Und derselbe Filter macht die Sache billig.** Er läuft in einem
+        NumPy-Zug über die vorbereiteten Punkte; projiziert wird nur, was ihn
+        übersteht. An einem Gewindebolzen sind das statt 5692 Punkten die
+        wenigen einer Handvoll Kanten.
+
+        **Der Versatz der Ansicht gehört dazu** (:meth:`_shown_offset`): Ein
+        Körper auf Platte 2 wird eine Bettbreite weiter gezeichnet, und ohne
+        ihn läge jede Kante um genau diese Breite daneben.
+        """
+        prepared = self._prepared_edges(object_id)
+        if not prepared or self.renderer is None or self._result is None:
+            return None
+
+        import numpy as np
+
+        from app.ui.render.edges import nearest_polyline
+
+        entry = self._result.scene.objects.get(object_id) if object_id else None
+        if entry is None:
+            return None
+        offset = np.asarray(self._shown_offset(entry, self._result), dtype=float)
+        near = self._edges_near(prepared, offset, behind, entry)
+        if not near:
+            return None
+        ratio = self._device_ratio()
+        projected: list[Any] = []
+        for index in near:
+            shown = prepared[index][1] + offset
+            projected.append(
+                np.asarray(
+                    [self.renderer.world_to_display((p[0], p[1], p[2])) for p in shown],
+                    dtype=float,
+                )
+            )
+        found = nearest_polyline(projected, float(x), float(y), EDGE_REACH_PIXELS * ratio)
+        return prepared[near[found]][0] if found is not None else None
+
+    def _edges_near(
+        self,
+        prepared: Sequence[tuple[str, Any]],
+        offset: Any,
+        behind: Vec3 | None,
+        entry: Any,
+    ) -> list[int]:
+        """Welche Kanten überhaupt in Frage kommen — ihre Plätze in ``prepared``.
+
+        Gemessen wird gegen den **Hüllquader** der Kante und nicht gegen ihre
+        Stützpunkte. Der erste Anlauf tat das zweite und warf zwölf von zwölf
+        Kanten weg: Eine gerade Kante hat genau zwei Punkte, und bei einer
+        dreißig Millimeter langen liegt die Mitte fünfzehn davon entfernt —
+        derselbe Fehler, den :func:`~app.ui.render.edges.nearest_polyline` im
+        Bildraum ausdrücklich vermeidet, zwei Funktionen weiter noch einmal
+        gemacht.
+
+        Der Quader ist großzügiger als die Kante, und das ist hier richtig:
+        Ein Vorfilter darf zu viel durchlassen, nie zu wenig — genauer trennt
+        der Bildabstand danach.
+
+        Ohne getroffenen Punkt kommen alle in Frage: Der Aufrufer weiß dann
+        nichts über die Tiefe, und eine erfundene Grenze wäre schlechter als
+        keine (Regel 21).
+        """
+        if behind is None:
+            return list(range(len(prepared)))
+
+        import numpy as np
+
+        try:
+            reach = float(entry.mesh.bounds.diagonal) * EDGE_REACH_WORLD_SHARE
+        except Exception:  # pragma: no cover — hängt am Körper
+            return list(range(len(prepared)))
+        target = np.asarray(behind, dtype=float)
+        near: list[int] = []
+        for index, (_key, points) in enumerate(prepared):
+            shown = np.asarray(points, dtype=float) + offset
+            low = shown.min(axis=0)
+            high = shown.max(axis=0)
+            # Abstand des Punktes zum achsparallelen Quader: je Achse, was
+            # links beziehungsweise rechts übersteht, und davon die Länge.
+            outside = np.maximum(np.maximum(low - target, target - high), 0.0)
+            if float(np.linalg.norm(outside)) <= reach:
+                near.append(index)
+        return near
+
     def set_direct_picking(self, active: bool) -> None:
         """Schaltet die Auswahltiefe ab, solange ein Dialog nach einem Merkmal
         fragt (§18.5).
@@ -9168,28 +9553,82 @@ class Viewport(QWidget):
         object_id = self._object_at(point)
         if object_id is None:
             return None, None
-        if direct or self._direct_picking:
-            return object_id, self._feature_at(point)
-        if add:
-            return object_id, (self._feature_at(point) if self.selection_depth() >= 2 else None)
-        if object_id != self._selected:
+        if not self._goes_deeper(object_id, direct=direct, add=add):
             # Erste Stufe: ein anderer Körper wird als Ganzes gewählt.
             return object_id, None
-        # Derselbe Körper, also eine Stufe tiefer. Steht dort kein Merkmal,
-        # bleibt es beim Körper — und ein gewähltes Merkmal fällt weg, denn
-        # der Klick ging auf die nackte Fläche.
+        # Eine Stufe tiefer. Steht dort kein Merkmal, bleibt es beim Körper —
+        # und ein gewähltes Merkmal fällt weg, denn der Klick ging auf die
+        # nackte Fläche.
         return object_id, self._feature_at(point)
 
+    def _edge_click(self, x: int, y: int, point: Vec3, *, add: bool = False) -> bool:
+        """Ob dieser Klick eine bearbeitbare Kante gewählt hat.
+
+        Vier Bedingungen, und jede hat ihren Grund:
+
+        * **Kein Dazunehmen.** Eine Kante wird einzeln gewählt — wer mehrere
+          verrunden will, nimmt die Gruppen der Operation („alle senkrechten"
+          ist eine Auswahl und keine Sammlung von Klicks, siehe
+          :attr:`edgePicked`). Umschalt und Strg meinen also den Körper oder
+          das Merkmal, und ein Kantentreffer dazwischen verschluckte das
+          Dazunehmen: Die Linie leuchtete, und der Objektbaum erfuhr nichts.
+        * **Eine Stufe tiefer** (:meth:`_goes_deeper`). Der erste Klick auf
+          einen Körper meint den Körper — auch dann, wenn er zufällig neben
+          einer Kante landet. ``add`` geht dorthin mit und wird nicht
+          festgeschrieben; genau diese zweite Rechnung sollte
+          :meth:`_goes_deeper` verhindern.
+        * **Nicht, solange ein Dialog nach einem Merkmal fragt**
+          (:meth:`set_direct_picking`). Dort ist ein Klick eine Antwort, und
+          die Frage lautete nicht „welche Kante".
+        * **Der Körper unter dem Zeiger.** Die Kanten gehören ihm; die eines
+          Nachbarn zu treffen, weil sie im Bild dahinter liegt, wäre eine
+          Auswahl, die niemand gemeint hat.
+        """
+        if add or self._direct_picking:
+            return False
+        object_id = self._object_at(point)
+        if object_id is None or not self._goes_deeper(object_id, direct=False, add=add):
+            return False
+        key = self._edge_at(x, y, object_id, behind=point)
+        if key is None:
+            return False
+        self.select_edge(object_id, key)
+        self.edgePicked.emit(object_id, key)
+        return True
+
+    def _goes_deeper(self, object_id: ObjectId, *, direct: bool, add: bool) -> bool:
+        """Ob ein Klick auf diesen Körper die zweite Stufe meint (§18.5).
+
+        Die Stufenfrage steht hier und nicht zweimal ausgeschrieben, weil sie
+        zwei Anrufer hat: das Merkmal (:meth:`_click_target`) und die Kante
+        (:meth:`_edge_click`). Zwei Rechnungen für dieselbe Frage laufen
+        auseinander, und dann wählte ein Klick eine Kante an einem Körper, den
+        derselbe Klick gerade erst als Ganzes gewählt hätte.
+        """
+        if direct or self._direct_picking:
+            return True
+        if add:
+            return self.selection_depth() >= 2
+        return object_id == self._selected
+
     def selection_depth(self) -> int:
-        """Wie tief die Auswahl steht: 0 nichts, 1 ein Körper, 2 ein Merkmal.
+        """Wie tief die Auswahl steht: 0 nichts, 1 ein Körper, 2 ein Merkmal
+        **oder eine Kante**.
 
         Als eigene Auskunft, damit der Weg heraus (:meth:`step_selection_out`)
         und der Weg hinein (:meth:`_click_target`) dieselbe Stufenzählung
         benutzen und nicht zwei.
+
+        **Die Kante zählt hier mit, sonst ist der Weg zurück für sie nicht
+        eingelöst** (§18.5): Ohne sie stand die Tiefe bei gewählter Kante auf
+        1, und Escape sprang von ihr aus dem Körper heraus statt eine Stufe
+        auf ihn zurück.
         """
         if self._selected is None:
             return 0
-        return 2 if self.highlighted_feature_refs() else 1
+        if self.highlighted_feature_refs() or self._selected_edge is not None:
+            return 2
+        return 1
 
     def _would_pick_feature(self, point: Vec3) -> bool:
         """Ob der **nächste** Klick hier ein Merkmal wählen würde.
@@ -12744,7 +13183,23 @@ class Viewport(QWidget):
             # die Auswahl ohne den Baum wieder loszuwerden.
             if not add:
                 self.objectPicked.emit("", False)
+                self.select_edge(None, None)
             return
+        # **Die Kante kommt vor dem Merkmal**, und zwar nur dort, wo ohnehin
+        # eine Stufe tiefer gegangen wird. Wer wenige Bildpunkte neben einer
+        # Kante klickt, meint sie und nicht die Fläche, an der sie liegt — an
+        # einer Fläche ist jede Stelle gleich gut, an einer Kante nicht.
+        #
+        # **Aber nur, wenn der Klick überhaupt auswählt.** Messen, Trennen,
+        # Skelett und Formen setzen eine **Stelle**, und die zweigt
+        # :meth:`_on_picked` ab — davor gefragt verschluckte die Kante den
+        # Messklick, und zwar stumm: Kein Satz, kein erster Punkt, nur eine
+        # hervorgehobene Linie. Gelesen wird dieselbe Rangfolge wie beim
+        # Zeiger (:meth:`_means_a_feature`), nicht eine zweite Aufzählung der
+        # Flaggen.
+        if self._means_a_feature() and self._edge_click(x, y, point, add=add):
+            return
+        self.select_edge(None, None)
         self._on_picked(point, add)
 
     @property

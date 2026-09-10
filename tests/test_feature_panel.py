@@ -26,8 +26,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, read_mesh
-from app.core.perceive import features
+from app.core.perceive import actions, features
 from app.core.perceive.actions import actions_for
 from app.core.registry import REGISTRY, validate
 from app.core.types import Feature
@@ -1274,3 +1275,78 @@ def test_the_live_preview_of_a_part_changes_its_step(qt_app: QApplication) -> No
     MainWindow._preview_feature_change(fenster)
     assert len(gerufen) == 1 and gerufen[0]["drafts"] is not None, gerufen
     assert "change_op" not in gerufen[0]
+
+
+def test_the_edge_panel_carries_the_key_the_customer_never_sees(qt_app: QApplication) -> None:
+    """Eine angeklickte Kante bietet Verrunden und Fasen an — mit einem Feld.
+
+    Die zwei Werte, die der Kunde **nicht** eingibt, reisen als ``fixed``
+    mit: Die Auswahl ``named`` hat er mit dem Klick beantwortet, und der
+    Schlüssel ist eine Kennung aus sechs Zahlen und keine Beschriftung
+    (§2.4). Stünden sie als Felder da, wäre das Fenster eine Abschrift des
+    Dialogs, den es ersetzt.
+
+    **Die Gegenprobe zum Schlüssel steht im Test selbst:** Er darf in keinem
+    sichtbaren Text auftauchen. Ohne diese Zeile wäre ein Panel grün, das
+    ``e:-20.00,0.00,20.00:0.000,1.000,0.000`` als Beschriftung zeigt.
+    """
+    from app.core.bootstrap import load_operations
+
+    # Ohne geladenes Register ist die Grundmenge leer, und der Test wäre grün,
+    # ohne eine Handlung gesehen zu haben.
+    load_operations()
+    if not REGISTRY.has("fillet_edges"):
+        pytest.skip("OpenCASCADE is an optional dependency")
+    schluessel = "e:-20.00,0.00,20.00:0.000,1.000,0.000"
+    panel = FeaturePanel()
+    gerufen: list[tuple[str, dict[str, Any]]] = []
+    panel.operationRequested.connect(lambda op, werte: gerufen.append((op, dict(werte))))
+
+    panel.show_edge(schluessel, "Waagerecht · 30,00 mm · x -20,00, y 0,00")
+
+    knoepfe = {b.text(): b for b in panel.findChildren(QPushButton)}
+    assert set(knoepfe) == {
+        str(REGISTRY.get("fillet_edges").title),
+        str(REGISTRY.get("chamfer_edges").title),
+    }, "an einer Kante gibt es genau diese zwei Handlungen"
+
+    for beschriftung in panel.findChildren(QLabel):
+        assert schluessel not in beschriftung.text(), "der Schlüssel ist keine Beschriftung"
+
+    knoepfe[str(REGISTRY.get("fillet_edges").title)].click()
+
+    assert len(gerufen) == 1
+    op, werte = gerufen[0]
+    assert op == "fillet_edges"
+    assert werte["edges"] == "named", "der Klick hat die Auswahl beantwortet"
+    assert werte["edge_keys"] == schluessel
+    # Und der Radius kommt aus dem Register, nicht aus einer Zahl hier.
+    vorgabe = next(e for e in REGISTRY.get("fillet_edges").params.spec() if e.name == "radius")
+    assert werte["radius"] == pytest.approx(float(vorgabe.default))
+
+
+def test_no_feature_kind_falls_back_to_the_sentence_that_says_nothing() -> None:
+    """Jede erkennbare Art begründet ihre Absagen selbst (Regel 17).
+
+    Der Fallback ``_UNKNOWN_KIND`` — „Für diese Art von Merkmal gibt es noch
+    keine Handlung." — ist genau das Ende ohne Weg nach vorn, das Regel 17
+    verbietet. Bis zum 10.09.2026 stand er an **jeder** der fünf Zeilen eines
+    Gewindes, obwohl es zwei Wege gibt: den Schritt des Bausteins, aus dem es
+    stammt (§21.2), und bei einem eingelesenen Modell das Verschließen.
+
+    Gefunden bei einer Durchsicht aller zehn Arten auf Roberts Bitte („auch
+    alle anderen mal gründlich kontrollieren"). Der Test hält sie fest: Wer
+    eine Merkmalsart ergänzt, ohne ihr einen Satz zu geben, bekommt hier einen
+    roten Lauf statt eines Panels aus fünf nichtssagenden Zeilen.
+    """
+    load_operations()
+    speechless = []
+    for kind in sorted(features.DETECTABLE_KINDS | {"thread"}):
+        feature = Feature(id="x_1", kind=kind, provenance="detected", params={})
+        for action in actions_for(feature):
+            if action.op is None and str(action.reason) == str(actions._UNKNOWN_KIND):
+                speechless.append(f"{kind}/{action.title}")
+    assert not speechless, (
+        f"Absagen ohne eigenen Grund: {speechless} — ein Fehler endet nie mit "
+        "„geht nicht“ (Regel 17)"
+    )

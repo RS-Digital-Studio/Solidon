@@ -14397,3 +14397,47 @@ def test_the_object_tree_offers_the_filament_where_the_body_stands(
     asked.clear()
     window.object_tree._on_cell_clicked(tree.indexFromItem(row, 0))
     assert asked == [], "ein Klick auf den Namen wählt aus und weist nichts zu"
+
+
+def test_a_clicked_edge_reaches_the_selection_window(window: MainWindow) -> None:
+    """Der Klick auf eine Kante endet im Auswahlfenster, nicht im Signal.
+
+    Der Anschluss ist die Zusage: ``Viewport.edgePicked`` gibt es, das Panel
+    kann Kanten zeigen, und dazwischen liegt eine Zeile in ``__init__``. Ohne
+    sie wären beide Hälften einzeln geprüft und grün, und im Fenster
+    passierte beim Anklicken einer Kante nichts.
+
+    Gefahren wird deshalb das **Signal der Ansicht** und nicht die Methode
+    dahinter — dieselbe Regel wie überall: Wer eine Oberfläche prüft,
+    drückt, tippt und wählt.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    from app.core.brep import edit as brep_edit
+    from app.core.brep.features import features_of
+    from app.core.brep.kernel import available
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene, SceneObject
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    solid = brep_edit.box(40.0, 30.0, 20.0)
+    entry = SceneObject(
+        id="block", name="Block", mesh=solid, kind="brep", features=features_of(solid)
+    )
+    ergebnis = EvaluationResult(scene=Scene(objects={"block": entry}))
+    window.session.last_result = ergebnis
+    # **Die Ansicht kennt die Szene, sonst kennt sie die Kanten nicht.** Im
+    # Betrieb ist das immer so; ohne diese Zeile prüfte der Test eine Lage,
+    # die es nicht gibt — und bekäme „diese Kante gibt es nicht mehr".
+    window.viewport.show_scene(ergebnis)
+    kante = next(info for info in brep_edit.edges_of(solid) if info.upright)
+    schluessel = brep_edit.edge_key(kante)
+
+    window.viewport.edgePicked.emit("block", schluessel)
+
+    knoepfe = [b.text() for b in window.feature_panel.findChildren(QPushButton)]
+    assert str(REGISTRY.get("fillet_edges").title) in knoepfe, (
+        "die angeklickte Kante bietet ihre Handlungen an"
+    )

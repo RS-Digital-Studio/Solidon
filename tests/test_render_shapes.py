@@ -15,7 +15,7 @@ import pytest
 import trimesh
 
 from app.ui.render import shapes
-from app.ui.render.edges import feature_edges
+from app.ui.render.edges import feature_edges, nearest_polyline
 
 
 def as_trimesh(mesh: shapes.Mesh) -> trimesh.Trimesh:
@@ -133,3 +133,29 @@ def test_feature_edges_are_the_creases_and_the_open_rims() -> None:
     assert len(feature_edges(roof, roof_faces, 30.0)) == 7 * 2
     assert len(feature_edges(roof, roof_faces, 100.0)) == 6 * 2
     assert feature_edges(roof, np.zeros((0, 3), dtype=int), 30.0).shape == (0, 3)
+
+
+def test_the_pointer_finds_the_edge_it_points_at_and_the_nearer_of_two() -> None:
+    """Welche Kante ein Klick meint — die Rechnung hinter dem Anklicken.
+
+    Drei Lagen, und jede prüft eine andere Hälfte der Regel:
+
+    * Der Zeiger liegt **zwischen** den Endpunkten einer langen Kante. Wer
+      Punktabstände misst statt Streckenabstände, findet sie hier nicht.
+    * Zwei Kanten liegen im Bild **übereinander** — die Silhouette eines
+      Quaders von vorn. Sichtbar ist die vordere, und die Tiefe ist das
+      einzige, was sie unterscheidet.
+    * Der Zeiger liegt **daneben**. Dann ist keine Kante gemeint, und der
+      entfernteste Linienzug ist keine Antwort.
+    """
+    lang = np.array([[10.0, 10.0, 0.2], [10.0, 90.0, 0.2]])
+    quer = np.array([[0.0, 55.0, 0.5], [100.0, 55.0, 0.5]])
+    hinten = np.array([[10.0, 10.0, 0.8], [10.0, 90.0, 0.8]])
+
+    assert nearest_polyline([lang, quer], 12.0, 50.0, 8.0) == 0, "die Strecke zählt, nicht ihr Ende"
+    assert nearest_polyline([lang, quer], 60.0, 54.0, 8.0) == 1
+    assert nearest_polyline([hinten, lang], 11.0, 50.0, 8.0) == 1, "die vordere ist die sichtbare"
+    assert nearest_polyline([lang, quer], 60.0, 20.0, 8.0) is None
+    # Ein Linienzug aus einem einzigen Punkt ist keine Strecke und nimmt nicht
+    # teil; sonst zöge er den Zeiger auf eine Kante ohne Ausdehnung.
+    assert nearest_polyline([np.array([[60.0, 20.0, 0.1]])], 60.0, 20.0, 8.0) is None

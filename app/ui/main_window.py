@@ -1866,6 +1866,7 @@ class MainWindow(QMainWindow):
         # entscheidet das Fenster, wie bei ``measurementStatus``.
         self.viewport.gizmoStatus.connect(self.announce)
         self.viewport.featurePicked.connect(self._on_feature_picked)
+        self.viewport.edgePicked.connect(self._on_edge_picked)
         self.viewport.objectPicked.connect(self._on_object_picked)
         self.viewport.contextMenuAt.connect(self._on_viewport_context_menu)
         self.viewport.pointPicked.connect(self._on_point_picked)
@@ -10463,6 +10464,55 @@ class MainWindow(QMainWindow):
         self.viewport.set_hidden(hidden)
         self.object_tree.set_hidden(hidden)
         self.announce(f"{len(hidden)} × {tr('ausgeblendet')}" if hidden else "")
+
+    def _on_edge_picked(self, object_id: str, key: str) -> None:
+        """Eine angeklickte Kante ins Auswahlfenster — mit ihren zwei Handlungen.
+
+        Der Weg ist derselbe wie beim Merkmal, und das ist der Punkt: Wer eine
+        Kante anklickt, will sie verrunden oder fasen, und beides steht dann
+        an derselben Stelle wie der Durchmesser einer angeklickten Bohrung —
+        als Feld mit einem Knopf darunter, nicht als Menüweg mit Dialog
+        (Robert, 09.09.2026: „statt nochmal über einen Button und Dialog zu
+        gehen, eher den Wert eingeben und dann bestätigen").
+
+        Bis hierher gab es die Kantenwahl nur als Liste im Dialog: Der
+        Renderer pickte Flächen und Merkmale, keine Kanten.
+        """
+        title = self.viewport.edge_title(object_id, key)
+        if not title:
+            # **Die Kante gibt es nicht mehr** — und dann bleibt sie auch
+            # nicht hervorgehoben stehen. Ein leeres Fenster über einer
+            # leuchtenden Linie nennt seine Ursache nicht (Regel 17).
+            self.viewport.select_edge(None, None)
+            self.feature_panel.clear()
+            self.announce(
+                tr("Diese Kante gibt es an diesem Körper nicht mehr — wählen Sie sie neu.")
+            )
+            return
+        # **Der Baum ist der Eigentümer der Auswahl** (§18.5): Bliebe seine
+        # Merkmalszeile markiert, widerspräche eine Ansicht der anderen.
+        #
+        # **Und die Kante wird danach neu gesetzt, nicht vorher.** Der Weg
+        # durch den Baum meldet „kein Merkmal" zurück, und
+        # ``_on_feature_selected(None)`` lässt die Kante fallen — sie wäre
+        # sonst gewählt und im nächsten Atemzug wieder weg. Gefragt wird
+        # vorher, ob überhaupt etwas zu räumen ist: Im Normalfall steht dort
+        # nichts, und dann kostet die Kantenwahl keinen Umweg.
+        if self.object_tree.selected_features():
+            self.object_tree.select_features([])
+            self.viewport.select_edge(object_id, key)
+        self._feature_shown = None
+        # Die Statuszeile nennt die Kante, denn im Bild trägt sie nur Farbe
+        # und Strichstärke — für einen Bildschirmleser wäre sie sonst allein
+        # an der Fensterüberschrift zu erkennen (Regel 18).
+        self.measurements.setText(title)
+        # Zugemacht heißt „bei diesem Merkmal nicht", nicht „in dieser
+        # Sitzung nie wieder" — dieselbe Zeile wie bei der Merkmalsauswahl.
+        # Ohne sie leuchtete die Kante, und die beiden Handlungen dazu waren
+        # über keinen Weg mehr erreichbar.
+        self.feature_dock.forget_dismissal()
+        self.feature_panel.show_edge(key, title)
+        self.feature_dock.reveal()
 
     def _on_feature_picked(self, feature_id: str, add: bool = False) -> None:
         """Ein Klick in der Ansicht wählt das Merkmal auch im Baum aus (§18.5).
