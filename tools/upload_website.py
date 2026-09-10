@@ -43,6 +43,7 @@ from app.core.http import (  # noqa: E402 - Repositorypfad gilt erst ab hier
     RejectRedirects,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     read_limited,
     response_url,
@@ -131,12 +132,18 @@ _PACKAGE_FIELDS = frozenset({"file", "url", "size", "sha256"})
 #: bedient, von dem, was dauerhaft dort liegt.
 _VERSIONED_NAME = re.compile(r"\d+\.\d+\.\d+")
 _PACKAGE_PLATFORMS = frozenset({"windows", "linux", "macos-arm64", "macos-x86_64"})
-_PUBLIC_OPENER = urllib.request.build_opener(RejectRedirects())
 
 
 def _open_public(request: urllib.request.Request, *, timeout: float) -> Any:
-    """Öffnet eine öffentliche Website-Datei ohne Weiterleitungen."""
-    return _PUBLIC_OPENER.open(request, timeout=timeout)
+    """Öffnet eine öffentliche Website-Datei ohne Weiterleitungen.
+
+    Der Öffner entsteht je Abruf: Die Gesamtfrist steckt in ihm, und sie
+    gilt auch für Statuszeile und Kopfzeilen. ``timeout`` allein begrenzt
+    nur die einzelne Leseoperation.
+    """
+    opener = urllib.request.build_opener(RejectRedirects())
+    apply_header_deadline(opener, deadline_after(timeout))
+    return opener.open(request, timeout=timeout)
 
 
 _DEFAULT_OPEN_PUBLIC = _open_public
@@ -831,10 +838,20 @@ def verify_downloads() -> int:
     print(f"{len(promised)} versprochene Datei(en) gegen {base}")
 
     broken: list[str] = []
+    unmeasured: list[str] = []
     for name in sorted(promised):
         local = LOCAL_ROOT / "dl" / name
         # Ohne lokale Datei misst das Manifest (R22) — eine beliebig kurze
         # 200-Antwort ist sonst ein „ok".
+        #
+        # **Und wenn beide Quellen schweigen, wird das gesagt.** Genau das
+        # traf das AppImage: Es steht mit Absicht nicht in `version.json`
+        # (`updates.py`), also blieb `sizes.get(name, 0)` bei null, `expected`
+        # war falsch, und die Prüfung unten fiel in ihren Sonst-Zweig und
+        # meldete „ok" — für eine Datei, von der sie nur wusste, dass der
+        # Server irgendetwas geantwortet hat. Der Kommentar darüber hat diese
+        # Falle beschrieben und die Stelle ist trotzdem hineingefallen; sie
+        # war nur für den einen der beiden Fälle geschlossen.
         expected = local.stat().st_size if local.is_file() else sizes.get(name, 0)
         address = _public_address(f"{base}/dl/{name}")
         request = urllib.request.Request(address, method="HEAD")
@@ -844,7 +861,13 @@ def verify_downloads() -> int:
                 if not same_origin(address, final):
                     raise OSError("unerwartete Weiterleitung")
                 length = int(answer.headers.get("Content-Length") or 0)
-            if expected and length != expected:
+            if not expected:
+                print(
+                    f"  OHNE MASS  {name}: kein Sollwert — die Datei liegt nicht unter "
+                    "website/dl/ und steht in keinem Manifest."
+                )
+                unmeasured.append(name)
+            elif length != expected:
                 print(f"  GRÖSSE  {name}: oben {length}, hier {expected}")
                 broken.append(name)
             else:
@@ -859,6 +882,15 @@ def verify_downloads() -> int:
 
     if broken:
         print(f"\n{len(broken)} Datei(en) nicht in Ordnung — der Kunde bekommt dafür einen Fehler.")
+    if unmeasured:
+        # Kein „nicht in Ordnung": Die Datei liegt vielleicht vollständig oben.
+        # Nur weiß dieser Lauf es nicht, und das ist etwas anderes — es sagt zu
+        # sagen ist der ganze Zweck der Prüfung.
+        print(
+            f"\n{len(unmeasured)} Datei(en) ohne Sollwert — dort wurde nur geprüft, dass der "
+            "Server antwortet.\nLege die Datei unter website/dl/ ab und fahre den Lauf erneut."
+        )
+    if broken or unmeasured:
         return 1
     print("\nAlles, was versprochen wird, liegt oben und ist vollständig.")
     return 0
@@ -893,8 +925,27 @@ def public_url(root: str, target: str) -> str:
 
     Der Dokumentenstamm heißt ``<domain>/httpdocs``; was dahinter liegt, ist
     der Pfad unter der Domain.
+
+    **Außer bei ``index.html``: die liegt unter ihrem Verzeichnis.**
+    ``website/.htaccess`` beantwortet jede Anfrage nach ``…/index.html`` mit
+    einer 301 auf ``…/`` — und weil der Prüfabruf Weiterleitungen ablehnt
+    (``RejectRedirects``), kam von dort ein ``HTTPError`` zurück, den
+    :func:`differs` als „weicht ab" gelesen hat. Ergebnis: ``--fehlend`` nannte
+    nach jedem Lauf dieselben sechs ``index.html`` erneut, auch unmittelbar
+    nach ihrem eigenen erfolgreichen Upload (10.09.2026, Release 0.4.0;
+    gegengemessen war die Startseite byte-identisch, 63 639 Bytes).
+
+    Der Fehler saß nicht im Vergleich, sondern in der Adresse: Diese Funktion
+    verspricht die **ausgelieferte** Adresse, und für ``index.html`` hat sie
+    eine genannt, die der Server so nicht ausliefert. Ein Abgleich, der etwas
+    als offen meldet, das erledigt ist, kostet beim nächsten Release die
+    Aufmerksamkeit, die einem echten Rest gehört.
     """
     domain = root.strip("/").split("/")[0]
+    if target == "index.html":
+        target = ""
+    elif target.endswith("/index.html"):
+        target = target.removesuffix("index.html")
     return _public_address(f"https://{domain}/{target}")
 
 

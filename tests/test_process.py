@@ -234,9 +234,23 @@ def test_a_successful_parent_must_not_leave_a_descendant_running(tmp_path: Path)
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows-Jobobjekt")
 def test_a_windows_child_cannot_escape_into_a_detached_process_group(tmp_path: Path) -> None:
+    """Das Jobobjekt schließt auch eine losgelöste Prozessgruppe.
+
+    **Die Flaggen kommen aus dem Produktivweg und stehen hier nicht ein zweites
+    Mal.** Ausgeschrieben waren es nur ``CREATE_NEW_PROCESS_GROUP`` und
+    ``DETACHED_PROCESS`` — die Anwendung startet losgelöste Prozesse aber immer
+    zusätzlich mit ``CREATE_NO_WINDOW`` (``detached_process_options`` hat
+    ``no_window=True`` als Vorgabe). Ohne diese dritte Flagge öffnet der
+    Testenkel unter Windows Terminal ein sichtbares Fenster mit „Fehler
+    2147942632 (0x800700e8)"; der Test blieb dabei grün, denn das Fenster ist
+    ein Nebeneffekt der Konsolenzuweisung und nicht der Prozessgruppe.
+
+    Eine Testfassung, die dieselben Flaggen selbst zusammensetzt, kann vom
+    echten Startweg abweichen — diese hier kann es nicht mehr.
+    """
     marker = tmp_path / "entkommener-windows-nachkomme"
     child = f"import time; from pathlib import Path; time.sleep(1); Path({str(marker)!r}).touch()"
-    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    flags = process.process_group_options(detached=True, no_window=True)["creationflags"]
     parent = (
         "import subprocess, sys; "
         f"subprocess.Popen([sys.executable, '-c', {child!r}], creationflags={flags})"

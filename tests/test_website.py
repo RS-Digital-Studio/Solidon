@@ -2314,3 +2314,44 @@ def test_every_css_variable_the_stylesheet_uses_is_defined_in_it() -> None:
     used = set(re.findall(r"var\(\s*(--[a-z0-9-]+)", css))
     assert used, "ohne Variablen prüft dieser Test nichts"
     assert used <= defined, f"benutzt, aber nie definiert: {sorted(used - defined)}"
+
+
+def test_the_checked_address_of_a_start_page_is_the_one_the_server_answers() -> None:
+    """Der Abgleich muss die Adresse abrufen, die der Server auch ausliefert.
+
+    ``.htaccess`` beantwortet jede Anfrage nach ``…/index.html`` mit einer 301
+    auf ``…/``. Der Prüfabruf in ``upload_website.differs`` lehnt
+    Weiterleitungen grundsätzlich ab (``RejectRedirects``) und bekam von dort
+    einen ``HTTPError`` — den er als „weicht ab" gewertet hat. Beim Release
+    von 0.4.0 nannte ``--fehlend`` deshalb nach **jedem** Lauf dieselben sechs
+    ``index.html`` erneut, unmittelbar nach ihrem eigenen erfolgreichen
+    Upload; gegengemessen war die Startseite byte-identisch (63 639 Bytes).
+
+    Geprüft wird hier nicht, was die Funktion zurückgibt, sondern dass ihr
+    Ergebnis **die Umschreibungsregel nicht auslöst** — die beiden Seiten
+    können sonst unabhängig voneinander altern. Ändert jemand die Regel in
+    ``.htaccess``, muss dieser Test es merken.
+    """
+    from tools import upload_website
+
+    rule = re.search(
+        r"RewriteRule\s+(\S+)\s+\S+\s+\[R=301[^\]]*\]",
+        (WEBSITE / ".htaccess").read_text(encoding="utf-8"),
+    )
+    assert rule, "die index.html-Umschreibung steht nicht mehr in .htaccess"
+
+    start_pages = sorted(WEBSITE.rglob("index.html"))
+    assert len(start_pages) >= 6, (
+        f"nur {len(start_pages)} Startseiten gefunden — die Suche greift nicht"
+    )
+
+    for page in start_pages:
+        target = page.relative_to(WEBSITE).as_posix()
+        address = upload_website.public_url("solidon3d.de/httpdocs", target)
+        path = address.removeprefix("https://solidon3d.de/")
+
+        assert not re.match(r"^(.*/)?index\.html$", path), (
+            f"{target} würde unter {address} geprüft — diese Adresse beantwortet der "
+            "Server mit einer 301 auf das Verzeichnis, und der Abgleich liest das als "
+            "Abweichung."
+        )

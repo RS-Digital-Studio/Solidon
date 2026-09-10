@@ -2130,3 +2130,56 @@ def test_no_generated_comparison_runs_in_the_ci() -> None:
         f"markiert, nicht eingetragen: {sorted(marked - set(RENDERED_TESTS))}; "
         f"eingetragen, nicht markiert: {sorted(set(RENDERED_TESTS) - marked)}"
     )
+
+
+def test_a_promised_package_without_a_size_is_not_reported_as_fine(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Ohne Sollwert sagt der Abruf, dass er nichts gemessen hat.
+
+    ``verify_downloads`` vergleicht die Länge der Antwort gegen die lokale
+    Datei, ersatzweise gegen ``version.json``. Schweigen **beide**, war
+    ``expected`` null — und der Vergleich fiel in seinen Sonst-Zweig und
+    schrieb „ok" für eine Datei, von der er nur wusste, dass der Server
+    irgendetwas geantwortet hat.
+
+    Getroffen hat das genau eine: das AppImage. Es steht mit Absicht nicht im
+    Update-Manifest (``updates.py``), im Download-Kasten aber schon. Ein
+    abgebrochener Upload hätte dort als Erfolg dagestanden — bei dem einen
+    Paket, das keine Prüfsumme im Manifest hat.
+
+    Der Kommentar über der Stelle hat diese Falle beschrieben; geschlossen war
+    sie nur für den anderen der beiden Fälle.
+    """
+    import tools.upload_website as upload
+
+    (tmp_path / "dl").mkdir()
+    (tmp_path / "index.html").write_text(
+        '<a href="/api/count.php?f=Solidon3D-9.9.9-x86_64.AppImage">Linux</a>',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(upload, "LOCAL_ROOT", tmp_path)
+    monkeypatch.setattr(upload, "read_access", lambda: {"public": "https://example.org/"})
+
+    class Antwort:
+        url = "https://example.org/dl/Solidon3D-9.9.9-x86_64.AppImage"
+
+        def __init__(self) -> None:
+            # Siebzehn Bytes: eine Antwort, die es gibt, und ein Paket, das
+            # niemand entpacken kann.
+            self.headers = {"Content-Length": "17"}
+
+        def __enter__(self) -> Antwort:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(upload, "_open_public", lambda request, timeout: Antwort())
+
+    code = upload.verify_downloads()
+
+    ausgabe = capsys.readouterr().out
+    assert code == 1, "ohne Sollwert darf der Lauf nicht mit Erfolg enden"
+    assert "OHNE MASS" in ausgabe, f"die Auskunft fehlt: {ausgabe!r}"
+    assert "  ok " not in ausgabe, f"siebzehn Bytes galten als vollständig: {ausgabe!r}"
