@@ -31,10 +31,10 @@ it into `website/version.json`.
 ### Drilling and placing
 
 - When you place a hole, the preview shows the outline of its mouth instead of a half-transparent cylinder. The spot that matters stays clear.
-- The preview follows the mouse smoothly, on larger models too.
+- The preview follows the mouse smoothly: the face search under the pointer no longer starts over on every movement.
 - The dimension fields move out of the way of the spot where the hole appears, instead of standing on top of it.
 - Choosing an operation that is placed in the model starts placing right away; the button in front of it is gone.
-- After the click you set the depth with the mouse. The model turns translucent and the view swings to the side so you can look into the hole.
+- Once you confirm the dimensions you set the depth with the mouse. The model turns translucent and the view swings to the side so you can look into the hole.
 - While you drag, the depth snaps briefly to the places that mean something: the middle of the material and its back face.
 - Box, sphere and the other primitives can be moved and turned in the preview already, with the same handle as on a finished body.
 - The primitives have gained a rotation angle: the direction says where the body points, the angle says how it stands around that direction.
@@ -57,7 +57,7 @@ it into `website/version.json`.
 - Snap hooks and clamping tongues now calculate with material and spring travel instead of a rule of thumb. Solidon reports an arm that breaks the first time it snaps in.
 - The three calibration bodies come without a helper body, and the tolerance ladder prints as two numbered strips that plug into each other.
 - The spring warning measures the actual arm, the living hinge moves, and the strain relief carries through into preview and output.
-- A building block lays down supporting material before it cuts where that is needed; blocks that create a body no longer sink in without a host.
+- A building block lays down supporting material before it cuts where that is needed; and their preview sits correctly even without a host.
 - A building block explains which combination of dimensions it cannot build, instead of quietly capping them.
 
 ### Filaments and stock
@@ -73,7 +73,7 @@ it into `website/version.json`.
 
 ### Printing and preparing
 
-- Solidon finds what Cura has: 642 printers, 6010 process profiles and 281 filaments that stayed invisible before.
+- Solidon finds what Cura has: printers, process profiles and filaments that stayed invisible before.
 - From PrusaSlicer, Solidon picks up the loaded filaments and the printer you last set.
 - If your slicer does not know the printer at all, Solidon says so — instead of sending you to a list with nothing in it.
 - Switching the quality level takes seconds instead of the better part of a minute, and the window stays usable while it does.
@@ -85,7 +85,7 @@ it into `website/version.json`.
 - The spacing when arranging now counts the bed adhesion skirt and the support structure: both count twice between two neighbours.
 - Parts are arranged in the middle of the bed, the way the slicers next door do it, instead of in the back left corner.
 - Orienting for printing now lays the turned parts out again afterwards. A body that lies down needs more area, and used to end up inside its neighbour.
-- Arranging only part of the scene no longer runs over the rest: whatever stays put keeps its place.
+- In the print settings, the second filament picker under the slicer profiles is gone. It repeated what the filament picker already says; fetching the profile values is now a button of its own.
 - Orient for printing now takes every body in the scene, not just the selected ones. The whole bed then moves to the centre instead of a turned part dodging a standing one into the corner.
 
 ### View and operation
@@ -103,7 +103,7 @@ it into `website/version.json`.
 
 ### Manual and website
 
-- The images on the pages show the model at full width instead of a strip between the panels.
+- The images on solidon3d.de show the model at full width instead of a strip between the panels.
 - Manual and website name every operation there is, including the new feature editors.
 
 ## 0.3.5

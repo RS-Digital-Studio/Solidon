@@ -31,10 +31,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 ### Furar e colocar
 
 - Ao colocar um furo, a pré-visualização mostra o contorno da boca em vez de um cilindro semitransparente. O ponto que interessa fica desimpedido.
-- A pré-visualização acompanha o rato com fluidez, também em modelos grandes.
+- A pré-visualização acompanha o rato com fluidez: a procura da face sob o ponteiro já não recomeça a cada movimento.
 - Os campos de medida afastam-se do ponto onde nasce o furo, em vez de ficarem por cima dele.
 - Quem escolhe uma operação que se coloca no modelo começa logo a colocar; o botão anterior desaparece.
-- Depois do clique, a profundidade regula-se com o rato. O modelo fica translúcido e a vista roda de lado para que possa olhar para dentro do furo.
+- Depois de confirmar as medidas, a profundidade regula-se com o rato. O modelo fica translúcido e a vista roda de lado para que possa olhar para dentro do furo.
 - Ao arrastar, a profundidade encaixa por instantes nos pontos com significado: o meio do material e a sua face posterior.
 - O paralelepípedo, a esfera e os restantes corpos base movem-se e rodam já na pré-visualização, com a mesma pega de um corpo terminado.
 - Os corpos base ganharam um ângulo de rotação: a direção diz para onde aponta o corpo, o ângulo diz como fica virado em torno dela.
@@ -57,7 +57,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Os ganchos e as linguetas elásticas calculam com o material e o curso da mola, e não com uma regra prática. O Solidon assinala um braço que parte ao primeiro encaixe.
 - Os três corpos de calibração nascem sem corpo auxiliar, e a escala de tolerâncias imprime-se como duas réguas numeradas que encaixam uma na outra.
 - O aviso da mola mede o braço real, a dobradiça de película mexe-se, e o prende-cabos chega até à pré-visualização e à saída.
-- Um bloco deposita material de apoio antes de cortar onde é preciso; os blocos que criam um corpo já não afundam sem suporte.
+- Um bloco deposita material de apoio antes de cortar onde é preciso; e a sua pré-visualização assenta bem mesmo sem suporte.
 - Um bloco explica que combinação de medidas não consegue construir, em vez de as cortar em silêncio.
 
 ### Filamentos e armazém
@@ -73,7 +73,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Impressão e preparação
 
-- O Solidon encontra o que o Cura tem: 642 impressoras, 6010 perfis de processo e 281 filamentos que antes ficavam invisíveis.
+- O Solidon encontra o que o Cura tem: impressoras, perfis de processo e filamentos que antes ficavam invisíveis.
 - Do PrusaSlicer, o Solidon retoma os filamentos carregados e a impressora definida por último.
 - Se o seu fatiador não conhece sequer a impressora, o Solidon di-lo, em vez de o mandar para uma lista onde não está nada.
 - Mudar o nível de qualidade demora segundos e não quase um minuto, e a janela mantém-se utilizável entretanto.
@@ -85,8 +85,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O afastamento ao dispor conta a borda de aderência e a estrutura de suporte: entre dois vizinhos ambas contam a dobrar.
 - As peças são dispostas no meio da base, como fazem os fatiadores ao lado, e não no canto traseiro esquerdo.
 - Orientar para impressão volta a dispor depois as peças rodadas. Um corpo que se deita ocupa mais superfície e antes acabava dentro do vizinho.
-- Dispor apenas parte da cena já não atropela o resto: o que fica mantém o seu lugar.
-- Orientar para impressão passa a considerar todos os corpos da cena, não só os marcados. Assim a mesa inteira desloca-se para o centro em vez de uma peça rodada se desviar para o canto de outra que ficou parada.
+- Nas definições de impressão desapareceu a segunda escolha de filamento sob os perfis do fatiador. Repetia o que o seletor de filamento já diz; obter os valores do perfil é agora um botão próprio.
+- Orientar para impressão considera todos os corpos da cena, não só os marcados. Assim a mesa inteira desloca-se depois para o centro, em vez de uma peça rodada desviar de outra parada.
 
 ### Vista e utilização
 
@@ -103,7 +103,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ### Manual e site
 
-- As imagens das páginas mostram o modelo a toda a largura, e não como uma faixa entre os painéis.
+- As imagens de solidon3d.de mostram o modelo a toda a largura, e não como uma faixa entre os painéis.
 - O manual e o site nomeiam todas as operações que existem, incluindo os novos editores de características.
 
 ## 0.3.5

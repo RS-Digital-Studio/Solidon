@@ -122,9 +122,23 @@ def test_a_point_fits_into_the_window(language: str) -> None:
 
     Ein Punkt, der darüber liegt, endet im Fenster mitten im Wort — und zwar
     ohne dass es beim Schreiben jemand sieht.
+
+    **Der ganze Verlauf und nicht nur die laufende Fassung.** Hier stand
+    ``changelog_for(APP_VERSION, …)``, und das reichte, solange ein Abschnitt
+    mit seiner Versionsnummer entstand. Er entsteht jetzt vorher: Am
+    10.09.2026 lagen im vorbereiteten 0.4.0-Abschnitt acht Punkte zwischen 208
+    und 236 Zeichen, in vier Sprachen, und der Wächter sah keinen davon — er
+    las 0.3.5. Aufgefallen sind sie bei einer Messung von Hand. Ein Wächter,
+    der erst nach dem Versionssprung anschlägt, schlägt zu spät an; denselben
+    Weg geht ``test_no_point_talks_about_internal_tests`` seit dem 29.08.2026.
     """
-    for point in changelog_for(APP_VERSION, language):
-        assert len(point) <= MAX_FIELD_LENGTH, f"{language}: zu lang ({len(point)}): {point[:60]} …"
+    from app.core import changes
+
+    for entry in changes.history(language):
+        for point in entry.points:
+            assert len(point) <= MAX_FIELD_LENGTH, (
+                f"{language} {entry.version}: zu lang ({len(point)}): {point[:60]} …"
+            )
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))

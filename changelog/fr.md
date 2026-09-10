@@ -32,10 +32,10 @@ dans `website/version.json`.
 ### Percer et placer
 
 - Lors de la pose d'un perçage, l'aperçu montre le contour de l'entrée au lieu d'un cylindre semi-transparent. L'endroit qui compte reste dégagé.
-- L'aperçu suit la souris avec fluidité, y compris sur de grands modèles.
+- L'aperçu suit la souris avec fluidité : la recherche de la face sous le pointeur ne recommence plus à chaque mouvement.
 - Les champs de cote s'écartent de l'endroit où naît le perçage, au lieu de se poser dessus.
 - Choisir une opération qui se place dans le modèle lance le placement aussitôt ; le bouton d'avant disparaît.
-- Après le clic, vous réglez la profondeur à la souris. Le modèle devient translucide et la vue pivote de côté pour que vous puissiez regarder dans le trou.
+- Après avoir validé les cotes, vous réglez la profondeur à la souris. Le modèle devient translucide et la vue pivote de côté pour que vous puissiez regarder dans le trou.
 - Pendant le glissement, la profondeur s'accroche brièvement aux endroits qui veulent dire quelque chose : le milieu de la matière et sa face arrière.
 - Le pavé, la sphère et les autres corps de base se déplacent et tournent déjà dans l'aperçu, avec la même poignée que sur un corps terminé.
 - Les corps de base ont reçu un angle de rotation : la direction dit où pointe le corps, l'angle dit comment il est tourné autour d'elle.
@@ -58,7 +58,7 @@ dans `website/version.json`.
 - Les crochets et les languettes élastiques calculent avec la matière et la course du ressort, non avec une règle empirique. Solidon signale un bras qui casse au premier encliquetage.
 - Les trois corps d'étalonnage naissent sans corps auxiliaire, et l'échelle de tolérances s'imprime en deux réglettes numérotées qui s'emboîtent.
 - L'avertissement du ressort mesure le bras réel, la charnière souple bouge, et le serre-câble va jusque dans l'aperçu et la sortie.
-- Un bloc dépose de la matière porteuse avant de couper là où c'est nécessaire ; les blocs qui créent un corps ne s'enfoncent plus sans support.
+- Un bloc dépose de la matière porteuse avant de couper là où c'est nécessaire ; et leur aperçu se pose correctement même sans support.
 - Un bloc explique quelle combinaison de cotes il ne peut pas construire, au lieu de les rogner en silence.
 
 ### Filaments et stock
@@ -74,7 +74,7 @@ dans `website/version.json`.
 
 ### Impression et préparation
 
-- Solidon trouve ce que possède Cura : 642 imprimantes, 6010 profils de processus et 281 filaments qui restaient invisibles.
+- Solidon trouve ce que possède Cura : imprimantes, profils de processus et filaments qui restaient invisibles.
 - De PrusaSlicer, Solidon reprend les filaments chargés et la dernière imprimante réglée.
 - Si votre trancheur ne connaît pas du tout l'imprimante, Solidon le dit, au lieu de vous envoyer vers une liste où il n'y a rien.
 - Changer de niveau de qualité prend des secondes et non près d'une minute, et la fenêtre reste utilisable pendant ce temps.
@@ -86,8 +86,8 @@ dans `website/version.json`.
 - L'écart lors de la disposition compte la bordure d'adhérence et la structure de support : entre deux voisins, les deux comptent double.
 - Les pièces sont disposées au milieu du plateau, comme le font les trancheurs d'à côté, et non dans le coin arrière gauche.
 - Orienter pour l'impression redispose ensuite les pièces tournées. Un corps qui se couche prend plus de surface et finissait avant dans son voisin.
-- Ne disposer qu'une partie de la scène n'écrase plus le reste : ce qui demeure garde sa place.
-- Orienter pour l'impression prend désormais tous les corps de la scène, pas seulement ceux qui sont sélectionnés. Le plateau entier se place ensuite au centre au lieu qu'une pièce tournée contourne vers le coin une pièce restée en place.
+- Le second choix de filament sous les profils du trancheur a disparu. Il répétait le sélecteur de filament ; récupérer les valeurs du profil est maintenant un bouton à part.
+- Orienter pour l'impression prend tous les corps de la scène, pas seulement les sélectionnés. Le plateau entier se place ensuite au centre, au lieu qu'une pièce tournée en contourne une autre.
 
 ### Vue et utilisation
 
@@ -104,7 +104,7 @@ dans `website/version.json`.
 
 ### Manuel et site web
 
-- Les images des pages montrent le modèle sur toute la largeur, et non comme une bande entre les panneaux.
+- Les images de solidon3d.de montrent le modèle sur toute la largeur, et non comme une bande entre les panneaux.
 - Le manuel et le site web nomment toutes les opérations existantes, y compris les nouveaux éditeurs de caractéristiques.
 
 ## 0.3.5

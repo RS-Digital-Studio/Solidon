@@ -56,10 +56,10 @@ Nutzen da und sonst nichts.
 ### Bohren und Platzieren
 
 - Beim Setzen einer Bohrung zeigt die Vorschau den Umriss der Mündung statt eines halbdurchsichtigen Zylinders. Die Stelle, auf die es ankommt, bleibt frei.
-- Die Vorschau folgt der Maus flüssig, auch an größeren Modellen.
+- Die Vorschau folgt der Maus flüssig: Die Flächensuche unter dem Zeiger rechnet nicht mehr bei jeder Bewegung von vorn.
 - Die Maßfelder weichen der Stelle aus, an der die Bohrung entsteht, statt über ihr zu stehen.
 - Wer eine Operation wählt, die im Modell platziert wird, platziert sofort; der Knopf davor entfällt.
-- Nach dem Klick stellen Sie die Tiefe mit der Maus ein. Das Modell wird durchscheinend, und die Ansicht schwenkt zur Seite, damit Sie in das Loch hineinsehen.
+- Nach dem Übernehmen der Maße stellen Sie die Tiefe mit der Maus ein. Das Modell wird durchscheinend, und die Ansicht schwenkt zur Seite, damit Sie in das Loch hineinsehen.
 - Beim Ziehen rastet die Tiefe kurz an den Stellen ein, die etwas bedeuten: an der Mitte des Materials und an seiner Rückseite.
 - Quader, Kugel und die anderen Grundkörper verschieben und drehen Sie schon in der Vorschau, mit demselben Griff wie am fertigen Körper.
 - Die Grundkörper haben einen Drehwinkel bekommen: Die Richtung sagt, wohin der Körper zeigt, der Winkel, wie er dabei herumsteht.
@@ -82,7 +82,7 @@ Nutzen da und sonst nichts.
 - Schnapphaken und Klemmzungen rechnen mit Material und Federweg statt mit einer Faustregel. Solidon meldet einen Arm, der beim ersten Einrasten bricht.
 - Die drei Kalibrierkörper entstehen ohne Hilfskörper, und die Toleranzleiter wird als zwei nummerierte Leisten gedruckt, die ineinandergesteckt werden.
 - Die Federwarnung misst den tatsächlichen Arm, das Filmscharnier bewegt sich, und die Kabelzugentlastung trägt bis in Vorschau und Ausgabe.
-- Ein Baustein legt bei Bedarf tragendes Material vor, bevor er schneidet; erzeugte Bausteine sinken ohne Träger nicht mehr ein.
+- Ein Baustein legt bei Bedarf tragendes Material vor, bevor er schneidet; und ihre Vorschau sitzt auch ohne Träger richtig.
 - Ein Baustein erklärt, welche Kombination von Maßen er nicht bauen kann, statt sie still zu kappen.
 
 ### Filamente und Lager
@@ -98,7 +98,7 @@ Nutzen da und sonst nichts.
 
 ### Drucken und Vorbereiten
 
-- Solidon findet den Bestand von Cura: 642 Drucker, 6010 Prozessprofile und 281 Filamente, die vorher unsichtbar blieben.
+- Solidon findet den Bestand von Cura: Drucker, Prozessprofile und Filamente, die vorher unsichtbar blieben.
 - Von PrusaSlicer übernimmt Solidon die eingelegten Filamente und den zuletzt eingestellten Drucker.
 - Kennt Ihr Slicer den eingestellten Drucker gar nicht, sagt Solidon das — statt Sie in eine Liste zu schicken, in der nichts steht.
 - Die Qualitätsstufe zu wechseln dauert Sekunden statt einer knappen Minute, und das Fenster bleibt dabei bedienbar.
@@ -107,11 +107,11 @@ Nutzen da und sonst nichts.
 - Eine lange Brücke wird an ihren tatsächlichen Auflagern bewertet, und der Überhangwinkel gilt für Drucker, Düse, Schichthöhe und Linienbreite, unter denen er gemessen wurde.
 - Zu hohes Tempo wird an der betroffenen Bahnart begrenzt, statt Düse und Bett immer weiter aufzuheizen.
 - Abgewählte Vorschläge bleiben abgewählt, und ein Wechsel von Filament, Szene, Platte oder Qualität entwertet ein veraltetes Ergebnis sofort.
-- Der Abstand beim Anordnen rechnet Druckbettrand und Stützstruktur mit: Beide zählen zwischen zwei Nachbarn doppelt.
+- Der Abstand beim Anordnen rechnet Druckbetthaftung und Stützstruktur mit: Beide zählen zwischen zwei Nachbarn doppelt.
 - Angeordnet wird in der Mitte des Betts, wie in den Slicern daneben, statt in der hinteren linken Ecke.
 - Druckoptimal ausrichten legt die gedrehten Teile danach neu hin. Ein Körper, der sich hinlegt, braucht mehr Fläche und steckte vorher im Nachbarn.
-- Wer nur einen Teil der Szene anordnet, überfährt die anderen nicht mehr: Was liegen bleibt, behält seinen Platz.
-- Druckoptimal ausrichten nimmt jetzt alle Körper der Szene, nicht nur die markierten. So wandert das ganze Bett anschließend in die Mitte, statt dass ein gedrehtes Teil einem stehengebliebenen in die Ecke ausweicht.
+- Die zweite Filamentauswahl unter den Slicer-Profilen ist verschwunden. Sie wiederholte den Filamentwähler; die Profilwerte zu holen steht jetzt als eigener Knopf da.
+- Druckoptimal ausrichten nimmt alle Körper der Szene, nicht nur die markierten. So wandert danach das ganze Bett in die Mitte, statt dass ein gedrehtes Teil einem stehenden ausweicht.
 
 ### Ansicht und Bedienung
 
@@ -128,7 +128,7 @@ Nutzen da und sonst nichts.
 
 ### Handbuch und Website
 
-- Die Bilder auf den Seiten zeigen das Modell in ganzer Breite statt als Streifen zwischen den Panelen.
+- Die Bilder auf solidon3d.de zeigen das Modell in ganzer Breite statt als Streifen zwischen den Panelen.
 - Handbuch und Website nennen jede Operation, die es gibt, samt der neuen Merkmalseditoren.
 
 ## 0.3.5

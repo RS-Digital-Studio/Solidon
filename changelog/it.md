@@ -31,10 +31,10 @@ scrive in `website/version.json`.
 ### Forare e posizionare
 
 - Quando posate un foro, l'anteprima mostra il contorno dell'imbocco invece di un cilindro semitrasparente. Il punto che conta resta libero.
-- L'anteprima segue il mouse in modo fluido, anche su modelli grandi.
+- L'anteprima segue il mouse in modo fluido: la ricerca della faccia sotto il puntatore non riparte più a ogni movimento.
 - I campi delle misure si scostano dal punto in cui nasce il foro, invece di restarci sopra.
 - Chi sceglie un'operazione che si posiziona nel modello inizia subito a posizionare; il pulsante precedente sparisce.
-- Dopo il clic regolate la profondità con il mouse. Il modello diventa traslucido e la vista ruota di lato perché possiate guardare dentro al foro.
+- Dopo aver confermato le misure regolate la profondità con il mouse. Il modello diventa traslucido e la vista ruota di lato perché possiate guardare dentro al foro.
 - Mentre trascinate, la profondità scatta brevemente nei punti che significano qualcosa: la metà del materiale e la sua faccia posteriore.
 - Il parallelepipedo, la sfera e gli altri corpi di base si spostano e si ruotano già nell'anteprima, con la stessa maniglia di un corpo finito.
 - I corpi di base hanno un angolo di rotazione: la direzione dice dove punta il corpo, l'angolo dice come è ruotato attorno a essa.
@@ -57,7 +57,7 @@ scrive in `website/version.json`.
 - Ganci e linguette elastiche calcolano con il materiale e la corsa della molla, non con una regola pratica. Solidon segnala un braccio che si rompe al primo scatto.
 - I tre corpi di taratura nascono senza corpo ausiliario, e la scala di tolleranze si stampa come due listelli numerati che si innestano fra loro.
 - L'avviso della molla misura il braccio reale, la cerniera a film si muove e il pressacavo arriva fino all'anteprima e all'uscita.
-- Un blocco depone materiale portante prima di tagliare dove serve; i blocchi che creano un corpo non affondano più senza supporto.
+- Un blocco depone materiale portante prima di tagliare dove serve; e la loro anteprima si posa bene anche senza supporto.
 - Un blocco spiega quale combinazione di misure non è in grado di costruire, invece di tagliarle in silenzio.
 
 ### Filamenti e magazzino
@@ -73,7 +73,7 @@ scrive in `website/version.json`.
 
 ### Stampa e preparazione
 
-- Solidon trova quello che ha Cura: 642 stampanti, 6010 profili di processo e 281 filamenti che prima restavano invisibili.
+- Solidon trova quello che ha Cura: stampanti, profili di processo e filamenti che prima restavano invisibili.
 - Da PrusaSlicer Solidon riprende i filamenti caricati e l'ultima stampante impostata.
 - Se il vostro slicer non conosce affatto la stampante, Solidon lo dice, invece di mandarvi a un elenco in cui non c'è nulla.
 - Cambiare livello di qualità richiede secondi e non quasi un minuto, e la finestra resta utilizzabile nel frattempo.
@@ -85,7 +85,7 @@ scrive in `website/version.json`.
 - La distanza nella disposizione conta il bordo di adesione e la struttura di supporto: fra due vicini entrambi contano doppio.
 - I pezzi vengono disposti al centro del piano, come fanno gli slicer accanto, e non nell'angolo posteriore sinistro.
 - Orientare per la stampa ridispone poi i pezzi ruotati. Un corpo che si corica occupa più superficie e prima finiva dentro al vicino.
-- Disporre solo una parte della scena non travolge più il resto: ciò che rimane conserva il suo posto.
+- La seconda scelta del filamento sotto i profili dello slicer è sparita. Ripeteva il selettore del filamento; recuperare i valori del profilo è ora un pulsante a sé.
 - Orientare per la stampa prende ora tutti i corpi della scena, non solo quelli selezionati. Così l'intero piano si sposta al centro invece che un pezzo ruotato schivi verso l'angolo uno rimasto fermo.
 
 ### Vista e utilizzo
@@ -103,7 +103,7 @@ scrive in `website/version.json`.
 
 ### Manuale e sito web
 
-- Le immagini delle pagine mostrano il modello per tutta la larghezza, non come una striscia fra i pannelli.
+- Le immagini di solidon3d.de mostrano il modello per tutta la larghezza, non come una striscia fra i pannelli.
 - Manuale e sito web nominano ogni operazione esistente, compresi i nuovi editor delle caratteristiche.
 
 ## 0.3.5

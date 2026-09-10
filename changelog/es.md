@@ -32,10 +32,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 ### Taladrar y colocar
 
 - Al colocar un taladro, la vista previa muestra el contorno de la boca en lugar de un cilindro semitransparente. El punto que importa queda despejado.
-- La vista previa sigue al ratón con fluidez, también en modelos grandes.
+- La vista previa sigue al ratón con fluidez: la búsqueda de la cara bajo el puntero ya no se rehace en cada movimiento.
 - Los campos de medida se apartan del punto donde nace el taladro, en lugar de quedar encima.
 - Quien elige una operación que se coloca en el modelo empieza a colocar de inmediato; el botón previo desaparece.
-- Tras el clic, la profundidad se ajusta con el ratón. El modelo se vuelve translúcido y la vista gira de lado para que pueda mirar dentro del agujero.
+- Tras aceptar las medidas, la profundidad se ajusta con el ratón. El modelo se vuelve translúcido y la vista gira de lado para que pueda mirar dentro del agujero.
 - Al arrastrar, la profundidad encaja brevemente en los puntos con significado: la mitad del material y su cara posterior.
 - El prisma, la esfera y los demás cuerpos básicos se mueven y giran ya en la vista previa, con el mismo tirador que un cuerpo terminado.
 - Los cuerpos básicos tienen ángulo de giro: la dirección dice hacia dónde apunta el cuerpo y el ángulo, cómo queda girado alrededor de ella.
@@ -58,7 +58,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Los ganchos y las lengüetas elásticas calculan con el material y el recorrido del muelle, no con una regla aproximada. Solidon avisa del brazo que rompe al primer encaje.
 - Los tres cuerpos de calibración nacen sin cuerpo auxiliar, y la escalera de tolerancias se imprime como dos listones numerados que se encajan entre sí.
 - El aviso del muelle mide el brazo real, la bisagra de película se mueve y el sujetacables llega hasta la vista previa y la salida.
-- Un bloque añade material de apoyo antes de cortar cuando hace falta; los bloques que crean un cuerpo ya no se hunden sin soporte.
+- Un bloque añade material de apoyo antes de cortar cuando hace falta; y su vista previa se asienta bien incluso sin soporte.
 - Un bloque explica qué combinación de medidas no puede construir, en lugar de recortarlas en silencio.
 
 ### Filamentos y almacén
@@ -74,7 +74,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Imprimir y preparar
 
-- Solidon encuentra lo que tiene Cura: 642 impresoras, 6010 perfiles de proceso y 281 filamentos que antes quedaban invisibles.
+- Solidon encuentra lo que tiene Cura: impresoras, perfiles de proceso y filamentos que antes quedaban invisibles.
 - De PrusaSlicer, Solidon adopta los filamentos cargados y la impresora configurada por última vez.
 - Si su laminador no conoce siquiera la impresora, Solidon lo dice, en lugar de enviarle a una lista en la que no hay nada.
 - Cambiar el nivel de calidad tarda segundos y no casi un minuto, y la ventana sigue utilizable mientras tanto.
@@ -86,8 +86,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La separación al distribuir cuenta el borde de adherencia y la estructura de soporte: entre dos vecinos ambos cuentan dos veces.
 - Las piezas se distribuyen en el centro de la cama, como hacen los laminadores de al lado, y no en la esquina posterior izquierda.
 - Orientar para imprimir vuelve a distribuir después las piezas giradas. Un cuerpo que se tumba ocupa más superficie y antes acababa dentro del vecino.
-- Distribuir solo una parte de la escena ya no atropella al resto: lo que se queda conserva su sitio.
-- Orientar para imprimir toma ahora todos los cuerpos de la escena, no solo los marcados. Así toda la cama se desplaza al centro en lugar de que una pieza girada esquive hacia la esquina a otra que se quedó parada.
+- La segunda selección de filamento bajo los perfiles del laminador ha desaparecido. Repetía el selector de filamento; obtener los valores del perfil es ahora un botón propio.
+- Orientar para imprimir toma todos los cuerpos de la escena, no solo los marcados. Así toda la cama se desplaza después al centro en vez de que una pieza girada esquive a otra parada.
 
 ### Vista y manejo
 
@@ -104,7 +104,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ### Manual y sitio web
 
-- Las imágenes de las páginas muestran el modelo a todo lo ancho, no como una franja entre los paneles.
+- Las imágenes de solidon3d.de muestran el modelo a todo lo ancho, no como una franja entre los paneles.
 - El manual y el sitio web nombran todas las operaciones que existen, incluidos los nuevos editores de características.
 
 ## 0.3.5
