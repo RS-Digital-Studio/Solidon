@@ -86,6 +86,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - As peças são dispostas no meio da base, como fazem os fatiadores ao lado, e não no canto traseiro esquerdo.
 - Orientar para impressão volta a dispor depois as peças rodadas. Um corpo que se deita ocupa mais superfície e antes acabava dentro do vizinho.
 - Dispor apenas parte da cena já não atropela o resto: o que fica mantém o seu lugar.
+- Orientar para impressão passa a considerar todos os corpos da cena, não só os marcados. Assim a mesa inteira desloca-se para o centro em vez de uma peça rodada se desviar para o canto de outra que ficou parada.
 
 ### Vista e utilização
 

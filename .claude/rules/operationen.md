@@ -99,8 +99,10 @@ Merkmals in den Schlüssel — alle, weil zwei Körper denselben Merkmalsnamen
 tragen können. Ohne das behielt ein ausgerichteter Körper mit Cache die alte
 Lage und eine `up_to`-Extrusion die alte Höhe, über das Schließen hinaus.
 **Und die vierte hängt an keinem Parameter.** `orient_for_print` liest die
-*übrigen* Körper der Szene — es dreht die gewählten und ordnet sie danach an,
-ohne einen in einen nicht gewählten zu legen. Kein Feld benennt sie, also
+*übrigen* Körper der Szene — es dreht seine Eingänge und ordnet sie danach an,
+ohne einen in einen fremden zu legen. Über die Oberfläche sind das alle
+(`whole_scene`), ein **gespeicherter** Auftrag trägt aber die Teilmenge von
+damals, und genau der liest an seinen Eingängen vorbei. Kein Feld benennt sie, also
 findet sie keiner der drei Zweige oben. Sie ist am **Register** deklariert
 (`OperationSpec.reads_other_bodies`), und `_with_nested_context` mischt dann
 die Hashes **aller** Objekte unter `#scene` in den Schlüssel. Ohne das wich
@@ -251,6 +253,38 @@ allein im Werkzeugbau.
 Die allgemeine Form, weil sie über diesen Fall hinausgeht: **Wer aus einer
 Zahl auf einen Sachverhalt schließt, schreibt dazu, unter welcher Bedingung
 der Schluss gilt — und prüft die Bedingung, nicht die Zahl.**
+
+## Ein Füllkörper hat die Form des Werkzeugs, nicht die des Hohlraums
+
+Einen Hohlraum zu schließen heißt nicht, ihn nachzubauen. Ein Körper, der die
+Kegelwand einer Senkung nachbildet, endet **auf** ihr, und die Vereinigung
+lässt dort zwei Flächen nebeneinander stehen statt einer: Im Objektbaum standen
+danach zwei Senkungen (Ø 10,34 und Ø 10,36), und der Oberseite fehlte weiterhin
+das Stück, das der Trichter aus ihr geschnitten hatte (Robert, 10.09.2026).
+
+Was trägt, ist die Bauart, die `_closed_at` für jede Bohrung geht: ein Körper,
+der **überall breiter** ist als der Hohlraum, dessen Mantelfläche also im
+vollen Material liegt, mit Zugabe an den Enden und danach an der Körpergrenze
+gekappt. Übrig bleibt genau eine ebene Fläche.
+
+**Und die Gegenrichtung dazu:** Was nach dem Füllen wieder ausgeschnitten wird,
+ist exakt das Merkmal — dort ist jede Zugabe ein Maßfehler. Ein Durchgang mit
+der üblichen Werkzeugzugabe war 0,02 mm weiter als die Bohrung darunter, und
+der Baum zeigte danach zwei Bohrungen übereinander.
+
+## Ein Vieleck aus einem gemessenen Durchmesser ist enger als er
+
+`trimesh.creation.cylinder` baut ein **eingeschriebenes** Vieleck: Der
+angegebene Durchmesser ist sein Umkreis, seine Flanken liegen um
+`cos(π/sections)` weiter innen. Wer aus einem **gemessenen** Maß ein Werkzeug
+baut, das dieses Maß wiederherstellen soll, rechnet den Unterschied dazu
+(`_polygon_gain`) — sonst schrumpft die Bohrung bei jedem Zyklus: gemessen
+7,9848 vor dem Zug, 7,9696 danach, also 0,015 mm je Durchgang.
+
+Dass das nie auffiel, hat einen Grund, und der ist Zufall: Die Zugabe aus §39
+(`FEATURE_OVERLAP`, 0,02 mm) hat bei den üblichen Durchmessern dieselbe
+Größenordnung wie der Vieleckverlust und deckt ihn zu. Wer sie weglässt — weil
+sein Werkzeug exakt sein muss —, verliert diese Deckung mit.
 
 ## Toleranzen sind Durchmessermaße
 

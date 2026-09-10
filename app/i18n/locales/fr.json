@@ -3902,7 +3902,7 @@
   "Suchen — Befehl oder Taste": "Rechercher — commande ou touche",
   "Suchen — auch im Text der Seiten": "Chercher — aussi dans le texte des pages",
   "Suchen — zum Beispiel Mutter, Magnet, Kabel": "Chercher — par exemple écrou, aimant, câble",
-  "Sucht für jeden gewählten Körper die Lage mit dem geringsten Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus der Geometrie des einzelnen Teils.": "Cherche pour chaque corps sélectionné la position au moindre support. Chacun reçoit la sienne — la meilleure position découle de la géométrie de la pièce elle-même.",
+  "Sucht für jeden Körper der Szene die Lage mit dem geringsten Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils.": "Cherche pour chaque corps de la scène la position au moindre support, puis réorganise le plateau. Chacun reçoit la sienne — la meilleure position découle de la géométrie de la pièce elle-même.",
   "Sucht in Namen und Erklärungen. Eingabetaste führt zum nächsten Treffer.": "Cherche dans les noms et les explications. Entrée passe au résultat suivant.",
   "Sucht in der Bausteinbibliothek": "Cherche dans la bibliothèque de blocs",
   "Support und Kontakt": "Assistance et contact",

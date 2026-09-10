@@ -114,7 +114,14 @@ def good_answer(case: Case) -> list[Reply]:
 
 
 def _call(index: int, name: str) -> ToolCall:
-    arguments: dict[str, object] = {"objects": ["obj_1"]}
+    # **Was das Werkzeugschema nicht anbietet, schickt auch kein Modell.**
+    # ``tools.py`` legt das Feld ``objects`` nur an, wenn die Operation etwas
+    # verbraucht; eine Whole-Scene-Operation bekommt die Szene von der Sitzung
+    # nachgefüllt. Eine Attrappe, die es trotzdem mitschickt, fährt einen Weg,
+    # den es draußen nicht gibt.
+    arguments: dict[str, object] = {}
+    if REGISTRY.get(name).consumes:
+        arguments["objects"] = ["obj_1"]
     if name == "translate_object":
         arguments["dx"] = 10.0
     elif name == "rotate_object":

@@ -3941,23 +3941,31 @@ class OrientParams(BaseParams):
     title=_("Druckoptimal ausrichten"),
     category="transform",
     params=OrientParams,
-    # **So viele, wie gewählt sind** (Befund Robert, 07.09.2026). Mit
-    # ``consumes=1`` nahm die Operation den ersten Körper und ließ die übrigen
-    # liegen — wer vier Teile wählte und deren erstes schon richtig lag, sah
-    # überhaupt keine Wirkung und keine Meldung.
-    consumes=VARIABLE,
-    minimum_inputs=1,
+    # **Die ganze Szene** (Entscheidung Robert, 10.09.2026: „druckoptimal
+    # ausrichten alle körper"). Zwei Schritte hierher: ``consumes=1`` nahm den
+    # ersten Körper und ließ die übrigen liegen — wer vier Teile wählte und
+    # deren erstes schon richtig lag, sah überhaupt keine Wirkung (07.09.2026);
+    # ``VARIABLE`` nahm die gewählten und musste den übrigen ausweichen, was
+    # jede Zentrierung verhindert (§29): Der gedrehte Körper landete in der
+    # hinteren linken Ecke, weil die freie Mitte einem Nachbarn gehörte.
+    #
+    # Es ist dieselbe Bauart wie bei *Auf dem Bett anordnen* daneben, und aus
+    # demselben Grund: Wer ein Druckbett optimiert, meint das Bett und nicht
+    # eine Markierung darauf.
+    consumes=0,
+    whole_scene=True,
     produces=VARIABLE,
-    # **Sie liest die nicht gewählten Körper mit.** Nach dem Drehen ordnet sie
-    # an, und die übrigen belegen dabei ihren Platz; ohne diese Zeile bliebe
-    # ein Ergebnis im Cache gültig, nachdem jemand einen von ihnen verschoben
-    # hat — der gedrehte wiche einem Nachbarn aus, der längst woanders steht.
+    # **Und sie liest trotzdem an ihren Eingängen vorbei.** Die Oberfläche gibt
+    # ihr heute alles, ein **gespeicherter** Auftrag von gestern trägt aber
+    # seine damalige Teilmenge — der liest die übrigen aus ``ctx.scene``, und
+    # ohne diese Zeile bliebe sein Ergebnis im Cache gültig, nachdem jemand
+    # einen von ihnen verschoben hat.
     reads_other_bodies=True,
     deterministic=True,
     doc=_(
-        "Sucht für jeden gewählten Körper die Lage mit dem geringsten "
-        "Stützbedarf. Jeder bekommt seine eigene — die beste Lage folgt aus "
-        "der Geometrie des einzelnen Teils."
+        "Sucht für jeden Körper der Szene die Lage mit dem geringsten "
+        "Stützbedarf und ordnet danach das Bett neu. Jeder bekommt seine "
+        "eigene Lage — die beste folgt aus der Geometrie des einzelnen Teils."
     ),
 )
 def orient_for_print_op(ctx: OpContext) -> OpResult:
@@ -4038,9 +4046,11 @@ def _laid_out_after_turning(
     Bett samt Befund (Roberts Ansage: „neues druckbett oder neben dem bett
     anordnen je nachdem wie viele druckplatten ausgewählt waren").
 
-    **Die nicht gewählten Körper bleiben liegen und belegen ihren Platz.** Die
-    Operation dreht so viele, wie gewählt sind; die übrigen liest sie aus
-    ``ctx.scene``, und lesen darf sie (Regel 3).
+    **Fremde Körper bleiben liegen und belegen ihren Platz.** Über die
+    Oberfläche gibt es keine: Die Operation bekommt die ganze Szene
+    (``whole_scene``), und dann wird der Verband am Ende zentriert. Ein
+    **gespeicherter** Auftrag trägt dagegen die Teilmenge von damals; die
+    übrigen liest sie aus ``ctx.scene``, und lesen darf sie (Regel 3).
     """
     chosen = {entry.id for entry in turned}
     standing = [

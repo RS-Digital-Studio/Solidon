@@ -2001,10 +2001,30 @@ Maschinenprofile von ElegooSlicer, Orca und Bambu Studio führen dafür
 was die Anordnung bestimmt; die Verschiebung danach ändert keine relative
 Lage.
 
-**Belegte Plätze verschieben nichts.** Ordnet eine Operation nur einen Teil
-der Szene an — *Druckoptimal ausrichten* tut das für die gewählten Körper —,
-dann stehen die übrigen schon irgendwo, und eine Verschiebung des Verbands
-liefe in sie hinein. Dort bleibt es bei der gefundenen Stelle.
+**Wer ein Druckbett ordnet, ordnet das Bett.** *Auf dem Bett anordnen* und
+*Druckoptimal ausrichten* nehmen beide die **ganze Szene**, nicht eine
+Markierung darauf (Entscheidung Robert, 10.09.2026: „druckoptimal ausrichten
+alle körper"). Der Weg dorthin ging über zwei Befunde: Zuerst drehte das
+Ausrichten nur den ersten gewählten Körper und ließ die übrigen liegen; dann
+nahm es die gewählten und musste den übrigen ausweichen — und damit entfiel
+die Zentrierung, denn ein Verband, in dem jemand stehen bleibt, lässt sich
+nicht als Ganzes schieben. Gemessen an zwei Türmen: Der gedrehte landete bei
+x -123, y 103 in der hinteren linken Ecke, während die Mitte frei danebenlag.
+
+**Belegte Plätze verschieben nichts** — den Fall gibt es weiterhin, nur nicht
+mehr über die Oberfläche: Ein **gespeicherter** Auftrag trägt die Teilmenge,
+die zur Zeit seiner Entstehung gewählt war. Dann stehen die übrigen schon
+irgendwo, eine Verschiebung des Verbands liefe in sie hinein, und es bleibt
+bei der gefundenen Stelle.
+
+**Ein gespeicherter Auftrag ordnet beim Öffnen mit** (Entscheidung Robert,
+10.09.2026). *Druckoptimal ausrichten* legt hin, was es umwirft, und das gilt
+auch für Stapel, die vor dieser Erweiterung entstanden sind: Ein alter
+Auftrag, dessen Körper ineinanderliefen, tut das nach dem Öffnen nicht mehr.
+Eine Migration, die vorhandene Operationen auf das alte Verhalten festlegte,
+gibt es deshalb nicht — anders als bei einer Maßänderung (§24.4, `anchor` an
+alten Bohrungen), wo eine stille Umdeutung die Geometrie verändert hätte.
+Hier ändert sie die **Lage** und behebt dabei einen Fehler.
 
 Der Mindestabstand gilt zwischen den Körpern; notwendige Plattenhaftungen
 werden zusätzlich berücksichtigt. Der Bauraum und die Zahl verfügbarer Platten

@@ -399,9 +399,12 @@ class OperationSpec:
     reads_other_bodies: bool = False
     """Liest an den eigenen Eingängen vorbei die übrigen Körper der Szene.
 
-    ``orient_for_print`` tut das: Es dreht die gewählten Körper und muss sie
-    danach neu anordnen, ohne dabei in einen nicht gewählten zu legen — der
-    steht in ``ctx.scene``, und lesen darf es ihn (Regel 3). **Der
+    ``orient_for_print`` tut das: Es dreht seine Eingänge und muss sie danach
+    neu anordnen, ohne dabei in einen fremden Körper zu legen — der steht in
+    ``ctx.scene``, und lesen darf es ihn (Regel 3). Über die Oberfläche
+    bekommt es die ganze Szene und liest dann nichts Fremdes; ein
+    **gespeicherter** Auftrag trägt aber die Teilmenge von damals, und für den
+    gilt die Zeile. **Der
     Cache-Schlüssel weiß davon nichts**, denn ``operation_hash`` deckt die
     Hashes der *Eingänge*, und ein fremder Körper ist keiner: Verschiebt
     jemand ihn, bleibt der Schlüssel derselbe und das alte Ergebnis gilt
@@ -489,11 +492,11 @@ class OperationSpec:
     def takes_whole_scene(self) -> bool:
         """Arbeitet diese Operation auf allen Objekten zugleich?
 
-        Anordnen und die Kollisionsprüfung tun das: sie nehmen kein bestimmtes
-        Objekt und geben alle zurück. Jede Oberfläche muss ihnen die ganze
-        Szene hineingeben — eine Operation dieser Art ohne Eingaben läuft auf
-        nichts und sieht kaputt aus, und genau so sah sie aus, bevor es diese
-        Eigenschaft gab.
+        Anordnen, die Kollisionsprüfung und das druckoptimale Ausrichten tun
+        das: Sie nehmen kein bestimmtes Objekt und geben alle zurück. Jede
+        Oberfläche muss ihnen die ganze Szene hineingeben — eine Operation
+        dieser Art ohne Eingaben läuft auf nichts und sieht kaputt aus, und
+        genau so sah sie aus, bevor es diese Eigenschaft gab.
 
         Deklariert statt aus ``consumes == 0 and produces == VARIABLE``
         hergeleitet, was sie früher war: eine Baugruppe zu laden nimmt auch

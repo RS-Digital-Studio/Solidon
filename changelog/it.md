@@ -86,6 +86,7 @@ scrive in `website/version.json`.
 - I pezzi vengono disposti al centro del piano, come fanno gli slicer accanto, e non nell'angolo posteriore sinistro.
 - Orientare per la stampa ridispone poi i pezzi ruotati. Un corpo che si corica occupa più superficie e prima finiva dentro al vicino.
 - Disporre solo una parte della scena non travolge più il resto: ciò che rimane conserva il suo posto.
+- Orientare per la stampa prende ora tutti i corpi della scena, non solo quelli selezionati. Così l'intero piano si sposta al centro invece che un pezzo ruotato schivi verso l'angolo uno rimasto fermo.
 
 ### Vista e utilizzo
 

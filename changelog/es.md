@@ -87,6 +87,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Las piezas se distribuyen en el centro de la cama, como hacen los laminadores de al lado, y no en la esquina posterior izquierda.
 - Orientar para imprimir vuelve a distribuir después las piezas giradas. Un cuerpo que se tumba ocupa más superficie y antes acababa dentro del vecino.
 - Distribuir solo una parte de la escena ya no atropella al resto: lo que se queda conserva su sitio.
+- Orientar para imprimir toma ahora todos los cuerpos de la escena, no solo los marcados. Así toda la cama se desplaza al centro en lugar de que una pieza girada esquive hacia la esquina a otra que se quedó parada.
 
 ### Vista y manejo
 

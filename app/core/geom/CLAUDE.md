@@ -12,8 +12,19 @@ oder mehrdeutige Fläche bleibt abgelehnt.
 `remove_feature` fragt bei einer solchen Kette über `ctx.ask`, ob alle
 Abschnitte mitgehen, und hält die Antwort im Parameter `sections`
 (`OpResult.answered`) fest — derselbe Weg, den `load` mit der Einheit geht.
-Bei „ganzer Hohlraum" füllt es `_paired_cavity_body`, bei „nur das gewählte"
-den einen Abschnitt. Ob dessen zweiter Randring ein Übergang oder sein Boden
+
+**Beide Antworten gehen denselben Weg: erst geht der ganze Hohlraum zu, dann
+wird frisch geschnitten, was bleiben soll.** Bei „ganzer Hohlraum" entfällt der
+zweite Schritt, bei „nur das gewählte" schneidet `_cavity_tool` die übrigen
+Abschnitte wieder aus dem vollen Material — für die Abschnitte weiter innen
+zusätzlich durch den gefüllten hindurch, sonst verlören sie ihren Weg nach
+außen. Den Füllkörper liefert `_cavity_plug`: aus den Flächen des Hohlraums,
+wo sie einen geschlossenen Körper hergeben, sonst als **Stopfen**
+(`_chain_plug`) — ein Zylinder über die ganze Kette, wie ihn der Absagetext
+seit je empfiehlt. Ein Füllkörper, der die Kegelwand nachbildet, endet auf ihr,
+und die Vereinigung lässt dort zwei Flächen nebeneinander stehen.
+
+Ob der zweite Randring eines einzelnen Abschnitts ein Übergang oder sein Boden
 ist, beantwortet `_stands_alone` an derselben Kette und nicht die Ringzahl:
 Nach dem Verschließen der Bohrung bleiben es zwei Ringe, und die Senkung
 gehört sich dann selbst. Größenänderungen bleiben einzelne
@@ -215,11 +226,20 @@ Platte mit solchen wird nicht zentriert.
 **`orient_for_print` legt hin, was es umgeworfen hat.** Ein gedrehter Körper
 braucht mehr Fläche als ein stehender und lief sonst in seinen Nachbarn
 (Befund Robert, 09.09.2026). Der Parameter `arrange` ruft dieselbe Anordnung
-mit denselben Werten für Abstand und Platten; die nicht gewählten Körper der
-Szene bleiben liegen und gehen als `occupied` mit. Was der Abstand enthalten
+mit denselben Werten für Abstand und Platten. **Über die Oberfläche bekommt sie
+die ganze Szene** (`whole_scene`, wie *Auf dem Bett anordnen*), es bleibt also
+niemand liegen und die Platte wird zentriert. Ein **gespeicherter** Auftrag
+trägt dagegen seine damalige Teilmenge; dort gehen die übrigen als `occupied`
+mit und die Zentrierung entfällt. Was der Abstand enthalten
 muss — Plattenhaftung und Stützrand —, rechnet `export.writer.clearance_margin`,
 und vorbelegt wird er in der Oberfläche (`MainWindow._spacing_for`), weil
 Druckeinstellungen nicht zur Auswertung gehören.
+
+Der Parameter `arrange` steht dabei auf `True`, auch für **gespeicherte**
+Aufträge: Ein alter Stapel ordnet beim Öffnen mit und legt seine Körper
+auseinander (Entscheidung Robert, 10.09.2026). Ohne Migration, weil die
+Änderung die Lage berichtigt und keine Maße umdeutet — Bauplan §29 führt die
+Begründung.
 
 **Und weil sie an ihren Eingängen vorbei liest, sagt sie es dem Schlüssel.**
 Der Registereintrag trägt `reads_other_bodies=True`; ohne das behielte ein

@@ -22,7 +22,7 @@ from app.core.types import Profile, Source
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
-@pytest.mark.parametrize("name", ["arrange_bed", "check_collisions"])
+@pytest.mark.parametrize("name", ["arrange_bed", "check_collisions", "orient_for_print"])
 def test_the_registry_says_which_operations_take_everything(name: str) -> None:
     assert REGISTRY.get(name).takes_whole_scene
 
@@ -98,6 +98,14 @@ def test_the_window_hands_the_whole_scene_in() -> None:
     objects = ["obj_1", "obj_2", "obj_3"]
 
     assert inputs_for(REGISTRY.get("arrange_bed"), objects, ()) == ("obj_1", "obj_2", "obj_3")
+    # **Auch mit Auswahl.** Das ist der Unterschied zu ``consumes=VARIABLE``,
+    # und er ist der Grund für die Umstellung von *Druckoptimal ausrichten*
+    # (Robert, 10.09.2026: „druckoptimal ausrichten alle körper"): Wer einen
+    # von vier Körpern markiert, richtet trotzdem das ganze Bett aus — sonst
+    # belegen die übrigen ihren Platz und die Zentrierung entfällt.
+    ausrichten = REGISTRY.get("orient_for_print")
+    assert inputs_for(ausrichten, objects, ()) == ("obj_1", "obj_2", "obj_3")
+    assert inputs_for(ausrichten, objects, ("obj_2",)) == ("obj_1", "obj_2", "obj_3")
     assert inputs_for(REGISTRY.get("repair"), objects, ("obj_2",)) == ("obj_2",)
     assert inputs_for(REGISTRY.get("repair"), objects, ()) == ()
     creating = REGISTRY.get("create_box")

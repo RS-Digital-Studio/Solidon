@@ -86,6 +86,7 @@ it into `website/version.json`.
 - Parts are arranged in the middle of the bed, the way the slicers next door do it, instead of in the back left corner.
 - Orienting for printing now lays the turned parts out again afterwards. A body that lies down needs more area, and used to end up inside its neighbour.
 - Arranging only part of the scene no longer runs over the rest: whatever stays put keeps its place.
+- Orient for printing now takes every body in the scene, not just the selected ones. The whole bed then moves to the centre instead of a turned part dodging a standing one into the corner.
 
 ### View and operation
 

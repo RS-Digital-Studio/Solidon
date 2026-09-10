@@ -212,19 +212,25 @@ def test_the_thorough_orientation_uses_the_layer_analysis(
     assert history.operations[-1].seed is None, "geometry candidates need no random seed (§28.2)"
 
 
-def test_the_orientation_operation_is_registered() -> None:
-    """Sie nimmt so viele Körper, wie gewählt sind — nicht genau einen.
+def test_the_orientation_operation_takes_the_whole_scene() -> None:
+    """Sie nimmt das ganze Bett, nicht eine Markierung darauf.
 
-    Hier stand ``(1, 1)``, und das war die festgeschriebene Gestalt eines
-    Fehlers: Wer alle Teile einer Baugruppe wählte und *Druckoptimal
-    ausrichten* rief, bekam den ersten gedreht und die übrigen liegengelassen.
-    Lag der erste schon richtig, sah es aus, als täte die Operation gar nichts
-    (Befund Robert, 07.09.2026).
+    Zwei Schritte hierher, und beide waren Befunde: ``(1, 1)`` drehte den
+    ersten Körper und ließ die übrigen liegen — lag der erste schon richtig,
+    sah es aus, als täte die Operation nichts (07.09.2026). ``VARIABLE`` nahm
+    die gewählten und musste den übrigen ausweichen, was jede Zentrierung
+    verhinderte: Der gedrehte Körper landete in der hinteren linken Ecke,
+    weil die freie Mitte einem Nachbarn gehörte (Entscheidung Robert,
+    10.09.2026: „druckoptimal ausrichten alle körper").
+
+    Dieselbe Bauart wie *Auf dem Bett anordnen*: ``consumes=0`` und
+    ``whole_scene``, und jede Oberfläche gibt die Szene hinein.
     """
     spec = REGISTRY.get("orient_for_print")
     assert spec.category == "transform"
-    assert (spec.consumes, spec.produces) == (VARIABLE, VARIABLE)
-    assert spec.minimum_inputs == 1, "ein einzelner Körper bleibt zulässig"
+    assert (spec.consumes, spec.produces) == (0, VARIABLE)
+    assert spec.takes_whole_scene, "die Oberfläche muss ihr die ganze Szene geben"
+    assert spec.takes_whole_scene == REGISTRY.get("arrange_bed").takes_whole_scene
 
 
 def test_every_chosen_body_gets_its_own_orientation(document: Document, profile: Profile) -> None:
@@ -341,13 +347,59 @@ def test_orienting_does_not_leave_the_bodies_inside_each_other(
             assert apart, f"{bodies[first]} und {bodies[second]} stecken ineinander"
 
 
-def test_a_body_that_was_not_chosen_keeps_its_place(document: Document, profile: Profile) -> None:
-    """Wer nicht gewählt ist, wird nicht bewegt — und sein Platz bleibt belegt.
+def test_orienting_everything_leaves_the_bed_in_the_middle(
+    document: Document, profile: Profile
+) -> None:
+    """Ausgerichtet wird das Bett, und danach liegt sein Inhalt mittig.
 
-    Die Operation nimmt so viele Körper, wie gewählt sind. Ordnete sie danach
-    an, als wäre die Szene leer, legte sie einen gedrehten Körper genau dorthin,
-    wo ein nicht gewählter schon steht. Der liest sich aus ``ctx.scene``, und
-    lesen darf sie ihn (Regel 3).
+    Bekommt die Operation alles, bleibt niemand liegen, und der Verband wird
+    als Ganzes in die Mitte geschoben (§29) — wie es jeder Slicer daneben tut.
+    Belegt dagegen ein fremder Körper einen Platz, entfällt die Zentrierung,
+    und der gedrehte landet gemessen bei x -123..-33, y 103..123, in der
+    hinteren linken Ecke, während die Mitte frei danebenliegt; das ist der
+    Grund für ``whole_scene`` (Robert, 10.09.2026: „druckoptimal ausrichten
+    alle körper").
+
+    **Dieser Test hält die Zentrierung fest, nicht die Deklaration.** Er
+    übergibt beide Körper von Hand und bliebe deshalb auch mit dem alten
+    ``consumes=VARIABLE`` grün. Dass die *Oberfläche* die ganze Szene
+    hineingibt, hält ``test_whole_scene_ops.py`` fest — dort, wo dieselbe
+    Frage für die zwei älteren Operationen schon steht.
+
+    Geprüft wird die **Mitte des Verbands**, nicht die Lage eines einzelnen
+    Körpers: Was in der Mitte liegen soll, ist das Gepackte als Ganzes.
+    """
+    project, bodies = _towers(document)
+    History(document).apply(
+        _("Alles ausrichten"),
+        [OperationDraft(op="orient_for_print", inputs=tuple(bodies), params={"thorough": False})],
+    )
+    result = evaluate(document, profile, sources=ProjectSources(project))
+    assert result.complete
+
+    kanten = [result.scene.objects[name].mesh.bounds for name in bodies]
+    links = min(float(b.minimum[0]) for b in kanten)
+    rechts = max(float(b.maximum[0]) for b in kanten)
+    vorn = min(float(b.minimum[1]) for b in kanten)
+    hinten = max(float(b.maximum[1]) for b in kanten)
+
+    assert (links + rechts) / 2.0 == pytest.approx(0.0, abs=1.0), (
+        f"der Verband steht bei x {(links + rechts) / 2.0}, nicht in der Mitte"
+    )
+    assert (vorn + hinten) / 2.0 == pytest.approx(0.0, abs=1.0), (
+        f"der Verband steht bei y {(vorn + hinten) / 2.0}, nicht in der Mitte"
+    )
+
+
+def test_a_body_that_was_not_chosen_keeps_its_place(document: Document, profile: Profile) -> None:
+    """Wer nicht Eingang ist, wird nicht bewegt — und sein Platz bleibt belegt.
+
+    **Der Weg eines gespeicherten Auftrags.** Über die Oberfläche bekommt die
+    Operation seit dem 10.09.2026 die ganze Szene; ein Stapel von gestern trägt
+    aber die Teilmenge, die damals gewählt war, und die Kommandozeile darf sie
+    ebenso übergeben. Ordnete sie dann an, als wäre die Szene leer, legte sie
+    einen gedrehten Körper genau dorthin, wo ein fremder schon steht. Der liest
+    sich aus ``ctx.scene``, und lesen darf sie ihn (Regel 3).
     """
     project, bodies = _towers(document)
     standing = bodies[1]

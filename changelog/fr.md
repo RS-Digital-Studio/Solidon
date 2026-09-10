@@ -87,6 +87,7 @@ dans `website/version.json`.
 - Les pièces sont disposées au milieu du plateau, comme le font les trancheurs d'à côté, et non dans le coin arrière gauche.
 - Orienter pour l'impression redispose ensuite les pièces tournées. Un corps qui se couche prend plus de surface et finissait avant dans son voisin.
 - Ne disposer qu'une partie de la scène n'écrase plus le reste : ce qui demeure garde sa place.
+- Orienter pour l'impression prend désormais tous les corps de la scène, pas seulement ceux qui sont sélectionnés. Le plateau entier se place ensuite au centre au lieu qu'une pièce tournée contourne vers le coin une pièce restée en place.
 
 ### Vue et utilisation
 
