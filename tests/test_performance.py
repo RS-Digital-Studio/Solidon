@@ -550,6 +550,113 @@ def test_feature_detection_on_two_hundred_thousand_triangles() -> None:
     assert taken < 10.0, "the target is one second; ten catches an order of magnitude"
 
 
+def pocketed_plate(count: int) -> MeshData:
+    """Eine Platte mit ``count`` rechteckigen Taschen, jede mit vier Eckrundungen.
+
+    **Der Körper, den die Langlochsuche teuer findet** — und den kein anderer
+    Prüfkörper dieser Datei hat: ``mechanical_feature_mesh`` trägt null
+    Innenverrundungen, also kehrt ``find_slots`` dort sofort zurück und die
+    Suche wird nie gemessen. Vier Rundungen je Tasche ergeben bei 64 Taschen
+    256 Kandidaten und 32 640 Paare, alle mit gleichem Radius und paralleler
+    Achse — die Vorprüfungen greifen also nicht, und was übrig bleibt, ist
+    genau der Teil, um den es geht.
+    """
+    import trimesh
+    from shapely.geometry import Polygon
+
+    from app.core.geom.boolean import boolean
+
+    side = int(count**0.5 + 0.999)
+    width = side * 30.0 + 20.0
+    body = MeshData.of(trimesh.creation.box(extents=(width, width, 20.0)))
+    outline = (
+        Polygon([(-8.0, -5.0), (8.0, -5.0), (8.0, 5.0), (-8.0, 5.0)])
+        .buffer(-3.0)
+        .buffer(3.0, quad_segs=16)
+    )
+    for index in range(count):
+        tool = trimesh.creation.extrude_polygon(outline, height=8.0)
+        tool.apply_translation(
+            (
+                (index % side) * 30.0 - width / 2.0 + 25.0,
+                (index // side) * 30.0 - width / 2.0 + 25.0,
+                6.0,
+            )
+        )
+        body = boolean("difference", [body, MeshData.of(tool)]).mesh
+    return body
+
+
+def test_looking_for_slots_does_not_grow_with_the_whole_mesh() -> None:
+    """§31: viele Innenverrundungen dürfen die Erkennung nicht sprengen.
+
+    Die Suche geht über **alle Paare** von Innenverrundungen, und zwei Posten
+    darin hingen einmal am ganzen Netz statt am Paar: die Quermaske, die je
+    Paar über sämtliche Normalen lief, und der Tiefenlauf, der auch für zwei
+    Bögen aus verschiedenen Taschen startete. Gemessen an dieser Platte mit 64
+    Taschen: 4,8 s vorher, 0,8 s nachher — bei 16 Taschen 200 ms gegen 58 ms.
+
+    **Die Zahl allein wäre die halbe Prüfung.** Beide Griffe verwerfen Paare
+    früher, und ein Griff, der zu viel verwirft, ist schnell und falsch —
+    deshalb steht die Gegenprobe daneben: In derselben Bauart liegt ein echtes
+    Langloch, und es wird gefunden.
+    """
+    from app.core.perceive.features import _fitted, _one_body
+    from app.core.perceive.slots import find_slots
+
+    mesh = _one_body(pocketed_plate(64))
+    fitted = _fitted(mesh)
+    inward = [entry for entry in fitted.fillets if getattr(entry[0], "inward", False)]
+    assert len(inward) >= 200, (
+        f"ohne viele Innenverrundungen misst dieser Test nichts (hier {len(inward)})"
+    )
+
+    found: list[Any] = []
+    taken = measure(
+        "find_slots_many_fillets", lambda: found.append(find_slots(mesh, fitted.fillets))
+    )
+
+    assert found == [[]], "vier Ecken einer Tasche sind kein Langloch"
+    # Zwischen die beiden gemessenen Stände gelegt, nicht neben den heutigen:
+    # 4,8 s vorher, 0,8 s nachher. Fünf Sekunden hätten den alten Stand auf
+    # dieser Maschine noch durchgelassen, eine Sekunde ließe einer langsameren
+    # keinen Raum. Der 25-Prozent-Vergleich über ``measure`` greift daneben.
+    assert taken < 2.5, "die Suche darf nicht wieder mit dem ganzen Netz wachsen"
+
+
+def test_a_real_slot_survives_the_shortcuts_that_make_the_search_fast() -> None:
+    """Die Gegenprobe zum Test darüber: was schnell verworfen wird, ist nicht alles.
+
+    Zwischen den Taschen sitzt ein echtes durchgehendes Langloch. Es teilt
+    seinen Mantel mit keiner von ihnen, wird also von genau der Vorprüfung
+    beurteilt, die die anderen 32 640 Paare wegwirft.
+    """
+    import trimesh
+
+    from app.core.geom.boolean import boolean
+    from app.core.perceive.features import _fitted, _one_body
+    from app.core.perceive.slots import find_slots
+
+    plate = pocketed_plate(4)
+    first = trimesh.creation.cylinder(radius=2.5, height=40.0)
+    first.apply_translation((0.0, -6.0, 0.0))
+    second = trimesh.creation.cylinder(radius=2.5, height=40.0)
+    second.apply_translation((0.0, 6.0, 0.0))
+    bridge = trimesh.creation.box(extents=(5.0, 12.0, 40.0))
+    # Vereinigt und nicht aneinandergelegt: Drei überlappende Körper in einem
+    # Netz sind nicht dicht, und die Differenz dagegen liefert keinen Mantel,
+    # an dem die Suche entlanglaufen könnte.
+    tool = boolean("union", [MeshData.of(first), MeshData.of(second), MeshData.of(bridge)]).mesh
+    with_slot = boolean("difference", [plate, tool]).mesh
+
+    mesh = _one_body(with_slot)
+    slots = find_slots(mesh, _fitted(mesh).fillets)
+
+    assert len(slots) == 1, f"das echte Langloch fehlt (gefunden: {len(slots)})"
+    assert slots[0].diameter == pytest.approx(5.0, abs=0.1)
+    assert slots[0].length == pytest.approx(17.0, abs=0.2)
+
+
 def test_feature_detection_on_a_freeform_tracks_the_real_customer_path() -> None:
     """Die Freiform prüft tausende Fits, bevor sie erfundene Formen weglässt.
 

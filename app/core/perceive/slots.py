@@ -221,6 +221,11 @@ def find_slots(
     # Maske, und die fragt der Lauf jetzt beim Betreten einer Fläche.
     graph = _neighbourhood(neighbours, len(normals))
 
+    # Die Quermaske hängt allein an der Achse und wird deshalb über alle Paare
+    # geteilt — der Grund steht bei :func:`_across_mask`.
+    masks: dict[bytes, tuple[list[bool], list[int]]] = {}
+    shells: dict[int, frozenset[int]] = {}
+
     found: list[Slot] = []
     taken: set[int] = set()
     for first in range(len(candidates)):
@@ -231,7 +236,9 @@ def find_slots(
         for second in range(first + 1, len(candidates)):
             if candidates[second][0] in taken:
                 continue
-            slot = _slot_from(body, normals, graph, candidates[first], candidates[second])
+            slot = _slot_from(
+                body, normals, graph, masks, shells, candidates[first], candidates[second]
+            )
             if slot is not None:
                 found.append(slot)
                 taken.update(slot.swallowed)
@@ -259,10 +266,16 @@ def _slot_from(
     body: Any,
     normals: np.ndarray,
     graph: tuple[np.ndarray, np.ndarray],
+    masks: dict[bytes, tuple[list[bool], list[int]]],
+    shells: dict[int, frozenset[int]],
     first: tuple[int, CylinderFit, list[int]],
     second: tuple[int, CylinderFit, list[int]],
 ) -> Slot | None:
-    """Ob diese zwei Zylinderausschnitte ein Langloch sind — und welches."""
+    """Ob diese zwei Zylinderausschnitte ein Langloch sind — und welches.
+
+    ``masks`` sammelt die Quermasken je Achse über alle Paare eines Laufs —
+    siehe :func:`_across_mask`.
+    """
     index_a, fit_a, patch_a = first
     index_b, fit_b, patch_b = second
 
@@ -295,7 +308,11 @@ def _slot_from(
     direction = sideways / travel
     across = np.cross(axis, direction)
 
-    faces = _connected_shell(normals, graph, axis, patch_a, patch_b)
+    across_mask, labels = _shells_for(normals, axis, graph, masks)
+    if not _shares_a_shell(labels, graph, (index_a, patch_a), (index_b, patch_b), shells):
+        return None
+
+    faces = _connected_shell(across_mask, graph, patch_a, patch_b)
     if faces is None:
         return None
 
@@ -333,9 +350,8 @@ def _unit(vector: Any) -> np.ndarray | None:
 
 
 def _connected_shell(
-    normals: np.ndarray,
+    across: list[bool],
     graph: tuple[np.ndarray, np.ndarray],
-    axis: np.ndarray,
     patch_a: Sequence[int],
     patch_b: Sequence[int],
 ) -> set[int] | None:
@@ -349,28 +365,156 @@ def _connected_shell(
 
     ``graph`` ist die Nachbarschaft des ganzen Netzes aus
     :func:`_neighbourhood` — sie gilt für alle Paare, und deshalb wird sie
-    hier gelesen und nicht gebaut. Was diesem Paar gehört, ist die Maske
-    ``allowed``; sie wird beim **Betreten** einer Fläche gefragt, und damit hat
-    jede gelaufene Kante beide Enden im Erlaubten, genau wie vorher.
-    """
-    across = np.abs(normals @ axis) <= _ACROSS
-    if not bool(across.any()):
-        return None
-    allowed = np.array(across, dtype=bool)
-    allowed[np.asarray(patch_a, dtype=int)] = True
-    allowed[np.asarray(patch_b, dtype=int)] = True
+    hier gelesen und nicht gebaut.
 
+    ``across`` sagt je Fläche, ob sie quer zur Achse steht — sie kommt von
+    außen, weil sie **allein an der Achse hängt** und nicht am Paar; alle
+    Bögen eines Langlochs teilen sie. Was diesem Paar gehört, sind die zwei
+    Bogenflecken, und die stehen als Menge daneben statt in einer Kopie.
+    """
     starts, targets = graph
+    arcs = {int(face) for face in patch_a} | {int(face) for face in patch_b}
     goal = {int(face) for face in patch_b}
     seen: set[int] = {int(face) for face in patch_a}
     stack = list(seen)
     while stack:
         face = stack.pop()
         for neighbour in targets[starts[face] : starts[face + 1]].tolist():
-            if neighbour not in seen and allowed[neighbour]:
+            if neighbour not in seen and (across[neighbour] or neighbour in arcs):
                 seen.add(neighbour)
                 stack.append(neighbour)
     return seen if goal <= seen else None
+
+
+def _shell_labels(across: list[bool], graph: tuple[np.ndarray, np.ndarray]) -> list[int]:
+    """Die zusammenhängenden Mantelstücke einer Achse, je Fläche eine Nummer.
+
+    Flächen, die nicht quer stehen, bekommen ``-1``. Zwei Bögen können nur
+    dann ein Langloch sein, wenn sie an **dasselbe** Stück grenzen — und das
+    steht damit fest, ohne für jedes Paar zu laufen (:func:`_shares_a_shell`).
+    """
+    starts, targets = graph
+    labels = [-1] * len(across)
+    running = 0
+    for seed in range(len(across)):
+        if not across[seed] or labels[seed] >= 0:
+            continue
+        labels[seed] = running
+        stack = [seed]
+        while stack:
+            face = stack.pop()
+            for neighbour in targets[starts[face] : starts[face + 1]].tolist():
+                if across[neighbour] and labels[neighbour] < 0:
+                    labels[neighbour] = running
+                    stack.append(neighbour)
+        running += 1
+    return labels
+
+
+def _shells_touched(
+    labels: list[int],
+    graph: tuple[np.ndarray, np.ndarray],
+    patch: Sequence[int],
+    index: int,
+    cache: dict[int, frozenset[int]],
+) -> frozenset[int]:
+    """An welche Mantelstücke dieser Bogen grenzt — je Bogen einmal gefragt.
+
+    **Auch das gehört dem Bogen und nicht dem Paar.** Der erste Anlauf der
+    Vorprüfung rechnete es beidseitig je Paar aus und war damit wieder
+    quadratisch, nur billiger: An der Platte mit 64 Taschen liefen 65 280
+    Durchgänge über die Nachbarschaft von Flecken, die sich zu 256
+    unterschiedlichen zusammenfassen lassen. Der Bogen hat eine Nummer, die
+    über den ganzen Lauf gilt (die Stelle in ``fillets``), und die ist der
+    Schlüssel.
+    """
+    ready = cache.get(index)
+    if ready is None:
+        starts, targets = graph
+        ready = frozenset(
+            labels[neighbour]
+            for face in patch
+            for neighbour in targets[starts[face] : starts[face + 1]].tolist()
+            if labels[neighbour] >= 0
+        )
+        cache[index] = ready
+    return ready
+
+
+def _shares_a_shell(
+    labels: list[int],
+    graph: tuple[np.ndarray, np.ndarray],
+    first: tuple[int, Sequence[int]],
+    second: tuple[int, Sequence[int]],
+    cache: dict[int, frozenset[int]],
+) -> bool:
+    """Grenzen beide Bögen an dasselbe Mantelstück?
+
+    **Die Vorprüfung, die den quadratischen Teil bezahlbar macht.** Ohne sie
+    lief für jedes Paar ein Tiefenlauf, auch für zwei Bögen in verschiedenen
+    Taschen desselben Bauteils, zwischen denen es gar keinen gemeinsamen
+    Mantel gibt. Gemessen an einer Platte mit 64 verrundeten Taschen (256
+    Innenverrundungen, 32 640 Paare) waren das 32 640 Läufe, von denen 384
+    überhaupt eine Chance hatten.
+
+    **Sie lehnt nur ab, was auch der Lauf abgelehnt hätte.** Erreicht er den
+    zweiten Bogen, ist er über querstehende Flächen dorthin gekommen, und die
+    liegen dann in einem Stück. Der einzige andere Weg wäre ein unmittelbarer
+    Kontakt der beiden Bogenflecken — dann ist ``faces`` genau
+    ``patch_a | patch_b``, und :func:`_flanks_are_flat` lehnt mit leerem
+    ``rest`` ab. Beide Wege enden gleich.
+    """
+    index_a, patch_a = first
+    index_b, patch_b = second
+    touched = _shells_touched(labels, graph, patch_a, index_a, cache)
+    if not touched:
+        return False
+    return bool(touched & _shells_touched(labels, graph, patch_b, index_b, cache))
+
+
+def _shells_for(
+    normals: np.ndarray,
+    axis: np.ndarray,
+    graph: tuple[np.ndarray, np.ndarray],
+    cache: dict[bytes, tuple[list[bool], list[int]]],
+) -> tuple[list[bool], list[int]]:
+    """Quermaske und Mantelstücke einer Achse — je Achse einmal gerechnet.
+
+    **Der teuerste Posten der Langlochsuche stand hier, und er war es zweimal
+    umsonst.** ``np.abs(normals @ axis) <= _ACROSS`` lief in
+    :func:`_connected_shell` je **Paar** über das ganze Netz, dazu eine
+    Vollkopie als ``allowed``. Beides hängt nur an der Achse, und die teilen
+    sich alle Bögen eines Langlochs: An einer Platte mit sechzehn verrundeten
+    Taschen (64 Innenverrundungen, 2016 Paare) wurde dieselbe Maske
+    zweitausendmal gebaut, und ``find_slots`` kostete 200 ms bei 4366
+    Dreiecken — ein Anteil, der mit dem **Netz** wächst, obwohl der Lauf davon
+    nur einen Bruchteil der Flächen anfasst. Bei den 200 000 Dreiecken aus §31
+    reißt das die Sekunde um ein Mehrfaches.
+
+    **Der naheliegende Griff daneben war der falsche**, und er ist gemessen
+    worden: die Querprüfung je betretener Fläche zu rechnen statt vorher für
+    alle. Das sieht nach weniger Arbeit aus und war dreimal so teuer (532 ms) —
+    ein numpy-Skalarzugriff kostet mehr als das vektorisierte Produkt über
+    tausende Zeilen. Die Rechnung bleibt also vektorisiert; gespart wird ihre
+    **Wiederholung**.
+
+    Der Schlüssel sind die Achsenbytes und keine gerundete Fassung: Zwei
+    Achsen, die sich im letzten Bit unterscheiden, bekommen lieber zwei
+    Einträge, als dass eine Fläche dicht an der Schwelle die Maske des
+    Nachbarn erbt. ``tolist()`` einmal, weil der Lauf danach einzeln fragt und
+    eine Python-Liste dort schneller antwortet als ein numpy-Feld.
+
+    Die Mantelstücke aus :func:`_shell_labels` kommen im selben Zug, weil sie
+    an derselben Achse hängen und einen zweiten Durchgang über das Netz
+    kosteten.
+    """
+    key = np.ascontiguousarray(axis, dtype=float).tobytes()
+    ready = cache.get(key)
+    if ready is None:
+        across = (np.abs(normals @ axis) <= _ACROSS).tolist()
+        ready = (across, _shell_labels(across, graph))
+        cache[key] = ready
+    return ready
 
 
 def _flanks_are_flat(
