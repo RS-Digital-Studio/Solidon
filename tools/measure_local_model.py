@@ -56,7 +56,8 @@ from app.core.backends.llm import (
     ollama_endpoint,
 )
 from app.core.bootstrap import load_operations
-from app.core.http import deadline_after, read_limited
+from app.core.discover import opener_for
+from app.core.http import apply_header_deadline, deadline_after, read_limited
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 
@@ -111,7 +112,11 @@ def model_state() -> tuple[bool | None, int | None]:
     haben — und es steht als solches in der Ausgabe.
     """
     try:
-        with urllib.request.urlopen("http://localhost:11434/api/ps", timeout=15) as answer:
+        # Über denselben Weg wie die Anwendung: ohne Proxy für einen lokalen
+        # Dienst, und mit der Frist auch über Statuszeile und Kopfzeilen.
+        opener = opener_for("http://localhost:11434/api/ps")
+        apply_header_deadline(opener, deadline_after(15))
+        with opener.open("http://localhost:11434/api/ps", timeout=15) as answer:
             raw_models = _answer_json(
                 answer,
                 limit=MAX_STATE_RESPONSE_BYTES,
@@ -168,8 +173,10 @@ def _ask(model: str, tools: list[dict[str, object]]) -> Turn | None:
         headers={"Content-Type": "application/json"},
     )
     started = time.monotonic()
+    opener = opener_for(ollama_endpoint(None))
+    apply_header_deadline(opener, deadline_after(REQUEST_TIMEOUT_SECONDS))
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT_SECONDS) as answer:
+        with opener.open(request, timeout=REQUEST_TIMEOUT_SECONDS) as answer:
             data = _answer_json(
                 answer,
                 limit=MAX_CHAT_RESPONSE_BYTES,
@@ -199,8 +206,10 @@ def unload(model: str) -> None:
         data=json.dumps({"model": model, "keep_alive": 0, "messages": []}).encode("utf-8"),
         headers={"Content-Type": "application/json"},
     )
+    opener = opener_for(ollama_endpoint(None))
+    apply_header_deadline(opener, deadline_after(120))
     try:
-        with urllib.request.urlopen(request, timeout=120) as answer:
+        with opener.open(request, timeout=120) as answer:
             reason = _answer_json(
                 answer,
                 limit=MAX_UNLOAD_RESPONSE_BYTES,

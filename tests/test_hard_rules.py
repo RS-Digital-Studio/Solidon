@@ -4,6 +4,11 @@ Ein Zweig hinter ``if sys.platform == "darwin"`` ist auf zwei von drei
 Maschinen toter Code. Weder ein Testlauf noch mypy sieht ihn dort; gefunden
 wird er von der CI, nach fünfundzwanzig Minuten, und dann liegt der Tag still.
 Was hier steht, prüft solche Zweige am **Quelltext** und läuft deshalb überall.
+
+Dazu kommen Zusagen, die gar nicht an einer Plattform hängen, sondern am
+Quelltext selbst — dass eine Frage nur an einer Stelle gestellt wird, dass
+ein Netzaufruf seine Kopfzeilen unter die Gesamtfrist stellt. Auch sie sind
+hier richtig: Es sind harte Regeln, die kein einzelner Testlauf zeigt.
 """
 
 from __future__ import annotations
@@ -421,4 +426,148 @@ def test_a_state_that_is_set_is_taken_back_on_every_path() -> None:
 
     assert not unguarded, "gesetzt und nicht auf jedem Weg zurückgenommen:\n  " + "\n  ".join(
         unguarded
+    )
+
+
+def _asks_the_system_for_a_handle_path(tree: ast.AST) -> bool:
+    """Ob diese Datei das Betriebssystem nach dem Pfad eines offenen Handles fragt.
+
+    Zwei Fragen, eine je Plattformfamilie: ``GetFinalPathNameByHandleW`` unter
+    Windows, ``fcntl(fd, 50, …)`` — Darwins ``F_GETPATH`` — darunter. Wer eine
+    davon stellt, baut den Weg; wer nur ``/proc/self/fd`` liest, tut etwas
+    anderes und wird hier bewusst nicht gezählt (``updates._inherited_descriptor_path``
+    gibt den Deskriptorpfad **zur Weitergabe** zurück und löst ihn gerade nicht auf).
+
+    **Gefragt wird am Syntaxbaum und nicht im Text**, und das war eine
+    Messung: Die erste Fassung suchte den Windows-Namen als Zeichenkette und
+    meldete ``updates.py`` weiterhin — sie hatte den Docstring gelesen, der
+    dort seit der Zusammenführung erklärt, was die Datei **nicht** mehr tut.
+    Ein Wächter, der Prosa mitzählt, ist im Neubau rot und wird abgeschaltet.
+    """
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr == "GetFinalPathNameByHandleW":
+            return True
+        if not isinstance(node, ast.Call) or len(node.args) < 2:
+            continue
+        if _name_of(node) != "fcntl":
+            continue
+        second = node.args[1]
+        if isinstance(second, ast.Constant) and second.value == 50:
+            return True
+    return False
+
+
+def test_the_path_behind_an_open_handle_is_asked_in_exactly_one_place() -> None:
+    """Diese Frage steht einmal — sonst altert eine der Antworten.
+
+    Bis zum 10.09.2026 stand sie zweimal: ``scene.project._opened_file_path``
+    für verknüpfte Quellen, ``updates._descriptor_path`` für den Deskriptor,
+    den das Update an den Installer weiterreicht. Beide fragen aus einem
+    Sicherheitsgrund, beide waren „dieselbe Frage in derselben Reihenfolge" —
+    der Kommentar in ``updates`` sagte das ausdrücklich. Gleich waren sie
+    trotzdem nicht.
+
+    **Was der älteren fehlte**, und es war die einzige Abweichung mit Folgen:
+    Unter Windows nennt ``GetFinalPathNameByHandleW`` beim zweiten Aufruf
+    entweder die geschriebene Länge oder — wenn der Puffer nicht reicht — die
+    benötigte. Wächst der Pfad zwischen den beiden Aufrufen, etwa weil jemand
+    einen Ordner darüber umbenennt, kommt der zweite Fall. ``project`` prüfte
+    ``written >= len(buffer)`` und hielt an; ``updates`` prüfte nur gegen Null
+    und rechnete mit einer abgeschnittenen Zeichenkette weiter — als Antwort
+    auf eine Sicherheitsfrage.
+
+    Der Wächter zählt Dateien und nicht Zeilen, weil eine dritte Kopie genauso
+    entstünde wie die zweite: nicht durch Ändern der ersten, sondern daneben.
+    Gegenprobe gefahren: Vor der Zusammenführung nennt derselbe Lauf zwei
+    Dateien (``scene/project.py`` und ``updates.py``), danach eine.
+    """
+    asking = [
+        path
+        for path in source_files()
+        if _asks_the_system_for_a_handle_path(
+            ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        )
+    ]
+
+    assert [path.name for path in asking] == ["paths.py"], (
+        "Der Pfad hinter einem offenen Handle wird an mehr als einer Stelle ermittelt:\n  "
+        + "\n  ".join(str(path) for path in asking)
+        + "\nEine gemeinsame Fassung steht in app/core/paths.opened_path."
+    )
+
+
+def _opens_with_a_timeout(node: ast.AST) -> bool:
+    """Ein Netzaufruf über urllib — ``…​.open(…, timeout=…)`` oder ``urlopen(…)``.
+
+    **Beide Schreibweisen**, und die zweite hat gefehlt: Der erste Anlauf
+    fragte nur nach ``.open`` und übersah damit drei ``urlopen``-Aufrufe in
+    ``tools/measure_local_model.py``, die genau denselben Fehler trugen.
+    Ein Wächter, der die naheliegendste Schreibweise nicht kennt, prüft die
+    Gewohnheit und nicht die Zusage.
+    """
+    if not isinstance(node, ast.Call):
+        return False
+    if _name_of(node) not in {"open", "urlopen"}:
+        return False
+    return any(keyword.arg == "timeout" for keyword in node.keywords)
+
+
+def unfristed_network_calls(tree: ast.AST) -> list[int]:
+    """Netzaufrufe, in deren Funktion keine Kopfzeilenfrist gesetzt wird."""
+    found: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            continue
+        calls = [inner for inner in ast.walk(node) if _opens_with_a_timeout(inner)]
+        if not calls:
+            continue
+        fristed = any(
+            isinstance(inner, ast.Call) and _name_of(inner) == "apply_header_deadline"
+            for inner in ast.walk(node)
+        )
+        if not fristed:
+            found.extend(call.lineno for call in calls)
+    return sorted(found)
+
+
+def test_every_network_call_puts_its_headers_under_a_deadline() -> None:
+    """``timeout`` ist ein Zeitlimit je Leseoperation, keine Gesamtfrist.
+
+    Ein Gegenüber, das seine Kopfzeilen byteweise mit Pausen unterhalb des
+    Zeitlimits schickt, hält die Verbindung beliebig lange offen, ohne es je zu
+    verletzen. Gemessen am 10.09.2026: Statuszeile und Kopfzeilen brauchten
+    eine volle Sekunde, das Zeitlimit stand auf fünfzig Millisekunden, und die
+    Antwort kam mit 200 zurück (``test_http_security.py::
+    test_an_opener_puts_its_headers_under_the_same_deadline``).
+
+    **Der Wächter steht hier, weil zehn solche Stellen über Monate entstanden
+    sind** — drei im Sprachbackend, eine im Mesh-Backend, dazu Support,
+    Update, Aktivierung und drei Werkzeuge. Keine davon war falsch geschrieben;
+    jede hat nur eine Zusage nicht mitgenommen, die es an einer anderen Stelle
+    schon gab. Die elfte entstünde genauso.
+
+    Gefragt wird je Funktion und nicht je Datei: Wer ein
+    ``…​.open(request, timeout=…)`` schreibt, ruft in derselben Funktion
+    ``apply_header_deadline``. ``http.open_public_url`` kommt hier nicht vor —
+    es baut seine Verbindung selbst und setzt die Antwortklasse direkt.
+
+    **Gemessene Gegenprobe:** Derselbe Lauf über ``HEAD`` nennt zehn Stellen,
+    über den Arbeitsbaum keine. Die Zusicherung auf die Grundmenge darunter
+    steht, weil ein Verbotstest über eine leere Menge immer grün ist: Griffe
+    das Muster nicht mehr, meldete dieser Test „alles in Ordnung", ohne eine
+    einzige Zeile geprüft zu haben.
+    """
+    offenders: list[str] = []
+    calls = 0
+    for path in source_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        calls += sum(1 for node in ast.walk(tree) if _opens_with_a_timeout(node))
+        offenders.extend(f"{path.name}:{line}" for line in unfristed_network_calls(tree))
+
+    assert calls >= 13, f"nur {calls} Netzaufrufe gefunden — das Muster greift nicht mehr"
+    assert not offenders, (
+        "Netzaufruf ohne Frist über Statuszeile und Kopfzeilen:\n  "
+        + "\n  ".join(offenders)
+        + "\n`timeout` gilt je Leseoperation; die Gesamtfrist setzt "
+        "app.core.http.apply_header_deadline."
     )

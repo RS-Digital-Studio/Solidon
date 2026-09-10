@@ -32,6 +32,7 @@ from app.branding import APP_NAME, APP_VERSION, SUPPORT_ADDRESS
 from app.core.errors import CANCEL, CORRECT_INPUT, Action, AppError, UserError
 from app.core.http import (
     RejectRedirects,
+    apply_header_deadline,
     deadline_after,
     is_private_destination,
     read_limited,
@@ -75,7 +76,20 @@ MAX_MESSAGE_LENGTH: Final = 20_000
 #: Namen, und am Namen sah man es nicht. Gemeldet vom Zwillingsscan einer
 #: Nachbarsitzung.
 MAX_REPLY_BYTES: Final = 64 * 1024
-_SUPPORT_OPENER = urllib.request.build_opener(RejectRedirects())
+
+
+def _open_support(request: urllib.request.Request, *, timeout: float) -> Any:
+    """Öffnet den Support-Endpunkt ohne Weiterleitung — mit echter Gesamtfrist.
+
+    Eine Funktion und kein Öffner-Objekt, und beides hat denselben Grund: Die
+    Frist steckt in der Antwortklasse dieses Öffners, also muss er dem Aufruf
+    gehören — ein modulweit geteilter trüge nach der ersten Sendung für immer
+    deren Frist. ``timeout`` allein begrenzt nur die einzelne Leseoperation.
+    """
+    opener = urllib.request.build_opener(RejectRedirects())
+    apply_header_deadline(opener, deadline_after(timeout))
+    return opener.open(request, timeout=timeout)
+
 
 #: Die Arten einer Sendung. Sie stehen im Betreff und sortieren den Posteingang
 #: — mehr tun sie nicht, und deshalb sind es fünf und nicht zwölf.
@@ -455,7 +469,7 @@ def _post(url: str, content_type: str, body: bytes) -> dict[str, Any]:
         },
         method="POST",
     )
-    with _SUPPORT_OPENER.open(request, timeout=TIMEOUT_SECONDS) as answer:
+    with _open_support(request, timeout=TIMEOUT_SECONDS) as answer:
         if redirect_left_origin(answer, address, allow_http=True):
             raise ValueError("support endpoint redirected")
         raw = read_limited(answer, limit=MAX_REPLY_BYTES, deadline=deadline)

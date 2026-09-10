@@ -43,6 +43,7 @@ from app.core.http import (
     RejectRedirects,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     read_limited,
     response_url,
@@ -65,12 +66,23 @@ OPERATOR_TIMEOUT_SECONDS: Final = 10.0
 MAX_OPERATOR_RESPONSE_BYTES: Final = 256 * 1024
 MAX_TOKEN_FILE_BYTES: Final = 256
 
-_OPERATOR_OPENER = build_opener(RejectRedirects())
+
+def _operator_opener() -> Any:
+    """Ein Öffner für den Betreiber-Endpunkt — ohne Weiterleitung."""
+    return build_opener(RejectRedirects())
 
 
 def _open_operator(request: Request, *, timeout: float) -> Any:
-    """Öffnet den Betreiber-Endpunkt ohne Weiterleitung des Zugriffstokens."""
-    return _OPERATOR_OPENER.open(request, timeout=timeout)
+    """Öffnet den Betreiber-Endpunkt ohne Weiterleitung des Zugriffstokens.
+
+    Der Öffner entsteht je Aufruf, weil die Gesamtfrist in ihm steckt:
+    ``timeout`` begrenzt nur die einzelne Leseoperation, und ein
+    tröpfelnder Antwortkopf bliebe sonst unbegrenzt — mit einem
+    Zugriffstoken in der Anfrage.
+    """
+    opener = _operator_opener()
+    apply_header_deadline(opener, deadline_after(timeout))
+    return opener.open(request, timeout=timeout)
 
 
 _DEFAULT_OPEN_OPERATOR = _open_operator

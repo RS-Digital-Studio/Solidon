@@ -23,6 +23,7 @@ from app.core.http import (
     RejectRedirects,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     read_limited,
     validate_download_redirect,
@@ -129,10 +130,18 @@ def test_a_public_download_cannot_redirect_into_a_private_network_or_downgrade()
 
 
 def test_service_openers_reject_redirects_before_credentials_can_travel() -> None:
+    """Gefragt wird die Fabrik, weil der Öffner je Aufruf entsteht.
+
+    Bis zum 10.09.2026 stand hier ein modulweit geteiltes ``_OPERATOR_OPENER``.
+    Seit die Gesamtfrist auch über Statuszeile und Kopfzeilen gilt, gehört der
+    Öffner dem einzelnen Aufruf — die Frist steckt in seiner Antwortklasse, und
+    ein geteilter trüge nach dem ersten Aufruf für immer dessen Frist.
+    """
     opener = discover.opener_for("https://example.org/api")
     assert any(isinstance(handler, RejectRedirects) for handler in opener.handlers)
     assert any(
-        isinstance(handler, RejectRedirects) for handler in licence_admin._OPERATOR_OPENER.handlers
+        isinstance(handler, RejectRedirects)
+        for handler in licence_admin._operator_opener().handlers
     )
 
 
@@ -343,11 +352,9 @@ def test_health_check_refuses_unsafe_json(
     raw: bytes,
 ) -> None:
     answer = _ContextBody(_Body(raw), check_activation.DEFAULT_URL)
-    monkeypatch.setattr(
-        check_activation,
-        "_HEALTH_OPENER",
-        SimpleNamespace(open=lambda request, timeout: answer),
-    )
+    # Wie beim Support: gepatcht wird die Öffner-Funktion, seit der Öffner dem
+    # einzelnen Aufruf gehört und seine Gesamtfrist mitbringt.
+    monkeypatch.setattr(check_activation, "_open_health", lambda request, timeout: answer)
 
     ready, message = check_activation.check(check_activation.DEFAULT_URL)
 
@@ -374,11 +381,12 @@ def test_support_refuses_non_finite_json_from_the_server(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     answer = _ContextBody(_Body(b'{"ok":true,"value":NaN}'), "https://example.org/support")
-    monkeypatch.setattr(
-        support,
-        "_SUPPORT_OPENER",
-        SimpleNamespace(open=lambda request, timeout: answer),
-    )
+    # Gepatcht wird die Öffner-**Funktion**, nicht mehr ein modulweit geteiltes
+    # Öffner-Objekt: Seit die Sendung ihre Gesamtfrist auch über die Kopfzeilen
+    # legt, muss der Öffner dem Aufruf gehören (`http.apply_header_deadline`).
+    # Zwischenzeitlich zeigte dieser Test, was ein verfehlter Testzugang
+    # kostet — der Aufruf ging an das echte example.org und kam mit 405 zurück.
+    monkeypatch.setattr(support, "_open_support", lambda request, timeout: answer)
 
     with pytest.raises(ValueError):
         support._post("https://example.org/support", "application/octet-stream", b"x")
@@ -852,6 +860,74 @@ def test_initial_http_lines_share_the_absolute_deadline(
         with pytest.raises(ResponseDeadlineError):
             http.open_public_url("http://example.org/model", deadline=deadline_after(0.08))
         assert time.monotonic() - started < 0.30
+    finally:
+        stop.set()
+        left.close()
+        writer.join(timeout=1.0)
+    assert not writer.is_alive()
+
+
+@pytest.mark.parametrize("with_deadline", [True, False])
+def test_an_opener_puts_its_headers_under_the_same_deadline(
+    monkeypatch: pytest.MonkeyPatch, with_deadline: bool
+) -> None:
+    """Was ``open_public_url`` seit je hält, gilt jetzt auch für die übrigen Wege.
+
+    ``OpenerDirector.open(request, timeout=…)`` begrenzt die einzelne
+    Leseoperation, nicht die Gesamtdauer. Ein Gegenüber, das seine Kopfzeilen
+    byteweise mit Pausen unterhalb des Zeitlimits schickt, hält die Verbindung
+    beliebig lange offen — und die Frist, die der Aufrufer daneben gebildet
+    hat, greift erst am Rumpf.
+
+    **Der zweite Parameterwert ist die Gegenprobe, und sie fiel deutlicher aus
+    als erwartet.** Ohne ``apply_header_deadline`` läuft derselbe Aufruf nicht
+    etwa in ein späteres Zeitlimit — er **gelingt**: Statuszeile und Kopfzeilen
+    brauchen eine volle Sekunde, das Zeitlimit steht auf zweihundert
+    Millisekunden, und die Antwort kommt trotzdem mit 200 zurück. Weil jede
+    einzelne Leseoperation innerhalb dieser Frist bleibt, ist das Zeitlimit
+    nie verletzt. Genau darum ist es keine Gesamtfrist.
+
+    **Warum zweihundert und nicht fünfzig:** Die Gegenstelle schickt ein Byte
+    alle zwanzig Millisekunden. Bei fünfzig blieben je Lesevorgang dreißig
+    Millisekunden Reserve — dreiundfünfzigmal hintereinander, und unter einer
+    zweiten Testsuite daneben reißt eine davon. Der Test wäre dann rot aus
+    einem Grund, der mit der Sache nichts zu tun hat.
+    """
+    left, right = _loopback_pair()
+    stop = threading.Event()
+    monkeypatch.setattr(socket, "create_connection", lambda *_args, **_kwargs: left)
+
+    def send() -> None:
+        try:
+            right.recv(4096)
+            right.sendall(b"HTTP/1.1 200 OK\r\n")
+            for value in b"X-Header: abcdefghijklmnopqrst\r\nContent-Length: 0\r\n\r\n":
+                if stop.wait(0.02):
+                    break
+                right.sendall(bytes([value]))
+        except OSError:
+            pass
+        finally:
+            right.close()
+
+    writer = threading.Thread(target=send, daemon=True)
+    writer.start()
+    opener = urllib.request.build_opener(RejectRedirects())
+    if with_deadline:
+        apply_header_deadline(opener, deadline_after(0.08))
+    request = urllib.request.Request("http://example.org/version.json")
+    started = time.monotonic()
+    try:
+        if with_deadline:
+            with pytest.raises(ResponseDeadlineError):
+                opener.open(request, timeout=5.0)
+            assert time.monotonic() - started < 0.30
+        else:
+            with opener.open(request, timeout=0.2) as answer:
+                assert answer.status == 200
+            # Eine Sekunde für die Kopfzeilen, zweihundert Millisekunden
+            # Zeitlimit, und die Antwort kommt durch: Es gilt je Leseoperation.
+            assert time.monotonic() - started > 0.30
     finally:
         stop.set()
         left.close()

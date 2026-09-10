@@ -46,6 +46,7 @@ from app.core.http import (
     HttpBoundaryError,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     iter_limited,
     read_limited,
@@ -301,8 +302,10 @@ def post_json(
     request = urllib.request.Request(
         address, data=body, headers={"Content-Type": "application/json", **headers}
     )
+    opener = opener_for(address)
+    apply_header_deadline(opener, deadline)
     try:
-        with opener_for(address).open(request, timeout=timeout) as answer:
+        with opener.open(request, timeout=timeout) as answer:
             if redirect_left_origin(answer, address, allow_http=True):
                 raise BackendUnavailable()
             raw = read_limited(answer, limit=MAX_RESPONSE_BYTES, deadline=deadline)
@@ -1378,7 +1381,9 @@ def _get_json(url: str) -> dict[str, Any]:
     address = validate_http_url(url, allow_http=True)
     deadline = deadline_after(TAGS_TIMEOUT_SECONDS)
     request = urllib.request.Request(address)
-    with opener_for(address).open(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
+    opener = opener_for(address)
+    apply_header_deadline(opener, deadline)
+    with opener.open(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
         if redirect_left_origin(answer, address, allow_http=True):
             raise ValueError("redirected model list")
         raw = read_limited(answer, limit=MAX_TAGS_RESPONSE_BYTES, deadline=deadline)
@@ -1595,7 +1600,9 @@ def pull_model(
         request = urllib.request.Request(
             address, data=body, headers={"Content-Type": "application/json"}
         )
-        with opener_for(address).open(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
+        opener = opener_for(address)
+        apply_header_deadline(opener, deadline)
+        with opener.open(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
             if redirect_left_origin(answer, address, allow_http=True):
                 raise ValueError("redirected model pull")
             for raw in _pull_lines(answer, deadline):

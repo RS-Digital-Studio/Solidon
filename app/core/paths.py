@@ -8,12 +8,23 @@ die Lizenzliste kurz bleibt.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import os
 import sys
 from contextlib import suppress
 from pathlib import Path
+from typing import Any
 
 from app.branding import APP_NAME, APP_VENDOR, APP_VERSION
+
+_windows_ctypes: Any = None
+_windows_msvcrt: Any = None
+if os.name == "nt":
+    import ctypes as _native_ctypes
+    import msvcrt as _native_msvcrt
+
+    _windows_ctypes = _native_ctypes
+    _windows_msvcrt = _native_msvcrt
 
 
 def _windows_base(variable: str, fallback: str) -> Path:
@@ -233,3 +244,95 @@ def ensure_dir(path: Path) -> Path:
     """Legt ein Verzeichnis samt Eltern an und gibt es zurück."""
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def opened_path(descriptor: int) -> Path | None:
+    """Der kanonische Pfad hinter einem offenen Handle, oder ``None``.
+
+    Zwei Stellen stellen dieselbe Frage, und beide fragen sie aus einem
+    Sicherheitsgrund: ``scene.project`` will wissen, wohin eine verknüpfte
+    Quelle wirklich zeigt, ``updates`` dasselbe für den Deskriptor, den es an
+    den Installer weiterreicht. Sie standen bis zum 10.09.2026 zweimal da, und
+    von zwei Kopien altert immer eine — hier war es die in ``updates``, der die
+    Längengegenprobe unter Windows fehlte (siehe unten).
+
+    ``None`` heißt „diese Plattform sagt es nicht" — und **nur** das. Eine
+    Abfrage, die schiefgeht, wirft, weil die Aufrufer aus ``None`` „nicht
+    prüfbar, also weiter" machen: ``updates`` hängt drei Sicherheitsprüfungen
+    an ``if opened is not None and opened != …``. Ein ``None`` an der falschen
+    Stelle schaltet sie ab, statt abzuweisen.
+
+    Das war schon einmal beinahe der Fall: Die zusammengeführte Fassung gab
+    zunächst auch beim gewachsenen Pfad ``None`` zurück. Die alte Fassung in
+    ``updates`` warf dort **implizit** — sie nahm den abgeschnittenen Namen und
+    lief damit in ``resolve(strict=True)``, das ihn nicht fand. Aus einer
+    Abweisung wäre so ein stilles Durchlassen geworden; gefunden hat das ein
+    Review am selben Tag.
+    """
+    if os.name == "nt":
+        kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.GetFinalPathNameByHandleW.argtypes = (
+            _windows_ctypes.c_void_p,
+            _windows_ctypes.c_wchar_p,
+            _windows_ctypes.c_uint32,
+            _windows_ctypes.c_uint32,
+        )
+        kernel32.GetFinalPathNameByHandleW.restype = _windows_ctypes.c_uint32
+        handle = _windows_ctypes.c_void_p(_windows_msvcrt.get_osfhandle(descriptor))
+        length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
+        if not length:
+            return None
+        buffer = _windows_ctypes.create_unicode_buffer(length + 1)
+        written = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
+        # **Der zweite Wert wird gegen die Puffergröße gehalten, nicht nur
+        # gegen Null.** Zwischen den beiden Aufrufen kann der Pfad wachsen —
+        # ein umbenannter Ordner darüber genügt. Dann meldet der zweite Aufruf
+        # nicht „geschrieben", sondern „so viel bräuchte ich", also einen Wert
+        # ab Puffergröße, und ``buffer.value`` trägt einen abgeschnittenen
+        # Pfad. Wer den ungeprüft weiterreicht, vergleicht eine gekürzte
+        # Zeichenkette mit einem Ordner und bekommt die falsche Antwort auf
+        # eine Sicherheitsfrage.
+        #
+        # **Geworfen und nicht `None`**, weil `None` bei den Aufrufern „nicht
+        # prüfbar, also weiter" heißt. Die alte Fassung in `updates` warf hier
+        # ohne es zu wissen: Sie nahm den abgeschnittenen Namen und lief damit
+        # in `resolve(strict=True)`, das ihn nicht fand.
+        if not written or written >= len(buffer):
+            raise OSError(
+                _windows_ctypes.get_last_error(),
+                "Der Pfad hinter dem Handle ließ sich nicht vollständig lesen",
+            )
+        name = buffer.value
+        if name.startswith("\\\\?\\UNC\\"):
+            name = "\\\\" + name[8:]
+        elif name.startswith("\\\\?\\"):
+            name = name[4:]
+        return Path(name).resolve(strict=True)
+
+    # **Gefragt wird, ob der Deskriptorpfad wirklich woandershin zeigt.**
+    # ``/dev/fd/N`` gibt es auch auf dem Mac, aber dort ist es kein Symlink:
+    # ``resolve()`` gibt ``/dev/fd/N`` zurück, und der liegt unter keinem
+    # Projektordner — jede verknüpfte Quelle galt damit als absoluter Pfad
+    # (Tag-Lauf 0.3.0, 02.09.2026, acht Tests). Geprüft wird die Eigenschaft
+    # und nicht die Plattform: ``if sys.platform == "darwin"`` vor dieser
+    # Schleife macht den Rest auf dem Mac zu totem Code, und das meldet mypy
+    # dort als Fehler — auf Windows sieht man es nie (``mypy --platform darwin``).
+    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
+        candidate = descriptor_root / str(descriptor)
+        if not candidate.exists():
+            continue
+        resolved = candidate.resolve(strict=True)
+        if resolved != candidate:
+            return resolved
+    if sys.platform == "darwin":
+        # F_GETPATH (50) nennt den Pfad, den der Mac nicht verlinkt.
+        fcntl = importlib.import_module("fcntl")
+
+        # Genau 1024 Byte: Pythons ``fcntl`` nimmt nicht mehr als das
+        # (``FCNTL_BUFSZ``) und wirft sonst „fcntl string arg too long", bevor
+        # der Systemaufruf läuft — 4096 kosteten 23 rote Tests im Tag-Lauf 3
+        # (03.09.2026). Und 1024 ist zugleich, was Darwin für ``F_GETPATH``
+        # verlangt: ein Puffer von ``MAXPATHLEN``, und das ist dort PATH_MAX.
+        raw = fcntl.fcntl(descriptor, 50, b"\0" * 1024)
+        return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
+    return None

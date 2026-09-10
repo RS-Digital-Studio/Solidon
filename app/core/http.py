@@ -20,7 +20,7 @@ from contextlib import contextmanager
 from time import monotonic
 from typing import IO, Any, Final, Protocol, cast
 from urllib.parse import SplitResult, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request
+from urllib.request import AbstractHTTPHandler, HTTPRedirectHandler, Request
 
 READ_CHUNK_BYTES: Final = 64 * 1024
 _DNS_SLOTS: Final = threading.BoundedSemaphore(4)
@@ -315,14 +315,27 @@ class _PinnedResponse:
         self.close()
 
 
-def open_public_url(
-    url: str,
-    *,
-    deadline: float,
-    headers: dict[str, str] | None = None,
-    timer: Timer = monotonic,
-) -> _PinnedResponse:
-    """Öffnet eine öffentliche URL an genau einer zuvor geprüften IP-Adresse."""
+def deadline_response_class(
+    deadline: float, *, timer: Timer = monotonic
+) -> type[http.client.HTTPResponse]:
+    """Eine Antwortklasse, die auch Statuszeile und Kopfzeilen unter die Frist stellt.
+
+    Ohne sie gilt die Frist erst ab dem Rumpf. Das `timeout` einer Verbindung
+    ist ein Socket-Timeout **je Leseoperation**, keine Gesamtdauer: Ein
+    Gegenüber, das alle `timeout` minus ein bisschen Sekunden ein Byte der
+    Kopfzeilen schickt, hält die Verbindung beliebig lange offen, ohne je in
+    ein Zeitlimit zu laufen. Erst `begin()` unter der monotonen Gesamtfrist
+    macht daraus eine Zusage.
+
+    **Wo die Zusage endet:** beim CONNECT-Vorlauf durch einen Proxy.
+    `http.client._tunnel` erzeugt zwar diese Antwortklasse, liest dann aber
+    über `_read_status()` und `fp.readline` an `begin()` **vorbei** — für
+    Statuszeile und Kopfzeilen des Tunnels gilt weiterhin nur das Zeitlimit je
+    Leseoperation, und für den TLS-Handschlag darunter ebenso. Wer hinter einem
+    Firmenproxy sitzt, behält diese eine Lücke. Sie ist benannt und nicht
+    geschlossen; eine Zusage, die zur Hälfte gilt, ist schlechter als eine
+    benannte Grenze.
+    """
 
     class DeadlineResponse(http.client.HTTPResponse):
         """Auch Statuszeile und Kopfzeilen gehören zur Gesamtfrist."""
@@ -333,6 +346,63 @@ def open_public_url(
                     super().begin()
             except TimeoutError as problem:
                 raise ResponseDeadlineError("response headers deadline exceeded") from problem
+
+    return DeadlineResponse
+
+
+def _answering_with(
+    base: type[http.client.HTTPConnection], response: type[http.client.HTTPResponse]
+) -> type[http.client.HTTPConnection]:
+    """Dieselbe Verbindungsklasse, aber mit dieser Antwortklasse."""
+    return type(f"{base.__name__}WithDeadline", (base,), {"response_class": response})
+
+
+def apply_header_deadline(opener: Any, deadline: float, *, timer: Timer = monotonic) -> None:
+    """Legt die Gesamtfrist auch über Statuszeile und Kopfzeilen dieses Öffners.
+
+    `open_public_url` hält diese Frist seit je — es baut seine Verbindung
+    selbst. Die übrigen Netzwege des Hauses gehen dagegen über
+    `OpenerDirector.open(request, timeout=…)`, und dort greift die Frist erst
+    beim Lesen des Rumpfs; die Kopfzeilen davor waren unbegrenzt.
+
+    **Angesetzt wird am fertigen Öffner und nicht an dem, der ihn baut.** Der
+    naheliegende Weg wäre ein `deadline`-Argument an `discover.opener_for`
+    gewesen — aber ein Öffner wird an vierzehn Stellen der Suite durch eine
+    Attrappe mit genau einem Positionsargument ersetzt, und die wären alle
+    gerissen. Ein Objekt ohne `handlers` bleibt hier unangetastet, womit jede
+    dieser Attrappen weiterhin genau das misst, wofür sie gebaut wurde.
+
+    Der Öffner muss dem Aufruf gehören: Die Frist steckt in der erzeugten
+    Klasse, also trüge ein geteilter Öffner nach dem ersten Aufruf für immer
+    dessen Frist.
+    """
+    response = deadline_response_class(deadline, timer=timer)
+    for handler in getattr(opener, "handlers", ()):
+        if not isinstance(handler, AbstractHTTPHandler):
+            continue
+        original = handler.do_open
+
+        def do_open(
+            http_class: type[http.client.HTTPConnection],
+            request: Request,
+            *,
+            _original: Any = original,
+            **arguments: Any,
+        ) -> Any:
+            return _original(_answering_with(http_class, response), request, **arguments)
+
+        handler.do_open = do_open  # type: ignore[assignment,method-assign]
+
+
+def open_public_url(
+    url: str,
+    *,
+    deadline: float,
+    headers: dict[str, str] | None = None,
+    timer: Timer = monotonic,
+) -> _PinnedResponse:
+    """Öffnet eine öffentliche URL an genau einer zuvor geprüften IP-Adresse."""
+    deadline_response = deadline_response_class(deadline, timer=timer)
 
     checked = validate_http_url(url, allow_http=True, allow_fragment=False)
     parts = urlsplit(checked)
@@ -367,7 +437,7 @@ def open_public_url(
             return socket.create_connection((pinned_address, target[1]), timeout, source_address)
 
         connection.__dict__["_create_connection"] = pinned_connection
-        connection.response_class = DeadlineResponse
+        connection.response_class = deadline_response
         try:
             connection.connect()
             sock = connection.sock

@@ -19,6 +19,7 @@ from app.core.http import (
     RejectRedirects,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     read_limited,
     redirect_left_origin,
@@ -31,12 +32,19 @@ ACTIVATION_URL: Final = "https://solidon3d.de/api/activation.php"
 DEACTIVATION_URL: Final = "https://solidon3d.de/api/deactivation.php"
 TIMEOUT_SECONDS: Final = 15.0
 MAX_RESPONSE_BYTES: Final = 65536
-_SERVICE_OPENER = build_opener(RejectRedirects())
 
 
 def _open_service(request: Request, *, timeout: float) -> object:
-    """Öffnet genau den festen Aktivierungsendpunkt, ohne Weiterleitung."""
-    return _SERVICE_OPENER.open(request, timeout=timeout)
+    """Öffnet genau den festen Aktivierungsendpunkt, ohne Weiterleitung.
+
+    Der Öffner entsteht je Aufruf, weil die Gesamtfrist in ihm steckt.
+    ``timeout`` begrenzt nur die einzelne Leseoperation; erst
+    :func:`apply_header_deadline` stellt auch Statuszeile und Kopfzeilen
+    unter dieselbe Dauer.
+    """
+    opener = build_opener(RejectRedirects())
+    apply_header_deadline(opener, deadline_after(timeout))
+    return opener.open(request, timeout=timeout)
 
 
 class ActivationServiceError(AppError):

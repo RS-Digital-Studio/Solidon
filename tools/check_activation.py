@@ -8,6 +8,7 @@ einem Upload oder nach einer Serverwartung.
 from __future__ import annotations
 
 import argparse
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener
@@ -17,6 +18,7 @@ from app.core.http import (
     RejectRedirects,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     is_private_destination,
     read_limited,
@@ -31,7 +33,16 @@ from app.core.log import redact_external
 DEFAULT_URL = "https://solidon3d.de/api/activation-health.php"
 TIMEOUT_SECONDS = 10.0
 MAX_RESPONSE_BYTES = 4096
-_HEALTH_OPENER = build_opener(RejectRedirects())
+
+
+def _open_health(request: Request, *, timeout: float) -> Any:
+    """Öffnet den Gesundheitsendpunkt ohne Weiterleitung — mit echter Frist.
+
+    Der Öffner entsteht je Abfrage, weil die Gesamtfrist in ihm steckt.
+    """
+    opener = build_opener(RejectRedirects())
+    apply_header_deadline(opener, deadline_after(timeout))
+    return opener.open(request, timeout=timeout)
 
 
 def _checked_url(url: str) -> str:
@@ -60,7 +71,7 @@ def check(url: str) -> tuple[bool, str]:
         method="GET",
     )
     try:
-        with _HEALTH_OPENER.open(request, timeout=TIMEOUT_SECONDS) as response:
+        with _open_health(request, timeout=TIMEOUT_SECONDS) as response:
             final = _checked_url(response_url(response, address))
             if not same_origin(address, final):
                 return False, "Aktivierungsdienst hat unerwartet weitergeleitet."

@@ -21,7 +21,6 @@ Drei Regeln, die der Container erzwingt statt annimmt:
 
 from __future__ import annotations
 
-import ctypes
 import dataclasses
 import hashlib
 import importlib
@@ -30,7 +29,6 @@ import math
 import os
 import re
 import secrets
-import sys
 import tempfile
 import unicodedata
 import zipfile
@@ -52,7 +50,7 @@ from app.core.ingest.loader import (
 from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_data_dir
+from app.core.paths import ensure_dir, opened_path, user_data_dir
 from app.core.scene.gathered import GATHERED_DIR, externalise, gathered_path, inline, references
 from app.core.scene.migrations import FORMAT_VERSION, migrate
 from app.core.scene.serialise import (
@@ -65,7 +63,6 @@ from app.core.scene.serialise import (
 from app.core.types import Document, Finding, Report, Source, SourceId
 from app.i18n import TranslatableText, _
 
-_windows_ctypes: Any = ctypes
 _windows_msvcrt: Any = None
 if os.name == "nt":
     import msvcrt as _native_msvcrt
@@ -364,64 +361,18 @@ def _read_linked_source(
 
 
 def _opened_file_path(stream: Any) -> Path:
-    """Ermittelt den kanonischen Pfad des bereits geöffneten Dateihandles."""
-    if os.name == "nt":
-        kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.GetFinalPathNameByHandleW.argtypes = (
-            ctypes.c_void_p,
-            ctypes.c_wchar_p,
-            ctypes.c_uint32,
-            ctypes.c_uint32,
-        )
-        kernel32.GetFinalPathNameByHandleW.restype = ctypes.c_uint32
-        handle = ctypes.c_void_p(_windows_msvcrt.get_osfhandle(stream.fileno()))
-        length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
-        if not length:
-            raise OSError(
-                _windows_ctypes.get_last_error(),
-                "Dateipfad konnte nicht geprüft werden",
-            )
-        buffer = ctypes.create_unicode_buffer(length + 1)
-        written = kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0)
-        if not written or written >= len(buffer):
-            raise OSError(
-                _windows_ctypes.get_last_error(),
-                "Dateipfad konnte nicht geprüft werden",
-            )
-        name = buffer.value
-        if name.startswith("\\\\?\\UNC\\"):
-            name = "\\\\" + name[8:]
-        elif name.startswith("\\\\?\\"):
-            name = name[4:]
-        return Path(name).resolve(strict=True)
+    """Ermittelt den kanonischen Pfad des bereits geöffneten Dateihandles.
 
-    # **Gefragt wird, ob der Deskriptorpfad wirklich woandershin zeigt.**
-    # `/dev/fd/N` gibt es auch auf dem Mac, aber dort ist es kein Symlink:
-    # `resolve()` gibt `/dev/fd/N` zurück, und der liegt unter keinem
-    # Projektordner — jede verknüpfte Quelle galt damit als absoluter Pfad
-    # (Tag-Lauf 0.3.0, 02.09.2026, acht Tests). Geprüft wird die Eigenschaft
-    # und nicht die Plattform: `if sys.platform == "darwin"` vor dieser
-    # Schleife macht den Rest auf dem Mac zu totem Code, und das meldet mypy
-    # dort als Fehler — auf Windows sieht man es nie (`mypy --platform darwin`).
-    for descriptor_root in (Path("/proc/self/fd"), Path("/dev/fd")):
-        descriptor = descriptor_root / str(stream.fileno())
-        if not descriptor.exists():
-            continue
-        resolved = descriptor.resolve(strict=True)
-        if resolved != descriptor:
-            return resolved
-    if sys.platform == "darwin":
-        # F_GETPATH (50) nennt den Pfad, den der Mac nicht verlinkt.
-        import fcntl
-
-        # Genau 1024 Byte: Pythons ``fcntl`` nimmt nicht mehr als das
-        # (``FCNTL_BUFSZ``) und wirft sonst „fcntl string arg too long", bevor
-        # der Systemaufruf läuft — 4096 kosteten 23 rote Tests im Tag-Lauf 3
-        # (03.09.2026). Und 1024 ist zugleich, was Darwin für ``F_GETPATH``
-        # verlangt: ein Puffer von ``MAXPATHLEN``, und das ist dort PATH_MAX.
-        raw = fcntl.fcntl(stream.fileno(), 50, b"\0" * 1024)
-        return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
-    raise OSError("Der geöffnete Dateipfad lässt sich auf dieser Plattform nicht prüfen")
+    Die Plattformarbeit steht in :func:`app.core.paths.opened_path` und wird
+    mit ``app.core.updates`` geteilt — beide fragen aus demselben
+    Sicherheitsgrund, wohin ein offenes Handle wirklich zeigt. Hier bleibt nur
+    der Fehlervertrag: Wer eine verknüpfte Quelle prüft, braucht ein Nein, mit
+    dem er nicht weiterrechnen kann, keinen stillen ``None``.
+    """
+    found = opened_path(stream.fileno())
+    if found is None:
+        raise OSError("Der geöffnete Dateipfad lässt sich auf dieser Plattform nicht prüfen")
+    return found
 
 
 def embedded_source_path(filename: str, source_id: str) -> str:

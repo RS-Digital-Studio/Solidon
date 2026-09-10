@@ -92,6 +92,7 @@ from app.core.http import (
     HttpBoundaryError,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     read_limited,
 )
@@ -412,8 +413,10 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
     """
     request = urllib.request.Request(url, data=body, headers=headers or {})
     deadline = deadline_after(TIMEOUT_SECONDS)
+    opener = opener_for(url)
+    apply_header_deadline(opener, deadline)
     try:
-        with opener_for(url).open(request, timeout=TIMEOUT_SECONDS) as answer:
+        with opener.open(request, timeout=TIMEOUT_SECONDS) as answer:
             return read_limited(
                 answer,
                 limit=MAX_ANSWER_BYTES,

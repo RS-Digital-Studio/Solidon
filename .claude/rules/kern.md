@@ -53,6 +53,29 @@ Zeitgeber, ein Fehlerpfad oder ein Startaufruf, der selbst sendet, ist ein
 Verstoß, gleich wie freundlich er begründet wird. `app/core/report.py`
 schreibt weiter nur einen Ordner und darf kein `urlopen` kennen.
 
+### Ein Zeitlimit ist keine Frist
+
+`opener.open(request, timeout=…)` begrenzt die **einzelne Leseoperation**,
+nicht die Gesamtdauer. Ein Gegenüber, das seine Kopfzeilen byteweise mit
+Pausen knapp unterhalb des Limits schickt, hält die Verbindung beliebig lange
+offen, ohne es je zu verletzen — gemessen am 10.09.2026: eine volle Sekunde
+für Statuszeile und Kopfzeilen bei einem Zeitlimit von fünfzig Millisekunden,
+und die Antwort kam mit 200 zurück.
+
+**Wer ein `…open(request, timeout=…)` schreibt, ruft daneben
+`http.apply_header_deadline(opener, deadline)`** —
+`tests/test_hard_rules.py::test_every_network_call_puts_its_headers_under_a_deadline`
+prüft das je Funktion über `app/` und `tools/`. Zehn Stellen waren es beim
+Anschließen, und keine davon war falsch geschrieben; jede hatte nur eine
+Zusage nicht mitgenommen, die es anderswo schon gab.
+
+**Der Öffner gehört dem einzelnen Aufruf.** Die Frist steckt in der
+Antwortklasse, die dieser Aufruf erzeugt — ein modulweit geteilter Öffner
+trüge nach dem ersten Aufruf für immer dessen Frist. Wer einen solchen
+auflöst, sieht vorher nach, **wer ihn in der Suite patcht**: Ein verfehlter
+Testzugang schickt den Test ins echte Netz, und das fällt als Fehler in einem
+ganz anderen Test auf.
+
 ## Auswertung
 
 `OpContext.scene` ist nur lesend. Ops erzeugen Objekte, sie ändern keine.

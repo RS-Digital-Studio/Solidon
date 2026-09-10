@@ -67,6 +67,7 @@ from app.core.http import (
     RejectRedirects,
     ResponseDeadlineError,
     ResponseTooLargeError,
+    apply_header_deadline,
     deadline_after,
     iter_limited,
     read_limited,
@@ -78,7 +79,7 @@ from app.core.install import packaged
 from app.core.json_boundary import StrictJsonError
 from app.core.json_boundary import loads as load_json
 from app.core.log import get_logger, redact_external, redact_url
-from app.core.paths import user_cache_dir
+from app.core.paths import opened_path, user_cache_dir
 from app.core.process import detached_process_options
 from app.core.types import CancelToken, ProgressFn
 from app.i18n import SOURCE_LANGUAGE, _, get_language
@@ -94,12 +95,20 @@ if os.name == "nt":
 
 _log = get_logger(__name__)
 CHUNK_BYTES: Final = READ_CHUNK_BYTES
-_UPDATE_OPENER = urllib.request.build_opener(RejectRedirects())
 
 
 def _open_update(request: urllib.request.Request, *, timeout: float) -> Any:
-    """Öffnet eine feste Update-Adresse ohne Weiterleitung."""
-    return _UPDATE_OPENER.open(request, timeout=timeout)
+    """Öffnet eine feste Update-Adresse ohne Weiterleitung — mit echter Frist.
+
+    Der Öffner entsteht **je Aufruf**, weil die Frist in ihm steckt: Ein
+    modulweit geteilter trüge nach der ersten Prüfung für immer deren Frist.
+    ``timeout`` allein begrenzt nur die einzelne Leseoperation; erst
+    :func:`apply_header_deadline` stellt auch Statuszeile und Kopfzeilen unter
+    dieselbe Gesamtdauer.
+    """
+    opener = urllib.request.build_opener(RejectRedirects())
+    apply_header_deadline(opener, deadline_after(timeout))
+    return opener.open(request, timeout=timeout)
 
 
 _DEFAULT_OPEN_UPDATE = _open_update
@@ -965,47 +974,16 @@ def target_dir() -> Path:
 
 
 def _descriptor_path(descriptor: int) -> Path | None:
-    """Der kanonische Pfad eines offenen Handles, soweit die Plattform ihn anbietet."""
-    if os.name == "nt":
-        kernel32 = _windows_ctypes.WinDLL("kernel32", use_last_error=True)
-        kernel32.GetFinalPathNameByHandleW.argtypes = (
-            _windows_ctypes.c_void_p,
-            _windows_ctypes.c_wchar_p,
-            _windows_ctypes.c_uint32,
-            _windows_ctypes.c_uint32,
-        )
-        kernel32.GetFinalPathNameByHandleW.restype = _windows_ctypes.c_uint32
-        handle = _windows_ctypes.c_void_p(_windows_msvcrt.get_osfhandle(descriptor))
-        length = kernel32.GetFinalPathNameByHandleW(handle, None, 0, 0)
-        if not length:
-            return None
-        buffer = _windows_ctypes.create_unicode_buffer(length + 1)
-        if not kernel32.GetFinalPathNameByHandleW(handle, buffer, len(buffer), 0):
-            return None
-        name = buffer.value
-        if name.startswith("\\\\?\\UNC\\"):
-            name = "\\\\" + name[8:]
-        elif name.startswith("\\\\?\\"):
-            name = name[4:]
-        return Path(name).resolve(strict=True)
-    # Dieselbe Frage wie in ``scene.project._opened_file_path``, und in
-    # derselben Reihenfolge: erst der Deskriptorpfad, wenn er wirklich
-    # woandershin zeigt, dann der Mac-Weg. Die Plattform zuerst zu fragen
-    # macht den Rest dort zu totem Code (mypy, `--platform darwin`).
-    descriptor_path = Path("/proc/self/fd") / str(descriptor)
-    if descriptor_path.exists():
-        resolved = descriptor_path.resolve(strict=True)
-        if resolved != descriptor_path:
-            return resolved
-    if sys.platform == "darwin":
-        # `/dev/fd/N` ist auf dem Mac kein Symlink, und /proc gibt es nicht —
-        # F_GETPATH (50) nennt den Pfad.
-        module = importlib.import_module("fcntl")
-        # 1024 und nicht mehr — die Begründung steht bei der Zwillingsstelle
-        # in ``scene.project._opened_file_path``.
-        raw = module.fcntl(descriptor, 50, b"\0" * 1024)
-        return Path(raw.split(b"\0", 1)[0].decode()).resolve(strict=True)
-    return None
+    """Der kanonische Pfad eines offenen Handles, soweit die Plattform ihn anbietet.
+
+    Steht seit dem 10.09.2026 in :func:`app.core.paths.opened_path`, gemeinsam
+    mit ``scene.project``. Diese Kopie war die ältere: Ihr fehlte unter Windows
+    die Gegenprobe, ob der zweite ``GetFinalPathNameByHandleW`` den Puffer
+    wirklich gefüllt hat oder nur gesagt hat, wie groß er sein müsste — ein
+    zwischenzeitlich gewachsener Pfad kam damit abgeschnitten zurück, und diese
+    Zeichenkette entschied hier eine Sicherheitsfrage.
+    """
+    return opened_path(descriptor)
 
 
 def _posix_lock(descriptor: int, *, exclusive: bool) -> None:
