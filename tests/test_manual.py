@@ -852,15 +852,31 @@ def test_the_rules_page_carries_every_rule() -> None:
 
 def test_the_numbers_are_written_the_way_the_language_writes_them() -> None:
     """Der Kern liefert diese Seite fertig aus — ein Punkt statt eines Kommas
-    stünde im deutschen Handbuch neben einer Anwendung, die 2,40 mm anzeigt."""
+    stünde im deutschen Handbuch neben einer Anwendung, die 2,40 mm anzeigt.
+
+    **Der Katalog wird hier geladen und nicht vorausgesetzt.** ``set_language``
+    setzt nur eine Variable; das Dezimalzeichen kommt aus dem Katalog
+    (``decimal_separator`` liest ``tr("0,1")``), und ohne ihn fällt ``tr`` auf
+    die deutsche Message-ID zurück — also auf das Komma. Der Test war trotzdem
+    jahrelang grün, weil in derselben Portion vorher ein anderer Test den
+    englischen Katalog geladen hatte. Am 10.09.2026 fiel dieser Vorgänger weg:
+    Ein nativer Abbruch ließ das Tor die Portion halbieren, der Test landete in
+    der anderen Hälfte und wurde rot — an einer Anwendung, in der nichts kaputt
+    war. ``app.py`` lädt den Katalog beim Start; das ist die Betriebslage, und
+    ein Test stellt sie selbst her.
+    """
     from app.i18n import set_language
+    from app.i18n.catalog import install_language
 
     try:
+        install_language("de")
         set_language("de")
         assert "0,25" in manual.profiles_text()
+        install_language("en")
         set_language("en")
         assert "0.25" in manual.profiles_text()
     finally:
+        install_language("de")
         set_language("de")
 
 
