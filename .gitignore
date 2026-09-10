@@ -142,3 +142,8 @@ tools/.window-bench-profile/
 # `.git` — Git zeigt den Ordner sonst dauerhaft als unversioniert an, und in
 # dieses hier gehört er nicht. Wer dort committet, tut es in seinem eigenen.
 /3D Drucker/
+
+# Der Erinnerungs-Index wird über tools/memory_index.py geschrieben; seine
+# Sperr- und Zwischendateien gehören niemandem sonst.
+/.claude/memory/.*.lock
+/.claude/memory/.memory-index-*

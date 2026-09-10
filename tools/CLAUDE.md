@@ -45,7 +45,16 @@ ein sauberes Ergebnis.
 | `check_env.py` | Prüft die Umgebung gegen den festgeschriebenen Stand — **und stellt ihn her** |
 | `sync_agents.py` | Erzeugt Codex-Agenten und Skills aus `.claude/agents/` und `.claude/skills/` (`--check` im Tor) |
 | `link_memory.py` | Die Erinnerungen ins Repository hängen — einmal je Maschine |
+| `memory_index.py` | Eine Zeile in `MEMORY.md` einfügen — unter Sperre, atomar, mit Nachzählen |
 | `check_message.py` | Der `commit-msg`-Hook: Ersatzschreibung statt Umlaut in einer Commit-Meldung |
+
+**Die beiden Erinnerungswerkzeuge tun Verschiedenes**, und die Namen sagen es
+nicht von selbst: `link_memory.py` hängt das Verzeichnis einmal je Maschine
+ein und fasst `MEMORY.md` nie an; `memory_index.py` schreibt genau eine Zeile
+hinein. Es hält dafür eine Sperrdatei daneben, liest den Index **unter** der
+Sperre und zählt vor dem Schreiben nach — ohne das gehen bei zwei gleichzeitig
+schreibenden Sitzungen Einträge verloren, gemessen 17 bis 20 von 40
+(`tests/test_memory_index.py`, mit zwei echten Prozessen).
 
 `link_memory.py` reserviert bei Konflikten
 freie Sicherungsnamen exklusiv; vor dem Entfernen des lokalen Bestands wird

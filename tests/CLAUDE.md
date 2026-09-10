@@ -115,6 +115,7 @@ bestimmte meint, nennt sie. Meldet es
 | Zeichnet der Renderer, was der Vertrag verspricht — Bildpunkte, Picks, Kamera, Griffe? | `test_render_contract.py`, `test_render_gizmo.py` und `test_render_gfx_regressions.py` am pygfx-Renderer ohne Fenster (ohne wgpu-Adapter ein Skip mit Grund); `test_render_factory.py` der Aufbau über `factory.py`; `test_render_shapes.py` und `test_navigator.py` ganz ohne Renderer |
 | Gilt eine Zusage auch dort, wo der Code auf dieser Maschine nie läuft? | `test_hard_rules.py` — fcntl-Puffergrenze über den Quelltext, die Nutzerverzeichnisse für darwin, win32 und linux |
 | Findet `tools/twin_scan.py` die Zwillinge, für die es gebaut wurde? | `test_twin_scan.py` — gepflanzte Fälle, und ein leerer Baum ist ein Fehler statt eines Ergebnisses |
+| Überleben zwei Sitzungen, die gleichzeitig in `MEMORY.md` schreiben? | `test_memory_index.py` — zwei echte Prozesse; ohne Sperre gingen gemessen 17 bis 20 von 40 Einträgen verloren |
 
 ## Der Korpus
 
