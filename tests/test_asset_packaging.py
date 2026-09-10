@@ -611,10 +611,11 @@ def test_the_pyinstaller_spec_checks_rights_before_analysis() -> None:
 def test_the_bundled_fonts_travel_in_the_package() -> None:
     """Eine Schrift, die zur Wahl steht und im Paket fehlt, ist eine Falle.
 
-    ``label_ops.FONTS`` bietet Liberation an; die zwölf Dateien liegen in
-    ``app/core/geom/data/fonts``. Fehlt der Ordner in der Spec, wählt der Kunde
-    „Liberation Sans" und bekommt DejaVu — matplotlib fällt still zurück, und
-    dasselbe Projekt sähe hier anders aus als beim Bauen.
+    ``label_ops.FONTS`` bietet Liberation, Comfortaa und Dancing Script an; ihre
+    vierzehn Dateien liegen in ``app/core/geom/data/fonts``. Fehlt der Ordner
+    in der Spec, wählt der Kunde „Liberation Sans“ und bekommt DejaVu —
+    matplotlib fällt still zurück, und dasselbe Projekt sähe hier anders aus
+    als beim Bauen.
 
     ``font_properties`` fängt den Fall inzwischen ab und sagt ihn (Regel 21).
     Das ist die zweite Hürde; diese hier ist die erste.

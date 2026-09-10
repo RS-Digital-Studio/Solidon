@@ -65,7 +65,8 @@ datas = [
     (str(ROOT / "app" / "core" / "knowledge" / "data"), "app/core/knowledge/data"),
     (str(ROOT / "app" / "core" / "knowledge" / "parts" / "LICENSE"), "app/core/knowledge/parts"),
     (str(ROOT / "app" / "core" / "backends" / "data"), "app/core/backends/data"),
-    # Die mitgelieferten Beschriftungsschriften (Liberation, SIL OFL). Ohne sie
+    # Die mitgelieferten Beschriftungsschriften (Liberation, Comfortaa und Dancing
+    # Script, alle SIL OFL). Ohne sie
     # steht die Familie im Dialog zur Wahl und ist beim Kunden nicht da —
     # matplotlib fiele dann auf DejaVu zurück, und ein Projekt sähe hier anders
     # aus als beim Bauen. `label_ops.font_properties` fängt genau das ab und

@@ -30,7 +30,12 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Um escareado sobre um furo passa a manter-se também numa peça com superfícies redondas e curvas — antes perdia-se aí, e o furo e o seu escareado já não podiam ser deslocados em conjunto.
 - Uma cavidade inteiramente dentro do material, sem saída, aparece na árvore de objetos como bolsa de ar, com o seu volume. Antes aparecia como um furo que não existia.
-- As inscrições oferecem agora seis tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura.
+
+### Rotular
+
+- Uma inscrição pode usar agora oito tipos de letra em vez de três, mais negrito e itálico. O negrito tem traços mais grossos com a mesma altura e continua legível onde o estilo normal borra.
+- Ao lado dos tipos de letra direitos há agora um redondo e um manuscrito, ambos num só estilo. Os oito viajam com o programa, por isso um projeto fica igual em todo o lado.
+- Se um tipo de letra for demasiado fino para o seu bico, o Solidon diz a partir de que altura aguenta, em vez de o imprimir e deixar as letras empastarem.
 
 ## 0.4.0
 

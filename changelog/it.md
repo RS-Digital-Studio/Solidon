@@ -30,7 +30,12 @@ scrive in `website/version.json`.
 
 - Una svasatura sopra un foro viene mantenuta anche su un pezzo con superfici tonde e sinuose: prima andava persa, e foro e svasatura non potevano più essere spostati insieme.
 - Una cavità interamente nel materiale, senza via d'uscita, compare nell'albero degli oggetti come sacca d'aria, con il suo volume. Prima compariva come un foro inesistente.
-- Le scritte offrono ora sei caratteri invece di tre, più grassetto e corsivo. Il grassetto porta tratti più spessi a parità di altezza.
+
+### Scrivere
+
+- Una scritta può usare ora otto caratteri invece di tre, più grassetto e corsivo. Il grassetto porta tratti più spessi a parità di altezza e resta leggibile dove lo stile normale sbava.
+- Accanto ai caratteri diritti ci sono ora uno tondo e uno manoscritto, entrambi in un solo stile. Tutti e otto viaggiano con il programma, così un progetto appare uguale ovunque.
+- Se un carattere è troppo fine per il tuo ugello, Solidon dice da quale altezza tiene, invece di stamparlo e lasciare che le lettere si impastino.
 
 ## 0.4.0
 

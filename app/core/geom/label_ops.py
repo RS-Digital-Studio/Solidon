@@ -18,7 +18,8 @@ Umriss ist ein Umriss, ob ihn eine Schrift gezeichnet hat oder Inkscape.
 from __future__ import annotations
 
 import dataclasses
-from pathlib import Path, PurePath
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Final, Literal, cast
 
 import numpy as np
@@ -44,10 +45,11 @@ from app.core.types import (
     MaterialSlot,
     OpContext,
     OpResult,
+    Profile,
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM, format_volume
+from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length, format_volume
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -71,6 +73,39 @@ FONTS: tuple[str, ...] = (
     "Liberation Sans",
     "Liberation Serif",
     "Liberation Mono",
+    "Comfortaa",
+    "Dancing Script",
+)
+
+#: Welche Familie welche Schnitte wirklich hat — und was ohne diese Tabelle
+#: passiert wäre.
+#:
+#: Comfortaa und Dancing Script kommen als **variable** Schriften: eine Datei
+#: mit einer Gewichtsachse, aus der sich jeder Schnitt rechnen ließe. Nur kann
+#: matplotlib das nicht; es nimmt die Standardinstanz und meldet „Failed to
+#: find font weight bold, now using 400" auf die Fehlerausgabe. Gemessen am
+#: 10.09.2026 an „ABCabc 123" auf 10 mm: Bei den sechs statischen Familien
+#: wächst die mittlere Strichbreite von 0,61 bis 0,84 mm auf 0,92 bis 1,44 mm, bei
+#: diesen beiden bleibt sie auf 0,70 beziehungsweise 0,48 — vier Einträge im
+#: Dialog, ein Ergebnis.
+#:
+#: **Der Riegel in** :func:`font_properties` **hätte das nicht gefangen**: Er
+#: prüfte die Familie, und die ist ja da. Ein Schnitt, den es nicht gibt, ist
+#: dieselbe stille Lüge eine Ebene tiefer.
+FONT_STYLES_AVAILABLE: Final[dict[str, tuple[str, ...]]] = {
+    "Comfortaa": ("regular",),
+    "Dancing Script": ("regular",),
+}
+
+#: Die Familien, bei denen das Feld *Schnitt* etwas bewirkt.
+#:
+#: Aus :data:`FONTS` abzüglich derer, die nur einen Schnitt mitbringen — der
+#: Dialog graut das Feld damit aus, statt eine Wahl anzubieten, die
+#: :func:`font_properties` gleich danach ablehnt. Eine neue variable Schrift
+#: braucht nur ihren Eintrag in :data:`FONT_STYLES_AVAILABLE`; hier fällt sie
+#: von selbst heraus.
+FONTS_WITH_ALL_STYLES: Final[tuple[str, ...]] = tuple(
+    font for font in FONTS if font not in FONT_STYLES_AVAILABLE
 )
 
 #: Wo die mitgelieferten Schriften liegen, die matplotlib nicht selbst kennt.
@@ -81,13 +116,20 @@ FONTS: tuple[str, ...] = (
 #: Beschriftung „in Arial" erwartet, bekommt sie, ohne dass eine Schrift ins
 #: Paket muss, die niemand weitergeben darf.
 #:
-#: Zwölf Dateien und 4,2 MB, weil jede Familie ihre vier Schnitte mitbringt.
-#: Drei Regular allein wären billiger und wären eine Falle: Der Schnitt stünde
-#: dann bei DejaVu zur Wahl und bei Liberation nicht, ohne dass es jemand
-#: sähe — matplotlib fällt still zurück (:func:`font_properties`).
+#: **Comfortaa und Dancing Script aus dem entgegengesetzten Grund:** Die sechs
+#: übrigen Familien haben eckige Ecken und gerade Striche, weil sie für
+#: Fließtext auf einem Bildschirm gezeichnet sind. Eine runde und eine
+#: geschriebene daneben decken ab, wofür sonst jemand das Programm verlässt.
 #:
-#: SIL Open Font License 1.1, Lizenztext unter
-#: ``knowledge/data/third_party_licenses/``.
+#: Vierzehn Dateien und gut viereinhalb Megabyte: zwölf für Liberation, weil
+#: jede der drei Familien ihre vier Schnitte mitbringt, und je eine für die
+#: beiden variablen. Drei Regular allein wären billiger und wären eine Falle:
+#: Der Schnitt stünde dann bei DejaVu zur Wahl und bei Liberation nicht, ohne
+#: dass es jemand sähe — matplotlib fällt still zurück
+#: (:func:`font_properties`).
+#:
+#: Alle drei stehen unter der SIL Open Font License 1.1; welcher Text zu
+#: welcher Sippe gehört, sagt :data:`BUNDLED_FONT_LICENCES`.
 BUNDLED_FONTS: Final[Path] = Path(__file__).parent / "data" / "fonts"
 
 #: Welche mitgelieferte Schriftsippe unter welchem Lizenztext steht.
@@ -98,8 +140,16 @@ BUNDLED_FONTS: Final[Path] = Path(__file__).parent / "data" / "fonts"
 #: den es unter diesem Namen nicht gibt. Die Zuordnung ist eine Aussage, keine
 #: Zeichenkettenoperation: Wer eine Schrift dazulegt, trägt sie hier ein, und
 #: ``tests/test_licences.py`` verlangt beides — den Eintrag und die Datei.
+#:
+#: **Die Fassung im Dateinamen ist eine Zusage.** Sie stand zweimal daneben —
+#: Comfortaa liegt als 3.105 bei und hieß 3.101, Dancing Script als 2.001 und
+#: hieß 2.104 —, und niemandem wäre es aufgefallen: Der Name einer Textdatei
+#: wird von nichts gelesen. ``tests/test_licences.py`` hält ihn seit dem
+#: 10.09.2026 gegen den Versionseintrag in der Schriftdatei selbst.
 BUNDLED_FONT_LICENCES: Final[dict[str, str]] = {
     "Liberation": "Liberation-2.1.5-OFL-1.1.txt",
+    "Comfortaa": "Comfortaa-3.105-OFL-1.1.txt",
+    "DancingScript": "DancingScript-2.001-OFL-1.1.txt",
 }
 
 _registered = False
@@ -114,8 +164,8 @@ def _register_bundled_fonts() -> None:
     seinen Zwischenspeicher auf der Platte anzufassen.
 
     **Einmal je Prozess**, denn ``addfont`` liest jede Datei und legt sie in
-    die Liste — zwölf Dateien bei jedem Aufruf von :func:`outlines` wären zwölf
-    Dateizugriffe je Buchstabengruppe.
+    die Liste — vierzehn Dateien bei jedem Aufruf von :func:`outlines` wären
+    vierzehn Dateizugriffe je Buchstabengruppe.
     """
     global _registered
     if _registered:
@@ -130,9 +180,11 @@ def _register_bundled_fonts() -> None:
 #: Die Schnitte, die jede dieser Familien mitbringt — und die bis zum
 #: 10.09.2026 niemand anbieten konnte.
 #:
-#: Sie liegen längst im Paket: matplotlib führt zu jeder Familie vier Dateien
-#: (regular, bold, oblique, bold-oblique), und ``FONTS`` nannte nur die erste.
-#: Aus drei Einträgen werden damit zwölf, ohne ein Byte mehr.
+#: Sie liegen längst im Paket: matplotlib führt zu jeder statischen Familie
+#: vier Dateien (regular, bold, oblique, bold-oblique), und ``FONTS`` nannte
+#: nur die erste. Aus sechs Familien werden damit vierundzwanzig Kombinationen,
+#: ohne ein Byte mehr; die beiden variablen bleiben bei je einer
+#: (:data:`FONT_STYLES_AVAILABLE`).
 #:
 #: **Fett ist dabei kein Geschmack, sondern eine Drucksache.** Die
 #: Untergrenze von :data:`MIN_SIZE` steht bei drei Millimetern, weil dünne
@@ -140,10 +192,10 @@ def _register_bundled_fonts() -> None:
 #: dieselbe Höhe mit dickeren Strichen aus und bleibt lesbar, wo der normale
 #: schon zerfällt.
 #:
-#: Als **zweiter Parameter** und nicht als zwölf Einträge in einer Liste: Der
-#: Kunde wählt eine Schrift und danach, wie sie aussehen soll — zwei kurze
-#: Listen statt einer langen, und mit jeder weiteren Familie wächst nur die
-#: erste. Der Schlüssel ist englisch, weil er in der Projektdatei steht.
+#: Als **zweiter Parameter** und nicht als sechsundzwanzig Einträge in einer
+#: Liste: Der Kunde wählt eine Schrift und danach, wie sie aussehen soll — zwei
+#: kurze Listen statt einer langen, und mit jeder weiteren Familie wächst nur
+#: die erste. Der Schlüssel ist englisch, weil er in der Projektdatei steht.
 FONT_STYLES: Final[tuple[str, ...]] = ("regular", "bold", "italic", "bold_italic")
 
 #: Was ein Schnitt für ``FontProperties`` bedeutet: Gewicht und Neigung.
@@ -167,14 +219,99 @@ _FACING = _(
 )
 _FACING_MORE = _("Weitere Achse der Richtung — siehe Normale X.")
 _SIZE = _("Höhe der Großbuchstaben. Unter drei Millimetern verliert der Druck die Form.")
-_FONT = _("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
+_FONT = _("Alle acht liegen bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
 _STYLE = _(
     "Fett trägt bei kleinen Buchstaben dickere Striche und bleibt lesbar, wo der "
     "normale Schnitt schon verschmiert."
 )
 
-#: Darunter sind die Buchstaben dünner als eine Düse und drucken als Schmierer.
+#: Darunter lohnt die Beschriftung auf keiner Maschine mehr.
+#:
+#: **Eine Zahl für jeden Drucker, und deshalb keine Aussage über den Druck.**
+#: Ein Parameterschema kennt das Profil nicht; seine Grenze muss für die feinste
+#: und die gröbste Düse zugleich gelten und ist damit für beide falsch. Gemessen
+#: am 10.09.2026 an „SOLIDON3D": Drei Millimeter trägt eine 0,25er Düse bei
+#: sechs der acht Familien; mit der üblichen 0,4er trägt dort kein normaler
+#: Schnitt mehr, sondern nur noch fette — und auch die nicht alle.
+#:
+#: Die Auskunft, auf die es ankommt, gibt darum nicht diese Zahl, sondern
+#: :func:`too_thin_to_print`: Sie kennt Schrift, Schnitt, Höhe und Düse und
+#: nennt die Höhe, ab der es trägt. Gesperrt wird deswegen nichts — wer ein
+#: Schild nur ansehen will, darf es klein haben.
 MIN_SIZE = 3.0
+
+
+def stroke_width(shapes: Sequence[Any]) -> float:
+    """Wie breit die Striche dieses Textes im Mittel sind, in Millimetern.
+
+    Doppelte Fläche durch Umfang — für einen langen Streifen ist das genau
+    seine Breite, und ein Buchstabe ist nichts anderes als ein paar gebogene
+    Streifen. Die Zahl skaliert linear mit der Schrifthöhe.
+
+    **Am gesetzten Text gemessen und nicht je Familie hinterlegt.** Eine
+    Tabelle hätte an einem Beispielwort gehangen („ABCabc 123"), und der Kunde
+    schreibt ein anderes: Dieselbe Familie kommt auf 0,84 mm für dieses Wort
+    und auf 0,90 mm für „SOLIDON3D", weil Versalien dickere Striche haben als
+    Gemeine. Sie hätte außerdem den Schnitt verschwiegen — fett ist rund
+    anderthalbmal so breit wie normal (gemessen am 10.09.2026 über alle sechs
+    statischen Familien) —, und genau das ist die Auskunft, auf die es
+    ankommt.
+
+    **Das Mittel und nicht die dünnste Stelle**, und das ist eine
+    Entscheidung: Eine Antiqua hat Haarstriche neben Stämmen. Gemessen an
+    „ABCabc 123" auf 10 mm, über die Öffnung mit wachsendem Radius: Bei
+    Liberation Serif verlieren schon bei einer Bahn von 0,40 mm die ersten fünf
+    Prozent der Fläche ihre Spur, während das Mittel derselben Zeile bei
+    0,61 mm liegt. Wer die dünnste Stelle nähme, meldete jede Serifenschrift
+    bei jeder üblichen Größe. Gefragt ist, ob das Schriftbild hält, nicht ob
+    der erste Haarstrich breiter gedruckt wird als gezeichnet.
+    """
+    from shapely.ops import unary_union
+
+    whole = unary_union(list(shapes))
+    around = float(whole.length)
+    if around <= EPS_GEOM:
+        return 0.0
+    return 2.0 * float(whole.area) / around
+
+
+def narrowest_bead(profile: Profile) -> float:
+    """Die schmalste Bahn, die dieser Drucker legt, in Millimetern.
+
+    Nicht der Düsendurchmesser: Ein Slicer quetscht eine Bahn bis auf
+    ``NARROW_LINE_SHARE`` seiner Düse zusammen, darunter reißt die Spur ab,
+    statt dünner zu werden. Die Zahl steht in :mod:`app.core.slice.advise` und
+    wird von dort geholt, weil zwei Schwellen für dieselbe Frage dazwischen
+    einen Bereich ließen, in dem beide Antworten falsch sind — der Kommentar
+    dort sagt es für die andere Seite mit denselben Worten.
+    """
+    from app.core.slice.advise import NARROW_LINE_SHARE
+
+    return NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+
+
+def too_thin_to_print(shapes: Sequence[Any], size: float, line_width: float) -> float | None:
+    """Ab welcher Höhe dieser Text eine Bahn trägt — ``None``, wenn er es tut.
+
+    **Die Grenze gehört der Düse und nicht der Schrift.** Dieselbe
+    Schreibschrift, die mit einer 0,25er Düse sauber kommt, läuft mit einer
+    0,8er zu; eine feste Mindesthöhe je Familie wäre auf der einen Maschine zu
+    streng und auf der anderen zu milde. Gerechnet wird deshalb aus der
+    gemessenen Strichbreite (linear in der Höhe) gegen die schmalste Bahn, die
+    dieser Drucker wirklich legt (:func:`narrowest_bead`).
+
+    Gemessen am 10.09.2026 an „SOLIDON3D": „Dancing Script" hat bei 10 mm eine
+    mittlere Strichbreite von 0,51 mm. Auf einer 0,4er Düse — schmalste Bahn
+    0,34 mm — trägt sie ab **6,6 mm**; auf einer 0,25er ab 4,1 mm, auf einer
+    0,8er erst ab 13,2 mm. Dieselbe Schrift, drei Antworten.
+
+    Zurück kommt die nötige Höhe, damit der Aufrufer sie nennen kann; ein Satz
+    „zu dünn" ohne Zahl schickt den Kunden ins Raten (Regel 17).
+    """
+    stroke = stroke_width(shapes)
+    if stroke <= EPS_GEOM or line_width <= EPS_GEOM or stroke >= line_width:
+        return None
+    return size * line_width / stroke
 
 
 def font_properties(font: str, style: str = FONT_STYLES[0]) -> Any:
@@ -193,9 +330,24 @@ def font_properties(font: str, style: str = FONT_STYLES[0]) -> Any:
     mitgelieferte Schrift, die es aus einem Paketfehler nicht ins Paket
     schafft, fiele lautlos auf DejaVu zurück (Regel 21).
     """
-    from matplotlib.font_manager import FontProperties, findfont
+    from matplotlib.font_manager import FontProperties, findfont, get_font
 
     _register_bundled_fonts()
+    # **Und der Schnitt gehört zur selben Frage.** Eine variable Schrift bringt
+    # nur ihre Standardinstanz mit; „fett" liefert dieselben Umrisse, und
+    # matplotlib sagt es auf einer Fehlerausgabe, die niemand liest.
+    offered = FONT_STYLES_AVAILABLE.get(font)
+    if offered is not None and style not in offered:
+        raise ValidationError(
+            field="style",
+            detail=_(
+                "„{font}“ gibt es nur in einem Schnitt. Wählen Sie „Normal“, oder "
+                "nehmen Sie eine Schrift, die fett und kursiv mitbringt.",
+                font=font,
+            ),
+            value=style,
+            constraint="missing_style",
+        )
     weight, slant = _STYLE_PROPERTIES.get(style, _STYLE_PROPERTIES[FONT_STYLES[0]])
     # ``slant`` stammt aus :data:`_STYLE_PROPERTIES` und ist dort immer einer
     # der drei Werte, die matplotlib kennt; der Parameter selbst kommt als
@@ -203,8 +355,16 @@ def font_properties(font: str, style: str = FONT_STYLES[0]) -> Any:
     prop = FontProperties(
         family=font, weight=weight, style=cast(Literal["normal", "italic", "oblique"], slant)
     )
-    found = PurePath(findfont(prop)).name
-    if font.split()[0].lower() not in found.lower():
+    # **Die Datei wird nach ihrer Familie gefragt, nicht nach ihrem Namen.**
+    # Der erste Anlauf verglich das erste Wort mit dem Dateinamen — „DejaVu
+    # Serif" fand „dejavu" in ``DejaVuSans.ttf`` und war zufrieden, also fing
+    # der Riegel genau den Fall nicht, für den er gebaut ist: den Rückfall
+    # innerhalb derselben Sippe. ``get_font`` liest den Familiennamen aus dem
+    # ``name``-Table der gefundenen Datei und beantwortet damit die gestellte
+    # Frage; nebenbei fällt jede Vermutung über Dateinamen weg, die auf einer
+    # fremden Distribution ohnehin anders lauten dürfen.
+    found = get_font(findfont(prop)).family_name
+    if found.casefold() != font.casefold():
         raise ValidationError(
             field="font",
             detail=_(
@@ -390,7 +550,7 @@ class LabelParams(BaseParams):
         default=FONTS[0],
         choices=FONTS,
         placement="advanced",
-        doc=_("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht."),
+        doc=_FONT,
     )
     style: str = param(
         title=_("Schnitt"),
@@ -398,6 +558,7 @@ class LabelParams(BaseParams):
         choices=FONT_STYLES,
         placement="advanced",
         doc=_STYLE,
+        depends_on=("font", FONTS_WITH_ALL_STYLES),
     )
     x: float = param(
         title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
@@ -501,6 +662,67 @@ def _buried(letters: Any, before: Any, after: Any, mode: str) -> Finding | None:
     )
 
 
+def _too_fine(
+    text: str, size: float, font: str, style: str, profile: Profile | None
+) -> Finding | None:
+    """Trägt diese Schrift bei dieser Höhe überhaupt eine Bahn? (Regel 17)
+
+    Die Untergrenze von :data:`MIN_SIZE` gilt allen Schriften gleich; die
+    Strichbreite tut das nicht. Gemessen wird deshalb am gesetzten Text, mit
+    dem gewählten Schnitt — ein fetter trägt rund anderthalbmal so breite
+    Striche und braucht darum weniger Höhe.
+
+    **Und die Auskunft gilt beiden Arten.** Erhaben werden die Striche breiter
+    gedruckt, als sie gezeichnet sind; graviert wachsen die Rillen zu. In
+    beiden Fällen läuft die Schrift zu, und in beiden hilft dasselbe.
+
+    Gemeldet und nicht gesperrt: Wer eine Beschriftung nur ansehen oder als STL
+    weitergeben will, darf sie klein haben. Was der Kunde braucht, ist die
+    **Zahl** — ab welcher Höhe es trägt —, nicht ein „zu dünn".
+    """
+    if profile is None:
+        return None
+    shapes = outlines(text, size, font, style)
+    if not shapes:
+        return None
+    bead = narrowest_bead(profile)
+    needed = too_thin_to_print(shapes, size, bead)
+    if needed is None:
+        return None
+    # **Der Rat muss es an dieser Schrift geben.** „Nehmen Sie den fetten
+    # Schnitt" ist bei Comfortaa und Dancing Script kein Ausweg, sondern der
+    # nächste Fehler — sie bringen nur einen Schnitt mit, und die Operation
+    # lehnt jeden anderen ab (:func:`font_properties`).
+    bolder = style not in ("bold", "bold_italic") and font in FONTS_WITH_ALL_STYLES
+    message = (
+        _(
+            "Bei {size} sind die Striche dieser Schrift im Mittel schmaler als die "
+            "schmalste Bahn Ihrer Düse ({bead}) — gedruckt läuft die Schrift zu. Ab "
+            "{needed} trägt sie; darunter hilft der fette Schnitt, der dieselbe Höhe "
+            "mit dickeren Strichen trägt.",
+            size=format_length(size),
+            bead=format_length(bead),
+            needed=format_length(needed),
+        )
+        if bolder
+        else _(
+            "Bei {size} sind die Striche dieser Schrift im Mittel schmaler als die "
+            "schmalste Bahn Ihrer Düse ({bead}) — gedruckt läuft die Schrift zu. Ab "
+            "{needed} trägt sie; darunter hilft eine Schrift mit dickeren Strichen "
+            "oder eine feinere Düse.",
+            size=format_length(size),
+            bead=format_length(bead),
+            needed=format_length(needed),
+        )
+    )
+    return Finding(
+        code="label.too_fine",
+        severity="warning",
+        message=message,
+        values={"font": font, "needed": format_length(needed)},
+    )
+
+
 @register_op(
     name="label_text",
     title=_("Text aufbringen"),
@@ -589,6 +811,15 @@ def label_text(ctx: OpContext) -> OpResult:
             *([nothing] if nothing is not None else []),
             *([apart] if apart is not None else []),
             *([buried] if buried is not None else []),
+            *(
+                [fine]
+                if (
+                    fine := _too_fine(
+                        params.text, params.size, params.font, params.style, ctx.profile
+                    )
+                )
+                else []
+            ),
         ],
     )
 
@@ -625,6 +856,7 @@ class LabelBodyParams(BaseParams):
         choices=FONT_STYLES,
         placement="advanced",
         doc=_STYLE,
+        depends_on=("font", FONTS_WITH_ALL_STYLES),
     )
     x: float = param(
         title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
@@ -690,8 +922,13 @@ def create_label(ctx: OpContext) -> OpResult:
         angle=params.angle,
     )
     placed = place(body, (params.x, params.y, params.z), (params.nx, params.ny, params.nz))
+    # Dieselbe Frage wie bei ``label_text``, und hier wiegt sie schwerer: Ein
+    # Schild steht für sich, es hängt nicht an einem Körper, der es hielte.
+    # Wer es dünner setzt, als seine Düse legen kann, druckt einen Klumpen.
+    fine = _too_fine(params.text, params.size, params.font, params.style, ctx.profile)
     return OpResult(
-        outputs=[SceneObject(id="", name=params.name or params.text.strip()[:20], mesh=placed)]
+        outputs=[SceneObject(id="", name=params.name or params.text.strip()[:20], mesh=placed)],
+        findings=[fine] if fine is not None else [],
     )
 
 

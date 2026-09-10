@@ -594,18 +594,9 @@ def test_the_manual_finds_a_place_for_a_new_language(monkeypatch: pytest.MonkeyP
 
 
 #: Auswahlwerte, die ihr eigener Name sind: Normteilgrößen (M4), Maße (6x3),
-#: Einheiten, Achsen, Schriftnamen und der eine Eigenname unter den
-#: Gitterstrukturen. Sie heißen in jeder Sprache gleich.
-#:
-#: **Schriftnamen sind Marken und keine Wörter.** „Liberation Sans" heißt auf
-#: Französisch nicht „Libération Sans" — der Name steht so in der
-#: Schriftdatei, und wer ihn übersetzte, machte aus einer Auswahl eine
-#: Behauptung über eine Schrift, die es nicht gibt. Die **Schnitte** daneben
-#: (Normal, Fett, Kursiv) sind das Gegenteil: gewöhnliche Wörter, die jede
-#: Sprache selbst hat, und die stehen deshalb in ``_CHOICE_NAMES``.
-SELF_NAMING = re.compile(
-    r"^(M\d+(\.\d+)?|\d+x\d+|mm|cm|in|m|x|y|z|DejaVu .*|Liberation .*|gyroid)$"
-)
+#: Einheiten, Achsen und der eine Eigenname unter den Gitterstrukturen. Sie
+#: heißen in jeder Sprache gleich.
+SELF_NAMING = re.compile(r"^(M\d+(\.\d+)?|\d+x\d+|mm|cm|in|m|x|y|z|gyroid)$")
 
 
 def self_naming_sizes() -> frozenset[str]:
@@ -620,6 +611,27 @@ def self_naming_sizes() -> frozenset[str]:
     from app.core.knowledge import standards
 
     return frozenset(standards.profile_sizes())
+
+
+def self_naming_fonts() -> frozenset[str]:
+    """Die Schriftnamen, und zwar aus der Liste, die der Dialog anbietet.
+
+    **Schriftnamen sind Marken und keine Wörter.** „Liberation Sans" heißt auf
+    Französisch nicht „Libération Sans" — der Name steht so in der
+    Schriftdatei, und wer ihn übersetzte, machte aus einer Auswahl eine
+    Behauptung über eine Schrift, die es nicht gibt. Die **Schnitte** daneben
+    (Normal, Fett, Kursiv) sind das Gegenteil: gewöhnliche Wörter, die jede
+    Sprache selbst hat, und die stehen deshalb in ``_CHOICE_NAMES``.
+
+    Aus ``FONTS`` geholt und nicht als ``DejaVu .*|Liberation .*`` ins Muster
+    geschrieben — dieselbe Entscheidung wie bei den Profilgrößen darüber, und
+    hier ist sie am 10.09.2026 einmal fällig geworden: Zwei neue Familien
+    machten diesen Test rot, weil die Liste an zwei Stellen gepflegt war und
+    nur eine nachzog. Eine siebte Schrift ist hier von selbst dabei.
+    """
+    from app.core.geom.label_ops import FONTS
+
+    return frozenset(FONTS)
 
 
 def test_every_choice_has_a_name_someone_can_read() -> None:
@@ -646,10 +658,10 @@ def test_every_choice_has_a_name_someone_can_read() -> None:
     from app.ui.print_settings_dialog import FIELDS
 
     load_operations()
-    sizes = self_naming_sizes()
+    by_itself = self_naming_sizes() | self_naming_fonts()
 
     def named(value: str) -> bool:
-        return bool(SELF_NAMING.match(value)) or value in sizes or choice_label(value) != value
+        return bool(SELF_NAMING.match(value)) or value in by_itself or choice_label(value) != value
 
     offenders = []
     for spec in REGISTRY.all():

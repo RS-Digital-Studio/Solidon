@@ -145,12 +145,28 @@ def test_repeated_point_moves_reuse_the_prepared_geometry(monkeypatch):
 
 @pytest.mark.parametrize("normal", [(0.0, 0.0, -1.0), (0.3, -0.7, 0.6), (0.0, 0.0, 0.0)])
 def test_text_preview_and_real_body_share_geometry_and_orientation(normal, profile):
+    """Vorschau und Operation bauen denselben Körper — **mit allen Parametern**.
+
+    Der Test stand hier schon, und er lief mit den Vorgaben: kein Schnitt, kein
+    anderer Zeichensatz. Genau darum blieb unsichtbar, dass ``placement`` den
+    Schnitt gar nicht durchreichte — die Vorschau zeigte den normalen, während
+    die Operation den fetten baute (Fett ist rund anderthalbmal so breit).
+    Seitdem stehen beide in ``values``, und ein vergessener Parameter fällt hier
+    auf statt im Fenster.
+    """
     from app.core.sketch.planes import frame_of
     from tests.test_missing_ops import run
 
     load_operations()
     spec = REGISTRY.get("create_label")
-    values = {"text": "L7", "size": 8.0, "depth": 0.7, "angle": 37.0}
+    values = {
+        "text": "L7",
+        "size": 8.0,
+        "depth": 0.7,
+        "angle": 37.0,
+        "font": "Liberation Serif",
+        "style": "bold_italic",
+    }
     tool = placement.placement_tool(spec, values, profile)
     point = (3.123456789, -2.1, 8.0)
     frame = frame_of(normal if np.linalg.norm(normal) else (0.0, 0.0, 1.0), point)
@@ -176,6 +192,12 @@ def test_text_preview_and_real_body_share_geometry_and_orientation(normal, profi
     )
     assert actual.volume == pytest.approx(expected.volume)
     assert np.asarray(actual.raw.vertices) == pytest.approx(expected.raw.vertices, abs=1e-12)
+
+    # **Und der Schnitt macht wirklich einen Unterschied.** Ohne diese Zeile
+    # wäre der Test auch dann grün, wenn beide Seiten denselben falschen
+    # nähmen — zwei gleich fehlerhafte Wege sehen aus wie Übereinstimmung.
+    plain = placement.placement_tool(spec, {**values, "style": "regular"}, profile)
+    assert plain.volume < 0.9 * tool.volume, (plain.volume, tool.volume)
 
 
 def test_drill_preview_and_actual_cut_share_the_same_local_tool(profile, monkeypatch):

@@ -11,11 +11,28 @@
 # ausschließlich als extern installierte Programme aufgerufen, nie
 # mitgeliefert.
 #
-# **Und was mitreist, ohne ein Paket zu sein, ebenfalls.** Die Liberation-
-# Schriften liegen als zwölf TTF-Dateien in `app/core/geom/data/fonts/` und
-# werden mit ausgeliefert; `pip` weiß nichts von ihnen. Ihr Lizenztext steht
-# unter `third_party_licenses/Liberation-2.1.5-OFL-1.1.txt`, und
-# `test_every_bundled_font_carries_its_licence` hält beides zusammen.
+# **Und was mitreist, ohne ein Paket zu sein, ebenfalls.** Drei Schriftsippen
+# liegen als vierzehn TTF-Dateien in `app/core/geom/data/fonts/` und werden mit
+# ausgeliefert; `pip` weiß nichts von ihnen. Alle drei stehen unter der SIL
+# Open Font License 1.1:
+#
+#   Liberation      2.1.5   zwölf Dateien, drei Familien zu vier Schnitten
+#   Comfortaa       3.105   eine Datei, variabel
+#   Dancing Script  2.001   eine Datei, variabel
+#
+# Ihre Lizenztexte stehen unter `third_party_licenses/`, benannt nach Sippe und
+# Fassung; die Zuordnung führt `label_ops.BUNDLED_FONT_LICENCES`. Drei Tests
+# halten das zusammen: `test_every_bundled_font_carries_its_licence` verlangt
+# zu jeder Datei einen Eintrag und zu jedem Eintrag einen Text,
+# `test_every_licence_text_names_the_version_that_lies_beside_it` hält die
+# Fassung im Dateinamen gegen die Schriftdatei selbst, und
+# `test_the_bundled_fonts_are_listed_here` hält diese Aufzählung gegen die
+# Zuordnung — eine vierte Sippe stünde sonst nirgends in der Aktenlage.
+#
+# Sie erscheinen **nicht** in `THIRD-PARTY-NOTICES.md`: Die Beilage entsteht
+# aus den installierten Wheels und den nativen Laufzeitteilen, und eine Schrift
+# ist beides nicht. Was die OFL verlangt, ist trotzdem eingelöst — der
+# Lizenztext reist als Datei mit, `third_party_licenses/` liegt im Paket.
 #
 # **Was extern läuft, steht trotzdem hier.** Die Prüfung unten sieht nur, was
 # in der eigenen Laufzeit installiert ist — ein Programm, das Solidon bloß

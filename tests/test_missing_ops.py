@@ -1179,9 +1179,18 @@ def test_a_bold_style_carries_thicker_strokes_at_the_same_height() -> None:
     lesbar, wo der normale schon zerfällt — gemessen an „ABC 123" auf 10 mm:
     88,59 mm² normal gegen 149,72 fett, also 69 Prozent mehr Material.
     """
-    from app.core.geom.label_ops import FONT_STYLES, FONTS
+    from app.core.geom.label_ops import FONT_STYLES, FONT_STYLES_AVAILABLE, FONTS
 
-    for font in FONTS:
+    # **Nur die Familien, die mehr als einen Schnitt haben.** Comfortaa und
+    # Dancing Script sind variable Schriften und bringen nur ihre
+    # Standardinstanz mit; sie stehen deshalb in ``FONT_STYLES_AVAILABLE`` und
+    # werden von ``font_properties`` abgewiesen, statt still dasselbe zu
+    # liefern. Der eigene Test dazu ist
+    # ``test_a_font_with_only_one_cut_says_so_instead_of_silently_giving_the_same``.
+    complete = [font for font in FONTS if font not in FONT_STYLES_AVAILABLE]
+    assert len(complete) >= 6, f"die statischen Familien fehlen — {complete}"
+
+    for font in complete:
         areas = {
             style: sum(shape.area for shape in outlines("ABC 123", 10.0, font, style))
             for style in FONT_STYLES
@@ -1219,3 +1228,132 @@ def test_a_font_that_is_not_there_says_so_instead_of_quietly_becoming_another() 
     assert fehler.value.field == "font"
     assert "Eine Schrift, die es nicht gibt" in str(fehler.value.detail)
     assert fehler.value.suggestions, "und ein Weg nach vorn steht dabei (Regel 17)"
+
+
+def test_a_font_with_only_one_cut_says_so_instead_of_silently_giving_the_same() -> None:
+    """Eine variable Schrift bringt nur ihre Standardinstanz mit.
+
+    Comfortaa und Dancing Script kommen als eine Datei mit einer
+    Gewichtsachse; matplotlib kann sie nicht instanziieren und nimmt die
+    Vorgabe — „fett" liefert dieselben Umrisse, gemeldet nur auf einer
+    Fehlerausgabe, die kein Kunde sieht. Gemessen am 10.09.2026 an
+    „ABCabc 123" auf 10 mm: bei den sechs statischen Familien wächst die
+    mittlere Strichbreite von 0,61–0,84 auf 0,89–1,44 mm, bei diesen beiden
+    bleibt sie bei 0,70 beziehungsweise 0,48.
+
+    Der Riegel in ``font_properties`` hätte das nicht gefangen — er prüft die
+    **Familie**, und die ist ja da.
+    """
+    from app.core.errors import ValidationError
+    from app.core.geom.label_ops import FONT_STYLES_AVAILABLE
+
+    for font in FONT_STYLES_AVAILABLE:
+        for style in ("bold", "italic", "bold_italic"):
+            with pytest.raises(ValidationError) as fehler:
+                outlines("A", 10.0, font, style)
+            assert fehler.value.field == "style", f"{font}/{style}"
+            assert font in str(fehler.value.detail)
+        # Und der eine, den es gibt, geht.
+        assert outlines("A", 10.0, font, "regular")
+
+
+def test_a_script_face_says_how_tall_it_has_to_be_for_the_nozzle() -> None:
+    """Die Untergrenze gilt allen Schriften gleich — die Striche nicht.
+
+    ``MIN_SIZE`` steht bei drei Millimetern und muss für die feinste und die
+    gröbste Düse zugleich gelten. Was wirklich trägt, hängt an drei Dingen, die
+    das Schema nicht kennt: Schrift, Schnitt und Bahnbreite. Gemessen am
+    10.09.2026 an „SOLIDON3D" auf 10 mm — „Dancing Script" 0,51 mm mittlere
+    Strichbreite, „DejaVu Sans" 0,90, dieselbe fett 1,57.
+
+    Gemeldet wird die **Zahl**, ab der es trägt, nicht ein „zu dünn" — sonst
+    rät der Kunde (Regel 17). Und gerechnet wird gegen die schmalste Bahn und
+    nicht gegen die Düse: Ein Slicer quetscht bis auf 0,85 davon.
+    """
+    from app.core.geom.label_ops import outlines, stroke_width, too_thin_to_print
+
+    def needed_for(font: str, size: float, bead: float, style: str = "regular") -> float | None:
+        return too_thin_to_print(outlines("SOLIDON3D", size, font, style), size, bead)
+
+    assert needed_for("DejaVu Sans", 10.0, 0.34) is None, "0,90 mm trägt eine 0,34er Bahn"
+
+    needed = needed_for("Dancing Script", 3.0, 0.34)
+    assert needed is not None and needed == pytest.approx(6.6, abs=0.3), needed
+
+    # Eine feinere Düse verschiebt die Grenze — die Zahl gehört ihr und nicht
+    # der Schrift.
+    assert needed_for("Dancing Script", 6.0, 0.21) is None, "mit 0,21er Bahn trägt sie bei 6 mm"
+    assert needed_for("Dancing Script", 6.0, 0.68) is not None, "mit 0,68er nicht"
+
+    # **Und der Schnitt gehört zur Frage.** Eine Tabelle je Familie hätte für
+    # fett dieselbe Antwort gegeben wie für normal, obwohl fett rund
+    # anderthalbmal so breite Striche trägt.
+    # Gemessen: normal trägt eine 0,68er Bahn ab 7,6 mm, fett schon ab 4,3.
+    thin = needed_for("DejaVu Sans", 6.0, 0.68)
+    thick = needed_for("DejaVu Sans", 6.0, 0.68, style="bold")
+    assert thin is not None, "0,54 mm bei 6 mm Höhe trägt keine 0,68er Bahn"
+    assert thick is None, "0,94 mm schon — sonst sieht die Prüfung den Schnitt nicht"
+
+    # Die gemessene Breite skaliert linear mit der Höhe; darauf beruht die
+    # Umrechnung auf die nötige Größe.
+    small = stroke_width(outlines("SOLIDON3D", 5.0, "DejaVu Sans", "regular"))
+    large = stroke_width(outlines("SOLIDON3D", 10.0, "DejaVu Sans", "regular"))
+    assert large == pytest.approx(2.0 * small, rel=0.02), (small, large)
+
+
+def test_both_labelling_ops_report_a_face_too_fine_for_the_nozzle(profile: Profile) -> None:
+    """Der Anschlusstest: Die **Operation** meldet es, nicht nur die Funktion.
+
+    Beide Wege bringen dieselbe Schrift auf — ``label_text`` auf einen Körper,
+    ``create_label`` als eigenes Schild —, und beide gingen bis zum 10.09.2026
+    ohne ein Wort durch. Beim Schild wiegt es schwerer: Es hängt an keinem
+    Körper, der es hielte.
+
+    Geprüft wird zusätzlich, **was** der Satz rät. „Nehmen Sie den fetten
+    Schnitt" ist bei einer variablen Schrift kein Ausweg, sondern der nächste
+    Fehler: Sie bringt nur einen mit, und dieselbe Operation lehnt jeden
+    anderen ab.
+    """
+    from app.core.geom.label_ops import FONT_STYLES_AVAILABLE
+
+    plate = block(60.0, 60.0, 5.0)
+    body = SceneObject(id="plate", name="Platte", mesh=plate)
+
+    for op, extra in (("label_text", {"z": 5.0}), ("create_label", {})):
+        result = run(
+            op,
+            body if op == "label_text" else None,
+            profile,
+            text="SOLIDON3D",
+            size=3.0,
+            font="Dancing Script",
+            depth=0.6,
+            **extra,
+        )
+        found = [entry for entry in result.findings if entry.code == "label.too_fine"]
+        assert found, f"{op} sagt nichts zu einer Schrift, die keine Bahn trägt"
+        said = str(found[0].message)
+        assert "fett" not in said.lower(), (
+            f"{op} rät zu einem Schnitt, den „Dancing Script“ nicht hat: {said}"
+        )
+        assert "Dancing Script" in FONT_STYLES_AVAILABLE, "sonst prüft die Zeile darüber nichts"
+
+    # Und bei einer Familie mit fettem Schnitt steht er im Satz.
+    result = run(
+        "create_label",
+        None,
+        profile,
+        text="SOLIDON3D",
+        size=3.0,
+        font="DejaVu Sans",
+        depth=0.6,
+    )
+    found = [entry for entry in result.findings if entry.code == "label.too_fine"]
+    assert found and "fett" in str(found[0].message).lower(), found
+
+    # Groß genug gesetzt schweigt sie — sonst wäre der Befund kein Befund,
+    # sondern eine Eigenschaft der Operation.
+    quiet = run(
+        "create_label", None, profile, text="SOLIDON3D", size=30.0, font="DejaVu Sans", depth=0.6
+    )
+    assert not [entry for entry in quiet.findings if entry.code == "label.too_fine"]

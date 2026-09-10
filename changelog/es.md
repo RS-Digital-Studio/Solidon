@@ -31,7 +31,12 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 - Un avellanado sobre un taladro se conserva también en una pieza con superficies redondeadas y curvas: antes se perdía ahí, y el taladro y su avellanado ya no podían desplazarse juntos.
 - Una cavidad por completo dentro del material, sin salida, aparece en el árbol de objetos como bolsa de aire, con su volumen. Antes aparecía como un taladro que no existía.
-- Las inscripciones ofrecen ahora seis fuentes en lugar de tres, más negrita y cursiva. La negrita lleva trazos más gruesos con la misma altura.
+
+### Rotular
+
+- Una inscripción puede usar ahora ocho fuentes en lugar de tres, más negrita y cursiva. La negrita lleva trazos más gruesos con la misma altura y sigue siendo legible donde la normal se emborrona.
+- Junto a las fuentes rectas hay ahora una redonda y una manuscrita, ambas en un solo estilo. Las ocho viajan con el programa, así que un proyecto se ve igual en todas partes.
+- Si una fuente es demasiado fina para su boquilla, Solidon indica a partir de qué altura aguanta, en lugar de imprimirla y dejar que las letras se empasten.
 
 ## 0.4.0
 

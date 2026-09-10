@@ -308,17 +308,39 @@ in `data/fonts/`)
 **Eine Beschriftung sieht überall gleich aus, oder sie ist keine.** Ein Projekt
 wandert zwischen Rechnern, und eine Systemschrift, die es hier gibt und dort
 nicht, macht daraus zwei verschiedene Teile. Angeboten wird deshalb nur, was
-mitreist: DejaVu bringt matplotlib mit, Liberation liegt als zwölf TTF-Dateien
-in `data/fonts/` (SIL OFL, Lizenztext unter `knowledge/data/third_party_licenses/`,
-Zuordnung in `BUNDLED_FONT_LICENCES`). Sechs Familien mal vier Schnitte —
-`FONT_STYLES` holt die Schnitte über `weight` und `style` aus denselben
+mitreist: DejaVu bringt matplotlib mit, Liberation, Comfortaa und Dancing
+Script liegen in `data/fonts/` (SIL OFL, Lizenztexte unter
+`knowledge/data/third_party_licenses/`, Zuordnung in `BUNDLED_FONT_LICENCES`).
+`FONT_STYLES` holt fett und kursiv über `weight` und `style` aus denselben
 Dateien, die ohnehin im Paket liegen.
+
+**Nicht jede Familie hat alle vier.** Comfortaa und Dancing Script sind
+*variable* Schriften — eine Datei mit einer Gewichtsachse, die matplotlib nicht
+instanziieren kann. „Fett" liefert dort dieselben Umrisse, und der Riegel für
+die Familie greift nicht, weil die ja da ist. `FONT_STYLES_AVAILABLE` sagt
+deshalb je Familie, was es wirklich gibt, und `FONTS_WITH_ALL_STYLES` daneben
+ist dieselbe Auskunft für den Dialog: Das Feld *Schnitt* hängt über
+`depends_on` an der Schrift und graut aus, wo es nichts zu wählen gibt — statt
+anzubieten und danach abzulehnen.
+
+**Und was zu dünn zum Drucken ist, misst `stroke_width` am gesetzten Text.**
+Doppelte Fläche durch Umfang über die Umrisse, die die Operation ohnehin baut;
+`too_thin_to_print` rechnet daraus die Höhe, ab der es trägt. **Keine Tabelle je
+Familie** — eine solche hing an einem Beispielwort, verschwieg den Schnitt (fett
+ist rund anderthalbmal so breit) und wäre acht Zahlen gewesen, die niemand
+nachmisst. Verglichen wird gegen `narrowest_bead`, die schmalste Bahn dieses
+Druckers: `NARROW_LINE_SHARE` aus `slice/advise.py`, dieselbe Zahl wie beim
+Wandvorschlag und nicht der Düsendurchmesser. Die Operation macht daraus einen
+Befund mit der Zahl, keine Sperre: Wer nur ansehen oder exportieren will, darf
+klein bleiben.
 
 **Und matplotlib fällt still zurück.** Wer eine Schrift verlangt, die fehlt,
 bekommt keine Ausnahme, sondern DejaVu Sans und eine Zeile auf der
-Fehlerausgabe. `font_properties` prüft deshalb nach, was `findfont`
-zurückgegeben hat, und sagt es (Regel 21) — die zweite Hürde hinter der Spec,
-die den Ordner mitnimmt.
+Fehlerausgabe. `font_properties` prüft deshalb nach, welche **Familie** die
+gefundene Datei führt (`get_font(...).family_name`), und sagt es (Regel 21) —
+die zweite Hürde hinter der Spec, die den Ordner mitnimmt. Am Dateinamen
+gemessen wäre der Riegel halb: „DejaVu" steht auch in `DejaVuSans.ttf`, wenn
+„DejaVu Serif" gemeint war.
 
 ## Was eine Operation hier einhalten muss
 
@@ -355,7 +377,9 @@ die den Ordner mitnimmt.
 - **Textvorschauen verwenden echte Konturen.** `local_text_body()` wird von
   der Operation und der Platzierung verwendet; lokale Drehung und
   Überlappung entstehen nur einmal. Der Anzeigeaktor verändert keine
-  gespeicherte Geometrie.
+  gespeicherte Geometrie. **Jeder Parameter der Form reist mit** — auch der
+  Schnitt: Er fehlte in `scene/placement.py`, und die Vorschau zeigte den
+  normalen, während die Operation den fetten baute.
 
 - **Millimeter, doppelte Genauigkeit.** Vergleich über `units.is_close()`,
   nie mit `==`.

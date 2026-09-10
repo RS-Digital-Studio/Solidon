@@ -1003,6 +1003,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "exit_code": _("Rückgabewert"),
     "first": _("Erste Bedingung"),
     "first_layer": _("Erste Schicht"),
+    # Der Befund „zu fein für diese Düse" nennt die Schrift, um die es geht —
+    # bei acht zur Wahl ist das die halbe Auskunft.
+    "font": _("Schrift"),
     "grip": _("Verengung"),
     "head_room": _("Kopftiefe"),
     "angle": _("Winkel"),

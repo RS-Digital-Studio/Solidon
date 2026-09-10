@@ -299,7 +299,7 @@ def test_every_bundled_font_carries_its_licence() -> None:
     """Was mitreist, ohne ein Paket zu sein, braucht seine eigene Akte (Regel 22).
 
     Die Prüfungen darüber lesen `pyproject.toml` und die installierten
-    Verteilungen — von zwölf TTF-Dateien in `app/core/geom/data/fonts/` wissen
+    Verteilungen — von vierzehn TTF-Dateien in `app/core/geom/data/fonts/` wissen
     sie nichts. Sie werden trotzdem ausgeliefert, und für den Kunden ist eine
     mitgelieferte Schrift dasselbe wie eine mitgelieferte Bibliothek.
 
@@ -353,3 +353,71 @@ def test_every_bundled_font_carries_its_licence() -> None:
         assert flat in bundled or flat.startswith("dejavu"), (
             f"{family} steht zur Wahl, liegt aber nicht bei — {sorted(bundled)}"
         )
+
+
+def test_the_bundled_fonts_are_listed_here() -> None:
+    """Die Aufzählung in ``licences.toml`` gegen die Zuordnung im Code.
+
+    Der Block dort ist die Aktenlage für alles, was mitreist, ohne ein Paket zu
+    sein — dieselbe Rolle wie die Liste der extern aufgerufenen Slicer darüber.
+    Er nannte am 10.09.2026 eine von drei Sippen und zwölf von vierzehn
+    Dateien, weil zwei Schriften dazukamen und niemand die Prosa nachzog.
+
+    Kein Test las ihn, also war er ein Kommentar über einen Zustand von
+    gestern. Jetzt liest ihn dieser: Eine vierte Sippe muss dort auftauchen,
+    sonst steht sie in der Aktenlage nirgends.
+    """
+    from app.core.geom.label_ops import BUNDLED_FONT_LICENCES, BUNDLED_FONTS
+
+    text = (
+        Path(__file__).parent.parent / "app" / "core" / "knowledge" / "data" / "licences.toml"
+    ).read_text(encoding="utf-8")
+    head = text.split("[known]")[0]
+    for clan, licence in BUNDLED_FONT_LICENCES.items():
+        version = licence.split("-")[1]
+        assert version in head, (
+            f"{clan} {version} liegt bei, steht aber in keiner Zeile von licences.toml"
+        )
+    count = len(sorted(BUNDLED_FONTS.glob("*.ttf")))
+    written = {"12": "zwölf", "13": "dreizehn", "14": "vierzehn", "15": "fünfzehn"}.get(str(count))
+    assert written is not None, f"{count} Schriftdateien — die Zahlwörter hier reichen nicht mehr"
+    assert written in head, (
+        f"es liegen {written} ({count}) Schriftdateien bei; licences.toml nennt eine andere Zahl"
+    )
+
+
+def test_every_licence_text_names_the_version_that_lies_beside_it() -> None:
+    """Die Fassung im Dateinamen ist eine Zusage — und sie stand zweimal daneben.
+
+    ``Comfortaa-3.101-OFL-1.1.txt`` lag neben einer Schrift, die sich selbst
+    als 3.105 ausweist; bei Dancing Script standen 2.104 und 2.001
+    nebeneinander. Beides wäre nie aufgefallen: Den Namen einer Textdatei liest
+    kein Programm, und der Lizenztext selbst ist für jede Fassung derselbe.
+
+    Für den Kunden ist er das nicht. Die OFL verlangt, dass die Lizenz mit der
+    Schrift weitergegeben wird; welche Fassung er in der Hand hält, sagt ihm
+    nur dieser Name. Gefragt wird deshalb die Schrift selbst — Namenseintrag 5
+    des ``name``-Tables, wo jede TTF ihre Version führt.
+    """
+    from fontTools.ttLib import TTFont
+
+    from app.core.geom.label_ops import BUNDLED_FONT_LICENCES, BUNDLED_FONTS
+
+    for clan, text in BUNDLED_FONT_LICENCES.items():
+        parts = text.split("-")
+        assert len(parts) >= 2, f"{text} nennt keine Fassung — erwartet <Sippe>-<Fassung>-…"
+        promised = parts[1]
+        files = sorted(BUNDLED_FONTS.glob(f"{clan}*.ttf"))
+        assert files, f"{clan}: keine Schriftdatei zu dieser Zuordnung"
+        for entry in files:
+            font = TTFont(entry)
+            names = {
+                record.nameID: str(record)
+                for record in font["name"].names
+                if record.platformID == 3
+            }
+            version = names.get(5, "")
+            assert promised in version, (
+                f"{entry.name} führt {version!r}, der Lizenztext heißt aber "
+                f"{text} — eine der beiden Zahlen ist falsch"
+            )

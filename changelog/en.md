@@ -30,7 +30,12 @@ it into `website/version.json`.
 
 - A countersink above a hole is now kept even on a part with round, sweeping surfaces — previously it was dropped there, and the hole and its countersink could no longer be moved together.
 - A cavity entirely inside the material, with no way out, appears in the object tree as an air pocket — with its volume. Previously it appeared as a hole that was not there.
-- Labels now offer six fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.
+
+### Labelling
+
+- A label can now use eight fonts instead of three, plus bold and italic. Bold carries thicker strokes at the same height and stays legible where the regular style smears.
+- Beside the upright faces there is now a round one and a handwritten one — those two come in a single style. All eight travel with the program, so a project looks the same everywhere.
+- If a font is too fine for your nozzle, Solidon says from which height it carries — instead of printing it and letting the letters run together.
 
 ## 0.4.0
 

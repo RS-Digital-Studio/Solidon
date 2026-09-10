@@ -31,7 +31,12 @@ dans `website/version.json`.
 
 - Un fraisage au-dessus d'un perçage est conservé même sur une pièce aux surfaces rondes et galbées. Auparavant il disparaissait, avec lui le déplacement commun des deux.
 - Une cavité entièrement dans la matière, sans issue, figure dans l'arborescence comme poche d'air, avec son volume. Auparavant, elle y figurait comme un perçage qui n'existait pas.
-- Les inscriptions proposent désormais six polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale.
+
+### Inscrire
+
+- Une inscription dispose désormais de huit polices au lieu de trois, plus gras et italique. Le gras porte des traits plus épais à hauteur égale et reste lisible là où le style normal bave.
+- À côté des polices droites, il y a maintenant une ronde et une manuscrite, toutes deux en un seul style. Les huit voyagent avec le programme : un projet a partout la même apparence.
+- Si une police est trop fine pour votre buse, Solidon indique à partir de quelle hauteur elle tient, au lieu de l'imprimer et de laisser les lettres se boucher.
 
 ## 0.4.0
 

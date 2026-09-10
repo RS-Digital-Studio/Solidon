@@ -1293,6 +1293,10 @@ def _creation_tool(
             values.size,
             values.font,
             values.depth,
+            # Der Schnitt gehört zur Form, nicht zur Farbe: Fett ist rund
+            # anderthalbmal so breit wie normal. Ohne ihn zeigte die Vorschau
+            # den normalen und die Operation baute den gewählten.
+            style=values.style,
             mode=values.mode if spec.name == "label_text" else "body",
             angle=getattr(values, "angle", 0.0),
         )
