@@ -15,6 +15,7 @@ from app.core.geom.transform import (
     place_on_bed,
     rotation,
     scaling,
+    snap_to_marks,
     snap_to_step,
     translation,
 )
@@ -158,6 +159,40 @@ def test_snapping_rounds_to_the_step() -> None:
     assert snap_to_step(37.0, 15.0) == pytest.approx(30.0)
     assert snap_to_step(38.0, 15.0) == pytest.approx(45.0)
     assert snap_to_step(10.4, 0.0) == pytest.approx(10.4), "a step of zero means no snapping"
+
+
+def test_snapping_to_marks_holds_only_near_a_named_place() -> None:
+    """Freie Fahrt, kurzes Einrasten — an Stellen, die etwas bedeuten.
+
+    Das Geschwister von ``snap_to_step``: Jenes rastet auf einem gleichmäßigen
+    Raster ein, dieses auf einer Handvoll benannter Stellen — die halbe
+    Wandstärke, die Rückseite, der Grund einer Tasche (Robert, 09.09.2026: „bei
+    mitten und außenkanten immer so leicht einrasten, wenn wir in der nähe
+    sind").
+    """
+    marken = (10.0, 20.0)
+
+    # In der Nähe hält die Marke, außerhalb bleibt der rohe Wert stehen.
+    assert snap_to_marks(10.4, marken, 1.0) == pytest.approx(10.0)
+    assert snap_to_marks(9.6, marken, 1.0) == pytest.approx(10.0)
+    assert snap_to_marks(12.0, marken, 1.0) == pytest.approx(12.0), "wer weiterzieht, kommt heraus"
+    assert snap_to_marks(19.5, marken, 1.0) == pytest.approx(20.0)
+
+    # Ohne Zone und ohne Marken passiert nichts — beides sind die Fälle, in
+    # denen die Ansicht keinen Maßstab kennt.
+    assert snap_to_marks(10.4, marken, 0.0) == pytest.approx(10.4)
+    assert snap_to_marks(10.4, (), 5.0) == pytest.approx(10.4)
+
+    # Zwei Marken in Reichweite: die nähere gewinnt …
+    assert snap_to_marks(10.4, (10.0, 11.0), 2.0) == pytest.approx(10.0)
+    assert snap_to_marks(10.7, (10.0, 11.0), 2.0) == pytest.approx(11.0)
+    # … und bei genau gleichem Abstand die kleinere, damit dieselbe Eingabe
+    # immer dasselbe ergibt (§15.1).
+    assert snap_to_marks(10.5, (10.0, 11.0), 2.0) == pytest.approx(10.0)
+
+    # Die Zone zählt beidseitig und schließt ihren Rand ein.
+    assert snap_to_marks(11.0, (10.0,), 1.0) == pytest.approx(10.0)
+    assert snap_to_marks(11.0, (10.0,), 0.999) == pytest.approx(11.0)
 
 
 # --- as operations --------------------------------------------------------------

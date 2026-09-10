@@ -12,6 +12,7 @@ den Wert, die Operation speichert, was wirklich angewandt wurde.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Literal, cast
 
@@ -203,6 +204,32 @@ def snap_to_step(value: float, step: float) -> float:
     if step <= EPS_GEOM:
         return value
     return round(value / step) * step
+
+
+def snap_to_marks(value: float, marks: Sequence[float], zone: float) -> float:
+    """Rastet in der Nähe **benannter Stellen** ein — Mitte, Kante, Boden.
+
+    Das Geschwister von :func:`snap_near`, und der Unterschied ist der Anlass:
+    Jenes rastet auf einem gleichmäßigen Raster ein (alle 45 Grad), dieses auf
+    einer Handvoll Stellen, die etwas **bedeuten** — die halbe Wandstärke, die
+    Rückseite, der Grund einer Tasche. Robert, 09.09.2026: „schön wäre auch
+    wenn wir auch bei anderen operationen die sowas machen bei mitten und
+    außenkanten immer so leicht einrasten, wenn wir in der nähe sind."
+
+    Dieselbe Zusage wie dort: **freie Fahrt, kurzes Einrasten.** Innerhalb der
+    Zone gilt die Marke, außerhalb der rohe Wert, und wer weiterzieht, kommt
+    heraus. Ohne Marken oder ohne Zone bleibt der Wert, wie er ist.
+
+    Liegen zwei Marken so dicht, dass beide in Reichweite sind, gewinnt die
+    nähere; bei genau gleichem Abstand die kleinere, damit dieselbe Eingabe
+    immer dasselbe ergibt (§15.1).
+    """
+    if zone <= EPS_GEOM:
+        return value
+    reachable = [mark for mark in marks if abs(value - mark) <= zone]
+    if not reachable:
+        return value
+    return min(reachable, key=lambda mark: (abs(value - mark), mark))
 
 
 def snap_near(value: float, step: float, zone: float) -> float:
