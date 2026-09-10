@@ -92,3 +92,4 @@ Verwandte Einträge stehen auf einer Zeile; jede Datei trägt ihre eigene Beschr
 - [Kette mit ; läuft nach dem Kill weiter](kette-mit-semikolon-laeuft-nach-dem-kill-weiter.md) · [Agent-Edits schreiben CRLF](agent-edits-schreiben-crlf.md) — erst den Wrapper beenden, `&&` statt `;`; nach jedem Prosa-Durchgang `git diff --stat` auf CRLF-Warnungen lesen, AST-Vergleich sagt „nur Prosa“.
 - [Git-Identität](git-identitaet-mitgeben.md) · [Erinnerungen im Repository](erinnerungen-liegen-im-repository.md) — Exit 128 ohne Autor; link_memory.py hängt das Gedächtnis ins Repository.
 - [Katalogschreiber überschreibt still](katalogschreiber-ueberschreibt-still.md) — `git diff HEAD --numstat` vor dem Commit; jede Zahl in der zweiten Spalte ist ein überschriebener Eintrag.
+- [Heredoc frisst den Backslash](heredoc-frisst-den-backslash.md) — ein `\n` darin wird zum echten Umbruch; Skript als Datei ablegen.
