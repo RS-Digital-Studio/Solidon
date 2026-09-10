@@ -13,6 +13,7 @@ from __future__ import annotations
 import math
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 from PySide6.QtWidgets import (
@@ -1134,3 +1135,100 @@ def test_a_part_step_keeps_the_values_it_was_not_asked_about(qt_app: QApplicatio
     MainWindow._change_part_step(fenster, 3, {"x": 12.0})
 
     assert geschrieben == [(3, {"size": "M5", "drop": 9.0, "x": 12.0})], geschrieben
+
+
+def test_only_a_part_step_answers_for_the_feature_that_came_from_it() -> None:
+    """Wer den Baustein erkennt, entscheidet, was rechts steht — also wird er geprüft.
+
+    ``part_actions`` hat seinen eigenen Test; hier geht es um die Frage davor:
+    **gehört dieses Merkmal zu einem Baustein?** Sie fällt an zwei Stellen —
+    beim einzeln angeklickten Merkmal (``part_step_of``) und bei der Auswahl
+    im Baum, wo ein Dach seine zwölf Kinder mitwählt (``_common_part_step``).
+
+    Vier Fälle, und die letzten beiden sind die, an denen eine bequemere
+    Fassung fiele:
+
+    * Ein Merkmal aus dem Bausteinschritt → der Schritt.
+    * Ein **erkanntes** Merkmal ohne Provenienz → nichts; zu ihm gibt es
+      keinen Schritt, den man ändern könnte.
+    * Ein Merkmal aus ``drill_hole`` → nichts. Auch das trägt Provenienz und
+      ist kein Baustein; deshalb hängt die Frage an der Kategorie ``parts``
+      und nicht an einem Namen wie ``insert_*``.
+    * Eine Auswahl aus **zwei** Schritten → nichts. Wer eine Bohrung des
+      Schlüssellochs und eine fremde daneben markiert, meint zwei Dinge.
+    """
+    from types import SimpleNamespace
+
+    from app.core.bootstrap import load_operations
+    from app.ui.main_window import MainWindow
+
+    load_operations()
+
+    def fenster(*schritte: object) -> Any:
+        objekt = SimpleNamespace(
+            features={
+                "keyhole_bore_1": Feature(
+                    id="keyhole_bore_1",
+                    kind="hole",
+                    provenance="generated",
+                    params={},
+                    created_by=2,
+                ),
+                "hole_1": Feature(
+                    id="hole_1",
+                    kind="hole",
+                    provenance="generated",
+                    params={},
+                    created_by=3,
+                ),
+                "face_1": Feature(
+                    id="face_1",
+                    kind="face",
+                    provenance="detected",
+                    params={},
+                    created_by=None,
+                ),
+            }
+        )
+        window = SimpleNamespace(
+            session=SimpleNamespace(
+                project=SimpleNamespace(document=SimpleNamespace(ops=list(schritte))),
+                last_result=SimpleNamespace(scene=SimpleNamespace(objects={"obj_1": objekt})),
+            )
+        )
+        # ``_common_part_step`` fragt über ``self`` weiter — das Doppel muss
+        # denselben Weg anbieten, sonst prüft der Test nur die halbe Kette.
+        window.part_step_of = lambda feature: MainWindow.part_step_of(window, feature)
+        return window
+
+    baustein = SimpleNamespace(id=2, op="insert_keyhole", params={"size": "M4"})
+    bohrung = SimpleNamespace(id=3, op="drill_hole", params={"diameter": 5.0})
+    window = fenster(baustein, bohrung)
+    features = window.session.last_result.scene.objects["obj_1"].features
+
+    step = MainWindow.part_step_of(window, features["keyhole_bore_1"])
+    assert step is not None and step[0] is baustein, (
+        "das Merkmal des Bausteins nennt seinen Schritt"
+    )
+    assert step[1].name == "insert_keyhole"
+
+    assert MainWindow.part_step_of(window, features["face_1"]) is None, (
+        "ein erkanntes Merkmal trägt keine Provenienz und keinen änderbaren Schritt"
+    )
+    assert MainWindow.part_step_of(window, features["hole_1"]) is None, (
+        "drill_hole trägt Provenienz und ist trotzdem kein Baustein — die Kategorie "
+        "entscheidet, nicht der Name"
+    )
+
+    # Und ein Schritt, den es im Dokument nicht mehr gibt, ist keiner.
+    assert MainWindow.part_step_of(fenster(bohrung), features["keyhole_bore_1"]) is None
+
+    # Der Baum: Ein Dach wählt seine Kinder mit, eine gemischte Auswahl nicht.
+    zusammen = [("obj_1", "keyhole_bore_1"), ("obj_1", "keyhole_bore_1")]
+    gemischt = [("obj_1", "keyhole_bore_1"), ("obj_1", "hole_1")]
+    gemeinsam = MainWindow._common_part_step(window, zusammen)
+    assert gemeinsam is not None and gemeinsam[0] is baustein
+    assert MainWindow._common_part_step(window, gemischt) is None, (
+        "zwei Schritte sind zwei Dinge und kein Baustein"
+    )
+    assert MainWindow._common_part_step(window, []) is None
