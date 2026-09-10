@@ -3709,14 +3709,35 @@ def test_the_material_tolerance_widens_a_slot_and_keeps_its_travel(profile: Prof
 
     zugabe = bore_diameter(5.0, profile, True) - 5.0
     assert zugabe > EPS_GEOM, "das Materialprofil gibt überhaupt eine Toleranz her"
-    schmal_lang = float(np.ptp(schmal.mesh.raw.vertices[:, 0]))
-    weit_lang = float(np.ptp(weit.mesh.raw.vertices[:, 0]))
-    assert weit_lang == pytest.approx(schmal_lang, abs=EPS_GEOM), (
-        "der Würfel ist derselbe — gemessen wird am Loch, nicht an ihm"
-    )
     assert weit.mesh.volume < schmal.mesh.volume, "das weitere Loch nimmt mehr weg"
+
+    # **Der Weg wird am Loch gemessen und nicht am Volumen.** Hier standen zwei
+    # `np.ptp` über *alle* x-Koordinaten — also zweimal die Würfelkante, beide
+    # 20,0, verglichen mit `abs=EPS_GEOM`. Die Zeile konnte nicht rot werden,
+    # und ihr eigener Assert-Text sagte es: „gemessen wird am Loch, nicht an
+    # ihm". Gemessen wurde trotzdem der Würfel.
+    #
+    # Was der Testname zusagt, ist der **Verschiebeweg**, und der steht im
+    # erkannten Merkmal. Die Toleranz weitet das Loch überall, auch an den
+    # Enden; der Weg zwischen den Bogenmittelpunkten bleibt deshalb der
+    # eingegebene, während die Gesamtlänge um die Zugabe wächst.
+    gemessen = next(
+        entry for entry in detect(as_mesh_data(weit.mesh)).values() if entry.kind == "slot"
+    )
+    assert float(gemessen.params["travel"]) == pytest.approx(15.0 - 5.0, abs=0.05), (
+        "der Verschiebeweg ist der eingegebene, nicht der um die Toleranz gekürzte"
+    )
+    assert float(gemessen.params["length"]) == pytest.approx(15.0 + zugabe, abs=0.05), (
+        "und die Gesamtlänge wächst genau um die Zugabe"
+    )
+
+    # `rel=0.02` stand hier und war zu weit: Die falsche These „die Gesamtlänge
+    # bleibt" liefert 1443,94 mm³ gegen die richtigen 1464,74 — 1,42 Prozent
+    # Abstand, also innerhalb der Schranke. Der tatsächliche Netzfehler liegt
+    # bei 0,037 Prozent; ein Fünftel Prozent lässt ihm das Fünffache und
+    # schließt die falsche These aus.
     assert body.volume - weit.mesh.volume == pytest.approx(
-        _slot_volume(5.0 + zugabe, 15.0 + zugabe, 20.0), rel=0.02
+        _slot_volume(5.0 + zugabe, 15.0 + zugabe, 20.0), rel=0.002
     )
 
 
@@ -3899,12 +3920,22 @@ def test_a_detected_bore_becomes_a_slot(document: Document, profile: Profile) ->
     assert danach.complete
     nachher = danach.scene.objects["obj_1"]
     assert nachher.mesh.is_watertight
-    assert nachher.mesh.volume == pytest.approx(
-        davor.mesh.volume
-        - _slot_volume(mass, 3.0 * mass, float(loch.params["depth"]))
-        + math.pi * (mass / 2.0) ** 2 * float(loch.params["depth"]),
-        rel=0.05,
+    # **Gemessen wird der Abtrag und nicht der ganze Körper.** Hier stand
+    # `nachher.mesh.volume == approx(davor minus Abtrag, rel=0.05)`, und die
+    # Schranke lag damit auf dem **Gesamtvolumen**: 31 322 mm³ mal fünf Prozent
+    # sind ±1566 mm³, während die Operation 431 mm³ abträgt. Ein Körper, an dem
+    # gar nichts geschehen wäre, hätte in diesem Band gelegen — die Geometrie
+    # war ungeprüft, getragen hat nur die Nebenmenge daneben (Befundcode,
+    # `hole_1` weg, ein `slot` da).
+    tiefe = float(loch.params["depth"])
+    abtrag = _slot_volume(mass, 3.0 * mass, tiefe) - math.pi * (mass / 2.0) ** 2 * tiefe
+    assert davor.mesh.volume - nachher.mesh.volume == pytest.approx(abtrag, rel=0.02), (
+        "das Langloch nimmt genau den Kanal neben der vorhandenen Bohrung weg"
     )
+    # Und die Länge steht am Merkmal, nicht nur im Volumen: Ein zu kurzes Loch
+    # mit zu großer Breite käme auf dieselbe Zahl.
+    entstanden = next(entry for entry in nachher.features.values() if entry.kind == "slot")
+    assert float(entstanden.params["length"]) == pytest.approx(3.0 * mass, abs=0.1)
     assert not [entry for entry in danach.scene.report.findings if entry.severity == "error"]
     # **Und es steht dabei, was aus der Bohrung geworden ist.** Sie heißt nicht
     # mehr ``hole_1``, sondern trägt eine eigene Art — wer auf sie verwiesen
