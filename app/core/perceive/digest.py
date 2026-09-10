@@ -12,12 +12,14 @@ nachsieht, was dem Modell gesagt wurde.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Collection, Mapping
 from pathlib import PurePosixPath
+from typing import Final
 
 from app.core.perceive.relations import sleeve_at
 from app.core.types import Document, Feature, FeatureId, ObjectId, Operation, Scene, SceneObject
-from app.core.units import format_length, round_display
+from app.core.units import EPS_GEOM, format_length, format_volume, round_display
 from app.i18n import TranslatableText, tr
 
 #: Wie viele Zeichen ein Name aus einer fremden Datei im Steckbrief belegen
@@ -338,6 +340,20 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
             f"{feature_id}  Ø {format_length(float(params.get('diameter', 0.0)))}, "
             f"{tr('Achse')} {axis}, {through}{at}"
         )
+    if feature.kind == "slot":
+        # **Breite mal Länge, und die Richtung dazu.** Die Breite ist das Maß,
+        # das über die Schraube entscheidet; die Länge sagt, wieviel Spiel sie
+        # hat. Ohne die Richtung wüsste der Agent nicht, wohin sich das Teil
+        # verschieben lässt — und genau dafür gibt es Langlöcher.
+        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        along = _direction_name(params.get("direction", (1.0, 0.0, 0.0)))
+        through = tr("Durchgang") if params.get("through") else tr("Sackloch")
+        return (
+            f"{feature_id}  {tr('Langloch')} "
+            f"{format_length(float(params.get('diameter', 0.0)))} × "
+            f"{format_length(float(params.get('length', 0.0)))}, "
+            f"{tr('Achse')} {axis}, {tr('Länge entlang')} {along}, {through}{at}"
+        )
     if feature.kind == "face":
         normal = _axis_name(params.get("normal", (0.0, 0.0, 1.0)))
         return (
@@ -414,6 +430,13 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         if more:
             return f"{feature_id}  {more} {tr('weitere offene Stellen')}"
         return f"{feature_id}  {params.get('open_edges', 0)} {tr('offene Kanten')}"
+    # **Der Satz sagt dem Agenten gleich, dass hier nichts zu holen ist.** Ein
+    # „Lufteinschluss Ø 2" läse sich wie eine Bohrung, und der Agent schlüge
+    # vor, sie zu ändern — an einer Fläche, die kein Werkzeug erreicht. Das
+    # Volumen ist die einzige Zahl, die den Hohlraum wirklich beschreibt.
+    if feature.kind == "void":
+        size = format_volume(float(params.get("volume", 0.0)))
+        return f"{feature_id}  {tr('Lufteinschluss im Material')} {size}{at}"
     # **Der Fallback nennt den englischen Schlüssel.** Er sieht aus wie ein Name
     # — genau daran sind pin, thread, sphere, torus und fillet vorbeigelaufen,
     # ohne dass ein Test etwas sagte.
@@ -460,6 +483,45 @@ def _axis_name(vector: tuple[float, float, float]) -> str:
     largest = max(range(3), key=lambda index: abs(vector[index]))
     sign = "+" if vector[largest] >= 0 else "-"
     return f"{sign}{names[largest]}"
+
+
+#: Wie nah an einer Achse eine Richtung liegen muss, um ihren Namen zu tragen.
+#:
+#: Ein halbes Grad. Die Zahl deckt die Rundung, mit der eine gemessene Richtung
+#: aus dem Netz kommt, und sonst nichts — sie ist keine Aussage darüber, wann
+#: zwei Richtungen „ungefähr gleich" sind.
+_ALONG_AN_AXIS: Final = math.cos(math.radians(0.5))
+
+
+def _direction_name(vector: object) -> str:
+    """Eine Richtung, die keine Achse sein muss — als Name oder als Zahlen.
+
+    **``_axis_name`` rastet, und für eine Achse ist das richtig.** Sie nimmt
+    die größte Komponente; eine gemessene Bohrachse liegt entweder auf einer
+    Hauptrichtung oder ist schräg, und dann steht die Zahl daneben im Ort.
+
+    Die Richtung eines Langlochs ist dagegen ein **stetiger** Wert: ``slot_angle``
+    ist ein Parameter, und wer 30 Grad einstellt, bekam hier „+X" zu lesen —
+    gemessen sagten 0, 15, 30, 44, 45 und minus 45 Grad alle sechs denselben Satz.
+    Das ist eine stille Rundung, die als Tatsache dasteht (Regel 21).
+
+    Also: der Achsenname, wo die Richtung wirklich auf einer Achse liegt, und
+    sonst die drei Zahlen. Der Agent kann mit beidem rechnen.
+    """
+    if not isinstance(vector, list | tuple) or len(vector) != 3:
+        return ""
+    try:
+        values = tuple(float(value) for value in vector)
+    except TypeError, ValueError:
+        return ""
+    length = math.sqrt(sum(value * value for value in values))
+    if length <= EPS_GEOM:
+        return ""
+    unit = tuple(value / length for value in values)
+    largest = max(range(3), key=lambda index: abs(unit[index]))
+    if abs(unit[largest]) >= _ALONG_AN_AXIS:
+        return _axis_name((unit[0], unit[1], unit[2]))
+    return "(" + ", ".join(_rounded(value) for value in unit) + ")"
 
 
 def _finding_lines(scene: Scene) -> list[str]:

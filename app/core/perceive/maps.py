@@ -672,6 +672,11 @@ def curvature_map(mesh: MeshData, features: dict[FeatureId, Feature] | None = No
 #: Woraus sich der Krümmungsradius eines Merkmals ablesen lässt, und mit
 #: welchem Faktor. **Kein Kegel:** Sein Radius ändert sich über die Höhe, ein
 #: einzelner Wert wäre dort für fast jedes Dreieck der falsche.
+#:
+#: **Und kein Langloch**, aus genau demselben Grund: Gekrümmt ist es nur an
+#: seinen beiden Enden. Die Flanken dazwischen sind eben, und die machen bei
+#: einem langen Loch die Mehrzahl der Dreiecke aus — ein eingesetzter Radius
+#: färbte dort eine Rundung, wo eine gerade Wand steht.
 _FEATURE_RADIUS: Final[dict[str, tuple[str, float]]] = {
     "sphere": ("diameter", 0.5),
     "hole": ("diameter", 0.5),

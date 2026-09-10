@@ -22,16 +22,17 @@ import math
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, NamedTuple
+from typing import Any, Final, NamedTuple
 
 import numpy as np
 
 from app.core.deferred import trimesh
-from app.core.geom.mesh import MeshData, face_components, fully_stitched
+from app.core.geom.mesh import MeshData, face_components, fully_stitched, on_surface
 from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.perceive.helix import Helix, find_helices
-from app.core.types import Feature, FeatureId, Vec3
+from app.core.perceive.slots import slots_instead_of_half_bores
+from app.core.types import Feature, FeatureId, Vec3, is_a_cavity
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 
 _log = get_logger(__name__)
@@ -582,7 +583,7 @@ _SHAPES_ON_A_FREEFORM: Final[frozenset[str]] = frozenset({"sphere", "torus", "co
 #: trägt seinen Namen von dort. Wer es wie eine Bohrung prüfte, verlöre es bei
 #: jeder Operation, weil kein Partner zu finden ist.
 DETECTABLE_KINDS: frozenset[str] = frozenset(
-    {"hole", "pin", "face", "edge_loop", "cone", "sphere", "torus", "fillet"}
+    {"hole", "pin", "face", "edge_loop", "cone", "sphere", "torus", "fillet", "void", "slot"}
 )
 
 
@@ -814,6 +815,28 @@ def detect(
         found = _threads_instead_of_phantoms(mesh, found, helices=fitted.helices)
         if check_cancelled is not None:
             check_cancelled()
+        # **Nach dem Gewinde und vor dem Freiformfilter.** Nach dem Gewinde,
+        # weil eine Wendel dieselben Zylinderausschnitte verschluckt und die
+        # engere Aussage ist: Was ein Gewindegang ist, ist kein Langloch. Vor
+        # dem Freiformfilter aus demselben Grund wie beim Einschluss darunter —
+        # die zwei Bögen zählten sonst beim Urteil über das ganze Modell mit
+        # und schöben es Richtung Figur, obwohl sie zu einer Öffnung gehören.
+        found = slots_instead_of_half_bores(
+            mesh,
+            found,
+            _fillets_worth_naming(mesh, fitted.fillets),
+            check_cancelled=check_cancelled,
+        )
+        if check_cancelled is not None:
+            check_cancelled()
+        # **Vor dem Freiformfilter, und das ist keine Reihenfolge nach Gefühl.**
+        # Die Schale eines Einschlusses trägt echte Rundformen; blieben sie in
+        # der Liste, zählten sie beim Urteil über das ganze Modell mit und
+        # schöben es Richtung Freiform. Hier gehen sie weg, weil sie zu einem
+        # Einschluss gehören — nicht, weil das Modell eine Figur wäre.
+        found = _voids_instead_of_phantom_bores(found, detect_voids(mesh))
+        if check_cancelled is not None:
+            check_cancelled()
         found, left_out = _shapes_on_a_freeform(
             found, unpublished_round_shapes=unpublished_round_shapes
         )
@@ -901,6 +924,90 @@ def _threads_instead_of_phantoms(
     return kept
 
 
+# --- Lage zweier Merkmale zueinander ---------------------------------------------
+
+
+def axis_of(feature: Feature) -> Any | None:
+    """Die Achse eines Merkmals als Einheitsvektor, oder nichts."""
+    raw = feature.params.get("axis")
+    if raw is None:
+        return None
+    axis = np.asarray(raw, dtype=float)
+    length = float(np.linalg.norm(axis))
+    if axis.shape != (3,) or length <= EPS_GEOM:
+        return None
+    return axis / length
+
+
+def centre_of(feature: Feature) -> Any | None:
+    """Die Mitte eines Merkmals, oder nichts."""
+    raw = feature.params.get("centre")
+    if raw is None:
+        return None
+    centre = np.asarray(raw, dtype=float)
+    return centre if centre.shape == (3,) else None
+
+
+def sits_at_the_mouth_of(bore: Feature, wider: Feature) -> bool:
+    """Ob ``wider`` sich über einer Mündung von ``bore`` aufweitet — die
+    Senkung über einer Bohrung.
+
+    **Die eine Antwort auf diese Frage, und sie wohnt hier**, weil hier die
+    Schwellen wohnen (:data:`SINK_AXIS_LIMIT`, :data:`SINK_FIT_LIMIT`). Zwei
+    Aufrufer stellen sie aus entgegengesetzten Richtungen:
+    :func:`app.core.perceive.relations.widening_at_the_mouth` sucht von der
+    Bohrung aus die Senkung, :func:`_shapes_on_a_freeform` fragt umgekehrt, ob
+    eine Rundform an einer Bohrung hängt und damit keine Erfindung ist. Zwei
+    Fassungen derselben fünf Bedingungen wären zwei Antworten auf dieselbe
+    Frage — und die eine würde beim nächsten Messwert nachgezogen, die andere
+    nicht.
+
+    Fünf Bedingungen, alle an den Merkmalen und keine an der Geometrie:
+
+    * beide sind **Hohlräume** — ein Zapfen um eine Bohrung ist ein Rohr und
+      keine Aufweitung ihrer Öffnung (:func:`app.core.types.is_a_cavity`).
+      Das war der eine Fehlgriff der ersten Fassung, und zwar an Roberts
+      eigenem Halter: Die Bohrung Ø 34 steckt im Zapfen Ø 40,80, beide auf
+      derselben Achse, und die Mitte des Zapfens liegt in ihrer Strecke. Er
+      umgibt die Bohrung, er mündet nicht in sie,
+    * dieselbe Achsrichtung (:data:`SINK_AXIS_LIMIT`),
+    * die Mitten auf **einer** Linie und nicht bloß parallel
+      (:data:`SINK_FIT_LIMIT`) — zwei Bohrungen nebeneinander haben dieselbe
+      Richtung und sind trotzdem zwei,
+    * die Mitte der Aufweitung liegt auf der Strecke der Bohrung, denn eine
+      Senkung sitzt an einer ihrer Mündungen und nicht drei Zentimeter daneben,
+    * und sie ist **weiter** — eine Senkung, die enger wäre als ihre Bohrung,
+      gibt es nicht.
+
+    ``False``, wo die Zahlen für die Frage nicht reichen: ein Merkmal ohne
+    Achse, ohne Mitte oder ohne Durchmesser.
+    """
+    if not is_a_cavity(bore) or not is_a_cavity(wider):
+        return False
+    axis, centre = axis_of(bore), centre_of(bore)
+    other_axis, other_centre = axis_of(wider), centre_of(wider)
+    if axis is None or centre is None or other_axis is None or other_centre is None:
+        return False
+    diameter = float(bore.params.get("diameter") or 0.0)
+    other_diameter = float(wider.params.get("diameter") or 0.0)
+    if diameter <= EPS_GEOM or other_diameter <= diameter:
+        return False
+    if abs(float(axis @ other_axis)) < math.cos(math.radians(SINK_AXIS_LIMIT)):
+        return False
+    across_limit = (diameter / 2.0) * SINK_FIT_LIMIT
+    offset = other_centre - centre
+    along = float(offset @ axis)
+    across = offset - along * axis
+    if float(np.linalg.norm(across)) > across_limit:
+        return False
+    depth = float(bore.params.get("depth") or 0.0)
+    # Nur die obere Hälfte: ``abs(along)`` ist nie negativ und ``across_limit``
+    # nie kleiner als null, die untere Schranke konnte also nie greifen. Sie
+    # stand hier als ``-across_limit <= abs(along) <= …`` und las sich wie eine
+    # Bedingung, die etwas prüft.
+    return abs(along) <= depth + across_limit
+
+
 # --- Freiformen ------------------------------------------------------------------
 
 
@@ -944,17 +1051,53 @@ def _shapes_on_a_freeform(
     Befund daraus — ein Merkmal, das verschwindet, ohne dass ein Satz sagt
     warum, ist schlimmer als eines, das dasteht (Regel 17).
 
-    **Was es kostet, steht dazu:** Auf einer Figur mit einer echten Senkung
-    geht die Senkung mit. Bohrung und Zapfen bleiben, also bleibt der Weg zum
-    Loch; die Senkung darüber ist auf einer Freiform der seltenere Fall als
-    die hundert erfundenen, und gemessen ist er noch an keinem Modell.
+    **Was es kostete, stand hier als offener Preis** — „auf einer Figur mit
+    einer echten Senkung geht die Senkung mit […] gemessen ist er noch an
+    keinem Modell". Am 10.09.2026 war er gemessen: Roberts
+    ``garden-hose-holder.3mf`` ist ein konstruierter Halter mit einem
+    organisch geschwungenen Bogen, und der Bogen allein trägt 194 nicht
+    veröffentlichte Kugel- und Ringkandidaten. Damit liegt das Teil bei einem
+    Rundformanteil von **0,701 gegen die Schwelle 0,700** — ein Tausendstel —,
+    und mit den 51 erfundenen Kegeln fielen auch seine vier echten
+    90-Grad-Senkungen (Ø 11, halber Winkel 44,998°, Rückstand 7·10⁻⁵). Ohne
+    sie fand ``relations.cavity_chain_at`` die Kette Bohrung-Senkung-Bohrung
+    an keiner der vier Schraubstellen mehr.
+
+    **Nicht die Schwelle wurde nachgezogen, sondern die Frage geschärft.** Ein
+    Zehntel Prozent an einer Zahl zu drehen, die siebzehn Modelle trennt,
+    hieße den nächsten Grenzfall mit demselben Fehler zu treffen. Stattdessen
+    bleibt, was sich **belegen** lässt: eine Rundform, die an der Mündung
+    einer Bohrung sitzt, die selbst bleibt (:func:`sits_at_the_mouth_of`).
+    Eine Freiform hat dort keine Bohrung, an der eine Erfindung hängen könnte.
+
+    **Zwei Messungen, und sie sagen Verschiedenes** — die zweite stand hier
+    zuerst als Beleg für die erste, und das war sie nicht:
+
+    * *Diese Funktion* rettet am Halter genau **4 von 55** Kegeln; an jeder
+      Figur des Korpus null, weil dort keine Bohrung steht, an der etwas
+      hängen könnte.
+    * *Die Bedingung* :func:`sits_at_the_mouth_of` trifft daneben an
+      ``plate_countersunk.stl``, ``plate_countersunk_blind.stl`` und
+      ``plate_chamfer_and_taper.stl`` je die echte Senkung und nicht die
+      Verjüngung. Diese drei sind **keine Freiformen** (``freeform_dropped``
+      ist dort null) und kommen an dieser Zeile nie an; sie belegen die
+      Bedingung, nicht den Filter.
+
+    Was ohne diesen Beleg bleibt, geht weiter: die 51 Kegel des Bogens, sechs
+    Verrundungen und ein Ring.
     """
     if not is_a_freeform(found, unpublished_round_shapes=unpublished_round_shapes):
         return found, 0
+    bores = [
+        feature
+        for feature in found.values()
+        if feature.kind not in _SHAPES_ON_A_FREEFORM and is_a_cavity(feature)
+    ]
     kept = {
         name: feature
         for name, feature in found.items()
         if feature.kind not in _SHAPES_ON_A_FREEFORM
+        or any(sits_at_the_mouth_of(bore, feature) for bore in bores)
     }
     return kept, len(found) - len(kept) + unpublished_round_shapes
 
@@ -1829,6 +1972,30 @@ def _torus_candidates(mesh: MeshData, tori: Tori) -> Tori:
     ]
 
 
+def _fillets_worth_naming(mesh: MeshData, found: Fillets) -> Fillets:
+    """Die Zylinderausschnitte, die groß genug sind, um etwas zu bezeichnen.
+
+    **Die Frage steht hier und nicht in zwei Aufrufern**, denn genau darum
+    gibt es :func:`_too_small_to_make`. Zwei lesen sie: :func:`detect_fillets`,
+    das daraus ``fillet_N`` macht, und :func:`detect` für
+    :mod:`app.core.perceive.slots` — ein Langloch besteht aus zwei solchen
+    Ausschnitten, und was für keine Verrundung groß genug ist, ist auch kein
+    Loch.
+
+    Der Anlass ist gemessen (10.09.2026): ``find_slots`` bekam die
+    **ungefilterte** Liste und veröffentlichte ein Langloch Ø 0,1 auf 0,4 mm,
+    während die gleich große runde Bohrung daneben zu Recht keine war. Der
+    Wächter ``test_every_fitted_kind_asks_the_same_question`` sieht das nicht:
+    Er liest den Quelltext **dieses** Moduls, und die neue Art wohnt in einem
+    anderen.
+    """
+    return [
+        entry
+        for entry in found
+        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
+    ]
+
+
 def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Feature]:
     """Verrundete Kanten (§21.1) — Zylinder**ausschnitte**, keine Zapfen.
 
@@ -1859,11 +2026,7 @@ def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Featu
     # zufällig um eine Achse stehen, findet der Fit einen Zylinderausschnitt.
     # Die Begründung ist wörtlich die von :data:`MIN_CYLINDER_DIAMETER` — was
     # für kein Werkzeug groß genug ist, ist auch keine Verrundung.
-    big = [
-        entry
-        for entry in found
-        if not _too_small_to_make(entry[0].radius * 2.0) and not _a_sliver(mesh.raw, entry[1])
-    ]
+    big = _fillets_worth_naming(mesh, found)
     return [
         Feature(
             id=f"fillet_{number}",
@@ -3257,6 +3420,251 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
 def component_count(mesh: MeshData) -> int:
     """Wie viele getrennte Körper das Netz enthält (§21.1)."""
     return len(face_components(mesh.raw))
+
+
+def _enclosed_volume(body: trimesh.Trimesh, faces: Any) -> float:
+    """Das Volumen, das diese Dreiecke einschließen — mit Vorzeichen.
+
+    Über das Divergenztheorem an den Dreiecken selbst, ohne ein Teilnetz zu
+    bauen: ``Trimesh.split`` kostet an einem Modell mit 390 000 Dreiecken das
+    Vielfache und repariert dabei, was die Eingangsstufe noch gar nicht
+    entschieden hat (derselbe Grund, aus dem :func:`face_components` die
+    Nachbarschaft liest).
+
+    **Das Vorzeichen ist die ganze Auskunft.** Eine geschlossene Schale, deren
+    Normalen nach außen zeigen, schließt positives Volumen ein; zeigen sie
+    nach innen, ist es negativ — und dann ist die Schale kein Körper, sondern
+    ein Loch in einem.
+    """
+    triangles = body.vertices[body.faces[faces]]
+    first, second, third = triangles[:, 0], triangles[:, 1], triangles[:, 2]
+    return float(np.einsum("ij,ij->i", first, np.cross(second, third)).sum() / 6.0)
+
+
+#: Wie viele Dreiecksschwerpunkte einer Schale gefragt werden.
+#:
+#: Alle zu fragen ist genau, aber teuer: An Roberts ``garden-hose-holder.3mf``
+#: sind es 11 488 Proben gegen ein Material aus 381 044 Dreiecken, und die
+#: Abfrage kostete **2 915 ms** — mehr als die halbe Erkennung, für eine Frage
+#: mit acht Antworten. Der Baum darunter kostet einmalig rund 190 ms, jede
+#: weitere Probe rund 0,24 ms; die Zahl ist also fast vollständig die Zahl der
+#: Proben.
+#:
+#: Zweiunddreißig gleichmäßig über die Flächenliste verteilte reichen, weil die
+#: Frage nicht lautet „liegt jedes Dreieck innen", sondern „liegt diese Schale
+#: innen" — und eine Schale, die zur Hälfte draußen läge, wäre kein Hohlraum,
+#: sondern ein Netzfehler.
+INSIDE_PROBES: Final = 32
+
+#: Und welcher Anteil davon innen liegen muss.
+#:
+#: **Nicht alle**, und das ist gemessen: Ein Schwerpunkt kann auf der Höhe
+#: einer Materialkante liegen, und dort steht die Normale des nächsten
+#: Dreiecks quer zum Versatz — ``signed`` wird null und die ganze Schale fiele
+#: durch. Vier Fünftel trennen die echten Einschlüsse (dort liegen alle Proben
+#: innen) sicher von einem Nachbarkörper (dort liegt keine innen).
+INSIDE_SHARE: Final = 0.8
+
+
+def _spread_over(faces: Any) -> Any:
+    """Höchstens :data:`INSIDE_PROBES` Flächen, gleichmäßig über die Liste.
+
+    Gleichmäßig und nicht die ersten: Die Flächen einer Schale stehen in der
+    Reihenfolge, in der sie im Netz liegen, und die ersten zweiunddreißig eines
+    Zylindermantels sind ein einziger Streifen.
+    """
+    if len(faces) <= INSIDE_PROBES:
+        return faces
+    return np.asarray(faces)[np.linspace(0, len(faces) - 1, INSIDE_PROBES).astype(np.int64)]
+
+
+def _shells_inside_the_material(
+    body: trimesh.Trimesh, components: Sequence[Any], hollow: Sequence[int]
+) -> list[bool]:
+    """Welche dieser Schalen im Material der **festen** Komponenten liegen.
+
+    **Die Frage, die der Docstring von :func:`detect_voids` schon stellte und
+    der Code nicht.** „Zu 100 Prozent innerhalb des Hauptkörpers" stand dort
+    als Messung am Kundenmodell; geprüft wurde nur das Vorzeichen. Damit wurde
+    ein **getrennter** umgestülpter Nachbarkörper, sechzig Millimeter neben dem
+    Teil, zum eingeschlossenen Hohlraum — und
+    :func:`_voids_instead_of_phantom_bores` löschte vorher seine sechs Flächen
+    aus dem Objektbaum.
+
+    **Gefragt wird gegen das Material, nicht gegen „alles andere".** Der erste
+    Anlauf baute die Umgebung je Kandidat aus allen übrigen Komponenten,
+    Hohlraumschalen eingeschlossen — und damit fiel jeder Einschluss durch, der
+    einen Nachbarn hatte: Der nächste Ort lag dann auf **dessen** Mantel, und
+    dort steht die Normale quer zum Versatz. Gemessen an zwei Taschen Ø 2 in
+    einem Quader: bei 2,5 und 5,0 mm Achsabstand null von zwei gefunden, bei
+    8,0 mm beide. Zurück blieben genau die Phantombohrungen, wegen derer diese
+    Funktion entstanden ist.
+
+    Zugleich ist es die billige Fassung: Umgebung, Baum und Abfrage entstehen
+    **einmal** für alle Kandidaten statt je Kandidat. An 83 456 Dreiecken mit
+    acht Schalen waren die acht Umgebungen achtzig Prozent der Laufzeit.
+
+    Gefragt wird über :func:`app.core.geom.mesh.on_surface` und nicht über
+    ``trimesh.contains``: Jenes führt durch ``rtree``, und das greift auf
+    dieser Maschine in fremde Seiten (der ganze Grund, aus dem es
+    ``on_surface`` gibt). Der nächste Ort auf dem Material und die Normale
+    seines Dreiecks sagen dasselbe in einer Abfrage — dieselbe Bauart, mit der
+    ``geom.prepare_ops`` eine offene Flanke prüft.
+
+    Geprüft werden **Dreiecksschwerpunkte** und nicht Eckpunkte: Eine Ecke
+    liegt auf einer Kante, und dort entscheidet bei Gleichstand die
+    Reihenfolge, welches der angrenzenden Dreiecke antwortet. Bei einem
+    Zylinder liegen fünf der sechs Extremecken auf demselben Ring.
+    """
+    solid = [faces for number, faces in enumerate(components) if number not in set(hollow)]
+    if not solid:
+        return [False] * len(hollow)
+    material = trimesh.Trimesh(
+        vertices=body.vertices, faces=body.faces[np.concatenate(solid)], process=False
+    )
+    centres = np.asarray(body.triangles_center)
+    probes = [centres[_spread_over(components[index])] for index in hollow]
+    counts = [len(entry) for entry in probes]
+    points = np.concatenate(probes)
+    closest, _distance, faces_hit = on_surface(material, points)
+    normals = np.asarray(material.face_normals)[faces_hit]
+    # Negativ heißt: der Punkt liegt auf der Materialseite des nächsten
+    # Dreiecks — also im Körper.
+    signed = np.einsum("ij,ij->i", points - closest, normals)
+    inside = signed < -EPS_GEOM
+    at = 0
+    verdicts: list[bool] = []
+    for count in counts:
+        share = float(inside[at : at + count].mean())
+        verdicts.append(share >= INSIDE_SHARE)
+        at += count
+    return verdicts
+
+
+def detect_voids(mesh: MeshData) -> list[Feature]:
+    """Hohlräume, die vollständig im Material stecken (§21.1).
+
+    **Der Anlass, und er ist kein gedachter.** Robert lud am 10.09.2026
+    ``garden-hose-holder.3mf``, und der Objektbaum zeigte acht Bohrungen Ø 2,
+    9 mm tief, die es nicht gab: Es sind acht eigene geschlossene Schalen mit
+    **negativem** Volumen (je -28,27 mm³, gemessen zu 100 Prozent innerhalb
+    des Hauptkörpers), wie sie entstehen, wenn ein CAD oder ein Slicer
+    Negativkörper mitschreibt, die nie boolesch abgezogen wurden. Nach
+    :func:`_one_body` liegen ihre nach innen zeigenden Mäntel im selben Netz,
+    und für :func:`detect_holes` sieht das aus wie eine Bohrung — dieselben
+    Normalen, derselbe Kreis, nur ohne Öffnung.
+
+    **Vier Tore, drei topologische und eine geometrische Probe** — und keines
+    davon geraten:
+
+    * Das Netz ist **dicht**. An einem offenen Netz sagt ein Vorzeichen
+      nichts, und wer dort riete, machte aus einer Lücke einen Einschluss
+      (Regel 21). Solche Modelle behalten ihre Bohrungen, wie sie sie hatten.
+    * Sein **Umlaufsinn ist einheitlich**. Ein Vorzeichen trägt nur dort, wo
+      die Normalen verlässlich zeigen; ein Quader mit zehn verkehrt herum
+      stehenden Dreiecken war sonst ein „Lufteinschluss", und seine sechs
+      Flächen verschwanden dabei.
+    * Es hat **mehr als eine Komponente**. Eine einzelne Schale mit negativem
+      Volumen ist ein umgestülptes Teil und kein Loch.
+    * Die Komponente schließt **negatives** Volumen ein und liegt **im
+      Material** der festen Komponenten (:func:`_shells_inside_the_material`).
+      Negativ heißt: Ihre Normalen zeigen in den Hohlraum und nicht ins
+      Material — deshalb ist ihr eingeschlossenes Volumen negativ, und deshalb
+      ist die Materialseite des nächsten Dreiecks die richtige Frage.
+
+    Gemessen über den ganzen Korpus trifft das acht Mal am Kundenmodell und
+    **null Mal** sonst — auch nicht an ``two_components.stl`` mit zwei echten
+    Körpern und nicht an ``broken_selfint.stl``.
+
+    Was ein Einschluss **nicht** ist: bearbeitbar. Es gibt keine Fläche, die
+    ein Werkzeug erreicht, und keine Handlung, die ihn ändert;
+    :mod:`app.core.perceive.actions` sagt genau das, statt ihn zu verschweigen.
+    """
+    body = mesh.raw
+    # **Der Umlaufsinn gehört zur Frage, nicht nur die Dichtheit.** Ein
+    # Vorzeichen ist nur dort eine Auskunft, wo die Normalen überhaupt
+    # verlässlich zeigen; ``is_winding_consistent`` fällt in derselben
+    # Kantenzählung an wie ``is_watertight`` und liegt danach im Cache. Ohne
+    # ihn wurde ein Quader, dessen Dreiecke zum Teil verkehrt herum standen,
+    # zum „Lufteinschluss" — und seine sechs Flächen verschwanden dabei aus
+    # dem Objektbaum.
+    if not (bool(body.is_watertight) and bool(body.is_winding_consistent)):
+        return []
+    components = face_components(body)
+    # **Ein Einschluss braucht einen Körper um sich herum.** Eine einzelne
+    # Komponente mit negativem Volumen ist ein umgestülptes Teil und kein
+    # Loch — an einem vollständig invertierten Quader blieb sonst genau ein
+    # Merkmal übrig, und das war eine Lüge über das ganze Modell.
+    #
+    # Die Zeile spart nebenbei den teuren Normalfall: An einem einteiligen
+    # Netz mit 327 680 Dreiecken kostete die Volumenschleife 52 bis 113 ms für
+    # eine Antwort, die hier schon feststeht.
+    if len(components) < 2:
+        return []
+    volumes = [_enclosed_volume(body, faces) for faces in components]
+    hollow = [number for number, volume in enumerate(volumes) if volume < 0.0]
+    if not hollow:
+        return []
+    # **Alle Kandidaten in einer Abfrage.** Je Kandidat eine eigene Umgebung zu
+    # bauen war nicht nur teuer, es war falsch: Die Umgebung enthielt dann die
+    # übrigen Hohlraumschalen, und ein Einschluss mit einem Nachbarn fiel durch.
+    inside = _shells_inside_the_material(body, components, hollow)
+
+    found: list[Feature] = []
+    for number, verdict in zip(hollow, inside, strict=True):
+        if not verdict:
+            continue
+        faces = components[number]
+        corners = body.vertices[body.faces[faces]].reshape(-1, 3)
+        lower, upper = corners.min(axis=0), corners.max(axis=0)
+        identifier = FeatureId(f"void_{len(found) + 1}")
+        found.append(
+            Feature(
+                id=identifier,
+                kind="void",
+                provenance="detected",
+                params={
+                    # Der Betrag, weil die Zahl den Hohlraum beschreibt und
+                    # nicht die Umlaufrichtung seiner Dreiecke.
+                    "volume": round(-volumes[number], 4),
+                    "centre": tuple(float(value) for value in (lower + upper) / 2.0),
+                    "size": tuple(float(value) for value in upper - lower),
+                },
+                face_indices=tuple(int(index) for index in faces),
+            )
+        )
+    return found
+
+
+def _voids_instead_of_phantom_bores(
+    found: dict[FeatureId, Feature], voids: Sequence[Feature]
+) -> dict[FeatureId, Feature]:
+    """Wo ein Einschluss liegt, steht er selbst statt der Bohrung, die keine ist.
+
+    Dieselbe Bauart wie :func:`_threads_instead_of_phantoms`, und aus demselben
+    Grund: Die Flächen eines Einschlusses tragen echte Zylinder- und
+    Kegeleinpassungen — sie sind ja wirklich rund —, nur benennen sie nichts,
+    was jemand anfassen kann. Ein Merkmal, dessen Flächen mehrheitlich auf
+    einer Einschlussschale liegen, verschwindet deshalb, und der Einschluss
+    steht an seiner Stelle.
+
+    **Die Mehrheit und nicht die Berührung**: Ein Merkmal, das einen
+    Einschluss nur streift, gehört weiter dem Körper. Dieselbe Schwelle wie
+    bei der Wendel, damit zwei Nachbarschaften nicht zwei Antworten geben.
+    """
+    if not voids:
+        return found
+    kept = dict(found)
+    for void in voids:
+        on_the_shell = set(void.face_indices)
+        for name, feature in list(kept.items()):
+            if feature.kind == "void" or not feature.face_indices:
+                continue
+            inside = sum(1 for index in feature.face_indices if index in on_the_shell)
+            if inside * 2 > len(feature.face_indices):
+                del kept[name]
+        kept[void.id] = void
+    return kept
 
 
 def _same_torus(one: tuple[TorusFit, list[int]], two: tuple[TorusFit, list[int]]) -> bool:

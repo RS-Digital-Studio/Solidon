@@ -49,8 +49,40 @@ ParameterName = str
 # --- Aufzählungen --------------------------------------------------------------
 
 FeatureKind = Literal[
-    "hole", "face", "edge_loop", "pin", "cone", "sphere", "torus", "thread", "fillet"
+    "hole",
+    "face",
+    "edge_loop",
+    "pin",
+    "cone",
+    "sphere",
+    "torus",
+    "thread",
+    "fillet",
+    "void",
+    "slot",
 ]
+"""Die Arten, die ein Merkmal haben kann.
+
+``slot`` ist das Langloch, und es steht hier, weil die Einpassung es nicht
+sieht: Sie findet darin zwei Zylinderausschnitte und nennt sie Verrundungen.
+Zusammengesetzt wird es am Netz (:mod:`app.core.perceive.slots`), aus den zwei
+Bögen und den zwei ebenen Flanken dazwischen — so wie ein Gewinde aus einer
+Wendel entsteht und nicht aus einem Fit.
+
+``void`` ist eine geschlossene Innenschale im Material, ein Hohlraum ohne Weg
+nach außen. Robert fand am 10.09.2026 acht davon in ``garden-hose-holder.3mf``,
+jeder Ø 2 auf 9 mm — die Erkennung nannte sie bis dahin ``hole``, also acht
+Bohrungen, die man weder sehen noch bohren kann.
+
+**Unantastbar ist er deshalb nicht.** Der erste Entwurf sperrte ihn ganz und
+begründete es damit, kein Werkzeug komme an ihn heran; gemessen ist das
+falsch — Versetzen und Entfernen tragen (:data:`geom.prepare_ops.MOVABLE_KINDS`).
+Was fehlt, ist das Maß und nicht der Zugang.
+
+**Und ein Fehler ist er nicht immer.** Die Aussparung für einen eingegossenen
+Magneten und ein vergessener Negativkörper sind topologisch dieselbe Sache;
+welche vorliegt, weiß nur der Kunde. Solidon benennt, was da ist, und urteilt
+nicht."""
 Provenance = Literal["detected", "generated"]
 ObjectKind = Literal["mesh", "brep"]
 Quality = Literal["draft", "fine"]
@@ -307,11 +339,26 @@ def is_a_cavity(feature: Feature) -> bool:
     ``geom`` einen trägen Import gegen die Paketrichtung — sieben waren es,
     und keiner davon brauchte mehr als diese vier Zeilen.
     """
-    if feature.kind == "hole":
+    if feature.kind in ("hole", "void"):
         return True
     if feature.kind == "pin":
         return False
     return bool(feature.params.get("recess", False))
+
+
+#: **Und ``slot`` steht dort nicht, obwohl ein Langloch ein Hohlraum ist.**
+#:
+#: Die Aussage wäre wahr und der Gewinn klein: Von den zehn Aufrufern gehen
+#: sieben durch Operationen, deren ``applies_to`` ein Langloch gar nicht
+#: durchlässt. Der größte übrige — :func:`app.core.perceive.relations.sleeve_at`
+#: — rechnet daraus aber eine **falsche Wandstärke**: Er sucht einen koaxialen
+#: Mantel und meldet den halben Unterschied der Durchmesser — das gilt nur, wo die Wand
+#: rundum gleich ist. Gemessen an einem Zapfen Ø 20 mit einem Langloch Ø 8 auf
+#: 14 mm: an den Flanken 6 mm, an den Enden **3 mm** — die Auskunft nennte die
+#: doppelte Stärke der dünnsten Stelle, und Wandstärke ist druckkritisch.
+#:
+#: Wer ``sleeve_at`` beibringt, ein Langloch zu messen, trägt ``slot`` hier ein
+#: — bis dahin ist das Schweigen die richtigere Antwort (ROADMAP RM-151).
 
 
 #: Wie viele Filamente die Operationen benennen lassen (§20).

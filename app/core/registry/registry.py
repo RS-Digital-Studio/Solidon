@@ -345,6 +345,8 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "cone": _("Kegel"),
     "thread": _("Gewinde"),
     "fillet": _("Verrundung"),
+    "void": _("Lufteinschluss"),
+    "slot": _("Langloch"),
 }
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
